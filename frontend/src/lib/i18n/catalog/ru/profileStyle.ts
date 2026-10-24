@@ -26,6 +26,8 @@ export const profileStyle = {
   'profileStyle.coverHint': 'JPG, PNG, WebP или GIF · до 8 МБ. Лучше 2560 × 640 (4:1). GIF может сохраниться без анимации.',
   'profileStyle.coverInvalid': 'Выберите JPG, PNG, WebP или GIF до 8 МБ.',
   'profileStyle.frame': 'Рамка аватара',
+  'profileStyle.frameOwned': 'Персональные',
+  'profileStyle.frameRevoked': 'Рамка отозвана',
   'profileStyle.frame.none': 'Без рамки',
   'profileStyle.frame.ring': 'Кольцо',
   'profileStyle.frame.glow': 'Свечение',

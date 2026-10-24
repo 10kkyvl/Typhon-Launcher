@@ -13,7 +13,18 @@ export const VISIBILITIES = ['public', 'friends', 'private'] as const;
 export type Visibility = (typeof VISIBILITIES)[number];
 
 export const AVATAR_FRAMES = ['none', 'ring', 'glow', 'neon', 'orbit', 'pixel'] as const;
-export type AvatarFrame = (typeof AVATAR_FRAMES)[number];
+export type AvatarPreset = (typeof AVATAR_FRAMES)[number];
+export type AvatarFrame = AvatarPreset | `custom:${string}`;
+
+export interface FrameImage {
+  url: string;
+  hole: number;
+}
+
+export interface OwnedFrame extends FrameImage {
+  id: string;
+  name: string;
+}
 
 export const NAME_STYLES = ['plain', 'gradient', 'glow'] as const;
 export type NameStyle = (typeof NAME_STYLES)[number];
@@ -111,6 +122,7 @@ export interface CurrentUser {
   avatarUrl: string;
   bio: string;
   profile: ProfileSettings;
+  frames?: OwnedFrame[] | null;
   createdAt: string;
   termsAccepted?: { version: string; acceptedAt: string } | null;
 }
@@ -171,6 +183,7 @@ const KNOWN_CODES = new Set([
   'invalid_avatar',
   'invalid_profile',
   'invalid_bio',
+  'frame_not_granted',
   'rate_limited',
   'auth_busy',
   'bad_request',
@@ -223,6 +236,7 @@ const CODE_FIELDS: Record<string, string> = {
   invalid_avatar: 'avatar',
   invalid_profile: 'profile',
   invalid_bio: 'bio',
+  frame_not_granted: 'profile',
   friend_self: 'query',
   review_too_short: 'body',
   review_too_long: 'body',

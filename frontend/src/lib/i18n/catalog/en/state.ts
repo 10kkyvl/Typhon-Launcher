@@ -118,6 +118,7 @@ export const state: Record<StateKey, Message> = {
   'state.accountErrorAvatarTooLarge': 'File is larger than 10 MB',
   'state.accountErrorUnsupportedAvatar': 'PNG, JPEG, and WebP are supported',
   'state.accountErrorInvalidAvatar': 'Failed to read the image',
+  'state.accountErrorFrameNotGranted': 'This frame is no longer granted to you',
   'state.accountErrorInvalidProfile': 'Invalid profile settings',
   'state.accountErrorInvalidBio': 'Bio can’t be longer than 150 characters',
   'state.accountErrorUnauthenticated': 'Session expired — sign in again',

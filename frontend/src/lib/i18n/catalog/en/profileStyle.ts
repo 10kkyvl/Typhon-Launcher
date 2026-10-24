@@ -29,6 +29,8 @@ export const profileStyle: Record<ProfileStyleKey, Message> = {
   'profileStyle.coverHint': 'JPG, PNG, WebP or GIF · up to 8 MB. Best at 2560 × 640 (4:1). A GIF may be saved without animation.',
   'profileStyle.coverInvalid': 'Choose a JPG, PNG, WebP or GIF up to 8 MB.',
   'profileStyle.frame': 'Avatar frame',
+  'profileStyle.frameOwned': 'Personal',
+  'profileStyle.frameRevoked': 'Frame revoked',
   'profileStyle.frame.none': 'No frame',
   'profileStyle.frame.ring': 'Ring',
   'profileStyle.frame.glow': 'Glow',

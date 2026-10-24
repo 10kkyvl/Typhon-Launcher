@@ -1,5 +1,5 @@
 import { Service as SocialService } from '../../../bindings/typhon/internal/social';
-import { type AvatarFrame, type NameStyle, type ProfileAppearance, type ProfileBlock, AccountError, toAccountError } from './account';
+import { type AvatarFrame, type FrameImage, type NameStyle, type ProfileAppearance, type ProfileBlock, AccountError, toAccountError } from './account';
 import { inWails } from './backend';
 
 export type Relation = 'self' | 'friend' | 'incoming' | 'outgoing' | 'none' | 'blocked';
@@ -7,6 +7,7 @@ export type Relation = 'self' | 'friend' | 'incoming' | 'outgoing' | 'none' | 'b
 export interface PlayerCardStyle {
   accent: string;
   avatarFrame: AvatarFrame;
+  frameImage?: FrameImage | null;
   nameStyle: NameStyle;
   statusEmoji?: string;
   statusText?: string;
@@ -182,6 +183,7 @@ export interface PublicLayout {
 
 export interface PublicProfile extends UserCard {
   appearance?: ProfileAppearance;
+  avatarFrameImage?: FrameImage | null;
   statusEmoji?: string;
   statusText?: string;
   layout?: PublicLayout | null;
@@ -364,6 +366,7 @@ function toProfile(value: unknown): PublicProfile {
     avatarUrl: profile.avatarUrl,
     card: profile.card ?? null,
     appearance: profile.appearance,
+    avatarFrameImage: profile.avatarFrameImage ?? null,
     statusEmoji: profile.statusEmoji ?? '',
     statusText: profile.statusText ?? '',
     layout: profile.layout ? { version: profile.layout.version, blocks: list(profile.layout.blocks) } : null,

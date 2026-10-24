@@ -30,6 +30,7 @@
   import { STATUS_EMOJI } from '../../lib/profile/appearanceEmoji';
   import { layoutErrorText, statusIssue } from '../../lib/profile/layout';
   import { currentUser } from '../../lib/stores/user';
+  import { frameLook, isCustomFrame, ownedFrame } from '../../lib/profile/frameLook';
   import { msg } from '../../lib/i18n';
 
   let { draft = $bindable(), disabled, autoArt }: { draft: ProfileSettings; disabled: boolean; autoArt?: string } = $props();
@@ -43,6 +44,9 @@
     appearanceAccentStyle(a).split(';').filter((rule) => rule.startsWith('--accent')).join(';'),
   );
   const preview = $derived({ ...a, parallax: false });
+  const ownedFrames = $derived($currentUser?.frames ?? []);
+  const activeFrame = $derived(ownedFrame(ownedFrames, a.avatarFrame));
+  const frameRevoked = $derived(isCustomFrame(a.avatarFrame) && !activeFrame);
   const statusLength = $derived([...(draft.statusText ?? '')].length);
   const statusError = $derived(statusIssue(draft.statusText));
 
@@ -262,12 +266,27 @@
       <h3>{msg('profileStyle.frame')}</h3>
       <div class="frames">
         {#each AVATAR_FRAMES as frame}
-          <button type="button" class="pick-card" class:selected={a.avatarFrame === frame} aria-pressed={a.avatarFrame === frame} onclick={() => patch({ avatarFrame: frame })}>
+          {@const picked = frame === 'none' ? a.avatarFrame === 'none' || frameRevoked : a.avatarFrame === frame}
+          <button type="button" class="pick-card" class:selected={picked} aria-pressed={picked} onclick={() => patch({ avatarFrame: frame })}>
             <Avatar size="sm" name={previewName} src={$currentUser?.avatarUrl} {frame} frameColor={a.frameColor} />
             <span>{msg(`profileStyle.frame.${frame}`)}</span>
           </button>
         {/each}
       </div>
+      {#if frameRevoked}<p class="hint danger" role="status">{msg('profileStyle.frameRevoked')}</p>{/if}
+      {#if ownedFrames.length > 0}
+        <h4 class="sub">{msg('profileStyle.frameOwned')}</h4>
+        <div class="frames owned">
+          {#each ownedFrames as owned (owned.id)}
+            {@const picked = activeFrame?.id === owned.id}
+            <button type="button" class="pick-card" class:selected={picked} aria-pressed={picked} onclick={() => patch({ avatarFrame: `custom:${owned.id}` })}>
+              <span class="checker"><img src={owned.url} alt="" draggable="false" loading="lazy" decoding="async" /></span>
+              <span class="owned-name">{owned.name}</span>
+            </button>
+          {/each}
+        </div>
+      {/if}
+      {#if !activeFrame}
       <div class="pick">
         <span class="pick-label">{msg('profileStyle.frameColor')}</span>
         <button type="button" class="color" style:background={a.frameColor || a.accent} aria-label={msg('profileStyle.frameColor')} aria-expanded={palette === 'frame'} onclick={() => togglePalette('frame')}></button>
@@ -276,6 +295,7 @@
       </div>
       {#if palette === 'frame'}<ColorPalette value={a.frameColor || a.accent} onchange={(v) => setOptionalColor('frameColor', v)} disabled={locked} />{/if}
       {#if frameText !== '' && !validAccent(frameText)}<p class="hint danger">{msg('settings.accentInvalid')}</p>{/if}
+      {/if}
     </section>
 
     <section>
@@ -369,6 +389,11 @@
   .slider > span { display: flex; justify-content: space-between; } input[type=range] { width: 100%; }
   .frames { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; }
   .names { display: grid; grid-template-columns: minmax(0, 1fr); gap: .8rem; }
+  h4.sub { margin: 1.4rem 0 .8rem; font-size: var(--font-xs); font-weight: 600; color: var(--text-3); }
+  .frames.owned { margin-top: 0; }
+  .checker { display: flex; align-items: center; justify-content: center; width: 4.8rem; height: 4.8rem; border-radius: var(--radius-sm); background: repeating-conic-gradient(var(--surface-3) 0% 25%, var(--surface-4) 0% 50%) 0 0 / 1.2rem 1.2rem; overflow: hidden; }
+  .checker img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .owned-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pick-card { display: flex; flex-direction: column; align-items: center; gap: .9rem; padding: 1.2rem .6rem; background: transparent; border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text-2); font: inherit; font-size: var(--font-xs); cursor: pointer; min-width: 0; }
   .name-card { align-items: flex-start; padding: 1rem 1.2rem; font-size: var(--font-md); font-weight: 600; color: var(--text); }
   .name-card small { font-size: var(--font-xs); font-weight: 400; color: var(--text-3); }

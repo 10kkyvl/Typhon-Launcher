@@ -1,5 +1,6 @@
 <script lang="ts">
   import Avatar from './Avatar.svelte';
+  import { frameLook } from '../profile/frameLook';
   import StyledName from './StyledName.svelte';
   import { playerCardOf } from '../profile/appearanceCard';
   import { LIGHT_INK } from '../profile/appearanceColor';
@@ -27,7 +28,7 @@
   </div>
   <div class="body">
     <div class="head">
-      <span class="avatar"><Avatar size="md" {name} src={user.avatarUrl} {status} frame={view.appearance.avatarFrame} frameColor={view.appearance.frameColor} /></span>
+      <span class="avatar"><Avatar size="md" {name} src={user.avatarUrl} {status} {...frameLook(view.appearance.avatarFrame, view.appearance.frameColor, view.frameImage)} /></span>
       <div class="ident">
         <span class="name"><StyledName {name} styleName={view.appearance.nameStyle} nameColor={view.appearance.nameColor} /></span>
         <span class="handle">@{user.username}</span>

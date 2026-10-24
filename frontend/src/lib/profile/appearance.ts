@@ -1,7 +1,8 @@
 import { accentPalette, validAccent } from '../theme/accent';
-import { ACCENT_SOURCES, AUTO_SOURCES, AVATAR_FRAMES, NAME_STYLES, type ProfileAppearance } from '../services/account';
+import { ACCENT_SOURCES, AUTO_SOURCES, NAME_STYLES, type ProfileAppearance } from '../services/account';
 import { DARK_INK, darkenUntil, deriveSurfaces, mixHex, PROFILE_TEXT_3, pureSurfaces, READABLE, smoothStops, type CanvasInk } from './appearanceColor';
 import type { ArtPalette } from './artPalette';
+import { isCustomFrame, presetFrame } from './frameLook';
 
 export const DEFAULT_APPEARANCE: ProfileAppearance = {
   theme: 'midnight', accent: '#67d8ef', coverUrl: '', coverDim: 35, coverPosition: 50,
@@ -55,7 +56,7 @@ export function appearanceOf(value?: Partial<ProfileAppearance> | null): Profile
     customTo: hexOr(a.customTo, defaults.customTo),
     customAngle: Math.round(clamped(a.customAngle, 0, 360, defaults.customAngle)),
     autoSource: oneOf(AUTO_SOURCES, a.autoSource, defaults.autoSource),
-    avatarFrame: oneOf(AVATAR_FRAMES, a.avatarFrame, defaults.avatarFrame),
+    avatarFrame: isCustomFrame(a.avatarFrame) ? a.avatarFrame : presetFrame(a.avatarFrame),
     nameStyle: oneOf(NAME_STYLES, a.nameStyle, defaults.nameStyle),
     parallax: typeof a.parallax === 'boolean' ? a.parallax : defaults.parallax,
     nameColor: hexOr(a.nameColor, ''),

@@ -115,6 +115,7 @@ export const state = {
   'state.accountErrorAvatarTooLarge': 'Файл больше 10 МБ',
   'state.accountErrorUnsupportedAvatar': 'Поддерживаются PNG, JPEG и WebP',
   'state.accountErrorInvalidAvatar': 'Не удалось прочитать изображение',
+  'state.accountErrorFrameNotGranted': 'Эта рамка больше не выдана',
   'state.accountErrorInvalidProfile': 'Некорректные настройки профиля',
   'state.accountErrorInvalidBio': 'Био не длиннее 150 символов',
   'state.accountErrorUnauthenticated': 'Сессия истекла, войдите заново',

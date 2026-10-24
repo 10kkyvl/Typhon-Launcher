@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ArrowLeft, ChevronUp, RefreshCw, Send } from '@lucide/svelte';
   import Avatar from '../lib/components/Avatar.svelte';
+  import { fieldsFrame } from '../lib/profile/frameLook';
   import ChatAttachments from '../lib/components/ChatAttachments.svelte';
   import { msg } from '../lib/i18n';
   import type { ChatPeer, Message } from '../lib/services/messaging';
@@ -167,7 +168,7 @@
   {#if peer}
     <header class="dialog-head">
       <button class="back" type="button" aria-label={msg('social.chatBack')} onclick={showList}><ArrowLeft size="1.7rem" /></button>
-      <Avatar size="sm" name={displayName(peer)} src={peer.avatarUrl} />
+      <Avatar size="sm" name={displayName(peer)} src={peer.avatarUrl} {...fieldsFrame(peer)} />
       <div class="head-copy">
         <strong>{displayName(peer)}</strong>
         <span>{peer.username ? `@${peer.username}` : ''}{#if !$chatConnected} · {msg('social.chatOffline')}{/if}</span>
@@ -249,7 +250,7 @@
       {:else}
         {#each $conversations as item (item.peer.id)}
           <button class="conversation" type="button" onclick={() => openChat(item.peer)}>
-            <Avatar size="md" name={displayName(item.peer)} src={item.peer.avatarUrl} />
+            <Avatar size="md" name={displayName(item.peer)} src={item.peer.avatarUrl} {...fieldsFrame(item.peer)} />
             <span class="conversation-copy">
               <strong>{displayName(item.peer)}</strong>
               <span>{item.lastMessage ? messagePreview(item.lastMessage) : msg('social.chatNewConversation')}</span>

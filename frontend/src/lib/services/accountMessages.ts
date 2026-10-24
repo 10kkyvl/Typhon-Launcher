@@ -21,6 +21,7 @@ function messages(): Record<string, string> {
     unsupported_cover: msg('profile.coverInvalid'),
     invalid_cover: msg('profile.coverDecode'),
     invalid_profile: msg('state.accountErrorInvalidProfile'),
+    frame_not_granted: msg('state.accountErrorFrameNotGranted'),
     invalid_bio: msg('state.accountErrorInvalidBio'),
     unauthenticated: msg('state.accountErrorUnauthenticated'),
     sync_disabled: msg('state.accountErrorSyncDisabled'),

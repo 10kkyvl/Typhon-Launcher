@@ -2,6 +2,8 @@
   import { onMount, tick } from 'svelte';
   import { ArrowLeft, Check, ChevronRight, Gamepad2, RefreshCw, Search, Users } from '@lucide/svelte';
   import Avatar from '../../components/Avatar.svelte';
+  import { publicFrame } from '../../profile/frameSources';
+  import { cardFrame } from '../../profile/frameLook';
   import Artwork from '../../components/Artwork.svelte';
   import { accountErrorText } from '../../services/accountMessages';
   import { openByIGDB } from '../../services/sources';
@@ -464,7 +466,7 @@ import { friendsPage as sharedFriendsPage, needsSocialConsent } from '../../stor
       <div class="bp-error" role="alert"><p>{profileError}</p><button class="bp-button" data-bp-focus="social-profile-retry" disabled={!profileRetry} onclick={() => profileRetry && void showProfile(profileRetry)}>{$t('bp.social.retry')}</button></div>
     {:else if viewedProfile}
       <section class="public-identity bp-card">
-        <Avatar size="lg" name={viewedProfile.displayName || viewedProfile.username} src={viewedProfile.avatarUrl} status={viewedProfile.presence ? presenceDot(viewedProfile.presence) : undefined} />
+        <Avatar size="lg" name={viewedProfile.displayName || viewedProfile.username} src={viewedProfile.avatarUrl} {...publicFrame(viewedProfile)} status={viewedProfile.presence ? presenceDot(viewedProfile.presence) : undefined} />
         <div class="public-copy">
           <span class="eyebrow">@{viewedProfile.username}</span>
           <h2>{viewedProfile.displayName || viewedProfile.username}</h2>
@@ -597,7 +599,7 @@ import { friendsPage as sharedFriendsPage, needsSocialConsent } from '../../stor
           <div class="people-grid">
             {#each sortedFriends as friend (friend.id)}
               <button class="person-card bp-card" data-bp-focus={`social-friend-${encodeURIComponent(friend.id)}`} disabled={!!actionBusy} onclick={() => void openUser(friend, `social-friend-${encodeURIComponent(friend.id)}`)}>
-                <Avatar size="md" name={friend.displayName || friend.username} src={friend.avatarUrl} status={presenceDot(friend.presence)} />
+                <Avatar size="md" name={friend.displayName || friend.username} src={friend.avatarUrl} {...cardFrame(friend.card)} status={presenceDot(friend.presence)} />
                 <span class="person-copy"><strong>{friend.displayName || friend.username}</strong><span>@{friend.username}</span><span class="person-presence">{presenceLine(friend.presence)}</span></span>
                 <ChevronRight class="person-chevron" size="1.4em" />
               </button>
@@ -616,7 +618,7 @@ import { friendsPage as sharedFriendsPage, needsSocialConsent } from '../../stor
             <div class="request-list">
               {#each friendsPage.incoming as request (request.id)}
                 <div class="request-card bp-card">
-                  <button class="person-link" data-bp-focus={`social-incoming-profile-${encodeURIComponent(request.id)}`} disabled={!!actionBusy} onclick={() => void openUser(request, `social-incoming-profile-${encodeURIComponent(request.id)}`)}><Avatar size="md" name={request.displayName || request.username} src={request.avatarUrl} /><span><strong>{request.displayName || request.username}</strong><small>@{request.username}</small></span><ChevronRight size="1.2em" /></button>
+                  <button class="person-link" data-bp-focus={`social-incoming-profile-${encodeURIComponent(request.id)}`} disabled={!!actionBusy} onclick={() => void openUser(request, `social-incoming-profile-${encodeURIComponent(request.id)}`)}><Avatar size="md" name={request.displayName || request.username} src={request.avatarUrl} {...cardFrame(request.card)} /><span><strong>{request.displayName || request.username}</strong><small>@{request.username}</small></span><ChevronRight size="1.2em" /></button>
                   <div class="request-actions">
                     <button class="bp-button bp-primary" data-bp-focus={`social-accept-${encodeURIComponent(request.id)}`} disabled={!!actionBusy || friendsLoading} onclick={() => void runAction(`accept:${request.id}`, () => accept(request.id), $t('bp.social.requestAccepted'))}>{actionBusy === `accept:${request.id}` ? $t('bp.social.searching') : $t('bp.social.accept')}</button>
                     <button class="bp-button" data-bp-focus={`social-decline-${encodeURIComponent(request.id)}`} disabled={!!actionBusy || friendsLoading} onclick={() => void runAction(`decline:${request.id}`, () => decline(request.id), $t('bp.social.requestDeclined'))}>{$t('bp.social.decline')}</button>
@@ -631,7 +633,7 @@ import { friendsPage as sharedFriendsPage, needsSocialConsent } from '../../stor
             <div class="request-list">
               {#each friendsPage.outgoing as request (request.id)}
                 <div class="request-card bp-card">
-                  <button class="person-link" data-bp-focus={`social-outgoing-profile-${encodeURIComponent(request.id)}`} disabled={!!actionBusy} onclick={() => void openUser(request, `social-outgoing-profile-${encodeURIComponent(request.id)}`)}><Avatar size="md" name={request.displayName || request.username} src={request.avatarUrl} /><span><strong>{request.displayName || request.username}</strong><small>@{request.username}</small></span><ChevronRight size="1.2em" /></button>
+                  <button class="person-link" data-bp-focus={`social-outgoing-profile-${encodeURIComponent(request.id)}`} disabled={!!actionBusy} onclick={() => void openUser(request, `social-outgoing-profile-${encodeURIComponent(request.id)}`)}><Avatar size="md" name={request.displayName || request.username} src={request.avatarUrl} {...cardFrame(request.card)} /><span><strong>{request.displayName || request.username}</strong><small>@{request.username}</small></span><ChevronRight size="1.2em" /></button>
                   <div class="request-actions"><button class="bp-button" data-bp-focus={`social-cancel-${encodeURIComponent(request.id)}`} disabled={!!actionBusy || friendsLoading} onclick={() => void runAction(`cancel:${request.id}`, () => decline(request.id), $t('bp.social.requestCancelled'))}>{$t('bp.social.cancel')}</button></div>
                 </div>
               {/each}
