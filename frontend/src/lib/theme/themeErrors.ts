@@ -16,9 +16,24 @@ export const REASONS: Record<string, MessageKey> = {
   'theme.not_found': 'theme.not_found',
   'theme.invalid_path': 'theme.invalid_path',
   'theme.dialog_unavailable': 'theme.dialog_unavailable',
+  'theme.token_kind': 'theme.token_kind',
+  'theme.skill_invalid_path': 'theme.skill_invalid_path',
 };
 
+const TOKEN = /(--[a-z0-9-]+) \(/;
+
+function tokenName(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err ?? '');
+  return TOKEN.exec(raw)?.[1] ?? '';
+}
+
 export function themeErrorText(err: unknown, fallback: string = msg('errLibrary.themeErrFallback')): string {
-  const key = REASONS[errorCode(err)];
-  return key ? msg(key) : fallback;
+  const code = errorCode(err);
+  const key = REASONS[code];
+  if (!key) return fallback;
+  if (code === 'theme.token_kind') {
+    const name = tokenName(err);
+    return name ? `${msg(key)}: ${name}` : msg(key);
+  }
+  return msg(key);
 }

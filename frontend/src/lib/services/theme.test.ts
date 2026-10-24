@@ -128,3 +128,34 @@ describe('theme calls', () => {
     expect(stored.name).toBe('Stored');
   });
 });
+
+describe('AI skill wrappers', () => {
+  it('passes the folder through and returns the saved path', async () => {
+    const skill = { SelectSkillFolder: vi.fn().mockResolvedValue('/home/u/.claude/skills'), SaveAISkill: vi.fn().mockResolvedValue('/home/u/.claude/skills/typhon-theme') };
+    Object.assign(bindings, skill);
+    const { selectSkillFolder, saveAISkill } = await load(true);
+    expect(await selectSkillFolder()).toBe('/home/u/.claude/skills');
+    expect(await saveAISkill('/home/u/.claude/skills')).toBe('/home/u/.claude/skills/typhon-theme');
+    expect(skill.SaveAISkill).toHaveBeenCalledWith('/home/u/.claude/skills');
+  });
+
+  it('propagates a save error instead of hiding it', async () => {
+    Object.assign(bindings, { SaveAISkill: vi.fn().mockRejectedValue(new Error('typhon:theme.skill_invalid_path')) });
+    const { saveAISkill } = await load(true);
+    await expect(saveAISkill('/x')).rejects.toThrow('theme.skill_invalid_path');
+  });
+
+  it('is unavailable outside Wails', async () => {
+    const { selectSkillFolder, saveAISkill } = await load(false);
+    expect(await selectSkillFolder()).toBe('');
+    await expect(saveAISkill('/x')).rejects.toThrow('unavailable in browser');
+  });
+});
+
+describe('themeErrorText', () => {
+  it('names the token for theme.token_kind', async () => {
+    const { themeErrorText } = await import('../theme/themeErrors');
+    const text = themeErrorText(new Error('typhon:theme.token_kind --radius-md (length): значение'));
+    expect(text).toContain('--radius-md');
+  });
+});

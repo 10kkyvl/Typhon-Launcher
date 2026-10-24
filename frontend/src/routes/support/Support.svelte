@@ -1,5 +1,6 @@
 <script lang="ts">
   import { LifeBuoy } from '@lucide/svelte';
+  import AiSkillButton from '../../lib/components/AiSkillButton.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
@@ -68,4 +69,24 @@
   <NewTicket initialTopic={parseTopic(topic)} />
 {:else}
   <TicketList />
+  <Card title={msg('settings.aiSkillSupportTitle')}>
+    <div class="skill-row">
+      <span class="skill-sub">{msg('settings.aiSkillSupportSub')}</span>
+      <AiSkillButton label={msg('settings.aiSkillSupportButton')} />
+    </div>
+  </Card>
 {/if}
+
+<style>
+  .skill-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-6);
+  }
+
+  .skill-sub {
+    font-size: var(--font-xs);
+    color: var(--text-3);
+  }
+</style>

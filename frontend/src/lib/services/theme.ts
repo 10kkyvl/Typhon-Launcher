@@ -126,3 +126,13 @@ export async function selectExportPath(): Promise<string> {
   if (!inWails) return '';
   return await Service.SelectExportPath(get(locale));
 }
+
+export async function selectSkillFolder(): Promise<string> {
+  if (!inWails) return '';
+  return await Service.SelectSkillFolder();
+}
+
+export async function saveAISkill(dir: string): Promise<string> {
+  if (!inWails) throw unavailable();
+  return await Service.SaveAISkill(dir);
+}

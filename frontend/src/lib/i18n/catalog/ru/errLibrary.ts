@@ -70,6 +70,8 @@ export const errLibrary = {
   'theme.not_found': 'тема не найдена',
   'theme.invalid_path': 'недопустимый путь к файлу темы',
   'theme.dialog_unavailable': 'диалог выбора файла недоступен',
+  'theme.token_kind': 'значение токена не подходит по типу',
+  'theme.skill_invalid_path': 'эта папка не подходит для скилла',
   'errLibrary.themeErrFallback': 'Не удалось выполнить действие с темой',
 
   'settings.library_not_configured': 'библиотека не настроена',

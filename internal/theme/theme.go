@@ -45,6 +45,7 @@ var (
 	ErrThemeBase       = uierr.New("theme.invalid_base", "недопустимая базовая палитра темы")
 	ErrThemeTokenName  = uierr.New("theme.unknown_token", "неизвестное имя токена темы")
 	ErrThemeTokenValue = uierr.New("theme.invalid_token_value", "недопустимое значение токена темы")
+	ErrThemeTokenKind  = uierr.New("theme.token_kind", "значение токена не подходит по типу")
 	ErrThemeCSSSize    = uierr.New("theme.css_too_large", "пользовательский CSS превышает допустимый размер")
 	ErrThemeCSSContent = uierr.New("theme.css_forbidden", "пользовательский CSS содержит запрещённую конструкцию")
 	ErrThemeCSSBraces  = uierr.New("theme.css_unbalanced_braces", "непарные или слишком глубоко вложенные фигурные скобки в CSS")
@@ -98,6 +99,9 @@ func Validate(t Theme) (Theme, error) {
 		}
 		if err := validateTokenValue(value); err != nil {
 			return Theme{}, fmt.Errorf("%s: %w", name, err)
+		}
+		if !validTokenKind(allowedTokenSet[name], value) {
+			return Theme{}, fmt.Errorf("%s (%s): %w", name, allowedTokenSet[name], ErrThemeTokenKind)
 		}
 	}
 

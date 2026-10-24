@@ -73,6 +73,8 @@ export const errLibrary: Record<ErrLibraryKey, Message> = {
   'theme.not_found': 'Theme not found',
   'theme.invalid_path': 'Invalid theme file path',
   'theme.dialog_unavailable': 'The file dialog is unavailable',
+  'theme.token_kind': 'The token value has the wrong type',
+  'theme.skill_invalid_path': 'This folder cannot hold the skill',
   'errLibrary.themeErrFallback': 'Could not complete the theme action',
 
   'settings.library_not_configured': 'The library is not set up',
