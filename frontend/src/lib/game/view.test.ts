@@ -14,6 +14,7 @@ import {
   orderPlatforms,
   pickHero,
   preferView,
+  onPC,
   primaryAction,
   stepIndex,
   summaryView,
@@ -598,4 +599,49 @@ describe("metaStatus", () => {
       expect(metaStatus(c.input)).toBe(c.want);
     });
   }
+});
+
+describe("primaryAction with related versions", () => {
+  it("points to other versions when they have releases", () => {
+    const action = primaryAction(status({ relatedWithReleases: true }));
+    expect(action.kind).toBe("other-versions");
+    expect(action.disabled).toBe(false);
+  });
+
+  it("says the game never reached PC only when no relative did", () => {
+    const action = primaryAction(status({ notOnPc: true }));
+    expect(action.kind).toBe("not-on-pc");
+    expect(action.disabled).toBe(true);
+  });
+
+  it("prefers other versions over the not-on-PC label", () => {
+    expect(primaryAction(status({ relatedWithReleases: true, notOnPc: true })).kind).toBe("other-versions");
+  });
+
+  it("keeps the plain label while relatives are unknown", () => {
+    expect(primaryAction(status()).kind).toBe("unavailable");
+  });
+
+  it("keeps own releases, install and loading ahead of relatives", () => {
+    expect(primaryAction(status({ releaseCount: 1, relatedWithReleases: true })).kind).toBe("download");
+    expect(primaryAction(status({ releasesLoading: true, relatedWithReleases: true })).kind).toBe("resolving");
+    expect(primaryAction(status({ installed: true, relatedWithReleases: true, notOnPc: true })).kind).toBe("play");
+  });
+});
+
+describe("onPC", () => {
+  it("treats unknown platforms as PC", () => {
+    expect(onPC(undefined)).toBe(true);
+    expect(onPC(null)).toBe(true);
+    expect(onPC([])).toBe(true);
+  });
+
+  it("accepts Windows and DOS", () => {
+    expect(onPC(["PlayStation 2", "PC (Microsoft Windows)"])).toBe(true);
+    expect(onPC(["DOS"])).toBe(true);
+  });
+
+  it("rejects console-only games", () => {
+    expect(onPC(["PlayStation 2"])).toBe(false);
+  });
 });

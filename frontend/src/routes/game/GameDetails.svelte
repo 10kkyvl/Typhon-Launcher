@@ -56,7 +56,7 @@
   import { discardDownloadPrompt, removeDownloadPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
   import { playLabel } from '../../lib/game/profiles';
   import PlayProfileMenu from '../../lib/components/PlayProfileMenu.svelte';
-  import { releaseOrigin } from '../../lib/game/releases';
+  import { relationKey, releaseOrigin } from '../../lib/game/releases';
   import { completionLine, statusBadgeKind, statusLabel } from '../../lib/game/status';
   import {
     busyState,
@@ -65,6 +65,7 @@
     galleryShots,
     cancelFreesDisk,
     hubAction,
+    onPC,
     isGameMissing,
     joinLimited,
     metaLine,
@@ -113,8 +114,10 @@
   import { openGameFolder, openFolder } from '../../lib/services/settings';
   import {
     getCatalogGame,
+    getRelatedReleases,
     getReleasesForGame,
     getReleasesForTitle,
+    type RelatedReleases,
     prepareReleaseDownload,
     type CatalogGame,
     type ReleaseGroup,
@@ -216,6 +219,13 @@
   let releasesLoading = $state(false);
   let releasesFailed = $state(false);
   let releaseToken = 0;
+
+  let related = $state<RelatedReleases[]>([]);
+  let relatedLoading = $state(false);
+  let relatedFailed = $state(false);
+  let relatedLoaded = $state(false);
+  let relatedToken = 0;
+  let otherVersionsEl = $state<HTMLElement | null>(null);
 
   let catalogGame = $state<CatalogGame | null>(null);
   let catalogLoading = $state(false);
@@ -499,6 +509,15 @@
 
   const availableGroups = $derived(releaseGroups.filter((group) => group.release.availability !== 'removed'));
 
+  const relatedShown = $derived(
+    related
+      .map((item) => ({ ...item, groups: item.groups.filter((group) => group.release.availability !== 'removed') }))
+      .filter((item) => item.groups.length > 0),
+  );
+  const ownOnPc = $derived(onPC(info?.platforms));
+  const relatedOk = $derived(relatedLoaded && !relatedLoading && !relatedFailed);
+  const hasPcRelative = $derived(related.some((item) => item.onPc));
+
   const primary = $derived(
     hubAction({
       installed,
@@ -506,6 +525,8 @@
       updateAvailable,
       releaseCount: availableGroups.length,
       releasesLoading,
+      relatedWithReleases: relatedShown.length > 0,
+      notOnPc: !ownOnPc && relatedOk && !hasPcRelative,
       busy,
       terminalDownload: terminalDownload ? { status: terminalDownload.status } : null,
     }),
@@ -711,12 +732,37 @@
     }
   }
 
+  async function loadRelated(canonicalGameId: string | undefined) {
+    const current = ++relatedToken;
+    related = [];
+    relatedFailed = false;
+    relatedLoaded = false;
+    if (!canonicalGameId) {
+      relatedLoading = false;
+      return;
+    }
+    relatedLoading = true;
+    try {
+      const list = await getRelatedReleases(canonicalGameId);
+      if (current !== relatedToken) return;
+      related = list;
+      relatedLoaded = true;
+    } catch {
+      if (current !== relatedToken) return;
+      relatedFailed = true;
+    } finally {
+      if (current === relatedToken) relatedLoading = false;
+    }
+  }
+
   $effect(() => {
     releaseKey;
     $sources; // A feed can finish importing while this game is already open.
     const canonicalGameId = canonicalId;
     const gameTitle = releaseTitle;
+    const isExternalGame = external;
     untrack(() => {
+      loadRelated(isExternalGame ? undefined : canonicalGameId);
       loadReleases(canonicalGameId, gameTitle);
     });
   });
@@ -852,6 +898,7 @@
     if (primary.kind === 'play') play();
     else if (primary.kind === 'stop') stop();
     else if (primary.kind === 'download') startDownload();
+    else if (primary.kind === 'other-versions') otherVersionsEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     else if (primary.kind === 'update') updateCard?.start();
     else if (primary.kind === 'retry-download') retryTerminalDownload();
     else if (primary.kind === 'install-download') installFromTerminalDownload();
@@ -921,6 +968,13 @@
             <StatusBadge kind="neutral" label={msg('games.detailBadgeUninstalled')} dot={false} />
           {:else if title}
             <StatusBadge kind="neutral" label={msg('games.notInstalledStatusWord')} dot={false} />
+          {/if}
+          {#if !ownOnPc && relatedOk}
+            <StatusBadge
+              kind="neutral"
+              label={hasPcRelative ? msg('games.badgeNotPcVersion') : msg('games.badgeNeverOnPc')}
+              dot={false}
+            />
           {/if}
           {#if updateAvailable && !busy}
             <span class="pop" use:popOnce>
@@ -1231,6 +1285,45 @@
               ondownload={downloadRelease}
             />
           </section>
+
+          {#if relatedShown.length > 0 || relatedFailed}
+            <section class="section" bind:this={otherVersionsEl}>
+              <h2 class="heading">{msg('games.otherVersionsHeading')}</h2>
+              {#if relatedFailed}
+                <p class="muted">{msg('games.otherVersionsFailed')}</p>
+                <Button onclick={() => loadRelated(canonicalId)}>{msg('games.catalogRetry')}</Button>
+              {:else}
+                {#if availableGroups.length === 0 && !releasesLoading && !releasesFailed}
+                  <p class="muted">{msg('games.otherVersionsHint')}</p>
+                {/if}
+                {#each relatedShown as item (item.game.id)}
+                  {@const localId = item.gameId}
+                  <div class="related">
+                    <div class="related-head">
+                      {#if item.game.coverUrl}
+                        <span class="related-cover">
+                          <Artwork src={item.game.coverUrl} alt={item.game.title} ratio="3 / 4" radius="var(--radius-sm)" />
+                        </span>
+                      {/if}
+                      <div class="related-ident">
+                        {#if localId}
+                          <button class="related-title link" onclick={() => navigate('game', { id: localId })}>{item.game.title}</button>
+                        {:else}
+                          <span class="related-title">{item.game.title}</span>
+                        {/if}
+                        <div class="related-meta">
+                          <StatusBadge kind="neutral" label={msg(relationKey(item.game.relation))} dot={false} />
+                          {#if item.game.releaseYear}<span class="related-year">{item.game.releaseYear}</span>{/if}
+                          {#if !item.onPc}<StatusBadge kind="neutral" label={msg('games.otherVersionsNotPc')} dot={false} />{/if}
+                        </div>
+                      </div>
+                    </div>
+                    <ReleaseList groups={item.groups} ondownload={downloadRelease} />
+                  </div>
+                {/each}
+              {/if}
+            </section>
+          {/if}
         {/if}
 
         {#if localGame}
@@ -1710,6 +1803,52 @@
 
   .section {
     margin-top: var(--space-10);
+  }
+
+  .related {
+    margin-bottom: var(--space-8);
+  }
+
+  .related-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    margin-bottom: var(--space-4);
+  }
+
+  .related-cover {
+    display: block;
+    width: 6rem;
+    flex-shrink: 0;
+  }
+
+  .related-ident {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+
+  .related-title {
+    font-size: var(--font-md);
+    font-weight: 600;
+    text-align: left;
+  }
+
+  .related-title.link:hover {
+    color: var(--accent);
+  }
+
+  .related-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .related-year {
+    font-size: var(--font-sm);
+    color: var(--text-muted);
   }
 
   .heading {
