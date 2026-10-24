@@ -92,3 +92,15 @@ export function problemText(code: string, file?: string): string {
   const key = `wrappers.${short}`;
   return hasMessage(key) ? msg(key) : msg('modals.compatProblemUnknown');
 }
+
+export interface ProblemActions {
+  revert: boolean;
+  keepChanged: boolean;
+  dirMissing: boolean;
+}
+
+export function problemActions(code: string): ProblemActions {
+  const short = code.replace(/^wrappers\./, '');
+  if (short === 'game_dir_missing') return { revert: false, keepChanged: false, dirMissing: true };
+  return { revert: true, keepChanged: short === 'tampered', dirMissing: false };
+}

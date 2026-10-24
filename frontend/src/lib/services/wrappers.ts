@@ -66,3 +66,8 @@ export function onWrapperProgress(handler: (event: WrapperProgress) => void): ()
   if (!inWails) return () => {};
   return Events.On('wrappers:progress', (event) => handler(event.data as WrapperProgress));
 }
+
+export async function disableWrapperKeepChanged(gameId: string): Promise<void> {
+  if (!inWails) throw unavailable();
+  await WrappersService.DisableKeepChanged(gameId);
+}

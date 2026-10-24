@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultWrapper, describeImports, presetsFor, problemText, progressView } from './compatMode';
+import { defaultWrapper, describeImports, presetsFor, problemActions, problemText, progressView } from './compatMode';
 
 const size = (n: number) => `${n}b`;
 
@@ -93,5 +93,21 @@ describe('problemText', () => {
 
   it('does not invent a reason for an unknown code', () => {
     expect(problemText('mystery')).toBe(problemText('other'));
+  });
+});
+
+describe('problemActions', () => {
+  it('offers both ways out of a tamper', () => {
+    expect(problemActions('wrappers.tampered')).toEqual({ revert: true, keepChanged: true, dirMissing: false });
+    expect(problemActions('tampered').keepChanged).toBe(true);
+  });
+
+  it('offers only the plain revert for other problems', () => {
+    expect(problemActions('wrappers.backup_corrupt')).toEqual({ revert: true, keepChanged: false, dirMissing: false });
+    expect(problemActions('needs_repair').keepChanged).toBe(false);
+  });
+
+  it('offers nothing while the game folder is missing', () => {
+    expect(problemActions('wrappers.game_dir_missing')).toEqual({ revert: false, keepChanged: false, dirMissing: true });
   });
 });

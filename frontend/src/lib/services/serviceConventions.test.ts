@@ -278,6 +278,7 @@ const ACTIONS: ActionCase[] = [
   { module: 'savebackup', fn: 'deleteBackup', args: ['g', 's1'], binding: 'savebackup.Delete', sent: ['g', 's1'] },
   { module: 'wrappers', fn: 'enableWrapper', args: ['g', 'dxvk', 'default'], binding: 'wrappers.Enable', sent: ['g', 'dxvk', 'default'] },
   { module: 'wrappers', fn: 'disableWrapper', args: ['g'], binding: 'wrappers.Disable', sent: ['g'] },
+  { module: 'wrappers', fn: 'disableWrapperKeepChanged', args: ['g'], binding: 'wrappers.DisableKeepChanged', sent: ['g'] },
   { module: 'history', fn: 'clearHistory', args: [], binding: 'history.Clear', sent: [] },
   { module: 'discovery', fn: 'scanInstalledGames', args: [], binding: 'discovery.Scan', sent: [] },
   { module: 'discovery', fn: 'cancelScan', args: [], binding: 'discovery.CancelScan', sent: [] },
