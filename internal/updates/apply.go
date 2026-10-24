@@ -461,15 +461,15 @@ func (s *Service) prefetch(ctx context.Context, plan UpdatePlan) error {
 }
 
 func (s *Service) waitDownload(ctx context.Context, gameID, downloadID string) error {
-	ticker := time.NewTicker(pollInterval)
-	defer ticker.Stop()
+	ticks, stop := s.poll()
+	defer stop()
 	var lastProgress int64
 	var lastChange time.Time
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-ticker.C:
+		case <-ticks:
 		}
 		task, err := s.downloads.Get(downloadID)
 		if err != nil {
@@ -488,7 +488,7 @@ func (s *Service) waitDownload(ctx context.Context, gameID, downloadID string) e
 			}
 			return errDownloadFailed
 		case download.StatusDownloading:
-			now := time.Now()
+			now := s.now()
 			if lastChange.IsZero() || task.Downloaded != lastProgress {
 				lastProgress = task.Downloaded
 				lastChange = now

@@ -112,6 +112,9 @@ type job struct {
 
 type Service struct {
 	checkMu        sync.Mutex
+	resolveMu      sync.Mutex
+	now            func() time.Time
+	poll           func() (<-chan time.Time, func())
 	rollbackActive map[string]bool
 	mu             sync.Mutex
 	settings       *settings.Service
@@ -180,6 +183,8 @@ func newServiceAt(dir string, settingsService *settings.Service) (*Service, erro
 		return nil, errors.New("updates path unavailable")
 	}
 	return &Service{
+		now:           time.Now,
+		poll:          realPoll,
 		settings:      settingsService,
 		store:         newStore(dir),
 		updates:       map[string]*Update{},
@@ -189,6 +194,11 @@ func newServiceAt(dir string, settingsService *settings.Service) (*Service, erro
 		jobs:          map[string]*job{},
 		waiters:       map[string]chan install.Installation{},
 	}, nil
+}
+
+func realPoll() (<-chan time.Time, func()) {
+	ticker := time.NewTicker(pollInterval)
+	return ticker.C, ticker.Stop
 }
 
 func (s *Service) config() settings.Settings {
@@ -797,6 +807,8 @@ func (s *Service) check(game library.Game) error {
 	if s.releases == nil {
 		return nil
 	}
+	s.resolveMu.Lock()
+	defer s.resolveMu.Unlock()
 	availability := s.resolveAvailability(game)
 
 	s.mu.Lock()
