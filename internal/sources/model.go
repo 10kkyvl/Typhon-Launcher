@@ -118,6 +118,7 @@ type RemoteMatch struct {
 	GameID     string         `json:"gameId,omitempty"`
 	Confidence float64        `json:"confidence,omitempty"`
 	Method     string         `json:"method,omitempty"`
+	Rev        int            `json:"rev,omitempty"`
 }
 
 func (r *Release) identity() string {

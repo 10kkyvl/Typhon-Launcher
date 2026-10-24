@@ -83,7 +83,22 @@ func (s *Service) ResolveSourceQueries(ctx context.Context, queries []ReleaseQue
 		g.LocalExternalIDs = ExternalIDs{}
 		g.Provisional = false
 		if pos := s.idx.matchRemote(g); pos >= 0 {
-			g = s.games[pos]
+			old := s.games[pos]
+			// A match answer carries a slim projection without cover, genres or
+			// summary, so only the links the server owns are taken from it.
+			merged := old
+			if g.ParentID != "" {
+				merged.ParentID = g.ParentID
+			}
+			if g.GameType != "" {
+				merged.GameType = g.GameType
+			}
+			if merged.ParentID != old.ParentID || merged.GameType != old.GameType {
+				s.games[pos] = merged
+				s.updateIndexAtLocked(pos, old)
+				changed = true
+			}
+			g = merged
 		} else {
 			s.games = append(s.games, g)
 			s.addToIndexLocked(g)

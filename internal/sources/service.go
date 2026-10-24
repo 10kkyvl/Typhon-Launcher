@@ -889,6 +889,7 @@ func (s *Service) settle(ctx context.Context, id string, incoming []*Release, re
 						GameID:     rm.GameID,
 						Confidence: rm.Confidence,
 						Method:     string(rm.Method),
+						Rev:        remoteMatchRev,
 					}
 				}
 			}
