@@ -251,6 +251,15 @@ type LaunchHook interface {
 	SessionStarting(ctx context.Context, game Game) error
 }
 
+// LaunchBlockedError is the one hook failure that stops the launch: the hook
+// found that starting the game now would risk the player's data. Any other
+// hook error is only logged.
+type LaunchBlockedError struct{ Err error }
+
+func (e *LaunchBlockedError) Error() string { return e.Err.Error() }
+
+func (e *LaunchBlockedError) Unwrap() error { return e.Err }
+
 type SessionChangeWatcher interface {
 	SessionChanged(game Game, startedAt time.Time)
 }

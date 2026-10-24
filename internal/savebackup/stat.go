@@ -62,10 +62,16 @@ func statTree(ctx context.Context, root string) ([]fileStat, error) {
 	return out, nil
 }
 
+// writeStat skips a record too large to read back: without one the next
+// launch simply hashes, the same quiet fallback as for a snapshot made before
+// records existed.
 func writeStat(dir, source string, files []fileStat) error {
 	data, err := json.Marshal(statDoc{Source: source, Files: files})
 	if err != nil {
 		return err
+	}
+	if len(data) > maxStatSize {
+		return nil
 	}
 	return storage.WriteAtomic(filepath.Join(dir, statFile), data)
 }

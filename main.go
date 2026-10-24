@@ -646,23 +646,7 @@ func main() {
 	libraryService.AddSessionWatcher(presenceWatcher)
 	libraryService.AddSessionWatcher(saveBackupService)
 	libraryService.AddLaunchHook(saveBackupService)
-	saveBackupService.SetPlaytime(func(gameID string, since time.Time) (int64, error) {
-		if time.Since(since) > playlog.Retention {
-			return 0, errors.New("snapshot is older than the play log retention")
-		}
-		var total int64
-		for _, s := range playlogService.Since(since) {
-			if s.GameID != gameID {
-				continue
-			}
-			start := s.StartedAt
-			if start.Before(since) {
-				start = since
-			}
-			total += int64(s.EndedAt.Sub(start).Seconds())
-		}
-		return total, nil
-	})
+	saveBackupService.SetPlaytime(savebackup.PlaytimeFrom(playlogService, time.Now))
 	libraryService.AddSessionWatcher(cloudSavesService)
 	libraryService.AddSessionWatcher(achievementsService)
 	playWatcher := downloadManager.PlayWatcher()

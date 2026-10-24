@@ -90,6 +90,8 @@ var (
 	errSnapshotBroken   = uierr.New("savebackup.snapshot_broken", "резервная копия повреждена")
 	errVerify           = uierr.New("savebackup.verify_failed", "копия сохранений не совпала с оригиналом")
 	errSavesUnreadable  = errors.New("часть каталогов не удалось прочитать")
+	errSavesHintsFailed = errors.New("подсказки путей сохранений недоступны")
+	errRecoveryPending  = uierr.New("savebackup.recovery_pending", "прерванный откат сохранений не завершён — запуск остановлен, чтобы не потерять сохранения")
 	errLaunchTimeout    = uierr.New("savebackup.launch_timeout", "копия сохранений перед запуском не успела — игра запущена без неё")
 	errUnchanged        = uierr.New("savebackup.unchanged", "сохранения не изменились с прошлой копии")
 	errLeftovers        = uierr.New("savebackup.restore_leftovers", "рядом с папкой сохранений остались следы прерванного восстановления")

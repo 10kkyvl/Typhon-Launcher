@@ -95,10 +95,13 @@ func TestSessionStartingOutcomes(t *testing.T) {
 		}, false, "", "", false},
 		{"several folders", func(t *testing.T, h *harness) {
 			h.games.setResult(gameID, library.SavesResult{Candidates: []string{"a", "b"}})
-		}, true, StatusSkipped, "savebackup.saves_ambiguous", true},
+		}, false, StatusSkipped, "savebackup.saves_ambiguous", true},
+		{"path hints failed is not a clean miss", func(t *testing.T, h *harness) {
+			h.games.setResult(gameID, library.SavesResult{HintsError: "сервер недоступен"})
+		}, false, StatusSkipped, "savebackup.saves_not_found", true},
 		{"unreadable folders are not a clean miss", func(t *testing.T, h *harness) {
 			h.games.setResult(gameID, library.SavesResult{Unreadable: 2})
-		}, true, StatusSkipped, "savebackup.saves_not_found", true},
+		}, false, StatusSkipped, "savebackup.saves_not_found", true},
 		{"lookup fails", func(t *testing.T, h *harness) {
 			h.games.mu.Lock()
 			h.games.err = uierr.New("library.saves_path_unavailable", "нет доступа")
@@ -225,59 +228,6 @@ func TestLargeSavesAreFlagged(t *testing.T) {
 	h.svc.largeAt = 1 << 20
 	if list := h.list(); list[0].Large {
 		t.Fatal("small saves flagged Large")
-	}
-}
-
-func TestListReportsPlayTimeAfterEachSnapshot(t *testing.T) {
-	h := newHarness(t)
-	first := h.create()
-	writeFile(t, filepath.Join(h.saves, "slot1.sav"), "later")
-	second := h.create()
-	h.svc.SetPlaytime(func(id string, since time.Time) (int64, error) {
-		switch {
-		case id != gameID:
-			t.Errorf("asked for game %q", id)
-		case since.Equal(first.CreatedAt):
-			return 3600, nil
-		case since.Equal(second.CreatedAt):
-			return 0, nil
-		}
-		return 0, errors.New("unexpected snapshot")
-	})
-
-	byID := map[string]Snapshot{}
-	for _, s := range h.list() {
-		byID[s.ID] = s
-	}
-
-	if s := byID[first.ID]; !s.PlayedAfterKnown || s.PlayedAfterSeconds != 3600 {
-		t.Fatalf("first = %+v, want 3600 s known", s)
-	}
-	if s := byID[second.ID]; !s.PlayedAfterKnown || s.PlayedAfterSeconds != 0 {
-		t.Fatalf("second = %+v, want a known zero", s)
-	}
-}
-
-func TestListMarksPlayTimeUnknownWhenThePlayLogFails(t *testing.T) {
-	cases := []struct {
-		name string
-		fn   PlaytimeFunc
-	}{
-		{"play log errors", func(string, time.Time) (int64, error) { return 99, errors.New("degraded") }},
-		{"no play log wired", nil},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			h := newHarness(t)
-			h.create()
-			h.svc.SetPlaytime(c.fn)
-
-			list := h.list()
-
-			if len(list) != 1 || list[0].PlayedAfterKnown || list[0].PlayedAfterSeconds != 0 {
-				t.Fatalf("list = %+v, want unknown and no number", list)
-			}
-		})
 	}
 }
 

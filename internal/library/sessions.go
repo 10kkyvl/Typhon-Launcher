@@ -315,9 +315,17 @@ func (s *Service) play(id, profileID string, explicit bool) error {
 	hooks := slices.Clone(s.launchHooks)
 	s.mu.Unlock()
 	for _, h := range hooks {
-		if hookErr := h.SessionStarting(ctx, *game); hookErr != nil && ctx.Err() == nil {
-			slog.Warn("pre-launch hook failed, launching anyway", "id", id, "error", redact.Error(hookErr))
+		hookErr := h.SessionStarting(ctx, *game)
+		if hookErr == nil || ctx.Err() != nil {
+			continue
 		}
+		var blocked *LaunchBlockedError
+		if errors.As(hookErr, &blocked) {
+			slog.Error("pre-launch hook stopped the launch", "id", id, "error", redact.Error(hookErr))
+			s.mu.Lock()
+			return blocked.Err
+		}
+		slog.Warn("pre-launch hook failed, launching anyway", "id", id, "error", redact.Error(hookErr))
 	}
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		s.mu.Lock()

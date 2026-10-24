@@ -35,9 +35,17 @@ const (
 	largeSavesBytes = 500 << 20
 )
 
-// PlaytimeFunc returns the seconds played in a game after since. An error
-// means the answer is unknown, not zero.
-type PlaytimeFunc func(gameID string, since time.Time) (int64, error)
+// Played is the play time after one moment; Known is false when the play log
+// cannot answer for it.
+type Played struct {
+	Seconds int64
+	Known   bool
+}
+
+// PlaytimeFunc answers for every moment in since at once, in the same order:
+// the play log is read once per List, not once per snapshot. An error means
+// nothing is known.
+type PlaytimeFunc func(gameID string, since []time.Time) ([]Played, error)
 
 type games interface {
 	Find(id string) (library.Game, error)
@@ -63,6 +71,7 @@ type Service struct {
 	cancel  context.CancelFunc
 	closing bool
 	locks   map[string]chan struct{}
+	warned  map[string]bool
 	build   func(ctx context.Context, root string, onProgress func(hashdir.Progress)) (hashdir.Manifest, error)
 	wg      sync.WaitGroup
 }
@@ -104,6 +113,7 @@ func newServiceAt(dir string, config func() settings.Settings, g games) (*Servic
 		emit:       emitEvent,
 		now:        time.Now,
 		locks:      map[string]chan struct{}{},
+		warned:     map[string]bool{},
 		build:      hashdir.Build,
 		enabled:    true,
 
@@ -250,17 +260,32 @@ func (s *Service) List(ctx context.Context, gameID string) ([]Snapshot, error) {
 	s.mu.Lock()
 	played := s.playtime
 	s.mu.Unlock()
+	if played == nil {
+		return list, nil
+	}
+	var idx []int
+	var since []time.Time
 	for i := range list {
-		snap := &list[i]
-		if played == nil || snap.Broken {
-			continue
+		if !list[i].Broken {
+			idx = append(idx, i)
+			since = append(since, list[i].CreatedAt)
 		}
-		secs, err := played(gameID, snap.CreatedAt)
-		if err != nil {
-			slog.Warn("playtime after snapshot unknown", "game", gameID, "snapshot", snap.ID, "error", err)
-			continue
+	}
+	if len(idx) == 0 {
+		return list, nil
+	}
+	answers, err := played(gameID, since)
+	if err == nil && len(answers) != len(since) {
+		err = fmt.Errorf("play log answered %d of %d moments", len(answers), len(since))
+	}
+	if err != nil {
+		slog.Warn("playtime after snapshots unknown", "game", gameID, "error", err)
+		return list, nil
+	}
+	for n, i := range idx {
+		if answers[n].Known {
+			list[i].PlayedAfterSeconds, list[i].PlayedAfterKnown = answers[n].Seconds, true
 		}
-		snap.PlayedAfterSeconds, snap.PlayedAfterKnown = secs, true
 	}
 	return list, nil
 }
@@ -392,10 +417,13 @@ func (s *Service) SessionStopped(gameID string) {
 }
 
 // SessionStarting takes the copy before the game process starts. It is a
-// library.LaunchHook: the library launches the game whatever this returns, so
-// the error exists to be logged and reported, never to hold the game back.
-// Cancelling the launch cancels the copy; a copy that overruns launchTimeout
-// is abandoned and reported.
+// library.LaunchHook: the game launches whatever this returns, except for a
+// library.LaunchBlockedError, which means an interrupted rollback is still
+// unresolved and launching could cost the player's saves. The copy runs in a
+// goroutine owned by the service and the hook waits for it only until the
+// deadline: a step that ignores ctx (a dead network share, a cloud
+// placeholder) cannot hold the game back, and the goroutine cleans up after
+// itself when it finally returns.
 //
 //wails:ignore
 func (s *Service) SessionStarting(ctx context.Context, game library.Game) error {
@@ -410,31 +438,85 @@ func (s *Service) SessionStarting(ctx context.Context, game library.Game) error 
 	capCtx, cancel := context.WithTimeout(ctx, s.launchTimeout)
 	defer cancel()
 
-	snap, created, err := s.launchCapture(capCtx, game.ID)
-	switch {
-	case err == nil && created:
-		s.emit(createdEvent(snap, nil))
-		return nil
-	case created:
-		s.emit(createdEvent(snap, err))
+	done := make(chan launchResult, 1)
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		snap, created, err := s.launchCapture(capCtx, game.ID)
+		done <- launchResult{snap, created, err}
+	}()
+	select {
+	case r := <-done:
+		return s.finishLaunch(ctx, capCtx, game.ID, r)
+	case <-capCtx.Done():
+		select {
+		case r := <-done:
+			return s.finishLaunch(ctx, capCtx, game.ID, r)
+		default:
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return s.launchTimedOut(game.ID)
+	}
+}
+
+type launchResult struct {
+	snap    Snapshot
+	created bool
+	err     error
+}
+
+func (s *Service) launchTimedOut(gameID string) error {
+	if _, err := os.Lstat(s.journalPath(gameID)); !errors.Is(err, fs.ErrNotExist) {
+		s.emit(Event{GameID: gameID, Kind: KindLaunch, Status: StatusFailed, Code: uierr.Code(errRecoveryPending), Error: errRecoveryPending.Error()})
+		return &library.LaunchBlockedError{Err: errRecoveryPending}
+	}
+	s.emit(Event{GameID: gameID, Kind: KindLaunch, Status: StatusFailed, Code: uierr.Code(errLaunchTimeout), Error: errLaunchTimeout.Error()})
+	return errLaunchTimeout
+}
+
+func (s *Service) finishLaunch(ctx, capCtx context.Context, gameID string, r launchResult) error {
+	failed := func(err error) error {
+		s.emit(Event{GameID: gameID, Kind: KindLaunch, Status: StatusFailed, Code: uierr.Code(err), Error: err.Error()})
 		return err
+	}
+	var blocked *library.LaunchBlockedError
+	switch {
+	case r.err == nil && r.created:
+		s.emit(createdEvent(r.snap, nil))
+		return nil
+	case r.created:
+		s.emit(createdEvent(r.snap, r.err))
+		return r.err
 	case ctx.Err() != nil:
 		return ctx.Err()
-	case errors.Is(capCtx.Err(), context.DeadlineExceeded):
-		s.emit(Event{GameID: game.ID, Kind: KindLaunch, Status: StatusFailed, Code: uierr.Code(errLaunchTimeout), Error: errLaunchTimeout.Error()})
-		return errLaunchTimeout
-	case library.IsGameNotFound(err):
+	case errors.As(r.err, &blocked):
+		return failed(r.err)
+	case errors.Is(r.err, context.DeadlineExceeded) && errors.Is(capCtx.Err(), context.DeadlineExceeded):
+		return s.launchTimedOut(gameID)
+	case library.IsGameNotFound(r.err), errors.Is(r.err, errUnchanged):
 		return nil
-	case errors.Is(err, errUnchanged):
+	case errors.Is(r.err, errSavesNotFound) && !errors.Is(r.err, errSavesUnreadable) && !errors.Is(r.err, errSavesHintsFailed):
 		return nil
-	case errors.Is(err, errSavesNotFound) && !errors.Is(err, errSavesUnreadable):
+	case errors.Is(r.err, errSavesNotFound), errors.Is(r.err, errSavesAmbiguous), errors.Is(r.err, errSavesCacheLike):
+		code := uierr.Code(r.err)
+		s.emit(Event{GameID: gameID, Kind: KindLaunch, Status: StatusSkipped, Code: code, Error: r.err.Error()})
+		s.warnOnce(gameID, code, r.err)
 		return nil
-	case errors.Is(err, errSavesNotFound), errors.Is(err, errSavesAmbiguous), errors.Is(err, errSavesCacheLike):
-		s.emit(Event{GameID: game.ID, Kind: KindLaunch, Status: StatusSkipped, Code: uierr.Code(err), Error: err.Error()})
-		return err
 	default:
-		s.emit(Event{GameID: game.ID, Kind: KindLaunch, Status: StatusFailed, Code: uierr.Code(err), Error: err.Error()})
-		return err
+		return failed(r.err)
+	}
+}
+
+func (s *Service) warnOnce(gameID, code string, err error) {
+	key := gameID + "|" + code
+	s.mu.Lock()
+	seen := s.warned[key]
+	s.warned[key] = true
+	s.mu.Unlock()
+	if !seen {
+		slog.Warn("pre-launch save copy skipped", "game", gameID, "code", code, "error", err)
 	}
 }
 
@@ -447,6 +529,9 @@ func (s *Service) launchCapture(ctx context.Context, gameID string) (Snapshot, b
 		return Snapshot{}, false, err
 	}
 	defer unlock()
+	if err := s.recoverJournal(gameID); err != nil {
+		return Snapshot{}, false, &library.LaunchBlockedError{Err: fmt.Errorf("%w: %w", errRecoveryPending, err)}
+	}
 	if err := s.recoverGame(ctx, gameID); err != nil {
 		return Snapshot{}, false, err
 	}
@@ -527,6 +612,9 @@ func (s *Service) locate(ctx context.Context, gameID string) (string, error) {
 		return "", fmt.Errorf("%w: %s; укажите папку сохранений вручную", errSavesCacheLike, res.Rejected[0].Path)
 	case res.Unreadable > 0:
 		return "", fmt.Errorf("%w: %w: %d", errSavesNotFound, errSavesUnreadable, res.Unreadable)
+	}
+	if res.HintsError != "" {
+		return "", fmt.Errorf("%w: %w: %s", errSavesNotFound, errSavesHintsFailed, res.HintsError)
 	}
 	return "", errSavesNotFound
 }

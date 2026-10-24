@@ -52,6 +52,19 @@ func dedupFor(kind Kind) dedupMode {
 	return dedupNone
 }
 
+// storedSnapshot is what snapshot.json keeps: the fields that describe the
+// copy itself, not the ones derived on every read.
+type storedSnapshot struct {
+	ID         string    `json:"id"`
+	GameID     string    `json:"gameId"`
+	Kind       Kind      `json:"kind"`
+	CreatedAt  time.Time `json:"createdAt"`
+	SourcePath string    `json:"sourcePath"`
+	SizeBytes  int64     `json:"sizeBytes"`
+	Files      int       `json:"files"`
+	Digest     string    `json:"digest"`
+}
+
 type captureOpts struct {
 	dedup   dedupMode
 	at      time.Time
@@ -204,7 +217,10 @@ func (s *Service) capture(ctx context.Context, gameID, src string, kind Kind, op
 	if err := writeStat(partial, src, stats); err != nil {
 		return fail(err)
 	}
-	data, err := json.MarshalIndent(snap, "", "  ")
+	data, err := json.MarshalIndent(storedSnapshot{
+		ID: snap.ID, GameID: snap.GameID, Kind: snap.Kind, CreatedAt: snap.CreatedAt, SourcePath: snap.SourcePath,
+		SizeBytes: snap.SizeBytes, Files: snap.Files, Digest: snap.Digest,
+	}, "", "  ")
 	if err != nil {
 		return fail(err)
 	}

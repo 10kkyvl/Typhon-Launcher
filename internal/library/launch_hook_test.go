@@ -106,3 +106,26 @@ func TestLaunchHookSeesCancellationAndStopsTheLaunch(t *testing.T) {
 		t.Fatal("cancelled launch kept its reservation")
 	}
 }
+
+func TestLaunchHookBlockedErrorStopsTheLaunch(t *testing.T) {
+	s, id, order := hookedGame(t)
+	cause := errors.New("rollback unfinished")
+	s.AddLaunchHook(hookFunc(func(context.Context, Game) error { return &LaunchBlockedError{Err: cause} }))
+
+	err := s.PlayGame(id)
+
+	if !errors.Is(err, cause) {
+		t.Fatalf("PlayGame = %v, want the blocking cause", err)
+	}
+	for _, step := range *order {
+		if step == "start" {
+			t.Fatalf("order = %v, process started despite a blocking hook error", *order)
+		}
+	}
+	if s.IsRunning(id) {
+		t.Fatal("blocked launch kept its reservation")
+	}
+	if err := s.PlayGame(id); !errors.Is(err, cause) {
+		t.Fatalf("second PlayGame = %v, want the library lock to be released", err)
+	}
+}
