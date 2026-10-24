@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
@@ -29,6 +30,9 @@ type SavesResult struct {
 	Path       string   `json:"path"`
 	Candidates []string `json:"candidates"`
 	Unreadable int      `json:"unreadable"`
+	// Rejected — папки, найденные по имени, но отвергнутые как кеш игры: при пустом
+	// результате по ним объясняют, почему сохранения не найдены.
+	Rejected []RejectedSaves `json:"rejected,omitempty"`
 	// HintsError — почему подсказки путей не сработали (сеть, сервер). Пустая
 	// строка значит, что подсказки либо отработали, либо их не запрашивали.
 	HintsError string `json:"hintsError,omitempty"`
@@ -36,6 +40,12 @@ type SavesResult struct {
 	// сервера, а не из SavesDir и не эвристиками: по нему окно показывает
 	// атрибуцию источника.
 	Hint *SaveHintSource `json:"hint,omitempty"`
+}
+
+// RejectedSaves — папка, похожая на кеш, а не на сохранения, и причина отказа.
+type RejectedSaves struct {
+	Path   string `json:"path"`
+	Reason string `json:"reason"`
 }
 
 // SaveHintSource — откуда взяты подсказки путей и на каких условиях.
@@ -295,13 +305,16 @@ func detectSaves(ctx context.Context, title, installDir string, roots func() ([]
 			return nil
 		}
 		seen[key] = true
-		verdict, err := vetHeuristicSaves(ctx, path)
+		verdict, cached, err := vetHeuristicSaves(ctx, path)
 		if err != nil {
 			return err
 		}
 		result.Unreadable += verdict.unreadable
 		if verdict.reason != "" {
-			logRejectedSaves(path, verdict.reason)
+			if !cached {
+				slog.Info("save folder guess rejected", "path", path, "reason", verdict.reason)
+			}
+			result.Rejected = append(result.Rejected, RejectedSaves{Path: path, Reason: verdict.reason})
 			return nil
 		}
 		result.Candidates = append(result.Candidates, path)

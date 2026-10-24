@@ -31,6 +31,7 @@ export const cloudsaves: Record<CloudsavesKey, Message> = {
   'cloud.remote_missing': 'There are no saves of this game in the cloud',
   'cloud.removed': 'Saves were removed from the cloud',
   'cloud.saves_ambiguous': 'Several save folders were found. Choose the right one',
+  'cloud.saves_cache_like': 'The folder found looks like a game cache, not saves. Specify the save folder manually',
   'cloud.saves_not_found': 'Save folder not found. Specify it manually',
   'cloud.saves_not_a_directory': 'The saves path is not a folder',
   'cloud.saves_unreadable': 'The save folder could not be read',

@@ -695,6 +695,9 @@ func TestSavesFolderProblemsAreSkipsWithReasons(t *testing.T) {
 	}{
 		{"not found", func(h *harness) { h.lib.results[gameLocal] = library.SavesResult{} }, codeSavesMissing, StateSkipped},
 		{"ambiguous", func(h *harness) { h.lib.results[gameLocal] = library.SavesResult{Candidates: []string{"a", "b"}} }, codeSavesAmbig, StateSkipped},
+		{"rejected as cache", func(h *harness) {
+			h.lib.results[gameLocal] = library.SavesResult{Rejected: []library.RejectedSaves{{Path: "C:/g/cache", Reason: "mostly cache"}}}
+		}, codeSavesCache, StateSkipped},
 		{"unreadable", func(h *harness) { h.lib.results[gameLocal] = library.SavesResult{Unreadable: 2} }, codeSavesUnread, StateFailed},
 	}
 	for _, tc := range cases {

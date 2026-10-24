@@ -89,6 +89,7 @@ const (
 	codeSavesNotDir   = "cloud.saves_not_a_directory"
 	codeSavesMissing  = "cloud.saves_not_found"
 	codeSavesAmbig    = "cloud.saves_ambiguous"
+	codeSavesCache    = "cloud.saves_cache_like"
 	codeSavesUnread   = "cloud.saves_unreadable"
 	codeGameRunning   = "cloud.game_running"
 	codeNoConflict    = "cloud.no_conflict"
@@ -129,6 +130,7 @@ var (
 	errSavesNotDir   = uierr.New(codeSavesNotDir, "путь сохранений не является папкой")
 	errSavesMissing  = uierr.New(codeSavesMissing, "папка сохранений не найдена")
 	errSavesAmbig    = uierr.New(codeSavesAmbig, "найдено несколько папок сохранений, выберите нужную")
+	errSavesCache    = uierr.New(codeSavesCache, "найденная папка похожа на кеш игры, а не на сохранения")
 	errSavesUnread   = uierr.New(codeSavesUnread, "папку сохранений не удалось прочитать")
 	errGameRunning   = uierr.New(codeGameRunning, "игра запущена, синхронизация подождёт")
 	errNoConflict    = uierr.New(codeNoConflict, "у игры нет конфликта сохранений")

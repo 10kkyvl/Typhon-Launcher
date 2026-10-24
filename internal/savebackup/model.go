@@ -71,6 +71,7 @@ var (
 	errInvalidKind      = uierr.New("savebackup.invalid_kind", "неизвестный вид резервной копии")
 	errSavesNotFound    = uierr.New("savebackup.saves_not_found", "папка сохранений не найдена")
 	errSavesAmbiguous   = uierr.New("savebackup.saves_ambiguous", "найдено несколько папок сохранений, выберите нужную")
+	errSavesCacheLike   = uierr.New("savebackup.saves_cache_like", "найденная папка похожа на кеш игры, а не на сохранения")
 	errSavesNotDir      = uierr.New("savebackup.saves_not_a_directory", "путь сохранений не является папкой")
 	errNoSource         = uierr.New("savebackup.no_source", "не указана папка, которую нужно скопировать")
 	errGameRunning      = uierr.New("savebackup.game_running", "игра запущена — закройте её перед восстановлением сохранений")

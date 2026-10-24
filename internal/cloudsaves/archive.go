@@ -16,10 +16,11 @@ import (
 	"time"
 
 	"typhon/internal/hashdir"
+	"typhon/internal/library"
 )
 
 const (
-	maxUnpackedBytes = 1 << 30
+	maxUnpackedBytes = library.MaxSavesBytes
 	maxEntries       = 20000
 )
 
