@@ -287,7 +287,7 @@ func TestCrashEventNotEmittedAfterShutdown(t *testing.T) {
 	h.emit = func(CrashEvent) { emitted = true }
 	s := &Service{ctx: ctx, crash: h, running: map[string]*session{}, now: time.Now}
 	s.running["g"] = &session{exePath: exe, startedAt: time.Now().Add(-time.Minute)}
-	s.finishSession("g", time.Now().Add(-time.Minute))
+	s.finishSession(s.ctx, "g", time.Now().Add(-time.Minute))
 	s.wg.Wait()
 	if emitted {
 		t.Fatal("crash event emitted after the service context was cancelled")

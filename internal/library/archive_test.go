@@ -36,7 +36,7 @@ func TestSessionEndingAfterRemovalUpdatesArchive(t *testing.T) {
 	if err := s.RemoveGame("game"); err != nil {
 		t.Fatal(err)
 	}
-	s.finishSession("game", now.Add(-time.Hour))
+	s.finishSession(s.ctx, "game", now.Add(-time.Hour))
 	restored := mustServiceAt(t, path)
 	history := restored.GetHistoryGames()
 	if len(history) != 1 || history[0].PlaytimeSeconds != 7200 || len(restored.GetGames()) != 0 {

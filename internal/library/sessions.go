@@ -378,7 +378,7 @@ func (s *Service) play(id, profileID string, explicit bool) error {
 		if closed || watching {
 			return
 		}
-		s.finishSession(id, startedAt)
+		s.finishSession(s.ctx, id, startedAt)
 	}()
 	return nil
 }
@@ -510,7 +510,7 @@ func exitCode(err error) (int, bool) {
 	return 0, false
 }
 
-func (s *Service) finishSession(id string, startedAt time.Time) {
+func (s *Service) finishSession(ctx context.Context, id string, startedAt time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -583,7 +583,7 @@ func (s *Service) finishSession(id string, startedAt time.Time) {
 			}
 		}
 	}
-	if hooks := s.crash; !stoppedByUser && s.ctx != nil && hooks.await != nil {
+	if hooks := s.crash; !stoppedByUser && ctx != nil && hooks.await != nil {
 		in := crashInput{gameID: id, exePath: exePath, pid: gamePID, exit: exit, seconds: seconds, startedAt: startedAt, endedAt: endedAt}
 		if game != nil {
 			in.installDir = game.InstallDir
@@ -591,7 +591,6 @@ func (s *Service) finishSession(id string, startedAt time.Time) {
 				in.exePath = game.Executable
 			}
 		}
-		ctx := s.ctx
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()

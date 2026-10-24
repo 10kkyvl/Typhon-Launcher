@@ -227,7 +227,7 @@ func (s *Service) detectTick(ctx context.Context) {
 		slog.Info("game session detected", "id", game.ID, "title", game.Title)
 	}
 	for _, id := range toClose {
-		s.finishSession(id, closeStarts[id])
+		s.finishSession(ctx, id, closeStarts[id])
 	}
 }
 
