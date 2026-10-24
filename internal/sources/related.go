@@ -31,10 +31,12 @@ func (s *Service) GetRelatedReleases(ctx context.Context, gameID string) ([]Rela
 	if err = ctx.Err(); err != nil {
 		return nil, err
 	}
+	pool, names := s.relatedPool()
 	out := make([]RelatedReleases, 0, len(related))
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	for _, rel := range related {
+		if err = ctx.Err(); err != nil {
+			return nil, err
+		}
 		item := RelatedReleases{Game: rel, OnPC: catalog.OnPC(rel.Platforms), Groups: []ReleaseGroup{}}
 		localID, ok := s.catalog.LocalIDByServerID(rel.ID)
 		if ok && s.catalog.SameGame(localID, gameID) {
@@ -42,23 +44,43 @@ func (s *Service) GetRelatedReleases(ctx context.Context, gameID string) ([]Rela
 		}
 		if ok {
 			item.GameID = localID
-			item.Groups = s.groupsForRelatedLocked(localID, gameID)
+			item.Groups = s.groupsForRelated(pool, names, localID, gameID)
 		}
 		out = append(out, item)
 	}
 	return out, nil
 }
 
-func (s *Service) groupsForRelatedLocked(relatedID, gameID string) []ReleaseGroup {
-	var list []*Release
+// relatedPool copies the releases that can belong to a related game, so the
+// catalog lookups that follow run without s.mu.
+func (s *Service) relatedPool() ([]*Release, map[string]string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var pool []*Release
+	names := map[string]string{}
 	for _, releases := range s.releases {
 		for _, r := range releases {
-			if r.Ignored || r.CanonicalGameID == nil || !s.sameGame(*r.CanonicalGameID, relatedID) || s.sameGame(*r.CanonicalGameID, gameID) {
+			if r.Ignored || r.CanonicalGameID == nil {
 				continue
 			}
-			list = append(list, r)
+			cp := *r
+			pool = append(pool, &cp)
+			if _, seen := names[cp.SourceID]; !seen {
+				names[cp.SourceID] = s.sourceNameLocked(cp.SourceID)
+			}
 		}
 	}
+	return pool, names
+}
+
+func (s *Service) groupsForRelated(pool []*Release, names map[string]string, relatedID, gameID string) []ReleaseGroup {
+	var list []*Release
+	for _, r := range pool {
+		if !s.sameGame(*r.CanonicalGameID, relatedID) || s.sameGame(*r.CanonicalGameID, gameID) {
+			continue
+		}
+		list = append(list, r)
+	}
 	sortReleases(list, "")
-	return s.groupLocked(list)
+	return groupReleases(list, func(id string) string { return names[id] })
 }

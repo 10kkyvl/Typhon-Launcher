@@ -66,6 +66,7 @@
     cancelFreesDisk,
     hubAction,
     onPC,
+    notOnPcBadge,
     isGameMissing,
     joinLimited,
     metaLine,
@@ -517,6 +518,9 @@
   const ownOnPc = $derived(onPC(info?.platforms));
   const relatedOk = $derived(relatedLoaded && !relatedLoading && !relatedFailed);
   const hasPcRelative = $derived(related.some((item) => item.onPc));
+  const notOnPcKind = $derived(
+    notOnPcBadge({ ownOnPc, relatedOk, hasPcRelative, installed, releaseCount: availableGroups.length }),
+  );
 
   const primary = $derived(
     hubAction({
@@ -969,10 +973,10 @@
           {:else if title}
             <StatusBadge kind="neutral" label={msg('games.notInstalledStatusWord')} dot={false} />
           {/if}
-          {#if !ownOnPc && relatedOk}
+          {#if notOnPcKind}
             <StatusBadge
               kind="neutral"
-              label={hasPcRelative ? msg('games.badgeNotPcVersion') : msg('games.badgeNeverOnPc')}
+              label={notOnPcKind === "other-platform" ? msg('games.badgeNotPcVersion') : msg('games.badgeNeverOnPc')}
               dot={false}
             />
           {/if}

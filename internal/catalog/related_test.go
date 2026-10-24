@@ -120,3 +120,20 @@ func TestLocalIDByServerID(t *testing.T) {
 		t.Fatal("empty id matched")
 	}
 }
+
+func TestRelatedCacheResetOnRemoteChange(t *testing.T) {
+	ctx := context.Background()
+	s := mustServiceAt(t, t.TempDir())
+	seed(t, s, Game{ID: "g", ServerID: "srv", Title: "G"})
+	first := &relatedRemote{items: []RelatedGame{{ID: "old", Title: "Old", Relation: "remake"}}}
+	s.SetRemoteCatalog(first)
+	if got, err := s.Related(ctx, "g"); err != nil || len(got) != 1 || got[0].ID != "old" {
+		t.Fatalf("first: %v %v", got, err)
+	}
+	second := &relatedRemote{items: []RelatedGame{{ID: "new", Title: "New", Relation: "remake"}}}
+	s.SetRemoteCatalog(second)
+	got, err := s.Related(ctx, "g")
+	if err != nil || len(got) != 1 || got[0].ID != "new" || len(second.asked) != 1 {
+		t.Fatalf("stale cache survived SetRemoteCatalog: %v %v asked %v", got, err, second.asked)
+	}
+}

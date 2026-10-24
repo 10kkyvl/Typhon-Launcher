@@ -189,6 +189,10 @@ func (s *Service) GetReleasesForTitle(title string) []ReleaseGroup {
 }
 
 func (s *Service) groupLocked(list []*Release) []ReleaseGroup {
+	return groupReleases(list, s.sourceNameLocked)
+}
+
+func groupReleases(list []*Release, sourceName func(string) string) []ReleaseGroup {
 	groups := make([]ReleaseGroup, 0, len(list))
 	byHash := map[string]int{}
 	for _, r := range list {
@@ -197,13 +201,13 @@ func (s *Service) groupLocked(list []*Release) []ReleaseGroup {
 				groups[pos].Duplicates = append(groups[pos].Duplicates, SourceRef{
 					ReleaseID:  r.ID,
 					SourceID:   r.SourceID,
-					SourceName: s.sourceNameLocked(r.SourceID),
+					SourceName: sourceName(r.SourceID),
 				})
 				continue
 			}
 			byHash[r.InfoHash] = len(groups)
 		}
-		groups = append(groups, ReleaseGroup{Release: *r, SourceName: s.sourceNameLocked(r.SourceID)})
+		groups = append(groups, ReleaseGroup{Release: *r, SourceName: sourceName(r.SourceID)})
 	}
 	return groups
 }

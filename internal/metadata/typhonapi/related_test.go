@@ -85,3 +85,21 @@ func TestRelatedCleansFields(t *testing.T) {
 		t.Fatalf("not cleaned: %+v", g)
 	}
 }
+
+func TestRelatedForeignNotFoundIsUpstream(t *testing.T) {
+	for name, body := range map[string]string{
+		"plain text from the mux": "404 page not found",
+		"other error code":        `{"error":{"code":"no_route"}}`,
+		"empty body":              ``,
+	} {
+		t.Run(name, func(t *testing.T) {
+			client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				writeJSON(t, w, 404, body)
+			}), nil)
+			_, err := client.Related(context.Background(), "self")
+			if err == nil || errors.Is(err, catalog.ErrRelatedNotFound) || !errors.Is(err, ErrUpstream) {
+				t.Fatalf("err = %v, want upstream error that is not ErrRelatedNotFound", err)
+			}
+		})
+	}
+}

@@ -10,6 +10,7 @@ import {
   joinLimited,
   languageLabel,
   metaLine,
+  notOnPcBadge,
   metaStatus,
   orderPlatforms,
   pickHero,
@@ -643,5 +644,21 @@ describe("onPC", () => {
 
   it("rejects console-only games", () => {
     expect(onPC(["PlayStation 2"])).toBe(false);
+  });
+});
+
+describe("notOnPcBadge", () => {
+  const base = { ownOnPc: false, relatedOk: true, hasPcRelative: false, installed: false, releaseCount: 0 };
+  it("names the case when the game never reached PC", () => {
+    expect(notOnPcBadge(base)).toBe("never");
+    expect(notOnPcBadge({ ...base, hasPcRelative: true })).toBe("other-platform");
+  });
+  it("stays hidden for a PC game or while related games are unknown", () => {
+    expect(notOnPcBadge({ ...base, ownOnPc: true })).toBeNull();
+    expect(notOnPcBadge({ ...base, relatedOk: false })).toBeNull();
+  });
+  it("stays hidden when the game is installed or has its own releases", () => {
+    expect(notOnPcBadge({ ...base, installed: true })).toBeNull();
+    expect(notOnPcBadge({ ...base, releaseCount: 2 })).toBeNull();
   });
 });
