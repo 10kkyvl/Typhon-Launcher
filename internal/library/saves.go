@@ -295,6 +295,15 @@ func detectSaves(ctx context.Context, title, installDir string, roots func() ([]
 			return nil
 		}
 		seen[key] = true
+		verdict, err := vetHeuristicSaves(ctx, path)
+		if err != nil {
+			return err
+		}
+		result.Unreadable += verdict.unreadable
+		if verdict.reason != "" {
+			logRejectedSaves(path, verdict.reason)
+			return nil
+		}
 		result.Candidates = append(result.Candidates, path)
 		return nil
 	}
