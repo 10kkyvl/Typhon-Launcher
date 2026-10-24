@@ -495,3 +495,55 @@ func (r *searchRemote) Browse(_ context.Context, q catalog.GameQuery) (catalog.G
 	r.query = q
 	return catalog.GamePage{Items: []catalog.Game{{ID: "official", Title: "Grand Theft Auto V", Aliases: []string{"GTA V"}, CoverURL: "https://example.com/cover.jpg"}}, Total: 1}, r.err
 }
+
+func TestConsoleOnlyGameRanksBelowPCGameOfSameMatchClass(t *testing.T) {
+	pc := []string{"PC (Microsoft Windows)"}
+	console := []string{"PlayStation 5"}
+	cases := []struct {
+		name  string
+		games []catalog.Game
+		query string
+		want  []string
+	}{
+		{
+			name:  "same class, console after pc",
+			query: "doom",
+			games: []catalog.Game{
+				{ID: "console", Title: "Doom Alpha", Platforms: console},
+				{ID: "pc", Title: "Doom Chronicles", Platforms: pc},
+			},
+			want: []string{"pc", "console"},
+		},
+		{
+			name:  "unknown platforms are not penalised",
+			query: "doom",
+			games: []catalog.Game{
+				{ID: "console", Title: "Doom Alpha", Platforms: console},
+				{ID: "unknown", Title: "Doom Chronicles"},
+			},
+			want: []string{"unknown", "console"},
+		},
+		{
+			name:  "exact console title still beats pc substring",
+			query: "doom",
+			games: []catalog.Game{
+				{ID: "pc", Title: "The Doom Chronicles", Platforms: pc},
+				{ID: "console", Title: "Doom", Platforms: console},
+			},
+			want: []string{"console", "pc"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewService(fakeLibrary{}, fakeCatalog{games: tc.games}, noReleases())
+			result := mustSearch(t, s, tc.query)
+			var got []string
+			for _, hit := range result.Games {
+				got = append(got, hit.ID)
+			}
+			if strings.Join(got, ",") != strings.Join(tc.want, ",") {
+				t.Fatalf("order = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
