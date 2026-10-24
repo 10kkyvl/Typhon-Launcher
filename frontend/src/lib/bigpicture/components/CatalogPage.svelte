@@ -251,8 +251,8 @@
   .filter-caption { justify-content: space-between; color: var(--text-2); font-size: 1.5rem; font-weight: 700; }
   .count, .filter-chip span { color: var(--text-3); font-size: 1.3rem; font-weight: 500; }
   .filter-strip, .sort-strip { display: flex; align-items: center; flex-wrap: wrap; gap: .8rem; }
-  .filter-chip, .sort-button { min-height: 4.6rem; display: inline-flex; align-items: center; justify-content: center; gap: .8rem; padding: 0 1.5rem; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-1); color: var(--text-2); font-size: 1.45rem; font-weight: 650; cursor: pointer; }
-  .filter-chip.selected, .sort-button.selected { border-color: color-mix(in srgb, var(--accent) 75%, white); background: color-mix(in srgb, var(--accent) 18%, var(--surface-1)); color: var(--text); }
+  .filter-chip, .sort-button { min-height: 4.6rem; display: inline-flex; align-items: center; justify-content: center; gap: .8rem; padding: 0 1.5rem; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text-2); font-size: 1.45rem; font-weight: 650; cursor: pointer; }
+  .filter-chip.selected, .sort-button.selected { border-color: color-mix(in srgb, var(--accent) 75%, white); background: color-mix(in srgb, var(--accent) 18%, var(--surface)); color: var(--text); }
   .sort-strip { padding-top: .5rem; }
   .sort-label { margin-right: .5rem; color: var(--text-3); font-size: 1.4rem; }
   .notice { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; padding: 1.4rem 1.8rem; border: 1px solid var(--border); border-radius: 1.2rem; background: var(--surface-2); color: var(--text-2); font-size: 1.5rem; }
