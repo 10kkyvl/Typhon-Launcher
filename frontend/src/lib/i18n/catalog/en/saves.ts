@@ -41,4 +41,9 @@ export const saves: Record<SavesKey, Message> = {
   'saves.listFailed': 'Could not load the list of backups',
   'saves.autoFailed': 'Could not back up saves for “{title}”. {reason}',
   'saves.autoRotationFailed': 'Saves backup for “{title}” created. {reason}',
+  'saves.kindLaunch': 'Before launch',
+  'saves.playedAfter': 'Played after: {time}',
+  'saves.playedAfterNone': 'Not played since',
+  'saves.largeWarning': 'Large saves: every snapshot takes a lot of disk space and time before the game starts.',
+  'saves.launchFailed': '“{title}” was launched without a saves backup. {reason}',
 };

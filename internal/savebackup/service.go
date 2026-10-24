@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"typhon/internal/hashdir"
 	"typhon/internal/library"
 	"typhon/internal/settings"
 	"typhon/internal/uierr"
@@ -29,6 +30,23 @@ const (
 // SnapshotPath and keeps working either way, as it did before this service.
 const playerBackups = true
 
+const (
+	launchTimeout   = 20 * time.Second
+	largeSavesBytes = 500 << 20
+)
+
+// Played is the play time after one moment; Known is false when the play log
+// cannot answer for it.
+type Played struct {
+	Seconds int64
+	Known   bool
+}
+
+// PlaytimeFunc answers for every moment in since at once, in the same order:
+// the play log is read once per List, not once per snapshot. An error means
+// nothing is known.
+type PlaytimeFunc func(gameID string, since []time.Time) ([]Played, error)
+
 type games interface {
 	Find(id string) (library.Game, error)
 	LocateSaves(ctx context.Context, id string) (library.SavesResult, error)
@@ -44,11 +62,17 @@ type Service struct {
 	now        func() time.Time
 	enabled    bool
 
+	launchTimeout time.Duration
+	largeAt       int64
+	playtime      PlaytimeFunc
+
 	mu      sync.Mutex
 	ctx     context.Context
 	cancel  context.CancelFunc
 	closing bool
-	locks   map[string]*sync.Mutex
+	locks   map[string]chan struct{}
+	warned  map[string]bool
+	build   func(ctx context.Context, root string, onProgress func(hashdir.Progress)) (hashdir.Manifest, error)
 	wg      sync.WaitGroup
 }
 
@@ -88,9 +112,21 @@ func newServiceAt(dir string, config func() settings.Settings, g games) (*Servic
 		games:      g,
 		emit:       emitEvent,
 		now:        time.Now,
-		locks:      map[string]*sync.Mutex{},
+		locks:      map[string]chan struct{}{},
+		warned:     map[string]bool{},
+		build:      hashdir.Build,
 		enabled:    true,
+
+		launchTimeout: launchTimeout,
+		largeAt:       largeSavesBytes,
 	}, nil
+}
+
+//wails:ignore
+func (s *Service) SetPlaytime(fn PlaytimeFunc) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.playtime = fn
 }
 
 func (s *Service) Enabled() bool {
@@ -172,16 +208,33 @@ func (s *Service) beginRooted() (context.Context, func(), error) {
 	return s.begin(root)
 }
 
-func (s *Service) lockGame(id string) func() {
+func (s *Service) gameSem(id string) chan struct{} {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	l, ok := s.locks[id]
 	if !ok {
-		l = &sync.Mutex{}
+		l = make(chan struct{}, 1)
 		s.locks[id] = l
 	}
-	s.mu.Unlock()
-	l.Lock()
-	return l.Unlock
+	return l
+}
+
+func (s *Service) lockGame(id string) func() {
+	l := s.gameSem(id)
+	l <- struct{}{}
+	return func() { <-l }
+}
+
+// lockGameCtx is lockGame that gives up when ctx ends, for the launch path
+// that must not wait behind a long copy.
+func (s *Service) lockGameCtx(ctx context.Context, id string) (func(), error) {
+	l := s.gameSem(id)
+	select {
+	case l <- struct{}{}:
+		return func() { <-l }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 func (s *Service) gameDir(id string) string {
@@ -200,7 +253,41 @@ func (s *Service) List(ctx context.Context, gameID string) ([]Snapshot, error) {
 	if !validName(gameID) {
 		return nil, errInvalidID
 	}
-	return s.list(ctx, gameID)
+	list, err := s.list(ctx, gameID)
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	played := s.playtime
+	s.mu.Unlock()
+	if played == nil {
+		return list, nil
+	}
+	var idx []int
+	var since []time.Time
+	for i := range list {
+		if !list[i].Broken {
+			idx = append(idx, i)
+			since = append(since, list[i].CreatedAt)
+		}
+	}
+	if len(idx) == 0 {
+		return list, nil
+	}
+	answers, err := played(gameID, since)
+	if err == nil && len(answers) != len(since) {
+		err = fmt.Errorf("play log answered %d of %d moments", len(answers), len(since))
+	}
+	if err != nil {
+		slog.Warn("playtime after snapshots unknown", "game", gameID, "error", err)
+		return list, nil
+	}
+	for n, i := range idx {
+		if answers[n].Known {
+			list[i].PlayedAfterSeconds, list[i].PlayedAfterKnown = answers[n].Seconds, true
+		}
+	}
+	return list, nil
 }
 
 func (s *Service) Create(ctx context.Context, gameID string) (Snapshot, error) {
@@ -329,6 +416,136 @@ func (s *Service) SessionStopped(gameID string) {
 	}()
 }
 
+// SessionStarting takes the copy before the game process starts. It is a
+// library.LaunchHook: the game launches whatever this returns, except for a
+// library.LaunchBlockedError, which means an interrupted rollback is still
+// unresolved and launching could cost the player's saves. The copy runs in a
+// goroutine owned by the service and the hook waits for it only until the
+// deadline: a step that ignores ctx (a dead network share, a cloud
+// placeholder) cannot hold the game back, and the goroutine cleans up after
+// itself when it finally returns.
+//
+//wails:ignore
+func (s *Service) SessionStarting(ctx context.Context, game library.Game) error {
+	if !s.enabled || !s.config().SaveBackupBeforeLaunch {
+		return nil
+	}
+	ctx, end, err := s.begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer end()
+	capCtx, cancel := context.WithTimeout(ctx, s.launchTimeout)
+	defer cancel()
+
+	done := make(chan launchResult, 1)
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		snap, created, err := s.launchCapture(capCtx, game.ID)
+		done <- launchResult{snap, created, err}
+	}()
+	select {
+	case r := <-done:
+		return s.finishLaunch(ctx, capCtx, game.ID, r)
+	case <-capCtx.Done():
+		select {
+		case r := <-done:
+			return s.finishLaunch(ctx, capCtx, game.ID, r)
+		default:
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return s.launchTimedOut(game.ID)
+	}
+}
+
+type launchResult struct {
+	snap    Snapshot
+	created bool
+	err     error
+}
+
+func (s *Service) launchTimedOut(gameID string) error {
+	if _, err := os.Lstat(s.journalPath(gameID)); !errors.Is(err, fs.ErrNotExist) {
+		s.emit(Event{GameID: gameID, Kind: KindLaunch, Status: StatusFailed, Code: uierr.Code(errRecoveryPending), Error: errRecoveryPending.Error()})
+		return &library.LaunchBlockedError{Err: errRecoveryPending}
+	}
+	s.emit(Event{GameID: gameID, Kind: KindLaunch, Status: StatusFailed, Code: uierr.Code(errLaunchTimeout), Error: errLaunchTimeout.Error()})
+	return errLaunchTimeout
+}
+
+func (s *Service) finishLaunch(ctx, capCtx context.Context, gameID string, r launchResult) error {
+	failed := func(err error) error {
+		s.emit(Event{GameID: gameID, Kind: KindLaunch, Status: StatusFailed, Code: uierr.Code(err), Error: err.Error()})
+		return err
+	}
+	var blocked *library.LaunchBlockedError
+	switch {
+	case r.err == nil && r.created:
+		s.emit(createdEvent(r.snap, nil))
+		return nil
+	case r.created:
+		s.emit(createdEvent(r.snap, r.err))
+		return r.err
+	case ctx.Err() != nil:
+		return ctx.Err()
+	case errors.As(r.err, &blocked):
+		return failed(r.err)
+	case errors.Is(r.err, context.DeadlineExceeded) && errors.Is(capCtx.Err(), context.DeadlineExceeded):
+		return s.launchTimedOut(gameID)
+	case library.IsGameNotFound(r.err), errors.Is(r.err, errUnchanged):
+		return nil
+	case errors.Is(r.err, errSavesNotFound) && !errors.Is(r.err, errSavesUnreadable) && !errors.Is(r.err, errSavesHintsFailed):
+		return nil
+	case errors.Is(r.err, errSavesNotFound), errors.Is(r.err, errSavesAmbiguous), errors.Is(r.err, errSavesCacheLike):
+		code := uierr.Code(r.err)
+		s.emit(Event{GameID: gameID, Kind: KindLaunch, Status: StatusSkipped, Code: code, Error: r.err.Error()})
+		s.warnOnce(gameID, code, r.err)
+		return nil
+	default:
+		return failed(r.err)
+	}
+}
+
+func (s *Service) warnOnce(gameID, code string, err error) {
+	key := gameID + "|" + code
+	s.mu.Lock()
+	seen := s.warned[key]
+	s.warned[key] = true
+	s.mu.Unlock()
+	if !seen {
+		slog.Warn("pre-launch save copy skipped", "game", gameID, "code", code, "error", err)
+	}
+}
+
+func (s *Service) launchCapture(ctx context.Context, gameID string) (Snapshot, bool, error) {
+	if !validName(gameID) {
+		return Snapshot{}, false, errInvalidID
+	}
+	unlock, err := s.lockGameCtx(ctx, gameID)
+	if err != nil {
+		return Snapshot{}, false, err
+	}
+	defer unlock()
+	if err := s.recoverJournal(gameID); err != nil {
+		return Snapshot{}, false, &library.LaunchBlockedError{Err: fmt.Errorf("%w: %w", errRecoveryPending, err)}
+	}
+	if err := s.recoverGame(ctx, gameID); err != nil {
+		return Snapshot{}, false, err
+	}
+	src, err := s.locate(ctx, gameID)
+	if err != nil {
+		return Snapshot{}, false, err
+	}
+	snap, created, err := s.capture(ctx, gameID, src, KindLaunch, captureOpts{dedup: dedupLatest, rotate: true, cheap: true})
+	if err == nil && !created {
+		return snap, false, errUnchanged
+	}
+	return snap, created, err
+}
+
 func (s *Service) autoBackup(ctx context.Context, gameID string) {
 	ev := Event{GameID: gameID, Kind: KindSession}
 	snap, created, err := s.autoCapture(ctx, gameID)
@@ -394,7 +611,10 @@ func (s *Service) locate(ctx context.Context, gameID string) (string, error) {
 	case len(res.Rejected) > 0:
 		return "", fmt.Errorf("%w: %s; укажите папку сохранений вручную", errSavesCacheLike, res.Rejected[0].Path)
 	case res.Unreadable > 0:
-		return "", fmt.Errorf("%w: не удалось прочитать каталогов %d", errSavesNotFound, res.Unreadable)
+		return "", fmt.Errorf("%w: %w: %d", errSavesNotFound, errSavesUnreadable, res.Unreadable)
+	}
+	if res.HintsError != "" {
+		return "", fmt.Errorf("%w: %w: %s", errSavesNotFound, errSavesHintsFailed, res.HintsError)
 	}
 	return "", errSavesNotFound
 }

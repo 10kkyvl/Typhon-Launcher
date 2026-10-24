@@ -54,6 +54,7 @@ export interface Settings {
   updateAutoInstall: boolean;
   updateSaveBackup: boolean;
   saveBackupAfterSession: boolean;
+  saveBackupBeforeLaunch: boolean;
   cloudSaves: boolean;
   saveBackupLimit: number;
   keepPreviousVersion: string;
@@ -123,6 +124,7 @@ const fallbackDefaults: Settings = {
   updateAutoInstall: false,
   updateSaveBackup: true,
   saveBackupAfterSession: true,
+  saveBackupBeforeLaunch: true,
   cloudSaves: false,
   saveBackupLimit: 5,
   keepPreviousVersion: 'first_launch',

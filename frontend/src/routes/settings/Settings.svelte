@@ -1155,6 +1155,17 @@
             </div>
             <div class="row">
               <div class="row-text">
+                <span class="row-label">{msg('settings.downloadsSaveBackupBeforeLaunchLabel')}</span>
+                <span class="row-sub">{msg('settings.downloadsSaveBackupBeforeLaunchSub')}</span>
+              </div>
+              <Toggle
+                checked={current?.saveBackupBeforeLaunch ?? true}
+                label={msg('settings.downloadsSaveBackupBeforeLaunchToggle')}
+                onchange={(v) => set({ saveBackupBeforeLaunch: v })}
+              />
+            </div>
+            <div class="row">
+              <div class="row-text">
                 <span class="row-label">{msg('settings.downloadsSaveBackupLimitLabel')}</span>
                 <span class="row-sub">{msg('settings.downloadsSaveBackupLimitSub')}</span>
               </div>

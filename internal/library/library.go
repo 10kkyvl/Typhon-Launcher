@@ -205,6 +205,7 @@ type Service struct {
 	onLaunchFail  func(gameID, code, reason string)
 	playRecord    func(gameID string, startedAt, endedAt time.Time)
 	watchers      []SessionWatcher
+	launchHooks   []LaunchHook
 	usageRecord   func(ev usagestats.Event)
 	historyRecord func(r history.Record) error
 	wg            sync.WaitGroup
@@ -242,6 +243,22 @@ type SessionWatcher interface {
 	SessionStarted(game Game)
 	SessionStopped(gameID string)
 }
+
+// LaunchHook вызывается синхронно после подготовки окружения и до старта
+// процесса, без блокировки библиотеки. Ошибка хука запуск не отменяет:
+// библиотека пишет её в журнал и стартует игру; отмену запуска хук видит по ctx.
+type LaunchHook interface {
+	SessionStarting(ctx context.Context, game Game) error
+}
+
+// LaunchBlockedError is the one hook failure that stops the launch: the hook
+// found that starting the game now would risk the player's data. Any other
+// hook error is only logged.
+type LaunchBlockedError struct{ Err error }
+
+func (e *LaunchBlockedError) Error() string { return e.Err.Error() }
+
+func (e *LaunchBlockedError) Unwrap() error { return e.Err }
 
 type SessionChangeWatcher interface {
 	SessionChanged(game Game, startedAt time.Time)
@@ -694,6 +711,16 @@ func (s *Service) AddSessionWatcher(w SessionWatcher) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.watchers = append(s.watchers, w)
+}
+
+//wails:ignore
+func (s *Service) AddLaunchHook(h LaunchHook) {
+	if h == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.launchHooks = append(s.launchHooks, h)
 }
 
 //wails:ignore

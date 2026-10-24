@@ -653,6 +653,8 @@ func main() {
 	}
 	libraryService.AddSessionWatcher(presenceWatcher)
 	libraryService.AddSessionWatcher(saveBackupService)
+	libraryService.AddLaunchHook(saveBackupService)
+	saveBackupService.SetPlaytime(savebackup.PlaytimeFrom(playlogService, time.Now))
 	libraryService.AddSessionWatcher(cloudSavesService)
 	libraryService.AddSessionWatcher(achievementsService)
 	playWatcher := downloadManager.PlayWatcher()

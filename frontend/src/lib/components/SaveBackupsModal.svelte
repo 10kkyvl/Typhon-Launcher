@@ -9,7 +9,7 @@
   import { chooseSavesDir } from '../game/actions/saves';
   import { cloudCodeText, cloudErrorText, cloudStateKind, cloudStateLabel } from '../cloudsaves/messages';
   import { errorCode, msg } from '../i18n';
-  import { saveBackupErrorText, snapshotKindLabel, snapshotWhen } from '../savebackup/messages';
+  import { saveBackupErrorText, snapshotKindLabel, snapshotPlayedAfter, snapshotWhen } from '../savebackup/messages';
   import { cloudDeleteRemote, cloudPullRemote, cloudSyncNow } from '../services/cloudsaves';
   import { saveAttribution } from '../game/extras';
   import { metadataErrorText } from '../metadata/metadataErrors';
@@ -439,6 +439,9 @@
         {#if gameRunning}
           <p class="warning">{msg('saves.gameRunning')}</p>
         {/if}
+        {#if snapshots.some((s) => s.large)}
+          <p class="warning">{msg('saves.largeWarning')}</p>
+        {/if}
 
         {#if snapshots.length > 0}
           <ul class="snapshots">
@@ -457,6 +460,9 @@
                     <span class="snapshot-meta">
                       {snapshotKindLabel(snapshot.kind)} · {bytesSize(snapshot.sizeBytes)} · {msg('saves.filesCount', { count: snapshot.files })}
                     </span>
+                    {#if snapshotPlayedAfter(snapshot)}
+                      <span class="snapshot-meta">{snapshotPlayedAfter(snapshot)}</span>
+                    {/if}
                   {/if}
                 </div>
                 <div class="actions">

@@ -178,6 +178,7 @@ export const games = {
   'games.actionStatus': 'Статус: {status}',
   'games.actionRemoveLibrary': 'Удалить из библиотеки',
   'games.actionOpenSaves': 'Открыть сохранения',
+  'games.detailSavesRollback': 'Откатить сохранение',
   'games.actionSavesBackups': 'Сохранения…',
   'games.actionVerify': 'Проверить файлы',
   'games.actionMove': 'Переместить на другой диск',

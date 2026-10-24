@@ -80,6 +80,9 @@ func TestRecordRollsBackOnPersistFailure(t *testing.T) {
 	if !status.Degraded || status.Message == "" {
 		t.Fatalf("status = %+v, want degraded with a message", status)
 	}
+	if got := s.Degraded(); got != status {
+		t.Fatalf("Degraded() = %+v, want %+v", got, status)
+	}
 
 	s.mu.Lock()
 	s.path = filepath.Join(root, "playlog.json")
