@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -145,8 +146,38 @@ func TestForwardSendsWailsPayload(t *testing.T) {
 	if len(got.Args) != 3 || got.Args[2] != "g1" || got.WorkingDir != `C:\work` {
 		t.Fatalf("payload = %s", api.sentData)
 	}
-	if api.asked[0] != "typhon-com.typhon.launcher-early" || api.asked[1] != "wails-app-com.typhon.launcher-sic" || api.askedTitle != "wails-app-com.typhon.launcher-siw" {
+	if api.asked[0] != "typhon-com.typhon.launcher-early" || api.asked[1] != "typhon-com.typhon.launcher-handoff" || api.askedTitle != "typhon-com.typhon.launcher-handoff" {
 		t.Fatalf("names = %v %q", api.asked, api.askedTitle)
+	}
+}
+
+func TestForwardToAnOlderLauncherUsesTheWailsWindow(t *testing.T) {
+	api := &fakeAPI{first: true, running: true, appearsAt: 1}
+	c := &clock{}
+	if _, err := forward(t.Context(), api, c.wait, "com.typhon.launcher", []string{"typhon.exe"}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if api.asked[2] != "wails-app-com.typhon.launcher-sic" || api.askedTitle != "wails-app-com.typhon.launcher-siw" {
+		t.Fatalf("names = %v %q", api.asked, api.askedTitle)
+	}
+}
+
+func TestDispatcherKeepsOrderAndDrainsOnClose(t *testing.T) {
+	var mu sync.Mutex
+	var got []string
+	d := newDispatcher(func(args []string) {
+		mu.Lock()
+		got = append(got, args[0])
+		mu.Unlock()
+	})
+	for _, v := range []string{"a", "b", "c", "d", "e"} {
+		d.push([]string{v})
+	}
+	d.close()
+	mu.Lock()
+	defer mu.Unlock()
+	if strings.Join(got, "") != "abcde" {
+		t.Fatalf("got %v", got)
 	}
 }
 

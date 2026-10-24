@@ -3,29 +3,18 @@
 package instance
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"runtime"
+	"strconv"
+	"sync"
 	"syscall"
 	"testing"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
-
-type wndClass struct {
-	size       uint32
-	style      uint32
-	proc       uintptr
-	clsExtra   int32
-	wndExtra   int32
-	instance   windows.Handle
-	icon       windows.Handle
-	cursor     windows.Handle
-	background windows.Handle
-	menuName   *uint16
-	className  *uint16
-	iconSm     windows.Handle
-}
 
 type received struct {
 	id      uintptr
@@ -160,5 +149,120 @@ func TestClaimGoesToTheFirstCaller(t *testing.T) {
 		if err != nil || got != want {
 			t.Fatalf("claim %d = %v, %v; want %v", i, got, err, want)
 		}
+	}
+}
+
+func sendToReceiver(id string, args ...string) error {
+	var sys windowsAPI
+	name := earlyPrefix + id + handoffSuffix
+	window, err := sys.FindWindow(name, name)
+	if err != nil {
+		return err
+	}
+	if window == 0 {
+		return errors.New("receiver window not found")
+	}
+	payload, err := json.Marshal(message{Args: args})
+	if err != nil {
+		return err
+	}
+	return sys.Send(window, copyDataID, string(payload))
+}
+
+func TestListenTakesABurstWhileTheMainThreadPumpsNothing(t *testing.T) {
+	const id = "typhon.listen.burst"
+	var mu sync.Mutex
+	var got []string
+	l, err := Listen(t.Context(), id, func(args []string) {
+		mu.Lock()
+		got = append(got, args[0])
+		mu.Unlock()
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := l.Close(); err != nil {
+			t.Errorf("close: %v", err)
+		}
+	}()
+
+	for i := range 10 {
+		if err := sendToReceiver(id, strconv.Itoa(i)); err != nil {
+			t.Fatalf("send %d: %v", i, err)
+		}
+	}
+	var wg sync.WaitGroup
+	for i := range 10 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := sendToReceiver(id, "p"+strconv.Itoa(i)); err != nil {
+				t.Errorf("parallel send %d: %v", i, err)
+			}
+		}()
+	}
+	wg.Wait()
+	if err := l.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(got) != 20 {
+		t.Fatalf("received %d of 20: %v", len(got), got)
+	}
+	for i := range 10 {
+		if got[i] != strconv.Itoa(i) {
+			t.Fatalf("order lost: %v", got[:10])
+		}
+	}
+}
+
+func TestListenStopsWithoutLeakingGoroutines(t *testing.T) {
+	const id = "typhon.listen.stop"
+	before := runtime.NumGoroutine()
+	ctx, cancel := context.WithCancel(t.Context())
+	l, err := Listen(ctx, id, func([]string) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Listen(t.Context(), id, func([]string) {}); !errors.Is(err, ErrAlreadyListening) {
+		t.Fatalf("second Listen err = %v", err)
+	}
+	cancel()
+	if err := l.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := sendToReceiver(id, "late"); err == nil {
+		t.Fatal("the receiver window survived Close")
+	}
+	if after := runtime.NumGoroutine(); after > before {
+		t.Fatalf("goroutines: %d before, %d after", before, after)
+	}
+}
+
+func TestForwardReachesTheReceiverOfAFirstInstance(t *testing.T) {
+	const id = "typhon.listen.forward"
+	var sys windowsAPI
+	if first, err := sys.Claim(earlyPrefix + id + earlySuffix); err != nil || !first {
+		t.Fatalf("claim = %v, %v", first, err)
+	}
+	got := make(chan []string, 1)
+	l, err := Listen(t.Context(), id, func(args []string) { got <- args })
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := l.Close(); err != nil {
+			t.Errorf("close: %v", err)
+		}
+	}()
+	forwarded, err := forward(t.Context(), sys, sleep, id, []string{"typhon.exe", "--open", "library"}, "")
+	if err != nil || !forwarded {
+		t.Fatalf("forward = %v, %v", forwarded, err)
+	}
+	if args := <-got; len(args) != 3 || args[2] != "library" {
+		t.Fatalf("args = %v", args)
 	}
 }

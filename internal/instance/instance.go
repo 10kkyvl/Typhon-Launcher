@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 )
 
@@ -22,6 +23,10 @@ const (
 
 	earlyPrefix = "typhon-"
 	earlySuffix = "-early"
+	// The Wails receiver writes into a one-slot channel that nothing drains until
+	// its main loop runs, so a burst of launches deadlocks the first instance's
+	// main thread; the first instance listens on a window of its own instead.
+	handoffSuffix = "-handoff"
 
 	deadline  = 30 * time.Second
 	pollEvery = 50 * time.Millisecond
@@ -29,9 +34,10 @@ const (
 )
 
 var (
-	ErrNoID        = errors.New("single instance id is empty")
-	ErrNotTaken    = errors.New("the running instance did not take the launch in time")
-	ErrSendTimeout = errors.New("the running instance did not process the message in time")
+	ErrAlreadyListening = errors.New("this process already listens for second launches")
+	ErrNoID             = errors.New("single instance id is empty")
+	ErrNotTaken         = errors.New("the running instance did not take the launch in time")
+	ErrSendTimeout      = errors.New("the running instance did not process the message in time")
 )
 
 type message struct {
@@ -46,6 +52,67 @@ type api interface {
 	MutexExists(name string) (bool, error)
 	FindWindow(class, title string) (uintptr, error)
 	Send(window uintptr, dataID uintptr, payload string) error
+}
+
+type Listener interface {
+	Close() error
+}
+
+type dispatcher struct {
+	mu    sync.Mutex
+	queue [][]string
+	wake  chan struct{}
+	stop  chan struct{}
+	done  chan struct{}
+	sink  func(args []string)
+}
+
+func newDispatcher(sink func(args []string)) *dispatcher {
+	d := &dispatcher{wake: make(chan struct{}, 1), stop: make(chan struct{}), done: make(chan struct{}), sink: sink}
+	go d.run()
+	return d
+}
+
+func (d *dispatcher) push(args []string) {
+	d.mu.Lock()
+	d.queue = append(d.queue, args)
+	d.mu.Unlock()
+	select {
+	case d.wake <- struct{}{}:
+	default:
+	}
+}
+
+func (d *dispatcher) run() {
+	defer close(d.done)
+	for {
+		d.drain()
+		select {
+		case <-d.wake:
+		case <-d.stop:
+			d.drain()
+			return
+		}
+	}
+}
+
+func (d *dispatcher) drain() {
+	for {
+		d.mu.Lock()
+		if len(d.queue) == 0 {
+			d.mu.Unlock()
+			return
+		}
+		args := d.queue[0]
+		d.queue = d.queue[1:]
+		d.mu.Unlock()
+		d.sink(args)
+	}
+}
+
+func (d *dispatcher) close() {
+	close(d.stop)
+	<-d.done
 }
 
 type waiter func(ctx context.Context, d time.Duration) error
@@ -77,6 +144,7 @@ func forward(ctx context.Context, sys api, wait waiter, id string, args []string
 		return false, ErrNoID
 	}
 	prefix := namePrefix + id
+	class, title := earlyPrefix+id+handoffSuffix, earlyPrefix+id+handoffSuffix
 	first, err := sys.Claim(earlyPrefix + id + earlySuffix)
 	if err != nil {
 		return false, fmt.Errorf("claim the first instance: %w", err)
@@ -90,13 +158,14 @@ func forward(ctx context.Context, sys api, wait waiter, id string, args []string
 		if !running {
 			return false, nil
 		}
+		class, title = prefix+classSuffix, prefix+windowSuffix
 	}
 	payload, err := json.Marshal(message{Args: args, WorkingDir: workDir})
 	if err != nil {
 		return false, fmt.Errorf("encode launch data: %w", err)
 	}
 	for waited := time.Duration(0); waited < deadline; {
-		window, err := sys.FindWindow(prefix+classSuffix, prefix+windowSuffix)
+		window, err := sys.FindWindow(class, title)
 		if err != nil {
 			return false, fmt.Errorf("find the running instance window: %w", err)
 		}
