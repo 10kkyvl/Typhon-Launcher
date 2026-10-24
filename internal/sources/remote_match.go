@@ -234,9 +234,9 @@ func mergeBatch(out map[string]resolvedRemoteMatch, keys []string, matches []cat
 // With everything cached the launcher never asks the server anything, so a new
 // rules version would stay unknown for good. One release is asked to learn the
 // current version; when it moved on, the saved matches made under older rules
-// are asked again in the same pass. An unchanged version leaves the cache as it is. A failed second batch leaves those releases
-// on their saved match and under their old rules version, so the next pass asks
-// again.
+// are asked again in the same pass. An unchanged version leaves the cache as
+// it is. A failed second batch leaves those releases on their saved match and
+// under their old rules version, so the next pass asks again.
 func (s *Service) probeRulesVersion(ctx context.Context, run *refreshRun, now time.Time, out map[string]resolvedRemoteMatch, byKey map[string]*Release, cached map[string]*RemoteMatch, known int) (map[string]resolvedRemoteMatch, *catalog.PartialMatchError, error) {
 	if !s.rulesProbeDue(now) {
 		return out, nil, nil
