@@ -6,6 +6,7 @@
     ChevronDown,
     ChevronRight,
     Clock,
+    Dices,
     EyeOff,
     LayoutGrid,
     List,
@@ -27,6 +28,7 @@
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import GameCard, { type GameCardAction } from '../../lib/components/GameCard.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
+  import RandomGameModal from '../../lib/components/RandomGameModal.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import SearchInput from '../../lib/components/SearchInput.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
@@ -87,6 +89,7 @@
   let heroHidden = $state(false);
   let activeCollectionId = $state('');
   let collectionOpen = $state(false);
+  let randomOpen = $state(false);
   let collectionTarget = $state<LibraryCollection | null>(null);
   let catalogGames = $state<Record<string, CatalogGame>>({});
   const installedByGame = $derived.by(() => {
@@ -482,6 +485,10 @@
         <SearchInput bind:value={search} placeholder={msg('games.librarySearchPlaceholder')} />
       </div>
       <div class="toolbar-right">
+        <Chip onclick={() => (randomOpen = true)}>
+          <Dices size="1.4rem" strokeWidth={1.8} />
+          {msg('games.randomButton')}
+        </Chip>
         {#each filters as f (f.id)}
           <Chip selected={filter === f.id} onclick={() => (filter = nextLibraryFilter(filter, f.id))}>
             {#if f.icon}
@@ -628,6 +635,10 @@
     {/if}
   </section>
 </Card>
+
+{#if randomOpen}
+  <RandomGameModal onclose={() => (randomOpen = false)} />
+{/if}
 
 {#if collectionOpen}
   <CollectionModal bind:open={collectionOpen} collection={collectionTarget} genres={knownGenres} />
