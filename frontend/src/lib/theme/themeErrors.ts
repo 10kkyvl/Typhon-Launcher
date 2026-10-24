@@ -18,6 +18,7 @@ export const REASONS: Record<string, MessageKey> = {
   'theme.dialog_unavailable': 'theme.dialog_unavailable',
   'theme.token_kind': 'theme.token_kind',
   'theme.skill_invalid_path': 'theme.skill_invalid_path',
+  'theme.skill_write_failed': 'theme.skill_write_failed',
 };
 
 const TOKEN = /(--[a-z0-9-]+) \(/;

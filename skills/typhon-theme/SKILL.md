@@ -71,12 +71,15 @@ outside `# 0-9 A-Z a-z space . , % ( ) / + * -` is refused: no quotes, `;`, `{}`
 
 | Kind | Accepted | Example |
 |---|---|---|
-| color | `#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`, `rgb()`/`rgba()`, `hsl()`/`hsla()`, `color-mix(in srgb, A, B 30%)`, `transparent`. Color names such as `red` are refused | `rgba(46, 196, 182, 0.16)` |
-| length | `0`, or a number with `px`, `rem`, `em`, `%`, `vw` or `vh` (may be negative); `calc()` with spaces around operators, `min()`, `max()`, `clamp(a, b, c)` of those. A bare number like `12` is refused | `0.8rem` |
-| time | number with `ms` or `s`, not negative. A bare `300` is refused | `160ms` |
-| ease | `cubic-bezier(x1, y1, x2, y2)` with x1 and x2 between 0 and 1, `linear`, `ease`, `ease-in`, `ease-out`, `ease-in-out` | `cubic-bezier(0.2, 0.8, 0.2, 1)` |
-| shadow | `none`, or comma-separated shadows: optional `inset`, 2–4 lengths and exactly one color each | `0 2rem 6rem rgba(0, 0, 0, 0.55)` |
-| font | comma-separated family names of letters, digits, spaces and hyphens, no quotes; end with a generic family (`sans-serif`, `serif`, `monospace`, `system-ui`) | `Inter, Segoe UI, sans-serif` |
+| color | `#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`; `rgb()`/`rgba()`/`hsl()`/`hsla()` (commas `rgb(1, 2, 3)` or spaces `rgb(1 2 3 / 50%)`, never mixed, no trailing comma); `oklch()`, `oklab()`, `lab()`, `lch()`, `hwb()` (spaces only); `color(display-p3 1 0 0)`; `color-mix(in <space>, A, B 30%)` with percentages 0–100%; every CSS color name (`red`, `rebeccapurple`); `transparent`, `currentColor`; `var(--<color token>)` | `rgba(46, 196, 182, 0.16)` |
+| length | `0`, or a number with `px`, `rem`, `em`, `%`, `vw`, `vh`, `vmin`, `vmax`, `ch`, `ex`, `dvh`/`svh`/`lvh`, `dvw`/`svw`/`lvw`, `pt`, `cm`, `mm` or `in` (write `5px`, not `5.px`). Never negative, except for the two `--tracking-*` tokens. At most 10000 for px/pt/cm/mm/in and 1000 for every other unit. `calc()` with spaces around `+` and `-` (a length times a number, a length divided by a non-zero number; length times length is refused), `min()`, `max()`, `clamp(a, b, c)`, `var(--<length token>)`. A bare number like `12` is refused | `0.8rem` |
+| time | number with `ms` or `s`, not negative, at most 10s. A bare `300` is refused | `160ms` |
+| ease | `linear`, `ease`, `ease-in`, `ease-out`, `ease-in-out`, `step-start`, `step-end`, `steps(n)` or `steps(n, jump-end)` (also `jump-start`, `jump-none`, `jump-both`, `start`, `end`), `cubic-bezier(x1, y1, x2, y2)` with x1 and x2 between 0 and 1; case does not matter; `var(--<ease token>)` | `cubic-bezier(0.2, 0.8, 0.2, 1)` |
+| shadow | `none`, or comma-separated shadows: optional single `inset`, 2–4 lengths (may be negative), optionally one color of any form above; `var(--<shadow token>)` | `0 2rem 6rem rgba(0, 0, 0, 0.55)` |
+| font | comma-separated family names of letters, digits, spaces and hyphens, no quotes; every word must start with a letter (or `-` as in `-apple-system`), so `Source Sans 3`, `Font Awesome 5 Free` and `3270 Nerd Font` are refused (invalid without quotes: the whole UI would fall back to serif). End with a generic family (`sans-serif`, `serif`, `monospace`, `system-ui`) | `Inter, Segoe UI, sans-serif` |
+
+A `var(--token)` must name a token from tokens.md of the same kind and never the token it is
+set on.
 
 `1rem` is 11 px in Typhon (before the user's interface scale), so `1.5rem` text is about 16 px.
 
@@ -133,4 +136,11 @@ A complete dark theme ("night ocean": deep blue with a teal accent):
 - [ ] Saved with the `.typhontheme` extension, UTF-8.
 
 Tell the user to import it in **Settings → Appearance → Import** and to pick it in the theme
-list. If Typhon refuses the file, its message names the field or token; fix exactly that.
+list. If Typhon refuses the file:
+
+- the message for a wrong value lists every offending token with its kind (for example
+  `--radius-md (length), --dur (time)`); fix exactly those values;
+- for any other refusal the message does not name the field, so check in this order: `version` is
+  `1`; `id` matches the pattern; `base` is `dark` or `light`; every token name exists in
+  tokens.md (and is not `--ui-scale`); no value contains a character outside the allowed set
+  (quotes, `;`, `{}`, `url(`), and none is longer than 120 characters; `css` is empty.

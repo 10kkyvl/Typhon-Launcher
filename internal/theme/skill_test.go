@@ -108,3 +108,42 @@ func TestSaveAISkillFailsWhenTargetIsAFile(t *testing.T) {
 		t.Fatal("SaveAISkill over a file named typhon-theme returned nil")
 	}
 }
+
+func TestSaveAISkillLeavesNoStagingFolder(t *testing.T) {
+	ok := t.TempDir()
+	if _, err := skillService(t).SaveAISkill(ok); err != nil {
+		t.Fatal(err)
+	}
+	blocked := t.TempDir()
+	if err := os.WriteFile(filepath.Join(blocked, "typhon-theme"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := skillService(t).SaveAISkill(blocked); !errors.Is(err, ErrSkillWrite) {
+		t.Fatalf("SaveAISkill over a file = %v, want ErrSkillWrite", err)
+	}
+	for _, dir := range []string{ok, blocked} {
+		left, err := filepath.Glob(filepath.Join(dir, ".typhon-theme-*"))
+		if err != nil || len(left) != 0 {
+			t.Errorf("staging folders left in %s: %v, %v", dir, left, err)
+		}
+	}
+	if raw, err := os.ReadFile(filepath.Join(blocked, "typhon-theme")); err != nil || string(raw) != "x" {
+		t.Errorf("blocking file changed: %q, %v", raw, err)
+	}
+}
+
+func TestInstallSkillRollsBackOnFailure(t *testing.T) {
+	stage, root := t.TempDir(), t.TempDir()
+	if err := os.WriteFile(filepath.Join(stage, "a.md"), []byte("new-a"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "a.md"), []byte("old-a"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := installSkill(stage, root, []string{"a.md", "missing.md"}); err == nil {
+		t.Fatal("installSkill succeeded with a file missing from the stage")
+	}
+	if raw, err := os.ReadFile(filepath.Join(root, "a.md")); err != nil || string(raw) != "old-a" {
+		t.Fatalf("a.md after rollback = %q, %v, want old-a", raw, err)
+	}
+}

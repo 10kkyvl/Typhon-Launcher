@@ -11,6 +11,7 @@ type Labels struct {
 	FeedTitle, Feeds                       string
 	TargetFolder                           string
 	ThemeTitle, Themes, ExportTheme, Theme string
+	SkillFolder                            string
 	AvatarTitle, AvatarImages              string
 	CoverTitle, CoverImages                string
 	ChatImageTitle, ChatImages             string
@@ -31,6 +32,7 @@ func For(language string) Labels {
 			TargetFolder: "Выберите папку назначения",
 			ThemeTitle:   "Выберите файл темы", Themes: "Файл темы (*.typhontheme, *.json)",
 			ExportTheme: "Сохранить тему", Theme: "Файл темы (*.typhontheme)",
+			SkillFolder: "Выберите папку скиллов ИИ",
 			AvatarTitle: "Выберите аватар", AvatarImages: "Изображения (*.png, *.jpg, *.jpeg, *.webp, *.gif)",
 			CoverTitle: "Выберите обложку профиля", CoverImages: "Изображения (*.png, *.jpg, *.jpeg, *.webp)",
 			ChatImageTitle: "Выберите изображение для чата", ChatImages: "Изображения (*.png, *.jpg, *.jpeg, *.webp, *.gif)",
@@ -49,6 +51,7 @@ func For(language string) Labels {
 		TargetFolder: "Choose the destination folder",
 		ThemeTitle:   "Choose a theme file", Themes: "Theme file (*.typhontheme, *.json)",
 		ExportTheme: "Save theme", Theme: "Theme file (*.typhontheme)",
+		SkillFolder: "Choose the AI skills folder",
 		AvatarTitle: "Choose an avatar", AvatarImages: "Images (*.png, *.jpg, *.jpeg, *.webp, *.gif)",
 		CoverTitle: "Choose a profile cover", CoverImages: "Images (*.png, *.jpg, *.jpeg, *.webp)",
 		ChatImageTitle: "Choose an image for the chat", ChatImages: "Images (*.png, *.jpg, *.jpeg, *.webp, *.gif)",

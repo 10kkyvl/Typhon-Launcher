@@ -72,6 +72,7 @@ export const errLibrary = {
   'theme.dialog_unavailable': 'диалог выбора файла недоступен',
   'theme.token_kind': 'значение токена не подходит по типу',
   'theme.skill_invalid_path': 'эта папка не подходит для скилла',
+  'theme.skill_write_failed': 'не удалось записать скилл в эту папку',
   'errLibrary.themeErrFallback': 'Не удалось выполнить действие с темой',
 
   'settings.library_not_configured': 'библиотека не настроена',

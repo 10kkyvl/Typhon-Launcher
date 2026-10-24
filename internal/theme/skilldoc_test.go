@@ -16,7 +16,7 @@ func TestSkillTokenReferenceMatchesCode(t *testing.T) {
 		t.Fatalf("read skill reference: %v", err)
 	}
 	rows := map[string][2]string{}
-	for _, m := range skillTokenRow.FindAllStringSubmatch(string(data), -1) {
+	for _, m := range skillTokenRow.FindAllStringSubmatch(strings.ReplaceAll(string(data), "\r\n", "\n"), -1) {
 		rows[m[1]] = [2]string{m[2], m[3]}
 	}
 	if len(rows) != len(allowedTokens) {
@@ -42,16 +42,13 @@ func TestSkillExampleThemeIsAccepted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read skill: %v", err)
 	}
-	text := string(data)
+	text := strings.ReplaceAll(string(data), "\r\n", "\n")
 	start := strings.Index(text, "## Example")
 	if start < 0 {
 		t.Fatal("skill has no Example section")
 	}
 	block := text[start:]
 	open := strings.Index(block, "```json\n")
-	if open < 0 {
-		open = strings.Index(block, "```json\r\n")
-	}
 	if open < 0 {
 		t.Fatal("Example section has no json block")
 	}
