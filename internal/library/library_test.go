@@ -36,6 +36,7 @@ func mustServiceAt(t testing.TB, path string) *Service {
 	// секунды и сотни мегабайт на каждый запуск. Тесты запускают обычные
 	// процессы, и оставлять после прогона настоящие бутыли нельзя.
 	s.prepare = func(context.Context, launch) error { return nil }
+	s.crash = noJournalHooks()
 	// Registered after the t.TempDir() that produced path, so it runs before
 	// that directory is removed: a session goroutine still persisting into it
 	// would otherwise race the cleanup.

@@ -9,7 +9,9 @@ import (
 	"path/filepath"
 	"time"
 
+	"typhon/internal/crashlog"
 	"typhon/internal/procs"
+	"typhon/internal/redact"
 	"typhon/internal/uierr"
 	"typhon/internal/usagestats"
 )
@@ -27,6 +29,137 @@ type SessionEvent struct {
 const crashSessionSeconds = 20
 
 var emitStopped = func(ev SessionEvent) { emit("game:stopped", ev) }
+
+type CrashEvent struct {
+	GameID         string `json:"gameId"`
+	ExitCode       int    `json:"exitCode"`
+	ExitKnown      bool   `json:"exitKnown"`
+	ReasonCode     string `json:"reasonCode"`
+	FaultModule    string `json:"faultModule"`
+	ExceptionCode  string `json:"exceptionCode"`
+	Hint           string `json:"hint"`
+	MissingFile    string `json:"missingFile"`
+	SessionSeconds int64  `json:"sessionSeconds"`
+	DumpFound      bool   `json:"dumpFound"`
+	JournalUnknown bool   `json:"journalUnknown"`
+}
+
+const (
+	crashWindowSlack = 30 * time.Second
+	crashDumpDepth   = 2
+)
+
+type crashHooks struct {
+	await func(ctx context.Context, q crashlog.Query, opt crashlog.Options) (crashlog.Fault, bool, error)
+	dumps func(ctx context.Context, dirs []crashlog.DumpDir, exe string, from, to time.Time) (bool, error)
+	dir   func() (string, error)
+	emit  func(CrashEvent)
+}
+
+func defaultCrashHooks() crashHooks {
+	return crashHooks{
+		await: crashlog.Lookup,
+		dumps: crashlog.FindDump,
+		dir:   crashlog.CrashDumpsDir,
+		emit:  func(ev CrashEvent) { emit("game:crash", ev) },
+	}
+}
+
+type crashInput struct {
+	gameID     string
+	exePath    string
+	installDir string
+	exit       *exitInfo
+	seconds    int64
+	startedAt  time.Time
+	endedAt    time.Time
+}
+
+// analyzeCrash decides whether a finished session was a crash and explains
+// it. The journal is the only source for a crash in the middle of a long
+// session or for a session found by the OS (no exit code); a failed journal
+// read marks the event unknown instead of pretending nothing happened.
+func (h crashHooks) analyze(ctx context.Context, in crashInput) (CrashEvent, bool) {
+	ev := CrashEvent{GameID: in.gameID, SessionSeconds: in.seconds}
+	exitKnown := in.exit != nil && in.exit.known
+	if exitKnown {
+		ev.ExitCode = in.exit.code
+		ev.ExitKnown = true
+		ev.ReasonCode = crashReasonCode(in.exit.code)
+	}
+	short := exitFields(SessionEvent{}, in.exit, false, in.seconds).Crashed
+	exe := ""
+	if in.exePath != "" {
+		exe = filepath.Base(in.exePath)
+	}
+
+	var fault crashlog.Fault
+	found := false
+	if exe != "" {
+		opt := crashlog.DefaultOptions
+		if exitKnown && in.exit.code == 0 {
+			opt.MaxWait = 0
+		}
+		q := crashlog.Query{Exe: exe, From: in.startedAt.Add(-crashWindowSlack), To: in.endedAt.Add(crashWindowSlack)}
+		f, ok, err := h.await(ctx, q, opt)
+		switch {
+		case err == nil:
+			fault, found = f, ok
+		case errors.Is(err, crashlog.ErrUnsupported):
+		case ctx.Err() != nil:
+			return ev, false
+		default:
+			ev.JournalUnknown = true
+			slog.Warn("read application crash journal", "id", in.gameID, "error", redact.Error(err))
+		}
+	}
+	if !short && !found {
+		return ev, false
+	}
+
+	if found {
+		ev.FaultModule = fault.Module
+		if fault.HasException {
+			ev.ExceptionCode = fmt.Sprintf("0x%08X", fault.ExceptionCode)
+			if ev.ReasonCode == "" {
+				ev.ReasonCode = crashReasonCodes[fault.ExceptionCode]
+			}
+		}
+	}
+	gameDir := in.installDir
+	if gameDir == "" && in.exePath != "" {
+		gameDir = filepath.Dir(in.exePath)
+	}
+	diag, err := crashlog.Diagnose(crashlog.DiagnoseInput{
+		ExePath: in.exePath, GameDir: gameDir, Module: fault.Module, ModulePath: fault.ModulePath, ReasonCode: ev.ReasonCode,
+	})
+	if err != nil {
+		slog.Warn("collect crash evidence", "id", in.gameID, "error", redact.Error(err))
+	}
+	ev.Hint, ev.MissingFile = diag.Hint, diag.MissingFile
+	ev.DumpFound = h.findDump(ctx, in, exe, gameDir)
+
+	slog.Warn("game crash analyzed", "id", in.gameID, "exe", redact.Text(exe), "module", redact.Text(ev.FaultModule),
+		"moduleVersion", redact.Text(fault.ModuleVersion), "exception", ev.ExceptionCode, "exit", ev.ExitCode,
+		"exitKnown", ev.ExitKnown, "hint", ev.Hint, "missing", redact.Text(ev.MissingFile),
+		"dump", ev.DumpFound, "journalUnknown", ev.JournalUnknown, "sessionSeconds", in.seconds)
+	return ev, true
+}
+
+func (h crashHooks) findDump(ctx context.Context, in crashInput, exe, gameDir string) bool {
+	var dirs []crashlog.DumpDir
+	if dir, err := h.dir(); err == nil {
+		dirs = append(dirs, crashlog.DumpDir{Path: dir, MatchExe: true, MaxDepth: 1})
+	} else if !errors.Is(err, crashlog.ErrUnsupported) {
+		slog.Warn("locate crash dumps folder", "id", in.gameID, "error", redact.Error(err))
+	}
+	dirs = append(dirs, crashlog.DumpDir{Path: gameDir, MaxDepth: crashDumpDepth})
+	found, err := h.dumps(ctx, dirs, exe, in.startedAt, in.endedAt.Add(crashWindowSlack))
+	if err != nil {
+		slog.Warn("search crash dumps", "id", in.gameID, "error", redact.Error(err))
+	}
+	return found
+}
 
 type exitInfo struct {
 	code  int
@@ -203,7 +336,7 @@ func (s *Service) play(id, profileID string, explicit bool) error {
 	//nolint:gosec // G115: PID из os/exec укладывается в uint32 на Windows
 	pid := uint32(proc.pid())
 	startedAt := s.now()
-	s.running[id] = &session{process: proc, pid: pid, startedAt: startedAt, lastSeen: startedAt}
+	s.running[id] = &session{process: proc, pid: pid, exePath: game.Executable, startedAt: startedAt, lastSeen: startedAt}
 	slog.Info("game started", "id", id, "title", game.Title, "pid", proc.pid(),
 		"executable", game.Executable, "workDir", workDir)
 	for _, w := range s.watchers {
@@ -385,9 +518,11 @@ func (s *Service) finishSession(id string, startedAt time.Time) {
 
 	stoppedByUser := false
 	var exit *exitInfo
+	exePath := ""
 	if current, ok := s.running[id]; ok {
 		stoppedByUser = current.stoppedByUser
 		exit = current.exit
+		exePath = current.exePath
 	}
 	delete(s.running, id)
 	for _, w := range s.watchers {
@@ -440,6 +575,23 @@ func (s *Service) finishSession(id string, startedAt time.Time) {
 				break
 			}
 		}
+	}
+	if hooks := s.crash; !stoppedByUser && s.ctx != nil && hooks.await != nil {
+		in := crashInput{gameID: id, exePath: exePath, exit: exit, seconds: seconds, startedAt: startedAt, endedAt: endedAt}
+		if game != nil {
+			in.installDir = game.InstallDir
+			if in.exePath == "" {
+				in.exePath = game.Executable
+			}
+		}
+		ctx := s.ctx
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			if ev, ok := hooks.analyze(ctx, in); ok {
+				hooks.emit(ev)
+			}
+		}()
 	}
 	if game == nil {
 		emitStopped(exitFields(SessionEvent{GameID: id, SessionSeconds: seconds}, exit, stoppedByUser, seconds))
