@@ -6,7 +6,7 @@ const NOW = Date.parse('2026-10-24T12:00:00Z');
 const DAY = 24 * 60 * 60 * 1000;
 
 function game(id: string, extra: Partial<LibraryGame> = {}): LibraryGame {
-  return { id, title: id, lastPlayed: null, ...extra } as LibraryGame;
+  return { id, title: id, lastPlayed: null, executable: `C:/games/${id}.exe`, ...extra } as LibraryGame;
 }
 
 const filters = (extra: Partial<PickFilters> = {}): PickFilters => ({ ...defaultFilters, ...extra });
@@ -22,6 +22,11 @@ describe('pickCandidates', () => {
     for (const source of ['installed', 'all', 'backlog'] as const) {
       expect(pickCandidates(games, filters({ source }), {}, [], NOW)).toEqual([]);
     }
+  });
+
+  it('installed skips games that cannot be launched', () => {
+    const games = [game('a'), game('b', { executable: '' })];
+    expect(ids(pickCandidates(games, filters(), {}, [], NOW))).toEqual(['a']);
   });
 
   it('installed skips uninstalled games, all keeps them', () => {
