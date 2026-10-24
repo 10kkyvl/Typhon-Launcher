@@ -186,8 +186,10 @@
                 {#if candidate.source === 'server'}
                   <span class="candidate-method">{msg('modals.releaseMatchFromCatalog')}</span>
                 {/if}
-                <span class="candidate-method">{candidate.method}</span>
-                <span class="candidate-score">{Math.round(candidate.score * 100)}%</span>
+                {#if candidate.source !== 'server'}
+                  <span class="candidate-method">{candidate.method}</span>
+                  <span class="candidate-score">{Math.round(candidate.score * 100)}%</span>
+                {/if}
               </button>
             {/each}
           </div>

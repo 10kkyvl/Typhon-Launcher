@@ -526,7 +526,7 @@
       hasGameId: Boolean(canonicalId),
     }),
   );
-  const similarFamily = $derived(relatedFailed ? [] : familyIds(related));
+  const similarFamily = $derived(relatedFailed ? [] : familyIds(related, canonicalId ?? ''));
   const ownOnPc = $derived(onPC(info?.platforms));
   const relatedOk = $derived(relatedLoaded && !relatedLoading && !relatedFailed);
   const hasPcRelative = $derived(related.some((item) => item.onPc));
