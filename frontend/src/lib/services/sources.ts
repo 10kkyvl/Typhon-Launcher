@@ -170,6 +170,7 @@ export interface CatalogGame {
   sortTitle: string;
   coverUrl?: string;
   serverId?: string;
+  parentId?: string;
   externalIds?: CatalogExternalIDs;
   providerLinks?: Record<string, string[]>;
   aliasIds?: string[];

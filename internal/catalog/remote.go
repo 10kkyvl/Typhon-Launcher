@@ -572,6 +572,9 @@ func (s *Service) remotePageAliasesLocked(items []Game) [][]string {
 				}
 			}
 		}
+		if parent := s.parentLocked(game); parent != "" && parent != canonical && !seen[parent] {
+			aliases[i] = append(aliases[i], parent)
+		}
 	}
 	return aliases
 }
