@@ -16,20 +16,33 @@ type UserCard struct {
 }
 
 type PlayerCardStyle struct {
-	Accent      string    `json:"accent"`
-	AvatarFrame string    `json:"avatarFrame"`
-	NameStyle   string    `json:"nameStyle"`
-	StatusEmoji string    `json:"statusEmoji,omitempty"`
-	StatusText  string    `json:"statusText,omitempty"`
-	Theme       string    `json:"theme,omitempty"`
-	CustomFrom  string    `json:"customFrom,omitempty"`
-	CustomTo    string    `json:"customTo,omitempty"`
-	CustomAngle *int      `json:"customAngle,omitempty"`
-	CoverURL    string    `json:"coverUrl,omitempty"`
-	NameColor   string    `json:"nameColor,omitempty"`
-	FrameColor  string    `json:"frameColor,omitempty"`
-	CustomPure  bool      `json:"customPure,omitempty"`
-	Pinned      *GameCard `json:"pinned,omitempty"`
+	Accent      string              `json:"accent"`
+	AvatarFrame string              `json:"avatarFrame"`
+	NameStyle   string              `json:"nameStyle"`
+	StatusEmoji string              `json:"statusEmoji,omitempty"`
+	StatusText  string              `json:"statusText,omitempty"`
+	Theme       string              `json:"theme,omitempty"`
+	CustomFrom  string              `json:"customFrom,omitempty"`
+	CustomTo    string              `json:"customTo,omitempty"`
+	CustomAngle *int                `json:"customAngle,omitempty"`
+	CoverURL    string              `json:"coverUrl,omitempty"`
+	NameColor   string              `json:"nameColor,omitempty"`
+	FrameColor  string              `json:"frameColor,omitempty"`
+	FrameImage  *account.FrameImage `json:"frameImage,omitempty"`
+	CustomPure  bool                `json:"customPure,omitempty"`
+	Pinned      *GameCard           `json:"pinned,omitempty"`
+}
+
+// UnmarshalJSON drops a frame picture that fails validation instead of failing the whole card.
+func (p *PlayerCardStyle) UnmarshalJSON(data []byte) error {
+	type plain PlayerCardStyle
+	var v plain
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	v.FrameImage = account.SanitizeFrameImage(v.FrameImage)
+	*p = PlayerCardStyle(v)
+	return nil
 }
 
 type PublicBlock struct {
@@ -96,24 +109,25 @@ type PresenceView struct {
 
 type PublicProfile struct {
 	UserCard
-	Appearance     *account.ProfileAppearance `json:"appearance,omitempty"`
-	StatusEmoji    string                     `json:"statusEmoji,omitempty"`
-	StatusText     string                     `json:"statusText,omitempty"`
-	Layout         *PublicLayout              `json:"layout,omitempty"`
-	AutoGame       *GameCard                  `json:"autoGame,omitempty"`
-	Bio            string                     `json:"bio"`
-	Relation       string                     `json:"relation"`
-	Visibility     string                     `json:"visibility"`
-	Stats          *StatsView                 `json:"stats"`
-	Favorites      []GameCard                 `json:"favorites"`
-	Showcase       []ShowcaseBlock            `json:"showcase"`
-	RecentlyPlayed []PlayedGame               `json:"recentlyPlayed"`
-	RecentActivity []ActivityView             `json:"recentActivity"`
-	Common         *CommonGames               `json:"common"`
-	MutualFriends  []UserCard                 `json:"mutualFriends"`
-	MutualCount    int                        `json:"mutualCount"`
-	CreatedAt      time.Time                  `json:"createdAt"`
-	Presence       *PresenceView              `json:"presence,omitempty"`
+	Appearance       *account.ProfileAppearance `json:"appearance,omitempty"`
+	AvatarFrameImage *account.FrameImage        `json:"avatarFrameImage,omitempty"`
+	StatusEmoji      string                     `json:"statusEmoji,omitempty"`
+	StatusText       string                     `json:"statusText,omitempty"`
+	Layout           *PublicLayout              `json:"layout,omitempty"`
+	AutoGame         *GameCard                  `json:"autoGame,omitempty"`
+	Bio              string                     `json:"bio"`
+	Relation         string                     `json:"relation"`
+	Visibility       string                     `json:"visibility"`
+	Stats            *StatsView                 `json:"stats"`
+	Favorites        []GameCard                 `json:"favorites"`
+	Showcase         []ShowcaseBlock            `json:"showcase"`
+	RecentlyPlayed   []PlayedGame               `json:"recentlyPlayed"`
+	RecentActivity   []ActivityView             `json:"recentActivity"`
+	Common           *CommonGames               `json:"common"`
+	MutualFriends    []UserCard                 `json:"mutualFriends"`
+	MutualCount      int                        `json:"mutualCount"`
+	CreatedAt        time.Time                  `json:"createdAt"`
+	Presence         *PresenceView              `json:"presence,omitempty"`
 }
 
 type ActivityView struct {

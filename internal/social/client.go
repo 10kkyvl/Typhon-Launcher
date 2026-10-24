@@ -191,6 +191,7 @@ func (c *client) profileByCode(ctx context.Context, code string) (PublicProfile,
 }
 
 func normalizeProfile(profile PublicProfile) PublicProfile {
+	profile.AvatarFrameImage = account.SanitizeFrameImage(profile.AvatarFrameImage)
 	if profile.RecentActivity == nil {
 		profile.RecentActivity = []ActivityView{}
 	}
