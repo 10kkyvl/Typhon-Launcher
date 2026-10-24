@@ -70,6 +70,7 @@ import (
 	"typhon/internal/usagestats"
 	"typhon/internal/watchlist"
 	"typhon/internal/wine"
+	"typhon/internal/wrappers"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -524,6 +525,10 @@ func main() {
 	if err != nil {
 		fatal("start redist service", err)
 	}
+	wrappersService, err := wrappers.NewService(configDir, libraryService)
+	if err != nil {
+		fatal("start wrappers service", err)
+	}
 	lanService, err := lan.NewService(settingsService, libraryService)
 	if err != nil {
 		fatal("start lan service", err)
@@ -831,6 +836,7 @@ func main() {
 		application.NewService(lanService),
 		application.NewService(relocateService),
 		application.NewService(redistService),
+		application.NewService(wrappersService),
 		// Registered whether or not telemetry ever started: the window that
 		// shows what was sent must open and say "nothing" rather than fail.
 		application.NewService(telemetrylog.NewService()),
