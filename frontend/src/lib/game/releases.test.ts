@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildKind, buildLabel, releaseBadge, releaseOrigin, repackNote } from './releases';
+import { buildKind, buildLabel, relationKey, releaseBadge, releaseOrigin, repackNote } from './releases';
 
 describe('releaseOrigin', () => {
   it('carries the release version so the install records it', () => {
@@ -144,5 +144,22 @@ describe('repackNote', () => {
   it('leaves an unattributed release alone', () => {
     expect(repackNote({ tags: ['archive'], repacker: '' }, 'Репак')).toBe('');
     expect(repackNote({}, 'Репак')).toBe('');
+  });
+});
+
+describe('relationKey', () => {
+  it('maps every relation to its label', () => {
+    expect(relationKey('original')).toBe('games.relationOriginal');
+    expect(relationKey('base')).toBe('games.relationBase');
+    expect(relationKey('remake')).toBe('games.relationRemake');
+    expect(relationKey('remaster')).toBe('games.relationRemaster');
+    expect(relationKey('expanded')).toBe('games.relationExpanded');
+    expect(relationKey('port')).toBe('games.relationPort');
+    expect(relationKey('edition')).toBe('games.relationEdition');
+    expect(relationKey('update')).toBe('games.relationUpdate');
+  });
+
+  it('falls back to the edition label for an unknown relation', () => {
+    expect(relationKey('sequel')).toBe('games.relationEdition');
   });
 });

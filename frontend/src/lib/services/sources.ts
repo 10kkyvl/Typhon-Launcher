@@ -349,6 +349,31 @@ export async function getReleasesForGame(gameId: string): Promise<ReleaseGroup[]
   return ((await SourcesService.GetReleasesForGame(gameId)) ?? []) as unknown as ReleaseGroup[];
 }
 
+export type RelatedRelation = 'original' | 'base' | 'remake' | 'remaster' | 'expanded' | 'port' | 'edition' | 'update';
+
+export interface RelatedGame {
+  id: string;
+  title: string;
+  gameType?: string;
+  relation: RelatedRelation;
+  releaseYear?: number | null;
+  platforms?: string[] | null;
+  coverUrl?: string;
+}
+
+export interface RelatedReleases {
+  game: RelatedGame;
+  gameId?: string;
+  onPc: boolean;
+  groups: ReleaseGroup[];
+}
+
+export async function getRelatedReleases(gameId: string): Promise<RelatedReleases[]> {
+  if (!inWails) return [];
+  const list = (await SourcesService.GetRelatedReleases(gameId)) ?? [];
+  return list.map((item) => ({ ...item, groups: item.groups ?? [] })) as unknown as RelatedReleases[];
+}
+
 export async function getReleasesForTitle(title: string): Promise<ReleaseGroup[]> {
   if (!inWails) return [];
   return ((await SourcesService.GetReleasesForTitle(title)) ?? []) as unknown as ReleaseGroup[];

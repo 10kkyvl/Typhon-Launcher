@@ -172,6 +172,8 @@ export type PrimaryKind =
   | 'progress'
   | 'resolving'
   | 'unavailable'
+  | 'other-versions'
+  | 'not-on-pc'
   | 'retry-download'
   | 'install-download';
 
@@ -194,6 +196,8 @@ export interface GameStatus {
   updateAvailable: boolean;
   releaseCount: number;
   releasesLoading: boolean;
+  relatedWithReleases?: boolean;
+  notOnPc?: boolean;
   busy?: BusyState | null;
 }
 
@@ -208,7 +212,16 @@ export function primaryAction(status: GameStatus): PrimaryAction {
   }
   if (status.releaseCount > 0) return { kind: 'download', label: msg('games.primaryDownload'), disabled: false };
   if (status.releasesLoading) return { kind: 'resolving', label: msg('games.primaryResolving'), disabled: true };
+  if (status.relatedWithReleases) return { kind: 'other-versions', label: msg('games.primaryOtherVersions'), disabled: false };
+  if (status.notOnPc) return { kind: 'not-on-pc', label: msg('games.primaryNotOnPc'), disabled: true };
   return { kind: 'unavailable', label: msg('games.primaryUnavailable'), disabled: true };
+}
+
+const pcPlatforms = ['PC (Microsoft Windows)', 'DOS'];
+
+export function onPC(platforms: readonly string[] | null | undefined): boolean {
+  if (!platforms || platforms.length === 0) return true;
+  return platforms.some((name) => pcPlatforms.includes(name));
 }
 
 export type TerminalDownloadStatus = 'failed' | 'completed';

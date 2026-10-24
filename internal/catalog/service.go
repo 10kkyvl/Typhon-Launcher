@@ -64,6 +64,7 @@ type Service struct {
 	lastPrune             time.Time
 	life                  pageLife
 	emit                  func(name string, data any)
+	related               relatedCache
 }
 
 func NewService() (*Service, error) {
