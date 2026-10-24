@@ -60,6 +60,10 @@ vi.mock('../../../bindings/typhon/internal/catalog', async (importOriginal) => (
   ...(await importOriginal<object>()),
   Service: (await import(FAKE)).fakeBinding('catalog'),
 }));
+vi.mock('../../../bindings/typhon/internal/wrappers', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  Service: (await import(FAKE)).fakeBinding('wrappers'),
+}));
 vi.mock('../../../bindings/typhon/internal/diagnostics', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   Service: (await import(FAKE)).fakeBinding('diagnostics'),
@@ -82,6 +86,7 @@ const loaders = import.meta.glob([
   './discovery.ts',
   './recommendations.ts',
   './logsUpload.ts',
+  './wrappers.ts',
 ]);
 
 type Fn = (...args: unknown[]) => Promise<unknown>;
@@ -217,6 +222,23 @@ describe('lists that Go may send as null', () => {
     expect(prefs).toMatchObject({ genre: 'rpg', hideNotInterested: true, hideLibrary: false, notInterested: [] });
   });
 
+  it('a wrapper report with null lists has empty ones', async () => {
+    const api = await service('wrappers', true);
+
+    answer('wrappers.Inspect', { supported: true, arch: 'x86', imports: null, suggested: '', active: { wrapper: 'dxvk', files: null }, problem: null });
+    const info = (await api.inspectWrapper('g')) as unknown as { imports: string[]; active: { files: string[] } };
+
+    expect(info.imports).toEqual([]);
+    expect(info.active.files).toEqual([]);
+  });
+
+  it('a wrapper check is unsupported, not an error, in a browser preview', async () => {
+    const api = await service('wrappers', false);
+
+    await expect(api.inspectWrapper('g')).resolves.toMatchObject({ supported: false, imports: [], active: null });
+    expect(calls).toEqual([]);
+  });
+
   it('a log upload reports no dropped files as an empty list', async () => {
     const api = await service('logsUpload', true);
 
@@ -253,6 +275,8 @@ const ACTIONS: ActionCase[] = [
   { module: 'savebackup', fn: 'createBackup', args: ['g'], binding: 'savebackup.Create', sent: ['g'] },
   { module: 'savebackup', fn: 'restoreBackup', args: ['g', 's1'], binding: 'savebackup.Restore', sent: ['g', 's1'] },
   { module: 'savebackup', fn: 'deleteBackup', args: ['g', 's1'], binding: 'savebackup.Delete', sent: ['g', 's1'] },
+  { module: 'wrappers', fn: 'enableWrapper', args: ['g', 'dxvk', 'default'], binding: 'wrappers.Enable', sent: ['g', 'dxvk', 'default'] },
+  { module: 'wrappers', fn: 'disableWrapper', args: ['g'], binding: 'wrappers.Disable', sent: ['g'] },
   { module: 'history', fn: 'clearHistory', args: [], binding: 'history.Clear', sent: [] },
   { module: 'discovery', fn: 'scanInstalledGames', args: [], binding: 'discovery.Scan', sent: [] },
   { module: 'discovery', fn: 'cancelScan', args: [], binding: 'discovery.CancelScan', sent: [] },
