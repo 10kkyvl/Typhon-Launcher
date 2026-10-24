@@ -306,3 +306,38 @@ func TestCutAtPlus(t *testing.T) {
 		}
 	}
 }
+
+func TestMatchNamesTrailingOneIsOnlyAFallback(t *testing.T) {
+	cases := []struct {
+		raw    string
+		first  string
+		tail   string
+		absent string
+	}{
+		{"Portal 1 — RePack от X", "Portal 1", "Portal", ""},
+		{"Prototype 1", "Prototype 1", "Prototype", ""},
+		{"Battlefield 1", "Battlefield 1", "Battlefield", ""},
+		{"Portal 2", "Portal 2", "", "Portal"},
+		{"Need for Speed 2015", "Need for Speed 2015", "", "Need for Speed"},
+		{"Half-Life 2: Episode 1", "Half-Life 2: Episode 1", "", "Half-Life 2: Episode"},
+		{"Half-Life 1: Source", "Half-Life 1: Source", "", "Half-Life"},
+		{"Silent Hill Homecoming New Edition", "", "Silent Hill Homecoming", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.raw, func(t *testing.T) {
+			got := MatchNames(tc.raw)
+			if tc.first != "" && (len(got) == 0 || Normalize(got[0]) != Normalize(tc.first)) {
+				t.Fatalf("MatchNames(%q) = %q, want %q first", tc.raw, got, tc.first)
+			}
+			if tc.tail != "" && !hasMatchName(got, tc.tail) {
+				t.Fatalf("MatchNames(%q) = %q, want %q among them", tc.raw, got, tc.tail)
+			}
+			if tc.tail != "" && len(got) > 0 && Normalize(got[0]) == Normalize(tc.tail) {
+				t.Fatalf("MatchNames(%q) = %q, %q must not be first", tc.raw, got, tc.tail)
+			}
+			if tc.absent != "" && hasMatchName(got, tc.absent) {
+				t.Fatalf("MatchNames(%q) = %q, must not offer %q", tc.raw, got, tc.absent)
+			}
+		})
+	}
+}
