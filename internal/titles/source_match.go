@@ -187,6 +187,10 @@ func withoutMatchExtras(raw string) string {
 // MatchNames preserves edition identity and offers an English title embedded
 // beside its Cyrillic translation. Arbitrary subtitles and sequel numbers stay.
 func MatchNames(raw string) []string {
+	return withSpellings(matchNamesMixed(raw))
+}
+
+func matchNamesMixed(raw string) []string {
 	names := matchNames(raw)
 	repaired := repairMixedLatinWords(raw)
 	if repaired == raw {

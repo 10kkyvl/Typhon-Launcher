@@ -44,6 +44,7 @@ type Spec struct {
 	BracketFiller     []string          `json:"bracketFiller,omitempty"`
 	RepackerPriority  []string          `json:"repackerPriority,omitempty"`
 	GameTypes         []string          `json:"gameTypes,omitempty"`
+	TitleSpellings    map[string]string `json:"titleSpellings,omitempty"`
 }
 
 type Dict struct {
@@ -58,6 +59,7 @@ type Dict struct {
 	bracketFiller     map[string]struct{}
 	repackerPriority  []string
 	gameTypes         map[string]struct{}
+	spellings         map[string]string
 
 	reLangCombo  *regexp.Regexp
 	reLangSingle *regexp.Regexp
@@ -128,7 +130,7 @@ func (s Spec) validate() error {
 			}
 		}
 	}
-	return nil
+	return validateSpellings(s.TitleSpellings)
 }
 
 func checkToken(field, token string) error {
@@ -170,6 +172,7 @@ func (s Spec) Merge(layer Spec) Spec {
 	out.BracketPhraseTags = mergeTable(out.BracketPhraseTags, layer.BracketPhraseTags)
 	out.MarkerTags = mergeTable(out.MarkerTags, layer.MarkerTags)
 	out.RepackerNames = mergeTable(out.RepackerNames, layer.RepackerNames)
+	out.TitleSpellings = mergeTable(out.TitleSpellings, layer.TitleSpellings)
 	return out
 }
 
@@ -234,6 +237,10 @@ func NewDict(spec Spec) (*Dict, error) {
 	for key, value := range spec.RepackerNames {
 		d.repackerNames[Normalize(key)] = value
 	}
+	d.spellings = make(map[string]string, len(spec.TitleSpellings))
+	for key, value := range spec.TitleSpellings {
+		d.spellings[spellingKey(key)] = value
+	}
 	for _, kind := range spec.GameTypes {
 		d.gameTypes[gameTypeKey(kind)] = struct{}{}
 	}
@@ -293,7 +300,16 @@ func gameTypeKey(kind string) string {
 // Builtin возвращает вшитую спеку. Она же служит нижним слоем для серверного и
 // пользовательского словарей.
 func Builtin() (Spec, error) {
-	return ParseSpec(builtinDict)
+	spec, err := ParseSpec(builtinDict)
+	if err != nil {
+		return Spec{}, err
+	}
+	spellings, err := ParseSpec(builtinSpellings)
+	if err != nil {
+		return Spec{}, fmt.Errorf("titles: builtin spellings: %w", err)
+	}
+	spec.TitleSpellings = spellings.TitleSpellings
+	return spec, nil
 }
 
 var (

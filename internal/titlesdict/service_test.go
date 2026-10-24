@@ -326,3 +326,64 @@ func TestReloadPicksUpAnEditedUserFile(t *testing.T) {
 		t.Fatalf("Repacker = %q, want latecomer", got)
 	}
 }
+
+func TestRefreshAppliesServerSpellingsToMatchNames(t *testing.T) {
+	const layer = `{"version":1,"titleSpellings":{"новая игра":"Brand New Game","дед спейс":"Dead Space Remote"}}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if _, err := w.Write([]byte(layer)); err != nil {
+			t.Errorf("write: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	s, _ := newService(t, srv.URL)
+	if got := titles.MatchNames("Новая Игра 2"); len(got) != 1 {
+		t.Fatalf("before refresh MatchNames = %q, want only the original", got)
+	}
+	if err := s.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh() error = %v", err)
+	}
+	if got := titles.MatchNames("Новая Игра 2"); got[len(got)-1] != "Brand New Game 2" {
+		t.Fatalf("MatchNames = %q, want the server spelling last", got)
+	}
+	if got := titles.MatchNames("Дед Спейс 2"); got[len(got)-1] != "Dead Space Remote 2" {
+		t.Fatalf("MatchNames = %q, want the server spelling to override the built-in one", got)
+	}
+}
+
+func TestRefreshRejectsBadSpellings(t *testing.T) {
+	bodies := map[string]string{
+		"cyrillic value": `{"version":1,"titleSpellings":{"игра":"Игра"}}`,
+		"link value":     `{"version":1,"titleSpellings":{"игра":"https://example.com/g"}}`,
+		"blank key":      `{"version":1,"titleSpellings":{" ":"Game"}}`,
+	}
+	const good = `{"version":1,"titleSpellings":{"хорошая игра":"Good Game"}}`
+	for name, body := range bodies {
+		t.Run(name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				if _, err := w.Write([]byte(body)); err != nil {
+					t.Errorf("write: %v", err)
+				}
+			}))
+			defer srv.Close()
+
+			dir := t.TempDir()
+			restoreActive(t)
+			writeLayer(t, dir, remoteFileName, good)
+			s, err := NewServiceAt(dir, srv.URL)
+			if err != nil {
+				t.Fatalf("NewServiceAt() error = %v", err)
+			}
+			if err := s.Refresh(context.Background()); err == nil {
+				t.Fatal("Refresh() = nil, want the layer rejected")
+			}
+			saved, err := os.ReadFile(filepath.Join(dir, remoteFileName))
+			if err != nil || string(saved) != good {
+				t.Fatalf("cache = %q (%v), want the previous layer", saved, err)
+			}
+			if got := titles.MatchNames("Хорошая Игра"); got[len(got)-1] != "Good Game" {
+				t.Fatalf("MatchNames = %q, the cached spelling was lost", got)
+			}
+		})
+	}
+}
