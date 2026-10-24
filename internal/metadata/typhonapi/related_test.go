@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"typhon/internal/catalog"
+	"typhon/internal/metadata"
 )
 
 func TestRelatedStatusesAndPayload(t *testing.T) {
@@ -101,5 +102,63 @@ func TestRelatedForeignNotFoundIsUpstream(t *testing.T) {
 				t.Fatalf("err = %v, want upstream error that is not ErrRelatedNotFound", err)
 			}
 		})
+	}
+}
+
+func TestRelatedRetriesRateLimit(t *testing.T) {
+	cases := []struct {
+		name      string
+		limited   int
+		wantCalls int
+		wantErr   bool
+	}{
+		{"limited twice then ok", 2, 3, false},
+		{"limited three times", 3, 3, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var calls int
+			client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				calls++
+				if calls <= tc.limited {
+					w.Header().Set("Retry-After", "1")
+					writeJSON(t, w, 429, `{}`)
+					return
+				}
+				writeJSON(t, w, 200, `{"items":[{"id":"r1","title":"A","relation":"port"}]}`)
+			}), nil)
+			got, err := client.Related(context.Background(), "self")
+			if calls != tc.wantCalls {
+				t.Fatalf("calls = %d, want %d", calls, tc.wantCalls)
+			}
+			if tc.wantErr {
+				var limit *metadata.RateLimitError
+				if !errors.As(err, &limit) {
+					t.Fatalf("err = %v, want RateLimitError", err)
+				}
+				return
+			}
+			if err != nil || len(got) != 1 {
+				t.Fatalf("got %+v err %v", got, err)
+			}
+		})
+	}
+}
+
+func TestRelatedStopsWaitingWhenContextIsCancelled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	var calls int
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		cancel()
+		w.Header().Set("Retry-After", "30")
+		writeJSON(t, w, 429, `{}`)
+	}), nil)
+	_, err := client.Related(ctx, "self")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+	if calls != 1 {
+		t.Fatalf("calls = %d, want 1", calls)
 	}
 }

@@ -7,11 +7,13 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
 	"typhon/internal/account"
 	"typhon/internal/catalog"
+	"typhon/internal/metadata"
 )
 
 const (
@@ -48,7 +50,21 @@ func (c *Client) Related(ctx context.Context, serverID string) ([]catalog.Relate
 		return nil, fmt.Errorf("%w: некорректный id игры", ErrBadRequest)
 	}
 	var payload relatedResponse
-	err := c.get(ctx, account.APIPrefix+"/catalog/games/"+url.PathEscape(serverID)+"/related", &payload)
+	var err error
+	for attempt := 0; ; attempt++ {
+		err = c.get(ctx, account.APIPrefix+"/catalog/games/"+url.PathEscape(serverID)+"/related", &payload)
+		var limit *metadata.RateLimitError
+		if !errors.As(err, &limit) || attempt >= 2 {
+			break
+		}
+		timer := time.NewTimer(max(time.Second, limit.RetryAfter))
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
 	var statusErr *httpStatusError
 	if errors.As(err, &statusErr) && statusErr.status == http.StatusNotFound {
 		if statusErr.code == "not_found" {
