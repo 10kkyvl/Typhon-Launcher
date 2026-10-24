@@ -207,11 +207,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	handedOff, handOffErr := handOffLaunch(context.Background(), os.Args)
+	if handedOff {
+		return
+	}
+
 	// A locked or unwritable log file must not stop the launcher from
 	// starting, but it must not pass silently either: stderr logging is
 	// already live here, so the failure is recorded rather than discarded.
 	if err := app.InitLogging(); err != nil {
 		slog.Error("init logging", "component", "app", "operation", "init_logging", "error", err)
+	}
+	if handOffErr != nil {
+		slog.Warn("hand over the launch to the running instance", "component", "app", "operation", "forward_launch", "error", handOffErr)
 	}
 
 	// Without an explicit AppUserModelID a launcher started from a game shortcut inherits that
@@ -854,11 +862,14 @@ func main() {
 	windowsOptions := application.WindowsOptions{
 		AdditionalBrowserArgs: append(browserArgs(current.HardwareAcceleration), qaArgs...),
 	}
-	instanceID := singleInstanceID
+	instanceID, err := launcherInstanceID()
+	if err != nil {
+		fatal("resolve single instance id", err)
+	}
 	if settings.IsPortable() {
 		windowsOptions.WebviewUserDataPath = filepath.Join(configDir, "webview2")
-		instanceID = portableInstanceID(configDir)
 	}
+	launches := &secondLaunches{}
 
 	wails := application.New(application.Options{
 		Name:        "Typhon",
@@ -867,19 +878,7 @@ func main() {
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID: instanceID,
 			OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
-				req, requested, err := playTarget(data.Args)
-				if err != nil {
-					slog.Error("parse play argument", "args", data.Args, "error", err)
-				}
-				if !requested {
-					trayController.Open()
-					navigateFromArgs(data.Args, navigation, func(route string) { emitNavigate(application.Get(), route) })
-					return
-				}
-				if err := libraryService.PlayGameProfile(req.id, req.profile); err != nil {
-					slog.Error("play from shortcut", "id", req.id, "profile", req.profile, "error", err)
-					trayController.Open()
-				}
+				launches.Receive(data.Args)
 			},
 		},
 		Services: services,
@@ -1048,6 +1047,15 @@ func main() {
 			playFromShortcut(libraryService, playReq, func() { window.Show() })
 		})
 	}
+
+	// Launches that reached the running instance during start-up wait here: the
+	// tray controller exists and the services have their contexts only once the
+	// application is running.
+	wails.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+		launches.Ready(func(args []string) {
+			handleSecondLaunch(args, libraryService, trayController, navigation, func(route string) { emitNavigate(application.Get(), route) })
+		})
+	})
 
 	slog.Info("typhon starting", "version", app.Version)
 	if err := wails.Run(); err != nil {
