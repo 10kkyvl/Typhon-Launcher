@@ -176,11 +176,14 @@
                 <span class="radio" class:on={selectedGameId === candidate.gameId}>
                   {#if selectedGameId === candidate.gameId}<Check size="1.2rem" strokeWidth={2.6} />{/if}
                 </span>
-                <span class="candidate-title" title={candidate.title}>{candidate.title}</span>
+                <span class="candidate-main">
+                  <span class="candidate-title" title={candidate.title}>{candidate.title}</span>
+                  {#if candidate.platforms && candidate.platforms.length > 0}
+                    {@const platforms = candidate.platforms.join(', ')}
+                    <span class="candidate-platforms" title={platforms}>{platforms}</span>
+                  {/if}
+                </span>
                 {#if candidate.year}<span class="year">{candidate.year}</span>{/if}
-                {#if candidate.platforms && candidate.platforms.length > 0}
-                  <span class="candidate-method">{candidate.platforms.join(', ')}</span>
-                {/if}
                 {#if candidate.source === 'server'}
                   <span class="candidate-method">{msg('modals.releaseMatchFromCatalog')}</span>
                 {/if}
@@ -334,8 +337,23 @@
     border-color: var(--accent);
   }
 
+  .candidate-main {
+    flex: 1 1 0;
+    min-width: 12rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .candidate-platforms {
+    font-size: var(--font-xs);
+    color: var(--text-3);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .candidate-title {
-    flex: 1;
     min-width: 0;
     font-size: var(--font-sm);
     color: var(--text);

@@ -22,6 +22,7 @@
   import ProfilePage from '../bigpicture/components/ProfilePage.svelte';
   import SocialPage from '../bigpicture/components/SocialPage.svelte';
   import ScreenKeyboard from '../bigpicture/components/ScreenKeyboard.svelte';
+  import { bigPictureStyle } from '../bigpicture/palette';
   import '../bigpicture/styles.css';
 
   let shell: HTMLElement;
@@ -209,7 +210,7 @@
 </script>
 
 <svelte:window onkeydown={trapTab} />
-<div class="big-picture" data-big-picture bind:this={shell}>
+<div class="big-picture" data-big-picture style={bigPictureStyle} bind:this={shell}>
   <div class="stage" bind:this={stage} inert={menu || !!textRequest || applyingUpdate}>
     <header>
       <div class="brand"><img src="/typhon.png" alt="Typhon" /><span>Big Picture</span></div>
@@ -275,15 +276,15 @@
 </div>
 
 <style>
-  .big-picture { --bp-unit: clamp(16px, 1.25vw, 28px); position: fixed; inset: 0; z-index: 130; overflow: hidden; background: #090e16; color: #f3f5fa; font-size: var(--bp-unit); line-height: 1.45; }
+  .big-picture { --bp-unit: clamp(16px, 1.25vw, 28px); position: fixed; inset: 0; z-index: 130; overflow: hidden; background: var(--bg); color: var(--text); font-size: var(--bp-unit); line-height: 1.45; }
   .stage { position: relative; height: calc(100% - 68px); display: flex; flex-direction: column; }
-  header { padding: 18px 3vw 12px; display: flex; gap: 20px; justify-content: space-between; align-items: center; flex: none; border-bottom: 1px solid #ffffff0a; }
+  header { padding: 18px 3vw 12px; display: flex; gap: 20px; justify-content: space-between; align-items: center; flex: none; border-bottom: 1px solid var(--border); }
   .brand { display: flex; align-items: center; gap: 12px; font-size: 16px; white-space: nowrap; letter-spacing: .04em; }.brand img { width: 34px; height: 34px; }
-  nav, .header-actions { display: flex; align-items: center; gap: 12px; }nav button { padding: 10px 14px; display: flex; align-items: center; gap: 9px; font-size: .83em; }.active { background: #ffffff18; }nav b { font-size: .75em; padding: 1px 6px; background: var(--accent); border-radius: 4px; }
+  nav, .header-actions { display: flex; align-items: center; gap: 12px; }nav button { padding: 10px 14px; display: flex; align-items: center; gap: 9px; font-size: .83em; }.active { background: var(--hover-strong); }nav b { font-size: .75em; padding: 1px 6px; background: var(--accent); border-radius: 4px; }
   .utility { display: grid; place-items: center; min-width: 46px; min-height: 46px; }
   main { flex: 1; min-height: 0; position: relative; }.page-slot { height: 100%; overflow-y: auto; overflow-anchor: none; scrollbar-width: thin; scroll-padding: 22px; scroll-behavior: smooth; }.page-slot[hidden] { display: none; }
-  footer { position: absolute; bottom: 0; inset-inline: 0; height: 68px; padding: 0 3vw; display: flex; justify-content: space-between; gap: 24px; align-items: center; background: #090e16f5; border-top: 1px solid #ffffff12; font-size: clamp(13px, .86vw, 20px); }
-  .hints, .hints > span, .input-device { display: flex; align-items: center; gap: 9px; }.hints { gap: 20px; color: #bcc8d8; }kbd { display: inline-flex; justify-content: center; align-items: center; min-width: 26px; padding: 3px 6px; font: inherit; font-weight: 600; border: 1px solid #ffffff3b; border-radius: 6px; color: #fff; }.input-device { color: #8d9aaf; font-size: .9em; max-width: 230px; }
+  footer { position: absolute; bottom: 0; inset-inline: 0; height: 68px; padding: 0 3vw; display: flex; justify-content: space-between; gap: 24px; align-items: center; background: color-mix(in srgb, var(--bg) 96%, transparent); border-top: 1px solid var(--border); font-size: clamp(13px, .86vw, 20px); }
+  .hints, .hints > span, .input-device { display: flex; align-items: center; gap: 9px; }.hints { gap: 20px; color: var(--text-2); }kbd { display: inline-flex; justify-content: center; align-items: center; min-width: 26px; padding: 3px 6px; font: inherit; font-weight: 600; border: 1px solid var(--border-strong); border-radius: 6px; color: var(--text); }.input-device { color: var(--text-3); font-size: .9em; max-width: 230px; }
   .menu-dialog { width: min(760px, 95vw); }.menu-items { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }.menu-items button { justify-content: flex-start; text-align: left; }.floating { position: absolute; bottom: 85px; left: 4vw; right: 4vw; }
   @media (max-width: 1150px) { .input-device { display: none; }.brand span { display: none; } }
   @media (max-width: 700px) { nav button span { display: none; }.extra-hint { display: none !important; }.menu-items { grid-template-columns: 1fr; } }

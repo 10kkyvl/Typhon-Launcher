@@ -185,7 +185,7 @@
   .setting-row { display: flex; align-items: center; gap: 1.4rem; justify-content: space-between; min-width: 0; }
   .setting-copy { min-width: 0; }
   .setting-copy h3 { margin: 0 0 .22rem; font-size: 1.08em; line-height: 1.25; }
-  .setting-copy p { margin: 0; max-width: 42rem; color: #b8c5d7; font-size: .88em; line-height: 1.45; }
+  .setting-copy p { margin: 0; max-width: 42rem; color: var(--text-2); font-size: .88em; line-height: 1.45; }
   .switch { position: relative; flex: none; display: inline-flex; justify-content: space-between; align-items: center; gap: .8rem; min-width: 6.5rem; min-height: 3.25rem; padding: .45rem .55rem .45rem .95rem; border-radius: 99px; background: var(--surface-2); border: 1px solid var(--border); }
   .switch.on { background: color-mix(in srgb, var(--accent) 34%, var(--surface-2)); border-color: var(--accent); }
   .switch-state { min-width: 1.8em; font-size: .8em; font-weight: 700; text-transform: uppercase; }
