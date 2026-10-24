@@ -1286,7 +1286,7 @@
             />
           </section>
 
-          {#if relatedShown.length > 0 || relatedFailed}
+          {#if relatedShown.length > 0 || (relatedFailed && availableGroups.length === 0)}
             <section class="section" bind:this={otherVersionsEl}>
               <h2 class="heading">{msg('games.otherVersionsHeading')}</h2>
               {#if relatedFailed}
