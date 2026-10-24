@@ -1,6 +1,21 @@
 import { Service as SocialService } from '../../../bindings/typhon/internal/social';
 import { type AvatarFrame, type FrameImage, type NameStyle, type ProfileAppearance, type ProfileBlock, AccountError, toAccountError } from './account';
 import { inWails } from './backend';
+import type { ChatPeer } from './messaging';
+
+// A friend list or profile keeps the frame inside its card, while the chat
+// reads it from the peer itself, as the conversations list sends it.
+export function chatPeerOf(user: UserCard & { appearance?: ProfileAppearance; avatarFrameImage?: FrameImage | null }): ChatPeer {
+  return {
+    id: user.id,
+    username: user.username,
+    displayName: user.displayName,
+    avatarUrl: user.avatarUrl,
+    avatarFrame: user.card?.avatarFrame ?? user.appearance?.avatarFrame,
+    frameColor: user.card?.frameColor ?? user.appearance?.frameColor,
+    frameImage: user.card?.frameImage ?? user.avatarFrameImage ?? null,
+  };
+}
 
 export type Relation = 'self' | 'friend' | 'incoming' | 'outgoing' | 'none' | 'blocked';
 

@@ -11,7 +11,7 @@
   import BlockGrid from '../../lib/components/profile/BlockGrid.svelte';
   import { AccountError } from '../../lib/services/account';
   import { accountErrorText } from '../../lib/services/accountMessages';
-  import type { PublicProfile } from '../../lib/services/social';
+  import { chatPeerOf, type PublicProfile } from '../../lib/services/social';
   import {
     accept,
     block,
@@ -269,7 +269,7 @@
   <div class="profile" class:refreshing>
     <ProfileCanvas appearance={data.appearance} {autoArt}>
     <ProfileCover appearance={data.appearance} {autoArt} />
-    <UserHeader profile={data} {busy} onaction={act} onmessage={() => data && openChat(data)} />
+    <UserHeader profile={data} {busy} onaction={act} onmessage={() => data && openChat(chatPeerOf(data))} />
     {#if closed}
       <p class="notice"><Lock size="1.8rem" strokeWidth={1.6} />{msg('social.userProfileClosed')}</p>
     {:else if restricted}
