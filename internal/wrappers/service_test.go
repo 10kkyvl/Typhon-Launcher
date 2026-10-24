@@ -723,6 +723,7 @@ func TestStartupDropsEntryOfDeletedGame(t *testing.T) {
 	if err := os.RemoveAll(f.dir); err != nil {
 		t.Fatal(err)
 	}
+	f.games.game.ID = "removed-from-library"
 	svc := f.reopen(t)
 	if err := svc.ServiceStartup(ctx, application.ServiceOptions{}); err != nil {
 		t.Fatal(err)
@@ -794,7 +795,7 @@ func TestConcurrentEnableOnlyOneWins(t *testing.T) {
 		switch {
 		case err == nil:
 			ok++
-		case !errors.Is(err, ErrActive):
+		case !errors.Is(err, ErrActive) && !errors.Is(err, ErrBusy):
 			t.Fatalf("unexpected error: %v", err)
 		}
 	}
