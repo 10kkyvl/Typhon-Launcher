@@ -193,6 +193,7 @@ func TestCachedMatchWithMissingCatalogGameReQueries(t *testing.T) {
 			Status: catalog.StatusMatched,
 			GameID: "ghost-game-id",
 			Method: string(catalog.MethodServerTitle),
+			Rev:    remoteMatchRev,
 		}
 	}
 	s.mu.Unlock()
@@ -273,5 +274,56 @@ func TestTwinReleaseCacheServesSharedKey(t *testing.T) {
 	}
 	if n := remote.queryCount(); n != 1 {
 		t.Fatalf("cumulative queries = %d, want 1: the twin's fresh cache covers the shared key", n)
+	}
+}
+
+func TestMatchSavedBeforeRevIsAskedAgainAndCarriesParent(t *testing.T) {
+	s, cat, _ := testService(t)
+	for _, g := range []catalog.Game{
+		{ID: "base", ServerID: "srv-base", Title: "Base Game", ExternalIDs: catalog.ExternalIDs{IGDB: "10"}},
+		{ID: "edition", ServerID: "srv-edition", Title: "Zeta Deluxe Pack", ExternalIDs: catalog.ExternalIDs{IGDB: "11"}},
+	} {
+		if _, err := cat.AddGame(g); err != nil {
+			t.Fatal(err)
+		}
+	}
+	server := newFeedServer(t, feedBody(t, "Source", feedEntry{DistributionID: "a", Title: "Zeta Deluxe Pack v1.0", URIs: []string{magnetOf("aa")}}))
+	src := addSource(t, s, server.url())
+	remote := &cachingTestRemote{games: map[string]catalog.Game{
+		"Zeta Deluxe Pack": {ID: "srv-edition", Title: "Zeta Deluxe Pack", GameType: "Edition", ParentID: "srv-base", ExternalIDs: catalog.ExternalIDs{IGDB: "11"}},
+	}}
+	cat.SetRemoteCatalog(remote)
+
+	if _, err := s.RefreshSource(src.ID); err != nil {
+		t.Fatalf("first refresh: %v", err)
+	}
+	if n := remote.queryCount(); n != 1 {
+		t.Fatalf("first refresh sent %d queries, want 1", n)
+	}
+	if _, err := s.RefreshSource(src.ID); err != nil {
+		t.Fatalf("second refresh: %v", err)
+	}
+	if n := remote.queryCount(); n != 1 {
+		t.Fatalf("a current-rev match was asked again: %d queries", n)
+	}
+
+	s.mu.Lock()
+	for _, r := range s.releases[src.ID] {
+		if r.RemoteMatch == nil || r.RemoteMatch.Rev != remoteMatchRev {
+			s.mu.Unlock()
+			t.Fatalf("saved match = %+v, want Rev %d", r.RemoteMatch, remoteMatchRev)
+		}
+		r.RemoteMatch.Rev = 0
+	}
+	s.mu.Unlock()
+
+	if _, err := s.RefreshSource(src.ID); err != nil {
+		t.Fatalf("third refresh: %v", err)
+	}
+	if n := remote.queryCount(); n != 2 {
+		t.Fatalf("cumulative queries after rev bump = %d, want 2", n)
+	}
+	if got := len(s.GetReleasesForGame("base")); got != 1 {
+		t.Fatalf("base game release groups = %d, want 1 from its edition", got)
 	}
 }

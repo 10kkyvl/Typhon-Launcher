@@ -23,6 +23,12 @@ const (
 	remoteMatchKnownJitterMax = 24 * time.Hour
 )
 
+// remoteMatchRev is bumped when a match answer starts to carry more than it did
+// (rev 1: the catalog record's parentId and gameType). A found match saved under
+// an older rev is asked again, in the ordinary batches, instead of waiting out
+// remoteMatchKnownTTL.
+const remoteMatchRev = 1
+
 // Stable per key, so a large feed does not expire in a single refresh.
 func remoteMatchJitter(key string, span time.Duration) time.Duration {
 	seconds := crc32.ChecksumIEEE([]byte(key)) % uint32(span.Seconds())
@@ -40,6 +46,9 @@ func remoteMatchLifetime(rm *RemoteMatch, key string) time.Duration {
 
 func remoteMatchFresh(rm *RemoteMatch, key string, now time.Time) bool {
 	if rm == nil || rm.Key != key {
+		return false
+	}
+	if rm.GameID != "" && rm.Rev < remoteMatchRev {
 		return false
 	}
 	age := now.Sub(rm.At)
