@@ -1,4 +1,5 @@
 import { matchesCollection } from '../library/collections';
+import { canPlay } from '../library/launch';
 import type { LibraryCollection, LibraryGame } from '../services/library';
 
 export type PickSource = 'installed' | 'all' | 'backlog' | 'collection';
@@ -35,7 +36,7 @@ export function pickCandidates(
   if (filters.source === 'collection' && !collection) return [];
   return games.filter((game) => {
     if (game.hidden) return false;
-    if (filters.source === 'installed' && game.uninstalled) return false;
+    if (filters.source === 'installed' && !canPlay(game)) return false;
     if (filters.source === 'backlog' && game.status !== 'backlog') return false;
     const own = game.canonicalGameId ? genres[game.canonicalGameId] : undefined;
     if (collection && !matchesCollection(game, own, collection)) return false;
