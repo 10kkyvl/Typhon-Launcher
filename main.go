@@ -207,9 +207,17 @@ func main() {
 		os.Exit(1)
 	}
 
-	handedOff, handOffErr := handOffLaunch(context.Background(), os.Args)
+	launches := &secondLaunches{}
+	handedOff, handOffListener, handOffErr := handOffLaunch(context.Background(), os.Args, launches)
 	if handedOff {
 		return
+	}
+	if handOffListener != nil {
+		defer func() {
+			if err := handOffListener.Close(); err != nil {
+				slog.Warn("stop the second launch receiver", "component", "app", "error", err)
+			}
+		}()
 	}
 
 	// A locked or unwritable log file must not stop the launcher from
@@ -871,7 +879,6 @@ func main() {
 	if settings.IsPortable() {
 		windowsOptions.WebviewUserDataPath = filepath.Join(configDir, "webview2")
 	}
-	launches := &secondLaunches{}
 
 	wails := application.New(application.Options{
 		Name:        "Typhon",

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -37,23 +38,30 @@ func isWorkerLaunch(args []string) bool {
 
 // Runs before logging, recovery and the services: past that point a second
 // launch writes to the first one's state files.
-func handOffLaunch(ctx context.Context, args []string) (bool, error) {
+func handOffLaunch(ctx context.Context, args []string, launches *secondLaunches) (bool, instance.Listener, error) {
 	if isWorkerLaunch(args) {
-		return false, nil
+		return false, nil, nil
 	}
 	id, err := launcherInstanceID()
 	if err != nil {
-		return false, fmt.Errorf("resolve single instance id: %w", err)
+		return false, nil, fmt.Errorf("resolve single instance id: %w", err)
 	}
 	// The regular start repeats the call and logs its failure.
 	_ = platform.AllowForegroundHandoff() //nolint:errcheck // Главный принцип: ошибка не теряется, обычный старт повторяет вызов и пишет её в лог
 	// Wails sends an empty directory when this fails, and so does the hand-off.
 	workDir, _ := os.Getwd() //nolint:errcheck // Главный принцип: пустой каталог — то, что отправляет и сам Wails; запуск от этого не отменяется
-	forwarded, err := instance.Forward(ctx, id, args, workDir)
-	if err != nil {
-		return false, fmt.Errorf("hand the launch to the running instance: %w", err)
+	forwarded, forwardErr := instance.Forward(ctx, id, args, workDir)
+	if forwarded {
+		return true, nil, nil
 	}
-	return forwarded, nil
+	if forwardErr != nil {
+		forwardErr = fmt.Errorf("hand the launch to the running instance: %w", forwardErr)
+	}
+	listener, listenErr := instance.Listen(ctx, id, launches.Receive)
+	if listenErr != nil {
+		listenErr = fmt.Errorf("listen for second launches: %w", listenErr)
+	}
+	return false, listener, errors.Join(forwardErr, listenErr)
 }
 
 // Wails delivers second launches from its own goroutine as soon as
