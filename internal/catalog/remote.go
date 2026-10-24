@@ -39,6 +39,7 @@ func (s *Service) SetRemoteCatalog(remote RemoteCatalog) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.remote = remote
+	s.related.reset()
 }
 
 // BrowseGames is the public catalog. Local games are a personal/cache store,

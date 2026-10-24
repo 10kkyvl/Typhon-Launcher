@@ -74,6 +74,12 @@ func (c *relatedCache) get(id string, now time.Time) ([]RelatedGame, bool) {
 	return slices.Clone(e.items), true
 }
 
+func (c *relatedCache) reset() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.entries = nil
+}
+
 func (c *relatedCache) put(id string, items []RelatedGame, now time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

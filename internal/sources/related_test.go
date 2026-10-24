@@ -3,6 +3,8 @@ package sources
 import (
 	"context"
 	"errors"
+	"strconv"
+	"sync"
 	"testing"
 
 	"typhon/internal/catalog"
@@ -124,4 +126,44 @@ func TestGetRelatedReleasesErrors(t *testing.T) {
 			t.Fatalf("got %v %v", got, err)
 		}
 	})
+}
+
+func TestGetRelatedReleasesConcurrentWithReleaseChanges(t *testing.T) {
+	s, cat, _ := testService(t)
+	for _, g := range []catalog.Game{
+		{ID: "orig", ServerID: "srv-orig", Title: "Game", ExternalIDs: catalog.ExternalIDs{IGDB: "1"}},
+		{ID: "remake", ServerID: "srv-remake", Title: "Game Remake", ExternalIDs: catalog.ExternalIDs{IGDB: "2"}},
+	} {
+		if _, err := cat.AddGame(g); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cat.SetRemoteCatalog(&relatedFixture{items: []catalog.RelatedGame{{ID: "srv-remake", Title: "Game Remake", Relation: "remake"}}})
+	s.mu.Lock()
+	s.releases["src"] = []*Release{canonicalRelease("r1", "h1", "remake")}
+	s.mu.Unlock()
+
+	var wg sync.WaitGroup
+	for range 4 {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			for range 50 {
+				if _, err := s.GetRelatedReleases(context.Background(), "orig"); err != nil {
+					t.Error(err)
+					return
+				}
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			for i := range 50 {
+				s.mu.Lock()
+				s.releases["src"][0].Ignored = i%2 == 0
+				s.releases["src"][0].RawTitle = "t" + strconv.Itoa(i)
+				s.mu.Unlock()
+			}
+		}()
+	}
+	wg.Wait()
 }

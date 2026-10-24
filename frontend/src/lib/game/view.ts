@@ -224,6 +224,21 @@ export function onPC(platforms: readonly string[] | null | undefined): boolean {
   return platforms.some((name) => pcPlatforms.includes(name));
 }
 
+export interface NotOnPcInput {
+  ownOnPc: boolean;
+  relatedOk: boolean;
+  hasPcRelative: boolean;
+  installed: boolean;
+  releaseCount: number;
+}
+
+export type NotOnPcBadge = "never" | "other-platform" | null;
+
+export function notOnPcBadge(input: NotOnPcInput): NotOnPcBadge {
+  if (input.ownOnPc || !input.relatedOk || input.installed || input.releaseCount > 0) return null;
+  return input.hasPcRelative ? "other-platform" : "never";
+}
+
 export type TerminalDownloadStatus = 'failed' | 'completed';
 
 export interface TerminalDownload {

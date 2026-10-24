@@ -41,7 +41,8 @@ type relatedResponse struct {
 }
 
 // Related returns the server's related records for a catalog game. A game the
-// server does not know is catalog.ErrRelatedNotFound, not an empty list.
+// server does not know (404 with code not_found) is catalog.ErrRelatedNotFound,
+// not an empty list; any other 404 is an upstream error.
 func (c *Client) Related(ctx context.Context, serverID string) ([]catalog.RelatedGame, error) {
 	if serverID == "" || len(serverID) > maxRelatedID {
 		return nil, fmt.Errorf("%w: некорректный id игры", ErrBadRequest)
@@ -50,7 +51,11 @@ func (c *Client) Related(ctx context.Context, serverID string) ([]catalog.Relate
 	err := c.get(ctx, account.APIPrefix+"/catalog/games/"+url.PathEscape(serverID)+"/related", &payload)
 	var statusErr *httpStatusError
 	if errors.As(err, &statusErr) && statusErr.status == http.StatusNotFound {
-		return nil, fmt.Errorf("%w: %w", catalog.ErrRelatedNotFound, err)
+		if statusErr.code == "not_found" {
+			return nil, fmt.Errorf("%w: %w", catalog.ErrRelatedNotFound, err)
+		}
+		// a 404 without the server error code comes from a proxy or an undeployed route, not from the catalog
+		return nil, fmt.Errorf("%w: маршрут связанных игр недоступен: %w", ErrUpstream, err)
 	}
 	if err != nil {
 		return nil, err
