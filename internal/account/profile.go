@@ -34,6 +34,7 @@ func loadProfile(path string) (cachedProfile, error) {
 		return cachedProfile{}, err
 	}
 	loaded.User = withProfileDefaults(loaded.User)
+	loaded.User.Frames = sanitizeFrames(loaded.User.Frames)
 	return loaded, nil
 }
 

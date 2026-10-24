@@ -1,7 +1,8 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import type { PresenceDot } from '../social/presence';
-  import type { AvatarFrame } from '../services/account';
+  import type { AvatarFrame, FrameImage } from '../services/account';
+  import { frameScale, isCustomFrame, presetFrame } from '../profile/frameLook';
 
   let {
     src,
@@ -10,6 +11,7 @@
     status,
     frame = 'none',
     frameColor,
+    frameImage,
   }: {
     src?: string;
     name: string;
@@ -17,14 +19,24 @@
     status?: PresenceDot;
     frame?: AvatarFrame;
     frameColor?: string;
+    frameImage?: FrameImage;
   } = $props();
 
   let failed = $state(false);
+  let frameFailed = $state(false);
 
   $effect(() => {
     src;
     failed = false;
   });
+
+  $effect(() => {
+    frameImage?.url;
+    frameFailed = false;
+  });
+
+  const preset = $derived(presetFrame(frame));
+  const layer = $derived(isCustomFrame(frame) && frameImage && !frameFailed ? frameImage : null);
 
   const initial = $derived(name.trim().slice(0, 1).toUpperCase() || '?');
 
@@ -39,14 +51,17 @@
   });
 </script>
 
-<span class="avatar {size}" class:framed={frame !== 'none'} style:--frame-color={frameColor || undefined}>
-  {#if frame !== 'none'}
-    <span class="frame frame-{frame}" aria-hidden="true"></span>
+<span class="avatar {size}" class:framed={preset !== 'none' || !!layer} class:art={!!layer} style:--frame-color={frameColor || undefined} style:--art-over={layer ? (frameScale(layer.hole) / 100 - 1) / 2 : undefined}>
+  {#if preset !== 'none'}
+    <span class="frame frame-{preset}" aria-hidden="true"></span>
   {/if}
   {#if !src || failed}
     <span class="fallback">{initial}</span>
   {:else}
     <img {src} alt="" draggable="false" onerror={() => (failed = true)} />
+  {/if}
+  {#if layer}
+    <img class="frame-art" src={layer.url} alt="" aria-hidden="true" decoding="async" loading="lazy" draggable="false" style:width="{frameScale(layer.hole)}%" onerror={() => (frameFailed = true)} />
   {/if}
   {#if status}
     <span class="dot {status}" class:changed onanimationend={() => (changed = false)}></span>
@@ -64,20 +79,27 @@
     isolation: isolate;
   }
 
+  .avatar.art {
+    margin-inline: calc(var(--size) * var(--art-over, 0) * 0.5);
+  }
+
   .avatar.sm {
     --frame-w: 0.2rem;
+    --size: 3.2rem;
     width: 3.2rem;
     height: 3.2rem;
   }
 
   .avatar.md {
     --frame-w: 0.3rem;
+    --size: 4.8rem;
     width: 4.8rem;
     height: 4.8rem;
   }
 
   .avatar.lg {
     --frame-w: 0.4rem;
+    --size: 9.6rem;
     width: 9.6rem;
     height: 9.6rem;
   }
@@ -87,6 +109,19 @@
     height: 100%;
     border-radius: 50%;
     object-fit: cover;
+  }
+
+  img.frame-art {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    height: auto;
+    max-width: none;
+    border-radius: 0;
+    object-fit: contain;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 1;
   }
 
   .fallback {

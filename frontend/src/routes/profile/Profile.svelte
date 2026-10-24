@@ -390,30 +390,30 @@
 
 <div class="workspace" class:editing>
   <div class="profile">
-    {#if editing}
-      <div class="topbar">
-        <div class="topbar-text">
-          <strong>{msg('profile.editingTitle')}</strong>
-          {#if saveError || layoutError}
-            <span class="topbar-sub error" role="alert">{saveError || layoutError}</span>
-          {:else if statusProblem}
-            <span class="topbar-sub error" role="alert">{layoutErrorText(statusProblem)}</span>
-          {:else if issues.length > 0}
-            <span class="topbar-sub">{msg('profile.fillBlocks')}</span>
-          {:else}
-            <span class="topbar-sub">{msg('profile.editingHint')}</span>
-          {/if}
-        </div>
-        <Button size="sm" variant="ghost" disabled={saving} onclick={askReset}>
-          <RotateCcw size="1.4rem" strokeWidth={1.8} />{msg('profile.resetLayout')}
-        </Button>
-        <Button variant="ghost" disabled={saving} onclick={cancel}>{msg('common.cancel')}</Button>
-        <Button variant="primary" disabled={!canSave} onclick={save}>
-          {saving ? msg('social.saving') : msg('common.save')}
-        </Button>
-      </div>
-    {/if}
     <ProfileCanvas {appearance} {autoArt}>
+      {#if editing}
+        <div class="topbar">
+          <div class="topbar-text">
+            <strong>{msg('profile.editingTitle')}</strong>
+            {#if saveError || layoutError}
+              <span class="topbar-sub error" role="alert">{saveError || layoutError}</span>
+            {:else if statusProblem}
+              <span class="topbar-sub error" role="alert">{layoutErrorText(statusProblem)}</span>
+            {:else if issues.length > 0}
+              <span class="topbar-sub">{msg('profile.fillBlocks')}</span>
+            {:else}
+              <span class="topbar-sub">{msg('profile.editingHint')}</span>
+            {/if}
+          </div>
+          <Button size="sm" variant="ghost" disabled={saving} onclick={askReset}>
+            <RotateCcw size="1.4rem" strokeWidth={1.8} />{msg('profile.resetLayout')}
+          </Button>
+          <Button variant="ghost" disabled={saving} onclick={cancel}>{msg('common.cancel')}</Button>
+          <Button variant="primary" disabled={!canSave} onclick={save}>
+            {saving ? msg('social.saving') : msg('common.save')}
+          </Button>
+        </div>
+      {/if}
       <ProfileCover {appearance} {autoArt} />
       <ProfileHeader
         running={$profileSnapshot.running}
@@ -434,7 +434,6 @@
             blocks={gridBlocks}
             {external}
             {flag}
-            accent={appearance.accent}
             {editing}
             {selectedId}
             onselect={(id) => (selectedId = id)}
@@ -467,7 +466,7 @@
         {/key}
       {:else}
         {#key $currentUser?.id}
-          <ProfileAppearancePanel bind:draft disabled={saving} />
+          <ProfileAppearancePanel bind:draft disabled={saving} {autoArt} />
         {/key}
       {/if}
     </div>
@@ -521,7 +520,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    margin-bottom: var(--space-4);
+    margin: var(--space-4) 0;
     padding: var(--space-3) var(--space-4);
     background: var(--surface-2);
     border: 1px solid var(--border-strong);

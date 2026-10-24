@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Calendar, EllipsisVertical, Gamepad2, LogIn } from '@lucide/svelte';
   import Avatar from '../../lib/components/Avatar.svelte';
+  import { frameLook } from '../../lib/profile/frameLook';
   import AvatarEditor from '../../lib/components/AvatarEditor.svelte';
   import Button from '../../lib/components/Button.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
@@ -59,6 +60,7 @@
   let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
 
   const isGuest = $derived($authState === 'guest');
+  const avatarFrame = $derived(isGuest ? frameLook('none', '') : frameLook(look.avatarFrame, look.frameColor, $currentUser?.frames));
 
   const avatarName = $derived(
     !isGuest && $currentUser ? $currentUser.displayName || $currentUser.username : msg('social.guestName'),
@@ -151,8 +153,7 @@
         name={avatarName}
         src={isGuest ? undefined : $currentUser?.avatarUrl}
         status={isGuest ? undefined : statusDot($shownPresence)}
-        frame={isGuest ? 'none' : look.avatarFrame}
-        frameColor={look.frameColor}
+        {...avatarFrame}
       />
 
       <div class="identity">

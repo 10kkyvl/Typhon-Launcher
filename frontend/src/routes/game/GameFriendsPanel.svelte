@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ChevronRight } from '@lucide/svelte';
   import Avatar from '../../lib/components/Avatar.svelte';
+  import { cardFrame } from '../../lib/profile/frameLook';
   import Card from '../../lib/components/Card.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { AccountError } from '../../lib/services/account';
@@ -65,6 +66,7 @@
               size="sm"
               name={row.friend.displayName || row.friend.username}
               src={row.friend.avatarUrl}
+              {...cardFrame(row.friend.card)}
               status={row.playing ? 'online' : undefined}
             />
             <span class="names">

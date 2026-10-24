@@ -29,3 +29,30 @@ describe('Avatar frame', () => {
     expect(html({ frame: 'ring', frameColor: '' })).not.toContain('--frame-color');
   });
 });
+
+describe('Avatar personal frame', () => {
+  const frame = 'custom:3f2b8c1e-9a4d-4e57-b0aa-1c2d3e4f5a6b';
+  const frameImage = { url: 'https://cdn/dog.png', hole: 0.5 };
+
+  it('lays the image over the avatar at the size the hole asks for', () => {
+    const out = html({ frame, frameImage });
+    expect(out).toContain('class="frame-art svelte-');
+    expect(out).toContain('src="https://cdn/dog.png"');
+    expect(out).toContain('width: 200%');
+    expect(out).toContain('alt=""');
+    expect(out).toContain('aria-hidden="true"');
+    expect(out).toContain('decoding="async"');
+    expect(out).toContain('loading="lazy"');
+    expect(out).toContain('framed');
+  });
+  it('draws nothing for a custom frame without an image', () => {
+    const out = html({ frame });
+    expect(out).not.toContain('frame-art');
+    expect(out).not.toContain('framed');
+  });
+  it('ignores the image for a preset, none or a malformed id', () => {
+    expect(html({ frame: 'none', frameImage })).not.toContain('frame-art');
+    expect(html({ frame: 'ring', frameImage })).not.toContain('frame-art');
+    expect(html({ frame: 'custom:bad', frameImage })).not.toContain('frame-art');
+  });
+});

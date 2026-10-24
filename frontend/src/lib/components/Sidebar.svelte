@@ -14,6 +14,7 @@
   import { incomingCount } from '../stores/social';
   import { unreadReplies } from '../stores/support';
   import { authState, currentUser, isOffline, leaveGuest, signOut } from '../stores/user';
+  import { ownFrame } from '../profile/frameSources';
   import { settings } from '../stores/settings';
   import { toast } from '../stores/toasts';
   import { msg } from '../i18n';
@@ -207,6 +208,7 @@
               name={avatarName}
               src={$currentUser?.avatarUrl}
               status={$currentUser ? statusDot($shownPresence) : undefined}
+              {...ownFrame($currentUser)}
             />
           </span>
           <span class="profile-text">

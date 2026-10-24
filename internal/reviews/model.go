@@ -1,12 +1,32 @@
 package reviews
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+
+	"typhon/internal/account"
+)
 
 type Author struct {
-	ID          string `json:"id"`
-	Username    string `json:"username"`
-	DisplayName string `json:"displayName"`
-	AvatarURL   string `json:"avatarUrl"`
+	ID          string              `json:"id"`
+	Username    string              `json:"username"`
+	DisplayName string              `json:"displayName"`
+	AvatarURL   string              `json:"avatarUrl"`
+	AvatarFrame string              `json:"avatarFrame"`
+	FrameColor  string              `json:"frameColor"`
+	FrameImage  *account.FrameImage `json:"frameImage,omitempty"`
+}
+
+// UnmarshalJSON drops a frame picture that fails validation instead of failing the whole review.
+func (a *Author) UnmarshalJSON(data []byte) error {
+	type plain Author
+	var v plain
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	v.FrameImage = account.SanitizeFrameImage(v.FrameImage)
+	*a = Author(v)
+	return nil
 }
 
 type Review struct {

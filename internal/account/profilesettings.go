@@ -42,6 +42,7 @@ type ProfileAppearance struct {
 	NameColor     string `json:"nameColor"`
 	FrameColor    string `json:"frameColor"`
 	CustomPure    bool   `json:"customPure"`
+	AccentSource  string `json:"accentSource"`
 }
 
 func (a *ProfileAppearance) UnmarshalJSON(data []byte) error {
@@ -64,6 +65,7 @@ func (a *ProfileAppearance) UnmarshalJSON(data []byte) error {
 		NameColor     *string `json:"nameColor"`
 		FrameColor    *string `json:"frameColor"`
 		CustomPure    *bool   `json:"customPure"`
+		AccentSource  *string `json:"accentSource"`
 	}
 	var in fields
 	if err := json.Unmarshal(data, &in); err != nil {
@@ -115,6 +117,9 @@ func (a *ProfileAppearance) UnmarshalJSON(data []byte) error {
 	if in.CustomPure != nil {
 		out.CustomPure = *in.CustomPure
 	}
+	if in.AccentSource != nil {
+		out.AccentSource = *in.AccentSource
+	}
 	*a = out
 	return nil
 }
@@ -132,6 +137,7 @@ func DefaultProfileAppearance() ProfileAppearance {
 		AvatarFrame:   "none",
 		NameStyle:     "plain",
 		Parallax:      true,
+		AccentSource:  "custom",
 	}
 }
 
@@ -209,5 +215,8 @@ func mergeAppearance(defaults, value ProfileAppearance) ProfileAppearance {
 	defaults.NameColor = value.NameColor
 	defaults.FrameColor = value.FrameColor
 	defaults.CustomPure = value.CustomPure
+	if value.AccentSource != "" {
+		defaults.AccentSource = value.AccentSource
+	}
 	return defaults
 }

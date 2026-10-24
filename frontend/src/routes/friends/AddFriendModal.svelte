@@ -2,6 +2,7 @@
   import { onDestroy } from 'svelte';
   import { ChevronRight } from '@lucide/svelte';
   import Avatar from '../../lib/components/Avatar.svelte';
+  import { publicFrame } from '../../lib/profile/frameSources';
   import Button from '../../lib/components/Button.svelte';
   import Modal from '../../lib/components/Modal.svelte';
   import SearchInput from '../../lib/components/SearchInput.svelte';
@@ -113,7 +114,7 @@
 
     {#if found}
       <button class="preview" type="button" onclick={openProfile}>
-        <Avatar size="md" name={found.displayName || found.username} src={found.avatarUrl} />
+        <Avatar size="md" name={found.displayName || found.username} src={found.avatarUrl} {...publicFrame(found)} />
         <div class="info">
           <span class="name">{found.displayName || found.username}</span>
           <span class="handle">@{found.username}</span>

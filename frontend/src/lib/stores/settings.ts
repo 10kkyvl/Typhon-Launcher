@@ -5,6 +5,7 @@ import { inWails } from '../services/backend';
 import { getSettings, saveSettingsPatch, setupLibrary, type Settings } from '../services/settings';
 import { toast } from './toasts';
 import { applyLanguage, msg } from '../i18n';
+import { confirmAccent } from './confirmedAccent';
 
 export const settings = writable<Settings | null>(null);
 
@@ -17,7 +18,9 @@ settings.subscribe((value) => {
 });
 
 export async function initSettings() {
-  settings.set(await getSettings());
+  const loaded = await getSettings();
+  settings.set(loaded);
+  if (loaded.accentColor) confirmAccent(loaded.accentColor);
   if (inWails) {
     Events.On('settings:updated', (event) => {
       applyExternalSettings(event.data as Settings);
@@ -70,6 +73,7 @@ function enqueueSettingsUpdate(patch: Partial<Settings>, onError?: (err: unknown
     try {
       confirmed = { ...(await saveSettingsPatch(patch)) };
       dropUnsettled(patch);
+      if ('accentColor' in patch) confirmAccent(confirmed.accentColor ?? '');
       return true;
     } catch (err) {
       console.error('save settings', err);

@@ -3,7 +3,7 @@ import { contrast, luminance, rgb } from '../theme/accent';
 type RGB = [number, number, number];
 
 export const PROFILE_TEXT_3 = '#99a5b5';
-const READABLE = 4.6;
+export const READABLE = 4.6;
 
 export function toHex(color: RGB): string {
   return '#' + color.map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
@@ -48,11 +48,45 @@ export function inkFor(background: string): CanvasInk {
   return contrast(background, DARK_INK.text) > contrast(background, LIGHT_INK.text) ? DARK_INK : LIGHT_INK;
 }
 
-export function pureSurfaces(from: string, to: string): { background: string; surface: string; ink: CanvasInk } {
-  const background = mixHex(from, to, 0.5);
-  const ink = inkFor(background);
+const SMOOTH_STEPS = 3;
+
+export function smoothStops(colors: string[]): string[] {
+  if (colors.length < 2) return colors;
+  const out: string[] = [];
+  for (let i = 0; i < colors.length - 1; i++) {
+    for (let step = 0; step < SMOOTH_STEPS; step++) out.push(mixHex(colors[i], colors[i + 1], step / SMOOTH_STEPS));
+  }
+  out.push(colors[colors.length - 1]);
+  return out;
+}
+
+const MIN_TEXT = 4.5;
+
+function worstContrast(ink: CanvasInk, colors: string[]): number {
+  return Math.min(...smoothStops(colors).map((color) => contrast(color, ink.text)));
+}
+
+// A gradient from white to black has no ink that reads on both ends. The ends are moved
+// towards the ink's opposite just far enough, and only the ends that fail.
+export function pureStops(from: string, to: string): { stops: string[]; ink: CanvasInk } {
+  const ends = [from, to];
+  const ink = worstContrast(DARK_INK, ends) > worstContrast(LIGHT_INK, ends) ? DARK_INK : LIGHT_INK;
+  const target = ink === DARK_INK ? '#ffffff' : '#000000';
+  const failing = ends.map((color) => contrast(color, ink.text) < MIN_TEXT);
+  for (const moved of [failing, ends.map(() => true)]) {
+    for (let step = 0; step <= 100; step++) {
+      const stops = ends.map((color, i) => (moved[i] ? mixHex(color, target, step / 100) : color));
+      if (worstContrast(ink, stops) >= MIN_TEXT) return { stops, ink };
+    }
+  }
+  return { stops: [target, target], ink };
+}
+
+export function pureSurfaces(from: string, to: string): { background: string; surface: string; ink: CanvasInk; stops: string[] } {
+  const { stops, ink } = pureStops(from, to);
+  const background = mixHex(stops[0], stops[1], 0.5);
   const towards = ink === DARK_INK || luminanceOf(background) < 0.02 ? '#ffffff' : '#000000';
-  return { background, surface: mixHex(background, towards, ink === DARK_INK ? 0.35 : 0.08), ink };
+  return { background, surface: mixHex(background, towards, ink === DARK_INK ? 0.35 : 0.08), ink, stops };
 }
 
 export function nameGradientEnd(color: string): string {

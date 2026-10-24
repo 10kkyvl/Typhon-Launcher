@@ -17,6 +17,7 @@ const (
 	CodeCoverTooLarge     = "cover_too_large"
 	CodeUnsupportedCover  = "unsupported_cover"
 	CodeInvalidCover      = "invalid_cover"
+	CodeFrameNotGranted   = "frame_not_granted"
 	CodeRateLimited       = "rate_limited"
 	CodeBadRequest        = "bad_request"
 	CodeBlocked           = "request_blocked"

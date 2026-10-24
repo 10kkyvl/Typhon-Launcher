@@ -8,6 +8,7 @@
   import { relativeDate } from '../utils/format';
   import Artwork from './Artwork.svelte';
   import Avatar from './Avatar.svelte';
+  import { cardFrame } from '../profile/frameLook';
   import FeedNote from './FeedNote.svelte';
   import ReactionBar from './reactions/ReactionBar.svelte';
 
@@ -41,7 +42,7 @@
 
 <div class="row" class:compact>
   <button class="who" type="button" aria-label={name} title={name} onclick={openUser}>
-    <Avatar src={event.user.avatarUrl} {name} size="sm" />
+    <Avatar src={event.user.avatarUrl} {name} size="sm" {...cardFrame(event.user.card)} />
     {#if compact}
       <span class="name">{name}</span>
     {/if}

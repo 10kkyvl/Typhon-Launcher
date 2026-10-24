@@ -144,3 +144,14 @@ describe('picking a custom background colour', () => {
     expect(start).toEqual(copy);
   });
 });
+
+describe('accent source', () => {
+  it('is custom for profiles saved before the field existed', () => {
+    expect(appearanceOf({ theme: 'forest' }).accentSource).toBe('custom');
+    expect(DEFAULT_APPEARANCE.accentSource).toBe('custom');
+  });
+  it('keeps theme and rejects unknown values', () => {
+    expect(appearanceOf({ accentSource: 'theme' }).accentSource).toBe('theme');
+    expect(appearanceOf({ accentSource: 'bogus' as never }).accentSource).toBe('custom');
+  });
+});

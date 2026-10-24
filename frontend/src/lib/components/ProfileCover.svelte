@@ -1,12 +1,11 @@
 <script lang="ts">
   import type { ProfileAppearance } from '../services/account';
-  import { appearanceOf, AUTO_THEME, themeOf } from '../profile/appearance';
+  import { appearanceOf, AUTO_THEME } from '../profile/appearance';
 
   const REACH = 12;
 
   let { appearance, autoArt }: { appearance?: ProfileAppearance; autoArt?: string } = $props();
   const a = $derived(appearanceOf(appearance));
-  const theme = $derived(themeOf(a));
   const fromArt = $derived(!a.coverUrl && a.theme === AUTO_THEME && !!autoArt);
   const image = $derived(a.coverUrl || (fromArt ? autoArt ?? '' : ''));
   let failed = $state(false);
@@ -47,24 +46,26 @@
     };
   });
 </script>
-<div class="cover" bind:this={el} class:has-image={image && !failed} style:background={theme.banner}>
+<div class="cover" bind:this={el} class:has-image={image && !failed}>
   {#if image && !failed}
-    <div class="layer" class:moving style:transform={moving ? `translate3d(${shift.x}px, ${shift.y}px, 0)` : undefined}>
-      <img class:art={fromArt} src={image} alt="" style:object-position={`50% ${a.coverPosition}%`} onerror={() => (failed = true)} />
+    <div class="media">
+      <div class="layer" class:moving style:transform={moving ? `translate3d(${shift.x}px, ${shift.y}px, 0)` : undefined}>
+        <img class:art={fromArt} src={image} alt="" style:object-position={`50% ${a.coverPosition}%`} onerror={() => (failed = true)} />
+      </div>
+      <div class="dim" style:opacity={a.coverDim / 100}></div>
     </div>
   {/if}
-  <div class="dim" style:opacity={a.coverDim / 100}></div>
-  <div class="fade"></div>
 </div>
 <style>
-  .cover { position: relative; height: 11rem; margin: 0 -2rem -4.8rem; border-radius: var(--radius-lg) var(--radius-lg) 0 0; overflow: hidden; }
+  .cover { position: relative; height: 11rem; margin: 0 -2rem -4.8rem; overflow: hidden; }
+  .cover:first-child { border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
   .cover.has-image { height: auto; aspect-ratio: 4 / 1; }
-  .layer, .dim, .fade { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .media { position: absolute; inset: 0; mask-image: linear-gradient(#000 35%, transparent); }
+  .media > .layer, .dim { position: absolute; inset: 0; width: 100%; height: 100%; }
   .layer.moving { inset: -14px; width: auto; height: auto; transition: transform var(--dur-panel) var(--ease); will-change: transform; }
   img { width: 100%; height: 100%; object-fit: cover; }
   img.art { filter: blur(14px) saturate(1.15); transform: scale(1.15); }
   .dim { background: #000; }
-  .fade { background: linear-gradient(transparent 35%, var(--profile-bg)); }
   @media (prefers-reduced-motion: reduce) { .layer.moving { transition: none; } }
   @media (max-width: 800px) { .cover { margin-left: -1.2rem; margin-right: -1.2rem; } }
 </style>

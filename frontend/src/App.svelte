@@ -45,6 +45,7 @@
   import { initSources } from './lib/stores/sources';
   import { initSourceProgress } from './lib/stores/sourceProgress';
   import { initSupport } from './lib/stores/support';
+  import { initProfileAccentSync } from './lib/stores/profileAccent';
   import { initLegalAcceptance, showLegalAcceptance } from './lib/stores/legalAcceptance';
   import { showTelemetryConsent } from './lib/stores/telemetryConsent';
   import { initUpdates } from './lib/stores/updates';
@@ -99,6 +100,7 @@
   initSaveBackups();
   initCollections();
   onDestroy(initCloudSaves());
+  onDestroy(initProfileAccentSync());
   initLegalAcceptance();
 
   let lastGamesPath: string | undefined;

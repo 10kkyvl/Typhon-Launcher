@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Flag, ThumbsDown, ThumbsUp } from '@lucide/svelte';
   import Avatar from '../../lib/components/Avatar.svelte';
+  import { fieldsFrame } from '../../lib/profile/frameLook';
   import { AccountError } from '../../lib/services/account';
   import { vote as voteReview, type Review, type ReviewVote } from '../../lib/services/reviews';
   import { reviewToastMessage } from '../../lib/game/reviewMessages';
@@ -72,7 +73,7 @@
 <article class="review">
   <header class="head">
     <button class="who" type="button" onclick={() => navigate('user', { username: review.author.username })}>
-      <Avatar size="sm" name={review.author.displayName || review.author.username} src={review.author.avatarUrl} />
+      <Avatar size="sm" name={review.author.displayName || review.author.username} src={review.author.avatarUrl} {...fieldsFrame(review.author)} />
       <span class="who-text">
         <span class="name">{review.author.displayName || review.author.username}</span>
         <span class="meta">

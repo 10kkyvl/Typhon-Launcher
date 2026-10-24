@@ -22,7 +22,6 @@
     unfriend,
   } from '../../lib/services/social';
   import { blockPrompt, unfriendPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
-  import { appearanceOf } from '../../lib/profile/appearance';
   import { publicLayout, resolvePublic, type GridBlock } from '../../lib/profile/layoutView';
   import { wideArt } from '../../lib/social/art';
   import { openGameByIGDB } from '../../lib/social/openGame';
@@ -278,7 +277,7 @@
     {:else}
       <div class="columns">
         <div class="main">
-          <BlockGrid blocks={gridBlocks} {external} {masked} accent={appearanceOf(data.appearance).accent} />
+          <BlockGrid blocks={gridBlocks} {external} {masked} />
           {#if common}
             <UserCommon
               {common}

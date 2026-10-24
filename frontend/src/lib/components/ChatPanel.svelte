@@ -3,6 +3,7 @@
   import { onMount } from 'svelte';
   import { fade } from 'svelte/transition';
   import Avatar from './Avatar.svelte';
+  import { fieldsFrame } from '../profile/frameLook';
   import Button from './Button.svelte';
   import IconButton from './IconButton.svelte';
   import ChatAttachments from './ChatAttachments.svelte';
@@ -333,7 +334,7 @@
 <div class="chat-root">
   {#if $chatToast}
     <button class="chat-toast" type="button" onclick={openToast} out:fade={{ duration: 240 }}>
-      <Avatar size="sm" name={displayName($chatToast.peer)} src={$chatToast.peer.avatarUrl} />
+      <Avatar size="sm" name={displayName($chatToast.peer)} src={$chatToast.peer.avatarUrl} {...fieldsFrame($chatToast.peer)} />
       <span class="toast-copy">
         <strong>{$chatToast.peer.displayName || $chatToast.peer.username}</strong>
         <span>{messagePreview($chatToast.message)}</span>
@@ -352,7 +353,7 @@
       <header class="chat-header">
         {#if peer}
           <button class="back" type="button" aria-label={msg('social.chatBack')} onclick={showList}><ArrowLeft size="1.7rem" /></button>
-          <Avatar size="sm" name={displayName(peer)} src={peer.avatarUrl} />
+          <Avatar size="sm" name={displayName(peer)} src={peer.avatarUrl} {...fieldsFrame(peer)} />
           <div class="header-copy">
             <strong>{displayName(peer)}</strong>
             <span>{peer.username ? `@${peer.username}` : ''}{#if !$chatConnected} · {msg('social.chatOffline')}{/if}</span>
@@ -495,7 +496,7 @@
           {:else}
             {#each $conversations as item (item.peer.id)}
               <button class="conversation" type="button" onclick={() => openConversation(item.peer)}>
-                <Avatar size="md" name={displayName(item.peer)} src={item.peer.avatarUrl} />
+                <Avatar size="md" name={displayName(item.peer)} src={item.peer.avatarUrl} {...fieldsFrame(item.peer)} />
                 <span class="conversation-copy">
                   <strong>{displayName(item.peer)}</strong>
                   <span>{item.lastMessage ? messagePreview(item.lastMessage) : msg('social.chatNewConversation')}</span>

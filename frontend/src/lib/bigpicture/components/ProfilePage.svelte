@@ -2,6 +2,7 @@
   import { onMount, tick } from 'svelte';
   import { ArrowLeft, Clock3, Gamepad2, Pencil, Trophy, UserRound } from '@lucide/svelte';
   import Avatar from '../../components/Avatar.svelte';
+  import { ownFrame } from '../../profile/frameSources';
   import Artwork from '../../components/Artwork.svelte';
   import { accountErrorText } from '../../services/accountMessages';
   import type { LibraryGame } from '../../services/library';
@@ -103,7 +104,7 @@
     <div class="bp-empty"><UserRound size="2.5rem" /><p>{$t('bp.profile.loading')}</p></div>
   {:else if showContent}
     <section class="identity bp-card">
-      <Avatar size="lg" name={displayName} src={$currentUser?.avatarUrl} />
+      <Avatar size="lg" name={displayName} src={$currentUser?.avatarUrl} {...ownFrame($currentUser)} />
       <div class="identity-copy">
         <span class="eyebrow">{#if isGuest || !isAuthenticated}{$t('bp.profile.localLabel')}{:else}@{$currentUser?.username}{/if}</span>
         <h2>{displayName}</h2>
