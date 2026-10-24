@@ -248,6 +248,8 @@ export const modals = {
   'modals.releaseMatchSource': 'Источник',
   'modals.releaseMatchSize': 'Размер',
   'modals.releaseMatchUploaded': 'Загружено',
+  'modals.releaseMatchFromCatalog': 'по данным каталога',
+  'modals.releaseMatchNotInCatalog': 'Игры нет в локальном каталоге',
   'modals.releaseMatchCandidates': 'Кандидаты',
   'modals.releaseMatchSearchingCandidates': 'Поиск кандидатов…',
   'modals.releaseMatchNoCandidates': 'Автоматических кандидатов не найдено. Найдите игру вручную.',

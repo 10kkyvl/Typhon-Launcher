@@ -13,6 +13,7 @@
   import { errorMessage } from '../stores/sources';
   import { metadataErrorText } from '../metadata/metadataErrors';
   import { toast } from '../stores/toasts';
+  import { candidateGroups } from '../game/similar';
   import { bytesSize, relativeDate } from '../utils/format';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
@@ -29,6 +30,10 @@
   } = $props();
 
   let candidates = $state<MatchCandidate[]>([]);
+  const ordered = $derived.by(() => {
+    const groups = candidateGroups(candidates);
+    return [...groups.server, ...groups.local];
+  });
   let loadingCandidates = $state(false);
   let selectedGameId = $state<string | null>(null);
   let query = $state('');
@@ -159,10 +164,13 @@
           <p class="muted">{msg('modals.releaseMatchNoCandidates')}</p>
         {:else}
           <div class="candidates">
-            {#each candidates as candidate (candidate.gameId)}
+            {#each ordered as candidate (candidate.gameId)}
+              {@const missing = candidate.inCatalog === false}
               <button
                 class="candidate"
                 class:selected={selectedGameId === candidate.gameId}
+                disabled={missing}
+                title={missing ? msg('modals.releaseMatchNotInCatalog') : undefined}
                 onclick={() => (selectedGameId = candidate.gameId)}
               >
                 <span class="radio" class:on={selectedGameId === candidate.gameId}>
@@ -172,6 +180,12 @@
                   {candidate.title}
                   {#if candidate.year}<span class="year">({candidate.year})</span>{/if}
                 </span>
+                {#if candidate.platforms && candidate.platforms.length > 0}
+                  <span class="candidate-method">{candidate.platforms.join(', ')}</span>
+                {/if}
+                {#if candidate.source === 'server'}
+                  <span class="candidate-method">{msg('modals.releaseMatchFromCatalog')}</span>
+                {/if}
                 <span class="candidate-method">{candidate.method}</span>
                 <span class="candidate-score">{Math.round(candidate.score * 100)}%</span>
               </button>
@@ -293,6 +307,11 @@
 
   .candidate:hover {
     background: var(--hover);
+  }
+
+  .candidate:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .candidate.selected {

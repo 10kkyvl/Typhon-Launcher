@@ -251,6 +251,8 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.releaseMatchSource': 'Source',
   'modals.releaseMatchSize': 'Size',
   'modals.releaseMatchUploaded': 'Uploaded',
+  'modals.releaseMatchFromCatalog': 'from the catalog',
+  'modals.releaseMatchNotInCatalog': 'The game is not in the local catalog',
   'modals.releaseMatchCandidates': 'Candidates',
   'modals.releaseMatchSearchingCandidates': 'Searching for candidates…',
   'modals.releaseMatchNoCandidates': 'No automatic candidates found. Find the game manually.',

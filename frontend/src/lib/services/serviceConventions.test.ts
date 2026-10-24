@@ -121,6 +121,7 @@ const LISTS: ListCase[] = [
   { module: 'sources', fn: 'getReleasesForGame', args: ['g'], binding: 'sources.GetReleasesForGame', empty: [] },
   { module: 'sources', fn: 'getReleasesForTitle', args: ['t'], binding: 'sources.GetReleasesForTitle', empty: [] },
   { module: 'sources', fn: 'getMatchCandidates', args: ['r'], binding: 'sources.GetCandidates', empty: [] },
+  { module: 'sources', fn: 'similarReleases', args: ['g', []], binding: 'sources.SimilarReleases', empty: [] },
   { module: 'updates', fn: 'listUpdates', args: [], binding: 'updates.GetUpdates', empty: [] },
   { module: 'updates', fn: 'checkUpdates', args: [], binding: 'updates.CheckUpdates', empty: [] },
   { module: 'updates', fn: 'getUpdateHistory', args: ['g'], binding: 'updates.GetHistory', empty: [] },

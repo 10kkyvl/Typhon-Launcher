@@ -38,6 +38,7 @@
   import Modal from '../../lib/components/Modal.svelte';
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import ReleaseList from '../../lib/components/ReleaseList.svelte';
+  import SimilarReleases from '../../lib/components/SimilarReleases.svelte';
   import RemoveGameModal from '../../lib/components/RemoveGameModal.svelte';
   import ReferenceLinks from '../../lib/components/ReferenceLinks.svelte';
   import SteamExtras from '../../lib/components/SteamExtras.svelte';
@@ -57,6 +58,7 @@
   import { playLabel } from '../../lib/game/profiles';
   import PlayProfileMenu from '../../lib/components/PlayProfileMenu.svelte';
   import { relationKey, releaseOrigin } from '../../lib/game/releases';
+  import { familyIds, showSimilar } from '../../lib/game/similar';
   import { completionLine, statusBadgeKind, statusLabel } from '../../lib/game/status';
   import {
     busyState,
@@ -515,6 +517,16 @@
       .map((item) => ({ ...item, groups: item.groups.filter((group) => group.release.availability !== 'removed') }))
       .filter((item) => item.groups.length > 0),
   );
+  const similarShown = $derived(
+    showSimilar({
+      releasesLoading,
+      releasesFailed,
+      releaseCount: availableGroups.length,
+      relatedSettled: !relatedLoading && (relatedLoaded || relatedFailed),
+      hasGameId: Boolean(canonicalId),
+    }),
+  );
+  const similarFamily = $derived(relatedFailed ? [] : familyIds(related));
   const ownOnPc = $derived(onPC(info?.platforms));
   const relatedOk = $derived(relatedLoaded && !relatedLoading && !relatedFailed);
   const hasPcRelative = $derived(related.some((item) => item.onPc));
@@ -1289,6 +1301,17 @@
               ondownload={downloadRelease}
             />
           </section>
+
+          {#if similarShown && canonicalId}
+            <SimilarReleases
+              gameId={canonicalId}
+              familyIds={similarFamily}
+              onlinked={() => {
+                loadReleases(canonicalId, releaseTitle);
+                loadRelated(canonicalId);
+              }}
+            />
+          {/if}
 
           {#if relatedShown.length > 0 || (relatedFailed && availableGroups.length === 0)}
             <section class="section" bind:this={otherVersionsEl}>
