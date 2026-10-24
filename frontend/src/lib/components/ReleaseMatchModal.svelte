@@ -176,10 +176,8 @@
                 <span class="radio" class:on={selectedGameId === candidate.gameId}>
                   {#if selectedGameId === candidate.gameId}<Check size="1.2rem" strokeWidth={2.6} />{/if}
                 </span>
-                <span class="candidate-title">
-                  {candidate.title}
-                  {#if candidate.year}<span class="year">({candidate.year})</span>{/if}
-                </span>
+                <span class="candidate-title" title={candidate.title}>{candidate.title}</span>
+                {#if candidate.year}<span class="year">{candidate.year}</span>{/if}
                 {#if candidate.platforms && candidate.platforms.length > 0}
                   <span class="candidate-method">{candidate.platforms.join(', ')}</span>
                 {/if}
@@ -215,10 +213,8 @@
                 <span class="radio" class:on={selectedGameId === game.id}>
                   {#if selectedGameId === game.id}<Check size="1.2rem" strokeWidth={2.6} />{/if}
                 </span>
-                <span class="candidate-title">
-                  {game.title}
-                  {#if game.releaseYear}<span class="year">({game.releaseYear})</span>{/if}
-                </span>
+                <span class="candidate-title" title={game.title}>{game.title}</span>
+                {#if game.releaseYear}<span class="year">{game.releaseYear}</span>{/if}
               </button>
             {/each}
           </div>
@@ -343,14 +339,23 @@
     min-width: 0;
     font-size: var(--font-sm);
     color: var(--text);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
   }
 
   .year {
-    color: var(--text-3);
-    margin-left: 0.4rem;
+    flex-shrink: 0;
+    padding: 0.2rem 0.8rem;
+    border-radius: var(--radius-sm);
+    background: var(--surface-3);
+    color: var(--text);
+    font-size: var(--font-xs);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
   }
 
   .candidate-method {

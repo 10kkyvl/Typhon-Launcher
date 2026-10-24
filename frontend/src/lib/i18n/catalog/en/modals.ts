@@ -500,6 +500,7 @@ export const modals: Record<ModalsKey, Message> = {
   'wrappers.not_active': 'Compatibility mode is not enabled',
   'wrappers.tampered': 'A file was changed after the wrapper was installed, so the original was not restored. Check the game files',
   'wrappers.symlink': 'The game folder contains a link instead of a file, so the wrapper cannot be installed',
+  'wrappers.arch_unsupported': 'dgVoodoo2 for DirectDraw, Direct3D 8 and Glide only works with 32-bit games, and this game is 64-bit',
   'wrappers.backup_corrupt': 'The backup of the original files is damaged',
   'wrappers.archive_hash': 'The downloaded archive failed the integrity check. Try again later',
   'wrappers.bad_archive': 'The downloaded archive is damaged or has unexpected contents',

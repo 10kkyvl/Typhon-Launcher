@@ -193,7 +193,7 @@
 
 <style>
   .backdrop { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 2rem; background: rgba(0, 0, 0, .76); }
-  .dialog { display: flex; width: min(72rem, 100%); max-height: min(90vh, 100rem); flex-direction: column; gap: 2rem; overflow: auto; padding: 2.4rem; border: 1px solid var(--border); border-radius: 1.8rem; background: var(--surface-0); box-shadow: 0 3rem 8rem rgba(0, 0, 0, .5); }
+  .dialog { display: flex; width: min(72rem, 100%); max-height: min(90vh, 100rem); flex-direction: column; gap: 2rem; overflow: auto; padding: 2.4rem; border: 1px solid var(--border); border-radius: 1.8rem; background: var(--surface-2); box-shadow: 0 3rem 8rem rgba(0, 0, 0, .5); }
   header { display: flex; align-items: center; justify-content: space-between; gap: 2rem; }
   h2, h3, p { margin: 0; }
   .filters, .actions { display: flex; flex-wrap: wrap; gap: 1.2rem; }

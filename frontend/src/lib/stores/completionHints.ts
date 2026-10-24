@@ -4,12 +4,15 @@ import { hintKey, shouldSuggestMastered, shouldSuggestPlaying } from '../game/hi
 import { msg } from '../i18n';
 import { fetchAchievements, onAchievementsUnlocked } from '../services/achievements';
 import { inWails } from '../services/backend';
-import { setStatus, type SessionEvent } from '../services/library';
+import { setStatus, type CrashEvent, type SessionEvent } from '../services/library';
 import { libraryErrorText } from '../library/errors';
 import { libraryGames } from './library';
 import { toast } from './toasts';
 
 const shown = new Set<string>();
+
+export const PLAYING_HINT_DELAY_MS = 60_000;
+const pending = new Map<string, ReturnType<typeof setTimeout>>();
 
 function find(gameId: string) {
   return get(libraryGames).find((game) => game.id === gameId);
@@ -31,6 +34,24 @@ function suggestPlaying(gameId: string) {
     label: msg('games.hintStartedAction'),
     run: () => void mark(gameId, 'playing'),
   });
+}
+
+export function schedulePlayingHint(gameId: string) {
+  cancelPlayingHint(gameId);
+  pending.set(
+    gameId,
+    setTimeout(() => {
+      pending.delete(gameId);
+      suggestPlaying(gameId);
+    }, PLAYING_HINT_DELAY_MS),
+  );
+}
+
+export function cancelPlayingHint(gameId: string) {
+  const timer = pending.get(gameId);
+  if (timer === undefined) return;
+  clearTimeout(timer);
+  pending.delete(gameId);
 }
 
 async function suggestMastered(gameId: string) {
