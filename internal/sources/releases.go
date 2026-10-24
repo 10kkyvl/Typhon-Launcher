@@ -285,12 +285,10 @@ func (s *Service) SimilarReleases(gameID string, familyIDs []string) ([]SimilarR
 	if len(familyIDs) > maxFamilyIDs {
 		return nil, fmt.Errorf("similar releases: %d family ids, at most %d", len(familyIDs), maxFamilyIDs)
 	}
-	family := make(map[string]bool, len(familyIDs))
 	for _, id := range familyIDs {
 		if id == "" {
 			return nil, errors.New("similar releases: empty family id")
 		}
-		family[id] = true
 	}
 
 	type hit struct {
@@ -314,11 +312,11 @@ func (s *Service) SimilarReleases(gameID string, familyIDs []string) ([]SimilarR
 			direct := false
 			for i := range r.RemoteMatch.Candidates {
 				c := &r.RemoteMatch.Candidates[i]
-				if c.ID == gameID {
+				if s.sameGame(c.ID, gameID) {
 					best, direct = c, true
 					break
 				}
-				if best == nil && family[c.ID] {
+				if best == nil && s.inFamily(c.ID, familyIDs) {
 					best = c
 				}
 			}
@@ -789,6 +787,15 @@ func latestVersion(refs []versionRef) string {
 		}
 	}
 	return raw
+}
+
+func (s *Service) inFamily(id string, family []string) bool {
+	for _, member := range family {
+		if s.sameGame(id, member) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Service) sameGame(a, b string) bool {

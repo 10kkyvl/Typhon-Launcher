@@ -84,7 +84,7 @@ func normalizeReason(reason string) string {
 
 func cleanText(s string, limit int) string {
 	s = strings.TrimSpace(strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
 			return -1
 		}
 		return r
@@ -178,6 +178,11 @@ func (s *Service) ResolveSourceQueries(ctx context.Context, queries []ReleaseQue
 			out[i].Reason = normalizeReason(r.Reason)
 			if out[i].Reason == ReasonAmbiguous {
 				if list := serverCandidates(r.Candidates); len(list) > 0 {
+					for j := range list {
+						if pos := s.idx.byServer[list[j].GameID]; len(pos) > 0 {
+							list[j].GameID = s.games[pos[len(pos)-1]].ID
+						}
+					}
 					out[i].Status = StatusReview
 					out[i].Candidates = list
 				}

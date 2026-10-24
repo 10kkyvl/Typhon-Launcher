@@ -25,8 +25,19 @@ export function showSimilar(input: {
   return input.hasGameId && input.relatedSettled && !input.releasesLoading && !input.releasesFailed && input.releaseCount === 0;
 }
 
-export function familyIds(items: { game: { id: string } }[]): string[] {
-  return items.map((item) => item.game.id).filter(Boolean);
+export const maxFamilyIds = 32;
+
+export function familyIds(items: { game: { id: string } }[], selfId = ''): string[] {
+  const seen = new Set<string>([selfId]);
+  const ids: string[] = [];
+  for (const item of items) {
+    const id = item.game.id;
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+    if (ids.length === maxFamilyIds) break;
+  }
+  return ids;
 }
 
 export function candidateGroups<T extends { source?: string }>(list: T[]): { server: T[]; local: T[] } {

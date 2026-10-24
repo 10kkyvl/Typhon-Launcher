@@ -38,6 +38,13 @@ describe('familyIds and candidateGroups', () => {
   it('takes game ids and skips empty ones', () => {
     expect(familyIds([{ game: { id: 'a' } }, { game: { id: '' } }, { game: { id: 'b' } }])).toEqual(['a', 'b']);
   });
+  it('drops duplicates and the game itself, and caps at 32', () => {
+    expect(familyIds([{ game: { id: 'a' } }, { game: { id: 'a' } }, { game: { id: 'self' } }, { game: { id: 'b' } }], 'self')).toEqual(['a', 'b']);
+    const many = Array.from({ length: 40 }, (_, i) => ({ game: { id: `g${i}` } }));
+    const ids = familyIds(many);
+    expect(ids).toHaveLength(32);
+    expect(ids[31]).toBe('g31');
+  });
   it('puts server candidates first group, the rest local', () => {
     const groups = candidateGroups([{ source: 'local' }, { source: 'server' }, {}]);
     expect(groups.server).toEqual([{ source: 'server' }]);
