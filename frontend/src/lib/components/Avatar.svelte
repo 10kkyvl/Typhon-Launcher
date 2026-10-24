@@ -2,7 +2,7 @@
   import { untrack } from 'svelte';
   import type { PresenceDot } from '../social/presence';
   import type { AvatarFrame, FrameImage } from '../services/account';
-  import { frameScale, isCustomFrame, presetFrame } from '../profile/frameLook';
+  import { frameOverhang, frameScale, frameShift, isCustomFrame, presetFrame } from '../profile/frameLook';
 
   let {
     src,
@@ -51,7 +51,7 @@
   });
 </script>
 
-<span class="avatar {size}" class:framed={preset !== 'none' || !!layer} class:art={!!layer} style:--frame-color={frameColor || undefined} style:--art-over={layer ? (frameScale(layer.hole) / 100 - 1) / 2 : undefined}>
+<span class="avatar {size}" class:framed={preset !== 'none' || !!layer} class:art={!!layer} style:--frame-color={frameColor || undefined} style:--art-left={layer ? frameOverhang(layer.hole, layer.holeX ?? 0.5) : undefined} style:--art-right={layer ? frameOverhang(layer.hole, 1 - (layer.holeX ?? 0.5)) : undefined}>
   {#if preset !== 'none'}
     <span class="frame frame-{preset}" aria-hidden="true"></span>
   {/if}
@@ -61,7 +61,7 @@
     <img {src} alt="" draggable="false" onerror={() => (failed = true)} />
   {/if}
   {#if layer}
-    <img class="frame-art" src={layer.url} alt="" aria-hidden="true" decoding="async" loading="lazy" draggable="false" style:width="{frameScale(layer.hole)}%" onerror={() => (frameFailed = true)} />
+    <img class="frame-art" src={layer.url} alt="" aria-hidden="true" decoding="async" loading="lazy" draggable="false" style:width="{frameScale(layer.hole)}%" style:transform="translate({frameShift(layer.holeX ?? 0.5)}, {frameShift(layer.holeY ?? 0.5)})" onerror={() => (frameFailed = true)} />
   {/if}
   {#if status}
     <span class="dot {status}" class:changed onanimationend={() => (changed = false)}></span>
@@ -80,7 +80,8 @@
   }
 
   .avatar.art {
-    margin-inline: calc(var(--size) * var(--art-over, 0) * 0.5);
+    margin-inline-start: calc(var(--size) * var(--art-left, 0) * 0.5);
+    margin-inline-end: calc(var(--size) * var(--art-right, 0) * 0.5);
   }
 
   .avatar.sm {

@@ -45,6 +45,15 @@ describe('Avatar personal frame', () => {
     expect(out).toContain('loading="lazy"');
     expect(out).toContain('framed');
   });
+  it('centres the image when the hole is centred or the centre is absent', () => {
+    expect(html({ frame, frameImage })).toContain('transform: translate(-50%, -50%)');
+    expect(html({ frame, frameImage: { ...frameImage, holeX: 0.5, holeY: 0.5 } })).toContain('transform: translate(-50%, -50%)');
+  });
+  it('shifts the image so the offset hole lands on the avatar centre', () => {
+    const out = html({ frame, frameImage: { ...frameImage, holeX: 0.4, holeY: 0.62 } });
+    expect(out).toContain('width: 200%');
+    expect(out).toContain('transform: translate(-40%, -62%)');
+  });
   it('draws nothing for a custom frame without an image', () => {
     const out = html({ frame });
     expect(out).not.toContain('frame-art');

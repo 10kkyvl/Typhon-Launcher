@@ -4,6 +4,9 @@ import { validAccent } from '../theme/accent';
 
 const CUSTOM = /^custom:([0-9a-f-]{36})$/;
 const MIN_HOLE = 0.3;
+const MIN_CENTER = 0.05;
+const MAX_CENTER = 0.95;
+const MID_CENTER = 0.5;
 
 export interface FrameProps {
   frame: AvatarFrame;
@@ -28,10 +31,23 @@ export function frameScale(hole: number): number {
   return Math.round((100 / clamped) * 100) / 100;
 }
 
+export function frameCenter(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return MID_CENTER;
+  return Math.min(MAX_CENTER, Math.max(MIN_CENTER, value));
+}
+
+export function frameOverhang(hole: number, before: number): number {
+  return Math.max(0, (frameCenter(before) * frameScale(hole)) / 100 - 0.5);
+}
+
+export function frameShift(center: number): string {
+  return `-${Math.round(frameCenter(center) * 10000) / 100}%`;
+}
+
 function usable(image?: FrameImage | null): FrameImage | undefined {
   if (!image || typeof image.url !== 'string' || image.url === '') return undefined;
   if (typeof image.hole !== 'number' || !Number.isFinite(image.hole) || image.hole <= 0) return undefined;
-  return { url: image.url, hole: image.hole };
+  return { url: image.url, hole: image.hole, holeX: frameCenter(image.holeX), holeY: frameCenter(image.holeY) };
 }
 
 export function ownedFrame(owned: readonly OwnedFrame[] | null | undefined, frame: unknown): OwnedFrame | undefined {
