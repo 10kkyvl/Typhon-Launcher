@@ -153,9 +153,15 @@ describe('AI skill wrappers', () => {
 });
 
 describe('themeErrorText', () => {
-  it('names the token for theme.token_kind', async () => {
+  it('names every refused token for theme.token_kind', async () => {
     const { themeErrorText } = await import('../theme/themeErrors');
-    const text = themeErrorText(new Error('typhon:theme.token_kind --radius-md (length): значение'));
-    expect(text).toContain('--radius-md');
+    const text = themeErrorText(new Error('--font-sans (font), --sidebar-w (length): typhon:theme.token_kind: значение токена не подходит по типу'));
+    expect(text).toContain('--font-sans, --sidebar-w');
+  });
+
+  it('names the tokens of a var() cycle', async () => {
+    const { themeErrorText } = await import('../theme/themeErrors');
+    const text = themeErrorText(new Error('var() cycle: --bg, --surface: typhon:theme.token_kind: значение токена не подходит по типу'));
+    expect(text).toContain('--bg, --surface');
   });
 });

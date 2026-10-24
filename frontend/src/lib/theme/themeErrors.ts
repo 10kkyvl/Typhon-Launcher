@@ -21,11 +21,12 @@ export const REASONS: Record<string, MessageKey> = {
   'theme.skill_write_failed': 'theme.skill_write_failed',
 };
 
-const TOKEN = /(--[a-z0-9-]+) \(/;
+const TOKEN = /--[a-z0-9-]+/g;
 
-function tokenName(err: unknown): string {
+function tokenNames(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err ?? '');
-  return TOKEN.exec(raw)?.[1] ?? '';
+  const subject = raw.split('typhon:')[0];
+  return [...new Set(subject.match(TOKEN) ?? [])].join(', ');
 }
 
 export function themeErrorText(err: unknown, fallback: string = msg('errLibrary.themeErrFallback')): string {
@@ -33,7 +34,7 @@ export function themeErrorText(err: unknown, fallback: string = msg('errLibrary.
   const key = REASONS[code];
   if (!key) return fallback;
   if (code === 'theme.token_kind') {
-    const name = tokenName(err);
+    const name = tokenNames(err);
     return name ? `${msg(key)}: ${name}` : msg(key);
   }
   return msg(key);
