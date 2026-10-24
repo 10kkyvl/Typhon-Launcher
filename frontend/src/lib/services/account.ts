@@ -19,6 +19,8 @@ export type AvatarFrame = AvatarPreset | `custom:${string}`;
 export interface FrameImage {
   url: string;
   hole: number;
+  holeX?: number;
+  holeY?: number;
 }
 
 export interface OwnedFrame extends FrameImage {

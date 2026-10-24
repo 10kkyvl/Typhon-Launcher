@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('../services/backend', () => ({ inWails: false }));
-import { cardFrame, fieldsFrame, frameLook, frameScale } from './frameLook';
+import { cardFrame, fieldsFrame, frameCenter, frameLook, frameOverhang, frameScale, frameShift } from './frameLook';
 import { ownFrame, publicFrame } from './frameSources';
 import { appearanceOf } from './appearance';
 import { playerCardOf } from './appearanceCard';
@@ -8,7 +8,7 @@ import type { CurrentUser } from '../services/account';
 import type { PublicProfile } from '../services/social';
 
 const id = '3f2b8c1e-9a4d-4e57-b0aa-1c2d3e4f5a6b';
-const image = { url: 'https://cdn/f.png', hole: 0.5 };
+const image = { url: 'https://cdn/f.png', hole: 0.5, holeX: 0.5, holeY: 0.5 };
 const owned = [{ id, name: 'Dachshund', ...image }];
 
 describe('frameLook', () => {
@@ -47,6 +47,38 @@ describe('frameLook', () => {
     expect(frameScale(1)).toBe(100);
     expect(frameScale(2)).toBe(100);
     expect(frameScale(0.01)).toBeCloseTo(333.33, 2);
+  });
+});
+
+describe('frame hole centre', () => {
+  const raw = { url: 'https://cdn/f.png', hole: 0.5 };
+  it('defaults a missing centre to the middle', () => {
+    expect(frameLook(`custom:${id}`, '', raw)).toEqual({ frame: `custom:${id}`, frameImage: image });
+  });
+  it('keeps an offset centre', () => {
+    expect(frameLook(`custom:${id}`, '', { ...raw, holeX: 0.4, holeY: 0.62 })).toEqual({
+      frame: `custom:${id}`,
+      frameImage: { ...raw, holeX: 0.4, holeY: 0.62 },
+    });
+  });
+  it('clamps and repairs a bad centre', () => {
+    expect(frameCenter(0)).toBe(0.05);
+    expect(frameCenter(2)).toBe(0.95);
+    expect(frameCenter(Number.NaN)).toBe(0.5);
+    expect(frameCenter(undefined)).toBe(0.5);
+    expect(frameCenter('0.3')).toBe(0.5);
+  });
+  it('turns a centre into a negative shift', () => {
+    expect(frameShift(0.5)).toBe('-50%');
+    expect(frameShift(0.4)).toBe('-40%');
+    expect(frameShift(0.6234)).toBe('-62.34%');
+  });
+
+  it('reserves the overhang on each side from the hole centre', () => {
+    expect(frameOverhang(0.5, 0.5)).toBe(0.5);
+    expect(frameOverhang(0.5, 0.25)).toBe(0);
+    expect(frameOverhang(0.5, 0.75)).toBe(1);
+    expect(frameOverhang(1, 0.5)).toBe(0);
   });
 });
 
