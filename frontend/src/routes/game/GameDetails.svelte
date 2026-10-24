@@ -139,6 +139,7 @@
   import { toast } from '../../lib/stores/toasts';
   import { toggleWatch, watchedIds } from '../../lib/stores/watchlist';
   import { settings } from '../../lib/stores/settings';
+  import { openSaveBackups, saveBackupsEnabled } from '../../lib/stores/savebackup';
   import { sources } from '../../lib/stores/sources';
   import { stepLabels, updatesByGame, verifications } from '../../lib/stores/updates';
   import { bytesSize, formatCount, numericDate, playtime, progressPercent, relativeDate, truncateMiddle } from '../../lib/utils/format';
@@ -551,6 +552,7 @@
   const busyPercent = $derived(progressPercent(busy?.progress ?? 0));
 
   const menuItems = $derived([
+    ...($saveBackupsEnabled && localGame ? [{ id: 'saves-backups', label: msg('games.detailSavesRollback') }] : []),
     ...($metadataAvailable && canonicalId
       ? metaView?.resolved
         ? [
@@ -589,7 +591,9 @@
   }
 
   function onMenu(actionId: string) {
-    if (actionId === 'remove') {
+    if (actionId === 'saves-backups') {
+      if (localGame) openSaveBackups(localGame.id);
+    } else if (actionId === 'remove') {
       removeMode = 'library';
       removeOpen = true;
     } else if (actionId === 'uninstall') {

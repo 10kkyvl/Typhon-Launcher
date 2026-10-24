@@ -180,6 +180,7 @@ export const games: Record<GamesKey, Message> = {
   'games.actionStatus': 'Status: {status}',
   'games.actionRemoveLibrary': 'Remove from library',
   'games.actionOpenSaves': 'Open saves',
+  'games.detailSavesRollback': 'Roll back saves',
   'games.actionSavesBackups': 'Saves…',
   'games.actionVerify': 'Verify files',
   'games.actionMove': 'Move to another drive',

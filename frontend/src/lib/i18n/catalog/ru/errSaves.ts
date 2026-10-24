@@ -20,6 +20,7 @@ export const errSaves = {
   'savebackup.recovery_failed': 'Не удалось довести до конца прерванную операцию с сохранениями',
   'savebackup.no_free_space': 'На диске не хватает места для копии',
   'savebackup.rotation_failed': 'Копия создана, но старые копии удалить не удалось',
+  'savebackup.launch_timeout': 'копия сохранений перед запуском не успела — игра запущена без неё',
   'savebackup.cleanup_failed': 'не удалось убрать временные файлы рядом с папкой сохранений',
 } as const;
 
