@@ -120,11 +120,33 @@ export interface ReactionCount {
   count: number;
 }
 
+export const FEED_KINDS = ['completed', 'started', 'favorited', 'played', 'achievement', 'reviewed', 'planned'] as const;
+
+export type FeedKind = (typeof FEED_KINDS)[number];
+
+export function isFeedKind(kind: string): kind is FeedKind {
+  return (FEED_KINDS as readonly string[]).includes(kind);
+}
+
+export interface FeedAchievement {
+  key: string;
+  name: string;
+  iconUrl: string;
+}
+
+export interface FeedReview {
+  id: number;
+  recommended: boolean;
+}
+
 export interface ActivityView {
   id: number;
   kind: string;
   game: GameCard;
   createdAt: string;
+  seconds: number;
+  achievements: FeedAchievement[];
+  review: FeedReview | null;
 }
 
 export interface FeedEvent {
@@ -133,6 +155,9 @@ export interface FeedEvent {
   kind: string;
   game: GameCard;
   createdAt: string;
+  seconds: number;
+  achievements: FeedAchievement[];
+  review: FeedReview | null;
   reactions: ReactionCount[];
   mine: string[];
   note: string;
@@ -393,7 +418,9 @@ function toProfile(value: unknown): PublicProfile {
     favorites: list(profile.favorites),
     showcase: list(profile.showcase),
     recentlyPlayed: list(profile.recentlyPlayed),
-    recentActivity: list(profile.recentActivity),
+    recentActivity: list(profile.recentActivity)
+      .filter((item) => isFeedKind(item.kind))
+      .map((item) => ({ ...item, ...extras(item) })),
     common: profile.common ?? null,
     mutualFriends: list(profile.mutualFriends),
     mutualCount: profile.mutualCount ?? 0,
@@ -450,13 +477,28 @@ export async function gameFriends(canonicalGameId: string): Promise<GameFriends>
   }
 }
 
+function extras(item: {
+  seconds?: number | null;
+  achievements?: Partial<FeedAchievement>[] | null;
+  review?: FeedReview | null;
+}): Pick<FeedEvent, 'seconds' | 'achievements' | 'review'> {
+  return {
+    seconds: item.seconds ?? 0,
+    achievements: list(item.achievements).map((a) => ({ key: a.key ?? '', name: a.name ?? '', iconUrl: a.iconUrl ?? '' })),
+    review: item.review ?? null,
+  };
+}
+
 export async function feed(cursor = ''): Promise<FeedPage> {
   if (!inWails) return emptyFeedPage();
   try {
     const page = (await SocialService.Feed(cursor)) as unknown as Partial<FeedPage> | null;
     return {
-      events: list(page?.events).map((event) => ({
+      events: list(page?.events)
+        .filter((event) => isFeedKind(event.kind))
+        .map((event) => ({
         ...event,
+        ...extras(event),
         reactions: list(event.reactions),
         mine: list(event.mine),
         note: event.note ?? '',

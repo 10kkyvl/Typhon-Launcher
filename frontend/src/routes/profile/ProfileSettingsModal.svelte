@@ -5,8 +5,10 @@
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
   import { VISIBILITIES, type ProfileSettings, type Visibility } from '../../lib/services/account';
+  import { FEED_KINDS } from '../../lib/services/social';
+  import { FEED_KIND_LABELS } from '../../lib/social/feed';
   import { accountErrorText } from '../../lib/services/accountMessages';
-  import { privacyPatch } from '../../lib/profile/settingsPatch';
+  import { privacyPatch, withFeedKind } from '../../lib/profile/settingsPatch';
   import { visibilityLabel } from '../../lib/profile/view';
   import { isOffline, saveProfile, savingProfile } from '../../lib/stores/user';
   import { toast } from '../../lib/stores/toasts';
@@ -31,17 +33,19 @@
       showLibrary: settings.showLibrary,
       showPlaytime: settings.showPlaytime,
       showcase: [...(settings.showcase ?? [])],
+      feedHidden: [...(settings.feedHidden ?? [])],
     };
   }
 
   let draft = $state<ProfileSettings>(initialDraft());
   let visibility = $state<string>(initialDraft().visibility);
+  let feedTouched = $state(false);
   let error = $state('');
   let deleting = $state(false);
 
   const visibilityOptions = VISIBILITIES.map((id) => ({ id, label: visibilityLabel(id) }));
 
-  const flags: { key: keyof Omit<ProfileSettings, 'showcase' | 'visibility' | 'appearance' | 'statusEmoji' | 'statusText' | 'layout'>; label: string; sub: string }[] = [
+  const flags: { key: keyof Omit<ProfileSettings, 'showcase' | 'feedHidden' | 'visibility' | 'appearance' | 'statusEmoji' | 'statusText' | 'layout'>; label: string; sub: string }[] = [
     { key: 'showOnline', label: msg('social.flagOnlineLabel'), sub: msg('social.flagOnlineSub') },
     { key: 'showPlaying', label: msg('social.flagPlayingLabel'), sub: msg('social.flagPlayingSub') },
     { key: 'showLibrary', label: msg('social.flagLibraryLabel'), sub: msg('social.flagLibrarySub') },
@@ -54,7 +58,7 @@
     if ($savingProfile || $isOffline) return;
     error = '';
     try {
-      if (!(await saveProfile({ profile: privacyPatch($state.snapshot(draft), toVisibility(visibility)) }))) {
+      if (!(await saveProfile({ profile: privacyPatch($state.snapshot(draft), toVisibility(visibility), feedTouched) }))) {
         error = msg('profile.saveBusy');
         return;
       }
@@ -89,6 +93,31 @@
             <span class="row-sub">{flag.sub}</span>
           </div>
           <Toggle checked={draft[flag.key]} label={flag.label} disabled={$isOffline} onchange={(v) => (draft[flag.key] = v)} />
+        </div>
+      {/each}
+    </div>
+  </div>
+
+  <div class="group">
+    <h4>{msg('social.feedPrivacyTitle')}</h4>
+    <p class="hint">{msg('social.feedPrivacySub')}</p>
+    <div class="rows">
+      {#each FEED_KINDS as kind (kind)}
+        {@const label = msg(FEED_KIND_LABELS[kind])}
+        <div class="row">
+          <div class="row-text">
+            <span class="row-label">{label}</span>
+            {#if kind === 'played'}<span class="row-sub">{msg('social.feedKindPlayedSub')}</span>{/if}
+          </div>
+          <Toggle
+            checked={!(draft.feedHidden ?? []).includes(kind)}
+            {label}
+            disabled={$isOffline || !draft.showActivity}
+            onchange={(v) => {
+              draft.feedHidden = withFeedKind(draft.feedHidden, kind, v);
+              feedTouched = true;
+            }}
+          />
         </div>
       {/each}
     </div>

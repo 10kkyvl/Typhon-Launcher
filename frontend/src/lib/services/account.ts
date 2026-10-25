@@ -99,6 +99,7 @@ export interface ProfileSettings {
   showLibrary: boolean;
   showActivity: boolean;
   showStats: boolean;
+  feedHidden?: string[] | null;
   showcase: ShowcaseKind[];
   statusEmoji?: string;
   statusText?: string;

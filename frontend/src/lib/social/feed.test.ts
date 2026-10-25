@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FeedEvent } from '../services/social';
-import { REACTIONS, eventLine, feedDayGroups, kindLabel, reactionLabel, toggleReaction } from './feed';
+import { REACTIONS, eventLabel, eventLine, feedDayGroups, kindLabel, reactionLabel, toggleReaction } from './feed';
 
 function event(patch: Partial<FeedEvent> = {}): FeedEvent {
   return {
@@ -9,6 +9,9 @@ function event(patch: Partial<FeedEvent> = {}): FeedEvent {
     kind: 'completed',
     game: { igdbId: 7, title: 'Elden Ring', coverUrl: '' },
     createdAt: '2026-09-03T12:00:00Z',
+    seconds: 0,
+    achievements: [],
+    review: null,
     reactions: [],
     mine: [],
     note: '',
@@ -32,6 +35,30 @@ describe('kindLabel', () => {
   it('не выдумывает подпись для незнакомого вида', () => {
     expect(kindLabel('exploded')).toBe('');
     expect(kindLabel('')).toBe('');
+  });
+});
+
+describe('eventLabel', () => {
+  it('names the static kinds', () => {
+    expect(eventLabel(event({ kind: 'reviewed' }))).toBe('Написан отзыв');
+    expect(eventLabel(event({ kind: 'planned' }))).toBe('В планах');
+  });
+
+  it('shows whole hours for played and nothing when there are none', () => {
+    expect(eventLabel(event({ kind: 'played', seconds: 3600 * 5 + 1200 }))).toBe('Наиграно 5 ч за неделю');
+    expect(eventLabel(event({ kind: 'played', seconds: 0 }))).toBe('');
+  });
+
+  it('names a single achievement and counts several with a plural', () => {
+    const one = { key: 'A', name: 'First win', iconUrl: '' };
+    expect(eventLabel(event({ kind: 'achievement', achievements: [one] }))).toBe('Получено достижение «First win»');
+    expect(eventLabel(event({ kind: 'achievement', achievements: [one, one] }))).toBe('Получено 2 достижения');
+    expect(eventLabel(event({ kind: 'achievement', achievements: Array(5).fill(one) }))).toBe('Получено 5 достижений');
+    expect(eventLabel(event({ kind: 'achievement', achievements: [] }))).toBe('');
+  });
+
+  it('gives nothing for an unknown kind', () => {
+    expect(eventLabel(event({ kind: 'exploded' }))).toBe('');
   });
 });
 
