@@ -114,6 +114,8 @@ func TestPrereleaseOrder(t *testing.T) {
 		{"v1.3.0-BETA.1", "1.3.0-beta.1", 0},
 		{"1.3.0-beta.1", "1.3.0-beta.1.1", -1},
 		{"1.3.0-beta.1", "1.3", -1},
+		{"1.3.0-beta.2", "1.3.0-rc.1", -1},
+		{"1.3.0-RC.1", "1.3.0", -1},
 	}
 	for _, c := range cases {
 		got, ok := Compare(Parse(c.left), Parse(c.right))
@@ -134,7 +136,7 @@ func TestPrereleaseParse(t *testing.T) {
 	if s := Parse("1.3.0"); IsPrerelease(s) || Channel(s) != "stable" {
 		t.Fatalf("stable misdetected: %+v", s)
 	}
-	for _, raw := range []string{"1.3-beta.1", "1.3.0-beta", "1.3.0-beta.x", "1.3.0-beta.1+x"} {
+	for _, raw := range []string{"1.3-beta.1", "1.3.0-beta", "1.3.0-beta.x", "1.3.0-beta.1+x", "1.0.3-hotfix.1", "1.0.3-patch.2", "1.0.3-update.1", "1.0.3-gold.1"} {
 		if Parse(raw).Comparable {
 			t.Errorf("Parse(%q) must stay non-comparable", raw)
 		}

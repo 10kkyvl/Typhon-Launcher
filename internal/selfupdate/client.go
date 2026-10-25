@@ -101,7 +101,10 @@ func (c *Client) fetchManifest(ctx context.Context, access BetaAccess) (Manifest
 	if access != nil {
 		token, ok, aerr := access()
 		if aerr != nil {
-			return Manifest{}, "", fmt.Errorf("resolve beta access: %w", aerr)
+			// The stable manifest is public: a locked vault must not stop the
+			// launcher from learning about a release. Status.Channel says stable.
+			slog.Warn("selfupdate: beta access is unavailable, checking the stable channel", "error", aerr)
+			ok = false
 		}
 		if ok {
 			if serr := account.CheckURLScheme(req.URL); serr != nil {

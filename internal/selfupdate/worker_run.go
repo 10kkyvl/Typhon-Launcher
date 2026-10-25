@@ -161,7 +161,7 @@ func runUpdate(waitCtx, applyCtx context.Context, configDir string, spec updateS
 	ui.setStage(text.title(spec.Version), text.installing)
 
 	staged := false
-	if rollbackSupported() == nil {
+	if rollbackSupported() == nil && !spec.Downgrade {
 		if serr := saveCurrent(applyCtx, configDir, spec.RelaunchPath, spec.FromVersion); serr != nil {
 			snapshotErr = fmt.Errorf("%w: %w", ErrSnapshotFailed, serr)
 			slog.Warn("selfupdate worker: the running launcher could not be saved, updating without a rollback", "error", serr)
@@ -170,6 +170,11 @@ func runUpdate(waitCtx, applyCtx context.Context, configDir string, spec updateS
 		}
 	}
 	err = applyUpdate(applyCtx, configDir, spec)
+	if err == nil && spec.Downgrade {
+		if derr := dropPrereleasePrevious(configDir); derr != nil {
+			slog.Warn("selfupdate worker: remove the beta rollback snapshot, a stable launcher cannot read it", "error", derr)
+		}
+	}
 	if !staged {
 		if err != nil {
 			return nil, err

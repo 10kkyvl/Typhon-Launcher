@@ -24,6 +24,7 @@ type betaStand struct {
 	header  http.Header
 	channel string
 	failing bool
+	hits    int
 }
 
 func newBetaStand(t *testing.T, version, channel string) *betaStand {
@@ -35,6 +36,9 @@ func newBetaStand(t *testing.T, version, channel string) *betaStand {
 		content := bytes.Clone(st.content)
 		st.mu.Unlock()
 		if r.URL.Path != ManifestPath {
+			st.mu.Lock()
+			st.hits++
+			st.mu.Unlock()
 			if _, err := w.Write(content); err != nil {
 				t.Errorf("write artifact: %v", err)
 			}
@@ -101,7 +105,7 @@ func TestFetchManifestBetaHeaders(t *testing.T) {
 		{"tester but server answers stable", tester, "stable", true, ChannelStable, nil},
 		{"old server without the header", tester, "", true, ChannelStable, nil},
 		{"unknown channel is stable", tester, "nightly", true, ChannelStable, nil},
-		{"access failure stops the check", func() (string, bool, error) { return "", false, boom }, "", false, "", boom},
+		{"access failure falls back to stable without headers", func() (string, bool, error) { return "tok-123", true, boom }, "stable", false, ChannelStable, nil},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

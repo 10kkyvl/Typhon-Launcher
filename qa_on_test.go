@@ -78,7 +78,7 @@ func TestQAStartPort(t *testing.T) {
 }
 
 func TestQAWindowTitle(t *testing.T) {
-	if got := windowTitle(); got != "Typhon [qa]" {
-		t.Fatalf("windowTitle() = %q", got)
+	if got := windowTitleFor("1.2.0"); got != "Typhon [qa]" {
+		t.Fatalf("windowTitleFor() = %q", got)
 	}
 }

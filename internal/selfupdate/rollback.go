@@ -206,7 +206,12 @@ func markSkipped(configDir, ver string) error {
 	if err != nil {
 		return err
 	}
-	st.SkippedVersion = ver
+	// A stable launcher does not parse a beta's version, so a beta is never
+	// written here: the stable build would fail every check on it. It does not
+	// need the mark either, the stable manifest never offers a beta.
+	if !version.IsPrerelease(version.Parse(ver)) {
+		st.SkippedVersion = ver
+	}
 	// The launcher a rollback returns to may not know a rebuilt executable and
 	// would hand it to the installer runner as if it were an installer.
 	if st.Artifact != nil && st.Artifact.Kind == KindExe {

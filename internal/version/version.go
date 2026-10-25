@@ -40,7 +40,7 @@ var (
 	reBuild     = regexp.MustCompile(`^(?:build|bld|b)[\s._-]*([0-9]{2,})$`)
 	reSeries    = regexp.MustCompile(`^(update|upd|patch|hotfix|rev|revision)[\s._-]*([0-9]+(?:[._][0-9]+)*)$`)
 	reDotted    = regexp.MustCompile(`^([0-9]+(?:[._-][0-9]+)*)(.*)$`)
-	rePre       = regexp.MustCompile(`^-([a-z][a-z0-9]*(?:\.[0-9]+)+)$`)
+	rePre       = regexp.MustCompile(`^-((?:alpha|beta|rc)(?:\.[0-9]+)+)$`)
 	reTrimNoise = regexp.MustCompile(`^[\s._\-()\[\]]+|[\s._\-()\[\]]+$`)
 )
 
