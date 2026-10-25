@@ -50,7 +50,7 @@ export const social: Record<SocialKey, Message> = {
     other: 'Unlocked {count} achievements',
   },
   'social.feedReviewed': 'Review posted',
-  'social.feedPlanned': 'Planned',
+  'social.feedPlanned': 'Added to Backlog',
   'social.feedReviewYes': 'Recommends',
   'social.feedReviewNo': 'Does not recommend',
   'social.feedPrivacyTitle': 'What goes into the feed',
@@ -62,7 +62,7 @@ export const social: Record<SocialKey, Message> = {
   'social.feedKindPlayedSub': 'Also hidden while "Playtime" is off',
   'social.feedKindAchievement': 'Achievements',
   'social.feedKindReviewed': 'Reviews',
-  'social.feedKindPlanned': 'Planned',
+  'social.feedKindPlanned': 'Backlog',
 
   // lib/social/presence.ts
   'social.presenceOnline': 'Online',
