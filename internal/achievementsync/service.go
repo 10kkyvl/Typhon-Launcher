@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
@@ -73,7 +74,10 @@ func New(cfg Config) (*Service, error) {
 	case cfg.IGDBID == nil:
 		return nil, errors.New("achievementsync: igdb resolver is required")
 	}
-	cl, err := newClient(cfg.BaseURL, cfg.Token)
+	if cfg.Token == nil {
+		return nil, errors.New("achievementsync: token resolver is nil")
+	}
+	cl, err := newClient(cfg.BaseURL)
 	if err != nil {
 		return nil, err
 	}
@@ -167,10 +171,6 @@ func (s *Service) Report(gameID, appID string, unlocks []achievements.Unlock) er
 	if tok == "" {
 		return nil
 	}
-	owner, err := s.owner(tok)
-	if err != nil {
-		return err
-	}
 	steam, ok := positiveID(appID)
 	if !ok {
 		slog.Debug("achievements not reported: no steam app id", "game", gameID)
@@ -191,17 +191,27 @@ func (s *Service) Report(gameID, appID string, unlocks []achievements.Unlock) er
 		slog.Debug("achievements not reported: no igdb id", "game", gameID)
 		return nil
 	}
+	owner := s.ownerOrPending(tok)
 	now := s.now()
 	items := make([]entry, 0, len(unlocks))
+	seen := make(map[string]struct{}, len(unlocks))
 	for _, u := range unlocks {
-		at := u.At
-		if at.IsZero() {
-			at = now
-		}
-		if u.Key == "" || now.Sub(at) > maxAge || at.Sub(now) > maxFuture {
+		if !validKey(u.Key) {
+			slog.Debug("achievement unlock skipped: invalid key", "game", gameID)
 			continue
 		}
-		items = append(items, entry{Owner: owner, IGDBID: igdb, SteamAppID: steam, Key: u.Key, UnlockedAt: at.UTC()})
+		if _, dup := seen[u.Key]; dup {
+			continue
+		}
+		seen[u.Key] = struct{}{}
+		if u.At.IsZero() {
+			slog.Debug("achievement unlock skipped: no unlock time", "game", gameID, "key", u.Key)
+			continue
+		}
+		if now.Sub(u.At) > maxAge || u.At.Sub(now) > maxFuture {
+			continue
+		}
+		items = append(items, entry{Owner: owner, IGDBID: igdb, SteamAppID: steam, Key: u.Key, UnlockedAt: u.At.UTC()})
 	}
 	if len(items) == 0 {
 		return nil
@@ -216,22 +226,29 @@ func (s *Service) Report(gameID, appID string, unlocks []achievements.Unlock) er
 	return nil
 }
 
-// Flush sends the queue. A permanent rejection drops that batch, a retryable
-// failure stops the flush and keeps everything not yet accepted.
+func validKey(key string) bool {
+	return key != "" && utf8.ValidString(key) && utf8.RuneCountInString(key) <= maxKeyRunes
+}
+
+// Flush sends the queue of the current account. Consent withdrawn or a
+// sign-out discards the queue. A rejection the server will repeat is dropped; a
+// failure of the session or the path to the server stops the flush and keeps
+// everything; a server error keeps that game's batch and moves on to the next
+// game.
 //
 //wails:ignore
 func (s *Service) Flush(ctx context.Context) error {
 	s.flushMu.Lock()
 	defer s.flushMu.Unlock()
 	if !s.consent() {
-		return nil
+		return s.discard()
 	}
 	tok, err := s.token()
 	if err != nil {
 		return fmt.Errorf("resolve achievements token: %w", err)
 	}
 	if tok == "" {
-		return nil
+		return s.discard()
 	}
 	owner, err := s.owner(tok)
 	if err != nil {
@@ -243,27 +260,52 @@ func (s *Service) Flush(ctx context.Context) error {
 		s.mu.Unlock()
 		return s.box.broken
 	}
-	if err := s.box.settle(nil, s.now()); err != nil {
+	now := s.now()
+	if err := s.box.rebind(pendingOwner(tok), owner, now); err != nil {
+		s.mu.Unlock()
+		return err
+	}
+	if err := s.box.settle(nil, now); err != nil {
 		s.mu.Unlock()
 		return err
 	}
 	pending := slices.DeleteFunc(slices.Clone(s.box.items), func(e entry) bool { return e.Owner != owner })
 	s.mu.Unlock()
 
+	type game struct{ igdb, steam int64 }
+	failed := map[game]struct{}{}
+	var firstErr error
 	for _, batch := range batches(pending) {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		req := request{IGDBID: batch[0].IGDBID, SteamAppID: batch[0].SteamAppID}
+		if !s.consent() {
+			return s.discard()
+		}
+		g := game{batch[0].IGDBID, batch[0].SteamAppID}
+		if _, skip := failed[g]; skip {
+			continue
+		}
+		if current, err := s.token(); err != nil || current != tok {
+			return errors.Join(errSessionChanged, err)
+		}
+		req := request{IGDBID: g.igdb, SteamAppID: g.steam}
 		for _, e := range batch {
 			req.Unlocks = append(req.Unlocks, Unlock{Key: e.Key, UnlockedAt: e.UnlockedAt})
 		}
-		err := s.client.report(ctx, req)
+		err := s.client.report(ctx, tok, req)
 		var permanent *PermanentError
+		var retry *RetryableError
 		switch {
 		case err == nil:
 		case errors.As(err, &permanent):
 			slog.Warn("achievements report rejected, unlocks dropped", "igdb", req.IGDBID, "count", len(req.Unlocks), "status", permanent.Status, "code", permanent.Code)
+		case errors.As(err, &retry) && !retry.Stop:
+			failed[g] = struct{}{}
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
 		default:
 			return err
 		}
@@ -274,7 +316,39 @@ func (s *Service) Flush(ctx context.Context) error {
 			return err
 		}
 	}
+	return firstErr
+}
+
+// discard drops the whole queue: nothing may be sent without consent, and a
+// sign-out ends the account's claim on what it had queued.
+func (s *Service) discard() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.box.broken != nil || len(s.box.items) == 0 {
+		return nil
+	}
+	if err := s.box.replace(nil); err != nil {
+		return err
+	}
+	slog.Info("achievements outbox cleared: no consent or signed out")
 	return nil
+}
+
+// ownerOrPending tags an entry with the account when it is known. While the
+// account id is not known yet (the backend has not answered since sign-in and
+// nothing is cached) it tags the entry with a digest of the session, which
+// Flush rebinds to the account as soon as the id resolves.
+func (s *Service) ownerOrPending(token string) string {
+	owner, err := s.owner(token)
+	if err != nil {
+		slog.Debug("achievements queued before the account id is known", "error", err)
+		return pendingOwner(token)
+	}
+	return owner
+}
+
+func pendingOwner(token string) string {
+	return "session-" + fmt.Sprintf("%x", sha256.Sum256([]byte("achievementsync-session:"+token)))
 }
 
 // owner is a digest of the account id: entries stay bound to the account that

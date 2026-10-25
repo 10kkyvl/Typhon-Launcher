@@ -112,3 +112,26 @@ func (ob *outbox) settle(done []entry, now time.Time) error {
 	}
 	return ob.replace(next)
 }
+
+// rebind hands the entries queued under a provisional owner to the account.
+func (ob *outbox) rebind(from, to string, now time.Time) error {
+	if from == to || !slices.ContainsFunc(ob.items, func(e entry) bool { return e.Owner == from }) {
+		return nil
+	}
+	moved := slices.Clone(ob.items)
+	for i := range moved {
+		if moved[i].Owner == from {
+			moved[i].Owner = to
+		}
+	}
+	seen := make(map[identity]struct{}, len(moved))
+	next := moved[:0:0]
+	for _, e := range moved {
+		if _, dup := seen[e.id()]; dup {
+			continue
+		}
+		seen[e.id()] = struct{}{}
+		next = append(next, e)
+	}
+	return ob.replace(pruned(next, now))
+}

@@ -19,7 +19,7 @@ type ProfileSettings struct {
 	ShowLibrary  bool              `json:"showLibrary"`
 	ShowActivity bool              `json:"showActivity"`
 	ShowStats    bool              `json:"showStats"`
-	FeedHidden   []string          `json:"feedHidden,omitempty"`
+	FeedHidden   []string          `json:"feedHidden,omitzero"`
 	Showcase     []string          `json:"showcase,omitzero"`
 	Appearance   ProfileAppearance `json:"appearance,omitzero"`
 	StatusEmoji  *string           `json:"statusEmoji,omitempty"`

@@ -14,12 +14,14 @@ const (
 	maxAge        = 7 * 24 * time.Hour
 	maxFuture     = time.Hour
 	maxBatch      = 100
+	maxKeyRunes   = 128
 	flushInterval = 10 * time.Minute
 )
 
 var (
-	ErrNotSignedIn  = errors.New("achievementsync: not signed in")
-	ErrOutboxBroken = errors.New("achievementsync: outbox file is unreadable, saving is stopped")
+	errSessionChanged = errors.New("achievementsync: the session changed during the flush")
+	ErrNotSignedIn    = errors.New("achievementsync: not signed in")
+	ErrOutboxBroken   = errors.New("achievementsync: outbox file is unreadable, saving is stopped")
 )
 
 // PermanentError is a rejection that sending the same data again cannot fix.
@@ -37,7 +39,10 @@ func (e *PermanentError) Error() string {
 type RetryableError struct {
 	Status int
 	Code   string
-	cause  error
+	// Stop is set when the failure concerns the session or the path to the
+	// server rather than one game, so no further batch can succeed.
+	Stop  bool
+	cause error
 }
 
 func (e *RetryableError) Error() string {

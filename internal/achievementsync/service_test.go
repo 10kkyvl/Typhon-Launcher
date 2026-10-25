@@ -110,10 +110,14 @@ func newRig(t *testing.T) *rig {
 			"g1":     {ID: "g1", CanonicalGameID: "c1"},
 			"hidden": {ID: "hidden", CanonicalGameID: "c1", Hidden: true},
 			"noigdb": {ID: "noigdb", CanonicalGameID: "c2"},
+			"g2":     {ID: "g2", CanonicalGameID: "c3"},
 		}},
 		IGDBID: func(id string) string {
-			if id == "c1" {
+			switch id {
+			case "c1":
 				return "1942"
+			case "c3":
+				return "2000"
 			}
 			return ""
 		},
@@ -172,12 +176,11 @@ func TestReportSkipsUnlocksOutsideTheWindow(t *testing.T) {
 		unlock("FUTURE", t0.Add(2*time.Hour)),
 		unlock("", t0),
 		unlock("OK", t0.Add(-time.Hour)),
-		{Key: "ZERO"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(r.svc.box.items) != 2 {
+	if len(r.svc.box.items) != 1 {
 		t.Fatalf("queued %+v", r.svc.box.items)
 	}
 }
@@ -206,10 +209,14 @@ func TestFlushStatusSemantics(t *testing.T) {
 		{"200 drops", http.StatusOK, 0, false},
 		{"400 drops", http.StatusBadRequest, 0, false},
 		{"401 keeps", http.StatusUnauthorized, 1, true},
+		{"408 keeps", http.StatusRequestTimeout, 1, true},
 		{"429 keeps", http.StatusTooManyRequests, 1, true},
 		{"500 keeps", http.StatusInternalServerError, 1, true},
 		{"503 keeps", http.StatusServiceUnavailable, 1, true},
-		{"404 keeps", http.StatusNotFound, 1, true},
+		{"404 drops", http.StatusNotFound, 0, false},
+		{"405 drops", http.StatusMethodNotAllowed, 0, false},
+		{"413 drops", http.StatusRequestEntityTooLarge, 0, false},
+		{"422 drops", http.StatusUnprocessableEntity, 0, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -248,7 +255,7 @@ func TestFlushStatusSemantics(t *testing.T) {
 func TestClientClassifiesFailures(t *testing.T) {
 	r := newRig(t)
 	r.srv.status = http.StatusBadRequest
-	err := r.svc.client.report(context.Background(), request{IGDBID: 1, SteamAppID: 2, Unlocks: []Unlock{{Key: "A", UnlockedAt: t0}}})
+	err := r.svc.client.report(context.Background(), "tok", request{IGDBID: 1, SteamAppID: 2, Unlocks: []Unlock{{Key: "A", UnlockedAt: t0}}})
 	var perm *PermanentError
 	if !errors.As(err, &perm) || perm.Status != 400 || perm.Code != "bad_request" {
 		t.Fatalf("400 = %#v", err)
@@ -258,12 +265,16 @@ func TestClientClassifiesFailures(t *testing.T) {
 		t.Fatal("400 classified as retryable")
 	}
 	r.srv.status = http.StatusServiceUnavailable
-	err = r.svc.client.report(context.Background(), request{})
-	if !errors.As(err, &retry) || retry.Code != "bad_request" {
+	err = r.svc.client.report(context.Background(), "tok", request{})
+	if !errors.As(err, &retry) || retry.Stop || retry.Code != "bad_request" {
 		t.Fatalf("503 = %#v", err)
 	}
-	r.token = ""
-	if err := r.svc.client.report(context.Background(), request{}); !errors.Is(err, ErrNotSignedIn) {
+	r.srv.status = http.StatusUnauthorized
+	err = r.svc.client.report(context.Background(), "tok", request{})
+	if !errors.As(err, &retry) || !retry.Stop {
+		t.Fatalf("401 = %#v", err)
+	}
+	if err := r.svc.client.report(context.Background(), "", request{}); !errors.Is(err, ErrNotSignedIn) {
 		t.Fatalf("signed out = %v", err)
 	}
 }
@@ -300,25 +311,52 @@ func TestFlushDropsExpiredWithoutSending(t *testing.T) {
 	}
 }
 
-func TestFlushWaitsForConsentAndSignIn(t *testing.T) {
+func TestFlushDiscardsTheQueueWithoutConsentOrSession(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(r *rig)
+	}{
+		{"consent withdrawn", func(r *rig) { r.consent = false }},
+		{"signed out", func(r *rig) { r.token = "" }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := newRig(t)
+			if err := r.svc.Report("g1", "620", []achievements.Unlock{unlock("A", t0)}); err != nil {
+				t.Fatal(err)
+			}
+			tt.mutate(r)
+			if err := r.svc.Flush(context.Background()); err != nil || r.srv.count() != 0 {
+				t.Fatalf("flush: %v, sent %d", err, r.srv.count())
+			}
+			if len(r.svc.box.items) != 0 {
+				t.Fatalf("queue kept: %+v", r.svc.box.items)
+			}
+			if again := openOutbox(r.dir, storage.Save); len(again.items) != 0 {
+				t.Fatalf("disk kept: %+v", again.items)
+			}
+		})
+	}
+}
+
+func TestFlushRechecksConsentBeforeEveryBatch(t *testing.T) {
 	r := newRig(t)
-	if err := r.svc.Report("g1", "620", []achievements.Unlock{unlock("A", t0)}); err != nil {
+	if err := r.svc.Report("g1", "620", manyUnlocks(maxBatch*2)); err != nil {
 		t.Fatal(err)
 	}
-	r.consent = false
-	if err := r.svc.Flush(context.Background()); err != nil || r.srv.count() != 0 {
-		t.Fatalf("flush without consent: %v, sent %d", err, r.srv.count())
+	calls := 0
+	r.svc.consent = func() bool {
+		calls++
+		return calls <= 2
 	}
-	r.consent, r.token = true, ""
-	if err := r.svc.Flush(context.Background()); err != nil || r.srv.count() != 0 {
-		t.Fatalf("flush signed out: %v, sent %d", err, r.srv.count())
+	if err := r.svc.Flush(context.Background()); err != nil {
+		t.Fatal(err)
 	}
-	if len(r.svc.box.items) != 1 {
-		t.Fatal("entry dropped while the user was not allowed to send")
+	if r.srv.count() != 1 {
+		t.Fatalf("requests = %d, want 1", r.srv.count())
 	}
-	r.token = "tok"
-	if err := r.svc.Flush(context.Background()); err != nil || len(r.svc.box.items) != 0 {
-		t.Fatalf("flush: %v left %d", err, len(r.svc.box.items))
+	if len(r.svc.box.items) != 0 {
+		t.Fatalf("the rest was kept after consent was withdrawn: %d", len(r.svc.box.items))
 	}
 }
 
@@ -529,13 +567,182 @@ func TestEntryWithoutOwnerIsDroppedOnLoadAndNeverSent(t *testing.T) {
 	}
 }
 
-func TestUnknownAccountRefusesReportAndFlush(t *testing.T) {
+func TestUnlocksSurviveAnUnknownAccountAndRebindOnceItResolves(t *testing.T) {
 	r := newRig(t)
-	r.svc.account = func(string) (string, error) { return "", errors.New("not bound yet") }
-	if err := r.svc.Report("g1", "620", []achievements.Unlock{unlock("A", t0)}); err == nil {
-		t.Fatal("report queued an unowned entry")
+	known := false
+	r.svc.account = func(string) (string, error) {
+		if !known {
+			return "", errors.New("not bound yet")
+		}
+		return r.account, nil
+	}
+	if err := r.svc.Report("g1", "620", []achievements.Unlock{unlock("A", t0)}); err != nil {
+		t.Fatalf("an unknown account must not lose the unlock: %v", err)
 	}
 	if err := r.svc.Flush(context.Background()); err == nil || r.srv.count() != 0 {
 		t.Fatalf("flush = %v, sent %d", err, r.srv.count())
+	}
+	if len(r.svc.box.items) != 1 {
+		t.Fatal("unlock dropped while the account was unknown")
+	}
+	known = true
+	if err := r.svc.Report("g1", "620", []achievements.Unlock{unlock("A", t0)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.svc.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if r.srv.count() != 1 || len(r.srv.bodies[0].Unlocks) != 1 || len(r.svc.box.items) != 0 {
+		t.Fatalf("sent %+v, left %+v", r.srv.bodies, r.svc.box.items)
+	}
+}
+
+func TestPendingEntriesOfAnotherSessionAreNotSent(t *testing.T) {
+	r := newRig(t)
+	known := false
+	r.svc.account = func(string) (string, error) {
+		if !known {
+			return "", errors.New("not bound yet")
+		}
+		return r.account, nil
+	}
+	if err := r.svc.Report("g1", "620", []achievements.Unlock{unlock("A", t0)}); err != nil {
+		t.Fatal(err)
+	}
+	known = true
+	r.token = "other-session"
+	if err := r.svc.Flush(context.Background()); err != nil || r.srv.count() != 0 {
+		t.Fatalf("flush = %v, sent %d", err, r.srv.count())
+	}
+	if len(r.svc.box.items) != 1 {
+		t.Fatalf("items = %+v", r.svc.box.items)
+	}
+}
+
+func TestFlushStopsWhenTheSessionChangesMidFlush(t *testing.T) {
+	r := newRig(t)
+	if err := r.svc.Report("g1", "620", manyUnlocks(maxBatch*2)); err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	r.svc.token = func() (string, error) {
+		calls++
+		if calls <= 2 {
+			return "tok", nil
+		}
+		return "tok-of-b", nil
+	}
+	err := r.svc.Flush(context.Background())
+	if !errors.Is(err, errSessionChanged) {
+		t.Fatalf("err = %v", err)
+	}
+	if r.srv.count() != 1 {
+		t.Fatalf("requests = %d, want 1", r.srv.count())
+	}
+	for _, a := range r.srv.auth {
+		if a != "Bearer tok" {
+			t.Fatalf("batch sent with %q", a)
+		}
+	}
+	if len(r.svc.box.items) != maxBatch {
+		t.Fatalf("left = %d", len(r.svc.box.items))
+	}
+}
+
+func TestServerErrorOnOneGameDoesNotBlockTheNext(t *testing.T) {
+	r := newRig(t)
+	r.srv.response = func(n int) int {
+		if n == 1 {
+			return http.StatusServiceUnavailable
+		}
+		return http.StatusNoContent
+	}
+	if err := r.svc.Report("g1", "620", []achievements.Unlock{unlock("A", t0)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.svc.Report("g2", "730", []achievements.Unlock{unlock("B", t0)}); err != nil {
+		t.Fatal(err)
+	}
+	err := r.svc.Flush(context.Background())
+	var retry *RetryableError
+	if !errors.As(err, &retry) || retry.Status != 503 {
+		t.Fatalf("err = %v", err)
+	}
+	if r.srv.count() != 2 {
+		t.Fatalf("requests = %d", r.srv.count())
+	}
+	if len(r.svc.box.items) != 1 || r.svc.box.items[0].Key != "A" {
+		t.Fatalf("left = %+v", r.svc.box.items)
+	}
+}
+
+func TestServerErrorSkipsTheRestOfThatGame(t *testing.T) {
+	r := newRig(t)
+	r.srv.response = func(int) int { return http.StatusInternalServerError }
+	if err := r.svc.Report("g1", "620", manyUnlocks(maxBatch*2)); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.svc.Flush(context.Background()); err == nil {
+		t.Fatal("expected an error")
+	}
+	if r.srv.count() != 1 || len(r.svc.box.items) != maxBatch*2 {
+		t.Fatalf("requests = %d, left = %d", r.srv.count(), len(r.svc.box.items))
+	}
+}
+
+func TestSessionFailureStopsEveryGame(t *testing.T) {
+	for _, status := range []int{http.StatusUnauthorized, http.StatusRequestTimeout, http.StatusTooManyRequests} {
+		t.Run(strconv.Itoa(status), func(t *testing.T) {
+			r := newRig(t)
+			r.srv.status = status
+			if err := r.svc.Report("g1", "620", []achievements.Unlock{unlock("A", t0)}); err != nil {
+				t.Fatal(err)
+			}
+			if err := r.svc.Report("g2", "730", []achievements.Unlock{unlock("B", t0)}); err != nil {
+				t.Fatal(err)
+			}
+			if err := r.svc.Flush(context.Background()); err == nil {
+				t.Fatal("expected an error")
+			}
+			if r.srv.count() != 1 || len(r.svc.box.items) != 2 {
+				t.Fatalf("requests = %d, left = %d", r.srv.count(), len(r.svc.box.items))
+			}
+		})
+	}
+}
+
+func TestReportValidatesKeys(t *testing.T) {
+	r := newRig(t)
+	long := strings.Repeat("я", maxKeyRunes)
+	err := r.svc.Report("g1", "620", []achievements.Unlock{
+		unlock(long, t0),
+		unlock(long+"x", t0),
+		unlock("bad\xff", t0),
+		unlock("", t0),
+		unlock("DUP", t0),
+		unlock("DUP", t0.Add(-time.Minute)),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys := map[string]int{}
+	for _, it := range r.svc.box.items {
+		keys[it.Key]++
+	}
+	if len(r.svc.box.items) != 2 || keys[long] != 1 || keys["DUP"] != 1 {
+		t.Fatalf("queued %+v", r.svc.box.items)
+	}
+}
+
+func TestReportSkipsUnlocksWithoutATime(t *testing.T) {
+	r := newRig(t)
+	if err := r.svc.Report("g1", "620", []achievements.Unlock{{Key: "NOTIME"}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.svc.box.items) != 0 {
+		t.Fatalf("queued %+v", r.svc.box.items)
+	}
+	if _, err := os.Stat(filepath.Join(r.dir, storeFile)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("outbox written: %v", err)
 	}
 }

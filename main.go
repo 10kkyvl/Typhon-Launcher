@@ -535,9 +535,9 @@ func main() {
 		BaseURL:   account.BaseURL(),
 		Token:     accountService.SessionToken,
 		AccountID: func(token string) (string, error) {
-			id := accountService.SyncAccountID(token)
+			id := accountService.DurableAccountID(token)
 			if id == "" {
-				return "", errors.New("account id is not bound to the session yet")
+				return "", errors.New("account id is not known yet")
 			}
 			return id, nil
 		},

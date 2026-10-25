@@ -13,7 +13,7 @@ func TestUpdateProfileSendsFeedHiddenOnlyWhenSet(t *testing.T) {
 		want    string
 	}{
 		{"nil list is not sent", ProfileSettings{Visibility: VisibilityFriends}, ""},
-		{"empty list is not sent", ProfileSettings{Visibility: VisibilityFriends, FeedHidden: []string{}}, ""},
+		{"empty list clears the stored kinds", ProfileSettings{Visibility: VisibilityFriends, FeedHidden: []string{}}, `[]`},
 		{"kinds are sent", ProfileSettings{Visibility: VisibilityFriends, FeedHidden: []string{"played", "reviewed"}}, `["played","reviewed"]`},
 	}
 	for _, tt := range tests {
@@ -30,6 +30,21 @@ func TestUpdateProfileSendsFeedHiddenOnlyWhenSet(t *testing.T) {
 				t.Fatalf("feedHidden = %s, want %s", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestFeedHiddenEmptyListSurvivesDecodeAndClone(t *testing.T) {
+	for data, wantNil := range map[string]bool{`{"feedHidden":[]}`: false, `{"feedHidden":null}`: true, `{}`: true} {
+		var in ProfileSettings
+		if err := json.Unmarshal([]byte(data), &in); err != nil {
+			t.Fatal(err)
+		}
+		if (in.FeedHidden == nil) != wantNil {
+			t.Errorf("%s: FeedHidden nil = %v", data, in.FeedHidden == nil)
+		}
+		if cloned := slices.Clone(in.FeedHidden); (cloned == nil) != wantNil {
+			t.Errorf("%s: clone nil = %v", data, cloned == nil)
+		}
 	}
 }
 

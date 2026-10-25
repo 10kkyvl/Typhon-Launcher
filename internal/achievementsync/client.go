@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -23,21 +22,16 @@ const (
 
 type client struct {
 	baseURL    string
-	token      func() (string, error)
 	httpClient *http.Client
 }
 
-func newClient(baseURL string, token func() (string, error)) (*client, error) {
+func newClient(baseURL string) (*client, error) {
 	base, err := account.ValidateBaseURL(baseURL)
 	if err != nil {
 		return nil, err
 	}
-	if token == nil {
-		return nil, errors.New("achievementsync: token resolver is nil")
-	}
 	return &client{
 		baseURL: base,
-		token:   token,
 		httpClient: &http.Client{
 			Timeout: requestTimeout,
 			Transport: &http.Transport{
@@ -54,11 +48,7 @@ func newClient(baseURL string, token func() (string, error)) (*client, error) {
 // report sends one batch. A nil result means the server accepted it; every
 // failure is a *PermanentError, a *RetryableError, ErrNotSignedIn or a context
 // error.
-func (c *client) report(ctx context.Context, req request) error {
-	tok, err := c.token()
-	if err != nil {
-		return fmt.Errorf("resolve achievements token: %w", err)
-	}
+func (c *client) report(ctx context.Context, tok string, req request) error {
 	if tok == "" {
 		return ErrNotSignedIn
 	}
@@ -80,7 +70,7 @@ func (c *client) report(ctx context.Context, req request) error {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return ctxErr
 		}
-		return &RetryableError{cause: err}
+		return &RetryableError{cause: err, Stop: true}
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
@@ -91,10 +81,13 @@ func (c *client) report(ctx context.Context, req request) error {
 		return nil
 	}
 	code := errorCode(io.LimitReader(resp.Body, maxResponseBytes))
-	if resp.StatusCode == http.StatusBadRequest {
-		return &PermanentError{Status: resp.StatusCode, Code: code}
+	switch {
+	case resp.StatusCode == http.StatusUnauthorized, resp.StatusCode == http.StatusRequestTimeout, resp.StatusCode == http.StatusTooManyRequests:
+		return &RetryableError{Status: resp.StatusCode, Code: code, Stop: true}
+	case resp.StatusCode >= 500:
+		return &RetryableError{Status: resp.StatusCode, Code: code}
 	}
-	return &RetryableError{Status: resp.StatusCode, Code: code}
+	return &PermanentError{Status: resp.StatusCode, Code: code}
 }
 
 func errorCode(body io.Reader) string {
