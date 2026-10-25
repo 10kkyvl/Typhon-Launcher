@@ -47,25 +47,34 @@ describe('privacyPatch', () => {
 });
 
 describe('feedHidden', () => {
-  it('is not sent when the user never touched it and nothing is stored', () => {
-    expect(privacyPatch(stale, 'friends')).not.toHaveProperty('feedHidden');
-    expect(privacyPatch({ ...stale, feedHidden: null }, 'friends')).not.toHaveProperty('feedHidden');
-    expect(privacyPatch({ ...stale, feedHidden: [] }, 'friends')).not.toHaveProperty('feedHidden');
+  it('is not sent when it equals the stored value, whatever the order', () => {
+    expect(privacyPatch(stale, 'friends', stale)).not.toHaveProperty('feedHidden');
+    expect(privacyPatch({ ...stale, feedHidden: [] }, 'friends', { ...stale, feedHidden: null })).not.toHaveProperty('feedHidden');
+    const stored = { ...stale, feedHidden: ['played', 'planned'] };
+    expect(privacyPatch({ ...stored, feedHidden: ['planned', 'played'] }, 'friends', stored)).not.toHaveProperty('feedHidden');
   });
 
-  it('keeps a stored value when other settings are edited', () => {
-    expect(privacyPatch({ ...stale, feedHidden: ['played'] }, 'friends')).toMatchObject({ feedHidden: ['played'] });
+  it('is not sent after toggling a kind off and on again', () => {
+    const hidden = withFeedKind(withFeedKind(stale.feedHidden, 'played', false), 'played', true);
+    expect(privacyPatch({ ...stale, feedHidden: hidden }, 'friends', stale)).not.toHaveProperty('feedHidden');
   });
 
-  it('sends an empty list when the user re-enabled everything', () => {
-    expect(privacyPatch({ ...stale, feedHidden: [] }, 'friends', true)).toMatchObject({ feedHidden: [] });
+  it('sends the full list when it differs from the stored one', () => {
+    const stored = { ...stale, feedHidden: ['played'] };
+    expect(privacyPatch({ ...stored, feedHidden: ['played', 'planned'] }, 'friends', stored)).toMatchObject({
+      feedHidden: ['played', 'planned'],
+    });
   });
 
-  it('round-trips through the checkbox toggle', () => {
+  it('sends an empty list when the user re-enabled everything that was hidden', () => {
+    const stored = { ...stale, feedHidden: ['played'] };
+    expect(privacyPatch({ ...stored, feedHidden: [] }, 'friends', stored)).toMatchObject({ feedHidden: [] });
+  });
+
+  it('round-trips through the toggle helper', () => {
     const hidden = withFeedKind(withFeedKind(undefined, 'played', false), 'planned', false);
     expect(hidden).toEqual(['played', 'planned']);
-    expect(withFeedKind(hidden, 'played', false)).toEqual(['planned', 'played']);
     expect(withFeedKind(hidden, 'played', true)).toEqual(['planned']);
-    expect(privacyPatch({ ...stale, feedHidden: hidden }, 'friends', true).feedHidden).toEqual(['played', 'planned']);
+    expect(privacyPatch({ ...stale, feedHidden: hidden }, 'friends', stale).feedHidden).toEqual(['played', 'planned']);
   });
 });

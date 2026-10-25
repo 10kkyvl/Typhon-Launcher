@@ -39,7 +39,6 @@
 
   let draft = $state<ProfileSettings>(initialDraft());
   let visibility = $state<string>(initialDraft().visibility);
-  let feedTouched = $state(false);
   let error = $state('');
   let deleting = $state(false);
 
@@ -58,7 +57,7 @@
     if ($savingProfile || $isOffline) return;
     error = '';
     try {
-      if (!(await saveProfile({ profile: privacyPatch($state.snapshot(draft), toVisibility(visibility), feedTouched) }))) {
+      if (!(await saveProfile({ profile: privacyPatch($state.snapshot(draft), toVisibility(visibility), settings) }))) {
         error = msg('profile.saveBusy');
         return;
       }
@@ -115,7 +114,6 @@
             disabled={$isOffline || !draft.showActivity}
             onchange={(v) => {
               draft.feedHidden = withFeedKind(draft.feedHidden, kind, v);
-              feedTouched = true;
             }}
           />
         </div>

@@ -5,9 +5,19 @@ export function withFeedKind(hidden: string[] | null | undefined, kind: string, 
   return shown ? rest : [...rest, kind];
 }
 
-export function privacyPatch(draft: ProfileSettings, visibility: Visibility, feedTouched = false): ProfileSettingsPatch {
+export function feedHiddenChanged(draft: string[] | null | undefined, stored: string[] | null | undefined): boolean {
+  const a = new Set(draft ?? []);
+  const b = new Set(stored ?? []);
+  return a.size !== b.size || [...a].some((kind) => !b.has(kind));
+}
+
+export function privacyPatch(
+  draft: ProfileSettings,
+  visibility: Visibility,
+  stored?: ProfileSettings,
+): ProfileSettingsPatch {
   const feedHidden = draft.feedHidden ?? [];
-  const sendFeed = feedTouched || feedHidden.length > 0;
+  const sendFeed = stored !== undefined && feedHiddenChanged(feedHidden, stored.feedHidden);
   return {
     visibility,
     showOnline: draft.showOnline,

@@ -70,7 +70,7 @@
       </span>
       {#if event.kind === 'achievement'}
         <span class="icons">
-          {#each event.achievements as item (item.key)}
+          {#each event.achievements as item, index (item.key || `#${index}`)}
             {#if item.iconUrl}
               <img class="ach" src={item.iconUrl} alt={item.name} title={item.name} loading="lazy" />
             {/if}

@@ -37,6 +37,9 @@ function event(id: number, emoji = 'fire', count = 0) {
     reactions: count > 0 ? [{ emoji, count }] : [],
     mine: [] as string[],
     note: '',
+    seconds: 0,
+    achievements: [],
+    review: null,
   };
 }
 
@@ -224,5 +227,40 @@ describe('подпись события', () => {
     await noteEvent(99, 'что-то');
 
     expect(vi.mocked(setNote)).not.toHaveBeenCalled();
+  });
+});
+
+describe('страницы без известных событий', () => {
+  it('идёт на следующую страницу, пока не найдёт событие', async () => {
+    const { loadFeed, feedEvents, feedCursor, fetchFeed } = await load();
+    fetchFeed
+      .mockResolvedValueOnce({ events: [], next: 5 })
+      .mockResolvedValueOnce({ events: [], next: 4 })
+      .mockResolvedValueOnce({ events: [event(1)], next: 3 });
+
+    await loadFeed(true);
+
+    expect(fetchFeed.mock.calls.map((c) => c[0])).toEqual(['', '5', '4']);
+    expect(get(feedEvents).map((e) => e.id)).toEqual([1]);
+    expect(get(feedCursor)).toBe(3);
+  });
+
+  it('останавливается после трёх дополнительных страниц', async () => {
+    const { loadFeed, feedCursor, fetchFeed } = await load();
+    fetchFeed.mockResolvedValue({ events: [], next: 9 });
+
+    await loadFeed(true);
+
+    expect(fetchFeed).toHaveBeenCalledTimes(4);
+    expect(get(feedCursor)).toBe(9);
+  });
+
+  it('не ходит дальше, когда курсора нет', async () => {
+    const { loadFeed, fetchFeed } = await load();
+    fetchFeed.mockResolvedValue({ events: [], next: 0 });
+
+    await loadFeed(true);
+
+    expect(fetchFeed).toHaveBeenCalledTimes(1);
   });
 });
