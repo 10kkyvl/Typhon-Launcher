@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { CheckCircle2, Heart, Play } from '@lucide/svelte';
+  import { CheckCircle2, Clock, Heart, Play, ThumbsDown, ThumbsUp, Trophy, Bookmark } from '@lucide/svelte';
   import Card from '../../lib/components/Card.svelte';
   import type { ActivityView } from '../../lib/services/social';
   import { eventLine } from '../../lib/social/feed';
@@ -20,6 +20,16 @@
               <CheckCircle2 size="1.7rem" strokeWidth={1.8} />
             {:else if item.kind === 'favorited'}
               <Heart size="1.7rem" strokeWidth={1.8} />
+            {:else if item.kind === 'played'}
+              <Clock size="1.7rem" strokeWidth={1.8} />
+            {:else if item.kind === 'achievement'}
+              <Trophy size="1.7rem" strokeWidth={1.8} />
+            {:else if item.kind === 'reviewed' && item.review?.recommended === false}
+              <ThumbsDown size="1.7rem" strokeWidth={1.8} />
+            {:else if item.kind === 'reviewed'}
+              <ThumbsUp size="1.7rem" strokeWidth={1.8} />
+            {:else if item.kind === 'planned'}
+              <Bookmark size="1.7rem" strokeWidth={1.8} />
             {:else}
               <Play size="1.7rem" strokeWidth={1.8} />
             {/if}

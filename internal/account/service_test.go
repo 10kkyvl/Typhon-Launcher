@@ -894,3 +894,30 @@ func TestBetaToken(t *testing.T) {
 		})
 	}
 }
+
+func TestDurableAccountIDFallsBackToTheCachedProfileOfTheStoredCredential(t *testing.T) {
+	store := &fakeStore{cred: Credential{Token: "tok"}, present: true}
+	s := startedService(t, store, "https://api.example.test")
+	if got := s.DurableAccountID("tok"); got != "" {
+		t.Fatalf("no cache yet, id = %q", got)
+	}
+	s.mu.Lock()
+	s.profile = cachedProfile{User: CurrentUser{ID: "u-cached"}}
+	s.mu.Unlock()
+	if got := s.SyncAccountID("tok"); got != "" {
+		t.Fatalf("SyncAccountID must stay bound-only, got %q", got)
+	}
+	if got := s.DurableAccountID("tok"); got != "u-cached" {
+		t.Fatalf("id = %q", got)
+	}
+	if got := s.DurableAccountID("other-token"); got != "" {
+		t.Fatalf("a token that is not the stored credential got %q", got)
+	}
+	if got := s.DurableAccountID(""); got != "" {
+		t.Fatalf("empty token got %q", got)
+	}
+	s.bindSyncIdentity("tok", "u-bound")
+	if got := s.DurableAccountID("tok"); got != "u-bound" {
+		t.Fatalf("bound id must win, got %q", got)
+	}
+}

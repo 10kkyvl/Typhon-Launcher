@@ -24,6 +24,7 @@ type Service struct {
 	language func() string
 	scanner  scanner
 	emit     func(Event)
+	reporter Reporter
 
 	mu      sync.Mutex
 	store   *store
@@ -54,6 +55,7 @@ func New(cfg Config) (*Service, error) {
 		now:      now,
 		language: cfg.Language,
 		scanner:  newScanner(),
+		reporter: cfg.Reporter,
 		emit:     emitEvent,
 		store:    openStore(cfg.ConfigDir, storage.Save),
 	}, nil
@@ -192,13 +194,15 @@ func (s *Service) scan(ctx context.Context, gameID string) (Progress, error) {
 	}
 	if len(prog.NewKeys) > 0 && !prog.First {
 		s.announce(ctx, gameID, ref.AppID, prog.NewKeys)
+		s.report(gameID, ref.AppID, prog.NewKeys, prog.FreshAt)
 	}
 	return prog.Progress, nil
 }
 
 type mergeResult struct {
 	Progress
-	First bool
+	First   bool
+	FreshAt map[string]time.Time
 }
 
 func (s *Service) merge(gameID, appID string, res scanResult) (mergeResult, error) {
@@ -221,11 +225,15 @@ func (s *Service) merge(gameID, appID string, res scanResult) (mergeResult, erro
 		mergeKey(next.Unlocked, key, at)
 	}
 	sort.Strings(fresh)
+	freshAt := make(map[string]time.Time, len(fresh))
+	for _, key := range fresh {
+		freshAt[key] = next.Unlocked[key]
+	}
 	first := next.ScannedAt.IsZero()
 	next.Found = next.Found || res.Found
 	next.Partial = res.Partial
 	next.ScannedAt = s.now()
-	out := mergeResult{First: first, Progress: Progress{
+	out := mergeResult{First: first, FreshAt: freshAt, Progress: Progress{
 		GameID: gameID, AppID: appID, Unlocked: len(next.Unlocked), NewKeys: fresh, Found: next.Found, Partial: res.Partial,
 	}}
 	if !first && len(fresh) == 0 && cur.Found == next.Found && cur.Partial == next.Partial && cur.AppID == next.AppID && had {
@@ -253,6 +261,19 @@ func (s *Service) announce(ctx context.Context, gameID, appID string, keys []str
 		}
 	}
 	s.emit(Event{GameID: gameID, Keys: keys, Names: names})
+}
+
+func (s *Service) report(gameID, appID string, keys []string, at map[string]time.Time) {
+	if s.reporter == nil {
+		return
+	}
+	unlocks := make([]Unlock, len(keys))
+	for i, key := range keys {
+		unlocks[i] = Unlock{Key: key, At: at[key]}
+	}
+	if err := s.reporter.Report(gameID, appID, unlocks); err != nil {
+		slog.Warn("achievements not queued for the activity feed", "game", gameID, "error", err)
+	}
 }
 
 type schemaState struct {

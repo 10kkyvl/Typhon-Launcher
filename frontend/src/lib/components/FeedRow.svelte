@@ -1,11 +1,13 @@
 <script lang="ts">
   import type { FeedEvent } from '../services/social';
   import { wideArt } from '../social/art';
-  import { eventLine, kindLabel } from '../social/feed';
+  import { eventLabel, eventLine } from '../social/feed';
   import { openGameByIGDB } from '../social/openGame';
   import { feedPending } from '../stores/feed';
   import { navigate } from '../stores/router';
   import { relativeDate } from '../utils/format';
+  import { ThumbsDown, ThumbsUp } from '@lucide/svelte';
+  import { msg } from '../i18n';
   import Artwork from './Artwork.svelte';
   import Avatar from './Avatar.svelte';
   import { cardFrame } from '../profile/frameLook';
@@ -28,7 +30,7 @@
 
   const name = $derived(event.user.displayName || event.user.username);
   const when = $derived(relativeDate(event.createdAt));
-  const kind = $derived(kindLabel(event.kind));
+  const kind = $derived(eventLabel(event));
   const line = $derived(eventLine(event));
 
   function openUser() {
@@ -54,7 +56,27 @@
         <button class="name" type="button" onclick={openUser}>{name}</button>
         <span class="when">{when}</span>
       </div>
-      <span class="kind">{kind}</span>
+      <span class="kind">
+        {kind}
+        {#if event.kind === 'reviewed' && event.review}
+          <span class="verdict" title={msg(event.review.recommended ? 'social.feedReviewYes' : 'social.feedReviewNo')}>
+            {#if event.review.recommended}
+              <ThumbsUp size="1.5rem" strokeWidth={1.8} />
+            {:else}
+              <ThumbsDown size="1.5rem" strokeWidth={1.8} />
+            {/if}
+          </span>
+        {/if}
+      </span>
+      {#if event.kind === 'achievement'}
+        <span class="icons">
+          {#each event.achievements as item, index (item.key || `#${index}`)}
+            {#if item.iconUrl}
+              <img class="ach" src={item.iconUrl} alt={item.name} title={item.name} loading="lazy" />
+            {/if}
+          {/each}
+        </span>
+      {/if}
     {/if}
 
     <button class="game" type="button" onclick={openGame}>
@@ -151,6 +173,29 @@
   .kind {
     font-size: var(--font-sm);
     color: var(--text-2);
+  }
+
+  .verdict {
+    display: inline-flex;
+    vertical-align: middle;
+    margin-left: var(--space-2);
+  }
+
+  .icons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .icons:empty {
+    display: none;
+  }
+
+  .ach {
+    width: 3.2rem;
+    height: 3.2rem;
+    border-radius: var(--radius-xs);
+    object-fit: cover;
   }
 
   .game {

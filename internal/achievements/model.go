@@ -66,8 +66,21 @@ type SchemaSource interface {
 	Schema(ctx context.Context, appID, lang string) ([]SchemaItem, error)
 }
 
+// Unlock is a freshly earned achievement and the time the game recorded for it.
+type Unlock struct {
+	Key string
+	At  time.Time
+}
+
+// Reporter takes the fresh unlocks of a game once they are announced. It
+// decides by itself whether they are worth sending anywhere.
+type Reporter interface {
+	Report(gameID, appID string, unlocks []Unlock) error
+}
+
 type Config struct {
 	ConfigDir string
+	Reporter  Reporter
 	Games     GameLookup
 	Schema    SchemaSource
 	Clock     func() time.Time

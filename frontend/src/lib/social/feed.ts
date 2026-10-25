@@ -1,4 +1,4 @@
-import type { FeedEvent, ReactionCount } from '../services/social';
+import type { FeedAchievement, FeedEvent, FeedKind, ReactionCount } from '../services/social';
 import { relativeDate } from '../utils/format';
 import { msg } from '../i18n';
 import type { SocialKey } from '../i18n/catalog/ru/social';
@@ -18,11 +18,31 @@ const REACTION_KEYS: Record<ReactionId, SocialKey> = {
   joy: 'social.reactionJoy',
 };
 
-const KIND_KEYS: Record<string, SocialKey> = {
+const KIND_KEYS: Record<FeedKind, SocialKey> = {
   completed: 'social.feedCompleted',
   started: 'social.feedStarted',
   favorited: 'social.feedFavorited',
+  played: 'social.feedPlayed',
+  achievement: 'social.feedAchievement',
+  reviewed: 'social.feedReviewed',
+  planned: 'social.feedPlanned',
 };
+
+export const FEED_KIND_LABELS: Record<FeedKind, SocialKey> = {
+  completed: 'social.feedKindCompleted',
+  started: 'social.feedKindStarted',
+  favorited: 'social.feedKindFavorited',
+  played: 'social.feedKindPlayed',
+  achievement: 'social.feedKindAchievement',
+  reviewed: 'social.feedKindReviewed',
+  planned: 'social.feedKindPlanned',
+};
+
+export interface FeedLabelSource {
+  kind: string;
+  seconds?: number;
+  achievements?: FeedAchievement[];
+}
 
 export interface FeedDayGroup {
   key: string;
@@ -40,12 +60,27 @@ export function isReaction(emoji: string): emoji is ReactionId {
 }
 
 export function kindLabel(kind: string): string {
-  const key = KIND_KEYS[kind];
+  if (kind === 'played' || kind === 'achievement') return '';
+  const key = (KIND_KEYS as Record<string, SocialKey>)[kind];
   return key ? msg(key) : '';
 }
 
-export function eventLine(event: { kind: string; game: { title: string } }): string {
-  const label = kindLabel(event.kind);
+export function eventLabel(event: FeedLabelSource): string {
+  if (event.kind === 'played') {
+    const hours = Math.floor((event.seconds ?? 0) / 3600);
+    return hours > 0 ? msg('social.feedPlayed', { hours }) : '';
+  }
+  if (event.kind === 'achievement') {
+    const list = event.achievements ?? [];
+    if (list.length === 0) return '';
+    if (list.length === 1) return msg('social.feedAchievement', { name: list[0].name || list[0].key });
+    return msg('social.feedAchievements', { count: list.length });
+  }
+  return kindLabel(event.kind);
+}
+
+export function eventLine(event: FeedLabelSource & { game: { title: string } }): string {
+  const label = eventLabel(event);
   const title = event.game.title.trim();
   if (!label) return title;
   if (!title) return label;

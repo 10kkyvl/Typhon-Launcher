@@ -131,21 +131,38 @@ type PublicProfile struct {
 }
 
 type ActivityView struct {
-	ID        int64     `json:"id"`
-	Kind      string    `json:"kind"`
-	Game      GameCard  `json:"game"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID           int64             `json:"id"`
+	Kind         string            `json:"kind"`
+	Game         GameCard          `json:"game"`
+	CreatedAt    time.Time         `json:"createdAt"`
+	Seconds      int64             `json:"seconds,omitempty"`
+	Achievements []FeedAchievement `json:"achievements,omitempty"`
+	Review       *FeedReview       `json:"review,omitempty"`
 }
 
 type Event struct {
-	ID        int64           `json:"id"`
-	User      UserCard        `json:"user"`
-	Kind      string          `json:"kind"`
-	Game      GameCard        `json:"game"`
-	CreatedAt time.Time       `json:"createdAt"`
-	Reactions []ReactionCount `json:"reactions"`
-	Mine      []string        `json:"mine"`
-	Note      string          `json:"note"`
+	ID           int64             `json:"id"`
+	User         UserCard          `json:"user"`
+	Kind         string            `json:"kind"`
+	Game         GameCard          `json:"game"`
+	CreatedAt    time.Time         `json:"createdAt"`
+	Reactions    []ReactionCount   `json:"reactions"`
+	Mine         []string          `json:"mine"`
+	Note         string            `json:"note"`
+	Seconds      int64             `json:"seconds,omitempty"`
+	Achievements []FeedAchievement `json:"achievements,omitempty"`
+	Review       *FeedReview       `json:"review,omitempty"`
+}
+
+type FeedAchievement struct {
+	Key     string `json:"key"`
+	Name    string `json:"name"`
+	IconURL string `json:"iconUrl"`
+}
+
+type FeedReview struct {
+	ID          int64 `json:"id"`
+	Recommended bool  `json:"recommended"`
 }
 
 type ReactionCount struct {

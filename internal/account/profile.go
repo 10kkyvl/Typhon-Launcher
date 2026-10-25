@@ -133,6 +133,24 @@ func (s *Service) SyncAccountID(token string) string {
 	return s.syncUserID
 }
 
+// DurableAccountID is SyncAccountID that also answers while the backend is
+// unreachable: for the stored credential it falls back to the user of the
+// cached profile, which is dropped on sign-out and when the token is rejected.
+//
+//wails:ignore
+func (s *Service) DurableAccountID(token string) string {
+	if id := s.SyncAccountID(token); id != "" {
+		return id
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	current, err := s.token()
+	if err != nil || token == "" || current != token {
+		return ""
+	}
+	return s.profile.User.ID
+}
+
 func (s *Service) bindSyncIdentity(token, id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
