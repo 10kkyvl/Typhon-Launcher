@@ -534,9 +534,16 @@ func main() {
 		ConfigDir: configDir,
 		BaseURL:   account.BaseURL(),
 		Token:     accountService.SessionToken,
-		Consent:   func() bool { return settingsService.GetSettings().AccountSync },
-		Games:     libraryService,
-		IGDBID:    catalogService.IGDBIDOf,
+		AccountID: func(token string) (string, error) {
+			id := accountService.SyncAccountID(token)
+			if id == "" {
+				return "", errors.New("account id is not bound to the session yet")
+			}
+			return id, nil
+		},
+		Consent: func() bool { return settingsService.GetSettings().AccountSync },
+		Games:   libraryService,
+		IGDBID:  catalogService.IGDBIDOf,
 	})
 	if err != nil {
 		fatal("start achievements sync", err)

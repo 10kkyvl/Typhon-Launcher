@@ -2,6 +2,7 @@ package achievementsync
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -26,6 +27,9 @@ type Config struct {
 	ConfigDir string
 	BaseURL   string
 	Token     func() (string, error)
+	// AccountID returns the stable id of the account behind a token; an error
+	// means the account is not known yet.
+	AccountID func(token string) (string, error)
 	// Consent reports whether the user allowed account sync; nothing is queued
 	// or sent without it.
 	Consent func() bool
@@ -39,6 +43,7 @@ type Config struct {
 type Service struct {
 	client   *client
 	token    func() (string, error)
+	account  func(token string) (string, error)
 	consent  func() bool
 	games    GameSource
 	igdbID   func(string) string
@@ -59,6 +64,8 @@ func New(cfg Config) (*Service, error) {
 	switch {
 	case cfg.ConfigDir == "" || !filepath.IsAbs(cfg.ConfigDir):
 		return nil, fmt.Errorf("achievementsync: config dir %q is not an absolute path", cfg.ConfigDir)
+	case cfg.AccountID == nil:
+		return nil, errors.New("achievementsync: account id source is required")
 	case cfg.Consent == nil:
 		return nil, errors.New("achievementsync: consent source is required")
 	case cfg.Games == nil:
@@ -81,6 +88,7 @@ func New(cfg Config) (*Service, error) {
 	return &Service{
 		client:   cl,
 		token:    cfg.Token,
+		account:  cfg.AccountID,
 		consent:  cfg.Consent,
 		games:    cfg.Games,
 		igdbID:   cfg.IGDBID,
@@ -159,6 +167,10 @@ func (s *Service) Report(gameID, appID string, unlocks []achievements.Unlock) er
 	if tok == "" {
 		return nil
 	}
+	owner, err := s.owner(tok)
+	if err != nil {
+		return err
+	}
 	steam, ok := positiveID(appID)
 	if !ok {
 		slog.Debug("achievements not reported: no steam app id", "game", gameID)
@@ -189,7 +201,7 @@ func (s *Service) Report(gameID, appID string, unlocks []achievements.Unlock) er
 		if u.Key == "" || now.Sub(at) > maxAge || at.Sub(now) > maxFuture {
 			continue
 		}
-		items = append(items, entry{IGDBID: igdb, SteamAppID: steam, Key: u.Key, UnlockedAt: at.UTC()})
+		items = append(items, entry{Owner: owner, IGDBID: igdb, SteamAppID: steam, Key: u.Key, UnlockedAt: at.UTC()})
 	}
 	if len(items) == 0 {
 		return nil
@@ -221,6 +233,10 @@ func (s *Service) Flush(ctx context.Context) error {
 	if tok == "" {
 		return nil
 	}
+	owner, err := s.owner(tok)
+	if err != nil {
+		return err
+	}
 
 	s.mu.Lock()
 	if s.box.broken != nil {
@@ -231,7 +247,7 @@ func (s *Service) Flush(ctx context.Context) error {
 		s.mu.Unlock()
 		return err
 	}
-	pending := slices.Clone(s.box.items)
+	pending := slices.DeleteFunc(slices.Clone(s.box.items), func(e entry) bool { return e.Owner != owner })
 	s.mu.Unlock()
 
 	for _, batch := range batches(pending) {
@@ -259,6 +275,19 @@ func (s *Service) Flush(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// owner is a digest of the account id: entries stay bound to the account that
+// earned them, and neither the token nor the raw id lands on disk.
+func (s *Service) owner(token string) (string, error) {
+	id, err := s.account(token)
+	if err != nil {
+		return "", fmt.Errorf("resolve achievements account: %w", err)
+	}
+	if id == "" {
+		return "", errors.New("achievementsync: account id is empty")
+	}
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(id))), nil
 }
 
 func positiveID(raw string) (int64, bool) {

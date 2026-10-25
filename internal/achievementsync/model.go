@@ -61,6 +61,7 @@ type request struct {
 }
 
 type entry struct {
+	Owner      string    `json:"owner"`
 	IGDBID     int64     `json:"igdbId"`
 	SteamAppID int64     `json:"steamAppId"`
 	Key        string    `json:"key"`
@@ -68,11 +69,12 @@ type entry struct {
 }
 
 type identity struct {
-	igdb int64
-	key  string
+	owner string
+	igdb  int64
+	key   string
 }
 
-func (e entry) id() identity { return identity{igdb: e.IGDBID, key: e.Key} }
+func (e entry) id() identity { return identity{owner: e.Owner, igdb: e.IGDBID, key: e.Key} }
 
 type state struct {
 	Entries []entry `json:"entries"`

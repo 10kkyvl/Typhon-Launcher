@@ -32,7 +32,13 @@ func openOutbox(dir string, write func(path string, version int, data any) error
 	case err != nil:
 		ob.broken = fmt.Errorf("%w: %w", ErrOutboxBroken, err)
 	default:
-		ob.items = loaded.Entries
+		for _, it := range loaded.Entries {
+			if it.Owner == "" {
+				slog.Warn("achievements outbox entry without an owner dropped", "igdb", it.IGDBID, "key", it.Key)
+				continue
+			}
+			ob.items = append(ob.items, it)
+		}
 	}
 	return ob
 }

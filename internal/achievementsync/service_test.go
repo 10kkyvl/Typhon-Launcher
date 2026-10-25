@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -90,18 +91,20 @@ type rig struct {
 	dir     string
 	consent bool
 	token   string
+	account string
 	now     time.Time
 }
 
 func newRig(t *testing.T) *rig {
 	t.Helper()
-	r := &rig{srv: &server{status: http.StatusNoContent}, dir: t.TempDir(), consent: true, token: "tok", now: t0}
+	r := &rig{srv: &server{status: http.StatusNoContent}, dir: t.TempDir(), consent: true, token: "tok", account: "user-a", now: t0}
 	ts := httptest.NewServer(r.srv.handler(t))
 	t.Cleanup(ts.Close)
 	svc, err := New(Config{
 		ConfigDir: r.dir,
 		BaseURL:   ts.URL,
 		Token:     func() (string, error) { return r.token, nil },
+		AccountID: func(string) (string, error) { return r.account, nil },
 		Consent:   func() bool { return r.consent },
 		Games: fakeGames{games: map[string]library.Game{
 			"g1":     {ID: "g1", CanonicalGameID: "c1"},
@@ -423,8 +426,9 @@ func TestNewValidatesConfig(t *testing.T) {
 	ok := func() Config {
 		return Config{
 			ConfigDir: t.TempDir(), BaseURL: "https://api.test",
-			Token:   func() (string, error) { return "t", nil },
-			Consent: func() bool { return true }, Games: fakeGames{}, IGDBID: func(string) string { return "" },
+			Token:     func() (string, error) { return "t", nil },
+			AccountID: func(string) (string, error) { return "a", nil },
+			Consent:   func() bool { return true }, Games: fakeGames{}, IGDBID: func(string) string { return "" },
 		}
 	}
 	if _, err := New(ok()); err != nil {
@@ -436,6 +440,7 @@ func TestNewValidatesConfig(t *testing.T) {
 		"no consent":    func(c *Config) { c.Consent = nil },
 		"no games":      func(c *Config) { c.Games = nil },
 		"no igdb":       func(c *Config) { c.IGDBID = nil },
+		"no account":    func(c *Config) { c.AccountID = nil },
 		"no token":      func(c *Config) { c.Token = nil },
 		"insecure base": func(c *Config) { c.BaseURL = "http://api.example.com" },
 	} {
@@ -444,5 +449,93 @@ func TestNewValidatesConfig(t *testing.T) {
 		if _, err := New(cfg); err == nil {
 			t.Errorf("%s: no error", name)
 		}
+	}
+}
+
+func TestFlushSendsOnlyTheCurrentAccountsEntries(t *testing.T) {
+	r := newRig(t)
+	if err := r.svc.Report("g1", "620", []achievements.Unlock{unlock("A1", t0)}); err != nil {
+		t.Fatal(err)
+	}
+	r.account = "user-b"
+	if err := r.svc.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if r.srv.count() != 0 || len(r.svc.box.items) != 1 {
+		t.Fatalf("account A's unlock went out under B: sent %d, left %d", r.srv.count(), len(r.svc.box.items))
+	}
+	if err := r.svc.Report("g1", "620", []achievements.Unlock{unlock("B1", t0)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.svc.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if r.srv.count() != 1 || len(r.srv.bodies[0].Unlocks) != 1 || r.srv.bodies[0].Unlocks[0].Key != "B1" {
+		t.Fatalf("B sent %+v", r.srv.bodies)
+	}
+	if len(r.svc.box.items) != 1 || r.svc.box.items[0].Key != "A1" {
+		t.Fatalf("A's entry should wait for A: %+v", r.svc.box.items)
+	}
+	r.account = "user-a"
+	if err := r.svc.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if r.srv.count() != 2 || r.srv.bodies[1].Unlocks[0].Key != "A1" || len(r.svc.box.items) != 0 {
+		t.Fatalf("A back: sent %+v, left %+v", r.srv.bodies, r.svc.box.items)
+	}
+}
+
+func TestDedupeIsPerOwner(t *testing.T) {
+	r := newRig(t)
+	for _, acc := range []string{"user-a", "user-b", "user-a"} {
+		r.account = acc
+		if err := r.svc.Report("g1", "620", []achievements.Unlock{unlock("SAME", t0)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(r.svc.box.items) != 2 || r.svc.box.items[0].Owner == r.svc.box.items[1].Owner {
+		t.Fatalf("items = %+v", r.svc.box.items)
+	}
+}
+
+func TestOwnerIsNotTheRawTokenOrAccountID(t *testing.T) {
+	r := newRig(t)
+	if err := r.svc.Report("g1", "620", []achievements.Unlock{unlock("A", t0)}); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join(r.dir, storeFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, secret := range []string{"tok", "user-a"} {
+		if strings.Contains(string(raw), secret) {
+			t.Fatalf("outbox file contains %q: %s", secret, raw)
+		}
+	}
+}
+
+func TestEntryWithoutOwnerIsDroppedOnLoadAndNeverSent(t *testing.T) {
+	r := newRig(t)
+	legacy := state{Entries: []entry{{IGDBID: 1942, SteamAppID: 620, Key: "OLD", UnlockedAt: t0}}}
+	if err := storage.Save(filepath.Join(r.dir, storeFile), storeVersion, legacy); err != nil {
+		t.Fatal(err)
+	}
+	r.svc.box = openOutbox(r.dir, storage.Save)
+	if len(r.svc.box.items) != 0 {
+		t.Fatalf("kept %+v", r.svc.box.items)
+	}
+	if err := r.svc.Flush(context.Background()); err != nil || r.srv.count() != 0 {
+		t.Fatalf("flush: %v, sent %d", err, r.srv.count())
+	}
+}
+
+func TestUnknownAccountRefusesReportAndFlush(t *testing.T) {
+	r := newRig(t)
+	r.svc.account = func(string) (string, error) { return "", errors.New("not bound yet") }
+	if err := r.svc.Report("g1", "620", []achievements.Unlock{unlock("A", t0)}); err == nil {
+		t.Fatal("report queued an unowned entry")
+	}
+	if err := r.svc.Flush(context.Background()); err == nil || r.srv.count() != 0 {
+		t.Fatalf("flush = %v, sent %d", err, r.srv.count())
 	}
 }

@@ -15,7 +15,7 @@ import (
 var t0 = time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
 
 func ent(igdb int64, key string, at time.Time) entry {
-	return entry{IGDBID: igdb, SteamAppID: 620, Key: key, UnlockedAt: at}
+	return entry{Owner: "o", IGDBID: igdb, SteamAppID: 620, Key: key, UnlockedAt: at}
 }
 
 func TestOpenOutbox(t *testing.T) {
