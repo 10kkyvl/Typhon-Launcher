@@ -450,6 +450,7 @@ func (s *Service) CurrentProfileSettings() ProfileSettings {
 	}
 	settings := profile.User.Profile
 	settings.Showcase = slices.Clone(settings.Showcase)
+	settings.FeedHidden = slices.Clone(settings.FeedHidden)
 	return settings
 }
 
