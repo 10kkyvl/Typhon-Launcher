@@ -18,6 +18,7 @@ export interface AppInfo {
   arch: string;
   devMock: boolean;
   portable: boolean;
+  channel?: 'beta' | 'stable';
   dataDir: string;
 }
 

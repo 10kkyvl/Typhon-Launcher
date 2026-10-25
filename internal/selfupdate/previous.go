@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"typhon/internal/storage"
+	"typhon/internal/version"
 )
 
 const (
@@ -401,6 +402,21 @@ func writeRestored(ctx context.Context, items []restoreItem) error {
 		}
 	}
 	return nil
+}
+
+// dropPrereleasePrevious removes a rollback snapshot whose version is a beta.
+func dropPrereleasePrevious(configDir string) error {
+	rec, err := loadPrevious(configDir)
+	if errors.Is(err, ErrNoPrevious) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !version.IsPrerelease(version.Parse(rec.Version)) {
+		return nil
+	}
+	return dropPrevious(configDir)
 }
 
 // dropPrevious removes the snapshot once it has been used. The record goes

@@ -23,6 +23,7 @@ type Portable struct {
 	UpdateAutoDownload       *bool    `json:"updateAutoDownload,omitempty"`
 	UpdateAutoInstall        *bool    `json:"updateAutoInstall,omitempty"`
 	UpdateSaveBackup         *bool    `json:"updateSaveBackup,omitempty"`
+	UpdateBetaChannel        *bool    `json:"updateBetaChannel,omitempty"`
 	KeepPreviousVersion      *string  `json:"keepPreviousVersion,omitempty"`
 	AllowTorrentReuse        *bool    `json:"allowTorrentReuse,omitempty"`
 	SaveBackupAfterSession   *bool    `json:"saveBackupAfterSession,omitempty"`
@@ -54,6 +55,7 @@ func PortableOf(s Settings) Portable {
 		UpdateAutoDownload:       &s.UpdateAutoDownload,
 		UpdateAutoInstall:        &s.UpdateAutoInstall,
 		UpdateSaveBackup:         &s.UpdateSaveBackup,
+		UpdateBetaChannel:        &s.UpdateBetaChannel,
 		KeepPreviousVersion:      &s.KeepPreviousVersion,
 		AllowTorrentReuse:        &s.AllowTorrentReuse,
 		SaveBackupAfterSession:   &s.SaveBackupAfterSession,
@@ -85,6 +87,7 @@ func ApplyPortable(s Settings, p Portable) Settings {
 	applyBool(&s.UpdateAutoDownload, p.UpdateAutoDownload)
 	applyBool(&s.UpdateAutoInstall, p.UpdateAutoInstall)
 	applyBool(&s.UpdateSaveBackup, p.UpdateSaveBackup)
+	applyBool(&s.UpdateBetaChannel, p.UpdateBetaChannel)
 	applyString(&s.KeepPreviousVersion, p.KeepPreviousVersion)
 	applyBool(&s.AllowTorrentReuse, p.AllowTorrentReuse)
 	applyBool(&s.SaveBackupAfterSession, p.SaveBackupAfterSession)

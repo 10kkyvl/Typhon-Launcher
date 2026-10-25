@@ -68,6 +68,7 @@ import (
 	"typhon/internal/tray"
 	"typhon/internal/updates"
 	"typhon/internal/usagestats"
+	"typhon/internal/version"
 	"typhon/internal/watchlist"
 	"typhon/internal/wine"
 	"typhon/internal/wrappers"
@@ -554,6 +555,12 @@ func main() {
 	if err != nil {
 		fatal("start selfupdate service", err)
 	}
+	selfupdateService.SetBetaAccess(func() (string, bool, error) {
+		if !settingsService.GetSettings().UpdateBetaChannel {
+			return "", false, nil
+		}
+		return accountService.BetaToken()
+	})
 	discordService, err := discord.NewService(discordClientID)
 	if err != nil {
 		fatal("start discord presence", err)
@@ -1316,8 +1323,16 @@ func fatal(stage string, err error) {
 }
 
 func windowTitle() string {
-	if devmock.Enabled {
-		return "Typhon [devmock]"
+	return windowTitleFor(app.Version)
+}
+
+func windowTitleFor(ver string) string {
+	name := "Typhon"
+	if version.IsPrerelease(version.Parse(ver)) {
+		name = "Typhon beta"
 	}
-	return "Typhon" + qaTitleSuffix
+	if devmock.Enabled {
+		return name + " [devmock]"
+	}
+	return name + qaTitleSuffix
 }

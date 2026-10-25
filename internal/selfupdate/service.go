@@ -17,6 +17,7 @@ import (
 	"typhon/internal/app"
 	"typhon/internal/settings"
 	"typhon/internal/uierr"
+	"typhon/internal/version"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -89,6 +90,10 @@ type Service struct {
 	notesState      notesState
 	skippedVersion  string
 	rollbackPending bool
+
+	beta          BetaAccess
+	offerArtifact *Artifact
+	offerVersion  string
 }
 
 func NewService() (*Service, error) {
@@ -124,6 +129,13 @@ func NewService() (*Service, error) {
 		portable:       portable,
 		currentVersion: app.Version,
 	}, nil
+}
+
+//wails:ignore
+func (s *Service) SetBetaAccess(access BetaAccess) {
+	s.mu.Lock()
+	s.beta = access
+	s.mu.Unlock()
 }
 
 func emit(name string, data any) {
@@ -732,7 +744,10 @@ func (s *Service) doCheck(ctx context.Context, call *checkCall) (Status, error) 
 		return s.setError(code, err), err
 	}
 
-	m, err := s.client.FetchManifest(ctx)
+	s.mu.Lock()
+	access := s.beta
+	s.mu.Unlock()
+	m, channel, err := s.client.fetchManifest(ctx, access)
 	if err != nil {
 		return fail("manifest", err)
 	}
@@ -765,6 +780,22 @@ func (s *Service) doCheck(ctx context.Context, call *checkCall) (Status, error) 
 	if buildErr != nil {
 		return fail(status.ErrorCode, buildErr)
 	}
+	status.Channel = channel
+
+	var offer *Artifact
+	if artErr == nil && newerErr == nil && !newer && version.IsPrerelease(version.Parse(s.currentVersion)) &&
+		!version.IsPrerelease(version.Parse(m.Version)) {
+		older, cmpErr := IsNewer(s.currentVersion, m.Version)
+		if cmpErr != nil {
+			return fail("version", cmpErr)
+		}
+		if older {
+			offered := art
+			offered.Deltas = nil
+			offer = &offered
+			status.StableOffer = m.Version
+		}
+	}
 	newStored.SkippedVersion = skipped
 
 	if err := s.store.Save(newStored); err != nil {
@@ -773,6 +804,8 @@ func (s *Service) doCheck(ctx context.Context, call *checkCall) (Status, error) 
 
 	s.mu.Lock()
 	s.status = status
+	s.offerArtifact = offer
+	s.offerVersion = status.StableOffer
 	if newer {
 		s.pendingArtifact = &art
 		s.pendingVersion = m.Version
@@ -802,7 +835,82 @@ func (s *Service) DownloadUpdate(ctx context.Context) (Status, error) {
 		return Status{}, err
 	}
 	defer s.release()
+	return s.downloadPending(ctx)
+}
 
+// InstallStable is the explicit way off a beta, and only the user's click
+// starts it. When the saved rollback snapshot is exactly the offered stable
+// build, the rollback restores it together with the data it ran on. Otherwise
+// the offered release is downloaded, verified like any update and installed
+// over the beta, and the beta is not saved as a snapshot.
+func (s *Service) InstallStable(ctx context.Context, language string) (Status, error) {
+	if err := s.acquire(); err != nil {
+		return Status{}, err
+	}
+	s.mu.Lock()
+	offer, offered := s.offerArtifact, s.offerVersion
+	s.mu.Unlock()
+	if offer == nil {
+		s.release()
+		return s.GetStatus(), ErrNoStableOffer
+	}
+
+	if rec, err := checkRollback(s.dir, s.currentVersion); err == nil &&
+		!version.IsPrerelease(version.Parse(rec.Version)) && sameVersion(rec.Version, offered) {
+		if err := s.startRollback(language); err != nil {
+			return s.GetStatus(), err
+		}
+		return s.GetStatus(), nil
+	}
+
+	s.mu.Lock()
+	art := *offer
+	s.pendingArtifact = &art
+	s.pendingVersion = offered
+	s.readyPath = ""
+	s.readyArtifact = nil
+	s.status = clearError(s.status)
+	s.status.State = StateAvailable
+	s.status.AvailableVersion = offered
+	s.status.Notes = ""
+	s.status.PublishedAt = time.Time{}
+	s.mu.Unlock()
+
+	status, err := s.downloadPending(ctx)
+	if err == nil {
+		err = s.applyReady(language, true)
+	}
+	if err != nil {
+		return s.backToOffer(err), err
+	}
+	return status, nil
+}
+
+// backToOffer undoes the staging InstallStable did, so a failed attempt leaves
+// the status where the check put it: a stable build on offer, nothing pending
+// that the ordinary update button could take.
+func (s *Service) backToOffer(cause error) Status {
+	s.mu.Lock()
+	s.busy = false
+	s.pendingArtifact = nil
+	s.pendingVersion = ""
+	s.readyPath = ""
+	s.readyArtifact = nil
+	s.status.State = StateIdle
+	s.status.AvailableVersion = ""
+	s.status.Notes = ""
+	s.status.PublishedAt = time.Time{}
+	s.status.TotalBytes, s.status.DownloadedBytes, s.status.Delta = 0, 0, false
+	if s.status.Error == "" && !errors.Is(cause, context.Canceled) {
+		s.status = errorStatus(s.status, "install", cause)
+	}
+	status := s.status
+	s.mu.Unlock()
+	emit(eventStatus, status)
+	return status
+}
+
+func (s *Service) downloadPending(ctx context.Context) (Status, error) {
 	s.mu.Lock()
 	if s.status.State == StateReady {
 		// The installer is already on disk: whatever went wrong before this
@@ -953,6 +1061,11 @@ func (s *Service) ApplyUpdate(language string) error {
 	if err := s.acquire(); err != nil {
 		return err
 	}
+	return s.applyReady(language, false)
+}
+
+// applyReady is ApplyUpdate for a caller that already holds the service.
+func (s *Service) applyReady(language string, downgrade bool) error {
 	s.mu.Lock()
 	if s.status.State != StateReady {
 		s.busy = false
@@ -1016,6 +1129,7 @@ func (s *Service) ApplyUpdate(language string) error {
 		Version:       version,
 		FromVersion:   s.currentVersion,
 		Portable:      s.portable,
+		Downgrade:     downgrade,
 	}
 	if isExe {
 		spec.Kind = specKindExe
@@ -1155,7 +1269,7 @@ func (s *Service) storeReleaseNotes(incoming []ReleaseNote) error {
 	// The first successful check is where "everything up to this build has
 	// been seen" becomes true. Without it a fresh install has nothing to
 	// compare against and the first update would show no changelog at all.
-	if next.LastSeenVersion == "" {
+	if next.LastSeenVersion == "" && !version.IsPrerelease(version.Parse(currentVersion)) {
 		next.LastSeenVersion = currentVersion
 	}
 	if reflect.DeepEqual(current, next) {
@@ -1211,6 +1325,11 @@ func (s *Service) GetReleaseNotes() (ReleaseNotes, error) {
 }
 
 func (s *Service) AcknowledgeReleaseNotes() error {
+	// notes.json outlives a beta and is read by the stable launcher, which
+	// cannot parse a beta's version; the beta has no changelog entries to mark.
+	if version.IsPrerelease(version.Parse(s.currentVersion)) {
+		return nil
+	}
 	s.mu.Lock()
 	current := s.notesState
 	next := current

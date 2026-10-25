@@ -3,6 +3,8 @@ import { locale } from '../i18n/locale';
 import { Service as SelfUpdateService } from '../../../bindings/typhon/internal/selfupdate';
 import { inWails } from './backend';
 
+export type UpdateChannel = 'beta' | 'stable';
+
 export type SelfUpdateState = 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'applying' | 'failed';
 
 export interface SelfUpdateStatus {
@@ -17,6 +19,8 @@ export interface SelfUpdateStatus {
   error?: string;
   errorCode?: string;
   delta?: boolean;
+  channel?: UpdateChannel;
+  stableOffer?: string;
 }
 
 export interface SelfUpdateProgress {
@@ -143,6 +147,15 @@ export async function applyUpdate(): Promise<void> {
   if (!inWails) throw unavailable();
   try {
     await SelfUpdateService.ApplyUpdate(get(locale));
+  } catch (err) {
+    throw toSelfUpdateError(err);
+  }
+}
+
+export async function installStable(): Promise<SelfUpdateStatus> {
+  if (!inWails) throw unavailable();
+  try {
+    return (await SelfUpdateService.InstallStable(get(locale))) as unknown as SelfUpdateStatus;
   } catch (err) {
     throw toSelfUpdateError(err);
   }

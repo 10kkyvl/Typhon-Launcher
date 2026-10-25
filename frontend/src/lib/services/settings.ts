@@ -51,6 +51,7 @@ export interface Settings {
   desktopShortcuts: boolean;
   updateCheckAutomatically: boolean;
   updateAutoDownload: boolean;
+  updateBetaChannel: boolean;
   updateAutoInstall: boolean;
   updateSaveBackup: boolean;
   saveBackupAfterSession: boolean;
@@ -121,6 +122,7 @@ const fallbackDefaults: Settings = {
   desktopShortcuts: true,
   updateCheckAutomatically: true,
   updateAutoDownload: false,
+  updateBetaChannel: false,
   updateAutoInstall: false,
   updateSaveBackup: true,
   saveBackupAfterSession: true,

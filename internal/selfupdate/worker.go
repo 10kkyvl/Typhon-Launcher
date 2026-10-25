@@ -52,6 +52,10 @@ type updateSpec struct {
 	Version       string `json:"version"`
 	FromVersion   string `json:"fromVersion,omitempty"`
 	Portable      bool   `json:"portable,omitempty"`
+	// Downgrade marks the way off a beta to an older stable build. The beta is
+	// not saved as the rollback snapshot: a stable launcher cannot read the
+	// record of a beta.
+	Downgrade bool `json:"downgrade,omitempty"`
 }
 
 // Outcome is what the worker leaves behind for the relaunched launcher: the

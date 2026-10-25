@@ -63,6 +63,7 @@ const REASONS: Record<string, MessageKey> = {
   'selfupdate.portable_zip_no_executable': 'state.selfupdateReasonPortableNoExecutable',
   'selfupdate.portable_zip_executable': 'state.selfupdateReasonPortableBadExecutable',
   'selfupdate.rollback_unsupported': 'state.selfupdateReasonRollbackUnsupported',
+  'selfupdate.no_stable_offer': 'state.selfupdateReasonNoStableOffer',
   'selfupdate.rollback_none': 'state.selfupdateReasonRollbackNone',
   'selfupdate.rollback_broken': 'state.selfupdateReasonRollbackBroken',
   'selfupdate.rollback_hash': 'state.selfupdateReasonRollbackBroken',

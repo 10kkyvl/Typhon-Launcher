@@ -15,7 +15,7 @@
   import TicketList from './TicketList.svelte';
   import TicketView from './TicketView.svelte';
 
-  let { ticket, view, topic }: { ticket?: string; view?: string; topic?: string } = $props();
+  let { ticket, view, topic, subject }: { ticket?: string; view?: string; topic?: string; subject?: string } = $props();
 
   const number = $derived(parseTicketNumber(ticket));
   const needsAccount = $derived($authState === 'guest');
@@ -66,7 +66,7 @@
     <TicketView {number} />
   {/key}
 {:else if view === 'new'}
-  <NewTicket initialTopic={parseTopic(topic)} />
+  <NewTicket initialTopic={parseTopic(topic)} initialSubject={subject ?? ''} />
 {:else}
   <TicketList />
   <Card title={msg('settings.aiSkillSupportTitle')}>

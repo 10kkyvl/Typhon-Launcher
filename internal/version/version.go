@@ -24,6 +24,7 @@ type Version struct {
 	Series     string `json:"series,omitempty"`
 	Parts      []int  `json:"parts,omitempty"`
 	BuildID    string `json:"buildId,omitempty"`
+	Pre        string `json:"pre,omitempty"`
 	Comparable bool   `json:"comparable"`
 }
 
@@ -39,6 +40,7 @@ var (
 	reBuild     = regexp.MustCompile(`^(?:build|bld|b)[\s._-]*([0-9]{2,})$`)
 	reSeries    = regexp.MustCompile(`^(update|upd|patch|hotfix|rev|revision)[\s._-]*([0-9]+(?:[._][0-9]+)*)$`)
 	reDotted    = regexp.MustCompile(`^([0-9]+(?:[._-][0-9]+)*)(.*)$`)
+	rePre       = regexp.MustCompile(`^-((?:alpha|beta|rc)(?:\.[0-9]+)+)$`)
 	reTrimNoise = regexp.MustCompile(`^[\s._\-()\[\]]+|[\s._\-()\[\]]+$`)
 )
 
@@ -111,6 +113,12 @@ func Parse(raw string) Version {
 			v.Kind = KindSemantic
 		} else {
 			v.Kind = KindNumeric
+		}
+		if pre := rePre.FindStringSubmatch(m[2]); pre != nil && len(parts) == 3 {
+			v.Pre = pre[1]
+			v.Normalized = v.Normalized + "-" + v.Pre
+			v.Comparable = true
+			return v
 		}
 		v.Comparable = strings.TrimLeft(m[2], " ._-") == ""
 		if !v.Comparable {
@@ -223,6 +231,9 @@ func Key(v Version) string {
 	if v.Series != "" {
 		return v.Series + " " + joinParts(parts)
 	}
+	if v.Pre != "" {
+		return joinParts(parts) + "-" + v.Pre
+	}
 	return joinParts(parts)
 }
 
@@ -234,7 +245,62 @@ func Compare(a, b Version) (int, bool) {
 	if fa == "" || fa != fb || a.Series != b.Series {
 		return 0, false
 	}
-	return comparePartsOf(a.Parts, b.Parts), true
+	if c := comparePartsOf(a.Parts, b.Parts); c != 0 {
+		return c, true
+	}
+	return comparePre(a.Pre, b.Pre), true
+}
+
+func comparePre(a, b string) int {
+	switch {
+	case a == b:
+		return 0
+	case a == "":
+		return 1
+	case b == "":
+		return -1
+	}
+	left, right := strings.Split(a, "."), strings.Split(b, ".")
+	for i := 0; i < len(left) && i < len(right); i++ {
+		ln, lerr := strconv.Atoi(left[i])
+		rn, rerr := strconv.Atoi(right[i])
+		var c int
+		switch {
+		case lerr == nil && rerr == nil:
+			c = cmpInt(ln, rn)
+		case lerr == nil:
+			c = -1
+		case rerr == nil:
+			c = 1
+		default:
+			c = strings.Compare(left[i], right[i])
+		}
+		if c != 0 {
+			return c
+		}
+	}
+	return cmpInt(len(left), len(right))
+}
+
+func cmpInt(a, b int) int {
+	switch {
+	case a < b:
+		return -1
+	case a > b:
+		return 1
+	}
+	return 0
+}
+
+func IsPrerelease(v Version) bool {
+	return v.Pre != ""
+}
+
+func Channel(v Version) string {
+	if IsPrerelease(v) {
+		return "beta"
+	}
+	return "stable"
 }
 
 func comparePartsOf(a, b []int) int {

@@ -10,6 +10,7 @@ import (
 	"typhon/internal/dialogtext"
 	"typhon/internal/platform"
 	"typhon/internal/settings"
+	"typhon/internal/version"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -23,6 +24,7 @@ type AppInfo struct {
 	DevMock  bool   `json:"devMock"`
 	Portable bool   `json:"portable"`
 	DataDir  string `json:"dataDir"`
+	Channel  string `json:"channel"`
 }
 
 type Service struct {
@@ -56,6 +58,7 @@ func CurrentInfo() AppInfo {
 		Platform: runtime.GOOS,
 		Arch:     runtime.GOARCH,
 		DevMock:  devmock.Enabled,
+		Channel:  version.Channel(version.Parse(Version)),
 	}
 	// A marker error stops the launcher before any service exists (main.go), so
 	// by the time the UI asks, the portable state is settled.

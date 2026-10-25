@@ -118,6 +118,12 @@ type Status struct {
 	CheckedAt time.Time `json:"checkedAt,omitempty"`
 	Error     string    `json:"error,omitempty"`
 	ErrorCode string    `json:"errorCode,omitempty"`
+	// Channel is the channel the last manifest came from, "beta" or "stable";
+	// empty until the first check has finished.
+	Channel string `json:"channel,omitempty"`
+	// StableOffer is a stable release older than the running beta. It is never
+	// installed by itself: only InstallStable takes it.
+	StableOffer string `json:"stableOffer,omitempty"`
 }
 
 func (s Status) MarshalJSON() ([]byte, error) {

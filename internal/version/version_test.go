@@ -97,3 +97,51 @@ func TestNewer(t *testing.T) {
 		t.Fatal("Newer with unknown version must not be comparable")
 	}
 }
+
+func TestPrereleaseOrder(t *testing.T) {
+	cases := []struct {
+		left, right string
+		want        int
+	}{
+		{"1.3.0-beta.1", "1.3.0-beta.2", -1},
+		{"1.3.0-beta.2", "1.3.0-beta.10", -1},
+		{"1.3.0-beta.2", "1.3.0", -1},
+		{"1.3.0", "1.3.0-beta.2", 1},
+		{"1.2.9", "1.3.0-beta.1", -1},
+		{"1.3.0-beta.1", "1.2.9", 1},
+		{"1.3.0-beta.1", "1.3.0-beta.1", 0},
+		{"1.3.0-alpha.1", "1.3.0-beta.1", -1},
+		{"v1.3.0-BETA.1", "1.3.0-beta.1", 0},
+		{"1.3.0-beta.1", "1.3.0-beta.1.1", -1},
+		{"1.3.0-beta.1", "1.3", -1},
+		{"1.3.0-beta.2", "1.3.0-rc.1", -1},
+		{"1.3.0-RC.1", "1.3.0", -1},
+	}
+	for _, c := range cases {
+		got, ok := Compare(Parse(c.left), Parse(c.right))
+		if !ok || got != c.want {
+			t.Errorf("Compare(%q, %q) = %d, %v, want %d", c.left, c.right, got, ok, c.want)
+		}
+	}
+}
+
+func TestPrereleaseParse(t *testing.T) {
+	v := Parse("1.3.0-beta.1")
+	if !v.Comparable || v.Kind != KindSemantic || v.Normalized != "1.3.0-beta.1" || v.Pre != "beta.1" {
+		t.Fatalf("Parse(1.3.0-beta.1) = %+v", v)
+	}
+	if !IsPrerelease(v) || Channel(v) != "beta" {
+		t.Fatalf("beta not detected: %+v", v)
+	}
+	if s := Parse("1.3.0"); IsPrerelease(s) || Channel(s) != "stable" {
+		t.Fatalf("stable misdetected: %+v", s)
+	}
+	for _, raw := range []string{"1.3-beta.1", "1.3.0-beta", "1.3.0-beta.x", "1.3.0-beta.1+x", "1.0.3-hotfix.1", "1.0.3-patch.2", "1.0.3-update.1", "1.0.3-gold.1"} {
+		if Parse(raw).Comparable {
+			t.Errorf("Parse(%q) must stay non-comparable", raw)
+		}
+	}
+	if Key(Parse("1.3.0-beta.1")) == Key(Parse("1.3.0")) {
+		t.Error("Key must distinguish prerelease from release")
+	}
+}

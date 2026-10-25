@@ -18,6 +18,11 @@ func (s *Service) ApplyRollback(language string) error {
 	if err := s.acquire(); err != nil {
 		return err
 	}
+	return s.startRollback(language)
+}
+
+// startRollback is ApplyRollback for a caller that already holds the service.
+func (s *Service) startRollback(language string) error {
 	if err := launchRollback(s.dir, s.portable, s.currentVersion, language); err != nil {
 		s.release()
 		return err

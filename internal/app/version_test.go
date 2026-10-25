@@ -93,6 +93,11 @@ func readInfoJSONVersions(path string) (fileVersion, productVersion string, err 
 	return v.Fixed.FileVersion, entry.ProductVersion, nil
 }
 
+func releaseCore(v string) string {
+	core, _, _ := strings.Cut(strings.TrimSpace(v), "-")
+	return core
+}
+
 func coreVersion(v string, parts int) (string, error) {
 	segs := strings.Split(strings.TrimSpace(v), ".")
 	if len(segs) < parts {
@@ -137,6 +142,20 @@ func TestCoreVersion(t *testing.T) {
 				t.Fatalf("coreVersion(%q, %d) = %q, want %q", tt.version, tt.parts, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestReleaseCore(t *testing.T) {
+	tests := []struct{ in, want string }{
+		{"1.2.0", "1.2.0"},
+		{"1.3.0-beta.1", "1.3.0"},
+		{" 1.3.0-beta.12\n", "1.3.0"},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		if got := releaseCore(tt.in); got != tt.want {
+			t.Errorf("releaseCore(%q) = %q, want %q", tt.in, got, tt.want)
+		}
 	}
 }
 
@@ -329,8 +348,8 @@ func TestVersionSourcesMatch(t *testing.T) {
 				}
 			}
 			t.Run("build/darwin/"+name+" "+key, func(t *testing.T) {
-				if value != fileVersion {
-					t.Errorf("%s = %q, want VERSION %q", key, value, fileVersion)
+				if value != releaseCore(fileVersion) {
+					t.Errorf("%s = %q, want the numeric part of VERSION %q", key, value, fileVersion)
 				}
 			})
 		}
@@ -338,11 +357,11 @@ func TestVersionSourcesMatch(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			core, err := coreVersion(tc.got, 3)
+			core, err := coreVersion(releaseCore(tc.got), 3)
 			if err != nil {
 				t.Fatalf("%s = %q: %v", tc.name, tc.got, err)
 			}
-			if core != fileVersion {
+			if core != releaseCore(fileVersion) {
 				t.Fatalf("%s = %q (core %q), want core version %q (from VERSION file)", tc.name, tc.got, core, fileVersion)
 			}
 		})
