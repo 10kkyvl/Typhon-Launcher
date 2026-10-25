@@ -168,7 +168,7 @@ export const transfers = {
   'transfers.activitySubtitle': 'Лента событий ваших друзей',
   'transfers.activityGuestTitle': 'Активность доступна с аккаунтом',
   'transfers.activityGuestDescription':
-    'Войдите, чтобы видеть события друзей: пройденные игры, новинки и попавшее в любимые.',
+    'Войдите, чтобы видеть события друзей: пройденные и новые игры, любимые, наигранное за неделю, достижения, отзывы и планы.',
   'transfers.activitySignIn': 'Войти',
   'transfers.activityCreateAccount': 'Создать аккаунт',
   'transfers.activityConsentTitle': 'Нужна синхронизация с аккаунтом',
@@ -185,7 +185,7 @@ export const transfers = {
   'transfers.activityLoading': 'Загрузка…',
   'transfers.activityFeedEmptyTitle': 'Пока тихо',
   'transfers.activityFeedEmptyDescription':
-    'Здесь появятся события друзей: пройденные игры, новинки и попавшее в любимые.',
+    'Здесь появятся события друзей: пройденные и новые игры, любимые, наигранное за неделю, достижения, отзывы и планы.',
   'transfers.activityShowMore': 'Показать ещё',
   'transfers.activityPlayingTitle': 'Друзья в игре',
   'transfers.activityNoOnePlaying': 'Сейчас никто из друзей не играет',
