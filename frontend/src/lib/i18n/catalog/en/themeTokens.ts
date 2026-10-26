@@ -200,6 +200,7 @@ export const themeTokens: Record<ThemeTokensKey, Message> = {
   'settings.themeContrast.text2': 'Secondary text',
   'settings.themeContrast.text3': 'Muted text and hints',
   'settings.themeContrast.button': 'Text on the accent button',
+  'settings.themeContrast.links': 'Links and accent-coloured text',
   'settings.themeContrast.accent': 'Accent on the background: links, switches',
   'settings.themeContrast.danger': 'Errors and destructive actions',
   'settings.themeContrast.success': 'Success',

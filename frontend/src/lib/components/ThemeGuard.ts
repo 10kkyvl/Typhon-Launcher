@@ -28,12 +28,15 @@ export function mountThemeGuard(): () => void {
   const host = document.createElement('div');
   host.id = randomHostId();
 
+  // Bottom centre, not a corner: a theme may put the sidebar on either side,
+  // and a corner would then cover its account block.
   let pinning = false;
   function pin() {
     pinning = true;
     host.style.setProperty('display', 'block', 'important');
     host.style.setProperty('position', 'fixed', 'important');
-    host.style.setProperty('right', '1.6rem', 'important');
+    host.style.setProperty('left', '50%', 'important');
+    host.style.setProperty('transform', 'translateX(-50%)', 'important');
     host.style.setProperty('bottom', '1.6rem', 'important');
     host.style.setProperty('z-index', '2147483647', 'important');
     host.style.setProperty('pointer-events', 'none', 'important');

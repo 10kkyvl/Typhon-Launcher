@@ -1,4 +1,4 @@
-import type { RGBA } from './contrastReport';
+import { CONTRAST_FALLBACKS, type RGBA } from './contrastReport';
 
 const SENTINEL = '#010203';
 
@@ -20,7 +20,8 @@ export function resolveColors(vars: Record<string, string>, names: readonly stri
   try {
     for (const name of names) {
       probe.style.color = '';
-      probe.style.color = `var(${name})`;
+      const fallback = CONTRAST_FALLBACKS[name];
+      probe.style.color = fallback ? `var(${name}, ${fallback})` : `var(${name})`;
       const computed = getComputedStyle(probe).color;
       if (!ctx || !computed) {
         out[name] = undefined;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CONTRAST_CHECKS, CONTRAST_TOKENS, contrastReport, formatRatio, type RGBA } from './contrastReport';
+import { CONTRAST_CHECKS, CONTRAST_FALLBACKS, CONTRAST_TOKENS, contrastReport, formatRatio, type RGBA } from './contrastReport';
 import { tokenGroups } from './tokens';
 
 const black: RGBA = [0, 0, 0, 1];
@@ -52,8 +52,8 @@ describe('contrastReport', () => {
     expect(row(colors, 'text').ok).toBe(false);
   });
 
-  it('only names tokens the theme editor knows', () => {
-    const known = new Set(tokenGroups.flatMap((group) => group.tokens));
+  it('only names tokens the theme editor knows, or ones with a fallback', () => {
+    const known = new Set([...tokenGroups.flatMap((group) => group.tokens), ...Object.keys(CONTRAST_FALLBACKS)]);
     expect(CONTRAST_TOKENS.filter((name) => !known.has(name))).toEqual([]);
   });
 

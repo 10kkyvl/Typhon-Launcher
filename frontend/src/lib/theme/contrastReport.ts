@@ -16,7 +16,8 @@ export const CONTRAST_CHECKS: readonly ContrastCheck[] = [
   { id: 'text', fg: '--text', backgrounds: ['--bg', '--bg-sidebar', '--surface', '--surface-2', '--surface-3'], min: 4.5 },
   { id: 'text2', fg: '--text-2', backgrounds: ['--bg', '--bg-sidebar', '--surface', '--surface-2'], min: 4.5 },
   { id: 'text3', fg: '--text-3', backgrounds: ['--bg', '--surface', '--surface-2'], min: 3 },
-  { id: 'button', fg: '--accent-text', backgrounds: ['--accent', '--accent-hover'], min: 4.5 },
+  { id: 'button', fg: '--accent-on', backgrounds: ['--accent', '--accent-hover'], min: 4.5 },
+  { id: 'links', fg: '--accent-text', backgrounds: ['--accent-subtle', '--surface', '--bg'], min: 4.5 },
   { id: 'accent', fg: '--accent', backgrounds: ['--bg', '--surface', '--surface-2'], min: 3 },
   { id: 'danger', fg: '--danger', backgrounds: ['--bg', '--surface'], min: 3 },
   { id: 'success', fg: '--success', backgrounds: ['--bg', '--surface'], min: 3 },
@@ -24,6 +25,10 @@ export const CONTRAST_CHECKS: readonly ContrastCheck[] = [
 ];
 
 export const CONTRAST_TOKENS: readonly string[] = [...new Set(CONTRAST_CHECKS.flatMap((c) => [c.fg, ...c.backgrounds]))];
+
+// Not theme tokens: values the window falls back to where it reads them.
+// --accent-on comes from a personal accent; without one, buttons draw white.
+export const CONTRAST_FALLBACKS: Readonly<Record<string, string>> = { '--accent-on': '#fff' };
 
 export interface ContrastRow {
   id: string;
