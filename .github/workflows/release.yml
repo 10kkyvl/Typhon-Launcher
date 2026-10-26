@@ -605,6 +605,7 @@ jobs:
             -version "$RELEASE_VERSION" \
             -notes "$RELEASE_NOTES" \
             -changelog CHANGELOG.md \
+            -max-releases 7 \
             -base-url "$MANIFEST_BASE_URL" \
             -out manifest.json \
             -artifact "os=windows,arch=amd64,kind=installer,path=bin/typhon-amd64-installer.exe,portable=bin/typhon-windows-portable.zip${exe_field}" \
@@ -621,6 +622,7 @@ jobs:
             -version "$RELEASE_VERSION" \
             -notes "$RELEASE_NOTES" \
             -changelog CHANGELOG.md \
+            -max-releases 7 \
             -base-url "$MANIFEST_BASE_URL" \
             -out manifest-legacy.json \
             -artifact "os=windows,arch=amd64,kind=installer,path=bin/typhon-amd64-installer.exe"
