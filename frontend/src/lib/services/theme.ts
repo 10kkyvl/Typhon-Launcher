@@ -4,6 +4,7 @@ import { Service } from '../../../bindings/typhon/internal/theme';
 import type { Theme as BindingTheme } from '../../../bindings/typhon/internal/theme';
 import { msg } from '../i18n';
 import { inWails } from './backend';
+import type { ThemeLayout } from '../theme/layout';
 
 export type { BindingTheme };
 
@@ -15,6 +16,11 @@ export interface Theme {
   base: ThemeBase;
   tokens: Record<string, string>;
   css?: string;
+  source?: string;
+  layout?: ThemeLayout;
+  // The stored CSS breaks a rule added after it was saved; the backend serves
+  // the theme without it and keeps the text on disk.
+  cssBlocked?: boolean;
   builtIn: boolean;
   updatedAt: string;
 }
@@ -37,6 +43,9 @@ export function toTheme(raw: BindingTheme): Theme {
     base: raw.base === 'light' ? 'light' : 'dark',
     tokens: cleanTokens(raw.tokens),
     css: raw.css,
+    source: raw.source,
+    layout: raw.layout ?? undefined,
+    cssBlocked: raw.cssBlocked,
     builtIn: raw.builtIn,
     updatedAt: raw.updatedAt,
   };
@@ -49,6 +58,7 @@ function fromTheme(theme: Theme): BindingTheme {
     base: theme.base,
     tokens: theme.tokens,
     css: theme.css,
+    layout: theme.layout,
     builtIn: theme.builtIn,
     updatedAt: theme.updatedAt,
   };
@@ -105,6 +115,11 @@ export async function activeTheme(): Promise<Theme> {
 export async function importTheme(path: string): Promise<Theme> {
   if (!inWails) throw unavailable();
   return toTheme(await Service.Import(path));
+}
+
+export async function importThemeText(text: string, name: string): Promise<Theme> {
+  if (!inWails) throw unavailable();
+  return toTheme(await Service.ImportText(text, name));
 }
 
 export async function exportTheme(id: string, path: string): Promise<void> {

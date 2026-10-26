@@ -77,6 +77,24 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('theme:source-failed', () => {
+  it('tells the user which theme did not update and why', async () => {
+    const { toast } = await load();
+    handlers['theme:source-failed']({ data: { id: 'x', name: 'Mine', code: 'theme.invalid_format', message: 'raw' } });
+    expect(toast).toHaveBeenCalledTimes(1);
+    const [text, kind] = toast.mock.calls[0];
+    expect(kind).toBe('danger');
+    expect(text).toContain('Mine');
+    expect(text).toContain('version');
+  });
+
+  it('falls back to the backend message for an unknown code', async () => {
+    const { toast } = await load();
+    handlers['theme:source-failed']({ data: { id: 'x', name: 'Mine', code: 'weird', message: 'raw reason' } });
+    expect(toast.mock.calls[0][0]).toContain('raw reason');
+  });
+});
+
 describe('choosing a theme', () => {
   it('applies the theme on the backend, shows what the backend reports and paints it', async () => {
     const { store, dom } = await load();
@@ -310,5 +328,119 @@ describe('outside the desktop app', () => {
 
     expect(api.applyTheme).not.toHaveBeenCalled();
     vi.doMock('../services/backend', () => ({ inWails: true }));
+  });
+});
+
+describe('trying a draft on the window', () => {
+  it('shows the draft, then goes back by itself without touching the backend', async () => {
+    const { store, dom } = await load();
+    const draft = theme('dark', { name: 'draft', css: '.x{}', builtIn: false });
+    store.tryTheme(draft, 1000);
+    expect(get(store.activeTheme)).toEqual(draft);
+    expect(dom.applyTheme).toHaveBeenLastCalledWith(draft);
+    expect(get(store.themeTrial)).toMatchObject({ name: 'draft', kept: false });
+    vi.advanceTimersByTime(1000);
+    expect(get(store.activeTheme)?.name).toBe('dark');
+    expect(get(store.themeTrial)).toBeNull();
+    expect(api.applyTheme).not.toHaveBeenCalled();
+    expect(api.confirmTheme).not.toHaveBeenCalled();
+  });
+
+  it('goes back to the original theme after several tries', async () => {
+    const { store } = await load();
+    store.tryTheme(theme('dark', { name: 'one' }), 1000);
+    store.tryTheme(theme('dark', { name: 'two' }), 1000);
+    store.endTrial();
+    expect(get(store.activeTheme)?.name).toBe('dark');
+  });
+
+  it('keeps a kept trial past the timer and keeps it kept on the next try', async () => {
+    const { store } = await load();
+    store.tryTheme(theme('dark', { name: 'one' }), 1000);
+    store.keepTrial();
+    vi.advanceTimersByTime(5000);
+    expect(get(store.activeTheme)?.name).toBe('one');
+    store.tryTheme(theme('dark', { name: 'two' }), 1000);
+    vi.advanceTimersByTime(5000);
+    expect(get(store.activeTheme)?.name).toBe('two');
+    expect(get(store.themeTrial)?.kept).toBe(true);
+    store.endTrial();
+    expect(get(store.activeTheme)?.name).toBe('dark');
+  });
+
+  it('drops the trial without going back when a theme is really picked', async () => {
+    const { store } = await load();
+    store.tryTheme(theme('dark', { name: 'draft' }), 1000);
+    api.activeTheme.mockResolvedValue(theme('light', { base: 'light' }));
+    await store.selectTheme('light');
+    expect(get(store.themeTrial)).toBeNull();
+    vi.advanceTimersByTime(5000);
+    expect(get(store.activeTheme)?.id).toBe('light');
+  });
+
+  it('does nothing before a theme is active', async () => {
+    vi.resetModules();
+    const store = await import('./theme');
+    store.tryTheme(theme('dark', { name: 'draft' }));
+    expect(get(store.themeTrial)).toBeNull();
+  });
+});
+
+describe('a trial never reaches the backend', () => {
+  it('refuses CSS the backend would refuse and keeps the window as it was', async () => {
+    const { store, dom } = await load();
+    const error = store.tryTheme(theme('dark', { name: 'draft', css: '.a { background: image-set("https://x.test/a.png" 1x) }' }));
+    expect(error).not.toBeNull();
+    expect(get(store.themeTrial)).toBeNull();
+    expect(get(store.activeTheme)?.name).toBe('dark');
+    expect(dom.applyTheme).not.toHaveBeenCalled();
+  });
+
+  it('holds the pending confirm of a fresh pick until the trial ends', async () => {
+    const { store } = await load();
+    api.activeTheme.mockResolvedValue(theme('light', { base: 'light' }));
+    await store.selectTheme('light');
+    store.tryTheme(theme('other', { name: 'draft', builtIn: false }), 60_000);
+    vi.advanceTimersByTime(6000);
+    expect(api.confirmTheme).not.toHaveBeenCalled();
+    store.endTrial();
+    expect(get(store.activeTheme)?.id).toBe('light');
+    await vi.advanceTimersByTimeAsync(6000);
+    expect(api.confirmTheme).toHaveBeenCalledWith('light');
+  });
+
+  it('does not turn a saved draft into the active theme', async () => {
+    const { store } = await load();
+    store.tryTheme(theme('other', { name: 'draft', builtIn: false }), 60_000);
+    handlers['theme:updated']({ data: raw('other', { name: 'saved' }) });
+    expect(get(store.themeTrial)).not.toBeNull();
+    store.endTrial();
+    expect(get(store.activeTheme)?.id).toBe('dark');
+  });
+
+  it('goes back to the latest version of the real theme', async () => {
+    const { store } = await load();
+    store.tryTheme(theme('other', { name: 'draft', builtIn: false }), 60_000);
+    handlers['theme:updated']({ data: raw('dark', { name: 'dark edited', builtIn: true }) });
+    store.endTrial();
+    expect(get(store.activeTheme)?.name).toBe('dark edited');
+  });
+
+  it('never goes back to a theme that was deleted during the trial', async () => {
+    const { store } = await load();
+    store.tryTheme(theme('dark', { name: 'draft' }), 1000);
+    api.activeTheme.mockResolvedValue(theme('light', { base: 'light' }));
+    await store.forgetTheme('dark');
+    expect(get(store.themeTrial)).toBeNull();
+    vi.advanceTimersByTime(5000);
+    expect(get(store.activeTheme)?.id).toBe('light');
+  });
+
+  it('ends the trial of a deleted draft that was not active', async () => {
+    const { store } = await load();
+    store.tryTheme(theme('other', { name: 'draft', builtIn: false }), 60_000);
+    await store.forgetTheme('other');
+    expect(get(store.themeTrial)).toBeNull();
+    expect(get(store.activeTheme)?.id).toBe('dark');
   });
 });

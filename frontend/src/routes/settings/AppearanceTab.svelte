@@ -1,6 +1,8 @@
 <script lang="ts">
   import AccentPicker from './AccentPicker.svelte';
+  import LayoutEditor from './LayoutEditor.svelte';
   import ThemePreview from './ThemePreview.svelte';
+  import { Trash2 } from '@lucide/svelte';
   import { msg } from '../../lib/i18n';
   import { themeDisplayName, personalThemeVars, displayedAccent } from '../../lib/theme/apply';
   import { validateCss, validateTokenName, validateTokenValue } from '../../lib/theme/validate';
@@ -8,6 +10,10 @@
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
+  import ThemeTextImportModal from '../../lib/components/ThemeTextImportModal.svelte';
+  import ThemeContrast from '../../lib/components/ThemeContrast.svelte';
+  import { onDestroy, untrack } from 'svelte';
+  import { get } from 'svelte/store';
   import {
     deleteTheme,
     exportTheme,
@@ -18,7 +24,18 @@
     type Theme,
   } from '../../lib/services/theme';
   import { deleteThemePrompt, resetAppearancePrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
-  import { activeTheme, refreshThemes, resetAppearance, selectTheme, themeList, themeMode } from '../../lib/stores/theme';
+  import {
+    activeTheme,
+    endTrial,
+    forgetTheme,
+    refreshThemes,
+    resetAppearance,
+    selectTheme,
+    themeList,
+    themeMode,
+    themeTrial,
+    tryTheme,
+  } from '../../lib/stores/theme';
   import { toast } from '../../lib/stores/toasts';
   import { themeErrorText } from '../../lib/theme/themeErrors';
   import {
@@ -45,6 +62,7 @@
   let saving = $state(false);
   let deleting = $state(false);
   let importing = $state(false);
+  let textImportOpen = $state(false);
   let exporting = $state(false);
   let errors = $state<string[]>([]);
   let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
@@ -109,6 +127,7 @@
       stored !== null &&
       (draftName !== themeDisplayName(stored) ||
         cssDraft !== (stored.css ?? '') ||
+        JSON.stringify(draft.layout ?? null) !== JSON.stringify(stored.layout ?? null) ||
         !sameTokens(draft.tokens, stored.tokens)),
   );
 
@@ -143,8 +162,34 @@
       .join('; '),
   );
 
+  const trialDraft = $derived(draft ? { ...draft, name: draftName, css: cssDraft } : null);
+  const trialKept = $derived($themeTrial?.kept ?? false);
+
+  function tryDraft() {
+    if (!trialDraft) return;
+    const error = tryTheme(trialDraft);
+    errors = error ? [error] : [];
+  }
+
+  // A kept trial follows every edit, so the window shows the draft as it is
+  // typed; an edit the CSS check refuses leaves the last accepted one shown.
+  $effect(() => {
+    if (!trialKept || !trialDraft) return;
+    JSON.stringify(trialDraft);
+    const next = trialDraft;
+    untrack(() => {
+      const error = tryTheme(next);
+      errors = error ? [error] : [];
+    });
+  });
+
+  onDestroy(() => {
+    if (get(themeTrial)) endTrial();
+  });
+
   async function saveDraft() {
     if (!draft) return;
+    const previous = { id: draft.id, builtIn: draft.builtIn };
     const validation = validateDraft();
     errors = validation;
     if (validation.length > 0) return;
@@ -152,6 +197,7 @@
     try {
       const saved = await saveTheme({ ...draft, name: draftName, css: cssDraft });
       startEditing(saved);
+      if (saved.id !== previous.id || previous.builtIn) await selectTheme(saved.id);
       toast(msg('settings.appearanceSavedToast', { name: saved.name }), 'success');
       await refreshThemes();
     } catch (err) {
@@ -161,10 +207,13 @@
     }
   }
 
-  function removeDraft() {
-    const target = draft;
-    if (!target || target.builtIn) return;
+  function askRemove(target: Theme) {
+    if (target.builtIn) return;
     pending = { prompt: deleteThemePrompt(target.name), run: () => runRemove(target) };
+  }
+
+  function removeDraft() {
+    if (draft) askRemove(draft);
   }
 
   async function runRemove(target: Theme) {
@@ -172,8 +221,9 @@
     try {
       await deleteTheme(target.id);
       toast(msg('settings.appearanceDeletedToast', { name: target.name }), 'success');
-      draft = null;
       await refreshThemes();
+      await forgetTheme(target.id);
+      if (draft?.id === target.id) draft = null;
     } catch (err) {
       toast(themeErrorText(err), 'danger');
     } finally {
@@ -201,8 +251,14 @@
     }
   }
 
+  async function onTextImported(theme: Theme) {
+    toast(msg('settings.appearanceImportedToast', { name: theme.name }), 'success');
+    await refreshThemes();
+    startEditing(theme);
+  }
+
   async function runExport() {
-    if (!draft) return;
+    if (!draft || dirty) return;
     exporting = true;
     try {
       const path = await selectExportPath();
@@ -239,21 +295,36 @@
           <span class="preset-name">{msg('settings.appearanceSystemPresetLabel')}</span>
         </button>
         {#each list as theme (theme.id)}
-          <button
-            type="button"
-            class="preset"
-            class:selected={$themeMode === 'theme' && active?.id === theme.id}
-            onclick={() => pickTheme(theme)}
-          >
-            <span
-              class="preset-swatch"
-              style={`background: ${theme.tokens['--bg'] ?? (theme.base === 'light' ? '#f4f6f8' : '#0b0f14')}; border-color: ${theme.tokens['--accent'] ?? '#6875e8'};`}
-            ></span>
-            <span class="preset-name">{themeDisplayName(theme)}</span>
+          <div class="preset-cell">
+            <button
+              type="button"
+              class="preset"
+              class:selected={$themeMode === 'theme' && active?.id === theme.id}
+              onclick={() => pickTheme(theme)}
+            >
+              <span
+                class="preset-swatch"
+                style={`background: ${theme.tokens['--bg'] ?? (theme.base === 'light' ? '#f4f6f8' : '#0b0f14')}; border-color: ${theme.tokens['--accent'] ?? '#6875e8'};`}
+              ></span>
+              <span class="preset-name">{themeDisplayName(theme)}</span>
+              {#if !theme.builtIn}
+                <span class="preset-tag">{msg('settings.appearanceCustomThemeTag')}</span>
+              {/if}
+            </button>
             {#if !theme.builtIn}
-              <span class="preset-tag">{msg('settings.appearanceCustomThemeTag')}</span>
+              {@const deleteLabel = msg('settings.appearanceDeleteTile', { name: themeDisplayName(theme) })}
+              <button
+                type="button"
+                class="preset-delete"
+                aria-label={deleteLabel}
+                title={deleteLabel}
+                disabled={deleting}
+                onclick={() => askRemove(theme)}
+              >
+                <Trash2 size={14} />
+              </button>
             {/if}
-          </button>
+          </div>
         {/each}
       </div>
       <div class="row">
@@ -261,9 +332,14 @@
           <span class="row-label">{msg('settings.appearanceImportLabel')}</span>
           <span class="row-sub">{msg('settings.appearanceImportSub')}</span>
         </div>
-        <Button size="sm" disabled={importing} onclick={runImport}>
-          {importing ? msg('settings.appearanceImportingEllipsis') : msg('settings.appearanceImportButton')}
-        </Button>
+        <div class="import-actions">
+          <Button size="sm" disabled={importing} onclick={() => (textImportOpen = true)}>
+            {msg('settings.appearanceImportTextButton')}
+          </Button>
+          <Button size="sm" disabled={importing} onclick={runImport}>
+            {importing ? msg('settings.appearanceImportingEllipsis') : msg('settings.appearanceImportButton')}
+          </Button>
+        </div>
       </div>
       <div class="row">
         <div class="row-text">
@@ -299,11 +375,15 @@
         {#if draft.builtIn}
           <p class="hint">{msg('settings.appearanceBuiltinHint')}</p>
         {/if}
+        {#if stored?.cssBlocked}
+          <p class="hint warn">{msg('settings.themeCssBlocked')}</p>
+        {/if}
         <div class="editor-layout">
           <div class="editor-preview">
             <Card surface="panel" title={msg('settings.themePreviewTitle')}>
               <ThemePreview vars={previewStyle} />
             </Card>
+            <ThemeContrast vars={previewVars} />
           </div>
 
           <div class="editor-fields">
@@ -362,6 +442,8 @@
               {/each}
             </div>
 
+            <LayoutEditor bind:layout={draft.layout} />
+
             <button type="button" class="advanced-toggle" onclick={() => (advancedOpen = !advancedOpen)}>
               {advancedOpen ? msg('settings.appearanceHideAdvanced') : msg('settings.appearanceShowAdvanced')}
             </button>
@@ -384,15 +466,22 @@
               <Button size="sm" disabled={saving} onclick={saveDraft}>
                 {saving ? msg('settings.appearanceSavingEllipsis') : msg('common.save')}
               </Button>
-              <Button size="sm" variant="secondary" disabled={exporting} onclick={runExport}>
+              <Button size="sm" variant="secondary" disabled={exporting || dirty} onclick={runExport}>
                 {exporting ? msg('settings.appearanceExportingEllipsis') : msg('settings.appearanceExportButton')}
               </Button>
+              <Button size="sm" variant="secondary" onclick={tryDraft}>
+                {msg('settings.themeTry')}
+              </Button>
+              {#if dirty}
+                <span class="hint export-hint">{msg('settings.appearanceExportDirtyHint')}</span>
+              {/if}
               {#if !draft.builtIn}
                 <Button size="sm" variant="danger" disabled={deleting} onclick={removeDraft}>
                   {deleting ? msg('settings.appearanceDeletingEllipsis') : msg('common.delete')}
                 </Button>
               {/if}
             </div>
+            <p class="hint">{msg('settings.themeTryHint')}</p>
           </div>
         </div>
       </Card>
@@ -402,11 +491,16 @@
   </div>
 </div>
 
+<ThemeTextImportModal bind:open={textImportOpen} onimported={onTextImported} />
+
 {#if pending}
   <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
 {/if}
 
 <style>
+  .hint.warn {
+    color: var(--warning);
+  }
   .hint {
     font-size: var(--font-xs);
     color: var(--text-3);
@@ -418,6 +512,57 @@
     grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
     gap: var(--space-3);
     margin-bottom: var(--space-4);
+  }
+
+  .preset-cell {
+    position: relative;
+    display: flex;
+  }
+
+  .preset-cell > .preset {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding-right: 3.4rem;
+  }
+
+  .preset-delete {
+    position: absolute;
+    top: 50%;
+    right: var(--space-2);
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--control-sm);
+    height: var(--control-sm);
+    border-radius: var(--radius-sm);
+    color: var(--text-2);
+    opacity: 0;
+    transition:
+      opacity var(--dur) var(--ease),
+      background var(--dur) var(--ease),
+      color var(--dur) var(--ease);
+  }
+
+  .preset-cell:hover .preset-delete,
+  .preset-delete:focus-visible {
+    opacity: 1;
+  }
+
+  .preset-delete:hover:not(:disabled) {
+    background: var(--danger-subtle);
+    color: var(--danger);
+  }
+
+  .preset-delete:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  @media (hover: none) {
+    .preset-delete {
+      opacity: 1;
+    }
   }
 
   .preset {
@@ -477,6 +622,12 @@
     justify-content: space-between;
     gap: var(--space-6);
     padding: 1.3rem 0;
+  }
+
+  .import-actions {
+    display: flex;
+    gap: var(--space-3);
+    flex-shrink: 0;
   }
 
   .row-text {
@@ -640,6 +791,11 @@
     border-radius: var(--radius-md);
     color: var(--danger);
     font-size: var(--font-xs);
+  }
+
+  .export-hint {
+    margin-bottom: 0;
+    align-self: center;
   }
 
   .editor-actions {

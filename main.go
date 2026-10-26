@@ -160,6 +160,7 @@ func init() {
 	application.RegisterEvent[theme.Theme]("theme:updated")
 	application.RegisterEvent[[]theme.Theme]("theme:list")
 	application.RegisterEvent[theme.Theme]("theme:reverted")
+	application.RegisterEvent[theme.SourceFailure]("theme:source-failed")
 	application.RegisterEvent[selfupdate.Status]("launcher:update_status")
 	application.RegisterEvent[selfupdate.Progress]("launcher:update_progress")
 	application.RegisterEvent[playlog.Session]("playlog:recorded")

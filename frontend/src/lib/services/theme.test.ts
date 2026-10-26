@@ -8,6 +8,7 @@ const bindings = {
   Save: vi.fn(),
   Apply: vi.fn(),
   SelectThemeFile: vi.fn(),
+  ImportText: vi.fn(),
 };
 
 vi.mock('../../../bindings/typhon/internal/theme', () => ({ Service: bindings }));
@@ -163,5 +164,50 @@ describe('themeErrorText', () => {
     const { themeErrorText } = await import('../theme/themeErrors');
     const text = themeErrorText(new Error('var() cycle: --bg, --surface: typhon:theme.token_kind: значение токена не подходит по типу'));
     expect(text).toContain('--bg, --surface');
+  });
+});
+
+describe('importThemeText', () => {
+  it('passes text and name to the binding and maps the theme', async () => {
+    bindings.ImportText.mockResolvedValue(raw({ source: '/t/x.typhontheme' }));
+    const { importThemeText } = await load(true);
+    const theme = await importThemeText('{}', 'N');
+    expect(bindings.ImportText).toHaveBeenCalledWith('{}', 'N');
+    expect(theme.source).toBe('/t/x.typhontheme');
+  });
+
+  it('propagates the backend error', async () => {
+    bindings.ImportText.mockRejectedValue(new Error('typhon:theme.invalid_format'));
+    const { importThemeText } = await load(true);
+    await expect(importThemeText('x', '')).rejects.toThrow('theme.invalid_format');
+  });
+
+  it('is unavailable outside Wails', async () => {
+    const { importThemeText } = await load(false);
+    await expect(importThemeText('x', '')).rejects.toThrow('unavailable in browser');
+    expect(bindings.ImportText).not.toHaveBeenCalled();
+  });
+
+  it('maps theme.invalid_format to its reason', async () => {
+    const { themeErrorText } = await import('../theme/themeErrors');
+    expect(themeErrorText(new Error('typhon:theme.invalid_format'))).toContain('version');
+  });
+});
+
+describe('theme layout', () => {
+  const layout = { sidebar: { side: 'right', hidden: ['stats'] }, gamePage: { main: ['notes'], side: ['about'] } };
+
+  it('reads layout from the binding', async () => {
+    const { toTheme } = await load(true);
+    expect(toTheme(raw({ layout })).layout).toEqual(layout);
+    expect(toTheme(raw()).layout).toBeUndefined();
+  });
+
+  it('sends layout back on save and reads the saved one', async () => {
+    const { saveTheme, toTheme } = await load(true);
+    bindings.Save.mockImplementation(async (t: BindingTheme) => t);
+    const saved = await saveTheme(toTheme(raw({ layout })));
+    expect(bindings.Save.mock.calls[0][0].layout).toEqual(layout);
+    expect(saved.layout).toEqual(layout);
   });
 });

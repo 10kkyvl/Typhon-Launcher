@@ -73,6 +73,8 @@ export const errLibrary = {
   'theme.token_kind': 'значение токена не подходит по типу',
   'theme.skill_invalid_path': 'эта папка не подходит для скилла',
   'theme.skill_write_failed': 'не удалось записать скилл в эту папку',
+  'theme.invalid_format': 'Текст не похож на файл темы Typhon — вставьте его целиком, вместе с "version"',
+  'theme.invalid_layout': 'В раскладке темы неизвестный или повторяющийся элемент',
   'errLibrary.themeErrFallback': 'Не удалось выполнить действие с темой',
 
   'settings.library_not_configured': 'библиотека не настроена',

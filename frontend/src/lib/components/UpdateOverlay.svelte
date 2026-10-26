@@ -12,6 +12,7 @@
     selfUpdateStatus,
   } from '../stores/selfupdate';
   import { route } from '../stores/router';
+  import { themeLayout } from '../stores/layout';
   import { outcomeReason } from '../services/selfupdateMessages';
   import { bytesSize } from '../utils/format';
   import { msg } from '../i18n';
@@ -42,7 +43,7 @@
 {/if}
 
 {#if downloading && !applying && $route.name !== 'settings' && !$bigPictureActive}
-  <div class="card">
+  <div class="card" class:sidebar-right={$themeLayout.side === 'right'}>
     <div class="row">
       <Download size="1.8rem" strokeWidth={1.8} />
       <span class="title">{msg(status.delta ? 'ui.downloadingUpdatePatch' : 'ui.downloadingUpdate', { version })}</span>
@@ -54,7 +55,7 @@
     <span class="meta">{msg('ui.bytesOfBytes', { done: bytesSize(downloadedBytes), total: bytesSize(totalBytes) })} · {Math.round(pct)}%</span>
   </div>
 {:else if outcome && !$bigPictureActive}
-  <div class="card" class:card-danger={!outcome.ok} in:fly={{ x: -24, duration: 220 }} out:fade={{ duration: 200 }}>
+  <div class="card" class:card-danger={!outcome.ok} class:sidebar-right={$themeLayout.side === 'right'} in:fly={{ x: -24, duration: 220 }} out:fade={{ duration: 200 }}>
     <div class="row">
       {#if outcome.ok}
         <CheckCircle2 size="1.8rem" strokeWidth={1.8} />
@@ -161,6 +162,10 @@
     box-shadow: var(--shadow-modal);
   }
 
+  .card.sidebar-right {
+    left: 2.4rem;
+  }
+
   .card-danger {
     background: var(--danger-subtle);
     color: var(--danger);
@@ -190,6 +195,10 @@
   @media (max-width: 1140px) {
     .card {
       left: 8.8rem;
+    }
+
+    .card.sidebar-right {
+      left: 2.4rem;
     }
   }
 

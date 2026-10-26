@@ -4,6 +4,7 @@
   import { fade } from 'svelte/transition';
   import Avatar from './Avatar.svelte';
   import { fieldsFrame } from '../profile/frameLook';
+  import { themeLayout } from '../stores/layout';
   import Button from './Button.svelte';
   import IconButton from './IconButton.svelte';
   import ChatAttachments from './ChatAttachments.svelte';
@@ -331,7 +332,7 @@
   });
 </script>
 
-<div class="chat-root">
+<div class="chat-root" class:sidebar-right={$themeLayout.side === 'right'}>
   {#if $chatToast}
     <button class="chat-toast" type="button" onclick={openToast} out:fade={{ duration: 240 }}>
       <Avatar size="sm" name={displayName($chatToast.peer)} src={$chatToast.peer.avatarUrl} {...fieldsFrame($chatToast.peer)} />
@@ -514,6 +515,7 @@
 
 <style>
   .chat-root { position: fixed; z-index: 140; right: 2.4rem; bottom: 2.4rem; display: flex; flex-direction: column; align-items: flex-end; pointer-events: none; }
+  .chat-root.sidebar-right { right: calc(2.4rem + var(--sidebar-now)); }
   .chat-root > * { pointer-events: auto; }
   .chat-toggle { position: relative; display: flex; align-items: center; justify-content: center; width: 4.8rem; height: 4.8rem; border: 1px solid var(--border-strong); border-radius: 50%; background: var(--accent); color: var(--accent-on, #fff); box-shadow: var(--shadow-pop); cursor: pointer; }
   .chat-toggle:hover { background: var(--accent-hover); }

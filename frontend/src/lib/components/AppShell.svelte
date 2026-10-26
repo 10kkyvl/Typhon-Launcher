@@ -4,6 +4,7 @@
   import { authState, isOffline } from '../stores/user';
   import { needsSocialConsent } from '../stores/social';
   import { chatOpen } from '../stores/messaging';
+  import { themeLayout } from '../stores/layout';
   import { scrollmemory } from '../utils/scrollmemory';
   import ActivityDock from './ActivityDock.svelte';
   import ChatPanel from './ChatPanel.svelte';
@@ -19,9 +20,9 @@
   const chatShown = $derived($authState === 'authenticated' && !$needsSocialConsent);
 </script>
 
-<div class="shell">
+<div class="shell" class:right={$themeLayout.side === 'right'} data-part="app-shell">
   <Sidebar />
-  <div class="main">
+  <div class="main" data-part="main">
     <Topbar />
     {#if $isOffline}
       <OfflineBanner />
@@ -29,7 +30,7 @@
     <NetworkBanner />
     {#key $route}
       <main class="content" use:scrollmemory>
-        <div class="page">
+        <div class="page" data-part="page">
           {@render children?.()}
         </div>
       </main>
@@ -37,7 +38,12 @@
   </div>
 </div>
 
-<div class="corner" class:above-chat={chatShown && !$chatOpen} class:beside-chat={chatShown && $chatOpen}>
+<div
+  class="corner"
+  class:above-chat={chatShown && !$chatOpen}
+  class:beside-chat={chatShown && $chatOpen}
+  class:sidebar-right={$themeLayout.side === 'right'}
+>
   <Toasts />
   {#if $route.name !== 'downloads'}
     <ActivityDock />
@@ -70,6 +76,14 @@
     right: calc(2.4rem + 38rem + 1.2rem);
   }
 
+  .corner.sidebar-right {
+    right: calc(2.4rem + var(--sidebar-now));
+  }
+
+  .corner.sidebar-right.beside-chat {
+    right: calc(2.4rem + var(--sidebar-now) + 38rem + 1.2rem);
+  }
+
   .corner > :global(*) {
     pointer-events: auto;
   }
@@ -79,6 +93,20 @@
     height: 100vh;
     min-width: 100rem;
     overflow: hidden;
+  }
+
+  .shell.right {
+    flex-direction: row-reverse;
+  }
+
+  :global(:root) {
+    --sidebar-now: var(--sidebar-w);
+  }
+
+  @media (max-width: 1140px) {
+    :global(:root) {
+      --sidebar-now: 6.4rem;
+    }
   }
 
   .main {

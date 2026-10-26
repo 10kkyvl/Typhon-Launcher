@@ -24,7 +24,8 @@ The file is exactly this object and nothing else (unknown keys are refused):
     "name": "<display name>",
     "base": "dark",
     "tokens": { "<token>": "<value>" },
-    "css": ""
+    "css": "",
+    "layout": { "sidebar": {}, "topbar": {}, "gamePage": {} }
   }
 }
 ```
@@ -36,7 +37,8 @@ The file is exactly this object and nothing else (unknown keys are refused):
 | `theme.name` | 1–64 characters shown in the theme list; any language. |
 | `theme.base` | `"dark"` or `"light"`: which way the launcher derives the personal accent palette. Pick by the background lightness. |
 | `theme.tokens` | Map of token name → value. Names only from [tokens.md](tokens.md). Do not include `--ui-scale` (it belongs to a separate setting and is refused). |
-| `theme.css` | Optional extra CSS, normally `""`. Leave it empty unless the user asks for something tokens cannot do. |
+| `theme.css` | Optional extra CSS, normally `""`. Leave it empty unless the user asks for something tokens cannot do. Rules in [Custom CSS](#custom-css). |
+| `theme.layout` | Optional: sidebar side and order, search position, top bar buttons, game page sections, what is hidden. Leave it out unless the user asks to move or hide something. Every id and rule is in [layout.md](layout.md). |
 
 ## Writing the tokens
 
@@ -83,6 +85,26 @@ set on.
 
 `1rem` is 11 px in Typhon (before the user's interface scale), so `1.5rem` text is about 16 px.
 
+## Custom CSS
+
+`theme.css` is at most 32 KB, braces balanced and nested at most 4 deep. Target window parts by
+their `data-part` and `data-id` attributes (list in [layout.md](layout.md)), for example
+`[data-part="sidebar-item"][data-id="library"]`. Ordering and hiding belong in `theme.layout`,
+not in CSS.
+
+A theme must never make the launcher load anything from outside, so the launcher refuses the
+whole file (case and spaces before `(` do not matter, comments are ignored) when the CSS
+contains:
+
+- a backslash `\` anywhere: no CSS escapes, not even inside strings or comments;
+- `url(`, `src(`, `image-set(` (and `-webkit-image-set(`), `image(`, `cross-fade(`, `attr(`;
+- `@import`, `@font-face`, `@namespace`;
+- `expression(`, `javascript:`, `behavior:`, `-moz-binding`, `</style`;
+- `--ui-scale` (the interface scale belongs to its own setting).
+
+Use gradients and colors instead of images, and fonts the user already has installed (by family
+name in `--font`), not web fonts.
+
 ## Example
 
 A complete dark theme ("night ocean": deep blue with a teal accent):
@@ -128,7 +150,9 @@ A complete dark theme ("night ocean": deep blue with a teal accent):
 ## Before handing the file over
 
 - [ ] Top level has exactly `version` (= 1) and `theme`; `theme` has only `id`, `name`, `base`,
-      `tokens`, `css`.
+      `tokens`, `css` and, if the user asked to move or hide something, `layout`.
+- [ ] Every `layout` id is in layout.md, none appears twice, `settings` is not hidden.
+- [ ] `css` has no backslash and nothing from the refused list in Custom CSS.
 - [ ] All 24 color tokens are present (plus the three shadows for a light base); every token name
       is in tokens.md; no `--ui-scale`.
 - [ ] Every value matches its kind; no quotes anywhere inside values.
@@ -143,4 +167,6 @@ list. If Typhon refuses the file:
 - for any other refusal the message does not name the field, so check in this order: `version` is
   `1`; `id` matches the pattern; `base` is `dark` or `light`; every token name exists in
   tokens.md (and is not `--ui-scale`); no value contains a character outside the allowed set
-  (quotes, `;`, `{}`, `url(`), and none is longer than 120 characters; `css` is empty.
+  (quotes, `;`, `{}`, `url(`), and none is longer than 120 characters; `css` is empty;
+- a refused layout names the field and the bad value (for example `sidebar.hidden: unknown id
+  "settings"`); fix exactly that id against layout.md.

@@ -76,6 +76,8 @@ export const errLibrary: Record<ErrLibraryKey, Message> = {
   'theme.token_kind': 'The token value has the wrong type',
   'theme.skill_invalid_path': 'This folder cannot hold the skill',
   'theme.skill_write_failed': 'Could not write the skill to this folder',
+  'theme.invalid_format': "This doesn't look like a Typhon theme file — paste all of it, including \"version\"",
+  'theme.invalid_layout': 'The theme layout has an unknown or repeated element',
   'errLibrary.themeErrFallback': 'Could not complete the theme action',
 
   'settings.library_not_configured': 'The library is not set up',

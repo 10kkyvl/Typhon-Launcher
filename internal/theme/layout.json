@@ -1,0 +1,42 @@
+{
+  "separator": "-",
+  "maxSeparators": 6,
+  "sidebar": {
+    "sides": ["left", "right"],
+    "items": ["library", "catalog", "installed", "diskusage", "downloads", "sources", "friends", "activity", "stats", "history", "lan"],
+    "defaultOrder": ["library", "catalog", "installed", "diskusage", "-", "downloads", "sources", "friends", "activity", "stats", "history", "-", "lan"],
+    "hideable": ["library", "catalog", "installed", "diskusage", "downloads", "sources", "friends", "activity", "stats", "history", "lan", "support"]
+  },
+  "topbar": {
+    "searchPositions": ["left", "center"],
+    "actions": ["bigpicture", "notifications", "friends"]
+  },
+  "gamePage": {
+    "main": ["summary", "tags", "links", "update", "install", "requirements", "releases", "similar", "otherVersions", "notes", "steamExtras", "reviews"],
+    "side": ["about", "achievements", "reviewSummary", "friends"]
+  },
+  "parts": [
+    "app-shell",
+    "sidebar",
+    "sidebar-nav",
+    "sidebar-item",
+    "sidebar-separator",
+    "sidebar-bottom",
+    "sidebar-account",
+    "topbar",
+    "topbar-history",
+    "topbar-search",
+    "topbar-actions",
+    "topbar-action",
+    "window-controls",
+    "main",
+    "page",
+    "game-hero",
+    "game-actions",
+    "game-tabs",
+    "game-main",
+    "game-side",
+    "game-section"
+  ],
+  "partsWithId": ["sidebar-item", "topbar-action", "game-section"]
+}

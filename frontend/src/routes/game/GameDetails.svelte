@@ -128,6 +128,8 @@
   import { getWineStatus, type WineStatus } from '../../lib/services/system';
   import { getVerifyState } from '../../lib/services/updates';
   import { downloads, statusLabels } from '../../lib/stores/downloads';
+  import { GAME_MAIN_SECTIONS, gameSections, type GameSection } from '../../lib/theme/layout';
+  import { activeTheme } from '../../lib/stores/theme';
   import { installActive, installStatusLabels, installations } from '../../lib/stores/install';
   import { installIndeterminate } from '../../lib/install/progress';
   import { openGameProperties } from '../../lib/stores/gameProperties';
@@ -933,7 +935,333 @@
       hasOwnDownload: Boolean(anyOwnDownload),
     }),
   );
+
+  // The main button scrolls to or drives these sections, so a theme that hides
+  // them must not leave the button doing nothing.
+  const keepSections = $derived(
+    primary.kind === 'update' ? ['update'] : primary.kind === 'other-versions' ? ['otherVersions'] : [],
+  );
+  const columns = $derived(gameSections($activeTheme?.layout, keepSections));
+  const reviewsShown = $derived(columns.main.includes('reviews') || columns.side.includes('reviews'));
+
+  const isMainSection = (id: GameSection) => (GAME_MAIN_SECTIONS as readonly string[]).includes(id);
+  const moved = (id: GameSection) => columns.main.includes(id) !== isMainSection(id);
+  const part = (id: GameSection) => ({ 'data-part': 'game-section', 'data-id': id });
 </script>
+
+{#snippet sec_summary()}
+  {#if summary.text || !title || metaState === 'searching'}
+    <div class="gsec" class:moved={moved('summary')} {...part('summary')}>
+      {#if summary.text}
+        <p class="summary">{summary.text}</p>
+        {#if summary.expandable}
+          <button class="more" onclick={() => (summaryExpanded = !summaryExpanded)}>
+            {summaryExpanded ? msg('games.detailCollapseSummary') : msg('games.detailExpandSummary')}
+          </button>
+        {/if}
+      {:else if !title || metaState === 'searching'}
+        <div aria-hidden="true">
+          <div class="skeleton line"></div>
+          <div class="skeleton line"></div>
+          <div class="skeleton line short"></div>
+        </div>
+      {/if}
+    </div>
+  {/if}
+{/snippet}
+
+{#snippet sec_tags()}
+  {#if tags.length > 0}
+    <div class="gsec" class:moved={moved('tags')} {...part('tags')}>
+      {#if tags.length > 0}
+        <div class="tags">
+          {#each tags as tag (tag)}
+            <span class="tag">{tag}</span>
+          {/each}
+        </div>
+      {/if}
+    </div>
+  {/if}
+{/snippet}
+
+{#snippet sec_links()}
+  {#if true}
+    <div class="gsec" class:moved={moved('links')} {...part('links')}>
+      <div class="stores">
+        <StoreLinks links={metaView?.storeLinks} onopen={openStore} />
+        <ReferenceLinks kinds={references} onopen={(kind) => openReference(kind)} />
+      </div>
+    </div>
+  {/if}
+{/snippet}
+
+{#snippet sec_update()}
+  {#if showUpdateCard && update}
+    <div class="gsec" class:moved={moved('update')} {...part('update')}>
+      {#if showUpdateCard && update}
+        <section class="section">
+          <UpdateCard bind:this={updateCard} {update} {running} />
+        </section>
+      {/if}
+    </div>
+  {/if}
+{/snippet}
+
+{#snippet sec_install()}
+  {#if installed && localGame}
+    <div class="gsec" class:moved={moved('install')} {...part('install')}>
+      {#if installed && localGame}
+        {#if !external}
+          <section class="section">
+            <VerifyCard gameId={localGame.id} state={verifyState} {running} />
+          </section>
+        {/if}
+
+        <section class="section">
+          <h2 class="heading">{msg('games.detailInstallHeading')}</h2>
+          {#if external}
+            <p class="muted">{msg('games.externalNote', { provider: externalName })}</p>
+          {/if}
+          <div class="path">
+            <span class="path-value" title={localGame.installDir}>{truncateMiddle(localGame.installDir, 34)}</span>
+            <IconButton label={msg('games.openFolder')} size="sm" onclick={reveal}>
+              <FolderOpen size="1.6rem" strokeWidth={1.8} />
+            </IconButton>
+          </div>
+          <dl class="facts">
+            {#each installFacts as fact (fact.label)}
+              <div class="fact">
+                <dt>{fact.label}</dt>
+                <dd class:mono={fact.mono} title={fact.full ?? undefined}>{fact.value}</dd>
+              </div>
+            {/each}
+          </dl>
+          <div class="redist-row">
+            <Button size="sm" onclick={() => openRedist(localGame.id)}>{msg('redist.action')}</Button>
+          </div>
+          {#if wineStatus?.required}
+            <div class="steam-row">
+              <div class="steam-row-text">
+                <span class="steam-row-label">{msg('games.detailSteamBottleLabel')}</span>
+                <span class="steam-row-hint">{msg('games.detailSteamBottleHint')}</span>
+              </div>
+              <Toggle
+                bind:checked={requiresSteam}
+                label={msg('games.detailSteamBottleLabel')}
+                disabled={requiresSteamSaving}
+                onchange={(on) => void toggleRequiresSteam(on)}
+              />
+            </div>
+          {/if}
+        </section>
+      {/if}
+    </div>
+  {/if}
+{/snippet}
+
+{#snippet sec_requirements(withReleases: boolean)}
+  {#if (catalogGame || localGame) && !external}
+    <div class="gsec" class:moved={moved('requirements')} {...part('requirements')}>
+      <section class="section">
+        <h2 class="heading">{msg('games.detailAvailableDownloadsHeading')}</h2>
+        {#if canonicalId}
+          <SystemRequirements gameId={canonicalId} installPath={$settings?.gamesPath ?? ''} {installed} revision={sysreqRevision} />
+        {/if}
+        {#if withReleases}
+          {#if releasesFailed}<p class="muted">{msg('games.detailReleasesFailed')}</p><Button onclick={() => loadReleases(canonicalId,releaseTitle)}>{msg('games.catalogRetry')}</Button>{/if}
+          {#if !releasesLoading && !releasesFailed && releaseGroups.length === 0}<p class="muted">{msg('games.detailNoReleases')}</p>{/if}
+          <ReleaseList
+            groups={releaseGroups}
+            loading={releasesLoading}
+            currentReleaseId={localGame?.releaseId ?? ''}
+            targetReleaseId={updateAvailable ? (update?.availability.targetReleaseId ?? '') : ''}
+            updateKind={updateAvailable ? (update?.availability.kind ?? 'none') : 'none'}
+            ondownload={downloadRelease}
+          />
+        {/if}
+      </section>
+    </div>
+  {/if}
+{/snippet}
+
+{#snippet sec_releases()}
+  {#if (catalogGame || localGame) && !external}
+    <div class="gsec" class:moved={moved('releases')} {...part('releases')}>
+      <section class="section">
+        <h2 class="heading">{msg('games.detailAvailableDownloadsHeading')}</h2>
+        {#if releasesFailed}<p class="muted">{msg('games.detailReleasesFailed')}</p><Button onclick={() => loadReleases(canonicalId,releaseTitle)}>{msg('games.catalogRetry')}</Button>{/if}
+        {#if !releasesLoading && !releasesFailed && releaseGroups.length === 0}<p class="muted">{msg('games.detailNoReleases')}</p>{/if}
+        <ReleaseList
+          groups={releaseGroups}
+          loading={releasesLoading}
+          currentReleaseId={localGame?.releaseId ?? ''}
+          targetReleaseId={updateAvailable ? (update?.availability.targetReleaseId ?? '') : ''}
+          updateKind={updateAvailable ? (update?.availability.kind ?? 'none') : 'none'}
+          ondownload={downloadRelease}
+        />
+      </section>
+    </div>
+  {/if}
+{/snippet}
+
+{#snippet sec_similar()}
+  {#if (catalogGame || localGame) && !external && similarShown && canonicalId}
+    <div class="gsec" class:moved={moved('similar')} {...part('similar')}>
+      {#if similarShown && canonicalId}
+        <SimilarReleases
+          gameId={canonicalId}
+          familyIds={similarFamily}
+          onlinked={() => {
+            loadReleases(canonicalId, releaseTitle);
+            loadRelated(canonicalId);
+          }}
+        />
+      {/if}
+    </div>
+  {/if}
+{/snippet}
+
+{#snippet sec_otherVersions()}
+  {#if (catalogGame || localGame) && !external && (relatedShown.length > 0 || (relatedFailed && availableGroups.length === 0))}
+    <div class="gsec" class:moved={moved('otherVersions')} {...part('otherVersions')}>
+      {#if relatedShown.length > 0 || (relatedFailed && availableGroups.length === 0)}
+        <section class="section" bind:this={otherVersionsEl}>
+          <h2 class="heading">{msg('games.otherVersionsHeading')}</h2>
+          {#if relatedFailed}
+            <p class="muted">{msg('games.otherVersionsFailed')}</p>
+            <Button onclick={() => loadRelated(canonicalId)}>{msg('games.catalogRetry')}</Button>
+          {:else}
+            {#if availableGroups.length === 0 && !releasesLoading && !releasesFailed}
+              <p class="muted">{msg('games.otherVersionsHint')}</p>
+            {/if}
+            {#each relatedShown as item (item.game.id)}
+              {@const localId = item.gameId}
+              <div class="related">
+                <div class="related-head">
+                  {#if item.game.coverUrl}
+                    <span class="related-cover">
+                      <Artwork src={item.game.coverUrl} alt={item.game.title} ratio="3 / 4" radius="var(--radius-sm)" />
+                    </span>
+                  {/if}
+                  <div class="related-ident">
+                    {#if localId}
+                      <button class="related-title link" onclick={() => navigate('game', { id: localId })}>{item.game.title}</button>
+                    {:else}
+                      <span class="related-title">{item.game.title}</span>
+                    {/if}
+                    <div class="related-meta">
+                      <StatusBadge kind="neutral" label={msg(relationKey(item.game.relation))} dot={false} />
+                      {#if item.game.releaseYear}<span class="related-year">{item.game.releaseYear}</span>{/if}
+                      {#if !item.onPc}<StatusBadge kind="neutral" label={msg('games.otherVersionsNotPc')} dot={false} />{/if}
+                    </div>
+                  </div>
+                </div>
+                <ReleaseList groups={item.groups} ondownload={downloadRelease} />
+              </div>
+            {/each}
+          {/if}
+        </section>
+      {/if}
+    </div>
+  {/if}
+{/snippet}
+
+{#snippet sec_notes()}
+  {#if localGame}
+    <div class="gsec" class:moved={moved('notes')} {...part('notes')}>
+      {#if localGame}
+        {#key localGame.id}
+          <GameNotes gameId={localGame.id} stored={localGame.notes ?? ''} />
+        {/key}
+      {/if}
+    </div>
+  {/if}
+{/snippet}
+
+{#snippet sec_steamExtras()}
+  {#if true}
+    <div class="gsec" class:moved={moved('steamExtras')} {...part('steamExtras')}>
+      <SteamExtras steam={metaView?.steam} onopendlc={(appId) => openReference('steamdlc', appId)} />
+    </div>
+  {/if}
+{/snippet}
+
+{#snippet sec_reviews()}
+  {#if true}
+    <div class="gsec" class:moved={moved('reviews')} {...part('reviews')}>
+      <GameReviews canonicalGameId={canonicalId ?? ''} />
+    </div>
+  {/if}
+{/snippet}
+
+{#snippet sec_about()}
+  {#if gameFacts.length > 0}
+    <div class="gsec" class:moved={moved('about')} {...part('about')}>
+      {#if gameFacts.length > 0}
+        <Card title={msg('games.detailAboutTitle')} surface="panel" padding="var(--space-5)">
+          <dl class="facts about">
+            {#each gameFacts as fact (fact.label)}
+              <div class="fact">
+                <dt>{fact.label}</dt>
+                <dd class:mono={fact.mono} title={fact.full ?? undefined}>{fact.value}</dd>
+              </div>
+            {/each}
+          </dl>
+        </Card>
+      {/if}
+    </div>
+  {/if}
+{/snippet}
+
+{#snippet sec_achievements()}
+  {#if localGame}
+    <div class="gsec" class:moved={moved('achievements')} {...part('achievements')}>
+      {#if localGame}
+        <AchievementsCard gameId={localGame.id} />
+      {/if}
+    </div>
+  {/if}
+{/snippet}
+
+{#snippet sec_reviewSummary()}
+  {#if true}
+    <div class="gsec" class:moved={moved('reviewSummary')} {...part('reviewSummary')}>
+      <ReviewSummary canonicalGameId={canonicalId ?? ''} onopen={reviewsShown ? scrollToReviews : undefined} />
+    </div>
+  {/if}
+{/snippet}
+
+{#snippet sec_friends()}
+  {#if true}
+    <div class="gsec" class:moved={moved('friends')} {...part('friends')}>
+      <GameFriendsPanel canonicalGameId={canonicalId ?? ''} />
+    </div>
+  {/if}
+{/snippet}
+
+{#snippet column(ids: GameSection[])}
+  {#each ids as id, i (id)}
+    {#if !(id === 'releases' && ids[i - 1] === 'requirements') && (activeTab !== 'screenshots' || !isMainSection(id))}
+      {#if id === 'summary'}{@render sec_summary()}
+      {:else if id === 'tags'}{@render sec_tags()}
+      {:else if id === 'links'}{@render sec_links()}
+      {:else if id === 'update'}{@render sec_update()}
+      {:else if id === 'install'}{@render sec_install()}
+      {:else if id === 'requirements'}{@render sec_requirements(ids[i + 1] === 'releases')}
+      {:else if id === 'releases'}{@render sec_releases()}
+      {:else if id === 'similar'}{@render sec_similar()}
+      {:else if id === 'otherVersions'}{@render sec_otherVersions()}
+      {:else if id === 'notes'}{@render sec_notes()}
+      {:else if id === 'steamExtras'}{@render sec_steamExtras()}
+      {:else if id === 'reviews'}{@render sec_reviews()}
+      {:else if id === 'about'}{@render sec_about()}
+      {:else if id === 'achievements'}{@render sec_achievements()}
+      {:else if id === 'reviewSummary'}{@render sec_reviewSummary()}
+      {:else if id === 'friends'}{@render sec_friends()}
+      {/if}
+    {/if}
+  {/each}
+{/snippet}
 
 {#if missing}
   <EmptyState title={msg('games.detailMissingTitle')} description={msg('games.detailMissingDescription')}>
@@ -949,7 +1277,7 @@
     {/snippet}
   </EmptyState>
 {:else}
-  <section class="hero" class:plain={!showHero}>
+  <section class="hero" class:plain={!showHero} data-part="game-hero">
     <div class="art">
       {#if showHero}
         {#key heroSrc}
@@ -1029,7 +1357,7 @@
           </p>
         {/if}
 
-        <div class="cta">
+        <div class="cta" data-part="game-actions">
           {#if primary.kind === 'progress'}
             <div class="progress">
               <span class="progress-label">{primary.label}</span>
@@ -1148,13 +1476,13 @@
   </section>
 
   {#if tabs.length > 1}
-    <div class="tabs-wrap">
+    <div class="tabs-wrap" data-part="game-tabs">
       <Tabs {tabs} bind:value={activeTab} />
     </div>
   {/if}
 
   <div class="body">
-    <div class="main">
+    <div class="main" data-part="game-main">
       {#if activeTab === 'screenshots'}
         {#if localGame && ownShots}
           <GameScreenshots gameId={localGame.id} {title} />
@@ -1171,6 +1499,7 @@
             </button>
           {/each}
         </div>
+        {@render column(columns.main)}
       {:else}
         {#if metaState === 'searching'}
           <div class="meta-note" role="status">
@@ -1208,187 +1537,12 @@
           </div>
         {/if}
 
-        {#if summary.text}
-          <p class="summary">{summary.text}</p>
-          {#if summary.expandable}
-            <button class="more" onclick={() => (summaryExpanded = !summaryExpanded)}>
-              {summaryExpanded ? msg('games.detailCollapseSummary') : msg('games.detailExpandSummary')}
-            </button>
-          {/if}
-        {:else if !title || metaState === 'searching'}
-          <div aria-hidden="true">
-            <div class="skeleton line"></div>
-            <div class="skeleton line"></div>
-            <div class="skeleton line short"></div>
-          </div>
-        {/if}
-
-        {#if tags.length > 0}
-          <div class="tags">
-            {#each tags as tag (tag)}
-              <span class="tag">{tag}</span>
-            {/each}
-          </div>
-        {/if}
-
-        <div class="stores">
-          <StoreLinks links={metaView?.storeLinks} onopen={openStore} />
-          <ReferenceLinks kinds={references} onopen={(kind) => openReference(kind)} />
-        </div>
-
-        {#if showUpdateCard && update}
-          <section class="section">
-            <UpdateCard bind:this={updateCard} {update} {running} />
-          </section>
-        {/if}
-
-        {#if installed && localGame}
-          {#if !external}
-            <section class="section">
-              <VerifyCard gameId={localGame.id} state={verifyState} {running} />
-            </section>
-          {/if}
-
-          <section class="section">
-            <h2 class="heading">{msg('games.detailInstallHeading')}</h2>
-            {#if external}
-              <p class="muted">{msg('games.externalNote', { provider: externalName })}</p>
-            {/if}
-            <div class="path">
-              <span class="path-value" title={localGame.installDir}>{truncateMiddle(localGame.installDir, 34)}</span>
-              <IconButton label={msg('games.openFolder')} size="sm" onclick={reveal}>
-                <FolderOpen size="1.6rem" strokeWidth={1.8} />
-              </IconButton>
-            </div>
-            <dl class="facts">
-              {#each installFacts as fact (fact.label)}
-                <div class="fact">
-                  <dt>{fact.label}</dt>
-                  <dd class:mono={fact.mono} title={fact.full ?? undefined}>{fact.value}</dd>
-                </div>
-              {/each}
-            </dl>
-            <div class="redist-row">
-              <Button size="sm" onclick={() => openRedist(localGame.id)}>{msg('redist.action')}</Button>
-            </div>
-            {#if wineStatus?.required}
-              <div class="steam-row">
-                <div class="steam-row-text">
-                  <span class="steam-row-label">{msg('games.detailSteamBottleLabel')}</span>
-                  <span class="steam-row-hint">{msg('games.detailSteamBottleHint')}</span>
-                </div>
-                <Toggle
-                  bind:checked={requiresSteam}
-                  label={msg('games.detailSteamBottleLabel')}
-                  disabled={requiresSteamSaving}
-                  onchange={(on) => void toggleRequiresSteam(on)}
-                />
-              </div>
-            {/if}
-          </section>
-        {/if}
-
-        {#if (catalogGame || localGame) && !external}
-          <section class="section">
-            <h2 class="heading">{msg('games.detailAvailableDownloadsHeading')}</h2>
-            {#if canonicalId}
-              <SystemRequirements gameId={canonicalId} installPath={$settings?.gamesPath ?? ''} {installed} revision={sysreqRevision} />
-            {/if}
-            {#if releasesFailed}<p class="muted">{msg('games.detailReleasesFailed')}</p><Button onclick={() => loadReleases(canonicalId,releaseTitle)}>{msg('games.catalogRetry')}</Button>{/if}
-            {#if !releasesLoading && !releasesFailed && releaseGroups.length === 0}<p class="muted">{msg('games.detailNoReleases')}</p>{/if}
-            <ReleaseList
-              groups={releaseGroups}
-              loading={releasesLoading}
-              currentReleaseId={localGame?.releaseId ?? ''}
-              targetReleaseId={updateAvailable ? (update?.availability.targetReleaseId ?? '') : ''}
-              updateKind={updateAvailable ? (update?.availability.kind ?? 'none') : 'none'}
-              ondownload={downloadRelease}
-            />
-          </section>
-
-          {#if similarShown && canonicalId}
-            <SimilarReleases
-              gameId={canonicalId}
-              familyIds={similarFamily}
-              onlinked={() => {
-                loadReleases(canonicalId, releaseTitle);
-                loadRelated(canonicalId);
-              }}
-            />
-          {/if}
-
-          {#if relatedShown.length > 0 || (relatedFailed && availableGroups.length === 0)}
-            <section class="section" bind:this={otherVersionsEl}>
-              <h2 class="heading">{msg('games.otherVersionsHeading')}</h2>
-              {#if relatedFailed}
-                <p class="muted">{msg('games.otherVersionsFailed')}</p>
-                <Button onclick={() => loadRelated(canonicalId)}>{msg('games.catalogRetry')}</Button>
-              {:else}
-                {#if availableGroups.length === 0 && !releasesLoading && !releasesFailed}
-                  <p class="muted">{msg('games.otherVersionsHint')}</p>
-                {/if}
-                {#each relatedShown as item (item.game.id)}
-                  {@const localId = item.gameId}
-                  <div class="related">
-                    <div class="related-head">
-                      {#if item.game.coverUrl}
-                        <span class="related-cover">
-                          <Artwork src={item.game.coverUrl} alt={item.game.title} ratio="3 / 4" radius="var(--radius-sm)" />
-                        </span>
-                      {/if}
-                      <div class="related-ident">
-                        {#if localId}
-                          <button class="related-title link" onclick={() => navigate('game', { id: localId })}>{item.game.title}</button>
-                        {:else}
-                          <span class="related-title">{item.game.title}</span>
-                        {/if}
-                        <div class="related-meta">
-                          <StatusBadge kind="neutral" label={msg(relationKey(item.game.relation))} dot={false} />
-                          {#if item.game.releaseYear}<span class="related-year">{item.game.releaseYear}</span>{/if}
-                          {#if !item.onPc}<StatusBadge kind="neutral" label={msg('games.otherVersionsNotPc')} dot={false} />{/if}
-                        </div>
-                      </div>
-                    </div>
-                    <ReleaseList groups={item.groups} ondownload={downloadRelease} />
-                  </div>
-                {/each}
-              {/if}
-            </section>
-          {/if}
-        {/if}
-
-        {#if localGame}
-          {#key localGame.id}
-            <GameNotes gameId={localGame.id} stored={localGame.notes ?? ''} />
-          {/key}
-        {/if}
-
-        <SteamExtras steam={metaView?.steam} onopendlc={(appId) => openReference('steamdlc', appId)} />
-
-        <GameReviews canonicalGameId={canonicalId ?? ''} />
+        {@render column(columns.main)}
       {/if}
     </div>
 
-    <aside class="side">
-      {#if gameFacts.length > 0}
-        <Card title={msg('games.detailAboutTitle')} surface="panel" padding="var(--space-5)">
-          <dl class="facts about">
-            {#each gameFacts as fact (fact.label)}
-              <div class="fact">
-                <dt>{fact.label}</dt>
-                <dd class:mono={fact.mono} title={fact.full ?? undefined}>{fact.value}</dd>
-              </div>
-            {/each}
-          </dl>
-        </Card>
-      {/if}
-
-      {#if localGame}
-        <AchievementsCard gameId={localGame.id} />
-      {/if}
-
-      <ReviewSummary canonicalGameId={canonicalId ?? ''} onopen={scrollToReviews} />
-      <GameFriendsPanel canonicalGameId={canonicalId ?? ''} />
+    <aside class="side" data-part="game-side">
+      {@render column(columns.side)}
     </aside>
   </div>
 
@@ -1731,8 +1885,35 @@
     min-width: 0;
   }
 
-  .main > :first-child {
+  .main > :first-child,
+  .main > .gsec:first-child > :global(:first-child) {
     margin-top: 0;
+  }
+
+  .gsec:empty {
+    display: none;
+  }
+
+  .main > .gsec.moved:not(:first-child) {
+    max-width: 60rem;
+    margin-top: var(--space-8);
+  }
+
+  .main > .gsec.moved {
+    max-width: 60rem;
+  }
+
+  .side > .gsec {
+    min-width: 0;
+  }
+
+  .side > .gsec.moved > :global(:first-child) {
+    margin-top: 0;
+  }
+
+  .side > .gsec.moved {
+    overflow-x: auto;
+    overflow-wrap: anywhere;
   }
 
   .meta-note {

@@ -16,6 +16,8 @@
   import { authState, currentUser, isOffline, leaveGuest, signOut } from '../stores/user';
   import { ownFrame } from '../profile/frameSources';
   import { settings } from '../stores/settings';
+  import { navBlocks, themeLayout } from '../stores/layout';
+  import type { SidebarItem } from '../theme/layout';
   import { toast } from '../stores/toasts';
   import { msg } from '../i18n';
   import { signOutPrompt, type ConfirmPrompt } from '../confirm/prompts';
@@ -32,24 +34,21 @@
 
   type NavItem = { name: RouteName; label: string; icon: typeof LayoutGrid };
 
-  const groups: NavItem[][] = [
-    [
-      { name: 'library', label: msg('ui.library'), icon: LayoutGrid },
-      { name: 'catalog', label: msg('ui.allGames'), icon: Gamepad2 },
-      { name: 'installed', label: msg('ui.installed'), icon: MonitorDown },
-      { name: 'diskusage', label: msg('diskusage.nav'), icon: HardDrive },
-    ],
-    [
-      { name: 'downloads', label: msg('ui.downloadsNav'), icon: Download },
-      { name: 'sources', label: msg('ui.sourcesNav'), icon: Database },
-      { name: 'friends', label: msg('ui.friends'), icon: Users },
-      { name: 'activity', label: msg('ui.activity'), icon: Activity },
-      { name: 'stats', label: msg('stats.nav'), icon: ChartColumn },
-      { name: 'history', label: msg('ui.history'), icon: History },
-    ],
-  ];
+  const navItems: Record<SidebarItem, NavItem> = {
+    library: { name: 'library', label: msg('ui.library'), icon: LayoutGrid },
+    catalog: { name: 'catalog', label: msg('ui.allGames'), icon: Gamepad2 },
+    installed: { name: 'installed', label: msg('ui.installed'), icon: MonitorDown },
+    diskusage: { name: 'diskusage', label: msg('diskusage.nav'), icon: HardDrive },
+    downloads: { name: 'downloads', label: msg('ui.downloadsNav'), icon: Download },
+    sources: { name: 'sources', label: msg('ui.sourcesNav'), icon: Database },
+    friends: { name: 'friends', label: msg('ui.friends'), icon: Users },
+    activity: { name: 'activity', label: msg('ui.activity'), icon: Activity },
+    stats: { name: 'stats', label: msg('stats.nav'), icon: ChartColumn },
+    history: { name: 'history', label: msg('ui.history'), icon: History },
+    lan: { name: 'lan', label: msg('ui.localNetwork'), icon: Wifi },
+  };
 
-  const lanItem: NavItem = { name: 'lan', label: msg('ui.localNetwork'), icon: Wifi };
+  const blocks = $derived(navBlocks($themeLayout.entries, Boolean($settings?.lanSharing)));
 
   const supportItem: NavItem = { name: 'support', label: msg('tickets.nav'), icon: LifeBuoy };
 
@@ -68,6 +67,7 @@
   $effect(() => {
     void $route.name;
     void $settings?.lanSharing;
+    void $themeLayout;
     glide = true;
     placeMarker();
   });
@@ -146,6 +146,8 @@
 {#snippet navButton(item: NavItem)}
   <button
     class="nav-item"
+    data-part="sidebar-item"
+    data-id={item.name}
     class:active={isActive(item.name)}
     aria-current={isActive(item.name) ? 'page' : undefined}
     onclick={() => navigate(item.name)}
@@ -160,7 +162,7 @@
   </button>
 {/snippet}
 
-<aside class="sidebar" bind:this={sidebar}>
+<aside class="sidebar" class:right={$themeLayout.side === 'right'} data-part="sidebar" bind:this={sidebar}>
   {#if marker}
     <span
       class="marker"
@@ -177,28 +179,30 @@
     <BetaBadge />
   </div>
 
-  <nav>
-    {#each groups as group, i (i)}
-      <div class="group">
-        {#each group as item (item.name)}
-          {@render navButton(item)}
-        {/each}
-      </div>
+  <nav data-part="sidebar-nav">
+    {#each blocks as block (block.kind === 'group' ? block.ids[0] : block.key)}
+      {#if block.kind === 'group'}
+        <div class="group">
+          {#each block.ids as id (id)}
+            {@render navButton(navItems[id])}
+          {/each}
+        </div>
+      {:else}
+        <div class="separator" data-part="sidebar-separator"></div>
+      {/if}
     {/each}
-    {#if $settings?.lanSharing}
-      <div class="group">
-        {@render navButton(lanItem)}
-      </div>
-    {/if}
   </nav>
 
-  <div class="bottom">
-    {@render navButton(supportItem)}
+  <div class="bottom" data-part="sidebar-bottom">
+    {#if !$themeLayout.supportHidden}
+      {@render navButton(supportItem)}
+    {/if}
     {@render navButton(settingsItem)}
     <DropdownMenu items={profileMenu} placement="up" align="left" onselect={onProfileSelect}>
       {#snippet trigger({ open, toggle })}
         <button
           class="profile"
+          data-part="sidebar-account"
           class:active={$route.name === 'profile'}
           class:open
           title={$currentUser && $autoAway ? msg('ui.presenceAutoAwayHint') : undefined}
@@ -247,6 +251,11 @@
     padding: 1.8rem 1.2rem 1.4rem;
   }
 
+  .sidebar.right {
+    border-right: 0;
+    border-left: 1px solid var(--border);
+  }
+
   .logo {
     display: flex;
     align-items: center;
@@ -278,8 +287,7 @@
     gap: 2px;
   }
 
-  .group + .group {
-    padding-top: var(--space-3);
+  .separator {
     border-top: 1px solid var(--border);
   }
 
