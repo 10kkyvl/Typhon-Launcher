@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -172,7 +173,7 @@ func testJobCancellation(t *testing.T, memoryGuard bool) {
 	select {
 	case got := <-done:
 		if !got.stopped || got.err != nil {
-			t.Fatalf("cancellation=%+v", got)
+			t.Fatalf("cancellation: code=%d stopped=%t err=%v", got.code, got.stopped, got.err)
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("job cancellation blocked")
@@ -203,5 +204,71 @@ func TestRunJobRejectsOversizedProbe(t *testing.T) {
 		if err != nil || !stopped || code != 0 {
 			t.Fatalf("%s: code=%d stopped=%v err=%v", test.role, code, stopped, err)
 		}
+	}
+}
+
+func TestWaitSignaled(t *testing.T) {
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	open := func(t *testing.T, cmd *exec.Cmd) windows.Handle {
+		t.Helper()
+		if err := cmd.Start(); err != nil {
+			t.Fatal(err)
+		}
+		//nolint:gosec // G115: Windows process ids are 32-bit.
+		h, err := windows.OpenProcess(windows.SYNCHRONIZE|windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(cmd.Process.Pid))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if err := windows.CloseHandle(h); err != nil {
+				t.Error(err)
+			}
+		})
+		return h
+	}
+	exited := func(t *testing.T) map[uint32]windows.Handle {
+		//nolint:gosec // G204: launch this test executable from os.Executable with fixture-only arguments.
+		cmd := exec.Command(exe, "-test.run=^$")
+		h := open(t, cmd)
+		if err := cmd.Wait(); err != nil {
+			t.Fatal(err)
+		}
+		return map[uint32]windows.Handle{1: h}
+	}
+	running := func(t *testing.T) map[uint32]windows.Handle {
+		//nolint:gosec // G204: launch this test executable from os.Executable with fixture-only arguments.
+		cmd := exec.Command(exe, "-test.run=^TestJobFixtureProcess$", "-job.role=child", "-job.ready="+filepath.Join(t.TempDir(), "ready"))
+		h := open(t, cmd)
+		t.Cleanup(func() {
+			if err := cmd.Process.Kill(); err != nil {
+				t.Error(err)
+			}
+			if err := cmd.Wait(); err == nil {
+				t.Error("killed fixture reported success")
+			}
+		})
+		return map[uint32]windows.Handle{2: h}
+	}
+	for _, test := range []struct {
+		name    string
+		handles func(*testing.T) map[uint32]windows.Handle
+		want    string
+	}{
+		{"empty", func(*testing.T) map[uint32]windows.Handle { return nil }, ""},
+		{"exited", exited, ""},
+		{"running past the deadline", running, "installer process 2 ("},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			err := waitSignaled(test.handles(t), time.Now())
+			switch {
+			case test.want == "" && err != nil:
+				t.Fatalf("waitSignaled: %v", err)
+			case test.want != "" && (err == nil || !strings.Contains(err.Error(), test.want)):
+				t.Fatalf("waitSignaled = %v, want %q", err, test.want)
+			}
+		})
 	}
 }

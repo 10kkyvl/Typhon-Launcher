@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"golang.org/x/sys/windows"
+	"math"
 	"os"
 	"strings"
 	"syscall"
@@ -87,7 +88,7 @@ func RunJob(args []string, cancelFile string, hidden bool, compatibility bool) (
 		for _, id := range ids {
 			p := children[id]
 			if p == nil {
-				access := uint32(windows.PROCESS_QUERY_INFORMATION | windows.PROCESS_VM_READ | windows.PROCESS_VM_WRITE | windows.PROCESS_VM_OPERATION | windows.PROCESS_SUSPEND_RESUME)
+				access := uint32(windows.SYNCHRONIZE | windows.PROCESS_QUERY_INFORMATION | windows.PROCESS_VM_READ | windows.PROCESS_VM_WRITE | windows.PROCESS_VM_OPERATION | windows.PROCESS_SUSPEND_RESUME)
 				h, e := windows.OpenProcess(access, false, id)
 				if e != nil {
 					if trace {
@@ -148,10 +149,35 @@ func RunJob(args []string, cancelFile string, hidden bool, compatibility bool) (
 		if err = windows.GetExitCodeProcess(pi.Process, &exit); err != nil {
 			return 0, false, err
 		}
+		// A process leaves the job's list before its object is signaled and its
+		// handles are closed, so the caller could still find installer files open.
+		// After a cancel the launcher gives the bridge 5 s in total (wine.Run WaitDelay).
+		settle := func(withServices bool) error {
+			until := time.Now().Add(5 * time.Second)
+			if cancelled {
+				until = deadline.Add(time.Second)
+			}
+			handles := map[uint32]windows.Handle{pi.ProcessId: pi.Process}
+			for id, p := range children {
+				if withServices || !p.service {
+					handles[id] = p.handle
+				}
+			}
+			if err := waitSignaled(handles, until); err != nil {
+				return err
+			}
+			return windows.GetExitCodeProcess(pi.Process, &exit)
+		}
 		if active == 0 {
+			if err = settle(true); err != nil {
+				return 0, false, err
+			}
 			return int(exit), true, nil
 		}
 		if payloads == 0 && exit != 259 && !cancelled {
+			if err = settle(false); err != nil {
+				return 0, false, err
+			}
 			// Only Wine's persistent explorer/rpcss remain. They aren't game writers.
 			limits.BasicLimitInformation.LimitFlags = 0
 			//nolint:gosec // G103: Win32/COM ABI uses pointers to live typed buffers; the call is synchronous.
@@ -180,6 +206,23 @@ func RunJob(args []string, cancelFile string, hidden bool, compatibility bool) (
 		time.Sleep(delay)
 	}
 }
+func waitSignaled(handles map[uint32]windows.Handle, until time.Time) error {
+	for id, h := range handles {
+		ms := uint32(0)
+		if left := time.Until(until).Milliseconds(); left > 0 && left <= math.MaxUint32 {
+			ms = uint32(left)
+		}
+		wait, err := windows.WaitForSingleObject(h, ms)
+		if err != nil {
+			return err
+		}
+		if wait != windows.WAIT_OBJECT_0 {
+			return fmt.Errorf("installer process %d (%s) did not stop", id, processImage(h))
+		}
+	}
+	return nil
+}
+
 func jobProcessIDs(job windows.Handle) ([]uint32, error) {
 	for capacity := 128; capacity <= 32768; capacity *= 2 {
 		buffer := make([]uintptr, capacity+2)
