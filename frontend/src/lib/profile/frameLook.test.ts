@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('../services/backend', () => ({ inWails: false }));
-import { cardFrame, fieldsFrame, frameCenter, frameLook, frameOverhang, frameScale, frameShift } from './frameLook';
+import { MAX_FRAME_BLEED, cardFrame, fieldsFrame, frameBleed, frameCenter, frameLook, frameOverhang, frameScale, frameShift } from './frameLook';
 import { ownFrame, publicFrame } from './frameSources';
 import { appearanceOf } from './appearance';
 import { playerCardOf } from './appearanceCard';
@@ -126,5 +126,26 @@ describe('custom frame normalisation', () => {
   it('gives the card view no image for a custom frame without one', () => {
     const card = { accent: '#ff8800', nameStyle: 'plain' as const, avatarFrame: `custom:${id}` as const };
     expect(playerCardOf(card).frameImage).toBeUndefined();
+  });
+});
+
+describe('frameBleed', () => {
+  it('equals the overhang while it stays within the bound', () => {
+    expect(frameBleed(0.8, 0.5)).toBeCloseTo(0.125, 5);
+    expect(frameBleed(0.5, 0.25)).toBe(0);
+    expect(frameBleed(1, 0.5)).toBe(0);
+  });
+  it('caps the extreme frames the server accepts at the maximum bleed', () => {
+    expect(MAX_FRAME_BLEED).toBe(0.5);
+    expect(frameOverhang(0.3, 0.95)).toBeGreaterThan(2.6);
+    expect(frameBleed(0.3, 0.95)).toBe(MAX_FRAME_BLEED);
+    expect(frameBleed(0.3, 0.05)).toBe(0);
+  });
+  it('scales the span by the image aspect ratio', () => {
+    expect(frameBleed(0.8, 0.5, 1)).toBeCloseTo(0.125, 5);
+    expect(frameBleed(0.8, 0.5, 1.2)).toBeCloseTo(0.25, 5);
+    expect(frameBleed(0.8, 0.5, 2)).toBe(MAX_FRAME_BLEED);
+    expect(frameBleed(0.8, 0.5, 0)).toBeCloseTo(frameBleed(0.8, 0.5, 1), 5);
+    expect(frameBleed(0.8, 0.5, Number.NaN)).toBeCloseTo(frameBleed(0.8, 0.5, 1), 5);
   });
 });

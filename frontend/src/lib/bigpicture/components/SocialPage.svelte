@@ -691,7 +691,7 @@ import { friendsPage as sharedFriendsPage, needsSocialConsent } from '../../stor
   .inline-message, .error-text { margin: 0; color: var(--success); font-size: .92em; }
   .inline-message.danger, .error-text { color: var(--danger); }
   .public-identity { display: flex; align-items: center; gap: clamp(1rem, 2.2vw, 2.4rem); padding: clamp(1.1rem, 1.9vw, 2rem); }
-  .public-identity :global(.avatar.lg) { width: clamp(5rem, 8vw, 8.5rem); height: clamp(5rem, 8vw, 8.5rem); }
+  .public-identity :global(.avatar.lg) { --size: clamp(5rem, 8vw, 8.5rem); }
   .public-copy { min-width: 0; flex: 1; }
   .public-copy h2 { margin: 0; font-size: clamp(1.6rem, 2.7vw, 3rem); line-height: 1.1; overflow-wrap: anywhere; }
   .public-copy > p { margin: .4rem 0 0; color: var(--text-2); }

@@ -112,8 +112,11 @@
   .avatar {
     flex-shrink: 0;
     padding: 0.3rem;
+  }
+
+  .avatar :global(.avatar) {
     border-radius: 50%;
-    background: var(--card-bg);
+    box-shadow: 0 0 0 0.3rem var(--card-bg);
   }
 
   .ident {

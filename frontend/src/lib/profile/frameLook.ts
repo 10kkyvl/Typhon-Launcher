@@ -8,6 +8,8 @@ const MIN_CENTER = 0.05;
 const MAX_CENTER = 0.95;
 const MID_CENTER = 0.5;
 
+export const MAX_FRAME_BLEED = 0.5;
+
 export interface FrameProps {
   frame: AvatarFrame;
   frameColor?: string;
@@ -38,6 +40,12 @@ export function frameCenter(value: unknown): number {
 
 export function frameOverhang(hole: number, before: number): number {
   return Math.max(0, (frameCenter(before) * frameScale(hole)) / 100 - 0.5);
+}
+
+export function frameBleed(hole: number, before: number, ratio = 1): number {
+  const span = (frameCenter(before) * frameScale(hole)) / 100;
+  const ratioed = Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+  return Math.min(MAX_FRAME_BLEED, Math.max(0, span * ratioed - 0.5));
 }
 
 export function frameShift(center: number): string {
