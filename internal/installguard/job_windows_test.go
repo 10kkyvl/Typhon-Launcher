@@ -62,7 +62,13 @@ func TestJobFixtureProcess(t *testing.T) {
 		}
 		os.Exit(0) // The loader exits, leaving the actual installer alive.
 	}
-	if err := os.WriteFile(*jobReady, []byte(strconv.Itoa(os.Getpid())), 0600); err != nil {
+	// The test polls the ready file; os.WriteFile creates it empty before writing, so the pid
+	// must appear by rename or the poll can read "" and fail.
+	tmp := *jobReady + ".tmp"
+	if err := os.WriteFile(tmp, []byte(strconv.Itoa(os.Getpid())), 0600); err != nil {
+		os.Exit(4)
+	}
+	if err := os.Rename(tmp, *jobReady); err != nil {
 		os.Exit(4)
 	}
 	if *jobRole == "finite-child" {
