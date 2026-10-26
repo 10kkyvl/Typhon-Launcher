@@ -117,7 +117,7 @@ func licensePath(c Component, roots Roots) (string, error) {
 		if dir == "" {
 			dir = c.Name + "@" + c.Version
 		}
-		return filepath.Join(roots.GoModCache, dir, c.LicenseFile), nil
+		return filepath.Join(roots.GoModCache, cacheDir(dir), c.LicenseFile), nil
 	case "npm":
 		dir := c.LicenseFrom
 		if dir == "" {
@@ -133,6 +133,21 @@ func licensePath(c Component, roots Roots) (string, error) {
 	default:
 		return "", fmt.Errorf("component %s: unknown source %q", c.Name, c.Source)
 	}
+}
+
+// cacheDir spells a module path the way the module cache stores it: an
+// upper-case letter becomes "!" and its lower case, so paths that differ only
+// in case stay apart on case-insensitive file systems.
+func cacheDir(modVersion string) string {
+	var b strings.Builder
+	for _, r := range modVersion {
+		if 'A' <= r && r <= 'Z' {
+			b.WriteByte('!')
+			r += 'a' - 'A'
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 func readLicenseText(path string) (string, error) {
