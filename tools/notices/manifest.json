@@ -44,14 +44,14 @@
     },
     {
       "name": "golang.org/x/sync",
-      "version": "v0.22.0",
+      "version": "v0.24.0",
       "license": "BSD-3-Clause",
       "source": "go",
       "licenseFile": "LICENSE"
     },
     {
       "name": "golang.org/x/sys",
-      "version": "v0.47.0",
+      "version": "v0.49.0",
       "license": "BSD-3-Clause",
       "source": "go",
       "licenseFile": "LICENSE"

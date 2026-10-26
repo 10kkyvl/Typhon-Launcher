@@ -32,8 +32,8 @@ This file lists the third-party components (libraries and modules) distributed w
 | github.com/klauspost/compress | v1.19.0 | BSD-3-Clause AND Apache-2.0 AND MIT |
 | github.com/nwaples/rardecode/v2 | v2.3.0 | BSD-2-Clause |
 | github.com/wailsapp/wails/v3 | v3.0.0-beta.10 | MIT |
-| golang.org/x/sync | v0.22.0 | BSD-3-Clause |
-| golang.org/x/sys | v0.47.0 | BSD-3-Clause |
+| golang.org/x/sync | v0.24.0 | BSD-3-Clause |
+| golang.org/x/sys | v0.49.0 | BSD-3-Clause |
 | golang.org/x/time | v0.14.0 | BSD-3-Clause |
 | svelte | 5.56.9 | MIT |
 
@@ -1689,7 +1689,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### BSD-3-Clause — golang.org/x/sync v0.22.0, golang.org/x/sys v0.47.0, golang.org/x/time v0.14.0
+### BSD-3-Clause — golang.org/x/sync v0.24.0, golang.org/x/sys v0.49.0, golang.org/x/time v0.14.0
 
 ```
 Copyright 2009 The Go Authors.
