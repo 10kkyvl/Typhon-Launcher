@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"typhon/internal/selfupdate"
+	"typhon/internal/version"
 )
 
 const sampleChangelog = `# Changelog
@@ -197,11 +198,18 @@ func TestRepositoryChangelogMatchesVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read VERSION: %v", err)
 	}
-	version := strings.TrimSpace(string(rawVersion))
+	release := strings.TrimSpace(string(rawVersion))
 
-	notes, err := releaseNotesFor(data, version, 10)
+	// A beta is signed with -notes and no changelog, so the top entry is still
+	// the last stable release.
+	var notes []selfupdate.ReleaseNote
+	if version.IsPrerelease(version.Parse(release)) {
+		notes, err = parseChangelog(data)
+	} else {
+		notes, err = releaseNotesFor(data, release, 10)
+	}
 	if err != nil {
-		t.Fatalf("releaseNotesFor(CHANGELOG.md, %q) error = %v", version, err)
+		t.Fatalf("releaseNotesFor(CHANGELOG.md, %q) error = %v", release, err)
 	}
 	for _, n := range notes {
 		if err := n.Validate(); err != nil {
