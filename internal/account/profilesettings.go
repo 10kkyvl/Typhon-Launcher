@@ -19,6 +19,7 @@ type ProfileSettings struct {
 	ShowLibrary  bool              `json:"showLibrary"`
 	ShowActivity bool              `json:"showActivity"`
 	ShowStats    bool              `json:"showStats"`
+	FeedHidden   []string          `json:"feedHidden,omitzero"`
 	Showcase     []string          `json:"showcase,omitzero"`
 	Appearance   ProfileAppearance `json:"appearance,omitzero"`
 	StatusEmoji  *string           `json:"statusEmoji,omitempty"`
@@ -42,6 +43,7 @@ type ProfileAppearance struct {
 	NameColor     string `json:"nameColor"`
 	FrameColor    string `json:"frameColor"`
 	CustomPure    bool   `json:"customPure"`
+	AccentSource  string `json:"accentSource"`
 }
 
 func (a *ProfileAppearance) UnmarshalJSON(data []byte) error {
@@ -64,6 +66,7 @@ func (a *ProfileAppearance) UnmarshalJSON(data []byte) error {
 		NameColor     *string `json:"nameColor"`
 		FrameColor    *string `json:"frameColor"`
 		CustomPure    *bool   `json:"customPure"`
+		AccentSource  *string `json:"accentSource"`
 	}
 	var in fields
 	if err := json.Unmarshal(data, &in); err != nil {
@@ -115,6 +118,9 @@ func (a *ProfileAppearance) UnmarshalJSON(data []byte) error {
 	if in.CustomPure != nil {
 		out.CustomPure = *in.CustomPure
 	}
+	if in.AccentSource != nil {
+		out.AccentSource = *in.AccentSource
+	}
 	*a = out
 	return nil
 }
@@ -132,6 +138,7 @@ func DefaultProfileAppearance() ProfileAppearance {
 		AvatarFrame:   "none",
 		NameStyle:     "plain",
 		Parallax:      true,
+		AccentSource:  "custom",
 	}
 }
 
@@ -157,6 +164,7 @@ func withProfileDefaults(user CurrentUser) CurrentUser {
 		user.Profile.StatusEmoji = legacy.StatusEmoji
 		user.Profile.StatusText = legacy.StatusText
 		user.Profile.Layout = legacy.Layout
+		user.Profile.FeedHidden = legacy.FeedHidden
 	}
 	if user.Profile.Layout.Value == nil {
 		user.Profile.Layout = OptionalLayout{}
@@ -209,5 +217,8 @@ func mergeAppearance(defaults, value ProfileAppearance) ProfileAppearance {
 	defaults.NameColor = value.NameColor
 	defaults.FrameColor = value.FrameColor
 	defaults.CustomPure = value.CustomPure
+	if value.AccentSource != "" {
+		defaults.AccentSource = value.AccentSource
+	}
 	return defaults
 }

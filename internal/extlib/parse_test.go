@@ -130,6 +130,7 @@ func TestScanSteam(t *testing.T) {
 	writeFile(t, filepath.Join(apps, "appmanifest_6.acf"), ``)
 	writeFile(t, filepath.Join(apps, "appmanifest_7.acf"), `"AppState" {`)
 	writeFile(t, filepath.Join(apps, "appmanifest_228980.acf"), acf("228980", "Steamworks Common Redistributables", "Tool", "4"))
+	writeFile(t, filepath.Join(apps, "appmanifest_480.acf"), acf("480", "Spacewar", "Spacewar", "4"))
 	writeFile(t, filepath.Join(apps, "notes.txt"), `x`)
 	writeFile(t, filepath.Join(second, "steamapps", "appmanifest_8.acf"), acf("8", "Other", "Other", "6"))
 	writeFile(t, filepath.Join(second, "steamapps", "appmanifest_1.acf"), acf("1", "Good Duplicate", "Other", "4"))
@@ -164,6 +165,12 @@ func TestScanSteam(t *testing.T) {
 	}
 	if _, tool := reasons["Steamworks Common Redistributables"]; tool {
 		t.Error("the service component must be dropped silently")
+	}
+	if _, ok := byID["480"]; ok {
+		t.Error("Spacewar must not be imported")
+	}
+	if _, skipped := reasons["Spacewar"]; skipped {
+		t.Error("Spacewar must be dropped silently")
 	}
 }
 

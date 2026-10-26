@@ -25,6 +25,7 @@
   import { bytesSize } from '../utils/format';
   import { msg } from '../i18n';
   import { enterBigPicture } from '../bigpicture/mode';
+  import { themeLayout } from '../stores/layout';
   import Artwork from './Artwork.svelte';
   import IconButton from './IconButton.svelte';
   import SearchInput from './SearchInput.svelte';
@@ -156,8 +157,14 @@
 <svelte:window onkeydown={onWindowKeydown} />
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<header class="topbar" style="--wails-draggable: drag" ondblclick={onTitlebarDoubleClick}>
-  <div class="no-drag nav-buttons">
+<header
+  class="topbar"
+  class:centered={$themeLayout.search === 'center'}
+  data-part="topbar"
+  style="--wails-draggable: drag"
+  ondblclick={onTitlebarDoubleClick}
+>
+  <div class="no-drag nav-buttons" data-part="topbar-history">
     <IconButton label={msg('common.back')} disabled={!$canGoBack} onclick={goBack}>
       <ChevronLeft size="1.8rem" strokeWidth={1.8} />
     </IconButton>
@@ -166,7 +173,7 @@
     </IconButton>
   </div>
 
-  <div class="no-drag search-wrap" use:clickOutside={() => overlay.close()}>
+  <div class="no-drag search-wrap" data-part="topbar-search" use:clickOutside={() => overlay.close()}>
     <SearchInput
       bind:value={search}
       bind:input={searchInput}
@@ -255,55 +262,69 @@
   </div>
 
   <div class="no-drag right">
-    <IconButton label={msg('bp.enter')} disabled={enteringBigPicture} onclick={openBigPicture}>
-      <Gamepad2 size="1.9rem" strokeWidth={1.8} />
-    </IconButton>
-    <div class="icon-slot" use:clickOutside={() => (notificationsOpen = false)}>
-      <IconButton label={msg('ui.notifications')} active={notificationsOpen} onclick={() => (notificationsOpen = !notificationsOpen)}>
-        <Bell size="1.8rem" strokeWidth={1.8} />
-      </IconButton>
-      {#if $notifications.length > 0}
-        <span class="badge">{$notifications.length}</span>
-      {/if}
-      {#if notificationsOpen}
-        <div class="notifications">
-          <div class="notifications-head-row">
-            <div class="notifications-head">{msg('ui.notifications')}</div>
+    <div class="actions" data-part="topbar-actions">
+      {#each $themeLayout.actions as id (id)}
+        {#if id === 'bigpicture'}
+          <div class="icon-slot" data-part="topbar-action" data-id="bigpicture">
+            <IconButton label={msg('bp.enter')} disabled={enteringBigPicture} onclick={openBigPicture}>
+              <Gamepad2 size="1.9rem" strokeWidth={1.8} />
+            </IconButton>
+          </div>
+        {:else if id === 'notifications'}
+          <div
+            class="icon-slot"
+            data-part="topbar-action"
+            data-id="notifications"
+            use:clickOutside={() => (notificationsOpen = false)}
+          >
+            <IconButton label={msg('ui.notifications')} active={notificationsOpen} onclick={() => (notificationsOpen = !notificationsOpen)}>
+              <Bell size="1.8rem" strokeWidth={1.8} />
+            </IconButton>
             {#if $notifications.length > 0}
-              <button class="notifications-mark-read" onclick={markAllRead}>{msg('ui.markAllRead')}</button>
+              <span class="badge">{$notifications.length}</span>
+            {/if}
+            {#if notificationsOpen}
+              <div class="notifications">
+                <div class="notifications-head-row">
+                  <div class="notifications-head">{msg('ui.notifications')}</div>
+                  {#if $notifications.length > 0}
+                    <button class="notifications-mark-read" onclick={markAllRead}>{msg('ui.markAllRead')}</button>
+                  {/if}
+                </div>
+                {#if $notifications.length === 0}
+                  <div class="notifications-empty">{msg('ui.nothingNewYet')}</div>
+                {:else}
+                  {#each $notifications as n (n.id)}
+                    <button class="notification" onclick={() => openNotification(n)}>
+                      <span class="notification-title">{n.title}</span>
+                      <span class="notification-text">{n.text}</span>
+                    </button>
+                  {/each}
+                {/if}
+                <button
+                  class="notifications-all"
+                  onclick={() => {
+                    notificationsOpen = false;
+                    openHistory();
+                  }}>{msg('ui.allHistory')}</button
+                >
+              </div>
             {/if}
           </div>
-          {#if $notifications.length === 0}
-            <div class="notifications-empty">{msg('ui.nothingNewYet')}</div>
-          {:else}
-            {#each $notifications as n (n.id)}
-              <button class="notification" onclick={() => openNotification(n)}>
-                <span class="notification-title">{n.title}</span>
-                <span class="notification-text">{n.text}</span>
-              </button>
-            {/each}
-          {/if}
-          <button
-            class="notifications-all"
-            onclick={() => {
-              notificationsOpen = false;
-              openHistory();
-            }}>{msg('ui.allHistory')}</button
-          >
-        </div>
-      {/if}
+        {:else if id === 'friends'}
+          <div class="icon-slot" data-part="topbar-action" data-id="friends">
+            <IconButton label={msg('ui.friends')} onclick={() => navigate('friends')}>
+              <Users size="1.8rem" strokeWidth={1.8} />
+            </IconButton>
+            {#if $incomingCount > 0}
+              <span class="badge">{$incomingCount}</span>
+            {/if}
+          </div>
+        {/if}
+      {/each}
     </div>
 
-    <div class="icon-slot">
-      <IconButton label={msg('ui.friends')} onclick={() => navigate('friends')}>
-        <Users size="1.8rem" strokeWidth={1.8} />
-      </IconButton>
-      {#if $incomingCount > 0}
-        <span class="badge">{$incomingCount}</span>
-      {/if}
-    </div>
-
-    <div class="window-controls">
+    <div class="window-controls" data-part="window-controls">
       <button class="wc" aria-label={msg('ui.minimize')} onclick={() => win('minimise')}>
         <Minus size="1.6rem" strokeWidth={1.6} />
       </button>
@@ -341,6 +362,26 @@
     position: relative;
     flex: 1;
     max-width: 44rem;
+  }
+
+  .topbar.centered {
+    display: grid;
+    grid-template-columns: 1fr minmax(0, 44rem) 1fr;
+  }
+
+  .topbar.centered .nav-buttons {
+    justify-self: start;
+  }
+
+  .topbar.centered .right {
+    justify-self: end;
+    margin-left: 0;
+  }
+
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
   }
 
   .results {

@@ -54,6 +54,9 @@ type Have struct {
 	Bytes   uint64  `json:"bytes"`
 	Free    *uint64 `json:"free"`
 	DirectX int     `json:"directX"`
+	// Installed marks a storage check of a game that already sits on the disk:
+	// free space is irrelevant once the files are in place.
+	Installed bool `json:"installed"`
 }
 
 type Report struct {
@@ -75,6 +78,7 @@ type Hardware struct {
 	VRAMBytes     uint64
 	FreeBytes     uint64
 	FreeKnown     bool
+	Installed     bool
 }
 
 type tri int
@@ -212,6 +216,9 @@ func (h Hardware) evalFacts(kind Kind, r *reqSet) tri {
 		if r.storage == 0 {
 			return triNone
 		}
+		if h.Installed {
+			return triMet
+		}
 		if !h.FreeKnown {
 			return triUnknown
 		}
@@ -285,6 +292,9 @@ func (h Hardware) have(kind Kind) Have {
 	case KindDirectX:
 		return Have{DirectX: h.directX()}
 	case KindStorage:
+		if h.Installed {
+			return Have{Installed: true}
+		}
 		if h.FreeKnown {
 			free := h.FreeBytes
 			return Have{Free: &free}

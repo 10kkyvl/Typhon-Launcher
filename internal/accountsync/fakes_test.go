@@ -87,6 +87,7 @@ func (f *fakeLibrary) Apply(items []Game) error {
 			FavoriteAt:      it.FavoriteAt,
 			Status:          it.Status,
 			StatusAt:        it.StatusAt,
+			CompletedAt:     it.CompletedAt,
 			Hidden:          it.Hidden,
 			HiddenAt:        it.HiddenAt,
 		}

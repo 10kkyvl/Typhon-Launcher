@@ -99,6 +99,7 @@ export function haveText(check: SysreqCheck): string {
     case 'directx':
       return have.directX > 0 ? msg('sysreq.haveDirectx', { version: have.directX }) : '';
     case 'storage':
+      if (have.installed) return msg('sysreq.haveInstalled');
       return have.free === null ? '' : msg('sysreq.haveFree', { size: bytesSize(have.free) });
   }
 }

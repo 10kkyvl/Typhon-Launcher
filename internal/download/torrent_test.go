@@ -96,6 +96,35 @@ func openTestClient(mk func() (*torrent.ClientConfig, error)) (*torrent.Client, 
 	}
 }
 
+// openOnRandomPort finishes a stand-in for openTorrentClient that opens a real
+// client. The port newClient hands the stand-in is the fixed one, which the
+// launcher on this machine may hold, and port 0 is no replacement: Windows
+// then hands out the next number in a row, which sits in the same range that
+// Hyper-V or Docker excluded from UDP, so every retry newClient makes lands in
+// it again. The stand-in picks random ports of the dynamic range itself and
+// rides out the ones refused for listening, so one call of it opens a client
+// unless every port is refused.
+func openOnRandomPort(open func(*torrent.ClientConfig) (*torrent.Client, error), tc *torrent.ClientConfig) (*torrent.Client, error) {
+	tc.NoDHT = true
+	tc.DisableTrackers = true
+	tc.DisablePEX = true
+	tc.NoDefaultPortForwarding = true
+	var err error
+	for attempt := 0; attempt <= listenport.Attempts; attempt++ {
+		if tc.ListenPort, err = listenport.Random(); err != nil {
+			return nil, err
+		}
+		var cl *torrent.Client
+		if cl, err = open(tc); err == nil {
+			return cl, nil
+		}
+		if !listenport.IsListenError(err) {
+			return nil, err
+		}
+	}
+	return nil, err
+}
+
 func offlineClient(t *testing.T) *client {
 	t.Helper()
 	dir := t.TempDir()

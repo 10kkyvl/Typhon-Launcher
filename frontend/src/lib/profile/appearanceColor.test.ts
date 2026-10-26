@@ -45,7 +45,7 @@ describe('pure custom surfaces', () => {
     expect(ink).toBe(DARK_INK);
   });
   it('averages the two colours', () => {
-    expect(pureSurfaces('#000000', '#ffffff').background).toBe('#808080');
+    expect(pureSurfaces('#202020', '#404040').background).toBe('#303030');
   });
   it('lifts the card off a black background instead of leaving it invisible', () => {
     const { background, surface } = pureSurfaces('#000000', '#000000');

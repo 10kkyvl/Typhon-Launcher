@@ -2,6 +2,7 @@
   import { onMount, tick } from 'svelte';
   import { ArrowLeft, Clock3, Gamepad2, Pencil, Trophy, UserRound } from '@lucide/svelte';
   import Avatar from '../../components/Avatar.svelte';
+  import { ownFrame } from '../../profile/frameSources';
   import Artwork from '../../components/Artwork.svelte';
   import { accountErrorText } from '../../services/accountMessages';
   import type { LibraryGame } from '../../services/library';
@@ -103,7 +104,7 @@
     <div class="bp-empty"><UserRound size="2.5rem" /><p>{$t('bp.profile.loading')}</p></div>
   {:else if showContent}
     <section class="identity bp-card">
-      <Avatar size="lg" name={displayName} src={$currentUser?.avatarUrl} />
+      <Avatar size="lg" name={displayName} src={$currentUser?.avatarUrl} {...ownFrame($currentUser)} />
       <div class="identity-copy">
         <span class="eyebrow">{#if isGuest || !isAuthenticated}{$t('bp.profile.localLabel')}{:else}@{$currentUser?.username}{/if}</span>
         <h2>{displayName}</h2>
@@ -170,7 +171,7 @@
   .bp-header h1 { margin: 0; font-size: clamp(2rem, 4vw, 4.6rem); line-height: 1.08; }
   .back-button { min-height: 3.4rem; padding-inline: 1.2rem; }
   .identity { display: flex; align-items: center; gap: clamp(1rem, 2.2vw, 2.5rem); padding: clamp(1.2rem, 2vw, 2.25rem); }
-  .identity :global(.avatar.lg) { width: clamp(5rem, 8vw, 8.5rem); height: clamp(5rem, 8vw, 8.5rem); }
+  .identity :global(.avatar.lg) { --size: clamp(5rem, 8vw, 8.5rem); }
   .identity-copy { min-width: 0; flex: 1; }
   .identity-copy h2 { margin: 0; font-size: clamp(1.55rem, 2.6vw, 3rem); line-height: 1.12; overflow-wrap: anywhere; }
   .identity-copy p { margin: .45rem 0 0; color: var(--text-2); font-size: .95em; line-height: 1.45; }

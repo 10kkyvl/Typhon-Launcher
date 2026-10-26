@@ -2,12 +2,16 @@ import { get } from 'svelte/store';
 import { Service as MessagingService } from '../../../bindings/typhon/internal/messaging';
 import { locale } from '../i18n/locale';
 import { inWails } from './backend';
+import type { FrameImage } from './account';
 
 export interface ChatPeer {
   id: string;
   username: string;
   displayName: string;
   avatarUrl: string;
+  avatarFrame?: string;
+  frameColor?: string;
+  frameImage?: FrameImage | null;
 }
 
 export interface Reaction {

@@ -12,7 +12,7 @@ func TestReleaseBuildHasNoQAHooks(t *testing.T) {
 	if len(args) != 0 {
 		t.Fatalf("qaStart() args = %v, want none", args)
 	}
-	if got := windowTitle(); got != "Typhon" {
-		t.Fatalf("windowTitle() = %q, want %q", got, "Typhon")
+	if got := windowTitleFor("1.2.0"); got != "Typhon" {
+		t.Fatalf("windowTitleFor() = %q, want %q", got, "Typhon")
 	}
 }

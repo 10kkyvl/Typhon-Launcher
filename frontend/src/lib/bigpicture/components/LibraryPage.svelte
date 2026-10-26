@@ -1,16 +1,19 @@
 <script lang="ts">
   import { tick, untrack } from 'svelte';
-  import { ArrowLeft, Search, Star, SlidersHorizontal } from '@lucide/svelte';
+  import { ArrowLeft, Dices, Search, Star, SlidersHorizontal } from '@lucide/svelte';
   import { t } from '../../i18n';
   import { collections } from '../../stores/collections';
   import { libraryGenres, requestLibraryGenres } from '../../stores/genres';
   import { libraryGames, runningGames } from '../../stores/library';
   import { gameArt, requestArt } from '../../stores/metadata';
   import { filterLibrary, type LibraryFilter, type LibrarySort } from '../library';
+  import type { BigPictureCommand } from '../input';
   import type { RequestText } from '../contracts';
   import { focusControl } from '../navigation';
   import Artwork from '../../components/Artwork.svelte';
-  let { onback, ongame, oncatalog, requestText }: { onback: () => void; ongame: (id: string) => void; oncatalog: () => void; requestText: RequestText } = $props();
+  import RandomGamePicker from './RandomGamePicker.svelte';
+  let { onback, ongame, oncatalog, onlaunch, requestText }: { onback: () => void; ongame: (id: string) => void; oncatalog: () => void; onlaunch: (id: string) => Promise<boolean>; requestText: RequestText } = $props();
+  let randomOpen = $state(false);
   let query = $state('');
   let filter = $state<LibraryFilter>('all');
   let sort = $state<LibrarySort>('title');
@@ -26,6 +29,15 @@
     await tick();
     focusControl(root.querySelector<HTMLButtonElement>('[data-bp-focus="library-search"]') ?? undefined);
   }
+  async function closeRandom() {
+    randomOpen = false;
+    await tick();
+    focusControl(root.querySelector<HTMLButtonElement>('[data-bp-focus="library-random"]') ?? undefined);
+  }
+  export function handleCommand(command: BigPictureCommand): boolean {
+    if (command === 'back' && randomOpen) { void closeRandom(); return true; }
+    return false;
+  }
   $effect(() => { const ids = $libraryGames.map((game) => game.canonicalGameId ?? ''); untrack(() => void requestLibraryGenres(ids)); });
   $effect(() => { const ids = games.map((game) => game.canonicalGameId ?? ''); untrack(() => requestArt(ids)); });
 </script>
@@ -35,6 +47,7 @@
   <div class="bp-actions filters">
     <button class="bp-button" data-bp-focus="library-search" data-bp-default onclick={search}><Search />{query || $t('bp.librarySearch')}</button>
     <button class="bp-button" data-bp-focus="library-filter" onclick={() => filter = filters[(filters.indexOf(filter) + 1) % filters.length]}><SlidersHorizontal />{filterLabels[filter] ?? $t('bp.allGames')}</button>
+    <button class="bp-button" data-bp-focus="library-random" onclick={() => randomOpen = true}><Dices />{$t('games.randomButton')}</button>
     <button class="bp-button" data-bp-focus="library-sort" onclick={() => sort = sorts[(sorts.indexOf(sort) + 1) % sorts.length]}>{$t('bp.sort')}: {sortLabels[sort]}</button>
     {#if query || filter !== 'all'}<button class="bp-button" data-bp-focus="library-reset" onclick={() => { query = ''; filter = 'all'; }}>{$t('bp.reset')}</button>{/if}
   </div>
@@ -51,10 +64,12 @@
   </div>
 </section>
 
+{#if randomOpen}<RandomGamePicker onclose={() => void closeRandom()} {onlaunch} ongame={(id) => { randomOpen = false; ongame(id); }} />{/if}
+
 <style>
-  h1 span { color: #94a5bc; font-size: .55em; }.filters { margin-bottom: 30px; }.filters button { max-width: 100%; overflow-wrap: anywhere; }
+  h1 span { color: var(--text-3); font-size: .55em; }.filters { margin-bottom: 30px; }.filters button { max-width: 100%; overflow-wrap: anywhere; }
   .library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(140px, 13vw, 230px), 1fr)); gap: 32px 24px; }
   .library-card { display: flex; flex-direction: column; text-align: left; gap: 10px; min-width: 0; border-radius: 12px; }
   .library-card :global(.artwork) { width: 100%; }.library-card strong { font-size: .95em; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  .library-card span { color: #afbdd0; font-size: .7em; display: flex; align-items: center; gap: 7px; }.bp-empty { grid-column: 1 / -1; }
+  .library-card span { color: var(--text-2); font-size: .7em; display: flex; align-items: center; gap: 7px; }.bp-empty { grid-column: 1 / -1; }
 </style>

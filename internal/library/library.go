@@ -72,6 +72,7 @@ type Game struct {
 	FavoriteAt        *time.Time        `json:"favoriteAt,omitempty"`
 	Status            string            `json:"status,omitempty"`
 	StatusAt          *time.Time        `json:"statusAt,omitempty"`
+	CompletedAt       *time.Time        `json:"completedAt,omitempty"`
 	Tags              []string          `json:"tags,omitempty"`
 	Notes             string            `json:"notes,omitempty"`
 	Hidden            bool              `json:"hidden,omitempty"`
@@ -171,7 +172,7 @@ const (
 
 func ValidStatus(s string) bool {
 	switch s {
-	case "", StatusPlaying, StatusCompleted, StatusDropped, StatusBacklog, StatusPaused:
+	case "", StatusPlaying, StatusCompleted, StatusMastered, StatusDropped, StatusBacklog, StatusPaused:
 		return true
 	default:
 		return false
@@ -204,6 +205,7 @@ type Service struct {
 	onLaunchFail  func(gameID, code, reason string)
 	playRecord    func(gameID string, startedAt, endedAt time.Time)
 	watchers      []SessionWatcher
+	launchHooks   []LaunchHook
 	usageRecord   func(ev usagestats.Event)
 	historyRecord func(r history.Record) error
 	wg            sync.WaitGroup
@@ -211,6 +213,7 @@ type Service struct {
 	scan          func(context.Context) ([]procs.Process, bool, error)
 	watchInterval time.Duration
 	now           func() time.Time
+	crash         crashHooks
 	ctx           context.Context
 	cancel        context.CancelFunc
 	closed        bool
@@ -241,6 +244,22 @@ type SessionWatcher interface {
 	SessionStopped(gameID string)
 }
 
+// LaunchHook вызывается синхронно после подготовки окружения и до старта
+// процесса, без блокировки библиотеки. Ошибка хука запуск не отменяет:
+// библиотека пишет её в журнал и стартует игру; отмену запуска хук видит по ctx.
+type LaunchHook interface {
+	SessionStarting(ctx context.Context, game Game) error
+}
+
+// LaunchBlockedError is the one hook failure that stops the launch: the hook
+// found that starting the game now would risk the player's data. Any other
+// hook error is only logged.
+type LaunchBlockedError struct{ Err error }
+
+func (e *LaunchBlockedError) Error() string { return e.Err.Error() }
+
+func (e *LaunchBlockedError) Unwrap() error { return e.Err }
+
 type SessionChangeWatcher interface {
 	SessionChanged(game Game, startedAt time.Time)
 }
@@ -248,6 +267,8 @@ type SessionChangeWatcher interface {
 type session struct {
 	process   gameProcess // nil у сессии, обнаруженной в системе, а не запущенной нами
 	pid       uint32
+	gamePID   uint32    // pid процесса exePath; журналу падений нужен он, а не pid обёртки
+	exePath   string    // путь процесса, который реально отслеживается; для обёрток это не exe лаунчера
 	createdAt time.Time // время старта процесса по данным ОС; нулевое — неизвестно
 	startedAt time.Time // с этого момента считается наигранное время
 	lastSeen  time.Time
@@ -293,6 +314,7 @@ func NewServiceAt(path string) (*Service, error) {
 		scan:            procs.List,
 		watchInterval:   defaultWatchInterval,
 		now:             time.Now,
+		crash:           defaultCrashHooks(),
 		shortcuts:       systemShortcuts{},
 		steam:           disabledSteam{},
 		launcherPath:    os.Executable,
@@ -369,9 +391,14 @@ func (s *Service) load() ([]Game, error) {
 				// Keep the flag unchanged until the marker can be checked.
 			}
 		}
+		// legacyGame.CompletedAt shadows Game.CompletedAt in JSON, so the date
+		// of the current format arrives through the legacy field. A legacy
+		// "completed" flag keeps its date in StatusAt only.
 		if entry.Completed && g.Status == "" {
 			g.Status = StatusCompleted
 			g.StatusAt = entry.CompletedAt
+		} else if !entry.Completed && IsCompletedStatus(g.Status) {
+			g.CompletedAt = entry.CompletedAt
 		}
 		if g.Status != "" && g.StatusAt == nil {
 			stamp := legacyStamp()
@@ -687,6 +714,16 @@ func (s *Service) AddSessionWatcher(w SessionWatcher) {
 }
 
 //wails:ignore
+func (s *Service) AddLaunchHook(h LaunchHook) {
+	if h == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.launchHooks = append(s.launchHooks, h)
+}
+
+//wails:ignore
 func (s *Service) SetUsageRecorder(rec func(ev usagestats.Event)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -889,7 +926,7 @@ func (s *Service) removeGameLocked(id string) error {
 		previous := append([]Game(nil), s.games...)
 		previousArchive := append([]Game(nil), s.archived...)
 		archived := Game{ID: game.ID, Title: game.Title, Cover: game.Cover, CanonicalGameID: game.CanonicalGameID,
-			PlaytimeSeconds: game.PlaytimeSeconds, Status: game.Status, StatusAt: game.StatusAt, LastPlayed: game.LastPlayed, Hidden: game.Hidden, HiddenAt: game.HiddenAt, Tags: game.Tags, Notes: game.Notes, Archived: true}
+			PlaytimeSeconds: game.PlaytimeSeconds, Status: game.Status, StatusAt: game.StatusAt, CompletedAt: game.CompletedAt, LastPlayed: game.LastPlayed, Hidden: game.Hidden, HiddenAt: game.HiddenAt, Tags: game.Tags, Notes: game.Notes, Archived: true}
 		for j, old := range s.archived {
 			if old.ID == game.ID {
 				archived.PlaytimeSeconds += old.PlaytimeSeconds
@@ -1049,8 +1086,9 @@ func (s *Service) SetStatus(id, status string) (Game, error) {
 		return *game, nil
 	}
 	previous := *game
-	game.Status = status
 	now := s.now()
+	game.CompletedAt = completedAtAfter(previous.Status, status, previous.CompletedAt, now)
+	game.Status = status
 	game.StatusAt = &now
 	if err := s.persist(); err != nil {
 		*game = previous

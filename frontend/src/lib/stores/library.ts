@@ -1,9 +1,9 @@
 import { derived, writable } from 'svelte/store';
 import { Events } from '@wailsio/runtime';
 import { inWails } from '../services/backend';
-import { getGames, getRunningGames, type LibraryGame, type ProfileFallback, type SessionEvent } from '../services/library';
+import { getGames, getRunningGames, type CrashEvent, type LibraryGame, type ProfileFallback, type SessionEvent } from '../services/library';
 import { msg } from '../i18n';
-import { clearCrashes, recordCrash } from './crash';
+import { clearCrashes, recordCrash, recordCrashDetail } from './crash';
 import { toast } from './toasts';
 
 export const libraryGames = writable<LibraryGame[]>([]);
@@ -25,6 +25,9 @@ export async function initLibrary() {
   Events.On('game:started', (event) => {
     const { gameId } = event.data as SessionEvent;
     runningGames.update((set) => new Set(set).add(gameId));
+  });
+  Events.On('game:crash', (event) => {
+    recordCrashDetail(event.data as CrashEvent);
   });
   Events.On('game:stopped', (event) => {
     const session = event.data as SessionEvent;

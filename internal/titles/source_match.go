@@ -12,7 +12,7 @@ import (
 // The "+" and its count/"all" prefix are sometimes glued straight onto the
 // version with no space ("v1.3.9+DLC", "v99i2+allDLC"), so both spaces are
 // optional, not required.
-var reMatchExtras = regexp.MustCompile(`(?i)\s*\+\s*(?:(?:all\s*|\d+\s*)?(?:bonus(?:es)?|dlcs?|osts?|soundtracks?|wallpapers)|windows\s+7\s+fix|essential\s+mods\s+and\s+fixes|radio\s+downgrader|vanilla\s+fixes\s+modpack|nve\s+(?:platinum\s+)?modpack)\b`)
+var reMatchExtras = regexp.MustCompile(`(?i)\s*\+\s*(?:(?:all\s*|\d+\s*)?(?:bonus(?:es)?|dlcs?|osts?|soundtracks?|wallpapers)|unrated|windows\s+7\s+fix|essential\s+mods\s+and\s+fixes|radio\s+downgrader|vanilla\s+fixes\s+modpack|nve\s+(?:platinum\s+)?modpack)\b`)
 
 var (
 	reMatchNumberPair      = regexp.MustCompile(`\b(\d{1,2})\s*\(([IVX]+)\)`)
@@ -22,7 +22,7 @@ var (
 
 // A commercial package can follow an identity-bearing edition. Keep the
 // remaster in fallback names even though Parse exposes the outer package.
-var reMatchLayeredEdition = regexp.MustCompile(`(?i)\b((?:remastered|remaster|enhanced|definitive|anniversary)(?:\s+edition)?|director['’]s\s+cut)\s+((?:digital\s+)?(?:deluxe|ultimate|gold|premium|complete|collector['’]?s|special)\s+edition)\b`)
+var reMatchLayeredEdition = regexp.MustCompile(`(?i)\b((?:remastered|remaster|enhanced|definitive|anniversary)(?:\s+edition)?|director['’]s\s+cut)\s+((?:digital\s+)?(?:deluxe|ultimate|gold|premium|complete|collector['’]?s|special)\s+edition|deluxe|gold|complete)\b`)
 
 // Некоторые фиды кладут номер сборки в отдельную скобку, не помечая его
 // словом Build: «Monster Train 2 (14193)» или «StarRupture
@@ -187,14 +187,18 @@ func withoutMatchExtras(raw string) string {
 // MatchNames preserves edition identity and offers an English title embedded
 // beside its Cyrillic translation. Arbitrary subtitles and sequel numbers stay.
 func MatchNames(raw string) []string {
-	names := matchNames(raw)
+	return withSpellings(matchNamesMixed(raw))
+}
+
+func matchNamesMixed(raw string) []string {
+	names, extra := matchNames(raw)
 	repaired := repairMixedLatinWords(raw)
-	if repaired == raw {
-		return limitMatchNames(names)
+	var alternatives, alternativeExtra []string
+	if repaired != raw {
+		alternatives, alternativeExtra = matchNames(repaired)
 	}
 	// Preserve real mixed-script catalog spellings too. Try both edition
 	// spellings before either base-title fallback.
-	alternatives := matchNames(repaired)
 	out := []string{}
 	seen := map[string]bool{}
 	for i := range max(len(names), len(alternatives)) {
@@ -205,6 +209,17 @@ func MatchNames(raw string) []string {
 			}
 		}
 	}
+	// Newer spellings go strictly after the older ones: the server takes the
+	// first spelling that has candidates, and the limit below must cut the
+	// newcomers, not the spellings an existing match depends on.
+	out = append(out, extra...)
+	out = append(out, alternativeExtra...)
+	if glyphs := repairLookalikeGlyphs(repaired); glyphs != repaired {
+		glyphNames, glyphExtra := matchNames(glyphs)
+		out = append(out, glyphNames...)
+		out = append(out, glyphExtra...)
+	}
+	out = append(out, withoutTrailingOne(out)...)
 	// Каталог принимает не больше шести написаний на раздачу.
 	return limitMatchNames(out)
 }
@@ -231,7 +246,9 @@ func limitMatchNames(names []string) []string {
 	return out
 }
 
-func matchNames(raw string) []string {
+// matchNames returns the spellings established earlier and, separately, the
+// newer cleanup spellings that may only follow them.
+func matchNames(raw string) ([]string, []string) {
 	// Repeated sequel numbers are common in feed titles. Collapse only exact
 	// Arabic/Roman pairs and dotted acronym spellings; a mismatching number or
 	// an ordinary parenthesized subtitle remains part of the name.
@@ -323,8 +340,9 @@ func matchNames(raw string) []string {
 	}
 	if !identityEdition {
 		out = append(out, releaseFallbackNames(base, cleaned)...)
+		return out, junkFallbackNames(cleaned, base, out)
 	}
-	return out
+	return out, nil
 }
 
 func identityMatchEdition(edition string) bool {
@@ -654,6 +672,64 @@ func repairMixedLatinWords(s string) string {
 	}
 	flush()
 	return out.String()
+}
+
+// repairLookalikeGlyphs fixes what repairMixedLatinWords leaves: a Cyrillic
+// letter squeezed between digits ("2К25") and Greek capitals or omicron inside
+// an otherwise Latin word.
+func repairLookalikeGlyphs(s string) string {
+	runes := []rune(s)
+	for i, r := range runes {
+		if i == 0 || i == len(runes)-1 {
+			continue
+		}
+		replacement, ok := latinLookalikes[r]
+		if !ok {
+			replacement, ok = greekLookalikes[r]
+		}
+		if ok && unicode.IsDigit(runes[i-1]) && unicode.IsDigit(runes[i+1]) {
+			runes[i] = replacement
+		}
+	}
+	var out strings.Builder
+	var word []rune
+	flush := func() {
+		latin, greek, repairable := false, false, true
+		for _, r := range word {
+			latin = latin || unicode.In(r, unicode.Latin)
+			if unicode.In(r, unicode.Greek) {
+				greek = true
+				if _, ok := greekLookalikes[r]; !ok {
+					repairable = false
+				}
+			}
+		}
+		for _, r := range word {
+			if latin && greek && repairable {
+				if replacement, ok := greekLookalikes[r]; ok {
+					r = replacement
+				}
+			}
+			out.WriteRune(r)
+		}
+		word = word[:0]
+	}
+	for _, r := range runes {
+		if unicode.IsLetter(r) {
+			word = append(word, r)
+		} else {
+			flush()
+			out.WriteRune(r)
+		}
+	}
+	flush()
+	return out.String()
+}
+
+var greekLookalikes = map[rune]rune{
+	'Α': 'A', 'Β': 'B', 'Ε': 'E', 'Ζ': 'Z', 'Η': 'H', 'Ι': 'I', 'Κ': 'K',
+	'Μ': 'M', 'Ν': 'N', 'Ο': 'O', 'Ρ': 'P', 'Τ': 'T', 'Υ': 'Y', 'Χ': 'X',
+	'ο': 'o', 'ν': 'v', 'ρ': 'p', 'ι': 'i', 'α': 'a',
 }
 
 var latinLookalikes = map[rune]rune{

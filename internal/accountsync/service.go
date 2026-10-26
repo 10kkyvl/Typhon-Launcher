@@ -353,7 +353,8 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 	if err != nil {
 		return fmt.Errorf("fetch account sync snapshot: %w", err)
 	}
-	hiddenSync := s.client.supportsHidden()
+	feats := s.client.features()
+	hiddenSync := feats.hidden
 
 	if err := ensureOwner(); err != nil {
 		return err
@@ -435,9 +436,12 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 			delta = 0
 		}
 
-		status, statusAt := local.Status, local.StatusAt
+		status, statusAt, completedAt := local.Status, local.StatusAt, local.CompletedAt
 		if hasRemote && remote.StatusAt != nil && (statusAt == nil || remote.StatusAt.After(*statusAt)) {
-			status, statusAt = remote.Status, remote.StatusAt
+			status, statusAt, completedAt = remote.Status, remote.StatusAt, nil
+			if feats.completion && isCompletedStatus(status) {
+				completedAt = remote.CompletedAt
+			}
 		}
 		favorite, favoriteAt := local.Favorite, local.FavoriteAt
 		if hasRemote && remote.FavoriteAt != nil && (favoriteAt == nil || remote.FavoriteAt.After(*favoriteAt)) {
@@ -460,6 +464,7 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 				FavoriteAt:      favoriteAt,
 				Status:          status,
 				StatusAt:        statusAt,
+				CompletedAt:     completedAt,
 				Hidden:          hidden,
 				HiddenAt:        hiddenAt,
 			},
@@ -484,8 +489,9 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 			Owned:           r.combined.Owned,
 			Favorite:        r.combined.Favorite,
 			FavoriteAt:      r.combined.FavoriteAt,
-			Status:          r.combined.Status,
+			Status:          wireStatus(r.combined.Status, feats),
 			StatusAt:        r.combined.StatusAt,
+			CompletedAt:     wireCompletedAt(r.combined.Status, r.combined.CompletedAt, feats),
 			LastPlayedAt:    r.combined.LastPlayed,
 			PlaytimeSeconds: r.device,
 		}
@@ -513,7 +519,7 @@ func (s *Service) attempt(ctx context.Context, allowRetry bool) error {
 	if err != nil {
 		return err
 	}
-	idle := settled && st.DeviceID != "" && upToDate(st, results, remoteByIGDB, hiddenSync) && len(pendingRemoved) == 0
+	idle := settled && st.DeviceID != "" && upToDate(st, results, remoteByIGDB, feats) && len(pendingRemoved) == 0
 
 	for i, chunk := range chunkGames(pushGames, maxGamesPerRequest) {
 		if idle {
@@ -628,7 +634,25 @@ func sameStamp(a, b *time.Time) bool {
 	return a.Truncate(time.Microsecond).Equal(b.Truncate(time.Microsecond))
 }
 
-func upToDate(st syncState, results map[string]gameCompute, remote map[string]wireGame, hiddenSync bool) bool {
+func isCompletedStatus(status string) bool {
+	return status == statusCompleted || status == statusMastered
+}
+
+func wireStatus(status string, feats syncFeatures) string {
+	if status == statusMastered && !feats.completion {
+		return statusCompleted
+	}
+	return status
+}
+
+func wireCompletedAt(status string, at *time.Time, feats syncFeatures) *time.Time {
+	if !feats.completion || !isCompletedStatus(status) {
+		return nil
+	}
+	return at
+}
+
+func upToDate(st syncState, results map[string]gameCompute, remote map[string]wireGame, feats syncFeatures) bool {
 	for igdbID, r := range results {
 		rem, known := remote[igdbID]
 		if !known {
@@ -638,13 +662,16 @@ func upToDate(st syncState, results map[string]gameCompute, remote map[string]wi
 		if !seen || prev.DeviceSeconds != r.device {
 			return false
 		}
-		if (r.combined.Owned && !rem.Owned) || rem.Favorite != r.combined.Favorite || rem.Status != r.combined.Status {
+		if (r.combined.Owned && !rem.Owned) || rem.Favorite != r.combined.Favorite || rem.Status != wireStatus(r.combined.Status, feats) {
 			return false
 		}
 		if !sameStamp(rem.FavoriteAt, r.combined.FavoriteAt) || !sameStamp(rem.StatusAt, r.combined.StatusAt) {
 			return false
 		}
-		if hiddenSync && (rem.Hidden != r.combined.Hidden || !sameStamp(rem.HiddenAt, r.combined.HiddenAt)) {
+		if feats.completion && !sameStamp(rem.CompletedAt, wireCompletedAt(r.combined.Status, r.combined.CompletedAt, feats)) {
+			return false
+		}
+		if feats.hidden && (rem.Hidden != r.combined.Hidden || !sameStamp(rem.HiddenAt, r.combined.HiddenAt)) {
 			return false
 		}
 		if !sameStamp(rem.LastPlayedAt, r.combined.LastPlayed) {

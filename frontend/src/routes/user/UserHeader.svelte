@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Calendar, EllipsisVertical, Gamepad2 } from '@lucide/svelte';
   import Avatar from '../../lib/components/Avatar.svelte';
+  import { publicFrame } from '../../lib/profile/frameSources';
   import Button from '../../lib/components/Button.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
@@ -48,7 +49,7 @@
 <section class="user-header">
   <div class="header-surface">
     <div class="head">
-      <Avatar size="lg" name={name} src={profile.avatarUrl} status={presence} frame={look.avatarFrame} frameColor={look.frameColor} />
+      <Avatar size="lg" name={name} src={profile.avatarUrl} status={presence} {...publicFrame(profile)} />
 
       <div class="identity">
         <h2 class="display-name"><StyledName {name} styleName={look.nameStyle} nameColor={look.nameColor} /></h2>

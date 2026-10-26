@@ -22,6 +22,8 @@ export const feedPending = writable<ReadonlySet<number>>(new Set());
 
 export const staleAfter = 60_000;
 
+const maxEmptyPages = 3;
+
 const pending = new Set<string>();
 
 let generation = 0;
@@ -50,8 +52,12 @@ function fresh(): boolean {
 async function page(cursor: number, append: boolean, owner: number): Promise<void> {
   feedLoading.set(true);
   try {
-    const loaded = await fetchFeed(cursor > 0 ? String(cursor) : '');
+    let loaded = await fetchFeed(cursor > 0 ? String(cursor) : '');
     if (owner !== generation) return;
+    for (let extra = 0; extra < maxEmptyPages && loaded.events.length === 0 && loaded.next > 0; extra++) {
+      loaded = await fetchFeed(String(loaded.next));
+      if (owner !== generation) return;
+    }
     feedEvents.update((events) => {
       if (!append) return loaded.events;
       const known = new Set(events.map((event) => event.id));

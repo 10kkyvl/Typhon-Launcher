@@ -52,10 +52,13 @@ func (m Manifest) Validate() error {
 	}
 	seen := make(map[string]bool, len(m.Artifacts))
 	for _, a := range m.Artifacts {
-		if a.Kind == KindPortable {
+		if a.Kind != KindInstaller && a.Kind != KindBundle {
 			return ErrUnsupportedKind
 		}
 		if err := a.Validate(); err != nil {
+			return err
+		}
+		if err := m.validateDeltaVersions(a); err != nil {
 			return err
 		}
 		key := a.OS + "|" + a.Arch + "|" + string(a.Kind)
@@ -107,6 +110,10 @@ func (m Manifest) PortableArtifactFor(goos, goarch string) (Artifact, error) {
 			URL:    a.PortableURL,
 			Size:   a.PortableSize,
 			SHA256: a.PortableSHA256,
+
+			ExeSHA256: a.ExeSHA256,
+			ExeSize:   a.ExeSize,
+			Deltas:    a.Deltas,
 		}
 		if err := portable.Validate(); err != nil {
 			return Artifact{}, err

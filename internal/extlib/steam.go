@@ -77,8 +77,10 @@ func parseAppManifest(data []byte) (steamApp, error) {
 	return app, nil
 }
 
+const spacewarAppID = "480"
+
 func isSteamTool(app steamApp) bool {
-	if app.AppID == "228980" {
+	if app.AppID == "228980" || app.AppID == spacewarAppID {
 		return true
 	}
 	for _, prefix := range []string{"Proton ", "Steam Linux Runtime", "Steamworks Shared"} {

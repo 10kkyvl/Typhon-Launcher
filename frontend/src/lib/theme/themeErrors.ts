@@ -16,9 +16,33 @@ export const REASONS: Record<string, MessageKey> = {
   'theme.not_found': 'theme.not_found',
   'theme.invalid_path': 'theme.invalid_path',
   'theme.dialog_unavailable': 'theme.dialog_unavailable',
+  'theme.token_kind': 'theme.token_kind',
+  'theme.skill_invalid_path': 'theme.skill_invalid_path',
+  'theme.skill_write_failed': 'theme.skill_write_failed',
+  'theme.invalid_format': 'theme.invalid_format',
+  'theme.invalid_layout': 'theme.invalid_layout',
 };
 
-export function themeErrorText(err: unknown, fallback: string = msg('errLibrary.themeErrFallback')): string {
-  const key = REASONS[errorCode(err)];
+const TOKEN = /--[a-z0-9-]+/g;
+
+function tokenNames(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err ?? '');
+  const subject = raw.split('typhon:')[0];
+  return [...new Set(subject.match(TOKEN) ?? [])].join(', ');
+}
+
+export function themeCodeText(code: string, fallback: string = msg('errLibrary.themeErrFallback')): string {
+  const key = REASONS[code];
   return key ? msg(key) : fallback;
+}
+
+export function themeErrorText(err: unknown, fallback: string = msg('errLibrary.themeErrFallback')): string {
+  const code = errorCode(err);
+  const key = REASONS[code];
+  if (!key) return fallback;
+  if (code === 'theme.token_kind') {
+    const name = tokenNames(err);
+    return name ? `${msg(key)}: ${name}` : msg(key);
+  }
+  return msg(key);
 }

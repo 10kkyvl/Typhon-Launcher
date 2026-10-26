@@ -155,6 +155,9 @@ export interface MatchCandidate {
   year?: number;
   score: number;
   method: string;
+  platforms?: string[] | null;
+  source?: 'server' | 'local';
+  inCatalog?: boolean;
 }
 
 export interface CatalogExternalIDs {
@@ -170,6 +173,7 @@ export interface CatalogGame {
   sortTitle: string;
   coverUrl?: string;
   serverId?: string;
+  parentId?: string;
   externalIds?: CatalogExternalIDs;
   providerLinks?: Record<string, string[]>;
   aliasIds?: string[];
@@ -348,6 +352,31 @@ export async function getReleasesForGame(gameId: string): Promise<ReleaseGroup[]
   return ((await SourcesService.GetReleasesForGame(gameId)) ?? []) as unknown as ReleaseGroup[];
 }
 
+export type RelatedRelation = 'original' | 'base' | 'remake' | 'remaster' | 'expanded' | 'port' | 'edition' | 'update';
+
+export interface RelatedGame {
+  id: string;
+  title: string;
+  gameType?: string;
+  relation: RelatedRelation;
+  releaseYear?: number | null;
+  platforms?: string[] | null;
+  coverUrl?: string;
+}
+
+export interface RelatedReleases {
+  game: RelatedGame;
+  gameId?: string;
+  onPc: boolean;
+  groups: ReleaseGroup[];
+}
+
+export async function getRelatedReleases(gameId: string): Promise<RelatedReleases[]> {
+  if (!inWails) return [];
+  const list = (await SourcesService.GetRelatedReleases(gameId)) ?? [];
+  return list.map((item) => ({ ...item, groups: item.groups ?? [] })) as unknown as RelatedReleases[];
+}
+
 export async function getReleasesForTitle(title: string): Promise<ReleaseGroup[]> {
   if (!inWails) return [];
   return ((await SourcesService.GetReleasesForTitle(title)) ?? []) as unknown as ReleaseGroup[];
@@ -356,6 +385,18 @@ export async function getReleasesForTitle(title: string): Promise<ReleaseGroup[]
 export async function getMatchCandidates(releaseId: string): Promise<MatchCandidate[]> {
   if (!inWails) return [];
   return ((await SourcesService.GetCandidates(releaseId)) ?? []) as unknown as MatchCandidate[];
+}
+
+export type SimilarReason = 'ambiguous' | 'none' | 'too_many' | '';
+
+export interface SimilarRelease extends ReleaseView {
+  matchedCandidate: { id: string; title: string; year: number };
+  reason: SimilarReason;
+}
+
+export async function similarReleases(gameId: string, familyIds: string[]): Promise<SimilarRelease[]> {
+  if (!inWails) return [];
+  return ((await SourcesService.SimilarReleases(gameId, familyIds)) ?? []) as unknown as SimilarRelease[];
 }
 
 export async function confirmMatch(releaseId: string, gameId: string): Promise<void> {

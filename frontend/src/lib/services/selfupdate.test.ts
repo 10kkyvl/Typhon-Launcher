@@ -8,6 +8,8 @@ const bindings = {
   CheckForUpdate: vi.fn(),
   DownloadUpdate: vi.fn(),
   ApplyUpdate: vi.fn(),
+  GetRollback: vi.fn(),
+  ApplyRollback: vi.fn(),
   DismissUpdate: vi.fn(),
   CancelDownload: vi.fn(),
   GetOutcome: vi.fn(),
@@ -68,6 +70,55 @@ describe('selfupdate service calls', () => {
 
     await expect(dismissUpdate()).resolves.toBeUndefined();
     expect(bindings.DismissUpdate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('rollback calls', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns what GetRollback says', async () => {
+    const { getRollback } = await import('./selfupdate');
+    const info = { available: true, version: '1.1.0', reason: '', reasonCode: '' };
+    bindings.GetRollback.mockResolvedValueOnce(info);
+
+    await expect(getRollback()).resolves.toEqual(info);
+  });
+
+  it('reports a failed GetRollback instead of pretending there is nothing to go back to', async () => {
+    const { getRollback } = await import('./selfupdate');
+    bindings.GetRollback.mockRejectedValueOnce(new Error('boom'));
+
+    await expect(getRollback()).rejects.toMatchObject({ message: 'boom' });
+  });
+
+  it('passes the selected language to the rollback worker', async () => {
+    const { applyRollback } = await import('./selfupdate');
+    applyLanguage('en');
+    bindings.ApplyRollback.mockResolvedValueOnce(undefined);
+
+    await expect(applyRollback()).resolves.toBeUndefined();
+    expect(bindings.ApplyRollback).toHaveBeenCalledWith('en');
+  });
+
+  it('keeps the busy sentinel of a rollback as code busy', async () => {
+    const { applyRollback } = await import('./selfupdate');
+    bindings.ApplyRollback.mockRejectedValueOnce(new Error('selfupdate: another update operation is in progress'));
+
+    await expect(applyRollback()).rejects.toMatchObject({ code: 'busy' });
+  });
+
+  it.each([
+    [{ available: true, version: '1.1.0', reason: '', reasonCode: '' }, true],
+    [{ available: false, version: '', reason: 'x', reasonCode: 'selfupdate.rollback_none' }, false],
+    [{ available: false, version: '', reason: 'x', reasonCode: 'selfupdate.rollback_unsupported' }, false],
+    [{ available: false, version: '1.1.0', reason: 'x', reasonCode: 'selfupdate.rollback_broken' }, true],
+    [{ available: false, version: '', reason: 'x', reasonCode: '' }, true],
+  ])('decides whether to show the rollback row for %j', async (info, shown) => {
+    const { rollbackShown } = await import('./selfupdate');
+
+    expect(rollbackShown(info)).toBe(shown);
   });
 });
 

@@ -1,7 +1,8 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import type { PresenceDot } from '../social/presence';
-  import type { AvatarFrame } from '../services/account';
+  import type { AvatarFrame, FrameImage } from '../services/account';
+  import { MAX_FRAME_BLEED, frameBleed, frameScale, frameShift, isCustomFrame, presetFrame } from '../profile/frameLook';
 
   let {
     src,
@@ -10,6 +11,7 @@
     status,
     frame = 'none',
     frameColor,
+    frameImage,
   }: {
     src?: string;
     name: string;
@@ -17,14 +19,31 @@
     status?: PresenceDot;
     frame?: AvatarFrame;
     frameColor?: string;
+    frameImage?: FrameImage;
   } = $props();
 
   let failed = $state(false);
+  let frameFailed = $state(false);
+  let ratio = $state(1);
 
   $effect(() => {
     src;
     failed = false;
   });
+
+  $effect(() => {
+    frameImage?.url;
+    frameFailed = false;
+    ratio = 1;
+  });
+
+  const preset = $derived(presetFrame(frame));
+  const layer = $derived(isCustomFrame(frame) && frameImage && !frameFailed ? frameImage : null);
+
+  function onFrameLoad(event: Event) {
+    const img = event.currentTarget as HTMLImageElement;
+    if (img.naturalWidth > 0 && img.naturalHeight > 0) ratio = img.naturalHeight / img.naturalWidth;
+  }
 
   const initial = $derived(name.trim().slice(0, 1).toUpperCase() || '?');
 
@@ -39,14 +58,17 @@
   });
 </script>
 
-<span class="avatar {size}" class:framed={frame !== 'none'} style:--frame-color={frameColor || undefined}>
-  {#if frame !== 'none'}
-    <span class="frame frame-{frame}" aria-hidden="true"></span>
+<span class="avatar {size}" class:framed={preset !== 'none' || !!layer} class:art={!!layer} style:--frame-color={frameColor || undefined} style:--frame-bleed={layer ? MAX_FRAME_BLEED : undefined} style:--bleed-l={layer ? frameBleed(layer.hole, layer.holeX ?? 0.5) : undefined} style:--bleed-r={layer ? frameBleed(layer.hole, 1 - (layer.holeX ?? 0.5)) : undefined} style:--bleed-t={layer ? frameBleed(layer.hole, layer.holeY ?? 0.5, ratio) : undefined} style:--bleed-b={layer ? frameBleed(layer.hole, 1 - (layer.holeY ?? 0.5), ratio) : undefined}>
+  {#if preset !== 'none'}
+    <span class="frame frame-{preset}" aria-hidden="true"></span>
   {/if}
   {#if !src || failed}
     <span class="fallback">{initial}</span>
   {:else}
     <img {src} alt="" draggable="false" onerror={() => (failed = true)} />
+  {/if}
+  {#if layer}
+    <span class="frame-clip" aria-hidden="true"><img class="frame-art" src={layer.url} alt="" aria-hidden="true" decoding="async" loading="lazy" draggable="false" style:width="calc(var(--size) * {frameScale(layer.hole) / 100})" style:transform="translate({frameShift(layer.holeX ?? 0.5)}, {frameShift(layer.holeY ?? 0.5)})" onload={onFrameLoad} onerror={() => (frameFailed = true)} /></span>
   {/if}
   {#if status}
     <span class="dot {status}" class:changed onanimationend={() => (changed = false)}></span>
@@ -64,22 +86,37 @@
     isolation: isolate;
   }
 
+  .avatar.art {
+    margin: calc(var(--size) * var(--bleed-t, 0)) calc(var(--size) * var(--bleed-r, 0)) calc(var(--size) * var(--bleed-b, 0)) calc(var(--size) * var(--bleed-l, 0));
+  }
+
+  .frame-clip {
+    position: absolute;
+    inset: calc(var(--frame-bleed) * -100%);
+    overflow: clip;
+    pointer-events: none;
+    z-index: 1;
+  }
+
   .avatar.sm {
     --frame-w: 0.2rem;
-    width: 3.2rem;
-    height: 3.2rem;
+    --size: 3.2rem;
+    width: var(--size);
+    height: var(--size);
   }
 
   .avatar.md {
     --frame-w: 0.3rem;
-    width: 4.8rem;
-    height: 4.8rem;
+    --size: 4.8rem;
+    width: var(--size);
+    height: var(--size);
   }
 
   .avatar.lg {
     --frame-w: 0.4rem;
-    width: 9.6rem;
-    height: 9.6rem;
+    --size: 9.6rem;
+    width: var(--size);
+    height: var(--size);
   }
 
   img {
@@ -87,6 +124,18 @@
     height: 100%;
     border-radius: 50%;
     object-fit: cover;
+  }
+
+  img.frame-art {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    height: auto;
+    max-width: none;
+    border-radius: 0;
+    object-fit: contain;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
   }
 
   .fallback {

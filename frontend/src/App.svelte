@@ -20,9 +20,11 @@
   import { initDownloads } from './lib/stores/downloads';
   import { initPlayThrottle } from './lib/stores/playThrottle';
   import { initAchievements } from './lib/stores/achievements';
+  import { initCompletionHints } from './lib/stores/completionHints';
   import { initHistory } from './lib/stores/history';
   import { initWatchlist } from './lib/stores/watchlist';
   import { initScreenshots } from './lib/stores/screenshots';
+  import { initLaunchNavigation } from './lib/stores/launchNavigation';
   import { initInstalls } from './lib/stores/install';
   import { initLan } from './lib/stores/lan';
   import { initNetwork } from './lib/stores/network';
@@ -43,6 +45,7 @@
   import { initSources } from './lib/stores/sources';
   import { initSourceProgress } from './lib/stores/sourceProgress';
   import { initSupport } from './lib/stores/support';
+  import { initProfileAccentSync } from './lib/stores/profileAccent';
   import { initLegalAcceptance, showLegalAcceptance } from './lib/stores/legalAcceptance';
   import { showTelemetryConsent } from './lib/stores/telemetryConsent';
   import { initUpdates } from './lib/stores/updates';
@@ -72,6 +75,7 @@
   initDownloads();
   initPlayThrottle();
   onDestroy(initAchievements());
+  onDestroy(initCompletionHints());
   initNetwork();
   initInstalls();
   refreshStorage();
@@ -88,6 +92,7 @@
   initHistory();
   initWatchlist();
   onDestroy(initScreenshots());
+  onDestroy(initLaunchNavigation());
   initLan();
   initSocial();
   onDestroy(initSupport());
@@ -95,6 +100,7 @@
   initSaveBackups();
   initCollections();
   onDestroy(initCloudSaves());
+  onDestroy(initProfileAccentSync());
   initLegalAcceptance();
 
   let lastGamesPath: string | undefined;
@@ -151,7 +157,7 @@
         {:else if $route.name === 'profile'}
           <Profile />
         {:else if $route.name === 'support'}
-          <Support ticket={$route.params.ticket} view={$route.params.view} topic={$route.params.topic} />
+          <Support ticket={$route.params.ticket} view={$route.params.view} topic={$route.params.topic} subject={$route.params.subject} />
         {:else if $route.name === 'settings'}
           <Settings tab={$route.params.tab} />
         {/if}

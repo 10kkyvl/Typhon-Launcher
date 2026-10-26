@@ -16,6 +16,7 @@ import (
 	"typhon/internal/account"
 	"typhon/internal/accountsync"
 	"typhon/internal/achievements"
+	"typhon/internal/achievementsync"
 	"typhon/internal/app"
 	"typhon/internal/autostart"
 	"typhon/internal/catalog"
@@ -24,7 +25,6 @@ import (
 	"typhon/internal/compat"
 	"typhon/internal/devmock"
 	"typhon/internal/diagnostics"
-	"typhon/internal/dialogtext"
 	"typhon/internal/discord"
 	"typhon/internal/discovery"
 	"typhon/internal/diskusage"
@@ -69,8 +69,10 @@ import (
 	"typhon/internal/tray"
 	"typhon/internal/updates"
 	"typhon/internal/usagestats"
+	"typhon/internal/version"
 	"typhon/internal/watchlist"
 	"typhon/internal/wine"
+	"typhon/internal/wrappers"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -99,8 +101,10 @@ func init() {
 	application.RegisterEvent[settings.Settings]("settings:updated")
 	application.RegisterEvent[[]library.Game]("library:updated")
 	application.RegisterEvent[[]library.Collection](library.EventCollections)
+	application.RegisterEvent[navigateEvent](eventNavigate)
 	application.RegisterEvent[library.SessionEvent]("game:started")
 	application.RegisterEvent[library.SessionEvent]("game:stopped")
+	application.RegisterEvent[library.CrashEvent]("game:crash")
 	application.RegisterEvent[download.Download]("download:added")
 	application.RegisterEvent[download.Download]("download:updated")
 	application.RegisterEvent[download.Download]("download:completed")
@@ -156,6 +160,7 @@ func init() {
 	application.RegisterEvent[theme.Theme]("theme:updated")
 	application.RegisterEvent[[]theme.Theme]("theme:list")
 	application.RegisterEvent[theme.Theme]("theme:reverted")
+	application.RegisterEvent[theme.SourceFailure]("theme:source-failed")
 	application.RegisterEvent[selfupdate.Status]("launcher:update_status")
 	application.RegisterEvent[selfupdate.Progress]("launcher:update_progress")
 	application.RegisterEvent[playlog.Session]("playlog:recorded")
@@ -205,11 +210,27 @@ func main() {
 		os.Exit(1)
 	}
 
+	launches := &secondLaunches{}
+	handedOff, handOffListener, handOffErr := handOffLaunch(context.Background(), os.Args, launches)
+	if handedOff {
+		return
+	}
+	if handOffListener != nil {
+		defer func() {
+			if err := handOffListener.Close(); err != nil {
+				slog.Warn("stop the second launch receiver", "component", "app", "error", err)
+			}
+		}()
+	}
+
 	// A locked or unwritable log file must not stop the launcher from
 	// starting, but it must not pass silently either: stderr logging is
 	// already live here, so the failure is recorded rather than discarded.
 	if err := app.InitLogging(); err != nil {
 		slog.Error("init logging", "component", "app", "operation", "init_logging", "error", err)
+	}
+	if handOffErr != nil {
+		slog.Warn("hand over the launch to the running instance", "component", "app", "operation", "forward_launch", "error", handOffErr)
 	}
 
 	// Without an explicit AppUserModelID a launcher started from a game shortcut inherits that
@@ -306,6 +327,39 @@ func main() {
 	if err != nil {
 		slog.Error("parse play argument", "args", os.Args[1:], "error", err)
 		playRequested = false
+	}
+	openRoute, openRequested, err := openTarget(os.Args)
+	if err != nil {
+		slog.Error("parse open argument", "args", os.Args[1:], "error", err)
+		openRequested = false
+	}
+	navigation := &NavigationService{}
+	if openRequested && !playRequested {
+		navigation.setPending(openRoute)
+	}
+
+	configDir, err := settings.ConfigDir()
+	if err != nil {
+		fatal("resolve config dir", err)
+	}
+
+	// Before any service reads its state: a file put back after a service has
+	// loaded it would be overwritten by that service's next save.
+	if err := selfupdate.RecoverInterrupted(configDir, app.Version); err != nil {
+		slog.Error("settle an interrupted update or rollback", "error", err)
+	}
+
+	// Counted for --play starts as well: a shortcut start runs the same
+	// services and fails the same way. The workers above never get here, so
+	// an update or a rollback in progress is not counted as a failed start.
+	startGuard := selfupdate.BeginStart(configDir, app.Version)
+	rolledBack, err := startGuard.OfferRollback(settings.IsPortable())
+	if err != nil {
+		slog.Error("offer rollback after failed starts", "error", err)
+	}
+	if rolledBack {
+		slog.Info("rolling back after repeated failed starts", "attempts", startGuard.Attempts())
+		os.Exit(0)
 	}
 
 	if err := titles.Ready(); err != nil {
@@ -429,10 +483,6 @@ func main() {
 		}
 		return steamlink.Art{Cover: files.Cover, Hero: files.Hero}, nil
 	})
-	configDir, err := settings.ConfigDir()
-	if err != nil {
-		fatal("resolve config dir", err)
-	}
 	accountSyncService, err := accountsync.NewService(
 		configDir,
 		account.BaseURL(),
@@ -481,7 +531,25 @@ func main() {
 	if err != nil {
 		fatal("start cloud saves service", err)
 	}
-	achievementsService := newAchievementsService(configDir, accountService, libraryService, catalogService, appService)
+	achievementsReporter, err := achievementsync.New(achievementsync.Config{
+		ConfigDir: configDir,
+		BaseURL:   account.BaseURL(),
+		Token:     accountService.SessionToken,
+		AccountID: func(token string) (string, error) {
+			id := accountService.DurableAccountID(token)
+			if id == "" {
+				return "", errors.New("account id is not known yet")
+			}
+			return id, nil
+		},
+		Consent: func() bool { return settingsService.GetSettings().AccountSync },
+		Games:   libraryService,
+		IGDBID:  catalogService.IGDBIDOf,
+	})
+	if err != nil {
+		fatal("start achievements sync", err)
+	}
+	achievementsService := newAchievementsService(configDir, accountService, libraryService, catalogService, appService, achievementsReporter)
 	updateService, err := updates.NewService(settingsService, libraryService, sourcesService, downloadManager, installService, saveBackupService)
 	if err != nil {
 		fatal("start updates service", err)
@@ -495,6 +563,10 @@ func main() {
 	if err != nil {
 		fatal("start redist service", err)
 	}
+	wrappersService, err := wrappers.NewService(configDir, libraryService)
+	if err != nil {
+		fatal("start wrappers service", err)
+	}
 	lanService, err := lan.NewService(settingsService, libraryService)
 	if err != nil {
 		fatal("start lan service", err)
@@ -503,6 +575,12 @@ func main() {
 	if err != nil {
 		fatal("start selfupdate service", err)
 	}
+	selfupdateService.SetBetaAccess(func() (string, bool, error) {
+		if !settingsService.GetSettings().UpdateBetaChannel {
+			return "", false, nil
+		}
+		return accountService.BetaToken()
+	})
 	discordService, err := discord.NewService(discordClientID)
 	if err != nil {
 		fatal("start discord presence", err)
@@ -610,6 +688,8 @@ func main() {
 	}
 	libraryService.AddSessionWatcher(presenceWatcher)
 	libraryService.AddSessionWatcher(saveBackupService)
+	libraryService.AddLaunchHook(saveBackupService)
+	saveBackupService.SetPlaytime(savebackup.PlaytimeFrom(playlogService, time.Now))
 	libraryService.AddSessionWatcher(cloudSavesService)
 	libraryService.AddSessionWatcher(achievementsService)
 	playWatcher := downloadManager.PlayWatcher()
@@ -767,6 +847,7 @@ func main() {
 
 	services := []application.Service{
 		application.NewService(appService),
+		application.NewService(navigation),
 		application.NewService(accountService),
 		application.NewService(accountSyncService),
 		application.NewService(socialService),
@@ -788,6 +869,7 @@ func main() {
 		application.NewService(saveBackupService),
 		application.NewService(cloudSavesService),
 		application.NewService(achievementsService),
+		application.NewService(achievementsReporter),
 		application.NewService(metadataService),
 		application.NewService(sysreqService),
 		application.NewService(discoveryService),
@@ -801,6 +883,7 @@ func main() {
 		application.NewService(lanService),
 		application.NewService(relocateService),
 		application.NewService(redistService),
+		application.NewService(wrappersService),
 		// Registered whether or not telemetry ever started: the window that
 		// shows what was sent must open and say "nothing" rather than fail.
 		application.NewService(telemetrylog.NewService()),
@@ -817,10 +900,12 @@ func main() {
 	windowsOptions := application.WindowsOptions{
 		AdditionalBrowserArgs: append(browserArgs(current.HardwareAcceleration), qaArgs...),
 	}
-	instanceID := singleInstanceID
+	instanceID, err := launcherInstanceID()
+	if err != nil {
+		fatal("resolve single instance id", err)
+	}
 	if settings.IsPortable() {
 		windowsOptions.WebviewUserDataPath = filepath.Join(configDir, "webview2")
-		instanceID = portableInstanceID(configDir)
 	}
 
 	wails := application.New(application.Options{
@@ -830,18 +915,7 @@ func main() {
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID: instanceID,
 			OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
-				req, requested, err := playTarget(data.Args)
-				if err != nil {
-					slog.Error("parse play argument", "args", data.Args, "error", err)
-				}
-				if !requested {
-					trayController.Open()
-					return
-				}
-				if err := libraryService.PlayGameProfile(req.id, req.profile); err != nil {
-					slog.Error("play from shortcut", "id", req.id, "profile", req.profile, "error", err)
-					trayController.Open()
-				}
+				launches.Receive(data.Args)
 			},
 		},
 		Services: services,
@@ -893,8 +967,56 @@ func main() {
 	if err != nil {
 		fatal("start autostart service", err)
 	}
+	recentCtx, stopRecent := context.WithCancel(context.Background())
+	recent := &recentMenu{
+		fetch:    func() []tray.Game { return trayGames(libraryService.RecentGames(tray.MaxRecent)) },
+		language: appService.UILanguage,
+		open:     func() { trayController.Open() },
+		quit:     func() { trayController.Quit() },
+		play:     func(id string) { playFromTray(libraryService, id, func() { trayController.Open() }) },
+		stop:     func(id string) { stopFromTray(libraryService, id, func() { trayController.Open() }) },
+	}
+	recent.setGames(recent.fetch())
+	menuRefresh := tray.NewCoalescer(recentCtx, recentRefreshDelay, recent.refresh)
+	refreshJumpList := jumpListRefresher(libraryService, appService.UILanguage, jumpListAllowed(portable, qaTitleSuffix != ""))
+	var listRefresh *tray.Coalescer
+	if refreshJumpList != nil {
+		listRefresh = tray.NewCoalescer(recentCtx, recentRefreshDelay, refreshJumpList)
+	}
+	recentChanged := func() {
+		menuRefresh.Trigger()
+		if listRefresh != nil {
+			listRefresh.Trigger()
+		}
+	}
+	for _, name := range []string{"game:started", "game:stopped", library.EventUpdated} {
+		unsubscribe := wails.Event.On(name, func(*application.CustomEvent) { recentChanged() })
+		defer unsubscribe()
+	}
+	settingsService.Subscribe(func(settings.Settings) { recentChanged() })
+	wails.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+		recent.running.Store(true)
+		recentChanged()
+	})
+	// A refresh that reaches InvokeSync after the UI loop has stopped would wait
+	// on it forever, so the menu is cut off from refreshes as shutdown begins.
+	wails.OnShutdown(func() {
+		recent.running.Store(false)
+		stopRecent()
+		waitBounded("tray click handlers", shutdownWaitLimit, recent.async.Close)
+	})
+	defer func() {
+		stopRecent()
+		menuRefresh.Close()
+		waitBounded("tray menu refresh", shutdownWaitLimit, menuRefresh.Wait)
+		if listRefresh != nil {
+			listRefresh.Close()
+			waitBounded("jump list refresh", shutdownWaitLimit, listRefresh.Wait)
+		}
+	}()
+
 	trayController, err = tray.New(windowControl{window: window}, func() (tray.Tray, error) {
-		return newSystemTray(wails, trayController, appService.UILanguage)
+		return newSystemTray(wails, recent)
 	}, wails.Quit)
 	if err != nil {
 		fatal("start tray controller", err)
@@ -942,6 +1064,19 @@ func main() {
 		wails.Quit()
 	})
 
+	// Services have all started by the time either event fires. A start that
+	// hides the window in the tray is judged by ApplicationStarted: nothing
+	// promises that a hidden webview reports its runtime as ready.
+	if playRequested && current.MinimizeToTray {
+		wails.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+			startGuard.Succeeded()
+		})
+	} else {
+		window.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) {
+			startGuard.Succeeded()
+		})
+	}
+
 	if playRequested {
 		// PlayGame нужен контекст из ServiceStartup, а сервисы стартуют только
 		// внутри wails.Run: вызов до него ярлык с холодного старта отклонял.
@@ -949,6 +1084,15 @@ func main() {
 			playFromShortcut(libraryService, playReq, func() { window.Show() })
 		})
 	}
+
+	// Launches that reached the running instance during start-up wait here: the
+	// tray controller exists and the services have their contexts only once the
+	// application is running.
+	wails.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+		launches.Ready(func(args []string) {
+			handleSecondLaunch(args, libraryService, trayController, navigation, func(route string) { emitNavigate(application.Get(), route) })
+		})
+	})
 
 	slog.Info("typhon starting", "version", app.Version)
 	if err := wails.Run(); err != nil {
@@ -1058,35 +1202,7 @@ func (w *lateWindow) Show() {
 	}
 }
 
-func newSystemTray(wails *application.App, controller *tray.Controller, language func() string) (tray.Tray, error) {
-	labels := dialogtext.For(language())
-	menu := application.NewMenu()
-	openItem := menu.Add(labels.OpenTyphon).OnClick(func(*application.Context) {
-		controller.Open()
-	})
-	menu.AddSeparator()
-	quitItem := menu.Add(labels.Quit).OnClick(func(*application.Context) {
-		controller.Quit()
-	})
-
-	systemTray := wails.SystemTray.New()
-	systemTray.SetIcon(trayIcon)
-	systemTray.SetTooltip("Typhon")
-	systemTray.SetMenu(menu)
-	systemTray.OnClick(controller.Open)
-	systemTray.OnRightClick(func() {
-		labels := dialogtext.For(language())
-		application.InvokeSync(func() {
-			openItem.SetLabel(labels.OpenTyphon)
-			quitItem.SetLabel(labels.Quit)
-			menu.Update()
-		})
-		systemTray.ShowMenu()
-	})
-	return systemTray, nil
-}
-
-func newAchievementsService(configDir string, accountService *account.Service, libraryService *library.Service, catalogService *catalog.Service, appService *app.Service) *achievements.Service {
+func newAchievementsService(configDir string, accountService *account.Service, libraryService *library.Service, catalogService *catalog.Service, appService *app.Service, reporter achievements.Reporter) *achievements.Service {
 	client, err := typhonapi.New(account.BaseURL(), accountService.SessionToken)
 	if err != nil {
 		fatal("start achievements api client", err)
@@ -1099,7 +1215,7 @@ func newAchievementsService(configDir string, accountService *account.Service, l
 	if err != nil {
 		fatal("start achievements schema source", err)
 	}
-	service, err := achievements.New(achievements.Config{ConfigDir: configDir, Games: games, Schema: schema, Language: appService.UILanguage})
+	service, err := achievements.New(achievements.Config{ConfigDir: configDir, Games: games, Schema: schema, Language: appService.UILanguage, Reporter: reporter})
 	if err != nil {
 		fatal("start achievements service", err)
 	}
@@ -1228,8 +1344,16 @@ func fatal(stage string, err error) {
 }
 
 func windowTitle() string {
-	if devmock.Enabled {
-		return "Typhon [devmock]"
+	return windowTitleFor(app.Version)
+}
+
+func windowTitleFor(ver string) string {
+	name := "Typhon"
+	if version.IsPrerelease(version.Parse(ver)) {
+		name = "Typhon beta"
 	}
-	return "Typhon" + qaTitleSuffix
+	if devmock.Enabled {
+		return name + " [devmock]"
+	}
+	return name + qaTitleSuffix
 }

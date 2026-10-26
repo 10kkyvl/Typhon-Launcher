@@ -49,7 +49,7 @@
 {:else if downloading || view === 'downloading'}
   <div class="banner">
     <div class="banner-text">
-      <span>{msg('ui.downloadingUpdate', { version: status.availableVersion ?? '' })}</span>
+      <span>{msg(status.delta ? 'ui.downloadingUpdatePatch' : 'ui.downloadingUpdate', { version: status.availableVersion ?? '' })}</span>
     </div>
     <div class="progress">
       <ProgressBar value={pct} />

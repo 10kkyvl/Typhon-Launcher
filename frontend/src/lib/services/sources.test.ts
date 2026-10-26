@@ -1,17 +1,18 @@
 import { CancellablePromise } from '@wailsio/runtime';
 import { describe, expect, it, vi } from 'vitest';
 
-const { browseGames, getGame, getReleaseBinding } = vi.hoisted(() => ({
+const { browseGames, getGame, getReleaseBinding, similarBinding } = vi.hoisted(() => ({
   browseGames: vi.fn(),
   getGame: vi.fn(),
   getReleaseBinding: vi.fn(),
+  similarBinding: vi.fn(),
 }));
 
 vi.mock('../../../bindings/typhon/internal/catalog', () => ({ Service: { BrowseGames: browseGames, GetGame: getGame } }));
-vi.mock('../../../bindings/typhon/internal/sources', () => ({ Service: { GetRelease: getReleaseBinding } }));
+vi.mock('../../../bindings/typhon/internal/sources', () => ({ Service: { GetRelease: getReleaseBinding, SimilarReleases: similarBinding } }));
 vi.mock('./backend', () => ({ inWails: true }));
 
-import { getCatalogGame, getRelease, isCancelledRequest, queryCatalogGames, searchGames } from './sources';
+import { getCatalogGame, getRelease, isCancelledRequest, queryCatalogGames, searchGames, similarReleases } from './sources';
 
 const emptyPage = { items: [], total: 0, page: 1, pageSize: 20 };
 
@@ -116,5 +117,23 @@ describe('single record lookups', () => {
     getReleaseBinding.mockRejectedValueOnce(failure);
 
     await expect(getRelease('r1')).rejects.toBe(failure);
+  });
+});
+
+describe('similar releases', () => {
+  it('sends the game and its family and returns the rows', async () => {
+    const row = { release: { id: 'r1' }, sourceName: 's', gameTitle: 't', matchedCandidate: { id: 'g2', title: 'B', year: 0 }, reason: 'ambiguous' };
+    similarBinding.mockResolvedValueOnce([row]);
+
+    const list = await similarReleases('g1', ['g2']);
+
+    expect(similarBinding).toHaveBeenCalledWith('g1', ['g2']);
+    expect(list).toEqual([row]);
+  });
+
+  it('lets a backend error through', async () => {
+    similarBinding.mockRejectedValueOnce(new Error('typhon:sources.failed: x'));
+
+    await expect(similarReleases('g1', [])).rejects.toThrow('sources.failed');
   });
 });

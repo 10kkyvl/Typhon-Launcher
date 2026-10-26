@@ -28,14 +28,14 @@
   import AttachLogs from './AttachLogs.svelte';
   import LogsConfirm from './LogsConfirm.svelte';
 
-  let { initialTopic }: { initialTopic: SupportTopic } = $props();
+  let { initialTopic, initialSubject = '' }: { initialTopic: SupportTopic; initialSubject?: string } = $props();
 
   let topic = $state<string>(untrack(() => initialTopic));
   let attachLogs = $state(untrack(() => attachLogsByDefault(initialTopic)));
   let logsTouched = false;
   let game = $state<{ igdbId: number; title: string } | null>(null);
   let pickerOpen = $state(false);
-  let subject = $state('');
+  let subject = $state(untrack(() => initialSubject));
   let body = $state('');
   let limits = $state<Limits | null>(null);
   let limitsFailure = $state('');

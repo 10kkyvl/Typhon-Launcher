@@ -52,3 +52,27 @@ describe('public profile mapping', () => {
     expect(got.layout).toEqual({ version: 1, blocks: [] });
   });
 });
+
+describe('chat peer from a user card', () => {
+  const image = { url: 'https://cdn.test/f.webp', hole: 0.65 };
+
+  it('takes the frame from the card of a friend list entry', async () => {
+    const { chatPeerOf } = await import('./social');
+    const card = { accent: '#ff0000', avatarFrame: 'custom:f1', frameImage: image, frameColor: '#00ff00', nameStyle: 'plain' } as const;
+
+    expect(chatPeerOf({ ...base, card })).toEqual({ ...base, avatarFrame: 'custom:f1', frameColor: '#00ff00', frameImage: image });
+  });
+
+  it('falls back to the appearance and frame image of a public profile', async () => {
+    const { chatPeerOf } = await import('./social');
+    const appearance = { avatarFrame: 'custom:f1', frameColor: '' } as never;
+
+    expect(chatPeerOf({ ...base, appearance, avatarFrameImage: image })).toMatchObject({ avatarFrame: 'custom:f1', frameImage: image });
+  });
+
+  it('leaves a user without a frame unframed', async () => {
+    const { chatPeerOf } = await import('./social');
+
+    expect(chatPeerOf(base)).toEqual({ ...base, avatarFrame: undefined, frameColor: undefined, frameImage: null });
+  });
+});

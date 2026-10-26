@@ -1,6 +1,6 @@
 # Typhon Terms of Use
 
-Revision of 21 October 2026.
+Revision of 25 October 2026.
 
 This document sets out the terms of use of the Typhon launcher (the "app") and of the related server services: the account, metadata and update services (the "Typhon services").
 

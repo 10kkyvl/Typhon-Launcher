@@ -36,6 +36,7 @@ export const tickets = {
   'tickets.gameClear': 'Remove game',
   'tickets.gameCollapse': 'Hide the list',
   'tickets.subjectLabel': 'Summary of the problem',
+  'tickets.betaSubject': 'Beta {version}: ',
   'tickets.bodyLabel': 'Details',
   'tickets.bodyPlaceholder': 'What you did, what you expected and what actually happened',
   'tickets.counter': '{count} of {max}',
@@ -87,6 +88,8 @@ export const tickets = {
   'tickets.forgotOpenFailed': 'Could not open the password reset page.',
   'tickets.cantSignIn': "Can't sign in? Write to us from the website",
   'tickets.siteOpenFailed': 'Could not open the support page on the website.',
+  'tickets.statusPage': 'Service status',
+  'tickets.statusOpenFailed': 'Could not open the service status page.',
 
   'tickets.writeSupport': 'Contact support',
   'tickets.settingsLabel': 'Contact support',

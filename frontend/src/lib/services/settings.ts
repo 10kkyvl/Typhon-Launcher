@@ -51,9 +51,11 @@ export interface Settings {
   desktopShortcuts: boolean;
   updateCheckAutomatically: boolean;
   updateAutoDownload: boolean;
+  updateBetaChannel: boolean;
   updateAutoInstall: boolean;
   updateSaveBackup: boolean;
   saveBackupAfterSession: boolean;
+  saveBackupBeforeLaunch: boolean;
   cloudSaves: boolean;
   saveBackupLimit: number;
   keepPreviousVersion: string;
@@ -120,9 +122,11 @@ const fallbackDefaults: Settings = {
   desktopShortcuts: true,
   updateCheckAutomatically: true,
   updateAutoDownload: false,
+  updateBetaChannel: false,
   updateAutoInstall: false,
   updateSaveBackup: true,
   saveBackupAfterSession: true,
+  saveBackupBeforeLaunch: true,
   cloudSaves: false,
   saveBackupLimit: 5,
   keepPreviousVersion: 'first_launch',

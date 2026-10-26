@@ -4,6 +4,7 @@
   import Card from '../Card.svelte';
   import { msg } from '../../i18n';
   import type { BlockGame } from '../../profile/layoutView';
+  import { statusLabel } from '../../game/status';
   import { shortDate } from '../../profile/view';
 
   let { title, games, dated, hearts = false }: { title: string; games: BlockGame[]; dated: boolean; hearts?: boolean } = $props();
@@ -18,6 +19,9 @@
         <button class="tile" type="button" onclick={game.open}>
           <span class="cover">
             <Artwork src={game.cover} alt="" label={game.title} ratio="3 / 4" radius="var(--radius-md)" />
+            {#if dated && game.status === 'mastered'}
+              <span class="mastered" title={statusLabel('mastered')}>100%</span>
+            {/if}
             {#if hearts}
               <span class="heart"><Heart size="1.4rem" strokeWidth={0} fill="currentColor" /></span>
             {/if}
@@ -87,6 +91,18 @@
     border-radius: 50%;
     background: rgba(5, 8, 12, 0.6);
     color: var(--danger);
+  }
+
+  .mastered {
+    position: absolute;
+    left: 0.7rem;
+    bottom: 0.7rem;
+    padding: 0.2rem 0.7rem;
+    border-radius: var(--radius-sm);
+    background: rgba(5, 8, 12, 0.6);
+    color: var(--success);
+    font-size: var(--font-xs);
+    font-weight: 700;
   }
 
   .caption {

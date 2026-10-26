@@ -73,3 +73,26 @@ func TestRemoteManualConfirmationDoesNotBindOtherHomonymousReleases(t *testing.T
 		t.Fatal("manual choice attached unconfirmed homonym")
 	}
 }
+
+func TestEditionPageListsBaseGameReleases(t *testing.T) {
+	s, cat, _ := testService(t)
+	for _, g := range []catalog.Game{
+		{ID: "base", Title: "Base Game", ExternalIDs: catalog.ExternalIDs{IGDB: "10"}},
+		{ID: "edition", Title: "Zeta Deluxe Pack", GameType: "Edition", ParentID: "base", ExternalIDs: catalog.ExternalIDs{IGDB: "11"}},
+		{ID: "orphan", Title: "Orphan Pack", GameType: "Edition", ParentID: "missing", ExternalIDs: catalog.ExternalIDs{IGDB: "12"}},
+	} {
+		if _, err := cat.AddGame(g); err != nil {
+			t.Fatal(err)
+		}
+	}
+	server := newFeedServer(t, feedBody(t, "Editions",
+		feedEntry{Title: "Base Game v1.0", URIs: []string{magnetOf("e1")}},
+		feedEntry{Title: "Base Game v2.0", URIs: []string{magnetOf("e2")}},
+	))
+	addSource(t, s, server.url())
+	for id, want := range map[string]int{"base": 2, "edition": 2, "orphan": 0} {
+		if got := len(s.GetReleasesForGame(id)); got != want {
+			t.Fatalf("%s release groups=%d want %d", id, got, want)
+		}
+	}
+}

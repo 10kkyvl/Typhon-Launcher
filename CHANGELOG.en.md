@@ -6,6 +6,50 @@ this file carries the same entries for the GitHub releases. It starts at
 0.4.0, the release that introduced the English interface — for anything older
 see `CHANGELOG.md`. Sections: "Added", "Changed", "Fixed", "Removed".
 
+## 1.3.0 — 2026-10-26
+The friends feed shows more: achievements, reviews, plans and the week's play time. Old games can run in a compatibility mode, a crashed game comes with the reason, and themes can now change the window's layout too.
+
+### Added
+- New events in the friends feed: more than an hour played this week, achievements unlocked, a review written, a game added to "Backlog". The "What goes into the feed" block in "Profile privacy" turns any kind off — others stop seeing it, including what was already there
+- So friends can see your new achievements, the launcher sends the server which achievements you unlocked and when — only while you are signed in and sync between devices is on. Without it achievements stay on the computer
+- Compatibility mode for old games on Windows: a game's "Properties" show which old graphics API it uses and turn on dgVoodoo2 or DXVK. The wrapper comes from its official page, and the game files it replaced come back when the mode is off
+- When a game crashes on Windows, the launcher reads the system log, names the cause and says what to do: install Visual C++ or DirectX, turn on the compatibility mode, or add the folder to the antivirus exclusions if a game file went missing. "Collect report" saves the details
+- A copy of the saves before every game launch: if a game breaks a save, its page has "Roll back saves", and each copy shows how long you played after it. On from the start, turned off in Settings on the "Downloads" tab
+- A "Completed 100%" status and a completion date: the launcher asks for the date when a game is marked completed and shows it on the game page. The library filters by status and sorts by status or completion date
+- After a game's first launch the launcher offers to mark it "Playing", and once every achievement is unlocked, "Completed 100%"
+- A "Completed this year" block in the profile lists the games finished this year; whoever can see your library can see it
+- A "What to play?" button in the library and in Big Picture picks a random game from installed games, the whole library, the backlog or a collection. You can keep only games you have not launched for 30 days, or one genre
+- The tray menu lists the five most recent games: a game starts with its last profile without opening the window, and the running one can be stopped from there. On Windows the same games are in the taskbar icon's menu and in Start
+- A game page with no downloads of its own now has "Other versions": the original, a remake, a remaster or an edition of the same game with their downloads. Games that never came out on PC are marked "Never released on PC"
+- The same page has "Similar releases" — releases that may belong to this game. "Link to this game" ties a release to the game on this computer
+- Personal avatar frames: a frame granted to your account shows wherever your avatar does — profile, friends, feed, chat, reviews and Big Picture. Pick it in the profile style panel
+- Launcher updates download only the part of the program that changed, not the whole installer. This starts with the next update after 1.3.0
+- If a new launcher version works worse, "Settings → About" has "Go back to version …". The previous version is saved during an update, so the button appears after the next one
+- A skill for AI agents such as Claude Code: save it from the appearance settings or from "Support", ask the agent for a theme in any style and import the file it makes
+- "Support" links to the Typhon service status page
+- A theme can change the window's layout: put the sidebar on the right, reorder and hide its items, centre the search, reorder the top bar buttons and the blocks of the game page. The theme editor has a "Layout" section for it; "Settings" can never be hidden
+- A theme can be pasted as text: "Paste text" in Settings → Appearance takes what an AI agent printed and saves the theme under its own name. A custom theme can now be deleted right from its tile
+- An imported theme file is followed: edit it in your editor and the change shows up in the launcher at once, without a restart
+- The theme editor's "Readability" block shows the contrast of text, buttons and links against the background by WCAG thresholds and warns about pairs that are hard to read, without stopping you from saving
+- "Try on the window" shows the draft theme on the whole launcher, with its CSS and layout. Unless you press "Keep while editing", the window goes back by itself after 15 seconds
+### Changed
+- The profile gradient covers the whole profile instead of a thin strip under the cover. The profile accent can follow "Launcher theme" and then changes with the theme
+- An avatar in a frame is centred on the frame's hole, not on the picture, and leaves room around itself for the frame, so the frame no longer covers the name, the status or anything next to it
+- A theme's custom CSS can no longer load images or fonts from the internet, including through workaround spellings: a stranger's theme could use that to tell an outside server your address. A theme saved earlier with such CSS opens without it, and the editor says why
+- Releases find their game more often: the launcher understands Russian spellings of titles and names like "Portal 1", and a catalog edition shows the downloads of its main game
+- The documents are updated to the 25 October 2026 edition: the policy covers the new feed events, sending achievements, the completion date and personal frames. The launcher asks you to accept them again
+### Fixed
+- A click in the tray menu no longer starts another game or quits the launcher instead of the item you picked. A tray switched on in the settings while the launcher runs opens its menu on a right click straight away, without a restart
+- A game shortcut clicked while the launcher is open hands the launch over at once — before, a second copy went through most of its startup, and each click cost a few seconds
+- Cloud saves and save copies no longer take a game's cache for its saves: for World of Tanks hundreds of megabytes of cache were archived instead. When a found folder is refused, the launcher says why and asks you to pick the folder yourself
+- The Steamworks Spacewar sample no longer lands in the library on a Steam import
+- System requirements of an installed game no longer say "not enough space" when the disk filled up after the install
+- Big Picture under the light theme no longer shows white text on white panels
+- A click in an image opened from the chat no longer closes the launcher
+- Checking a game for updates no longer hides a release that just came out when two checks run at once
+- The "Reset appearance" button no longer pops up after every start with a custom theme — only after the theme changes
+- "Export" in the theme editor no longer writes the previous version to the file: it is unavailable while there are unsaved edits. After editing a built-in theme the launcher switches to the copy it made instead of staying on the built-in one
+
 ## 1.2.0 — 2026-10-21
 Downloads follow a schedule, the launcher runs from a USB stick, a game's page shows achievements, system requirements and notes, and the computer switches to a game mode while you play.
 

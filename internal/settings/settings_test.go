@@ -760,3 +760,32 @@ func TestLanguageIsPortable(t *testing.T) {
 		t.Fatalf("язык не переносится через аккаунт: получено %q", got)
 	}
 }
+
+func TestUpdateBetaChannelDefaultsOff(t *testing.T) {
+	if Defaults().UpdateBetaChannel {
+		t.Fatal("beta channel enabled by default")
+	}
+}
+
+func TestUpdateBetaChannelSurvivesRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	s := mustServiceAt(t, path)
+	next := s.GetSettings()
+	next.UpdateBetaChannel = true
+	if err := s.SaveSettings(next); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	if !mustServiceAt(t, path).GetSettings().UpdateBetaChannel {
+		t.Fatal("UpdateBetaChannel not persisted")
+	}
+}
+
+func TestUpdateBetaChannelMissingInOldConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(`{"minimizeToTray":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if mustServiceAt(t, path).GetSettings().UpdateBetaChannel {
+		t.Fatal("legacy config must stay on the stable channel")
+	}
+}

@@ -121,6 +121,21 @@ func (s *Service) SessionToken() (string, error) {
 	return token, nil
 }
 
+// BetaToken returns the session token only for a signed-in tester. The flag is
+// the one /me reported last: the backend still decides what a token may fetch.
+//
+//wails:ignore
+func (s *Service) BetaToken() (string, bool, error) {
+	if !s.currentProfile().User.Tester {
+		return "", false, nil
+	}
+	token, err := s.SessionToken()
+	if err != nil {
+		return "", false, err
+	}
+	return token, token != "", nil
+}
+
 func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
 	s.mu.Lock()
 	s.ctx, s.cancel = context.WithCancel(ctx)
@@ -435,6 +450,7 @@ func (s *Service) CurrentProfileSettings() ProfileSettings {
 	}
 	settings := profile.User.Profile
 	settings.Showcase = slices.Clone(settings.Showcase)
+	settings.FeedHidden = slices.Clone(settings.FeedHidden)
 	return settings
 }
 

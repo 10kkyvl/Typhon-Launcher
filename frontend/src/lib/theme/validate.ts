@@ -33,11 +33,25 @@ const FORBIDDEN_CSS_SUBSTRINGS = [
   '-moz-binding',
   '</style',
   '--ui-scale',
+  'src(',
+  'image-set(',
+  'cross-fade(',
+  'image(',
+  'attr(',
+  '@font-face',
+  '@namespace',
 ];
 
+// Mirrors internal/theme validateCSS: a backslash escape can spell any
+// forbidden name, so none is accepted, and comments and spaces before "(" are
+// removed before the names are looked up.
 export function validateCss(css: string): string | null {
   if (new TextEncoder().encode(css).length > CSS_MAX_BYTES) return msg('settings.appearanceCssTooLong');
-  const lower = css.toLowerCase();
+  if (css.includes('\\')) return msg('settings.appearanceCssForbidden', { substring: '\\' });
+  const lower = css
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .toLowerCase()
+    .replace(/\s+\(/g, '(');
   for (const substring of FORBIDDEN_CSS_SUBSTRINGS) {
     if (lower.includes(substring)) return msg('settings.appearanceCssForbidden', { substring });
   }

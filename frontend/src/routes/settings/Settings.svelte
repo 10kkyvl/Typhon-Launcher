@@ -25,6 +25,8 @@
   import SourcesNoticeModal from '../../lib/components/SourcesNoticeModal.svelte';
   import Tabs from '../../lib/components/Tabs.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
+  import RollbackAction from '../../lib/components/RollbackAction.svelte';
+  import StableOffer from '../../lib/components/StableOffer.svelte';
   import UpdateBanner from '../../lib/components/UpdateBanner.svelte';
   import AppearanceTab from './AppearanceTab.svelte';
   import LanSettingsRow from './LanSettingsRow.svelte';
@@ -58,13 +60,16 @@
     type SystemInfo,
     type WineStatus,
   } from '../../lib/services/system';
-  import { releaseNotesHistory, requestCheck, selfUpdateChecking, selfUpdateStatus } from '../../lib/stores/selfupdate';
+  import { releaseNotesHistory, requestCheck, rollbackInfo, selfUpdateChecking, selfUpdateStatus } from '../../lib/stores/selfupdate';
+  import { rollbackShown } from '../../lib/services/selfupdate';
+  import { rollbackReason } from '../../lib/services/selfupdateMessages';
   import { cloudStatus, refreshCloudStatus } from '../../lib/stores/cloudsaves';
   import { saveBackupsEnabled } from '../../lib/stores/savebackup';
   import { navigate } from '../../lib/stores/router';
   import { settings, updateSettings, updateSettingsReporting, updateSettingsResult } from '../../lib/stores/settings';
   import { toast } from '../../lib/stores/toasts';
-  import { authState } from '../../lib/stores/user';
+  import { authState, currentUser } from '../../lib/stores/user';
+  import { betaToggleShown, isBeta } from '../../lib/services/selfupdateChannel';
   import { bytesLabel, bytesSize, relativeDate } from '../../lib/utils/format';
 
   let { tab: initialTab }: { tab?: string } = $props();
@@ -362,6 +367,13 @@
   }
 
   const portable = $derived(appInfo?.portable ?? false);
+  const betaShown = $derived(betaToggleShown($authState, $currentUser));
+  const onBeta = $derived(isBeta($selfUpdateStatus.channel) || isBeta(appInfo?.channel));
+
+  async function setBetaChannel(value: boolean) {
+    const saved = await updateSettingsReporting({ updateBetaChannel: value }, () => toast(msg('state.settingsSaveFailed'), 'danger'));
+    if (saved) await requestCheck();
+  }
 
   async function setLaunchOnStartup(value: boolean) {
     await updateSettingsReporting({ launchOnStartup: value }, (err) => {
@@ -1127,6 +1139,20 @@
               onchange={(v) => set({ updateAutoDownload: v })}
             />
           </div>
+          {#if betaShown}
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.downloadsBetaLabel')}{#if onBeta} · {msg('settings.downloadsBetaChannelMark')}{/if}</span>
+                <span class="row-sub">{msg('settings.downloadsBetaSub')}</span>
+              </div>
+              <Toggle
+                checked={current?.updateBetaChannel ?? false}
+                label={msg('settings.downloadsBetaToggle')}
+                onchange={setBetaChannel}
+              />
+            </div>
+          {/if}
+          <StableOffer />
           <div class="row">
             <div class="row-text">
               <span class="row-label">{msg('settings.downloadsSaveBackupLabel')}</span>
@@ -1148,6 +1174,17 @@
                 checked={current?.saveBackupAfterSession ?? true}
                 label={msg('settings.downloadsSaveBackupAfterSessionToggle')}
                 onchange={(v) => set({ saveBackupAfterSession: v })}
+              />
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.downloadsSaveBackupBeforeLaunchLabel')}</span>
+                <span class="row-sub">{msg('settings.downloadsSaveBackupBeforeLaunchSub')}</span>
+              </div>
+              <Toggle
+                checked={current?.saveBackupBeforeLaunch ?? true}
+                label={msg('settings.downloadsSaveBackupBeforeLaunchToggle')}
+                onchange={(v) => set({ saveBackupBeforeLaunch: v })}
               />
             </div>
             <div class="row">
@@ -1326,7 +1363,7 @@
           <img src="/typhon.png" alt="" width="44" height="44" draggable="false" />
           <div>
             <h3>Typhon Launcher</h3>
-            <span class="row-sub">{msg('settings.aboutVersionLabel', { version: appInfo?.version ?? '—' })} · {appInfo?.platform ?? ''}/{appInfo?.arch ?? ''}{appInfo?.devMock ? ' · devmock' : ''}</span>
+            <span class="row-sub">{msg(onBeta ? 'settings.aboutVersionBetaLabel' : 'settings.aboutVersionLabel', { version: appInfo?.version ?? '—' })} · {appInfo?.platform ?? ''}/{appInfo?.arch ?? ''}{appInfo?.devMock ? ' · devmock' : ''}</span>
           </div>
         </div>
         <div class="rows">
@@ -1414,6 +1451,21 @@
               {msg('settings.aboutHistoryButtonLabel')}
             </Button>
           </div>
+          {#if rollbackShown($rollbackInfo)}
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.aboutRollbackLabel')}</span>
+                <span class="row-sub">
+                  {#if $rollbackInfo.available}
+                    {msg('settings.aboutRollbackAvailable', { version: $rollbackInfo.version })}
+                  {:else}
+                    {rollbackReason($rollbackInfo)}
+                  {/if}
+                </span>
+              </div>
+              <RollbackAction />
+            </div>
+          {/if}
           <div class="row">
             <div class="row-text">
               <span class="row-label">{msg('settings.aboutLicenseLabel')}</span>
@@ -1421,6 +1473,7 @@
             </div>
           </div>
           <UpdateBanner />
+          <StableOffer />
         </div>
       </Card>
 

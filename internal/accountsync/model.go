@@ -17,6 +17,7 @@ type Game struct {
 	FavoriteAt      *time.Time
 	Status          string
 	StatusAt        *time.Time
+	CompletedAt     *time.Time
 	Hidden          bool
 	HiddenAt        *time.Time
 }

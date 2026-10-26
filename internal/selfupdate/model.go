@@ -20,6 +20,7 @@ const (
 	ManifestPath    = "/launcher/manifest"
 	MaxManifestSize = 64 << 10
 	MaxArtifactSize = 512 << 20
+	MaxDeltas       = 8
 	StateVersion    = 1
 )
 
@@ -47,6 +48,12 @@ const (
 	// KindPortable — zip с typhon.exe для портативной сборки. В манифесте не
 	// встречается: клиент собирает его из Portable* полей установщика.
 	KindPortable Kind = "portable"
+	// KindDelta — бинарный патч от установленного typhon.exe к новому. Лежит
+	// в списке Deltas установщика, самостоятельным артефактом манифеста не бывает.
+	KindDelta Kind = "delta"
+	// KindExe — готовый typhon.exe, собранный клиентом из патча и записанный
+	// в state.json как готовое к применению обновление. В манифесте не бывает.
+	KindExe Kind = "exe"
 )
 
 type Artifact struct {
@@ -62,6 +69,25 @@ type Artifact struct {
 	PortableURL    string `json:"portableUrl,omitempty"`
 	PortableSize   int64  `json:"portableSize,omitempty"`
 	PortableSHA256 string `json:"portableSha256,omitempty"`
+
+	// ExeSHA256 и ExeSize описывают typhon.exe, который получится после
+	// обновления; патч принимается, только если собранный из него файл им равен.
+	ExeSHA256 string  `json:"exeSha256,omitempty"`
+	ExeSize   int64   `json:"exeSize,omitempty"`
+	Deltas    []Delta `json:"deltas,omitempty"`
+}
+
+// Delta is a patch that turns the typhon.exe of release From into the
+// typhon.exe the artifact carries. FromSHA256 is the hash of that old file: a
+// launcher whose own exe differs (an antivirus rewrote it, someone patched it)
+// has nothing to apply the patch to and downloads the full artifact.
+type Delta struct {
+	From       string `json:"from"`
+	FromSHA256 string `json:"fromSha256"`
+	Name       string `json:"name"`
+	URL        string `json:"url"`
+	Size       int64  `json:"size"`
+	SHA256     string `json:"sha256"`
 }
 
 type Manifest struct {
@@ -86,9 +112,18 @@ type Status struct {
 	PublishedAt      time.Time `json:"publishedAt,omitempty"`
 	TotalBytes       int64     `json:"totalBytes,omitempty"`
 	DownloadedBytes  int64     `json:"downloadedBytes,omitempty"`
-	CheckedAt        time.Time `json:"checkedAt,omitempty"`
-	Error            string    `json:"error,omitempty"`
-	ErrorCode        string    `json:"errorCode,omitempty"`
+	// Delta says that TotalBytes and DownloadedBytes count a patch against the
+	// installed build instead of the full installer.
+	Delta     bool      `json:"delta,omitempty"`
+	CheckedAt time.Time `json:"checkedAt,omitempty"`
+	Error     string    `json:"error,omitempty"`
+	ErrorCode string    `json:"errorCode,omitempty"`
+	// Channel is the channel the last manifest came from, "beta" or "stable";
+	// empty until the first check has finished.
+	Channel string `json:"channel,omitempty"`
+	// StableOffer is a stable release older than the running beta. It is never
+	// installed by itself: only InstallStable takes it.
+	StableOffer string `json:"stableOffer,omitempty"`
 }
 
 func (s Status) MarshalJSON() ([]byte, error) {
@@ -120,6 +155,9 @@ type stored struct {
 	CheckedAt        time.Time `json:"checkedAt,omitempty"`
 	Artifact         *Artifact `json:"artifact,omitempty"`
 	ReadyPath        string    `json:"readyPath,omitempty"`
+	// SkippedVersion is the version a rollback moved away from: the check does
+	// not offer it again, nor anything older, until a newer release comes out.
+	SkippedVersion string `json:"skippedVersion,omitempty"`
 }
 
 func PublicKey() (ed25519.PublicKey, error) {
@@ -138,7 +176,7 @@ func PublicKey() (ed25519.PublicKey, error) {
 
 func (a Artifact) Validate() error {
 	switch a.Kind {
-	case KindInstaller, KindBundle, KindPortable:
+	case KindInstaller, KindBundle, KindPortable, KindDelta:
 	default:
 		return ErrUnsupportedKind
 	}
@@ -146,6 +184,9 @@ func (a Artifact) Validate() error {
 		return ErrInvalidArtifact
 	}
 	if err := a.validatePortableFields(); err != nil {
+		return err
+	}
+	if err := a.validateExeFields(); err != nil {
 		return err
 	}
 	if err := validateArtifactName(a.Name); err != nil {

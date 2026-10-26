@@ -13,6 +13,7 @@
   import { errorMessage } from '../stores/sources';
   import { metadataErrorText } from '../metadata/metadataErrors';
   import { toast } from '../stores/toasts';
+  import { candidateGroups } from '../game/similar';
   import { bytesSize, relativeDate } from '../utils/format';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
@@ -29,6 +30,10 @@
   } = $props();
 
   let candidates = $state<MatchCandidate[]>([]);
+  const ordered = $derived.by(() => {
+    const groups = candidateGroups(candidates);
+    return [...groups.server, ...groups.local];
+  });
   let loadingCandidates = $state(false);
   let selectedGameId = $state<string | null>(null);
   let query = $state('');
@@ -159,21 +164,33 @@
           <p class="muted">{msg('modals.releaseMatchNoCandidates')}</p>
         {:else}
           <div class="candidates">
-            {#each candidates as candidate (candidate.gameId)}
+            {#each ordered as candidate (candidate.gameId)}
+              {@const missing = candidate.inCatalog === false}
               <button
                 class="candidate"
                 class:selected={selectedGameId === candidate.gameId}
+                disabled={missing}
+                title={missing ? msg('modals.releaseMatchNotInCatalog') : undefined}
                 onclick={() => (selectedGameId = candidate.gameId)}
               >
                 <span class="radio" class:on={selectedGameId === candidate.gameId}>
                   {#if selectedGameId === candidate.gameId}<Check size="1.2rem" strokeWidth={2.6} />{/if}
                 </span>
-                <span class="candidate-title">
-                  {candidate.title}
-                  {#if candidate.year}<span class="year">({candidate.year})</span>{/if}
+                <span class="candidate-main">
+                  <span class="candidate-title" title={candidate.title}>{candidate.title}</span>
+                  {#if candidate.platforms && candidate.platforms.length > 0}
+                    {@const platforms = candidate.platforms.join(', ')}
+                    <span class="candidate-platforms" title={platforms}>{platforms}</span>
+                  {/if}
                 </span>
-                <span class="candidate-method">{candidate.method}</span>
-                <span class="candidate-score">{Math.round(candidate.score * 100)}%</span>
+                {#if candidate.year}<span class="year">{candidate.year}</span>{/if}
+                {#if candidate.source === 'server'}
+                  <span class="candidate-method">{msg('modals.releaseMatchFromCatalog')}</span>
+                {/if}
+                {#if candidate.source !== 'server'}
+                  <span class="candidate-method">{candidate.method}</span>
+                  <span class="candidate-score">{Math.round(candidate.score * 100)}%</span>
+                {/if}
               </button>
             {/each}
           </div>
@@ -199,10 +216,8 @@
                 <span class="radio" class:on={selectedGameId === game.id}>
                   {#if selectedGameId === game.id}<Check size="1.2rem" strokeWidth={2.6} />{/if}
                 </span>
-                <span class="candidate-title">
-                  {game.title}
-                  {#if game.releaseYear}<span class="year">({game.releaseYear})</span>{/if}
-                </span>
+                <span class="candidate-title" title={game.title}>{game.title}</span>
+                {#if game.releaseYear}<span class="year">{game.releaseYear}</span>{/if}
               </button>
             {/each}
           </div>
@@ -295,6 +310,11 @@
     background: var(--hover);
   }
 
+  .candidate:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
   .candidate.selected {
     background: var(--hover-strong);
   }
@@ -317,19 +337,43 @@
     border-color: var(--accent);
   }
 
-  .candidate-title {
-    flex: 1;
-    min-width: 0;
-    font-size: var(--font-sm);
-    color: var(--text);
+  .candidate-main {
+    flex: 1 1 0;
+    min-width: 12rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .candidate-platforms {
+    font-size: var(--font-xs);
+    color: var(--text-3);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
+  .candidate-title {
+    min-width: 0;
+    font-size: var(--font-sm);
+    color: var(--text);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+  }
+
   .year {
-    color: var(--text-3);
-    margin-left: 0.4rem;
+    flex-shrink: 0;
+    padding: 0.2rem 0.8rem;
+    border-radius: var(--radius-sm);
+    background: var(--surface-3);
+    color: var(--text);
+    font-size: var(--font-xs);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
   }
 
   .candidate-method {

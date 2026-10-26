@@ -39,6 +39,11 @@ export const saves = {
   'saves.listFailed': 'Не удалось загрузить список копий',
   'saves.autoFailed': 'Не удалось создать копию сохранений «{title}». {reason}',
   'saves.autoRotationFailed': 'Копия сохранений «{title}» создана. {reason}',
+  'saves.kindLaunch': 'Перед запуском',
+  'saves.playedAfter': 'Играл после: {time}',
+  'saves.playedAfterNone': 'После этого не играл',
+  'saves.largeWarning': 'Большие сохранения: каждый снимок занимает много места и времени при запуске игры.',
+  'saves.launchFailed': 'Игра «{title}» запущена без копии сохранений. {reason}',
 } as const;
 
 export type SavesKey = keyof typeof saves;

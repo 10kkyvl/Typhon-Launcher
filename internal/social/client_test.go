@@ -869,7 +869,7 @@ func TestClient_FeedKeepsTheWideShot(t *testing.T) {
 }
 
 func TestPublicProfileAppearanceSurvivesHTTPAndWailsJSON(t *testing.T) {
-	for _, appearance := range []string{`{"theme":"forest","accent":"#91c59c","coverUrl":"https://cdn.test/profile-covers/u/cover.webp","coverDim":0,"coverPosition":15,"customFrom":"#1a1033","customTo":"#0b2a3a","customAngle":90,"autoSource":"pinned","avatarFrame":"orbit","nameStyle":"gradient","parallax":false,"nameColor":"","frameColor":"","customPure":false}`, `null`} {
+	for _, appearance := range []string{`{"theme":"forest","accent":"#91c59c","coverUrl":"https://cdn.test/profile-covers/u/cover.webp","coverDim":0,"coverPosition":15,"customFrom":"#1a1033","customTo":"#0b2a3a","customAngle":90,"autoSource":"pinned","avatarFrame":"orbit","nameStyle":"gradient","parallax":false,"nameColor":"","frameColor":"","customPure":false,"accentSource":"custom"}`, `null`} {
 		c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			if _, err := io.WriteString(w, `{"id":"u","username":"alice","appearance":`+appearance+`}`); err != nil {
@@ -895,6 +895,62 @@ func TestPublicProfileAppearanceSurvivesHTTPAndWailsJSON(t *testing.T) {
 			}
 		} else if string(bridge["appearance"]) != appearance {
 			t.Fatalf("appearance lost between HTTP and UI: %s", encoded)
+		}
+	}
+}
+
+func TestClient_DecodesNewFeedKinds(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if _, err := w.Write([]byte(`{"events":[
+			{"id":1,"kind":"played","game":{"id":"1"},"seconds":4200},
+			{"id":2,"kind":"achievement","game":{"id":"1"},"achievements":[{"key":"A","name":"Alpha","iconUrl":"https://cdn.test/a.jpg"},{"key":"B","name":"B","iconUrl":""}]},
+			{"id":3,"kind":"reviewed","game":{"id":"1"},"review":{"id":77,"recommended":true}},
+			{"id":4,"kind":"planned","game":{"id":"1"}},
+			{"id":5,"kind":"future","game":{"id":"1"}}
+		],"next":0}`)); err != nil {
+			t.Errorf("write: %v", err)
+		}
+	})
+	page, err := c.feed(context.Background(), 0, 20)
+	if err != nil {
+		t.Fatalf("feedPage: %v", err)
+	}
+	if len(page.Events) != 5 {
+		t.Fatalf("events = %d", len(page.Events))
+	}
+	if page.Events[0].Seconds != 4200 {
+		t.Errorf("seconds = %d", page.Events[0].Seconds)
+	}
+	if got := page.Events[1].Achievements; len(got) != 2 || got[0] != (FeedAchievement{Key: "A", Name: "Alpha", IconURL: "https://cdn.test/a.jpg"}) {
+		t.Errorf("achievements = %+v", got)
+	}
+	if got := page.Events[2].Review; got == nil || got.ID != 77 || !got.Recommended {
+		t.Errorf("review = %+v", got)
+	}
+	if page.Events[3].Review != nil || page.Events[3].Achievements != nil || page.Events[3].Seconds != 0 {
+		t.Errorf("planned event carries extras: %+v", page.Events[3])
+	}
+	if page.Events[4].Kind != "future" {
+		t.Errorf("unknown kind = %q", page.Events[4].Kind)
+	}
+}
+
+func TestActivityView_DecodesNewFields(t *testing.T) {
+	var v ActivityView
+	data := `{"id":1,"kind":"reviewed","game":{"id":"1"},"createdAt":"2026-10-25T10:00:00Z","review":{"id":5,"recommended":false}}`
+	if err := json.Unmarshal([]byte(data), &v); err != nil {
+		t.Fatal(err)
+	}
+	if v.Review == nil || v.Review.ID != 5 || v.Review.Recommended {
+		t.Fatalf("review = %+v", v.Review)
+	}
+	out, err := json.Marshal(ActivityView{ID: 1, Kind: "planned"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"seconds", "achievements", "review"} {
+		if strings.Contains(string(out), field) {
+			t.Errorf("%s encoded for an event without it: %s", field, out)
 		}
 	}
 }

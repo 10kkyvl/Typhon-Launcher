@@ -2,7 +2,7 @@ import { Events } from '@wailsio/runtime';
 import { Service as SaveBackupService } from '../../../bindings/typhon/internal/savebackup';
 import { inWails } from './backend';
 
-export type SnapshotKind = 'manual' | 'session' | 'update' | 'pre-restore' | 'cloud';
+export type SnapshotKind = 'manual' | 'session' | 'update' | 'pre-restore' | 'cloud' | 'launch';
 export type BackupStatus = 'created' | 'skipped' | 'failed' | 'deleted' | 'restored';
 
 export interface Snapshot {
@@ -14,6 +14,9 @@ export interface Snapshot {
   sizeBytes: number;
   files: number;
   digest: string;
+  large?: boolean;
+  playedAfterSeconds?: number;
+  playedAfterKnown?: boolean;
   path?: string;
   broken?: boolean;
   problem?: string;

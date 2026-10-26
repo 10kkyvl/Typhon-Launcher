@@ -3,6 +3,8 @@ import { locale } from '../i18n/locale';
 import { Service as SelfUpdateService } from '../../../bindings/typhon/internal/selfupdate';
 import { inWails } from './backend';
 
+export type UpdateChannel = 'beta' | 'stable';
+
 export type SelfUpdateState = 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'applying' | 'failed';
 
 export interface SelfUpdateStatus {
@@ -16,6 +18,9 @@ export interface SelfUpdateStatus {
   checkedAt?: string;
   error?: string;
   errorCode?: string;
+  delta?: boolean;
+  channel?: UpdateChannel;
+  stableOffer?: string;
 }
 
 export interface SelfUpdateProgress {
@@ -45,10 +50,31 @@ export interface ReleaseNotes {
 }
 
 export interface SelfUpdateOutcome {
+  kind?: 'rolled_back';
   version: string;
+  from?: string;
+  to?: string;
   ok: boolean;
   error?: string;
+  snapshotError?: string;
   finishedAt: string;
+}
+
+export interface RollbackInfo {
+  available: boolean;
+  version: string;
+  reason: string;
+  reasonCode: string;
+}
+
+export function noRollback(): RollbackInfo {
+  return { available: false, version: '', reason: '', reasonCode: 'selfupdate.rollback_none' };
+}
+
+const QUIET_ROLLBACK_CODES = ['selfupdate.rollback_none', 'selfupdate.rollback_unsupported'];
+
+export function rollbackShown(info: RollbackInfo): boolean {
+  return info.available || !QUIET_ROLLBACK_CODES.includes(info.reasonCode);
 }
 
 const SENTINEL_CODES: Record<string, string> = {
@@ -121,6 +147,33 @@ export async function applyUpdate(): Promise<void> {
   if (!inWails) throw unavailable();
   try {
     await SelfUpdateService.ApplyUpdate(get(locale));
+  } catch (err) {
+    throw toSelfUpdateError(err);
+  }
+}
+
+export async function installStable(): Promise<SelfUpdateStatus> {
+  if (!inWails) throw unavailable();
+  try {
+    return (await SelfUpdateService.InstallStable(get(locale))) as unknown as SelfUpdateStatus;
+  } catch (err) {
+    throw toSelfUpdateError(err);
+  }
+}
+
+export async function getRollback(): Promise<RollbackInfo> {
+  if (!inWails) return noRollback();
+  try {
+    return (await SelfUpdateService.GetRollback()) as unknown as RollbackInfo;
+  } catch (err) {
+    throw toSelfUpdateError(err);
+  }
+}
+
+export async function applyRollback(): Promise<void> {
+  if (!inWails) throw unavailable();
+  try {
+    await SelfUpdateService.ApplyRollback(get(locale));
   } catch (err) {
     throw toSelfUpdateError(err);
   }

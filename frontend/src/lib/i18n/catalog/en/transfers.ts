@@ -171,7 +171,7 @@ export const transfers: Record<TransfersKey, Message> = {
   'transfers.activitySubtitle': "Your friends' event feed",
   'transfers.activityGuestTitle': 'Activity requires an account',
   'transfers.activityGuestDescription':
-    'Sign in to see friend events: games completed, new releases, and additions to favorites.',
+    'Sign in to see friend events: games completed and started, favorites, weekly playtime, achievements, reviews and backlog.',
   'transfers.activitySignIn': 'Sign in',
   'transfers.activityCreateAccount': 'Create account',
   'transfers.activityConsentTitle': 'Account sync required',
@@ -188,7 +188,7 @@ export const transfers: Record<TransfersKey, Message> = {
   'transfers.activityLoading': 'Loading…',
   'transfers.activityFeedEmptyTitle': "It's quiet here",
   'transfers.activityFeedEmptyDescription':
-    'Friend events will appear here: games completed, new releases, and additions to favorites.',
+    'Friend events will appear here: games completed and started, favorites, weekly playtime, achievements, reviews and backlog.',
   'transfers.activityShowMore': 'Show more',
   'transfers.activityPlayingTitle': 'Friends in game',
   'transfers.activityNoOnePlaying': 'None of your friends are playing right now',

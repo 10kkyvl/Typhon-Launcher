@@ -48,8 +48,9 @@ const shutdownWait = 2 * time.Second
 
 // Check takes the catalog game id, the one the game page opens metadata with,
 // and the folder the game will be installed to (its volume decides the free
-// space; empty means unknown).
-func (s *Service) Check(ctx context.Context, gameID, installPath string) (Report, error) {
+// space; empty means unknown). An installed game passes the storage check
+// outright: its files already occupy the disk.
+func (s *Service) Check(ctx context.Context, gameID, installPath string, installed bool) (Report, error) {
 	if err := ctx.Err(); err != nil {
 		return Report{}, err
 	}
@@ -64,7 +65,7 @@ func (s *Service) Check(ctx context.Context, gameID, installPath string) (Report
 	if !found {
 		return Report{Verdict: VerdictUnknown, Reason: ReasonNoRequirements, Checks: []Check{}}, nil
 	}
-	hw, err := s.hardwareFor(ctx, installPath)
+	hw, err := s.hardwareFor(ctx, installPath, installed)
 	if err != nil {
 		return Report{}, err
 	}
@@ -79,8 +80,12 @@ func rowsOf(in []metadata.Requirement) []Row {
 	return out
 }
 
-func (s *Service) hardwareFor(ctx context.Context, installPath string) (Hardware, error) {
+func (s *Service) hardwareFor(ctx context.Context, installPath string, installed bool) (Hardware, error) {
 	hw := s.cachedHardware()
+	if installed {
+		hw.Installed = true
+		return hw, nil
+	}
 	if strings.TrimSpace(installPath) == "" {
 		return hw, nil
 	}

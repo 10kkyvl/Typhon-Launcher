@@ -65,3 +65,36 @@ func TestProfileAppearanceKeepsCustomColours(t *testing.T) {
 		})
 	}
 }
+
+func TestProfileAppearanceAccentSource(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"absent means custom", `{"theme":"orbital"}`, "custom"},
+		{"theme kept", `{"theme":"orbital","accentSource":"theme"}`, "theme"},
+		{"explicit custom", `{"theme":"orbital","accentSource":"custom"}`, "custom"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var got ProfileAppearance
+			if err := json.Unmarshal([]byte(tc.in), &got); err != nil {
+				t.Fatal(err)
+			}
+			if got.AccentSource != tc.want {
+				t.Fatalf("AccentSource = %q, want %q", got.AccentSource, tc.want)
+			}
+			merged := mergeAppearance(DefaultProfileAppearance(), ProfileAppearance{Theme: "orbital", AccentSource: got.AccentSource})
+			if merged.AccentSource != tc.want {
+				t.Fatalf("merged AccentSource = %q, want %q", merged.AccentSource, tc.want)
+			}
+		})
+	}
+	legacy := mergeAppearance(DefaultProfileAppearance(), ProfileAppearance{Theme: "orbital"})
+	if legacy.AccentSource != "custom" {
+		t.Fatalf("legacy appearance AccentSource = %q, want custom", legacy.AccentSource)
+	}
+	if DefaultProfileAppearance().AccentSource != "custom" {
+		t.Fatal("default AccentSource is not custom")
+	}
+}

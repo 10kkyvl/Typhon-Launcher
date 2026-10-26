@@ -77,6 +77,7 @@ export interface LibraryGame {
   favoriteAt?: string | null;
   status?: string;
   statusAt?: string | null;
+  completedAt?: string | null;
   tags?: string[];
   hidden?: boolean;
   notes?: string;
@@ -117,6 +118,22 @@ export interface SessionEvent {
   exitKnown: boolean;
   crashed: boolean;
   reasonCode: string;
+}
+
+export type CrashHint = 'vcredist' | 'directx' | 'compat' | 'antivirus' | 'runtimes' | 'unknown';
+
+export interface CrashEvent {
+  gameId: string;
+  exitCode: number;
+  exitKnown: boolean;
+  reasonCode: string;
+  faultModule: string;
+  exceptionCode: string;
+  hint: string;
+  missingFile: string;
+  sessionSeconds: number;
+  dumpFound: boolean;
+  journalUnknown: boolean;
 }
 
 const unavailable = () => new Error('unavailable in browser');
@@ -259,6 +276,11 @@ export async function setRequiresSteam(id: string, on: boolean): Promise<Library
 export async function setStatus(id: string, status: string): Promise<LibraryGame> {
   if (!inWails) throw unavailable();
   return (await LibraryService.SetStatus(id, status)) as unknown as LibraryGame;
+}
+
+export async function setCompletedAt(id: string, date: Date): Promise<void> {
+  if (!inWails) throw unavailable();
+  await LibraryService.SetCompletedAt(id, date.toISOString());
 }
 
 export async function setTags(id: string, tags: string[]): Promise<LibraryGame> {

@@ -210,3 +210,22 @@ export function deleteProfilePrompt(name: string): ConfirmPrompt {
     confirm: msg('modals.profilesDelete'),
   };
 }
+
+export function rollbackPrompt(version: string, current: string): ConfirmPrompt {
+  return {
+    title: msg('ui.rollbackConfirmTitle', { version }),
+    text: msg('ui.rollbackConfirmText', { version, current }),
+    note: msg('ui.rollbackConfirmNote'),
+    confirm: msg('ui.rollbackButton', { version }),
+    tone: 'primary',
+  };
+}
+
+export function stableOfferPrompt(version: string): ConfirmPrompt {
+  return {
+    title: msg('ui.stableOfferConfirmTitle', { version }),
+    text: msg('ui.stableOfferConfirmText'),
+    confirm: msg('ui.stableOfferButton', { version }),
+    tone: 'primary',
+  };
+}

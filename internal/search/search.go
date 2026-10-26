@@ -31,6 +31,10 @@ const (
 	scoreNormalizedAlias = 15
 	scoreReleaseOnly     = 10
 	scoreCatalogFuzzy    = 5
+
+	// Smaller than the smallest gap between match classes, so it only breaks
+	// ties inside one class.
+	penaltyNotOnPC = 3
 )
 
 type GameHit struct {
@@ -148,7 +152,11 @@ func (s *Service) collectCatalog(ctx context.Context, entries map[string]*entry,
 	for _, game := range page.Items {
 		e := ensure(entries, game.ID)
 		applyCatalog(e, game)
-		e.hit.Score = maxScore(e.hit.Score, q.score(game.Title, game.Aliases), scoreCatalogFuzzy)
+		score := maxScore(q.score(game.Title, game.Aliases), scoreCatalogFuzzy)
+		if !catalog.OnPC(game.Platforms) {
+			score -= penaltyNotOnPC
+		}
+		e.hit.Score = max(e.hit.Score, score)
 		for _, alias := range game.AliasIDs {
 			entries[alias] = e
 		}

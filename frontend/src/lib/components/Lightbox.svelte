@@ -53,6 +53,14 @@
     }
   });
 
+  // The chat dock lets clicks through (pointer-events: none) and the viewer
+  // inherited that, so a click on the backdrop or the close button reached the
+  // window chrome underneath and closed the launcher.
+  function portal(node: HTMLDivElement) {
+    document.body.appendChild(node);
+    return { destroy: () => node.remove() };
+  }
+
   function reset() { zoom = 1; x = 0; y = 0; drag = null; }
   $effect(() => { open; current?.url; reset(); });
 
@@ -114,6 +122,7 @@
 {#if open && current}
   <div
     class="backdrop"
+    use:portal
     role="presentation"
     onpointerdown={(e) => e.target === e.currentTarget && (open = false)}
   >
@@ -172,7 +181,8 @@
   .backdrop {
     position: fixed;
     inset: 0;
-    z-index: 110;
+    z-index: 150;
+    pointer-events: auto;
     display: flex;
     align-items: center;
     justify-content: center;

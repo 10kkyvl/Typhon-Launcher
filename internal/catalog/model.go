@@ -19,6 +19,7 @@ type Game struct {
 	AliasIDs          []string            `json:"aliasIds,omitempty"`
 	ProviderLinks     map[string][]string `json:"providerLinks,omitempty"`
 	ServerID          string              `json:"serverId,omitempty"`
+	ParentID          string              `json:"parentId,omitempty"`
 	CoverURL          string              `json:"coverUrl,omitempty"`
 	ID                string              `json:"id"`
 	Title             string              `json:"title"`
@@ -104,11 +105,14 @@ type Query struct {
 }
 
 type Candidate struct {
-	GameID string  `json:"gameId"`
-	Title  string  `json:"title"`
-	Year   *int    `json:"year,omitempty"`
-	Score  float64 `json:"score"`
-	Method Method  `json:"method"`
+	GameID    string   `json:"gameId"`
+	Title     string   `json:"title"`
+	Year      *int     `json:"year,omitempty"`
+	Score     float64  `json:"score"`
+	Method    Method   `json:"method"`
+	Platforms []string `json:"platforms,omitempty"`
+	Source    string   `json:"source,omitempty"`
+	InCatalog bool     `json:"inCatalog,omitempty"`
 }
 
 type Match struct {
@@ -117,4 +121,5 @@ type Match struct {
 	Confidence float64     `json:"confidence"`
 	Method     Method      `json:"method"`
 	Candidates []Candidate `json:"candidates"`
+	Reason     string      `json:"reason,omitempty"`
 }

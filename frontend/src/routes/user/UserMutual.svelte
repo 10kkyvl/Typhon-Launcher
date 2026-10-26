@@ -1,5 +1,6 @@
 <script lang="ts">
   import Avatar from '../../lib/components/Avatar.svelte';
+  import { cardFrame } from '../../lib/profile/frameLook';
   import Card from '../../lib/components/Card.svelte';
   import type { UserCard } from '../../lib/services/social';
   import { mutualMore } from '../../lib/social/view';
@@ -25,7 +26,7 @@
         title={friend.displayName || friend.username}
         onclick={() => navigate('user', { username: friend.username })}
       >
-        <Avatar size="sm" name={friend.displayName || friend.username} src={friend.avatarUrl} />
+        <Avatar size="sm" name={friend.displayName || friend.username} src={friend.avatarUrl} {...cardFrame(friend.card)} />
       </button>
     {/each}
     {#if more}<span class="more">{more}</span>{/if}

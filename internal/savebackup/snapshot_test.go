@@ -218,6 +218,7 @@ func TestCreateDistinguishesMissingAndAmbiguousFolders(t *testing.T) {
 	}{
 		{"not found", library.SavesResult{}, nil, errSavesNotFound, "savebackup.saves_not_found"},
 		{"not found with unreadable", library.SavesResult{Unreadable: 2}, nil, errSavesNotFound, "savebackup.saves_not_found"},
+		{"rejected as cache", library.SavesResult{Rejected: []library.RejectedSaves{{Path: "C:/g/cache", Reason: "mostly cache"}}}, nil, errSavesCacheLike, "savebackup.saves_cache_like"},
 		{"several", library.SavesResult{Candidates: []string{"a", "b"}}, nil, errSavesAmbiguous, "savebackup.saves_ambiguous"},
 		{"locate fails", library.SavesResult{}, uierr.New("library.saves_path_unavailable", "нет доступа"), nil, "library.saves_path_unavailable"},
 	}

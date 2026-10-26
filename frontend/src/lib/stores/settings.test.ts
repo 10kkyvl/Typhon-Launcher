@@ -68,6 +68,45 @@ function emitUpdated(data: Settings) {
   for (const fn of listeners) fn({ data });
 }
 
+describe('confirmed accent', () => {
+  it('follows a personal accent only after the backend saved it', async () => {
+    const { confirmedAccent } = await import('./confirmedAccent');
+    const pending = deferred<Settings>();
+    vi.mocked(saveSettingsPatch).mockImplementationOnce(() => pending.promise);
+    const before = get(confirmedAccent);
+
+    const saving = updateSettings({ accentColor: '#ABCDEF' });
+    await Promise.resolve();
+    expect(get(confirmedAccent)).toBe(before);
+
+    pending.resolve({ ...makeSettings(), accentColor: '#ABCDEF' });
+    await saving;
+    expect(get(confirmedAccent)).toBe('#ABCDEF');
+  });
+
+  it('confirms only a personal accent at start, never the theme one', async () => {
+    const { confirmedAccent } = await import('./confirmedAccent');
+    confirmedAccent.set('');
+    stored = makeSettings();
+    await initSettings();
+    expect(get(confirmedAccent)).toBe('');
+
+    stored = { ...makeSettings(), accentColor: '#ABCDEF' } as Settings;
+    await initSettings();
+    expect(get(confirmedAccent)).toBe('#ABCDEF');
+  });
+
+  it('keeps the confirmed accent when the save fails', async () => {
+    const { confirmedAccent } = await import('./confirmedAccent');
+    const before = get(confirmedAccent);
+    vi.mocked(saveSettingsPatch).mockRejectedValueOnce(new Error('disk full'));
+
+    await updateSettings({ accentColor: '#ABCDEF' });
+
+    expect(get(confirmedAccent)).toBe(before);
+  });
+});
+
 describe('updateSettings', () => {
   it('sends each queued patch with only its own key, never a stale copy of the other field', async () => {
     const first = deferred<Settings>();

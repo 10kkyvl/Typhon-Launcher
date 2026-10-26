@@ -30,9 +30,11 @@ var portableNames = []string{
 	"updateAutoDownload",
 	"updateAutoInstall",
 	"updateSaveBackup",
+	"updateBetaChannel",
 	"keepPreviousVersion",
 	"allowTorrentReuse",
 	"saveBackupAfterSession",
+	"saveBackupBeforeLaunch",
 	"saveBackupLimit",
 }
 

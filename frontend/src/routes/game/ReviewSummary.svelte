@@ -62,7 +62,7 @@
     {:else if loading && !summary}
       <p class="muted">{msg('reviews.summaryLoading')}</p>
     {:else if score}
-      <button class="score" type="button" onclick={() => onopen?.()}>
+      <button class="score" type="button" disabled={!onopen} onclick={() => onopen?.()}>
         <StatusBadge kind={reviewScoreBadgeKind(score.tone)} label={score.label} />
         {#if summary && summary.total > 0}
           <span class="line">{line}</span>
@@ -92,8 +92,12 @@
     border-radius: var(--radius-md);
   }
 
-  .score:hover .line {
+  .score:hover:not(:disabled) .line {
     color: var(--text);
+  }
+
+  .score:disabled {
+    cursor: default;
   }
 
   .line {

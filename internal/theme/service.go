@@ -2,11 +2,13 @@ package theme
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,6 +37,13 @@ type Service struct {
 	themes    []Theme
 	pending   string
 	confirmed string
+	events    func(name string, data any)
+
+	ctx       context.Context
+	cancel    context.CancelFunc
+	wg        sync.WaitGroup
+	pollEvery time.Duration
+	watch     sourceWatch
 }
 
 func NewService() (*Service, error) {
@@ -62,13 +71,16 @@ func NewServiceAt(path string) (*Service, error) {
 		themes:    st.Themes,
 		pending:   st.Pending,
 		confirmed: st.Confirmed,
+		events:    emit,
+		pollEvery: time.Second,
+		watch:     sourceWatch{seen: map[string]sourceSeen{}},
 	}
 	if s.pending != "" && s.pending != s.confirmed {
 		s.pending = ""
 		if err := s.persist(); err != nil {
 			return nil, fmt.Errorf("revert pending theme: %w", err)
 		}
-		emit("theme:reverted", defaultTheme())
+		s.events("theme:reverted", defaultTheme())
 	}
 	return s, nil
 }
@@ -82,7 +94,25 @@ func loadState(path string) (state, error) {
 	if err != nil {
 		return state{}, fmt.Errorf("load themes: %w", err)
 	}
+	for i := range st.Themes {
+		t := &st.Themes[i]
+		cssErr := validateCSS(t.CSS)
+		t.CSSBlocked = cssErr != nil
+		if cssErr != nil {
+			slog.Warn("stored theme css refused by current rules", "id", t.ID, "error", cssErr)
+		}
+	}
 	return st, nil
+}
+
+// served is the copy of a stored theme handed out of the service. CSS that
+// the current rules refuse stays in themes.json untouched, so the user keeps
+// the text, but it never reaches the window.
+func served(t Theme) Theme {
+	if t.CSSBlocked {
+		t.CSS = ""
+	}
+	return t
 }
 
 func (s *Service) persist() error {
@@ -102,7 +132,9 @@ func emit(name string, data any) {
 func (s *Service) listLocked() []Theme {
 	all := make([]Theme, 0, len(presets)+len(s.themes))
 	all = append(all, presets...)
-	all = append(all, s.themes...)
+	for _, t := range s.themes {
+		all = append(all, served(t))
+	}
 	return all
 }
 
@@ -118,7 +150,7 @@ func (s *Service) getLocked(id string) (Theme, error) {
 	}
 	for _, t := range s.themes {
 		if t.ID == id {
-			return t, nil
+			return served(t), nil
 		}
 	}
 	return Theme{}, fmt.Errorf("%q: %w", id, ErrThemeNotFound)
@@ -128,6 +160,18 @@ func (s *Service) Get(id string) (Theme, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.getLocked(id)
+}
+
+func (s *Service) findLocked(id string) (Theme, bool) {
+	if t, ok := presetByID(id); ok {
+		return t, true
+	}
+	for _, t := range s.themes {
+		if t.ID == id {
+			return t, true
+		}
+	}
+	return Theme{}, false
 }
 
 func (s *Service) idTakenLocked(id string) bool {
@@ -189,8 +233,8 @@ func (s *Service) upsertLocked(t Theme) (Theme, error) {
 		s.themes = before
 		return Theme{}, fmt.Errorf("сохранить тему %s: %w", id, err)
 	}
-	emit("theme:updated", t)
-	emit("theme:list", s.listLocked())
+	s.events("theme:updated", t)
+	s.events("theme:list", s.listLocked())
 	return t, nil
 }
 
@@ -241,7 +285,7 @@ func (s *Service) Delete(id string) error {
 		s.pending, s.confirmed = beforePending, beforeConfirmed
 		return fmt.Errorf("удалить тему %s: %w", id, err)
 	}
-	emit("theme:list", s.listLocked())
+	s.events("theme:list", s.listLocked())
 	return nil
 }
 
@@ -315,7 +359,7 @@ func (s *Service) Reset() error {
 		s.pending, s.confirmed = beforePending, beforeConfirmed
 		return fmt.Errorf("сбросить темы: %w", err)
 	}
-	emit("theme:list", s.listLocked())
+	s.events("theme:list", s.listLocked())
 	return nil
 }
 
@@ -352,41 +396,86 @@ func (s *Service) Import(path string) (Theme, error) {
 	if err != nil {
 		return Theme{}, err
 	}
-	f, err := os.Open(abs)
+	data, err := readThemeFile(abs)
 	if err != nil {
-		return Theme{}, fmt.Errorf("открыть файл темы: %w", err)
+		return Theme{}, err
+	}
+	normalized, err := decodeTheme(data, "")
+	if err != nil {
+		return Theme{}, err
+	}
+	normalized.Source = abs
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.upsertLocked(normalized)
+}
+
+func (s *Service) ImportText(text, name string) (Theme, error) {
+	if len(text) > MaxThemeBytes {
+		return Theme{}, ErrThemeSize
+	}
+	if strings.TrimSpace(text) == "" {
+		return Theme{}, fmt.Errorf("%w: пустой текст", ErrThemeFormat)
+	}
+	name = strings.TrimSpace(name)
+	normalized, err := decodeTheme([]byte(text), name)
+	if err != nil {
+		return Theme{}, err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	// Pasted text often comes from an AI agent that reuses an id such as
+	// "neon"; a theme under another name with that id stays, and the paste
+	// becomes its own theme. The same name means an update of that theme.
+	if existing, ok := s.findLocked(normalized.ID); ok && existing.Name != normalized.Name {
+		normalized.ID = s.uniqueIDLocked(normalized.ID)
+	}
+	return s.upsertLocked(normalized)
+}
+
+func readThemeFile(path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("открыть файл темы: %w", err)
 	}
 	data, readErr := io.ReadAll(io.LimitReader(f, MaxThemeBytes+1))
 	closeErr := f.Close()
 	if readErr != nil {
-		return Theme{}, fmt.Errorf("прочитать файл темы: %w", readErr)
+		return nil, fmt.Errorf("прочитать файл темы: %w", readErr)
 	}
 	if closeErr != nil {
-		return Theme{}, fmt.Errorf("закрыть файл темы: %w", closeErr)
+		return nil, fmt.Errorf("закрыть файл темы: %w", closeErr)
 	}
 	if int64(len(data)) > MaxThemeBytes {
-		return Theme{}, ErrThemeSize
+		return nil, ErrThemeSize
 	}
+	return data, nil
+}
 
+// decodeTheme parses the .typhontheme payload shared by file and text import.
+// A non-empty name replaces the one in the payload before validation, so an
+// unusable override still fails with ErrThemeName.
+func decodeTheme(data []byte, name string) (Theme, error) {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	var payload file
 	if err := dec.Decode(&payload); err != nil {
-		return Theme{}, fmt.Errorf("разобрать файл темы: %w", err)
+		return Theme{}, fmt.Errorf("разобрать файл темы: %w: %w", ErrThemeFormat, err)
 	}
 	if payload.Version != 1 {
 		return Theme{}, fmt.Errorf("%d: %w", payload.Version, ErrThemeVersion)
 	}
-
+	if name != "" {
+		payload.Theme.Name = name
+	}
 	normalized, err := Validate(payload.Theme)
 	if err != nil {
 		return Theme{}, err
 	}
 	normalized.BuiltIn = false
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.upsertLocked(normalized)
+	return normalized, nil
 }
 
 func (s *Service) Export(id, path string) error {
@@ -407,6 +496,8 @@ func (s *Service) Export(id, path string) error {
 		}
 	}
 	t.Tokens = tokens
+	t.Source = ""
+	t.CSSBlocked = false
 	payload := file{Version: 1, Theme: t}
 	data, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {

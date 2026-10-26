@@ -10,6 +10,7 @@ import {
   removeCoverPrompt,
   removeDownloadPrompt,
   removeSourcePrompt,
+  rollbackPrompt,
   resetAppearancePrompt,
   resetProfileAppearancePrompt,
   sendLogsPrompt,
@@ -111,6 +112,17 @@ describe('profile prompts', () => {
     expect(prompt.text).toBe('Выйти из аккаунта?');
     expect(prompt.confirm).toBe('Выйти');
     expect(prompt.busy).toBe('Выход…');
+  });
+});
+
+describe('rollbackPrompt', () => {
+  it('names both versions and warns that data changed since the update is lost', () => {
+    const prompt = rollbackPrompt('1.1.0', '1.2.0');
+    expect(prompt.title).toBe('Вернуться на версию 1.1.0?');
+    expect(prompt.text).toContain('в версии 1.1.0');
+    expect(prompt.text).toContain('Версия 1.2.0 не будет предлагаться');
+    expect(prompt.note).toContain('изменения в них после обновления пропадут');
+    expect(prompt.confirm).toBe('Вернуться на версию 1.1.0');
   });
 });
 

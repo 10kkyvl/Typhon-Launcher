@@ -33,7 +33,9 @@ type CurrentUser struct {
 	AvatarURL   string          `json:"avatarUrl"`
 	Bio         string          `json:"bio"`
 	Profile     ProfileSettings `json:"profile"`
+	Frames      []OwnedFrame    `json:"frames"`
 	CreatedAt   time.Time       `json:"createdAt"`
+	Tester      bool            `json:"tester"`
 
 	TermsAccepted *TermsAcceptance `json:"termsAccepted"`
 }
@@ -277,6 +279,10 @@ func (c *Client) doUser(
 	}
 	if user.ID == "" {
 		return CurrentUser{}, &Error{Code: CodeServer, Status: resp.StatusCode, cause: errors.New("user reply has no id")}
+	}
+	user.Frames = sanitizeFrames(user.Frames)
+	if user.Frames == nil {
+		user.Frames = []OwnedFrame{}
 	}
 	return withProfileDefaults(user), nil
 }

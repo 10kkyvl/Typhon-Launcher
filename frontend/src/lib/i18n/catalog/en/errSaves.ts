@@ -8,6 +8,7 @@ export const errSaves: Record<ErrSavesKey, Message> = {
   'savebackup.invalid_id': 'Invalid game or backup identifier',
   'savebackup.invalid_kind': 'Unknown backup kind',
   'savebackup.saves_not_found': 'Save folder not found. Specify it manually',
+  'savebackup.saves_cache_like': 'The folder found looks like a game cache, not saves. Specify the save folder manually',
   'savebackup.saves_ambiguous': 'Several save folders were found. Choose the right one',
   'savebackup.saves_not_a_directory': 'The saves path is not a folder',
   'savebackup.saves_path_unavailable': 'The save folder is unavailable',
@@ -22,5 +23,7 @@ export const errSaves: Record<ErrSavesKey, Message> = {
   'savebackup.recovery_failed': 'Could not finish an interrupted operation on the saves',
   'savebackup.no_free_space': 'Not enough disk space for the backup',
   'savebackup.rotation_failed': 'The backup was created, but old backups could not be removed',
+  'savebackup.launch_timeout': 'the backup before launch did not finish in time, so the game started without it',
+  'savebackup.recovery_pending': 'an interrupted save rollback is not finished, so the launch was stopped to keep your saves safe. Close programs that may hold the save folder and try again',
   'savebackup.cleanup_failed': 'temporary files next to the save folder could not be removed',
 };

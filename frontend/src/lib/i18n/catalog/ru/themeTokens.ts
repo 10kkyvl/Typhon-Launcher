@@ -189,6 +189,32 @@ export const themeTokens = {
   'settings.themePreviewDialogText': 'Убрать игру из библиотеки?',
   'settings.themePreviewCancel': 'Отмена',
   'settings.themePreviewConfirm': 'Подтвердить',
+
+  'settings.themeContrast.title': 'Читаемость',
+  'settings.themeContrast.summaryOk': 'Все пары читаются',
+  'settings.themeContrast.summaryBad': 'Плохо читается: {count}',
+  'settings.themeContrast.text': 'Основной текст',
+  'settings.themeContrast.text2': 'Второстепенный текст',
+  'settings.themeContrast.text3': 'Приглушённый текст и подсказки',
+  'settings.themeContrast.button': 'Текст на кнопке акцента',
+  'settings.themeContrast.links': 'Ссылки и текст цвета акцента',
+  'settings.themeContrast.accent': 'Акцент на фоне: ссылки, переключатели',
+  'settings.themeContrast.danger': 'Ошибки и опасные действия',
+  'settings.themeContrast.success': 'Успех',
+  'settings.themeContrast.warning': 'Предупреждения',
+  'settings.themeContrast.target': 'Нужно не меньше {min}',
+  'settings.themeContrast.lowOn': 'Плохо видно на «{surface}», нужно не меньше {min}',
+  'settings.themeContrast.unknown': 'Не удалось прочитать один из цветов',
+  'settings.themeContrast.hint': 'Пороги — по WCAG 2.2. Это подсказка: тему с низким контрастом всё равно можно сохранить',
+
+  'settings.themeCssBlocked':
+    'Свой CSS этой темы отключён: в нём есть то, что лаунчер больше не принимает (обратная косая черта или загрузка внешних файлов). Текст сохранён на диске, но если сохранить тему сейчас, он заменится содержимым поля «Пользовательский CSS», а экспорт выносит тему без него',
+  'settings.themeTry': 'Примерить на окне',
+  'settings.themeTryHint': 'Черновик применится ко всему окну, вместе со своим CSS и раскладкой. Если не нажать «Оставить», окно вернётся само',
+  'settings.themeTryActive': 'Примерка «{name}» — вернётся через {seconds} с',
+  'settings.themeTryKeptActive': 'Примерка «{name}» — окно показывает черновик, пока открыт редактор',
+  'settings.themeTryKeep': 'Оставить на время правки',
+  'settings.themeTryRevert': 'Вернуть',
 } as const;
 
 export type ThemeTokensKey = keyof typeof themeTokens;

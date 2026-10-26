@@ -78,6 +78,9 @@ type Service struct {
 	sources  []*Source
 	releases map[string][]*Release
 
+	rulesVersion int
+	rulesAsked   time.Time
+
 	refreshing map[string]bool
 	failures   map[string]int
 	retryAt    map[string]time.Time
@@ -140,6 +143,11 @@ func newServiceAt(dir string, settingsService *settings.Service, cat *catalog.Se
 }
 
 func (s *Service) load() error {
+	rules, err := s.store.loadMatchRules()
+	if err != nil {
+		return err
+	}
+	s.rulesVersion = rules
 	srcs, err := s.store.loadSources()
 	if err != nil {
 		return err
@@ -889,6 +897,11 @@ func (s *Service) settle(ctx context.Context, id string, incoming []*Release, re
 						GameID:     rm.GameID,
 						Confidence: rm.Confidence,
 						Method:     string(rm.Method),
+						Rev:        remoteMatchRev,
+
+						RulesVersion: rm.rules,
+						Reason:       rm.Reason,
+						Candidates:   remoteCandidates(rm.Candidates),
 					}
 				}
 			}

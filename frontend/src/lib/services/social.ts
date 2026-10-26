@@ -1,12 +1,28 @@
 import { Service as SocialService } from '../../../bindings/typhon/internal/social';
-import { type AvatarFrame, type NameStyle, type ProfileAppearance, type ProfileBlock, AccountError, toAccountError } from './account';
+import { type AvatarFrame, type FrameImage, type NameStyle, type ProfileAppearance, type ProfileBlock, AccountError, toAccountError } from './account';
 import { inWails } from './backend';
+import type { ChatPeer } from './messaging';
+
+// A friend list or profile keeps the frame inside its card, while the chat
+// reads it from the peer itself, as the conversations list sends it.
+export function chatPeerOf(user: UserCard & { appearance?: ProfileAppearance; avatarFrameImage?: FrameImage | null }): ChatPeer {
+  return {
+    id: user.id,
+    username: user.username,
+    displayName: user.displayName,
+    avatarUrl: user.avatarUrl,
+    avatarFrame: user.card?.avatarFrame ?? user.appearance?.avatarFrame,
+    frameColor: user.card?.frameColor ?? user.appearance?.frameColor,
+    frameImage: user.card?.frameImage ?? user.avatarFrameImage ?? null,
+  };
+}
 
 export type Relation = 'self' | 'friend' | 'incoming' | 'outgoing' | 'none' | 'blocked';
 
 export interface PlayerCardStyle {
   accent: string;
   avatarFrame: AvatarFrame;
+  frameImage?: FrameImage | null;
   nameStyle: NameStyle;
   statusEmoji?: string;
   statusText?: string;
@@ -104,11 +120,33 @@ export interface ReactionCount {
   count: number;
 }
 
+export const FEED_KINDS = ['completed', 'started', 'favorited', 'played', 'achievement', 'reviewed', 'planned'] as const;
+
+export type FeedKind = (typeof FEED_KINDS)[number];
+
+export function isFeedKind(kind: string): kind is FeedKind {
+  return (FEED_KINDS as readonly string[]).includes(kind);
+}
+
+export interface FeedAchievement {
+  key: string;
+  name: string;
+  iconUrl: string;
+}
+
+export interface FeedReview {
+  id: number;
+  recommended: boolean;
+}
+
 export interface ActivityView {
   id: number;
   kind: string;
   game: GameCard;
   createdAt: string;
+  seconds: number;
+  achievements: FeedAchievement[];
+  review: FeedReview | null;
 }
 
 export interface FeedEvent {
@@ -117,6 +155,9 @@ export interface FeedEvent {
   kind: string;
   game: GameCard;
   createdAt: string;
+  seconds: number;
+  achievements: FeedAchievement[];
+  review: FeedReview | null;
   reactions: ReactionCount[];
   mine: string[];
   note: string;
@@ -167,6 +208,8 @@ export interface BlockData {
   unknown?: number;
   hours?: number;
   completed?: number;
+  year?: number;
+  total?: number;
 }
 
 export interface PublicBlock extends ProfileBlock {
@@ -180,6 +223,7 @@ export interface PublicLayout {
 
 export interface PublicProfile extends UserCard {
   appearance?: ProfileAppearance;
+  avatarFrameImage?: FrameImage | null;
   statusEmoji?: string;
   statusText?: string;
   layout?: PublicLayout | null;
@@ -362,6 +406,7 @@ function toProfile(value: unknown): PublicProfile {
     avatarUrl: profile.avatarUrl,
     card: profile.card ?? null,
     appearance: profile.appearance,
+    avatarFrameImage: profile.avatarFrameImage ?? null,
     statusEmoji: profile.statusEmoji ?? '',
     statusText: profile.statusText ?? '',
     layout: profile.layout ? { version: profile.layout.version, blocks: list(profile.layout.blocks) } : null,
@@ -373,7 +418,9 @@ function toProfile(value: unknown): PublicProfile {
     favorites: list(profile.favorites),
     showcase: list(profile.showcase),
     recentlyPlayed: list(profile.recentlyPlayed),
-    recentActivity: list(profile.recentActivity),
+    recentActivity: list(profile.recentActivity)
+      .filter((item) => isFeedKind(item.kind))
+      .map((item) => ({ ...item, ...extras(item) })),
     common: profile.common ?? null,
     mutualFriends: list(profile.mutualFriends),
     mutualCount: profile.mutualCount ?? 0,
@@ -430,13 +477,28 @@ export async function gameFriends(canonicalGameId: string): Promise<GameFriends>
   }
 }
 
+function extras(item: {
+  seconds?: number | null;
+  achievements?: Partial<FeedAchievement>[] | null;
+  review?: FeedReview | null;
+}): Pick<FeedEvent, 'seconds' | 'achievements' | 'review'> {
+  return {
+    seconds: item.seconds ?? 0,
+    achievements: list(item.achievements).map((a) => ({ key: a.key ?? '', name: a.name ?? '', iconUrl: a.iconUrl ?? '' })),
+    review: item.review ?? null,
+  };
+}
+
 export async function feed(cursor = ''): Promise<FeedPage> {
   if (!inWails) return emptyFeedPage();
   try {
     const page = (await SocialService.Feed(cursor)) as unknown as Partial<FeedPage> | null;
     return {
-      events: list(page?.events).map((event) => ({
+      events: list(page?.events)
+        .filter((event) => isFeedKind(event.kind))
+        .map((event) => ({
         ...event,
+        ...extras(event),
         reactions: list(event.reactions),
         mine: list(event.mine),
         note: event.note ?? '',

@@ -1,6 +1,7 @@
 package profile
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -179,5 +180,28 @@ func TestRefCarriesCanonicalGameID(t *testing.T) {
 	got := ref(library.Game{ID: "local", Title: "007 First Light", CanonicalGameID: "bcc546bd4ab58c4e"})
 	if got.CanonicalGameID != "bcc546bd4ab58c4e" {
 		t.Fatalf("CanonicalGameID = %q, ожидался bcc546bd4ab58c4e", got.CanonicalGameID)
+	}
+}
+
+func TestBuildCountsMasteredByItsCompletionDate(t *testing.T) {
+	list := []library.Game{
+		{ID: "mastered", Title: "Mastered", Status: library.StatusMastered, StatusAt: ptr(at(-time.Hour)), CompletedAt: ptr(at(-40 * 24 * time.Hour))},
+		{ID: "fresh", Title: "Fresh", Status: library.StatusMastered, StatusAt: ptr(at(-60 * 24 * time.Hour)), CompletedAt: ptr(at(-time.Hour))},
+		{ID: "old", Title: "Old", Status: library.StatusCompleted, StatusAt: ptr(at(-24 * time.Hour))},
+		{ID: "playing", Title: "Playing", Status: library.StatusPlaying, StatusAt: ptr(at(-time.Minute))},
+	}
+	snap := Build(list, nil, nil, []string{"recently_completed"}, now)
+	if snap.Stats.Completed != 3 {
+		t.Errorf("Completed = %d, want 3 (mastered counts as completed)", snap.Stats.Completed)
+	}
+	if snap.Stats.MonthCompleted != 2 {
+		t.Errorf("MonthCompleted = %d, want 2 (fresh by its completion date, old by its status change; mastered was completed last month)", snap.Stats.MonthCompleted)
+	}
+	got := []string{}
+	for _, g := range snap.Showcase[0].Games {
+		got = append(got, g.ID)
+	}
+	if want := []string{"fresh", "old", "mastered"}; strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("recently_completed = %v, want %v", got, want)
 	}
 }

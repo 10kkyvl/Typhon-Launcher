@@ -38,6 +38,7 @@
     type FriendView,
     type RequestView,
     type UserCard,
+    chatPeerOf,
   } from '../../lib/services/social';
   import { blockPrompt, unfriendPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
   import { presenceDot, presenceLine, sortFriends } from '../../lib/social/presence';
@@ -235,7 +236,7 @@
   }
 
   function openMessage(user: UserCard) {
-    openChat(user);
+    openChat(chatPeerOf(user));
   }
 
   $effect(() => {

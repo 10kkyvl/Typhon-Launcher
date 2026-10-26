@@ -119,6 +119,11 @@ func TestLicensePath(t *testing.T) {
 			want: filepath.Join("cache", "github.com/foo/bar@v1.2.3", "LICENSE"),
 		},
 		{
+			name: "go module with upper-case letters",
+			c:    Component{Name: "github.com/RoaringBitmap/roaring", Version: "v1.2.3", Source: "go", LicenseFile: "LICENSE"},
+			want: filepath.Join("cache", "github.com/!roaring!bitmap/roaring@v1.2.3", "LICENSE"),
+		},
+		{
 			name: "npm package",
 			c:    Component{Name: "left-pad", Version: "1.0.0", Source: "npm", LicenseFile: "LICENSE.md"},
 			want: filepath.Join("npm", "left-pad", "LICENSE.md"),

@@ -262,7 +262,7 @@ describe('lists around a profile', () => {
 
 describe('activity feed', () => {
   it('gives every event empty reaction lists and an empty note when Go sent none', async () => {
-    answer('social.Feed', { events: [{ id: 'e1', reactions: null, mine: null }, { id: 'e2', reactions: [{ emoji: 'fire', count: 2 }], mine: ['fire'], note: 'gg' }], next: 7 });
+    answer('social.Feed', { events: [{ id: 'e1', kind: 'completed', reactions: null, mine: null }, { id: 'e2', kind: 'started', reactions: [{ emoji: 'fire', count: 2 }], mine: ['fire'], note: 'gg' }], next: 7 });
     const { social } = await load(true);
 
     const page = (await social.feed('c0')) as unknown as { events: Array<Record<string, unknown>>; next: number };
@@ -271,6 +271,28 @@ describe('activity feed', () => {
     expect(page.events[0]).toMatchObject({ id: 'e1', reactions: [], mine: [], note: '' });
     expect(page.events[1]).toMatchObject({ id: 'e2', reactions: [{ emoji: 'fire', count: 2 }], mine: ['fire'], note: 'gg' });
     expect(calls.at(-1)).toEqual({ key: 'social.Feed', args: ['c0'] });
+  });
+
+  it('normalises the new nullable fields and drops unknown kinds', async () => {
+    answer('social.Feed', {
+      events: [
+        { id: 'e1', kind: 'played', seconds: 7200 },
+        { id: 'e2', kind: 'achievement', achievements: [{ key: 'K', name: 'N' }] },
+        { id: 'e3', kind: 'reviewed', review: { id: 4, recommended: false } },
+        { id: 'e4', kind: 'planned', achievements: null, review: null },
+        { id: 'e5', kind: 'exploded' },
+      ],
+      next: 0,
+    });
+    const { social } = await load(true);
+
+    const page = (await social.feed()) as unknown as { events: Array<Record<string, unknown>> };
+
+    expect(page.events.map((e) => e.id)).toEqual(['e1', 'e2', 'e3', 'e4']);
+    expect(page.events[0]).toMatchObject({ seconds: 7200, achievements: [], review: null });
+    expect(page.events[1]).toMatchObject({ seconds: 0, achievements: [{ key: 'K', name: 'N', iconUrl: '' }] });
+    expect(page.events[2]).toMatchObject({ review: { id: 4, recommended: false } });
+    expect(page.events[3]).toMatchObject({ achievements: [], review: null });
   });
 
   it('turns a missing page into an empty one', async () => {

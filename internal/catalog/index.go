@@ -25,6 +25,7 @@ type index struct {
 	byExternal map[string]int
 
 	byServer       map[string][]int
+	byParent       map[string][]int
 	byIGDB         map[string][]int
 	bySteam        map[string][]int
 	byGOG          map[string][]int
@@ -44,6 +45,7 @@ func buildIndex(games []Game) *index {
 		byToken:        map[string][]int{},
 		byExternal:     map[string]int{},
 		byServer:       make(map[string][]int, len(games)),
+		byParent:       make(map[string][]int),
 		byIGDB:         make(map[string][]int, len(games)),
 		bySteam:        make(map[string][]int, len(games)),
 		byGOG:          map[string][]int{},
@@ -116,6 +118,9 @@ func (idx *index) registerRemote(pos int, g Game) {
 	if g.ServerID != "" {
 		addPosting(idx.byServer, g.ServerID, pos)
 	}
+	if g.ParentID != "" {
+		addPosting(idx.byParent, g.ParentID, pos)
+	}
 	if g.ExternalIDs.IGDB != "" {
 		addPosting(idx.byIGDB, strings.ToLower(g.ExternalIDs.IGDB), pos)
 	}
@@ -132,6 +137,9 @@ func (idx *index) registerRemote(pos int, g Game) {
 func (idx *index) unregisterRemote(pos int, g Game) {
 	if g.ServerID != "" {
 		removePosting(idx.byServer, g.ServerID, pos)
+	}
+	if g.ParentID != "" {
+		removePosting(idx.byParent, g.ParentID, pos)
 	}
 	if g.ExternalIDs.IGDB != "" {
 		removePosting(idx.byIGDB, strings.ToLower(g.ExternalIDs.IGDB), pos)

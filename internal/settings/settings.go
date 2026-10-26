@@ -185,10 +185,12 @@ type Settings struct {
 	UpdateAutoDownload       bool   `json:"updateAutoDownload"`
 	UpdateAutoInstall        bool   `json:"updateAutoInstall"`
 	UpdateSaveBackup         bool   `json:"updateSaveBackup"`
+	UpdateBetaChannel        bool   `json:"updateBetaChannel"`
 	KeepPreviousVersion      string `json:"keepPreviousVersion"`
 	AllowTorrentReuse        bool   `json:"allowTorrentReuse"`
 
 	SaveBackupAfterSession bool `json:"saveBackupAfterSession"`
+	SaveBackupBeforeLaunch bool `json:"saveBackupBeforeLaunch"`
 	SaveBackupLimit        int  `json:"saveBackupLimit"`
 
 	CloudSaves bool `json:"cloudSaves"`
@@ -292,10 +294,12 @@ func Defaults() Settings {
 		UpdateAutoDownload:       false,
 		UpdateAutoInstall:        false,
 		UpdateSaveBackup:         true,
+		UpdateBetaChannel:        false,
 		KeepPreviousVersion:      KeepPreviousFirstLaunch,
 		AllowTorrentReuse:        true,
 
 		SaveBackupAfterSession: true,
+		SaveBackupBeforeLaunch: true,
 		SaveBackupLimit:        DefaultSaveBackupLimit,
 
 		CloudSaves: false,

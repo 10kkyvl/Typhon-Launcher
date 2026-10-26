@@ -9,6 +9,7 @@
   import type { GridBlock } from '../../profile/layoutView';
   import AboutBlock from './AboutBlock.svelte';
   import CollectionBlock from './CollectionBlock.svelte';
+  import CompletedBlock from './CompletedBlock.svelte';
   import FingerprintBlock from './FingerprintBlock.svelte';
   import GenresBlock from './GenresBlock.svelte';
   import PinnedBlock from './PinnedBlock.svelte';
@@ -152,6 +153,8 @@
     {/if}
   {:else if body.kind === 'collection'}
     <CollectionBlock title={body.title} games={body.games} dated={body.dated} hearts={body.hearts} />
+  {:else if body.kind === 'completed'}
+    <CompletedBlock year={body.year} total={body.total} games={body.games} />
   {:else if body.kind === 'genres'}
     <GenresBlock breakdown={body.breakdown} />
   {:else if body.kind === 'fingerprint'}

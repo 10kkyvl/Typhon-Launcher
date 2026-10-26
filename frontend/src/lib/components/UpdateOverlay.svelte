@@ -12,6 +12,7 @@
     selfUpdateStatus,
   } from '../stores/selfupdate';
   import { route } from '../stores/router';
+  import { themeLayout } from '../stores/layout';
   import { outcomeReason } from '../services/selfupdateMessages';
   import { bytesSize } from '../utils/format';
   import { msg } from '../i18n';
@@ -42,10 +43,10 @@
 {/if}
 
 {#if downloading && !applying && $route.name !== 'settings' && !$bigPictureActive}
-  <div class="card">
+  <div class="card" class:sidebar-right={$themeLayout.side === 'right'}>
     <div class="row">
       <Download size="1.8rem" strokeWidth={1.8} />
-      <span class="title">{msg('ui.downloadingUpdate', { version })}</span>
+      <span class="title">{msg(status.delta ? 'ui.downloadingUpdatePatch' : 'ui.downloadingUpdate', { version })}</span>
       <IconButton label={msg('ui.cancelDownload')} size="sm" onclick={requestCancelDownload}>
         <X size="1.6rem" strokeWidth={1.8} />
       </IconButton>
@@ -54,14 +55,22 @@
     <span class="meta">{msg('ui.bytesOfBytes', { done: bytesSize(downloadedBytes), total: bytesSize(totalBytes) })} · {Math.round(pct)}%</span>
   </div>
 {:else if outcome && !$bigPictureActive}
-  <div class="card" class:card-danger={!outcome.ok} in:fly={{ x: -24, duration: 220 }} out:fade={{ duration: 200 }}>
+  <div class="card" class:card-danger={!outcome.ok} class:sidebar-right={$themeLayout.side === 'right'} in:fly={{ x: -24, duration: 220 }} out:fade={{ duration: 200 }}>
     <div class="row">
       {#if outcome.ok}
         <CheckCircle2 size="1.8rem" strokeWidth={1.8} />
-        <span class="title">{msg('ui.launcherUpdatedTo', { version: outcome.version })}</span>
+        <span class="title">
+          {outcome.kind === 'rolled_back'
+            ? msg('ui.launcherRolledBackTo', { version: outcome.version })
+            : msg('ui.launcherUpdatedTo', { version: outcome.version })}
+        </span>
       {:else}
         <TriangleAlert size="1.8rem" strokeWidth={1.8} />
-        <span class="title">{msg('ui.updateFailedVersion', { version: outcome.version })}</span>
+        <span class="title">
+          {outcome.kind === 'rolled_back'
+            ? msg('ui.rollbackFailedVersion', { version: outcome.version })
+            : msg('ui.updateFailedVersion', { version: outcome.version })}
+        </span>
       {/if}
       <IconButton label={msg('ui.hide')} size="sm" onclick={dismissOutcome}>
         <X size="1.6rem" strokeWidth={1.8} />
@@ -69,6 +78,8 @@
     </div>
     {#if !outcome.ok && outcome.error}
       <span class="meta">{outcomeReason(outcome)}</span>
+    {:else if outcome.ok && outcome.snapshotError}
+      <span class="meta">{msg('state.selfupdateReasonSnapshotFailed')}</span>
     {/if}
   </div>
 {/if}
@@ -151,6 +162,10 @@
     box-shadow: var(--shadow-modal);
   }
 
+  .card.sidebar-right {
+    left: 2.4rem;
+  }
+
   .card-danger {
     background: var(--danger-subtle);
     color: var(--danger);
@@ -180,6 +195,10 @@
   @media (max-width: 1140px) {
     .card {
       left: 8.8rem;
+    }
+
+    .card.sidebar-right {
+      left: 2.4rem;
     }
   }
 

@@ -14,6 +14,7 @@ type SyncGame struct {
 	FavoriteAt      *time.Time
 	Status          string
 	StatusAt        *time.Time
+	CompletedAt     *time.Time
 	Hidden          bool
 	HiddenAt        *time.Time
 }
@@ -46,6 +47,10 @@ func (s *Service) SyncSnapshot() []SyncGame {
 		if s.games[i].StatusAt != nil {
 			t := *s.games[i].StatusAt
 			item.StatusAt = &t
+		}
+		if s.games[i].CompletedAt != nil {
+			t := *s.games[i].CompletedAt
+			item.CompletedAt = &t
 		}
 		if s.games[i].FavoriteAt != nil {
 			t := *s.games[i].FavoriteAt
@@ -92,6 +97,7 @@ func (s *Service) ApplySync(items []SyncGame) error {
 				t := *item.StatusAt
 				s.games[i].Status = item.Status
 				s.games[i].StatusAt = &t
+				s.games[i].CompletedAt = syncedCompletedAt(item.Status, item.CompletedAt, s.now())
 				changed = true
 			}
 			if item.FavoriteAt != nil && (s.games[i].FavoriteAt == nil || item.FavoriteAt.After(*s.games[i].FavoriteAt)) {

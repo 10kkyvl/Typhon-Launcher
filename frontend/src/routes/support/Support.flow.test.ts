@@ -149,10 +149,11 @@ describe('where the section is reachable from', () => {
         for (const key of match[1].matchAll(/(\w+):/g)) used.add(key[1]);
       }
     }
-    expect([...used].sort()).toEqual(['ticket', 'topic', 'view']);
+    expect([...used].sort()).toEqual(['subject', 'ticket', 'topic', 'view']);
     expect(app).toContain('ticket={$route.params.ticket}');
     expect(app).toContain('view={$route.params.view}');
     expect(app).toContain('topic={$route.params.topic}');
+    expect(app).toContain('subject={$route.params.subject}');
   });
 
   it('keeps every support screen in one folder', () => {

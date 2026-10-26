@@ -53,7 +53,7 @@ export interface AddPreset {
 type Config = Record<string, unknown>;
 type VisibilityFlags = Pick<ProfileSettings, 'showPlaying' | 'showLibrary' | 'showActivity' | 'showStats'>;
 
-const ONCE: ReadonlySet<string> = new Set(['genres', 'fingerprint', 'recent', 'activity', 'stats', 'playing', 'about']);
+const ONCE: ReadonlySet<string> = new Set(['genres', 'fingerprint', 'recent', 'activity', 'stats', 'playing', 'about', 'completed']);
 
 export const ADD_PRESETS: readonly AddPreset[] = [
   { id: 'pinned', type: 'pinned', width: 'full', config: { igdbId: 0, caption: '' } },
@@ -69,6 +69,7 @@ export const ADD_PRESETS: readonly AddPreset[] = [
   { id: 'stats', type: 'stats', width: 'half', config: {} },
   { id: 'playing', type: 'playing', width: 'full', config: {} },
   { id: 'about', type: 'about', width: 'full', config: {} },
+  { id: 'completed', type: 'completed', width: 'full', config: {} },
 ];
 
 const ERROR_KEYS: Record<LayoutErrorCode, ProfileKey> = {
@@ -361,6 +362,7 @@ export function hiddenFromOthers(type: string, flags: VisibilityFlags): boolean 
     case 'recent':
     case 'pinned':
     case 'collection':
+    case 'completed':
       return !flags.showLibrary;
     default:
       return false;

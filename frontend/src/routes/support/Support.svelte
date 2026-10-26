@@ -1,11 +1,12 @@
 <script lang="ts">
   import { LifeBuoy } from '@lucide/svelte';
+  import AiSkillButton from '../../lib/components/AiSkillButton.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import { msg } from '../../lib/i18n';
-  import { openSupportSite } from '../../lib/services/account';
+  import { openStatusPage, openSupportSite } from '../../lib/services/account';
   import { accountErrorText } from '../../lib/services/accountMessages';
   import { parseTicketNumber, parseTopic } from '../../lib/support/topics';
   import { authState, leaveGuest } from '../../lib/stores/user';
@@ -14,7 +15,7 @@
   import TicketList from './TicketList.svelte';
   import TicketView from './TicketView.svelte';
 
-  let { ticket, view, topic }: { ticket?: string; view?: string; topic?: string } = $props();
+  let { ticket, view, topic, subject }: { ticket?: string; view?: string; topic?: string; subject?: string } = $props();
 
   const number = $derived(parseTicketNumber(ticket));
   const needsAccount = $derived($authState === 'guest');
@@ -35,6 +36,15 @@
       toast(msg('tickets.siteOpenFailed'), 'danger');
     }
   }
+
+  async function openStatus() {
+    try {
+      await openStatusPage();
+    } catch (err) {
+      console.error('open status page', err);
+      toast(msg('tickets.statusOpenFailed'), 'danger');
+    }
+  }
 </script>
 
 {#if needsAccount}
@@ -47,6 +57,7 @@
       {#snippet actions()}
         <Button variant="primary" onclick={signIn}>{msg('tickets.guestSignIn')}</Button>
         <Button onclick={writeFromSite}>{msg('tickets.cantSignIn')}</Button>
+        <Button variant="ghost" onclick={openStatus}>{msg('tickets.statusPage')}</Button>
       {/snippet}
     </EmptyState>
   </Card>
@@ -55,7 +66,27 @@
     <TicketView {number} />
   {/key}
 {:else if view === 'new'}
-  <NewTicket initialTopic={parseTopic(topic)} />
+  <NewTicket initialTopic={parseTopic(topic)} initialSubject={subject ?? ''} />
 {:else}
   <TicketList />
+  <Card title={msg('settings.aiSkillSupportTitle')}>
+    <div class="skill-row">
+      <span class="skill-sub">{msg('settings.aiSkillSupportSub')}</span>
+      <AiSkillButton label={msg('settings.aiSkillSupportButton')} />
+    </div>
+  </Card>
 {/if}
+
+<style>
+  .skill-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-6);
+  }
+
+  .skill-sub {
+    font-size: var(--font-xs);
+    color: var(--text-3);
+  }
+</style>

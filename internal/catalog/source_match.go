@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"unicode"
 )
 
 type ReleaseQuery struct {
@@ -11,10 +13,27 @@ type ReleaseQuery struct {
 	Year   int      `json:"year,omitempty"`
 }
 type ReleaseMatch struct {
-	Game *Game `json:"game,omitempty"`
+	Game       *Game              `json:"game,omitempty"`
+	Reason     string             `json:"reason,omitempty"`
+	Candidates []ReleaseCandidate `json:"candidates,omitempty"`
+}
+
+type ReleaseCandidate struct {
+	ID          string   `json:"id"`
+	Title       string   `json:"title"`
+	ReleaseYear int      `json:"releaseYear,omitempty"`
+	Platforms   []string `json:"platforms,omitempty"`
+	GameType    string   `json:"gameType,omitempty"`
+	ParentID    string   `json:"parentId,omitempty"`
 }
 type ReleaseMatcher interface {
 	MatchReleases(context.Context, []ReleaseQuery) ([]ReleaseMatch, error)
+}
+
+// RulesVersioner is implemented by a matcher whose server numbers its matching
+// rules; a saved match from an older number is worth asking again.
+type RulesVersioner interface {
+	MatchRulesVersion() int
 }
 
 // Failed positions in the results are zero values, not misses.
@@ -32,12 +51,99 @@ func (e *PartialMatchError) Unwrap() error { return e.Err }
 
 const MethodServerTitle Method = "server_title"
 
+const (
+	ReasonNone      = "none"
+	ReasonAmbiguous = "ambiguous"
+	ReasonTooMany   = "too_many"
+)
+
+const (
+	SourceServer = "server"
+	SourceLocal  = "local"
+)
+
+const (
+	maxServerCandidates = 3
+	maxCandidateID      = 128
+	maxCandidateTitle   = 200
+	maxCandidatePlats   = 8
+	maxCandidatePlat    = 32
+	minCandidateYear    = 1950
+	maxCandidateYear    = 2100
+)
+
+// An answer from a server that does not know the field, or from a newer one
+// with a reason this launcher has no word for, carries no reason.
+func normalizeReason(reason string) string {
+	switch reason {
+	case ReasonNone, ReasonAmbiguous, ReasonTooMany:
+		return reason
+	}
+	return ""
+}
+
+func cleanText(s string, limit int) string {
+	s = strings.TrimSpace(strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+			return -1
+		}
+		return r
+	}, s))
+	if runes := []rune(s); len(runes) > limit {
+		s = strings.TrimSpace(string(runes[:limit]))
+	}
+	return s
+}
+
+// serverCandidates keeps at most three well-formed candidates: a name from the
+// network is shown to the user, so it is cleaned and cut before it is stored.
+func serverCandidates(in []ReleaseCandidate) []Candidate {
+	out := make([]Candidate, 0, maxServerCandidates)
+	seen := map[string]bool{}
+	for _, c := range in {
+		if len(out) == maxServerCandidates {
+			break
+		}
+		id := strings.TrimSpace(c.ID)
+		title := cleanText(c.Title, maxCandidateTitle)
+		if id == "" || len(id) > maxCandidateID || title == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		cand := Candidate{GameID: id, Title: title, Method: MethodNone, Source: SourceServer}
+		if c.ReleaseYear >= minCandidateYear && c.ReleaseYear <= maxCandidateYear {
+			year := c.ReleaseYear
+			cand.Year = &year
+		}
+		for _, p := range c.Platforms {
+			if len(cand.Platforms) == maxCandidatePlats {
+				break
+			}
+			if p = cleanText(p, maxCandidatePlat); p != "" {
+				cand.Platforms = append(cand.Platforms, p)
+			}
+		}
+		out = append(out, cand)
+	}
+	return out
+}
+
 //wails:ignore
 func (s *Service) HasReleaseMatcher() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	_, ok := s.remote.(ReleaseMatcher)
 	return ok
+}
+
+//wails:ignore
+func (s *Service) MatchRulesVersion() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if v, ok := s.remote.(RulesVersioner); ok {
+		return v.MatchRulesVersion()
+	}
+	return 0
 }
 
 //wails:ignore
@@ -69,6 +175,18 @@ func (s *Service) ResolveSourceQueries(ctx context.Context, queries []ReleaseQue
 	for i, r := range resolved {
 		out[i] = Match{Status: StatusUnmatched, Method: MethodNone}
 		if r.Game == nil {
+			out[i].Reason = normalizeReason(r.Reason)
+			if out[i].Reason == ReasonAmbiguous {
+				if list := serverCandidates(r.Candidates); len(list) > 0 {
+					for j := range list {
+						if pos := s.idx.byServer[list[j].GameID]; len(pos) > 0 {
+							list[j].GameID = s.games[pos[len(pos)-1]].ID
+						}
+					}
+					out[i].Status = StatusReview
+					out[i].Candidates = list
+				}
+			}
 			continue
 		}
 		g := *r.Game
@@ -83,7 +201,22 @@ func (s *Service) ResolveSourceQueries(ctx context.Context, queries []ReleaseQue
 		g.LocalExternalIDs = ExternalIDs{}
 		g.Provisional = false
 		if pos := s.idx.matchRemote(g); pos >= 0 {
-			g = s.games[pos]
+			old := s.games[pos]
+			// A match answer carries a slim projection without cover, genres or
+			// summary, so only the links the server owns are taken from it.
+			merged := old
+			if g.ParentID != "" {
+				merged.ParentID = g.ParentID
+			}
+			if g.GameType != "" {
+				merged.GameType = g.GameType
+			}
+			if merged.ParentID != old.ParentID || merged.GameType != old.GameType {
+				s.games[pos] = merged
+				s.updateIndexAtLocked(pos, old)
+				changed = true
+			}
+			g = merged
 		} else {
 			s.games = append(s.games, g)
 			s.addToIndexLocked(g)

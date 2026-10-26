@@ -36,9 +36,25 @@ func stubOpenTorrentClient(t *testing.T, stub func(tc *torrent.ClientConfig) (*t
 	openTorrentClient = stub
 }
 
+// Port 0 is no stand-in for a free port: Windows hands out the next number in
+// a row, which sits in the range Hyper-V or Docker excluded from UDP as surely
+// as the one newLANClient just retried from, so the real client is opened on
+// random ports of the dynamic range until one listens.
 func openForReal(tc *torrent.ClientConfig) (*torrent.Client, error) {
-	tc.ListenPort = 0
-	return torrent.NewClient(tc)
+	var err error
+	for attempt := 0; attempt <= listenport.Attempts; attempt++ {
+		if tc.ListenPort, err = listenport.Random(); err != nil {
+			return nil, err
+		}
+		var cl *torrent.Client
+		if cl, err = torrent.NewClient(tc); err == nil {
+			return cl, nil
+		}
+		if !listenport.IsListenError(err) {
+			return nil, err
+		}
+	}
+	return nil, err
 }
 
 func TestNewLANClientKeepsTryingRandomPorts(t *testing.T) {

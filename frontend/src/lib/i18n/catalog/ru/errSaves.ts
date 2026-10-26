@@ -5,6 +5,7 @@ export const errSaves = {
   'savebackup.invalid_id': 'Некорректный идентификатор игры или копии',
   'savebackup.invalid_kind': 'Неизвестный вид резервной копии',
   'savebackup.saves_not_found': 'Папка сохранений не найдена. Укажите её вручную',
+  'savebackup.saves_cache_like': 'Найденная папка похожа на кеш игры, а не на сохранения. Укажите папку сохранений вручную',
   'savebackup.saves_ambiguous': 'Найдено несколько папок сохранений. Выберите нужную',
   'savebackup.saves_not_a_directory': 'Путь сохранений не является папкой',
   'savebackup.saves_path_unavailable': 'Папка сохранений недоступна',
@@ -19,6 +20,8 @@ export const errSaves = {
   'savebackup.recovery_failed': 'Не удалось довести до конца прерванную операцию с сохранениями',
   'savebackup.no_free_space': 'На диске не хватает места для копии',
   'savebackup.rotation_failed': 'Копия создана, но старые копии удалить не удалось',
+  'savebackup.launch_timeout': 'копия сохранений перед запуском не успела — игра запущена без неё',
+  'savebackup.recovery_pending': 'прерванный откат сохранений не завершён — запуск остановлен, чтобы не потерять сохранения. Закройте программы, которые могут держать папку сохранений, и попробуйте снова',
   'savebackup.cleanup_failed': 'не удалось убрать временные файлы рядом с папкой сохранений',
 } as const;
 

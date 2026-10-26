@@ -2,7 +2,8 @@
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
   import ReleaseNotesList from './ReleaseNotesList.svelte';
-  import { dismissReleaseNotes, releaseNotes, unseenReleaseNotes } from '../stores/selfupdate';
+  import RollbackAction from './RollbackAction.svelte';
+  import { dismissReleaseNotes, releaseNotes, rollbackInfo, unseenReleaseNotes } from '../stores/selfupdate';
   import { msg } from '../i18n';
 
   const notes = $derived($unseenReleaseNotes);
@@ -23,11 +24,18 @@
   {/if}
   <ReleaseNotesList notes={notes} currentVersion={$releaseNotes.currentVersion} />
   {#snippet footer()}
+    {#if $rollbackInfo.available}
+      <span class="rollback"><RollbackAction compact /></span>
+    {/if}
     <Button variant="primary" onclick={dismissReleaseNotes}>{msg('common.gotIt')}</Button>
   {/snippet}
 </Modal>
 
 <style>
+  .rollback {
+    margin-right: auto;
+  }
+
   .lead {
     margin: 0 0 var(--space-4);
     color: var(--text-2);

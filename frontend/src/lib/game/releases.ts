@@ -1,6 +1,6 @@
 import type { MessageKey } from '../i18n';
 import type { DownloadOrigin } from '../services/downloads';
-import type { Release, ReleaseDownloadRequest } from '../services/sources';
+import type { Release, ReleaseDownloadRequest, RelatedRelation } from '../services/sources';
 import type { AvailabilityKind } from '../services/updates';
 
 export function releaseOrigin(request: ReleaseDownloadRequest): DownloadOrigin {
@@ -13,6 +13,21 @@ export function releaseOrigin(request: ReleaseDownloadRequest): DownloadOrigin {
   if (request.releaseUploadedAt) origin.releaseUploadedAt = request.releaseUploadedAt;
   if (request.version) origin.version = request.version;
   return origin;
+}
+
+const relationKeys: Record<RelatedRelation, MessageKey> = {
+  original: 'games.relationOriginal',
+  base: 'games.relationBase',
+  remake: 'games.relationRemake',
+  remaster: 'games.relationRemaster',
+  expanded: 'games.relationExpanded',
+  port: 'games.relationPort',
+  edition: 'games.relationEdition',
+  update: 'games.relationUpdate',
+};
+
+export function relationKey(relation: string): MessageKey {
+  return relationKeys[relation as RelatedRelation] ?? 'games.relationEdition';
 }
 
 export type ReleaseBadge = 'installed' | 'update' | 'new-release' | 'new' | 'none';

@@ -14,6 +14,7 @@ const LABELS: Record<BlockType, ProfileKey> = {
   stats: 'profile.blockStats',
   playing: 'profile.blockPlaying',
   about: 'profile.blockAbout',
+  completed: 'profile.blockCompleted',
 };
 
 export function blockLabel(type: string): string {

@@ -215,6 +215,13 @@ func (s *Service) Record(gameID string, startedAt, endedAt time.Time) {
 }
 
 //wails:ignore
+func (s *Service) Degraded() DegradedStatus {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.status
+}
+
+//wails:ignore
 func (s *Service) Since(t time.Time) []Session {
 	s.mu.Lock()
 	defer s.mu.Unlock()

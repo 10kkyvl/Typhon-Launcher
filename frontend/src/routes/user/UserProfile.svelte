@@ -11,7 +11,7 @@
   import BlockGrid from '../../lib/components/profile/BlockGrid.svelte';
   import { AccountError } from '../../lib/services/account';
   import { accountErrorText } from '../../lib/services/accountMessages';
-  import type { PublicProfile } from '../../lib/services/social';
+  import { chatPeerOf, type PublicProfile } from '../../lib/services/social';
   import {
     accept,
     block,
@@ -22,7 +22,6 @@
     unfriend,
   } from '../../lib/services/social';
   import { blockPrompt, unfriendPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
-  import { appearanceOf } from '../../lib/profile/appearance';
   import { publicLayout, resolvePublic, type GridBlock } from '../../lib/profile/layoutView';
   import { wideArt } from '../../lib/social/art';
   import { openGameByIGDB } from '../../lib/social/openGame';
@@ -270,7 +269,7 @@
   <div class="profile" class:refreshing>
     <ProfileCanvas appearance={data.appearance} {autoArt}>
     <ProfileCover appearance={data.appearance} {autoArt} />
-    <UserHeader profile={data} {busy} onaction={act} onmessage={() => data && openChat(data)} />
+    <UserHeader profile={data} {busy} onaction={act} onmessage={() => data && openChat(chatPeerOf(data))} />
     {#if closed}
       <p class="notice"><Lock size="1.8rem" strokeWidth={1.6} />{msg('social.userProfileClosed')}</p>
     {:else if restricted}
@@ -278,7 +277,7 @@
     {:else}
       <div class="columns">
         <div class="main">
-          <BlockGrid blocks={gridBlocks} {external} {masked} accent={appearanceOf(data.appearance).accent} />
+          <BlockGrid blocks={gridBlocks} {external} {masked} />
           {#if common}
             <UserCommon
               {common}

@@ -130,9 +130,9 @@ tasks:
       - wails3 generate webview2bootstrapper -dir "{{.ROOT_DIR}}/build/windows/nsis"
       - |
         {{if eq OS "windows"}}
-        makensis -DWAILS_INSTALL_SCOPE={{.INSTALL_SCOPE}} {{if eq .INSTALL_SCOPE "user"}}-DREQUEST_EXECUTION_LEVEL=user {{end}}-DINFO_PRODUCTVERSION={{.VERSION}} -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.ROOT_DIR}}\{{.BIN_DIR}}\{{.APP_NAME}}.exe" project.nsi
+        makensis -DWAILS_INSTALL_SCOPE={{.INSTALL_SCOPE}} {{if eq .INSTALL_SCOPE "user"}}-DREQUEST_EXECUTION_LEVEL=user {{end}}-DINFO_PRODUCTVERSION={{.VERSION}} -DINFO_NUMERIC_VERSION={{.NUMERIC_VERSION}} -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.ROOT_DIR}}\{{.BIN_DIR}}\{{.APP_NAME}}.exe" project.nsi
         {{else}}
-        makensis -DWAILS_INSTALL_SCOPE={{.INSTALL_SCOPE}} {{if eq .INSTALL_SCOPE "user"}}-DREQUEST_EXECUTION_LEVEL=user {{end}}-DINFO_PRODUCTVERSION={{.VERSION}} -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.ROOT_DIR}}/{{.BIN_DIR}}/{{.APP_NAME}}.exe" project.nsi
+        makensis -DWAILS_INSTALL_SCOPE={{.INSTALL_SCOPE}} {{if eq .INSTALL_SCOPE "user"}}-DREQUEST_EXECUTION_LEVEL=user {{end}}-DINFO_PRODUCTVERSION={{.VERSION}} -DINFO_NUMERIC_VERSION={{.NUMERIC_VERSION}} -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.ROOT_DIR}}/{{.BIN_DIR}}/{{.APP_NAME}}.exe" project.nsi
         {{end}}
     vars:
       ARCH: '{{.ARCH | default ARCH}}'
@@ -140,6 +140,8 @@ tasks:
       INSTALL_SCOPE: '{{.INSTALL_SCOPE | default "user"}}'
       VERSION:
         sh: cat "{{.ROOT_DIR}}/VERSION"
+      NUMERIC_VERSION:
+        sh: cut -d- -f1 "{{.ROOT_DIR}}/VERSION"
 
   create:msix:package:
     summary: Creates an MSIX package

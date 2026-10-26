@@ -1,6 +1,6 @@
 import { get, writable } from 'svelte/store';
 import { backupsEnabled, onBackupEvent } from '../services/savebackup';
-import { saveBackupCodeText } from '../savebackup/messages';
+import { backupNotice } from '../savebackup/messages';
 import { msg } from '../i18n';
 import { libraryGames } from './library';
 import { toast } from './toasts';
@@ -29,16 +29,8 @@ export function initSaveBackups() {
     () => saveBackupsEnabled.set(false),
   );
   onBackupEvent((event) => {
-    if (event.kind === 'manual') return;
     const title = get(libraryGames).find((g) => g.id === event.gameId)?.title ?? '';
-    if (event.status === 'failed') {
-      const reason = saveBackupCodeText(event.code, msg('savebackup.fallback'));
-      toast(msg('saves.autoFailed', { title, reason }), 'danger');
-      return;
-    }
-    if (event.status === 'created' && event.error) {
-      const reason = saveBackupCodeText(event.code, msg('savebackup.fallback'));
-      toast(msg('saves.autoRotationFailed', { title, reason }));
-    }
+    const notice = backupNotice(event, title);
+    if (notice) toast(notice.text, notice.kind === 'info' ? undefined : notice.kind);
   });
 }

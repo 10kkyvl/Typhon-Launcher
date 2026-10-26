@@ -167,7 +167,7 @@ func TestStoreSaveLoadRoundTrip(t *testing.T) {
 	if got.AvailableVersion != want.AvailableVersion || got.Notes != want.Notes || got.ReadyPath != want.ReadyPath {
 		t.Fatalf("Load() = %+v, want %+v", got, want)
 	}
-	if got.Artifact == nil || *got.Artifact != *want.Artifact {
+	if got.Artifact == nil || !sameFile(*got.Artifact, *want.Artifact) {
 		t.Fatalf("Load() artifact = %+v, want %+v", got.Artifact, want.Artifact)
 	}
 }

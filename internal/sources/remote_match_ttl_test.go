@@ -23,7 +23,7 @@ func TestRemoteMatchLifetimeDependsOnWhetherTheGameWasFound(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			for i := range 200 {
 				key := fmt.Sprintf("title-%d|2020", i)
-				rm := &RemoteMatch{Key: key, At: at, GameID: tc.gameID}
+				rm := &RemoteMatch{Key: key, At: at, GameID: tc.gameID, Rev: remoteMatchRev}
 				life := remoteMatchLifetime(rm, key)
 				if life < tc.min || life >= tc.max {
 					t.Fatalf("%s lifetime = %v, want [%v, %v)", key, life, tc.min, tc.max)
@@ -41,7 +41,7 @@ func TestRemoteMatchLifetimeDependsOnWhetherTheGameWasFound(t *testing.T) {
 
 func TestRemoteMatchChangedKeyIsNeverFresh(t *testing.T) {
 	at := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
-	rm := &RemoteMatch{Key: "old title|0", At: at, GameID: "game-1"}
+	rm := &RemoteMatch{Key: "old title|0", At: at, GameID: "game-1", Rev: remoteMatchRev}
 	if remoteMatchFresh(rm, "new title|0", at.Add(time.Minute)) {
 		t.Fatal("a renamed release must be asked again at once")
 	}
@@ -81,7 +81,7 @@ func TestRemoteMatchAskIntervalAtSixHourCycles(t *testing.T) {
 					if remoteMatchFresh(rm, key, now) {
 						continue
 					}
-					rm = &RemoteMatch{Key: key, At: now, GameID: tc.gameID}
+					rm = &RemoteMatch{Key: key, At: now, GameID: tc.gameID, Rev: remoteMatchRev}
 					asked = append(asked, now)
 				}
 				if len(asked) > tc.maxAsked {

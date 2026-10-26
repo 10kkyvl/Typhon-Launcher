@@ -39,6 +39,7 @@ func (s *Service) SetRemoteCatalog(remote RemoteCatalog) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.remote = remote
+	s.related.reset()
 }
 
 // BrowseGames is the public catalog. Local games are a personal/cache store,
@@ -571,6 +572,9 @@ func (s *Service) remotePageAliasesLocked(items []Game) [][]string {
 					aliases[i] = append(aliases[i], id)
 				}
 			}
+		}
+		if parent := s.parentLocked(game); parent != "" && parent != canonical && !seen[parent] {
+			aliases[i] = append(aliases[i], parent)
 		}
 	}
 	return aliases

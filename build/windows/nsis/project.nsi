@@ -39,9 +39,13 @@ Unicode true
 ####
 !include "wails_tools.nsh"
 
-# The version information for this two must consist of 4 parts
-VIProductVersion "${INFO_PRODUCTVERSION}.0"
-VIFileVersion    "${INFO_PRODUCTVERSION}.0"
+# The version information for this two must consist of 4 numeric parts, so a
+# beta such as 1.3.0-beta.1 passes its numeric core separately.
+!ifndef INFO_NUMERIC_VERSION
+    !define INFO_NUMERIC_VERSION "${INFO_PRODUCTVERSION}"
+!endif
+VIProductVersion "${INFO_NUMERIC_VERSION}.0"
+VIFileVersion    "${INFO_NUMERIC_VERSION}.0"
 
 VIAddVersionKey "CompanyName"     "${INFO_COMPANYNAME}"
 VIAddVersionKey "FileDescription" "${INFO_PRODUCTNAME} Installer"

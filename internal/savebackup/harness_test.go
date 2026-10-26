@@ -95,10 +95,11 @@ type harness struct {
 	events chan Event
 	cancel context.CancelFunc
 
-	mu    sync.Mutex
-	limit int
-	after bool
-	clock time.Time
+	mu     sync.Mutex
+	limit  int
+	after  bool
+	launch bool
+	clock  time.Time
 }
 
 func newHarness(t *testing.T) *harness {
@@ -110,6 +111,7 @@ func newHarness(t *testing.T) *harness {
 		events: make(chan Event, 1024),
 		limit:  settings.DefaultSaveBackupLimit,
 		after:  true,
+		launch: true,
 		clock:  time.Date(2026, 9, 29, 15, 30, 0, 0, time.UTC),
 	}
 	writeFile(t, filepath.Join(h.saves, "slot1.sav"), "one")
@@ -129,6 +131,7 @@ func (h *harness) config() settings.Settings {
 	cfg := settings.Defaults()
 	cfg.SaveBackupLimit = h.limit
 	cfg.SaveBackupAfterSession = h.after
+	cfg.SaveBackupBeforeLaunch = h.launch
 	return cfg
 }
 
@@ -142,6 +145,12 @@ func (h *harness) setAfter(on bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.after = on
+}
+
+func (h *harness) setLaunch(on bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.launch = on
 }
 
 func (h *harness) tick() time.Time {

@@ -1,12 +1,31 @@
 package messaging
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"typhon/internal/account"
+)
 
 type UserCard struct {
-	ID          string `json:"id"`
-	Username    string `json:"username"`
-	DisplayName string `json:"displayName"`
-	AvatarURL   string `json:"avatarUrl"`
+	ID          string              `json:"id"`
+	Username    string              `json:"username"`
+	DisplayName string              `json:"displayName"`
+	AvatarURL   string              `json:"avatarUrl"`
+	AvatarFrame string              `json:"avatarFrame"`
+	FrameColor  string              `json:"frameColor"`
+	FrameImage  *account.FrameImage `json:"frameImage,omitempty"`
+}
+
+// UnmarshalJSON drops a frame picture that fails validation instead of failing the whole peer.
+func (u *UserCard) UnmarshalJSON(data []byte) error {
+	type plain UserCard
+	var v plain
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	v.FrameImage = account.SanitizeFrameImage(v.FrameImage)
+	*u = UserCard(v)
+	return nil
 }
 
 type Reaction struct {

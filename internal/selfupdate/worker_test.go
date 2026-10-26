@@ -443,6 +443,7 @@ func TestCopyExecutableMissingSource(t *testing.T) {
 // not written down looks to the user like a launcher that closed and came back
 // for no reason.
 func TestRunWorkerRecordsFailureForTheRelaunchedLauncher(t *testing.T) {
+	stubSaveCurrent(t)
 	dir := t.TempDir()
 	t.Setenv("APPDATA", dir)
 

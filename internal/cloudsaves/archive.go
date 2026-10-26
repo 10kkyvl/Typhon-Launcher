@@ -16,10 +16,11 @@ import (
 	"time"
 
 	"typhon/internal/hashdir"
+	"typhon/internal/library"
 )
 
 const (
-	maxUnpackedBytes = 1 << 30
+	maxUnpackedBytes = library.MaxSavesBytes
 	maxEntries       = 20000
 )
 
@@ -34,6 +35,7 @@ type treeFile struct {
 type tree struct {
 	files  []treeFile
 	digest string
+	sig    string
 	size   int64
 	newest time.Time
 }

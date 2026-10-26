@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import Avatar from '../../lib/components/Avatar.svelte';
+  import { frameLook } from '../../lib/profile/frameLook';
   import Card from '../../lib/components/Card.svelte';
   import PlayerCardPopover from '../../lib/components/PlayerCardPopover.svelte';
   import { playerCardOf } from '../../lib/profile/appearanceCard';
@@ -43,7 +44,7 @@
 </script>
 
 {#snippet who()}
-  <Avatar size={avatarSize} name={user.displayName || user.username} src={user.avatarUrl} {status} frame={look.appearance.avatarFrame} frameColor={look.appearance.frameColor || look.accent} />
+  <Avatar size={avatarSize} name={user.displayName || user.username} src={user.avatarUrl} {status} {...frameLook(look.appearance.avatarFrame, look.appearance.frameColor || look.accent, look.frameImage)} />
   <span class="names">
     <span class="name">{user.displayName || user.username}</span>
     {#if !compact}<span class="handle">@{user.username}</span>{/if}

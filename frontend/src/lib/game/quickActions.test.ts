@@ -47,13 +47,13 @@ describe('quickActions', () => {
   it('shows the status item for an installed game', () => {
     const items = quickActions(state());
     const item = items.find((i) => i.id === 'status');
-    expect(item?.label).toBe('Статус: Без статуса');
+    expect(item?.label).toBe('Статус: Не начата');
   });
 
   it('shows the status item for a game that is not installed', () => {
     const items = quickActions(state({ installed: false }));
     const item = items.find((i) => i.id === 'status');
-    expect(item?.label).toBe('Статус: Без статуса');
+    expect(item?.label).toBe('Статус: Не начата');
   });
 
   it('reflects the current status in the label', () => {
