@@ -16,7 +16,12 @@ func resetPortable() {
 
 func fakeLauncher(t *testing.T, marker *string) string {
 	t.Helper()
-	dir := t.TempDir()
+	// PortableDir resolves the executable path, which expands 8.3 short names such as
+	// RUNNER~1 in the CI temp dir; the expected directory must be resolved the same way.
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	exe := filepath.Join(dir, "typhon.exe")
 	if err := os.WriteFile(exe, []byte("exe"), 0o600); err != nil {
 		t.Fatal(err)
