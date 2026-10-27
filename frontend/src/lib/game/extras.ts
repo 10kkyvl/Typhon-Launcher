@@ -4,21 +4,29 @@ import type { FactInput } from './view';
 
 export const DLC_COLLAPSED = 8;
 
+export interface RequirementRow extends SteamRequirement {
+  key: string;
+}
+
 export interface RequirementColumns {
-  minimum: SteamRequirement[];
-  recommended: SteamRequirement[];
+  minimum: RequirementRow[];
+  recommended: RequirementRow[];
 }
 
 function text(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-function rows(list: SteamRequirement[] | null | undefined): SteamRequirement[] {
-  const out: SteamRequirement[] = [];
+function rows(list: SteamRequirement[] | null | undefined): RequirementRow[] {
+  const out: RequirementRow[] = [];
+  const seen = new Map<string, number>();
   for (const item of list ?? []) {
     const label = text(item?.label);
     const value = text(item?.value);
-    if (label && value) out.push({ label, value });
+    if (!label || !value) continue;
+    const n = seen.get(label) ?? 0;
+    seen.set(label, n + 1);
+    out.push({ key: `${label}#${n}`, label, value });
   }
   return out;
 }

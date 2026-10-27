@@ -42,15 +42,32 @@ describe('requirementColumns', () => {
       }),
     );
     expect(columns.minimum).toEqual([
-      { label: 'ОС', value: 'Windows 10' },
-      { label: 'Заметки', value: '<b>x</b>' },
+      { key: 'ОС#0', label: 'ОС', value: 'Windows 10' },
+      { key: 'Заметки#0', label: 'Заметки', value: '<b>x</b>' },
     ]);
     expect(columns.recommended).toEqual([]);
   });
 
+  it('keeps rows that repeat a label under distinct keys', () => {
+    const columns = requirementColumns(
+      steam({
+        requirements: {
+          minimum: [
+            { label: 'Видеокарта', value: 'DirectX 8' },
+            { label: 'ОС', value: 'Windows XP' },
+            { label: 'Видеокарта', value: '16 MB' },
+          ],
+          recommended: null,
+        },
+      }),
+    );
+    expect(columns.minimum.map((row) => row.value)).toEqual(['DirectX 8', 'Windows XP', '16 MB']);
+    expect(new Set(columns.minimum.map((row) => row.key)).size).toBe(3);
+  });
+
   it('reports a block as present when only one column has rows', () => {
     expect(hasRequirements({ minimum: [], recommended: [] })).toBe(false);
-    expect(hasRequirements({ minimum: [], recommended: [{ label: 'a', value: 'b' }] })).toBe(true);
+    expect(hasRequirements({ minimum: [], recommended: [{ key: 'a#0', label: 'a', value: 'b' }] })).toBe(true);
   });
 });
 
