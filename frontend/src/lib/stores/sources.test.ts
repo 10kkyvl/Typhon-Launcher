@@ -183,3 +183,56 @@ describe('source actions', () => {
     expect(get(store.sources).map((item) => item.id)).toEqual(['f']);
   });
 });
+
+describe('background add failures', () => {
+  const failed = new Error('typhon:sources.feed_bad_status: GET https://feed.example/x: 404');
+
+  it('toasts an error nobody announced, like a sources.json write that failed after the source was created', async () => {
+    const { store, toast } = await load();
+    const mark = store.errorMark();
+
+    store.toastUnannounced(new Error('save sources: access denied'), mark);
+
+    expect(toast).toHaveBeenCalledTimes(1);
+    expect(toast.mock.calls[0][1]).toBe('danger');
+  });
+
+  it('stays quiet when source:error already announced the same failure after the mark', async () => {
+    const { store, toast } = await load();
+    const mark = store.errorMark();
+    handlers['source:error']({
+      data: { sourceId: 'a', name: 'Alpha', message: 'typhon:sources.feed_bad_status: GET https://feed.example/x: 404', scheduled: false },
+    });
+    toast.mockClear();
+
+    store.toastUnannounced(failed, mark);
+
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it('still toasts when the matching announcement came before the mark', async () => {
+    const { store, toast } = await load();
+    handlers['source:error']({
+      data: { sourceId: 'a', name: 'Alpha', message: 'typhon:sources.feed_bad_status: GET https://feed.example/x: 404', scheduled: false },
+    });
+    const mark = store.errorMark();
+    toast.mockClear();
+
+    store.toastUnannounced(failed, mark);
+
+    expect(toast).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not count scheduled errors, an empty message or a different failure as announced', async () => {
+    const { store, toast } = await load();
+    const mark = store.errorMark();
+    handlers['source:error']({ data: { sourceId: 'a', name: 'Alpha', message: 'typhon:sources.feed_bad_status: GET https://feed.example/x: 404', scheduled: true } });
+    handlers['source:error']({ data: { sourceId: 'b', name: 'Beta', message: '', scheduled: false } });
+    handlers['source:error']({ data: { sourceId: 'c', name: 'Gamma', message: 'typhon:sources.feed_empty', scheduled: false } });
+    toast.mockClear();
+
+    store.toastUnannounced(failed, mark);
+
+    expect(toast).toHaveBeenCalledTimes(1);
+  });
+});

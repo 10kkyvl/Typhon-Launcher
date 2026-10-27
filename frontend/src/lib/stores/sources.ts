@@ -33,6 +33,20 @@ interface ReleaseBatchEvent {
   count: number;
 }
 
+const announcedLimit = 20;
+const announced: { seq: number; message: string }[] = [];
+let announcedSeq = 0;
+
+export function errorMark() {
+  return announcedSeq;
+}
+
+export function toastUnannounced(err: unknown, since: number) {
+  const raw = errorMessage(err);
+  if (announced.some((item) => item.seq > since && item.message !== '' && raw.includes(item.message))) return;
+  toast(sourceErrorText(err), 'danger');
+}
+
 function upsert(item: Source) {
   sources.update((list) => {
     const index = list.findIndex((s) => s.id === item.id);
@@ -62,6 +76,8 @@ export async function initSources() {
   Events.On('source:error', (event) => {
     const { name, message, scheduled } = event.data as SourceErrorEvent;
     if (scheduled) return;
+    announced.push({ seq: ++announcedSeq, message });
+    if (announced.length > announcedLimit) announced.shift();
     toast(msg('state.sourcesErrorToast', { name, message }), 'danger');
   });
   Events.On('release:added', (event) => {
