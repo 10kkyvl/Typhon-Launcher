@@ -130,7 +130,11 @@
     const filtered = query ? groupFor.filter((f) => matchesSearch(f, query)) : groupFor;
     return sortBy === 'status' ? sortFriends(filtered) : sortByName(filtered);
   });
-  const listReserve = $derived(frameReserve(visibleFriends.map((friend) => playerFrame(friend.card))));
+  const reserveOf = (users: readonly UserCard[]) => frameReserve(users.map((user) => playerFrame(user.card)));
+  const listReserve = $derived(reserveOf(groupFor));
+  const incomingReserve = $derived(reserveOf(page.incoming));
+  const outgoingReserve = $derived(reserveOf(page.outgoing));
+  const blockedReserve = $derived(reserveOf(blocked));
 
   function playingGame(friend: FriendView): { igdbId: number; title: string } | null {
     const presence = friend.presence;
@@ -267,7 +271,7 @@
         in:fly={{ y: '0.8rem', duration: motion('--dur-panel') }}
         out:fade={{ duration: motion('--dur') }}
       >
-        <FriendRow user={request} variant="card" stats={incomingStats(request)} onopen={() => openProfile(request)}>
+        <FriendRow user={request} variant="card" reserve={incomingReserve} stats={incomingStats(request)} onopen={() => openProfile(request)}>
           {#snippet actions()}
             <Button
               variant="primary"
@@ -437,6 +441,7 @@
               meta={presenceLine(friend.presence)}
               game={playingGame(friend)}
               variant="grid"
+              reserve={listReserve}
               onopen={() => openProfile(friend)}
             >
               {#snippet actions()}
@@ -487,7 +492,7 @@
                 in:fly={{ y: '0.8rem', duration: motion('--dur-panel') }}
                 out:fade={{ duration: motion('--dur') }}
               >
-                <FriendRow user={request} variant="card" stats={outgoingStats(request)} onopen={() => openProfile(request)}>
+                <FriendRow user={request} variant="card" reserve={outgoingReserve} stats={outgoingStats(request)} onopen={() => openProfile(request)}>
                   {#snippet actions()}
                     <Button
                       variant="ghost"
@@ -526,7 +531,7 @@
             in:fly={{ y: '0.8rem', duration: motion('--dur-panel') }}
             out:fade={{ duration: motion('--dur') }}
           >
-            <FriendRow {user} variant="card">
+            <FriendRow {user} variant="card" reserve={blockedReserve}>
               {#snippet actions()}
                 <Button
                   size="sm"

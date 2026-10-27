@@ -3,7 +3,7 @@
   import { onMount } from 'svelte';
   import { fade } from 'svelte/transition';
   import Avatar from './Avatar.svelte';
-  import { fieldsFrame } from '../profile/frameLook';
+  import { fieldsFrame, frameReserve } from '../profile/frameLook';
   import { themeLayout } from '../stores/layout';
   import Button from './Button.svelte';
   import IconButton from './IconButton.svelte';
@@ -69,6 +69,7 @@
   const peer = $derived($activePeer);
   const activeMessages = $derived(peer ? ($messagesByPeer[peer.id] ?? []) : []);
   const conversation = $derived(peer ? $conversations.find((item) => item.peer.id === peer.id) : undefined);
+  const conversationReserve = $derived(frameReserve($conversations.map((item) => fieldsFrame(item.peer))));
   const canSend = $derived(conversation?.canSend ?? $canSendByPeer[peer?.id ?? ''] ?? true);
   const draftList = $derived(peer ? ($attachmentDrafts[peer.id] ?? []) : []);
   const hasUnread = $derived($conversations.some((item) => item.unread > 0));
@@ -497,7 +498,7 @@
           {:else}
             {#each $conversations as item (item.peer.id)}
               <button class="conversation" type="button" onclick={() => openConversation(item.peer)}>
-                <Avatar size="md" name={displayName(item.peer)} src={item.peer.avatarUrl} {...fieldsFrame(item.peer)} />
+                <Avatar size="md" name={displayName(item.peer)} src={item.peer.avatarUrl} reserve={conversationReserve} {...fieldsFrame(item.peer)} />
                 <span class="conversation-copy">
                   <strong>{displayName(item.peer)}</strong>
                   <span>{item.lastMessage ? messagePreview(item.lastMessage) : msg('social.chatNewConversation')}</span>
