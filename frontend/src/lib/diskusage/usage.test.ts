@@ -106,8 +106,8 @@ describe('ageText', () => {
 });
 
 describe('isStale', () => {
-  it('flags a game that was never played', () => {
-    expect(isStale(null, NOW)).toBe(true);
+  it('leaves a never played game to the played column', () => {
+    expect(isStale(null, NOW)).toBe(false);
   });
 
   it('flags a game after more than 90 days only', () => {
