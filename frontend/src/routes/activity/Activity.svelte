@@ -28,6 +28,8 @@
   import { formatCount } from '../../lib/utils/format';
   import { msg } from '../../lib/i18n';
   import FriendRow from '../friends/FriendRow.svelte';
+  import { playerFrame } from '../../lib/profile/appearanceCard';
+  import { frameReserve } from '../../lib/profile/frameLook';
   import PopularGames from './PopularGames.svelte';
   import WeekActivity from './WeekActivity.svelte';
 
@@ -46,6 +48,8 @@
   const playingFriends = $derived(
     sortFriends($friendsPage.friends).filter((friend) => isPlaying(friend.presence)),
   );
+  const playingShown = $derived(playingFriends.slice(0, PLAYING_LIMIT));
+  const playingReserve = $derived(frameReserve(playingShown.map((friend) => playerFrame(friend.card))));
   const popular = $derived(popularGames($feedEvents, $friendsPage.friends, user?.id ?? ''));
   const week = $derived(weekSummary($profileSnapshot.activity));
 
@@ -184,8 +188,8 @@
           <p class="muted">{msg('transfers.activityNoOnePlaying')}</p>
         {:else}
           <div class="friends">
-            {#each playingFriends.slice(0, PLAYING_LIMIT) as friend (friend.id)}
-              <FriendRow compact user={friend} status={presenceDot(friend.presence)} game={playingGame(friend)} onopen={() => openUser(friend)} />
+            {#each playingShown as friend (friend.id)}
+              <FriendRow compact user={friend} reserve={playingReserve} status={presenceDot(friend.presence)} game={playingGame(friend)} onopen={() => openUser(friend)} />
             {/each}
           </div>
         {/if}

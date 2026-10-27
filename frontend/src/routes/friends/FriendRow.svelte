@@ -1,10 +1,10 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import Avatar from '../../lib/components/Avatar.svelte';
-  import { frameLook } from '../../lib/profile/frameLook';
+  import type { FrameReserve } from '../../lib/profile/frameLook';
   import Card from '../../lib/components/Card.svelte';
   import PlayerCardPopover from '../../lib/components/PlayerCardPopover.svelte';
-  import { playerCardOf } from '../../lib/profile/appearanceCard';
+  import { playerCardOf, playerFrame } from '../../lib/profile/appearanceCard';
   import type { FriendView, UserCard } from '../../lib/services/social';
   import { openGameByIGDB } from '../../lib/social/openGame';
   import { msg } from '../../lib/i18n';
@@ -17,6 +17,7 @@
     stats,
     variant = 'list',
     compact = false,
+    reserve,
     actions,
     onopen,
   }: {
@@ -27,6 +28,7 @@
     stats?: string[];
     variant?: 'list' | 'grid' | 'card';
     compact?: boolean;
+    reserve?: FrameReserve;
     actions?: Snippet;
     onopen?: () => void;
   } = $props();
@@ -44,7 +46,7 @@
 </script>
 
 {#snippet who()}
-  <Avatar size={avatarSize} name={user.displayName || user.username} src={user.avatarUrl} {status} {...frameLook(look.appearance.avatarFrame, look.appearance.frameColor || look.accent, look.frameImage)} />
+  <Avatar size={avatarSize} name={user.displayName || user.username} src={user.avatarUrl} {status} {reserve} {...playerFrame(user.card)} />
   <span class="names">
     <span class="name">{user.displayName || user.username}</span>
     {#if !compact}<span class="handle">@{user.username}</span>{/if}
@@ -100,7 +102,7 @@
     </div>
   </Card>
 {:else}
-  <div class="row" class:compact class:edged={!!edge} class:offline={status === 'offline'} style:--edge={edge}>
+  <div class="row" class:compact class:edged={!!edge} class:offline={status === 'offline'} style:--edge={edge} style:--reserve-l={reserve?.left} style:--reserve-r={reserve?.right}>
     {@render identity()}
     {#if compact}
       {@render metaLine()}
@@ -127,7 +129,7 @@
   .compact .playing,
   .compact .meta {
     min-width: 0;
-    margin-left: calc(3.2rem + var(--space-3));
+    margin-left: calc(3.2rem * (1 + var(--reserve-l, 0) + var(--reserve-r, 0)) + var(--space-3));
     text-align: left;
   }
 

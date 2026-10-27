@@ -7,11 +7,14 @@
   import { presenceDot, presenceLine, sortFriends } from '../lib/social/presence';
   import { friendsPage } from '../lib/stores/social';
   import FriendRow from '../routes/friends/FriendRow.svelte';
+  import { playerFrame } from '../lib/profile/appearanceCard';
+  import { frameReserve } from '../lib/profile/frameLook';
   import { overlayFriendsFailed, retryFriends } from './data';
 
   let { onchat }: { onchat: (peer: ChatPeer) => void } = $props();
 
   const list = $derived(sortFriends($friendsPage.friends));
+  const reserve = $derived(frameReserve(list.map((friend) => playerFrame(friend.card))));
 
   function peerOf(friend: FriendView): ChatPeer {
     return {
@@ -39,6 +42,7 @@
         status={presenceDot(friend.presence)}
         meta={presenceLine(friend.presence)}
         compact
+        {reserve}
         onopen={() => onchat(peerOf(friend))}
       >
         {#snippet actions()}

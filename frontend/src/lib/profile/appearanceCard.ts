@@ -1,7 +1,7 @@
 import type { ProfileAppearance } from '../services/account';
 import type { GameCard, PlayerCardStyle } from '../services/social';
 import type { FrameImage } from '../services/account';
-import { frameLook } from './frameLook';
+import { frameLook, type FrameProps } from './frameLook';
 import { appearanceAccentStyle, appearanceOf, appearancePalette, themeOf, type ProfileTheme } from './appearance';
 
 export interface PlayerCardView {
@@ -14,6 +14,11 @@ export interface PlayerCardView {
   coverUrl: string;
   frameImage?: FrameImage;
   pinned: GameCard | null;
+}
+
+export function playerFrame(card?: PlayerCardStyle | null): FrameProps {
+  const look = playerCardOf(card);
+  return frameLook(look.appearance.avatarFrame, look.appearance.frameColor || look.accent, look.frameImage);
 }
 
 export function playerCardOf(card?: PlayerCardStyle | null): PlayerCardView {

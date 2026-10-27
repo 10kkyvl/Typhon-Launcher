@@ -54,6 +54,8 @@
   import AddFriendModal from './AddFriendModal.svelte';
   import FriendCodeCard from './FriendCodeCard.svelte';
   import FriendRow from './FriendRow.svelte';
+  import { playerFrame } from '../../lib/profile/appearanceCard';
+  import { frameReserve } from '../../lib/profile/frameLook';
 
   let { tab: initialTab }: { tab?: string } = $props();
 
@@ -128,6 +130,7 @@
     const filtered = query ? groupFor.filter((f) => matchesSearch(f, query)) : groupFor;
     return sortBy === 'status' ? sortFriends(filtered) : sortByName(filtered);
   });
+  const listReserve = $derived(frameReserve(visibleFriends.map((friend) => playerFrame(friend.card))));
 
   function playingGame(friend: FriendView): { igdbId: number; title: string } | null {
     const presence = friend.presence;
@@ -451,6 +454,7 @@
               meta={presenceLine(friend.presence)}
               game={playingGame(friend)}
               variant="list"
+              reserve={listReserve}
               onopen={() => openProfile(friend)}
             >
               {#snippet actions()}
