@@ -78,3 +78,25 @@ describe('Avatar personal frame', () => {
     expect(html({ frame: 'custom:bad', frameImage })).not.toContain('frame-art');
   });
 });
+
+describe('Avatar list reserve', () => {
+  const frame = 'custom:3f2b8c1e-9a4d-4e57-b0aa-1c2d3e4f5a6b';
+
+  it('gives a plain avatar the same side margins as the widest frame in its list', () => {
+    const out = html({ reserve: { left: 0.4, right: 0.1 } });
+    expect(out).toContain('reserved');
+    expect(out).toContain('--reserve-l: 0.4');
+    expect(out).toContain('--reserve-r: 0.1');
+  });
+
+  it('lets the list reserve replace a framed avatar own side bleed', () => {
+    const out = html({ frame, frameImage: { url: 'https://cdn/dog.png', hole: 0.5, holeX: 0.6 }, reserve: { left: 0.4, right: 0.1 } });
+    expect(out).toContain('reserved');
+    expect(out).toContain('--reserve-l: 0.4');
+  });
+
+  it('keeps the old layout without a reserve', () => {
+    expect(html({})).not.toContain('reserved');
+    expect(html({})).not.toContain('--reserve');
+  });
+});

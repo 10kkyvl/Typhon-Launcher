@@ -2,7 +2,7 @@
   import { untrack } from 'svelte';
   import type { PresenceDot } from '../social/presence';
   import type { AvatarFrame, FrameImage } from '../services/account';
-  import { MAX_FRAME_BLEED, frameBleed, frameScale, frameShift, isCustomFrame, presetFrame } from '../profile/frameLook';
+  import { MAX_FRAME_BLEED, frameBleed, frameScale, frameShift, isCustomFrame, presetFrame, type FrameReserve } from '../profile/frameLook';
 
   let {
     src,
@@ -12,6 +12,7 @@
     frame = 'none',
     frameColor,
     frameImage,
+    reserve,
   }: {
     src?: string;
     name: string;
@@ -20,6 +21,7 @@
     frame?: AvatarFrame;
     frameColor?: string;
     frameImage?: FrameImage;
+    reserve?: FrameReserve;
   } = $props();
 
   let failed = $state(false);
@@ -58,7 +60,7 @@
   });
 </script>
 
-<span class="avatar {size}" class:framed={preset !== 'none' || !!layer} class:art={!!layer} style:--frame-color={frameColor || undefined} style:--frame-bleed={layer ? MAX_FRAME_BLEED : undefined} style:--bleed-l={layer ? frameBleed(layer.hole, layer.holeX ?? 0.5) : undefined} style:--bleed-r={layer ? frameBleed(layer.hole, 1 - (layer.holeX ?? 0.5)) : undefined} style:--bleed-t={layer ? frameBleed(layer.hole, layer.holeY ?? 0.5, ratio) : undefined} style:--bleed-b={layer ? frameBleed(layer.hole, 1 - (layer.holeY ?? 0.5), ratio) : undefined}>
+<span class="avatar {size}" class:framed={preset !== 'none' || !!layer} class:art={!!layer} class:reserved={!!reserve} style:--reserve-l={reserve?.left} style:--reserve-r={reserve?.right} style:--frame-color={frameColor || undefined} style:--frame-bleed={layer ? MAX_FRAME_BLEED : undefined} style:--bleed-l={layer ? frameBleed(layer.hole, layer.holeX ?? 0.5) : undefined} style:--bleed-r={layer ? frameBleed(layer.hole, 1 - (layer.holeX ?? 0.5)) : undefined} style:--bleed-t={layer ? frameBleed(layer.hole, layer.holeY ?? 0.5, ratio) : undefined} style:--bleed-b={layer ? frameBleed(layer.hole, 1 - (layer.holeY ?? 0.5), ratio) : undefined}>
   {#if preset !== 'none'}
     <span class="frame frame-{preset}" aria-hidden="true"></span>
   {/if}
@@ -88,6 +90,11 @@
 
   .avatar.art {
     margin: calc(var(--size) * var(--bleed-t, 0)) calc(var(--size) * var(--bleed-r, 0)) calc(var(--size) * var(--bleed-b, 0)) calc(var(--size) * var(--bleed-l, 0));
+  }
+
+  .avatar.reserved {
+    margin-left: calc(var(--size) * var(--reserve-l, 0));
+    margin-right: calc(var(--size) * var(--reserve-r, 0));
   }
 
   .frame-clip {

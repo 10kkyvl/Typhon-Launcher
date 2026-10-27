@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('../services/backend', () => ({ inWails: false }));
-import { MAX_FRAME_BLEED, cardFrame, fieldsFrame, frameBleed, frameCenter, frameLook, frameOverhang, frameScale, frameShift } from './frameLook';
+import { MAX_FRAME_BLEED, cardFrame, fieldsFrame, frameBleed, frameCenter, frameLook, frameOverhang, frameReserve, frameScale, frameShift } from './frameLook';
 import { ownFrame, publicFrame } from './frameSources';
 import { appearanceOf } from './appearance';
 import { playerCardOf } from './appearanceCard';
@@ -147,5 +147,31 @@ describe('frameBleed', () => {
     expect(frameBleed(0.8, 0.5, 2)).toBe(MAX_FRAME_BLEED);
     expect(frameBleed(0.8, 0.5, 0)).toBeCloseTo(frameBleed(0.8, 0.5, 1), 5);
     expect(frameBleed(0.8, 0.5, Number.NaN)).toBeCloseTo(frameBleed(0.8, 0.5, 1), 5);
+  });
+});
+
+describe('frameReserve', () => {
+  const frame = 'custom:3f2b8c1e-9a4d-4e57-b0aa-1c2d3e4f5a6b';
+
+  it('reserves nothing for a list without personal frames', () => {
+    expect(frameReserve([])).toEqual({ left: 0, right: 0 });
+    expect(frameReserve([{ frame: 'none' }, { frame: 'ring', frameColor: '#ff8800' }])).toEqual({ left: 0, right: 0 });
+  });
+
+  it('takes the widest overhang on each side across the list', () => {
+    const left = { frame, frameImage: { url: 'a', hole: 0.8, holeX: 0.6, holeY: 0.5 } } as const;
+    const right = { frame, frameImage: { url: 'b', hole: 0.8, holeX: 0.45, holeY: 0.5 } } as const;
+    const reserve = frameReserve([{ frame: 'none' }, left, right]);
+    expect(reserve.left).toBeCloseTo(0.25, 5);
+    expect(reserve.right).toBeCloseTo(0.1875, 5);
+  });
+
+  it('never reserves more than the bleed cap', () => {
+    const wide = { frame, frameImage: { url: 'a', hole: 0.3, holeX: 0.95, holeY: 0.5 } } as const;
+    expect(frameReserve([wide]).left).toBe(MAX_FRAME_BLEED);
+  });
+
+  it('ignores an image on a preset or a custom frame without an image', () => {
+    expect(frameReserve([{ frame: 'ring', frameImage: { url: 'a', hole: 0.3 } }, { frame }])).toEqual({ left: 0, right: 0 });
   });
 });

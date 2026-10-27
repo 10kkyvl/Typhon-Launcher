@@ -183,3 +183,127 @@ describe('source actions', () => {
     expect(get(store.sources).map((item) => item.id)).toEqual(['f']);
   });
 });
+
+describe('background add failures', () => {
+  const failed = new Error('typhon:sources.feed_bad_status: GET https://feed.example/x: 404');
+
+  it('toasts an error nobody announced, like a sources.json write that failed after the source was created', async () => {
+    const { store, toast } = await load();
+    const mark = store.errorMark();
+
+    store.toastUnannounced(new Error('save sources: access denied'), mark);
+
+    expect(toast).toHaveBeenCalledTimes(1);
+    expect(toast.mock.calls[0][1]).toBe('danger');
+  });
+
+  it('stays quiet when source:error already announced the same failure after the mark', async () => {
+    const { store, toast } = await load();
+    const mark = store.errorMark();
+    handlers['source:error']({
+      data: { sourceId: 'a', name: 'Alpha', message: 'typhon:sources.feed_bad_status: GET https://feed.example/x: 404', scheduled: false },
+    });
+    toast.mockClear();
+
+    store.toastUnannounced(failed, mark);
+
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it('still toasts when the matching announcement came before the mark', async () => {
+    const { store, toast } = await load();
+    handlers['source:error']({
+      data: { sourceId: 'a', name: 'Alpha', message: 'typhon:sources.feed_bad_status: GET https://feed.example/x: 404', scheduled: false },
+    });
+    const mark = store.errorMark();
+    toast.mockClear();
+
+    store.toastUnannounced(failed, mark);
+
+    expect(toast).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not count scheduled errors, an empty message or a different failure as announced', async () => {
+    const { store, toast } = await load();
+    const mark = store.errorMark();
+    handlers['source:error']({ data: { sourceId: 'a', name: 'Alpha', message: 'typhon:sources.feed_bad_status: GET https://feed.example/x: 404', scheduled: true } });
+    handlers['source:error']({ data: { sourceId: 'b', name: 'Beta', message: '', scheduled: false } });
+    handlers['source:error']({ data: { sourceId: 'c', name: 'Gamma', message: 'typhon:sources.feed_empty', scheduled: false } });
+    toast.mockClear();
+
+    store.toastUnannounced(failed, mark);
+
+    expect(toast).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('announcements that already told the player', () => {
+  const saveFailure = 'replace C:/data/sources.json: rename C:/data/.tmp-1 C:/data/sources.json: Access is denied.';
+
+  it('treats a source:degraded save failure as announced, so a minimized add does not toast it twice', async () => {
+    const { store, toast } = await load();
+    const mark = store.errorMark();
+    handlers['source:degraded']({ data: { degraded: true, message: saveFailure } });
+
+    store.toastUnannounced(new Error(`save sources: ${saveFailure}`), mark);
+
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it('does not count a recovery notice as an announcement', async () => {
+    const { store, toast } = await load();
+    const mark = store.errorMark();
+    handlers['source:degraded']({ data: { degraded: false, message: saveFailure } });
+
+    store.toastUnannounced(new Error(`save sources: ${saveFailure}`), mark);
+
+    expect(toast).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a translated reason instead of the raw error code', async () => {
+    const { toast } = await load();
+
+    handlers['source:error']({
+      data: { sourceId: 'a', name: 'Alpha', message: 'typhon:sources.feed_invalid_json: некорректный JSON фида', scheduled: false },
+    });
+
+    const text = String(toast.mock.calls[0][0]);
+    expect(text).toContain('Alpha');
+    expect(text).not.toContain('typhon:');
+  });
+
+  it('keeps the backend text when the error carries no known code', async () => {
+    const { toast } = await load();
+
+    handlers['source:error']({ data: { sourceId: 'a', name: 'Alpha', message: 'не удалось сопоставить 3 из 10 названий', scheduled: false } });
+
+    expect(String(toast.mock.calls[0][0])).toContain('не удалось сопоставить 3 из 10 названий');
+  });
+});
+
+describe('manual refresh failures', () => {
+  it('shows one toast when the backend already announced the failure', async () => {
+    const { store, toast } = await load();
+    api.refreshSource.mockImplementationOnce(async () => {
+      handlers['source:error']({
+        data: { sourceId: 'a', name: 'Alpha', message: 'typhon:sources.feed_invalid_json: некорректный JSON фида', scheduled: false },
+      });
+      throw new Error('typhon:sources.feed_invalid_json: некорректный JSON фида');
+    });
+
+    await store.refresh('a');
+
+    expect(toast).toHaveBeenCalledTimes(1);
+    expect(String(toast.mock.calls[0][0])).toContain('Alpha');
+  });
+
+  it('still toasts a failure the backend did not announce', async () => {
+    const { store, toast } = await load();
+    api.refreshSource.mockRejectedValueOnce(new Error('typhon:sources.source_busy'));
+
+    await store.refresh('a');
+
+    expect(toast).toHaveBeenCalledTimes(1);
+    expect(toast.mock.calls[0][1]).toBe('danger');
+  });
+});

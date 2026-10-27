@@ -670,7 +670,7 @@
                       <div>
                         <h3>{column.title}</h3>
                         <dl class="requirement-list">
-                          {#each column.list as row (row.label)}<div><dt>{row.label}</dt><dd>{row.value}</dd></div>{/each}
+                          {#each column.list as row (row.key)}<div><dt>{row.label}</dt><dd>{row.value}</dd></div>{/each}
                         </dl>
                       </div>
                     {/if}

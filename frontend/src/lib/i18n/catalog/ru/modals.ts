@@ -61,6 +61,8 @@ export const modals = {
   'modals.addSourceInsecure': 'Источник отдаётся по http: соединение не защищено, содержимое фида можно подменить по дороге',
   'modals.addSourceCheck': 'Проверить источник',
   'modals.addSourceAdding': 'Добавление…',
+  'modals.addSourceMinimize': 'Свернуть',
+  'modals.addSourceBackgroundNote': 'Окно можно свернуть: источник добавится в фоне, а лаунчер сообщит, когда закончит.',
 
   // AvatarCropModal.svelte
   'modals.avatarCropTitle': 'Аватар',

@@ -34,7 +34,7 @@
       </p>
     {/if}
     <dl class="rows">
-      {#each rows as row (row.label)}
+      {#each rows as row (row.key)}
         <div class="row">
           <dt>{row.label}</dt>
           <dd>{row.value}</dd>

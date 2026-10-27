@@ -33,6 +33,25 @@ interface ReleaseBatchEvent {
   count: number;
 }
 
+const announcedLimit = 20;
+const announced: { seq: number; message: string }[] = [];
+let announcedSeq = 0;
+
+function announce(message: string) {
+  announced.push({ seq: ++announcedSeq, message });
+  if (announced.length > announcedLimit) announced.shift();
+}
+
+export function errorMark() {
+  return announcedSeq;
+}
+
+export function toastUnannounced(err: unknown, since: number) {
+  const raw = errorMessage(err);
+  if (announced.some((item) => item.seq > since && item.message !== '' && raw.includes(item.message))) return;
+  toast(sourceErrorText(err), 'danger');
+}
+
 function upsert(item: Source) {
   sources.update((list) => {
     const index = list.findIndex((s) => s.id === item.id);
@@ -62,7 +81,12 @@ export async function initSources() {
   Events.On('source:error', (event) => {
     const { name, message, scheduled } = event.data as SourceErrorEvent;
     if (scheduled) return;
-    toast(msg('state.sourcesErrorToast', { name, message }), 'danger');
+    announce(message);
+    toast(msg('state.sourcesErrorToast', { name, message: sourceErrorText(new Error(message), message) }), 'danger');
+  });
+  Events.On('source:degraded', (event) => {
+    const status = event.data as { degraded: boolean; message: string } | null;
+    if (status?.degraded) announce(status.message);
   });
   Events.On('release:added', (event) => {
     const { count } = event.data as ReleaseBatchEvent;
@@ -71,6 +95,7 @@ export async function initSources() {
 }
 
 export async function refresh(id: string) {
+  const mark = errorMark();
   try {
     const summary = await refreshSource(id);
     await reload();
@@ -83,7 +108,7 @@ export async function refresh(id: string) {
       'success',
     );
   } catch (err) {
-    toast(sourceErrorText(err), 'danger');
+    toastUnannounced(err, mark);
   }
 }
 

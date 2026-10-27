@@ -64,6 +64,8 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.addSourceInsecure': 'This source is served over http: the connection is not protected and the feed can be tampered with on the way',
   'modals.addSourceCheck': 'Check source',
   'modals.addSourceAdding': 'Adding…',
+  'modals.addSourceMinimize': 'Minimize',
+  'modals.addSourceBackgroundNote': 'You can minimize this window: the source keeps being added in the background and you will be notified when it is done.',
 
   // AvatarCropModal.svelte
   'modals.avatarCropTitle': 'Avatar',

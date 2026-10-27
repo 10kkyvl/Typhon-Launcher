@@ -48,6 +48,24 @@ export function frameBleed(hole: number, before: number, ratio = 1): number {
   return Math.min(MAX_FRAME_BLEED, Math.max(0, span * ratioed - 0.5));
 }
 
+export interface FrameReserve {
+  left: number;
+  right: number;
+}
+
+export function frameReserve(looks: readonly FrameProps[]): FrameReserve {
+  let left = 0;
+  let right = 0;
+  for (const look of looks) {
+    const image = isCustomFrame(look.frame) ? look.frameImage : undefined;
+    if (!image) continue;
+    const center = image.holeX ?? MID_CENTER;
+    left = Math.max(left, frameBleed(image.hole, center));
+    right = Math.max(right, frameBleed(image.hole, 1 - center));
+  }
+  return { left, right };
+}
+
 export function frameShift(center: number): string {
   return `-${Math.round(frameCenter(center) * 10000) / 100}%`;
 }

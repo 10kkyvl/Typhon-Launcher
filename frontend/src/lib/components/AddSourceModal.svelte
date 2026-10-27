@@ -2,7 +2,7 @@
   import { sourceWarningText } from '../sources/sourceWarnings';
   import { untrack } from 'svelte';
   import { FileUp, TriangleAlert } from '@lucide/svelte';
-  import { add as addSource, addFile as addSourceFile, sourceErrorText } from '../stores/sources';
+  import { add as addSource, addFile as addSourceFile, errorMark, sourceErrorText, toastUnannounced } from '../stores/sources';
   import { selectFeedFile, testSource, testSourceFile, type SourcePreview } from '../services/sources';
   import { toast } from '../stores/toasts';
   import Button from './Button.svelte';
@@ -18,8 +18,10 @@
   let preview = $state<SourcePreview | null>(null);
   let error = $state('');
   let adding = $state(false);
+  let run = 0;
 
   function reset() {
+    run++;
     step = 'input';
     mode = 'url';
     url = '';
@@ -53,12 +55,16 @@
   async function check() {
     const value = mode === 'file' ? path : url.trim();
     if (!value) return;
+    const token = run;
     step = 'checking';
     error = '';
     try {
-      preview = mode === 'file' ? await testSourceFile(value) : await testSource(value);
+      const result = mode === 'file' ? await testSourceFile(value) : await testSource(value);
+      if (token !== run) return;
+      preview = result;
       step = 'preview';
     } catch (err) {
+      if (token !== run) return;
       error = sourceErrorText(err);
       step = 'input';
     }
@@ -67,16 +73,22 @@
   async function submit() {
     const value = mode === 'file' ? path : url.trim();
     if (!value) return;
+    const token = run;
+    const mark = errorMark();
     adding = true;
     try {
       const source = mode === 'file' ? await addSourceFile(value) : await addSource(value);
       toast(msg('modals.addSourceAdded', { name: source.name }), 'success');
-      open = false;
+      if (token === run) open = false;
     } catch (err) {
-      error = sourceErrorText(err);
-      step = 'input';
+      if (token === run && open) {
+        error = sourceErrorText(err);
+        step = 'input';
+      } else {
+        toastUnannounced(err, mark);
+      }
     } finally {
-      adding = false;
+      if (token === run) adding = false;
     }
   }
 
@@ -182,6 +194,9 @@
           {/each}
         </div>
       {/if}
+      {#if adding}
+        <p class="background-note">{msg('modals.addSourceBackgroundNote')}</p>
+      {/if}
     </div>
   {/if}
 
@@ -190,7 +205,11 @@
       <Button onclick={() => (open = false)}>{msg('common.cancel')}</Button>
       <Button variant="primary" disabled={!url.trim() && !path} onclick={check}>{msg('modals.addSourceCheck')}</Button>
     {:else if step === 'preview'}
-      <Button onclick={back}>{msg('common.back')}</Button>
+      {#if adding}
+        <Button onclick={() => (open = false)}>{msg('modals.addSourceMinimize')}</Button>
+      {:else}
+        <Button onclick={back}>{msg('common.back')}</Button>
+      {/if}
       <Button variant="primary" disabled={adding} onclick={submit}>{adding ? msg('modals.addSourceAdding') : msg('common.add')}</Button>
     {/if}
   {/snippet}
@@ -311,6 +330,12 @@
   .value {
     color: var(--text);
     font-variant-numeric: tabular-nums;
+  }
+
+  .background-note {
+    margin-top: 0.6rem;
+    font-size: var(--font-xs);
+    color: var(--text-3);
   }
 
   .warnings {

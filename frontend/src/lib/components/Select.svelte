@@ -97,6 +97,9 @@
     top: calc(100% + 0.4rem);
     left: 0;
     right: 0;
+    max-height: min(36rem, 60vh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
     padding: 0.4rem;
     background: var(--surface-3);
     border: 1px solid var(--border-strong);

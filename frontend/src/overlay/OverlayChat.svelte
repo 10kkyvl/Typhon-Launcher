@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ArrowLeft, ChevronUp, RefreshCw, Send } from '@lucide/svelte';
   import Avatar from '../lib/components/Avatar.svelte';
-  import { fieldsFrame } from '../lib/profile/frameLook';
+  import { fieldsFrame, frameReserve } from '../lib/profile/frameLook';
   import ChatAttachments from '../lib/components/ChatAttachments.svelte';
   import { msg } from '../lib/i18n';
   import type { ChatPeer, Message } from '../lib/services/messaging';
@@ -50,6 +50,7 @@
   const peer = $derived($activePeer);
   const activeMessages = $derived(peer ? ($messagesByPeer[peer.id] ?? []) : []);
   const conversation = $derived(peer ? $conversations.find((item) => item.peer.id === peer.id) : undefined);
+  const conversationReserve = $derived(frameReserve($conversations.map((item) => fieldsFrame(item.peer))));
   const canSend = $derived(conversation?.canSend ?? $canSendByPeer[peer?.id ?? ''] ?? true);
 
   function displayName(target: ChatPeer): string {
@@ -250,7 +251,7 @@
       {:else}
         {#each $conversations as item (item.peer.id)}
           <button class="conversation" type="button" onclick={() => openChat(item.peer)}>
-            <Avatar size="md" name={displayName(item.peer)} src={item.peer.avatarUrl} {...fieldsFrame(item.peer)} />
+            <Avatar size="md" name={displayName(item.peer)} src={item.peer.avatarUrl} reserve={conversationReserve} {...fieldsFrame(item.peer)} />
             <span class="conversation-copy">
               <strong>{displayName(item.peer)}</strong>
               <span>{item.lastMessage ? messagePreview(item.lastMessage) : msg('social.chatNewConversation')}</span>

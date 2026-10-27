@@ -30,7 +30,7 @@ export function ageOf(iso: string | null, now: number): Age {
 
 export function isStale(iso: string | null, now: number): boolean {
   const at = playedAt(iso);
-  if (at === null) return true;
+  if (at === null) return false;
   return now - at > STALE_DAYS * DAY_MS;
 }
 
