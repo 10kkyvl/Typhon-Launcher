@@ -796,13 +796,16 @@ func (s *Service) watchTransfer(run *runState, ctx context.Context, id, dest str
 			s.finishTransfer(run, id, TransferCancelled, ctx.Err())
 			t.Drop()
 			return
+		// BytesCompleted counts written but not yet hashed chunks, so it hits
+		// total before the last piece's part files are renamed into place;
+		// Complete is set only after every piece's MarkComplete returned.
+		case <-t.Complete().On():
+			s.updateTransfer(run, id, func(tr *Transfer) { tr.Downloaded = total })
+			s.completeTransfer(ctx, run, id, dest, offer, t)
+			return
 		case <-ticker.C:
 			completed := t.BytesCompleted()
 			s.updateTransfer(run, id, func(tr *Transfer) { tr.Downloaded = completed })
-			if completed >= total {
-				s.completeTransfer(ctx, run, id, dest, offer, t)
-				return
-			}
 		}
 	}
 }

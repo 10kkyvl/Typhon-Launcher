@@ -62,6 +62,8 @@ type lanClient struct {
 
 var openTorrentClient = torrent.NewClient
 
+var receiveStorage = func(dest string) tstorage.ClientImplCloser { return flatStorage(dest, false) }
+
 func newLANClient(cfg settings.Settings, dataDir string, preferredPort int) (*lanClient, error) {
 	port := preferredPort
 	for attempt := 0; ; attempt++ {
@@ -144,7 +146,7 @@ func (c *lanClient) addForSeeding(mi *metainfo.MetaInfo, root string) (*torrent.
 // addForReceiving adds a torrent known only by infohash; its metainfo
 // arrives from the peer over BEP 9 (ut_metadata) once AddPeers connects us.
 func (c *lanClient) addForReceiving(hash metainfo.Hash, displayName, dest string) (*torrent.Torrent, error) {
-	st := flatStorage(dest, false)
+	st := receiveStorage(dest)
 	spec := &torrent.TorrentSpec{
 		AddTorrentOpts: torrent.AddTorrentOpts{
 			InfoHash: hash,
