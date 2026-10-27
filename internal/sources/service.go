@@ -157,6 +157,9 @@ func (s *Service) load() error {
 		if item.Type == "" {
 			item.Type = TypeURL
 		}
+		if item.Status == StatusUpdating {
+			item.Status = statusOf(&item)
+		}
 		s.sources = append(s.sources, &item)
 		list, err := s.store.loadReleases(item.ID)
 		if err != nil {

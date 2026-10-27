@@ -249,3 +249,35 @@ func TestNewServiceAtBuildsAnIsolatedService(t *testing.T) {
 		t.Fatalf("building the service wrote state: %v", err)
 	}
 }
+
+func TestStartupSettlesASourceLeftUpdating(t *testing.T) {
+	cases := []struct {
+		name string
+		src  Source
+		want Status
+	}{
+		{"healthy", Source{ID: "src-1", Name: "Feed", URL: "https://example.test/feed.json", Enabled: true, Status: StatusUpdating}, StatusActive},
+		{"with an error", Source{ID: "src-1", Name: "Feed", URL: "https://example.test/feed.json", Enabled: true, Status: StatusUpdating, LastError: "boom"}, StatusError},
+		{"disabled", Source{ID: "src-1", Name: "Feed", URL: "https://example.test/feed.json", Status: StatusUpdating}, StatusDisabled},
+		{"already settled", Source{ID: "src-1", Name: "Feed", URL: "https://example.test/feed.json", Enabled: true, Status: StatusError, LastError: "boom"}, StatusError},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := newStore(dir).saveSources([]Source{tc.src}); err != nil {
+				t.Fatal(err)
+			}
+			s, err := newServiceAt(dir, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := s.GetSource("src-1")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Status != tc.want {
+				t.Fatalf("status = %q, want %q: a refresh never survives a restart", got.Status, tc.want)
+			}
+		})
+	}
+}
