@@ -6,6 +6,19 @@ this file carries the same entries for the GitHub releases. It starts at
 0.4.0, the release that introduced the English interface — for anything older
 see `CHANGELOG.md`. Sections: "Added", "Changed", "Fixed", "Removed".
 
+## 1.3.1 — 2026-10-27
+A large source can be added in the background while you keep using the launcher. Plus fixes for game pages, friends lists and source error notifications.
+
+### Added
+- The "Add source" window can be minimized while a source is being added: it keeps going in the background, and the launcher notifies you when it finishes or if something goes wrong. A large source can take a minute or more
+### Fixed
+- Some game pages, such as Grand Theft Auto III, opened without a cover and stopped responding to clicks when Steam listed the system requirements twice for another system. Big Picture had the same problem
+- In "All games" the long platform filter list ran past the bottom of the window, leaving some entries out of reach. The list now scrolls inside the window
+- On the "Disk usage" page, games that were never launched no longer carry the "Not played for a long time" tag: the row already says "Never played"
+- When a friend has an avatar frame that sticks out to the side, their avatar and name no longer shift against the others: in the friends list and grid, requests, "Friends in game", on game pages, in chat and in the overlay every avatar lines up
+- A source error after a manual refresh showed up as two notifications with an internal code in the text. You get a single notification with a readable reason
+- A source whose update was cut short — the launcher closed or could not save its data to disk — no longer stays stuck as "Updating" after a restart
+
 ## 1.3.0 — 2026-10-26
 The friends feed shows more: achievements, reviews, plans and the week's play time. Old games can run in a compatibility mode, a crashed game comes with the reason, and themes can now change the window's layout too.
 
