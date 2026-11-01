@@ -4,16 +4,38 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"slices"
 	"strings"
+
+	"typhon/internal/emulators"
+	"typhon/internal/library"
 )
+
+// sharesFootprint says whether path overlaps what the game occupies on disk,
+// which for an emulated game is its files and not the folder they lie in.
+func sharesFootprint(game library.Game, path string) bool {
+	return slices.ContainsFunc(game.Footprint(), func(root string) bool { return sharesPath(root, path) })
+}
+
+// checkHoldsNoImage refuses to delete or consume a folder that an emulated game
+// of the library keeps its files in: they are not part of what is being removed.
+func (s *Service) checkHoldsNoImage(dir string) error {
+	if s.library == nil {
+		return errNoLibrary
+	}
+	for _, game := range s.library.GetGames() {
+		if game.Emulation != nil && sharesFootprint(game, dir) {
+			return fmt.Errorf("%w: %s", emulators.ErrImageInside, game.Title)
+		}
+	}
+	return nil
+}
 
 func (s *Service) gameRoots() []string {
 	var roots []string
 	if s.library != nil {
 		for _, game := range s.library.GetGames() {
-			if game.InstallDir != "" {
-				roots = append(roots, game.InstallDir)
-			}
+			roots = append(roots, game.Footprint()...)
 		}
 	}
 	s.mu.Lock()

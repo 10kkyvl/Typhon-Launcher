@@ -29,6 +29,7 @@ import (
 	"typhon/internal/discovery"
 	"typhon/internal/diskusage"
 	"typhon/internal/download"
+	"typhon/internal/emulators"
 	"typhon/internal/extlib"
 	"typhon/internal/gamemode"
 	"typhon/internal/heartbeat"
@@ -390,6 +391,11 @@ func main() {
 	if err != nil {
 		fatal("start library service", err)
 	}
+	emulatorService, err := emulators.NewService(settingsService)
+	if err != nil {
+		fatal("start emulators service", err)
+	}
+	libraryService.SetEmulatorResolver(emulatorService.Resolve)
 	playlogService, err := playlog.NewService()
 	if err != nil {
 		fatal("start playlog service", err)
@@ -460,6 +466,9 @@ func main() {
 		fatal("start metadata service", err)
 	}
 	libraryService.EnableSteam()
+	libraryService.SetCoverSearch(func(ctx context.Context, title, platform string) (string, error) {
+		return emulators.FindCover(ctx, metadataService.FindCover, title, platform)
+	})
 	libraryService.SetSaveHints(func(ctx context.Context, canonicalID string) (library.SaveHintSet, error) {
 		// A save search must not hang on the network: a slower answer falls back to heuristics with the reason shown.
 		ctx, cancel := context.WithTimeout(ctx, saveHintsTimeout)
@@ -504,7 +513,7 @@ func main() {
 	if err != nil {
 		fatal("start external libraries service", err)
 	}
-	searchService := search.NewService(libraryService, catalogService, sourcesService)
+	searchService := search.NewService(playableGames{libraryService}, catalogService, sourcesService)
 	saveBackupService, err := savebackup.NewService(settingsService, libraryService)
 	if err != nil {
 		fatal("start save backup service", err)
@@ -559,11 +568,11 @@ func main() {
 	if err != nil {
 		fatal("start relocate service", err)
 	}
-	redistService, err := redist.NewService(libraryService.Find)
+	redistService, err := redist.NewService(libraryService.FindNative)
 	if err != nil {
 		fatal("start redist service", err)
 	}
-	wrappersService, err := wrappers.NewService(configDir, libraryService)
+	wrappersService, err := wrappers.NewService(configDir, nativeGames{libraryService})
 	if err != nil {
 		fatal("start wrappers service", err)
 	}
@@ -857,6 +866,7 @@ func main() {
 		application.NewService(supportService),
 		application.NewService(settingsService),
 		application.NewService(libraryService),
+		application.NewService(emulatorService),
 		application.NewService(profileService),
 		application.NewService(playlogService),
 		application.NewService(downloadManager),
@@ -1325,6 +1335,16 @@ func gameTitle(cat *catalog.Service, src *sources.Service, canonicalGameID, rele
 func heartbeatPolicy(s settings.Settings) heartbeat.Policy {
 	return heartbeat.Policy{Enabled: s.SessionHeartbeat, Identified: s.UsageStatsAllowedCurrent()}
 }
+
+// playableGames lets search find emulated games, which are not installations.
+type playableGames struct{ *library.Service }
+
+func (g playableGames) GetInstalledGames() []library.Game { return g.GetPlayableGames() }
+
+// nativeGames keeps wrappers out of the folder an image happens to lie in.
+type nativeGames struct{ *library.Service }
+
+func (g nativeGames) Find(id string) (library.Game, error) { return g.FindNative(id) }
 
 type runningGames struct{ *library.Service }
 

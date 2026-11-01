@@ -29,6 +29,7 @@
   import StableOffer from '../../lib/components/StableOffer.svelte';
   import UpdateBanner from '../../lib/components/UpdateBanner.svelte';
   import AppearanceTab from './AppearanceTab.svelte';
+  import EmulatorsCard from './EmulatorsCard.svelte';
   import LanSettingsRow from './LanSettingsRow.svelte';
   import LibraryFoldersRow from './LibraryFoldersRow.svelte';
   import LibraryLocationRow from './LibraryLocationRow.svelte';
@@ -1351,6 +1352,7 @@
         </div>
       </Card>
 
+      <EmulatorsCard />
     </div>
   </div>
 {:else if tab === 'appearance'}

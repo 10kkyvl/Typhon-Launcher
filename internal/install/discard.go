@@ -151,7 +151,7 @@ func (s *Service) discardBlocker(item Installation) error {
 		return errNoLibrary
 	}
 	for _, game := range s.library.GetGames() {
-		if sharesPath(game.InstallDir, item.Destination) {
+		if sharesFootprint(game, item.Destination) {
 			return fmt.Errorf("%w: %s", errDiscardReferenced, game.Title)
 		}
 	}

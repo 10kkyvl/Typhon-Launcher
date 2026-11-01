@@ -3,6 +3,8 @@ package install
 import (
 	"fmt"
 	"strings"
+
+	"typhon/internal/emulators"
 )
 
 func (s *Service) ExecutableCandidates(gameID string) ([]Candidate, error) {
@@ -12,6 +14,9 @@ func (s *Service) ExecutableCandidates(gameID string) ([]Candidate, error) {
 	game, err := s.library.Find(gameID)
 	if err != nil {
 		return nil, err
+	}
+	if game.Emulation != nil {
+		return nil, emulators.ErrUnsupported
 	}
 	if strings.TrimSpace(game.InstallDir) == "" {
 		return nil, errEmptyDestination

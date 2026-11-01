@@ -16,6 +16,7 @@
     title,
     mode = $bindable<Mode>('disk'),
     external = '',
+    emulated = false,
     onremoved,
   }: {
     open?: boolean;
@@ -23,6 +24,7 @@
     title: string;
     mode?: Mode;
     external?: string;
+    emulated?: boolean;
     onremoved?: (mode: Mode) => void;
   } = $props();
 
@@ -35,8 +37,8 @@
   let loadedFor = $state('');
 
   const blocked = $derived(!!info && (info.running || info.busy));
-  const canDeleteFiles = $derived(!external && !!info && info.owned && !info.dirMissing);
-  const canUninstall = $derived(!external && !!info && (info.method === 'installer' || canDeleteFiles));
+  const canDeleteFiles = $derived(!external && !emulated && !!info && info.owned && !info.dirMissing);
+  const canUninstall = $derived(!external && !emulated && !!info && (info.method === 'installer' || canDeleteFiles));
 
   $effect(() => {
     if (!open) {
@@ -153,7 +155,9 @@
       </button>
     </div>
 
-    {#if external}
+    {#if emulated}
+      <p class="text">{msg('emul.removeNote')}</p>
+    {:else if external}
       <p class="text">{msg('games.externalRemoveNote')}</p>
     {:else}
       <p class="text">{methodText}</p>

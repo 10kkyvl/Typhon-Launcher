@@ -402,7 +402,7 @@ func (s *Service) Share(gameID string) (Share, error) {
 	if s.lib == nil {
 		return Share{}, errLibraryUnavailable
 	}
-	game, err := s.lib.Find(gameID)
+	game, err := s.lib.FindNative(gameID)
 	if err != nil {
 		return Share{}, fmt.Errorf("lan: find game: %w", err)
 	}

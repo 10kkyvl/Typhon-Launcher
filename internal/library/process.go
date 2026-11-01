@@ -3,6 +3,8 @@ package library
 import (
 	"context"
 	"os/exec"
+
+	"typhon/internal/emulators"
 )
 
 type gameProcess interface {
@@ -35,6 +37,18 @@ type launch struct {
 // платформах идёт через внешний процесс, и обрывать его надо вместе с
 // лаунчером, а не оставлять висеть.
 type gameStarter func(ctx context.Context, req launch) (gameProcess, error)
+
+// nativeOnlyStarter serves a machine without the Windows runtime: a native
+// program, an emulator on macOS among them, starts as usual, and only a Windows
+// file gets the error about the missing runtime.
+func nativeOnlyStarter(native gameStarter, missing error) gameStarter {
+	return func(ctx context.Context, req launch) (gameProcess, error) {
+		if emulators.IsWindowsProgram(req.executable) {
+			return nil, missing
+		}
+		return native(ctx, req)
+	}
+}
 
 type execProcess struct {
 	cmd *exec.Cmd

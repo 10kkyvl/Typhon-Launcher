@@ -40,6 +40,7 @@
   import { toast } from '../stores/toasts';
   import { verify } from '../stores/updates';
   import { libraryErrorText } from '../library/errors';
+  import { isEmulated } from '../library/emulation';
   import { externalLabel, isExternal, isLaunchable } from '../library/external';
   import { errorMessage } from '../utils/errors';
   import { msg } from '../i18n';
@@ -87,6 +88,7 @@
           hasExecutable: Boolean(game.executable),
           launchable: isLaunchable(game),
           external: isExternal(game),
+          emulated: isEmulated(game),
           hasShortcut: Boolean(game.shortcutPath),
           lanEnabled: Boolean($settings?.lanSharing),
           lanShared: $shares.some((s) => s.gameId === game.id),
@@ -294,7 +296,7 @@
 {/if}
 
 {#if target}
-  <RemoveGameModal bind:open={removeOpen} bind:mode={removeMode} gameId={target.id} title={target.title} external={externalLabel(target)} />
+  <RemoveGameModal bind:open={removeOpen} bind:mode={removeMode} gameId={target.id} title={target.title} external={externalLabel(target)} emulated={isEmulated(target)} />
 
   <SavesCandidatesModal
     bind:open={savesOpen}

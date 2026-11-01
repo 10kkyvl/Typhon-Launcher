@@ -31,6 +31,9 @@ const (
 	minHeroRatio   = 1.5
 	candidateLimit = 10
 	searchTimeout  = 30 * time.Second
+
+	maxCoverCandidates = 3
+
 	refreshTimeout = 2 * time.Minute
 
 	maxArtBatch     = 48
@@ -341,6 +344,51 @@ func (s *Service) SearchCandidates(query string) ([]Candidate, error) {
 		return nil, err
 	}
 	return s.decorate(session.ctx, rank(query, 0, found)), nil
+}
+
+// FindCover returns the cover of the game with exactly this title whose
+// platforms accept approves, or ErrNoMatch. It goes through the request budget
+// as a user's search and ends with ctx or the service.
+//
+//wails:ignore
+func (s *Service) FindCover(ctx context.Context, title string, accept func(platforms []string) bool) (string, error) {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return "", errEmptyQuery
+	}
+	provider, session, err := s.session(searchTimeout)
+	if err != nil {
+		return "", err
+	}
+	defer session.cancel()
+	ctx, cancel := context.WithTimeout(requestLanguage(ctx, s.currentLanguage()), searchTimeout)
+	defer cancel()
+	//nolint:contextcheck // invariant 19: only watches the service context, so the lookup ends with the service
+	defer context.AfterFunc(session.ctx, cancel)()
+
+	found, err := s.search(ctx, provider, title, candidateLimit, classUser)
+	if err != nil {
+		return "", err
+	}
+	wanted := titles.Normalize(title)
+	checked := 0
+	for _, candidate := range found {
+		if checked == maxCoverCandidates {
+			break
+		}
+		if titles.Normalize(candidate.Title) != wanted {
+			continue
+		}
+		checked++
+		meta, err := s.fetchMeta(ctx, provider, candidate.ProviderID, classUser)
+		if err != nil {
+			return "", err
+		}
+		if accept(meta.Platforms) && meta.Cover != nil && meta.Cover.URL != "" {
+			return meta.Cover.URL, nil
+		}
+	}
+	return "", ErrNoMatch
 }
 
 func (s *Service) FindCandidates(gameID string) ([]Candidate, error) {

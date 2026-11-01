@@ -8,6 +8,7 @@ import (
 
 	"typhon/internal/devmock"
 	"typhon/internal/dialogtext"
+	"typhon/internal/emulators"
 	"typhon/internal/platform"
 	"typhon/internal/settings"
 	"typhon/internal/version"
@@ -118,6 +119,37 @@ func (s *Service) SelectExecutable(title, language string) (string, error) {
 		return "", err
 	}
 	return path, nil
+}
+
+// SelectEmulator picks an emulator program. Off Windows it has no .exe filter
+// and takes folders as well: on macOS the program is an .app bundle, which
+// emulators.Service.SetPath reduces to its binary.
+func (s *Service) SelectEmulator(title, language string) (string, error) {
+	if runtime.GOOS == "windows" {
+		return s.SelectExecutable(title, language)
+	}
+	dialog := application.Get().Dialog.OpenFile().
+		SetTitle(title).
+		SetMessage(title).
+		CanChooseFiles(true).
+		CanChooseDirectories(true)
+	return dialogtext.Selection(dialog.PromptForSingleSelection())
+}
+
+// SelectImageFile picks a game image, filtered by the extensions of the given
+// consoles or of all of them. imagesLabel is the filter's name in the UI language.
+func (s *Service) SelectImageFile(title, imagesLabel, language string, platformIDs []string) (string, error) {
+	patterns, err := emulators.ImagePatterns(platformIDs)
+	if err != nil {
+		return "", err
+	}
+	dialog := application.Get().Dialog.OpenFile().
+		SetTitle(title).
+		SetMessage(title).
+		CanChooseFiles(true).
+		AddFilter(imagesLabel, patterns).
+		AddFilter(dialogtext.For(language).AllFiles, "*.*")
+	return dialogtext.Selection(dialog.PromptForSingleSelection())
 }
 
 // SelectGameExecutable opens the picker in the game's CrossOver bottle on

@@ -15,10 +15,12 @@
     Sparkles,
     Square,
   } from '@lucide/svelte';
+  import AddImageModal from '../../lib/components/AddImageModal.svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import Chip from '../../lib/components/Chip.svelte';
+  import ConsoleTag from '../../lib/components/ConsoleTag.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
@@ -42,6 +44,7 @@
   import { openGameFolder, openFolder } from '../../lib/services/settings';
   import { rescan, scanProgress, scanSummary, scanning } from '../../lib/stores/discovery';
   import { installedGames, runningGames } from '../../lib/stores/library';
+  import { emulationPlatform, isEmulated } from '../../lib/library/emulation';
   import { externalLabel, isExternal, isLaunchable } from '../../lib/library/external';
   import { gamesOnVolume } from '../../lib/library/folders';
   import { gameArt, loadArt } from '../../lib/stores/metadata';
@@ -175,6 +178,16 @@
     addOpen = true;
   }
 
+  let imageOpen = $state(false);
+
+  function openImageDialog() {
+    if (!inWails) {
+      toast(msg('games.installedAddDesktopOnly'));
+      return;
+    }
+    imageOpen = true;
+  }
+
   async function browseExecutable() {
     try {
       const path = await selectExecutable(msg('games.installedSelectExeDialog'));
@@ -246,6 +259,11 @@
     { id: 'executable', label: msg('games.installedChooseExeLabel') },
     { id: 'uninstall', label: msg('games.actionUninstall'), danger: true, separator: true },
     { id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true },
+  ];
+
+  const emulatedMenuItems = [
+    { id: 'folder', label: msg('games.openFolder') },
+    { id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true, separator: true },
   ];
 
   const externalMenuItems = [
@@ -352,6 +370,10 @@
     <Button onclick={findGames} disabled={$scanning}>
       <RefreshCw size="1.5rem" strokeWidth={2} class={$scanning ? 'spin' : ''} />
       {$scanning ? scanLabel : msg('games.installedFindGames')}
+    </Button>
+    <Button onclick={openImageDialog}>
+      <Plus size="1.5rem" strokeWidth={2} />
+      {msg('emul.addButton')}
     </Button>
     <Button variant="primary" onclick={openAddDialog}>
       <Plus size="1.5rem" strokeWidth={2} />
@@ -468,6 +490,10 @@
         <Plus size="1.5rem" strokeWidth={2} />
         {msg('games.installedAddGameButton')}
       </Button>
+      <Button onclick={openImageDialog}>
+        <Plus size="1.5rem" strokeWidth={2} />
+        {msg('emul.addButton')}
+      </Button>
     {/snippet}
   </EmptyState>
 {:else if filteredGames.length === 0}
@@ -488,7 +514,10 @@
             <Artwork src={heroFor(game)} alt={game.title} radius="var(--radius-sm)" />
           </div>
           <div class="titles">
-            <span class="title">{game.title}</span>
+            <span class="title-line">
+              <span class="title">{game.title}</span>
+              {#if isEmulated(game)}<ConsoleTag platform={emulationPlatform(game)} />{/if}
+            </span>
             <span class="path">{game.installDir}</span>
             {#if sizeLabel(game) || updateText}
               <span class="size">
@@ -537,7 +566,7 @@
             <FolderOpen size="1.3rem" strokeWidth={1.8} />
             {msg('games.openFolder')}
           </Button>
-          <DropdownMenu items={isExternal(game) ? externalMenuItems : menuItems} onselect={(id) => onMenu(game, id)}>
+          <DropdownMenu items={isExternal(game) ? externalMenuItems : isEmulated(game) ? emulatedMenuItems : menuItems} onselect={(id) => onMenu(game, id)}>
             {#snippet trigger({ toggle })}
               <IconButton label={msg('games.installedMenuLabel')} size="sm" onclick={toggle}>
                 <EllipsisVertical size="1.6rem" strokeWidth={1.8} />
@@ -585,7 +614,10 @@
         </div>
         <div class="card-info">
           <span class="card-title">{game.title}</span>
-          <span class="card-meta">{sizeLabel(game)}</span>
+          <span class="card-meta">
+            {#if isEmulated(game)}<ConsoleTag platform={emulationPlatform(game)} />{/if}
+            {sizeLabel(game)}
+          </span>
         </div>
       </div>
     {/each}
@@ -599,6 +631,7 @@
 {/if}
 
 <LibrarySetupModal bind:open={librarySetupOpen} />
+<AddImageModal bind:open={imageOpen} />
 
 {#if removeTarget}
   <RemoveGameModal
@@ -607,6 +640,7 @@
     gameId={removeTarget.id}
     title={removeTarget.title}
     external={externalLabel(removeTarget)}
+    emulated={isEmulated(removeTarget)}
   />
 {/if}
 
@@ -867,6 +901,13 @@
     min-width: 0;
   }
 
+  .title-line {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+
   .title {
     font-size: var(--font-lg);
     font-weight: 600;
@@ -1062,6 +1103,9 @@
   }
 
   .card-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
     font-size: var(--font-xs);
     color: var(--text-3);
     font-variant-numeric: tabular-nums;

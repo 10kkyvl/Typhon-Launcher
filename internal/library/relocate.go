@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"typhon/internal/emulators"
 	"typhon/internal/platform"
 	"typhon/internal/uierr"
 )
@@ -40,6 +41,10 @@ func (s *Service) Relocate(id, newInstallDir string) (Game, error) {
 	if game == nil {
 		s.mu.Unlock()
 		return Game{}, errNotFound
+	}
+	if game.Emulation != nil {
+		s.mu.Unlock()
+		return Game{}, emulators.ErrUnsupported
 	}
 	previous := *game
 	oldInstallDir := previous.InstallDir
@@ -142,6 +147,9 @@ func (s *Service) CheckRelocatable(id string) error {
 	game := s.findLocked(id)
 	if game == nil {
 		return errNotFound
+	}
+	if game.Emulation != nil {
+		return emulators.ErrUnsupported
 	}
 	return checkExecutableInside(*game)
 }

@@ -270,6 +270,7 @@ func (s *Service) play(id, profileID string, explicit bool) error {
 		shared:     game.UsesSharedBottle(),
 		elevated:   chosen.admin,
 	}
+	resolveEmulator := s.emulator
 	ctx := s.ctx
 	// Constructors are also used without startup by synchronous callers.
 	// A missing context must not start platform work.
@@ -291,6 +292,12 @@ func (s *Service) play(id, profileID string, explicit bool) error {
 		}
 	}()
 	s.mu.Unlock()
+	if game.Emulation != nil {
+		if err := emulatedLaunch(resolveEmulator, *game, chosen, &req); err != nil {
+			s.mu.Lock()
+			return err
+		}
+	}
 	err = s.prepare(ctx, req)
 	s.mu.Lock()
 	if err != nil {
@@ -360,9 +367,10 @@ func (s *Service) play(id, profileID string, explicit bool) error {
 	//nolint:gosec // G115: PID из os/exec укладывается в uint32 на Windows
 	pid := uint32(proc.pid())
 	startedAt := s.now()
-	s.running[id] = &session{process: proc, pid: pid, exePath: game.Executable, gamePID: pid, startedAt: startedAt, lastSeen: startedAt}
+	program := req.executable
+	s.running[id] = &session{process: proc, pid: pid, exePath: program, gamePID: pid, startedAt: startedAt, lastSeen: startedAt}
 	slog.Info("game started", "id", id, "title", game.Title, "pid", proc.pid(),
-		"executable", game.Executable, "workDir", workDir)
+		"executable", program, "workDir", req.workDir)
 	for _, w := range s.watchers {
 		w.SessionStarted(*game)
 	}
@@ -375,13 +383,12 @@ func (s *Service) play(id, profileID string, explicit bool) error {
 	})
 	emit("game:started", SessionEvent{GameID: id})
 
-	executable := game.Executable
 	s.sessionWG.Add(1)
 	go func() {
 		defer s.sessionWG.Done()
 		defer cancel()
 		waitErr := proc.wait()
-		logExit(id, executable, s.now().Sub(startedAt), waitErr)
+		logExit(id, program, s.now().Sub(startedAt), waitErr)
 		code, known := exitCode(waitErr)
 		info := &exitInfo{code: code, known: known}
 		// Детект по ОС переживает лаунчер и сам решает, когда сессия
@@ -605,7 +612,9 @@ func (s *Service) finishSession(ctx context.Context, id string, startedAt time.T
 	if hooks := s.crash; !stoppedByUser && ctx != nil && hooks.await != nil {
 		in := crashInput{gameID: id, exePath: exePath, pid: gamePID, exit: exit, seconds: seconds, startedAt: startedAt, endedAt: endedAt}
 		if game != nil {
-			in.installDir = game.InstallDir
+			if game.Emulation == nil {
+				in.installDir = game.InstallDir
+			}
 			if in.exePath == "" {
 				in.exePath = game.Executable
 			}

@@ -1,6 +1,7 @@
 package library
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -15,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"typhon/internal/emulators"
 	"typhon/internal/history"
 	"typhon/internal/platform"
 	"typhon/internal/procs"
@@ -80,6 +82,7 @@ type Game struct {
 	HidePresence      bool              `json:"hidePresence,omitempty"`
 	GameMode          *GameModeOverride `json:"gameMode,omitempty"`
 	External          *External         `json:"external,omitempty"`
+	Emulation         *Emulation        `json:"emulation,omitempty"`
 }
 
 type External struct {
@@ -154,6 +157,7 @@ var (
 	errEmptyCanonicalGameID = uierr.New("library.no_canonical_id", "не указан идентификатор игры каталога")
 	errEmptyCatalogTitle    = uierr.New("library.no_catalog_title", "не указано название игры")
 	errInstallationChanged  = uierr.New("library.installation_changed", "установка изменилась во время обновления")
+	errAlreadyAdded         = uierr.New("library.already_added", "эта игра уже добавлена")
 )
 
 func IsGameNotFound(err error) bool {
@@ -237,6 +241,17 @@ type Service struct {
 	saveHints func(ctx context.Context, canonicalID string) (SaveHintSet, error)
 	saveEnvs  func() ([]platform.SaveEnv, error)
 	steamRoot func() (string, error)
+	// emulator отдаёт программу для консоли. Поле, а не импорт сервиса
+	// эмуляторов: тесты подменяют его, а без настройки эмулятора нет.
+	emulator func(platform string) (string, error)
+	// coverSearch ищет обложку образа по явному действию пользователя.
+	coverSearch func(ctx context.Context, title, platform string) (string, error)
+
+	emulatedPath string
+	// savedNative и savedEmulated — то, что сейчас лежит в файлах: пишется
+	// только изменившийся файл.
+	savedNative   []byte
+	savedEmulated []byte
 }
 
 type SessionWatcher interface {
@@ -324,11 +339,23 @@ func NewServiceAt(path string) (*Service, error) {
 		start:           newGameStarter(),
 		openURI:         platform.OpenURI,
 		prepare:         prepareRuntime,
+		emulator:        func(string) (string, error) { return "", emulators.ErrNotConfigured },
+		coverSearch:     func(context.Context, string, string) (string, error) { return "", emulators.ErrCoverLookup },
+		emulatedPath:    emulatedPathFor(path),
+		savedNative:     []byte("[]"),
 	}
 	games, err := s.load()
 	if err != nil {
 		return nil, err
 	}
+	emulated, err := loadEmulated(s.emulatedPath)
+	if err != nil {
+		return nil, err
+	}
+	if s.savedEmulated, err = encodeEmulated(append([]Game{}, emulated...)); err != nil {
+		return nil, err
+	}
+	games = append(games, emulated...)
 	excluded, err := loadExcluded(excludedPath)
 	if err != nil {
 		return nil, err
@@ -369,6 +396,7 @@ func (s *Service) load() ([]Game, error) {
 	if err := json.Unmarshal(data, &stored); err != nil {
 		return nil, fmt.Errorf("parse library %s: %w", s.path, err)
 	}
+	s.savedNative = data
 	games := make([]Game, 0, len(stored))
 	for _, entry := range stored {
 		g := entry.Game
@@ -424,13 +452,36 @@ func (s *Service) persist() error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(append(append([]Game{}, s.games...), s.archived...), "", "  ")
+	native, emulated := splitEmulated(s.games)
+	data, err := json.MarshalIndent(append(native, s.archived...), "", "  ")
 	if err != nil {
 		return err
 	}
-	if err := storage.WriteAtomic(s.path, data); err != nil {
-		return fmt.Errorf("write library %s: %w", s.path, err)
+	images, err := encodeEmulated(emulated)
+	if err != nil {
+		return err
 	}
+	imagesChanged := !bytes.Equal(images, s.savedEmulated)
+	nativeChanged := !imagesChanged || !bytes.Equal(data, s.savedNative)
+	if nativeChanged {
+		if err := storage.WriteAtomic(s.path, data); err != nil {
+			return fmt.Errorf("write library %s: %w", s.path, err)
+		}
+	}
+	if imagesChanged {
+		if err := storage.Save(s.emulatedPath, emulatedVersion, emulated); err != nil {
+			err = fmt.Errorf("write emulated games %s: %w", s.emulatedPath, err)
+			// Removing an emulated game touches both files: the caller restores
+			// the memory, and the first file must not stay ahead of it.
+			if nativeChanged {
+				if undo := storage.WriteAtomic(s.path, s.savedNative); undo != nil {
+					return errors.Join(err, fmt.Errorf("restore library %s: %w", s.path, undo))
+				}
+			}
+			return err
+		}
+	}
+	s.savedNative, s.savedEmulated = data, images
 	return nil
 }
 
@@ -462,12 +513,15 @@ func (s *Service) GetGames() []Game {
 	return games
 }
 
+// GetInstalledGames lists installations: updates, repair, discovery and moves
+// work on InstallDir as the game's own folder. An emulated game has no such
+// folder, see GetPlayableGames.
 func (s *Service) GetInstalledGames() []Game {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	games := make([]Game, 0, len(s.games))
 	for _, game := range s.games {
-		if game.Uninstalled {
+		if game.Uninstalled || game.Emulation != nil {
 			continue
 		}
 		games = append(games, game)
@@ -911,7 +965,7 @@ func (s *Service) removeGameLocked(id string) error {
 			continue
 		}
 		previousExcluded := s.excluded
-		if game.InstallDir != "" && game.External == nil {
+		if game.InstallDir != "" && game.External == nil && game.Emulation == nil {
 			_, err := os.Stat(game.InstallDir)
 			switch {
 			case err == nil:

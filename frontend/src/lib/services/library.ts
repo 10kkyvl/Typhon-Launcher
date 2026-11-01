@@ -5,6 +5,8 @@ import { Service as AppService } from '../../../bindings/typhon/internal/app';
 import { inWails } from './backend';
 import { errorCode } from '../i18n/errors';
 import { markError } from '../game/markMessages';
+import { emulationPlatform, needsEmulator } from '../library/emulation';
+import { askForEmulator } from '../stores/emulatorPrompt';
 
 export { markError };
 
@@ -47,6 +49,10 @@ export interface GameModeOverride {
   raisePriority?: boolean | null;
 }
 
+export interface LibraryEmulation {
+  platform: string;
+}
+
 export interface LibraryGame {
   id: string;
   title: string;
@@ -68,6 +74,7 @@ export interface LibraryGame {
   canonicalGameId?: string;
   source?: 'external' | string;
   external?: LibraryExternal | null;
+  emulation?: LibraryEmulation | null;
   uninstalled?: boolean;
   shortcutPath?: string;
   savesDir?: string;
@@ -153,6 +160,17 @@ export async function addGame(executable: string, title: string): Promise<Librar
   return (await LibraryService.AddGame(executable, title)) as unknown as LibraryGame;
 }
 
+export async function addEmulatedGame(romPath: string, platformID: string, title: string): Promise<LibraryGame> {
+  if (!inWails) throw unavailable();
+  return (await LibraryService.AddEmulatedGame(romPath, platformID, title)) as unknown as LibraryGame;
+}
+
+export async function findEmulatedCover(id: string): Promise<LibraryGame> {
+  if (!inWails) throw unavailable();
+  const service = LibraryService as unknown as { FindEmulatedCover(id: string): Promise<unknown> };
+  return (await service.FindEmulatedCover(id)) as LibraryGame;
+}
+
 export async function addCatalogGame(canonicalGameId: string, title: string, cover: string): Promise<LibraryGame> {
   if (!inWails) throw unavailable();
   return (await LibraryService.AddCatalogGame(canonicalGameId, title, cover)) as unknown as LibraryGame;
@@ -171,6 +189,20 @@ export async function playGame(id: string): Promise<void> {
 // Existing callers of playGame still treat a dismissed native prompt as a no-op.
 export async function launchGame(id: string): Promise<boolean> {
   if (!inWails) throw unavailable();
+  try { await LibraryService.PlayGame(id); } catch (err) {
+    if (errorCode(err) === 'library.launch_cancelled') return false;
+    if (!needsEmulator(err)) throw err;
+    return await launchAfterEmulator(id, err);
+  }
+  return true;
+}
+
+// The game is asked for again only once: if the emulator the user just
+// pointed at is rejected, that error is shown as it is instead of looping.
+async function launchAfterEmulator(id: string, first: unknown): Promise<boolean> {
+  const platform = emulationPlatform((await getGames()).find((game) => game.id === id));
+  if (!platform) throw first;
+  if (!(await askForEmulator(platform, errorCode(first)))) return false;
   try { await LibraryService.PlayGame(id); } catch (err) {
     if (errorCode(err) !== 'library.launch_cancelled') throw err;
     return false;

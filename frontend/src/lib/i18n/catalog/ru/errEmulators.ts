@@ -1,0 +1,24 @@
+export const errEmulators = {
+  'emulators.unknown_platform': 'неизвестная консоль',
+  'emulators.not_configured': 'эмулятор для этой консоли не указан',
+  'emulators.file_missing': 'файл эмулятора не найден',
+  'emulators.file_unreadable': 'файл эмулятора недоступен',
+  'emulators.path_relative': 'путь к эмулятору должен быть полным',
+  'emulators.path_invalid': 'путь к эмулятору содержит недопустимые символы',
+  'emulators.not_regular_file': 'эмулятор должен быть файлом, а не папкой или ссылкой',
+  'emulators.not_exe': 'нужен исполняемый файл эмулятора (.exe)',
+  'emulators.windows_program': 'на этой системе программа для Windows не подходит: нужна версия эмулятора для неё',
+  'emulators.bad_app_bundle': 'в выбранном приложении не найден файл эмулятора',
+  'emulators.save_failed': 'не удалось сохранить путь к эмулятору',
+  'emulators.image_path_empty': 'не выбран файл образа',
+  'emulators.image_path_relative': 'путь к образу должен быть полным',
+  'emulators.image_extension': 'формат файла не подходит этой консоли',
+  'emulators.image_missing': 'файл образа не найден',
+  'emulators.image_unreadable': 'файл образа недоступен',
+  'emulators.image_not_file': 'образ должен быть файлом, а не папкой или ссылкой',
+  'emulators.cover_not_found': 'обложка по этому названию не найдена',
+  'emulators.title_empty': 'не указано название игры',
+  'emulators.game_unsupported': 'для игры на эмуляторе это действие недоступно',
+} as const;
+
+export type ErrEmulatorsKey = keyof typeof errEmulators;

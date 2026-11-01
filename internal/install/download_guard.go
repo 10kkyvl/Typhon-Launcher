@@ -41,7 +41,7 @@ func (s *Service) CheckDownloadDeletable(d download.Download) error {
 		return errNoGameList
 	}
 	for _, game := range s.library.GetGames() {
-		if sharesPath(root, game.InstallDir) {
+		if sharesFootprint(game, root) {
 			return fmt.Errorf("%w: %s", errDownloadIsInstall, game.Title)
 		}
 	}

@@ -330,7 +330,7 @@ func (s *Service) installDirOf(id string) (string, error) {
 	if game == nil {
 		return "", errNotFound
 	}
-	if game.External != nil {
+	if game.External != nil || game.Emulation != nil {
 		return "", errProfileExternal
 	}
 	return game.InstallDir, nil

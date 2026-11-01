@@ -39,6 +39,7 @@ export interface QuickActionState {
   hasExecutable: boolean;
   launchable?: boolean;
   external?: boolean;
+  emulated?: boolean;
   hasShortcut: boolean;
   lanEnabled: boolean;
   lanShared: boolean;
@@ -82,19 +83,21 @@ export function quickActions(state: QuickActionState): QuickActionItem[] {
   }
   items.push(...markItems(state));
   items.push({ id: 'folder', label: msg('games.openFolder') });
-  items.push({ id: 'saves', label: msg('games.actionOpenSaves') });
-  if (state.saveBackups) {
-    items.push({ id: 'saves-backups', label: msg('games.actionSavesBackups') });
-  }
-  if (!state.external) {
-    items.push({ id: 'verify', label: msg('games.actionVerify') });
-  }
-  items.push({ id: 'redist', label: msg('redist.action') });
-  if (!state.running && !state.external) {
-    items.push({ id: 'move', label: msg('games.actionMove') });
+  if (!state.emulated) {
+    items.push({ id: 'saves', label: msg('games.actionOpenSaves') });
+    if (state.saveBackups) {
+      items.push({ id: 'saves-backups', label: msg('games.actionSavesBackups') });
+    }
+    if (!state.external) {
+      items.push({ id: 'verify', label: msg('games.actionVerify') });
+    }
+    items.push({ id: 'redist', label: msg('redist.action') });
+    if (!state.running && !state.external) {
+      items.push({ id: 'move', label: msg('games.actionMove') });
+    }
   }
   items.push({ id: 'properties', label: msg('games.actionProperties') });
-  if (state.lanEnabled) {
+  if (state.lanEnabled && !state.emulated) {
     items.push(
       state.lanShared
         ? { id: 'lan-unshare', label: msg('games.actionLanUnshare') }
@@ -113,7 +116,7 @@ export function quickActions(state: QuickActionState): QuickActionItem[] {
         : { id: 'steam-add', label: msg('games.actionSteamAdd') },
     );
   }
-  if (state.external) {
+  if (state.external || state.emulated) {
     items.push({ id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true, separator: true });
     return items;
   }

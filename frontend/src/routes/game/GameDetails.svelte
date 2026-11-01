@@ -92,14 +92,17 @@
   import {
     addCatalogGame,
     createShortcut,
+    findEmulatedCover,
     markError,
     playGame,
     playGameProfile,
     removeShortcut,
+    setExecutable,
     setFavorite,
     setRequiresSteam,
     stopGame,
   } from '../../lib/services/library';
+  import { selectImageFile } from '../../lib/services/emulators';
   import {
     dismissMetadataMatch,
     ensureMetadataFresh,
@@ -134,7 +137,9 @@
   import { installIndeterminate } from '../../lib/install/progress';
   import { openGameProperties } from '../../lib/stores/gameProperties';
   import { libraryGames, runningGames } from '../../lib/stores/library';
+  import { emulationPlatform, isEmulated, platformBadge } from '../../lib/library/emulation';
   import { externalLabel, isExternal } from '../../lib/library/external';
+  import ConsoleTag from '../../lib/components/ConsoleTag.svelte';
   import { metadataAvailable } from '../../lib/stores/metadata';
   import { navigate } from '../../lib/stores/router';
   import { openRedist } from '../../lib/stores/redist';
@@ -178,7 +183,10 @@
 
   const external = $derived(isExternal(localGame));
   const externalName = $derived(externalLabel(localGame));
-  const update = $derived(localGame && !external ? $updatesByGame.get(localGame.id) : undefined);
+  const emulated = $derived(isEmulated(localGame));
+  const emulatedPlatform = $derived(emulationPlatform(localGame));
+  const managed = $derived(!external && !emulated);
+  const update = $derived(localGame && managed ? $updatesByGame.get(localGame.id) : undefined);
   const verifyState = $derived(localGame ? $verifications[localGame.id] : undefined);
   const updateAvailable = $derived(Boolean(update?.availability.available));
   const updateIsRelease = $derived(update?.availability.kind !== 'update');
@@ -468,7 +476,7 @@
     return facts([
       { label: msg('games.detailFactVersion'), value: localGame.version },
       { label: msg('games.detailFactSize'), value: localGame.sizeBytes > 0 ? bytesSize(localGame.sizeBytes) : '' },
-      { label: msg('games.executableLabel'), value: exe, full: localGame.executable, mono: true },
+      { label: emulated ? msg('emul.factImage') : msg('games.executableLabel'), value: exe, full: localGame.executable, mono: true },
       { label: msg('games.detailFactPlaytime'), value: playtime(localGame.playtimeSeconds) },
       { label: msg('games.lastPlayedLabel'), value: relativeDate(localGame.lastPlayed) },
       { label: msg('games.detailFactAdded'), value: relativeDate(localGame.installedAt) },
@@ -554,7 +562,7 @@
   const busyPercent = $derived(progressPercent(busy?.progress ?? 0));
 
   const menuItems = $derived([
-    ...($saveBackupsEnabled && localGame ? [{ id: 'saves-backups', label: msg('games.detailSavesRollback') }] : []),
+    ...($saveBackupsEnabled && localGame && !emulated ? [{ id: 'saves-backups', label: msg('games.detailSavesRollback') }] : []),
     ...($metadataAvailable && canonicalId
       ? metaView?.resolved
         ? [
@@ -573,11 +581,11 @@
             : { id: 'shortcut-create', label: msg('games.actionShortcutCreate') },
         ]
       : []),
-    ...(installed && !external
+    ...(installed && managed
       ? [{ id: 'uninstall', label: msg('games.actionUninstall'), danger: true, separator: true }]
       : []),
     ...(localGame
-      ? [{ id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true, separator: !installed || external }]
+      ? [{ id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true, separator: !installed || !managed }]
       : []),
     ...(terminalDownload
       ? [
@@ -782,7 +790,7 @@
     $sources; // A feed can finish importing while this game is already open.
     const canonicalGameId = canonicalId;
     const gameTitle = releaseTitle;
-    const isExternalGame = external;
+    const isExternalGame = !managed;
     untrack(() => {
       loadRelated(isExternalGame ? undefined : canonicalGameId);
       loadReleases(canonicalGameId, gameTitle);
@@ -859,6 +867,36 @@
       return;
     }
     pickerOpen = true;
+  }
+
+  let imageBusy = $state(false);
+
+  async function chooseImage() {
+    if (!localGame || imageBusy) return;
+    imageBusy = true;
+    try {
+      const path = await selectImageFile(msg('emul.addImageDialog'));
+      if (!path) return;
+      await setExecutable(localGame.id, path);
+      toast(msg('emul.imageSaved'), 'success');
+    } catch (err) {
+      toast(libraryErrorText(err, msg('emul.imageSaveFailed')), 'danger');
+    } finally {
+      imageBusy = false;
+    }
+  }
+
+  async function findCover() {
+    if (!localGame || imageBusy) return;
+    imageBusy = true;
+    try {
+      await findEmulatedCover(localGame.id);
+      toast(msg('emul.coverFound'), 'success');
+    } catch (err) {
+      toast(libraryErrorText(err, msg('emul.coverFailed')));
+    } finally {
+      imageBusy = false;
+    }
   }
 
   async function play() {
@@ -1011,7 +1049,7 @@
   {#if installed && localGame}
     <div class="gsec" class:moved={moved('install')} {...part('install')}>
       {#if installed && localGame}
-        {#if !external}
+        {#if managed}
           <section class="section">
             <VerifyCard gameId={localGame.id} state={verifyState} {running} />
           </section>
@@ -1021,6 +1059,8 @@
           <h2 class="heading">{msg('games.detailInstallHeading')}</h2>
           {#if external}
             <p class="muted">{msg('games.externalNote', { provider: externalName })}</p>
+          {:else if emulated}
+            <p class="muted">{msg('emul.gameNote', { console: platformBadge(emulatedPlatform) })}</p>
           {/if}
           <div class="path">
             <span class="path-value" title={localGame.installDir}>{truncateMiddle(localGame.installDir, 34)}</span>
@@ -1036,10 +1076,17 @@
               </div>
             {/each}
           </dl>
-          <div class="redist-row">
-            <Button size="sm" onclick={() => openRedist(localGame.id)}>{msg('redist.action')}</Button>
-          </div>
-          {#if wineStatus?.required}
+          {#if emulated}
+            <div class="redist-row">
+              <Button size="sm" disabled={imageBusy} onclick={chooseImage}>{msg('emul.pickImage')}</Button>
+              <Button size="sm" disabled={imageBusy} onclick={findCover}>{msg('emul.coverFind')}</Button>
+            </div>
+          {:else}
+            <div class="redist-row">
+              <Button size="sm" onclick={() => openRedist(localGame.id)}>{msg('redist.action')}</Button>
+            </div>
+          {/if}
+          {#if wineStatus?.required && !emulated}
             <div class="steam-row">
               <div class="steam-row-text">
                 <span class="steam-row-label">{msg('games.detailSteamBottleLabel')}</span>
@@ -1060,7 +1107,7 @@
 {/snippet}
 
 {#snippet sec_requirements(withReleases: boolean)}
-  {#if (catalogGame || localGame) && !external}
+  {#if (catalogGame || localGame) && managed}
     <div class="gsec" class:moved={moved('requirements')} {...part('requirements')}>
       <section class="section">
         <h2 class="heading">{msg('games.detailAvailableDownloadsHeading')}</h2>
@@ -1085,7 +1132,7 @@
 {/snippet}
 
 {#snippet sec_releases()}
-  {#if (catalogGame || localGame) && !external}
+  {#if (catalogGame || localGame) && managed}
     <div class="gsec" class:moved={moved('releases')} {...part('releases')}>
       <section class="section">
         <h2 class="heading">{msg('games.detailAvailableDownloadsHeading')}</h2>
@@ -1105,7 +1152,7 @@
 {/snippet}
 
 {#snippet sec_similar()}
-  {#if (catalogGame || localGame) && !external && similarShown && canonicalId}
+  {#if (catalogGame || localGame) && managed && similarShown && canonicalId}
     <div class="gsec" class:moved={moved('similar')} {...part('similar')}>
       {#if similarShown && canonicalId}
         <SimilarReleases
@@ -1122,7 +1169,7 @@
 {/snippet}
 
 {#snippet sec_otherVersions()}
-  {#if (catalogGame || localGame) && !external && (relatedShown.length > 0 || (relatedFailed && availableGroups.length === 0))}
+  {#if (catalogGame || localGame) && managed && (relatedShown.length > 0 || (relatedFailed && availableGroups.length === 0))}
     <div class="gsec" class:moved={moved('otherVersions')} {...part('otherVersions')}>
       {#if relatedShown.length > 0 || (relatedFailed && availableGroups.length === 0)}
         <section class="section" bind:this={otherVersionsEl}>
@@ -1187,7 +1234,7 @@
 {/snippet}
 
 {#snippet sec_reviews()}
-  {#if true}
+  {#if !emulated}
     <div class="gsec" class:moved={moved('reviews')} {...part('reviews')}>
       <GameReviews canonicalGameId={canonicalId ?? ''} />
     </div>
@@ -1224,7 +1271,7 @@
 {/snippet}
 
 {#snippet sec_reviewSummary()}
-  {#if true}
+  {#if !emulated}
     <div class="gsec" class:moved={moved('reviewSummary')} {...part('reviewSummary')}>
       <ReviewSummary canonicalGameId={canonicalId ?? ''} onopen={reviewsShown ? scrollToReviews : undefined} />
     </div>
@@ -1232,7 +1279,7 @@
 {/snippet}
 
 {#snippet sec_friends()}
-  {#if true}
+  {#if !emulated}
     <div class="gsec" class:moved={moved('friends')} {...part('friends')}>
       <GameFriendsPanel canonicalGameId={canonicalId ?? ''} />
     </div>
@@ -1331,6 +1378,9 @@
           {/if}
           {#if externalName}
             <StatusBadge kind="neutral" label={externalName} dot={false} />
+          {/if}
+          {#if emulated}
+            <ConsoleTag platform={emulatedPlatform} />
           {/if}
           {#if localGame?.status}
             <StatusBadge kind={statusBadgeKind(localGame.status)} label={statusLabel(localGame.status)} dot={false} />
@@ -1559,6 +1609,7 @@
       gameId={localGame.id}
       title={localGame.title}
       external={externalLabel(localGame)}
+      emulated={emulated}
       onremoved={(removed) => {
         if (removed === 'library') navigate('installed');
       }}

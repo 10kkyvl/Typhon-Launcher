@@ -1,0 +1,25 @@
+import type { Message } from '../../types';
+import type { ErrEmulatorsKey } from '../ru/errEmulators';
+
+export const errEmulators: Record<ErrEmulatorsKey, Message> = {
+  'emulators.unknown_platform': 'Unknown console',
+  'emulators.not_configured': 'No emulator is set for this console',
+  'emulators.file_missing': 'The emulator file was not found',
+  'emulators.file_unreadable': 'The emulator file cannot be read',
+  'emulators.path_relative': 'The emulator path must be a full path',
+  'emulators.path_invalid': 'The emulator path contains invalid characters',
+  'emulators.not_regular_file': 'The emulator must be a file, not a folder or a link',
+  'emulators.not_exe': 'An emulator executable (.exe) is required',
+  'emulators.windows_program': 'A Windows program does not work on this system: use the emulator build made for it',
+  'emulators.bad_app_bundle': 'The selected app has no emulator executable inside',
+  'emulators.save_failed': 'Could not save the emulator path',
+  'emulators.image_path_empty': 'No game image selected',
+  'emulators.image_path_relative': 'The image path must be a full path',
+  'emulators.image_extension': 'This file format does not fit the console',
+  'emulators.image_missing': 'The game image was not found',
+  'emulators.image_unreadable': 'The game image cannot be read',
+  'emulators.image_not_file': 'The image must be a file, not a folder or a link',
+  'emulators.cover_not_found': 'No cover found for this title',
+  'emulators.title_empty': 'The game title is empty',
+  'emulators.game_unsupported': 'This action is not available for a game run through an emulator',
+};

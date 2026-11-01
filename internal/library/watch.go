@@ -89,7 +89,9 @@ func (s *Service) detectTick(ctx context.Context) {
 	targets := make([]matchTarget, 0, len(s.games))
 	for i := range s.games {
 		g := &s.games[i]
-		if g.Uninstalled {
+		// An image is not a process and its folder is not the game's: a session
+		// of an emulated game follows the pid of the emulator the launcher started.
+		if g.Uninstalled || g.Emulation != nil {
 			continue
 		}
 		if g.InstallDir == "" && g.Executable == "" {

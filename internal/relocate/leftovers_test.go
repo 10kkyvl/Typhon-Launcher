@@ -220,3 +220,20 @@ func newBareService(t *testing.T, lib *library.Service) *Service {
 	}
 	return s
 }
+
+func TestStagingHoldingAnImageIsNotDeletable(t *testing.T) {
+	target := filepath.Join(t.TempDir(), "Target")
+	staging := target + stagingSuffix
+	job := Job{Stage: StageDone, Source: t.TempDir(), Target: target, Staging: staging}
+	image := library.Game{ID: "emu", Executable: filepath.Join(staging, "game.iso"), InstallDir: t.TempDir(),
+		Emulation: &library.Emulation{Platform: "ps2"}}
+	if ok, _, _ := stagingVerdict(job, true, []library.Game{image}); ok {
+		t.Fatal("a staging folder with an image was offered for deletion")
+	}
+	beside := image
+	beside.Executable = filepath.Join(filepath.Dir(staging), "game.iso")
+	beside.InstallDir = filepath.Dir(staging)
+	if ok, _, reason := stagingVerdict(job, true, []library.Game{beside}); !ok {
+		t.Fatalf("an image beside the staging folder blocked it: %s", reason)
+	}
+}

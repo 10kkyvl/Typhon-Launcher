@@ -120,7 +120,9 @@ func steamProfileTarget(game Game, profileID string, launcherPath func() (string
 		}
 		sc.Name = profileTitle(game, profileID)
 	}
-	if chosen.admin {
+	// Steam cannot start an image: an emulated game goes through --play, which
+	// finds the emulator at launch.
+	if chosen.admin || game.Emulation != nil {
 		playArgs, err := shortcut.PlayArgs(game.ID, profileID)
 		if err != nil {
 			return steamlink.Shortcut{}, fmt.Errorf("%w: %w", errShortcutBadID, err)
@@ -128,6 +130,9 @@ func steamProfileTarget(game Game, profileID string, launcherPath func() (string
 		launcher, err := launcherPath()
 		if err != nil {
 			return steamlink.Shortcut{}, fmt.Errorf("путь к лаунчеру: %w", err)
+		}
+		if game.Emulation != nil {
+			sc.Icon = launcher
 		}
 		sc.Exe = launcher
 		sc.StartDir = filepath.Dir(launcher)

@@ -9,6 +9,7 @@
   import { compatBadge } from '../game/compat';
   import type { GameSource } from '../library/source';
   import SourceBadge from './SourceBadge.svelte';
+  import ConsoleTag from './ConsoleTag.svelte';
 
   export interface GameCardAction {
     id: string;
@@ -31,6 +32,7 @@
     meta,
     compat,
     source = null,
+    platform = '',
     variant = 'poster',
     footer,
     actions,
@@ -44,6 +46,7 @@
     meta?: string;
     compat?: CompatInfo;
     source?: GameSource | null;
+    platform?: string;
     variant?: 'poster' | 'capsule';
     footer?: Snippet;
     actions?: GameCardAction[];
@@ -74,7 +77,9 @@
       <Artwork src={cover} alt={title} {ratio} radius="var(--radius-md)" />
       <span class="fade"></span>
     </button>
-    {#if source}
+    {#if platform}
+      <span class="source"><ConsoleTag {platform} /></span>
+    {:else if source}
       <span class="source"><SourceBadge {source} /></span>
     {/if}
     {#if compatLabel}

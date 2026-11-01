@@ -11,6 +11,7 @@
   import GameCrashModal from './lib/components/GameCrashModal.svelte';
   import RedistModal from './lib/components/RedistModal.svelte';
   import CloudConflictModal from './lib/components/CloudConflictModal.svelte';
+  import EmulatorNeededModal from './lib/components/EmulatorNeededModal.svelte';
   import LegalAcceptanceScreen from './lib/components/LegalAcceptanceScreen.svelte';
   import TelemetryConsentScreen from './lib/components/TelemetryConsentScreen.svelte';
   import UpdateOverlay from './lib/components/UpdateOverlay.svelte';
@@ -178,6 +179,8 @@
   {/if}
 {/key}
 {/if}
+
+<EmulatorNeededModal />
 
 <style>
   .boot {

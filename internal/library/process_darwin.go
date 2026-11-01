@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"typhon/internal/emulators"
 	"typhon/internal/wine"
 )
 
@@ -48,7 +49,7 @@ type wineStarter struct {
 func newGameStarter() gameStarter {
 	rt, err := wine.Detect()
 	if err != nil {
-		return func(context.Context, launch) (gameProcess, error) { return nil, errNoRuntime }
+		return nativeOnlyStarter(execStarter, errNoRuntime)
 	}
 	manager := wine.NewManager(rt)
 	s := wineStarter{
@@ -294,11 +295,4 @@ func (p *wineGameProcess) kill() error {
 	return p.stop(p.bottle)
 }
 
-func isWindowsExecutable(path string) bool {
-	switch strings.ToLower(filepath.Ext(path)) {
-	case ".exe", ".bat", ".cmd", ".com", ".msi":
-		return true
-	default:
-		return false
-	}
-}
+func isWindowsExecutable(path string) bool { return emulators.IsWindowsProgram(path) }

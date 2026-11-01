@@ -2,6 +2,7 @@ package lan
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/netip"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"typhon/internal/emulators"
 	"typhon/internal/library"
 	"typhon/internal/platform"
 	"typhon/internal/settings"
@@ -50,6 +52,30 @@ func newTestService(t *testing.T, lib *library.Service, settingsSvc *settings.Se
 		t.Fatalf("new lan service: %v", err)
 	}
 	return svc
+}
+
+func TestShareRefusesTheFolderOfAnImage(t *testing.T) {
+	lib, err := library.NewServiceAt(filepath.Join(t.TempDir(), "library.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := lib.ServiceShutdown(); err != nil {
+			t.Errorf("library shutdown: %v", err)
+		}
+	})
+	rom := filepath.Join(t.TempDir(), "game.iso")
+	if err := os.WriteFile(rom, []byte("image"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	game, err := lib.AddEmulatedGame(t.Context(), rom, emulators.PS2, "Game")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := newTestService(t, lib, nil)
+	if _, err := svc.Share(game.ID); !errors.Is(err, emulators.ErrUnsupported) {
+		t.Fatalf("Share = %v", err)
+	}
 }
 
 func TestShareCacheSkipsRehash(t *testing.T) {

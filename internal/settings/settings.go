@@ -224,6 +224,11 @@ type Settings struct {
 	LegalAcceptedVersion string `json:"legalAcceptedVersion"`
 
 	GameMode GameMode `json:"gameMode"`
+
+	// EmulatorPaths is keyed by platform id. A map is replaced, never edited in
+	// place: copies of Settings share it. Only the emulators service writes it,
+	// because it validates a program that will be executed.
+	EmulatorPaths map[string]string `json:"emulatorPaths"`
 }
 
 type GameMode struct {
@@ -334,6 +339,8 @@ func Defaults() Settings {
 		// The installation ID and the game ID it may add are gated by
 		// UsageStatsAllowedCurrent, not by this switch.
 		SessionHeartbeat: true,
+
+		EmulatorPaths: map[string]string{},
 	}
 }
 
@@ -649,6 +656,9 @@ func sanitize(s Settings) (Settings, error) {
 	}
 	if s.SaveBackupLimit > MaxSaveBackupLimit {
 		s.SaveBackupLimit = MaxSaveBackupLimit
+	}
+	if s.EmulatorPaths == nil {
+		s.EmulatorPaths = map[string]string{}
 	}
 	return s, nil
 }

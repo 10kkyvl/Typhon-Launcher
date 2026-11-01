@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -1435,5 +1436,49 @@ func TestIdentifiedGameStillReportsDetailsLoading(t *testing.T) {
 	view, err = svc.GetView(game.ID)
 	if err != nil || view.Match == MatchSearching {
 		t.Fatalf("completed view: %+v, %v", view, err)
+	}
+}
+
+func TestFindCoverTakesOnlyTheExactTitleOnTheConsole(t *testing.T) {
+	cover := &ImageRef{URL: "https://images.example/c.jpg"}
+	console := func(platforms []string) bool { return slices.Contains(platforms, "PlayStation 2") }
+	cases := []struct {
+		name       string
+		candidates []Candidate
+		meta       map[string]GameMetadata
+		want       string
+		err        error
+	}{
+		{"title and console agree", []Candidate{{ProviderID: "1", Title: "Doom"}},
+			map[string]GameMetadata{"1": {Platforms: []string{"PlayStation 2"}, Cover: cover}}, cover.URL, nil},
+		{"second namesake fits", []Candidate{{ProviderID: "1", Title: "DOOM"}, {ProviderID: "2", Title: "Doom"}},
+			map[string]GameMetadata{"1": {Platforms: []string{"PC"}, Cover: cover}, "2": {Platforms: []string{"PlayStation 2"}, Cover: cover}}, cover.URL, nil},
+		{"similar title", []Candidate{{ProviderID: "1", Title: "Doom 3"}},
+			map[string]GameMetadata{"1": {Platforms: []string{"PlayStation 2"}, Cover: cover}}, "", ErrNoMatch},
+		{"other console", []Candidate{{ProviderID: "1", Title: "Doom"}},
+			map[string]GameMetadata{"1": {Platforms: []string{"PC"}, Cover: cover}}, "", ErrNoMatch},
+		{"no cover", []Candidate{{ProviderID: "1", Title: "Doom"}},
+			map[string]GameMetadata{"1": {Platforms: []string{"PlayStation 2"}}}, "", ErrNoMatch},
+		{"nothing found", nil, nil, "", ErrNoMatch},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			svc, _, _ := newTestService(t, &fakeProvider{candidates: c.candidates, meta: c.meta})
+			got, err := svc.FindCover(t.Context(), "Doom", console)
+			if got != c.want || !errors.Is(err, c.err) {
+				t.Fatalf("FindCover = %q, %v", got, err)
+			}
+		})
+	}
+}
+
+func TestFindCoverReportsTheNetwork(t *testing.T) {
+	boom := errors.New("offline")
+	svc, _, _ := newTestService(t, &fakeProvider{searchErr: boom})
+	if _, err := svc.FindCover(t.Context(), "Doom", func([]string) bool { return true }); err == nil || errors.Is(err, ErrNoMatch) {
+		t.Fatalf("FindCover = %v", err)
+	}
+	if _, err := svc.FindCover(t.Context(), " ", func([]string) bool { return true }); !errors.Is(err, errEmptyQuery) {
+		t.Fatalf("empty title = %v", err)
 	}
 }

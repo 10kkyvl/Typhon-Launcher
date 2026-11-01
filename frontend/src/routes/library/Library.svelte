@@ -54,6 +54,8 @@
   import { gameSource, sourceLabel, sourceOrder, type GameSource } from '../../lib/library/source';
   import SourceBadge from '../../lib/components/SourceBadge.svelte';
   import { canPlay } from '../../lib/library/launch';
+  import { emulationPlatform } from '../../lib/library/emulation';
+  import ConsoleTag from '../../lib/components/ConsoleTag.svelte';
   import { matchesCollection } from '../../lib/library/collections';
   import { STATUS_FILTERS, compareByCompleted, compareByStatus, matchesStatus, type StatusFilter } from '../../lib/library/statuses';
   import { statusLabel } from '../../lib/game/status';
@@ -79,6 +81,7 @@
     canonicalGameId?: string;
     watched?: boolean;
     source?: GameSource | null;
+    platform?: string;
   }
 
   let filter = $state<LibraryFilter>('all');
@@ -213,6 +216,7 @@
       completedAt: game.completedAt,
       canonicalGameId: game.canonicalGameId,
       source: gameSource(game),
+      platform: emulationPlatform(game),
     };
   }
 
@@ -460,6 +464,7 @@
               installed={entry.installed}
               running={$runningGames.has(entry.id)}
               source={entry.source}
+              platform={entry.platform}
               onplay={entry.playable ? () => toggleRun(entry.id) : undefined}
             >
               {#snippet footer()}
@@ -606,6 +611,7 @@
             installed={entry.installed}
             running={$runningGames.has(entry.id)}
             source={entry.source}
+            platform={entry.platform}
             meta={entry.watched ? entry.subtitle : entryMeta(entry)}
             actions={watchedActions(entry)}
             onplay={entry.playable ? () => toggleRun(entry.id) : undefined}
@@ -624,7 +630,9 @@
               <Artwork src={entry.cover} alt={entry.title} radius="var(--radius-xs)" />
             </div>
             <span class="list-title">{entry.title}</span>
-            {#if entry.source}
+            {#if entry.platform}
+              <ConsoleTag platform={entry.platform} />
+            {:else if entry.source}
               <SourceBadge source={entry.source} />
             {/if}
             <span class="list-meta">{entry.subtitle}</span>

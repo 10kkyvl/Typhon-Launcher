@@ -58,6 +58,7 @@ var localNames = []string{
 	"screenshotsPath",
 	"extraLibraryPaths",
 	"lastInstallRoot",
+	"emulatorPaths",
 	"launchOnStartup",
 	"hardwareAcceleration",
 	"maxActiveDownloads",

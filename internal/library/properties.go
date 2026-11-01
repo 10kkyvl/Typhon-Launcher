@@ -6,6 +6,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"typhon/internal/emulators"
 	"typhon/internal/uierr"
 )
 
@@ -69,6 +70,9 @@ func (s *Service) SetRunAsAdmin(id string, on bool) (Game, error) {
 	}
 	if game.RunAsAdmin == on {
 		return *game, nil
+	}
+	if on && game.Emulation != nil {
+		return Game{}, emulators.ErrUnsupported
 	}
 	previous := *game
 	game.RunAsAdmin = on

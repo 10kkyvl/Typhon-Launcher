@@ -62,6 +62,11 @@ func (s *Service) runPortable(ctx context.Context, id string, item Installation)
 		return err
 	}
 
+	if item.Mode == ModeMove {
+		if err := s.checkHoldsNoImage(item.ContentRoot); err != nil {
+			return err
+		}
+	}
 	if item.Mode == ModeMove && s.sameVolume(item.ContentRoot, item.Destination) {
 		err := s.renameSource(item)
 		switch {

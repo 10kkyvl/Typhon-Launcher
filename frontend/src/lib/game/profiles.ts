@@ -8,17 +8,17 @@ export interface ProfileChoice {
 
 export const playProfilePrefix = 'play-profile:';
 
-type ProfileSource = Pick<LibraryGame, 'profiles' | 'lastProfile'>;
+type ProfileSource = Pick<LibraryGame, 'profiles' | 'lastProfile' | 'emulation'>;
 
 export function profileChoices(game: ProfileSource): ProfileChoice[] {
   const extra = game.profiles ?? [];
-  if (extra.length === 0) return [];
+  if (game.emulation || extra.length === 0) return [];
   return [{ id: '', name: msg('games.profileDefault') }, ...extra.map((p) => ({ id: p.id, name: p.name }))];
 }
 
 export function lastProfileId(game: ProfileSource): string {
   const id = game.lastProfile ?? '';
-  return id !== '' && (game.profiles ?? []).some((p) => p.id === id) ? id : '';
+  return !game.emulation && id !== '' && (game.profiles ?? []).some((p) => p.id === id) ? id : '';
 }
 
 export function playLabel(game: ProfileSource): string {

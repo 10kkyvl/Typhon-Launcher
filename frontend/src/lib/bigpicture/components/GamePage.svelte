@@ -20,6 +20,7 @@
   import { appInfo, elevationSupported, type AppInfo } from '../../services/system';
   import { offerElevateAhead } from '../../services/install';
   import { selectFolder } from '../../services/settings';
+  import { isEmulated, platformBadge } from '../../library/emulation';
   import { LatestRequestGate } from '../latestRequest';
   import { GameDownloadFlow } from '../gameDownload';
   import type { BigPictureCommand } from '../input';
@@ -98,6 +99,7 @@
   const canonicalId = $derived(localGame?.canonicalGameId || catalogGame?.id || id);
   const releaseCanonicalId = $derived(localGame?.canonicalGameId || catalogGame?.id || (localGame ? '' : id));
   const installed = $derived(Boolean(localGame && !localGame.uninstalled));
+  const emulated = $derived(isEmulated(localGame));
   const running = $derived(Boolean(localGame && $runningGames.has(localGame.id)));
   const cover = $derived(metadata?.cover || catalogGame?.coverUrl || localGame?.cover || '');
   const shots = $derived(metadata?.screenshots ?? []);
@@ -290,7 +292,7 @@
     }
     if (dialog) return false;
     if (command === 'previous' || command === 'next') {
-      activeTab = command === 'previous' ? 'overview' : 'releases';
+      activeTab = command === 'previous' || emulated ? 'overview' : 'releases';
       return true;
     }
     return false;
@@ -376,6 +378,7 @@
   }
 
   function openReleases() {
+    if (emulated) return;
     activeTab = 'releases';
   }
 
@@ -541,7 +544,7 @@
       <button class="large-button secondary back-button" data-bp-focus="game:back" onclick={onback}><ArrowLeft size="2rem" />{bp('bp.game.back')}</button>
       <div class="head-tabs" role="tablist" aria-label={title}>
         <button class="tab" class:selected={activeTab === 'overview'} role="tab" aria-selected={activeTab === 'overview'} data-bp-focus="game:tab:overview" onclick={() => activeTab = 'overview'}>{bp('bp.game.tabOverview')}</button>
-        <button class="tab" class:selected={activeTab === 'releases'} role="tab" aria-selected={activeTab === 'releases'} data-bp-focus="game:tab:releases" onclick={openReleases}>{bp('bp.game.tabReleases')}<span>{availableReleases.length}</span></button>
+        {#if !emulated}<button class="tab" class:selected={activeTab === 'releases'} role="tab" aria-selected={activeTab === 'releases'} data-bp-focus="game:tab:releases" onclick={openReleases}>{bp('bp.game.tabReleases')}<span>{availableReleases.length}</span></button>{/if}
       </div>
     </header>
 
@@ -565,6 +568,7 @@
             {#if running}<span class="badge running"><span class="dot"></span>{bp('bp.game.running')}</span>
             {:else if installed}<span class="badge installed">{bp('bp.game.installed')}</span>
             {:else if localGame}<span class="badge">{bp('bp.game.notInstalled')}</span>{/if}
+            {#if emulated && localGame?.emulation}<span class="badge">{platformBadge(localGame.emulation.platform)}</span>{/if}
             {#if localGame?.status}<span class="badge status">{statusLabel(localGame.status)}</span>{/if}
           </div>
           <div class="hero-actions">

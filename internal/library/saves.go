@@ -12,6 +12,7 @@ import (
 	"strings"
 	"unicode"
 
+	"typhon/internal/emulators"
 	"typhon/internal/platform"
 	"typhon/internal/steamlink"
 	"typhon/internal/uierr"
@@ -82,6 +83,12 @@ func (s *Service) LocateSaves(ctx context.Context, id string) (SavesResult, erro
 	if game == nil {
 		s.mu.Unlock()
 		return SavesResult{}, errNotFound
+	}
+	// Saves of an emulated game live in the emulator's own memory cards, shared
+	// by all its games, and the folder of the image says nothing about them.
+	if game.Emulation != nil {
+		s.mu.Unlock()
+		return SavesResult{}, nil
 	}
 	stored, title, installDir := game.SavesDir, game.Title, game.InstallDir
 	canonicalID := game.CanonicalGameID
@@ -277,6 +284,9 @@ func (s *Service) SetSavesDir(id, dir string) (Game, error) {
 	for i := range s.games {
 		if s.games[i].ID != id {
 			continue
+		}
+		if s.games[i].Emulation != nil {
+			return Game{}, emulators.ErrUnsupported
 		}
 		if s.games[i].SavesDir == normalized {
 			return s.games[i], nil
