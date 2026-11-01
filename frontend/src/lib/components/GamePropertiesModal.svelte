@@ -8,7 +8,8 @@
   import Select from './Select.svelte';
   import Toggle from './Toggle.svelte';
   import { chooseSavesDir } from '../game/actions/saves';
-  import { isEmulated } from '../library/emulation';
+  import { emulationPlatform, isEmulated } from '../library/emulation';
+  import { selectImageFile } from '../services/emulators';
   import { errorCode, hasMessage, msg } from '../i18n';
   import { installErrorText } from '../install/installErrors';
   import {
@@ -287,11 +288,10 @@
     exeBusy = true;
     exeError = '';
     try {
-      const path = await selectGameExecutable(
-        msg('modals.propertiesExeDialog', { title: game.title }),
-        game.installDir,
-        game.executable,
-      );
+      const title = msg('modals.propertiesExeDialog', { title: game.title });
+      const path = emulated
+        ? await selectImageFile(title, [emulationPlatform(game)])
+        : await selectGameExecutable(title, game.installDir, game.executable);
       if (path) await setExecutable(game.id, path);
     } catch (err) {
       exeError = errorText(err, msg('modals.propertiesExeSaveFailed'));
@@ -398,13 +398,14 @@
 >
   {#if game}
     <div class="props">
-      {#if !emulated}
       <section class="section">
         <h4>{msg('modals.propertiesExeTitle')}</h4>
         <p class="path">
           {game.executable ? msg('modals.propertiesExeCurrent', { path: game.executable }) : msg('modals.propertiesExeNone')}
         </p>
-        {#if candidatesLoading}
+        {#if emulated}
+          <p class="hint">{msg('emul.imageHint')}</p>
+        {:else if candidatesLoading}
           <p class="hint">{msg('modals.propertiesExeLoading')}</p>
         {:else if candidatesError}
           <p class="failure">{candidatesError}</p>
@@ -437,6 +438,7 @@
         </div>
       </section>
 
+      {#if !emulated}
       <section class="section">
         <h4>{msg('modals.propertiesArgsTitle')}</h4>
         <div class="row">

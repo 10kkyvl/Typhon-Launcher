@@ -2,7 +2,9 @@ import { Browser } from '@wailsio/runtime';
 import { Service as EmulatorsService } from '../../../bindings/typhon/internal/emulators';
 import { Service as AppService } from '../../../bindings/typhon/internal/app';
 import { get } from 'svelte/store';
+import { msg } from '../i18n';
 import { locale } from '../i18n/locale';
+import { Service as LibraryService } from '../../../bindings/typhon/internal/library';
 import { inWails } from './backend';
 
 export type EmulatorStatus = 'not_set' | 'ready' | 'missing' | 'unavailable';
@@ -57,10 +59,15 @@ export async function openOfficialPage(platform: string): Promise<void> {
 
 export async function selectEmulatorFile(title: string): Promise<string> {
   if (!inWails) return '';
-  return await AppService.SelectExecutable(title, get(locale));
+  return await AppService.SelectEmulator(title, get(locale));
 }
 
-export async function selectImageFile(title: string): Promise<string> {
+export async function selectImageFile(title: string, platformIDs: string[] | null = null): Promise<string> {
   if (!inWails) return '';
-  return await AppService.SelectExecutable(title, get(locale));
+  return await AppService.SelectImageFile(title, msg('emul.imagesFilter'), get(locale), platformIDs);
+}
+
+export async function missingImages(): Promise<string[]> {
+  if (!inWails) return [];
+  return (await LibraryService.MissingImages()) ?? [];
 }

@@ -18,6 +18,8 @@ export const errEmulators = {
   'emulators.image_not_file': 'образ должен быть файлом, а не папкой или ссылкой',
   'emulators.cover_not_found': 'обложка по этому названию не найдена',
   'emulators.title_empty': 'не указано название игры',
+  'emulators.cover_lookup_failed': 'не удалось найти обложку: поиск недоступен',
+  'emulators.image_inside': 'в этой папке лежит образ консольной игры, поэтому файлы удалить нельзя',
   'emulators.game_unsupported': 'для игры на эмуляторе это действие недоступно',
 } as const;
 

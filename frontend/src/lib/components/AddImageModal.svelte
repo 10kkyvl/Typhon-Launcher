@@ -73,7 +73,7 @@
   async function browse() {
     let path = '';
     try {
-      path = await selectImageFile(msg('emul.addImageDialog'));
+      path = await selectImageFile(msg('emul.addImageDialog'), null);
     } catch (err) {
       toast(libraryErrorText(err, msg('games.installedOpenDialogError')), 'danger');
       return;

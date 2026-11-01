@@ -103,6 +103,7 @@
     stopGame,
   } from '../../lib/services/library';
   import { selectImageFile } from '../../lib/services/emulators';
+  import { missingImages, refreshMissingImages } from '../../lib/stores/missingImages';
   import {
     dismissMetadataMatch,
     ensureMetadataFresh,
@@ -223,7 +224,7 @@
 
   $effect(() => {
     const gameId = localGame?.id;
-    if (!gameId) return;
+    if (!gameId || emulated) return;
     untrack(() => {
       loadVerifyState(gameId);
     });
@@ -791,7 +792,17 @@
     const canonicalGameId = canonicalId;
     const gameTitle = releaseTitle;
     const isExternalGame = !managed;
+    const sideloaded = emulated;
     untrack(() => {
+      if (sideloaded) {
+        releaseToken++;
+        relatedToken++;
+        releaseGroups = [];
+        releasesLoading = false;
+        releasesFailed = false;
+        relatedLoading = false;
+        return;
+      }
       loadRelated(isExternalGame ? undefined : canonicalGameId);
       loadReleases(canonicalGameId, gameTitle);
     });
@@ -870,14 +881,20 @@
   }
 
   let imageBusy = $state(false);
+  const imageMissing = $derived(Boolean(localGame && $missingImages.has(localGame.id)));
+
+  $effect(() => {
+    if (emulated) void refreshMissingImages();
+  });
 
   async function chooseImage() {
     if (!localGame || imageBusy) return;
     imageBusy = true;
     try {
-      const path = await selectImageFile(msg('emul.addImageDialog'));
+      const path = await selectImageFile(msg('emul.addImageDialog'), [emulatedPlatform]);
       if (!path) return;
       await setExecutable(localGame.id, path);
+      await refreshMissingImages();
       toast(msg('emul.imageSaved'), 'success');
     } catch (err) {
       toast(libraryErrorText(err, msg('emul.imageSaveFailed')), 'danger');
@@ -1078,7 +1095,9 @@
           </dl>
           {#if emulated}
             <div class="redist-row">
-              <Button size="sm" disabled={imageBusy} onclick={chooseImage}>{msg('emul.pickImage')}</Button>
+              {#if imageMissing}
+                <Button size="sm" disabled={imageBusy} onclick={chooseImage}>{msg('emul.pickImage')}</Button>
+              {/if}
               <Button size="sm" disabled={imageBusy} onclick={findCover}>{msg('emul.coverFind')}</Button>
             </div>
           {:else}
@@ -1381,6 +1400,7 @@
           {/if}
           {#if emulated}
             <ConsoleTag platform={emulatedPlatform} />
+            {#if imageMissing}<StatusBadge kind="danger" label={msg('emul.imageMissing')} dot={false} />{/if}
           {/if}
           {#if localGame?.status}
             <StatusBadge kind={statusBadgeKind(localGame.status)} label={statusLabel(localGame.status)} dot={false} />

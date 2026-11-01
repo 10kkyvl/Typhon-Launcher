@@ -21,5 +21,7 @@ export const errEmulators: Record<ErrEmulatorsKey, Message> = {
   'emulators.image_not_file': 'The image must be a file, not a folder or a link',
   'emulators.cover_not_found': 'No cover found for this title',
   'emulators.title_empty': 'The game title is empty',
+  'emulators.cover_lookup_failed': 'Could not look for a cover: the search is unavailable',
+  'emulators.image_inside': 'A console game image is in this folder, so its files cannot be deleted',
   'emulators.game_unsupported': 'This action is not available for a game run through an emulator',
 };

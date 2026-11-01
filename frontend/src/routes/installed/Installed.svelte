@@ -45,6 +45,8 @@
   import { rescan, scanProgress, scanSummary, scanning } from '../../lib/stores/discovery';
   import { installedGames, runningGames } from '../../lib/stores/library';
   import { emulationPlatform, isEmulated } from '../../lib/library/emulation';
+  import { selectImageFile } from '../../lib/services/emulators';
+  import { missingImages, refreshMissingImages } from '../../lib/stores/missingImages';
   import { externalLabel, isExternal, isLaunchable } from '../../lib/library/external';
   import { gamesOnVolume } from '../../lib/library/folders';
   import { gameArt, loadArt } from '../../lib/stores/metadata';
@@ -176,6 +178,23 @@
     newExecutable = '';
     newTitle = '';
     addOpen = true;
+  }
+
+  $effect(() => {
+    void $installedGames;
+    void refreshMissingImages();
+  });
+
+  async function chooseImage(game: LibraryGame) {
+    try {
+      const path = await selectImageFile(msg('emul.addImageDialog'), [emulationPlatform(game)]);
+      if (!path) return;
+      await setExecutable(game.id, path);
+      await refreshMissingImages();
+      toast(msg('emul.imageSaved'), 'success');
+    } catch (err) {
+      toast(libraryErrorText(err, msg('emul.imageSaveFailed')), 'danger');
+    }
   }
 
   let imageOpen = $state(false);
@@ -312,6 +331,7 @@
 
   function statusKind(game: LibraryGame, running: boolean, updateKind?: string): 'success' | 'warning' | 'accent' | 'neutral' {
     if (running) return 'accent';
+    if ($missingImages.has(game.id)) return 'warning';
     if (!isLaunchable(game)) return 'warning';
     if (updateKind === 'update') return 'warning';
     if (updateKind === 'new_release') return 'neutral';
@@ -320,6 +340,7 @@
 
   function statusLabel(game: LibraryGame, running: boolean) {
     if (running) return msg('games.runningLabel');
+    if ($missingImages.has(game.id)) return msg('emul.imageMissing');
     if (!isLaunchable(game)) return msg('games.installedNeedsExeLabel');
     return relativeDate(game.lastPlayed);
   }
@@ -551,6 +572,11 @@
               <Square size="1.2rem" strokeWidth={2} fill="currentColor" />
               {msg('games.installedStopButton')}
             </Button>
+          {:else if $missingImages.has(game.id)}
+            <Button size="sm" onclick={() => chooseImage(game)}>
+              <FolderOpen size="1.3rem" strokeWidth={1.8} />
+              {msg('emul.pickImage')}
+            </Button>
           {:else if !isLaunchable(game)}
             <Button size="sm" onclick={() => chooseExecutable(game)}>
               <FolderOpen size="1.3rem" strokeWidth={1.8} />
@@ -606,7 +632,7 @@
             <button class="card-play running" aria-label={msg('games.installedStopButton')} onclick={() => stop(game)}>
               <Square size="1.2rem" strokeWidth={2} fill="currentColor" />
             </button>
-          {:else if isLaunchable(game)}
+          {:else if isLaunchable(game) && !$missingImages.has(game.id)}
             <button class="card-play" aria-label={msg('games.play')} onclick={() => play(game)}>
               <Play size="1.4rem" strokeWidth={2} fill="currentColor" />
             </button>
@@ -617,6 +643,7 @@
           <span class="card-meta">
             {#if isEmulated(game)}<ConsoleTag platform={emulationPlatform(game)} />{/if}
             {sizeLabel(game)}
+            {#if $missingImages.has(game.id)}<StatusBadge kind="danger" label={msg('emul.imageMissing')} plain />{/if}
           </span>
         </div>
       </div>

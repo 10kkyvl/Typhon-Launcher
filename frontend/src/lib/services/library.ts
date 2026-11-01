@@ -51,6 +51,7 @@ export interface GameModeOverride {
 
 export interface LibraryEmulation {
   platform: string;
+  files?: string[] | null;
 }
 
 export interface LibraryGame {
@@ -167,8 +168,7 @@ export async function addEmulatedGame(romPath: string, platformID: string, title
 
 export async function findEmulatedCover(id: string): Promise<LibraryGame> {
   if (!inWails) throw unavailable();
-  const service = LibraryService as unknown as { FindEmulatedCover(id: string): Promise<unknown> };
-  return (await service.FindEmulatedCover(id)) as LibraryGame;
+  return (await LibraryService.FindEmulatedCover(id)) as unknown as LibraryGame;
 }
 
 export async function addCatalogGame(canonicalGameId: string, title: string, cover: string): Promise<LibraryGame> {
