@@ -62,6 +62,17 @@ export const errSources = {
   'errSources.lanShareRootNotDir': 'раздаваемый путь не является папкой',
   'errSources.lanShareSymlink': 'раздаваемая папка содержит символическую ссылку',
   'errSources.lanShareIrregularFile': 'раздаваемая папка содержит файл особого типа',
+
+  'errSources.linkUnavailable': 'Не удалось открыть ссылку, проверьте соединение',
+  'errSources.linkFailed': 'Не удалось открыть ссылку',
+  'errSources.linkInvalid': 'Некорректная ссылка',
+  'errSources.linkNotFound': 'Игра не найдена',
+  'errSources.linkNotInCatalog': 'Этой игры пока нет в каталоге',
+  'errSources.linkOutdated': 'Обновите Typhon, чтобы открыть эту ссылку',
+  'errSources.linkBadRequest': 'Сервер не принял ссылку',
+  'errSources.linkBadResponse': 'Сервер ответил неожиданно, попробуйте позже',
+  'errSources.linkTooMany': 'Слишком много запросов, попробуйте чуть позже',
+  'errSources.linkOpening': 'Открываем игру…',
 } as const;
 
 export type ErrSourcesKey = keyof typeof errSources;

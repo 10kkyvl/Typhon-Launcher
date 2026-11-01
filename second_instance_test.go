@@ -103,6 +103,53 @@ func TestHandleSecondLaunch(t *testing.T) {
 	}
 }
 
+func TestHandleSecondLaunchLink(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		link PendingLink
+	}{
+		{"link opens the window and waits for the page", []string{"typhon.exe", "typhon://game?steam=440"}, PendingLink{Provider: "steam", ID: "440"}},
+		{"bad link is reported to the page", []string{"typhon.exe", "typhon://game?steam=x"}, PendingLink{Invalid: true}},
+		{"injected play never plays", []string{"typhon.exe", "typhon://game?steam=1", "--play", "g1"}, PendingLink{Invalid: true}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			player := &recordedPlayer{}
+			opener := &countOpener{}
+			nav := &NavigationService{}
+			emitted := []string{}
+			handleSecondLaunch(tc.args, player, opener, nav, func(r string) { emitted = append(emitted, r) })
+			if opener.n != 1 || player.id != "" {
+				t.Fatalf("opens=%d played=%q", opener.n, player.id)
+			}
+			if !reflect.DeepEqual(emitted, []string{""}) {
+				t.Fatalf("emitted %q, want one event without a route", emitted)
+			}
+			if got := nav.TakePendingLink(); got != tc.link {
+				t.Fatalf("pending = %+v, want %+v", got, tc.link)
+			}
+		})
+	}
+}
+
+func TestLinkDeliveredOnceThroughTheQueue(t *testing.T) {
+	var s secondLaunches
+	s.Receive(launchFromURL("typhon://game?igdb=7"))
+	nav := &NavigationService{}
+	opener := &countOpener{}
+	events := 0
+	s.Ready(func(args []string) {
+		handleSecondLaunch(args, &recordedPlayer{}, opener, nav, func(string) { events++ })
+	})
+	if opener.n != 1 || events != 1 {
+		t.Fatalf("opens=%d events=%d", opener.n, events)
+	}
+	if got := nav.TakePendingLink(); got != (PendingLink{Provider: "igdb", ID: "7"}) {
+		t.Fatalf("pending = %+v", got)
+	}
+}
+
 func TestIsWorkerLaunch(t *testing.T) {
 	for args, want := range map[string]bool{"--install-worker": true, "--install-broker": true, "--selfupdate-worker": true, "--play": false} {
 		if got := isWorkerLaunch([]string{"typhon.exe", args}); got != want {

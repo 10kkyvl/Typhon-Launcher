@@ -113,6 +113,13 @@ type windowOpener interface {
 }
 
 func handleSecondLaunch(args []string, player gamePlayer, window windowOpener, nav *NavigationService, emit func(route string)) {
+	target, linked, err := linkTarget(args)
+	if linked {
+		window.Open()
+		nav.setPendingLink(pendingLink(target, err))
+		emit("")
+		return
+	}
 	req, requested, err := playTarget(args)
 	if err != nil {
 		slog.Error("parse play argument", "args", args, "error", err)

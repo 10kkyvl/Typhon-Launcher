@@ -65,4 +65,15 @@ export const errSources: Record<ErrSourcesKey, Message> = {
   'errSources.lanShareRootNotDir': 'The shared path is not a folder',
   'errSources.lanShareSymlink': 'The shared folder contains a symbolic link',
   'errSources.lanShareIrregularFile': 'The shared folder contains a special file',
+
+  'errSources.linkUnavailable': 'Could not open the link, check your connection',
+  'errSources.linkFailed': 'Could not open the link',
+  'errSources.linkInvalid': 'Invalid link',
+  'errSources.linkNotFound': 'Game not found',
+  'errSources.linkNotInCatalog': 'This game is not in the catalog yet',
+  'errSources.linkOutdated': 'Update Typhon to open this link',
+  'errSources.linkBadRequest': 'The server did not accept the link',
+  'errSources.linkBadResponse': 'The server sent an unexpected response, try again later',
+  'errSources.linkTooMany': 'Too many requests, try again shortly',
+  'errSources.linkOpening': 'Opening the game…',
 };

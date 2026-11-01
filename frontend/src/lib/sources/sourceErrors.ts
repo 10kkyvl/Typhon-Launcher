@@ -49,6 +49,12 @@ export const REASONS: Record<string, MessageKey> = {
   'lan.share_root_not_dir': 'errSources.lanShareRootNotDir',
   'lan.share_symlink': 'errSources.lanShareSymlink',
   'lan.share_irregular_file': 'errSources.lanShareIrregularFile',
+
+  'link.unavailable': 'errSources.linkUnavailable',
+  'link.outdated': 'errSources.linkOutdated',
+  'link.bad_request': 'errSources.linkBadRequest',
+  'link.bad_response': 'errSources.linkBadResponse',
+  'link.too_many': 'errSources.linkTooMany',
 };
 
 export function sourceErrorText(err: unknown, fallback: string = msg('errSources.fallback')): string {
