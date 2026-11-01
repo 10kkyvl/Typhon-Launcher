@@ -7,7 +7,6 @@ import (
 	"errors"
 	"log/slog"
 	"path/filepath"
-	"strings"
 
 	"typhon/internal/emulators"
 	"typhon/internal/wine"
