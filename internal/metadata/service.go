@@ -710,6 +710,17 @@ func (s *Service) search(ctx context.Context, provider Provider, query string, l
 	return found, nil
 }
 
+// FetchGame asks the provider about one game on the user's behalf, under the
+// same budget and 429 pause as a card opened in the window.
+//
+//wails:ignore
+func (s *Service) FetchGame(ctx context.Context, providerID string) (GameMetadata, error) {
+	if s.provider == nil {
+		return GameMetadata{}, ErrNotConfigured
+	}
+	return s.fetchMeta(ctx, s.provider, providerID, classUser)
+}
+
 func (s *Service) fetchMeta(ctx context.Context, provider Provider, providerID string, class callClass) (GameMetadata, error) {
 	if err := s.budget.acquire(ctx, class); err != nil {
 		return GameMetadata{}, err

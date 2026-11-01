@@ -24,7 +24,7 @@
   import { initHistory } from './lib/stores/history';
   import { initWatchlist } from './lib/stores/watchlist';
   import { initScreenshots } from './lib/stores/screenshots';
-  import { initLaunchNavigation } from './lib/stores/launchNavigation';
+  import { initLaunchNavigation, setLinksReady } from './lib/stores/launchNavigation';
   import { initInstalls } from './lib/stores/install';
   import { initLan } from './lib/stores/lan';
   import { initNetwork } from './lib/stores/network';
@@ -102,6 +102,13 @@
   onDestroy(initCloudSaves());
   onDestroy(initProfileAccentSync());
   initLegalAcceptance();
+
+  const linksReady = $derived(
+    !$showLegalAcceptance &&
+      !$showTelemetryConsent &&
+      ($authState === 'authenticated' || $authState === 'guest' || $authState === 'offline'),
+  );
+  $effect(() => setLinksReady(linksReady));
 
   let lastGamesPath: string | undefined;
   settings.subscribe((value) => {
