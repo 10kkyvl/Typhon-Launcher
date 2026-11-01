@@ -6,8 +6,11 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
+
+	"typhon/internal/library"
 
 	"github.com/anacrolix/torrent/metainfo"
 )
@@ -55,6 +58,90 @@ func TestBuildInfoMatchesReference(t *testing.T) {
 	}
 	if !reflect.DeepEqual(mine.Pieces, reference.Pieces) {
 		t.Errorf("Pieces mismatch: got %x, want %x", mine.Pieces, reference.Pieces)
+	}
+}
+
+func TestBuildInfoLeavesOutOnlyTheRootMarker(t *testing.T) {
+	tests := []struct {
+		name string
+		rel  string
+		want bool
+	}{
+		{name: "root marker", rel: library.MarkerName, want: false},
+		{name: "nested file of the same name", rel: "data/" + library.MarkerName, want: true},
+		{name: "similar name in the root", rel: library.MarkerName + ".bak", want: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeTree(t, root)
+			p := filepath.Join(root, filepath.FromSlash(tc.rel))
+			if err := os.WriteFile(p, []byte("{}"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			info, err := BuildInfo(context.Background(), root, nil)
+			if err != nil {
+				t.Fatalf("BuildInfo: %v", err)
+			}
+
+			got := false
+			for _, f := range info.Files {
+				if strings.Join(f.Path, "/") == tc.rel {
+					got = true
+				}
+			}
+			if got != tc.want {
+				t.Fatalf("%s in torrent = %v, want %v: %+v", tc.rel, got, tc.want, info.Files)
+			}
+		})
+	}
+}
+
+func TestBuildInfoRejectsSymlinkNamedAsMarker(t *testing.T) {
+	root := t.TempDir()
+	writeTree(t, root)
+	if err := os.Symlink(filepath.Join(root, "game.exe"), filepath.Join(root, library.MarkerName)); err != nil {
+		t.Skipf("symlink not supported on this system: %v", err)
+	}
+
+	_, err := BuildInfo(context.Background(), root, nil)
+	if !errors.Is(err, errSymlinkInShare) {
+		t.Fatalf("BuildInfo error = %v, want errSymlinkInShare", err)
+	}
+}
+
+func TestFingerprintIgnoresOnlyTheRootMarker(t *testing.T) {
+	tests := []struct {
+		name string
+		rel  string
+		want bool
+	}{
+		{name: "root marker", rel: library.MarkerName, want: false},
+		{name: "nested file of the same name", rel: "data/" + library.MarkerName, want: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeTree(t, root)
+			before, err := fingerprint(context.Background(), root)
+			if err != nil {
+				t.Fatalf("fingerprint: %v", err)
+			}
+			p := filepath.Join(root, filepath.FromSlash(tc.rel))
+			if err := os.WriteFile(p, []byte("{}"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			after, err := fingerprint(context.Background(), root)
+			if err != nil {
+				t.Fatalf("fingerprint: %v", err)
+			}
+
+			if changed := before != after; changed != tc.want {
+				t.Fatalf("fingerprint changed = %v, want %v", changed, tc.want)
+			}
+		})
 	}
 }
 

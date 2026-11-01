@@ -79,6 +79,19 @@ func (s *shareStore) put(sh Share) error {
 	return nil
 }
 
+func (s *shareStore) remove(gameID string) error {
+	previous, had := s.shares[gameID]
+	if !had {
+		return nil
+	}
+	delete(s.shares, gameID)
+	if err := s.save(); err != nil {
+		s.shares[gameID] = previous
+		return err
+	}
+	return nil
+}
+
 func (s *shareStore) list() []Share {
 	list := make([]Share, 0, len(s.shares))
 	for _, sh := range s.shares {

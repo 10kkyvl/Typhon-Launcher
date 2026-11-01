@@ -22,6 +22,8 @@
   import ProfilePage from '../bigpicture/components/ProfilePage.svelte';
   import SocialPage from '../bigpicture/components/SocialPage.svelte';
   import ScreenKeyboard from '../bigpicture/components/ScreenKeyboard.svelte';
+  import Toasts from './Toasts.svelte';
+  import { bigPictureGame } from '../stores/launchNavigation';
   import { bigPictureStyle } from '../bigpicture/palette';
   import '../bigpicture/styles.css';
 
@@ -84,6 +86,13 @@
   async function navigate(page: Page) {
     pages = pushPage(pages, page, currentFocus()); failure = ''; await focusPage();
   }
+  $effect(() => {
+    const id = $bigPictureGame;
+    if (!id) return;
+    bigPictureGame.set(null);
+    menu = false;
+    void navigate({ name: 'game', id });
+  });
   async function section(name: Section) {
     menu = false; pages = [entry({ name })]; failure = ''; await focusPage();
   }
@@ -273,6 +282,7 @@
   {/if}
   {#if textRequest}<ScreenKeyboard request={textRequest} ondone={finishText} />{/if}
   {#if failure && !menu}<p class="bp-error floating" role="alert">{failure}</p>{/if}
+  <div class="toast-corner"><Toasts /></div>
 </div>
 
 <style>
@@ -286,6 +296,7 @@
   footer { position: absolute; bottom: 0; inset-inline: 0; height: 68px; padding: 0 3vw; display: flex; justify-content: space-between; gap: 24px; align-items: center; background: color-mix(in srgb, var(--bg) 96%, transparent); border-top: 1px solid var(--border); font-size: clamp(13px, .86vw, 20px); }
   .hints, .hints > span, .input-device { display: flex; align-items: center; gap: 9px; }.hints { gap: 20px; color: var(--text-2); }kbd { display: inline-flex; justify-content: center; align-items: center; min-width: 26px; padding: 3px 6px; font: inherit; font-weight: 600; border: 1px solid var(--border-strong); border-radius: 6px; color: var(--text); }.input-device { color: var(--text-3); font-size: .9em; max-width: 230px; }
   .menu-dialog { width: min(760px, 95vw); }.menu-items { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }.menu-items button { justify-content: flex-start; text-align: left; }.floating { position: absolute; bottom: 85px; left: 4vw; right: 4vw; }
+  .toast-corner { position: absolute; z-index: 10; right: 3vw; bottom: 85px; pointer-events: none; }.toast-corner > :global(*) { pointer-events: auto; }
   @media (max-width: 1150px) { .input-device { display: none; }.brand span { display: none; } }
   @media (max-width: 700px) { nav button span { display: none; }.extra-hint { display: none !important; }.menu-items { grid-template-columns: 1fr; } }
   @media (prefers-reduced-motion: reduce) { .page-slot { scroll-behavior: auto; } }

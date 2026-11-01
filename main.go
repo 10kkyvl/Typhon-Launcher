@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"strings"
 	"sync/atomic"
@@ -23,6 +24,7 @@ import (
 	"typhon/internal/clientid"
 	"typhon/internal/cloudsaves"
 	"typhon/internal/compat"
+	"typhon/internal/deeplink"
 	"typhon/internal/devmock"
 	"typhon/internal/diagnostics"
 	"typhon/internal/discord"
@@ -48,6 +50,7 @@ import (
 	"typhon/internal/playlog"
 	"typhon/internal/presence"
 	"typhon/internal/profile"
+	"typhon/internal/protocolreg"
 	"typhon/internal/redact"
 	"typhon/internal/redist"
 	"typhon/internal/relocate"
@@ -321,23 +324,8 @@ func main() {
 		}
 	}
 
-	// A shortcut with a broken argument must not keep the launcher from
-	// starting: the window opens as usual and the user can launch the game
-	// by hand, which is strictly better than refusing to start at all.
-	playReq, playRequested, err := playTarget(os.Args)
-	if err != nil {
-		slog.Error("parse play argument", "args", os.Args[1:], "error", err)
-		playRequested = false
-	}
-	openRoute, openRequested, err := openTarget(os.Args)
-	if err != nil {
-		slog.Error("parse open argument", "args", os.Args[1:], "error", err)
-		openRequested = false
-	}
 	navigation := &NavigationService{}
-	if openRequested && !playRequested {
-		navigation.setPending(openRoute)
-	}
+	playReq, playRequested := firstLaunch(os.Args, navigation)
 
 	configDir, err := settings.ConfigDir()
 	if err != nil {
@@ -464,6 +452,10 @@ func main() {
 	metadataService, err := metadata.NewService(catalogService, provider)
 	if err != nil {
 		fatal("start metadata service", err)
+	}
+	deeplinkService, err := deeplink.NewService(catalogService, metadataService, appService.UILanguage)
+	if err != nil {
+		fatal("start link service", err)
 	}
 	libraryService.EnableSteam()
 	libraryService.SetCoverSearch(func(ctx context.Context, title, platform string) (string, error) {
@@ -857,6 +849,7 @@ func main() {
 	services := []application.Service{
 		application.NewService(appService),
 		application.NewService(navigation),
+		application.NewService(deeplinkService),
 		application.NewService(accountService),
 		application.NewService(accountSyncService),
 		application.NewService(socialService),
@@ -969,6 +962,10 @@ func main() {
 	defer chatDesktop.Close()
 	overlayService.Attach(wails)
 	portable := settings.IsPortable()
+	owner := protocolOwner{production: productionBuild, portable: portable, qa: qaTitleSuffix != ""}
+	if err := registerProtocol(owner, os.Executable, protocolreg.InstallDir, protocolreg.Register); err != nil {
+		slog.Warn("register typhon protocol", "component", "app", "operation", "register_protocol", "error", err)
+	}
 	autostartManager := autostart.ForPlatform(wails.Autostart)
 	if portable {
 		autostartManager = autostart.Unsupported("автозапуск недоступен в портативном режиме")
@@ -1098,6 +1095,11 @@ func main() {
 	// Launches that reached the running instance during start-up wait here: the
 	// tray controller exists and the services have their contexts only once the
 	// application is running.
+	if urlEventCarriesLink(runtime.GOOS) {
+		wails.Event.OnApplicationEvent(events.Common.ApplicationLaunchedWithUrl, func(event *application.ApplicationEvent) {
+			launches.Receive(launchFromURL(event.Context().URL()))
+		})
+	}
 	wails.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
 		launches.Ready(func(args []string) {
 			handleSecondLaunch(args, libraryService, trayController, navigation, func(route string) { emitNavigate(application.Get(), route) })

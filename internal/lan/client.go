@@ -130,7 +130,10 @@ func (c *lanClient) addForSeeding(mi *metainfo.MetaInfo, root string) (*torrent.
 	// skipped, the torrent never becomes ready to serve ut_metadata to a
 	// connecting peer, so a receiver hangs on GotInfo forever. The engine
 	// re-reads the install once at add time; that cost is accepted.
-	t, _, err := c.cl.AddTorrentSpec(spec)
+	t, isNew, err := c.cl.AddTorrentSpec(spec)
+	if err == nil && !isNew {
+		err = errAlreadyHave
+	}
 	if err != nil {
 		if cerr := st.Close(); cerr != nil {
 			slog.Warn("close lan seed storage", "error", cerr)
@@ -154,7 +157,10 @@ func (c *lanClient) addForReceiving(hash metainfo.Hash, displayName, dest string
 		},
 		DisplayName: displayName,
 	}
-	t, _, err := c.cl.AddTorrentSpec(spec)
+	t, isNew, err := c.cl.AddTorrentSpec(spec)
+	if err == nil && !isNew {
+		err = errAlreadyHave
+	}
 	if err != nil {
 		if cerr := st.Close(); cerr != nil {
 			slog.Warn("close lan receive storage", "error", cerr)
