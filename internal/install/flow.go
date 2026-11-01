@@ -894,6 +894,9 @@ func (s *Service) complete(ctx context.Context, id string) error {
 	if !ok {
 		return errNotFound
 	}
+	if err := makeMovedWritable(ctx, item); err != nil {
+		return err
+	}
 	cfg := s.config()
 	if cfg.VerifyAfterInstall {
 		if err := verifyInstall(item); err != nil {

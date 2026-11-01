@@ -1024,39 +1024,10 @@ func (s *Service) watchTransfer(run *runState, ctx context.Context, id, dest str
 	}
 }
 
+var makeWritable = storage.MakeWritable
+
 // clearReadOnly is a variable so a test can observe what the engine left behind.
 var clearReadOnly = makeWritable
-
-// makeWritable undoes the read-only mode the torrent engine puts on promoted
-// files: a game must be able to write next to its executable.
-func makeWritable(ctx context.Context, dir string) (err error) {
-	root, err := os.OpenRoot(dir)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		err = errors.Join(err, root.Close())
-	}()
-	return fs.WalkDir(root.FS(), ".", func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if !d.Type().IsRegular() {
-			return nil
-		}
-		info, err := d.Info()
-		if err != nil {
-			return err
-		}
-		if info.Mode().Perm()&0o200 != 0 {
-			return nil
-		}
-		return root.Chmod(filepath.FromSlash(path), info.Mode()|0o200)
-	})
-}
 
 // removeForeignMarker deletes the marker a sender older than this version put
 // into the transfer: its game id and uninstall command describe the sender's
