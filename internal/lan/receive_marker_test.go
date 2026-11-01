@@ -7,13 +7,16 @@ import (
 	"io/fs"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"typhon/internal/library"
+	"typhon/internal/platform"
 
 	g "github.com/anacrolix/generics"
 	"github.com/anacrolix/torrent"
@@ -399,8 +402,17 @@ func TestReceiveFailsWhenFilesCannotBeMadeWritable(t *testing.T) {
 	}
 }
 
+func stagingDir(t *testing.T) string {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), receivingPrefix+"test")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
 func TestCompleteTransferSurvivesCancelledContext(t *testing.T) {
-	dest := t.TempDir()
+	dest := stagingDir(t)
 	exe := filepath.Join(dest, "game.exe")
 	marker := filepath.Join(dest, library.MarkerName)
 	for _, path := range []string{exe, marker} {
@@ -434,10 +446,13 @@ func TestCompleteTransferSurvivesCancelledContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("find game: %v", err)
 	}
-	if got, err := library.ReadMarker(dest); err != nil || got.GameID != game.ID {
+	if got, err := library.ReadMarker(game.InstallDir); err != nil || got.GameID != game.ID {
 		t.Fatalf("marker = %+v, %v, want game %s", got, err, game.ID)
 	}
-	info, err := os.Stat(exe)
+	if _, err := os.Stat(dest); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("receiving folder stayed: %v", err)
+	}
+	info, err := os.Stat(game.Executable)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -446,13 +461,13 @@ func TestCompleteTransferSurvivesCancelledContext(t *testing.T) {
 	}
 }
 
-func TestCompleteTransferDropsMarkerWhenExecutableIsRefused(t *testing.T) {
+func TestCompleteTransferDiscardsFolderWhenExecutableIsRefused(t *testing.T) {
 	for _, test := range []struct{ exe, code string }{
 		{"../outside.exe", "lan.exe_outside_install"},
 		{"missing.exe", "lan.executable_missing"},
 	} {
 		t.Run(test.code, func(t *testing.T) {
-			dest := t.TempDir()
+			dest := stagingDir(t)
 			marker := filepath.Join(dest, library.MarkerName)
 			if err := os.WriteFile(marker, []byte("{}"), 0o644); err != nil {
 				t.Fatal(err)
@@ -468,8 +483,8 @@ func TestCompleteTransferDropsMarkerWhenExecutableIsRefused(t *testing.T) {
 			if state.transfer.Status != TransferFailed || !strings.Contains(state.transfer.Error, "typhon:"+test.code) {
 				t.Fatalf("transfer = %+v, want failed with %s", state.transfer, test.code)
 			}
-			if _, err := os.Stat(marker); !errors.Is(err, fs.ErrNotExist) {
-				t.Fatalf("foreign marker stayed: %v", err)
+			if _, err := os.Stat(dest); !errors.Is(err, fs.ErrNotExist) {
+				t.Fatalf("refused transfer's folder stayed: %v", err)
 			}
 		})
 	}
@@ -551,7 +566,8 @@ func TestCancelledTransferLeavesNoForeignMarker(t *testing.T) {
 	case <-time.After(30 * time.Second):
 		t.Fatal("timed out waiting for the marker's piece")
 	}
-	marker := filepath.Join(p.dest, library.MarkerName)
+	staging := filepath.Join(p.svcB.gamesPath(), receivingPrefix+tr.ID)
+	marker := filepath.Join(staging, library.MarkerName)
 	if _, err := os.Stat(marker); err != nil {
 		t.Fatalf("marker was not promoted before the cancel: %v", err)
 	}
@@ -566,6 +582,269 @@ func TestCancelledTransferLeavesNoForeignMarker(t *testing.T) {
 	}
 	if _, err := os.Stat(marker); !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("foreign marker stayed after the cancel: %v", err)
+	}
+	if _, err := os.Stat(p.dest); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("cancelled transfer reached the visible folder: %v", err)
+	}
+}
+
+func TestFinishedTransferLeavesNoReceivingFolder(t *testing.T) {
+	tests := []struct {
+		name     string
+		port     int
+		occupied bool
+	}{
+		{name: "free name", port: 46041},
+		{name: "taken name keeps the other folder", port: 46043, occupied: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			p := newMarkerPair(t, tc.port, nil, shareLikeOldLauncher)
+			existing := filepath.Join(p.dest, "saves.dat")
+			if tc.occupied {
+				if err := os.MkdirAll(p.dest, 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(existing, []byte("mine"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			_, done := p.receive(t)
+			final := waitTransfer(t, done)
+
+			if final.Status != TransferCompleted {
+				t.Fatalf("transfer status = %s, error = %s", final.Status, final.Error)
+			}
+			game, err := p.libB.Find(final.GameID)
+			if err != nil {
+				t.Fatalf("find game: %v", err)
+			}
+			if !platform.Inside(game.InstallDir, game.Executable) {
+				t.Fatalf("executable %s outside %s", game.Executable, game.InstallDir)
+			}
+			if strings.Contains(game.InstallDir, receivingPrefix) {
+				t.Fatalf("game registered in the receiving folder: %s", game.InstallDir)
+			}
+			if tc.occupied {
+				if platform.SamePath(game.InstallDir, p.dest) {
+					t.Fatalf("game took an occupied folder: %s", game.InstallDir)
+				}
+				got, err := os.ReadFile(existing)
+				if err != nil || string(got) != "mine" {
+					t.Fatalf("existing folder changed: %q, %v", got, err)
+				}
+			}
+			entries, err := os.ReadDir(p.svcB.gamesPath())
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, entry := range entries {
+				if strings.HasPrefix(entry.Name(), receivingPrefix) {
+					t.Fatalf("receiving folder left behind: %s", entry.Name())
+				}
+			}
+		})
+	}
+}
+
+func TestRenameFailureKeepsReceivedGame(t *testing.T) {
+	orig := renameReceived
+	t.Cleanup(func() { renameReceived = orig })
+	renameReceived = func(string, string) error { return errors.New("sharing violation") }
+
+	p := newMarkerPair(t, 46045, nil, shareWhole)
+	tr, done := p.receive(t)
+	final := waitTransfer(t, done)
+
+	if final.Status != TransferFailed {
+		t.Fatalf("transfer status = %s, want failed", final.Status)
+	}
+	for _, want := range []string{"typhon:lan.finish_files_failed", "sharing violation"} {
+		if !strings.Contains(final.Error, want) {
+			t.Fatalf("transfer error = %q, want it to contain %q", final.Error, want)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(p.svcB.gamesPath(), receivingPrefix+tr.ID, "game.exe")); err != nil {
+		t.Fatalf("received game was lost: %v", err)
+	}
+	if _, err := os.Stat(p.dest); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("reserved folder stayed: %v", err)
+	}
+	if games := p.libB.GetGames(); len(games) != 0 {
+		t.Fatalf("library took a game that never left the receiving folder: %+v", games)
+	}
+}
+
+func TestSenderTitleCannotHideReceivedFolder(t *testing.T) {
+	tests := []struct {
+		name, title, gameID, want string
+	}{
+		{name: "receiving prefix", title: ".typhon-receiving-x", gameID: "g1", want: "typhon-receiving-x"},
+		{name: "plain dot name", title: ".hidden", gameID: "g1", want: "hidden"},
+		{name: "dots and spaces", title: " . .hidden", gameID: "g1", want: "hidden"},
+		{name: "nothing left", title: "...", gameID: "g1", want: "lan-g1"},
+		{name: "dot inside stays", title: "Half.Life", gameID: "g1", want: "Half.Life"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			staging := stagingDir(t)
+			run := &runState{}
+
+			dest, err := placeReceived(run, staging, Offer{Title: tc.title, GameID: tc.gameID})
+			if err != nil {
+				t.Fatalf("placeReceived: %v", err)
+			}
+
+			if got := filepath.Base(dest); got != tc.want {
+				t.Fatalf("folder = %q, want %q", got, tc.want)
+			}
+			sweepReceiving(context.Background(), filepath.Dir(dest))
+			if _, err := os.Stat(dest); err != nil {
+				t.Fatalf("sweep took the received game: %v", err)
+			}
+		})
+	}
+}
+
+func TestSweepReceiving(t *testing.T) {
+	root := t.TempDir()
+	leftover := filepath.Join(root, receivingPrefix+"dead")
+	nested := filepath.Join(root, "Game", receivingPrefix+"inner")
+	game := filepath.Join(root, "Game")
+	lookalike := filepath.Join(root, "typhon-receiving-game")
+	stray := filepath.Join(root, receivingPrefix+"file")
+	for _, dir := range []string{leftover, nested, lookalike} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	readOnly := filepath.Join(leftover, "data.bin")
+	if err := os.WriteFile(readOnly, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(readOnly, 0o400); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stray, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	sweepReceiving(context.Background(), root)
+
+	if _, err := os.Stat(leftover); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("leftover stayed: %v", err)
+	}
+	for _, path := range []string{game, nested, lookalike, stray} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("%s must survive: %v", path, err)
+		}
+	}
+}
+
+func TestSweepReceivingLeavesEverythingOnCancelledContext(t *testing.T) {
+	root := t.TempDir()
+	leftover := filepath.Join(root, receivingPrefix+"dead")
+	if err := os.Mkdir(leftover, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	sweepReceiving(ctx, root)
+
+	if _, err := os.Stat(leftover); err != nil {
+		t.Fatalf("cancelled sweep still removed: %v", err)
+	}
+}
+
+func TestSweepReceivingHandlesMissingOrEmptyRoot(t *testing.T) {
+	sweepReceiving(context.Background(), "")
+	sweepReceiving(context.Background(), filepath.Join(t.TempDir(), "gone"))
+}
+
+func TestSweepReceivingDoesNotFollowSymlink(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	keep := filepath.Join(outside, "keep.txt")
+	if err := os.WriteFile(keep, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, receivingPrefix+"link")
+	if runtime.GOOS == "windows" {
+		//nolint:gosec // G204: аргументы — пути из t.TempDir(); внешнего ввода, который требует валидации по инварианту 32, здесь нет
+		if out, err := exec.Command("cmd", "/c", "mklink", "/J", link, outside).CombinedOutput(); err != nil {
+			t.Skipf("junction not available: %v (%s)", err, out)
+		}
+	} else if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlink not supported on this system: %v", err)
+	}
+
+	sweepReceiving(context.Background(), root)
+
+	if _, err := os.Stat(keep); err != nil {
+		t.Fatalf("sweep followed the link: %v", err)
+	}
+	if _, err := os.Lstat(link); err != nil {
+		t.Fatalf("link must be refused, not removed: %v", err)
+	}
+}
+
+func TestRemoveReceivingRefusesForeignPaths(t *testing.T) {
+	plain := t.TempDir()
+	if err := removeReceiving(plain); err == nil {
+		t.Fatal("removeReceiving accepted a folder without the prefix")
+	}
+	if _, err := os.Stat(plain); err != nil {
+		t.Fatalf("folder was removed: %v", err)
+	}
+	file := filepath.Join(t.TempDir(), receivingPrefix+"file")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := removeReceiving(file); err == nil {
+		t.Fatal("removeReceiving accepted a file")
+	}
+	if err := removeReceiving(filepath.Join(t.TempDir(), receivingPrefix+"gone")); err != nil {
+		t.Fatalf("missing folder: %v", err)
+	}
+}
+
+func TestEnableSweepsLeftoversAndScanCannotSeeThem(t *testing.T) {
+	lib, err := library.NewServiceAt(filepath.Join(t.TempDir(), "library.json"))
+	if err != nil {
+		t.Fatalf("new library: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := lib.ServiceShutdown(); err != nil {
+			t.Errorf("library shutdown: %v", err)
+		}
+	})
+	svc := newTestService(t, lib, newTestSettings(t, t.TempDir()))
+	gamesPath := svc.gamesPath()
+	transport, _ := loopbackPair(t)
+	svc.newTransport = transport
+	svc.torrentPort = 46047
+
+	leftover := filepath.Join(gamesPath, receivingPrefix+"crashed")
+	if err := os.MkdirAll(leftover, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := library.WriteMarker(leftover, library.Marker{GameID: "sender", Title: "Foreign", Uninstall: library.Uninstall{}}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := svc.enable(context.Background()); err != nil {
+		t.Fatalf("enable: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := svc.ServiceShutdown(); err != nil {
+			t.Errorf("shutdown: %v", err)
+		}
+	})
+
+	if _, err := os.Stat(leftover); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("crash leftover survived start: %v", err)
 	}
 }
 
@@ -1037,6 +1316,12 @@ func TestRemoveForeignMarker(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "no marker", prepare: func(*testing.T, string) {}},
+		{name: "marker in another case", prepare: func(t *testing.T, marker string) {
+			upper := filepath.Join(filepath.Dir(marker), strings.ToUpper(library.MarkerName))
+			if err := os.WriteFile(upper, []byte("{}"), 0o400); err != nil {
+				t.Fatal(err)
+			}
+		}},
 		{name: "writable marker", prepare: func(t *testing.T, marker string) {
 			if err := os.WriteFile(marker, []byte("{}"), 0o644); err != nil {
 				t.Fatal(err)
@@ -1085,6 +1370,15 @@ func TestRemoveForeignMarker(t *testing.T) {
 			}
 			if _, err := os.Stat(marker); !errors.Is(err, fs.ErrNotExist) {
 				t.Fatalf("marker still there: %v", err)
+			}
+			entries, err := os.ReadDir(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, entry := range entries {
+				if strings.EqualFold(entry.Name(), library.MarkerName) {
+					t.Fatalf("marker still there as %s", entry.Name())
+				}
 			}
 			if _, err := os.Stat(nested); err != nil {
 				t.Fatalf("nested file of the same name was touched: %v", err)
