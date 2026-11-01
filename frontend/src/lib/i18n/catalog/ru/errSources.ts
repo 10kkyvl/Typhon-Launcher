@@ -51,6 +51,8 @@ export const errSources = {
   'errSources.lanExeOutsideInstall': 'исполняемый файл находится вне каталога установки',
   'errSources.lanExecutableMissing': 'после передачи не найден исполняемый файл игры',
   'errSources.lanRegisterGameFailed': 'не удалось добавить полученную игру в библиотеку',
+  'errSources.lanFinishFilesFailed': 'игра получена, но не удалось подготовить её файлы: проверьте права на папку и антивирус',
+  'errSources.lanAlreadyHave': 'эта игра уже раздаётся с этого компьютера или уже принимается',
   'errSources.lanGamesPathUnavailable': 'папка с играми недоступна',
   'errSources.lanOfferNotFound': 'раздача не найдена или срок её действия истёк',
   'errSources.lanUnknownTransfer': 'передача не найдена',

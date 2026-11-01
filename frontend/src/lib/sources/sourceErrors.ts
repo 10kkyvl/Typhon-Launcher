@@ -38,6 +38,8 @@ export const REASONS: Record<string, MessageKey> = {
   'lan.exe_outside_install': 'errSources.lanExeOutsideInstall',
   'lan.executable_missing': 'errSources.lanExecutableMissing',
   'lan.register_game_failed': 'errSources.lanRegisterGameFailed',
+  'lan.finish_files_failed': 'errSources.lanFinishFilesFailed',
+  'lan.already_have': 'errSources.lanAlreadyHave',
   'lan.games_path_unavailable': 'errSources.lanGamesPathUnavailable',
   'lan.offer_not_found': 'errSources.lanOfferNotFound',
   'lan.unknown_transfer': 'errSources.lanUnknownTransfer',

@@ -22,6 +22,7 @@ import (
 	"typhon/internal/library"
 	"typhon/internal/platform"
 	"typhon/internal/settings"
+	"typhon/internal/storage"
 	"typhon/internal/uierr"
 
 	"github.com/anacrolix/torrent"
@@ -40,6 +41,7 @@ var (
 	errGamesPathUnavailable = uierr.New("lan.games_path_unavailable", "lan: games path unavailable")
 	errOfferNotFound        = uierr.New("lan.offer_not_found", "lan: offer not found or expired")
 	errUnknownTransfer      = uierr.New("lan.unknown_transfer", "lan: unknown transfer")
+	errAlreadyHave          = uierr.New("lan.already_have", "lan: this game is already shared or being received")
 )
 
 // transferState is one in-flight or finished Receive, guarded by runState.mu.
@@ -63,9 +65,31 @@ type runState struct {
 	stats     *statCounters
 	changed   chan struct{}
 
+	// seedMu serializes startSeeding, so a second Share of one game finds the
+	// first one's seed instead of racing it to the client.
+	seedMu sync.Mutex
+
 	mu        sync.Mutex
 	seeded    map[string]*torrent.Torrent
 	transfers map[string]*transferState
+}
+
+// hashHeldLocked tells whether a seed or a running transfer owns the infohash.
+// The client hands back the existing torrent for a known infohash, so a second
+// owner would share it and drop it from under the first. A seed being added
+// right now is not visible here: lanClient refuses that one by itself.
+func (r *runState) hashHeldLocked(infoHash string) bool {
+	for _, t := range r.seeded {
+		if t.InfoHash().HexString() == infoHash {
+			return true
+		}
+	}
+	for _, ts := range r.transfers {
+		if ts.transfer.InfoHash == infoHash && ts.transfer.Status == TransferReceiving {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *runState) signalChanged() {
@@ -389,6 +413,27 @@ func (s *Service) persistShare(sh Share) error {
 	return nil
 }
 
+// undoShare puts the store back after a share was saved but could not start:
+// a row marked enabled that nothing seeds would be announced as nothing and
+// resumed on every start.
+func (s *Service) undoShare(gameID string, previous Share, had bool, cause error) error {
+	s.mu.Lock()
+	var err error
+	if had {
+		previous.Enabled = false
+		err = s.store.put(previous)
+	} else {
+		err = s.store.remove(gameID)
+	}
+	list := s.store.list()
+	s.mu.Unlock()
+	if err != nil {
+		return errors.Join(cause, fmt.Errorf("lan: undo share: %w", err))
+	}
+	s.emit("lan:shares", list)
+	return cause
+}
+
 // Share builds (or reuses a cached build of) the torrent for an installed
 // game and starts seeding it. Hashing runs outside Service.mu, tracked in
 // the running instance's WaitGroup and cancelled through its ctx, so a
@@ -440,6 +485,7 @@ func (s *Service) Share(gameID string) (Share, error) {
 
 	if had && cached.Fingerprint == fp && cached.Root == installDir {
 		if _, err := s.store.readTorrent(cached.InfoHash); err == nil {
+			previous := cached
 			cached.Enabled = true
 			cached.Exe = filepath.ToSlash(exeRel)
 			cached.Title = game.Title
@@ -448,7 +494,7 @@ func (s *Service) Share(gameID string) (Share, error) {
 				return Share{}, err
 			}
 			if err := s.startSeeding(run, cached); err != nil {
-				slog.Error("resume lan seed", "gameId", gameID, "error", err)
+				return Share{}, s.undoShare(gameID, previous, true, err)
 			}
 			run.signalChanged()
 			return cached, nil
@@ -492,7 +538,7 @@ func (s *Service) Share(gameID string) (Share, error) {
 	s.emitHashProgress(gameID, Progress{ProcessedBytes: share.SizeBytes, TotalBytes: share.SizeBytes}, true, "")
 
 	if err := s.startSeeding(run, share); err != nil {
-		slog.Error("start lan seed", "gameId", gameID, "error", err)
+		return Share{}, s.undoShare(gameID, cached, had, err)
 	}
 	run.signalChanged()
 	return share, nil
@@ -531,11 +577,18 @@ func (s *Service) Unshare(gameID string) error {
 }
 
 func (s *Service) startSeeding(run *runState, sh Share) error {
+	run.seedMu.Lock()
+	defer run.seedMu.Unlock()
+
 	run.mu.Lock()
 	_, exists := run.seeded[sh.GameID]
+	held := run.hashHeldLocked(sh.InfoHash)
 	run.mu.Unlock()
 	if exists {
 		return nil
+	}
+	if held {
+		return errAlreadyHave
 	}
 
 	data, err := s.store.readTorrent(sh.InfoHash)
@@ -621,10 +674,18 @@ func (s *Service) Receive(infoHash, peerID string) (Transfer, error) {
 		return Transfer{}, errLibraryUnavailable
 	}
 
+	// Add under s.mu: disable clears s.run under it before it waits on wg.
 	s.mu.Lock()
 	run := s.run
+	if run != nil {
+		run.wg.Add(1)
+	}
 	s.mu.Unlock()
 	if run == nil {
+		return Transfer{}, errSharingDisabled
+	}
+	defer run.wg.Done()
+	if run.ctx.Err() != nil {
 		return Transfer{}, errSharingDisabled
 	}
 
@@ -647,27 +708,8 @@ func (s *Service) Receive(infoHash, peerID string) (Transfer, error) {
 		return Transfer{}, fmt.Errorf("lan: infohash: %w", err)
 	}
 
-	if err := os.MkdirAll(gamesPath, 0o755); err != nil {
-		return Transfer{}, err
-	}
-	dest, err := reserveReceiveDirectory(filepath.Join(gamesPath, sanitizeFolderName(offer.Title, offer.GameID)), offer.InfoHash)
-	if err != nil {
-		return Transfer{}, err
-	}
-
-	t, err := run.cl.addForReceiving(hash, offer.Title, dest)
-	if err != nil {
-		return Transfer{}, fmt.Errorf("lan: add receiving torrent: %w", err)
-	}
-	t.AddPeers([]torrent.PeerInfo{{
-		Addr:    &net.TCPAddr{IP: net.IP(srcAddr.AsSlice()), Port: offer.Port},
-		Source:  torrent.PeerSourceDirect,
-		Trusted: true,
-	}})
-
 	id, err := randomID()
 	if err != nil {
-		t.Drop()
 		return Transfer{}, err
 	}
 	now := time.Now()
@@ -682,10 +724,36 @@ func (s *Service) Receive(infoHash, peerID string) (Transfer, error) {
 		StartedAt: now,
 		UpdatedAt: now,
 	}
+
+	// The slot is taken before the folder and the torrent exist: everything
+	// after this point is slow, and the check must hold until it is done.
+	run.mu.Lock()
+	if run.hashHeldLocked(offer.InfoHash) {
+		run.mu.Unlock()
+		return Transfer{}, errAlreadyHave
+	}
+	ts := &transferState{transfer: tr}
+	run.transfers[id] = ts
+	run.mu.Unlock()
+
+	t, dest, err := s.openTransfer(run, offer, hash, gamesPath)
+	if err != nil {
+		run.mu.Lock()
+		delete(run.transfers, id)
+		run.mu.Unlock()
+		return Transfer{}, err
+	}
+	t.AddPeers([]torrent.PeerInfo{{
+		Addr:    &net.TCPAddr{IP: net.IP(srcAddr.AsSlice()), Port: offer.Port},
+		Source:  torrent.PeerSourceDirect,
+		Trusted: true,
+	}})
+
 	transferCtx, cancel := context.WithCancel(run.ctx)
 
 	run.mu.Lock()
-	run.transfers[id] = &transferState{transfer: tr, t: t, cancel: cancel}
+	ts.t = t
+	ts.cancel = cancel
 	run.mu.Unlock()
 
 	run.wg.Add(1)
@@ -693,6 +761,25 @@ func (s *Service) Receive(infoHash, peerID string) (Transfer, error) {
 
 	s.emit("lan:transfer", tr)
 	return tr, nil
+}
+
+func (s *Service) openTransfer(run *runState, offer Offer, hash metainfo.Hash, gamesPath string) (*torrent.Torrent, string, error) {
+	if err := os.MkdirAll(gamesPath, 0o755); err != nil {
+		return nil, "", err
+	}
+	dest, err := reserveReceiveDirectory(filepath.Join(gamesPath, sanitizeFolderName(offer.Title, offer.GameID)), offer.InfoHash)
+	if err != nil {
+		return nil, "", err
+	}
+	t, err := run.cl.addForReceiving(hash, offer.Title, dest)
+	if err != nil {
+		err = fmt.Errorf("lan: add receiving torrent: %w", err)
+		if rmErr := os.Remove(dest); rmErr != nil {
+			return nil, "", errors.Join(err, fmt.Errorf("lan: remove unused destination: %w", rmErr))
+		}
+		return nil, "", err
+	}
+	return t, dest, nil
 }
 
 func reserveReceiveDirectory(base, infoHash string) (string, error) {
@@ -776,11 +863,16 @@ func (s *Service) watchTransfer(run *runState, ctx context.Context, id, dest str
 		return
 	}
 
+	stop := func() {
+		t.Drop()
+		discardForeignMarker(dest)
+		s.finishTransfer(run, id, TransferCancelled, ctx.Err())
+	}
+
 	select {
 	case <-t.GotInfo():
 	case <-ctx.Done():
-		s.finishTransfer(run, id, TransferCancelled, ctx.Err())
-		t.Drop()
+		stop()
 		return
 	}
 
@@ -788,20 +880,32 @@ func (s *Service) watchTransfer(run *runState, ctx context.Context, id, dest str
 	t.DownloadAll()
 	s.updateTransfer(run, id, func(tr *Transfer) { tr.Total = total })
 
+	finish := func() {
+		s.updateTransfer(run, id, func(tr *Transfer) { tr.Downloaded = total })
+		// A live torrent re-stats its files for piece completion: once the
+		// marker is removed it would mark the piece missing and fetch it back.
+		t.Drop()
+		s.completeTransfer(ctx, run, id, dest, offer, t)
+	}
+
 	ticker := time.NewTicker(transferSampleInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			s.finishTransfer(run, id, TransferCancelled, ctx.Err())
-			t.Drop()
+			// select picks at random when both are ready, and a game that has
+			// fully arrived is finished even if the launcher is closing.
+			if t.Complete().Bool() {
+				finish()
+				return
+			}
+			stop()
 			return
 		// BytesCompleted counts written but not yet hashed chunks, so it hits
 		// total before the last piece's part files are renamed into place;
 		// Complete is set only after every piece's MarkComplete returned.
 		case <-t.Complete().On():
-			s.updateTransfer(run, id, func(tr *Transfer) { tr.Downloaded = total })
-			s.completeTransfer(ctx, run, id, dest, offer, t)
+			finish()
 			return
 		case <-ticker.C:
 			completed := t.BytesCompleted()
@@ -810,15 +914,90 @@ func (s *Service) watchTransfer(run *runState, ctx context.Context, id, dest str
 	}
 }
 
-func (s *Service) completeTransfer(ctx context.Context, run *runState, id, dest string, offer Offer, t *torrent.Torrent) {
-	exePath := filepath.Join(dest, filepath.FromSlash(offer.Exe))
+// clearReadOnly is a variable so a test can observe what the engine left behind.
+var clearReadOnly = makeWritable
+
+// makeWritable undoes the read-only mode the torrent engine puts on promoted
+// files: a game must be able to write next to its executable.
+func makeWritable(ctx context.Context, dir string) (err error) {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		err = errors.Join(err, root.Close())
+	}()
+	return fs.WalkDir(root.FS(), ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if !d.Type().IsRegular() {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		if info.Mode().Perm()&0o200 != 0 {
+			return nil
+		}
+		return root.Chmod(filepath.FromSlash(path), info.Mode()|0o200)
+	})
+}
+
+// removeForeignMarker deletes the marker a sender older than this version put
+// into the transfer: its game id and uninstall command describe the sender's
+// install, and "Find games" would adopt the folder by it.
+func removeForeignMarker(dir string) error {
+	path, err := library.MarkerPath(dir)
+	if err != nil {
+		return fmt.Errorf("lan: foreign install marker: %w", err)
+	}
+	if err := storage.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("lan: remove foreign install marker: %w", err)
+	}
+	return nil
+}
+
+// discardForeignMarker is for a transfer already headed to a failed or cancelled
+// status: that status is what the user must see, so a marker that would not go
+// can only be logged.
+func discardForeignMarker(dir string) {
+	if err := removeForeignMarker(dir); err != nil {
+		slog.Warn("foreign install marker left in received folder", "dir", dir, "error", err)
+	}
+}
+
+func receivedExecutable(dest, exe string) (string, error) {
+	exePath := filepath.Join(dest, filepath.FromSlash(exe))
 	if !platform.Inside(dest, exePath) {
-		s.finishTransfer(run, id, TransferFailed, errExeOutsideInstall)
-		return
+		return "", errExeOutsideInstall
 	}
 	info, err := os.Stat(exePath)
 	if err != nil || info.IsDir() {
-		s.finishTransfer(run, id, TransferFailed, uierr.Wrap("lan.executable_missing", fmt.Errorf("lan: executable missing after transfer: %s", exePath)))
+		return "", uierr.Wrap("lan.executable_missing", fmt.Errorf("lan: executable missing after transfer: %s", exePath))
+	}
+	return exePath, nil
+}
+
+func (s *Service) completeTransfer(ctx context.Context, run *runState, id, dest string, offer Offer, t *torrent.Torrent) {
+	exePath, err := receivedExecutable(dest, offer.Exe)
+	if err != nil {
+		discardForeignMarker(dest)
+		s.finishTransfer(run, id, TransferFailed, err)
+		return
+	}
+	if err := removeForeignMarker(dest); err != nil {
+		s.finishTransfer(run, id, TransferFailed, uierr.Wrap("lan.finish_files_failed", err))
+		return
+	}
+	// Every byte is on disk by now: closing the launcher must not lose a fully
+	// received game. run.wg still holds Shutdown until this returns.
+	if err := clearReadOnly(context.WithoutCancel(ctx), dest); err != nil {
+		s.finishTransfer(run, id, TransferFailed, uierr.Wrap("lan.finish_files_failed", fmt.Errorf("lan: make received files writable: %w", err)))
 		return
 	}
 

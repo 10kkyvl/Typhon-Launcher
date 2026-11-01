@@ -54,6 +54,8 @@ export const errSources: Record<ErrSourcesKey, Message> = {
   'errSources.lanExeOutsideInstall': 'The executable is outside the install directory',
   'errSources.lanExecutableMissing': 'The game executable was not found after the transfer',
   'errSources.lanRegisterGameFailed': 'Could not add the received game to the library',
+  'errSources.lanFinishFilesFailed': 'The game was received, but its files could not be prepared: check folder permissions and your antivirus',
+  'errSources.lanAlreadyHave': 'This game is already shared from this computer or is already being received',
   'errSources.lanGamesPathUnavailable': 'The games folder is unavailable',
   'errSources.lanOfferNotFound': 'The offer was not found or has expired',
   'errSources.lanUnknownTransfer': 'Transfer not found',
