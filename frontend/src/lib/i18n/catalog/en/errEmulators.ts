@@ -21,6 +21,7 @@ export const errEmulators: Record<ErrEmulatorsKey, Message> = {
   'emulators.image_not_file': 'The image must be a file, not a folder or a link',
   'emulators.image_manual_only': 'The launcher cannot start this file: install the game in the emulator by hand',
   'emulators.image_incomplete': 'The rest of the game data is not next to this file',
+  'emulators.image_in_storage': 'This is an update or add-on from the emulator folder, not a game',
   'emulators.sfo_missing': 'The game has no param.sfo file',
   'emulators.sfo_invalid': 'The param.sfo file of the game is damaged',
   'emulators.title_id_invalid': 'The param.sfo file has no valid game code',

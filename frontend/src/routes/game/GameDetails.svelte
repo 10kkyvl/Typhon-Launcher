@@ -31,6 +31,7 @@
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import GameStatusModal from '../../lib/components/GameStatusModal.svelte';
   import GameTagsModal from '../../lib/components/GameTagsModal.svelte';
+  import EmulatorHint from '../../lib/components/EmulatorHint.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import InstallModal from '../../lib/components/InstallModal.svelte';
   import Lightbox from '../../lib/components/Lightbox.svelte';
@@ -1093,6 +1094,7 @@
             <p class="muted">{msg('games.externalNote', { provider: externalName })}</p>
           {:else if emulated}
             <p class="muted">{msg(isInstalledImage(localGame) ? 'emul.gameNoteOwned' : 'emul.gameNote', { console: platformBadge(emulatedPlatform) })}</p>
+            <EmulatorHint platform={emulatedPlatform} game={localGame} />
           {/if}
           <div class="path">
             <span class="path-value" title={localGame.installDir}>{truncateMiddle(localGame.installDir, 34)}</span>

@@ -47,6 +47,7 @@ var (
 	ErrImageNotFile      = uierr.New("emulators.image_not_file", "образ должен быть обычным файлом, а не папкой или ссылкой")
 	ErrImageManualOnly   = uierr.New("emulators.image_manual_only", "такой файл лаунчер не запускает: установите игру в эмуляторе вручную")
 	ErrImageIncomplete   = uierr.New("emulators.image_incomplete", "рядом с файлом нет остальных данных игры")
+	ErrImageInStorage    = uierr.New("emulators.image_in_storage", "это обновление или дополнение из папки эмулятора, а не игра")
 	ErrSFOMissing        = uierr.New("emulators.sfo_missing", "в игре нет файла param.sfo")
 	ErrSFOInvalid        = uierr.New("emulators.sfo_invalid", "файл param.sfo игры повреждён")
 	ErrTitleIDInvalid    = uierr.New("emulators.title_id_invalid", "в param.sfo нет правильного кода игры")

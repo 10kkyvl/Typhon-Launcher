@@ -3,6 +3,7 @@ import {
   EMULATOR_PROMPT_CODES,
   consoleForImage,
   consolesForImage,
+  copiesOnFirstLaunch,
   emulationPlatform,
   emulatorMissing,
   imageExtension,
@@ -158,6 +159,17 @@ describe('installed images', () => {
   it('is not triggered by a PC game', () => {
     expect(isInstalledImage({ owned: true, installType: 'console_image' })).toBe(false);
     expect(isInstalledImage(null)).toBe(false);
+  });
+});
+
+describe('copiesOnFirstLaunch', () => {
+  it('warns only about a Vita game the emulator does not have yet', () => {
+    expect(copiesOnFirstLaunch({ emulation: { platform: 'vita' } })).toBe(true);
+    expect(copiesOnFirstLaunch({ emulation: { platform: 'vita', titleId: '' } })).toBe(true);
+    expect(copiesOnFirstLaunch({ emulation: { platform: 'vita', titleId: 'PCSE00001' } })).toBe(false);
+    expect(copiesOnFirstLaunch({ emulation: { platform: 'ps4' } })).toBe(false);
+    expect(copiesOnFirstLaunch({ emulation: null })).toBe(false);
+    expect(copiesOnFirstLaunch(undefined)).toBe(false);
   });
 });
 

@@ -2,6 +2,7 @@ package install
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"os"
 	"path/filepath"
@@ -253,6 +254,21 @@ func TestInspectImageOfNextGenConsoles(t *testing.T) {
 			t.Fatalf("plan = %+v, %v", plan, err)
 		}
 	})
+	for name, category := range map[string]string{"update": "gp", "add-on": "ac"} {
+		t.Run("an archive beside an "+name+" still gets its chance", func(t *testing.T) {
+			dir := t.TempDir()
+			filler := make([]byte, 1<<16)
+			if _, err := rand.Read(filler); err != nil {
+				t.Fatal(err)
+			}
+			writeZip(t, filepath.Join(dir, "game.zip"), []zipEntry{{name: "x", data: filler}})
+			vitaPackage(t, filepath.Join(dir, "extra.vpk"), "PCSE00001", category)
+			plan, err := InspectImage(t.Context(), dir, emulators.Vita)
+			if err != nil || plan.ArchivePath == "" {
+				t.Fatalf("plan = %+v, %v", plan, err)
+			}
+		})
+	}
 	t.Run("an eboot alone is not a game", func(t *testing.T) {
 		dir := t.TempDir()
 		plantImages(t, dir, imageTree{"eboot.bin": "big", "sce_sys/param.sfo": sfoBody("CUSA00001", "gd")})

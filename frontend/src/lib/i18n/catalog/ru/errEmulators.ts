@@ -18,6 +18,7 @@ export const errEmulators = {
   'emulators.image_not_file': 'образ должен быть файлом, а не папкой или ссылкой',
   'emulators.image_manual_only': 'такой файл лаунчер не запускает: установите игру в эмуляторе вручную',
   'emulators.image_incomplete': 'рядом с файлом нет остальных данных игры',
+  'emulators.image_in_storage': 'это обновление или дополнение из папки эмулятора, а не игра',
   'emulators.sfo_missing': 'в игре нет файла param.sfo',
   'emulators.sfo_invalid': 'файл param.sfo игры повреждён',
   'emulators.title_id_invalid': 'в param.sfo нет правильного кода игры',

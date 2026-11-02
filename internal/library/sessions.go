@@ -662,7 +662,7 @@ func (s *Service) finishSession(ctx context.Context, id string, startedAt time.T
 	game.LastPlayed = &now
 	game.PlaytimeSeconds += seconds
 	if emulated {
-		game.Emulation = settleInstalledTitle(*game, run, quick, cleanExit(exit, stoppedByUser), failedExit(exit, stoppedByUser))
+		game.Emulation = settleInstalledTitle(*game, run, quick, cleanExit(exit, stoppedByUser), emulatorLostGame(game.Emulation.Platform, exit, stoppedByUser))
 	}
 	if err := s.persist(); err != nil {
 		game.LastPlayed = previousLastPlayed
@@ -703,8 +703,12 @@ func cleanExit(exit *exitInfo, stoppedByUser bool) bool {
 	return exit != nil && exit.known && exit.code == 0 && !stoppedByUser
 }
 
-func failedExit(exit *exitInfo, stoppedByUser bool) bool {
-	return exit != nil && exit.known && exit.code != 0 && !stoppedByUser
+func emulatorLostGame(platformID string, exit *exitInfo, stoppedByUser bool) bool {
+	if exit == nil || !exit.known || stoppedByUser {
+		return false
+	}
+	target, ok := emulators.Lookup(platformID)
+	return ok && target.InstallGone(exit.code)
 }
 
 func (s *Service) findLocked(id string) *Game {

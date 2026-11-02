@@ -499,6 +499,9 @@ func checkImage(romPath, platformID string) (string, string, emulators.Platform,
 	if target.ManualOnly(rom) {
 		return refuse(fmt.Errorf("%w: %s", emulators.ErrImageManualOnly, filepath.Ext(rom)))
 	}
+	if target.InEmulatorData(rom) {
+		return refuse(fmt.Errorf("%w: %s", emulators.ErrImageInStorage, rom))
+	}
 	if !target.AcceptsImage(rom) {
 		return refuse(fmt.Errorf("%w: %s", emulators.ErrImageExtension, filepath.Ext(rom)))
 	}
@@ -728,22 +731,30 @@ func emulatorCommand(ctx context.Context, target emulators.Platform, game Game, 
 	if err != nil {
 		return nil, emulatorRun{}, err
 	}
-	run.titleID, run.installed = info.TitleID, false
+	run.titleID = info.TitleID
+	// A folder the launcher made is its own copy, whatever the download called
+	// its subfolders: the emulator has never seen it.
+	if !game.Owned && strings.EqualFold(target.StoredTitle(image), info.TitleID) {
+		command, err := target.InstalledCommand(info.TitleID)
+		return command, run, err
+	}
+	run.installed = false
 	return target.Command(image), run, nil
 }
 
 // settleInstalledTitle says what the card remembers after a session. An install
 // counts only after the emulator outlived the quick exit and closed cleanly by
-// itself: anything else may have cut the copy short, and repeating an install
-// costs nothing. The id goes when a start by id fails at once: the emulator no
-// longer has the game, and the next launch installs it. The result is a new
-// value: copies of the card given out earlier share the old pointer.
-func settleInstalledTitle(game Game, run emulatorRun, quick, clean, failed bool) *Emulation {
+// itself: anything else may have cut the copy short, and a game half copied must
+// not be started by id. The id goes only on the emulator's own answer that it has
+// no such game: an install copies gigabytes, so a crash must not cause one. The
+// result is a new value: copies of the card given out earlier share the old
+// pointer.
+func settleInstalledTitle(game Game, run emulatorRun, quick, clean, lost bool) *Emulation {
 	next := *game.Emulation
 	switch {
 	case run.titleID == "":
 		return game.Emulation
-	case run.installed && quick && failed && next.TitleID == run.titleID:
+	case run.installed && quick && lost && next.TitleID == run.titleID:
 		next.TitleID = ""
 	case !run.installed && !quick && clean && next.TitleID == "" && platform.SamePath(game.Executable, run.image):
 		next.TitleID = run.titleID

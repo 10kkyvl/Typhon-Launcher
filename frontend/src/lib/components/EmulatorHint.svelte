@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { emulatorMissing, platformBadge } from '../library/emulation';
+  import { copiesOnFirstLaunch, emulatorMissing, platformBadge, type EmulatedGame } from '../library/emulation';
   import { installErrorText } from '../install/installErrors';
   import { listPlatforms, type PlatformStatus } from '../services/emulators';
   import { toast } from '../stores/toasts';
   import { msg } from '../i18n';
 
-  let { platform }: { platform: string } = $props();
+  let { platform, game = null }: { platform: string; game?: EmulatedGame | null } = $props();
 
   let row = $state<PlatformStatus | null>(null);
   let token = 0;
@@ -25,8 +25,11 @@
   });
 </script>
 
-{#if row && emulatorMissing(row)}
+{#if !game && row && emulatorMissing(row)}
   <p class="hint">{msg('emul.emulatorMissing', { console: row.name || platformBadge(platform) })}</p>
+{/if}
+{#if copiesOnFirstLaunch(game)}
+  <p class="hint">{msg('emul.vitaFirstLaunch')}</p>
 {/if}
 
 <style>

@@ -401,7 +401,9 @@ func InspectImage(ctx context.Context, path, platformID string) (Plan, error) {
 		plan.CanAutoInstall = true
 		return plan, nil
 	}
-	if !errors.Is(err, errImageNotFound) && !errors.Is(err, emulators.ErrImageManualOnly) {
+	if !slices.ContainsFunc([]error{errImageNotFound, errImageUpdateOnly, errImageAddonOnly, emulators.ErrImageManualOnly}, func(refusal error) bool {
+		return errors.Is(err, refusal)
+	}) {
 		return Plan{}, err
 	}
 	archive := pickDominantArchive(root, files, plan.EstimatedSize)

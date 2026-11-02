@@ -28,8 +28,9 @@ const (
 	consoleVita    = `psvita|ps[ ._-]vita|playstation[ ._-]?vita`
 	consolePattern = `(?:sony[ ._-]+)?(?:(ps[ ._-]?(?:1|one)|psx|playstation[ ._-]?(?:1|one))|(ps[ ._-]?2|playstation[ ._-]?2)|(psp|playstation[ ._-]?portable)|(ps[ ._-]?3|playstation[ ._-]?3)|(%s)|(ps[ ._-]?4|playstation[ ._-]?4)|(playstation))`
 	consoleImage   = `iso|cso|chd|pbp|pkg|fpkg|vpk|ntsc(?:-[uj])?|pal`
+	consoleRegion  = `usa|eur|europe|japan`
 	consoleLang    = `rus|eng|jpn|multi\d*`
-	consoleMeta    = consoleImage + `|` + consoleLang
+	consoleMeta    = consoleImage + `|` + consoleRegion + `|` + consoleLang
 	pcName         = `(?:pc|windows|win)`
 
 	consoleSeparators = "-|/,:–—"
@@ -45,16 +46,19 @@ var (
 	reConsoleName = regexp.MustCompile(`(?i)` + fmt.Sprintf(consolePattern, consoleVita))
 	// One part of a bracket: «PS2», «PS2 NTSC», but not «PS2 Remake».
 	reConsoleBracketPart = regexp.MustCompile(`(?i)^\s*` + fmt.Sprintf(consolePattern, consoleVita+`|psv`) + `((?:[\s._]+(?:` + consoleMeta + `))*)\s*$`)
-	// What may follow a bare token: release data, never words of a title.
-	reConsoleMetaTail = regexp.MustCompile(`(?i)^(?:(?:` + consoleMeta + `|v\.?\d\S*|(?:19|20)\d\d)(?:[\s._]+|$))+$`)
+	// What may follow a bare token: release data, never words of a title. A region
+	// is not here: outside a bracket «Europe» can end a real name.
+	reConsoleMetaTail = regexp.MustCompile(`(?i)^(?:(?:` + consoleImage + `|` + consoleLang + `|v\.?\d\S*|(?:19|20)\d\d)(?:[\s._]+|$))+$`)
 	rePCBracketPart   = regexp.MustCompile(`(?i)^\s*` + pcName + `(?:[ ._]?(?:32|64|xp|7|8|10|11))?\s*$`)
 	rePCBeforeConsole = regexp.MustCompile(`(?i)(?:^|[\s._])` + pcName + `\s*[` + consoleSeparators + `]*\s*$`)
 	rePCAfterConsole  = regexp.MustCompile(`(?i)^[` + consoleSeparators + `]\s*` + pcName + `\b`)
 	// Disc image and region labels only appear beside a console token; the same
 	// words stay untouched in a title that has none.
-	reConsoleRegion = regexp.MustCompile(`(?i)[\[({]\s*(?:ntsc(?:-[uj])?|pal|usa|europe|japan)\s*[\])}]`)
+	reConsoleRegion = regexp.MustCompile(`(?i)[\[({]\s*(?:` + consoleImage + `|` + consoleRegion + `)\s*[\])}]`)
 	reConsoleImage  = regexp.MustCompile(`(?i)[\s._-]+(?:` + consoleImage + `)[\s._-]*$`)
 	reConsoleLang   = regexp.MustCompile(`(?i)^(?:` + consoleLang + `)$`)
+	// A part of a bracket that says nothing about the name: «PS4, PKG».
+	reConsoleLabelPart = regexp.MustCompile(`(?i)^\s*(?:` + consoleImage + `|` + consoleRegion + `)\s*$`)
 )
 
 // consoleLangs keeps what the title pipeline strips from a bracket on its own.
@@ -170,6 +174,7 @@ func cutConsoleBrackets(s string) (string, string) {
 		if !cut {
 			return bracket
 		}
+		kept = slices.DeleteFunc(kept, reConsoleLabelPart.MatchString)
 		if len(kept) == 0 {
 			return " "
 		}

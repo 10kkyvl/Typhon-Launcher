@@ -160,6 +160,7 @@ export const REASONS: Record<string, MessageKey> = {
   'emulators.image_incomplete': 'emulators.image_incomplete',
   'emulators.image_manual_only': 'emulators.image_manual_only',
   'emulators.image_unreadable': 'emulators.image_unreadable',
+  'emulators.image_in_storage': 'emulators.image_in_storage',
   'emulators.sfo_invalid': 'emulators.sfo_invalid',
   'emulators.sfo_missing': 'emulators.sfo_missing',
   'emulators.title_id_invalid': 'emulators.title_id_invalid',

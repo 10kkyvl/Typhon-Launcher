@@ -62,6 +62,8 @@ type Platform struct {
 	// installedArgs start a game the emulator keeps for itself. Empty means the
 	// emulator is given the image every time.
 	installedArgs []string
+	// installedGone is the exit code of installedArgs for an unknown title.
+	installedGone int
 }
 
 var platforms = []Platform{
@@ -150,6 +152,7 @@ var platforms = []Platform{
 		updateCategories: []string{"gp"},
 		addonCategories:  []string{"ac"},
 		installedArgs:    []string{"--frontend", "sdl", "-F", "-r", TitleArg},
+		installedGone:    4,
 	},
 	{
 		ID:         PS4,
@@ -286,4 +289,9 @@ func (p Platform) InstalledCommand(titleID string) ([]string, error) {
 		}
 	}
 	return args, nil
+}
+
+// InstallGone says whether an exit code means the emulator no longer has the game.
+func (p Platform) InstallGone(code int) bool {
+	return p.RemembersInstall() && code == p.installedGone
 }

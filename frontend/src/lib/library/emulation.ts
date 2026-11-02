@@ -1,7 +1,7 @@
 import { errorCode } from '../i18n/errors';
 
 export interface EmulatedGame {
-  emulation?: { platform: string; catalogGameId?: string } | null;
+  emulation?: { platform: string; catalogGameId?: string; titleId?: string } | null;
   owned?: boolean;
   installType?: string;
 }
@@ -55,6 +55,10 @@ export function pageGame<T extends CatalogPageGame>(
 
 export function emulationPlatform(game: EmulatedGame | null | undefined): string {
   return game?.emulation?.platform ?? '';
+}
+
+export function copiesOnFirstLaunch(game: EmulatedGame | null | undefined): boolean {
+  return game?.emulation?.platform === 'vita' && !game.emulation.titleId;
 }
 
 export function emulatorMissing(row: { status: string }): boolean {

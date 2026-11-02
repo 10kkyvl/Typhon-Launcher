@@ -277,6 +277,7 @@ func TestParseSFOLimits(t *testing.T) {
 	}{
 		{"entries at the limit", entries(maxSFOEntries), true},
 		{"entries over the limit", entries(maxSFOEntries + 1), false},
+		{"a real long key", map[string]string{"SAVE_DATA_TRANSFER_TITLE_ID_LIST_1": "x"}, true},
 		{"a key at the limit", map[string]string{strings.Repeat("K", maxSFOKey): "x"}, true},
 		{"a key over the limit", map[string]string{strings.Repeat("K", maxSFOKey+1): "x"}, false},
 	}
@@ -441,6 +442,39 @@ func TestIsUpdateKeepsTheCaseOfEachConsole(t *testing.T) {
 	}
 }
 
+func TestStorageFolders(t *testing.T) {
+	vita := mustPlatform(t, Vita)
+	cases := []struct {
+		path   string
+		stored string
+		data   bool
+	}{
+		{`E:\Vita3K\ux0\app\PCSE00001\eboot.bin`, "PCSE00001", false},
+		{`E:\Vita3K\Ux0\App\PCSE00001\eboot.bin`, "PCSE00001", false},
+		{"/home/a/ux0/app/PCSE00001/game.vpk", "PCSE00001", false},
+		{`E:\Vita3K\ux0\app\game.vpk`, "", false},
+		{`E:\ux0x\app\PCSE00001\eboot.bin`, "", false},
+		{`E:\xux0\app\PCSE00001\eboot.bin`, "", false},
+		{`E:\ux0\apps\PCSE00001\eboot.bin`, "", false},
+		{`E:\Vita3K\ux0\patch\PCSE00001\eboot.bin`, "", true},
+		{`E:\Vita3K\UX0\ADDCONT\PCSE00001\a\eboot.bin`, "", true},
+		{`E:\Games\eboot.bin`, "", false},
+		{"", "", false},
+	}
+	for _, c := range cases {
+		if got := vita.StoredTitle(c.path); got != c.stored {
+			t.Errorf("%q: StoredTitle = %q, want %q", c.path, got, c.stored)
+		}
+		if got := vita.InEmulatorData(c.path); got != c.data {
+			t.Errorf("%q: InEmulatorData = %v, want %v", c.path, got, c.data)
+		}
+	}
+	ps4 := mustPlatform(t, PS4)
+	if ps4.StoredTitle(`E:\ux0\app\CUSA00001\eboot.bin`) != "" || ps4.InEmulatorData(`E:\ux0\patch\CUSA00001\eboot.bin`) {
+		t.Fatal("a console whose emulator installs nothing has no such storage")
+	}
+}
+
 func TestIsAddon(t *testing.T) {
 	cases := []struct {
 		platform, category string
@@ -491,8 +525,11 @@ func TestInstalledCommand(t *testing.T) {
 	if got, err := vita.InstalledCommand("VITASHELL"); err != nil || got[4] != "VITASHELL" {
 		t.Fatalf("a homebrew id: %q, %v", got, err)
 	}
+	if !vita.InstallGone(4) || vita.InstallGone(0) || vita.InstallGone(1) || vita.InstallGone(-1) {
+		t.Fatal("only the emulator's answer about an unknown title counts")
+	}
 	ps4 := mustPlatform(t, PS4)
-	if ps4.RemembersInstall() {
+	if ps4.RemembersInstall() || ps4.InstallGone(0) || ps4.InstallGone(4) {
 		t.Fatal("the PS4 emulator is given the game every time")
 	}
 	if _, err := ps4.InstalledCommand("CUSA00001"); err == nil {

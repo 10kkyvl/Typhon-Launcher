@@ -176,7 +176,8 @@ func TestVitaForgetsATitleTheEmulatorLost(t *testing.T) {
 		quick bool
 	}{
 		{"code 4 at once", vitaRun{lived: time.Second, err: codeError(4)}, "", true},
-		{"another code at once", vitaRun{lived: time.Second, err: codeError(1)}, "", true},
+		{"a crash at once keeps the install", vitaRun{lived: time.Second, err: codeError(-1)}, "PCSE00001", true},
+		{"a failed start keeps the install", vitaRun{lived: time.Second, err: codeError(1)}, "PCSE00001", true},
 		{"a clean exit at once", vitaRun{lived: time.Second}, "PCSE00001", true},
 		{"code 4 after a while", vitaRun{lived: time.Minute, err: codeError(4)}, "PCSE00001", false},
 		{"code 4 after the player closed it", vitaRun{lived: time.Second, err: codeError(4), kill: true}, "PCSE00001", false},
@@ -327,6 +328,114 @@ func TestVitaLaunchRefusesWhatItCannotName(t *testing.T) {
 				t.Fatal("the emulator was started")
 			}
 		})
+	}
+}
+
+func vitaFolder(t *testing.T, dir, title string) string {
+	t.Helper()
+	writeFile(t, filepath.Join(dir, "sce_sys", "param.sfo"), sfoText(title, "gd"))
+	return writeFile(t, filepath.Join(dir, "eboot.bin"), "x")
+}
+
+// Installing removes ux0/app/<id> before it copies. Given that very folder as
+// content, the emulator would delete the only copy of the game.
+func TestGameInEmulatorStorageIsNeverGivenAsContent(t *testing.T) {
+	byID := []string{"--frontend", "sdl", "-F", "-r", "PCSE00001"}
+	cases := []struct {
+		name   string
+		folder []string
+		byID   bool
+	}{
+		{"the storage", []string{"ux0", "app", "PCSE00001"}, true},
+		{"another case", []string{"Ux0", "App", "PCSE00001"}, true},
+		{"upper case", []string{"UX0", "APP", "PCSE00001"}, true},
+		{"folder in another case than the id", []string{"ux0", "app", "pcse00001"}, true},
+		{"deeper in the game", []string{"ux0", "app", "PCSE00001", "extra"}, true},
+		{"a lookalike root", []string{"ux0x", "app", "PCSE00001"}, false},
+		{"a lookalike kind", []string{"ux0", "apps", "PCSE00001"}, false},
+		{"folders not side by side", []string{"ux0", "x", "app", "PCSE00001"}, false},
+		{"a folder of another title", []string{"ux0", "app", "PCSE00002"}, false},
+		{"not in a storage", []string{"Games", "PCSE00001"}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s := newLibrary(t)
+			dir := filepath.Join(append([]string{t.TempDir()}, c.folder...)...)
+			image := vitaFolder(t, dir, "PCSE00001")
+			game, err := s.AddEmulatedGame(t.Context(), image, emulators.Vita, "Game")
+			if err != nil {
+				t.Fatal(err)
+			}
+			req, _ := playVita(t, s, game.ID, vitaRun{lived: time.Minute})
+			if c.byID {
+				if !slices.Equal(req.args, byID) {
+					t.Fatalf("args = %q, want %q", req.args, byID)
+				}
+				if slices.Contains(req.args, dir) {
+					t.Fatal("the folder was given as content")
+				}
+				return
+			}
+			if want := []string{"--frontend", "sdl", "-F", dir}; !slices.Equal(req.args, want) {
+				t.Fatalf("args = %q, want %q", req.args, want)
+			}
+		})
+	}
+}
+
+func TestGameInEmulatorStorageStaysAfterTheEmulatorDeniesIt(t *testing.T) {
+	s := newLibrary(t)
+	image := vitaFolder(t, filepath.Join(t.TempDir(), "ux0", "app", "PCSE00001"), "PCSE00001")
+	game, err := s.AddEmulatedGame(t.Context(), image, emulators.Vita, "Game")
+	if err != nil {
+		t.Fatal(err)
+	}
+	playVita(t, s, game.ID, vitaRun{lived: time.Second, err: codeError(4)})
+	req, _ := playVita(t, s, game.ID, vitaRun{lived: time.Minute})
+	if want := []string{"--frontend", "sdl", "-F", "-r", "PCSE00001"}; !slices.Equal(req.args, want) {
+		t.Fatalf("args = %q: a retry must not turn into an install", req.args)
+	}
+}
+
+func TestOwnedCopyOfAStorageFolderIsContent(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "Consoles", "vita", "Game", "ux0", "app", "PCSE00001")
+	image := vitaFolder(t, dir, "PCSE00001")
+	target, ok := emulators.Lookup(emulators.Vita)
+	if !ok {
+		t.Fatal("no vita")
+	}
+	command, run, err := emulatorCommand(t.Context(), target, Game{Owned: true, Emulation: &Emulation{Platform: emulators.Vita}}, image)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.installed || !slices.Equal(command, []string{"--frontend", "sdl", "-F", dir}) {
+		t.Fatalf("command = %q, run = %+v", command, run)
+	}
+}
+
+func TestAddingRefusesTheEmulatorsOwnData(t *testing.T) {
+	cases := []struct {
+		name string
+		path []string
+		want error
+	}{
+		{"patch", []string{"ux0", "patch", "PCSE00001"}, emulators.ErrImageInStorage},
+		{"patch in another case", []string{"Ux0", "Patch", "PCSE00001"}, emulators.ErrImageInStorage},
+		{"addcont", []string{"ux0", "addcont", "PCSE00001", "dlc"}, emulators.ErrImageInStorage},
+		{"a lookalike", []string{"ux0x", "patch", "PCSE00001"}, nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			image := vitaFolder(t, filepath.Join(append([]string{t.TempDir()}, c.path...)...), "PCSE00001")
+			_, err := newLibrary(t).AddEmulatedGame(t.Context(), image, emulators.Vita, "Game")
+			if !errors.Is(err, c.want) {
+				t.Fatalf("AddEmulatedGame = %v, want %v", err, c.want)
+			}
+		})
+	}
+	ps4 := vitaFolder(t, filepath.Join(t.TempDir(), "ux0", "patch", "CUSA00001"), "CUSA00001")
+	if _, err := newLibrary(t).AddEmulatedGame(t.Context(), ps4, emulators.PS4, "Game"); err != nil {
+		t.Fatalf("a console without such storage: %v", err)
 	}
 }
 
