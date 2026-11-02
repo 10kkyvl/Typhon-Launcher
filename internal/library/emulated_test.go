@@ -781,10 +781,13 @@ func TestEmulatedCrashIsAnalyzedAgainstTheEmulator(t *testing.T) {
 		return false, nil
 	}
 	s.crash = hooks
+	clock := newRegClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	s.now = clock.now
 
 	if err := s.PlayGame(game.ID); err != nil {
 		t.Fatal(err)
 	}
+	clock.set(clock.now().Add(emulatorQuickExitSeconds * time.Second))
 	close(proc.exit)
 	s.sessionWG.Wait()
 	if got, want := <-seen, "emulator.exe|"+filepath.Dir(program); got != want {

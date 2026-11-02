@@ -64,4 +64,6 @@ export const emulators: Record<EmulatorsKey, Message> = {
   'emul.factImage': 'Image',
   'emul.gameNote': 'This game runs through an emulator: {console}. The image stays in its own folder, the launcher does not touch it.',
   'emul.removeNote': 'Only the library entry is removed. The game image and its folder stay on disk.',
+  'emul.quickExit': 'The emulator closed right away. Check the BIOS and the settings in {emulator}.',
+  'emul.quickExitAction': 'Emulator settings',
 };

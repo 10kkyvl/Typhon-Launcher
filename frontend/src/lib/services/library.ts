@@ -126,6 +126,8 @@ export interface SessionEvent {
   exitKnown: boolean;
   crashed: boolean;
   reasonCode: string;
+  emulatorQuickExit: boolean;
+  emulator: string;
 }
 
 export type CrashHint = 'vcredist' | 'directx' | 'compat' | 'antivirus' | 'runtimes' | 'unknown';

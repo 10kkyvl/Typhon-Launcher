@@ -61,6 +61,8 @@ export const emulators = {
   'emul.factImage': 'Образ',
   'emul.gameNote': 'Игра запускается через эмулятор: {console}. Образ лежит в своей папке, лаунчер её не трогает.',
   'emul.removeNote': 'Из библиотеки удалится только карточка. Образ игры и его папка останутся на диске.',
+  'emul.quickExit': 'Эмулятор сразу закрылся. Проверьте BIOS и настройки в {emulator}.',
+  'emul.quickExitAction': 'Настройки эмуляторов',
 } as const;
 
 export type EmulatorsKey = keyof typeof emulators;

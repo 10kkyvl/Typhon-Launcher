@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { compatBadge } from './compat';
+import type { CompatStatus } from '../services/compat';
+import { brokenStatus, compatBadge } from './compat';
+
+describe('brokenStatus', () => {
+  const status = (state: CompatStatus['state']) => ({ gameId: 'a', state }) as CompatStatus;
+  const emulated = { emulation: { platform: 'ps2' } };
+
+  it.each([
+    ['a broken native game', {}, status('broken'), true],
+    ['a working native game', {}, status('works'), false],
+    ['a native game without a record', {}, undefined, false],
+    ['an emulated game with an old broken record', emulated, status('broken'), false],
+  ])('%s', (_, game, record, shown) => {
+    expect(brokenStatus(game, record)).toBe(shown ? record : null);
+  });
+});
 
 describe('compatBadge', () => {
   it('молчит, когда цифры нет', () => {

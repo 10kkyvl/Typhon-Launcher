@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"typhon/internal/crashlog"
+	"typhon/internal/emulators"
 	"typhon/internal/procs"
 	"typhon/internal/redact"
 	"typhon/internal/uierr"
@@ -25,9 +26,16 @@ type SessionEvent struct {
 	ExitKnown       bool   `json:"exitKnown"`
 	Crashed         bool   `json:"crashed"`
 	ReasonCode      string `json:"reasonCode"`
+	// EmulatorQuickExit says an emulator closed by itself right after launch,
+	// which usually means a missing BIOS. Emulator names it for the message.
+	EmulatorQuickExit bool   `json:"emulatorQuickExit"`
+	Emulator          string `json:"emulator"`
 }
 
-const crashSessionSeconds = 20
+const (
+	crashSessionSeconds      = 20
+	emulatorQuickExitSeconds = 5
+)
 
 var emitStopped = func(ev SessionEvent) { emit("game:stopped", ev) }
 
@@ -191,7 +199,7 @@ func exitFields(ev SessionEvent, exit *exitInfo, stoppedByUser bool, seconds int
 	}
 	ev.ExitCode = exit.code
 	ev.ExitKnown = true
-	if exit.code != 0 && !stoppedByUser && seconds < crashSessionSeconds {
+	if exit.code != 0 && !stoppedByUser && !ev.EmulatorQuickExit && seconds < crashSessionSeconds {
 		ev.Crashed = true
 		ev.ReasonCode = crashReasonCode(exit.code)
 	}
@@ -563,7 +571,14 @@ func (s *Service) finishSession(ctx context.Context, id string, startedAt time.T
 	}
 	endedAt := s.now()
 	seconds := int64(endedAt.Sub(startedAt).Seconds())
-	if s.onOutcome != nil {
+	game := s.findLocked(id)
+	emulated := s.emulatedLocked(id)
+	stopped := SessionEvent{GameID: id, SessionSeconds: seconds}
+	if emulated && !stoppedByUser && seconds < emulatorQuickExitSeconds {
+		stopped.EmulatorQuickExit = true
+		stopped.Emulator = emulatorName(game.Emulation.Platform)
+	}
+	if s.onOutcome != nil && !emulated {
 		note := s.onOutcome
 		played := endedAt.Sub(startedAt)
 		s.wg.Add(1)
@@ -588,7 +603,6 @@ func (s *Service) finishSession(ctx context.Context, id string, startedAt time.T
 			record(id, startedAt, endedAt)
 		}()
 	}
-	game := s.findLocked(id)
 	usageGameID := ""
 	if game != nil {
 		usageGameID = game.CanonicalGameID
@@ -609,7 +623,7 @@ func (s *Service) finishSession(ctx context.Context, id string, startedAt time.T
 			}
 		}
 	}
-	if hooks := s.crash; !stoppedByUser && ctx != nil && hooks.await != nil {
+	if hooks := s.crash; !stoppedByUser && !stopped.EmulatorQuickExit && ctx != nil && hooks.await != nil {
 		in := crashInput{gameID: id, exePath: exePath, pid: gamePID, exit: exit, seconds: seconds, startedAt: startedAt, endedAt: endedAt}
 		if game != nil {
 			if game.Emulation == nil {
@@ -628,7 +642,7 @@ func (s *Service) finishSession(ctx context.Context, id string, startedAt time.T
 		}()
 	}
 	if game == nil {
-		emitStopped(exitFields(SessionEvent{GameID: id, SessionSeconds: seconds}, exit, stoppedByUser, seconds))
+		emitStopped(exitFields(stopped, exit, stoppedByUser, seconds))
 		return
 	}
 	previousLastPlayed := game.LastPlayed
@@ -645,13 +659,29 @@ func (s *Service) finishSession(ctx context.Context, id string, startedAt time.T
 		// удалена, поэтому остановка уходит наружу и без записи на диск:
 		// иначе UI и трей остаются в «Играет».
 		slog.Error("persist session", "id", id, "error", err)
-		emitStopped(exitFields(SessionEvent{GameID: id, SessionSeconds: seconds, PlaytimeSeconds: game.PlaytimeSeconds}, exit, stoppedByUser, seconds))
+		stopped.PlaytimeSeconds = game.PlaytimeSeconds
+		emitStopped(exitFields(stopped, exit, stoppedByUser, seconds))
 		s.emitUpdated()
 		return
 	}
 	slog.Info("game stopped", "id", id, "title", game.Title, "sessionSeconds", seconds)
-	emitStopped(exitFields(SessionEvent{GameID: id, SessionSeconds: seconds, PlaytimeSeconds: game.PlaytimeSeconds}, exit, stoppedByUser, seconds))
+	stopped.PlaytimeSeconds = game.PlaytimeSeconds
+	emitStopped(exitFields(stopped, exit, stoppedByUser, seconds))
 	s.emitUpdated()
+}
+
+// emulatedLocked keeps emulated games out of the compatibility journal: its
+// verdict would rate the emulator and its settings, not the game.
+func (s *Service) emulatedLocked(id string) bool {
+	game := s.findLocked(id)
+	return game != nil && game.Emulation != nil
+}
+
+func emulatorName(platformID string) string {
+	if target, ok := emulators.Lookup(platformID); ok {
+		return target.Emulator
+	}
+	return platformID
 }
 
 func (s *Service) findLocked(id string) *Game {
@@ -666,7 +696,7 @@ func (s *Service) findLocked(id string) *Game {
 // noteLaunchFailureLocked зовётся под мьютексом сервиса: PlayGame держит его
 // на всё время запуска, а журнал совместимости пишется в своей горутине.
 func (s *Service) noteLaunchFailureLocked(gameID, code, reason string) {
-	if s.onLaunchFail == nil {
+	if s.onLaunchFail == nil || s.emulatedLocked(gameID) {
 		return
 	}
 	note := s.onLaunchFail

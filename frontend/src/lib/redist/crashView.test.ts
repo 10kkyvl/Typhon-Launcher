@@ -25,6 +25,8 @@ const stopped: SessionEvent = {
   exitKnown: true,
   crashed: true,
   reasonCode: 'dll_not_found',
+  emulatorQuickExit: false,
+  emulator: '',
 };
 
 const view = (over: Partial<CrashEvent> = {}) => crashView(recordFromCrash(crash(over), 1, 0));

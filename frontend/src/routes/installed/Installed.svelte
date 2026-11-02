@@ -57,6 +57,7 @@
   import { toast } from '../../lib/stores/toasts';
   import { installedView } from '../../lib/stores/ui';
   import { updatesByGame } from '../../lib/stores/updates';
+  import { brokenStatus } from '../../lib/game/compat';
   import { compatStatuses, type CompatStatus } from '../../lib/services/compat';
   import { bytesSize, relativeDate } from '../../lib/utils/format';
   import { errorCode, hasMessage, msg } from '../../lib/i18n';
@@ -91,8 +92,8 @@
   });
 
   function brokenNote(game: LibraryGame): string {
-    const status = compat.get(game.id);
-    if (!status || status.state !== 'broken') return '';
+    const status = brokenStatus(game, compat.get(game.id));
+    if (!status) return '';
     const reason = libraryErrorText(status.lastError, '');
     return reason
       ? msg('games.compatBrokenWithReason', { reason })
