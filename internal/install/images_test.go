@@ -3,6 +3,8 @@ package install
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1012,4 +1014,40 @@ func TestPlainInstallIsNotAffected(t *testing.T) {
 			t.Fatalf("the install sat on the image card: %+v", game)
 		}
 	})
+}
+
+func TestExpectedImageRefusalsAreNotLoggedAsFaults(t *testing.T) {
+	cases := []struct {
+		name  string
+		cause error
+		want  slog.Level
+	}{
+		{"ambiguous", fmt.Errorf("%w: две игры", errImageAmbiguous), slog.LevelWarn},
+		{"not found", errImageNotFound, slog.LevelWarn},
+		{"unreadable", fmt.Errorf("%w: %w", errImageUnreadable, library.ErrImageList), slog.LevelWarn},
+		{"already added", fmt.Errorf("%w: Game", library.ErrAlreadyAdded), slog.LevelWarn},
+		{"damaged copy", errCopyVerify, slog.LevelError},
+		{"disk failure", errors.New("disk full"), slog.LevelError},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := newRig(t)
+			r.add(Installation{ID: "job", DownloadID: "d1", Name: "Game", Type: TypeImage, Status: StatusVerifying})
+			logged := captureSlog(t)
+
+			r.s.fail("job", c.cause)
+
+			logged.mu.Lock()
+			defer logged.mu.Unlock()
+			for _, record := range logged.records {
+				if record.Message == "install failed" {
+					if record.Level != c.want {
+						t.Fatalf("level = %v, want %v", record.Level, c.want)
+					}
+					return
+				}
+			}
+			t.Fatal("the failure was not logged")
+		})
+	}
 }

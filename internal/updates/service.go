@@ -952,7 +952,8 @@ func (s *Service) HandleInstallFinished(item install.Installation) {
 		close(waiter)
 		return
 	}
-	if item.Status != install.StatusCompleted || item.GameID == "" {
+	// An image is outside updates, so it has nothing to build a manifest for.
+	if item.Status != install.StatusCompleted || item.GameID == "" || item.Type == install.TypeImage {
 		return
 	}
 	if err := s.BuildManifest(item.GameID); err != nil {

@@ -124,6 +124,74 @@ func TestConsoleReleaseMatching(t *testing.T) {
 			answers: map[string]catalog.ReleaseMatch{"God of War|0": {Reason: catalog.ReasonNone}},
 			status:  catalog.StatusUnmatched, reason: catalog.ReasonNone, asks: 1,
 		},
+		{
+			name: "pc game with one dropped console record",
+			answers: map[string]catalog.ReleaseMatch{
+				"God of War|0": {Game: consoleGame("pc-gow", "God of War", pcName), ConsoleCandidates: []catalog.ReleaseCandidate{
+					{ID: "ps2-gow", Title: "God of War", ReleaseYear: year, Platforms: []string{"PlayStation 2"}},
+				}},
+				"God of War|2005": {Game: consoleGame("ps2-gow", "God of War", "PlayStation 2")},
+			},
+			status: catalog.StatusMatched, gameID: "ps2-gow", asks: 2,
+		},
+		{
+			name: "dropped record on another console",
+			answers: map[string]catalog.ReleaseMatch{"God of War|0": {Game: consoleGame("pc-gow", "God of War", pcName), ConsoleCandidates: []catalog.ReleaseCandidate{
+				{ID: "ps1-gow", Title: "God of War", ReleaseYear: 1998, Platforms: []string{"PlayStation"}},
+			}}},
+			status: catalog.StatusUnmatched, reason: catalog.ReasonPlatform, asks: 1,
+		},
+		{
+			name: "two dropped records stay for review",
+			answers: map[string]catalog.ReleaseMatch{"God of War|0": {Game: consoleGame("pc-gow", "God of War", pcName), ConsoleCandidates: []catalog.ReleaseCandidate{
+				{ID: "ps2-a", Title: "God of War", ReleaseYear: 2005, Platforms: []string{"PlayStation 2"}},
+				{ID: "ps2-b", Title: "God of War", ReleaseYear: 2006, Platforms: []string{"PlayStation 2"}},
+			}}},
+			status: catalog.StatusReview, reason: catalog.ReasonAmbiguous, candidates: []string{"ps2-a", "ps2-b"}, asks: 1,
+		},
+		{
+			name: "ambiguous pc pool with a dropped console record",
+			answers: map[string]catalog.ReleaseMatch{
+				"God of War|0": {Reason: catalog.ReasonAmbiguous, Candidates: []catalog.ReleaseCandidate{
+					{ID: "pc-a", Title: "God of War", Platforms: []string{pcName}},
+					{ID: "pc-b", Title: "God of War", Platforms: []string{pcName}},
+				}, ConsoleCandidates: []catalog.ReleaseCandidate{
+					{ID: "ps2-gow", Title: "God of War", ReleaseYear: year, Platforms: []string{"PlayStation 2"}},
+				}},
+				"God of War|2005": {Game: consoleGame("ps2-gow", "God of War", "PlayStation 2")},
+			},
+			status: catalog.StatusMatched, gameID: "ps2-gow", asks: 2,
+		},
+		{
+			name: "one record in both lists counts once",
+			answers: map[string]catalog.ReleaseMatch{
+				"God of War|0": {Reason: catalog.ReasonAmbiguous, Candidates: []catalog.ReleaseCandidate{
+					{ID: "ps2-gow", Title: "God of War", ReleaseYear: year, Platforms: []string{"PlayStation 2"}},
+					{ID: "pc-gow", Title: "God of War", Platforms: []string{pcName}},
+				}, ConsoleCandidates: []catalog.ReleaseCandidate{
+					{ID: "ps2-gow", Title: "God of War", ReleaseYear: year, Platforms: []string{"PlayStation 2"}},
+				}},
+				"God of War|2005": {Game: consoleGame("ps2-gow", "God of War", "PlayStation 2")},
+			},
+			status: catalog.StatusMatched, gameID: "ps2-gow", asks: 2,
+		},
+		{
+			name: "the server still picks the pc game: dropped record stays for review",
+			answers: map[string]catalog.ReleaseMatch{
+				"God of War|0": {Game: consoleGame("pc-gow", "God of War", pcName), ConsoleCandidates: []catalog.ReleaseCandidate{
+					{ID: "ps2-gow", Title: "God of War", ReleaseYear: year, Platforms: []string{"PlayStation 2"}},
+				}},
+				"God of War|2005": {Game: consoleGame("pc-gow", "God of War", pcName)},
+			},
+			status: catalog.StatusReview, reason: catalog.ReasonAmbiguous, candidates: []string{"ps2-gow"}, asks: 2,
+		},
+		{
+			name: "a game on the console keeps its place",
+			answers: map[string]catalog.ReleaseMatch{"God of War|0": {Game: consoleGame("ps2-gow", "God of War", "PlayStation 2"), ConsoleCandidates: []catalog.ReleaseCandidate{
+				{ID: "ps2-other", Title: "God of War", ReleaseYear: 2006, Platforms: []string{"PlayStation 2"}},
+			}}},
+			status: catalog.StatusMatched, gameID: "ps2-gow", asks: 1,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -23,6 +25,10 @@ type ReleaseMatch struct {
 	Game       *Game              `json:"game,omitempty"`
 	Reason     string             `json:"reason,omitempty"`
 	Candidates []ReleaseCandidate `json:"candidates,omitempty"`
+
+	// ConsoleCandidates are console records the server's Windows-first rules
+	// left out of the answer. A server without the field simply sends none.
+	ConsoleCandidates []ReleaseCandidate `json:"consoleCandidates,omitempty"`
 }
 
 type ReleaseCandidate struct {
@@ -32,6 +38,10 @@ type ReleaseCandidate struct {
 	Platforms   []string `json:"platforms,omitempty"`
 	GameType    string   `json:"gameType,omitempty"`
 	ParentID    string   `json:"parentId,omitempty"`
+
+	// Only entries of ConsoleCandidates carry these two.
+	ExternalIDs ExternalIDs `json:"externalIds"`
+	CoverURL    string      `json:"coverUrl,omitempty"`
 }
 type ReleaseMatcher interface {
 	MatchReleases(context.Context, []ReleaseQuery) ([]ReleaseMatch, error)
@@ -80,6 +90,11 @@ const (
 	maxCandidatePlat    = 32
 	minCandidateYear    = 1950
 	maxCandidateYear    = 2100
+)
+
+const (
+	maxConsoleCandidates = 8
+	maxCandidateCover    = 2048
 )
 
 // An answer from a server that does not know the field, or from a newer one
@@ -292,7 +307,7 @@ func confirmConsoleMatches(ctx context.Context, remote ReleaseMatcher, queries [
 		if queries[i].Accept == nil {
 			continue
 		}
-		only, ok := narrowConsoleMatch(&resolved[i], queries[i].Accept)
+		only, ok := narrowConsoleMatch(&resolved[i], queries[i])
 		if !ok || only.Title == "" || len([]rune(only.Title)) > maxCandidateTitle {
 			continue
 		}
@@ -330,29 +345,98 @@ func confirmConsoleMatches(ctx context.Context, remote ReleaseMatcher, queries [
 }
 
 // narrowConsoleMatch reports the candidate when exactly one fits the console.
-// An empty platform list proves nothing, so it does not fit.
-func narrowConsoleMatch(m *ReleaseMatch, accept func([]string) bool) (ReleaseCandidate, bool) {
+// An empty platform list proves nothing, so it does not fit. The server's
+// candidates and the console records it dropped are weighed together, and the
+// release year only settles between several that fit.
+func narrowConsoleMatch(m *ReleaseMatch, q ReleaseQuery) (ReleaseCandidate, bool) {
 	if m.Game != nil {
-		if !accept(m.Game.Platforms) {
-			*m = ReleaseMatch{Reason: ReasonPlatform}
+		if q.Accept(m.Game.Platforms) {
+			return ReleaseCandidate{}, false
 		}
+	} else if m.Reason != ReasonAmbiguous || len(m.Candidates) == 0 {
 		return ReleaseCandidate{}, false
 	}
-	if m.Reason != ReasonAmbiguous || len(m.Candidates) == 0 {
-		return ReleaseCandidate{}, false
-	}
-	kept := make([]ReleaseCandidate, 0, len(m.Candidates))
-	for _, c := range m.Candidates {
-		if accept(c.Platforms) {
-			kept = append(kept, c)
+	kept := consoleCandidates(*m, q.Accept)
+	if len(kept) > 1 && q.Year > 0 {
+		dated := slices.DeleteFunc(slices.Clone(kept), func(c ReleaseCandidate) bool { return c.ReleaseYear != q.Year })
+		if len(dated) > 0 {
+			kept = dated
 		}
 	}
-	m.Candidates = kept
-	switch len(kept) {
-	case 0:
+	if len(kept) == 0 {
 		*m = ReleaseMatch{Reason: ReasonPlatform}
-	case 1:
-		return kept[0], true
+		return ReleaseCandidate{}, false
 	}
-	return ReleaseCandidate{}, false
+	*m = ReleaseMatch{Reason: ReasonAmbiguous, Candidates: kept}
+	if len(kept) > 1 {
+		return ReleaseCandidate{}, false
+	}
+	if game := consoleCandidateGame(kept[0]); game != nil {
+		*m = ReleaseMatch{Game: game}
+		return ReleaseCandidate{}, false
+	}
+	return kept[0], true
+}
+
+// consoleCandidateGame builds the game from a candidate that names its
+// providers. Asking by title again could only bring back a Windows namesake.
+// The fields come from the network, so they pass the same limits as a shown
+// candidate; without a provider id there is nothing to build from.
+func consoleCandidateGame(c ReleaseCandidate) *Game {
+	ids := ExternalIDs{IGDB: cleanText(c.ExternalIDs.IGDB, maxCandidateID), Steam: cleanText(c.ExternalIDs.Steam, maxCandidateID), GOG: cleanText(c.ExternalIDs.GOG, maxCandidateID)}
+	list := serverCandidates([]ReleaseCandidate{c})
+	if ids.empty() || len(list) == 0 {
+		return nil
+	}
+	game := Game{
+		ID:          list[0].GameID,
+		Title:       list[0].Title,
+		SortTitle:   sortTitle(list[0].Title),
+		ReleaseYear: list[0].Year,
+		Platforms:   list[0].Platforms,
+		GameType:    cleanText(c.GameType, maxCandidatePlat),
+		ParentID:    cleanText(c.ParentID, maxCandidateID),
+		ExternalIDs: ids,
+		CoverURL:    consoleCoverURL(c.CoverURL),
+	}
+	links := map[string][]string{}
+	if ids.IGDB != "" {
+		links["igdb"] = []string{ids.IGDB}
+	}
+	if ids.Steam != "" {
+		links["steam"] = []string{ids.Steam}
+	}
+	game.ProviderLinks = links
+	return &game
+}
+
+// A bad cover costs the picture, not the match.
+func consoleCoverURL(raw string) string {
+	if len(raw) > maxCandidateCover {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.Host == "" {
+		return ""
+	}
+	return raw
+}
+
+func consoleCandidates(m ReleaseMatch, accept func([]string) bool) []ReleaseCandidate {
+	listed := m.ConsoleCandidates[:min(len(m.ConsoleCandidates), maxConsoleCandidates)]
+	kept := make([]ReleaseCandidate, 0, len(m.Candidates)+len(listed))
+	seen := map[string]int{}
+	for _, c := range slices.Concat(m.Candidates, listed) {
+		if !accept(c.Platforms) {
+			continue
+		}
+		// The later copy comes from the console list and has the provider ids.
+		if at, ok := seen[c.ID]; ok {
+			kept[at] = c
+			continue
+		}
+		seen[c.ID] = len(kept)
+		kept = append(kept, c)
+	}
+	return kept
 }

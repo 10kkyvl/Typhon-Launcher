@@ -3,6 +3,8 @@ package catalog
 import (
 	"context"
 	"errors"
+	"slices"
+	"strconv"
 	"testing"
 )
 
@@ -57,6 +59,188 @@ func TestConsoleSecondPassFailure(t *testing.T) {
 				t.Fatalf("match: %+v", out[0])
 			}
 		})
+	}
+}
+
+type consoleYearRemote struct {
+	first ReleaseMatch
+	calls int
+}
+
+func (f *consoleYearRemote) Browse(context.Context, GameQuery) (GamePage, error) {
+	return GamePage{}, nil
+}
+
+func (f *consoleYearRemote) MatchReleases(_ context.Context, qs []ReleaseQuery) ([]ReleaseMatch, error) {
+	f.calls++
+	if f.calls == 1 {
+		return []ReleaseMatch{f.first}, nil
+	}
+	out := make([]ReleaseMatch, len(qs))
+	for i, q := range qs {
+		id := "ps2-" + strconv.Itoa(q.Year)
+		out[i] = ReleaseMatch{Game: &Game{ID: id, Title: q.Titles[0], Platforms: []string{"PlayStation 2"}, ExternalIDs: ExternalIDs{IGDB: id}}}
+	}
+	return out, nil
+}
+
+func TestConsoleCandidateYearNarrowsSeveral(t *testing.T) {
+	accept := func(platforms []string) bool { return slices.Contains(platforms, "PlayStation 2") }
+	record := func(id string, year int) ReleaseCandidate {
+		return ReleaseCandidate{ID: id, Title: "Alpha", ReleaseYear: year, Platforms: []string{"PlayStation 2"}}
+	}
+	dropped := []ReleaseCandidate{record("ps2-2005", 2005), record("ps2-2010", 2010), record("other-2010", 2010), record("ps2-0", 0)}
+	cases := []struct {
+		name   string
+		year   int
+		status Status
+		game   string
+		review []string
+	}{
+		{"the year names one", 2005, StatusMatched, "ps2-2005", nil},
+		{"the year names two", 2010, StatusReview, "", []string{"ps2-2010", "other-2010"}},
+		{"the year names none", 1999, StatusReview, "", []string{"ps2-2005", "ps2-2010", "other-2010"}},
+		{"no year", 0, StatusReview, "", []string{"ps2-2005", "ps2-2010", "other-2010"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := mustServiceAt(t, t.TempDir())
+			s.SetRemoteCatalog(&consoleYearRemote{first: ReleaseMatch{
+				Game:              &Game{ID: "pc", Title: "Alpha", Platforms: []string{"PC"}, ExternalIDs: ExternalIDs{IGDB: "pc"}},
+				ConsoleCandidates: dropped,
+			}})
+			out, err := s.ResolveSourceQueries(context.Background(), []ReleaseQuery{{Titles: []string{"Alpha"}, Year: tc.year, Accept: accept}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if out[0].Status != tc.status {
+				t.Fatalf("status = %q, want %q: %+v", out[0].Status, tc.status, out[0])
+			}
+			if tc.status == StatusMatched {
+				game, err := s.GetGame(out[0].GameID)
+				if err != nil || game.ServerID != tc.game {
+					t.Fatalf("game %+v (%v), want server id %q", game, err, tc.game)
+				}
+				return
+			}
+			ids := []string{}
+			for _, c := range out[0].Candidates {
+				ids = append(ids, c.GameID)
+			}
+			if !slices.Equal(ids, tc.review) {
+				t.Fatalf("candidates = %q, want %q", ids, tc.review)
+			}
+		})
+	}
+}
+
+func TestConsoleCandidateWithProviderIDBecomesTheGame(t *testing.T) {
+	accept := func(platforms []string) bool { return slices.Contains(platforms, "PlayStation 2") }
+	year := 2005
+	full := ReleaseCandidate{
+		ID: "ps2", Title: "Alpha", ReleaseYear: year, Platforms: []string{"PlayStation 2"}, GameType: "Main Game", ParentID: "base",
+		ExternalIDs: ExternalIDs{IGDB: "2", Steam: "20"}, CoverURL: "https://cover.example/ps2.jpg",
+	}
+	badCover := full
+	badCover.CoverURL = "http://cover.example/ps2.jpg"
+	steamOnly := full
+	steamOnly.ExternalIDs = ExternalIDs{Steam: "20"}
+	namesakes := []struct {
+		name  string
+		pc    Game
+		cand  ReleaseCandidate
+		cover string
+		ids   ExternalIDs
+	}{
+		{"pc a year later", Game{GameType: "Main Game", ReleaseYear: new(2006)}, full, full.CoverURL, full.ExternalIDs},
+		{"pc a year earlier", Game{GameType: "Main Game", ReleaseYear: new(2004)}, full, full.CoverURL, full.ExternalIDs},
+		{"pc port", Game{GameType: "Port", ReleaseYear: new(2004)}, full, full.CoverURL, full.ExternalIDs},
+		{"unusable cover keeps the match", Game{GameType: "Main Game", ReleaseYear: new(2006)}, badCover, "", full.ExternalIDs},
+		{"steam id alone is enough", Game{GameType: "Main Game", ReleaseYear: new(2006)}, steamOnly, full.CoverURL, steamOnly.ExternalIDs},
+	}
+	for _, tc := range namesakes {
+		t.Run(tc.name, func(t *testing.T) {
+			pc := tc.pc
+			pc.ID, pc.Title, pc.Platforms, pc.ExternalIDs = "pc", "Alpha", []string{"PC"}, ExternalIDs{IGDB: "pc"}
+			s := mustServiceAt(t, t.TempDir())
+			remote := &consoleYearRemote{first: ReleaseMatch{Game: &pc, ConsoleCandidates: []ReleaseCandidate{tc.cand}}}
+			s.SetRemoteCatalog(remote)
+			out, err := s.ResolveSourceQueries(context.Background(), []ReleaseQuery{{Titles: []string{"Alpha"}, Year: year, Accept: accept}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if out[0].Status != StatusMatched || remote.calls != 1 {
+				t.Fatalf("match %+v after %d calls, want matched after one", out[0], remote.calls)
+			}
+			game, err := s.GetGame(out[0].GameID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if game.ServerID != "ps2" || game.ExternalIDs != tc.ids || game.CoverURL != tc.cover || game.GameType != "Main Game" || game.ReleaseYear == nil || *game.ReleaseYear != year || !accept(game.Platforms) {
+				t.Fatalf("game: %+v", game)
+			}
+		})
+	}
+}
+
+func TestConsoleCandidateWithoutUsableIdentityIsAskedAgain(t *testing.T) {
+	accept := func(platforms []string) bool { return slices.Contains(platforms, "PlayStation 2") }
+	cases := []struct {
+		name string
+		cand ReleaseCandidate
+	}{
+		{"no provider id", ReleaseCandidate{ID: "ps2-2005", Title: "Alpha", ReleaseYear: 2005, Platforms: []string{"PlayStation 2"}}},
+		{"blank provider id", ReleaseCandidate{ID: "ps2-2005", Title: "Alpha", ReleaseYear: 2005, Platforms: []string{"PlayStation 2"}, ExternalIDs: ExternalIDs{IGDB: " \t"}}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := mustServiceAt(t, t.TempDir())
+			remote := &consoleYearRemote{first: ReleaseMatch{
+				Game:              &Game{ID: "pc", Title: "Alpha", Platforms: []string{"PC"}, ExternalIDs: ExternalIDs{IGDB: "pc"}},
+				ConsoleCandidates: []ReleaseCandidate{tc.cand},
+			}}
+			s.SetRemoteCatalog(remote)
+			out, err := s.ResolveSourceQueries(context.Background(), []ReleaseQuery{{Titles: []string{"Alpha"}, Accept: accept}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if out[0].Status != StatusMatched || remote.calls != 2 {
+				t.Fatalf("match %+v after %d calls, want the second pass", out[0], remote.calls)
+			}
+		})
+	}
+}
+
+func TestConsoleCandidateCopyWithProviderIDWins(t *testing.T) {
+	accept := func(platforms []string) bool { return slices.Contains(platforms, "PlayStation 2") }
+	bare := ReleaseCandidate{ID: "ps2", Title: "Alpha", Platforms: []string{"PlayStation 2"}}
+	full := bare
+	full.ExternalIDs = ExternalIDs{IGDB: "2"}
+	remote := &consoleYearRemote{first: ReleaseMatch{Reason: ReasonAmbiguous, Candidates: []ReleaseCandidate{bare}, ConsoleCandidates: []ReleaseCandidate{full}}}
+	s := mustServiceAt(t, t.TempDir())
+	s.SetRemoteCatalog(remote)
+	out, err := s.ResolveSourceQueries(context.Background(), []ReleaseQuery{{Titles: []string{"Alpha"}, Accept: accept}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out[0].Status != StatusMatched || remote.calls != 1 {
+		t.Fatalf("match %+v after %d calls", out[0], remote.calls)
+	}
+}
+
+func TestConsoleCandidatesIgnoredForPCRelease(t *testing.T) {
+	s := mustServiceAt(t, t.TempDir())
+	remote := &consoleYearRemote{first: ReleaseMatch{
+		Game:              &Game{ID: "pc", Title: "Alpha", Platforms: []string{"PC"}, ExternalIDs: ExternalIDs{IGDB: "pc"}},
+		ConsoleCandidates: []ReleaseCandidate{{ID: "ps2", Title: "Alpha", Platforms: []string{"PlayStation 2"}}},
+	}}
+	s.SetRemoteCatalog(remote)
+	out, err := s.ResolveSourceQueries(context.Background(), []ReleaseQuery{{Titles: []string{"Alpha"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out[0].Status != StatusMatched || remote.calls != 1 {
+		t.Fatalf("match %+v after %d calls", out[0], remote.calls)
 	}
 }
 

@@ -57,7 +57,8 @@
   import { discardDownloadPrompt, removeDownloadPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
   import { playLabel } from '../../lib/game/profiles';
   import PlayProfileMenu from '../../lib/components/PlayProfileMenu.svelte';
-  import { consoleOrigin, relationKey, releaseOrigin, sharedPlatform, splitReleases } from '../../lib/game/releases';
+  import { consoleOrigin, firstWebUrl, relationKey, releaseOrigin, sharedPlatform, splitReleases } from '../../lib/game/releases';
+  import { catalogLoadKey, pageTitle, releaseLoadKey, sameGameIds } from '../../lib/game/pageLoad';
   import { familyIds, showSimilar } from '../../lib/game/similar';
   import { completionLine, statusBadgeKind, statusLabel } from '../../lib/game/status';
   import {
@@ -166,7 +167,7 @@
   const pageOwn = $derived(
     $libraryGames.find((g) => g.id === id) ?? $libraryGames.find((g) => g.canonicalGameId === id || catalogGame?.aliasIds?.includes(g.canonicalGameId ?? '')),
   );
-  const found = $derived.by(() => pageGame(pageOwn, $libraryGames, [id, ...(catalogGame?.aliasIds ?? [])]));
+  const found = $derived.by(() => pageGame(pageOwn, $libraryGames, [id, ...(catalogGame?.aliasIds ?? []), ...(relatedFailed ? [] : sameGameIds(related))]));
   const localGame = $derived(found.game);
   const viaCatalog = $derived(found.viaCatalog);
   const wasInstalled = $derived(Boolean(localGame?.installedAt && Date.parse(localGame.installedAt) > 0));
@@ -268,11 +269,12 @@
     }
   }
 
+  const catalogKey = $derived(catalogLoadKey(id, $libraryGames));
+
   $effect(() => {
-    const gameId = id;
-    const known = Boolean(localGame);
+    const gameId = catalogKey;
     untrack(() => {
-      if (known) {
+      if (!gameId) {
         catalogToken++;
         catalogLoading = false;
         catalogFailed = false;
@@ -284,8 +286,11 @@
   });
 
   const canonicalId = $derived(localGame && !viaCatalog ? localGame.canonicalGameId : catalogGame?.id || id);
-  const releaseTitle = $derived(localGame?.title ?? catalogGame?.title);
-  const releaseKey = $derived(`${id}|${canonicalId ?? ''}|${releaseTitle ?? ''}`);
+  const releaseTitle = $derived(pageTitle(localGame, viaCatalog, catalogGame?.title));
+  const sideloaded = $derived(emulated && !viaCatalog);
+  const releaseKey = $derived(
+    releaseLoadKey({ id, canonicalId, title: releaseTitle, sideloaded, external: external }),
+  );
 
   const anyOwnDownload = $derived($downloads.find((item) => ownsDownload(item)));
 
@@ -530,7 +535,7 @@
   const pcGroups = $derived(split.pc);
   const consoleGroups = $derived(split.console);
   const downloadPool = $derived(pcGroups.length > 0 ? pcGroups : consoleGroups);
-  const catalogCover = $derived(clean(metaView?.cover) || clean(catalogGame?.coverUrl));
+  const catalogCover = $derived(firstWebUrl(catalogGame?.coverUrl, metaView?.cover, localGame?.cover));
 
   const relatedShown = $derived(
     related
@@ -799,11 +804,10 @@
   $effect(() => {
     releaseKey;
     $sources; // A feed can finish importing while this game is already open.
-    const canonicalGameId = canonicalId;
-    const gameTitle = releaseTitle;
-    const isExternalGame = !managed;
-    const sideloaded = emulated && !viaCatalog;
     untrack(() => {
+      const canonicalGameId = canonicalId;
+      const gameTitle = releaseTitle;
+      const isExternalGame = external;
       if (sideloaded) {
         releaseToken++;
         relatedToken++;
@@ -874,7 +878,7 @@
     try {
       const request = await prepareReleaseDownload(group.release.id);
       downloadSource = request.uri;
-      downloadOrigin = { ...releaseOrigin(request), ...consoleOrigin(group.release, title, catalogCover) };
+      downloadOrigin = { ...releaseOrigin(request), ...consoleOrigin(group.release, title, catalogCover, canonicalId ?? '') };
       downloadModalOpen = true;
     } catch (err) {
       toast(sourceErrorText(err, msg('games.detailPrepareDownloadError')), 'danger');

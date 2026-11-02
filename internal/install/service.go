@@ -1900,7 +1900,11 @@ func (s *Service) fail(id string, cause error) {
 		}
 		snap := snapshotOf(item)
 		s.mu.Unlock()
-		slog.Error("install failed", "id", id, "name", snap.Name, "error", cause)
+		if expectedImageRefusal(cause) {
+			slog.Warn("install failed", "id", id, "name", snap.Name, "error", cause)
+		} else {
+			slog.Error("install failed", "id", id, "name", snap.Name, "error", cause)
+		}
 		emit(eventFailed, snap)
 		s.recordUsage(usagestats.Event{
 			Type:      usagestats.TypeInstallFailed,

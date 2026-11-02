@@ -23,6 +23,13 @@ func TestMatchReleasesReadsReasonAndCandidates(t *testing.T) {
 			Reason:     "ambiguous",
 			Candidates: []catalog.ReleaseCandidate{{ID: "a", Title: "A", ReleaseYear: 2001, Platforms: []string{"PC"}, GameType: "Main", ParentID: "p"}},
 		}},
+		{"console candidates next to a game", `{"matches":[{"game":{"id":"g1","title":"Game"},"consoleCandidates":[{"id":"c","title":"Game","releaseYear":2005,"platforms":["PlayStation 2"],"gameType":"Main Game","externalIds":{"igdb":"2","steam":"20"},"coverUrl":"https://cover.example/c.jpg"}]}]}`, catalog.ReleaseMatch{
+			Game: &catalog.Game{ID: "g1", Title: "Game"},
+			ConsoleCandidates: []catalog.ReleaseCandidate{{
+				ID: "c", Title: "Game", ReleaseYear: 2005, Platforms: []string{"PlayStation 2"}, GameType: "Main Game",
+				ExternalIDs: catalog.ExternalIDs{IGDB: "2", Steam: "20"}, CoverURL: "https://cover.example/c.jpg",
+			}},
+		}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

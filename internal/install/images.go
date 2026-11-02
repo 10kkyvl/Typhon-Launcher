@@ -351,6 +351,18 @@ func fillImageArchive(plan *Plan, archive string) error {
 	return nil
 }
 
+// expectedImageRefusal is what the content of a download or the state of the
+// library decides: the player sees it, and diagnostics must not count it as a
+// fault of the launcher.
+func expectedImageRefusal(err error) bool {
+	for _, refusal := range []error{errImageAmbiguous, errImageNotFound, errImageUnreadable, library.ErrAlreadyAdded} {
+		if errors.Is(err, refusal) {
+			return true
+		}
+	}
+	return false
+}
+
 // checkImageOptions validates what the interface sends before anything looks at
 // the download (invariant 32). Image fields without a console mean the caller
 // mixed up two flows, and dropping them would install a console game as a PC one.

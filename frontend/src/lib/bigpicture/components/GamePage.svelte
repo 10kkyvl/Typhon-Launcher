@@ -6,7 +6,7 @@
   import StoreLinks from '../../components/StoreLinks.svelte';
   import ProgressBar from '../../components/ProgressBar.svelte';
   import { galleryShots, languageLabel, pickHero, primaryAction } from '../../game/view';
-  import { consoleGroupStart, consoleOrigin, orderReleases, sharedPlatform, splitReleases } from '../../game/releases';
+  import { consoleGroupStart, consoleOrigin, firstWebUrl, orderReleases, sharedPlatform, splitReleases } from '../../game/releases';
   import { dlcView, hasRequirements, requirementColumns } from '../../game/extras';
   import { GAME_STATUSES, statusLabel, type GameStatus } from '../../game/status';
   import { t, type MessageKey, type Params } from '../../i18n';
@@ -413,7 +413,7 @@
     pendingReleaseId = releaseId;
     dialogError = '';
     const picked = releaseGroups.find((group) => group.release.id === releaseId);
-    consoleDownload = picked ? consoleOrigin(picked.release, title, cover) : {};
+    consoleDownload = picked ? consoleOrigin(picked.release, title, firstWebUrl(catalogGame?.coverUrl, metadata?.cover, localGame?.cover), canonicalId) : {};
     downloadStep = 'preparing';
     torrent = null;
     selectedFiles = [];

@@ -169,9 +169,29 @@ export function sharedPlatform(groups: readonly { release: Pick<Release, 'platfo
   return ids.size === 1 ? [...ids][0] : '';
 }
 
-export function consoleOrigin(release: Pick<Release, 'platform' | 'title'>, title: string, cover: string): DownloadOrigin {
+const webUrl = /^https?:\/\//i;
+
+export function firstWebUrl(...urls: (string | null | undefined)[]): string {
+  for (const url of urls) {
+    const value = (url ?? '').trim();
+    if (webUrl.test(value)) return value;
+  }
+  return '';
+}
+
+export function consoleOrigin(
+  release: Pick<Release, 'platform' | 'title'>,
+  title: string,
+  cover: string,
+  pageGameId = '',
+): DownloadOrigin {
   if (!release.platform) return {};
   const name = title.trim() || release.title.trim();
-  const art = cover.trim();
-  return { platform: release.platform, ...(name ? { title: name } : {}), ...(/^https?:\/\//i.test(art) ? { cover: art } : {}) };
+  const art = firstWebUrl(cover);
+  return {
+    platform: release.platform,
+    ...(name ? { title: name } : {}),
+    ...(art ? { cover: art } : {}),
+    ...(pageGameId ? { gameId: pageGameId } : {}),
+  };
 }
