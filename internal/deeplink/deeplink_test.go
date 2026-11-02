@@ -20,7 +20,7 @@ func TestParseAccepts(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := Parse(tc.raw)
-			if err != nil || got != tc.want {
+			if err != nil || got != (Link{Target: tc.want}) {
 				t.Fatalf("Parse(%q) = %+v, %v; want %+v", tc.raw, got, err, tc.want)
 			}
 		})
@@ -85,10 +85,158 @@ func TestParseRejects(t *testing.T) {
 			if !errors.Is(err, tc.want) {
 				t.Fatalf("Parse(%q) error = %v, want %v", tc.raw, err, tc.want)
 			}
-			if got != (Target{}) {
+			if got != (Link{}) {
 				t.Fatalf("Parse(%q) = %+v alongside an error", tc.raw, got)
 			}
 		})
+	}
+}
+
+func TestParseSearchAccepts(t *testing.T) {
+	cases := []struct {
+		name, raw, want string
+	}{
+		{"latin", "typhon://search?q=Hades", "Hades"},
+		{"browser slash", "typhon://search/?q=Hades", "Hades"},
+		{"scheme case", "TYPHON://search?q=Hades", "Hades"},
+		{"cyrillic", "typhon://search?q=%D0%92%D0%B5%D0%B4%D1%8C%D0%BC%D0%B0%D0%BA%203", "Ведьмак 3"},
+		{"emoji", "typhon://search?q=%F0%9F%98%80", "😀"},
+		{"escaped space", "typhon://search?q=Half%20Life", "Half Life"},
+		{"plus stays a plus", "typhon://search?q=C++", "C++"},
+		{"escaped plus", "typhon://search?q=C%2B%2B", "C++"},
+		{"traversal is text", "typhon://search?q=../..", "../.."},
+		{"escaped traversal is text", "typhon://search?q=%2E%2E%2Fetc", "../etc"},
+		{"escaped quote", "typhon://search?q=Baldur%27s%20%22Gate%22", `Baldur's "Gate"`},
+		{"markup is text", "typhon://search?q=%3Cb%3Ex%3C%2Fb%3E", "<b>x</b>"},
+		{"play flag is text", "typhon://search?q=--play", "--play"},
+		{"quote and play flag are text", "typhon://search?q=x%22%20--play%20g1", `x" --play g1`},
+		{"escaped separators are text", "typhon://search?q=a%26b%3Dc%3Bd%23e", "a&b=c;d#e"},
+		{"spaces trimmed", "typhon://search?q=%20%20Hades%20", "Hades"},
+		{"joiner inside an emoji", "typhon://search?q=%F0%9F%91%A9%E2%80%8D%F0%9F%9A%80", "👩\u200d🚀"},
+		{"invisible character next to a letter", "typhon://search?q=a%E2%80%8B", "a\u200b"},
+		{"longest", "typhon://search?q=" + strings.Repeat("a", maxQueryRunes), strings.Repeat("a", maxQueryRunes)},
+		{"longest cyrillic", "typhon://search?q=" + strings.Repeat("%D1%8F", maxQueryRunes), strings.Repeat("я", maxQueryRunes)},
+		{"longest possible link", "typhon://search/?q=" + strings.Repeat("%F0%9F%98%80", maxQueryRunes), strings.Repeat("😀", maxQueryRunes)},
+		{"spaces do not count", "typhon://search?q=%20" + strings.Repeat("a", maxQueryRunes) + "%20", strings.Repeat("a", maxQueryRunes)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := Parse(tc.raw)
+			if err != nil || got != (Link{Query: tc.want}) {
+				t.Fatalf("Parse(%q) = %+v, %v; want query %q", tc.raw, got, err, tc.want)
+			}
+		})
+	}
+}
+
+func TestParseSearchRejects(t *testing.T) {
+	cases := []struct {
+		name, raw string
+		want      error
+	}{
+		{"link over the limit", "typhon://search/?q=" + strings.Repeat("%F0%9F%98%80", maxQueryRunes) + "a", ErrTooLong},
+		{"control character in raw link", "typhon://search?q=a\nb", ErrMalformed},
+		{"host case", "typhon://SEARCH?q=a", ErrHost},
+		{"port", "typhon://search:80?q=a", ErrHost},
+		{"opaque", "typhon:search?q=a", ErrHost},
+		{"userinfo", "typhon://user@search?q=a", ErrUserinfo},
+		{"path", "typhon://search/play?q=a", ErrPath},
+		{"fragment", "typhon://search?q=a#b", ErrFragment},
+		{"no query", "typhon://search", ErrSearchParams},
+		{"empty query", "typhon://search?", ErrSearchParams},
+		{"no value", "typhon://search?q", ErrSearchParams},
+		{"no key", "typhon://search?=a", ErrSearchParams},
+		{"other key", "typhon://search?steam=1", ErrSearchParams},
+		{"key case", "typhon://search?Q=a", ErrSearchParams},
+		{"encoded key", "typhon://search?%71=a", ErrSearchParams},
+		{"repeated q", "typhon://search?q=a&q=b", ErrSearchParams},
+		{"extra param", "typhon://search?q=a&autoinstall=1", ErrSearchParams},
+		{"param before q", "typhon://search?x=1&q=a", ErrSearchParams},
+		{"semicolon", "typhon://search?q=a;x=1", ErrSearchParams},
+		{"second equals", "typhon://search?q=a=b", ErrSearchParams},
+		{"bad escape", "typhon://search?q=%ZZ", ErrQueryEscape},
+		{"cut escape", "typhon://search?q=a%2", ErrQueryEscape},
+		{"lone percent", "typhon://search?q=100%", ErrQueryEscape},
+		{"raw quote", `typhon://search?q=a"b`, ErrQueryEscape},
+		{"raw space", "typhon://search?q=a b", ErrQueryEscape},
+		{"raw backslash", `typhon://search?q=a\b`, ErrQueryEscape},
+		{"raw cyrillic", "typhon://search?q=Ведьмак", ErrQueryEscape},
+		{"not utf-8", "typhon://search?q=%FF", ErrQueryUTF8},
+		{"cut utf-8", "typhon://search?q=%D0", ErrQueryUTF8},
+		{"overlong utf-8", "typhon://search?q=%C0%AE", ErrQueryUTF8},
+		{"surrogate", "typhon://search?q=%ED%A0%80", ErrQueryUTF8},
+		{"nul", "typhon://search?q=a%00b", ErrQueryControl},
+		{"line feed", "typhon://search?q=a%0Ab", ErrQueryControl},
+		{"carriage return", "typhon://search?q=a%0Db", ErrQueryControl},
+		{"leading line feed", "typhon://search?q=%0Aab", ErrQueryControl},
+		{"trailing line feed", "typhon://search?q=ab%0A", ErrQueryControl},
+		{"tab", "typhon://search?q=a%09b", ErrQueryControl},
+		{"delete", "typhon://search?q=a%7Fb", ErrQueryControl},
+		{"c1 control", "typhon://search?q=a%C2%85b", ErrQueryControl},
+		{"line separator", "typhon://search?q=a%E2%80%A8b", ErrQueryControl},
+		{"paragraph separator", "typhon://search?q=a%E2%80%A9b", ErrQueryControl},
+		{"right to left override", "typhon://search?q=a%E2%80%AEb", ErrQueryControl},
+		{"empty value", "typhon://search?q=", ErrQueryEmpty},
+		{"only spaces", "typhon://search?q=%20%20", ErrQueryEmpty},
+		{"only wide spaces", "typhon://search?q=%E3%80%80", ErrQueryEmpty},
+		{"only zero width space", "typhon://search?q=%E2%80%8B", ErrQueryEmpty},
+		{"only soft hyphen", "typhon://search?q=%C2%AD", ErrQueryEmpty},
+		{"only byte order mark", "typhon://search?q=%EF%BB%BF", ErrQueryEmpty},
+		{"only zero width joiner", "typhon://search?q=%E2%80%8D", ErrQueryEmpty},
+		{"only variation selector", "typhon://search?q=%EF%B8%8F", ErrQueryEmpty},
+		{"only hangul filler", "typhon://search?q=%E3%85%A4", ErrQueryEmpty},
+		{"invisible characters and spaces", "typhon://search?q=%20%E2%80%8B%20%C2%AD%20", ErrQueryEmpty},
+		{"121 runes", "typhon://search?q=" + strings.Repeat("a", maxQueryRunes+1), ErrQueryTooLong},
+		{"121 cyrillic runes", "typhon://search?q=" + strings.Repeat("%D1%8F", maxQueryRunes+1), ErrQueryTooLong},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := Parse(tc.raw)
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("Parse(%q) error = %v, want %v", tc.raw, err, tc.want)
+			}
+			if got != (Link{}) {
+				t.Fatalf("Parse(%q) = %+v alongside an error", tc.raw, got)
+			}
+		})
+	}
+}
+
+func TestParseKeepsGameLinksStrict(t *testing.T) {
+	longGame := "typhon://game?steam=1&x=" + strings.Repeat("a", maxLinkLen-len("typhon://game?steam=1&x=")+1)
+	cases := []struct {
+		name, raw string
+		want      error
+	}{
+		{"game link over its own limit", longGame, ErrTooLong},
+		{"escape in id", "typhon://game?steam=%31", ErrID},
+		{"query key on a game link", "typhon://game?q=Hades", ErrProvider},
+		{"id on a search link", "typhon://search?steam=440", ErrSearchParams},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := Parse(tc.raw); !errors.Is(err, tc.want) {
+				t.Fatalf("Parse(%q) error = %v, want %v", tc.raw, err, tc.want)
+			}
+		})
+	}
+}
+
+func TestParseSearchErrorDoesNotQuoteTheLink(t *testing.T) {
+	for _, raw := range []string{
+		"typhon://search?q=secret-payload%ZZ",
+		"typhon://search?q=secret-payload%FF",
+		"typhon://search?q=secret-payload%0A",
+		"typhon://search?q=secret-payload\"",
+		"typhon://search?q=secret-payload&x=1",
+	} {
+		_, err := Parse(raw)
+		if err == nil {
+			t.Fatalf("Parse(%q) accepted", raw)
+		}
+		if strings.Contains(err.Error(), "secret-payload") {
+			t.Fatalf("error text carries the input: %q", err)
+		}
 	}
 }
 

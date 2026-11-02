@@ -7,8 +7,10 @@ import (
 	"log/slog"
 	"os"
 	"runtime/debug"
+	"strings"
 	"sync"
 
+	"typhon/internal/deeplink"
 	"typhon/internal/instance"
 	"typhon/internal/platform"
 	"typhon/internal/settings"
@@ -102,10 +104,26 @@ func (s *secondLaunches) Ready(run func(args []string)) {
 func runRecovered(run func(args []string), args []string) {
 	defer func() {
 		if r := recover(); r != nil {
-			slog.Error("second launch handler panicked", "args", args, "panic", r, "stack", string(debug.Stack()))
+			slog.Error("second launch handler panicked", "args", argsForLog(args), "panic", r, "stack", string(debug.Stack()))
 		}
 	}()
 	run(args)
+}
+
+// A link carries text from an untrusted page, and a search link carries what
+// the user looked at; neither belongs in a log. A quote inside a link splits it
+// across arguments, so one mention hides everything after the program name.
+func argsForLog(args []string) []string {
+	if len(args) < 2 {
+		return args
+	}
+	marker := deeplink.Scheme + ":"
+	for _, arg := range args[1:] {
+		if strings.Contains(strings.ToLower(arg), marker) {
+			return []string{args[0], "<typhon link>"}
+		}
+	}
+	return args
 }
 
 type windowOpener interface {
@@ -113,16 +131,16 @@ type windowOpener interface {
 }
 
 func handleSecondLaunch(args []string, player gamePlayer, window windowOpener, nav *NavigationService, emit func(route string)) {
-	target, linked, err := linkTarget(args)
+	link, linked, err := linkTarget(args)
 	if linked {
 		window.Open()
-		nav.setPendingLink(pendingLink(target, err))
+		nav.setPendingLink(pendingLink(link, err))
 		emit("")
 		return
 	}
 	req, requested, err := playTarget(args)
 	if err != nil {
-		slog.Error("parse play argument", "args", args, "error", err)
+		slog.Error("parse play argument", "args", argsForLog(args), "error", err)
 		window.Open()
 		return
 	}

@@ -103,6 +103,39 @@ func imageServer(t *testing.T) *httptest.Server {
 	return srv
 }
 
+func TestSearchTitleGoesThroughTheProviderAndKeepsItsErrors(t *testing.T) {
+	provider := &fakeProvider{candidates: []Candidate{{ProviderID: "7", Title: "Hades"}}}
+	svc, _, _ := newTestService(t, provider)
+	found, err := svc.SearchTitle(context.Background(), "Hades")
+	if err != nil || len(found) != 1 || found[0].ProviderID != "7" {
+		t.Fatalf("SearchTitle = %+v, %v", found, err)
+	}
+
+	limited := &fakeProvider{searchErr: &RateLimitError{}}
+	svc, _, _ = newTestService(t, limited)
+	if _, err := svc.SearchTitle(context.Background(), "Hades"); !errors.Is(err, ErrRateLimited) {
+		t.Fatalf("error = %v, want rate limit", err)
+	}
+
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	idle := &fakeProvider{}
+	svc, _, _ = newTestService(t, idle)
+	if _, err := svc.SearchTitle(cancelled, "Hades"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v, want cancel", err)
+	}
+	if idle.searches != 0 {
+		t.Fatalf("provider asked %d times after cancel", idle.searches)
+	}
+}
+
+func TestSearchTitleWithoutAProvider(t *testing.T) {
+	svc, _, _ := newTestService(t, nil)
+	if _, err := svc.SearchTitle(context.Background(), "Hades"); !errors.Is(err, ErrNotConfigured) {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func newTestService(t *testing.T, provider Provider) (*Service, *catalog.Service, string) {
 	t.Helper()
 	dir := t.TempDir()

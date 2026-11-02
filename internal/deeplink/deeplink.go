@@ -1,11 +1,14 @@
-// Package deeplink reads typhon:// links. A link only ever names a game to
-// show: nothing a web page can put into one reaches an install or a launch.
+// Package deeplink reads typhon:// links. A link only ever names a game to show
+// or a title to search the catalog for: nothing a web page can put into one
+// reaches an install or a launch.
 package deeplink
 
 import (
 	"errors"
 	"net/url"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 const (
@@ -14,26 +17,44 @@ const (
 	ProviderSteam = "steam"
 	ProviderIGDB  = "igdb"
 
-	hostGame = "game"
+	hostGame   = "game"
+	hostSearch = "search"
 
-	maxLinkLen = 256
-	maxIDLen   = 12
+	maxLinkLen    = 256
+	maxIDLen      = 12
+	maxQueryRunes = 120
+
+	// The longest query is four-byte runes with every byte written as %XX.
+	maxSearchLinkLen = len("typhon://search/?q=") + maxQueryRunes*4*3
 )
 
 var (
-	ErrEmpty     = errors.New("ссылка пустая")
-	ErrTooLong   = errors.New("ссылка слишком длинная")
-	ErrMalformed = errors.New("ссылка не разбирается как URL")
-	ErrScheme    = errors.New("в ссылке другая схема")
-	ErrHost      = errors.New("ссылка ведёт не на игру")
-	ErrUserinfo  = errors.New("в ссылке есть данные пользователя")
-	ErrPath      = errors.New("в ссылке есть лишний путь")
-	ErrFragment  = errors.New("в ссылке есть фрагмент")
-	ErrParams    = errors.New("в ссылке нужен ровно один параметр steam или igdb")
-	ErrProvider  = errors.New("в ссылке неизвестный источник")
-	ErrID        = errors.New("идентификатор в ссылке — не от 1 до 12 цифр")
-	ErrZeroID    = errors.New("идентификатор в ссылке нулевой")
+	ErrEmpty        = errors.New("ссылка пустая")
+	ErrTooLong      = errors.New("ссылка слишком длинная")
+	ErrMalformed    = errors.New("ссылка не разбирается как URL")
+	ErrScheme       = errors.New("в ссылке другая схема")
+	ErrHost         = errors.New("ссылка ведёт не на игру")
+	ErrUserinfo     = errors.New("в ссылке есть данные пользователя")
+	ErrPath         = errors.New("в ссылке есть лишний путь")
+	ErrFragment     = errors.New("в ссылке есть фрагмент")
+	ErrParams       = errors.New("в ссылке нужен ровно один параметр steam или igdb")
+	ErrProvider     = errors.New("в ссылке неизвестный источник")
+	ErrID           = errors.New("идентификатор в ссылке — не от 1 до 12 цифр")
+	ErrZeroID       = errors.New("идентификатор в ссылке нулевой")
+	ErrSearchParams = errors.New("в ссылке поиска нужен ровно один параметр q")
+	ErrQueryEscape  = errors.New("запрос в ссылке закодирован неверно")
+	ErrQueryUTF8    = errors.New("запрос в ссылке — не UTF-8")
+	ErrQueryControl = errors.New("в запросе из ссылки есть управляющие символы")
+	ErrQueryEmpty   = errors.New("запрос в ссылке пустой")
+	ErrQueryTooLong = errors.New("запрос в ссылке длиннее 120 символов")
 )
+
+// Link is what a typhon:// link asks for: a game in Target or, when Query is
+// set, a catalog search that nothing else follows.
+type Link struct {
+	Target Target
+	Query  string
+}
 
 // Target is the game a link names. ID is in canonical form: digits without
 // leading zeros, the spelling the catalog indexes it under.
@@ -82,45 +103,112 @@ func IsLink(arg string) bool {
 	return len(arg) >= len(prefix) && strings.EqualFold(arg[:len(prefix)], prefix)
 }
 
-// Parse accepts typhon://game?steam=<appid> and typhon://game?igdb=<id>. The
-// slash before the query is allowed because browsers add it to a URL with an
-// empty path. The query is read by hand: url.Values would accept percent
-// escapes, a plus and repeated keys that have no place in a link.
-func Parse(raw string) (Target, error) {
+// Parse accepts typhon://game?steam=<appid>, typhon://game?igdb=<id> and
+// typhon://search?q=<percent-encoded UTF-8>. The slash before the query is
+// allowed because browsers add it to a URL with an empty path. The query is read
+// by hand: url.Values would accept percent escapes in a game link, a plus and
+// repeated keys that have no place in a link.
+func Parse(raw string) (Link, error) {
 	if raw == "" {
-		return Target{}, ErrEmpty
+		return Link{}, ErrEmpty
 	}
-	if len(raw) > maxLinkLen {
-		return Target{}, ErrTooLong
+	if len(raw) > maxSearchLinkLen {
+		return Link{}, ErrTooLong
 	}
 	u, err := url.Parse(raw)
 	if err != nil {
 		// url.Error quotes the input, and a link is text from an untrusted page
 		// that would end up in the log.
-		return Target{}, ErrMalformed
+		return Link{}, ErrMalformed
 	}
 	if u.Scheme != Scheme {
-		return Target{}, ErrScheme
+		return Link{}, ErrScheme
 	}
-	if u.Opaque != "" || u.Host != hostGame {
-		return Target{}, ErrHost
+	if u.Opaque != "" || (u.Host != hostGame && u.Host != hostSearch) {
+		return Link{}, ErrHost
+	}
+	if u.Host == hostGame && len(raw) > maxLinkLen {
+		return Link{}, ErrTooLong
 	}
 	if u.User != nil {
-		return Target{}, ErrUserinfo
+		return Link{}, ErrUserinfo
 	}
 	if u.Path != "" && u.Path != "/" {
-		return Target{}, ErrPath
+		return Link{}, ErrPath
 	}
 	if strings.Contains(raw, "#") {
-		return Target{}, ErrFragment
+		return Link{}, ErrFragment
+	}
+	if u.Host == hostSearch {
+		query, err := parseQuery(u.RawQuery)
+		if err != nil {
+			return Link{}, err
+		}
+		return Link{Query: query}, nil
 	}
 	provider, id, found := strings.Cut(u.RawQuery, "=")
 	if !found || provider == "" || strings.ContainsAny(u.RawQuery, "&;") || strings.ContainsRune(id, '=') {
-		return Target{}, ErrParams
+		return Link{}, ErrParams
 	}
 	target := Target{Provider: provider, ID: id}
 	if err := target.Validate(); err != nil {
-		return Target{}, err
+		return Link{}, err
 	}
-	return target, nil
+	return Link{Target: target}, nil
+}
+
+// parseQuery reads the one q parameter of a search link. Like the game query it
+// is read by hand: url.ParseQuery would turn a plus into a space and accept
+// repeated keys. Its errors never wrap url.EscapeError, which quotes the input.
+func parseQuery(rawQuery string) (string, error) {
+	key, value, found := strings.Cut(rawQuery, "=")
+	if !found || key != "q" || strings.ContainsAny(value, "&;=") {
+		return "", ErrSearchParams
+	}
+	for i := range len(value) {
+		if !isQueryByte(value[i]) {
+			return "", ErrQueryEscape
+		}
+	}
+	decoded, err := url.PathUnescape(value)
+	if err != nil {
+		return "", ErrQueryEscape
+	}
+	return validateQuery(decoded)
+}
+
+// validateQuery checks decoded search text and returns it trimmed.
+func validateQuery(decoded string) (string, error) {
+	if !utf8.ValidString(decoded) {
+		return "", ErrQueryUTF8
+	}
+	for _, r := range decoded {
+		if unicode.IsControl(r) || unicode.In(r, unicode.Zl, unicode.Zp, unicode.Bidi_Control) {
+			return "", ErrQueryControl
+		}
+	}
+	query := strings.TrimSpace(decoded)
+	if !strings.ContainsFunc(query, isVisible) {
+		return "", ErrQueryEmpty
+	}
+	if utf8.RuneCountInString(query) > maxQueryRunes {
+		return "", ErrQueryTooLong
+	}
+	return query, nil
+}
+
+// isVisible tells a character that shows from one that only joins or shapes its
+// neighbours: a zero width joiner is fine inside an emoji, not as a whole query.
+func isVisible(r rune) bool {
+	return !unicode.IsSpace(r) && !unicode.In(r, unicode.Cf, unicode.Variation_Selector, unicode.Other_Default_Ignorable_Code_Point)
+}
+
+// isQueryByte is what RFC 3986 allows unescaped in a query. Anything else, a
+// raw quote above all, must arrive percent-encoded.
+func isQueryByte(c byte) bool {
+	switch {
+	case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		return true
+	}
+	return strings.IndexByte("-._~!$'()*+,:@/?%", c) >= 0
 }

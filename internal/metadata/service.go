@@ -769,6 +769,17 @@ func (s *Service) FetchGame(ctx context.Context, providerID string) (GameMetadat
 	return s.fetchMeta(ctx, s.provider, providerID, classUser)
 }
 
+// SearchTitle looks a title up on the user's behalf, under the same budget and
+// 429 pause as a search in the window.
+//
+//wails:ignore
+func (s *Service) SearchTitle(ctx context.Context, title string) ([]Candidate, error) {
+	if s.provider == nil {
+		return nil, ErrNotConfigured
+	}
+	return s.search(ctx, s.provider, title, candidateLimit, classUser)
+}
+
 func (s *Service) fetchMeta(ctx context.Context, provider Provider, providerID string, class callClass) (GameMetadata, error) {
 	if err := s.budget.acquire(ctx, class); err != nil {
 		return GameMetadata{}, err

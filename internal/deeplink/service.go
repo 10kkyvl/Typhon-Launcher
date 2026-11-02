@@ -10,6 +10,7 @@ import (
 	"typhon/internal/catalog"
 	"typhon/internal/metadata"
 	"typhon/internal/metadata/typhonapi"
+	"typhon/internal/titles"
 	"typhon/internal/uierr"
 )
 
@@ -17,6 +18,7 @@ const (
 	StatusFound        = "found"
 	StatusNotFound     = "not_found"
 	StatusNotInCatalog = "not_in_catalog"
+	StatusAmbiguous    = "ambiguous"
 
 	codeUnavailable = "link.unavailable"
 	codeOutdated    = "link.outdated"
@@ -54,6 +56,7 @@ type Catalog interface {
 //wails:ignore
 type Metadata interface {
 	FetchGame(ctx context.Context, providerID string) (metadata.GameMetadata, error)
+	SearchTitle(ctx context.Context, title string) ([]metadata.Candidate, error)
 }
 
 type Service struct {
@@ -107,6 +110,105 @@ func (s *Service) Resolve(ctx context.Context, target Target) (Resolution, error
 		return Resolution{}, fmt.Errorf("%w: %w", ErrBadProviderID, err)
 	}
 	return s.open(ctx, providerID, meta.Title)
+}
+
+// ResolveTitle finds the one game a search link names: on this machine first,
+// then by asking the metadata service for exactly this title. Only the page calls
+// it, and the page waits for the accepted terms and a session before taking a
+// link. A catalog record appears only for a single exact match, under the same
+// limit as a game link. Candidates are read instead of Match.Status because
+// catalog.Resolve never reports a title as matched next to a remote catalog.
+func (s *Service) ResolveTitle(ctx context.Context, query string) (Resolution, error) {
+	if err := ctx.Err(); err != nil {
+		return Resolution{}, err
+	}
+	title, err := validateQuery(query)
+	if err != nil {
+		return Resolution{}, err
+	}
+	local := s.localTitle(title)
+	if err := ctx.Err(); err != nil {
+		return Resolution{}, err
+	}
+	if local.Status == StatusFound {
+		return local, nil
+	}
+	normalized := titles.Normalize(title)
+	if normalized == "" {
+		return local, nil
+	}
+	candidates, err := s.metadata.SearchTitle(metadata.WithLanguage(ctx, s.language()), title)
+	if errors.Is(err, metadata.ErrNoMatch) {
+		return local, nil
+	}
+	if err != nil {
+		if ctx.Err() != nil {
+			return Resolution{}, ctx.Err()
+		}
+		return Resolution{}, titleLookupError(err)
+	}
+	var exact *metadata.Candidate
+	for i := range candidates {
+		if titles.Normalize(candidates[i].Title) != normalized {
+			continue
+		}
+		if exact != nil && exact.ProviderID != candidates[i].ProviderID {
+			return Resolution{Status: StatusAmbiguous}, nil
+		}
+		exact = &candidates[i]
+	}
+	if exact == nil {
+		return local, nil
+	}
+	return s.openCandidate(ctx, strings.TrimSpace(exact.ProviderID), exact.Title)
+}
+
+func (s *Service) openCandidate(ctx context.Context, providerID, title string) (Resolution, error) {
+	if steamID, steam := strings.CutPrefix(providerID, steamProviderPrefix); steam {
+		if err := validateID(steamID); err != nil {
+			return Resolution{}, fmt.Errorf("%w: %w", ErrBadProviderID, err)
+		}
+		return Resolution{Status: StatusNotInCatalog}, nil
+	}
+	if err := validateID(providerID); err != nil {
+		return Resolution{}, fmt.Errorf("%w: %w", ErrBadProviderID, err)
+	}
+	return s.open(ctx, providerID, title)
+}
+
+func (s *Service) localTitle(title string) Resolution {
+	match := s.catalog.Resolve(catalog.Query{Title: title})
+	if match.Method == catalog.MethodOverride && match.GameID != "" {
+		return found(match.GameID)
+	}
+	exact := ""
+	for _, candidate := range match.Candidates {
+		if candidate.GameID == "" || (candidate.Method != catalog.MethodExactTitle && candidate.Method != catalog.MethodAlias) {
+			continue
+		}
+		if exact != "" {
+			return Resolution{Status: StatusAmbiguous}
+		}
+		exact = candidate.GameID
+	}
+	if exact == "" {
+		return Resolution{Status: StatusNotFound}
+	}
+	return found(exact)
+}
+
+// titleLookupError never wraps a transport error: url.Error quotes the request
+// URL, and that URL holds the title from the link.
+func titleLookupError(err error) error {
+	switch {
+	case uierr.Code(err) != "":
+		return err
+	case errors.Is(err, typhonapi.ErrOutdated):
+		return uierr.New(codeOutdated, typhonapi.ErrOutdated.Error())
+	case errors.Is(err, typhonapi.ErrBadRequest):
+		return uierr.New(codeBadRequest, typhonapi.ErrBadRequest.Error())
+	}
+	return uierr.New(codeUnavailable, typhonapi.ErrUpstream.Error())
 }
 
 func lookupError(err error) error {

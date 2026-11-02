@@ -96,7 +96,7 @@ func TestLinkTarget(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			got, requested, err := linkTarget(tc.args)
-			if !errors.Is(err, tc.err) || requested != tc.requested || got != tc.want {
+			if !errors.Is(err, tc.err) || requested != tc.requested || got != (deeplink.Link{Target: tc.want}) {
 				t.Fatalf("linkTarget = %+v, %v, %v; want %+v, %v, %v", got, requested, err, tc.want, tc.requested, tc.err)
 			}
 		})
@@ -121,6 +121,10 @@ func TestFirstLaunch(t *testing.T) {
 		{name: "bad link is reported to the page", args: []string{"typhon.exe", "typhon://game?igdb=x"}, link: PendingLink{Invalid: true}},
 		{name: "injected play never plays", args: []string{"typhon.exe", "typhon://game?igdb=7", "--play", "g1"}, link: PendingLink{Invalid: true}},
 		{name: "injected open never navigates", args: []string{"typhon.exe", "typhon://game?igdb=7", "--open", "library"}, link: PendingLink{Invalid: true}},
+		{name: "search link", args: []string{"typhon.exe", "typhon://search?q=%D0%92%D0%B5%D0%B4%D1%8C%D0%BC%D0%B0%D0%BA"}, link: PendingLink{Query: "Ведьмак"}},
+		{name: "play flag in a query stays text", args: []string{"typhon.exe", "typhon://search?q=--play"}, link: PendingLink{Query: "--play"}},
+		{name: "bad search link is reported to the page", args: []string{"typhon.exe", "typhon://search?q=%ZZ"}, link: PendingLink{Invalid: true}},
+		{name: "search with injected play never plays", args: []string{"typhon.exe", "typhon://search?q=a", "--play", "g1"}, link: PendingLink{Invalid: true}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -198,9 +202,9 @@ func TestURLEventCarriesLinkOnlyOnMac(t *testing.T) {
 }
 
 func TestLaunchFromURLReadsAsALinkLaunch(t *testing.T) {
-	target, requested, err := linkTarget(launchFromURL("typhon://game?igdb=7"))
-	if err != nil || !requested || target.ID != "7" {
-		t.Fatalf("linkTarget = %+v, %v, %v", target, requested, err)
+	link, requested, err := linkTarget(launchFromURL("typhon://game?igdb=7"))
+	if err != nil || !requested || link.Target.ID != "7" {
+		t.Fatalf("linkTarget = %+v, %v, %v", link, requested, err)
 	}
 }
 

@@ -1,7 +1,7 @@
 import { CancelError, Events } from '@wailsio/runtime';
 import { get, writable } from 'svelte/store';
 import { TakePending, TakePendingLink } from '../../../bindings/typhon/navigationservice';
-import { Resolve } from '../../../bindings/typhon/internal/deeplink/service';
+import { Resolve, ResolveTitle } from '../../../bindings/typhon/internal/deeplink/service';
 import { inWails } from '../services/backend';
 import { bigPictureActive } from '../bigpicture/mode';
 import { errorCode, msg } from '../i18n';
@@ -14,8 +14,10 @@ import { dismissToast, toast } from './toasts';
 const OPENING_DELAY_MS = 400;
 
 export const bigPictureGame = writable<string | null>(null);
+export const bigPictureSearch = writable<string | null>(null);
 
 let linkRun = 0;
+let searchNonce = 0;
 let cancelLink: (() => void) | null = null;
 let ready = false;
 
@@ -35,6 +37,11 @@ function linkErrorText(err: unknown): string {
 function openGame(id: string) {
   if (get(bigPictureActive)) bigPictureGame.set(id);
   else navigate('game', { id });
+}
+
+function openSearch(query: string) {
+  if (get(bigPictureActive)) bigPictureSearch.set(query);
+  else navigate('catalog', { q: query, nonce: String(++searchNonce) });
 }
 
 async function takeRoute() {
@@ -63,14 +70,16 @@ async function takeLink() {
     toast(msg('errSources.linkInvalid'), 'danger');
     return;
   }
+  if (pending.query) {
+    await openTitle(pending.query);
+    return;
+  }
   if (!pending.provider) return;
   await openLink(pending.provider, pending.id);
 }
 
-async function openLink(provider: string, id: string) {
-  dropLink();
+async function followLink<T>(request: Promise<T> & { cancel(): void }, onResult: (result: T) => void, onError: (err: unknown) => void) {
   const run = linkRun;
-  const request = Resolve({ provider, id });
   cancelLink = () => request.cancel();
   const startKey = get(route).key;
   const stopWatching = route.subscribe((current) => {
@@ -84,6 +93,21 @@ async function openLink(provider: string, id: string) {
     const result = await request;
     if (run !== linkRun) return;
     stopWatching();
+    onResult(result);
+  } catch (err) {
+    if (err instanceof CancelError || run !== linkRun) return;
+    onError(err);
+  } finally {
+    stopWatching();
+    clearTimeout(timer);
+    if (openingToast !== null) dismissToast(openingToast);
+    if (run === linkRun) cancelLink = null;
+  }
+}
+
+async function openLink(provider: string, id: string) {
+  dropLink();
+  await followLink(Resolve({ provider, id }), (result) => {
     if (result.status === 'found' && result.gameId) {
       openGame(result.gameId);
     } else if (result.status === 'not_found') {
@@ -93,15 +117,18 @@ async function openLink(provider: string, id: string) {
     } else {
       toast(msg('errSources.linkFailed'), 'danger');
     }
-  } catch (err) {
-    if (err instanceof CancelError || run !== linkRun) return;
+  }, (err) => toast(linkErrorText(err), 'danger'));
+}
+
+async function openTitle(query: string) {
+  dropLink();
+  await followLink(ResolveTitle(query), (result) => {
+    if (result.status === 'found' && result.gameId) openGame(result.gameId);
+    else openSearch(query);
+  }, (err) => {
     toast(linkErrorText(err), 'danger');
-  } finally {
-    stopWatching();
-    clearTimeout(timer);
-    if (openingToast !== null) dismissToast(openingToast);
-    if (run === linkRun) cancelLink = null;
-  }
+    openSearch(query);
+  });
 }
 
 async function takePending() {

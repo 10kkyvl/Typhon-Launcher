@@ -44,6 +44,20 @@ type fakeMetadata struct {
 	asked    []string
 	language string
 	cancel   context.CancelFunc
+
+	candidates []metadata.Candidate
+	searchErr  error
+	searched   []string
+	onSearch   func()
+}
+
+func (m *fakeMetadata) SearchTitle(ctx context.Context, title string) ([]metadata.Candidate, error) {
+	m.searched = append(m.searched, title)
+	m.language = metadata.Language(ctx)
+	if m.onSearch != nil {
+		m.onSearch()
+	}
+	return m.candidates, m.searchErr
 }
 
 func (m *fakeMetadata) FetchGame(ctx context.Context, providerID string) (metadata.GameMetadata, error) {

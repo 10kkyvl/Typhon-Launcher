@@ -23,7 +23,7 @@
   import SocialPage from '../bigpicture/components/SocialPage.svelte';
   import ScreenKeyboard from '../bigpicture/components/ScreenKeyboard.svelte';
   import Toasts from './Toasts.svelte';
-  import { bigPictureGame } from '../stores/launchNavigation';
+  import { bigPictureGame, bigPictureSearch } from '../stores/launchNavigation';
   import { bigPictureStyle } from '../bigpicture/palette';
   import '../bigpicture/styles.css';
 
@@ -92,6 +92,13 @@
     bigPictureGame.set(null);
     menu = false;
     void navigate({ name: 'game', id });
+  });
+  $effect(() => {
+    const query = $bigPictureSearch;
+    if (!query) return;
+    bigPictureSearch.set(null);
+    menu = false;
+    void navigate({ name: 'catalog', query });
   });
   async function section(name: Section) {
     menu = false; pages = [entry({ name })]; failure = ''; await focusPage();
@@ -241,7 +248,7 @@
           {:else if page.page.name === 'library'}
             <LibraryPage bind:this={handles[page.key]} onlaunch={play} onback={back} ongame={(id) => navigate({ name: 'game', id })} oncatalog={() => section('catalog')} {requestText} />
           {:else if page.page.name === 'catalog'}
-            <CatalogPage bind:this={handles[page.key]} onback={back} ongame={(id) => navigate({ name: 'game', id })} {requestText} />
+            <CatalogPage bind:this={handles[page.key]} initialQuery={page.page.query} onback={back} ongame={(id) => navigate({ name: 'game', id })} {requestText} />
           {:else if page.page.name === 'game'}
             <GamePage bind:this={handles[page.key]} id={page.page.id} onback={back} ondownloads={() => section('downloads')} onlaunch={play} {requestText} />
           {:else if page.page.name === 'downloads'}
