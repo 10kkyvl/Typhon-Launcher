@@ -14,6 +14,7 @@ import { dismissToast, toast } from './toasts';
 const OPENING_DELAY_MS = 400;
 
 export const bigPictureGame = writable<string | null>(null);
+export const bigPictureSearch = writable<string | null>(null);
 
 let linkRun = 0;
 let cancelLink: (() => void) | null = null;
@@ -35,6 +36,12 @@ function linkErrorText(err: unknown): string {
 function openGame(id: string) {
   if (get(bigPictureActive)) bigPictureGame.set(id);
   else navigate('game', { id });
+}
+
+function openSearch(query: string) {
+  dropLink();
+  if (get(bigPictureActive)) bigPictureSearch.set(query);
+  else navigate('catalog', { q: query });
 }
 
 async function takeRoute() {
@@ -61,6 +68,10 @@ async function takeLink() {
   if (pending.invalid) {
     dropLink();
     toast(msg('errSources.linkInvalid'), 'danger');
+    return;
+  }
+  if (pending.query) {
+    openSearch(pending.query);
     return;
   }
   if (!pending.provider) return;

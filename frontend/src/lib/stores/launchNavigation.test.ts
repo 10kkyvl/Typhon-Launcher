@@ -34,7 +34,7 @@ const { Resolve } = await import('../../../bindings/typhon/internal/deeplink/ser
 const { navigate, route } = await import('./router');
 const { bigPictureActive } = await import('../bigpicture/mode');
 const { toast, dismissToast } = await import('./toasts');
-const { initLaunchNavigation, setLinksReady, bigPictureGame } = await import('./launchNavigation');
+const { initLaunchNavigation, setLinksReady, bigPictureGame, bigPictureSearch } = await import('./launchNavigation');
 import { get, type Writable } from 'svelte/store';
 
 interface Request {
@@ -86,6 +86,7 @@ beforeEach(() => {
   (route as unknown as Writable<{ name: string; params: object; key: number }>).set({ name: 'library', params: {}, key: 1 });
   (bigPictureActive as unknown as Writable<boolean>).set(false);
   bigPictureGame.set(null);
+  bigPictureSearch.set(null);
 });
 
 afterEach(() => {
@@ -424,6 +425,88 @@ describe('Big Picture', () => {
 
     expect(get(bigPictureGame)).toBe('game-9');
     expect(navigate).not.toHaveBeenCalled();
+  });
+});
+
+describe('ссылка поиска', () => {
+  function search(query: string) {
+    return { provider: '', id: '', query, invalid: false };
+  }
+
+  it('открывает каталог с запросом и не вызывает Resolve', async () => {
+    vi.mocked(TakePendingLink).mockResolvedValue(search('Ведьмак 3') as never);
+
+    await start();
+
+    expect(navigate).toHaveBeenCalledTimes(1);
+    expect(navigate).toHaveBeenCalledWith('catalog', { q: 'Ведьмак 3' });
+    expect(Resolve).not.toHaveBeenCalled();
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it('разметка и кавычки доходят до каталога текстом, без правок', async () => {
+    const text = '<img src=x onerror=alert(1)> "--play" g1';
+    vi.mocked(TakePendingLink).mockResolvedValue(search(text) as never);
+
+    await start();
+
+    expect(navigate).toHaveBeenCalledWith('catalog', { q: text });
+  });
+
+  it('до готовности интерфейса ждёт, после неё открывается один раз', async () => {
+    vi.mocked(TakePendingLink).mockResolvedValueOnce(search('Hades') as never).mockResolvedValue(NO_LINK as never);
+    stop = initLaunchNavigation();
+    handlers[0]!();
+    await settle();
+
+    expect(navigate).not.toHaveBeenCalled();
+
+    setLinksReady(true);
+    await settle();
+    handlers[0]!();
+    await settle();
+
+    expect(vi.mocked(navigate).mock.calls).toEqual([['catalog', { q: 'Hades' }]]);
+  });
+
+  it('отменяет идущий Resolve, его поздний ответ не перекидывает', async () => {
+    vi.mocked(TakePendingLink)
+      .mockResolvedValueOnce(link('steam', '620') as never)
+      .mockResolvedValueOnce(search('Hades') as never);
+    const r = request();
+    mockResolve(r);
+
+    await start();
+    r.promise.catch(() => {});
+    handlers[0]!();
+    await settle();
+
+    expect(r.cancel).toHaveBeenCalledTimes(1);
+    r.resolve({ status: 'found', gameId: 'late' });
+    await settle();
+
+    expect(vi.mocked(navigate).mock.calls).toEqual([['catalog', { q: 'Hades' }]]);
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it('в Big Picture уходит в его роутер, а не в основной', async () => {
+    (bigPictureActive as unknown as Writable<boolean>).set(true);
+    vi.mocked(TakePendingLink).mockResolvedValue(search('Hades') as never);
+
+    await start();
+
+    expect(get(bigPictureSearch)).toBe('Hades');
+    expect(navigate).not.toHaveBeenCalled();
+    expect(Resolve).not.toHaveBeenCalled();
+  });
+
+  it('некорректная ссылка важнее запроса', async () => {
+    vi.mocked(TakePendingLink).mockResolvedValue({ provider: '', id: '', query: 'Hades', invalid: true } as never);
+
+    await start();
+
+    expect(navigate).not.toHaveBeenCalled();
+    expect(toast).toHaveBeenCalledWith('Некорректная ссылка', 'danger');
   });
 });
 

@@ -20,11 +20,13 @@ var errBadOpenTarget = errors.New("--open требует маршрут library 
 
 var errLinkWithArguments = errors.New("ссылка typhon:// должна быть единственным аргументом запуска")
 
-// PendingLink is what a typhon:// launch left for the page. Provider is empty
-// and Invalid false when there is nothing to show.
+// PendingLink is what a typhon:// launch left for the page. Provider and Query
+// are empty and Invalid false when there is nothing to show. A Query never goes
+// through Resolve: the page only searches the catalog for it.
 type PendingLink struct {
 	Provider string `json:"provider"`
 	ID       string `json:"id"`
+	Query    string `json:"query"`
 	Invalid  bool   `json:"invalid"`
 }
 
@@ -100,9 +102,9 @@ func openTarget(args []string) (string, bool, error) {
 // else. The shell starts `"typhon.exe" "%1"`, so a quote inside a URL that a
 // caller did not escape splits it into extra arguments: `--play <id>` smuggled
 // that way must not start a game. Only the link alone is accepted.
-func linkTarget(args []string) (deeplink.Target, bool, error) {
+func linkTarget(args []string) (deeplink.Link, bool, error) {
 	if len(args) < 2 {
-		return deeplink.Target{}, false, nil
+		return deeplink.Link{}, false, nil
 	}
 	mentioned := false
 	for _, arg := range args[1:] {
@@ -112,33 +114,33 @@ func linkTarget(args []string) (deeplink.Target, bool, error) {
 		}
 	}
 	if !mentioned {
-		return deeplink.Target{}, false, nil
+		return deeplink.Link{}, false, nil
 	}
 	if len(args) != 2 {
-		return deeplink.Target{}, true, errLinkWithArguments
+		return deeplink.Link{}, true, errLinkWithArguments
 	}
-	target, err := deeplink.Parse(args[1])
+	link, err := deeplink.Parse(args[1])
 	if err != nil {
-		return deeplink.Target{}, true, fmt.Errorf("parse typhon link: %w", err)
+		return deeplink.Link{}, true, fmt.Errorf("parse typhon link: %w", err)
 	}
-	return target, true, nil
+	return link, true, nil
 }
 
-func pendingLink(target deeplink.Target, err error) PendingLink {
+func pendingLink(link deeplink.Link, err error) PendingLink {
 	if err != nil {
 		slog.Warn("reject typhon link", "component", "app", "operation", "open_link", "error", err)
 		return PendingLink{Invalid: true}
 	}
-	return PendingLink{Provider: target.Provider, ID: target.ID}
+	return PendingLink{Provider: link.Target.Provider, ID: link.Target.ID, Query: link.Query}
 }
 
 // firstLaunch settles what a cold start was asked to do. Parse failures do not
 // stop the launcher: the window opens as usual, which is strictly better than
 // refusing to start over a broken shortcut.
 func firstLaunch(args []string, nav *NavigationService) (playRequest, bool) {
-	target, linked, err := linkTarget(args)
+	link, linked, err := linkTarget(args)
 	if linked {
-		nav.setPendingLink(pendingLink(target, err))
+		nav.setPendingLink(pendingLink(link, err))
 		return playRequest{}, false
 	}
 	req, playRequested, err := playTarget(args)

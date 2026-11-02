@@ -9,6 +9,7 @@ import (
 	"runtime/debug"
 	"sync"
 
+	"typhon/internal/deeplink"
 	"typhon/internal/instance"
 	"typhon/internal/platform"
 	"typhon/internal/settings"
@@ -102,10 +103,23 @@ func (s *secondLaunches) Ready(run func(args []string)) {
 func runRecovered(run func(args []string), args []string) {
 	defer func() {
 		if r := recover(); r != nil {
-			slog.Error("second launch handler panicked", "args", args, "panic", r, "stack", string(debug.Stack()))
+			slog.Error("second launch handler panicked", "args", argsForLog(args), "panic", r, "stack", string(debug.Stack()))
 		}
 	}()
 	run(args)
+}
+
+// A link carries text from an untrusted page, and a search link carries what
+// the user looked at; neither belongs in a log.
+func argsForLog(args []string) []string {
+	safe := make([]string, len(args))
+	for i, arg := range args {
+		if deeplink.IsLink(arg) {
+			arg = "<typhon link>"
+		}
+		safe[i] = arg
+	}
+	return safe
 }
 
 type windowOpener interface {
@@ -113,10 +127,10 @@ type windowOpener interface {
 }
 
 func handleSecondLaunch(args []string, player gamePlayer, window windowOpener, nav *NavigationService, emit func(route string)) {
-	target, linked, err := linkTarget(args)
+	link, linked, err := linkTarget(args)
 	if linked {
 		window.Open()
-		nav.setPendingLink(pendingLink(target, err))
+		nav.setPendingLink(pendingLink(link, err))
 		emit("")
 		return
 	}

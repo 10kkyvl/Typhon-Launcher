@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, onMount } from 'svelte';
+  import { onDestroy, onMount, untrack } from 'svelte';
   import { Search, ChevronLeft, ChevronRight, RotateCw, X, ArrowLeft } from '@lucide/svelte';
   import Artwork from '../../components/Artwork.svelte';
   import { errorCode, t, type MessageKey, type Params } from '../../i18n';
@@ -9,7 +9,8 @@
 
   import { bigpictureCatalog } from '../../i18n/catalog/en/bigpictureCatalog';
 
-  let { onback, ongame, requestText }: {
+  let { initialQuery = '', onback, ongame, requestText }: {
+    initialQuery?: string;
     onback: () => void;
     ongame: (id: string) => void;
     requestText: RequestText;
@@ -29,7 +30,7 @@
   let facets = $state<GenreFacet[]>([]);
   let page = $state(0);
   let total = $state(0);
-  let query = $state('');
+  let query = $state(untrack(() => initialQuery));
   let genre = $state('');
   let sort = $state<(typeof sortOptions)[number]['id']>('popular');
   let loading = $state(false);
