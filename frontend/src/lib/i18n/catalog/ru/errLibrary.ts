@@ -12,6 +12,8 @@ export const errLibrary = {
   'library.completed_at_in_future': 'дата прохождения в будущем',
   'library.no_executable': 'исполняемый файл не найден',
   'library.already_added': 'эта игра уже добавлена',
+  'library.cover_invalid': 'обложка должна быть адресом http или https',
+  'library.image_outside_dir': 'образ игры лежит вне папки установки',
   'library.executable_outside_install': 'файл находится вне папки установки',
   'library.crossover_unavailable': 'CrossOver не установлен или недоступен',
   'library.bottle_unavailable': 'бутылка CrossOver для этой игры не найдена',

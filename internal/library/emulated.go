@@ -18,12 +18,26 @@ import (
 	"typhon/internal/emulators"
 	"typhon/internal/platform"
 	"typhon/internal/storage"
+	"typhon/internal/uierr"
 )
 
 const (
 	emulatedFileName = "library-emulated.json"
 	emulatedVersion  = 1
 	maxImageListSize = 1 << 20
+
+	// InstallTypeImage is the install type of an image the launcher put into
+	// a folder of its own.
+	InstallTypeImage = "console_image"
+)
+
+var (
+	errCoverInvalid = uierr.New("library.cover_invalid", "обложка должна быть адресом http или https")
+	errImageOutside = uierr.New("library.image_outside_dir", "образ лежит вне папки установки")
+
+	// ErrAlreadyAdded lets the install refuse a duplicate before it copies
+	// anything.
+	ErrAlreadyAdded = errAlreadyAdded
 )
 
 var imageStat = os.Lstat
@@ -34,7 +48,8 @@ var loadEmulatedFile = storage.Load
 // Emulation marks a game started through an emulator. Executable then holds the
 // image and InstallDir its folder, which keeps every "the file lies inside the
 // game's folder" check true. The folder is not the game's: it can be Downloads,
-// so nothing may treat it as an installation. Files are the other files the
+// so nothing may treat it as an installation, unless the launcher made it for the
+// image (Owned with InstallTypeImage). Files are the other files the
 // image lists (tracks of a .cue, discs of an .m3u). The emulator is not stored
 // here, it is resolved at launch.
 //
@@ -49,7 +64,11 @@ type Emulation struct {
 // is its files, not the folder they happen to lie in.
 func (g Game) Footprint() []string {
 	if g.Emulation != nil {
-		return append([]string{g.Executable}, g.Emulation.Files...)
+		files := append([]string{g.Executable}, g.Emulation.Files...)
+		if g.Owned && g.InstallType == InstallTypeImage {
+			return append([]string{g.InstallDir}, files...)
+		}
+		return files
 	}
 	if g.InstallDir == "" {
 		return nil
@@ -172,13 +191,167 @@ func (s *Service) AddEmulatedGame(ctx context.Context, romPath, platformID, titl
 	return game, nil
 }
 
+// InstalledImage is an image the install service has put on disk. CanonicalGameID
+// stays out on purpose: the catalog id belongs to the PC game, and carrying it
+// would attach the card to that game's page, sync and cloud saves.
+type InstalledImage struct {
+	Title            string `json:"title"`
+	Cover            string `json:"cover"`
+	Platform         string `json:"platform"`
+	Image            string `json:"image"`
+	InstallDir       string `json:"installDir"`
+	Owned            bool   `json:"owned"`
+	ReleaseID        string `json:"releaseId"`
+	SourceID         string `json:"sourceId"`
+	SourceDownloadID string `json:"sourceDownloadId"`
+	Version          string `json:"version"`
+}
+
+// RegisterEmulated records an image installed by the launcher, under the checks
+// of AddEmulatedGame. The same folder is the same install: a process killed
+// between this write and closing its job comes back here on startup and must not
+// fail on its own card. Another folder with the same release is refused rather
+// than rebound: the old folder would lose its card and with it the only way to
+// delete it. A card left without files comes back with its playtime.
+func (s *Service) RegisterEmulated(ctx context.Context, g InstalledImage) (Game, error) {
+	if err := ctx.Err(); err != nil {
+		return Game{}, err
+	}
+	title := strings.TrimSpace(g.Title)
+	if title == "" {
+		return Game{}, emulators.ErrTitleEmpty
+	}
+	dir := strings.TrimSpace(g.InstallDir)
+	if !filepath.IsAbs(dir) {
+		return Game{}, errEmptyInstallDir
+	}
+	dir = filepath.Clean(dir)
+	if g.Cover != "" && !emulators.ValidCover(g.Cover) {
+		return Game{}, errCoverInvalid
+	}
+	rom, target, err := checkImage(g.Image, g.Platform)
+	if err != nil {
+		return Game{}, err
+	}
+	if !platform.Inside(dir, rom) {
+		return Game{}, fmt.Errorf("%w: %s", errImageOutside, rom)
+	}
+	facts, err := readImage(rom, ctx.Err)
+	if err != nil {
+		return Game{}, err
+	}
+	if g.Owned {
+		// The folder is the game's here, disc two the list does not name included.
+		facts.size, facts.unknown = measureInstall(ctx, "", dir)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	pos, err := s.imageCardLocked(g, rom, dir, title, target.ID)
+	if err != nil {
+		return Game{}, err
+	}
+	if pos < 0 {
+		s.games = append(s.games, Game{ID: newID(), InstalledAt: time.Now()})
+		pos = len(s.games) - 1
+		fillImageCard(&s.games[pos], g, title, rom, dir, target.ID, facts)
+		if err := s.persist(); err != nil {
+			s.games = s.games[:pos]
+			return Game{}, fmt.Errorf("save library: %w", err)
+		}
+	} else {
+		previous := s.games[pos]
+		fillImageCard(&s.games[pos], g, title, rom, dir, target.ID, facts)
+		if err := s.persist(); err != nil {
+			s.games[pos] = previous
+			return Game{}, fmt.Errorf("save library: %w", err)
+		}
+	}
+	slog.Info("console image installed", "id", s.games[pos].ID, "title", title, "platform", target.ID)
+	s.emitUpdated()
+	return s.games[pos], nil
+}
+
+// imageCardLocked finds the card this image lands on: -1 means a new one. A card
+// without files matches by name too, because removal forgets its release.
+func (s *Service) imageCardLocked(g InstalledImage, rom, dir, title, platformID string) (int, error) {
+	match := -1
+	for i := range s.games {
+		game := &s.games[i]
+		sameImage := platform.SamePath(game.Executable, rom)
+		if game.Emulation == nil || game.Emulation.Platform != platformID {
+			if sameImage {
+				return -1, fmt.Errorf("%w: %s", errAlreadyAdded, game.Title)
+			}
+			continue
+		}
+		if game.Uninstalled {
+			if match < 0 && (sameImage || game.HoldsRelease("", "", g.SourceDownloadID) || strings.EqualFold(game.Title, title)) {
+				match = i
+			}
+			continue
+		}
+		if game.Owned && platform.SamePath(game.InstallDir, dir) {
+			return i, nil
+		}
+		if sameImage || game.HoldsRelease(g.ReleaseID, g.SourceID, g.SourceDownloadID) {
+			return -1, fmt.Errorf("%w: %s", errAlreadyAdded, game.Title)
+		}
+	}
+	return match, nil
+}
+
+func fillImageCard(game *Game, g InstalledImage, title, rom, dir, platformID string, facts imageFacts) {
+	game.Title = title
+	if g.Cover != "" {
+		game.Cover = g.Cover
+	}
+	game.Executable = rom
+	game.InstallDir = dir
+	game.Uninstalled = false
+	game.Version = g.Version
+	game.SizeBytes, game.SizeUnknown = facts.size, facts.unknown
+	game.SourceDownloadID = g.SourceDownloadID
+	game.ReleaseID = g.ReleaseID
+	game.SourceID = g.SourceID
+	game.Source = SourceManaged
+	game.Owned = g.Owned
+	game.InstallType = ""
+	if g.Owned {
+		game.InstallType = InstallTypeImage
+	}
+	game.Emulation = &Emulation{Platform: platformID, Files: facts.files}
+}
+
+// HoldsRelease says whether the card was installed from this release or this
+// download.
+func (g Game) HoldsRelease(releaseID, sourceID, downloadID string) bool {
+	if releaseID != "" && g.ReleaseID == releaseID && g.SourceID == sourceID {
+		return true
+	}
+	return downloadID != "" && g.SourceDownloadID == downloadID
+}
+
+// ImageMembers returns the files an image lists. complete is false when the list
+// could not be followed to the end.
+func ImageMembers(rom string, alive func() error) (files []string, complete bool, err error) {
+	return listedFiles(rom, alive)
+}
+
 // bindImageLocked points a card at an image. An empty title keeps the old name.
 func (s *Service) bindImageLocked(pos int, title, rom, platformID string, facts imageFacts) (Game, error) {
 	previous := s.games[pos]
 	s.games[pos].Emulation = &Emulation{Platform: platformID, Files: facts.files}
 	s.games[pos].Uninstalled = false
 	s.games[pos].Executable = rom
-	s.games[pos].InstallDir = filepath.Dir(rom)
+	if !previous.Owned || !platform.Inside(previous.InstallDir, rom) {
+		// A card that followed its file elsewhere must not delete that folder.
+		s.games[pos].InstallDir = filepath.Dir(rom)
+		s.games[pos].Owned = false
+		s.games[pos].InstallType = ""
+		clearInstalledProvenance(&s.games[pos])
+		s.games[pos].SourceDownloadID = ""
+	}
 	s.games[pos].SizeBytes, s.games[pos].SizeUnknown = facts.size, facts.unknown
 	if title != "" {
 		s.games[pos].Title = title

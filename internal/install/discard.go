@@ -135,7 +135,7 @@ func (s *Service) discardDestination(item Installation) error {
 // уберёт остаток.
 func (s *Service) discardBlocker(item Installation) error {
 	source := item.ContentRoot
-	if archived(item.Type) {
+	if archived(item.Type) || (item.Type == TypeImage && item.ArchivePath != "") {
 		source = item.ArchivePath
 	}
 	if source == "" {

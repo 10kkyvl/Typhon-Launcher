@@ -53,13 +53,22 @@ func (m *titleMemo) MatchNames(raw string) []string {
 func (m *titleMemo) reparse(r *Release) {
 	p := m.Parse(r.RawTitle)
 	r.Title, r.NormalizedTitle = p.Base, p.Normalized
+	platform := p.Platform
 	if r.GameHint != "" {
 		hint := m.Parse(r.GameHint)
 		r.Title, r.NormalizedTitle = hint.Base, hint.Normalized
 		if hint.Year != 0 {
 			p.Year = hint.Year
 		}
+		if platform == "" {
+			platform = hint.Platform
+		}
 	}
+	// A row saved before the console was known may sit on a PC card.
+	if r.Platform != platform {
+		r.MatchEpoch = 0
+	}
+	r.Platform = platform
 	r.Version, r.RawVersion = p.Version, p.RawVersion
 	if r.ToVersion != "" {
 		r.Version = r.ToVersion
@@ -69,7 +78,13 @@ func (m *titleMemo) reparse(r *Release) {
 }
 
 func (m *titleMemo) queryKey(r *Release) string {
-	return strings.Join(m.releaseNames(r), "\x00") + "|" + strconv.Itoa(r.Year)
+	key := strings.Join(m.releaseNames(r), "\x00") + "|" + strconv.Itoa(r.Year)
+	// Only a console release gets a new key, so a PC cache stays valid while a
+	// console row saved under the old key is asked again.
+	if r.Platform != "" {
+		key += "|" + r.Platform
+	}
+	return key
 }
 
 // The result is shared between releases with the same title and hint: callers

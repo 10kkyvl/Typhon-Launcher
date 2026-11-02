@@ -15,6 +15,8 @@ export const errLibrary: Record<ErrLibraryKey, Message> = {
   'library.completed_at_in_future': 'The completion date is in the future',
   'library.no_executable': 'Executable file not found',
   'library.already_added': 'This game is already added',
+  'library.cover_invalid': 'The cover must be an http or https address',
+  'library.image_outside_dir': 'The game image lies outside the install folder',
   'library.executable_outside_install': 'The executable is outside the install directory',
   'library.crossover_unavailable': 'CrossOver is not installed or unavailable',
   'library.bottle_unavailable': 'The CrossOver bottle for this game was not found',

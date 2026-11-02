@@ -39,7 +39,7 @@ var clearMovedReadOnly = storage.MakeWritable
 // Решает режим, а не movedSource: ошибка stat там значит «не перенос», и обход
 // тихо пропустился бы.
 func makeMovedWritable(ctx context.Context, item Installation) error {
-	if item.Type != TypePortable || item.Mode != ModeMove {
+	if !takesSource(item.Type, item.ArchivePath) || item.Mode != ModeMove {
 		return nil
 	}
 	if err := clearMovedReadOnly(ctx, item.Destination); err != nil {
@@ -91,7 +91,7 @@ func resolveMode(requested string, d download.Download, contentRoot string) (str
 // spaceNeeded — единственное место, где решается, сколько места нужно под
 // установку: перенос в пределах тома не копирует данные.
 func spaceNeeded(plan Plan, mode string, sameVolume bool) int64 {
-	if plan.Type == TypePortable && mode == ModeMove && sameVolume {
+	if takesSource(plan.Type, plan.ArchivePath) && mode == ModeMove && sameVolume {
 		return moveReserveBytes
 	}
 	return requiredBytes(plan)

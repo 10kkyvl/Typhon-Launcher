@@ -87,6 +87,7 @@ type Release struct {
 	ToVersion       string         `json:"toVersion,omitempty"`
 	Sequence        int            `json:"sequence,omitempty"`
 	Edition         string         `json:"edition,omitempty"`
+	Platform        string         `json:"platform,omitempty"`
 	Languages       []string       `json:"languages,omitempty"`
 	Year            int            `json:"year,omitempty"`
 	Tags            []string       `json:"tags,omitempty"`

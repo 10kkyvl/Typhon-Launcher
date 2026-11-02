@@ -96,7 +96,11 @@ var errFakeNoGame = errors.New("игра не найдена")
 type fakeRegistrar struct {
 	mu      sync.Mutex
 	games   []library.InstalledGame
+	images  []library.InstalledImage
 	records map[string]library.Game
+
+	imageErr error
+
 	running map[string]bool
 	removed []string
 
@@ -131,6 +135,31 @@ func (f *fakeRegistrar) RegisterInstalled(ctx context.Context, g library.Install
 		Owned:            g.Owned,
 		Uninstall:        g.Uninstall,
 		UninstallUnknown: g.UninstallUnknown,
+	}
+	f.putLocked(game)
+	return game, nil
+}
+
+func (f *fakeRegistrar) RegisterEmulated(ctx context.Context, g library.InstalledImage) (library.Game, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.imageErr != nil {
+		return library.Game{}, f.imageErr
+	}
+	f.images = append(f.images, g)
+	f.next++
+	game := library.Game{
+		ID:               fmt.Sprintf("game-%d", f.next),
+		Title:            g.Title,
+		Cover:            g.Cover,
+		Executable:       g.Image,
+		InstallDir:       g.InstallDir,
+		SourceDownloadID: g.SourceDownloadID,
+		ReleaseID:        g.ReleaseID,
+		SourceID:         g.SourceID,
+		InstallType:      library.InstallTypeImage,
+		Owned:            g.Owned,
+		Emulation:        &library.Emulation{Platform: g.Platform},
 	}
 	f.putLocked(game)
 	return game, nil

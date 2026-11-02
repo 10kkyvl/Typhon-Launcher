@@ -153,6 +153,10 @@ export const errInstall = {
   'errInstall.diskusageNoGame': 'не указана игра',
 
   'errInstall.wineBottleCreateFailed': 'не удалось подготовить окружение CrossOver для этой игры',
+  'errInstall.installImageAmbiguous': 'в загрузке лежат образы разных игр, выбрать один автоматически нельзя',
+  'errInstall.installImageDestination': 'образ игры ставится только в папку Consoles каталога игр',
+  'errInstall.installImageNotFound': 'в загрузке не найден образ игры для этой консоли',
+  'errInstall.installImageOptionsInvalid': 'неверные данные для установки образа игры',
   'errInstall.wineNotInstalled': 'для установки и запуска игр на macOS нужен CrossOver',
 } as const;
 

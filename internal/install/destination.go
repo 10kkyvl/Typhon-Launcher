@@ -20,11 +20,17 @@ func sharesFootprint(game library.Game, path string) bool {
 // checkHoldsNoImage refuses to delete or consume a folder that an emulated game
 // of the library keeps its files in: they are not part of what is being removed.
 func (s *Service) checkHoldsNoImage(dir string) error {
+	return s.checkHoldsOtherImage(dir, "")
+}
+
+// checkHoldsOtherImage is checkHoldsNoImage for a folder that may hold the image
+// of the game being removed.
+func (s *Service) checkHoldsOtherImage(dir, gameID string) error {
 	if s.library == nil {
 		return errNoLibrary
 	}
 	for _, game := range s.library.GetGames() {
-		if game.Emulation != nil && sharesFootprint(game, dir) {
+		if game.ID != gameID && game.Emulation != nil && sharesFootprint(game, dir) {
 			return fmt.Errorf("%w: %s", emulators.ErrImageInside, game.Title)
 		}
 	}

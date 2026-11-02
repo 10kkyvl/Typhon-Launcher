@@ -40,6 +40,7 @@ func sameRelease(a, b *Release) bool {
 		a.ToVersion == b.ToVersion &&
 		a.Sequence == b.Sequence &&
 		a.Edition == b.Edition &&
+		a.Platform == b.Platform &&
 		slices.Equal(a.Languages, b.Languages) &&
 		a.Year == b.Year &&
 		slices.Equal(a.Tags, b.Tags) &&

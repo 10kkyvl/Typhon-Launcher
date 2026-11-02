@@ -6,11 +6,17 @@ import (
 	"fmt"
 	"strings"
 	"unicode"
+
+	"typhon/internal/matchprogress"
 )
 
 type ReleaseQuery struct {
 	Titles []string `json:"titles"`
 	Year   int      `json:"year,omitempty"`
+
+	// Accept narrows the answer to one console. It stays on this side: the
+	// server gets the same title and year as for a PC release.
+	Accept func(platforms []string) bool `json:"-"`
 }
 type ReleaseMatch struct {
 	Game       *Game              `json:"game,omitempty"`
@@ -55,6 +61,9 @@ const (
 	ReasonNone      = "none"
 	ReasonAmbiguous = "ambiguous"
 	ReasonTooMany   = "too_many"
+	// The title is known, but not on the console the release is for. Only this
+	// launcher sets it: the server does not know about the console.
+	ReasonPlatform = "platform"
 )
 
 const (
@@ -76,7 +85,7 @@ const (
 // with a reason this launcher has no word for, carries no reason.
 func normalizeReason(reason string) string {
 	switch reason {
-	case ReasonNone, ReasonAmbiguous, ReasonTooMany:
+	case ReasonNone, ReasonAmbiguous, ReasonTooMany, ReasonPlatform:
 		return reason
 	}
 	return ""
@@ -172,7 +181,8 @@ func (s *Service) ResolveSourceQueries(ctx context.Context, queries []ReleaseQue
 	previous := append([]Game(nil), s.games...)
 	out := make([]Match, len(queries))
 	changed := false
-	for i, r := range resolved {
+	for i, query := range queries {
+		r := resolved[i]
 		out[i] = Match{Status: StatusUnmatched, Method: MethodNone}
 		if r.Game == nil {
 			out[i].Reason = normalizeReason(r.Reason)
@@ -211,7 +221,11 @@ func (s *Service) ResolveSourceQueries(ctx context.Context, queries []ReleaseQue
 			if g.GameType != "" {
 				merged.GameType = g.GameType
 			}
-			if merged.ParentID != old.ParentID || merged.GameType != old.GameType {
+			// A console release rechecks this record locally on the next pass.
+			if query.Accept != nil && len(merged.Platforms) == 0 {
+				merged.Platforms = g.Platforms
+			}
+			if merged.ParentID != old.ParentID || merged.GameType != old.GameType || len(merged.Platforms) != len(old.Platforms) {
 				s.games[pos] = merged
 				s.updateIndexAtLocked(pos, old)
 				changed = true
@@ -259,5 +273,77 @@ func (s *Service) PreviewSourceQueries(ctx context.Context, queries []ReleaseQue
 	if len(resolved) != len(queries) {
 		return nil, errors.New("incomplete catalog release match response")
 	}
+	if confirmErr := confirmConsoleMatches(ctx, remote, queries, resolved); confirmErr != nil {
+		return nil, confirmErr
+	}
 	return resolved, err
+}
+
+// confirmConsoleMatches drops whatever the server chose for a console release
+// on other platforms. A candidate has no provider ids and cannot become a game
+// by itself, so the only one left on the console is asked for by its own
+// catalog title and year; without a full answer it stays for the user to review.
+func confirmConsoleMatches(ctx context.Context, remote ReleaseMatcher, queries []ReleaseQuery, resolved []ReleaseMatch) error {
+	var asks []ReleaseQuery
+	var positions []int
+	var wanted []ReleaseCandidate
+	for i := range resolved {
+		if queries[i].Accept == nil {
+			continue
+		}
+		only, ok := narrowConsoleMatch(&resolved[i], queries[i].Accept)
+		if !ok || only.Title == "" || len([]rune(only.Title)) > maxCandidateTitle {
+			continue
+		}
+		asks = append(asks, ReleaseQuery{Titles: []string{only.Title}, Year: only.ReleaseYear, Accept: queries[i].Accept})
+		positions = append(positions, i)
+		wanted = append(wanted, only)
+	}
+	if len(asks) == 0 {
+		return nil
+	}
+	// This pass is not part of the batch progress the caller reports.
+	answers, err := remote.MatchReleases(matchprogress.With(ctx, func(int, int) {}), asks)
+	var partial *PartialMatchError
+	if err != nil && !errors.As(err, &partial) {
+		return fmt.Errorf("confirm console matches: %w", err)
+	}
+	if len(answers) != len(asks) {
+		return errors.New("incomplete catalog release match response")
+	}
+	// A failed position is a zero answer: that release keeps its candidate.
+	for j, answer := range answers {
+		if answer.Game != nil && answer.Game.ID == wanted[j].ID && asks[j].Accept(answer.Game.Platforms) {
+			resolved[positions[j]] = ReleaseMatch{Game: answer.Game}
+		}
+	}
+	return nil
+}
+
+// narrowConsoleMatch reports the candidate when exactly one fits the console.
+// An empty platform list proves nothing, so it does not fit.
+func narrowConsoleMatch(m *ReleaseMatch, accept func([]string) bool) (ReleaseCandidate, bool) {
+	if m.Game != nil {
+		if !accept(m.Game.Platforms) {
+			*m = ReleaseMatch{Reason: ReasonPlatform}
+		}
+		return ReleaseCandidate{}, false
+	}
+	if m.Reason != ReasonAmbiguous || len(m.Candidates) == 0 {
+		return ReleaseCandidate{}, false
+	}
+	kept := make([]ReleaseCandidate, 0, len(m.Candidates))
+	for _, c := range m.Candidates {
+		if accept(c.Platforms) {
+			kept = append(kept, c)
+		}
+	}
+	m.Candidates = kept
+	switch len(kept) {
+	case 0:
+		*m = ReleaseMatch{Reason: ReasonPlatform}
+	case 1:
+		return kept[0], true
+	}
+	return ReleaseCandidate{}, false
 }

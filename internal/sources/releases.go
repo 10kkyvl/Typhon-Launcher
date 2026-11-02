@@ -354,6 +354,7 @@ func (s *Service) ConfirmMatch(releaseID, gameID string) error {
 	}
 	cat := s.catalog
 	normalized := r.NormalizedTitle
+	platform := r.Platform
 	s.mu.Unlock()
 
 	if cat == nil {
@@ -377,7 +378,7 @@ func (s *Service) ConfirmMatch(releaseID, gameID string) error {
 	before := map[string][]Release{}
 	for sourceID, list := range s.releases {
 		for _, item := range list {
-			if item.ID != releaseID && (!learnPattern || item.Locked || item.NormalizedTitle != normalized) {
+			if item.ID != releaseID && (!learnPattern || item.Locked || item.NormalizedTitle != normalized || item.Platform != platform) {
 				continue
 			}
 			if !touched[sourceID] {

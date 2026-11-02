@@ -20,6 +20,9 @@ type Parsed struct {
 	Year       int
 	Tags       []string
 	DLCCount   int
+	// Platform is one of Consoles() when the name says so explicitly, empty for
+	// a PC release.
+	Platform string
 }
 
 func (d *Dict) Parse(raw string) Parsed {
@@ -31,6 +34,7 @@ func (d *Dict) Parse(raw string) Parsed {
 	s = reExt.ReplaceAllString(s, "")
 	s = reURL.ReplaceAllString(s, " ")
 	s = reWWW.ReplaceAllString(s, " ")
+	s, platform := extractConsole(s)
 
 	s, markerTags := d.extractMarkers(s)
 	// A bracket beginning with a version is release metadata, including
@@ -120,6 +124,7 @@ func (d *Dict) Parse(raw string) Parsed {
 		Year:       year,
 		Tags:       tags,
 		DLCCount:   dlcCount,
+		Platform:   platform,
 	}
 }
 

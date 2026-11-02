@@ -113,6 +113,7 @@ type downloadSource interface {
 
 type registrar interface {
 	RegisterInstalled(ctx context.Context, g library.InstalledGame) (library.Game, error)
+	RegisterEmulated(ctx context.Context, g library.InstalledImage) (library.Game, error)
 	Find(id string) (library.Game, error)
 	GetGames() []library.Game
 	IsRunning(id string) bool
@@ -985,6 +986,9 @@ func (s *Service) InspectDownload(downloadID string) (PlanInfo, error) {
 }
 
 func (s *Service) Start(downloadID string, opts StartOptions) (Installation, error) {
+	if err := checkImageOptions(opts); err != nil {
+		return Installation{}, err
+	}
 	d, err := s.completedDownload(downloadID)
 	if err != nil {
 		return Installation{}, err
@@ -1007,11 +1011,11 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 	if err != nil {
 		return Installation{}, err
 	}
-	plan, err := Inspect(base, source)
+	plan, err := inspectSource(base, source, opts.Platform)
 	if err != nil {
 		return Installation{}, err
 	}
-	if opts.Type != "" {
+	if opts.Type != "" && opts.Platform == "" {
 		plan.Type = opts.Type
 	}
 	manual := false
@@ -1037,17 +1041,21 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 	}
 
 	mode := ""
-	if plan.Type == TypePortable {
+	if takesSource(plan.Type, plan.ArchivePath) {
 		mode, err = resolveMode(opts.Mode, d, plan.ContentRoot)
 		if err != nil {
 			return Installation{}, err
 		}
 	}
 
+	name := strings.TrimSpace(opts.Title)
+	if name == "" {
+		name = s.nameFor(d)
+	}
 	item := &Installation{
 		ID:              newID(),
 		DownloadID:      d.ID,
-		Name:            s.nameFor(d),
+		Name:            name,
 		Type:            plan.Type,
 		Status:          StatusPending,
 		SourcePath:      plan.SourcePath,
@@ -1063,11 +1071,23 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 		Origin:          d.Origin,
 		Unattended:      opts.Unattended,
 		SkipRegister:    opts.SkipRegister,
+		Platform:        opts.Platform,
+		Cover:           opts.Cover,
 		StartedAt:       time.Now(),
 	}
 
+	requested := opts.Destination
+	if plan.Type == TypeImage {
+		if err := s.checkImageNew(*item); err != nil {
+			return Installation{}, err
+		}
+		requested, err = s.imageDestination(s.config(), opts.Destination, opts.Platform, name)
+		if err != nil {
+			return Installation{}, err
+		}
+	}
 	if ownDestination(plan.Type, plan.Silent) {
-		dest, err := cleanDestination(opts.Destination)
+		dest, err := cleanDestination(requested)
 		if err != nil {
 			return Installation{}, err
 		}
@@ -1090,7 +1110,7 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 			return Installation{}, err
 		}
 	}
-	if plan.Type == TypePortable {
+	if takesSource(plan.Type, plan.ArchivePath) {
 		item.Mode = mode
 	}
 
@@ -1134,6 +1154,15 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 	})
 	emit(eventUpdated, snap)
 	return snap, nil
+}
+
+// inspectSource keeps the two ways of reading a download apart: a console means
+// the download is an image whatever it looks like.
+func inspectSource(ctx context.Context, source, console string) (Plan, error) {
+	if console != "" {
+		return InspectImage(ctx, source, console)
+	}
+	return Inspect(ctx, source)
 }
 
 func (s *Service) startBlockedLocked(item *Installation, downloadID string) error {
@@ -1345,6 +1374,7 @@ func (s *Service) retry(id string, forceInteractive bool) error {
 	destination := item.Destination
 	title := item.Name
 	storedMode := item.Mode
+	console := item.Platform
 	s.mu.Unlock()
 
 	d, err := s.completedDownload(downloadID)
@@ -1355,16 +1385,19 @@ func (s *Service) retry(id string, forceInteractive bool) error {
 	if err != nil {
 		return err
 	}
-	plan, err := Inspect(base, source)
+	plan, err := inspectSource(base, source, console)
 	if err != nil {
 		return err
 	}
 	mode := storedMode
-	if kind == TypePortable {
+	switch {
+	case takesSource(kind, plan.ArchivePath):
 		mode, err = resolveMode(storedMode, d, plan.ContentRoot)
 		if err != nil {
 			return err
 		}
+	case kind == TypeImage:
+		mode = ""
 	}
 
 	// Установщик, выбранный пользователем вручную, переживает повтор вместе со
@@ -1437,7 +1470,7 @@ func (s *Service) retry(id string, forceInteractive bool) error {
 		item.ContentRoot = plan.ContentRoot
 		item.ArchivePath = plan.ArchivePath
 		item.BytesTotal = progressTotal(item.Type, plan)
-		if item.Type == TypePortable {
+		if item.Type == TypePortable || item.Type == TypeImage {
 			item.Mode = mode
 		}
 	}

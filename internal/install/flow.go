@@ -27,9 +27,9 @@ func (s *Service) run(ctx context.Context, id string) {
 	}
 	var err error
 	switch {
-	case item.Type == TypePortable:
+	case takesSource(item.Type, item.ArchivePath):
 		err = s.runPortable(ctx, id, item)
-	case archived(item.Type):
+	case archived(item.Type), item.Type == TypeImage:
 		err = s.runArchive(ctx, id, item)
 	case external(item.Type):
 		err = s.runInstaller(ctx, id, item)
@@ -83,7 +83,11 @@ func (s *Service) runPortable(ctx context.Context, id string, item Installation)
 	report := func(p Progress) { s.updateProgress(id, p) }
 	var err error
 	// Keep the source until both the destination and library entry are committed.
-	err = CopyDirVerified(ctx, item.ContentRoot, partial, report)
+	if item.Type == TypeImage {
+		err = copyImageSource(ctx, item.ContentRoot, partial, report)
+	} else {
+		err = CopyDirVerified(ctx, item.ContentRoot, partial, report)
+	}
 	if err == nil {
 		err = s.commit(ctx, partial, item.Destination)
 	}
@@ -111,7 +115,8 @@ func (s *Service) runPortable(ctx context.Context, id string, item Installation)
 // удалось, источник цел, и вызывающий копирует: файл внутри занят (антивирус,
 // индексатор) или «тот же том» оказался точкой монтирования другого.
 func (s *Service) renameSource(item Installation) error {
-	if _, err := os.Stat(item.ContentRoot); err != nil {
+	source, err := os.Stat(item.ContentRoot)
+	if err != nil {
 		return fmt.Errorf("source of the move: %w", err)
 	}
 	if err := os.MkdirAll(filepath.Dir(item.Destination), 0o755); err != nil {
@@ -123,6 +128,18 @@ func (s *Service) renameSource(item Installation) error {
 	}
 	if !empty {
 		return errDestNotEmpty
+	}
+	if !source.IsDir() {
+		// Единственный файл образа: каталогом назначения он стать не может.
+		// Созданная папка до переименования пуста, и после краха запись просто
+		// считается прерванной, источник цел.
+		if err := os.MkdirAll(item.Destination, 0o755); err != nil {
+			return fmt.Errorf("create destination: %w", err)
+		}
+		if err := os.Rename(item.ContentRoot, filepath.Join(item.Destination, filepath.Base(item.ContentRoot))); err != nil {
+			return fmt.Errorf("%w: %w", errRenameRefused, err)
+		}
+		return nil
 	}
 	if err := os.Remove(item.Destination); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("%w: remove empty destination: %w", errRenameRefused, err)
@@ -153,6 +170,10 @@ func (s *Service) runArchive(ctx context.Context, id string, item Installation) 
 	}
 
 	err := ExtractArchive(ctx, item.ArchivePath, partial, func(p Progress) { s.updateProgress(id, p) })
+	if err == nil && item.Type == TypeImage {
+		// До commit: архив без образа не оставляет после себя папку в Consoles.
+		_, err = FindImages(ctx, partial, item.Platform)
+	}
 	if err == nil {
 		err = s.commitExtracted(ctx, partial, item.Destination)
 	}
@@ -869,6 +890,16 @@ func (s *Service) finalize(ctx context.Context, id string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if item.Type == TypeImage {
+		image, err := FindImages(ctx, item.Destination, item.Platform)
+		if err != nil {
+			return err
+		}
+		if err := s.setExecutable(id, image, nil); err != nil {
+			return err
+		}
+		return s.complete(ctx, id)
+	}
 	if item.Executable == "" {
 		candidates, err := FindExecutables(ctx, item.Destination, item.Name)
 		if err != nil {
@@ -910,7 +941,13 @@ func (s *Service) complete(ctx context.Context, id string) error {
 	}
 	version, source := detectVersion(item)
 	var game library.Game
-	if !item.SkipRegister {
+	if item.Type == TypeImage {
+		registered, err := s.registerImage(ctx, item, version)
+		if err != nil {
+			return err
+		}
+		game = registered
+	} else if !item.SkipRegister {
 		registered, err := s.register(ctx, item, version, source)
 		if err != nil {
 			return err
@@ -1056,7 +1093,7 @@ func (s *Service) applyCleanup(cfg settings.Settings, downloadID string) {
 // считается переносом: любая другая ошибка stat не повод удалять запись
 // загрузки, чьи файлы могут быть на месте.
 func movedSource(item Installation) bool {
-	if item.Type != TypePortable || item.Mode != ModeMove || item.ContentRoot == "" {
+	if !takesSource(item.Type, item.ArchivePath) || item.Mode != ModeMove || item.ContentRoot == "" {
 		return false
 	}
 	_, err := os.Stat(item.ContentRoot)
@@ -1251,6 +1288,9 @@ func verifyInstall(item Installation) error {
 func detectVersion(item Installation) (string, string) {
 	if item.Origin.Version != "" {
 		return item.Origin.Version, VersionSourceRelease
+	}
+	if item.Type == TypeImage {
+		return "", ""
 	}
 	if item.Executable != "" {
 		if info, ok := ExeVersion(item.Executable); ok && info.Version != "" {

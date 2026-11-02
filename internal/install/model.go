@@ -16,6 +16,7 @@ const (
 	TypeArchiveRar   Type = "archive_rar"
 	TypeExeInstaller Type = "exe_installer"
 	TypeMsiInstaller Type = "msi_installer"
+	TypeImage        Type = library.InstallTypeImage
 	TypeUnknown      Type = "unknown"
 )
 
@@ -55,6 +56,8 @@ type Plan struct {
 	RequiresUserInteraction bool        `json:"requiresUserInteraction"`
 	CanAutoInstall          bool        `json:"canAutoInstall"`
 	Candidates              []Candidate `json:"candidates"`
+	Platform                string      `json:"platform,omitempty"`
+	ImagePath               string      `json:"imagePath,omitempty"`
 }
 
 type Progress struct {
@@ -114,6 +117,11 @@ type Installation struct {
 	// OwnedDestination records the empty target before starting an installer.
 	// Unlike a filesystem snapshot, it survives retries and launcher restarts.
 	OwnedDestination string `json:"ownedDestination,omitempty"`
+
+	// Platform and Cover describe a console image: Retry and the recovery after
+	// a crash have nothing else to go on.
+	Platform string `json:"platform,omitempty"`
+	Cover    string `json:"cover,omitempty"`
 }
 
 type PlanInfo struct {
@@ -150,6 +158,11 @@ type StartOptions struct {
 	InstallerPath string `json:"installerPath"`
 	Unattended    bool   `json:"unattended,omitempty"`
 	SkipRegister  bool   `json:"skipRegister,omitempty"`
+	// Platform turns the install into a console image; Title and Cover are its
+	// card. Empty for every other install.
+	Platform string `json:"platform,omitempty"`
+	Title    string `json:"title,omitempty"`
+	Cover    string `json:"cover,omitempty"`
 }
 
 type RemovedEvent struct {
@@ -169,10 +182,16 @@ func snapshotOf(i *Installation) Installation {
 
 func controlled(t Type) bool {
 	switch t {
-	case TypePortable, TypeArchiveZip, TypeArchive7z, TypeArchiveRar:
+	case TypePortable, TypeArchiveZip, TypeArchive7z, TypeArchiveRar, TypeImage:
 		return true
 	}
 	return false
+}
+
+// takesSource says whether the job carries the downloaded files over as they
+// are, so move and copy apply. An image that came in an archive is unpacked.
+func takesSource(t Type, archivePath string) bool {
+	return t == TypePortable || (t == TypeImage && archivePath == "")
 }
 
 func archived(t Type) bool {

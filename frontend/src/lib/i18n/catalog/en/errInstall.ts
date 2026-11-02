@@ -156,5 +156,9 @@ export const errInstall: Record<ErrInstallKey, Message> = {
   'errInstall.diskusageNoGame': 'No game specified',
 
   'errInstall.wineBottleCreateFailed': 'Could not prepare the CrossOver environment for this game',
+  'errInstall.installImageAmbiguous': 'The download holds images of different games, so one cannot be picked automatically',
+  'errInstall.installImageDestination': 'A game image can only be installed into the Consoles folder of a games folder',
+  'errInstall.installImageNotFound': 'No game image for this console was found in the download',
+  'errInstall.installImageOptionsInvalid': 'Invalid data for installing a game image',
   'errInstall.wineNotInstalled': 'CrossOver is required to install and run games on macOS',
 };

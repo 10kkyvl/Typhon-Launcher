@@ -6,6 +6,7 @@ package emulators
 
 import (
 	"fmt"
+	"net/url"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -18,6 +19,8 @@ const (
 
 	// ImageArg marks the place of the game image in an argument template.
 	ImageArg = "<image>"
+
+	maxCoverURL = 2048
 )
 
 // Platform is one console. Args are checked against the real emulators by hand,
@@ -124,6 +127,19 @@ func ImagePatterns(ids []string) (string, error) {
 		}
 	}
 	return strings.Join(patterns, ";"), nil
+}
+
+// ValidCover says whether a cover can be stored: covers are catalog addresses,
+// never a local path a card would make the window load.
+func ValidCover(raw string) bool {
+	if len(raw) > maxCoverURL {
+		return false
+	}
+	address, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	return (address.Scheme == "http" || address.Scheme == "https") && address.Hostname() != ""
 }
 
 // AcceptsImage says whether the file extension belongs to this console.

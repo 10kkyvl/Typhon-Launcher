@@ -32,6 +32,10 @@ export const REASONS: Record<string, MessageKey> = {
   'install.free_space_unknown': 'errInstall.installFreeSpaceUnknown',
   'install.game_busy': 'errInstall.installGameBusy',
   'install.game_running': 'errInstall.installGameRunning',
+  'install.image_ambiguous': 'errInstall.installImageAmbiguous',
+  'install.image_destination': 'errInstall.installImageDestination',
+  'install.image_not_found': 'errInstall.installImageNotFound',
+  'install.image_options_invalid': 'errInstall.installImageOptionsInvalid',
   'install.incomplete_source': 'errInstall.installIncompleteSource',
   'install.installer_busy': 'errInstall.installInstallerBusy',
   'install.installer_changed': 'errInstall.installInstallerChanged',
@@ -148,6 +152,12 @@ export const REASONS: Record<string, MessageKey> = {
   'diskusage.no_game': 'errInstall.diskusageNoGame',
   'wine.bottle_create_failed': 'errInstall.wineBottleCreateFailed',
   'wine.not_installed': 'errInstall.wineNotInstalled',
+
+  'emulators.image_inside': 'emulators.image_inside',
+  'emulators.unknown_platform': 'emulators.unknown_platform',
+  'library.already_added': 'library.already_added',
+  'library.cover_invalid': 'library.cover_invalid',
+  'library.image_outside_dir': 'library.image_outside_dir',
 };
 
 function suggestedPath(err: unknown): string {
