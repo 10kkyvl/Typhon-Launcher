@@ -37,7 +37,9 @@ type trayStopper interface {
 
 func playFromTray(player trayPlayer, id string, reveal func()) {
 	if err := player.PlayGame(id); err != nil {
-		slog.Error("play from tray", "id", id, "error", err)
+		if !noteEmulatorNeeded(id, err) {
+			slog.Error("play from tray", "id", id, "error", err)
+		}
 		reveal()
 	}
 }

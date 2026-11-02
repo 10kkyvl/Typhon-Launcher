@@ -9,7 +9,6 @@ import {
   isEmulated,
   needsEmulator,
   platformBadge,
-  titleFromImage,
   type ConsoleInfo,
 } from './emulation';
 import { lastProfileId, playLabel, profileChoices } from '../game/profiles';
@@ -93,28 +92,5 @@ describe('console of an image', () => {
 
   it('lists every extension once, sorted', () => {
     expect(imageExtensions(consoles)).toEqual(['.bin', '.chd', '.cso', '.cue', '.iso', '.m3u', '.pbp', '.zso']);
-  });
-});
-
-describe('title from an image file', () => {
-  it.each([
-    ['C:\\roms\\Final Fantasy VII (USA) (Disc 1).cue', 'Final Fantasy VII'],
-    ['/roms/Gran Turismo 4 [SCUS-97328].iso', 'Gran Turismo 4'],
-    ['/roms/Crash_Bandicoot_(Europe)_[!].chd', 'Crash Bandicoot'],
-    ['/roms/Spider-Man 2.iso', 'Spider-Man 2'],
-    ['/roms/Vol. 2 (Rev 1).iso', 'Vol. 2'],
-    ['/roms/Game   Name.pbp', 'Game Name'],
-    ['/roms/Game', 'Game'],
-  ])('turns %s into %s', (path, expected) => {
-    expect(titleFromImage(path)).toBe(expected);
-  });
-
-  it('never goes empty when the whole name is tags', () => {
-    expect(titleFromImage('/roms/(USA).iso')).toBe('(USA)');
-    expect(titleFromImage('/roms/[SLUS-00001].iso')).toBe('[SLUS-00001]');
-  });
-
-  it('returns nothing for an empty path', () => {
-    expect(titleFromImage('')).toBe('');
   });
 });

@@ -56,16 +56,3 @@ export function consoleForImage(consoles: readonly ConsoleInfo[], path: string):
 export function imageExtensions(consoles: readonly ConsoleInfo[]): string[] {
   return [...new Set(consoles.flatMap((item) => item.extensions ?? []))].sort();
 }
-
-export function titleFromImage(path: string): string {
-  const base = (path.split(/[\\/]/).pop() ?? '').trim();
-  const dot = base.lastIndexOf('.');
-  const stem = dot > 0 && /^\.[a-z0-9]{1,5}$/i.test(base.slice(dot)) ? base.slice(0, dot) : base;
-  const plain = stem.replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
-  const cleaned = plain
-    .replace(/\s*\([^()]*\)/g, '')
-    .replace(/\s*\[[^[\]]*\]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return cleaned || plain;
-}

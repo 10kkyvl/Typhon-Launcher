@@ -106,6 +106,7 @@ func init() {
 	application.RegisterEvent[[]library.Game]("library:updated")
 	application.RegisterEvent[[]library.Collection](library.EventCollections)
 	application.RegisterEvent[navigateEvent](eventNavigate)
+	application.RegisterEvent[EmulatorNeeded](eventEmulatorsNeeded)
 	application.RegisterEvent[library.SessionEvent]("game:started")
 	application.RegisterEvent[library.SessionEvent]("game:stopped")
 	application.RegisterEvent[library.CrashEvent]("game:crash")
@@ -384,6 +385,10 @@ func main() {
 		fatal("start emulators service", err)
 	}
 	libraryService.SetEmulatorResolver(emulatorService.Resolve)
+	emulatorPrompts := newEmulatorPromptService(libraryService, func(needed EmulatorNeeded) {
+		emitEmulatorNeeded(application.Get(), needed)
+	})
+	outsidePlayer := promptingPlayer{player: libraryService, prompts: emulatorPrompts}
 	playlogService, err := playlog.NewService()
 	if err != nil {
 		fatal("start playlog service", err)
@@ -860,6 +865,7 @@ func main() {
 		application.NewService(settingsService),
 		application.NewService(libraryService),
 		application.NewService(emulatorService),
+		application.NewService(emulatorPrompts),
 		application.NewService(profileService),
 		application.NewService(playlogService),
 		application.NewService(downloadManager),
@@ -980,7 +986,7 @@ func main() {
 		language: appService.UILanguage,
 		open:     func() { trayController.Open() },
 		quit:     func() { trayController.Quit() },
-		play:     func(id string) { playFromTray(libraryService, id, func() { trayController.Open() }) },
+		play:     func(id string) { playFromTray(outsidePlayer, id, func() { trayController.Open() }) },
 		stop:     func(id string) { stopFromTray(libraryService, id, func() { trayController.Open() }) },
 	}
 	recent.setGames(recent.fetch())
@@ -1088,7 +1094,7 @@ func main() {
 		// PlayGame нужен контекст из ServiceStartup, а сервисы стартуют только
 		// внутри wails.Run: вызов до него ярлык с холодного старта отклонял.
 		wails.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
-			playFromShortcut(libraryService, playReq, func() { window.Show() })
+			playFromShortcut(outsidePlayer, playReq, func() { window.Show() })
 		})
 	}
 
@@ -1102,7 +1108,7 @@ func main() {
 	}
 	wails.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
 		launches.Ready(func(args []string) {
-			handleSecondLaunch(args, libraryService, trayController, navigation, func(route string) { emitNavigate(application.Get(), route) })
+			handleSecondLaunch(args, outsidePlayer, trayController, navigation, func(route string) { emitNavigate(application.Get(), route) })
 		})
 	})
 
@@ -1125,7 +1131,9 @@ type playRequest struct {
 
 func playFromShortcut(player gamePlayer, req playRequest, reveal func()) {
 	if err := player.PlayGameProfile(req.id, req.profile); err != nil {
-		slog.Error("play from shortcut", "id", req.id, "profile", req.profile, "error", err)
+		if !noteEmulatorNeeded(req.id, err) {
+			slog.Error("play from shortcut", "id", req.id, "profile", req.profile, "error", err)
+		}
 		reveal()
 	}
 }

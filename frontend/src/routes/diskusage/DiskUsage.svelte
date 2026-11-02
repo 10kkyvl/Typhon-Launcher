@@ -28,6 +28,8 @@
     type GameSort,
   } from '../../lib/diskusage/usage';
   import { openMoveGame } from '../../lib/game/actions/move';
+  import { isEmulated } from '../../lib/library/emulation';
+  import { libraryGames } from '../../lib/stores/library';
   import { msg } from '../../lib/i18n';
   import { installErrorText } from '../../lib/install/installErrors';
   import {
@@ -486,6 +488,7 @@
     bind:mode={removeMode}
     gameId={removeTarget.id}
     title={removeTarget.title}
+    emulated={isEmulated($libraryGames.find((game) => game.id === removeTarget?.id))}
     onremoved={() => void refresh()}
   />
 {/if}

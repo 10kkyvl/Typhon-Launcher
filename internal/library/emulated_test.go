@@ -15,6 +15,7 @@ import (
 	"typhon/internal/crashlog"
 	"typhon/internal/emulators"
 	"typhon/internal/procs"
+	"typhon/internal/storage"
 	"typhon/internal/uierr"
 )
 
@@ -23,7 +24,7 @@ func writeFile(t *testing.T, path, body string) string {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+	if err := storage.WriteAtomic(path, []byte(body)); err != nil {
 		t.Fatal(err)
 	}
 	return path

@@ -18,6 +18,7 @@
   import { initDegradedNotices } from './lib/stores/degraded';
   import { initGameModeNotices } from './lib/stores/gamemode';
   import { initMissingImages } from './lib/stores/missingImages';
+  import { initEmulatorNeeded } from './lib/stores/emulatorNeeded';
   import { initDiscovery } from './lib/stores/discovery';
   import { initDownloads } from './lib/stores/downloads';
   import { initPlayThrottle } from './lib/stores/playThrottle';
@@ -103,6 +104,7 @@
   initCollections();
   onDestroy(initCloudSaves());
   onDestroy(initMissingImages());
+  onDestroy(initEmulatorNeeded());
   onDestroy(initProfileAccentSync());
   initLegalAcceptance();
 

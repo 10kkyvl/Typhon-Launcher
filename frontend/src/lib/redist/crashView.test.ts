@@ -115,6 +115,28 @@ describe('crashView details', () => {
   });
 });
 
+describe('crashView for an emulated game', () => {
+  it('drops libraries, file check, compatibility and module hints, keeping the log', () => {
+    for (const hint of ['vcredist', 'compat', 'antivirus', 'unknown', '']) {
+      const v = crashView(recordFromCrash(crash({ hint, dumpFound: true }), 1, 0), true);
+      expect(v.actions).toEqual(['report']);
+      expect(v.reason).toBeNull();
+      expect(v.tips).toEqual([]);
+      expect(v.tech).toEqual([{ key: 'redist.crashCode', params: { code: '0xC0000005' } }]);
+    }
+  });
+
+  it('does the same for a stopped-only record', () => {
+    const v = crashView(recordFromStopped(stopped, 1, 0), true);
+    expect(v.actions).toEqual(['report']);
+    expect(v.title).toBe('redist.crashTitle');
+  });
+
+  it('leaves a regular game untouched', () => {
+    expect(crashView(recordFromCrash(crash(), 1, 0), false).actions).toEqual(['libs', 'verify']);
+  });
+});
+
 describe('merge', () => {
   it('adds the details to a stopped record and keeps the short title and count', () => {
     const base = recordFromStopped(stopped, 2, 5);

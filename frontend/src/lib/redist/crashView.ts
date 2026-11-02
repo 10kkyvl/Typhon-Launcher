@@ -128,9 +128,12 @@ function exitLine(record: CrashRecord): CrashLine[] {
   return [{ key: 'redist.crashCode', params: { code: `0x${(record.exitCode >>> 0).toString(16).toUpperCase()}` } }];
 }
 
-export function crashView(record: CrashRecord): CrashView {
+export function crashView(record: CrashRecord, emulated = false): CrashView {
   const detail = record.detail;
   const title: MessageKey = record.late ? 'redist.crashTitleLate' : 'redist.crashTitle';
+  if (emulated) {
+    return { title, reason: null, tips: [], tech: exitLine(record), actions: ['report'] };
+  }
   if (!detail) {
     return { title, reason: null, tips: [], tech: exitLine(record), actions: actionsFor('') };
   }

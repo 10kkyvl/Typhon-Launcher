@@ -42,7 +42,7 @@ export const emulators: Record<EmulatorsKey, Message> = {
   'emul.addNoConsole': 'The "{ext}" format does not fit any console. Supported: {list}.',
   'emul.addTitleHint': 'The image stays where it is; the launcher does not copy it.',
   'emul.addFindCover': 'Find a cover by title',
-  'emul.addFindCoverHint': 'The title exactly as written above is sent to the cover search. Nothing is sent without the checkbox.',
+  'emul.addFindCoverHint': 'Only the title you typed above is sent to the cover search. Nothing is sent without the checkbox.',
   'emul.imagesFilter': 'Game images',
   'emul.imageHint': 'If the image was moved or renamed, choose it again.',
   'emul.imageMissing': 'Image not found',

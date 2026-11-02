@@ -138,6 +138,7 @@
     const key = `${id}|${releaseCanonicalId}|${localGame?.title ?? catalogGame?.title ?? ''}`;
     const gameId = releaseCanonicalId;
     const gameTitle = localGame?.title ?? catalogGame?.title ?? '';
+    if (emulated) return;
     untrack(() => {
       if (key === releaseLoadKey) return;
       releaseLoadKey = key;

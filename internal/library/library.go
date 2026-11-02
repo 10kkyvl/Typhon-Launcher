@@ -355,7 +355,7 @@ func NewServiceAt(path string) (*Service, error) {
 	if s.savedEmulated, err = encodeEmulated(append([]Game{}, emulated...)); err != nil {
 		return nil, err
 	}
-	games = append(games, emulated...)
+	games = append(dropRemovalStubs(games, emulated), emulated...)
 	excluded, err := loadExcluded(excludedPath)
 	if err != nil {
 		return nil, err

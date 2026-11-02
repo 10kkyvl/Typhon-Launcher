@@ -28,6 +28,9 @@ const (
 
 var imageStat = os.Lstat
 
+// A variable because rights cannot be taken away from a file portably in a test.
+var loadEmulatedFile = storage.Load
+
 // Emulation marks a game started through an emulator. Executable then holds the
 // image and InstallDir its folder, which keeps every "the file lies inside the
 // game's folder" check true. The folder is not the game's: it can be Downloads,
@@ -61,7 +64,7 @@ func emulatedPathFor(path string) string {
 // loadEmulated follows invariant 3: only a missing file means "no games".
 func loadEmulated(path string) ([]Game, error) {
 	var games []Game
-	err := storage.Load(path, emulatedVersion, nil, &games)
+	err := loadEmulatedFile(path, emulatedVersion, nil, &games)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}
@@ -74,6 +77,26 @@ func loadEmulated(path string) ([]Game, error) {
 		}
 	}
 	return games, nil
+}
+
+// dropRemovalStubs settles a process killed inside the removal of an emulated
+// game (invariant 9). Removal writes the stub to library.json first, so a stub
+// whose game is still in the second file means the second write never happened.
+// The game stays; the stub only repeats its record and would double its hours.
+// Nothing is written here: the next persist rewrites library.json.
+func dropRemovalStubs(games, emulated []Game) []Game {
+	alive := make(map[string]struct{}, len(emulated))
+	for _, game := range emulated {
+		alive[game.ID] = struct{}{}
+	}
+	return slices.DeleteFunc(games, func(game Game) bool {
+		_, twin := alive[game.ID]
+		if game.Archived && twin {
+			slog.Warn("drop the stub of an interrupted removal", "id", game.ID)
+			return true
+		}
+		return false
+	})
 }
 
 func splitEmulated(games []Game) (native, emulated []Game) {

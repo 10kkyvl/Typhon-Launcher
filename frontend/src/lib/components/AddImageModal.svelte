@@ -10,8 +10,7 @@
     consolesForImage,
     imageExtension,
     imageExtensions,
-    titleFromImage,
-  } from '../library/emulation';
+  }from '../library/emulation';
   import { libraryErrorText } from '../library/errors';
   import { listPlatforms, selectImageFile, type PlatformStatus } from '../services/emulators';
   import { addEmulatedGame, findEmulatedCover, type LibraryGame } from '../services/library';
@@ -30,7 +29,6 @@
   let image = $state('');
   let platform = $state('');
   let title = $state('');
-  let titleTouched = $state(false);
   let findCover = $state(false);
   let adding = $state(false);
   let failure = $state('');
@@ -50,7 +48,6 @@
       image = '';
       platform = '';
       title = '';
-      titleTouched = false;
       findCover = false;
       failure = '';
       loadFailed = false;
@@ -85,7 +82,6 @@
     image = path;
     failure = '';
     platform = consoleForImage(platforms, path);
-    if (!titleTouched) title = titleFromImage(path);
   }
 
   async function lookUpCover(game: LibraryGame) {
@@ -151,7 +147,6 @@
         type="text"
         placeholder={msg('games.installedTitlePlaceholder')}
         bind:value={title}
-        oninput={() => (titleTouched = true)}
       />
       <span class="form-hint">{msg('emul.addTitleHint')}</span>
     </label>
