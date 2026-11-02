@@ -1,7 +1,7 @@
 import { CancelError, Events } from '@wailsio/runtime';
 import { get, writable } from 'svelte/store';
 import { TakePending, TakePendingLink } from '../../../bindings/typhon/navigationservice';
-import { Resolve } from '../../../bindings/typhon/internal/deeplink/service';
+import { Resolve, ResolveTitle } from '../../../bindings/typhon/internal/deeplink/service';
 import { inWails } from '../services/backend';
 import { bigPictureActive } from '../bigpicture/mode';
 import { errorCode, msg } from '../i18n';
@@ -17,6 +17,7 @@ export const bigPictureGame = writable<string | null>(null);
 export const bigPictureSearch = writable<string | null>(null);
 
 let linkRun = 0;
+let searchNonce = 0;
 let cancelLink: (() => void) | null = null;
 let ready = false;
 
@@ -38,10 +39,34 @@ function openGame(id: string) {
   else navigate('game', { id });
 }
 
-function openSearch(query: string) {
+async function openTitle(query: string) {
   dropLink();
+  const run = linkRun;
+  const request = ResolveTitle(query);
+  cancelLink = () => request.cancel();
+  const startKey = get(route).key;
+  const stopWatching = route.subscribe((current) => {
+    if (current.key !== startKey && run === linkRun) dropLink();
+  });
+  try {
+    const result = await request;
+    if (run !== linkRun) return;
+    stopWatching();
+    if (result.status === 'found' && result.gameId) openGame(result.gameId);
+    else openSearchDraft(query);
+  } catch (err) {
+    if (err instanceof CancelError || run !== linkRun) return;
+    console.error('resolve link title', err);
+    openSearchDraft(query);
+  } finally {
+    stopWatching();
+    if (run === linkRun) cancelLink = null;
+  }
+}
+
+function openSearchDraft(query: string) {
   if (get(bigPictureActive)) bigPictureSearch.set(query);
-  else navigate('catalog', { q: query });
+  else navigate('catalog', { draft: query, nonce: String(++searchNonce) });
 }
 
 async function takeRoute() {
@@ -71,7 +96,7 @@ async function takeLink() {
     return;
   }
   if (pending.query) {
-    openSearch(pending.query);
+    await openTitle(pending.query);
     return;
   }
   if (!pending.provider) return;

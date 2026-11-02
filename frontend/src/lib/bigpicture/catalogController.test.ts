@@ -17,6 +17,20 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+describe('черновик из ссылки', () => {
+  it('до подтверждения запрос идёт без текста, после — с ним', async () => {
+    const fetchPage = vi.fn(async () => ({ items: [], total: 0, page: 1, pageSize: 24 }));
+    const controller = new CatalogController(fetchPage as never);
+    const draft = 'Ведьмак 3';
+
+    await controller.load({ search: '', genre: '', sort: 'popular' }, 1);
+    expect(JSON.stringify(fetchPage.mock.calls)).not.toContain(draft);
+
+    await controller.load({ search: draft, genre: '', sort: 'popular' }, 1);
+    expect((fetchPage.mock.calls.at(-1) as unknown[])[0]).toMatchObject({ search: draft });
+  });
+});
+
 describe('CatalogController', () => {
   it('retries the latest search and filters at page one after a failed filter change', async () => {
     const fetchPage = vi.fn()

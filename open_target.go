@@ -145,7 +145,7 @@ func firstLaunch(args []string, nav *NavigationService) (playRequest, bool) {
 	}
 	req, playRequested, err := playTarget(args)
 	if err != nil {
-		slog.Error("parse play argument", "args", args[1:], "error", err)
+		slog.Error("parse play argument", "args", argsForLog(args), "error", err)
 		playRequested = false
 	}
 	if playRequested {
@@ -153,7 +153,7 @@ func firstLaunch(args []string, nav *NavigationService) (playRequest, bool) {
 	}
 	route, openRequested, err := openTarget(args)
 	if err != nil {
-		slog.Error("parse open argument", "args", args[1:], "error", err)
+		slog.Error("parse open argument", "args", argsForLog(args), "error", err)
 		return playRequest{}, false
 	}
 	if openRequested {
@@ -165,7 +165,7 @@ func firstLaunch(args []string, nav *NavigationService) (playRequest, bool) {
 func navigateFromArgs(args []string, nav *NavigationService, emit func(route string)) bool {
 	route, requested, err := openTarget(args)
 	if err != nil {
-		slog.Error("parse open argument", "args", args, "error", err)
+		slog.Error("parse open argument", "args", argsForLog(args), "error", err)
 		return false
 	}
 	if !requested {

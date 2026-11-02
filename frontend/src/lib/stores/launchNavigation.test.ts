@@ -27,10 +27,10 @@ vi.mock('../../../bindings/typhon/navigationservice', () => ({
   TakePending: vi.fn(),
   TakePendingLink: vi.fn(),
 }));
-vi.mock('../../../bindings/typhon/internal/deeplink/service', () => ({ Resolve: vi.fn() }));
+vi.mock('../../../bindings/typhon/internal/deeplink/service', () => ({ Resolve: vi.fn(), ResolveTitle: vi.fn() }));
 
 const { TakePending, TakePendingLink } = await import('../../../bindings/typhon/navigationservice');
-const { Resolve } = await import('../../../bindings/typhon/internal/deeplink/service');
+const { Resolve, ResolveTitle } = await import('../../../bindings/typhon/internal/deeplink/service');
 const { navigate, route } = await import('./router');
 const { bigPictureActive } = await import('../bigpicture/mode');
 const { toast, dismissToast } = await import('./toasts');
@@ -65,6 +65,10 @@ function link(provider: string, id: string, invalid = false) {
   return { provider, id, invalid };
 }
 
+function titleAnswer(value: unknown) {
+  return Object.assign(Promise.resolve(value), { cancel: vi.fn() });
+}
+
 async function settle() {
   await vi.advanceTimersByTimeAsync(0);
 }
@@ -79,6 +83,7 @@ beforeEach(() => {
   vi.mocked(TakePending).mockReset().mockResolvedValue('' as never);
   vi.mocked(TakePendingLink).mockReset().mockResolvedValue(NO_LINK as never);
   vi.mocked(Resolve).mockReset();
+  vi.mocked(ResolveTitle).mockReset().mockImplementation((() => titleAnswer({ status: 'not_found', gameId: '' })) as never);
   vi.mocked(navigate).mockReset();
   vi.mocked(toast).mockClear();
   vi.mocked(dismissToast).mockClear();
@@ -439,7 +444,7 @@ describe('ссылка поиска', () => {
     await start();
 
     expect(navigate).toHaveBeenCalledTimes(1);
-    expect(navigate).toHaveBeenCalledWith('catalog', { q: 'Ведьмак 3' });
+    expect(navigate).toHaveBeenCalledWith('catalog', { draft: 'Ведьмак 3', nonce: expect.any(String) });
     expect(Resolve).not.toHaveBeenCalled();
     expect(toast).not.toHaveBeenCalled();
   });
@@ -450,7 +455,7 @@ describe('ссылка поиска', () => {
 
     await start();
 
-    expect(navigate).toHaveBeenCalledWith('catalog', { q: text });
+    expect(navigate).toHaveBeenCalledWith('catalog', { draft: text, nonce: expect.any(String) });
   });
 
   it('до готовности интерфейса ждёт, после неё открывается один раз', async () => {
@@ -466,7 +471,7 @@ describe('ссылка поиска', () => {
     handlers[0]!();
     await settle();
 
-    expect(vi.mocked(navigate).mock.calls).toEqual([['catalog', { q: 'Hades' }]]);
+    expect(vi.mocked(navigate).mock.calls).toEqual([['catalog', { draft: 'Hades', nonce: expect.any(String) }]]);
   });
 
   it('отменяет идущий Resolve, его поздний ответ не перекидывает', async () => {
@@ -485,7 +490,7 @@ describe('ссылка поиска', () => {
     r.resolve({ status: 'found', gameId: 'late' });
     await settle();
 
-    expect(vi.mocked(navigate).mock.calls).toEqual([['catalog', { q: 'Hades' }]]);
+    expect(vi.mocked(navigate).mock.calls).toEqual([['catalog', { draft: 'Hades', nonce: expect.any(String) }]]);
     expect(toast).not.toHaveBeenCalled();
   });
 
@@ -498,6 +503,110 @@ describe('ссылка поиска', () => {
     expect(get(bigPictureSearch)).toBe('Hades');
     expect(navigate).not.toHaveBeenCalled();
     expect(Resolve).not.toHaveBeenCalled();
+  });
+
+  it('та же ссылка повторно даёт новый nonce, и поле перезаписывается', async () => {
+    vi.mocked(TakePendingLink)
+      .mockResolvedValueOnce(search('Hades') as never)
+      .mockResolvedValueOnce(search('Hades') as never);
+
+    await start();
+    handlers[0]!();
+    await settle();
+
+    const calls = vi.mocked(navigate).mock.calls as unknown as Array<[string, { nonce: string }]>;
+    expect(calls).toHaveLength(2);
+    expect(calls[0]![1].nonce).not.toBe(calls[1]![1].nonce);
+  });
+
+  it('ссылка не кладёт текст в q: из q каталог искал бы сразу', async () => {
+    vi.mocked(TakePendingLink).mockResolvedValue(search('Hades') as never);
+
+    await start();
+
+    expect(vi.mocked(navigate).mock.calls[0]![1]).not.toHaveProperty('q');
+  });
+
+  it('одно точное совпадение открывает страницу игры без черновика', async () => {
+    vi.mocked(TakePendingLink).mockResolvedValue(search('Hades') as never);
+    vi.mocked(ResolveTitle).mockImplementation((() => titleAnswer({ status: 'found', gameId: 'game-9' })) as never);
+
+    await start();
+
+    expect(ResolveTitle).toHaveBeenCalledWith('Hades');
+    expect(vi.mocked(navigate).mock.calls).toEqual([['game', { id: 'game-9' }]]);
+    expect(Resolve).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['ambiguous', ''],
+    ['not_found', ''],
+    ['found', ''],
+  ])('статус %s с пустым id оставляет черновик', async (status, gameId) => {
+    vi.mocked(TakePendingLink).mockResolvedValue(search('Prey') as never);
+    vi.mocked(ResolveTitle).mockImplementation((() => titleAnswer({ status, gameId })) as never);
+
+    await start();
+
+    expect(vi.mocked(navigate).mock.calls).toEqual([['catalog', { draft: 'Prey', nonce: expect.any(String) }]]);
+  });
+
+  it('сбой поиска по названию оставляет черновик и не показывает ошибку', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const failed = Object.assign(Promise.reject(new Error('boom')), { cancel: vi.fn() });
+    vi.mocked(TakePendingLink).mockResolvedValue(search('Hades') as never);
+    vi.mocked(ResolveTitle).mockImplementation((() => failed) as never);
+
+    await start();
+
+    expect(vi.mocked(navigate).mock.calls).toEqual([['catalog', { draft: 'Hades', nonce: expect.any(String) }]]);
+    expect(toast).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('новая ссылка отменяет поиск по названию, поздний ответ не перекидывает', async () => {
+    const r = request();
+    vi.mocked(TakePendingLink)
+      .mockResolvedValueOnce(search('Hades') as never)
+      .mockResolvedValueOnce(link('', '', true) as never);
+    vi.mocked(ResolveTitle).mockImplementation((() => r.promise) as never);
+
+    await start();
+    r.promise.catch(() => {});
+    handlers[0]!();
+    await settle();
+
+    expect(r.cancel).toHaveBeenCalledTimes(1);
+    r.resolve({ status: 'found', gameId: 'late' });
+    await settle();
+
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('ручная смена маршрута отменяет поиск по названию', async () => {
+    const r = request();
+    vi.mocked(TakePendingLink).mockResolvedValue(search('Hades') as never);
+    vi.mocked(ResolveTitle).mockImplementation((() => r.promise) as never);
+
+    await start();
+    r.promise.catch(() => {});
+    (route as unknown as Writable<{ name: string; params: object; key: number }>).set({ name: 'catalog', params: {}, key: 2 });
+    await settle();
+
+    expect(r.cancel).toHaveBeenCalledTimes(1);
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('в Big Picture страница игры идёт в его роутер', async () => {
+    (bigPictureActive as unknown as Writable<boolean>).set(true);
+    vi.mocked(TakePendingLink).mockResolvedValue(search('Hades') as never);
+    vi.mocked(ResolveTitle).mockImplementation((() => titleAnswer({ status: 'found', gameId: 'game-9' })) as never);
+
+    await start();
+
+    expect(get(bigPictureGame)).toBe('game-9');
+    expect(get(bigPictureSearch)).toBeNull();
+    expect(navigate).not.toHaveBeenCalled();
   });
 
   it('некорректная ссылка важнее запроса', async () => {

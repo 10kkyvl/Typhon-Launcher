@@ -1,5 +1,5 @@
 export type Section = 'home' | 'library' | 'catalog' | 'downloads' | 'settings' | 'profile' | 'social';
-export type Page = { name: Section; query?: string } | { name: 'game'; id: string };
+export type Page = { name: Section; draft?: string } | { name: 'game'; id: string };
 export interface PageEntry { key: number; page: Page; focus: string }
 
 let sequence = 0;

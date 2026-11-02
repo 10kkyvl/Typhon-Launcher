@@ -9,8 +9,8 @@
 
   import { bigpictureCatalog } from '../../i18n/catalog/en/bigpictureCatalog';
 
-  let { initialQuery = '', onback, ongame, requestText }: {
-    initialQuery?: string;
+  let { initialDraft = '', onback, ongame, requestText }: {
+    initialDraft?: string;
     onback: () => void;
     ongame: (id: string) => void;
     requestText: RequestText;
@@ -30,7 +30,8 @@
   let facets = $state<GenreFacet[]>([]);
   let page = $state(0);
   let total = $state(0);
-  let query = $state(untrack(() => initialQuery));
+  let query = $state('');
+  let draft = $state(untrack(() => initialDraft));
   let genre = $state('');
   let sort = $state<(typeof sortOptions)[number]['id']>('popular');
   let loading = $state(false);
@@ -87,10 +88,11 @@
   async function openSearch() {
     const result = await requestText({
       title: bp('bp.catalog.searchTitle'),
-      initialValue: query,
+      initialValue: draft || query,
       maxLength: 160,
     });
     if (result === null) return;
+    draft = '';
     query = result.trim();
     resetQueryPage();
     await loadPage(1);
@@ -119,6 +121,7 @@
   }
 
   function clearFilters() {
+    draft = '';
     query = '';
     genre = '';
     resetQueryPage();
@@ -143,9 +146,9 @@
     <div class="head-actions">
       <button class="bp-button search-button" data-bp-focus="catalog:search" data-bp-default onclick={openSearch}>
         <Search size="2rem" strokeWidth={2} />
-        <span>{query || bp('bp.catalog.search')}</span>
+        <span>{draft || query || bp('bp.catalog.search')}</span>
       </button>
-      {#if query || genre}
+      {#if draft || query || genre}
         <button class="bp-button secondary clear-button" data-bp-focus="catalog:clear" onclick={clearFilters}>
           <X size="1.8rem" />{bp('bp.catalog.clearFilters')}
         </button>

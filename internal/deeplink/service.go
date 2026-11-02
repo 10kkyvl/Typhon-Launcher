@@ -17,6 +17,7 @@ const (
 	StatusFound        = "found"
 	StatusNotFound     = "not_found"
 	StatusNotInCatalog = "not_in_catalog"
+	StatusAmbiguous    = "ambiguous"
 
 	codeUnavailable = "link.unavailable"
 	codeOutdated    = "link.outdated"
@@ -107,6 +108,43 @@ func (s *Service) Resolve(ctx context.Context, target Target) (Resolution, error
 		return Resolution{}, fmt.Errorf("%w: %w", ErrBadProviderID, err)
 	}
 	return s.open(ctx, providerID, meta.Title)
+}
+
+// ResolveTitle looks for one game by the title of a search link in the catalog
+// on this machine. It must stay local: search link text does not leave the
+// machine until the user confirms a search, so neither the metadata client nor
+// a catalog write belongs here. Candidates are read instead of Match.Status
+// because catalog.Resolve never reports a title as matched next to a remote
+// catalog; a page opening a game is cheaper to undo than a repack bound to one.
+func (s *Service) ResolveTitle(ctx context.Context, query string) (Resolution, error) {
+	if err := ctx.Err(); err != nil {
+		return Resolution{}, err
+	}
+	title, err := validateQuery(query)
+	if err != nil {
+		return Resolution{}, err
+	}
+	match := s.catalog.Resolve(catalog.Query{Title: title})
+	if err := ctx.Err(); err != nil {
+		return Resolution{}, err
+	}
+	if match.Method == catalog.MethodOverride && match.GameID != "" {
+		return found(match.GameID), nil
+	}
+	exact := ""
+	for _, candidate := range match.Candidates {
+		if candidate.GameID == "" || (candidate.Method != catalog.MethodExactTitle && candidate.Method != catalog.MethodAlias) {
+			continue
+		}
+		if exact != "" {
+			return Resolution{Status: StatusAmbiguous}, nil
+		}
+		exact = candidate.GameID
+	}
+	if exact == "" {
+		return Resolution{Status: StatusNotFound}, nil
+	}
+	return found(exact), nil
 }
 
 func lookupError(err error) error {

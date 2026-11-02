@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"runtime/debug"
+	"strings"
 	"sync"
 
 	"typhon/internal/deeplink"
@@ -110,16 +111,19 @@ func runRecovered(run func(args []string), args []string) {
 }
 
 // A link carries text from an untrusted page, and a search link carries what
-// the user looked at; neither belongs in a log.
+// the user looked at; neither belongs in a log. A quote inside a link splits it
+// across arguments, so one mention hides everything after the program name.
 func argsForLog(args []string) []string {
-	safe := make([]string, len(args))
-	for i, arg := range args {
-		if deeplink.IsLink(arg) {
-			arg = "<typhon link>"
-		}
-		safe[i] = arg
+	if len(args) < 2 {
+		return args
 	}
-	return safe
+	marker := deeplink.Scheme + ":"
+	for _, arg := range args[1:] {
+		if strings.Contains(strings.ToLower(arg), marker) {
+			return []string{args[0], "<typhon link>"}
+		}
+	}
+	return args
 }
 
 type windowOpener interface {
@@ -136,7 +140,7 @@ func handleSecondLaunch(args []string, player gamePlayer, window windowOpener, n
 	}
 	req, requested, err := playTarget(args)
 	if err != nil {
-		slog.Error("parse play argument", "args", args, "error", err)
+		slog.Error("parse play argument", "args", argsForLog(args), "error", err)
 		window.Open()
 		return
 	}

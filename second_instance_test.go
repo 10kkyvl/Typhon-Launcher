@@ -158,18 +158,58 @@ func TestSearchLinkFromURLEventTakesTheSameQueue(t *testing.T) {
 }
 
 func TestPanicLogDoesNotCarryTheLink(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{"whole link", []string{"typhon", "typhon://search?q=secret-payload"}},
+		{"link split by a quote", []string{"typhon.exe", "typhon://search?q=Baldur", "secret-payload"}},
+		{"tail before the link", []string{"typhon.exe", "secret-payload", "typhon://search?q=a"}},
+		{"link inside an argument", []string{"typhon.exe", "--x=TYPHON://search?q=secret-payload"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var logged bytes.Buffer
+			previous := slog.Default()
+			slog.SetDefault(slog.New(slog.NewTextHandler(&logged, nil)))
+			t.Cleanup(func() { slog.SetDefault(previous) })
+
+			runRecovered(func([]string) { panic("boom") }, tc.args)
+
+			if !strings.Contains(logged.String(), "second launch handler panicked") {
+				t.Fatalf("panic was not logged: %q", logged.String())
+			}
+			if strings.Contains(logged.String(), "secret-payload") {
+				t.Fatalf("log carries the link: %q", logged.String())
+			}
+		})
+	}
+}
+
+func TestParseErrorLogsDoNotCarryALinkInsideAnArgument(t *testing.T) {
 	var logged bytes.Buffer
 	previous := slog.Default()
 	slog.SetDefault(slog.New(slog.NewTextHandler(&logged, nil)))
 	t.Cleanup(func() { slog.SetDefault(previous) })
 
-	runRecovered(func([]string) { panic("boom") }, []string{"typhon", "typhon://search?q=secret-payload"})
+	handleSecondLaunch([]string{"typhon.exe", "--play", "--open", "x=typhon://search?q=secret-payload"}, &recordedPlayer{}, &countOpener{}, &NavigationService{}, func(string) {})
+	firstLaunch([]string{"typhon.exe", "--open", "x=typhon://search?q=secret-payload"}, &NavigationService{})
 
-	if !strings.Contains(logged.String(), "second launch handler panicked") {
-		t.Fatalf("panic was not logged: %q", logged.String())
+	if !strings.Contains(logged.String(), "parse open argument") {
+		t.Fatalf("parse failure was not logged: %q", logged.String())
 	}
 	if strings.Contains(logged.String(), "secret-payload") {
 		t.Fatalf("log carries the link: %q", logged.String())
+	}
+}
+
+func TestArgsForLogKeepsArgumentsWithoutALink(t *testing.T) {
+	args := []string{"typhon.exe", "--play", "g1"}
+	if got := argsForLog(args); !reflect.DeepEqual(got, args) {
+		t.Fatalf("argsForLog = %q", got)
+	}
+	if got := argsForLog(nil); len(got) != 0 {
+		t.Fatalf("argsForLog(nil) = %q", got)
 	}
 }
 

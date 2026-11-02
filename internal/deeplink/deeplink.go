@@ -174,6 +174,11 @@ func parseQuery(rawQuery string) (string, error) {
 	if err != nil {
 		return "", ErrQueryEscape
 	}
+	return validateQuery(decoded)
+}
+
+// validateQuery checks decoded search text and returns it trimmed.
+func validateQuery(decoded string) (string, error) {
 	if !utf8.ValidString(decoded) {
 		return "", ErrQueryUTF8
 	}
@@ -183,13 +188,19 @@ func parseQuery(rawQuery string) (string, error) {
 		}
 	}
 	query := strings.TrimSpace(decoded)
-	if query == "" {
+	if !strings.ContainsFunc(query, isVisible) {
 		return "", ErrQueryEmpty
 	}
 	if utf8.RuneCountInString(query) > maxQueryRunes {
 		return "", ErrQueryTooLong
 	}
 	return query, nil
+}
+
+// isVisible tells a character that shows from one that only joins or shapes its
+// neighbours: a zero width joiner is fine inside an emoji, not as a whole query.
+func isVisible(r rune) bool {
+	return !unicode.IsSpace(r) && !unicode.In(r, unicode.Cf, unicode.Variation_Selector, unicode.Other_Default_Ignorable_Code_Point)
 }
 
 // isQueryByte is what RFC 3986 allows unescaped in a query. Anything else, a
