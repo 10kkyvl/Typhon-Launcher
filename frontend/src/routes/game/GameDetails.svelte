@@ -138,7 +138,7 @@
   import { installIndeterminate } from '../../lib/install/progress';
   import { openGameProperties } from '../../lib/stores/gameProperties';
   import { libraryGames, runningGames } from '../../lib/stores/library';
-  import { emulationPlatform, isEmulated, isInstalledImage, platformBadge } from '../../lib/library/emulation';
+  import { emulationPlatform, isEmulated, isInstalledImage, pageGame, platformBadge } from '../../lib/library/emulation';
   import { externalLabel, isExternal } from '../../lib/library/external';
   import ConsoleTag from '../../lib/components/ConsoleTag.svelte';
   import { metadataAvailable } from '../../lib/stores/metadata';
@@ -163,9 +163,12 @@
 
   let { id }: { id: string } = $props();
 
-  const localGame = $derived(
+  const pageOwn = $derived(
     $libraryGames.find((g) => g.id === id) ?? $libraryGames.find((g) => g.canonicalGameId === id || catalogGame?.aliasIds?.includes(g.canonicalGameId ?? '')),
   );
+  const found = $derived.by(() => pageGame(pageOwn, $libraryGames, [id, ...(catalogGame?.aliasIds ?? [])]));
+  const localGame = $derived(found.game);
+  const viaCatalog = $derived(found.viaCatalog);
   const wasInstalled = $derived(Boolean(localGame?.installedAt && Date.parse(localGame.installedAt) > 0));
   const installed = $derived(Boolean(localGame) && !localGame?.uninstalled);
   const running = $derived(localGame ? $runningGames.has(localGame.id) : false);
@@ -280,7 +283,7 @@
     });
   });
 
-  const canonicalId = $derived(localGame ? localGame.canonicalGameId : catalogGame?.id || id);
+  const canonicalId = $derived(localGame && !viaCatalog ? localGame.canonicalGameId : catalogGame?.id || id);
   const releaseTitle = $derived(localGame?.title ?? catalogGame?.title);
   const releaseKey = $derived(`${id}|${canonicalId ?? ''}|${releaseTitle ?? ''}`);
 
@@ -799,7 +802,7 @@
     const canonicalGameId = canonicalId;
     const gameTitle = releaseTitle;
     const isExternalGame = !managed;
-    const sideloaded = emulated;
+    const sideloaded = emulated && !viaCatalog;
     untrack(() => {
       if (sideloaded) {
         releaseToken++;
@@ -879,6 +882,7 @@
   }
 
   function startDownload() {
+    if (busy) return;
     if (downloadPool.length === 0) return;
     if (downloadPool.length === 1) {
       downloadRelease(downloadPool[0]);

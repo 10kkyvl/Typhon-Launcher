@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { installErrorText, needsInteractiveInstall } from './installErrors';
+import { canRetryInstall, installErrorText, needsInteractiveInstall } from './installErrors';
 
 describe('installer refusals', () => {
   it('asks for a manual install when the wizard refused silent mode', () => {
@@ -59,5 +59,23 @@ describe('console image refusals', () => {
 
   it('keeps a failed image on retry, not on a manual install', () => {
     expect(needsInteractiveInstall('typhon:install.image_ambiguous: x')).toBe(false);
+  });
+});
+
+describe('image install records', () => {
+  it('does not offer a retry for a game that is already in the library', () => {
+    expect(canRetryInstall('typhon:library.already_added: эта игра уже добавлена: X')).toBe(false);
+    expect(installErrorText('typhon:library.already_added: x')).toBe('эта игра уже добавлена');
+  });
+
+  it('keeps the retry for an unreadable image list and names the reason', () => {
+    const err = 'typhon:install.image_unreadable: x';
+    expect(canRetryInstall(err)).toBe(true);
+    expect(installErrorText(err)).toBe('не удалось прочитать список файлов образа игры (.cue или .m3u), файл повреждён');
+  });
+
+  it('keeps the retry for ordinary failures', () => {
+    expect(canRetryInstall('typhon:install.image_not_found: x')).toBe(true);
+    expect(canRetryInstall('')).toBe(true);
   });
 });

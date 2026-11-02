@@ -6,7 +6,7 @@
   import StoreLinks from '../../components/StoreLinks.svelte';
   import ProgressBar from '../../components/ProgressBar.svelte';
   import { galleryShots, languageLabel, pickHero, primaryAction } from '../../game/view';
-  import { consoleOrigin, orderReleases, sharedPlatform, splitReleases } from '../../game/releases';
+  import { consoleGroupStart, consoleOrigin, orderReleases, sharedPlatform, splitReleases } from '../../game/releases';
   import { dlcView, hasRequirements, requirementColumns } from '../../game/extras';
   import { GAME_STATUSES, statusLabel, type GameStatus } from '../../game/status';
   import { t, type MessageKey, type Params } from '../../i18n';
@@ -21,7 +21,7 @@
   import { appInfo, elevationSupported, type AppInfo } from '../../services/system';
   import { offerElevateAhead } from '../../services/install';
   import { selectFolder } from '../../services/settings';
-  import { isEmulated, platformBadge } from '../../library/emulation';
+  import { isEmulated, pageGame, platformBadge } from '../../library/emulation';
   import { LatestRequestGate } from '../latestRequest';
   import { GameDownloadFlow } from '../gameDownload';
   import type { BigPictureCommand } from '../input';
@@ -93,15 +93,21 @@
   let releaseLoadKey = '';
   let eventOff: (() => void) | undefined;
 
-  const localGame = $derived(
+  const pageOwn = $derived(
     $libraryGames.find((game) => game.id === id) ??
       $libraryGames.find((game) => game.canonicalGameId === id || (game.canonicalGameId && catalogGame?.aliasIds?.includes(game.canonicalGameId))),
   );
+  const found = $derived(pageGame(pageOwn, $libraryGames, [id, ...(catalogGame?.aliasIds ?? [])]));
+  const localGame = $derived(found.game);
+  const viaCatalog = $derived(found.viaCatalog);
   const title = $derived(localGame?.title || metadata?.game.title || catalogGame?.title || bp('bp.game.unknownTitle'));
   const canonicalId = $derived(localGame?.canonicalGameId || catalogGame?.id || id);
-  const releaseCanonicalId = $derived(localGame?.canonicalGameId || catalogGame?.id || (localGame ? '' : id));
+  const releaseCanonicalId = $derived(
+    (viaCatalog ? '' : localGame?.canonicalGameId) || catalogGame?.id || (localGame && !viaCatalog ? '' : id),
+  );
   const installed = $derived(Boolean(localGame && !localGame.uninstalled));
   const emulated = $derived(isEmulated(localGame));
+  const sideloaded = $derived(emulated && !viaCatalog);
   const running = $derived(Boolean(localGame && $runningGames.has(localGame.id)));
   const cover = $derived(metadata?.cover || catalogGame?.coverUrl || localGame?.cover || '');
   const shots = $derived(metadata?.screenshots ?? []);
@@ -116,7 +122,7 @@
   const availableReleases = $derived(releaseGroups.filter((group) => group.release.availability !== 'removed'));
   const releaseSplit = $derived(splitReleases(availableReleases));
   const orderedReleases = $derived(orderReleases(releaseGroups));
-  const consoleStart = $derived(releaseSplit.pc.length > 0 ? -1 : orderedReleases.findIndex((group) => group.release.platform));
+  const consoleStart = $derived(consoleGroupStart(releaseGroups));
   const heroDownloadLabel = $derived(
     releaseSplit.pc.length === 0 && releaseSplit.console.length > 0
       ? primaryAction({
@@ -156,7 +162,7 @@
     const key = `${id}|${releaseCanonicalId}|${localGame?.title ?? catalogGame?.title ?? ''}`;
     const gameId = releaseCanonicalId;
     const gameTitle = localGame?.title ?? catalogGame?.title ?? '';
-    if (emulated) return;
+    if (sideloaded) return;
     untrack(() => {
       if (key === releaseLoadKey) return;
       releaseLoadKey = key;
@@ -311,7 +317,7 @@
     }
     if (dialog) return false;
     if (command === 'previous' || command === 'next') {
-      activeTab = command === 'previous' || emulated ? 'overview' : 'releases';
+      activeTab = command === 'previous' || sideloaded ? 'overview' : 'releases';
       return true;
     }
     return false;
@@ -397,11 +403,13 @@
   }
 
   function openReleases() {
-    if (emulated) return;
+    if (sideloaded) return;
     activeTab = 'releases';
   }
 
   async function beginDownload(releaseId: string) {
+    if (currentInstall && installActive(currentInstall.status)) return;
+    if (currentDownload && ['queued', 'metadata', 'downloading', 'paused', 'verifying'].includes(currentDownload.status)) return;
     pendingReleaseId = releaseId;
     dialogError = '';
     const picked = releaseGroups.find((group) => group.release.id === releaseId);
@@ -566,7 +574,7 @@
       <button class="large-button secondary back-button" data-bp-focus="game:back" onclick={onback}><ArrowLeft size="2rem" />{bp('bp.game.back')}</button>
       <div class="head-tabs" role="tablist" aria-label={title}>
         <button class="tab" class:selected={activeTab === 'overview'} role="tab" aria-selected={activeTab === 'overview'} data-bp-focus="game:tab:overview" onclick={() => activeTab = 'overview'}>{bp('bp.game.tabOverview')}</button>
-        {#if !emulated}<button class="tab" class:selected={activeTab === 'releases'} role="tab" aria-selected={activeTab === 'releases'} data-bp-focus="game:tab:releases" onclick={openReleases}>{bp('bp.game.tabReleases')}<span>{availableReleases.length}</span></button>{/if}
+        {#if !sideloaded}<button class="tab" class:selected={activeTab === 'releases'} role="tab" aria-selected={activeTab === 'releases'} data-bp-focus="game:tab:releases" onclick={openReleases}>{bp('bp.game.tabReleases')}<span>{availableReleases.length}</span></button>{/if}
       </div>
     </header>
 

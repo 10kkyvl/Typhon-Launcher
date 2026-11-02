@@ -10,6 +10,7 @@ import {
   isEmulated,
   isInstalledImage,
   needsEmulator,
+  pageGame,
   platformBadge,
   type ConsoleInfo,
 } from './emulation';
@@ -119,5 +120,33 @@ describe('emulatorMissing', () => {
     expect(emulatorMissing({ status: 'missing' })).toBe(true);
     expect(emulatorMissing({ status: 'unavailable' })).toBe(true);
     expect(emulatorMissing({ status: 'ready' })).toBe(false);
+  });
+});
+
+describe('pageGame', () => {
+  const image = { id: 'img', emulation: { platform: 'ps2', catalogGameId: 'cat1' }, owned: true, installType: 'console_image' };
+  const pc = { id: 'pc', canonicalGameId: 'cat1', emulation: null };
+
+  it('shows the installed image on the catalog page of its game', () => {
+    expect(pageGame(undefined, [image], ['cat1'])).toEqual({ game: image, viaCatalog: true });
+  });
+
+  it('finds the image through an alias of the catalog game', () => {
+    expect(pageGame(undefined, [image], ['other', 'cat1']).game).toBe(image);
+  });
+
+  it('prefers the installed PC copy over the image', () => {
+    expect(pageGame(pc, [pc, image], ['cat1'])).toEqual({ game: pc, viaCatalog: false });
+  });
+
+  it('ignores an image that was uninstalled, a manual one and another game', () => {
+    expect(pageGame(undefined, [{ ...image, uninstalled: true }], ['cat1']).game).toBeUndefined();
+    expect(pageGame(undefined, [{ id: 'm', emulation: { platform: 'ps2' } }], ['cat1']).game).toBeUndefined();
+    expect(pageGame(undefined, [image], ['cat2']).game).toBeUndefined();
+    expect(pageGame(undefined, [image], ['']).game).toBeUndefined();
+  });
+
+  it('a page opened by the library id of the card is not a catalog page', () => {
+    expect(pageGame(image, [image], ['img']).viaCatalog).toBe(false);
   });
 });

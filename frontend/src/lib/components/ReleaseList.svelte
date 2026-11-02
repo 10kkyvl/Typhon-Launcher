@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Download } from '@lucide/svelte';
-  import { buildKind, buildLabel, orderReleases, releaseBadge, repackNote } from '../game/releases';
+  import { buildKind, buildLabel, consoleGroupStart, orderReleases, releaseBadge, repackNote } from '../game/releases';
   import { languageLabel } from '../game/view';
   import type { ReleaseGroup } from '../services/sources';
   import type { AvailabilityKind } from '../services/updates';
@@ -27,9 +27,7 @@
   } = $props();
 
   const ordered = $derived(orderReleases(groups));
-  const consoleStart = $derived(
-    ordered.some((group) => !group.release.platform) ? ordered.findIndex((group) => group.release.platform) : -1,
-  );
+  const consoleStart = $derived(consoleGroupStart(groups));
   const showLanguages = $derived(groups.some((group) => languageLabel(group.release.languages) !== ''));
 </script>
 

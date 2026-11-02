@@ -18,7 +18,7 @@
     type PlanInfo,
     type SpaceInfo,
   } from '../services/install';
-  import { installErrorText, needsInteractiveInstall } from '../install/installErrors';
+  import { canRetryInstall, installErrorText, needsInteractiveInstall } from '../install/installErrors';
   import { createSpacePlanner } from '../install/spacePlanner';
   import { adviseDestination, type DestinationHint, type DestinationOrigin } from '../install/destinationAdvice';
   import { installIndeterminate, installTotalUnknown } from '../install/progress';
@@ -718,7 +718,7 @@
       {/if}
       {#if installation && needsInteractiveInstall(installation.error)}
         <Button variant="primary" onclick={retryManually} disabled={busy}>{msg('modals.installManually')}</Button>
-      {:else}
+      {:else if !installation || canRetryInstall(installation.error)}
         <Button variant="primary" onclick={retryCurrent} disabled={busy}>{msg('common.retry')}</Button>
       {/if}
     {/if}

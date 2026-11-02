@@ -1,7 +1,7 @@
 import { errorCode } from '../i18n/errors';
 
 export interface EmulatedGame {
-  emulation?: { platform: string } | null;
+  emulation?: { platform: string; catalogGameId?: string } | null;
   owned?: boolean;
   installType?: string;
 }
@@ -28,6 +28,28 @@ export function isEmulated(game: EmulatedGame | null | undefined): boolean {
 
 export function isInstalledImage(game: EmulatedGame | null | undefined): boolean {
   return isEmulated(game) && game?.owned === true && game.installType === 'console_image';
+}
+
+export interface CatalogPageGame extends EmulatedGame {
+  uninstalled?: boolean;
+}
+
+export interface PageGame<T> {
+  game: T | undefined;
+  viaCatalog: boolean;
+}
+
+export function pageGame<T extends CatalogPageGame>(
+  own: T | undefined,
+  games: readonly T[],
+  catalogIds: readonly string[],
+): PageGame<T> {
+  if (own) return { game: own, viaCatalog: false };
+  const ids = catalogIds.filter(Boolean);
+  const image = games.find(
+    (game) => !game.uninstalled && Boolean(game.emulation?.catalogGameId) && ids.includes(game.emulation?.catalogGameId ?? ''),
+  );
+  return { game: image, viaCatalog: image !== undefined };
 }
 
 export function emulationPlatform(game: EmulatedGame | null | undefined): string {

@@ -176,6 +176,10 @@ export function installErrorText(err: unknown, fallback: string = msg('errInstal
   return key ? msg(key) : fallback;
 }
 
+export function canRetryInstall(err: unknown): boolean {
+  return errorCode(err) !== 'library.already_added';
+}
+
 export function needsInteractiveInstall(err: unknown): boolean {
   return errorCode(err) === 'install.installer_needs_interactive';
 }

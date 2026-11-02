@@ -51,6 +51,7 @@ export interface GameModeOverride {
 
 export interface LibraryEmulation {
   platform: string;
+  catalogGameId?: string;
   files?: string[] | null;
 }
 

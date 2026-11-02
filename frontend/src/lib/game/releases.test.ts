@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildKind,
   buildLabel,
+  consoleGroupStart,
   consoleOrigin,
   orderReleases,
   relationKey,
@@ -211,5 +212,21 @@ describe('console releases', () => {
 
   it('adds nothing to the origin of a PC release', () => {
     expect(consoleOrigin({ title: 'Raw' }, 'Game', 'https://img/c.jpg')).toEqual({});
+  });
+});
+
+describe('consoleGroupStart', () => {
+  const pc = { release: { id: 'a', platform: undefined } };
+  const ps2 = { release: { id: 'b', platform: 'ps2' as const } };
+
+  it('opens the console group after the PC releases', () => {
+    expect(consoleGroupStart([ps2, pc])).toBe(1);
+    expect(consoleGroupStart([pc, pc, ps2, ps2])).toBe(2);
+  });
+
+  it('has no heading when only one kind is listed', () => {
+    expect(consoleGroupStart([ps2, ps2])).toBe(-1);
+    expect(consoleGroupStart([pc])).toBe(-1);
+    expect(consoleGroupStart([])).toBe(-1);
   });
 });

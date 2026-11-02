@@ -158,6 +158,12 @@ export function orderReleases<T extends { release: Pick<Release, 'platform'> }>(
   return [...split.pc, ...split.console];
 }
 
+export function consoleGroupStart<T extends { release: Pick<Release, 'platform'> }>(groups: readonly T[]): number {
+  const ordered = orderReleases(groups);
+  const first = ordered.findIndex((group) => group.release.platform);
+  return first > 0 ? first : -1;
+}
+
 export function sharedPlatform(groups: readonly { release: Pick<Release, 'platform'> }[]): string {
   const ids = new Set(groups.map((group) => group.release.platform ?? ''));
   return ids.size === 1 ? [...ids][0] : '';
