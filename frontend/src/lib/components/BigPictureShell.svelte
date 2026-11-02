@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import { ArrowLeft, Download, Gamepad2, House, Library, Menu, Monitor, Search, Settings, User, Users, WifiOff } from '@lucide/svelte';
   import { startBigPictureInput, type BigPictureCommand, type BigPictureDevice } from '../bigpicture/input';
   import { focusControl, moveFocus } from '../bigpicture/navigation';
@@ -23,7 +23,7 @@
   import SocialPage from '../bigpicture/components/SocialPage.svelte';
   import ScreenKeyboard from '../bigpicture/components/ScreenKeyboard.svelte';
   import Toasts from './Toasts.svelte';
-  import { bigPictureGame, bigPictureSearch } from '../stores/launchNavigation';
+  import { bigPictureGame, bigPictureSearch, cancelPendingLink } from '../stores/launchNavigation';
   import { bigPictureStyle } from '../bigpicture/palette';
   import '../bigpicture/styles.css';
 
@@ -100,6 +100,13 @@
     menu = false;
     void navigate({ name: 'catalog', query });
   });
+  let watchedPage = untrack(() => active.key);
+  $effect(() => {
+    const key = active.key;
+    if (key === watchedPage) return;
+    watchedPage = key;
+    cancelPendingLink();
+  });
   async function section(name: Section) {
     menu = false; pages = [entry({ name })]; failure = ''; await focusPage();
   }
@@ -157,6 +164,7 @@
   }
   function command(command: BigPictureCommand) {
     if (!shell) return;
+    if (command === 'confirm' || command === 'back' || command === 'menu') cancelPendingLink();
     if (command === 'back') { back(); return; }
     const root = scope();
     if (!root) return;

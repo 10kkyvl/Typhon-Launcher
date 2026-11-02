@@ -125,16 +125,17 @@ async function openTitle(query: string) {
   await followLink(ResolveTitle(query), (result) => {
     if (result.status === 'found' && result.gameId) openGame(result.gameId);
     else openSearch(query);
-  }, (err) => {
-    toast(linkErrorText(err), 'danger');
-    openSearch(query);
-  });
+  }, (err) => toast(linkErrorText(err), 'danger'));
 }
 
 async function takePending() {
   if (!ready) return;
   await takeRoute();
   await takeLink();
+}
+
+export function cancelPendingLink() {
+  dropLink();
 }
 
 export function setLinksReady(next: boolean) {

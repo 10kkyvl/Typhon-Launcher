@@ -115,8 +115,9 @@ func TestParseSearchAccepts(t *testing.T) {
 		{"joiner inside an emoji", "typhon://search?q=%F0%9F%91%A9%E2%80%8D%F0%9F%9A%80", "👩\u200d🚀"},
 		{"invisible character next to a letter", "typhon://search?q=a%E2%80%8B", "a\u200b"},
 		{"longest", "typhon://search?q=" + strings.Repeat("a", maxQueryRunes), strings.Repeat("a", maxQueryRunes)},
-		{"longest cyrillic", "typhon://search?q=" + strings.Repeat("%D1%8F", maxQueryRunes), strings.Repeat("я", maxQueryRunes)},
-		{"longest possible link", "typhon://search/?q=" + strings.Repeat("%F0%9F%98%80", maxQueryRunes), strings.Repeat("😀", maxQueryRunes)},
+		{"longest cyrillic", "typhon://search?q=" + strings.Repeat("%D1%8F", 100), strings.Repeat("я", 100)},
+		{"longest japanese", "typhon://search?q=" + strings.Repeat("%E3%81%82", 66), strings.Repeat("あ", 66)},
+		{"longest possible link", "typhon://search/?q=" + strings.Repeat("%F0%9F%98%80", 50), strings.Repeat("😀", 50)},
 		{"spaces do not count", "typhon://search?q=%20" + strings.Repeat("a", maxQueryRunes) + "%20", strings.Repeat("a", maxQueryRunes)},
 	}
 	for _, tc := range cases {
@@ -134,7 +135,7 @@ func TestParseSearchRejects(t *testing.T) {
 		name, raw string
 		want      error
 	}{
-		{"link over the limit", "typhon://search/?q=" + strings.Repeat("%F0%9F%98%80", maxQueryRunes) + "a", ErrTooLong},
+		{"link over the limit", "typhon://search/?q=" + strings.Repeat("%F0%9F%98%80", 50) + "a", ErrTooLong},
 		{"control character in raw link", "typhon://search?q=a\nb", ErrMalformed},
 		{"host case", "typhon://SEARCH?q=a", ErrHost},
 		{"port", "typhon://search:80?q=a", ErrHost},
@@ -187,7 +188,10 @@ func TestParseSearchRejects(t *testing.T) {
 		{"only hangul filler", "typhon://search?q=%E3%85%A4", ErrQueryEmpty},
 		{"invisible characters and spaces", "typhon://search?q=%20%E2%80%8B%20%C2%AD%20", ErrQueryEmpty},
 		{"121 runes", "typhon://search?q=" + strings.Repeat("a", maxQueryRunes+1), ErrQueryTooLong},
-		{"121 cyrillic runes", "typhon://search?q=" + strings.Repeat("%D1%8F", maxQueryRunes+1), ErrQueryTooLong},
+		{"101 cyrillic runes are 202 bytes", "typhon://search?q=" + strings.Repeat("%D1%8F", 101), ErrTooLong},
+		{"120 cyrillic runes are 240 bytes", "typhon://search?q=" + strings.Repeat("%D1%8F", maxQueryRunes), ErrTooLong},
+		{"67 japanese runes are 201 bytes", "typhon://search?q=" + strings.Repeat("%E3%81%82", 67), ErrTooLong},
+		{"short in runes, over in bytes", "typhon://search?q=" + strings.Repeat("a", 30) + strings.Repeat("%D1%8F", 86), ErrQueryTooLong},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

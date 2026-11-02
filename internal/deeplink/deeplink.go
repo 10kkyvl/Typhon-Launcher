@@ -23,9 +23,12 @@ const (
 	maxLinkLen    = 256
 	maxIDLen      = 12
 	maxQueryRunes = 120
+	// typhon-backend refuses a longer query in bytes: maxSearchQueryLen in
+	// internal/httpapi/metadata.go and the Search check in catalog/browse.go.
+	maxQueryBytes = 200
 
-	// The longest query is four-byte runes with every byte written as %XX.
-	maxSearchLinkLen = len("typhon://search/?q=") + maxQueryRunes*4*3
+	// The longest query has every byte written as %XX.
+	maxSearchLinkLen = len("typhon://search/?q=") + maxQueryBytes*3
 )
 
 var (
@@ -46,11 +49,11 @@ var (
 	ErrQueryUTF8    = errors.New("запрос в ссылке — не UTF-8")
 	ErrQueryControl = errors.New("в запросе из ссылки есть управляющие символы")
 	ErrQueryEmpty   = errors.New("запрос в ссылке пустой")
-	ErrQueryTooLong = errors.New("запрос в ссылке длиннее 120 символов")
+	ErrQueryTooLong = errors.New("запрос в ссылке слишком длинный")
 )
 
 // Link is what a typhon:// link asks for: a game in Target or, when Query is
-// set, a catalog search that nothing else follows.
+// set, text to look up by title. Neither starts an install or a launch.
 type Link struct {
 	Target Target
 	Query  string
@@ -191,7 +194,7 @@ func validateQuery(decoded string) (string, error) {
 	if !strings.ContainsFunc(query, isVisible) {
 		return "", ErrQueryEmpty
 	}
-	if utf8.RuneCountInString(query) > maxQueryRunes {
+	if len(query) > maxQueryBytes || utf8.RuneCountInString(query) > maxQueryRunes {
 		return "", ErrQueryTooLong
 	}
 	return query, nil

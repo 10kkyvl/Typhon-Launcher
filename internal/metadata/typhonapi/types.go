@@ -12,6 +12,8 @@ type candidatePayload struct {
 	ReleaseYear int    `json:"releaseYear"`
 	Developer   string `json:"developer"`
 	ThumbURL    string `json:"thumbUrl"`
+	GameType    string `json:"gameType"`
+	ParentID    string `json:"parentId"`
 }
 
 type imagePayload struct {

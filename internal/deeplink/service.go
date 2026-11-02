@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
+	"time"
 
 	"typhon/internal/catalog"
 	"typhon/internal/metadata"
@@ -29,12 +31,21 @@ const (
 	// A page can open links in a loop, and every new game is a permanent record
 	// in the user's catalog file.
 	maxNewGames = 20
+
+	// Every search link is a request to the metadata service with text a page
+	// chose, so a page must not be able to drive the launcher's budget.
+	minTitleSearchGap = 3 * time.Second
+	maxTitleSearches  = 60
+
+	gameTypeBundle = "Bundle"
 )
 
 var (
-	ErrTooManyNewGames = uierr.New("link.too_many", "по ссылкам добавлено слишком много новых игр, перезапустите лаунчер")
-	ErrBadProviderID   = uierr.New("link.bad_response", "сервер метаданных вернул некорректный идентификатор игры")
+	ErrTooManyNewGames      = uierr.New("link.too_many", "по ссылкам добавлено слишком много новых игр, перезапустите лаунчер")
+	ErrTooManyTitleSearches = uierr.New("link.too_many", "слишком много поисков по ссылкам, попробуйте позже")
+	ErrBadProviderID        = uierr.New("link.bad_response", "сервер метаданных вернул некорректный идентификатор игры")
 
+	errTitleLookup  = errors.New("не удалось найти игру по названию")
 	errNoDependency = errors.New("для ссылок нужны каталог, метаданные и язык")
 )
 
@@ -64,15 +75,19 @@ type Service struct {
 	metadata Metadata
 	language func() string
 
-	mu      sync.Mutex
-	created int
+	now func() time.Time
+
+	mu         sync.Mutex
+	created    int
+	searches   int
+	lastSearch time.Time
 }
 
 func NewService(games Catalog, lookup Metadata, language func() string) (*Service, error) {
 	if games == nil || lookup == nil || language == nil {
 		return nil, errNoDependency
 	}
-	return &Service{catalog: games, metadata: lookup, language: language}, nil
+	return &Service{catalog: games, metadata: lookup, language: language, now: time.Now}, nil
 }
 
 // Resolve finds the catalog game a link names. The target comes back from the
@@ -112,12 +127,12 @@ func (s *Service) Resolve(ctx context.Context, target Target) (Resolution, error
 	return s.open(ctx, providerID, meta.Title)
 }
 
-// ResolveTitle finds the one game a search link names: on this machine first,
-// then by asking the metadata service for exactly this title. Only the page calls
-// it, and the page waits for the accepted terms and a session before taking a
-// link. A catalog record appears only for a single exact match, under the same
-// limit as a game link. Candidates are read instead of Match.Status because
-// catalog.Resolve never reports a title as matched next to a remote catalog.
+// ResolveTitle finds the one game a search link names by asking the metadata
+// service for exactly this title: the local catalog is a cache of visited pages
+// and cannot show that a title is unique. Only the page calls it, and the page
+// waits for the accepted terms and a session before taking a link. A catalog
+// record appears only for a single exact game, under the same limit as a game
+// link.
 func (s *Service) ResolveTitle(ctx context.Context, query string) (Resolution, error) {
 	if err := ctx.Err(); err != nil {
 		return Resolution{}, err
@@ -126,20 +141,16 @@ func (s *Service) ResolveTitle(ctx context.Context, query string) (Resolution, e
 	if err != nil {
 		return Resolution{}, err
 	}
-	local := s.localTitle(title)
-	if err := ctx.Err(); err != nil {
-		return Resolution{}, err
-	}
-	if local.Status == StatusFound {
-		return local, nil
-	}
 	normalized := titles.Normalize(title)
 	if normalized == "" {
-		return local, nil
+		return Resolution{Status: StatusNotFound}, nil
+	}
+	if err := s.takeSearch(); err != nil {
+		return Resolution{}, err
 	}
 	candidates, err := s.metadata.SearchTitle(metadata.WithLanguage(ctx, s.language()), title)
-	if errors.Is(err, metadata.ErrNoMatch) {
-		return local, nil
+	if errors.Is(err, metadata.ErrNoMatch) || errors.Is(err, metadata.ErrNotConfigured) {
+		return Resolution{Status: StatusNotFound}, nil
 	}
 	if err != nil {
 		if ctx.Err() != nil {
@@ -147,20 +158,52 @@ func (s *Service) ResolveTitle(ctx context.Context, query string) (Resolution, e
 		}
 		return Resolution{}, titleLookupError(err)
 	}
-	var exact *metadata.Candidate
-	for i := range candidates {
-		if titles.Normalize(candidates[i].Title) != normalized {
+	exact := mainCandidates(candidates, normalized)
+	switch len(exact) {
+	case 0:
+		return Resolution{Status: StatusNotFound}, nil
+	case 1:
+		return s.openCandidate(ctx, strings.TrimSpace(exact[0].ProviderID), exact[0].Title)
+	}
+	return Resolution{Status: StatusAmbiguous}, nil
+}
+
+// takeSearch counts the attempt before the request goes out, so a page opening
+// links in a loop cannot reach the metadata service past the limit.
+func (s *Service) takeSearch() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := s.now()
+	if s.searches >= maxTitleSearches || (s.searches > 0 && now.Sub(s.lastSearch) < minTitleSearchGap) {
+		return ErrTooManyTitleSearches
+	}
+	s.searches++
+	s.lastSearch = now
+	return nil
+}
+
+// mainCandidates keeps the distinct games with exactly this title. A bundle is
+// how IGDB stores some editions, so it stays; DLC, updates and other add-ons go.
+// An edition listed next to its parent under the same title is the same game.
+func mainCandidates(candidates []metadata.Candidate, normalized string) []metadata.Candidate {
+	byID := map[string]metadata.Candidate{}
+	for _, candidate := range candidates {
+		if titles.Normalize(candidate.Title) != normalized || !isMainGame(candidate.GameType) {
 			continue
 		}
-		if exact != nil && exact.ProviderID != candidates[i].ProviderID {
-			return Resolution{Status: StatusAmbiguous}, nil
+		byID[strings.TrimSpace(candidate.ProviderID)] = candidate
+	}
+	exact := make([]metadata.Candidate, 0, len(byID))
+	for _, candidate := range byID {
+		if _, listed := byID[strings.TrimSpace(candidate.ParentID)]; !listed {
+			exact = append(exact, candidate)
 		}
-		exact = &candidates[i]
 	}
-	if exact == nil {
-		return local, nil
-	}
-	return s.openCandidate(ctx, strings.TrimSpace(exact.ProviderID), exact.Title)
+	return exact
+}
+
+func isMainGame(gameType string) bool {
+	return gameType == gameTypeBundle || titles.IsGameType(gameType)
 }
 
 func (s *Service) openCandidate(ctx context.Context, providerID, title string) (Resolution, error) {
@@ -176,27 +219,6 @@ func (s *Service) openCandidate(ctx context.Context, providerID, title string) (
 	return s.open(ctx, providerID, title)
 }
 
-func (s *Service) localTitle(title string) Resolution {
-	match := s.catalog.Resolve(catalog.Query{Title: title})
-	if match.Method == catalog.MethodOverride && match.GameID != "" {
-		return found(match.GameID)
-	}
-	exact := ""
-	for _, candidate := range match.Candidates {
-		if candidate.GameID == "" || (candidate.Method != catalog.MethodExactTitle && candidate.Method != catalog.MethodAlias) {
-			continue
-		}
-		if exact != "" {
-			return Resolution{Status: StatusAmbiguous}
-		}
-		exact = candidate.GameID
-	}
-	if exact == "" {
-		return Resolution{Status: StatusNotFound}
-	}
-	return found(exact)
-}
-
 // titleLookupError never wraps a transport error: url.Error quotes the request
 // URL, and that URL holds the title from the link.
 func titleLookupError(err error) error {
@@ -207,8 +229,11 @@ func titleLookupError(err error) error {
 		return uierr.New(codeOutdated, typhonapi.ErrOutdated.Error())
 	case errors.Is(err, typhonapi.ErrBadRequest):
 		return uierr.New(codeBadRequest, typhonapi.ErrBadRequest.Error())
+	case errors.Is(err, typhonapi.ErrUpstream):
+		return uierr.New(codeUnavailable, typhonapi.ErrUpstream.Error())
 	}
-	return uierr.New(codeUnavailable, typhonapi.ErrUpstream.Error())
+	slog.Warn("look up title from link", "component", "deeplink", "operation", "resolve_title", "errorType", fmt.Sprintf("%T", err))
+	return errTitleLookup
 }
 
 func lookupError(err error) error {

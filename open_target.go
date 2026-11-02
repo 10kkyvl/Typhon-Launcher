@@ -21,8 +21,8 @@ var errBadOpenTarget = errors.New("--open требует маршрут library 
 var errLinkWithArguments = errors.New("ссылка typhon:// должна быть единственным аргументом запуска")
 
 // PendingLink is what a typhon:// launch left for the page. Provider and Query
-// are empty and Invalid false when there is nothing to show. A Query never goes
-// through Resolve: the page only searches the catalog for it.
+// are empty and Invalid false when there is nothing to show. A Query goes to
+// ResolveTitle: the page opens the one game it names or the catalog search.
 type PendingLink struct {
 	Provider string `json:"provider"`
 	ID       string `json:"id"`

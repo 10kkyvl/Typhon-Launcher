@@ -1,13 +1,16 @@
 package deeplink
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"typhon/internal/catalog"
 	"typhon/internal/metadata"
@@ -15,73 +18,58 @@ import (
 	"typhon/internal/uierr"
 )
 
-func TestResolveTitleLocalMatchAsksNoServer(t *testing.T) {
-	exact := catalog.Candidate{GameID: "g1", Method: catalog.MethodExactTitle}
-	alias := catalog.Candidate{GameID: "g2", Method: catalog.MethodAlias}
-	fuzzy := catalog.Candidate{GameID: "g3", Method: catalog.MethodFuzzy}
-	cases := []struct {
-		name  string
-		match catalog.Match
-		want  string
-	}{
-		{"one exact title", catalog.Match{Status: catalog.StatusReview, Candidates: []catalog.Candidate{exact}}, "g1"},
-		{"one alias", catalog.Match{Status: catalog.StatusReview, Candidates: []catalog.Candidate{alias}}, "g2"},
-		{"fuzzy next to the exact game", catalog.Match{Status: catalog.StatusReview, Candidates: []catalog.Candidate{exact, fuzzy}}, "g1"},
-		{"user override", catalog.Match{Status: catalog.StatusMatched, GameID: "g9", Method: catalog.MethodOverride}, "g9"},
+// spacedService moves the clock past the search gap on every read.
+func spacedService(t *testing.T, games Catalog, lookup Metadata) *Service {
+	t.Helper()
+	s := newTestService(t, games, lookup)
+	clock := time.Unix(1000, 0)
+	s.now = func() time.Time {
+		clock = clock.Add(minTitleSearchGap)
+		return clock
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			lookup := &fakeMetadata{}
-			got, err := newTestService(t, &fakeCatalog{match: tc.match}, lookup).ResolveTitle(context.Background(), "Hades")
-			if err != nil || got != found(tc.want) {
-				t.Fatalf("ResolveTitle = %+v, %v; want %q", got, err, tc.want)
-			}
-			if len(lookup.searched) != 0 {
-				t.Fatalf("server asked %q", lookup.searched)
-			}
-		})
-	}
+	return s
 }
 
-func TestResolveTitleAsksTheServerAfterTheCatalog(t *testing.T) {
-	twoLocal := catalog.Match{Candidates: []catalog.Candidate{
-		{GameID: "g1", Method: catalog.MethodExactTitle},
-		{GameID: "g2", Method: catalog.MethodExactTitle},
-	}}
-	noID := catalog.Match{Candidates: []catalog.Candidate{{Method: catalog.MethodExactTitle}}}
-	onlyFuzzy := catalog.Match{Candidates: []catalog.Candidate{{GameID: "g3", Method: catalog.MethodFuzzy}}}
-	igdb := metadata.Candidate{ProviderID: "1942", Title: "The Witcher 3: Wild Hunt"}
+func TestResolveTitleAsksTheServerFirst(t *testing.T) {
+	const name = "The Witcher 3: Wild Hunt"
+	igdb := metadata.Candidate{ProviderID: "1942", Title: name, GameType: "Main Game"}
+	localHit := catalog.Match{Status: catalog.StatusMatched, GameID: "cached", Method: catalog.MethodOverride, Candidates: []catalog.Candidate{{GameID: "cached", Method: catalog.MethodExactTitle}}}
+	notFound := Resolution{Status: StatusNotFound}
+	ambiguous := Resolution{Status: StatusAmbiguous}
 	cases := []struct {
 		name       string
-		local      catalog.Match
 		candidates []metadata.Candidate
 		searchErr  error
 		want       Resolution
 		ensured    int
 	}{
-		{"one exact opens a record", catalog.Match{}, []metadata.Candidate{igdb}, nil, found("new-1942"), 1},
-		{"case and marks", catalog.Match{}, []metadata.Candidate{{ProviderID: "1942", Title: "THE WITCHER 3 - WILD HUNT"}}, nil, found("new-1942"), 1},
-		{"edition next to the exact game", catalog.Match{}, []metadata.Candidate{igdb, {ProviderID: "7", Title: "The Witcher 3: Wild Hunt - Complete Edition"}}, nil, found("new-1942"), 1},
-		{"only fuzzy locally", onlyFuzzy, []metadata.Candidate{igdb}, nil, found("new-1942"), 1},
-		{"candidate without id locally", noID, []metadata.Candidate{igdb}, nil, found("new-1942"), 1},
-		{"same game listed twice", catalog.Match{}, []metadata.Candidate{igdb, igdb}, nil, found("new-1942"), 1},
-		{"two exact", catalog.Match{}, []metadata.Candidate{igdb, {ProviderID: "7", Title: "The Witcher 3: Wild Hunt"}}, nil, Resolution{Status: StatusAmbiguous}, 0},
-		{"two local, server settles it", twoLocal, []metadata.Candidate{igdb}, nil, found("new-1942"), 1},
-		{"two local, server knows none", twoLocal, nil, nil, Resolution{Status: StatusAmbiguous}, 0},
-		{"none", catalog.Match{}, nil, nil, Resolution{Status: StatusNotFound}, 0},
-		{"only inexact", catalog.Match{}, []metadata.Candidate{{ProviderID: "7", Title: "The Witcher 2"}}, nil, Resolution{Status: StatusNotFound}, 0},
-		{"server says no match", catalog.Match{}, nil, fmt.Errorf("%w: 404", metadata.ErrNoMatch), Resolution{Status: StatusNotFound}, 0},
-		{"steam only game", catalog.Match{}, []metadata.Candidate{{ProviderID: "steam:440", Title: "The Witcher 3: Wild Hunt"}}, nil, Resolution{Status: StatusNotInCatalog}, 0},
+		{"one exact opens a record", []metadata.Candidate{igdb}, nil, found("new-1942"), 1},
+		{"old server without a type", []metadata.Candidate{{ProviderID: "1942", Title: name}}, nil, found("new-1942"), 1},
+		{"case and marks", []metadata.Candidate{{ProviderID: "1942", Title: "THE WITCHER 3 - WILD HUNT"}}, nil, found("new-1942"), 1},
+		{"other edition title next to the game", []metadata.Candidate{igdb, {ProviderID: "7", Title: name + " - Complete Edition", GameType: "Main Game"}}, nil, found("new-1942"), 1},
+		{"same game listed twice", []metadata.Candidate{igdb, igdb}, nil, found("new-1942"), 1},
+		{"bundle edition is a game", []metadata.Candidate{{ProviderID: "1942", Title: name, GameType: "Bundle"}}, nil, found("new-1942"), 1},
+		{"edition under its parent is one game", []metadata.Candidate{igdb, {ProviderID: "7", Title: name, GameType: "Bundle", ParentID: "1942"}}, nil, found("new-1942"), 1},
+		{"dlc is dropped", []metadata.Candidate{{ProviderID: "7", Title: name, GameType: "DLC"}}, nil, notFound, 0},
+		{"expansion is dropped", []metadata.Candidate{{ProviderID: "7", Title: name, GameType: "Expansion"}}, nil, notFound, 0},
+		{"update is dropped", []metadata.Candidate{{ProviderID: "7", Title: name, GameType: "Update", ParentID: "1942"}}, nil, notFound, 0},
+		{"dlc next to the game", []metadata.Candidate{igdb, {ProviderID: "7", Title: name, GameType: "DLC"}}, nil, found("new-1942"), 1},
+		{"two exact", []metadata.Candidate{igdb, {ProviderID: "7", Title: name, GameType: "Remake"}}, nil, ambiguous, 0},
+		{"none", nil, nil, notFound, 0},
+		{"only inexact", []metadata.Candidate{{ProviderID: "7", Title: "The Witcher 2"}}, nil, notFound, 0},
+		{"server says no match", nil, fmt.Errorf("%w: 404", metadata.ErrNoMatch), notFound, 0},
+		{"metadata not configured", nil, metadata.ErrNotConfigured, notFound, 0},
+		{"steam only game", []metadata.Candidate{{ProviderID: "steam:440", Title: name}}, nil, Resolution{Status: StatusNotInCatalog}, 0},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			games := &fakeCatalog{match: tc.local}
+			games := &fakeCatalog{match: localHit}
 			lookup := &fakeMetadata{candidates: tc.candidates, searchErr: tc.searchErr}
-			got, err := newTestService(t, games, lookup).ResolveTitle(context.Background(), " The Witcher 3: Wild Hunt ")
+			got, err := newTestService(t, games, lookup).ResolveTitle(context.Background(), " "+name+" ")
 			if err != nil || got != tc.want {
 				t.Fatalf("ResolveTitle = %+v, %v; want %+v", got, err, tc.want)
 			}
-			if len(lookup.searched) != 1 || lookup.searched[0] != "The Witcher 3: Wild Hunt" {
+			if len(lookup.searched) != 1 || lookup.searched[0] != name {
 				t.Fatalf("searched %q", lookup.searched)
 			}
 			if lookup.language != "ru" {
@@ -111,6 +99,71 @@ func TestResolveTitleSkipsTheServerForATitleWithNoLettersOrDigits(t *testing.T) 
 	}
 }
 
+func TestResolveTitleSearchLimit(t *testing.T) {
+	start := time.Unix(1000, 0)
+	cases := []struct {
+		name  string
+		gaps  []time.Duration
+		allow []bool
+	}{
+		{"first is free", []time.Duration{0}, []bool{true}},
+		{"just under the gap", []time.Duration{0, minTitleSearchGap - time.Nanosecond}, []bool{true, false}},
+		{"exactly the gap", []time.Duration{0, minTitleSearchGap}, []bool{true, true}},
+		{"a refused attempt does not move the window", []time.Duration{0, time.Second, minTitleSearchGap - time.Second}, []bool{true, false, true}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			lookup := &fakeMetadata{}
+			s := newTestService(t, &fakeCatalog{}, lookup)
+			now := start
+			s.now = func() time.Time { return now }
+			asked := 0
+			for i, gap := range tc.gaps {
+				now = now.Add(gap)
+				got, err := s.ResolveTitle(context.Background(), "Hades")
+				if tc.allow[i] {
+					asked++
+					if err != nil || got.Status != StatusNotFound {
+						t.Fatalf("attempt %d: %+v, %v", i, got, err)
+					}
+				} else if !errors.Is(err, ErrTooManyTitleSearches) || uierr.Code(err) != "link.too_many" {
+					t.Fatalf("attempt %d: %+v, %v", i, got, err)
+				}
+				if len(lookup.searched) != asked {
+					t.Fatalf("attempt %d: asked %d, want %d", i, len(lookup.searched), asked)
+				}
+			}
+		})
+	}
+}
+
+func TestResolveTitleStopsAfterTheSessionLimit(t *testing.T) {
+	lookup := &fakeMetadata{}
+	s := spacedService(t, &fakeCatalog{}, lookup)
+	for i := range maxTitleSearches {
+		if _, err := s.ResolveTitle(context.Background(), "Hades"); err != nil {
+			t.Fatalf("search %d: %v", i+1, err)
+		}
+	}
+	_, err := s.ResolveTitle(context.Background(), "Hades")
+	if !errors.Is(err, ErrTooManyTitleSearches) || len(lookup.searched) != maxTitleSearches {
+		t.Fatalf("over the limit: %v, asked %d", err, len(lookup.searched))
+	}
+}
+
+func TestResolveTitleCountsTheSearchBeforeTheRequest(t *testing.T) {
+	lookup := &fakeMetadata{searchErr: typhonapi.ErrUpstream}
+	s := newTestService(t, &fakeCatalog{}, lookup)
+	lookup.onSearch = func() {
+		if s.searches != 1 {
+			t.Errorf("searches = %d during the request", s.searches)
+		}
+	}
+	if _, err := s.ResolveTitle(context.Background(), "Hades"); uierr.Code(err) != codeUnavailable {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func TestResolveTitleErrors(t *testing.T) {
 	transport := &url.Error{Op: "Get", URL: "https://api.example.com/metadata/search?q=secret-payload", Err: errors.New("dial failed")}
 	cases := []struct {
@@ -119,22 +172,29 @@ func TestResolveTitleErrors(t *testing.T) {
 		code string
 	}{
 		{"network", fmt.Errorf("%w: %w", typhonapi.ErrUpstream, transport), codeUnavailable},
-		{"unknown failure", transport, codeUnavailable},
 		{"outdated", fmt.Errorf("%w: 426 %w", typhonapi.ErrOutdated, transport), codeOutdated},
 		{"bad request", fmt.Errorf("%w: 400 %w", typhonapi.ErrBadRequest, transport), codeBadRequest},
 		{"rate limit", &metadata.RateLimitError{}, "metadata.rate_limited"},
-		{"not configured", metadata.ErrNotConfigured, "metadata.not_configured"},
+		{"unknown failure has no code", transport, ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			var logged bytes.Buffer
+			previous := slog.Default()
+			slog.SetDefault(slog.New(slog.NewTextHandler(&logged, nil)))
+			t.Cleanup(func() { slog.SetDefault(previous) })
+
 			games := &fakeCatalog{}
 			lookup := &fakeMetadata{searchErr: tc.err}
 			got, err := newTestService(t, games, lookup).ResolveTitle(context.Background(), "Hades")
-			if got != (Resolution{}) || uierr.Code(err) != tc.code {
+			if err == nil || got != (Resolution{}) || uierr.Code(err) != tc.code {
 				t.Fatalf("ResolveTitle = %+v, %v; want code %q", got, err, tc.code)
 			}
-			if strings.Contains(err.Error(), "secret-payload") {
-				t.Fatalf("error text carries the title: %q", err)
+			if strings.Contains(err.Error(), "secret-payload") || strings.Contains(logged.String(), "secret-payload") || strings.Contains(logged.String(), "Hades") {
+				t.Fatalf("error %q or log %q carries the text", err, logged.String())
+			}
+			if tc.code == "" && !strings.Contains(logged.String(), "errorType=*url.Error") {
+				t.Fatalf("log = %q", logged.String())
 			}
 			if len(games.ensured) != 0 {
 				t.Fatalf("ensured %q", games.ensured)
@@ -157,7 +217,7 @@ func TestResolveTitleRejectsABadProviderID(t *testing.T) {
 func TestResolveTitleSharesTheNewGameLimit(t *testing.T) {
 	games := &fakeCatalog{}
 	lookup := &fakeMetadata{}
-	s := newTestService(t, games, lookup)
+	s := spacedService(t, games, lookup)
 	for i := range maxNewGames + 1 {
 		lookup.candidates = []metadata.Candidate{{ProviderID: strconv.Itoa(i + 1), Title: "Hades"}}
 		got, err := s.ResolveTitle(context.Background(), "Hades")
@@ -173,70 +233,6 @@ func TestResolveTitleSharesTheNewGameLimit(t *testing.T) {
 	}
 }
 
-func TestResolveTitleOverRealCatalog(t *testing.T) {
-	games, err := catalog.NewServiceAt(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	add := func(game catalog.Game) string {
-		t.Helper()
-		added, err := games.AddGame(game)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return added.ID
-	}
-	witcher := add(catalog.Game{Title: "The Witcher 3: Wild Hunt"})
-	add(catalog.Game{Title: "The Witcher 3: Wild Hunt - Game of the Year Edition"})
-	baldur := add(catalog.Game{Title: "Baldur's Gate 3", Aliases: []string{"BG3"}})
-	add(catalog.Game{Title: "Prey"})
-	add(catalog.Game{Title: "Prey"})
-	add(catalog.Game{Title: "Solo Addon", GameType: "dlc"})
-	before := len(games.ListGames())
-
-	cases := []struct {
-		name, query string
-		want        Resolution
-		searched    int
-	}{
-		{"exact", "The Witcher 3: Wild Hunt", found(witcher), 0},
-		{"case and punctuation", "the WITCHER 3 - wild hunt", found(witcher), 0},
-		{"apostrophe", "BALDURS GATE 3", found(baldur), 0},
-		{"alias", "bg3", found(baldur), 0},
-		{"two games with one title", "Prey", Resolution{Status: StatusAmbiguous}, 1},
-		{"edition without an exact entry", "The Witcher 3: Wild Hunt Complete Edition", Resolution{Status: StatusNotFound}, 1},
-		{"dlc is not a game page", "Solo Addon", Resolution{Status: StatusNotFound}, 1},
-		{"no such game", "Zzz Unknown Title", Resolution{Status: StatusNotFound}, 1},
-	}
-	for _, remote := range []bool{false, true} {
-		if remote {
-			games.SetRemoteCatalog(noRemote{})
-		}
-		for _, tc := range cases {
-			name := tc.name
-			if remote {
-				name += " next to a remote catalog"
-			}
-			t.Run(name, func(t *testing.T) {
-				lookup := &fakeMetadata{}
-				got, err := newTestService(t, games, lookup).ResolveTitle(context.Background(), tc.query)
-				if err != nil || got != tc.want {
-					t.Fatalf("ResolveTitle(%q) = %+v, %v; want %+v", tc.query, got, err, tc.want)
-				}
-				if len(lookup.searched) != tc.searched {
-					t.Fatalf("searched %q, want %d", lookup.searched, tc.searched)
-				}
-			})
-		}
-	}
-	if after := len(games.ListGames()); after != before {
-		t.Fatalf("catalog grew from %d to %d", before, after)
-	}
-}
-
-// noRemote panics on any call: a local lookup that touches it fails the test.
-type noRemote struct{ catalog.RemoteCatalog }
-
 func TestResolveTitleRejects(t *testing.T) {
 	cases := []struct {
 		name, query string
@@ -246,6 +242,7 @@ func TestResolveTitleRejects(t *testing.T) {
 		{"spaces", "   ", ErrQueryEmpty},
 		{"control", "a\nb", ErrQueryControl},
 		{"not utf-8", "a\xff", ErrQueryUTF8},
+		{"over the byte limit", strings.Repeat("я", 101), ErrQueryTooLong},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -264,9 +261,10 @@ func TestResolveTitleHonoursCancellation(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 		lookup := &fakeMetadata{candidates: igdb}
-		got, err := newTestService(t, &fakeCatalog{}, lookup).ResolveTitle(ctx, "Hades")
-		if !errors.Is(err, context.Canceled) || got != (Resolution{}) || len(lookup.searched) != 0 {
-			t.Fatalf("ResolveTitle = %+v, %v, searched %q", got, err, lookup.searched)
+		s := newTestService(t, &fakeCatalog{}, lookup)
+		got, err := s.ResolveTitle(ctx, "Hades")
+		if !errors.Is(err, context.Canceled) || got != (Resolution{}) || len(lookup.searched) != 0 || s.searches != 0 {
+			t.Fatalf("ResolveTitle = %+v, %v, searched %q, counted %d", got, err, lookup.searched, s.searches)
 		}
 	})
 	t.Run("during the search no record is written", func(t *testing.T) {

@@ -13,6 +13,11 @@ describe('поиск из ссылки в Big Picture', () => {
     expect(catalogPage).toContain('catalog.load({ search: query, genre, sort }, nextPage, pageSize)');
   });
 
+  it('смена страницы и действия Big Picture отменяют идущий запрос ссылки', () => {
+    expect(shell).toMatch(/if \(key === watchedPage\) return;\s*watchedPage = key;\s*cancelPendingLink\(\);/);
+    expect(shell).toContain("if (command === 'confirm' || command === 'back' || command === 'menu') cancelPendingLink();");
+  });
+
   it('запрос нигде не вставляется как HTML', () => {
     expect(catalogPage).not.toContain('{@html');
     expect(shell).not.toContain('{@html');

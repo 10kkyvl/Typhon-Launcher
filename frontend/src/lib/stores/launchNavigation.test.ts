@@ -34,7 +34,7 @@ const { Resolve, ResolveTitle } = await import('../../../bindings/typhon/interna
 const { navigate, route } = await import('./router');
 const { bigPictureActive } = await import('../bigpicture/mode');
 const { toast, dismissToast } = await import('./toasts');
-const { initLaunchNavigation, setLinksReady, bigPictureGame, bigPictureSearch } = await import('./launchNavigation');
+const { initLaunchNavigation, setLinksReady, cancelPendingLink, bigPictureGame, bigPictureSearch } = await import('./launchNavigation');
 import { get, type Writable } from 'svelte/store';
 
 interface Request {
@@ -497,7 +497,7 @@ describe('ссылка поиска', () => {
     ['link.unavailable', 'Не удалось открыть ссылку, проверьте соединение'],
     ['link.too_many', 'Слишком много запросов, попробуйте чуть позже'],
     ['metadata.rate_limited', 'сервер метаданных ограничил частоту запросов'],
-  ])('ошибка %s показывает сообщение и всё равно открывает каталог', async (code, text) => {
+  ])('ошибка %s показывает только сообщение, каталог не открывается', async (code, text) => {
     const failed = Object.assign(Promise.reject(new Error(`typhon:${code}: detail`)), { cancel: vi.fn() });
     vi.mocked(TakePendingLink).mockResolvedValue(search('Hades') as never);
     vi.mocked(ResolveTitle).mockImplementation((() => failed) as never);
@@ -505,7 +505,8 @@ describe('ссылка поиска', () => {
     await start();
 
     expect(toast).toHaveBeenCalledWith(text, 'danger');
-    expect(vi.mocked(navigate).mock.calls).toEqual([catalogCall('Hades')]);
+    expect(navigate).not.toHaveBeenCalled();
+    expect(get(bigPictureSearch)).toBeNull();
   });
 
   it('медленный ответ показывает загрузку и снимает её', async () => {
@@ -574,6 +575,23 @@ describe('ссылка поиска', () => {
 
     expect(r.cancel).toHaveBeenCalledTimes(1);
     expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('действие в Big Picture отменяет поиск по названию', async () => {
+    (bigPictureActive as unknown as Writable<boolean>).set(true);
+    const r = request();
+    vi.mocked(TakePendingLink).mockResolvedValue(search('Hades') as never);
+    vi.mocked(ResolveTitle).mockImplementation((() => r.promise) as never);
+
+    await start();
+    r.promise.catch(() => {});
+    cancelPendingLink();
+    r.resolve({ status: 'found', gameId: 'late' });
+    await settle();
+
+    expect(r.cancel).toHaveBeenCalledTimes(1);
+    expect(get(bigPictureGame)).toBeNull();
+    expect(get(bigPictureSearch)).toBeNull();
   });
 
   it('потеря готовности отменяет поиск по названию', async () => {
