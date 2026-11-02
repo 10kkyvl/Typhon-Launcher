@@ -11,6 +11,7 @@ import (
 	"unicode"
 
 	"typhon/internal/matchprogress"
+	"typhon/internal/titles"
 )
 
 type ReleaseQuery struct {
@@ -367,6 +368,11 @@ func narrowConsoleMatch(m *ReleaseMatch, q ReleaseQuery) (ReleaseCandidate, bool
 		*m = ReleaseMatch{Reason: ReasonPlatform}
 		return ReleaseCandidate{}, false
 	}
+	// A pick without provider ids would only be asked again by title and come
+	// back ambiguous, with the other record lost from the review list.
+	if sameConsoleGame(kept) && consoleCandidateGame(kept[0]) != nil {
+		kept = kept[:1]
+	}
 	*m = ReleaseMatch{Reason: ReasonAmbiguous, Candidates: kept}
 	if len(kept) > 1 {
 		return ReleaseCandidate{}, false
@@ -376,6 +382,19 @@ func narrowConsoleMatch(m *ReleaseMatch, q ReleaseQuery) (ReleaseCandidate, bool
 		return ReleaseCandidate{}, false
 	}
 	return kept[0], true
+}
+
+// sameConsoleGame reports duplicate records of one game: the catalog keeps some
+// console titles twice, and the server already ranks the better one first.
+// Without a year nothing proves they are the same release.
+func sameConsoleGame(kept []ReleaseCandidate) bool {
+	if len(kept) < 2 {
+		return false
+	}
+	title := titles.Normalize(kept[0].Title)
+	return title != "" && kept[0].ReleaseYear > 0 && !slices.ContainsFunc(kept[1:], func(c ReleaseCandidate) bool {
+		return c.ReleaseYear != kept[0].ReleaseYear || titles.Normalize(c.Title) != title
+	})
 }
 
 // consoleCandidateGame builds the game from a candidate that names its

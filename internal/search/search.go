@@ -1,8 +1,10 @@
 package search
 
 import (
+	"cmp"
 	"context"
 	"errors"
+	"slices"
 	"sort"
 	"strings"
 
@@ -149,7 +151,13 @@ func (s *Service) collectCatalog(ctx context.Context, entries map[string]*entry,
 	if err != nil {
 		return 0, err
 	}
-	for _, game := range page.Items {
+	// Base games go first: an edition answers for its parent only when the
+	// parent is not on this page, otherwise the edition would replace it.
+	items := slices.Clone(page.Items)
+	slices.SortStableFunc(items, func(a, b catalog.Game) int {
+		return cmp.Compare(min(len(a.ParentID), 1), min(len(b.ParentID), 1))
+	})
+	for _, game := range items {
 		e := ensure(entries, game.ID)
 		applyCatalog(e, game)
 		score := maxScore(q.score(game.Title, game.Aliases), scoreCatalogFuzzy)
@@ -158,6 +166,11 @@ func (s *Service) collectCatalog(ctx context.Context, entries map[string]*entry,
 		}
 		e.hit.Score = max(e.hit.Score, score)
 		for _, alias := range game.AliasIDs {
+			// The parent's alias is a local id while game.ParentID is a server
+			// one, so the listed record itself says whose id this is.
+			if held := entries[alias]; game.ParentID != "" && held != nil && held != e && held.hit.CanonicalGameID == alias {
+				continue
+			}
 			entries[alias] = e
 		}
 	}

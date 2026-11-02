@@ -89,7 +89,9 @@ func TestConsoleCandidateYearNarrowsSeveral(t *testing.T) {
 	record := func(id string, year int) ReleaseCandidate {
 		return ReleaseCandidate{ID: id, Title: "Alpha", ReleaseYear: year, Platforms: []string{"PlayStation 2"}}
 	}
-	dropped := []ReleaseCandidate{record("ps2-2005", 2005), record("ps2-2010", 2010), record("other-2010", 2010), record("ps2-0", 0)}
+	other := record("other-2010", 2010)
+	other.Title = "Alpha Reissue"
+	dropped := []ReleaseCandidate{record("ps2-2005", 2005), record("ps2-2010", 2010), other, record("ps2-0", 0)}
 	cases := []struct {
 		name   string
 		year   int
@@ -261,5 +263,46 @@ func TestConsoleMatchFillsMissingPlatformsOfSavedGame(t *testing.T) {
 	}
 	if !accept(game.Platforms) {
 		t.Fatalf("platforms = %q", game.Platforms)
+	}
+}
+
+func TestConsoleDuplicateRecordsTakeTheServerFirst(t *testing.T) {
+	accept := func(platforms []string) bool { return slices.Contains(platforms, "PlayStation") }
+	record := func(id, title string, year int) ReleaseCandidate {
+		return ReleaseCandidate{ID: id, Title: title, ReleaseYear: year, Platforms: []string{"PlayStation"}, ExternalIDs: ExternalIDs{IGDB: id}}
+	}
+	bare := func(id string) ReleaseCandidate {
+		return ReleaseCandidate{ID: id, Title: "Alpha", ReleaseYear: 1997, Platforms: []string{"PlayStation"}}
+	}
+	cases := []struct {
+		name    string
+		records []ReleaseCandidate
+		game    string
+	}{
+		{"same title and year", []ReleaseCandidate{record("1", "Alpha", 1997), record("2", "ALPHA", 1997)}, "1"},
+		{"different years", []ReleaseCandidate{record("1", "Alpha", 1997), record("2", "Alpha", 1999)}, ""},
+		{"different titles", []ReleaseCandidate{record("1", "Alpha", 1997), record("2", "Alpha Reissue", 1997)}, ""},
+		{"unknown year", []ReleaseCandidate{record("1", "Alpha", 0), record("2", "Alpha", 0)}, ""},
+		{"no provider ids", []ReleaseCandidate{bare("1"), bare("2")}, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := mustServiceAt(t, t.TempDir())
+			s.SetRemoteCatalog(&consoleYearRemote{first: ReleaseMatch{Reason: ReasonAmbiguous, Candidates: tc.records}})
+			out, err := s.ResolveSourceQueries(context.Background(), []ReleaseQuery{{Titles: []string{"Alpha"}, Accept: accept}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.game == "" {
+				if out[0].Status != StatusReview || len(out[0].Candidates) != 2 {
+					t.Fatalf("result = %+v, want review with both records", out[0])
+				}
+				return
+			}
+			game, err := s.GetGame(out[0].GameID)
+			if out[0].Status != StatusMatched || err != nil || game.ExternalIDs.IGDB != tc.game {
+				t.Fatalf("result %+v, game %+v (%v), want igdb %q", out[0], game, err, tc.game)
+			}
+		})
 	}
 }
