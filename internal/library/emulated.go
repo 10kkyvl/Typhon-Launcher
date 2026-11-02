@@ -35,6 +35,10 @@ var (
 	errCoverInvalid = uierr.New("library.cover_invalid", "обложка должна быть адресом http или https")
 	errImageOutside = uierr.New("library.image_outside_dir", "образ лежит вне папки установки")
 
+	// ErrImageList says a .cue or .m3u could not be read, which is not the same
+	// as there being no image.
+	ErrImageList = errors.New("не удалось прочитать список файлов образа")
+
 	// ErrAlreadyAdded lets the install refuse a duplicate before it copies
 	// anything.
 	ErrAlreadyAdded = errAlreadyAdded
@@ -58,6 +62,10 @@ var loadEmulatedFile = storage.Load
 type Emulation struct {
 	Platform string   `json:"platform"`
 	Files    []string `json:"files,omitempty"`
+	// CatalogGameID links the card to the catalog entry it was installed from,
+	// for the game page and nothing else. It is deliberately not CanonicalGameID,
+	// which would attach the image to the PC game's sync and cloud saves.
+	CatalogGameID string `json:"catalogGameId,omitempty"`
 }
 
 // Footprint is what the game's data occupies on disk. For an emulated game that
@@ -197,6 +205,7 @@ func (s *Service) AddEmulatedGame(ctx context.Context, romPath, platformID, titl
 type InstalledImage struct {
 	Title            string `json:"title"`
 	Cover            string `json:"cover"`
+	CatalogGameID    string `json:"catalogGameId"`
 	Platform         string `json:"platform"`
 	Image            string `json:"image"`
 	InstallDir       string `json:"installDir"`
@@ -320,7 +329,7 @@ func fillImageCard(game *Game, g InstalledImage, title, rom, dir, platformID str
 	if g.Owned {
 		game.InstallType = InstallTypeImage
 	}
-	game.Emulation = &Emulation{Platform: platformID, Files: facts.files}
+	game.Emulation = &Emulation{Platform: platformID, Files: facts.files, CatalogGameID: g.CatalogGameID}
 }
 
 // HoldsRelease says whether the card was installed from this release or this
@@ -333,15 +342,18 @@ func (g Game) HoldsRelease(releaseID, sourceID, downloadID string) bool {
 }
 
 // ImageMembers returns the files an image lists. complete is false when the list
-// could not be followed to the end.
+// names a file it should not; a list that cannot be read is ErrImageList.
 func ImageMembers(rom string, alive func() error) (files []string, complete bool, err error) {
-	return listedFiles(rom, alive)
+	return followList(rom, alive)
 }
 
 // bindImageLocked points a card at an image. An empty title keeps the old name.
 func (s *Service) bindImageLocked(pos int, title, rom, platformID string, facts imageFacts) (Game, error) {
 	previous := s.games[pos]
 	s.games[pos].Emulation = &Emulation{Platform: platformID, Files: facts.files}
+	if previous.Emulation != nil && previous.Owned && platform.Inside(previous.InstallDir, rom) {
+		s.games[pos].Emulation.CatalogGameID = previous.Emulation.CatalogGameID
+	}
 	s.games[pos].Uninstalled = false
 	s.games[pos].Executable = rom
 	if !previous.Owned || !platform.Inside(previous.InstallDir, rom) {
@@ -513,10 +525,23 @@ func readImage(rom string, alive func() error) (imageFacts, error) {
 	return facts, nil
 }
 
-// listedFiles returns the files an image names. Names come from a file the user
-// downloaded (invariant 32): only those inside the image's folder are taken, and
-// any other makes the list incomplete. Only a cancelled alive is an error.
+// listedFiles is followList for a file the user chose: a list that cannot be read
+// costs the card its size, not the card. Only a cancelled alive is an error.
 func listedFiles(rom string, alive func() error) (files []string, complete bool, err error) {
+	files, complete, err = followList(rom, alive)
+	if errors.Is(err, ErrImageList) {
+		slog.Warn("read image list", "error", err)
+		return files, false, nil
+	}
+	return files, complete, err
+}
+
+// followList returns the files an image names. Names come from a file the user
+// downloaded (invariant 32): only those inside the image's folder are taken, and
+// any other makes the list incomplete. A list that cannot be read or names
+// nothing is ErrImageList; a disc of an .m3u that is simply absent only makes the
+// list incomplete.
+func followList(rom string, alive func() error) (files []string, complete bool, err error) {
 	ext := strings.ToLower(filepath.Ext(rom))
 	if ext != ".cue" && ext != ".m3u" {
 		return nil, true, nil
@@ -526,11 +551,13 @@ func listedFiles(rom string, alive func() error) (files []string, complete bool,
 	}
 	names, err := readImageList(rom, ext)
 	if err != nil {
-		slog.Warn("read image list", "error", err)
-		return nil, false, nil
+		return nil, false, fmt.Errorf("%w: %s: %w", ErrImageList, filepath.Base(rom), err)
+	}
+	if len(names) == 0 {
+		return nil, false, fmt.Errorf("%w: %s: в списке нет файлов", ErrImageList, filepath.Base(rom))
 	}
 	dir := filepath.Dir(rom)
-	complete = len(names) > 0
+	complete = true
 	for _, name := range names {
 		local := filepath.FromSlash(strings.ReplaceAll(name, `\`, "/"))
 		if !filepath.IsLocal(local) {
@@ -540,9 +567,13 @@ func listedFiles(rom string, alive func() error) (files []string, complete bool,
 		path := filepath.Join(dir, local)
 		files = append(files, path)
 		if ext == ".m3u" && strings.EqualFold(filepath.Ext(path), ".cue") {
-			tracks, whole, err := listedFiles(path, alive)
+			if _, statErr := imageStat(path); errors.Is(statErr, fs.ErrNotExist) {
+				complete = false
+				continue
+			}
+			tracks, whole, err := followList(path, alive)
 			if err != nil {
-				return nil, false, err
+				return files, false, err
 			}
 			files = append(files, tracks...)
 			complete = complete && whole
@@ -572,7 +603,7 @@ func playlistFiles(r io.Reader) ([]string, error) {
 	var names []string
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
+		line := listLine(scanner.Text())
 		if line != "" && !strings.HasPrefix(line, "#") && !slices.Contains(names, line) {
 			names = append(names, line)
 		}
@@ -583,11 +614,17 @@ func playlistFiles(r io.Reader) ([]string, error) {
 	return names, nil
 }
 
+// listLine drops the byte order mark Windows editors put first: with it the
+// opening FILE of a sheet is not recognised and the sheet looks empty.
+func listLine(raw string) string {
+	return strings.TrimSpace(strings.TrimPrefix(raw, "\ufeff"))
+}
+
 func cueFiles(r io.Reader) ([]string, error) {
 	var names []string
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
+		line := listLine(scanner.Text())
 		if len(line) < 5 || !strings.EqualFold(line[:5], "FILE ") {
 			continue
 		}

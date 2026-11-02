@@ -11,9 +11,9 @@ import (
 	"testing"
 )
 
-// The rules: a console counts only as a whole bracket part, or as a separate
-// word at the end of the title, between two separators, or first before a
-// separator. Everything else is the name of a game.
+// The rules: a console counts as a whole bracket part without the PC beside it,
+// as a word behind a separator, or first before a separator. Everything else is
+// the name of a game.
 func TestParseConsoleTokens(t *testing.T) {
 	cases := []struct {
 		raw, platform, base string
@@ -30,14 +30,13 @@ func TestParseConsoleTokens(t *testing.T) {
 		{"Daxter [PlayStation Portable]", ConsolePSP, "Daxter"},
 		{"Persona 3 Portable [psp]", ConsolePSP, "Persona 3 Portable"},
 
-		{"God of War PS2", ConsolePS2, "God of War"},
-		{"God of War PlayStation 2", ConsolePS2, "God of War"},
-		{"God.of.War.PS2.iso", ConsolePS2, "God of War"},
-		{"God of War PS2 ISO", ConsolePS2, "God of War"},
-		{"God of War PS2 NTSC", ConsolePS2, "God of War"},
-		{"God of War for PS2", ConsolePS2, "God of War"},
-		{"God of War для PS2", ConsolePS2, "God of War"},
 		{"God of War - PS2", ConsolePS2, "God of War"},
+		{"God of War / PS2", ConsolePS2, "God of War"},
+		{"PS2 / God of War", ConsolePS2, "God of War"},
+		{"Crash Bandicoot - Sony PlayStation 2", ConsolePS2, "Crash Bandicoot"},
+		{"God of War - PS2 ISO", ConsolePS2, "God of War"},
+		{"God of War - PS2 (2005)", ConsolePS2, "God of War"},
+		{"God of War / PS2 [RUS]", ConsolePS2, "God of War"},
 		{"God of War — PSX", ConsolePS1, "God of War"},
 		{"God of War | PS2 | RePack", ConsolePS2, "God of War"},
 		{"God of War - PS2 - Rus", ConsolePS2, "God of War"},
@@ -45,13 +44,34 @@ func TestParseConsoleTokens(t *testing.T) {
 		{"PS2: God of War", ConsolePS2, "God of War"},
 		{"[PS2] God of War", ConsolePS2, "God of War"},
 
-		{"God of War PS2 (2005)", ConsolePS2, "God of War"},
-		{"God of War PS2 v1.0", ConsolePS2, "God of War"},
 		{"Crash Bandicoot (USA) [PS1]", ConsolePS1, "Crash Bandicoot"},
+		{"Crash Bandicoot [PlayStation]", ConsolePS1, "Crash Bandicoot"},
+		{"Crash Bandicoot (Sony PlayStation)", ConsolePS1, "Crash Bandicoot"},
+		{"Crash Bandicoot [Sony PlayStation 2]", ConsolePS2, "Crash Bandicoot"},
+		{"God of War [PSX-PSP]", ConsolePS1, "God of War"},
+		{"God of War [PS-2]", ConsolePS2, "God of War"},
 		{"God of War [PS2, RUS]", ConsolePS2, "God of War"},
 		{"God of War [PS2 NTSC]", ConsolePS2, "God of War"},
 		{"God of War [PS2/PSP]", ConsolePS2, "God of War"},
 
+		// PC comes first: a bracket that names it keeps the release as it was.
+		{"God of War [PC, PS2]", "", "God of War [PC, PS2]"},
+		{"God of War (PC + PS2)", "", "God of War (PC + PS2)"},
+		{"God of War [PC/PS2/Xbox]", "", "God of War [PC/PS2/Xbox]"},
+		{"God of War [Windows, PSP]", "", "God of War [Windows, PSP]"},
+		{"God of War [Win64/PS2]", "", "God of War [Win64/PS2]"},
+		{"God of War - PC / PS2", "", "God of War PC / PS2"},
+
+		// Not a console: a word at the end with no separator before it.
+		{"Bloodborne PSX", "", "Bloodborne PSX"},
+		{"God of War PS2", "", "God of War PS2"},
+		{"God of War PlayStation 2", "", "God of War PlayStation 2"},
+		{"Crash Bandicoot Sony PlayStation 2", "", "Crash Bandicoot Sony PlayStation 2"},
+		{"God of War for PS2", "", "God of War for PS2"},
+		{"God of War PS2 (2005)", "", "God of War PS2"},
+		{"Half-PSX", "", "Half PSX"},
+		// Not a console: a scene name.
+		{"God.of.War.PS2-GROUP", "", "God of War PS2 GROUP"},
 		// Not a console: part of a word.
 		{"PSPice Simulator", "", "PSPice Simulator"},
 		{"Epsilon", "", "Epsilon"},
@@ -88,18 +108,18 @@ func TestParseConsoleTokens(t *testing.T) {
 	}
 }
 
-// The token, a known trailing false positive included, must not reach the
-// server in any spelling, the fallbacks that read the raw line among them.
+// The token must not reach the server in any spelling, the fallbacks that read
+// the raw line among them.
 func TestMatchNamesDropsConsoleToken(t *testing.T) {
 	cases := []struct {
 		raw  string
 		want []string
 	}{
 		{"God of War [PS2]", []string{"God of War"}},
-		{"God of War PS2 (2005)", []string{"God of War"}},
+		{"God of War [PS2] (2005)", []string{"God of War"}},
 		{"God of War - PS2", []string{"God of War"}},
+		{"God of War / PS2", []string{"God of War"}},
 		{"Daxter - Release HV [PSP]", []string{"Daxter Release HV", "Daxter"}},
-		{"Bloodborne PSX", []string{"Bloodborne"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.raw, func(t *testing.T) {

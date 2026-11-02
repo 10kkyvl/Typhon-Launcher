@@ -339,6 +339,72 @@ func TestLearnedMatchSkipsConsoleNamesake(t *testing.T) {
 	}
 }
 
+func TestLocalMatchKeepsPCReleaseOffConsoleGame(t *testing.T) {
+	cases := []struct {
+		name      string
+		platforms []string
+		matched   bool
+	}{
+		{"console only", []string{"PlayStation 2"}, false},
+		{"console and pc", []string{"PlayStation 2", pcName}, true},
+		{"another console", []string{"Nintendo 64"}, true},
+		{"no platforms", nil, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, cat, _ := testService(t)
+			game, err := cat.AddGame(catalog.Game{ID: "gow", Title: "God of War", Platforms: tc.platforms, ExternalIDs: catalog.ExternalIDs{IGDB: "1"}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			list := parseEntries("src", []feed.Entry{{Title: "God of War", URIs: []string{magnetOf("a1")}}}, time.Now())
+			if err := applyMatches(cat, list); err != nil {
+				t.Fatal(err)
+			}
+			got := list[0].CanonicalGameID != nil && *list[0].CanonicalGameID == game.ID
+			if got != tc.matched {
+				t.Fatalf("matched = %v, want %v: %+v", got, tc.matched, list[0])
+			}
+		})
+	}
+}
+
+func TestConfirmedConsoleReleaseTeachesNoRuleForPC(t *testing.T) {
+	s, cat, _ := testService(t)
+	game, err := cat.AddGame(catalog.Game{ID: "ps2", Title: "Some Other Title", Platforms: []string{"PlayStation 2"}, ExternalIDs: catalog.ExternalIDs{IGDB: "1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := newFeedServer(t, feedBody(t, "Source",
+		feedEntry{Title: "God of War", URIs: []string{magnetOf("a1")}},
+		feedEntry{Title: "God of War [PS2]", URIs: []string{magnetOf("a2")}},
+	))
+	src := addSource(t, s, server.url())
+	var console string
+	for _, item := range releasesOf(t, s, src.ID, "") {
+		if item.Release.Platform != "" {
+			console = item.Release.ID
+		}
+	}
+	if err := s.ConfirmMatch(console, game.ID); err != nil {
+		t.Fatal(err)
+	}
+	groups := s.GetReleasesForGame(game.ID)
+	if len(groups) != 1 || groups[0].Release.ID != console {
+		t.Fatalf("groups: %+v", groups)
+	}
+	if rules := cat.ListOverrides(); len(rules) != 0 {
+		t.Fatalf("learned %+v", rules)
+	}
+	list := parseEntries("src", []feed.Entry{{Title: "God of War", URIs: []string{magnetOf("a1")}}}, time.Now())
+	if err := applyMatches(cat, list); err != nil {
+		t.Fatal(err)
+	}
+	if list[0].CanonicalGameID != nil {
+		t.Fatalf("the PC release went to %q", *list[0].CanonicalGameID)
+	}
+}
+
 func TestConsolePlatformReachesEveryReader(t *testing.T) {
 	s, cat, _ := testService(t)
 	remote := &consoleRemote{answers: map[string]catalog.ReleaseMatch{

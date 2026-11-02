@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -374,24 +375,41 @@ func consoleAccept(id string) func([]string) bool {
 }
 
 // The local matcher compares titles only, and without the token a console
-// release reads exactly like its PC namesake.
+// release reads exactly like its PC namesake. So a console release needs a game
+// on its console, and a PC release stays off a game only on supported consoles,
+// unless the user's own rule put it there.
 func localConsoleMatch(m matcher, r *Release, match catalog.Match) (catalog.Match, error) {
-	if r.Platform == "" || match.Status != catalog.StatusMatched {
+	if match.Status != catalog.StatusMatched || (r.Platform == "" && match.Method == catalog.MethodOverride) {
 		return match, nil
 	}
 	unmatched := catalog.Match{Status: catalog.StatusUnmatched, Method: catalog.MethodNone, Reason: catalog.ReasonPlatform}
 	reader, ok := m.(gameReader)
 	if !ok {
+		if r.Platform == "" {
+			return match, nil
+		}
 		return unmatched, nil
 	}
 	game, err := reader.GetGame(match.GameID)
 	if err != nil {
 		return catalog.Match{}, fmt.Errorf("read game %s: %w", match.GameID, err)
 	}
+	if r.Platform == "" {
+		if !catalog.OnPC(game.Platforms) && onSupportedConsole(game.Platforms) {
+			return unmatched, nil
+		}
+		return match, nil
+	}
 	if !consoleAccept(r.Platform)(game.Platforms) {
 		return unmatched, nil
 	}
 	return match, nil
+}
+
+func onSupportedConsole(platforms []string) bool {
+	return slices.ContainsFunc(emulators.Platforms(), func(p emulators.Platform) bool {
+		return p.OnCatalog(platforms)
+	})
 }
 
 // Матч по псевдониму или похожести держится на данных каталога, а они

@@ -2,8 +2,11 @@ package library
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"typhon/internal/emulators"
@@ -16,7 +19,7 @@ func installedImage(t *testing.T) InstalledImage {
 	writeFile(t, filepath.Join(dir, "disc2.bin"), "1234")
 	cue := writeFile(t, filepath.Join(dir, "game.cue"), `FILE "game.bin" BINARY`)
 	return InstalledImage{
-		Title: "Game", Cover: "https://example.com/c.jpg", Platform: emulators.PS1, Image: cue, InstallDir: dir,
+		Title: "Game", Cover: "https://example.com/c.jpg", CatalogGameID: "c1", Platform: emulators.PS1, Image: cue, InstallDir: dir,
 		Owned: true, ReleaseID: "r1", SourceID: "s1", SourceDownloadID: "d1", Version: "1.0",
 	}
 }
@@ -225,5 +228,85 @@ func TestRebindingOutOfItsFolderDropsTheOwnership(t *testing.T) {
 	}
 	if moved.Owned || moved.InstallType != "" || moved.ReleaseID != "" || moved.InstallDir != filepath.Dir(outside) {
 		t.Fatalf("the card would delete the folder it was moved to: %+v", moved)
+	}
+}
+
+func TestCatalogLinkStaysLocal(t *testing.T) {
+	s := newLibrary(t)
+	game, err := s.RegisterEmulated(t.Context(), installedImage(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if game.Emulation.CatalogGameID != "c1" || game.CanonicalGameID != "" {
+		t.Fatalf("card = %+v", game)
+	}
+	encoded, err := json.Marshal(s.SyncSnapshot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "c1") || strings.Contains(string(encoded), "catalogGameId") {
+		t.Fatalf("the link left for sync: %s", encoded)
+	}
+	stored, err := os.ReadFile(emulatedPathFor(s.path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(stored), "catalogGameId") {
+		t.Fatalf("the link is not in the image file: %s", stored)
+	}
+	native, err := os.ReadFile(s.path)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(native), "catalogGameId") {
+		t.Fatalf("the link reached library.json: %s", native)
+	}
+}
+
+func TestRebindingKeepsTheCatalogLinkWhileOwned(t *testing.T) {
+	s := newLibrary(t)
+	input := installedImage(t)
+	game, err := s.RegisterEmulated(t.Context(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bound, err := s.rebindImage(game.ID, filepath.Join(input.InstallDir, "disc2.bin"), emulators.PS1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bound.Emulation.CatalogGameID != "c1" {
+		t.Fatalf("link lost inside the folder: %+v", bound.Emulation)
+	}
+	moved, err := s.rebindImage(game.ID, writeFile(t, filepath.Join(t.TempDir(), "other.bin"), "x"), emulators.PS1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if moved.Emulation.CatalogGameID != "" {
+		t.Fatalf("link survived the loss of ownership: %+v", moved.Emulation)
+	}
+}
+
+func TestSheetWithAByteOrderMarkIsRead(t *testing.T) {
+	names, err := cueFiles(strings.NewReader("\ufeffFILE \"game.bin\" BINARY\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(names) != 1 || names[0] != "game.bin" {
+		t.Fatalf("names = %v", names)
+	}
+}
+
+func TestUnreadableListKeepsAManualCardWithUnknownSize(t *testing.T) {
+	s := newLibrary(t)
+	cue := writeFile(t, filepath.Join(t.TempDir(), "game.cue"), "FILE \"broken")
+	game, err := s.AddEmulatedGame(t.Context(), cue, emulators.PS1, "Game")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !game.SizeUnknown {
+		t.Fatalf("card = %+v", game)
+	}
+	if _, _, err := ImageMembers(cue, t.Context().Err); !errors.Is(err, ErrImageList) {
+		t.Fatalf("ImageMembers = %v", err)
 	}
 }

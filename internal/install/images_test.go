@@ -153,6 +153,115 @@ func TestCopyImageSourceStopsOnACancelledContext(t *testing.T) {
 	}
 }
 
+func TestFindImagesTellsAnUnreadableListFromNoImage(t *testing.T) {
+	cases := []struct {
+		name string
+		tree imageTree
+	}{
+		{"broken cue beside a stranger", imageTree{"game.cue": "FILE \"game.bin BINARY", "game.bin": "big", "stranger.iso": "big"}},
+		{"cue naming nothing beside a stranger", imageTree{"game.cue": "REM nothing", "stranger.iso": "big"}},
+		{"playlist with too long a line", imageTree{"game.m3u": strings.Repeat("x", 1<<17), "stranger.iso": "big"}},
+		{"playlist with a broken sheet", imageTree{"game.m3u": "d1.cue", "d1.cue": "FILE \"d1.bin", "stranger.iso": "big"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			plantImages(t, dir, c.tree)
+			got, err := FindImages(t.Context(), dir, emulators.PS1)
+			if !errors.Is(err, errImageUnreadable) || errors.Is(err, errImageNotFound) {
+				t.Fatalf("FindImages = %q, %v", got, err)
+			}
+		})
+	}
+}
+
+func TestFindImagesReadsASheetWithAByteOrderMark(t *testing.T) {
+	dir := t.TempDir()
+	plantImages(t, dir, imageTree{"game.cue": "\ufeffFILE \"game.bin\" BINARY\n", "game.bin": "big"})
+	got, err := FindImages(t.Context(), dir, emulators.PS1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(dir, "game.cue"); !samePath(got, want) {
+		t.Fatalf("FindImages = %q, want %q", got, want)
+	}
+}
+
+func setImageSeam[T any](t *testing.T, seam *T, value T) {
+	t.Helper()
+	previous := *seam
+	*seam = value
+	t.Cleanup(func() { *seam = previous })
+}
+
+func TestImageCopyWithAnotherHashKeepsTheSource(t *testing.T) {
+	calls := 0
+	genuine := hashImageFile
+	setImageSeam(t, &hashImageFile, func(ctx context.Context, path string, buf []byte) (string, int64, error) {
+		calls++
+		hash, size, err := genuine(ctx, path, buf)
+		if calls == 2 {
+			hash += "0"
+		}
+		return hash, size, err
+	})
+	r := newImageRig(t)
+	r.s.sameVolume = differentVolumes
+	root := t.TempDir()
+	plantImages(t, root, imageTree{"Game.iso": "big"})
+	r.downloads.add("d1", "Game.iso", root)
+	item, err := r.s.Start("d1", StartOptions{Platform: emulators.PS2, Mode: ModeMove})
+	if err != nil {
+		t.Fatal(err)
+	}
+	failed := r.s.waitStatus(t, item.ID, StatusFailed)
+	r.s.waitJobDone(t, item.ID)
+	if !strings.Contains(failed.Error, "install.copy_verify_failed") {
+		t.Fatalf("error = %q", failed.Error)
+	}
+	if _, err := os.Stat(filepath.Join(root, "Game.iso")); err != nil {
+		t.Fatalf("the source went: %v", err)
+	}
+	if pathExists(failed.Destination + partialSuffix) {
+		t.Fatal("the bad copy stayed")
+	}
+	if len(r.lib.GetPlayableGames()) != 0 {
+		t.Fatal("a card was created")
+	}
+}
+
+func TestImageFileThatRefusesToRenameIsCopied(t *testing.T) {
+	refused := 0
+	setImageSeam(t, &renameImageFile, func(string, string) error {
+		refused++
+		return os.ErrPermission
+	})
+	r := newImageRig(t)
+	root := t.TempDir()
+	plantImages(t, root, imageTree{"Game.iso": "big"})
+	source := filepath.Join(root, "Game.iso")
+	r.downloads.add("d1", "Game.iso", root)
+	item, err := r.s.Start("d1", StartOptions{Platform: emulators.PS2, Mode: ModeMove})
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := r.s.waitStatus(t, item.ID, StatusCompleted)
+	r.s.waitJobDone(t, item.ID)
+	if refused != 1 {
+		t.Fatalf("renames = %d", refused)
+	}
+	info, err := os.Stat(filepath.Join(done.Destination, "Game.iso"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Size() != 4096 {
+		t.Fatalf("size = %d", info.Size())
+	}
+	if _, err := os.Stat(source); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the source stayed after a move: %v", err)
+	}
+}
+
 func TestInspectImage(t *testing.T) {
 	t.Run("a single image stays alone", func(t *testing.T) {
 		shared := t.TempDir()
@@ -345,6 +454,9 @@ func TestImageInstall(t *testing.T) {
 			}
 			if game.CanonicalGameID != "" {
 				t.Fatalf("the card took the id of the PC game: %q", game.CanonicalGameID)
+			}
+			if game.Emulation.CatalogGameID != "pc-game" {
+				t.Fatalf("catalog link = %q", game.Emulation.CatalogGameID)
 			}
 			if game.SizeBytes <= 0 {
 				t.Fatalf("size = %d", game.SizeBytes)

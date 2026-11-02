@@ -206,20 +206,63 @@ func TestRetryOfARefusedImageChecksWhatStartChecks(t *testing.T) {
 	})
 }
 
-func TestImageThatIsTakenCareOfIsNotAFailure(t *testing.T) {
-	t.Run("card of the release exists", func(t *testing.T) {
-		r := newRig(t)
-		r.reg.put(library.Game{ID: "g1", Title: "Console Game", ReleaseID: "r1", SourceID: "s1", Emulation: &library.Emulation{Platform: emulators.PS2}})
+func TestSecondDownloadOfAnInstalledImageIsAVisibleRefusal(t *testing.T) {
+	r := newRig(t)
+	r.reg.put(library.Game{ID: "g1", Title: "Console Game", ReleaseID: "r1", SourceID: "s1", Emulation: &library.Emulation{Platform: emulators.PS2}})
 
-		r.s.HandleDownloadCompleted(r.imageDownload("d1", imageTree{"Game/game.iso": "big"}, imageOrigin()))
+	r.s.HandleDownloadCompleted(r.imageDownload("d1", imageTree{"Game/game.iso": "big"}, imageOrigin()))
 
-		if items := r.s.List(); len(items) != 0 {
-			t.Fatalf("records = %+v", items)
+	items := r.s.List()
+	if len(items) != 1 {
+		t.Fatalf("records = %+v", items)
+	}
+	item := items[0]
+	if item.Status != StatusFailed || !strings.Contains(item.Error, "library.already_added") {
+		t.Fatalf("record = %+v", item)
+	}
+	want, err := sourceDir(r.current("d1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if item.SourcePath == "" || item.SourcePath != want {
+		t.Fatalf("source path = %q, want %q", item.SourcePath, want)
+	}
+	if !r.current("d1").ImageAttempted {
+		t.Fatal("the download does not say its image was tried")
+	}
+}
+
+func TestStartTakesTheConsoleFromTheDownload(t *testing.T) {
+	t.Run("nothing named", func(t *testing.T) {
+		r := newImageRig(t)
+		root := t.TempDir()
+		plantImages(t, root, imageTree{"Game/game.iso": "big", "Game/setup.exe": "big"})
+		r.downloads.add("d1", "Game", root)
+		r.setOrigin("d1", imageOrigin())
+		item, err := r.s.Start("d1", StartOptions{Mode: ModeCopy})
+		if err != nil {
+			t.Fatal(err)
 		}
-		if !r.current("d1").ImageAttempted {
-			t.Fatal("the download does not say its image was tried")
+		done := r.s.waitStatus(t, item.ID, StatusCompleted)
+		if done.Type != TypeImage || done.Platform != emulators.PS2 || done.Name != "Console Game" || done.Cover != imageCover {
+			t.Fatalf("job = %+v", done)
 		}
 	})
+	t.Run("a PC install cannot be forced", func(t *testing.T) {
+		for _, opts := range []StartOptions{{Type: TypePortable}, {InstallerPath: `C:\setup.exe`}} {
+			r := newImageRig(t)
+			root := t.TempDir()
+			plantImages(t, root, imageTree{"Game/game.iso": "big"})
+			r.downloads.add("d1", "Game", root)
+			r.setOrigin("d1", imageOrigin())
+			if _, err := r.s.Start("d1", opts); !errors.Is(err, errImageOptions) {
+				t.Fatalf("Start(%+v) = %v", opts, err)
+			}
+		}
+	})
+}
+
+func TestImageThatIsTakenCareOfIsNotAFailure(t *testing.T) {
 	t.Run("install of the download is running", func(t *testing.T) {
 		r := newRig(t)
 		d := r.imageDownload("d1", imageTree{"Game/game.iso": "big"}, imageOrigin())

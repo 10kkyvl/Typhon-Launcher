@@ -36,6 +36,7 @@ export const REASONS: Record<string, MessageKey> = {
   'install.image_destination': 'errInstall.installImageDestination',
   'install.image_not_found': 'errInstall.installImageNotFound',
   'install.image_options_invalid': 'errInstall.installImageOptionsInvalid',
+  'install.image_unreadable': 'errInstall.installImageUnreadable',
   'install.incomplete_source': 'errInstall.installIncompleteSource',
   'install.installer_busy': 'errInstall.installInstallerBusy',
   'install.installer_changed': 'errInstall.installInstallerChanged',

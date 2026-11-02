@@ -9,11 +9,27 @@ import (
 	"time"
 
 	"typhon/internal/download"
-	"typhon/internal/library"
 )
 
 func imageOptions(origin download.Origin) StartOptions {
 	return StartOptions{Platform: origin.Platform, Title: origin.Title, Cover: origin.Cover}
+}
+
+// withImageOrigin makes the console of a download binding: a caller that does not
+// name it must not install a console image as a PC game. What the caller did say
+// stays, and the checks that follow refuse what does not fit an image.
+func withImageOrigin(opts StartOptions, origin download.Origin) StartOptions {
+	if opts.Platform != "" || origin.Platform == "" {
+		return opts
+	}
+	opts.Platform = origin.Platform
+	if opts.Title == "" {
+		opts.Title = origin.Title
+	}
+	if opts.Cover == "" {
+		opts.Cover = origin.Cover
+	}
+	return opts
 }
 
 // checkImageOrigin refuses at the start of a download what checkImageOptions
@@ -44,7 +60,7 @@ func (s *Service) installImageDownload(d download.Download) {
 	switch {
 	case err == nil:
 		slog.Info("image install started", "id", item.ID, "download", d.ID, "name", item.Name)
-	case errors.Is(err, library.ErrAlreadyAdded), errors.Is(err, errBusy) && s.hasInstall(d.ID):
+	case errors.Is(err, errBusy) && s.hasInstall(d.ID):
 		slog.Info("image install skipped, already taken care of", "download", d.ID, "error", err)
 	case imageAttemptLater(err):
 		// The attempt did not take place: the next start of the launcher repeats it.
@@ -102,12 +118,17 @@ func (s *Service) recordImageRefusal(d download.Download, cause error) error {
 	if name == "" {
 		name = s.nameFor(d)
 	}
+	source, err := sourceDir(d)
+	if err != nil {
+		cause = errors.Join(cause, err)
+	}
 	item := &Installation{
 		ID:         newID(),
 		DownloadID: d.ID,
 		Name:       name,
 		Type:       TypeImage,
 		Status:     StatusFailed,
+		SourcePath: source,
 		Origin:     d.Origin,
 		Platform:   d.Origin.Platform,
 		Cover:      cover,

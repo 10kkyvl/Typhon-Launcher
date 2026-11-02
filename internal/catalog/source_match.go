@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"unicode"
 
@@ -304,12 +305,20 @@ func confirmConsoleMatches(ctx context.Context, remote ReleaseMatcher, queries [
 	}
 	// This pass is not part of the batch progress the caller reports.
 	answers, err := remote.MatchReleases(matchprogress.With(ctx, func(int, int) {}), asks)
-	var partial *PartialMatchError
-	if err != nil && !errors.As(err, &partial) {
+	switch {
+	case err == nil:
+	case ctx.Err() != nil || errors.Is(err, context.Canceled):
 		return fmt.Errorf("confirm console matches: %w", err)
+	default:
+		// The first pass is already a good answer for the whole feed: losing
+		// this extra request leaves a release in review, it must not undo that.
+		slog.Warn("console match confirmation failed", "asked", len(asks), "error", err)
 	}
 	if len(answers) != len(asks) {
-		return errors.New("incomplete catalog release match response")
+		if err == nil {
+			slog.Warn("console match confirmation came back incomplete", "asked", len(asks), "answered", len(answers))
+		}
+		return nil
 	}
 	// A failed position is a zero answer: that release keeps its candidate.
 	for j, answer := range answers {

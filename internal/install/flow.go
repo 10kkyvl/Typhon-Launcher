@@ -136,7 +136,7 @@ func (s *Service) renameSource(item Installation) error {
 		if err := os.MkdirAll(item.Destination, 0o755); err != nil {
 			return fmt.Errorf("create destination: %w", err)
 		}
-		if err := os.Rename(item.ContentRoot, filepath.Join(item.Destination, filepath.Base(item.ContentRoot))); err != nil {
+		if err := renameImageFile(item.ContentRoot, filepath.Join(item.Destination, filepath.Base(item.ContentRoot))); err != nil {
 			return fmt.Errorf("%w: %w", errRenameRefused, err)
 		}
 		return nil

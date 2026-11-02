@@ -363,7 +363,9 @@ func (s *Service) ConfirmMatch(releaseID, gameID string) error {
 	if _, err := cat.GetGame(gameID); err != nil {
 		return err
 	}
-	learnPattern := !cat.HasRemoteCatalog()
+	// A console release reads exactly like its PC namesake, and a learned rule
+	// knows only the title: it would pull the PC release onto the console game.
+	learnPattern := !cat.HasRemoteCatalog() && platform == ""
 	var undo catalog.MatchUndo
 	if learnPattern {
 		learned, err := cat.LearnMatch(normalized, gameID)

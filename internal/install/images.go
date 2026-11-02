@@ -30,9 +30,17 @@ const (
 
 var (
 	errImageNotFound    = uierr.New("install.image_not_found", "в загрузке не найден образ игры для этой консоли")
+	errImageUnreadable  = uierr.New("install.image_unreadable", "не удалось прочитать список файлов образа игры (.cue или .m3u)")
 	errImageAmbiguous   = uierr.New("install.image_ambiguous", "в загрузке лежат образы разных игр, выбрать один автоматически нельзя")
 	errImageOptions     = uierr.New("install.image_options_invalid", "неверные данные для установки образа игры")
 	errImageDestination = uierr.New("install.image_destination", "образ игры ставится только в папку Consoles каталога игр")
+)
+
+// Seams: a mismatch of two hashes and a refused rename of one file cannot be
+// produced on a healthy disk.
+var (
+	hashImageFile   = hashdir.HashFile
+	renameImageFile = os.Rename
 )
 
 // discMark finds "Disc 2", "(CD1)", "_disk_b" in a file name: the only sign that
@@ -134,6 +142,9 @@ func usableImages(ctx context.Context, found []imageFile) ([]imageFile, error) {
 			continue
 		}
 		members, complete, err := library.ImageMembers(file.path, ctx.Err)
+		if errors.Is(err, library.ErrImageList) {
+			return nil, fmt.Errorf("%w: %w", errImageUnreadable, err)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -461,6 +472,7 @@ func (s *Service) registerImage(ctx context.Context, item Installation, version 
 	return s.library.RegisterEmulated(ctx, library.InstalledImage{
 		Title:            item.Name,
 		Cover:            item.Cover,
+		CatalogGameID:    item.Origin.GameID,
 		Platform:         item.Platform,
 		Image:            item.Executable,
 		InstallDir:       item.Destination,
@@ -498,11 +510,11 @@ func copyImageSource(ctx context.Context, src, partial string, report func(Progr
 	if err := copyFile(ctx, src, target, info.Mode(), rep, buf); err != nil {
 		return err
 	}
-	want, _, err := hashdir.HashFile(ctx, src, buf)
+	want, _, err := hashImageFile(ctx, src, buf)
 	if err != nil {
 		return err
 	}
-	got, _, err := hashdir.HashFile(ctx, target, buf)
+	got, _, err := hashImageFile(ctx, target, buf)
 	if err != nil {
 		return err
 	}

@@ -38,7 +38,8 @@ func TestConsoleSecondPassFailure(t *testing.T) {
 		status  Status
 	}{
 		{"cancelled", context.Canceled, context.Canceled, ""},
-		{"server failure", boom, boom, ""},
+		{"server failure keeps the first pass", boom, nil, StatusReview},
+		{"outdated server keeps the first pass", ErrBackendOutdated, nil, StatusReview},
 		{"partial answer keeps the candidate", &PartialMatchError{Failed: []int{0}, Total: 1, Err: boom}, nil, StatusReview},
 	}
 	for _, tc := range cases {

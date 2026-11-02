@@ -156,6 +156,7 @@ export const errInstall = {
   'errInstall.installImageAmbiguous': 'в загрузке лежат образы разных игр, выбрать один автоматически нельзя',
   'errInstall.installImageDestination': 'образ игры ставится только в папку Consoles каталога игр',
   'errInstall.installImageNotFound': 'в загрузке не найден образ игры для этой консоли',
+  'errInstall.installImageUnreadable': 'не удалось прочитать список файлов образа игры (.cue или .m3u), файл повреждён',
   'errInstall.installImageOptionsInvalid': 'неверные данные для установки образа игры',
   'errInstall.wineNotInstalled': 'для установки и запуска игр на macOS нужен CrossOver',
 } as const;

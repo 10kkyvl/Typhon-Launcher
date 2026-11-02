@@ -990,11 +990,12 @@ func (s *Service) InspectDownload(downloadID string) (PlanInfo, error) {
 }
 
 func (s *Service) Start(downloadID string, opts StartOptions) (Installation, error) {
-	if err := checkImageOptions(opts); err != nil {
-		return Installation{}, err
-	}
 	d, err := s.completedDownload(downloadID)
 	if err != nil {
+		return Installation{}, err
+	}
+	opts = withImageOrigin(opts, d.Origin)
+	if err := checkImageOptions(opts); err != nil {
 		return Installation{}, err
 	}
 
