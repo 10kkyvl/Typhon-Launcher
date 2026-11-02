@@ -123,12 +123,15 @@ func withPrefix(prefix string) func(string, ast.Expr) bool {
 
 func TestFrontendUnionsMatchTheGoConstants(t *testing.T) {
 	src := readFrontend(t, installTS)
+	// TypeImage is defined by library, and goConsts reads only literals.
+	installTypes := append(goConsts(t, "model.go", ofType("Type")), string(TypeImage))
+	sort.Strings(installTypes)
 	cases := []struct {
 		union string
 		want  []string
 	}{
 		{"InstallStatus", goConsts(t, "model.go", ofType("Status"))},
-		{"InstallType", goConsts(t, "model.go", ofType("Type"))},
+		{"InstallType", installTypes},
 		{"InstallMode", goConsts(t, "model.go", withPrefix("Mode"))},
 		{"RemovalMethod", goConsts(t, "removal.go", ofType("RemovalMethod"))},
 	}

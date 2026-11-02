@@ -29,6 +29,7 @@ type fakeDownloads struct {
 	deleted []string
 	stopped []string
 	stopErr error
+	markErr error
 
 	deleteErr error
 }
@@ -59,6 +60,31 @@ func (f *fakeDownloads) Get(id string) (download.Download, error) {
 		return download.Download{}, download.ErrNotFound
 	}
 	return d, nil
+}
+
+func (f *fakeDownloads) List() []download.Download {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]download.Download, 0, len(f.items))
+	for _, d := range f.items {
+		out = append(out, d)
+	}
+	return out
+}
+
+func (f *fakeDownloads) MarkImageAttempted(id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.markErr != nil {
+		return f.markErr
+	}
+	d, ok := f.items[id]
+	if !ok {
+		return download.ErrNotFound
+	}
+	d.ImageAttempted = true
+	f.items[id] = d
+	return nil
 }
 
 func (f *fakeDownloads) DeleteData(id string) error {

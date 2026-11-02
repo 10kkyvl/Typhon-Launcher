@@ -40,6 +40,7 @@ type record struct {
 	Error       string     `json:"error"`
 
 	IgnoreSchedule bool `json:"ignoreSchedule,omitempty"`
+	ImageAttempted bool `json:"imageAttempted,omitempty"`
 }
 
 type store struct {

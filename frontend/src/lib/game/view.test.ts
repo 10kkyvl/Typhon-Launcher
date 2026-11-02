@@ -321,6 +321,25 @@ describe("primaryAction", () => {
     expect(primaryAction(status({ releaseCount: 3 })).kind).toBe("download");
   });
 
+  it("names the console when only console images are offered", () => {
+    const action = primaryAction(status({ consoleCount: 2, consolePlatform: "ps2" }));
+    expect(action).toEqual({ kind: "download", label: "Скачать для PS2", disabled: false });
+  });
+
+  it("asks for an image without a console when the images belong to several", () => {
+    const action = primaryAction(status({ consoleCount: 2, consolePlatform: "" }));
+    expect(action).toEqual({ kind: "download", label: "Скачать образ", disabled: false });
+  });
+
+  it("keeps the PC download first when both kinds are offered", () => {
+    const action = primaryAction(status({ releaseCount: 1, consoleCount: 3, consolePlatform: "ps2" }));
+    expect(action.label).toBe("Скачать");
+  });
+
+  it("does not hide an installed card behind its images", () => {
+    expect(primaryAction(status({ installed: true, consoleCount: 1, consolePlatform: "ps1" })).kind).toBe("play");
+  });
+
   it("waits instead of guessing while releases load", () => {
     expect(primaryAction(status({ releasesLoading: true })).kind).toBe(
       "resolving",

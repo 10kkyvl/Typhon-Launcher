@@ -108,6 +108,7 @@ func TestHandleDownloadStartedStaysOutWhenNotAsked(t *testing.T) {
 		{"права заранее не просили", func(d *download.Download) { d.Origin.ElevateAhead = false }},
 		{"автоустановка отключена для этой загрузки", func(d *download.Download) { d.Origin.AutoInstall = &no }},
 		{"загрузка не про релиз", func(d *download.Download) { d.Origin.Purpose = download.PurposeUpdate }},
+		{"образ консоли, запускать нечего", func(d *download.Download) { d.Origin.Platform = "ps2" }},
 		{"в загрузке нет установщика", func(d *download.Download) {
 			d.Files = []download.FileState{{Path: "Game/Game.bin", Selected: true}}
 		}},

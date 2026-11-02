@@ -107,8 +107,10 @@ var (
 
 type downloadSource interface {
 	Get(id string) (download.Download, error)
+	List() []download.Download
 	DeleteData(id string) error
 	StopSeeding(id string) error
+	MarkImageAttempted(id string) error
 }
 
 type registrar interface {
@@ -191,6 +193,7 @@ func NewService(settingsService *settings.Service, downloads *download.Manager, 
 	}
 	if downloads != nil {
 		s.downloads = downloads
+		downloads.SetOriginCheck(checkImageOrigin)
 	}
 	if lib != nil {
 		s.library = lib
@@ -412,6 +415,7 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		if err := s.releaseOrphanedWaiting(base, waitingDownloads); err != nil && !errors.Is(err, context.Canceled) {
 			slog.Error("release installs of downloads removed earlier", "error", err)
 		}
+		s.resumeImageInstalls(base)
 	}()
 
 	base, err := s.baseContext()
@@ -1375,6 +1379,7 @@ func (s *Service) retry(id string, forceInteractive bool) error {
 	title := item.Name
 	storedMode := item.Mode
 	console := item.Platform
+	refused := snapshotOf(item)
 	s.mu.Unlock()
 
 	d, err := s.completedDownload(downloadID)
@@ -1398,6 +1403,13 @@ func (s *Service) retry(id string, forceInteractive bool) error {
 		}
 	case kind == TypeImage:
 		mode = ""
+	}
+	placeImage := kind == TypeImage && destination == ""
+	if placeImage {
+		destination, err = s.placeRefusedImage(refused, plan, mode)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Установщик, выбранный пользователем вручную, переживает повтор вместе со
@@ -1445,6 +1457,12 @@ func (s *Service) retry(id string, forceInteractive bool) error {
 		s.mu.Unlock()
 		return errBusy
 	}
+	if placeImage {
+		if err := s.startBlockedLocked(&Installation{Destination: destination}, downloadID); err != nil {
+			s.mu.Unlock()
+			return err
+		}
+	}
 	if alive, _ := s.transientWorkerStatus(id); alive {
 		s.mu.Unlock()
 		return errInstallerStillRunning
@@ -1473,6 +1491,10 @@ func (s *Service) retry(id string, forceInteractive bool) error {
 		if item.Type == TypePortable || item.Type == TypeImage {
 			item.Mode = mode
 		}
+	}
+	if placeImage {
+		item.Destination = destination
+		item.Owned = true
 	}
 	if external(item.Type) {
 		item.InstallerPath = installer
@@ -1618,6 +1640,10 @@ func (s *Service) HandleDownloadCompleted(d download.Download) {
 			s.DropBroker(d.ID)
 		}
 	}()
+	if d.Origin.Platform != "" {
+		s.installImageDownload(d)
+		return
+	}
 	if !autoInstallFor(d, s.config().AutoInstall) {
 		return
 	}

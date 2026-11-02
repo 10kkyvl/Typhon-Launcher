@@ -18,3 +18,30 @@ describe('release variants', () => {
     expect(html).not.toContain('class="release-row');
   });
 });
+
+describe('console images', () => {
+  const image = (id: string, platform: 'ps1' | 'ps2' | 'psp'): ReleaseGroup => {
+    const base = group(id, `Game (${platform})`);
+    return { ...base, release: { ...base.release, platform } };
+  };
+
+  it('lists PC releases first and opens the console group with a heading', () => {
+    const html = render(ReleaseList, { props: { groups: [image('img', 'ps2'), group('pc', 'Game')], ondownload: () => {} } }).body;
+    expect(html.indexOf('Game</span>')).toBeLessThan(html.indexOf('Game (ps2)'));
+    expect(html).toContain('Образы для консолей');
+    expect(html).toContain('console-tag');
+    expect(html).toContain('PS2');
+  });
+
+  it('marks each image with its console without a heading when no PC release exists', () => {
+    const html = render(ReleaseList, { props: { groups: [image('a', 'ps1'), image('b', 'psp')], ondownload: () => {} } }).body;
+    expect(html).not.toContain('Образы для консолей');
+    expect(html).toContain('PS1');
+    expect(html).toContain('PSP');
+  });
+
+  it('shows no console tag on a PC release', () => {
+    const html = render(ReleaseList, { props: { groups: [group('pc', 'Game')], ondownload: () => {} } }).body;
+    expect(html).not.toContain('console-tag');
+  });
+});

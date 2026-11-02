@@ -44,7 +44,7 @@
   import { openGameFolder, openFolder } from '../../lib/services/settings';
   import { rescan, scanProgress, scanSummary, scanning } from '../../lib/stores/discovery';
   import { installedGames, runningGames } from '../../lib/stores/library';
-  import { emulationPlatform, isEmulated } from '../../lib/library/emulation';
+  import { emulationPlatform, isEmulated, isInstalledImage } from '../../lib/library/emulation';
   import { selectImageFile } from '../../lib/services/emulators';
   import { missingImages, refreshMissingImages } from '../../lib/stores/missingImages';
   import { externalLabel, isExternal, isLaunchable } from '../../lib/library/external';
@@ -284,6 +284,12 @@
   const emulatedMenuItems = [
     { id: 'folder', label: msg('games.openFolder') },
     { id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true, separator: true },
+  ];
+
+  const imageMenuItems = [
+    { id: 'folder', label: msg('games.openFolder') },
+    { id: 'uninstall', label: msg('games.actionUninstall'), danger: true, separator: true },
+    { id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true },
   ];
 
   const externalMenuItems = [
@@ -593,7 +599,7 @@
             <FolderOpen size="1.3rem" strokeWidth={1.8} />
             {msg('games.openFolder')}
           </Button>
-          <DropdownMenu items={isExternal(game) ? externalMenuItems : isEmulated(game) ? emulatedMenuItems : menuItems} onselect={(id) => onMenu(game, id)}>
+          <DropdownMenu items={isExternal(game) ? externalMenuItems : isInstalledImage(game) ? imageMenuItems : isEmulated(game) ? emulatedMenuItems : menuItems} onselect={(id) => onMenu(game, id)}>
             {#snippet trigger({ toggle })}
               <IconButton label={msg('games.installedMenuLabel')} size="sm" onclick={toggle}>
                 <EllipsisVertical size="1.6rem" strokeWidth={1.8} />

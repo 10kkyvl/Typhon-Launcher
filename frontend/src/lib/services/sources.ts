@@ -35,6 +35,8 @@ export interface Source {
   createdAt: string;
 }
 
+export type ConsolePlatform = 'ps1' | 'ps2' | 'psp';
+
 export interface Release {
   id: string;
   sourceId: string;
@@ -50,6 +52,7 @@ export interface Release {
   toVersion?: string;
   sequence?: number;
   edition?: string;
+  platform?: ConsolePlatform;
   languages?: string[];
   year?: number;
   tags?: string[];
@@ -387,7 +390,7 @@ export async function getMatchCandidates(releaseId: string): Promise<MatchCandid
   return ((await SourcesService.GetCandidates(releaseId)) ?? []) as unknown as MatchCandidate[];
 }
 
-export type SimilarReason = 'ambiguous' | 'none' | 'too_many' | '';
+export type SimilarReason = 'ambiguous' | 'none' | 'too_many' | 'platform' | '';
 
 export interface SimilarRelease extends ReleaseView {
   matchedCandidate: { id: string; title: string; year: number };

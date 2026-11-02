@@ -8,6 +8,7 @@ export type InstallType =
   | 'archive_rar'
   | 'exe_installer'
   | 'msi_installer'
+  | 'console_image'
   | 'unknown';
 
 export type InstallStatus =
@@ -44,6 +45,8 @@ export interface Plan {
   candidates: Candidate[] | null;
   engine: string;
   silent: boolean;
+  platform?: string;
+  imagePath?: string;
 }
 
 export interface PlanInfo {
@@ -97,6 +100,8 @@ export interface Installation {
   warning?: string;
   engine: string;
   silent: boolean;
+  platform?: string;
+  cover?: string;
 }
 
 export type RemovalMethod = 'files' | 'installer' | 'record';
@@ -133,11 +138,14 @@ export interface StartOptions {
   mode?: string;
   type?: InstallType;
   installerPath?: string;
+  platform?: string;
+  title?: string;
+  cover?: string;
 }
 
 const unavailable = () => new Error('unavailable in browser');
 
-export const controlledTypes: InstallType[] = ['portable', 'archive_zip', 'archive_7z', 'archive_rar'];
+export const controlledTypes: InstallType[] = ['portable', 'archive_zip', 'archive_7z', 'archive_rar', 'console_image'];
 export const externalTypes: InstallType[] = ['exe_installer', 'msi_installer'];
 
 export function isControlled(type: InstallType) {
@@ -189,6 +197,7 @@ export async function startInstall(downloadID: string, opts: StartOptions): Prom
     mode: opts.mode ?? '',
     type: opts.type ?? '',
     installerPath: opts.installerPath ?? '',
+    ...(opts.platform ? { platform: opts.platform, title: opts.title ?? '', cover: opts.cover ?? '' } : {}),
   };
   return (await InstallService.Start(downloadID, payload as never)) as unknown as Installation;
 }

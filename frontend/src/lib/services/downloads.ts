@@ -34,6 +34,9 @@ export interface DownloadOrigin {
   libraryId?: string;
   autoInstall?: boolean;
   elevateAhead?: boolean;
+  platform?: string;
+  title?: string;
+  cover?: string;
 }
 
 export interface Download {

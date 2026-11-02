@@ -24,6 +24,7 @@ export const state = {
   'state.installTypeExeInstaller': 'Установщик (EXE)',
   'state.installTypeMsiInstaller': 'Установщик (MSI)',
   'state.installTypeUnknown': 'Неизвестный пакет',
+  'state.installTypeImage': 'Образ',
   'state.installCompletedToast': 'Игра «{name}» установлена',
   'state.installFailedToast': 'Ошибка установки «{name}»: {error}',
 

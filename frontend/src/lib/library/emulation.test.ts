@@ -4,9 +4,11 @@ import {
   consoleForImage,
   consolesForImage,
   emulationPlatform,
+  emulatorMissing,
   imageExtension,
   imageExtensions,
   isEmulated,
+  isInstalledImage,
   needsEmulator,
   platformBadge,
   type ConsoleInfo,
@@ -92,5 +94,30 @@ describe('console of an image', () => {
 
   it('lists every extension once, sorted', () => {
     expect(imageExtensions(consoles)).toEqual(['.bin', '.chd', '.cso', '.cue', '.iso', '.m3u', '.pbp', '.zso']);
+  });
+});
+
+describe('installed images', () => {
+  it('recognises an image the launcher put into its own folder', () => {
+    expect(isInstalledImage({ emulation: { platform: 'ps2' }, owned: true, installType: 'console_image' })).toBe(true);
+  });
+
+  it('leaves a manually added image alone', () => {
+    expect(isInstalledImage({ emulation: { platform: 'ps2' }, owned: false })).toBe(false);
+    expect(isInstalledImage({ emulation: { platform: 'ps2' } })).toBe(false);
+  });
+
+  it('is not triggered by a PC game', () => {
+    expect(isInstalledImage({ owned: true, installType: 'console_image' })).toBe(false);
+    expect(isInstalledImage(null)).toBe(false);
+  });
+});
+
+describe('emulatorMissing', () => {
+  it('hints for every state but ready', () => {
+    expect(emulatorMissing({ status: 'not_set' })).toBe(true);
+    expect(emulatorMissing({ status: 'missing' })).toBe(true);
+    expect(emulatorMissing({ status: 'unavailable' })).toBe(true);
+    expect(emulatorMissing({ status: 'ready' })).toBe(false);
   });
 });

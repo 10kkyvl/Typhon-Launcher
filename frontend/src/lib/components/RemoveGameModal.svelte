@@ -37,8 +37,9 @@
   let loadedFor = $state('');
 
   const blocked = $derived(!!info && (info.running || info.busy));
-  const canDeleteFiles = $derived(!external && !emulated && !!info && info.owned && !info.dirMissing);
-  const canUninstall = $derived(!external && !emulated && !!info && (info.method === 'installer' || canDeleteFiles));
+  const manualImage = $derived(emulated && !info?.owned);
+  const canDeleteFiles = $derived(!external && !manualImage && !!info && info.owned && !info.dirMissing);
+  const canUninstall = $derived(!external && !manualImage && !!info && (info.method === 'installer' || canDeleteFiles));
 
   $effect(() => {
     if (!open) {
@@ -155,8 +156,10 @@
       </button>
     </div>
 
-    {#if emulated}
+    {#if manualImage}
       <p class="text">{msg('emul.removeNote')}</p>
+    {:else if emulated}
+      <p class="text">{msg('emul.removeOwnedNote')}</p>
     {:else if external}
       <p class="text">{msg('games.externalRemoveNote')}</p>
     {:else}

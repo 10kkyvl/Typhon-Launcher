@@ -5,7 +5,8 @@
   import Artwork from '../../components/Artwork.svelte';
   import StoreLinks from '../../components/StoreLinks.svelte';
   import ProgressBar from '../../components/ProgressBar.svelte';
-  import { galleryShots, languageLabel, pickHero } from '../../game/view';
+  import { galleryShots, languageLabel, pickHero, primaryAction } from '../../game/view';
+  import { consoleOrigin, orderReleases, sharedPlatform, splitReleases } from '../../game/releases';
   import { dlcView, hasRequirements, requirementColumns } from '../../game/extras';
   import { GAME_STATUSES, statusLabel, type GameStatus } from '../../game/status';
   import { t, type MessageKey, type Params } from '../../i18n';
@@ -14,7 +15,7 @@
   import { libraryGames, runningGames } from '../../stores/library';
   import { settings } from '../../stores/settings';
   import { addCatalogGame, setFavorite, setStatus, stopGame, type LibraryGame } from '../../services/library';
-  import { cancelDownload, pauseDownload, resumeDownload, type Download as DownloadItem, type TorrentInfo } from '../../services/downloads';
+  import { cancelDownload, pauseDownload, resumeDownload, type Download as DownloadItem, type DownloadOrigin, type TorrentInfo } from '../../services/downloads';
   import { getCatalogGame, getReleasesForGame, getReleasesForTitle, type CatalogGame, type ReleaseGroup } from '../../services/sources';
   import { getMetadataView, ensureMetadataFresh, openStoreLink, type MetadataView, type StoreId } from '../../services/metadata';
   import { appInfo, elevationSupported, type AppInfo } from '../../services/system';
@@ -67,6 +68,7 @@
   let dialogReturnFocus = '';
   let cancelDownloadId = '';
   let pendingReleaseId = $state('');
+  let consoleDownload = $state<DownloadOrigin>({});
   let downloadStep = $state<DownloadStep>('preparing');
   let dialogError = $state('');
   let torrent = $state<TorrentInfo | null>(null);
@@ -112,6 +114,22 @@
   const gameMeta = $derived([year || '', metadata?.game.developer || catalogGame?.developer, metadata?.game.publisher || catalogGame?.publisher].filter(Boolean).join(' · '));
   const genres = $derived([...new Set([...(metadata?.game.genres ?? []), ...(catalogGame?.genres ?? [])])]);
   const availableReleases = $derived(releaseGroups.filter((group) => group.release.availability !== 'removed'));
+  const releaseSplit = $derived(splitReleases(availableReleases));
+  const orderedReleases = $derived(orderReleases(releaseGroups));
+  const consoleStart = $derived(releaseSplit.pc.length > 0 ? -1 : orderedReleases.findIndex((group) => group.release.platform));
+  const heroDownloadLabel = $derived(
+    releaseSplit.pc.length === 0 && releaseSplit.console.length > 0
+      ? primaryAction({
+          installed: false,
+          running: false,
+          updateAvailable: false,
+          releaseCount: 0,
+          releasesLoading: false,
+          consoleCount: releaseSplit.console.length,
+          consolePlatform: sharedPlatform(releaseSplit.console),
+        }).label
+      : bp('bp.game.tabReleases'),
+  );
   const downloadRows = $derived.by(() => $downloads
     .filter((item) => ownsDownload(item))
     .toSorted((a, b) => Date.parse(b.addedAt) - Date.parse(a.addedAt)));
@@ -386,6 +404,8 @@
   async function beginDownload(releaseId: string) {
     pendingReleaseId = releaseId;
     dialogError = '';
+    const picked = releaseGroups.find((group) => group.release.id === releaseId);
+    consoleDownload = picked ? consoleOrigin(picked.release, title, cover) : {};
     downloadStep = 'preparing';
     torrent = null;
     selectedFiles = [];
@@ -466,10 +486,11 @@
     startingDownload = true;
     dialogError = '';
     try {
-      await downloadFlow.start(destination.trim(), indices, {
-        autoInstall,
-        elevateAhead: autoInstall && canElevate && elevateAhead,
-      });
+      await downloadFlow.start(
+        destination.trim(),
+        indices,
+        consoleDownload.platform ? { ...consoleDownload } : { autoInstall, elevateAhead: autoInstall && canElevate && elevateAhead },
+      );
       startingDownload = false;
       await closeDialog();
     } catch (error) {
@@ -586,7 +607,7 @@
             {:else if currentDownload}
               <button class="large-button primary" data-bp-focus="game:download-status" data-bp-default onclick={ondownloads}><Download size="1.9rem" />{bp('bp.game.downloads')}</button>
             {:else}
-              <button class="large-button primary" data-bp-focus="game:see-releases" data-bp-default onclick={openReleases}><Download size="1.9rem" />{bp('bp.game.tabReleases')}</button>
+              <button class="large-button primary" data-bp-focus="game:see-releases" data-bp-default onclick={openReleases}><Download size="1.9rem" />{heroDownloadLabel}</button>
             {/if}
             {#if !localGame && canonicalId}
               <button class="large-button secondary" data-bp-focus="game:add-library" onclick={() => void addToLibrary()}><Check size="1.8rem" />{bp('bp.game.addToLibrary')}</button>
@@ -717,11 +738,12 @@
             <div class="bp-empty small"><h2>{bp('bp.game.releaseEmpty')}</h2></div>
           {:else}
             <div class="release-grid">
-              {#each releaseGroups as group (group.release.id)}
+              {#each orderedReleases as group, index (group.release.id)}
                 {@const release = group.release}
                 {@const removed = release.availability === 'removed'}
+                {#if index === consoleStart}<h3 class="release-group">{bp('bp.game.consoleHeading')}</h3>{/if}
                 <button class="release-card" class:unavailable={removed} disabled={removed || Boolean(pendingReleaseId === release.id)} data-bp-focus={`game:release:${encodeURIComponent(release.id)}`} onclick={() => void beginDownload(release.id)}>
-                  <span class="release-heading"><strong>{release.version || release.rawTitle}</strong>{#if release.new}<span class="new-badge">New</span>{/if}</span>
+                  <span class="release-heading"><strong>{release.version || release.rawTitle}</strong>{#if release.platform}<span class="console-chip">{platformBadge(release.platform)}</span>{/if}{#if release.new}<span class="new-badge">New</span>{/if}</span>
                   <span class="release-name">{release.rawTitle}</span>
                   {#if release.edition}<span class="release-edition">{release.edition}</span>{/if}
                   <span class="release-info"><span>{formattedSize(release.size)}</span>{#if release.languages?.length}<span>{languageLabel(release.languages)}</span>{/if}<span>{relativeDate(release.uploadedAt)}</span></span>
@@ -753,6 +775,10 @@
             <div class="dialog-actions"><button class="large-button secondary" data-bp-focus="game:dialog:retry-metadata" data-bp-default onclick={() => void retryMetadata()}><RotateCw size="1.8rem" />{bp('bp.game.releaseRetry')}</button><button class="large-button secondary" data-bp-focus="game:dialog:close" onclick={() => void closeDialog()}>{bp('bp.game.cancel')}</button></div>
           {:else if torrent}
             <div class="torrent-summary"><strong>{torrent.name}</strong><span>{formattedSize(torrent.totalBytes)}</span></div>
+            {#if consoleDownload.platform}
+              <p class="muted">{bp('bp.game.consoleNote')}</p>
+              {#if dialogError}<div class="dialog-error" role="alert">{dialogError}</div>{/if}
+            {:else}
             <div class="destination-card"><div><span class="field-label">{bp('bp.game.downloadDestination')}</span><span class="path">{destination || '—'}</span></div><div class="destination-actions"><button class="large-button secondary" data-bp-focus="game:dialog:destination" onclick={() => void changeDestination()}>{bp('bp.game.changeDestination')}</button><button class="large-button secondary" data-bp-focus="game:dialog:browse-destination" onclick={() => void browseDestination()}>{bp('bp.game.browseFolder')}</button></div></div>
             <div class="file-heading"><span class="field-label">{bp('bp.game.selectFiles')}</span><button class="text-button" data-bp-focus="game:dialog:select-all" onclick={toggleAllFiles}>{selectedCount === torrent.files.length ? bp('bp.game.deselectAll') : bp('bp.game.selectAll')}</button></div>
             <div class="file-list" role="group" aria-label={bp('bp.game.selectFiles')}>
@@ -773,6 +799,7 @@
             {#if elevationCheckFailed}<p class="muted">{bp('bp.game.elevationFailed')}</p>{/if}
             {#if dialogError}<div class="dialog-error" role="alert">{dialogError}</div>{/if}
             {#if selectedCount === 0}<p class="dialog-error" role="status">{bp('bp.game.noFilesSelected')}</p>{/if}
+            {/if}
             <div class="dialog-actions"><button class="large-button secondary" data-bp-focus="game:dialog:cancel" data-bp-default onclick={() => void closeDialog()}>{bp('bp.game.cancel')}</button><button class="large-button primary" data-bp-focus="game:dialog:start" disabled={!canStartDownload} onclick={() => void startDownload()}>{startingDownload ? bp('bp.game.downloadStarting') : bp('bp.game.downloadStart')}</button></div>
           {/if}
         {:else if dialog === 'screenshot'}
@@ -899,6 +926,8 @@
   .release-card.unavailable { opacity: .4; }
   .release-heading { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 1rem; }
   .release-heading strong { min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; font-size: 1.75rem; }
+  .release-group { grid-column: 1 / -1; margin: 1rem 0 0; color: var(--text-3); font-size: 1.3rem; font-weight: 700; }
+  .console-chip { padding: .35rem .65rem; border-radius: 999px; background: var(--surface-3); color: var(--text-2); font-size: 1.1rem; font-weight: 800; }
   .new-badge { padding: .35rem .65rem; border-radius: 999px; background: color-mix(in srgb, var(--accent) 20%, var(--surface)); color: var(--accent); font-size: 1.1rem; font-weight: 800; }
   .release-name { display: -webkit-box; overflow: hidden; color: var(--text-2); font-size: 1.35rem; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
   .release-edition { color: var(--text-3); font-size: 1.25rem; }

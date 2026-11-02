@@ -163,6 +163,25 @@ func TestScanSkipsNonGameDirectories(t *testing.T) {
 	}
 }
 
+func TestScanLeavesTheConsolesFolderAlone(t *testing.T) {
+	for _, folder := range []string{"Consoles", "consoles"} {
+		t.Run(folder, func(t *testing.T) {
+			f := newFixture(t)
+			installedGame(t, f.root, "Portal")
+			installedGame(t, f.root, folder)
+
+			result := f.scan(t)
+
+			if result.Added != 1 || result.Candidates != 1 || result.Skipped != 0 {
+				t.Fatalf("result = %+v, want only Portal looked at", result)
+			}
+			if games := f.lib.GetInstalledGames(); len(games) != 1 || games[0].Title != "Portal" {
+				t.Fatalf("games = %+v", games)
+			}
+		})
+	}
+}
+
 func TestScanPicksExecutableByExistingPolicy(t *testing.T) {
 	f := newFixture(t)
 	dir := installedGame(t, f.root, "Portal")

@@ -152,6 +152,7 @@ type Manager struct {
 	gamesRunning    bool
 	playShown       PlayThrottleState
 	onCompleted     func(Download)
+	originCheck     func(Origin) error
 	onStarted       func(Download)
 	onGone          func(string)
 	usageRecorder   func(usagestats.Event)
@@ -419,6 +420,7 @@ func (m *Manager) loadLocked() error {
 			Error:       r.Error,
 
 			IgnoreSchedule: r.IgnoreSchedule,
+			ImageAttempted: r.ImageAttempted,
 		}
 		if d.Type == "" {
 			d.Type = TypeTorrent
@@ -522,6 +524,7 @@ func (m *Manager) persistLocked() error {
 			Error:       d.Error,
 
 			IgnoreSchedule: d.IgnoreSchedule,
+			ImageAttempted: d.ImageAttempted,
 		})
 	}
 	if err := m.store.save(records); err != nil {
@@ -846,6 +849,9 @@ func (m *Manager) StartDownload(infoHash, destination string, selectedIndices []
 // this is not one of the four windows the audit named, but the same TOCTOU
 // applies to it and anacrolix/torrent's own dedup cannot be relied on either).
 func (m *Manager) StartDownloadFrom(infoHash, destination string, selectedIndices []int, origin Origin) (Download, error) {
+	if err := m.checkOrigin(origin); err != nil {
+		return Download{}, err
+	}
 	m.mu.Lock()
 	if m.offlineLocked() {
 		err := m.offlineErrLocked()
@@ -1190,6 +1196,48 @@ func (m *Manager) SetOnStarted(fn func(Download)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.onStarted = fn
+}
+
+// SetOriginCheck names who validates an origin before a download starts: what
+// is wrong with it would otherwise surface only when the download ends. The
+// rules belong to the installer, and install imports this package.
+//
+//wails:ignore
+func (m *Manager) SetOriginCheck(fn func(Origin) error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.originCheck = fn
+}
+
+func (m *Manager) checkOrigin(origin Origin) error {
+	m.mu.Lock()
+	check := m.originCheck
+	m.mu.Unlock()
+	if check == nil {
+		return nil
+	}
+	return check(origin)
+}
+
+// MarkImageAttempted records that the install of a console image was tried.
+//
+//wails:ignore
+func (m *Manager) MarkImageAttempted(id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	d := m.findLocked(id)
+	if d == nil {
+		return errNotFound
+	}
+	if d.ImageAttempted {
+		return nil
+	}
+	d.ImageAttempted = true
+	if err := m.persistLocked(); err != nil {
+		d.ImageAttempted = false
+		return err
+	}
+	return nil
 }
 
 // SetOnGone reports a download that will never complete — removed, cancelled

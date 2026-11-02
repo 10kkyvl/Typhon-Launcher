@@ -106,6 +106,8 @@ export const bigpictureCatalog = {
   'bp.game.noFilesSelected': 'Выберите хотя бы один файл.',
   'bp.game.librarySetupRequired': 'Перед загрузкой настройте папку библиотеки в обычном режиме.',
   'bp.game.downloadStart': 'Начать загрузку',
+  'bp.game.consoleNote': 'Для запуска нужен эмулятор. BIOS настраивается в самом эмуляторе. После загрузки образ игры сам окажется в библиотеке.',
+  'bp.game.consoleHeading': 'Образы для консолей',
   'bp.game.downloadStarting': 'Запускаем загрузку…',
   'bp.game.downloadStartFailed': 'Не удалось начать загрузку. Выбранные файлы сохранены — можно повторить.',
   'bp.game.downloadClose': 'Закрыть',

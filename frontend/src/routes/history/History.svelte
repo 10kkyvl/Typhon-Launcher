@@ -14,6 +14,7 @@
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
+  import ConsoleTag from '../../lib/components/ConsoleTag.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import SearchInput from '../../lib/components/SearchInput.svelte';
@@ -22,6 +23,7 @@
   import { filterHistory } from '../../lib/history/historyFilter';
   import { historyLabel } from '../../lib/history/historyText';
   import { Kind, type Record as HistoryRecord } from '../../lib/services/history';
+  import { libraryGames } from '../../lib/stores/library';
   import { clearHistory, history, historyErrorText, historyStatus } from '../../lib/stores/history';
   import { toast } from '../../lib/stores/toasts';
   import { clockTime, longDate, relativeDate } from '../../lib/utils/format';
@@ -85,6 +87,10 @@
     const date = new Date(iso);
     return Number.isNaN(date.getTime()) ? '' : clockTime(date);
   }
+
+  const consoleOf = $derived(
+    new Map($libraryGames.flatMap((game) => (game.emulation?.platform ? [[game.id, game.emulation.platform] as const] : []))),
+  );
 
   const days = $derived.by(() => {
     const groups: { key: string; label: string; records: HistoryRecord[] }[] = [];
@@ -162,7 +168,10 @@
                   <div class="row" class:failed={failed(record.kind)}>
                     <span class="icon-cell"><Icon size="1.7rem" strokeWidth={1.8} /></span>
                     <div class="body">
-                      <span class="title" title={label.title}>{label.title}</span>
+                      <div class="head">
+                        <span class="title" title={label.title}>{label.title}</span>
+                        {#if record.gameId && consoleOf.has(record.gameId)}<ConsoleTag platform={consoleOf.get(record.gameId) ?? ''} />{/if}
+                      </div>
                       {#if label.detail}
                         <span class="detail" title={label.detail}>{label.detail}</span>
                       {/if}
@@ -291,7 +300,15 @@
     min-width: 0;
   }
 
+  .head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    min-width: 0;
+  }
+
   .title {
+    min-width: 0;
     font-size: var(--font-sm);
     font-weight: 500;
     color: var(--text);

@@ -111,6 +111,7 @@ export const games: Record<GamesKey, Message> = {
   'games.similarCandidate': 'Candidate: {title}',
   'games.similarLink': 'Link to this game',
   'games.similarLinked': 'The release is linked to the game.',
+  'games.similarPlatform': 'Image for the {platform} console',
   'games.detailNoReleases': 'No downloads for this game are available in your connected sources yet.',
   'games.catalogPlatform': 'Platform',
   'games.catalogAllPlatforms': 'All platforms',
@@ -205,6 +206,8 @@ export const games: Record<GamesKey, Message> = {
 
   'games.primaryDownload': 'Download',
   'games.primaryInstall': 'Install',
+  'games.primaryDownloadFor': 'Download for {platform}',
+  'games.primaryDownloadImage': 'Download image',
   'games.primaryResolving': 'Checking downloads…',
   'games.primaryUnavailable': 'No downloads available',
   'games.primaryOtherVersions': 'Other versions',

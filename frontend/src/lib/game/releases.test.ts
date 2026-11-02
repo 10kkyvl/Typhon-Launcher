@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { buildKind, buildLabel, relationKey, releaseBadge, releaseOrigin, repackNote } from './releases';
+import {
+  buildKind,
+  buildLabel,
+  consoleOrigin,
+  orderReleases,
+  relationKey,
+  releaseBadge,
+  releaseOrigin,
+  repackNote,
+  sharedPlatform,
+  splitReleases,
+} from './releases';
 
 describe('releaseOrigin', () => {
   it('carries the release version so the install records it', () => {
@@ -161,5 +172,44 @@ describe('relationKey', () => {
 
   it('falls back to the edition label for an unknown relation', () => {
     expect(relationKey('sequel')).toBe('games.relationEdition');
+  });
+});
+
+describe('console releases', () => {
+  const pc = { release: { id: 'a', title: 'G', platform: undefined } };
+  const ps2 = { release: { id: 'b', title: 'G', platform: 'ps2' as const } };
+  const ps1 = { release: { id: 'c', title: 'G', platform: 'ps1' as const } };
+
+  it('splits the console images from the PC releases', () => {
+    expect(splitReleases([ps2, pc, ps1])).toEqual({ pc: [pc], console: [ps2, ps1] });
+  });
+
+  it('puts PC releases first and keeps the order inside each group', () => {
+    expect(orderReleases([ps2, pc, ps1]).map((g) => g.release.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('names a platform only when all console images share it', () => {
+    expect(sharedPlatform([ps2, ps2])).toBe('ps2');
+    expect(sharedPlatform([ps2, ps1])).toBe('');
+    expect(sharedPlatform([])).toBe('');
+  });
+
+  it('puts the console and the card into the origin of an image download', () => {
+    expect(consoleOrigin({ platform: 'ps2', title: 'Raw' }, ' Game ', 'https://img/c.jpg')).toEqual({
+      platform: 'ps2',
+      title: 'Game',
+      cover: 'https://img/c.jpg',
+    });
+  });
+
+  it('falls back to the release title and drops a cover that is not a web address', () => {
+    expect(consoleOrigin({ platform: 'psp', title: 'Raw' }, '', 'C:\covers\g.png')).toEqual({
+      platform: 'psp',
+      title: 'Raw',
+    });
+  });
+
+  it('adds nothing to the origin of a PC release', () => {
+    expect(consoleOrigin({ title: 'Raw' }, 'Game', 'https://img/c.jpg')).toEqual({});
   });
 });

@@ -167,7 +167,7 @@ func listCandidates(root string, result *Result) ([]candidate, error) {
 		if !entry.IsDir() {
 			continue
 		}
-		if strings.HasSuffix(strings.ToLower(name), ".partial") {
+		if strings.HasSuffix(strings.ToLower(name), ".partial") || strings.EqualFold(name, install.ConsolesFolder) {
 			continue
 		}
 		out = append(out, candidate{path: path, name: name})

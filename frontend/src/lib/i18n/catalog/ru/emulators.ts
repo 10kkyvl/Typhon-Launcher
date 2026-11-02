@@ -63,6 +63,18 @@ export const emulators = {
   'emul.removeNote': 'Из библиотеки удалится только карточка. Образ игры и его папка останутся на диске.',
   'emul.quickExit': 'Эмулятор сразу закрылся. Проверьте BIOS и настройки в {emulator}.',
   'emul.quickExitAction': 'Настройки эмуляторов',
+  'emul.downloadTitle': 'Образ игры для {console}',
+  'emul.downloadNote': 'Для запуска нужен эмулятор. BIOS и прошивка настраиваются в самом эмуляторе, лаунчер их не поставляет.',
+  'emul.downloadAuto': 'Когда загрузка завершится, образ игры будет положен в папку Consoles каталога игр и появится в библиотеке.',
+  'emul.downloadSize': 'Размер',
+  'emul.downloadName': 'Раздача',
+  'emul.installAction': 'Установить образ',
+  'emul.installLead': 'Образ игры будет положен в папку Consoles каталога игр и добавлен в библиотеку.',
+  'emul.installDone': 'Образ игры добавлен в библиотеку.',
+  'emul.installFolder': 'Открыть загруженные файлы',
+  'emul.emulatorMissing': 'Эмулятор для {console} не указан. Загрузке это не мешает: укажите его в настройках до первого запуска.',
+  'emul.gameNoteOwned': 'Игра запускается через эмулятор: {console}. Образ лежит в папке каталога игр.',
+  'emul.removeOwnedNote': 'Можно убрать только карточку или вместе с ней удалить образ игры и его папку.',
 } as const;
 
 export type EmulatorsKey = keyof typeof emulators;

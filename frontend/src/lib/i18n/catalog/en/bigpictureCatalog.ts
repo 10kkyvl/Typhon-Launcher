@@ -106,6 +106,8 @@ export const bigpictureCatalog = {
   'bp.game.noFilesSelected': 'Select at least one file to continue.',
   'bp.game.librarySetupRequired': 'Set up the game library in desktop mode before starting a download.',
   'bp.game.downloadStart': 'Start download',
+  'bp.game.consoleNote': 'An emulator is required to run it. BIOS is set up in the emulator itself. After the download the game image is added to the library on its own.',
+  'bp.game.consoleHeading': 'Game images for consoles',
   'bp.game.downloadStarting': 'Starting download…',
   'bp.game.downloadStartFailed': 'Could not start the download. Your file selection is still ready to retry.',
   'bp.game.downloadClose': 'Close',

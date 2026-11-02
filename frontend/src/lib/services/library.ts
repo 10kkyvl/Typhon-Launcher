@@ -76,6 +76,8 @@ export interface LibraryGame {
   source?: 'external' | string;
   external?: LibraryExternal | null;
   emulation?: LibraryEmulation | null;
+  owned?: boolean;
+  installType?: string;
   uninstalled?: boolean;
   shortcutPath?: string;
   savesDir?: string;

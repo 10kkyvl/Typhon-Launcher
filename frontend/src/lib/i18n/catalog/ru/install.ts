@@ -13,6 +13,7 @@ export const install = {
   'release.new': 'Новое',
   'release.newRelease': 'Новый релиз',
   'release.unavailable': 'Недоступно',
+  'release.consoleHeading': 'Образы для консолей',
   'verify.missingFiles': { one: '{count} файл', few: '{count} файла', many: '{count} файлов' },
   'verify.corruptedBlocks': { one: '{count} блок', few: '{count} блока', many: '{count} блоков' },
   'verify.unreadableFiles': { one: '{count} файл', few: '{count} файла', many: '{count} файлов' },

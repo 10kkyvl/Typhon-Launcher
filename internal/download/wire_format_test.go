@@ -38,6 +38,7 @@ func fullDownload() Download {
 		Origin: Origin{
 			ReleaseID: "r", SourceID: "s", DistributionID: "d", ReleaseUploadedAt: &at, GameID: "g", Version: "v",
 			Purpose: PurposeUpdate, UpdatePlanID: "p", LibraryID: "l", AutoInstall: &flag, ElevateAhead: true,
+			Platform: "ps2", Title: "t", Cover: "c",
 		},
 	}
 }
@@ -54,8 +55,8 @@ func TestPayloadsKeepTheirJSONKeys(t *testing.T) {
 			"stalled", "stalledSince", "status", "total", "type", "uploadSpeed",
 		}},
 		{"Origin", fullDownload().Origin, []string{
-			"autoInstall", "distributionId", "elevateAhead", "gameId", "libraryId", "purpose", "releaseId",
-			"releaseUploadedAt", "sourceId", "updatePlanId", "version",
+			"autoInstall", "cover", "distributionId", "elevateAhead", "gameId", "libraryId", "platform", "purpose", "releaseId",
+			"releaseUploadedAt", "sourceId", "title", "updatePlanId", "version",
 		}},
 		{"FileState", FileState{}, []string{"bytesDone", "path", "selected", "size"}},
 		{"ProgressUpdate", func() ProgressUpdate {

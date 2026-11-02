@@ -2,7 +2,7 @@
   import { untrack } from 'svelte';
   import { get } from 'svelte/store';
   import { FileSearch, FolderOpen, Gamepad2 } from '@lucide/svelte';
-  import { addGame, selectExecutable } from '../services/library';
+  import { addGame, playGame, selectExecutable } from '../services/library';
   import {
     cancelInstall,
     confirmExecutable,
@@ -25,6 +25,8 @@
   import { libraryFolders, openGameFolder, selectFolder, type LibraryFolder } from '../services/settings';
   import { destinationInRoot, rootOfDestination } from '../library/folders';
   import { downloadsById } from '../stores/downloads';
+  import type { Download } from '../services/downloads';
+  import { platformBadge } from '../library/emulation';
   import {
     installActive,
     installStatusLabels,
@@ -37,6 +39,8 @@
   import { toast } from '../stores/toasts';
   import { bytesSize, progressPercent, truncateMiddle } from '../utils/format';
   import Button from './Button.svelte';
+  import ConsoleTag from './ConsoleTag.svelte';
+  import EmulatorHint from './EmulatorHint.svelte';
   import Modal from './Modal.svelte';
   import Select from './Select.svelte';
   import ProgressBar from './ProgressBar.svelte';
@@ -52,6 +56,7 @@
   ]);
 
   let installId = $state<string | null>(null);
+  let imageDownload = $state<Download | null>(null);
   let info = $state<PlanInfo | null>(null);
   let loading = $state(false);
   let busy = $state(false);
@@ -89,6 +94,8 @@
   });
 
   const installation = $derived(installId ? $installations.find((i) => i.id === installId) : undefined);
+  const imagePlatform = $derived(installation?.platform ?? imageDownload?.origin?.platform ?? '');
+  const imageTitle = $derived(imageDownload?.origin?.title || imageDownload?.name || '');
   const plan = $derived(info?.plan);
   const controlled = $derived(plan ? isControlled(plan.type) : false);
   const external = $derived(plan ? isExternal(plan.type) : false);
@@ -120,6 +127,7 @@
       return 'problem';
     }
     if (info) return 'plan';
+    if (imageDownload) return 'image';
     return 'loading';
   });
 
@@ -161,6 +169,7 @@
     token++;
     planner.cancel();
     installId = null;
+    imageDownload = null;
     info = null;
     loading = false;
     busy = false;
@@ -219,6 +228,11 @@
     const existing = get(installationsByDownload).get(id);
     if (existing) {
       installId = existing.id;
+      return;
+    }
+    const queued = get(downloadsById).get(id);
+    if (queued?.origin?.platform) {
+      imageDownload = queued;
       return;
     }
     const current = ++token;
@@ -316,6 +330,37 @@
       });
       upsertInstallation(item);
       installId = item.id;
+    });
+  }
+
+  function startImage() {
+    const current = imageDownload;
+    if (!current?.origin?.platform) return;
+    return run(async () => {
+      const item = await startInstall(current.id, {
+        platform: current.origin.platform,
+        title: current.origin.title || current.name,
+        cover: current.origin.cover ?? '',
+      });
+      upsertInstallation(item);
+      installId = item.id;
+    });
+  }
+
+  function playInstalled() {
+    const item = installation;
+    if (!item?.gameId) return;
+    return run(async () => {
+      await playGame(item.gameId);
+      open = false;
+    });
+  }
+
+  function openImageFolder() {
+    const path = installation?.sourcePath || imageDownload?.destination;
+    if (!path) return;
+    return run(async () => {
+      await openGameFolder(path, '');
     });
   }
 
@@ -521,10 +566,31 @@
         </div>
       {/if}
     </div>
+  {:else if phase === 'image' && imageDownload}
+    <div class="block">
+      <div class="pkg">
+        <span class="pkg-name">{imageTitle}</span>
+        <ConsoleTag platform={imagePlatform} />
+      </div>
+      <div class="rows">
+        <div class="row">
+          <span class="key">{msg('emul.downloadName')}</span>
+          <span class="value">{truncateMiddle(imageDownload.name, 48)}</span>
+        </div>
+        <div class="row">
+          <span class="key">{msg('emul.downloadSize')}</span>
+          <span class="value">{bytesSize(imageDownload.total)}</span>
+        </div>
+      </div>
+      <p class="note">{msg('emul.installLead')}</p>
+      <p class="note">{msg('emul.downloadNote')}</p>
+      <EmulatorHint platform={imagePlatform} />
+    </div>
   {:else if phase === 'progress' && installation}
     <div class="block">
       <div class="pkg">
         <span class="pkg-name">{installation.name}</span>
+        {#if installation.platform}<ConsoleTag platform={installation.platform} />{/if}
         <span class="pkg-type">{installStatusLabels(installation.status)}</span>
       </div>
       {#if externalWait}
@@ -573,11 +639,22 @@
           <span class="key">{msg('modals.installFolderLabel')}</span>
           <span class="value">{truncateMiddle(installation.destination, 44)}</span>
         </div>
-        <div class="row">
-          <span class="key">{msg('modals.installVersionLabel')}</span>
-          <span class="value">{installation.detectedVersion || msg('modals.installUnknownVersion')}</span>
-        </div>
+        {#if installation.platform}
+          <div class="row">
+            <span class="key">{msg('emul.addConsoleLabel')}</span>
+            <span class="value">{platformBadge(installation.platform)}</span>
+          </div>
+        {:else}
+          <div class="row">
+            <span class="key">{msg('modals.installVersionLabel')}</span>
+            <span class="value">{installation.detectedVersion || msg('modals.installUnknownVersion')}</span>
+          </div>
+        {/if}
       </div>
+      {#if installation.platform}
+        <p class="note">{msg('emul.installDone')}</p>
+        <EmulatorHint platform={installation.platform} />
+      {/if}
       {#if installation.warning}
         <p class="note warning">{installation.warning}</p>
       {/if}
@@ -598,6 +675,7 @@
     <div class="block">
       <div class="pkg">
         <span class="pkg-name">{installation.name}</span>
+        {#if installation.platform}<ConsoleTag platform={installation.platform} />{/if}
         <span class="pkg-type">{installStatusLabels(installation.status)}</span>
       </div>
       <p class="note danger">{installation.error ? installErrorText(installation.error) : msg('modals.installNotCompleted')}</p>
@@ -616,6 +694,9 @@
           {primaryLabel}
         </Button>
       {/if}
+    {:else if phase === 'image'}
+      <Button onclick={() => (open = false)}>{msg('common.cancel')}</Button>
+      <Button variant="primary" disabled={busy} onclick={startImage}>{msg('emul.installAction')}</Button>
     {:else if phase === 'progress'}
       <Button onclick={() => (open = false)}>{msg('modals.installMinimize')}</Button>
       <Button variant="danger" disabled={busy || externalWait} onclick={cancelCurrent}>{msg('modals.installCancelInstall')}</Button>
@@ -624,9 +705,17 @@
       <Button variant="danger" disabled={busy} onclick={cancelCurrent}>{msg('modals.installCancelInstall')}</Button>
       <Button variant="primary" disabled={busy || !chosen} onclick={confirmChoice}>{msg('modals.installConfirm')}</Button>
     {:else if phase === 'done'}
-      <Button variant="primary" onclick={() => (open = false)}>{msg('common.done')}</Button>
+      {#if installation?.platform && installation.gameId}
+        <Button onclick={() => (open = false)}>{msg('common.done')}</Button>
+        <Button variant="primary" disabled={busy} onclick={playInstalled}>{msg('games.play')}</Button>
+      {:else}
+        <Button variant="primary" onclick={() => (open = false)}>{msg('common.done')}</Button>
+      {/if}
     {:else if phase === 'problem'}
       <Button onclick={dismissCurrent} disabled={busy}>{msg('modals.installDismiss')}</Button>
+      {#if installation?.platform}
+        <Button onclick={openImageFolder} disabled={busy}>{msg('emul.installFolder')}</Button>
+      {/if}
       {#if installation && needsInteractiveInstall(installation.error)}
         <Button variant="primary" onclick={retryManually} disabled={busy}>{msg('modals.installManually')}</Button>
       {:else}

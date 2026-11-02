@@ -16,6 +16,7 @@ export const install: Record<InstallKey, Message> = {
   'release.new': 'New',
   'release.newRelease': 'New release',
   'release.unavailable': 'Unavailable',
+  'release.consoleHeading': 'Game images for consoles',
   'verify.missingFiles': { one: '{count} file', other: '{count} files' },
   'verify.corruptedBlocks': { one: '{count} block', other: '{count} blocks' },
   'verify.unreadableFiles': { one: '{count} file', other: '{count} files' },

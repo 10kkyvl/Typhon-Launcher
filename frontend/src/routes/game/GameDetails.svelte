@@ -57,7 +57,7 @@
   import { discardDownloadPrompt, removeDownloadPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
   import { playLabel } from '../../lib/game/profiles';
   import PlayProfileMenu from '../../lib/components/PlayProfileMenu.svelte';
-  import { relationKey, releaseOrigin } from '../../lib/game/releases';
+  import { consoleOrigin, relationKey, releaseOrigin, sharedPlatform, splitReleases } from '../../lib/game/releases';
   import { familyIds, showSimilar } from '../../lib/game/similar';
   import { completionLine, statusBadgeKind, statusLabel } from '../../lib/game/status';
   import {
@@ -138,7 +138,7 @@
   import { installIndeterminate } from '../../lib/install/progress';
   import { openGameProperties } from '../../lib/stores/gameProperties';
   import { libraryGames, runningGames } from '../../lib/stores/library';
-  import { emulationPlatform, isEmulated, platformBadge } from '../../lib/library/emulation';
+  import { emulationPlatform, isEmulated, isInstalledImage, platformBadge } from '../../lib/library/emulation';
   import { externalLabel, isExternal } from '../../lib/library/external';
   import ConsoleTag from '../../lib/components/ConsoleTag.svelte';
   import { metadataAvailable } from '../../lib/stores/metadata';
@@ -523,6 +523,11 @@
   );
 
   const availableGroups = $derived(releaseGroups.filter((group) => group.release.availability !== 'removed'));
+  const split = $derived(splitReleases(availableGroups));
+  const pcGroups = $derived(split.pc);
+  const consoleGroups = $derived(split.console);
+  const downloadPool = $derived(pcGroups.length > 0 ? pcGroups : consoleGroups);
+  const catalogCover = $derived(clean(metaView?.cover) || clean(catalogGame?.coverUrl));
 
   const relatedShown = $derived(
     related
@@ -533,7 +538,7 @@
     showSimilar({
       releasesLoading,
       releasesFailed,
-      releaseCount: availableGroups.length,
+      releaseCount: pcGroups.length,
       relatedSettled: !relatedLoading && (relatedLoaded || relatedFailed),
       hasGameId: Boolean(canonicalId),
     }),
@@ -551,7 +556,9 @@
       installed,
       running,
       updateAvailable,
-      releaseCount: availableGroups.length,
+      releaseCount: pcGroups.length,
+      consoleCount: consoleGroups.length,
+      consolePlatform: sharedPlatform(consoleGroups),
       releasesLoading,
       relatedWithReleases: relatedShown.length > 0,
       notOnPc: !ownOnPc && relatedOk && !hasPcRelative,
@@ -582,11 +589,11 @@
             : { id: 'shortcut-create', label: msg('games.actionShortcutCreate') },
         ]
       : []),
-    ...(installed && managed
+    ...(installed && (managed || isInstalledImage(localGame))
       ? [{ id: 'uninstall', label: msg('games.actionUninstall'), danger: true, separator: true }]
       : []),
     ...(localGame
-      ? [{ id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true, separator: !installed || !managed }]
+      ? [{ id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true, separator: !installed || !(managed || isInstalledImage(localGame)) }]
       : []),
     ...(terminalDownload
       ? [
@@ -864,7 +871,7 @@
     try {
       const request = await prepareReleaseDownload(group.release.id);
       downloadSource = request.uri;
-      downloadOrigin = releaseOrigin(request);
+      downloadOrigin = { ...releaseOrigin(request), ...consoleOrigin(group.release, title, catalogCover) };
       downloadModalOpen = true;
     } catch (err) {
       toast(sourceErrorText(err, msg('games.detailPrepareDownloadError')), 'danger');
@@ -872,9 +879,9 @@
   }
 
   function startDownload() {
-    if (availableGroups.length === 0) return;
-    if (availableGroups.length === 1) {
-      downloadRelease(availableGroups[0]);
+    if (downloadPool.length === 0) return;
+    if (downloadPool.length === 1) {
+      downloadRelease(downloadPool[0]);
       return;
     }
     pickerOpen = true;
@@ -1077,7 +1084,7 @@
           {#if external}
             <p class="muted">{msg('games.externalNote', { provider: externalName })}</p>
           {:else if emulated}
-            <p class="muted">{msg('emul.gameNote', { console: platformBadge(emulatedPlatform) })}</p>
+            <p class="muted">{msg(isInstalledImage(localGame) ? 'emul.gameNoteOwned' : 'emul.gameNote', { console: platformBadge(emulatedPlatform) })}</p>
           {/if}
           <div class="path">
             <span class="path-value" title={localGame.installDir}>{truncateMiddle(localGame.installDir, 34)}</span>
@@ -1638,7 +1645,7 @@
 
   <Modal bind:open={pickerOpen} title={msg('games.detailChooseDownloadTitle')} width="86rem">
     <ReleaseList
-      groups={availableGroups}
+      groups={downloadPool}
       currentReleaseId={localGame?.releaseId ?? ''}
       ondownload={(group) => {
         pickerOpen = false;

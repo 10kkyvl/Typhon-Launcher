@@ -22,7 +22,8 @@ import (
 )
 
 const (
-	consolesFolder = "Consoles"
+	// ConsolesFolder lies in a games folder and holds images, not a game.
+	ConsolesFolder = "Consoles"
 	maxImageDepth  = 5
 	maxImageTitle  = 200
 )
@@ -403,13 +404,13 @@ func (s *Service) imageDestination(cfg settings.Settings, requested, platformID,
 	if root == "" {
 		return "", errNoDestination
 	}
-	return s.proposeDestination(filepath.Join(root, consolesFolder, platformID), name)
+	return s.proposeDestination(filepath.Join(root, ConsolesFolder, platformID), name)
 }
 
 func imageLayout(dest, platformID string) bool {
 	platformDir := filepath.Dir(dest)
 	consoles := filepath.Dir(platformDir)
-	return strings.EqualFold(filepath.Base(platformDir), platformID) && strings.EqualFold(filepath.Base(consoles), consolesFolder)
+	return strings.EqualFold(filepath.Base(platformDir), platformID) && strings.EqualFold(filepath.Base(consoles), ConsolesFolder)
 }
 
 // ownedImage is the only way an image card gets to delete files. The flag alone

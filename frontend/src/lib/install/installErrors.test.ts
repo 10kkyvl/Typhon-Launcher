@@ -43,3 +43,21 @@ describe('installer refusals', () => {
     );
   });
 });
+
+describe('console image refusals', () => {
+  it.each([
+    ['install.image_not_found', 'в загрузке не найден образ игры для этой консоли'],
+    ['install.image_ambiguous', 'в загрузке лежат образы разных игр, выбрать один автоматически нельзя'],
+    ['install.image_options_invalid', 'неверные данные для установки образа игры'],
+    ['install.image_destination', 'образ игры ставится только в папку Consoles каталога игр'],
+    ['library.cover_invalid', 'обложка должна быть адресом http или https'],
+    ['library.image_outside_dir', 'образ игры лежит вне папки установки'],
+    ['library.already_added', 'эта игра уже добавлена'],
+  ])('names %s instead of the fallback', (code, text) => {
+    expect(installErrorText(`typhon:${code}: x`)).toBe(text);
+  });
+
+  it('keeps a failed image on retry, not on a manual install', () => {
+    expect(needsInteractiveInstall('typhon:install.image_ambiguous: x')).toBe(false);
+  });
+});

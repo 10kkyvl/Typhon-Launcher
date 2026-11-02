@@ -2,6 +2,8 @@ import { errorCode } from '../i18n/errors';
 
 export interface EmulatedGame {
   emulation?: { platform: string } | null;
+  owned?: boolean;
+  installType?: string;
 }
 
 export interface ConsoleInfo {
@@ -24,8 +26,16 @@ export function isEmulated(game: EmulatedGame | null | undefined): boolean {
   return Boolean(game?.emulation?.platform);
 }
 
+export function isInstalledImage(game: EmulatedGame | null | undefined): boolean {
+  return isEmulated(game) && game?.owned === true && game.installType === 'console_image';
+}
+
 export function emulationPlatform(game: EmulatedGame | null | undefined): string {
   return game?.emulation?.platform ?? '';
+}
+
+export function emulatorMissing(row: { status: string }): boolean {
+  return row.status !== 'ready';
 }
 
 export function platformBadge(platform: string): string {
