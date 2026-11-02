@@ -499,9 +499,6 @@ func checkImage(romPath, platformID string) (string, string, emulators.Platform,
 	if target.ManualOnly(rom) {
 		return refuse(fmt.Errorf("%w: %s", emulators.ErrImageManualOnly, filepath.Ext(rom)))
 	}
-	if target.InEmulatorData(rom) {
-		return refuse(fmt.Errorf("%w: %s", emulators.ErrImageInStorage, rom))
-	}
 	if !target.AcceptsImage(rom) {
 		return refuse(fmt.Errorf("%w: %s", emulators.ErrImageExtension, filepath.Ext(rom)))
 	}
@@ -684,7 +681,7 @@ func cueFiles(r io.Reader) ([]string, error) {
 // own arguments go first: the emulators read options only before the image.
 // The working folder is the emulator's on every console: shadPS4 keeps its data
 // beside the working folder, so anything else would give it an empty install.
-func emulatedLaunch(ctx context.Context, resolve func(string) (string, error), game Game, chosen chosenProfile, req *launch) error {
+func emulatedLaunch(ctx context.Context, resolve func(string) (string, error), home func() (string, error), game Game, chosen chosenProfile, req *launch) error {
 	target, ok := emulators.Lookup(game.Emulation.Platform)
 	if !ok {
 		return fmt.Errorf("%w: %q", emulators.ErrUnknownPlatform, game.Emulation.Platform)
@@ -697,7 +694,7 @@ func emulatedLaunch(ctx context.Context, resolve func(string) (string, error), g
 	if err != nil {
 		return fmt.Errorf("рабочая папка эмулятора: %w", err)
 	}
-	command, run, err := emulatorCommand(ctx, target, game, chosen.executable)
+	command, run, err := emulatorCommand(ctx, target, game, chosen.executable, target.FindStorage(program, home))
 	if err != nil {
 		return err
 	}
@@ -715,10 +712,13 @@ type emulatorRun struct {
 	titleID string
 	// installed means it was started by titleID, not given the image.
 	installed bool
-	image     string
+	// stored means the game was found in the emulator's storage: no install
+	// happened, and the id is still to be remembered.
+	stored bool
+	image  string
 }
 
-func emulatorCommand(ctx context.Context, target emulators.Platform, game Game, image string) ([]string, emulatorRun, error) {
+func emulatorCommand(ctx context.Context, target emulators.Platform, game Game, image string, storage emulators.Storage) ([]string, emulatorRun, error) {
 	if !target.RemembersInstall() {
 		return target.Command(image), emulatorRun{}, nil
 	}
@@ -732,31 +732,64 @@ func emulatorCommand(ctx context.Context, target emulators.Platform, game Game, 
 		return nil, emulatorRun{}, err
 	}
 	run.titleID = info.TitleID
-	// A folder the launcher made is its own copy, whatever the download called
-	// its subfolders: the emulator has never seen it.
-	if !game.Owned && strings.EqualFold(target.StoredTitle(image), info.TitleID) {
+	switch target.Place(image, info.TitleID, storage) {
+	case emulators.PlaceData:
+		return nil, emulatorRun{}, fmt.Errorf("%w: %s", emulators.ErrImageInStorage, image)
+	case emulators.PlaceInstalled:
+		run.stored = true
 		command, err := target.InstalledCommand(info.TitleID)
 		return command, run, err
+	case emulators.PlaceOutside:
 	}
 	run.installed = false
 	return target.Command(image), run, nil
+}
+
+// GameInEmulator says whether a card with no remembered id points at the
+// emulator's own copy, so that the first launch copies nothing.
+func (s *Service) GameInEmulator(ctx context.Context, id string) (bool, error) {
+	s.mu.Lock()
+	found := s.findLocked(id)
+	if found == nil {
+		s.mu.Unlock()
+		return false, errNotFound
+	}
+	game, resolve, home := *found, s.emulator, s.emulatorHome
+	s.mu.Unlock()
+	if game.Emulation == nil {
+		return false, nil
+	}
+	target, ok := emulators.Lookup(game.Emulation.Platform)
+	if !ok || !target.RemembersInstall() {
+		return false, nil
+	}
+	info, err := target.ReadGameInfo(ctx, game.Executable)
+	if err != nil {
+		return false, err
+	}
+	// No usable emulator leaves the storage unknown, which Place takes as it is.
+	var storage emulators.Storage
+	if program, err := resolve(game.Emulation.Platform); err == nil {
+		storage = target.FindStorage(program, home)
+	}
+	return target.Place(game.Executable, info.TitleID, storage) == emulators.PlaceInstalled, nil
 }
 
 // settleInstalledTitle says what the card remembers after a session. An install
 // counts only after the emulator outlived the quick exit and closed cleanly by
 // itself: anything else may have cut the copy short, and a game half copied must
 // not be started by id. The id goes only on the emulator's own answer that it has
-// no such game: an install copies gigabytes, so a crash must not cause one. The
-// result is a new value: copies of the card given out earlier share the old
-// pointer.
+// no such game: an install copies gigabytes, so a crash must not cause one. A
+// game started from the storage counts the same way. The result is a new value:
+// copies of the card given out earlier share the old pointer.
 func settleInstalledTitle(game Game, run emulatorRun, quick, clean, lost bool) *Emulation {
 	next := *game.Emulation
 	switch {
 	case run.titleID == "":
 		return game.Emulation
-	case run.installed && quick && lost && next.TitleID == run.titleID:
+	case run.installed && lost && next.TitleID == run.titleID:
 		next.TitleID = ""
-	case !run.installed && !quick && clean && next.TitleID == "" && platform.SamePath(game.Executable, run.image):
+	case (!run.installed || run.stored) && !quick && clean && next.TitleID == "" && platform.SamePath(game.Executable, run.image):
 		next.TitleID = run.titleID
 	default:
 		return game.Emulation

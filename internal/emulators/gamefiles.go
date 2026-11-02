@@ -27,10 +27,6 @@ const (
 	maxSFOEntries = 256
 	maxSFOKey     = 64
 
-	// A portable emulator keeps games under ux0 next to itself.
-	storageRoot  = "ux0"
-	storageGames = "app"
-
 	sfoHeaderSize = 20
 	sfoEntrySize  = 16
 	sfoMagic      = "\x00PSF"
@@ -157,36 +153,6 @@ func findFile(dir string, parts []string) (string, error) {
 		dir = filepath.Join(dir, entries[at].Name())
 	}
 	return dir, nil
-}
-
-// storageFolder finds "ux0/<kind>/<name>/..." on the path by whole folder names
-// and returns kind and name. The file itself is never the name.
-func storageFolder(image string) (kind, name string, ok bool) {
-	parts := strings.FieldsFunc(image, func(r rune) bool { return r == '/' || r == '\\' })
-	for i := len(parts) - 3; i >= 0; i-- {
-		if strings.EqualFold(parts[i], storageRoot) {
-			return strings.ToLower(parts[i+1]), parts[i+2], i+3 < len(parts)
-		}
-	}
-	return "", "", false
-}
-
-// StoredTitle is the folder name when the image already lies in the storage of an
-// emulator that installs games. Installing removes the title's folder before it
-// copies, so such a game must never be given to the emulator as content: that
-// would delete the only copy.
-func (p Platform) StoredTitle(image string) string {
-	if kind, name, ok := storageFolder(image); ok && p.RemembersInstall() && kind == storageGames {
-		return name
-	}
-	return ""
-}
-
-// InEmulatorData says whether the image lies among the updates or add-ons in the
-// emulator's storage: they belong to a game there and start nothing by themselves.
-func (p Platform) InEmulatorData(image string) bool {
-	kind, _, ok := storageFolder(image)
-	return ok && p.RemembersInstall() && (kind == "patch" || kind == "addcont")
 }
 
 // IsUpdate says whether the game's data describes an update to a game.

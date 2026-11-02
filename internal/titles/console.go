@@ -54,18 +54,31 @@ var (
 	rePCAfterConsole  = regexp.MustCompile(`(?i)^[` + consoleSeparators + `]\s*` + pcName + `\b`)
 	// Disc image and region labels only appear beside a console token; the same
 	// words stay untouched in a title that has none.
-	reConsoleRegion = regexp.MustCompile(`(?i)[\[({]\s*(?:` + consoleImage + `|` + consoleRegion + `)\s*[\])}]`)
-	reConsoleImage  = regexp.MustCompile(`(?i)[\s._-]+(?:` + consoleImage + `)[\s._-]*$`)
-	reConsoleLang   = regexp.MustCompile(`(?i)^(?:` + consoleLang + `)$`)
-	// A part of a bracket that says nothing about the name: «PS4, PKG».
-	reConsoleLabelPart = regexp.MustCompile(`(?i)^\s*(?:` + consoleImage + `|` + consoleRegion + `)\s*$`)
+	reConsoleImage = regexp.MustCompile(`(?i)[\s._-]+(?:` + consoleImage + `)[\s._-]*$`)
+	reConsoleLang  = regexp.MustCompile(`(?i)^(?:` + consoleLang + `)$`)
+	// Text that says nothing about the name: «PKG USA», «USA, Europe», «PKG, RUS».
+	reConsoleLabels = regexp.MustCompile(`(?i)^[\s,._]*(?:` + consoleMeta + `)(?:[\s,._]+(?:` + consoleMeta + `))*[\s,._]*$`)
 )
 
 // consoleLangs keeps what the title pipeline strips from a bracket on its own.
 // A format or a region left there would reach the server as part of the name.
 func consoleLangs(meta string) string {
-	words := strings.FieldsFunc(meta, func(r rune) bool { return unicode.IsSpace(r) || r == '.' || r == '_' })
+	words := strings.FieldsFunc(meta, func(r rune) bool { return unicode.IsSpace(r) || strings.ContainsRune("._,", r) })
 	return strings.Join(slices.DeleteFunc(words, func(word string) bool { return !reConsoleLang.MatchString(word) }), " ")
+}
+
+// cutConsoleLabels clears the brackets that only label a release already known
+// to be a console's.
+func cutConsoleLabels(s string) string {
+	return reBracket.ReplaceAllStringFunc(s, func(bracket string) string {
+		if !reConsoleLabels.MatchString(bracket[1 : len(bracket)-1]) {
+			return bracket
+		}
+		if langs := consoleLangs(bracket[1 : len(bracket)-1]); langs != "" {
+			return bracket[:1] + langs + bracket[len(bracket)-1:]
+		}
+		return " "
+	})
 }
 
 func consoleFromGroups(loc []int) string {
@@ -100,7 +113,7 @@ func extractConsole(s string) (string, string) {
 	if id == "" {
 		return s, ""
 	}
-	cut = reConsoleRegion.ReplaceAllString(cut, " ")
+	cut = cutConsoleLabels(cut)
 	for {
 		next := reConsoleImage.ReplaceAllString(cut, "")
 		if next == cut {
@@ -174,7 +187,12 @@ func cutConsoleBrackets(s string) (string, string) {
 		if !cut {
 			return bracket
 		}
-		kept = slices.DeleteFunc(kept, reConsoleLabelPart.MatchString)
+		for i, part := range kept {
+			if reConsoleLabels.MatchString(part) {
+				kept[i] = consoleLangs(part)
+			}
+		}
+		kept = slices.DeleteFunc(kept, func(part string) bool { return part == "" })
 		if len(kept) == 0 {
 			return " "
 		}

@@ -32,7 +32,10 @@ func writeFile(t *testing.T, path, body string) string {
 
 func newLibrary(t *testing.T) *Service {
 	t.Helper()
-	return mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+	home := t.TempDir()
+	s.emulatorHome = func() (string, error) { return home, nil }
+	return s
 }
 
 func emulatedGame(t *testing.T, s *Service, name string) Game {

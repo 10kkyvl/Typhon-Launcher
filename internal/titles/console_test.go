@@ -88,12 +88,22 @@ func TestParseConsoleTokens(t *testing.T) {
 		{"Bloodborne [PS4] [PKG]", ConsolePS4, "Bloodborne"},
 		{"Bloodborne [PS4] [FPKG] [RUS]", ConsolePS4, "Bloodborne"},
 		{"Bloodborne [PS4] [EUR]", ConsolePS4, "Bloodborne"},
+		{"Bloodborne [PS4] [PKG, RUS]", ConsolePS4, "Bloodborne"},
+		{"Bloodborne [PS4] [PKG USA RUS]", ConsolePS4, "Bloodborne"},
+		{"Bloodborne [PS4, PKG USA]", ConsolePS4, "Bloodborne"},
+		{"Bloodborne [PS4, PKG RUS]", ConsolePS4, "Bloodborne"},
+		{"Game (USA, Europe) [PS2]", ConsolePS2, "Game"},
+		{"Game (USA, Europe) (RUS) [PS2]", ConsolePS2, "Game"},
+		{"Game (Director's Cut) [PS2]", ConsolePS2, "Game (Director's Cut)"},
 		{"Bloodborne [PKG] (PS4)", ConsolePS4, "Bloodborne"},
 		{"Bloodborne - PS4 [PKG]", ConsolePS4, "Bloodborne"},
 
 		// Without a console nothing here is a label.
 		{"Game [PKG]", "", "Game [PKG]"},
 		{"Game [EUR]", "", "Game [EUR]"},
+		{"Game (USA, Europe)", "", "Game (USA, Europe)"},
+		{"Game [PKG, RUS]", "", "Game [PKG, ]"},
+		{"Game (USA, Europe) [PC, PS2]", "", "Game (USA, Europe) [PC, PS2]"},
 		{"Trip to Europe", "", "Trip to Europe"},
 		{"Trip - PS4 Europe", "", "Trip PS4 Europe"},
 		{"Game [PKG, PC, PS4]", "", "Game [PKG, PC, PS4]"},
@@ -208,6 +218,9 @@ func TestMatchNamesDropsConsoleToken(t *testing.T) {
 		{"Bloodborne [PS4, PKG]", []string{"Bloodborne"}},
 		{"Bloodborne [PS4] [PKG]", []string{"Bloodborne"}},
 		{"Bloodborne [PS4] [FPKG] [RUS]", []string{"Bloodborne"}},
+		{"Bloodborne [PS4] [PKG, RUS]", []string{"Bloodborne"}},
+		{"Bloodborne [PS4, PKG USA]", []string{"Bloodborne"}},
+		{"Game (USA, Europe) [PS2]", []string{"Game"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.raw, func(t *testing.T) {

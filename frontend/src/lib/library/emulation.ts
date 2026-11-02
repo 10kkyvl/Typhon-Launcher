@@ -1,6 +1,7 @@
 import { errorCode } from '../i18n/errors';
 
 export interface EmulatedGame {
+  id?: string;
   emulation?: { platform: string; catalogGameId?: string; titleId?: string } | null;
   owned?: boolean;
   installType?: string;

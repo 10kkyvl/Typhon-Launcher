@@ -68,6 +68,11 @@ export async function selectImageFile(title: string, platformIDs: string[] | nul
   return await AppService.SelectImageFile(title, msg('emul.imagesFilter'), get(locale), platformIDs);
 }
 
+export async function gameInEmulator(id: string): Promise<boolean> {
+  if (!inWails) return false;
+  return await LibraryService.GameInEmulator(id);
+}
+
 export async function missingImages(): Promise<string[]> {
   if (!inWails) return [];
   return (await LibraryService.MissingImages()) ?? [];

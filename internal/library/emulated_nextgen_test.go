@@ -57,7 +57,11 @@ type vitaRun struct {
 	lived time.Duration
 	err   error
 	kill  bool
+	// program is the emulator; empty means one with no config beside it.
+	program string
 }
+
+var errStartReached = errors.New("the emulator was started")
 
 // playVita runs one session and returns the launch and its stopped event.
 func playVita(t *testing.T, s *Service, id string, run vitaRun) (launch, SessionEvent) {
@@ -71,7 +75,11 @@ func playVita(t *testing.T, s *Service, id string, run vitaRun) (launch, Session
 		seen = req
 		return proc, nil
 	}
-	s.SetEmulatorResolver(func(string) (string, error) { return filepath.Join(t.TempDir(), "Vita3K.exe"), nil })
+	program := run.program
+	if program == "" {
+		program = vitaProgram(t, "")
+	}
+	s.SetEmulatorResolver(func(string) (string, error) { return program, nil })
 	events := make(chan SessionEvent, 1)
 	previous := emitStopped
 	emitStopped = func(ev SessionEvent) { events <- ev }
@@ -179,7 +187,7 @@ func TestVitaForgetsATitleTheEmulatorLost(t *testing.T) {
 		{"a crash at once keeps the install", vitaRun{lived: time.Second, err: codeError(-1)}, "PCSE00001", true},
 		{"a failed start keeps the install", vitaRun{lived: time.Second, err: codeError(1)}, "PCSE00001", true},
 		{"a clean exit at once", vitaRun{lived: time.Second}, "PCSE00001", true},
-		{"code 4 after a while", vitaRun{lived: time.Minute, err: codeError(4)}, "PCSE00001", false},
+		{"code 4 after a while", vitaRun{lived: time.Minute, err: codeError(4)}, "", false},
 		{"code 4 after the player closed it", vitaRun{lived: time.Second, err: codeError(4), kill: true}, "PCSE00001", false},
 		{"an unknown exit code", vitaRun{lived: time.Second, err: errors.New("wait failed")}, "PCSE00001", true},
 	}
@@ -337,105 +345,236 @@ func vitaFolder(t *testing.T, dir, title string) string {
 	return writeFile(t, filepath.Join(dir, "eboot.bin"), "x")
 }
 
+var vitaByID = []string{"--frontend", "sdl", "-F", "-r", "PCSE00001"}
+
+// vitaProgram is an emulator with a config beside it; an empty config means none.
+func vitaProgram(t *testing.T, config string) string {
+	t.Helper()
+	dir := t.TempDir()
+	if config != "" {
+		writeFile(t, filepath.Join(dir, "config.yml"), config)
+	}
+	return filepath.Join(dir, "Vita3K.exe")
+}
+
+func prefConfig(root string) string {
+	return "log-level: 0\npref-path: " + root + "\ncpu-opt: true\n"
+}
+
+func addVita(t *testing.T, s *Service, image string) Game {
+	t.Helper()
+	game, err := s.AddEmulatedGame(t.Context(), image, emulators.Vita, "Game")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return game
+}
+
 // Installing removes ux0/app/<id> before it copies. Given that very folder as
 // content, the emulator would delete the only copy of the game.
-func TestGameInEmulatorStorageIsNeverGivenAsContent(t *testing.T) {
-	byID := []string{"--frontend", "sdl", "-F", "-r", "PCSE00001"}
+func TestStorageIsFoundByIdentity(t *testing.T) {
+	const brokenConfig = "pref-path: \"unfinished\n"
 	cases := []struct {
-		name   string
+		name string
+		// config gets the storage root; folder is relative to root or dump.
+		config func(root string) string
+		home   bool
+		inDump bool
 		folder []string
 		byID   bool
 	}{
-		{"the storage", []string{"ux0", "app", "PCSE00001"}, true},
-		{"another case", []string{"Ux0", "App", "PCSE00001"}, true},
-		{"upper case", []string{"UX0", "APP", "PCSE00001"}, true},
-		{"folder in another case than the id", []string{"ux0", "app", "pcse00001"}, true},
-		{"deeper in the game", []string{"ux0", "app", "PCSE00001", "extra"}, true},
-		{"a lookalike root", []string{"ux0x", "app", "PCSE00001"}, false},
-		{"a lookalike kind", []string{"ux0", "apps", "PCSE00001"}, false},
-		{"folders not side by side", []string{"ux0", "x", "app", "PCSE00001"}, false},
-		{"a folder of another title", []string{"ux0", "app", "PCSE00002"}, false},
-		{"not in a storage", []string{"Games", "PCSE00001"}, false},
+		{name: "the storage", config: prefConfig, folder: []string{"ux0", "app", "PCSE00001"}, byID: true},
+		{name: "deeper in the game", config: prefConfig, folder: []string{"ux0", "app", "PCSE00001", "extra"}, byID: true},
+		{name: "a dump in another ux0", config: prefConfig, inDump: true, folder: []string{"ux0", "app", "PCSE00001"}},
+		{name: "another title in the storage", config: prefConfig, folder: []string{"ux0", "app", "PCSE00002"}},
+		{name: "default storage", home: true, folder: []string{"ux0", "app", "PCSE00001"}, byID: true},
+		{name: "a dump with the default storage", home: true, inDump: true, folder: []string{"ux0", "app", "PCSE00001"}},
+		{name: "an empty pref-path is the default", config: func(string) string { return "pref-path:\n" }, home: true,
+			folder: []string{"ux0", "app", "PCSE00001"}, byID: true},
+		{name: "no storage known, looks like one", config: func(string) string { return brokenConfig }, inDump: true,
+			folder: []string{"ux0", "app", "PCSE00001"}, byID: true},
+		{name: "no storage known, a short folder name", config: func(string) string { return brokenConfig }, inDump: true,
+			folder: []string{"Ux0", "App", "PCSE00~1"}, byID: true},
+		{name: "no storage known, a lookalike", config: func(string) string { return brokenConfig }, inDump: true,
+			folder: []string{"ux0x", "app", "PCSE00001"}},
+		{name: "no storage known, any folder", config: func(string) string { return brokenConfig }, inDump: true,
+			folder: []string{"Games", "PCSE00001"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			s := newLibrary(t)
-			dir := filepath.Join(append([]string{t.TempDir()}, c.folder...)...)
-			image := vitaFolder(t, dir, "PCSE00001")
-			game, err := s.AddEmulatedGame(t.Context(), image, emulators.Vita, "Game")
-			if err != nil {
-				t.Fatal(err)
+			root, dump := t.TempDir(), t.TempDir()
+			if c.home {
+				s.emulatorHome = func() (string, error) { return root, nil }
 			}
-			req, _ := playVita(t, s, game.ID, vitaRun{lived: time.Minute})
+			base := root
+			if c.inDump {
+				base = dump
+			}
+			dir := filepath.Join(append([]string{base}, c.folder...)...)
+			config := ""
+			if c.config != nil {
+				config = c.config(root)
+			}
+			game := addVita(t, s, vitaFolder(t, dir, "PCSE00001"))
+			req, _ := playVita(t, s, game.ID, vitaRun{lived: time.Minute, program: vitaProgram(t, config)})
+			want := []string{"--frontend", "sdl", "-F", dir}
 			if c.byID {
-				if !slices.Equal(req.args, byID) {
-					t.Fatalf("args = %q, want %q", req.args, byID)
-				}
-				if slices.Contains(req.args, dir) {
-					t.Fatal("the folder was given as content")
-				}
-				return
+				want = vitaByID
 			}
-			if want := []string{"--frontend", "sdl", "-F", dir}; !slices.Equal(req.args, want) {
+			if !slices.Equal(req.args, want) {
 				t.Fatalf("args = %q, want %q", req.args, want)
 			}
 		})
 	}
 }
 
-func TestGameInEmulatorStorageStaysAfterTheEmulatorDeniesIt(t *testing.T) {
+func TestDefaultStorageThatCannotBeFoundIsUnknown(t *testing.T) {
 	s := newLibrary(t)
-	image := vitaFolder(t, filepath.Join(t.TempDir(), "ux0", "app", "PCSE00001"), "PCSE00001")
-	game, err := s.AddEmulatedGame(t.Context(), image, emulators.Vita, "Game")
-	if err != nil {
-		t.Fatal(err)
-	}
-	playVita(t, s, game.ID, vitaRun{lived: time.Second, err: codeError(4)})
+	s.emulatorHome = func() (string, error) { return "", errors.New("no home") }
+	dir := filepath.Join(t.TempDir(), "ux0", "app", "PCSE00001")
+	game := addVita(t, s, vitaFolder(t, dir, "PCSE00001"))
 	req, _ := playVita(t, s, game.ID, vitaRun{lived: time.Minute})
-	if want := []string{"--frontend", "sdl", "-F", "-r", "PCSE00001"}; !slices.Equal(req.args, want) {
+	if !slices.Equal(req.args, vitaByID) {
+		t.Fatalf("args = %q: in doubt the folder goes by id", req.args)
+	}
+}
+
+func TestStorageCopyIsNotInstalledAgainAfterADenial(t *testing.T) {
+	s := newLibrary(t)
+	root := t.TempDir()
+	program := vitaProgram(t, prefConfig(root))
+	game := addVita(t, s, vitaFolder(t, filepath.Join(root, "ux0", "app", "PCSE00001"), "PCSE00001"))
+	playVita(t, s, game.ID, vitaRun{lived: time.Second, err: codeError(4), program: program})
+	req, _ := playVita(t, s, game.ID, vitaRun{lived: time.Minute, program: program})
+	if !slices.Equal(req.args, vitaByID) {
 		t.Fatalf("args = %q: a retry must not turn into an install", req.args)
 	}
 }
 
-func TestOwnedCopyOfAStorageFolderIsContent(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "Consoles", "vita", "Game", "ux0", "app", "PCSE00001")
-	image := vitaFolder(t, dir, "PCSE00001")
+func TestOwnedCardsFollowIdentityToo(t *testing.T) {
 	target, ok := emulators.Lookup(emulators.Vita)
 	if !ok {
 		t.Fatal("no vita")
 	}
-	command, run, err := emulatorCommand(t.Context(), target, Game{Owned: true, Emulation: &Emulation{Platform: emulators.Vita}}, image)
-	if err != nil {
-		t.Fatal(err)
+	root := t.TempDir()
+	storage := emulators.Storage{Root: root, Known: true}
+	owned := Game{Owned: true, Emulation: &Emulation{Platform: emulators.Vita}}
+
+	stored := filepath.Join(root, "ux0", "app", "PCSE00001")
+	command, run, err := emulatorCommand(t.Context(), target, owned, vitaFolder(t, stored, "PCSE00001"), storage)
+	if err != nil || !slices.Equal(command, vitaByID) || !run.stored {
+		t.Fatalf("the storage itself: %q, %+v, %v", command, run, err)
 	}
-	if run.installed || !slices.Equal(command, []string{"--frontend", "sdl", "-F", dir}) {
-		t.Fatalf("command = %q, run = %+v", command, run)
+
+	copied := filepath.Join(t.TempDir(), "Consoles", "vita", "Game", "ux0", "app", "PCSE00001")
+	command, run, err = emulatorCommand(t.Context(), target, owned, vitaFolder(t, copied, "PCSE00001"), storage)
+	if err != nil || run.installed || !slices.Equal(command, []string{"--frontend", "sdl", "-F", copied}) {
+		t.Fatalf("a copy elsewhere: %q, %+v, %v", command, run, err)
 	}
 }
 
-func TestAddingRefusesTheEmulatorsOwnData(t *testing.T) {
+func TestEmulatorsOwnDataIsRefusedAtLaunch(t *testing.T) {
+	const brokenConfig = "pref-path: 'unfinished\n"
 	cases := []struct {
-		name string
-		path []string
-		want error
+		name    string
+		folder  []string
+		dump    bool
+		unknown bool
+		want    error
 	}{
-		{"patch", []string{"ux0", "patch", "PCSE00001"}, emulators.ErrImageInStorage},
-		{"patch in another case", []string{"Ux0", "Patch", "PCSE00001"}, emulators.ErrImageInStorage},
-		{"addcont", []string{"ux0", "addcont", "PCSE00001", "dlc"}, emulators.ErrImageInStorage},
-		{"a lookalike", []string{"ux0x", "patch", "PCSE00001"}, nil},
+		{name: "patch", folder: []string{"ux0", "patch", "PCSE00001"}, want: emulators.ErrImageInStorage},
+		{name: "add-on", folder: []string{"ux0", "addcont", "PCSE00001", "dlc"}, want: emulators.ErrImageInStorage},
+		{name: "a dump of a patch", folder: []string{"ux0", "patch", "PCSE00001"}, dump: true},
+		{name: "unknown storage, by name", folder: []string{"Ux0", "Patch", "PCSE00001"}, dump: true, unknown: true,
+			want: emulators.ErrImageInStorage},
+		{name: "unknown storage, a lookalike", folder: []string{"ux0x", "patch", "PCSE00001"}, dump: true, unknown: true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			image := vitaFolder(t, filepath.Join(append([]string{t.TempDir()}, c.path...)...), "PCSE00001")
-			_, err := newLibrary(t).AddEmulatedGame(t.Context(), image, emulators.Vita, "Game")
-			if !errors.Is(err, c.want) {
-				t.Fatalf("AddEmulatedGame = %v, want %v", err, c.want)
+			s := newLibrary(t)
+			root, base := t.TempDir(), ""
+			base = root
+			if c.dump {
+				base = t.TempDir()
+			}
+			config := prefConfig(root)
+			if c.unknown {
+				config = brokenConfig
+			}
+			game := addVita(t, s, vitaFolder(t, filepath.Join(append([]string{base}, c.folder...)...), "PCSE00001"))
+			program := vitaProgram(t, config)
+			s.SetEmulatorResolver(func(string) (string, error) { return program, nil })
+			s.start = func(context.Context, launch) (gameProcess, error) { return nil, errStartReached }
+			err := s.PlayGame(game.ID)
+			s.wg.Wait()
+			if c.want != nil && !errors.Is(err, c.want) {
+				t.Fatalf("PlayGame = %v, want %v", err, c.want)
+			}
+			if c.want == nil && !errors.Is(err, errStartReached) {
+				t.Fatalf("PlayGame = %v: the game did not reach the emulator", err)
 			}
 		})
 	}
-	ps4 := vitaFolder(t, filepath.Join(t.TempDir(), "ux0", "patch", "CUSA00001"), "CUSA00001")
-	if _, err := newLibrary(t).AddEmulatedGame(t.Context(), ps4, emulators.PS4, "Game"); err != nil {
-		t.Fatalf("a console without such storage: %v", err)
+}
+
+func TestStoredGameIsRememberedOnACleanRun(t *testing.T) {
+	cases := []struct {
+		name string
+		run  vitaRun
+		want string
+	}{
+		{"a clean run", vitaRun{lived: time.Minute}, "PCSE00001"},
+		{"exits at once", vitaRun{lived: time.Second}, ""},
+		{"closed by the player", vitaRun{lived: time.Minute, kill: true}, ""},
+		{"a crash", vitaRun{lived: time.Minute, err: codeError(-1)}, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s := newLibrary(t)
+			root := t.TempDir()
+			c.run.program = vitaProgram(t, prefConfig(root))
+			game := addVita(t, s, vitaFolder(t, filepath.Join(root, "ux0", "app", "PCSE00001"), "PCSE00001"))
+			playVita(t, s, game.ID, c.run)
+			if got := storedTitle(t, s, game.ID); got != c.want {
+				t.Fatalf("title = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+func TestGameInEmulator(t *testing.T) {
+	s := newLibrary(t)
+	root := t.TempDir()
+	program := vitaProgram(t, prefConfig(root))
+	stored := addVita(t, s, vitaFolder(t, filepath.Join(root, "ux0", "app", "PCSE00001"), "PCSE00001"))
+	dump := addVita(t, s, vitaFolder(t, filepath.Join(t.TempDir(), "ux0", "app", "PCSE00002"), "PCSE00002"))
+	plain := vitaGame(t, s, "PCSE00003")
+	other := emulatedGame(t, s, "game.iso")
+
+	s.SetEmulatorResolver(func(string) (string, error) { return program, nil })
+	for _, c := range []struct {
+		name string
+		id   string
+		want bool
+	}{{"storage", stored.ID, true}, {"dump", dump.ID, false}, {"package", plain.ID, false}, {"another console", other.ID, false}} {
+		if got, err := s.GameInEmulator(t.Context(), c.id); err != nil || got != c.want {
+			t.Errorf("%s: %v, %v, want %v", c.name, got, err, c.want)
+		}
+	}
+	if _, err := s.GameInEmulator(t.Context(), "gone"); !errors.Is(err, errNotFound) {
+		t.Fatalf("unknown card: %v", err)
+	}
+
+	s.SetEmulatorResolver(func(string) (string, error) { return "", emulators.ErrNotConfigured })
+	if got, err := s.GameInEmulator(t.Context(), dump.ID); err != nil || !got {
+		t.Fatalf("no emulator goes by the look of the path: %v, %v", got, err)
+	}
+	if err := os.Remove(filepath.Join(filepath.Dir(dump.Executable), "sce_sys", "param.sfo")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.GameInEmulator(t.Context(), dump.ID); !errors.Is(err, emulators.ErrImageIncomplete) {
+		t.Fatalf("unreadable game: %v", err)
 	}
 }
 
