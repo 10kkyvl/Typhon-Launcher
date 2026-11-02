@@ -1,6 +1,6 @@
 # Typhon Privacy Policy
 
-Revision of 25 October 2026.
+Revision of 2 November 2026.
 
 This document describes what data Typhon keeps on the user's device and what it sends outside. It describes the actual behavior of the current version of the app, not intentions.
 
@@ -82,6 +82,7 @@ Metadata is available without an account too: in guest mode these requests are m
 Points worth understanding:
 
 - **The game title is sent to the service.** When already-installed games are detected automatically, the title is derived from **the folder name on disk**. If the folder has an arbitrary name, that arbitrary name is what gets sent as the search query.
+- **A game title from a link or the browser extension.** When the user presses the Typhon browser extension button on a game page or opens a `typhon://search` link, the app looks for the game in the catalog on the device and, if it is not there, sends the metadata service the game title from the page the user opened. This is text from the link itself, not from the disk: the page address, paths and other data are not sent. If there is no single exact match, the catalog search opens with that title, and it goes out as an ordinary search query. Such a query lives as long as any other search query: no more than 7 days in the reverse proxy log and in the results cache for the period in section 2.5. Without a button press or an opened link, the title is not sent automatically.
 - **Metadata requests made from an account carry its token.** This means the service is technically able to link an account with which game titles were requested. Requests made in guest mode carry no token.
 - **Game titles from source feeds are sent to the service too** — for the same cover and description matching. From a feed entry's name the app extracts the game title (without the packager's name, version or other tags) and the year, and sends only those. The server matches them against the catalog and stores nothing from that request.
 - The metadata service is **not** sent: source addresses, links from feeds, magnet links, infohashes, download contents, download history or installation paths.
@@ -116,7 +117,7 @@ A reverse proxy sits in front of the service and the website and keeps its own a
 
 The IP address is used as a temporary rate-limiting key for requests made without an account: it is held in the service's memory, is not written to the database and is not linked to an account. For requests made with an account, the account identifier serves as that key instead of the address. The same kind of short-lived IP key is used for session state (section 8.1), so that one address cannot count as a thousand running launchers; it lives in the in-memory store and disappears together with the state.
 
-Catalog search strings — what the user types into the game search — are kept by the server in a results cache for one day, lower-cased and not linked to an account, installation identifier or address: the cache exists so the same query is not sent to IGDB again. After a day the entry is deleted.
+Catalog search strings — what the user types into the game search, and titles from `typhon://search` links (section 2.2) — are kept by the server in a results cache for one day, lower-cased and not linked to an account, installation identifier or address: the cache exists so the same query is not sent to IGDB again. After a day the entry is deleted.
 
 ### 2.6. Session state, anonymous usage statistics and anonymous diagnostics
 

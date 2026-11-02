@@ -3,22 +3,14 @@ import catalogPage from './CatalogPage.svelte?raw';
 import shell from '../../components/BigPictureShell.svelte?raw';
 
 describe('поиск из ссылки в Big Picture', () => {
-  it('оболочка кладёт текст ссылки в новую страницу каталога черновиком', () => {
-    expect(shell).toContain("navigate({ name: 'catalog', draft })");
-    expect(shell).toContain('initialDraft={page.page.draft}');
+  it('оболочка кладёт запрос ссылки в новую страницу каталога', () => {
+    expect(shell).toContain("navigate({ name: 'catalog', query })");
+    expect(shell).toContain('initialQuery={page.page.query}');
   });
 
-  it('первая загрузка идёт без черновика: запросы читают только query', () => {
-    expect(catalogPage).toContain("let query = $state('');");
-    expect(catalogPage).toContain('let draft = $state(untrack(() => initialDraft));');
+  it('каталог стартует с этого запроса, первая загрузка идёт через него', () => {
+    expect(catalogPage).toContain('let query = $state(untrack(() => initialQuery));');
     expect(catalogPage).toContain('catalog.load({ search: query, genre, sort }, nextPage, pageSize)');
-    expect(catalogPage).not.toMatch(/search:\s*draft/);
-  });
-
-  it('черновик виден на кнопке поиска и уходит в запрос только после подтверждения', () => {
-    expect(catalogPage).toContain("{draft || query || bp('bp.catalog.search')}");
-    expect(catalogPage).toContain('initialValue: draft || query,');
-    expect(catalogPage).toMatch(/if \(result === null\) return;\s*draft = '';\s*query = result\.trim\(\);/);
   });
 
   it('запрос нигде не вставляется как HTML', () => {

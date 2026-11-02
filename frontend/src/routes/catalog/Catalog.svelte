@@ -16,7 +16,6 @@
   import { discoveryCache } from '../../lib/recommendations/cache';
   import { defaultPreferences, emptyProfile, getDiscovery, getRecommendationPreferences, getRecommendationProfile, saveRecommendationPreferences, setNotInterested, type CatalogSort } from '../../lib/services/recommendations';
   import Artwork from '../../lib/components/Artwork.svelte';
-  import { confirmSearch, openSearchField, typeSearch, type SearchStep } from '../../lib/catalog/searchDraft';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import Chip from '../../lib/components/Chip.svelte';
@@ -82,8 +81,6 @@
     hideLibrary: boolean;
     hideNotInterested: boolean;
     search: string;
-    searchField: string;
-    searchDraft: boolean;
     genre: string;
     sort: Sort;
     compatOnly: boolean;
@@ -106,11 +103,7 @@
   let sourceState = restored?.sourceState;
   let snapshot = $state(restored?.snapshot ?? '');
 
-  const opened = openSearchField(get(route).params);
-  let search = $state(restored?.search ?? opened.search);
-  let searchField = $state(restored?.searchField ?? opened.field);
-  let searchDraft = $state(restored?.searchDraft ?? opened.draft);
-  let searchBox = $state<HTMLInputElement>();
+  let search = $state(restored?.search ?? get(route).params.q ?? '');
   let genre = $state(restored?.genre ?? '');
   let sort = $state<Sort>(restored?.sort ?? 'auto');
   let compatOnly = $state(restored?.compatOnly ?? false);
@@ -184,8 +177,6 @@
       revision, offline, incomplete, platform, kind, facets, platforms,
       sourceState, snapshot, preferenceKey, catalogFallback, discoveryFallback, discoveryStale, profile, discovery: [...discovery], hideLibrary, hideNotInterested,
       search,
-      searchField,
-      searchDraft,
       genre,
       sort,
       compatOnly,
@@ -553,25 +544,9 @@
     }
   }
 
-  function applySearch(step: SearchStep) {
-    search = step.search;
-    searchDraft = step.draft;
-    if (step.run === 'none') return;
-    clearTimeout(debounce);
-    if (step.run === 'now') void reload(false);
-    else debounce = setTimeout(() => void reload(false), 350);
-  }
-
   function onSearch() {
-    applySearch(typeSearch({ field: searchField, search, draft: searchDraft }));
-  }
-
-  function commitSearch() {
-    applySearch(confirmSearch({ field: searchField, search, draft: searchDraft }));
-  }
-
-  function onSearchKeydown(event: KeyboardEvent) {
-    if (event.key === 'Enter') commitSearch();
+    clearTimeout(debounce);
+    debounce = setTimeout(() => void reload(false), 350);
   }
 
   function onSort(value: Sort) {
@@ -626,10 +601,6 @@
     return Events.On('catalog:page', (event) => {
       onFreshPage(event.data as FreshPageEvent | undefined);
     });
-  });
-
-  onMount(() => {
-    if (searchDraft) searchBox?.focus();
   });
 
   onMount(async () => {
@@ -779,9 +750,8 @@
   <div class="toolbar-dock" use:watchStuck>
     <div class="toolbar-row" class:stuck>
       <div class="search-wrap">
-        <SearchInput bind:value={searchField} bind:input={searchBox} placeholder={msg('games.catalogSearchPlaceholder')} loading={loading && !appending} oninput={onSearch} onkeydown={onSearchKeydown} />
+        <SearchInput bind:value={search} placeholder={msg('games.catalogSearchPlaceholder')} loading={loading && !appending} oninput={onSearch} />
       </div>
-      {#if searchDraft}<Button variant="primary" onclick={commitSearch}>{msg('ui.search')}</Button>{/if}
       <fieldset class="controls" disabled={!ready}>
         <Select bind:value={platform} width="20rem" onchange={() => void preferencesChanged()}
           options={[{id:'',label:msg('games.catalogAllPlatforms')}, ...platforms.map((p) => ({id:p.label,label:p.label}))]} />

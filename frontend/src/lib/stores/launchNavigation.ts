@@ -39,34 +39,9 @@ function openGame(id: string) {
   else navigate('game', { id });
 }
 
-async function openTitle(query: string) {
-  dropLink();
-  const run = linkRun;
-  const request = ResolveTitle(query);
-  cancelLink = () => request.cancel();
-  const startKey = get(route).key;
-  const stopWatching = route.subscribe((current) => {
-    if (current.key !== startKey && run === linkRun) dropLink();
-  });
-  try {
-    const result = await request;
-    if (run !== linkRun) return;
-    stopWatching();
-    if (result.status === 'found' && result.gameId) openGame(result.gameId);
-    else openSearchDraft(query);
-  } catch (err) {
-    if (err instanceof CancelError || run !== linkRun) return;
-    console.error('resolve link title', err);
-    openSearchDraft(query);
-  } finally {
-    stopWatching();
-    if (run === linkRun) cancelLink = null;
-  }
-}
-
-function openSearchDraft(query: string) {
+function openSearch(query: string) {
   if (get(bigPictureActive)) bigPictureSearch.set(query);
-  else navigate('catalog', { draft: query, nonce: String(++searchNonce) });
+  else navigate('catalog', { q: query, nonce: String(++searchNonce) });
 }
 
 async function takeRoute() {
@@ -103,10 +78,8 @@ async function takeLink() {
   await openLink(pending.provider, pending.id);
 }
 
-async function openLink(provider: string, id: string) {
-  dropLink();
+async function followLink<T>(request: Promise<T> & { cancel(): void }, onResult: (result: T) => void, onError: (err: unknown) => void) {
   const run = linkRun;
-  const request = Resolve({ provider, id });
   cancelLink = () => request.cancel();
   const startKey = get(route).key;
   const stopWatching = route.subscribe((current) => {
@@ -120,6 +93,21 @@ async function openLink(provider: string, id: string) {
     const result = await request;
     if (run !== linkRun) return;
     stopWatching();
+    onResult(result);
+  } catch (err) {
+    if (err instanceof CancelError || run !== linkRun) return;
+    onError(err);
+  } finally {
+    stopWatching();
+    clearTimeout(timer);
+    if (openingToast !== null) dismissToast(openingToast);
+    if (run === linkRun) cancelLink = null;
+  }
+}
+
+async function openLink(provider: string, id: string) {
+  dropLink();
+  await followLink(Resolve({ provider, id }), (result) => {
     if (result.status === 'found' && result.gameId) {
       openGame(result.gameId);
     } else if (result.status === 'not_found') {
@@ -129,15 +117,18 @@ async function openLink(provider: string, id: string) {
     } else {
       toast(msg('errSources.linkFailed'), 'danger');
     }
-  } catch (err) {
-    if (err instanceof CancelError || run !== linkRun) return;
+  }, (err) => toast(linkErrorText(err), 'danger'));
+}
+
+async function openTitle(query: string) {
+  dropLink();
+  await followLink(ResolveTitle(query), (result) => {
+    if (result.status === 'found' && result.gameId) openGame(result.gameId);
+    else openSearch(query);
+  }, (err) => {
     toast(linkErrorText(err), 'danger');
-  } finally {
-    stopWatching();
-    clearTimeout(timer);
-    if (openingToast !== null) dismissToast(openingToast);
-    if (run === linkRun) cancelLink = null;
-  }
+    openSearch(query);
+  });
 }
 
 async function takePending() {
