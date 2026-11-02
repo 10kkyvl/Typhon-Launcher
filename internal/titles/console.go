@@ -1,6 +1,7 @@
 package titles
 
 import (
+	"fmt"
 	"regexp"
 	"slices"
 	"strings"
@@ -11,27 +12,39 @@ import (
 // The ids repeat the table in internal/emulators: that package depends on
 // catalog, and catalog on this one. A test in internal/sources keeps both equal.
 const (
-	ConsolePS1 = "ps1"
-	ConsolePS2 = "ps2"
-	ConsolePSP = "psp"
+	ConsolePS1  = "ps1"
+	ConsolePS2  = "ps2"
+	ConsolePSP  = "psp"
+	ConsolePS3  = "ps3"
+	ConsoleVita = "vita"
+	ConsolePS4  = "ps4"
 )
 
 func Consoles() []string {
-	return []string{ConsolePS1, ConsolePS2, ConsolePSP}
+	return []string{ConsolePS1, ConsolePS2, ConsolePSP, ConsolePS3, ConsoleVita, ConsolePS4}
 }
 
 const (
-	consoleName = `(?:sony[ ._-]+)?(?:(ps[ ._-]?(?:1|one)|psx|playstation[ ._-]?(?:1|one))|(ps[ ._-]?2|playstation[ ._-]?2)|(psp|playstation[ ._-]?portable)|(playstation))`
-	consoleMeta = `iso|cso|chd|pbp|ntsc(?:-[uj])?|pal|rus|eng|jpn|multi\d*`
-	pcName      = `(?:pc|windows|win)`
+	consoleVita    = `psvita|ps[ ._-]vita|playstation[ ._-]?vita`
+	consolePattern = `(?:sony[ ._-]+)?(?:(ps[ ._-]?(?:1|one)|psx|playstation[ ._-]?(?:1|one))|(ps[ ._-]?2|playstation[ ._-]?2)|(psp|playstation[ ._-]?portable)|(ps[ ._-]?3|playstation[ ._-]?3)|(%s)|(ps[ ._-]?4|playstation[ ._-]?4)|(playstation))`
+	consoleImage   = `iso|cso|chd|pbp|pkg|fpkg|vpk|ntsc(?:-[uj])?|pal`
+	consoleLang    = `rus|eng|jpn|multi\d*`
+	consoleMeta    = consoleImage + `|` + consoleLang
+	pcName         = `(?:pc|windows|win)`
 
 	consoleSeparators = "-|/,:–—"
+
+	// Capture groups of consolePattern, in order, and the one that follows them
+	// in reConsoleBracketPart.
+	consoleBrandGroup = 7
+	consoleMetaGroup  = 8
 )
 
 var (
-	reConsoleName = regexp.MustCompile(`(?i)` + consoleName)
+	// «PSV» is too short to be a console anywhere but alone in a bracket.
+	reConsoleName = regexp.MustCompile(`(?i)` + fmt.Sprintf(consolePattern, consoleVita))
 	// One part of a bracket: «PS2», «PS2 NTSC», but not «PS2 Remake».
-	reConsoleBracketPart = regexp.MustCompile(`(?i)^\s*` + consoleName + `((?:[\s._]+(?:` + consoleMeta + `))*)\s*$`)
+	reConsoleBracketPart = regexp.MustCompile(`(?i)^\s*` + fmt.Sprintf(consolePattern, consoleVita+`|psv`) + `((?:[\s._]+(?:` + consoleMeta + `))*)\s*$`)
 	// What may follow a bare token: release data, never words of a title.
 	reConsoleMetaTail = regexp.MustCompile(`(?i)^(?:(?:` + consoleMeta + `|v\.?\d\S*|(?:19|20)\d\d)(?:[\s._]+|$))+$`)
 	rePCBracketPart   = regexp.MustCompile(`(?i)^\s*` + pcName + `(?:[ ._]?(?:32|64|xp|7|8|10|11))?\s*$`)
@@ -40,11 +53,20 @@ var (
 	// Disc image and region labels only appear beside a console token; the same
 	// words stay untouched in a title that has none.
 	reConsoleRegion = regexp.MustCompile(`(?i)[\[({]\s*(?:ntsc(?:-[uj])?|pal|usa|europe|japan)\s*[\])}]`)
-	reConsoleImage  = regexp.MustCompile(`(?i)[\s._-]+(?:iso|cso|chd|pbp|ntsc(?:-[uj])?|pal)[\s._-]*$`)
+	reConsoleImage  = regexp.MustCompile(`(?i)[\s._-]+(?:` + consoleImage + `)[\s._-]*$`)
+	reConsoleLang   = regexp.MustCompile(`(?i)^(?:` + consoleLang + `)$`)
 )
 
+// consoleLangs keeps what the title pipeline strips from a bracket on its own.
+// A format or a region left there would reach the server as part of the name.
+func consoleLangs(meta string) string {
+	words := strings.FieldsFunc(meta, func(r rune) bool { return unicode.IsSpace(r) || r == '.' || r == '_' })
+	return strings.Join(slices.DeleteFunc(words, func(word string) bool { return !reConsoleLang.MatchString(word) }), " ")
+}
+
 func consoleFromGroups(loc []int) string {
-	for i, id := range []string{ConsolePS1, ConsolePS2, ConsolePSP, ConsolePS1} {
+	// The bare brand name, the last group, means the first console.
+	for i, id := range []string{ConsolePS1, ConsolePS2, ConsolePSP, ConsolePS3, ConsoleVita, ConsolePS4, ConsolePS1} {
 		if loc[2+2*i] >= 0 {
 			return id
 		}
@@ -106,7 +128,7 @@ func hasPCBracket(s string) bool {
 // joined by a dash, while «PS-2» is one, so the whole part is tried first.
 func consoleBracketPart(part string) (id, meta string, ok bool) {
 	if loc := reConsoleBracketPart.FindStringSubmatchIndex(part); loc != nil {
-		return consoleFromGroups(loc), strings.TrimSpace(part[loc[10]:loc[11]]), true
+		return consoleFromGroups(loc), consoleLangs(part[loc[2*consoleMetaGroup]:loc[2*consoleMetaGroup+1]]), true
 	}
 	if !strings.Contains(part, "-") {
 		return "", "", false
@@ -164,7 +186,7 @@ func cutConsoleBrackets(s string) (string, string) {
 func cutConsoleWord(s string) (string, string) {
 	for _, loc := range reConsoleName.FindAllStringSubmatchIndex(s, -1) {
 		before, after := s[:loc[0]], s[loc[1]:]
-		if !consoleBoundary(before, after) || loc[8] == loc[0] {
+		if !consoleBoundary(before, after) || loc[2*consoleBrandGroup] == loc[0] {
 			continue
 		}
 		head := strings.TrimRight(before, " ._")

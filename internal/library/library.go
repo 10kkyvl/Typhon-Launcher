@@ -294,6 +294,7 @@ type session struct {
 	stoppedByUser bool
 	exit          *exitInfo
 	closeDeferred bool
+	emulator      emulatorRun
 }
 
 func NewService() (*Service, error) {

@@ -48,17 +48,27 @@ func TestNewServiceRefusesMissingSettings(t *testing.T) {
 
 func TestTableIsTheSingleSourceOfTruth(t *testing.T) {
 	want := map[string][]string{
-		PS1: {"-batch", "-fullscreen", "--", "image"},
-		PS2: {"-batch", "-fullscreen", "--", "image"},
-		PSP: {"--fullscreen", "image"},
+		PS1:  {"-batch", "-fullscreen", "--", "image"},
+		PS2:  {"-batch", "-fullscreen", "--", "image"},
+		PSP:  {"--fullscreen", "image"},
+		PS3:  {"--no-gui", "--fullscreen", "image"},
+		Vita: {"--frontend", "sdl", "-F", "image"},
+		PS4:  {"-f", "true", "-g", "image"},
 	}
 	for _, p := range Platforms() {
 		page, err := url.Parse(p.Homepage)
 		if err != nil || page.Scheme != "https" || page.Host == "" {
 			t.Errorf("%s: homepage %q is not https", p.ID, p.Homepage)
 		}
-		if p.Name == "" || p.Emulator == "" || len(p.Extensions) == 0 || len(p.windowsExes) == 0 || len(p.macBundles) == 0 {
+		if p.Name == "" || p.Emulator == "" || len(p.windowsExes) == 0 {
 			t.Errorf("%s: incomplete row: %+v", p.ID, p)
+		}
+		if len(p.Extensions) == 0 && !p.HasGameFiles() {
+			t.Errorf("%s: takes no file at all", p.ID)
+		}
+		// Bundle names are listed only as far as they were seen on a real Mac.
+		if !p.HasGameFiles() && len(p.macBundles) == 0 {
+			t.Errorf("%s: no macOS bundle", p.ID)
 		}
 		if got := p.Command("image"); !slices.Equal(got, want[p.ID]) {
 			t.Errorf("%s: command %q, want %q", p.ID, got, want[p.ID])
@@ -308,15 +318,15 @@ func TestListTellsTheStatesApart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(rows) != 3 {
+	if len(rows) != len(platforms) {
 		t.Fatalf("rows: %+v", rows)
 	}
-	want := []string{StatusReady, StatusMissing, StatusNotSet}
+	want := []string{StatusReady, StatusMissing, StatusNotSet, StatusNotSet, StatusNotSet, StatusNotSet}
 	for i, row := range rows {
 		if row.Status != want[i] {
 			t.Errorf("%s: status %q, want %q", row.ID, row.Status, want[i])
 		}
-		if row.Homepage == "" || row.Emulator == "" || len(row.Extensions) == 0 {
+		if row.Homepage == "" || row.Emulator == "" || (len(row.Extensions) == 0 && len(row.ImageNames) == 0) {
 			t.Errorf("%s: incomplete row %+v", row.ID, row)
 		}
 	}

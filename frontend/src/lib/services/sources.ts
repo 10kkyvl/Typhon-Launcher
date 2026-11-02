@@ -35,7 +35,7 @@ export interface Source {
   createdAt: string;
 }
 
-export type ConsolePlatform = 'ps1' | 'ps2' | 'psp';
+export type ConsolePlatform = 'ps1' | 'ps2' | 'psp' | 'ps3' | 'vita' | 'ps4';
 
 export interface Release {
   id: string;

@@ -34,6 +34,8 @@ var (
 	errImageAmbiguous   = uierr.New("install.image_ambiguous", "в загрузке лежат образы разных игр, выбрать один автоматически нельзя")
 	errImageOptions     = uierr.New("install.image_options_invalid", "неверные данные для установки образа игры")
 	errImageDestination = uierr.New("install.image_destination", "образ игры ставится только в папку Consoles каталога игр")
+	errImageUpdateOnly  = uierr.New("install.image_update_only", "в загрузке только обновление игры, самой игры нет")
+	errImageAddonOnly   = uierr.New("install.image_addon_only", "в загрузке только дополнение к игре, самой игры нет")
 )
 
 // Seams: a mismatch of two hashes and a refused rename of one file cannot be
@@ -69,9 +71,12 @@ func FindImages(ctx context.Context, dir, platformID string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("%w: %q", emulators.ErrUnknownPlatform, platformID)
 	}
-	found, err := imageFiles(ctx, dir, target)
+	found, manual, err := imageFiles(ctx, dir, target)
 	if err != nil {
 		return "", err
+	}
+	if target.HasGameFiles() {
+		return pickGame(ctx, found, manual, target)
 	}
 	usable, err := usableImages(ctx, found)
 	if err != nil {
@@ -80,8 +85,11 @@ func FindImages(ctx context.Context, dir, platformID string) (string, error) {
 	return pickImage(usable)
 }
 
-func imageFiles(ctx context.Context, dir string, target emulators.Platform) ([]imageFile, error) {
+// imageFiles also says whether it saw a form of the console's games that only the
+// emulator itself can install.
+func imageFiles(ctx context.Context, dir string, target emulators.Platform) ([]imageFile, bool, error) {
 	var found []imageFile
+	manual := false
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return fmt.Errorf("обход %s: %w", path, err)
@@ -98,12 +106,13 @@ func imageFiles(ctx context.Context, dir string, target emulators.Platform) ([]i
 			if err != nil {
 				return fmt.Errorf("путь %s: %w", path, err)
 			}
-			if hidden || strings.Count(rel, string(filepath.Separator)) >= maxImageDepth {
+			if hidden || target.SkipsFolder(d.Name()) || strings.Count(rel, string(filepath.Separator)) >= maxImageDepth {
 				return fs.SkipDir
 			}
 			return nil
 		}
-		if hidden || !d.Type().IsRegular() || !target.AcceptsImage(path) {
+		manualForm := target.ManualOnly(path)
+		if hidden || !d.Type().IsRegular() || (!manualForm && !target.AcceptsImage(path)) {
 			return nil
 		}
 		info, err := d.Info()
@@ -112,6 +121,15 @@ func imageFiles(ctx context.Context, dir string, target emulators.Platform) ([]i
 		}
 		if info.Size() == 0 {
 			return nil
+		}
+		if manualForm {
+			manual = true
+			return nil
+		}
+		if _, err := target.GameFolder(path); errors.Is(err, emulators.ErrImageIncomplete) {
+			return nil
+		} else if err != nil {
+			return err
 		}
 		ext := strings.ToLower(filepath.Ext(path))
 		rank, ranked := imageRanks[ext]
@@ -122,9 +140,81 @@ func imageFiles(ctx context.Context, dir string, target emulators.Platform) ([]i
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return found, nil
+	return found, manual, nil
+}
+
+type foundGame struct {
+	path  string
+	title string
+	disc  bool
+}
+
+// pickGame chooses among games of a console that describe themselves. Each file
+// that stays after what follows is a game of its own: size cannot tell a second
+// game from a small file here, so two are never settled by a guess.
+func pickGame(ctx context.Context, found []imageFile, manual bool, target emulators.Platform) (string, error) {
+	games := make([]foundGame, 0, len(found))
+	updates, addons := false, false
+	for _, file := range outermostGames(found, target) {
+		info, err := target.ReadGameInfo(ctx, file.path)
+		if err != nil {
+			return "", err
+		}
+		if target.IsUpdate(info) {
+			updates = true
+			continue
+		}
+		if target.IsAddon(info) {
+			addons = true
+			continue
+		}
+		games = append(games, foundGame{path: file.path, title: info.TitleID, disc: target.InDiscFolder(file.path)})
+	}
+	games = preferDisc(games)
+	switch {
+	case len(games) == 1:
+		return games[0].path, nil
+	case len(games) > 1:
+		return "", fmt.Errorf("%w: найдено игр: %d", errImageAmbiguous, len(games))
+	case updates:
+		return "", errImageUpdateOnly
+	case addons:
+		return "", errImageAddonOnly
+	case manual:
+		return "", emulators.ErrImageManualOnly
+	}
+	return "", errImageNotFound
+}
+
+// outermostGames drops what lies inside the folder of an unpacked game: a game
+// carries its own tools and extras, and those are not games of the download.
+func outermostGames(found []imageFile, target emulators.Platform) []imageFile {
+	outer := make([]imageFile, 0, len(found))
+	for _, file := range found {
+		nested := slices.ContainsFunc(found, func(other imageFile) bool {
+			return other.path != file.path && target.IsGameFile(other.path) &&
+				!samePath(target.GameDir(other.path), target.GameDir(file.path)) &&
+				inside(target.GameDir(other.path), file.path)
+		})
+		if !nested {
+			outer = append(outer, file)
+		}
+	}
+	return outer
+}
+
+// preferDisc keeps a disc over another copy of the same game. A folder with an id
+// of its own is another game, and that stays for the caller to refuse.
+func preferDisc(games []foundGame) []foundGame {
+	discs := map[string]bool{}
+	for _, game := range games {
+		if game.disc && game.title != "" {
+			discs[game.title] = true
+		}
+	}
+	return slices.DeleteFunc(games, func(game foundGame) bool { return !game.disc && discs[game.title] })
 }
 
 // usableImages drops what cannot start a game: a list with a missing file, and a
@@ -279,7 +369,7 @@ func InspectImage(ctx context.Context, path, platformID string) (Plan, error) {
 		return Plan{}, fmt.Errorf("%w: %w", errNoSource, err)
 	}
 	if !info.IsDir() {
-		return inspectImageFile(path, info.Size(), target)
+		return inspectImageFile(ctx, path, info.Size(), target)
 	}
 	root, err := normalizeRoot(path)
 	if err != nil {
@@ -311,7 +401,7 @@ func InspectImage(ctx context.Context, path, platformID string) (Plan, error) {
 		plan.CanAutoInstall = true
 		return plan, nil
 	}
-	if !errors.Is(err, errImageNotFound) {
+	if !errors.Is(err, errImageNotFound) && !errors.Is(err, emulators.ErrImageManualOnly) {
 		return Plan{}, err
 	}
 	archive := pickDominantArchive(root, files, plan.EstimatedSize)
@@ -324,7 +414,7 @@ func InspectImage(ctx context.Context, path, platformID string) (Plan, error) {
 	return plan, nil
 }
 
-func inspectImageFile(path string, size int64, target emulators.Platform) (Plan, error) {
+func inspectImageFile(ctx context.Context, path string, size int64, target emulators.Platform) (Plan, error) {
 	plan := Plan{Type: TypeImage, SourcePath: path, ContentRoot: path, Platform: target.ID, Candidates: []Candidate{}}
 	if IsArchive(path) {
 		plan.ContentRoot = filepath.Dir(path)
@@ -333,9 +423,25 @@ func inspectImageFile(path string, size int64, target emulators.Platform) (Plan,
 		}
 		return plan, nil
 	}
+	if target.ManualOnly(path) {
+		return Plan{}, fmt.Errorf("%w: %s", emulators.ErrImageManualOnly, filepath.Base(path))
+	}
 	ext := strings.ToLower(filepath.Ext(path))
-	if !target.AcceptsImage(path) || ext == ".cue" || ext == ".m3u" {
+	// A file that starts an unpacked game means nothing away from its folder.
+	if !target.AcceptsImage(path) || target.IsGameFile(path) || ext == ".cue" || ext == ".m3u" {
 		return Plan{}, fmt.Errorf("%w: %s", errImageNotFound, filepath.Base(path))
+	}
+	if target.HasGameFiles() {
+		info, err := target.ReadGameInfo(ctx, path)
+		if err != nil {
+			return Plan{}, err
+		}
+		if target.IsUpdate(info) {
+			return Plan{}, fmt.Errorf("%w: %s", errImageUpdateOnly, filepath.Base(path))
+		}
+		if target.IsAddon(info) {
+			return Plan{}, fmt.Errorf("%w: %s", errImageAddonOnly, filepath.Base(path))
+		}
 	}
 	plan.ImagePath = path
 	plan.EstimatedSize = size
@@ -355,7 +461,12 @@ func fillImageArchive(plan *Plan, archive string) error {
 // library decides: the player sees it, and diagnostics must not count it as a
 // fault of the launcher.
 func expectedImageRefusal(err error) bool {
-	for _, refusal := range []error{errImageAmbiguous, errImageNotFound, errImageUnreadable, library.ErrAlreadyAdded} {
+	refusals := []error{
+		errImageAmbiguous, errImageNotFound, errImageUnreadable, errImageUpdateOnly, errImageAddonOnly, library.ErrAlreadyAdded,
+		emulators.ErrImageManualOnly, emulators.ErrSFOMissing, emulators.ErrSFOInvalid,
+		emulators.ErrTitleIDInvalid, emulators.ErrPackageInvalid,
+	}
+	for _, refusal := range refusals {
 		if errors.Is(err, refusal) {
 			return true
 		}
@@ -446,7 +557,10 @@ func ownedImage(game library.Game) bool {
 	if game.InstallDir == "" || !imageLayout(game.InstallDir, game.Emulation.Platform) {
 		return false
 	}
-	if !inside(game.InstallDir, game.Executable) {
+	target, ok := emulators.Lookup(game.Emulation.Platform)
+	// The whole game has to be inside: a card standing on USRDIR would delete
+	// half of an unpacked game and leave the rest.
+	if !ok || !inside(game.InstallDir, game.Executable) || !inside(game.InstallDir, target.GameDir(game.Executable)) {
 		return false
 	}
 	for _, file := range game.Emulation.Files {

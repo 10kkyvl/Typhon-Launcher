@@ -7,6 +7,7 @@ import {
   emulatorMissing,
   imageExtension,
   imageExtensions,
+  imageNames,
   isEmulated,
   isInstalledImage,
   needsEmulator,
@@ -20,6 +21,9 @@ const consoles: ConsoleInfo[] = [
   { id: 'ps1', name: 'PlayStation', extensions: ['.cue', '.chd', '.pbp', '.iso', '.bin', '.m3u'] },
   { id: 'ps2', name: 'PlayStation 2', extensions: ['.iso', '.chd', '.cso', '.zso', '.bin', '.cue'] },
   { id: 'psp', name: 'PlayStation Portable', extensions: ['.iso', '.cso', '.chd', '.pbp'] },
+  { id: 'ps3', name: 'PlayStation 3', extensions: [], imageNames: ['EBOOT.BIN'] },
+  { id: 'vita', name: 'PlayStation Vita', extensions: ['.vpk'], imageNames: ['eboot.bin'] },
+  { id: 'ps4', name: 'PlayStation 4', extensions: [], imageNames: ['eboot.bin'] },
 ];
 
 describe('emulated games', () => {
@@ -31,6 +35,9 @@ describe('emulated games', () => {
     expect(emulationPlatform({ emulation: { platform: 'psp' } })).toBe('psp');
     expect(emulationPlatform(null)).toBe('');
     expect(platformBadge('ps1')).toBe('PS1');
+    expect(platformBadge('ps3')).toBe('PS3');
+    expect(platformBadge('vita')).toBe('PS Vita');
+    expect(platformBadge('ps4')).toBe('PS4');
   });
 
   it('keeps launch profiles out of an emulated game', () => {
@@ -89,12 +96,52 @@ describe('console of an image', () => {
     expect(consoleForImage([], 'game.iso')).toBe('');
   });
 
+  it.each(['D:\\games\\BCES0001\\PS3_GAME\\USRDIR\\EBOOT.BIN', '/games/NPXX/eboot.bin', 'C:\\g\\Eboot.Bin'])(
+    'leaves %s to the user: PS3, PS4 and Vita all claim it',
+    (path) => {
+      expect(consolesForImage(consoles, path).map((item) => item.id)).toEqual(['ps3', 'vita', 'ps4']);
+      expect(consoleForImage(consoles, path)).toBe('');
+    },
+  );
+
+  it('picks the only console that claims a file name', () => {
+    const only: ConsoleInfo[] = [consoles[0], { id: 'ps3', name: 'PlayStation 3', extensions: [], imageNames: ['EBOOT.BIN'] }];
+    expect(consoleForImage(only, 'D:\\g\\EBOOT.BIN')).toBe('ps3');
+  });
+
+  it('does not take a PS1 image for a game file because of the .bin extension', () => {
+    expect(consolesForImage(consoles, 'D:\\g\\game.bin').map((item) => item.id)).toEqual(['ps1', 'ps2']);
+    expect(consolesForImage(consoles, 'D:\\g\\EBOOT.BIN').map((item) => item.id)).not.toContain('ps1');
+    expect(consolesForImage(consoles, 'D:\\g\\EBOOT.BIN').map((item) => item.id)).not.toContain('ps2');
+  });
+
+  it('matches the whole name, not a tail of it', () => {
+    expect(consolesForImage(consoles, 'D:\\g\\MYEBOOT.BIN').map((item) => item.id)).toEqual(['ps1', 'ps2']);
+    expect(consolesForImage(consoles, 'D:\\g\\EBOOT.BIN.txt')).toEqual([]);
+    expect(consolesForImage(consoles, 'D:\\g\\')).toEqual([]);
+  });
+
+  it('keeps the Vita package picked by extension', () => {
+    expect(consoleForImage(consoles, 'D:\\g\\Game.VPK')).toBe('vita');
+  });
+
+  it('does not offer a game folder file to a console that lists no names', () => {
+    expect(consolesForImage([consoles[0]], 'D:\\g\\EBOOT.BIN').map((item) => item.id)).toEqual(['ps1']);
+    expect(consolesForImage([{ id: 'x', name: 'X', extensions: [], imageNames: null }], 'D:\\g\\EBOOT.BIN')).toEqual([]);
+  });
+
   it('survives a console whose extensions came as null', () => {
     expect(consolesForImage([{ id: 'x', name: 'X', extensions: null }], 'game.iso')).toEqual([]);
   });
 
   it('lists every extension once, sorted', () => {
-    expect(imageExtensions(consoles)).toEqual(['.bin', '.chd', '.cso', '.cue', '.iso', '.m3u', '.pbp', '.zso']);
+    expect(imageExtensions(consoles)).toEqual(['.bin', '.chd', '.cso', '.cue', '.iso', '.m3u', '.pbp', '.vpk', '.zso']);
+  });
+
+  it('lists every exact file name once, whatever its case', () => {
+    expect(imageNames(consoles)).toEqual(['EBOOT.BIN']);
+    expect(imageNames([{ id: 'x', name: 'X', extensions: null, imageNames: null }])).toEqual([]);
+    expect(imageNames([])).toEqual([]);
   });
 });
 

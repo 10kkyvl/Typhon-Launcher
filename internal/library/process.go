@@ -31,6 +31,8 @@ type launch struct {
 	// Учитывает только Windows-стартер; на остальных платформах флаг
 	// игнорируется.
 	elevated bool
+
+	emulator emulatorRun
 }
 
 // gameStarter получает контекст жизни сервиса: запуск игры на некоторых

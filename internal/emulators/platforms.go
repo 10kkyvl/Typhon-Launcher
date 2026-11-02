@@ -16,9 +16,15 @@ const (
 	PS1 = "ps1"
 	PS2 = "ps2"
 	PSP = "psp"
+	PS3 = "ps3"
+	// Vita is the PlayStation Vita.
+	Vita = "vita"
+	PS4  = "ps4"
 
 	// ImageArg marks the place of the game image in an argument template.
 	ImageArg = "<image>"
+	// TitleArg marks the place of the title id in an argument template.
+	TitleArg = "<title>"
 
 	maxCoverURL = 2048
 )
@@ -40,6 +46,22 @@ type Platform struct {
 	windowsExes []string
 	macBundles  []string
 	macBinaries []string
+
+	// game describes the unpacked form of a console, on top of Extensions.
+	game gameFile
+	// manualForms are files of this console the launcher cannot start: the
+	// player installs them in the emulator by hand.
+	manualForms []string
+	// updateCategories are the values of CATEGORY that mean an update, not a
+	// game. Case matters: on the PS3 "GD" is game data, on the PS4 "gd" a game.
+	updateCategories []string
+	// addonCategories are the values of CATEGORY that mean an add-on.
+	addonCategories []string
+	// skippedFolders never hold a game, whatever lies in them.
+	skippedFolders []string
+	// installedArgs start a game the emulator keeps for itself. Empty means the
+	// emulator is given the image every time.
+	installedArgs []string
 }
 
 var platforms = []Platform{
@@ -88,6 +110,65 @@ var platforms = []Platform{
 		macBundles:  []string{"PPSSPP.app", "PPSSPPSDL.app"},
 		macBinaries: []string{"PPSSPP", "PPSSPPSDL"},
 	},
+	{
+		ID:         PS3,
+		Name:       "PlayStation 3",
+		Emulator:   "RPCS3",
+		Homepage:   "https://rpcs3.net/",
+		Extensions: []string{},
+		Args:       []string{"--no-gui", "--fullscreen", ImageArg},
+
+		CatalogPlatforms: []string{"PlayStation 3"},
+
+		dirs:        []string{"RPCS3"},
+		windowsExes: []string{"rpcs3.exe"},
+
+		game: gameFile{
+			name: "EBOOT.BIN", parent: "USRDIR", proof: []string{"PARAM.SFO"},
+			discFolder: "PS3_GAME", discMark: "PS3_DISC.SFB",
+		},
+		manualForms:      []string{".iso", ".pkg"},
+		updateCategories: []string{"GD"},
+		skippedFolders:   []string{"PS3_UPDATE"},
+	},
+	{
+		ID:         Vita,
+		Name:       "PlayStation Vita",
+		Emulator:   "Vita3K",
+		Homepage:   "https://vita3k.org/",
+		Extensions: []string{packageExt},
+		// The Qt frontend stops on a first-run window that nothing would answer.
+		Args: []string{"--frontend", "sdl", "-F", ImageArg},
+
+		CatalogPlatforms: []string{"PlayStation Vita"},
+
+		dirs:        []string{"Vita3K"},
+		windowsExes: []string{"Vita3K.exe"},
+
+		game:             gameFile{name: "eboot.bin", proof: []string{"sce_sys", "param.sfo"}, startsFolder: true},
+		manualForms:      []string{".iso", ".pkg"},
+		updateCategories: []string{"gp"},
+		addonCategories:  []string{"ac"},
+		installedArgs:    []string{"--frontend", "sdl", "-F", "-r", TitleArg},
+	},
+	{
+		ID:         PS4,
+		Name:       "PlayStation 4",
+		Emulator:   "shadPS4",
+		Homepage:   "https://shadps4.net/",
+		Extensions: []string{},
+		Args:       []string{"-f", "true", "-g", ImageArg},
+
+		CatalogPlatforms: []string{"PlayStation 4"},
+
+		dirs:        []string{"shadPS4"},
+		windowsExes: []string{"shadPS4.exe"},
+
+		game:             gameFile{name: "eboot.bin", proof: []string{"sce_sys", "param.sfo"}},
+		manualForms:      []string{".iso", ".pkg"},
+		updateCategories: []string{"gp"},
+		addonCategories:  []string{"ac"},
+	},
 }
 
 // Platforms returns the table in display order. The result is a copy.
@@ -125,6 +206,11 @@ func ImagePatterns(ids []string) (string, error) {
 				patterns = append(patterns, pattern)
 			}
 		}
+		for _, name := range p.ImageNames() {
+			if !slices.ContainsFunc(patterns, func(seen string) bool { return strings.EqualFold(seen, name) }) {
+				patterns = append(patterns, name)
+			}
+		}
 	}
 	return strings.Join(patterns, ";"), nil
 }
@@ -142,9 +228,16 @@ func ValidCover(raw string) bool {
 	return (address.Scheme == "http" || address.Scheme == "https") && address.Hostname() != ""
 }
 
-// AcceptsImage says whether the file extension belongs to this console.
+// AcceptsImage says whether the file name belongs to this console. The name alone
+// does not make an unpacked game: GameFolder checks what lies around it.
 func (p Platform) AcceptsImage(path string) bool {
-	return slices.Contains(p.Extensions, strings.ToLower(filepath.Ext(path)))
+	return slices.Contains(p.Extensions, strings.ToLower(filepath.Ext(path))) || p.IsGameFile(path)
+}
+
+// ManualOnly says whether the file is a form of this console's games the launcher
+// cannot start.
+func (p Platform) ManualOnly(path string) bool {
+	return slices.Contains(p.manualForms, strings.ToLower(filepath.Ext(path)))
 }
 
 // OnCatalog says whether a catalog entry was released for this console. Names
@@ -159,6 +252,9 @@ func (p Platform) OnCatalog(platforms []string) bool {
 
 // Command fills the argument template with the game image.
 func (p Platform) Command(image string) []string {
+	if p.game.startsFolder && p.IsGameFile(image) {
+		image = filepath.Dir(image)
+	}
 	args := slices.Clone(p.Args)
 	for i, arg := range args {
 		if arg == ImageArg {
@@ -166,4 +262,28 @@ func (p Platform) Command(image string) []string {
 		}
 	}
 	return args
+}
+
+// RemembersInstall says whether the emulator copies a game into its own storage
+// on the first launch and starts it by title id afterwards.
+func (p Platform) RemembersInstall() bool {
+	return len(p.installedArgs) > 0
+}
+
+// InstalledCommand fills the template of a game the emulator keeps. The id comes
+// from a file on disk, which can be edited by hand, so it is checked on every use.
+func (p Platform) InstalledCommand(titleID string) ([]string, error) {
+	if !p.RemembersInstall() {
+		return nil, fmt.Errorf("%w: %q", ErrUnknownPlatform, p.ID)
+	}
+	if !validTitleID.MatchString(titleID) {
+		return nil, fmt.Errorf("%w: %q", ErrTitleIDInvalid, titleID)
+	}
+	args := slices.Clone(p.installedArgs)
+	for i, arg := range args {
+		if arg == TitleArg {
+			args[i] = titleID
+		}
+	}
+	return args, nil
 }

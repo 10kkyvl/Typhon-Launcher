@@ -45,6 +45,12 @@ var (
 	ErrImageMissing      = uierr.New("emulators.image_missing", "файл образа не найден")
 	ErrImageUnreadable   = uierr.New("emulators.image_unreadable", "файл образа недоступен")
 	ErrImageNotFile      = uierr.New("emulators.image_not_file", "образ должен быть обычным файлом, а не папкой или ссылкой")
+	ErrImageManualOnly   = uierr.New("emulators.image_manual_only", "такой файл лаунчер не запускает: установите игру в эмуляторе вручную")
+	ErrImageIncomplete   = uierr.New("emulators.image_incomplete", "рядом с файлом нет остальных данных игры")
+	ErrSFOMissing        = uierr.New("emulators.sfo_missing", "в игре нет файла param.sfo")
+	ErrSFOInvalid        = uierr.New("emulators.sfo_invalid", "файл param.sfo игры повреждён")
+	ErrTitleIDInvalid    = uierr.New("emulators.title_id_invalid", "в param.sfo нет правильного кода игры")
+	ErrPackageInvalid    = uierr.New("emulators.vpk_invalid", "файл .vpk повреждён или содержит недопустимые пути")
 	ErrTitleEmpty        = uierr.New("emulators.title_empty", "не указано название игры")
 	ErrImageInside       = uierr.New("emulators.image_inside", "в этой папке лежит образ игры из библиотеки")
 	ErrCoverNotFound     = uierr.New("emulators.cover_not_found", "обложка для этой игры не найдена")
@@ -65,6 +71,7 @@ type PlatformStatus struct {
 	Emulator   string   `json:"emulator"`
 	Homepage   string   `json:"homepage"`
 	Extensions []string `json:"extensions"`
+	ImageNames []string `json:"imageNames"`
 	Path       string   `json:"path"`
 	Status     string   `json:"status"`
 	Reason     string   `json:"reason"`
@@ -118,7 +125,7 @@ func (s *Service) List(ctx context.Context) ([]PlatformStatus, error) {
 func (s *Service) statusOf(p Platform, path string) PlatformStatus {
 	row := PlatformStatus{
 		ID: p.ID, Name: p.Name, Emulator: p.Emulator, Homepage: p.Homepage,
-		Extensions: slices.Clone(p.Extensions), Path: path, Status: StatusNotSet,
+		Extensions: slices.Clone(p.Extensions), ImageNames: p.ImageNames(), Path: path, Status: StatusNotSet,
 	}
 	if path == "" {
 		return row

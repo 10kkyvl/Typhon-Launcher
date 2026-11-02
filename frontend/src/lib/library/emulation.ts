@@ -10,6 +10,7 @@ export interface ConsoleInfo {
   id: string;
   name: string;
   extensions: string[] | null;
+  imageNames?: string[] | null;
 }
 
 export const EMULATOR_PROMPT_CODES: readonly string[] = [
@@ -60,8 +61,10 @@ export function emulatorMissing(row: { status: string }): boolean {
   return row.status !== 'ready';
 }
 
+const BADGES: Record<string, string> = { vita: 'PS Vita' };
+
 export function platformBadge(platform: string): string {
-  return platform.toUpperCase();
+  return BADGES[platform] ?? platform.toUpperCase();
 }
 
 export function needsEmulator(err: unknown): boolean {
@@ -74,7 +77,19 @@ export function imageExtension(path: string): string {
   return dot > 0 ? base.slice(dot).toLowerCase() : '';
 }
 
+export function imageBaseName(path: string): string {
+  return (path.split(/[\\/]/).pop() ?? '').toLowerCase();
+}
+
+function claimsName(item: ConsoleInfo, base: string): boolean {
+  return (item.imageNames ?? []).some((name) => name.toLowerCase() === base);
+}
+
 export function consolesForImage(consoles: readonly ConsoleInfo[], path: string): ConsoleInfo[] {
+  const base = imageBaseName(path);
+  if (!base) return [];
+  const named = consoles.filter((item) => claimsName(item, base));
+  if (named.length > 0) return named;
   const ext = imageExtension(path);
   if (!ext) return [];
   return consoles.filter((item) => (item.extensions ?? []).includes(ext));
@@ -87,4 +102,12 @@ export function consoleForImage(consoles: readonly ConsoleInfo[], path: string):
 
 export function imageExtensions(consoles: readonly ConsoleInfo[]): string[] {
   return [...new Set(consoles.flatMap((item) => item.extensions ?? []))].sort();
+}
+
+export function imageNames(consoles: readonly ConsoleInfo[]): string[] {
+  const seen = new Map<string, string>();
+  for (const name of consoles.flatMap((item) => item.imageNames ?? [])) {
+    if (!seen.has(name.toLowerCase())) seen.set(name.toLowerCase(), name);
+  }
+  return [...seen.values()].sort();
 }

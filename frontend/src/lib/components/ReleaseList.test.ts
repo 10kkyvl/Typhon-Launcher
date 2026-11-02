@@ -19,8 +19,10 @@ describe('release variants', () => {
   });
 });
 
+type ReleasePlatform = 'ps1' | 'ps2' | 'psp' | 'ps3' | 'vita' | 'ps4';
+
 describe('console images', () => {
-  const image = (id: string, platform: 'ps1' | 'ps2' | 'psp'): ReleaseGroup => {
+  const image = (id: string, platform: ReleasePlatform): ReleaseGroup => {
     const base = group(id, `Game (${platform})`);
     return { ...base, release: { ...base.release, platform } };
   };
@@ -38,6 +40,16 @@ describe('console images', () => {
     expect(html).not.toContain('Образы для консолей');
     expect(html).toContain('PS1');
     expect(html).toContain('PSP');
+  });
+
+  it('tags PS3, PS Vita and PS4 images with their short names', () => {
+    const html = render(ReleaseList, {
+      props: { groups: [image('a', 'ps3'), image('b', 'vita'), image('c', 'ps4')], ondownload: () => {} },
+    }).body;
+    expect(html).toContain('>PS3<');
+    expect(html).toContain('>PS Vita<');
+    expect(html).toContain('>PS4<');
+    expect(html).not.toContain('VITA');
   });
 
   it('shows no console tag on a PC release', () => {

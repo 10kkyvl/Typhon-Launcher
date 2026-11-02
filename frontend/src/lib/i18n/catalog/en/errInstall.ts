@@ -161,5 +161,7 @@ export const errInstall: Record<ErrInstallKey, Message> = {
   'errInstall.installImageNotFound': 'No game image for this console was found in the download',
   'errInstall.installImageUnreadable': 'The list of game image files (.cue or .m3u) could not be read, the file is damaged',
   'errInstall.installImageOptionsInvalid': 'Invalid data for installing a game image',
+  'errInstall.installImageUpdateOnly': 'The download holds only an update, not the game itself',
+  'errInstall.installImageAddonOnly': 'The download holds only an add-on, not the game itself',
   'errInstall.wineNotInstalled': 'CrossOver is required to install and run games on macOS',
 };

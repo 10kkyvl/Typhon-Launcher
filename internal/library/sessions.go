@@ -178,6 +178,9 @@ func (h crashHooks) findDump(ctx context.Context, in crashInput, exe, gameDir st
 type exitInfo struct {
 	code  int
 	known bool
+	// ended is when the process really exited. With the detector on, the session
+	// closes on a later tick, so the session's own end says nothing about this.
+	ended time.Time
 }
 
 var crashReasonCodes = map[uint32]string{
@@ -301,7 +304,7 @@ func (s *Service) play(id, profileID string, explicit bool) error {
 	}()
 	s.mu.Unlock()
 	if game.Emulation != nil {
-		if err := emulatedLaunch(resolveEmulator, *game, chosen, &req); err != nil {
+		if err := emulatedLaunch(ctx, resolveEmulator, *game, chosen, &req); err != nil {
 			s.mu.Lock()
 			return err
 		}
@@ -376,7 +379,7 @@ func (s *Service) play(id, profileID string, explicit bool) error {
 	pid := uint32(proc.pid())
 	startedAt := s.now()
 	program := req.executable
-	s.running[id] = &session{process: proc, pid: pid, exePath: program, gamePID: pid, startedAt: startedAt, lastSeen: startedAt}
+	s.running[id] = &session{process: proc, pid: pid, exePath: program, gamePID: pid, startedAt: startedAt, lastSeen: startedAt, emulator: req.emulator}
 	slog.Info("game started", "id", id, "title", game.Title, "pid", proc.pid(),
 		"executable", program, "workDir", req.workDir)
 	for _, w := range s.watchers {
@@ -398,7 +401,7 @@ func (s *Service) play(id, profileID string, explicit bool) error {
 		waitErr := proc.wait()
 		logExit(id, program, s.now().Sub(startedAt), waitErr)
 		code, known := exitCode(waitErr)
-		info := &exitInfo{code: code, known: known}
+		info := &exitInfo{code: code, known: known, ended: s.now()}
 		// Детект по ОС переживает лаунчер и сам решает, когда сессия
 		// закончилась (см. detectTick); закрывать её здесь при активном
 		// детекте — значит закрывать по смерти лаунчер-обёртки, а не игры.
@@ -559,11 +562,13 @@ func (s *Service) finishSession(ctx context.Context, id string, startedAt time.T
 	var exit *exitInfo
 	exePath := ""
 	var gamePID uint32
+	var run emulatorRun
 	if current, ok := s.running[id]; ok {
 		stoppedByUser = current.stoppedByUser
 		exit = current.exit
 		exePath = current.exePath
 		gamePID = current.gamePID
+		run = current.emulator
 	}
 	delete(s.running, id)
 	for _, w := range s.watchers {
@@ -574,7 +579,12 @@ func (s *Service) finishSession(ctx context.Context, id string, startedAt time.T
 	game := s.findLocked(id)
 	emulated := s.emulatedLocked(id)
 	stopped := SessionEvent{GameID: id, SessionSeconds: seconds}
-	if emulated && !stoppedByUser && seconds < emulatorQuickExitSeconds {
+	exitedAt := endedAt
+	if exit != nil && !exit.ended.IsZero() {
+		exitedAt = exit.ended
+	}
+	quick := int64(exitedAt.Sub(startedAt).Seconds()) < emulatorQuickExitSeconds
+	if emulated && !stoppedByUser && quick {
 		stopped.EmulatorQuickExit = true
 		stopped.Emulator = emulatorName(game.Emulation.Platform)
 	}
@@ -647,12 +657,17 @@ func (s *Service) finishSession(ctx context.Context, id string, startedAt time.T
 	}
 	previousLastPlayed := game.LastPlayed
 	previousPlaytime := game.PlaytimeSeconds
+	previousEmulation := game.Emulation
 	now := s.now()
 	game.LastPlayed = &now
 	game.PlaytimeSeconds += seconds
+	if emulated {
+		game.Emulation = settleInstalledTitle(*game, run, quick, cleanExit(exit, stoppedByUser), failedExit(exit, stoppedByUser))
+	}
 	if err := s.persist(); err != nil {
 		game.LastPlayed = previousLastPlayed
 		game.PlaytimeSeconds = previousPlaytime
+		game.Emulation = previousEmulation
 		// Вызывающие — cmd.Wait()-горутина и detect-цикл watch.go, вернуть
 		// ошибку им наверх некому: это единственное место в пакете, где
 		// логирование, а не return err, оправдано. Сессия из s.running уже
@@ -682,6 +697,14 @@ func emulatorName(platformID string) string {
 		return target.Emulator
 	}
 	return platformID
+}
+
+func cleanExit(exit *exitInfo, stoppedByUser bool) bool {
+	return exit != nil && exit.known && exit.code == 0 && !stoppedByUser
+}
+
+func failedExit(exit *exitInfo, stoppedByUser bool) bool {
+	return exit != nil && exit.known && exit.code != 0 && !stoppedByUser
 }
 
 func (s *Service) findLocked(id string) *Game {

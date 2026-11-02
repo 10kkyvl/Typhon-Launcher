@@ -15,6 +15,7 @@ export interface PlatformStatus {
   emulator: string;
   homepage: string;
   extensions: string[];
+  imageNames: string[];
   path: string;
   status: EmulatorStatus | string;
   reason: string;
@@ -33,7 +34,7 @@ export interface DetectResult {
 const unavailable = () => new Error('unavailable in browser');
 
 function row(value: PlatformStatus): PlatformStatus {
-  return { ...value, extensions: value.extensions ?? [] };
+  return { ...value, extensions: value.extensions ?? [], imageNames: value.imageNames ?? [] };
 }
 
 export async function listPlatforms(): Promise<PlatformStatus[]> {

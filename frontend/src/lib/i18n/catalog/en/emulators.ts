@@ -40,6 +40,7 @@ export const emulators: Record<EmulatorsKey, Message> = {
   'emul.addConsoleChoose': 'Choose a console',
   'emul.addConsoleAmbiguous': 'This format fits several consoles: choose the right one.',
   'emul.addNoConsole': 'The "{ext}" format does not fit any console. Supported: {list}.',
+  'emul.addGameFileHint': 'PS3, PS4 and PS Vita games are chosen by their EBOOT.BIN (eboot.bin) file in the game folder. .pkg files have to be installed in the emulator by hand.',
   'emul.addTitleHint': 'The image stays where it is; the launcher does not copy it.',
   'emul.addFindCover': 'Find a cover by title',
   'emul.addFindCoverHint': 'Only the title you typed above is sent to the cover search. Nothing is sent without the checkbox.',

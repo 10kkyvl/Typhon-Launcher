@@ -66,6 +66,9 @@ type Emulation struct {
 	// for the game page and nothing else. It is deliberately not CanonicalGameID,
 	// which would attach the image to the PC game's sync and cloud saves.
 	CatalogGameID string `json:"catalogGameId,omitempty"`
+	// TitleID is set once the emulator has copied the game into its own storage
+	// (see emulators.Platform.RemembersInstall) and is started by this id.
+	TitleID string `json:"titleId,omitempty"`
 }
 
 // Footprint is what the game's data occupies on disk. For an emulated game that
@@ -157,7 +160,7 @@ func (s *Service) AddEmulatedGame(ctx context.Context, romPath, platformID, titl
 	if title == "" {
 		return Game{}, emulators.ErrTitleEmpty
 	}
-	rom, target, err := checkImage(romPath, platformID)
+	rom, dir, target, err := checkImage(romPath, platformID)
 	if err != nil {
 		return Game{}, err
 	}
@@ -165,7 +168,9 @@ func (s *Service) AddEmulatedGame(ctx context.Context, romPath, platformID, titl
 	if err != nil {
 		return Game{}, err
 	}
-	dir := filepath.Dir(rom)
+	if target.IsGameFile(rom) {
+		facts.size, facts.unknown = measureInstall(ctx, "", dir)
+	}
 	game := Game{
 		ID:          newID(),
 		Title:       title,
@@ -187,7 +192,7 @@ func (s *Service) AddEmulatedGame(ctx context.Context, romPath, platformID, titl
 		if !s.games[i].Uninstalled || s.games[i].Emulation == nil {
 			return Game{}, errAlreadyAdded
 		}
-		return s.bindImageLocked(i, title, rom, target.ID, facts)
+		return s.bindImageLocked(i, title, rom, dir, target.ID, facts)
 	}
 	s.games = append(s.games, game)
 	if err := s.persist(); err != nil {
@@ -238,7 +243,7 @@ func (s *Service) RegisterEmulated(ctx context.Context, g InstalledImage) (Game,
 	if g.Cover != "" && !emulators.ValidCover(g.Cover) {
 		return Game{}, errCoverInvalid
 	}
-	rom, target, err := checkImage(g.Image, g.Platform)
+	rom, _, target, err := checkImage(g.Image, g.Platform)
 	if err != nil {
 		return Game{}, err
 	}
@@ -249,7 +254,7 @@ func (s *Service) RegisterEmulated(ctx context.Context, g InstalledImage) (Game,
 	if err != nil {
 		return Game{}, err
 	}
-	if g.Owned {
+	if g.Owned || target.IsGameFile(rom) {
 		// The folder is the game's here, disc two the list does not name included.
 		facts.size, facts.unknown = measureInstall(ctx, "", dir)
 	}
@@ -347,8 +352,10 @@ func ImageMembers(rom string, alive func() error) (files []string, complete bool
 	return followList(rom, alive)
 }
 
-// bindImageLocked points a card at an image. An empty title keeps the old name.
-func (s *Service) bindImageLocked(pos int, title, rom, platformID string, facts imageFacts) (Game, error) {
+// bindImageLocked points a card at an image, a new folder being the image's game
+// folder. An empty title keeps the old name. The title id goes with the old image:
+// the emulator installs what the card now points at.
+func (s *Service) bindImageLocked(pos int, title, rom, folder, platformID string, facts imageFacts) (Game, error) {
 	previous := s.games[pos]
 	s.games[pos].Emulation = &Emulation{Platform: platformID, Files: facts.files}
 	if previous.Emulation != nil && previous.Owned && platform.Inside(previous.InstallDir, rom) {
@@ -358,7 +365,7 @@ func (s *Service) bindImageLocked(pos int, title, rom, platformID string, facts 
 	s.games[pos].Executable = rom
 	if !previous.Owned || !platform.Inside(previous.InstallDir, rom) {
 		// A card that followed its file elsewhere must not delete that folder.
-		s.games[pos].InstallDir = filepath.Dir(rom)
+		s.games[pos].InstallDir = folder
 		s.games[pos].Owned = false
 		s.games[pos].InstallType = ""
 		clearInstalledProvenance(&s.games[pos])
@@ -389,13 +396,23 @@ func (s *Service) emulatedPlatform(id string) (string, bool) {
 // rebindImage is SetExecutable of an emulated game: a moved file comes back to
 // its card, with the playtime, under the same rules as a newly added image.
 func (s *Service) rebindImage(id, path, platformID string) (Game, error) {
-	rom, target, err := checkImage(path, platformID)
+	rom, folder, target, err := checkImage(path, platformID)
 	if err != nil {
 		return Game{}, err
 	}
 	facts, err := readImage(rom, func() error { return nil })
 	if err != nil {
 		return Game{}, err
+	}
+	if target.IsGameFile(rom) {
+		s.mu.Lock()
+		ctx := s.ctx
+		s.mu.Unlock()
+		// Before startup there is no context to measure a folder under.
+		facts.size, facts.unknown = 0, true
+		if ctx != nil {
+			facts.size, facts.unknown = measureInstall(ctx, "", folder)
+		}
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -413,7 +430,7 @@ func (s *Service) rebindImage(id, path, platformID string) (Game, error) {
 	if s.games[pos].Emulation == nil {
 		return Game{}, errInstallationChanged
 	}
-	return s.bindImageLocked(pos, "", rom, target.ID, facts)
+	return s.bindImageLocked(pos, "", rom, folder, target.ID, facts)
 }
 
 // FindEmulatedCover runs only when the user asks for it, with the name the user
@@ -462,32 +479,43 @@ func (s *Service) SetCoverSearch(fn func(ctx context.Context, title, platform st
 	s.coverSearch = fn
 }
 
-func checkImage(romPath, platformID string) (string, emulators.Platform, error) {
+// checkImage returns the cleaned path and the folder of the whole game.
+func checkImage(romPath, platformID string) (string, string, emulators.Platform, error) {
+	refuse := func(err error) (string, string, emulators.Platform, error) {
+		return "", "", emulators.Platform{}, err
+	}
 	target, ok := emulators.Lookup(platformID)
 	if !ok {
-		return "", emulators.Platform{}, fmt.Errorf("%w: %q", emulators.ErrUnknownPlatform, platformID)
+		return refuse(fmt.Errorf("%w: %q", emulators.ErrUnknownPlatform, platformID))
 	}
 	rom := strings.TrimSpace(romPath)
 	if rom == "" {
-		return "", emulators.Platform{}, emulators.ErrImagePathEmpty
+		return refuse(emulators.ErrImagePathEmpty)
 	}
 	if !filepath.IsAbs(rom) {
-		return "", emulators.Platform{}, fmt.Errorf("%w: %s", emulators.ErrImagePathRelative, rom)
+		return refuse(fmt.Errorf("%w: %s", emulators.ErrImagePathRelative, rom))
 	}
 	rom = filepath.Clean(rom)
+	if target.ManualOnly(rom) {
+		return refuse(fmt.Errorf("%w: %s", emulators.ErrImageManualOnly, filepath.Ext(rom)))
+	}
 	if !target.AcceptsImage(rom) {
-		return "", emulators.Platform{}, fmt.Errorf("%w: %s", emulators.ErrImageExtension, filepath.Ext(rom))
+		return refuse(fmt.Errorf("%w: %s", emulators.ErrImageExtension, filepath.Ext(rom)))
 	}
 	info, err := imageStat(rom)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
-		return "", emulators.Platform{}, fmt.Errorf("%w: %s", emulators.ErrImageMissing, rom)
+		return refuse(fmt.Errorf("%w: %s", emulators.ErrImageMissing, rom))
 	case err != nil:
-		return "", emulators.Platform{}, fmt.Errorf("%w: %w", emulators.ErrImageUnreadable, err)
+		return refuse(fmt.Errorf("%w: %w", emulators.ErrImageUnreadable, err))
 	case !info.Mode().IsRegular():
-		return "", emulators.Platform{}, fmt.Errorf("%w: %s", emulators.ErrImageNotFile, rom)
+		return refuse(fmt.Errorf("%w: %s", emulators.ErrImageNotFile, rom))
 	}
-	return rom, target, nil
+	folder, err := target.GameFolder(rom)
+	if err != nil {
+		return refuse(err)
+	}
+	return rom, folder, target, nil
 }
 
 type imageFacts struct {
@@ -651,7 +679,9 @@ func cueFiles(r io.Reader) ([]string, error) {
 // emulatedLaunch turns the game's launch into the emulator's. It runs outside
 // the library mutex: the resolver touches the disk (invariant 18). The player's
 // own arguments go first: the emulators read options only before the image.
-func emulatedLaunch(resolve func(string) (string, error), game Game, chosen chosenProfile, req *launch) error {
+// The working folder is the emulator's on every console: shadPS4 keeps its data
+// beside the working folder, so anything else would give it an empty install.
+func emulatedLaunch(ctx context.Context, resolve func(string) (string, error), game Game, chosen chosenProfile, req *launch) error {
 	target, ok := emulators.Lookup(game.Emulation.Platform)
 	if !ok {
 		return fmt.Errorf("%w: %q", emulators.ErrUnknownPlatform, game.Emulation.Platform)
@@ -664,11 +694,63 @@ func emulatedLaunch(resolve func(string) (string, error), game Game, chosen chos
 	if err != nil {
 		return fmt.Errorf("рабочая папка эмулятора: %w", err)
 	}
+	command, run, err := emulatorCommand(ctx, target, game, chosen.executable)
+	if err != nil {
+		return err
+	}
 	req.executable = program
-	req.args = append(slices.Clone(chosen.args), target.Command(chosen.executable)...)
+	req.args = append(slices.Clone(chosen.args), command...)
 	req.workDir = workDir
 	req.elevated = false
+	req.emulator = run
 	return nil
+}
+
+// emulatorRun is what the end of a session needs to know about how it started.
+type emulatorRun struct {
+	// titleID is what the emulator was asked to install or to start.
+	titleID string
+	// installed means it was started by titleID, not given the image.
+	installed bool
+	image     string
+}
+
+func emulatorCommand(ctx context.Context, target emulators.Platform, game Game, image string) ([]string, emulatorRun, error) {
+	if !target.RemembersInstall() {
+		return target.Command(image), emulatorRun{}, nil
+	}
+	run := emulatorRun{titleID: game.Emulation.TitleID, installed: true, image: image}
+	if run.titleID != "" {
+		command, err := target.InstalledCommand(run.titleID)
+		return command, run, err
+	}
+	info, err := target.ReadGameInfo(ctx, image)
+	if err != nil {
+		return nil, emulatorRun{}, err
+	}
+	run.titleID, run.installed = info.TitleID, false
+	return target.Command(image), run, nil
+}
+
+// settleInstalledTitle says what the card remembers after a session. An install
+// counts only after the emulator outlived the quick exit and closed cleanly by
+// itself: anything else may have cut the copy short, and repeating an install
+// costs nothing. The id goes when a start by id fails at once: the emulator no
+// longer has the game, and the next launch installs it. The result is a new
+// value: copies of the card given out earlier share the old pointer.
+func settleInstalledTitle(game Game, run emulatorRun, quick, clean, failed bool) *Emulation {
+	next := *game.Emulation
+	switch {
+	case run.titleID == "":
+		return game.Emulation
+	case run.installed && quick && failed && next.TitleID == run.titleID:
+		next.TitleID = ""
+	case !run.installed && !quick && clean && next.TitleID == "" && platform.SamePath(game.Executable, run.image):
+		next.TitleID = run.titleID
+	default:
+		return game.Emulation
+	}
+	return &next
 }
 
 // MissingImages lists the emulated games whose image file is gone, for the cards

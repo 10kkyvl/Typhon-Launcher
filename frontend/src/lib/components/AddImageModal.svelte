@@ -10,6 +10,7 @@
     consolesForImage,
     imageExtension,
     imageExtensions,
+    imageNames,
   }from '../library/emulation';
   import { libraryErrorText } from '../library/errors';
   import { listPlatforms, selectImageFile, type PlatformStatus } from '../services/emulators';
@@ -35,6 +36,7 @@
 
   const matching = $derived(consolesForImage(platforms, image));
   const ext = $derived(imageExtension(image));
+  const hasGameFiles = $derived(imageNames(platforms).length > 0);
   const noConsole = $derived(Boolean(image) && platforms.length > 0 && matching.length === 0);
   const options = $derived([
     { id: '', label: msg('emul.addConsoleChoose') },
@@ -124,12 +126,13 @@
         />
         <Button onclick={browse}>{msg('games.installedBrowseButton')}</Button>
       </div>
+      {#if hasGameFiles}<span class="form-hint">{msg('emul.addGameFileHint')}</span>{/if}
     </label>
     {#if loadFailed}
       <p class="failure" role="alert">{msg('emul.addConsolesFailed')}</p>
     {:else if noConsole}
       <p class="failure" role="alert">
-        {msg('emul.addNoConsole', { ext, list: imageExtensions(platforms).join(' ') })}
+        {msg('emul.addNoConsole', { ext, list: [...imageExtensions(platforms), ...imageNames(platforms)].join(' ') })}
       </p>
     {:else if image}
       <div class="field">
