@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"math"
 	"path/filepath"
+	"time"
 
 	// classicio must be initialized before any anacrolix storage read: its
 	// mmap-based file IO corrupts piece verification and blocks incoming
@@ -29,6 +30,13 @@ const (
 	listenPort      = 42817
 	minLimiterBurst = 256 * 1024
 	maxTorrentConns = 32
+
+	// peerWriterWake is what recovers a stalled connection. anacrolix v1.61.0
+	// tickles a peer's writer without the writer's mutex, so a wake that lands
+	// between filling the buffer and waiting is lost, and the writer sleeps until
+	// its keep-alive timer with a request or a chunk unsent: the transfer froze
+	// for exactly the default minute. On a LAN a frequent keep-alive costs nothing.
+	peerWriterWake = 2 * time.Second
 )
 
 // newClientConfig builds the ClientConfig for the LAN sharing client. Every
@@ -46,6 +54,7 @@ func newClientConfig(cfg settings.Settings, dataDir string, port int) *torrent.C
 	tc.DisableTrackers = true
 	tc.DisablePEX = true
 	tc.NoDefaultPortForwarding = true
+	tc.KeepAliveTimeout = peerWriterWake
 	tc.Slogger = slog.Default()
 	tc.DownloadRateLimiter = newLimiter(cfg.DownloadRateLimit)
 	tc.UploadRateLimiter = newLimiter(cfg.UploadRateLimit)

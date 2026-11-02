@@ -764,11 +764,12 @@ func (s *Service) Receive(infoHash, peerID string) (Transfer, error) {
 		run.mu.Unlock()
 		return Transfer{}, err
 	}
-	t.AddPeers([]torrent.PeerInfo{{
+	peer := torrent.PeerInfo{
 		Addr:    &net.TCPAddr{IP: net.IP(srcAddr.AsSlice()), Port: offer.Port},
 		Source:  torrent.PeerSourceDirect,
 		Trusted: true,
-	}})
+	}
+	t.AddPeers([]torrent.PeerInfo{peer})
 
 	transferCtx, cancel := context.WithCancel(run.ctx)
 
@@ -778,7 +779,7 @@ func (s *Service) Receive(infoHash, peerID string) (Transfer, error) {
 	run.mu.Unlock()
 
 	run.wg.Add(1)
-	go s.watchTransfer(run, transferCtx, id, dest, offer)
+	go s.watchTransfer(run, transferCtx, id, dest, offer, peer)
 
 	s.emit("lan:transfer", tr)
 	return tr, nil
@@ -966,7 +967,18 @@ func (s *Service) finishTransfer(run *runState, id string, status TransferStatus
 	s.emit("lan:transfer", out)
 }
 
-func (s *Service) watchTransfer(run *runState, ctx context.Context, id, dest string, offer Offer) {
+// redialIfAlone hands the sender back to the engine: it dials a peer once and
+// forgets it when the dial or the handshake fails, and this transfer has no
+// other source, so nothing would ever connect again.
+func redialIfAlone(t *torrent.Torrent, peer torrent.PeerInfo) {
+	stats := t.Stats()
+	if stats.TotalPeers != 0 {
+		return
+	}
+	t.AddPeers([]torrent.PeerInfo{peer})
+}
+
+func (s *Service) watchTransfer(run *runState, ctx context.Context, id, dest string, offer Offer, peer torrent.PeerInfo) {
 	defer run.wg.Done()
 	t := s.transferTorrent(run, id)
 	if t == nil {
@@ -979,11 +991,19 @@ func (s *Service) watchTransfer(run *runState, ctx context.Context, id, dest str
 		s.finishTransfer(run, id, TransferCancelled, ctx.Err())
 	}
 
-	select {
-	case <-t.GotInfo():
-	case <-ctx.Done():
-		stop()
-		return
+	ticker := time.NewTicker(transferSampleInterval)
+	defer ticker.Stop()
+
+	for waiting := true; waiting; {
+		select {
+		case <-t.GotInfo():
+			waiting = false
+		case <-ctx.Done():
+			stop()
+			return
+		case <-ticker.C:
+			redialIfAlone(t, peer)
+		}
 	}
 
 	total := t.Info().TotalLength()
@@ -998,8 +1018,6 @@ func (s *Service) watchTransfer(run *runState, ctx context.Context, id, dest str
 		s.completeTransfer(ctx, run, id, dest, offer, t)
 	}
 
-	ticker := time.NewTicker(transferSampleInterval)
-	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
@@ -1018,6 +1036,7 @@ func (s *Service) watchTransfer(run *runState, ctx context.Context, id, dest str
 			finish()
 			return
 		case <-ticker.C:
+			redialIfAlone(t, peer)
 			completed := t.BytesCompleted()
 			s.updateTransfer(run, id, func(tr *Transfer) { tr.Downloaded = completed })
 		}

@@ -986,6 +986,23 @@ func TestReceiveIsOpenAgainAfterTransferEnds(t *testing.T) {
 	}
 }
 
+// The engine dials a peer once and forgets it on failure, so a sender that was
+// briefly unreachable used to leave the transfer waiting forever.
+func TestTransferRedialsSenderAfterFailedConnection(t *testing.T) {
+	p := newMarkerPair(t, 46049, nil, shareWhole)
+	p.svcA.disable()
+
+	_, done := p.receive(t)
+
+	p.svcA.torrentPort = p.offer.Port
+	if err := p.svcA.enable(context.Background()); err != nil {
+		t.Fatalf("enable A: %v", err)
+	}
+	if final := waitTransfer(t, done); final.Status != TransferCompleted {
+		t.Fatalf("transfer status = %s, error = %s", final.Status, final.Error)
+	}
+}
+
 func TestReceiveFreesSlotWhenTransferCannotOpen(t *testing.T) {
 	p := newMarkerPair(t, 46029, nil, shareWhole)
 	gamesPath := p.svcB.gamesPath()
