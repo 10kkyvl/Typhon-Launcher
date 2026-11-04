@@ -44,6 +44,7 @@ function messages(): Record<string, string> {
     server_error: msg('state.accountErrorServerError'),
     credential_store_error: msg('state.accountErrorCredentialStore'),
     account_suspended: msg('state.accountErrorSuspended'),
+    discord_unavailable: msg('state.accountErrorDiscordUnavailable'),
     email_undeliverable: msg('state.accountErrorEmailUndeliverable'),
   };
 }

@@ -29,6 +29,7 @@
   import StableOffer from '../../lib/components/StableOffer.svelte';
   import UpdateBanner from '../../lib/components/UpdateBanner.svelte';
   import AppearanceTab from './AppearanceTab.svelte';
+  import DiscordCard from './DiscordCard.svelte';
   import EmulatorsCard from './EmulatorsCard.svelte';
   import LanSettingsRow from './LanSettingsRow.svelte';
   import LibraryFoldersRow from './LibraryFoldersRow.svelte';
@@ -995,6 +996,10 @@
           </div>
         </div>
       </Card>
+
+      {#if accountReady}
+        <DiscordCard />
+      {/if}
     </div>
   </div>
 {:else if tab === 'downloads'}

@@ -41,6 +41,7 @@ describe('account service errors', () => {
     ['unsupported_avatar', 'avatar'],
     ['invalid_avatar', 'avatar'],
     ['unauthenticated', ''],
+    ['discord_unavailable', ''],
   ])('maps %s to field %s', async (code, field) => {
     const { AccountError, updateProfile } = await import('./account');
     bindings.UpdateProfile.mockRejectedValueOnce(new Error(code));

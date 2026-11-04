@@ -35,6 +35,7 @@ import { errSupport } from './errSupport';
 import { saves } from './saves';
 import { cloudsaves } from './cloudsaves';
 import { tickets } from './tickets';
+import { discord } from './discord';
 import { overlay } from './overlay';
 import { redist } from './redist';
 import { emulators } from './emulators';
@@ -81,6 +82,7 @@ export const en: Record<MessageKey, Message> = {
   ...saves,
   ...cloudsaves,
   ...tickets,
+  ...discord,
   ...overlay,
   ...redist,
   ...emulators,
@@ -92,4 +94,4 @@ export const en: Record<MessageKey, Message> = {
   ...themeTokens,
 };
 
-export { common, format, friends, profile, profileStyle, search, install, downloads, installed, settings, modals, ui, social, games, reviews, transfers, state, errInstall, errMetadata, errUpdates, errSources, errLibrary, errLogs, errSaves, errChat, errGameMode, errSupport, saves, cloudsaves, tickets, overlay, redist, emulators, errEmulators, screenshots, stats, sysreq };
+export { common, format, friends, profile, profileStyle, search, install, downloads, installed, settings, modals, ui, social, games, reviews, transfers, state, errInstall, errMetadata, errUpdates, errSources, errLibrary, errLogs, errSaves, errChat, errGameMode, errSupport, saves, cloudsaves, tickets, discord, overlay, redist, emulators, errEmulators, screenshots, stats, sysreq };
