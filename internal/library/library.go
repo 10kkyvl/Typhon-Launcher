@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -226,11 +227,14 @@ type Service struct {
 	steam         steamBackend
 	steamArt      func(canonicalID string) (steamlink.Art, error)
 	steamSync     bool
-	launcherPath  func() (string, error)
-	launcherLinks func(ctx context.Context) error
-	saveRoots     func() ([]platform.SaveRoot, error)
-	start         gameStarter
-	openURI       func(uri string) error
+	// steamViaLauncher makes every Steam shortcut start the game through the
+	// launcher (see steamRoute).
+	steamViaLauncher bool
+	launcherPath     func() (string, error)
+	launcherLinks    func(ctx context.Context) error
+	saveRoots        func() ([]platform.SaveRoot, error)
+	start            gameStarter
+	openURI          func(uri string) error
 	// prepare готовит окружение запуска. Поле, а не прямой вызов: на macOS
 	// настоящая реализация заводит бутыль CrossOver, и тесты обязаны иметь
 	// возможность её подменить, иначе прогон оставляет после себя
@@ -240,6 +244,7 @@ type Service struct {
 	// импорт metadata: библиотека не знает про сервис метаданных.
 	saveHints func(ctx context.Context, canonicalID string) (SaveHintSet, error)
 	saveEnvs  func() ([]platform.SaveEnv, error)
+	// steamRoot is the Steam folder that {steam} save templates expand to.
 	steamRoot func() (string, error)
 	// emulator отдаёт программу для консоли. Поле, а не импорт сервиса
 	// эмуляторов: тесты подменяют его, а без настройки эмулятора нет.
@@ -325,28 +330,29 @@ func NewServiceAt(path string) (*Service, error) {
 		return nil, err
 	}
 	s := &Service{
-		path:            path,
-		excludedPath:    excludedPath,
-		collectionsPath: collectionsPathFor(path),
-		running:         map[string]*session{},
-		scan:            procs.List,
-		watchInterval:   defaultWatchInterval,
-		now:             time.Now,
-		crash:           defaultCrashHooks(),
-		shortcuts:       systemShortcuts{},
-		steam:           disabledSteam{},
-		launcherPath:    os.Executable,
-		saveRoots:       platform.SaveRoots,
-		saveEnvs:        platform.SaveEnvs,
-		steamRoot:       steamlink.Root,
-		start:           newGameStarter(),
-		openURI:         platform.OpenURI,
-		prepare:         prepareRuntime,
-		emulator:        func(string) (string, error) { return "", emulators.ErrNotConfigured },
-		emulatorHome:    emulators.DefaultStorageHome,
-		coverSearch:     func(context.Context, string, string) (string, error) { return "", emulators.ErrCoverLookup },
-		emulatedPath:    emulatedPathFor(path),
-		savedNative:     []byte("[]"),
+		path:             path,
+		excludedPath:     excludedPath,
+		collectionsPath:  collectionsPathFor(path),
+		running:          map[string]*session{},
+		scan:             procs.List,
+		watchInterval:    defaultWatchInterval,
+		now:              time.Now,
+		crash:            defaultCrashHooks(),
+		shortcuts:        systemShortcuts{},
+		steam:            disabledSteam{},
+		launcherPath:     os.Executable,
+		steamViaLauncher: runtime.GOOS == "darwin",
+		saveRoots:        platform.SaveRoots,
+		saveEnvs:         platform.SaveEnvs,
+		steamRoot:        saveSteamRoot,
+		start:            newGameStarter(),
+		openURI:          platform.OpenURI,
+		prepare:          prepareRuntime,
+		emulator:         func(string) (string, error) { return "", emulators.ErrNotConfigured },
+		emulatorHome:     emulators.DefaultStorageHome,
+		coverSearch:      func(context.Context, string, string) (string, error) { return "", emulators.ErrCoverLookup },
+		emulatedPath:     emulatedPathFor(path),
+		savedNative:      []byte("[]"),
 	}
 	games, err := s.load()
 	if err != nil {

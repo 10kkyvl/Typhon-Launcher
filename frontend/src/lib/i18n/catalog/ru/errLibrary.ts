@@ -48,7 +48,7 @@ export const errLibrary = {
   'steam.running': 'Закройте Steam: пока он запущен, он перезапишет список ярлыков',
   'steam.no_users': 'В Steam не выполнен вход ни под одним пользователем',
   'steam.not_installed': 'Steam не установлен',
-  'steam.unsupported': 'Добавление в Steam пока работает только в Windows',
+  'steam.unsupported': 'Добавление в Steam работает только в Windows и macOS',
   'steam.already_in_steam': 'Игра уже есть в Steam',
   'library.no_saves_path': 'не указана папка сохранений',
   'library.saves_not_a_directory': 'это не папка',

@@ -215,6 +215,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	steamHandedOver, steamRelaunchErr := systemSteamRelaunch(runtime.GOOS).handOver(os.Args)
+	if steamHandedOver {
+		return
+	}
+
 	launches := &secondLaunches{}
 	handedOff, handOffListener, handOffErr := handOffLaunch(context.Background(), os.Args, launches)
 	if handedOff {
@@ -236,6 +241,16 @@ func main() {
 	}
 	if handOffErr != nil {
 		slog.Warn("hand over the launch to the running instance", "component", "app", "operation", "forward_launch", "error", handOffErr)
+	}
+	if steamRelaunchErr != nil {
+		slog.Warn("hand the steam launch over", "component", "app", "operation", "steam_relaunch", "error", steamRelaunchErr)
+	}
+	// Before anything is started: every game and CrossOver command inherits
+	// this environment.
+	if dropped, err := platform.DropSteamLaunchEnv(); err != nil {
+		slog.Error("drop the steam launch environment", "component", "app", "operation", "steam_env", "error", err)
+	} else if len(dropped) > 0 {
+		slog.Info("started by steam: its game environment dropped", "component", "app", "vars", dropped)
 	}
 
 	// Without an explicit AppUserModelID a launcher started from a game shortcut inherits that

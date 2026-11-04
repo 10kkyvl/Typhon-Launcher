@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"unicode"
@@ -233,6 +234,16 @@ func failureText(err error) string {
 		return ""
 	}
 	return err.Error()
+}
+
+// saveSteamRoot is the Steam folder for {steam} save templates. They describe
+// Windows games: on macOS those run in CrossOver, and only the shared Steam
+// bottle (its own SaveEnv) holds their saves, never the native Mac Steam.
+func saveSteamRoot() (string, error) {
+	if runtime.GOOS != "windows" {
+		return "", steamlink.ErrUnsupported
+	}
+	return steamlink.Root()
 }
 
 // steamRootFor отличает «Steam не установлен» от поломки: первое означает

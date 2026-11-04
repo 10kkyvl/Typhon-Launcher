@@ -998,7 +998,7 @@ func TestSteamEntryOfAnEmulatedGameRunsThroughTheLauncher(t *testing.T) {
 	sc, err := steamProfileTarget(Game{
 		ID: "abc", Title: "Game", Executable: filepath.Join(t.TempDir(), "game.iso"),
 		Emulation: &Emulation{Platform: emulators.PS2},
-	}, "", func() (string, error) { return launcher, nil })
+	}, "", steamRoute{launcherPath: func() (string, error) { return launcher, nil }})
 	if err != nil {
 		t.Fatal(err)
 	}

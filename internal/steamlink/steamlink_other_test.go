@@ -1,4 +1,4 @@
-//go:build !windows
+//go:build !windows && !(darwin && !devmock)
 
 package steamlink
 
@@ -10,7 +10,7 @@ import (
 
 func TestPublicAPIUnsupported(t *testing.T) {
 	if Supported() {
-		t.Fatal("Supported() = true off Windows")
+		t.Fatal("Supported() = true without a Steam backend")
 	}
 	if err := Add(context.Background(), sampleShortcut(), Art{}, Sync{}); !errors.Is(err, ErrUnsupported) {
 		t.Fatalf("Add err = %v", err)

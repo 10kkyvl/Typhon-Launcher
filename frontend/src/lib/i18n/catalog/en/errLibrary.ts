@@ -51,7 +51,7 @@ export const errLibrary: Record<ErrLibraryKey, Message> = {
   'steam.running': 'Close Steam: while it is running, it overwrites the shortcut list',
   'steam.no_users': 'No user is signed in to Steam',
   'steam.not_installed': 'Steam is not installed',
-  'steam.unsupported': 'Adding to Steam is only supported on Windows for now',
+  'steam.unsupported': 'Adding to Steam is only supported on Windows and macOS',
   'steam.already_in_steam': 'The game is already in Steam',
   'library.no_saves_path': 'No save folder given',
   'library.saves_not_a_directory': 'This is not a folder',

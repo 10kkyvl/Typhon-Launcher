@@ -27,7 +27,7 @@ var (
 	ErrNotInstalled = uierr.New("steam.not_installed", "Steam не установлен")
 	ErrNoUsers      = uierr.New("steam.no_users", "в Steam не выполнен вход ни под одним пользователем")
 	ErrSteamRunning = uierr.New("steam.running", "закройте Steam, иначе он перезапишет список ярлыков")
-	ErrUnsupported  = uierr.Wrap("steam.unsupported", fmt.Errorf("добавление в Steam поддерживается только в Windows: %w", errors.ErrUnsupported))
+	ErrUnsupported  = uierr.Wrap("steam.unsupported", fmt.Errorf("добавление в Steam поддерживается только в Windows и macOS: %w", errors.ErrUnsupported))
 )
 
 const (

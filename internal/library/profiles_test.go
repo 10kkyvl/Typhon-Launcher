@@ -459,7 +459,7 @@ func TestSteamPlanKeepsProfilesWhenDefaultTargetFails(t *testing.T) {
 	v := addProfile(t, s, game, "Mods", "mod.exe")
 	g := mustFind(t, s, game.ID)
 	g.Executable = ""
-	st := steamState{live: []Game{g}, liveIDs: map[string]struct{}{g.ID: {}}, launcherPath: os.Executable}
+	st := steamState{live: []Game{g}, liveIDs: map[string]struct{}{g.ID: {}}, route: steamRoute{launcherPath: os.Executable}}
 	plan := st.plan()
 	if len(plan.Update) != 1 || plan.Update[0].AppID != steamlink.ProfileAppID(game.ID, v.ID) {
 		t.Fatalf("update = %+v", plan.Update)
@@ -557,14 +557,14 @@ func TestSteamTargetPerProfile(t *testing.T) {
 	g := mustFind(t, s, game.ID)
 	launcher := func() (string, error) { return filepath.Join(t.TempDir(), "typhon.exe"), nil }
 
-	def, err := steamTarget(g, launcher)
+	def, err := steamTarget(g, steamRoute{launcherPath: launcher})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if def.AppID != steamlink.AppID(game.ID) || def.Name != "Half-Life 2" {
 		t.Fatalf("default target changed: %+v", def)
 	}
-	prof, err := steamProfileTarget(g, v.ID, launcher)
+	prof, err := steamProfileTarget(g, v.ID, steamRoute{launcherPath: launcher})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -574,7 +574,7 @@ func TestSteamTargetPerProfile(t *testing.T) {
 	if prof.Name != "Half-Life 2 (Mods)" || prof.Exe != v.Executable || prof.StartDir != filepath.Dir(v.Executable) || prof.LaunchOptions != steamlink.JoinArgs([]string{"-windowed", "-x y"}) {
 		t.Fatalf("profile target = %+v", prof)
 	}
-	if _, err := steamProfileTarget(g, "nope", launcher); !errors.Is(err, errProfileNotFound) {
+	if _, err := steamProfileTarget(g, "nope", steamRoute{launcherPath: launcher}); !errors.Is(err, errProfileNotFound) {
 		t.Fatalf("unknown profile: %v", err)
 	}
 
@@ -582,7 +582,7 @@ func TestSteamTargetPerProfile(t *testing.T) {
 		t.Fatal(err)
 	}
 	g = mustFind(t, s, game.ID)
-	admin, err := steamProfileTarget(g, v.ID, launcher)
+	admin, err := steamProfileTarget(g, v.ID, steamRoute{launcherPath: launcher})
 	if err != nil {
 		t.Fatal(err)
 	}
