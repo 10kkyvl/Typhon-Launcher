@@ -3,6 +3,7 @@
   import AiSkillButton from '../../lib/components/AiSkillButton.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
+  import DiscordJoinButton from '../../lib/components/DiscordJoinButton.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import { msg } from '../../lib/i18n';
@@ -73,6 +74,12 @@
     <div class="skill-row">
       <span class="skill-sub">{msg('settings.aiSkillSupportSub')}</span>
       <AiSkillButton label={msg('settings.aiSkillSupportButton')} />
+    </div>
+  </Card>
+  <Card title={msg('discord.communityLabel')}>
+    <div class="skill-row">
+      <span class="skill-sub">{msg('discord.communitySub')}</span>
+      <DiscordJoinButton />
     </div>
   </Card>
 {/if}

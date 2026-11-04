@@ -28,6 +28,7 @@
   import RollbackAction from '../../lib/components/RollbackAction.svelte';
   import StableOffer from '../../lib/components/StableOffer.svelte';
   import UpdateBanner from '../../lib/components/UpdateBanner.svelte';
+  import DiscordJoinButton from '../../lib/components/DiscordJoinButton.svelte';
   import AppearanceTab from './AppearanceTab.svelte';
   import DiscordCard from './DiscordCard.svelte';
   import EmulatorsCard from './EmulatorsCard.svelte';
@@ -1478,6 +1479,13 @@
               <span class="row-label">{msg('settings.aboutLicenseLabel')}</span>
               <span class="row-sub">{msg('settings.aboutLicenseText')}</span>
             </div>
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <span class="row-label">{msg('discord.communityLabel')}</span>
+              <span class="row-sub">{msg('discord.communitySub')}</span>
+            </div>
+            <DiscordJoinButton />
           </div>
           <UpdateBanner />
           <StableOffer />
