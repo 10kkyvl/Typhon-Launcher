@@ -19,6 +19,7 @@ export const install: Record<InstallKey, Message> = {
   'release.consoleHeading': 'Game images for consoles',
   'verify.missingFiles': { one: '{count} file', other: '{count} files' },
   'verify.corruptedBlocks': { one: '{count} block', other: '{count} blocks' },
+  'verify.corruptedFiles': { one: '{count} file', other: '{count} files' },
   'verify.unreadableFiles': { one: '{count} file', other: '{count} files' },
   'verify.fileIntegrity': 'File integrity',
   'verify.unavailable': 'Check unavailable',

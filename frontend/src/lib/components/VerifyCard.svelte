@@ -84,7 +84,7 @@
       {#if corrupted > 0}
         <div>
           <dt>{msg('verify.corrupted')}</dt>
-          <dd>{msg('verify.corruptedBlocks', { count: corrupted })}</dd>
+          <dd>{msg(state?.method === 'torrent' ? 'verify.corruptedBlocks' : 'verify.corruptedFiles', { count: corrupted })}</dd>
         </div>
       {/if}
       {#if unreadable > 0}

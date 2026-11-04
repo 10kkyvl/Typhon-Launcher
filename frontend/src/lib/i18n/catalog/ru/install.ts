@@ -16,6 +16,7 @@ export const install = {
   'release.consoleHeading': 'Образы для консолей',
   'verify.missingFiles': { one: '{count} файл', few: '{count} файла', many: '{count} файлов' },
   'verify.corruptedBlocks': { one: '{count} блок', few: '{count} блока', many: '{count} блоков' },
+  'verify.corruptedFiles': { one: '{count} файл', few: '{count} файла', many: '{count} файлов' },
   'verify.unreadableFiles': { one: '{count} файл', few: '{count} файла', many: '{count} файлов' },
   'verify.fileIntegrity': 'Целостность файлов',
   'verify.unavailable': 'Проверка недоступна',
