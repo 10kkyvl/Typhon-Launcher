@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -44,7 +45,7 @@ func TestFindStorage(t *testing.T) {
 			if c.config != "" {
 				plant(t, filepath.Join(dir, storageConfig), []byte(c.config))
 			}
-			got := vita.FindStorage(filepath.Join(dir, "Vita3K.exe"), func() (string, error) { return home, nil })
+			got := vita.FindStorage(filepath.Join(dir, "Vita3K.exe"), func() (StorageHome, error) { return StorageHome{Root: home}, nil })
 			if got != c.want {
 				t.Fatalf("FindStorage = %+v, want %+v", got, c.want)
 			}
@@ -54,7 +55,7 @@ func TestFindStorage(t *testing.T) {
 
 func TestFindStorageNeverGuessesTheDefault(t *testing.T) {
 	vita := mustPlatform(t, Vita)
-	home := func() (string, error) { return t.TempDir(), nil }
+	home := func() (StorageHome, error) { return StorageHome{Root: t.TempDir()}, nil }
 
 	t.Run("a config that cannot be read", func(t *testing.T) {
 		dir := t.TempDir()
@@ -75,13 +76,13 @@ func TestFindStorageNeverGuessesTheDefault(t *testing.T) {
 		}
 	})
 	t.Run("no default location", func(t *testing.T) {
-		got := vita.FindStorage(filepath.Join(t.TempDir(), "Vita3K.exe"), func() (string, error) { return "", errors.New("no home") })
+		got := vita.FindStorage(filepath.Join(t.TempDir(), "Vita3K.exe"), func() (StorageHome, error) { return StorageHome{}, errors.New("no home") })
 		if got.Known {
 			t.Fatalf("FindStorage = %+v", got)
 		}
 	})
 	t.Run("a relative default location", func(t *testing.T) {
-		got := vita.FindStorage(filepath.Join(t.TempDir(), "Vita3K.exe"), func() (string, error) { return "Vita3K", nil })
+		got := vita.FindStorage(filepath.Join(t.TempDir(), "Vita3K.exe"), func() (StorageHome, error) { return StorageHome{Root: "Vita3K"}, nil })
 		if got.Known {
 			t.Fatalf("FindStorage = %+v", got)
 		}
@@ -128,5 +129,56 @@ func TestPlace(t *testing.T) {
 	}
 	if got := mustPlatform(t, PS4).Place(in(root, "ux0", "app", "CUSA00001"), "CUSA00001", known); got != PlaceOutside {
 		t.Fatalf("a console that installs nothing: %v", got)
+	}
+}
+
+// On macOS the config lives in Application Support, not in the signed bundle
+// beside the program (Vita3K continuous build of 2026-11-03).
+func TestFindStorageReadsTheConfigOfItsHome(t *testing.T) {
+	vita := mustPlatform(t, Vita)
+	pref, games := t.TempDir(), t.TempDir()
+	bundle := filepath.Join(t.TempDir(), "Vita3K.app", "Contents", "MacOS")
+	program := filepath.Join(bundle, "Vita3K")
+	home := func() (StorageHome, error) {
+		return StorageHome{ConfigDir: pref, Root: filepath.Join(pref, "fs")}, nil
+	}
+
+	if got, want := vita.FindStorage(program, home), (Storage{Root: filepath.Join(pref, "fs"), Known: true}); got != want {
+		t.Fatalf("no config: FindStorage = %+v, want %+v", got, want)
+	}
+	plant(t, filepath.Join(bundle, storageConfig), []byte("pref-path: "+t.TempDir()+"\n"))
+	if got, want := vita.FindStorage(program, home), (Storage{Root: filepath.Join(pref, "fs"), Known: true}); got != want {
+		t.Fatalf("a config beside the program: FindStorage = %+v, want %+v", got, want)
+	}
+	plant(t, filepath.Join(pref, storageConfig), []byte("pref-path: "+games+"\n"))
+	if got, want := vita.FindStorage(program, home), (Storage{Root: games, Known: true}); got != want {
+		t.Fatalf("a config at home: FindStorage = %+v, want %+v", got, want)
+	}
+	relative := func() (StorageHome, error) { return StorageHome{ConfigDir: "Vita3K", Root: games}, nil }
+	if got := vita.FindStorage(program, relative); got.Known {
+		t.Fatalf("a relative config folder: FindStorage = %+v", got)
+	}
+}
+
+func TestDefaultStorageHomeOnThisSystem(t *testing.T) {
+	home, err := DefaultStorageHome()
+	switch runtime.GOOS {
+	case "darwin":
+		dir, dirErr := os.UserConfigDir()
+		if dirErr != nil {
+			t.Skip(dirErr)
+		}
+		pref := filepath.Join(dir, "Vita3K", "Vita3K")
+		if want := (StorageHome{ConfigDir: pref, Root: filepath.Join(pref, "fs")}); err != nil || home != want {
+			t.Fatalf("DefaultStorageHome = %+v, %v; want %+v", home, err, want)
+		}
+	case "windows":
+		if err != nil || home.ConfigDir != "" || !filepath.IsAbs(home.Root) {
+			t.Fatalf("DefaultStorageHome = %+v, %v", home, err)
+		}
+	default:
+		if err == nil {
+			t.Fatalf("DefaultStorageHome = %+v, want an error", home)
+		}
 	}
 }

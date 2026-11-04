@@ -681,7 +681,7 @@ func cueFiles(r io.Reader) ([]string, error) {
 // own arguments go first: the emulators read options only before the image.
 // The working folder is the emulator's on every console: shadPS4 keeps its data
 // beside the working folder, so anything else would give it an empty install.
-func emulatedLaunch(ctx context.Context, resolve func(string) (string, error), home func() (string, error), game Game, chosen chosenProfile, req *launch) error {
+func emulatedLaunch(ctx context.Context, resolve func(string) (string, error), home func() (emulators.StorageHome, error), game Game, chosen chosenProfile, req *launch) error {
 	target, ok := emulators.Lookup(game.Emulation.Platform)
 	if !ok {
 		return fmt.Errorf("%w: %q", emulators.ErrUnknownPlatform, game.Emulation.Platform)

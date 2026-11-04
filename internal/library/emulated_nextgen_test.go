@@ -405,7 +405,7 @@ func TestStorageIsFoundByIdentity(t *testing.T) {
 			s := newLibrary(t)
 			root, dump := t.TempDir(), t.TempDir()
 			if c.home {
-				s.emulatorHome = func() (string, error) { return root, nil }
+				s.emulatorHome = func() (emulators.StorageHome, error) { return emulators.StorageHome{Root: root}, nil }
 			}
 			base := root
 			if c.inDump {
@@ -431,7 +431,7 @@ func TestStorageIsFoundByIdentity(t *testing.T) {
 
 func TestDefaultStorageThatCannotBeFoundIsUnknown(t *testing.T) {
 	s := newLibrary(t)
-	s.emulatorHome = func() (string, error) { return "", errors.New("no home") }
+	s.emulatorHome = func() (emulators.StorageHome, error) { return emulators.StorageHome{}, errors.New("no home") }
 	dir := filepath.Join(t.TempDir(), "ux0", "app", "PCSE00001")
 	game := addVita(t, s, vitaFolder(t, dir, "PCSE00001"))
 	req, _ := playVita(t, s, game.ID, vitaRun{lived: time.Minute})

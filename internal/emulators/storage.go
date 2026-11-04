@@ -50,22 +50,36 @@ const (
 	PlaceData
 )
 
-// DefaultStorageRoot is where the emulator keeps games with an empty pref-path.
-// Only the Windows location was seen on a real run.
-func DefaultStorageRoot() (string, error) {
-	if runtime.GOOS != "windows" {
-		return "", errors.New("папка эмулятора по умолчанию на этой системе неизвестна")
+// StorageHome is where the emulator reads its config and where it keeps games
+// when the config names no folder. An empty ConfigDir is the program's folder.
+type StorageHome struct {
+	ConfigDir string
+	Root      string
+}
+
+// DefaultStorageHome gives the locations seen on real runs. On Windows the config
+// sits beside Vita3K.exe. On macOS it is in the user's Application Support,
+// outside the signed bundle, and a fresh install writes pref-path as its fs
+// folder there.
+func DefaultStorageHome() (StorageHome, error) {
+	if runtime.GOOS != "windows" && runtime.GOOS != "darwin" {
+		return StorageHome{}, errors.New("папка эмулятора по умолчанию на этой системе неизвестна")
 	}
 	dir, err := os.UserConfigDir()
 	if err != nil {
-		return "", fmt.Errorf("папка настроек пользователя: %w", err)
+		return StorageHome{}, fmt.Errorf("папка настроек пользователя: %w", err)
 	}
-	return filepath.Join(dir, "Vita3K", "Vita3K"), nil
+	pref := filepath.Join(dir, "Vita3K", "Vita3K")
+	if runtime.GOOS == "darwin" {
+		return StorageHome{ConfigDir: pref, Root: filepath.Join(pref, "fs")}, nil
+	}
+	return StorageHome{Root: pref}, nil
 }
 
-// FindStorage reads the emulator's config beside its program and never writes it.
-// Only a config that is absent or says nothing means the default location.
-func (p Platform) FindStorage(program string, defaultRoot func() (string, error)) Storage {
+// FindStorage reads the emulator's config and never writes it. Only a config
+// that is absent or says nothing means the default location. Without a home the
+// config is still looked for beside the program, since it may name the folder.
+func (p Platform) FindStorage(program string, home func() (StorageHome, error)) Storage {
 	if !p.RemembersInstall() {
 		return Storage{}
 	}
@@ -73,7 +87,15 @@ func (p Platform) FindStorage(program string, defaultRoot func() (string, error)
 	if _, err := os.Lstat(filepath.Join(dir, portableMark)); !errors.Is(err, fs.ErrNotExist) {
 		return Storage{}
 	}
-	data, err := readStorageConfig(filepath.Join(dir, storageConfig))
+	where, homeErr := home()
+	configDir := dir
+	if homeErr == nil && where.ConfigDir != "" {
+		if !filepath.IsAbs(where.ConfigDir) {
+			return Storage{}
+		}
+		configDir = where.ConfigDir
+	}
+	data, err := readStorageConfig(filepath.Join(configDir, storageConfig))
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 	case err != nil:
@@ -87,11 +109,10 @@ func (p Platform) FindStorage(program string, defaultRoot func() (string, error)
 			return Storage{Root: filepath.Clean(root), Known: true}
 		}
 	}
-	root, err := defaultRoot()
-	if err != nil || !filepath.IsAbs(root) {
+	if homeErr != nil || !filepath.IsAbs(where.Root) {
 		return Storage{}
 	}
-	return Storage{Root: root, Known: true}
+	return Storage{Root: where.Root, Known: true}
 }
 
 func readStorageConfig(path string) (data []byte, err error) {

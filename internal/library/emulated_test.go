@@ -34,7 +34,7 @@ func newLibrary(t *testing.T) *Service {
 	t.Helper()
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
 	home := t.TempDir()
-	s.emulatorHome = func() (string, error) { return home, nil }
+	s.emulatorHome = func() (emulators.StorageHome, error) { return emulators.StorageHome{Root: home}, nil }
 	return s
 }
 

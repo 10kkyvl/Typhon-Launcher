@@ -245,7 +245,7 @@ type Service struct {
 	// эмуляторов: тесты подменяют его, а без настройки эмулятора нет.
 	emulator func(platform string) (string, error)
 	// emulatorHome is a field so that tests never read the player's real storage.
-	emulatorHome func() (string, error)
+	emulatorHome func() (emulators.StorageHome, error)
 	// coverSearch ищет обложку образа по явному действию пользователя.
 	coverSearch func(ctx context.Context, title, platform string) (string, error)
 
@@ -343,7 +343,7 @@ func NewServiceAt(path string) (*Service, error) {
 		openURI:         platform.OpenURI,
 		prepare:         prepareRuntime,
 		emulator:        func(string) (string, error) { return "", emulators.ErrNotConfigured },
-		emulatorHome:    emulators.DefaultStorageRoot,
+		emulatorHome:    emulators.DefaultStorageHome,
 		coverSearch:     func(context.Context, string, string) (string, error) { return "", emulators.ErrCoverLookup },
 		emulatedPath:    emulatedPathFor(path),
 		savedNative:     []byte("[]"),
