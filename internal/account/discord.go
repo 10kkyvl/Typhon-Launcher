@@ -9,10 +9,6 @@ import (
 	"time"
 )
 
-// CodeDiscordUnavailable means the backend does not serve the Discord routes
-// (yet): a 404 on them is a missing feature, not a missing record.
-const CodeDiscordUnavailable = "discord_unavailable"
-
 // DiscordLinkCode is a one-time code the player types into the Typhon bot.
 type DiscordLinkCode struct {
 	Code      string    `json:"code"`
