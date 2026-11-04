@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
+	"path"
 	"slices"
 	"strings"
 
@@ -73,12 +73,13 @@ func (r steamRelaunch) handOver(args []string) (bool, error) {
 	return true, nil
 }
 
-// appBundle finds X.app of an executable at X.app/Contents/MacOS/<name>.
+// appBundle finds X.app of an executable at X.app/Contents/MacOS/<name>. A
+// bundle path is a macOS path, so it is split on slashes whatever the host OS.
 func appBundle(exe string) (string, bool) {
-	macOS := filepath.Dir(exe)
-	contents := filepath.Dir(macOS)
-	bundle := filepath.Dir(contents)
-	if filepath.Base(macOS) != "MacOS" || filepath.Base(contents) != "Contents" || !strings.HasSuffix(bundle, ".app") {
+	macOS := path.Dir(exe)
+	contents := path.Dir(macOS)
+	bundle := path.Dir(contents)
+	if path.Base(macOS) != "MacOS" || path.Base(contents) != "Contents" || !strings.HasSuffix(bundle, ".app") {
 		return "", false
 	}
 	return bundle, true
