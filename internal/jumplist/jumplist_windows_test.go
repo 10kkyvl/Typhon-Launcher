@@ -3,9 +3,11 @@
 package jumplist
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -64,5 +66,18 @@ func TestApplySkipsAGameWithABadID(t *testing.T) {
 	cfg := throwawayConfig(t)
 	if err := Apply(cfg, []Game{{ID: "bad id", Title: "Bad"}, {ID: "ok", Title: "Ok"}}); err != nil {
 		t.Fatalf("Apply with one unusable id: %v", err)
+	}
+}
+
+func TestAppendCategoryErrRecognisesAccessDenied(t *testing.T) {
+	err := appendCategoryErr(eAccessDenied)
+	if !errors.Is(err, errCategoryRefused) {
+		t.Fatalf("E_ACCESSDENIED = %v, want errCategoryRefused", err)
+	}
+	if !strings.Contains(err.Error(), "0x80070005") {
+		t.Fatalf("hresult lost from %q", err)
+	}
+	if err := appendCategoryErr(int32(-0x7FFFBFFB)); errors.Is(err, errCategoryRefused) { // E_FAIL 0x80004005
+		t.Fatalf("E_FAIL treated as a privacy refusal: %v", err)
 	}
 }
