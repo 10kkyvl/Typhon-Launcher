@@ -124,6 +124,8 @@ var platforms = []Platform{
 
 		dirs:        []string{"RPCS3"},
 		windowsExes: []string{"rpcs3.exe"},
+		macBundles:  []string{"RPCS3.app"},
+		macBinaries: []string{"rpcs3"},
 
 		game: gameFile{
 			name: "EBOOT.BIN", parent: "USRDIR", proof: []string{"PARAM.SFO"},
@@ -146,6 +148,8 @@ var platforms = []Platform{
 
 		dirs:        []string{"Vita3K"},
 		windowsExes: []string{"Vita3K.exe"},
+		macBundles:  []string{"Vita3K.app"},
+		macBinaries: []string{"Vita3K"},
 
 		game:             gameFile{name: "eboot.bin", proof: []string{"sce_sys", "param.sfo"}, startsFolder: true},
 		manualForms:      []string{".iso", ".pkg"},

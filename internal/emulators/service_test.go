@@ -458,6 +458,24 @@ func TestDetectLooksInsideMacBundles(t *testing.T) {
 	}
 }
 
+// The layouts are the ones of RPCS3 v0.0.43 (macos_aarch64) and the Vita3K
+// continuous build of 2026-11-03.
+func TestDetectFindsNextGenMacBundles(t *testing.T) {
+	root := t.TempDir()
+	rpcs3 := touch(t, filepath.Join(root, "RPCS3.app", "Contents", "MacOS", "rpcs3"))
+	vita3k := touch(t, filepath.Join(root, "Vita3K.app", "Contents", "MacOS", "Vita3K"))
+	s, _ := newTestService(t, "darwin")
+	s.roots = func() ([]string, error) { return []string{root}, nil }
+	got, err := s.Detect(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Found{{Platform: PS3, Path: rpcs3}, {Platform: Vita, Path: vita3k}}
+	if !slices.Equal(got.Found, want) {
+		t.Fatalf("Detect = %+v, want %+v", got.Found, want)
+	}
+}
+
 func TestDetectCountsWhatItCouldNotCheck(t *testing.T) {
 	s, _ := newTestService(t, "windows")
 	s.roots = func() ([]string, error) { return []string{t.TempDir()}, nil }
