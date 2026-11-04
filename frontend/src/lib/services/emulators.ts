@@ -42,6 +42,12 @@ export async function listPlatforms(): Promise<PlatformStatus[]> {
   return ((await EmulatorsService.List()) ?? []).map((item) => row(item as PlatformStatus));
 }
 
+// imageConsoles asks which consoles the files around the image are laid out for.
+export async function imageConsoles(path: string): Promise<string[]> {
+  if (!inWails) return [];
+  return (await EmulatorsService.ImageConsoles(path)) ?? [];
+}
+
 export async function setEmulatorPath(platform: string, path: string): Promise<PlatformStatus> {
   if (!inWails) throw unavailable();
   return row((await EmulatorsService.SetPath(platform, path)) as PlatformStatus);

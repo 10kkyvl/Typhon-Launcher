@@ -11,9 +11,10 @@
     imageExtension,
     imageExtensions,
     imageNames,
-  }from '../library/emulation';
+    narrowByLayout,
+  } from '../library/emulation';
   import { libraryErrorText } from '../library/errors';
-  import { listPlatforms, selectImageFile, type PlatformStatus } from '../services/emulators';
+  import { imageConsoles, listPlatforms, selectImageFile, type PlatformStatus } from '../services/emulators';
   import { addEmulatedGame, findEmulatedCover, type LibraryGame } from '../services/library';
   import { toast } from '../stores/toasts';
 
@@ -33,8 +34,12 @@
   let findCover = $state(false);
   let adding = $state(false);
   let failure = $state('');
+  // fitting is the answer of the disk for the current image; lookup drops a late
+  // answer for a path that was typed over in the meantime.
+  let fitting = $state<string[]>([]);
+  let lookup = 0;
 
-  const matching = $derived(consolesForImage(platforms, image));
+  const matching = $derived(narrowByLayout(consolesForImage(platforms, image), fitting));
   const ext = $derived(imageExtension(image));
   const hasGameFiles = $derived(imageNames(platforms).length > 0);
   const noConsole = $derived(Boolean(image) && platforms.length > 0 && matching.length === 0);
@@ -52,6 +57,7 @@
       title = '';
       findCover = false;
       failure = '';
+      fitting = [];
       loadFailed = false;
     });
     let stale = false;
@@ -83,7 +89,21 @@
   function pick(path: string) {
     image = path;
     failure = '';
+    fitting = [];
     platform = consoleForImage(platforms, path);
+    const mine = ++lookup;
+    if (consolesForImage(platforms, path).length < 2) return;
+    imageConsoles(path).then(
+      (ids) => {
+        if (mine !== lookup) return;
+        fitting = ids;
+        const narrowed = narrowByLayout(consolesForImage(platforms, path), ids);
+        if (!narrowed.some((item) => item.id === platform)) {
+          platform = narrowed.length === 1 ? narrowed[0].id : '';
+        }
+      },
+      (err) => console.warn('image consoles', err),
+    );
   }
 
   async function lookUpCover(game: LibraryGame) {

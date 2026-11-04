@@ -102,6 +102,17 @@ func (p Platform) InDiscFolder(image string) bool {
 	return p.game.discFolder != "" && p.IsGameFile(image) && strings.EqualFold(filepath.Base(p.GameDir(image)), p.game.discFolder)
 }
 
+// FitsLayout says whether image is this console's game file with its proof in
+// place. Only names are looked at, never the contents: PS Vita and PS4 games
+// are laid out alike, and both fit the same file.
+func (p Platform) FitsLayout(image string) bool {
+	if !p.IsGameFile(image) {
+		return false
+	}
+	_, err := findFile(p.GameDir(image), p.game.proof)
+	return err == nil
+}
+
 // GameFolder is the folder that holds the whole game. It checks the proof of an
 // unpacked game: ErrImageIncomplete means it is not there, and anything else that
 // it could not be looked at. A disc is the folder above discFolder only when the

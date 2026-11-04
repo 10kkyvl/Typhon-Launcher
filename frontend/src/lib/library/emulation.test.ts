@@ -11,6 +11,7 @@ import {
   imageNames,
   isEmulated,
   isInstalledImage,
+  narrowByLayout,
   needsEmulator,
   pageGame,
   platformBadge,
@@ -90,6 +91,14 @@ describe('console of an image', () => {
       expect(consoleForImage(consoles, name)).toBe('');
     },
   );
+
+  it('narrows an eboot to the consoles whose layout is on disk', () => {
+    const named = consolesForImage(consoles, '/g/Game/PS3_GAME/USRDIR/EBOOT.BIN');
+    expect(narrowByLayout(named, ['ps3']).map((item) => item.id)).toEqual(['ps3']);
+    expect(narrowByLayout(named, ['vita', 'ps4']).map((item) => item.id)).toEqual(['vita', 'ps4']);
+    expect(narrowByLayout(named, []).map((item) => item.id)).toEqual(['ps3', 'vita', 'ps4']);
+    expect(narrowByLayout(named, ['ps2']).map((item) => item.id)).toEqual(['ps3', 'vita', 'ps4']);
+  });
 
   it('offers nothing for an unknown or missing extension', () => {
     expect(consolesForImage(consoles, 'game.exe')).toEqual([]);

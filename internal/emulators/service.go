@@ -263,6 +263,26 @@ func bundleBinary(p Platform, bundle string) (string, error) {
 	return "", fmt.Errorf("%w: %s", ErrBadAppBundle, bundle)
 }
 
+// ImageConsoles lists the consoles whose game layout the files around image have,
+// so that the add form offers only those. An empty list proves nothing: the form
+// keeps what the file name alone allows.
+func (s *Service) ImageConsoles(ctx context.Context, image string) ([]string, error) {
+	out := []string{}
+	if !filepath.IsAbs(image) || strings.IndexFunc(image, unicode.IsControl) >= 0 {
+		return out, nil
+	}
+	image = filepath.Clean(image)
+	for _, p := range platforms {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if p.FitsLayout(image) {
+			out = append(out, p.ID)
+		}
+	}
+	return out, nil
+}
+
 // Resolve gives the program to start for a console.
 //
 //wails:ignore

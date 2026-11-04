@@ -507,3 +507,31 @@ func TestDetectReportsWhenTheFoldersCannotBeResolved(t *testing.T) {
 		t.Fatalf("Detect = %v", err)
 	}
 }
+
+func TestImageConsolesFollowTheLayoutOnDisk(t *testing.T) {
+	s, _ := newTestService(t, "darwin")
+	root := t.TempDir()
+	ps3 := touch(t, filepath.Join(root, "Game", "PS3_GAME", "USRDIR", "EBOOT.BIN"))
+	touch(t, filepath.Join(root, "Game", "PS3_GAME", "PARAM.SFO"))
+	next := touch(t, filepath.Join(root, "Next", "eboot.bin"))
+	touch(t, filepath.Join(root, "Next", "sce_sys", "param.sfo"))
+	bare := touch(t, filepath.Join(root, "Bare", "eboot.bin"))
+	cases := []struct {
+		name, image string
+		want        []string
+	}{
+		{"a ps3 game folder", ps3, []string{PS3}},
+		{"a ps vita or ps4 folder", next, []string{Vita, PS4}},
+		{"no proof beside the file", bare, []string{}},
+		{"an image of another console", touch(t, filepath.Join(root, "game.iso")), []string{}},
+		{"a relative path", filepath.Join("Game", "PS3_GAME", "USRDIR", "EBOOT.BIN"), []string{}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := s.ImageConsoles(t.Context(), c.image)
+			if err != nil || !slices.Equal(got, c.want) {
+				t.Fatalf("ImageConsoles = %q, %v; want %q", got, err, c.want)
+			}
+		})
+	}
+}

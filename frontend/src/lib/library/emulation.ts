@@ -100,6 +100,13 @@ export function consolesForImage(consoles: readonly ConsoleInfo[], path: string)
   return consoles.filter((item) => (item.extensions ?? []).includes(ext));
 }
 
+// narrowByLayout keeps the consoles whose game layout the files on disk have. An
+// answer that names none of them proves nothing, so the name-based list stays.
+export function narrowByLayout(consoles: readonly ConsoleInfo[], fitting: readonly string[]): ConsoleInfo[] {
+  const kept = consoles.filter((item) => fitting.includes(item.id));
+  return kept.length > 0 ? kept : [...consoles];
+}
+
 export function consoleForImage(consoles: readonly ConsoleInfo[], path: string): string {
   const found = consolesForImage(consoles, path);
   return found.length === 1 ? found[0].id : '';
