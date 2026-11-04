@@ -23,6 +23,10 @@ const (
 	StatusMissing     = "missing"
 	StatusUnavailable = "unavailable"
 
+	// WarnDiscordExitHang: Vita3K on macOS hangs on exit with its Discord Rich
+	// Presence on, so a session never ends and an install is never remembered.
+	WarnDiscordExitHang = "discord_exit_hang"
+
 	macAppSuffix = ".app"
 )
 
@@ -76,6 +80,8 @@ type PlatformStatus struct {
 	Path       string   `json:"path"`
 	Status     string   `json:"status"`
 	Reason     string   `json:"reason"`
+	// Warnings are codes of known trouble with a ready emulator.
+	Warnings []string `json:"warnings"`
 }
 
 // Found is an emulator already present on this machine. Nothing is stored until
@@ -102,13 +108,15 @@ type Service struct {
 	goos     string
 	roots    func() ([]string, error)
 	lstat    func(string) (fs.FileInfo, error)
+	// home is a field so that tests never read the player's real config.
+	home func() (StorageHome, error)
 }
 
 func NewService(store *settings.Service) (*Service, error) {
 	if store == nil {
 		return nil, errors.New("настройки недоступны")
 	}
-	return &Service{settings: store, goos: runtime.GOOS, roots: systemRoots, lstat: os.Lstat}, nil
+	return &Service{settings: store, goos: runtime.GOOS, roots: systemRoots, lstat: os.Lstat, home: DefaultStorageHome}, nil
 }
 
 func (s *Service) List(ctx context.Context) ([]PlatformStatus, error) {
@@ -127,6 +135,7 @@ func (s *Service) statusOf(p Platform, path string) PlatformStatus {
 	row := PlatformStatus{
 		ID: p.ID, Name: p.Name, Emulator: p.Emulator, Homepage: p.Homepage,
 		Extensions: slices.Clone(p.Extensions), ImageNames: p.ImageNames(), Path: path, Status: StatusNotSet,
+		Warnings: []string{},
 	}
 	if path == "" {
 		return row
@@ -135,6 +144,9 @@ func (s *Service) statusOf(p Platform, path string) PlatformStatus {
 	switch {
 	case err == nil:
 		row.Status = StatusReady
+		if s.goos == "darwin" && p.DiscordPresenceOn(path, s.home) {
+			row.Warnings = append(row.Warnings, WarnDiscordExitHang)
+		}
 	case errors.Is(err, ErrFileMissing):
 		row.Status = StatusMissing
 	default:

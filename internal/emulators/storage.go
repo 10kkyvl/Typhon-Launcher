@@ -19,6 +19,7 @@ const (
 
 	storageConfig = "config.yml"
 	storageKey    = "pref-path"
+	discordKey    = "discord-rich-presence"
 	// The emulator's marker of a portable install. Where such an install keeps
 	// its games is not established, so its storage counts as unknown.
 	portableMark = "portable"
@@ -88,12 +89,9 @@ func (p Platform) FindStorage(program string, home func() (StorageHome, error)) 
 		return Storage{}
 	}
 	where, homeErr := home()
-	configDir := dir
-	if homeErr == nil && where.ConfigDir != "" {
-		if !filepath.IsAbs(where.ConfigDir) {
-			return Storage{}
-		}
-		configDir = where.ConfigDir
+	configDir, ok := configFolder(program, where, homeErr)
+	if !ok {
+		return Storage{}
 	}
 	data, err := readStorageConfig(filepath.Join(configDir, storageConfig))
 	switch {
@@ -113,6 +111,39 @@ func (p Platform) FindStorage(program string, home func() (StorageHome, error)) 
 		return Storage{}
 	}
 	return Storage{Root: where.Root, Known: true}
+}
+
+// configFolder is where the config of the program lies: its home when the home
+// names one, the program's folder otherwise. A relative home is no answer.
+func configFolder(program string, where StorageHome, homeErr error) (string, bool) {
+	if homeErr != nil || where.ConfigDir == "" {
+		return filepath.Dir(program), true
+	}
+	if !filepath.IsAbs(where.ConfigDir) {
+		return "", false
+	}
+	return where.ConfigDir, true
+}
+
+// DiscordPresenceOn says whether the config turns on the emulator's Discord Rich
+// Presence. On macOS Vita3K then hangs on exit inside the Discord SDK while the
+// Discord app is open: the window closes, the process stays. Only an explicit
+// true counts; a config that cannot be read says nothing.
+func (p Platform) DiscordPresenceOn(program string, home func() (StorageHome, error)) bool {
+	if p.ID != Vita {
+		return false
+	}
+	where, homeErr := home()
+	dir, ok := configFolder(program, where, homeErr)
+	if !ok {
+		return false
+	}
+	data, err := readStorageConfig(filepath.Join(dir, storageConfig))
+	if err != nil {
+		return false
+	}
+	value, ok := configValue(data, discordKey)
+	return ok && value == "true"
 }
 
 func readStorageConfig(path string) (data []byte, err error) {
@@ -139,6 +170,20 @@ func readStorageConfig(path string) (data []byte, err error) {
 // parsing the rest. An empty result means the key is absent or empty; ok is false
 // for anything that cannot be read as an absolute path with certainty.
 func prefPath(data []byte) (string, bool) {
+	value, ok := configValue(data, storageKey)
+	if !ok {
+		return "", false
+	}
+	if value != "" && (!filepath.IsAbs(value) || strings.ContainsFunc(value, unicode.IsControl)) {
+		return "", false
+	}
+	return value, true
+}
+
+// configValue reads one top-level key of the YAML config as a scalar. An empty
+// value means the key is absent or empty; ok is false when the key repeats or
+// its value cannot be read with certainty.
+func configValue(data []byte, name string) (string, bool) {
 	text := strings.TrimPrefix(string(data), utf8BOM)
 	if !utf8.ValidString(text) {
 		return "", false
@@ -146,7 +191,7 @@ func prefPath(data []byte) (string, bool) {
 	value, found := "", false
 	for _, line := range strings.Split(text, "\n") {
 		key, rest, ok := strings.Cut(line, ":")
-		if !ok || key != storageKey {
+		if !ok || key != name {
 			continue
 		}
 		if found {
@@ -156,9 +201,6 @@ func prefPath(data []byte) (string, bool) {
 		if value, ok = yamlScalar(strings.TrimSpace(rest)); !ok {
 			return "", false
 		}
-	}
-	if value != "" && (!filepath.IsAbs(value) || strings.ContainsFunc(value, unicode.IsControl)) {
-		return "", false
 	}
 	return value, true
 }

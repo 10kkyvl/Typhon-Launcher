@@ -76,6 +76,7 @@ export const emulators: Record<EmulatorsKey, Message> = {
   'emul.installLead': 'A supported game image is placed in the Consoles folder of the games folder and added to the library. Install .pkg files in the emulator by hand.',
   'emul.installDone': 'The game image is added to the library.',
   'emul.installFolder': 'Open downloaded files',
+  'emul.discordExitHang': 'On macOS, Vita3K hangs on exit while its Discord Rich Presence is on and Discord is open: the window closes, but the game stays "running" and is copied again on every start. Turn off Discord Rich Presence in the Vita3K settings.',
   'emul.vitaFirstLaunch': 'On the first launch Vita3K copies the game to itself. This can take a few minutes, and the window appears once the copy is done.',
   'emul.emulatorMissing': 'No emulator is set for {console}. This does not block the download: set it in settings before the first launch.',
   'emul.gameNoteOwned': 'This game runs through an emulator: {console}. The image lies in a folder of the games folder.',

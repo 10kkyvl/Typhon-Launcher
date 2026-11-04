@@ -205,6 +205,9 @@
             <span class="row-label">{row.name} · {row.emulator}</span>
             <span class="row-sub path" title={row.path}>{row.path}</span>
             {#if reason}<span class="row-sub">{reason}</span>{/if}
+            {#if row.warnings.includes('discord_exit_hang')}
+              <span class="row-sub warning">{msg('emul.discordExitHang')}</span>
+            {/if}
           </div>
           <div class="controls">
             <StatusBadge kind={statusKind(row)} label={statusLabel(row)} />
@@ -312,6 +315,10 @@
     flex-wrap: wrap;
     justify-content: flex-end;
     gap: var(--space-2);
+  }
+
+  .warning {
+    color: var(--warning);
   }
 
   .failure {

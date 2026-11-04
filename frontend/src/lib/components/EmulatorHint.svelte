@@ -49,6 +49,9 @@
 {#if copies}
   <p class="hint">{msg('emul.vitaFirstLaunch')}</p>
 {/if}
+{#if row?.warnings.includes('discord_exit_hang')}
+  <p class="hint warning">{msg('emul.discordExitHang')}</p>
+{/if}
 
 <style>
   .hint {
@@ -56,5 +59,9 @@
     font-size: var(--font-xs);
     line-height: 1.5;
     color: var(--text-3);
+  }
+
+  .warning {
+    color: var(--warning);
   }
 </style>

@@ -26,6 +26,7 @@ func newTestService(t *testing.T, goos string) (*Service, *settings.Service) {
 		t.Fatal(err)
 	}
 	s.goos = goos
+	s.home = func() (StorageHome, error) { return StorageHome{}, errors.New("no home in tests") }
 	return s, store
 }
 
@@ -533,5 +534,42 @@ func TestImageConsolesFollowTheLayoutOnDisk(t *testing.T) {
 				t.Fatalf("ImageConsoles = %q, %v; want %q", got, err, c.want)
 			}
 		})
+	}
+}
+
+func TestStatusWarnsOfTheDiscordHangOnMac(t *testing.T) {
+	pref := t.TempDir()
+	program := touch(t, filepath.Join(t.TempDir(), "Vita3K.app", "Contents", "MacOS", "Vita3K"))
+	cases := []struct {
+		name, goos, config string
+		want               []string
+	}{
+		{"on", "darwin", "log-level: 0\ndiscord-rich-presence: true\n", []string{WarnDiscordExitHang}},
+		{"off", "darwin", "discord-rich-presence: false\n", []string{}},
+		{"not said", "darwin", "log-level: 0\n", []string{}},
+		{"said twice", "darwin", "discord-rich-presence: true\ndiscord-rich-presence: true\n", []string{}},
+		{"windows", "windows", "discord-rich-presence: true\n", []string{}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s, _ := newTestService(t, c.goos)
+			s.home = func() (StorageHome, error) { return StorageHome{ConfigDir: pref, Root: filepath.Join(pref, "fs")}, nil }
+			plant(t, filepath.Join(pref, storageConfig), []byte(c.config))
+			p, _ := Lookup(Vita)
+			got := s.statusOf(p, program)
+			if c.goos == "darwin" && got.Status != StatusReady {
+				t.Fatalf("status = %+v", got)
+			}
+			if !slices.Equal(got.Warnings, c.want) {
+				t.Fatalf("warnings = %q, want %q", got.Warnings, c.want)
+			}
+		})
+	}
+	s, _ := newTestService(t, "darwin")
+	s.home = func() (StorageHome, error) { return StorageHome{ConfigDir: pref}, nil }
+	plant(t, filepath.Join(pref, storageConfig), []byte("discord-rich-presence: true\n"))
+	ps3, _ := Lookup(PS3)
+	if got := s.statusOf(ps3, program); len(got.Warnings) != 0 {
+		t.Fatalf("another console warned: %q", got.Warnings)
 	}
 }
