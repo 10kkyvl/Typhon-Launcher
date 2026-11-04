@@ -112,6 +112,8 @@ Note (Go standard library and runtime): Not a module: the Go standard library an
 
 Note (github.com/RoaringBitmap/roaring): The main text is Apache-2.0; the same `LICENSE` file says part of runcontainer.go comes from the Go standard library under BSD-3-Clause and reproduces that text.
 
+Note (github.com/anacrolix/torrent): Typhon is built with a modified copy of this module in `third_party/anacrolix-torrent`: `peer-conn-msg-writer.go` carries two fixes backported from the project's main branch (commits aa71e8d2 and 70072f1a) that are not in a release yet. The modified files are listed in `third_party/anacrolix-torrent/TYPHON_PATCHES.md`, and their source code is available under the MPL-2.0.
+
 Note (github.com/go-llsqlite/adapter): Only in the macOS build. This version of the module has no license file. The file was added to the github.com/go-llsqlite/adapter repository by the commit “add license file: same as anacrolix/torrent” (MPL-2.0), so the verbatim license text of the github.com/anacrolix/torrent module is reproduced here.
 
 Note (github.com/go-llsqlite/crawshaw): Only in the macOS build. The module contains the SQLite source code, which its authors dedicated to the public domain; the license below covers the Go wrapper.

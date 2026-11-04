@@ -12,7 +12,9 @@
       "version": "v1.61.0",
       "license": "MPL-2.0",
       "source": "go",
-      "licenseFile": "LICENSE"
+      "licenseFile": "LICENSE",
+      "note": "Typhon собирается с изменённой копией этого модуля в `third_party/anacrolix-torrent`: в `peer-conn-msg-writer.go` перенесены два исправления из основной ветки проекта (коммиты aa71e8d2 и 70072f1a), которые ещё не вошли в релиз. Изменённые файлы перечислены в `third_party/anacrolix-torrent/TYPHON_PATCHES.md`, их исходный код распространяется на условиях MPL-2.0.",
+      "noteEn": "Typhon is built with a modified copy of this module in `third_party/anacrolix-torrent`: `peer-conn-msg-writer.go` carries two fixes backported from the project's main branch (commits aa71e8d2 and 70072f1a) that are not in a release yet. The modified files are listed in `third_party/anacrolix-torrent/TYPHON_PATCHES.md`, and their source code is available under the MPL-2.0."
     },
     {
       "name": "github.com/bodgit/sevenzip",

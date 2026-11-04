@@ -31,11 +31,12 @@ const (
 	minLimiterBurst = 256 * 1024
 	maxTorrentConns = 32
 
-	// peerWriterWake is what recovers a stalled connection. anacrolix v1.61.0
-	// tickles a peer's writer without the writer's mutex, so a wake that lands
-	// between filling the buffer and waiting is lost, and the writer sleeps until
-	// its keep-alive timer with a request or a chunk unsent: the transfer froze
-	// for exactly the default minute. On a LAN a frequent keep-alive costs nothing.
+	// peerWriterWake bounds how long a peer writer can sleep. Released anacrolix
+	// v1.61.0 lost a wake that landed between filling the buffer and waiting, so
+	// the writer slept until its keep-alive timer with a request or a chunk unsent
+	// and the transfer froze for exactly the default minute. The engine is now
+	// built from third_party/anacrolix-torrent with the upstream fix; the short
+	// interval stays as a safety net because on a LAN a keep-alive costs nothing.
 	peerWriterWake = 2 * time.Second
 )
 

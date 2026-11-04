@@ -112,6 +112,8 @@
 
 Примечание (github.com/RoaringBitmap/roaring): Основной текст — Apache-2.0; в том же файле `LICENSE` сказано, что часть runcontainer.go взята из стандартной библиотеки Go под BSD-3-Clause, и приведён её текст.
 
+Примечание (github.com/anacrolix/torrent): Typhon собирается с изменённой копией этого модуля в `third_party/anacrolix-torrent`: в `peer-conn-msg-writer.go` перенесены два исправления из основной ветки проекта (коммиты aa71e8d2 и 70072f1a), которые ещё не вошли в релиз. Изменённые файлы перечислены в `third_party/anacrolix-torrent/TYPHON_PATCHES.md`, их исходный код распространяется на условиях MPL-2.0.
+
 Примечание (github.com/go-llsqlite/adapter): Попадает только в сборку для macOS. В этой версии модуля нет файла лицензии. Файл добавлен в репозиторий github.com/go-llsqlite/adapter коммитом «add license file: same as anacrolix/torrent» (MPL-2.0), поэтому приведён дословный текст лицензии модуля github.com/anacrolix/torrent.
 
 Примечание (github.com/go-llsqlite/crawshaw): Попадает только в сборку для macOS. Модуль содержит исходный код SQLite, который его авторы передали в общественное достояние; лицензия ниже относится к обёртке на Go.
