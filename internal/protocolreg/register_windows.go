@@ -10,6 +10,14 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
+const (
+	classKey = `Software\Classes\typhon`
+
+	// Written by build/windows/nsis/project.nsi and by selfupdate.
+	installKey      = `Software\Typhon`
+	installDirValue = "InstallDir"
+)
+
 // Register points typhon:// at exe for the current user.
 func Register(exe string) error {
 	return apply(regStore{base: classKey}, exe)

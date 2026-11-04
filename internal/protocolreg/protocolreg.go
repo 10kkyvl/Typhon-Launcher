@@ -12,15 +12,7 @@ import (
 	"strings"
 )
 
-const (
-	classKey = `Software\Classes\typhon`
-
-	// Written by build/windows/nsis/project.nsi and by selfupdate.
-	installKey      = `Software\Typhon`
-	installDirValue = "InstallDir"
-
-	foldCase = runtime.GOOS == "windows"
-)
+const foldCase = runtime.GOOS == "windows"
 
 var (
 	ErrEmptyPath  = errors.New("путь лаунчера пустой")

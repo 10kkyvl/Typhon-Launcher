@@ -7,19 +7,11 @@ import (
 	"crypto/ed25519"
 	"errors"
 	"runtime"
-	"strings"
 	"testing"
 	"time"
 
 	"typhon/internal/uierr"
 )
-
-func kindArtifact(goos, arch string, kind Kind, name string) Artifact {
-	return Artifact{
-		OS: goos, Arch: arch, Kind: kind, Name: name,
-		URL: "https://cdn.example.com/" + name, Size: 1024, SHA256: strings.Repeat("0123456789abcdef", 4),
-	}
-}
 
 // A manifest may carry several kinds for one os/arch. The client has to take
 // the one this platform applies, not whichever the publisher listed first: a
