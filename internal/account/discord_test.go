@@ -9,13 +9,12 @@ import (
 	"time"
 )
 
-func discordErr(t *testing.T, err error, code string) *Error {
+func discordErr(t *testing.T, err error, code string) {
 	t.Helper()
 	var apiErr *Error
 	if !errors.As(err, &apiErr) || apiErr.Code != code {
 		t.Fatalf("error = %v, want code %q", err, code)
 	}
-	return apiErr
 }
 
 func TestCreateDiscordLinkCode(t *testing.T) {
@@ -109,7 +108,9 @@ func TestGetDiscordLinkParsesBothStates(t *testing.T) {
 
 func TestGetDiscordLinkRejectsGarbage(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte("<html>"))
+		if _, err := w.Write([]byte("<html>")); err != nil {
+			t.Error(err)
+		}
 	}))
 	defer srv.Close()
 	_, err := newTestClient(t, srv.URL, tokenOK("tok")).GetDiscordLink(context.Background())
