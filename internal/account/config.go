@@ -22,6 +22,9 @@ const siteBaseURL = "https://typhon-launcher.com"
 // itself is down (DNS, certificate), a page on our own domain would be down too.
 const StatusPageURL = "https://typhon.betteruptime.com"
 
+// DiscordInviteURL is the permanent invite to the Typhon community server.
+const DiscordInviteURL = "https://discord.gg/xDDFYy6Nj2"
+
 const (
 	forgotPasswordPath = "/account/forgot"
 	supportPath        = "/support"
