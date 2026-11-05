@@ -146,3 +146,54 @@ func TestResponseErrorPreservesCodeAndStatus(t *testing.T) {
 		}
 	}
 }
+
+// A "remote" event wakes Discord remote control instead of reaching the chat
+// UI, and so does every connect, which covers a command sent while the stream
+// was down.
+func TestRemoteEventsWakeRemoteControlOnly(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/me" {
+			if _, err := fmt.Fprint(w, `{"id":"a"}`); err != nil {
+				t.Errorf("write identity: %v", err)
+			}
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		if _, err := fmt.Fprint(w, "data: {\"kind\":\"remote\",\"peerId\":\"a\"}\n\ndata: {\"kind\":\"sync\"}\n\n"); err != nil {
+			t.Errorf("write chat stream: %v", err)
+		}
+		if err := http.NewResponseController(w).Flush(); err != nil {
+			t.Errorf("flush chat stream: %v", err)
+		}
+		<-r.Context().Done()
+	}))
+	defer server.Close()
+	s, err := NewService(server.URL, func() (string, error) { return "token", nil }, func() bool { return true })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := s.ServiceShutdown(); err != nil {
+			t.Errorf("shutdown chat service: %v", err)
+		}
+	}()
+	var wakes atomic.Int32
+	s.SetRemoteWake(func() { wakes.Add(1) })
+	events := make(chan Event, 32)
+	s.emit = func(e Event) { events <- e }
+	if err = s.Start(); err != nil {
+		t.Fatal(err)
+	}
+	awaitKind(t, events, "sync")
+	if n := wakes.Load(); n != 2 {
+		t.Fatalf("wakes = %d, want one for the connect and one for the event", n)
+	}
+	for len(events) > 0 {
+		if e := <-events; e.Kind == "remote" {
+			t.Fatal("a remote event reached the chat UI")
+		}
+	}
+}

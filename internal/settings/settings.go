@@ -144,37 +144,41 @@ const ErrCodeConsentSaveFailed = "settings.consent_save_failed"
 const ErrCodeLegalAcceptanceSaveFailed = "settings.legal_acceptance_save_failed"
 
 type Settings struct {
-	Theme                  string  `json:"theme"`
-	AccentColor            string  `json:"accentColor"`
-	TintLogo               bool    `json:"tintLogo"`
-	UIScale                float64 `json:"uiScale"`
-	Language               string  `json:"language"`
-	LibraryPath            string  `json:"libraryPath"`
-	DownloadsPath          string  `json:"downloadsPath"`
-	GamesPath              string  `json:"gamesPath"`
-	ScreenshotsPath        string  `json:"screenshotsPath"`
-	LaunchOnStartup        bool    `json:"launchOnStartup"`
-	MinimizeToTray         bool    `json:"minimizeToTray"`
-	DiscordRichPresence    bool    `json:"discordRichPresence"`
-	HardwareAcceleration   bool    `json:"hardwareAcceleration"`
-	AnimationsEnabled      bool    `json:"animationsEnabled"`
-	MaxActiveDownloads     int     `json:"maxActiveDownloads"`
-	DownloadRateLimit      int64   `json:"downloadRateLimit"`
-	UploadRateLimit        int64   `json:"uploadRateLimit"`
-	PlayDownloadMode       string  `json:"playDownloadMode"`
-	PlayDownloadRateLimit  int64   `json:"playDownloadRateLimit"`
-	PlayUploadRateLimit    int64   `json:"playUploadRateLimit"`
-	UploadWhileDownloading bool    `json:"uploadWhileDownloading"`
-	SeedAfterDownload      bool    `json:"seedAfterDownload"`
-	InstallCleanupPolicy   string  `json:"installCleanupPolicy"`
-	AutoInstall            bool    `json:"autoInstall"`
-	ElevateAhead           bool    `json:"elevateAhead"`
-	SourceRefreshInterval  string  `json:"sourceRefreshInterval"`
-	VerifyAfterInstall     bool    `json:"verifyAfterInstall"`
-	InstallSkipShortcuts   bool    `json:"installSkipShortcuts"`
-	InstallSkipExtras      bool    `json:"installSkipExtras"`
-	InstallVerifyRepack    bool    `json:"installVerifyRepack"`
-	DesktopShortcuts       bool    `json:"desktopShortcuts"`
+	Theme               string  `json:"theme"`
+	AccentColor         string  `json:"accentColor"`
+	TintLogo            bool    `json:"tintLogo"`
+	UIScale             float64 `json:"uiScale"`
+	Language            string  `json:"language"`
+	LibraryPath         string  `json:"libraryPath"`
+	DownloadsPath       string  `json:"downloadsPath"`
+	GamesPath           string  `json:"gamesPath"`
+	ScreenshotsPath     string  `json:"screenshotsPath"`
+	LaunchOnStartup     bool    `json:"launchOnStartup"`
+	MinimizeToTray      bool    `json:"minimizeToTray"`
+	DiscordRichPresence bool    `json:"discordRichPresence"`
+	// DiscordRemoteControl lets the linked Discord account check and steer
+	// this launcher's downloads through the Typhon bot. Off by default and
+	// kept per machine: it is not part of the portable settings.
+	DiscordRemoteControl   bool   `json:"discordRemoteControl"`
+	HardwareAcceleration   bool   `json:"hardwareAcceleration"`
+	AnimationsEnabled      bool   `json:"animationsEnabled"`
+	MaxActiveDownloads     int    `json:"maxActiveDownloads"`
+	DownloadRateLimit      int64  `json:"downloadRateLimit"`
+	UploadRateLimit        int64  `json:"uploadRateLimit"`
+	PlayDownloadMode       string `json:"playDownloadMode"`
+	PlayDownloadRateLimit  int64  `json:"playDownloadRateLimit"`
+	PlayUploadRateLimit    int64  `json:"playUploadRateLimit"`
+	UploadWhileDownloading bool   `json:"uploadWhileDownloading"`
+	SeedAfterDownload      bool   `json:"seedAfterDownload"`
+	InstallCleanupPolicy   string `json:"installCleanupPolicy"`
+	AutoInstall            bool   `json:"autoInstall"`
+	ElevateAhead           bool   `json:"elevateAhead"`
+	SourceRefreshInterval  string `json:"sourceRefreshInterval"`
+	VerifyAfterInstall     bool   `json:"verifyAfterInstall"`
+	InstallSkipShortcuts   bool   `json:"installSkipShortcuts"`
+	InstallSkipExtras      bool   `json:"installSkipExtras"`
+	InstallVerifyRepack    bool   `json:"installVerifyRepack"`
+	DesktopShortcuts       bool   `json:"desktopShortcuts"`
 
 	ExtraLibraryPaths []string `json:"extraLibraryPaths"`
 	LastInstallRoot   string   `json:"lastInstallRoot"`
@@ -276,6 +280,7 @@ func Defaults() Settings {
 		LaunchOnStartup:        false,
 		MinimizeToTray:         true,
 		DiscordRichPresence:    false,
+		DiscordRemoteControl:   false,
 		HardwareAcceleration:   true,
 		AnimationsEnabled:      true,
 		MaxActiveDownloads:     2,
