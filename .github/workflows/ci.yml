@@ -26,7 +26,7 @@ permissions:
   contents: read
 
 env:
-  WAILS_VERSION: v3.0.0-beta.17
+  WAILS_VERSION: v3.0.0
 
 jobs:
   test-windows:

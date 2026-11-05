@@ -92,7 +92,7 @@ jobs:
       - name: Set up Wails CLI
         uses: ./.github/actions/setup-wails
         with:
-          version: v3.0.0-beta.17
+          version: v3.0.0
 
       - name: Verify tag matches VERSION
         if: github.ref_type == 'tag'
@@ -175,7 +175,7 @@ jobs:
       - name: Set up Wails CLI
         uses: ./.github/actions/setup-wails
         with:
-          version: v3.0.0-beta.17
+          version: v3.0.0
 
       # The pinned official archive comes first: during the 1.1.0 release the
       # Chocolatey feed kept answering 503, and a tag run cannot pick up a
