@@ -8,7 +8,7 @@ This file lists the third-party components (libraries and modules) distributed w
 | --- | --- | --- |
 | @fontsource-variable/inter-tight | 5.3.0 | OFL-1.1 |
 | @lucide/svelte | 1.33.0 | ISC |
-| @wailsio/runtime | 3.0.0-beta.10 | MIT |
+| @wailsio/runtime | 3.0.0 | MIT |
 | Fluent Emoji (Microsoft) | - | MIT |
 | Go standard library and runtime | go1.26.10 | BSD-3-Clause |
 | Microsoft Edge WebView2 Runtime | - | Microsoft distribution terms (not a Go/npm module) |
@@ -86,7 +86,7 @@ This file lists the third-party components (libraries and modules) distributed w
 | github.com/stangelandcl/ppmd | v0.1.1 | MIT |
 | github.com/tidwall/btree | v1.8.1 | MIT |
 | github.com/ulikunitz/xz | v0.5.15 | BSD-3-Clause |
-| github.com/wailsapp/wails/v3 | v3.0.0-beta.17 | MIT |
+| github.com/wailsapp/wails/v3 | v3.0.0 | MIT |
 | github.com/wlynxg/anet | v0.0.5 | BSD-3-Clause |
 | go.etcd.io/bbolt | v1.3.6 | MIT |
 | go.opentelemetry.io/auto/sdk | v1.2.1 | Apache-2.0 |
@@ -292,7 +292,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### MIT — @wailsio/runtime 3.0.0-beta.10, github.com/wailsapp/wails/v3 v3.0.0-beta.17
+### MIT — @wailsio/runtime 3.0.0, github.com/wailsapp/wails/v3 v3.0.0
 
 ```
 MIT License
