@@ -39,7 +39,7 @@
     },
     {
       "name": "github.com/wailsapp/wails/v3",
-      "version": "v3.0.0-beta.17",
+      "version": "v3.0.0",
       "license": "MIT",
       "source": "go",
       "licenseFile": "LICENSE"
@@ -664,11 +664,11 @@
     },
     {
       "name": "@wailsio/runtime",
-      "version": "3.0.0-beta.10",
+      "version": "3.0.0",
       "license": "MIT",
       "source": "go",
       "licenseFile": "LICENSE",
-      "licenseFrom": "github.com/wailsapp/wails/v3@v3.0.0-beta.17",
+      "licenseFrom": "github.com/wailsapp/wails/v3@v3.0.0",
       "note": "Пакет не содержит собственного файла LICENSE. В его package.json указан репозиторий github.com/wailsapp/wails, каталог v3/internal/runtime/desktop/@wailsio/runtime — то есть он публикуется из того же репозитория, что и Go-модуль github.com/wailsapp/wails/v3. Приведён дословный текст лицензии этого модуля.",
       "noteEn": "The package contains no LICENSE file of its own. Its package.json points at the repository github.com/wailsapp/wails, directory v3/internal/runtime/desktop/@wailsio/runtime — that is, it is published from the same repository as the Go module github.com/wailsapp/wails/v3. The verbatim license text of that module is reproduced here."
     },
