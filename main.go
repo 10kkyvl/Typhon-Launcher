@@ -1068,6 +1068,26 @@ func main() {
 	if err := settingsService.AddApplier(overlayService.Apply); err != nil {
 		fatal("register overlay applier", err)
 	}
+	// Remote control has its own device id, like compat sharing: the
+	// telemetry installation id must not become linked to the account.
+	remoteDeviceID := ""
+	if remoteIdentity, err := clientid.LoadAt(filepath.Join(configDir, "remote-device.json")); err != nil {
+		slog.Error("load remote control device id", "error", err)
+	} else {
+		remoteDeviceID = remoteIdentity.InstallationID
+	}
+	stopRemoteControl, err := startRemoteControl(context.Background(), remoteControlDeps{
+		installationID: remoteDeviceID,
+		token:          accountService.SessionToken,
+		downloads:      downloadManager,
+		library:        libraryService,
+		settings:       settingsService,
+		messaging:      messagingService,
+	})
+	if err != nil {
+		fatal("start discord remote control", err)
+	}
+	wails.OnShutdown(stopRemoteControl)
 
 	// A locked-down registry or a refused tray icon must not keep the launcher
 	// from starting: the toggle in settings goes through SaveSettingsPatch, which

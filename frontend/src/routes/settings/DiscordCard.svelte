@@ -6,12 +6,14 @@
   import Card from '../../lib/components/Card.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import DiscordJoinButton from '../../lib/components/DiscordJoinButton.svelte';
+  import Toggle from '../../lib/components/Toggle.svelte';
   import type { ConfirmPrompt } from '../../lib/confirm/prompts';
   import { createDiscordFlow } from '../../lib/discord/flow';
   import { formatCountdown, formatLinkCode } from '../../lib/discord/format';
   import { msg } from '../../lib/i18n';
   import { accountMessage } from '../../lib/services/accountMessages';
   import { discordApi, type DiscordApi } from '../../lib/services/discord';
+  import { settings, updateSettingsReporting } from '../../lib/stores/settings';
   import { toast } from '../../lib/stores/toasts';
   import { handleSessionLost } from '../../lib/stores/user';
 
@@ -58,6 +60,14 @@
     if ($view.phase === 'unlinked') toast(msg('discord.unlinkedToast'), 'success');
   }
 
+  const remoteOn = $derived($settings?.discordRemoteControl ?? false);
+
+  // The launcher registers itself with the backend before the switch turns
+  // on; a failed registration leaves it off.
+  function setRemote(on: boolean) {
+    void updateSettingsReporting({ discordRemoteControl: on }, () => toast(msg('discord.remoteEnableFailed'), 'danger'));
+  }
+
   const steps = $derived([msg('discord.step1'), msg('discord.step2'), msg('discord.step3'), msg('discord.step4')]);
 </script>
 
@@ -83,6 +93,13 @@
           <Unlink size="1.5rem" strokeWidth={1.8} />
           {msg('discord.unlinkButton')}
         </Button>
+      </div>
+      <div class="row">
+        <div class="text">
+          <span class="label">{msg('discord.remoteLabel')}</span>
+          <span class="sub">{msg('discord.remoteSub')}</span>
+        </div>
+        <Toggle checked={remoteOn} label={msg('discord.remoteLabel')} onchange={setRemote} />
       </div>
     {:else if $view.phase === 'code'}
       <div class="code-block">

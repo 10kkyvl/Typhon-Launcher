@@ -33,4 +33,7 @@ export const discord = {
   'discord.communityLabel': 'Discord community',
   'discord.communitySub': 'News, help and chat with other Typhon players',
   'discord.openFailed': 'Could not open Discord',
+  'discord.remoteLabel': 'Allow control from Discord',
+  'discord.remoteSub': 'The Typhon bot can show the downloads on this computer and what is running, and pause, resume, start from the queue or cancel a download. It cannot launch games or delete files. Works while the launcher is open and you are signed in.',
+  'discord.remoteEnableFailed': 'Could not turn on control from Discord. Check your connection and try again.',
 } as const;

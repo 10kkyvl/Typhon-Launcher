@@ -171,6 +171,7 @@ func (s *Service) stream(r *session) error {
 		return errors.New("chat_invalid_stream")
 	}
 	s.publish(r, Event{Kind: "connection", Connected: true})
+	s.wakeRemote()
 	// A black-holed connection must reconnect even if the TCP socket stays open.
 	idle := time.AfterFunc(75*time.Second, func() { closeResponseBody(resp.Body) })
 	defer idle.Stop()
@@ -189,6 +190,10 @@ func (s *Service) stream(r *session) error {
 				switch event.Kind {
 				case "sync", "message", "updated", "read", "typing":
 					s.publish(r, event)
+				case "remote":
+					// Not for the chat UI: a Discord command waits for this
+					// account's launchers.
+					s.wakeRemote()
 				}
 				data.Reset()
 			}

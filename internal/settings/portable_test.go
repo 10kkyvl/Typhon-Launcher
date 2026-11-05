@@ -42,6 +42,7 @@ var localNames = []string{
 	"accentColor", "tintLogo",
 	"lanSharing",
 	"cloudSaves",
+	"discordRemoteControl",
 	"networkMode",
 	"networkInterface",
 	"proxyType",
