@@ -36,7 +36,19 @@ func (f *fakeDownloads) act(name, id string) error {
 	return nil
 }
 
-func (f *fakeDownloads) Pause(id string) error      { return f.act("pause", id) }
+func (f *fakeDownloads) Pause(id string) error {
+	if err := f.act("pause", id); err != nil {
+		return err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i := range f.items {
+		if f.items[i].ID == id {
+			f.items[i].Status = download.StatusPaused
+		}
+	}
+	return nil
+}
 func (f *fakeDownloads) Resume(id string) error     { return f.act("resume", id) }
 func (f *fakeDownloads) ForceStart(id string) error { return f.act("start", id) }
 func (f *fakeDownloads) Cancel(id string) error     { return f.act("cancel", id) }
@@ -223,5 +235,13 @@ func TestWakeDoesNothingWhenControlIsOff(t *testing.T) {
 	s.Wait()
 	if api.fetches.Load() != 0 {
 		t.Fatal("a launcher with control off asked for commands")
+	}
+}
+
+func TestActionReportsTheStateAfterIt(t *testing.T) {
+	a := newTestService(t, true, queue()).Run(account.RemoteCommand{Action: actionPause, Target: "a1"})
+	var got actionResult
+	if err := json.Unmarshal(a.Result, &got); err != nil || len(got.Affected) != 1 || got.Affected[0].Status != string(download.StatusPaused) {
+		t.Fatalf("affected %s: %v", a.Result, err)
 	}
 }

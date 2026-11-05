@@ -252,7 +252,7 @@ func (s *Service) apply(all []download.Download, target string, allowAll bool, e
 		}
 		chosen = []download.Download{d}
 	}
-	res := actionResult{Affected: []DownloadView{}}
+	var acted []download.Download
 	for _, d := range chosen {
 		if err := act(d.ID); err != nil {
 			s.d.Log.Warn("remote action failed", "component", "remote", "download", d.ID, "error", err)
@@ -260,6 +260,18 @@ func (s *Service) apply(all []download.Download, target string, allowAll bool, e
 				return failed(codeFailed)
 			}
 			continue
+		}
+		acted = append(acted, d)
+	}
+	// Report each download as it is after the action, not as it was before.
+	now := map[string]download.Download{}
+	for _, d := range s.d.Downloads.List() {
+		now[d.ID] = d
+	}
+	res := actionResult{Affected: []DownloadView{}}
+	for _, d := range acted {
+		if fresh, ok := now[d.ID]; ok {
+			d = fresh
 		}
 		res.Affected = append(res.Affected, view(d))
 	}
