@@ -20,6 +20,10 @@ import (
 
 const (
 	packageExt = ".vpk"
+	pbpExt     = ".pbp"
+	// A PBP header is the magic, a version and the offsets of eight parts.
+	pbpHeaderSize = 40
+	pbpMagic      = "\x00PBP"
 	// A param.sfo is a few kilobytes. The limit only stops a file that is not one.
 	maxSFOSize = 1 << 20
 	// Real files hold tens of entries with short keys. Both limits matter on their
@@ -58,6 +62,9 @@ type gameFile struct {
 type GameInfo struct {
 	TitleID  string
 	Category string
+	// Title is the name shown on the console; empty when the file has none
+	// that can be shown.
+	Title string
 }
 
 // ImageNames are the exact file names this console takes besides Extensions.
@@ -203,6 +210,88 @@ func (p Platform) ReadGameInfo(ctx context.Context, image string) (GameInfo, err
 	return info, nil
 }
 
+// ReadTitle gives the name a game carries in its param.sfo, for the user to
+// accept or change. Forms that keep no param.sfo the launcher can reach, such as
+// a disc image, have no name to offer and are not an error.
+func (p Platform) ReadTitle(ctx context.Context, image string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	var data []byte
+	var err error
+	switch ext := strings.ToLower(filepath.Ext(image)); {
+	case p.IsGameFile(image):
+		data, err = p.readProof(image)
+	case ext == packageExt && slices.Contains(p.Extensions, ext):
+		data, err = readPackageSFO(image)
+	case ext == pbpExt && slices.Contains(p.Extensions, ext):
+		data, err = readPBPSFO(image)
+	default:
+		return "", nil
+	}
+	if errors.Is(err, errNotPBP) {
+		// Homebrew often ships a bare ELF under the PBP name: it starts, but
+		// it carries no name.
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	info, err := parseSFO(data)
+	if err != nil {
+		return "", err
+	}
+	return info.Title, nil
+}
+
+// errNotPBP marks a file named like a PBP that is something else.
+var errNotPBP = fmt.Errorf("%w: нет заголовка PBP", ErrSFOMissing)
+
+// readPBPSFO takes the param.sfo out of a PSP EBOOT.PBP: the header lists the
+// offsets of its parts, and the param.sfo runs from the first to the second.
+func readPBPSFO(image string) (data []byte, err error) {
+	f, err := os.Open(image)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return nil, fmt.Errorf("%w: %s", ErrImageMissing, image)
+	case err != nil:
+		return nil, fmt.Errorf("%w: %w", ErrImageUnreadable, err)
+	}
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("%w: %w", ErrImageUnreadable, closeErr)
+		}
+	}()
+	header := make([]byte, pbpHeaderSize)
+	if _, err := io.ReadFull(f, header); err != nil {
+		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+			return nil, errNotPBP
+		}
+		return nil, fmt.Errorf("%w: %w", ErrImageUnreadable, err)
+	}
+	if string(header[:4]) != pbpMagic {
+		return nil, errNotPBP
+	}
+	start := int64(binary.LittleEndian.Uint32(header[8:]))
+	end := int64(binary.LittleEndian.Uint32(header[12:]))
+	if start < pbpHeaderSize || end < start {
+		return nil, fmt.Errorf("%w: смещения PBP", ErrSFOInvalid)
+	}
+	if end-start > maxSFOSize {
+		return nil, fmt.Errorf("%w: %d байт", ErrSFOInvalid, end-start)
+	}
+	data, err = readSFOBytes(io.NewSectionReader(f, start, end-start))
+	switch {
+	case errors.Is(err, ErrSFOInvalid):
+		return nil, err
+	case err != nil:
+		return nil, fmt.Errorf("%w: %w", ErrImageUnreadable, err)
+	case int64(len(data)) != end-start:
+		return nil, fmt.Errorf("%w: PBP обрезан", ErrSFOInvalid)
+	}
+	return data, nil
+}
+
 func (p Platform) readProof(image string) (data []byte, err error) {
 	proof, err := findFile(p.GameDir(image), p.game.proof)
 	if err != nil {
@@ -337,6 +426,12 @@ func parseSFO(data []byte) (GameInfo, error) {
 		if length > limit || values+offset+length > size {
 			return GameInfo{}, fmt.Errorf("%w: значение %s вне файла", ErrSFOInvalid, key)
 		}
+		if key == "TITLE" {
+			// A name is only a suggestion for the user: a value that is not
+			// text must not refuse a game the emulator would start.
+			info.Title = sfoTitle(format, data[values+offset:values+offset+length])
+			continue
+		}
 		if key != "TITLE_ID" && key != "CATEGORY" {
 			continue
 		}
@@ -363,6 +458,23 @@ func sfoKey(table []byte, offset uint64) (string, error) {
 		return "", fmt.Errorf("%w: ключ без конца", ErrSFOInvalid)
 	}
 	return string(rest[:end]), nil
+}
+
+// sfoTitle keeps a name readable: consoles break long titles over lines, and
+// those breaks become spaces.
+func sfoTitle(format uint16, value []byte) string {
+	if format != sfoUTF8 && format != sfoUTF8Raw {
+		return ""
+	}
+	if end := slices.Index(value, 0); end >= 0 {
+		value = value[:end]
+	}
+	if !utf8.Valid(value) {
+		return ""
+	}
+	return strings.Join(strings.FieldsFunc(string(value), func(r rune) bool {
+		return unicode.IsSpace(r) || unicode.IsControl(r)
+	}), " ")
 }
 
 func sfoText(format uint16, value []byte) (string, error) {

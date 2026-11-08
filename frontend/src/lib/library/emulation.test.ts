@@ -12,6 +12,7 @@ import {
   isEmulated,
   isInstalledImage,
   narrowByLayout,
+  suggestedTitle,
   needsEmulator,
   pageGame,
   platformBadge,
@@ -216,5 +217,23 @@ describe('pageGame', () => {
 
   it('a page opened by the library id of the card is not a catalog page', () => {
     expect(pageGame(image, [image], ['img']).viaCatalog).toBe(false);
+  });
+});
+
+describe('suggestedTitle', () => {
+  it('fills an empty field', () => {
+    expect(suggestedTitle('', '', 'Apollo Save Tool')).toBe('Apollo Save Tool');
+    expect(suggestedTitle('   ', '', 'Apollo Save Tool')).toBe('Apollo Save Tool');
+  });
+  it('replaces its own earlier suggestion when another file is picked', () => {
+    expect(suggestedTitle('VitaShell', 'VitaShell', 'TrigWars PSP')).toBe('TrigWars PSP');
+  });
+  it('never overwrites a name the user typed', () => {
+    expect(suggestedTitle('My name', 'VitaShell', 'TrigWars PSP')).toBeUndefined();
+    expect(suggestedTitle('My name', '', 'TrigWars PSP')).toBeUndefined();
+  });
+  it('keeps the field when the game has no name', () => {
+    expect(suggestedTitle('', '', '')).toBeUndefined();
+    expect(suggestedTitle('VitaShell', 'VitaShell', '  ')).toBeUndefined();
   });
 });

@@ -54,6 +54,13 @@ export async function imageConsoles(path: string): Promise<string[]> {
   return (await EmulatorsService.ImageConsoles(path)) ?? [];
 }
 
+// imageTitle suggests the name the game carries in its param.sfo; empty when it
+// has none.
+export async function imageTitle(path: string, platform: string): Promise<string> {
+  if (!inWails) return '';
+  return (await EmulatorsService.ImageTitle(path, platform)) ?? '';
+}
+
 export async function setEmulatorPath(platform: string, path: string): Promise<PlatformStatus> {
   if (!inWails) throw unavailable();
   return row((await EmulatorsService.SetPath(platform, path)) as PlatformStatus);

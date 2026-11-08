@@ -295,6 +295,20 @@ func (s *Service) ImageConsoles(ctx context.Context, image string) ([]string, er
 	return out, nil
 }
 
+// ImageTitle suggests a name for the add form from the game's own param.sfo.
+// An empty answer means there is nothing to suggest; the form then waits for the
+// user's name as before.
+func (s *Service) ImageTitle(ctx context.Context, image, platform string) (string, error) {
+	p, ok := Lookup(platform)
+	if !ok {
+		return "", fmt.Errorf("%w: %q", ErrUnknownPlatform, platform)
+	}
+	if !filepath.IsAbs(image) || strings.IndexFunc(image, unicode.IsControl) >= 0 {
+		return "", ErrPathInvalid
+	}
+	return p.ReadTitle(ctx, filepath.Clean(image))
+}
+
 // Resolve gives the program to start for a console.
 //
 //wails:ignore

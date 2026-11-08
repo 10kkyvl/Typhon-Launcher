@@ -12,9 +12,10 @@
     imageExtensions,
     imageNames,
     narrowByLayout,
+    suggestedTitle,
   } from '../library/emulation';
   import { libraryErrorText } from '../library/errors';
-  import { imageConsoles, listPlatforms, selectImageFile, type PlatformStatus } from '../services/emulators';
+  import { imageConsoles, imageTitle, listPlatforms, selectImageFile, type PlatformStatus } from '../services/emulators';
   import { addEmulatedGame, findEmulatedCover, type LibraryGame } from '../services/library';
   import { toast } from '../stores/toasts';
 
@@ -38,6 +39,10 @@
   // answer for a path that was typed over in the meantime.
   let fitting = $state<string[]>([]);
   let lookup = 0;
+  // suggested is the name last taken from the game itself: it may be replaced by
+  // the next one, a name the user typed never is.
+  let suggested = '';
+  let titleLookup = 0;
 
   const matching = $derived(narrowByLayout(consolesForImage(platforms, image), fitting));
   const ext = $derived(imageExtension(image));
@@ -55,6 +60,7 @@
       image = '';
       platform = '';
       title = '';
+      suggested = '';
       findCover = false;
       failure = '';
       fitting = [];
@@ -73,6 +79,23 @@
     return () => {
       stale = true;
     };
+  });
+
+  $effect(() => {
+    const path = image.trim();
+    const id = platform;
+    if (!open || !path || !id) return;
+    const mine = ++titleLookup;
+    imageTitle(path, id).then(
+      (name) => {
+        if (mine !== titleLookup) return;
+        const next = suggestedTitle(title, suggested, name);
+        if (next === undefined) return;
+        title = next;
+        suggested = next;
+      },
+      (err) => console.warn('image title', err),
+    );
   });
 
   async function browse() {

@@ -123,3 +123,12 @@ export function imageNames(consoles: readonly ConsoleInfo[]): string[] {
   }
   return [...seen.values()].sort();
 }
+
+// suggestedTitle decides whether a name read from the game replaces the title
+// field: only an empty field or the previous suggestion gives way, never a name
+// the user typed. Undefined means the field stays as it is.
+export function suggestedTitle(current: string, previous: string, found: string): string | undefined {
+  if (!found.trim()) return undefined;
+  if (current.trim() !== '' && current !== previous) return undefined;
+  return found;
+}
