@@ -12,9 +12,11 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"typhon/internal/app"
+	"typhon/internal/handoffgate"
 	"typhon/internal/settings"
 	"typhon/internal/uierr"
 	"typhon/internal/version"
@@ -94,6 +96,16 @@ type Service struct {
 	beta          BetaAccess
 	offerArtifact *Artifact
 	offerVersion  string
+
+	// Seamless update (see handoff_old.go and handoff_new.go).
+	handoffRunning    atomic.Bool
+	handoffWindow     *application.WebviewWindow
+	handoffBackground func() string
+	handoffSpec       *HandoffSpec // set only in a successor launcher
+	handoffFinished   bool
+	handoffOldGone    bool // the old process exited; the held-back cleanup may run
+	renderOnce        sync.Once
+	renderErr         error
 }
 
 func NewService() (*Service, error) {
@@ -229,10 +241,16 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	if err != nil {
 		return err
 	}
+	successor := s.successorPending()
 	if stale {
 		v = stored{CheckedAt: v.CheckedAt, SkippedVersion: v.SkippedVersion}
-		if serr := s.store.Save(v); serr != nil {
-			return fmt.Errorf("selfupdate: persist cleared state: %w", serr)
+		// A successor of a seamless update keeps the record on disk until the
+		// old launcher is gone: if the hand-off is rolled back, the old one
+		// still needs the downloaded update it offers again.
+		if !successor {
+			if serr := s.store.Save(v); serr != nil {
+				return fmt.Errorf("selfupdate: persist cleared state: %w", serr)
+			}
 		}
 	}
 
@@ -255,14 +273,16 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	}
 	s.mu.Unlock()
 
-	if err := s.cleanupCache(startupCtx, keepVersion); err != nil {
-		if ctxErr := startupCtx.Err(); ctxErr != nil {
-			return fmt.Errorf("selfupdate: clean cache: %w", ctxErr)
+	if !successor {
+		if err := s.cleanupCache(startupCtx, keepVersion); err != nil {
+			if ctxErr := startupCtx.Err(); ctxErr != nil {
+				return fmt.Errorf("selfupdate: clean cache: %w", ctxErr)
+			}
+			// The cache is disposable and the state it must not lose is already
+			// loaded: a scanner holding a file without FILE_SHARE_DELETE is no
+			// reason to refuse to start, and the next start sweeps again.
+			slog.Warn("selfupdate: clean cache", "error", err)
 		}
-		// The cache is disposable and the state it must not lose is already
-		// loaded: a scanner holding a file without FILE_SHARE_DELETE is no
-		// reason to refuse to start, and the next start sweeps again.
-		slog.Warn("selfupdate: clean cache", "error", err)
 	}
 
 	s.wg.Add(1)
@@ -381,6 +401,9 @@ func (s *Service) recoverPortable() error {
 // record for the version that is running now, which would offer to "go back"
 // to itself. None of it blocks the start: all of it is retried on the next one.
 func (s *Service) recoverRollback() {
+	if s.successorPending() {
+		return // the old launcher is still settling the snapshot; finishHandoff repeats this
+	}
 	if exe, err := currentExecutable(); err != nil {
 		slog.Warn("selfupdate: resolve executable for swap recovery", "error", err)
 	} else {
@@ -492,7 +515,7 @@ func (s *Service) cleanupCache(ctx context.Context, keepVersion string) error {
 			if d.Name() == workerDirName {
 				return fs.SkipDir
 			}
-			if d.Name() == previousDirName || d.Name() == stagingDirName {
+			if d.Name() == previousDirName || d.Name() == stagingDirName || d.Name() == handoffDirName {
 				return fs.SkipDir
 			}
 			if keepVersion != "" && d.Name() == keepVersion {
@@ -501,7 +524,7 @@ func (s *Service) cleanupCache(ctx context.Context, keepVersion string) error {
 			remove(relPath, root.RemoveAll)
 			return fs.SkipDir
 		case depth == 1:
-			if d.Name() == "state.json" || d.Name() == outcomeName || d.Name() == notesName || d.Name() == previousRecordName || d.Name() == stagingRecordName || d.Name() == snapshotFailedName || d.Name() == startupMarkerName {
+			if d.Name() == "state.json" || d.Name() == outcomeName || d.Name() == notesName || d.Name() == previousRecordName || d.Name() == stagingRecordName || d.Name() == snapshotFailedName || d.Name() == startupMarkerName || d.Name() == handoffJournalName {
 				return nil
 			}
 			remove(relPath, root.Remove)
@@ -532,6 +555,9 @@ func nextCheckDelay(failures int) time.Duration {
 
 func (s *Service) periodicCheck() {
 	defer s.wg.Done()
+	if !handoffgate.Wait(s.ctx) {
+		return
+	}
 	failures := 0
 	for {
 		if s.checkQuiet() {

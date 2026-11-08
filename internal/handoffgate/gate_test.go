@@ -56,3 +56,48 @@ func TestWaitStopsOnCancel(t *testing.T) {
 		t.Fatal("Wait() ignored the cancelled context")
 	}
 }
+
+func TestStartupRunsAtOnceWhenNotArmed(t *testing.T) {
+	reset(t)
+	ran := false
+	if err := Startup(t.Context(), "x", func() error { ran = true; return nil }); err != nil || !ran {
+		t.Fatalf("Startup() ran=%v err=%v, want it to run synchronously", ran, err)
+	}
+}
+
+func TestStartupWaitsForTheGateThenRuns(t *testing.T) {
+	reset(t)
+	Arm()
+	started := make(chan struct{})
+	if err := Startup(t.Context(), "x", func() error { close(started); return nil }); err != nil {
+		t.Fatalf("Startup() error = %v", err)
+	}
+	select {
+	case <-started:
+		t.Fatal("the startup ran while the gate was closed")
+	case <-time.After(50 * time.Millisecond):
+	}
+	Open()
+	if err := Settled(t.Context()); err != nil {
+		t.Fatalf("Settled() error = %v", err)
+	}
+	select {
+	case <-started:
+	default:
+		t.Fatal("the startup did not run after Open")
+	}
+}
+
+func TestStartupSkippedWhenTheContextEndsFirst(t *testing.T) {
+	reset(t)
+	Arm()
+	ctx, cancel := context.WithCancel(t.Context())
+	if err := Startup(ctx, "x", func() error { t.Error("ran after the context ended"); return nil }); err != nil {
+		t.Fatal(err)
+	}
+	cancel()
+	if err := Settled(t.Context()); err != nil {
+		t.Fatalf("Settled() error = %v", err)
+	}
+	Open()
+}

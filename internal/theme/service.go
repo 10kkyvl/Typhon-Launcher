@@ -582,3 +582,37 @@ func (s *Service) SelectExportPath(language string) (string, error) {
 	}
 	return path, nil
 }
+
+// Background is the page colour (#rrggbb) of the active theme: its own --bg,
+// or that of the base palette it builds on. A seamless update hands it to the
+// successor launcher so the window opens in the right colour before any
+// stylesheet loads. It is empty when no colour can be determined.
+//
+//wails:ignore
+func (s *Service) Background() string {
+	t, err := s.Active()
+	if err != nil {
+		return ""
+	}
+	if c := t.Tokens["--bg"]; isHexColour(c) {
+		return c
+	}
+	for _, p := range presets {
+		if p.Base == t.Base && isHexColour(p.Tokens["--bg"]) {
+			return p.Tokens["--bg"]
+		}
+	}
+	return ""
+}
+
+func isHexColour(c string) bool {
+	if len(c) != 7 || c[0] != '#' {
+		return false
+	}
+	for _, r := range c[1:] {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') && (r < 'A' || r > 'F') {
+			return false
+		}
+	}
+	return true
+}

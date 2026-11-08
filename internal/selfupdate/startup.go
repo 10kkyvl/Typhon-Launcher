@@ -95,6 +95,14 @@ func BeginStart(configDir, ver string) *StartGuard {
 	return g
 }
 
+// InertStartGuard is the guard of a successor launcher in a seamless update.
+// It neither counts the start nor takes the instance lock: the old launcher
+// still holds that lock, and a start the user watched succeed is not one the
+// guard should ever count against.
+func InertStartGuard(configDir, ver string) *StartGuard {
+	return &StartGuard{dir: configDir, version: ver, inert: true}
+}
+
 // instanceLockName is per config directory, so a portable copy beside an
 // installed launcher does not take the other's turn.
 func instanceLockName(configDir string) string {

@@ -11,13 +11,15 @@ package handoffgate
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 )
 
 var (
-	mu    sync.Mutex
-	armed bool
-	open  = make(chan struct{})
+	pending sync.WaitGroup
+	mu      sync.Mutex
+	armed   bool
+	open    = make(chan struct{})
 )
 
 // Arm closes the gate. Call it once, before the services start.
@@ -64,5 +66,48 @@ func Wait(ctx context.Context) bool {
 		return ctx.Err() == nil
 	case <-ctx.Done():
 		return false
+	}
+}
+
+// Startup runs a service's startup now in a normal launcher. In a successor it
+// returns at once and runs start when the gate opens, so the service reads and
+// writes its state only after the old launcher has gone. A failure there can
+// no longer stop the application from starting and is logged.
+func Startup(ctx context.Context, name string, start func() error) error {
+	mu.Lock()
+	if !armed {
+		mu.Unlock()
+		return start()
+	}
+	pending.Add(1)
+	ch := open
+	mu.Unlock()
+	go func() {
+		defer pending.Done()
+		select {
+		case <-ch:
+		case <-ctx.Done():
+			return
+		}
+		if err := start(); err != nil {
+			slog.Error("deferred service startup failed", "service", name, "error", err)
+		}
+	}()
+	return nil
+}
+
+// Settled waits until every startup held back by the gate has finished. Call
+// it after Open, before the interface is told the launcher is ready.
+func Settled(ctx context.Context) error {
+	done := make(chan struct{})
+	go func() {
+		pending.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
