@@ -30,6 +30,9 @@ type AddRequest struct {
 //
 //wails:ignore
 func (m *Manager) AddTask(ctx context.Context, req AddRequest) (Download, error) {
+	if err := m.checkOrigin(req.Origin); err != nil {
+		return Download{}, err
+	}
 	cl, _, err := m.engine()
 	if err != nil {
 		return Download{}, err

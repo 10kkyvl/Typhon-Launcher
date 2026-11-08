@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"strings"
 	"sync/atomic"
@@ -23,12 +24,14 @@ import (
 	"typhon/internal/clientid"
 	"typhon/internal/cloudsaves"
 	"typhon/internal/compat"
+	"typhon/internal/deeplink"
 	"typhon/internal/devmock"
 	"typhon/internal/diagnostics"
 	"typhon/internal/discord"
 	"typhon/internal/discovery"
 	"typhon/internal/diskusage"
 	"typhon/internal/download"
+	"typhon/internal/emulators"
 	"typhon/internal/extlib"
 	"typhon/internal/gamemode"
 	"typhon/internal/heartbeat"
@@ -47,6 +50,7 @@ import (
 	"typhon/internal/playlog"
 	"typhon/internal/presence"
 	"typhon/internal/profile"
+	"typhon/internal/protocolreg"
 	"typhon/internal/redact"
 	"typhon/internal/redist"
 	"typhon/internal/relocate"
@@ -102,6 +106,7 @@ func init() {
 	application.RegisterEvent[[]library.Game]("library:updated")
 	application.RegisterEvent[[]library.Collection](library.EventCollections)
 	application.RegisterEvent[navigateEvent](eventNavigate)
+	application.RegisterEvent[EmulatorNeeded](eventEmulatorsNeeded)
 	application.RegisterEvent[library.SessionEvent]("game:started")
 	application.RegisterEvent[library.SessionEvent]("game:stopped")
 	application.RegisterEvent[library.CrashEvent]("game:crash")
@@ -210,6 +215,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	steamHandedOver, steamRelaunchErr := systemSteamRelaunch(runtime.GOOS).handOver(os.Args)
+	if steamHandedOver {
+		return
+	}
+
 	launches := &secondLaunches{}
 	handedOff, handOffListener, handOffErr := handOffLaunch(context.Background(), os.Args, launches)
 	if handedOff {
@@ -231,6 +241,16 @@ func main() {
 	}
 	if handOffErr != nil {
 		slog.Warn("hand over the launch to the running instance", "component", "app", "operation", "forward_launch", "error", handOffErr)
+	}
+	if steamRelaunchErr != nil {
+		slog.Warn("hand the steam launch over", "component", "app", "operation", "steam_relaunch", "error", steamRelaunchErr)
+	}
+	// Before anything is started: every game and CrossOver command inherits
+	// this environment.
+	if dropped, err := platform.DropSteamLaunchEnv(); err != nil {
+		slog.Error("drop the steam launch environment", "component", "app", "operation", "steam_env", "error", err)
+	} else if len(dropped) > 0 {
+		slog.Info("started by steam: its game environment dropped", "component", "app", "vars", dropped)
 	}
 
 	// Without an explicit AppUserModelID a launcher started from a game shortcut inherits that
@@ -320,23 +340,8 @@ func main() {
 		}
 	}
 
-	// A shortcut with a broken argument must not keep the launcher from
-	// starting: the window opens as usual and the user can launch the game
-	// by hand, which is strictly better than refusing to start at all.
-	playReq, playRequested, err := playTarget(os.Args)
-	if err != nil {
-		slog.Error("parse play argument", "args", os.Args[1:], "error", err)
-		playRequested = false
-	}
-	openRoute, openRequested, err := openTarget(os.Args)
-	if err != nil {
-		slog.Error("parse open argument", "args", os.Args[1:], "error", err)
-		openRequested = false
-	}
 	navigation := &NavigationService{}
-	if openRequested && !playRequested {
-		navigation.setPending(openRoute)
-	}
+	playReq, playRequested := firstLaunch(os.Args, navigation)
 
 	configDir, err := settings.ConfigDir()
 	if err != nil {
@@ -390,6 +395,15 @@ func main() {
 	if err != nil {
 		fatal("start library service", err)
 	}
+	emulatorService, err := emulators.NewService(settingsService)
+	if err != nil {
+		fatal("start emulators service", err)
+	}
+	libraryService.SetEmulatorResolver(emulatorService.Resolve)
+	emulatorPrompts := newEmulatorPromptService(libraryService, func(needed EmulatorNeeded) {
+		emitEmulatorNeeded(application.Get(), needed)
+	})
+	outsidePlayer := promptingPlayer{player: libraryService, prompts: emulatorPrompts}
 	playlogService, err := playlog.NewService()
 	if err != nil {
 		fatal("start playlog service", err)
@@ -459,7 +473,14 @@ func main() {
 	if err != nil {
 		fatal("start metadata service", err)
 	}
+	deeplinkService, err := deeplink.NewService(catalogService, metadataService, appService.UILanguage)
+	if err != nil {
+		fatal("start link service", err)
+	}
 	libraryService.EnableSteam()
+	libraryService.SetCoverSearch(func(ctx context.Context, title, platform string) (string, error) {
+		return emulators.FindCover(ctx, metadataService.FindCover, title, platform)
+	})
 	libraryService.SetSaveHints(func(ctx context.Context, canonicalID string) (library.SaveHintSet, error) {
 		// A save search must not hang on the network: a slower answer falls back to heuristics with the reason shown.
 		ctx, cancel := context.WithTimeout(ctx, saveHintsTimeout)
@@ -504,7 +525,7 @@ func main() {
 	if err != nil {
 		fatal("start external libraries service", err)
 	}
-	searchService := search.NewService(libraryService, catalogService, sourcesService)
+	searchService := search.NewService(playableGames{libraryService}, catalogService, sourcesService)
 	saveBackupService, err := savebackup.NewService(settingsService, libraryService)
 	if err != nil {
 		fatal("start save backup service", err)
@@ -559,11 +580,11 @@ func main() {
 	if err != nil {
 		fatal("start relocate service", err)
 	}
-	redistService, err := redist.NewService(libraryService.Find)
+	redistService, err := redist.NewService(libraryService.FindNative)
 	if err != nil {
 		fatal("start redist service", err)
 	}
-	wrappersService, err := wrappers.NewService(configDir, libraryService)
+	wrappersService, err := wrappers.NewService(configDir, nativeGames{libraryService})
 	if err != nil {
 		fatal("start wrappers service", err)
 	}
@@ -848,6 +869,7 @@ func main() {
 	services := []application.Service{
 		application.NewService(appService),
 		application.NewService(navigation),
+		application.NewService(deeplinkService),
 		application.NewService(accountService),
 		application.NewService(accountSyncService),
 		application.NewService(socialService),
@@ -857,6 +879,8 @@ func main() {
 		application.NewService(supportService),
 		application.NewService(settingsService),
 		application.NewService(libraryService),
+		application.NewService(emulatorService),
+		application.NewService(emulatorPrompts),
 		application.NewService(profileService),
 		application.NewService(playlogService),
 		application.NewService(downloadManager),
@@ -959,6 +983,10 @@ func main() {
 	defer chatDesktop.Close()
 	overlayService.Attach(wails)
 	portable := settings.IsPortable()
+	owner := protocolOwner{production: productionBuild, portable: portable, qa: qaTitleSuffix != ""}
+	if err := registerProtocol(owner, os.Executable, protocolreg.InstallDir, protocolreg.Register); err != nil {
+		slog.Warn("register typhon protocol", "component", "app", "operation", "register_protocol", "error", err)
+	}
 	autostartManager := autostart.ForPlatform(wails.Autostart)
 	if portable {
 		autostartManager = autostart.Unsupported("автозапуск недоступен в портативном режиме")
@@ -973,7 +1001,7 @@ func main() {
 		language: appService.UILanguage,
 		open:     func() { trayController.Open() },
 		quit:     func() { trayController.Quit() },
-		play:     func(id string) { playFromTray(libraryService, id, func() { trayController.Open() }) },
+		play:     func(id string) { playFromTray(outsidePlayer, id, func() { trayController.Open() }) },
 		stop:     func(id string) { stopFromTray(libraryService, id, func() { trayController.Open() }) },
 	}
 	recent.setGames(recent.fetch())
@@ -1040,6 +1068,28 @@ func main() {
 	if err := settingsService.AddApplier(overlayService.Apply); err != nil {
 		fatal("register overlay applier", err)
 	}
+	// Remote control has its own device id, like compat sharing: the
+	// telemetry installation id must not become linked to the account.
+	remoteDeviceID := ""
+	if remoteIdentity, err := clientid.LoadAt(filepath.Join(configDir, "remote-device.json")); err != nil {
+		slog.Error("load remote control device id", "error", err)
+	} else {
+		remoteDeviceID = remoteIdentity.InstallationID
+	}
+	stopRemoteControl, err := startRemoteControl(context.Background(), remoteControlDeps{
+		installationID: remoteDeviceID,
+		token:          accountService.SessionToken,
+		downloads:      downloadManager,
+		manager:        downloadManager,
+		releases:       sourcesService,
+		library:        libraryService,
+		settings:       settingsService,
+		messaging:      messagingService,
+	})
+	if err != nil {
+		fatal("start discord remote control", err)
+	}
+	wails.OnShutdown(stopRemoteControl)
 
 	// A locked-down registry or a refused tray icon must not keep the launcher
 	// from starting: the toggle in settings goes through SaveSettingsPatch, which
@@ -1081,16 +1131,21 @@ func main() {
 		// PlayGame нужен контекст из ServiceStartup, а сервисы стартуют только
 		// внутри wails.Run: вызов до него ярлык с холодного старта отклонял.
 		wails.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
-			playFromShortcut(libraryService, playReq, func() { window.Show() })
+			playFromShortcut(outsidePlayer, playReq, func() { window.Show() })
 		})
 	}
 
 	// Launches that reached the running instance during start-up wait here: the
 	// tray controller exists and the services have their contexts only once the
 	// application is running.
+	if urlEventCarriesLink(runtime.GOOS) {
+		wails.Event.OnApplicationEvent(events.Common.ApplicationLaunchedWithUrl, func(event *application.ApplicationEvent) {
+			launches.Receive(launchFromURL(event.Context().URL()))
+		})
+	}
 	wails.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
 		launches.Ready(func(args []string) {
-			handleSecondLaunch(args, libraryService, trayController, navigation, func(route string) { emitNavigate(application.Get(), route) })
+			handleSecondLaunch(args, outsidePlayer, trayController, navigation, func(route string) { emitNavigate(application.Get(), route) })
 		})
 	})
 
@@ -1113,7 +1168,9 @@ type playRequest struct {
 
 func playFromShortcut(player gamePlayer, req playRequest, reveal func()) {
 	if err := player.PlayGameProfile(req.id, req.profile); err != nil {
-		slog.Error("play from shortcut", "id", req.id, "profile", req.profile, "error", err)
+		if !noteEmulatorNeeded(req.id, err) {
+			slog.Error("play from shortcut", "id", req.id, "profile", req.profile, "error", err)
+		}
 		reveal()
 	}
 }
@@ -1325,6 +1382,16 @@ func gameTitle(cat *catalog.Service, src *sources.Service, canonicalGameID, rele
 func heartbeatPolicy(s settings.Settings) heartbeat.Policy {
 	return heartbeat.Policy{Enabled: s.SessionHeartbeat, Identified: s.UsageStatsAllowedCurrent()}
 }
+
+// playableGames lets search find emulated games, which are not installations.
+type playableGames struct{ *library.Service }
+
+func (g playableGames) GetInstalledGames() []library.Game { return g.GetPlayableGames() }
+
+// nativeGames keeps wrappers out of the folder an image happens to lie in.
+type nativeGames struct{ *library.Service }
+
+func (g nativeGames) Find(id string) (library.Game, error) { return g.FindNative(id) }
 
 type runningGames struct{ *library.Service }
 

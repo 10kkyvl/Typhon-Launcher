@@ -108,6 +108,7 @@ export const games = {
   'games.similarCandidate': 'Кандидат: {title}',
   'games.similarLink': 'Привязать к этой игре',
   'games.similarLinked': 'Раздача привязана к игре.',
+  'games.similarPlatform': 'Образ для консоли {platform}',
   'games.detailNoReleases': 'Для этой игры пока нет раздач в подключённых источниках.',
   'games.catalogPlatform': 'Платформа',
   'games.catalogAllPlatforms': 'Все платформы',
@@ -203,6 +204,8 @@ export const games = {
 
   'games.primaryDownload': 'Скачать',
   'games.primaryInstall': 'Установить',
+  'games.primaryDownloadFor': 'Скачать для {platform}',
+  'games.primaryDownloadImage': 'Скачать образ',
   'games.primaryResolving': 'Проверяем загрузки…',
   'games.primaryUnavailable': 'Нет доступных загрузок',
   'games.primaryOtherVersions': 'Другие версии',

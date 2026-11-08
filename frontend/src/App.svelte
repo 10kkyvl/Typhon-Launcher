@@ -11,11 +11,16 @@
   import GameCrashModal from './lib/components/GameCrashModal.svelte';
   import RedistModal from './lib/components/RedistModal.svelte';
   import CloudConflictModal from './lib/components/CloudConflictModal.svelte';
+  import EmulatorNeededModal from './lib/components/EmulatorNeededModal.svelte';
+  import BiosNeededModal from './lib/components/BiosNeededModal.svelte';
+  import EmulatorBusyModal from './lib/components/EmulatorBusyModal.svelte';
   import LegalAcceptanceScreen from './lib/components/LegalAcceptanceScreen.svelte';
   import TelemetryConsentScreen from './lib/components/TelemetryConsentScreen.svelte';
   import UpdateOverlay from './lib/components/UpdateOverlay.svelte';
   import { initDegradedNotices } from './lib/stores/degraded';
   import { initGameModeNotices } from './lib/stores/gamemode';
+  import { initMissingImages } from './lib/stores/missingImages';
+  import { initEmulatorNeeded } from './lib/stores/emulatorNeeded';
   import { initDiscovery } from './lib/stores/discovery';
   import { initDownloads } from './lib/stores/downloads';
   import { initPlayThrottle } from './lib/stores/playThrottle';
@@ -24,7 +29,7 @@
   import { initHistory } from './lib/stores/history';
   import { initWatchlist } from './lib/stores/watchlist';
   import { initScreenshots } from './lib/stores/screenshots';
-  import { initLaunchNavigation } from './lib/stores/launchNavigation';
+  import { initLaunchNavigation, setLinksReady } from './lib/stores/launchNavigation';
   import { initInstalls } from './lib/stores/install';
   import { initLan } from './lib/stores/lan';
   import { initNetwork } from './lib/stores/network';
@@ -100,8 +105,17 @@
   initSaveBackups();
   initCollections();
   onDestroy(initCloudSaves());
+  onDestroy(initMissingImages());
+  onDestroy(initEmulatorNeeded());
   onDestroy(initProfileAccentSync());
   initLegalAcceptance();
+
+  const linksReady = $derived(
+    !$showLegalAcceptance &&
+      !$showTelemetryConsent &&
+      ($authState === 'authenticated' || $authState === 'guest' || $authState === 'offline'),
+  );
+  $effect(() => setLinksReady(linksReady));
 
   let lastGamesPath: string | undefined;
   settings.subscribe((value) => {
@@ -178,6 +192,10 @@
   {/if}
 {/key}
 {/if}
+
+<EmulatorNeededModal />
+<BiosNeededModal />
+<EmulatorBusyModal />
 
 <style>
   .boot {

@@ -151,6 +151,14 @@ func (s *Service) RemoveGame(gameID string, opts RemoveOptions) error {
 		if err := removableDir(game.InstallDir); err != nil {
 			return err
 		}
+		if err := s.checkHoldsOtherImage(game.InstallDir, game.ID); err != nil {
+			return err
+		}
+		if game.Emulation != nil {
+			if err := s.checkImageFolder(game); err != nil {
+				return err
+			}
+		}
 	}
 	if seedsFromGame && (deleteFiles || plan.method == RemovalInstaller) {
 		if err := s.downloads.StopSeeding(game.SourceDownloadID); err != nil {
@@ -174,8 +182,10 @@ func (s *Service) RemoveGame(gameID string, opts RemoveOptions) error {
 		// Окружение запуска живёт вместе с файлами: пережившее их бутыль —
 		// мусор, про который пользователь никогда не узнает. Но провал сноса
 		// не отменяет удаления игры, поэтому предупреждение, а не ошибка.
-		if err := s.releaseRuntime(game.InstallDir); err != nil {
-			slog.Warn("release game runtime", "id", gameID, "installDir", game.InstallDir, "error", err)
+		if game.Emulation == nil {
+			if err := s.releaseRuntime(game.InstallDir); err != nil {
+				slog.Warn("release game runtime", "id", gameID, "installDir", game.InstallDir, "error", err)
+			}
 		}
 	}
 
@@ -225,6 +235,15 @@ func (s *Service) removalPlan(gameID string) (removalPlan, error) {
 	game, err := s.library.Find(gameID)
 	if err != nil {
 		return removalPlan{}, err
+	}
+	// The folder of an image is the user's: nothing in it, a marker of another
+	// game included, may authorize deleting files or running an uninstaller. The
+	// exception is a folder the launcher made for the image itself.
+	if game.Emulation != nil {
+		if ownedImage(game) {
+			return removalPlan{game: game, method: RemovalFiles, owned: true, installType: game.InstallType}, nil
+		}
+		return removalPlan{game: game, method: RemovalRecord}, nil
 	}
 	plan := removalPlan{
 		game:        game,
@@ -299,7 +318,7 @@ func (s *Service) gameBusy(game library.Game) bool {
 		if item.Status == StatusWaitingForUser && game.SourceDownloadID != "" && item.DownloadID == game.SourceDownloadID {
 			continue
 		}
-		if item.GameID == game.ID || sharesPath(item.Destination, game.InstallDir) {
+		if item.GameID == game.ID || sharesFootprint(game, item.Destination) {
 			s.mu.Unlock()
 			return true
 		}

@@ -207,6 +207,7 @@ const KNOWN_CODES = new Set([
   'credential_store_error',
   'account_suspended',
   'email_undeliverable',
+  'discord_unavailable',
   'account_muted',
   'review_not_found',
   'review_too_short',

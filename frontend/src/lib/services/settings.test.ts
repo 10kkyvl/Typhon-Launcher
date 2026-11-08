@@ -146,6 +146,26 @@ describe('settings in the desktop app', () => {
     await expect(settings.saveSettingsPatch(patch)).rejects.toThrow('network_mode_invalid');
   });
 
+  it('never sends the emulator paths: only the emulators service writes them', async () => {
+    bindings.SaveSettingsPatch.mockResolvedValue({ theme: 'dark', emulatorPaths: { ps1: 'C:\e.exe' } });
+    const settings = await load(true);
+
+    const saved = await settings.saveSettingsPatch({ theme: 'dark', emulatorPaths: { ps1: 'C:\evil.exe' } });
+
+    expect(bindings.SaveSettingsPatch).toHaveBeenCalledWith({ theme: 'dark' });
+    expect(saved.emulatorPaths).toEqual({ ps1: 'C:\e.exe' });
+  });
+
+  it('does not store the emulator paths in the browser preview either', async () => {
+    const storage = memoryStorage();
+    vi.stubGlobal('localStorage', storage);
+    const settings = await load(false);
+
+    await settings.saveSettingsPatch({ theme: 'light', emulatorPaths: { ps2: 'C:\evil.exe' } });
+
+    expect((await settings.getSettings()).emulatorPaths).toEqual({});
+  });
+
   it('passes the library questions through to the backend', async () => {
     bindings.ProposeLibraryPath.mockResolvedValue('D:\\TyphonLibrary');
     bindings.SetupLibrary.mockResolvedValue({ libraryPath: 'D:\\TyphonLibrary' });

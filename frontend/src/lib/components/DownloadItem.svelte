@@ -12,6 +12,7 @@
   import Artwork from './Artwork.svelte';
   import Button from './Button.svelte';
   import ConfirmModal from './ConfirmModal.svelte';
+  import ConsoleTag from './ConsoleTag.svelte';
   import IconButton from './IconButton.svelte';
   import ProgressBar from './ProgressBar.svelte';
   import StatusBadge from './StatusBadge.svelte';
@@ -29,6 +30,7 @@
   const barColor = $derived(download.status === 'paused' ? 'var(--text-3)' : 'var(--accent)');
 
   const typeTag = $derived.by(() => {
+    if (download.origin.platform) return msg('state.installTypeImage');
     if (download.origin.purpose === 'update') return msg('ui.update');
     if (download.origin.purpose === 'repair') return msg('ui.repair');
     if (download.origin.gameId || download.origin.releaseId) return msg('ui.game');
@@ -78,6 +80,7 @@
       {#if typeTag || sourceTag || download.ignoreSchedule}
         <div class="tags">
           {#if typeTag}<StatusBadge kind="neutral" label={typeTag} dot={false} />{/if}
+          {#if download.origin.platform}<ConsoleTag platform={download.origin.platform} />{/if}
           {#if sourceTag}<StatusBadge kind="neutral" label={sourceTag} dot={false} />{/if}
           {#if download.ignoreSchedule}<StatusBadge kind="neutral" label={msg('transfers.outsideSchedule')} dot={false} />{/if}
         </div>

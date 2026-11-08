@@ -2,6 +2,7 @@ package lan
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/netip"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"typhon/internal/emulators"
 	"typhon/internal/library"
 	"typhon/internal/platform"
 	"typhon/internal/settings"
@@ -49,7 +51,32 @@ func newTestService(t *testing.T, lib *library.Service, settingsSvc *settings.Se
 	if err != nil {
 		t.Fatalf("new lan service: %v", err)
 	}
+	svc.newTransport, _ = loopbackPair(t)
 	return svc
+}
+
+func TestShareRefusesTheFolderOfAnImage(t *testing.T) {
+	lib, err := library.NewServiceAt(filepath.Join(t.TempDir(), "library.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := lib.ServiceShutdown(); err != nil {
+			t.Errorf("library shutdown: %v", err)
+		}
+	})
+	rom := filepath.Join(t.TempDir(), "game.iso")
+	if err := os.WriteFile(rom, []byte("image"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	game, err := lib.AddEmulatedGame(t.Context(), rom, emulators.PS2, "Game")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := newTestService(t, lib, nil)
+	if _, err := svc.Share(game.ID); !errors.Is(err, emulators.ErrUnsupported) {
+		t.Fatalf("Share = %v", err)
+	}
 }
 
 func TestShareCacheSkipsRehash(t *testing.T) {
@@ -162,37 +189,51 @@ func newTestSettings(t *testing.T, gamesRoot string) *settings.Service {
 	return svc
 }
 
-// loopbackPair binds two ephemeral UDP ports (closing them immediately) and
-// wires two loopback transport factories pointed at each other, so a test
-// can run two Services' announce protocol in one process without joining a
-// real multicast group.
+// memoryTransport carries announces over channels and, like UDP, drops what
+// nobody has room for. A probed UDP port can be taken by another test binary
+// between closing the probe and binding it.
+type memoryTransport struct {
+	in  <-chan []byte
+	out chan<- []byte
+}
+
+func (m memoryTransport) Send(ctx context.Context, payload []byte) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	select {
+	case m.out <- payload:
+	default:
+	}
+	return nil
+}
+
+func (m memoryTransport) Recv(ctx context.Context) ([]byte, netip.Addr, error) {
+	select {
+	case payload := <-m.in:
+		return payload, netip.AddrFrom4([4]byte{127, 0, 0, 1}), nil
+	case <-ctx.Done():
+		return nil, netip.Addr{}, ctx.Err()
+	}
+}
+
+func (m memoryTransport) Close() error { return nil }
+
+// loopbackPair wires two transport factories to each other, so a test can run
+// two Services' announce protocol in one process without a multicast group.
 func loopbackPair(t *testing.T) (aTransport, bTransport func() (transport, error)) {
 	t.Helper()
-	pick := func() netip.AddrPort {
-		conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1")})
-		if err != nil {
-			t.Fatalf("pick loopback port: %v", err)
-		}
-		udpAddr, ok := conn.LocalAddr().(*net.UDPAddr)
-		if !ok {
-			t.Fatalf("probe local addr is %T, want *net.UDPAddr", conn.LocalAddr())
-		}
-		if err := conn.Close(); err != nil {
-			t.Fatalf("close probe: %v", err)
-		}
-		return udpAddr.AddrPort()
-	}
-	addrA, addrB := pick(), pick()
+	toA, toB := make(chan []byte, 64), make(chan []byte, 64)
 	return func() (transport, error) {
-			return newLoopback([]netip.AddrPort{addrB}, addrA)
+			return memoryTransport{in: toA, out: toB}, nil
 		}, func() (transport, error) {
-			return newLoopback([]netip.AddrPort{addrA}, addrB)
+			return memoryTransport{in: toB, out: toA}, nil
 		}
 }
 
 // TestLoopbackEndToEnd is the acceptance test for the whole package: two
 // Services, two real torrent.Client instances talking over real (loopback)
-// sockets, announcing over a loopback UDP transport instead of multicast.
+// sockets, announcing over an in-memory transport instead of multicast.
 // One shares a small install, the other discovers it, downloads it and
 // registers it as a game with the right executable path.
 func TestLoopbackEndToEnd(t *testing.T) {

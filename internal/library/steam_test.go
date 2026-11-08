@@ -173,6 +173,8 @@ func steamService(t *testing.T) (*Service, *fakeSteam, Game) {
 	s.steam = fake
 	launcher := filepath.Join(t.TempDir(), "typhon.exe")
 	s.launcherPath = func() (string, error) { return launcher, nil }
+	// The Windows route; the Mac one is set by the tests that check it.
+	s.steamViaLauncher = false
 	game, err := s.AddGame(t.Context(), tempGameExe(t), "Half-Life 2")
 	if err != nil {
 		t.Fatalf("add game: %v", err)
@@ -607,10 +609,11 @@ func TestRelocateRefreshesExistingEntryOnly(t *testing.T) {
 	fake := newStateSteam()
 	fake.lockProbe = probeFor(s)
 	s.steam = fake
+	s.steamViaLauncher = false
 	moved, oldDir := addRelocateGame(t, s)
 	notInSteam, _ := addRelocateGame(t, s)
 
-	sc, err := steamTarget(moved, s.launcherPath)
+	sc, err := steamTarget(moved, steamRoute{launcherPath: s.launcherPath})
 	if err != nil {
 		t.Fatal(err)
 	}

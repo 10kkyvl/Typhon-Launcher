@@ -15,6 +15,16 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+// stubSaveCurrent keeps the worker from copying the test binary's state: the
+// tests of the worker's orchestration are not about the snapshot itself.
+func stubSaveCurrent(t *testing.T) {
+	t.Helper()
+	restoreSave, restoreCommit := saveCurrent, commitCurrent
+	saveCurrent = func(context.Context, string, string, string) error { return nil }
+	commitCurrent = func(string) error { return nil }
+	t.Cleanup(func() { saveCurrent, commitCurrent = restoreSave, restoreCommit })
+}
+
 func TestUpdateSpecRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "sub", "spec.json")

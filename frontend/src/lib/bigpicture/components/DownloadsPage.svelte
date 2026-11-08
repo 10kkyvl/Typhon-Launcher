@@ -466,6 +466,21 @@
       if (currentRequest()) await focusDialog();
       return;
     }
+    const queued = $downloadsById.get(downloadId);
+    if (queued?.origin?.platform) {
+      const platform = queued.origin.platform;
+      await perform(key, async () => {
+        const item = await startInstall(downloadId, {
+          platform,
+          title: queued.origin.title || queued.name,
+          cover: queued.origin.cover ?? '',
+        });
+        upsertInstallation(item);
+        if (currentRequest()) installId = item.id;
+      });
+      if (currentRequest()) await focusDialog();
+      return;
+    }
     await perform(key, async () => {
       let info: PlanInfo;
       try {

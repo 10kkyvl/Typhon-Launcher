@@ -107,12 +107,15 @@ var (
 
 type downloadSource interface {
 	Get(id string) (download.Download, error)
+	List() []download.Download
 	DeleteData(id string) error
 	StopSeeding(id string) error
+	MarkImageAttempted(id string) error
 }
 
 type registrar interface {
 	RegisterInstalled(ctx context.Context, g library.InstalledGame) (library.Game, error)
+	RegisterEmulated(ctx context.Context, g library.InstalledImage) (library.Game, error)
 	Find(id string) (library.Game, error)
 	GetGames() []library.Game
 	IsRunning(id string) bool
@@ -190,6 +193,7 @@ func NewService(settingsService *settings.Service, downloads *download.Manager, 
 	}
 	if downloads != nil {
 		s.downloads = downloads
+		downloads.SetOriginCheck(checkImageOrigin)
 	}
 	if lib != nil {
 		s.library = lib
@@ -411,6 +415,7 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		if err := s.releaseOrphanedWaiting(base, waitingDownloads); err != nil && !errors.Is(err, context.Canceled) {
 			slog.Error("release installs of downloads removed earlier", "error", err)
 		}
+		s.resumeImageInstalls(base)
 	}()
 
 	base, err := s.baseContext()
@@ -989,6 +994,10 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 	if err != nil {
 		return Installation{}, err
 	}
+	opts = withImageOrigin(opts, d.Origin)
+	if err := checkImageOptions(opts); err != nil {
+		return Installation{}, err
+	}
 
 	s.mu.Lock()
 	for _, item := range s.items {
@@ -1007,11 +1016,11 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 	if err != nil {
 		return Installation{}, err
 	}
-	plan, err := Inspect(base, source)
+	plan, err := inspectSource(base, source, opts.Platform)
 	if err != nil {
 		return Installation{}, err
 	}
-	if opts.Type != "" {
+	if opts.Type != "" && opts.Platform == "" {
 		plan.Type = opts.Type
 	}
 	manual := false
@@ -1037,17 +1046,21 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 	}
 
 	mode := ""
-	if plan.Type == TypePortable {
+	if takesSource(plan.Type, plan.ArchivePath) {
 		mode, err = resolveMode(opts.Mode, d, plan.ContentRoot)
 		if err != nil {
 			return Installation{}, err
 		}
 	}
 
+	name := strings.TrimSpace(opts.Title)
+	if name == "" {
+		name = s.nameFor(d)
+	}
 	item := &Installation{
 		ID:              newID(),
 		DownloadID:      d.ID,
-		Name:            s.nameFor(d),
+		Name:            name,
 		Type:            plan.Type,
 		Status:          StatusPending,
 		SourcePath:      plan.SourcePath,
@@ -1063,11 +1076,23 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 		Origin:          d.Origin,
 		Unattended:      opts.Unattended,
 		SkipRegister:    opts.SkipRegister,
+		Platform:        opts.Platform,
+		Cover:           opts.Cover,
 		StartedAt:       time.Now(),
 	}
 
+	requested := opts.Destination
+	if plan.Type == TypeImage {
+		if err := s.checkImageNew(*item); err != nil {
+			return Installation{}, err
+		}
+		requested, err = s.imageDestination(s.config(), opts.Destination, opts.Platform, name)
+		if err != nil {
+			return Installation{}, err
+		}
+	}
 	if ownDestination(plan.Type, plan.Silent) {
-		dest, err := cleanDestination(opts.Destination)
+		dest, err := cleanDestination(requested)
 		if err != nil {
 			return Installation{}, err
 		}
@@ -1090,7 +1115,7 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 			return Installation{}, err
 		}
 	}
-	if plan.Type == TypePortable {
+	if takesSource(plan.Type, plan.ArchivePath) {
 		item.Mode = mode
 	}
 
@@ -1134,6 +1159,15 @@ func (s *Service) Start(downloadID string, opts StartOptions) (Installation, err
 	})
 	emit(eventUpdated, snap)
 	return snap, nil
+}
+
+// inspectSource keeps the two ways of reading a download apart: a console means
+// the download is an image whatever it looks like.
+func inspectSource(ctx context.Context, source, console string) (Plan, error) {
+	if console != "" {
+		return InspectImage(ctx, source, console)
+	}
+	return Inspect(ctx, source)
 }
 
 func (s *Service) startBlockedLocked(item *Installation, downloadID string) error {
@@ -1345,6 +1379,8 @@ func (s *Service) retry(id string, forceInteractive bool) error {
 	destination := item.Destination
 	title := item.Name
 	storedMode := item.Mode
+	console := item.Platform
+	refused := snapshotOf(item)
 	s.mu.Unlock()
 
 	d, err := s.completedDownload(downloadID)
@@ -1355,13 +1391,23 @@ func (s *Service) retry(id string, forceInteractive bool) error {
 	if err != nil {
 		return err
 	}
-	plan, err := Inspect(base, source)
+	plan, err := inspectSource(base, source, console)
 	if err != nil {
 		return err
 	}
 	mode := storedMode
-	if kind == TypePortable {
+	switch {
+	case takesSource(kind, plan.ArchivePath):
 		mode, err = resolveMode(storedMode, d, plan.ContentRoot)
+		if err != nil {
+			return err
+		}
+	case kind == TypeImage:
+		mode = ""
+	}
+	placeImage := kind == TypeImage && destination == ""
+	if placeImage {
+		destination, err = s.placeRefusedImage(refused, plan, mode)
 		if err != nil {
 			return err
 		}
@@ -1412,6 +1458,12 @@ func (s *Service) retry(id string, forceInteractive bool) error {
 		s.mu.Unlock()
 		return errBusy
 	}
+	if placeImage {
+		if err := s.startBlockedLocked(&Installation{Destination: destination}, downloadID); err != nil {
+			s.mu.Unlock()
+			return err
+		}
+	}
 	if alive, _ := s.transientWorkerStatus(id); alive {
 		s.mu.Unlock()
 		return errInstallerStillRunning
@@ -1437,9 +1489,13 @@ func (s *Service) retry(id string, forceInteractive bool) error {
 		item.ContentRoot = plan.ContentRoot
 		item.ArchivePath = plan.ArchivePath
 		item.BytesTotal = progressTotal(item.Type, plan)
-		if item.Type == TypePortable {
+		if item.Type == TypePortable || item.Type == TypeImage {
 			item.Mode = mode
 		}
+	}
+	if placeImage {
+		item.Destination = destination
+		item.Owned = true
 	}
 	if external(item.Type) {
 		item.InstallerPath = installer
@@ -1585,6 +1641,10 @@ func (s *Service) HandleDownloadCompleted(d download.Download) {
 			s.DropBroker(d.ID)
 		}
 	}()
+	if d.Origin.Platform != "" {
+		s.installImageDownload(d)
+		return
+	}
 	if !autoInstallFor(d, s.config().AutoInstall) {
 		return
 	}
@@ -1840,7 +1900,11 @@ func (s *Service) fail(id string, cause error) {
 		}
 		snap := snapshotOf(item)
 		s.mu.Unlock()
-		slog.Error("install failed", "id", id, "name", snap.Name, "error", cause)
+		if expectedImageRefusal(cause) {
+			slog.Warn("install failed", "id", id, "name", snap.Name, "error", cause)
+		} else {
+			slog.Error("install failed", "id", id, "name", snap.Name, "error", cause)
+		}
 		emit(eventFailed, snap)
 		s.recordUsage(usagestats.Event{
 			Type:      usagestats.TypeInstallFailed,

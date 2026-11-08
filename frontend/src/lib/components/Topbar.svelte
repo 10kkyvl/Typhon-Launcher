@@ -23,6 +23,7 @@
   import { toggleWatch, watchedIds } from '../stores/watchlist';
   import { clickOutside } from '../utils/clickOutside';
   import { bytesSize } from '../utils/format';
+  import { searchShortcut } from '../utils/shortcut';
   import { msg } from '../i18n';
   import { enterBigPicture } from '../bigpicture/mode';
   import { themeLayout } from '../stores/layout';
@@ -178,7 +179,7 @@
       bind:value={search}
       bind:input={searchInput}
       placeholder={msg('search.placeholder')}
-      shortcut="Ctrl K"
+      shortcut={searchShortcut()}
       loading={results.loading}
       oninput={(value) => overlay.setQuery(value)}
       onfocus={() => overlay.focus()}

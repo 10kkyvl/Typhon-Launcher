@@ -48,6 +48,7 @@ export function installTypeLabels(type: InstallType): string {
     archive_rar: msg('state.installTypeArchiveRar'),
     exe_installer: msg('state.installTypeExeInstaller'),
     msi_installer: msg('state.installTypeMsiInstaller'),
+    console_image: msg('state.installTypeImage'),
     unknown: msg('state.installTypeUnknown'),
   };
   return labels[type];

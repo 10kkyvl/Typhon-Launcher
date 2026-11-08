@@ -135,7 +135,7 @@ func (s *Service) discardDestination(item Installation) error {
 // уберёт остаток.
 func (s *Service) discardBlocker(item Installation) error {
 	source := item.ContentRoot
-	if archived(item.Type) {
+	if archived(item.Type) || (item.Type == TypeImage && item.ArchivePath != "") {
 		source = item.ArchivePath
 	}
 	if source == "" {
@@ -151,7 +151,7 @@ func (s *Service) discardBlocker(item Installation) error {
 		return errNoLibrary
 	}
 	for _, game := range s.library.GetGames() {
-		if sharesPath(game.InstallDir, item.Destination) {
+		if sharesFootprint(game, item.Destination) {
 			return fmt.Errorf("%w: %s", errDiscardReferenced, game.Title)
 		}
 	}

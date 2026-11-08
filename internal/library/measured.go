@@ -25,7 +25,8 @@ func (s *Service) UpdateMeasuredSize(id, installDir string, size int64, unknown 
 		return false, errNotFound
 	}
 	previous := s.games[pos]
-	if previous.InstallDir != installDir {
+	// The folder of an image holds whatever else the user keeps there.
+	if previous.InstallDir != installDir || previous.Emulation != nil {
 		return false, nil
 	}
 	if previous.SizeBytes == size && previous.SizeUnknown == unknown {

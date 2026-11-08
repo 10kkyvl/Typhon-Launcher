@@ -1,15 +1,12 @@
 package main
 
 import (
-	"errors"
 	"log/slog"
 	"os"
-	"reflect"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"typhon/internal/dialogtext"
 	"typhon/internal/jumplist"
@@ -37,7 +34,9 @@ type trayStopper interface {
 
 func playFromTray(player trayPlayer, id string, reveal func()) {
 	if err := player.PlayGame(id); err != nil {
-		slog.Error("play from tray", "id", id, "error", err)
+		if !noteEmulatorNeeded(id, err) {
+			slog.Error("play from tray", "id", id, "error", err)
+		}
 		reveal()
 	}
 }
@@ -61,6 +60,9 @@ type recentMenu struct {
 	running    atomic.Bool
 	showing    atomic.Bool
 	systemTray atomic.Pointer[application.SystemTray]
+	// lastRightClick is the UnixNano time of the last right click that opened
+	// the menu.
+	lastRightClick atomic.Int64
 
 	mu      sync.Mutex
 	games   []tray.Game
@@ -114,9 +116,29 @@ func (m *recentMenu) swap(menu *application.Menu, set func(*application.Menu)) {
 }
 
 func (m *recentMenu) show(systemTray *application.SystemTray) {
+	if !m.rightClick(time.Now()) {
+		return
+	}
 	application.InvokeSync(func() {
-		m.present(func(menu *application.Menu) { setTrayMenu(systemTray, menu) }, systemTray.ShowMenu)
+		m.present(func(menu *application.Menu) { systemTray.SetMenu(menu) }, systemTray.ShowMenu)
 	})
+}
+
+// trayRightClickWindow folds the two notifications of one right click into
+// one menu. Since v3.0.0 Wails reports a right click on WM_RBUTTONUP and on
+// the WM_CONTEXTMENU that NOTIFYICON_VERSION_4 can send after it; opening the
+// menu for both would show it again right after a choice.
+const trayRightClickWindow = 400 * time.Millisecond
+
+func (m *recentMenu) rightClick(now time.Time) bool {
+	if m.showing.Load() {
+		return false
+	}
+	last := m.lastRightClick.Load()
+	if last != 0 && now.Sub(time.Unix(0, last)) < trayRightClickWindow {
+		return false
+	}
+	return m.lastRightClick.CompareAndSwap(last, now.UnixNano())
 }
 
 // The menu is never replaced after display returns: TrackPopupMenuEx returns
@@ -179,34 +201,11 @@ func newSystemTray(wails *application.App, menu *recentMenu) (tray.Tray, error) 
 	systemTray := wails.SystemTray.New()
 	systemTray.SetIcon(trayIcon)
 	systemTray.SetTooltip("Typhon")
-	menu.swap(menu.build(), func(built *application.Menu) { setTrayMenu(systemTray, built) })
+	menu.swap(menu.build(), func(built *application.Menu) { systemTray.SetMenu(built) })
 	systemTray.OnClick(menu.open)
 	systemTray.OnRightClick(func() { menu.show(systemTray) })
 	menu.systemTray.Store(systemTray)
 	return trayHandle{SystemTray: systemTray, menu: menu}, nil
-}
-
-var errTrayMenuField = errors.New("wails SystemTray has no menu field to keep")
-
-func setTrayMenu(systemTray *application.SystemTray, menu *application.Menu) {
-	systemTray.SetMenu(menu)
-	if err := keepTrayMenu(systemTray, menu); err != nil {
-		slog.Error("keep tray menu", "error", err)
-	}
-}
-
-// Wails v3 beta.17 stores the menu that SystemTray.OpenMenu checks only when
-// SetMenu runs before the tray starts. A tray turned on in the settings starts
-// at once, so its SetMenu reaches the native menu alone and every right click
-// found no menu and opened nothing.
-func keepTrayMenu(systemTray *application.SystemTray, menu *application.Menu) error {
-	field := reflect.ValueOf(systemTray).Elem().FieldByName("menu")
-	if !field.IsValid() || field.Type() != reflect.TypeOf(menu) {
-		return errTrayMenuField
-	}
-	//nolint:gosec // G103: the address is of a live field of the tray, written once with a value of its own type.
-	reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem().Set(reflect.ValueOf(menu))
-	return nil
 }
 
 func trayGames(recent []library.RecentGame) []tray.Game {

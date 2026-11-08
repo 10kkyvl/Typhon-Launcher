@@ -187,6 +187,9 @@ func withoutMatchExtras(raw string) string {
 // MatchNames preserves edition identity and offers an English title embedded
 // beside its Cyrillic translation. Arbitrary subtitles and sequel numbers stay.
 func MatchNames(raw string) []string {
+	// The fallbacks read the raw line too, not only Parse: the console token
+	// must leave before them, or it reaches the server in a shorter spelling.
+	raw, _ = extractConsole(raw)
 	return withSpellings(matchNamesMixed(raw))
 }
 

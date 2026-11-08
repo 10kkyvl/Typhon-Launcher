@@ -249,6 +249,11 @@ function onUnauthenticated(err: unknown) {
   }
 }
 
+/** Runs the signed-out path for a call that found the session gone. */
+export function handleSessionLost() {
+  onUnauthenticated(new AccountError('unauthenticated'));
+}
+
 export async function saveProfile(patch: ProfilePatch): Promise<boolean> {
   if (get(savingProfile)) return false;
   savingProfile.set(true);

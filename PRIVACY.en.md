@@ -1,6 +1,6 @@
 # Typhon Privacy Policy
 
-Revision of 25 October 2026.
+Revision of 2 November 2026.
 
 This document describes what data Typhon keeps on the user's device and what it sends outside. It describes the actual behavior of the current version of the app, not intentions.
 
@@ -64,6 +64,8 @@ Acceptance of the Terms of Use is stored as a record: the revision, the time of 
 
 **Tester mark.** The account carries a "tester" mark that gives access to beta versions of the app (section 2.4). The operator's administrator sets and clears it in the administration panel; each change is recorded in the operator's internal action journal (who changed it, for which account, when). For administrators the mark applies automatically. The user sees their own mark: it is returned with the profile data. The mark is used for nothing except issuing beta versions and is deleted together with the account.
 
+**Discord link.** If the user links a Discord account (in the app's settings), the Typhon account stores the Discord user identifier and Discord username, and the time of linking. Linking is done by entering a one-time code, valid for 10 minutes, in the Typhon bot on the Typhon Discord server. This data is kept until the user unlinks Discord or the account is deleted.
+
 The session token is stored on the device in the Windows credential store (Credential Manager), not in the settings file. In portable mode (section 1) the system store is not used: the session token and the proxy password, if one is set, are written to a `credentials.json` file in the data directory next to the executable, readable only by the file's owner; moving that directory to another drive moves the token with it.
 
 The same account works on the `typhon-launcher.com` website: there you can register, sign in, write to support, and confirm an address or change a password through a link from an email. A website session is the same kind of session record as an app session (token hash, creation time, expiry, issued length, revocation flag), but the token itself lives not in the Windows credential store but in a browser cookie (section 8.4). When registering on the website, the checkbox accepts the Terms of Use and confirms that the user has read the Privacy Policy: without it no account is created, and the accepted revision and time are recorded on the server. In the app, the accepted revision is recorded in the settings on the device and, if the user is signed in, sent to the server — on registration, when a new revision is accepted, and on sign-in and launch if the server does not yet hold a record of the accepted current revision; a failed send is retried until the record appears. Accounts created before these records existed get one at the next acceptance in the app.
@@ -82,6 +84,7 @@ Metadata is available without an account too: in guest mode these requests are m
 Points worth understanding:
 
 - **The game title is sent to the service.** When already-installed games are detected automatically, the title is derived from **the folder name on disk**. If the folder has an arbitrary name, that arbitrary name is what gets sent as the search query.
+- **Text from a link or the browser extension.** When the user presses the Typhon browser extension button or opens a `typhon://search` link, the app sends the metadata service the text from that link, up to 120 characters: usually the game title from the page the user opened. The page address and paths are not sent. A link on a third-party page may carry other text, and it is sent the same way. If there is no single exact match, the catalog search opens with that text, and it goes out as an ordinary search query. Storage is the same as for any search query: no more than 7 days in the reverse proxy log and the results cache from section 2.5. Without a button press or an opened link, the text is not sent automatically.
 - **Metadata requests made from an account carry its token.** This means the service is technically able to link an account with which game titles were requested. Requests made in guest mode carry no token.
 - **Game titles from source feeds are sent to the service too** — for the same cover and description matching. From a feed entry's name the app extracts the game title (without the packager's name, version or other tags) and the year, and sends only those. The server matches them against the catalog and stores nothing from that request.
 - The metadata service is **not** sent: source addresses, links from feeds, magnet links, infohashes, download contents, download history or installation paths.
@@ -116,7 +119,7 @@ A reverse proxy sits in front of the service and the website and keeps its own a
 
 The IP address is used as a temporary rate-limiting key for requests made without an account: it is held in the service's memory, is not written to the database and is not linked to an account. For requests made with an account, the account identifier serves as that key instead of the address. The same kind of short-lived IP key is used for session state (section 8.1), so that one address cannot count as a thousand running launchers; it lives in the in-memory store and disappears together with the state.
 
-Catalog search strings — what the user types into the game search — are kept by the server in a results cache for one day, lower-cased and not linked to an account, installation identifier or address: the cache exists so the same query is not sent to IGDB again. After a day the entry is deleted.
+Catalog search strings — what the user types into the game search, and text from `typhon://search` links (section 2.2) — are kept by the server in a results cache for one day, lower-cased and not linked to an account, installation identifier or address: the cache exists so the same query is not sent to IGDB again. After a day the entry is deleted.
 
 ### 2.6. Session state, anonymous usage statistics and anonymous diagnostics
 

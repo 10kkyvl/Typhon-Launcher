@@ -2,6 +2,7 @@ package jumplist
 
 import (
 	"errors"
+	"fmt"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -148,5 +149,22 @@ func TestConfigValidate(t *testing.T) {
 				t.Fatalf("validate = %v, want %v", err, tc.want)
 			}
 		})
+	}
+}
+
+// Reproduces the 1.3.1 report "update jump list: jumplist: AppendCategory:
+// hresult 0x80070005": with recent items turned off in Windows the whole
+// refresh failed, so the Library and Downloads tasks were lost as well.
+func TestAppendRecentSkipsARefusedCategory(t *testing.T) {
+	refused := fmt.Errorf("%w: jumplist: AppendCategory: hresult 0x80070005", errCategoryRefused)
+	if err := appendRecent(func() error { return refused }); err != nil {
+		t.Fatalf("a refused category failed the list: %v", err)
+	}
+	other := errors.New("jumplist: AppendCategory: hresult 0x80004005")
+	if err := appendRecent(func() error { return other }); !errors.Is(err, other) {
+		t.Fatalf("another failure = %v, want it returned", err)
+	}
+	if err := appendRecent(func() error { return nil }); err != nil {
+		t.Fatalf("success = %v", err)
 	}
 }

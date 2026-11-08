@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | @fontsource-variable/inter-tight | 5.3.0 | OFL-1.1 |
 | @lucide/svelte | 1.33.0 | ISC |
-| @wailsio/runtime | 3.0.0-beta.10 | MIT |
+| @wailsio/runtime | 3.0.0 | MIT |
 | Fluent Emoji (Microsoft) | - | MIT |
 | Go standard library and runtime | go1.26.10 | BSD-3-Clause |
 | Microsoft Edge WebView2 Runtime | - | Условия распространения Microsoft (не Go/npm-модуль) |
@@ -86,7 +86,7 @@
 | github.com/stangelandcl/ppmd | v0.1.1 | MIT |
 | github.com/tidwall/btree | v1.8.1 | MIT |
 | github.com/ulikunitz/xz | v0.5.15 | BSD-3-Clause |
-| github.com/wailsapp/wails/v3 | v3.0.0-beta.17 | MIT |
+| github.com/wailsapp/wails/v3 | v3.0.0 | MIT |
 | github.com/wlynxg/anet | v0.0.5 | BSD-3-Clause |
 | go.etcd.io/bbolt | v1.3.6 | MIT |
 | go.opentelemetry.io/auto/sdk | v1.2.1 | Apache-2.0 |
@@ -111,6 +111,8 @@
 Примечание (Go standard library and runtime): Не модуль: стандартная библиотека и рантайм Go компилируются в исполняемый файл Typhon. Текст — файл `LICENSE` из дистрибутива Go, хранится в `tools/notices/licenses/go-LICENSE`.
 
 Примечание (github.com/RoaringBitmap/roaring): Основной текст — Apache-2.0; в том же файле `LICENSE` сказано, что часть runcontainer.go взята из стандартной библиотеки Go под BSD-3-Clause, и приведён её текст.
+
+Примечание (github.com/anacrolix/torrent): Typhon собирается с изменённой копией этого модуля в `third_party/anacrolix-torrent`: в `peer-conn-msg-writer.go` перенесены два исправления из основной ветки проекта (коммиты aa71e8d2 и 70072f1a), которые ещё не вошли в релиз. Изменённые файлы перечислены в `third_party/anacrolix-torrent/TYPHON_PATCHES.md`, их исходный код распространяется на условиях MPL-2.0.
 
 Примечание (github.com/go-llsqlite/adapter): Попадает только в сборку для macOS. В этой версии модуля нет файла лицензии. Файл добавлен в репозиторий github.com/go-llsqlite/adapter коммитом «add license file: same as anacrolix/torrent» (MPL-2.0), поэтому приведён дословный текст лицензии модуля github.com/anacrolix/torrent.
 
@@ -290,7 +292,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### MIT — @wailsio/runtime 3.0.0-beta.10, github.com/wailsapp/wails/v3 v3.0.0-beta.17
+### MIT — @wailsio/runtime 3.0.0, github.com/wailsapp/wails/v3 v3.0.0
 
 ```
 MIT License

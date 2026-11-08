@@ -35,6 +35,8 @@ type Candidate struct {
 	ThumbURL    string  `json:"-"`
 	Thumb       string  `json:"thumb,omitempty"`
 	Confidence  float64 `json:"confidence"`
+	GameType    string  `json:"gameType,omitempty"`
+	ParentID    string  `json:"parentId,omitempty"`
 }
 
 type GameMetadata struct {

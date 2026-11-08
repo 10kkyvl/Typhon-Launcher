@@ -38,6 +38,8 @@ export const REASONS: Record<string, MessageKey> = {
   'lan.exe_outside_install': 'errSources.lanExeOutsideInstall',
   'lan.executable_missing': 'errSources.lanExecutableMissing',
   'lan.register_game_failed': 'errSources.lanRegisterGameFailed',
+  'lan.finish_files_failed': 'errSources.lanFinishFilesFailed',
+  'lan.already_have': 'errSources.lanAlreadyHave',
   'lan.games_path_unavailable': 'errSources.lanGamesPathUnavailable',
   'lan.offer_not_found': 'errSources.lanOfferNotFound',
   'lan.unknown_transfer': 'errSources.lanUnknownTransfer',
@@ -47,6 +49,12 @@ export const REASONS: Record<string, MessageKey> = {
   'lan.share_root_not_dir': 'errSources.lanShareRootNotDir',
   'lan.share_symlink': 'errSources.lanShareSymlink',
   'lan.share_irregular_file': 'errSources.lanShareIrregularFile',
+
+  'link.unavailable': 'errSources.linkUnavailable',
+  'link.outdated': 'errSources.linkOutdated',
+  'link.bad_request': 'errSources.linkBadRequest',
+  'link.bad_response': 'errSources.linkBadResponse',
+  'link.too_many': 'errSources.linkTooMany',
 };
 
 export function sourceErrorText(err: unknown, fallback: string = msg('errSources.fallback')): string {

@@ -101,6 +101,9 @@ func (s *Service) ApplyDiscovered(d Discovered) (Game, Outcome, error) {
 func (s *Service) matchDiscoveredLocked(gameID, key, executable, canonicalGameID string) (int, error) {
 	byPath, byID, byExecutable, byCanonical := -1, -1, -1, -1
 	for i := range s.games {
+		if s.games[i].Emulation != nil {
+			continue
+		}
 		if s.games[i].InstallDir != "" && byPath < 0 {
 			existing, err := platform.PathKey(s.games[i].InstallDir)
 			if err != nil {
@@ -230,6 +233,9 @@ func (s *Service) mergeDiscoveredLocked(pos int, d Discovered, installDir, execu
 
 func (s *Service) SetExecutable(id, executable string) (Game, error) {
 	executable = strings.TrimSpace(executable)
+	if platformID, ok := s.emulatedPlatform(id); ok {
+		return s.rebindImage(id, executable, platformID)
+	}
 	info, err := os.Stat(executable)
 	if err != nil {
 		return Game{}, fmt.Errorf("%w: %w", errNoExecutable, err)

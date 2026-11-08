@@ -547,3 +547,31 @@ func TestConsoleOnlyGameRanksBelowPCGameOfSameMatchClass(t *testing.T) {
 		})
 	}
 }
+
+func TestEditionDoesNotReplaceItsBaseGame(t *testing.T) {
+	base := catalog.Game{ID: "base", Title: "Crisis Core", Platforms: []string{"PlayStation Portable"}}
+	edition := catalog.Game{ID: "edition", Title: "Crisis Core Collector's Edition", ParentID: "base", AliasIDs: []string{"base"}, Platforms: []string{"PlayStation Portable"}}
+	lone := catalog.Game{ID: "lone", Title: "Crisis Core Deluxe", ParentID: "absent", AliasIDs: []string{"absent"}, Platforms: []string{"PlayStation Portable"}}
+	localParent := edition
+	localParent.ParentID = "server-base"
+	for name, games := range map[string][]catalog.Game{
+		"base first":                {base, edition, lone},
+		"edition first":             {edition, lone, base},
+		"parent known by server id": {base, localParent, lone},
+	} {
+		t.Run(name, func(t *testing.T) {
+			s := NewService(fakeLibrary{}, fakeCatalog{games: games}, nil)
+			got, err := s.Search(context.Background(), "crisis core")
+			if err != nil {
+				t.Fatal(err)
+			}
+			ids := map[string]bool{}
+			for _, hit := range got.Games {
+				ids[hit.CanonicalGameID] = true
+			}
+			if len(got.Games) != 3 || !ids["base"] || !ids["edition"] || !ids["lone"] {
+				t.Fatalf("games = %+v", got.Games)
+			}
+		})
+	}
+}

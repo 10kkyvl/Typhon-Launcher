@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"typhon/internal/crashlog"
+	"typhon/internal/emulators"
 	"typhon/internal/procs"
 	"typhon/internal/redact"
 	"typhon/internal/uierr"
@@ -25,9 +26,16 @@ type SessionEvent struct {
 	ExitKnown       bool   `json:"exitKnown"`
 	Crashed         bool   `json:"crashed"`
 	ReasonCode      string `json:"reasonCode"`
+	// EmulatorQuickExit says an emulator closed by itself right after launch,
+	// which usually means a missing BIOS. Emulator names it for the message.
+	EmulatorQuickExit bool   `json:"emulatorQuickExit"`
+	Emulator          string `json:"emulator"`
 }
 
-const crashSessionSeconds = 20
+const (
+	crashSessionSeconds      = 20
+	emulatorQuickExitSeconds = 5
+)
 
 var emitStopped = func(ev SessionEvent) { emit("game:stopped", ev) }
 
@@ -170,6 +178,9 @@ func (h crashHooks) findDump(ctx context.Context, in crashInput, exe, gameDir st
 type exitInfo struct {
 	code  int
 	known bool
+	// ended is when the process really exited. With the detector on, the session
+	// closes on a later tick, so the session's own end says nothing about this.
+	ended time.Time
 }
 
 var crashReasonCodes = map[uint32]string{
@@ -191,7 +202,7 @@ func exitFields(ev SessionEvent, exit *exitInfo, stoppedByUser bool, seconds int
 	}
 	ev.ExitCode = exit.code
 	ev.ExitKnown = true
-	if exit.code != 0 && !stoppedByUser && seconds < crashSessionSeconds {
+	if exit.code != 0 && !stoppedByUser && !ev.EmulatorQuickExit && seconds < crashSessionSeconds {
 		ev.Crashed = true
 		ev.ReasonCode = crashReasonCode(exit.code)
 	}
@@ -270,6 +281,7 @@ func (s *Service) play(id, profileID string, explicit bool) error {
 		shared:     game.UsesSharedBottle(),
 		elevated:   chosen.admin,
 	}
+	resolveEmulator, emulatorHome, biosEnv, copies, installPackage := s.emulator, s.emulatorHome, s.biosEnv, s.emulatorCopies, s.installPackage
 	ctx := s.ctx
 	// Constructors are also used without startup by synchronous callers.
 	// A missing context must not start platform work.
@@ -291,6 +303,12 @@ func (s *Service) play(id, profileID string, explicit bool) error {
 		}
 	}()
 	s.mu.Unlock()
+	if game.Emulation != nil {
+		if err := emulatedLaunch(ctx, emulatorEnv{resolveEmulator, emulatorHome, biosEnv, copies, installPackage}, *game, chosen, &req); err != nil {
+			s.mu.Lock()
+			return err
+		}
+	}
 	err = s.prepare(ctx, req)
 	s.mu.Lock()
 	if err != nil {
@@ -360,9 +378,10 @@ func (s *Service) play(id, profileID string, explicit bool) error {
 	//nolint:gosec // G115: PID из os/exec укладывается в uint32 на Windows
 	pid := uint32(proc.pid())
 	startedAt := s.now()
-	s.running[id] = &session{process: proc, pid: pid, exePath: game.Executable, gamePID: pid, startedAt: startedAt, lastSeen: startedAt}
+	program := req.executable
+	s.running[id] = &session{process: proc, pid: pid, exePath: program, gamePID: pid, startedAt: startedAt, lastSeen: startedAt, emulator: req.emulator}
 	slog.Info("game started", "id", id, "title", game.Title, "pid", proc.pid(),
-		"executable", game.Executable, "workDir", workDir)
+		"executable", program, "workDir", req.workDir)
 	for _, w := range s.watchers {
 		w.SessionStarted(*game)
 	}
@@ -375,15 +394,14 @@ func (s *Service) play(id, profileID string, explicit bool) error {
 	})
 	emit("game:started", SessionEvent{GameID: id})
 
-	executable := game.Executable
 	s.sessionWG.Add(1)
 	go func() {
 		defer s.sessionWG.Done()
 		defer cancel()
 		waitErr := proc.wait()
-		logExit(id, executable, s.now().Sub(startedAt), waitErr)
+		logExit(id, program, s.now().Sub(startedAt), waitErr)
 		code, known := exitCode(waitErr)
-		info := &exitInfo{code: code, known: known}
+		info := &exitInfo{code: code, known: known, ended: s.now()}
 		// Детект по ОС переживает лаунчер и сам решает, когда сессия
 		// закончилась (см. detectTick); закрывать её здесь при активном
 		// детекте — значит закрывать по смерти лаунчер-обёртки, а не игры.
@@ -544,11 +562,13 @@ func (s *Service) finishSession(ctx context.Context, id string, startedAt time.T
 	var exit *exitInfo
 	exePath := ""
 	var gamePID uint32
+	var run emulatorRun
 	if current, ok := s.running[id]; ok {
 		stoppedByUser = current.stoppedByUser
 		exit = current.exit
 		exePath = current.exePath
 		gamePID = current.gamePID
+		run = current.emulator
 	}
 	delete(s.running, id)
 	for _, w := range s.watchers {
@@ -556,7 +576,19 @@ func (s *Service) finishSession(ctx context.Context, id string, startedAt time.T
 	}
 	endedAt := s.now()
 	seconds := int64(endedAt.Sub(startedAt).Seconds())
-	if s.onOutcome != nil {
+	game := s.findLocked(id)
+	emulated := s.emulatedLocked(id)
+	stopped := SessionEvent{GameID: id, SessionSeconds: seconds}
+	exitedAt := endedAt
+	if exit != nil && !exit.ended.IsZero() {
+		exitedAt = exit.ended
+	}
+	quick := int64(exitedAt.Sub(startedAt).Seconds()) < emulatorQuickExitSeconds
+	if emulated && !stoppedByUser && quick {
+		stopped.EmulatorQuickExit = true
+		stopped.Emulator = emulatorName(game.Emulation.Platform)
+	}
+	if s.onOutcome != nil && !emulated {
 		note := s.onOutcome
 		played := endedAt.Sub(startedAt)
 		s.wg.Add(1)
@@ -581,7 +613,6 @@ func (s *Service) finishSession(ctx context.Context, id string, startedAt time.T
 			record(id, startedAt, endedAt)
 		}()
 	}
-	game := s.findLocked(id)
 	usageGameID := ""
 	if game != nil {
 		usageGameID = game.CanonicalGameID
@@ -602,10 +633,12 @@ func (s *Service) finishSession(ctx context.Context, id string, startedAt time.T
 			}
 		}
 	}
-	if hooks := s.crash; !stoppedByUser && ctx != nil && hooks.await != nil {
+	if hooks := s.crash; !stoppedByUser && !stopped.EmulatorQuickExit && ctx != nil && hooks.await != nil {
 		in := crashInput{gameID: id, exePath: exePath, pid: gamePID, exit: exit, seconds: seconds, startedAt: startedAt, endedAt: endedAt}
 		if game != nil {
-			in.installDir = game.InstallDir
+			if game.Emulation == nil {
+				in.installDir = game.InstallDir
+			}
 			if in.exePath == "" {
 				in.exePath = game.Executable
 			}
@@ -619,30 +652,63 @@ func (s *Service) finishSession(ctx context.Context, id string, startedAt time.T
 		}()
 	}
 	if game == nil {
-		emitStopped(exitFields(SessionEvent{GameID: id, SessionSeconds: seconds}, exit, stoppedByUser, seconds))
+		emitStopped(exitFields(stopped, exit, stoppedByUser, seconds))
 		return
 	}
 	previousLastPlayed := game.LastPlayed
 	previousPlaytime := game.PlaytimeSeconds
+	previousEmulation := game.Emulation
 	now := s.now()
 	game.LastPlayed = &now
 	game.PlaytimeSeconds += seconds
+	if emulated {
+		game.Emulation = settleInstalledTitle(*game, run, quick, cleanExit(exit, stoppedByUser), emulatorLostGame(game.Emulation.Platform, exit, stoppedByUser))
+	}
 	if err := s.persist(); err != nil {
 		game.LastPlayed = previousLastPlayed
 		game.PlaytimeSeconds = previousPlaytime
+		game.Emulation = previousEmulation
 		// Вызывающие — cmd.Wait()-горутина и detect-цикл watch.go, вернуть
 		// ошибку им наверх некому: это единственное место в пакете, где
 		// логирование, а не return err, оправдано. Сессия из s.running уже
 		// удалена, поэтому остановка уходит наружу и без записи на диск:
 		// иначе UI и трей остаются в «Играет».
 		slog.Error("persist session", "id", id, "error", err)
-		emitStopped(exitFields(SessionEvent{GameID: id, SessionSeconds: seconds, PlaytimeSeconds: game.PlaytimeSeconds}, exit, stoppedByUser, seconds))
+		stopped.PlaytimeSeconds = game.PlaytimeSeconds
+		emitStopped(exitFields(stopped, exit, stoppedByUser, seconds))
 		s.emitUpdated()
 		return
 	}
 	slog.Info("game stopped", "id", id, "title", game.Title, "sessionSeconds", seconds)
-	emitStopped(exitFields(SessionEvent{GameID: id, SessionSeconds: seconds, PlaytimeSeconds: game.PlaytimeSeconds}, exit, stoppedByUser, seconds))
+	stopped.PlaytimeSeconds = game.PlaytimeSeconds
+	emitStopped(exitFields(stopped, exit, stoppedByUser, seconds))
 	s.emitUpdated()
+}
+
+// emulatedLocked keeps emulated games out of the compatibility journal: its
+// verdict would rate the emulator and its settings, not the game.
+func (s *Service) emulatedLocked(id string) bool {
+	game := s.findLocked(id)
+	return game != nil && game.Emulation != nil
+}
+
+func emulatorName(platformID string) string {
+	if target, ok := emulators.Lookup(platformID); ok {
+		return target.Emulator
+	}
+	return platformID
+}
+
+func cleanExit(exit *exitInfo, stoppedByUser bool) bool {
+	return exit != nil && exit.known && exit.code == 0 && !stoppedByUser
+}
+
+func emulatorLostGame(platformID string, exit *exitInfo, stoppedByUser bool) bool {
+	if exit == nil || !exit.known || stoppedByUser {
+		return false
+	}
+	target, ok := emulators.Lookup(platformID)
+	return ok && target.InstallGone(exit.code)
 }
 
 func (s *Service) findLocked(id string) *Game {
@@ -657,7 +723,7 @@ func (s *Service) findLocked(id string) *Game {
 // noteLaunchFailureLocked зовётся под мьютексом сервиса: PlayGame держит его
 // на всё время запуска, а журнал совместимости пишется в своей горутине.
 func (s *Service) noteLaunchFailureLocked(gameID, code, reason string) {
-	if s.onLaunchFail == nil {
+	if s.onLaunchFail == nil || s.emulatedLocked(gameID) {
 		return
 	}
 	note := s.onLaunchFail

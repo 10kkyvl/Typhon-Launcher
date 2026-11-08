@@ -10,7 +10,7 @@
     disabled = false,
     onpick,
   }: {
-    game: Pick<LibraryGame, 'profiles' | 'lastProfile'>;
+    game: Pick<LibraryGame, 'profiles' | 'lastProfile' | 'emulation'>;
     disabled?: boolean;
     onpick: (profileID: string) => void;
   } = $props();

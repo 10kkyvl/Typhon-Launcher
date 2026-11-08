@@ -3,8 +3,10 @@ package jumplist
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 	"strings"
+	"sync"
 	"unicode"
 
 	"typhon/internal/shortcut"
@@ -25,7 +27,30 @@ var (
 	ErrUnsupported  = errors.New("jumplist: Jump List есть только в Windows")
 	errNoCategory   = errors.New("jumplist: нет названия категории недавних игр")
 	errNoTaskLabels = errors.New("jumplist: нет названий задач")
+
+	// errCategoryRefused is AppendCategory's E_ACCESSDENIED. Windows returns it
+	// when the user (Settings > Personalization > Start, "recently opened
+	// items") or a Group Policy turns off usage tracking, and for a category
+	// that puts back an item the user removed. Microsoft documents it as a
+	// normal outcome: skip the category, keep the tasks and commit the list.
+	errCategoryRefused = errors.New("jumplist: Windows не разрешает категорию недавних игр")
 )
+
+var categoryRefusedOnce sync.Once
+
+// appendRecent adds the recent games category unless Windows refuses it; a
+// refusal costs only that category, not the Library and Downloads tasks, and
+// is not an error worth a diagnostics report on every refresh.
+func appendRecent(appendCategory func() error) error {
+	err := appendCategory()
+	if !errors.Is(err, errCategoryRefused) {
+		return err
+	}
+	categoryRefusedOnce.Do(func() {
+		slog.Info("jump list without recent games: Windows refused the category", "component", "jumplist", "error", err)
+	})
+	return nil
+}
 
 type Game struct {
 	ID         string

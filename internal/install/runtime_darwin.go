@@ -7,8 +7,8 @@ import (
 	"errors"
 	"log/slog"
 	"path/filepath"
-	"strings"
 
+	"typhon/internal/emulators"
 	"typhon/internal/wine"
 )
 
@@ -57,14 +57,7 @@ func prepareRuntime(ctx context.Context, installDir, executable string) error {
 	return manager.Boot(ctx, bottle)
 }
 
-func windowsExecutable(path string) bool {
-	switch strings.ToLower(filepath.Ext(path)) {
-	case ".exe", ".bat", ".cmd", ".com", ".msi":
-		return true
-	default:
-		return false
-	}
-}
+func windowsExecutable(path string) bool { return emulators.IsWindowsProgram(path) }
 
 // releaseRuntime сносит бутыль вместе с каталогом установки. Отсутствие
 // бутыля не ошибка: игру могли поставить до появления macOS-поддержки, а

@@ -162,6 +162,20 @@ func (sc *scanner) measure(path string) measured {
 	return measured{size: size, viaLink: linked || inner}
 }
 
+// measureGame takes the stored size of an emulated game: its folder is whatever
+// the image lies in, and only the library knows the tracks of a .cue. The image
+// itself is still looked at, so a moved file shows as missing.
+func (sc *scanner) measureGame(g library.Game) measured {
+	if g.Emulation == nil {
+		return sc.measure(g.InstallDir)
+	}
+	image := sc.measure(g.Executable)
+	if image.missing || image.err != nil {
+		return image
+	}
+	return measured{size: g.SizeBytes, unknown: g.SizeUnknown || image.unknown}
+}
+
 func (sc *scanner) scanGames() error {
 	for _, g := range sc.games {
 		if err := sc.ctx.Err(); err != nil {
@@ -170,7 +184,7 @@ func (sc *scanner) scanGames() error {
 		if g.Uninstalled {
 			continue
 		}
-		m := sc.measure(g.InstallDir)
+		m := sc.measureGame(g)
 		if m.err != nil {
 			return m.err
 		}
@@ -456,7 +470,7 @@ func (sc *scanner) orphanVerdict(path string) (bool, string, string) {
 		return false, code, reason
 	}
 	for _, g := range sc.s.deps.Library.GetGames() {
-		if g.InstallDir != "" && overlaps(g.InstallDir, path) {
+		if slices.ContainsFunc(g.Footprint(), func(root string) bool { return overlaps(root, path) }) {
 			return false, diskreason.HoldsGame, "в этой папке лежит игра из библиотеки"
 		}
 	}

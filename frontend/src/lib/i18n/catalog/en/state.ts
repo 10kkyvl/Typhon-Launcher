@@ -27,6 +27,7 @@ export const state: Record<StateKey, Message> = {
   'state.installTypeExeInstaller': 'Installer (EXE)',
   'state.installTypeMsiInstaller': 'Installer (MSI)',
   'state.installTypeUnknown': 'Unknown package',
+  'state.installTypeImage': 'Image',
   'state.installCompletedToast': 'Game "{name}" installed',
   'state.installFailedToast': 'Install failed for "{name}": {error}',
 
@@ -141,6 +142,7 @@ export const state: Record<StateKey, Message> = {
   'state.accountErrorCredentialStore': 'Could not read the saved sign-in from the system credential store — sign in again',
   'state.accountErrorSuspended': 'This account is suspended. See the Support section for details',
   'state.accountErrorEmailUndeliverable': 'This address cannot receive mail — use another one',
+  'state.accountErrorDiscordUnavailable': "Discord linking isn't available yet, check back later",
   'state.accountErrorGeneric': 'Failed to complete the action',
 
   'state.accountSyncReasonUnauthenticated': 'Your account session expired — sign in again to sync your data.',

@@ -1,12 +1,13 @@
 <script lang="ts">
   import { Download } from '@lucide/svelte';
-  import { buildKind, buildLabel, releaseBadge, repackNote } from '../game/releases';
+  import { buildKind, buildLabel, consoleGroupStart, orderReleases, releaseBadge, repackNote } from '../game/releases';
   import { languageLabel } from '../game/view';
   import type { ReleaseGroup } from '../services/sources';
   import type { AvailabilityKind } from '../services/updates';
   import { bytesSize, relativeDate } from '../utils/format';
   import { msg } from '../i18n';
   import Button from './Button.svelte';
+  import ConsoleTag from './ConsoleTag.svelte';
   import StatusBadge from './StatusBadge.svelte';
 
   let {
@@ -25,6 +26,8 @@
     ondownload: (group: ReleaseGroup) => void;
   } = $props();
 
+  const ordered = $derived(orderReleases(groups));
+  const consoleStart = $derived(consoleGroupStart(groups));
   const showLanguages = $derived(groups.some((group) => languageLabel(group.release.languages) !== ''));
 </script>
 
@@ -32,7 +35,7 @@
   {#if loading && groups.length === 0}
     <p class="hint">{msg('release.loading')}</p>
   {:else}
-    {#each groups as group (group.release.id)}
+    {#each ordered as group, index (group.release.id)}
       {@const release = group.release}
       {@const removed = release.availability === 'removed'}
       {@const badge = releaseBadge({
@@ -45,9 +48,15 @@
       {@const current = badge === 'installed'}
       {@const build = buildLabel(buildKind(release))}
       {@const repack = repackNote(release, msg('release.buildRepack'))}
+      {#if index === consoleStart}
+        <h3 class="release-group">{msg('release.consoleHeading')}</h3>
+      {/if}
       <div class="release-row" class:current>
         <div class="release-main">
-          <span class="release-version">{release.version || '—'}</span>
+          <span class="release-version">
+            {#if release.platform}<ConsoleTag platform={release.platform} />{/if}
+            {release.version || '—'}
+          </span>
           <span class="release-title" title={release.rawTitle}>{release.rawTitle}</span>
           {#if release.edition}
             <span class="release-edition">{release.edition}</span>
@@ -119,6 +128,15 @@
     align-items: center;
     gap: var(--space-4);
     padding: 1.1rem 0;
+  }
+
+  .release-group {
+    margin: var(--space-4) 0 0;
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--border);
+    font-size: var(--font-xs);
+    font-weight: 600;
+    color: var(--text-3);
   }
 
   .release-row + .release-row {

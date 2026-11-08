@@ -485,6 +485,38 @@ func TestScanGames(t *testing.T) {
 	}
 }
 
+func TestScanCountsTheImageNotItsFolder(t *testing.T) {
+	r := newRig(t)
+	r.addGame(t, "folder", 300)
+	dir := filepath.Join(r.games, "folder")
+	rom := filepath.Join(dir, "game.iso")
+	if err := os.WriteFile(rom, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r.lib.games = append(r.lib.games,
+		library.Game{ID: "known", Title: "Known", Executable: rom, InstallDir: dir, SizeBytes: 5, Emulation: &library.Emulation{Platform: "ps2"}},
+		library.Game{ID: "unknown", Title: "Unknown", Executable: rom, InstallDir: dir, SizeUnknown: true, Emulation: &library.Emulation{Platform: "ps2"}},
+		library.Game{ID: "moved", Title: "Moved", Executable: filepath.Join(dir, "gone.iso"), InstallDir: dir, SizeBytes: 9, Emulation: &library.Emulation{Platform: "ps2"}},
+	)
+	rep, err := r.svc.Scan(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	by := map[string]GameUsage{}
+	for _, g := range rep.Games {
+		by[g.ID] = g
+	}
+	if g := by["known"]; g.SizeBytes != 5 || g.SizeUnknown {
+		t.Fatalf("known = %+v", g)
+	}
+	if g := by["unknown"]; g.SizeBytes != 0 || !g.SizeUnknown {
+		t.Fatalf("unknown = %+v", g)
+	}
+	if g := by["moved"]; !g.Missing || g.SizeBytes != 0 {
+		t.Fatalf("moved = %+v", g)
+	}
+}
+
 func TestScanSkipsUninstalledGames(t *testing.T) {
 	r := newRig(t)
 	r.addGame(t, "kept", 10)

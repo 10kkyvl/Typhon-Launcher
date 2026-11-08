@@ -15,10 +15,12 @@
     Sparkles,
     Square,
   } from '@lucide/svelte';
+  import AddImageModal from '../../lib/components/AddImageModal.svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import Chip from '../../lib/components/Chip.svelte';
+  import ConsoleTag from '../../lib/components/ConsoleTag.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
@@ -42,6 +44,9 @@
   import { openGameFolder, openFolder } from '../../lib/services/settings';
   import { rescan, scanProgress, scanSummary, scanning } from '../../lib/stores/discovery';
   import { installedGames, runningGames } from '../../lib/stores/library';
+  import { emulationPlatform, isEmulated, isInstalledImage } from '../../lib/library/emulation';
+  import { selectImageFile } from '../../lib/services/emulators';
+  import { missingImages, refreshMissingImages } from '../../lib/stores/missingImages';
   import { externalLabel, isExternal, isLaunchable } from '../../lib/library/external';
   import { gamesOnVolume } from '../../lib/library/folders';
   import { gameArt, loadArt } from '../../lib/stores/metadata';
@@ -52,6 +57,7 @@
   import { toast } from '../../lib/stores/toasts';
   import { installedView } from '../../lib/stores/ui';
   import { updatesByGame } from '../../lib/stores/updates';
+  import { brokenStatus } from '../../lib/game/compat';
   import { compatStatuses, type CompatStatus } from '../../lib/services/compat';
   import { bytesSize, relativeDate } from '../../lib/utils/format';
   import { errorCode, hasMessage, msg } from '../../lib/i18n';
@@ -86,8 +92,8 @@
   });
 
   function brokenNote(game: LibraryGame): string {
-    const status = compat.get(game.id);
-    if (!status || status.state !== 'broken') return '';
+    const status = brokenStatus(game, compat.get(game.id));
+    if (!status) return '';
     const reason = libraryErrorText(status.lastError, '');
     return reason
       ? msg('games.compatBrokenWithReason', { reason })
@@ -175,6 +181,33 @@
     addOpen = true;
   }
 
+  $effect(() => {
+    void $installedGames;
+    void refreshMissingImages();
+  });
+
+  async function chooseImage(game: LibraryGame) {
+    try {
+      const path = await selectImageFile(msg('emul.addImageDialog'), [emulationPlatform(game)]);
+      if (!path) return;
+      await setExecutable(game.id, path);
+      await refreshMissingImages();
+      toast(msg('emul.imageSaved'), 'success');
+    } catch (err) {
+      toast(libraryErrorText(err, msg('emul.imageSaveFailed')), 'danger');
+    }
+  }
+
+  let imageOpen = $state(false);
+
+  function openImageDialog() {
+    if (!inWails) {
+      toast(msg('games.installedAddDesktopOnly'));
+      return;
+    }
+    imageOpen = true;
+  }
+
   async function browseExecutable() {
     try {
       const path = await selectExecutable(msg('games.installedSelectExeDialog'));
@@ -248,6 +281,17 @@
     { id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true },
   ];
 
+  const emulatedMenuItems = [
+    { id: 'folder', label: msg('games.openFolder') },
+    { id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true, separator: true },
+  ];
+
+  const imageMenuItems = [
+    { id: 'folder', label: msg('games.openFolder') },
+    { id: 'uninstall', label: msg('games.actionUninstall'), danger: true, separator: true },
+    { id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true },
+  ];
+
   const externalMenuItems = [
     { id: 'folder', label: msg('games.openFolder') },
     { id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true, separator: true },
@@ -294,6 +338,7 @@
 
   function statusKind(game: LibraryGame, running: boolean, updateKind?: string): 'success' | 'warning' | 'accent' | 'neutral' {
     if (running) return 'accent';
+    if ($missingImages.has(game.id)) return 'warning';
     if (!isLaunchable(game)) return 'warning';
     if (updateKind === 'update') return 'warning';
     if (updateKind === 'new_release') return 'neutral';
@@ -302,6 +347,7 @@
 
   function statusLabel(game: LibraryGame, running: boolean) {
     if (running) return msg('games.runningLabel');
+    if ($missingImages.has(game.id)) return msg('emul.imageMissing');
     if (!isLaunchable(game)) return msg('games.installedNeedsExeLabel');
     return relativeDate(game.lastPlayed);
   }
@@ -352,6 +398,10 @@
     <Button onclick={findGames} disabled={$scanning}>
       <RefreshCw size="1.5rem" strokeWidth={2} class={$scanning ? 'spin' : ''} />
       {$scanning ? scanLabel : msg('games.installedFindGames')}
+    </Button>
+    <Button onclick={openImageDialog}>
+      <Plus size="1.5rem" strokeWidth={2} />
+      {msg('emul.addButton')}
     </Button>
     <Button variant="primary" onclick={openAddDialog}>
       <Plus size="1.5rem" strokeWidth={2} />
@@ -468,6 +518,10 @@
         <Plus size="1.5rem" strokeWidth={2} />
         {msg('games.installedAddGameButton')}
       </Button>
+      <Button onclick={openImageDialog}>
+        <Plus size="1.5rem" strokeWidth={2} />
+        {msg('emul.addButton')}
+      </Button>
     {/snippet}
   </EmptyState>
 {:else if filteredGames.length === 0}
@@ -488,7 +542,10 @@
             <Artwork src={heroFor(game)} alt={game.title} radius="var(--radius-sm)" />
           </div>
           <div class="titles">
-            <span class="title">{game.title}</span>
+            <span class="title-line">
+              <span class="title">{game.title}</span>
+              {#if isEmulated(game)}<ConsoleTag platform={emulationPlatform(game)} />{/if}
+            </span>
             <span class="path">{game.installDir}</span>
             {#if sizeLabel(game) || updateText}
               <span class="size">
@@ -522,6 +579,11 @@
               <Square size="1.2rem" strokeWidth={2} fill="currentColor" />
               {msg('games.installedStopButton')}
             </Button>
+          {:else if $missingImages.has(game.id)}
+            <Button size="sm" onclick={() => chooseImage(game)}>
+              <FolderOpen size="1.3rem" strokeWidth={1.8} />
+              {msg('emul.pickImage')}
+            </Button>
           {:else if !isLaunchable(game)}
             <Button size="sm" onclick={() => chooseExecutable(game)}>
               <FolderOpen size="1.3rem" strokeWidth={1.8} />
@@ -537,7 +599,7 @@
             <FolderOpen size="1.3rem" strokeWidth={1.8} />
             {msg('games.openFolder')}
           </Button>
-          <DropdownMenu items={isExternal(game) ? externalMenuItems : menuItems} onselect={(id) => onMenu(game, id)}>
+          <DropdownMenu items={isExternal(game) ? externalMenuItems : isInstalledImage(game) ? imageMenuItems : isEmulated(game) ? emulatedMenuItems : menuItems} onselect={(id) => onMenu(game, id)}>
             {#snippet trigger({ toggle })}
               <IconButton label={msg('games.installedMenuLabel')} size="sm" onclick={toggle}>
                 <EllipsisVertical size="1.6rem" strokeWidth={1.8} />
@@ -577,7 +639,7 @@
             <button class="card-play running" aria-label={msg('games.installedStopButton')} onclick={() => stop(game)}>
               <Square size="1.2rem" strokeWidth={2} fill="currentColor" />
             </button>
-          {:else if isLaunchable(game)}
+          {:else if isLaunchable(game) && !$missingImages.has(game.id)}
             <button class="card-play" aria-label={msg('games.play')} onclick={() => play(game)}>
               <Play size="1.4rem" strokeWidth={2} fill="currentColor" />
             </button>
@@ -585,7 +647,11 @@
         </div>
         <div class="card-info">
           <span class="card-title">{game.title}</span>
-          <span class="card-meta">{sizeLabel(game)}</span>
+          <span class="card-meta">
+            {#if isEmulated(game)}<ConsoleTag platform={emulationPlatform(game)} />{/if}
+            {sizeLabel(game)}
+            {#if $missingImages.has(game.id)}<StatusBadge kind="danger" label={msg('emul.imageMissing')} plain />{/if}
+          </span>
         </div>
       </div>
     {/each}
@@ -599,6 +665,7 @@
 {/if}
 
 <LibrarySetupModal bind:open={librarySetupOpen} />
+<AddImageModal bind:open={imageOpen} />
 
 {#if removeTarget}
   <RemoveGameModal
@@ -607,6 +674,7 @@
     gameId={removeTarget.id}
     title={removeTarget.title}
     external={externalLabel(removeTarget)}
+    emulated={isEmulated(removeTarget)}
   />
 {/if}
 
@@ -867,6 +935,13 @@
     min-width: 0;
   }
 
+  .title-line {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+
   .title {
     font-size: var(--font-lg);
     font-weight: 600;
@@ -1062,6 +1137,9 @@
   }
 
   .card-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
     font-size: var(--font-xs);
     color: var(--text-3);
     font-variant-numeric: tabular-nums;

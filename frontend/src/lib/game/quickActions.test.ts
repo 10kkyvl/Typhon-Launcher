@@ -199,3 +199,45 @@ describe('quickActions', () => {
     });
   });
 });
+
+describe('quickActions for a game run through an emulator', () => {
+  const emulated = (over: Partial<QuickActionState> = {}) => ids({ emulated: true, ...over });
+
+  it('keeps what an image can use and drops the rest', () => {
+    expect(emulated()).toEqual([
+      'play',
+      'favorite-add',
+      'status',
+      'tags',
+      'hide',
+      'folder',
+      'properties',
+      'shortcut-create',
+      'remove',
+    ]);
+  });
+
+  it.each(['saves', 'saves-backups', 'verify', 'redist', 'move', 'uninstall', 'lan-share', 'lan-unshare'] as QuickAction[])(
+    'never offers %s',
+    (id) => {
+      expect(emulated({ lanEnabled: true })).not.toContain(id);
+      expect(emulated({ lanEnabled: true, lanShared: true })).not.toContain(id);
+    },
+  );
+
+  it('removes only from the library and marks it as dangerous', () => {
+    const danger = quickActions(state({ emulated: true }))
+      .filter((item) => item.danger)
+      .map((item) => item.id);
+    expect(danger).toEqual(['remove']);
+  });
+
+  it('still stops a running game and swaps the shortcut item', () => {
+    expect(emulated({ running: true })).toContain('stop');
+    expect(emulated({ hasShortcut: true })).toContain('shortcut-remove');
+  });
+
+  it('can be added to steam like any game with a launcher entry', () => {
+    expect(emulated({ steam: { added: false } })).toContain('steam-add');
+  });
+});

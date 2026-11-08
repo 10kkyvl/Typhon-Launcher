@@ -8,10 +8,12 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"unicode"
 
+	"typhon/internal/emulators"
 	"typhon/internal/platform"
 	"typhon/internal/steamlink"
 	"typhon/internal/uierr"
@@ -82,6 +84,12 @@ func (s *Service) LocateSaves(ctx context.Context, id string) (SavesResult, erro
 	if game == nil {
 		s.mu.Unlock()
 		return SavesResult{}, errNotFound
+	}
+	// Saves of an emulated game live in the emulator's own memory cards, shared
+	// by all its games, and the folder of the image says nothing about them.
+	if game.Emulation != nil {
+		s.mu.Unlock()
+		return SavesResult{}, nil
 	}
 	stored, title, installDir := game.SavesDir, game.Title, game.InstallDir
 	canonicalID := game.CanonicalGameID
@@ -228,6 +236,16 @@ func failureText(err error) string {
 	return err.Error()
 }
 
+// saveSteamRoot is the Steam folder for {steam} save templates. They describe
+// Windows games: on macOS those run in CrossOver, and only the shared Steam
+// bottle (its own SaveEnv) holds their saves, never the native Mac Steam.
+func saveSteamRoot() (string, error) {
+	if runtime.GOOS != "windows" {
+		return "", steamlink.ErrUnsupported
+	}
+	return steamlink.Root()
+}
+
 // steamRootFor отличает «Steam не установлен» от поломки: первое означает
 // только, что шаблоны с {steam} пропускаются.
 func steamRootFor(root func() (string, error)) (string, error) {
@@ -277,6 +295,9 @@ func (s *Service) SetSavesDir(id, dir string) (Game, error) {
 	for i := range s.games {
 		if s.games[i].ID != id {
 			continue
+		}
+		if s.games[i].Emulation != nil {
+			return Game{}, emulators.ErrUnsupported
 		}
 		if s.games[i].SavesDir == normalized {
 			return s.games[i], nil

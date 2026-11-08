@@ -354,6 +354,7 @@ func (s *Service) ConfirmMatch(releaseID, gameID string) error {
 	}
 	cat := s.catalog
 	normalized := r.NormalizedTitle
+	platform := r.Platform
 	s.mu.Unlock()
 
 	if cat == nil {
@@ -362,7 +363,9 @@ func (s *Service) ConfirmMatch(releaseID, gameID string) error {
 	if _, err := cat.GetGame(gameID); err != nil {
 		return err
 	}
-	learnPattern := !cat.HasRemoteCatalog()
+	// A console release reads exactly like its PC namesake, and a learned rule
+	// knows only the title: it would pull the PC release onto the console game.
+	learnPattern := !cat.HasRemoteCatalog() && platform == ""
 	var undo catalog.MatchUndo
 	if learnPattern {
 		learned, err := cat.LearnMatch(normalized, gameID)
@@ -377,7 +380,7 @@ func (s *Service) ConfirmMatch(releaseID, gameID string) error {
 	before := map[string][]Release{}
 	for sourceID, list := range s.releases {
 		for _, item := range list {
-			if item.ID != releaseID && (!learnPattern || item.Locked || item.NormalizedTitle != normalized) {
+			if item.ID != releaseID && (!learnPattern || item.Locked || item.NormalizedTitle != normalized || item.Platform != platform) {
 				continue
 			}
 			if !touched[sourceID] {
@@ -803,4 +806,62 @@ func (s *Service) sameGame(a, b string) bool {
 		return true
 	}
 	return s.catalog != nil && s.catalog.SameGame(a, b)
+}
+
+// SearchDownloadable returns at most limit releases matching query that can
+// be downloaded as they are: from an enabled source, still available, not
+// ignored, a full release rather than a patch, with a link. Newest first.
+// Remote control offers these to the Discord bot.
+func (s *Service) SearchDownloadable(query string, limit int) []ReleaseView {
+	search := strings.ToLower(strings.TrimSpace(query))
+	if search == "" || limit <= 0 {
+		return []ReleaseView{}
+	}
+	normalized := titles.Normalize(search)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var found []*Release
+	for _, list := range s.releases {
+		for _, r := range list {
+			if !s.downloadableLocked(r) {
+				continue
+			}
+			if s.matchesSearch(r, search, normalized) {
+				found = append(found, r)
+			}
+		}
+	}
+	sortReleases(found, "")
+	if len(found) > limit {
+		found = found[:limit]
+	}
+	out := make([]ReleaseView, 0, len(found))
+	for _, r := range found {
+		out = append(out, s.viewLocked(r))
+	}
+	return out
+}
+
+// downloadableLocked is the rule SearchDownloadable and PrepareDownloadable
+// share: a full, available, not ignored release with a link, from an enabled
+// source.
+func (s *Service) downloadableLocked(r *Release) bool {
+	if src := s.findLocked(r.SourceID); src == nil || !src.Enabled {
+		return false
+	}
+	return !r.Ignored && r.Availability == AvailabilityAvailable && r.Kind != KindPatch && len(r.URIs) > 0
+}
+
+// PrepareDownloadable is PrepareDownload for a release SearchDownloadable
+// would offer; any other release is reported as not found. Remote control
+// uses it so a release id from Discord cannot reach what search hides.
+func (s *Service) PrepareDownloadable(releaseID string) (DownloadRequest, error) {
+	s.mu.Lock()
+	r := s.findReleaseLocked(releaseID)
+	ok := r != nil && s.downloadableLocked(r)
+	s.mu.Unlock()
+	if !ok {
+		return DownloadRequest{}, errReleaseNotFound
+	}
+	return s.PrepareDownload(releaseID)
 }

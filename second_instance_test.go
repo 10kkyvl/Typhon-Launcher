@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
+	"log/slog"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -100,6 +103,130 @@ func TestHandleSecondLaunch(t *testing.T) {
 				t.Fatalf("opens=%d id=%q route=%q", opener.n, player.id, route)
 			}
 		})
+	}
+}
+
+func TestHandleSecondLaunchLink(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		link PendingLink
+	}{
+		{"link opens the window and waits for the page", []string{"typhon.exe", "typhon://game?steam=440"}, PendingLink{Provider: "steam", ID: "440"}},
+		{"bad link is reported to the page", []string{"typhon.exe", "typhon://game?steam=x"}, PendingLink{Invalid: true}},
+		{"injected play never plays", []string{"typhon.exe", "typhon://game?steam=1", "--play", "g1"}, PendingLink{Invalid: true}},
+		{"search link opens the window and waits for the page", []string{"typhon.exe", "typhon://search?q=Half%20Life"}, PendingLink{Query: "Half Life"}},
+		{"play flag in a query stays text", []string{"typhon.exe", "typhon://search?q=--play%20g1"}, PendingLink{Query: "--play g1"}},
+		{"search with injected play never plays", []string{"typhon.exe", "typhon://search?q=a", "--play", "g1"}, PendingLink{Invalid: true}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			player := &recordedPlayer{}
+			opener := &countOpener{}
+			nav := &NavigationService{}
+			emitted := []string{}
+			handleSecondLaunch(tc.args, player, opener, nav, func(r string) { emitted = append(emitted, r) })
+			if opener.n != 1 || player.id != "" {
+				t.Fatalf("opens=%d played=%q", opener.n, player.id)
+			}
+			if !reflect.DeepEqual(emitted, []string{""}) {
+				t.Fatalf("emitted %q, want one event without a route", emitted)
+			}
+			if got := nav.TakePendingLink(); got != tc.link {
+				t.Fatalf("pending = %+v, want %+v", got, tc.link)
+			}
+		})
+	}
+}
+
+func TestSearchLinkFromURLEventTakesTheSameQueue(t *testing.T) {
+	var s secondLaunches
+	s.Receive(launchFromURL("typhon://search?q=Hades"))
+	nav := &NavigationService{}
+	player := &recordedPlayer{}
+	opener := &countOpener{}
+	events := 0
+	s.Ready(func(args []string) {
+		handleSecondLaunch(args, player, opener, nav, func(string) { events++ })
+	})
+	if opener.n != 1 || events != 1 || player.id != "" {
+		t.Fatalf("opens=%d events=%d played=%q", opener.n, events, player.id)
+	}
+	if got := nav.TakePendingLink(); got != (PendingLink{Query: "Hades"}) {
+		t.Fatalf("pending = %+v", got)
+	}
+}
+
+func TestPanicLogDoesNotCarryTheLink(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{"whole link", []string{"typhon", "typhon://search?q=secret-payload"}},
+		{"link split by a quote", []string{"typhon.exe", "typhon://search?q=Baldur", "secret-payload"}},
+		{"tail before the link", []string{"typhon.exe", "secret-payload", "typhon://search?q=a"}},
+		{"link inside an argument", []string{"typhon.exe", "--x=TYPHON://search?q=secret-payload"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var logged bytes.Buffer
+			previous := slog.Default()
+			slog.SetDefault(slog.New(slog.NewTextHandler(&logged, nil)))
+			t.Cleanup(func() { slog.SetDefault(previous) })
+
+			runRecovered(func([]string) { panic("boom") }, tc.args)
+
+			if !strings.Contains(logged.String(), "second launch handler panicked") {
+				t.Fatalf("panic was not logged: %q", logged.String())
+			}
+			if strings.Contains(logged.String(), "secret-payload") {
+				t.Fatalf("log carries the link: %q", logged.String())
+			}
+		})
+	}
+}
+
+func TestParseErrorLogsDoNotCarryALinkInsideAnArgument(t *testing.T) {
+	var logged bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logged, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	handleSecondLaunch([]string{"typhon.exe", "--play", "--open", "x=typhon://search?q=secret-payload"}, &recordedPlayer{}, &countOpener{}, &NavigationService{}, func(string) {})
+	firstLaunch([]string{"typhon.exe", "--open", "x=typhon://search?q=secret-payload"}, &NavigationService{})
+
+	if !strings.Contains(logged.String(), "parse open argument") {
+		t.Fatalf("parse failure was not logged: %q", logged.String())
+	}
+	if strings.Contains(logged.String(), "secret-payload") {
+		t.Fatalf("log carries the link: %q", logged.String())
+	}
+}
+
+func TestArgsForLogKeepsArgumentsWithoutALink(t *testing.T) {
+	args := []string{"typhon.exe", "--play", "g1"}
+	if got := argsForLog(args); !reflect.DeepEqual(got, args) {
+		t.Fatalf("argsForLog = %q", got)
+	}
+	if got := argsForLog(nil); len(got) != 0 {
+		t.Fatalf("argsForLog(nil) = %q", got)
+	}
+}
+
+func TestLinkDeliveredOnceThroughTheQueue(t *testing.T) {
+	var s secondLaunches
+	s.Receive(launchFromURL("typhon://game?igdb=7"))
+	nav := &NavigationService{}
+	opener := &countOpener{}
+	events := 0
+	s.Ready(func(args []string) {
+		handleSecondLaunch(args, &recordedPlayer{}, opener, nav, func(string) { events++ })
+	})
+	if opener.n != 1 || events != 1 {
+		t.Fatalf("opens=%d events=%d", opener.n, events)
+	}
+	if got := nav.TakePendingLink(); got != (PendingLink{Provider: "igdb", ID: "7"}) {
+		t.Fatalf("pending = %+v", got)
 	}
 }
 

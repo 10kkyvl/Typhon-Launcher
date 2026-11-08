@@ -27,6 +27,9 @@ const (
 	CodeVaultError        = "credential_store_error"
 	CodeOutdated          = "launcher_outdated"
 	CodeTermsRequired     = "terms_required"
+	// CodeDiscordUnavailable: the backend does not serve the Discord routes
+	// (yet), so a 404 there is a missing feature, not a missing record.
+	CodeDiscordUnavailable = "discord_unavailable"
 )
 
 type Error struct {

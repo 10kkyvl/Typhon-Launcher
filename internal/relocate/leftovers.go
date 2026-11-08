@@ -49,9 +49,10 @@ func stagingVerdict(job Job, sourceExists bool, games []library.Game) (ok bool, 
 		return false, diskreason.RelocateJournal, "папка пересекается с исходной"
 	}
 	for _, g := range games {
-		if g.InstallDir != "" && (platform.SamePath(g.InstallDir, job.Staging) ||
-			platform.Inside(g.InstallDir, job.Staging) || platform.Inside(job.Staging, g.InstallDir)) {
-			return false, diskreason.HoldsGame, "в этой папке лежит игра из библиотеки"
+		for _, root := range g.Footprint() {
+			if platform.SamePath(root, job.Staging) || platform.Inside(root, job.Staging) || platform.Inside(job.Staging, root) {
+				return false, diskreason.HoldsGame, "в этой папке лежит игра из библиотеки"
+			}
 		}
 	}
 	return true, "", ""

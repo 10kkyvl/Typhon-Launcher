@@ -136,6 +136,8 @@ func (c *Client) Search(ctx context.Context, query string, limit int) ([]metadat
 			ReleaseYear: c.ReleaseYear,
 			Developer:   strings.TrimSpace(c.Developer),
 			ThumbURL:    c.ThumbURL,
+			GameType:    strings.TrimSpace(c.GameType),
+			ParentID:    strings.TrimSpace(c.ParentID),
 		})
 	}
 	return candidates, nil

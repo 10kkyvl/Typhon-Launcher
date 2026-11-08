@@ -128,4 +128,26 @@ describe('running sessions', () => {
     expect(toast.mock.calls[0][0]).toContain('1');
     expect(toast.mock.calls[1][0]).toContain('3');
   });
+
+  it.each([
+    { name: 'quick emulator exit', quick: true, crashed: false, toasts: 1 },
+    { name: 'plain short session', quick: false, crashed: false, toasts: 0 },
+    { name: 'crash', quick: false, crashed: true, toasts: 0 },
+  ])('tells about an emulator that closed at once: $name', async ({ quick, crashed, toasts }) => {
+    running = ['a'];
+    const { store, toast } = await load();
+    const { crashTarget } = await import('./crash');
+
+    handlers['game:stopped']({
+      data: { gameId: 'a', sessionSeconds: 1, playtimeSeconds: 1, crashed, emulatorQuickExit: quick, emulator: quick ? 'DuckStation' : '' },
+    });
+
+    expect(toast).toHaveBeenCalledTimes(toasts);
+    expect(get(store.runningGames).has('a')).toBe(false);
+    expect(get(crashTarget) !== null).toBe(crashed);
+    if (quick) {
+      expect(toast.mock.calls[0][0]).toContain('DuckStation');
+      expect(toast.mock.calls[0][1]).toBe('info');
+    }
+  });
 });

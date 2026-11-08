@@ -29,6 +29,7 @@ type fakeDownloads struct {
 	deleted []string
 	stopped []string
 	stopErr error
+	markErr error
 
 	deleteErr error
 }
@@ -59,6 +60,31 @@ func (f *fakeDownloads) Get(id string) (download.Download, error) {
 		return download.Download{}, download.ErrNotFound
 	}
 	return d, nil
+}
+
+func (f *fakeDownloads) List() []download.Download {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]download.Download, 0, len(f.items))
+	for _, d := range f.items {
+		out = append(out, d)
+	}
+	return out
+}
+
+func (f *fakeDownloads) MarkImageAttempted(id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.markErr != nil {
+		return f.markErr
+	}
+	d, ok := f.items[id]
+	if !ok {
+		return download.ErrNotFound
+	}
+	d.ImageAttempted = true
+	f.items[id] = d
+	return nil
 }
 
 func (f *fakeDownloads) DeleteData(id string) error {
@@ -96,7 +122,11 @@ var errFakeNoGame = errors.New("игра не найдена")
 type fakeRegistrar struct {
 	mu      sync.Mutex
 	games   []library.InstalledGame
+	images  []library.InstalledImage
 	records map[string]library.Game
+
+	imageErr error
+
 	running map[string]bool
 	removed []string
 
@@ -131,6 +161,31 @@ func (f *fakeRegistrar) RegisterInstalled(ctx context.Context, g library.Install
 		Owned:            g.Owned,
 		Uninstall:        g.Uninstall,
 		UninstallUnknown: g.UninstallUnknown,
+	}
+	f.putLocked(game)
+	return game, nil
+}
+
+func (f *fakeRegistrar) RegisterEmulated(ctx context.Context, g library.InstalledImage) (library.Game, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.imageErr != nil {
+		return library.Game{}, f.imageErr
+	}
+	f.images = append(f.images, g)
+	f.next++
+	game := library.Game{
+		ID:               fmt.Sprintf("game-%d", f.next),
+		Title:            g.Title,
+		Cover:            g.Cover,
+		Executable:       g.Image,
+		InstallDir:       g.InstallDir,
+		SourceDownloadID: g.SourceDownloadID,
+		ReleaseID:        g.ReleaseID,
+		SourceID:         g.SourceID,
+		InstallType:      library.InstallTypeImage,
+		Owned:            g.Owned,
+		Emulation:        &library.Emulation{Platform: g.Platform},
 	}
 	f.putLocked(game)
 	return game, nil

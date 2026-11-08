@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -100,6 +101,39 @@ func imageServer(t *testing.T) *httptest.Server {
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	return srv
+}
+
+func TestSearchTitleGoesThroughTheProviderAndKeepsItsErrors(t *testing.T) {
+	provider := &fakeProvider{candidates: []Candidate{{ProviderID: "7", Title: "Hades"}}}
+	svc, _, _ := newTestService(t, provider)
+	found, err := svc.SearchTitle(context.Background(), "Hades")
+	if err != nil || len(found) != 1 || found[0].ProviderID != "7" {
+		t.Fatalf("SearchTitle = %+v, %v", found, err)
+	}
+
+	limited := &fakeProvider{searchErr: &RateLimitError{}}
+	svc, _, _ = newTestService(t, limited)
+	if _, err := svc.SearchTitle(context.Background(), "Hades"); !errors.Is(err, ErrRateLimited) {
+		t.Fatalf("error = %v, want rate limit", err)
+	}
+
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	idle := &fakeProvider{}
+	svc, _, _ = newTestService(t, idle)
+	if _, err := svc.SearchTitle(cancelled, "Hades"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v, want cancel", err)
+	}
+	if idle.searches != 0 {
+		t.Fatalf("provider asked %d times after cancel", idle.searches)
+	}
+}
+
+func TestSearchTitleWithoutAProvider(t *testing.T) {
+	svc, _, _ := newTestService(t, nil)
+	if _, err := svc.SearchTitle(context.Background(), "Hades"); !errors.Is(err, ErrNotConfigured) {
+		t.Fatalf("error = %v", err)
+	}
 }
 
 func newTestService(t *testing.T, provider Provider) (*Service, *catalog.Service, string) {
@@ -1435,5 +1469,49 @@ func TestIdentifiedGameStillReportsDetailsLoading(t *testing.T) {
 	view, err = svc.GetView(game.ID)
 	if err != nil || view.Match == MatchSearching {
 		t.Fatalf("completed view: %+v, %v", view, err)
+	}
+}
+
+func TestFindCoverTakesOnlyTheExactTitleOnTheConsole(t *testing.T) {
+	cover := &ImageRef{URL: "https://images.example/c.jpg"}
+	console := func(platforms []string) bool { return slices.Contains(platforms, "PlayStation 2") }
+	cases := []struct {
+		name       string
+		candidates []Candidate
+		meta       map[string]GameMetadata
+		want       string
+		err        error
+	}{
+		{"title and console agree", []Candidate{{ProviderID: "1", Title: "Doom"}},
+			map[string]GameMetadata{"1": {Platforms: []string{"PlayStation 2"}, Cover: cover}}, cover.URL, nil},
+		{"second namesake fits", []Candidate{{ProviderID: "1", Title: "DOOM"}, {ProviderID: "2", Title: "Doom"}},
+			map[string]GameMetadata{"1": {Platforms: []string{"PC"}, Cover: cover}, "2": {Platforms: []string{"PlayStation 2"}, Cover: cover}}, cover.URL, nil},
+		{"similar title", []Candidate{{ProviderID: "1", Title: "Doom 3"}},
+			map[string]GameMetadata{"1": {Platforms: []string{"PlayStation 2"}, Cover: cover}}, "", ErrNoMatch},
+		{"other console", []Candidate{{ProviderID: "1", Title: "Doom"}},
+			map[string]GameMetadata{"1": {Platforms: []string{"PC"}, Cover: cover}}, "", ErrNoMatch},
+		{"no cover", []Candidate{{ProviderID: "1", Title: "Doom"}},
+			map[string]GameMetadata{"1": {Platforms: []string{"PlayStation 2"}}}, "", ErrNoMatch},
+		{"nothing found", nil, nil, "", ErrNoMatch},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			svc, _, _ := newTestService(t, &fakeProvider{candidates: c.candidates, meta: c.meta})
+			got, err := svc.FindCover(t.Context(), "Doom", console)
+			if got != c.want || !errors.Is(err, c.err) {
+				t.Fatalf("FindCover = %q, %v", got, err)
+			}
+		})
+	}
+}
+
+func TestFindCoverReportsTheNetwork(t *testing.T) {
+	boom := errors.New("offline")
+	svc, _, _ := newTestService(t, &fakeProvider{searchErr: boom})
+	if _, err := svc.FindCover(t.Context(), "Doom", func([]string) bool { return true }); err == nil || errors.Is(err, ErrNoMatch) {
+		t.Fatalf("FindCover = %v", err)
+	}
+	if _, err := svc.FindCover(t.Context(), " ", func([]string) bool { return true }); !errors.Is(err, errEmptyQuery) {
+		t.Fatalf("empty title = %v", err)
 	}
 }

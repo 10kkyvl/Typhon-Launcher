@@ -20,6 +20,7 @@ const (
 	sFalse            = syscall.Errno(0x00000001)
 	rpcErrChangedMode = syscall.Errno(0x80010106)
 	eNoInterface      = int32(-0x7FFFBFFE) // 0x80004002
+	eAccessDenied     = int32(-0x7FF8FFFB) // 0x80070005
 	vtLPWSTR          = 31
 	argsBufLen        = 2048
 )
@@ -186,6 +187,14 @@ func hresultErr(call string, hr int32) error {
 	return fmt.Errorf("jumplist: %s: hresult 0x%08X", call, uint32(hr))
 }
 
+func appendCategoryErr(hr int32) error {
+	err := hresultErr("AppendCategory", hr)
+	if hr == eAccessDenied {
+		return fmt.Errorf("%w: %w", errCategoryRefused, err)
+	}
+	return err
+}
+
 //nolint:gosec // G115: HRESULT is the 32-bit value in r0.
 func hresult(r0 uintptr) int32 { return int32(r0) }
 
@@ -320,7 +329,7 @@ func (l *destinationList) appendCategory(title string, items *objectCollection) 
 	r0 := callMethod(l.vtbl.AppendCategory, uintptr(l.raw()), uintptr(unsafe.Pointer(ptr)), uintptr(unsafe.Pointer(items)))
 	runtime.KeepAlive(ptr)
 	if hr := hresult(r0); hr < 0 {
-		return hresultErr("AppendCategory", hr)
+		return appendCategoryErr(hr)
 	}
 	return nil
 }
@@ -599,7 +608,7 @@ func Apply(cfg Config, games []Game) (err error) {
 			return err
 		}
 		defer collection.release()
-		if err := list.appendCategory(cfg.Labels.Recent, collection); err != nil {
+		if err := appendRecent(func() error { return list.appendCategory(cfg.Labels.Recent, collection) }); err != nil {
 			return err
 		}
 	}

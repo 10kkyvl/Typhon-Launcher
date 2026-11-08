@@ -2,6 +2,7 @@
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
   import { msg } from '../i18n';
+  import { isEmulated } from '../library/emulation';
   import { crashView, type CrashAction } from '../redist/crashView';
   import { crashReasonText } from '../redist/messages';
   import { exportLogs } from '../services/system';
@@ -16,7 +17,8 @@
 
   const record = $derived($crashTarget);
   const title = $derived(record ? ($libraryGames.find((g) => g.id === record.gameId)?.title ?? '') : '');
-  const view = $derived(record ? crashView(record) : null);
+  const emulated = $derived(record ? isEmulated($libraryGames.find((g) => g.id === record.gameId)) : false);
+  const view = $derived(record ? crashView(record, emulated) : null);
   const reason = $derived(view?.reason ? msg(view.reason.key, view.reason.params) : record ? crashReasonText(record.reasonCode) : '');
 
   let open = $state(false);

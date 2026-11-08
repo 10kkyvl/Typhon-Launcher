@@ -74,3 +74,15 @@ export function listenFriends(): () => void {
     overlayFriendsFailed.set(false);
   });
 }
+
+export interface RunningRow {
+  id: string;
+  title: string;
+}
+
+// runningRows names the games the launcher runs, in the order it reports them.
+// A game the list does not know yet keeps a row: closing it must stay possible.
+export function runningRows(ids: readonly string[], games: readonly { id: string; title: string }[]): RunningRow[] {
+  const titles = new Map(games.map((game) => [game.id, game.title]));
+  return [...new Set(ids)].map((id) => ({ id, title: titles.get(id) ?? '' }));
+}

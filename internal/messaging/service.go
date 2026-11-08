@@ -49,6 +49,27 @@ type Service struct {
 	clearNotify func()
 	wg          sync.WaitGroup
 	pickFiles   func(dialogtext.Labels) ([]string, error)
+	remoteWake  func()
+}
+
+// SetRemoteWake installs what runs when the backend says a Discord command is
+// waiting, and on every (re)connect, which covers a command sent while the
+// stream was down. It is called on the stream's goroutine and must not block.
+//
+//wails:ignore
+func (s *Service) SetRemoteWake(fn func()) {
+	s.mu.Lock()
+	s.remoteWake = fn
+	s.mu.Unlock()
+}
+
+func (s *Service) wakeRemote() {
+	s.mu.Lock()
+	fn := s.remoteWake
+	s.mu.Unlock()
+	if fn != nil {
+		fn()
+	}
 }
 
 func NewService(base string, token func() (string, error), enabled func() bool) (*Service, error) {

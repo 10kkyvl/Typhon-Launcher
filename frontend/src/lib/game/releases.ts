@@ -136,3 +136,62 @@ export function repackNote(release: Pick<Release, 'tags' | 'repacker'>, repackWo
   if ((release.tags ?? []).includes('repack')) return name ? `${repackWord} ${name}` : repackWord;
   return name;
 }
+
+export function isConsoleRelease(release: Pick<Release, 'platform'>): boolean {
+  return Boolean(release.platform);
+}
+
+export interface ReleaseSplit<T> {
+  pc: T[];
+  console: T[];
+}
+
+export function splitReleases<T extends { release: Pick<Release, 'platform'> }>(groups: readonly T[]): ReleaseSplit<T> {
+  const pc: T[] = [];
+  const consoles: T[] = [];
+  for (const group of groups) (isConsoleRelease(group.release) ? consoles : pc).push(group);
+  return { pc, console: consoles };
+}
+
+export function orderReleases<T extends { release: Pick<Release, 'platform'> }>(groups: readonly T[]): T[] {
+  const split = splitReleases(groups);
+  return [...split.pc, ...split.console];
+}
+
+export function consoleGroupStart<T extends { release: Pick<Release, 'platform'> }>(groups: readonly T[]): number {
+  const ordered = orderReleases(groups);
+  const first = ordered.findIndex((group) => group.release.platform);
+  return first > 0 ? first : -1;
+}
+
+export function sharedPlatform(groups: readonly { release: Pick<Release, 'platform'> }[]): string {
+  const ids = new Set(groups.map((group) => group.release.platform ?? ''));
+  return ids.size === 1 ? [...ids][0] : '';
+}
+
+const webUrl = /^https?:\/\//i;
+
+export function firstWebUrl(...urls: (string | null | undefined)[]): string {
+  for (const url of urls) {
+    const value = (url ?? '').trim();
+    if (webUrl.test(value)) return value;
+  }
+  return '';
+}
+
+export function consoleOrigin(
+  release: Pick<Release, 'platform' | 'title'>,
+  title: string,
+  cover: string,
+  pageGameId = '',
+): DownloadOrigin {
+  if (!release.platform) return {};
+  const name = title.trim() || release.title.trim();
+  const art = firstWebUrl(cover);
+  return {
+    platform: release.platform,
+    ...(name ? { title: name } : {}),
+    ...(art ? { cover: art } : {}),
+    ...(pageGameId ? { gameId: pageGameId } : {}),
+  };
+}

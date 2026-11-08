@@ -45,6 +45,13 @@ type Origin struct {
 	// ElevateAhead is consumed the moment the download starts, so it needs no
 	// third state.
 	ElevateAhead bool `json:"elevateAhead,omitempty"`
+
+	// Platform marks the download as a console image and has to outlive it the
+	// same way: the install starts by itself hours later. Title and Cover are
+	// what the card gets, and a torrent name is no title.
+	Platform string `json:"platform,omitempty"`
+	Title    string `json:"title,omitempty"`
+	Cover    string `json:"cover,omitempty"`
 }
 
 type FileState struct {
@@ -84,6 +91,12 @@ type Download struct {
 	// IgnoreSchedule lets this download run outside the schedule windows. It
 	// ends with the download: completeLocked clears it.
 	IgnoreSchedule bool `json:"ignoreSchedule"`
+
+	// ImageAttempted is set once the install of a console image was started or
+	// refused. A finished image with no install record then means the launcher
+	// died in between, not that the user dismissed the record, and only the
+	// first of the two may start the install on the next run.
+	ImageAttempted bool `json:"imageAttempted,omitempty"`
 
 	// heldSelection is the selection a stored record named while the torrent's
 	// file list is not known (no cached torrent yet). It is written back as it

@@ -80,15 +80,16 @@ func readInfoJSONVersions(path string) (fileVersion, productVersion string, err 
 	if err := json.Unmarshal(data, &v); err != nil {
 		return "", "", fmt.Errorf("parse %s: %w", path, err)
 	}
-	entry, ok := v.Info["0000"]
+	// en-US: Explorer hides the version details of the neutral language 0000.
+	entry, ok := v.Info["0409"]
 	if !ok {
-		return "", "", fmt.Errorf("%s: info.0000 entry not found", path)
+		return "", "", fmt.Errorf("%s: info.0409 entry not found", path)
 	}
 	if v.Fixed.FileVersion == "" {
 		return "", "", fmt.Errorf("%s: fixed.file_version is empty", path)
 	}
 	if entry.ProductVersion == "" {
-		return "", "", fmt.Errorf("%s: info.0000.ProductVersion is empty", path)
+		return "", "", fmt.Errorf("%s: info.0409.ProductVersion is empty", path)
 	}
 	return v.Fixed.FileVersion, entry.ProductVersion, nil
 }
@@ -249,19 +250,19 @@ func TestReadInfoJSONVersions(t *testing.T) {
 	}{
 		{
 			name:        "three part versions",
-			content:     `{"fixed":{"file_version":"0.1.0"},"info":{"0000":{"ProductVersion":"0.1.0"}}}`,
+			content:     `{"fixed":{"file_version":"0.1.0"},"info":{"0409":{"ProductVersion":"0.1.0"}}}`,
 			wantFile:    "0.1.0",
 			wantProduct: "0.1.0",
 		},
 		{
 			name:        "four part file_version",
-			content:     `{"fixed":{"file_version":"0.1.0.0"},"info":{"0000":{"ProductVersion":"0.1.0.0"}}}`,
+			content:     `{"fixed":{"file_version":"0.1.0.0"},"info":{"0409":{"ProductVersion":"0.1.0.0"}}}`,
 			wantFile:    "0.1.0.0",
 			wantProduct: "0.1.0.0",
 		},
 		{"malformed json", `{"fixed":`, false, "", "", true},
-		{"missing 0000 entry", `{"fixed":{"file_version":"0.1.0"},"info":{}}`, false, "", "", true},
-		{"empty file_version", `{"fixed":{"file_version":""},"info":{"0000":{"ProductVersion":"0.1.0"}}}`, false, "", "", true},
+		{"missing 0409 entry", `{"fixed":{"file_version":"0.1.0"},"info":{"0000":{"ProductVersion":"0.1.0"}}}`, false, "", "", true},
+		{"empty file_version", `{"fixed":{"file_version":""},"info":{"0409":{"ProductVersion":"0.1.0"}}}`, false, "", "", true},
 		{"missing file", "", true, "", "", true},
 	}
 	for _, tt := range tests {
@@ -318,7 +319,7 @@ func TestVersionSourcesMatch(t *testing.T) {
 	}{
 		{"build/config.yml info.version", configVersion},
 		{"build/windows/info.json fixed.file_version", winFileVersion},
-		{"build/windows/info.json info.0000.ProductVersion", winProductVersion},
+		{"build/windows/info.json info.0409.ProductVersion", winProductVersion},
 	}
 
 	for _, name := range []string{"Info.plist", "Info.dev.plist"} {

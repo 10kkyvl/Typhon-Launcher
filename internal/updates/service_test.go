@@ -539,6 +539,10 @@ func TestManifestBuiltAfterInstall(t *testing.T) {
 			item: install.Installation{ID: "i4", DownloadID: "d4", Status: install.StatusCompleted},
 		},
 		{
+			name: "console image",
+			item: install.Installation{ID: "i6", DownloadID: "d6", GameID: "local-1", Type: install.TypeImage, Status: install.StatusCompleted},
+		},
+		{
 			name: "unknown game",
 			item: install.Installation{ID: "i5", DownloadID: "d5", GameID: "other", Status: install.StatusCompleted},
 		},

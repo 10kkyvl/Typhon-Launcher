@@ -92,7 +92,11 @@ func (s *Service) CreateProfileShortcut(id, profileID string) error {
 	}
 
 	path := filepath.Join(dir, name)
-	link, err := gameShortcutLink(*game, profileID, chosen.executable, launcher)
+	icon := chosen.executable
+	if game.Emulation != nil {
+		icon = launcher
+	}
+	link, err := gameShortcutLink(*game, profileID, icon, launcher)
 	if err != nil {
 		return err
 	}

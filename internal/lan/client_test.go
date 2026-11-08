@@ -17,6 +17,15 @@ import (
 // info.Private, so the only thing keeping a shared game's infohash off the
 // public DHT is this config. A future "just reuse the download client"
 // simplification would silently announce every LAN share to the world.
+// The engine loses a writer wake-up now and then, and only the keep-alive timer
+// recovers it: at the default minute a transfer froze for the whole of it.
+func TestLanClientWakesPeerWritersOften(t *testing.T) {
+	cfg := newClientConfig(settings.Defaults(), t.TempDir(), 0)
+	if cfg.KeepAliveTimeout != peerWriterWake {
+		t.Fatalf("KeepAliveTimeout = %v, want %v", cfg.KeepAliveTimeout, peerWriterWake)
+	}
+}
+
 func TestLanClientConfigHasNoPublicAnnounce(t *testing.T) {
 	cfg := newClientConfig(settings.Defaults(), t.TempDir(), 0)
 	if !cfg.NoDHT {

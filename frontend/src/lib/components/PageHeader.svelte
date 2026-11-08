@@ -37,13 +37,15 @@
   .page-header {
     display: flex;
     align-items: flex-end;
+    flex-wrap: wrap;
     justify-content: space-between;
-    gap: var(--space-6);
+    gap: var(--space-3) var(--space-6);
     padding-top: var(--space-3);
     margin-bottom: var(--space-6);
   }
 
   .text {
+    flex: 1 1 24rem;
     min-width: 0;
   }
 
@@ -78,8 +80,10 @@
   .actions {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: var(--space-2);
-    flex-shrink: 0;
+    max-width: 100%;
     padding-bottom: 0.3rem;
   }
 </style>

@@ -8,6 +8,8 @@
   import Select from './Select.svelte';
   import Toggle from './Toggle.svelte';
   import { chooseSavesDir } from '../game/actions/saves';
+  import { emulationPlatform, isEmulated } from '../library/emulation';
+  import { selectImageFile } from '../services/emulators';
   import { errorCode, hasMessage, msg } from '../i18n';
   import { installErrorText } from '../install/installErrors';
   import {
@@ -59,6 +61,8 @@
 
   const target = $derived($gamePropertiesTarget);
   const game = $derived(target ? ($libraryGames.find((g) => g.id === target.gameId) ?? null) : null);
+
+  const emulated = $derived(isEmulated(game));
 
   let candidates = $state<Candidate[]>([]);
   let candidatesLoading = $state(false);
@@ -199,8 +203,8 @@
     candidatesLoading = true;
     argsLoading = true;
     const [list, line, info] = await Promise.allSettled([
-      executableCandidates(gameId),
-      getLaunchArgsLine(gameId),
+      emulated ? Promise.resolve<Candidate[]>([]) : executableCandidates(gameId),
+      emulated ? Promise.resolve('') : getLaunchArgsLine(gameId),
       appInfo(),
     ]);
     if (mine !== seq) return;
@@ -223,6 +227,7 @@
   }
 
   async function loadCompat(gameId: string) {
+    if (emulated) return;
     const mine = seq;
     compatLoading = true;
     try {
@@ -283,11 +288,10 @@
     exeBusy = true;
     exeError = '';
     try {
-      const path = await selectGameExecutable(
-        msg('modals.propertiesExeDialog', { title: game.title }),
-        game.installDir,
-        game.executable,
-      );
+      const title = msg('modals.propertiesExeDialog', { title: game.title });
+      const path = emulated
+        ? await selectImageFile(title, [emulationPlatform(game)])
+        : await selectGameExecutable(title, game.installDir, game.executable);
       if (path) await setExecutable(game.id, path);
     } catch (err) {
       exeError = errorText(err, msg('modals.propertiesExeSaveFailed'));
@@ -399,7 +403,9 @@
         <p class="path">
           {game.executable ? msg('modals.propertiesExeCurrent', { path: game.executable }) : msg('modals.propertiesExeNone')}
         </p>
-        {#if candidatesLoading}
+        {#if emulated}
+          <p class="hint">{msg('emul.imageHint')}</p>
+        {:else if candidatesLoading}
           <p class="hint">{msg('modals.propertiesExeLoading')}</p>
         {:else if candidatesError}
           <p class="failure">{candidatesError}</p>
@@ -432,6 +438,7 @@
         </div>
       </section>
 
+      {#if !emulated}
       <section class="section">
         <h4>{msg('modals.propertiesArgsTitle')}</h4>
         <div class="row">
@@ -454,8 +461,9 @@
         {/if}
         <p class="hint">{msg('modals.propertiesArgsHint')}</p>
       </section>
+      {/if}
 
-      {#if adminShown}
+      {#if adminShown && !emulated}
         <section class="section">
           <div class="row spread">
             <h4>{msg('modals.propertiesAdminTitle')}</h4>
@@ -473,12 +481,12 @@
         </section>
       {/if}
 
-      {#if compatLoading && !compat}
+      {#if !emulated && compatLoading && !compat}
         <section class="section">
           <h4>{msg('modals.compatTitle')}</h4>
           <p class="hint">{msg('modals.compatLoading')}</p>
         </section>
-      {:else if compatVisible && compat}
+      {:else if !emulated && compatVisible && compat}
         <section class="section">
           <div class="row spread">
             <h4>{msg('modals.compatTitle')}</h4>
@@ -576,14 +584,16 @@
           {/if}
           <p class="hint">{msg('modals.compatHint')}</p>
         </section>
-      {:else if compatError}
+      {:else if !emulated && compatError}
         <section class="section">
           <h4>{msg('modals.compatTitle')}</h4>
           <p class="failure">{compatError}</p>
         </section>
       {/if}
 
-      <GameProfiles {game} {candidates} {adminShown} />
+      {#if !emulated}
+        <GameProfiles {game} {candidates} {adminShown} />
+      {/if}
       {#if gameModeShown}
         <section class="section">
           <h4>{msg('modals.propertiesGameModeTitle')}</h4>
@@ -621,7 +631,7 @@
         {/if}
       </section>
 
-      {#if game.installDir || game.savesDir}
+      {#if !emulated && (game.installDir || game.savesDir)}
         <section class="section">
           <h4>{msg('modals.propertiesSavesTitle')}</h4>
           <p class="path">{game.savesDir || msg('modals.propertiesSavesAuto')}</p>

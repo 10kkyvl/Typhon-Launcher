@@ -6,6 +6,37 @@ this file carries the same entries for the GitHub releases. It starts at
 0.4.0, the release that introduced the English interface — for anything older
 see `CHANGELOG.md`. Sections: "Added", "Changed", "Fixed", "Removed".
 
+## 1.4.0 — 2026-11-09
+PlayStation games from PS1 to PS4, PSP and PS Vita run through emulators, and console releases download straight from the catalog. With Discord linked, the Typhon bot shows and controls your downloads, starts new ones and messages you when a game is ready. On a Mac games go to Steam too.
+
+### Added
+- PS1, PS2, PSP, PS3, PS Vita and PS4 games run through emulators you install yourself: DuckStation, PCSX2, PPSSPP, RPCS3, Vita3K and shadPS4. Set them in Settings → Downloads → Emulators or with "Find installed". The launcher never downloads or ships a BIOS or firmware
+- "Add console image" adds an image or an unpacked game to the library. The title is filled in from the game itself, and a PS3 folder gets its console by its layout. A PS3 .pkg can be added as is: RPCS3 installs it at the first launch
+- The game page lists console releases apart from PC ones. A downloaded image installs by itself and the page then shows Play
+- When a PS1 or PS2 emulator folder has no BIOS, the launcher does not start the game for nothing: it names and opens the folder and retries once the BIOS is there. When an emulator closes right after the start, the launcher points to where the cause is
+- Before a PS3 game starts, the launcher offers to close an RPCS3 that is already open, since the emulator refuses a second copy
+- When a game started from the tray, a shortcut or Steam has no emulator set, the launcher opens its window and asks for one
+- PSP games can be left through the PPSSPP pause menu
+- The overlay has a Close game button: after a confirmation, since unsaved progress is lost, it stops the game, a fullscreen emulator included
+- Link Discord in Settings → General → Discord: the launcher gives a code you enter in the Typhon bot with /profile. Your Typhon account keeps your Discord ID and name until you unlink it
+- "Allow control from Discord": the /launcher command on the Typhon server shows this computer's downloads and running game and pauses, resumes, starts from the queue or cancels a download. Off by default
+- The /launcher panel refreshes itself while downloads run. The bot cannot launch games or delete files
+- "Allow starting downloads from Discord": the Get a game button in /launcher searches your sources and starts a download into the default folder. At most 10 unfinished downloads. Works only while control from Discord is on, off by default
+- "Notify me in Discord": the bot sends you a direct message when a download finishes or stops with an error, and says whether a download started from Discord could begin. For this the launcher sends the game's title to the Typhon server. Off by default
+- A "Discord community" entry in About and Support
+- "Add to Steam" works on a Mac: Steam starts the game the same way the Play button does. A game cannot be added while Steam is open, since Steam would overwrite the list on exit
+- typhon:// links open a game page or a catalog search. A link never installs or starts a game. To find a game from a link, the launcher sends the metadata service only the title from the page, never its address
+
+### Fixed
+- A download could lose a peer's speed for a minute. The same thing sometimes stalled LAN transfers, and a receiver waited forever with no error when the sender was briefly unreachable
+- A game received over the LAN stayed read-only and could fail to keep settings and saves next to its executable. The same happened to games moved to the same drive after downloading
+- A file check reported damage on an intact game after the launcher rewrote its own service file in the game folder. Damage is now counted in files
+- The catalog search lost a base game that has another edition, and its releases moved to the edition's card
+- One right click on the tray icon could open its menu again after a choice
+- On Windows with recent items turned off, the taskbar menu lost its Library and Downloads entries
+- On a Mac the search hint shows ⌘K instead of Ctrl K
+- In a narrow window the header buttons of the Installed page went past the edge
+
 ## 1.3.1 — 2026-10-27
 A large source can be added in the background while you keep using the launcher. Plus fixes for game pages, friends lists and source error notifications.
 

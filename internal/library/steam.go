@@ -95,13 +95,45 @@ func (s *Service) SetSteamArt(fn func(canonicalID string) (steamlink.Art, error)
 	s.steamArt = fn
 }
 
-// steamTarget is what Steam has to start for a game: the game itself, or the
-// launcher with --play when the game needs administrator rights.
-func steamTarget(game Game, launcherPath func() (string, error)) (steamlink.Shortcut, error) {
-	return steamProfileTarget(game, "", launcherPath)
+// steamRoute is how a shortcut reaches the game.
+type steamRoute struct {
+	launcherPath func() (string, error)
+	// viaLauncher sends every game through --play. The Mac Steam can start
+	// neither a Windows game, which runs in a CrossOver bottle the launcher
+	// picks, nor a native one the way the launcher prepares it.
+	viaLauncher bool
 }
 
-func steamProfileTarget(game Game, profileID string, launcherPath func() (string, error)) (steamlink.Shortcut, error) {
+// steamTarget is what Steam has to start for a game: the game itself, or the
+// launcher with --play when the game needs administrator rights, is emulated
+// or the route says so.
+func steamTarget(game Game, route steamRoute) (steamlink.Shortcut, error) {
+	return steamProfileTarget(game, "", route)
+}
+
+func steamProfileTarget(game Game, profileID string, route steamRoute) (steamlink.Shortcut, error) {
+	sc, _, err := steamProfileEntry(game, profileID, route)
+	return sc, err
+}
+
+// steamProfileEntry also returns the file the entry depends on, which has to
+// exist when the entry is added: the game's executable, or the launcher for an
+// emulated game.
+func steamProfileEntry(game Game, profileID string, route steamRoute) (steamlink.Shortcut, string, error) {
+	sc, err := steamEntry(game, profileID, route)
+	if err != nil {
+		return steamlink.Shortcut{}, "", err
+	}
+	proof := sc.Icon
+	// The Mac Steam draws no icon out of an .exe or a bare binary, and reading
+	// one makes macOS ask whether Steam may open the folder the game is in.
+	if route.viaLauncher {
+		sc.Icon = ""
+	}
+	return sc, proof, nil
+}
+
+func steamEntry(game Game, profileID string, route steamRoute) (steamlink.Shortcut, error) {
 	chosen, err := chooseProfile(&game, profileID, true)
 	if err != nil {
 		return steamlink.Shortcut{}, err
@@ -120,14 +152,19 @@ func steamProfileTarget(game Game, profileID string, launcherPath func() (string
 		}
 		sc.Name = profileTitle(game, profileID)
 	}
-	if chosen.admin {
+	// Steam cannot start an image: an emulated game goes through --play, which
+	// finds the emulator at launch.
+	if chosen.admin || game.Emulation != nil || route.viaLauncher {
 		playArgs, err := shortcut.PlayArgs(game.ID, profileID)
 		if err != nil {
 			return steamlink.Shortcut{}, fmt.Errorf("%w: %w", errShortcutBadID, err)
 		}
-		launcher, err := launcherPath()
+		launcher, err := route.launcherPath()
 		if err != nil {
 			return steamlink.Shortcut{}, fmt.Errorf("путь к лаунчеру: %w", err)
+		}
+		if game.Emulation != nil {
+			sc.Icon = launcher
 		}
 		sc.Exe = launcher
 		sc.StartDir = filepath.Dir(launcher)
@@ -159,11 +196,15 @@ type steamState struct {
 	liveIDs      map[string]struct{}
 	goneIDs      []string
 	goneProfiles map[string][]uint32
-	launcherPath func() (string, error)
+	route        steamRoute
 }
 
 func (s *Service) steamStateLocked() steamState {
-	st := steamState{liveIDs: map[string]struct{}{}, goneProfiles: map[string][]uint32{}, launcherPath: s.launcherPath}
+	st := steamState{
+		liveIDs:      map[string]struct{}{},
+		goneProfiles: map[string][]uint32{},
+		route:        steamRoute{launcherPath: s.launcherPath, viaLauncher: s.steamViaLauncher},
+	}
 	for _, g := range s.games {
 		if g.Uninstalled {
 			st.goneIDs = append(st.goneIDs, g.ID)
@@ -195,7 +236,7 @@ func (st steamState) plan() steamlink.Sync {
 		if g.External != nil && g.External.Provider == ProviderSteam {
 			continue
 		}
-		if sc, err := steamTarget(g, st.launcherPath); err == nil {
+		if sc, err := steamTarget(g, st.route); err == nil {
 			if err := sc.Validate(); err != nil {
 				slog.Warn("steam shortcut skipped", "id", g.ID, "error", err)
 			} else {
@@ -203,7 +244,7 @@ func (st steamState) plan() steamlink.Sync {
 			}
 		}
 		for _, p := range g.Profiles {
-			psc, err := steamProfileTarget(g, p.ID, st.launcherPath)
+			psc, err := steamProfileTarget(g, p.ID, st.route)
 			if err != nil {
 				continue
 			}
@@ -268,11 +309,11 @@ func (s *Service) AddProfileToSteam(id, profileID string) error {
 	if ctx == nil {
 		return errSteamNotStarted
 	}
-	sc, err := steamProfileTarget(game, profileID, state.launcherPath)
+	sc, proof, err := steamProfileEntry(game, profileID, state.route)
 	if err != nil {
 		return err
 	}
-	if _, err := os.Stat(sc.Icon); err != nil {
+	if _, err := os.Stat(proof); err != nil {
 		return fmt.Errorf("исполняемый файл игры: %w", err)
 	}
 

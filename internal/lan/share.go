@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"typhon/internal/library"
 	"typhon/internal/uierr"
 
 	"github.com/anacrolix/torrent/bencode"
@@ -99,6 +100,9 @@ func walkShareFiles(ctx context.Context, root string) ([]metainfo.FileInfo, int6
 		if err != nil {
 			return err
 		}
+		if isInstallMarker(rel) {
+			return nil
+		}
 		files = append(files, metainfo.FileInfo{
 			Path:   strings.Split(rel, string(filepath.Separator)),
 			Length: fi.Size(),
@@ -113,6 +117,13 @@ func walkShareFiles(ctx context.Context, root string) ([]metainfo.FileInfo, int6
 		return strings.Join(files[i].Path, "/") < strings.Join(files[j].Path, "/")
 	})
 	return files, total, nil
+}
+
+// isInstallMarker takes a path relative to the share root. The marker describes
+// this machine's install: its game id and uninstall command mean nothing on the
+// receiver. Only the root one is ours, a game may ship a same-named file deeper.
+func isInstallMarker(rel string) bool {
+	return rel == library.MarkerName
 }
 
 func infoName(root string) string {
@@ -212,6 +223,9 @@ func fingerprint(ctx context.Context, root string) (string, error) {
 		rel, err := filepath.Rel(root, path)
 		if err != nil {
 			return err
+		}
+		if isInstallMarker(rel) {
+			return nil
 		}
 		entries = append(entries, entry{
 			rel:     filepath.ToSlash(rel),

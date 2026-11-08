@@ -24,6 +24,7 @@ export const state = {
   'state.installTypeExeInstaller': 'Установщик (EXE)',
   'state.installTypeMsiInstaller': 'Установщик (MSI)',
   'state.installTypeUnknown': 'Неизвестный пакет',
+  'state.installTypeImage': 'Образ',
   'state.installCompletedToast': 'Игра «{name}» установлена',
   'state.installFailedToast': 'Ошибка установки «{name}»: {error}',
 
@@ -138,6 +139,7 @@ export const state = {
   'state.accountErrorCredentialStore': 'Не удалось прочитать сохранённый вход из системного хранилища, войдите заново',
   'state.accountErrorSuspended': 'Аккаунт заблокирован. Подробности — в разделе «Поддержка»',
   'state.accountErrorEmailUndeliverable': 'Этот адрес не может получать почту, укажите другой',
+  'state.accountErrorDiscordUnavailable': 'Привязка Discord пока недоступна, загляните позже',
   'state.accountErrorGeneric': 'Не удалось выполнить операцию',
 
   'state.accountSyncReasonUnauthenticated': 'Сессия аккаунта истекла — войдите заново, чтобы синхронизировать данные.',

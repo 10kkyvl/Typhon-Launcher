@@ -1,12 +1,14 @@
 package install
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
 
 	"typhon/internal/download"
+	"typhon/internal/storage"
 	"typhon/internal/uierr"
 )
 
@@ -19,7 +21,32 @@ var (
 	errUnknownMode = uierr.New("install.mode_invalid", "неизвестный режим установки")
 
 	errRenameRefused = errors.New("не удалось переименовать папку загрузки")
+
+	// Без кода uierr: коды — контракт с таблицей фронтенда, а текст ошибки
+	// пользователь и так видит целиком вместе с причиной.
+	errMovedReadOnly = errors.New("не удалось снять с файлов игры режим «только чтение»")
 )
+
+var clearMovedReadOnly = storage.MakeWritable
+
+// makeMovedWritable снимает с папки, отданной установке переименованием, режим
+// только для чтения: его ставит торрент-движок, а копирование и распаковка его
+// не переносят. Вызов — на единственном пути к регистрации (complete), поэтому
+// его проходят и первый запуск, и Retry, и доводка после краха (crashFinalizable):
+// крах посреди обхода оставляет часть файлов закрытыми, а повторный обход
+// безвреден. Откатывать переименование незачем: папка уже на месте, запись не
+// закрыта, а обратное переименование — ещё один шаг, который может оборваться.
+// Решает режим, а не movedSource: ошибка stat там значит «не перенос», и обход
+// тихо пропустился бы.
+func makeMovedWritable(ctx context.Context, item Installation) error {
+	if !takesSource(item.Type, item.ArchivePath) || item.Mode != ModeMove {
+		return nil
+	}
+	if err := clearMovedReadOnly(ctx, item.Destination); err != nil {
+		return fmt.Errorf("%w: %w", errMovedReadOnly, err)
+	}
+	return nil
+}
 
 // moveEligible — можно ли отдать ContentRoot переименованием или удалением:
 // только когда он целиком лежит в папке, которую загрузка создала сама. Для
@@ -64,7 +91,7 @@ func resolveMode(requested string, d download.Download, contentRoot string) (str
 // spaceNeeded — единственное место, где решается, сколько места нужно под
 // установку: перенос в пределах тома не копирует данные.
 func spaceNeeded(plan Plan, mode string, sameVolume bool) int64 {
-	if plan.Type == TypePortable && mode == ModeMove && sameVolume {
+	if takesSource(plan.Type, plan.ArchivePath) && mode == ModeMove && sameVolume {
 		return moveReserveBytes
 	}
 	return requiredBytes(plan)

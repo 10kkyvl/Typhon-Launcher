@@ -68,7 +68,7 @@ func selectedPaths(d download.Download) []string {
 //
 //wails:ignore
 func (s *Service) HandleDownloadStarted(d download.Download) {
-	if d.Origin.Purpose != download.PurposeRelease || !d.Origin.ElevateAhead {
+	if d.Origin.Purpose != download.PurposeRelease || !d.Origin.ElevateAhead || d.Origin.Platform != "" {
 		return
 	}
 	if !elevationAvailable() {

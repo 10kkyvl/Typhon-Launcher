@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"reflect"
 	"testing"
 	"time"
 
@@ -188,14 +187,21 @@ func TestWaitBounded(t *testing.T) {
 	})
 }
 
-func TestKeepTrayMenuStoresTheMenuOpenMenuChecks(t *testing.T) {
-	systemTray := new(application.SystemTray)
-	menu := application.NewMenu()
-	if err := keepTrayMenu(systemTray, menu); err != nil {
-		t.Fatalf("keepTrayMenu: %v", err)
+func TestOneRightClickOpensTheMenuOnce(t *testing.T) {
+	m := newTestMenu()
+	click := time.Unix(1_800_000_000, 0)
+	if !m.rightClick(click) {
+		t.Fatal("the first right click must open the menu")
 	}
-	got := reflect.ValueOf(systemTray).Elem().FieldByName("menu")
-	if got.Pointer() != reflect.ValueOf(menu).Pointer() {
-		t.Fatalf("the tray keeps %v, want the menu it was given", got)
+	// WM_CONTEXTMENU right after WM_RBUTTONUP of the same click.
+	if m.rightClick(click.Add(30 * time.Millisecond)) {
+		t.Fatal("the second notification of one click opened the menu again")
+	}
+	if !m.rightClick(click.Add(trayRightClickWindow + time.Millisecond)) {
+		t.Fatal("a later right click must open the menu")
+	}
+	m.showing.Store(true)
+	if m.rightClick(click.Add(10 * time.Second)) {
+		t.Fatal("a right click while the menu is open must not open another")
 	}
 }

@@ -12,6 +12,8 @@ const event = (over: Partial<SessionEvent> = {}): SessionEvent => ({
   exitKnown: true,
   crashed: true,
   reasonCode: 'dll_not_found',
+  emulatorQuickExit: false,
+  emulator: '',
   ...over,
 });
 

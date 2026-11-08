@@ -34,8 +34,11 @@ import { errSupport } from './errSupport';
 import { saves } from './saves';
 import { cloudsaves } from './cloudsaves';
 import { tickets } from './tickets';
+import { discord } from './discord';
 import { overlay } from './overlay';
 import { redist } from './redist';
+import { emulators } from './emulators';
+import { errEmulators } from './errEmulators';
 import { screenshots } from './screenshots';
 import { stats } from './stats';
 import { sysreq } from './sysreq';
@@ -78,8 +81,11 @@ export const ru = {
   ...saves,
   ...cloudsaves,
   ...tickets,
+  ...discord,
   ...overlay,
   ...redist,
+  ...emulators,
+  ...errEmulators,
   ...screenshots,
   ...stats,
   ...sysreq,
@@ -89,4 +95,4 @@ export const ru = {
 
 export type MessageKey = keyof typeof ru;
 
-export { common, format, friends, profile, profileStyle, search, install, downloads, installed, settings, modals, ui, social, games, reviews, transfers, state, errInstall, errMetadata, errUpdates, errSources, errLibrary, errLogs, errSaves, errChat, errGameMode, errSupport, saves, cloudsaves, tickets, overlay, redist, screenshots, stats, sysreq };
+export { common, format, friends, profile, profileStyle, search, install, downloads, installed, settings, modals, ui, social, games, reviews, transfers, state, errInstall, errMetadata, errUpdates, errSources, errLibrary, errLogs, errSaves, errChat, errGameMode, errSupport, saves, cloudsaves, tickets, discord, overlay, redist, emulators, errEmulators, screenshots, stats, sysreq };

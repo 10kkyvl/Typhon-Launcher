@@ -19,7 +19,10 @@
   import { toast } from '../stores/toasts';
   import { bytesSize } from '../utils/format';
   import { msg } from '../i18n';
+  import { platformBadge } from '../library/emulation';
   import Button from './Button.svelte';
+  import ConsoleTag from './ConsoleTag.svelte';
+  import EmulatorHint from './EmulatorHint.svelte';
   import LibrarySetupModal from './LibrarySetupModal.svelte';
   import Modal from './Modal.svelte';
 
@@ -41,6 +44,7 @@
   let pendingHash = '';
   let token = 0;
 
+  const consolePlatform = $derived(origin?.platform ?? '');
   const libraryReady = $derived(Boolean($settings?.libraryPath));
   const canContinue = $derived(source.trim().startsWith('magnet:'));
   const selectedCount = $derived(selected.filter(Boolean).length);
@@ -148,11 +152,14 @@
     const indices = selected.map((on, i) => (on ? i : -1)).filter((i) => i >= 0);
     starting = true;
     try {
-      await startDownloadFrom(info.infoHash, destination, indices, {
-        ...(origin ?? {}),
-        autoInstall,
-        elevateAhead: autoInstall && canElevateAhead && elevateAhead,
-      });
+      await startDownloadFrom(
+        info.infoHash,
+        destination,
+        indices,
+        consolePlatform
+          ? { ...origin }
+          : { ...(origin ?? {}), autoInstall, elevateAhead: autoInstall && canElevateAhead && elevateAhead },
+      );
       pendingHash = '';
       open = false;
     } catch (err) {
@@ -165,7 +172,13 @@
 {#if !libraryReady}
   <LibrarySetupModal bind:open />
 {:else}
-<Modal bind:open title={msg('modals.addDownloadTitle')} width={step === 'files' ? '62rem' : '48rem'}>
+<Modal
+  bind:open
+  title={consolePlatform && step === 'files'
+    ? msg('emul.downloadTitle', { console: platformBadge(consolePlatform) })
+    : msg('modals.addDownloadTitle')}
+  width={step === 'files' && !consolePlatform ? '62rem' : '48rem'}
+>
   {#if step === 'source'}
     <div class="source">
       <label class="field">
@@ -187,6 +200,20 @@
       <span class="spinner"></span>
       <span class="loading-text">{msg('modals.addDownloadFetchingMetadata')}</span>
       <span class="loading-note">{msg('modals.addDownloadFetchingNote')}</span>
+    </div>
+  {:else if info && consolePlatform}
+    <div class="files">
+      <div class="torrent">
+        <span class="torrent-name">{info.name}</span>
+        <span class="torrent-size">{bytesSize(info.totalBytes)}</span>
+      </div>
+      <div class="console">
+        <ConsoleTag platform={consolePlatform} />
+        {#if origin?.title}<span class="console-title">{origin.title}</span>{/if}
+      </div>
+      <p class="note">{msg('emul.downloadNote')}</p>
+      <p class="note">{msg('emul.downloadAuto')}</p>
+      <EmulatorHint platform={consolePlatform} />
     </div>
   {:else if info}
     <div class="files">
@@ -351,6 +378,24 @@
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;
+  }
+
+  .console {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  .console-title {
+    font-size: var(--font-sm);
+    color: var(--text-2);
+  }
+
+  .note {
+    margin: 0;
+    font-size: var(--font-xs);
+    line-height: 1.5;
+    color: var(--text-3);
   }
 
   .dest {

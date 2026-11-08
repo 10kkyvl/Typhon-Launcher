@@ -1,4 +1,5 @@
 import { msg } from '../i18n';
+import { platformBadge } from '../library/emulation';
 import { genreLabel } from '../metadata/labels';
 import type { MediaAsset, MetadataMatch, MetadataView } from '../services/metadata';
 
@@ -196,6 +197,8 @@ export interface GameStatus {
   updateAvailable: boolean;
   releaseCount: number;
   releasesLoading: boolean;
+  consoleCount?: number;
+  consolePlatform?: string;
   relatedWithReleases?: boolean;
   notOnPc?: boolean;
   busy?: BusyState | null;
@@ -211,6 +214,12 @@ export function primaryAction(status: GameStatus): PrimaryAction {
     return { kind: 'play', label: msg('games.play'), disabled: false };
   }
   if (status.releaseCount > 0) return { kind: 'download', label: msg('games.primaryDownload'), disabled: false };
+  if ((status.consoleCount ?? 0) > 0) {
+    const label = status.consolePlatform
+      ? msg('games.primaryDownloadFor', { platform: platformBadge(status.consolePlatform) })
+      : msg('games.primaryDownloadImage');
+    return { kind: 'download', label, disabled: false };
+  }
   if (status.releasesLoading) return { kind: 'resolving', label: msg('games.primaryResolving'), disabled: true };
   if (status.relatedWithReleases) return { kind: 'other-versions', label: msg('games.primaryOtherVersions'), disabled: false };
   if (status.notOnPc) return { kind: 'not-on-pc', label: msg('games.primaryNotOnPc'), disabled: true };

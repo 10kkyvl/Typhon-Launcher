@@ -44,6 +44,9 @@ func (s *Service) RecentGames(limit int) []RecentGame {
 			Executable: game.Executable,
 			Running:    active,
 		}}
+		if game.Emulation != nil {
+			c.Executable = ""
+		}
 		if game.LastPlayed != nil {
 			c.lastPlayed = *game.LastPlayed
 			c.played = true

@@ -4,6 +4,7 @@ import { inWails } from '../services/backend';
 import { getGames, getRunningGames, type CrashEvent, type LibraryGame, type ProfileFallback, type SessionEvent } from '../services/library';
 import { msg } from '../i18n';
 import { clearCrashes, recordCrash, recordCrashDetail } from './crash';
+import { navigate } from './router';
 import { toast } from './toasts';
 
 export const libraryGames = writable<LibraryGame[]>([]);
@@ -42,6 +43,13 @@ export async function initLibrary() {
       return;
     }
     clearCrashes(gameId);
+    if (session.emulatorQuickExit) {
+      toast(msg('emul.quickExit', { emulator: session.emulator }), 'info', {
+        label: msg('emul.quickExitAction'),
+        run: () => navigate('settings', { tab: 'downloads' }),
+      });
+      return;
+    }
     if (sessionSeconds >= 60) {
       toast(msg('state.librarySessionEnded', { minutes: Math.round(sessionSeconds / 60) }));
     }

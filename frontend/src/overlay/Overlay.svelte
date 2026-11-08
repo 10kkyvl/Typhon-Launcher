@@ -16,6 +16,7 @@
   import OverlayBrowser from './OverlayBrowser.svelte';
   import OverlayChat from './OverlayChat.svelte';
   import OverlayFriends from './OverlayFriends.svelte';
+  import OverlayGame from './OverlayGame.svelte';
   import OverlayMusic from './OverlayMusic.svelte';
 
   let { settingsFailed = false }: { settingsFailed?: boolean } = $props();
@@ -117,6 +118,8 @@
         <IconButton label={msg('common.close')} onclick={hide}><X size="1.8rem" strokeWidth={1.8} /></IconButton>
       </div>
     </header>
+
+    <OverlayGame active={shown} />
 
     <OverlayMusic active={shown} />
 

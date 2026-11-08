@@ -23,6 +23,7 @@
   import DownloadDetailsModal from '../../lib/components/DownloadDetailsModal.svelte';
   import DownloadItem from '../../lib/components/DownloadItem.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
+  import ConsoleTag from '../../lib/components/ConsoleTag.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import InstallModal from '../../lib/components/InstallModal.svelte';
@@ -104,6 +105,7 @@
   }
 
   function typeTag(d: DownloadRecord) {
+    if (d.origin.platform) return msg('state.installTypeImage');
     if (d.origin.purpose === 'update') return msg('transfers.downloadsTypeUpdate');
     if (d.origin.purpose === 'repair') return msg('transfers.downloadsTypeRepair');
     if (d.origin.gameId || d.origin.releaseId) return msg('transfers.downloadsTypeGame');
@@ -269,6 +271,7 @@
             {#if typeTag(q) || sourceTag(q) || q.ignoreSchedule}
               <div class="tags">
                 {#if typeTag(q)}<StatusBadge kind="neutral" label={typeTag(q)} dot={false} />{/if}
+                {#if q.origin.platform}<ConsoleTag platform={q.origin.platform} />{/if}
                 {#if sourceTag(q)}<StatusBadge kind="neutral" label={sourceTag(q)} dot={false} />{/if}
                 {#if q.ignoreSchedule}<StatusBadge kind="neutral" label={msg('transfers.outsideSchedule')} dot={false} />{/if}
               </div>
@@ -329,6 +332,7 @@
             {#if typeTag(item) || sourceTag(item)}
               <div class="tags">
                 {#if typeTag(item)}<StatusBadge kind="neutral" label={typeTag(item)} dot={false} />{/if}
+                {#if item.origin.platform}<ConsoleTag platform={item.origin.platform} />{/if}
                 {#if sourceTag(item)}<StatusBadge kind="neutral" label={sourceTag(item)} dot={false} />{/if}
               </div>
             {/if}

@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"typhon/internal/download"
+	"typhon/internal/hashdir"
+	"typhon/internal/library"
 	"typhon/internal/sources"
 )
 
@@ -271,5 +273,44 @@ func TestRepairRefusesWithoutTorrentVerdict(t *testing.T) {
 	defer h.downloads.mu.Unlock()
 	if len(h.downloads.requests) != 0 {
 		t.Fatalf("repair queued a download into the install directory: %+v", h.downloads.requests)
+	}
+}
+
+// A manifest saved before launcher files were excluded lists the install
+// marker; the launcher then rewrites the marker (a version bump, ownership
+// data), and the card used to report "damage found" for an intact game.
+func TestVerifyGameIgnoresRewrittenInstallMarker(t *testing.T) {
+	h := newHarness(t)
+	marker := library.Marker{GameID: "local-1", Title: "Game", Version: "1.0", InstalledAt: time.Unix(1, 0)}
+	if err := library.WriteMarker(h.installDir, marker); err != nil {
+		t.Fatal(err)
+	}
+	legacy, err := hashdir.Build(context.Background(), h.installDir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy.GameID, legacy.ReleaseID, legacy.Version = "local-1", "r1", "1.0"
+	if err := h.service.store.saveManifest(legacy); err != nil {
+		t.Fatal(err)
+	}
+	marker.Owned = true
+	marker.InstalledAt = time.Unix(2, 0)
+	if err := library.WriteMarker(h.installDir, marker); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := h.service.VerifyGame("local-1"); err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	h.awaitJob(t, "local-1")
+	state, err := h.service.GetVerifyState("local-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.CorruptedPieces != 0 || state.MissingFiles != 0 || len(state.Issues) != 0 || len(state.Extra) != 0 {
+		t.Fatalf("intact install reported as damaged: %+v", state)
+	}
+	if state.Ratio != 1 || state.OkBytes != state.TotalBytes {
+		t.Fatalf("ratio = %v ok=%d total=%d, want a full match", state.Ratio, state.OkBytes, state.TotalBytes)
 	}
 }

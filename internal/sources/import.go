@@ -2,12 +2,15 @@ package sources
 
 import (
 	"context"
+	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"typhon/internal/catalog"
+	"typhon/internal/emulators"
 	"typhon/internal/sources/feed"
 	"typhon/internal/titles"
 )
@@ -38,11 +41,15 @@ func parseFeedEntries(ctx context.Context, sourceID string, entries []feed.Entry
 		}
 		base, normalized := parsed.Base, parsed.Normalized
 		year := parsed.Year
+		platform := parsed.Platform
 		if e.Game != "" {
 			hint := memo.Parse(e.Game)
 			base, normalized = hint.Base, hint.Normalized
 			if hint.Year != 0 {
 				year = hint.Year
+			}
+			if platform == "" {
+				platform = hint.Platform
 			}
 		}
 		version := parsed.Version
@@ -63,6 +70,7 @@ func parseFeedEntries(ctx context.Context, sourceID string, entries []feed.Entry
 			ToVersion:       e.ToVersion,
 			Sequence:        e.Sequence,
 			Edition:         parsed.Edition,
+			Platform:        platform,
 			Languages:       parsed.Languages,
 			Year:            year,
 			Tags:            parsed.Tags,
@@ -180,7 +188,7 @@ func mergeReleases(ctx context.Context, existing, incoming []*Release, now time.
 			// Изменившийся заголовок или версия — другой запрос к каталогу,
 			// поэтому прошлый результат матчинга больше не действителен.
 			current.MatchEpoch = 0
-			if !current.Locked && current.NormalizedTitle != next.NormalizedTitle {
+			if !current.Locked && (current.NormalizedTitle != next.NormalizedTitle || current.Platform != next.Platform) {
 				current.CanonicalGameID = nil
 				current.MatchStatus = ""
 				current.MatchMethod = ""
@@ -198,6 +206,7 @@ func mergeReleases(ctx context.Context, existing, incoming []*Release, now time.
 		current.ToVersion = next.ToVersion
 		current.Sequence = next.Sequence
 		current.Edition = next.Edition
+		current.Platform = next.Platform
 		current.Languages = next.Languages
 		current.Year = next.Year
 		current.Tags = next.Tags
@@ -269,6 +278,7 @@ func changed(current, next *Release) bool {
 		current.GameHint != next.GameHint ||
 		current.NormalizedTitle != next.NormalizedTitle ||
 		current.Year != next.Year ||
+		current.Platform != next.Platform ||
 		current.Kind != next.Kind ||
 		current.Version != next.Version ||
 		current.FromVersion != next.FromVersion ||
@@ -311,7 +321,7 @@ func applyMatches(m matcher, list []*Release) error {
 		if r.MatchEpoch == epoch {
 			continue
 		}
-		if r.MatchStatus == catalog.StatusMatched && r.CanonicalGameID != nil && stableMatch(r.MatchMethod) {
+		if r.Platform == "" && r.MatchStatus == catalog.StatusMatched && r.CanonicalGameID != nil && stableMatch(r.MatchMethod) {
 			r.MatchEpoch = epoch
 			continue
 		}
@@ -336,12 +346,70 @@ func applyMatches(m matcher, list []*Release) error {
 
 	matches := m.ResolveAll(queries)
 	for i, r := range targets {
-		match := matches[position[keys[i]]]
+		match, err := localConsoleMatch(m, r, matches[position[keys[i]]])
+		if err != nil {
+			return err
+		}
 		assign(r, match)
 		r.MatchEpoch = epoch
 	}
 
 	return nil
+}
+
+type gameReader interface {
+	GetGame(id string) (catalog.Game, error)
+}
+
+// consoleAccept is the filter for one console; nil for a PC release. An id
+// missing from the emulator table accepts nothing.
+func consoleAccept(id string) func([]string) bool {
+	if id == "" {
+		return nil
+	}
+	platform, ok := emulators.Lookup(id)
+	if !ok {
+		return func([]string) bool { return false }
+	}
+	return platform.OnCatalog
+}
+
+// The local matcher compares titles only, and without the token a console
+// release reads exactly like its PC namesake. So a console release needs a game
+// on its console, and a PC release stays off a game only on supported consoles,
+// unless the user's own rule put it there.
+func localConsoleMatch(m matcher, r *Release, match catalog.Match) (catalog.Match, error) {
+	if match.Status != catalog.StatusMatched || (r.Platform == "" && match.Method == catalog.MethodOverride) {
+		return match, nil
+	}
+	unmatched := catalog.Match{Status: catalog.StatusUnmatched, Method: catalog.MethodNone, Reason: catalog.ReasonPlatform}
+	reader, ok := m.(gameReader)
+	if !ok {
+		if r.Platform == "" {
+			return match, nil
+		}
+		return unmatched, nil
+	}
+	game, err := reader.GetGame(match.GameID)
+	if err != nil {
+		return catalog.Match{}, fmt.Errorf("read game %s: %w", match.GameID, err)
+	}
+	if r.Platform == "" {
+		if !catalog.OnPC(game.Platforms) && onSupportedConsole(game.Platforms) {
+			return unmatched, nil
+		}
+		return match, nil
+	}
+	if !consoleAccept(r.Platform)(game.Platforms) {
+		return unmatched, nil
+	}
+	return match, nil
+}
+
+func onSupportedConsole(platforms []string) bool {
+	return slices.ContainsFunc(emulators.Platforms(), func(p emulators.Platform) bool {
+		return p.OnCatalog(platforms)
+	})
 }
 
 // Матч по псевдониму или похожести держится на данных каталога, а они

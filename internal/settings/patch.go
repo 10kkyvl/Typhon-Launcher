@@ -13,6 +13,7 @@ var (
 	ErrPatchInvalidValue = errors.New("settings patch: invalid value")
 	ErrPatchDerivedField = errors.New("settings patch: field is derived from libraryPath")
 	ErrPatchConsentField = errors.New("settings patch: consent version is recorded only by SaveConsent")
+	ErrPatchEmulatorPath = errors.New("settings patch: emulator paths are set only by the emulators service")
 )
 
 var derivedFields = map[string]bool{"gamesPath": true, "downloadsPath": true, "screenshotsPath": true}
@@ -59,6 +60,9 @@ func applyPatch(current Settings, patch map[string]json.RawMessage) (Settings, e
 		}
 		if key == "telemetryConsentVersion" {
 			return Settings{}, fmt.Errorf("%w: %q", ErrPatchConsentField, key)
+		}
+		if key == "emulatorPaths" {
+			return Settings{}, fmt.Errorf("%w: %q", ErrPatchEmulatorPath, key)
 		}
 		if !json.Valid(value) {
 			return Settings{}, fmt.Errorf("%w for %q: not JSON", ErrPatchInvalidValue, key)

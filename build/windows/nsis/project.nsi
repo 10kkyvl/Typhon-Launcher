@@ -201,6 +201,8 @@ Section "uninstall"
     # Value name is autostartSlug(Options.Name) from the Wails runtime, and
     # main.go names the application "Typhon".
     DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "typhon"
+    # The launcher writes this class to HKCU itself on every start.
+    DeleteRegKey HKCU "Software\Classes\typhon"
 
     !insertmacro wails.unassociateFiles
     !insertmacro wails.unassociateCustomProtocols

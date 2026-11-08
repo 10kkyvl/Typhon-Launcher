@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"typhon/internal/procs"
 	"typhon/internal/wine"
 )
 
@@ -432,5 +433,38 @@ func TestWineProcessKillSharedSparesBottle(t *testing.T) {
 	}
 	if !killedGame {
 		t.Fatal("процессы игры не остановлены")
+	}
+}
+
+// An emulator or a native game runs outside every bottle. The detect loop has
+// to find it in the real process table, or a complete scan closes its session
+// a second after the start while the program is still on screen.
+func TestDetectKeepsANativeProgramRunningWithTheRealProcessTable(t *testing.T) {
+	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+	s.scan = procs.List
+	exe, _ := testExecutable(t)
+	game, err := s.AddGame(t.Context(), exe, "Native")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	s.findLocked(game.ID).LaunchArgs = testHoldArgs(30)
+	s.watching = true
+	s.mu.Unlock()
+
+	if err := s.PlayGame(game.ID); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := s.StopGame(game.ID); err != nil {
+			t.Errorf("StopGame: %v", err)
+		}
+		s.sessionWG.Wait()
+	})
+	for i := range 3 {
+		s.detectTick(t.Context())
+		if !s.IsRunning(game.ID) {
+			t.Fatalf("session closed on tick %d while its process is alive", i)
+		}
 	}
 }

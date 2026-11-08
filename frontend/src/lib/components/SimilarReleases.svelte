@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { Link2 } from '@lucide/svelte';
+  import { platformBadge } from '../library/emulation';
   import { candidateLabel, relativeCandidate } from '../game/similar';
   import { confirmMatch, similarReleases, type SimilarRelease } from '../services/sources';
   import { errorMessage } from '../stores/sources';
@@ -9,6 +10,7 @@
   import { bytesSize, relativeDate } from '../utils/format';
   import { msg } from '../i18n';
   import Button from './Button.svelte';
+  import ConsoleTag from './ConsoleTag.svelte';
   import StatusBadge from './StatusBadge.svelte';
 
   let {
@@ -77,6 +79,9 @@
           <div class="row">
             <div class="main">
               <span class="title" title={item.release.rawTitle}>{item.release.title || item.release.rawTitle}</span>
+              {#if item.release.platform}
+                <span class="note"><ConsoleTag platform={item.release.platform} /> {msg('games.similarPlatform', { platform: platformBadge(item.release.platform) })}</span>
+              {/if}
               {#if note}
                 <span class="note">{msg('games.similarCandidate', { title: candidateLabel(note) })}</span>
               {/if}

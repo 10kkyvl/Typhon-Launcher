@@ -5,6 +5,12 @@ import { Service as AppService } from '../../../bindings/typhon/internal/app';
 import { inWails } from './backend';
 import { errorCode } from '../i18n/errors';
 import { markError } from '../game/markMessages';
+import { emulationPlatform, emulatorAlreadyOpen, installingPackage, needsBios, needsEmulator } from '../library/emulation';
+import { libraryErrorText } from '../library/errors';
+import { toast } from '../stores/toasts';
+import { askForBios } from '../stores/biosPrompt';
+import { askToCloseEmulator } from '../stores/emulatorBusyPrompt';
+import { askForEmulator } from '../stores/emulatorPrompt';
 
 export { markError };
 
@@ -47,6 +53,13 @@ export interface GameModeOverride {
   raisePriority?: boolean | null;
 }
 
+export interface LibraryEmulation {
+  platform: string;
+  catalogGameId?: string;
+  titleId?: string;
+  files?: string[] | null;
+}
+
 export interface LibraryGame {
   id: string;
   title: string;
@@ -68,6 +81,9 @@ export interface LibraryGame {
   canonicalGameId?: string;
   source?: 'external' | string;
   external?: LibraryExternal | null;
+  emulation?: LibraryEmulation | null;
+  owned?: boolean;
+  installType?: string;
   uninstalled?: boolean;
   shortcutPath?: string;
   savesDir?: string;
@@ -118,6 +134,8 @@ export interface SessionEvent {
   exitKnown: boolean;
   crashed: boolean;
   reasonCode: string;
+  emulatorQuickExit: boolean;
+  emulator: string;
 }
 
 export type CrashHint = 'vcredist' | 'directx' | 'compat' | 'antivirus' | 'runtimes' | 'unknown';
@@ -153,6 +171,16 @@ export async function addGame(executable: string, title: string): Promise<Librar
   return (await LibraryService.AddGame(executable, title)) as unknown as LibraryGame;
 }
 
+export async function addEmulatedGame(romPath: string, platformID: string, title: string): Promise<LibraryGame> {
+  if (!inWails) throw unavailable();
+  return (await LibraryService.AddEmulatedGame(romPath, platformID, title)) as unknown as LibraryGame;
+}
+
+export async function findEmulatedCover(id: string): Promise<LibraryGame> {
+  if (!inWails) throw unavailable();
+  return (await LibraryService.FindEmulatedCover(id)) as unknown as LibraryGame;
+}
+
 export async function addCatalogGame(canonicalGameId: string, title: string, cover: string): Promise<LibraryGame> {
   if (!inWails) throw unavailable();
   return (await LibraryService.AddCatalogGame(canonicalGameId, title, cover)) as unknown as LibraryGame;
@@ -171,11 +199,67 @@ export async function playGame(id: string): Promise<void> {
 // Existing callers of playGame still treat a dismissed native prompt as a no-op.
 export async function launchGame(id: string): Promise<boolean> {
   if (!inWails) throw unavailable();
+  return await relaunch(id, new Set());
+}
+
+// A question the player already answered for this launch; asking it again
+// would loop, so its error is shown instead.
+type Answered = ReadonlySet<'emulator' | 'closing'>;
+
+async function relaunch(id: string, answered: Answered): Promise<boolean> {
   try { await LibraryService.PlayGame(id); } catch (err) {
-    if (errorCode(err) !== 'library.launch_cancelled') throw err;
-    return false;
+    return await recoverLaunch(id, err, answered);
   }
   return true;
+}
+
+// recoverLaunch turns a launch the player can fix into a question; any other
+// error is shown as it is. Every try goes through it, so a launch retried
+// after one question still gets the next one or the installer notice.
+async function recoverLaunch(id: string, err: unknown, answered: Answered): Promise<boolean> {
+  if (errorCode(err) === 'library.launch_cancelled') return false;
+  if (installingPackage(err)) {
+    // Not a failure: the emulator's installer is open and waits for the player.
+    toast(libraryErrorText(err, ''), 'info');
+    return false;
+  }
+  if (needsBios(err)) return await launchAfterBios(id, err, answered);
+  if (emulatorAlreadyOpen(err) && !answered.has('closing')) return await launchAfterClosing(id, err, answered);
+  if (needsEmulator(err) && !answered.has('emulator')) return await launchAfterEmulator(id, err, answered);
+  throw err;
+}
+
+// The emulator is closed only with the player's yes; if another copy opens in
+// the meantime, the next error is shown instead of asking in a loop.
+async function launchAfterClosing(id: string, first: unknown, answered: Answered): Promise<boolean> {
+  const platform = emulationPlatform((await getGames()).find((game) => game.id === id));
+  if (!platform) throw first;
+  if (!(await askToCloseEmulator(platform))) return false;
+  return await relaunch(id, new Set([...answered, 'closing']));
+}
+
+// The game is asked for again only once: if the emulator the user just
+// pointed at is rejected, that error is shown as it is instead of looping.
+async function launchAfterEmulator(id: string, first: unknown, answered: Answered): Promise<boolean> {
+  const platform = emulationPlatform((await getGames()).find((game) => game.id === id));
+  if (!platform) throw first;
+  if (!(await askForEmulator(platform, errorCode(first)))) return false;
+  return await relaunch(id, new Set([...answered, 'emulator']));
+}
+
+// The player may check again as often as they like: each try only reads the
+// folder, and closing the prompt gives the launch up.
+async function launchAfterBios(id: string, first: unknown, answered: Answered): Promise<boolean> {
+  const platform = emulationPlatform((await getGames()).find((game) => game.id === id));
+  if (!platform) throw first;
+  for (let stillMissing = false; ; stillMissing = true) {
+    if (!(await askForBios(platform, stillMissing))) return false;
+    try { await LibraryService.PlayGame(id); } catch (err) {
+      if (needsBios(err)) continue;
+      return await recoverLaunch(id, err, answered);
+    }
+    return true;
+  }
 }
 
 export async function playGameProfile(id: string, profileID: string): Promise<boolean> {

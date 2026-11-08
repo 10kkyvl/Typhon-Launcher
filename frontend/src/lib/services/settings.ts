@@ -29,6 +29,9 @@ export interface Settings {
   launchOnStartup: boolean;
   minimizeToTray: boolean;
   discordRichPresence: boolean;
+  discordRemoteControl: boolean;
+  discordRemoteDownloads: boolean;
+  discordNotifications: boolean;
   hardwareAcceleration: boolean;
   animationsEnabled: boolean;
   maxActiveDownloads: number;
@@ -81,7 +84,10 @@ export interface Settings {
   screenshotsEnabled: boolean;
   screenshotHotkey: string;
   gameMode: GameMode;
+  emulatorPaths: Record<string, string>;
 }
+
+export type SettingsPatch = Partial<Omit<Settings, 'emulatorPaths'>>;
 
 const FALLBACK_KEY = 'typhon.settings';
 
@@ -100,6 +106,9 @@ const fallbackDefaults: Settings = {
   launchOnStartup: false,
   minimizeToTray: true,
   discordRichPresence: false,
+  discordRemoteControl: false,
+  discordRemoteDownloads: false,
+  discordNotifications: false,
   hardwareAcceleration: true,
   animationsEnabled: true,
   maxActiveDownloads: 2,
@@ -152,6 +161,7 @@ const fallbackDefaults: Settings = {
   screenshotsEnabled: true,
   screenshotHotkey: 'Ctrl+F12',
   gameMode: { highPerformance: false, hideLauncher: false, raisePriority: false },
+  emulatorPaths: {},
 };
 
 export const maxActiveDownloadOptions = [
@@ -179,11 +189,13 @@ export async function getSettings(): Promise<Settings> {
   }
 }
 
+// Go rejects a patch that carries emulatorPaths: only the emulators service writes it.
 export async function saveSettingsPatch(patch: Partial<Settings>): Promise<Settings> {
+  const { emulatorPaths: _readonly, ...writable } = patch;
   if (inWails) {
-    return normalize((await SettingsService.SaveSettingsPatch(patch)) as Settings);
+    return normalize((await SettingsService.SaveSettingsPatch(writable)) as Settings);
   }
-  const merged = { ...(await getSettings()), ...patch };
+  const merged = { ...(await getSettings()), ...writable };
   localStorage.setItem(FALLBACK_KEY, JSON.stringify(merged));
   return merged;
 }

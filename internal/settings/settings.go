@@ -144,37 +144,49 @@ const ErrCodeConsentSaveFailed = "settings.consent_save_failed"
 const ErrCodeLegalAcceptanceSaveFailed = "settings.legal_acceptance_save_failed"
 
 type Settings struct {
-	Theme                  string  `json:"theme"`
-	AccentColor            string  `json:"accentColor"`
-	TintLogo               bool    `json:"tintLogo"`
-	UIScale                float64 `json:"uiScale"`
-	Language               string  `json:"language"`
-	LibraryPath            string  `json:"libraryPath"`
-	DownloadsPath          string  `json:"downloadsPath"`
-	GamesPath              string  `json:"gamesPath"`
-	ScreenshotsPath        string  `json:"screenshotsPath"`
-	LaunchOnStartup        bool    `json:"launchOnStartup"`
-	MinimizeToTray         bool    `json:"minimizeToTray"`
-	DiscordRichPresence    bool    `json:"discordRichPresence"`
-	HardwareAcceleration   bool    `json:"hardwareAcceleration"`
-	AnimationsEnabled      bool    `json:"animationsEnabled"`
-	MaxActiveDownloads     int     `json:"maxActiveDownloads"`
-	DownloadRateLimit      int64   `json:"downloadRateLimit"`
-	UploadRateLimit        int64   `json:"uploadRateLimit"`
-	PlayDownloadMode       string  `json:"playDownloadMode"`
-	PlayDownloadRateLimit  int64   `json:"playDownloadRateLimit"`
-	PlayUploadRateLimit    int64   `json:"playUploadRateLimit"`
-	UploadWhileDownloading bool    `json:"uploadWhileDownloading"`
-	SeedAfterDownload      bool    `json:"seedAfterDownload"`
-	InstallCleanupPolicy   string  `json:"installCleanupPolicy"`
-	AutoInstall            bool    `json:"autoInstall"`
-	ElevateAhead           bool    `json:"elevateAhead"`
-	SourceRefreshInterval  string  `json:"sourceRefreshInterval"`
-	VerifyAfterInstall     bool    `json:"verifyAfterInstall"`
-	InstallSkipShortcuts   bool    `json:"installSkipShortcuts"`
-	InstallSkipExtras      bool    `json:"installSkipExtras"`
-	InstallVerifyRepack    bool    `json:"installVerifyRepack"`
-	DesktopShortcuts       bool    `json:"desktopShortcuts"`
+	Theme               string  `json:"theme"`
+	AccentColor         string  `json:"accentColor"`
+	TintLogo            bool    `json:"tintLogo"`
+	UIScale             float64 `json:"uiScale"`
+	Language            string  `json:"language"`
+	LibraryPath         string  `json:"libraryPath"`
+	DownloadsPath       string  `json:"downloadsPath"`
+	GamesPath           string  `json:"gamesPath"`
+	ScreenshotsPath     string  `json:"screenshotsPath"`
+	LaunchOnStartup     bool    `json:"launchOnStartup"`
+	MinimizeToTray      bool    `json:"minimizeToTray"`
+	DiscordRichPresence bool    `json:"discordRichPresence"`
+	// DiscordRemoteControl lets the linked Discord account check and steer
+	// this launcher's downloads through the Typhon bot. Off by default and
+	// kept per machine: it is not part of the portable settings.
+	DiscordRemoteControl bool `json:"discordRemoteControl"`
+	// DiscordRemoteDownloads also lets that account start a download of a
+	// release from this launcher's own sources. It only matters while
+	// DiscordRemoteControl is on. Off by default, kept per machine.
+	DiscordRemoteDownloads bool `json:"discordRemoteDownloads"`
+	// DiscordNotifications asks the Typhon bot to message the linked Discord
+	// account when a download finishes or fails. Off by default, kept per
+	// machine.
+	DiscordNotifications   bool   `json:"discordNotifications"`
+	HardwareAcceleration   bool   `json:"hardwareAcceleration"`
+	AnimationsEnabled      bool   `json:"animationsEnabled"`
+	MaxActiveDownloads     int    `json:"maxActiveDownloads"`
+	DownloadRateLimit      int64  `json:"downloadRateLimit"`
+	UploadRateLimit        int64  `json:"uploadRateLimit"`
+	PlayDownloadMode       string `json:"playDownloadMode"`
+	PlayDownloadRateLimit  int64  `json:"playDownloadRateLimit"`
+	PlayUploadRateLimit    int64  `json:"playUploadRateLimit"`
+	UploadWhileDownloading bool   `json:"uploadWhileDownloading"`
+	SeedAfterDownload      bool   `json:"seedAfterDownload"`
+	InstallCleanupPolicy   string `json:"installCleanupPolicy"`
+	AutoInstall            bool   `json:"autoInstall"`
+	ElevateAhead           bool   `json:"elevateAhead"`
+	SourceRefreshInterval  string `json:"sourceRefreshInterval"`
+	VerifyAfterInstall     bool   `json:"verifyAfterInstall"`
+	InstallSkipShortcuts   bool   `json:"installSkipShortcuts"`
+	InstallSkipExtras      bool   `json:"installSkipExtras"`
+	InstallVerifyRepack    bool   `json:"installVerifyRepack"`
+	DesktopShortcuts       bool   `json:"desktopShortcuts"`
 
 	ExtraLibraryPaths []string `json:"extraLibraryPaths"`
 	LastInstallRoot   string   `json:"lastInstallRoot"`
@@ -224,6 +236,11 @@ type Settings struct {
 	LegalAcceptedVersion string `json:"legalAcceptedVersion"`
 
 	GameMode GameMode `json:"gameMode"`
+
+	// EmulatorPaths is keyed by platform id. A map is replaced, never edited in
+	// place: copies of Settings share it. Only the emulators service writes it,
+	// because it validates a program that will be executed.
+	EmulatorPaths map[string]string `json:"emulatorPaths"`
 }
 
 type GameMode struct {
@@ -271,6 +288,9 @@ func Defaults() Settings {
 		LaunchOnStartup:        false,
 		MinimizeToTray:         true,
 		DiscordRichPresence:    false,
+		DiscordRemoteControl:   false,
+		DiscordRemoteDownloads: false,
+		DiscordNotifications:   false,
 		HardwareAcceleration:   true,
 		AnimationsEnabled:      true,
 		MaxActiveDownloads:     2,
@@ -334,6 +354,8 @@ func Defaults() Settings {
 		// The installation ID and the game ID it may add are gated by
 		// UsageStatsAllowedCurrent, not by this switch.
 		SessionHeartbeat: true,
+
+		EmulatorPaths: map[string]string{},
 	}
 }
 
@@ -649,6 +671,9 @@ func sanitize(s Settings) (Settings, error) {
 	}
 	if s.SaveBackupLimit > MaxSaveBackupLimit {
 		s.SaveBackupLimit = MaxSaveBackupLimit
+	}
+	if s.EmulatorPaths == nil {
+		s.EmulatorPaths = map[string]string{}
 	}
 	return s, nil
 }

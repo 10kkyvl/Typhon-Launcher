@@ -51,6 +51,8 @@ export const errSources = {
   'errSources.lanExeOutsideInstall': 'исполняемый файл находится вне каталога установки',
   'errSources.lanExecutableMissing': 'после передачи не найден исполняемый файл игры',
   'errSources.lanRegisterGameFailed': 'не удалось добавить полученную игру в библиотеку',
+  'errSources.lanFinishFilesFailed': 'игра получена, но не удалось подготовить её файлы: проверьте права на папку и антивирус',
+  'errSources.lanAlreadyHave': 'эта игра уже раздаётся с этого компьютера или уже принимается',
   'errSources.lanGamesPathUnavailable': 'папка с играми недоступна',
   'errSources.lanOfferNotFound': 'раздача не найдена или срок её действия истёк',
   'errSources.lanUnknownTransfer': 'передача не найдена',
@@ -60,6 +62,17 @@ export const errSources = {
   'errSources.lanShareRootNotDir': 'раздаваемый путь не является папкой',
   'errSources.lanShareSymlink': 'раздаваемая папка содержит символическую ссылку',
   'errSources.lanShareIrregularFile': 'раздаваемая папка содержит файл особого типа',
+
+  'errSources.linkUnavailable': 'Не удалось открыть ссылку, проверьте соединение',
+  'errSources.linkFailed': 'Не удалось открыть ссылку',
+  'errSources.linkInvalid': 'Некорректная ссылка',
+  'errSources.linkNotFound': 'Игра не найдена',
+  'errSources.linkNotInCatalog': 'Этой игры пока нет в каталоге',
+  'errSources.linkOutdated': 'Обновите Typhon, чтобы открыть эту ссылку',
+  'errSources.linkBadRequest': 'Сервер не принял ссылку',
+  'errSources.linkBadResponse': 'Сервер ответил неожиданно, попробуйте позже',
+  'errSources.linkTooMany': 'Слишком много запросов, попробуйте чуть позже',
+  'errSources.linkOpening': 'Открываем игру…',
 } as const;
 
 export type ErrSourcesKey = keyof typeof errSources;

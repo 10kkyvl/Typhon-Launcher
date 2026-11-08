@@ -185,6 +185,17 @@ func TestBrowseDoesNotFallbackToOversizedGET(t *testing.T) {
 	}
 }
 
+func TestSearchKeepsGameTypeAndParent(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(t, w, http.StatusOK, `{"candidates":[{"providerId":"7","title":"Prey","gameType":" DLC ","parentId":" 2657 "}]}`)
+	}), func() (string, error) { return "", nil })
+
+	got, err := client.Search(context.Background(), "Prey", 5)
+	if err != nil || len(got) != 1 || got[0].GameType != "DLC" || got[0].ParentID != "2657" {
+		t.Fatalf("search = %+v, %v", got, err)
+	}
+}
+
 func TestSearchSendsNoAuthorizationForGuest(t *testing.T) {
 	var hadAuth bool
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

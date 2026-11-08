@@ -2,11 +2,14 @@ package library
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"typhon/internal/emulators"
 )
 
 func tempGameExe(t *testing.T) string {
@@ -32,6 +35,10 @@ func mustServiceAt(t testing.TB, path string) *Service {
 	// starter, and it sets s.start itself.
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 	s.start = execStarter
+	// The player's own emulator folders must not decide a test's launch.
+	s.biosEnv = func() emulators.BIOSEnv { return emulators.BIOSEnv{} }
+	s.emulatorCopies = func(context.Context, string) ([]int, error) { return nil, nil }
+	s.installPackage = func(string, string) error { return errors.New("tests start no installer") }
 	// Настоящая подготовка окружения на macOS заводит бутыль CrossOver:
 	// секунды и сотни мегабайт на каждый запуск. Тесты запускают обычные
 	// процессы, и оставлять после прогона настоящие бутыли нельзя.

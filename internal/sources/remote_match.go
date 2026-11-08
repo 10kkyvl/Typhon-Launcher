@@ -356,7 +356,7 @@ func remoteReleaseQueries(ctx context.Context, memo *titleMemo, list []*Release)
 			continue
 		}
 		keys = append(keys, key)
-		queries = append(queries, catalog.ReleaseQuery{Titles: valid, Year: r.Year})
+		queries = append(queries, catalog.ReleaseQuery{Titles: valid, Year: r.Year, Accept: consoleAccept(r.Platform)})
 	}
 	return keys, queries, nil
 }
