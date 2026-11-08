@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -1004,5 +1005,59 @@ func TestSteamEntryOfAnEmulatedGameRunsThroughTheLauncher(t *testing.T) {
 	}
 	if sc.Exe != launcher || sc.Icon != launcher || !strings.Contains(sc.LaunchOptions, "--play") {
 		t.Fatalf("steam entry: %+v", sc)
+	}
+}
+
+// Without a BIOS both emulators quit at once and say nothing, so the launch
+// stops before anything starts and names the folder the emulator reads.
+func TestPlayStopsWhenTheEmulatorWouldFindNoBIOS(t *testing.T) {
+	s := newLibrary(t)
+	starts := 0
+	s.start = func(context.Context, launch) (gameProcess, error) {
+		starts++
+		return nil, errors.New("unexpected")
+	}
+	program := filepath.Join(t.TempDir(), "PCSX2")
+	s.SetEmulatorResolver(func(string) (string, error) { return program, nil })
+	config := t.TempDir()
+	s.biosEnv = func() emulators.BIOSEnv { return emulators.BIOSEnv{ConfigDir: config, HomeDir: config} }
+	bios := filepath.Join(config, "PCSX2", "bios")
+	if err := os.MkdirAll(bios, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS == "windows" {
+		bios = filepath.Join(config, "Documents", "PCSX2", "bios")
+		if err := os.MkdirAll(bios, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	game := emulatedGame(t, s, "game.iso")
+
+	err := s.PlayGame(game.ID)
+	if uierr.Code(err) != "emulators.bios_missing" || !strings.Contains(err.Error(), bios) {
+		t.Fatalf("PlayGame = %v, want bios_missing naming %s", err, bios)
+	}
+	if starts != 0 || s.IsRunning(game.ID) {
+		t.Fatalf("started %d, running %v", starts, s.IsRunning(game.ID))
+	}
+
+	// With a dump in place the same launch goes on to the emulator.
+	rec := recordLaunches(t, s)
+	f, err := os.Create(filepath.Join(bios, "scph39001.bin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Truncate(4 << 20); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PlayGame(game.ID); err != nil {
+		t.Fatalf("with a BIOS: %v", err)
+	}
+	rec.finish(s)
+	if len(rec.req.args) == 0 || rec.req.args[len(rec.req.args)-1] != game.Executable {
+		t.Fatalf("launch %+v", rec.req)
 	}
 }

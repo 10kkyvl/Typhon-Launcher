@@ -64,6 +64,9 @@ type Platform struct {
 	installedArgs []string
 	// installedGone is the exit code of installedArgs for an unknown title.
 	installedGone int
+	// bios is where the emulator looks for the BIOS image; zero for consoles
+	// whose emulators need none.
+	bios biosLayout
 }
 
 var platforms = []Platform{
@@ -81,6 +84,15 @@ var platforms = []Platform{
 		windowsExes: []string{"duckstation-qt-x64-ReleaseLTCG.exe", "duckstation-qt-ARM64-ReleaseLTCG.exe", "duckstation-qt.exe"},
 		macBundles:  []string{"DuckStation.app"},
 		macBinaries: []string{"DuckStation"},
+
+		bios: biosLayout{
+			portableMarks: []string{"portable.txt", "settings.ini"},
+			roots:         duckStationRoots,
+			config:        []string{"settings.ini"},
+			section:       "BIOS", key: "SearchDirectory", dir: "bios",
+			// A PS1 BIOS is 512 KB; DuckStation also takes a PS2 one.
+			minSize: 512 << 10, maxSize: 16 << 20,
+		},
 	},
 	{
 		ID:         PS2,
@@ -96,6 +108,15 @@ var platforms = []Platform{
 		windowsExes: []string{"pcsx2-qt.exe", "pcsx2-qtx64-avx2.exe", "pcsx2-qtx64.exe"},
 		macBundles:  []string{"PCSX2.app"},
 		macBinaries: []string{"PCSX2"},
+
+		bios: biosLayout{
+			portableMarks: []string{"portable.ini", "portable.txt"},
+			roots:         pcsx2Roots,
+			config:        []string{"inis", "PCSX2.ini"},
+			section:       "Folders", key: "Bios", dir: "bios",
+			// A PS2 BIOS is 4 MB; some dumps carry the extra ROMs.
+			minSize: 4 << 20, maxSize: 16 << 20,
+		},
 	},
 	{
 		ID:         PSP,

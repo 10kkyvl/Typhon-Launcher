@@ -61,6 +61,16 @@ export async function imageTitle(path: string, platform: string): Promise<string
   return (await EmulatorsService.ImageTitle(path, platform)) ?? '';
 }
 
+export async function biosFolder(platform: string): Promise<string> {
+  if (!inWails) throw unavailable();
+  return await EmulatorsService.BIOSFolder(platform);
+}
+
+export async function openBiosFolder(platform: string): Promise<void> {
+  if (!inWails) throw unavailable();
+  await EmulatorsService.OpenBIOSFolder(platform);
+}
+
 export async function setEmulatorPath(platform: string, path: string): Promise<PlatformStatus> {
   if (!inWails) throw unavailable();
   return row((await EmulatorsService.SetPath(platform, path)) as PlatformStatus);

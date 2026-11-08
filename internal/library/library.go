@@ -251,6 +251,8 @@ type Service struct {
 	emulator func(platform string) (string, error)
 	// emulatorHome is a field so that tests never read the player's real storage.
 	emulatorHome func() (emulators.StorageHome, error)
+	// biosEnv is a field so that tests never read the player's real BIOS folders.
+	biosEnv func() emulators.BIOSEnv
 	// coverSearch ищет обложку образа по явному действию пользователя.
 	coverSearch func(ctx context.Context, title, platform string) (string, error)
 
@@ -350,6 +352,7 @@ func NewServiceAt(path string) (*Service, error) {
 		prepare:          prepareRuntime,
 		emulator:         func(string) (string, error) { return "", emulators.ErrNotConfigured },
 		emulatorHome:     emulators.DefaultStorageHome,
+		biosEnv:          emulators.DefaultBIOSEnv,
 		coverSearch:      func(context.Context, string, string) (string, error) { return "", emulators.ErrCoverLookup },
 		emulatedPath:     emulatedPathFor(path),
 		savedNative:      []byte("[]"),

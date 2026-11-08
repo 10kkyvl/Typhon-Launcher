@@ -281,7 +281,7 @@ func (s *Service) play(id, profileID string, explicit bool) error {
 		shared:     game.UsesSharedBottle(),
 		elevated:   chosen.admin,
 	}
-	resolveEmulator, emulatorHome := s.emulator, s.emulatorHome
+	resolveEmulator, emulatorHome, biosEnv := s.emulator, s.emulatorHome, s.biosEnv
 	ctx := s.ctx
 	// Constructors are also used without startup by synchronous callers.
 	// A missing context must not start platform work.
@@ -304,7 +304,7 @@ func (s *Service) play(id, profileID string, explicit bool) error {
 	}()
 	s.mu.Unlock()
 	if game.Emulation != nil {
-		if err := emulatedLaunch(ctx, resolveEmulator, emulatorHome, *game, chosen, &req); err != nil {
+		if err := emulatedLaunch(ctx, resolveEmulator, emulatorHome, biosEnv, *game, chosen, &req); err != nil {
 			s.mu.Lock()
 			return err
 		}

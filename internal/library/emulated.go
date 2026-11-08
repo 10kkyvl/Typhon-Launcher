@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -681,7 +682,7 @@ func cueFiles(r io.Reader) ([]string, error) {
 // own arguments go first: the emulators read options only before the image.
 // The working folder is the emulator's on every console: shadPS4 keeps its data
 // beside the working folder, so anything else would give it an empty install.
-func emulatedLaunch(ctx context.Context, resolve func(string) (string, error), home func() (emulators.StorageHome, error), game Game, chosen chosenProfile, req *launch) error {
+func emulatedLaunch(ctx context.Context, resolve func(string) (string, error), home func() (emulators.StorageHome, error), biosEnv func() emulators.BIOSEnv, game Game, chosen chosenProfile, req *launch) error {
 	target, ok := emulators.Lookup(game.Emulation.Platform)
 	if !ok {
 		return fmt.Errorf("%w: %q", emulators.ErrUnknownPlatform, game.Emulation.Platform)
@@ -689,6 +690,11 @@ func emulatedLaunch(ctx context.Context, resolve func(string) (string, error), h
 	program, err := resolve(game.Emulation.Platform)
 	if err != nil {
 		return err
+	}
+	// Without a BIOS both emulators of the older consoles quit at once in batch
+	// mode and say nothing: the player would see the game not start at all.
+	if state := target.CheckBIOS(program, runtime.GOOS, biosEnv()); state.Missing {
+		return fmt.Errorf("%w: %s", emulators.ErrBIOSMissing, state.Dir)
 	}
 	workDir, err := filepath.Abs(filepath.Dir(program))
 	if err != nil {

@@ -4,6 +4,8 @@ import type { ErrEmulatorsKey } from '../ru/errEmulators';
 export const errEmulators: Record<ErrEmulatorsKey, Message> = {
   'emulators.unknown_platform': 'Unknown console',
   'emulators.not_configured': 'No emulator is set for this console',
+  'emulators.bios_missing': 'The emulator will not find a BIOS: put a BIOS dump of your console into its folder',
+  'emulators.bios_dir_unknown': 'The BIOS folder of this emulator could not be determined',
   'emulators.file_missing': 'The emulator file was not found',
   'emulators.file_unreadable': 'The emulator file cannot be read',
   'emulators.path_relative': 'The emulator path must be a full path',

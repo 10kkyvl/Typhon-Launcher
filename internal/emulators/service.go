@@ -13,6 +13,7 @@ import (
 	"strings"
 	"unicode"
 
+	"typhon/internal/platform"
 	"typhon/internal/settings"
 	"typhon/internal/uierr"
 )
@@ -42,6 +43,8 @@ var (
 	ErrWindowsProgram  = uierr.New("emulators.windows_program", "на этой системе эмулятор запускается нативно, программа Windows не подходит")
 	ErrBadAppBundle    = uierr.New("emulators.bad_app_bundle", "в приложении не найден исполняемый файл эмулятора")
 	ErrSaveFailed      = uierr.New("emulators.save_failed", "не удалось сохранить настройки эмулятора")
+	ErrBIOSMissing     = uierr.New("emulators.bios_missing", "эмулятор не найдёт BIOS: положите дамп BIOS своей приставки в папку эмулятора")
+	ErrBIOSUnknown     = uierr.New("emulators.bios_dir_unknown", "папка BIOS этого эмулятора неизвестна")
 
 	ErrImagePathEmpty    = uierr.New("emulators.image_path_empty", "не указан файл образа")
 	ErrImagePathRelative = uierr.New("emulators.image_path_relative", "путь к образу должен быть абсолютным")
@@ -110,13 +113,15 @@ type Service struct {
 	lstat    func(string) (fs.FileInfo, error)
 	// home is a field so that tests never read the player's real config.
 	home func() (StorageHome, error)
+	// biosEnv is a field for the same reason.
+	biosEnv func() BIOSEnv
 }
 
 func NewService(store *settings.Service) (*Service, error) {
 	if store == nil {
 		return nil, errors.New("настройки недоступны")
 	}
-	return &Service{settings: store, goos: runtime.GOOS, roots: systemRoots, lstat: os.Lstat, home: DefaultStorageHome}, nil
+	return &Service{settings: store, goos: runtime.GOOS, roots: systemRoots, lstat: os.Lstat, home: DefaultStorageHome, biosEnv: DefaultBIOSEnv}, nil
 }
 
 func (s *Service) List(ctx context.Context) ([]PlatformStatus, error) {
@@ -307,6 +312,40 @@ func (s *Service) ImageTitle(ctx context.Context, image, platform string) (strin
 		return "", ErrPathInvalid
 	}
 	return p.ReadTitle(ctx, filepath.Clean(image))
+}
+
+// BIOSFolder is the folder the configured emulator of a console reads its BIOS
+// from, for the player to put a dump into.
+func (s *Service) BIOSFolder(platformID string) (string, error) {
+	p, ok := Lookup(platformID)
+	if !ok {
+		return "", fmt.Errorf("%w: %q", ErrUnknownPlatform, platformID)
+	}
+	program, err := s.Resolve(platformID)
+	if err != nil {
+		return "", err
+	}
+	dir, ok := p.BIOSDir(program, s.goos, s.biosEnv())
+	if !ok {
+		return "", ErrBIOSUnknown
+	}
+	return dir, nil
+}
+
+// OpenBIOSFolder shows that folder, made first if the emulator has not yet: it
+// is a folder the emulator itself creates and reads, inside its own data.
+func (s *Service) OpenBIOSFolder(platformID string) error {
+	dir, err := s.BIOSFolder(platformID)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("создать папку BIOS: %w", err)
+	}
+	if err := platform.OpenFolder(dir); err != nil {
+		return fmt.Errorf("открыть папку BIOS: %w", err)
+	}
+	return nil
 }
 
 // Resolve gives the program to start for a console.

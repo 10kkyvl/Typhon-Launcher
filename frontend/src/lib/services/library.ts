@@ -5,7 +5,8 @@ import { Service as AppService } from '../../../bindings/typhon/internal/app';
 import { inWails } from './backend';
 import { errorCode } from '../i18n/errors';
 import { markError } from '../game/markMessages';
-import { emulationPlatform, needsEmulator } from '../library/emulation';
+import { emulationPlatform, needsBios, needsEmulator } from '../library/emulation';
+import { askForBios } from '../stores/biosPrompt';
 import { askForEmulator } from '../stores/emulatorPrompt';
 
 export { markError };
@@ -197,6 +198,7 @@ export async function launchGame(id: string): Promise<boolean> {
   if (!inWails) throw unavailable();
   try { await LibraryService.PlayGame(id); } catch (err) {
     if (errorCode(err) === 'library.launch_cancelled') return false;
+    if (needsBios(err)) return await launchAfterBios(id, err);
     if (!needsEmulator(err)) throw err;
     return await launchAfterEmulator(id, err);
   }
@@ -210,10 +212,27 @@ async function launchAfterEmulator(id: string, first: unknown): Promise<boolean>
   if (!platform) throw first;
   if (!(await askForEmulator(platform, errorCode(first)))) return false;
   try { await LibraryService.PlayGame(id); } catch (err) {
+    if (needsBios(err)) return await launchAfterBios(id, err);
     if (errorCode(err) !== 'library.launch_cancelled') throw err;
     return false;
   }
   return true;
+}
+
+// The player may check again as often as they like: each try only reads the
+// folder, and closing the prompt gives the launch up.
+async function launchAfterBios(id: string, first: unknown): Promise<boolean> {
+  const platform = emulationPlatform((await getGames()).find((game) => game.id === id));
+  if (!platform) throw first;
+  for (let stillMissing = false; ; stillMissing = true) {
+    if (!(await askForBios(platform, stillMissing))) return false;
+    try { await LibraryService.PlayGame(id); } catch (err) {
+      if (needsBios(err)) continue;
+      if (errorCode(err) !== 'library.launch_cancelled') throw err;
+      return false;
+    }
+    return true;
+  }
 }
 
 export async function playGameProfile(id: string, profileID: string): Promise<boolean> {

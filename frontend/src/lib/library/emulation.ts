@@ -72,6 +72,12 @@ export function platformBadge(platform: string): string {
   return BADGES[platform] ?? platform.toUpperCase();
 }
 
+export const BIOS_MISSING_CODE = 'emulators.bios_missing';
+
+export function needsBios(err: unknown): boolean {
+  return errorCode(err) === BIOS_MISSING_CODE;
+}
+
 export function needsEmulator(err: unknown): boolean {
   return EMULATOR_PROMPT_CODES.includes(errorCode(err));
 }
