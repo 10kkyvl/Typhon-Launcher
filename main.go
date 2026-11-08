@@ -1080,6 +1080,8 @@ func main() {
 		installationID: remoteDeviceID,
 		token:          accountService.SessionToken,
 		downloads:      downloadManager,
+		manager:        downloadManager,
+		releases:       sourcesService,
 		library:        libraryService,
 		settings:       settingsService,
 		messaging:      messagingService,

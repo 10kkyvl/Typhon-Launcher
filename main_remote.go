@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"typhon/internal/account"
+	"typhon/internal/download"
 	"typhon/internal/library"
 	"typhon/internal/messaging"
 	"typhon/internal/remote"
@@ -21,6 +22,8 @@ type remoteControlDeps struct {
 	installationID string
 	token          func() (string, error)
 	downloads      remote.Downloads
+	manager        *download.Manager
+	releases       remote.Releases
 	library        *library.Service
 	settings       *settings.Service
 	messaging      *messaging.Service
@@ -28,6 +31,8 @@ type remoteControlDeps struct {
 
 // startRemoteControl wires Discord remote control: the chat stream wakes it,
 // and turning the setting on registers this launcher with the backend. It
+// also wires the messages to the owner's Discord account: finished and
+// failed downloads, and the outcome of downloads started from Discord. It
 // returns what to call at shutdown.
 func startRemoteControl(parent context.Context, d remoteControlDeps) (func(), error) {
 	if d.installationID == "" {
@@ -39,13 +44,31 @@ func startRemoteControl(parent context.Context, d remoteControlDeps) (func(), er
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(parent)
-	svc, err := remote.New(ctx, remote.Deps{
+	notifier, err := remote.NewNotifier(ctx, remote.NotifierDeps{
+		API:            client,
+		InstallationID: d.installationID,
+		Enabled:        func() bool { return d.settings.GetSettings().DiscordNotifications },
+	})
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	deps := remote.Deps{
 		API:            client,
 		Downloads:      d.downloads,
 		InstallationID: d.installationID,
 		Enabled:        func() bool { return d.settings.GetSettings().DiscordRemoteControl },
 		Running:        func() []string { return runningTitles(d.library.RecentGames(tray.MaxRecent)) },
-	})
+		Releases:       d.releases,
+		DownloadsPath:  func() string { return d.settings.GetSettings().DownloadsPath },
+		AddEnabled:     func() bool { return d.settings.GetSettings().DiscordRemoteDownloads },
+		Notify:         notifier.Send,
+	}
+	if d.manager != nil {
+		deps.Starter = d.manager
+		d.manager.SetOnOutcome(notifier.OnOutcome)
+	}
+	svc, err := remote.New(ctx, deps)
 	if err != nil {
 		cancel()
 		return nil, err
@@ -90,7 +113,7 @@ func startRemoteControl(parent context.Context, d remoteControlDeps) (func(), er
 	}
 	return func() {
 		cancel()
-		waitBounded("discord remote control", shutdownWaitLimit, func() { renew.Wait(); svc.Wait() })
+		waitBounded("discord remote control", shutdownWaitLimit, func() { renew.Wait(); svc.Wait(); notifier.Wait() })
 	}, nil
 }
 

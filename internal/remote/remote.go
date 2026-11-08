@@ -2,8 +2,10 @@
 // The backend wakes it through the chat event stream; it then fetches the
 // waiting commands, runs each against the download queue and posts the
 // answer. Nothing runs unless "Allow control from Discord" is on in this
-// launcher, and the action whitelist mirrors the backend's: launching games,
-// deleting data and adding downloads are not remote actions.
+// launcher, and the action whitelist mirrors the backend's: launching games
+// and deleting data are not remote actions, and starting a download of a
+// release from this launcher's own sources also needs "Allow starting
+// downloads from Discord".
 package remote
 
 import (
@@ -63,6 +65,16 @@ type Deps struct {
 	// Running lists the titles of the games running now.
 	Running func() []string
 	Log     *slog.Logger
+
+	// Releases, Starter, DownloadsPath and AddEnabled make search and add
+	// work; without them both answer add_unavailable. AddEnabled reads
+	// "Allow starting downloads from Discord" when a command runs.
+	Releases      Releases
+	Starter       Starter
+	DownloadsPath func() string
+	AddEnabled    func() bool
+	// Notify sends a message to the owner's Discord account; nil sends none.
+	Notify func(kind, title, code string)
 }
 
 type Service struct {
@@ -209,6 +221,10 @@ func (s *Service) Run(c account.RemoteCommand) account.RemoteAnswer {
 		return s.apply(all, c.Target, false, func(d download.Download) bool {
 			return d.Status == download.StatusQueued || d.Status == download.StatusPaused
 		}, s.d.Downloads.ForceStart)
+	case actionSearch:
+		return s.search(c.Target)
+	case actionAdd:
+		return s.add(all, c.Target)
 	case actionCancel:
 		// Cancel drops a download's progress: one named download only.
 		if strings.TrimSpace(c.Target) == "" || strings.EqualFold(strings.TrimSpace(c.Target), "all") {

@@ -30,6 +30,8 @@ export interface Settings {
   minimizeToTray: boolean;
   discordRichPresence: boolean;
   discordRemoteControl: boolean;
+  discordRemoteDownloads: boolean;
+  discordNotifications: boolean;
   hardwareAcceleration: boolean;
   animationsEnabled: boolean;
   maxActiveDownloads: number;
@@ -105,6 +107,8 @@ const fallbackDefaults: Settings = {
   minimizeToTray: true,
   discordRichPresence: false,
   discordRemoteControl: false,
+  discordRemoteDownloads: false,
+  discordNotifications: false,
   hardwareAcceleration: true,
   animationsEnabled: true,
   maxActiveDownloads: 2,

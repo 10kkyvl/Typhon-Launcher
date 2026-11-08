@@ -94,6 +94,24 @@ func (c *Client) RemoteCommands(ctx context.Context, installationID string) ([]R
 	return out.Commands, nil
 }
 
+// RemoteNotification is a message for the owner's linked Discord account.
+type RemoteNotification struct {
+	InstallationID string `json:"installationId"`
+	Kind           string `json:"kind"`
+	Title          string `json:"title"`
+	Code           string `json:"code,omitempty"`
+}
+
+// PostRemoteNotification asks the backend to have the bot send it.
+func (c *Client) PostRemoteNotification(ctx context.Context, n RemoteNotification) error {
+	resp, err := c.remoteRequest(ctx, http.MethodPost, remotePath+"/notifications", n)
+	if err != nil {
+		return err
+	}
+	closeBody(resp)
+	return nil
+}
+
 // FinishRemoteCommand posts the answer to a command.
 func (c *Client) FinishRemoteCommand(ctx context.Context, installationID, id string, a RemoteAnswer) error {
 	body := struct {

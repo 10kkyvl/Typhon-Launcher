@@ -36,4 +36,9 @@ export const discord = {
   'discord.remoteLabel': 'Allow control from Discord',
   'discord.remoteSub': 'The Typhon bot can show the downloads on this computer and what is running, and pause, resume, start from the queue or cancel a download. It cannot launch games or delete files. Works while the launcher is open and you are signed in.',
   'discord.remoteEnableFailed': 'Could not turn on control from Discord. Check your connection and try again.',
+  'discord.remoteDownloadsLabel': 'Allow starting downloads from Discord',
+  'discord.remoteDownloadsSub': 'The bot can find a game in your sources and start downloading it into the default folder. At most 10 unfinished downloads; games are never launched. Works only while control from Discord is on.',
+  'discord.notifyLabel': 'Notify me in Discord',
+  'discord.notifySub': 'The bot sends you a direct message when a download finishes or fails, and tells you whether a download started from Discord began.',
+  'discord.settingFailed': 'Could not save the setting. Try again.',
 } as const;

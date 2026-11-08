@@ -68,6 +68,13 @@
     void updateSettingsReporting({ discordRemoteControl: on }, () => toast(msg('discord.remoteEnableFailed'), 'danger'));
   }
 
+  const remoteDownloadsOn = $derived($settings?.discordRemoteDownloads ?? false);
+  const notifyOn = $derived($settings?.discordNotifications ?? false);
+
+  function setSetting(patch: { discordRemoteDownloads?: boolean; discordNotifications?: boolean }) {
+    void updateSettingsReporting(patch, () => toast(msg('discord.settingFailed'), 'danger'));
+  }
+
   const steps = $derived([msg('discord.step1'), msg('discord.step2'), msg('discord.step3'), msg('discord.step4')]);
 </script>
 
@@ -100,6 +107,26 @@
           <span class="sub">{msg('discord.remoteSub')}</span>
         </div>
         <Toggle checked={remoteOn} label={msg('discord.remoteLabel')} onchange={setRemote} />
+      </div>
+      {#if remoteOn}
+        <div class="row nested">
+          <div class="text">
+            <span class="label">{msg('discord.remoteDownloadsLabel')}</span>
+            <span class="sub">{msg('discord.remoteDownloadsSub')}</span>
+          </div>
+          <Toggle
+            checked={remoteDownloadsOn}
+            label={msg('discord.remoteDownloadsLabel')}
+            onchange={(on) => setSetting({ discordRemoteDownloads: on })}
+          />
+        </div>
+      {/if}
+      <div class="row">
+        <div class="text">
+          <span class="label">{msg('discord.notifyLabel')}</span>
+          <span class="sub">{msg('discord.notifySub')}</span>
+        </div>
+        <Toggle checked={notifyOn} label={msg('discord.notifyLabel')} onchange={(on) => setSetting({ discordNotifications: on })} />
       </div>
     {:else if $view.phase === 'code'}
       <div class="code-block">
@@ -159,6 +186,11 @@
     justify-content: space-between;
     flex-wrap: wrap;
     gap: var(--space-3) var(--space-6);
+  }
+
+  .nested {
+    padding-left: var(--space-5);
+    border-left: 2px solid var(--border);
   }
 
   .text {

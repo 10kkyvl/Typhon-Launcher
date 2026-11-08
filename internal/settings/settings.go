@@ -159,7 +159,15 @@ type Settings struct {
 	// DiscordRemoteControl lets the linked Discord account check and steer
 	// this launcher's downloads through the Typhon bot. Off by default and
 	// kept per machine: it is not part of the portable settings.
-	DiscordRemoteControl   bool   `json:"discordRemoteControl"`
+	DiscordRemoteControl bool `json:"discordRemoteControl"`
+	// DiscordRemoteDownloads also lets that account start a download of a
+	// release from this launcher's own sources. It only matters while
+	// DiscordRemoteControl is on. Off by default, kept per machine.
+	DiscordRemoteDownloads bool `json:"discordRemoteDownloads"`
+	// DiscordNotifications asks the Typhon bot to message the linked Discord
+	// account when a download finishes or fails. Off by default, kept per
+	// machine.
+	DiscordNotifications   bool   `json:"discordNotifications"`
 	HardwareAcceleration   bool   `json:"hardwareAcceleration"`
 	AnimationsEnabled      bool   `json:"animationsEnabled"`
 	MaxActiveDownloads     int    `json:"maxActiveDownloads"`
@@ -281,6 +289,8 @@ func Defaults() Settings {
 		MinimizeToTray:         true,
 		DiscordRichPresence:    false,
 		DiscordRemoteControl:   false,
+		DiscordRemoteDownloads: false,
+		DiscordNotifications:   false,
 		HardwareAcceleration:   true,
 		AnimationsEnabled:      true,
 		MaxActiveDownloads:     2,

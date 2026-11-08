@@ -43,6 +43,8 @@ var localNames = []string{
 	"lanSharing",
 	"cloudSaves",
 	"discordRemoteControl",
+	"discordRemoteDownloads",
+	"discordNotifications",
 	"networkMode",
 	"networkInterface",
 	"proxyType",
