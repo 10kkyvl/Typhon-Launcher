@@ -139,3 +139,46 @@ func TestQueryReleasesFiltersBySourceAndSearch(t *testing.T) {
 		t.Fatalf("search for nothing returned %v", got)
 	}
 }
+
+func TestSearchDownloadableOffersOnlyWhatCanStart(t *testing.T) {
+	day := func(n int) *time.Time {
+		at := time.Date(2026, 1, n, 0, 0, 0, 0, time.UTC)
+		return &at
+	}
+	old := availableRelease("r-old", "src", "Celeste", "celeste", "", "1.0")
+	old.UploadedAt = day(1)
+	newer := availableRelease("r-new", "src", "Celeste", "celeste", "", "1.4")
+	newer.UploadedAt = day(5)
+	patch := availableRelease("r-patch", "src", "Celeste Update", "celeste update", "", "1.5")
+	patch.Kind = KindPatch
+	removed := availableRelease("r-removed", "src", "Celeste", "celeste", "", "1.0")
+	removed.Availability = AvailabilityRemoved
+	ignored := availableRelease("r-ignored", "src", "Celeste", "celeste", "", "1.0")
+	ignored.Ignored = true
+	linkless := availableRelease("r-nolink", "src", "Celeste", "celeste", "", "1.0")
+	off := availableRelease("r-off", "off", "Celeste", "celeste", "", "1.0")
+	other := availableRelease("r-other", "src", "Hades", "hades", "", "1.0")
+	for _, r := range []*Release{old, newer, patch, removed, ignored, off, other} {
+		r.URIs = []string{"magnet:?xt=urn:btih:" + r.ID}
+	}
+	s := searchService(t,
+		[]*Source{{ID: "src", Name: "Feed", Enabled: true}, {ID: "off", Name: "Off", Enabled: false}},
+		map[string][]*Release{"src": {old, newer, patch, removed, ignored, linkless, other}, "off": {off}},
+	)
+	ids := func(views []ReleaseView) []string {
+		out := []string{}
+		for _, v := range views {
+			out = append(out, v.Release.ID)
+		}
+		return out
+	}
+	if got := ids(s.SearchDownloadable(" CELESTE ", 10)); !reflect.DeepEqual(got, []string{"r-new", "r-old"}) {
+		t.Fatalf("ids = %v, want the two full, available releases newest first", got)
+	}
+	if got := s.SearchDownloadable("celeste", 1); len(got) != 1 || got[0].SourceName != "Feed" {
+		t.Fatalf("limit/source name = %+v", got)
+	}
+	if got := s.SearchDownloadable("  ", 10); len(got) != 0 {
+		t.Fatalf("empty query = %v", ids(got))
+	}
+}

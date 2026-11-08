@@ -807,3 +807,40 @@ func (s *Service) sameGame(a, b string) bool {
 	}
 	return s.catalog != nil && s.catalog.SameGame(a, b)
 }
+
+// SearchDownloadable returns at most limit releases matching query that can
+// be downloaded as they are: from an enabled source, still available, not
+// ignored, a full release rather than a patch, with a link. Newest first.
+// Remote control offers these to the Discord bot.
+func (s *Service) SearchDownloadable(query string, limit int) []ReleaseView {
+	search := strings.ToLower(strings.TrimSpace(query))
+	if search == "" || limit <= 0 {
+		return []ReleaseView{}
+	}
+	normalized := titles.Normalize(search)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var found []*Release
+	for sourceID, list := range s.releases {
+		if src := s.findLocked(sourceID); src == nil || !src.Enabled {
+			continue
+		}
+		for _, r := range list {
+			if r.Ignored || r.Availability != AvailabilityAvailable || r.Kind == KindPatch || len(r.URIs) == 0 {
+				continue
+			}
+			if s.matchesSearch(r, search, normalized) {
+				found = append(found, r)
+			}
+		}
+	}
+	sortReleases(found, "")
+	if len(found) > limit {
+		found = found[:limit]
+	}
+	out := make([]ReleaseView, 0, len(found))
+	for _, r := range found {
+		out = append(out, s.viewLocked(r))
+	}
+	return out
+}
