@@ -78,7 +78,11 @@ func TestAcceptsImageOnNextGenConsoles(t *testing.T) {
 		{PS3, filepath.Join("g", "EBOOT.BIN"), false},
 		{PS3, filepath.Join("g", "USRDIR", "game.bin"), false},
 		{PS3, "game.iso", false},
-		{PS3, "game.pkg", false},
+		// RPCS3 installs a package itself; the launcher hands it over.
+		{PS3, "game.pkg", true},
+		{PS3, "game.PKG", true},
+		{PS4, "game.pkg", false},
+		{Vita, "game.pkg", false},
 		{PS4, filepath.Join("g", "eboot.bin"), true},
 		{PS4, filepath.Join("g", "EBOOT.BIN"), true},
 		{PS4, filepath.Join("g", "game.bin"), false},
@@ -541,7 +545,7 @@ func TestInstalledCommand(t *testing.T) {
 }
 
 func TestImagePatternsNameTheStartingFiles(t *testing.T) {
-	cases := map[string]string{PS3: "EBOOT.BIN", PS4: "eboot.bin", Vita: "*.vpk;eboot.bin"}
+	cases := map[string]string{PS3: "*.pkg;EBOOT.BIN", PS4: "eboot.bin", Vita: "*.vpk;eboot.bin"}
 	for id, want := range cases {
 		if got, err := ImagePatterns([]string{id}); err != nil || got != want {
 			t.Errorf("%s = %q, %v, want %q", id, got, err, want)

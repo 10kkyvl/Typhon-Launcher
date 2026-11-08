@@ -497,7 +497,7 @@ func checkImage(romPath, platformID string) (string, string, emulators.Platform,
 		return refuse(fmt.Errorf("%w: %s", emulators.ErrImagePathRelative, rom))
 	}
 	rom = filepath.Clean(rom)
-	if target.ManualOnly(rom) {
+	if target.ManualOnly(rom) && !target.AcceptsPackage(rom) {
 		return refuse(fmt.Errorf("%w: %s", emulators.ErrImageManualOnly, filepath.Ext(rom)))
 	}
 	if !target.AcceptsImage(rom) {
@@ -511,6 +511,12 @@ func checkImage(romPath, platformID string) (string, string, emulators.Platform,
 		return refuse(fmt.Errorf("%w: %w", emulators.ErrImageUnreadable, err))
 	case !info.Mode().IsRegular():
 		return refuse(fmt.Errorf("%w: %s", emulators.ErrImageNotFile, rom))
+	}
+	if target.AcceptsPackage(rom) {
+		// A package that names no game would only fail at the first launch.
+		if _, err := emulators.PackageTitleID(rom); err != nil {
+			return refuse(err)
+		}
 	}
 	folder, err := target.GameFolder(rom)
 	if err != nil {
@@ -689,6 +695,7 @@ type emulatorEnv struct {
 	home    func() (emulators.StorageHome, error)
 	bios    func() emulators.BIOSEnv
 	copies  func(ctx context.Context, program string) ([]int, error)
+	install func(program, pkg string) error
 }
 
 func emulatedLaunch(ctx context.Context, env emulatorEnv, game Game, chosen chosenProfile, req *launch) error {
@@ -720,6 +727,9 @@ func emulatedLaunch(ctx context.Context, env emulatorEnv, game Game, chosen chos
 	if err != nil {
 		return fmt.Errorf("рабочая папка эмулятора: %w", err)
 	}
+	if target.AcceptsPackage(chosen.executable) {
+		return packageLaunch(env, target, program, workDir, chosen, req)
+	}
 	command, run, err := emulatorCommand(ctx, target, game, chosen.executable, target.FindStorage(program, env.home))
 	if err != nil {
 		return err
@@ -730,6 +740,28 @@ func emulatedLaunch(ctx context.Context, env emulatorEnv, game Game, chosen chos
 	req.elevated = false
 	req.emulator = run
 	return nil
+}
+
+// packageLaunch starts what the emulator installed from the package, or hands
+// the package to its installer and says so: the game can only start after the
+// player has confirmed the installation in the emulator.
+func packageLaunch(env emulatorEnv, target emulators.Platform, program, workDir string, chosen chosenProfile, req *launch) error {
+	id, err := emulators.PackageTitleID(chosen.executable)
+	if err != nil {
+		return err
+	}
+	if eboot, ok := target.InstalledPackageGame(program, id, runtime.GOOS, env.bios()); ok {
+		req.executable = program
+		req.args = append(slices.Clone(chosen.args), target.Command(eboot)...)
+		req.workDir = workDir
+		req.elevated = false
+		req.emulator = emulatorRun{}
+		return nil
+	}
+	if err := env.install(program, chosen.executable); err != nil {
+		return err
+	}
+	return fmt.Errorf("%w: %s", emulators.ErrPKGInstalling, id)
 }
 
 // emulatorRun is what the end of a session needs to know about how it started.

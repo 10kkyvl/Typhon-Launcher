@@ -1,6 +1,8 @@
 export const errEmulators = {
   'emulators.unknown_platform': 'неизвестная консоль',
   'emulators.not_configured': 'эмулятор для этой консоли не указан',
+  'emulators.pkg_invalid': 'Файл .pkg повреждён или это не пакет PS3',
+  'emulators.pkg_installing': 'Эмулятор устанавливает игру из пакета: подтвердите установку в его окне и запустите игру ещё раз',
   'emulators.already_running': 'Эмулятор уже открыт: закройте его, чтобы запустить игру',
   'emulators.bios_missing': 'Эмулятор не найдёт BIOS: положите дамп BIOS своей приставки в его папку',
   'emulators.bios_dir_unknown': 'Не удалось определить папку BIOS этого эмулятора',

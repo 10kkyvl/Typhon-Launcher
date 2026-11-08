@@ -1115,3 +1115,75 @@ func TestPlayDoesNotLookForCopiesOfOtherEmulators(t *testing.T) {
 	}
 	rec.finish(s)
 }
+
+func ps3Package(t *testing.T, id string) string {
+	t.Helper()
+	header := make([]byte, 0xC0)
+	copy(header, "\x7fPKG\x00\x00\x00\x01")
+	copy(header[0x30:], "UP0001-"+id+"_00-0000000000000000")
+	return writeFile(t, filepath.Join(t.TempDir(), "game.pkg"), string(header))
+}
+
+// A PS3 package is RPCS3's to install: the first launch hands it over and
+// says so, a launch after the installation starts what RPCS3 put on its disk.
+func TestPlayAPS3Package(t *testing.T) {
+	s := newLibrary(t)
+	program := filepath.Join(t.TempDir(), "rpcs3")
+	s.SetEmulatorResolver(func(string) (string, error) { return program, nil })
+	config := t.TempDir()
+	s.biosEnv = func() emulators.BIOSEnv { return emulators.BIOSEnv{ConfigDir: config} }
+	if err := os.MkdirAll(filepath.Join(config, "rpcs3", "dev_hdd0"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("RPCS3 keeps its data beside the program on Windows: covered in emulators")
+	}
+	pkg := ps3Package(t, "NP0APOLLO")
+	game, err := s.AddEmulatedGame(t.Context(), pkg, emulators.PS3, "Apollo")
+	if err != nil {
+		t.Fatalf("add a package: %v", err)
+	}
+
+	var installed [][2]string
+	s.installPackage = func(program, pkg string) error {
+		installed = append(installed, [2]string{program, pkg})
+		return nil
+	}
+	s.start = func(context.Context, launch) (gameProcess, error) {
+		t.Error("a game started before the package was installed")
+		return nil, errors.New("unexpected")
+	}
+	if err := s.PlayGame(game.ID); uierr.Code(err) != "emulators.pkg_installing" {
+		t.Fatalf("first launch: %v", err)
+	}
+	if len(installed) != 1 || installed[0] != [2]string{program, pkg} || s.IsRunning(game.ID) {
+		t.Fatalf("installer %v, running %v", installed, s.IsRunning(game.ID))
+	}
+
+	s.installPackage = func(string, string) error { return errors.New("no installer") }
+	if err := s.PlayGame(game.ID); err == nil || uierr.Code(err) == "emulators.pkg_installing" {
+		t.Fatalf("an installer that failed to start: %v", err)
+	}
+
+	eboot := writeFile(t, filepath.Join(config, "rpcs3", "dev_hdd0", "game", "NP0APOLLO", "USRDIR", "EBOOT.BIN"), "x")
+	rec := recordLaunches(t, s)
+	s.SetEmulatorResolver(func(string) (string, error) { return program, nil })
+	if err := s.PlayGame(game.ID); err != nil {
+		t.Fatalf("after the installation: %v", err)
+	}
+	rec.finish(s)
+	if want := []string{"--no-gui", "--fullscreen", eboot}; rec.req.executable != program || !slices.Equal(rec.req.args, want) {
+		t.Fatalf("launch %+v, want %v", rec.req, want)
+	}
+}
+
+func TestAddRefusesAPackageThatNamesNoPS3Game(t *testing.T) {
+	s := newLibrary(t)
+	broken := writeFile(t, filepath.Join(t.TempDir(), "game.pkg"), "PK\x03\x04 not a package at all..................................................")
+	if _, err := s.AddEmulatedGame(t.Context(), broken, emulators.PS3, "Broken"); uierr.Code(err) != "emulators.pkg_invalid" {
+		t.Fatalf("broken package: %v", err)
+	}
+	if _, err := s.AddEmulatedGame(t.Context(), ps3Package(t, "NP0APOLLO"), emulators.PS4, "PS4"); uierr.Code(err) != "emulators.image_manual_only" {
+		t.Fatalf("PS4 package: %v", err)
+	}
+}

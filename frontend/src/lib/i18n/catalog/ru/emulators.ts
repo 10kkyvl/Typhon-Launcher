@@ -37,7 +37,7 @@ export const emulators = {
   'emul.addConsoleChoose': 'Выберите консоль',
   'emul.addConsoleAmbiguous': 'Этот формат подходит нескольким консолям — выберите нужную.',
   'emul.addNoConsole': 'Формат «{ext}» не подходит ни одной консоли. Поддерживаются: {list}.',
-  'emul.addGameFileHint': 'Игры PS3, PS4 и PS Vita выбираются по файлу EBOOT.BIN (eboot.bin) в папке игры. Файлы .pkg нужно установить в эмуляторе вручную.',
+  'emul.addGameFileHint': 'Игры PS3, PS4 и PS Vita выбираются по файлу EBOOT.BIN (eboot.bin) в папке игры. Пакет .pkg для PS3 можно добавить как есть: RPCS3 установит его при первом запуске. Пакеты .pkg для PS4 и PS Vita нужно установить в эмуляторе вручную.',
   'emul.addTitleHint': 'Образ остаётся на месте, лаунчер его не копирует.',
   'emul.addFindCover': 'Найти обложку по названию',
   'emul.addFindCoverHint': 'В поиск обложки уйдёт только название, которое вы ввели выше. Без галочки ничего не отправляется.',

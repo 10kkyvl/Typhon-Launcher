@@ -80,6 +80,12 @@ export function emulatorAlreadyOpen(err: unknown): boolean {
   return errorCode(err) === EMULATOR_RUNNING_CODE;
 }
 
+export const PKG_INSTALLING_CODE = 'emulators.pkg_installing';
+
+export function installingPackage(err: unknown): boolean {
+  return errorCode(err) === PKG_INSTALLING_CODE;
+}
+
 export function needsBios(err: unknown): boolean {
   return errorCode(err) === BIOS_MISSING_CODE;
 }

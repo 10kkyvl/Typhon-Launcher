@@ -45,6 +45,8 @@ var (
 	ErrSaveFailed      = uierr.New("emulators.save_failed", "не удалось сохранить настройки эмулятора")
 	ErrBIOSMissing     = uierr.New("emulators.bios_missing", "эмулятор не найдёт BIOS: положите дамп BIOS своей приставки в папку эмулятора")
 	ErrBIOSUnknown     = uierr.New("emulators.bios_dir_unknown", "папка BIOS этого эмулятора неизвестна")
+	ErrPKGInvalid      = uierr.New("emulators.pkg_invalid", "файл .pkg повреждён или это не пакет PS3")
+	ErrPKGInstalling   = uierr.New("emulators.pkg_installing", "эмулятор устанавливает игру из пакета: подтвердите установку в его окне и запустите игру ещё раз")
 	ErrEmulatorRunning = uierr.New("emulators.already_running", "эмулятор уже открыт: закройте его, чтобы запустить игру")
 
 	ErrImagePathEmpty    = uierr.New("emulators.image_path_empty", "не указан файл образа")
@@ -140,7 +142,7 @@ func (s *Service) List(ctx context.Context) ([]PlatformStatus, error) {
 func (s *Service) statusOf(p Platform, path string) PlatformStatus {
 	row := PlatformStatus{
 		ID: p.ID, Name: p.Name, Emulator: p.Emulator, Homepage: p.Homepage,
-		Extensions: slices.Clone(p.Extensions), ImageNames: p.ImageNames(), Path: path, Status: StatusNotSet,
+		Extensions: append(slices.Clone(p.Extensions), p.packages...), ImageNames: p.ImageNames(), Path: path, Status: StatusNotSet,
 		Warnings: []string{},
 	}
 	if path == "" {

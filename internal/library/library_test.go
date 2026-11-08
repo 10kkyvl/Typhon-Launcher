@@ -2,6 +2,7 @@ package library
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,6 +38,7 @@ func mustServiceAt(t testing.TB, path string) *Service {
 	// The player's own emulator folders must not decide a test's launch.
 	s.biosEnv = func() emulators.BIOSEnv { return emulators.BIOSEnv{} }
 	s.emulatorCopies = func(context.Context, string) ([]int, error) { return nil, nil }
+	s.installPackage = func(string, string) error { return errors.New("tests start no installer") }
 	// Настоящая подготовка окружения на macOS заводит бутыль CrossOver:
 	// секунды и сотни мегабайт на каждый запуск. Тесты запускают обычные
 	// процессы, и оставлять после прогона настоящие бутыли нельзя.

@@ -4,6 +4,8 @@ import type { ErrEmulatorsKey } from '../ru/errEmulators';
 export const errEmulators: Record<ErrEmulatorsKey, Message> = {
   'emulators.unknown_platform': 'Unknown console',
   'emulators.not_configured': 'No emulator is set for this console',
+  'emulators.pkg_invalid': 'The .pkg file is damaged or is not a PS3 package',
+  'emulators.pkg_installing': 'The emulator is installing the game from the package: confirm the installation in its window, then start the game again',
   'emulators.already_running': 'The emulator is already open: close it to start the game',
   'emulators.bios_missing': 'The emulator will not find a BIOS: put a BIOS dump of your console into its folder',
   'emulators.bios_dir_unknown': 'The BIOS folder of this emulator could not be determined',

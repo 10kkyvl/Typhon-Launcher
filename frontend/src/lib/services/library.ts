@@ -5,7 +5,9 @@ import { Service as AppService } from '../../../bindings/typhon/internal/app';
 import { inWails } from './backend';
 import { errorCode } from '../i18n/errors';
 import { markError } from '../game/markMessages';
-import { emulationPlatform, emulatorAlreadyOpen, needsBios, needsEmulator } from '../library/emulation';
+import { emulationPlatform, emulatorAlreadyOpen, installingPackage, needsBios, needsEmulator } from '../library/emulation';
+import { libraryErrorText } from '../library/errors';
+import { toast } from '../stores/toasts';
 import { askForBios } from '../stores/biosPrompt';
 import { askToCloseEmulator } from '../stores/emulatorBusyPrompt';
 import { askForEmulator } from '../stores/emulatorPrompt';
@@ -207,6 +209,11 @@ export async function launchGame(id: string): Promise<boolean> {
 // error is shown as it is.
 async function recoverLaunch(id: string, err: unknown): Promise<boolean> {
   if (errorCode(err) === 'library.launch_cancelled') return false;
+  if (installingPackage(err)) {
+    // Not a failure: the emulator's installer is open and waits for the player.
+    toast(libraryErrorText(err, ''), 'info');
+    return false;
+  }
   if (needsBios(err)) return await launchAfterBios(id, err);
   if (emulatorAlreadyOpen(err)) return await launchAfterClosing(id, err);
   if (!needsEmulator(err)) throw err;

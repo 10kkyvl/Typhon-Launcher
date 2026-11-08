@@ -256,6 +256,9 @@ type Service struct {
 	// emulatorCopies lists running copies of an emulator; tests replace it so
 	// that the player's own processes never decide a launch.
 	emulatorCopies func(ctx context.Context, program string) ([]int, error)
+	// installPackage hands a package to the emulator's installer; tests replace
+	// it so that no emulator is ever started.
+	installPackage func(program, pkg string) error
 	// coverSearch ищет обложку образа по явному действию пользователя.
 	coverSearch func(ctx context.Context, title, platform string) (string, error)
 
@@ -357,6 +360,7 @@ func NewServiceAt(path string) (*Service, error) {
 		emulatorHome:     emulators.DefaultStorageHome,
 		biosEnv:          emulators.DefaultBIOSEnv,
 		emulatorCopies:   emulators.RunningCopies,
+		installPackage:   emulators.InstallPackage,
 		coverSearch:      func(context.Context, string, string) (string, error) { return "", emulators.ErrCoverLookup },
 		emulatedPath:     emulatedPathFor(path),
 		savedNative:      []byte("[]"),

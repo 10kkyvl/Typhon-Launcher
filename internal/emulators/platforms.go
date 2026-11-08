@@ -69,6 +69,10 @@ type Platform struct {
 	bios biosLayout
 	// singleInstance means a second copy refuses to start while one runs.
 	singleInstance bool
+	// packages are files the emulator installs for itself; the launcher hands
+	// them over and later starts the game from hddRoots.
+	packages []string
+	hddRoots func(program, goos string, env BIOSEnv) []string
 }
 
 var platforms = []Platform{
@@ -160,6 +164,8 @@ var platforms = []Platform{
 		updateCategories: []string{"GD"},
 		skippedFolders:   []string{"PS3_UPDATE"},
 		singleInstance:   true,
+		packages:         []string{pkgExt},
+		hddRoots:         rpcs3Roots,
 	},
 	{
 		ID:         Vita,
@@ -234,7 +240,7 @@ func ImagePatterns(ids []string) (string, error) {
 	}
 	var patterns []string
 	for _, p := range selected {
-		for _, ext := range p.Extensions {
+		for _, ext := range slices.Concat(p.Extensions, p.packages) {
 			if pattern := "*" + ext; !slices.Contains(patterns, pattern) {
 				patterns = append(patterns, pattern)
 			}
@@ -264,7 +270,7 @@ func ValidCover(raw string) bool {
 // AcceptsImage says whether the file name belongs to this console. The name alone
 // does not make an unpacked game: GameFolder checks what lies around it.
 func (p Platform) AcceptsImage(path string) bool {
-	return slices.Contains(p.Extensions, strings.ToLower(filepath.Ext(path))) || p.IsGameFile(path)
+	return slices.Contains(p.Extensions, strings.ToLower(filepath.Ext(path))) || p.AcceptsPackage(path) || p.IsGameFile(path)
 }
 
 // ManualOnly says whether the file is a form of this console's games the launcher
