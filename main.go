@@ -34,9 +34,11 @@ import (
 	"typhon/internal/emulators"
 	"typhon/internal/extlib"
 	"typhon/internal/gamemode"
+	"typhon/internal/handoffgate"
 	"typhon/internal/heartbeat"
 	"typhon/internal/history"
 	"typhon/internal/install"
+	"typhon/internal/instance"
 	"typhon/internal/lan"
 	"typhon/internal/legal"
 	"typhon/internal/library"
@@ -75,6 +77,7 @@ import (
 	"typhon/internal/usagestats"
 	"typhon/internal/version"
 	"typhon/internal/watchlist"
+	"typhon/internal/windowhandoff"
 	"typhon/internal/wine"
 	"typhon/internal/wrappers"
 
@@ -170,6 +173,7 @@ func init() {
 	application.RegisterEvent[theme.Theme]("theme:reverted")
 	application.RegisterEvent[theme.SourceFailure]("theme:source-failed")
 	application.RegisterEvent[selfupdate.Status]("launcher:update_status")
+	application.RegisterEvent[selfupdate.HandoffInfo]("launcher:handoff_done")
 	application.RegisterEvent[selfupdate.Progress]("launcher:update_progress")
 	application.RegisterEvent[playlog.Session]("playlog:recorded")
 	application.RegisterEvent[playlog.DegradedStatus]("playlog:degraded")
@@ -328,6 +332,17 @@ func main() {
 		return
 	}
 
+	// A successor in a seamless update: started by the outgoing launcher, which
+	// is still running. Malformed arguments end the process, which the old
+	// launcher reads as a failed hand-off and rolls back.
+	handoffSpec, handoffMode, handoffArgErr := selfupdate.ParseHandoffArgs(os.Args)
+	if handoffArgErr != nil {
+		fatal("read the hand-off argument", handoffArgErr)
+	}
+	if handoffMode {
+		handoffgate.Arm()
+	}
+
 	qaArgs, err := qaStart()
 	if err != nil {
 		fatal("start qa build", err)
@@ -353,14 +368,26 @@ func main() {
 
 	// Before any service reads its state: a file put back after a service has
 	// loaded it would be overwritten by that service's next save.
-	if err := selfupdate.RecoverInterrupted(configDir, app.Version); err != nil {
-		slog.Error("settle an interrupted update or rollback", "error", err)
+	// A successor leaves all of this to the old launcher, which is still
+	// alive and still owns the journal and the snapshot.
+	if !handoffMode {
+		if err := selfupdate.RecoverHandoff(configDir, app.Version); err != nil {
+			slog.Error("settle an interrupted seamless update", "error", err)
+		}
+		if err := selfupdate.RecoverInterrupted(configDir, app.Version); err != nil {
+			slog.Error("settle an interrupted update or rollback", "error", err)
+		}
 	}
 
 	// Counted for --play starts as well: a shortcut start runs the same
 	// services and fails the same way. The workers above never get here, so
 	// an update or a rollback in progress is not counted as a failed start.
-	startGuard := selfupdate.BeginStart(configDir, app.Version)
+	var startGuard *selfupdate.StartGuard
+	if handoffMode {
+		startGuard = selfupdate.InertStartGuard(configDir, app.Version)
+	} else {
+		startGuard = selfupdate.BeginStart(configDir, app.Version)
+	}
 	rolledBack, err := startGuard.OfferRollback(settings.IsPortable())
 	if err != nil {
 		slog.Error("offer rollback after failed starts", "error", err)
@@ -599,6 +626,12 @@ func main() {
 	selfupdateService, err := selfupdate.NewService()
 	if err != nil {
 		fatal("start selfupdate service", err)
+	}
+	if handoffMode {
+		if handoffSpec.ConfigDir != configDir {
+			fatal("check the hand-off config dir", fmt.Errorf("the old launcher uses %q, this one %q", handoffSpec.ConfigDir, configDir))
+		}
+		selfupdateService.SetHandoff(handoffSpec)
 	}
 	selfupdateService.SetBetaAccess(func() (string, bool, error) {
 		if !settingsService.GetSettings().UpdateBetaChannel {
@@ -942,17 +975,25 @@ func main() {
 		windowsOptions.WebviewUserDataPath = filepath.Join(configDir, "webview2")
 	}
 
-	wails := application.New(application.Options{
-		Name:        "Typhon",
-		Description: "Typhon game launcher",
-		Windows:     windowsOptions,
-		SingleInstance: &application.SingleInstanceOptions{
+	// A successor starts beside the running launcher, so it must not claim the
+	// single-instance role through Wails: the check would take it for a second
+	// launch and exit. It claims the role itself once the old launcher is gone.
+	var singleInstance *application.SingleInstanceOptions
+	if !handoffMode {
+		singleInstance = &application.SingleInstanceOptions{
 			UniqueID: instanceID,
 			OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
 				launches.Receive(data.Args)
 			},
-		},
-		Services: services,
+		}
+	}
+
+	wails := application.New(application.Options{
+		Name:           "Typhon",
+		Description:    "Typhon game launcher",
+		Windows:        windowsOptions,
+		SingleInstance: singleInstance,
+		Services:       services,
 		Assets: application.AssetOptions{
 			Handler:    application.AssetFileServerFS(assets),
 			Middleware: application.ChainMiddleware(overlay.GuardAssets, metadataService.Middleware, screenshotService.Middleware),
@@ -965,6 +1006,12 @@ func main() {
 		},
 	})
 
+	// The dark theme's --bg; a successor opens in the outgoing window's theme.
+	windowBackground := application.NewRGB(9, 13, 23)
+	if handoffMode {
+		r, g, b := handoffSpec.BackgroundRGB()
+		windowBackground = application.NewRGB(r, g, b)
+	}
 	window := wails.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:            windowTitle(),
 		Width:            1440,
@@ -972,11 +1019,13 @@ func main() {
 		MinWidth:         1100,
 		MinHeight:        750,
 		Frameless:        true,
-		BackgroundColour: application.NewRGB(11, 16, 22),
+		BackgroundColour: windowBackground,
 		// Started from a game shortcut the launcher stays out of the way, but
 		// only when the tray icon is there to bring it back: hiding a window
 		// nobody can reopen leaves a process the user cannot reach.
-		Hidden: playRequested && current.MinimizeToTray,
+		// A successor stays hidden until its first frame is painted, then takes
+		// the old window's place (HandoffRendered).
+		Hidden: handoffMode || (playRequested && current.MinimizeToTray),
 		Mac: application.MacWindow{
 			InvisibleTitleBarHeight: 55,
 			Backdrop:                application.MacBackdropTranslucent,
@@ -986,6 +1035,15 @@ func main() {
 	})
 
 	gameModeWindow.window.Store(window)
+
+	selfupdateService.SetHandoffWindow(window)
+	selfupdateService.SetHandoffBackground(themeService.Background)
+	if handoffMode {
+		if err := windowhandoff.Prepare(window, handoffSpec.Geometry); err != nil {
+			// The window still opens, at the default size, and the hand-off goes on.
+			slog.Warn("prepare the hand-off window", "error", err)
+		}
+	}
 
 	chatDesktop := messaging.NewDesktop(context.Background(), wails, window)
 	messagingService.SetNotifier(chatDesktop.Notify, chatDesktop.Clear)
@@ -1155,9 +1213,46 @@ func main() {
 	}
 	wails.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
 		launches.Ready(func(args []string) {
+			if selfupdateService.HandoffInProgress() {
+				// The successor is taking over; a launch that reached this
+				// launcher in these seconds is not repeated there, so the
+				// window it would open is the one about to close.
+				slog.Info("second launch ignored: the launcher is handing itself over", "args", argsForLog(args))
+				return
+			}
 			handleSecondLaunch(args, outsidePlayer, trayController, navigation, func(route string) { emitNavigate(application.Get(), route) })
 		})
 	})
+
+	if handoffMode {
+		handoffCtx, stopHandoff := context.WithCancel(context.Background())
+		var takenOver instance.Listener
+		defer func() {
+			stopHandoff()
+			if takenOver != nil {
+				if err := takenOver.Close(); err != nil {
+					slog.Warn("stop the second launch receiver", "component", "app", "error", err)
+				}
+			}
+		}()
+		go func() {
+			err := selfupdateService.CompleteHandoff(handoffCtx, func() error {
+				l, err := instance.Takeover(handoffCtx, instanceID, launches.Receive)
+				if err != nil {
+					return err
+				}
+				takenOver = l
+				return nil
+			})
+			if err != nil {
+				// Without the single-instance role this process must not go
+				// on beside whatever holds it. The old launcher, if it is
+				// still alive, keeps its window.
+				slog.Error("complete the hand-off", "component", "app", "error", err)
+				wails.Quit()
+			}
+		}()
+	}
 
 	slog.Info("typhon starting", "version", app.Version)
 	if err := wails.Run(); err != nil {

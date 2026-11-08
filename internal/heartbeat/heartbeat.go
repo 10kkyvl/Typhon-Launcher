@@ -12,6 +12,7 @@ import (
 	"typhon/internal/account"
 	"typhon/internal/app"
 	"typhon/internal/clientid"
+	"typhon/internal/handoffgate"
 	"typhon/internal/library"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -81,7 +82,13 @@ func NewService(id clientid.Identity, resolveGameID func(catalogGameID string) s
 	}, nil
 }
 
-func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
+// ServiceStartup runs the startup at once, or after the old launcher has
+// exited when this one is the successor of a seamless update.
+func (s *Service) ServiceStartup(ctx context.Context, opts application.ServiceOptions) error {
+	return handoffgate.Startup(ctx, "heartbeat", func() error { return s.startService(ctx, opts) })
+}
+
+func (s *Service) startService(ctx context.Context, _ application.ServiceOptions) error {
 	runCtx, cancel := context.WithCancel(ctx)
 	s.mu.Lock()
 	s.cancel = cancel

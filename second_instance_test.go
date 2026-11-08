@@ -231,12 +231,21 @@ func TestLinkDeliveredOnceThroughTheQueue(t *testing.T) {
 }
 
 func TestIsWorkerLaunch(t *testing.T) {
-	for args, want := range map[string]bool{"--install-worker": true, "--install-broker": true, "--selfupdate-worker": true, "--play": false} {
+	for args, want := range map[string]bool{"--install-worker": true, "--install-broker": true, "--selfupdate-worker": true, "--handoff": true, "--play": false} {
 		if got := isWorkerLaunch([]string{"typhon.exe", args}); got != want {
 			t.Errorf("%s = %v", args, got)
 		}
 	}
 	if isWorkerLaunch([]string{"typhon.exe"}) {
 		t.Error("no arguments is not a worker")
+	}
+}
+
+// The successor of a seamless update starts beside the running launcher on
+// purpose; forwarding it to that launcher would make it quit at once.
+func TestHandoffLaunchIsNotForwarded(t *testing.T) {
+	handed, listener, err := handOffLaunch(t.Context(), []string{"typhon.exe", "--handoff", "abc"}, &secondLaunches{})
+	if handed || listener != nil || err != nil {
+		t.Fatalf("handOffLaunch() = %v, %v, %v; want it to step aside", handed, listener, err)
 	}
 }

@@ -32,7 +32,9 @@ func isWorkerLaunch(args []string) bool {
 		return false
 	}
 	switch args[1] {
-	case "--install-worker", "--install-broker", "--selfupdate-worker":
+	// --handoff is the successor of a seamless update: the launcher it starts
+	// beside is meant to be running, so it must not be forwarded to it.
+	case "--install-worker", "--install-broker", "--selfupdate-worker", "--handoff":
 		return true
 	}
 	return false

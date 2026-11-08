@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"typhon/internal/download"
+	"typhon/internal/handoffgate"
 	"typhon/internal/history"
 	"typhon/internal/install"
 	"typhon/internal/library"
@@ -234,7 +235,13 @@ func (s *Service) clearDegradedLocked() {
 	emit(eventDegraded, s.status)
 }
 
-func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
+// ServiceStartup runs the startup at once, or after the old launcher has
+// exited when this one is the successor of a seamless update.
+func (s *Service) ServiceStartup(ctx context.Context, opts application.ServiceOptions) error {
+	return handoffgate.Startup(ctx, "updates", func() error { return s.startService(ctx, opts) })
+}
+
+func (s *Service) startService(ctx context.Context, _ application.ServiceOptions) error {
 	s.mu.Lock()
 	startupCtx, cancel := context.WithCancel(ctx)
 	stored, err := s.store.loadAll()

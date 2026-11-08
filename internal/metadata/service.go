@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"typhon/internal/catalog"
+	"typhon/internal/handoffgate"
 	"typhon/internal/settings"
 	"typhon/internal/storage"
 	"typhon/internal/titles"
@@ -167,7 +168,13 @@ func NewServiceAt(dir string, cat *catalog.Service, provider Provider) (*Service
 	}, nil
 }
 
-func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
+// ServiceStartup runs the startup at once, or after the old launcher has
+// exited when this one is the successor of a seamless update.
+func (s *Service) ServiceStartup(ctx context.Context, opts application.ServiceOptions) error {
+	return handoffgate.Startup(ctx, "metadata", func() error { return s.startService(ctx, opts) })
+}
+
+func (s *Service) startService(ctx context.Context, _ application.ServiceOptions) error {
 	own, cancel := context.WithCancel(ctx)
 	s.mu.Lock()
 	s.ctx, s.cancel = own, cancel

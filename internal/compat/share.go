@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"typhon/internal/handoffgate"
+
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -104,7 +106,13 @@ func NewSharer(
 	}, nil
 }
 
-func (s *Sharer) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
+// ServiceStartup runs the startup at once, or after the old launcher has
+// exited when this one is the successor of a seamless update.
+func (s *Sharer) ServiceStartup(ctx context.Context, opts application.ServiceOptions) error {
+	return handoffgate.Startup(ctx, "compat", func() error { return s.startService(ctx, opts) })
+}
+
+func (s *Sharer) startService(ctx context.Context, _ application.ServiceOptions) error {
 	runCtx, cancel := context.WithCancel(ctx)
 	s.cancel = cancel
 

@@ -12,6 +12,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 
 	"typhon/internal/catalog"
+	"typhon/internal/handoffgate"
 	"typhon/internal/library"
 	"typhon/internal/titles"
 	"typhon/internal/uierr"
@@ -100,7 +101,13 @@ func emit(name string, data any) {
 	}
 }
 
-func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
+// ServiceStartup runs the startup at once, or after the old launcher has
+// exited when this one is the successor of a seamless update.
+func (s *Service) ServiceStartup(ctx context.Context, opts application.ServiceOptions) error {
+	return handoffgate.Startup(ctx, "extlib", func() error { return s.startService(ctx, opts) })
+}
+
+func (s *Service) startService(ctx context.Context, _ application.ServiceOptions) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	runCtx, cancel := context.WithCancel(ctx)

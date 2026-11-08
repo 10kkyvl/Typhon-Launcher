@@ -18,6 +18,7 @@ import (
 
 	"typhon/internal/account"
 	"typhon/internal/dialogtext"
+	"typhon/internal/handoffgate"
 
 	// classicio must be initialized before anacrolix storage reads
 	// TORRENT_STORAGE_DEFAULT_FILE_IO: mmap file IO never releases mappings,
@@ -296,7 +297,13 @@ func maxActive(cfg settings.Settings) int {
 	return cfg.MaxActiveDownloads
 }
 
-func (m *Manager) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
+// ServiceStartup runs the startup at once, or after the old launcher has
+// exited when this one is the successor of a seamless update.
+func (m *Manager) ServiceStartup(ctx context.Context, opts application.ServiceOptions) error {
+	return handoffgate.Startup(ctx, "download", func() error { return m.startService(ctx, opts) })
+}
+
+func (m *Manager) startService(ctx context.Context, _ application.ServiceOptions) error {
 	runCtx, cancelRun := context.WithCancel(ctx)
 	m.mu.Lock()
 	m.ctx, m.cancel = runCtx, cancelRun

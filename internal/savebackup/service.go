@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"typhon/internal/handoffgate"
 	"typhon/internal/hashdir"
 	"typhon/internal/library"
 	"typhon/internal/settings"
@@ -148,7 +149,13 @@ func emitEvent(ev Event) {
 	}
 }
 
-func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
+// ServiceStartup runs the startup at once, or after the old launcher has
+// exited when this one is the successor of a seamless update.
+func (s *Service) ServiceStartup(ctx context.Context, opts application.ServiceOptions) error {
+	return handoffgate.Startup(ctx, "savebackup", func() error { return s.startService(ctx, opts) })
+}
+
+func (s *Service) startService(ctx context.Context, _ application.ServiceOptions) error {
 	s.mu.Lock()
 	if s.ctx != nil {
 		s.mu.Unlock()

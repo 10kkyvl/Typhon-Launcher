@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"typhon/internal/handoffgate"
 	"typhon/internal/procs"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -29,7 +30,13 @@ const defaultWatchInterval = 1 * time.Second
 // procs.List is not supported (invariant: no OS default on failure — here
 // the honest answer is "detection unavailable", not "nobody is playing"),
 // the detector simply never runs and watching stays false.
-func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
+// ServiceStartup runs the startup at once, or after the old launcher has
+// exited when this one is the successor of a seamless update.
+func (s *Service) ServiceStartup(ctx context.Context, opts application.ServiceOptions) error {
+	return handoffgate.Startup(ctx, "library", func() error { return s.startService(ctx, opts) })
+}
+
+func (s *Service) startService(ctx context.Context, _ application.ServiceOptions) error {
 	if !procs.Supported() {
 		s.mu.Lock()
 		s.ctx = ctx

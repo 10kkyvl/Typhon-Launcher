@@ -16,6 +16,7 @@ import (
 
 	"typhon/internal/dialogtext"
 	"typhon/internal/download"
+	"typhon/internal/handoffgate"
 	"typhon/internal/hashdir"
 	"typhon/internal/history"
 	"typhon/internal/install"
@@ -114,7 +115,13 @@ func NewServiceAt(dir string, set *settings.Service, lib *library.Service, dl *d
 	}, nil
 }
 
-func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
+// ServiceStartup runs the startup at once, or after the old launcher has
+// exited when this one is the successor of a seamless update.
+func (s *Service) ServiceStartup(ctx context.Context, opts application.ServiceOptions) error {
+	return handoffgate.Startup(ctx, "relocate", func() error { return s.startService(ctx, opts) })
+}
+
+func (s *Service) startService(ctx context.Context, _ application.ServiceOptions) error {
 	s.mu.Lock()
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	s.mu.Unlock()
