@@ -127,26 +127,25 @@ func TestCheckBIOS(t *testing.T) {
 }
 
 func TestBIOSRootsPerSystem(t *testing.T) {
-	env := BIOSEnv{ConfigDir: "/cfg", CacheDir: `/local`, HomeDir: "/home/u", XDGDataDir: "/xdg"}
+	// Absolute on every system the test runs on: a drive letter on Windows.
+	root := filepath.VolumeName(t.TempDir()) + string(filepath.Separator)
+	abs := func(path string) string { return filepath.Join(root, filepath.FromSlash(path)) }
+	env := BIOSEnv{ConfigDir: abs("cfg"), CacheDir: abs("local"), HomeDir: abs("home/u"), XDGDataDir: abs("xdg")}
 	cases := []struct {
 		got, want []string
 	}{
-		{duckStationRoots("darwin", env), []string{"/cfg/DuckStation"}},
-		{duckStationRoots("windows", env), []string{"/local/DuckStation", "/home/u/Documents/DuckStation"}},
-		{duckStationRoots("linux", env), []string{"/xdg/duckstation"}},
-		{duckStationRoots("linux", BIOSEnv{HomeDir: "/home/u"}), []string{"/home/u/.local/share/duckstation"}},
-		{pcsx2Roots("darwin", env), []string{"/cfg/PCSX2"}},
-		{pcsx2Roots("windows", env), []string{"/home/u/Documents/PCSX2"}},
-		{pcsx2Roots("linux", env), []string{"/cfg/PCSX2"}},
+		{duckStationRoots("darwin", env), []string{abs("cfg/DuckStation")}},
+		{duckStationRoots("windows", env), []string{abs("local/DuckStation"), abs("home/u/Documents/DuckStation")}},
+		{duckStationRoots("linux", env), []string{abs("xdg/duckstation")}},
+		{duckStationRoots("linux", BIOSEnv{HomeDir: abs("home/u")}), []string{abs("home/u/.local/share/duckstation")}},
+		{pcsx2Roots("darwin", env), []string{abs("cfg/PCSX2")}},
+		{pcsx2Roots("windows", env), []string{abs("home/u/Documents/PCSX2")}},
+		{pcsx2Roots("linux", env), []string{abs("cfg/PCSX2")}},
 		{duckStationRoots("darwin", BIOSEnv{ConfigDir: "relative"}), nil},
 	}
 	for i, c := range cases {
-		want := make([]string, 0, len(c.want))
-		for _, w := range c.want {
-			want = append(want, filepath.FromSlash(w))
-		}
-		if !slices.Equal(c.got, want) && (len(c.got) != 0 || len(want) != 0) {
-			t.Errorf("case %d: %q, want %q", i, c.got, want)
+		if !slices.Equal(c.got, c.want) {
+			t.Errorf("case %d: %q, want %q", i, c.got, c.want)
 		}
 	}
 }
