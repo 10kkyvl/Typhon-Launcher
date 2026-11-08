@@ -67,6 +67,8 @@ type Platform struct {
 	// bios is where the emulator looks for the BIOS image; zero for consoles
 	// whose emulators need none.
 	bios biosLayout
+	// singleInstance means a second copy refuses to start while one runs.
+	singleInstance bool
 }
 
 var platforms = []Platform{
@@ -157,6 +159,7 @@ var platforms = []Platform{
 		manualForms:      []string{".iso", ".pkg"},
 		updateCategories: []string{"GD"},
 		skippedFolders:   []string{"PS3_UPDATE"},
+		singleInstance:   true,
 	},
 	{
 		ID:         Vita,

@@ -71,6 +71,11 @@ export async function openBiosFolder(platform: string): Promise<void> {
   await EmulatorsService.OpenBIOSFolder(platform);
 }
 
+export async function closeEmulator(platform: string): Promise<void> {
+  if (!inWails) throw unavailable();
+  await EmulatorsService.CloseEmulator(platform);
+}
+
 export async function setEmulatorPath(platform: string, path: string): Promise<PlatformStatus> {
   if (!inWails) throw unavailable();
   return row((await EmulatorsService.SetPath(platform, path)) as PlatformStatus);

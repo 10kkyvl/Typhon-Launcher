@@ -45,6 +45,7 @@ var (
 	ErrSaveFailed      = uierr.New("emulators.save_failed", "не удалось сохранить настройки эмулятора")
 	ErrBIOSMissing     = uierr.New("emulators.bios_missing", "эмулятор не найдёт BIOS: положите дамп BIOS своей приставки в папку эмулятора")
 	ErrBIOSUnknown     = uierr.New("emulators.bios_dir_unknown", "папка BIOS этого эмулятора неизвестна")
+	ErrEmulatorRunning = uierr.New("emulators.already_running", "эмулятор уже открыт: закройте его, чтобы запустить игру")
 
 	ErrImagePathEmpty    = uierr.New("emulators.image_path_empty", "не указан файл образа")
 	ErrImagePathRelative = uierr.New("emulators.image_path_relative", "путь к образу должен быть абсолютным")
@@ -346,6 +347,23 @@ func (s *Service) OpenBIOSFolder(platformID string) error {
 		return fmt.Errorf("открыть папку BIOS: %w", err)
 	}
 	return nil
+}
+
+// CloseEmulator closes the open copies of a console's emulator that would stop
+// a game from starting, after the player agreed to it.
+func (s *Service) CloseEmulator(ctx context.Context, platformID string) error {
+	p, ok := Lookup(platformID)
+	if !ok {
+		return fmt.Errorf("%w: %q", ErrUnknownPlatform, platformID)
+	}
+	if !p.SingleInstance() {
+		return nil
+	}
+	program, err := s.Resolve(platformID)
+	if err != nil {
+		return err
+	}
+	return CloseRunning(ctx, program)
 }
 
 // Resolve gives the program to start for a console.

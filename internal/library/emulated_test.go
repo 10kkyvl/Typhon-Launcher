@@ -15,6 +15,7 @@ import (
 
 	"typhon/internal/crashlog"
 	"typhon/internal/emulators"
+	"typhon/internal/emulators/sfotest"
 	"typhon/internal/procs"
 	"typhon/internal/storage"
 	"typhon/internal/uierr"
@@ -1060,4 +1061,57 @@ func TestPlayStopsWhenTheEmulatorWouldFindNoBIOS(t *testing.T) {
 	if len(rec.req.args) == 0 || rec.req.args[len(rec.req.args)-1] != game.Executable {
 		t.Fatalf("launch %+v", rec.req)
 	}
+}
+
+// RPCS3 stops a second copy with an error the player has to dismiss, so the
+// launch asks first; a table that cannot be read leaves the game alone.
+func TestPlayStopsWhileRPCS3IsAlreadyOpen(t *testing.T) {
+	s := newLibrary(t)
+	starts := 0
+	s.start = func(context.Context, launch) (gameProcess, error) {
+		starts++
+		return nil, errors.New("unexpected")
+	}
+	program := filepath.Join(t.TempDir(), "rpcs3")
+	s.SetEmulatorResolver(func(string) (string, error) { return program, nil })
+	var asked string
+	s.emulatorCopies = func(_ context.Context, p string) ([]int, error) {
+		asked = p
+		return []int{4242}, nil
+	}
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "PARAM.SFO"), string(sfotest.Bytes(map[string]string{"TITLE_ID": "NP0APOLLO", "CATEGORY": "HG"})))
+	eboot := writeFile(t, filepath.Join(dir, "USRDIR", "EBOOT.BIN"), "x")
+	game, err := s.AddEmulatedGame(t.Context(), eboot, emulators.PS3, "Apollo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PlayGame(game.ID); uierr.Code(err) != "emulators.already_running" {
+		t.Fatalf("PlayGame = %v", err)
+	}
+	if asked != program || starts != 0 || s.IsRunning(game.ID) {
+		t.Fatalf("asked %q, started %d", asked, starts)
+	}
+
+	rec := recordLaunches(t, s)
+	s.emulatorCopies = func(context.Context, string) ([]int, error) { return nil, errors.New("denied") }
+	if err := s.PlayGame(game.ID); err != nil {
+		t.Fatalf("unknown copies: %v", err)
+	}
+	rec.finish(s)
+}
+
+// Only an emulator that refuses a second copy is looked for.
+func TestPlayDoesNotLookForCopiesOfOtherEmulators(t *testing.T) {
+	s := newLibrary(t)
+	rec := recordLaunches(t, s)
+	s.emulatorCopies = func(context.Context, string) ([]int, error) {
+		t.Error("looked for copies of PCSX2")
+		return []int{1}, nil
+	}
+	game := emulatedGame(t, s, "game.iso")
+	if err := s.PlayGame(game.ID); err != nil {
+		t.Fatal(err)
+	}
+	rec.finish(s)
 }

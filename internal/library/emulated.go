@@ -682,25 +682,45 @@ func cueFiles(r io.Reader) ([]string, error) {
 // own arguments go first: the emulators read options only before the image.
 // The working folder is the emulator's on every console: shadPS4 keeps its data
 // beside the working folder, so anything else would give it an empty install.
-func emulatedLaunch(ctx context.Context, resolve func(string) (string, error), home func() (emulators.StorageHome, error), biosEnv func() emulators.BIOSEnv, game Game, chosen chosenProfile, req *launch) error {
+// emulatorEnv is what an emulated launch reads outside the library: copied
+// out under the lock and used outside it.
+type emulatorEnv struct {
+	resolve func(string) (string, error)
+	home    func() (emulators.StorageHome, error)
+	bios    func() emulators.BIOSEnv
+	copies  func(ctx context.Context, program string) ([]int, error)
+}
+
+func emulatedLaunch(ctx context.Context, env emulatorEnv, game Game, chosen chosenProfile, req *launch) error {
 	target, ok := emulators.Lookup(game.Emulation.Platform)
 	if !ok {
 		return fmt.Errorf("%w: %q", emulators.ErrUnknownPlatform, game.Emulation.Platform)
 	}
-	program, err := resolve(game.Emulation.Platform)
+	program, err := env.resolve(game.Emulation.Platform)
 	if err != nil {
 		return err
 	}
 	// Without a BIOS both emulators of the older consoles quit at once in batch
 	// mode and say nothing: the player would see the game not start at all.
-	if state := target.CheckBIOS(program, runtime.GOOS, biosEnv()); state.Missing {
+	if state := target.CheckBIOS(program, runtime.GOOS, env.bios()); state.Missing {
 		return fmt.Errorf("%w: %s", emulators.ErrBIOSMissing, state.Dir)
+	}
+	if target.SingleInstance() {
+		copies, err := env.copies(ctx, program)
+		switch {
+		case err != nil:
+			// Not knowing is no reason to hold the game back: the emulator
+			// then says itself that another copy runs.
+			slog.Warn("emulator copies unknown", "program", program, "error", err)
+		case len(copies) > 0:
+			return fmt.Errorf("%w: %s %v", emulators.ErrEmulatorRunning, filepath.Base(program), copies)
+		}
 	}
 	workDir, err := filepath.Abs(filepath.Dir(program))
 	if err != nil {
 		return fmt.Errorf("рабочая папка эмулятора: %w", err)
 	}
-	command, run, err := emulatorCommand(ctx, target, game, chosen.executable, target.FindStorage(program, home))
+	command, run, err := emulatorCommand(ctx, target, game, chosen.executable, target.FindStorage(program, env.home))
 	if err != nil {
 		return err
 	}

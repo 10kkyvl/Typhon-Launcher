@@ -5,8 +5,9 @@ import { Service as AppService } from '../../../bindings/typhon/internal/app';
 import { inWails } from './backend';
 import { errorCode } from '../i18n/errors';
 import { markError } from '../game/markMessages';
-import { emulationPlatform, needsBios, needsEmulator } from '../library/emulation';
+import { emulationPlatform, emulatorAlreadyOpen, needsBios, needsEmulator } from '../library/emulation';
 import { askForBios } from '../stores/biosPrompt';
+import { askToCloseEmulator } from '../stores/emulatorBusyPrompt';
 import { askForEmulator } from '../stores/emulatorPrompt';
 
 export { markError };
@@ -197,10 +198,31 @@ export async function playGame(id: string): Promise<void> {
 export async function launchGame(id: string): Promise<boolean> {
   if (!inWails) throw unavailable();
   try { await LibraryService.PlayGame(id); } catch (err) {
-    if (errorCode(err) === 'library.launch_cancelled') return false;
+    return await recoverLaunch(id, err);
+  }
+  return true;
+}
+
+// recoverLaunch turns a launch the player can fix into a question; any other
+// error is shown as it is.
+async function recoverLaunch(id: string, err: unknown): Promise<boolean> {
+  if (errorCode(err) === 'library.launch_cancelled') return false;
+  if (needsBios(err)) return await launchAfterBios(id, err);
+  if (emulatorAlreadyOpen(err)) return await launchAfterClosing(id, err);
+  if (!needsEmulator(err)) throw err;
+  return await launchAfterEmulator(id, err);
+}
+
+// The emulator is closed only with the player's yes; if another copy opens in
+// the meantime, the next error is shown instead of asking in a loop.
+async function launchAfterClosing(id: string, first: unknown): Promise<boolean> {
+  const platform = emulationPlatform((await getGames()).find((game) => game.id === id));
+  if (!platform) throw first;
+  if (!(await askToCloseEmulator(platform))) return false;
+  try { await LibraryService.PlayGame(id); } catch (err) {
     if (needsBios(err)) return await launchAfterBios(id, err);
-    if (!needsEmulator(err)) throw err;
-    return await launchAfterEmulator(id, err);
+    if (errorCode(err) !== 'library.launch_cancelled') throw err;
+    return false;
   }
   return true;
 }

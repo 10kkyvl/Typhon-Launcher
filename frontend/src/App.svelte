@@ -13,6 +13,7 @@
   import CloudConflictModal from './lib/components/CloudConflictModal.svelte';
   import EmulatorNeededModal from './lib/components/EmulatorNeededModal.svelte';
   import BiosNeededModal from './lib/components/BiosNeededModal.svelte';
+  import EmulatorBusyModal from './lib/components/EmulatorBusyModal.svelte';
   import LegalAcceptanceScreen from './lib/components/LegalAcceptanceScreen.svelte';
   import TelemetryConsentScreen from './lib/components/TelemetryConsentScreen.svelte';
   import UpdateOverlay from './lib/components/UpdateOverlay.svelte';
@@ -194,6 +195,7 @@
 
 <EmulatorNeededModal />
 <BiosNeededModal />
+<EmulatorBusyModal />
 
 <style>
   .boot {
