@@ -103,7 +103,9 @@ var platforms = []Platform{
 		Emulator:   "PPSSPP",
 		Homepage:   "https://www.ppsspp.org/",
 		Extensions: []string{".iso", ".cso", ".chd", ".pbp"},
-		Args:       []string{"--fullscreen", ImageArg},
+		// The pause menu then offers "Exit" instead of "Exit to menu": a
+		// fullscreen game has no other way out without the launcher.
+		Args: []string{"--pause-menu-exit", "--fullscreen", ImageArg},
 
 		CatalogPlatforms: []string{"PlayStation Portable"},
 

@@ -579,7 +579,7 @@ func TestPlayRunsTheEmulatorWithTheExactCommand(t *testing.T) {
 	}{
 		{emulators.PS1, func(rom string) []string { return []string{"-batch", "-fullscreen", "--", rom} }},
 		{emulators.PS2, func(rom string) []string { return []string{"-batch", "-fullscreen", "--", rom} }},
-		{emulators.PSP, func(rom string) []string { return []string{"--fullscreen", rom} }},
+		{emulators.PSP, func(rom string) []string { return []string{"--pause-menu-exit", "--fullscreen", rom} }},
 	}
 	for _, c := range cases {
 		t.Run(c.platform, func(t *testing.T) {

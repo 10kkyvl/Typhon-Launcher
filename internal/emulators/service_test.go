@@ -51,7 +51,7 @@ func TestTableIsTheSingleSourceOfTruth(t *testing.T) {
 	want := map[string][]string{
 		PS1:  {"-batch", "-fullscreen", "--", "image"},
 		PS2:  {"-batch", "-fullscreen", "--", "image"},
-		PSP:  {"--fullscreen", "image"},
+		PSP:  {"--pause-menu-exit", "--fullscreen", "image"},
 		PS3:  {"--no-gui", "--fullscreen", "image"},
 		Vita: {"--frontend", "sdl", "-F", "image"},
 		PS4:  {"-f", "true", "-g", "image"},
@@ -88,7 +88,7 @@ func TestTableIsTheSingleSourceOfTruth(t *testing.T) {
 func TestCommandDoesNotEditTheTable(t *testing.T) {
 	p, _ := Lookup(PSP)
 	p.Command("first")
-	if got := p.Command("second"); got[1] != "second" {
+	if got := p.Command("second"); got[len(got)-1] != "second" {
 		t.Fatalf("second command %q", got)
 	}
 }

@@ -614,7 +614,7 @@ func TestOlderConsolesKeepTheirCommand(t *testing.T) {
 	}{
 		{emulators.PS1, "game.cue", func(image string) []string { return []string{"-batch", "-fullscreen", "--", image} }},
 		{emulators.PS2, "game.iso", func(image string) []string { return []string{"-batch", "-fullscreen", "--", image} }},
-		{emulators.PSP, "game.iso", func(image string) []string { return []string{"--fullscreen", image} }},
+		{emulators.PSP, "game.iso", func(image string) []string { return []string{"--pause-menu-exit", "--fullscreen", image} }},
 	}
 	for _, c := range cases {
 		t.Run(c.platform, func(t *testing.T) {
