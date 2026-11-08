@@ -152,6 +152,7 @@ type Manager struct {
 	gamesRunning    bool
 	playShown       PlayThrottleState
 	onCompleted     func(Download)
+	onOutcome       func(Download)
 	originCheck     func(Origin) error
 	onStarted       func(Download)
 	onGone          func(string)
@@ -1240,6 +1241,27 @@ func (m *Manager) MarkImageAttempted(id string) error {
 	return nil
 }
 
+// SetOnOutcome reports every download that completed or failed, after its
+// state is settled. It is an observer: unlike onCompleted it starts nothing
+// and runs for failures too. Downloads failed in bulk because the torrent
+// client could not start are not reported one by one.
+//
+//wails:ignore
+func (m *Manager) SetOnOutcome(fn func(Download)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.onOutcome = fn
+}
+
+// notifyOutcomeLocked требует удержания m.mu вызывающим.
+func (m *Manager) notifyOutcomeLocked(d *Download) {
+	if m.onOutcome == nil {
+		return
+	}
+	notify, done := m.onOutcome, snapshot(d)
+	m.spawnTrackedLocked(func() { notify(done) })
+}
+
 // SetOnGone reports a download that will never complete — removed, cancelled
 // or failed. Whatever was set up for its completion has to be torn down, and
 // onCompleted never fires for it.
@@ -1820,6 +1842,7 @@ func (m *Manager) markFailed(id, message string, cause error) {
 	})
 	emit(eventFailed, snapshot(d))
 	emit(eventUpdated, snapshot(d))
+	m.notifyOutcomeLocked(d)
 	m.schedule()
 }
 
@@ -2050,6 +2073,7 @@ func (m *Manager) completeLocked(d *Download) {
 		notify, done := m.onCompleted, snapshot(d)
 		m.spawnTrackedLocked(func() { notify(done) })
 	}
+	m.notifyOutcomeLocked(d)
 	m.schedule()
 }
 

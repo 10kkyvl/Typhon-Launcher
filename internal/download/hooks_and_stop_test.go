@@ -287,3 +287,60 @@ func TestCompletionIsWrittenToTheHistory(t *testing.T) {
 		}
 	})
 }
+
+func TestOnOutcomeReportsCompletionsAndFailuresOnly(t *testing.T) {
+	cases := []struct {
+		name   string
+		status Status
+		op     func(t *testing.T, m *Manager) error
+		want   Status
+	}{
+		{"completion", StatusVerifying, func(_ *testing.T, m *Manager) error {
+			m.mu.Lock()
+			defer m.mu.Unlock()
+			m.completeLocked(m.findLocked("a"))
+			return nil
+		}, StatusCompleted},
+		{"failure", StatusDownloading, func(_ *testing.T, m *Manager) error {
+			m.markFailed("a", "boom", errors.New("cause"))
+			return nil
+		}, StatusFailed},
+		{"failure of a download that already failed", StatusFailed, func(_ *testing.T, m *Manager) error {
+			m.markFailed("a", "boom", errors.New("cause"))
+			return nil
+		}, ""},
+		{"cancel", StatusQueued, func(_ *testing.T, m *Manager) error { return m.Cancel("a") }, ""},
+		{"pause", StatusDownloading, func(_ *testing.T, m *Manager) error { return m.Pause("a") }, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			m := newTestManager(t, 1)
+			m.addTestItem("a", c.status)
+			attachFake(m, "a")
+			got := make(chan Download, 4)
+			m.SetOnOutcome(func(d Download) { got <- d })
+			if err := c.op(t, m); err != nil {
+				t.Fatal(err)
+			}
+			if c.want == "" {
+				select {
+				case d := <-got:
+					t.Fatalf("reported %s for %s", d.Status, c.name)
+				case <-time.After(150 * time.Millisecond):
+				}
+				return
+			}
+			select {
+			case d := <-got:
+				if d.ID != "a" || d.Status != c.want {
+					t.Fatalf("reported %s %s, want %s", d.ID, d.Status, c.want)
+				}
+				if c.want == StatusFailed && d.Error != "boom" {
+					t.Fatalf("error = %q", d.Error)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("no outcome reported")
+			}
+		})
+	}
+}
