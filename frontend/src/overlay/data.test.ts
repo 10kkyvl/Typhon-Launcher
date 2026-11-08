@@ -221,3 +221,27 @@ describe('refreshing the overlay', () => {
     expect(get(data.overlayAccount)).toBe('ready');
   });
 });
+
+describe('runningRows', () => {
+  let runningRows: typeof import('./data').runningRows;
+  beforeEach(async () => {
+    ({ runningRows } = await import('./data'));
+  });
+  it('names running games from the library and keeps the order', () => {
+    const games = [
+      { id: 'a', title: 'Apollo' },
+      { id: 'b', title: 'TrigWars' },
+    ];
+    expect(runningRows(['b', 'a'], games)).toEqual([
+      { id: 'b', title: 'TrigWars' },
+      { id: 'a', title: 'Apollo' },
+    ]);
+  });
+  it('keeps a game the list does not know yet, so it can still be closed', () => {
+    expect(runningRows(['x'], [])).toEqual([{ id: 'x', title: '' }]);
+  });
+  it('drops repeated ids and shows nothing when nothing runs', () => {
+    expect(runningRows(['a', 'a'], [{ id: 'a', title: 'A' }])).toEqual([{ id: 'a', title: 'A' }]);
+    expect(runningRows([], [{ id: 'a', title: 'A' }])).toEqual([]);
+  });
+});
