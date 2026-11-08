@@ -37,13 +37,20 @@
     failure = '';
     try {
       await stopGame(id);
-      confirming = '';
-      await refresh();
-      await hideOverlay();
     } catch (err) {
       failure = libraryErrorText(err, msg('overlay.closeGameFailed'));
+      return;
     } finally {
       closing = '';
+    }
+    confirming = '';
+    await refresh();
+    try {
+      await hideOverlay();
+    } catch (err) {
+      // The game is closed and its row is gone, so there is nowhere to show
+      // this; the overlay stays open for the player to dismiss.
+      console.error('hide overlay after closing the game', err);
     }
   }
 </script>
