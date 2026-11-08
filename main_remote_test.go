@@ -11,7 +11,10 @@ import (
 
 func TestDeviceNameCarriesNoHostName(t *testing.T) {
 	got := deviceName("e455bf5c-902e-4889-844b-ce697bd3e3b0")
-	host, _ := os.Hostname()
+	host, err := os.Hostname()
+	if err != nil {
+		t.Fatalf("os.Hostname: %v", err)
+	}
 	if !strings.HasPrefix(got, "Typhon · ") || !strings.HasSuffix(got, " · e455") || (host != "" && strings.Contains(got, host)) {
 		t.Fatalf("deviceName = %q", got)
 	}
