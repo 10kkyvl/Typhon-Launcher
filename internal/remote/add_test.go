@@ -28,7 +28,7 @@ func (f fakeReleases) SearchDownloadable(q string, limit int) []sources.ReleaseV
 	return out
 }
 
-func (f fakeReleases) PrepareDownload(id string) (sources.DownloadRequest, error) {
+func (f fakeReleases) PrepareDownloadable(id string) (sources.DownloadRequest, error) {
 	for _, v := range f.views {
 		if v.Release.ID == id {
 			return sources.DownloadRequest{URI: "magnet:" + id, Name: v.Release.RawTitle, ReleaseID: id, SourceID: v.Release.SourceID, Version: "1.4"}, nil
@@ -39,6 +39,7 @@ func (f fakeReleases) PrepareDownload(id string) (sources.DownloadRequest, error
 
 type fakeStarter struct {
 	mu        sync.Mutex
+	gate      chan struct{}
 	fetchErr  error
 	startErr  error
 	started   []string
@@ -49,6 +50,9 @@ type fakeStarter struct {
 }
 
 func (f *fakeStarter) FetchMetadata(source string) (download.TorrentInfo, error) {
+	if f.gate != nil {
+		<-f.gate
+	}
 	if f.fetchErr != nil {
 		return download.TorrentInfo{}, f.fetchErr
 	}
@@ -102,7 +106,11 @@ func newAddEnv(t *testing.T) *addEnv {
 		Log:      slog.New(slog.DiscardHandler),
 		Releases: releases, Starter: e.starter,
 		DownloadsPath: func() string { return "/games/downloads" },
-		AddEnabled:    func() bool { return e.addOn },
+		AddEnabled: func() bool {
+			e.mu.Lock()
+			defer e.mu.Unlock()
+			return e.addOn
+		},
 		Notify: func(kind, title, code string) {
 			e.mu.Lock()
 			defer e.mu.Unlock()
@@ -292,5 +300,67 @@ func TestNotifierDropsABurstAndStopsAtShutdown(t *testing.T) {
 	n.Wait()
 	if len(api.got) != 0 {
 		t.Fatalf("sent after shutdown: %+v", api.got)
+	}
+}
+
+func TestABurstOfAddsCannotPassTheLimitOrDuplicate(t *testing.T) {
+	e := newAddEnv(t)
+	e.dl.items = nil
+	e.starter.gate = make(chan struct{})
+	views := make([]sources.ReleaseView, 0, maxOpenForAdd+5)
+	for i := range maxOpenForAdd + 5 {
+		id := "burst-" + string(rune('a'+i))
+		views = append(views, sources.ReleaseView{Release: sources.Release{ID: id, RawTitle: id}})
+	}
+	e.svc.d.Releases = fakeReleases{views: views}
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	accepted, dup := 0, 0
+	for i := range maxOpenForAdd + 5 {
+		id := views[i].Release.ID
+		for range 2 {
+			wg.Go(func() {
+				a := e.svc.Run(account.RemoteCommand{Action: actionAdd, Target: id})
+				mu.Lock()
+				defer mu.Unlock()
+				switch {
+				case a.Status == "done":
+					accepted++
+				case a.ErrorCode == codeAlreadyThere:
+					dup++
+				}
+			})
+		}
+	}
+	wg.Wait()
+	close(e.starter.gate)
+	e.svc.Wait()
+	if accepted != maxOpenForAdd {
+		t.Fatalf("%d adds accepted while their torrents were fetched, limit %d", accepted, maxOpenForAdd)
+	}
+	if len(e.starter.started) != maxOpenForAdd {
+		t.Fatalf("%d downloads started", len(e.starter.started))
+	}
+	if dup == 0 {
+		t.Fatal("the same release was accepted twice")
+	}
+}
+
+func TestWithdrawingPermissionStopsAnAddInFlight(t *testing.T) {
+	e := newAddEnv(t)
+	e.starter.gate = make(chan struct{})
+	if a := e.svc.Run(account.RemoteCommand{Action: actionAdd, Target: "rel-1"}); a.Status != "done" {
+		t.Fatalf("add %+v", a)
+	}
+	e.mu.Lock()
+	e.addOn = false
+	e.mu.Unlock()
+	close(e.starter.gate)
+	e.svc.Wait()
+	if len(e.starter.started) != 0 || len(e.starter.discarded) != 1 {
+		t.Fatalf("started %v discarded %v", e.starter.started, e.starter.discarded)
+	}
+	if got := e.messages(); len(got) != 1 || got[0] != (sent{KindAddFailed, "Celeste v1.4", codeAddOff}) {
+		t.Fatalf("messages %+v", got)
 	}
 }

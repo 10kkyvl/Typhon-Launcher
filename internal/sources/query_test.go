@@ -181,4 +181,13 @@ func TestSearchDownloadableOffersOnlyWhatCanStart(t *testing.T) {
 	if got := s.SearchDownloadable("  ", 10); len(got) != 0 {
 		t.Fatalf("empty query = %v", ids(got))
 	}
+	// A release id from elsewhere cannot reach what search hides.
+	for _, id := range []string{"r-patch", "r-removed", "r-ignored", "r-nolink", "r-off", "missing"} {
+		if _, err := s.PrepareDownloadable(id); err == nil {
+			t.Errorf("%s was prepared", id)
+		}
+	}
+	if req, err := s.PrepareDownloadable("r-new"); err != nil || req.ReleaseID != "r-new" || req.URI == "" {
+		t.Fatalf("downloadable release: %+v %v", req, err)
+	}
 }

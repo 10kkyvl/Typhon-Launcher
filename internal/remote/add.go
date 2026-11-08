@@ -33,7 +33,10 @@ const (
 // Releases is the part of the sources service remote control may use.
 type Releases interface {
 	SearchDownloadable(query string, limit int) []sources.ReleaseView
-	PrepareDownload(releaseID string) (sources.DownloadRequest, error)
+	// PrepareDownloadable refuses any release SearchDownloadable would not
+	// offer, so a release id from Discord cannot reach a disabled source, a
+	// removed or ignored release or a patch.
+	PrepareDownloadable(releaseID string) (sources.DownloadRequest, error)
 }
 
 // Starter is the part of the download manager that starts a download.
@@ -112,11 +115,23 @@ func (s *Service) add(all []download.Download, releaseID string) account.RemoteA
 	if releaseID == "" {
 		return failed(codeReleaseMissing)
 	}
-	req, err := s.d.Releases.PrepareDownload(releaseID)
+	req, err := s.d.Releases.PrepareDownloadable(releaseID)
 	if err != nil {
 		return failed(codeReleaseMissing)
 	}
-	open := 0
+	// Adds still fetching their torrent are not in the queue yet; they count
+	// against the limit and the duplicate check under the same lock that
+	// records them, so a burst of adds cannot pass a check taken before the
+	// others were recorded.
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.ctx.Err() != nil {
+		return failed(codeAddUnavailable)
+	}
+	if s.adding[req.ReleaseID] {
+		return failed(codeAlreadyThere)
+	}
+	open := len(s.adding)
 	for _, d := range all {
 		if d.Status == download.StatusCompleted || d.Status == download.StatusFailed {
 			continue
@@ -129,19 +144,21 @@ func (s *Service) add(all []download.Download, releaseID string) account.RemoteA
 	if open >= maxOpenForAdd {
 		return failed(codeQueueFull)
 	}
-	name := req.Name
-	s.mu.Lock()
-	if s.ctx.Err() != nil {
-		s.mu.Unlock()
-		return failed(codeAddUnavailable)
+	if s.adding == nil {
+		s.adding = map[string]bool{}
 	}
+	s.adding[req.ReleaseID] = true
 	s.wg.Add(1)
-	s.mu.Unlock()
 	go func() {
 		defer s.wg.Done()
+		defer func() {
+			s.mu.Lock()
+			delete(s.adding, req.ReleaseID)
+			s.mu.Unlock()
+		}()
 		s.startDownload(req)
 	}()
-	return done(addResult{Name: name})
+	return done(addResult{Name: req.Name})
 }
 
 func (s *Service) startDownload(req sources.DownloadRequest) {
@@ -152,6 +169,13 @@ func (s *Service) startDownload(req sources.DownloadRequest) {
 	}
 	if s.ctx.Err() != nil {
 		s.d.Starter.DiscardMetadata(info.InfoHash)
+		return
+	}
+	// The permission may have been withdrawn while the torrent was fetched.
+	if !s.d.Enabled() || !s.d.AddEnabled() {
+		s.d.Starter.DiscardMetadata(info.InfoHash)
+		s.d.Log.Info("remote download dropped: permission withdrawn", "component", "remote")
+		s.notify(KindAddFailed, req.Name, codeAddOff)
 		return
 	}
 	destination := s.d.DownloadsPath()

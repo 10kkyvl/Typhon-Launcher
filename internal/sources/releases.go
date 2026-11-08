@@ -821,12 +821,9 @@ func (s *Service) SearchDownloadable(query string, limit int) []ReleaseView {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var found []*Release
-	for sourceID, list := range s.releases {
-		if src := s.findLocked(sourceID); src == nil || !src.Enabled {
-			continue
-		}
+	for _, list := range s.releases {
 		for _, r := range list {
-			if r.Ignored || r.Availability != AvailabilityAvailable || r.Kind == KindPatch || len(r.URIs) == 0 {
+			if !s.downloadableLocked(r) {
 				continue
 			}
 			if s.matchesSearch(r, search, normalized) {
@@ -843,4 +840,28 @@ func (s *Service) SearchDownloadable(query string, limit int) []ReleaseView {
 		out = append(out, s.viewLocked(r))
 	}
 	return out
+}
+
+// downloadableLocked is the rule SearchDownloadable and PrepareDownloadable
+// share: a full, available, not ignored release with a link, from an enabled
+// source.
+func (s *Service) downloadableLocked(r *Release) bool {
+	if src := s.findLocked(r.SourceID); src == nil || !src.Enabled {
+		return false
+	}
+	return !r.Ignored && r.Availability == AvailabilityAvailable && r.Kind != KindPatch && len(r.URIs) > 0
+}
+
+// PrepareDownloadable is PrepareDownload for a release SearchDownloadable
+// would offer; any other release is reported as not found. Remote control
+// uses it so a release id from Discord cannot reach what search hides.
+func (s *Service) PrepareDownloadable(releaseID string) (DownloadRequest, error) {
+	s.mu.Lock()
+	r := s.findReleaseLocked(releaseID)
+	ok := r != nil && s.downloadableLocked(r)
+	s.mu.Unlock()
+	if !ok {
+		return DownloadRequest{}, errReleaseNotFound
+	}
+	return s.PrepareDownload(releaseID)
 }

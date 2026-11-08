@@ -82,8 +82,10 @@ type Service struct {
 	mu   sync.Mutex
 	busy bool
 	more bool
-	ctx  context.Context
-	wg   sync.WaitGroup
+	// adding holds the releases whose add is still fetching its torrent.
+	adding map[string]bool
+	ctx    context.Context
+	wg     sync.WaitGroup
 }
 
 func New(ctx context.Context, d Deps) (*Service, error) {
