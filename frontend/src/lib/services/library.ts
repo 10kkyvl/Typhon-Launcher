@@ -199,66 +199,64 @@ export async function playGame(id: string): Promise<void> {
 // Existing callers of playGame still treat a dismissed native prompt as a no-op.
 export async function launchGame(id: string): Promise<boolean> {
   if (!inWails) throw unavailable();
+  return await relaunch(id, new Set());
+}
+
+// A question the player already answered for this launch; asking it again
+// would loop, so its error is shown instead.
+type Answered = ReadonlySet<'emulator' | 'closing'>;
+
+async function relaunch(id: string, answered: Answered): Promise<boolean> {
   try { await LibraryService.PlayGame(id); } catch (err) {
-    return await recoverLaunch(id, err);
+    return await recoverLaunch(id, err, answered);
   }
   return true;
 }
 
 // recoverLaunch turns a launch the player can fix into a question; any other
-// error is shown as it is.
-async function recoverLaunch(id: string, err: unknown): Promise<boolean> {
+// error is shown as it is. Every try goes through it, so a launch retried
+// after one question still gets the next one or the installer notice.
+async function recoverLaunch(id: string, err: unknown, answered: Answered): Promise<boolean> {
   if (errorCode(err) === 'library.launch_cancelled') return false;
   if (installingPackage(err)) {
     // Not a failure: the emulator's installer is open and waits for the player.
     toast(libraryErrorText(err, ''), 'info');
     return false;
   }
-  if (needsBios(err)) return await launchAfterBios(id, err);
-  if (emulatorAlreadyOpen(err)) return await launchAfterClosing(id, err);
-  if (!needsEmulator(err)) throw err;
-  return await launchAfterEmulator(id, err);
+  if (needsBios(err)) return await launchAfterBios(id, err, answered);
+  if (emulatorAlreadyOpen(err) && !answered.has('closing')) return await launchAfterClosing(id, err, answered);
+  if (needsEmulator(err) && !answered.has('emulator')) return await launchAfterEmulator(id, err, answered);
+  throw err;
 }
 
 // The emulator is closed only with the player's yes; if another copy opens in
 // the meantime, the next error is shown instead of asking in a loop.
-async function launchAfterClosing(id: string, first: unknown): Promise<boolean> {
+async function launchAfterClosing(id: string, first: unknown, answered: Answered): Promise<boolean> {
   const platform = emulationPlatform((await getGames()).find((game) => game.id === id));
   if (!platform) throw first;
   if (!(await askToCloseEmulator(platform))) return false;
-  try { await LibraryService.PlayGame(id); } catch (err) {
-    if (needsBios(err)) return await launchAfterBios(id, err);
-    if (errorCode(err) !== 'library.launch_cancelled') throw err;
-    return false;
-  }
-  return true;
+  return await relaunch(id, new Set([...answered, 'closing']));
 }
 
 // The game is asked for again only once: if the emulator the user just
 // pointed at is rejected, that error is shown as it is instead of looping.
-async function launchAfterEmulator(id: string, first: unknown): Promise<boolean> {
+async function launchAfterEmulator(id: string, first: unknown, answered: Answered): Promise<boolean> {
   const platform = emulationPlatform((await getGames()).find((game) => game.id === id));
   if (!platform) throw first;
   if (!(await askForEmulator(platform, errorCode(first)))) return false;
-  try { await LibraryService.PlayGame(id); } catch (err) {
-    if (needsBios(err)) return await launchAfterBios(id, err);
-    if (errorCode(err) !== 'library.launch_cancelled') throw err;
-    return false;
-  }
-  return true;
+  return await relaunch(id, new Set([...answered, 'emulator']));
 }
 
 // The player may check again as often as they like: each try only reads the
 // folder, and closing the prompt gives the launch up.
-async function launchAfterBios(id: string, first: unknown): Promise<boolean> {
+async function launchAfterBios(id: string, first: unknown, answered: Answered): Promise<boolean> {
   const platform = emulationPlatform((await getGames()).find((game) => game.id === id));
   if (!platform) throw first;
   for (let stillMissing = false; ; stillMissing = true) {
     if (!(await askForBios(platform, stillMissing))) return false;
     try { await LibraryService.PlayGame(id); } catch (err) {
       if (needsBios(err)) continue;
-      if (errorCode(err) !== 'library.launch_cancelled') throw err;
-      return false;
+      return await recoverLaunch(id, err, answered);
     }
     return true;
   }
