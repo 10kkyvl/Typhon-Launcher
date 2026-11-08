@@ -58,13 +58,31 @@ func Prepare(w *application.WebviewWindow, g Geometry) error {
 	if err := disableTransitions(w); err != nil {
 		return fmt.Errorf("windowhandoff: disable transitions: %w", err)
 	}
-	w.SetSize(g.Width, g.Height)
-	w.SetPosition(g.X, g.Y)
-	if g.Maximised {
+	r := place(g, screensFromApp(application.Get()))
+	w.SetSize(r.W, r.H)
+	w.SetPosition(r.X, r.Y)
+	// Maximise after the position so the window maximises on the right screen.
+	if g.Maximised && !g.Fullscreen {
 		w.Maximise()
 	}
 	if err := paintHidden(w); err != nil {
 		return fmt.Errorf("windowhandoff: paint hidden: %w", err)
+	}
+	if g.Fullscreen {
+		// On macOS native fullscreen always plays the Space-change animation;
+		// there is no supported way around it, so the user sees one system
+		// transition and we do not try to bypass it.
+		w.Fullscreen()
+	}
+	return nil
+}
+
+// DisableTransitions turns off the system show/hide/close animation of w, so
+// the outgoing window can be closed without a visible effect. Reveal re-enables
+// animations on the successor.
+func DisableTransitions(w *application.WebviewWindow) error {
+	if err := disableTransitions(w); err != nil {
+		return fmt.Errorf("windowhandoff: disable transitions: %w", err)
 	}
 	return nil
 }

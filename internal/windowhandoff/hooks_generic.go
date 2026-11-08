@@ -1,3 +1,5 @@
+//go:build !windows && !darwin
+
 package windowhandoff
 
 import "github.com/wailsapp/wails/v3/pkg/application"
