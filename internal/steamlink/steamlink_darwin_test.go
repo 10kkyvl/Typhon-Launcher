@@ -137,4 +137,10 @@ func copyExecutable(t *testing.T, from, to string) {
 	if err := os.WriteFile(to, data, 0o700); err != nil {
 		t.Fatal(err)
 	}
+	// A copy of a system binary keeps Apple's platform signature, and macOS
+	// kills it at exec outside its own path; an ad-hoc signature lets it run.
+	out, err := exec.Command("/usr/bin/codesign", "--force", "--sign", "-", to).CombinedOutput() //nolint:gosec // G204: fixed tool on the test's own copy
+	if err != nil {
+		t.Fatalf("ad-hoc sign %s: %v: %s", to, err, out)
+	}
 }
