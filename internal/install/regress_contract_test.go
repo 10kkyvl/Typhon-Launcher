@@ -187,7 +187,9 @@ func TestFrontendListensToEventsTheServiceEmits(t *testing.T) {
 		t.Fatalf("в сервисе найдено %d событий, ожидалось 6", len(emitted))
 	}
 	store := readFrontend(t, "stores/install.ts")
-	heard := regexp.MustCompile(`Events\.On\('(install:[a-z]+)'`).FindAllStringSubmatch(store, -1)
+	// Сторы подписываются либо напрямую через Events.On, либо через хелпер
+	// listenFirst (`on(...)`); у обоих имя события — первый строковый аргумент.
+	heard := regexp.MustCompile(`(?:Events\.On|\bon)\('(install:[a-z]+)'`).FindAllStringSubmatch(store, -1)
 	if len(heard) == 0 {
 		t.Fatal("stores/install.ts не слушает ни одного события установки")
 	}
