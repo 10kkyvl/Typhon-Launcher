@@ -27,7 +27,10 @@ tasks:
       - sh: npm version
         msg: "Looks like npm isn't installed. Npm is part of the Node installer: https://nodejs.org/en/download/"
     cmds:
-      - npm install
+      # ci reproduces the lock file exactly and --ignore-scripts keeps the
+      # lifecycle scripts of transitive packages off the build machine; the
+      # only package with one (fsevents) ships its binary prebuilt.
+      - npm ci --ignore-scripts
 
   install:frontend:deps:bun:
     dir: frontend

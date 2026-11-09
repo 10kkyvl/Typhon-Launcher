@@ -259,29 +259,6 @@ jobs:
         shell: bash
         run: wails3 task package
 
-      # Compile with the already-warm build job. Publication needs only this
-      # executable, not a second Go installation and a gigabyte of Go caches.
-      - name: Test and build the manifest signer
-        shell: bash
-        env:
-          CGO_ENABLED: "0"
-          GOARCH: amd64
-        run: |
-          go test ./cmd/signrelease ./cmd/mkdelta ./internal/selfupdate/delta
-          go build -trimpath -o bin/signrelease.exe ./cmd/signrelease
-          go build -trimpath -o bin/mkdelta.exe ./cmd/mkdelta
-
-      - name: Upload the manifest signer
-        uses: actions/upload-artifact@v4
-        with:
-          name: typhon-release-tools
-          path: |
-            bin/signrelease.exe
-            bin/mkdelta.exe
-          if-no-files-found: error
-          retention-days: 1
-          compression-level: 0
-
       - name: Verify the Windows binary carries no devmock code
         shell: bash
         run: |
@@ -371,10 +348,56 @@ jobs:
           retention-days: 1
           compression-level: 0
 
+  signer:
+    name: Build the manifest signer
+    # A job of its own, on a runner that never ran npm: the installer build
+    # executes the lifecycle scripts of every transitive npm dependency, and
+    # the binary that later runs with the signing key must not be produced on
+    # that runner. The release job checks the digest recorded here before use.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      sha256: ${{ steps.digest.outputs.sha256 }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+        with:
+          variant: production
+
+      - name: Test and build the manifest signer
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          go test ./cmd/signrelease ./cmd/mkdelta ./internal/selfupdate/delta
+          GOOS=windows GOARCH=amd64 go build -trimpath -o bin/signrelease.exe ./cmd/signrelease
+          GOOS=windows GOARCH=amd64 go build -trimpath -o bin/mkdelta.exe ./cmd/mkdelta
+
+      - name: Record the signer digest
+        id: digest
+        run: |
+          digest="$(cat bin/signrelease.exe bin/mkdelta.exe | sha256sum | awk '{print $1}')"
+          echo "sha256=$digest" >> "$GITHUB_OUTPUT"
+          echo "signer digest: $digest"
+
+      - name: Upload the manifest signer
+        uses: actions/upload-artifact@v4
+        with:
+          name: typhon-release-tools
+          path: |
+            bin/signrelease.exe
+            bin/mkdelta.exe
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
   release:
     name: Sign and publish both platforms
-    needs: [macos, windows]
-    # Run the tested signer from this run's Windows build, without a Go SDK.
+    needs: [macos, windows, signer]
+    # Run the signer built by the signer job, without a Go SDK; its digest is
+    # checked against the one recorded there before the key touches it.
     runs-on: windows-latest
     # 15 minutes covered the publication alone. The patches add three
     # downloads of about 16 MB each, three 7z extractions, three mkdelta runs
@@ -404,9 +427,16 @@ jobs:
 
       - name: Verify the manifest signer
         shell: bash
+        env:
+          EXPECTED_SIGNER_SHA256: ${{ needs.signer.outputs.sha256 }}
         run: |
           test -s bin/signrelease.exe
           test -s bin/mkdelta.exe
+          actual="$(cat bin/signrelease.exe bin/mkdelta.exe | sha256sum | awk '{print $1}')"
+          if [ -z "$EXPECTED_SIGNER_SHA256" ] || [ "$actual" != "$EXPECTED_SIGNER_SHA256" ]; then
+            echo "signer digest mismatch: built $EXPECTED_SIGNER_SHA256, downloaded $actual" >&2
+            exit 1
+          fi
 
       - name: Determine release version
         id: version
