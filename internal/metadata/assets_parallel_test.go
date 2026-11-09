@@ -8,17 +8,19 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"typhon/internal/catalog"
 )
 
-func slowImageServer(t *testing.T, delay time.Duration, block <-chan struct{}) (*httptest.Server, *atomic.Int32) {
+// slowImageServer answers every image after delay; a path containing "hang"
+// waits for block instead. Each finished answer is announced on the returned
+// channel, which is buffered for every request a test makes.
+func slowImageServer(t *testing.T, delay time.Duration, block <-chan struct{}) (*httptest.Server, <-chan struct{}) {
 	t.Helper()
 	body := pngBytes(t, 640, 360)
-	var served atomic.Int32
+	served := make(chan struct{}, 64)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if block != nil && strings.Contains(r.URL.Path, "hang") {
 			select {
@@ -27,15 +29,21 @@ func slowImageServer(t *testing.T, delay time.Duration, block <-chan struct{}) (
 				return
 			}
 		}
-		time.Sleep(delay)
+		timer := time.NewTimer(delay)
+		select {
+		case <-timer.C:
+		case <-r.Context().Done():
+			timer.Stop()
+			return
+		}
 		w.Header().Set("Content-Type", "image/png")
 		if _, err := w.Write(body); err != nil {
 			t.Errorf("write image: %v", err)
 		}
-		served.Add(1)
+		served <- struct{}{}
 	}))
 	t.Cleanup(srv.Close)
-	return srv, &served
+	return srv, served
 }
 
 // TestBuildAssetsDownloadsImagesTogether fails against one-by-one downloads: a
@@ -119,8 +127,8 @@ func TestBuildAssetsCancelledRemovesFinishedDownloads(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		for served.Load() < 3 {
-			time.Sleep(5 * time.Millisecond)
+		for range 3 {
+			<-served
 		}
 		cancel()
 	}()

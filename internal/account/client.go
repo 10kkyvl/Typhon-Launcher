@@ -372,11 +372,11 @@ func decodeError(status int, body io.Reader) error {
 		// whatever sits in front of it, and only the status says what happened.
 		// The edge answers a rate limit or a restarting API this way by design;
 		// those are logged without an error report, anything else is a fault.
-		level := slog.LevelError
+		logReply := slog.Error
 		if edgeStatus(status) {
-			level = slog.LevelWarn
+			logReply = slog.Warn
 		}
-		slog.Log(context.Background(), level, "account api replied outside the error contract",
+		logReply("account api replied outside the error contract",
 			"status", status, "bytes", len(data), "body", snippet(data))
 	}
 
