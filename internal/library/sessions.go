@@ -451,25 +451,41 @@ func (s *Service) StopGame(id string) error {
 	}
 	current, ok := s.running[id]
 	ctx := s.ctx
-	if ok {
-		// Ставим до убийства: сессию закроет чужая горутина, и к тому
-		// моменту отличить закрытие пользователем от падения будет нечем.
-		current.stoppedByUser = true
-	}
-	s.mu.Unlock()
 	if !ok {
+		s.mu.Unlock()
 		return errSessionNotRunning
 	}
-	if current.process != nil {
-		if err := current.process.kill(); err != nil {
+	// Ставим до убийства: сессию закроет чужая горутина, и к тому
+	// моменту отличить закрытие пользователем от падения будет нечем.
+	current.stoppedByUser = true
+	// Поля сессии копируются под локом: detectTick обновляет их из своей
+	// горутины, а дальше мы работаем без мьютекса.
+	process, pid, createdAt := current.process, current.pid, current.createdAt
+	s.mu.Unlock()
+
+	// Если убить игру не вышло, закрыл её не пользователь: флаг снимается,
+	// иначе последующее падение запишется как остановка по его воле.
+	err := s.stopSession(ctx, process, pid, createdAt)
+	if err != nil {
+		s.mu.Lock()
+		if live, still := s.running[id]; still && live == current {
+			live.stoppedByUser = false
+		}
+		s.mu.Unlock()
+	}
+	return err
+}
+
+// stopSession убивает процесс сессии. Запущенную нами игру останавливает её
+// дескриптор; сессию, обнаруженную по ОС, сначала опознаёт свежим сканом:
+// pid могла переиспользовать другая программа с момента детекта.
+func (s *Service) stopSession(ctx context.Context, process gameProcess, pid uint32, createdAt time.Time) error {
+	if process != nil {
+		if err := process.kill(); err != nil {
 			return fmt.Errorf("остановить игру: %w", err)
 		}
 		return nil
 	}
-
-	// Сессия обнаружена по ОС: pid могла переиспользовать другая программа
-	// с момента детекта, поэтому перед убийством личность подтверждается
-	// свежим сканом и сверкой времени старта процесса.
 	if ctx == nil {
 		return fmt.Errorf("%w: сервис ещё не запущен", errSessionCannotConfirm)
 	}
@@ -479,7 +495,7 @@ func (s *Service) StopGame(id string) error {
 	}
 	var found *procs.Process
 	for i := range list {
-		if list[i].PID == current.pid {
+		if list[i].PID == pid {
 			found = &list[i]
 			break
 		}
@@ -487,18 +503,18 @@ func (s *Service) StopGame(id string) error {
 	if found == nil {
 		return errSessionProcessGone
 	}
-	if found.CreatedAtUnknown || current.createdAt.IsZero() {
+	if found.CreatedAtUnknown || createdAt.IsZero() {
 		return errSessionIdentityUnknown
 	}
-	if !found.CreatedAt.Equal(current.createdAt) {
+	if !found.CreatedAt.Equal(createdAt) {
 		return errSessionIdentityMismatch
 	}
 
-	proc, err := os.FindProcess(int(current.pid))
+	proc, err := os.FindProcess(int(pid))
 	if err != nil {
 		return fmt.Errorf("найти процесс: %w", err)
 	}
-	if err := killProcessTree(int(current.pid), proc.Kill); err != nil {
+	if err := killProcessTree(int(pid), proc.Kill); err != nil {
 		return fmt.Errorf("остановить игру: %w", err)
 	}
 	return nil
