@@ -23,13 +23,14 @@ frontend/bindings/
 Thumbs.db
 *.log
 
-.claude/
-CLAUDE.md
 LEGAL_TODO.md
 *.local.md
 
 typhon.exe
-docs/
+# Working notes that stay local: the open-defect queue and hand-off drafts.
+docs/REFACTOR_ROADMAP.md
+docs/redesign-port-plan.md
+docs/update-handoff.md
 notices.exe
 
 /devrelease

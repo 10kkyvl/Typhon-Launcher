@@ -1,0 +1,174 @@
+# Typhon Launcher — End-to-end flows
+
+Each flow: entry point → key functions in order → state reads/writes → filesystem/process side effects → invariants → error paths. Symbols are `path::Func`. State paths are relative to `<ConfigDir>` unless they start with `<Library>` (see `DEBUGGING.md` §5). Working tree of 2026-09-11; [INDEX.md](INDEX.md) explains freshness and evidence limits.
+
+## 1. App startup
+
+1. `main.go::main`: `app.InitLogging` (failure logged, not fatal) → `redact.SetLocal` → CLI dispatch (`--install-worker`, `--install-broker`, `--selfupdate-worker` exit after running; `--play` parsed by `playTarget`).
+2. `titles.Ready` (embedded dictionary) — fatal on error.
+3. Constructors in order (each `fatal` on error): settings → app → account → history → theme → library → playlog → download → install → titlesdict → catalog → sources → metadata (provider `typhonapi.New`; nil provider only logs) → accountsync → discovery → search → updates → relocate → lan → selfupdate → discord → legal → presence → compat (+ `compat.Sharer`, non-fatal) → profile → social → online → clientid (non-fatal; without it heartbeat/usagestats/diagnostics are skipped).
+4. Callbacks wired (`ARCHITECTURE.md` §4), `slog.SetDefault(diagnostics.NewLogHandler(...))`.
+5. `application.New` with all services, `SingleInstance` (second launch → `--play` forwarded to `library.PlayGame` or `tray.Open`), window (hidden when started via shortcut and `MinimizeToTray`), autostart/tray appliers, `WindowClosing` hook (tray hide vs `Quit`).
+6. `wails.Run` → each service's `ServiceStartup(ctx)` runs. Recovery work per service (see §14): `library/watch.go::ServiceStartup` detection loop; `download/manager.go::ServiceStartup` load → client → sweep metainfo → `restore` + `tick`; `install/service.go::ServiceStartup` resume/finalize/interrupt + sweeps; `updates/service.go::ServiceStartup` load six stores → demote states → `recoverJournals` → `housekeeping` → `checkAll`; `relocate/service.go::ServiceStartup` → `recoverAll`; `sources` schedule loop; `selfupdate` outcome pickup + periodic check; `metadata`, `accountsync`, `social`, `online`, `heartbeat`, `usagestats`, `diagnostics`, `compat.Sharer`, `lan`, `titlesdict`, `discord`.
+
+State: every constructor loads its file(s); a corrupt file (not `ErrNotExist`) is fatal for constructors, and a `ServiceStartup` error makes `wails.Run` return (`error starting service '<name>'`) → `main.go::fatal("run application")` — the launcher exits either way. Invariants: I-1, I-2 (`INVARIANTS.md`). Errors: `startup failed stage=<name>` in `typhon.log`.
+
+Frontend: `App.svelte` runs `init*()` for every store (subscribe + initial fetch); `authState` gate shows boot/consent/auth screens before `AppShell`.
+
+## 2. Source / catalog refresh
+
+Entry: UI `sources.Service.AddSource(url)` / `AddSourceFile(path)` / `RefreshSource(id)` / `RefreshAll`, or `sources/service.go::scheduleLoop` (1 min tick, per-source interval from `SourceRefreshInterval`: manual/1h/6h/12h/24h; failures back off via `retryDelay` ≤ 1 h).
+
+1. `sources/service.go::refresh`: mark `StatusUpdating`, emit `source:updated`; `fetchFeed` → preview cache, or `feed.ReadFile` (file source), or `feed.Fetch` (conditional GET with ETag/Last-Modified through `feed/guard.go::NewClient`, private hosts refused, redirects re-validated, 64 MiB / 60 s limits, Cloudflare challenge → distinct error).
+2. `304` → `settle(nil, notModified=true)`; else `sources/import.go::parseEntries` (feed `Entry` → `Release`: `titles.Parse`, versions, `MagnetInfoHash`, tags, repacker) → `settle`.
+3. `settle`: `import.go::merge` (identity by `DistributionID`; legacy torrents by infohash; removed releases kept, evicted past a cap) → `applyMatches` (catalog `Resolve` per release, skipped when release unchanged and catalog `Epoch` unchanged; locked matches kept) → `store.saveReleases` (`releases/<sourceID>.json`, rollback on failure) → counts → `store.saveSources` (`sources.json`; failure ⇒ `markDegradedLocked`, `source:degraded`) → events `source:updated`, `release:added/removed/matched/needs-review` → `notifyChanged` → `updates.HandleSourcesRefreshed`.
+4. Failure: `fail` records `LastError`/health, emits `source:error` (URL redacted), arms backoff.
+
+Catalog side: `catalog/service.go::Resolve` uses the title index (`index.go::resolve`, `match.go`) + `match_overrides.json`; `ConfirmMatch` from UI → `catalog.LearnMatch` + `sources.ConfirmMatch`; `Provision` creates provisional catalog games for unmatched titles (never from `applyMatches`). Note: a parser change does not alter stored releases until the source is refreshed (releases are persisted parsed).
+
+## 3. Search
+
+Entry: UI search → `search/service.go::Service.Search(query)` (bound). Reads `library.GetGames`, `catalog.SearchGames` (index), `sources.SearchReleaseMatches` (aggregates releases by game, skips disabled sources, unavailable and ignored releases, limits unmatched). Pure in-memory; normalization via `titles.Normalize`. No state written. Catalog browsing (Catalog route) is separate: `catalog.BrowseGames` → remote `typhonapi` page, cached in `catalog-pages/<sha256>.json`, offline fallback (`Offline=true`).
+
+## 4. Download
+
+Entry: release → `sources.PrepareDownload(releaseID)` → `DownloadRequest{URIs, Origin}` → UI `download.Manager.FetchMetadata(source)` → `StartDownloadFrom(infoHash, destination, selected, origin)`. Non-UI entry for updates/repair: `tasks.go::AddTask`.
+
+1. `manager.go::FetchMetadata`: under one lock — duplicate check, pending check, `hashBusyLocked`, `m.reserved[hash]=true`; add to `meta/`, wait `GotInfo` (90 s); `torrent.go::validateInfo` (path safety); `store.saveMetainfo` (`torrents/<hash>.torrent`); move into `m.pending`.
+2. `StartDownloadFrom`: take pending + reserve hash in one section; `MkdirAll(destination)`; `requiredBytes` → `checkFreeSpace` (stat error = refusal); re-add with real storage (`newStorage`: flat / in-place); `setPriorities`; `watchWriteErrors`; append item + engine; persist `downloads.json` (rollback on failure); `download:added`; `onStarted` → `install.HandleDownloadStarted` (may raise a broker, §6); usage `download_started`; `schedule` (≤ `MaxActiveDownloads`).
+3. `tick` every 250 ms → `sample`: progress/speeds/ETA/stall (2 min), `download:progress`, persist ≤ every 5 s. When `Downloaded >= Total`, no job, and all selected pieces hashed → `verifying` + `spawnVerifyLocked`.
+4. `verifyCompletion` (`beginJob` exclusivity) → `verify.go::verifyFilesOnDisk` (missing/`.part`/truncated/oversized/AV) → `completeLocked`: `completed`, `SeedAfterDownload` (seed or `detachEngineLocked`), persist (not rolled back), usage, `download:completed`, history `downloaded`, `onCompleted` → `install.HandleDownloadCompleted` (§5).
+
+Pause/Resume/ForceStart: state check → persist (rollback + corrective event on failure) → engine gate → emit → `schedule`. Cancel (`discard(id, true)`): `dropLocked` (persist first, then `onGone` → `install.DropBroker`) → cancel job → detach engine → `download:removed` → tracked teardown deletes payload only if unfinished and not in-place (`removeContent(destination, name)`). Remove keeps files. `DeleteData` (completed only, not seeding, not in-place): flat ⇒ only own files via `os.OpenRoot`; else `removeContent`.
+
+Restart: `loadLocked` demotes downloading/verifying/metadata → queued; `restore` → `restoreOne` (`reserveHashExcept`, `reattach` from cached metainfo or magnet, `settleRestored` re-verifies outside the lock) → paused/queued/downloading. No client ⇒ everything non-terminal `failed` (`download.no_client`).
+
+Invariants: I-11 (one lock for check+act on infohash), I-6 (goroutines tracked, no start while closing), I-3 (persist before engine gating, rollback on failure), I-10 (`removeContent` root; flat handled separately). Errors: `download.*` codes → `frontend/src/lib/install/installErrors.ts`.
+
+## 5. Installation
+
+Entry A (auto): `download.SetOnCompleted` → `install/service.go::HandleDownloadCompleted` (only `Origin.Purpose == PurposeRelease`; `auto.go::autoInstallFor` per-download override else `Settings.AutoInstall`; `InspectDownload`; requires `Plan.CanAutoInstall && ownDestination(Type, Silent)` and enough free space) → `Start`. Entry B (manual): UI `InspectDownload(downloadID)` → `Start(downloadID, StartOptions{Destination, Mode, Type, InstallerPath})`. Entry C (update): `updates/apply.go::installInto` → `Start(..., Unattended, SkipRegister)`.
+
+1. `Start`: refuse second active install for the download (`install.busy`); `inspect.go::Inspect` (file → archive/msi/exe; `normalizeRoot`; msi → installer exe chain (`orderInstallers`, engine mix refused) → dominant archive ≥80 % → portable when `installedLayout`); UI `Type`/`InstallerPath` overrides validated (`ManualInstaller`); for own destinations: absolute, `destAvailable`, `Owned = controlled(Type)`, `checkSpace`; portable `Mode` (seeding forces `copy`); record `pending`, persist with rollback, `spawnLocked`, `install:started`.
+2. `flow.go::run` by type:
+   - portable: `preparing` → wipe `<dest>.partial` → `installing` → `fsops.go::CopyDirVerified(ContentRoot → .partial)` (hash verify) → `commit` (rename, `MoveDir` fallback) → `finalize` → move-mode only: `RemoveAll(ContentRoot)` after library registration.
+   - archive: `extracting` → `archive.go::ExtractArchive` (`EstimateExtracted` first; `safeJoin` per entry) into `.partial` → `commitExtracted` (drops single wrapper dir) → `finalize`.
+   - installer: `takeSnapshot(installRoots)` + `readUninstallEntries` + shell baseline → silent (`runSilent`: `rememberInstallerDestination`, per-chain `runSpec` with state/inf/cancel paths and broker hand-off, `trackInstallSize` 2 s, `runSilentChain` forgives Inno "Installation process succeeded." crashes, `silentDestination` re-locates real output, `setRemoval` (Owned if dir did not exist before or matches `OwnedDestination`; uninstall entry via `pickUninstall`; registry read error ⇒ `UninstallUnknown`), `dropShortcuts`, `finalize`) or interactive (`setExternal`, exit 0/3010, snapshot diff → candidates → `pickInstallDir` → `waitForUser`). `Unattended` + interactive ⇒ `install.needs_user`.
+3. Runner per platform (`runner_windows.go` process + job object + `installguard.Start`, elevation via §6; `runner_darwin.go` CrossOver bottle + `installguard.exe` bridge; `runner_devmock.go` fake). `msiexec` always absolute (`exec.go::systemExecutable`).
+4. `finalize`: `verifying`; exe = existing or `executable.go::FindExecutables` → `HighConfidence` auto-pick / `Unattended` top / `waitForUser` (`waiting_for_user`, candidates listed; UI `ConfirmExecutable` → `validExecutable`).
+5. `complete`: `verifyInstall` (if `VerifyAfterInstall`) → `detectVersion` (release metadata → PE version → version files) → `register` → `library.RegisterInstalled(InstalledGame{…, Owned, Uninstall, ReleaseID, DistributionID, Repacker…})` (marker written) → `prepareRuntime` (darwin bottle, warn-only) → `CreateShortcut` (warn-only) → `completed`+`GameID` → `install:completed` → `applyCleanup` (`InstallCleanupPolicy=delete` and not seeding ⇒ `download.DeleteData`) → `notifyFinished` → `updates.HandleInstallFinished` → history `installed`.
+
+Cancel: `Cancel` refuses while an interactive installer window is open (`install.external_runs`); otherwise job ctx cancel → copy/extract abort, or runner kills the tree (Windows `TerminateJobObject`; darwin cancel file; elevated worker cancel marker + 30 s then terminate but status stays `failed` with `install.installer_not_confirmed_stopped` and the directory is kept). Result `cancelled`, `.partial` swept. Retry (`Retry`): refuses while a worker is alive (same lock), re-inspects, re-plans, keeps manual installer.
+
+State: `installations.json` (every transition, rollback on persist failure), `<Library>/Games/<name>.partial`, `installer-<id>.log`, worker/broker files. Invariants: I-3 (every transition persisted with rollback), I-4 (hash before deleting `ContentRoot`), I-5 (single copy recoverable: `sweepPartial`/`recoverMovePartial`), I-10 (never delete a dir an installer may write to), I-15 (`validExecutable`, `checkSpace` fail on unknown). Errors: `install.*` codes.
+
+## 6. Elevated worker and broker (Windows; devmock mimics)
+
+- Ahead of time: `download.SetOnStarted` → `broker_host.go::HandleDownloadStarted` (release purpose, `Origin.ElevateAhead`, elevation available, auto-install on, `auto.go::InstallerLikely`) → `startBroker`: `broker-<downloadID>/pin.json` (content root, library root, state dir), `alive` heartbeat 30 s, `startElevated(self --install-broker <dir>)` → one UAC prompt while the user is present. `RunBroker` polls 500 ms: `spec.json` validated against the pin, consumed before running (`runWorkerSpec`), `abort` ⇒ exit, heartbeat stale 2 min ⇒ abandoned, 12 h ⇒ expired. `DropBroker` on download gone/completed-without-install/`runInstaller` exit.
+- At install: `elevated.go::runElevated`: `clearWorkerCancel`, per-attempt `Run` token, `worker-<id>-spec.json`; hand-off to the broker (write `spec.json`, wait `Gone`) or `startElevated(self --install-worker <spec>)` (`ShellExecuteExW runas`, `ERROR_CANCELLED` ⇒ `install.elevation_declined`). Poll `worker-<id>-state.json` every 250 ms; accept only `Done && Run == run`; ctx cancel ⇒ write `worker-<id>-cancel`, wait 30 s, terminate, still `install.installer_not_confirmed_stopped`.
+- Worker (`worker_run.go::runWorkerSpec`): state `discovering` (Inno `/SAVEINF` component discovery, `components.go` filtering per `InstallSkipShortcuts/Extras`) → `installing` → final `{Code, Done, Error, Cancelled}`; cancel watcher polls the marker.
+- Restart with a live worker: `service.go::ServiceStartup` → `transientWorkerStatus` → `spawnResumeWatcher` (2 s) → `finishResumed` (`markResumedOwnership`: Owned only if `OwnedDestination == Destination`, `UninstallUnknown=true`) → `finalize`.
+
+## 7. Executable detection
+
+Three entry points share `install/executable.go`: (a) after install — `flow.go::finalize` (`FindExecutables(Destination, Name)`, `HighConfidence`, else `waitForUser` → UI `ConfirmExecutable`); (b) discovery — `discovery/scan.go::executableFor` (current exe → marker's `MarkerExecutable` → `detect` = `FindExecutables`+`HighConfidence`, else the folder is skipped for review); (c) manual — UI `library.Service.SetExecutable(id, path)` after `app.Service.SelectGameExecutable` (darwin runs `exepicker` inside the bottle via `platform/executable_darwin.go`). Scoring in `scoreExe` (depth, `binDirs`, arch dirs, server/editor penalties, title similarity, Unity/Godot data pair, `shipping`, size); exclusions in `excludedExe`/`skippedDirs`. Launch requires the exe to exist (`library.executable_missing`) and, after a move, `library/relocate.go::Relocate` rebases it (`ErrExecutableOutside` if not inside the old dir).
+
+## 8. Game launch and sessions
+
+Entry: UI `library.Service.PlayGame(id)`; shortcut `typhon --play <id>` (`main.go::playTarget`; second instance forwards via `OnSecondInstanceLaunch`).
+
+1. `sessions.go::PlayGame` under the library lock: not already running, not `Uninstalled`, exe exists; `launch{installDir, executable, args, workDir, shared: UsesSharedBottle()}` (`RequiresSteam` nil/true ⇒ shared Steam bottle on macOS).
+2. `prepare` (`runtime_darwin.go::prepareRuntime`: ensure/boot bottle unless shared covers it; no-op elsewhere) — failure recorded via `noteLaunchFailureLocked` (`compat.RecordLaunchFailure`) and returned as `library.runtime_failed`.
+3. `start` = `process_default.go::execStarter` / `process_darwin.go::wineStarter` (`wine.Manager.StartDetached` via `cxstart --no-wait`, then `await` process appearance, `proxyDLLOverrides`, `steamfix_darwin.go` monitoring) / `process_devmock.go` (`devmock.Start`, lifetime `TYPHON_DEVMOCK_GAME_SECONDS`). Failure ⇒ `library.launch_failed`.
+4. Session registered (`running[id]`), watchers `SessionStarted` (presence → Discord, online → `/me/presence`, heartbeat), usage `game_started`, `game:started`. A `cmd.Wait` goroutine (`sessionWG`, not waited at shutdown) closes the session only if OS detection is unavailable.
+5. `watch.go::detectTick` (1 s): `procs.List` → match processes to games by exe path / install dir (`bestMatchTarget`, uninstallers ignored) → open sessions for games started outside the launcher, close sessions whose process vanished (`lastSeen`), pid identity via `CreatedAt`. Scan error ⇒ no change.
+6. `StopGame`: kill process (darwin: `wine.Manager.KillProcesses` by install dir; never `wineserver -k` in the shared bottle) → `finishSession`.
+7. `finishSession`: watchers `SessionStopped`; callbacks on `wg` goroutines: `onOutcome` → `compat.RecordSession`, `onSession` → `updates.HandleSessionEnded` (≥60 s drops `AwaitLaunch` rollback and its `.previous`), `playRecord` → `playlog.Record`; usage `game_stopped`; `LastPlayed`/`PlaytimeSeconds` persisted to `library.json` (rollback on failure, logged — no caller to return to); `game:stopped`, `library:updated`.
+
+Invariants: I-6 (games outlive the launcher), I-12 (watchers called under the library lock must not block). Errors: `library.*` codes; compat journal `compat.json` records failures per game.
+
+## 9. Update detection
+
+Entry: `sources.SetOnChanged` → `updates/service.go::HandleSourcesRefreshed` (only if `UpdateCheckAutomatically`; one `checkAll`), startup `checkAll`, UI `CheckUpdates`/`CheckGame`, `recheck` after an update/rollback.
+
+1. `check(game)`: `installedOf(library.Game)` (ReleaseID, SourceID, DistributionID, ReleaseUploadedAt, versions, `VersionSource`/`VersionConfidence`) → `sources.ReleasesFor(canonicalGameID, title)` → `bindLegacyDistribution` (single release matching saved SourceID+ReleaseID with a DistributionID ⇒ `library.BindDistribution`).
+2. `resolver.go::ResolveUpdate(installed, releases, PatchesFrom(releases))`: keep releases with `sameDistribution` (same `SourceID` and `DistributionID`; legacy: exact `ReleaseID`), `usable` (not patch/ignored, available, URIs, same canonical game), `compat.go::Compatible` (edition mismatch fatal; language/size lower confidence); `order.go::OrderReleases` newest-first (Sequence → `version.Compare` → UploadedAt → FirstSeenAt → ID); skip the installed revision; first strictly newer version ⇒ `KindUpdate`; else newest equal/incomparable published strictly later ⇒ `KindNewRelease`; confidence = version source × match confidence × compat; `<0.6` demotes update → new_release, `<0.25` ⇒ none. `graph.go::FindPatchPath` (Dijkstra) may replace the full-release strategy when cheaper.
+3. Merge into `Update` (skipped while downloading/updating), clear stale Plan/DownloadID/Error, persist `updates.json` (rollback + `update:degraded`), `update:updated`, `update:available` for a new offer; `prune` drops uninstalled games.
+
+Invariants: I-8 (identity = `SourceID`+`DistributionID`/`ReleaseID`, never title/repacker fuzzy matching), persisted offers are never exposed before re-validation in this process (`provenance_test.go`). Frontend: `stores/updates.ts`, `UpdateCard.svelte`. No periodic re-check timer exists.
+
+## 10. Update installation
+
+Entry: UI `updates.Service.PreparePlan(gameID)` → (optional `PrefetchUpdate`) → `StartUpdate(gameID)`. Also `Rollback`, `VerifyGame`, `RepairGame`.
+
+Plan (`plan.go`): job slot (`beginJob`, one per game; `Busy` consulted by install/relocate) → `planInputFor` re-resolves and refuses if target/installed moved (`updates.no_target`) → `inspectReuse` (if `AllowTorrentReuse` and infohash) → first strategy that `CanHandle`: patch chain (path bytes < target size) → torrent reuse (`direct_files`, matched ≥15 %) → full release → `locateSaves` (plan-time only) → `Plan{Steps, RequiredDiskBytes, Patches…}`.
+
+Apply (`apply.go::StartUpdate` → `runUpdate`): `validatePlan` twice (identity, target, patch set) → history `running` → `updating` → `saves.go::backupSaves` if `UpdateSaveBackup` (verified copy into `saves/<gameID>`; failure fails the update) → strategy:
+- **Full release** `applyFullRelease`: wipe `<Library>/Games/.staging/<gameID>` → `downloadRelease` (`AddTask` with `Origin{Purpose=update, UpdatePlanID, LibraryID}`; `existingTask` reuse) → `waitDownload` (1 s poll, 15 min stall) → `installInto(staging)` (install `Start` with `Unattended, SkipRegister`; waits on `HandleInstallFinished` waiter) → staging non-empty, game not running → `swapDirectories` (remove stale `.previous` → **journal `swap` persisted** → install→`.previous` → staging→install, restore on failure) → `resolveExecutable` (`undoSwapAndClear` on failure) → `carryOverExtras` (`.previous` files missing in the new install, engine extensions skipped, 4 GiB cap; failure leaves journal + `.previous` for recovery) → `registerVersion` (`library.ApplyInstalledUpdate`, manifest rebuild) → `clearJournal` → `rememberPrevious` (delete now if `KeepPreviousVersion=off`, else `registerRollback` with `AwaitLaunch` or `KeepUntil` +24 h).
+- **Patch chain** `applyPatchChain`: `copyInstallAside` (verified copy → `.previous`) → `registerRollback` before the first patch → per patch: download → extract to staging → journal `patch` → `install.MergeDirWithBackup(staging, installDir, <installDir>.patch-backup)` → `resolveExecutable` → `registerVersionAs(ToVersion)` (intermediate version committed before the next patch) → `clearJournal` → drop backup. Failure: `undoPatch` (`RestoreMergeBackup`), error prefixed "патч X → Y".
+- **Torrent reuse** `applyTorrentReuse`: `backupInPlace` (verified copy → `.previous`, then journal `inplace`) → `downloadRelease(installDir, inPlace, flat)` with `Verify` (existing files re-hashed, only missing pieces fetched) → `waitDownload` → `resolveExecutable` → `registerVersion` → `clearJournal` → `rememberPrevious`. Failures `stopRepairDownload` (`download.StopAndWait`) then `undoSwapAndClear`.
+Outcomes: success → `idle`, `update:completed`, `recheck`, history `updated`; ctx cancelled → `update_available` + "обновление было прервано"; error → `update_failed`, `update:failed`, history `update_failed`.
+
+Rollback (`Rollback`): entry in `rollbacks.json`, game not running, `.previous` exists → install→`<installDir>.replaced` → `.previous`→install (restore `.replaced` on failure) → remove `.replaced` → drop manifest → `library.ApplyInstalledUpdate(saved metadata)` → `forgetPrevious` → manifest rebuild → `update:rollback`, history `rolled_back`. (Two renames without a journal — open finding TYPHON-AUDIT-006.)
+
+Verify/Repair (`verify.go`): `VerifyGame` → torrent identity (release still matches source+distribution+version with infohash) and/or stored manifest; torrent verdict only for `direct_files` layouts (`InspectReuse` in place), else `hashdir.Verify` against `manifests/<gameID>.json`; `emitVerify` persists `verify.json` before emitting. `RepairGame` needs a repairable torrent verdict → `.previous.repair` verified copy + `inplace` journal → in-place `AddTask(Verify, Purpose=repair)` → completion clears journal and deletes the backup.
+
+Invariants: I-5 (journal before the first rename; recovery at startup), I-4 (hash-verified backup copy before any overwrite of a live install), I-14 (`registerVersion` per patch), I-3 (every state change persisted with rollback). Errors: `updates.*` codes → `frontend/src/lib/stores/updates.ts`.
+
+## 11. Migration between disks (relocate)
+
+Entry: UI `relocate.Service.MoveGame(gameID, target)`; `MoveLibrary(parent)` for the whole `<Library>`.
+
+1. `MoveGame`: `context()` (no Background fallback) → `library.Find`, non-empty `InstallDir` → `checkBusy` (running, `updates.Busy`, `install.Busy`, unfinished downloads by origin) → `validateTarget` (absolute, not a volume root, not nested, missing or empty) → `install.DirSize` → `checkFreeSpace` (+5 %) → `registerJob` (conflict check + append under one lock; persist `moves.json`; `move:started`) → goroutine `runGameJob`.
+2. `runPipeline`: `os.Rename(source, target)` fast path (`Renamed=true`, straight to repoint) or `copyAndVerify`: stage `copy` with `Staging=<target>.staging` → `hashdir.Build(source)` → manifest `moves/<jobID>.json` → `install.CopyDir(source → staging)` → stage `verify` → `hashdir.Verify(staging)`; any issue/extra ⇒ remove staging, `relocate.verify_failed`, source intact → stage `commit` → rename staging→target → stage `repoint`.
+3. Repoint: `library.Relocate(gameID, target)` (rebases Executable/SavesDir/Uninstall command, writes marker). Failure leaves the job at `repoint` for retry on next start.
+4. `cleanupItem`: stage `cleanup` → `RemoveAll(source)` → drop manifest → history `moved` → `completeJob` (`move:completed`, journal entry removed).
+5. `MoveLibrary`: `settings.ProposeLibraryPath` → busy checks for all games, no unfinished downloads → queue `[games…, @downloads, @screenshots, @settings]` → per game the same pipeline with rebased target; `@downloads` → `download/repoint.go::Repoint` (refuses active downloads, drops engines, rename or `.repoint-staging` verified copy, rebases destinations, `restore`); `@screenshots` generic; `@settings` → `settings.SaveSettings(LibraryPath=newRoot)` (derives Games/Downloads/Screenshots).
+6. Cancel: job ctx → copy/verify abort → `cancelled`, staging removed, source intact. After commit, cleanup is not cancellable (data already at target).
+
+Crash recovery (`recover.go::recoverAll` at startup): prepare → source gone & target present ⇒ rename landed, continue at repoint; copy/verify ⇒ drop staging + manifest, failed; commit ⇒ target only → repoint, staging only → redo rename, both/neither ⇒ `relocate.ambiguous_recovery` (nothing deleted); repoint ⇒ re-verify target against the manifest, retry the external repoint, cleanup; cleanup ⇒ verify target then delete source; library job with items left ⇒ failed on purpose (original roots not journaled). Invariants: I-4, I-5. Errors: `relocate.*` → `frontend/src/lib/relocate/moveMessages.ts`.
+
+## 12. Uninstall / delete
+
+Entry: UI `install.Service.InspectRemoval(gameID)` → `RemoveGame(gameID, RemoveOptions{DeleteFiles, DeleteDownload, KeepInLibrary})`. Library-only removal: `library.Service.RemoveGame(id)` (archives the entry, excludes the dir in `library-excluded.json`, drops the shortcut, **never deletes files**).
+
+1. `removal.go::removalPlan`: `library.Find`; ownership from `Owned`/`InstallType`, or `library.ReadMarker` for legacy records; method `installer` (usable uninstall entry) > `files` (owned + dir exists) > `record`.
+2. Refusals: `DeleteFiles && !owned` ⇒ `install.unsafe_removal`; running ⇒ `install.game_running`; active install for the game ⇒ `install.game_busy`; seeding into the dir ⇒ `install.remove_seeding`; `removableDir` (absolute, not volume root, not symlink, is a dir).
+3. Run the uninstaller (`uninstallSpec`: `msiexec /x <ProductCode> /qn /norestart` or the Inno/NSIS quiet command with `_?=<dir>`; exit 0/3010/1605 ok, 1602 cancelled) → `removeInstallDir` (`stageForRemoval`: record in `removals.json`, rename to `<dir>.removing[-N]` — a rename failure surfaces `install.files_locked` before anything is gone → `RemoveAll` → drop record) → `releaseRuntime` (darwin bottle removal, warn-only) → `forgetInstallations` (`install:removed`) → `library.RemoveGame` or `MarkUninstalled` → `download.DeleteData` if requested. After files are gone, a `forgetInstallations` failure is deferred so the library still updates.
+4. Startup: `sweepRemovals` finishes staged `.removing` paths only.
+
+Invariants: I-5 (intent recorded in `removals.json` before the rename), I-9 (marker proves ownership for legacy records), I-10 (destructive root from the library record and ownership flags, never from a name). Shortcuts created by installers are cleaned only right after install (`flow.go::dropShortcuts`), not here.
+
+## 13. Self-update
+
+Entry: `selfupdate/service.go::periodicCheck` (15 min; failures retry with backoff 30 s → 15 min) or UI `CheckForUpdate` → `DownloadUpdate` → `ApplyUpdate`.
+
+1. `client.go::FetchManifest` (`<BaseURL>/launcher/manifest`, `SignedManifest` verified with the embedded ed25519 key; devmock overrides via `TYPHON_DEVMOCK_MANIFEST_URL`/`_RELEASE_PUBKEY`) → artifact for `GOOS/GOARCH` and `Kind` (`installer` on Windows, `bundle` on macOS) → `Status{State=update_available…}`, `launcher:update_status`; release notes merged into `selfupdate/release-notes.json`.
+2. `DownloadUpdate`: `selfupdate/<version>/` → `download.go::Download` (`<name>.partial`, `Range` resume, hash mismatch after resume ⇒ restart, stall guard) → `VerifyFile` (SHA-256) → `state.json{ReadyPath, Artifact}` → `StateReady`.
+3. `ApplyUpdate`: `stageWorker` copies the running binary to `selfupdate/worker/typhon-update-<pid>.exe` → `update-spec.json{InstallerPath, InstallDir, ParentPID, RelaunchPath, Version}` → `startWorker` (detached) → `application.Quit`.
+4. Worker (`worker_run.go::runWorker`): wait for parent exit (90 s) → `apply_windows.go::Apply` (installer silent into `InstallDir`) or `apply_darwin.go::Apply` (`bundle_darwin.go::extractBundle` next to the bundle with `safeJoin`, `swapBundle`, `dropQuarantine`, restore old bundle on failure) → `last-update.json{Version, OK, Error}` → `relaunch`. Progress: Windows native window (`progress_windows.go`), devmock `progress.json`/`worker.log`.
+5. Next start: `ServiceStartup` → `takeOutcome` (shown in About via `GetOutcome`), `dropStaleWorker`, stale ready artifact re-verified or removed, `cleanupCache`.
+
+Invariants: I-7 (signature and hash before apply, re-verified at startup), I-5 for the bundle swap (open finding TYPHON-AUDIT-014: two renames without a journal). Errors: `selfupdate.*` codes.
+
+## 14. Persistence and recovery summary
+
+| Service | Load (constructor / startup) | Recovery at `ServiceStartup` | Journal / marker |
+|---|---|---|---|
+| settings, library, catalog, sources, history, playlog, theme, compat, account, accountsync, lan, relocate | constructor; corrupt ⇒ fatal | — | — |
+| download | startup (`loadLocked`); corrupt ⇒ startup fails | demote active → queued, `sweepMetainfo`, `restore` re-adds and re-verifies | `downloads.json`, `meta/piece-completion.json` (quarantined if corrupt) |
+| install | startup; corrupt ⇒ fails | resume live/done workers, finalize committed installs, interrupt the rest, `sweepPartial` (move-mode partials recovered), `sweepRemovals` | `installations.json`, `.partial`, `.removing`, worker state files, `removals.json` |
+| updates | startup (six files); corrupt ⇒ fails | demote in-flight states, `recoverJournals` (swap/patch/inplace), wipe failed `.staging`, `sweepPrevious` | `journal.json`, `.previous*`, `.staging/`, `.patch-backup`, `.replaced` |
+| relocate | constructor | `recoverAll` per stage (see §11) | `moves.json`, `moves/<jobID>.json`, `<target>.staging` |
+| selfupdate | startup; corrupt ⇒ startup fails (launcher exits) | outcome pickup, stale worker/artifact cleanup | `selfupdate/state.json`, `worker/*` |
+| metadata | constructor (`media_assets.json`, `metadata_attempts.json`) | orphan sweep of `media/` | — |
+
+Required state semantics and documented cache/background exceptions: INVARIANTS I-2–I-3. Several services roll memory back and emit `*:degraded` after persist failures; inspect the owner rather than assuming uniform handling; `ServiceShutdown` order is closing flag → cancel jobs → cancel ctx → `wg.Wait` → final persist → close external resources.
+
+## 15. Cancellation and error recovery
+
+- **Cancellation is ctx-based** in every service: UI `Cancel*` → per-job `cancel()`; long loops (`WalkDir`, `copyStream`, `hashdir`, poll loops) check `ctx.Err()`. A job that sees its own ctx cancelled reports "cancelled", not "failed" (download `discard`, install `fail` cancelled branch, updates ctx branch → `update_available` + interrupted text, relocate `failOrCancel`).
+- **Child processes**: Windows installer trees die with `TerminateJobObject`; elevated workers get a cancel marker and 30 s; darwin installers get a cancel file consumed by the `installguard.exe` bridge (`wine.ErrTreeNotStopped` when unconfirmed); game processes are never killed on shutdown, only by `StopGame`.
+- **Shutdown**: `spawnTrackedLocked`-style guards refuse new goroutines once `closing`; teardowns that would leave half-deleted trees are skipped while closing (download `startTeardownLocked`, install `cleanupPartial`/`discardSilent`).
+- **Error surfacing**: every user-visible failure is a `uierr` code; wrapped with `%w` so `uierr.Code` finds the innermost code; the frontend maps codes via per-domain tables. Persist failures are wrapped with a stable prefix (`install.errPersistPrefix`) and reach the UI.
+- **Degraded mode**: persist failure ⇒ `*:degraded{degraded:true,message}`; recovery ⇒ `{degraded:false}`; the UI toasts once per subsystem (`frontend/src/lib/stores/degraded.ts`).
