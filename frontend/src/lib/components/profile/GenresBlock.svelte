@@ -61,7 +61,7 @@
   .bar {
     display: flex;
     gap: 2px;
-    height: 1.6rem;
+    height: 1.76rem;
     overflow: hidden;
     border-radius: var(--radius-sm);
   }
@@ -77,7 +77,7 @@
   .tone-4 { background: color-mix(in srgb, var(--accent) 32%, var(--surface-3)); }
   .tone-other { background: var(--text-3); }
   .tone-unknown {
-    background: repeating-linear-gradient(135deg, var(--surface-4) 0 0.4rem, var(--surface-3) 0.4rem 0.8rem);
+    background: repeating-linear-gradient(135deg, var(--surface-4) 0 0.44rem, var(--surface-3) 0.44rem 0.88rem);
   }
 
   .legend {
@@ -86,7 +86,7 @@
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.8rem;
+    gap: 0.88rem;
   }
 
   .legend li {
@@ -99,8 +99,8 @@
 
   .swatch {
     flex-shrink: 0;
-    width: 1rem;
-    height: 1rem;
+    width: 1.1rem;
+    height: 1.1rem;
     border-radius: 50%;
   }
 

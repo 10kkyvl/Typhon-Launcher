@@ -56,7 +56,7 @@
     --text-2: #bec7d2;
     --text-3: #99a5b5;
     --avatar-ring: var(--card-bg);
-    width: 32rem;
+    width: 35.2rem;
     max-width: 100%;
     overflow: hidden;
     border: 1px solid rgba(200, 220, 240, 0.14);
@@ -68,7 +68,7 @@
 
   .banner {
     position: relative;
-    height: 7.2rem;
+    height: 7.92rem;
     overflow: hidden;
   }
 
@@ -97,33 +97,33 @@
     position: relative;
     display: flex;
     flex-direction: column;
-    gap: 0.8rem;
-    padding: 0 1.4rem 1.4rem;
+    gap: 0.88rem;
+    padding: 0 1.54rem 1.54rem;
   }
 
   .head {
     display: flex;
     align-items: flex-end;
-    gap: 1.2rem;
+    gap: 1.32rem;
     margin-top: -2.6rem;
     min-width: 0;
   }
 
   .avatar {
     flex-shrink: 0;
-    padding: 0.3rem;
+    padding: 0.33rem;
   }
 
   .avatar :global(.avatar) {
     border-radius: 50%;
-    box-shadow: 0 0 0 0.3rem var(--card-bg);
+    box-shadow: 0 0 0 0.33rem var(--card-bg);
   }
 
   .ident {
     display: flex;
     flex-direction: column;
     min-width: 0;
-    padding-bottom: 0.2rem;
+    padding-bottom: 0.22rem;
   }
 
   .name {
@@ -146,7 +146,7 @@
   .status,
   .presence {
     display: flex;
-    gap: 0.6rem;
+    gap: 0.66rem;
     font-size: var(--font-sm);
     color: var(--text-2);
     overflow-wrap: anywhere;
@@ -160,15 +160,15 @@
   .pinned {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    padding: 0.8rem;
+    gap: 1.1rem;
+    padding: 0.88rem;
     border-radius: var(--radius-md);
     background: var(--card-surface);
   }
 
   .thumb {
-    width: 3.2rem;
-    height: 4.2rem;
+    width: 3.52rem;
+    height: 4.62rem;
     flex-shrink: 0;
     border-radius: var(--radius-sm);
     object-fit: cover;

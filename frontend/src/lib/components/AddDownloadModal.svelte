@@ -177,7 +177,7 @@
   title={consolePlatform && step === 'files'
     ? msg('emul.downloadTitle', { console: platformBadge(consolePlatform) })
     : msg('modals.addDownloadTitle')}
-  width={step === 'files' && !consolePlatform ? '62rem' : '48rem'}
+  width={step === 'files' && !consolePlatform ? '68.2rem' : '52.8rem'}
 >
   {#if step === 'source'}
     <div class="source">
@@ -191,7 +191,7 @@
         <span class="line"></span>
       </div>
       <Button onclick={pickTorrent}>
-        <FileUp size="1.6rem" strokeWidth={1.8} />
+        <FileUp size="1.76rem" strokeWidth={1.8} />
         {msg('modals.addDownloadPickTorrent')}
       </Button>
     </div>
@@ -237,7 +237,7 @@
             onclick={() => (selected[i] = !selected[i])}
           >
             <span class="box" class:on={selected[i]}>
-              {#if selected[i]}<Check size="1.3rem" strokeWidth={2.6} />{/if}
+              {#if selected[i]}<Check size="1.43rem" strokeWidth={2.6} />{/if}
             </span>
             <span class="file-path">{file.path}</span>
             <span class="file-size">{bytesSize(file.size)}</span>
@@ -247,7 +247,7 @@
       <div class="options">
         <button class="option" role="checkbox" aria-checked={autoInstall} onclick={() => (autoInstall = !autoInstall)}>
           <span class="box" class:on={autoInstall}>
-            {#if autoInstall}<Check size="1.3rem" strokeWidth={2.6} />{/if}
+            {#if autoInstall}<Check size="1.43rem" strokeWidth={2.6} />{/if}
           </span>
           <span class="option-text">
             <span class="option-label">{msg('modals.addDownloadAutoInstallLabel')}</span>
@@ -262,7 +262,7 @@
             onclick={() => (elevateAhead = !elevateAhead)}
           >
             <span class="box" class:on={elevateAhead}>
-              {#if elevateAhead}<Check size="1.3rem" strokeWidth={2.6} />{/if}
+              {#if elevateAhead}<Check size="1.43rem" strokeWidth={2.6} />{/if}
             </span>
             <span class="option-text">
               <span class="option-label">{msg('modals.addDownloadElevateAheadLabel')}</span>
@@ -299,7 +299,7 @@
   .field {
     display: flex;
     flex-direction: column;
-    gap: 0.8rem;
+    gap: 0.88rem;
   }
 
   .field-label {
@@ -328,13 +328,13 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 1.2rem;
-    padding: 3.2rem 0;
+    gap: 1.32rem;
+    padding: 3.52rem 0;
   }
 
   .spinner {
-    width: 3.2rem;
-    height: 3.2rem;
+    width: 3.52rem;
+    height: 3.52rem;
     border-radius: 50%;
     border: 2px solid rgba(255, 255, 255, 0.1);
     border-top-color: var(--accent);
@@ -401,13 +401,13 @@
   .dest {
     display: flex;
     flex-direction: column;
-    gap: 0.8rem;
+    gap: 0.88rem;
   }
 
   .dest-controls {
     display: flex;
     align-items: center;
-    gap: 0.8rem;
+    gap: 0.88rem;
   }
 
   .dest-controls .input {
@@ -417,7 +417,7 @@
   .file-list {
     display: flex;
     flex-direction: column;
-    max-height: 28rem;
+    max-height: 30.8rem;
     overflow-y: auto;
     padding: var(--space-1);
     background: var(--surface);
@@ -429,7 +429,7 @@
     align-items: center;
     gap: var(--space-3);
     width: 100%;
-    padding: 0.7rem 0.8rem;
+    padding: 0.77rem 0.88rem;
     border-radius: var(--radius-sm);
     text-align: left;
     transition: background var(--dur-fast) var(--ease);
@@ -443,8 +443,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 1.8rem;
-    height: 1.8rem;
+    width: 1.98rem;
+    height: 1.98rem;
     flex-shrink: 0;
     border-radius: var(--radius-xs);
     border: 1px solid var(--border-strong);
@@ -481,7 +481,7 @@
   .options {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: 0.44rem;
   }
 
   .option {
@@ -489,7 +489,7 @@
     align-items: flex-start;
     gap: var(--space-3);
     width: 100%;
-    padding: 0.8rem;
+    padding: 0.88rem;
     border-radius: var(--radius-sm);
     text-align: left;
     transition: background var(--dur-fast) var(--ease);
@@ -504,13 +504,13 @@
   }
 
   .option .box {
-    margin-top: 0.1rem;
+    margin-top: 0.11rem;
   }
 
   .option-text {
     display: flex;
     flex-direction: column;
-    gap: 0.3rem;
+    gap: 0.33rem;
     min-width: 0;
   }
 

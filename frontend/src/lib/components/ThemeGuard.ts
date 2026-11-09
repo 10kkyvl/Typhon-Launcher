@@ -37,7 +37,7 @@ export function mountThemeGuard(): () => void {
     host.style.setProperty('position', 'fixed', 'important');
     host.style.setProperty('left', '50%', 'important');
     host.style.setProperty('transform', 'translateX(-50%)', 'important');
-    host.style.setProperty('bottom', '1.6rem', 'important');
+    host.style.setProperty('bottom', '1.76rem', 'important');
     host.style.setProperty('z-index', '2147483647', 'important');
     host.style.setProperty('pointer-events', 'none', 'important');
     queueMicrotask(() => {

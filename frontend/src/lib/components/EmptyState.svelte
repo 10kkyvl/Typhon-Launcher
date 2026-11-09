@@ -38,7 +38,7 @@
     align-items: flex-start;
     text-align: left;
     padding: var(--space-8) 0;
-    max-width: 44rem;
+    max-width: 48.4rem;
     animation: rise-in var(--dur-panel) var(--ease) backwards;
   }
 
@@ -46,8 +46,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 4.4rem;
-    height: 4.4rem;
+    width: 4.84rem;
+    height: 4.84rem;
     margin-bottom: var(--space-4);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
@@ -61,7 +61,7 @@
   }
 
   p {
-    margin-top: 0.6rem;
+    margin-top: 0.66rem;
     font-size: var(--font-sm);
     line-height: 1.55;
     color: var(--text-3);

@@ -45,9 +45,9 @@
   .capsule {
     display: flex;
     flex-direction: column;
-    gap: 0.7rem;
+    gap: 0.77rem;
     flex: 0 0 auto;
-    width: 22rem;
+    width: 24.2rem;
     padding: 0;
     background: none;
     border: 0;
@@ -86,15 +86,15 @@
   .meta {
     display: inline-flex;
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.66rem;
     font-size: var(--font-xs);
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
   }
 
   .meta .dot {
-    width: 0.7rem;
-    height: 0.7rem;
+    width: 0.77rem;
+    height: 0.77rem;
     border-radius: 50%;
     background: var(--success);
     flex-shrink: 0;

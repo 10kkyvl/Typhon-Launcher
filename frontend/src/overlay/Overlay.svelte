@@ -113,9 +113,9 @@
       </div>
       <div class="actions">
         <IconButton label={msg('overlay.browserOpen')} active={browser} onclick={() => (browser = true)}>
-          <Globe size="1.8rem" strokeWidth={1.8} />
+          <Globe size="1.98rem" strokeWidth={1.8} />
         </IconButton>
-        <IconButton label={msg('common.close')} onclick={hide}><X size="1.8rem" strokeWidth={1.8} /></IconButton>
+        <IconButton label={msg('common.close')} onclick={hide}><X size="1.98rem" strokeWidth={1.8} /></IconButton>
       </div>
     </header>
 
@@ -158,7 +158,7 @@
   </aside>
   {#if unlockToast}
     <div class="unlock" role="status" aria-label={msg('overlay.achievementLabel')}>
-      <Trophy size="1.8rem" strokeWidth={1.8} />
+      <Trophy size="1.98rem" strokeWidth={1.8} />
       <span>{unlockToast}</span>
     </div>
   {/if}
@@ -187,7 +187,7 @@
     bottom: 0;
     display: flex;
     flex-direction: column;
-    width: min(40rem, 100vw);
+    width: min(44rem, 100vw);
     background: var(--surface);
     border-left: 1px solid var(--border-strong);
     box-shadow: var(--shadow-pop);
@@ -211,7 +211,7 @@
     display: flex;
     flex-direction: column;
     min-width: 0;
-    gap: 0.2rem;
+    gap: 0.22rem;
   }
 
   .brand strong {
@@ -261,7 +261,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    max-width: 38rem;
+    max-width: 41.8rem;
     padding: var(--space-3) var(--space-4);
     background: var(--surface-4);
     border: 1px solid var(--border-strong);
@@ -281,7 +281,7 @@
   @keyframes unlock-in {
     from {
       opacity: 0;
-      transform: translateY(0.6rem);
+      transform: translateY(0.66rem);
     }
     to {
       opacity: 1;

@@ -31,7 +31,7 @@
 
 <div class="picker">
   <Button {disabled} pressed={open} onclick={() => (open = !open)}>
-    <Plus size="1.5rem" strokeWidth={1.8} />{msg('profile.addBlock')}
+    <Plus size="1.65rem" strokeWidth={1.8} />{msg('profile.addBlock')}
   </Button>
   {#if hiddenByVersion}
     <p class="hint">{msg('profile.blocksFromNewer', { hidden: unknownBlockCount(layout), count: MAX_BLOCKS })}</p>
@@ -72,7 +72,7 @@
     padding: 0;
     width: 100%;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(19.8rem, 1fr));
     gap: var(--space-2);
   }
 
@@ -80,7 +80,7 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.2rem;
+    gap: 0.22rem;
     width: 100%;
     padding: var(--space-3) var(--space-4);
     border: 1px solid var(--border);

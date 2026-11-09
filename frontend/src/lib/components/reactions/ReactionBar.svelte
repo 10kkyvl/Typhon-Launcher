@@ -65,7 +65,7 @@
       title={msg('social.reactionAdd')}
       onclick={() => (open = !open)}
     >
-      <span class="plus"><Plus size="1.4rem" strokeWidth={2} /></span>
+      <span class="plus"><Plus size="1.54rem" strokeWidth={2} /></span>
     </button>
     {#if open}
       <span class="tray">
@@ -82,7 +82,7 @@
   .tray {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.4rem;
+    gap: 0.44rem;
   }
 
   .tray {
@@ -92,14 +92,14 @@
   .reaction {
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
-    height: 2.6rem;
-    padding: 0 0.7rem;
+    gap: 0.44rem;
+    height: 2.86rem;
+    padding: 0 0.77rem;
     border: 1px solid transparent;
     border-radius: var(--radius-md);
     background: var(--surface-3);
     color: var(--text-2);
-    font-size: 1.4rem;
+    font-size: 1.54rem;
     line-height: 1;
     transition:
       background var(--dur) var(--ease),

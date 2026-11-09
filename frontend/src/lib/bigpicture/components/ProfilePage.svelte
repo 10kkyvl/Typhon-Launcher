@@ -101,7 +101,7 @@
   </header>
 
   {#if $authState === 'bootstrapping'}
-    <div class="bp-empty"><UserRound size="2.5rem" /><p>{$t('bp.profile.loading')}</p></div>
+    <div class="bp-empty"><UserRound size="2.75rem" /><p>{$t('bp.profile.loading')}</p></div>
   {:else if showContent}
     <section class="identity bp-card">
       <Avatar size="lg" name={displayName} src={$currentUser?.avatarUrl} {...ownFrame($currentUser)} />
@@ -158,51 +158,51 @@
           {/each}
         </div>
       {:else}
-        <div class="bp-empty empty-games"><Gamepad2 size="2.5rem" /><h3>{$t('bp.profile.noGamesTitle')}</h3><p>{$t('bp.profile.noGamesDescription')}</p></div>
+        <div class="bp-empty empty-games"><Gamepad2 size="2.75rem" /><h3>{$t('bp.profile.noGamesTitle')}</h3><p>{$t('bp.profile.noGamesDescription')}</p></div>
       {/if}
     </section>
   {/if}
 </div>
 
 <style>
-  .profile-page { display: flex; flex-direction: column; gap: clamp(1.2rem, 2.1vh, 2rem); padding-bottom: 2rem; }
+  .profile-page { display: flex; flex-direction: column; gap: clamp(1.32rem, 2.1vh, 2.2rem); padding-bottom: 2.2rem; }
   .title-copy { min-width: 0; }
-  .eyebrow { display: block; margin-bottom: .35rem; color: var(--text-3); font-size: .72em; font-weight: 700; letter-spacing: .16em; }
-  .bp-header h1 { margin: 0; font-size: clamp(2rem, 4vw, 4.6rem); line-height: 1.08; }
-  .back-button { min-height: 3.4rem; padding-inline: 1.2rem; }
-  .identity { display: flex; align-items: center; gap: clamp(1rem, 2.2vw, 2.5rem); padding: clamp(1.2rem, 2vw, 2.25rem); }
-  .identity :global(.avatar.lg) { --size: clamp(5rem, 8vw, 8.5rem); }
+  .eyebrow { display: block; margin-bottom: .385rem; color: var(--text-3); font-size: .72em; font-weight: 700; letter-spacing: .16em; }
+  .bp-header h1 { margin: 0; font-size: clamp(2.2rem, 4vw, 5.06rem); line-height: 1.08; }
+  .back-button { min-height: 3.74rem; padding-inline: 1.32rem; }
+  .identity { display: flex; align-items: center; gap: clamp(1.1rem, 2.2vw, 2.75rem); padding: clamp(1.32rem, 2vw, 2.475rem); }
+  .identity :global(.avatar.lg) { --size: clamp(5.5rem, 8vw, 9.35rem); }
   .identity-copy { min-width: 0; flex: 1; }
-  .identity-copy h2 { margin: 0; font-size: clamp(1.55rem, 2.6vw, 3rem); line-height: 1.12; overflow-wrap: anywhere; }
-  .identity-copy p { margin: .45rem 0 0; color: var(--text-2); font-size: .95em; line-height: 1.45; }
+  .identity-copy h2 { margin: 0; font-size: clamp(1.705rem, 2.6vw, 3.3rem); line-height: 1.12; overflow-wrap: anywhere; }
+  .identity-copy p { margin: .495rem 0 0; color: var(--text-2); font-size: .95em; line-height: 1.45; }
   .identity-copy p.edit-message { color: var(--success); }
   .identity-copy p.edit-message.danger { color: var(--danger); }
   .identity-actions { flex: none; }
-  .identity-actions .bp-button { min-height: 3.25rem; padding: .7rem 1.1rem; }
-  .stats-section .load-error { margin: 0; color: var(--danger); font-size: 1.4rem; }
-  .stats-section h2, .section-title h2 { margin: 0; font-size: clamp(1.25rem, 1.8vw, 2rem); }
-  .stat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(.65rem, 1.2vw, 1.2rem); margin-top: .75rem; }
-  .stat-card { min-height: 7.5rem; display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; align-content: center; align-items: center; column-gap: .7rem; row-gap: .08rem; padding: clamp(1rem, 1.6vw, 1.7rem); }
+  .identity-actions .bp-button { min-height: 3.575rem; padding: .77rem 1.21rem; }
+  .stats-section .load-error { margin: 0; color: var(--danger); font-size: 1.54rem; }
+  .stats-section h2, .section-title h2 { margin: 0; font-size: clamp(1.375rem, 1.8vw, 2.2rem); }
+  .stat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(.715rem, 1.2vw, 1.32rem); margin-top: .825rem; }
+  .stat-card { min-height: 8.25rem; display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; align-content: center; align-items: center; column-gap: .77rem; row-gap: .088rem; padding: clamp(1.1rem, 1.6vw, 1.87rem); }
   .stat-card :global(svg) { grid-row: span 2; color: var(--accent); }
-  .stat-card strong { font-size: clamp(1.6rem, 2.4vw, 2.8rem); line-height: 1; font-variant-numeric: tabular-nums; }
+  .stat-card strong { font-size: clamp(1.76rem, 2.4vw, 3.08rem); line-height: 1; font-variant-numeric: tabular-nums; }
   .stat-card span { color: var(--text-3); font-size: .86em; }
-  .section-title { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; margin-bottom: .8rem; }
-  .section-title p { margin: .25rem 0 0; color: var(--text-3); font-size: .85em; }
-  .section-title .bp-button { min-height: 2.9rem; padding: .6rem 1rem; }
-  .game-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, max(18rem, 10em)), 1fr)); gap: clamp(.7rem, 1.2vw, 1.2rem); }
-  .game-card { display: flex; flex-direction: column; gap: .5rem; width: 100%; padding: .65rem; border-radius: var(--radius-lg); color: var(--text); text-align: left; overflow: hidden; }
+  .section-title { display: flex; align-items: flex-end; justify-content: space-between; gap: 1.1rem; margin-bottom: .88rem; }
+  .section-title p { margin: .275rem 0 0; color: var(--text-3); font-size: .85em; }
+  .section-title .bp-button { min-height: 3.19rem; padding: .66rem 1.1rem; }
+  .game-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, max(19.8rem, 10em)), 1fr)); gap: clamp(.77rem, 1.2vw, 1.32rem); }
+  .game-card { display: flex; flex-direction: column; gap: .55rem; width: 100%; padding: .715rem; border-radius: var(--radius-lg); color: var(--text); text-align: left; overflow: hidden; }
   .cover { display: block; width: 100%; aspect-ratio: 3 / 4; overflow: hidden; border-radius: var(--radius-md); }
   .game-name { width: 100%; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; font-weight: 650; line-height: 1.35; }
   .game-meta { color: var(--text-3); font-size: .8em; }
-  .empty-games { min-height: 11rem; }
-  .empty-games h3 { margin: .5rem 0 0; }
-  .empty-games p { margin: .3rem 0 0; max-width: 38rem; }
+  .empty-games { min-height: 12.1rem; }
+  .empty-games h3 { margin: .55rem 0 0; }
+  .empty-games p { margin: .33rem 0 0; max-width: 41.8rem; }
   @media (max-width: 760px) {
     .identity { align-items: flex-start; flex-wrap: wrap; }
-    .identity-copy { flex-basis: calc(100% - 7rem); }
+    .identity-copy { flex-basis: calc(100% - 7.7rem); }
     .identity-actions { width: 100%; }
     .identity-actions .bp-button { width: 100%; }
     .stat-grid { grid-template-columns: 1fr; }
-    .stat-card { min-height: 5.8rem; }
+    .stat-card { min-height: 6.38rem; }
   }
 </style>

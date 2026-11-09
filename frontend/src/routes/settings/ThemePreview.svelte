@@ -92,7 +92,7 @@
   .preview {
     display: flex;
     flex-direction: column;
-    min-height: 32rem;
+    min-height: 35.2rem;
     overflow: hidden;
     container-type: inline-size;
     background: var(--bg);
@@ -135,8 +135,8 @@
   }
 
   .topbar-field {
-    flex: 1 1 16rem;
-    max-width: 32rem;
+    flex: 1 1 17.6rem;
+    max-width: 35.2rem;
   }
 
   .link {
@@ -154,7 +154,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-1);
-    flex: 0 0 16rem;
+    flex: 0 0 17.6rem;
     min-width: 0;
     padding: var(--space-4) var(--space-3);
     background: var(--bg-sidebar);
@@ -201,7 +201,7 @@
 
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(26rem, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(28.6rem, 1fr));
     gap: var(--space-5);
     align-items: start;
   }
@@ -229,8 +229,8 @@
   }
 
   .cover {
-    flex: 0 0 8rem;
-    min-height: 11rem;
+    flex: 0 0 8.8rem;
+    min-height: 12.1rem;
     background: var(--surface-3);
     border-radius: var(--radius-md);
   }
@@ -420,7 +420,7 @@
   }
 
   .layer > * {
-    flex: 1 1 26rem;
+    flex: 1 1 28.6rem;
   }
 
   .toast {
@@ -456,7 +456,7 @@
     letter-spacing: var(--tracking-heading);
   }
 
-  @container (max-width: 48rem) {
+  @container (max-width: 52.8rem) {
     .body {
       flex-direction: column;
     }

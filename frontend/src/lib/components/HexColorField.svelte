@@ -32,13 +32,13 @@
       spellcheck={false} autocapitalize="characters" autocomplete="off" aria-invalid={!validAccent(value)}
       oninput={input} {onkeydown} />
   </label>
-  <IconButton size="sm" label={msg('settings.accentCopyHex')} disabled={disabled || !validAccent(value)} onclick={copy}><Copy size="1.5rem" /></IconButton>
+  <IconButton size="sm" label={msg('settings.accentCopyHex')} disabled={disabled || !validAccent(value)} onclick={copy}><Copy size="1.65rem" /></IconButton>
 </div>
 
 <style>
   .hex-field { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
   label { display: flex; align-items: center; gap: var(--space-2); color: var(--text-2); font-size: var(--font-xs); }
-  input { width: 10rem; min-width: 0; padding: .7rem; background: var(--surface-2); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font: inherit; font-variant-numeric: tabular-nums; }
+  input { width: 11rem; min-width: 0; padding: .77rem; background: var(--surface-2); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font: inherit; font-variant-numeric: tabular-nums; }
   input[aria-invalid=true] { border-color: var(--danger); }
   input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 </style>

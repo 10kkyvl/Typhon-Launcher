@@ -12,7 +12,7 @@
 
 {#if $networkDown && state}
   <div class="network-banner" role="alert">
-    <span class="icon"><WifiOff size="1.6rem" strokeWidth={1.8} /></span>
+    <span class="icon"><WifiOff size="1.76rem" strokeWidth={1.8} /></span>
     <span class="text">
       <span class="title">{networkDownTitle(state)}</span>
       {#if reason}
@@ -20,7 +20,7 @@
       {/if}
     </span>
     <Button size="sm" onclick={() => navigate('settings', { tab: 'downloads' })}>
-      <Settings size="1.4rem" strokeWidth={1.8} />
+      <Settings size="1.54rem" strokeWidth={1.8} />
       {msg('ui.networkBannerSettings')}
     </Button>
   </div>

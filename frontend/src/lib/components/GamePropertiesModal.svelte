@@ -393,7 +393,7 @@
 <Modal
   open={Boolean(target && game)}
   title={game ? msg('modals.propertiesTitle', { title: game.title }) : msg('games.actionProperties')}
-  width="56rem"
+  width="61.6rem"
   onclose={closeGameProperties}
 >
   {#if game}
@@ -432,7 +432,7 @@
         {/if}
         <div>
           <Button size="sm" disabled={exeBusy} onclick={browseExecutable}>
-            <FolderOpen size="1.5rem" strokeWidth={1.8} />
+            <FolderOpen size="1.65rem" strokeWidth={1.8} />
             {msg('modals.propertiesExeBrowse')}
           </Button>
         </div>
@@ -525,7 +525,7 @@
                 <span class="label">{msg('modals.compatWrapper')}</span>
                 <Select
                   value={compatWrapper}
-                  width="26rem"
+                  width="28.6rem"
                   options={WRAPPERS.map((id) => ({ id, label: wrapperName(id) }))}
                   onchange={pickWrapper}
                 />
@@ -535,7 +535,7 @@
                   <span class="label">{msg('modals.compatPresetLabel')}</span>
                   <Select
                     bind:value={compatPreset}
-                    width="26rem"
+                    width="28.6rem"
                     options={presetsFor(compatWrapper).map((id) => ({ id, label: presetLabel(id) }))}
                   />
                 </div>
@@ -602,7 +602,7 @@
               <span class="label">{row.title}</span>
               <Select
                 value={overrideState(game.gameMode, row.key)}
-                width="26rem"
+                width="28.6rem"
                 options={row.options}
                 onchange={(id) => changeGameMode(row.key, id as OverrideState)}
               />
@@ -640,7 +640,7 @@
           {/if}
           <div class="row">
             <Button size="sm" disabled={savesBusy} onclick={browseSaves}>
-              <FolderOpen size="1.5rem" strokeWidth={1.8} />
+              <FolderOpen size="1.65rem" strokeWidth={1.8} />
               {msg('modals.propertiesSavesBrowse')}
             </Button>
             {#if game.savesDir}
@@ -727,7 +727,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-1);
-    max-height: 18rem;
+    max-height: 19.8rem;
     overflow-y: auto;
   }
 

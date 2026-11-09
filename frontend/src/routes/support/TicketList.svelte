@@ -104,11 +104,11 @@
   <PageHeader title={msg('tickets.title')} subtitle={msg('tickets.subtitle')}>
     {#snippet actions()}
       <Button variant="ghost" onclick={openStatus}>
-        <Activity size="1.5rem" strokeWidth={1.8} />
+        <Activity size="1.65rem" strokeWidth={1.8} />
         {msg('tickets.statusPage')}
       </Button>
       <Button variant="primary" onclick={newTicket}>
-        <Plus size="1.5rem" strokeWidth={1.8} />
+        <Plus size="1.65rem" strokeWidth={1.8} />
         {msg('tickets.new')}
       </Button>
     {/snippet}
@@ -116,7 +116,7 @@
 
   {#if failure}
     <div class="banner" role="alert">
-      <CircleAlert size="1.6rem" strokeWidth={1.8} />
+      <CircleAlert size="1.76rem" strokeWidth={1.8} />
       <span class="banner-text">{failure}</span>
       <Button size="sm" onclick={retry}>{msg('common.retry')}</Button>
     </div>
@@ -127,7 +127,7 @@
   {:else if tickets.length === 0 && !failure}
     <EmptyState title={msg('tickets.emptyTitle')} description={msg('tickets.emptyText')}>
       {#snippet icon()}
-        <LifeBuoy size="2rem" strokeWidth={1.8} />
+        <LifeBuoy size="2.2rem" strokeWidth={1.8} />
       {/snippet}
       {#snippet actions()}
         <Button variant="primary" onclick={newTicket}>{msg('tickets.new')}</Button>
@@ -177,7 +177,7 @@
     align-items: center;
     gap: var(--space-3);
     margin-bottom: var(--space-4);
-    padding: 0.9rem 1.2rem;
+    padding: 0.99rem 1.32rem;
     border-radius: var(--radius-md);
     background: var(--danger-subtle);
     color: var(--danger);
@@ -225,8 +225,8 @@
 
   .dot {
     flex-shrink: 0;
-    width: 0.9rem;
-    height: 0.9rem;
+    width: 0.99rem;
+    height: 0.99rem;
     border-radius: 50%;
     background: transparent;
   }
@@ -240,7 +240,7 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: 0.44rem;
   }
 
   .subject {
@@ -259,7 +259,7 @@
   .meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.4rem var(--space-3);
+    gap: 0.44rem var(--space-3);
     font-size: var(--font-xs);
     color: var(--text-3);
   }

@@ -126,7 +126,7 @@
   <PageHeader title={msg('transfers.historyTitle')} subtitle={msg('transfers.historySubtitle')}>
     {#snippet actions()}
       <Button variant="ghost" disabled={$history.length === 0} onclick={() => (clearOpen = true)}>
-        <Trash2 size="1.5rem" strokeWidth={1.8} />
+        <Trash2 size="1.65rem" strokeWidth={1.8} />
         {msg('transfers.historyClearAction')}
       </Button>
     {/snippet}
@@ -134,7 +134,7 @@
 
   {#if $historyStatus.degraded}
     <div class="banner">
-      <span class="icon"><CircleAlert size="1.6rem" strokeWidth={1.8} /></span>
+      <span class="icon"><CircleAlert size="1.76rem" strokeWidth={1.8} /></span>
       <span class="text">{msg('transfers.historyDegradedBanner', { message: $historyStatus.message })}</span>
     </div>
   {/if}
@@ -142,7 +142,7 @@
   {#if $history.length === 0}
     <EmptyState title={msg('transfers.historyEmptyTitle')} description={msg('transfers.historyEmptyDescription')}>
       {#snippet icon()}
-        <HistoryIcon size="2rem" strokeWidth={1.8} />
+        <HistoryIcon size="2.2rem" strokeWidth={1.8} />
       {/snippet}
     </EmptyState>
   {:else}
@@ -166,7 +166,7 @@
                   {@const label = historyLabel(record)}
                   {@const Icon = iconFor(record.kind)}
                   <div class="row" class:failed={failed(record.kind)}>
-                    <span class="icon-cell"><Icon size="1.7rem" strokeWidth={1.8} /></span>
+                    <span class="icon-cell"><Icon size="1.87rem" strokeWidth={1.8} /></span>
                     <div class="body">
                       <div class="head">
                         <span class="title" title={label.title}>{label.title}</span>
@@ -220,27 +220,27 @@
     justify-content: space-between;
     gap: var(--space-3) var(--space-4);
     flex-wrap: wrap;
-    max-width: 110rem;
+    max-width: 121rem;
     margin-bottom: var(--space-6);
   }
 
   .search-slot {
     flex: 1;
-    min-width: 22rem;
-    max-width: 32rem;
+    min-width: 24.2rem;
+    max-width: 35.2rem;
   }
 
   .days {
     display: flex;
     flex-direction: column;
     gap: var(--space-6);
-    max-width: 110rem;
+    max-width: 121rem;
     animation: rise-in var(--dur-panel) var(--ease) backwards;
   }
 
   .day-label {
     margin-bottom: var(--space-2);
-    padding: 0 1.2rem;
+    padding: 0 1.32rem;
     font-size: var(--font-sm);
     font-weight: 500;
     color: var(--text-3);
@@ -257,11 +257,11 @@
 
   .row {
     display: grid;
-    grid-template-columns: 3.6rem minmax(0, 1fr) 6rem;
+    grid-template-columns: 3.96rem minmax(0, 1fr) 6.6rem;
     align-items: center;
     gap: var(--space-4);
-    min-height: 5.6rem;
-    padding: 0.8rem 1.6rem 0.8rem 1.2rem;
+    min-height: 6.16rem;
+    padding: 0.88rem 1.76rem 0.88rem 1.32rem;
     transition: background var(--dur) var(--ease);
   }
 
@@ -277,8 +277,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 3.6rem;
-    height: 3.6rem;
+    width: 3.96rem;
+    height: 3.96rem;
     border-radius: var(--radius-md);
     background: var(--surface-3);
     color: var(--text-2);
@@ -296,7 +296,7 @@
   .body {
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: 0.22rem;
     min-width: 0;
   }
 

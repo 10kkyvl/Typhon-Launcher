@@ -64,7 +64,7 @@
   }
 </script>
 
-<Modal bind:open title={msg('modals.sentDataTitle')} width="76rem">
+<Modal bind:open title={msg('modals.sentDataTitle')} width="83.6rem">
   {#if loading}
     <p class="status">{msg('modals.sentDataLoading')}</p>
   {:else if failed}
@@ -85,7 +85,7 @@
               <span class="endpoint" title={entry.endpoint}>{entry.endpoint}</span>
             </div>
             <IconButton label={msg('modals.sentDataCopyLabel')} size="sm" onclick={() => copyPayload(entry)}>
-              <Copy size="1.5rem" strokeWidth={1.8} />
+              <Copy size="1.65rem" strokeWidth={1.8} />
             </IconButton>
           </div>
           {#if !entry.formatted}
@@ -118,7 +118,7 @@
   .entry {
     display: flex;
     flex-direction: column;
-    gap: 0.8rem;
+    gap: 0.88rem;
     padding: var(--space-3) var(--space-4);
     background: var(--surface);
     border: 1px solid var(--border);
@@ -158,13 +158,13 @@
     font-size: var(--font-xs);
     color: var(--warning);
     background: var(--warning-subtle);
-    padding: 0.6rem var(--space-3);
+    padding: 0.66rem var(--space-3);
     border-radius: var(--radius-sm);
   }
 
   .payload {
     max-width: 100%;
-    max-height: 32rem;
+    max-height: 35.2rem;
     overflow: auto;
     margin: 0;
     padding: var(--space-3) var(--space-4);

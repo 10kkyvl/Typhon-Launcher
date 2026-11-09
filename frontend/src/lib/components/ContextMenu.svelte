@@ -75,8 +75,8 @@
   .menu {
     position: fixed;
     z-index: 90;
-    min-width: 20rem;
-    padding: 0.4rem;
+    min-width: 22rem;
+    padding: 0.44rem;
     background: var(--surface-3);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-md);
@@ -87,7 +87,7 @@
   .item {
     display: block;
     width: 100%;
-    padding: 0.7rem 1rem;
+    padding: 0.77rem 1.1rem;
     border-radius: var(--radius-sm);
     font-size: var(--font-sm);
     color: var(--text-2);
@@ -113,7 +113,7 @@
 
   .separator {
     height: 1px;
-    margin: 0.4rem;
+    margin: 0.44rem;
     background: var(--border);
   }
 

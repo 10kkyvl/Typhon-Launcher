@@ -86,7 +86,7 @@
   .options {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    gap: 0.66rem;
   }
 
   .date {

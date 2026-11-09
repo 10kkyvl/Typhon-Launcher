@@ -22,7 +22,7 @@
   <div class="heading">
     <h2>{title}</h2>
     {#if onrefresh}
-      <Button onclick={onrefresh} disabled={loading}><RefreshCw size="1.4rem" />{msg('games.recommendationRefresh')}</Button>
+      <Button onclick={onrefresh} disabled={loading}><RefreshCw size="1.54rem" />{msg('games.recommendationRefresh')}</Button>
     {/if}
   </div>
   {#if items.length > 0}
@@ -62,5 +62,5 @@
   .pick { min-width: 0; }
   .genre, .empty { font-size: var(--font-sm); color: var(--text-3); }
   .genre { white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
-  @media (max-width: 900px) { .picks { grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); } }
+  @media (max-width: 900px) { .picks { grid-template-columns: repeat(auto-fit, minmax(14.3rem, 1fr)); } }
 </style>

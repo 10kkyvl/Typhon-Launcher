@@ -128,7 +128,7 @@
   }
 </script>
 
-<Modal bind:open title={msg('modals.releaseMatchTitle')} width="56rem">
+<Modal bind:open title={msg('modals.releaseMatchTitle')} width="61.6rem">
   {#if release}
     <div class="sections">
       <section class="block">
@@ -174,7 +174,7 @@
                 onclick={() => (selectedGameId = candidate.gameId)}
               >
                 <span class="radio" class:on={selectedGameId === candidate.gameId}>
-                  {#if selectedGameId === candidate.gameId}<Check size="1.2rem" strokeWidth={2.6} />{/if}
+                  {#if selectedGameId === candidate.gameId}<Check size="1.32rem" strokeWidth={2.6} />{/if}
                 </span>
                 <span class="candidate-main">
                   <span class="candidate-title" title={candidate.title}>{candidate.title}</span>
@@ -214,7 +214,7 @@
                 onclick={() => (selectedGameId = game.id)}
               >
                 <span class="radio" class:on={selectedGameId === game.id}>
-                  {#if selectedGameId === game.id}<Check size="1.2rem" strokeWidth={2.6} />{/if}
+                  {#if selectedGameId === game.id}<Check size="1.32rem" strokeWidth={2.6} />{/if}
                 </span>
                 <span class="candidate-title" title={game.title}>{game.title}</span>
                 {#if game.releaseYear}<span class="year">{game.releaseYear}</span>{/if}
@@ -241,7 +241,7 @@
   }
 
   .block h4 {
-    font-size: 1.2rem;
+    font-size: 1.32rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -259,7 +259,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-4);
-    padding: 0.8rem 0;
+    padding: 0.88rem 0;
     font-size: var(--font-sm);
   }
 
@@ -289,7 +289,7 @@
   .candidates {
     display: flex;
     flex-direction: column;
-    max-height: 18rem;
+    max-height: 19.8rem;
     overflow-y: auto;
     padding: var(--space-1);
     background: var(--surface);
@@ -300,7 +300,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    padding: 0.9rem 1rem;
+    padding: 0.99rem 1.1rem;
     border-radius: var(--radius-sm);
     text-align: left;
     transition: background var(--dur-fast) var(--ease);
@@ -323,8 +323,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 1.8rem;
-    height: 1.8rem;
+    width: 1.98rem;
+    height: 1.98rem;
     flex-shrink: 0;
     border-radius: 50%;
     border: 1px solid var(--border-strong);
@@ -339,10 +339,10 @@
 
   .candidate-main {
     flex: 1 1 0;
-    min-width: 12rem;
+    min-width: 13.2rem;
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: 0.22rem;
   }
 
   .candidate-platforms {
@@ -367,7 +367,7 @@
 
   .year {
     flex-shrink: 0;
-    padding: 0.2rem 0.8rem;
+    padding: 0.22rem 0.88rem;
     border-radius: var(--radius-sm);
     background: var(--surface-3);
     color: var(--text);
@@ -377,7 +377,7 @@
   }
 
   .candidate-method {
-    font-size: 1.2rem;
+    font-size: 1.32rem;
     color: var(--text-3);
     flex-shrink: 0;
   }
@@ -388,11 +388,11 @@
     color: var(--accent-text);
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;
-    min-width: 4rem;
+    min-width: 4.4rem;
     text-align: right;
   }
 
   .block .input {
-    margin-bottom: 0.8rem;
+    margin-bottom: 0.88rem;
   }
 </style>

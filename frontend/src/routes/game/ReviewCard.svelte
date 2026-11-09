@@ -86,9 +86,9 @@
     </button>
     <span class="recommend" class:positive={review.recommended} class:negative={!review.recommended}>
       {#if review.recommended}
-        <ThumbsUp size="1.5rem" strokeWidth={1.8} />
+        <ThumbsUp size="1.65rem" strokeWidth={1.8} />
       {:else}
-        <ThumbsDown size="1.5rem" strokeWidth={1.8} />
+        <ThumbsDown size="1.65rem" strokeWidth={1.8} />
       {/if}
       {review.recommended ? msg('reviews.recommends') : msg('reviews.notRecommends')}
     </span>
@@ -132,7 +132,7 @@
     </div>
     {#if showActions}
       <button class="report" type="button" onclick={() => (reportOpen = true)}>
-        <Flag size="1.4rem" strokeWidth={1.8} />
+        <Flag size="1.54rem" strokeWidth={1.8} />
         {msg('reviews.report')}
       </button>
     {/if}
@@ -188,7 +188,7 @@
   .recommend {
     display: inline-flex;
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.66rem;
     flex-shrink: 0;
     font-size: var(--font-xs);
     font-weight: 500;
@@ -217,7 +217,7 @@
   }
 
   .more {
-    margin-top: 0.6rem;
+    margin-top: 0.66rem;
     font-size: var(--font-xs);
     font-weight: 500;
     color: var(--accent-text);
@@ -253,7 +253,7 @@
     display: inline-flex;
     align-items: center;
     height: var(--control-sm);
-    padding: 0 1.2rem;
+    padding: 0 1.32rem;
     border-radius: var(--radius-md);
     border: 1px solid var(--border-strong);
     font-size: var(--font-xs);
@@ -278,7 +278,7 @@
   .report {
     display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.55rem;
     font-size: var(--font-xs);
     color: var(--text-3);
   }

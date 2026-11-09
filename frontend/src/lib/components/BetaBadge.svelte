@@ -53,13 +53,13 @@
 
 <style>
   .badge {
-    padding: 0 0.6rem;
+    padding: 0 0.66rem;
     border-radius: var(--radius-sm);
     background: var(--accent);
     color: var(--accent-on, #fff);
-    font-size: 1rem;
+    font-size: 1.1rem;
     font-weight: 700;
     letter-spacing: 0.05em;
-    line-height: 1.8rem;
+    line-height: 1.98rem;
   }
 </style>

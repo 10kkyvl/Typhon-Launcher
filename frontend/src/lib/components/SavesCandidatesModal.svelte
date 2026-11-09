@@ -19,7 +19,7 @@
   } = $props();
 </script>
 
-<Modal bind:open title={msg('ui.savesDirTitle')} width="52rem">
+<Modal bind:open title={msg('ui.savesDirTitle')} width="57.2rem">
   <p class="hint">{msg('ui.savesMultipleCandidates', { title })}</p>
   <div class="candidates">
     {#each candidates as candidate (candidate)}
@@ -46,11 +46,11 @@
   .candidates {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: 0.44rem;
   }
 
   .candidate {
-    padding: 0.9rem 1.1rem;
+    padding: 0.99rem 1.21rem;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     font-size: var(--font-sm);

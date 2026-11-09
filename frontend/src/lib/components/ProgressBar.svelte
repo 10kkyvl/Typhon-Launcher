@@ -16,7 +16,7 @@
   const pct = $derived(max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0);
 </script>
 
-<div class="track" style:height="{height / 10}rem">
+<div class="track" style:height="{(height * 11) / 100}rem">
   <div class="fill" class:indeterminate style:width="{indeterminate ? 30 : pct}%" style:background={color}></div>
 </div>
 
@@ -24,13 +24,13 @@
   .track {
     width: 100%;
     background: var(--hover-strong);
-    border-radius: 99rem;
+    border-radius: 108.9rem;
     overflow: hidden;
   }
 
   .fill {
     height: 100%;
-    border-radius: 99rem;
+    border-radius: 108.9rem;
     transition: width 600ms linear;
   }
   .fill.indeterminate { animation: sweep 1.4s ease-in-out infinite; }

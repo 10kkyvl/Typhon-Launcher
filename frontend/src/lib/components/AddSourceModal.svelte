@@ -117,7 +117,7 @@
         <span class="line"></span>
       </div>
       <Button onclick={pickFile}>
-        <FileUp size="1.6rem" strokeWidth={1.8} />
+        <FileUp size="1.76rem" strokeWidth={1.8} />
         {msg('modals.addSourcePickFile')}
       </Button>
       {#if path}
@@ -125,7 +125,7 @@
       {/if}
       {#if error}
         <p class="error">
-          <TriangleAlert size="1.5rem" strokeWidth={1.8} />
+          <TriangleAlert size="1.65rem" strokeWidth={1.8} />
           {error}
         </p>
       {/if}
@@ -174,13 +174,13 @@
       </div>
       {#if preview.insecure}
         <p class="warn">
-          <TriangleAlert size="1.5rem" strokeWidth={1.8} />
+          <TriangleAlert size="1.65rem" strokeWidth={1.8} />
           {msg('modals.addSourceInsecure')}
         </p>
       {/if}
       {#if preview.duplicate}
         <p class="warn">
-          <TriangleAlert size="1.5rem" strokeWidth={1.8} />
+          <TriangleAlert size="1.65rem" strokeWidth={1.8} />
           {msg('modals.addSourceDuplicate')}
         </p>
       {/if}
@@ -188,7 +188,7 @@
         <div class="warnings">
           {#each preview.warnings as warning (warning)}
             <p class="warn">
-              <TriangleAlert size="1.5rem" strokeWidth={1.8} />
+              <TriangleAlert size="1.65rem" strokeWidth={1.8} />
               {sourceWarningText(warning)}
             </p>
           {/each}
@@ -225,7 +225,7 @@
   .field {
     display: flex;
     flex-direction: column;
-    gap: 0.7rem;
+    gap: 0.77rem;
   }
 
   .field-label {
@@ -260,7 +260,7 @@
   }
 
   .location {
-    max-width: 28rem;
+    max-width: 30.8rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -269,7 +269,7 @@
   .error {
     display: flex;
     align-items: center;
-    gap: 0.7rem;
+    gap: 0.77rem;
     font-size: var(--font-sm);
     color: var(--danger);
   }
@@ -278,13 +278,13 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 1.2rem;
-    padding: 3.2rem 0;
+    gap: 1.32rem;
+    padding: 3.52rem 0;
   }
 
   .spinner {
-    width: 3.2rem;
-    height: 3.2rem;
+    width: 3.52rem;
+    height: 3.52rem;
     border-radius: 50%;
     border: 2px solid rgba(255, 255, 255, 0.1);
     border-top-color: var(--accent);
@@ -304,8 +304,8 @@
   .preview {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
-    padding: 0.4rem var(--space-4);
+    gap: 0.44rem;
+    padding: 0.44rem var(--space-4);
     background: var(--surface);
     border-radius: var(--radius-md);
   }
@@ -315,7 +315,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-4);
-    padding: 0.9rem 0;
+    padding: 0.99rem 0;
     font-size: var(--font-sm);
   }
 
@@ -333,7 +333,7 @@
   }
 
   .background-note {
-    margin-top: 0.6rem;
+    margin-top: 0.66rem;
     font-size: var(--font-xs);
     color: var(--text-3);
   }
@@ -341,19 +341,19 @@
   .warnings {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
-    margin-top: 0.6rem;
+    gap: 0.66rem;
+    margin-top: 0.66rem;
   }
 
   .warn {
     display: flex;
     align-items: center;
-    gap: 0.7rem;
+    gap: 0.77rem;
     font-size: var(--font-xs);
     color: var(--warning);
     background: var(--warning-subtle);
     border-radius: var(--radius-md);
-    padding: 0.8rem 1rem;
+    padding: 0.88rem 1.1rem;
   }
 
   @keyframes spin {

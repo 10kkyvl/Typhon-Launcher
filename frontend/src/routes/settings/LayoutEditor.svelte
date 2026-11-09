@@ -313,7 +313,7 @@
 
   .game-cols {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(17.6rem, 1fr));
     align-items: start;
   }
 
@@ -335,7 +335,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-1);
-    min-height: 2.4rem;
+    min-height: 2.64rem;
     padding: 0;
     border-radius: var(--radius-md);
   }

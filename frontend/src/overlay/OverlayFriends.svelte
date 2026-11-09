@@ -47,7 +47,7 @@
       >
         {#snippet actions()}
           <IconButton label={msg('social.chatWrite')} size="sm" onclick={() => onchat(peerOf(friend))}>
-            <MessageCircle size="1.6rem" strokeWidth={1.8} />
+            <MessageCircle size="1.76rem" strokeWidth={1.8} />
           </IconButton>
         {/snippet}
       </FriendRow>
@@ -68,7 +68,7 @@
     align-items: center;
     justify-content: center;
     gap: var(--space-2);
-    min-height: 13rem;
+    min-height: 14.3rem;
     padding: var(--space-5);
     color: var(--text-3);
     font-size: var(--font-sm);

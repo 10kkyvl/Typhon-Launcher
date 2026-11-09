@@ -84,7 +84,7 @@
   }
 </script>
 
-<Modal bind:open {title} width="52rem">
+<Modal bind:open {title} width="57.2rem">
   <div class="setup">
     <p class="intro">
       {msg('modals.librarySetupIntro')}
@@ -104,7 +104,7 @@
 
     {#if info}
       <div class="disk">
-        <HardDrive size="1.7rem" strokeWidth={1.8} />
+        <HardDrive size="1.87rem" strokeWidth={1.8} />
         <div class="disk-text">
           <span class="disk-name">{msg('modals.librarySetupDiskName', { volume: info.volume || '—' })}{info.filesystem ? ` · ${info.filesystem}` : ''}</span>
           <span class="disk-meta">
@@ -122,7 +122,7 @@
   {#snippet footer()}
     <Button onclick={() => (open = false)}>{msg('common.cancel')}</Button>
     <Button variant="primary" disabled={!proposed || busy} onclick={confirm}>
-      <FolderPlus size="1.5rem" strokeWidth={1.8} />
+      <FolderPlus size="1.65rem" strokeWidth={1.8} />
       {msg('modals.librarySetupCreate')}
     </Button>
   {/snippet}
@@ -155,7 +155,7 @@
   .pick {
     display: flex;
     flex-direction: column;
-    gap: 0.8rem;
+    gap: 0.88rem;
   }
 
   .field-label {
@@ -185,7 +185,7 @@
   .disk-text {
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: 0.22rem;
   }
 
   .disk-name {

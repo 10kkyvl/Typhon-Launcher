@@ -172,7 +172,7 @@
       >{:else}{t.value}{/if}{/each}
 {/snippet}
 
-<Modal bind:open {title} width="64rem">
+<Modal bind:open {title} width="70.4rem">
   {#if status === 'loading' || status === 'idle'}
     <p class="state-text">{msg('modals.legalLoading')}</p>
   {:else if status === 'error'}

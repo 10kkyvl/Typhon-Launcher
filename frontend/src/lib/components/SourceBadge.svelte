@@ -7,7 +7,7 @@
 
 <span class="badge" data-source={source} title={sourceTitle(source)}>
   {#if source === 'disk'}
-    <HardDrive size="1.2rem" strokeWidth={2} />
+    <HardDrive size="1.32rem" strokeWidth={2} />
   {/if}
   {sourceLabel(source)}
 </span>
@@ -16,13 +16,13 @@
   .badge {
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.44rem;
     max-width: 100%;
-    padding: 0.25rem 0.55rem;
+    padding: 0.275rem 0.605rem;
     border-radius: var(--radius-sm);
     background: rgba(5, 8, 12, 0.72);
     color: #fff;
-    font-size: 1.1rem;
+    font-size: 1.21rem;
     line-height: 1.2;
     white-space: nowrap;
   }

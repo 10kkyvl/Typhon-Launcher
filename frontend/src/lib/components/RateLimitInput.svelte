@@ -7,7 +7,7 @@
   let {
     value,
     presets,
-    width = '20rem',
+    width = '22rem',
     allowUnlimited = true,
     onchange,
   }: {
@@ -128,7 +128,7 @@
   .limit {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    gap: 0.66rem;
   }
 
   .custom {
@@ -136,13 +136,13 @@
   }
 
   .custom .input {
-    padding-right: 5.4rem;
+    padding-right: 5.94rem;
   }
 
   .unit {
     position: absolute;
     top: 50%;
-    right: 1.2rem;
+    right: 1.32rem;
     transform: translateY(-50%);
     font-size: var(--font-sm);
     color: var(--text-3);

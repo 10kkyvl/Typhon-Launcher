@@ -121,13 +121,13 @@
 <div class="auth" style="--wails-draggable: drag">
   <div class="window-controls" style="--wails-draggable: no-drag">
     <button class="wc" aria-label={msg('transfers.authMinimizeLabel')} onclick={() => win('minimise')}>
-      <Minus size="1.6rem" strokeWidth={1.6} />
+      <Minus size="1.76rem" strokeWidth={1.6} />
     </button>
     <button class="wc" aria-label={msg('transfers.authMaximizeLabel')} onclick={() => win('maximise')}>
-      <Square size="1.2rem" strokeWidth={1.6} />
+      <Square size="1.32rem" strokeWidth={1.6} />
     </button>
     <button class="wc close" aria-label={msg('common.close')} onclick={() => win('close')}>
-      <X size="1.6rem" strokeWidth={1.6} />
+      <X size="1.76rem" strokeWidth={1.6} />
     </button>
   </div>
 
@@ -231,7 +231,7 @@
 
         {#if errors.general}
           <p class="error general" role="alert">
-            <CircleAlert size="1.6rem" strokeWidth={1.8} />
+            <CircleAlert size="1.76rem" strokeWidth={1.8} />
             <span>{errors.general}</span>
           </p>
         {/if}
@@ -276,14 +276,14 @@
     padding: var(--space-8) 0 var(--space-5);
     overflow-y: auto;
     background:
-      radial-gradient(120rem 60rem at 50% -20%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 60%),
+      radial-gradient(132rem 66rem at 50% -20%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 60%),
       var(--bg);
   }
 
   .window-controls {
     position: absolute;
-    top: 0.8rem;
-    right: 0.8rem;
+    top: 0.88rem;
+    right: 0.88rem;
     display: flex;
   }
 
@@ -291,8 +291,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 4.2rem;
-    height: 3.2rem;
+    width: 4.62rem;
+    height: 3.52rem;
     border-radius: var(--radius-sm);
     color: var(--text-3);
     transition:
@@ -311,7 +311,7 @@
   }
 
   .panel {
-    width: 40rem;
+    width: 44rem;
     margin: auto;
     padding: var(--space-6) var(--space-8);
     background: var(--surface);
@@ -329,17 +329,17 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 1rem;
+    gap: 1.1rem;
     margin-bottom: var(--space-4);
   }
 
   .brand-mark {
-    width: 3.6rem;
-    height: 3.6rem;
+    width: 3.96rem;
+    height: 3.96rem;
   }
 
   .brand-name {
-    font-size: 2.1rem;
+    font-size: 2.31rem;
     font-weight: 600;
     letter-spacing: var(--tracking-title);
   }
@@ -353,7 +353,7 @@
   }
 
   .subtitle {
-    margin-top: 0.8rem;
+    margin-top: 0.88rem;
     font-size: var(--font-sm);
     color: var(--text-2);
     text-align: center;
@@ -383,7 +383,7 @@
   .field {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    gap: 0.66rem;
   }
 
   .label {
@@ -393,7 +393,7 @@
 
   .input {
     height: var(--control-md);
-    padding: 0 1.2rem;
+    padding: 0 1.32rem;
     background: var(--surface-2);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-md);
@@ -427,8 +427,8 @@
   .error.general {
     display: flex;
     align-items: flex-start;
-    gap: 0.8rem;
-    padding: 0.9rem 1.2rem;
+    gap: 0.88rem;
+    padding: 0.99rem 1.32rem;
     border-radius: var(--radius-md);
     background: var(--danger-subtle);
     font-size: var(--font-sm);
@@ -438,7 +438,7 @@
 
   .error.general :global(svg) {
     flex-shrink: 0;
-    margin-top: 0.1rem;
+    margin-top: 0.11rem;
   }
 
   .submit {
@@ -457,7 +457,7 @@
 
   .submit:hover:not(:disabled) {
     background: var(--accent-hover);
-    box-shadow: 0 0.8rem 2rem -0.8rem var(--accent-ring);
+    box-shadow: 0 0.88rem 2.2rem -0.8rem var(--accent-ring);
     transform: translateY(-1px);
   }
 
@@ -478,7 +478,7 @@
   .guest-divider {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 1.1rem;
     font-size: var(--font-xs);
     color: var(--text-3);
   }
@@ -517,7 +517,7 @@
   }
 
   .guest-hint {
-    margin-top: 0.8rem;
+    margin-top: 0.88rem;
     font-size: var(--font-xs);
     line-height: 1.45;
     color: var(--text-3);
@@ -535,7 +535,7 @@
     color: var(--accent-text);
     font-size: var(--font-sm);
     font-weight: 500;
-    padding: 0.2rem 0.3rem;
+    padding: 0.22rem 0.33rem;
     border-radius: var(--radius-xs);
   }
 

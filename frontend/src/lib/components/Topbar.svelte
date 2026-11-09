@@ -167,10 +167,10 @@
 >
   <div class="no-drag nav-buttons" data-part="topbar-history">
     <IconButton label={msg('common.back')} disabled={!$canGoBack} onclick={goBack}>
-      <ChevronLeft size="1.8rem" strokeWidth={1.8} />
+      <ChevronLeft size="1.98rem" strokeWidth={1.8} />
     </IconButton>
     <IconButton label={msg('ui.forward')} disabled={!$canGoForward} onclick={goForward}>
-      <ChevronRight size="1.8rem" strokeWidth={1.8} />
+      <ChevronRight size="1.98rem" strokeWidth={1.8} />
     </IconButton>
   </div>
 
@@ -216,9 +216,9 @@
                 onclick={() => toggleWatch(hit.id)}
               >
                 {#if watching}
-                  <BellRing size="1.4rem" strokeWidth={1.8} />
+                  <BellRing size="1.54rem" strokeWidth={1.8} />
                 {:else}
-                  <Bell size="1.4rem" strokeWidth={1.8} />
+                  <Bell size="1.54rem" strokeWidth={1.8} />
                 {/if}
               </IconButton>
             {/if}
@@ -227,7 +227,7 @@
           {#if results.moreGames > 0}
             <button class="results-more results-link" onclick={openCatalog}>
               {msg('search.moreInCatalog', { count: results.moreGames })}
-              <ArrowRight size="1.4rem" strokeWidth={1.8} />
+              <ArrowRight size="1.54rem" strokeWidth={1.8} />
             </button>
           {/if}
         {/if}
@@ -268,7 +268,7 @@
         {#if id === 'bigpicture'}
           <div class="icon-slot" data-part="topbar-action" data-id="bigpicture">
             <IconButton label={msg('bp.enter')} disabled={enteringBigPicture} onclick={openBigPicture}>
-              <Gamepad2 size="1.9rem" strokeWidth={1.8} />
+              <Gamepad2 size="2.09rem" strokeWidth={1.8} />
             </IconButton>
           </div>
         {:else if id === 'notifications'}
@@ -279,7 +279,7 @@
             use:clickOutside={() => (notificationsOpen = false)}
           >
             <IconButton label={msg('ui.notifications')} active={notificationsOpen} onclick={() => (notificationsOpen = !notificationsOpen)}>
-              <Bell size="1.8rem" strokeWidth={1.8} />
+              <Bell size="1.98rem" strokeWidth={1.8} />
             </IconButton>
             {#if $notifications.length > 0}
               <span class="badge">{$notifications.length}</span>
@@ -315,7 +315,7 @@
         {:else if id === 'friends'}
           <div class="icon-slot" data-part="topbar-action" data-id="friends">
             <IconButton label={msg('ui.friends')} onclick={() => navigate('friends')}>
-              <Users size="1.8rem" strokeWidth={1.8} />
+              <Users size="1.98rem" strokeWidth={1.8} />
             </IconButton>
             {#if $incomingCount > 0}
               <span class="badge">{$incomingCount}</span>
@@ -327,13 +327,13 @@
 
     <div class="window-controls" data-part="window-controls">
       <button class="wc" aria-label={msg('ui.minimize')} onclick={() => win('minimise')}>
-        <Minus size="1.6rem" strokeWidth={1.6} />
+        <Minus size="1.76rem" strokeWidth={1.6} />
       </button>
       <button class="wc" aria-label={msg('ui.maximize')} onclick={() => win('maximise')}>
-        <Square size="1.2rem" strokeWidth={1.6} />
+        <Square size="1.32rem" strokeWidth={1.6} />
       </button>
       <button class="wc close" aria-label={msg('common.close')} onclick={() => win('close')}>
-        <X size="1.6rem" strokeWidth={1.6} />
+        <X size="1.76rem" strokeWidth={1.6} />
       </button>
     </div>
   </div>
@@ -362,12 +362,12 @@
   .search-wrap {
     position: relative;
     flex: 1;
-    max-width: 44rem;
+    max-width: 48.4rem;
   }
 
   .topbar.centered {
     display: grid;
-    grid-template-columns: 1fr minmax(0, 44rem) 1fr;
+    grid-template-columns: 1fr minmax(0, 48.4rem) 1fr;
   }
 
   .topbar.centered .nav-buttons {
@@ -382,18 +382,18 @@
   .actions {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.44rem;
   }
 
   .results {
     position: absolute;
     z-index: 50;
-    top: calc(100% + 0.6rem);
+    top: calc(100% + 0.66rem);
     left: 0;
     right: 0;
-    max-height: 46rem;
+    max-height: 50.6rem;
     overflow-y: auto;
-    padding: 0.5rem;
+    padding: 0.55rem;
     background: var(--surface-3);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-md);
@@ -403,8 +403,8 @@
 
   .results-head,
   .notifications-head {
-    padding: 0.8rem 1rem 0.5rem;
-    font-size: 1.1rem;
+    padding: 0.88rem 1.1rem 0.55rem;
+    font-size: 1.21rem;
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -415,12 +415,12 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.8rem;
+    gap: 0.88rem;
   }
 
   .notifications-mark-read {
     flex-shrink: 0;
-    padding: 0.3rem 0.8rem;
+    padding: 0.33rem 0.88rem;
     border-radius: var(--radius-xs);
     font-size: var(--font-xs);
     color: var(--text-3);
@@ -435,7 +435,7 @@
   .result-row {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.44rem;
   }
 
   .result-row > .result {
@@ -446,9 +446,9 @@
   .result {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 1.1rem;
     width: 100%;
-    padding: 0.6rem 1rem;
+    padding: 0.66rem 1.1rem;
     border-radius: var(--radius-sm);
     text-align: left;
     transition: background var(--dur-fast) var(--ease);
@@ -459,14 +459,14 @@
     flex-direction: column;
     gap: 1px;
     width: 100%;
-    padding: 0.8rem 1rem;
+    padding: 0.88rem 1.1rem;
     border-radius: var(--radius-sm);
     text-align: left;
     transition: background var(--dur-fast) var(--ease);
   }
 
   .result-art {
-    width: 3rem;
+    width: 3.3rem;
     flex-shrink: 0;
   }
 
@@ -481,16 +481,16 @@
   .result-line {
     display: flex;
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.66rem;
     min-width: 0;
   }
 
   .result-badge {
     flex-shrink: 0;
-    padding: 1px 0.6rem;
+    padding: 1px 0.66rem;
     border-radius: var(--radius-xs);
     background: var(--hover-strong);
-    font-size: 1.1rem;
+    font-size: 1.21rem;
     color: var(--text-3);
   }
 
@@ -518,7 +518,7 @@
   .notifications-all {
     display: block;
     width: 100%;
-    padding: 1rem 1.4rem;
+    padding: 1.1rem 1.54rem;
     border-top: 1px solid var(--border);
     text-align: center;
     font-size: var(--font-sm);
@@ -532,7 +532,7 @@
   }
 
   .notifications-empty {
-    padding: 0.8rem 1rem 1.2rem;
+    padding: 0.88rem 1.1rem 1.32rem;
     font-size: var(--font-xs);
     color: var(--text-3);
   }
@@ -542,22 +542,22 @@
     top: 0;
     right: 0;
     pointer-events: none;
-    min-width: 1.6rem;
-    height: 1.6rem;
-    padding: 0 0.4rem;
-    border-radius: 0.8rem;
+    min-width: 1.76rem;
+    height: 1.76rem;
+    padding: 0 0.44rem;
+    border-radius: 0.88rem;
     background: var(--accent);
     color: var(--accent-on, #fff);
-    font-size: 1rem;
+    font-size: 1.1rem;
     font-weight: 600;
-    line-height: 1.6rem;
+    line-height: 1.76rem;
     text-align: center;
   }
 
   .results-more,
   .results-empty,
   .results-error {
-    padding: 0.8rem 1rem;
+    padding: 0.88rem 1.1rem;
     font-size: var(--font-xs);
     color: var(--text-3);
   }
@@ -569,7 +569,7 @@
   .results-link {
     display: flex;
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.66rem;
     width: 100%;
     border-radius: var(--radius-sm);
     color: var(--accent);
@@ -584,7 +584,7 @@
   .right {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.44rem;
     margin-left: auto;
   }
 
@@ -595,10 +595,10 @@
   .notifications {
     position: absolute;
     z-index: 50;
-    top: calc(100% + 0.6rem);
+    top: calc(100% + 0.66rem);
     right: 0;
-    width: 32rem;
-    padding: 0.5rem;
+    width: 35.2rem;
+    padding: 0.55rem;
     background: var(--surface-3);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-md);
@@ -608,15 +608,15 @@
 
   .window-controls {
     display: flex;
-    margin-left: 1.2rem;
+    margin-left: 1.32rem;
   }
 
   .wc {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 4.2rem;
-    height: 3.2rem;
+    width: 4.62rem;
+    height: 3.52rem;
     border-radius: var(--radius-sm);
     color: var(--text-3);
     transition:

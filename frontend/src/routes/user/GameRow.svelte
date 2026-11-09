@@ -24,7 +24,7 @@
     align-items: center;
     gap: var(--space-4);
     width: 100%;
-    padding: 0.8rem;
+    padding: 0.88rem;
     border: 0;
     border-radius: var(--radius-md);
     background: none;
@@ -41,8 +41,8 @@
 
   .thumb {
     display: block;
-    width: 3.2rem;
-    height: 4.2rem;
+    width: 3.52rem;
+    height: 4.62rem;
     flex-shrink: 0;
     border-radius: var(--radius-xs);
     overflow: hidden;

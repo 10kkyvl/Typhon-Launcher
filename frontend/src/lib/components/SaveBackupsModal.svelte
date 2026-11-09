@@ -329,7 +329,7 @@
 <Modal
   open={!!target}
   title={target ? msg('saves.title', { title: target.title }) : msg('games.actionSavesBackups')}
-  width="64rem"
+  width="70.4rem"
   onclose={closeSaveBackups}
 >
   {#if target}
@@ -621,7 +621,7 @@
   .snapshot-main {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: 0.44rem;
     min-width: 0;
   }
 
@@ -651,7 +651,7 @@
   .empty {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: 0.44rem;
     padding: var(--space-5) 0;
     text-align: center;
   }

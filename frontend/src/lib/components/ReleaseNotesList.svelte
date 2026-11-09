@@ -87,7 +87,7 @@
   }
 
   .current {
-    padding: 0.1rem var(--space-2);
+    padding: 0.11rem var(--space-2);
     border-radius: var(--radius-xs);
     background: var(--accent-subtle);
     color: var(--accent-text);
@@ -115,7 +115,7 @@
 
   .kind {
     align-self: flex-start;
-    padding: 0.1rem var(--space-2);
+    padding: 0.11rem var(--space-2);
     border-radius: var(--radius-xs);
     font-size: var(--font-xs);
     font-weight: 500;

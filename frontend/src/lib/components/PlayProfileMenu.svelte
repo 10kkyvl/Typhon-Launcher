@@ -24,7 +24,7 @@
   <DropdownMenu {items} align="left" onselect={onpick}>
     {#snippet trigger({ toggle })}
       <button class="chevron" aria-label={msg('games.playProfileChoose')} {disabled} onclick={toggle}>
-        <ChevronDown size="1.8rem" strokeWidth={2} />
+        <ChevronDown size="1.98rem" strokeWidth={2} />
       </button>
     {/snippet}
   </DropdownMenu>

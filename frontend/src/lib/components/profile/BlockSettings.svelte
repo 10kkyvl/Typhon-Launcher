@@ -87,7 +87,7 @@
 <section class="settings" aria-label={msg('profile.blockSettings', { name })}>
   <div class="head">
     <h2>{name}</h2>
-    <IconButton label={msg('common.close')} onclick={onclose}><X size="1.8rem" /></IconButton>
+    <IconButton label={msg('common.close')} onclick={onclose}><X size="1.98rem" /></IconButton>
   </div>
   <div class="scroll">
     <fieldset {disabled}>
@@ -144,13 +144,13 @@
                   <li>
                     <span class="game">{titleOf(id)}</span>
                     <IconButton size="sm" label={msg('social.moveUp', { title: titleOf(id) })} disabled={index === 0 || disabled} onclick={() => shift(index, -1)}>
-                      <ArrowUp size="1.4rem" />
+                      <ArrowUp size="1.54rem" />
                     </IconButton>
                     <IconButton size="sm" label={msg('social.moveDown', { title: titleOf(id) })} disabled={index === ids.length - 1 || disabled} onclick={() => shift(index, 1)}>
-                      <ArrowDown size="1.4rem" />
+                      <ArrowDown size="1.54rem" />
                     </IconButton>
                     <IconButton size="sm" label={msg('profile.collectionRemoveGame', { title: titleOf(id) })} {disabled} onclick={() => onconfig({ igdbIds: ids.filter((item) => item !== id) })}>
-                      <X size="1.4rem" />
+                      <X size="1.54rem" />
                     </IconButton>
                   </li>
                 {/each}
@@ -207,7 +207,7 @@
   </div>
   <div class="foot">
     <Button variant="ghost" {disabled} onclick={onremove}>
-      <Trash2 size="1.4rem" />{msg('profile.removeBlock', { name })}
+      <Trash2 size="1.54rem" />{msg('profile.removeBlock', { name })}
     </Button>
   </div>
 </section>
@@ -216,8 +216,8 @@
   .settings {
     display: flex;
     flex-direction: column;
-    max-height: calc(100dvh - 12rem);
-    padding: 1.8rem;
+    max-height: calc(100dvh - 13.2rem);
+    padding: 1.98rem;
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
@@ -241,7 +241,7 @@
     overflow-y: auto;
     overscroll-behavior-y: contain;
     scrollbar-gutter: stable;
-    padding: 0.3rem;
+    padding: 0.33rem;
     margin: var(--space-3) -0.3rem 0;
   }
 
@@ -262,7 +262,7 @@
   .field {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    gap: 0.66rem;
     min-width: 0;
   }
 
@@ -270,7 +270,7 @@
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: 0.8rem;
+    gap: 0.88rem;
     font-size: var(--font-xs);
     color: var(--text-2);
   }
@@ -283,7 +283,7 @@
   .input {
     width: 100%;
     height: var(--control-md);
-    padding: 0 1.2rem;
+    padding: 0 1.32rem;
     background: var(--surface);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-md);
@@ -303,7 +303,7 @@
 
   .area {
     height: auto;
-    padding: 0.9rem 1.2rem;
+    padding: 0.99rem 1.32rem;
     resize: vertical;
     line-height: 1.5;
   }
@@ -321,13 +321,13 @@
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: 0.22rem;
   }
 
   .games li {
     display: flex;
     align-items: center;
-    gap: 0.2rem;
+    gap: 0.22rem;
     font-size: var(--font-sm);
   }
 

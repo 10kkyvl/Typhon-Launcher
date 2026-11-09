@@ -376,7 +376,7 @@
       {#snippet trigger({ open, toggle })}
         <Chip selected={open} onclick={toggle}>
           {msg('games.installedSortByLabel', { sort: sortLabels[sort] })}
-          <ChevronDown size="1.4rem" strokeWidth={1.8} />
+          <ChevronDown size="1.54rem" strokeWidth={1.8} />
         </Chip>
       {/snippet}
     </DropdownMenu>
@@ -389,22 +389,22 @@
     >
       {#snippet item(option)}
         {#if option.id === 'grid'}
-          <LayoutGrid size="1.6rem" strokeWidth={1.8} />
+          <LayoutGrid size="1.76rem" strokeWidth={1.8} />
         {:else}
-          <List size="1.6rem" strokeWidth={1.8} />
+          <List size="1.76rem" strokeWidth={1.8} />
         {/if}
       {/snippet}
     </SegmentedControl>
     <Button onclick={findGames} disabled={$scanning}>
-      <RefreshCw size="1.5rem" strokeWidth={2} class={$scanning ? 'spin' : ''} />
+      <RefreshCw size="1.65rem" strokeWidth={2} class={$scanning ? 'spin' : ''} />
       {$scanning ? scanLabel : msg('games.installedFindGames')}
     </Button>
     <Button onclick={openImageDialog}>
-      <Plus size="1.5rem" strokeWidth={2} />
+      <Plus size="1.65rem" strokeWidth={2} />
       {msg('emul.addButton')}
     </Button>
     <Button variant="primary" onclick={openAddDialog}>
-      <Plus size="1.5rem" strokeWidth={2} />
+      <Plus size="1.65rem" strokeWidth={2} />
       {msg('games.installedAddGameButton')}
     </Button>
   {/snippet}
@@ -415,14 +415,14 @@
     <Card>
       <div class="storage-empty">
         <div class="disk">
-          <HardDrive size="1.8rem" strokeWidth={1.8} />
+          <HardDrive size="1.98rem" strokeWidth={1.8} />
           <div class="disk-text">
             <span class="disk-name">{msg('games.installedLibraryNotSetTitle')}</span>
             <span class="disk-meta">{msg('games.installedLibraryNotSetHint')}</span>
           </div>
         </div>
         <Button size="sm" variant="primary" onclick={() => (librarySetupOpen = true)}>
-          <FolderOpen size="1.5rem" strokeWidth={1.8} />
+          <FolderOpen size="1.65rem" strokeWidth={1.8} />
           {msg('games.installedChooseFolderButton')}
         </Button>
       </div>
@@ -434,7 +434,7 @@
       <div class="storage">
         <div class="storage-head">
           <span class="disk-icon">
-            <HardDrive size="1.8rem" strokeWidth={1.8} />
+            <HardDrive size="1.98rem" strokeWidth={1.8} />
           </span>
           <div class="disk-text">
             <span class="disk-name">{msg('games.installedStorageTitle')}</span>
@@ -489,11 +489,11 @@
     <Card>
       <div class="storage-empty" role="alert">
         <div class="disk">
-          <HardDrive size="1.8rem" strokeWidth={1.8} />
+          <HardDrive size="1.98rem" strokeWidth={1.8} />
           <span class="storage-error">{msg('games.installedStorageLoadFailed')}</span>
         </div>
         <Button size="sm" onclick={refreshStorage}>
-          <RefreshCw size="1.5rem" strokeWidth={1.8} />
+          <RefreshCw size="1.65rem" strokeWidth={1.8} />
           {msg('common.retry')}
         </Button>
       </div>
@@ -507,19 +507,19 @@
     description={msg('games.installedNoGamesDescription')}
   >
     {#snippet icon()}
-      <Gamepad2 size="2rem" strokeWidth={1.8} />
+      <Gamepad2 size="2.2rem" strokeWidth={1.8} />
     {/snippet}
     {#snippet actions()}
       <Button variant="primary" onclick={findGames} disabled={$scanning}>
-        <RefreshCw size="1.5rem" strokeWidth={2} class={$scanning ? 'spin' : ''} />
+        <RefreshCw size="1.65rem" strokeWidth={2} class={$scanning ? 'spin' : ''} />
         {$scanning ? scanLabel : msg('games.installedFindGames')}
       </Button>
       <Button onclick={openAddDialog}>
-        <Plus size="1.5rem" strokeWidth={2} />
+        <Plus size="1.65rem" strokeWidth={2} />
         {msg('games.installedAddGameButton')}
       </Button>
       <Button onclick={openImageDialog}>
-        <Plus size="1.5rem" strokeWidth={2} />
+        <Plus size="1.65rem" strokeWidth={2} />
         {msg('emul.addButton')}
       </Button>
     {/snippet}
@@ -527,7 +527,7 @@
 {:else if filteredGames.length === 0}
   <EmptyState title={msg('games.nothingFoundTitle')} description={msg('games.installedNothingFoundDescription')}>
     {#snippet icon()}
-      <Search size="2rem" strokeWidth={1.8} />
+      <Search size="2.2rem" strokeWidth={1.8} />
     {/snippet}
   </EmptyState>
 {:else if $installedView === 'list'}
@@ -553,9 +553,9 @@
                 {#if updateText}
                   <span class="row-update" class:release={update?.kind !== 'update'}>
                     {#if update?.kind === 'update'}
-                      <ArrowUp size="1.2rem" strokeWidth={2.2} />
+                      <ArrowUp size="1.32rem" strokeWidth={2.2} />
                     {:else}
-                      <Sparkles size="1.2rem" strokeWidth={2} />
+                      <Sparkles size="1.32rem" strokeWidth={2} />
                     {/if}
                     {updateText}
                   </span>
@@ -576,33 +576,33 @@
         <div class="actions">
           {#if running}
             <Button size="sm" onclick={() => stop(game)}>
-              <Square size="1.2rem" strokeWidth={2} fill="currentColor" />
+              <Square size="1.32rem" strokeWidth={2} fill="currentColor" />
               {msg('games.installedStopButton')}
             </Button>
           {:else if $missingImages.has(game.id)}
             <Button size="sm" onclick={() => chooseImage(game)}>
-              <FolderOpen size="1.3rem" strokeWidth={1.8} />
+              <FolderOpen size="1.43rem" strokeWidth={1.8} />
               {msg('emul.pickImage')}
             </Button>
           {:else if !isLaunchable(game)}
             <Button size="sm" onclick={() => chooseExecutable(game)}>
-              <FolderOpen size="1.3rem" strokeWidth={1.8} />
+              <FolderOpen size="1.43rem" strokeWidth={1.8} />
               {msg('games.installedSetExeButton')}
             </Button>
           {:else}
             <Button variant="primary" size="sm" onclick={() => play(game)}>
-              <Gamepad2 size="1.3rem" strokeWidth={2} />
+              <Gamepad2 size="1.43rem" strokeWidth={2} />
               {msg('games.play')}
             </Button>
           {/if}
           <Button size="sm" onclick={() => openInstallDir(game)}>
-            <FolderOpen size="1.3rem" strokeWidth={1.8} />
+            <FolderOpen size="1.43rem" strokeWidth={1.8} />
             {msg('games.openFolder')}
           </Button>
           <DropdownMenu items={isExternal(game) ? externalMenuItems : isInstalledImage(game) ? imageMenuItems : isEmulated(game) ? emulatedMenuItems : menuItems} onselect={(id) => onMenu(game, id)}>
             {#snippet trigger({ toggle })}
               <IconButton label={msg('games.installedMenuLabel')} size="sm" onclick={toggle}>
-                <EllipsisVertical size="1.6rem" strokeWidth={1.8} />
+                <EllipsisVertical size="1.76rem" strokeWidth={1.8} />
               </IconButton>
             {/snippet}
           </DropdownMenu>
@@ -627,9 +627,9 @@
             {#if updateText}
               <span class="card-badge" class:release={update?.kind !== 'update'}>
                 {#if update?.kind === 'update'}
-                  <ArrowUp size="1.3rem" strokeWidth={2.4} />
+                  <ArrowUp size="1.43rem" strokeWidth={2.4} />
                 {:else}
-                  <Sparkles size="1.3rem" strokeWidth={2} />
+                  <Sparkles size="1.43rem" strokeWidth={2} />
                 {/if}
                 <span class="card-badge-text">{updateText}</span>
               </span>
@@ -637,11 +637,11 @@
           </button>
           {#if running}
             <button class="card-play running" aria-label={msg('games.installedStopButton')} onclick={() => stop(game)}>
-              <Square size="1.2rem" strokeWidth={2} fill="currentColor" />
+              <Square size="1.32rem" strokeWidth={2} fill="currentColor" />
             </button>
           {:else if isLaunchable(game) && !$missingImages.has(game.id)}
             <button class="card-play" aria-label={msg('games.play')} onclick={() => play(game)}>
-              <Play size="1.4rem" strokeWidth={2} fill="currentColor" />
+              <Play size="1.54rem" strokeWidth={2} fill="currentColor" />
             </button>
           {/if}
         </div>
@@ -713,7 +713,7 @@
   }
 
   .search-wrap {
-    width: 26rem;
+    width: 28.6rem;
   }
 
   .storage-block {
@@ -762,8 +762,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 4.4rem;
-    height: 4.4rem;
+    width: 4.84rem;
+    height: 4.84rem;
     flex-shrink: 0;
     border-radius: var(--radius-md);
     background: var(--surface-3);
@@ -773,7 +773,7 @@
   .disk-text {
     display: flex;
     flex-direction: column;
-    gap: 0.3rem;
+    gap: 0.33rem;
     min-width: 0;
   }
 
@@ -796,16 +796,16 @@
 
   .segments {
     display: flex;
-    gap: 0.2rem;
+    gap: 0.22rem;
     flex: 1;
     min-width: 0;
-    height: 0.8rem;
-    border-radius: 99rem;
+    height: 0.88rem;
+    border-radius: 108.9rem;
     overflow: hidden;
   }
 
   .segment {
-    min-width: 0.4rem;
+    min-width: 0.44rem;
     transform-origin: left center;
     animation: segment-grow var(--dur-slow) var(--ease) backwards;
   }
@@ -861,13 +861,13 @@
   .storage-legend li {
     display: flex;
     align-items: center;
-    gap: 0.9rem;
+    gap: 0.99rem;
     font-size: var(--font-sm);
   }
 
   .dot {
-    width: 1rem;
-    height: 1rem;
+    width: 1.1rem;
+    height: 1.1rem;
     border-radius: 50%;
     flex-shrink: 0;
   }
@@ -903,7 +903,7 @@
 
   .row {
     display: grid;
-    grid-template-columns: minmax(30rem, 1fr) 17rem auto;
+    grid-template-columns: minmax(33rem, 1fr) 18.7rem auto;
     align-items: center;
     gap: var(--space-5);
     padding: var(--space-4) var(--space-5);
@@ -921,8 +921,8 @@
   }
 
   .thumb {
-    width: 10.4rem;
-    height: 5.8rem;
+    width: 11.44rem;
+    height: 6.38rem;
     flex-shrink: 0;
     border-radius: var(--radius-sm);
     overflow: hidden;
@@ -931,7 +931,7 @@
   .titles {
     display: flex;
     flex-direction: column;
-    gap: 0.3rem;
+    gap: 0.33rem;
     min-width: 0;
   }
 
@@ -968,12 +968,12 @@
   .status {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.55rem;
     min-width: 0;
   }
 
   .status-label {
-    font-size: 1.2rem;
+    font-size: 1.32rem;
     color: var(--text-3);
     white-space: nowrap;
   }
@@ -981,20 +981,20 @@
   .actions {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.44rem;
     justify-self: end;
   }
 
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(17.6rem, 1fr));
     gap: var(--space-6) var(--space-5);
   }
 
   .card {
     display: flex;
     flex-direction: column;
-    gap: 0.9rem;
+    gap: 0.99rem;
     min-width: 0;
   }
 
@@ -1010,7 +1010,7 @@
     left: 0;
     right: 0;
     top: 100%;
-    height: 0.4rem;
+    height: 0.44rem;
   }
 
   .card-media:hover,
@@ -1041,18 +1041,18 @@
 
   .card-badge {
     position: absolute;
-    top: 0.6rem;
-    left: 0.6rem;
+    top: 0.66rem;
+    left: 0.66rem;
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    max-width: calc(100% - 1.2rem);
-    height: 2.2rem;
-    padding: 0 0.7rem 0 0.5rem;
+    gap: 0.44rem;
+    max-width: calc(100% - 1.32rem);
+    height: 2.42rem;
+    padding: 0 0.77rem 0 0.55rem;
     border-radius: var(--radius-sm);
     background: rgba(5, 8, 12, 0.78);
     color: white;
-    font-size: 1.1rem;
+    font-size: 1.21rem;
     font-weight: 500;
     line-height: 1.2;
     transform-origin: left top;
@@ -1084,18 +1084,18 @@
 
   .card-play {
     position: absolute;
-    left: 1rem;
-    bottom: 1rem;
+    left: 1.1rem;
+    bottom: 1.1rem;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 3.2rem;
-    height: 3.2rem;
+    width: 3.52rem;
+    height: 3.52rem;
     border-radius: var(--radius-md);
     background: var(--accent);
     color: var(--accent-on, #fff);
     opacity: 0;
-    transform: translateY(0.4rem) scale(0.9);
+    transform: translateY(0.44rem) scale(0.9);
     transition:
       opacity var(--dur) var(--ease),
       transform var(--dur-panel) var(--ease-spring),
@@ -1120,7 +1120,7 @@
   .card-info {
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: 0.22rem;
     min-width: 0;
   }
 
@@ -1148,8 +1148,8 @@
   .row-update {
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
-    margin-left: 0.8rem;
+    gap: 0.44rem;
+    margin-left: 0.88rem;
     color: var(--warning);
     vertical-align: bottom;
   }
@@ -1173,7 +1173,7 @@
   .field {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    gap: 0.66rem;
   }
 
   .field-label {
@@ -1184,7 +1184,7 @@
 
   .field-row {
     display: flex;
-    gap: 0.8rem;
+    gap: 0.88rem;
   }
 
   .form-hint {
@@ -1194,13 +1194,13 @@
 
   @media (min-width: 2200px) {
     .grid {
-      grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(19.8rem, 1fr));
     }
   }
 
   @media (max-width: 1400px) {
     .row {
-      grid-template-columns: minmax(22rem, 1fr) auto;
+      grid-template-columns: minmax(24.2rem, 1fr) auto;
     }
 
     .status {
@@ -1208,7 +1208,7 @@
     }
 
     .grid {
-      grid-template-columns: repeat(auto-fill, minmax(14.5rem, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(15.95rem, 1fr));
     }
   }
 </style>

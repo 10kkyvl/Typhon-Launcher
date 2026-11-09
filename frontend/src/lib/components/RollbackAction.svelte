@@ -21,13 +21,13 @@
 {#if shown}
   {#if info.available}
     <Button variant={compact ? 'ghost' : 'secondary'} size="sm" disabled={$rollbackBusy} onclick={() => (confirmOpen = true)}>
-      <Undo2 size="1.5rem" strokeWidth={1.8} />
+      <Undo2 size="1.65rem" strokeWidth={1.8} />
       {$rollbackBusy ? msg('settings.aboutRollbackBusy') : label}
     </Button>
   {:else}
     <span title={rollbackReason(info)}>
       <Button variant={compact ? 'ghost' : 'secondary'} size="sm" disabled>
-        <Undo2 size="1.5rem" strokeWidth={1.8} />
+        <Undo2 size="1.65rem" strokeWidth={1.8} />
         {msg('ui.rollbackButtonNone')}
       </Button>
     </span>

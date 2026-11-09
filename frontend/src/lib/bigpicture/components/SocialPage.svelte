@@ -461,7 +461,7 @@ import { friendsPage as sharedFriendsPage, needsSocialConsent } from '../../stor
 
   {#if viewingProfile}
     {#if profileLoading}
-      <div class="bp-empty"><Users size="2.6rem" /><p>{$t('bp.social.profileLoading')}</p></div>
+      <div class="bp-empty"><Users size="2.86rem" /><p>{$t('bp.social.profileLoading')}</p></div>
     {:else if profileError}
       <div class="bp-error" role="alert"><p>{profileError}</p><button class="bp-button" data-bp-focus="social-profile-retry" disabled={!profileRetry} onclick={() => profileRetry && void showProfile(profileRetry)}>{$t('bp.social.retry')}</button></div>
     {:else if viewedProfile}
@@ -499,9 +499,9 @@ import { friendsPage as sharedFriendsPage, needsSocialConsent } from '../../stor
 
       {#if actionMessage}<p class:danger={actionFailed} class="inline-message" role={actionFailed ? 'alert' : 'status'}>{actionMessage}</p>{/if}
       {#if profilePrivate}
-        <div class="bp-empty"><Users size="2.4rem" /><h2>{$t('bp.social.privateProfile')}</h2></div>
+        <div class="bp-empty"><Users size="2.64rem" /><h2>{$t('bp.social.privateProfile')}</h2></div>
       {:else if profileFriendsOnly}
-        <div class="bp-empty"><Users size="2.4rem" /><h2>{$t('bp.social.friendsOnlyProfile')}</h2></div>
+        <div class="bp-empty"><Users size="2.64rem" /><h2>{$t('bp.social.friendsOnlyProfile')}</h2></div>
       {:else if profileGamesVisible}
         {#if viewedProfile.bio}<section class="bp-card bio-card"><h2>{$t('social.aboutTitle')}</h2><p>{viewedProfile.bio}</p></section>{/if}
         {#if viewedProfile.recentlyPlayed.length > 0}
@@ -546,19 +546,19 @@ import { friendsPage as sharedFriendsPage, needsSocialConsent } from '../../stor
           </section>
         {/if}
         {#if viewedProfile.recentlyPlayed.length === 0 && viewedProfile.favorites.length === 0 && profileGames.length === 0 && !gamesLoading}
-          <div class="bp-empty"><Gamepad2 size="2.5rem" /><h2>{$t('bp.social.noGamesTitle')}</h2><p>{$t('bp.social.noGamesDescription')}</p></div>
+          <div class="bp-empty"><Gamepad2 size="2.75rem" /><h2>{$t('bp.social.noGamesTitle')}</h2><p>{$t('bp.social.noGamesDescription')}</p></div>
         {/if}
         {#if openGameError}<p class="error-text" role="alert">{openGameError}</p>{/if}
       {/if}
     {/if}
   {:else if availability === 'loading'}
-    <div class="bp-empty"><Users size="2.6rem" /><p>{$t('bp.social.loading')}</p></div>
+    <div class="bp-empty"><Users size="2.86rem" /><p>{$t('bp.social.loading')}</p></div>
   {:else if availability === 'guest'}
-    <div class="bp-empty"><Users size="2.8rem" /><h2>{$t('bp.social.guestTitle')}</h2><p>{$t('bp.social.guestDescription')}</p><button class="bp-button bp-primary" data-bp-focus="social-account" onclick={onaccount}>{$t('bp.social.account')}</button></div>
+    <div class="bp-empty"><Users size="3.08rem" /><h2>{$t('bp.social.guestTitle')}</h2><p>{$t('bp.social.guestDescription')}</p><button class="bp-button bp-primary" data-bp-focus="social-account" onclick={onaccount}>{$t('bp.social.account')}</button></div>
   {:else if availability === 'offline'}
-    <div class="bp-empty"><Users size="2.8rem" /><h2>{$t('bp.social.offlineTitle')}</h2><p>{$t('bp.social.offlineDescription')}</p></div>
+    <div class="bp-empty"><Users size="3.08rem" /><h2>{$t('bp.social.offlineTitle')}</h2><p>{$t('bp.social.offlineDescription')}</p></div>
   {:else if availability === 'sign-in'}
-    <div class="bp-empty"><Users size="2.8rem" /><h2>{$t('bp.social.signInTitle')}</h2><p>{$t('bp.social.signInDescription')}</p><button class="bp-button bp-primary" data-bp-focus="social-account" onclick={onaccount}>{$t('bp.social.account')}</button></div>
+    <div class="bp-empty"><Users size="3.08rem" /><h2>{$t('bp.social.signInTitle')}</h2><p>{$t('bp.social.signInDescription')}</p><button class="bp-button bp-primary" data-bp-focus="social-account" onclick={onaccount}>{$t('bp.social.account')}</button></div>
   {:else if needsConsent}
     <section class="bp-card consent-card">
       <h2>{$t('modals.socialConsentTitle')}</h2>
@@ -590,9 +590,9 @@ import { friendsPage as sharedFriendsPage, needsSocialConsent } from '../../stor
 
     {#if activeTab === 'friends'}
       {#if friendsLoading && friendsPage.friends.length === 0}
-        <div class="bp-empty"><Users size="2.4rem" /><p>{$t('bp.social.loading')}</p></div>
+        <div class="bp-empty"><Users size="2.64rem" /><p>{$t('bp.social.loading')}</p></div>
       {:else if sortedFriends.length === 0 && !friendsError}
-        <div class="bp-empty"><Users size="2.4rem" /><h2>{$t('bp.social.emptyFriendsTitle')}</h2><p>{$t('bp.social.emptyFriendsDescription')}</p><button class="bp-button bp-primary" data-bp-focus="social-add-empty" onclick={() => void findFriend('social-add-empty')}><Search size="1.05em" />{$t('bp.social.addFriend')}</button></div>
+        <div class="bp-empty"><Users size="2.64rem" /><h2>{$t('bp.social.emptyFriendsTitle')}</h2><p>{$t('bp.social.emptyFriendsDescription')}</p><button class="bp-button bp-primary" data-bp-focus="social-add-empty" onclick={() => void findFriend('social-add-empty')}><Search size="1.05em" />{$t('bp.social.addFriend')}</button></div>
       {:else}
         <section class="friend-section">
           <h2>{$t('bp.social.friendsCount', { count: sortedFriends.length })}</h2>
@@ -609,9 +609,9 @@ import { friendsPage as sharedFriendsPage, needsSocialConsent } from '../../stor
       {/if}
     {:else}
       {#if friendsLoading && friendsPage.incoming.length + friendsPage.outgoing.length === 0}
-        <div class="bp-empty"><Users size="2.4rem" /><p>{$t('bp.social.loading')}</p></div>
+        <div class="bp-empty"><Users size="2.64rem" /><p>{$t('bp.social.loading')}</p></div>
       {:else if friendsPage.incoming.length === 0 && friendsPage.outgoing.length === 0 && !friendsError}
-        <div class="bp-empty"><Users size="2.4rem" /><h2>{$t('bp.social.emptyIncomingTitle')}</h2><p>{$t('bp.social.emptyIncomingDescription')}</p></div>
+        <div class="bp-empty"><Users size="2.64rem" /><h2>{$t('bp.social.emptyIncomingTitle')}</h2><p>{$t('bp.social.emptyIncomingDescription')}</p></div>
       {:else}
         {#if friendsPage.incoming.length > 0}
           <section class="request-section"><h2>{$t('bp.social.incomingCount')} <span>{friendsPage.incoming.length}</span></h2>
@@ -647,76 +647,76 @@ import { friendsPage as sharedFriendsPage, needsSocialConsent } from '../../stor
 </div>
 
 <style>
-  .social-page { display: flex; flex-direction: column; gap: clamp(1rem, 1.8vh, 1.8rem); padding-bottom: 2rem; }
+  .social-page { display: flex; flex-direction: column; gap: clamp(1.1rem, 1.8vh, 1.98rem); padding-bottom: 2.2rem; }
   .title-copy { min-width: 0; }
-  .eyebrow { display: block; margin-bottom: .35rem; color: var(--text-3); font-size: .72em; font-weight: 700; letter-spacing: .16em; }
-  .bp-header h1 { margin: 0; font-size: clamp(2rem, 4vw, 4.6rem); line-height: 1.08; overflow-wrap: anywhere; }
-  .bp-header p { margin: .55rem 0 0; color: var(--text-2); font-size: 1.05em; }
+  .eyebrow { display: block; margin-bottom: .385rem; color: var(--text-3); font-size: .72em; font-weight: 700; letter-spacing: .16em; }
+  .bp-header h1 { margin: 0; font-size: clamp(2.2rem, 4vw, 5.06rem); line-height: 1.08; overflow-wrap: anywhere; }
+  .bp-header p { margin: .605rem 0 0; color: var(--text-2); font-size: 1.05em; }
   .bp-actions { flex-wrap: wrap; }
-  .back-button { min-height: 3.4rem; padding-inline: 1.15rem; }
-  .bp-empty { min-height: 14rem; padding: 2rem; }
-  .bp-empty h2 { margin: .55rem 0 .15rem; font-size: clamp(1.3rem, 2vw, 2rem); }
-  .bp-empty p { margin: .25rem 0 1rem; max-width: 42rem; }
-  .bp-empty .bp-button { margin-top: .65rem; min-height: 3.3rem; padding: .7rem 1.25rem; }
-  .presence-card { padding: clamp(1.1rem, 1.7vw, 1.8rem); }
-  .presence-heading { display: flex; align-items: center; gap: .7rem; }
-  .presence-heading h2, .friend-section h2, .request-section h2, .games-section h2 { margin: 0; font-size: clamp(1.2rem, 1.6vw, 1.8rem); }
-  .presence-indicator { width: .65rem; height: .65rem; border-radius: 50%; background: var(--success); }
+  .back-button { min-height: 3.74rem; padding-inline: 1.265rem; }
+  .bp-empty { min-height: 15.4rem; padding: 2.2rem; }
+  .bp-empty h2 { margin: .605rem 0 .165rem; font-size: clamp(1.43rem, 2vw, 2.2rem); }
+  .bp-empty p { margin: .275rem 0 1.1rem; max-width: 46.2rem; }
+  .bp-empty .bp-button { margin-top: .715rem; min-height: 3.63rem; padding: .77rem 1.375rem; }
+  .presence-card { padding: clamp(1.21rem, 1.7vw, 1.98rem); }
+  .presence-heading { display: flex; align-items: center; gap: .77rem; }
+  .presence-heading h2, .friend-section h2, .request-section h2, .games-section h2 { margin: 0; font-size: clamp(1.32rem, 1.6vw, 1.98rem); }
+  .presence-indicator { width: .715rem; height: .715rem; border-radius: 50%; background: var(--success); }
   .presence-indicator.busy { background: var(--warning); }
-  .presence-choices { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: .85rem; }
-  .presence-choice { min-height: 2.9rem; padding: .55rem .95rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-2); }
+  .presence-choices { display: flex; flex-wrap: wrap; gap: .605rem; margin-top: .935rem; }
+  .presence-choice { min-height: 3.19rem; padding: .605rem 1.045rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-2); }
   .presence-choice.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 24%, var(--surface-2)); }
-  .tabs { display: flex; gap: .6rem; border-bottom: 1px solid var(--border); }
-  .tab { display: inline-flex; align-items: center; gap: .6rem; min-height: 3.1rem; padding: .5rem 1.1rem; border-radius: var(--radius-md) var(--radius-md) 0 0; color: var(--text-2); }
+  .tabs { display: flex; gap: .66rem; border-bottom: 1px solid var(--border); }
+  .tab { display: inline-flex; align-items: center; gap: .66rem; min-height: 3.41rem; padding: .55rem 1.21rem; border-radius: var(--radius-md) var(--radius-md) 0 0; color: var(--text-2); }
   .tab.selected { color: var(--text); background: color-mix(in srgb, var(--accent) 18%, var(--surface-2)); box-shadow: inset 0 -3px var(--accent); }
-  .tab > span { min-width: 1.7em; padding: .1rem .4rem; border-radius: 99px; background: var(--surface-3); color: var(--text-3); text-align: center; font-size: .8em; }
-  .friend-section, .request-section, .games-section { display: flex; flex-direction: column; gap: .8rem; }
-  .people-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, max(30rem, 13em)), 1fr)); gap: 1rem; }
-  .person-card { display: flex; align-items: center; gap: .9rem; min-width: 0; width: 100%; padding: 1rem; border-radius: var(--radius-lg); text-align: left; color: var(--text); }
-  .person-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: .13rem; }
+  .tab > span { min-width: 1.7em; padding: .11rem .44rem; border-radius: 99px; background: var(--surface-3); color: var(--text-3); text-align: center; font-size: .8em; }
+  .friend-section, .request-section, .games-section { display: flex; flex-direction: column; gap: .88rem; }
+  .people-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, max(33rem, 13em)), 1fr)); gap: 1.1rem; }
+  .person-card { display: flex; align-items: center; gap: .99rem; min-width: 0; width: 100%; padding: 1.1rem; border-radius: var(--radius-lg); text-align: left; color: var(--text); }
+  .person-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: .143rem; }
   .person-copy strong, .person-copy > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
   .person-copy > span { color: var(--text-3); font-size: .82em; }
-  .person-copy > span.person-presence { color: var(--text-2); margin-top: .18rem; -webkit-line-clamp: 3; line-clamp: 3; }
+  .person-copy > span.person-presence { color: var(--text-2); margin-top: .198rem; -webkit-line-clamp: 3; line-clamp: 3; }
   .person-card :global(.person-chevron) { flex: none; color: var(--text-3); }
   .request-section h2 > span { color: var(--text-3); font-weight: 500; }
-  .request-list { display: flex; flex-direction: column; gap: .7rem; }
-  .request-card { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .8rem 1rem; }
-  .person-link { flex: 1; min-width: 0; display: flex; align-items: center; gap: .75rem; padding: .1rem; text-align: left; color: var(--text); border-radius: var(--radius-md); }
-  .person-link > span { min-width: 0; display: flex; flex-direction: column; gap: .15rem; }
+  .request-list { display: flex; flex-direction: column; gap: .77rem; }
+  .request-card { display: flex; align-items: center; justify-content: space-between; gap: 1.1rem; padding: .88rem 1.1rem; }
+  .person-link { flex: 1; min-width: 0; display: flex; align-items: center; gap: .825rem; padding: .11rem; text-align: left; color: var(--text); border-radius: var(--radius-md); }
+  .person-link > span { min-width: 0; display: flex; flex-direction: column; gap: .165rem; }
   .person-link strong, .person-link small { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
   .person-link small { color: var(--text-3); }
   .person-link :global(svg:last-child) { margin-left: auto; color: var(--text-3); }
-  .request-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; }
-  .request-actions .bp-button { min-height: 2.9rem; padding: .55rem .9rem; }
+  .request-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .55rem; }
+  .request-actions .bp-button { min-height: 3.19rem; padding: .605rem .99rem; }
   .inline-message, .error-text { margin: 0; color: var(--success); font-size: .92em; }
   .inline-message.danger, .error-text { color: var(--danger); }
-  .public-identity { display: flex; align-items: center; gap: clamp(1rem, 2.2vw, 2.4rem); padding: clamp(1.1rem, 1.9vw, 2rem); }
-  .public-identity :global(.avatar.lg) { --size: clamp(5rem, 8vw, 8.5rem); }
+  .public-identity { display: flex; align-items: center; gap: clamp(1.1rem, 2.2vw, 2.64rem); padding: clamp(1.21rem, 1.9vw, 2.2rem); }
+  .public-identity :global(.avatar.lg) { --size: clamp(5.5rem, 8vw, 9.35rem); }
   .public-copy { min-width: 0; flex: 1; }
-  .public-copy h2 { margin: 0; font-size: clamp(1.6rem, 2.7vw, 3rem); line-height: 1.1; overflow-wrap: anywhere; }
-  .public-copy > p { margin: .4rem 0 0; color: var(--text-2); }
-  .public-stats { display: flex; flex-wrap: wrap; gap: .9rem 1.4rem; margin-top: .65rem; }
-  .public-stats span { display: flex; align-items: baseline; gap: .35rem; color: var(--text-3); font-size: .83em; }
+  .public-copy h2 { margin: 0; font-size: clamp(1.76rem, 2.7vw, 3.3rem); line-height: 1.1; overflow-wrap: anywhere; }
+  .public-copy > p { margin: .44rem 0 0; color: var(--text-2); }
+  .public-stats { display: flex; flex-wrap: wrap; gap: .99rem 1.54rem; margin-top: .715rem; }
+  .public-stats span { display: flex; align-items: baseline; gap: .385rem; color: var(--text-3); font-size: .83em; }
   .public-stats strong { color: var(--text); font-size: 1.3em; font-variant-numeric: tabular-nums; }
-  .relation-actions { display: flex; flex-wrap: wrap; gap: .5rem; flex: none; }
-  .relation-actions .bp-button { min-height: 3.1rem; padding: .6rem 1rem; }
-  .relation-pill { display: inline-flex; align-items: center; gap: .4rem; padding: .6rem .95rem; border-radius: 99px; background: var(--surface-2); color: var(--text-2); white-space: nowrap; }
-  .bio-card { padding: 1.2rem 1.5rem; }
-  .bio-card h2 { margin: 0 0 .3rem; font-size: 1.2em; }
+  .relation-actions { display: flex; flex-wrap: wrap; gap: .55rem; flex: none; }
+  .relation-actions .bp-button { min-height: 3.41rem; padding: .66rem 1.1rem; }
+  .relation-pill { display: inline-flex; align-items: center; gap: .44rem; padding: .66rem 1.045rem; border-radius: 99px; background: var(--surface-2); color: var(--text-2); white-space: nowrap; }
+  .bio-card { padding: 1.32rem 1.65rem; }
+  .bio-card h2 { margin: 0 0 .33rem; font-size: 1.2em; }
   .bio-card p { margin: 0; color: var(--text-2); line-height: 1.5; white-space: pre-wrap; }
-  .game-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, max(18rem, 10em)), 1fr)); gap: 1.2rem; }
-  .game-card { display: flex; flex-direction: column; gap: .45rem; width: 100%; padding: .6rem; border-radius: var(--radius-lg); color: var(--text); text-align: left; overflow: hidden; }
+  .game-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, max(19.8rem, 10em)), 1fr)); gap: 1.32rem; }
+  .game-card { display: flex; flex-direction: column; gap: .495rem; width: 100%; padding: .66rem; border-radius: var(--radius-lg); color: var(--text); text-align: left; overflow: hidden; }
   .cover { display: block; width: 100%; aspect-ratio: 3 / 4; overflow: hidden; border-radius: var(--radius-md); }
   .game-name { width: 100%; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; font-weight: 650; line-height: 1.35; }
   .game-meta { color: var(--text-3); font-size: .8em; }
-  .consent-card { max-width: 78rem; padding: clamp(1.2rem, 2vw, 2.4rem); }
-  .consent-card h2 { margin: 0 0 .7rem; font-size: clamp(1.4rem, 2.2vw, 2.5rem); }
+  .consent-card { max-width: 85.8rem; padding: clamp(1.32rem, 2vw, 2.64rem); }
+  .consent-card h2 { margin: 0 0 .77rem; font-size: clamp(1.54rem, 2.2vw, 2.75rem); }
   .consent-card p, .consent-card li { color: var(--text-2); line-height: 1.5; }
-  .consent-card ul { margin: .4rem 0 .8rem; padding-left: 1.5rem; }
-  .consent-card .bp-button { min-height: 3.2rem; padding: .7rem 1.2rem; }
+  .consent-card ul { margin: .44rem 0 .88rem; padding-left: 1.65rem; }
+  .consent-card .bp-button { min-height: 3.52rem; padding: .77rem 1.32rem; }
   @media (max-width: 760px) {
     .public-identity { align-items: flex-start; flex-wrap: wrap; }
-    .public-copy { flex-basis: calc(100% - 7rem); }
+    .public-copy { flex-basis: calc(100% - 7.7rem); }
     .relation-actions { width: 100%; }
     .request-card { align-items: flex-start; flex-direction: column; }
     .request-actions { width: 100%; justify-content: flex-start; }

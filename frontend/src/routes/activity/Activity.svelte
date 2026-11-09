@@ -98,11 +98,11 @@
     description={msg('transfers.activityGuestDescription')}
   >
     {#snippet icon()}
-      <Users size="2.2rem" strokeWidth={1.6} />
+      <Users size="2.42rem" strokeWidth={1.6} />
     {/snippet}
     {#snippet actions()}
       <Button variant="primary" onclick={() => signIn('login')}>
-        <LogIn size="1.5rem" strokeWidth={1.8} />
+        <LogIn size="1.65rem" strokeWidth={1.8} />
         {msg('transfers.activitySignIn')}
       </Button>
       <Button onclick={() => signIn('register')}>{msg('transfers.activityCreateAccount')}</Button>
@@ -114,7 +114,7 @@
     description={msg('transfers.activityConsentDescription')}
   >
     {#snippet icon()}
-      <Users size="2.2rem" strokeWidth={1.6} />
+      <Users size="2.42rem" strokeWidth={1.6} />
     {/snippet}
     {#snippet actions()}
       <Button variant="primary" onclick={() => (consentOpen = true)}>{msg('transfers.activityEnableSync')}</Button>
@@ -150,11 +150,11 @@
             description={msg('transfers.activityFeedEmptyDescription')}
           >
             {#snippet icon()}
-              <Users size="2.2rem" strokeWidth={1.6} />
+              <Users size="2.42rem" strokeWidth={1.6} />
             {/snippet}
             {#snippet actions()}
               <Button variant="primary" onclick={() => navigate('friends')}>
-                <UserPlus size="1.5rem" strokeWidth={1.8} />
+                <UserPlus size="1.65rem" strokeWidth={1.8} />
                 {msg('social.friendsAddFriend')}
               </Button>
             {/snippet}
@@ -211,7 +211,7 @@
 
   .layout {
     display: grid;
-    grid-template-columns: 30rem minmax(0, 92rem) 30rem;
+    grid-template-columns: 33rem minmax(0, 101.2rem) 33rem;
     justify-content: space-between;
     gap: var(--space-6);
     align-items: start;
@@ -247,7 +247,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.44rem;
     text-align: center;
   }
 
@@ -263,7 +263,7 @@
   }
 
   .bio {
-    margin-top: 0.4rem;
+    margin-top: 0.44rem;
     font-size: var(--font-sm);
     line-height: 1.5;
     color: var(--text-2);
@@ -306,7 +306,7 @@
     align-items: center;
     gap: var(--space-3);
     margin-top: var(--space-2);
-    font-size: 1.2rem;
+    font-size: 1.32rem;
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -326,7 +326,7 @@
 
   @media (max-width: 1400px) {
     .layout {
-      grid-template-columns: 30rem minmax(0, 1fr);
+      grid-template-columns: 33rem minmax(0, 1fr);
     }
 
     .right {

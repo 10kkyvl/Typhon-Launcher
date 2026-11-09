@@ -49,9 +49,9 @@ The file is exactly this object and nothing else (unknown keys are refused):
    a different shape or feel; the defaults are listed in tokens.md. Exception: with
    `"base": "light"` also set the three shadows, because the defaults are heavy black ones made
    for a dark window:
-   `--shadow-pop`: `0 0.8rem 2.8rem rgba(15, 23, 32, 0.12), 0 2px 0.8rem rgba(15, 23, 32, 0.08)`,
-   `--shadow-modal`: `0 2rem 6rem rgba(15, 23, 32, 0.16)`,
-   `--shadow-lift`: `0 1.2rem 2.8rem -0.8rem rgba(15, 23, 32, 0.22)` (tint them to the theme if you like).
+   `--shadow-pop`: `0 0.88rem 3.08rem rgba(15, 23, 32, 0.12), 0 2px 0.88rem rgba(15, 23, 32, 0.08)`,
+   `--shadow-modal`: `0 2.2rem 6.6rem rgba(15, 23, 32, 0.16)`,
+   `--shadow-lift`: `0 1.32rem 3.08rem -0.8rem rgba(15, 23, 32, 0.22)` (tint them to the theme if you like).
 3. Keep the surface ladder ordered by elevation: `--bg` → `--surface` → `--surface-2` →
    `--surface-3` → `--surface-4`, each a small step lighter (dark base) or darker (light base).
 4. Keep text readable. Contrast ratio (WCAG) of `--text` on `--bg` and on `--surface-2` at least
@@ -74,16 +74,16 @@ outside `# 0-9 A-Z a-z space . , % ( ) / + * -` is refused: no quotes, `;`, `{}`
 | Kind | Accepted | Example |
 |---|---|---|
 | color | `#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`; `rgb()`/`rgba()`/`hsl()`/`hsla()` (commas `rgb(1, 2, 3)` or spaces `rgb(1 2 3 / 50%)`, never mixed, no trailing comma); `oklch()`, `oklab()`, `lab()`, `lch()`, `hwb()` (spaces only); `color(display-p3 1 0 0)`; `color-mix(in <space>, A, B 30%)` with percentages 0–100%; every CSS color name (`red`, `rebeccapurple`); `transparent`, `currentColor`; `var(--<color token>)` | `rgba(46, 196, 182, 0.16)` |
-| length | `0`, or a number with `px`, `rem`, `em`, `%`, `vw`, `vh`, `vmin`, `vmax`, `ch`, `ex`, `dvh`/`svh`/`lvh`, `dvw`/`svw`/`lvw`, `pt`, `cm`, `mm` or `in` (write `5px`, not `5.px`). Never negative, except for the two `--tracking-*` tokens. At most 10000 for px/pt/cm/mm/in and 1000 for every other unit. `calc()` with spaces around `+` and `-` (a length times a number, a length divided by a non-zero number; length times length is refused), `min()`, `max()`, `clamp(a, b, c)`, `var(--<length token>)`. A bare number like `12` is refused | `0.8rem` |
+| length | `0`, or a number with `px`, `rem`, `em`, `%`, `vw`, `vh`, `vmin`, `vmax`, `ch`, `ex`, `dvh`/`svh`/`lvh`, `dvw`/`svw`/`lvw`, `pt`, `cm`, `mm` or `in` (write `5px`, not `5.px`). Never negative, except for the two `--tracking-*` tokens. At most 10000 for px/pt/cm/mm/in and 1000 for every other unit. `calc()` with spaces around `+` and `-` (a length times a number, a length divided by a non-zero number; length times length is refused), `min()`, `max()`, `clamp(a, b, c)`, `var(--<length token>)`. A bare number like `12` is refused | `0.88rem` |
 | time | number with `ms` or `s`, not negative, at most 10s. A bare `300` is refused | `160ms` |
 | ease | `linear`, `ease`, `ease-in`, `ease-out`, `ease-in-out`, `step-start`, `step-end`, `steps(n)` or `steps(n, jump-end)` (also `jump-start`, `jump-none`, `jump-both`, `start`, `end`), `cubic-bezier(x1, y1, x2, y2)` with x1 and x2 between 0 and 1; case does not matter; `var(--<ease token>)` | `cubic-bezier(0.2, 0.8, 0.2, 1)` |
-| shadow | `none`, or comma-separated shadows: optional single `inset`, 2–4 lengths (may be negative), optionally one color of any form above; `var(--<shadow token>)` | `0 2rem 6rem rgba(0, 0, 0, 0.55)` |
+| shadow | `none`, or comma-separated shadows: optional single `inset`, 2–4 lengths (may be negative), optionally one color of any form above; `var(--<shadow token>)` | `0 2.2rem 6.6rem rgba(0, 0, 0, 0.55)` |
 | font | comma-separated family names of letters, digits, spaces and hyphens, no quotes; every word must start with a letter (or `-` as in `-apple-system`), so `Source Sans 3`, `Font Awesome 5 Free` and `3270 Nerd Font` are refused (invalid without quotes: the whole UI would fall back to serif). End with a generic family (`sans-serif`, `serif`, `monospace`, `system-ui`) | `Inter, Segoe UI, sans-serif` |
 
 A `var(--token)` must name a token from tokens.md of the same kind and never the token it is
 set on.
 
-`1rem` is 11 px in Typhon (before the user's interface scale), so `1.5rem` text is about 16 px.
+`1rem` is 10 px in Typhon (before the user's interface scale), so `1.6rem` text is 16 px.
 
 ## Custom CSS
 

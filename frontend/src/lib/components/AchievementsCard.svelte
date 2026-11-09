@@ -121,7 +121,7 @@
     {#snippet action()}
       {#if view}
         <button class="refresh" type="button" disabled={refreshing} onclick={refresh}>
-          <RefreshCw size="1.4rem" strokeWidth={1.8} class={refreshing ? 'spin' : ''} />
+          <RefreshCw size="1.54rem" strokeWidth={1.8} class={refreshing ? 'spin' : ''} />
           {$t('games.achievementsRefresh')}
         </button>
       {/if}
@@ -156,7 +156,7 @@
               onblur={() => drop(item)}
             >
               {#if concealed(item)}
-                <Lock size="1.8rem" strokeWidth={1.8} />
+                <Lock size="1.98rem" strokeWidth={1.8} />
               {:else if (item.unlocked ? item.icon : item.iconGray || item.icon) !== ''}
                 <img
                   src={item.unlocked ? item.icon : item.iconGray || item.icon}
@@ -166,7 +166,7 @@
                   draggable="false"
                 />
               {:else}
-                <Trophy size="1.8rem" strokeWidth={1.8} />
+                <Trophy size="1.98rem" strokeWidth={1.8} />
               {/if}
             </button>
           </li>
@@ -194,7 +194,7 @@
     {:else if loadError}
       <p class="state error">{loadError}</p>
       <button class="refresh" type="button" onclick={() => load(gameId)}>
-        <RefreshCw size="1.4rem" strokeWidth={1.8} />
+        <RefreshCw size="1.54rem" strokeWidth={1.8} />
         {$t('common.retry')}
       </button>
     {/if}
@@ -249,7 +249,7 @@
 
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(4.4rem, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(4.84rem, 1fr));
     gap: var(--space-2);
     margin: 0;
     padding: 0;
@@ -299,7 +299,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-1);
-    min-height: 6.4rem;
+    min-height: 7.04rem;
     margin-top: var(--space-3);
   }
 

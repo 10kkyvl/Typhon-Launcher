@@ -87,7 +87,7 @@
   .note {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: 0.44rem;
   }
 
   .text {

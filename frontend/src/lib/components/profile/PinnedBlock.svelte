@@ -78,7 +78,7 @@
     bottom: var(--space-4);
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: 0.44rem;
     color: #f1f4f8;
   }
 

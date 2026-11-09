@@ -33,7 +33,7 @@
           onclick={() => onopen(store)}
         >
           {$t(LABELS[store])}
-          <ExternalLink size="1.4rem" strokeWidth={1.8} />
+          <ExternalLink size="1.54rem" strokeWidth={1.8} />
         </button>
       {/each}
     </div>
@@ -62,9 +62,9 @@
   .store-link {
     display: inline-flex;
     align-items: center;
-    gap: 0.6rem;
-    height: 2.8rem;
-    padding: 0 1.1rem;
+    gap: 0.66rem;
+    height: 3.08rem;
+    padding: 0 1.21rem;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     background: var(--surface);

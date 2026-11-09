@@ -60,15 +60,15 @@
 </div>
 
 <style>
-  .palette { width: 100%; max-width: 44rem; margin-top: var(--space-4); }
-  .color-field { display: flex; height: 18rem; border: 1px solid var(--border-strong); border-radius: var(--radius-md); overflow: hidden; }
+  .palette { width: 100%; max-width: 48.4rem; margin-top: var(--space-4); }
+  .color-field { display: flex; height: 19.8rem; border: 1px solid var(--border-strong); border-radius: var(--radius-md); overflow: hidden; }
   .sample { width: 22%; flex-shrink: 0; }
   .saturation { position: relative; flex: 1; background: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent), var(--hue); cursor: crosshair; touch-action: none; user-select: none; }
   .saturation:focus-visible { outline: 2px solid #fff; outline-offset: -4px; box-shadow: inset 0 0 0 5px #000; }
-  .cursor { position: absolute; width: 1.6rem; height: 1.6rem; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 0 1px #0009; transform: translate(-50%, -50%); pointer-events: none; }
-  .hue { display: block; appearance: none; -webkit-appearance: none; width: 100%; height: 2.8rem; padding: 0; margin: var(--space-2) 0 0; background: transparent; cursor: pointer; touch-action: none; }
-  .hue::-webkit-slider-runnable-track { height: .8rem; border-radius: 99px; background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); }
-  .hue::-moz-range-track { height: .8rem; border-radius: 99px; background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); }
-  .hue::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 2rem; height: 2rem; margin-top: -.6rem; border: 2px solid #fff; border-radius: 50%; background: transparent; box-shadow: 0 0 0 1px #0009; }
-  .hue::-moz-range-thumb { width: 1.6rem; height: 1.6rem; border: 2px solid #fff; border-radius: 50%; background: transparent; box-shadow: 0 0 0 1px #0009; }
+  .cursor { position: absolute; width: 1.76rem; height: 1.76rem; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 0 1px #0009; transform: translate(-50%, -50%); pointer-events: none; }
+  .hue { display: block; appearance: none; -webkit-appearance: none; width: 100%; height: 3.08rem; padding: 0; margin: var(--space-2) 0 0; background: transparent; cursor: pointer; touch-action: none; }
+  .hue::-webkit-slider-runnable-track { height: .88rem; border-radius: 99px; background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); }
+  .hue::-moz-range-track { height: .88rem; border-radius: 99px; background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); }
+  .hue::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 2.2rem; height: 2.2rem; margin-top: -.6rem; border: 2px solid #fff; border-radius: 50%; background: transparent; box-shadow: 0 0 0 1px #0009; }
+  .hue::-moz-range-thumb { width: 1.76rem; height: 1.76rem; border: 2px solid #fff; border-radius: 50%; background: transparent; box-shadow: 0 0 0 1px #0009; }
 </style>

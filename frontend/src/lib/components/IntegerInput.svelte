@@ -7,7 +7,7 @@
     min,
     max,
     label,
-    width = '12rem',
+    width = '13.2rem',
     onchange,
   }: {
     value: number;
@@ -81,7 +81,7 @@
   .integer {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    gap: 0.66rem;
   }
 
   .error {

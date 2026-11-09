@@ -124,7 +124,7 @@
     {/if}
     {#if summary.empty}
       <EmptyState title={msg('stats.title')} description={msg('stats.empty')}>
-        {#snippet icon()}<ChartColumn size="3.2rem" strokeWidth={1.6} />{/snippet}
+        {#snippet icon()}<ChartColumn size="3.52rem" strokeWidth={1.6} />{/snippet}
       </EmptyState>
     {:else}
       <div class="body" class:stale={loading}>
@@ -198,7 +198,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-8);
-    max-width: 110rem;
+    max-width: 121rem;
     transition: opacity var(--dur) var(--ease);
   }
 
@@ -216,7 +216,7 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.8rem;
+    gap: 0.88rem;
     min-width: 0;
   }
 
@@ -235,7 +235,7 @@
 
   .longest-sub {
     max-width: 100%;
-    font-size: 1.2rem;
+    font-size: 1.32rem;
     color: var(--text-2);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -259,7 +259,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.66rem;
     min-width: 0;
   }
 
@@ -267,7 +267,7 @@
     display: flex;
     align-items: flex-end;
     width: 100%;
-    height: 12rem;
+    height: 13.2rem;
     border-radius: var(--radius-sm);
     background: var(--surface-3);
     overflow: hidden;
@@ -282,8 +282,8 @@
   }
 
   .tick {
-    height: 1.6rem;
-    font-size: 1.2rem;
+    height: 1.76rem;
+    font-size: 1.32rem;
     color: var(--text-3);
     white-space: nowrap;
   }
@@ -298,7 +298,7 @@
     align-items: center;
     gap: var(--space-3);
     width: 100%;
-    padding: 0.6rem var(--space-3);
+    padding: 0.66rem var(--space-3);
     border-radius: var(--radius-md);
     text-align: left;
     transition: background var(--dur) var(--ease);
@@ -311,8 +311,8 @@
   .cover {
     display: block;
     flex-shrink: 0;
-    width: 4rem;
-    min-height: 5.3rem;
+    width: 4.4rem;
+    min-height: 5.83rem;
     border-radius: var(--radius-sm);
     background: var(--surface-3);
     overflow: hidden;
@@ -322,7 +322,7 @@
     display: flex;
     flex-direction: column;
     flex: 1;
-    gap: 0.4rem;
+    gap: 0.44rem;
     min-width: 0;
   }
 
@@ -335,14 +335,14 @@
   }
 
   .sub {
-    font-size: 1.2rem;
+    font-size: 1.32rem;
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
   }
 
   .share {
     display: block;
-    height: 0.4rem;
+    height: 0.44rem;
     border-radius: var(--radius-sm);
     background: var(--surface-3);
     overflow: hidden;

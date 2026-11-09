@@ -96,7 +96,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.66rem;
     width: 100%;
   }
 
@@ -105,7 +105,7 @@
     align-items: flex-end;
     justify-content: center;
     width: 100%;
-    height: 6.4rem;
+    height: 7.04rem;
     border-radius: var(--radius-sm);
     background: var(--surface-3);
     overflow: hidden;
@@ -126,7 +126,7 @@
   }
 
   .day {
-    font-size: 1.2rem;
+    font-size: 1.32rem;
     color: var(--text-3);
   }
 
@@ -147,7 +147,7 @@
     align-items: center;
     gap: var(--space-3);
     width: 100%;
-    padding: 0.6rem var(--space-4);
+    padding: 0.66rem var(--space-4);
     border-radius: var(--radius-md);
     text-align: left;
     transition: background var(--dur) var(--ease);
@@ -160,7 +160,7 @@
   .cover {
     display: block;
     flex-shrink: 0;
-    width: 3.2rem;
+    width: 3.52rem;
     border-radius: var(--radius-sm);
     overflow: hidden;
   }
@@ -168,7 +168,7 @@
   .text {
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: 0.22rem;
     min-width: 0;
   }
 
@@ -182,7 +182,7 @@
   }
 
   .sub {
-    font-size: 1.2rem;
+    font-size: 1.32rem;
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
   }

@@ -36,7 +36,7 @@
 <Modal
   bind:open
   title={mode === 'review' ? msg('modals.sourcesNoticeReviewTitle') : msg('modals.sourcesNoticeGateTitle')}
-  width="48rem"
+  width="52.8rem"
 >
   <p class="notice-text">
     {msg('modals.sourcesNoticeBody')}

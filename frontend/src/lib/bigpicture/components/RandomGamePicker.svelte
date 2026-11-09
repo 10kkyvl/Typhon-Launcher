@@ -192,16 +192,16 @@
 </div>
 
 <style>
-  .backdrop { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 2rem; background: rgba(0, 0, 0, .76); }
-  .dialog { display: flex; width: min(72rem, 100%); max-height: min(90vh, 100rem); flex-direction: column; gap: 2rem; overflow: auto; padding: 2.4rem; border: 1px solid var(--border); border-radius: 1.8rem; background: var(--surface-2); box-shadow: 0 3rem 8rem rgba(0, 0, 0, .5); }
-  header { display: flex; align-items: center; justify-content: space-between; gap: 2rem; }
+  .backdrop { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 2.2rem; background: rgba(0, 0, 0, .76); }
+  .dialog { display: flex; width: min(79.2rem, 100%); max-height: min(90vh, 110rem); flex-direction: column; gap: 2.2rem; overflow: auto; padding: 2.64rem; border: 1px solid var(--border); border-radius: 1.98rem; background: var(--surface-2); box-shadow: 0 3.3rem 8.8rem rgba(0, 0, 0, .5); }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 2.2rem; }
   h2, h3, p { margin: 0; }
-  .filters, .actions { display: flex; flex-wrap: wrap; gap: 1.2rem; }
+  .filters, .actions { display: flex; flex-wrap: wrap; gap: 1.32rem; }
   .filters .on { background: var(--accent); color: white; }
   .empty { color: var(--danger); }
-  .card { display: flex; align-items: center; gap: 2.4rem; }
-  .cover { flex: none; width: min(22rem, 34vw); }
-  .info { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+  .card { display: flex; align-items: center; gap: 2.64rem; }
+  .cover { flex: none; width: min(24.2rem, 34vw); }
+  .info { display: flex; flex-direction: column; gap: 1.1rem; min-width: 0; }
   .info h3 { font-size: 1.6em; line-height: 1.3; overflow-wrap: anywhere; }
   .info p { color: var(--text-2); }
 </style>

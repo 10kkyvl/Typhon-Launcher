@@ -102,7 +102,7 @@
           {/if}
         </div>
         <Button size="sm" disabled={removed} onclick={() => ondownload(group)}>
-          <Download size="1.4rem" strokeWidth={1.8} />
+          <Download size="1.54rem" strokeWidth={1.8} />
           {msg('ui.download')}
         </Button>
       </div>
@@ -119,7 +119,7 @@
   .hint {
     font-size: var(--font-sm);
     color: var(--text-3);
-    padding: 0.8rem 0;
+    padding: 0.88rem 0;
   }
 
   .release-row {
@@ -127,7 +127,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-4);
-    padding: 1.1rem 0;
+    padding: 1.21rem 0;
   }
 
   .release-group {
@@ -175,7 +175,7 @@
   }
 
   .release-size {
-    flex: 0 0 7rem;
+    flex: 0 0 7.7rem;
     font-size: var(--font-xs);
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
@@ -189,15 +189,15 @@
     content: '';
     position: absolute;
     left: -1.2rem;
-    top: 1.2rem;
-    bottom: 1.2rem;
+    top: 1.32rem;
+    bottom: 1.32rem;
     width: 2px;
     border-radius: 2px;
     background: var(--success);
   }
 
   .release-lang {
-    flex: 0 0 9rem;
+    flex: 0 0 9.9rem;
     min-width: 0;
     font-size: var(--font-xs);
     color: var(--text-3);
@@ -221,12 +221,12 @@
   }
 
   .release-dup {
-    margin-left: 0.6rem;
+    margin-left: 0.66rem;
     color: var(--accent-text);
   }
 
   .release-date {
-    flex: 0 0 8.5rem;
+    flex: 0 0 9.35rem;
     font-size: var(--font-xs);
     color: var(--text-3);
     white-space: nowrap;
@@ -234,7 +234,7 @@
 
   .release-badges {
     display: flex;
-    gap: 0.6rem;
+    gap: 0.66rem;
     flex-shrink: 0;
   }
 </style>

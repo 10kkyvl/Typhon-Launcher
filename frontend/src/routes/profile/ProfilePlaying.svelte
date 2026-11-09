@@ -31,7 +31,7 @@
       <StatusBadge kind="success" label={msg('social.playing')} plain />
     </span>
     {#if !disabled}
-      <span class="go"><ChevronRight size="2rem" strokeWidth={1.8} /></span>
+      <span class="go"><ChevronRight size="2.2rem" strokeWidth={1.8} /></span>
     {/if}
   </button>
   {#if hidden}
@@ -73,7 +73,7 @@
   .cover {
     display: block;
     flex-shrink: 0;
-    width: 19rem;
+    width: 20.9rem;
     border-radius: var(--radius-md);
     overflow: hidden;
   }
@@ -90,7 +90,7 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.6rem;
+    gap: 0.66rem;
     flex: 1;
     min-width: 0;
   }
@@ -120,7 +120,7 @@
   }
 
   .open:hover .go {
-    transform: translateX(0.3rem);
+    transform: translateX(0.33rem);
     color: var(--text);
   }
 

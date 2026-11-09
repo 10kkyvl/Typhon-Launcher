@@ -254,7 +254,7 @@
 
   .path {
     margin: var(--space-3) 0 0;
-    font-size: 1.3rem;
+    font-size: 1.43rem;
     color: var(--text-3);
     word-break: break-all;
   }
@@ -307,7 +307,7 @@
   }
 
   .mode-sub {
-    font-size: 1.3rem;
+    font-size: 1.43rem;
     line-height: 1.4;
     color: var(--text-3);
   }
@@ -344,7 +344,7 @@
   }
 
   .row-sub {
-    font-size: 1.3rem;
+    font-size: 1.43rem;
     color: var(--text-3);
   }
 </style>

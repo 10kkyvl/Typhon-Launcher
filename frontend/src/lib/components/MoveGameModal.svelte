@@ -152,7 +152,7 @@
   }
 </script>
 
-<Modal open={!!$moveTarget} title={msg('modals.moveGameTitle')} width="52rem" onclose={close}>
+<Modal open={!!$moveTarget} title={msg('modals.moveGameTitle')} width="57.2rem" onclose={close}>
   {#if game}
     <div class="move">
       <div class="field">
@@ -189,7 +189,7 @@
           <div class="pick-controls">
             <input class="input sm" type="text" readonly placeholder={msg('modals.moveGameFolderPlaceholder')} value={picked} />
             <Button size="sm" disabled={picking} onclick={pickFolder}>
-              <FolderOpen size="1.5rem" strokeWidth={1.8} />
+              <FolderOpen size="1.65rem" strokeWidth={1.8} />
               {msg('modals.moveGameBrowse')}
             </Button>
           </div>
@@ -201,7 +201,7 @@
 
         {#if diskInfo}
           <div class="disk">
-            <HardDrive size="1.7rem" strokeWidth={1.8} />
+            <HardDrive size="1.87rem" strokeWidth={1.8} />
             <div class="disk-text">
               <span class="disk-name">{msg('modals.moveGameDiskName', { volume: diskInfo.volume || '—' })}{diskInfo.filesystem ? ` · ${diskInfo.filesystem}` : ''}</span>
               <span class="disk-meta">{msg('modals.moveGameDiskFree', { free: bytesSize(diskInfo.freeBytes), total: bytesSize(diskInfo.totalBytes) })}</span>
@@ -210,7 +210,7 @@
         {/if}
 
         <div class="safety">
-          <ShieldCheck size="1.7rem" strokeWidth={1.8} />
+          <ShieldCheck size="1.87rem" strokeWidth={1.8} />
           <p>
             {msg('modals.moveGameSafetyText')}
           </p>
@@ -253,7 +253,7 @@
   .field {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    gap: 0.66rem;
   }
 
   .field-label {
@@ -300,7 +300,7 @@
   .disk-text {
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: 0.22rem;
   }
 
   .disk-name {
@@ -346,7 +346,7 @@
   .progress {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    gap: 0.66rem;
   }
 
   .progress-text {

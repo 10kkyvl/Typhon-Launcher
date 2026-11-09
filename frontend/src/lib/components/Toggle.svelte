@@ -33,9 +33,9 @@
 <style>
   .toggle {
     position: relative;
-    width: 4rem;
-    height: 2.2rem;
-    border-radius: 99rem;
+    width: 4.4rem;
+    height: 2.42rem;
+    border-radius: 108.9rem;
     background: rgba(255, 255, 255, 0.12);
     flex-shrink: 0;
     transition: background var(--dur) var(--ease);
@@ -60,10 +60,10 @@
 
   .knob {
     position: absolute;
-    top: 0.3rem;
-    left: 0.3rem;
-    width: 1.6rem;
-    height: 1.6rem;
+    top: 0.33rem;
+    left: 0.33rem;
+    width: 1.76rem;
+    height: 1.76rem;
     border-radius: 50%;
     background: #fff;
     transition: transform var(--dur) var(--ease);
@@ -71,6 +71,6 @@
 
   .on .knob {
     background: var(--accent-on, #fff);
-    transform: translateX(1.8rem);
+    transform: translateX(1.98rem);
   }
 </style>

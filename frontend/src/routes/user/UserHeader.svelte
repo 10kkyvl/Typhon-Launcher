@@ -61,13 +61,13 @@
         <div class="meta">
           {#if playingLine}
             <span class="meta-item now">
-              <Gamepad2 size="1.5rem" strokeWidth={1.8} />
+              <Gamepad2 size="1.65rem" strokeWidth={1.8} />
               {playingLine}
             </span>
           {/if}
           {#if since}
             <span class="meta-item">
-              <Calendar size="1.5rem" strokeWidth={1.8} />
+              <Calendar size="1.65rem" strokeWidth={1.8} />
               {since}
             </span>
           {/if}
@@ -82,7 +82,7 @@
             <DropdownMenu items={friendMenu} onselect={onaction}>
               {#snippet trigger({ toggle })}
                 <IconButton label={msg('social.moreLabel')} onclick={toggle}>
-                  <EllipsisVertical size="1.8rem" strokeWidth={1.8} />
+                  <EllipsisVertical size="1.98rem" strokeWidth={1.8} />
                 </IconButton>
               {/snippet}
             </DropdownMenu>
@@ -103,7 +103,7 @@
             <DropdownMenu items={blockMenu} onselect={onaction}>
               {#snippet trigger({ toggle })}
                 <IconButton label={msg('social.moreLabel')} onclick={toggle}>
-                  <EllipsisVertical size="1.8rem" strokeWidth={1.8} />
+                  <EllipsisVertical size="1.98rem" strokeWidth={1.8} />
                 </IconButton>
               {/snippet}
             </DropdownMenu>
@@ -118,7 +118,7 @@
 </section>
 
 <style>
-  .header-surface { padding-bottom: 2rem; position: relative; }
+  .header-surface { padding-bottom: 2.2rem; position: relative; }
   .user-header {
     container-type: inline-size;
     display: block;
@@ -136,7 +136,7 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: 0.44rem;
   }
 
   .display-name {
@@ -155,15 +155,15 @@
   .status {
     display: flex;
     align-items: baseline;
-    gap: 0.6rem;
+    gap: 0.66rem;
     font-size: var(--font-sm);
     color: var(--text-2);
     overflow-wrap: anywhere;
   }
 
   .bio {
-    max-width: 60rem;
-    margin-top: 0.4rem;
+    max-width: 66rem;
+    margin-top: 0.44rem;
     font-size: var(--font-sm);
     line-height: 1.5;
     color: var(--text-2);
@@ -181,13 +181,13 @@
     align-items: center;
     flex-wrap: wrap;
     gap: var(--space-4);
-    margin-top: 0.4rem;
+    margin-top: 0.44rem;
   }
 
   .meta-item {
     display: inline-flex;
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.66rem;
     font-size: var(--font-sm);
     color: var(--text-2);
   }
@@ -199,8 +199,8 @@
 
   .meta-item.now {
     min-width: 0;
-    height: 2.8rem;
-    padding: 0 1.1rem;
+    height: 3.08rem;
+    padding: 0 1.21rem;
     border-radius: var(--radius-xl);
     background: var(--accent-subtle);
     color: var(--accent-text);
@@ -227,7 +227,7 @@
   .head-actions {
     display: flex;
     align-items: center;
-    gap: 0.8rem;
+    gap: 0.88rem;
     flex-shrink: 0;
   }
 

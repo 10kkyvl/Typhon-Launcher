@@ -37,6 +37,6 @@
 </div>
 
 <style>
-  .canvas { min-width: 0; border-radius: var(--radius-lg); background: var(--profile-page), var(--profile-bg); color: var(--text); padding: 0 2rem 2rem; }
-  @media (max-width: 800px) { .canvas { padding: 0 1.2rem 1.2rem; } }
+  .canvas { min-width: 0; border-radius: var(--radius-lg); background: var(--profile-page), var(--profile-bg); color: var(--text); padding: 0 2.2rem 2.2rem; }
+  @media (max-width: 800px) { .canvas { padding: 0 1.32rem 1.32rem; } }
 </style>

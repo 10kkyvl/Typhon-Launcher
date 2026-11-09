@@ -89,13 +89,13 @@
   .avatar-editor {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    gap: 0.66rem;
     min-width: 0;
   }
 
   .buttons {
     display: flex;
-    gap: 0.8rem;
+    gap: 0.88rem;
     flex-wrap: wrap;
   }
 

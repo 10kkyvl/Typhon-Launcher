@@ -691,7 +691,7 @@
             </div>
             <Select
               value={overlayHotkey}
-              width="22rem"
+              width="24.2rem"
               options={overlayHotkeyOptions}
               onchange={(id) => setOverlay({ overlayHotkey: id })}
             />
@@ -714,7 +714,7 @@
             </div>
             <Select
               value={screenshotHotkey}
-              width="22rem"
+              width="24.2rem"
               options={screenshotHotkeyOptions}
               onchange={(id) => setScreenshots({ screenshotHotkey: id })}
             />
@@ -750,7 +750,7 @@
                 disabled={!current?.libraryPath}
                 onclick={() => openPath(current?.libraryPath)}
               >
-                <FolderOpen size="1.6rem" strokeWidth={1.8} />
+                <FolderOpen size="1.76rem" strokeWidth={1.8} />
               </IconButton>
             </div>
           </div>
@@ -761,7 +761,7 @@
                 <div class="folder-controls">
                   <input class="input sm" type="text" readonly value={current?.[folder.key] ?? ''} />
                   <IconButton label={msg('settings.generalLibraryOpenFolderLabel')} size="sm" onclick={() => openPath(current?.[folder.key])}>
-                    <FolderOpen size="1.6rem" strokeWidth={1.8} />
+                    <FolderOpen size="1.76rem" strokeWidth={1.8} />
                   </IconButton>
                 </div>
               </div>
@@ -780,7 +780,7 @@
               <span class="row-sub">{msg('diskusage.settingsSub')}</span>
             </div>
             <Button size="sm" onclick={() => navigate('diskusage')}>
-              <HardDrive size="1.5rem" strokeWidth={1.8} />
+              <HardDrive size="1.65rem" strokeWidth={1.8} />
               {msg('diskusage.settingsOpen')}
             </Button>
           </div>
@@ -791,7 +791,7 @@
             </div>
             {#if appInfo?.platform === 'windows'}
               <Button size="sm" disabled={importing} onclick={runImportExternal}>
-                <RefreshCw size="1.5rem" strokeWidth={1.8} />
+                <RefreshCw size="1.65rem" strokeWidth={1.8} />
                 {importing ? msg('settings.extlibRunning') : msg('settings.extlibLabel')}
               </Button>
             {:else}
@@ -829,7 +829,7 @@
             </div>
             <Select
               value={$settings?.language ?? 'system'}
-              width="22rem"
+              width="24.2rem"
               options={[
                 { id: 'system', label: msg('settings.languageSystem') },
                 { id: 'ru', label: 'Русский' },
@@ -845,7 +845,7 @@
             </div>
             <Select
               value={scaleValue}
-              width="22rem"
+              width="24.2rem"
               options={[
                 { id: '90', label: '90%' },
                 { id: '100', label: msg('settings.generalUiScaleDefaultOption') },
@@ -921,7 +921,7 @@
               <span class="row-sub">{msg('settings.generalPrivacyShowSentSub')}</span>
             </div>
             <Button size="sm" onclick={() => (sentDataOpen = true)}>
-              <Eye size="1.5rem" strokeWidth={1.8} />
+              <Eye size="1.65rem" strokeWidth={1.8} />
               {msg('settings.generalPrivacyShowSentButton')}
             </Button>
           </div>
@@ -976,7 +976,7 @@
               <span class="row-sub">{msg('settings.generalSyncNowSub')}</span>
             </div>
             <Button size="sm" disabled={!accountReady || !current?.accountSync || syncingNow} onclick={runSyncNow}>
-              <RefreshCw size="1.5rem" strokeWidth={1.8} />
+              <RefreshCw size="1.65rem" strokeWidth={1.8} />
               {syncingNow ? msg('settings.generalSyncNowRunning') : msg('settings.generalSyncNowLabel')}
             </Button>
           </div>
@@ -991,7 +991,7 @@
               disabled={!accountReady || forgettingRemote}
               onclick={askForgetRemote}
             >
-              <Trash2 size="1.5rem" strokeWidth={1.8} />
+              <Trash2 size="1.65rem" strokeWidth={1.8} />
               {forgettingRemote ? msg('settings.generalSyncForgetRunning') : msg('settings.generalSyncForgetLabel')}
             </Button>
           </div>
@@ -1035,7 +1035,7 @@
               <span class='row-label'>{msg('settings.downloadsPlayLabel')}</span>
               <span class='row-sub'>{msg('settings.downloadsPlaySub')}</span>
             </div>
-            <Select value={playModeValue} width='20rem' options={playModeOptions} onchange={pickPlayMode} />
+            <Select value={playModeValue} width='22rem' options={playModeOptions} onchange={pickPlayMode} />
           </div>
           {#if playModeValue === 'limit'}
             <div class='row'>
@@ -1078,7 +1078,7 @@
             </div>
             <Select
               value={maxActiveValue}
-              width="20rem"
+              width="22rem"
               options={maxActiveDownloadOptions}
               onchange={(id) => set({ maxActiveDownloads: Number(id) })}
             />
@@ -1112,7 +1112,7 @@
             </div>
             <Select
               value={sourceRefreshInterval}
-              width="20rem"
+              width="22rem"
               options={sourceRefreshOptions}
               onchange={(id) => set({ sourceRefreshInterval: id })}
             />
@@ -1242,7 +1242,7 @@
             </div>
             <Select
               value={keepPreviousVersion}
-              width="28rem"
+              width="30.8rem"
               options={keepPreviousOptions}
               onchange={(id) => set({ keepPreviousVersion: id })}
             />
@@ -1271,7 +1271,7 @@
             </div>
             <Select
               value={cleanupPolicy}
-              width="26rem"
+              width="28.6rem"
               options={cleanupPolicyOptions}
               onchange={(id) => set({ installCleanupPolicy: id })}
             />
@@ -1439,7 +1439,7 @@
               </span>
             </div>
             <Button size="sm" disabled={$selfUpdateChecking} onclick={requestCheck}>
-              <ListChecks size="1.5rem" strokeWidth={1.8} />
+              <ListChecks size="1.65rem" strokeWidth={1.8} />
               {$selfUpdateChecking ? msg('settings.aboutCheckingEllipsis') : msg('settings.aboutCheckButtonLabel')}
             </Button>
           </div>
@@ -1455,7 +1455,7 @@
               </span>
             </div>
             <Button size="sm" disabled={$releaseNotesHistory.length === 0} onclick={() => (historyOpen = true)}>
-              <ScrollText size="1.5rem" strokeWidth={1.8} />
+              <ScrollText size="1.65rem" strokeWidth={1.8} />
               {msg('settings.aboutHistoryButtonLabel')}
             </Button>
           </div>
@@ -1508,7 +1508,7 @@
               </span>
             </div>
             <Button size="sm" disabled={logsSaving} onclick={saveLogs}>
-              <Download size="1.5rem" strokeWidth={1.8} />
+              <Download size="1.65rem" strokeWidth={1.8} />
               {logsSaving ? msg('settings.aboutLogsSavingEllipsis') : msg('settings.aboutLogsDownloadButton')}
             </Button>
           </div>
@@ -1543,7 +1543,7 @@
               {/if}
             </div>
             <Button size="sm" disabled={logsSending} onclick={openSendLogsConfirm}>
-              <Send size="1.5rem" strokeWidth={1.8} />
+              <Send size="1.65rem" strokeWidth={1.8} />
               {logsSending ? msg('settings.aboutLogsSendingEllipsis') : msg('settings.aboutLogsSendButton')}
             </Button>
           </div>
@@ -1554,7 +1554,7 @@
                 <span class="row-sub logs-send-id">{logsSendResult.id}</span>
               </div>
               <IconButton label={msg('settings.aboutLogsSendIdCopyLabel')} size="sm" onclick={copySendLogsId}>
-                <Copy size="1.5rem" strokeWidth={1.8} />
+                <Copy size="1.65rem" strokeWidth={1.8} />
               </IconButton>
             </div>
             {#if logsSendResult.dropped.length > 0}
@@ -1570,7 +1570,7 @@
               <span class="row-sub">{msg('tickets.settingsHint')}</span>
             </div>
             <Button size="sm" onclick={() => navigate('support', { view: 'new', topic: 'launcher' })}>
-              <LifeBuoy size="1.5rem" strokeWidth={1.8} />
+              <LifeBuoy size="1.65rem" strokeWidth={1.8} />
               {msg('tickets.writeSupport')}
             </Button>
           </div>
@@ -1634,7 +1634,7 @@
 {#if pending}
   <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
 {/if}
-<Modal bind:open={historyOpen} title={msg('settings.aboutHistoryLabel')} width="104rem">
+<Modal bind:open={historyOpen} title={msg('settings.aboutHistoryLabel')} width="114.4rem">
   <ReleaseNotesList notes={$releaseNotesHistory} currentVersion={$selfUpdateStatus.currentVersion} />
 </Modal>
 
@@ -1662,7 +1662,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-6);
-    padding: 1.3rem 0;
+    padding: 1.43rem 0;
   }
 
   .row + .row {
@@ -1720,7 +1720,7 @@
   }
 
   .logs-upload-progress {
-    width: min(28rem, 100%);
+    width: min(30.8rem, 100%);
     margin-top: var(--space-2);
   }
 
@@ -1756,7 +1756,7 @@
     color: var(--accent-text);
     font-size: var(--font-xs);
     font-weight: 500;
-    padding: 0.2rem 0.3rem;
+    padding: 0.22rem 0.33rem;
     margin-left: -0.3rem;
     border-radius: var(--radius-xs);
   }

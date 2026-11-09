@@ -50,7 +50,7 @@
     </p>
     <div class="actions">
       <Button disabled={busy || running} onclick={() => createManifest(gameId)}>
-        <FileCheck size="1.5rem" strokeWidth={1.8} />
+        <FileCheck size="1.65rem" strokeWidth={1.8} />
         {msg('verify.createManifest')}
       </Button>
     </div>
@@ -113,12 +113,12 @@
   {#if !unavailable}
     <div class="actions">
       <Button disabled={busy || running} onclick={() => verify(gameId)}>
-        <FileCheck size="1.5rem" strokeWidth={1.8} />
+        <FileCheck size="1.65rem" strokeWidth={1.8} />
         {msg('verify.verifyFiles')}
       </Button>
       {#if damaged && state?.repairable}
         <Button variant="primary" disabled={busy || running} onclick={() => repair(gameId)}>
-          <Wrench size="1.5rem" strokeWidth={1.8} />
+          <Wrench size="1.65rem" strokeWidth={1.8} />
           {msg('verify.repair')}
         </Button>
       {/if}
@@ -132,7 +132,7 @@
 
 <style>
   .section {
-    max-width: 120rem;
+    max-width: 132rem;
     margin-bottom: var(--space-6);
   }
 
@@ -160,7 +160,7 @@
   .summary dt {
     font-size: var(--font-xs);
     color: var(--text-3);
-    margin-bottom: 0.4rem;
+    margin-bottom: 0.44rem;
   }
 
   .summary dd {

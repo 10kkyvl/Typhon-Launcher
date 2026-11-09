@@ -58,7 +58,7 @@
 
 {#if unavailable || failed || media?.supported}
   <section class="music" aria-label={msg('overlay.musicLabel')}>
-    <span class="icon"><Music size="1.6rem" strokeWidth={1.8} /></span>
+    <span class="icon"><Music size="1.76rem" strokeWidth={1.8} /></span>
     <div class="info">
       {#if unavailable}
         <span class="muted">{msg('overlay.musicUnavailable')}</span>
@@ -75,7 +75,7 @@
     {#if track}
       <div class="controls">
         <IconButton label={msg('overlay.musicPrevious')} size="sm" disabled={!track.canPrev} onclick={() => command(mediaPrevious)}>
-          <SkipBack size="1.6rem" strokeWidth={1.8} />
+          <SkipBack size="1.76rem" strokeWidth={1.8} />
         </IconButton>
         <IconButton
           label={track.playing ? msg('overlay.musicPause') : msg('overlay.musicPlay')}
@@ -84,13 +84,13 @@
           onclick={() => command(mediaToggle)}
         >
           {#if track.playing}
-            <Pause size="1.6rem" strokeWidth={1.8} />
+            <Pause size="1.76rem" strokeWidth={1.8} />
           {:else}
-            <Play size="1.6rem" strokeWidth={1.8} />
+            <Play size="1.76rem" strokeWidth={1.8} />
           {/if}
         </IconButton>
         <IconButton label={msg('overlay.musicNext')} size="sm" disabled={!track.canNext} onclick={() => command(mediaNext)}>
-          <SkipForward size="1.6rem" strokeWidth={1.8} />
+          <SkipForward size="1.76rem" strokeWidth={1.8} />
         </IconButton>
       </div>
     {/if}
@@ -120,7 +120,7 @@
     flex: 1;
     flex-direction: column;
     min-width: 0;
-    gap: 0.1rem;
+    gap: 0.11rem;
   }
 
   .info strong,
@@ -147,6 +147,6 @@
   .controls {
     display: flex;
     flex-shrink: 0;
-    gap: 0.2rem;
+    gap: 0.22rem;
   }
 </style>

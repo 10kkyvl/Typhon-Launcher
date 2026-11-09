@@ -26,6 +26,6 @@
 </script>
 
 <Button {variant} {size} onclick={open}>
-  <MessagesSquare size="1.5rem" strokeWidth={1.8} />
+  <MessagesSquare size="1.65rem" strokeWidth={1.8} />
   {label}
 </Button>

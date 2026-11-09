@@ -33,7 +33,7 @@
   }
 </script>
 
-<Modal bind:open title={msg('modals.socialConsentTitle')} width="50rem" onclose={() => onclose?.()}>
+<Modal bind:open title={msg('modals.socialConsentTitle')} width="55rem" onclose={() => onclose?.()}>
   <div class="body">
     <p class="text">
       {msg('modals.socialConsentIntro')}
@@ -74,8 +74,8 @@
   .list {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
-    padding-left: 2rem;
+    gap: 0.44rem;
+    padding-left: 2.2rem;
     list-style: disc;
     font-size: var(--font-sm);
     line-height: 1.55;

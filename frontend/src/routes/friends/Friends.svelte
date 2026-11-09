@@ -268,7 +268,7 @@
       <div
         class="request"
         class:settling={settling(request.id)}
-        in:fly={{ y: '0.8rem', duration: motion('--dur-panel') }}
+        in:fly={{ y: '0.88rem', duration: motion('--dur-panel') }}
         out:fade={{ duration: motion('--dur') }}
       >
         <FriendRow user={request} variant="card" reserve={incomingReserve} stats={incomingStats(request)} onopen={() => openProfile(request)}>
@@ -298,13 +298,13 @@
 
 {#snippet friendActions(friend: FriendView)}
   <Button variant="ghost" size="sm" onclick={() => openMessage(friend)}>
-    <MessageCircle size="1.4rem" strokeWidth={1.8} />
+    <MessageCircle size="1.54rem" strokeWidth={1.8} />
     {msg('social.chatWrite')}
   </Button>
   <DropdownMenu items={menuItems} onselect={(item) => onMenu(friend, item)}>
     {#snippet trigger({ toggle })}
       <IconButton label={msg('social.moreLabel')} size="sm" onclick={toggle}>
-        <EllipsisVertical size="1.7rem" strokeWidth={1.8} />
+        <EllipsisVertical size="1.87rem" strokeWidth={1.8} />
       </IconButton>
     {/snippet}
   </DropdownMenu>
@@ -316,7 +316,7 @@
       {#if !isGuest && !$needsSocialConsent}
         <Button onclick={() => (codeOpen = !codeOpen)} pressed={codeOpen}>{msg('social.friendsMyCodeButton')}</Button>
         <Button variant="primary" onclick={() => (addOpen = true)}>
-          <UserPlus size="1.5rem" strokeWidth={1.8} />
+          <UserPlus size="1.65rem" strokeWidth={1.8} />
           {msg('social.friendsAddFriend')}
         </Button>
       {/if}
@@ -329,11 +329,11 @@
       description={msg('social.friendsGuestDesc')}
     >
       {#snippet icon()}
-        <Users size="2.2rem" strokeWidth={1.6} />
+        <Users size="2.42rem" strokeWidth={1.6} />
       {/snippet}
       {#snippet actions()}
         <Button variant="primary" onclick={() => signIn('login')}>
-          <LogIn size="1.5rem" strokeWidth={1.8} />
+          <LogIn size="1.65rem" strokeWidth={1.8} />
           {msg('social.signInButton')}
         </Button>
         <Button onclick={() => signIn('register')}>{msg('social.createAccountButton')}</Button>
@@ -345,7 +345,7 @@
       description={msg('social.friendsConsentDesc')}
     >
       {#snippet icon()}
-        <Users size="2.2rem" strokeWidth={1.6} />
+        <Users size="2.42rem" strokeWidth={1.6} />
       {/snippet}
       {#snippet actions()}
         <Button variant="primary" onclick={() => (consentOpen = true)}>{msg('social.friendsEnableSync')}</Button>
@@ -387,9 +387,9 @@
             >
               {#snippet trigger({ open, toggle })}
                 <Chip selected={open} onclick={toggle}>
-                  <ArrowDownUp size="1.4rem" strokeWidth={1.8} />
+                  <ArrowDownUp size="1.54rem" strokeWidth={1.8} />
                   {sortLabels[sortBy]}
-                  <ChevronDown size="1.4rem" strokeWidth={1.8} />
+                  <ChevronDown size="1.54rem" strokeWidth={1.8} />
                 </Chip>
               {/snippet}
             </DropdownMenu>
@@ -402,9 +402,9 @@
             >
               {#snippet item(option)}
                 {#if option.id === 'list'}
-                  <List size="1.6rem" strokeWidth={1.8} />
+                  <List size="1.76rem" strokeWidth={1.8} />
                 {:else}
-                  <LayoutGrid size="1.6rem" strokeWidth={1.8} />
+                  <LayoutGrid size="1.76rem" strokeWidth={1.8} />
                 {/if}
               {/snippet}
             </SegmentedControl>
@@ -416,11 +416,11 @@
         {#if page.friends.length === 0}
           <EmptyState title={msg('social.friendsEmptyNobodyTitle')} description={msg('social.friendsEmptyNobodyDesc')}>
             {#snippet icon()}
-              <Users size="2.2rem" strokeWidth={1.6} />
+              <Users size="2.42rem" strokeWidth={1.6} />
             {/snippet}
             {#snippet actions()}
               <Button variant="primary" onclick={() => (addOpen = true)}>
-                <UserPlus size="1.5rem" strokeWidth={1.8} />
+                <UserPlus size="1.65rem" strokeWidth={1.8} />
                 {msg('social.friendsAddFriend')}
               </Button>
             {/snippet}
@@ -489,7 +489,7 @@
               <div
                 class="request"
                 class:settling={settling(request.id)}
-                in:fly={{ y: '0.8rem', duration: motion('--dur-panel') }}
+                in:fly={{ y: '0.88rem', duration: motion('--dur-panel') }}
                 out:fade={{ duration: motion('--dur') }}
               >
                 <FriendRow user={request} variant="card" reserve={outgoingReserve} stats={outgoingStats(request)} onopen={() => openProfile(request)}>
@@ -511,7 +511,7 @@
       {/if}
 
       <div class="safety">
-        <ShieldCheck size="2rem" strokeWidth={1.6} />
+        <ShieldCheck size="2.2rem" strokeWidth={1.6} />
         <div class="safety-text">
           <h4>{msg('social.friendsSafetyTitle')}</h4>
           <p>{msg('social.friendsSafetyDesc')}</p>
@@ -528,7 +528,7 @@
           <div
             class="request"
             class:settling={settling(user.id)}
-            in:fly={{ y: '0.8rem', duration: motion('--dur-panel') }}
+            in:fly={{ y: '0.88rem', duration: motion('--dur-panel') }}
             out:fade={{ duration: motion('--dur') }}
           >
             <FriendRow {user} variant="card" reserve={blockedReserve}>
@@ -574,8 +574,8 @@
 
   .search-wrap {
     flex: 1;
-    min-width: 20rem;
-    max-width: 40rem;
+    min-width: 22rem;
+    max-width: 44rem;
   }
 
   .toolbar-right {
@@ -607,8 +607,8 @@
   }
 
   .eyebrow-dot {
-    width: 0.8rem;
-    height: 0.8rem;
+    width: 0.88rem;
+    height: 0.88rem;
     border-radius: 50%;
     background: var(--accent);
   }
@@ -629,7 +629,7 @@
 
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(24.2rem, 1fr));
     gap: var(--space-4);
   }
 
@@ -642,10 +642,10 @@
   .eyebrow {
     display: flex;
     align-items: center;
-    gap: 0.8rem;
+    gap: 0.88rem;
     margin: var(--space-6) 0 var(--space-3);
-    padding: 0 0.2rem;
-    font-size: 1.2rem;
+    padding: 0 0.22rem;
+    font-size: 1.32rem;
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -671,7 +671,7 @@
   }
 
   .safety-text p {
-    margin-top: 0.3rem;
+    margin-top: 0.33rem;
     font-size: var(--font-xs);
     line-height: 1.5;
     color: var(--text-3);

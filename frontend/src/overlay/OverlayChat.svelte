@@ -168,7 +168,7 @@
 <div class="chat">
   {#if peer}
     <header class="dialog-head">
-      <button class="back" type="button" aria-label={msg('social.chatBack')} onclick={showList}><ArrowLeft size="1.7rem" /></button>
+      <button class="back" type="button" aria-label={msg('social.chatBack')} onclick={showList}><ArrowLeft size="1.87rem" /></button>
       <Avatar size="sm" name={displayName(peer)} src={peer.avatarUrl} {...fieldsFrame(peer)} />
       <div class="head-copy">
         <strong>{displayName(peer)}</strong>
@@ -179,7 +179,7 @@
     <div class="messages" bind:this={scrollBox}>
       {#if $nextByPeer[peer.id]}
         <button class="load-more" type="button" disabled={$chatLoadingMore} onclick={() => loadMore(peer.id).catch(() => undefined)}>
-          <ChevronUp size="1.4rem" /> {$chatLoadingMore ? msg('social.chatLoadingHistory') : msg('social.chatEarlier')}
+          <ChevronUp size="1.54rem" /> {$chatLoadingMore ? msg('social.chatLoadingHistory') : msg('social.chatEarlier')}
         </button>
       {/if}
       {#if $chatHistoryError}
@@ -210,7 +210,7 @@
                 <span class="status" role="status">{msg('social.chatSending')}</span>
               {/if}
               {#if $failedMessages.has(message.clientId)}
-                <button class="retry" type="button" onclick={() => retry(message)}><RefreshCw size="1.25rem" /> {msg('social.chatRetry')}</button>
+                <button class="retry" type="button" onclick={() => retry(message)}><RefreshCw size="1.375rem" /> {msg('social.chatRetry')}</button>
               {/if}
             </article>
           </div>
@@ -237,7 +237,7 @@
           oninput={(event) => setComposer((event.currentTarget as HTMLTextAreaElement).value)}
           onkeydown={onKeydown}
         ></textarea>
-        <button class="send" type="button" aria-label={msg('social.chatSend')} disabled={!draft.trim() || sending} onclick={() => submit()}><Send size="1.7rem" /></button>
+        <button class="send" type="button" aria-label={msg('social.chatSend')} disabled={!draft.trim() || sending} onclick={() => submit()}><Send size="1.87rem" /></button>
       </div>
       <div class="hint">{msg('social.chatHint')}</div>
     {/if}
@@ -291,14 +291,14 @@
     display: flex;
     align-items: center;
     gap: var(--space-2);
-    min-height: 5.2rem;
+    min-height: 5.72rem;
     padding: 0 var(--space-3);
     border-bottom: 1px solid var(--border);
   }
 
   .back {
     display: inline-flex;
-    padding: 0.5rem;
+    padding: 0.55rem;
     color: var(--text-2);
   }
 
@@ -307,7 +307,7 @@
     display: flex;
     flex-direction: column;
     min-width: 0;
-    gap: 0.15rem;
+    gap: 0.165rem;
     text-align: left;
   }
 
@@ -351,10 +351,10 @@
   .unread {
     display: grid;
     place-items: center;
-    min-width: 2rem;
-    height: 2rem;
-    padding: 0 0.4rem;
-    border-radius: 2rem;
+    min-width: 2.2rem;
+    height: 2.2rem;
+    padding: 0 0.44rem;
+    border-radius: 2.2rem;
     background: var(--accent);
     color: var(--accent-on, #fff);
     font-size: var(--font-xs);
@@ -365,7 +365,7 @@
     align-items: center;
     justify-content: center;
     gap: var(--space-2);
-    min-height: 13rem;
+    min-height: 14.3rem;
     padding: var(--space-5);
     color: var(--text-3);
     font-size: var(--font-sm);
@@ -400,7 +400,7 @@
   .load-more {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.44rem;
     margin: 0 auto var(--space-3);
     font-size: var(--font-xs);
   }
@@ -417,14 +417,14 @@
 
   .message {
     max-width: 86%;
-    padding: 0.85rem 1rem;
+    padding: 0.935rem 1.1rem;
     border: 1px solid var(--border);
-    border-radius: 1.2rem 1.2rem 1.2rem 0.35rem;
+    border-radius: 1.32rem 1.32rem 1.32rem 0.385rem;
     background: var(--surface-3);
   }
 
   .own .message {
-    border-radius: 1.2rem 1.2rem 0.35rem 1.2rem;
+    border-radius: 1.32rem 1.32rem 0.385rem 1.32rem;
     background: color-mix(in srgb, var(--accent) 18%, var(--surface-3));
   }
 
@@ -436,10 +436,10 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.6rem;
-    margin-bottom: 0.35rem;
+    gap: 0.66rem;
+    margin-bottom: 0.385rem;
     color: var(--text-3);
-    font-size: 1rem;
+    font-size: 1.1rem;
   }
 
   .message-meta time {
@@ -467,15 +467,15 @@
 
   .status {
     color: var(--text-3);
-    font-size: 1rem;
+    font-size: 1.1rem;
   }
 
   .retry {
     display: inline-flex;
     align-items: center;
-    gap: 0.3rem;
+    gap: 0.33rem;
     color: var(--danger);
-    font-size: 1rem;
+    font-size: 1.1rem;
   }
 
   .typing {
@@ -495,8 +495,8 @@
 
   .composer textarea {
     flex: 1;
-    min-height: 4.2rem;
-    padding: 0.7rem;
+    min-height: 4.62rem;
+    padding: 0.77rem;
     resize: none;
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-sm);
@@ -516,8 +516,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 3.8rem;
-    height: 3.8rem;
+    width: 4.18rem;
+    height: 4.18rem;
     flex-shrink: 0;
     border-radius: 50%;
     background: var(--accent);
@@ -530,8 +530,8 @@
   }
 
   .hint {
-    padding: 0.45rem var(--space-3) var(--space-2);
+    padding: 0.495rem var(--space-3) var(--space-2);
     color: var(--text-3);
-    font-size: 1rem;
+    font-size: 1.1rem;
   }
 </style>

@@ -127,7 +127,7 @@
   onDestroy(() => cancelSpin?.());
 </script>
 
-<Modal open title={msg('games.randomTitle')} width="52rem" {onclose}>
+<Modal open title={msg('games.randomTitle')} width="57.2rem" {onclose}>
   {#if phase === 'setup' || phase === 'empty'}
     <div class="filters">
       <div class="group">
@@ -186,7 +186,7 @@
     {#if phase === 'setup' || phase === 'empty'}
       <Button onclick={onclose}>{msg('common.close')}</Button>
       <Button variant="primary" onclick={spin}>
-        <Dices size="1.6rem" strokeWidth={1.8} />
+        <Dices size="1.76rem" strokeWidth={1.8} />
         {msg('games.randomSpin')}
       </Button>
     {:else if phase === 'spinning'}
@@ -194,12 +194,12 @@
     {:else if shown}
       <Button onclick={() => (phase = 'setup')}>{msg('games.randomFilters')}</Button>
       <Button onclick={spin}>
-        <Dices size="1.6rem" strokeWidth={1.8} />
+        <Dices size="1.76rem" strokeWidth={1.8} />
         {msg('games.randomAgain')}
       </Button>
       <Button variant="primary" disabled={launching} onclick={() => play(shown!)}>
         {#if canPlay(shown)}
-          <Play size="1.6rem" strokeWidth={1.8} />
+          <Play size="1.76rem" strokeWidth={1.8} />
           {msg('games.randomPlay')}
         {:else}
           {msg('games.randomOpen')}
@@ -252,7 +252,7 @@
 
   .cover {
     flex: none;
-    width: 18rem;
+    width: 19.8rem;
   }
 
   .info h3 {

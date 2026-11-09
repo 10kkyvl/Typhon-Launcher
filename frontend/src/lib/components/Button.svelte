@@ -28,7 +28,7 @@
     align-items: center;
     justify-content: center;
     vertical-align: middle;
-    gap: 0.7rem;
+    gap: 0.77rem;
     font-size: var(--font-sm);
     font-weight: 500;
     border-radius: var(--radius-md);
@@ -49,18 +49,18 @@
 
   .md {
     height: var(--control-md);
-    padding: 0 1.5rem;
+    padding: 0 1.65rem;
   }
 
   .sm {
     height: var(--control-sm);
-    padding: 0 1.2rem;
+    padding: 0 1.32rem;
     font-size: var(--font-xs);
   }
 
   .lg {
     height: var(--control-lg);
-    padding: 0 2rem;
+    padding: 0 2.2rem;
     font-size: var(--font-md);
     font-weight: 600;
   }
@@ -73,7 +73,7 @@
 
   .primary:hover:not(:disabled) {
     background: var(--accent-hover);
-    box-shadow: 0 0.8rem 2rem -0.8rem var(--accent-ring);
+    box-shadow: 0 0.88rem 2.2rem -0.8rem var(--accent-ring);
     transform: translateY(-1px);
   }
 

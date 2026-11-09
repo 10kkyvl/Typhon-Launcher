@@ -121,7 +121,7 @@
   }
 </script>
 
-<Modal bind:open title={mode === 'change' ? msg('modals.metadataMatchChangeTitle') : msg('modals.metadataMatchFindTitle')} width="56rem">
+<Modal bind:open title={mode === 'change' ? msg('modals.metadataMatchChangeTitle') : msg('modals.metadataMatchFindTitle')} width="61.6rem">
   {#if pending}
     <div class="confirm">
       <p class="confirm-text">
@@ -214,7 +214,7 @@
   }
 
   .block h4 {
-    font-size: 1.2rem;
+    font-size: 1.32rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -225,10 +225,10 @@
   .candidates {
     display: flex;
     flex-direction: column;
-    max-height: 26rem;
+    max-height: 28.6rem;
     overflow-y: auto;
     padding: var(--space-1);
-    margin-top: 0.8rem;
+    margin-top: 0.88rem;
     background: var(--surface);
     border-radius: var(--radius-md);
   }
@@ -237,7 +237,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    padding: 0.7rem 1rem;
+    padding: 0.77rem 1.1rem;
     border-radius: var(--radius-sm);
     text-align: left;
     transition: background var(--dur-fast) var(--ease);
@@ -252,8 +252,8 @@
   }
 
   .thumb {
-    width: 3.6rem;
-    height: 4.8rem;
+    width: 3.96rem;
+    height: 5.28rem;
     flex-shrink: 0;
     border-radius: var(--radius-xs);
     overflow: hidden;
@@ -264,7 +264,7 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: 0.22rem;
   }
 
   .candidate-title {
@@ -277,11 +277,11 @@
 
   .year {
     color: var(--text-3);
-    margin-left: 0.4rem;
+    margin-left: 0.44rem;
   }
 
   .candidate-developer {
-    font-size: 1.2rem;
+    font-size: 1.32rem;
     color: var(--text-3);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -294,7 +294,7 @@
     color: var(--text-3);
     flex-shrink: 0;
     text-align: right;
-    max-width: 14rem;
+    max-width: 15.4rem;
   }
 
   .candidate-confidence.high {

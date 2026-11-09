@@ -93,7 +93,7 @@
               <StatusBadge kind="warning" label={msg('modals.sourceDetailsStatusReview')} plain />
             {/if}
             <Button size="sm" disabled={linking !== null} onclick={() => link(item)}>
-              <Link2 size="1.4rem" strokeWidth={1.8} />
+              <Link2 size="1.54rem" strokeWidth={1.8} />
               {msg('games.similarLink')}
             </Button>
           </div>
@@ -118,7 +118,7 @@
   .muted {
     font-size: var(--font-sm);
     color: var(--text-3);
-    padding: 0.4rem 0;
+    padding: 0.44rem 0;
   }
 
   .list {
@@ -130,7 +130,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-4);
-    padding: 1.1rem 0;
+    padding: 1.21rem 0;
   }
 
   .row + .row {

@@ -571,7 +571,7 @@
 <div class="bp-game">
   <div class="game-content" inert={Boolean(dialog)}>
     <header class="page-head">
-      <button class="large-button secondary back-button" data-bp-focus="game:back" onclick={onback}><ArrowLeft size="2rem" />{bp('bp.game.back')}</button>
+      <button class="large-button secondary back-button" data-bp-focus="game:back" onclick={onback}><ArrowLeft size="2.2rem" />{bp('bp.game.back')}</button>
       <div class="head-tabs" role="tablist" aria-label={title}>
         <button class="tab" class:selected={activeTab === 'overview'} role="tab" aria-selected={activeTab === 'overview'} data-bp-focus="game:tab:overview" onclick={() => activeTab = 'overview'}>{bp('bp.game.tabOverview')}</button>
         {#if !sideloaded}<button class="tab" class:selected={activeTab === 'releases'} role="tab" aria-selected={activeTab === 'releases'} data-bp-focus="game:tab:releases" onclick={openReleases}>{bp('bp.game.tabReleases')}<span>{availableReleases.length}</span></button>{/if}
@@ -583,11 +583,11 @@
     {:else if detailsFailed && !catalogGame && !localGame}
       <section class="bp-empty" role="alert">
         <h1>{bp('bp.game.loadFailed')}</h1>
-        <button class="large-button primary" data-bp-focus="game:retry-details" data-bp-default onclick={() => { detailLoadId = ''; void loadDetails(id, localGame); }}><RotateCw size="1.8rem" />{bp('bp.game.retry')}</button>
+        <button class="large-button primary" data-bp-focus="game:retry-details" data-bp-default onclick={() => { detailLoadId = ''; void loadDetails(id, localGame); }}><RotateCw size="1.98rem" />{bp('bp.game.retry')}</button>
       </section>
     {:else}
       <section class="hero" style:background-image={`linear-gradient(90deg, var(--bg) 0%, color-mix(in srgb, var(--bg) 85%, transparent) 55%, color-mix(in srgb, var(--bg) 40%, transparent) 100%), linear-gradient(0deg, var(--bg), transparent 70%), url("${hero}")`}>
-        <div class="hero-cover"><Artwork src={cover} alt={title} label={title} ratio="3 / 4" radius="1.4rem" /></div>
+        <div class="hero-cover"><Artwork src={cover} alt={title} label={title} ratio="3 / 4" radius="1.54rem" /></div>
         <div class="hero-info">
           <span class="eyebrow">{bp('bp.game.eyebrow')}</span>
           <h1>{title}</h1>
@@ -604,24 +604,24 @@
           <div class="hero-actions">
             {#if installed && localGame}
               {#if running}
-                <button class="large-button danger" data-bp-focus="game:play-toggle" data-bp-default onclick={() => { pageError = ''; showDialog('stop'); }}><Square size="1.8rem" fill="currentColor" />{bp('bp.game.stop')}</button>
+                <button class="large-button danger" data-bp-focus="game:play-toggle" data-bp-default onclick={() => { pageError = ''; showDialog('stop'); }}><Square size="1.98rem" fill="currentColor" />{bp('bp.game.stop')}</button>
               {:else}
-                <button class="large-button primary" data-bp-focus="game:play-toggle" data-bp-default disabled={launching} onclick={() => void launch()}><Play size="1.9rem" fill="currentColor" />{bp('bp.game.launch')}</button>
+                <button class="large-button primary" data-bp-focus="game:play-toggle" data-bp-default disabled={launching} onclick={() => void launch()}><Play size="2.09rem" fill="currentColor" />{bp('bp.game.launch')}</button>
               {/if}
             {:else if currentInstall && installActive(currentInstall.status)}
-              <button class="large-button primary" data-bp-focus="game:hero:continue-install" data-bp-default onclick={ondownloads}><Download size="1.9rem" />{bp('bp.game.installContinue')}</button>
+              <button class="large-button primary" data-bp-focus="game:hero:continue-install" data-bp-default onclick={ondownloads}><Download size="2.09rem" />{bp('bp.game.installContinue')}</button>
             {:else if currentDownload?.status === 'completed'}
-              <button class="large-button primary" data-bp-focus="game:hero:continue-install" data-bp-default onclick={ondownloads}><Download size="1.9rem" />{bp('bp.game.installContinue')}</button>
+              <button class="large-button primary" data-bp-focus="game:hero:continue-install" data-bp-default onclick={ondownloads}><Download size="2.09rem" />{bp('bp.game.installContinue')}</button>
             {:else if currentDownload}
-              <button class="large-button primary" data-bp-focus="game:download-status" data-bp-default onclick={ondownloads}><Download size="1.9rem" />{bp('bp.game.downloads')}</button>
+              <button class="large-button primary" data-bp-focus="game:download-status" data-bp-default onclick={ondownloads}><Download size="2.09rem" />{bp('bp.game.downloads')}</button>
             {:else}
-              <button class="large-button primary" data-bp-focus="game:see-releases" data-bp-default onclick={openReleases}><Download size="1.9rem" />{heroDownloadLabel}</button>
+              <button class="large-button primary" data-bp-focus="game:see-releases" data-bp-default onclick={openReleases}><Download size="2.09rem" />{heroDownloadLabel}</button>
             {/if}
             {#if !localGame && canonicalId}
-              <button class="large-button secondary" data-bp-focus="game:add-library" onclick={() => void addToLibrary()}><Check size="1.8rem" />{bp('bp.game.addToLibrary')}</button>
+              <button class="large-button secondary" data-bp-focus="game:add-library" onclick={() => void addToLibrary()}><Check size="1.98rem" />{bp('bp.game.addToLibrary')}</button>
             {/if}
             {#if localGame}
-              <button class="large-button secondary" data-bp-focus="game:favorite" aria-pressed={Boolean(localGame.favorite)} disabled={changingFavorite} onclick={() => void toggleFavorite()}><Heart size="1.8rem" fill={localGame.favorite ? 'currentColor' : 'none'} />{localGame.favorite ? bp('bp.game.favoriteRemove') : bp('bp.game.favoriteAdd')}</button>
+              <button class="large-button secondary" data-bp-focus="game:favorite" aria-pressed={Boolean(localGame.favorite)} disabled={changingFavorite} onclick={() => void toggleFavorite()}><Heart size="1.98rem" fill={localGame.favorite ? 'currentColor' : 'none'} />{localGame.favorite ? bp('bp.game.favoriteRemove') : bp('bp.game.favoriteAdd')}</button>
               <button class="large-button secondary" data-bp-focus="game:status" onclick={() => { dialogError = ''; showDialog('status'); }}>{bp('bp.game.status')}: {statusLabel(localGame.status)}</button>
             {/if}
           </div>
@@ -679,7 +679,7 @@
             <h2>{bp('bp.game.description')}</h2>
             {#if summary}
               <p class="summary summary-preview">{summary}</p>
-              <button class="large-button secondary description-open" data-bp-focus="game:description:open" onclick={openDescription}>{bp('bp.game.readDescription')}<ChevronRight size="1.8rem" /></button>
+              <button class="large-button secondary description-open" data-bp-focus="game:description:open" onclick={openDescription}>{bp('bp.game.readDescription')}<ChevronRight size="1.98rem" /></button>
             {:else}<p class="muted">{bp('bp.game.noDescription')}</p>{/if}
           </article>
           <article class="screenshots-card">
@@ -739,7 +739,7 @@
             {#if releasesLoading}<span class="loading-inline">{bp('bp.game.releaseLoading')}</span>{/if}
           </div>
           {#if releasesFailed}
-            <div class="notice error" role="alert"><span>{bp('bp.game.releaseFailed')}</span><button class="large-button secondary" data-bp-focus="game:retry-releases" onclick={() => void loadReleases(releaseCanonicalId, localGame?.title ?? catalogGame?.title ?? '')}><RotateCw size="1.7rem" />{bp('bp.game.releaseRetry')}</button></div>
+            <div class="notice error" role="alert"><span>{bp('bp.game.releaseFailed')}</span><button class="large-button secondary" data-bp-focus="game:retry-releases" onclick={() => void loadReleases(releaseCanonicalId, localGame?.title ?? catalogGame?.title ?? '')}><RotateCw size="1.87rem" />{bp('bp.game.releaseRetry')}</button></div>
           {:else if releasesLoading && !releaseGroups.length}
             <div class="loading-state compact" role="status"><span class="spinner"></span><span>{bp('bp.game.releaseLoading')}</span></div>
           {:else if !availableReleases.length}
@@ -756,7 +756,7 @@
                   {#if release.edition}<span class="release-edition">{release.edition}</span>{/if}
                   <span class="release-info"><span>{formattedSize(release.size)}</span>{#if release.languages?.length}<span>{languageLabel(release.languages)}</span>{/if}<span>{relativeDate(release.uploadedAt)}</span></span>
                   <span class="release-source">{group.sourceName}{#if release.repacker} · {release.repacker}{/if}{#if group.duplicates?.length}<span> · +{group.duplicates.length}</span>{/if}</span>
-                  {#if removed}<span class="release-unavailable">{bp('bp.game.releaseRemoved')}</span>{:else}<span class="release-cta">{pendingReleaseId === release.id ? bp('bp.game.prepareRelease') : bp('bp.game.releaseDownload')}<ChevronRight size="1.8rem" /></span>{/if}
+                  {#if removed}<span class="release-unavailable">{bp('bp.game.releaseRemoved')}</span>{:else}<span class="release-cta">{pendingReleaseId === release.id ? bp('bp.game.prepareRelease') : bp('bp.game.releaseDownload')}<ChevronRight size="1.98rem" /></span>{/if}
                 </button>
               {/each}
             </div>
@@ -770,17 +770,17 @@
     <div class="dialog-backdrop">
       <div class="bp-dialog" class:screenshot-dialog={dialog === 'screenshot'} class:description-dialog={dialog === 'description'} role="dialog" aria-modal="true" aria-labelledby="bp-game-dialog-title" tabindex="-1" bind:this={dialogRoot} data-bp-scope>
         {#if dialog === 'download'}
-          <header class="dialog-head"><div><span class="section-kicker">{bp('bp.game.downloads')}</span><h2 id="bp-game-dialog-title">{bp('bp.game.downloadTitle')}</h2></div><button class="icon-button" aria-label={bp('bp.game.downloadClose')} data-bp-focus="game:dialog:download-close" onclick={() => void closeDialog()}><X size="2rem" /></button></header>
+          <header class="dialog-head"><div><span class="section-kicker">{bp('bp.game.downloads')}</span><h2 id="bp-game-dialog-title">{bp('bp.game.downloadTitle')}</h2></div><button class="icon-button" aria-label={bp('bp.game.downloadClose')} data-bp-focus="game:dialog:download-close" onclick={() => void closeDialog()}><X size="2.2rem" /></button></header>
           {#if downloadStep === 'preparing'}
             <div class="loading-state compact" role="status"><span class="spinner"></span><span>{bp('bp.game.prepareRelease')}</span></div>
           {:else if downloadStep === 'prepare-error'}
             <div class="dialog-error" role="alert">{dialogError}</div>
-            <div class="dialog-actions"><button class="large-button secondary" data-bp-focus="game:dialog:retry-prepare" data-bp-default onclick={() => void retryPrepare()}><RotateCw size="1.8rem" />{bp('bp.game.releaseRetry')}</button><button class="large-button secondary" data-bp-focus="game:dialog:close" onclick={() => void closeDialog()}>{bp('bp.game.cancel')}</button></div>
+            <div class="dialog-actions"><button class="large-button secondary" data-bp-focus="game:dialog:retry-prepare" data-bp-default onclick={() => void retryPrepare()}><RotateCw size="1.98rem" />{bp('bp.game.releaseRetry')}</button><button class="large-button secondary" data-bp-focus="game:dialog:close" onclick={() => void closeDialog()}>{bp('bp.game.cancel')}</button></div>
           {:else if downloadStep === 'fetching'}
             <div class="loading-state compact" role="status"><span class="spinner"></span><span>{bp('bp.game.downloadFetching')}</span></div>
           {:else if downloadStep === 'fetch-error'}
             <div class="dialog-error" role="alert">{dialogError}</div>
-            <div class="dialog-actions"><button class="large-button secondary" data-bp-focus="game:dialog:retry-metadata" data-bp-default onclick={() => void retryMetadata()}><RotateCw size="1.8rem" />{bp('bp.game.releaseRetry')}</button><button class="large-button secondary" data-bp-focus="game:dialog:close" onclick={() => void closeDialog()}>{bp('bp.game.cancel')}</button></div>
+            <div class="dialog-actions"><button class="large-button secondary" data-bp-focus="game:dialog:retry-metadata" data-bp-default onclick={() => void retryMetadata()}><RotateCw size="1.98rem" />{bp('bp.game.releaseRetry')}</button><button class="large-button secondary" data-bp-focus="game:dialog:close" onclick={() => void closeDialog()}>{bp('bp.game.cancel')}</button></div>
           {:else if torrent}
             <div class="torrent-summary"><strong>{torrent.name}</strong><span>{formattedSize(torrent.totalBytes)}</span></div>
             {#if consoleDownload.platform}
@@ -792,17 +792,17 @@
             <div class="file-list" role="group" aria-label={bp('bp.game.selectFiles')}>
               {#each torrent.files as file, index (`${index}:${file.path}`)}
                 <button class="file-row" role="checkbox" aria-checked={Boolean(selectedFiles[index])} data-bp-focus={`game:dialog:file:${index}`} onclick={() => selectedFiles[index] = !selectedFiles[index]}>
-                  <span class="check-box" class:on={selectedFiles[index]}>{#if selectedFiles[index]}<Check size="1.6rem" />{/if}</span><span class="file-path">{file.path}</span><span class="file-size">{formattedSize(file.size)}</span>
+                  <span class="check-box" class:on={selectedFiles[index]}>{#if selectedFiles[index]}<Check size="1.76rem" />{/if}</span><span class="file-path">{file.path}</span><span class="file-size">{formattedSize(file.size)}</span>
                 </button>
               {/each}
             </div>
             <div class="selected-summary">{bp('bp.game.selectedFiles', { count: selectedCount, size: formattedSize(selectedBytes) })}</div>
             {#if !$settings?.libraryPath}<div class="notice error" role="alert">{bp('bp.game.librarySetupRequired')}</div>{/if}
             <button class="option-row" role="checkbox" aria-checked={autoInstall} data-bp-focus="game:dialog:auto-install" onclick={() => autoInstall = !autoInstall}>
-              <span class="check-box" class:on={autoInstall}>{#if autoInstall}<Check size="1.6rem" />{/if}</span><span><strong>{bp('bp.game.autoInstall')}</strong><small>{bp('bp.game.autoInstallHint')}</small></span>
+              <span class="check-box" class:on={autoInstall}>{#if autoInstall}<Check size="1.76rem" />{/if}</span><span><strong>{bp('bp.game.autoInstall')}</strong><small>{bp('bp.game.autoInstallHint')}</small></span>
             </button>
             {#if canElevate}<button class="option-row nested" role="checkbox" aria-checked={elevateAhead} data-bp-focus="game:dialog:elevate" onclick={() => elevateAhead = !elevateAhead}>
-              <span class="check-box" class:on={elevateAhead}>{#if elevateAhead}<Check size="1.6rem" />{/if}</span><span><strong>{bp('bp.game.elevateAhead')}</strong><small>{bp('bp.game.elevateAheadHint')}</small></span>
+              <span class="check-box" class:on={elevateAhead}>{#if elevateAhead}<Check size="1.76rem" />{/if}</span><span><strong>{bp('bp.game.elevateAhead')}</strong><small>{bp('bp.game.elevateAheadHint')}</small></span>
             </button>{/if}
             {#if elevationCheckFailed}<p class="muted">{bp('bp.game.elevationFailed')}</p>{/if}
             {#if dialogError}<div class="dialog-error" role="alert">{dialogError}</div>{/if}
@@ -812,12 +812,12 @@
           {/if}
         {:else if dialog === 'screenshot'}
           {@const shot = displayShots.length ? displayShots[screenshotIndex % displayShots.length] : undefined}
-          <header class="dialog-head"><div><span class="section-kicker">{bp('bp.game.screenshots')}</span><h2 id="bp-game-dialog-title">{title}</h2></div><button class="icon-button" aria-label={bp('bp.game.screenshotClose')} data-bp-focus="game:dialog:screenshot-close" data-bp-default onclick={() => void closeDialog()}><X size="2rem" /></button></header>
+          <header class="dialog-head"><div><span class="section-kicker">{bp('bp.game.screenshots')}</span><h2 id="bp-game-dialog-title">{title}</h2></div><button class="icon-button" aria-label={bp('bp.game.screenshotClose')} data-bp-focus="game:dialog:screenshot-close" data-bp-default onclick={() => void closeDialog()}><X size="2.2rem" /></button></header>
           {#if shot}
             <div class="screenshot-viewer">
-              <button class="large-button secondary screenshot-nav" aria-label={bp('bp.game.screenshotPrevious')} data-bp-focus="game:dialog:screenshot-previous" onclick={() => screenshotIndex = (screenshotIndex + displayShots.length - 1) % displayShots.length}><ChevronLeft size="2.5rem" /></button>
+              <button class="large-button secondary screenshot-nav" aria-label={bp('bp.game.screenshotPrevious')} data-bp-focus="game:dialog:screenshot-previous" onclick={() => screenshotIndex = (screenshotIndex + displayShots.length - 1) % displayShots.length}><ChevronLeft size="2.75rem" /></button>
               <figure><img src={shot.url || shot.path} alt={`${title} screenshot`} /><figcaption>{bp('bp.game.screenshotCounter', { current: screenshotIndex + 1, total: displayShots.length })}</figcaption></figure>
-              <button class="large-button secondary screenshot-nav" aria-label={bp('bp.game.screenshotNext')} data-bp-focus="game:dialog:screenshot-next" onclick={() => screenshotIndex = (screenshotIndex + 1) % displayShots.length}><ChevronRight size="2.5rem" /></button>
+              <button class="large-button secondary screenshot-nav" aria-label={bp('bp.game.screenshotNext')} data-bp-focus="game:dialog:screenshot-next" onclick={() => screenshotIndex = (screenshotIndex + 1) % displayShots.length}><ChevronRight size="2.75rem" /></button>
             </div>
             <p class="viewer-hint">{bp('bp.game.screenshotNavigationHint')}</p>
           {/if}
@@ -827,24 +827,24 @@
             <p id="bp-game-description-text">{summary}</p>
           </div>
           <div class="description-actions">
-            <button class="large-button secondary" data-bp-focus="game:dialog:description-up" aria-label={bp('bp.game.descriptionScrollUp')} onclick={() => scrollDescription('up')}><ArrowUp size="1.8rem" />{bp('bp.game.descriptionScrollUp')}</button>
-            <button class="large-button secondary" data-bp-focus="game:dialog:description-down" aria-label={bp('bp.game.descriptionScrollDown')} onclick={() => scrollDescription('down')}><ArrowDown size="1.8rem" />{bp('bp.game.descriptionScrollDown')}</button>
-            <button class="large-button primary" data-bp-focus="game:dialog:description-close" data-bp-default onclick={() => void closeDialog()}><X size="1.8rem" />{bp('bp.game.descriptionClose')}</button>
+            <button class="large-button secondary" data-bp-focus="game:dialog:description-up" aria-label={bp('bp.game.descriptionScrollUp')} onclick={() => scrollDescription('up')}><ArrowUp size="1.98rem" />{bp('bp.game.descriptionScrollUp')}</button>
+            <button class="large-button secondary" data-bp-focus="game:dialog:description-down" aria-label={bp('bp.game.descriptionScrollDown')} onclick={() => scrollDescription('down')}><ArrowDown size="1.98rem" />{bp('bp.game.descriptionScrollDown')}</button>
+            <button class="large-button primary" data-bp-focus="game:dialog:description-close" data-bp-default onclick={() => void closeDialog()}><X size="1.98rem" />{bp('bp.game.descriptionClose')}</button>
           </div>
         {:else if dialog === 'status' && localGame}
-          <header class="dialog-head"><div><span class="section-kicker">{bp('bp.game.status')}</span><h2 id="bp-game-dialog-title">{bp('bp.game.statusTitle')}</h2></div><button class="icon-button" aria-label={bp('bp.game.cancel')} data-bp-focus="game:dialog:status-close" data-bp-default onclick={() => void closeDialog()}><X size="2rem" /></button></header>
+          <header class="dialog-head"><div><span class="section-kicker">{bp('bp.game.status')}</span><h2 id="bp-game-dialog-title">{bp('bp.game.statusTitle')}</h2></div><button class="icon-button" aria-label={bp('bp.game.cancel')} data-bp-focus="game:dialog:status-close" data-bp-default onclick={() => void closeDialog()}><X size="2.2rem" /></button></header>
           <div class="status-options">
             <button class="status-option" aria-pressed={!localGame.status} data-bp-focus="game:dialog:status:none" onclick={() => void updateStatus('')}>{bp('bp.game.statusNone')}</button>
             {#each GAME_STATUSES as value (value)}<button class="status-option" aria-pressed={localGame.status === value} data-bp-focus={`game:dialog:status:${value}`} onclick={() => void updateStatus(value)}>{bp(`bp.game.status${value[0].toUpperCase()}${value.slice(1)}` as CatalogMessage)}</button>{/each}
           </div>
           {#if dialogError}<div class="dialog-error" role="alert">{dialogError}</div>{/if}
         {:else if dialog === 'stop'}
-          <header class="dialog-head"><div><span class="section-kicker">{bp('bp.game.stop')}</span><h2 id="bp-game-dialog-title">{bp('bp.game.stopTitle')}</h2></div><button class="icon-button" aria-label={bp('bp.game.cancel')} data-bp-focus="game:dialog:stop-close" data-bp-default onclick={() => void closeDialog()}><X size="2rem" /></button></header>
+          <header class="dialog-head"><div><span class="section-kicker">{bp('bp.game.stop')}</span><h2 id="bp-game-dialog-title">{bp('bp.game.stopTitle')}</h2></div><button class="icon-button" aria-label={bp('bp.game.cancel')} data-bp-focus="game:dialog:stop-close" data-bp-default onclick={() => void closeDialog()}><X size="2.2rem" /></button></header>
           <p class="dialog-copy">{bp('bp.game.stopWarning')}</p>
           {#if dialogError}<div class="dialog-error" role="alert">{dialogError}</div>{/if}
           <div class="dialog-actions"><button class="large-button secondary" data-bp-focus="game:dialog:stop-cancel" onclick={() => void closeDialog()}>{bp('bp.game.cancel')}</button><button class="large-button danger" data-bp-focus="game:dialog:stop-confirm" onclick={() => void stop()} disabled={stopping}>{bp('bp.game.confirmStop')}</button></div>
         {:else if dialog === 'cancel-download'}
-          <header class="dialog-head"><div><span class="section-kicker">{bp('bp.game.downloads')}</span><h2 id="bp-game-dialog-title">{bp('bp.game.cancelDownloadTitle')}</h2></div><button class="icon-button" aria-label={bp('bp.game.cancel')} data-bp-focus="game:dialog:cancel-download-close" data-bp-default onclick={() => void closeDialog()}><X size="2rem" /></button></header>
+          <header class="dialog-head"><div><span class="section-kicker">{bp('bp.game.downloads')}</span><h2 id="bp-game-dialog-title">{bp('bp.game.cancelDownloadTitle')}</h2></div><button class="icon-button" aria-label={bp('bp.game.cancel')} data-bp-focus="game:dialog:cancel-download-close" data-bp-default onclick={() => void closeDialog()}><X size="2.2rem" /></button></header>
           <p class="dialog-copy">{bp('bp.game.cancelDownloadText')}</p>
           {#if dialogError}<div class="dialog-error" role="alert">{dialogError}</div>{/if}
           <div class="dialog-actions"><button class="large-button secondary" data-bp-focus="game:dialog:cancel-download-keep" onclick={() => void closeDialog()}>{bp('bp.game.cancel')}</button><button class="large-button danger" data-bp-focus="game:dialog:cancel-download-confirm" onclick={() => void confirmCancelDownload()} disabled={cancelingDownload}>{bp('bp.game.confirmCancelDownload')}</button></div>
@@ -856,136 +856,136 @@
 
 <style>
   .bp-game { position: relative; min-height: 100%; color: var(--text); }
-  .game-content { max-width: 160rem; margin: 0 auto; padding: 2rem clamp(2rem, 4vw, 6rem) 5rem; }
-  .page-head { display: flex; align-items: center; gap: 2rem; margin-bottom: 2rem; }
-  .head-tabs { display: flex; align-items: center; gap: .8rem; }
-  .large-button { min-height: 5.6rem; display: inline-flex; align-items: center; justify-content: center; gap: .9rem; padding: 0 1.8rem; border: 1px solid transparent; border-radius: 1.2rem; background: var(--surface-2); color: var(--text); font-size: 1.55rem; font-weight: 700; line-height: 1.2; text-align: center; cursor: pointer; transition: transform 120ms ease, border-color 120ms ease, background 120ms ease; }
+  .game-content { max-width: 176rem; margin: 0 auto; padding: 2.2rem clamp(2.2rem, 4vw, 6.6rem) 5.5rem; }
+  .page-head { display: flex; align-items: center; gap: 2.2rem; margin-bottom: 2.2rem; }
+  .head-tabs { display: flex; align-items: center; gap: .88rem; }
+  .large-button { min-height: 6.16rem; display: inline-flex; align-items: center; justify-content: center; gap: .99rem; padding: 0 1.98rem; border: 1px solid transparent; border-radius: 1.32rem; background: var(--surface-2); color: var(--text); font-size: 1.705rem; font-weight: 700; line-height: 1.2; text-align: center; cursor: pointer; transition: transform 120ms ease, border-color 120ms ease, background 120ms ease; }
   .large-button:hover:not(:disabled), .tab:hover, .status-option:hover, .release-card:hover:not(:disabled) { transform: translateY(-1px); }
   .large-button.primary { background: var(--accent); color: var(--accent-on, white); }
   .large-button.secondary { border-color: var(--border); background: color-mix(in srgb, var(--surface-2) 86%, transparent); }
   .large-button.danger { background: color-mix(in srgb, var(--danger) 84%, black); color: white; }
   .large-button:disabled { opacity: .5; cursor: default; }
   :global([data-bp-focus]:focus-visible) { outline: 3px solid var(--accent); outline-offset: 4px; }
-  .back-button { min-height: 4.8rem; padding: 0 1.4rem; font-size: 1.35rem; }
-  .tab { min-height: 4.8rem; display: inline-flex; align-items: center; gap: .8rem; padding: 0 1.5rem; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text-2); font-size: 1.45rem; font-weight: 700; cursor: pointer; }
+  .back-button { min-height: 5.28rem; padding: 0 1.54rem; font-size: 1.485rem; }
+  .tab { min-height: 5.28rem; display: inline-flex; align-items: center; gap: .88rem; padding: 0 1.65rem; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text-2); font-size: 1.595rem; font-weight: 700; cursor: pointer; }
   .tab.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, var(--surface)); color: var(--text); }
-  .tab span { min-width: 2.3rem; padding: .2rem .5rem; border-radius: 999px; background: var(--surface-3); color: var(--text-3); font-size: 1.2rem; text-align: center; }
-  .hero { position: relative; isolation: isolate; display: grid; grid-template-columns: minmax(18rem, 26rem) minmax(0, 1fr); gap: clamp(2.4rem, 4vw, 6rem); align-items: center; min-height: 46rem; padding: clamp(2.4rem, 4vw, 5rem); overflow: hidden; border: 1px solid var(--border); border-radius: 2rem; background-color: var(--surface); background-size: cover; background-position: center; }
-  .hero-cover { width: 100%; max-width: 24rem; overflow: hidden; border-radius: 1.4rem; box-shadow: 0 2rem 5rem rgba(0,0,0,.38); }
-  .hero-info { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; gap: 1.4rem; }
-  .eyebrow, .section-kicker { color: var(--accent); font-size: 1.25rem; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
-  h1 { max-width: 88rem; margin: 0; font-size: clamp(3.4rem, 5vw, 7rem); line-height: 1.02; letter-spacing: -.04em; text-wrap: balance; }
-  .meta-line { margin: 0; color: var(--text-2); font-size: 1.65rem; }
-  .genre-list, .badges { display: flex; flex-wrap: wrap; gap: .8rem; }
-  .genre-list span, .badge { min-height: 3.2rem; display: inline-flex; align-items: center; gap: .7rem; padding: 0 1rem; border: 1px solid var(--border); border-radius: 999px; background: color-mix(in srgb, var(--surface) 75%, transparent); color: var(--text-2); font-size: 1.25rem; font-weight: 650; }
+  .tab span { min-width: 2.53rem; padding: .22rem .55rem; border-radius: 999px; background: var(--surface-3); color: var(--text-3); font-size: 1.32rem; text-align: center; }
+  .hero { position: relative; isolation: isolate; display: grid; grid-template-columns: minmax(19.8rem, 28.6rem) minmax(0, 1fr); gap: clamp(2.64rem, 4vw, 6.6rem); align-items: center; min-height: 50.6rem; padding: clamp(2.64rem, 4vw, 5.5rem); overflow: hidden; border: 1px solid var(--border); border-radius: 2.2rem; background-color: var(--surface); background-size: cover; background-position: center; }
+  .hero-cover { width: 100%; max-width: 26.4rem; overflow: hidden; border-radius: 1.54rem; box-shadow: 0 2.2rem 5.5rem rgba(0,0,0,.38); }
+  .hero-info { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; gap: 1.54rem; }
+  .eyebrow, .section-kicker { color: var(--accent); font-size: 1.375rem; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
+  h1 { max-width: 96.8rem; margin: 0; font-size: clamp(3.74rem, 5vw, 7.7rem); line-height: 1.02; letter-spacing: -.04em; text-wrap: balance; }
+  .meta-line { margin: 0; color: var(--text-2); font-size: 1.815rem; }
+  .genre-list, .badges { display: flex; flex-wrap: wrap; gap: .88rem; }
+  .genre-list span, .badge { min-height: 3.52rem; display: inline-flex; align-items: center; gap: .77rem; padding: 0 1.1rem; border: 1px solid var(--border); border-radius: 999px; background: color-mix(in srgb, var(--surface) 75%, transparent); color: var(--text-2); font-size: 1.375rem; font-weight: 650; }
   .badge.installed { border-color: color-mix(in srgb, var(--success) 45%, var(--border)); color: var(--success); }
   .badge.running { border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); color: var(--accent); }
   .badge.status { color: var(--text); }
-  .dot { width: .8rem; height: .8rem; border-radius: 50%; background: currentColor; }
-  .hero-actions { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 1rem; }
-  .page-error, .dialog-error { padding: 1.2rem 1.5rem; border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--border)); border-radius: 1rem; background: color-mix(in srgb, var(--danger) 10%, var(--surface)); color: var(--danger); font-size: 1.45rem; line-height: 1.4; }
-  .page-error { margin-top: 1.5rem; }
-  .state-card, .description-card, .screenshots-card, .release-section { margin-top: 2rem; padding: 2.2rem; border: 1px solid var(--border); border-radius: 1.6rem; background: var(--surface); }
-  .state-heading, .section-title { display: flex; align-items: center; justify-content: space-between; gap: 2rem; }
-  .state-heading h2, .section-title h2, .description-card h2, .screenshots-card h2 { margin: .5rem 0 0; font-size: 2.2rem; line-height: 1.2; }
-  .state-label { color: var(--text-2); font-size: 1.45rem; text-align: right; }
-  .progress-unknown { margin-top: 2rem; }
-  .progress-track { height: 1rem; margin-top: 2rem; overflow: hidden; border-radius: 999px; background: var(--surface-3); }
+  .dot { width: .88rem; height: .88rem; border-radius: 50%; background: currentColor; }
+  .hero-actions { display: flex; flex-wrap: wrap; gap: 1.1rem; margin-top: 1.1rem; }
+  .page-error, .dialog-error { padding: 1.32rem 1.65rem; border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--border)); border-radius: 1.1rem; background: color-mix(in srgb, var(--danger) 10%, var(--surface)); color: var(--danger); font-size: 1.595rem; line-height: 1.4; }
+  .page-error { margin-top: 1.65rem; }
+  .state-card, .description-card, .screenshots-card, .release-section { margin-top: 2.2rem; padding: 2.42rem; border: 1px solid var(--border); border-radius: 1.76rem; background: var(--surface); }
+  .state-heading, .section-title { display: flex; align-items: center; justify-content: space-between; gap: 2.2rem; }
+  .state-heading h2, .section-title h2, .description-card h2, .screenshots-card h2 { margin: .55rem 0 0; font-size: 2.42rem; line-height: 1.2; }
+  .state-label { color: var(--text-2); font-size: 1.595rem; text-align: right; }
+  .progress-unknown { margin-top: 2.2rem; }
+  .progress-track { height: 1.1rem; margin-top: 2.2rem; overflow: hidden; border-radius: 999px; background: var(--surface-3); }
   .progress-track span { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width 200ms ease; }
-  .progress-foot { display: flex; justify-content: space-between; gap: 2rem; margin-top: .8rem; color: var(--text-3); font-size: 1.3rem; font-variant-numeric: tabular-nums; }
-  .state-actions { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 1.5rem; }
+  .progress-foot { display: flex; justify-content: space-between; gap: 2.2rem; margin-top: .88rem; color: var(--text-3); font-size: 1.43rem; font-variant-numeric: tabular-nums; }
+  .state-actions { display: flex; flex-wrap: wrap; gap: 1.1rem; margin-top: 1.65rem; }
   .install-card { border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
-  .install-error { color: var(--danger); font-size: 1.4rem; }
-  .detail-layout { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(28rem, .85fr); gap: 2rem; margin-top: 2rem; }
+  .install-error { color: var(--danger); font-size: 1.54rem; }
+  .detail-layout { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(30.8rem, .85fr); gap: 2.2rem; margin-top: 2.2rem; }
   .description-card, .screenshots-card { min-width: 0; margin: 0; }
-  .summary { margin: 1.4rem 0 0; color: var(--text-2); font-size: 1.55rem; line-height: 1.65; white-space: pre-line; }
+  .summary { margin: 1.54rem 0 0; color: var(--text-2); font-size: 1.705rem; line-height: 1.65; white-space: pre-line; }
   .summary-preview { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 5; line-clamp: 5; }
-  .description-open { margin-top: 1.5rem; }
-  .detail-extras { display: grid; gap: 2rem; margin-top: 2rem; }
-  .requirement-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(28rem, 1fr)); gap: 2rem; margin-top: 1.4rem; }
-  .requirement-columns h3 { margin: 0 0 .8rem; color: var(--text-3); font-size: 1.4rem; font-weight: 600; }
+  .description-open { margin-top: 1.65rem; }
+  .detail-extras { display: grid; gap: 2.2rem; margin-top: 2.2rem; }
+  .requirement-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(30.8rem, 1fr)); gap: 2.2rem; margin-top: 1.54rem; }
+  .requirement-columns h3 { margin: 0 0 .88rem; color: var(--text-3); font-size: 1.54rem; font-weight: 600; }
   .requirement-list { display: flex; flex-direction: column; margin: 0; }
-  .requirement-list div { display: flex; gap: 1.4rem; padding: .8rem 0; border-top: 1px solid var(--border); font-size: 1.4rem; line-height: 1.5; }
-  .requirement-list dt { flex: 0 0 14rem; color: var(--text-3); }
+  .requirement-list div { display: flex; gap: 1.54rem; padding: .88rem 0; border-top: 1px solid var(--border); font-size: 1.54rem; line-height: 1.5; }
+  .requirement-list dt { flex: 0 0 15.4rem; color: var(--text-3); }
   .requirement-list dd { flex: 1; min-width: 0; margin: 0; color: var(--text-2); overflow-wrap: anywhere; }
-  .dlc-list { display: flex; flex-direction: column; gap: .6rem; margin: 1.4rem 0 0; padding: 0; list-style: none; color: var(--text-2); font-size: 1.45rem; }
-  .muted { color: var(--text-3); font-size: 1.45rem; line-height: 1.5; }
-  .screenshots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: 1.4rem; }
-  .shot { display: block; overflow: hidden; width: 100%; padding: 0; aspect-ratio: 16 / 9; border: 0; border-radius: 1rem; background: var(--surface-3); cursor: pointer; }
+  .dlc-list { display: flex; flex-direction: column; gap: .66rem; margin: 1.54rem 0 0; padding: 0; list-style: none; color: var(--text-2); font-size: 1.595rem; }
+  .muted { color: var(--text-3); font-size: 1.595rem; line-height: 1.5; }
+  .screenshots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.1rem; margin-top: 1.54rem; }
+  .shot { display: block; overflow: hidden; width: 100%; padding: 0; aspect-ratio: 16 / 9; border: 0; border-radius: 1.1rem; background: var(--surface-3); cursor: pointer; }
   .shot img { width: 100%; height: 100%; object-fit: cover; }
-  .bp-dialog.screenshot-dialog { width: min(148rem, 100%); height: min(92vh, 100rem); max-height: 92vh; overflow: hidden; }
-  .screenshot-viewer { display: grid; min-height: 0; flex: 1; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 1.5rem; }
-  .screenshot-viewer figure { display: flex; min-width: 0; height: 100%; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; margin: 0; }
+  .bp-dialog.screenshot-dialog { width: min(162.8rem, 100%); height: min(92vh, 110rem); max-height: 92vh; overflow: hidden; }
+  .screenshot-viewer { display: grid; min-height: 0; flex: 1; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 1.65rem; }
+  .screenshot-viewer figure { display: flex; min-width: 0; height: 100%; flex-direction: column; align-items: center; justify-content: center; gap: 1.1rem; margin: 0; }
   .screenshot-viewer img { display: block; max-width: 100%; max-height: 72vh; object-fit: contain; }
-  .screenshot-viewer figcaption, .viewer-hint { color: var(--text-3); font-size: 1.3rem; }
+  .screenshot-viewer figcaption, .viewer-hint { color: var(--text-3); font-size: 1.43rem; }
   .viewer-hint { margin: 0; text-align: center; }
-  .screenshot-nav { width: 5.8rem; min-height: 5.8rem; padding: 0; }
-  .description-dialog { width: min(88rem, 100%); }
-  .description-reader { min-height: 20rem; max-height: min(58vh, 66rem); overflow: auto; padding: 2rem; border: 1px solid var(--border); border-radius: 1.2rem; background: var(--surface); color: var(--text-2); font-size: 1.65rem; line-height: 1.7; }
+  .screenshot-nav { width: 6.38rem; min-height: 6.38rem; padding: 0; }
+  .description-dialog { width: min(96.8rem, 100%); }
+  .description-reader { min-height: 22rem; max-height: min(58vh, 72.6rem); overflow: auto; padding: 2.2rem; border: 1px solid var(--border); border-radius: 1.32rem; background: var(--surface); color: var(--text-2); font-size: 1.815rem; line-height: 1.7; }
   .description-reader p { margin: 0; white-space: pre-line; }
-  .description-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .8rem; }
+  .description-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .88rem; }
   @media (prefers-reduced-motion: reduce) { .description-reader { scroll-behavior: auto; } }
-  .section-title { margin-bottom: 1.5rem; }
-  .loading-inline { color: var(--text-3); font-size: 1.4rem; }
-  .release-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.2rem; }
-  .release-card { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: .9rem; padding: 1.6rem; border: 1px solid var(--border); border-radius: 1.4rem; background: var(--surface-2); color: var(--text); text-align: left; cursor: pointer; transition: transform 120ms ease, border-color 120ms ease; }
+  .section-title { margin-bottom: 1.65rem; }
+  .loading-inline { color: var(--text-3); font-size: 1.54rem; }
+  .release-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.32rem; }
+  .release-card { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: .99rem; padding: 1.76rem; border: 1px solid var(--border); border-radius: 1.54rem; background: var(--surface-2); color: var(--text); text-align: left; cursor: pointer; transition: transform 120ms ease, border-color 120ms ease; }
   .release-card:hover:not(:disabled) { border-color: var(--accent); }
   .release-card:disabled { opacity: .6; cursor: default; }
   .release-card.unavailable { opacity: .4; }
-  .release-heading { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 1rem; }
-  .release-heading strong { min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; font-size: 1.75rem; }
-  .release-group { grid-column: 1 / -1; margin: 1rem 0 0; color: var(--text-3); font-size: 1.3rem; font-weight: 700; }
-  .console-chip { padding: .35rem .65rem; border-radius: 999px; background: var(--surface-3); color: var(--text-2); font-size: 1.1rem; font-weight: 800; }
-  .new-badge { padding: .35rem .65rem; border-radius: 999px; background: color-mix(in srgb, var(--accent) 20%, var(--surface)); color: var(--accent); font-size: 1.1rem; font-weight: 800; }
-  .release-name { display: -webkit-box; overflow: hidden; color: var(--text-2); font-size: 1.35rem; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
-  .release-edition { color: var(--text-3); font-size: 1.25rem; }
-  .release-info { display: flex; flex-wrap: wrap; gap: .7rem 1.2rem; color: var(--text-3); font-size: 1.2rem; }
-  .release-source { max-width: 100%; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; color: var(--text-3); font-size: 1.2rem; }
-  .release-cta { display: flex; width: 100%; align-items: center; justify-content: space-between; margin-top: .3rem; padding-top: 1rem; border-top: 1px solid var(--border); color: var(--accent); font-size: 1.45rem; font-weight: 750; }
-  .release-unavailable { color: var(--danger); font-size: 1.3rem; }
-  .notice { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.4rem; border-radius: 1rem; background: var(--surface-2); color: var(--text-2); font-size: 1.4rem; }
+  .release-heading { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 1.1rem; }
+  .release-heading strong { min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; font-size: 1.925rem; }
+  .release-group { grid-column: 1 / -1; margin: 1.1rem 0 0; color: var(--text-3); font-size: 1.43rem; font-weight: 700; }
+  .console-chip { padding: .385rem .715rem; border-radius: 999px; background: var(--surface-3); color: var(--text-2); font-size: 1.21rem; font-weight: 800; }
+  .new-badge { padding: .385rem .715rem; border-radius: 999px; background: color-mix(in srgb, var(--accent) 20%, var(--surface)); color: var(--accent); font-size: 1.21rem; font-weight: 800; }
+  .release-name { display: -webkit-box; overflow: hidden; color: var(--text-2); font-size: 1.485rem; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
+  .release-edition { color: var(--text-3); font-size: 1.375rem; }
+  .release-info { display: flex; flex-wrap: wrap; gap: .77rem 1.32rem; color: var(--text-3); font-size: 1.32rem; }
+  .release-source { max-width: 100%; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; color: var(--text-3); font-size: 1.32rem; }
+  .release-cta { display: flex; width: 100%; align-items: center; justify-content: space-between; margin-top: .33rem; padding-top: 1.1rem; border-top: 1px solid var(--border); color: var(--accent); font-size: 1.595rem; font-weight: 750; }
+  .release-unavailable { color: var(--danger); font-size: 1.43rem; }
+  .notice { display: flex; align-items: center; justify-content: space-between; gap: 1.1rem; padding: 1.54rem; border-radius: 1.1rem; background: var(--surface-2); color: var(--text-2); font-size: 1.54rem; }
   .notice.error { color: var(--danger); }
-  .bp-empty { display: flex; min-height: 30rem; flex-direction: column; align-items: center; justify-content: center; gap: 1.5rem; padding: 3rem; border: 1px dashed var(--border); border-radius: 1.5rem; text-align: center; }
-  .bp-empty h1, .bp-empty h2 { margin: 0; font-size: 2.5rem; }
-  .bp-empty.small { min-height: 14rem; }
-  .loading-state { display: flex; min-height: 28rem; flex-direction: column; align-items: center; justify-content: center; gap: 1.5rem; color: var(--text-2); font-size: 1.6rem; }
-  .loading-state.compact { min-height: 14rem; flex-direction: row; justify-content: flex-start; }
-  .spinner { width: 3rem; height: 3rem; flex: 0 0 auto; border: 3px solid color-mix(in srgb, var(--accent) 22%, transparent); border-top-color: var(--accent); border-radius: 50%; animation: spin 850ms linear infinite; }
+  .bp-empty { display: flex; min-height: 33rem; flex-direction: column; align-items: center; justify-content: center; gap: 1.65rem; padding: 3.3rem; border: 1px dashed var(--border); border-radius: 1.65rem; text-align: center; }
+  .bp-empty h1, .bp-empty h2 { margin: 0; font-size: 2.75rem; }
+  .bp-empty.small { min-height: 15.4rem; }
+  .loading-state { display: flex; min-height: 30.8rem; flex-direction: column; align-items: center; justify-content: center; gap: 1.65rem; color: var(--text-2); font-size: 1.76rem; }
+  .loading-state.compact { min-height: 15.4rem; flex-direction: row; justify-content: flex-start; }
+  .spinner { width: 3.3rem; height: 3.3rem; flex: 0 0 auto; border: 3px solid color-mix(in srgb, var(--accent) 22%, transparent); border-top-color: var(--accent); border-radius: 50%; animation: spin 850ms linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .dialog-backdrop { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 2rem; background: rgba(0,0,0,.76); }
-  .bp-dialog { display: flex; width: min(88rem, 100%); max-height: min(90vh, 100rem); flex-direction: column; gap: 1.5rem; overflow: auto; padding: 2.4rem; border: 1px solid var(--border); border-radius: 1.8rem; background: var(--surface-2); box-shadow: 0 3rem 8rem rgba(0,0,0,.5); }
-  .dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 2rem; }
-  .dialog-head h2 { margin: .5rem 0 0; font-size: 2.5rem; }
-  .icon-button { width: 4.8rem; height: 4.8rem; display: grid; flex: 0 0 auto; place-items: center; border: 1px solid var(--border); border-radius: 1rem; background: var(--surface-2); color: var(--text); cursor: pointer; }
-  .torrent-summary { display: flex; align-items: center; justify-content: space-between; gap: 2rem; font-size: 1.45rem; }
+  .dialog-backdrop { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 2.2rem; background: rgba(0,0,0,.76); }
+  .bp-dialog { display: flex; width: min(96.8rem, 100%); max-height: min(90vh, 110rem); flex-direction: column; gap: 1.65rem; overflow: auto; padding: 2.64rem; border: 1px solid var(--border); border-radius: 1.98rem; background: var(--surface-2); box-shadow: 0 3.3rem 8.8rem rgba(0,0,0,.5); }
+  .dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 2.2rem; }
+  .dialog-head h2 { margin: .55rem 0 0; font-size: 2.75rem; }
+  .icon-button { width: 5.28rem; height: 5.28rem; display: grid; flex: 0 0 auto; place-items: center; border: 1px solid var(--border); border-radius: 1.1rem; background: var(--surface-2); color: var(--text); cursor: pointer; }
+  .torrent-summary { display: flex; align-items: center; justify-content: space-between; gap: 2.2rem; font-size: 1.595rem; }
   .torrent-summary strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .torrent-summary span { flex: 0 0 auto; color: var(--text-3); }
-  .destination-card { display: flex; align-items: center; justify-content: space-between; gap: 1.4rem; padding: 1.3rem; border: 1px solid var(--border); border-radius: 1.1rem; background: var(--surface); }
-  .destination-card > div { display: flex; min-width: 0; flex-direction: column; gap: .4rem; }
-  .field-label { color: var(--text-3); font-size: 1.25rem; font-weight: 700; }
-  .path { overflow: hidden; color: var(--text-2); font-size: 1.25rem; text-overflow: ellipsis; white-space: nowrap; }
-  .destination-actions { display: flex; flex-wrap: wrap; gap: .7rem; }
-  .destination-card .large-button { min-height: 4.5rem; flex: 0 0 auto; padding-inline: 1.2rem; font-size: 1.25rem; }
-  .file-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-  .text-button { min-height: 3.8rem; padding: 0 .8rem; background: none; color: var(--accent); font-size: 1.3rem; font-weight: 700; cursor: pointer; }
-  .file-list { display: flex; max-height: 25rem; flex-direction: column; gap: .5rem; overflow: auto; padding: .5rem; border: 1px solid var(--border); border-radius: 1.1rem; background: var(--surface); }
-  .file-row { display: flex; min-height: 4.8rem; align-items: center; gap: 1rem; padding: .5rem .8rem; border: 1px solid transparent; border-radius: .8rem; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+  .destination-card { display: flex; align-items: center; justify-content: space-between; gap: 1.54rem; padding: 1.43rem; border: 1px solid var(--border); border-radius: 1.21rem; background: var(--surface); }
+  .destination-card > div { display: flex; min-width: 0; flex-direction: column; gap: .44rem; }
+  .field-label { color: var(--text-3); font-size: 1.375rem; font-weight: 700; }
+  .path { overflow: hidden; color: var(--text-2); font-size: 1.375rem; text-overflow: ellipsis; white-space: nowrap; }
+  .destination-actions { display: flex; flex-wrap: wrap; gap: .77rem; }
+  .destination-card .large-button { min-height: 4.95rem; flex: 0 0 auto; padding-inline: 1.32rem; font-size: 1.375rem; }
+  .file-heading { display: flex; align-items: center; justify-content: space-between; gap: 1.1rem; }
+  .text-button { min-height: 4.18rem; padding: 0 .88rem; background: none; color: var(--accent); font-size: 1.43rem; font-weight: 700; cursor: pointer; }
+  .file-list { display: flex; max-height: 27.5rem; flex-direction: column; gap: .55rem; overflow: auto; padding: .55rem; border: 1px solid var(--border); border-radius: 1.21rem; background: var(--surface); }
+  .file-row { display: flex; min-height: 5.28rem; align-items: center; gap: 1.1rem; padding: .55rem .88rem; border: 1px solid transparent; border-radius: .88rem; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
   .file-row:hover { background: var(--surface-2); }
-  .check-box { width: 2.4rem; height: 2.4rem; display: grid; flex: 0 0 auto; place-items: center; border: 1px solid var(--border); border-radius: .5rem; color: var(--accent-on, white); }
+  .check-box { width: 2.64rem; height: 2.64rem; display: grid; flex: 0 0 auto; place-items: center; border: 1px solid var(--border); border-radius: .55rem; color: var(--accent-on, white); }
   .check-box.on { border-color: var(--accent); background: var(--accent); }
-  .file-path { min-width: 0; flex: 1; overflow: hidden; font-size: 1.25rem; text-overflow: ellipsis; white-space: nowrap; }
-  .file-size { flex: 0 0 auto; color: var(--text-3); font-size: 1.2rem; font-variant-numeric: tabular-nums; }
-  .selected-summary { color: var(--text-3); font-size: 1.25rem; text-align: right; }
-  .option-row { display: flex; align-items: center; gap: 1rem; padding: 1rem; border: 1px solid transparent; border-radius: 1rem; background: var(--surface); color: var(--text); text-align: left; cursor: pointer; }
-  .option-row.nested { margin-left: 3.4rem; }
-  .option-row > span:last-child { display: flex; flex-direction: column; gap: .35rem; }
-  .option-row strong { font-size: 1.35rem; }
-  .option-row small { color: var(--text-3); font-size: 1.15rem; line-height: 1.4; }
-  .dialog-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 1rem; margin-top: .5rem; }
-  .dialog-copy { margin: 0; color: var(--text-2); font-size: 1.6rem; line-height: 1.5; }
-  .status-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
-  .status-option { min-height: 5.4rem; padding: 1rem 1.3rem; border: 1px solid var(--border); border-radius: 1rem; background: var(--surface); color: var(--text); font-size: 1.5rem; font-weight: 650; cursor: pointer; }
+  .file-path { min-width: 0; flex: 1; overflow: hidden; font-size: 1.375rem; text-overflow: ellipsis; white-space: nowrap; }
+  .file-size { flex: 0 0 auto; color: var(--text-3); font-size: 1.32rem; font-variant-numeric: tabular-nums; }
+  .selected-summary { color: var(--text-3); font-size: 1.375rem; text-align: right; }
+  .option-row { display: flex; align-items: center; gap: 1.1rem; padding: 1.1rem; border: 1px solid transparent; border-radius: 1.1rem; background: var(--surface); color: var(--text); text-align: left; cursor: pointer; }
+  .option-row.nested { margin-left: 3.74rem; }
+  .option-row > span:last-child { display: flex; flex-direction: column; gap: .385rem; }
+  .option-row strong { font-size: 1.485rem; }
+  .option-row small { color: var(--text-3); font-size: 1.265rem; line-height: 1.4; }
+  .dialog-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 1.1rem; margin-top: .55rem; }
+  .dialog-copy { margin: 0; color: var(--text-2); font-size: 1.76rem; line-height: 1.5; }
+  .status-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .88rem; }
+  .status-option { min-height: 5.94rem; padding: 1.1rem 1.43rem; border: 1px solid var(--border); border-radius: 1.1rem; background: var(--surface); color: var(--text); font-size: 1.65rem; font-weight: 650; cursor: pointer; }
   .status-option[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--surface)); }
-  @media (max-width: 900px) { .hero { grid-template-columns: 18rem minmax(0, 1fr); min-height: 38rem; } .release-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .detail-layout { grid-template-columns: 1fr; } }
-  @media (max-width: 640px) { .game-content { padding-inline: 1.3rem; } .page-head { align-items: stretch; flex-direction: column; } .hero { grid-template-columns: minmax(0, 1fr); justify-items: center; padding: 2rem; text-align: center; } .hero-cover { max-width: 18rem; } .hero-info { align-items: center; } .hero-actions { justify-content: center; } .release-grid { grid-template-columns: 1fr; } .state-heading, .destination-card { align-items: flex-start; flex-direction: column; } .state-label { text-align: left; } .dialog-backdrop { padding: .8rem; } .bp-dialog { max-height: 96vh; padding: 1.5rem; } .screenshot-dialog { width: 100%; height: 96vh; max-height: 96vh; } .screenshot-viewer { grid-template-columns: auto minmax(0, 1fr) auto; gap: .5rem; } .screenshot-nav { width: 4.2rem; min-height: 4.2rem; } .screenshot-viewer img { max-height: 72vh; } .description-reader { min-height: 16rem; max-height: 60vh; padding: 1.5rem; } .description-actions .large-button { min-width: 0; flex: 1; padding-inline: .8rem; font-size: 1.3rem; } .dialog-actions .large-button { flex: 1; } }
+  @media (max-width: 900px) { .hero { grid-template-columns: 19.8rem minmax(0, 1fr); min-height: 41.8rem; } .release-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .detail-layout { grid-template-columns: 1fr; } }
+  @media (max-width: 640px) { .game-content { padding-inline: 1.43rem; } .page-head { align-items: stretch; flex-direction: column; } .hero { grid-template-columns: minmax(0, 1fr); justify-items: center; padding: 2.2rem; text-align: center; } .hero-cover { max-width: 19.8rem; } .hero-info { align-items: center; } .hero-actions { justify-content: center; } .release-grid { grid-template-columns: 1fr; } .state-heading, .destination-card { align-items: flex-start; flex-direction: column; } .state-label { text-align: left; } .dialog-backdrop { padding: .88rem; } .bp-dialog { max-height: 96vh; padding: 1.65rem; } .screenshot-dialog { width: 100%; height: 96vh; max-height: 96vh; } .screenshot-viewer { grid-template-columns: auto minmax(0, 1fr) auto; gap: .55rem; } .screenshot-nav { width: 4.62rem; min-height: 4.62rem; } .screenshot-viewer img { max-height: 72vh; } .description-reader { min-height: 17.6rem; max-height: 60vh; padding: 1.65rem; } .description-actions .large-button { min-width: 0; flex: 1; padding-inline: .88rem; font-size: 1.43rem; } .dialog-actions .large-button { flex: 1; } }
 </style>

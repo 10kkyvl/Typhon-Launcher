@@ -35,17 +35,17 @@
   <div class="stats">
     <div class="stat">
       <StatTile value={formatCount($lanStats.peersKnown)} label={msg('transfers.lanPeersLabel')}>
-        {#snippet icon()}<MonitorSmartphone size="1.8rem" strokeWidth={1.8} />{/snippet}
+        {#snippet icon()}<MonitorSmartphone size="1.98rem" strokeWidth={1.8} />{/snippet}
       </StatTile>
     </div>
     <div class="stat">
       <StatTile value={formatCount($lanStats.offersKnown)} label={msg('transfers.lanOffersLabel')}>
-        {#snippet icon()}<Wifi size="1.8rem" strokeWidth={1.8} />{/snippet}
+        {#snippet icon()}<Wifi size="1.98rem" strokeWidth={1.8} />{/snippet}
       </StatTile>
     </div>
     <div class="stat">
       <StatTile value={formatCount($lanStats.sharesActive)} label={msg('transfers.lanSharesLabel')}>
-        {#snippet icon()}<Share2 size="1.8rem" strokeWidth={1.8} />{/snippet}
+        {#snippet icon()}<Share2 size="1.98rem" strokeWidth={1.8} />{/snippet}
       </StatTile>
     </div>
   </div>
@@ -58,7 +58,7 @@
         description={msg('transfers.lanEmptyDescription')}
       >
         {#snippet icon()}
-          <Wifi size="2rem" strokeWidth={1.8} />
+          <Wifi size="2.2rem" strokeWidth={1.8} />
         {/snippet}
       </EmptyState>
       {#if rejectedNote}
@@ -71,7 +71,7 @@
             <div class="row-text">
               <span class="row-title">{offer.title}</span>
               <span class="row-sub">
-                <MonitorSmartphone size="1.3rem" strokeWidth={1.8} />
+                <MonitorSmartphone size="1.43rem" strokeWidth={1.8} />
                 {msg('transfers.lanFromHost', { host: offer.host })}
               </span>
             </div>
@@ -79,7 +79,7 @@
             <span class="row-size">{bytesSize(offer.sizeBytes)}</span>
             <div class="row-actions">
               <Button size="sm" onclick={() => receive(offer.infoHash, offer.peerId)}>
-                <Download size="1.4rem" strokeWidth={1.8} />
+                <Download size="1.54rem" strokeWidth={1.8} />
                 {msg('transfers.lanDownload')}
               </Button>
             </div>
@@ -132,7 +132,7 @@
             </div>
             <div class="row-actions">
               <IconButton label={msg('transfers.lanCancelLabel')} size="sm" onclick={() => cancel(transfer.id)}>
-                <X size="1.5rem" strokeWidth={1.8} />
+                <X size="1.65rem" strokeWidth={1.8} />
               </IconButton>
             </div>
           </div>
@@ -154,7 +154,7 @@
   }
 
   .stat {
-    min-width: 14rem;
+    min-width: 15.4rem;
     padding: 0 var(--space-6);
     border-left: 1px solid var(--border);
   }
@@ -166,7 +166,7 @@
 
   .section {
     margin-bottom: var(--space-10);
-    max-width: 140rem;
+    max-width: 154rem;
   }
 
   .section:last-child {
@@ -176,7 +176,7 @@
   .section h2 {
     display: flex;
     align-items: baseline;
-    gap: 0.8rem;
+    gap: 0.88rem;
     font-size: var(--font-lg);
     margin-bottom: var(--space-3);
   }
@@ -196,14 +196,14 @@
   .rows {
     display: flex;
     flex-direction: column;
-    gap: 0.8rem;
+    gap: 0.88rem;
   }
 
   .row {
     display: flex;
     align-items: center;
     gap: var(--space-4);
-    min-height: 6.4rem;
+    min-height: 7.04rem;
     padding: var(--space-2) var(--space-5);
     background: var(--surface-2);
     border: 1px solid var(--border);
@@ -231,7 +231,7 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: 0.44rem;
   }
 
   .row-text .row-title {
@@ -241,7 +241,7 @@
   .row-sub {
     display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.55rem;
     font-size: var(--font-xs);
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
@@ -257,11 +257,11 @@
   }
 
   .row-size {
-    min-width: 7rem;
+    min-width: 7.7rem;
   }
 
   .row-date {
-    min-width: 9rem;
+    min-width: 9.9rem;
   }
 
   .row-actions {

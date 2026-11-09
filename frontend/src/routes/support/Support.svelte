@@ -53,7 +53,7 @@
     <PageHeader title={msg('tickets.title')} subtitle={msg('tickets.subtitle')} />
     <EmptyState title={msg('tickets.guestTitle')} description={msg('tickets.guestText')}>
       {#snippet icon()}
-        <LifeBuoy size="2rem" strokeWidth={1.8} />
+        <LifeBuoy size="2.2rem" strokeWidth={1.8} />
       {/snippet}
       {#snippet actions()}
         <Button variant="primary" onclick={signIn}>{msg('tickets.guestSignIn')}</Button>

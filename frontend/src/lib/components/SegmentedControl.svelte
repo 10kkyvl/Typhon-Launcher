@@ -37,7 +37,7 @@
 <style>
   .segmented {
     display: inline-flex;
-    padding: 0.3rem;
+    padding: 0.33rem;
     gap: 2px;
     background: var(--surface);
     border-radius: var(--radius-md);
@@ -47,9 +47,9 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    height: 3rem;
-    min-width: 3.2rem;
-    padding: 0 0.8rem;
+    height: 3.3rem;
+    min-width: 3.52rem;
+    padding: 0 0.88rem;
     border-radius: var(--radius-sm);
     font-size: var(--font-xs);
     color: var(--text-3);

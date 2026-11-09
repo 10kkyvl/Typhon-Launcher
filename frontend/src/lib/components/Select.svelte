@@ -5,7 +5,7 @@
   let {
     options,
     value = $bindable(),
-    width = '22rem',
+    width = '24.2rem',
     onchange,
   }: {
     options: { id: string; label: string }[];
@@ -22,7 +22,7 @@
 <div class="select" style:width use:clickOutside={() => (open = false)}>
   <button class="trigger" class:open aria-haspopup="listbox" aria-expanded={open} onclick={() => (open = !open)}>
     <span class="value">{selected?.label ?? ''}</span>
-    <ChevronDown size="1.5rem" strokeWidth={1.8} />
+    <ChevronDown size="1.65rem" strokeWidth={1.8} />
   </button>
   {#if open}
     <div class="menu" role="listbox">
@@ -38,7 +38,7 @@
           }}
         >
           <span>{option.label}</span>
-          {#if value === option.id}<Check size="1.4rem" strokeWidth={2} />{/if}
+          {#if value === option.id}<Check size="1.54rem" strokeWidth={2} />{/if}
         </button>
       {/each}
     </div>
@@ -54,10 +54,10 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.8rem;
+    gap: 0.88rem;
     width: 100%;
     height: var(--control-md);
-    padding: 0 1rem 0 1.2rem;
+    padding: 0 1.1rem 0 1.32rem;
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
@@ -94,13 +94,13 @@
   .menu {
     position: absolute;
     z-index: 40;
-    top: calc(100% + 0.4rem);
+    top: calc(100% + 0.44rem);
     left: 0;
     right: 0;
-    max-height: min(36rem, 60vh);
+    max-height: min(39.6rem, 60vh);
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding: 0.4rem;
+    padding: 0.44rem;
     background: var(--surface-3);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-md);
@@ -112,9 +112,9 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.8rem;
+    gap: 0.88rem;
     width: 100%;
-    padding: 0.7rem 0.9rem;
+    padding: 0.77rem 0.99rem;
     border-radius: var(--radius-sm);
     font-size: var(--font-sm);
     color: var(--text-2);

@@ -73,7 +73,7 @@
 <Modal
   open={Boolean(prompt)}
   title={msg('emul.neededTitle')}
-  width="48rem"
+  width="52.8rem"
   onclose={() => prompt?.settle(false)}
 >
   {#if prompt}
@@ -89,11 +89,11 @@
   {#snippet footer()}
     <Button disabled={busy} onclick={() => prompt?.settle(false)}>{msg('common.cancel')}</Button>
     <Button disabled={busy || !info} onclick={openSite}>
-      <ExternalLink size="1.4rem" strokeWidth={1.8} />
+      <ExternalLink size="1.54rem" strokeWidth={1.8} />
       {msg('emul.neededOpenSite')}
     </Button>
     <Button variant="primary" disabled={busy} onclick={choose}>
-      <FolderOpen size="1.4rem" strokeWidth={1.8} />
+      <FolderOpen size="1.54rem" strokeWidth={1.8} />
       {msg('emul.neededChoose')}
     </Button>
   {/snippet}

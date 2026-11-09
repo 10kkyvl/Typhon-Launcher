@@ -57,7 +57,7 @@
   {/if}
 </div>
 <style>
-  .cover { position: relative; height: 11rem; margin: 0 -2rem -4.8rem; overflow: hidden; }
+  .cover { position: relative; height: 12.1rem; margin: 0 -2rem -4.8rem; overflow: hidden; }
   .cover:first-child { border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
   .cover.has-image { height: auto; aspect-ratio: 4 / 1; }
   .media { position: absolute; inset: 0; mask-image: linear-gradient(#000 35%, transparent); }

@@ -61,9 +61,9 @@
         {#if event.kind === 'reviewed' && event.review}
           <span class="verdict" title={msg(event.review.recommended ? 'social.feedReviewYes' : 'social.feedReviewNo')}>
             {#if event.review.recommended}
-              <ThumbsUp size="1.5rem" strokeWidth={1.8} />
+              <ThumbsUp size="1.65rem" strokeWidth={1.8} />
             {:else}
-              <ThumbsDown size="1.5rem" strokeWidth={1.8} />
+              <ThumbsDown size="1.65rem" strokeWidth={1.8} />
             {/if}
           </span>
         {/if}
@@ -117,7 +117,7 @@
 
   .row.compact {
     align-items: center;
-    padding: 0.6rem 0.8rem;
+    padding: 0.66rem 0.88rem;
     border-radius: var(--radius-md);
     transition: background var(--dur) var(--ease);
   }
@@ -192,8 +192,8 @@
   }
 
   .ach {
-    width: 3.2rem;
-    height: 3.2rem;
+    width: 3.52rem;
+    height: 3.52rem;
     border-radius: var(--radius-xs);
     object-fit: cover;
   }
@@ -202,9 +202,9 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.8rem;
+    gap: 0.88rem;
     width: 100%;
-    padding: 0.6rem;
+    padding: 0.66rem;
     margin: -0.6rem;
     border-radius: var(--radius-md);
     text-align: left;
@@ -227,7 +227,7 @@
     position: relative;
     display: block;
     width: 100%;
-    max-width: 40rem;
+    max-width: 44rem;
     border-radius: var(--radius-md);
     overflow: hidden;
     background: var(--surface-3);
@@ -248,7 +248,7 @@
 
   .thumb {
     display: block;
-    width: 2.6rem;
+    width: 2.86rem;
     flex-shrink: 0;
     border-radius: var(--radius-xs);
     overflow: hidden;

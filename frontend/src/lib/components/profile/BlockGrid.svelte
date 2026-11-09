@@ -198,7 +198,7 @@
               onpointercancel={release}
               onkeydown={(event) => key(event, block)}
             >
-              <GripVertical size="1.6rem" strokeWidth={1.8} />
+              <GripVertical size="1.76rem" strokeWidth={1.8} />
             </button>
             <span class="name">{name}</span>
             {#if block.issue}<span class="issue-tag">{msg('profile.blockIncomplete')}</span>{/if}
@@ -211,16 +211,16 @@
               {#snippet item(option)}{WIDTH_SHORT[option.id]}{/snippet}
             </SegmentedControl>
             <IconButton size="sm" label={msg('social.moveUp', { title: name })} onclick={() => shift(block, -1)}>
-              <ArrowUp size="1.5rem" strokeWidth={1.8} />
+              <ArrowUp size="1.65rem" strokeWidth={1.8} />
             </IconButton>
             <IconButton size="sm" label={msg('social.moveDown', { title: name })} onclick={() => shift(block, 1)}>
-              <ArrowDown size="1.5rem" strokeWidth={1.8} />
+              <ArrowDown size="1.65rem" strokeWidth={1.8} />
             </IconButton>
             <IconButton size="sm" label={msg('profile.blockSettings', { name })} active={selectedId === block.id} onclick={() => onselect?.(block.id)}>
-              <Settings2 size="1.5rem" strokeWidth={1.8} />
+              <Settings2 size="1.65rem" strokeWidth={1.8} />
             </IconButton>
             <IconButton size="sm" label={msg('profile.removeBlock', { name })} onclick={() => onremove?.(block.id)}>
-              <Trash2 size="1.5rem" strokeWidth={1.8} />
+              <Trash2 size="1.65rem" strokeWidth={1.8} />
             </IconButton>
           </div>
           <div class="body" role="presentation" onclick={() => onselect?.(block.id)}>
@@ -295,8 +295,8 @@
     display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: 0.4rem;
-    min-height: 9rem;
+    gap: 0.44rem;
+    min-height: 9.9rem;
     padding: var(--space-5) var(--space-6);
     border: 1px dashed var(--border-strong);
     border-radius: var(--radius-lg);

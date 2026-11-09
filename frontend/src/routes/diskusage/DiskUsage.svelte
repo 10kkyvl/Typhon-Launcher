@@ -205,7 +205,7 @@
 <PageHeader title={msg('diskusage.title')} subtitle={msg('diskusage.subtitle')}>
   {#snippet actions()}
     <Button onclick={refresh} disabled={scanning}>
-      <RefreshCw size="1.5rem" strokeWidth={2} class={scanning ? 'spin' : ''} />
+      <RefreshCw size="1.65rem" strokeWidth={2} class={scanning ? 'spin' : ''} />
       {scanning ? msg('diskusage.scanning') : msg('diskusage.rescan')}
     </Button>
   {/snippet}
@@ -222,7 +222,7 @@
 {:else}
   <Card>
     <div class="summary">
-      <span class="summary-icon"><HardDrive size="1.8rem" strokeWidth={1.8} /></span>
+      <span class="summary-icon"><HardDrive size="1.98rem" strokeWidth={1.8} /></span>
       <div class="figure">
         <span class="figure-label">{msg('diskusage.used')}</span>
         <span class="figure-value">{total(report.totals.totalBytes, report.totals.unknownSizes)}</span>
@@ -251,7 +251,7 @@
   {#if isEmpty}
     <EmptyState title={msg('diskusage.emptyTitle')} description={msg('diskusage.emptyText')}>
       {#snippet icon()}
-        <HardDrive size="2rem" strokeWidth={1.8} />
+        <HardDrive size="2.2rem" strokeWidth={1.8} />
       {/snippet}
     </EmptyState>
   {:else}
@@ -274,7 +274,7 @@
               {#snippet trigger({ open, toggle })}
                 <Chip selected={open} onclick={toggle}>
                   {msg('diskusage.sortLabel', { sort: sortLabels[sort] })}
-                  <ChevronDown size="1.4rem" strokeWidth={1.8} />
+                  <ChevronDown size="1.54rem" strokeWidth={1.8} />
                 </Chip>
               {/snippet}
             </DropdownMenu>
@@ -510,7 +510,7 @@
   }
 
   .muted {
-    margin-top: 0.3rem;
+    margin-top: 0.33rem;
     font-size: var(--font-sm);
     color: var(--text-3);
   }
@@ -538,7 +538,7 @@
   .figure {
     display: flex;
     flex-direction: column;
-    gap: 0.3rem;
+    gap: 0.33rem;
   }
 
   .figure-label {
@@ -618,7 +618,7 @@
     display: flex;
     flex: 1;
     flex-direction: column;
-    gap: 0.3rem;
+    gap: 0.33rem;
     min-width: 0;
   }
 
@@ -651,14 +651,14 @@
   }
 
   .played {
-    width: 15rem;
+    width: 16.5rem;
     flex-shrink: 0;
     font-size: var(--font-sm);
     color: var(--text-2);
   }
 
   .size {
-    width: 14rem;
+    width: 15.4rem;
     flex-shrink: 0;
     text-align: right;
     font-size: var(--font-sm);
@@ -671,7 +671,7 @@
     align-items: center;
     justify-content: flex-end;
     gap: var(--space-2);
-    min-width: 12rem;
+    min-width: 13.2rem;
     flex-shrink: 0;
   }
 </style>

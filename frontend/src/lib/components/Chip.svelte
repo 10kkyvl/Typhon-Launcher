@@ -25,9 +25,9 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.6rem;
+    gap: 0.66rem;
     height: var(--control-sm);
-    padding: 0 calc(1.2rem - 1px);
+    padding: 0 calc(1.32rem - 1px);
     border-radius: var(--radius-xl);
     border: 2px solid transparent;
     font-size: var(--font-sm);

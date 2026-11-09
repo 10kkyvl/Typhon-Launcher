@@ -93,7 +93,7 @@
         {#if checks.length > 0}
           <button class="toggle" aria-expanded={expanded} onclick={() => (expanded = !expanded)}>
             {expanded ? msg('sysreq.hide') : msg('sysreq.show')}
-            <span class="chevron" class:open={expanded}><ChevronDown size="1.4rem" strokeWidth={1.8} /></span>
+            <span class="chevron" class:open={expanded}><ChevronDown size="1.54rem" strokeWidth={1.8} /></span>
           </button>
         {/if}
       </div>
@@ -104,13 +104,13 @@
             <li class="check">
               <span class="mark {rowTone}" title={msg(statusLabelKey(check.status))}>
                 {#if check.status === 'ok'}
-                  <Check size="1.4rem" strokeWidth={2.2} />
+                  <Check size="1.54rem" strokeWidth={2.2} />
                 {:else if check.status === 'below_minimum'}
-                  <X size="1.4rem" strokeWidth={2.2} />
+                  <X size="1.54rem" strokeWidth={2.2} />
                 {:else if check.status === 'below_recommended'}
-                  <TriangleAlert size="1.4rem" strokeWidth={2} />
+                  <TriangleAlert size="1.54rem" strokeWidth={2} />
                 {:else}
-                  <CircleQuestionMark size="1.4rem" strokeWidth={2} />
+                  <CircleQuestionMark size="1.54rem" strokeWidth={2} />
                 {/if}
               </span>
               <div class="body">

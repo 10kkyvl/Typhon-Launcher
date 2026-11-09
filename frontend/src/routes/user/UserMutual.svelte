@@ -37,7 +37,7 @@
   .row {
     display: flex;
     align-items: center;
-    gap: 0.8rem;
+    gap: 0.88rem;
     flex-wrap: wrap;
   }
 
@@ -59,9 +59,9 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 3.2rem;
-    height: 3.2rem;
-    padding: 0 0.6rem;
+    min-width: 3.52rem;
+    height: 3.52rem;
+    padding: 0 0.66rem;
     border-radius: 50%;
     background: var(--surface-3);
     color: var(--text-2);

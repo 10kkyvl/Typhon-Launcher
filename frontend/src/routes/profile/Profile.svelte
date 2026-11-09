@@ -406,7 +406,7 @@
             {/if}
           </div>
           <Button size="sm" variant="ghost" disabled={saving} onclick={askReset}>
-            <RotateCcw size="1.4rem" strokeWidth={1.8} />{msg('profile.resetLayout')}
+            <RotateCcw size="1.54rem" strokeWidth={1.8} />{msg('profile.resetLayout')}
           </Button>
           <Button variant="ghost" disabled={saving} onclick={cancel}>{msg('common.cancel')}</Button>
           <Button variant="primary" disabled={!canSave} onclick={save}>
@@ -490,7 +490,7 @@
 
   .workspace {
     display: flex;
-    gap: 1.6rem;
+    gap: 1.76rem;
     align-items: flex-start;
   }
 
@@ -502,12 +502,12 @@
   }
 
   .side {
-    width: 30rem;
+    width: 33rem;
     flex-shrink: 0;
     position: sticky;
-    top: 1.6rem;
+    top: 1.76rem;
     align-self: flex-start;
-    max-height: calc(100vh - var(--topbar-h) - 2 * 1.6rem);
+    max-height: calc(100vh - var(--topbar-h) - 2 * 1.76rem);
     overflow-y: auto;
     overflow-x: hidden;
     padding: var(--space-1);
@@ -533,7 +533,7 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: 0.22rem;
   }
 
   .topbar-text strong {
@@ -568,21 +568,21 @@
 
   .recent-item {
     flex: 0 0 auto;
-    width: 22rem;
+    width: 24.2rem;
   }
 
   .recent-meta {
     display: inline-flex;
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.66rem;
     font-size: var(--font-xs);
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
   }
 
   .recent-meta .dot {
-    width: 0.7rem;
-    height: 0.7rem;
+    width: 0.77rem;
+    height: 0.77rem;
     border-radius: 50%;
     background: var(--success);
     flex-shrink: 0;

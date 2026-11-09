@@ -172,14 +172,14 @@
           <div class="meta">
             {#if playing}
               <span class="meta-item now">
-                <Gamepad2 size="1.5rem" strokeWidth={1.8} />
+                <Gamepad2 size="1.65rem" strokeWidth={1.8} />
                 {msg('social.playingIn', { name: playing.title })}
               </span>
               {#if playingHidden}<HiddenBadge text={msg('social.hiddenStatusHint')} />{/if}
             {/if}
             {#if memberSince}
               <span class="meta-item">
-                <Calendar size="1.5rem" strokeWidth={1.8} />
+                <Calendar size="1.65rem" strokeWidth={1.8} />
                 {msg('social.memberSince', { date: memberSince })}
               </span>
             {/if}
@@ -194,7 +194,7 @@
         <div class="head-actions">
           {#if isGuest}
             <Button variant="primary" disabled={busy} onclick={() => run(() => leaveGuest('login'), msg('social.signInFailed'))}>
-              <LogIn size="1.5rem" strokeWidth={1.8} />
+              <LogIn size="1.65rem" strokeWidth={1.8} />
               {msg('social.signInButton')}
             </Button>
             <Button disabled={busy} onclick={() => run(() => leaveGuest('register'), msg('social.signInFailed'))}>
@@ -206,7 +206,7 @@
             <DropdownMenu items={menuItems} onselect={onMenu}>
               {#snippet trigger({ toggle })}
                 <IconButton label={msg('social.moreLabel')} onclick={toggle}>
-                  <EllipsisVertical size="1.8rem" strokeWidth={1.8} />
+                  <EllipsisVertical size="1.98rem" strokeWidth={1.8} />
                 </IconButton>
               {/snippet}
             </DropdownMenu>
@@ -275,7 +275,7 @@
 {/if}
 
 <style>
-  .header-surface { padding: 0 0 2rem; position: relative; }
+  .header-surface { padding: 0 0 2.2rem; position: relative; }
   .profile-header {
     container-type: inline-size;
     display: block;
@@ -293,7 +293,7 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: 0.44rem;
   }
 
   .display-name {
@@ -312,7 +312,7 @@
   .status {
     display: flex;
     align-items: baseline;
-    gap: 0.6rem;
+    gap: 0.66rem;
     font-size: var(--font-sm);
     color: var(--text-2);
     overflow-wrap: anywhere;
@@ -321,7 +321,7 @@
   .bio {
     font-size: var(--font-sm);
     color: var(--text-2);
-    max-width: 56rem;
+    max-width: 61.6rem;
     overflow-wrap: anywhere;
     white-space: pre-wrap;
     display: -webkit-box;
@@ -336,13 +336,13 @@
     align-items: center;
     flex-wrap: wrap;
     gap: var(--space-4);
-    margin-top: 0.4rem;
+    margin-top: 0.44rem;
   }
 
   .meta-item {
     display: inline-flex;
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.66rem;
     font-size: var(--font-sm);
     color: var(--text-2);
   }
@@ -354,8 +354,8 @@
 
   .meta-item.now {
     min-width: 0;
-    height: 2.8rem;
-    padding: 0 1.1rem;
+    height: 3.08rem;
+    padding: 0 1.21rem;
     border-radius: var(--radius-xl);
     background: var(--accent-subtle);
     color: var(--accent-text);
@@ -377,7 +377,7 @@
   .head-actions {
     display: flex;
     align-items: center;
-    gap: 0.8rem;
+    gap: 0.88rem;
     flex-shrink: 0;
   }
 
@@ -385,7 +385,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
-    max-width: 44rem;
+    max-width: 48.4rem;
     margin-top: var(--space-5);
     padding-top: var(--space-5);
     border-top: 1px solid var(--border);
@@ -394,14 +394,14 @@
   .field {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    gap: 0.66rem;
   }
 
   .field-label {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: 0.8rem;
+    gap: 0.88rem;
     font-size: var(--font-xs);
     color: var(--text-2);
   }
@@ -412,7 +412,7 @@
 
   .input {
     height: var(--control-md);
-    padding: 0 1.2rem;
+    padding: 0 1.32rem;
     background: var(--surface-2);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-md);
@@ -433,7 +433,7 @@
 
   .area {
     height: auto;
-    padding: 0.9rem 1.2rem;
+    padding: 0.99rem 1.32rem;
     resize: vertical;
     line-height: 1.5;
   }
@@ -446,14 +446,14 @@
 
   .username-prefix {
     position: absolute;
-    left: 1.2rem;
+    left: 1.32rem;
     color: var(--text-3);
     font-size: var(--font-sm);
     pointer-events: none;
   }
 
   .username-field .input {
-    padding-left: 2.6rem;
+    padding-left: 2.86rem;
   }
 
   .hint {
@@ -470,7 +470,7 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 0.8rem;
+    gap: 0.88rem;
     margin-top: var(--space-5);
     padding-top: var(--space-4);
     border-top: 1px solid var(--border);

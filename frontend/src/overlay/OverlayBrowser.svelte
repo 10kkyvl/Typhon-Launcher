@@ -81,13 +81,13 @@
 <section class="browser" aria-label={msg('overlay.browserLabel')}>
   <div class="bar">
     <IconButton label={msg('overlay.browserBack')} size="sm" disabled={!loaded} onclick={() => run(browserBack)}>
-      <ArrowLeft size="1.6rem" strokeWidth={1.8} />
+      <ArrowLeft size="1.76rem" strokeWidth={1.8} />
     </IconButton>
     <IconButton label={msg('overlay.browserForward')} size="sm" disabled={!loaded} onclick={() => run(browserForward)}>
-      <ArrowRight size="1.6rem" strokeWidth={1.8} />
+      <ArrowRight size="1.76rem" strokeWidth={1.8} />
     </IconButton>
     <IconButton label={msg('overlay.browserReload')} size="sm" disabled={!loaded} onclick={() => run(browserReload)}>
-      <RotateCw size="1.6rem" strokeWidth={1.8} />
+      <RotateCw size="1.76rem" strokeWidth={1.8} />
     </IconButton>
     <form onsubmit={go}>
       <input
@@ -102,7 +102,7 @@
       />
     </form>
     <IconButton label={msg('overlay.browserClose')} size="sm" onclick={close}>
-      <X size="1.6rem" strokeWidth={1.8} />
+      <X size="1.76rem" strokeWidth={1.8} />
     </IconButton>
   </div>
   {#if error}
@@ -120,7 +120,7 @@
     position: absolute;
     top: var(--space-5);
     left: var(--space-5);
-    right: calc(min(40rem, 100vw) + var(--space-5));
+    right: calc(min(44rem, 100vw) + var(--space-5));
     bottom: var(--space-5);
     display: flex;
     flex-direction: column;
@@ -148,7 +148,7 @@
   .bar input {
     flex: 1;
     min-width: 0;
-    height: 3.2rem;
+    height: 3.52rem;
     padding: 0 var(--space-3);
     background: var(--surface-2);
     border: 1px solid var(--border);

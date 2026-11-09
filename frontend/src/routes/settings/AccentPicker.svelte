@@ -73,11 +73,11 @@
 <style>
   .hint { color: var(--text-2); font-size: var(--font-xs); margin-bottom: var(--space-3); }
   .choices, .editor { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
-  .choices button { min-height: 3.6rem; padding: .5rem 1rem; border: 2px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-2); color: var(--text); }
+  .choices button { min-height: 3.96rem; padding: .55rem 1.1rem; border: 2px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-2); color: var(--text); }
   .choices button.chosen { border-color: var(--accent-text); outline: 1px solid var(--accent-text); outline-offset: 2px; }
   .choices button:disabled { opacity: .5; }
-  .choices .swatch { padding: .4rem; }
-  .swatch span { display: block; width: 2.4rem; height: 2.4rem; border-radius: 50%; background: var(--swatch); }
+  .choices .swatch { padding: .44rem; }
+  .swatch span { display: block; width: 2.64rem; height: 2.64rem; border-radius: 50%; background: var(--swatch); }
   .editor { margin-top: var(--space-4); }
   .tint { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-4); font-size: var(--font-md); }
 </style>

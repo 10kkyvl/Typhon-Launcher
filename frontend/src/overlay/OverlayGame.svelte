@@ -64,7 +64,7 @@
       </div>
       {#if confirming !== row.id}
         <Button size="sm" onclick={() => (confirming = row.id)}>
-          <Power size="1.4rem" strokeWidth={1.8} />
+          <Power size="1.54rem" strokeWidth={1.8} />
           {msg('overlay.closeGame')}
         </Button>
       {/if}
@@ -105,7 +105,7 @@
     flex: 1;
     flex-direction: column;
     min-width: 0;
-    gap: 0.1rem;
+    gap: 0.11rem;
   }
 
   .info span {

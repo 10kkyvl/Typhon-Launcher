@@ -86,7 +86,7 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.6rem;
+    gap: 0.66rem;
     width: 100%;
     text-align: left;
     border-radius: var(--radius-md);

@@ -78,7 +78,7 @@
   }
 </script>
 
-<Modal bind:open title={view ? msg(view.title) : ''} width="48rem" onclose={dismiss}>
+<Modal bind:open title={view ? msg(view.title) : ''} width="52.8rem" onclose={dismiss}>
   {#if record}
     <div class="body">
       <p>{msg('redist.crashGame', { title, seconds: Math.round(record.sessionSeconds) })}</p>

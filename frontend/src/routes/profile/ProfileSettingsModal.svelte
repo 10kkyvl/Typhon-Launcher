@@ -69,7 +69,7 @@
   }
 </script>
 
-<Modal bind:open title={msg('social.profileSettingsTitle')} width="52rem">
+<Modal bind:open title={msg('social.profileSettingsTitle')} width="57.2rem">
   {#if $isOffline}
     <p class="hint">{msg('social.settingsRequireConnection')}</p>
   {/if}
@@ -153,7 +153,7 @@
   }
 
   h4 {
-    font-size: 1.2rem;
+    font-size: 1.32rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -178,7 +178,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-6);
-    padding: 1.3rem 0;
+    padding: 1.43rem 0;
   }
 
   .row + .row {

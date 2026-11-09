@@ -94,9 +94,9 @@
   <div class="head">
     <span class="mark" class:cautious aria-hidden="true">
       {#if isUpdate}
-        <ArrowUp size="2rem" strokeWidth={2} />
+        <ArrowUp size="2.2rem" strokeWidth={2} />
       {:else}
-        <Sparkles size="2rem" strokeWidth={1.8} />
+        <Sparkles size="2.2rem" strokeWidth={1.8} />
       {/if}
     </span>
     <div class="titles">
@@ -178,7 +178,7 @@
   <div class="actions">
     {#if busy}
       <Button onclick={() => abortUpdate(update.gameId)}>
-        <X size="1.5rem" strokeWidth={1.8} />
+        <X size="1.65rem" strokeWidth={1.8} />
         {msg('ui.abort')}
       </Button>
     {:else if plan}
@@ -186,7 +186,7 @@
       <Button onclick={() => (detailsOpen = !detailsOpen)}>
         {msg('ui.details')}
         <span class="chevron" class:open={detailsOpen}>
-          <ChevronDown size="1.5rem" strokeWidth={1.8} />
+          <ChevronDown size="1.65rem" strokeWidth={1.8} />
         </span>
       </Button>
     {:else if !noRelease}
@@ -196,12 +196,12 @@
     {/if}
     {#if update.canRollback}
       <Button onclick={() => restorePrevious(update.gameId)}>
-        <RotateCcw size="1.5rem" strokeWidth={1.8} />
+        <RotateCcw size="1.65rem" strokeWidth={1.8} />
         {msg('ui.restorePreviousVersion')}
       </Button>
     {/if}
     <Button onclick={openHistory}>
-      <History size="1.5rem" strokeWidth={1.8} />
+      <History size="1.65rem" strokeWidth={1.8} />
       {msg('ui.history')}
     </Button>
   </div>
@@ -304,7 +304,7 @@
 
 <style>
   .section {
-    max-width: 120rem;
+    max-width: 132rem;
     margin-bottom: var(--space-6);
   }
 
@@ -319,8 +319,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 4.4rem;
-    height: 4.4rem;
+    width: 4.84rem;
+    height: 4.84rem;
     flex-shrink: 0;
     border-radius: 50%;
     background: var(--accent-subtle);
@@ -340,7 +340,7 @@
   }
 
   .explain {
-    margin: 0.4rem 0 0;
+    margin: 0.44rem 0 0;
     font-size: var(--font-sm);
     line-height: 1.45;
     color: var(--text-2);
@@ -348,7 +348,7 @@
 
   .badges {
     display: flex;
-    gap: 0.8rem;
+    gap: 0.88rem;
     flex-shrink: 0;
     align-self: flex-start;
   }
@@ -396,7 +396,7 @@
   .facts .versions {
     display: flex;
     align-items: baseline;
-    gap: 0.8rem;
+    gap: 0.88rem;
     max-width: none;
   }
 
@@ -443,7 +443,7 @@
   .summary dt {
     font-size: var(--font-xs);
     color: var(--text-3);
-    margin-bottom: 0.4rem;
+    margin-bottom: 0.44rem;
   }
 
   .summary dd {
@@ -490,10 +490,10 @@
 
   .steps {
     margin: 0;
-    padding-left: 2.2rem;
+    padding-left: 2.42rem;
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    gap: 0.66rem;
   }
 
   .steps li,
@@ -509,7 +509,7 @@
     list-style: none;
     display: flex;
     flex-direction: column;
-    gap: 0.8rem;
+    gap: 0.88rem;
   }
 
   .step-label {

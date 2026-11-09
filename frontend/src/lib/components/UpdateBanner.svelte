@@ -38,11 +38,11 @@
 {#if view === 'failed'}
   <div class="banner banner-danger">
     <div class="banner-text">
-      <AlertTriangle size="1.8rem" strokeWidth={1.8} />
+      <AlertTriangle size="1.98rem" strokeWidth={1.8} />
       <span>{statusReason(status) || msg('ui.updateCheckFailed')}</span>
     </div>
     <Button size="sm" onclick={retryFailed}>
-      <RefreshCw size="1.5rem" strokeWidth={1.8} />
+      <RefreshCw size="1.65rem" strokeWidth={1.8} />
       {msg('common.retry')}
     </Button>
   </div>
@@ -55,7 +55,7 @@
       <ProgressBar value={pct} />
       <span class="muted">{msg('ui.bytesOfBytes', { done: bytesSize(downloadedBytes), total: bytesSize(totalBytes) })} · {Math.round(pct)}%</span>
       <Button size="sm" onclick={requestCancelDownload}>
-        <X size="1.5rem" strokeWidth={1.8} />
+        <X size="1.65rem" strokeWidth={1.8} />
         {msg('ui.cancelVerb')}
       </Button>
     </div>
@@ -88,7 +88,7 @@
     {/if}
     <div class="actions">
       <Button variant="primary" size="sm" onclick={requestDownload}>
-        <Download size="1.5rem" strokeWidth={1.8} />
+        <Download size="1.65rem" strokeWidth={1.8} />
         {msg('ui.download')}
       </Button>
     </div>
@@ -102,7 +102,7 @@
   {#snippet footer()}
     <Button onclick={() => (confirmOpen = false)}>{msg('common.cancel')}</Button>
     <Button variant="primary" onclick={confirmApply}>
-      <RotateCcw size="1.5rem" strokeWidth={1.8} />
+      <RotateCcw size="1.65rem" strokeWidth={1.8} />
       {msg('ui.restartAndUpdate')}
     </Button>
   {/snippet}

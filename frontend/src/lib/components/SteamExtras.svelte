@@ -52,7 +52,7 @@
         <li>
           <button class="dlc-link" onclick={() => onopendlc(item.appId)}>
             <span class="dlc-name">{item.name}</span>
-            <ExternalLink size="1.4rem" strokeWidth={1.8} />
+            <ExternalLink size="1.54rem" strokeWidth={1.8} />
           </button>
         </li>
       {/each}
@@ -92,13 +92,13 @@
     display: flex;
     align-items: baseline;
     gap: var(--space-4);
-    padding: 0.9rem 0;
+    padding: 0.99rem 0;
     border-top: 1px solid var(--border);
     font-size: var(--font-sm);
   }
 
   dt {
-    flex: 0 0 16rem;
+    flex: 0 0 17.6rem;
     color: var(--text-3);
   }
 
@@ -121,10 +121,10 @@
   .dlc-link {
     display: inline-flex;
     align-items: center;
-    gap: 0.6rem;
-    min-height: 2.8rem;
+    gap: 0.66rem;
+    min-height: 3.08rem;
     max-width: 100%;
-    padding: 0 1.1rem;
+    padding: 0 1.21rem;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     background: var(--surface);
