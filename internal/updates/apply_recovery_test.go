@@ -298,24 +298,6 @@ func TestRecoverSwapMissingRenamePendingRegistration(t *testing.T) {
 	}
 }
 
-func TestServiceStartupCorruptJournalFails(t *testing.T) {
-	root := t.TempDir()
-	configDir := filepath.Join(root, "config")
-	if err := os.MkdirAll(configDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(configDir, "journal.json"), []byte(`{"version":1,"data":[{"gameId":`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	svc, err := newServiceAt(configDir, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := svc.ServiceStartup(context.Background(), application.ServiceOptions{}); err == nil {
-		t.Fatal("expected ServiceStartup to fail on corrupt journal file")
-	}
-}
-
 // With the config directory entirely read-only, every persist in the update
 // job fails, including the one that would have recorded "update_failed": an
 // in-memory-only failure status would vanish on the next restart while

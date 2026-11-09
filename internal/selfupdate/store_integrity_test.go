@@ -27,6 +27,7 @@ func TestStoreUnreadableStateIsNeverTreatedAsEmpty(t *testing.T) {
 		{"whitespace only", []byte(" \n\t ")},
 		{"truncated envelope", []byte(`{"version":1,"data":{"availableVersion":"1.2`)},
 		{"binary garbage", []byte{0x00, 0xff, 0xfe, 0x01}},
+		{"plain broken json", []byte("{not valid json")},
 		{"json null", []byte(`null`)},
 		{"empty object without an envelope", []byte(`{}`)},
 		{"json array", []byte(`[1,2,3]`)},

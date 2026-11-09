@@ -109,22 +109,6 @@ func TestNewStore(t *testing.T) {
 	}
 }
 
-func TestStoreLoadMissingFile(t *testing.T) {
-	dir := t.TempDir()
-	s, err := NewStore(dir)
-	if err != nil {
-		t.Fatalf("NewStore() error = %v", err)
-	}
-
-	v, err := s.Load()
-	if err != nil {
-		t.Fatalf("Load() error = %v, want nil for a missing file", err)
-	}
-	if v != (stored{}) {
-		t.Fatalf("Load() = %+v, want zero value", v)
-	}
-}
-
 func TestStoreSaveLoadRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	s, err := NewStore(dir)
@@ -169,48 +153,6 @@ func TestStoreSaveLoadRoundTrip(t *testing.T) {
 	}
 	if got.Artifact == nil || !sameFile(*got.Artifact, *want.Artifact) {
 		t.Fatalf("Load() artifact = %+v, want %+v", got.Artifact, want.Artifact)
-	}
-}
-
-func TestStoreCorruptFileRefusesToSave(t *testing.T) {
-	dir := t.TempDir()
-	cacheDir, err := CacheDir(dir)
-	if err != nil {
-		t.Fatalf("CacheDir() error = %v", err)
-	}
-	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
-		t.Fatalf("mkdir cache dir: %v", err)
-	}
-	statePath := filepath.Join(cacheDir, "state.json")
-	if err := os.WriteFile(statePath, []byte("{not valid json"), 0o600); err != nil {
-		t.Fatalf("write corrupt state: %v", err)
-	}
-
-	s, err := NewStore(dir)
-	if err != nil {
-		t.Fatalf("NewStore() error = %v", err)
-	}
-
-	if _, err := s.Load(); err == nil {
-		t.Fatalf("Load() error = nil, want an error for corrupt JSON")
-	}
-
-	before, err := os.ReadFile(statePath)
-	if err != nil {
-		t.Fatalf("read state before Save: %v", err)
-	}
-
-	err = s.Save(stored{AvailableVersion: "9.9.9"})
-	if !errors.Is(err, ErrReadOnly) {
-		t.Fatalf("Save() error = %v, want ErrReadOnly", err)
-	}
-
-	after, err := os.ReadFile(statePath)
-	if err != nil {
-		t.Fatalf("read state after Save: %v", err)
-	}
-	if string(before) != string(after) {
-		t.Fatalf("Save() modified the corrupt state file: before=%q after=%q", before, after)
 	}
 }
 

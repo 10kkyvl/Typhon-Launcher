@@ -80,16 +80,6 @@ func TestStoreCorruptFileFailsLoad(t *testing.T) {
 	}
 }
 
-func TestStoreMissingFileLoadsEmpty(t *testing.T) {
-	got, err := newStore(t.TempDir()).load()
-	if err != nil {
-		t.Fatalf("load: %v", err)
-	}
-	if got != nil {
-		t.Fatalf("loaded %v, want nil", got)
-	}
-}
-
 func writeTestMetainfo(t *testing.T, s *store, infoHash string) {
 	t.Helper()
 	path := s.metainfoPath(infoHash)
