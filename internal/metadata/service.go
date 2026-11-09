@@ -1019,21 +1019,65 @@ type assetBatch struct {
 	partial bool
 }
 
+type storedImage struct {
+	asset MediaAsset
+	err   error
+}
+
+// storeImages downloads every url at once and returns the results in the
+// order given. The page shows nothing new until the whole batch is stored, so
+// one image after another made it wait the sum of all CDN round trips; the
+// image gate still caps how many downloads run together.
+func (s *Service) storeImages(ctx context.Context, gameID string, kinds []AssetType, urls []string) []storedImage {
+	out := make([]storedImage, len(urls))
+	var wg sync.WaitGroup
+	for i := range urls {
+		wg.Go(func() {
+			out[i].asset, out[i].err = s.storeImage(ctx, gameID, kinds[i], urls[i])
+		})
+	}
+	wg.Wait()
+	return out
+}
+
 func (s *Service) buildAssets(ctx context.Context, game catalog.Game, meta GameMetadata, mode refreshMode) (assetBatch, error) {
 	previous := s.store.list(game.ID)
 	batch := assetBatch{}
 
-	if meta.Cover != nil && meta.Cover.URL != "" {
-		asset, err := s.storeImage(ctx, game.ID, AssetCover, meta.Cover.URL)
-		switch {
-		case err == nil:
-			batch.assets = append(batch.assets, asset)
-			batch.created = append(batch.created, asset)
-			batch.cover = asset.ID
-		case ctx.Err() != nil:
-			return assetBatch{}, ctx.Err()
-		default:
-			slog.Warn("download cover", "game", game.ID, "url", meta.Cover.URL, "error", err)
+	var kinds []AssetType
+	var urls []string
+	hasCover := meta.Cover != nil && meta.Cover.URL != ""
+	if hasCover {
+		kinds, urls = append(kinds, AssetCover), append(urls, meta.Cover.URL)
+	}
+	if mode != modeArt {
+		for _, shot := range meta.Screenshots[:min(len(meta.Screenshots), maxScreenshots)] {
+			if shot.URL != "" {
+				kinds, urls = append(kinds, AssetScreenshot), append(urls, shot.URL)
+			}
+		}
+	}
+	results := s.storeImages(ctx, game.ID, kinds, urls)
+	if ctx.Err() != nil {
+		var done []MediaAsset
+		for _, r := range results {
+			if r.err == nil {
+				done = append(done, r.asset)
+			}
+		}
+		s.store.removeFiles(done)
+		return assetBatch{}, ctx.Err()
+	}
+
+	if hasCover {
+		cover := results[0]
+		results = results[1:]
+		if cover.err == nil {
+			batch.assets = append(batch.assets, cover.asset)
+			batch.created = append(batch.created, cover.asset)
+			batch.cover = cover.asset.ID
+		} else {
+			slog.Warn("download cover", "game", game.ID, "url", meta.Cover.URL, "error", cover.err)
 		}
 	}
 	if batch.cover == "" {
@@ -1051,22 +1095,14 @@ func (s *Service) buildAssets(ctx context.Context, game catalog.Game, meta GameM
 		return batch, nil
 	}
 
-	limit := min(len(meta.Screenshots), maxScreenshots)
 	var shots []MediaAsset
-	for _, shot := range meta.Screenshots[:limit] {
-		if shot.URL == "" {
+	for i, r := range results {
+		if r.err != nil {
+			slog.Warn("download screenshot", "game", game.ID, "url", urls[len(urls)-len(results)+i], "error", r.err)
 			continue
 		}
-		asset, err := s.storeImage(ctx, game.ID, AssetScreenshot, shot.URL)
-		if err != nil {
-			if ctx.Err() != nil {
-				return assetBatch{}, ctx.Err()
-			}
-			slog.Warn("download screenshot", "game", game.ID, "url", shot.URL, "error", err)
-			continue
-		}
-		shots = append(shots, asset)
-		batch.created = append(batch.created, asset)
+		shots = append(shots, r.asset)
+		batch.created = append(batch.created, r.asset)
 	}
 	if len(shots) == 0 {
 		shots = carryScreenshots(previous)
