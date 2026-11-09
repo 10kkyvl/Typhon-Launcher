@@ -216,3 +216,38 @@ func TestFastSplitEnvelopeRejectsTruncatedInput(t *testing.T) {
 		})
 	}
 }
+
+// The fast scanner is only worth having if it actually takes well-formed
+// envelopes: a regression that made it defer everything to the slow path would
+// keep every other test green while silently doubling the parse cost.
+func TestFastSplitEnvelopeTakesWellFormedEnvelopesAndRefusesTheRest(t *testing.T) {
+	accepted := []string{
+		`{"version":3,"data":[1,2,3]}`,
+		`{"data":{"a":1},"version":9}`,
+		"{\n  \"version\" : 1 ,\n  \"data\" : [1, 2]\n}",
+	}
+	for _, raw := range accepted {
+		payload, version, ok := fastSplitEnvelope(bytes.TrimSpace([]byte(raw)))
+		if !ok {
+			t.Fatalf("fast path refused a well-formed envelope %q", raw)
+		}
+		if version == 0 || len(payload) == 0 {
+			t.Fatalf("fast path returned version=%d payload=%q for %q", version, payload, raw)
+		}
+	}
+	refused := map[string]string{
+		"empty object":            `{}`,
+		"missing colon":           `{"version" 1,"data":[1]}`,
+		"truncated after key":     `{"version"`,
+		"truncated after colon":   `{"version":`,
+		"empty value":             `{"version":,"data":[1]}`,
+		"stray brace after value": `{"version":1}}`,
+		"not an object":           `[1,2,3]`,
+		"unterminated string key": `{"version:1,"data":[1]}`,
+	}
+	for name, raw := range refused {
+		if _, _, ok := fastSplitEnvelope([]byte(raw)); ok {
+			t.Fatalf("%s: fast path accepted %q", name, raw)
+		}
+	}
+}
