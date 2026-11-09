@@ -1,6 +1,6 @@
 ---
 name: typhon-keepers
-description: Use when the user asks to check that something in Typhon Launcher is still up to date — legal texts and consents, release notes, docs/ knowledge base, agent instructions, the Go↔frontend contract, dependencies and CI, invariant hygiene — or when preparing a release.
+description: Use when a change in Typhon Launcher trips a keeper row of .claude/rules/dispatch.md (contract, docs, invariants, legal, instructions), when preparing a release, or when the user asks to check that legal texts, release notes, docs, instructions, the Go↔frontend contract, dependencies or invariant hygiene are still up to date.
 ---
 
 # Keepers
@@ -12,14 +12,13 @@ orchestrator applies, verifies and commits. One agent = one area.
 |---|---|---|
 | `typhon-deps-keeper` | go.mod, npm, the anacrolix fork, Wails, `ci.yml`/`release.yml` supply chain | before every release |
 | `typhon-legal-keeper` | PRIVACY/TERMS/COPYRIGHT/THIRD_PARTY ru+en, `legal.Version`, `CurrentTelemetryConsent`, site copies | before every release; after a feature that sends data out |
-| `typhon-changelog-keeper` | CHANGELOG.md / .en.md in the `signrelease` format, version in all sources | on the user's request |
-| `typhon-docs-keeper` | `docs/*` against the code, audit and memory statuses | on the user's request |
-| `typhon-instructions-keeper` | CLAUDE.md, AGENTS.md, rules, skills, agents, hooks | on the user's request |
-| `typhon-contract-keeper` | events, `uierr` codes ↔ i18n, bindings ↔ TS types, enum labels | on the user's request |
-| `typhon-invariant-keeper` | code sweep against I-1…I-17 and test hygiene; lint candidates | on the user's request |
+| `typhon-changelog-keeper` | CHANGELOG.md / .en.md in the `signrelease` format, version in all sources | see `dispatch.md` |
+| `typhon-docs-keeper` | `docs/*` against the code | see `dispatch.md` |
+| `typhon-instructions-keeper` | CLAUDE.md, AGENTS.md, rules, skills, agents, hooks | see `dispatch.md` |
+| `typhon-contract-keeper` | events, `uierr` codes ↔ i18n, bindings ↔ TS types, enum labels | see `dispatch.md` |
+| `typhon-invariant-keeper` | code sweep against I-1…I-17 and test hygiene; lint candidates | see `dispatch.md` |
 
-No keeper runs on a schedule or automatically. The two pre-release keepers are part of
-`typhon-release-gate`; everything else waits for an explicit request.
+Triggers: `.claude/rules/dispatch.md`. The two pre-release keepers are part of `typhon-release-gate`.
 
 ## How to run one
 

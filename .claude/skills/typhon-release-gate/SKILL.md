@@ -15,7 +15,7 @@ describes the release procedure itself).
    `build/darwin/Info.plist` and `Info.dev.plist` — `go test ./internal/app -run TestVersionSourcesMatch`;
    macOS bundle metadata if a Mac artifact ships.
 2. **Changelog**: `go test ./cmd/signrelease`; ru/en match in meaning; no dev-only items
-   (`typhon-changelog-keeper` on request).
+   (`typhon-changelog-keeper` when the notes are prepared, per `dispatch.md`).
 3. **Legal**: `legal.Version` and the "edition" lines agree; new outgoing data is described; site copies
    updated; the `CurrentTelemetryConsent` decision is made (`typhon-legal-keeper`).
 4. **Dependencies and pipeline**: `typhon-deps-keeper` without reds; `release.yml`/`Taskfile` not

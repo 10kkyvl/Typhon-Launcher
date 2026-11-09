@@ -52,7 +52,7 @@ existing tests and a `git diff` with no semantic change.
 ## Independent author
 
 Orchestrator rule (not for the executing subagent): when you wrote the fix yourself or the scenario is
-large, order the test from `typhon-test-author` (read-only Sonnet). It gets the scenario, the public
+large, order the test from `typhon-test-author` (read-only). It gets the scenario, the public
 contract and the package path, never the implementation diff, and returns the test text; the
 orchestrator writes the file and does RED/GREEN. If the agent is not available, write the test yourself
 by this skill.

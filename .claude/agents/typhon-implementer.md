@@ -3,6 +3,7 @@ name: typhon-implementer
 description: Implementer for Typhon Launcher. Gets a brief (scenario, contract, package, invariants, acceptance criteria) and usually a behaviour test, works in its own git worktree, and returns commits plus a report with RED and GREEN shown. Edits files only inside its worktree. Never pushes, never touches dev, never spawns subagents.
 model: opus
 effort: high
+isolation: worktree
 tools: Read, Grep, Glob, Edit, Write, Bash
 disallowedTools: Agent, NotebookEdit
 ---
