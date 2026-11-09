@@ -6,6 +6,16 @@ this file carries the same entries for the GitHub releases. It starts at
 0.4.0, the release that introduced the English interface — for anything older
 see `CHANGELOG.md`. Sections: "Added", "Changed", "Fixed", "Removed".
 
+## 1.4.1 — 2026-11-09
+A catalog game's page opens much faster, most of all the first time you open a game.
+
+### Changed
+- The description, cover and screenshots of a game you open for the first time show up almost at once instead of after 2–3 seconds. The developer, publisher and Steam details, when they were not there yet, are filled in the next time you open the page
+- A game's cover and screenshots download together instead of one by one
+
+### Fixed
+- With error reports turned on, the launcher no longer sends the server's "too many requests" replies or its short unavailability during an update as errors
+
 ## 1.4.0 — 2026-11-09
 PlayStation games from PS1 to PS4, PSP and PS Vita run through emulators, and console releases download straight from the catalog. With Discord linked, the Typhon bot shows and controls your downloads, starts new ones and messages you when a game is ready. On a Mac games go to Steam too.
 
