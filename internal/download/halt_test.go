@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"typhon/internal/netguard"
 	"typhon/internal/settings"
 	"typhon/internal/uierr"
 
@@ -329,6 +330,7 @@ type guardedPlan struct {
 
 func guardedClient(t *testing.T, plan netPlan) (*client, *torrent.ClientConfig) {
 	t.Helper()
+	allowLoopbackDestinations(t)
 	var cfg *torrent.ClientConfig
 	orig := openTorrentClient
 	t.Cleanup(func() { openTorrentClient = orig })
@@ -559,5 +561,17 @@ func TestRestoreOfAGoneClientLeavesTheStatusAlone(t *testing.T) {
 	}
 	if st := r.m.statusOf(t, "dl"); st != StatusQueued {
 		t.Fatalf("status = %q, want the download left queued for the next client", st)
+	}
+}
+
+// allowLoopbackDestinations lets the tracker and webseed guard reach the
+// loopback servers these tests stand up; every other refused range stays
+// refused so the halt checks still exercise the real dial path.
+func allowLoopbackDestinations(t *testing.T) {
+	t.Helper()
+	orig := httpDestinationBlocked
+	t.Cleanup(func() { httpDestinationBlocked = orig })
+	httpDestinationBlocked = func(addr netip.Addr) bool {
+		return !addr.Unmap().IsLoopback() && netguard.BlockedAddr(addr)
 	}
 }

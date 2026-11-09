@@ -6,9 +6,9 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
-	"strings"
 	"time"
 
+	"typhon/internal/netguard"
 	"typhon/internal/uierr"
 )
 
@@ -25,8 +25,6 @@ var (
 	ErrNoAddress      = uierr.New("sources.feed_no_address", "не удалось определить адрес источника")
 	ErrTooManyHops    = uierr.New("sources.feed_too_many_hops", fmt.Sprintf("слишком много редиректов (лимит %d)", MaxRedirects))
 )
-
-var cgnat = netip.MustParsePrefix("100.64.0.0/10")
 
 type resolveFunc func(ctx context.Context, host string) ([]netip.Addr, error)
 
@@ -70,25 +68,11 @@ func systemResolve(ctx context.Context, host string) ([]netip.Addr, error) {
 	return addrs, nil
 }
 
-func blockedName(host string) bool {
-	host = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(host), "."))
-	return host == "" || host == "localhost" || strings.HasSuffix(host, ".localhost")
-}
+// blockedName and blockedAddr are the shared launcher-wide policy; the
+// download and metadata clients apply the same one (netguard).
+func blockedName(host string) bool { return netguard.BlockedName(host) }
 
-func blockedAddr(addr netip.Addr) bool {
-	addr = addr.Unmap()
-	if !addr.IsValid() {
-		return true
-	}
-	return addr.IsLoopback() ||
-		addr.IsPrivate() ||
-		addr.IsUnspecified() ||
-		addr.IsLinkLocalUnicast() ||
-		addr.IsLinkLocalMulticast() ||
-		addr.IsInterfaceLocalMulticast() ||
-		addr.IsMulticast() ||
-		(addr.Is4() && cgnat.Contains(addr))
-}
+func blockedAddr(addr netip.Addr) bool { return netguard.BlockedAddr(addr) }
 
 func (g guard) lookup(ctx context.Context, host string) ([]netip.Addr, error) {
 	if blockedName(host) {

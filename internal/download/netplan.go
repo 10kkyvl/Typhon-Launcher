@@ -142,6 +142,10 @@ func (a netAttach) attach(cl *torrent.Client) {
 func applyNetwork(ctx context.Context, tc *torrent.ClientConfig, p netPlan) (netAttach, error) {
 	switch p.mode {
 	case settings.NetworkDirect:
+		// Peers keep the library's own sockets; only the HTTP side (trackers,
+		// webseeds) goes through the address guard.
+		tc.HTTPDialContext = directHTTPDial()
+		tc.TrackerDialContext = directHTTPDial()
 		return netAttach{}, nil
 	case settings.NetworkInterface:
 		return applyInterface(ctx, tc, p)
@@ -173,8 +177,9 @@ func applyInterface(ctx context.Context, tc *torrent.ClientConfig, p netPlan) (n
 	// are dialled from the bound address by the dialers attached afterwards.
 	tc.DialForPeerConns = false
 	tc.HTTPProxy = nil
-	tc.HTTPDialContext = b.DialContext
-	tc.TrackerDialContext = b.DialContext
+	httpDial := guardedHTTPDial(b.DialContext, resolverLookup(b.resolver))
+	tc.HTTPDialContext = httpDial
+	tc.TrackerDialContext = httpDial
 	tc.TrackerListenPacket = b.listenPacket
 	tc.NoDefaultPortForwarding = true
 	tc.DisableWebtorrent = true

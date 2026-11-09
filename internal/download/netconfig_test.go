@@ -53,8 +53,11 @@ func TestApplyNetworkDirectLeavesTheDefaults(t *testing.T) {
 		tc.NoDefaultPortForwarding || tc.DisableWebtorrent || tc.DisableIPv6 || tc.DisableIPv4 {
 		t.Fatalf("direct mode changed the client defaults: %+v", tc)
 	}
-	if tc.HTTPProxy != nil || tc.HTTPDialContext != nil || tc.TrackerDialContext != nil || tc.TrackerListenPacket != nil {
-		t.Fatal("direct mode must not install network hooks")
+	if tc.HTTPProxy != nil || tc.TrackerListenPacket != nil {
+		t.Fatal("direct mode must not install proxy or UDP hooks")
+	}
+	if tc.HTTPDialContext == nil || tc.TrackerDialContext == nil {
+		t.Fatal("direct mode must route HTTP trackers and webseeds through the address guard")
 	}
 	if tc.ListenPort != want.ListenPort {
 		t.Fatalf("listen port changed: %d", tc.ListenPort)
