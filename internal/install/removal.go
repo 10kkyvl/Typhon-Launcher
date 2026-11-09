@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"typhon/internal/download"
@@ -432,6 +433,17 @@ func freeRemovalPath(dir string) (string, error) {
 	return "", fmt.Errorf("%w: %s", errFilesLocked, base)
 }
 
+// removalStagingName принимает только имена, которые выдаёт freeRemovalPath:
+// `<dir>.removing` и `<dir>.removing-N`. Журнал лежит в пользовательском
+// каталоге, поэтому подстроки в середине имени права на удаление не дают.
+var removalStagingName = regexp.MustCompile(`\.removing(-\d+)?$`)
+
+// sweepRemovals доводит до конца удаления, прерванные выключением. Каждая
+// запись проверяется так же, как путь перед stageForRemoval: абсолютный,
+// не корень, не symlink, настоящий каталог с суффиксом staging. Запись, не
+// прошедшая проверку, остаётся в журнале и попадает в лог, но не удаляется.
+// Отмена ctx здесь не прерывает проход: журнал делает удаление идемпотентным,
+// а ServiceShutdown ждёт завершения этой горутины (TestSweepRemovalsFinishesPending).
 func (s *Service) sweepRemovals() {
 	paths, err := s.removals.load()
 	if err != nil {
@@ -439,8 +451,12 @@ func (s *Service) sweepRemovals() {
 		return
 	}
 	for _, path := range paths {
-		if !strings.Contains(filepath.Base(path), removingSuffix) {
+		if !removalStagingName.MatchString(filepath.Base(path)) {
 			slog.Error("unexpected pending removal", "path", path)
+			continue
+		}
+		if err := removableDir(path); err != nil {
+			slog.Error("refuse pending removal", "path", path, "error", err)
 			continue
 		}
 		if err := os.RemoveAll(path); err != nil {

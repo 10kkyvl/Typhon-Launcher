@@ -1057,3 +1057,59 @@ func TestRemoveGameKeepsLibraryConsistentWhenBookkeepingPersistFails(t *testing.
 		t.Fatalf("library record kept = %v, want it gone: files are already deleted from disk, the library must not keep pointing at %s", findErr, dir)
 	}
 }
+
+// Журнал удалений лежит в пользовательском каталоге, поэтому sweep обязан
+// проверять каждую запись так же строго, как stageForRemoval проверял путь
+// перед записью: только настоящий staging-каталог с суффиксом .removing.
+func TestSweepRemovalsRefusesEntriesThatAreNotStagingDirectories(t *testing.T) {
+	dir := t.TempDir()
+	outside := t.TempDir()
+	lookalike := filepath.Join(outside, "Saves.removing-data")
+	mkFile(t, filepath.Join(lookalike, "slot1.sav"), 64)
+	target := filepath.Join(outside, "Target")
+	mkFile(t, filepath.Join(target, "game.exe"), 64)
+	link := filepath.Join(outside, "Link"+removingSuffix)
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	staged := filepath.Join(outside, "Game"+removingSuffix+"-1")
+	mkFile(t, filepath.Join(staged, "leftover.bin"), 64)
+
+	first := mustServiceAt(t, dir)
+	for _, p := range []string{lookalike, link, "Relative" + removingSuffix, staged} {
+		if err := first.removals.add(p); err != nil {
+			t.Fatalf("add %s: %v", p, err)
+		}
+	}
+
+	second := mustServiceAt(t, dir)
+	second.settings = newTestSettings(t)
+	if err := second.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
+		t.Fatalf("startup: %v", err)
+	}
+	if err := second.ServiceShutdown(); err != nil {
+		t.Fatalf("shutdown: %v", err)
+	}
+
+	if missing(t, lookalike) {
+		t.Fatal("sweep deleted a directory whose name only contains .removing")
+	}
+	if _, err := os.Lstat(link); err != nil {
+		t.Fatalf("sweep removed a symlink from the journal: %v", err)
+	}
+	if missing(t, target) {
+		t.Fatal("sweep followed a symlink and deleted its target")
+	}
+	if !missing(t, staged) {
+		t.Fatal("a genuine staging directory with a numbered suffix survived the sweep")
+	}
+	remaining, err := second.removals.load()
+	if err != nil {
+		t.Fatalf("load journal: %v", err)
+	}
+	for _, p := range remaining {
+		if p == staged {
+			t.Fatal("the finished staging entry is still journaled")
+		}
+	}
+}
