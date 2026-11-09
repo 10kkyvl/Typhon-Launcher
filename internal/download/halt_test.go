@@ -569,9 +569,9 @@ func TestRestoreOfAGoneClientLeavesTheStatusAlone(t *testing.T) {
 // refused so the halt checks still exercise the real dial path.
 func allowLoopbackDestinations(t *testing.T) {
 	t.Helper()
-	orig := httpDestinationBlocked
-	t.Cleanup(func() { httpDestinationBlocked = orig })
-	httpDestinationBlocked = func(addr netip.Addr) bool {
+	orig := destinationBlocked
+	t.Cleanup(func() { destinationBlocked = orig })
+	destinationBlocked = func(addr netip.Addr) bool {
 		return !addr.Unmap().IsLoopback() && netguard.BlockedAddr(addr)
 	}
 }
