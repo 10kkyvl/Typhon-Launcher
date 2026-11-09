@@ -39,10 +39,12 @@ func TestRollbackCleansUpTheReplacedVersionOnTheNextStartWhenRemovalFails(t *tes
 	if err := os.WriteFile(filepath.Join(locked, "busy.bin"), []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	//nolint:gosec // G302: a read-only directory is what keeps the sweep from removing the tree
 	if err := os.Chmod(locked, 0o500); err != nil {
 		t.Fatal(err)
 	}
 	unlock := func() {
+		//nolint:gosec // G302: restores the directory so TempDir cleanup can remove it
 		if err := os.Chmod(filepath.Join(replaced, "locked"), 0o755); err != nil && !errors.Is(err, os.ErrNotExist) {
 			t.Logf("unlock: %v", err)
 		}
