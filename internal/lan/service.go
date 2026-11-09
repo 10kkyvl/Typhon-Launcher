@@ -34,6 +34,7 @@ const transferSampleInterval = 500 * time.Millisecond
 
 var (
 	errEmptyGameID          = uierr.New("lan.empty_game_id", "lan: empty game id")
+	errUnsafeTorrentPaths   = uierr.New("lan.unsafe_paths", "lan: the peer's torrent lists paths outside the game folder")
 	errLibraryUnavailable   = uierr.New("lan.library_unavailable", "lan: library service unavailable")
 	errNoInstallDir         = uierr.New("lan.no_install_dir", "lan: game has no install directory")
 	errExeOutsideInstall    = uierr.New("lan.exe_outside_install", "lan: executable is outside the install directory")
@@ -1002,9 +1003,19 @@ func (s *Service) watchTransfer(run *runState, ctx context.Context, id, dest str
 			stop()
 			return
 		case <-ticker.C:
+			if err := run.cl.refusal(dest); err != nil {
+				// The peer's metainfo was rejected at storage open: the engine
+				// never fires GotInfo for it, so this is the only way out.
+				run.cl.forgetRefusal(dest)
+				t.Drop()
+				discardReceiving(dest)
+				s.finishTransfer(run, id, TransferFailed, err)
+				return
+			}
 			redialIfAlone(t, peer)
 		}
 	}
+	run.cl.forgetRefusal(dest)
 
 	total := t.Info().TotalLength()
 	t.DownloadAll()

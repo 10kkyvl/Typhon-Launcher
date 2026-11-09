@@ -62,6 +62,7 @@ export const errSources = {
   'errSources.lanShareRootNotDir': 'раздаваемый путь не является папкой',
   'errSources.lanShareSymlink': 'раздаваемая папка содержит символическую ссылку',
   'errSources.lanShareIrregularFile': 'раздаваемая папка содержит файл особого типа',
+  'errSources.lanUnsafePaths': 'полученная раздача содержит пути за пределами папки игры',
 
   'errSources.linkUnavailable': 'Не удалось открыть ссылку, проверьте соединение',
   'errSources.linkFailed': 'Не удалось открыть ссылку',

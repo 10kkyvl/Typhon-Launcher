@@ -65,6 +65,7 @@ export const errSources: Record<ErrSourcesKey, Message> = {
   'errSources.lanShareRootNotDir': 'The shared path is not a folder',
   'errSources.lanShareSymlink': 'The shared folder contains a symbolic link',
   'errSources.lanShareIrregularFile': 'The shared folder contains a special file',
+  'errSources.lanUnsafePaths': 'The received game lists files outside its own folder',
 
   'errSources.linkUnavailable': 'Could not open the link, check your connection',
   'errSources.linkFailed': 'Could not open the link',

@@ -1,11 +1,13 @@
 package lan
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
 	"math"
 	"path/filepath"
+	"sync"
 	"time"
 
 	// classicio must be initialized before any anacrolix storage read: its
@@ -14,6 +16,7 @@ import (
 	// same fix on the download client's own, separate torrent.Client).
 	_ "typhon/internal/download/classicio"
 	"typhon/internal/download/listenport"
+	"typhon/internal/download/torrentpath"
 	"typhon/internal/settings"
 
 	g "github.com/anacrolix/generics"
@@ -68,11 +71,56 @@ type lanClient struct {
 	down    *rate.Limiter
 	up      *rate.Limiter
 	dataDir string
+
+	mu       sync.Mutex
+	refusals map[string]error // receiving dest → why its metainfo was refused
 }
 
 var openTorrentClient = torrent.NewClient
 
 var receiveStorage = func(dest string) tstorage.ClientImplCloser { return flatStorage(dest, false) }
+
+// guardedStorage validates the metainfo a peer sent before the file storage
+// opens it. The engine's own storage refuses paths that escape dest, but it
+// does so by failing setInfo silently: GotInfo never fires and the transfer
+// hangs until cancelled. Recording the refusal lets watchTransfer fail the
+// transfer with a user-visible code within one sample interval, and the
+// stricter check also rejects Windows-hostile names the engine would accept.
+type guardedStorage struct {
+	tstorage.ClientImplCloser
+	refuse func(error)
+}
+
+func (g guardedStorage) OpenTorrent(ctx context.Context, info *metainfo.Info, hash metainfo.Hash) (tstorage.TorrentImpl, error) {
+	if err := torrentpath.ValidateInfo(info); err != nil {
+		g.refuse(errUnsafeTorrentPaths)
+		return tstorage.TorrentImpl{}, errUnsafeTorrentPaths
+	}
+	return g.ClientImplCloser.OpenTorrent(ctx, info, hash)
+}
+
+func (c *lanClient) recordRefusal(dest string, err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.refusals == nil {
+		c.refusals = map[string]error{}
+	}
+	c.refusals[dest] = err
+}
+
+// refusal reports why the metainfo for a receiving destination was rejected,
+// or nil while nothing was refused.
+func (c *lanClient) refusal(dest string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.refusals[dest]
+}
+
+func (c *lanClient) forgetRefusal(dest string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.refusals, dest)
+}
 
 func newLANClient(cfg settings.Settings, dataDir string, preferredPort int) (*lanClient, error) {
 	port := preferredPort
@@ -159,7 +207,10 @@ func (c *lanClient) addForSeeding(mi *metainfo.MetaInfo, root string) (*torrent.
 // addForReceiving adds a torrent known only by infohash; its metainfo
 // arrives from the peer over BEP 9 (ut_metadata) once AddPeers connects us.
 func (c *lanClient) addForReceiving(hash metainfo.Hash, displayName, dest string) (*torrent.Torrent, error) {
-	st := receiveStorage(dest)
+	st := guardedStorage{
+		ClientImplCloser: receiveStorage(dest),
+		refuse:           func(err error) { c.recordRefusal(dest, err) },
+	}
 	spec := &torrent.TorrentSpec{
 		AddTorrentOpts: torrent.AddTorrentOpts{
 			InfoHash: hash,

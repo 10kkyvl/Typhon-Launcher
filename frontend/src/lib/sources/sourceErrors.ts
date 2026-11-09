@@ -49,6 +49,7 @@ export const REASONS: Record<string, MessageKey> = {
   'lan.share_root_not_dir': 'errSources.lanShareRootNotDir',
   'lan.share_symlink': 'errSources.lanShareSymlink',
   'lan.share_irregular_file': 'errSources.lanShareIrregularFile',
+  'lan.unsafe_paths': 'errSources.lanUnsafePaths',
 
   'link.unavailable': 'errSources.linkUnavailable',
   'link.outdated': 'errSources.linkOutdated',

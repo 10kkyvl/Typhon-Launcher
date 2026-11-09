@@ -8,9 +8,8 @@ import (
 	"log/slog"
 	"math"
 	"path/filepath"
-	"strings"
 	"sync/atomic"
-	"typhon/internal/winpath"
+	"typhon/internal/download/torrentpath"
 
 	"typhon/internal/download/listenport"
 	"typhon/internal/settings"
@@ -497,45 +496,13 @@ func (l *liveTorrent) drop() {
 	}
 }
 
+// validateInfo refuses a torrent whose layout would escape the destination;
+// the rules live in torrentpath so the LAN receiver applies the same ones.
 func validateInfo(info *metainfo.Info) error {
-	if info == nil {
+	if err := torrentpath.ValidateInfo(info); err != nil {
 		return errBadPaths
-	}
-	if !isSafeTorrentPath(info.BestName()) {
-		return errBadPaths
-	}
-	for _, fi := range info.UpvertedFiles() {
-		components := fi.BestPath()
-		if len(components) == 0 {
-			if info.IsDir() {
-				return errBadPaths
-			}
-			continue
-		}
-		if !isSafeTorrentPath(strings.Join(components, "/")) {
-			return errBadPaths
-		}
 	}
 	return nil
 }
 
-func isSafeTorrentPath(path string) bool {
-	if strings.TrimSpace(path) == "" {
-		return false
-	}
-	for _, component := range strings.Split(path, "/") {
-		if component == "" || component == "." || component == ".." {
-			return false
-		}
-		if strings.ContainsAny(component, `\:`) {
-			return false
-		}
-		if !filepath.IsLocal(component) {
-			return false
-		}
-		if winpath.Reserved(component) {
-			return false
-		}
-	}
-	return true
-}
+func isSafeTorrentPath(path string) bool { return torrentpath.IsSafe(path) }
