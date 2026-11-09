@@ -60,6 +60,12 @@ func BaseURL() string {
 	return strings.TrimSuffix(base, "/")
 }
 
+// UsesProductionAPI reports whether BaseURL is the production backend, so a
+// development build can tell its traffic would land in production data.
+func UsesProductionAPI() bool {
+	return BaseURL() == strings.TrimSuffix(apiBaseURL, "/")
+}
+
 func ValidateBaseURL(raw string) (string, error) {
 	trimmed := strings.TrimSuffix(strings.TrimSpace(raw), "/")
 	if trimmed == "" {

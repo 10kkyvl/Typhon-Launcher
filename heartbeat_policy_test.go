@@ -39,9 +39,25 @@ func TestHeartbeatPolicy(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := settings.Defaults()
 			tt.mutate(&s)
-			if got := heartbeatPolicy(s); got != tt.want {
+			if got := heartbeatPolicy(s, false); got != tt.want {
 				t.Fatalf("heartbeatPolicy = %+v, want %+v", got, tt.want)
 			}
 		})
+	}
+}
+
+// A devmock build pointed at production would count its mocked games as real
+// players in the admin panel; against a local backend it still reports, so
+// the presence flow stays testable end to end.
+func TestHeartbeatPolicyMuteForMockOnProduction(t *testing.T) {
+	s := settings.Defaults()
+	s.AnonymousUsageStats = true
+	s.TelemetryConsentVersion = settings.CurrentTelemetryConsent
+
+	if got := heartbeatPolicy(s, true); got != (heartbeat.Policy{}) {
+		t.Fatalf("heartbeatPolicy(mock on production) = %+v, want it disabled", got)
+	}
+	if got := heartbeatPolicy(s, false); got != (heartbeat.Policy{Enabled: true, Identified: true}) {
+		t.Fatalf("heartbeatPolicy(real build) = %+v, want enabled and identified", got)
 	}
 }

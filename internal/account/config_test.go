@@ -27,6 +27,27 @@ func TestBaseURLPrefersEnv(t *testing.T) {
 	}
 }
 
+func TestUsesProductionAPI(t *testing.T) {
+	tests := []struct {
+		name string
+		env  string
+		want bool
+	}{
+		{"no override", "", true},
+		{"override to production", "https://api.typhon-launcher.com/", true},
+		{"override to a local backend", "http://127.0.0.1:8080", false},
+		{"override to staging", "https://staging.example.com", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("TYPHON_API_URL", tt.env)
+			if got := UsesProductionAPI(); got != tt.want {
+				t.Fatalf("UsesProductionAPI() with TYPHON_API_URL=%q = %v, want %v", tt.env, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestValidateBaseURL(t *testing.T) {
 	tests := []struct {
 		name    string

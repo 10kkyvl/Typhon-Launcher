@@ -757,8 +757,14 @@ func main() {
 		}
 		// The heartbeat identifies the installation and the game only under the
 		// current consent: an answer to an older prompt did not cover them.
-		settingsService.Subscribe(func(s settings.Settings) { heartbeatService.SetPolicy(heartbeatPolicy(s)) })
-		heartbeatService.SetPolicy(heartbeatPolicy(settingsService.GetSettings()))
+		mockOnProduction := devmock.Enabled && account.UsesProductionAPI()
+		if mockOnProduction {
+			slog.Info("presence heartbeat off: devmock build talks to the production API")
+		}
+		settingsService.Subscribe(func(s settings.Settings) {
+			heartbeatService.SetPolicy(heartbeatPolicy(s, mockOnProduction))
+		})
+		heartbeatService.SetPolicy(heartbeatPolicy(settingsService.GetSettings(), mockOnProduction))
 
 		// Both services ask *Allowed, never the switch itself: a switch read
 		// before the consent prompt is answered holds a preselection, and
@@ -1379,7 +1385,13 @@ func gameTitle(cat *catalog.Service, src *sources.Service, canonicalGameID, rele
 	return ""
 }
 
-func heartbeatPolicy(s settings.Settings) heartbeat.Policy {
+// heartbeatPolicy turns the heartbeat off for a devmock build aimed at the
+// production API: its mocked games would show up as real players in the admin
+// panel, and its version string is the same as the release's.
+func heartbeatPolicy(s settings.Settings, mockOnProduction bool) heartbeat.Policy {
+	if mockOnProduction {
+		return heartbeat.Policy{}
+	}
 	return heartbeat.Policy{Enabled: s.SessionHeartbeat, Identified: s.UsageStatsAllowedCurrent()}
 }
 
