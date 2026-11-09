@@ -93,21 +93,19 @@ func (b *replayBroker) waitExit(t *testing.T) (BrokerOutcome, error) {
 // the worker state file; the spec itself is removed before the run starts.
 func waitForRunDone(t *testing.T, statePath, run string) {
 	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
-	for time.Now().Before(deadline) {
-		state, found, err := readWorkerState(statePath)
+	var state workerState
+	waitFor(t, "run "+run+" to finish", func() bool {
+		var found bool
+		var err error
+		state, found, err = readWorkerState(statePath)
 		if err != nil {
 			t.Fatalf("read worker state: %v", err)
 		}
-		if found && state.Run == run && state.Done {
-			if state.Error != "" {
-				t.Fatalf("run %s finished with an error: %s", run, state.Error)
-			}
-			return
-		}
-		time.Sleep(5 * time.Millisecond)
+		return found && state.Run == run && state.Done
+	})
+	if state.Error != "" {
+		t.Fatalf("run %s finished with an error: %s", run, state.Error)
 	}
-	t.Fatalf("run %s never finished", run)
 }
 
 // A spec that was already served must not run a second time even when it is
