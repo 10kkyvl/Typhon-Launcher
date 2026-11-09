@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -326,5 +327,39 @@ func TestPersistedCatalogFileIsVersioned(t *testing.T) {
 	content := string(data)
 	if !strings.Contains(content, `"version"`) || !strings.Contains(content, `"data"`) || !strings.Contains(content, "Cyberpunk 2077") {
 		t.Fatalf("unexpected catalog file: %s", data)
+	}
+}
+
+func TestAddGameRollsBackMemoryOnPersistFailure(t *testing.T) {
+	dir := t.TempDir()
+	s := mustServiceAt(t, dir)
+	seed(t, s, Game{Title: "Existing Game"})
+	before := s.ListGames()
+
+	path := filepath.Join(dir, "catalog.json")
+	if err := os.Remove(path); err != nil {
+		t.Fatalf("remove catalog: %v", err)
+	}
+	if err := os.Mkdir(path, 0o755); err != nil {
+		t.Fatalf("block catalog path: %v", err)
+	}
+
+	added, err := s.AddGame(Game{ID: "ghost", Title: "Ghost Game"})
+	if err == nil {
+		t.Fatalf("AddGame() = %+v, want the write failure", added)
+	}
+
+	after := s.ListGames()
+	if len(after) != len(before) {
+		t.Fatalf("games = %d after failed add, want unchanged %d", len(after), len(before))
+	}
+	if _, err := s.GetGame("ghost"); err == nil {
+		t.Fatal("GetGame(ghost) found a game whose save failed")
+	}
+	if match := s.Resolve(query("Ghost Game")); match.Status != StatusUnmatched {
+		t.Fatalf("resolve after rollback = %+v, want unmatched", match)
+	}
+	if _, err := s.AddGame(Game{ID: "ghost", Title: "Ghost Game"}); errors.Is(err, errDuplicateID) {
+		t.Fatal("a failed add left its ID in the index: the retry is refused as a duplicate")
 	}
 }

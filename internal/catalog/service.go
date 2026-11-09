@@ -473,7 +473,11 @@ func (s *Service) AddGame(game Game) (Game, error) {
 	s.games = append(s.games, game)
 	s.addToIndexLocked(game)
 	if err := s.persistGamesLocked(); err != nil {
-		return Game{}, err
+		// Память и индекс не должны уходить вперёд файла: иначе карточка
+		// есть до перезапуска, а повтор добавления упирается в дубль.
+		s.games = s.games[:len(s.games)-1]
+		s.rebuildLocked()
+		return Game{}, fmt.Errorf("save catalog: %w", err)
 	}
 	return game, nil
 }
