@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"typhon/internal/download"
@@ -100,6 +101,7 @@ var (
 	// в Destination: удалять каталог в этом случае нельзя (инвариант 9).
 	errInstallerNotConfirmedStopped = uierr.New("install.installer_not_confirmed_stopped", "установщик не подтвердил остановку")
 	errInstallerStillRunning        = uierr.New("install.installer_still_running", "установка ещё идёт в фоне: установщик с правами администратора не завершился")
+	errWorkerStateUnknown           = uierr.New("install.worker_state_unknown", "не удалось проверить, завершился ли установщик с правами администратора")
 
 	errFreeSpaceUnknown = uierr.New("install.free_space_unknown", "не удалось определить свободное место на диске")
 	errNotEnoughSpace   = uierr.New("install.not_enough_space", "недостаточно места на диске")
@@ -479,6 +481,50 @@ func (s *Service) spawnFinalize(ctx context.Context, id string, pre func(context
 	}()
 }
 
+// workerLiveness is what the worker's state file and process tell about an
+// elevated installer: dead (no state or an exited process), alive, done, or
+// unknown when the state cannot be read or the process cannot be checked.
+// Unknown is its own answer: a read error must never pass for "no worker",
+// because the cost of being wrong is a second installer writing into the same
+// directory (retry) or the files of a live worker being deleted (dismiss).
+type workerLiveness int
+
+const (
+	workerDead workerLiveness = iota
+	workerAlive
+	workerDone
+	workerUnknown
+)
+
+func (s *Service) workerLiveness(id string) workerLiveness {
+	statePath := s.workerStatePath(id)
+	state, found, err := readWorkerState(statePath)
+	if errors.Is(err, syscall.ENOTDIR) {
+		// A component of the path is not a directory: the state directory
+		// itself is gone or replaced, so there is no state file to read.
+		return workerDead
+	}
+	if err != nil {
+		slog.Error("read worker state", "id", id, "error", err)
+		return workerUnknown
+	}
+	if !found {
+		return workerDead
+	}
+	if state.Done {
+		return workerDone
+	}
+	alive, err := workerProcessAlive(state.PID)
+	if err != nil {
+		slog.Error("check worker process", "id", id, "pid", state.PID, "error", err)
+		return workerUnknown
+	}
+	if alive {
+		return workerAlive
+	}
+	return workerDead
+}
+
 // transientWorkerStatus решает судьбу записи, пережившей перезапуск лаунчера:
 // os.FindProcess на Windows всегда "успешен" вне зависимости от того, жив ли
 // процесс, поэтому единственный источник правды — файл состояния воркера
@@ -490,25 +536,12 @@ func (s *Service) spawnFinalize(ctx context.Context, id string, pre func(context
 // был жив всё это время (finishResumed разбирает Done по существу). Ошибка
 // чтения или проверки не превращается в "жив" по умолчанию — только
 // подтверждённая жизнь или подтверждённый Done оставляют запись в работе.
+//
+// transientWorkerStatus keeps the two-flag view for the startup sweep, where an
+// unknown state ends as an interrupted install without touching the files.
 func (s *Service) transientWorkerStatus(id string) (alive, done bool) {
-	statePath := s.workerStatePath(id)
-	state, found, err := readWorkerState(statePath)
-	if err != nil {
-		slog.Error("read worker state on startup", "id", id, "error", err)
-		return false, false
-	}
-	if !found {
-		return false, false
-	}
-	if state.Done {
-		return false, true
-	}
-	alive, err = workerProcessAlive(state.PID)
-	if err != nil {
-		slog.Error("check worker process on startup", "id", id, "pid", state.PID, "error", err)
-		return false, false
-	}
-	return alive, false
+	l := s.workerLiveness(id)
+	return l == workerAlive, l == workerDone
 }
 
 // var, не const: тесты укорачивают интервал, чтобы не ждать боевые тайминги.
@@ -1208,7 +1241,9 @@ func (s *Service) Cancel(id string) error {
 	// s.jobs для неё никогда не заводился), либо воркер уже мёртв. Проверка и
 	// решение — под тем же захватом, что статус (инвариант 17): без этого UI
 	// сказал бы "отменено" над установщиком, который продолжает писать.
-	if alive, _ := s.transientWorkerStatus(id); alive {
+	if l := s.workerLiveness(id); l == workerAlive || l == workerUnknown {
+		// Unknown counts as alive here: a cancel marker is harmless for a dead
+		// worker, while "cancelled" over a live one would be a lie.
 		err := writeWorkerCancel(s.workerCancelPath(id))
 		s.mu.Unlock()
 		return err
@@ -1347,9 +1382,13 @@ func (s *Service) retry(id string, forceInteractive bool) error {
 	// ServiceStartup не успел узнать, ещё пишет по тем же детерминированным
 	// путям state/spec/cancel), и вызвать retry поверх него — поднять второго
 	// воркера на то же место.
-	if alive, _ := s.transientWorkerStatus(id); alive {
+	switch s.workerLiveness(id) {
+	case workerAlive:
 		s.mu.Unlock()
 		return errInstallerStillRunning
+	case workerUnknown:
+		s.mu.Unlock()
+		return errWorkerStateUnknown
 	}
 	if crashFinalizable(snapshotOf(item)) {
 		// Тот же случай, что и в ServiceStartup (finding 4): .partial уже
@@ -1464,9 +1503,13 @@ func (s *Service) retry(id string, forceInteractive bool) error {
 			return err
 		}
 	}
-	if alive, _ := s.transientWorkerStatus(id); alive {
+	switch s.workerLiveness(id) {
+	case workerAlive:
 		s.mu.Unlock()
 		return errInstallerStillRunning
+	case workerUnknown:
+		s.mu.Unlock()
+		return errWorkerStateUnknown
 	}
 	// Итог прошлого прогона убирается до записи Pending: смерть лаунчера между
 	// ними оставила бы запись в работе рядом с чужим Done, который
@@ -1567,11 +1610,19 @@ func (s *Service) Dismiss(id string) error {
 	// Файлы убираются до записи из списка: отказ оставляет запись на месте, и
 	// пользователь повторяет Dismiss, а не получает ошибку над уже исчезнувшей
 	// записью. Воркер, который ещё жив, свои файлы не теряет.
-	if alive, _ := s.transientWorkerStatus(id); alive {
+	switch s.workerLiveness(id) {
+	case workerAlive:
 		slog.Warn("keep the files of a dismissed install, its worker is still running", "id", id)
-	} else if err := removeWorkerFiles(append(s.workerFiles(id), s.installerLogPath(id))...); err != nil {
+	case workerUnknown:
+		// Neither "dead" nor "alive" can be told: dropping the record would
+		// hide an installer that may still be writing, so the dismiss waits.
 		s.mu.Unlock()
-		return fmt.Errorf("не удалось убрать файлы установки: %w", err)
+		return errWorkerStateUnknown
+	default:
+		if err := removeWorkerFiles(append(s.workerFiles(id), s.installerLogPath(id))...); err != nil {
+			s.mu.Unlock()
+			return fmt.Errorf("не удалось убрать файлы установки: %w", err)
+		}
 	}
 	idx := slices.Index(s.items, item)
 	s.items = slices.Delete(s.items, idx, idx+1)

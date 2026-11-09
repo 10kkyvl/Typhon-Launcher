@@ -51,6 +51,7 @@ export const errInstall: Record<ErrInstallKey, Message> = {
   'errInstall.installInstallerNotConfirmedStopped': 'The installer did not confirm that it stopped',
   'errInstall.installInstallerStillRunning':
     'The installation is still running in the background: the elevated installer has not finished',
+  'errInstall.installWorkerStateUnknown': 'Could not tell whether the elevated installer has finished; try again later',
   'errInstall.installMixedInstallers': 'The installer set mixes different installer types',
   'errInstall.installNeedsUser': 'This package requires user input',
   'errInstall.installNestedPaths': 'The source and destination cannot be nested inside each other',

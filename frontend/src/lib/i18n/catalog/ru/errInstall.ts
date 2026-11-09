@@ -48,6 +48,7 @@ export const errInstall = {
   'errInstall.installInstallerNotConfirmedStopped': 'установщик не подтвердил остановку',
   'errInstall.installInstallerStillRunning':
     'установка ещё идёт в фоне: установщик с правами администратора не завершился',
+  'errInstall.installWorkerStateUnknown': 'не удалось проверить, завершился ли установщик с правами администратора; повторите позже',
   'errInstall.installMixedInstallers': 'установщики набора разного типа',
   'errInstall.installNeedsUser': 'этот пакет требует участия пользователя',
   'errInstall.installNestedPaths': 'источник и назначение не должны быть вложены друг в друга',
