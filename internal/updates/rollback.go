@@ -61,11 +61,17 @@ func (s *Service) finishRollback(ctx context.Context, j SwapJournal) error {
 		s.mu.Unlock()
 		return err
 	}
+	// The replaced version is removed by clearJournal's cleanup phase, not
+	// here: a deletion that fails or is interrupted must leave a journal that
+	// the next start finishes, otherwise .replaced becomes an orphan and every
+	// later Rollback is refused as "recovery is required".
+	if cur := s.journals[j.GameID]; cur != nil && cur.RetainedPrevious == "" {
+		cur.RetainedPrevious = j.Previous
+	}
 	s.mu.Unlock()
 	if err := s.clearJournal(j.GameID); err != nil {
 		return err
 	}
-	removeTree(j.Previous)
 	s.updateFieldsBestEffort(j.GameID, func(u *Update) { u.CanRollback = false; u.State = StateIdle; u.Plan = nil; u.Error = "" })
 	s.store.removeManifest(j.GameID)
 	return nil
