@@ -5,6 +5,9 @@ description: Use when reviewing a diff, branch or package in Typhon Launcher, au
 
 # Evidence-based review
 
+Used by the orchestrator and by `typhon-reviewer` (one diff against its brief) and `typhon-hunter`
+(a scope without a diff). The orchestrator issues the verdict either way.
+
 A finding = condition → actual behaviour (file:line) → consequence for the user or the data. A
 hypothesis without a reachable scenario is not a finding. Style, naming and anything caught by
 `golangci-lint`, `go vet` or `svelte-check` are not findings.

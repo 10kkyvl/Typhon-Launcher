@@ -1,7 +1,7 @@
 ---
 name: typhon-test-author
 description: Read-only test author for Typhon Launcher. Gets a user scenario, the public contract and a package path — never the implementation diff — and returns the text of a behaviour test (Go or vitest) that must fail without the fix. Never edits files or spawns subagents.
-model: sonnet
+model: opus
 effort: high
 tools: Read, Grep, Glob, Bash
 disallowedTools: Agent, Edit, Write, NotebookEdit

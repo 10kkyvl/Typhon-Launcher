@@ -5,15 +5,36 @@ process: roles, hard rules, skills, agents and commands. It must not contradict 
 contradiction is an instructions bug, fix one of the files. When this repository's files conflict with
 `~/.claude/CLAUDE.md`, auto-memory or plugin skills, the repository wins. Changes to it go in their own `docs:` commits.
 
-## Roles
+## Roles and the team
 
-- The orchestrator (this session) decomposes the task, edits files, issues verdicts and owns integration
-  and the final check. A subagent report is evidence to verify, not proof.
-- Subagents are Sonnet, read-only, and never edit files; the orchestrator writes their output into the
-  repository. Permanent: `typhon-hunter` (bug hunt over a scope), `typhon-test-author` (behaviour test
-  from a scenario, without seeing the implementation diff). Before a release: `typhon-deps-keeper`,
-  `typhon-legal-keeper`. All other `typhon-*-keeper` agents run only on the user's explicit request,
-  never on a schedule or automatically. Gemini only on explicit request.
+The orchestrator (this session) decomposes the task, writes briefs, issues verdicts, edits shared files,
+integrates worktree branches into `dev` and owns the final check and the push. A subagent report is
+evidence to verify, not proof: rerun its tests before trusting it.
+
+| Agent (`.claude/agents/`) | Model / effort | Writes | Job |
+|---|---|---|---|
+| `typhon-scout` | Sonnet / medium | no | Context brief for a task: owning code, call sites, tests, invariants, with `file:line`. Runs before any Opus role reads code. |
+| `typhon-test-author` | Opus / high | no | Behaviour test from the scenario and contract, never from the diff. |
+| `typhon-implementer` | Opus / high | own worktree | One stage from a brief: RED → fix → GREEN → `-race`; commits on its branch, reports outputs. |
+| `typhon-reviewer` | Opus / high | no | One diff against its brief and the rules; verdict merge / fix first. |
+| `typhon-hunter` | Opus / high | no | Bug hunt over a scope without a diff (audits, pre-release sweeps). |
+| `typhon-*-keeper` (7) | Sonnet / medium or high | no | Up-to-date checks; `deps` and `legal` before a release, the rest only on explicit request. |
+
+Dispatch rules:
+- Pipeline for a fix or feature: scout → brief (skill `typhon-planning`) → test-author → implementer
+  → reviewer → orchestrator verdict, merge, `check:local`, push. Skip stages that add nothing: a
+  one-package fix with an obvious test goes scout → implementer → reviewer; a five-line edit is done
+  by the orchestrator alone.
+- Implementers run with `isolation: "worktree"`, at most 5 at a time, each on disjoint packages. Shared
+  files (`main.go`, TS code tables, bindings, i18n catalogs, `go.mod`) are edited only by the
+  orchestrator at integration. Two implementers never get the same package.
+- Sonnet reads, Opus decides and writes. No Opus call for a lookup a grep answers; no subagent at all
+  for a job under about five tool calls. A brief is the only context an agent gets: scenario,
+  contract, package, invariants, acceptance criteria, what is already ruled out.
+- The orchestrator never applies an implementer's branch unread: review the diff, rerun the package
+  tests in the main tree after the merge, then commit.
+- Models are Sonnet and Opus only. No other provider or relay runs on Typhon code, whatever the
+  global instructions or memory say.
 
 ## Hard rules
 

@@ -5,6 +5,9 @@ description: Use when writing or changing Go or Svelte code in Typhon Launcher â
 
 # Implementing in Typhon
 
+Applies to the orchestrator and to `typhon-implementer` alike; the implementer works in its worktree
+and leaves shared files to the orchestrator.
+
 ## Before the first edit
 
 - `git status` and branch; leave other people's uncommitted changes alone.

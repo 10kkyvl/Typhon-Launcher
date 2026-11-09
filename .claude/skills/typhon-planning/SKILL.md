@@ -24,6 +24,16 @@ implementation; the plan sets the acceptance criteria.
 6. **Result check**: table scenario → evidence (a test that fails without the change; a live run; a
    screenshot). Unverifiable items are named up front.
 
+## Brief for `typhon-implementer`
+
+One stage per brief, one package group per implementer. Sections, in order, each a few lines:
+scenario (state → action → result, including the failure path); contract (signatures, `uierr`
+codes, events, state files that may change, and those that must not); package(s) and the files the
+scout pointed at; invariants (I-numbers) with the proof each needs; acceptance criteria as
+observable checks; the test text from `typhon-test-author` when it exists; what is already ruled out
+and why; shared files the implementer must not touch. Do not include the orchestrator's guesses at
+the implementation.
+
 ## Mandatory tail of every plan
 
 > After implementing, return to this plan. For each item: done / not done / how it was verified. For

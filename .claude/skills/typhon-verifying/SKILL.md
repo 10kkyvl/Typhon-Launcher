@@ -11,7 +11,9 @@ request matching observable behaviour, with the evidence next to it.
 ## Checklist
 
 1. Return to the request or plan. For each item: done / not done / how verified.
-2. Every new test has a shown RED without the change and GREEN with it.
+2. Every new test has a shown RED without the change and GREEN with it. For an implementer's branch
+   the orchestrator reruns the package tests in the main tree after the merge; the agent's output is
+   not the proof.
 3. Impact map: what was touched (`grep` usages) → how checked → result. Regression of old behaviour
    gets its own line.
 4. Go: `go test ./internal/<pkg>/ -count=1`, `-race` for concurrent code,
