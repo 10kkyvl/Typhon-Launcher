@@ -2217,7 +2217,12 @@ func keepsSeeding(j restoreJob, seed bool) bool {
 
 func (m *Manager) restore() {
 	defer m.wg.Done()
+	m.restoreNow()
+}
 
+// restoreNow is the restore pass without the WaitGroup bookkeeping, for
+// callers that already run inside a tracked goroutine (spawnTrackedLocked).
+func (m *Manager) restoreNow() {
 	m.mu.Lock()
 	ctx := m.ctx
 	cl := m.client

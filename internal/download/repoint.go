@@ -55,6 +55,11 @@ func (m *Manager) Repoint(ctx context.Context, oldRoot, newRoot string) error {
 	}
 
 	m.mu.Lock()
+	if m.closing {
+		// A restore spawned behind ServiceShutdown's wait would race it.
+		m.mu.Unlock()
+		return errUnavailable
+	}
 	for _, d := range m.items {
 		if !downloadSettled(d.Status) || m.jobs[d.ID] != nil {
 			m.mu.Unlock()
@@ -78,6 +83,9 @@ func (m *Manager) Repoint(ctx context.Context, oldRoot, newRoot string) error {
 	}
 
 	if err := moveTreeIfPresent(ctx, oldRoot, newRoot); err != nil {
+		// The files are still under oldRoot and the records still point there:
+		// bring the engines back so seeding does not stop until a restart.
+		m.spawnRestore()
 		return err
 	}
 
@@ -104,18 +112,35 @@ func (m *Manager) Repoint(ctx context.Context, oldRoot, newRoot string) error {
 	}
 	if len(changed) > 0 {
 		if err := m.persistLocked(); err != nil {
-			for _, c := range changed {
-				c.item.Destination = c.was
-			}
 			m.mu.Unlock()
+			// The files already live under newRoot. Memory may only be rolled
+			// back if the files come back too; otherwise the records keep
+			// describing the disk and the next successful persist saves them.
+			if backErr := moveTreeIfPresent(ctx, newRoot, oldRoot); backErr == nil {
+				m.mu.Lock()
+				for _, c := range changed {
+					c.item.Destination = c.was
+				}
+				m.mu.Unlock()
+			} else {
+				slog.Error("repoint: downloads moved but the state could not be saved and the move back failed",
+					"old", oldRoot, "new", newRoot, "error", backErr)
+			}
+			m.spawnRestore()
 			return fmt.Errorf("persist downloads: %w", err)
 		}
 	}
-	m.wg.Add(1)
 	m.mu.Unlock()
-
-	go m.restore()
+	m.spawnRestore()
 	return nil
+}
+
+// spawnRestore re-attaches the engines of every settled download through the
+// tracked restore pass; nothing starts once the manager is closing.
+func (m *Manager) spawnRestore() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.spawnTrackedLocked(m.restoreNow)
 }
 
 func downloadSettled(s Status) bool {
