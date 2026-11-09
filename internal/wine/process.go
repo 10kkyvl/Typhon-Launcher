@@ -70,27 +70,46 @@ func normalizeSpaces(value string) string {
 	return strings.Join(strings.Fields(value), " ")
 }
 
-func (m *Manager) processList() (string, error) {
+// processList читает таблицу процессов. ps подчинён ctx: зависший ps иначе
+// держал бы цикл детекта и остановку сервиса до своего завершения.
+func (m *Manager) processList(ctx context.Context) (string, error) {
 	if m.psOutput != nil {
 		return m.psOutput()
 	}
-	out, err := exec.Command("ps", "-ax", "-o", "pid,lstart,command").Output()
+	out, err := psOutput(ctx, "-ax", "-o", "pid,lstart,command")
 	if err != nil {
 		return "", fmt.Errorf("перечисление процессов: %w", err)
+	}
+	return out, nil
+}
+
+// psOutput запускает ps под ctx. WaitDelay нужен, потому что убитый ps может
+// оставить потомка с открытым stdout, и без него Wait ждал бы закрытия канала.
+// Причина отмены возвращается как ошибка ctx, чтобы вызывающий отличил её от
+// сбоя самого ps.
+func psOutput(ctx context.Context, args ...string) (string, error) {
+	//nolint:gosec // G204: аргументы ps собраны внутри пакета из констант и pid
+	cmd := exec.CommandContext(ctx, "ps", args...)
+	cmd.WaitDelay = time.Second
+	out, err := cmd.Output()
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return "", ctxErr
+		}
+		return "", err
 	}
 	return string(out), nil
 }
 
-func (m *Manager) processEnvironment(pid int) (string, error) {
+func (m *Manager) processEnvironment(ctx context.Context, pid int) (string, error) {
 	if m.processEnv != nil {
 		return m.processEnv(pid)
 	}
-	//nolint:gosec // G204: pid is converted to base-10 digits before being passed directly to ps
-	out, err := exec.Command("ps", "e", "-p", strconv.Itoa(pid), "-o", "command=").Output()
+	out, err := psOutput(ctx, "e", "-p", strconv.Itoa(pid), "-o", "command=")
 	if err != nil {
 		return "", fmt.Errorf("ps %d: %w", pid, err)
 	}
-	return string(out), nil
+	return out, nil
 }
 
 var environmentAssignment = regexp.MustCompile(`\s+[A-Za-z_][A-Za-z0-9_]*=`)
@@ -124,7 +143,7 @@ func (m *Manager) Processes(ctx context.Context, b Bottle) ([]Process, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	out, err := m.processList()
+	out, err := m.processList(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +171,7 @@ func (m *Manager) AllProcesses(ctx context.Context) ([]Process, error) {
 	if err != nil {
 		return nil, err
 	}
-	out, err := m.processList()
+	out, err := m.processList(ctx)
 	if err != nil {
 		return nil, err
 	}

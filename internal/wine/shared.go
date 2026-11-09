@@ -209,8 +209,8 @@ func steamProcess(winPath string) bool {
 }
 
 // SteamRunning отвечает, крутится ли windows Steam именно в указанном бутыле.
-func (m *Manager) SteamRunning(b Bottle) (bool, error) {
-	out, err := m.processList()
+func (m *Manager) SteamRunning(ctx context.Context, b Bottle) (bool, error) {
+	out, err := m.processList(ctx)
 	if err != nil {
 		return false, err
 	}
@@ -218,7 +218,7 @@ func (m *Manager) SteamRunning(b Bottle) (bool, error) {
 		if !steamProcess(entry.winPath) {
 			continue
 		}
-		env, envErr := m.processEnvironment(entry.pid)
+		env, envErr := m.processEnvironment(ctx, entry.pid)
 		if envErr != nil {
 			return false, fmt.Errorf("окружение процесса Steam %d: %w", entry.pid, envErr)
 		}
@@ -243,7 +243,7 @@ const steamPollInterval = 500 * time.Millisecond
 //
 // Возвращает true, если Steam пришлось запускать.
 func (m *Manager) EnsureSteam(ctx context.Context, b Bottle) (bool, error) {
-	running, err := m.SteamRunning(b)
+	running, err := m.SteamRunning(ctx, b)
 	if err != nil {
 		return false, err
 	}
@@ -282,7 +282,7 @@ func (m *Manager) awaitSteam(ctx context.Context, b Bottle) error {
 			return nil
 		case <-ticker.C:
 		}
-		running, err := m.SteamRunning(b)
+		running, err := m.SteamRunning(ctx, b)
 		if err != nil {
 			return err
 		}
@@ -299,7 +299,7 @@ func (m *Manager) KillProcesses(ctx context.Context, b Bottle) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return m.killOwned(b)
+	return m.killOwned(ctx, b)
 }
 
 // stopBottle останавливает то, что в бутыле принадлежит этой операции:
@@ -311,15 +311,23 @@ func (m *Manager) KillProcesses(ctx context.Context, b Bottle) error {
 // такой процесс не опознаётся: установщик лежит в папке загрузок, а не в
 // том каталоге, куда ставит, и по одному только ключу бутыля оборванная
 // разведка оставляла бы его висеть в чужом бутыле навсегда.
-func (m *Manager) stopBottle(b Bottle, winPaths ...string) error {
+// stopBottle вызывается после отмены операции, когда её ctx уже погашен, поэтому
+// остановке выдаётся собственный ограниченный срок от контекста без отмены.
+func (m *Manager) stopBottle(ctx context.Context, b Bottle, winPaths ...string) error {
+	timeout := m.killTimeout
+	if timeout <= 0 {
+		timeout = defaultKillTimeout
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
+	defer cancel()
 	if b.Shared {
-		return m.killOwned(b, winPaths...)
+		return m.killOwned(ctx, b, winPaths...)
 	}
 	return m.Kill(b)
 }
 
-func (m *Manager) killOwned(b Bottle, winPaths ...string) error {
-	out, err := m.processList()
+func (m *Manager) killOwned(ctx context.Context, b Bottle, winPaths ...string) error {
+	out, err := m.processList(ctx)
 	if err != nil {
 		return err
 	}

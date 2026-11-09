@@ -92,7 +92,7 @@ func (m *Manager) Run(ctx context.Context, b Bottle, c Cmd) (int, error) {
 			if readErr == nil && string(ack) == "stopped\n" {
 				return 0, ctxErr
 			}
-			if stopErr := m.stopBottle(b, append([]string{c.Path}, c.StopPaths...)...); stopErr != nil {
+			if stopErr := m.stopBottle(ctx, b, append([]string{c.Path}, c.StopPaths...)...); stopErr != nil {
 				slog.Warn("installer fallback stop failed", "error", stopErr)
 			}
 			return 0, fmt.Errorf("%w: %w: installer bridge did not confirm termination", ErrTreeNotStopped, ctxErr)
@@ -102,7 +102,7 @@ func (m *Manager) Run(ctx context.Context, b Bottle, c Cmd) (int, error) {
 		// требуется свалить бутыль целиком. Общий бутыль — исключение: там
 		// гасятся только процессы этой установки, иначе отмена установки
 		// уронила бы Steam и все чужие игры того же префикса.
-		if killErr := m.stopBottle(b, append([]string{c.Path}, c.StopPaths...)...); killErr != nil {
+		if killErr := m.stopBottle(ctx, b, append([]string{c.Path}, c.StopPaths...)...); killErr != nil {
 			return 0, fmt.Errorf("%w: %w: %w", ErrTreeNotStopped, ctxErr, killErr)
 		}
 		return 0, ctxErr

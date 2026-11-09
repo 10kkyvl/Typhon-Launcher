@@ -211,7 +211,7 @@ func TestSteamRunning(t *testing.T) {
 	}
 	m.processEnv = func(int) (string, error) { return "CX_BOTTLE=Steam ", nil }
 	b := Bottle{Name: "Steam"}
-	running, err := m.SteamRunning(b)
+	running, err := m.SteamRunning(t.Context(), b)
 	if err != nil {
 		t.Fatalf("SteamRunning: %v", err)
 	}
@@ -223,7 +223,7 @@ func TestSteamRunning(t *testing.T) {
 		return "  PID                  STARTED COMMAND\n" +
 			`87451 Sun Sep  6 07:31:35 2026 C:\Program Files (x86)\Steam\steam.exe -silent` + "\n", nil
 	}
-	running, err = m.SteamRunning(b)
+	running, err = m.SteamRunning(t.Context(), b)
 	if err != nil {
 		t.Fatalf("SteamRunning: %v", err)
 	}
@@ -245,7 +245,7 @@ func TestSteamRunningIgnoresAnotherBottle(t *testing.T) {
 		return "CX_BOTTLE=Other WINEPREFIX=/bottles/Other ", nil
 	}
 
-	running, err := m.SteamRunning(Bottle{Name: "Steam"})
+	running, err := m.SteamRunning(t.Context(), Bottle{Name: "Steam"})
 	if err != nil {
 		t.Fatalf("SteamRunning: %v", err)
 	}
@@ -428,7 +428,7 @@ func TestStopBottleKillsLaunchedInstaller(t *testing.T) {
 			`87451 Sun Sep  6 07:31:35 2026 C:\Program Files (x86)\Steam\steam.exe` + "\n", nil
 	}
 
-	if err := m.stopBottle(b, installer); err != nil {
+	if err := m.stopBottle(t.Context(), b, installer); err != nil {
 		t.Fatalf("stopBottle: %v", err)
 	}
 	select {
