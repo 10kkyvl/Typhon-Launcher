@@ -370,7 +370,13 @@ func decodeError(status int, body io.Reader) error {
 	} else {
 		// A reply without our envelope never reached the API: it comes from
 		// whatever sits in front of it, and only the status says what happened.
-		slog.Error("account api replied outside the error contract",
+		// The edge answers a rate limit or a restarting API this way by design;
+		// those are logged without an error report, anything else is a fault.
+		level := slog.LevelError
+		if edgeStatus(status) {
+			level = slog.LevelWarn
+		}
+		slog.Log(context.Background(), level, "account api replied outside the error contract",
 			"status", status, "bytes", len(data), "body", snippet(data))
 	}
 
@@ -391,4 +397,14 @@ func decodeError(status int, body io.Reader) error {
 	}
 
 	return &Error{Code: code, Field: field, Status: status, Message: message}
+}
+
+// edgeStatus lists the replies the reverse proxy sends on its own: its rate
+// limit, and the gateway errors while the API restarts during a deploy.
+func edgeStatus(status int) bool {
+	switch status {
+	case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return true
+	}
+	return false
 }
