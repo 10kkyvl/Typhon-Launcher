@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"typhon/internal/storage"
 )
 
 func mustService(t *testing.T) *Service {
@@ -70,18 +72,31 @@ func TestRecordRejectsBadInput(t *testing.T) {
 }
 
 func TestRetentionByCount(t *testing.T) {
-	s := mustService(t)
+	// Seed everything but the last record with one write: 500 individual
+	// Record calls cost 500 fsyncs and proved nothing more than the final
+	// one, which is the write that has to prune.
+	path := filepath.Join(t.TempDir(), "history.json")
 	base := time.Now().Add(-time.Hour)
 	total := maxRecords + 10
-	for i := 0; i < total; i++ {
-		rec := Record{
+	seed := make([]Record, 0, total-1)
+	for i := 0; i < total-1; i++ {
+		seed = append(seed, Record{
+			ID:    fmt.Sprintf("seed-%d", i),
 			Kind:  KindInstalled,
 			Title: fmt.Sprintf("Game %d", i),
 			At:    base.Add(time.Duration(i) * time.Second),
-		}
-		if err := s.Record(rec); err != nil {
-			t.Fatalf("record %d: %v", i, err)
-		}
+		})
+	}
+	if err := storage.Save(path, historyVersion, seed); err != nil {
+		t.Fatalf("seed history: %v", err)
+	}
+	s, err := NewServiceAt(path)
+	if err != nil {
+		t.Fatalf("new service: %v", err)
+	}
+	last := Record{Kind: KindInstalled, Title: fmt.Sprintf("Game %d", total-1), At: base.Add(time.Duration(total-1) * time.Second)}
+	if err := s.Record(last); err != nil {
+		t.Fatalf("record last: %v", err)
 	}
 	got := s.List(Filter{})
 	if len(got) != maxRecords {

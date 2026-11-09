@@ -161,8 +161,13 @@ func (s *Service) reservedNow(path string) bool {
 }
 
 func TestReserveStagingAndTheCopyNeverBothWin(t *testing.T) {
+	// One service for every round: the race is between ReserveStaging and
+	// guardedTransition on the same mutex, so only the jobs are reset.
+	s := newBareService(t, newTestLibrary(t))
 	for round := 0; round < 200; round++ {
-		s := newBareService(t, newTestLibrary(t))
+		s.mu.Lock()
+		s.jobs = nil
+		s.mu.Unlock()
 		base := t.TempDir()
 		old := Job{ID: "old", Stage: StageCancelled, Source: filepath.Join(base, "src"), Target: filepath.Join(base, "dst")}
 		old.Staging = old.Target + stagingSuffix

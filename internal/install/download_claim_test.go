@@ -135,10 +135,16 @@ func (c *claimingDownloads) deleteData(id string) error {
 }
 
 func TestInstallAndDeleteNeverBothWin(t *testing.T) {
+	// One service for every round: the race lives in the lock around claim
+	// and delete, not in service startup, and a startup per round made this
+	// the slowest test of the suite.
+	s, downloads, _ := newTestService(t)
+	c := &claimingDownloads{fakeDownloads: downloads, s: s}
 	for round := 0; round < 200; round++ {
-		s, downloads, _ := newTestService(t)
+		s.mu.Lock()
+		s.items = nil
+		s.mu.Unlock()
 		downloads.add("d1", "Pack", t.TempDir())
-		c := &claimingDownloads{fakeDownloads: downloads, s: s}
 		item := &Installation{ID: "i", DownloadID: "d1", Status: StatusPending, Destination: filepath.Join(t.TempDir(), "G")}
 
 		var installed, deleted bool
