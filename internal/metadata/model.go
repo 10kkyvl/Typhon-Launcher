@@ -56,4 +56,8 @@ type GameMetadata struct {
 	Cover       *ImageRef         `json:"cover,omitempty"`
 	Screenshots []ImageRef        `json:"screenshots,omitempty"`
 	Steam       *SteamInfo        `json:"steam,omitempty"`
+	// DetailsPending marks an answer the server will complete shortly; it is
+	// stored as partial so that the next open of the game asks again instead
+	// of keeping it for the whole metadata lifetime.
+	DetailsPending bool `json:"detailsPending,omitempty"`
 }

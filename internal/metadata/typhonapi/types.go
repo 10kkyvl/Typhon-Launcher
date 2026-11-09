@@ -39,6 +39,9 @@ type gameResponse struct {
 	Cover       *imagePayload     `json:"cover"`
 	Screenshots []imagePayload    `json:"screenshots"`
 	Steam       *steamPayload     `json:"steam"`
+	// DetailsPending: the server answered from its bulk import and is
+	// fetching the per-game details (developer, publisher) behind it.
+	DetailsPending bool `json:"detailsPending"`
 }
 
 type requirementPayload struct {
