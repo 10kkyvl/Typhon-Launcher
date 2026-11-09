@@ -1,5 +1,5 @@
 import { derived, writable } from 'svelte/store';
-import { Events } from '@wailsio/runtime';
+import { listenFirst } from './listenFirst';
 import { inWails } from '../services/backend';
 import {
   buildManifest,
@@ -98,12 +98,15 @@ function upsertVerify(state: VerifyState) {
 }
 
 export async function initUpdates() {
-  updates.set(await listUpdates());
-  if (!inWails) return;
+  const { on, load } = listenFirst();
+  if (!inWails) {
+    updates.set(await listUpdates());
+    return;
+  }
 
-  Events.On('update:updated', (event) => upsert(event.data as Update));
-  Events.On('update:started', (event) => upsert(event.data as Update));
-  Events.On('update:available', (event) => {
+  on('update:updated', (event) => upsert(event.data as Update));
+  on('update:started', (event) => upsert(event.data as Update));
+  on('update:available', (event) => {
     const item = event.data as Update;
     upsert(item);
     toast(
@@ -113,31 +116,32 @@ export async function initUpdates() {
       ),
     );
   });
-  Events.On('update:completed', (event) => {
+  on('update:completed', (event) => {
     const item = event.data as Update;
     upsert(item);
     toast(msg('state.updatesUpdatedToast', { title: item.title }), 'success');
   });
-  Events.On('update:failed', (event) => {
+  on('update:failed', (event) => {
     const item = event.data as Update;
     upsert(item);
     toast(msg('state.updatesFailedToast', { title: item.title, error: updateErrorText(item.error) }), 'danger');
   });
-  Events.On('update:rollback', (event) => {
+  on('update:rollback', (event) => {
     const item = event.data as Update;
     upsert(item);
     toast(msg('state.updatesRollbackToast', { title: item.title }));
   });
 
   for (const name of ['verify:started', 'verify:updated', 'verify:completed', 'repair:started', 'repair:updated']) {
-    Events.On(name, (event) => upsertVerify(event.data as VerifyState));
+    on(name, (event) => upsertVerify(event.data as VerifyState));
   }
-  Events.On('repair:completed', (event) => {
+  on('repair:completed', (event) => {
     const state = event.data as VerifyState;
     upsertVerify(state);
     if (state.error) toast(msg('state.updatesRepairIncomplete', { error: updateErrorText(state.error) }), 'danger');
     else toast(msg('state.updatesRepairComplete'), 'success');
   });
+  updates.set(await load(listUpdates));
 }
 
 async function run(action: () => Promise<void>) {

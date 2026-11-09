@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store';
-import { Events } from '@wailsio/runtime';
+import { listenFirst } from './listenFirst';
 import { inWails } from '../services/backend';
 import {
   isScanning,
@@ -15,21 +15,22 @@ export const lastScan = writable<DiscoveryResult | null>(null);
 
 export async function initDiscovery() {
   if (!inWails) return;
-  scanning.set(await isScanning());
+  const { on, load } = listenFirst();
 
-  Events.On('discovery:started', (event) => {
+  on('discovery:started', (event) => {
     const data = event.data as DiscoveryProgress | undefined;
     scanning.set(true);
     scanProgress.set({ processed: 0, total: data?.total ?? 0 });
   });
-  Events.On('discovery:progress', (event) => {
+  on('discovery:progress', (event) => {
     const data = event.data as DiscoveryProgress | undefined;
     if (data) scanProgress.set(data);
   });
-  Events.On('discovery:completed', (event) => {
+  on('discovery:completed', (event) => {
     scanning.set(false);
     lastScan.set((event.data as DiscoveryResult) ?? null);
   });
+  scanning.set(await load(isScanning));
 }
 
 export async function rescan(): Promise<DiscoveryResult> {

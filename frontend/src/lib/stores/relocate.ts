@@ -1,5 +1,5 @@
 import { derived, get, writable } from 'svelte/store';
-import { Events } from '@wailsio/runtime';
+import { listenFirst } from './listenFirst';
 import { moveErrorText } from '../relocate/moveMessages';
 import { inWails } from '../services/backend';
 import { listMoves, type MoveJob } from '../services/relocate';
@@ -44,12 +44,15 @@ function upsertMove(job: MoveJob) {
 }
 
 export async function initMoves() {
-  moves.set(await listMoves());
-  if (!inWails) return;
+  const { on, load } = listenFirst();
+  if (!inWails) {
+    moves.set(await listMoves());
+    return;
+  }
 
-  Events.On('move:started', (event) => upsertMove(event.data as MoveJob));
-  Events.On('move:progress', (event) => upsertMove(event.data as MoveJob));
-  Events.On('move:completed', (event) => {
+  on('move:started', (event) => upsertMove(event.data as MoveJob));
+  on('move:progress', (event) => upsertMove(event.data as MoveJob));
+  on('move:completed', (event) => {
     const job = event.data as MoveJob;
     upsertMove(job);
     toast(
@@ -59,7 +62,7 @@ export async function initMoves() {
       'success',
     );
   });
-  Events.On('move:failed', (event) => {
+  on('move:failed', (event) => {
     const job = event.data as MoveJob;
     upsertMove(job);
     const fallback = job.title
@@ -67,5 +70,6 @@ export async function initMoves() {
       : msg('state.relocateFailedLibrary');
     toast(moveErrorText(job.error, fallback), 'danger');
   });
-  Events.On('move:cancelled', (event) => upsertMove(event.data as MoveJob));
+  on('move:cancelled', (event) => upsertMove(event.data as MoveJob));
+  moves.set(await load(listMoves));
 }

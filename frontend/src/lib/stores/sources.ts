@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store';
-import { Events } from '@wailsio/runtime';
+import { listenFirst } from './listenFirst';
 import { inWails } from '../services/backend';
 import {
   addSource as addSourceRequest,
@@ -67,10 +67,13 @@ async function reload() {
 }
 
 export async function initSources() {
-  await reload();
-  if (!inWails) return;
+  const { on, load } = listenFirst();
+  if (!inWails) {
+    await reload();
+    return;
+  }
 
-  Events.On('source:updated', (event) => {
+  on('source:updated', (event) => {
     const item = event.data as Source;
     if (!item.name) {
       sources.update((list) => list.filter((s) => s.id !== item.id));
@@ -78,20 +81,21 @@ export async function initSources() {
     }
     upsert(item);
   });
-  Events.On('source:error', (event) => {
+  on('source:error', (event) => {
     const { name, message, scheduled } = event.data as SourceErrorEvent;
     if (scheduled) return;
     announce(message);
     toast(msg('state.sourcesErrorToast', { name, message: sourceErrorText(new Error(message), message) }), 'danger');
   });
-  Events.On('source:degraded', (event) => {
+  on('source:degraded', (event) => {
     const status = event.data as { degraded: boolean; message: string } | null;
     if (status?.degraded) announce(status.message);
   });
-  Events.On('release:added', (event) => {
+  on('release:added', (event) => {
     const { count } = event.data as ReleaseBatchEvent;
     if (count > 0) toast(msg('state.sourcesNewEntries', { count }));
   });
+  await load(reload);
 }
 
 export async function refresh(id: string) {

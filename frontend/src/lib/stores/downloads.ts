@@ -1,5 +1,5 @@
 import { derived, writable } from 'svelte/store';
-import { Events } from '@wailsio/runtime';
+import { listenFirst } from './listenFirst';
 import { inWails } from '../services/backend';
 import {
   cancelDownload as cancelRequest,
@@ -125,37 +125,41 @@ async function refresh() {
 }
 
 export async function initDownloads() {
-  await refresh();
-  if (!inWails) return;
+  const { on, load } = listenFirst();
+  if (!inWails) {
+    await refresh();
+    return;
+  }
 
-  Events.On('download:added', (event) => {
+  on('download:added', (event) => {
     const item = withFiles(event.data as Download);
     upsert(item);
     toast(msg('state.downloadsAddedToast', { name: item.name }));
   });
-  Events.On('download:updated', (event) => {
+  on('download:updated', (event) => {
     upsert(withFiles(event.data as Download));
   });
-  Events.On('download:progress', (event) => {
+  on('download:progress', (event) => {
     const patch = event.data as DownloadProgress;
     downloads.update((list) => mergeProgress(list, patch));
   });
-  Events.On('download:completed', (event) => {
+  on('download:completed', (event) => {
     const item = withFiles(event.data as Download);
     upsert(item);
     toast(msg('state.downloadsCompletedToast', { name: item.name }), 'success');
   });
-  Events.On('download:failed', (event) => {
+  on('download:failed', (event) => {
     const item = withFiles(event.data as Download);
     upsert(item);
     toast(msg('state.downloadsFailedToast', { name: item.name, error: installErrorText(item.error) }), 'danger');
   });
-  Events.On('download:removed', (event) => {
+  on('download:removed', (event) => {
     const { id } = event.data as { id: string };
     downloads.update((list) => list.filter((d) => d.id !== id));
   });
-}
 
+  downloads.set(await load(listDownloads));
+}
 async function run(action: () => Promise<void>) {
   try {
     await action();

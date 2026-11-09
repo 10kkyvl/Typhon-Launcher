@@ -1,5 +1,5 @@
 import { derived, writable } from 'svelte/store';
-import { Events } from '@wailsio/runtime';
+import { listenFirst } from './listenFirst';
 import { inWails } from '../services/backend';
 import {
   listInstallations,
@@ -71,30 +71,34 @@ export function upsertInstallation(item: Installation) {
 }
 
 export async function initInstalls() {
-  installations.set(await listInstallations());
-  if (!inWails) return;
+  const { on, load } = listenFirst();
+  if (!inWails) {
+    installations.set(await listInstallations());
+    return;
+  }
 
-  Events.On('install:started', (event) => {
+  on('install:started', (event) => {
     upsertInstallation(event.data as Installation);
   });
-  Events.On('install:updated', (event) => {
+  on('install:updated', (event) => {
     upsertInstallation(event.data as Installation);
   });
-  Events.On('install:completed', (event) => {
+  on('install:completed', (event) => {
     const item = event.data as Installation;
     upsertInstallation(item);
     toast(msg('state.installCompletedToast', { name: item.name }), 'success');
   });
-  Events.On('install:failed', (event) => {
+  on('install:failed', (event) => {
     const item = event.data as Installation;
     upsertInstallation(item);
     toast(msg('state.installFailedToast', { name: item.name, error: installErrorText(item.error, item.error) }), 'danger');
   });
-  Events.On('install:cancelled', (event) => {
+  on('install:cancelled', (event) => {
     upsertInstallation(event.data as Installation);
   });
-  Events.On('install:removed', (event) => {
+  on('install:removed', (event) => {
     const { id } = event.data as { id: string };
     installations.update((list) => list.filter((i) => i.id !== id));
   });
+  installations.set(await load(listInstallations));
 }

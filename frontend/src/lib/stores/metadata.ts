@@ -1,5 +1,5 @@
 import { get, writable } from 'svelte/store';
-import { Events } from '@wailsio/runtime';
+import { listenFirst } from './listenFirst';
 import { inWails } from '../services/backend';
 import { ensureArt, getGameArt, isMetadataAvailable, type GameArt, type MetadataView } from '../services/metadata';
 import type { CatalogGame } from '../services/sources';
@@ -23,15 +23,21 @@ let pumping = false;
 let artFailureShown = false;
 
 export async function initMetadata() {
-  try {
-    metadataAvailable.set(await isMetadataAvailable());
-  } catch (err) {
-    metadataAvailable.set(false);
-    toast(metadataErrorText(err, msg('state.metadataCheckFailed')), 'danger');
+  const { on, load } = listenFirst();
+  const probe = async () => {
+    try {
+      metadataAvailable.set(await load(isMetadataAvailable));
+    } catch (err) {
+      metadataAvailable.set(false);
+      toast(metadataErrorText(err, msg('state.metadataCheckFailed')), 'danger');
+    }
+  };
+  if (!inWails) {
+    await probe();
+    return;
   }
-  if (!inWails) return;
 
-  Events.On('metadata:updated', (event) => {
+  on('metadata:updated', (event) => {
     const view = event.data as MetadataView;
     const id = view.game?.id;
     if (!id) return;
@@ -47,6 +53,7 @@ export async function initMetadata() {
     });
     if (pending.size > 0) pump();
   });
+  await probe();
 }
 
 async function fetchArt(ids: string[]) {

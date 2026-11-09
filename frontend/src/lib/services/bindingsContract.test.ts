@@ -181,9 +181,12 @@ describe('runtime events', () => {
   function subscribedEvents(): Array<{ file: string; name: string }> {
     const found: Array<{ file: string; name: string }> = [];
     for (const [file, text] of Object.entries(frontendSources)) {
-      for (const match of text.matchAll(/Events\.(?:On|Once)\(/g)) {
+      // Stores subscribe through listenFirst()'s `on(name, handler)` as well as
+      // directly through Events.On; both carry the event name as the first
+      // literal argument, and every runtime event name contains a colon.
+      for (const match of text.matchAll(/(?:Events\.(?:On|Once)|(?<![\w.])on)\(/g)) {
         const args = balanced(text, text.indexOf('(', match.index));
-        const literal = args === null ? null : /^\s*(['"])([A-Za-z0-9:_.-]+)\1/.exec(args);
+        const literal = args === null ? null : /^\s*(['"])([A-Za-z0-9_.-]+:[A-Za-z0-9:_.-]+)\1/.exec(args);
         if (literal) found.push({ file, name: literal[2] });
       }
     }

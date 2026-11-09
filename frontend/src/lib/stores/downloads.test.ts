@@ -223,3 +223,41 @@ describe('download events whose file list Go sent as null', () => {
     },
   );
 });
+
+describe('initialisation order', () => {
+  it('keeps a download added while the first list request is still pending', async () => {
+    vi.resetModules();
+    for (const key of Object.keys(handlers)) delete handlers[key];
+    const services = await import('../services/downloads');
+    let release: (list: Download[]) => void = () => {};
+    const pending = new Promise<Download[]>((resolve) => {
+      release = resolve;
+    });
+    vi.mocked(services.listDownloads).mockImplementationOnce(() => pending).mockResolvedValue([makeDownload(), makeDownload({ id: 'd2', name: 'Added Later' })]);
+    const store = await import('./downloads');
+
+    const init = store.initDownloads();
+    await Promise.resolve();
+    expect(handlers['download:added']).toBeTypeOf('function');
+    handlers['download:added']({ data: makeDownload({ id: 'd2', name: 'Added Later' }) });
+    release([makeDownload()]);
+    await init;
+
+    const ids = get(store.downloads).map((d) => d.id);
+    expect(ids).toContain('d2');
+    expect(ids).toContain('d1');
+  });
+
+  it('attaches the listeners even when the first list request fails', async () => {
+    vi.resetModules();
+    for (const key of Object.keys(handlers)) delete handlers[key];
+    const services = await import('../services/downloads');
+    vi.mocked(services.listDownloads).mockRejectedValueOnce(new Error('backend unavailable'));
+    const store = await import('./downloads');
+
+    await expect(store.initDownloads()).rejects.toThrow('backend unavailable');
+    expect(handlers['download:added']).toBeTypeOf('function');
+    handlers['download:added']({ data: makeDownload({ id: 'd3' }) });
+    expect(get(store.downloads).map((d) => d.id)).toEqual(['d3']);
+  });
+});

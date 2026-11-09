@@ -1,5 +1,5 @@
 import { derived, get, writable } from 'svelte/store';
-import { Events } from '@wailsio/runtime';
+import { listenFirst } from './listenFirst';
 import { inWails } from '../services/backend';
 import {
   dismissWatchAlert,
@@ -34,30 +34,37 @@ function mergeAlerts(current: Alert[], fresh: Alert[]): Alert[] {
 }
 
 export async function initWatchlist() {
-  try {
-    watchlist.set(await listWatched());
-    watchAlerts.set(await listAlerts());
-    watchAlertsLoaded.set(true);
-    watchlistStatus.set(await getWatchlistStatus());
-  } catch (err) {
-    toast(errorText(err), 'danger');
+  const { on, load } = listenFirst();
+  const snapshot = async () => {
+    try {
+      watchlist.set(await load(listWatched));
+      watchAlerts.set(await load(listAlerts));
+      watchAlertsLoaded.set(true);
+      watchlistStatus.set(await load(getWatchlistStatus));
+    } catch (err) {
+      toast(errorText(err), 'danger');
+    }
+  };
+  if (!inWails) {
+    await snapshot();
+    return;
   }
-  if (!inWails) return;
 
-  Events.On('watchlist:alert', (event) => {
+  on('watchlist:alert', (event) => {
     const fresh = event.data as Alert[];
     watchAlerts.update((list) => mergeAlerts(list, fresh));
     for (const alert of fresh) toast(msg('games.watchAlertToast', { title: alert.title }));
   });
-  Events.On('watchlist:updated', (event) => {
+  on('watchlist:updated', (event) => {
     watchlist.set(event.data as Entry[]);
     watchlistStatus.set({ degraded: false, message: '' });
   });
-  Events.On('watchlist:degraded', (event) => {
+  on('watchlist:degraded', (event) => {
     const status = event.data as Status;
     watchlistStatus.set(status);
     if (status.degraded) toast(msg('games.watchDegraded', { message: status.message }), 'danger');
   });
+  await snapshot();
 }
 
 export async function toggleWatch(gameId: string) {

@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store';
-import { Events } from '@wailsio/runtime';
+import { listenFirst } from './listenFirst';
 import { inWails } from '../services/backend';
 import {
   cancel as cancelRequest,
@@ -69,29 +69,15 @@ function clearHashing(gameId: string) {
 
 export async function initLan() {
   if (!inWails) return;
+  const { on, load } = listenFirst();
 
-  try {
-    const [peersList, offersList, sharesList, statsResult] = await Promise.all([
-      getPeers(),
-      getOffers(),
-      getShares(),
-      getStats(),
-    ]);
-    peers.set(peersList);
-    offers.set(offersList);
-    shares.set(sharesList);
-    lanStats.set(statsResult);
-  } catch (err) {
-    toast(sourceErrorText(err), 'danger');
-  }
-
-  Events.On('lan:peers', (event) => {
+  on('lan:peers', (event) => {
     peers.set((event.data as Peer[]) ?? []);
   });
-  Events.On('lan:shares', (event) => {
+  on('lan:shares', (event) => {
     shares.set((event.data as Share[]) ?? []);
   });
-  Events.On('lan:hashing', (event) => {
+  on('lan:hashing', (event) => {
     const progress = event.data as HashProgress;
     if (progress.done) {
       clearHashing(progress.gameId);
@@ -103,12 +89,24 @@ export async function initLan() {
       return next;
     });
   });
-  Events.On('lan:transfer', (event) => {
+  on('lan:transfer', (event) => {
     upsertTransfer(event.data as Transfer);
   });
-  Events.On('lan:stats', (event) => {
+  on('lan:stats', (event) => {
     lanStats.set(event.data as Stats);
   });
+
+  try {
+    const [peersList, offersList, sharesList, statsResult] = await load(() =>
+      Promise.all([getPeers(), getOffers(), getShares(), getStats()]),
+    );
+    peers.set(peersList);
+    offers.set(offersList);
+    shares.set(sharesList);
+    lanStats.set(statsResult);
+  } catch (err) {
+    toast(sourceErrorText(err), 'danger');
+  }
 
   let offersPollFailing = false;
   setInterval(async () => {

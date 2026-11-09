@@ -1,5 +1,5 @@
 import { derived, writable } from 'svelte/store';
-import { Events } from '@wailsio/runtime';
+import { listenFirst } from './listenFirst';
 import { inWails } from '../services/backend';
 import {
   clearHistory as clearHistoryRequest,
@@ -31,22 +31,27 @@ function sortDesc(records: Record[]): Record[] {
 }
 
 export async function initHistory() {
-  history.set(sortDesc(await listHistory()));
-  historyStatus.set(await getHistoryStatus());
-  if (!inWails) return;
+  const { on, load } = listenFirst();
+  if (!inWails) {
+    history.set(sortDesc(await listHistory()));
+    historyStatus.set(await getHistoryStatus());
+    return;
+  }
 
-  Events.On('history:recorded', (event) => {
+  on('history:recorded', (event) => {
     const record = event.data as Record;
     history.update((list) => sortDesc([record, ...list.filter((r) => r.id !== record.id)]));
     historyStatus.set({ degraded: false, message: '' });
   });
-  Events.On('history:updated', (event) => {
+  on('history:updated', (event) => {
     history.set(sortDesc(event.data as Record[]));
     historyStatus.set({ degraded: false, message: '' });
   });
-  Events.On('history:degraded', (event) => {
+  on('history:degraded', (event) => {
     historyStatus.set(event.data as Status);
   });
+  history.set(sortDesc(await load(listHistory)));
+  historyStatus.set(await load(getHistoryStatus));
 }
 
 export async function clearHistory() {

@@ -1,6 +1,6 @@
 import { applyPersonalAccent } from '../theme/apply';
 import { get, writable } from 'svelte/store';
-import { Events } from '@wailsio/runtime';
+import { listenFirst } from './listenFirst';
 import { inWails } from '../services/backend';
 import { getSettings, saveSettingsPatch, setupLibrary, type Settings } from '../services/settings';
 import { toast } from './toasts';
@@ -18,14 +18,15 @@ settings.subscribe((value) => {
 });
 
 export async function initSettings() {
-  const loaded = await getSettings();
-  settings.set(loaded);
-  if (loaded.accentColor) confirmAccent(loaded.accentColor);
+  const { on, load } = listenFirst();
   if (inWails) {
-    Events.On('settings:updated', (event) => {
+    on('settings:updated', (event) => {
       applyExternalSettings(event.data as Settings);
     });
   }
+  const loaded = await load(getSettings);
+  settings.set(loaded);
+  if (loaded.accentColor) confirmAccent(loaded.accentColor);
 }
 
 // Saves run one at a time so that clicks on the same field reach Go in the
