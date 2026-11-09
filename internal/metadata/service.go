@@ -976,7 +976,7 @@ func (s *Service) apply(ctx context.Context, game catalog.Game, meta GameMetadat
 		CoverAssetID: batch.cover,
 		HeroAssetID:  batch.hero,
 		UpdatedAt:    time.Now(),
-		Partial:      batch.partial,
+		Partial:      batch.partial || meta.DetailsPending,
 	})
 	if err != nil {
 		if _, restoreErr := s.store.replace(gameID, stripURLs(previous)); restoreErr != nil {

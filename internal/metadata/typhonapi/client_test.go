@@ -681,3 +681,21 @@ func TestGameMetadataStoreLinks(t *testing.T) {
 		})
 	}
 }
+
+func TestGetCarriesDetailsPending(t *testing.T) {
+	for body, want := range map[string]bool{
+		`{"providerId":"1","title":"Игра","detailsPending":true}`: true,
+		`{"providerId":"1","title":"Игра"}`:                       false,
+	} {
+		client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			writeJSON(t, w, http.StatusOK, body)
+		}), nil)
+		meta, err := client.Get(context.Background(), "1")
+		if err != nil {
+			t.Fatalf("get: %v", err)
+		}
+		if meta.DetailsPending != want {
+			t.Fatalf("%s: DetailsPending = %v, want %v", body, meta.DetailsPending, want)
+		}
+	}
+}
