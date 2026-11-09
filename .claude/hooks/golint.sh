@@ -1,10 +1,11 @@
 #!/bin/sh
 # PostToolUse hook: lint the Go module the edited file belongs to.
 #
-# The session runs from the umbrella folder that holds several repositories, so
-# the module cannot be assumed: it is found by walking up from the edited file
-# to the nearest go.mod. Anything that is not Go, or lives outside a module,
-# leaves without a word.
+# The session may run from the umbrella folder that holds several repositories,
+# so the module cannot be assumed: it is found by walking up from the edited
+# file to the nearest go.mod. Anything that is not Go, lives outside a module
+# or outside the session's project directory leaves without a word; a go.mod
+# found elsewhere could carry a linter config this hook must not execute.
 #
 # Findings go back as additionalContext rather than plain stdout, which a
 # PostToolUse hook only writes into the transcript where the model never sees
@@ -16,7 +17,7 @@ export PATH
 
 input=$(cat)
 
-file=$(printf '%s' "$input" | python3 -c 'import json,sys
+file=$(printf '%s' "$input" | python3 -I -c 'import json,sys
 try:
     print(json.load(sys.stdin).get("tool_input", {}).get("file_path", ""))
 except Exception:
@@ -27,8 +28,13 @@ case "$file" in
 *) exit 0 ;;
 esac
 
-dir=$(dirname "$file")
-while [ "$dir" != "/" ] && [ ! -f "$dir/go.mod" ]; do
+root=$(cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null && pwd -P) || exit 0
+dir=$(cd "$(dirname "$file")" 2>/dev/null && pwd -P) || exit 0
+case "$dir" in
+"$root" | "$root"/*) ;;
+*) exit 0 ;;
+esac
+while [ "$dir" != "$root" ] && [ ! -f "$dir/go.mod" ]; do
 	dir=$(dirname "$dir")
 done
 [ -f "$dir/go.mod" ] || exit 0
@@ -40,7 +46,7 @@ case "$findings" in
 "" | *"0 issues"*) exit 0 ;;
 esac
 
-MODULE="$dir" FINDINGS="$findings" python3 -c 'import json, os
+MODULE="$dir" FINDINGS="$findings" python3 -I -c 'import json, os
 print(json.dumps({"hookSpecificOutput": {
     "hookEventName": "PostToolUse",
     "additionalContext": "golangci-lint --fast-only in "
