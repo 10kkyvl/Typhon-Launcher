@@ -156,6 +156,9 @@ func partialMapWant(t *testing.T, kept map[string]string) map[string]string {
 	if accent, ok := kept["--accent"]; ok {
 		want["--accent-bright"] = accent
 	}
+	if sidebar, ok := kept["--bg-sidebar"]; ok {
+		want["--island-fill"] = sidebar
+	}
 	return want
 }
 

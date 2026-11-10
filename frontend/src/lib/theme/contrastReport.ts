@@ -13,8 +13,8 @@ export interface ContrastCheck {
 // controls that carry meaning. The report warns, it never blocks a save:
 // some authored themes go low on contrast on purpose.
 export const CONTRAST_CHECKS: readonly ContrastCheck[] = [
-  { id: 'text', fg: '--text', backgrounds: ['--bg', '--bg-sidebar', '--surface', '--surface-2', '--surface-3'], min: 4.5 },
-  { id: 'text2', fg: '--text-2', backgrounds: ['--bg', '--bg-sidebar', '--surface', '--surface-2'], min: 4.5 },
+  { id: 'text', fg: '--text', backgrounds: ['--bg', '--island-fill', '--surface', '--surface-2', '--surface-3'], min: 4.5 },
+  { id: 'text2', fg: '--text-2', backgrounds: ['--bg', '--island-fill', '--surface', '--surface-2'], min: 4.5 },
   { id: 'text3', fg: '--text-3', backgrounds: ['--bg', '--surface', '--surface-2'], min: 3 },
   { id: 'button', fg: '--accent-on', backgrounds: ['--accent', '--accent-hover'], min: 4.5 },
   { id: 'links', fg: '--accent-text', backgrounds: ['--accent-subtle', '--surface', '--bg'], min: 4.5 },

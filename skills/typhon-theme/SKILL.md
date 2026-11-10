@@ -60,10 +60,11 @@ The file is exactly this object and nothing else (unknown keys are refused):
    7:1, `--text-2` at least 4.5:1, `--text-3` at least 3:1. White text sits on `--accent` buttons,
    so `--accent` needs at least 4.5:1 against `#ffffff`. Progress bars, switches, checkboxes and
    selection borders use `--accent-bright`, focus outlines `--accent-ring`: both need at least 3:1
-   against every surface. `--island-fill` (the floating sidebar) is a translucent version of
-   `--bg-sidebar`: measure the text levels on it painted over `--bg`, over black and over white,
-   and raise its alpha until they hold. The launcher does not check contrast for you — compute it
-   before writing the file.
+   against every surface. `--island-fill` (the floating sidebar) is translucent: measure the
+   text levels on it painted over `--bg`, over black and over white, and raise its alpha until
+   they hold. Set `--bg-sidebar` to the colour `--island-fill` shows over `--bg` (it rings the
+   status dot of the avatar on the island). The launcher does not check contrast for you —
+   compute it before writing the file.
 5. Derive the accent family from one hue: `--accent-hover` a step lighter (dark base) or darker
    (light base); `--accent-subtle` the accent at 0.12–0.18 alpha; `--accent-bright` a lighter
    (dark base) or darker (light base) shade that stands out on every surface; `--accent-ring`

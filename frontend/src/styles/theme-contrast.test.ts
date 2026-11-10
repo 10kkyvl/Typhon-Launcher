@@ -170,6 +170,17 @@ describe('built-in themes', () => {
       expect(islandFailures((preset as Preset).tokens)).toEqual([]);
     });
 
+    // --bg-sidebar rings the presence dot on the account avatar inside the island: it is the colour
+    // the island shows over the page, or the ring reads as a halo.
+    it(`${id} rings the avatar in the colour the island shows over the page`, () => {
+      const preset = builtIns().find((p) => p.id === id);
+      expect(preset, id).toBeDefined();
+      const tokens = (preset as Preset).tokens;
+      const shown = paint(tokens, '--island-fill', paint(tokens, '--bg', BLACK));
+      const ring = paint(tokens, '--bg-sidebar', BLACK);
+      expect(ring.map((c, i) => Math.abs(c - shown[i])).every((d) => d <= 1), `${ring} vs ${shown.map(Math.round)}`).toBe(true);
+    });
+
     it(`${id} shows no warning in the Settings readability panel`, () => {
       const preset = builtIns().find((p) => p.id === id);
       expect(preset, id).toBeDefined();

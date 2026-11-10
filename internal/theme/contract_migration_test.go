@@ -263,6 +263,11 @@ func wantAfterMigration(t *testing.T, parent string, stored, kept map[string]str
 			want[tok.Name] = accent
 			continue
 		}
+		// Likewise a user sidebar colour keeps painting the island.
+		if sidebar, ok := kept["--bg-sidebar"]; ok && tok.Name == "--island-fill" {
+			want[tok.Name] = sidebar
+			continue
+		}
 		value, ok := current.Tokens[tok.Name]
 		if !ok {
 			t.Fatalf("preset %s has no token %s", parent, tok.Name)
@@ -893,6 +898,38 @@ func TestUserAccentKeepsPaintingTheIndicators(t *testing.T) {
 			got := migratedFrom(t, BaseDark, tc.stored)
 			if bright := got.Tokens["--accent-bright"]; bright != tc.want {
 				t.Fatalf("--accent-bright = %q, want %q", bright, tc.want)
+			}
+			requireContract2(t, "migrated theme", got)
+		})
+	}
+}
+
+// In 1.x --bg-sidebar painted the sidebar, which 2.0 fills with --island-fill.
+// A 1.x theme with its own sidebar colour keeps it on the island; one that
+// left it alone takes the preset's island.
+func TestUserSidebarColourKeepsPaintingTheIsland(t *testing.T) {
+	dark, ok := presetByID("dark")
+	if !ok {
+		t.Fatal("no dark preset")
+	}
+	presetIsland := dark.Tokens["--island-fill"]
+	released := releasedPresetGenerations[len(releasedPresetGenerations)-1].presets["dark"]["--bg-sidebar"]
+	cases := []struct {
+		name   string
+		stored map[string]string
+		want   string
+	}{
+		{"dark fork with a user sidebar colour", withChanges(fixture141(t, "dark"), map[string]string{"--bg-sidebar": "#20283a"}), "#20283a"},
+		{"dark fork with its sidebar untouched", withChanges(fixture141(t, "dark"), map[string]string{"--radius-md": "1rem"}), presetIsland},
+		{"partial map with only a user sidebar colour", map[string]string{"--bg-sidebar": "#20283a"}, "#20283a"},
+		{"partial map with the released sidebar colour", map[string]string{"--bg-sidebar": released, "--bg": "#101010"}, presetIsland},
+		{"partial map without a sidebar colour", map[string]string{"--bg": "#101010"}, presetIsland},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := migratedFrom(t, BaseDark, tc.stored)
+			if island := got.Tokens["--island-fill"]; island != tc.want {
+				t.Fatalf("--island-fill = %q, want %q", island, tc.want)
 			}
 			requireContract2(t, "migrated theme", got)
 		})

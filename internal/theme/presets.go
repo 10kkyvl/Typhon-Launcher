@@ -248,7 +248,7 @@ var presetBlush = Theme{
 	Tokens: map[string]string{
 		"--ui-scale":         "1",
 		"--bg":               "#ecd9dc",
-		"--bg-sidebar":       "#e3cbd0",
+		"--bg-sidebar":       "#f7ebee",
 		"--island-fill":      "rgba(248, 238, 240, 0.88)",
 		"--surface":          "#f8eef0",
 		"--surface-2":        "#fbf4f5",

@@ -18,8 +18,9 @@ var (
 
 // rolesTakenOver maps a token new in the current contract to the 1.x token
 // that played its part: --accent also painted every indicator in 1.x, so a
-// user's own accent keeps painting them.
-var rolesTakenOver = map[string]string{"--accent-bright": "--accent"}
+// user's own accent keeps painting them; --bg-sidebar painted the sidebar
+// that --island-fill paints now.
+var rolesTakenOver = map[string]string{"--accent-bright": "--accent", "--island-fill": "--bg-sidebar"}
 
 // toCurrentContract brings a theme saved under the 1.x contract to the
 // current one. A fork stores the whole preset it came from, so values equal

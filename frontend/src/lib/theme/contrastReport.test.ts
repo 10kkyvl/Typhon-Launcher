@@ -41,6 +41,13 @@ describe('contrastReport', () => {
     expect(row({ ...colors, '--surface': [255, 255, 255, 0.05] }, 'text').ok).toBe(true);
   });
 
+  it('warns when the sidebar island makes sidebar text unreadable, measured over the page', () => {
+    const page = { ...all(black), '--text': white, '--text-2': white, '--bg-sidebar': black };
+    expect(row({ ...page, '--island-fill': [255, 255, 255, 0.9] }, 'text')).toMatchObject({ ok: false, against: '--island-fill' });
+    expect(row({ ...page, '--island-fill': [255, 255, 255, 0.9] }, 'text2')).toMatchObject({ ok: false, against: '--island-fill' });
+    expect(row({ ...page, '--island-fill': [255, 255, 255, 0.05] }, 'text').ok).toBe(true);
+  });
+
   it('says unknown, not pass, when a colour could not be read', () => {
     const colors: Record<string, RGBA | undefined> = { ...all(white), '--text': black, '--surface-3': undefined };
     expect(row(colors, 'text').ok).toBeNull();

@@ -50,7 +50,8 @@ startup, from a file, from pasted text, or from a watched file.
 3. A value you changed stays. In lengths and shadows every `rem` number is multiplied by 1.1, so
    the size in pixels does not change.
 4. New tokens are added from the same built-in theme. If you set your own `--accent`, it also
-   becomes `--accent-bright`: in 1.x the accent painted the indicators too.
+   becomes `--accent-bright`: in 1.x the accent painted the indicators too. Likewise your own
+   `--bg-sidebar` becomes `--island-fill`, the fill of the floating sidebar.
 5. The theme is marked `"contract": 2` and is not converted again.
 
 The stored file is not rewritten at startup: the new form reaches the disk the first time a theme
