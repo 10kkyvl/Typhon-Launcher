@@ -3,6 +3,7 @@ package theme
 import (
 	"math/big"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -25,8 +26,13 @@ func toCurrentContract(t Theme) Theme {
 	if t.Contract >= currentContract {
 		return t
 	}
-	parent, released, ok := releasedParent(t)
+	generations, full := forkedGenerations(t)
+	parent, released, ok := releasedParent(t, generations)
 	if !ok {
+		return t
+	}
+	if lostContractMarker(t, parent, generations) {
+		t.Contract = currentContract
 		return t
 	}
 	tokens := make(map[string]string, len(allowedTokens))
@@ -40,13 +46,6 @@ func toCurrentContract(t Theme) Theme {
 		tokens[name] = userValueAtCurrentScale(name, value)
 	}
 
-	full := true
-	for name := range released {
-		if _, ok := t.Tokens[name]; !ok {
-			full = false
-			break
-		}
-	}
 	lastReleased := releasedPresetGenerations[len(releasedPresetGenerations)-1].presets[parent.ID]
 	for _, tok := range allowedTokens {
 		if _, ok := tokens[tok.Name]; ok {
@@ -66,10 +65,36 @@ func toCurrentContract(t Theme) Theme {
 	return t
 }
 
-// releasedParent finds the built-in preset and the released generation of it
-// that the theme was forked from: the one sharing the most values with it.
-// A tie goes to the default preset, then to the newer generation.
-func releasedParent(t Theme) (Theme, map[string]string, bool) {
+// forkedGenerations lists the released generations the theme holds every
+// token of: a fork copies one whole generation. A partial map is a fork of
+// none and is read against the newest generation only, so one value an older
+// preset happened to ship does not pass for untouched.
+func forkedGenerations(t Theme) ([]int, bool) {
+	var whole []int
+	for i, gen := range releasedPresetGenerations {
+		names := gen.presets[defaultTheme().ID]
+		holdsAll := true
+		for name := range names {
+			if _, ok := t.Tokens[name]; !ok {
+				holdsAll = false
+				break
+			}
+		}
+		if holdsAll {
+			whole = append(whole, i)
+		}
+	}
+	if len(whole) == 0 {
+		return []int{len(releasedPresetGenerations) - 1}, false
+	}
+	return whole, true
+}
+
+// releasedParent finds, among the given generations, the built-in preset and
+// the released state of it that the theme was forked from: the one sharing
+// the most values with it. A tie goes to the default preset, then to the
+// newer generation.
+func releasedParent(t Theme, generations []int) (Theme, map[string]string, bool) {
 	type candidate struct {
 		preset    Theme
 		tokens    map[string]string
@@ -92,8 +117,8 @@ func releasedParent(t Theme) (Theme, map[string]string, bool) {
 		if p.Base != t.Base {
 			continue
 		}
-		for i, gen := range releasedPresetGenerations {
-			tokens, ok := gen.presets[p.ID]
+		for _, i := range generations {
+			tokens, ok := releasedPresetGenerations[i].presets[p.ID]
 			if !ok {
 				continue
 			}
@@ -109,6 +134,38 @@ func releasedParent(t Theme) (Theme, map[string]string, bool) {
 		}
 	}
 	return best.preset, best.tokens, found
+}
+
+// lostContractMarker tells a current theme that a 1.x launcher rewrote after a
+// downgrade, dropping the marker, from a real 1.x theme: migrating it again
+// would scale its lengths once more on every such round trip. It holds values
+// only today's preset has and none that only a released preset had.
+func lostContractMarker(t Theme, parent Theme, generations []int) bool {
+	releasedOnly, currentOnly := 0, 0
+	for name, value := range t.Tokens {
+		now, hasNow := parent.Tokens[name]
+		if (!hasNow || value != now) && releasedValue(parent.ID, name, value, generations) {
+			releasedOnly++
+		}
+		if hasNow && value == now && !releasedValue(parent.ID, name, value, nil) {
+			currentOnly++
+		}
+	}
+	return currentOnly > 0 && releasedOnly == 0
+}
+
+// releasedValue reports whether a released generation of the preset shipped
+// value for name; nil generations means any of them.
+func releasedValue(presetID, name, value string, generations []int) bool {
+	for i, gen := range releasedPresetGenerations {
+		if generations != nil && !slices.Contains(generations, i) {
+			continue
+		}
+		if was, ok := gen.presets[presetID][name]; ok && was == value {
+			return true
+		}
+	}
+	return false
 }
 
 // userValueAtCurrentScale keeps a user's length or shadow at the pixel size

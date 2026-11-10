@@ -109,6 +109,40 @@ func TestValueOfAnOlderGenerationIsAUserEdit(t *testing.T) {
 	requireTokens(t, "migrated fork", got.Tokens, currentWith(t, "dark", map[string]string{"--radius-lg": "1.1rem"}), "")
 }
 
+// A partial map is a fork of no generation, so one value that an older
+// preset happened to ship does not make it that preset's untouched value.
+func TestPartialMapValueOfAnOlderGenerationIsAUserEdit(t *testing.T) {
+	cases := []struct {
+		name   string
+		stored map[string]string
+		kept   map[string]string
+	}{
+		{
+			name:   "0.3 large radius with an accent",
+			stored: map[string]string{"--radius-lg": "1rem", "--accent": "#ff0055"},
+			kept:   map[string]string{"--radius-lg": "1.1rem", "--accent": "#ff0055"},
+		},
+		{
+			name:   "0.3 extra large radius with a background",
+			stored: map[string]string{"--bg": "#101010", "--radius-xl": "1.2rem"},
+			kept:   map[string]string{"--bg": "#101010", "--radius-xl": "1.32rem"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dark, ok := presetByID("dark")
+			if !ok {
+				t.Fatal("no dark preset")
+			}
+			want := maps.Clone(tc.kept)
+			want["--font-mono"] = dark.Tokens["--font-mono"]
+			got := migratedFrom(t, BaseDark, tc.stored)
+			requireTokens(t, "migrated partial map", got.Tokens, want, "")
+			requireContract2(t, "migrated partial map", got)
+		})
+	}
+}
+
 // A rem value near the length limit would leave the allowed range once
 // scaled; it is kept as stored so the theme can still be saved.
 func TestScaledValuePastTheLimitIsKeptAsStored(t *testing.T) {

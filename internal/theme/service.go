@@ -95,8 +95,8 @@ func loadState(path string) (state, error) {
 		return state{}, fmt.Errorf("load themes: %w", err)
 	}
 	for i := range st.Themes {
-		// Served migrated but not written back here: the file changes on the
-		// first ordinary write, so a failed write cannot make startup fail.
+		// Migrated in memory only; the file follows on the next write. At
+		// startup that is only the pending-theme revert in NewServiceAt.
 		st.Themes[i] = toCurrentContract(st.Themes[i])
 		t := &st.Themes[i]
 		cssErr := validateCSS(t.CSS)
@@ -472,6 +472,11 @@ func decodeTheme(data []byte, name string) (Theme, error) {
 	}
 	if payload.Version != 1 {
 		return Theme{}, fmt.Errorf("%d: %w", payload.Version, ErrThemeVersion)
+	}
+	// Values of a newer contract cannot be read correctly here, and storing
+	// the theme would relabel it as contract 2.
+	if payload.Theme.Contract > currentContract {
+		return Theme{}, fmt.Errorf("contract %d: %w", payload.Theme.Contract, ErrThemeVersion)
 	}
 	if name != "" {
 		payload.Theme.Name = name
