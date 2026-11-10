@@ -224,6 +224,8 @@ export const themeTokens = {
   'settings.themeTokenHint.island-fill': 'Заливка парящих панелей интерфейса; полупрозрачная, под ней видно окно',
   'settings.themeToken.island-gap': 'Острова: отступ',
   'settings.themeTokenHint.island-gap': 'Расстояние от парящих панелей до краёв окна',
+  'settings.themeToken.radius-control': 'Скругление: элементы управления',
+  'settings.themeTokenHint.radius-control': 'Поле поиска и группы кнопок верхней панели; 999px рисует их таблетками, небольшое значение вроде 0.8rem возвращает прямоугольные углы',
 } as const;
 
 export type ThemeTokensKey = keyof typeof themeTokens;

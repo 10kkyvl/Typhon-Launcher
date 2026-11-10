@@ -227,4 +227,6 @@ export const themeTokens: Record<ThemeTokensKey, Message> = {
   'settings.themeTokenHint.island-fill': 'Fill of the floating panels of the interface; translucent, the window shows through it',
   'settings.themeToken.island-gap': 'Islands: margin',
   'settings.themeTokenHint.island-gap': 'Distance from the floating panels to the window edges',
+  'settings.themeToken.radius-control': 'Corner radius: controls',
+  'settings.themeTokenHint.radius-control': 'The search field and the button groups of the top bar; 999px draws them as pills, a value like 0.8rem brings square corners back',
 };
