@@ -44,6 +44,7 @@ What is covered where, how (unit vs integration), and what is not. Snapshot: 202
 | components with error paths | `RemoveGameModal.errors`, `AddDownloadModal.cancel`, `LibrarySetupModal.errors`, `routes/{catalog,installed,library}/*.errors.test.ts`, `routes/settings/Settings.logsSend.test.ts` | error rendering and cancel behaviour |
 | misc | `lib/{relocate,history,lan,profile,social,theme,utils,notifications,search,confirm}/**.test.ts` | text builders, filters, theme validation, formatting |
 | style guards | `styles/font-tokens.test.ts` | font families only through `--font-sans`/`--font-mono`, no typeface in the `font` shorthand, ligatures off on monospace text, first family of both tokens in `tokens.css` and `presets.go` is a bundled face |
+| | `styles/theme-contrast.test.ts`, `styles/accent-roles.test.ts`, `lib/bigpicture/palette.test.ts` | every built-in preset passes the readability report, indicators and the focus ring at 3:1; `--accent` only as a fill behind a label (text → `--accent-text`, focus → `--accent-ring`, indicators → `--accent-bright`); Big Picture pins dark neutrals and status colours and a readable accent family for any theme and personal accent |
 
 Not covered by vitest: visual layout, Wails runtime integration, real event delivery — use the [typhon-live-check](../../.agents/skills/typhon-live-check/SKILL.md) skill for those.
 
