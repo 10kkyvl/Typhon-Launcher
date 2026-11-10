@@ -220,6 +220,10 @@ export const themeTokens = {
   'settings.themeTryKeptActive': 'Примерка «{name}» — окно показывает черновик, пока открыт редактор',
   'settings.themeTryKeep': 'Оставить на время правки',
   'settings.themeTryRevert': 'Вернуть',
+  'settings.themeToken.island-fill': 'Острова: заливка',
+  'settings.themeTokenHint.island-fill': 'Заливка парящих панелей интерфейса; полупрозрачная, под ней видно окно',
+  'settings.themeToken.island-gap': 'Острова: отступ',
+  'settings.themeTokenHint.island-gap': 'Расстояние от парящих панелей до краёв окна',
 } as const;
 
 export type ThemeTokensKey = keyof typeof themeTokens;

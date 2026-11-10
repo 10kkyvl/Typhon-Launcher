@@ -199,6 +199,20 @@ export const ui = {
   'ui.networkBannerProxy': 'Прокси недоступен — загрузки и раздачи на паузе',
   'ui.networkBannerSettings': 'Настройки сети',
   'ui.networkRestoredToast': 'Сеть для торрентов снова доступна — загрузки продолжатся',
+  'ui.sidebarStatusLabel': 'Облачные сохранения и обновления',
+  'ui.statusCloudOffShort': 'Облако выкл.',
+  'ui.statusCloudSignInShort': 'Войдите',
+  'ui.statusOfflineShort': 'Офлайн',
+  'ui.statusCloudOffline': 'Нет связи с сервером: облачные сохранения синхронизируются, когда она появится',
+  'ui.statusCloudSynced': 'Облачные сохранения синхронизированы',
+  'ui.statusCloudConflict': 'Сохранения «{title}» изменились и здесь, и в облаке: выберите, какую копию оставить',
+  'ui.statusCloudConflicts': 'Конфликтов сохранений: {count}. Открыть первый',
+  'ui.statusCloudConflictsShort': 'Конфликты: {count}',
+  'ui.statusCloudFailed': 'Не удалось синхронизировать сохранения «{title}»',
+  'ui.statusUpdateDownload': 'Скачать версию {version}',
+  'ui.statusUpdateReadyShort': 'Перезапустить',
+  'ui.statusUpdateFailedShort': 'Ошибка обновления',
+  'ui.statusUpdateRetry': 'Обновление {version} не скачалось. Повторить',
 } as const;
 
 export type UiKey = keyof typeof ui;

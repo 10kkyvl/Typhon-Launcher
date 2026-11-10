@@ -223,4 +223,8 @@ export const themeTokens: Record<ThemeTokensKey, Message> = {
   'settings.themeTryKeptActive': 'Trying "{name}" — the window shows the draft while the editor is open',
   'settings.themeTryKeep': 'Keep while editing',
   'settings.themeTryRevert': 'Go back',
+  'settings.themeToken.island-fill': 'Islands: fill',
+  'settings.themeTokenHint.island-fill': 'Fill of the floating panels of the interface; translucent, the window shows through it',
+  'settings.themeToken.island-gap': 'Islands: margin',
+  'settings.themeTokenHint.island-gap': 'Distance from the floating panels to the window edges',
 };
