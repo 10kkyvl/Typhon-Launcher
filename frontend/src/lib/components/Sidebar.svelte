@@ -13,7 +13,7 @@
   import { autoAway, presenceStatus, shownPresence, updatePresenceStatus } from '../stores/presence';
   import { incomingCount } from '../stores/social';
   import { unreadReplies } from '../stores/support';
-  import { authState, currentUser, isOffline, leaveGuest, signOut } from '../stores/user';
+  import { authState, currentUser, isOffline, signOut } from '../stores/user';
   import { ownFrame } from '../profile/frameSources';
   import { settings } from '../stores/settings';
   import { navBlocks, themeLayout } from '../stores/layout';
@@ -28,6 +28,7 @@
   import DropdownMenu from './DropdownMenu.svelte';
   import type { MenuItem } from './DropdownMenu.svelte';
   import SidebarStatus from './SidebarStatus.svelte';
+  import { signInFromGuest } from './sidebarStatus';
 
   let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
   let sidebar = $state<HTMLElement>();
@@ -127,11 +128,7 @@
       return;
     }
     if (id !== 'login') return;
-    try {
-      await leaveGuest();
-    } catch (err) {
-      toast(accountErrorText(err, msg('ui.signOutFailed')), 'danger');
-    }
+    await signInFromGuest();
   }
 
   async function signOutNow() {

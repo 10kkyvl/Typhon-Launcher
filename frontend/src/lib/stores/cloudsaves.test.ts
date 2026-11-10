@@ -108,4 +108,22 @@ describe('cloud saves store', () => {
     expect(current?.games).toHaveLength(1);
     expect(current?.games[0].gameId).toBe('g1');
   });
+
+  it('keeps a failed pass as the global error, as the backend status does', async () => {
+    const { store } = await init();
+    emit(event({ gameId: '', status: 'failed', code: 'cloud.server', quotaBytes: 0, usedBytes: 0 }));
+    const current = get(store.cloudStatus);
+    expect(current?.error).toBe('cloud.server');
+    expect(current?.games).toEqual(status().games);
+  });
+
+  it('clears the global error once a game syncs again, and only then', async () => {
+    load = async () => status({ error: 'cloud.network' });
+    const { store } = await init();
+    emit(event({ gameId: '', status: 'pending', code: 'cloud.account_unknown' }));
+    emit(event({ gameId: 'g1', status: 'failed', code: 'cloud.quota' }));
+    expect(get(store.cloudStatus)?.error).toBe('cloud.network');
+    emit(event({ gameId: 'g1', status: 'synced' }));
+    expect(get(store.cloudStatus)?.error).toBe('');
+  });
 });

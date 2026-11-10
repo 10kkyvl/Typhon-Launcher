@@ -3,8 +3,9 @@
   import { cloudStatus } from '../stores/cloudsaves';
   import { libraryGames } from '../stores/library';
   import { selfUpdateDownloading, selfUpdateProgress, selfUpdateStatus, selfUpdateView } from '../stores/selfupdate';
-  import { isOffline } from '../stores/user';
+  import { authState, isOffline } from '../stores/user';
   import { statusReason } from '../services/selfupdateMessages';
+  import { cloudCodeText } from '../cloudsaves/messages';
   import { msg } from '../i18n';
   import UpdateRestartModal from './UpdateRestartModal.svelte';
   import { cloudRow, openCloudRow, runUpdateRow, updateRow } from './sidebarStatus';
@@ -15,15 +16,19 @@
 
   let restartOpen = $state(false);
 
-  const cloud = $derived(cloudRow($cloudStatus, $isOffline, $libraryGames));
+  const cloud = $derived(cloudRow($cloudStatus, { offline: $isOffline, guest: $authState === 'guest' }, $libraryGames));
   const update = $derived(updateRow($selfUpdateStatus, $selfUpdateView, $selfUpdateDownloading, $selfUpdateProgress));
 
   const cloudName = $derived.by(() => {
     switch (cloud.kind) {
       case 'off':
         return msg('cloud.disabled');
-      case 'signedOut':
+      case 'signIn':
         return msg('cloud.not_signed_in');
+      case 'account':
+        return cloudCodeText(cloud.code, msg('cloud.not_signed_in'));
+      case 'error':
+        return cloudCodeText(cloud.code, msg('cloud.failed'));
       case 'offline':
         return msg('ui.statusCloudOffline');
       case 'pending':
@@ -47,10 +52,18 @@
 {/snippet}
 
 <div class="status" role="group" aria-label={msg('ui.sidebarStatusLabel')}>
-  {#if cloud.kind === 'off' || cloud.kind === 'signedOut'}
-    <button type="button" class="item" data-cloud={cloud.kind} title={cloudName} onclick={() => openCloudRow(cloud)}>
+  {#if cloud.kind === 'off' || cloud.kind === 'signIn'}
+    <button type="button" class="item" data-cloud={cloud.kind} title={cloudName} onclick={() => void openCloudRow(cloud)}>
       <CloudOff aria-hidden="true" />{@render words(msg(cloud.kind === 'off' ? 'ui.statusCloudOffShort' : 'ui.statusCloudSignInShort'), cloudName)}
     </button>
+  {:else if cloud.kind === 'account'}
+    <span class="item" data-cloud="account" title={cloudName}>
+      <CloudOff aria-hidden="true" />{@render words(msg('ui.statusCloudAccountShort'), cloudName)}
+    </span>
+  {:else if cloud.kind === 'error'}
+    <span class="item danger" data-cloud="error" title={cloudName}>
+      <CloudAlert aria-hidden="true" />{@render words(msg('cloudsaves.stateFailed'), cloudName)}
+    </span>
   {:else if cloud.kind === 'offline'}
     <span class="item" data-cloud="offline" title={cloudName}>
       <CloudOff aria-hidden="true" />{@render words(msg('ui.statusOfflineShort'), cloudName)}
@@ -64,14 +77,14 @@
       <CloudCheck aria-hidden="true" />{@render words(msg('cloudsaves.stateSynced'), cloudName)}
     </span>
   {:else if cloud.kind === 'conflict'}
-    <button type="button" class="item warn" data-cloud="conflict" title={cloudName} onclick={() => openCloudRow(cloud)}>
+    <button type="button" class="item warn" data-cloud="conflict" title={cloudName} onclick={() => void openCloudRow(cloud)}>
       <CloudAlert aria-hidden="true" />{@render words(
         cloud.count > 1 ? msg('ui.statusCloudConflictsShort', { count: cloud.count }) : msg('cloudsaves.stateConflict'),
         cloudName,
       )}
     </button>
   {:else if cloud.kind === 'failed'}
-    <button type="button" class="item danger" data-cloud="failed" title={cloudName} onclick={() => openCloudRow(cloud)}>
+    <button type="button" class="item danger" data-cloud="failed" title={cloudName} onclick={() => void openCloudRow(cloud)}>
       <CloudAlert aria-hidden="true" />{@render words(msg('cloudsaves.stateFailed'), cloudName)}
     </button>
   {/if}

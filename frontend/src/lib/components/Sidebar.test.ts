@@ -13,7 +13,7 @@ import { activeTheme } from '../stores/theme';
 import { cloudStatus } from '../stores/cloudsaves';
 import { libraryGames } from '../stores/library';
 import { selfUpdateDownloading, selfUpdateStatus } from '../stores/selfupdate';
-import { isOffline } from '../stores/user';
+import { authState, isOffline } from '../stores/user';
 import { msg } from '../i18n';
 import type { Writable } from 'svelte/store';
 import type { Theme } from '../services/theme';
@@ -38,6 +38,7 @@ afterEach(() => {
   selfUpdateStatus.set({ state: 'idle', currentVersion: '' });
   selfUpdateDownloading.set(false);
   offline.set(false);
+  authState.set('bootstrapping');
 });
 
 describe('Sidebar layout', () => {
@@ -104,9 +105,11 @@ function cloud(over: Partial<CloudStatus>): CloudStatus {
 
 const conflict = (gameId: string) => ({ gameId, state: 'conflict' as const, code: '', message: '', at: '', syncedAt: '' });
 
-const cloudStates: { kind: string; status: CloudStatus; offline?: boolean; name: string; button: boolean }[] = [
+const cloudStates: { kind: string; status: CloudStatus; offline?: boolean; guest?: boolean; name: string; button: boolean }[] = [
   { kind: 'off', status: cloud({ enabled: false }), name: msg('cloud.disabled'), button: true },
-  { kind: 'signedOut', status: cloud({ signedIn: false }), name: msg('cloud.not_signed_in'), button: true },
+  { kind: 'signIn', status: cloud({ signedIn: false }), guest: true, name: msg('cloud.not_signed_in'), button: true },
+  { kind: 'account', status: cloud({ signedIn: false, error: 'cloud.token' }), name: msg('cloud.token'), button: false },
+  { kind: 'error', status: cloud({ error: 'cloud.server' }), name: msg('cloud.server'), button: false },
   { kind: 'offline', status: cloud({}), offline: true, name: msg('ui.statusCloudOffline'), button: false },
   { kind: 'synced', status: cloud({}), name: msg('ui.statusCloudSynced'), button: false },
   { kind: 'pending', status: cloud({ pending: true }), name: msg('cloudsaves.statePending'), button: false },
@@ -163,6 +166,7 @@ describe('Sidebar status row', () => {
         libraryGames.set(games);
         cloudStatus.set(c.status);
         offline.set(Boolean(c.offline));
+        authState.set(c.guest ? 'guest' : 'authenticated');
         selfUpdateStatus.set(u.status);
         const body = html();
         expect(body).toMatch(/class="status[^"]*"[^>]*role="group"/);
