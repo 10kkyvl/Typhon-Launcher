@@ -59,7 +59,7 @@ export const errLibrary = {
   'library.notes_invalid': 'заметка содержит недопустимые символы',
 
   'theme.file_too_large': 'файл темы превышает допустимый размер',
-  'theme.unsupported_version': 'неподдерживаемая версия файла темы',
+  'theme.unsupported_version': 'тема сделана для более новой версии Typhon: обновите лаунчер',
   'theme.invalid_id': 'недопустимый идентификатор темы',
   'theme.invalid_name': 'недопустимое имя темы',
   'theme.invalid_base': 'недопустимая базовая палитра темы',

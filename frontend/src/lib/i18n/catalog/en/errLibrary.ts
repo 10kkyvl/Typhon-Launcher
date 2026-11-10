@@ -62,7 +62,7 @@ export const errLibrary: Record<ErrLibraryKey, Message> = {
   'library.notes_invalid': 'The note contains invalid characters',
 
   'theme.file_too_large': 'The theme file exceeds the allowed size',
-  'theme.unsupported_version': 'Unsupported theme file version',
+  'theme.unsupported_version': 'This theme was made for a newer version of Typhon: update the launcher',
   'theme.invalid_id': 'Invalid theme id',
   'theme.invalid_name': 'Invalid theme name',
   'theme.invalid_base': 'Invalid theme base palette',

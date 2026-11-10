@@ -51,6 +51,12 @@ describe('toTheme', () => {
     });
   });
 
+  it('leaves the contract marker to the backend', async () => {
+    const { toTheme } = await load(true);
+
+    expect(toTheme(raw({ contract: 2 }))).not.toHaveProperty('contract');
+  });
+
   it('treats any base but light as dark', async () => {
     const { toTheme } = await load(true);
 
