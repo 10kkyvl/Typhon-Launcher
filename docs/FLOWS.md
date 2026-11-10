@@ -163,6 +163,8 @@ Invariants: I-7 (signature and hash before apply, re-verified at startup), I-5 f
 | selfupdate | startup; corrupt ⇒ startup fails (launcher exits) | outcome pickup, stale worker/artifact cleanup | `selfupdate/state.json`, `worker/*` |
 | metadata | constructor (`media_assets.json`, `metadata_attempts.json`) | orphan sweep of `media/` | — |
 
+`theme` also converts themes saved by 1.x in memory at load; the file takes the converted form on the next write, and at startup the only such write is the pending-theme revert in `NewServiceAt`.
+
 Required state semantics and documented cache/background exceptions: INVARIANTS I-2–I-3. Several services roll memory back and emit `*:degraded` after persist failures; inspect the owner rather than assuming uniform handling; `ServiceShutdown` order is closing flag → cancel jobs → cancel ctx → `wg.Wait` → final persist → close external resources.
 
 ## 15. Cancellation and error recovery
