@@ -238,6 +238,7 @@
 
   .code {
     font-family: var(--font-mono);
+    font-variant-ligatures: none;
     font-size: 3.74rem;
     font-weight: 700;
     letter-spacing: 0.18em;

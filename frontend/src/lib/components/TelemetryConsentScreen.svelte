@@ -287,6 +287,7 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     font-family: var(--font-mono);
+    font-variant-ligatures: none;
     font-size: var(--font-xs);
     line-height: 1.5;
     white-space: pre;

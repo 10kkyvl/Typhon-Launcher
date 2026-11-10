@@ -89,6 +89,7 @@
     resize: vertical;
     line-height: 1.5;
     font-family: var(--font-mono);
+    font-variant-ligatures: none;
     font-size: var(--font-sm);
   }
 

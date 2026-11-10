@@ -268,6 +268,7 @@
 
   .mono {
     font-family: var(--font-mono);
+    font-variant-ligatures: none;
     word-break: break-all;
   }
 

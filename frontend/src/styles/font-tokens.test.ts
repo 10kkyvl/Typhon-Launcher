@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { goSources } from '../lib/testing/sources';
 
 /**
  * Every typeface is a theme token (`--font-sans`, `--font-mono` in tokens.css), so a theme can change
@@ -26,7 +27,9 @@ const files = fs
   .filter((path) => /\.(ts|js|svelte|css|html|json|md)$/.test(path) && path !== SELF);
 const styled = files.filter((path) => /\.(svelte|css)$/.test(path) && path !== TOKENS);
 
-const FAMILY = /font-family\s*:\s*([^;}\n]+)/g;
+const FAMILY = /(?:font-family\s*:|style:font-family=)\s*([^;}\n]+)/g;
+const SHORTHAND = /(?<![-\w])font\s*:\s*([^;}\n]+)/g;
+const MONO_RULE = /\{[^{}]*font-family\s*:\s*var\(--font-mono\)[^{}]*\}/g;
 const ALLOWED = /^(?:inherit|initial|unset|var\(--font-(?:sans|mono)\))$/;
 
 function literals(text: string): string[] {
@@ -42,6 +45,13 @@ function tokenFamilies(name: string): string[] {
   const value = new RegExp(`${name}\\s*:\\s*([^;]+);`).exec(read(TOKENS))?.[1];
   expect(value, `${name} in tokens.css`).toBeTypeOf('string');
   return (value as string).split(',').map((f) => f.trim().replace(/^['"]|['"]$/g, ''));
+}
+
+function presetFamilies(name: string): string[] {
+  const presets = goSources['internal/theme/presets.go'] ?? '';
+  const first = [...presets.matchAll(new RegExp(`"${name}":\\s*"([^",]+)`, 'g'))].map((m) => m[1].trim());
+  expect(first.length, `${name} in presets.go`).toBeGreaterThanOrEqual(3);
+  return first;
 }
 
 function bundledFaces(): Set<string> {
@@ -65,6 +75,22 @@ describe('font tokens', () => {
     expect(offenders).toEqual([]);
   });
 
+  it('sets a typeface through the font shorthand nowhere', () => {
+    const offenders = styled.flatMap((path) =>
+      [...read(path).matchAll(SHORTHAND)].map((m) => m[1].trim()).filter((v) => v !== 'inherit').map((v) => `${path}: font: ${v}`),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  // JetBrains Mono joins "www", "//", "!=" and "->" into single glyphs; text shown as "exactly what is
+  // sent", a path or a licence has to read character by character.
+  it('turns ligatures off wherever the monospace font is used', () => {
+    const offenders = styled.flatMap((path) =>
+      [...read(path).matchAll(MONO_RULE)].filter((m) => !/font-variant-ligatures\s*:\s*none/.test(m[0])).map(() => path),
+    );
+    expect(offenders).toEqual([]);
+  });
+
   it('keeps no trace of the previous interface font', () => {
     const offenders = files.filter((path) => /inter[\s-]tight/i.test(read(path)));
     expect(offenders).toEqual([]);
@@ -74,6 +100,7 @@ describe('font tokens', () => {
     const faces = bundledFaces();
     for (const token of ['--font-sans', '--font-mono']) {
       expect(faces, `${token} first family`).toContain(tokenFamilies(token)[0]);
+      for (const family of presetFamilies(token)) expect(faces, `${token} first family in presets.go`).toContain(family);
     }
   });
 });

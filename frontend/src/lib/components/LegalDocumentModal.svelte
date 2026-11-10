@@ -285,6 +285,7 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     font-family: var(--font-mono);
+    font-variant-ligatures: none;
     font-size: var(--font-xs);
     line-height: 1.5;
     white-space: pre;
@@ -295,6 +296,7 @@
   .md-quote :global(code),
   .md-list :global(code) {
     font-family: var(--font-mono);
+    font-variant-ligatures: none;
     font-size: 0.92em;
     padding: 0.1em 0.4em;
     border-radius: var(--radius-xs);

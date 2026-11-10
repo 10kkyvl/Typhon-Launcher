@@ -88,6 +88,7 @@
   .folder {
     margin: 0 0 var(--space-3);
     font-family: var(--font-mono);
+    font-variant-ligatures: none;
     font-size: var(--font-sm);
     color: var(--text-2);
     overflow-wrap: anywhere;

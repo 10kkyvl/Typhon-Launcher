@@ -777,6 +777,7 @@
     border-radius: var(--radius-md);
     font-size: var(--font-xs);
     font-family: var(--font-mono);
+    font-variant-ligatures: none;
     color: var(--text);
     resize: vertical;
   }
