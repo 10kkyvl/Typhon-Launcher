@@ -62,6 +62,7 @@ Every token a `.typhontheme` file may set. *Default* is the built-in dark value 
 | `--radius-md` | length | Corner radius: medium: Buttons and input fields | `1.2rem` |
 | `--radius-lg` | length | Corner radius: large: Cards | `1.8rem` |
 | `--radius-xl` | length | Corner radius: largest: Dialogs, large banners and pill filters | `2.4rem` |
+| `--radius-control` | length | Corner radius: controls: The search field and the button groups of the top bar; `999px` draws them as pills, a value like `0.8rem` brings square corners back | `999px` |
 | `--cut` | length | Sidebar marker corner radius: Corners of the indicator bar next to the active sidebar item | `0.2rem` |
 | `--space-1` | length | Spacing 1: The smallest gap between elements | `0.4rem` |
 | `--space-2` | length | Spacing 2: A small gap between elements | `0.8rem` |

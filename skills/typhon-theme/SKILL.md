@@ -54,6 +54,7 @@ The file is exactly this object and nothing else (unknown keys are refused):
    `--shadow-pop`: `0 0.8rem 2.4rem rgba(15, 23, 32, 0.12), 0 1px 0 rgba(255, 255, 255, 0.6) inset`,
    `--shadow-modal`: `0 2.4rem 6rem rgba(15, 23, 32, 0.16)`,
    `--shadow-lift`: `0 1.2rem 2.8rem -0.8rem rgba(15, 23, 32, 0.22)` (tint them to the theme if you like).
+   For square controls instead of pills, set `--radius-control` to a small length such as `0.8rem`.
 3. Keep the surface ladder ordered by elevation: `--bg` → `--surface` → `--surface-2` →
    `--surface-3` → `--surface-4`, each a small step lighter (dark base) or darker (light base).
 4. Keep text readable. Contrast ratio (WCAG) of `--text` on `--bg` and on `--surface-2` at least

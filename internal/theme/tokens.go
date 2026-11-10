@@ -54,6 +54,7 @@ var allowedTokens = []Token{
 	{"--radius-md", KindLength},
 	{"--radius-lg", KindLength},
 	{"--radius-xl", KindLength},
+	{"--radius-control", KindLength},
 	{"--cut", KindLength},
 	{"--space-1", KindLength},
 	{"--space-2", KindLength},

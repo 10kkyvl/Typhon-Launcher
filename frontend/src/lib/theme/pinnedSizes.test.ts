@@ -44,7 +44,7 @@ const before: Record<string, string> = {
 };
 
 const sizes = tokenGroups.find((g) => g.id === 'sizes')?.tokens ?? [];
-const sharedRadii = new Set(['--radius-sm', '--radius-md', '--radius-lg', '--radius-xl', '--cut']);
+const sharedRadii = new Set(['--radius-sm', '--radius-md', '--radius-lg', '--radius-xl', '--radius-control', '--cut']);
 
 describe('sizes pinned in Big Picture and the overlay', () => {
   it('cover every size token their own sources read', () => {

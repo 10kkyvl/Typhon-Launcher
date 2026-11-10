@@ -20,7 +20,7 @@ Settings → Appearance).
 |---|---|---|
 | Root size | `1rem` = 11 px | `1rem` = 10 px |
 | Fonts | Inter Tight | Onest for the interface, JetBrains Mono for paths and code; both ship with the launcher |
-| New tokens | — | `--font-mono`, `--accent-bright`, `--island-fill`, `--island-gap` |
+| New tokens | — | `--font-mono`, `--accent-bright`, `--island-fill`, `--island-gap`, `--radius-control` |
 | Accent | one colour for everything | four roles, see below |
 | Built-in themes | three | four, Blush added |
 | Defaults | blue accent, navy background, 6–18 px radii | teal accent, graphite background, 8–24 px radii, the size scale of the 2.0 design |
@@ -37,6 +37,9 @@ Settings → Appearance).
 
 The "Readability" panel in the theme editor shows these pairs and warns; it never blocks a save.
 The personal accent from Settings is applied on top of the theme and derives every role itself.
+
+The top bar's search field and button groups are rounded by `--radius-control` (`999px`, pills);
+to get square controls back, set it to a small length such as `0.8rem`.
 
 ## What happens to a 1.x theme
 

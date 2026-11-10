@@ -49,6 +49,7 @@ export const tokenGroups: readonly TokenGroup[] = [
       '--radius-md',
       '--radius-lg',
       '--radius-xl',
+      '--radius-control',
       '--cut',
       '--space-1',
       '--space-2',

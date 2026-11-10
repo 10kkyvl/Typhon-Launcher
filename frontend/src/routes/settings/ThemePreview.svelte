@@ -308,6 +308,10 @@
     font-size: var(--font-xs);
   }
 
+  .field.topbar-field {
+    border-radius: var(--radius-control);
+  }
+
   .field.focused {
     border-color: var(--accent-ring);
     box-shadow: 0 0 0 var(--space-1) var(--accent-ring);
