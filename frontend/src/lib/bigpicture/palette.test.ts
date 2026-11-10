@@ -97,3 +97,44 @@ describe('bigPicturePalette', () => {
     for (const [name, value] of Object.entries(vars)) expect(style).toContain(`${name}: ${value}`);
   });
 });
+
+describe('labels on the Big Picture accent fill', () => {
+  type Fs = { readFileSync(path: URL, encoding: 'utf8'): string; readdirSync(path: URL, options: { recursive: true }): string[] };
+  const fs = (globalThis as unknown as { process: { getBuiltinModule(id: 'node:fs'): Fs } }).process.getBuiltinModule('node:fs');
+  const SRC = new URL('../../', import.meta.url);
+  const files = [
+    ...fs.readdirSync(new URL('lib/bigpicture/', SRC), { recursive: true }).map((p) => `lib/bigpicture/${p.replaceAll('\\', '/')}`),
+    'lib/components/BigPictureShell.svelte',
+  ].filter((p) => /\.(svelte|css)$/.test(p));
+
+  interface Rule { where: string; selector: string; body: string }
+  const rules: Rule[] = files.flatMap((path) => {
+    const text = fs.readFileSync(new URL(path, SRC), 'utf8');
+    return [...text.matchAll(/([^{};]+)\{([^{}]*)\}/g)].map((m) => ({
+      where: `${path}:${text.slice(0, (m.index ?? 0) + m[1].length - m[1].trimStart().length).split('\n').length}`,
+      selector: m[1].trim().replace(/\s+/g, ' '),
+      body: m[2],
+    }));
+  });
+  // A rule that only re-colours the fill for a state (`:hover`, `:active`) keeps the label of its base rule.
+  const base = (selector: string) => selector.replace(/:(?:hover|active|focus-visible|not\([^)]*\))/g, '');
+  const onFill = rules.filter((r) => /(?:^|;)\s*background(?:-color)?\s*:\s*var\(--accent(?:-hover)?\)\s*(?:;|$)/.test(r.body));
+  const label = (r: Rule) => /(?:^|;)\s*color\s*:\s*([^;]+)/.exec(r.body)?.[1].trim();
+
+  it('finds the fills to check', () => {
+    expect(onFill.length).toBeGreaterThan(4);
+  });
+
+  // --accent-on is pinned inside Big Picture to the colour that reads on its fill; a literal white
+  // does not once the fill is re-derived for a pale accent.
+  it('draws every label and glyph on the accent fill in --accent-on', () => {
+    const colourOf = (r: Rule): string | undefined => {
+      const own = label(r);
+      if (own !== undefined || base(r.selector) === r.selector) return own;
+      const stateless = rules.find((b) => b.selector === base(r.selector) && label(b) !== undefined);
+      return stateless ? label(stateless) : undefined;
+    };
+    const bad = onFill.filter((r) => !/^var\(--accent-on\b/.test(colourOf(r) ?? ''));
+    expect(bad.map((r) => `${r.where} ${r.selector} { color: ${colourOf(r) ?? '(none)'} }`)).toEqual([]);
+  });
+});

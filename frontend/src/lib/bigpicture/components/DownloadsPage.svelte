@@ -1264,8 +1264,8 @@
   .file-choice { width: 100%; display: flex; align-items: center; gap: .715rem; padding: .715rem .66rem; border-radius: .495rem; color: var(--text); text-align: left; font: inherit; font-size: .82em; }
   .file-choice:hover, .candidate:hover { background: var(--hover); }
   .file-choice[aria-checked='true'] { background: var(--hover-strong); }
-  .check-box { width: 1.32rem; height: 1.32rem; flex: none; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border-strong); border-radius: .33rem; color: white; }
-  .check-box.on { background: var(--accent); border-color: var(--accent-bright); }
+  .check-box { width: 1.32rem; height: 1.32rem; flex: none; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border-strong); border-radius: .33rem; color: var(--accent-on); }
+  .check-box.on { background: var(--accent); border-color: var(--accent-bright); color: var(--accent-on); }
   .all-files { border-bottom: 1px solid var(--border); }
   .file-path { min-width: 0; flex: 1; overflow-wrap: anywhere; }
   .file-size { flex: none; color: var(--text-3); }

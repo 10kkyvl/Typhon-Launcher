@@ -197,7 +197,7 @@
   header { display: flex; align-items: center; justify-content: space-between; gap: 2.2rem; }
   h2, h3, p { margin: 0; }
   .filters, .actions { display: flex; flex-wrap: wrap; gap: 1.32rem; }
-  .filters .on { background: var(--accent); color: white; }
+  .filters .on { background: var(--accent); color: var(--accent-on); }
   .empty { color: var(--danger); }
   .card { display: flex; align-items: center; gap: 2.64rem; }
   .cover { flex: none; width: min(24.2rem, 34vw); }

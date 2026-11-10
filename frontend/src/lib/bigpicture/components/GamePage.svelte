@@ -972,7 +972,7 @@
   .file-row { display: flex; min-height: 5.28rem; align-items: center; gap: 1.1rem; padding: .55rem .88rem; border: 1px solid transparent; border-radius: .88rem; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
   .file-row:hover { background: var(--surface-2); }
   .check-box { width: 2.64rem; height: 2.64rem; display: grid; flex: 0 0 auto; place-items: center; border: 1px solid var(--border); border-radius: .55rem; color: var(--accent-on, white); }
-  .check-box.on { border-color: var(--accent-bright); background: var(--accent); }
+  .check-box.on { border-color: var(--accent-bright); background: var(--accent); color: var(--accent-on); }
   .file-path { min-width: 0; flex: 1; overflow: hidden; font-size: 1.375rem; text-overflow: ellipsis; white-space: nowrap; }
   .file-size { flex: 0 0 auto; color: var(--text-3); font-size: 1.32rem; font-variant-numeric: tabular-nums; }
   .selected-summary { color: var(--text-3); font-size: 1.375rem; text-align: right; }
