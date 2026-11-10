@@ -197,11 +197,8 @@ export const transfers: Record<TransfersKey, Message> = {
   'transfers.activityPopularFriends': { one: '{count} friend', other: '{count} friends' },
   'transfers.activityPopularPlayingNow': 'in game: {count}',
 
-  'transfers.authDesktopOnly': 'Only available in the desktop build',
   'transfers.authGenericError': 'Failed to sign in',
   'transfers.authGuestError': 'Failed to continue without an account',
-  'transfers.authMinimizeLabel': 'Minimize',
-  'transfers.authMaximizeLabel': 'Maximize',
   'transfers.authOfflineTitle': 'No connection to the server',
   'transfers.authServerUnavailable': 'Account server unavailable',
   'transfers.authOfflineNote': 'Your saved session has not been removed — it will resume once the server responds again.',

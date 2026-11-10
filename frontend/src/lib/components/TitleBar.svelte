@@ -22,7 +22,7 @@
       <button
         type="button"
         class="wb no-drag"
-        aria-label={msg('ui.maximize')}
+        aria-label={msg($windowMaximised ? 'ui.restore' : 'ui.maximize')}
         data-maximised={$windowMaximised}
         onclick={() => runWindowAction('toggleMaximise')}
       >

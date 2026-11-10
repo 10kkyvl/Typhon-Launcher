@@ -198,11 +198,8 @@ export const transfers = {
   },
   'transfers.activityPopularPlayingNow': 'в игре: {count}',
 
-  'transfers.authDesktopOnly': 'Доступно только в desktop-сборке',
   'transfers.authGenericError': 'Не удалось выполнить вход',
   'transfers.authGuestError': 'Не удалось продолжить без аккаунта',
-  'transfers.authMinimizeLabel': 'Свернуть',
-  'transfers.authMaximizeLabel': 'Развернуть',
   'transfers.authOfflineTitle': 'Нет связи с сервером',
   'transfers.authServerUnavailable': 'Сервер аккаунтов недоступен',
   'transfers.authOfflineNote': 'Сохранённая сессия не удалена — она восстановится, когда сервер снова ответит.',

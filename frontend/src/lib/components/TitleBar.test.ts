@@ -79,14 +79,16 @@ describe('TitleBar', () => {
     expect(html().match(/data-part="window-controls"/g)).toHaveLength(1);
   });
 
-  it('shows the restore glyph while the window is maximised', async () => {
-    const { html } = await bar();
+  it('shows the restore glyph and label while the window is maximised', async () => {
+    const { html, msg } = await bar();
     const normal = buttons(html())[1];
     expect(normal).toContain('data-maximised="false"');
+    expect(normal).toContain(`aria-label="${msg('ui.maximize')}"`);
 
     handlers.get('windows:WindowMaximise')?.();
     const restored = buttons(html())[1];
     expect(restored).toContain('data-maximised="true"');
+    expect(restored).toContain(`aria-label="${msg('ui.restore')}"`);
     expect(html()).toContain('lucide-copy');
     expect(html()).not.toContain('lucide-square');
 

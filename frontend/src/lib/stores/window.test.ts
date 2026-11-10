@@ -219,7 +219,7 @@ describe('window actions', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     const { store, toast, msg } = await load();
     await expect(store.runWindowAction('minimise')).resolves.toBeUndefined();
-    expect(toast).toHaveBeenCalledWith(msg('common.error'), 'danger');
+    expect(toast).toHaveBeenCalledWith(msg('ui.windowActionFailed'), 'danger');
     expect(error).toHaveBeenCalled();
     error.mockRestore();
   });

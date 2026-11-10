@@ -90,6 +90,6 @@ export async function runWindowAction(action: WindowAction): Promise<void> {
     await windowAction(action);
   } catch (err) {
     console.error(`window ${action}`, err);
-    toast(msg('common.error'), 'danger');
+    toast(msg('ui.windowActionFailed'), 'danger');
   }
 }

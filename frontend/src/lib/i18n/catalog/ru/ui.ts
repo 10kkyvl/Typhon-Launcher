@@ -156,6 +156,8 @@ export const ui = {
   'ui.allHistory': 'Вся история',
   'ui.minimize': 'Свернуть',
   'ui.maximize': 'Развернуть',
+  'ui.restore': 'Восстановить',
+  'ui.windowActionFailed': 'Не удалось изменить окно',
 
   'ui.installingUpdateTitle': 'Установка обновления',
   'ui.installingVersion': 'Устанавливаем версию {version}',

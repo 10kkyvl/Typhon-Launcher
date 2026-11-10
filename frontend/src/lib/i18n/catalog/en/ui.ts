@@ -158,6 +158,8 @@ export const ui: Record<UiKey, Message> = {
   'ui.allHistory': 'All history',
   'ui.minimize': 'Minimize',
   'ui.maximize': 'Maximize',
+  'ui.restore': 'Restore',
+  'ui.windowActionFailed': 'Could not change the window',
 
   'ui.installingUpdateTitle': 'Installing update',
   'ui.installingVersion': 'Installing version {version}',
