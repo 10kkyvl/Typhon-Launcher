@@ -105,8 +105,8 @@ export function supportHidden(layout: ThemeLayout | null | undefined): boolean {
 }
 
 // Items a theme leaves out of its order keep working: they are appended in
-// their default order, so a theme written before a new item existed still
-// shows it.
+// the order of SIDEBAR_ITEMS (not of the default order), so a theme written
+// before a new item existed still shows it.
 export function sidebarEntries(layout: ThemeLayout | null | undefined): SidebarEntry[] {
   const custom = layout?.sidebar?.order;
   const source = custom && custom.length > 0 ? custom : SIDEBAR_DEFAULT_ORDER;
