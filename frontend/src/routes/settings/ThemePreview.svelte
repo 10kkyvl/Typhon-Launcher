@@ -372,7 +372,7 @@
   .knob {
     width: calc(var(--space-5) - var(--space-2));
     height: calc(var(--space-5) - var(--space-2));
-    background: var(--accent-on, #fff);
+    background: var(--accent-on, var(--bg));
     border-radius: 50%;
   }
 

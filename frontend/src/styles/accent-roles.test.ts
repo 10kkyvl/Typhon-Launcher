@@ -76,3 +76,37 @@ describe('accent roles', () => {
     expect(bad).toEqual([]);
   });
 });
+
+describe('switches on --accent-bright', () => {
+  interface Rule { file: string; where: string; selector: string; body: string }
+  const rules: Rule[] = files
+    .filter((path) => !path.endsWith('.ts'))
+    .flatMap((path) => {
+      const text = read(path);
+      return [...text.matchAll(/([^{};]+)\{([^{}]*)\}/g)].map((m) => ({
+        file: path,
+        where: `${path}:${text.slice(0, (m.index ?? 0) + m[1].length - m[1].trimStart().length).split('\n').length}`,
+        selector: m[1].trim().replace(/\s+/g, ' '),
+        body: m[2],
+      }));
+    });
+  const background = (r: Rule) => /(?:^|;)\s*background(?:-color)?\s*:\s*([^;]+)/.exec(r.body)?.[1].trim();
+
+  // The knob is the label of an ON switch: on the bright track it needs a dark knob on a dark theme
+  // and a light one on a light theme, which is --bg; a personal accent brings its own --accent-on.
+  it('draws the knob of an ON switch in --accent-on over --bg', () => {
+    const knobs = rules.filter((r) => /\.knob\b/.test(r.selector) && background(r)?.includes('--accent-on'));
+    expect(knobs.length).toBeGreaterThan(0);
+    expect(knobs.filter((r) => background(r) !== 'var(--accent-on, var(--bg))').map((r) => `${r.where} ${r.selector} { background: ${background(r)} }`)).toEqual([]);
+  });
+
+  // Hovering an ON switch must not look like switching it: the track stays in the bright family.
+  it('keeps a bright track bright on hover', () => {
+    const bright = new Set(rules.filter((r) => background(r) === 'var(--accent-bright)').map((r) => `${r.file} ${r.selector}`));
+    const bad = rules.filter((r) => {
+      const plain = r.selector.replace(/:(?:hover|not\([^)]*\))/g, '');
+      return r.selector.includes(':hover') && bright.has(`${r.file} ${plain}`) && background(r) !== undefined && !background(r)?.includes('--accent-bright');
+    });
+    expect(bad.map((r) => `${r.where} ${r.selector} { background: ${background(r)} }`)).toEqual([]);
+  });
+});

@@ -55,7 +55,7 @@
   }
 
   .toggle.on:hover:not(:disabled) {
-    background: var(--accent-hover);
+    background: color-mix(in srgb, var(--accent-bright) 85%, var(--text));
   }
 
   .knob {
@@ -70,7 +70,7 @@
   }
 
   .on .knob {
-    background: var(--accent-on, #fff);
+    background: var(--accent-on, var(--bg));
     transform: translateX(1.98rem);
   }
 </style>
