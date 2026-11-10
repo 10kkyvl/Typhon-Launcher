@@ -54,9 +54,11 @@
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    padding: var(--space-2) var(--page-x);
+    margin: 0 var(--page-x) var(--space-3);
+    padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
     background: var(--warning-subtle);
-    border-bottom: 1px solid var(--border);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
     flex-shrink: 0;
   }
 
