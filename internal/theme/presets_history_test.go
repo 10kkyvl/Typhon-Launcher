@@ -14,6 +14,9 @@ func TestReleasedPresetGenerationsAreWholeSnapshots(t *testing.T) {
 	if len(releasedPresetGenerations) == 0 {
 		t.Fatal("no released preset generations")
 	}
+	for _, lost := range droppedPresets(releasedPresetGenerations) {
+		t.Error(lost)
+	}
 	for _, gen := range releasedPresetGenerations {
 		if _, ok := gen.presets[defaultTheme().ID]; !ok {
 			t.Errorf("%s: no %s preset, which forks are matched against", gen.releases, defaultTheme().ID)
@@ -37,5 +40,32 @@ func TestReleasedPresetGenerationsAreWholeSnapshots(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// droppedPresets lists every preset a generation lost against the one before
+// it: a built-in preset, once released, stays in every later generation.
+func droppedPresets(gens []presetGeneration) []string {
+	var lost []string
+	for i := 1; i < len(gens); i++ {
+		for _, id := range slices.Sorted(maps.Keys(gens[i-1].presets)) {
+			if _, ok := gens[i].presets[id]; !ok {
+				lost = append(lost, gens[i].releases+": lost preset "+id+" of "+gens[i-1].releases)
+			}
+		}
+	}
+	return lost
+}
+
+func TestDroppedPresetsSeesAShrinkingGeneration(t *testing.T) {
+	one := map[string]string{"--bg": "#000000"}
+	gens := []presetGeneration{
+		{releases: "a", presets: map[string]map[string]string{"dark": one, "light": one}},
+		{releases: "b", presets: map[string]map[string]string{"dark": one, "light": one, "blush": one}},
+		{releases: "c", presets: map[string]map[string]string{"dark": one, "blush": one}},
+	}
+	got := droppedPresets(gens)
+	if want := []string{"c: lost preset light of b"}; !slices.Equal(got, want) {
+		t.Fatalf("droppedPresets() = %v, want %v", got, want)
 	}
 }

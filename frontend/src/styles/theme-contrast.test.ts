@@ -84,10 +84,10 @@ const PAIRS: { fg: string; on: string[]; min: number }[] = [
   { fg: ON_ACCENT, on: ['--accent', '--accent-hover'], min: 4.5 },
 ];
 
-function failures(tokens: Record<string, string>): string[] {
+function failures(tokens: Record<string, string>, pairs = PAIRS): string[] {
   const out: string[] = [];
   const bg = paint(tokens, '--bg', BLACK);
-  for (const pair of PAIRS) {
+  for (const pair of pairs) {
     for (const surface of pair.on) {
       const under = surface === '--bg' ? bg : paint(tokens, surface, bg);
       const r = ratio(paint(tokens, pair.fg, under), under);
@@ -109,6 +109,13 @@ describe('built-in themes', () => {
       expect(failures((preset as Preset).tokens)).toEqual([]);
     });
   }
+
+  // High contrast keeps the accent itself an indicator (focus ring, toggles) on every level.
+  it('contrast keeps its accent at 3:1 on every surface', () => {
+    const preset = builtIns().find((p) => p.id === 'contrast');
+    expect(preset).toBeDefined();
+    expect(failures((preset as Preset).tokens, [{ fg: '--accent', on: PAGE, min: 3 }])).toEqual([]);
+  });
 
   it('tokens.css :root is the dark preset, value for value', () => {
     const dark = builtIns().find((p) => p.id === 'dark');

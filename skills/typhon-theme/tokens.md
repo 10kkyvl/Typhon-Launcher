@@ -95,7 +95,7 @@ Every token a `.typhontheme` file may set. *Default* is the built-in dark value 
 | `--font-sans` | font | Interface font: A comma-separated list of fonts; the first installed one is used | `Onest Variable, Onest, Segoe UI, system-ui, sans-serif` |
 | `--font-mono` | font | Monospace font: Paths, identifiers and other technical text; a comma-separated list, the first installed one is used | `JetBrains Mono Variable, JetBrains Mono, ui-monospace, SF Mono, Consolas, monospace` |
 | `--ease` | ease | Animation easing: Curve of regular transitions: hover, panels appearing | `cubic-bezier(0.16, 1, 0.3, 1)` |
-| `--ease-spring` | ease | Easing: springy: Curve of springy animations: avatars and buttons on game cards | `cubic-bezier(0.7, -0.15, 0.25, 1.25)` |
+| `--ease-spring` | ease | Easing: springy: Curve of springy animations: avatars and buttons on game cards | `cubic-bezier(0.34, 1.36, 0.64, 1)` |
 | `--dur` | time | Animation duration: regular: A typical transition on hover and selection | `150ms` |
 | `--dur-fast` | time | Animation duration: fast: Small transitions of buttons and menus | `150ms` |
 | `--dur-panel` | time | Animation duration: panels: Showing and hiding panels and lists | `200ms` |

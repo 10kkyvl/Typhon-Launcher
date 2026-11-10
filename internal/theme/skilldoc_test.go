@@ -170,6 +170,27 @@ func TestSkillListsEveryRefusedCSSConstruct(t *testing.T) {
 	}
 }
 
+func TestSkillNamesEveryBuiltInIDAsReserved(t *testing.T) {
+	data, err := os.ReadFile("../../skills/typhon-theme/SKILL.md")
+	if err != nil {
+		t.Fatalf("read skill: %v", err)
+	}
+	var row string
+	for _, line := range strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n") {
+		if strings.HasPrefix(line, "| `theme.id` |") {
+			row = line
+		}
+	}
+	if row == "" {
+		t.Fatal("SKILL.md has no theme.id row")
+	}
+	for _, p := range presets {
+		if !strings.Contains(row, "`"+p.ID+"`") {
+			t.Errorf("the theme.id row does not name built-in id %s as reserved", p.ID)
+		}
+	}
+}
+
 func TestSkillQuotesTheLightPresetShadows(t *testing.T) {
 	section, ok := skillSections(t, "../../skills/typhon-theme/SKILL.md")["Writing the tokens"]
 	if !ok {

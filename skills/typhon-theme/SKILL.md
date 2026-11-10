@@ -35,7 +35,7 @@ The file is exactly this object and nothing else (unknown keys are refused):
 |---|---|
 | `version` | Always the number `1`. |
 | `theme.contract` | Always the number `2`: the values follow the current token contract (`1rem` is 10 px). Without it Typhon reads the file as a theme from launcher 1.x: values equal to an old built-in preset are swapped for today's and every other `rem` length is multiplied by 1.1, so the user would not get the theme you wrote. |
-| `theme.id` | `^[a-z0-9][a-z0-9-]{0,63}$`, e.g. `ocean-night`. Not `dark`, `light` or `contrast` (those are built in). Re-importing a file with the same id replaces that theme. |
+| `theme.id` | `^[a-z0-9][a-z0-9-]{0,63}$`, e.g. `ocean-night`. Not `dark`, `light`, `contrast` or `blush` (those are built in). Re-importing a file with the same id replaces that theme. |
 | `theme.name` | 1–64 characters shown in the theme list; any language. |
 | `theme.base` | `"dark"` or `"light"`: which way the launcher derives the personal accent palette. Pick by the background lightness. |
 | `theme.tokens` | Map of token name → value. Names only from [tokens.md](tokens.md). Do not include `--ui-scale` (it belongs to a separate setting and is refused). |

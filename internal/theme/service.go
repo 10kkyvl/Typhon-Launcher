@@ -75,6 +75,7 @@ func NewServiceAt(path string) (*Service, error) {
 		pollEvery: time.Second,
 		watch:     sourceWatch{seen: map[string]sourceSeen{}},
 	}
+	s.unshadowStored()
 	if s.pending != "" && s.pending != s.confirmed {
 		s.pending = ""
 		if err := s.persist(); err != nil {
@@ -106,6 +107,29 @@ func loadState(path string) (state, error) {
 		}
 	}
 	return st, nil
+}
+
+// unshadowStored gives a stored theme whose id a later release made a
+// built-in preset's (blush) a free id, so the preset does not hide it, and
+// moves the selection with it. In memory only, like the contract conversion:
+// the file follows on the next write, and until then every startup derives
+// the same id.
+func (s *Service) unshadowStored() {
+	for i := range s.themes {
+		id := s.themes[i].ID
+		if _, ok := presetByID(id); !ok {
+			continue
+		}
+		free := s.uniqueIDLocked(id)
+		s.themes[i].ID = free
+		if s.pending == id {
+			s.pending = free
+		}
+		if s.confirmed == id {
+			s.confirmed = free
+		}
+		slog.Info("stored theme renamed off a built-in id", "id", id, "now", free)
+	}
 }
 
 // served is the copy of a stored theme handed out of the service. CSS that
