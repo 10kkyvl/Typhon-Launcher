@@ -1,5 +1,6 @@
 import { accentPalette, contrast, rgb, validAccent } from '../theme/accent';
 import { normalizeColor } from '../profile/colorNormalize';
+import { pinnedSizes } from '../theme/pinnedSizes';
 
 export const bigPicturePalette: Readonly<Record<string, string>> = {
   '--bg': '#0e0f11',
@@ -81,7 +82,7 @@ export function bigPictureVars({ shown, theme, personal }: BigPictureAccent): Re
   const own = !validAccent(personal) && theme?.base === 'dark' ? ownFamily(theme.tokens ?? {}) : null;
   const seed = normalizeColor(shown) ?? '';
   const family = own ?? (!validAccent(seed) || seed === darkAccent['--accent'] ? darkAccent : accentPalette(seed, 'dark', bigPicturePalette));
-  return { ...bigPicturePalette, ...darkStatus, ...family };
+  return { ...pinnedSizes, ...bigPicturePalette, ...darkStatus, ...family };
 }
 
 export function bigPictureStyle(accent: BigPictureAccent): string {

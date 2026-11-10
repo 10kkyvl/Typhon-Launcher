@@ -4,6 +4,7 @@
   import IconButton from '../lib/components/IconButton.svelte';
   import Tabs from '../lib/components/Tabs.svelte';
   import { msg } from '../lib/i18n';
+  import { pinnedSizesStyle } from '../lib/theme/pinnedSizes';
   import type { ChatPeer } from '../lib/services/messaging';
   import { unlockMessage } from '../lib/services/achievements';
   import { DEFAULT_OVERLAY_HOTKEY, hideOverlay, onOverlayEvent, onOverlayStatus } from '../lib/services/overlay';
@@ -100,7 +101,7 @@
 
 <svelte:window onkeydown={onKeydown} onfocus={onFocus} />
 
-<div class="overlay" bind:this={root}>
+<div class="overlay" style={pinnedSizesStyle} bind:this={root}>
   <button class="backdrop" type="button" tabindex="-1" aria-label={msg('common.close')} onclick={hide}></button>
   {#if browser}
     <OverlayBrowser {shown} onclose={() => (browser = false)} />
@@ -169,6 +170,7 @@
     position: fixed;
     inset: 0;
     background: color-mix(in srgb, var(--bg) 55%, transparent);
+    font-size: var(--font-md);
   }
 
   .backdrop {
