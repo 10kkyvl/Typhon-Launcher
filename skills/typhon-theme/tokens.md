@@ -34,11 +34,12 @@ Every token a `.typhontheme` file may set. *Default* is the built-in dark value 
 
 | Token | Kind | What it paints | Default |
 |---|---|---|---|
-| `--accent` | color | Accent: buttons and highlights: Main buttons, selected items and indicators. The personal accent from settings is applied on top | `#0b7285` |
+| `--accent` | color | Accent: buttons and highlights: Fill of main buttons and filled badges, always behind a label. The personal accent from settings is applied on top | `#0b7285` |
 | `--accent-hover` | color | Accent on hover: Main button color while the pointer is over it | `#0d7a8f` |
 | `--accent-subtle` | color | Accent: soft background: Background of selected filters, marked reactions and tags | `rgba(44, 207, 232, 0.16)` |
 | `--accent-text` | color | Accent: text and links: Links and text on the soft accent background | `#8be9f7` |
 | `--accent-ring` | color | Accent: outline and glow: Outline of a focused field and the glow of the main button | `rgba(44, 207, 232, 0.75)` |
+| `--accent-bright` | color | Accent: indicators: Progress bars, switches, checkboxes, selection borders and markers: it has to stand out on every surface | `#2ccfe8` |
 
 ## Status colors
 

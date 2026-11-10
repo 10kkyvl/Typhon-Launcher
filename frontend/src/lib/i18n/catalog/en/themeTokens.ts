@@ -41,7 +41,7 @@ export const themeTokens: Record<ThemeTokensKey, Message> = {
   'settings.themeTokenHint.text-3': 'Hints, explanations and placeholder text in fields',
 
   'settings.themeToken.accent': 'Accent: buttons and highlights',
-  'settings.themeTokenHint.accent': 'Main buttons, selected items and indicators. The personal accent from settings is applied on top',
+  'settings.themeTokenHint.accent': 'Fill of main buttons and filled badges, always behind a label. The personal accent from settings is applied on top',
   'settings.themeToken.accent-hover': 'Accent on hover',
   'settings.themeTokenHint.accent-hover': 'Main button color while the pointer is over it',
   'settings.themeToken.accent-subtle': 'Accent: soft background',
@@ -50,6 +50,8 @@ export const themeTokens: Record<ThemeTokensKey, Message> = {
   'settings.themeTokenHint.accent-text': 'Links and text on the soft accent background',
   'settings.themeToken.accent-ring': 'Accent: outline and glow',
   'settings.themeTokenHint.accent-ring': 'Outline of a focused field and the glow of the main button',
+  'settings.themeToken.accent-bright': 'Accent: indicators',
+  'settings.themeTokenHint.accent-bright': 'Progress bars, switches, checkboxes, selection borders and markers: it has to stand out on every surface',
 
   'settings.themeToken.success': 'Success',
   'settings.themeTokenHint.success': 'Color of successful operations and positive badges',

@@ -135,7 +135,12 @@ func TestPartialMapValueOfAnOlderGenerationIsAUserEdit(t *testing.T) {
 				t.Fatal("no dark preset")
 			}
 			want := maps.Clone(tc.kept)
-			want["--font-mono"] = dark.Tokens["--font-mono"]
+			released := releasedPresetGenerations[len(releasedPresetGenerations)-1].presets["dark"]
+			for _, tok := range allowedTokens {
+				if _, old := released[tok.Name]; !old {
+					want[tok.Name] = dark.Tokens[tok.Name]
+				}
+			}
 			got := migratedFrom(t, BaseDark, tc.stored)
 			requireTokens(t, "migrated partial map", got.Tokens, want, "")
 			requireContract2(t, "migrated partial map", got)

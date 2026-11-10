@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { accentPalette, accentPresets, contrast, validAccent } from './accent';
+import { goSources } from '../testing/sources';
 
 describe('personal accent palette', () => {
   for (const base of ['dark', 'light', 'contrast']) {
@@ -36,4 +37,32 @@ it('resolves CSS token references and uses the theme background for unsupported 
   const p = accentPalette('#388BFF', 'light', { '--bg': '#ffffff', '--surface': '#f8f9fb', '--surface-3': 'var(--surface)', '--surface-4': 'color(display-p3 1 1 1)' });
   expect(p['--accent-text']).not.toBe('#000000');
   expect(contrast(p['--accent-text'], '#f8f9fb')).toBeGreaterThanOrEqual(4.5);
+});
+
+describe('personal accent on the built-in presets', () => {
+  const source = goSources['internal/theme/presets.go'] ?? '';
+  const presets = [...source.matchAll(/^var preset\w+ = Theme\{([\s\S]*?)^\}/gm)].map((m) => ({
+    id: /\bID:\s*"([^"]+)"/.exec(m[1])?.[1] ?? '',
+    base: /\bBase:\s*Base(\w+)/.exec(m[1])?.[1].toLowerCase() ?? '',
+    tokens: Object.fromEntries([...m[1].matchAll(/"(--[\w-]+)":\s*"([^"]*)"/g)].map((t) => [t[1], t[2]])),
+  }));
+  const surfaces = ['--bg', '--bg-sidebar', '--surface', '--surface-2', '--surface-3', '--surface-4'];
+
+  it('reads the four presets', () => {
+    expect(presets.map((p) => p.id)).toEqual(['dark', 'light', 'contrast', 'blush']);
+  });
+
+  for (const seed of ['#14202C', '#F2E6B8', '#4F6BFF', '#000000', '#FFFFFF', '#E45D87']) {
+    it(`${seed}: indicators stand out and labels read on every preset`, () => {
+      for (const preset of presets) {
+        const p = accentPalette(seed, preset.base, preset.tokens);
+        expect(p['--accent-bright'], `${preset.id} --accent-bright`).toMatch(/^#[0-9a-f]{6}$/);
+        for (const name of surfaces) {
+          expect(contrast(p['--accent-bright'], preset.tokens[name]), `${preset.id} bright on ${name}`).toBeGreaterThanOrEqual(3);
+        }
+        expect(contrast(p['--accent'], p['--accent-on']), `${preset.id} label`).toBeGreaterThanOrEqual(4.5);
+        expect(contrast(p['--accent-hover'], p['--accent-on']), `${preset.id} hover label`).toBeGreaterThanOrEqual(4.5);
+      }
+    });
+  }
 });

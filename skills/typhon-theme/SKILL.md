@@ -44,7 +44,7 @@ The file is exactly this object and nothing else (unknown keys are refused):
 
 ## Writing the tokens
 
-1. **Always set all 24 color tokens** (groups Background, Surfaces, Text, Accent, Status in
+1. **Always set all 25 color tokens** (groups Background, Surfaces, Text, Accent, Status in
    [tokens.md](tokens.md)). A token left out falls back to the built-in *dark* value, so a light
    theme with missing colors ends up half dark.
 2. Size, font, animation and shadow tokens are optional. Leave them out unless the user asked for
@@ -58,12 +58,15 @@ The file is exactly this object and nothing else (unknown keys are refused):
    `--surface-3` → `--surface-4`, each a small step lighter (dark base) or darker (light base).
 4. Keep text readable. Contrast ratio (WCAG) of `--text` on `--bg` and on `--surface-2` at least
    7:1, `--text-2` at least 4.5:1, `--text-3` at least 3:1. White text sits on `--accent` buttons,
-   so `--accent` needs at least 3:1 against `#ffffff`. The launcher does not check contrast for
-   you — compute it before writing the file.
+   so `--accent` needs at least 4.5:1 against `#ffffff`. Progress bars, switches, checkboxes and
+   selection borders use `--accent-bright`, focus outlines `--accent-ring`: both need at least 3:1
+   against every surface. The launcher does not check contrast for you — compute it before writing
+   the file.
 5. Derive the accent family from one hue: `--accent-hover` a step lighter (dark base) or darker
-   (light base); `--accent-subtle` the accent at 0.12–0.18 alpha; `--accent-ring` the accent at
-   about 0.5 alpha; `--accent-text` a lighter (dark base) or darker (light base) tint readable on
-   `--accent-subtle`. Same pattern for `--success`, `--warning`, `--danger` and their `-subtle`.
+   (light base); `--accent-subtle` the accent at 0.12–0.18 alpha; `--accent-bright` a lighter
+   (dark base) or darker (light base) shade that stands out on every surface; `--accent-ring`
+   `--accent-bright` at 0.75 alpha or more; `--accent-text` a lighter (dark base) or darker (light
+   base) tint readable on `--accent-subtle`. Same pattern for `--success`, `--warning`, `--danger` and their `-subtle`.
 6. If the user has a personal accent color set in Typhon, it is painted over `--accent*`; mention
    this when they say the accent did not change.
 
@@ -133,11 +136,12 @@ A complete dark theme ("night ocean": deep blue with a teal accent):
       "--text": "#e8f3f6",
       "--text-2": "#97b2c0",
       "--text-3": "#6d8a99",
-      "--accent": "#13877d",
-      "--accent-hover": "#18a194",
-      "--accent-subtle": "rgba(19, 135, 125, 0.18)",
+      "--accent": "#117a71",
+      "--accent-hover": "#128076",
+      "--accent-subtle": "rgba(17, 122, 113, 0.18)",
       "--accent-text": "#6fe0d3",
-      "--accent-ring": "rgba(19, 135, 125, 0.5)",
+      "--accent-ring": "rgba(63, 209, 195, 0.75)",
+      "--accent-bright": "#3fd1c3",
       "--success": "#5cc28a",
       "--success-subtle": "rgba(92, 194, 138, 0.13)",
       "--warning": "#e0b25c",
@@ -156,7 +160,7 @@ A complete dark theme ("night ocean": deep blue with a teal accent):
       `name`, `base`, `tokens`, `css` and, if the user asked to move or hide something, `layout`.
 - [ ] Every `layout` id is in layout.md, none appears twice, `settings` is not hidden.
 - [ ] `css` has no backslash and nothing from the refused list in Custom CSS.
-- [ ] All 24 color tokens are present (plus the three shadows for a light base); every token name
+- [ ] All 25 color tokens are present (plus the three shadows for a light base); every token name
       is in tokens.md; no `--ui-scale`.
 - [ ] Every value matches its kind; no quotes anywhere inside values.
 - [ ] Contrast targets from step 4 hold (state the ratios you computed).

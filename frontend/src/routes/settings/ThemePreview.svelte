@@ -297,7 +297,7 @@
   }
 
   .field.focused {
-    border-color: var(--accent);
+    border-color: var(--accent-ring);
     box-shadow: 0 0 0 var(--space-1) var(--accent-ring);
     color: var(--text);
   }
@@ -340,7 +340,7 @@
   .progress-fill {
     width: 64%;
     height: 100%;
-    background: var(--accent);
+    background: var(--accent-bright);
   }
 
   .checks {
@@ -365,7 +365,7 @@
     width: calc(var(--space-5) * 1.8);
     height: var(--space-5);
     padding: var(--space-1);
-    background: var(--accent);
+    background: var(--accent-bright);
     border-radius: var(--space-5);
   }
 

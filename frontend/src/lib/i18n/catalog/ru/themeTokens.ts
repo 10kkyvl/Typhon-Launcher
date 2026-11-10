@@ -38,7 +38,7 @@ export const themeTokens = {
   'settings.themeTokenHint.text-3': 'Подсказки, пояснения и текст-заполнитель в полях',
 
   'settings.themeToken.accent': 'Акцент: кнопки и выделение',
-  'settings.themeTokenHint.accent': 'Главные кнопки, выбранные элементы и индикаторы. Личный акцент из настроек накладывается поверх',
+  'settings.themeTokenHint.accent': 'Заливка главных кнопок и залитых меток, всегда под надписью. Личный акцент из настроек накладывается поверх',
   'settings.themeToken.accent-hover': 'Акцент при наведении',
   'settings.themeTokenHint.accent-hover': 'Цвет главной кнопки, когда на неё наведён курсор',
   'settings.themeToken.accent-subtle': 'Акцент: мягкая подложка',
@@ -47,6 +47,8 @@ export const themeTokens = {
   'settings.themeTokenHint.accent-text': 'Ссылки и текст на мягкой подложке акцента',
   'settings.themeToken.accent-ring': 'Акцент: обводка и свечение',
   'settings.themeTokenHint.accent-ring': 'Обводка при выборе поля и свечение главной кнопки',
+  'settings.themeToken.accent-bright': 'Акцент: индикаторы',
+  'settings.themeTokenHint.accent-bright': 'Полосы прогресса, переключатели, флажки, рамки выбора и метки: должен быть заметен на любой поверхности',
 
   'settings.themeToken.success': 'Успех',
   'settings.themeTokenHint.success': 'Цвет успешных операций и положительных значков',

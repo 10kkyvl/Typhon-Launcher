@@ -69,7 +69,7 @@ export function accentPalette(color: string, base: string, tokens: Record<string
   }
   const subtle = hex(mix(rgb(backgrounds[1]), main, .14));
   return {
-    '--accent': hex(main), '--accent-hover': hex(hover), '--accent-on': foreground,
+    '--accent': hex(main), '--accent-hover': hex(hover), '--accent-on': foreground, '--accent-bright': hex(main),
     '--accent-subtle': subtle,
     '--accent-text': hex(readable(seed, [...backgrounds, subtle], 4.5, light)),
     '--accent-ring': hex(readable(seed, backgrounds, 3, light)),

@@ -31,7 +31,7 @@ export const tokenGroups: readonly TokenGroup[] = [
     id: 'accent',
     colors: true,
     collapsed: false,
-    tokens: ['--accent', '--accent-hover', '--accent-subtle', '--accent-text', '--accent-ring'],
+    tokens: ['--accent', '--accent-hover', '--accent-subtle', '--accent-text', '--accent-ring', '--accent-bright'],
   },
   {
     id: 'status',

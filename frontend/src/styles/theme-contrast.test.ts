@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { goSources } from '../lib/testing/sources';
 import { luminance, rgb } from '../lib/theme/accent';
-import { CONTRAST_FALLBACKS } from '../lib/theme/contrastReport';
+import { CONTRAST_FALLBACKS, CONTRAST_TOKENS, contrastReport, type RGBA } from '../lib/theme/contrastReport';
 
 /**
  * WCAG 2.2 AA for every built-in theme, measured on the preset values in internal/theme/presets.go:
@@ -97,6 +97,23 @@ function failures(tokens: Record<string, string>, pairs = PAIRS): string[] {
   return out;
 }
 
+// Indicators (progress, toggles, selection, markers) and the focus ring must stand out on every level;
+// --accent-bright also reads as text on the low surfaces, where links and labels sit.
+const INDICATORS: { fg: string; on: string[]; min: number }[] = [
+  { fg: '--accent-bright', on: PAGE, min: 3 },
+  { fg: '--accent-bright', on: LOW, min: 4.5 },
+  { fg: '--accent-ring', on: PAGE, min: 3 },
+];
+
+function rgba(value: string): RGBA {
+  expect(value).toMatch(MEASURABLE);
+  const [r, g, b] = rgb(value, BLACK);
+  const alpha = /^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\s*\)$/.exec(value)?.[1];
+  if (alpha === undefined) return [r, g, b, 1];
+  const a = Number(alpha);
+  return a === 0 ? [0, 0, 0, 0] : [r / a, g / a, b / a, a];
+}
+
 describe('built-in themes', () => {
   it('are dark, light, contrast and blush, in that order', () => {
     expect(builtIns().map((p) => p.id)).toEqual(['dark', 'light', 'contrast', 'blush']);
@@ -107,6 +124,22 @@ describe('built-in themes', () => {
       const preset = builtIns().find((p) => p.id === id);
       expect(preset, id).toBeDefined();
       expect(failures((preset as Preset).tokens)).toEqual([]);
+    });
+  }
+
+  for (const id of ['dark', 'light', 'contrast', 'blush']) {
+    it(`${id} keeps indicators and the focus ring at 3:1 on every surface`, () => {
+      const preset = builtIns().find((p) => p.id === id);
+      expect(preset, id).toBeDefined();
+      expect(failures((preset as Preset).tokens, INDICATORS)).toEqual([]);
+    });
+
+    it(`${id} shows no warning in the Settings readability panel`, () => {
+      const preset = builtIns().find((p) => p.id === id);
+      expect(preset, id).toBeDefined();
+      const tokens = { ...CONTRAST_FALLBACKS, ...(preset as Preset).tokens };
+      const colors = Object.fromEntries(CONTRAST_TOKENS.map((name) => [name, rgba(tokens[name] ?? name)]));
+      expect(contrastReport(colors).filter((row) => row.ok !== true)).toEqual([]);
     });
   }
 

@@ -41,6 +41,7 @@ var allowedTokens = []Token{
 	{"--accent-subtle", KindColor},
 	{"--accent-text", KindColor},
 	{"--accent-ring", KindColor},
+	{"--accent-bright", KindColor},
 	{"--success", KindColor},
 	{"--success-subtle", KindColor},
 	{"--warning", KindColor},
