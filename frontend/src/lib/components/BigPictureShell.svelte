@@ -25,6 +25,7 @@
   import Toasts from './Toasts.svelte';
   import { bigPictureGame, bigPictureSearch, cancelPendingLink } from '../stores/launchNavigation';
   import { bigPictureStyle } from '../bigpicture/palette';
+  import { displayedAccent } from '../theme/apply';
   import '../bigpicture/styles.css';
 
   let shell: HTMLElement;
@@ -234,7 +235,7 @@
 </script>
 
 <svelte:window onkeydown={trapTab} />
-<div class="big-picture" data-big-picture style={bigPictureStyle} bind:this={shell}>
+<div class="big-picture" data-big-picture style={bigPictureStyle($displayedAccent)} bind:this={shell}>
   <div class="stage" bind:this={stage} inert={menu || !!textRequest || applyingUpdate}>
     <header>
       <div class="brand"><img src="/typhon.png" alt="Typhon" /><span>Big Picture</span></div>
