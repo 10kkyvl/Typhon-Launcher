@@ -13,8 +13,8 @@ export const themeTokens: Record<ThemeTokensKey, Message> = {
 
   'settings.themeToken.bg': 'Window background',
   'settings.themeTokenHint.bg': 'The main background behind everything in the window',
-  'settings.themeToken.bg-sidebar': 'Sidebar background',
-  'settings.themeTokenHint.bg-sidebar': 'The left panel with the launcher sections',
+  'settings.themeToken.bg-sidebar': 'Avatar ring',
+  'settings.themeTokenHint.bg-sidebar': 'Ring around the status dot of the avatar on the sidebar; the colour the island shows over the window background',
 
   'settings.themeToken.surface': 'Panels and fields',
   'settings.themeTokenHint.surface': 'Background of nested panels, search fields and switches',

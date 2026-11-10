@@ -215,4 +215,5 @@ export const ui: Record<UiKey, Message> = {
   'ui.statusUpdateReadyShort': 'Restart to update',
   'ui.statusUpdateFailedShort': 'Update failed',
   'ui.statusUpdateRetry': 'Update {version} did not download. Try again',
+  'ui.statusCloudAccountShort': 'Account',
 };

@@ -10,8 +10,8 @@ export const themeTokens = {
 
   'settings.themeToken.bg': 'Фон окна',
   'settings.themeTokenHint.bg': 'Основной фон за всем содержимым окна',
-  'settings.themeToken.bg-sidebar': 'Фон боковой панели',
-  'settings.themeTokenHint.bg-sidebar': 'Левая панель с разделами лаунчера',
+  'settings.themeToken.bg-sidebar': 'Кольцо аватара',
+  'settings.themeTokenHint.bg-sidebar': 'Обводка вокруг значка статуса у аватара на боковой панели; цвет острова поверх фона окна',
 
   'settings.themeToken.surface': 'Панели и поля',
   'settings.themeTokenHint.surface': 'Фон вложенных панелей, поля поиска и переключателей',

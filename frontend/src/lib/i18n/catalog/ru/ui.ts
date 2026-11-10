@@ -213,6 +213,7 @@ export const ui = {
   'ui.statusUpdateReadyShort': 'Перезапустить',
   'ui.statusUpdateFailedShort': 'Ошибка обновления',
   'ui.statusUpdateRetry': 'Обновление {version} не скачалось. Повторить',
+  'ui.statusCloudAccountShort': 'Аккаунт',
 } as const;
 
 export type UiKey = keyof typeof ui;
