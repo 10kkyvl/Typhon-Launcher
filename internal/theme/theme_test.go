@@ -155,6 +155,7 @@ func importFilePath(t *testing.T, name string, body []byte) string {
 	t.Helper()
 	dir := t.TempDir()
 	path := filepath.Join(dir, name)
+	//nolint:gosec // G703: path is t.TempDir() plus a name the test passes; the taint pass flags it once a caller's body comes from a file read.
 	if err := os.WriteFile(path, body, 0o600); err != nil {
 		t.Fatal(err)
 	}

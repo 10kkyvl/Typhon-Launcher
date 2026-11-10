@@ -95,6 +95,9 @@ func loadState(path string) (state, error) {
 		return state{}, fmt.Errorf("load themes: %w", err)
 	}
 	for i := range st.Themes {
+		// Served migrated but not written back here: the file changes on the
+		// first ordinary write, so a failed write cannot make startup fail.
+		st.Themes[i] = toCurrentContract(st.Themes[i])
 		t := &st.Themes[i]
 		cssErr := validateCSS(t.CSS)
 		t.CSSBlocked = cssErr != nil
@@ -213,6 +216,9 @@ func (s *Service) upsertLocked(t Theme) (Theme, error) {
 	t.ID = id
 	t.BuiltIn = false
 	t.UpdatedAt = time.Now().UTC()
+	// Every theme reaching here is on the current contract: imports were
+	// migrated in decodeTheme, and an editor save may drop the field.
+	t.Contract = currentContract
 
 	before := s.themes
 	themes := make([]Theme, len(s.themes))
@@ -470,7 +476,7 @@ func decodeTheme(data []byte, name string) (Theme, error) {
 	if name != "" {
 		payload.Theme.Name = name
 	}
-	normalized, err := Validate(payload.Theme)
+	normalized, err := Validate(toCurrentContract(payload.Theme))
 	if err != nil {
 		return Theme{}, err
 	}
@@ -498,6 +504,7 @@ func (s *Service) Export(id, path string) error {
 	t.Tokens = tokens
 	t.Source = ""
 	t.CSSBlocked = false
+	t.Contract = currentContract
 	payload := file{Version: 1, Theme: t}
 	data, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {

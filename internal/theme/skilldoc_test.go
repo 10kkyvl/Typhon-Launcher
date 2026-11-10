@@ -199,6 +199,9 @@ func TestSkillExampleThemeIsAccepted(t *testing.T) {
 	if file.Version != 1 {
 		t.Fatalf("example version = %d", file.Version)
 	}
+	if file.Theme.Contract != currentContract {
+		t.Fatalf("example contract = %d, want %d: without it the launcher reads the theme as a 1.x one", file.Theme.Contract, currentContract)
+	}
 	if _, err := Validate(file.Theme); err != nil {
 		t.Fatalf("example theme refused: %v", err)
 	}

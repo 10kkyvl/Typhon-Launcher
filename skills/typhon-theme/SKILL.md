@@ -20,6 +20,7 @@ The file is exactly this object and nothing else (unknown keys are refused):
 {
   "version": 1,
   "theme": {
+    "contract": 2,
     "id": "<lowercase id>",
     "name": "<display name>",
     "base": "dark",
@@ -33,6 +34,7 @@ The file is exactly this object and nothing else (unknown keys are refused):
 | Field | Rule |
 |---|---|
 | `version` | Always the number `1`. |
+| `theme.contract` | Always the number `2`: the values follow the current token contract (`1rem` is 10 px). Without it Typhon reads the file as a theme from launcher 1.x: values equal to an old built-in preset are swapped for today's and every other `rem` length is multiplied by 1.1, so the user would not get the theme you wrote. |
 | `theme.id` | `^[a-z0-9][a-z0-9-]{0,63}$`, e.g. `ocean-night`. Not `dark`, `light` or `contrast` (those are built in). Re-importing a file with the same id replaces that theme. |
 | `theme.name` | 1–64 characters shown in the theme list; any language. |
 | `theme.base` | `"dark"` or `"light"`: which way the launcher derives the personal accent palette. Pick by the background lightness. |
@@ -113,6 +115,7 @@ A complete dark theme ("night ocean": deep blue with a teal accent):
 {
   "version": 1,
   "theme": {
+    "contract": 2,
     "id": "night-ocean",
     "name": "Night ocean",
     "base": "dark",
@@ -149,8 +152,8 @@ A complete dark theme ("night ocean": deep blue with a teal accent):
 
 ## Before handing the file over
 
-- [ ] Top level has exactly `version` (= 1) and `theme`; `theme` has only `id`, `name`, `base`,
-      `tokens`, `css` and, if the user asked to move or hide something, `layout`.
+- [ ] Top level has exactly `version` (= 1) and `theme`; `theme` has only `contract` (= 2), `id`,
+      `name`, `base`, `tokens`, `css` and, if the user asked to move or hide something, `layout`.
 - [ ] Every `layout` id is in layout.md, none appears twice, `settings` is not hidden.
 - [ ] `css` has no backslash and nothing from the refused list in Custom CSS.
 - [ ] All 24 color tokens are present (plus the three shadows for a light base); every token name

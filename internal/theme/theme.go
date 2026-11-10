@@ -34,6 +34,7 @@ type Theme struct {
 	Source     string            `json:"source,omitempty"`
 	Layout     *Layout           `json:"layout,omitempty"`
 	CSSBlocked bool              `json:"cssBlocked,omitempty"`
+	Contract   int               `json:"contract,omitempty"`
 }
 
 type file struct {
