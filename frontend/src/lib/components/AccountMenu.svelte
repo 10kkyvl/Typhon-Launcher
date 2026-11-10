@@ -1,8 +1,8 @@
 <script lang="ts">
   import { navigate, route } from '../stores/router';
   import { accountErrorText } from '../services/accountMessages';
-  import { PRESENCE_STATUSES, type PresenceStatus } from '../services/online';
-  import { STATUS_LABELS, statusDot } from '../social/presence';
+  import type { PresenceStatus } from '../services/online';
+  import { statusDot } from '../social/presence';
   import { autoAway, presenceStatus, shownPresence, updatePresenceStatus } from '../stores/presence';
   import { authState, currentUser, isOffline, signOut } from '../stores/user';
   import { ownFrame } from '../profile/frameSources';
@@ -12,7 +12,7 @@
   import Avatar from './Avatar.svelte';
   import ConfirmModal from './ConfirmModal.svelte';
   import DropdownMenu from './DropdownMenu.svelte';
-  import type { MenuItem } from './DropdownMenu.svelte';
+  import { accountMenuItems } from './accountMenu';
   import { signInFromGuest } from './sidebarStatus';
 
   let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
@@ -21,28 +21,7 @@
 
   const avatarName = $derived($currentUser ? $currentUser.displayName || $currentUser.username : isGuest ? msg('ui.guest') : '');
 
-  const statusItems = $derived<MenuItem[]>(
-    PRESENCE_STATUSES.map((status, index) => ({
-      id: `status:${status}`,
-      label: STATUS_LABELS[status],
-      dot: statusDot(status),
-      checked: $presenceStatus === status,
-      separator: index === 0,
-    })),
-  );
-
-  const profileMenu = $derived<MenuItem[]>(
-    isGuest
-      ? [
-          { id: 'profile', label: msg('ui.profile') },
-          { id: 'login', label: msg('ui.signIn'), separator: true },
-        ]
-      : [
-          { id: 'profile', label: msg('ui.profile') },
-          ...statusItems,
-          { id: 'logout', label: msg('ui.signOut'), danger: true, separator: true },
-        ],
-  );
+  const profileMenu = $derived(accountMenuItems(isGuest, $presenceStatus));
 
   async function onProfileSelect(id: string) {
     if (id === 'profile') {
