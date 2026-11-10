@@ -15,6 +15,7 @@ export const pinnedSizes: Readonly<Record<string, string>> = {
   '--page-max': '255.2rem',
   '--prose-max': '83.6rem',
   '--sidebar-w': '25.52rem',
+  '--island-gap': '0.88rem',
   '--topbar-h': '6.16rem',
   '--font-xs': '1.43rem',
   '--font-sm': '1.54rem',

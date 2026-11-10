@@ -3,6 +3,7 @@
 
   --bg: #0e0f11;
   --bg-sidebar: #0b0c0e;
+  --island-fill: rgba(11, 12, 14, 0.88);
   --surface: #16181b;
   --surface-2: #1e2024;
   --surface-3: #25282c;
@@ -51,6 +52,7 @@
   --page-max: 192rem;
   --prose-max: 72rem;
   --sidebar-w: 23.2rem;
+  --island-gap: 0.8rem;
   --topbar-h: 5.6rem;
 
   --font-xs: 1.2rem;

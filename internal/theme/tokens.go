@@ -25,6 +25,7 @@ var settingsOwnedTokens = []string{"--ui-scale"}
 var allowedTokens = []Token{
 	{"--bg", KindColor},
 	{"--bg-sidebar", KindColor},
+	{"--island-fill", KindColor},
 	{"--surface", KindColor},
 	{"--surface-2", KindColor},
 	{"--surface-3", KindColor},
@@ -67,6 +68,7 @@ var allowedTokens = []Token{
 	{"--page-max", KindLength},
 	{"--prose-max", KindLength},
 	{"--sidebar-w", KindLength},
+	{"--island-gap", KindLength},
 	{"--topbar-h", KindLength},
 	{"--font-xs", KindLength},
 	{"--font-sm", KindLength},

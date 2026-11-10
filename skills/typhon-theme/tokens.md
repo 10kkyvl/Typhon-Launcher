@@ -8,6 +8,7 @@ Every token a `.typhontheme` file may set. *Default* is the built-in dark value 
 |---|---|---|---|
 | `--bg` | color | Window background: The main background behind everything in the window | `#0e0f11` |
 | `--bg-sidebar` | color | Sidebar background: The left panel with the launcher sections | `#0b0c0e` |
+| `--island-fill` | color | Sidebar island: Fill of the floating sidebar panel; translucent, the window shows through it. Text on it has to stay readable over black and over white as well as over `--bg` | `rgba(11, 12, 14, 0.88)` |
 
 ## Surfaces and borders
 
@@ -75,6 +76,7 @@ Every token a `.typhontheme` file may set. *Default* is the built-in dark value 
 | `--page-max` | length | Maximum page width: Content does not stretch wider than this | `192rem` |
 | `--prose-max` | length | Text block width: Maximum width of long text such as descriptions and documents | `72rem` |
 | `--sidebar-w` | length | Sidebar width: Width of the left panel with the sections | `23.2rem` |
+| `--island-gap` | length | Island margin: Distance from the floating sidebar panel to the window edges | `0.8rem` |
 | `--topbar-h` | length | Top bar height: Height of the strip with the section title | `5.6rem` |
 | `--font-xs` | length | Text size: tiny: Captions and explanations | `1.2rem` |
 | `--font-sm` | length | Text size: small: Secondary text and button labels | `1.3rem` |

@@ -5,6 +5,7 @@ import { pinnedSizes } from '../theme/pinnedSizes';
 export const bigPicturePalette: Readonly<Record<string, string>> = {
   '--bg': '#0e0f11',
   '--bg-sidebar': '#0b0c0e',
+  '--island-fill': 'rgba(11, 12, 14, 0.88)',
   '--surface': '#16181b',
   '--surface-2': '#1e2024',
   '--surface-3': '#25282c',

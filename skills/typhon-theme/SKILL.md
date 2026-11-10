@@ -44,7 +44,7 @@ The file is exactly this object and nothing else (unknown keys are refused):
 
 ## Writing the tokens
 
-1. **Always set all 25 color tokens** (groups Background, Surfaces, Text, Accent, Status in
+1. **Always set all 26 color tokens** (groups Background, Surfaces, Text, Accent, Status in
    [tokens.md](tokens.md)). A token left out falls back to the built-in *dark* value, so a light
    theme with missing colors ends up half dark.
 2. Size, font, animation and shadow tokens are optional. Leave them out unless the user asked for
@@ -60,8 +60,10 @@ The file is exactly this object and nothing else (unknown keys are refused):
    7:1, `--text-2` at least 4.5:1, `--text-3` at least 3:1. White text sits on `--accent` buttons,
    so `--accent` needs at least 4.5:1 against `#ffffff`. Progress bars, switches, checkboxes and
    selection borders use `--accent-bright`, focus outlines `--accent-ring`: both need at least 3:1
-   against every surface. The launcher does not check contrast for you — compute it before writing
-   the file.
+   against every surface. `--island-fill` (the floating sidebar) is a translucent version of
+   `--bg-sidebar`: measure the text levels on it painted over `--bg`, over black and over white,
+   and raise its alpha until they hold. The launcher does not check contrast for you — compute it
+   before writing the file.
 5. Derive the accent family from one hue: `--accent-hover` a step lighter (dark base) or darker
    (light base); `--accent-subtle` the accent at 0.12–0.18 alpha; `--accent-bright` a lighter
    (dark base) or darker (light base) shade that stands out on every surface; `--accent-ring`
@@ -125,6 +127,7 @@ A complete dark theme ("night ocean": deep blue with a teal accent):
     "tokens": {
       "--bg": "#06111c",
       "--bg-sidebar": "#06111c",
+      "--island-fill": "rgba(6, 17, 28, 0.92)",
       "--surface": "#0a1826",
       "--surface-2": "#0e1f31",
       "--surface-3": "#14283d",
@@ -160,7 +163,7 @@ A complete dark theme ("night ocean": deep blue with a teal accent):
       `name`, `base`, `tokens`, `css` and, if the user asked to move or hide something, `layout`.
 - [ ] Every `layout` id is in layout.md, none appears twice, `settings` is not hidden.
 - [ ] `css` has no backslash and nothing from the refused list in Custom CSS.
-- [ ] All 25 color tokens are present (plus the three shadows for a light base); every token name
+- [ ] All 26 color tokens are present (plus the three shadows for a light base); every token name
       is in tokens.md; no `--ui-scale`.
 - [ ] Every value matches its kind; no quotes anywhere inside values.
 - [ ] Contrast targets from step 4 hold (state the ratios you computed).

@@ -107,6 +107,34 @@ const INDICATORS: { fg: string; on: string[]; min: number }[] = [
   { fg: '--bg', on: ['--accent-bright'], min: 3 },
 ];
 
+// The sidebar island is translucent and is to float over game art, so what sits on it is measured with
+// the island painted over the page and over the two extremes art can bring, black and white.
+const WHITE: RGB = [255, 255, 255];
+const ON_ISLAND: { fg: string; min: number }[] = [
+  { fg: '--text', min: 4.5 },
+  { fg: '--text-2', min: 4.5 },
+  { fg: '--text-3', min: 4.5 },
+  { fg: '--accent-text', min: 4.5 },
+  { fg: '--accent-bright', min: 3 },
+];
+
+function islandFailures(tokens: Record<string, string>): string[] {
+  const out: string[] = [];
+  const grounds: [string, RGB][] = [
+    ['--bg', paint(tokens, '--bg', BLACK)],
+    ['black', BLACK],
+    ['white', WHITE],
+  ];
+  for (const [ground, below] of grounds) {
+    const island = paint(tokens, '--island-fill', below);
+    for (const pair of ON_ISLAND) {
+      const r = ratio(paint(tokens, pair.fg, island), island);
+      if (r < pair.min) out.push(`${pair.fg} on --island-fill over ${ground}: ${r.toFixed(2)} < ${pair.min}`);
+    }
+  }
+  return out;
+}
+
 function rgba(value: string): RGBA {
   expect(value).toMatch(MEASURABLE);
   const [r, g, b] = rgb(value, BLACK);
@@ -134,6 +162,12 @@ describe('built-in themes', () => {
       const preset = builtIns().find((p) => p.id === id);
       expect(preset, id).toBeDefined();
       expect(failures((preset as Preset).tokens, INDICATORS)).toEqual([]);
+    });
+
+    it(`${id} keeps text and markers readable on the sidebar island over any backdrop`, () => {
+      const preset = builtIns().find((p) => p.id === id);
+      expect(preset, id).toBeDefined();
+      expect(islandFailures((preset as Preset).tokens)).toEqual([]);
     });
 
     it(`${id} shows no warning in the Settings readability panel`, () => {

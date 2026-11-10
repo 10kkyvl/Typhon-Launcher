@@ -20,7 +20,7 @@ Settings → Appearance).
 |---|---|---|
 | Root size | `1rem` = 11 px | `1rem` = 10 px |
 | Fonts | Inter Tight | Onest for the interface, JetBrains Mono for paths and code; both ship with the launcher |
-| New tokens | — | `--font-mono`, `--accent-bright` |
+| New tokens | — | `--font-mono`, `--accent-bright`, `--island-fill`, `--island-gap` |
 | Accent | one colour for everything | four roles, see below |
 | Built-in themes | three | four, Blush added |
 | Defaults | blue accent, navy background, 6–18 px radii | teal accent, graphite background, 8–24 px radii, the size scale of the 2.0 design |

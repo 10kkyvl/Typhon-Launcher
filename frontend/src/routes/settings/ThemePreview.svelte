@@ -17,6 +17,7 @@
       <span class="side-item">{msg('settings.themePreviewSidebarCatalog')}</span>
       <span class="side-item hovered">{msg('settings.themePreviewHover')}</span>
       <span class="side-item pressed">{msg('settings.themePreviewPressed')}</span>
+      <span class="side-avatar"></span>
     </div>
 
     <div class="main">
@@ -156,9 +157,20 @@
     gap: var(--space-1);
     flex: 0 0 16rem;
     min-width: 0;
+    margin: var(--island-gap) 0 var(--island-gap) var(--island-gap);
     padding: var(--space-4) var(--space-3);
-    background: var(--bg-sidebar);
-    border-right: 1px solid var(--border);
+    background: var(--island-fill);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+  }
+
+  .side-avatar {
+    width: 2rem;
+    height: 2rem;
+    margin: auto 0 0 var(--space-3);
+    border-radius: 50%;
+    background: var(--surface-3);
+    box-shadow: 0 0 0 2px var(--bg-sidebar);
   }
 
   .side-item {
@@ -465,8 +477,11 @@
       flex: 0 0 auto;
       flex-direction: row;
       flex-wrap: wrap;
-      border-right: 0;
-      border-bottom: 1px solid var(--border);
+      margin: var(--island-gap) var(--island-gap) 0;
+    }
+
+    .side-avatar {
+      display: none;
     }
   }
 </style>

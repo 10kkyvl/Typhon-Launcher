@@ -10,7 +10,7 @@ export interface TokenGroup {
 }
 
 export const tokenGroups: readonly TokenGroup[] = [
-  { id: 'background', colors: true, collapsed: false, tokens: ['--bg', '--bg-sidebar'] },
+  { id: 'background', colors: true, collapsed: false, tokens: ['--bg', '--bg-sidebar', '--island-fill'] },
   {
     id: 'surfaces',
     colors: true,
@@ -63,6 +63,7 @@ export const tokenGroups: readonly TokenGroup[] = [
       '--page-max',
       '--prose-max',
       '--sidebar-w',
+      '--island-gap',
       '--topbar-h',
       '--font-xs',
       '--font-sm',
