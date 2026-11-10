@@ -23,7 +23,7 @@ For Windows and Apple Silicon Macs. No account needed to use your library.
 - **Take your library with you.** Move it to another drive or transfer an installed game to another computer on your local network.
 - **Bring your friends along.** An optional account adds a profile, friends, online status, an activity feed and library and settings sync between computers. Account sync does not transfer game files.
 
-The interface is available in English and Russian, with themes, playtime tracking and Discord Rich Presence.
+The interface is available in English and Russian, with themes ([how they work](THEMING.en.md)), playtime tracking and Discord Rich Presence.
 
 | Your collection | A closer look |
 |---|---|
