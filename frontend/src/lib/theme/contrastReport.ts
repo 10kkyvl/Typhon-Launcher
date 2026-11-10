@@ -19,6 +19,7 @@ export const CONTRAST_CHECKS: readonly ContrastCheck[] = [
   { id: 'button', fg: '--accent-on', backgrounds: ['--accent', '--accent-hover'], min: 4.5 },
   { id: 'links', fg: '--accent-text', backgrounds: ['--accent-subtle', '--surface', '--bg'], min: 4.5 },
   { id: 'accent', fg: '--accent-bright', backgrounds: ['--bg', '--surface', '--surface-2'], min: 3 },
+  { id: 'ring', fg: '--accent-ring', backgrounds: ['--bg', '--surface', '--surface-2'], min: 3 },
   { id: 'danger', fg: '--danger', backgrounds: ['--bg', '--surface'], min: 3 },
   { id: 'success', fg: '--success', backgrounds: ['--bg', '--surface'], min: 3 },
   { id: 'warning', fg: '--warning', backgrounds: ['--bg', '--surface'], min: 3 },
