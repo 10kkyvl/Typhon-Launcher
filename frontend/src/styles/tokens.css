@@ -30,43 +30,43 @@
   --danger: #ef7070;
   --danger-subtle: rgba(239, 112, 112, 0.13);
 
-  --radius-xs: 0.44rem;
+  --radius-xs: 0.4rem;
   --radius-sm: 0.8rem;
   --radius-md: 1.2rem;
   --radius-lg: 1.8rem;
   --radius-xl: 2.4rem;
   --cut: 0.2rem;
 
-  --space-1: 0.44rem;
-  --space-2: 0.88rem;
-  --space-3: 1.32rem;
-  --space-4: 1.76rem;
-  --space-5: 2.2rem;
-  --space-6: 2.64rem;
-  --space-8: 3.52rem;
-  --space-10: 4.4rem;
-  --space-12: 5.28rem;
+  --space-1: 0.4rem;
+  --space-2: 0.8rem;
+  --space-3: 1.2rem;
+  --space-4: 1.6rem;
+  --space-5: 2rem;
+  --space-6: 2.4rem;
+  --space-8: 3.2rem;
+  --space-10: 4rem;
+  --space-12: 4.8rem;
 
-  --page-x: 3.96rem;
-  --page-max: 255.2rem;
-  --prose-max: 83.6rem;
-  --sidebar-w: 25.52rem;
-  --topbar-h: 6.16rem;
+  --page-x: 3.2rem;
+  --page-max: 192rem;
+  --prose-max: 72rem;
+  --sidebar-w: 23.2rem;
+  --topbar-h: 5.6rem;
 
-  --font-xs: 1.43rem;
-  --font-sm: 1.54rem;
-  --font-md: 1.65rem;
-  --font-lg: 1.87rem;
-  --font-xl: 2.09rem;
-  --font-title: 3.52rem;
-  --font-hero: clamp(3.96rem, 2.6vw, 4.84rem);
+  --font-xs: 1.2rem;
+  --font-sm: 1.3rem;
+  --font-md: 1.4rem;
+  --font-lg: 1.6rem;
+  --font-xl: 2rem;
+  --font-title: 2.8rem;
+  --font-hero: clamp(2.4rem, 2.2vw, 3.6rem);
 
-  --tracking-title: -0.024em;
-  --tracking-heading: -0.012em;
+  --tracking-title: -0.02em;
+  --tracking-heading: -0.01em;
 
-  --control-sm: 3.52rem;
-  --control-md: 4.18rem;
-  --control-lg: 4.84rem;
+  --control-sm: 3.2rem;
+  --control-md: 3.6rem;
+  --control-lg: 4.4rem;
 
   --font-sans: Onest Variable, Onest, Segoe UI, system-ui, sans-serif;
   --font-mono: JetBrains Mono Variable, JetBrains Mono, ui-monospace, SF Mono, Consolas, monospace;

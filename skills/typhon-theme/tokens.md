@@ -56,38 +56,38 @@ Every token a `.typhontheme` file may set. *Default* is the built-in dark value 
 
 | Token | Kind | What it paints | Default |
 |---|---|---|---|
-| `--radius-xs` | length | Corner radius: smallest: Small tags and compact elements | `0.44rem` |
+| `--radius-xs` | length | Corner radius: smallest: Small tags and compact elements | `0.4rem` |
 | `--radius-sm` | length | Corner radius: small: Small buttons and auxiliary elements | `0.8rem` |
 | `--radius-md` | length | Corner radius: medium: Buttons and input fields | `1.2rem` |
 | `--radius-lg` | length | Corner radius: large: Cards | `1.8rem` |
 | `--radius-xl` | length | Corner radius: largest: Dialogs, large banners and pill filters | `2.4rem` |
 | `--cut` | length | Sidebar marker corner radius: Corners of the indicator bar next to the active sidebar item | `0.2rem` |
-| `--space-1` | length | Spacing 1: The smallest gap between elements | `0.44rem` |
-| `--space-2` | length | Spacing 2: A small gap between elements | `0.88rem` |
-| `--space-3` | length | Spacing 3: The gap between close blocks | `1.32rem` |
-| `--space-4` | length | Spacing 4: The usual gap between blocks | `1.76rem` |
-| `--space-5` | length | Spacing 5: Inner padding of cards | `2.2rem` |
-| `--space-6` | length | Spacing 6: A large gap between blocks | `2.64rem` |
-| `--space-8` | length | Spacing 8: Padding of large blocks and empty states | `3.52rem` |
-| `--space-10` | length | Spacing 10: Bottom padding of a page and the gap between sections | `4.4rem` |
-| `--space-12` | length | Spacing 12: Side margins of a page in a very wide window | `5.28rem` |
-| `--page-x` | length | Page side margins: Distance from the content to the left and right edges of the window | `3.96rem` |
-| `--page-max` | length | Maximum page width: Content does not stretch wider than this | `255.2rem` |
-| `--prose-max` | length | Text block width: Maximum width of long text such as descriptions and documents | `83.6rem` |
-| `--sidebar-w` | length | Sidebar width: Width of the left panel with the sections | `25.52rem` |
-| `--topbar-h` | length | Top bar height: Height of the strip with the section title | `6.16rem` |
-| `--font-xs` | length | Text size: tiny: Captions and explanations | `1.43rem` |
-| `--font-sm` | length | Text size: small: Secondary text and button labels | `1.54rem` |
-| `--font-md` | length | Text size: regular: Main interface text | `1.65rem` |
-| `--font-lg` | length | Text size: large: Titles of cards and dialogs | `1.87rem` |
-| `--font-xl` | length | Text size: extra large: Titles of profile blocks, shelves and documents | `2.09rem` |
-| `--font-title` | length | Page title size: Section titles and large numbers in statistics | `3.52rem` |
-| `--font-hero` | length | Largest heading size: Not used anywhere in the interface right now | `clamp(3.96rem, 2.6vw, 4.84rem)` |
-| `--tracking-title` | length | Letter spacing: titles: Letter density in page titles; a negative value tightens it | `-0.024em` |
-| `--tracking-heading` | length | Letter spacing: headings: Letter density in card names and headings | `-0.012em` |
-| `--control-sm` | length | Control height: small: Compact buttons, filters and tabs | `3.52rem` |
-| `--control-md` | length | Control height: regular: Buttons and input fields | `4.18rem` |
-| `--control-lg` | length | Control height: large: Large buttons such as "Play" | `4.84rem` |
+| `--space-1` | length | Spacing 1: The smallest gap between elements | `0.4rem` |
+| `--space-2` | length | Spacing 2: A small gap between elements | `0.8rem` |
+| `--space-3` | length | Spacing 3: The gap between close blocks | `1.2rem` |
+| `--space-4` | length | Spacing 4: The usual gap between blocks | `1.6rem` |
+| `--space-5` | length | Spacing 5: Inner padding of cards | `2rem` |
+| `--space-6` | length | Spacing 6: A large gap between blocks | `2.4rem` |
+| `--space-8` | length | Spacing 8: Padding of large blocks and empty states | `3.2rem` |
+| `--space-10` | length | Spacing 10: Bottom padding of a page and the gap between sections | `4rem` |
+| `--space-12` | length | Spacing 12: Side margins of a page in a very wide window | `4.8rem` |
+| `--page-x` | length | Page side margins: Distance from the content to the left and right edges of the window | `3.2rem` |
+| `--page-max` | length | Maximum page width: Content does not stretch wider than this | `192rem` |
+| `--prose-max` | length | Text block width: Maximum width of long text such as descriptions and documents | `72rem` |
+| `--sidebar-w` | length | Sidebar width: Width of the left panel with the sections | `23.2rem` |
+| `--topbar-h` | length | Top bar height: Height of the strip with the section title | `5.6rem` |
+| `--font-xs` | length | Text size: tiny: Captions and explanations | `1.2rem` |
+| `--font-sm` | length | Text size: small: Secondary text and button labels | `1.3rem` |
+| `--font-md` | length | Text size: regular: Main interface text | `1.4rem` |
+| `--font-lg` | length | Text size: large: Titles of cards and dialogs | `1.6rem` |
+| `--font-xl` | length | Text size: extra large: Titles of profile blocks, shelves and documents | `2rem` |
+| `--font-title` | length | Page title size: Section titles and large numbers in statistics | `2.8rem` |
+| `--font-hero` | length | Largest heading size: Not used anywhere in the interface right now | `clamp(2.4rem, 2.2vw, 3.6rem)` |
+| `--tracking-title` | length | Letter spacing: titles: Letter density in page titles; a negative value tightens it | `-0.02em` |
+| `--tracking-heading` | length | Letter spacing: headings: Letter density in card names and headings | `-0.01em` |
+| `--control-sm` | length | Control height: small: Compact buttons, filters and tabs | `3.2rem` |
+| `--control-md` | length | Control height: regular: Buttons and input fields | `3.6rem` |
+| `--control-lg` | length | Control height: large: Large buttons such as "Play" | `4.4rem` |
 
 ## Font, animations and shadows
 
