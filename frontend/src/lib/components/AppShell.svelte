@@ -99,13 +99,14 @@
     flex-direction: row-reverse;
   }
 
+  /* What the sidebar island takes from the window edge: its width and the gap outside it. */
   :global(:root) {
-    --sidebar-now: var(--sidebar-w);
+    --sidebar-now: calc(var(--sidebar-w) + var(--island-gap));
   }
 
   @media (max-width: 1140px) {
     :global(:root) {
-      --sidebar-now: 6.4rem;
+      --sidebar-now: calc(var(--sidebar-rail-w) + var(--island-gap));
     }
   }
 

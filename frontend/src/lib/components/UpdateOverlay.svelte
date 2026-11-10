@@ -148,7 +148,7 @@
 
   .card {
     position: fixed;
-    left: calc(var(--sidebar-w) + 2.4rem);
+    left: calc(var(--sidebar-now) + 2.4rem);
     bottom: 2.4rem;
     z-index: 150;
     display: flex;
@@ -190,16 +190,6 @@
 
   .card-danger .meta {
     color: var(--danger);
-  }
-
-  @media (max-width: 1140px) {
-    .card {
-      left: 8.8rem;
-    }
-
-    .card.sidebar-right {
-      left: 2.4rem;
-    }
   }
 
   @keyframes spin {

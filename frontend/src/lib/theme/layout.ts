@@ -18,17 +18,16 @@ export const SIDEBAR_ITEMS = [
 export const SIDEBAR_DEFAULT_ORDER: readonly string[] = [
   'library',
   'catalog',
-  'installed',
-  'diskusage',
-  SEPARATOR,
   'downloads',
-  'sources',
   'friends',
   'activity',
   'stats',
-  'history',
   SEPARATOR,
+  'installed',
+  'diskusage',
   'lan',
+  'sources',
+  'history',
 ];
 export const SIDEBAR_HIDEABLE: readonly string[] = [...SIDEBAR_ITEMS, 'support'];
 

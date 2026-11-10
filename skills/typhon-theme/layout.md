@@ -19,9 +19,10 @@ layout with nothing in it is dropped, so a theme without layout wishes has no `l
 
 - `side`: `left` (default) or `right`.
 - `order`: sidebar items top to bottom, each at most once, plus the separator `-` (a thin line)
-  at most 6 times. Items left out keep showing, appended in their default order:
-  `library`, `catalog`, `installed`, `diskusage`, `-`, `downloads`, `sources`, `friends`,
-  `activity`, `stats`, `history`, `-`, `lan`.
+  at most 6 times. Without `order` the sidebar shows the default order `library`, `catalog`,
+  `downloads`, `friends`, `activity`, `stats`, `-`, `installed`, `diskusage`, `lan`, `sources`,
+  `history`. Items an `order` leaves out keep showing, appended after it in the order of the
+  table below.
 - `hidden`: items to hide, each at most once. Settings can never be hidden and has no id.
 
 | Id | What it is | In `order` | In `hidden` |

@@ -21,16 +21,18 @@
   import { toast } from '../stores/toasts';
   import { msg } from '../i18n';
   import { signOutPrompt, type ConfirmPrompt } from '../confirm/prompts';
+  import { Plate } from '../motion/plate';
   import Avatar from './Avatar.svelte';
   import BetaBadge from './BetaBadge.svelte';
   import ConfirmModal from './ConfirmModal.svelte';
   import DropdownMenu from './DropdownMenu.svelte';
   import type { MenuItem } from './DropdownMenu.svelte';
+  import SidebarStatus from './SidebarStatus.svelte';
 
   let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
   let sidebar = $state<HTMLElement>();
-  let marker = $state<{ left: number; top: number; height: number } | null>(null);
-  let glide = $state(false);
+  let plateEl = $state<HTMLElement>();
+  let plate: Plate | undefined;
 
   type NavItem = { name: RouteName; label: string; icon: typeof LayoutGrid };
 
@@ -59,27 +61,25 @@
     (name === 'library' && $route.name === 'game') ||
     (name === 'friends' && $route.name === 'user');
 
-  function placeMarker() {
-    const active = sidebar?.querySelector<HTMLElement>('.nav-item.active');
-    marker = active ? { left: active.offsetLeft, top: active.offsetTop, height: active.offsetHeight } : null;
-  }
+  const activeItem = () => sidebar?.querySelector<HTMLElement>('.nav-item.active') ?? null;
+
+  $effect(() => {
+    if (!plateEl || !sidebar) return;
+    const current = new Plate(plateEl);
+    current.observe(sidebar, activeItem);
+    plate = current;
+    return () => {
+      current.destroy();
+      plate = undefined;
+    };
+  });
 
   $effect(() => {
     void $route.name;
     void $settings?.lanSharing;
     void $themeLayout;
-    glide = true;
-    placeMarker();
-  });
-
-  $effect(() => {
-    if (!sidebar) return;
-    const observer = new ResizeObserver(() => {
-      glide = false;
-      placeMarker();
-    });
-    observer.observe(sidebar);
-    return () => observer.disconnect();
+    // After the active class lands in the DOM.
+    queueMicrotask(() => plate?.to(activeItem()));
   });
 
   const isGuest = $derived($authState === 'guest');
@@ -163,19 +163,11 @@
 {/snippet}
 
 <aside class="sidebar" class:right={$themeLayout.side === 'right'} data-part="sidebar" bind:this={sidebar}>
-  {#if marker}
-    <span
-      class="marker"
-      class:glide
-      style:left="{marker.left}px"
-      style:height="calc({marker.height}px - 2.2rem)"
-      style:transform="translateY(calc({marker.top}px + 1.1rem))"
-    ></span>
-  {/if}
+  <span class="plate" bind:this={plateEl} aria-hidden="true"></span>
   <div class="logo">
     <svg width="0" height="0" aria-hidden="true" style="position:absolute"><defs><filter id="typhon-accent-logo" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values={logoMatrix} /></filter></defs></svg>
     <img style:filter={$appearanceSettings?.tintLogo ? 'url(#typhon-accent-logo)' : undefined} class="logo-mark" src="/typhon.png" alt="" draggable="false" />
-    <span class="logo-text">Typhon</span>
+    <span class="wordmark">Typhon</span>
     <BetaBadge />
   </div>
 
@@ -232,6 +224,8 @@
       {/snippet}
     </DropdownMenu>
   </div>
+
+  <SidebarStatus />
 </aside>
 
 {#if pending}
@@ -245,22 +239,23 @@
     flex-direction: column;
     width: var(--sidebar-w);
     flex-shrink: 0;
-    height: 100%;
-    background: var(--bg-sidebar);
-    border-right: 1px solid var(--border);
-    padding: 1.8rem 1.2rem 1.4rem;
+    height: calc(100% - 2 * var(--island-gap));
+    margin: var(--island-gap) 0 var(--island-gap) var(--island-gap);
+    padding: 1.8rem 1.2rem 1.2rem;
+    background: var(--island-fill);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
   }
 
   .sidebar.right {
-    border-right: 0;
-    border-left: 1px solid var(--border);
+    margin: var(--island-gap) var(--island-gap) var(--island-gap) 0;
   }
 
   .logo {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    padding: 0.2rem 1rem 0;
+    gap: var(--space-2);
+    padding: 0.2rem 0.6rem 0;
     margin-bottom: var(--space-8);
   }
 
@@ -269,10 +264,13 @@
     height: 2.8rem;
   }
 
-  .logo-text {
-    font-size: 1.9rem;
-    font-weight: 600;
-    letter-spacing: var(--tracking-title);
+  .wordmark {
+    font-family: var(--font-wordmark);
+    font-size: var(--font-lg);
+    font-weight: 500;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text);
   }
 
   nav {
@@ -293,6 +291,7 @@
 
   .nav-item {
     position: relative;
+    z-index: 1;
     display: flex;
     align-items: center;
     gap: 1.2rem;
@@ -303,14 +302,14 @@
     font-weight: 500;
     color: var(--text-2);
     transition:
-      background var(--dur) var(--ease),
-      color var(--dur) var(--ease);
+      background var(--motion-fast) var(--ease-out),
+      color var(--motion-fast) var(--ease-out);
   }
 
   .nav-item :global(svg) {
     flex-shrink: 0;
     color: var(--text-3);
-    transition: color var(--dur) var(--ease);
+    transition: color var(--motion-fast) var(--ease-out);
   }
 
   .nav-item:hover {
@@ -323,38 +322,38 @@
   }
 
   .nav-item.active {
-    background: var(--hover-strong);
     color: var(--text);
+  }
+
+  .nav-item.active:hover {
+    background: transparent;
   }
 
   .nav-item.active :global(svg) {
     color: var(--text);
   }
 
-  .marker {
+  .plate {
     position: absolute;
+    left: 0;
     top: 0;
-    z-index: 1;
-    width: 0.3rem;
-    border-radius: var(--cut) 0.3rem 0.3rem var(--cut);
-    background: var(--accent-bright);
+    z-index: 0;
+    transform-origin: 0 0;
     pointer-events: none;
-    animation: marker-in var(--dur) var(--ease);
+    border-radius: var(--radius-md);
+    background: var(--hover-strong);
+    transition: opacity var(--motion-fast) var(--ease-out);
   }
 
-  .marker.glide {
-    transition:
-      transform var(--dur-slow) var(--ease),
-      height var(--dur-slow) var(--ease);
-  }
-
-  @keyframes marker-in {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
+  .plate::before {
+    content: '';
+    position: absolute;
+    left: 0.4rem;
+    top: 1.1rem;
+    bottom: 1.1rem;
+    width: 0.3rem;
+    border-radius: var(--cut);
+    background: var(--accent-bright);
   }
 
   .nav-label {
@@ -440,8 +439,8 @@
 
   @media (max-width: 1140px) {
     .sidebar {
-      width: 6.4rem;
-      padding: 1.8rem 1rem 1.4rem;
+      width: var(--sidebar-rail-w);
+      padding: 1.8rem 1rem 1.2rem;
       align-items: center;
     }
 
@@ -452,7 +451,7 @@
       margin-bottom: var(--space-6);
     }
 
-    .logo-text,
+    .wordmark,
     .nav-label,
     .profile-text {
       display: none;

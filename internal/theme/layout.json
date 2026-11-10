@@ -4,7 +4,7 @@
   "sidebar": {
     "sides": ["left", "right"],
     "items": ["library", "catalog", "installed", "diskusage", "downloads", "sources", "friends", "activity", "stats", "history", "lan"],
-    "defaultOrder": ["library", "catalog", "installed", "diskusage", "-", "downloads", "sources", "friends", "activity", "stats", "history", "-", "lan"],
+    "defaultOrder": ["library", "catalog", "downloads", "friends", "activity", "stats", "-", "installed", "diskusage", "lan", "sources", "history"],
     "hideable": ["library", "catalog", "installed", "diskusage", "downloads", "sources", "friends", "activity", "stats", "history", "lan", "support"]
   },
   "topbar": {

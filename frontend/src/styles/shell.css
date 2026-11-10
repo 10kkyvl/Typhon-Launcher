@@ -8,5 +8,9 @@
   --titlebar-close-text: #fff;
   --traffic-lights-w: 7.6rem;
 
+  --sidebar-rail-w: 6.4rem;
   --font-wordmark: Unbounded, Onest Variable, sans-serif;
+
+  --motion-fast: var(--dur);
+  --ease-out: var(--ease);
 }

@@ -47,22 +47,27 @@ describe('navBlocks', () => {
   const ids = (blocks: ReturnType<typeof navBlocks>) =>
     blocks.map((block) => (block.kind === 'group' ? block.ids.join(',') : '|'));
 
-  it('splits the default order into three groups', () => {
+  it('splits the default order into two groups', () => {
     expect(ids(navBlocks(sidebarEntries(null), true))).toEqual([
-      'library,catalog,installed,diskusage',
+      'library,catalog,downloads,friends,activity,stats',
       '|',
-      'downloads,sources,friends,activity,stats,history',
-      '|',
-      'lan',
+      'installed,diskusage,lan,sources,history',
     ]);
   });
 
-  it('drops the lan group and its separator when LAN sharing is off', () => {
+  it('drops lan from its group when LAN sharing is off', () => {
     expect(ids(navBlocks(sidebarEntries(null), false))).toEqual([
-      'library,catalog,installed,diskusage',
+      'library,catalog,downloads,friends,activity,stats',
       '|',
-      'downloads,sources,friends,activity,stats,history',
+      'installed,diskusage,sources,history',
     ]);
+  });
+
+  it('drops a lan group and its separator when LAN sharing is off', () => {
+    const hidden = ['installed', 'diskusage', 'sources', 'friends', 'activity', 'stats', 'history'];
+    const layout = { sidebar: { order: ['library', 'catalog', '-', 'downloads', '-', 'lan'], hidden } };
+    expect(ids(navBlocks(sidebarEntries(layout), true))).toEqual(['library,catalog', '|', 'downloads', '|', 'lan']);
+    expect(ids(navBlocks(sidebarEntries(layout), false))).toEqual(['library,catalog', '|', 'downloads']);
   });
 
   it('never leaves a leading, doubled or trailing separator', () => {

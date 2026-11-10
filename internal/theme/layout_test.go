@@ -23,6 +23,18 @@ func TestLayoutSpecParses(t *testing.T) {
 	}
 }
 
+// The 2.0 sidebar groups the everyday places first and the storage and
+// sources tools after one separator; a theme's own order is not affected.
+func TestDefaultSidebarOrderGroupsEverydayPlacesFirst(t *testing.T) {
+	want := []string{"library", "catalog", "downloads", "friends", "activity", "stats", "-", "installed", "diskusage", "lan", "sources", "history"}
+	if !slices.Equal(layoutIDs.Sidebar.DefaultOrder, want) {
+		t.Fatalf("default order = %v, want %v", layoutIDs.Sidebar.DefaultOrder, want)
+	}
+	if _, err := Validate(Theme{ID: "x", Name: "x", Base: BaseDark, Contract: currentContract, Layout: &Layout{Sidebar: &SidebarLayout{Order: want}}}); err != nil {
+		t.Fatalf("the default order is refused as a theme order: %v", err)
+	}
+}
+
 func TestParseLayoutSpecRejectsBrokenFile(t *testing.T) {
 	cases := []struct {
 		name string
