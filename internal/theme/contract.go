@@ -3,7 +3,6 @@ package theme
 import (
 	"math/big"
 	"regexp"
-	"slices"
 	"strings"
 )
 
@@ -36,7 +35,7 @@ func toCurrentContract(t Theme) Theme {
 	if !ok {
 		return t
 	}
-	if lostContractMarker(t, parent, generations) {
+	if lostContractMarker(t) {
 		t.Contract = currentContract
 		return t
 	}
@@ -147,32 +146,30 @@ func releasedParent(t Theme, generations []int) (Theme, map[string]string, bool)
 	return best.preset, best.tokens, found
 }
 
-// lostContractMarker tells a current theme that a 1.x launcher rewrote after a
-// downgrade, dropping the marker, from a real 1.x theme: migrating it again
-// would scale its lengths once more on every such round trip. It holds values
-// only today's preset has and none that only a released preset had.
-func lostContractMarker(t Theme, parent Theme, generations []int) bool {
-	releasedOnly, currentOnly := 0, 0
-	for name, value := range t.Tokens {
-		now, hasNow := parent.Tokens[name]
-		if (!hasNow || value != now) && releasedValue(parent.ID, name, value, generations) {
-			releasedOnly++
-		}
-		if hasNow && value == now && !releasedValue(parent.ID, name, value, nil) {
-			currentOnly++
+// tokensAfterReleases are the whitelist names no released preset carried.
+var tokensAfterReleases = func() map[string]bool {
+	names := map[string]bool{}
+	for _, tok := range allowedTokens {
+		names[tok.Name] = true
+	}
+	for _, gen := range releasedPresetGenerations {
+		for _, tokens := range gen.presets {
+			for name := range tokens {
+				delete(names, name)
+			}
 		}
 	}
-	return currentOnly > 0 && releasedOnly == 0
-}
+	return names
+}()
 
-// releasedValue reports whether a released generation of the preset shipped
-// value for name; nil generations means any of them.
-func releasedValue(presetID, name, value string, generations []int) bool {
-	for i, gen := range releasedPresetGenerations {
-		if generations != nil && !slices.Contains(generations, i) {
-			continue
-		}
-		if was, ok := gen.presets[presetID][name]; ok && was == value {
+// lostContractMarker tells a 2.0 theme that a 1.x launcher rewrote after a
+// downgrade, dropping the marker, from a real 1.x theme, so its lengths are
+// not scaled again on every such round trip. 1.x refused unknown token names
+// on every save and import but rewrites a loaded map as it is, and 2.0 adds
+// the new names to every fork it converts: a name 1.x never had marks 2.0.
+func lostContractMarker(t Theme) bool {
+	for name := range t.Tokens {
+		if tokensAfterReleases[name] {
 			return true
 		}
 	}

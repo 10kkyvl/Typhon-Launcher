@@ -130,23 +130,65 @@ func TestPartialMapValueOfAnOlderGenerationIsAUserEdit(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			dark, ok := presetByID("dark")
-			if !ok {
-				t.Fatal("no dark preset")
-			}
-			want := maps.Clone(tc.kept)
-			released := releasedPresetGenerations[len(releasedPresetGenerations)-1].presets["dark"]
-			for _, tok := range allowedTokens {
-				if _, old := released[tok.Name]; !old {
-					want[tok.Name] = dark.Tokens[tok.Name]
-				}
-			}
-			if accent, ok := tc.kept["--accent"]; ok {
-				want["--accent-bright"] = accent
-			}
 			got := migratedFrom(t, BaseDark, tc.stored)
-			requireTokens(t, "migrated partial map", got.Tokens, want, "")
+			requireTokens(t, "migrated partial map", got.Tokens, partialMapWant(t, tc.kept), "")
 			requireContract2(t, "migrated partial map", got)
+		})
+	}
+}
+
+// partialMapWant is a converted 1.x partial dark map: the user's values,
+// the tokens 1.x never had from today's dark preset, and the user's accent
+// on the indicators.
+func partialMapWant(t *testing.T, kept map[string]string) map[string]string {
+	t.Helper()
+	dark, ok := presetByID("dark")
+	if !ok {
+		t.Fatal("no dark preset")
+	}
+	want := maps.Clone(kept)
+	released := releasedPresetGenerations[len(releasedPresetGenerations)-1].presets["dark"]
+	for _, tok := range allowedTokens {
+		if _, old := released[tok.Name]; !old {
+			want[tok.Name] = dark.Tokens[tok.Name]
+		}
+	}
+	if accent, ok := kept["--accent"]; ok {
+		want["--accent-bright"] = accent
+	}
+	return want
+}
+
+// A 1.x map written by hand may hit a value today's preset happens to use;
+// it holds only 1.x token names, so it is converted, not taken for a 2.0
+// theme that lost its marker.
+func TestPartialMapOnTodaysValuesIsConverted(t *testing.T) {
+	cases := []struct {
+		name   string
+		stored map[string]string
+		kept   map[string]string
+	}{
+		{
+			name:   "accent with today's font size",
+			stored: map[string]string{"--accent": "#ff0000", "--font-md": "1.4rem", "--radius-md": "1rem"},
+			kept:   map[string]string{"--accent": "#ff0000", "--font-md": "1.54rem", "--radius-md": "1.1rem"},
+		},
+		{
+			name:   "today's control and page sizes",
+			stored: map[string]string{"--control-md": "3.6rem", "--page-x": "3.2rem"},
+			kept:   map[string]string{"--control-md": "3.96rem", "--page-x": "3.52rem"},
+		},
+		{
+			name:   "today's medium radius",
+			stored: map[string]string{"--radius-md": "1.2rem"},
+			kept:   map[string]string{"--radius-md": "1.32rem"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := migratedFrom(t, BaseDark, tc.stored)
+			requireTokens(t, "converted partial map", got.Tokens, partialMapWant(t, tc.kept), "")
+			requireContract2(t, "converted partial map", got)
 		})
 	}
 }

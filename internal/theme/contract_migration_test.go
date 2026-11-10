@@ -915,9 +915,9 @@ func TestCurrentContractThemeWithoutBrightIsNotFilled(t *testing.T) {
 }
 
 // A 2.0 theme that a 1.x launcher rewrote without the marker, holding its own
-// accent as the indicator colour too: the lost-marker rule sees today's values
-// and no released-only one, so it is only stamped; nothing is rescaled or
-// re-derived, and its bright stays the user's accent.
+// accent as the indicator colour too: it holds token names no 1.x launcher
+// had, so it is only stamped; nothing is rescaled or re-derived, and its
+// bright stays the user's accent.
 func TestMarkerLessThemeWithBrightOnItsAccentIsOnlyStamped(t *testing.T) {
 	tokens := currentWith(t, "dark", map[string]string{"--accent": "#e45d87", "--accent-bright": "#e45d87"})
 	got := migratedFrom(t, BaseDark, tokens)

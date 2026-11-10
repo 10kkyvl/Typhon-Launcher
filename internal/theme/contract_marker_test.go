@@ -106,6 +106,28 @@ func TestOneUserColourOnTheCurrentPresetIsOnlyStamped(t *testing.T) {
 	requireContract2(t, "marker-less current theme", got)
 }
 
+// A token name no 1.x launcher accepted can only come from 2.0, so a
+// marker-less theme holding one is stamped and nothing else.
+func TestMarkerLessThemeWithA2xTokenNameIsOnlyStamped(t *testing.T) {
+	cases := []struct {
+		name   string
+		tokens map[string]string
+	}{
+		{"partial map with an indicator colour", map[string]string{"--accent-bright": "#2ccfe8", "--font-md": "1.4rem"}},
+		{"partial map with a mono font", map[string]string{"--font-mono": "Iosevka, monospace", "--radius-md": "1rem"}},
+		// Hand-made edge: a released preset plus one 2.0 name. The name rule
+		// takes it for a 2.0 theme; that is the accepted cost of the rule.
+		{"released preset plus a mono font", withChanges(fixture141(t, "dark"), map[string]string{"--font-mono": "Iosevka, monospace"})},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := migratedFrom(t, BaseDark, tc.tokens)
+			requireTokens(t, "marker-less 2.0 theme", got.Tokens, tc.tokens, "")
+			requireContract2(t, "marker-less 2.0 theme", got)
+		})
+	}
+}
+
 func TestNewerContractFileIsRefused(t *testing.T) {
 	cases := []struct {
 		name string
