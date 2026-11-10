@@ -1,10 +1,8 @@
 <script lang="ts">
-  import { CircleAlert, Minus, Square, X } from '@lucide/svelte';
-  import { Window } from '@wailsio/runtime';
+  import { CircleAlert } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import { accountErrorField, accountErrorText, accountMessage } from '../../lib/services/accountMessages';
   import { openForgotPassword, openSupportSite } from '../../lib/services/account';
-  import { inWails } from '../../lib/services/backend';
   import { authReason, authState, authView, enterAsGuest, retryBootstrap, signIn, signUp } from '../../lib/stores/user';
   import { toast } from '../../lib/stores/toasts';
   import { msg } from '../../lib/i18n';
@@ -106,31 +104,9 @@
     if (isRegister) submitRegister();
     else submitLogin();
   }
-
-  function win(action: 'minimise' | 'maximise' | 'close') {
-    if (!inWails) {
-      toast(msg('transfers.authDesktopOnly'));
-      return;
-    }
-    if (action === 'minimise') Window.Minimise();
-    else if (action === 'maximise') Window.ToggleMaximise();
-    else Window.Close();
-  }
 </script>
 
 <div class="auth" style="--wails-draggable: drag">
-  <div class="window-controls" style="--wails-draggable: no-drag">
-    <button class="wc" aria-label={msg('transfers.authMinimizeLabel')} onclick={() => win('minimise')}>
-      <Minus size="1.6rem" strokeWidth={1.6} />
-    </button>
-    <button class="wc" aria-label={msg('transfers.authMaximizeLabel')} onclick={() => win('maximise')}>
-      <Square size="1.2rem" strokeWidth={1.6} />
-    </button>
-    <button class="wc close" aria-label={msg('common.close')} onclick={() => win('close')}>
-      <X size="1.6rem" strokeWidth={1.6} />
-    </button>
-  </div>
-
   <div class="panel" style="--wails-draggable: no-drag">
     <div class="brand">
       <img class="brand-mark" src="/typhon.png" alt="" draggable="false" />
@@ -272,42 +248,12 @@
     display: flex;
     align-items: flex-start;
     justify-content: center;
-    height: 100vh;
+    height: calc(100vh - var(--titlebar-h));
     padding: var(--space-8) 0 var(--space-5);
     overflow-y: auto;
     background:
       radial-gradient(120rem 60rem at 50% -20%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 60%),
       var(--bg);
-  }
-
-  .window-controls {
-    position: absolute;
-    top: 0.8rem;
-    right: 0.8rem;
-    display: flex;
-  }
-
-  .wc {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 4.2rem;
-    height: 3.2rem;
-    border-radius: var(--radius-sm);
-    color: var(--text-3);
-    transition:
-      background var(--dur-fast) var(--ease),
-      color var(--dur-fast) var(--ease);
-  }
-
-  .wc:hover {
-    background: var(--hover-strong);
-    color: var(--text);
-  }
-
-  .wc.close:hover {
-    background: var(--danger);
-    color: var(--bg);
   }
 
   .panel {

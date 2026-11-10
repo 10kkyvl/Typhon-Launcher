@@ -6,21 +6,17 @@
     ChevronLeft,
     ChevronRight,
     Gamepad2,
-    Minus,
-    Square,
     Users,
-    X,
   } from '@lucide/svelte';
-  import { Window } from '@wailsio/runtime';
   import { onDestroy } from 'svelte';
   import { SearchOverlay, initialState } from '../search/overlay';
-  import { inWails } from '../services/backend';
   import { searchAll, type GameHit, type ReleaseHit } from '../services/search';
   import { canGoBack, canGoForward, goBack, goForward, navigate } from '../stores/router';
   import { markAllRead, notifications, openHistory, type Notification } from '../stores/notifications';
   import { incomingCount } from '../stores/social';
   import { toast } from '../stores/toasts';
   import { toggleWatch, watchedIds } from '../stores/watchlist';
+  import { runWindowAction } from '../stores/window';
   import { clickOutside } from '../utils/clickOutside';
   import { bytesSize } from '../utils/format';
   import { searchShortcut } from '../utils/shortcut';
@@ -141,17 +137,7 @@
   function onTitlebarDoubleClick(event: MouseEvent) {
     const target = event.target as HTMLElement | null;
     if (target?.closest('.no-drag')) return;
-    win('maximise');
-  }
-
-  function win(action: 'minimise' | 'maximise' | 'close') {
-    if (!inWails) {
-      toast(msg('ui.desktopOnly'));
-      return;
-    }
-    if (action === 'minimise') Window.Minimise();
-    else if (action === 'maximise') Window.ToggleMaximise();
-    else Window.Close();
+    runWindowAction('toggleMaximise');
   }
 </script>
 
@@ -323,18 +309,6 @@
           </div>
         {/if}
       {/each}
-    </div>
-
-    <div class="window-controls" data-part="window-controls">
-      <button class="wc" aria-label={msg('ui.minimize')} onclick={() => win('minimise')}>
-        <Minus size="1.6rem" strokeWidth={1.6} />
-      </button>
-      <button class="wc" aria-label={msg('ui.maximize')} onclick={() => win('maximise')}>
-        <Square size="1.2rem" strokeWidth={1.6} />
-      </button>
-      <button class="wc close" aria-label={msg('common.close')} onclick={() => win('close')}>
-        <X size="1.6rem" strokeWidth={1.6} />
-      </button>
     </div>
   </div>
 </header>
@@ -604,34 +578,6 @@
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-pop);
     animation: pop var(--dur-fast) var(--ease);
-  }
-
-  .window-controls {
-    display: flex;
-    margin-left: 1.2rem;
-  }
-
-  .wc {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 4.2rem;
-    height: 3.2rem;
-    border-radius: var(--radius-sm);
-    color: var(--text-3);
-    transition:
-      background var(--dur-fast) var(--ease),
-      color var(--dur-fast) var(--ease);
-  }
-
-  .wc:hover {
-    background: var(--hover-strong);
-    color: var(--text);
-  }
-
-  .wc.close:hover {
-    background: #c9403f;
-    color: #fff;
   }
 
   @keyframes pop {

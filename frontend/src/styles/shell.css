@@ -1,0 +1,10 @@
+/* Window chrome geometry and fixed colours. Not theme tokens: themes do not override them. */
+:root {
+  --titlebar-h: 4rem;
+  --titlebar-btn-w: 4.6rem;
+  --titlebar-btn-icon: 1.4rem;
+  --titlebar-btn-hover: var(--hover-strong);
+  --titlebar-close-hover: #c42b1c;
+  --titlebar-close-text: #fff;
+  --traffic-lights-w: 7.6rem;
+}

@@ -225,7 +225,7 @@
     flex-direction: column;
     gap: var(--space-6);
     min-width: 0;
-    max-height: calc(100vh - var(--topbar-h) - var(--space-8));
+    max-height: calc(100vh - var(--titlebar-h) - var(--topbar-h) - var(--space-8));
     overflow-y: auto;
     overflow-x: hidden;
     scrollbar-width: none;

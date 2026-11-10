@@ -216,7 +216,7 @@
   .settings {
     display: flex;
     flex-direction: column;
-    max-height: calc(100dvh - 12rem);
+    max-height: calc(100dvh - var(--titlebar-h) - 12rem);
     padding: 1.8rem;
     background: var(--surface-2);
     border: 1px solid var(--border);

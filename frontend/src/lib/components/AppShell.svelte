@@ -90,7 +90,7 @@
 
   .shell {
     display: flex;
-    height: 100vh;
+    height: calc(100vh - var(--titlebar-h));
     min-width: 100rem;
     overflow: hidden;
   }

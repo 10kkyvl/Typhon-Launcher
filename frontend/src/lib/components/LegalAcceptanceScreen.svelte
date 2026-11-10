@@ -122,6 +122,7 @@
     position: fixed;
     inset: 0;
     z-index: 100;
+    padding-top: var(--titlebar-h);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -132,7 +133,7 @@
   .card {
     width: 52rem;
     max-width: calc(100vw - 4.8rem);
-    max-height: calc(100vh - 8rem);
+    max-height: calc(100vh - var(--titlebar-h) - 8rem);
     display: flex;
     flex-direction: column;
     background: var(--surface-2);

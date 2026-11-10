@@ -507,7 +507,7 @@
     position: sticky;
     top: 1.6rem;
     align-self: flex-start;
-    max-height: calc(100vh - var(--topbar-h) - 2 * 1.6rem);
+    max-height: calc(100vh - var(--titlebar-h) - var(--topbar-h) - 2 * 1.6rem);
     overflow-y: auto;
     overflow-x: hidden;
     padding: var(--space-1);

@@ -16,6 +16,7 @@
   import EmulatorBusyModal from './lib/components/EmulatorBusyModal.svelte';
   import LegalAcceptanceScreen from './lib/components/LegalAcceptanceScreen.svelte';
   import TelemetryConsentScreen from './lib/components/TelemetryConsentScreen.svelte';
+  import TitleBar from './lib/components/TitleBar.svelte';
   import UpdateOverlay from './lib/components/UpdateOverlay.svelte';
   import { initDegradedNotices } from './lib/stores/degraded';
   import { initGameModeNotices } from './lib/stores/gamemode';
@@ -54,6 +55,7 @@
   import { initLegalAcceptance, showLegalAcceptance } from './lib/stores/legalAcceptance';
   import { showTelemetryConsent } from './lib/stores/telemetryConsent';
   import { initUpdates } from './lib/stores/updates';
+  import { initWindowState } from './lib/stores/window';
   import { authState, initAuth } from './lib/stores/user';
   import { refreshStorage } from './lib/stores/storage';
   import Activity from './routes/activity/Activity.svelte';
@@ -75,6 +77,7 @@
   import UserProfile from './routes/user/UserProfile.svelte';
 
   onDestroy(initNativeLanguage());
+  onDestroy(initWindowState());
   initDegradedNotices();
   initGameModeNotices();
   initDownloads();
@@ -132,6 +135,7 @@
   <UpdateOverlay />
 {:else}
 {#key $locale}
+  <TitleBar />
   {#if $authState === 'bootstrapping'}
     <div class="boot">
       <img class="boot-mark" src="/typhon.png" alt="" draggable="false" />
@@ -202,7 +206,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 100vh;
+    height: calc(100vh - var(--titlebar-h));
     background: var(--bg);
   }
 

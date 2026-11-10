@@ -5,17 +5,20 @@ import { mount } from 'svelte';
 import '@fontsource-variable/onest';
 import '@fontsource-variable/jetbrains-mono';
 import './styles/tokens.css';
+import './styles/shell.css';
 import './styles/global.css';
 import { installDiagnostics } from './lib/services/diagnostics';
 import { isOverlayWindow } from './lib/services/overlay';
 import { mountThemeGuard } from './lib/components/ThemeGuard';
 import { initTheme, resetAppearance } from './lib/stores/theme';
+import { initPlatform } from './lib/stores/window';
 
 const overlay = isOverlayWindow();
 
 installDiagnostics();
 
 async function start() {
+  const platformReady = overlay ? Promise.resolve() : initPlatform();
   let settingsFailed = false;
   try {
     await initSettings();
@@ -25,6 +28,7 @@ async function start() {
     if (!overlay) toast(msg('state.settingsNotLoaded'), 'danger');
   }
   await initTheme();
+  await platformReady;
   const target = document.getElementById('app')!;
   try {
     if (overlay) {
