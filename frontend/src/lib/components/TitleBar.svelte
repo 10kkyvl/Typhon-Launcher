@@ -1,34 +1,30 @@
 <script lang="ts">
   import { Copy, Minus, Square, X } from '@lucide/svelte';
   import { msg } from '../i18n';
-  import { runWindowAction, windowControls, windowMaximised } from '../stores/window';
-
-  function onDoubleClick(event: MouseEvent) {
-    if ((event.target as HTMLElement | null)?.closest('.no-drag')) return;
-    runWindowAction('toggleMaximise');
-  }
+  import { captionDoubleClick, runWindowAction, windowControls, windowMaximised } from '../stores/window';
 </script>
 
 <!-- The frameless window's caption: the band drags the window, double-click toggles maximise. -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="titlebar" class:native={$windowControls === 'native'} style="--wails-draggable: drag" ondblclick={onDoubleClick}>
+<div class="titlebar" class:native={$windowControls === 'native'} style="--wails-draggable: drag" ondblclick={(event) => captionDoubleClick(event.target)}>
   {#if $windowControls === 'native'}
     <div class="traffic-lights" aria-hidden="true"></div>
   {:else}
     <div class="window-controls" data-part="window-controls">
-      <button type="button" class="wb no-drag" aria-label={msg('ui.minimize')} onclick={() => runWindowAction('minimise')}>
+      <button type="button" class="wb no-drag" tabindex="-1" aria-label={msg('ui.minimize')} onclick={() => runWindowAction('minimise')}>
         <Minus aria-hidden="true" />
       </button>
       <button
         type="button"
         class="wb no-drag"
+        tabindex="-1"
         aria-label={msg($windowMaximised ? 'ui.restore' : 'ui.maximize')}
         data-maximised={$windowMaximised}
         onclick={() => runWindowAction('toggleMaximise')}
       >
         {#if $windowMaximised}<Copy aria-hidden="true" />{:else}<Square aria-hidden="true" />{/if}
       </button>
-      <button type="button" class="wb close no-drag" aria-label={msg('common.close')} onclick={() => runWindowAction('close')}>
+      <button type="button" class="wb close no-drag" tabindex="-1" aria-label={msg('common.close')} onclick={() => runWindowAction('close')}>
         <X aria-hidden="true" />
       </button>
     </div>

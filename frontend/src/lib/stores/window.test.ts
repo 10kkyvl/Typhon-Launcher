@@ -195,6 +195,18 @@ describe('window maximised state', () => {
 });
 
 describe('window actions', () => {
+  it('toggles maximise on a double-click of the caption but not of a caption button', async () => {
+    const { store } = await load();
+    const caption = { closest: () => null };
+    const button = { closest: (selector: string) => (selector === '.no-drag' ? {} : null) };
+
+    store.captionDoubleClick(button as unknown as EventTarget);
+    expect(windowApi.ToggleMaximise).not.toHaveBeenCalled();
+
+    store.captionDoubleClick(caption as unknown as EventTarget);
+    expect(windowApi.ToggleMaximise).toHaveBeenCalledTimes(1);
+  });
+
   it.each([
     ['minimise', windowApi.Minimise],
     ['toggleMaximise', windowApi.ToggleMaximise],

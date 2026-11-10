@@ -71,6 +71,7 @@ describe('TitleBar', () => {
       msg('common.close'),
     ]);
     for (const tag of tags) expect(tag).toMatch(/class="[^"]*\bno-drag\b/);
+    for (const tag of tags) expect(tag).toContain('tabindex="-1"');
     expect(body).not.toContain('traffic-lights');
   });
 

@@ -81,6 +81,15 @@ export function initWindowState(): () => void {
   };
 }
 
+// A double-click on the caption toggles maximise, as on a native title bar;
+// one that lands on a caption button belongs to that button.
+export function captionDoubleClick(target: EventTarget | null): void {
+  const element = target as { closest?: (selector: string) => unknown } | null;
+  if (element?.closest?.('.no-drag')) return;
+  // runWindowAction reports its own failures and never rejects.
+  void runWindowAction('toggleMaximise');
+}
+
 export async function runWindowAction(action: WindowAction): Promise<void> {
   if (!inWails) {
     toast(msg('ui.desktopOnly'));
