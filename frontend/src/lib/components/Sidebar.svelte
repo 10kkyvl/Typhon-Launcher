@@ -161,6 +161,7 @@
     data-part="sidebar-item"
     data-id={item.name}
     class:active={isActive(item.name)}
+    aria-label={item.label}
     aria-current={isActive(item.name) ? 'page' : undefined}
     onclick={() => navigate(item.name)}
   >

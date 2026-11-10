@@ -57,6 +57,12 @@ describe('Sidebar layout', () => {
     expect(body).not.toMatch(/class="sidebar[^"]*\bright\b/);
   });
 
+  it('names every nav item for assistive tech, also when the rail hides its label', () => {
+    const items = html().match(/<button[^>]*data-part="sidebar-item"[^>]*>/g) ?? [];
+    expect(items.length).toBeGreaterThan(10);
+    for (const tag of items) expect(tag).toMatch(/aria-label="[^"]+"/);
+  });
+
   it('follows a theme order, hides items and drops support', () => {
     withLayout({ sidebar: { order: ['stats', 'library'], hidden: ['catalog', 'support'] } });
     const list = ids(html());
