@@ -21,7 +21,7 @@
   import { toast } from '../stores/toasts';
   import { msg } from '../i18n';
   import { signOutPrompt, type ConfirmPrompt } from '../confirm/prompts';
-  import { Plate } from '../motion/plate';
+  import { Plate, partsThatMove, scrollToShow } from '../motion/plate';
   import Avatar from './Avatar.svelte';
   import BetaBadge from './BetaBadge.svelte';
   import ConfirmModal from './ConfirmModal.svelte';
@@ -33,6 +33,7 @@
   let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
   let sidebar = $state<HTMLElement>();
   let plateEl = $state<HTMLElement>();
+  let nav = $state<HTMLElement>();
   let plate: Plate | undefined;
 
   type NavItem = { name: RouteName; label: string; icon: typeof LayoutGrid };
@@ -64,10 +65,12 @@
 
   const activeItem = () => sidebar?.querySelector<HTMLElement>('.nav-item.active') ?? null;
 
+  // One plate in the island for the nav and the bottom block alike: it measures nav items through the
+  // nav's scroll (motion/plate.ts measure) and follows that scroll.
   $effect(() => {
-    if (!plateEl || !sidebar) return;
+    if (!plateEl || !nav) return;
     const current = new Plate(plateEl);
-    current.observe(sidebar, activeItem);
+    current.follow(nav, activeItem);
     plate = current;
     return () => {
       current.destroy();
@@ -75,12 +78,24 @@
     };
   });
 
+  // Every part whose size can move the active item, again when the nav's groups change.
+  $effect(() => {
+    void blocks;
+    if (sidebar) plate?.observe(partsThatMove(sidebar), activeItem);
+  });
+
   $effect(() => {
     void $route.name;
     void $settings?.lanSharing;
     void $themeLayout;
     // After the active class lands in the DOM.
-    queueMicrotask(() => plate?.to(activeItem()));
+    queueMicrotask(() => {
+      const active = activeItem();
+      if (nav && active?.offsetParent === nav) {
+        nav.scrollTop = scrollToShow(active.offsetTop, active.offsetHeight, nav.scrollTop, nav.clientHeight);
+      }
+      plate?.to(active);
+    });
   });
 
   const isGuest = $derived($authState === 'guest');
@@ -168,7 +183,7 @@
     <BetaBadge />
   </div>
 
-  <nav data-part="sidebar-nav">
+  <nav data-part="sidebar-nav" bind:this={nav}>
     {#each blocks as block (block.kind === 'group' ? block.ids[0] : block.key)}
       {#if block.kind === 'group'}
         <div class="group">
@@ -250,6 +265,7 @@
 
   .logo {
     display: flex;
+    flex: none;
     align-items: center;
     gap: var(--space-2);
     padding: 0.2rem 0.6rem 0;
@@ -270,10 +286,27 @@
     color: var(--text);
   }
 
+  /* The one part that gives way in a short window. The gutter is always there (scroll, not auto), so a
+     scrollbar appearing moves nothing; it sits in the island's right padding. */
   nav {
+    position: relative;
     display: flex;
+    flex: 1 1 0;
     flex-direction: column;
     gap: var(--space-3);
+    min-height: 0;
+    margin-right: -0.6rem;
+    overflow-x: hidden;
+    overflow-y: scroll;
+  }
+
+  nav::-webkit-scrollbar {
+    width: 0.6rem;
+  }
+
+  nav::-webkit-scrollbar-thumb {
+    border-width: 0.1rem;
+    background-color: var(--hover-strong);
   }
 
   .group {
@@ -312,6 +345,11 @@
   .nav-item:hover {
     background: var(--hover);
     color: var(--text);
+  }
+
+  /* Inset: the nav scrolls and would clip an outer ring. */
+  .nav-item:focus-visible {
+    outline-offset: -2px;
   }
 
   .nav-item:hover :global(svg) {
@@ -371,7 +409,8 @@
   }
 
   .bottom {
-    margin-top: auto;
+    flex: none;
+    margin-top: var(--space-3);
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
@@ -454,7 +493,10 @@
       display: none;
     }
 
-    nav,
+    nav {
+      align-self: stretch;
+    }
+
     .bottom {
       width: 100%;
     }

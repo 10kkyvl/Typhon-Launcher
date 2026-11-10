@@ -95,6 +95,25 @@ describe('Sidebar island', () => {
     expect(rule).toMatch(/margin: var\(--island-gap\)/);
     expect(rule).toContain('width: var(--sidebar-w)');
   });
+
+  // A short window (750px, a larger interface scale) must not push the bottom block or the status row
+  // out of the island: the nav alone gives way and scrolls.
+  it('lets only the nav shrink and scroll; the brand, the bottom block and the status row keep their height', () => {
+    const sidebar = fs.readFileSync(new URL('./Sidebar.svelte', import.meta.url), 'utf8');
+    const status = fs.readFileSync(new URL('./SidebarStatus.svelte', import.meta.url), 'utf8');
+    const body = (source: string, selector: string) =>
+      new RegExp(`\\n {2}${selector.replaceAll('.', '\\.')} \\{([^}]*)\\}`).exec(source)?.[1] ?? '';
+    const nav = body(sidebar, 'nav');
+    expect(nav).toMatch(/flex: 1 1 0/);
+    expect(nav).toMatch(/min-height: 0/);
+    expect(nav).toMatch(/overflow-y: scroll/);
+    expect(nav).toMatch(/position: relative/);
+    for (const [source, selector] of [[sidebar, '.logo'], [sidebar, '.bottom'], [status, '.status']] as const) {
+      expect(body(source, selector), selector).toMatch(/flex: none/);
+    }
+    expect(body(sidebar, '.plate')).toMatch(/position: absolute/);
+    expect(body(sidebar, '.sidebar')).not.toMatch(/overflow/);
+  });
 });
 
 const games = [{ id: 'g1', title: 'Hollow' }, { id: 'g2', title: 'Celeste' }] as LibraryGame[];

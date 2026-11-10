@@ -28,21 +28,45 @@ export function plateRest(b: Box): string {
 export function plateStep(shown: Box | null, next: Box | null, opts: { motion: boolean; instant: boolean }): PlateStep {
   if (!next) return { rest: null, from: null };
   if (!shown || opts.instant || !opts.motion) return { rest: next, from: null };
-  const same = shown.x === next.x && shown.y === next.y && shown.w === next.w && shown.h === next.h;
-  return { rest: next, from: same ? null : shown };
+  return { rest: next, from: same(shown, next) ? null : shown };
 }
 
 export function plateKeyframes(from: Box, to: Box): Keyframe[] {
   return [{ transform: `${place(from)} scale(${from.w / to.w}, ${from.h / to.h})` }, { transform: plateRest(to) }];
 }
 
-// Offsets inside the island, so the plate needs nothing per side.
-export function measure(target: HTMLElement | null | undefined): Box | null {
+const same = (a: Box, b: Box) => a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
+
+// Offsets inside the plate's container (the island), so the plate needs nothing per side. An item
+// of a positioned scroller inside it (the nav) is shifted by the scroll and cut to what the
+// scroller shows; an item scrolled out has no box.
+export function measure(target: HTMLElement | null | undefined, container?: Element | null): Box | null {
   if (!target) return null;
   const w = target.offsetWidth;
   const h = target.offsetHeight;
   if (!w || !h) return null;
-  return { x: target.offsetLeft, y: target.offsetTop, w, h };
+  const parent = target.offsetParent as HTMLElement | null;
+  if (!parent || parent === container) return { x: target.offsetLeft, y: target.offsetTop, w, h };
+  const left = parent.offsetLeft + parent.clientLeft;
+  const top = parent.offsetTop + parent.clientTop;
+  const y = top + target.offsetTop - parent.scrollTop;
+  const shownTop = Math.max(y, top);
+  const shownBottom = Math.min(y + h, top + parent.clientHeight);
+  if (shownBottom - shownTop < 1) return null;
+  return { x: left + target.offsetLeft - parent.scrollLeft, y: shownTop, w, h: shownBottom - shownTop };
+}
+
+// The scroll position that shows an item of a scroller with the least movement.
+export function scrollToShow(itemTop: number, itemHeight: number, scrollTop: number, viewHeight: number): number {
+  if (itemTop < scrollTop) return itemTop;
+  if (itemTop + itemHeight > scrollTop + viewHeight) return itemTop + itemHeight - viewHeight;
+  return scrollTop;
+}
+
+// The container, its children and theirs: whatever changes size among them can move the active item.
+export function partsThatMove(container: Element): Element[] {
+  const children = [...container.children];
+  return [container, ...children, ...children.flatMap((child) => [...child.children])];
 }
 
 export function motionAllowed(root: { classList: { contains(name: string): boolean } }, reducedMotion: boolean): boolean {
@@ -72,6 +96,7 @@ export class Plate {
   private box: Box | null = null;
   private slide: Animation | null = null;
   private ro: ResizeObserver | null = null;
+  private unfollow: (() => void) | null = null;
 
   constructor(
     private readonly el: HTMLElement,
@@ -89,7 +114,10 @@ export class Plate {
   }
 
   to(target: HTMLElement | null | undefined, instant = false): void {
-    const step = plateStep(this.shown(), measure(target), { motion: this.motion(), instant });
+    const next = measure(target, this.el.offsetParent);
+    // A re-measure that finds the plate in place leaves a running slide alone.
+    if (instant && next && this.box && same(next, this.box)) return;
+    const step = plateStep(this.shown(), next, { motion: this.motion(), instant });
     this.slide?.cancel();
     this.slide = null;
     this.box = step.rest;
@@ -112,15 +140,28 @@ export class Plate {
     };
   }
 
-  observe(container: HTMLElement, current: () => HTMLElement | null | undefined): void {
+  // Re-places without a slide whenever one of the parts changes size (window width, collapse to
+  // icons, a status row growing or shrinking, fonts).
+  observe(parts: readonly Element[], current: () => HTMLElement | null | undefined): void {
     if (typeof ResizeObserver !== 'function') return;
     this.ro?.disconnect();
-    this.ro = new ResizeObserver(() => this.to(current(), true));
-    this.ro.observe(container);
+    const ro = new ResizeObserver(() => this.to(current(), true));
+    for (const part of parts) ro.observe(part);
+    this.ro = ro;
+  }
+
+  // Keeps the plate on the active item while the scroller it lives in scrolls.
+  follow(scroller: HTMLElement, current: () => HTMLElement | null | undefined): void {
+    this.unfollow?.();
+    const onScroll = () => this.to(current(), true);
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    this.unfollow = () => scroller.removeEventListener('scroll', onScroll);
   }
 
   destroy(): void {
     this.ro?.disconnect();
+    this.unfollow?.();
+    this.unfollow = null;
     this.slide?.cancel();
     this.slide = null;
   }
