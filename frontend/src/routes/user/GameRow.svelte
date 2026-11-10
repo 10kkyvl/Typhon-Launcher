@@ -63,7 +63,7 @@
 
   .tag {
     font-size: var(--font-xs);
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .title {

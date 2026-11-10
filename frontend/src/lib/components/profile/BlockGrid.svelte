@@ -326,7 +326,7 @@
   }
 
   .frame.selected {
-    border-color: var(--accent);
+    border-color: var(--accent-bright);
   }
 
   .frame.issue:not(.selected) {
@@ -338,7 +338,7 @@
   }
 
   .cell.over .frame {
-    outline: 2px dashed var(--accent);
+    outline: 2px dashed var(--accent-bright);
     outline-offset: 2px;
   }
 

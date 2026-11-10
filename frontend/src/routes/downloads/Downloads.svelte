@@ -408,7 +408,7 @@
     border-radius: var(--radius-md);
     background: var(--surface-2);
     font-size: var(--font-sm);
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .play-text {

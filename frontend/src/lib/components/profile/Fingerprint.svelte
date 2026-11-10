@@ -8,7 +8,7 @@
     hours,
     games,
     completed,
-    accent = 'var(--accent)',
+    accent = 'var(--accent-bright)',
   }: {
     genres: GenreShare[];
     hours: number;

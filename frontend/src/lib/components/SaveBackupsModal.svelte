@@ -543,7 +543,7 @@
 
   .source-link {
     padding: 0;
-    color: var(--accent);
+    color: var(--accent-text);
     text-decoration: underline;
     font-size: inherit;
   }

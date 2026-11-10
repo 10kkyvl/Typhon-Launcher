@@ -748,7 +748,7 @@
   }
 
   .candidate.current {
-    border-color: var(--accent);
+    border-color: var(--accent-bright);
     color: var(--text);
   }
 

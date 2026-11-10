@@ -116,7 +116,7 @@
     width: 100%;
     min-height: 0;
     border-radius: var(--radius-sm);
-    background: var(--accent);
+    background: var(--accent-bright);
     opacity: 0.45;
     transition: height var(--dur-panel) var(--ease);
   }

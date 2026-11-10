@@ -2048,7 +2048,7 @@
     flex-shrink: 0;
     border-radius: 50%;
     border: 2px solid var(--border);
-    border-top-color: var(--accent);
+    border-top-color: var(--accent-bright);
     animation: spin 800ms linear infinite;
   }
 
@@ -2136,7 +2136,7 @@
   }
 
   .related-title.link:hover {
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .related-meta {

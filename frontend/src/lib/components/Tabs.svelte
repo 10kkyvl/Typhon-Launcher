@@ -121,7 +121,7 @@
     bottom: -1px;
     height: 2px;
     border-radius: 2px;
-    background: var(--accent);
+    background: var(--accent-bright);
   }
 
   .pill .tab {

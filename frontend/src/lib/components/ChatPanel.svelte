@@ -552,11 +552,11 @@
   .reactions, .reaction-menu { display: flex; flex-wrap: wrap; gap: 0.33rem; margin-top: 0.495rem; }
   .reactions button, .reaction-menu button { display: inline-flex; align-items: center; gap: 0.33rem; border: 1px solid var(--border); border-radius: 1.1rem; padding: 0.22rem 0.495rem; background: var(--surface-2); cursor: pointer; font-size: 1.32rem; }
   .reactions button :global(svg), .reaction-menu button :global(svg) { width: 1.4em; height: 1.4em; }
-  .reactions button.reacted { border-color: var(--accent); background: var(--accent-subtle); }
+  .reactions button.reacted { border-color: var(--accent-bright); background: var(--accent-subtle); }
   .reaction-menu { padding: 0.44rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-4); }
   .typing { margin: 0.66rem 0; color: var(--text-3); font-size: var(--font-xs); font-style: italic; }
   .edit-input, .composer textarea { width: 100%; resize: none; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); padding: 0.77rem; font: inherit; font-size: var(--font-sm); outline: none; }
-  .edit-input:focus, .composer textarea:focus { border-color: var(--accent); }
+  .edit-input:focus, .composer textarea:focus { border-color: var(--accent-ring); }
   .message-actions { display: flex; justify-content: flex-end; gap: 0.55rem; margin-top: 0.66rem; }
   .chat-error, .disabled-copy { padding: 0.77rem 1.1rem; color: var(--danger); font-size: var(--font-xs); }
   .disabled-copy { color: var(--text-3); }

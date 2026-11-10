@@ -183,7 +183,7 @@
   .stats-section h2, .section-title h2 { margin: 0; font-size: clamp(1.375rem, 1.8vw, 2.2rem); }
   .stat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(.715rem, 1.2vw, 1.32rem); margin-top: .825rem; }
   .stat-card { min-height: 8.25rem; display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; align-content: center; align-items: center; column-gap: .77rem; row-gap: .088rem; padding: clamp(1.1rem, 1.6vw, 1.87rem); }
-  .stat-card :global(svg) { grid-row: span 2; color: var(--accent); }
+  .stat-card :global(svg) { grid-row: span 2; color: var(--accent-text); }
   .stat-card strong { font-size: clamp(1.76rem, 2.4vw, 3.08rem); line-height: 1; font-variant-numeric: tabular-nums; }
   .stat-card span { color: var(--text-3); font-size: .86em; }
   .section-title { display: flex; align-items: flex-end; justify-content: space-between; gap: 1.1rem; margin-bottom: .88rem; }

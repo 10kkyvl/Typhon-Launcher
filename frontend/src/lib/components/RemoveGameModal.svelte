@@ -295,7 +295,7 @@
   }
 
   .mode.selected {
-    border-color: var(--accent);
+    border-color: var(--accent-bright);
   }
 
   .mode:disabled {

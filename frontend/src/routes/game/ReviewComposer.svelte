@@ -292,7 +292,7 @@
 
   .toggle.positive.active {
     background: var(--accent-subtle);
-    border-color: var(--accent);
+    border-color: var(--accent-bright);
     color: var(--accent-text);
   }
 
@@ -317,7 +317,7 @@
 
   .body:focus {
     outline: none;
-    border-color: var(--accent);
+    border-color: var(--accent-ring);
   }
 
   .form-foot {

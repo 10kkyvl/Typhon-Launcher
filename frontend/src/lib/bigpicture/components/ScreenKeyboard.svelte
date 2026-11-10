@@ -74,7 +74,7 @@
   .keyboard { width: min(920px, 100%); flex-shrink: 0; margin-block: auto; padding: 28px; border: 1px solid var(--border-strong); border-radius: 20px; background: var(--surface-3); }
   h2 { font-size: 1.4em; margin-bottom: 16px; }
   input { width: 100%; padding: 14px 18px; background: var(--bg); border: 1px solid var(--border-strong); border-radius: 10px; color: var(--text); font: inherit; }
-  input:focus { outline: 3px solid var(--accent); }
+  input:focus { outline: 3px solid var(--accent-ring); }
   p { margin: 10px 0 20px; color: var(--text-2); font-size: .8em; }
   .keys { display: grid; gap: 10px; }
   .key-row { display: flex; gap: 10px; justify-content: center; }

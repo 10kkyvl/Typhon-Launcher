@@ -337,7 +337,7 @@
     z-index: 1;
     width: 0.33rem;
     border-radius: var(--cut) 0.33rem 0.33rem var(--cut);
-    background: var(--accent);
+    background: var(--accent-bright);
     pointer-events: none;
     animation: marker-in var(--dur) var(--ease);
   }

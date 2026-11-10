@@ -610,7 +610,7 @@
     width: 0.88rem;
     height: 0.88rem;
     border-radius: 50%;
-    background: var(--accent);
+    background: var(--accent-bright);
   }
 
   .eyebrow-count {

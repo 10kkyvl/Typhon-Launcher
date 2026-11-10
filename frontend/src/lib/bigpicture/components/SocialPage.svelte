@@ -665,10 +665,10 @@ import { friendsPage as sharedFriendsPage, needsSocialConsent } from '../../stor
   .presence-indicator.busy { background: var(--warning); }
   .presence-choices { display: flex; flex-wrap: wrap; gap: .605rem; margin-top: .935rem; }
   .presence-choice { min-height: 3.19rem; padding: .605rem 1.045rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-2); }
-  .presence-choice.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 24%, var(--surface-2)); }
+  .presence-choice.selected { border-color: var(--accent-bright); background: color-mix(in srgb, var(--accent) 24%, var(--surface-2)); }
   .tabs { display: flex; gap: .66rem; border-bottom: 1px solid var(--border); }
   .tab { display: inline-flex; align-items: center; gap: .66rem; min-height: 3.41rem; padding: .55rem 1.21rem; border-radius: var(--radius-md) var(--radius-md) 0 0; color: var(--text-2); }
-  .tab.selected { color: var(--text); background: color-mix(in srgb, var(--accent) 18%, var(--surface-2)); box-shadow: inset 0 -3px var(--accent); }
+  .tab.selected { color: var(--text); background: color-mix(in srgb, var(--accent) 18%, var(--surface-2)); box-shadow: inset 0 -3px var(--accent-bright); }
   .tab > span { min-width: 1.7em; padding: .11rem .44rem; border-radius: 99px; background: var(--surface-3); color: var(--text-3); text-align: center; font-size: .8em; }
   .friend-section, .request-section, .games-section { display: flex; flex-direction: column; gap: .88rem; }
   .people-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, max(33rem, 13em)), 1fr)); gap: 1.1rem; }

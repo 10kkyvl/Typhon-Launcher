@@ -277,7 +277,7 @@
     display: block;
     width: 100%;
     border-radius: var(--radius-sm);
-    background: var(--accent);
+    background: var(--accent-bright);
     transition: height var(--dur-panel) var(--ease);
   }
 
@@ -351,7 +351,7 @@
   .share-fill {
     display: block;
     height: 100%;
-    background: var(--accent);
+    background: var(--accent-bright);
   }
 
   .muted {

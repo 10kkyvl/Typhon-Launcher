@@ -372,7 +372,7 @@
   .theme { background: transparent; border: 1px solid var(--border); border-radius: var(--radius-md); padding: .55rem; color: var(--text-2); font: inherit; font-size: 1.155rem; cursor: pointer; min-width: 0; }
   .theme-swatch { display: block; height: 4.4rem; border-radius: .44rem; margin-bottom: .55rem; }
   .theme-swatch.auto { background: linear-gradient(125deg, var(--accent-subtle), var(--accent)); }
-  .selected { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .selected { outline: 2px solid var(--accent-bright); outline-offset: 1px; }
   .custom { display: flex; flex-direction: column; gap: 1.1rem; margin-top: 1.54rem; }
   .preview { height: 9.9rem; margin-top: 1.54rem; overflow: hidden; border-radius: var(--radius-md); border: 1px solid var(--border); }
   .preview-scale { width: 250%; transform: scale(.4); transform-origin: 0 0; pointer-events: none; }
@@ -402,10 +402,10 @@
   .emoji-button { display: inline-flex; align-items: center; justify-content: center; width: var(--control-md); height: var(--control-md); flex-shrink: 0; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--radius-md); color: var(--text-2); cursor: pointer; }
   .emoji { font-size: 1.98rem; line-height: 1; }
   .text { flex: 1; min-width: 0; height: var(--control-md); padding: 0 1.32rem; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--radius-md); color: var(--text); font: inherit; font-size: var(--font-sm); }
-  .text:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-subtle); }
+  .text:focus { outline: none; border-color: var(--accent-ring); box-shadow: 0 0 0 3px var(--accent-subtle); }
   .counter { flex-shrink: 0; font-size: var(--font-xs); color: var(--text-3); font-variant-numeric: tabular-nums; } .counter.full { color: var(--danger); }
   .emoji-grid { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: .33rem; margin: 1.1rem 0; padding: .66rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); }
   .emoji-cell { aspect-ratio: 1; background: transparent; border: 0; border-radius: var(--radius-sm); font-size: 1.98rem; line-height: 1; cursor: pointer; }
   .emoji-cell:hover { background: var(--hover); }
-  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  button:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 3px; }
 </style>

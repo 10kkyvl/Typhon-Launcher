@@ -334,7 +334,7 @@
 
   .radio.on {
     background: var(--accent);
-    border-color: var(--accent);
+    border-color: var(--accent-bright);
   }
 
   .candidate-main {

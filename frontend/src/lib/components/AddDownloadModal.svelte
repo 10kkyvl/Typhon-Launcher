@@ -337,7 +337,7 @@
     height: 3.52rem;
     border-radius: 50%;
     border: 2px solid rgba(255, 255, 255, 0.1);
-    border-top-color: var(--accent);
+    border-top-color: var(--accent-bright);
     animation: spin 800ms linear infinite;
   }
 
@@ -458,7 +458,7 @@
   .box.on {
     color: var(--accent-on, #fff);
     background: var(--accent);
-    border-color: var(--accent);
+    border-color: var(--accent-bright);
   }
 
   .file-path {

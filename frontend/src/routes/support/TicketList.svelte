@@ -232,7 +232,7 @@
   }
 
   .dot.on {
-    background: var(--accent);
+    background: var(--accent-bright);
   }
 
   .main {

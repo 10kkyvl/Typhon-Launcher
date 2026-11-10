@@ -236,14 +236,14 @@
   .bp-catalog { display: flex; flex-direction: column; gap: 2.64rem; max-width: 176rem; margin: 0 auto; padding: 3.52rem clamp(2.2rem, 4vw, 6.6rem) 5.5rem; }
   .bp-page-header { display: flex; align-items: end; justify-content: space-between; gap: 2.64rem; }
   .heading-copy { min-width: 0; }
-  .eyebrow { display: block; margin-bottom: .88rem; color: var(--accent); font-size: 1.54rem; font-weight: 750; letter-spacing: .14em; text-transform: uppercase; }
+  .eyebrow { display: block; margin-bottom: .88rem; color: var(--accent-text); font-size: 1.54rem; font-weight: 750; letter-spacing: .14em; text-transform: uppercase; }
   h1 { margin: 0; font-size: clamp(3.52rem, 4vw, 5.5rem); line-height: 1.04; letter-spacing: -.035em; }
   .heading-copy p { margin: 1.1rem 0 0; color: var(--text-2); font-size: 1.98rem; }
   .head-actions { display: flex; align-items: center; gap: 1.1rem; }
   .bp-button { min-height: 6.38rem; display: inline-flex; align-items: center; justify-content: center; gap: 1.1rem; padding: 0 2.2rem; border: 1px solid transparent; border-radius: 1.32rem; background: var(--accent); color: var(--accent-on, white); font-size: 1.87rem; font-weight: 700; cursor: pointer; }
   .bp-button.secondary { border-color: var(--border); background: var(--surface-2); color: var(--text); }
   .bp-button:disabled, .filter-chip:disabled { opacity: .45; cursor: default; }
-  :global([data-bp-focus]:focus-visible) { outline: 3px solid var(--accent); outline-offset: 4px; }
+  :global([data-bp-focus]:focus-visible) { outline: 3px solid var(--accent-ring); outline-offset: 4px; }
   .search-button { min-width: 26.4rem; max-width: 52.8rem; justify-content: flex-start; overflow: hidden; }
   .search-button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .clear-button { min-width: 6.38rem; }
@@ -253,7 +253,7 @@
   .count, .filter-chip span { color: var(--text-3); font-size: 1.43rem; font-weight: 500; }
   .filter-strip, .sort-strip { display: flex; align-items: center; flex-wrap: wrap; gap: .88rem; }
   .filter-chip, .sort-button { min-height: 5.06rem; display: inline-flex; align-items: center; justify-content: center; gap: .88rem; padding: 0 1.65rem; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text-2); font-size: 1.595rem; font-weight: 650; cursor: pointer; }
-  .filter-chip.selected, .sort-button.selected { border-color: color-mix(in srgb, var(--accent) 75%, white); background: color-mix(in srgb, var(--accent) 18%, var(--surface)); color: var(--text); }
+  .filter-chip.selected, .sort-button.selected { border-color: color-mix(in srgb, var(--accent-bright) 75%, white); background: color-mix(in srgb, var(--accent) 18%, var(--surface)); color: var(--text); }
   .sort-strip { padding-top: .55rem; }
   .sort-label { margin-right: .55rem; color: var(--text-3); font-size: 1.54rem; }
   .notice { display: flex; align-items: center; justify-content: space-between; gap: 1.65rem; padding: 1.54rem 1.98rem; border: 1px solid var(--border); border-radius: 1.32rem; background: var(--surface-2); color: var(--text-2); font-size: 1.65rem; }
@@ -268,7 +268,7 @@
   .game-copy strong { color: var(--text); font-size: 1.815rem; line-height: 1.25; }
   .meta { color: var(--text-3); font-size: 1.43rem; }
   .bp-empty { display: flex; min-height: 30.8rem; flex-direction: column; align-items: center; justify-content: center; padding: 4.4rem; border: 1px dashed var(--border); border-radius: 1.76rem; text-align: center; }
-  .empty-mark { color: var(--accent); font-size: 6.05rem; }
+  .empty-mark { color: var(--accent-text); font-size: 6.05rem; }
   .bp-empty h2 { margin: 1.1rem 0 .55rem; font-size: 3.08rem; }
   .bp-empty p { max-width: 59.4rem; margin: 0 0 2.2rem; color: var(--text-2); font-size: 1.87rem; line-height: 1.5; }
   .pagination { display: flex; align-items: center; justify-content: center; gap: 2.2rem; padding-top: 1.1rem; }

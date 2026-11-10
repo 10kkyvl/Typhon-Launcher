@@ -70,11 +70,11 @@
     min-width: 2px;
   }
 
-  .tone-0 { background: var(--accent); }
-  .tone-1 { background: color-mix(in srgb, var(--accent) 80%, var(--surface-3)); }
-  .tone-2 { background: color-mix(in srgb, var(--accent) 62%, var(--surface-3)); }
-  .tone-3 { background: color-mix(in srgb, var(--accent) 46%, var(--surface-3)); }
-  .tone-4 { background: color-mix(in srgb, var(--accent) 32%, var(--surface-3)); }
+  .tone-0 { background: var(--accent-bright); }
+  .tone-1 { background: color-mix(in srgb, var(--accent-bright) 80%, var(--surface-3)); }
+  .tone-2 { background: color-mix(in srgb, var(--accent-bright) 62%, var(--surface-3)); }
+  .tone-3 { background: color-mix(in srgb, var(--accent-bright) 46%, var(--surface-3)); }
+  .tone-4 { background: color-mix(in srgb, var(--accent-bright) 32%, var(--surface-3)); }
   .tone-other { background: var(--text-3); }
   .tone-unknown {
     background: repeating-linear-gradient(135deg, var(--surface-4) 0 0.44rem, var(--surface-3) 0.44rem 0.88rem);

@@ -56,7 +56,7 @@
   }
 
   .outline.selected {
-    border-color: var(--accent);
+    border-color: var(--accent-bright);
     background: var(--accent-subtle);
     color: var(--accent-text);
   }

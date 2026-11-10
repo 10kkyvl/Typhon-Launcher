@@ -300,7 +300,7 @@
   }
 
   .group > summary:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--accent-ring);
     outline-offset: 2px;
   }
 
@@ -341,7 +341,7 @@
   }
 
   .list.drop-end {
-    outline: 2px dashed var(--accent);
+    outline: 2px dashed var(--accent-bright);
     outline-offset: 2px;
   }
 
@@ -361,7 +361,7 @@
   }
 
   .item.drop-target {
-    border-color: var(--accent);
+    border-color: var(--accent-bright);
   }
 
   .item.hidden .item-name {
@@ -415,7 +415,7 @@
   }
 
   .mini:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--accent-ring);
     outline-offset: 1px;
   }
 </style>

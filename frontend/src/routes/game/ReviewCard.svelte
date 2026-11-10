@@ -266,7 +266,7 @@
 
   .vote.active {
     background: var(--accent-subtle);
-    border-color: var(--accent);
+    border-color: var(--accent-bright);
     color: var(--accent-text);
   }
 

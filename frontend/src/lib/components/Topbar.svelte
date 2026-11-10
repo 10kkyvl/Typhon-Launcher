@@ -572,7 +572,7 @@
     gap: 0.66rem;
     width: 100%;
     border-radius: var(--radius-sm);
-    color: var(--accent);
+    color: var(--accent-text);
     text-align: left;
     transition: background var(--dur-fast) var(--ease);
   }

@@ -4,7 +4,7 @@
     indeterminate = false,
     max = 100,
     height = 4,
-    color = 'var(--accent)',
+    color = 'var(--accent-bright)',
   }: {
     value: number;
     indeterminate?: boolean;

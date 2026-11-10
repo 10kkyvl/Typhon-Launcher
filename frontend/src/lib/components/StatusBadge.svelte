@@ -91,7 +91,7 @@
   }
 
   .plain.accent .dot {
-    background: var(--accent);
+    background: var(--accent-bright);
   }
 
   .plain.neutral .dot {

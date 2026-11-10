@@ -55,7 +55,7 @@
     border: 0;
     background: none;
     font: inherit;
-    color: var(--accent);
+    color: var(--accent-text);
     cursor: pointer;
     text-decoration: underline;
   }

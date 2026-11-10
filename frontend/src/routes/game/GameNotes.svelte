@@ -145,7 +145,7 @@
 
   textarea:focus {
     outline: none;
-    border-color: var(--accent);
+    border-color: var(--accent-ring);
   }
 
   .foot {

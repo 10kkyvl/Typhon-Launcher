@@ -180,21 +180,21 @@
   .settings-page .settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .bp-card { padding: var(--setting-pad); }
   .bp-card h2 { display: flex; align-items: center; gap: .825rem; margin: 0 0 1.485rem; font-size: clamp(1.375rem, 1.6vw, 1.98rem); }
-  .bp-card h2 :global(svg) { flex: none; color: var(--accent); }
+  .bp-card h2 :global(svg) { flex: none; color: var(--accent-text); }
   .setting-list { display: flex; flex-direction: column; gap: 1.43rem; }
   .setting-row { display: flex; align-items: center; gap: 1.54rem; justify-content: space-between; min-width: 0; }
   .setting-copy { min-width: 0; }
   .setting-copy h3 { margin: 0 0 .242rem; font-size: 1.08em; line-height: 1.25; }
   .setting-copy p { margin: 0; max-width: 46.2rem; color: var(--text-2); font-size: .88em; line-height: 1.45; }
   .switch { position: relative; flex: none; display: inline-flex; justify-content: space-between; align-items: center; gap: .88rem; min-width: 7.15rem; min-height: 3.575rem; padding: .495rem .605rem .495rem 1.045rem; border-radius: 99px; background: var(--surface-2); border: 1px solid var(--border); }
-  .switch.on { background: color-mix(in srgb, var(--accent) 34%, var(--surface-2)); border-color: var(--accent); }
+  .switch.on { background: color-mix(in srgb, var(--accent) 34%, var(--surface-2)); border-color: var(--accent-bright); }
   .switch-state { min-width: 1.8em; font-size: .8em; font-weight: 700; text-transform: uppercase; }
   .switch-knob { width: 2.09rem; height: 2.09rem; border-radius: 50%; background: var(--text-3); transition: transform var(--dur) var(--ease), background var(--dur) var(--ease); }
-  .switch.on .switch-knob { background: var(--accent); }
+  .switch.on .switch-knob { background: var(--accent-bright); }
   .choice-block { display: flex; flex-direction: column; gap: .88rem; }
   .choices { display: flex; flex-wrap: wrap; gap: .605rem; }
   .choice { min-width: 5.5rem; min-height: 3.41rem; padding: .66rem 1.1rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-2); font-weight: 650; }
-  .choice.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 25%, var(--surface-2)); color: var(--text); }
+  .choice.selected { border-color: var(--accent-bright); background: color-mix(in srgb, var(--accent) 25%, var(--surface-2)); color: var(--text); }
   .download-choices { margin-top: 1.1rem; }
   .save-status { min-height: 1.6em; margin: 1.1rem var(--setting-pad) 0; color: var(--text-3); font-size: .9em; }
   .save-status span { display: inline-flex; align-items: center; gap: .44rem; }

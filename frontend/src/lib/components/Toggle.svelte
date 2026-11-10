@@ -51,7 +51,7 @@
   }
 
   .toggle.on {
-    background: var(--accent);
+    background: var(--accent-bright);
   }
 
   .toggle.on:hover:not(:disabled) {

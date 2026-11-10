@@ -344,7 +344,7 @@
   .bubble.mine {
     align-self: flex-end;
     background: var(--accent-subtle);
-    border-color: var(--accent);
+    border-color: var(--accent-bright);
   }
 
   .bubble.staff {
@@ -444,7 +444,7 @@
 
   .input:focus {
     outline: none;
-    border-color: var(--accent);
+    border-color: var(--accent-ring);
     box-shadow: 0 0 0 3px var(--accent-subtle);
   }
 

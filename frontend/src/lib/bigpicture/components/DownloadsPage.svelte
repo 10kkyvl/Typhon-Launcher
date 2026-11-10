@@ -1265,7 +1265,7 @@
   .file-choice:hover, .candidate:hover { background: var(--hover); }
   .file-choice[aria-checked='true'] { background: var(--hover-strong); }
   .check-box { width: 1.32rem; height: 1.32rem; flex: none; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border-strong); border-radius: .33rem; color: white; }
-  .check-box.on { background: var(--accent); border-color: var(--accent); }
+  .check-box.on { background: var(--accent); border-color: var(--accent-bright); }
   .all-files { border-bottom: 1px solid var(--border); }
   .file-path { min-width: 0; flex: 1; overflow-wrap: anywhere; }
   .file-size { flex: none; color: var(--text-3); }
@@ -1279,13 +1279,13 @@
   .install-row span { flex: none; color: var(--text-3); }
   .install-row strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; text-align: right; }
   .install-field, .cleanup-field { display: flex; flex-direction: column; gap: .66rem; }
-  .mode-actions .bp-button[aria-pressed='true'] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 28%, var(--surface-3)); }
+  .mode-actions .bp-button[aria-pressed='true'] { border-color: var(--accent-bright); background: color-mix(in srgb, var(--accent) 28%, var(--surface-3)); }
   .install-progress { display: flex; flex-direction: column; gap: .77rem; }
   .candidate-list { max-height: 35vh; overflow: auto; display: flex; flex-direction: column; gap: .275rem; padding: .44rem; border-radius: .77rem; background: var(--surface); }
   .candidate { display: flex; align-items: center; gap: .77rem; padding: .77rem; border-radius: .44rem; color: var(--text); text-align: left; font: inherit; overflow-wrap: anywhere; }
   .candidate[aria-checked='true'] { background: var(--hover-strong); }
   .radio-dot { width: 1.21rem; height: 1.21rem; flex: none; border: 1px solid var(--border-strong); border-radius: 50%; }
-  .radio-dot.on { background: var(--accent); box-shadow: inset 0 0 0 3px var(--surface-2); }
+  .radio-dot.on { background: var(--accent-bright); box-shadow: inset 0 0 0 3px var(--surface-2); }
   .installed-summary { display: flex; flex-direction: column; gap: .88rem; }
   .installed-summary > p { margin: 0; font-size: 1.05em; font-weight: 600; }
   .success-icon { color: var(--success); }

@@ -733,7 +733,7 @@
   }
 
   .storage {
-    --seg-games: var(--accent);
+    --seg-games: var(--accent-bright);
     --seg-other: var(--text-3);
     --seg-free: color-mix(in srgb, var(--text-3) 28%, transparent);
     display: flex;

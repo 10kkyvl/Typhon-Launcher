@@ -62,7 +62,7 @@
     if (tone === 'warning') return 'var(--warning)';
     if (tone === 'danger') return 'var(--danger)';
     if (tone === 'muted') return 'var(--text-3)';
-    return 'var(--accent)';
+    return 'var(--accent-bright)';
   }
 
   function toggle() {
@@ -323,7 +323,7 @@
   }
 
   .ring-fill {
-    stroke: var(--accent);
+    stroke: var(--accent-bright);
     stroke-linecap: round;
     transition: stroke-dashoffset 600ms linear;
   }

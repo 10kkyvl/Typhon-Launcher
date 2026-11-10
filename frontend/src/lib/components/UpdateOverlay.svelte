@@ -123,7 +123,7 @@
   }
 
   .panel :global(.spin) {
-    color: var(--accent);
+    color: var(--accent-text);
     animation: spin 1.6s linear infinite;
   }
 
@@ -141,7 +141,7 @@
     position: absolute;
     inset-block: 0;
     width: 34%;
-    background: var(--accent);
+    background: var(--accent-bright);
     border-radius: 108.9rem;
     animation: slide 1.4s var(--ease) infinite;
   }

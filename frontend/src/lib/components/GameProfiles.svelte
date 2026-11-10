@@ -423,7 +423,7 @@
 
   .tag {
     font-size: var(--font-xs);
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .grow {
@@ -456,7 +456,7 @@
     flex-direction: column;
     gap: var(--space-3);
     padding: var(--space-3);
-    border: 1px solid var(--accent);
+    border: 1px solid var(--accent-bright);
     border-radius: var(--radius-md);
   }
 
@@ -491,7 +491,7 @@
   }
 
   .candidate.current {
-    border-color: var(--accent);
+    border-color: var(--accent-bright);
     color: var(--text);
   }
 </style>

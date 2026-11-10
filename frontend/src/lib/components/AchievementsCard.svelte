@@ -287,7 +287,7 @@
   .tile:hover,
   .tile:focus-visible,
   .tile.selected {
-    border-color: var(--accent);
+    border-color: var(--accent-bright);
   }
 
   .tile:focus-visible {

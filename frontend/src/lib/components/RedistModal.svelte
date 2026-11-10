@@ -330,6 +330,6 @@
 
   .download {
     font-size: var(--font-sm);
-    color: var(--accent);
+    color: var(--accent-text);
   }
 </style>

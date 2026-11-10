@@ -27,7 +27,7 @@
 
   const downloading = $derived(download.status === 'downloading');
   const pct = $derived(download.progress * 100);
-  const barColor = $derived(download.status === 'paused' ? 'var(--text-3)' : 'var(--accent)');
+  const barColor = $derived(download.status === 'paused' ? 'var(--text-3)' : 'var(--accent-bright)');
 
   const typeTag = $derived.by(() => {
     if (download.origin.platform) return msg('state.installTypeImage');

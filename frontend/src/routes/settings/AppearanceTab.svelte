@@ -555,7 +555,7 @@
   }
 
   .preset-delete:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--accent-ring);
     outline-offset: 1px;
   }
 
@@ -584,7 +584,7 @@
   }
 
   .preset.selected {
-    border-color: var(--accent);
+    border-color: var(--accent-bright);
     background: var(--accent-subtle);
   }
 
@@ -683,7 +683,7 @@
   }
 
   .token-group > summary:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--accent-ring);
     outline-offset: 2px;
   }
 

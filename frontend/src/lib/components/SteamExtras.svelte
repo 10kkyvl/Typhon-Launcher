@@ -149,7 +149,7 @@
 
   .toggle {
     margin-top: var(--space-3);
-    color: var(--accent);
+    color: var(--accent-text);
     font-size: var(--font-xs);
     font-weight: 500;
   }
