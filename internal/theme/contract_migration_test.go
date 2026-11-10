@@ -257,6 +257,12 @@ func wantAfterMigration(t *testing.T, parent string, stored, kept map[string]str
 		if _, old := oldContract[tok.Name]; old {
 			continue
 		}
+		// In 1.x --accent was also the indicator colour: a user accent keeps
+		// painting the indicators that --accent-bright now owns.
+		if accent, ok := kept["--accent"]; ok && tok.Name == "--accent-bright" {
+			want[tok.Name] = accent
+			continue
+		}
 		value, ok := current.Tokens[tok.Name]
 		if !ok {
 			t.Fatalf("preset %s has no token %s", parent, tok.Name)
@@ -860,4 +866,61 @@ func TestUserRemLengthsKeepTheirPixelSize(t *testing.T) {
 		t.Errorf("css = %q, want %q untouched", got.CSS, th.CSS)
 	}
 	requireContract2(t, "units", got)
+}
+
+// In 1.x --accent painted the indicators too. A 1.x theme with its own accent
+// keeps its toggles, progress and selection in that accent; one that left the
+// accent alone takes the preset's indicator colour.
+func TestUserAccentKeepsPaintingTheIndicators(t *testing.T) {
+	dark, ok := presetByID("dark")
+	if !ok {
+		t.Fatal("no dark preset")
+	}
+	presetBright := dark.Tokens["--accent-bright"]
+	cases := []struct {
+		name   string
+		stored map[string]string
+		want   string
+	}{
+		{"dark fork with a user accent", withChanges(fixture141(t, "dark"), map[string]string{"--accent": "#e45d87"}), "#e45d87"},
+		{"dark fork with its accent untouched", withChanges(fixture141(t, "dark"), map[string]string{"--radius-md": "1rem"}), presetBright},
+		{"partial map with only a user accent", map[string]string{"--accent": "#e45d87"}, "#e45d87"},
+		{"partial map with the released accent", map[string]string{"--accent": "#4f6bff", "--bg": "#101010"}, presetBright},
+		{"partial map without an accent", map[string]string{"--bg": "#101010"}, presetBright},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := migratedFrom(t, BaseDark, tc.stored)
+			if bright := got.Tokens["--accent-bright"]; bright != tc.want {
+				t.Fatalf("--accent-bright = %q, want %q", bright, tc.want)
+			}
+			requireContract2(t, "migrated theme", got)
+		})
+	}
+}
+
+func TestCurrentContractThemeWithoutBrightIsNotFilled(t *testing.T) {
+	mine := validTheme("mine")
+	mine.Tokens["--accent"] = "#e45d87"
+	mine.Contract = currentContract
+	s := mustServiceAt(t, writeStoredThemes(t, []Theme{mine}, ""))
+	got, err := s.Get("mine")
+	if err != nil {
+		t.Fatalf("Get(mine) error = %v", err)
+	}
+	if bright, ok := got.Tokens["--accent-bright"]; ok {
+		t.Fatalf("contract %d theme gained --accent-bright = %q", currentContract, bright)
+	}
+	requireTokens(t, "current theme", got.Tokens, mine.Tokens, "")
+}
+
+// A 2.0 theme that a 1.x launcher rewrote without the marker, holding its own
+// accent as the indicator colour too: the lost-marker rule sees today's values
+// and no released-only one, so it is only stamped; nothing is rescaled or
+// re-derived, and its bright stays the user's accent.
+func TestMarkerLessThemeWithBrightOnItsAccentIsOnlyStamped(t *testing.T) {
+	tokens := currentWith(t, "dark", map[string]string{"--accent": "#e45d87", "--accent-bright": "#e45d87"})
+	got := migratedFrom(t, BaseDark, tokens)
+	requireTokens(t, "marker-less current theme", got.Tokens, tokens, "")
+	requireContract2(t, "marker-less current theme", got)
 }

@@ -93,7 +93,7 @@ func TestUserShadowWithRemKeepsItsPixelSize(t *testing.T) {
 
 func TestOldestGenerationForkFollowsCurrentPreset(t *testing.T) {
 	got := migratedFrom(t, BaseLight, withChanges(fixture030Light(), map[string]string{"--accent": "#ff0055"}))
-	requireTokens(t, "migrated 0.3 fork", got.Tokens, currentWith(t, "light", map[string]string{"--accent": "#ff0055"}), "")
+	requireTokens(t, "migrated 0.3 fork", got.Tokens, currentWith(t, "light", map[string]string{"--accent": "#ff0055", "--accent-bright": "#ff0055"}), "")
 	requireContract2(t, "migrated 0.3 fork", got)
 }
 
@@ -140,6 +140,9 @@ func TestPartialMapValueOfAnOlderGenerationIsAUserEdit(t *testing.T) {
 				if _, old := released[tok.Name]; !old {
 					want[tok.Name] = dark.Tokens[tok.Name]
 				}
+			}
+			if accent, ok := tc.kept["--accent"]; ok {
+				want["--accent-bright"] = accent
 			}
 			got := migratedFrom(t, BaseDark, tc.stored)
 			requireTokens(t, "migrated partial map", got.Tokens, want, "")

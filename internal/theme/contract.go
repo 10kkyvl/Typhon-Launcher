@@ -17,6 +17,11 @@ var (
 	remScale  = big.NewRat(11, 10)
 )
 
+// rolesTakenOver maps a token new in the current contract to the 1.x token
+// that played its part: --accent also painted every indicator in 1.x, so a
+// user's own accent keeps painting them.
+var rolesTakenOver = map[string]string{"--accent-bright": "--accent"}
+
 // toCurrentContract brings a theme saved under the 1.x contract to the
 // current one. A fork stores the whole preset it came from, so values equal
 // to that preset as released are taken as never touched and follow the
@@ -36,6 +41,7 @@ func toCurrentContract(t Theme) Theme {
 		return t
 	}
 	tokens := make(map[string]string, len(allowedTokens))
+	userValues := map[string]bool{}
 	for name, value := range t.Tokens {
 		if was, ok := released[name]; ok && was == value {
 			if now, ok := parent.Tokens[name]; ok {
@@ -44,6 +50,7 @@ func toCurrentContract(t Theme) Theme {
 			}
 		}
 		tokens[name] = userValueAtCurrentScale(name, value)
+		userValues[name] = true
 	}
 
 	lastReleased := releasedPresetGenerations[len(releasedPresetGenerations)-1].presets[parent.ID]
@@ -54,6 +61,10 @@ func toCurrentContract(t Theme) Theme {
 		// A partial map leans on the stylesheet for what it leaves out, as it
 		// did in 1.x; it only gains tokens that 1.x did not have at all.
 		if _, old := lastReleased[tok.Name]; old && !full {
+			continue
+		}
+		if from, ok := rolesTakenOver[tok.Name]; ok && userValues[from] {
+			tokens[tok.Name] = tokens[from]
 			continue
 		}
 		if now, ok := parent.Tokens[tok.Name]; ok {
