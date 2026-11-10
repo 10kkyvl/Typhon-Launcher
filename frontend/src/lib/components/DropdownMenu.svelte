@@ -154,7 +154,7 @@
   @keyframes pop {
     from {
       opacity: 0;
-      transform: translateY(-0.3rem);
+      transform: translateY(-0.33rem);
     }
     to {
       opacity: 1;

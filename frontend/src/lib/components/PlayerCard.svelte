@@ -105,7 +105,7 @@
     display: flex;
     align-items: flex-end;
     gap: 1.32rem;
-    margin-top: -2.6rem;
+    margin-top: -2.86rem;
     min-width: 0;
   }
 

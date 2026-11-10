@@ -356,7 +356,7 @@
   .nav-buttons {
     display: flex;
     gap: 0;
-    margin-left: -0.8rem;
+    margin-left: -0.88rem;
   }
 
   .search-wrap {
@@ -637,7 +637,7 @@
   @keyframes pop {
     from {
       opacity: 0;
-      transform: translateY(-0.3rem);
+      transform: translateY(-0.33rem);
     }
     to {
       opacity: 1;

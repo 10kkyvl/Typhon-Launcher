@@ -79,5 +79,5 @@
 
   --shadow-pop: 0 0.88rem 3.08rem rgba(0, 0, 0, 0.45), 0 2px 0.88rem rgba(0, 0, 0, 0.3);
   --shadow-modal: 0 2.2rem 6.6rem rgba(0, 0, 0, 0.55);
-  --shadow-lift: 0 1.32rem 3.08rem -0.8rem rgba(0, 0, 0, 0.6);
+  --shadow-lift: 0 1.32rem 3.08rem -0.88rem rgba(0, 0, 0, 0.6);
 }

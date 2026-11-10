@@ -205,7 +205,7 @@
     gap: 0.88rem;
     width: 100%;
     padding: 0.66rem;
-    margin: -0.6rem;
+    margin: -0.66rem;
     border-radius: var(--radius-md);
     text-align: left;
     transition: background var(--dur) var(--ease);

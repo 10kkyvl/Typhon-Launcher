@@ -73,7 +73,7 @@ var presetDark = Theme{
 		"--dur-slow":         "320ms",
 		"--shadow-pop":       "0 0.88rem 3.08rem rgba(0, 0, 0, 0.45), 0 2px 0.88rem rgba(0, 0, 0, 0.3)",
 		"--shadow-modal":     "0 2.2rem 6.6rem rgba(0, 0, 0, 0.55)",
-		"--shadow-lift":      "0 1.32rem 3.08rem -0.8rem rgba(0, 0, 0, 0.6)",
+		"--shadow-lift":      "0 1.32rem 3.08rem -0.88rem rgba(0, 0, 0, 0.6)",
 	},
 }
 
@@ -150,7 +150,7 @@ var presetLight = Theme{
 		"--dur-slow":         "320ms",
 		"--shadow-pop":       "0 0.88rem 3.08rem rgba(15, 23, 32, 0.12), 0 2px 0.88rem rgba(15, 23, 32, 0.08)",
 		"--shadow-modal":     "0 2.2rem 6.6rem rgba(15, 23, 32, 0.16)",
-		"--shadow-lift":      "0 1.32rem 3.08rem -0.8rem rgba(15, 23, 32, 0.22)",
+		"--shadow-lift":      "0 1.32rem 3.08rem -0.88rem rgba(15, 23, 32, 0.22)",
 	},
 }
 
@@ -227,7 +227,7 @@ var presetContrast = Theme{
 		"--dur-slow":         "320ms",
 		"--shadow-pop":       "0 0.88rem 3.08rem rgba(0, 0, 0, 0.7), 0 2px 0.88rem rgba(0, 0, 0, 0.5)",
 		"--shadow-modal":     "0 2.2rem 6.6rem rgba(0, 0, 0, 0.8)",
-		"--shadow-lift":      "0 1.32rem 3.08rem -0.8rem rgba(0, 0, 0, 0.85)",
+		"--shadow-lift":      "0 1.32rem 3.08rem -0.88rem rgba(0, 0, 0, 0.85)",
 	},
 }
 

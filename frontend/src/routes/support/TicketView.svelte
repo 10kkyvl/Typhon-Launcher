@@ -258,7 +258,7 @@
 
 <style>
   .top {
-    margin: 0 0 var(--space-4) -0.8rem;
+    margin: 0 0 var(--space-4) -0.88rem;
   }
 
   .muted {

@@ -75,7 +75,7 @@
 
   .tile:hover .cover,
   .tile:focus-visible .cover {
-    transform: translateY(-0.3rem);
+    transform: translateY(-0.33rem);
     box-shadow: var(--shadow-lift);
   }
 

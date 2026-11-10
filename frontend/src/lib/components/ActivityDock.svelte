@@ -492,7 +492,7 @@
     justify-content: flex-end;
     min-width: 3.08rem;
     flex-shrink: 0;
-    margin: -0.2rem -0.4rem 0 0;
+    margin: -0.22rem -0.44rem 0 0;
   }
 
   @keyframes dock-in {

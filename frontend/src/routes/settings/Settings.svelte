@@ -1757,7 +1757,7 @@
     font-size: var(--font-xs);
     font-weight: 500;
     padding: 0.22rem 0.33rem;
-    margin-left: -0.3rem;
+    margin-left: -0.33rem;
     border-radius: var(--radius-xs);
   }
 

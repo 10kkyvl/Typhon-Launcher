@@ -261,7 +261,7 @@
 
   .grid-actions {
     justify-content: space-between;
-    margin: 0 -0.6rem -0.4rem;
+    margin: 0 -0.66rem -0.44rem;
   }
 
   .card-row {

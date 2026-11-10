@@ -520,7 +520,7 @@
   .chat-root > * { pointer-events: auto; }
   .chat-toggle { position: relative; display: flex; align-items: center; justify-content: center; width: 5.28rem; height: 5.28rem; border: 1px solid var(--border-strong); border-radius: 50%; background: var(--accent); color: var(--accent-on, #fff); box-shadow: var(--shadow-pop); cursor: pointer; }
   .chat-toggle:hover { background: var(--accent-hover); }
-  .unread-dot { position: absolute; top: -0.5rem; right: -0.5rem; min-width: 2.2rem; height: 2.2rem; padding: 0 0.495rem; border-radius: 2.2rem; background: var(--danger); color: #fff; font-size: var(--font-xs); display: flex; align-items: center; justify-content: center; }
+  .unread-dot { position: absolute; top: -0.55rem; right: -0.55rem; min-width: 2.2rem; height: 2.2rem; padding: 0 0.495rem; border-radius: 2.2rem; background: var(--danger); color: #fff; font-size: var(--font-xs); display: flex; align-items: center; justify-content: center; }
   .chat-panel { display: flex; flex-direction: column; width: 41.8rem; height: min(70.4rem, calc(100vh - 8.8rem)); overflow: hidden; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-pop); }
   .chat-header { display: flex; align-items: center; gap: 0.99rem; min-height: 6.16rem; padding: 0 1.32rem; border-bottom: 1px solid var(--border); background: var(--surface-3); }
   .back { display: inline-flex; border: 0; background: transparent; color: var(--text-2); padding: 0.55rem; cursor: pointer; }

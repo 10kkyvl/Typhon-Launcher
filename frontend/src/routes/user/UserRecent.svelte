@@ -69,7 +69,7 @@
 
   .capsule:hover .cover,
   .capsule:focus-visible .cover {
-    transform: translateY(-0.4rem);
+    transform: translateY(-0.44rem);
     box-shadow: var(--shadow-lift);
   }
 

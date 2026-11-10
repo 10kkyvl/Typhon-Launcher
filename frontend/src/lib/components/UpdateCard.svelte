@@ -436,7 +436,7 @@
   @keyframes details-in {
     from {
       opacity: 0;
-      transform: translateY(-0.6rem);
+      transform: translateY(-0.66rem);
     }
   }
 

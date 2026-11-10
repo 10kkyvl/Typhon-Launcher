@@ -242,7 +242,7 @@
     overscroll-behavior-y: contain;
     scrollbar-gutter: stable;
     padding: 0.33rem;
-    margin: var(--space-3) -0.3rem 0;
+    margin: var(--space-3) -0.33rem 0;
   }
 
   fieldset {

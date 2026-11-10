@@ -184,7 +184,7 @@
 
   .cover-wrap:hover,
   .cover-wrap:focus-within {
-    transform: translateY(-0.4rem);
+    transform: translateY(-0.44rem);
   }
 
   .cover {

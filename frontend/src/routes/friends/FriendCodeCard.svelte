@@ -126,7 +126,7 @@
 
   .code.copy {
     padding: 0.22rem 0.88rem;
-    margin: -0.2rem -0.8rem;
+    margin: -0.22rem -0.88rem;
     border-radius: var(--radius-sm);
     color: var(--text);
     text-align: left;

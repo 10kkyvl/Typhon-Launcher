@@ -102,4 +102,4 @@ Every token a `.typhontheme` file may set. *Default* is the built-in dark value 
 | `--dur-slow` | time | Animation duration: slow: Slow effects: game covers, avatars appearing | `320ms` |
 | `--shadow-pop` | shadow | Shadow: menus and tooltips: Shadow of drop-down menus, tooltips and notifications | `0 0.88rem 3.08rem rgba(0, 0, 0, 0.45), 0 2px 0.88rem rgba(0, 0, 0, 0.3)` |
 | `--shadow-modal` | shadow | Shadow: dialogs: Shadow of dialog windows and full-screen viewers | `0 2.2rem 6.6rem rgba(0, 0, 0, 0.55)` |
-| `--shadow-lift` | shadow | Shadow: raised card: Shadow of a game cover on hover | `0 1.32rem 3.08rem -0.8rem rgba(0, 0, 0, 0.6)` |
+| `--shadow-lift` | shadow | Shadow: raised card: Shadow of a game cover on hover | `0 1.32rem 3.08rem -0.88rem rgba(0, 0, 0, 0.6)` |

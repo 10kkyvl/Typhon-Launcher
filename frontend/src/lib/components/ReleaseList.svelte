@@ -188,7 +188,7 @@
   .release-row.current::before {
     content: '';
     position: absolute;
-    left: -1.2rem;
+    left: -1.32rem;
     top: 1.32rem;
     bottom: 1.32rem;
     width: 2px;

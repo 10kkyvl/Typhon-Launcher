@@ -1015,7 +1015,7 @@
 
   .card-media:hover,
   .card-media:focus-within {
-    transform: translateY(-0.4rem);
+    transform: translateY(-0.44rem);
   }
 
   .card-cover {

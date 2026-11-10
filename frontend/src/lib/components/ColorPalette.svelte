@@ -69,6 +69,6 @@
   .hue { display: block; appearance: none; -webkit-appearance: none; width: 100%; height: 3.08rem; padding: 0; margin: var(--space-2) 0 0; background: transparent; cursor: pointer; touch-action: none; }
   .hue::-webkit-slider-runnable-track { height: .88rem; border-radius: 99px; background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); }
   .hue::-moz-range-track { height: .88rem; border-radius: 99px; background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); }
-  .hue::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 2.2rem; height: 2.2rem; margin-top: -.6rem; border: 2px solid #fff; border-radius: 50%; background: transparent; box-shadow: 0 0 0 1px #0009; }
+  .hue::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 2.2rem; height: 2.2rem; margin-top: -.66rem; border: 2px solid #fff; border-radius: 50%; background: transparent; box-shadow: 0 0 0 1px #0009; }
   .hue::-moz-range-thumb { width: 1.76rem; height: 1.76rem; border: 2px solid #fff; border-radius: 50%; background: transparent; box-shadow: 0 0 0 1px #0009; }
 </style>
