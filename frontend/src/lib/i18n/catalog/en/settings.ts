@@ -234,6 +234,7 @@ export const settings: Record<SettingsKey, Message> = {
   'settings.appearanceThemeNameDark': 'Dark',
   'settings.appearanceThemeNameLight': 'Light',
   'settings.appearanceThemeNameContrast': 'High contrast',
+  'settings.appearanceThemeNameBlush': 'Blush',
   'settings.appearanceCustomThemeTag': 'custom',
   'settings.appearanceImportLabel': 'Import theme',
   'settings.appearanceImportSub': 'Load a theme file from disk or paste its text. An imported file is followed: changes in it appear in the launcher right away',

@@ -4,7 +4,11 @@ import type { Theme } from '../../../bindings/typhon/internal/theme';
 import { msg, type MessageKey } from '../i18n';
 
 const STYLE_ELEMENT_ID = 'typhon-theme';
-export const displayedAccent = writable('#4F6BFF');
+// The built-in presets' own values (internal/theme/presets.go) for what is drawn before a theme
+// loads or where a theme leaves the token out; apply.test.ts holds them equal to the presets.
+export const fallbackAccent = '#0B7285';
+export const fallbackBackground = { dark: '#0e0f11', light: '#eef1f4' } as const;
+export const displayedAccent = writable<string>(fallbackAccent);
 
 interface NamedTheme {
   id: string;
@@ -24,6 +28,7 @@ const builtInThemeNameKeys: Record<string, MessageKey> = {
   dark: 'settings.appearanceThemeNameDark',
   light: 'settings.appearanceThemeNameLight',
   contrast: 'settings.appearanceThemeNameContrast',
+  blush: 'settings.appearanceThemeNameBlush',
 };
 
 export function themeDisplayName(theme: NamedTheme): string {
@@ -49,12 +54,12 @@ export function applyPersonalAccent(color: string): void {
   appliedTokenNames = [];
   const computed = typeof getComputedStyle === 'function' ? getComputedStyle(root) : null;
   const tokens = Object.fromEntries(['--bg', '--surface', '--surface-2', '--surface-3', '--surface-4', '--bg-sidebar'].map(name => [name, computed?.getPropertyValue(name).trim()]));
-  const background = tokens['--bg'] || '#090d17';
+  const background = tokens['--bg'] || fallbackBackground.dark;
   const base = contrast(background, '#000000') > contrast(background, '#ffffff') ? 'light' : 'dark';
   const vars = accentPalette(personalColor, base, tokens);
   for (const [name, value] of Object.entries(vars)) root.style.setProperty(name, value, 'important');
   appliedTokenNames = Object.keys(vars);
-  displayedAccent.set(personalColor || computed?.getPropertyValue('--accent').trim() || '#4F6BFF');
+  displayedAccent.set(personalColor || computed?.getPropertyValue('--accent').trim() || fallbackAccent);
 }
 
 export function personalThemeVars(theme: Theme): Record<string, string> {
@@ -97,7 +102,7 @@ export function applyTheme(theme: Theme): void {
   const themeAccent = typeof getComputedStyle === 'function'
     ? getComputedStyle(root).getPropertyValue('--accent').trim()
     : vars['--accent'];
-  displayedAccent.set(personalColor || themeAccent || '#4F6BFF');
+  displayedAccent.set(personalColor || themeAccent || fallbackAccent);
 }
 
 export function clearTheme(): void {

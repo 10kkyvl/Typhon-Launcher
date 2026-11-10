@@ -170,6 +170,18 @@ func TestSkillListsEveryRefusedCSSConstruct(t *testing.T) {
 	}
 }
 
+func TestSkillQuotesTheLightPresetShadows(t *testing.T) {
+	section, ok := skillSections(t, "../../skills/typhon-theme/SKILL.md")["Writing the tokens"]
+	if !ok {
+		t.Fatal("SKILL.md has no Writing the tokens section")
+	}
+	for _, name := range []string{"--shadow-pop", "--shadow-modal", "--shadow-lift"} {
+		if quote := "`" + name + "`: `" + presetLight.Tokens[name] + "`"; !strings.Contains(section, quote) {
+			t.Errorf("Writing the tokens does not quote the light preset's %s: want %s", name, quote)
+		}
+	}
+}
+
 func TestSkillExampleThemeIsAccepted(t *testing.T) {
 	data, err := os.ReadFile("../../skills/typhon-theme/SKILL.md")
 	if err != nil {

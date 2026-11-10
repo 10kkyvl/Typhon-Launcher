@@ -4,7 +4,7 @@
   import ThemePreview from './ThemePreview.svelte';
   import { Trash2 } from '@lucide/svelte';
   import { msg } from '../../lib/i18n';
-  import { themeDisplayName, personalThemeVars, displayedAccent } from '../../lib/theme/apply';
+  import { themeDisplayName, personalThemeVars, displayedAccent, fallbackAccent, fallbackBackground } from '../../lib/theme/apply';
   import { validateCss, validateTokenName, validateTokenValue } from '../../lib/theme/validate';
   import AiSkillButton from '../../lib/components/AiSkillButton.svelte';
   import Button from '../../lib/components/Button.svelte';
@@ -291,7 +291,7 @@
     <Card title={msg('settings.appearanceTab')}>
       <div class="preset-grid">
         <button type="button" class="preset" class:selected={$themeMode === 'system'} onclick={() => selectTheme('system')}>
-          <span class="preset-swatch system"></span>
+          <span class="preset-swatch system" style={`background: linear-gradient(135deg, ${fallbackBackground.dark} 50%, ${fallbackBackground.light} 50%);`}></span>
           <span class="preset-name">{msg('settings.appearanceSystemPresetLabel')}</span>
         </button>
         {#each list as theme (theme.id)}
@@ -304,7 +304,7 @@
             >
               <span
                 class="preset-swatch"
-                style={`background: ${theme.tokens['--bg'] ?? (theme.base === 'light' ? '#f4f6f8' : '#0b0f14')}; border-color: ${theme.tokens['--accent'] ?? '#6875e8'};`}
+                style={`background: ${theme.tokens['--bg'] ?? (theme.base === 'light' ? fallbackBackground.light : fallbackBackground.dark)}; border-color: ${theme.tokens['--accent'] ?? fallbackAccent};`}
               ></span>
               <span class="preset-name">{themeDisplayName(theme)}</span>
               {#if !theme.builtIn}
@@ -594,10 +594,6 @@
     border-radius: var(--radius-sm);
     border: 2px solid var(--border-strong);
     flex-shrink: 0;
-  }
-
-  .preset-swatch.system {
-    background: linear-gradient(135deg, #0b0f14 50%, #f4f6f8 50%);
   }
 
   .preset-name {

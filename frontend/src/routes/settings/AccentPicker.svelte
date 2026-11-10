@@ -3,7 +3,7 @@
   import { get } from 'svelte/store';
   import { msg, type MessageKey } from '../../lib/i18n';
   import { settings, updateSettings } from '../../lib/stores/settings';
-  import { applyPersonalAccent, displayedAccent } from '../../lib/theme/apply';
+  import { applyPersonalAccent, displayedAccent, fallbackAccent } from '../../lib/theme/apply';
   import { accentPresets, validAccent } from '../../lib/theme/accent';
   import HexColorField from '../../lib/components/HexColorField.svelte';
   import ColorPalette from '../../lib/components/ColorPalette.svelte';
@@ -17,7 +17,7 @@
   ];
   let editing = $state(false);
   let draft = $state('');
-  let lastValid = $state('#4F6BFF');
+  let lastValid = $state<string>(fallbackAccent);
   let busy = $state(false);
   const selected = $derived($settings?.accentColor ?? '');
   function cancel() {
@@ -27,7 +27,7 @@
   onDestroy(cancel);
   $effect(() => {
     $appearanceResetVersion;
-    untrack(() => { editing = false; draft = ''; lastValid = '#4F6BFF'; });
+    untrack(() => { editing = false; draft = ''; lastValid = fallbackAccent; });
   });
   function preview(value: string) {
     draft = value;
@@ -54,7 +54,7 @@
     {#each accentPresets as color, i}
       <button class="swatch" class:chosen={selected.toUpperCase() === color && !editing} style={`--swatch: ${color}`} disabled={busy} aria-label={msg(presetLabels[i])} aria-pressed={selected.toUpperCase() === color && !editing} onclick={() => save(color)}><span></span></button>
     {/each}
-    <button class:chosen={editing || (!!selected && !accentPresets.includes(selected.toUpperCase()))} disabled={busy} aria-pressed={editing || (!!selected && !accentPresets.includes(selected.toUpperCase()))} onclick={() => { draft = selected || (validAccent($displayedAccent) ? $displayedAccent : '#4F6BFF'); lastValid = draft; editing = true; }}>{msg('settings.accentCustom')}</button>
+    <button class:chosen={editing || (!!selected && !accentPresets.includes(selected.toUpperCase()))} disabled={busy} aria-pressed={editing || (!!selected && !accentPresets.includes(selected.toUpperCase()))} onclick={() => { draft = selected || (validAccent($displayedAccent) ? $displayedAccent : fallbackAccent); lastValid = draft; editing = true; }}>{msg('settings.accentCustom')}</button>
   </div>
   {#if editing}
     <ColorPalette value={lastValid} onchange={preview} disabled={busy} />

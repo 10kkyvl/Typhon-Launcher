@@ -100,6 +100,17 @@ describe('themeDisplayName', () => {
     expect(themeDisplayName(baseTheme({ id: 'contrast', name: 'Высокий контраст', builtIn: true }))).toBe(
       'High contrast',
     );
+    expect(themeDisplayName(baseTheme({ id: 'blush', name: 'Румянец', builtIn: true }))).toBe('Blush');
+    locale.set('ru');
+    expect(themeDisplayName(baseTheme({ id: 'blush', name: 'Blush', builtIn: true }))).toBe('Румянец');
+  });
+
+  it('has a catalog label for every preset presets.go builds in', async () => {
+    const { goSources } = await import('../testing/sources');
+    const ids = [...(goSources['internal/theme/presets.go'] ?? '').matchAll(/^\tID:\s*"([^"]+)"/gm)].map((m) => m[1]);
+    expect(ids.length).toBeGreaterThanOrEqual(4);
+    const { themeDisplayName } = await import('./apply');
+    for (const id of ids) expect(themeDisplayName(baseTheme({ id, name: 'stored', builtIn: true })), id).not.toBe('stored');
   });
 
   it('leaves an imported theme name untouched in any locale, even one shaped like a preset id', async () => {
@@ -206,6 +217,22 @@ describe('personal accent without a loaded theme', () => {
     expect(get(displayedAccent)).toBe('#E45D87');
     applyPersonalAccent('');
     expect(rootProps.has('--accent')).toBe(false);
-    expect(get(displayedAccent)).toBe('#4F6BFF');
+    expect(get(displayedAccent).toLowerCase()).toBe(await presetToken('presetDark', '--accent'));
+  });
+});
+
+async function presetToken(preset: string, name: string): Promise<string | undefined> {
+  const { goSources } = await import('../testing/sources');
+  const source = goSources['internal/theme/presets.go'] ?? '';
+  const block = source.slice(source.indexOf(`var ${preset} =`));
+  return new RegExp(`"${name}":\\s*"([^"]*)"`).exec(block.slice(0, block.search(/^}/m)))?.[1];
+}
+
+describe('fallback colours', () => {
+  it('are the built-in presets\' own accent and backgrounds', async () => {
+    const { fallbackAccent, fallbackBackground } = await import('./apply');
+    expect(fallbackAccent.toLowerCase()).toBe(await presetToken('presetDark', '--accent'));
+    expect(fallbackBackground.dark).toBe(await presetToken('presetDark', '--bg'));
+    expect(fallbackBackground.light).toBe(await presetToken('presetLight', '--bg'));
   });
 });

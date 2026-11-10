@@ -51,9 +51,9 @@ The file is exactly this object and nothing else (unknown keys are refused):
    a different shape or feel; the defaults are listed in tokens.md. Exception: with
    `"base": "light"` also set the three shadows, because the defaults are heavy black ones made
    for a dark window:
-   `--shadow-pop`: `0 0.88rem 3.08rem rgba(15, 23, 32, 0.12), 0 2px 0.88rem rgba(15, 23, 32, 0.08)`,
-   `--shadow-modal`: `0 2.2rem 6.6rem rgba(15, 23, 32, 0.16)`,
-   `--shadow-lift`: `0 1.32rem 3.08rem -0.88rem rgba(15, 23, 32, 0.22)` (tint them to the theme if you like).
+   `--shadow-pop`: `0 0.8rem 2.4rem rgba(15, 23, 32, 0.12), 0 1px 0 rgba(255, 255, 255, 0.6) inset`,
+   `--shadow-modal`: `0 2.4rem 6rem rgba(15, 23, 32, 0.16)`,
+   `--shadow-lift`: `0 1.2rem 2.8rem -0.8rem rgba(15, 23, 32, 0.22)` (tint them to the theme if you like).
 3. Keep the surface ladder ordered by elevation: `--bg` → `--surface` → `--surface-2` →
    `--surface-3` → `--surface-4`, each a small step lighter (dark base) or darker (light base).
 4. Keep text readable. Contrast ratio (WCAG) of `--text` on `--bg` and on `--surface-2` at least

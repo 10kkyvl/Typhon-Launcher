@@ -7,20 +7,21 @@ import (
 )
 
 // A generation is a snapshot of the whole built-in set at one release, so
-// every preset in it carries the same token names, all of them themeable.
+// every preset in it carries the same token names, all of them themeable. A
+// preset added later is absent from the older generations, while a released
+// one stays built in: its forks are migrated against it.
 func TestReleasedPresetGenerationsAreWholeSnapshots(t *testing.T) {
 	if len(releasedPresetGenerations) == 0 {
 		t.Fatal("no released preset generations")
 	}
 	for _, gen := range releasedPresetGenerations {
-		ids := slices.Sorted(maps.Keys(gen.presets))
-		var want []string
-		for _, p := range presets {
-			want = append(want, p.ID)
+		if _, ok := gen.presets[defaultTheme().ID]; !ok {
+			t.Errorf("%s: no %s preset, which forks are matched against", gen.releases, defaultTheme().ID)
 		}
-		slices.Sort(want)
-		if !slices.Equal(ids, want) {
-			t.Errorf("%s: presets %v, want %v", gen.releases, ids, want)
+		for id := range gen.presets {
+			if _, ok := presetByID(id); !ok {
+				t.Errorf("%s: released preset %s is no longer built in", gen.releases, id)
+			}
 		}
 		var names []string
 		for id, tokens := range gen.presets {

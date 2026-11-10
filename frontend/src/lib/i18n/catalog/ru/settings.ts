@@ -233,6 +233,7 @@ export const settings = {
   'settings.appearanceThemeNameDark': 'Тёмная',
   'settings.appearanceThemeNameLight': 'Светлая',
   'settings.appearanceThemeNameContrast': 'Высокий контраст',
+  'settings.appearanceThemeNameBlush': 'Румянец',
   'settings.appearanceCustomThemeTag': 'своя',
   'settings.appearanceImportLabel': 'Импорт темы',
   'settings.appearanceImportSub': 'Загрузить файл темы с диска или вставить текст. Импортированный файл отслеживается: изменения в нём сразу появляются в лаунчере',
