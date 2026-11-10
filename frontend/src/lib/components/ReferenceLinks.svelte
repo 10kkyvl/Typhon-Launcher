@@ -20,7 +20,7 @@
         {#if label}
           <button class="link" onclick={() => onopen(kind)}>
             {$t(label)}
-            <ExternalLink size="1.54rem" strokeWidth={1.8} />
+            <ExternalLink size="1.4rem" strokeWidth={1.8} />
           </button>
         {/if}
       {/each}
@@ -51,9 +51,9 @@
   .link {
     display: inline-flex;
     align-items: center;
-    gap: 0.66rem;
-    height: 3.08rem;
-    padding: 0 1.21rem;
+    gap: 0.6rem;
+    height: 2.8rem;
+    padding: 0 1.1rem;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     background: var(--surface);

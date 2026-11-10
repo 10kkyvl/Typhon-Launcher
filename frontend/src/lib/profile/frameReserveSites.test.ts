@@ -27,7 +27,7 @@ describe('lists that stack avatars give every row the same frame reserve', () =>
 
   it('hands the reserve from FriendRow to its Avatar and to the compact meta offset', () => {
     expect(tags(friendRow, 'Avatar')[0]).toContain('{reserve}');
-    expect(friendRow).toContain('margin-left: calc(3.52rem * (1 + var(--reserve-l, 0) + var(--reserve-r, 0)) + var(--space-3));');
+    expect(friendRow).toContain('margin-left: calc(3.2rem * (1 + var(--reserve-l, 0) + var(--reserve-r, 0)) + var(--space-3));');
   });
 
   it.each([

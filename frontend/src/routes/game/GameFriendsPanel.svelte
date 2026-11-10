@@ -95,7 +95,7 @@
 
     <button class="show-all" type="button" onclick={() => navigate('friends')}>
       {msg('games.friendsPanelSeeAll')}
-      <ChevronRight size="1.54rem" strokeWidth={1.8} />
+      <ChevronRight size="1.4rem" strokeWidth={1.8} />
     </button>
   </Card>
 {/if}
@@ -118,7 +118,7 @@
     align-items: center;
     gap: var(--space-3);
     width: 100%;
-    padding: 0.66rem;
+    padding: 0.6rem;
     border-radius: var(--radius-md);
     text-align: left;
     transition: background var(--dur) var(--ease);
@@ -145,7 +145,7 @@
   .meta {
     display: inline-flex;
     align-items: center;
-    gap: 0.66rem;
+    gap: 0.6rem;
     flex-wrap: wrap;
   }
 
@@ -157,7 +157,7 @@
   .show-all {
     display: inline-flex;
     align-items: center;
-    gap: 0.33rem;
+    gap: 0.3rem;
     margin-top: var(--space-4);
     font-size: var(--font-sm);
     font-weight: 500;

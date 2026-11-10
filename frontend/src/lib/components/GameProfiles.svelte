@@ -197,7 +197,7 @@
   <div class="row spread">
     <h4>{msg('modals.profilesTitle')}</h4>
     <Button size="sm" disabled={loading || busy || editor !== null} onclick={startAdd}>
-      <Plus size="1.65rem" strokeWidth={1.8} />
+      <Plus size="1.5rem" strokeWidth={1.8} />
       {msg('modals.profilesAdd')}
     </Button>
   </div>
@@ -221,10 +221,10 @@
           {#if !p.isDefault}
             <span class="grow"></span>
             <button class="icon" title={msg('modals.profilesEdit')} aria-label={msg('modals.profilesEdit')} disabled={busy || editor !== null} onclick={() => startEdit(p)}>
-              <Pencil size="1.65rem" strokeWidth={1.8} />
+              <Pencil size="1.5rem" strokeWidth={1.8} />
             </button>
             <button class="icon" title={msg('modals.profilesDelete')} aria-label={msg('modals.profilesDelete')} disabled={busy} onclick={() => (deleting = p)}>
-              <Trash2 size="1.65rem" strokeWidth={1.8} />
+              <Trash2 size="1.5rem" strokeWidth={1.8} />
             </button>
           {/if}
         </div>
@@ -288,7 +288,7 @@
         {/if}
         <div>
           <Button size="sm" disabled={busy} onclick={browse}>
-            <FolderOpen size="1.65rem" strokeWidth={1.8} />
+            <FolderOpen size="1.5rem" strokeWidth={1.8} />
             {msg('modals.profilesExeBrowse')}
           </Button>
         </div>
@@ -470,7 +470,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-1);
-    max-height: 13.2rem;
+    max-height: 12rem;
     overflow-y: auto;
   }
 

@@ -509,7 +509,7 @@
 
   .preset-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(16.5rem, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
     gap: var(--space-3);
     margin-bottom: var(--space-4);
   }
@@ -522,7 +522,7 @@
   .preset-cell > .preset {
     flex: 1 1 auto;
     min-width: 0;
-    padding-right: 3.74rem;
+    padding-right: 3.4rem;
   }
 
   .preset-delete {
@@ -589,8 +589,8 @@
   }
 
   .preset-swatch {
-    width: 2.64rem;
-    height: 2.64rem;
+    width: 2.4rem;
+    height: 2.4rem;
     border-radius: var(--radius-sm);
     border: 2px solid var(--border-strong);
     flex-shrink: 0;
@@ -617,7 +617,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-6);
-    padding: 1.43rem 0;
+    padding: 1.3rem 0;
   }
 
   .import-actions {
@@ -706,7 +706,7 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
-    flex: 1 1 17.6rem;
+    flex: 1 1 16rem;
     min-width: 0;
   }
 
@@ -725,12 +725,12 @@
     display: flex;
     align-items: center;
     gap: var(--space-2);
-    flex: 0 1 24.2rem;
+    flex: 0 1 22rem;
     min-width: 0;
   }
 
   .swatch {
-    width: 3.74rem;
+    width: 3.4rem;
     height: var(--control-sm);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-sm);
@@ -738,9 +738,9 @@
   }
 
   .color-input {
-    width: 3.74rem;
+    width: 3.4rem;
     height: var(--control-sm);
-    padding: 0.22rem;
+    padding: 0.2rem;
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
@@ -757,7 +757,7 @@
     font-size: var(--font-xs);
     font-weight: 500;
     color: var(--accent-text);
-    padding: 0.44rem 0;
+    padding: 0.4rem 0;
   }
 
   .advanced-toggle:hover {
@@ -766,7 +766,7 @@
 
   .textarea {
     width: 100%;
-    min-height: 15.4rem;
+    min-height: 14rem;
     padding: var(--space-2);
     background: var(--surface-2);
     border: 1px solid var(--border);

@@ -148,7 +148,7 @@
 
       {#if error}
         <p class="error">
-          <TriangleAlert size="1.65rem" strokeWidth={1.8} />
+          <TriangleAlert size="1.5rem" strokeWidth={1.8} />
           {error}
         </p>
       {/if}
@@ -178,9 +178,9 @@
   }
 
   .card {
-    width: 57.2rem;
-    max-width: calc(100vw - 5.28rem);
-    max-height: calc(100vh - 8.8rem);
+    width: 52rem;
+    max-width: calc(100vw - 4.8rem);
+    max-height: calc(100vh - 8rem);
     display: flex;
     flex-direction: column;
     background: var(--surface-2);
@@ -191,7 +191,7 @@
   }
 
   .head {
-    padding: 1.98rem 2.64rem 0;
+    padding: 1.8rem 2.4rem 0;
   }
 
   h3 {
@@ -203,15 +203,15 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
-    padding: 1.76rem 2.64rem 2.64rem;
+    padding: 1.6rem 2.4rem 2.4rem;
     overflow-y: auto;
   }
 
   .foot {
     display: flex;
     justify-content: flex-end;
-    gap: 0.88rem;
-    padding: 1.54rem 2.64rem;
+    gap: 0.8rem;
+    padding: 1.4rem 2.4rem;
     border-top: 1px solid var(--border);
   }
 
@@ -234,7 +234,7 @@
   .row-text {
     display: flex;
     flex-direction: column;
-    gap: 0.44rem;
+    gap: 0.4rem;
   }
 
   .row-title {
@@ -271,7 +271,7 @@
   .example {
     display: flex;
     flex-direction: column;
-    gap: 0.66rem;
+    gap: 0.6rem;
   }
 
   .example-label {
@@ -297,7 +297,7 @@
   .error {
     display: flex;
     align-items: center;
-    gap: 0.77rem;
+    gap: 0.7rem;
     font-size: var(--font-sm);
     color: var(--danger);
   }
@@ -314,7 +314,7 @@
   @keyframes rise {
     from {
       opacity: 0;
-      transform: translateY(0.44rem);
+      transform: translateY(0.4rem);
     }
     to {
       opacity: 1;

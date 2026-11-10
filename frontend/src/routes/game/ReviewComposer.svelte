@@ -276,9 +276,9 @@
   .toggle {
     display: inline-flex;
     align-items: center;
-    gap: 0.66rem;
+    gap: 0.6rem;
     height: var(--control-md);
-    padding: 0 1.54rem;
+    padding: 0 1.4rem;
     border-radius: var(--radius-md);
     border: 1px solid var(--border-strong);
     font-size: var(--font-sm);
@@ -304,7 +304,7 @@
 
   .body {
     width: 100%;
-    padding: 1.32rem 1.54rem;
+    padding: 1.2rem 1.4rem;
     border-radius: var(--radius-md);
     border: 1px solid var(--border-strong);
     background: var(--surface-3);

@@ -223,7 +223,7 @@
   .field {
     display: flex;
     flex-direction: column;
-    gap: 0.66rem;
+    gap: 0.6rem;
   }
 
   .field-label {
@@ -241,7 +241,7 @@
 
   .field-row {
     display: flex;
-    gap: 0.88rem;
+    gap: 0.8rem;
   }
 
   .form-hint {

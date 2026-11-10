@@ -122,21 +122,21 @@
   .row.compact {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 0.385rem;
-    padding: 0.88rem 0;
+    gap: 0.35rem;
+    padding: 0.8rem 0;
   }
 
   .compact .playing,
   .compact .meta {
     min-width: 0;
-    margin-left: calc(3.52rem * (1 + var(--reserve-l, 0) + var(--reserve-r, 0)) + var(--space-3));
+    margin-left: calc(3.2rem * (1 + var(--reserve-l, 0) + var(--reserve-r, 0)) + var(--space-3));
     text-align: left;
   }
 
   .compact .playing {
     display: flex;
     align-items: baseline;
-    gap: 0.385rem;
+    gap: 0.35rem;
   }
 
   .playing-label {
@@ -153,10 +153,10 @@
 
   .row {
     display: grid;
-    grid-template-columns: minmax(0, 33rem) minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 30rem) minmax(0, 1fr) auto;
     align-items: center;
     gap: var(--space-4);
-    padding: 0.88rem;
+    padding: 0.8rem;
     border-radius: var(--radius-md);
     transition: background var(--dur) var(--ease);
   }
@@ -190,7 +190,7 @@
   .presence {
     display: flex;
     align-items: center;
-    gap: 0.88rem;
+    gap: 0.8rem;
     min-width: 0;
   }
 
@@ -208,7 +208,7 @@
   .presence .playing {
     display: flex;
     align-items: baseline;
-    gap: 0.385rem;
+    gap: 0.35rem;
   }
 
   .presence .game-link {
@@ -228,8 +228,8 @@
   }
 
   .presence-dot {
-    width: 0.88rem;
-    height: 0.88rem;
+    width: 0.8rem;
+    height: 0.8rem;
     flex-shrink: 0;
     border-radius: 50%;
     background: var(--text-3);
@@ -261,7 +261,7 @@
 
   .grid-actions {
     justify-content: space-between;
-    margin: 0 -0.66rem -0.44rem;
+    margin: 0 -0.6rem -0.4rem;
   }
 
   .card-row {
@@ -272,7 +272,7 @@
   }
 
   .card-row .who {
-    flex: 0 1 22rem;
+    flex: 0 1 20rem;
   }
 
   .who {
@@ -299,7 +299,7 @@
   .names {
     display: flex;
     flex-direction: column;
-    gap: 0.11rem;
+    gap: 0.1rem;
     min-width: 0;
   }
 

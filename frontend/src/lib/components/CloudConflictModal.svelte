@@ -46,7 +46,7 @@
 <Modal
   open={!!target}
   title={msg('cloudsaves.conflictTitle')}
-  width="61.6rem"
+  width="56rem"
   onclose={closeCloudConflict}
 >
   {#if target}

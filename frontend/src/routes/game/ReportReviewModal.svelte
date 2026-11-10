@@ -34,7 +34,7 @@
   }
 </script>
 
-<Modal open title={msg('reviews.reportTitle')} width="41.8rem" {onclose}>
+<Modal open title={msg('reviews.reportTitle')} width="38rem" {onclose}>
   <div class="reasons">
     {#each REASONS as reason (reason.value)}
       <button class="reason" type="button" disabled={sending} onclick={() => submit(reason.value)}>
@@ -52,7 +52,7 @@
   }
 
   .reason {
-    padding: 1.1rem var(--space-4);
+    padding: 1rem var(--space-4);
     border-radius: var(--radius-md);
     border: 1px solid var(--border);
     text-align: left;

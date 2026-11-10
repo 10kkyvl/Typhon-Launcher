@@ -55,7 +55,7 @@
   }
 </script>
 
-<Modal open={Boolean(prompt)} title={msg('emul.biosTitle')} width="52.8rem" onclose={() => prompt?.settle(false)}>
+<Modal open={Boolean(prompt)} title={msg('emul.biosTitle')} width="48rem" onclose={() => prompt?.settle(false)}>
   {#if prompt}
     <p class="text">
       {msg('emul.biosText', { emulator: info?.emulator ?? prompt.platform, console: info?.name ?? prompt.platform })}
@@ -68,11 +68,11 @@
   {#snippet footer()}
     <Button onclick={() => prompt?.settle(false)}>{msg('common.cancel')}</Button>
     <Button disabled={!folder} onclick={openFolder}>
-      <FolderOpen size="1.54rem" strokeWidth={1.8} />
+      <FolderOpen size="1.4rem" strokeWidth={1.8} />
       {msg('emul.biosOpenFolder')}
     </Button>
     <Button variant="primary" onclick={() => prompt?.settle(true)}>
-      <RefreshCw size="1.54rem" strokeWidth={1.8} />
+      <RefreshCw size="1.4rem" strokeWidth={1.8} />
       {msg('emul.biosRetry')}
     </Button>
   {/snippet}

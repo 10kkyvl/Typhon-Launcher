@@ -57,7 +57,7 @@
   {/if}
 </div>
 <style>
-  .cover { position: relative; height: 12.1rem; margin: 0 -2.2rem -5.28rem; overflow: hidden; }
+  .cover { position: relative; height: 11rem; margin: 0 -2rem -4.8rem; overflow: hidden; }
   .cover:first-child { border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
   .cover.has-image { height: auto; aspect-ratio: 4 / 1; }
   .media { position: absolute; inset: 0; mask-image: linear-gradient(#000 35%, transparent); }
@@ -67,5 +67,5 @@
   img.art { filter: blur(14px) saturate(1.15); transform: scale(1.15); }
   .dim { background: #000; }
   @media (prefers-reduced-motion: reduce) { .layer.moving { transition: none; } }
-  @media (max-width: 800px) { .cover { margin-left: -1.32rem; margin-right: -1.32rem; } }
+  @media (max-width: 800px) { .cover { margin-left: -1.2rem; margin-right: -1.2rem; } }
 </style>

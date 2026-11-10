@@ -122,8 +122,8 @@
   </div>
   <div class="speeds" aria-hidden={!downloading}>
     {#if downloading}
-      <span class="down"><ArrowDown size="1.43rem" strokeWidth={2} />{speedBytes(download.downloadSpeed)}</span>
-      <span class="up"><ArrowUp size="1.43rem" strokeWidth={2} />{speedBytes(download.uploadSpeed)}</span>
+      <span class="down"><ArrowDown size="1.3rem" strokeWidth={2} />{speedBytes(download.downloadSpeed)}</span>
+      <span class="up"><ArrowUp size="1.3rem" strokeWidth={2} />{speedBytes(download.uploadSpeed)}</span>
     {/if}
   </div>
   <div class="controls">
@@ -136,7 +136,7 @@
             pause(download.id);
           }}
         >
-          <Pause size="1.65rem" strokeWidth={1.8} />
+          <Pause size="1.5rem" strokeWidth={1.8} />
           {msg('ui.pause')}
         </Button>
       {:else if download.status === 'paused'}
@@ -148,7 +148,7 @@
             resume(download.id);
           }}
         >
-          <Play size="1.65rem" strokeWidth={1.8} />
+          <Play size="1.5rem" strokeWidth={1.8} />
           {msg('common.continue')}
         </Button>
       {/if}
@@ -162,7 +162,7 @@
           navigate('game', { id: gameId });
         }}
       >
-        <Gamepad2 size="1.76rem" strokeWidth={1.8} />
+        <Gamepad2 size="1.6rem" strokeWidth={1.8} />
       </IconButton>
     {/if}
     <IconButton
@@ -173,7 +173,7 @@
         confirmOpen = true;
       }}
     >
-      <X size="1.76rem" strokeWidth={1.8} />
+      <X size="1.6rem" strokeWidth={1.8} />
     </IconButton>
     <IconButton
       label={msg('ui.moreAboutDownload')}
@@ -183,7 +183,7 @@
         onopen?.(download);
       }}
     >
-      <ChevronRight size="1.98rem" strokeWidth={1.8} />
+      <ChevronRight size="1.8rem" strokeWidth={1.8} />
     </IconButton>
   </div>
 </div>
@@ -199,7 +199,7 @@
 <style>
   .item {
     display: grid;
-    grid-template-columns: 5.28rem minmax(0, 1fr) 11.55rem 26.4rem;
+    grid-template-columns: 4.8rem minmax(0, 1fr) 10.5rem 24rem;
     align-items: center;
     column-gap: var(--space-5);
     padding: var(--space-3) var(--space-5);
@@ -219,7 +219,7 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.66rem;
+    gap: 0.6rem;
   }
 
   .head {
@@ -241,7 +241,7 @@
 
   .tags {
     display: flex;
-    gap: 0.66rem;
+    gap: 0.6rem;
     flex-shrink: 0;
   }
 
@@ -249,7 +249,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    min-height: 2.42rem;
+    min-height: 2.2rem;
   }
 
   .bar {
@@ -259,7 +259,7 @@
 
   .pct {
     flex-shrink: 0;
-    width: 4.62rem;
+    width: 4.2rem;
     text-align: right;
     font-size: var(--font-sm);
     font-weight: 500;
@@ -277,7 +277,7 @@
   }
 
   .sep {
-    margin: 0 0.55rem;
+    margin: 0 0.5rem;
     opacity: 0.6;
   }
 
@@ -298,7 +298,7 @@
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    gap: 0.44rem;
+    gap: 0.4rem;
     min-width: 0;
     font-size: var(--font-sm);
     font-variant-numeric: tabular-nums;
@@ -308,7 +308,7 @@
   .speeds span {
     display: inline-flex;
     align-items: center;
-    gap: 0.44rem;
+    gap: 0.4rem;
   }
 
   .down {
@@ -325,7 +325,7 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 0.44rem;
+    gap: 0.4rem;
     min-width: 0;
   }
 
@@ -334,16 +334,16 @@
     justify-content: flex-end;
     flex: 1;
     min-width: 0;
-    margin-right: 0.44rem;
+    margin-right: 0.4rem;
   }
 
   .toggle :global(.btn) {
-    min-width: 13.64rem;
+    min-width: 12.4rem;
   }
 
   @media (max-width: 1300px) {
     .item {
-      grid-template-columns: 5.28rem minmax(0, 1fr) 10.45rem 26.4rem;
+      grid-template-columns: 4.8rem minmax(0, 1fr) 9.5rem 24rem;
       column-gap: var(--space-4);
     }
 

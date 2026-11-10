@@ -181,7 +181,7 @@
 <Card title={msg('emul.cardTitle')}>
   {#snippet action()}
     <Button size="sm" disabled={detecting || loading} onclick={detect}>
-      <Search size="1.54rem" strokeWidth={1.8} />
+      <Search size="1.4rem" strokeWidth={1.8} />
       {detecting ? msg('emul.detecting') : msg('emul.detect')}
     </Button>
   {/snippet}
@@ -192,7 +192,7 @@
     <div class="row">
       <span class="failure">{msg('emul.loadFailed')}</span>
       <Button size="sm" onclick={load}>
-        <RefreshCw size="1.54rem" strokeWidth={1.8} />
+        <RefreshCw size="1.4rem" strokeWidth={1.8} />
         {msg('common.retry')}
       </Button>
     </div>
@@ -212,11 +212,11 @@
           <div class="controls">
             <StatusBadge kind={statusKind(row)} label={statusLabel(row)} />
             <Button size="sm" onclick={() => openSite(row)}>
-              <ExternalLink size="1.43rem" strokeWidth={1.8} />
+              <ExternalLink size="1.3rem" strokeWidth={1.8} />
               {msg('emul.official')}
             </Button>
             <Button size="sm" disabled={busy !== ''} onclick={() => choose(row)}>
-              <FolderOpen size="1.43rem" strokeWidth={1.8} />
+              <FolderOpen size="1.3rem" strokeWidth={1.8} />
               {msg('emul.choose')}
             </Button>
             {#if row.status !== 'not_set'}
@@ -275,7 +275,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-6);
-    padding: 1.43rem 0;
+    padding: 1.3rem 0;
   }
 
   .row + .row {
@@ -336,7 +336,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-6);
-    padding: 1.21rem 0;
+    padding: 1.1rem 0;
   }
 
   .found-row + .found-row {

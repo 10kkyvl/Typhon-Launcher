@@ -176,7 +176,7 @@
     {#snippet actions()}
       <Button variant="ghost" disabled={$refreshingAll} onclick={refreshAll}>
         <span class="spin" class:on={$refreshingAll}>
-          <RefreshCw size="1.65rem" strokeWidth={1.8} />
+          <RefreshCw size="1.5rem" strokeWidth={1.8} />
         </span>
         {#if $refreshingAll && progressList.length > 0}
           <span class="all-progress">
@@ -188,14 +188,14 @@
         {/if}
       </Button>
       <Button variant="primary" onclick={startAddSource}>
-        <Plus size="1.65rem" strokeWidth={2} />
+        <Plus size="1.5rem" strokeWidth={2} />
         {msg('transfers.sourcesAddAction')}
       </Button>
     {/snippet}
   </PageHeader>
 
   <div class="notice">
-    <span class="notice-icon"><Info size="1.98rem" strokeWidth={1.8} /></span>
+    <span class="notice-icon"><Info size="1.8rem" strokeWidth={1.8} /></span>
     <p class="notice-text">{msg('transfers.sourcesNotice')}</p>
   </div>
 
@@ -205,11 +205,11 @@
       description={msg('transfers.sourcesEmptyDescription')}
     >
       {#snippet icon()}
-        <Database size="2.2rem" strokeWidth={1.8} />
+        <Database size="2rem" strokeWidth={1.8} />
       {/snippet}
       {#snippet actions()}
         <Button variant="primary" onclick={startAddSource}>
-          <Plus size="1.65rem" strokeWidth={2} />
+          <Plus size="1.5rem" strokeWidth={2} />
           {msg('transfers.sourcesAddAction')}
         </Button>
       {/snippet}
@@ -238,9 +238,9 @@
             <button class="source" onclick={() => openDetails(source.id)}>
               <span class="type-icon">
                 {#if source.type === 'file'}
-                  <FileText size="1.87rem" strokeWidth={1.8} />
+                  <FileText size="1.7rem" strokeWidth={1.8} />
                 {:else}
-                  <Globe size="1.87rem" strokeWidth={1.8} />
+                  <Globe size="1.7rem" strokeWidth={1.8} />
                 {/if}
               </span>
               <span class="source-text">
@@ -248,7 +248,7 @@
                   {source.name}
                   {#if source.insecure}
                     <Tooltip text={msg('transfers.sourcesInsecureTooltip')}>
-                      <span class="insecure"><ShieldAlert size="1.54rem" strokeWidth={1.8} /></span>
+                      <span class="insecure"><ShieldAlert size="1.4rem" strokeWidth={1.8} /></span>
                     </Tooltip>
                   {/if}
                 </span>
@@ -271,17 +271,17 @@
               {:else}
                 <StatusBadge kind={badge.kind} label={badge.label} plain />
                 {#if source.status === 'updating'}
-                  <span class="spin on busy"><RefreshCw size="1.43rem" strokeWidth={2} /></span>
+                  <span class="spin on busy"><RefreshCw size="1.3rem" strokeWidth={2} /></span>
                 {/if}
               {/if}
               {#if source.lastError}
                 <Tooltip text={truncateMiddle(sourceErrorText(source.lastError), 90)}>
-                  <span class="warn-icon"><CircleAlert size="1.65rem" strokeWidth={1.8} /></span>
+                  <span class="warn-icon"><CircleAlert size="1.5rem" strokeWidth={1.8} /></span>
                 </Tooltip>
               {:else if source.health !== 'healthy'}
                 <Tooltip text={source.warnings?.length ? `${health.label}: ${source.warnings.map(sourceWarningText).join('; ')}` : health.label}>
                   <span class="health" style:color={health.color}>
-                    <health.icon size="1.65rem" strokeWidth={1.8} />
+                    <health.icon size="1.5rem" strokeWidth={1.8} />
                   </span>
                 </Tooltip>
               {/if}
@@ -308,7 +308,7 @@
               <DropdownMenu items={sourceMenu(source)} onselect={(id) => onSourceMenu(source, id)}>
                 {#snippet trigger({ toggle: toggleMenu })}
                   <IconButton label={msg('transfers.sourcesMenuLabel')} size="sm" onclick={toggleMenu}>
-                    <EllipsisVertical size="1.76rem" strokeWidth={1.8} />
+                    <EllipsisVertical size="1.6rem" strokeWidth={1.8} />
                   </IconButton>
                 {/snippet}
               </DropdownMenu>
@@ -340,7 +340,7 @@
   .notice-icon {
     display: flex;
     flex-shrink: 0;
-    margin-top: 0.11rem;
+    margin-top: 0.1rem;
     color: var(--text-3);
   }
 
@@ -352,7 +352,7 @@
   .table {
     display: flex;
     flex-direction: column;
-    max-width: 154rem;
+    max-width: 140rem;
     margin-top: var(--space-5);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
@@ -379,15 +379,15 @@
   .all-progress {
     display: inline-flex;
     flex-direction: column;
-    gap: 0.44rem;
-    min-width: 13.2rem;
+    gap: 0.4rem;
+    min-width: 12rem;
     text-align: left;
   }
 
   .live {
     display: flex;
     flex-direction: column;
-    gap: 0.44rem;
+    gap: 0.4rem;
     min-width: 0;
     width: 100%;
   }
@@ -415,18 +415,18 @@
   .thead,
   .row {
     display: grid;
-    grid-template-columns: minmax(26.4rem, 1.6fr) 17.6rem 12.1rem 10.45rem 13.2rem 4.4rem;
+    grid-template-columns: minmax(24rem, 1.6fr) 16rem 11rem 9.5rem 12rem 4rem;
     align-items: center;
     gap: var(--space-5);
   }
 
   .thead {
-    padding: 1.1rem 1.32rem;
+    padding: 1rem 1.2rem;
     border-bottom: 1px solid var(--border);
   }
 
   .th {
-    font-size: 1.32rem;
+    font-size: 1.2rem;
     font-weight: 500;
     color: var(--text-3);
     white-space: nowrap;
@@ -437,7 +437,7 @@
   }
 
   .row {
-    padding: 1.32rem 1.32rem;
+    padding: 1.2rem 1.2rem;
     transition: background var(--dur) var(--ease);
   }
 
@@ -466,8 +466,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 3.96rem;
-    height: 3.96rem;
+    width: 3.6rem;
+    height: 3.6rem;
     flex-shrink: 0;
     border-radius: var(--radius-md);
     background: var(--surface-3);
@@ -477,7 +477,7 @@
   .source-text {
     display: flex;
     flex-direction: column;
-    gap: 0.22rem;
+    gap: 0.2rem;
     min-width: 0;
   }
 
@@ -511,7 +511,7 @@
   .cell {
     display: inline-flex;
     align-items: center;
-    gap: 0.66rem;
+    gap: 0.6rem;
     min-width: 0;
     font-size: var(--font-sm);
     color: var(--text-2);
@@ -543,7 +543,7 @@
   .count-wrap {
     display: inline-flex;
     align-items: baseline;
-    gap: 0.55rem;
+    gap: 0.5rem;
     white-space: nowrap;
   }
 
@@ -577,7 +577,7 @@
   @media (max-width: 1300px) {
     .thead,
     .row {
-      grid-template-columns: minmax(22rem, 1.6fr) 16.5rem 11rem 13.2rem 4.4rem;
+      grid-template-columns: minmax(20rem, 1.6fr) 15rem 10rem 12rem 4rem;
     }
 
     .th:nth-child(4),

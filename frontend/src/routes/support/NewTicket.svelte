@@ -118,7 +118,7 @@
 
   {#if limitsFailure}
     <div class="banner" role="alert">
-      <CircleAlert size="1.76rem" strokeWidth={1.8} />
+      <CircleAlert size="1.6rem" strokeWidth={1.8} />
       <span class="banner-text">{limitsFailure}</span>
       <Button size="sm" onclick={loadLimits}>{msg('common.retry')}</Button>
     </div>
@@ -137,7 +137,7 @@
           <div class="chosen">
             <span class="chosen-title" dir="auto">{game.title}</span>
             <button type="button" class="clear" aria-label={msg('tickets.gameClear')} disabled={sending} onclick={() => (game = null)}>
-              <X size="1.65rem" strokeWidth={1.8} />
+              <X size="1.5rem" strokeWidth={1.8} />
             </button>
           </div>
         {:else}
@@ -201,7 +201,7 @@
 
       {#if formError}
         <p class="error general" role="alert">
-          <CircleAlert size="1.76rem" strokeWidth={1.8} />
+          <CircleAlert size="1.6rem" strokeWidth={1.8} />
           <span>{formError}</span>
         </p>
       {/if}
@@ -240,7 +240,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    padding: 0.99rem 1.32rem;
+    padding: 0.9rem 1.2rem;
     border-radius: var(--radius-md);
     background: var(--danger-subtle);
     color: var(--danger);
@@ -257,13 +257,13 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-5);
-    max-width: 79.2rem;
+    max-width: 72rem;
   }
 
   .field {
     display: flex;
     flex-direction: column;
-    gap: 0.66rem;
+    gap: 0.6rem;
     min-width: 0;
   }
 
@@ -271,7 +271,7 @@
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: 0.88rem;
+    gap: 0.8rem;
     font-size: var(--font-xs);
     color: var(--text-2);
   }
@@ -288,7 +288,7 @@
   .input {
     width: 100%;
     height: var(--control-md);
-    padding: 0 1.32rem;
+    padding: 0 1.2rem;
     background: var(--surface-2);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-md);
@@ -316,7 +316,7 @@
 
   .area {
     height: auto;
-    padding: 0.99rem 1.32rem;
+    padding: 0.9rem 1.2rem;
     line-height: 1.55;
     resize: vertical;
   }
@@ -333,7 +333,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-3);
-    padding: 0.66rem 0.66rem 0.66rem 1.32rem;
+    padding: 0.6rem 0.6rem 0.6rem 1.2rem;
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-md);
     background: var(--surface-2);
@@ -351,8 +351,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 3.08rem;
-    height: 3.08rem;
+    width: 2.8rem;
+    height: 2.8rem;
     border-radius: var(--radius-sm);
     color: var(--text-3);
   }
@@ -374,9 +374,9 @@
   .error.general {
     display: flex;
     align-items: flex-start;
-    gap: 0.88rem;
+    gap: 0.8rem;
     margin: 0;
-    padding: 0.99rem 1.32rem;
+    padding: 0.9rem 1.2rem;
     border-radius: var(--radius-md);
     background: var(--danger-subtle);
     font-size: var(--font-sm);
@@ -385,13 +385,13 @@
 
   .error.general :global(svg) {
     flex-shrink: 0;
-    margin-top: 0.11rem;
+    margin-top: 0.1rem;
   }
 
   .progress {
     display: flex;
     flex-direction: column;
-    gap: 0.66rem;
+    gap: 0.6rem;
   }
 
   .actions {

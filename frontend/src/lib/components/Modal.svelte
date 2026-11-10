@@ -11,7 +11,7 @@
   let {
     open = $bindable(false),
     title,
-    width = '50.6rem',
+    width = '46rem',
     onclose,
     children,
     footer,
@@ -60,7 +60,7 @@
       <div class="head">
         <h3>{title}</h3>
         <IconButton label={msg('common.close')} size="sm" onclick={close}>
-          <X size="1.87rem" strokeWidth={1.8} />
+          <X size="1.7rem" strokeWidth={1.8} />
         </IconButton>
       </div>
       <div class="body">
@@ -88,8 +88,8 @@
   }
 
   .modal {
-    max-width: calc(100vw - 5.28rem);
-    max-height: calc(100vh - 8.8rem);
+    max-width: calc(100vw - 4.8rem);
+    max-height: calc(100vh - 8rem);
     display: flex;
     flex-direction: column;
     background: var(--surface-2);
@@ -103,7 +103,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 1.98rem 1.98rem 1.76rem 2.64rem;
+    padding: 1.8rem 1.8rem 1.6rem 2.4rem;
     border-bottom: 1px solid var(--border);
   }
 
@@ -113,15 +113,15 @@
   }
 
   .body {
-    padding: 1.76rem 2.64rem 2.64rem;
+    padding: 1.6rem 2.4rem 2.4rem;
     overflow-y: auto;
   }
 
   .foot {
     display: flex;
     justify-content: flex-end;
-    gap: 0.88rem;
-    padding: 1.54rem 2.64rem;
+    gap: 0.8rem;
+    padding: 1.4rem 2.4rem;
     border-top: 1px solid var(--border);
   }
 
@@ -137,7 +137,7 @@
   @keyframes rise {
     from {
       opacity: 0;
-      transform: translateY(0.88rem) scale(0.98);
+      transform: translateY(0.8rem) scale(0.98);
     }
     to {
       opacity: 1;

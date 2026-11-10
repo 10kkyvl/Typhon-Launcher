@@ -167,11 +167,11 @@
             >
               <span class="row-icon" class:attention={item.attention}>
                 {#if item.kind === 'install'}
-                  <Wrench size="1.76rem" strokeWidth={1.8} />
+                  <Wrench size="1.6rem" strokeWidth={1.8} />
                 {:else if item.kind === 'verify'}
-                  <FileCheck size="1.76rem" strokeWidth={1.8} />
+                  <FileCheck size="1.6rem" strokeWidth={1.8} />
                 {:else}
-                  <Download size="1.76rem" strokeWidth={1.8} />
+                  <Download size="1.6rem" strokeWidth={1.8} />
                 {/if}
               </span>
               <span class="row-body">
@@ -197,7 +197,7 @@
                       pause(item.downloadId);
                     }}
                   >
-                    <Pause size="1.76rem" strokeWidth={1.8} />
+                    <Pause size="1.6rem" strokeWidth={1.8} />
                   </IconButton>
                 {:else if item.resumable}
                   <IconButton
@@ -208,7 +208,7 @@
                       resume(item.downloadId);
                     }}
                   >
-                    <Play size="1.76rem" strokeWidth={1.8} />
+                    <Play size="1.6rem" strokeWidth={1.8} />
                   </IconButton>
                 {:else if item.kind === 'install' && item.attention}
                   <IconButton
@@ -220,7 +220,7 @@
                       cancelWaiting(item);
                     }}
                   >
-                    <X size="1.76rem" strokeWidth={1.8} />
+                    <X size="1.6rem" strokeWidth={1.8} />
                   </IconButton>
                 {/if}
               </span>
@@ -256,7 +256,7 @@
       {/if}
       {#if !summary.primary.indeterminate}<span class="pill-pct">{progressPercent(summary.progress)}%</span>{/if}
       <span class="pill-chevron" class:down={expanded}>
-        <ChevronUp size="1.76rem" strokeWidth={1.8} />
+        <ChevronUp size="1.6rem" strokeWidth={1.8} />
       </span>
     </button>
   </div>
@@ -267,22 +267,22 @@
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    gap: 0.66rem;
+    gap: 0.6rem;
   }
 
   .pill {
     display: flex;
     align-items: center;
-    gap: 0.88rem;
-    max-width: 37.4rem;
-    height: 3.52rem;
-    padding: 0 0.88rem 0 0.66rem;
+    gap: 0.8rem;
+    max-width: 34rem;
+    height: 3.2rem;
+    padding: 0 0.8rem 0 0.6rem;
     background: var(--surface-4);
     border: 1px solid var(--border-strong);
-    border-radius: 108.9rem;
+    border-radius: 99rem;
     box-shadow: var(--shadow-pop);
     color: var(--text-2);
-    font-size: 1.32rem;
+    font-size: 1.2rem;
     font-variant-numeric: tabular-nums;
     transition:
       background var(--dur) var(--ease),
@@ -302,8 +302,8 @@
 
   .ring {
     display: flex;
-    width: 2.2rem;
-    height: 2.2rem;
+    width: 2rem;
+    height: 2rem;
     flex-shrink: 0;
   }
 
@@ -341,12 +341,12 @@
 
   .pill-more {
     flex-shrink: 0;
-    padding: 0 0.55rem;
+    padding: 0 0.5rem;
     border-radius: var(--radius-xs);
     background: var(--hover-strong);
     color: var(--text-3);
-    font-size: 1.21rem;
-    line-height: 1.76rem;
+    font-size: 1.1rem;
+    line-height: 1.6rem;
   }
 
   .pill-pct {
@@ -366,10 +366,10 @@
   }
 
   .panel {
-    width: 41.8rem;
-    max-height: 46.2rem;
+    width: 38rem;
+    max-height: 42rem;
     overflow-y: auto;
-    padding: 0.66rem;
+    padding: 0.6rem;
     background: var(--surface-3);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-md);
@@ -382,11 +382,11 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-4);
-    padding: 0.66rem 0.88rem 0.55rem;
+    padding: 0.6rem 0.8rem 0.5rem;
   }
 
   .panel-title {
-    font-size: 1.21rem;
+    font-size: 1.1rem;
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -411,8 +411,8 @@
   .row {
     display: flex;
     align-items: flex-start;
-    gap: 0.88rem;
-    padding: 0.88rem;
+    gap: 0.8rem;
+    padding: 0.8rem;
     border-radius: var(--radius-sm);
     cursor: pointer;
     transition: background var(--dur-fast) var(--ease);
@@ -426,8 +426,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 2.64rem;
-    height: 2.64rem;
+    width: 2.4rem;
+    height: 2.4rem;
     flex-shrink: 0;
     border-radius: var(--radius-xs);
     background: var(--surface-4);
@@ -444,7 +444,7 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.55rem;
+    gap: 0.5rem;
   }
 
   .row-head,
@@ -452,7 +452,7 @@
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: 0.88rem;
+    gap: 0.8rem;
     min-width: 0;
   }
 
@@ -470,7 +470,7 @@
   .row-status,
   .row-detail {
     flex-shrink: 0;
-    font-size: 1.21rem;
+    font-size: 1.1rem;
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
   }
@@ -490,15 +490,15 @@
   .row-controls {
     display: flex;
     justify-content: flex-end;
-    min-width: 3.08rem;
+    min-width: 2.8rem;
     flex-shrink: 0;
-    margin: -0.22rem -0.44rem 0 0;
+    margin: -0.2rem -0.4rem 0 0;
   }
 
   @keyframes dock-in {
     from {
       opacity: 0;
-      transform: translateY(0.66rem);
+      transform: translateY(0.6rem);
     }
     to {
       opacity: 1;
@@ -509,7 +509,7 @@
   @keyframes dock-panel {
     from {
       opacity: 0;
-      transform: translateY(0.88rem) scale(0.98);
+      transform: translateY(0.8rem) scale(0.98);
     }
     to {
       opacity: 1;

@@ -85,7 +85,7 @@
             onchange={(e) => setTime(i, 'to', e.currentTarget.value)}
           />
           <IconButton label={msg('settings.downloadsScheduleRemove')} size="sm" onclick={() => remove(i)}>
-            <Trash2 size="1.65rem" strokeWidth={1.8} />
+            <Trash2 size="1.5rem" strokeWidth={1.8} />
           </IconButton>
         </div>
       </div>
@@ -94,7 +94,7 @@
   {/if}
   <div class="actions">
     <Button size="sm" onclick={add}>
-      <Plus size="1.54rem" strokeWidth={2} />
+      <Plus size="1.4rem" strokeWidth={2} />
       {msg('settings.downloadsScheduleAdd')}
     </Button>
   </div>
@@ -123,7 +123,7 @@
   .days {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.66rem;
+    gap: 0.6rem;
   }
 
   .times {
@@ -133,7 +133,7 @@
   }
 
   .time {
-    width: 13.2rem;
+    width: 12rem;
   }
 
   .dash {

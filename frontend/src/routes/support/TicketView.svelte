@@ -151,14 +151,14 @@
 <Card surface="panel">
   <div class="top">
     <Button variant="ghost" size="sm" onclick={() => navigate('support')}>
-      <ArrowLeft size="1.65rem" strokeWidth={1.8} />
+      <ArrowLeft size="1.5rem" strokeWidth={1.8} />
       {msg('tickets.back')}
     </Button>
   </div>
 
   {#if failure}
     <div class="banner" role="alert">
-      <CircleAlert size="1.76rem" strokeWidth={1.8} />
+      <CircleAlert size="1.6rem" strokeWidth={1.8} />
       <span class="banner-text">{failure}</span>
       <Button size="sm" onclick={retry}>{msg('common.retry')}</Button>
     </div>
@@ -190,7 +190,7 @@
           </div>
           <p class="text" dir="auto">{message.body}</p>
           {#if message.logBundleId}
-            <span class="logs"><Paperclip size="1.54rem" strokeWidth={1.8} />{msg('tickets.logsAttached')}</span>
+            <span class="logs"><Paperclip size="1.4rem" strokeWidth={1.8} />{msg('tickets.logsAttached')}</span>
           {/if}
         </li>
       {/each}
@@ -202,7 +202,7 @@
       {/if}
       {#if limitsFailure}
         <div class="banner" role="alert">
-          <CircleAlert size="1.76rem" strokeWidth={1.8} />
+          <CircleAlert size="1.6rem" strokeWidth={1.8} />
           <span class="banner-text">{limitsFailure}</span>
           <Button size="sm" onclick={loadLimits}>{msg('common.retry')}</Button>
         </div>
@@ -258,7 +258,7 @@
 
 <style>
   .top {
-    margin: 0 0 var(--space-4) -0.88rem;
+    margin: 0 0 var(--space-4) -0.8rem;
   }
 
   .muted {
@@ -272,7 +272,7 @@
     align-items: center;
     gap: var(--space-3);
     margin-bottom: var(--space-4);
-    padding: 0.99rem 1.32rem;
+    padding: 0.9rem 1.2rem;
     border-radius: var(--radius-md);
     background: var(--danger-subtle);
     color: var(--danger);
@@ -313,7 +313,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.66rem var(--space-3);
+    gap: 0.6rem var(--space-3);
     margin-top: var(--space-2);
     font-size: var(--font-sm);
     color: var(--text-3);
@@ -334,7 +334,7 @@
   }
 
   .bubble {
-    max-width: 74.8rem;
+    max-width: 68rem;
     padding: var(--space-3) var(--space-4);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
@@ -356,7 +356,7 @@
     align-items: baseline;
     justify-content: space-between;
     gap: var(--space-4);
-    margin-bottom: 0.66rem;
+    margin-bottom: 0.6rem;
     font-size: var(--font-xs);
   }
 
@@ -382,8 +382,8 @@
   .logs {
     display: inline-flex;
     align-items: center;
-    gap: 0.55rem;
-    margin-top: 0.88rem;
+    gap: 0.5rem;
+    margin-top: 0.8rem;
     font-size: var(--font-xs);
     color: var(--text-3);
   }
@@ -392,7 +392,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
-    max-width: 79.2rem;
+    max-width: 72rem;
   }
 
   .hint {
@@ -405,14 +405,14 @@
   .field {
     display: flex;
     flex-direction: column;
-    gap: 0.66rem;
+    gap: 0.6rem;
   }
 
   .label {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: 0.88rem;
+    gap: 0.8rem;
     font-size: var(--font-xs);
     color: var(--text-2);
   }
@@ -428,7 +428,7 @@
 
   .input {
     width: 100%;
-    padding: 0.99rem 1.32rem;
+    padding: 0.9rem 1.2rem;
     background: var(--surface-2);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-md);
@@ -464,7 +464,7 @@
   .progress {
     display: flex;
     flex-direction: column;
-    gap: 0.66rem;
+    gap: 0.6rem;
   }
 
   .actions {

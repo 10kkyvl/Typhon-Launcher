@@ -84,7 +84,7 @@
     position: relative;
     display: inline-flex;
     align-items: center;
-    gap: 0.77rem;
+    gap: 0.7rem;
     font-size: var(--font-md);
     font-weight: 500;
     color: var(--text-3);
@@ -92,7 +92,7 @@
   }
 
   .underline .tab {
-    padding: 0.88rem 0.44rem 1.21rem;
+    padding: 0.8rem 0.4rem 1.1rem;
     margin-right: var(--space-3);
   }
 
@@ -151,9 +151,9 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 2.42rem;
-    height: 2.42rem;
-    padding: 0 0.66rem;
+    min-width: 2.2rem;
+    height: 2.2rem;
+    padding: 0 0.6rem;
     border-radius: var(--radius-xl);
     background: var(--hover-strong);
     color: var(--text-3);

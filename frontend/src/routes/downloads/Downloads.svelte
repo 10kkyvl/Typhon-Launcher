@@ -155,15 +155,15 @@
       {#snippet trigger({ toggle })}
         <Button onclick={toggle}>
           {msg('transfers.downloadsConcurrency', { value: concurrencyValue })}
-          <ChevronDown size="1.54rem" strokeWidth={1.8} />
+          <ChevronDown size="1.4rem" strokeWidth={1.8} />
         </Button>
       {/snippet}
     </DropdownMenu>
     <IconButton label={msg('transfers.downloadsSettingsLabel')} onclick={() => navigate('settings', { tab: 'downloads' })}>
-      <Settings size="1.87rem" strokeWidth={1.8} />
+      <Settings size="1.7rem" strokeWidth={1.8} />
     </IconButton>
     <Button variant="primary" onclick={() => (addOpen = true)}>
-      <Plus size="1.65rem" strokeWidth={2} />
+      <Plus size="1.5rem" strokeWidth={2} />
       {msg('transfers.downloadsAddAction')}
     </Button>
   {/snippet}
@@ -172,11 +172,11 @@
 {#if playBanner}
   <div class="play-banner" role="status">
     {#if playBanner.kind === 'schedule'}
-      <CalendarClock size="1.65rem" strokeWidth={1.8} />
+      <CalendarClock size="1.5rem" strokeWidth={1.8} />
     {:else if playBanner.kind === 'pause'}
-      <Pause size="1.65rem" strokeWidth={1.8} />
+      <Pause size="1.5rem" strokeWidth={1.8} />
     {:else}
-      <Gauge size="1.65rem" strokeWidth={1.8} />
+      <Gauge size="1.5rem" strokeWidth={1.8} />
     {/if}
     <span class="play-text">{playBannerText}</span>
     <Button size="sm" onclick={() => navigate('settings', { tab: 'downloads' })}>{msg('transfers.playBannerSettings')}</Button>
@@ -189,19 +189,19 @@
     description={msg('transfers.downloadsEmptyActiveDescription')}
   >
     {#snippet icon()}
-      <Download size="2.2rem" strokeWidth={1.8} />
+      <Download size="2rem" strokeWidth={1.8} />
     {/snippet}
     {#snippet actions()}
       <Button variant="primary" onclick={() => (addOpen = true)}>
-        <Plus size="1.65rem" strokeWidth={2} />
+        <Plus size="1.5rem" strokeWidth={2} />
         {msg('transfers.downloadsAddAction')}
       </Button>
     {/snippet}
   </EmptyState>
 {:else}
   <div class="summary">
-    <span class="sum speed"><ArrowDown size="1.65rem" strokeWidth={2} />{speedBytes($stats.downSpeed)}</span>
-    <span class="sum speed dim"><ArrowUp size="1.65rem" strokeWidth={2} />{speedBytes($stats.upSpeed)}</span>
+    <span class="sum speed"><ArrowDown size="1.5rem" strokeWidth={2} />{speedBytes($stats.downSpeed)}</span>
+    <span class="sum speed dim"><ArrowUp size="1.5rem" strokeWidth={2} />{speedBytes($stats.upSpeed)}</span>
     <span class="sum-sep" aria-hidden="true"></span>
     <span class="sum dim">{msg('downloads.active', { count: $stats.activeCount })}</span>
     <span class="sum dim">{msg('transfers.downloadsQueuedCount', { count: $queue.length })}</span>
@@ -233,22 +233,22 @@
           <div class="info">
             <button class="title link" title={item.name} onclick={() => openDetails(item.id)}>{item.name}</button>
             <span class="error-text">
-              <CircleAlert size="1.54rem" strokeWidth={1.8} />
+              <CircleAlert size="1.4rem" strokeWidth={1.8} />
               <span>{installErrorText(item.error)}</span>
             </span>
           </div>
           <div class="row-actions">
             {#if gamePageId(item)}
               <IconButton label={msg('transfers.gamePage')} size="sm" onclick={() => navigate('game', { id: gamePageId(item) })}>
-                <Gamepad2 size="1.76rem" strokeWidth={1.8} />
+                <Gamepad2 size="1.6rem" strokeWidth={1.8} />
               </IconButton>
             {/if}
             <Button size="sm" onclick={() => resume(item.id)}>
-              <RotateCcw size="1.54rem" strokeWidth={1.8} />
+              <RotateCcw size="1.4rem" strokeWidth={1.8} />
               {msg('common.retry')}
             </Button>
             <IconButton label={msg('transfers.downloadsRemoveFromListLabel')} size="sm" onclick={() => remove(item.id)}>
-              <X size="1.76rem" strokeWidth={1.8} />
+              <X size="1.6rem" strokeWidth={1.8} />
             </IconButton>
           </div>
         </div>
@@ -286,7 +286,7 @@
             {/if}
             {#if gamePageId(q)}
               <IconButton label={msg('transfers.gamePage')} size="sm" onclick={() => navigate('game', { id: gamePageId(q) })}>
-                <Gamepad2 size="1.76rem" strokeWidth={1.8} />
+                <Gamepad2 size="1.6rem" strokeWidth={1.8} />
               </IconButton>
             {/if}
             <DropdownMenu
@@ -303,12 +303,12 @@
             >
               {#snippet trigger({ toggle })}
                 <IconButton label={msg('transfers.downloadsQueueActionsLabel')} size="sm" onclick={toggle}>
-                  <Menu size="1.76rem" strokeWidth={1.8} />
+                  <Menu size="1.6rem" strokeWidth={1.8} />
                 </IconButton>
               {/snippet}
             </DropdownMenu>
             <IconButton label={msg('transfers.downloadsCancelLabel')} size="sm" onclick={() => remove(q.id)}>
-              <X size="1.76rem" strokeWidth={1.8} />
+              <X size="1.6rem" strokeWidth={1.8} />
             </IconButton>
           </div>
         </div>
@@ -370,14 +370,14 @@
           <div class="row-actions">
             {#if gamePageId(item)}
               <IconButton label={msg('transfers.gamePage')} size="sm" onclick={() => navigate('game', { id: gamePageId(item) })}>
-                <Gamepad2 size="1.65rem" strokeWidth={1.8} />
+                <Gamepad2 size="1.5rem" strokeWidth={1.8} />
               </IconButton>
             {/if}
             <IconButton label={msg('transfers.downloadsShowInFolderLabel')} size="sm" onclick={() => openDestination(item.destination)}>
-              <FolderOpen size="1.65rem" strokeWidth={1.8} />
+              <FolderOpen size="1.5rem" strokeWidth={1.8} />
             </IconButton>
             <IconButton label={msg('transfers.downloadsRemoveFromListLabel')} size="sm" onclick={() => remove(item.id)}>
-              <X size="1.65rem" strokeWidth={1.8} />
+              <X size="1.5rem" strokeWidth={1.8} />
             </IconButton>
           </div>
         </div>
@@ -401,7 +401,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-4);
-    max-width: 154rem;
+    max-width: 140rem;
     margin-bottom: var(--space-6);
     padding: var(--space-3) var(--space-5);
     border: 1px solid var(--border);
@@ -420,7 +420,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-5);
-    max-width: 154rem;
+    max-width: 140rem;
     margin-bottom: var(--space-6);
     padding: var(--space-3) var(--space-5);
     border: 1px solid var(--border);
@@ -434,13 +434,13 @@
   .sum {
     display: inline-flex;
     align-items: center;
-    gap: 0.66rem;
+    gap: 0.6rem;
     font-weight: 500;
     color: var(--text);
   }
 
   .sum.speed {
-    min-width: 11.55rem;
+    min-width: 10.5rem;
   }
 
   .sum.dim {
@@ -458,19 +458,19 @@
 
   .sum-sep {
     width: 1px;
-    height: 1.98rem;
+    height: 1.8rem;
     background: var(--border-strong);
   }
 
   .section {
     margin-bottom: var(--space-8);
-    max-width: 154rem;
+    max-width: 140rem;
   }
 
   .section h2 {
     display: flex;
     align-items: baseline;
-    gap: 0.88rem;
+    gap: 0.8rem;
     font-size: var(--font-lg);
     margin-bottom: var(--space-3);
   }
@@ -485,7 +485,7 @@
   .rows {
     display: flex;
     flex-direction: column;
-    gap: 0.88rem;
+    gap: 0.8rem;
   }
 
   .muted {
@@ -497,7 +497,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-5);
-    min-height: 7.04rem;
+    min-height: 6.4rem;
     padding: var(--space-2) var(--space-5);
     background: var(--surface-2);
     border: 1px solid var(--border);
@@ -517,7 +517,7 @@
   .error-text {
     display: inline-flex;
     align-items: center;
-    gap: 0.66rem;
+    gap: 0.6rem;
     max-width: 100%;
     font-size: var(--font-xs);
     color: var(--danger);
@@ -535,7 +535,7 @@
   }
 
   .thumb {
-    width: 3.96rem;
+    width: 3.6rem;
     flex-shrink: 0;
   }
 
@@ -545,7 +545,7 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.44rem;
+    gap: 0.4rem;
   }
 
   .info.inline {
@@ -580,15 +580,15 @@
 
   .tags {
     display: flex;
-    gap: 0.66rem;
+    gap: 0.6rem;
   }
 
   .status {
     display: flex;
     flex-direction: column;
-    gap: 0.33rem;
+    gap: 0.3rem;
     flex-shrink: 0;
-    width: 18.7rem;
+    width: 17rem;
     font-size: var(--font-sm);
     font-variant-numeric: tabular-nums;
   }
@@ -607,7 +607,7 @@
 
   .row-actions {
     display: flex;
-    gap: 0.44rem;
+    gap: 0.4rem;
     flex-shrink: 0;
   }
 
@@ -615,14 +615,14 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    width: 18.7rem;
+    width: 17rem;
     flex-shrink: 0;
   }
 
   .install-progress {
     display: flex;
     flex-direction: column;
-    gap: 0.44rem;
+    gap: 0.4rem;
     width: 100%;
   }
 

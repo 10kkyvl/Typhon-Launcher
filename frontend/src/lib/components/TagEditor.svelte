@@ -54,7 +54,7 @@
       {#each tags as tag (tag)}
         <Chip selected title={msg('modals.gameTagsRemove', { tag })} onclick={() => remove(tag)}>
           {tag}
-          <X size="1.32rem" strokeWidth={2} />
+          <X size="1.2rem" strokeWidth={2} />
         </Chip>
       {/each}
     </div>
@@ -81,6 +81,6 @@
   .chips {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.66rem;
+    gap: 0.6rem;
   }
 </style>

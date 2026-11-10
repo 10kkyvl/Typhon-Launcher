@@ -41,13 +41,13 @@
   }
 
   .md {
-    width: 3.96rem;
-    height: 3.96rem;
+    width: 3.6rem;
+    height: 3.6rem;
   }
 
   .sm {
-    width: 3.52rem;
-    height: 3.52rem;
+    width: 3.2rem;
+    height: 3.2rem;
   }
 
   .icon-btn:hover:not(:disabled) {

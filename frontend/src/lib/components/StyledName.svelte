@@ -29,7 +29,7 @@
   .glow {
     --halo: var(--name-color, var(--accent));
     text-shadow:
-      0 0 0.66rem color-mix(in srgb, var(--halo) 70%, transparent),
-      0 0 1.98rem color-mix(in srgb, var(--halo) 40%, transparent);
+      0 0 0.6rem color-mix(in srgb, var(--halo) 70%, transparent),
+      0 0 1.8rem color-mix(in srgb, var(--halo) 40%, transparent);
   }
 </style>

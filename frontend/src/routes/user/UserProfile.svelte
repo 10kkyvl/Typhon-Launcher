@@ -238,11 +238,11 @@
     description={msg('social.userGuestDesc')}
   >
     {#snippet icon()}
-      <UserRound size="2.42rem" strokeWidth={1.6} />
+      <UserRound size="2.2rem" strokeWidth={1.6} />
     {/snippet}
     {#snippet actions()}
       <Button variant="primary" onclick={() => signIn('login')}>
-        <LogIn size="1.65rem" strokeWidth={1.8} />
+        <LogIn size="1.5rem" strokeWidth={1.8} />
         {msg('social.signInButton')}
       </Button>
       <Button onclick={() => signIn('register')}>{msg('social.createAccountButton')}</Button>
@@ -253,13 +253,13 @@
 {:else if missing}
   <EmptyState title={msg('social.userNotFoundTitle')} description={msg('social.userNotFoundDesc')}>
     {#snippet icon()}
-      <UserRound size="2.42rem" strokeWidth={1.6} />
+      <UserRound size="2.2rem" strokeWidth={1.6} />
     {/snippet}
   </EmptyState>
 {:else if failure}
   <EmptyState title={msg('social.userLoadFailed')} description={failure}>
     {#snippet icon()}
-      <UserRound size="2.42rem" strokeWidth={1.6} />
+      <UserRound size="2.2rem" strokeWidth={1.6} />
     {/snippet}
     {#snippet actions()}
       <Button variant="primary" onclick={() => load(username ?? '')}>{msg('common.retry')}</Button>
@@ -271,9 +271,9 @@
     <ProfileCover appearance={data.appearance} {autoArt} />
     <UserHeader profile={data} {busy} onaction={act} onmessage={() => data && openChat(chatPeerOf(data))} />
     {#if closed}
-      <p class="notice"><Lock size="1.98rem" strokeWidth={1.6} />{msg('social.userProfileClosed')}</p>
+      <p class="notice"><Lock size="1.8rem" strokeWidth={1.6} />{msg('social.userProfileClosed')}</p>
     {:else if restricted}
-      <p class="notice"><Lock size="1.98rem" strokeWidth={1.6} />{msg('social.userRestToFriends')}</p>
+      <p class="notice"><Lock size="1.8rem" strokeWidth={1.6} />{msg('social.userRestToFriends')}</p>
     {:else}
       <div class="columns">
         <div class="main">

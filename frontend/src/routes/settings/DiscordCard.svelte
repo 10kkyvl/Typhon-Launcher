@@ -97,7 +97,7 @@
           {#if $view.errorCode}<span class="sub error">{accountMessage($view.errorCode)}</span>{/if}
         </div>
         <Button size="sm" variant="danger" disabled={$view.busy} onclick={askUnlink}>
-          <Unlink size="1.65rem" strokeWidth={1.8} />
+          <Unlink size="1.5rem" strokeWidth={1.8} />
           {msg('discord.unlinkButton')}
         </Button>
       </div>
@@ -134,7 +134,7 @@
         <div class="code-row">
           <code class="code" aria-label={msg('discord.codeLabel')}>{formatLinkCode($view.code)}</code>
           <Button size="sm" onclick={copy}>
-            <Copy size="1.65rem" strokeWidth={1.8} />
+            <Copy size="1.5rem" strokeWidth={1.8} />
             {msg('discord.copyCode')}
           </Button>
         </div>
@@ -160,7 +160,7 @@
       </div>
       <div class="actions">
         <Button variant="primary" size="sm" disabled={$view.busy} onclick={() => void flow.start()}>
-          <Link2 size="1.65rem" strokeWidth={1.8} />
+          <Link2 size="1.5rem" strokeWidth={1.8} />
           {$view.busy ? msg('discord.generating') : msg('discord.linkButton')}
         </Button>
         <DiscordJoinButton />
@@ -198,7 +198,7 @@
     flex-direction: column;
     gap: 2px;
     min-width: 0;
-    flex: 1 1 24.2rem;
+    flex: 1 1 22rem;
     overflow-wrap: anywhere;
   }
 
@@ -239,7 +239,7 @@
   .code {
     font-family: var(--font-mono);
     font-variant-ligatures: none;
-    font-size: 3.74rem;
+    font-size: 3.4rem;
     font-weight: 700;
     letter-spacing: 0.18em;
     padding: var(--space-3) var(--space-5);
@@ -265,7 +265,7 @@
 
   ol {
     margin: 0;
-    padding-left: 2.2rem;
+    padding-left: 2rem;
     font-size: var(--font-sm);
     line-height: 1.7;
   }

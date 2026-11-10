@@ -122,7 +122,7 @@
   }
 </script>
 
-<Modal bind:open title={msg('modals.avatarCropTitle')} width="46.2rem">
+<Modal bind:open title={msg('modals.avatarCropTitle')} width="42rem">
   <div class="crop">
     <div
       class="stage"
@@ -154,7 +154,7 @@
 
     <div class="zoom">
       <IconButton size="sm" label={msg('modals.avatarCropZoomOut')} disabled={!ready || zoom <= minZoom} onclick={() => applyZoom(zoom - 0.25)}>
-        <Minus size="1.76rem" strokeWidth={1.8} />
+        <Minus size="1.6rem" strokeWidth={1.8} />
       </IconButton>
       <input
         class="slider zoom-slider"
@@ -170,7 +170,7 @@
         oninput={(e) => applyZoom(clampZoom(Number(e.currentTarget.value)))}
       />
       <IconButton size="sm" label={msg('modals.avatarCropZoomIn')} disabled={!ready || zoom >= maxZoom} onclick={() => applyZoom(zoom + 0.25)}>
-        <Plus size="1.76rem" strokeWidth={1.8} />
+        <Plus size="1.6rem" strokeWidth={1.8} />
       </IconButton>
       <span class="zoom-value">{Math.round(zoom * 100)}%</span>
     </div>
@@ -225,7 +225,7 @@
     position: absolute;
     inset: 0;
     border-radius: 50%;
-    box-shadow: 0 0 0 110rem rgba(4, 6, 10, 0.62);
+    box-shadow: 0 0 0 100rem rgba(4, 6, 10, 0.62);
     border: 1px solid rgba(255, 255, 255, 0.55);
     pointer-events: none;
   }
@@ -235,7 +235,7 @@
     align-items: center;
     gap: var(--space-3);
     width: 100%;
-    padding: 0.44rem 0.88rem;
+    padding: 0.4rem 0.8rem;
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     background: var(--surface-2);
@@ -252,7 +252,7 @@
     opacity: 0.5;
   }
 
-  .zoom-value { min-width: 4.62rem; color: var(--text-2); font-size: var(--font-xs); font-variant-numeric: tabular-nums; text-align: center; }
+  .zoom-value { min-width: 4.2rem; color: var(--text-2); font-size: var(--font-xs); font-variant-numeric: tabular-nums; text-align: center; }
 
   .hint {
     font-size: var(--font-xs);

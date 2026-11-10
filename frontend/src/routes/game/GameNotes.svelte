@@ -129,7 +129,7 @@
 
   textarea {
     width: 100%;
-    min-height: 9.9rem;
+    min-height: 9rem;
     padding: var(--space-3);
     background: var(--surface-3);
     border: 1px solid var(--border);

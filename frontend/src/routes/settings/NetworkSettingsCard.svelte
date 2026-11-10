@@ -246,12 +246,12 @@
         <div class="control">
           <Select
             value={iface}
-            width="35.2rem"
+            width="32rem"
             options={interfaceOptions}
             onchange={(id) => (iface = id)}
           />
           <Button size="sm" disabled={interfacesLoading} onclick={loadInterfaces}>
-            <RefreshCw size="1.54rem" strokeWidth={1.8} class={interfacesLoading ? 'spin' : ''} />
+            <RefreshCw size="1.4rem" strokeWidth={1.8} class={interfacesLoading ? 'spin' : ''} />
             {msg('settings.networkInterfaceRefresh')}
           </Button>
         </div>
@@ -263,7 +263,7 @@
         <div class="row-text">
           <span class="row-label">{msg('settings.networkProxyTypeLabel')}</span>
         </div>
-        <Select value={proxyType} width="22rem" options={proxyTypeOptions} onchange={(id) => (proxyType = id)} />
+        <Select value={proxyType} width="20rem" options={proxyTypeOptions} onchange={(id) => (proxyType = id)} />
       </div>
       <div class="row">
         <div class="row-text">
@@ -333,7 +333,7 @@
       </div>
       <div class="row">
         <div class="note">
-          <AlertTriangle size="1.76rem" strokeWidth={1.8} />
+          <AlertTriangle size="1.6rem" strokeWidth={1.8} />
           <span>{msg('settings.networkProxyWarning')}</span>
         </div>
       </div>
@@ -398,7 +398,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-6);
-    padding: 1.43rem 0;
+    padding: 1.3rem 0;
   }
 
   .row + .row {
@@ -429,15 +429,15 @@
   }
 
   .field {
-    width: 28.6rem;
+    width: 26rem;
   }
 
   .field.port {
-    width: 13.2rem;
+    width: 12rem;
   }
 
   .control .field {
-    width: 24.2rem;
+    width: 22rem;
   }
 
   .actions {

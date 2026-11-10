@@ -451,7 +451,7 @@
   }
 </script>
 
-<Modal bind:open title={msg('modals.installTitle')} width="59.4rem">
+<Modal bind:open title={msg('modals.installTitle')} width="54rem">
   {#if phase === 'loading'}
     <div class="loading">
       <span class="spinner"></span>
@@ -552,15 +552,15 @@
         <div class="choices">
           <p class="note">{msg('modals.installUnknownTypeNote')}</p>
           <Button onclick={openSource}>
-            <FolderOpen size="1.76rem" strokeWidth={1.8} />
+            <FolderOpen size="1.6rem" strokeWidth={1.8} />
             {msg('modals.installOpenDownloadFolder')}
           </Button>
           <Button onclick={pickInstaller}>
-            <FileSearch size="1.76rem" strokeWidth={1.8} />
+            <FileSearch size="1.6rem" strokeWidth={1.8} />
             {msg('modals.installPickInstallerButton')}
           </Button>
           <Button onclick={pickGameExecutable}>
-            <Gamepad2 size="1.76rem" strokeWidth={1.8} />
+            <Gamepad2 size="1.6rem" strokeWidth={1.8} />
             {msg('modals.installPickExecutableButton')}
           </Button>
         </div>
@@ -736,13 +736,13 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 1.32rem;
-    padding: 3.52rem 0;
+    gap: 1.2rem;
+    padding: 3.2rem 0;
   }
 
   .spinner {
-    width: 3.52rem;
-    height: 3.52rem;
+    width: 3.2rem;
+    height: 3.2rem;
     border-radius: 50%;
     border: 2px solid rgba(255, 255, 255, 0.1);
     border-top-color: var(--accent-bright);
@@ -786,7 +786,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-4);
-    padding: 0.88rem 0;
+    padding: 0.8rem 0;
     font-size: var(--font-sm);
   }
 
@@ -819,7 +819,7 @@
   .field {
     display: flex;
     flex-direction: column;
-    gap: 0.88rem;
+    gap: 0.8rem;
     align-items: flex-start;
   }
 
@@ -831,7 +831,7 @@
   .field-controls {
     display: flex;
     align-items: center;
-    gap: 0.88rem;
+    gap: 0.8rem;
     width: 100%;
   }
 
@@ -848,7 +848,7 @@
   .hint {
     display: flex;
     align-items: center;
-    gap: 0.88rem;
+    gap: 0.8rem;
   }
 
   .note.danger {
@@ -863,7 +863,7 @@
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    gap: 0.88rem;
+    gap: 0.8rem;
     padding-top: var(--space-2);
     border-top: 1px solid var(--border);
   }
@@ -899,7 +899,7 @@
   .cand-list {
     display: flex;
     flex-direction: column;
-    max-height: 28.6rem;
+    max-height: 26rem;
     overflow-y: auto;
     padding: var(--space-1);
     background: var(--surface);
@@ -911,7 +911,7 @@
     align-items: center;
     gap: var(--space-3);
     width: 100%;
-    padding: 0.88rem;
+    padding: 0.8rem;
     border-radius: var(--radius-sm);
     text-align: left;
     transition: background var(--dur-fast) var(--ease);
@@ -926,8 +926,8 @@
   }
 
   .radio {
-    width: 1.76rem;
-    height: 1.76rem;
+    width: 1.6rem;
+    height: 1.6rem;
     flex-shrink: 0;
     border-radius: 50%;
     border: 1px solid var(--border-strong);
@@ -960,7 +960,7 @@
   }
 
   .cand-path {
-    font-size: 1.32rem;
+    font-size: 1.2rem;
     color: var(--text-3);
     white-space: normal;
     overflow-wrap: anywhere;
@@ -969,7 +969,7 @@
 
   .cleanup-actions {
     display: flex;
-    gap: 0.88rem;
+    gap: 0.8rem;
   }
 
   @keyframes spin {

@@ -152,7 +152,7 @@
     aria-current={isActive(item.name) ? 'page' : undefined}
     onclick={() => navigate(item.name)}
   >
-    <item.icon size="2.2rem" strokeWidth={1.8} />
+    <item.icon size="2rem" strokeWidth={1.8} />
     <span class="nav-label">{item.label}</span>
     {#if item.name === 'friends' && $incomingCount > 0}
       <span class="count">{$incomingCount}</span>
@@ -168,8 +168,8 @@
       class="marker"
       class:glide
       style:left="{marker.left}px"
-      style:height="calc({marker.height}px - 2.42rem)"
-      style:transform="translateY(calc({marker.top}px + 1.21rem))"
+      style:height="calc({marker.height}px - 2.2rem)"
+      style:transform="translateY(calc({marker.top}px + 1.1rem))"
     ></span>
   {/if}
   <div class="logo">
@@ -248,7 +248,7 @@
     height: 100%;
     background: var(--bg-sidebar);
     border-right: 1px solid var(--border);
-    padding: 1.98rem 1.32rem 1.54rem;
+    padding: 1.8rem 1.2rem 1.4rem;
   }
 
   .sidebar.right {
@@ -259,18 +259,18 @@
   .logo {
     display: flex;
     align-items: center;
-    gap: 1.1rem;
-    padding: 0.22rem 1.1rem 0;
+    gap: 1rem;
+    padding: 0.2rem 1rem 0;
     margin-bottom: var(--space-8);
   }
 
   .logo-mark {
-    width: 3.08rem;
-    height: 3.08rem;
+    width: 2.8rem;
+    height: 2.8rem;
   }
 
   .logo-text {
-    font-size: 2.09rem;
+    font-size: 1.9rem;
     font-weight: 600;
     letter-spacing: var(--tracking-title);
   }
@@ -295,9 +295,9 @@
     position: relative;
     display: flex;
     align-items: center;
-    gap: 1.32rem;
-    height: 4.4rem;
-    padding: 0 1.1rem;
+    gap: 1.2rem;
+    height: 4rem;
+    padding: 0 1rem;
     border-radius: var(--radius-md);
     font-size: var(--font-md);
     font-weight: 500;
@@ -335,8 +335,8 @@
     position: absolute;
     top: 0;
     z-index: 1;
-    width: 0.33rem;
-    border-radius: var(--cut) 0.33rem 0.33rem var(--cut);
+    width: 0.3rem;
+    border-radius: var(--cut) 0.3rem 0.3rem var(--cut);
     background: var(--accent-bright);
     pointer-events: none;
     animation: marker-in var(--dur) var(--ease);
@@ -363,14 +363,14 @@
 
   .count {
     margin-left: auto;
-    min-width: 1.98rem;
-    padding: 0 0.55rem;
-    border-radius: 0.99rem;
+    min-width: 1.8rem;
+    padding: 0 0.5rem;
+    border-radius: 0.9rem;
     background: var(--accent);
     color: var(--accent-on, #fff);
     font-size: var(--font-xs);
     font-weight: 600;
-    line-height: 1.98rem;
+    line-height: 1.8rem;
     text-align: center;
   }
 
@@ -391,8 +391,8 @@
     display: flex;
     align-items: center;
     width: 100%;
-    gap: 1.1rem;
-    padding: 0.66rem 0.88rem;
+    gap: 1rem;
+    padding: 0.6rem 0.8rem;
     border-radius: var(--radius-md);
     text-align: left;
     color: var(--text-3);
@@ -429,7 +429,7 @@
   }
 
   .profile-status {
-    font-size: 1.32rem;
+    font-size: 1.2rem;
     color: var(--text-3);
     line-height: 1.3;
   }
@@ -440,15 +440,15 @@
 
   @media (max-width: 1140px) {
     .sidebar {
-      width: 7.04rem;
-      padding: 1.98rem 1.1rem 1.54rem;
+      width: 6.4rem;
+      padding: 1.8rem 1rem 1.4rem;
       align-items: center;
     }
 
     .logo {
       flex-direction: column;
-      gap: 0.44rem;
-      padding: 0.22rem 0 0;
+      gap: 0.4rem;
+      padding: 0.2rem 0 0;
       margin-bottom: var(--space-6);
     }
 
@@ -471,19 +471,19 @@
 
     .count {
       position: absolute;
-      top: 0.44rem;
-      right: 0.44rem;
+      top: 0.4rem;
+      right: 0.4rem;
       margin-left: 0;
-      min-width: 1.76rem;
-      padding: 0 0.44rem;
-      border-radius: 0.88rem;
-      font-size: 1.1rem;
-      line-height: 1.76rem;
+      min-width: 1.6rem;
+      padding: 0 0.4rem;
+      border-radius: 0.8rem;
+      font-size: 1rem;
+      line-height: 1.6rem;
     }
 
     .profile {
       justify-content: center;
-      padding: 0.66rem;
+      padding: 0.6rem;
     }
   }
 </style>

@@ -211,7 +211,7 @@
   const to = $derived(Math.min(page * pageSize, total));
 </script>
 
-<Modal bind:open title={source?.name ?? msg('modals.sourceDetailsTitle')} width="101.2rem">
+<Modal bind:open title={source?.name ?? msg('modals.sourceDetailsTitle')} width="92rem">
   {#if source}
     <div class="sections">
       <section class="head">
@@ -250,7 +250,7 @@
       {/if}
 
       <section class="filters">
-        <Select options={statusOptions} bind:value={filterStatus} width="19.8rem" onchange={onFilterChange} />
+        <Select options={statusOptions} bind:value={filterStatus} width="18rem" onchange={onFilterChange} />
         <SearchInput bind:value={search} placeholder={msg('modals.sourceDetailsSearchPlaceholder')} oninput={onSearchInput} />
       </section>
 
@@ -304,10 +304,10 @@
             {/if}
             <div class="pager">
               <Button size="sm" disabled={page <= 1} onclick={prevPage}>
-                <ChevronLeft size="1.65rem" strokeWidth={1.8} />
+                <ChevronLeft size="1.5rem" strokeWidth={1.8} />
               </Button>
               <Button size="sm" disabled={page * pageSize >= total} onclick={nextPage}>
-                <ChevronRight size="1.65rem" strokeWidth={1.8} />
+                <ChevronRight size="1.5rem" strokeWidth={1.8} />
               </Button>
             </div>
           </div>
@@ -339,7 +339,7 @@
   .head-meta {
     display: flex;
     flex-direction: column;
-    gap: 0.77rem;
+    gap: 0.7rem;
     min-width: 0;
   }
 
@@ -378,7 +378,7 @@
 
   .head-actions {
     display: flex;
-    gap: 0.88rem;
+    gap: 0.8rem;
     flex-shrink: 0;
   }
 
@@ -391,7 +391,7 @@
   .counter {
     display: flex;
     flex-direction: column;
-    gap: 0.22rem;
+    gap: 0.2rem;
   }
 
   .counter-value {
@@ -401,7 +401,7 @@
   }
 
   .counter-label {
-    font-size: 1.32rem;
+    font-size: 1.2rem;
     color: var(--text-3);
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -426,26 +426,26 @@
   .thead,
   .row {
     display: grid;
-    grid-template-columns: minmax(17.6rem, 1.6fr) minmax(13.2rem, 1fr) 9.9rem 8.8rem 11rem 17.6rem;
+    grid-template-columns: minmax(16rem, 1.6fr) minmax(12rem, 1fr) 9rem 8rem 10rem 16rem;
     align-items: center;
     gap: var(--space-3);
     padding: 0 var(--space-4);
   }
 
   .thead {
-    height: 4.4rem;
+    height: 4rem;
     border-bottom: 1px solid var(--border);
   }
 
   .th {
-    font-size: 1.32rem;
+    font-size: 1.2rem;
     font-weight: 500;
     color: var(--text-3);
   }
 
   .row {
     width: 100%;
-    height: 5.06rem;
+    height: 4.6rem;
     text-align: left;
     transition: background var(--dur-fast) var(--ease);
   }
@@ -485,7 +485,7 @@
   .cell.status {
     display: flex;
     align-items: center;
-    gap: 0.66rem;
+    gap: 0.6rem;
     overflow: visible;
   }
 
@@ -507,7 +507,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-4);
-    padding: 1.32rem var(--space-4);
+    padding: 1.2rem var(--space-4);
     border-top: 1px solid var(--border);
   }
 
@@ -520,6 +520,6 @@
   .pager {
     display: flex;
     margin-left: auto;
-    gap: 0.66rem;
+    gap: 0.6rem;
   }
 </style>

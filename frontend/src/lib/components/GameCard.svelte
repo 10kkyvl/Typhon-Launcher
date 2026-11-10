@@ -88,9 +88,9 @@
     {#if installed && onplay}
       <button class="play" class:running aria-label={running ? msg('ui.stop') : msg('ui.play')} onclick={onplay}>
         {#if running}
-          <Square size="1.32rem" strokeWidth={2} fill="currentColor" />
+          <Square size="1.2rem" strokeWidth={2} fill="currentColor" />
         {:else}
-          <Play size="1.54rem" strokeWidth={2} fill="currentColor" />
+          <Play size="1.4rem" strokeWidth={2} fill="currentColor" />
         {/if}
       </button>
     {/if}
@@ -111,7 +111,7 @@
               action.onclick(event);
             }}
           >
-            <action.icon size="1.65rem" strokeWidth={1.8} fill={action.filled ? 'currentColor' : 'none'} />
+            <action.icon size="1.5rem" strokeWidth={1.8} fill={action.filled ? 'currentColor' : 'none'} />
           </button>
         {/each}
       </div>
@@ -132,20 +132,20 @@
   .card {
     display: flex;
     flex-direction: column;
-    gap: 0.99rem;
+    gap: 0.9rem;
     min-width: 0;
   }
 
   .compat {
     position: absolute;
-    left: 0.66rem;
-    bottom: 0.66rem;
-    max-width: calc(100% - 1.32rem);
-    padding: 0.275rem 0.605rem;
+    left: 0.6rem;
+    bottom: 0.6rem;
+    max-width: calc(100% - 1.2rem);
+    padding: 0.25rem 0.55rem;
     border-radius: var(--radius-sm);
     background: color-mix(in srgb, var(--danger) 88%, black);
     color: white;
-    font-size: 1.21rem;
+    font-size: 1.1rem;
     line-height: 1.2;
     white-space: nowrap;
     overflow: hidden;
@@ -155,10 +155,10 @@
 
   .source {
     position: absolute;
-    left: 0.66rem;
-    top: 0.66rem;
+    left: 0.6rem;
+    top: 0.6rem;
     display: flex;
-    max-width: calc(100% - 1.32rem);
+    max-width: calc(100% - 1.2rem);
     overflow: hidden;
     pointer-events: none;
   }
@@ -179,12 +179,12 @@
     left: 0;
     right: 0;
     top: 100%;
-    height: 0.44rem;
+    height: 0.4rem;
   }
 
   .cover-wrap:hover,
   .cover-wrap:focus-within {
-    transform: translateY(-0.44rem);
+    transform: translateY(-0.4rem);
   }
 
   .cover {
@@ -223,18 +223,18 @@
 
   .play {
     position: absolute;
-    left: 1.1rem;
-    bottom: 1.1rem;
+    left: 1rem;
+    bottom: 1rem;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 3.52rem;
-    height: 3.52rem;
+    width: 3.2rem;
+    height: 3.2rem;
     border-radius: var(--radius-md);
     background: var(--accent);
     color: var(--accent-on, #fff);
     opacity: 0;
-    transform: translateY(0.44rem) scale(0.9);
+    transform: translateY(0.4rem) scale(0.9);
     transition:
       opacity var(--dur) var(--ease),
       transform var(--dur-panel) var(--ease-spring),
@@ -258,18 +258,18 @@
 
   .quick {
     position: absolute;
-    top: 0.88rem;
-    right: 0.88rem;
+    top: 0.8rem;
+    right: 0.8rem;
     display: flex;
-    gap: 0.44rem;
+    gap: 0.4rem;
   }
 
   .quick-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 3.3rem;
-    height: 3.3rem;
+    width: 3rem;
+    height: 3rem;
     border-radius: var(--radius-sm);
     background: rgba(5, 8, 12, 0.72);
     color: #fff;
@@ -330,7 +330,7 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.22rem;
+    gap: 0.2rem;
     min-width: 0;
     text-align: left;
   }

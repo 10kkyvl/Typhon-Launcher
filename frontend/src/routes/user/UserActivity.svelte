@@ -17,21 +17,21 @@
         <button class="row" type="button" onclick={() => openGameByIGDB(item.game.igdbId, item.game.title)}>
           <span class="icon">
             {#if item.kind === 'completed'}
-              <CheckCircle2 size="1.87rem" strokeWidth={1.8} />
+              <CheckCircle2 size="1.7rem" strokeWidth={1.8} />
             {:else if item.kind === 'favorited'}
-              <Heart size="1.87rem" strokeWidth={1.8} />
+              <Heart size="1.7rem" strokeWidth={1.8} />
             {:else if item.kind === 'played'}
-              <Clock size="1.87rem" strokeWidth={1.8} />
+              <Clock size="1.7rem" strokeWidth={1.8} />
             {:else if item.kind === 'achievement'}
-              <Trophy size="1.87rem" strokeWidth={1.8} />
+              <Trophy size="1.7rem" strokeWidth={1.8} />
             {:else if item.kind === 'reviewed' && item.review?.recommended === false}
-              <ThumbsDown size="1.87rem" strokeWidth={1.8} />
+              <ThumbsDown size="1.7rem" strokeWidth={1.8} />
             {:else if item.kind === 'reviewed'}
-              <ThumbsUp size="1.87rem" strokeWidth={1.8} />
+              <ThumbsUp size="1.7rem" strokeWidth={1.8} />
             {:else if item.kind === 'planned'}
-              <Bookmark size="1.87rem" strokeWidth={1.8} />
+              <Bookmark size="1.7rem" strokeWidth={1.8} />
             {:else}
-              <Play size="1.87rem" strokeWidth={1.8} />
+              <Play size="1.7rem" strokeWidth={1.8} />
             {/if}
           </span>
           <span class="text">{eventLine(item)}</span>
@@ -58,7 +58,7 @@
     align-items: center;
     gap: var(--space-3);
     width: 100%;
-    padding: 0.88rem;
+    padding: 0.8rem;
     margin: 0 calc(var(--space-3) * -1);
     background: none;
     border: 0;
@@ -78,8 +78,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 3.96rem;
-    height: 3.96rem;
+    width: 3.6rem;
+    height: 3.6rem;
     flex-shrink: 0;
     border-radius: var(--radius-md);
     background: var(--surface-3);

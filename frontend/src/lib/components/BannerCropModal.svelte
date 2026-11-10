@@ -70,7 +70,7 @@
     finally { if (alive) saving = false; }
   }
 </script>
-<Modal bind:open title={msg('profile.cropTitle')} width="79.2rem">
+<Modal bind:open title={msg('profile.cropTitle')} width="72rem">
   <div class="crop">
     <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (Two-dimensional crop canvas supports focus and arrow-key panning.) -->
     <div class="stage" class:dragging bind:this={stage} bind:clientWidth={viewport} role="group" aria-label={msg('profile.cropTitle')} tabindex="0" onkeydown={key} onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} onwheel={wheel}>
@@ -78,9 +78,9 @@
       <span class="frame"></span>
     </div>
     <div class="zoom">
-      <IconButton size="sm" label={msg('modals.avatarCropZoomOut')} disabled={!ready || saving || zoom <= minZoom} onclick={() => changeZoom(zoom - .25)}><Minus size="1.76rem" /></IconButton>
+      <IconButton size="sm" label={msg('modals.avatarCropZoomOut')} disabled={!ready || saving || zoom <= minZoom} onclick={() => changeZoom(zoom - .25)}><Minus size="1.6rem" /></IconButton>
       <input class="zoom-slider" type="range" min={minZoom} max={maxZoom} step=".01" value={zoom} style:--zoom-progress={`${(zoom - minZoom) / (maxZoom - minZoom) * 100}%`} aria-label={msg('modals.avatarCropZoomLevel')} aria-valuetext={`${Math.round(zoom * 100)}%`} disabled={!ready || saving} oninput={(e) => changeZoom(Number(e.currentTarget.value))} />
-      <IconButton size="sm" label={msg('modals.avatarCropZoomIn')} disabled={!ready || saving || zoom >= maxZoom} onclick={() => changeZoom(zoom + .25)}><Plus size="1.76rem" /></IconButton>
+      <IconButton size="sm" label={msg('modals.avatarCropZoomIn')} disabled={!ready || saving || zoom >= maxZoom} onclick={() => changeZoom(zoom + .25)}><Plus size="1.6rem" /></IconButton>
       <span>{Math.round(zoom * 100)}%</span>
     </div>
     <p class:error={failed}>{failed ? msg('profile.coverDecode') : msg('profile.cropHint')}</p>
@@ -98,7 +98,7 @@
   .stage:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 3px; }
   img { position: absolute; max-width: none; pointer-events: none; }
   .frame { position: absolute; inset: 0; border: 1px solid rgba(255,255,255,.6); border-radius: inherit; pointer-events: none; }
-  .zoom { display: flex; align-items: center; gap: var(--space-3); padding: .44rem .88rem; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-2); }
-  .zoom-slider { flex: 1; min-width: 0; } .zoom > span { min-width: 4.62rem; font-variant-numeric: tabular-nums; text-align: center; }
+  .zoom { display: flex; align-items: center; gap: var(--space-3); padding: .4rem .8rem; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-2); }
+  .zoom-slider { flex: 1; min-width: 0; } .zoom > span { min-width: 4.2rem; font-variant-numeric: tabular-nums; text-align: center; }
   p, .zoom > span { font-size: var(--font-xs); color: var(--text-2); } .error { color: var(--danger); }
 </style>

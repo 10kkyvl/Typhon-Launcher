@@ -36,7 +36,7 @@
   }
 </script>
 
-<Modal bind:open title={download?.name ?? msg('modals.downloadDetailsTitle')} width="68.2rem">
+<Modal bind:open title={download?.name ?? msg('modals.downloadDetailsTitle')} width="62rem">
   {#if download}
     <div class="sections">
       <section class="block">
@@ -51,11 +51,11 @@
             <span class="value path">
               {download.destination}
               <IconButton label={msg('modals.downloadDetailsOpenFolder')} size="sm" onclick={() => openDestination(download.destination)}>
-                <FolderOpen size="1.76rem" strokeWidth={1.8} />
+                <FolderOpen size="1.6rem" strokeWidth={1.8} />
               </IconButton>
               {#if gameId}
                 <IconButton label={msg('transfers.gamePage')} size="sm" onclick={() => openGamePage(gameId)}>
-                  <Gamepad2 size="1.76rem" strokeWidth={1.8} />
+                  <Gamepad2 size="1.6rem" strokeWidth={1.8} />
                 </IconButton>
               {/if}
             </span>
@@ -137,7 +137,7 @@
   }
 
   .block h4 {
-    font-size: 1.32rem;
+    font-size: 1.2rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -155,7 +155,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-4);
-    padding: 0.88rem 0;
+    padding: 0.8rem 0;
     font-size: var(--font-sm);
   }
 
@@ -181,7 +181,7 @@
   .value.path {
     display: inline-flex;
     align-items: center;
-    gap: 0.66rem;
+    gap: 0.6rem;
   }
 
   .value.danger {
@@ -191,8 +191,8 @@
   .file-list {
     display: flex;
     flex-direction: column;
-    gap: 1.1rem;
-    max-height: 28.6rem;
+    gap: 1rem;
+    max-height: 26rem;
     overflow-y: auto;
     padding: var(--space-3) var(--space-4);
     background: var(--surface);
@@ -202,7 +202,7 @@
   .file {
     display: flex;
     flex-direction: column;
-    gap: 0.55rem;
+    gap: 0.5rem;
   }
 
   .file.skipped {

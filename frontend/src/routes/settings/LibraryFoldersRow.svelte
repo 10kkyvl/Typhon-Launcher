@@ -94,7 +94,7 @@
       <span class="row-sub">{msg('settings.libraryFoldersSub')}</span>
     </div>
     <Button size="sm" disabled={adding} onclick={add}>
-      <Plus size="1.65rem" strokeWidth={1.8} />
+      <Plus size="1.5rem" strokeWidth={1.8} />
       {msg('settings.libraryFolderAdd')}
     </Button>
   </div>
@@ -141,7 +141,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-6);
-    padding: 1.43rem 0;
+    padding: 1.3rem 0;
     border-top: 1px solid var(--border);
   }
 

@@ -51,7 +51,7 @@
         <button class="item" class:danger={item.danger} onclick={() => pick(item.id)}>
           {#if item.dot}<span class="dot {item.dot}"></span>{/if}
           <span class="label">{item.label}</span>
-          {#if item.checked}<Check size="1.65rem" strokeWidth={2.2} />{/if}
+          {#if item.checked}<Check size="1.5rem" strokeWidth={2.2} />{/if}
         </button>
       {/each}
     </div>
@@ -67,9 +67,9 @@
   .menu {
     position: absolute;
     z-index: 50;
-    top: calc(100% + 0.44rem);
-    min-width: 20.9rem;
-    padding: 0.44rem;
+    top: calc(100% + 0.4rem);
+    min-width: 19rem;
+    padding: 0.4rem;
     background: var(--surface-3);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-md);
@@ -79,16 +79,16 @@
 
   .menu.up {
     top: auto;
-    bottom: calc(100% + 0.44rem);
+    bottom: calc(100% + 0.4rem);
     animation: pop-up var(--dur-fast) var(--ease);
   }
 
   .item {
     display: flex;
     align-items: center;
-    gap: 0.88rem;
+    gap: 0.8rem;
     width: 100%;
-    padding: 0.77rem 1.1rem;
+    padding: 0.7rem 1rem;
     border-radius: var(--radius-sm);
     font-size: var(--font-sm);
     color: var(--text-2);
@@ -115,8 +115,8 @@
   }
 
   .dot {
-    width: 0.88rem;
-    height: 0.88rem;
+    width: 0.8rem;
+    height: 0.8rem;
     border-radius: 50%;
     flex-shrink: 0;
   }
@@ -147,14 +147,14 @@
 
   .separator {
     height: 1px;
-    margin: 0.44rem 0.44rem;
+    margin: 0.4rem 0.4rem;
     background: var(--border);
   }
 
   @keyframes pop {
     from {
       opacity: 0;
-      transform: translateY(-0.33rem);
+      transform: translateY(-0.3rem);
     }
     to {
       opacity: 1;
@@ -165,7 +165,7 @@
   @keyframes pop-up {
     from {
       opacity: 0;
-      transform: translateY(0.33rem);
+      transform: translateY(0.3rem);
     }
     to {
       opacity: 1;

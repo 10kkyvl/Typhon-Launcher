@@ -102,7 +102,7 @@
   }
 </script>
 
-<Modal bind:open title={msg('social.friendsAddFriend')} width="57.2rem" onclose={reset}>
+<Modal bind:open title={msg('social.friendsAddFriend')} width="52rem" onclose={reset}>
   <div class="body">
     <SearchInput
       bind:value={query}
@@ -125,7 +125,7 @@
             <span class="mutual">{mutual}</span>
           {/if}
         </div>
-        <ChevronRight class="chevron" size="1.98rem" strokeWidth={1.8} />
+        <ChevronRight class="chevron" size="1.8rem" strokeWidth={1.8} />
       </button>
       {#if hint}
         <p class="hint">{hint}</p>
@@ -194,7 +194,7 @@
   .info {
     display: flex;
     flex-direction: column;
-    gap: 0.33rem;
+    gap: 0.3rem;
     min-width: 0;
   }
 
@@ -210,14 +210,14 @@
   }
 
   .bio {
-    margin-top: 0.44rem;
+    margin-top: 0.4rem;
     font-size: var(--font-sm);
     line-height: 1.5;
     color: var(--text-2);
   }
 
   .mutual {
-    margin-top: 0.44rem;
+    margin-top: 0.4rem;
     font-size: var(--font-xs);
     color: var(--text-3);
   }

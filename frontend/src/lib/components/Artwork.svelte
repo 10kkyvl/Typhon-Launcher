@@ -77,13 +77,13 @@
       linear-gradient(160deg, rgba(255, 255, 255, 0.05), transparent 55%),
       var(--surface-3);
     color: var(--text-3);
-    font-size: 2.2rem;
+    font-size: 2rem;
     font-weight: 600;
     letter-spacing: 0.02em;
     container-type: inline-size;
   }
 
   .fallback span {
-    font-size: clamp(1.32rem, 22cqw, 3.52rem);
+    font-size: clamp(1.2rem, 22cqw, 3.2rem);
   }
 </style>

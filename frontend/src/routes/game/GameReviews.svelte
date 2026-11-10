@@ -229,8 +229,8 @@
   }
 
   .spinner {
-    width: 2.2rem;
-    height: 2.2rem;
+    width: 2rem;
+    height: 2rem;
     flex-shrink: 0;
     border-radius: 50%;
     border: 2px solid var(--border);

@@ -59,29 +59,29 @@
   .corner {
     position: fixed;
     z-index: 120;
-    right: 2.64rem;
-    bottom: 2.64rem;
+    right: 2.4rem;
+    bottom: 2.4rem;
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    gap: 0.88rem;
+    gap: 0.8rem;
     pointer-events: none;
   }
 
   .corner.above-chat {
-    bottom: calc(2.64rem + 5.28rem + 1.32rem);
+    bottom: calc(2.4rem + 4.8rem + 1.2rem);
   }
 
   .corner.beside-chat {
-    right: calc(2.64rem + 41.8rem + 1.32rem);
+    right: calc(2.4rem + 38rem + 1.2rem);
   }
 
   .corner.sidebar-right {
-    right: calc(2.64rem + var(--sidebar-now));
+    right: calc(2.4rem + var(--sidebar-now));
   }
 
   .corner.sidebar-right.beside-chat {
-    right: calc(2.64rem + var(--sidebar-now) + 41.8rem + 1.32rem);
+    right: calc(2.4rem + var(--sidebar-now) + 38rem + 1.2rem);
   }
 
   .corner > :global(*) {
@@ -91,7 +91,7 @@
   .shell {
     display: flex;
     height: 100vh;
-    min-width: 110rem;
+    min-width: 100rem;
     overflow: hidden;
   }
 
@@ -105,7 +105,7 @@
 
   @media (max-width: 1140px) {
     :global(:root) {
-      --sidebar-now: 7.04rem;
+      --sidebar-now: 6.4rem;
     }
   }
 
@@ -138,7 +138,7 @@
   @keyframes page-in {
     from {
       opacity: 0;
-      transform: translateY(0.66rem);
+      transform: translateY(0.6rem);
     }
     to {
       opacity: 1;

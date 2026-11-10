@@ -23,7 +23,7 @@
               <span class="mastered" title={statusLabel('mastered')}>100%</span>
             {/if}
             {#if hearts}
-              <span class="heart"><Heart size="1.54rem" strokeWidth={0} fill="currentColor" /></span>
+              <span class="heart"><Heart size="1.4rem" strokeWidth={0} fill="currentColor" /></span>
             {/if}
           </span>
           <span class="caption">{game.title}</span>
@@ -45,14 +45,14 @@
 
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(12.1rem, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
     gap: var(--space-3);
   }
 
   .tile {
     display: flex;
     flex-direction: column;
-    gap: 0.66rem;
+    gap: 0.6rem;
     min-width: 0;
     padding: 0;
     border: 0;
@@ -75,19 +75,19 @@
 
   .tile:hover .cover,
   .tile:focus-visible .cover {
-    transform: translateY(-0.33rem);
+    transform: translateY(-0.3rem);
     box-shadow: var(--shadow-lift);
   }
 
   .heart {
     position: absolute;
-    left: 0.77rem;
-    bottom: 0.77rem;
+    left: 0.7rem;
+    bottom: 0.7rem;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 2.86rem;
-    height: 2.86rem;
+    width: 2.6rem;
+    height: 2.6rem;
     border-radius: 50%;
     background: rgba(5, 8, 12, 0.6);
     color: var(--danger);
@@ -95,9 +95,9 @@
 
   .mastered {
     position: absolute;
-    left: 0.77rem;
-    bottom: 0.77rem;
-    padding: 0.22rem 0.77rem;
+    left: 0.7rem;
+    bottom: 0.7rem;
+    padding: 0.2rem 0.7rem;
     border-radius: var(--radius-sm);
     background: rgba(5, 8, 12, 0.6);
     color: var(--success);

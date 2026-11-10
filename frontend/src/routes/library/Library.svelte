@@ -422,10 +422,10 @@
           <div class="hero-actions">
             <Button variant="primary" size="lg" onclick={() => toggleRun(hero.id)}>
               {#if $runningGames.has(hero.id)}
-                <Square size="1.54rem" strokeWidth={2} fill="currentColor" />
+                <Square size="1.4rem" strokeWidth={2} fill="currentColor" />
                 {msg('games.stop')}
               {:else}
-                <Play size="1.65rem" strokeWidth={2} fill="currentColor" />
+                <Play size="1.5rem" strokeWidth={2} fill="currentColor" />
                 {msg('common.continue')}
               {/if}
             </Button>
@@ -438,7 +438,7 @@
           title={msg('games.libraryHideLabel')}
           onclick={() => (heroHidden = true)}
         >
-          <X size="1.76rem" strokeWidth={1.8} />
+          <X size="1.6rem" strokeWidth={1.8} />
         </button>
       </section>
     {/key}
@@ -450,7 +450,7 @@
         <h2>{msg('games.recentLabel')}</h2>
         <button class="link" onclick={() => (filter = 'recent')}>
           {msg('games.libraryShowAllButton')}
-          <ChevronRight size="1.54rem" strokeWidth={1.8} />
+          <ChevronRight size="1.4rem" strokeWidth={1.8} />
         </button>
       </div>
       <div class="recent-row">
@@ -491,13 +491,13 @@
       </div>
       <div class="toolbar-right">
         <Chip onclick={() => (randomOpen = true)}>
-          <Dices size="1.54rem" strokeWidth={1.8} />
+          <Dices size="1.4rem" strokeWidth={1.8} />
           {msg('games.randomButton')}
         </Chip>
         {#each filters as f (f.id)}
           <Chip selected={filter === f.id} onclick={() => (filter = nextLibraryFilter(filter, f.id))}>
             {#if f.icon}
-              <f.icon size="1.54rem" strokeWidth={1.8} />
+              <f.icon size="1.4rem" strokeWidth={1.8} />
             {/if}
             {f.label}
           </Chip>
@@ -517,7 +517,7 @@
             {#snippet trigger({ open, toggle })}
               <Chip selected={open || sourceFilter !== 'all'} onclick={toggle}>
                 {sourceFilter === 'all' ? msg('games.filterSourceAll') : sourceLabel(sourceFilter)}
-                <ChevronDown size="1.54rem" strokeWidth={1.8} />
+                <ChevronDown size="1.4rem" strokeWidth={1.8} />
               </Chip>
             {/snippet}
           </DropdownMenu>
@@ -530,7 +530,7 @@
             {#snippet trigger({ open, toggle })}
               <Chip selected={open || statusFilter !== 'all'} onclick={toggle}>
                 {statusFilterLabel(statusFilter)}
-                <ChevronDown size="1.54rem" strokeWidth={1.8} />
+                <ChevronDown size="1.4rem" strokeWidth={1.8} />
               </Chip>
             {/snippet}
           </DropdownMenu>
@@ -548,9 +548,9 @@
         >
           {#snippet trigger({ open, toggle })}
             <Chip selected={open} onclick={toggle}>
-              <ArrowDownUp size="1.54rem" strokeWidth={1.8} />
+              <ArrowDownUp size="1.4rem" strokeWidth={1.8} />
               {sortLabels[sort]}
-              <ChevronDown size="1.54rem" strokeWidth={1.8} />
+              <ChevronDown size="1.4rem" strokeWidth={1.8} />
             </Chip>
           {/snippet}
         </DropdownMenu>
@@ -563,9 +563,9 @@
         >
           {#snippet item(option)}
             {#if option.id === 'grid'}
-              <LayoutGrid size="1.76rem" strokeWidth={1.8} />
+              <LayoutGrid size="1.6rem" strokeWidth={1.8} />
             {:else}
-              <List size="1.76rem" strokeWidth={1.8} />
+              <List size="1.6rem" strokeWidth={1.8} />
             {/if}
           {/snippet}
         </SegmentedControl>
@@ -583,11 +583,11 @@
       {/each}
       {#if activeCollection}
         <IconButton size="sm" label={msg('games.collectionEditLabel')} onclick={() => openCollection(activeCollection)}>
-          <Pencil size="1.54rem" strokeWidth={1.8} />
+          <Pencil size="1.4rem" strokeWidth={1.8} />
         </IconButton>
       {/if}
       <Chip variant="quiet" onclick={() => openCollection(null)}>
-        <Plus size="1.54rem" strokeWidth={1.8} />
+        <Plus size="1.4rem" strokeWidth={1.8} />
         {msg('games.collectionAdd')}
       </Chip>
     </div>
@@ -657,7 +657,7 @@
     position: relative;
     display: flex;
     align-items: flex-end;
-    min-height: clamp(22rem, 17vw, 30.8rem);
+    min-height: clamp(20rem, 17vw, 28rem);
     margin-bottom: var(--space-8);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
@@ -714,7 +714,7 @@
     align-items: flex-start;
     gap: var(--space-2);
     min-width: 0;
-    max-width: min(70.4rem, 100%);
+    max-width: min(64rem, 100%);
     padding: var(--space-6) var(--space-8);
     color: var(--text);
   }
@@ -750,7 +750,7 @@
   .hero-meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.22rem var(--space-5);
+    gap: 0.2rem var(--space-5);
     font-size: var(--font-sm);
     color: var(--text-2);
     font-variant-numeric: tabular-nums;
@@ -770,8 +770,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 3.52rem;
-    height: 3.52rem;
+    width: 3.2rem;
+    height: 3.2rem;
     border-radius: var(--radius-sm);
     background: color-mix(in srgb, var(--surface-2) 70%, transparent);
     color: var(--text);
@@ -808,7 +808,7 @@
   .link {
     display: inline-flex;
     align-items: center;
-    gap: 0.22rem;
+    gap: 0.2rem;
     font-size: var(--font-sm);
     color: var(--text-3);
     transition: color var(--dur) var(--ease);
@@ -823,7 +823,7 @@
   }
 
   .link:hover :global(svg) {
-    transform: translateX(0.33rem);
+    transform: translateX(0.3rem);
   }
 
   .recent-row {
@@ -836,21 +836,21 @@
 
   .recent-item {
     flex: 0 0 auto;
-    width: 29.7rem;
+    width: 27rem;
   }
 
   .recent-meta {
     display: inline-flex;
     align-items: center;
-    gap: 0.66rem;
+    gap: 0.6rem;
     font-size: var(--font-xs);
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
   }
 
   .recent-meta .dot {
-    width: 0.77rem;
-    height: 0.77rem;
+    width: 0.7rem;
+    height: 0.7rem;
     border-radius: 50%;
     background: var(--success);
     flex-shrink: 0;
@@ -867,14 +867,14 @@
 
   .search-wrap {
     flex: 1;
-    min-width: 24.2rem;
-    max-width: 41.8rem;
+    min-width: 22rem;
+    max-width: 38rem;
   }
 
   .toolbar-right {
     display: flex;
     align-items: center;
-    gap: 0.66rem;
+    gap: 0.6rem;
     flex-wrap: wrap;
   }
 
@@ -882,13 +882,13 @@
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 0.66rem;
+    gap: 0.6rem;
     margin-bottom: var(--space-5);
   }
 
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(17.6rem, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
     gap: var(--space-6) var(--space-5);
   }
 
@@ -906,7 +906,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-4);
-    padding: 0.88rem 0.88rem;
+    padding: 0.8rem 0.8rem;
     border-radius: var(--radius-md);
     text-align: left;
     transition: background var(--dur) var(--ease);
@@ -921,8 +921,8 @@
   }
 
   .list-thumb {
-    width: 3.52rem;
-    height: 4.62rem;
+    width: 3.2rem;
+    height: 4.2rem;
     flex-shrink: 0;
     border-radius: var(--radius-xs);
     overflow: hidden;
@@ -945,20 +945,20 @@
   }
 
   .list-meta.right {
-    min-width: 6.6rem;
+    min-width: 6rem;
     text-align: right;
     font-variant-numeric: tabular-nums;
   }
 
   @media (min-width: 2200px) {
     .grid {
-      grid-template-columns: repeat(auto-fill, minmax(19.8rem, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
     }
   }
 
   @media (max-width: 1400px) {
     .grid {
-      grid-template-columns: repeat(auto-fill, minmax(15.95rem, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(14.5rem, 1fr));
     }
   }
 </style>

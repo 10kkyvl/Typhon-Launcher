@@ -121,7 +121,7 @@
     </div>
     {#if !noLibrary}
       <Button onclick={openFolder}>
-        <FolderOpen size="1.65rem" strokeWidth={1.8} />
+        <FolderOpen size="1.5rem" strokeWidth={1.8} />
         {msg('screenshots.openFolder')}
       </Button>
     {/if}
@@ -145,7 +145,7 @@
           <span class="when">{caption(shot)}</span>
           <span class="remove">
             <IconButton label={msg('screenshots.delete')} size="sm" onclick={() => askDelete(shot)}>
-              <Trash2 size="1.65rem" strokeWidth={1.8} />
+              <Trash2 size="1.5rem" strokeWidth={1.8} />
             </IconButton>
           </span>
         </div>
@@ -186,8 +186,8 @@
   }
 
   .hint {
-    margin-top: 0.44rem;
-    font-size: 1.32rem;
+    margin-top: 0.4rem;
+    font-size: 1.2rem;
     color: var(--text-3);
   }
 
@@ -202,7 +202,7 @@
 
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(26.4rem, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(24rem, 1fr));
     gap: var(--space-3);
   }
 
@@ -210,7 +210,7 @@
     position: relative;
     display: flex;
     flex-direction: column;
-    gap: 0.66rem;
+    gap: 0.6rem;
     min-width: 0;
   }
 
@@ -239,7 +239,7 @@
   }
 
   .when {
-    font-size: 1.32rem;
+    font-size: 1.2rem;
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
   }

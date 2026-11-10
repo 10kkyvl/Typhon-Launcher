@@ -106,7 +106,7 @@
     list-style: none;
     margin: 0;
     padding: 0;
-    max-height: 26.4rem;
+    max-height: 24rem;
     overflow-y: auto;
     overscroll-behavior-y: contain;
   }
@@ -117,7 +117,7 @@
     justify-content: space-between;
     gap: var(--space-2);
     width: 100%;
-    padding: 0.88rem 1.1rem;
+    padding: 0.8rem 1rem;
     border-radius: var(--radius-sm);
     background: none;
     color: inherit;

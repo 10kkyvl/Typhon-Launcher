@@ -47,7 +47,7 @@
 
 <style>
   .emblem {
-    max-width: 19.8rem;
+    max-width: 18rem;
     margin: 0 auto var(--space-4);
   }
 
@@ -63,7 +63,7 @@
     flex-direction: column;
     align-items: center;
     min-width: 0;
-    gap: 0.22rem;
+    gap: 0.2rem;
   }
 
   .num {

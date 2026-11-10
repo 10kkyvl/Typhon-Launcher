@@ -45,9 +45,9 @@
   .capsule {
     display: flex;
     flex-direction: column;
-    gap: 0.77rem;
+    gap: 0.7rem;
     flex: 0 0 auto;
-    width: 24.2rem;
+    width: 22rem;
     padding: 0;
     background: none;
     border: 0;
@@ -69,7 +69,7 @@
 
   .capsule:hover .cover,
   .capsule:focus-visible .cover {
-    transform: translateY(-0.44rem);
+    transform: translateY(-0.4rem);
     box-shadow: var(--shadow-lift);
   }
 
@@ -86,15 +86,15 @@
   .meta {
     display: inline-flex;
     align-items: center;
-    gap: 0.66rem;
+    gap: 0.6rem;
     font-size: var(--font-xs);
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
   }
 
   .meta .dot {
-    width: 0.77rem;
-    height: 0.77rem;
+    width: 0.7rem;
+    height: 0.7rem;
     border-radius: 50%;
     background: var(--success);
     flex-shrink: 0;

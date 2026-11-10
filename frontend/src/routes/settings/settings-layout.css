@@ -29,7 +29,7 @@
 }
 
 .settings-page .settings-grid .row-text {
-  flex: 1 1 24.2rem;
+  flex: 1 1 22rem;
   overflow-wrap: anywhere;
 }
 
@@ -57,17 +57,17 @@
 }
 
 .settings-page .settings-grid .progress-body {
-  flex-basis: 26.4rem;
+  flex-basis: 24rem;
   overflow-wrap: anywhere;
 }
 
-@container settings-page (min-width: 121rem) {
+@container settings-page (min-width: 110rem) {
   .settings-page .settings-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@container settings-card (min-width: 66rem) {
+@container settings-card (min-width: 60rem) {
   .settings-page .settings-grid .folder-row {
     flex-direction: row;
     align-items: center;
@@ -75,6 +75,6 @@
   }
 
   .settings-page .settings-grid .folder-label {
-    flex: 0 0 17.6rem;
+    flex: 0 0 16rem;
   }
 }

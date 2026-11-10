@@ -25,9 +25,9 @@
       onclick={() => (revealed = !revealed)}
     >
       {#if revealed}
-        <EyeOff size="1.76rem" strokeWidth={1.8} />
+        <EyeOff size="1.6rem" strokeWidth={1.8} />
       {:else}
-        <Eye size="1.76rem" strokeWidth={1.8} />
+        <Eye size="1.6rem" strokeWidth={1.8} />
       {/if}
     </IconButton>
   {/if}
@@ -37,7 +37,7 @@
   .masked-email {
     display: inline-flex;
     align-items: center;
-    gap: 0.44rem;
+    gap: 0.4rem;
     min-width: 0;
   }
 

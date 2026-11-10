@@ -106,22 +106,22 @@
   }
 
   .avatar.sm {
-    --frame-w: 0.22rem;
-    --size: 3.52rem;
+    --frame-w: 0.2rem;
+    --size: 3.2rem;
     width: var(--size);
     height: var(--size);
   }
 
   .avatar.md {
-    --frame-w: 0.33rem;
-    --size: 5.28rem;
+    --frame-w: 0.3rem;
+    --size: 4.8rem;
     width: var(--size);
     height: var(--size);
   }
 
   .avatar.lg {
-    --frame-w: 0.44rem;
-    --size: 10.56rem;
+    --frame-w: 0.4rem;
+    --size: 9.6rem;
     width: var(--size);
     height: var(--size);
   }
@@ -166,7 +166,7 @@
   }
 
   .lg .fallback {
-    font-size: 3.96rem;
+    font-size: 3.6rem;
   }
 
   .dot {
@@ -178,18 +178,18 @@
   }
 
   .sm .dot {
-    width: 0.99rem;
-    height: 0.99rem;
+    width: 0.9rem;
+    height: 0.9rem;
   }
 
   .md .dot {
-    width: 1.32rem;
-    height: 1.32rem;
+    width: 1.2rem;
+    height: 1.2rem;
   }
 
   .lg .dot {
-    width: 2.2rem;
-    height: 2.2rem;
+    width: 2rem;
+    height: 2rem;
     border-width: 3px;
   }
 

@@ -17,7 +17,7 @@
   <div class="offer">
     <span class="offer-text">{msg('ui.stableOfferText', { current: status.currentVersion, version })}</span>
     <Button size="sm" disabled={$stableBusy || $selfUpdateBusy} onclick={() => (confirmOpen = true)}>
-      <Undo2 size="1.65rem" strokeWidth={1.8} />
+      <Undo2 size="1.5rem" strokeWidth={1.8} />
       {$stableBusy ? msg('ui.stableOfferBusy') : msg('ui.stableOfferButton', { version })}
     </Button>
   </div>

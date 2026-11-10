@@ -58,7 +58,7 @@
   });
 </script>
 
-<Modal bind:open title={msg('social.userCommonAllTitle')} width="70.4rem">
+<Modal bind:open title={msg('social.userCommonAllTitle')} width="64rem">
   {#if failure && games.length === 0}
     <p class="note error" role="alert">{failure}</p>
     <Button variant="primary" onclick={() => load(true)}>{msg('common.retry')}</Button>

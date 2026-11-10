@@ -70,10 +70,10 @@
     <div class="actions">
       <Button size="sm" disabled={!code} onclick={copy}>
         {#if copied === code && code}
-          <span class="mark"><Check size="1.65rem" strokeWidth={2} /></span>
+          <span class="mark"><Check size="1.5rem" strokeWidth={2} /></span>
           {msg('social.copied')}
         {:else}
-          <Copy size="1.65rem" strokeWidth={1.8} />
+          <Copy size="1.5rem" strokeWidth={1.8} />
           {msg('social.friendsCopyCode')}
         {/if}
       </Button>
@@ -84,7 +84,7 @@
   </div>
 </Card>
 
-<Modal bind:open={confirmOpen} title={msg('social.friendsChangeCodeTitle')} width="46.2rem">
+<Modal bind:open={confirmOpen} title={msg('social.friendsChangeCodeTitle')} width="42rem">
   <p class="warn">
     {msg('social.friendsChangeCodeWarning')}
   </p>
@@ -108,7 +108,7 @@
   .text {
     display: flex;
     flex-direction: column;
-    gap: 0.33rem;
+    gap: 0.3rem;
     min-width: 0;
   }
 
@@ -125,8 +125,8 @@
   }
 
   .code.copy {
-    padding: 0.22rem 0.88rem;
-    margin: -0.22rem -0.88rem;
+    padding: 0.2rem 0.8rem;
+    margin: -0.2rem -0.8rem;
     border-radius: var(--radius-sm);
     color: var(--text);
     text-align: left;

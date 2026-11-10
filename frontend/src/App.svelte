@@ -207,8 +207,8 @@
   }
 
   .boot-mark {
-    width: 6.16rem;
-    height: 6.16rem;
+    width: 5.6rem;
+    height: 5.6rem;
     animation: pulse 1.4s var(--ease) infinite;
   }
 

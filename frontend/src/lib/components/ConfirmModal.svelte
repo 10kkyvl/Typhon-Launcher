@@ -28,7 +28,7 @@
   }
 </script>
 
-<Modal open title={prompt.title} width="48.4rem" {onclose}>
+<Modal open title={prompt.title} width="44rem" {onclose}>
   <p class="text">{prompt.text}</p>
   {#if prompt.note}
     <p class="note">{prompt.note}</p>

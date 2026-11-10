@@ -45,7 +45,7 @@
   }
 
   .text {
-    flex: 1 1 26.4rem;
+    flex: 1 1 24rem;
     min-width: 0;
   }
 
@@ -71,7 +71,7 @@
   }
 
   p {
-    margin-top: 0.66rem;
+    margin-top: 0.6rem;
     max-width: var(--prose-max);
     font-size: var(--font-sm);
     color: var(--text-3);
@@ -84,6 +84,6 @@
     justify-content: flex-end;
     gap: var(--space-2);
     max-width: 100%;
-    padding-bottom: 0.33rem;
+    padding-bottom: 0.3rem;
   }
 </style>

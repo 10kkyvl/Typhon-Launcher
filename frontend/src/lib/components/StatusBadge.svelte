@@ -21,11 +21,11 @@
   .badge {
     display: inline-flex;
     align-items: center;
-    gap: 0.66rem;
-    height: 2.64rem;
-    padding: 0 0.99rem;
+    gap: 0.6rem;
+    height: 2.4rem;
+    padding: 0 0.9rem;
     border-radius: var(--radius-sm);
-    font-size: 1.32rem;
+    font-size: 1.2rem;
     font-weight: 500;
     white-space: nowrap;
   }
@@ -33,7 +33,7 @@
   .badge.plain {
     height: auto;
     padding: 0;
-    gap: 0.77rem;
+    gap: 0.7rem;
     background: none;
     font-size: var(--font-xs);
     font-weight: 400;
@@ -41,16 +41,16 @@
   }
 
   .dot {
-    width: 0.66rem;
-    height: 0.66rem;
+    width: 0.6rem;
+    height: 0.6rem;
     border-radius: 50%;
     background: currentColor;
     flex-shrink: 0;
   }
 
   .plain .dot {
-    width: 0.77rem;
-    height: 0.77rem;
+    width: 0.7rem;
+    height: 0.7rem;
   }
 
   .success {

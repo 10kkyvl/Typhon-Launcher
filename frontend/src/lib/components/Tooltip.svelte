@@ -24,11 +24,11 @@
   .tip {
     position: absolute;
     z-index: 60;
-    bottom: calc(100% + 0.66rem);
+    bottom: calc(100% + 0.6rem);
     left: 50%;
     transform: translateX(-50%) translateY(2px);
-    padding: 0.55rem 0.88rem;
-    max-width: 35.2rem;
+    padding: 0.5rem 0.8rem;
+    max-width: 32rem;
     background: var(--surface-4);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-sm);

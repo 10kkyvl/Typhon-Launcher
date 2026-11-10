@@ -31,20 +31,20 @@
 
 {#if !dismissed}
   <div class="offline-banner" role="status">
-    <span class="icon"><WifiOff size="1.76rem" strokeWidth={1.8} /></span>
+    <span class="icon"><WifiOff size="1.6rem" strokeWidth={1.8} /></span>
     <span class="text">
       {msg('ui.offlineBannerText')}
     </span>
     <Button size="sm" variant="ghost" onclick={openStatus}>
-      <Activity size="1.54rem" strokeWidth={1.8} />
+      <Activity size="1.4rem" strokeWidth={1.8} />
       {msg('ui.offlineBannerStatus')}
     </Button>
     <Button size="sm" disabled={retrying} onclick={retry}>
-      <RefreshCw size="1.54rem" strokeWidth={1.8} class={retrying ? 'spin' : ''} />
+      <RefreshCw size="1.4rem" strokeWidth={1.8} class={retrying ? 'spin' : ''} />
       {retrying ? msg('ui.checkingConnection') : msg('common.retry')}
     </Button>
     <button type="button" class="close" aria-label={msg('common.close')} title={msg('common.close')} onclick={() => (dismissed = true)}>
-      <X size="1.54rem" strokeWidth={1.8} />
+      <X size="1.4rem" strokeWidth={1.8} />
     </button>
   </div>
 {/if}

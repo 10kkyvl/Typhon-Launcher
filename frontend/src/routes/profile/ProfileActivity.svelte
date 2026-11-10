@@ -24,7 +24,7 @@
       {#each rows as row (`${row.date}:${row.entry.game.id}`)}
         <li>
           <button class="row" type="button" disabled={row.entry.game.archived} onclick={() => navigate('game', { id: row.entry.game.id })}>
-            <span class="icon"><Gamepad2 size="1.87rem" strokeWidth={1.8} /></span>
+            <span class="icon"><Gamepad2 size="1.7rem" strokeWidth={1.8} /></span>
             <span class="text">
               <span class="title">{row.entry.game.title}</span>
               <span class="sub">{msg('social.playedFor', { value: playtime(row.entry.seconds) })}</span>
@@ -54,7 +54,7 @@
     align-items: center;
     gap: var(--space-3);
     width: 100%;
-    padding: 0.88rem;
+    padding: 0.8rem;
     margin: 0 calc(var(--space-3) * -1);
     background: none;
     border: 0;
@@ -74,8 +74,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 3.96rem;
-    height: 3.96rem;
+    width: 3.6rem;
+    height: 3.6rem;
     flex-shrink: 0;
     border-radius: var(--radius-md);
     background: var(--surface-3);
@@ -87,7 +87,7 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.22rem;
+    gap: 0.2rem;
   }
 
   .title {
@@ -114,7 +114,7 @@
     display: block;
     width: 100%;
     margin-top: var(--space-4);
-    padding: 0.99rem;
+    padding: 0.9rem;
     background: none;
     border: 1px solid var(--border);
     border-radius: var(--radius-md);

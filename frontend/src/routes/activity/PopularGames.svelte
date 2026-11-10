@@ -50,7 +50,7 @@
     align-items: center;
     gap: var(--space-4);
     width: 100%;
-    padding: 0.88rem var(--space-4);
+    padding: 0.8rem var(--space-4);
     border-radius: var(--radius-md);
     text-align: left;
     transition: background var(--dur) var(--ease);
@@ -63,7 +63,7 @@
   .cover {
     display: block;
     flex-shrink: 0;
-    width: 3.96rem;
+    width: 3.6rem;
     border-radius: var(--radius-sm);
     overflow: hidden;
   }
@@ -71,7 +71,7 @@
   .text {
     display: flex;
     flex-direction: column;
-    gap: 0.22rem;
+    gap: 0.2rem;
     min-width: 0;
   }
 
@@ -85,7 +85,7 @@
   }
 
   .sub {
-    font-size: 1.32rem;
+    font-size: 1.2rem;
     color: var(--text-3);
   }
 

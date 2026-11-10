@@ -31,7 +31,7 @@
   .text {
     display: flex;
     flex-direction: column;
-    gap: 0.33rem;
+    gap: 0.3rem;
     min-width: 0;
   }
 

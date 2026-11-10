@@ -251,7 +251,7 @@
     <section>
       <h3>{msg('profile.cover')}</h3>
       <input class="file" bind:this={input} type="file" accept={COVER_TYPES.join(',')} onchange={() => { void choose(input?.files?.[0]); if (input) input.value = ''; }} />
-      <Button onclick={() => input?.click()}><Upload size="1.65rem" />{msg('profile.upload')}</Button>
+      <Button onclick={() => input?.click()}><Upload size="1.5rem" />{msg('profile.upload')}</Button>
       <p class="hint">{msg('profileStyle.coverHint')}</p>
       {#if a.coverUrl}
         {#if originalSource}<Button size="sm" variant="ghost" onclick={() => { cropSource = originalSource; cropOpen = true; }}>{msg('profile.editCrop')}</Button>{/if}
@@ -332,7 +332,7 @@
       <h3>{msg('profileStyle.status')}</h3>
       <div class="status-row">
         <button type="button" class="emoji-button" aria-expanded={emojiOpen} aria-label={msg('profileStyle.emojiPick')} onclick={() => (emojiOpen = !emojiOpen)}>
-          {#if draft.statusEmoji}<span class="emoji">{draft.statusEmoji}</span>{:else}<Smile size="1.98rem" />{/if}
+          {#if draft.statusEmoji}<span class="emoji">{draft.statusEmoji}</span>{:else}<Smile size="1.8rem" />{/if}
         </button>
         <input class="text" type="text" autocomplete="off" spellcheck="true" placeholder={msg('profileStyle.statusPlaceholder')}
           aria-label={msg('profileStyle.status')} value={draft.statusText ?? ''} oninput={setStatusText} />
@@ -347,11 +347,11 @@
         </div>
       {/if}
       {#if draft.statusEmoji}
-        <Button size="sm" variant="ghost" onclick={() => (draft.statusEmoji = '')}><X size="1.54rem" />{msg('profileStyle.emojiClear')}</Button>
+        <Button size="sm" variant="ghost" onclick={() => (draft.statusEmoji = '')}><X size="1.4rem" />{msg('profileStyle.emojiClear')}</Button>
       {/if}
     </section>
 
-    <Button size="sm" variant="ghost" onclick={() => (pending = { prompt: resetProfileAppearancePrompt(), run: reset })}><RotateCcw size="1.54rem" />{msg('profile.reset')}</Button>
+    <Button size="sm" variant="ghost" onclick={() => (pending = { prompt: resetProfileAppearancePrompt(), run: reset })}><RotateCcw size="1.4rem" />{msg('profile.reset')}</Button>
   </fieldset>
 </div>
 {#if cropOpen}
@@ -362,50 +362,50 @@
 {/if}
 <style>
   .panel { min-width: 0; }
-  h3 { font-size: var(--font-sm); font-weight: 600; margin-bottom: 1.32rem; }
+  h3 { font-size: var(--font-sm); font-weight: 600; margin-bottom: 1.2rem; }
   fieldset { border: 0; padding: 0; min-width: 0; } fieldset:disabled { opacity: .65; }
-  section { padding: 1.87rem 0; border-bottom: 1px solid var(--border); }
-  .status-error { color: var(--danger); font-size: var(--font-xs); line-height: 1.5; margin-top: .88rem; }
-  .hint { color: var(--text-3); font-size: var(--font-xs); line-height: 1.5; margin-top: .88rem; }
+  section { padding: 1.7rem 0; border-bottom: 1px solid var(--border); }
+  .status-error { color: var(--danger); font-size: var(--font-xs); line-height: 1.5; margin-top: .8rem; }
+  .hint { color: var(--text-3); font-size: var(--font-xs); line-height: 1.5; margin-top: .8rem; }
   .danger { color: var(--danger); }
-  .themes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .88rem; }
-  .theme { background: transparent; border: 1px solid var(--border); border-radius: var(--radius-md); padding: .55rem; color: var(--text-2); font: inherit; font-size: 1.155rem; cursor: pointer; min-width: 0; }
-  .theme-swatch { display: block; height: 4.4rem; border-radius: .44rem; margin-bottom: .55rem; }
+  .themes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; }
+  .theme { background: transparent; border: 1px solid var(--border); border-radius: var(--radius-md); padding: .5rem; color: var(--text-2); font: inherit; font-size: 1.05rem; cursor: pointer; min-width: 0; }
+  .theme-swatch { display: block; height: 4rem; border-radius: .4rem; margin-bottom: .5rem; }
   .theme-swatch.auto { background: linear-gradient(125deg, var(--accent-subtle), var(--accent)); }
   .selected { outline: 2px solid var(--accent-bright); outline-offset: 1px; }
-  .custom { display: flex; flex-direction: column; gap: 1.1rem; margin-top: 1.54rem; }
-  .preview { height: 9.9rem; margin-top: 1.54rem; overflow: hidden; border-radius: var(--radius-md); border: 1px solid var(--border); }
+  .custom { display: flex; flex-direction: column; gap: 1rem; margin-top: 1.4rem; }
+  .preview { height: 9rem; margin-top: 1.4rem; overflow: hidden; border-radius: var(--radius-md); border: 1px solid var(--border); }
   .preview-scale { width: 250%; transform: scale(.4); transform-origin: 0 0; pointer-events: none; }
-  .preview-card { display: block; margin-top: 4.4rem; padding: 1.54rem 2.2rem; border-radius: var(--radius-md); font-size: var(--font-md); }
-  .pick { display: flex; align-items: center; gap: 1.1rem; flex-wrap: wrap; }
-  .pick-label { font-size: var(--font-xs); color: var(--text-2); min-width: 6.6rem; }
-  .frames + .pick, .names + .pick { margin-top: 1.32rem; }
-  .options { display: flex; flex-wrap: wrap; gap: .88rem; }
-  .option { background: transparent; border: 1px solid var(--border); border-radius: var(--radius-md); padding: .77rem 1.32rem; color: var(--text-2); font: inherit; font-size: var(--font-xs); cursor: pointer; }
-  .file { display: none; } .accents { display: flex; align-items: center; gap: .99rem; flex-wrap: wrap; }
-  .color { width: 2.75rem; height: 2.75rem; border-radius: 50%; border: 1px solid var(--border-strong); cursor: pointer; padding: 0; }
-  .hex { margin-top: 1.32rem; }
-  .slider { display: flex; flex-direction: column; gap: 1.1rem; margin-top: 1.76rem; font-size: var(--font-xs); }
+  .preview-card { display: block; margin-top: 4rem; padding: 1.4rem 2rem; border-radius: var(--radius-md); font-size: var(--font-md); }
+  .pick { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+  .pick-label { font-size: var(--font-xs); color: var(--text-2); min-width: 6rem; }
+  .frames + .pick, .names + .pick { margin-top: 1.2rem; }
+  .options { display: flex; flex-wrap: wrap; gap: .8rem; }
+  .option { background: transparent; border: 1px solid var(--border); border-radius: var(--radius-md); padding: .7rem 1.2rem; color: var(--text-2); font: inherit; font-size: var(--font-xs); cursor: pointer; }
+  .file { display: none; } .accents { display: flex; align-items: center; gap: .9rem; flex-wrap: wrap; }
+  .color { width: 2.5rem; height: 2.5rem; border-radius: 50%; border: 1px solid var(--border-strong); cursor: pointer; padding: 0; }
+  .hex { margin-top: 1.2rem; }
+  .slider { display: flex; flex-direction: column; gap: 1rem; margin-top: 1.6rem; font-size: var(--font-xs); }
   .slider > span { display: flex; justify-content: space-between; } input[type=range] { width: 100%; }
-  .frames { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .88rem; }
-  .names { display: grid; grid-template-columns: minmax(0, 1fr); gap: .88rem; }
-  h4.sub { margin: 1.54rem 0 .88rem; font-size: var(--font-xs); font-weight: 600; color: var(--text-3); }
+  .frames { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; }
+  .names { display: grid; grid-template-columns: minmax(0, 1fr); gap: .8rem; }
+  h4.sub { margin: 1.4rem 0 .8rem; font-size: var(--font-xs); font-weight: 600; color: var(--text-3); }
   .frames.owned { margin-top: 0; }
-  .checker { display: flex; align-items: center; justify-content: center; width: 5.28rem; height: 5.28rem; border-radius: var(--radius-sm); background: repeating-conic-gradient(var(--surface-3) 0% 25%, var(--surface-4) 0% 50%) 0 0 / 1.32rem 1.32rem; overflow: hidden; }
+  .checker { display: flex; align-items: center; justify-content: center; width: 4.8rem; height: 4.8rem; border-radius: var(--radius-sm); background: repeating-conic-gradient(var(--surface-3) 0% 25%, var(--surface-4) 0% 50%) 0 0 / 1.2rem 1.2rem; overflow: hidden; }
   .checker img { max-width: 100%; max-height: 100%; object-fit: contain; }
   .owned-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .pick-card { display: flex; flex-direction: column; align-items: center; gap: .99rem; padding: 1.32rem .66rem; background: transparent; border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text-2); font: inherit; font-size: var(--font-xs); cursor: pointer; min-width: 0; }
-  .name-card { align-items: flex-start; padding: 1.1rem 1.32rem; font-size: var(--font-md); font-weight: 600; color: var(--text); }
+  .pick-card { display: flex; flex-direction: column; align-items: center; gap: .9rem; padding: 1.2rem .6rem; background: transparent; border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text-2); font: inherit; font-size: var(--font-xs); cursor: pointer; min-width: 0; }
+  .name-card { align-items: flex-start; padding: 1rem 1.2rem; font-size: var(--font-md); font-weight: 600; color: var(--text); }
   .name-card small { font-size: var(--font-xs); font-weight: 400; color: var(--text-3); }
-  .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 1.76rem; } .toggle-row h3 { margin-bottom: 0; }
-  .status-row { display: flex; align-items: center; gap: .88rem; }
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 1.6rem; } .toggle-row h3 { margin-bottom: 0; }
+  .status-row { display: flex; align-items: center; gap: .8rem; }
   .emoji-button { display: inline-flex; align-items: center; justify-content: center; width: var(--control-md); height: var(--control-md); flex-shrink: 0; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--radius-md); color: var(--text-2); cursor: pointer; }
-  .emoji { font-size: 1.98rem; line-height: 1; }
-  .text { flex: 1; min-width: 0; height: var(--control-md); padding: 0 1.32rem; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--radius-md); color: var(--text); font: inherit; font-size: var(--font-sm); }
+  .emoji { font-size: 1.8rem; line-height: 1; }
+  .text { flex: 1; min-width: 0; height: var(--control-md); padding: 0 1.2rem; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--radius-md); color: var(--text); font: inherit; font-size: var(--font-sm); }
   .text:focus { outline: none; border-color: var(--accent-ring); box-shadow: 0 0 0 3px var(--accent-subtle); }
   .counter { flex-shrink: 0; font-size: var(--font-xs); color: var(--text-3); font-variant-numeric: tabular-nums; } .counter.full { color: var(--danger); }
-  .emoji-grid { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: .33rem; margin: 1.1rem 0; padding: .66rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); }
-  .emoji-cell { aspect-ratio: 1; background: transparent; border: 0; border-radius: var(--radius-sm); font-size: 1.98rem; line-height: 1; cursor: pointer; }
+  .emoji-grid { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: .3rem; margin: 1rem 0; padding: .6rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); }
+  .emoji-cell { aspect-ratio: 1; background: transparent; border: 0; border-radius: var(--radius-sm); font-size: 1.8rem; line-height: 1; cursor: pointer; }
   .emoji-cell:hover { background: var(--hover); }
   button:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 3px; }
 </style>

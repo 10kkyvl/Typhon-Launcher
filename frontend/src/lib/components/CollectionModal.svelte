@@ -91,7 +91,7 @@
   }
 </script>
 
-<Modal bind:open title={collection ? msg('modals.collectionEditTitle') : msg('modals.collectionNewTitle')} width="57.2rem">
+<Modal bind:open title={collection ? msg('modals.collectionEditTitle') : msg('modals.collectionNewTitle')} width="52rem">
   <div class="form">
     <label class="field">
       <span class="field-label">{msg('modals.collectionNameLabel')}</span>
@@ -152,7 +152,7 @@
   .field {
     display: flex;
     flex-direction: column;
-    gap: 0.77rem;
+    gap: 0.7rem;
   }
 
   .field-label {
@@ -164,8 +164,8 @@
   .chips {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.66rem;
-    max-height: 19.8rem;
+    gap: 0.6rem;
+    max-height: 18rem;
     overflow-y: auto;
   }
 

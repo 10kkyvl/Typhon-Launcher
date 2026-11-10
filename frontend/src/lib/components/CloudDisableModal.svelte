@@ -16,7 +16,7 @@
   } = $props();
 </script>
 
-<Modal bind:open title={msg('cloudsaves.disableTitle')} width="48.4rem">
+<Modal bind:open title={msg('cloudsaves.disableTitle')} width="44rem">
   <p class="text">{msg('cloudsaves.disableText')}</p>
   <p class="hint">{msg('cloudsaves.disableKeepHint')}</p>
 

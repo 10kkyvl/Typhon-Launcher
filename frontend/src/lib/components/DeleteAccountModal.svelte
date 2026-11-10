@@ -40,7 +40,7 @@
   }
 </script>
 
-<Modal open title={msg('profile.deleteAccountConfirmTitle')} width="48.4rem" {onclose}>
+<Modal open title={msg('profile.deleteAccountConfirmTitle')} width="44rem" {onclose}>
   <form
     class="form"
     onsubmit={(event) => {
@@ -78,7 +78,7 @@
   .field {
     display: flex;
     flex-direction: column;
-    gap: 0.77rem;
+    gap: 0.7rem;
   }
 
   .field-label {

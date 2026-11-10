@@ -24,13 +24,13 @@
   .track {
     width: 100%;
     background: var(--hover-strong);
-    border-radius: 108.9rem;
+    border-radius: 99rem;
     overflow: hidden;
   }
 
   .fill {
     height: 100%;
-    border-radius: 108.9rem;
+    border-radius: 99rem;
     transition: width 600ms linear;
   }
   .fill.indeterminate { animation: sweep 1.4s ease-in-out infinite; }

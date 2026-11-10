@@ -341,30 +341,30 @@
         <strong>{$chatToast.peer.displayName || $chatToast.peer.username}</strong>
         <span>{messagePreview($chatToast.message)}</span>
       </span>
-      <X size="1.65rem" strokeWidth={1.8} />
+      <X size="1.5rem" strokeWidth={1.8} />
     </button>
   {/if}
 
   {#if !$chatOpen}
     <button class="chat-toggle" type="button" aria-label={msg('social.chatOpen')} onclick={() => (chatOpen.set(true))}>
-      <MessageCircle size="2.2rem" strokeWidth={1.8} />
+      <MessageCircle size="2rem" strokeWidth={1.8} />
       {#if hasUnread}<span class="unread-dot">{$conversations.reduce((sum, item) => sum + item.unread, 0)}</span>{/if}
     </button>
   {:else}
     <section class="chat-panel" aria-label={msg('social.chatPanelLabel')}>
       <header class="chat-header">
         {#if peer}
-          <button class="back" type="button" aria-label={msg('social.chatBack')} onclick={showList}><ArrowLeft size="1.87rem" /></button>
+          <button class="back" type="button" aria-label={msg('social.chatBack')} onclick={showList}><ArrowLeft size="1.7rem" /></button>
           <Avatar size="sm" name={displayName(peer)} src={peer.avatarUrl} {...fieldsFrame(peer)} />
           <div class="header-copy">
             <strong>{displayName(peer)}</strong>
             <span>{peer.username ? `@${peer.username}` : ''}{#if !$chatConnected} · {msg('social.chatOffline')}{/if}</span>
           </div>
         {:else}
-          <MessageCircle size="1.98rem" />
+          <MessageCircle size="1.8rem" />
           <div class="header-copy"><strong>{msg('social.chatMessages')}</strong><span>{msg('social.chatFriends')}</span></div>
         {/if}
-        <IconButton label={msg('social.chatClose')} size="sm" onclick={closeChat}><X size="1.87rem" /></IconButton>
+        <IconButton label={msg('social.chatClose')} size="sm" onclick={closeChat}><X size="1.7rem" /></IconButton>
       </header>
 
       {#if peer}
@@ -372,7 +372,7 @@
         <div class="messages" bind:this={scrollBox}>
           {#if $nextByPeer[peer.id]}
             <button class="load-more" type="button" disabled={$chatLoadingMore} onclick={() => loadMore(peer.id).catch(() => undefined)}>
-              <ChevronUp size="1.54rem" /> { $chatLoadingMore ? msg('social.chatLoadingHistory') : msg('social.chatEarlier') }
+              <ChevronUp size="1.4rem" /> { $chatLoadingMore ? msg('social.chatLoadingHistory') : msg('social.chatEarlier') }
             </button>
           {/if}
           {#if $chatHistoryError}
@@ -395,7 +395,7 @@
                     <textarea class="edit-input" bind:value={editDraft} maxlength="2000" rows="3"></textarea>
                     <div class="message-actions">
                       <Button size="sm" onclick={() => editingMessageId.set(null)}>{msg('social.chatCancel')}</Button>
-                      <Button size="sm" variant="primary" onclick={() => saveEdit(message)}><Check size="1.43rem" /> {msg('social.chatSave')}</Button>
+                      <Button size="sm" variant="primary" onclick={() => saveEdit(message)}><Check size="1.3rem" /> {msg('social.chatSave')}</Button>
                     </div>
                   {:else}
                     {@const attachments = attachmentsOf(message)}
@@ -412,13 +412,13 @@
                         <span class="sending-status" role="status">{msg('social.chatSending')}</span>
                       {/if}
                       {#if isOwn(message) && !message.id.startsWith('local:')}
-                        <button class="tiny-action" type="button" title={msg('social.chatEdit')} onclick={() => startEdit(message)}><Pencil size="1.375rem" /></button>
+                        <button class="tiny-action" type="button" title={msg('social.chatEdit')} onclick={() => startEdit(message)}><Pencil size="1.25rem" /></button>
                       {/if}
                       {#if $failedMessages.has(message.clientId)}
-                        <button class="retry" type="button" onclick={() => retry(message)}><RefreshCw size="1.375rem" /> {msg('social.chatRetry')}</button>
+                        <button class="retry" type="button" onclick={() => retry(message)}><RefreshCw size="1.25rem" /> {msg('social.chatRetry')}</button>
                       {/if}
                       {#if !message.id.startsWith('local:')}
-                      <button class="tiny-action" type="button" title={msg('social.chatReaction')} onclick={() => (reactionMenu = reactionMenu === message.id ? null : message.id)}><MoreHorizontal size="1.43rem" /></button>
+                      <button class="tiny-action" type="button" title={msg('social.chatReaction')} onclick={() => (reactionMenu = reactionMenu === message.id ? null : message.id)}><MoreHorizontal size="1.3rem" /></button>
                       {/if}
                     </div>
                     {#if message.reactions.length > 0}
@@ -463,7 +463,7 @@
                     <strong>{item.name}</strong>
                     <span>{bytesSize(item.bytes)}</span>
                   </span>
-                  <button class="tiny-action" type="button" title={msg('social.chatAttachRemove')} aria-label={msg('social.chatAttachRemove')} disabled={sending} onclick={() => removeAttachment(item.key)}><X size="1.54rem" /></button>
+                  <button class="tiny-action" type="button" title={msg('social.chatAttachRemove')} aria-label={msg('social.chatAttachRemove')} disabled={sending} onclick={() => removeAttachment(item.key)}><X size="1.4rem" /></button>
                 </div>
               {/each}
             </div>
@@ -472,7 +472,7 @@
             {/if}
           {/if}
           <div class="composer">
-            <button class="attach" type="button" title={msg('social.chatAttachHint')} aria-label={msg('social.chatAttach')} disabled={sending} onclick={() => attach()}><Paperclip size="1.87rem" /></button>
+            <button class="attach" type="button" title={msg('social.chatAttachHint')} aria-label={msg('social.chatAttach')} disabled={sending} onclick={() => attach()}><Paperclip size="1.7rem" /></button>
             <textarea
               bind:this={composer}
               value={draft}
@@ -484,7 +484,7 @@
               onkeydown={onKeydown}
               onpaste={onPaste}
             ></textarea>
-            <button class="send" type="button" aria-label={msg('social.chatSend')} disabled={(!draft.trim() && draftList.length === 0) || sending} onclick={() => submit()}><Send size="1.87rem" /></button>
+            <button class="send" type="button" aria-label={msg('social.chatSend')} disabled={(!draft.trim() && draftList.length === 0) || sending} onclick={() => submit()}><Send size="1.7rem" /></button>
           </div>
           <div class="composer-hint">{msg('social.chatHint')}</div>
         {/if}
@@ -515,74 +515,74 @@
 </div>
 
 <style>
-  .chat-root { position: fixed; z-index: 140; right: 2.64rem; bottom: 2.64rem; display: flex; flex-direction: column; align-items: flex-end; pointer-events: none; }
-  .chat-root.sidebar-right { right: calc(2.64rem + var(--sidebar-now)); }
+  .chat-root { position: fixed; z-index: 140; right: 2.4rem; bottom: 2.4rem; display: flex; flex-direction: column; align-items: flex-end; pointer-events: none; }
+  .chat-root.sidebar-right { right: calc(2.4rem + var(--sidebar-now)); }
   .chat-root > * { pointer-events: auto; }
-  .chat-toggle { position: relative; display: flex; align-items: center; justify-content: center; width: 5.28rem; height: 5.28rem; border: 1px solid var(--border-strong); border-radius: 50%; background: var(--accent); color: var(--accent-on, #fff); box-shadow: var(--shadow-pop); cursor: pointer; }
+  .chat-toggle { position: relative; display: flex; align-items: center; justify-content: center; width: 4.8rem; height: 4.8rem; border: 1px solid var(--border-strong); border-radius: 50%; background: var(--accent); color: var(--accent-on, #fff); box-shadow: var(--shadow-pop); cursor: pointer; }
   .chat-toggle:hover { background: var(--accent-hover); }
-  .unread-dot { position: absolute; top: -0.55rem; right: -0.55rem; min-width: 2.2rem; height: 2.2rem; padding: 0 0.495rem; border-radius: 2.2rem; background: var(--danger); color: #fff; font-size: var(--font-xs); display: flex; align-items: center; justify-content: center; }
-  .chat-panel { display: flex; flex-direction: column; width: 41.8rem; height: min(70.4rem, calc(100vh - 8.8rem)); overflow: hidden; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-pop); }
-  .chat-header { display: flex; align-items: center; gap: 0.99rem; min-height: 6.16rem; padding: 0 1.32rem; border-bottom: 1px solid var(--border); background: var(--surface-3); }
-  .back { display: inline-flex; border: 0; background: transparent; color: var(--text-2); padding: 0.55rem; cursor: pointer; }
-  .header-copy, .conversation-copy, .toast-copy { min-width: 0; display: flex; flex-direction: column; gap: 0.165rem; text-align: left; }
+  .unread-dot { position: absolute; top: -0.5rem; right: -0.5rem; min-width: 2rem; height: 2rem; padding: 0 0.45rem; border-radius: 2rem; background: var(--danger); color: #fff; font-size: var(--font-xs); display: flex; align-items: center; justify-content: center; }
+  .chat-panel { display: flex; flex-direction: column; width: 38rem; height: min(64rem, calc(100vh - 8rem)); overflow: hidden; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-pop); }
+  .chat-header { display: flex; align-items: center; gap: 0.9rem; min-height: 5.6rem; padding: 0 1.2rem; border-bottom: 1px solid var(--border); background: var(--surface-3); }
+  .back { display: inline-flex; border: 0; background: transparent; color: var(--text-2); padding: 0.5rem; cursor: pointer; }
+  .header-copy, .conversation-copy, .toast-copy { min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; text-align: left; }
   .header-copy { flex: 1; }
   .header-copy strong { font-size: var(--font-sm); }
   .header-copy span, .conversation-copy span, .toast-copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-3); font-size: var(--font-xs); }
-  .history-note { padding: 0.77rem 1.1rem 0; color: var(--text-3); font-size: 1.1rem; text-align: center; }
-  .messages { flex: 1; overflow-y: auto; padding: 1.1rem; }
-  .load-more { display: flex; align-items: center; gap: 0.44rem; margin: 0 auto 1.1rem; border: 0; background: transparent; color: var(--accent-text); font-size: var(--font-xs); cursor: pointer; }
-  .state { display: grid; place-items: center; min-height: 14.3rem; padding: 2.2rem; color: var(--text-3); text-align: center; font-size: var(--font-sm); }
-  .sending-status { color: var(--text-3); font-size: 1.1rem; }
+  .history-note { padding: 0.7rem 1rem 0; color: var(--text-3); font-size: 1rem; text-align: center; }
+  .messages { flex: 1; overflow-y: auto; padding: 1rem; }
+  .load-more { display: flex; align-items: center; gap: 0.4rem; margin: 0 auto 1rem; border: 0; background: transparent; color: var(--accent-text); font-size: var(--font-xs); cursor: pointer; }
+  .state { display: grid; place-items: center; min-height: 13rem; padding: 2rem; color: var(--text-3); text-align: center; font-size: var(--font-sm); }
+  .sending-status { color: var(--text-3); font-size: 1rem; }
   .connection-retry { border: 0; background: transparent; color: var(--accent-text); cursor: pointer; font: inherit; text-decoration: underline; }
-  .history-error { display: flex; align-items: center; justify-content: center; gap: 0.77rem; margin-bottom: 0.77rem; color: var(--danger); font-size: var(--font-xs); text-align: center; }
+  .history-error { display: flex; align-items: center; justify-content: center; gap: 0.7rem; margin-bottom: 0.7rem; color: var(--danger); font-size: var(--font-xs); text-align: center; }
   .history-error button { border: 0; background: transparent; color: var(--accent-text); cursor: pointer; font: inherit; text-decoration: underline; }
-  .message-row { display: flex; justify-content: flex-start; margin: 0.88rem 0; }
+  .message-row { display: flex; justify-content: flex-start; margin: 0.8rem 0; }
   .message-row.own { justify-content: flex-end; }
-  .message { position: relative; max-width: 86%; padding: 0.935rem 1.1rem; border: 1px solid var(--border); border-radius: 1.32rem 1.32rem 1.32rem 0.385rem; background: var(--surface-3); }
-  .own .message { border-radius: 1.32rem 1.32rem 0.385rem 1.32rem; background: color-mix(in srgb, var(--accent) 18%, var(--surface-3)); }
+  .message { position: relative; max-width: 86%; padding: 0.85rem 1rem; border: 1px solid var(--border); border-radius: 1.2rem 1.2rem 1.2rem 0.35rem; background: var(--surface-3); }
+  .own .message { border-radius: 1.2rem 1.2rem 0.35rem 1.2rem; background: color-mix(in srgb, var(--accent) 18%, var(--surface-3)); }
   .message.failed { border-color: var(--danger); }
-  .message-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.66rem; margin-bottom: 0.385rem; color: var(--text-3); font-size: 1.1rem; }
+  .message-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-bottom: 0.35rem; color: var(--text-3); font-size: 1rem; }
   .message-meta time { opacity: 0.75; white-space: nowrap; }
   .edited { font-style: italic; }
   .message-text { margin: 0; color: var(--text); font-size: var(--font-sm); line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
   .message-text a { color: var(--accent-text); text-decoration: underline; }
-  .message-footer { display: flex; justify-content: flex-end; gap: 0.33rem; margin-top: 0.385rem; }
-  .tiny-action, .retry { display: inline-flex; align-items: center; gap: 0.33rem; border: 0; padding: 0.275rem; background: transparent; color: var(--text-3); font-size: 1.1rem; cursor: pointer; }
+  .message-footer { display: flex; justify-content: flex-end; gap: 0.3rem; margin-top: 0.35rem; }
+  .tiny-action, .retry { display: inline-flex; align-items: center; gap: 0.3rem; border: 0; padding: 0.25rem; background: transparent; color: var(--text-3); font-size: 1rem; cursor: pointer; }
   .retry { color: var(--danger); }
-  .reactions, .reaction-menu { display: flex; flex-wrap: wrap; gap: 0.33rem; margin-top: 0.495rem; }
-  .reactions button, .reaction-menu button { display: inline-flex; align-items: center; gap: 0.33rem; border: 1px solid var(--border); border-radius: 1.1rem; padding: 0.22rem 0.495rem; background: var(--surface-2); cursor: pointer; font-size: 1.32rem; }
+  .reactions, .reaction-menu { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.45rem; }
+  .reactions button, .reaction-menu button { display: inline-flex; align-items: center; gap: 0.3rem; border: 1px solid var(--border); border-radius: 1rem; padding: 0.2rem 0.45rem; background: var(--surface-2); cursor: pointer; font-size: 1.2rem; }
   .reactions button :global(svg), .reaction-menu button :global(svg) { width: 1.4em; height: 1.4em; }
   .reactions button.reacted { border-color: var(--accent-bright); background: var(--accent-subtle); }
-  .reaction-menu { padding: 0.44rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-4); }
-  .typing { margin: 0.66rem 0; color: var(--text-3); font-size: var(--font-xs); font-style: italic; }
-  .edit-input, .composer textarea { width: 100%; resize: none; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); padding: 0.77rem; font: inherit; font-size: var(--font-sm); outline: none; }
+  .reaction-menu { padding: 0.4rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-4); }
+  .typing { margin: 0.6rem 0; color: var(--text-3); font-size: var(--font-xs); font-style: italic; }
+  .edit-input, .composer textarea { width: 100%; resize: none; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); padding: 0.7rem; font: inherit; font-size: var(--font-sm); outline: none; }
   .edit-input:focus, .composer textarea:focus { border-color: var(--accent-ring); }
-  .message-actions { display: flex; justify-content: flex-end; gap: 0.55rem; margin-top: 0.66rem; }
-  .chat-error, .disabled-copy { padding: 0.77rem 1.1rem; color: var(--danger); font-size: var(--font-xs); }
+  .message-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.6rem; }
+  .chat-error, .disabled-copy { padding: 0.7rem 1rem; color: var(--danger); font-size: var(--font-xs); }
   .disabled-copy { color: var(--text-3); }
-  .composer { display: flex; align-items: flex-end; gap: 0.77rem; padding: 0.88rem 1.1rem 0; border-top: 1px solid var(--border); }
-  .composer textarea { flex: 1; min-height: 4.62rem; }
-  .send { display: flex; align-items: center; justify-content: center; width: 4.18rem; height: 4.18rem; flex-shrink: 0; border: 0; border-radius: 50%; background: var(--accent); color: var(--accent-on, #fff); cursor: pointer; }
+  .composer { display: flex; align-items: flex-end; gap: 0.7rem; padding: 0.8rem 1rem 0; border-top: 1px solid var(--border); }
+  .composer textarea { flex: 1; min-height: 4.2rem; }
+  .send { display: flex; align-items: center; justify-content: center; width: 3.8rem; height: 3.8rem; flex-shrink: 0; border: 0; border-radius: 50%; background: var(--accent); color: var(--accent-on, #fff); cursor: pointer; }
   .send:disabled { opacity: 0.45; cursor: default; }
-  .attach { display: flex; align-items: center; justify-content: center; width: 4.18rem; height: 4.18rem; flex-shrink: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-2); cursor: pointer; }
+  .attach { display: flex; align-items: center; justify-content: center; width: 3.8rem; height: 3.8rem; flex-shrink: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-2); cursor: pointer; }
   .attach:hover:not(:disabled) { background: var(--hover); color: var(--text); }
   .attach:disabled { opacity: 0.45; cursor: default; }
-  .draft-list { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; margin: 0.88rem 1.1rem 0; }
-  .draft-chip { display: flex; align-items: center; gap: 0.66rem; min-width: 0; padding: 0.44rem 0.55rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-3); }
-  .draft-chip img { width: 3.52rem; height: 3.52rem; flex-shrink: 0; border-radius: var(--radius-sm); object-fit: cover; }
-  .draft-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.165rem; }
+  .draft-list { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin: 0.8rem 1rem 0; }
+  .draft-chip { display: flex; align-items: center; gap: 0.6rem; min-width: 0; padding: 0.4rem 0.5rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-3); }
+  .draft-chip img { width: 3.2rem; height: 3.2rem; flex-shrink: 0; border-radius: var(--radius-sm); object-fit: cover; }
+  .draft-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
   .draft-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-xs); }
-  .draft-copy span { color: var(--text-3); font-size: 1.1rem; }
-  .upload-status { margin: 0.55rem 1.1rem 0; color: var(--text-3); font-size: 1.1rem; }
-  .composer-hint { padding: 0.495rem 1.1rem 0.88rem; color: var(--text-3); font-size: 1.1rem; }
-  .conversation-list { flex: 1; overflow-y: auto; padding: 0.88rem; }
-  .conversation { display: flex; align-items: center; gap: 1.1rem; width: 100%; padding: 1.1rem; border: 0; border-radius: var(--radius-md); background: transparent; color: inherit; cursor: pointer; text-align: left; }
+  .draft-copy span { color: var(--text-3); font-size: 1rem; }
+  .upload-status { margin: 0.5rem 1rem 0; color: var(--text-3); font-size: 1rem; }
+  .composer-hint { padding: 0.45rem 1rem 0.8rem; color: var(--text-3); font-size: 1rem; }
+  .conversation-list { flex: 1; overflow-y: auto; padding: 0.8rem; }
+  .conversation { display: flex; align-items: center; gap: 1rem; width: 100%; padding: 1rem; border: 0; border-radius: var(--radius-md); background: transparent; color: inherit; cursor: pointer; text-align: left; }
   .conversation:hover { background: var(--hover); }
   .conversation-copy { flex: 1; }
   .conversation-copy strong { font-size: var(--font-sm); }
-  .conversation-unread { display: grid; place-items: center; min-width: 2.2rem; height: 2.2rem; padding: 0 0.44rem; border-radius: 2.2rem; background: var(--accent); color: var(--accent-on, #fff); font-size: var(--font-xs); }
-  .chat-toast { display: flex; align-items: center; gap: 0.88rem; width: 35.2rem; margin-bottom: 1.1rem; padding: 1.1rem; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-4); color: var(--text); box-shadow: var(--shadow-pop); cursor: pointer; text-align: left; }
+  .conversation-unread { display: grid; place-items: center; min-width: 2rem; height: 2rem; padding: 0 0.4rem; border-radius: 2rem; background: var(--accent); color: var(--accent-on, #fff); font-size: var(--font-xs); }
+  .chat-toast { display: flex; align-items: center; gap: 0.8rem; width: 32rem; margin-bottom: 1rem; padding: 1rem; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-4); color: var(--text); box-shadow: var(--shadow-pop); cursor: pointer; text-align: left; }
   .toast-copy { flex: 1; }
   .toast-copy strong { font-size: var(--font-sm); }
-  @media (max-width: 640px) { .chat-panel { width: calc(100vw - 2.64rem); height: calc(100vh - 6.6rem); } .chat-toast { width: calc(100vw - 2.64rem); } }
+  @media (max-width: 640px) { .chat-panel { width: calc(100vw - 2.4rem); height: calc(100vh - 6rem); } .chat-toast { width: calc(100vw - 2.4rem); } }
 </style>

@@ -48,7 +48,7 @@
   }
 </script>
 
-<Modal open={Boolean(prompt)} title={msg('emul.busyTitle', { emulator })} width="48.4rem" onclose={() => prompt?.settle(false)}>
+<Modal open={Boolean(prompt)} title={msg('emul.busyTitle', { emulator })} width="44rem" onclose={() => prompt?.settle(false)}>
   {#if prompt}
     <p class="text">{msg('emul.busyText', { emulator })}</p>
     <p class="hint">{msg('emul.busyHint')}</p>

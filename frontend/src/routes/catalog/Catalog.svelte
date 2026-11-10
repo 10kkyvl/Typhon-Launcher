@@ -753,9 +753,9 @@
         <SearchInput bind:value={search} placeholder={msg('games.catalogSearchPlaceholder')} loading={loading && !appending} oninput={onSearch} />
       </div>
       <fieldset class="controls" disabled={!ready}>
-        <Select bind:value={platform} width="22rem" onchange={() => void preferencesChanged()}
+        <Select bind:value={platform} width="20rem" onchange={() => void preferencesChanged()}
           options={[{id:'',label:msg('games.catalogAllPlatforms')}, ...platforms.map((p) => ({id:p.label,label:p.label}))]} />
-        <Select bind:value={kind} width="14.3rem" onchange={() => void preferencesChanged()}
+        <Select bind:value={kind} width="13rem" onchange={() => void preferencesChanged()}
           options={[{id:'',label:msg('games.catalogGames')},{id:'all',label:msg('games.catalogAllContent')},{id:'dlc',label:'DLC'},{id:'demo',label:msg('games.catalogDemos')},{id:'soundtrack',label:msg('games.catalogSoundtracks')},{id:'Bundle',label:msg('games.catalogBundles')},{id:'Edition',label:msg('games.catalogEditions')}]} />
         <DropdownMenu
           items={[
@@ -765,9 +765,9 @@
         >
           {#snippet trigger({ open, toggle })}
             <Chip selected={open} onclick={toggle}>
-              <ArrowDownUp size="1.54rem" strokeWidth={1.8} />
+              <ArrowDownUp size="1.4rem" strokeWidth={1.8} />
               {sortLabels[(effectiveSort || 'popular') as Sort]}
-              <ChevronDown size="1.54rem" strokeWidth={1.8} />
+              <ChevronDown size="1.4rem" strokeWidth={1.8} />
             </Chip>
           {/snippet}
         </DropdownMenu>
@@ -780,9 +780,9 @@
         >
           {#snippet item(option)}
             {#if option.id === 'grid'}
-              <LayoutGrid size="1.76rem" strokeWidth={1.8} />
+              <LayoutGrid size="1.6rem" strokeWidth={1.8} />
             {:else}
-              <List size="1.76rem" strokeWidth={1.8} />
+              <List size="1.6rem" strokeWidth={1.8} />
             {/if}
           {/snippet}
         </SegmentedControl>
@@ -899,7 +899,7 @@
         <span class="list-action" class:pinned={isDismissed(game)}>
           <IconButton label={isDismissed(game) ? msg('games.recommendationRestore') : msg('games.recommendationNotInterested')}
             active={isDismissed(game)} disabled={preferenceBusy} onclick={() => void dismiss(game, !isDismissed(game))}>
-            {#if isDismissed(game)}<Undo2 size="1.54rem" />{:else}<ThumbsDown size="1.54rem" />{/if}
+            {#if isDismissed(game)}<Undo2 size="1.4rem" />{:else}<ThumbsDown size="1.4rem" />{/if}
           </IconButton>
         </span></div>
       {/each}
@@ -930,13 +930,13 @@
   .catalog-skeleton { margin-top: var(--space-4); }
   .loading-item { min-width: 0; }
   .loading-cover { aspect-ratio: 3 / 4; border-radius: var(--radius-md); }
-  .loading-copy { margin-top: 0.99rem; }
-  .loading-title { height: 1.76rem; width: 75%; }
-  .loading-meta { height: 1.32rem; width: 45%; margin-top: 0.66rem; }
+  .loading-copy { margin-top: 0.9rem; }
+  .loading-title { height: 1.6rem; width: 75%; }
+  .loading-meta { height: 1.2rem; width: 45%; margin-top: 0.6rem; }
   .loading-list { display: grid; gap: var(--space-3); }
   .loading-list .loading-item { display: flex; align-items: center; gap: var(--space-3); }
-  .loading-list .loading-cover { width: 5.5rem; flex-shrink: 0; }
-  .loading-list .loading-copy { width: min(35.2rem, 60%); margin-top: 0; }
+  .loading-list .loading-cover { width: 5rem; flex-shrink: 0; }
+  .loading-list .loading-copy { width: min(32rem, 60%); margin-top: 0; }
 
   .toolbar-dock {
     position: sticky;
@@ -981,8 +981,8 @@
 
   .search-wrap {
     flex: 1;
-    min-width: 17.6rem;
-    max-width: 50.6rem;
+    min-width: 16rem;
+    max-width: 46rem;
   }
 
   .controls,
@@ -1001,7 +1001,7 @@
   }
 
   .chips {
-    gap: 0.66rem;
+    gap: 0.6rem;
     margin-bottom: var(--space-6);
     padding: var(--space-3);
     background: var(--surface-2);
@@ -1012,8 +1012,8 @@
 
   .chips-sep {
     width: 1px;
-    height: 2.2rem;
-    margin: 0 0.44rem;
+    height: 2rem;
+    margin: 0 0.4rem;
     background: var(--border-strong);
   }
 
@@ -1023,7 +1023,7 @@
 
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(17.6rem, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
     gap: var(--space-6) var(--space-5);
   }
 
@@ -1040,7 +1040,7 @@
   .status {
     display: inline-flex;
     align-items: center;
-    gap: 0.55rem;
+    gap: 0.5rem;
     min-width: 0;
     font-size: var(--font-xs);
     color: var(--text-2);
@@ -1050,8 +1050,8 @@
   }
 
   .dot {
-    width: 0.77rem;
-    height: 0.77rem;
+    width: 0.7rem;
+    height: 0.7rem;
     flex-shrink: 0;
     border-radius: 50%;
     background: var(--success);
@@ -1066,7 +1066,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-4);
-    padding: 0.88rem;
+    padding: 0.8rem;
     border-radius: var(--radius-md);
     text-align: left;
     transition: background var(--dur) var(--ease);
@@ -1081,8 +1081,8 @@
   }
 
   .list-thumb {
-    width: 3.52rem;
-    height: 4.62rem;
+    width: 3.2rem;
+    height: 4.2rem;
     flex-shrink: 0;
     border-radius: var(--radius-xs);
     overflow: hidden;
@@ -1105,7 +1105,7 @@
   }
 
   .list-meta.right {
-    min-width: 11rem;
+    min-width: 10rem;
     text-align: right;
   }
 
@@ -1126,13 +1126,13 @@
 
   @media (min-width: 2200px) {
     .grid {
-      grid-template-columns: repeat(auto-fill, minmax(19.8rem, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
     }
   }
 
   @media (max-width: 1400px) {
     .grid {
-      grid-template-columns: repeat(auto-fill, minmax(15.95rem, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(14.5rem, 1fr));
     }
   }
 </style>

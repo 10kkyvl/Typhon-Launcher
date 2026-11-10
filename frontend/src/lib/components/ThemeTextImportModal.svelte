@@ -37,7 +37,7 @@
   }
 </script>
 
-<Modal bind:open title={msg('settings.appearanceImportTextTitle')} width="61.6rem">
+<Modal bind:open title={msg('settings.appearanceImportTextTitle')} width="56rem">
   <div class="form">
     <label class="field">
       <span class="field-label">{msg('settings.appearanceImportTextLabel')}</span>
@@ -74,7 +74,7 @@
   .field {
     display: flex;
     flex-direction: column;
-    gap: 0.77rem;
+    gap: 0.7rem;
   }
 
   .field-label {
@@ -85,7 +85,7 @@
 
   .area {
     height: auto;
-    padding: 0.99rem 1.32rem;
+    padding: 0.9rem 1.2rem;
     resize: vertical;
     line-height: 1.5;
     font-family: var(--font-mono);

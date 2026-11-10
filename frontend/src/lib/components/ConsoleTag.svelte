@@ -11,8 +11,8 @@
     display: inline-flex;
     align-items: center;
     flex-shrink: 0;
-    height: 1.98rem;
-    padding: 0 0.77rem;
+    height: 1.8rem;
+    padding: 0 0.7rem;
     border-radius: var(--radius-sm);
     background: var(--surface-3);
     color: var(--text-2);

@@ -34,7 +34,7 @@
 {#if applying}
   <div class="overlay" role="dialog" aria-modal="true" aria-label={msg('ui.installingUpdateTitle')}>
     <div class="panel">
-      <RotateCcw class="spin" size="3.52rem" strokeWidth={1.6} />
+      <RotateCcw class="spin" size="3.2rem" strokeWidth={1.6} />
       <h3>{msg('ui.installingVersion', { version })}</h3>
       <p>{msg('ui.launcherWillRestartShort')}</p>
       <div class="marquee"><span></span></div>
@@ -45,10 +45,10 @@
 {#if downloading && !applying && $route.name !== 'settings' && !$bigPictureActive}
   <div class="card" class:sidebar-right={$themeLayout.side === 'right'}>
     <div class="row">
-      <Download size="1.98rem" strokeWidth={1.8} />
+      <Download size="1.8rem" strokeWidth={1.8} />
       <span class="title">{msg(status.delta ? 'ui.downloadingUpdatePatch' : 'ui.downloadingUpdate', { version })}</span>
       <IconButton label={msg('ui.cancelDownload')} size="sm" onclick={requestCancelDownload}>
-        <X size="1.76rem" strokeWidth={1.8} />
+        <X size="1.6rem" strokeWidth={1.8} />
       </IconButton>
     </div>
     <ProgressBar value={pct} />
@@ -58,14 +58,14 @@
   <div class="card" class:card-danger={!outcome.ok} class:sidebar-right={$themeLayout.side === 'right'} in:fly={{ x: -24, duration: 220 }} out:fade={{ duration: 200 }}>
     <div class="row">
       {#if outcome.ok}
-        <CheckCircle2 size="1.98rem" strokeWidth={1.8} />
+        <CheckCircle2 size="1.8rem" strokeWidth={1.8} />
         <span class="title">
           {outcome.kind === 'rolled_back'
             ? msg('ui.launcherRolledBackTo', { version: outcome.version })
             : msg('ui.launcherUpdatedTo', { version: outcome.version })}
         </span>
       {:else}
-        <TriangleAlert size="1.98rem" strokeWidth={1.8} />
+        <TriangleAlert size="1.8rem" strokeWidth={1.8} />
         <span class="title">
           {outcome.kind === 'rolled_back'
             ? msg('ui.rollbackFailedVersion', { version: outcome.version })
@@ -73,7 +73,7 @@
         </span>
       {/if}
       <IconButton label={msg('ui.hide')} size="sm" onclick={dismissOutcome}>
-        <X size="1.76rem" strokeWidth={1.8} />
+        <X size="1.6rem" strokeWidth={1.8} />
       </IconButton>
     </div>
     {#if !outcome.ok && outcome.error}
@@ -100,8 +100,8 @@
     flex-direction: column;
     align-items: center;
     gap: var(--space-4);
-    width: min(46.2rem, calc(100vw - 5.28rem));
-    padding: 3.96rem 3.52rem;
+    width: min(42rem, calc(100vw - 4.8rem));
+    padding: 3.6rem 3.2rem;
     text-align: center;
     color: var(--text);
     background: var(--surface-2);
@@ -130,10 +130,10 @@
   .marquee {
     position: relative;
     width: 100%;
-    height: 0.44rem;
+    height: 0.4rem;
     margin-top: var(--space-2);
     background: rgba(255, 255, 255, 0.07);
-    border-radius: 108.9rem;
+    border-radius: 99rem;
     overflow: hidden;
   }
 
@@ -142,19 +142,19 @@
     inset-block: 0;
     width: 34%;
     background: var(--accent-bright);
-    border-radius: 108.9rem;
+    border-radius: 99rem;
     animation: slide 1.4s var(--ease) infinite;
   }
 
   .card {
     position: fixed;
-    left: calc(var(--sidebar-w) + 2.64rem);
-    bottom: 2.64rem;
+    left: calc(var(--sidebar-w) + 2.4rem);
+    bottom: 2.4rem;
     z-index: 150;
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
-    width: 35.2rem;
+    width: 32rem;
     padding: var(--space-4) var(--space-5);
     background: var(--surface-3);
     border: 1px solid var(--border-strong);
@@ -163,7 +163,7 @@
   }
 
   .card.sidebar-right {
-    left: 2.64rem;
+    left: 2.4rem;
   }
 
   .card-danger {
@@ -194,11 +194,11 @@
 
   @media (max-width: 1140px) {
     .card {
-      left: 9.68rem;
+      left: 8.8rem;
     }
 
     .card.sidebar-right {
-      left: 2.64rem;
+      left: 2.4rem;
     }
   }
 

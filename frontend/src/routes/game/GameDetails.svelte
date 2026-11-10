@@ -1099,7 +1099,7 @@
           <div class="path">
             <span class="path-value" title={localGame.installDir}>{truncateMiddle(localGame.installDir, 34)}</span>
             <IconButton label={msg('games.openFolder')} size="sm" onclick={reveal}>
-              <FolderOpen size="1.76rem" strokeWidth={1.8} />
+              <FolderOpen size="1.6rem" strokeWidth={1.8} />
             </IconButton>
           </div>
           <dl class="facts">
@@ -1376,7 +1376,7 @@
       {:else}
         <button class="crumb" onclick={() => navigate('library')}>{msg('games.libraryWord')}</button>
       {/if}
-      <ChevronRight size="1.54rem" strokeWidth={1.8} />
+      <ChevronRight size="1.4rem" strokeWidth={1.8} />
       <span class="crumb current">{title || msg('games.detailFallbackTitle')}</span>
     </nav>
 
@@ -1454,7 +1454,7 @@
           {:else if primary.kind === 'update'}
             <span class="lead" class:split={Boolean(localGame?.profiles?.length)}>
               <Button variant="primary" size="lg" onclick={play}>
-                <Play size="1.98rem" strokeWidth={2} fill="currentColor" />
+                <Play size="1.8rem" strokeWidth={2} fill="currentColor" />
                 {localGame ? playLabel(localGame) : msg('games.play')}
               </Button>
               {#if localGame}
@@ -1463,9 +1463,9 @@
             </span>
             <Button size="lg" disabled={primary.disabled} onclick={runPrimary}>
               {#if updateIsRelease}
-                <Sparkles size="1.65rem" strokeWidth={1.8} />
+                <Sparkles size="1.5rem" strokeWidth={1.8} />
               {:else}
-                <ArrowUp size="1.65rem" strokeWidth={2} />
+                <ArrowUp size="1.5rem" strokeWidth={2} />
               {/if}
               {primary.label}
             </Button>
@@ -1473,13 +1473,13 @@
             <span class="lead" class:split={primary.kind === 'play' && Boolean(localGame?.profiles?.length)}>
               <Button variant="primary" size="lg" disabled={primary.disabled} onclick={runPrimary}>
                 {#if primary.kind === 'play'}
-                  <Play size="1.98rem" strokeWidth={2} fill="currentColor" />
+                  <Play size="1.8rem" strokeWidth={2} fill="currentColor" />
                 {:else if primary.kind === 'stop'}
-                  <Square size="1.54rem" strokeWidth={2} fill="currentColor" />
+                  <Square size="1.4rem" strokeWidth={2} fill="currentColor" />
                 {:else if primary.kind === 'download'}
-                  <Download size="1.76rem" strokeWidth={1.8} />
+                  <Download size="1.6rem" strokeWidth={1.8} />
                 {:else if primary.kind === 'install-download'}
-                  <HardDriveDownload size="1.76rem" strokeWidth={1.8} />
+                  <HardDriveDownload size="1.6rem" strokeWidth={1.8} />
                 {/if}
                 {primary.kind === 'play' && localGame ? playLabel(localGame) : primary.label}
               </Button>
@@ -1491,7 +1491,7 @@
 
           {#if !localGame && canonicalId}
             <Button size="lg" disabled={addingToLibrary} onclick={addToLibrary}>
-              <BookmarkPlus size="1.65rem" strokeWidth={1.8} />
+              <BookmarkPlus size="1.5rem" strokeWidth={1.8} />
               {msg('games.detailAddToLibraryButton')}
             </Button>
           {/if}
@@ -1500,10 +1500,10 @@
             {@const watching = $watchedIds.has(canonicalId)}
             <Button size="lg" pressed={watching} onclick={() => toggleWatch(canonicalId)}>
               {#if watching}
-                <BellRing size="1.65rem" strokeWidth={1.8} />
+                <BellRing size="1.5rem" strokeWidth={1.8} />
                 {msg('games.watchingButton')}
               {:else}
-                <Bell size="1.65rem" strokeWidth={1.8} />
+                <Bell size="1.5rem" strokeWidth={1.8} />
                 {msg('games.watchButton')}
               {/if}
             </Button>
@@ -1516,13 +1516,13 @@
               onclick={toggleFavorite}
             >
               <span class="heart" class:pulse={favoritePulse} onanimationend={() => (favoritePulse = false)}>
-                <Heart size="1.98rem" strokeWidth={1.8} fill={localGame.favorite ? 'currentColor' : 'none'} />
+                <Heart size="1.8rem" strokeWidth={1.8} fill={localGame.favorite ? 'currentColor' : 'none'} />
               </span>
             </IconButton>
 
             {#if installed}
               <IconButton label={msg('games.actionProperties')} onclick={() => openGameProperties(localGame.id)}>
-                <SlidersHorizontal size="1.98rem" strokeWidth={1.8} />
+                <SlidersHorizontal size="1.8rem" strokeWidth={1.8} />
               </IconButton>
             {/if}
 
@@ -1534,7 +1534,7 @@
               label={localGame.tags?.length ? msg('games.tagsEditLabel') : msg('games.tagsAddLabel')}
               onclick={() => (tagsOpen = true)}
             >
-              <Tag size="1.98rem" strokeWidth={1.8} />
+              <Tag size="1.8rem" strokeWidth={1.8} />
             </IconButton>
           {/if}
 
@@ -1542,7 +1542,7 @@
             <DropdownMenu items={menuItems} onselect={onMenu}>
               {#snippet trigger({ toggle })}
                 <IconButton label={msg('games.moreLabel')} onclick={toggle}>
-                  <EllipsisVertical size="1.98rem" strokeWidth={1.8} />
+                  <EllipsisVertical size="1.8rem" strokeWidth={1.8} />
                 </IconButton>
               {/snippet}
             </DropdownMenu>
@@ -1653,7 +1653,7 @@
     />
   {/if}
 
-  <Modal bind:open={pickerOpen} title={msg('games.detailChooseDownloadTitle')} width="94.6rem">
+  <Modal bind:open={pickerOpen} title={msg('games.detailChooseDownloadTitle')} width="86rem">
     <ReleaseList
       groups={downloadPool}
       currentReleaseId={localGame?.releaseId ?? ''}
@@ -1693,7 +1693,7 @@
     margin-inline: calc(var(--page-x) * -1);
     margin-bottom: var(--space-8);
     padding: var(--space-4) var(--page-x) var(--space-5);
-    min-height: clamp(34.1rem, 42vh, 52.8rem);
+    min-height: clamp(31rem, 42vh, 48rem);
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -1715,7 +1715,7 @@
   }
 
   .hero.plain {
-    min-height: clamp(26.4rem, 28vh, 33rem);
+    min-height: clamp(24rem, 28vh, 30rem);
   }
 
   .hero.plain .art {
@@ -1761,7 +1761,7 @@
     position: relative;
     display: flex;
     align-items: center;
-    gap: 0.88rem;
+    gap: 0.8rem;
     color: var(--text-3);
   }
 
@@ -1793,7 +1793,7 @@
   }
 
   .cover {
-    width: clamp(14.3rem, 11vw, 19.8rem);
+    width: clamp(13rem, 11vw, 18rem);
     flex-shrink: 0;
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-md);
@@ -1814,10 +1814,10 @@
   .state {
     display: flex;
     align-items: center;
-    gap: 0.88rem;
+    gap: 0.8rem;
     flex-wrap: wrap;
-    margin-bottom: 1.1rem;
-    min-height: 2.64rem;
+    margin-bottom: 1rem;
+    min-height: 2.4rem;
   }
 
   .pop {
@@ -1834,13 +1834,13 @@
   }
 
   .title {
-    font-size: clamp(3.08rem, 2.4vw + 1.1rem, 5.06rem);
+    font-size: clamp(2.8rem, 2.4vw + 1rem, 4.6rem);
     font-weight: 600;
     letter-spacing: var(--tracking-title);
     line-height: 1.04;
     text-wrap: balance;
     max-width: 26ch;
-    text-shadow: 0 0.22rem 2.64rem color-mix(in srgb, var(--bg) 70%, transparent);
+    text-shadow: 0 0.2rem 2.4rem color-mix(in srgb, var(--bg) 70%, transparent);
   }
 
   .state,
@@ -1858,8 +1858,8 @@
   }
 
   .title-skeleton {
-    width: min(52.8rem, 60%);
-    height: 4.84rem;
+    width: min(48rem, 60%);
+    height: 4.4rem;
     border-radius: var(--radius-md);
   }
 
@@ -1867,8 +1867,8 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.77rem;
-    margin-top: 1.1rem;
+    gap: 0.7rem;
+    margin-top: 1rem;
     font-size: var(--font-sm);
     color: var(--text-2);
   }
@@ -1891,8 +1891,8 @@
   }
 
   .lead :global(.btn) {
-    min-width: 19.8rem;
-    padding: 0 3.08rem;
+    min-width: 18rem;
+    padding: 0 2.8rem;
   }
 
   .lead.split :global(.btn) {
@@ -1924,9 +1924,9 @@
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    width: min(46.2rem, 100%);
+    width: min(42rem, 100%);
     height: var(--control-lg);
-    padding: 0 1.98rem;
+    padding: 0 1.8rem;
     border-radius: var(--radius-md);
     background: var(--surface-3);
   }
@@ -1949,7 +1949,7 @@
 
   .note {
     margin-top: var(--space-4);
-    max-width: 61.6rem;
+    max-width: 56rem;
     font-size: var(--font-sm);
     color: var(--text-2);
   }
@@ -1964,7 +1964,7 @@
 
   .body {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 33rem;
+    grid-template-columns: minmax(0, 1fr) 30rem;
     gap: var(--space-12);
     align-items: start;
   }
@@ -1983,12 +1983,12 @@
   }
 
   .main > .gsec.moved:not(:first-child) {
-    max-width: 66rem;
+    max-width: 60rem;
     margin-top: var(--space-8);
   }
 
   .main > .gsec.moved {
-    max-width: 66rem;
+    max-width: 60rem;
   }
 
   .side > .gsec {
@@ -2019,7 +2019,7 @@
 
   .meta-text {
     flex: 1;
-    min-width: 24.2rem;
+    min-width: 22rem;
   }
 
   .meta-title {
@@ -2029,7 +2029,7 @@
   }
 
   .meta-hint {
-    margin-top: 0.44rem;
+    margin-top: 0.4rem;
     font-size: var(--font-xs);
     line-height: 1.5;
     color: var(--text-3);
@@ -2043,8 +2043,8 @@
   }
 
   .spinner {
-    width: 2.2rem;
-    height: 2.2rem;
+    width: 2rem;
+    height: 2rem;
     flex-shrink: 0;
     border-radius: 50%;
     border: 2px solid var(--border);
@@ -2067,7 +2067,7 @@
   }
 
   .more {
-    margin-top: 1.1rem;
+    margin-top: 1rem;
     font-size: var(--font-sm);
     font-weight: 500;
     color: var(--accent-text);
@@ -2081,15 +2081,15 @@
   .tags {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.66rem;
+    gap: 0.6rem;
     margin-top: var(--space-5);
   }
 
   .tag {
     display: inline-flex;
     align-items: center;
-    height: 2.64rem;
-    padding: 0 0.99rem;
+    height: 2.4rem;
+    padding: 0 0.9rem;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border);
     color: var(--text-2);
@@ -2118,7 +2118,7 @@
 
   .related-cover {
     display: block;
-    width: 6.6rem;
+    width: 6rem;
     flex-shrink: 0;
   }
 
@@ -2165,7 +2165,7 @@
   }
 
   .shots.one {
-    max-width: 79.2rem;
+    max-width: 72rem;
   }
 
   .shot {
@@ -2199,7 +2199,7 @@
   .path {
     display: flex;
     align-items: center;
-    gap: 0.66rem;
+    gap: 0.6rem;
     margin-bottom: var(--space-2);
   }
 
@@ -2223,7 +2223,7 @@
     align-items: baseline;
     justify-content: space-between;
     gap: var(--space-4);
-    padding: 0.99rem 0;
+    padding: 0.9rem 0;
     border-top: 1px solid var(--border);
   }
 
@@ -2242,7 +2242,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-4);
-    padding: 0.99rem 0;
+    padding: 0.9rem 0;
     border-top: 1px solid var(--border);
   }
 
@@ -2291,8 +2291,8 @@
   }
 
   .line {
-    height: 1.76rem;
-    margin-bottom: 1.1rem;
+    height: 1.6rem;
+    margin-bottom: 1rem;
     max-width: var(--prose-max);
   }
 
@@ -2314,11 +2314,11 @@
     }
 
     .side > :global(*) {
-      flex: 1 1 35.2rem;
+      flex: 1 1 32rem;
     }
 
     .shots {
-      grid-template-columns: repeat(auto-fill, minmax(30.8rem, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(28rem, 1fr));
     }
 
     .shots.featured {
@@ -2328,7 +2328,7 @@
 
   @media (max-width: 1200px) {
     .hero {
-      min-height: 30.8rem;
+      min-height: 28rem;
       gap: var(--space-6);
     }
 
@@ -2337,7 +2337,7 @@
     }
 
     .cover {
-      width: 11rem;
+      width: 10rem;
     }
 
     .shots,

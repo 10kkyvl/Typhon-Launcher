@@ -148,12 +148,12 @@
     {#if items.length > 1}
       <div class="nav prev">
         <IconButton label={msg('ui.previous')} onclick={() => step(-1)}>
-          <ChevronLeft size="2.64rem" strokeWidth={1.6} />
+          <ChevronLeft size="2.4rem" strokeWidth={1.6} />
         </IconButton>
       </div>
       <div class="nav next">
         <IconButton label={msg('ui.next')} onclick={() => step(1)}>
-          <ChevronRight size="2.64rem" strokeWidth={1.6} />
+          <ChevronRight size="2.4rem" strokeWidth={1.6} />
         </IconButton>
       </div>
       <span class="counter">{index + 1} / {items.length}</span>
@@ -161,17 +161,17 @@
 
     {#if !broken}
       <div class="zoom-controls">
-        <IconButton label={msg('ui.imageZoomOut')} onclick={() => setZoom(zoom - 0.25)} disabled={zoom <= 1}><Minus size="1.98rem" /></IconButton>
+        <IconButton label={msg('ui.imageZoomOut')} onclick={() => setZoom(zoom - 0.25)} disabled={zoom <= 1}><Minus size="1.8rem" /></IconButton>
         <input class="zoom-slider" style:--zoom-progress={`${((zoom - 1) / 3) * 100}%`} aria-valuetext={`${Math.round(zoom * 100)}%`} type="range" min="100" max="400" step="5" value={zoom * 100} aria-label={msg('ui.imageZoom')}
           oninput={(event) => setZoom(Number(event.currentTarget.value) / 100)} />
-        <IconButton label={msg('ui.imageZoomIn')} onclick={() => setZoom(zoom + 0.25)} disabled={zoom >= 4}><Plus size="1.98rem" /></IconButton>
+        <IconButton label={msg('ui.imageZoomIn')} onclick={() => setZoom(zoom + 0.25)} disabled={zoom >= 4}><Plus size="1.8rem" /></IconButton>
         <span class="zoom-value">{Math.round(zoom * 100)}%</span>
-        <IconButton label={msg('ui.imageZoomReset')} onclick={reset}><RotateCcw size="1.87rem" /></IconButton>
+        <IconButton label={msg('ui.imageZoomReset')} onclick={reset}><RotateCcw size="1.7rem" /></IconButton>
       </div>
     {/if}
     <div class="close">
       <IconButton label={msg('common.close')} onclick={() => (open = false)}>
-        <X size="2.2rem" strokeWidth={1.8} />
+        <X size="2rem" strokeWidth={1.8} />
       </IconButton>
     </div>
   </div>
@@ -186,7 +186,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 6.6rem;
+    padding: 6rem;
     background: rgba(4, 6, 10, 0.9);
     animation: fade var(--dur-panel) var(--ease);
   }
@@ -206,13 +206,13 @@
   .image-control.zoomed { cursor: grab; }
   .image-control.dragging { cursor: grabbing; }
   .image-control:focus-visible { outline: 2px solid var(--text-1); outline-offset: 3px; }
-  .zoom-controls { position: absolute; bottom: 1.76rem; display: flex; align-items: center; gap: 0.66rem; padding: 0.44rem 0.88rem; border-radius: 1.32rem; background: #181b24; box-shadow: var(--shadow-modal); }
-  .zoom-controls input { width: clamp(8.8rem, 18vw, 19.8rem); }
-  .zoom-value { min-width: 4.95rem; text-align: center; font-size: var(--font-xs); font-variant-numeric: tabular-nums; }
+  .zoom-controls { position: absolute; bottom: 1.6rem; display: flex; align-items: center; gap: 0.6rem; padding: 0.4rem 0.8rem; border-radius: 1.2rem; background: #181b24; box-shadow: var(--shadow-modal); }
+  .zoom-controls input { width: clamp(8rem, 18vw, 18rem); }
+  .zoom-value { min-width: 4.5rem; text-align: center; font-size: var(--font-xs); font-variant-numeric: tabular-nums; }
   img {
     grid-area: 1 / 1;
     max-width: 100%;
-    max-height: calc(100vh - 13.2rem);
+    max-height: calc(100vh - 12rem);
     width: auto;
     height: auto;
     object-fit: contain;
@@ -235,23 +235,23 @@
   }
 
   .prev {
-    left: 1.76rem;
+    left: 1.6rem;
   }
 
   .next {
-    right: 1.76rem;
+    right: 1.6rem;
   }
 
   .close {
     position: absolute;
-    top: 1.76rem;
-    right: 1.76rem;
+    top: 1.6rem;
+    right: 1.6rem;
   }
 
   .counter {
     position: absolute;
-    bottom: 2.2rem;
-    left: 2.2rem;
+    bottom: 2rem;
+    left: 2rem;
     font-size: var(--font-xs);
     color: var(--text-2);
     font-variant-numeric: tabular-nums;

@@ -37,11 +37,11 @@
 {/if}
 
 <style>
-  .attachments { display: grid; grid-template-columns: repeat(2, 13.2rem); gap: 0.44rem; margin-top: 0.55rem; }
+  .attachments { display: grid; grid-template-columns: repeat(2, 12rem); gap: 0.4rem; margin-top: 0.5rem; }
   .attachments.single { grid-template-columns: auto; }
   .tile { display: block; padding: 0; border: 0; background: transparent; line-height: 0; overflow: hidden; border-radius: var(--radius-sm); }
   button.tile { cursor: zoom-in; }
-  .tile img { display: block; width: 13.2rem; height: 13.2rem; border-radius: var(--radius-sm); object-fit: cover; }
-  .single .tile img { width: auto; height: auto; max-width: 26.4rem; max-height: 26.4rem; }
-  .broken { display: grid; place-items: center; width: 13.2rem; height: 13.2rem; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-3); font-size: var(--font-xs); text-align: center; }
+  .tile img { display: block; width: 12rem; height: 12rem; border-radius: var(--radius-sm); object-fit: cover; }
+  .single .tile img { width: auto; height: auto; max-width: 24rem; max-height: 24rem; }
+  .broken { display: grid; place-items: center; width: 12rem; height: 12rem; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-3); font-size: var(--font-xs); text-align: center; }
 </style>

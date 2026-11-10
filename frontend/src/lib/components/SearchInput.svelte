@@ -24,7 +24,7 @@
 </script>
 
 <div class="search">
-  <Search size="1.76rem" strokeWidth={1.8} />
+  <Search size="1.6rem" strokeWidth={1.8} />
   <input
     type="text"
     {placeholder}
@@ -45,9 +45,9 @@
   .search {
     display: flex;
     align-items: center;
-    gap: 0.99rem;
+    gap: 0.9rem;
     height: var(--control-md);
-    padding: 0 1.1rem 0 1.32rem;
+    padding: 0 1rem 0 1.2rem;
     background: var(--surface);
     border: 1px solid transparent;
     border-radius: var(--radius-md);
@@ -81,11 +81,11 @@
   }
 
   kbd {
-    padding: 1px 0.66rem;
+    padding: 1px 0.6rem;
     border-radius: var(--radius-xs);
     background: var(--hover-strong);
     font-family: inherit;
-    font-size: 1.21rem;
+    font-size: 1.1rem;
     color: var(--text-3);
   }
 
@@ -94,8 +94,8 @@
   }
 
   .spinner {
-    width: 1.54rem;
-    height: 1.54rem;
+    width: 1.4rem;
+    height: 1.4rem;
     flex-shrink: 0;
     border: 2px solid var(--hover-strong);
     border-top-color: var(--text-3);
