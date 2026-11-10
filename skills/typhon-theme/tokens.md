@@ -78,7 +78,7 @@ Every token a `.typhontheme` file may set. *Default* is the built-in dark value 
 | `--prose-max` | length | Text block width: Maximum width of long text such as descriptions and documents | `72rem` |
 | `--sidebar-w` | length | Sidebar width: Width of the left panel with the sections | `23.2rem` |
 | `--island-gap` | length | Islands: margin: Distance from the floating panels to the window edges | `0.8rem` |
-| `--topbar-h` | length | Top bar height: Height of the strip with the section title | `5.6rem` |
+| `--topbar-h` | length | Top bar height: Height of the strip with the section title | `6.4rem` |
 | `--font-xs` | length | Text size: tiny: Captions and explanations | `1.2rem` |
 | `--font-sm` | length | Text size: small: Secondary text and button labels | `1.3rem` |
 | `--font-md` | length | Text size: regular: Main interface text | `1.4rem` |

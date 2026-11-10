@@ -53,8 +53,17 @@ describe('Sidebar layout', () => {
     expect(body.match(/data-part="sidebar-separator"/g)).toHaveLength(1);
     expect(body).toContain('data-part="sidebar-nav"');
     expect(body).toContain('data-part="sidebar-bottom"');
-    expect(body).toContain('data-part="sidebar-account"');
     expect(body).not.toMatch(/class="sidebar[^"]*\bright\b/);
+  });
+
+  it('keeps only support and settings in the bottom block: the account lives in the top bar', () => {
+    const body = html();
+    const start = body.indexOf('data-part="sidebar-bottom"');
+    const bottom = body.slice(start, body.indexOf('role="group"', start));
+    expect(ids(bottom)).toEqual(['support', 'settings']);
+    expect(bottom.match(/<button/g)).toHaveLength(2);
+    expect(body).not.toContain('data-part="sidebar-account"');
+    expect(body).not.toContain('data-part="topbar-account"');
   });
 
   it('names every nav item for assistive tech, also when the rail hides its label', () => {

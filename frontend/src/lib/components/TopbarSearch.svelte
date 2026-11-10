@@ -201,8 +201,24 @@
 
   .search-wrap {
     position: relative;
-    flex: 1;
-    max-width: 44rem;
+    flex: 1 1 var(--topbar-search-max);
+    min-width: var(--topbar-search-min);
+    max-width: var(--topbar-search-max);
+  }
+
+  .search-wrap :global(.search) {
+    background: var(--island-fill);
+    border-color: var(--border-strong);
+    border-radius: var(--radius-control);
+  }
+
+  .search-wrap :global(.search:hover),
+  .search-wrap :global(.search:focus-within) {
+    background: var(--surface-2);
+  }
+
+  .search-wrap :global(.search:focus-within) {
+    border-color: var(--accent-ring);
   }
 
   .results {

@@ -90,6 +90,10 @@ section). Select them with attribute selectors in `theme.css`:
 [data-part="game-section"][data-id="notes"] { border: 1px solid var(--accent-ring); }
 ```
 
+The account chip (avatar, name, the account menu) sits in the top bar since theme contract 2:
+its part is `topbar-account`. The 1.x name `sidebar-account` no longer matches anything, so
+rewrite a selector that uses it.
+
 | Part | data-id |
 |---|---|
 | `app-shell` | no |
@@ -98,12 +102,12 @@ section). Select them with attribute selectors in `theme.css`:
 | `sidebar-item` | yes |
 | `sidebar-separator` | no |
 | `sidebar-bottom` | no |
-| `sidebar-account` | no |
 | `topbar` | no |
 | `topbar-history` | no |
 | `topbar-search` | no |
 | `topbar-actions` | no |
 | `topbar-action` | yes |
+| `topbar-account` | no |
 | `window-controls` | no |
 | `main` | no |
 | `page` | no |

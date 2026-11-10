@@ -9,6 +9,7 @@
   import { msg } from '../i18n';
   import { enterBigPicture } from '../bigpicture/mode';
   import { themeLayout } from '../stores/layout';
+  import AccountMenu from './AccountMenu.svelte';
   import IconButton from './IconButton.svelte';
   import TopbarSearch from './TopbarSearch.svelte';
 
@@ -45,7 +46,7 @@
   style="--wails-draggable: drag"
   ondblclick={onTitlebarDoubleClick}
 >
-  <div class="no-drag nav-buttons" data-part="topbar-history">
+  <div class="no-drag island history" data-part="topbar-history">
     <IconButton label={msg('common.back')} disabled={!$canGoBack} onclick={goBack}>
       <ChevronLeft size="1.8rem" strokeWidth={1.8} />
     </IconButton>
@@ -56,7 +57,7 @@
 
   <TopbarSearch />
 
-  <div class="no-drag right">
+  <div class="no-drag island right">
     <div class="actions" data-part="topbar-actions">
       {#each $themeLayout.actions as id (id)}
         {#if id === 'bigpicture'}
@@ -118,16 +119,23 @@
         {/if}
       {/each}
     </div>
+    <AccountMenu />
   </div>
 </header>
 
 <style>
+  /* The account chip reads this container's width (AccountMenu) to drop its text before the search shrinks;
+     the centred row has its own name because it runs out of room sooner. The row is lifted as a whole so
+     the popovers hanging below it stay over the page even where the container confines their z-index. */
   .topbar {
+    container: topbar / inline-size;
+    position: relative;
+    z-index: 50;
     display: flex;
     align-items: center;
-    gap: var(--space-4);
+    gap: var(--space-3);
     height: var(--topbar-h);
-    padding: 0 var(--space-3) 0 var(--page-x);
+    padding: 0 var(--page-x);
     flex-shrink: 0;
   }
 
@@ -135,18 +143,31 @@
     --wails-draggable: no-drag;
   }
 
-  .nav-buttons {
+  .island {
     display: flex;
+    flex: none;
+    align-items: center;
+    padding: 0.3rem;
+    background: var(--island-fill);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+  }
+
+  .island :global(.icon-btn) {
+    border-radius: var(--radius-control);
+  }
+
+  .history {
     gap: 0;
-    margin-left: -0.8rem;
   }
 
   .topbar.centered {
+    container-name: topbar-centred;
     display: grid;
-    grid-template-columns: 1fr minmax(0, 44rem) 1fr;
+    grid-template-columns: 1fr minmax(var(--topbar-search-min), var(--topbar-search-max)) 1fr;
   }
 
-  .topbar.centered .nav-buttons {
+  .topbar.centered .history {
     justify-self: start;
   }
 
@@ -158,7 +179,7 @@
   .actions {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: var(--space-1);
   }
 
   .notifications-head {
@@ -259,9 +280,7 @@
   }
 
   .right {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
+    gap: var(--space-1);
     margin-left: auto;
   }
 

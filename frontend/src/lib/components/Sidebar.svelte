@@ -14,7 +14,6 @@
   import type { SidebarItem } from '../theme/layout';
   import { msg } from '../i18n';
   import { Plate, partsThatMove, scrollToShow } from '../motion/plate';
-  import AccountMenu from './AccountMenu.svelte';
   import BetaBadge from './BetaBadge.svelte';
   import SidebarStatus from './SidebarStatus.svelte';
 
@@ -134,7 +133,6 @@
       {@render navButton(supportItem)}
     {/if}
     {@render navButton(settingsItem)}
-    <AccountMenu />
   </div>
 
   <SidebarStatus />
@@ -310,12 +308,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
-  }
-
-  .bottom :global(.dropdown) {
-    width: 100%;
-    padding-top: var(--space-3);
-    border-top: 1px solid var(--border);
   }
 
   @media (max-width: 1140px) {

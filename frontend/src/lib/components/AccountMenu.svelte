@@ -53,11 +53,11 @@
   }
 </script>
 
-<DropdownMenu items={profileMenu} placement="up" align="left" onselect={onProfileSelect}>
+<DropdownMenu items={profileMenu} placement="down" align="right" onselect={onProfileSelect}>
   {#snippet trigger({ open, toggle })}
     <button
-      class="profile"
-      data-part="sidebar-account"
+      class="chip"
+      data-part="topbar-account"
       class:active={$route.name === 'profile'}
       class:open
       title={$currentUser && $autoAway ? msg('ui.presenceAutoAwayHint') : undefined}
@@ -72,15 +72,15 @@
           {...ownFrame($currentUser)}
         />
       </span>
-      <span class="profile-text">
+      <span class="chip-text">
         {#if $currentUser}
-          <span class="profile-name">{$currentUser.displayName}</span>
-          <span class="profile-status">@{$currentUser.username}{#if $isOffline}<span class="offline-mark" title={msg('ui.offlineProfileTooltip')}>{msg('ui.offlineSuffix')}</span>{/if}</span>
+          <span class="chip-name">{$currentUser.displayName}</span>
+          <span class="chip-status">@{$currentUser.username}{#if $isOffline}<span class="offline-mark" title={msg('ui.offlineProfileTooltip')}>{msg('ui.offlineSuffix')}</span>{/if}</span>
         {:else if isGuest}
-          <span class="profile-name">{msg('ui.guest')}</span>
-          <span class="profile-status">{msg('ui.noAccount')}</span>
+          <span class="chip-name">{msg('ui.guest')}</span>
+          <span class="chip-status">{msg('ui.noAccount')}</span>
         {:else}
-          <span class="profile-name">{msg('ui.notAuthorized')}</span>
+          <span class="chip-name">{msg('ui.notAuthorized')}</span>
         {/if}
       </span>
     </button>
@@ -92,22 +92,24 @@
 {/if}
 
 <style>
-  .profile {
+  .chip {
     display: flex;
     align-items: center;
-    width: 100%;
-    gap: 1rem;
-    padding: 0.6rem 0.8rem;
-    border-radius: var(--radius-md);
+    gap: var(--space-2);
+    min-width: 0;
+    max-width: var(--topbar-chip-max);
+    height: var(--control-md);
+    padding: 0 var(--space-3) 0 0.2rem;
+    border-radius: var(--radius-control);
     text-align: left;
     color: var(--text-3);
     transition: background var(--dur) var(--ease);
   }
 
-  .profile:hover,
-  .profile.active,
-  .profile.open {
-    background: var(--hover);
+  .chip:hover,
+  .chip.active,
+  .chip.open {
+    background: var(--hover-strong);
   }
 
   .avatar {
@@ -116,41 +118,66 @@
     --avatar-ring: var(--bg-sidebar);
   }
 
-  .profile-text {
-    flex: 1;
+  .chip-text {
     min-width: 0;
     display: flex;
     flex-direction: column;
   }
 
-  .profile-name {
-    font-size: var(--font-sm);
-    font-weight: 500;
-    color: var(--text);
+  .chip-name,
+  .chip-status {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     line-height: 1.3;
   }
 
-  .profile-status {
-    font-size: 1.2rem;
+  .chip-name {
+    font-size: var(--font-sm);
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .chip-status {
+    font-size: var(--font-xs);
     color: var(--text-3);
-    line-height: 1.3;
   }
 
   .offline-mark {
     color: var(--warning);
   }
 
-  @media (max-width: 1140px) {
-    .profile-text {
-      display: none;
+  /* Where the search would start to shrink below its full width (topbarWidths.test.ts): the history pill,
+     the right island with three actions and a full chip, two gaps and the full search. The text stays in
+     the button's name for assistive tech. */
+  @container topbar (max-width: 87.2rem) {
+    .chip {
+      padding: 0.2rem;
     }
 
-    .profile {
-      justify-content: center;
-      padding: 0.6rem;
+    .chip-text {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+  }
+
+  /* The centred search needs the right island's width on both sides of it. */
+  @container topbar-centred (max-width: 112rem) {
+    .chip {
+      padding: 0.2rem;
+    }
+
+    .chip-text {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
     }
   }
 </style>

@@ -11,6 +11,10 @@
   --sidebar-rail-w: 6.4rem;
   --font-wordmark: Unbounded, Onest Variable, sans-serif;
 
+  --topbar-search-min: 18rem;
+  --topbar-search-max: 44rem;
+  --topbar-chip-max: 20rem;
+
   --motion-fast: var(--dur);
   --ease-out: var(--ease);
 }
