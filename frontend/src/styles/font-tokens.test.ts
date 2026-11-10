@@ -121,6 +121,20 @@ describe('font tokens', () => {
     expect(bundledFaces(), '--font-wordmark first family').toContain(tokenFamilies('--font-wordmark', SHELL)[0]);
   });
 
+  // The subset files declare no unicode-range, so the face declared last is tried first for every
+  // character: latin goes last, or the brand name pays for a cyrillic fetch it does not use.
+  it('bundles the wordmark weights in use, cyrillic before latin for each', () => {
+    const imports = [...read('main.ts').matchAll(/^import\s+'@fontsource\/unbounded\/([^']+)\.css';$/gm)].map((m) => m[1]);
+    const weights = new Set(
+      WORDMARK_SITES.map((site) => {
+        const [path, selector] = site.split(' ');
+        const body = new RegExp(`\\n\\s*${selector.replace('.', '\\.')} \\{([^}]*)\\}`).exec(read(path))?.[1] ?? '';
+        return /font-weight:\s*(\d+)/.exec(body)?.[1] ?? '400';
+      }),
+    );
+    expect(imports).toEqual([...weights].flatMap((w) => [`cyrillic-${w}`, `latin-${w}`]));
+  });
+
   it('sets the wordmark face on the brand name only', () => {
     const sites = styled.flatMap((path) => wordmarkSites(path, read(path)));
     expect(sites.filter((site) => !WORDMARK_SITES.includes(site))).toEqual([]);

@@ -4,10 +4,9 @@ import { initSettings } from './lib/stores/settings';
 import { mount } from 'svelte';
 import '@fontsource-variable/onest';
 import '@fontsource-variable/jetbrains-mono';
+// No unicode-range in these files: the face declared last is tried first, so latin stays last.
 import '@fontsource/unbounded/cyrillic-500.css';
-import '@fontsource/unbounded/cyrillic-600.css';
 import '@fontsource/unbounded/latin-500.css';
-import '@fontsource/unbounded/latin-600.css';
 import './styles/tokens.css';
 import './styles/shell.css';
 import './styles/global.css';
