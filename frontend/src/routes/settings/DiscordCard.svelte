@@ -237,7 +237,7 @@
   }
 
   .code {
-    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+    font-family: var(--font-mono);
     font-size: 3.74rem;
     font-weight: 700;
     letter-spacing: 0.18em;

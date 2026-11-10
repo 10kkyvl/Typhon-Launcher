@@ -130,6 +130,8 @@ export const themeTokens = {
 
   'settings.themeToken.font-sans': 'Шрифт интерфейса',
   'settings.themeTokenHint.font-sans': 'Список шрифтов через запятую; берётся первый установленный',
+  'settings.themeToken.font-mono': 'Моноширинный шрифт',
+  'settings.themeTokenHint.font-mono': 'Пути, идентификаторы и другой технический текст; список шрифтов через запятую, берётся первый установленный',
   'settings.themeToken.ease': 'Плавность анимации',
   'settings.themeTokenHint.ease': 'Кривая обычных переходов: наведение, появление панелей',
   'settings.themeToken.ease-spring': 'Плавность: пружинная',

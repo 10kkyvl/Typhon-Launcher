@@ -84,6 +84,7 @@ export const tokenGroups: readonly TokenGroup[] = [
     collapsed: true,
     tokens: [
       '--font-sans',
+      '--font-mono',
       '--ease',
       '--ease-spring',
       '--dur',

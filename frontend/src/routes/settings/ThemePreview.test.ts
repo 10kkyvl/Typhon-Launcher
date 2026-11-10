@@ -22,6 +22,7 @@ const notPreviewed = new Set([
   '--dur-slow',
   '--shadow-lift',
   '--font-hero',
+  '--font-mono',
 ]);
 
 const allTokens = tokenGroups.flatMap((g) => g.tokens);

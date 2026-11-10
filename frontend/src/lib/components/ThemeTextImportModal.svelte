@@ -88,7 +88,7 @@
     padding: 0.99rem 1.32rem;
     resize: vertical;
     line-height: 1.5;
-    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: var(--font-sm);
   }
 

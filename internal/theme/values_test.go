@@ -104,6 +104,40 @@ func TestValidateRejectsValueOfWrongKind(t *testing.T) {
 	}
 }
 
+func TestValidateChecksBothFontTokensAlike(t *testing.T) {
+	valid := []string{
+		"JetBrains Mono Variable, JetBrains Mono, ui-monospace, SF Mono, Consolas, monospace",
+		"Onest Variable, Onest, Segoe UI, system-ui, sans-serif",
+		"Inter Tight Variable, Inter, Segoe UI, system-ui, sans-serif",
+		"monospace",
+	}
+	bad := map[string]error{
+		"'JetBrains Mono', monospace": ErrThemeTokenValue,
+		`"Onest", sans-serif`:         ErrThemeTokenValue,
+		"JetBrains Mono,":             ErrThemeTokenKind,
+		"3270 Nerd Font, monospace":   ErrThemeTokenKind,
+		"var(--accent)":               ErrThemeTokenKind,
+		"12px":                        ErrThemeTokenKind,
+	}
+	for _, name := range []string{"--font-sans", "--font-mono"} {
+		for _, v := range valid {
+			if _, err := Validate(Theme{ID: "x", Name: "x", Base: BaseDark, Tokens: map[string]string{name: v}}); err != nil {
+				t.Errorf("Validate(%s: %s) = %v, want nil", name, v, err)
+			}
+		}
+		for v, want := range bad {
+			_, err := Validate(Theme{ID: "x", Name: "x", Base: BaseDark, Tokens: map[string]string{name: v}})
+			if !errors.Is(err, want) {
+				t.Errorf("Validate(%s: %s) = %v, want %v", name, v, err, want)
+			}
+		}
+	}
+	cycle := Theme{ID: "x", Name: "x", Base: BaseDark, Tokens: map[string]string{"--font-mono": "var(--font-sans)", "--font-sans": "var(--font-mono)"}}
+	if _, err := Validate(cycle); !errors.Is(err, ErrThemeTokenKind) {
+		t.Errorf("Validate(font var cycle) = %v, want ErrThemeTokenKind", err)
+	}
+}
+
 func TestValidateNamesEveryWrongTokenInOrder(t *testing.T) {
 	bad := Theme{ID: "x", Name: "x", Base: BaseDark, Tokens: map[string]string{
 		"--radius-md": "red", "--dur": "300", "--accent": "12px", "--bg": "#000", "--ease": "fast",

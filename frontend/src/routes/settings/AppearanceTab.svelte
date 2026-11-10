@@ -776,7 +776,7 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     font-size: var(--font-xs);
-    font-family: monospace;
+    font-family: var(--font-mono);
     color: var(--text);
     resize: vertical;
   }

@@ -80,6 +80,7 @@ var allowedTokens = []Token{
 	{"--control-md", KindLength},
 	{"--control-lg", KindLength},
 	{"--font-sans", KindFont},
+	{"--font-mono", KindFont},
 	{"--ease", KindEase},
 	{"--ease-spring", KindEase},
 	{"--dur", KindTime},

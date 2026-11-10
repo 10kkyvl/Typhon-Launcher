@@ -286,7 +286,7 @@
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: var(--font-xs);
     line-height: 1.5;
     white-space: pre;

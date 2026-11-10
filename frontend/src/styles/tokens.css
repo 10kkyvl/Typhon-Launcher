@@ -67,7 +67,8 @@
   --control-md: 4.18rem;
   --control-lg: 4.84rem;
 
-  --font-sans: Inter Tight Variable, Inter, Segoe UI, system-ui, sans-serif;
+  --font-sans: Onest Variable, Onest, Segoe UI, system-ui, sans-serif;
+  --font-mono: JetBrains Mono Variable, JetBrains Mono, ui-monospace, SF Mono, Consolas, monospace;
 
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --dur: 160ms;

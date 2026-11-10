@@ -103,7 +103,7 @@ contains:
 - `--ui-scale` (the interface scale belongs to its own setting).
 
 Use gradients and colors instead of images, and fonts the user already has installed (by family
-name in `--font`), not web fonts.
+name in `--font-sans` and `--font-mono`), not web fonts.
 
 ## Example
 

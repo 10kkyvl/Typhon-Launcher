@@ -284,7 +284,7 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: var(--font-xs);
     line-height: 1.5;
     white-space: pre;
@@ -294,7 +294,7 @@
   .md-p :global(code),
   .md-quote :global(code),
   .md-list :global(code) {
-    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 0.92em;
     padding: 0.1em 0.4em;
     border-radius: var(--radius-xs);

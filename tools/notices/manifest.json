@@ -640,8 +640,15 @@
       "noteEn": "Only in the macOS build. This version of the module has no license file. The file was added to the github.com/go-llsqlite/adapter repository by the commit “add license file: same as anacrolix/torrent” (MPL-2.0), so the verbatim license text of the github.com/anacrolix/torrent module is reproduced here."
     },
     {
-      "name": "@fontsource-variable/inter-tight",
+      "name": "@fontsource-variable/jetbrains-mono",
       "version": "5.3.0",
+      "license": "OFL-1.1",
+      "source": "npm",
+      "licenseFile": "LICENSE"
+    },
+    {
+      "name": "@fontsource-variable/onest",
+      "version": "5.3.1",
       "license": "OFL-1.1",
       "source": "npm",
       "licenseFile": "LICENSE"

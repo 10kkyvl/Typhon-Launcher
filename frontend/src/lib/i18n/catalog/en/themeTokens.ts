@@ -133,6 +133,8 @@ export const themeTokens: Record<ThemeTokensKey, Message> = {
 
   'settings.themeToken.font-sans': 'Interface font',
   'settings.themeTokenHint.font-sans': 'A comma-separated list of fonts; the first installed one is used',
+  'settings.themeToken.font-mono': 'Monospace font',
+  'settings.themeTokenHint.font-mono': 'Paths, identifiers and other technical text; a comma-separated list, the first installed one is used',
   'settings.themeToken.ease': 'Animation easing',
   'settings.themeTokenHint.ease': 'Curve of regular transitions: hover, panels appearing',
   'settings.themeToken.ease-spring': 'Easing: springy',

@@ -267,7 +267,7 @@
   }
 
   .mono {
-    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-family: var(--font-mono);
     word-break: break-all;
   }
 
