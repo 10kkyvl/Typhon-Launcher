@@ -4,10 +4,10 @@ const files = import.meta.glob(
   [
     '../bigpicture/components/ProfilePage.svelte',
     '../bigpicture/components/SocialPage.svelte',
+    '../components/AccountMenu.svelte',
     '../components/ChatPanel.svelte',
     '../components/FeedRow.svelte',
     '../components/PlayerCard.svelte',
-    '../components/Sidebar.svelte',
     '../../overlay/OverlayChat.svelte',
     '../../routes/activity/Activity.svelte',
     '../../routes/friends/AddFriendModal.svelte',
