@@ -659,7 +659,7 @@
           <div class="state-heading"><div><span class="section-kicker">{bp('bp.game.installation')}</span><h2>{currentInstall.name}</h2></div><span class="state-label">{installStatusText()}</span></div>
           {#if installActive(currentInstall.status)}
             {#if installTotalUnknown(currentInstall)}
-              <div class="progress-unknown"><ProgressBar value={0} indeterminate height={10} /></div>
+              <div class="progress-unknown"><ProgressBar value={0} indeterminate height={11} /></div>
             {:else}
               <div class="progress-track" role="progressbar" aria-valuenow={progressPercent(currentInstall.progress)} aria-valuemin="0" aria-valuemax="100"><span style:width={`${progressPercent(currentInstall.progress)}%`}></span></div>
             {/if}

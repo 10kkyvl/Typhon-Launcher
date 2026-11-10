@@ -16,7 +16,7 @@
   const pct = $derived(max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0);
 </script>
 
-<div class="track" style:height="{(height * 11) / 100}rem">
+<div class="track" style:height="{height / 10}rem">
   <div class="fill" class:indeterminate style:width="{indeterminate ? 30 : pct}%" style:background={color}></div>
 </div>
 
