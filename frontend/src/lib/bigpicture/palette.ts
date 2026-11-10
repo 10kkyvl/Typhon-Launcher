@@ -1,4 +1,4 @@
-import { accentPalette, validAccent } from '../theme/accent';
+import { accentPalette, contrast, rgb, validAccent } from '../theme/accent';
 import { normalizeColor } from '../profile/colorNormalize';
 
 export const bigPicturePalette: Readonly<Record<string, string>> = {
@@ -38,16 +38,53 @@ const darkAccent: Readonly<Record<string, string>> = {
   '--accent-on': '#ffffff',
 };
 
-// The accent the window shows (a personal one, else the theme's) keeps its hue in Big Picture,
-// re-derived for these surfaces; the dark preset's own accent, or one that cannot be read as a
-// colour, takes the dark preset's family as designed.
-export function bigPictureVars(accent: string): Record<string, string> {
-  const seed = normalizeColor(accent) ?? '';
-  const family = !validAccent(seed) || seed === darkAccent['--accent'] ? darkAccent : accentPalette(seed, 'dark', bigPicturePalette);
+const accentNames = ['--accent', '--accent-hover', '--accent-subtle', '--accent-text', '--accent-ring', '--accent-bright'];
+const measurable = /^(?:#[0-9a-f]{6}|rgba?\([^()]*\))$/i;
+const surfaces = ['--bg', '--bg-sidebar', '--surface', '--surface-2', '--surface-3', '--surface-4'];
+const low = ['--bg', '--surface', '--surface-2'];
+const hex = (c: number[]) => '#' + c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
+
+// The pairs Big Picture draws with an accent family on its own surfaces.
+function readsOnBigPicture(family: Record<string, string>): boolean {
+  const bg = rgb(bigPicturePalette['--bg'], [0, 0, 0]);
+  const ratio = (fg: string, under: number[]) => contrast(hex(rgb(fg, under as [number, number, number])), hex(under));
+  const on = (name: string) => (name === '--bg' ? bg : rgb(bigPicturePalette[name], bg));
+  return (
+    low.every((s) => ratio(family['--accent-text'], on(s)) >= 4.5) &&
+    surfaces.every((s) => ratio(family['--accent-bright'], on(s)) >= 3 && ratio(family['--accent-ring'], on(s)) >= 3) &&
+    ['--accent', '--accent-hover'].every((fill) => contrast(family['--accent-on'], family[fill]) >= 4.5)
+  );
+}
+
+// A dark theme's own accent family, when it is whole, plainly written and reads on these surfaces.
+function ownFamily(tokens: Readonly<Record<string, string | undefined>>): Record<string, string> | null {
+  const family: Record<string, string> = { '--accent-on': '#ffffff' };
+  for (const name of accentNames) {
+    const value = tokens[name]?.trim();
+    if (!value || !measurable.test(value)) return null;
+    family[name] = value;
+  }
+  return readsOnBigPicture(family) ? family : null;
+}
+
+export interface BigPictureAccent {
+  // The accent the window shows: the personal one, else the theme's.
+  shown: string;
+  theme: { base: string; tokens?: Readonly<Record<string, string | undefined>> | null } | null;
+  personal: string;
+}
+
+// With no personal accent, a dark theme keeps its own accent family in Big Picture when it reads
+// there. Otherwise the shown accent keeps its hue, re-derived for these surfaces; the dark preset's
+// own accent, or one that cannot be read as a colour, takes the dark preset's family as designed.
+export function bigPictureVars({ shown, theme, personal }: BigPictureAccent): Record<string, string> {
+  const own = !validAccent(personal) && theme?.base === 'dark' ? ownFamily(theme.tokens ?? {}) : null;
+  const seed = normalizeColor(shown) ?? '';
+  const family = own ?? (!validAccent(seed) || seed === darkAccent['--accent'] ? darkAccent : accentPalette(seed, 'dark', bigPicturePalette));
   return { ...bigPicturePalette, ...darkStatus, ...family };
 }
 
-export function bigPictureStyle(accent: string): string {
+export function bigPictureStyle(accent: BigPictureAccent): string {
   return Object.entries(bigPictureVars(accent))
     .map(([name, value]) => `${name}: ${value}`)
     .join('; ');
