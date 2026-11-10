@@ -654,6 +654,13 @@
       "licenseFile": "LICENSE"
     },
     {
+      "name": "@fontsource/unbounded",
+      "version": "5.3.0",
+      "license": "OFL-1.1",
+      "source": "npm",
+      "licenseFile": "LICENSE"
+    },
+    {
       "name": "@lucide/svelte",
       "version": "1.33.0",
       "license": "ISC",

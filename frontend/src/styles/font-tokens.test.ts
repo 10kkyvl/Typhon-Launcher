@@ -4,7 +4,9 @@ import { goSources } from '../lib/testing/sources';
 /**
  * Every typeface is a theme token (`--font-sans`, `--font-mono` in tokens.css), so a theme can change
  * it and the bundled faces are the only ones the UI asks for. A component never names a typeface: it
- * takes `var(--font-sans)` / `var(--font-mono)` without a fallback list, or inherits.
+ * takes `var(--font-sans)` / `var(--font-mono)` without a fallback list, or inherits. The one exception
+ * is the brand name: `var(--font-wordmark)` (shell.css, not themable) in the rules listed in
+ * WORDMARK_SITES and nowhere else.
  */
 
 // Read from disk: vitest serves `.css?raw` imports as empty strings, and the frontend has no Node typings.
@@ -18,6 +20,7 @@ const fs = (globalThis as unknown as { process: { getBuiltinModule(id: 'node:fs'
 const SRC = new URL('../', import.meta.url);
 const NODE_MODULES = new URL('../../node_modules/', import.meta.url);
 const TOKENS = 'styles/tokens.css';
+const SHELL = 'styles/shell.css';
 const SELF = 'styles/font-tokens.test.ts';
 
 const read = (path: string) => fs.readFileSync(new URL(path, SRC), 'utf8');
@@ -31,19 +34,29 @@ const FAMILY = /(?:font-family\s*:|style:font-family=)\s*([^;}\n]+)/g;
 const SHORTHAND = /(?<![-\w])font\s*:\s*([^;}\n]+)/g;
 const MONO_RULE = /\{[^{}]*font-family\s*:\s*var\(--font-mono\)[^{}]*\}/g;
 const ALLOWED = /^(?:inherit|initial|unset|var\(--font-(?:sans|mono)\))$/;
+const WORDMARK = 'var(--font-wordmark)';
+const WORDMARK_RULE = /([^{}]*)\{[^{}]*font-family\s*:\s*var\(--font-wordmark\)[^{}]*\}/g;
+const WORDMARK_SITES = ['lib/components/Sidebar.svelte .wordmark'];
 
 function literals(text: string): string[] {
   const bad: string[] = [];
   for (const m of text.matchAll(FAMILY)) {
     const value = m[1].trim().replace(/\s*!important$/, '');
-    if (!ALLOWED.test(value)) bad.push(value);
+    if (!ALLOWED.test(value) && value !== WORDMARK) bad.push(value);
   }
   return bad;
 }
 
-function tokenFamilies(name: string): string[] {
-  const value = new RegExp(`${name}\\s*:\\s*([^;]+);`).exec(read(TOKENS))?.[1];
-  expect(value, `${name} in tokens.css`).toBeTypeOf('string');
+// Every use of the wordmark face, as `path selector`; one written outside a rule block shows as `path ?`.
+function wordmarkSites(path: string, text: string): string[] {
+  const inRules = [...text.matchAll(WORDMARK_RULE)].map((m) => `${path} ${m[1].trim().split('\n').pop()?.trim()}`);
+  const all = [...text.matchAll(FAMILY)].filter((m) => m[1].trim().replace(/\s*!important$/, '') === WORDMARK).length;
+  return all === inRules.length ? inRules : [...inRules, `${path} ?`];
+}
+
+function tokenFamilies(name: string, file = TOKENS): string[] {
+  const value = new RegExp(`${name}\\s*:\\s*([^;]+);`).exec(read(file))?.[1];
+  expect(value, `${name} in ${file}`).toBeTypeOf('string');
   return (value as string).split(',').map((f) => f.trim().replace(/^['"]|['"]$/g, ''));
 }
 
@@ -102,5 +115,14 @@ describe('font tokens', () => {
       expect(faces, `${token} first family`).toContain(tokenFamilies(token)[0]);
       for (const family of presetFamilies(token)) expect(faces, `${token} first family in presets.go`).toContain(family);
     }
+  });
+
+  it('opens the wordmark token with a face the bundle provides', () => {
+    expect(bundledFaces(), '--font-wordmark first family').toContain(tokenFamilies('--font-wordmark', SHELL)[0]);
+  });
+
+  it('sets the wordmark face on the brand name only', () => {
+    const sites = styled.flatMap((path) => wordmarkSites(path, read(path)));
+    expect(sites.filter((site) => !WORDMARK_SITES.includes(site))).toEqual([]);
   });
 });
