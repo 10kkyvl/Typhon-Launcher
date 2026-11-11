@@ -192,7 +192,7 @@
   .backdrop {
     position: fixed;
     inset: 0;
-    z-index: var(--z-dialog);
+    z-index: var(--z-layer);
     pointer-events: auto;
     display: flex;
     align-items: center;

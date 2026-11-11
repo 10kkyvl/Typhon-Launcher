@@ -84,8 +84,8 @@ async function launchToPrompt(how: 'keyboard' | 'gamepad') {
 
 describe('a shared dialog over Big Picture', () => {
   it('sits on a layer above the shell', () => {
-    expect(z('dialog')).toBeGreaterThan(z('bigpicture'));
-    expect(modalSource).toMatch(/\.overlay \{[^}]*z-index: var\(--z-dialog\)/);
+    expect(z('layer')).toBeGreaterThan(z('bigpicture'));
+    expect(modalSource).toMatch(/\.overlay \{[^}]*z-index: var\(--z-layer\)/);
     expect(shellSource).toMatch(/\.big-picture \{[^}]*z-index: var\(--z-bigpicture\)/);
   });
 
@@ -159,7 +159,7 @@ describe('a shared dialog over Big Picture', () => {
     expect(shell.contains(message)).toBe(false);
     expect(message.closest('[inert]')).toBeNull();
     expect(shellSource).toMatch(/\.toast-corner \{[^}]*z-index: var\(--z-toast\)/);
-    expect(z('toast')).toBeGreaterThan(z('dialog'));
+    expect(z('toast')).toBeGreaterThan(z('layer'));
     await keys.click(screen.getByRole('button', { name: 'Open' }));
     expect(run).toHaveBeenCalledTimes(1);
   });

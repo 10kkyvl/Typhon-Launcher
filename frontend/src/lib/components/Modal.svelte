@@ -95,7 +95,7 @@
   .overlay {
     position: fixed;
     inset: 0;
-    z-index: var(--z-dialog);
+    z-index: var(--z-layer);
     padding-top: var(--titlebar-h);
     display: flex;
     align-items: center;

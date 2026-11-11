@@ -143,8 +143,8 @@ describe('Lightbox under a dialog that opens after it', () => {
     render(Modal, { target: app, props: { open: true, title: 'The game closed' } });
     const crash = layerRoot(screen.getByRole('dialog', { name: 'The game closed' }));
 
-    expect(zOf(lightboxSource, '.backdrop')).toBe('var(--z-dialog)');
-    expect(zOf(modalSource, '.overlay')).toBe('var(--z-dialog)');
+    expect(zOf(lightboxSource, '.backdrop')).toBe('var(--z-layer)');
+    expect(zOf(modalSource, '.overlay')).toBe('var(--z-layer)');
     expect(viewer.compareDocumentPosition(crash) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(crash.contains(document.activeElement)).toBe(true);
 

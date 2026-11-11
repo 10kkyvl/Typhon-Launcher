@@ -48,7 +48,7 @@ describe('toasts raised from an open dialog', () => {
     expect(message.closest('[inert]')).toBeNull();
     expect(dialog.contains(message)).toBe(false);
     expect(appShellSource).toMatch(/\.toast-region \{[^}]*z-index: var\(--z-toast\)/);
-    expect(z('toast')).toBeGreaterThan(z('dialog'));
+    expect(z('toast')).toBeGreaterThan(z('layer'));
     expect(z('toast')).toBeLessThan(z('titlebar'));
 
     await keys.click(screen.getByRole('button', { name: 'Retry' }));

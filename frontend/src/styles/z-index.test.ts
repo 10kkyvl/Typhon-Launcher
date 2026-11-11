@@ -43,7 +43,7 @@ const ORDER = [
   'bigpicture',
   'chat',
   'gate',
-  'dialog',
+  'layer',
   'toast',
   'titlebar',
   'update',
@@ -141,24 +141,24 @@ describe('z-index scale', () => {
   it('keeps the title bar above dialog scrims, dialogs (the image viewer among them) above Big Picture and the chat', () => {
     const scale = tokens();
     const z = (name: string) => scale.get(name) as number;
-    expect(z('titlebar')).toBeGreaterThan(z('dialog'));
+    expect(z('titlebar')).toBeGreaterThan(z('layer'));
     expect(z('titlebar')).toBeGreaterThan(z('gate'));
-    expect(z('dialog')).toBeGreaterThan(z('bigpicture'));
-    expect(z('dialog')).toBeGreaterThan(z('chat'));
+    expect(z('layer')).toBeGreaterThan(z('bigpicture'));
+    expect(z('layer')).toBeGreaterThan(z('chat'));
     expect(z('update')).toBeGreaterThan(z('titlebar'));
-    expect(z('toast')).toBeGreaterThan(z('dialog'));
+    expect(z('toast')).toBeGreaterThan(z('layer'));
     expect(z('toast')).toBeLessThan(z('titlebar'));
     expect(z('toast')).toBeGreaterThan(z('corner'));
   });
 
   // Paint order of modal layers follows the stack: every component that registers a modal layer puts its
   // root on the one dialog token, and portal() appends each at the end of <body> when it opens.
-  it('stacks every layer root on --z-dialog, so the layer opened last paints on top', () => {
+  it('stacks every layer root on --z-layer, so the layer opened last paints on top', () => {
     // Modal layers only; where non-modal ones (menus, listboxes) stack is the menus pass's to set.
     const layered = files.filter((path) => path.endsWith('.svelte') && /\{@attach layer\((?![^)]*modal: false)/.test(read(path)));
     expect(layered.length).toBeGreaterThan(1);
     const tokensUsed = layered.map((path) => [path, [...styles(path, read(path)).matchAll(/z-index:\s*var\(--z-([a-z-]+)\)/g)].map((m) => m[1])]);
-    expect(tokensUsed).toEqual(layered.map((path) => [path, ['dialog']]));
+    expect(tokensUsed).toEqual(layered.map((path) => [path, ['layer']]));
   });
 
   it('takes every z-index from the scale or stacks locally inside an isolated component', () => {
