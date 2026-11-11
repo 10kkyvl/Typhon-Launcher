@@ -8,7 +8,8 @@ import { describe, expect, it } from 'vitest';
  * - `var(--z-<name>)` with the token defined in shell.css;
  * - `auto`, `0`, `1` or `-1` for stacking inside a component that isolates itself: the same rule sets
  *   `isolation: isolate` or a `--z-*` z-index (its own stacking context), or so does a rule of the
- *   component's root element: the first element of the Svelte markup outside snippet definitions, matched by a selector made of
+ *   component's root element: the first tag of the Svelte markup outside snippet definitions when it is an
+ *   HTML element (not a component such as `<Page>`), matched by a selector made of
  *   its first static class with no combinator (`.avatar.framed` counts for `<span class="avatar …">`).
  *
  * Nothing else: no other integer, no file exceptions. The one z-index outside stylesheets is the theme
@@ -75,8 +76,10 @@ function markup(text: string): string {
 function rootClass(path: string, text: string): string | null {
   if (!path.endsWith('.svelte')) return null;
   const outsideSnippets = markup(text).replace(/\{#snippet[\s\S]*?\{\/snippet\}/g, '');
-  const first = /<([a-z][a-z0-9-]*)\b([^>]*)>/.exec(outsideSnippets);
-  const classes = first ? /\bclass="([^"]*)"/.exec(first[2])?.[1] : undefined;
+  // The first tag, `svelte:` ones aside; a component tag (`<Page>`) means the root is not an element of this file.
+  const first = /<(?!svelte:)([A-Za-z][\w.-]*)\b([^>]*)>/.exec(outsideSnippets);
+  if (!first || !/^[a-z]/.test(first[1])) return null;
+  const classes = /\bclass="([^"]*)"/.exec(first[2])?.[1];
   return classes?.split(/\s+/).find((name) => /^[\w-]+$/.test(name)) ?? null;
 }
 
@@ -149,4 +152,47 @@ describe('z-index scale', () => {
   it('takes every z-index from the scale or stacks locally inside an isolated component', () => {
     expect(violations()).toEqual([]);
   });
+
+  // An isolated root confines whatever it renders: a popover inside it (the beta badge's menu in the
+  // sidebar) is painted under later page content where it sticks out. Limit: only components imported
+  // by path are followed; a popover passed in as a snippet by the parent is not seen.
+  it('does not isolate the root of a component that renders a popover, directly or through its children', () => {
+    expect(isolatedPopoverHosts()).toEqual([]);
+  });
 });
+
+const POPOVERS = ['DropdownMenu', 'Select', 'Tooltip', 'ContextMenu'];
+
+function svelteImports(path: string, text: string): string[] {
+  const dir = path.slice(0, path.lastIndexOf('/') + 1);
+  return [...text.matchAll(/from\s+['"](\.{1,2}\/[^'"]+\.svelte)['"]/g)].map((m) => new URL(m[1], `file:///${dir}`).pathname.slice(1));
+}
+
+function isolatedPopoverHosts(): string[] {
+  const svelte = files.filter((path) => path.endsWith('.svelte'));
+  const imports = new Map(svelte.map((path) => [path, svelteImports(path, read(path))]));
+  const reaches = (start: string): boolean => {
+    const seen = new Set<string>();
+    const queue = [start];
+    while (queue.length) {
+      const next = queue.pop() as string;
+      for (const child of imports.get(next) ?? []) {
+        if (POPOVERS.some((name) => child.endsWith(`/${name}.svelte`))) return true;
+        if (!seen.has(child)) {
+          seen.add(child);
+          queue.push(child);
+        }
+      }
+    }
+    return false;
+  };
+  return svelte.filter((path) => {
+    const text = read(path);
+    const root = rootClass(path, text);
+    if (!root) return false;
+    const isolates = [...styles(path, text).matchAll(RULE)].some(
+      (m) => selectsRoot(m[1].trim().split('\n').pop()?.trim() ?? '', root) && /(?<![-\w])isolation\s*:\s*isolate/.test(m[2]),
+    );
+    return isolates && reaches(path);
+  });
+}

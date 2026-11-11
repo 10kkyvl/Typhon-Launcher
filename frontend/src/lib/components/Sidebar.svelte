@@ -141,7 +141,6 @@
 <style>
   .sidebar {
     position: relative;
-    isolation: isolate;
     display: flex;
     flex-direction: column;
     width: var(--sidebar-w);
@@ -214,9 +213,10 @@
     border-top: 1px solid var(--border);
   }
 
+  /* Positioned after the plate (the aside's first child), so items paint over it without a z-index;
+     the aside does not isolate, so the beta badge's menu can reach past it. */
   .nav-item {
     position: relative;
-    z-index: 1;
     display: flex;
     align-items: center;
     gap: 1.2rem;
@@ -267,7 +267,6 @@
     position: absolute;
     left: 0;
     top: 0;
-    z-index: 0;
     transform-origin: 0 0;
     pointer-events: none;
     border-radius: var(--radius-md);
