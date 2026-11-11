@@ -46,9 +46,9 @@ describe('status banners', () => {
     expect([...at].sort((a, b) => a - b)).toEqual(at);
   });
 
-  it('keeps the offline banner text and its three actions', () => {
+  // The text goes into the live region after it mounts, which the server never renders: banners.dom.test.ts.
+  it('keeps the three actions of the offline banner', () => {
     const body = render(OfflineBanner, { props: {} } as never).body;
-    expect(body).toContain(msg('ui.offlineBannerText'));
     expect(body).toContain(msg('ui.offlineBannerStatus'));
     expect(body).toContain(msg('common.retry'));
     expect(body).toContain(`aria-label="${msg('common.close')}"`);

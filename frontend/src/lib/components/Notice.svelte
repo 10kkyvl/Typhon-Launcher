@@ -10,7 +10,8 @@
    * A status message that belongs to a page or a section: an error, a warning, a success or a note,
    * on a plate of its own. The plate is opaque (the tone mixed into a surface, never a translucent
    * tint), so the message reads over the window backdrop in every theme; status-coloured text never
-   * sits on the bare page. A failure is an alert, the rest a status. Other attributes go to the plate.
+   * sits on the bare page. A failure is an alert, the rest a status: the title and the text are the
+   * live region, the action and the close button stay outside it. Other attributes go to the plate.
    */
   let {
     tone = 'info',
@@ -36,6 +37,17 @@
 
   let plate = $state<HTMLDivElement>();
 
+  // The live region is the message alone, and it is on the page before its words are: some screen
+  // readers do not announce a region inserted together with its content. Two frames let the browser
+  // lay the empty region out once before the words go in.
+  let worded = $state(false);
+  $effect(() => {
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => (worded = true));
+    });
+    return () => cancelAnimationFrame(frame);
+  });
+
   // The close button goes with the notice: focus would fall to the page. It moves on to what Tab
   // would reach next, else back to what came before.
   async function close() {
@@ -50,7 +62,7 @@
   }
 </script>
 
-<div {...rest} class="notice" class:compact data-tone={tone} role={tone === 'danger' ? 'alert' : 'status'} bind:this={plate}>
+<div {...rest} class="notice" class:compact data-tone={tone} bind:this={plate}>
   <span class="icon" aria-hidden="true">
     {#if icon}
       {@render icon()}
@@ -64,9 +76,11 @@
       <Info size="1.6rem" strokeWidth={1.8} />
     {/if}
   </span>
-  <div class="body">
-    {#if title}<span class="title">{title}</span>{/if}
-    <div class="text">{@render children?.()}</div>
+  <div class="body" role={tone === 'danger' ? 'alert' : 'status'}>
+    {#if worded}
+      {#if title}<span class="title">{title}</span>{/if}
+      <div class="text">{@render children?.()}</div>
+    {/if}
   </div>
   {#if action}
     <div class="action">{@render action()}</div>

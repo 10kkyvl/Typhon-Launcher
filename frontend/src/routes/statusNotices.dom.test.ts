@@ -40,9 +40,8 @@ describe('a status message of a page', () => {
     render(Activity);
 
     const alert = await screen.findByRole('alert');
-    expect(alert.textContent).toContain('Failed to load profile statistics');
-    expect(alert.classList.contains('notice')).toBe(true);
-    expect(alert.getAttribute('data-tone')).toBe('danger');
+    await waitFor(() => expect(alert.textContent).toContain('Failed to load profile statistics'));
+    expect(alert.closest('.notice')?.getAttribute('data-tone')).toBe('danger');
   });
 
   it('keeps the retry of a failed list inside its notice, and the notice goes once the list loads', async () => {
@@ -50,10 +49,11 @@ describe('a status message of a page', () => {
     render(TicketList);
 
     const alert = await screen.findByRole('alert');
-    expect(alert.getAttribute('data-tone')).toBe('danger');
-    expect(alert.textContent).toContain('Could not load your requests.');
+    await waitFor(() => expect(alert.textContent).toContain('Could not load your requests.'));
+    const notice = alert.closest('.notice') as HTMLElement;
+    expect(notice.getAttribute('data-tone')).toBe('danger');
 
-    await user().click(within(alert).getByRole('button', { name: 'Retry' }));
+    await user().click(within(notice).getByRole('button', { name: 'Retry' }));
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
     expect(listTickets).toHaveBeenCalledTimes(2);
   });
