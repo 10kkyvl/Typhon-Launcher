@@ -19,4 +19,26 @@ describe('what the stack remembers about a toast', () => {
     watch.forget(1);
     expect(watch.origin(1)).toBeUndefined();
   });
+
+  it('forgets every toast that has left the list, however it left, and says which', () => {
+    const watch = createToastWatch<string>();
+    watch.read(1, { hover: true });
+    watch.entered(2, 'button');
+    watch.read(3, { focus: true });
+
+    expect(watch.prune([3]).sort()).toEqual([1, 2]);
+
+    expect(watch.size).toBe(1);
+    expect(watch.origin(2)).toBeUndefined();
+    expect(watch.read(1, {})).toBe(false);
+  });
+
+  it('keeps nothing for a toast nobody reads, so a late event from a toast already gone leaves no entry', () => {
+    const watch = createToastWatch<string>();
+    watch.read(1, { hover: true });
+    watch.read(1, { hover: false });
+    watch.read(2, { focus: false });
+
+    expect(watch.size).toBe(0);
+  });
 });

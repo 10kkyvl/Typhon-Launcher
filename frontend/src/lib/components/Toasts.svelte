@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { CircleAlert, CircleCheck, Info, TriangleAlert, X } from '@lucide/svelte';
   import { msg } from '../i18n';
   import { modalOpen } from '../layers';
@@ -26,11 +27,31 @@
   $effect(() => holdToasts($modalOpen));
 
   const watch = createToastWatch<HTMLElement>();
+  let stack = $state<HTMLElement>();
 
   function read(id: number, change: { hover?: boolean; focus?: boolean }) {
     if (watch.read(id, change)) pauseToast(id);
     else resumeToast(id);
   }
+
+  // A toast can leave the list without being closed from inside: its time is up, or code removes it
+  // (the "opening the link" toast). If focus was inside it, focus goes back where it came from
+  // instead of dropping to the page's top; either way nothing is kept about a toast that is gone.
+  let listed: number[] = [];
+  $effect.pre(() => {
+    const present = $toasts.map((item) => item.id);
+    const gone = listed.filter((id) => !present.includes(id));
+    listed = present;
+    // Before the cards are taken out of the page: afterwards nothing says which one held focus.
+    const held = gone.find((id) => stack?.querySelector(`[data-toast="${id}"]`)?.contains(document.activeElement));
+    const home = held === undefined ? undefined : watch.origin(held);
+    watch.prune(present);
+    if (!home) return;
+    void tick().then(() => {
+      const lost = !document.activeElement?.isConnected || document.activeElement === document.body;
+      if (lost && home.isConnected) home.focus({ preventScroll: true });
+    });
+  });
 
   function onfocusin(item: Toast, event: FocusEvent) {
     const card = event.currentTarget as HTMLElement;
@@ -74,6 +95,7 @@
   <div
     class="toast {item.kind}"
     data-part="toast"
+    data-toast={item.id}
     onpointerenter={() => read(item.id, { hover: true })}
     onpointerleave={() => read(item.id, { hover: false })}
     onfocusin={(event) => onfocusin(item, event)}
@@ -105,7 +127,7 @@
   </div>
 {/snippet}
 
-<section class="toasts" aria-label={msg('ui.toastsLabel')}>
+<section class="toasts" aria-label={msg('ui.toastsLabel')} bind:this={stack}>
   <!-- Not atomic (an alert and a status are by default): a second toast is said alone, without the
        ones already in its lane. -->
   <div class="lane" role="alert" aria-atomic="false">

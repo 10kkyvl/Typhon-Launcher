@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import type { Theme } from '../services/theme';
 import { activeTheme, endTrial, themeTrial, tryTheme } from '../stores/theme';
-import { ACTION_MS, PLAIN_MS, RESUME_FLOOR_MS, holdToasts, toast, toasts } from '../stores/toasts';
+import { ACTION_MS, PLAIN_MS, RESUME_FLOOR_MS, dismissToast, holdToasts, toast, toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
 import ToastsHarness from '../testing/ToastsHarness.svelte';
 import { mountThemeGuard } from './ThemeGuard';
@@ -228,6 +228,36 @@ describe('Toasts: closing', () => {
     await keys.keyboard('{Enter}');
 
     expect(shown()).toEqual([]);
+    expect(document.activeElement).toBe(before);
+  });
+
+  it('removed by code while focus is inside it, it gives focus back where it came from', async () => {
+    const { keys, close } = setup();
+    const before = screen.getByRole('button', { name: 'Before' });
+    const id = toast('Opening the link…');
+    await tick();
+    before.focus();
+    await keys.tab();
+    expect(document.activeElement).toBe(close('Opening the link…'));
+
+    dismissToast(id);
+    await tick();
+    await tick();
+
+    expect(document.activeElement).toBe(before);
+  });
+
+  it('removed by code while focus is elsewhere, it leaves focus alone', async () => {
+    setup();
+    const before = screen.getByRole('button', { name: 'Before' });
+    const id = toast('Opening the link…');
+    await tick();
+    before.focus();
+
+    dismissToast(id);
+    await tick();
+    await tick();
+
     expect(document.activeElement).toBe(before);
   });
 
