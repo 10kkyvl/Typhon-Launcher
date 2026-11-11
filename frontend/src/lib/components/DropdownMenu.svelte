@@ -13,7 +13,7 @@
 
 <script lang="ts">
   import { flushSync, type Snippet } from 'svelte';
-  import { anchorTo, type Placement, type Rect } from '../utils/position';
+  import { anchorTo, type Placement } from '../utils/position';
   import MenuList from './MenuList.svelte';
   import { closesOnPick, type MenuItem } from './menu';
 
@@ -27,7 +27,8 @@
    *   </DropdownMenu>
    *
    * The menu opens next to the trigger, out of the page (a layer, see lib/layers), flipping and shifting
-   * to stay in the window and following the trigger on scroll and resize. A pick closes the menu and
+   * to stay in the window and following the trigger on scroll and resize; it closes when the trigger
+   * scrolls out of sight. A pick closes the menu and
    * puts focus back on the trigger before `onselect` runs, so a dialog the pick opens returns focus
    * there; an independent check (`MenuItem.independent`) keeps the menu open. The open state shows on
    * the trigger as `[aria-expanded="true"]`.
@@ -113,14 +114,10 @@
     onselect?.(item.id, item);
   }
 
-  let lastRect: Rect = { left: 0, top: 0, width: 0, height: 0 };
-  const anchorRect = (): Rect => {
-    const element = triggerElement();
-    if (element) lastRect = element.getBoundingClientRect();
-    return lastRect;
-  };
-
-  const place = (node: HTMLElement) => anchorTo(node, anchorRect, { placement: side, offset: 4 });
+  // A trigger scrolled out of sight takes its menu with it: the menu closes rather than stay clamped in
+  // the window, detached. The stack returns focus to the trigger without scrolling to it.
+  const place = (node: HTMLElement) =>
+    anchorTo(node, triggerElement, { placement: side, offset: 4, onhide: () => (open = false) });
 </script>
 
 {@render trigger({ open, toggle, props: triggerProps })}

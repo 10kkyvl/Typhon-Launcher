@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computePosition, lengthPx, positionAtPoint, type Insets } from './position';
+import { computePosition, lengthPx, positionAtPoint, visiblePart, type Insets } from './position';
 
 const viewport = { width: 390, height: 844 };
 const menu = { width: 200, height: 160 };
@@ -140,5 +140,31 @@ describe('lengthPx', () => {
     expect(lengthPx('', 10, 7)).toBe(7);
     expect(lengthPx('calc(1rem + 2px)', 10, 7)).toBe(7);
     expect(lengthPx('2em', 10, 7)).toBe(7);
+  });
+});
+
+describe('visiblePart', () => {
+  const anchor = { left: 100, top: 100, width: 40, height: 30 };
+
+  it('is the whole anchor when the window and its scroll containers show all of it', () => {
+    expect(visiblePart(anchor, [{ left: 0, top: 50, width: 300, height: 300 }], viewport)).toEqual(anchor);
+  });
+
+  it('is the part a scroll container and the window still show', () => {
+    expect(visiblePart(anchor, [{ left: 0, top: 115, width: 300, height: 300 }], viewport)).toEqual({ left: 100, top: 115, width: 40, height: 15 });
+  });
+
+  it('is nothing once the anchor has left the window', () => {
+    expect(visiblePart({ ...anchor, top: -40 }, [], viewport)).toBeNull();
+    expect(visiblePart({ ...anchor, top: 900 }, [], viewport)).toBeNull();
+    expect(visiblePart({ ...anchor, left: -50 }, [], viewport)).toBeNull();
+  });
+
+  it('is nothing once a scroll container has clipped it away, though it is still in the window', () => {
+    expect(visiblePart(anchor, [{ left: 0, top: 200, width: 300, height: 300 }], viewport)).toBeNull();
+  });
+
+  it('keeps an empty rect inside the window (no layout yet, a zero-size anchor)', () => {
+    expect(visiblePart({ left: 0, top: 0, width: 0, height: 0 }, [], viewport)).not.toBeNull();
   });
 });

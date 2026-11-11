@@ -163,6 +163,39 @@ export function positionAtPoint(
   return result;
 }
 
+/**
+ * The part of an anchor still on screen: `rect` cut by each clipping ancestor's box (its scroll
+ * containers) and by the window. Null when nothing is left; an empty rect that lies inside them (no
+ * layout yet, a zero-size anchor) still counts as shown.
+ */
+export function visiblePart(rect: Rect, clips: readonly Rect[], viewport: Size): Rect | null {
+  let left = Math.max(rect.left, 0);
+  let top = Math.max(rect.top, 0);
+  let right = Math.min(rect.left + rect.width, viewport.width);
+  let bottom = Math.min(rect.top + rect.height, viewport.height);
+  for (const clip of clips) {
+    left = Math.max(left, clip.left);
+    top = Math.max(top, clip.top);
+    right = Math.min(right, clip.left + clip.width);
+    bottom = Math.min(bottom, clip.top + clip.height);
+  }
+  if (right < left || bottom < top) return null;
+  return { left, top, width: right - left, height: bottom - top };
+}
+
+// The boxes of the ancestors that clip `element` (any overflow but visible), up to the first fixed
+// box on the way, which its ancestors' overflow does not clip.
+function clipRects(element: Element): Rect[] {
+  const clips: Rect[] = [];
+  for (let child = element, parent = element.parentElement; parent && parent !== document.documentElement; child = parent, parent = parent.parentElement) {
+    if (getComputedStyle(child).position === 'fixed') break;
+    const style = getComputedStyle(parent);
+    const clipping = [style.overflow, style.overflowX, style.overflowY].some((value) => value !== '' && value !== 'visible');
+    if (clipping) clips.push(parent.getBoundingClientRect());
+  }
+  return clips;
+}
+
 /** A CSS length token (`4rem`, `8px`) in px; `fallback` for anything else (a calc, an unset token). */
 export function lengthPx(raw: string, remPx: number, fallback: number): number {
   const value = raw.trim();
@@ -224,24 +257,51 @@ export interface AnchorOptions {
   padding?: number | Insets;
   /** Make the floating element at least as wide as the anchor (listboxes). */
   matchWidth?: boolean;
-  /** Called after each placement, e.g. to close a tooltip whose anchor scrolled away. */
+  /** Called after each placement. */
   onplace?: (result: PositionResult) => void;
+  /**
+   * Called on a placement that finds the anchor no longer shown: out of the window, or clipped away
+   * by a scroll container it sits in. An anchored popup closes then rather than float detached from it.
+   */
+  onhide?: () => void;
 }
+
+/** What a popup is anchored to: an element, or a getter for one (read on every placement) or for a rect. */
+export type Anchor = HTMLElement | (() => HTMLElement | Rect | null | undefined);
 
 /**
  * Keeps a `position: fixed` element next to an anchor while the page scrolls (any scrolling ancestor)
  * or the window resizes, and when either element changes size. Sets `data-placement` to the side it
- * ended up on. Returns a cleanup function.
+ * ended up on. A getter that returns nothing (the anchor element is being re-created) keeps the last
+ * place. Returns a cleanup function.
  */
-export function anchorTo(node: HTMLElement, anchor: HTMLElement | (() => Rect), options: AnchorOptions = {}): () => void {
+export function anchorTo(node: HTMLElement, anchor: Anchor, options: AnchorOptions = {}): () => void {
   node.style.position = 'fixed';
   node.style.left = '0px';
   node.style.top = '0px';
 
   let frame = 0;
+  let observed: Element | null = null;
+  let rect: Rect = { left: 0, top: 0, width: 0, height: 0 };
+  const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(() => schedule()) : null;
+  observer?.observe(node);
+
   const place = () => {
     frame = 0;
-    const rect = typeof anchor === 'function' ? anchor() : anchor.getBoundingClientRect();
+    const target = typeof anchor === 'function' ? anchor() : anchor;
+    let hidden = false;
+    if (target instanceof Element) {
+      rect = target.getBoundingClientRect();
+      hidden = visiblePart(rect, clipRects(target), viewportSize()) === null;
+      if (target !== observed) {
+        if (observed) observer?.unobserve(observed);
+        observer?.observe(target);
+        observed = target;
+      }
+    } else if (target) {
+      rect = target;
+      hidden = visiblePart(rect, [], viewportSize()) === null;
+    }
     if (options.matchWidth) node.style.minWidth = `${Math.round(rect.width)}px`;
     const result = keepScroll(node, () => {
       const placed = computePosition(rect, natural(node), {
@@ -254,10 +314,11 @@ export function anchorTo(node: HTMLElement, anchor: HTMLElement | (() => Rect), 
       return placed;
     });
     options.onplace?.(result);
+    if (hidden) options.onhide?.();
   };
-  const schedule = () => {
+  function schedule() {
     if (!frame) frame = requestAnimationFrame(place);
-  };
+  }
   // The page scrolling moves the anchor; the floating element scrolling its own content does not.
   const onScroll = (event: Event) => {
     if (event.target instanceof Node && node.contains(event.target)) return;
@@ -267,9 +328,6 @@ export function anchorTo(node: HTMLElement, anchor: HTMLElement | (() => Rect), 
   place();
   window.addEventListener('resize', schedule);
   window.addEventListener('scroll', onScroll, true);
-  const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(schedule) : null;
-  observer?.observe(node);
-  if (anchor instanceof HTMLElement) observer?.observe(anchor);
 
   return () => {
     cancelAnimationFrame(frame);

@@ -72,6 +72,61 @@ describe('anchorTo', () => {
     stop();
   });
 
+  it('reports a hidden anchor: scrolled out of its scroll container, then out of the window', () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => frames.push(cb));
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+    const scroller = document.createElement('div');
+    scroller.style.overflow = 'auto';
+    const anchor = document.createElement('button');
+    const floating = document.createElement('div');
+    scroller.append(anchor);
+    document.body.append(scroller, floating);
+    scroller.getBoundingClientRect = () => box({ left: 0, top: 100, width: 400, height: 300 });
+    let anchorRect: Rect = { left: 20, top: 150, width: 40, height: 30 };
+    anchor.getBoundingClientRect = () => box(anchorRect);
+    const onhide = vi.fn();
+    const scrolled = (rect: Rect) => {
+      anchorRect = rect;
+      scroller.dispatchEvent(new Event('scroll'));
+      for (const frame of frames.splice(0)) frame(0);
+    };
+
+    const stop = anchorTo(floating, () => anchor, { padding: 8, onhide });
+    expect(onhide).not.toHaveBeenCalled();
+
+    scrolled({ ...anchorRect, top: 110 });
+    expect(onhide).not.toHaveBeenCalled();
+    scrolled({ ...anchorRect, top: 60 });
+    expect(onhide).toHaveBeenCalledTimes(1);
+
+    scroller.getBoundingClientRect = () => box({ left: 0, top: -400, width: 400, height: 300 });
+    onhide.mockClear();
+    scrolled({ ...anchorRect, top: -380 });
+    expect(onhide).toHaveBeenCalledTimes(1);
+    stop();
+  });
+
+  it('does not count a clipping ancestor above a fixed box the anchor sits in', () => {
+    const clipped = document.createElement('div');
+    clipped.style.overflow = 'hidden';
+    const dock = document.createElement('div');
+    dock.style.position = 'fixed';
+    const anchor = document.createElement('button');
+    const floating = document.createElement('div');
+    dock.append(anchor);
+    clipped.append(dock);
+    document.body.append(clipped, floating);
+    clipped.getBoundingClientRect = () => box({ left: 0, top: 0, width: 10, height: 10 });
+    anchor.getBoundingClientRect = () => box({ left: 300, top: 300, width: 40, height: 30 });
+    const onhide = vi.fn();
+
+    const stop = anchorTo(floating, anchor, { padding: 8, onhide });
+
+    expect(onhide).not.toHaveBeenCalled();
+    stop();
+  });
+
   it('keeps the scroll position of a height-limited element when it is placed again', () => {
     const frames: FrameRequestCallback[] = [];
     vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => frames.push(cb));

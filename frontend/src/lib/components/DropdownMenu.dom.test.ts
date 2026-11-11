@@ -1,3 +1,4 @@
+import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
 import { user } from '../testing/dom';
@@ -259,6 +260,38 @@ describe('DropdownMenu: items changing while it is open', () => {
     await rerender({ items: ACTIONS.filter((entry) => entry.disabled) });
 
     expect(document.activeElement).toBe(menu());
+  });
+});
+
+describe('DropdownMenu: its trigger scrolled away', () => {
+  it('closes when the trigger leaves the window, and focus goes back to it without scrolling there', async () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => frames.push(cb));
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+    try {
+      const { keys, trigger, menu } = setup();
+      let top = 300;
+      trigger().getBoundingClientRect = () => DOMRect.fromRect({ x: 200, y: top, width: 80, height: 32 });
+      const focus = vi.spyOn(trigger(), 'focus');
+      await keys.click(trigger());
+      expect(menu()).not.toBeNull();
+
+      top = 120;
+      document.dispatchEvent(new Event('scroll'));
+      for (const frame of frames.splice(0)) frame(0);
+      expect(menu()).not.toBeNull();
+
+      top = -60;
+      document.dispatchEvent(new Event('scroll'));
+      for (const frame of frames.splice(0)) frame(0);
+      await tick();
+
+      expect(menu()).toBeNull();
+      expect(trigger().getAttribute('aria-expanded')).toBe('false');
+      expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 
