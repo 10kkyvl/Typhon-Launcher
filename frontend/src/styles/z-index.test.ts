@@ -45,7 +45,6 @@ const ORDER = [
   'gate',
   'dialog',
   'titlebar',
-  'lightbox',
   'update',
 ];
 const BIG_PICTURE_ORDER = ['bp-menu', 'bp-keyboard', 'bp-toasts', 'bp-dialog'];
@@ -138,16 +137,23 @@ describe('z-index scale', () => {
     expect(elsewhere).toEqual([]);
   });
 
-  it('keeps the title bar above dialog scrims, dialogs above Big Picture and the chat, the viewer above the chat it opens from', () => {
+  it('keeps the title bar above dialog scrims, dialogs (the image viewer among them) above Big Picture and the chat', () => {
     const scale = tokens();
     const z = (name: string) => scale.get(name) as number;
     expect(z('titlebar')).toBeGreaterThan(z('dialog'));
     expect(z('titlebar')).toBeGreaterThan(z('gate'));
     expect(z('dialog')).toBeGreaterThan(z('bigpicture'));
     expect(z('dialog')).toBeGreaterThan(z('chat'));
-    expect(z('lightbox')).toBeGreaterThan(z('chat'));
-    expect(z('lightbox')).toBeGreaterThan(z('titlebar'));
-    expect(z('update')).toBeGreaterThan(z('lightbox'));
+    expect(z('update')).toBeGreaterThan(z('titlebar'));
+  });
+
+  // Paint order of modal layers follows the stack: every component that registers a layer puts its
+  // root on the one dialog token, and portal() appends each at the end of <body> when it opens.
+  it('stacks every layer root on --z-dialog, so the layer opened last paints on top', () => {
+    const layered = files.filter((path) => path.endsWith('.svelte') && /\{@attach layer\(/.test(read(path)));
+    expect(layered.length).toBeGreaterThan(1);
+    const tokensUsed = layered.map((path) => [path, [...styles(path, read(path)).matchAll(/z-index:\s*var\(--z-([a-z-]+)\)/g)].map((m) => m[1])]);
+    expect(tokensUsed).toEqual(layered.map((path) => [path, ['dialog']]));
   });
 
   it('takes every z-index from the scale or stacks locally inside an isolated component', () => {

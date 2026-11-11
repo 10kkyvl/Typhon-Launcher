@@ -5,7 +5,7 @@
   import { stepIndex } from '../game/view';
   import { msg } from '../i18n';
   import IconButton from './IconButton.svelte';
-  import { layer } from '../layers';
+  import { layer, topLayer } from '../layers';
   import { documentMotion, tokenMs } from '../motion/motion';
 
   export interface LightboxItem {
@@ -92,8 +92,11 @@
   }
 
   let pressedOnScrim = false;
+  let backdrop = $state<HTMLDivElement>();
 
   function onKeydown(event: KeyboardEvent) {
+    // A dialog opened over the viewer owns the keyboard until it closes.
+    if (!backdrop || topLayer() !== backdrop) return;
     if (event.target instanceof HTMLInputElement) return;
     if (event.key === '+' || event.key === '=') { event.preventDefault(); setZoom(zoom + 0.25); }
     if (event.key === '-') { event.preventDefault(); setZoom(zoom - 0.25); }
@@ -115,6 +118,7 @@
   <div
     class="backdrop"
     role="presentation"
+    bind:this={backdrop}
     {@attach layer({ dismiss: close })}
     onpointerdown={(event) => (pressedOnScrim = event.target === event.currentTarget)}
     onclick={(event) => {
@@ -177,7 +181,7 @@
   .backdrop {
     position: fixed;
     inset: 0;
-    z-index: var(--z-lightbox);
+    z-index: var(--z-dialog);
     pointer-events: auto;
     display: flex;
     align-items: center;
@@ -238,9 +242,10 @@
     right: 1.6rem;
   }
 
+  /* Under the title bar, which stays above every layer's scrim. */
   .close {
     position: absolute;
-    top: 1.6rem;
+    top: calc(var(--titlebar-h) + 1.6rem);
     right: 1.6rem;
   }
 

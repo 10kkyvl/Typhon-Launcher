@@ -4,6 +4,20 @@ import { msg } from '../i18n';
 import { user } from '../testing/dom';
 import LightboxHarness from '../testing/LightboxHarness.svelte';
 import Lightbox from './Lightbox.svelte';
+import lightboxSource from './Lightbox.svelte?raw';
+import Modal from './Modal.svelte';
+import modalSource from './Modal.svelte?raw';
+
+// The portalled root of whatever layer holds `el`: the body's child.
+function layerRoot(el: Element): HTMLElement {
+  let node = el as HTMLElement;
+  while (node.parentElement && node.parentElement !== document.body) node = node.parentElement;
+  return node;
+}
+
+function zOf(source: string, selector: string): string | undefined {
+  return new RegExp(`\\${selector} \\{[^}]*z-index: ([^;]+);`).exec(source)?.[1];
+}
 
 const items = [
   { id: 'a', url: 'https://img.test/a.png' },
@@ -61,7 +75,7 @@ describe('Lightbox placement', () => {
 
     const dialog = screen.getByRole('dialog');
     expect(dock.contains(dialog)).toBe(false);
-    expect(dialog.parentElement?.parentElement).toBe(document.body);
+    expect(layerRoot(dialog).parentElement).toBe(document.body);
     view.unmount();
   });
 });
@@ -69,7 +83,7 @@ describe('Lightbox placement', () => {
 describe('Lightbox as a layer', () => {
   it('takes focus, keeps Tab inside, makes the page inert, and Escape returns focus to the thumbnail', async () => {
     const { keys, thumbnail, dialog } = await openViewer();
-    const viewer = dialog.parentElement as HTMLElement;
+    const viewer = layerRoot(dialog);
 
     expect(viewer.contains(document.activeElement)).toBe(true);
     expect(thumbnail.closest('[inert]')).not.toBeNull();
@@ -115,5 +129,34 @@ describe('Lightbox as a layer', () => {
 
     expect(screen.queryByText(msg('ui.imageUnavailable'))).toBeNull();
     expect(document.querySelector('img')?.getAttribute('src')).toBe(items[0].url);
+  });
+});
+
+describe('Lightbox under a dialog that opens after it', () => {
+  it('the later dialog paints above it and owns the keys: arrows leave the image, Escape closes the dialog, then the viewer', async () => {
+    document.documentElement.classList.add('no-anim');
+    const { keys, dialog } = await openViewer();
+    const viewer = layerRoot(dialog);
+    const image = () => document.querySelector('img')?.getAttribute('src');
+    const shown = image();
+
+    render(Modal, { target: app, props: { open: true, title: 'The game closed' } });
+    const crash = layerRoot(screen.getByRole('dialog', { name: 'The game closed' }));
+
+    expect(zOf(lightboxSource, '.backdrop')).toBe('var(--z-dialog)');
+    expect(zOf(modalSource, '.overlay')).toBe('var(--z-dialog)');
+    expect(viewer.compareDocumentPosition(crash) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(crash.contains(document.activeElement)).toBe(true);
+
+    await keys.keyboard('{ArrowRight}');
+    await keys.keyboard('{End}');
+    expect(image()).toBe(shown);
+
+    await keys.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'The game closed' })).toBeNull();
+    expect(screen.getByRole('dialog', { name: msg('ui.imageViewer') })).toBeTruthy();
+
+    await keys.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 });
