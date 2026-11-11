@@ -38,6 +38,7 @@ type Props = {
   inDialog?: boolean;
   placeholder?: string;
   disabled?: boolean;
+  naming?: 'labelledby' | 'label' | 'for';
   onchange?: (id: string) => void;
 };
 
@@ -96,6 +97,20 @@ describe('Select: the field', () => {
     await keys.click(field());
     expect(option('Deutsch').getAttribute('aria-disabled')).toBe('true');
     expect(option('English').hasAttribute('aria-disabled')).toBe(false);
+  });
+
+  it.each([
+    ['label', 'label'],
+    ['a <label for> its id', 'for'],
+  ] as const)('a field named by %s gives its list the same name, not the chosen value', async (_how, naming) => {
+    const { keys, field } = setup({ naming });
+
+    await keys.click(field());
+
+    const list = screen.getByRole('listbox', { name: 'Language' });
+    // A browser names a list labelled by a combobox with the combobox's chosen option (accname,
+    // embedded control); jsdom's name computation does not, so the reference itself is checked.
+    expect(list.getAttribute('aria-labelledby')?.split(/\s+/) ?? []).not.toContain(field().id);
   });
 
   it('a disabled field does not open', async () => {

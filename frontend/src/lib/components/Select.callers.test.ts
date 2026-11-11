@@ -38,14 +38,19 @@ describe('Select call sites', () => {
   });
 
   // A screen reader announces an unnamed field as a bare combobox. A visible label next to the field
-  // names it through `labelledby` (the same id expression is on an element of that file); `label` is for
-  // a field with no visible label; RateLimitInput passes its caller's `labelledby` on.
+  // names it through `labelledby` (the same id expression is on an element of that file) or through a
+  // `<label for>` matching the field's `id` (the same expression in `for=` in that file); `label` is for
+  // a field with no visible label; RateLimitInput passes its caller's `labelledby` on. An `id` alone,
+  // without such a `<label for>`, names nothing.
   it('name every field: from the visible label next to it, or with label where none is shown', () => {
     const unnamed = [...uses('Select'), ...uses('RateLimitInput')].filter(({ path, tag }) => {
+      const text = frontendSources[path] ?? '';
       if (/\blabel=\{msg\(/.test(tag)) return false;
+      const id = /\bid=("[^"]*"|\{[^}]*\})/.exec(tag)?.[1];
+      if (id && text.includes(`for=${id}`)) return false;
       const by = /\blabelledby=("[^"]*"|\{[^}]*\})/.exec(tag)?.[1];
       if (!by) return !(path === 'lib/components/RateLimitInput.svelte' && /\{labelledby\}/.test(tag));
-      return !(frontendSources[path] ?? '').includes(`id=${by}`);
+      return !text.includes(`id=${by}`);
     });
     expect(unnamed.map(({ path, tag }) => `${path}: ${tag}`)).toEqual([]);
   });

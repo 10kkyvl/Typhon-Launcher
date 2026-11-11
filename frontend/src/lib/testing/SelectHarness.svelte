@@ -16,6 +16,7 @@
     inDialog = false,
     placeholder,
     disabled = false,
+    naming = 'labelledby',
     onchange,
   }: {
     options: SelectOption[];
@@ -25,8 +26,14 @@
     inDialog?: boolean;
     placeholder?: string;
     disabled?: boolean;
+    /** How the field gets its name "Language": a visible label it points at, `label`, or `<label for>` + `id`. */
+    naming?: 'labelledby' | 'label' | 'for';
     onchange?: (id: string) => void;
   } = $props();
+
+  const names = $derived(
+    naming === 'label' ? { label: 'Language' } : naming === 'for' ? { id: 'language-field' } : { labelledby: 'language-label' },
+  );
 
   let value = $state(untrack(() => initial));
   let settings = $state(false);
@@ -39,11 +46,15 @@
 
 {#snippet field()}
   <button type="button">Before</button>
-  <span id="language-label">Language</span>
+  {#if naming === 'labelledby'}
+    <span id="language-label">Language</span>
+  {:else if naming === 'for'}
+    <label for="language-field">Language</label>
+  {/if}
   {#if controlled}
-    <Select {options} {value} labelledby="language-label" {placeholder} {disabled} onchange={change} />
+    <Select {options} {value} {...names} {placeholder} {disabled} onchange={change} />
   {:else}
-    <Select {options} bind:value labelledby="language-label" {placeholder} {disabled} />
+    <Select {options} bind:value {...names} {placeholder} {disabled} />
   {/if}
   <button type="button">After</button>
   <button type="button" aria-label="Help">

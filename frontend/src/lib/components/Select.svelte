@@ -36,7 +36,7 @@
     options: SelectOption[];
     value: string;
     width?: string;
-    /** Id of the field, for a `<label for>`. */
+    /** Id of the field: a `<label for>` with it names the field and its list. */
     id?: string;
     /** Accessible name when no visible label names the field. */
     label?: string;
@@ -173,6 +173,13 @@
     else onClosedKeydown(event);
   }
 
+  // The text of the `<label for>` elements naming the field. The list is not labelled by the field
+  // itself: a browser reads a combobox used as a label as its chosen option.
+  function forLabels(): string | undefined {
+    const text = [...(field?.labels ?? [])].map((element) => element.textContent?.trim() ?? '').filter(Boolean).join(' ');
+    return text || undefined;
+  }
+
   // The list leaves with its field: it closes when the field scrolls out of sight.
   const place: Attachment<HTMLElement> = (node) =>
     untrack(() => anchorTo(node, () => field, { placement: 'bottom-start', offset: 4, matchWidth: true, onhide: hide }));
@@ -225,8 +232,8 @@
     role="listbox"
     data-part="listbox"
     id={listId}
-    aria-label={label}
-    aria-labelledby={label ? undefined : (labelledby ?? fieldId)}
+    aria-label={label ?? (labelledby ? undefined : forLabels())}
+    aria-labelledby={label ? undefined : labelledby}
     tabindex="-1"
     onmousedown={(event) => event.preventDefault()}
     {@attach layer({ modal: false, owner: () => field, dismiss: hide })}
