@@ -7,7 +7,8 @@
 </script>
 
 <Tooltip {text}>
-  <span class="hidden-badge">
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex (A stop in the Tab order so the hint, who it is hidden from, reaches keyboard users; pressing it does nothing.) -->
+  <span class="hidden-badge" tabindex="0">
     <EyeOff size="1.3rem" strokeWidth={1.8} />
     {msg('social.hiddenLabel')}
   </span>

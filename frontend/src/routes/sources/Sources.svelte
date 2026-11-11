@@ -239,29 +239,34 @@
           {@const health = healthMetaFor(source.health)}
           {@const live = source.status === 'updating' ? $sourceProgress[source.id] : undefined}
           <div class="row" class:disabled={!source.enabled}>
-            <button class="source" onclick={() => openDetails(source.id)}>
-              <span class="type-icon">
-                {#if source.type === 'file'}
-                  <FileText size="1.7rem" strokeWidth={1.8} />
-                {:else}
-                  <Globe size="1.7rem" strokeWidth={1.8} />
-                {/if}
-              </span>
-              <span class="source-text">
-                <span class="source-name">
-                  {source.name}
-                  {#if source.insecure}
-                    <Tooltip text={msg('transfers.sourcesInsecureTooltip')}>
-                      <span class="insecure"><ShieldAlert size="1.4rem" strokeWidth={1.8} /></span>
-                    </Tooltip>
+            {#snippet details()}
+              <button class="source" onclick={() => openDetails(source.id)}>
+                <span class="type-icon">
+                  {#if source.type === 'file'}
+                    <FileText size="1.7rem" strokeWidth={1.8} />
+                  {:else}
+                    <Globe size="1.7rem" strokeWidth={1.8} />
                   {/if}
                 </span>
-                <span class="source-url" title={sourceLocation(source)}>{sourceLocation(source)}</span>
-                {#if source.lastError}
-                  <span class="source-error" title={sourceErrorText(source.lastError)}>{sourceErrorText(source.lastError)}</span>
-                {/if}
-              </span>
-            </button>
+                <span class="source-text">
+                  <span class="source-name">
+                    {source.name}
+                    {#if source.insecure}
+                      <span class="insecure"><ShieldAlert size="1.4rem" strokeWidth={1.8} /></span>
+                    {/if}
+                  </span>
+                  <span class="source-url" title={sourceLocation(source)}>{sourceLocation(source)}</span>
+                  {#if source.lastError}
+                    <span class="source-error" title={sourceErrorText(source.lastError)}>{sourceErrorText(source.lastError)}</span>
+                  {/if}
+                </span>
+              </button>
+            {/snippet}
+            {#if source.insecure}
+              <Tooltip text={msg('transfers.sourcesInsecureTooltip')}>{@render details()}</Tooltip>
+            {:else}
+              {@render details()}
+            {/if}
             <span class="cell status">
               {#if live}
                 {@const percent = Math.round(progressPercent(live))}
@@ -280,13 +285,16 @@
               {/if}
               {#if source.lastError}
                 <Tooltip text={truncateMiddle(sourceErrorText(source.lastError), 90)}>
-                  <span class="warn-icon"><CircleAlert size="1.5rem" strokeWidth={1.8} /></span>
+                  <button type="button" class="warn-icon" aria-label={msg('common.error')} onclick={() => openDetails(source.id)}>
+                    <CircleAlert size="1.5rem" strokeWidth={1.8} />
+                  </button>
                 </Tooltip>
               {:else if source.health !== 'healthy'}
-                <Tooltip text={source.warnings?.length ? `${health.label}: ${source.warnings.map(sourceWarningText).join('; ')}` : health.label}>
-                  <span class="health" style:color={health.color}>
+                {@const warnings = source.warnings?.length ? source.warnings.map(sourceWarningText).join('; ') : ''}
+                <Tooltip text={warnings ? `${health.label}: ${warnings}` : health.label} describe={Boolean(warnings)}>
+                  <button type="button" class="health" style:color={health.color} aria-label={health.label} onclick={() => openDetails(source.id)}>
                     <health.icon size="1.5rem" strokeWidth={1.8} />
-                  </span>
+                  </button>
                 </Tooltip>
               {/if}
             </span>
@@ -300,12 +308,12 @@
                   unmatched: formatCount(source.unmatched),
                 })}
               >
-                <span class="count-wrap">
+                <button type="button" class="count-wrap" onclick={() => openDetails(source.id)}>
                   <span class="count">{formatCount(source.matched)}</span>
                   {#if source.review > 0}
                     <span class="count review">+{formatCount(source.review)}</span>
                   {/if}
-                </span>
+                </button>
               </Tooltip>
             </span>
             <span class="cell menu-cell">
