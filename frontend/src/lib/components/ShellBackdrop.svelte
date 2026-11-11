@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import { ambientState, pickAmbient } from '../stores/ambient';
   import { libraryGames } from '../stores/library';
   import { gameArt, requestArt } from '../stores/metadata';
@@ -6,6 +7,7 @@
   import { resolveColors } from '../theme/resolveColors';
   import { documentMotion, tokenMs } from '../motion/plate';
   import { BackdropPainter } from '../backdrop/painter';
+  import { LookReader } from '../backdrop/lookReader';
   import { BACKDROP_H, BACKDROP_LOOK_COLORS, BACKDROP_W, backdropLook, bakeImage, loadImage, type BackdropLook } from '../backdrop/pixels';
   import { artRequest, backdropSources, playedArtRequests, rememberedGame } from '../backdrop/source';
 
@@ -19,14 +21,26 @@
   let canvas = $state<HTMLCanvasElement>();
   let painter = $state.raw<BackdropPainter | null>(null);
   let look = $state.raw<BackdropLook | null>(null);
+  let lookKey = $state('');
 
   // Read from the window, not the theme file: custom CSS, a personal accent and any colour syntax are
-  // resolved there. themeApplied moves once the window holds a new look.
-  $effect(() => {
-    void $themeApplied;
+  // resolved there.
+  function readLook(): BackdropLook | null {
     const root = getComputedStyle(document.documentElement);
     const number = (name: string) => Number.parseFloat(root.getPropertyValue(name));
-    look = backdropLook(resolveColors({}, BACKDROP_LOOK_COLORS), number('--ambient-saturate'), number('--ambient-dim'));
+    return backdropLook(resolveColors({}, BACKDROP_LOOK_COLORS), number('--ambient-saturate'), number('--ambient-dim'));
+  }
+
+  const lookReader = new LookReader(readLook, (step) => requestAnimationFrame(step), (id) => cancelAnimationFrame(id), (next, key) => {
+    look = next;
+    lookKey = key;
+  });
+  onDestroy(() => lookReader.dispose());
+
+  // themeApplied moves once the window holds a new look; the reader reads at most once a frame.
+  $effect(() => {
+    void $themeApplied;
+    lookReader.request();
   });
 
   const target = $derived(
@@ -68,7 +82,7 @@
     const target = painter;
     if (!target) return;
     const ms = documentMotion() && !document.hidden ? tokenMs('--motion-backdrop', 600) : 0;
-    target.show(sources, look, look ? JSON.stringify(look) : '', ms).catch((err: unknown) => {
+    target.show(sources, look, lookKey, ms).catch((err: unknown) => {
       console.warn('backdrop: the picture could not be drawn', err);
     });
   });

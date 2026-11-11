@@ -62,11 +62,14 @@ describe('the window backdrop', () => {
     expect(bar).not.toMatch(/background/);
   });
 
-  // The look is read from the DOM (a probe element and a canvas), which must happen in an effect that the
-  // theme-applied signal drives, never lazily in a derived that may run before the theme reaches the window.
-  it('reads the theme from the window when it has been applied, in an effect, never in a derived', () => {
+  // The look is read from the DOM (a probe element and a canvas), which must happen when the theme-applied
+  // signal moves, through the once-a-frame reader, never lazily in a derived that may run before the
+  // theme reaches the window.
+  it('reads the theme from the window when it has been applied, once a frame, never in a derived', () => {
     const source = frontendSources['lib/components/ShellBackdrop.svelte'];
-    expect(source).toMatch(/\$effect\(\(\) => \{\s*void \$themeApplied;[^}]*resolveColors\(/);
+    expect(source).toMatch(/\$effect\(\(\) => \{\s*void \$themeApplied;\s*(\w+)\.request\(\);/);
+    expect(source).toMatch(/new LookReader\(readLook,/);
+    expect(source).toMatch(/function readLook\(\)[^}]*resolveColors\(/);
     for (const m of source.matchAll(/\$derived(?:\.by)?\(([\s\S]*?)\);\n/g)) {
       expect(m[1]).not.toMatch(/resolveColors|getComputedStyle|document\./);
     }
