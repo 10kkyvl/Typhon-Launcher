@@ -36,7 +36,7 @@ afterEach(() => {
 
 function setup(props: { items?: MenuItem[]; inDialog?: boolean; align?: 'left' | 'right'; placement?: 'down' | 'up'; onselect?: (id: string, item: MenuItem) => void } = {}) {
   const onselect = props.onselect ?? vi.fn();
-  render(MenuHarness, { target: app, props: { items: ACTIONS, ...props, onselect } });
+  const view = render(MenuHarness, { target: app, props: { items: ACTIONS, ...props, onselect } });
   const keys = user();
   const trigger = () => screen.getByRole('button', { name: 'Sort' });
   const menu = () => screen.queryByRole('menu');
@@ -45,7 +45,7 @@ function setup(props: { items?: MenuItem[]; inDialog?: boolean; align?: 'left' |
     if (!found) throw new Error(`no menu item named ${name}`);
     return found;
   };
-  return { keys, onselect, trigger, menu, item };
+  return { keys, onselect, trigger, menu, item, rerender: view.rerender };
 }
 
 describe('DropdownMenu: opening', () => {
@@ -223,6 +223,42 @@ describe('DropdownMenu: held keys', () => {
     expect(onselect).toHaveBeenCalledExactlyOnceWith('move', expect.objectContaining({ id: 'move' }));
     expect(menu()).toBeNull();
     expect(document.activeElement).toBe(trigger());
+  });
+});
+
+describe('DropdownMenu: items changing while it is open', () => {
+  it('when the focused item goes away, focus moves to the item now in its place and the keys keep working', async () => {
+    const { keys, trigger, item, rerender } = setup();
+    trigger().focus();
+    await keys.keyboard('{ArrowDown}{ArrowDown}');
+    expect(document.activeElement).toBe(item('Move'));
+
+    await rerender({ items: ACTIONS.filter((entry) => entry.id !== 'move') });
+
+    expect(document.activeElement).toBe(item('Mute'));
+    await keys.keyboard('{ArrowDown}');
+    expect(document.activeElement).toBe(item('Remove'));
+  });
+
+  it('when the focused last item goes away, focus moves to the enabled item above it', async () => {
+    const { keys, trigger, item, rerender } = setup();
+    trigger().focus();
+    await keys.keyboard('{ArrowUp}');
+    expect(document.activeElement).toBe(item('Remove'));
+
+    await rerender({ items: ACTIONS.filter((entry) => entry.id !== 'confirm') });
+
+    expect(document.activeElement).toBe(item('Mute'));
+  });
+
+  it('when no enabled item is left, focus stays on the menu itself', async () => {
+    const { keys, trigger, menu, rerender } = setup();
+    trigger().focus();
+    await keys.keyboard('{ArrowDown}');
+
+    await rerender({ items: ACTIONS.filter((entry) => entry.disabled) });
+
+    expect(document.activeElement).toBe(menu());
   });
 });
 

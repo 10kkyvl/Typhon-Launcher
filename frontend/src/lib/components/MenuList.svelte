@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import type { Attachment } from 'svelte/attachments';
   import { Check } from '@lucide/svelte';
   import { cycleFocus, layer, topModalLayer } from '../layers';
@@ -59,6 +60,44 @@
     onpick(item);
   }
 
+  // Where focus was in the menu, so that an item removed under it (a queue row's "Move down" when the
+  // last download finishes) hands focus to the item now in its place instead of dropping it to <body>.
+  let root = $state<HTMLElement>();
+  let holding = false;
+  let lastIndex = -1;
+
+  function onFocusin(event: FocusEvent) {
+    holding = true;
+    lastIndex = itemsIn(event.currentTarget as HTMLElement).indexOf(event.target as HTMLElement);
+  }
+
+  function onFocusout(event: FocusEvent) {
+    const to = event.relatedTarget;
+    // No relatedTarget: the window lost focus or the focused item was removed; the menu still holds it.
+    if (to instanceof Node && !(event.currentTarget as HTMLElement).contains(to)) holding = false;
+  }
+
+  function nearestEnabled(at: number): number | null {
+    for (let step = 0; step < items.length; step += 1) {
+      if (at + step < items.length && !isDisabled(at + step)) return at + step;
+      if (at - step >= 0 && !isDisabled(at - step)) return at - step;
+    }
+    return null;
+  }
+
+  function refocus(menu: HTMLElement) {
+    const active = document.activeElement;
+    if (!holding || (active && active !== document.body && active.isConnected)) return;
+    const index = lastIndex < 0 ? null : nearestEnabled(Math.min(lastIndex, items.length - 1));
+    (index === null ? menu : (itemsIn(menu)[index] ?? menu)).focus({ preventScroll: true });
+  }
+
+  $effect(() => {
+    void items;
+    const menu = root;
+    if (menu) untrack(() => refocus(menu));
+  });
+
   function tab(event: KeyboardEvent) {
     onclose('tab');
     // On the page the browser moves on from the owner; a dialog keeps Tab inside itself.
@@ -94,6 +133,7 @@
 </script>
 
 <div
+  bind:this={root}
   class="menu"
   role="menu"
   data-part="menu"
@@ -101,6 +141,8 @@
   aria-labelledby={label ? undefined : labelledby}
   aria-label={label}
   onkeydowncapture={onKeydown}
+  onfocusin={onFocusin}
+  onfocusout={onFocusout}
   onkeyupcapture={(event) => {
     // Items run on keydown; the browser's Space-keyup click on an item would run it again.
     if (event.key === ' ') event.preventDefault();
