@@ -72,8 +72,9 @@
     const element = anchor();
     if (element && outOfSight(element)) element.scrollIntoView({ block: 'nearest' });
     // Beside the control, top-aligned, sliding along the window so the whole menu shows: below or
-    // above it a long menu would be cut to the room left there.
-    return anchorTo(node, anchor, { placement: 'right-start', offset: 4, onhide: onclose });
+    // above it a long menu would be cut to the room left there. A control as wide as the page (a list
+    // row) leaves no room beside it, and the menu goes below.
+    return anchorTo(node, anchor, { placement: 'right-start', fallback: 'bottom-start', offset: 4, onhide: onclose });
   };
 </script>
 

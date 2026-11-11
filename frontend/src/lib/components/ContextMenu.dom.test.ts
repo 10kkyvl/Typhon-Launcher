@@ -335,6 +335,18 @@ describe('a game menu opened next to a control', () => {
     return screen.getByRole('menu');
   }
 
+  it('opens below a control as wide as the page (a list row), where neither side has room', async () => {
+    sized();
+    const keys = setup();
+    link('Hades').getBoundingClientRect = box(100, 300, 900, 58);
+
+    const opened = await openFromKeyboard(keys, link('Hades'));
+
+    expect(opened.dataset.placement).toBe('bottom-start');
+    expect([opened.style.left, opened.style.top]).toEqual(['100px', '362px']);
+    expect(opened.style.maxWidth).toBe('');
+  });
+
   it('opens beside the control, top-aligned, and slides up along the window to show whole near the bottom', async () => {
     sized();
     const keys = setup();

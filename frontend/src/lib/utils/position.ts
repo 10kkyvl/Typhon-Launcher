@@ -35,6 +35,8 @@ export interface Insets {
 
 export interface PositionOptions {
   placement?: Placement;
+  /** Used instead when the box fits on neither side of `placement`'s axis (an anchor as wide as the page). */
+  fallback?: Placement;
   /** Gap between anchor and floating element, px. */
   offset?: number;
   /** Minimum distance to the viewport edges, px: one number for all four or one per side. */
@@ -104,6 +106,7 @@ export function computePosition(anchor: Rect, floating: Size, options: PositionO
   // Flip when the preferred side is too small and the opposite one has more room.
   const here = spaceOn(side, anchor, viewport, offset, pad);
   const there = spaceOn(OPPOSITE[side], anchor, viewport, offset, pad);
+  if (options.fallback && need > here && need > there) return computePosition(anchor, floating, { ...options, placement: options.fallback, fallback: undefined });
   if (need > here && there > here) side = OPPOSITE[side];
   const space = Math.max(0, spaceOn(side, anchor, viewport, offset, pad));
 
@@ -257,6 +260,7 @@ function apply(node: HTMLElement, result: PositionResult): void {
 
 export interface AnchorOptions {
   placement?: Placement;
+  fallback?: Placement;
   offset?: number;
   /** Default: `windowInsets()`, read on every placement (the zoom setting changes the rem). */
   padding?: number | Insets;
@@ -311,6 +315,7 @@ export function anchorTo(node: HTMLElement, anchor: Anchor, options: AnchorOptio
     const result = keepScroll(node, () => {
       const placed = computePosition(rect, natural(node), {
         placement: options.placement,
+        fallback: options.fallback,
         offset: options.offset,
         padding: options.padding ?? windowInsets(),
         viewport: viewportSize(),

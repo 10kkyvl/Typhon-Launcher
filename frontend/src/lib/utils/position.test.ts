@@ -122,6 +122,30 @@ describe('computePosition beside the anchor (a context menu next to a control)',
     });
     expect(r).toEqual({ x: 384, y: 8, placement: 'right-start', maxHeight: 234 });
   });
+
+  it('falls back to below an anchor too wide to leave room on either side (a list row)', () => {
+    const row = { left: 100, top: 300, width: 900, height: 58 };
+    const r = computePosition(row, tall, { viewport: wide, placement: 'right-start', fallback: 'bottom-start', padding: pad });
+    expect(r).toEqual({ x: 100, y: 362, placement: 'bottom-start' });
+  });
+
+  it('keeps the side when either one has room, whatever the fallback', () => {
+    const r = computePosition({ left: 900, top: 200, width: 80, height: 20 }, tall, {
+      viewport: wide,
+      placement: 'right-start',
+      fallback: 'bottom-start',
+      padding: pad,
+    });
+    expect(r.placement).toBe('left-start');
+    expect(r.maxWidth).toBeUndefined();
+  });
+
+  it('without a fallback it squeezes into the wider side, as before', () => {
+    const row = { left: 100, top: 300, width: 900, height: 58 };
+    const r = computePosition(row, tall, { viewport: wide, placement: 'right-start', padding: pad });
+    expect(r.placement).toBe('left-start');
+    expect(r.maxWidth).toBe(88);
+  });
 });
 
 describe('computePosition under the title bar', () => {
