@@ -1,7 +1,9 @@
 import { Window } from '@wailsio/runtime';
+import { render } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
-import { renderDom } from '../testing/dom';
+import { openLayer } from '../layers';
+import { renderDom, user } from '../testing/dom';
 import TitleBar from './TitleBar.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
@@ -68,5 +70,29 @@ describe('TitleBar in a DOM', () => {
 
     expect([minimise, maximise, close]).not.toContain(document.activeElement);
     expect(document.activeElement).toBe(document.body);
+  });
+
+  it('stays usable while a dialog makes the rest of the app inert, so the window can still be moved and closed', async () => {
+    const app = document.createElement('div');
+    app.id = 'app';
+    const page = document.createElement('main');
+    document.body.append(app);
+    const view = render(TitleBar, { target: app });
+    app.append(page);
+    const dialog = document.createElement('div');
+    dialog.innerHTML = '<button>OK</button>';
+    document.body.append(dialog);
+    const close = openLayer(dialog, { dismiss: () => {} });
+
+    const caption = view.container.querySelector('.titlebar') as HTMLElement;
+    expect(page.hasAttribute('inert')).toBe(true);
+    expect(caption.closest('[inert]')).toBeNull();
+    await user().click(view.getByRole('button', { name: msg('common.close') }));
+    expect(actions().close).toBe(1);
+
+    close();
+    view.unmount();
+    app.remove();
+    dialog.remove();
   });
 });
