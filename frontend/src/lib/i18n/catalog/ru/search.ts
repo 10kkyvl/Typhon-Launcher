@@ -8,6 +8,9 @@ export const search = {
   'search.moreInCatalog': 'Ещё {count} в каталоге',
   'search.releasesNoMatch': 'Релизы без совпадения',
   'search.nothingFound': 'Ничего не найдено',
+  'search.results': 'Результаты поиска',
+  'search.searching': 'Идёт поиск…',
+  'search.found': { one: 'Найден {count} результат', few: 'Найдено {count} результата', many: 'Найдено {count} результатов' },
 } as const;
 
 export type SearchKey = keyof typeof search;
