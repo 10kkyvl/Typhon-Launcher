@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createHoverIntent, HOVER_DELAY } from './hoverIntent';
+import { createHoverIntent, HOVER_DELAY, LEAVE_GRACE } from './hoverIntent';
 
 describe('hover intent', () => {
   beforeEach(() => vi.useFakeTimers());
@@ -29,12 +29,76 @@ describe('hover intent', () => {
     expect(changes).toEqual([]);
   });
 
-  it('closes when the pointer leaves', () => {
+  it('closes when the pointer has been away for the leave grace', () => {
     const { intent, changes } = make();
     intent.hover();
     vi.advanceTimersByTime(HOVER_DELAY);
     intent.unhover();
+    vi.advanceTimersByTime(LEAVE_GRACE - 1);
+    expect(changes).toEqual([true]);
+    vi.advanceTimersByTime(1);
     expect(changes).toEqual([true, false]);
+  });
+
+  it('stays open while the pointer crosses from the control onto the hint', () => {
+    const { intent, changes } = make();
+    intent.hover();
+    vi.advanceTimersByTime(HOVER_DELAY);
+    intent.unhover();
+    vi.advanceTimersByTime(LEAVE_GRACE - 1);
+    intent.hover();
+    vi.advanceTimersByTime(1000);
+    expect(changes).toEqual([true]);
+    intent.unhover();
+    vi.advanceTimersByTime(LEAVE_GRACE);
+    expect(changes).toEqual([true, false]);
+  });
+
+  it('a press before the delay keeps it closed until the pointer leaves and comes back', () => {
+    const { intent, changes } = make();
+    intent.hover();
+    vi.advanceTimersByTime(100);
+    intent.escape();
+    vi.advanceTimersByTime(1000);
+    expect(changes).toEqual([]);
+    intent.unhover();
+    vi.advanceTimersByTime(LEAVE_GRACE);
+    intent.hover();
+    vi.advanceTimersByTime(HOVER_DELAY);
+    expect(changes).toEqual([true]);
+  });
+
+  it('a press while open hides it, and coming back inside the grace does not show it again', () => {
+    const { intent, changes } = make();
+    intent.hover();
+    vi.advanceTimersByTime(HOVER_DELAY);
+    intent.escape();
+    intent.unhover();
+    intent.hover();
+    vi.advanceTimersByTime(1000);
+    expect(changes).toEqual([true, false]);
+  });
+
+  it('a dismissal forgets focus: a control removed without a blur does not hold the next hint open', () => {
+    const { intent, changes } = make();
+    intent.focus();
+    intent.dismiss();
+    intent.hover();
+    vi.advanceTimersByTime(HOVER_DELAY);
+    intent.unhover();
+    vi.advanceTimersByTime(LEAVE_GRACE);
+    expect(changes).toEqual([true, false, true, false]);
+    expect(intent.open).toBe(false);
+  });
+
+  it('a pending leave is cancelled on destroy', () => {
+    const { intent, changes } = make();
+    intent.hover();
+    vi.advanceTimersByTime(HOVER_DELAY);
+    intent.unhover();
+    intent.destroy();
+    vi.advanceTimersByTime(1000);
+    expect(changes).toEqual([true]);
   });
 
   it('opens at once on keyboard focus and closes on blur', () => {
@@ -63,6 +127,7 @@ describe('hover intent', () => {
     intent.hover();
     vi.advanceTimersByTime(HOVER_DELAY);
     intent.unhover();
+    vi.advanceTimersByTime(LEAVE_GRACE);
     expect(changes).toEqual([true]);
     expect(intent.open).toBe(true);
   });
