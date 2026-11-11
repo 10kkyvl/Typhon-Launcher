@@ -6,6 +6,7 @@
   import { msg } from '../../lib/i18n';
   import { themeDisplayName, personalThemeVars, displayedAccent, fallbackAccent, fallbackBackground } from '../../lib/theme/apply';
   import { validateCss, validateTokenName, validateTokenValue } from '../../lib/theme/validate';
+  import TokenValueInput from './TokenValueInput.svelte';
   import AiSkillButton from '../../lib/components/AiSkillButton.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
@@ -425,14 +426,12 @@
                               <span class="swatch" style:background={value} aria-hidden="true"></span>
                             {/if}
                           {/if}
-                          <input
+                          <TokenValueInput
                             id={fieldId}
-                            class="input sm token-value"
-                            type="text"
-                            title={name}
-                            aria-describedby={known ? `${fieldId}-hint` : undefined}
+                            {name}
                             {value}
-                            oninput={(e) => setToken(name, (e.currentTarget as HTMLInputElement).value)}
+                            describedBy={known ? `${fieldId}-hint` : undefined}
+                            onchange={(next) => setToken(name, next)}
                           />
                         </div>
                       </div>
@@ -747,10 +746,6 @@
     flex-shrink: 0;
   }
 
-  .token-value {
-    flex: 1 1 auto;
-    min-width: 0;
-  }
 
   .advanced-toggle {
     align-self: flex-start;
