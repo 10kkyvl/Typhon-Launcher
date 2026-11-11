@@ -84,7 +84,7 @@
   }
 </script>
 
-<Modal bind:open {title} width="52rem">
+<Modal dismissible={!busy} bind:open {title} width="52rem">
   <div class="setup">
     <p class="intro">
       {msg('modals.librarySetupIntro')}
@@ -120,7 +120,7 @@
   </div>
 
   {#snippet footer()}
-    <Button onclick={() => (open = false)}>{msg('common.cancel')}</Button>
+    <Button disabled={busy} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
     <Button variant="primary" disabled={!proposed || busy} onclick={confirm}>
       <FolderPlus size="1.5rem" strokeWidth={1.8} />
       {msg('modals.librarySetupCreate')}

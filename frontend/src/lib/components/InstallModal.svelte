@@ -451,7 +451,7 @@
   }
 </script>
 
-<Modal bind:open title={msg('modals.installTitle')} width="54rem">
+<Modal dismissible={!busy} bind:open title={msg('modals.installTitle')} width="54rem">
   {#if phase === 'loading'}
     <div class="loading">
       <span class="spinner"></span>
@@ -684,7 +684,7 @@
 
   {#snippet footer()}
     {#if phase === 'plan' && plan}
-      <Button onclick={() => (open = false)}>{msg('common.cancel')}</Button>
+      <Button disabled={busy} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
       {#if plan.type !== 'unknown'}
         <Button
           variant="primary"
@@ -695,7 +695,7 @@
         </Button>
       {/if}
     {:else if phase === 'image'}
-      <Button onclick={() => (open = false)}>{msg('common.cancel')}</Button>
+      <Button disabled={busy} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
       <Button variant="primary" disabled={busy} onclick={startImage}>{msg('emul.installAction')}</Button>
     {:else if phase === 'progress'}
       <Button onclick={() => (open = false)}>{msg('modals.installMinimize')}</Button>

@@ -40,7 +40,7 @@
   }
 </script>
 
-<Modal open title={msg('profile.deleteAccountConfirmTitle')} width="44rem" {onclose}>
+<Modal dismissible={!running} open title={msg('profile.deleteAccountConfirmTitle')} width="44rem" {onclose}>
   <form
     class="form"
     onsubmit={(event) => {

@@ -33,7 +33,7 @@
   }
 </script>
 
-<Modal bind:open title={msg('modals.socialConsentTitle')} width="50rem" onclose={() => onclose?.()}>
+<Modal dismissible={!saving} bind:open title={msg('modals.socialConsentTitle')} width="50rem" onclose={() => onclose?.()}>
   <div class="body">
     <p class="text">
       {msg('modals.socialConsentIntro')}

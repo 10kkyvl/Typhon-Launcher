@@ -58,7 +58,7 @@
   }
 </script>
 
-<Modal bind:open title={msg('modals.gameStatusTitle')}>
+<Modal dismissible={!saving} bind:open title={msg('modals.gameStatusTitle')}>
   <div class="options" role="group" aria-label={msg('modals.gameStatusTitle')}>
     {#each options as option (option.value)}
       <Button

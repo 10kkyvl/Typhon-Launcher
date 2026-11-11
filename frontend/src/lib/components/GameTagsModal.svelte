@@ -42,7 +42,7 @@
   }
 </script>
 
-<Modal bind:open title={msg('modals.gameTagsTitle')}>
+<Modal dismissible={!saving} bind:open title={msg('modals.gameTagsTitle')}>
   <TagEditor bind:this={editor} bind:tags {suggestions} placeholder={msg('modals.gameTagsPlaceholder')} disabled={saving} />
   {#if tags.length === 0}
     <p class="empty">{msg('modals.gameTagsEmpty')}</p>

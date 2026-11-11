@@ -327,6 +327,7 @@
 {/snippet}
 
 <Modal
+  dismissible={!busy}
   open={!!target}
   title={target ? msg('saves.title', { title: target.title }) : msg('games.actionSavesBackups')}
   width="64rem"

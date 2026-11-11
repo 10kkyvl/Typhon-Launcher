@@ -152,7 +152,8 @@
   }
 </script>
 
-<Modal open={!!$moveTarget} title={msg('modals.moveGameTitle')} width="52rem" onclose={close}>
+<!-- dismissible while resolving: it only reads where the game would go; closing drops the answer. -->
+<Modal dismissible={!(starting || cancelling)} open={!!$moveTarget} title={msg('modals.moveGameTitle')} width="52rem" onclose={close}>
   {#if game}
     <div class="move">
       <div class="field">

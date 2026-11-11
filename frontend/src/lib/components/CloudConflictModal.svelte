@@ -44,6 +44,7 @@
 </script>
 
 <Modal
+  dismissible={!busy}
   open={!!target}
   title={msg('cloudsaves.conflictTitle')}
   width="56rem"

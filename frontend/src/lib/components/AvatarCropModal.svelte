@@ -122,7 +122,7 @@
   }
 </script>
 
-<Modal bind:open title={msg('modals.avatarCropTitle')} width="42rem">
+<Modal dismissible={!saving} bind:open title={msg('modals.avatarCropTitle')} width="42rem">
   <div class="crop">
     <div
       class="stage"

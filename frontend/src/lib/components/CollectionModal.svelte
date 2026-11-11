@@ -91,7 +91,7 @@
   }
 </script>
 
-<Modal bind:open title={collection ? msg('modals.collectionEditTitle') : msg('modals.collectionNewTitle')} width="52rem">
+<Modal dismissible={!busy} bind:open title={collection ? msg('modals.collectionEditTitle') : msg('modals.collectionNewTitle')} width="52rem">
   <div class="form">
     <label class="field">
       <span class="field-label">{msg('modals.collectionNameLabel')}</span>

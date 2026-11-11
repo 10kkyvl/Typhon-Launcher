@@ -127,7 +127,7 @@
   onDestroy(() => cancelSpin?.());
 </script>
 
-<Modal open title={msg('games.randomTitle')} width="52rem" {onclose}>
+<Modal dismissible={!launching} open title={msg('games.randomTitle')} width="52rem" {onclose}>
   {#if phase === 'setup' || phase === 'empty'}
     <div class="filters">
       <div class="group">

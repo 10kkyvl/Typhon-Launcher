@@ -102,7 +102,7 @@
   }
 </script>
 
-<Modal bind:open title={msg('social.friendsAddFriend')} width="52rem" onclose={reset}>
+<Modal dismissible={!sending} bind:open title={msg('social.friendsAddFriend')} width="52rem" onclose={reset}>
   <div class="body">
     <SearchInput
       bind:value={query}

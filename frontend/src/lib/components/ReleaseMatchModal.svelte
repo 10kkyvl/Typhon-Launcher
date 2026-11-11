@@ -128,7 +128,7 @@
   }
 </script>
 
-<Modal bind:open title={msg('modals.releaseMatchTitle')} width="56rem">
+<Modal dismissible={!submitting} bind:open title={msg('modals.releaseMatchTitle')} width="56rem">
   {#if release}
     <div class="sections">
       <section class="block">
@@ -228,7 +228,7 @@
 
   {#snippet footer()}
     <Button variant="danger" disabled={submitting} onclick={ignore}>{msg('modals.releaseMatchIgnore')}</Button>
-    <Button onclick={() => (open = false)}>{msg('common.cancel')}</Button>
+    <Button disabled={submitting} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
     <Button variant="primary" disabled={!selectedGameId || submitting} onclick={confirm}>{msg('modals.releaseMatchConfirm')}</Button>
   {/snippet}
 </Modal>

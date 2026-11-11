@@ -71,6 +71,7 @@
 </script>
 
 <Modal
+  dismissible={!busy}
   open={Boolean(prompt)}
   title={msg('emul.neededTitle')}
   width="48rem"

@@ -173,6 +173,7 @@
   <LibrarySetupModal bind:open />
 {:else}
 <Modal
+  dismissible={!starting}
   bind:open
   title={consolePlatform && step === 'files'
     ? msg('emul.downloadTitle', { console: platformBadge(consolePlatform) })

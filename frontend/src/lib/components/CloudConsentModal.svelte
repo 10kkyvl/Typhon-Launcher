@@ -16,7 +16,7 @@
   } = $props();
 </script>
 
-<Modal bind:open title={msg('cloudsaves.consentTitle')} width="48rem">
+<Modal dismissible={!busy} bind:open title={msg('cloudsaves.consentTitle')} width="48rem">
   <p class="text">{msg('cloudsaves.consentIntro')}</p>
   <ul class="items">
     <li>{msg('cloudsaves.consentArchive')}</li>

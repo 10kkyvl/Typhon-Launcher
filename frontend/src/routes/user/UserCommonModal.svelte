@@ -58,6 +58,7 @@
   });
 </script>
 
+<!-- dismissible while loading: loading more of the list is a read; closing drops it. -->
 <Modal bind:open title={msg('social.userCommonAllTitle')} width="64rem">
   {#if failure && games.length === 0}
     <p class="note error" role="alert">{failure}</p>

@@ -34,6 +34,7 @@
 </script>
 
 <Modal
+  dismissible={!saving}
   bind:open
   title={mode === 'review' ? msg('modals.sourcesNoticeReviewTitle') : msg('modals.sourcesNoticeGateTitle')}
   width="48rem"
@@ -43,9 +44,9 @@
   </p>
   {#snippet footer()}
     {#if mode === 'review'}
-      <Button onclick={cancel}>{msg('common.close')}</Button>
+      <Button disabled={saving} onclick={cancel}>{msg('common.close')}</Button>
     {:else}
-      <Button onclick={cancel}>{msg('common.cancel')}</Button>
+      <Button disabled={saving} onclick={cancel}>{msg('common.cancel')}</Button>
       <Button variant="primary" disabled={saving} onclick={confirm}>
         {saving ? msg('modals.sourcesNoticeSaving') : msg('modals.sourcesNoticeContinue')}
       </Button>

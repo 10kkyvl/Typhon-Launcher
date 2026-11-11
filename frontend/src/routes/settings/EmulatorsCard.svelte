@@ -231,7 +231,7 @@
   {/if}
 </Card>
 
-<Modal bind:open={foundOpen} title={msg('emul.detectTitle')}>
+<Modal dismissible={!applying} bind:open={foundOpen} title={msg('emul.detectTitle')}>
   {#if found}
     <p class="hint">{msg('emul.detectIntro')}</p>
     <div class="found">
@@ -250,7 +250,7 @@
     {/if}
   {/if}
   {#snippet footer()}
-    <Button onclick={() => (foundOpen = false)}>{msg('common.cancel')}</Button>
+    <Button disabled={applying} onclick={() => (foundOpen = false)}>{msg('common.cancel')}</Button>
     <Button variant="primary" disabled={!anyPicked || applying} onclick={applyFound}>
       {msg('emul.detectApply')}
     </Button>

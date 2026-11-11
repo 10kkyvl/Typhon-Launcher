@@ -84,7 +84,7 @@
   </div>
 </Card>
 
-<Modal bind:open={confirmOpen} title={msg('social.friendsChangeCodeTitle')} width="42rem">
+<Modal dismissible={!rotating} bind:open={confirmOpen} title={msg('social.friendsChangeCodeTitle')} width="42rem">
   <p class="warn">
     {msg('social.friendsChangeCodeWarning')}
   </p>

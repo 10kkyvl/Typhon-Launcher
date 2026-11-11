@@ -128,7 +128,7 @@
   });
 </script>
 
-<Modal bind:open title={msg('modals.removeGameTitle')}>
+<Modal dismissible={!working} bind:open title={msg('modals.removeGameTitle')}>
   {#if loading}
     <p class="text">{msg('modals.removeGameLoading', { title })}</p>
   {:else if info}
@@ -232,7 +232,7 @@
   {/if}
 
   {#snippet footer()}
-    <Button onclick={() => (open = false)}>{msg('common.cancel')}</Button>
+    <Button disabled={working} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
     <Button variant="danger" onclick={confirm} disabled={!info || blocked || working}>
       {#if working}
         {msg('modals.removeGameWorking')}

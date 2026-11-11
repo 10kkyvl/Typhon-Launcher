@@ -121,7 +121,7 @@
   }
 </script>
 
-<Modal bind:open title={mode === 'change' ? msg('modals.metadataMatchChangeTitle') : msg('modals.metadataMatchFindTitle')} width="56rem">
+<Modal dismissible={!applying} bind:open title={mode === 'change' ? msg('modals.metadataMatchChangeTitle') : msg('modals.metadataMatchFindTitle')} width="56rem">
   {#if pending}
     <div class="confirm">
       <p class="confirm-text">
@@ -201,7 +201,7 @@
         {applying ? msg('modals.metadataMatchApplying') : msg('modals.metadataMatchReplace')}
       </Button>
     {:else}
-      <Button onclick={() => (open = false)}>{msg('common.cancel')}</Button>
+      <Button disabled={applying} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
     {/if}
   {/snippet}
 </Modal>

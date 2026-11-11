@@ -681,7 +681,7 @@
     />
   {/if}
 
-  <Modal bind:open={addOpen} title={msg('games.installedAddGameModalTitle')}>
+  <Modal dismissible={!adding} bind:open={addOpen} title={msg('games.installedAddGameModalTitle')}>
     <div class="form">
       <label class="field">
         <span class="field-label">{msg('games.executableLabel')}</span>
@@ -697,7 +697,7 @@
       <p class="form-hint">{msg('games.installedFolderAutoHint')}</p>
     </div>
     {#snippet footer()}
-      <Button onclick={() => (addOpen = false)}>{msg('common.cancel')}</Button>
+      <Button disabled={adding} onclick={() => (addOpen = false)}>{msg('common.cancel')}</Button>
       <Button variant="primary" disabled={!newExecutable.trim() || adding} onclick={submitAdd}>
         {adding ? msg('games.installedAddingLabel') : msg('common.add')}
       </Button>

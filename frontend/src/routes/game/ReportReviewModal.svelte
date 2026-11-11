@@ -34,7 +34,7 @@
   }
 </script>
 
-<Modal open title={msg('reviews.reportTitle')} width="38rem" {onclose}>
+<Modal dismissible={!sending} open title={msg('reviews.reportTitle')} width="38rem" {onclose}>
   <div class="reasons">
     {#each REASONS as reason (reason.value)}
       <button class="reason" type="button" disabled={sending} onclick={() => submit(reason.value)}>

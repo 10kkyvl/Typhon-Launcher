@@ -98,6 +98,7 @@
   }
 </script>
 
+<!-- dismissible while adding: the add goes on in the background (the footer offers Minimize) and the sources store reports how it ended. -->
 <Modal bind:open title={msg('modals.addSourceTitle')}>
   {#if step === 'input'}
     <div class="form">

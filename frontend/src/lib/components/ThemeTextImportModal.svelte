@@ -37,7 +37,7 @@
   }
 </script>
 
-<Modal bind:open title={msg('settings.appearanceImportTextTitle')} width="56rem">
+<Modal dismissible={!busy} bind:open title={msg('settings.appearanceImportTextTitle')} width="56rem">
   <div class="form">
     <label class="field">
       <span class="field-label">{msg('settings.appearanceImportTextLabel')}</span>

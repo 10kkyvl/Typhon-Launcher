@@ -391,6 +391,7 @@
 </script>
 
 <Modal
+  dismissible={!compatBusy}
   open={Boolean(target && game)}
   title={game ? msg('modals.propertiesTitle', { title: game.title }) : msg('games.actionProperties')}
   width="56rem"
