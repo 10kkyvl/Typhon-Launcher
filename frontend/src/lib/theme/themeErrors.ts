@@ -1,5 +1,6 @@
 import { errorCode, msg } from '../i18n';
 import type { MessageKey } from '../i18n';
+import { TOKEN_RANGES, TOKEN_RANGE_KEY, tokenRangeText } from './tokenRanges';
 
 export const REASONS: Record<string, MessageKey> = {
   'theme.file_too_large': 'theme.file_too_large',
@@ -17,6 +18,7 @@ export const REASONS: Record<string, MessageKey> = {
   'theme.invalid_path': 'theme.invalid_path',
   'theme.dialog_unavailable': 'theme.dialog_unavailable',
   'theme.token_kind': 'theme.token_kind',
+  'theme.token_range': TOKEN_RANGE_KEY,
   'theme.skill_invalid_path': 'theme.skill_invalid_path',
   'theme.skill_write_failed': 'theme.skill_write_failed',
   'theme.invalid_format': 'theme.invalid_format',
@@ -40,6 +42,13 @@ export function themeErrorText(err: unknown, fallback: string = msg('errLibrary.
   const code = errorCode(err);
   const key = REASONS[code];
   if (!key) return fallback;
+  if (code === 'theme.token_range') {
+    const texts = tokenNames(err)
+      .split(', ')
+      .filter((name) => TOKEN_RANGES[name])
+      .map((name) => tokenRangeText({ name, min: TOKEN_RANGES[name].min, max: TOKEN_RANGES[name].max }));
+    return texts.length > 0 ? texts.join('; ') : msg(key);
+  }
   if (code === 'theme.token_kind') {
     const name = tokenNames(err);
     return name ? `${msg(key)}: ${name}` : msg(key);

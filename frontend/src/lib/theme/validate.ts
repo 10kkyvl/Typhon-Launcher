@@ -1,4 +1,5 @@
 import { msg } from '../i18n';
+import { tokenRangeProblem, tokenRangeText } from './tokenRanges';
 
 const RESERVED_TOKEN_NAMES = new Set(['--ui-scale']);
 
@@ -20,6 +21,23 @@ export function validateTokenValue(value: string): string | null {
     if (lower.includes(substring)) return msg('settings.appearanceTokenValueForbidden', { substring });
   }
   return null;
+}
+
+/** Every problem with a draft's tokens: unknown or reserved names, refused values, numbers out of range. */
+export function validateTokens(tokens: Record<string, string>, allowed: Set<string> | string[]): string[] {
+  const found: string[] = [];
+  for (const [name, value] of Object.entries(tokens)) {
+    const nameError = validateTokenName(name, allowed);
+    if (nameError) found.push(nameError);
+    const valueError = validateTokenValue(value);
+    if (valueError) {
+      found.push(msg('settings.appearanceTokenValueErrorWrap', { name, error: valueError }));
+      continue;
+    }
+    const range = tokenRangeProblem(name, value);
+    if (range) found.push(tokenRangeText(range));
+  }
+  return found;
 }
 
 const CSS_MAX_BYTES = 32 * 1024;

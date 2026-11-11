@@ -166,6 +166,15 @@ describe('themeErrorText', () => {
     expect(text).toContain('--font-sans, --sidebar-w');
   });
 
+  it('names the token and its range for theme.token_range, not a wrong type', async () => {
+    const { REASONS, themeErrorText } = await import('../theme/themeErrors');
+    expect(REASONS['theme.token_range']).toBe('theme.token_range');
+    const text = themeErrorText(new Error('--ambient-dim: typhon:theme.token_range: число вне допустимого для токена диапазона'));
+    expect(text).toContain('--ambient-dim');
+    expect(text).toMatch(/0\D[\s\S]*1/);
+    expect(text).not.toBe(themeErrorText(new Error('--ambient-dim (number): typhon:theme.token_kind: x')));
+  });
+
   it('names the tokens of a var() cycle', async () => {
     const { themeErrorText } = await import('../theme/themeErrors');
     const text = themeErrorText(new Error('var() cycle: --bg, --surface: typhon:theme.token_kind: значение токена не подходит по типу'));

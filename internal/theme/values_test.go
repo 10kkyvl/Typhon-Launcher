@@ -47,8 +47,8 @@ func TestValidTokenKind(t *testing.T) {
 			[]string{"1", "0", "0.5", "-2", ".5"},
 			[]string{"", "1px", "red", "1.2.3", "1e3", "5."}},
 		{"--ambient-dim", KindNumber,
-			[]string{"0", "0.6", ".74", "1", "1.0"},
-			[]string{"", "-0.1", "1.01", "2", "60%", "red", "rgba(14, 15, 17, 0.6)", "var(--x)"}},
+			[]string{"0", "0.6", ".74", "1", "1.0", "-0.1", "2"},
+			[]string{"", "60%", "red", "1e0", "rgba(14, 15, 17, 0.6)", "var(--x)", "calc(1 / 2)"}},
 		{"--dur", KindTime,
 			[]string{"0s", "120ms", "0.3s", ".5s", "10s", "10000ms", "var(--dur-fast)"},
 			[]string{"300", "ms", "-1s", "1m", "red", "10px", "11s", "10001ms", "var(--ease)"}},
@@ -104,6 +104,42 @@ func TestValidateRejectsValueOfWrongKind(t *testing.T) {
 	}}
 	if _, err := Validate(ok); err != nil {
 		t.Errorf("Validate(valid) = %v", err)
+	}
+}
+
+// A number outside its token's range is the right type with a wrong value: the user sees which token and
+// the range, not "wrong type".
+func TestValidateTellsAnOutOfRangeNumberFromAWrongKind(t *testing.T) {
+	cases := []struct {
+		value string
+		want  error
+	}{
+		{"0", nil},
+		{"0.6", nil},
+		{"1", nil},
+		{"-0.1", ErrThemeTokenRange},
+		{"1.01", ErrThemeTokenRange},
+		{"2", ErrThemeTokenRange},
+		{"red", ErrThemeTokenKind},
+		{"60%", ErrThemeTokenKind},
+	}
+	for _, c := range cases {
+		_, err := Validate(Theme{ID: "x", Name: "x", Base: BaseDark, Tokens: map[string]string{"--ambient-dim": c.value}})
+		if c.want == nil {
+			if err != nil {
+				t.Errorf("Validate(--ambient-dim: %s) = %v, want ok", c.value, err)
+			}
+			continue
+		}
+		if !errors.Is(err, c.want) {
+			t.Errorf("Validate(--ambient-dim: %s) = %v, want %v", c.value, err, c.want)
+		}
+		if err != nil && !strings.Contains(err.Error(), "--ambient-dim") {
+			t.Errorf("Validate(--ambient-dim: %s) = %v, want the token named", c.value, err)
+		}
+	}
+	if errors.Is(ErrThemeTokenRange, ErrThemeTokenKind) {
+		t.Error("the range error must not read as the kind error")
 	}
 }
 

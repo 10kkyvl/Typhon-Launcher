@@ -88,7 +88,7 @@ func validTokenKind(name string, kind Kind, value string) bool {
 	case KindLength:
 		return c.isLength(v)
 	case KindNumber:
-		return numberRe.MatchString(v) && c.inNumberRange(v)
+		return numberRe.MatchString(v)
 	case KindTime:
 		return c.isTime(v)
 	case KindEase:
@@ -101,12 +101,14 @@ func validTokenKind(name string, kind Kind, value string) bool {
 	return false
 }
 
-func (c checker) inNumberRange(v string) bool {
-	bounds, ok := numberRanges[c.self]
+// inTokenRange reports whether a value of the right kind is inside the
+// token's range; tokens without one accept any value of their kind.
+func inTokenRange(name, value string) bool {
+	bounds, ok := numberRanges[name]
 	if !ok {
 		return true
 	}
-	n, err := strconv.ParseFloat(v, 64)
+	n, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
 	return err == nil && n >= bounds[0] && n <= bounds[1]
 }
 

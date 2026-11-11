@@ -51,6 +51,7 @@ var (
 	ErrThemeTokenName  = uierr.New("theme.unknown_token", "неизвестное имя токена темы")
 	ErrThemeTokenValue = uierr.New("theme.invalid_token_value", "недопустимое значение токена темы")
 	ErrThemeTokenKind  = uierr.New("theme.token_kind", "значение токена не подходит по типу")
+	ErrThemeTokenRange = uierr.New("theme.token_range", "число вне допустимого для токена диапазона")
 	ErrThemeCSSSize    = uierr.New("theme.css_too_large", "пользовательский CSS превышает допустимый размер")
 	ErrThemeCSSContent = uierr.New("theme.css_forbidden", "пользовательский CSS содержит запрещённую конструкцию")
 	ErrThemeCSSBraces  = uierr.New("theme.css_unbalanced_braces", "непарные или слишком глубоко вложенные фигурные скобки в CSS")
@@ -112,7 +113,7 @@ func Validate(t Theme) (Theme, error) {
 		names = append(names, name)
 	}
 	slices.Sort(names)
-	var wrongKind []string
+	var wrongKind, outOfRange []string
 	for _, name := range names {
 		value := t.Tokens[name]
 		if err := validateTokenName(name); err != nil {
@@ -123,10 +124,15 @@ func Validate(t Theme) (Theme, error) {
 		}
 		if !validTokenKind(name, allowedTokenSet[name], value) {
 			wrongKind = append(wrongKind, fmt.Sprintf("%s (%s)", name, allowedTokenSet[name]))
+		} else if !inTokenRange(name, value) {
+			outOfRange = append(outOfRange, name)
 		}
 	}
 	if len(wrongKind) > 0 {
 		return Theme{}, fmt.Errorf("%s: %w", strings.Join(wrongKind, ", "), ErrThemeTokenKind)
+	}
+	if len(outOfRange) > 0 {
+		return Theme{}, fmt.Errorf("%s: %w", strings.Join(outOfRange, ", "), ErrThemeTokenRange)
 	}
 	if cycle := varCycles(t.Tokens); len(cycle) > 0 {
 		return Theme{}, fmt.Errorf("var() cycle: %s: %w", strings.Join(cycle, ", "), ErrThemeTokenKind)

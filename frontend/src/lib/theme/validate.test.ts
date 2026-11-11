@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { allowedTokenNamesFixture, cssCases, tokenNameCases, tokenValueCases } from './cases';
-import { validateCss, validateTokenName, validateTokenValue } from './validate';
+import { validateCss, validateTokenName, validateTokenValue, validateTokens } from './validate';
+import { tokenRangeText } from './tokenRanges';
 
 describe('validateTokenName', () => {
   it.each(tokenNameCases)('$title', ({ name, valid }) => {
@@ -56,5 +57,18 @@ describe('validateCss mirrors internal/theme', () => {
 
   it('keeps ordinary rules and data-part selectors', () => {
     expect(validateCss('[data-part="sidebar-item"][data-id="stats"] { order: -1; color: var(--accent); }')).toBeNull();
+  });
+});
+
+describe('validateTokens', () => {
+  it('reports a ranged token outside its range in the draft, before saving', () => {
+    const problems = validateTokens({ '--ambient-dim': '2', '--bg': '#000' }, ['--ambient-dim', '--bg']);
+    expect(problems).toEqual([tokenRangeText({ name: '--ambient-dim', min: 0, max: 1 })]);
+  });
+
+  it('accepts a ranged token inside its range, and keeps the name and value checks', () => {
+    expect(validateTokens({ '--ambient-dim': '0.6' }, ['--ambient-dim'])).toEqual([]);
+    expect(validateTokens({ '--nope': '1' }, ['--ambient-dim'])).toEqual([validateTokenName('--nope', ['--ambient-dim'])]);
+    expect(validateTokens({ '--bg': '' }, ['--bg'])).toHaveLength(1);
   });
 });

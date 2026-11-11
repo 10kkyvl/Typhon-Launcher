@@ -193,7 +193,7 @@ func userValueAtCurrentScale(name, value string) string {
 }
 
 func validTokenValue(name string, kind Kind, value string) bool {
-	return validateTokenValue(value) == nil && validTokenKind(name, kind, value)
+	return validateTokenValue(value) == nil && validTokenKind(name, kind, value) && inTokenRange(name, value)
 }
 
 func scaleRem(value string) string {

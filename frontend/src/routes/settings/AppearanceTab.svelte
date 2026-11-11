@@ -5,7 +5,7 @@
   import { Trash2 } from '@lucide/svelte';
   import { msg } from '../../lib/i18n';
   import { themeDisplayName, personalThemeVars, displayedAccent, fallbackAccent, fallbackBackground } from '../../lib/theme/apply';
-  import { validateCss, validateTokenName, validateTokenValue } from '../../lib/theme/validate';
+  import { validateCss, validateTokens } from '../../lib/theme/validate';
   import TokenValueInput from './TokenValueInput.svelte';
   import AiSkillButton from '../../lib/components/AiSkillButton.svelte';
   import Button from '../../lib/components/Button.svelte';
@@ -140,13 +140,7 @@
 
   function validateDraft(): string[] {
     if (!draft) return [];
-    const found: string[] = [];
-    for (const [name, value] of Object.entries(draft.tokens)) {
-      const nameError = validateTokenName(name, allowedTokenNames);
-      if (nameError) found.push(nameError);
-      const valueError = validateTokenValue(value);
-      if (valueError) found.push(msg('settings.appearanceTokenValueErrorWrap', { name, error: valueError }));
-    }
+    const found = validateTokens(draft.tokens, allowedTokenNames);
     const cssError = validateCss(cssDraft);
     if (cssError) found.push(cssError);
     return found;
