@@ -190,13 +190,24 @@ h4 {
 }
 
 /* A popup (menu, listbox, popover) entering: it settles from the side of its anchor. `data-placement`
-   is where utils/position.ts put it: above the anchor it rises from below. */
+   is where utils/position.ts put it: below the anchor it drops from above, above it rises from below,
+   beside it (a context menu next to a control) it slides out from the anchor's side. */
 @keyframes popup-in {
-  from { opacity: 0; transform: translateY(var(--popup-from, -0.3rem)); }
+  from { opacity: 0; transform: translate(var(--popup-from-x, 0), var(--popup-from-y, -0.3rem)); }
 }
 
 [data-placement^='top'] {
-  --popup-from: 0.3rem;
+  --popup-from-y: 0.3rem;
+}
+
+[data-placement^='right'] {
+  --popup-from-x: -0.3rem;
+  --popup-from-y: 0;
+}
+
+[data-placement^='left'] {
+  --popup-from-x: 0.3rem;
+  --popup-from-y: 0;
 }
 
 .no-anim *,

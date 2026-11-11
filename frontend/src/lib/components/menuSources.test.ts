@@ -49,4 +49,19 @@ describe('menu components', () => {
     const global = fs.readFileSync(new URL('../../styles/global.css', import.meta.url), 'utf8');
     expect(global).toMatch(/@keyframes popup-in\s*\{/);
   });
+
+  // A popup settles from the side of its anchor: from above when below it, from below when above it,
+  // from the left when on its right, from the right when on its left.
+  it('enter from the anchor whichever side of it they open on', () => {
+    const global = fs.readFileSync(new URL('../../styles/global.css', import.meta.url), 'utf8');
+    const from = (side: string) => {
+      const rule = new RegExp(`\\[data-placement\\^='${side}'\\]\\s*\\{([^}]*)\\}`).exec(global)?.[1] ?? '';
+      const value = (name: string) => /-?[\d.]+rem|\b0\b/.exec(new RegExp(`--popup-from-${name}:\\s*([^;]+);`).exec(rule)?.[1] ?? '')?.[0];
+      return { x: value('x'), y: value('y') };
+    };
+    expect(global).toMatch(/@keyframes popup-in\s*\{\s*from\s*\{[^}]*translate\(var\(--popup-from-x, 0\), var\(--popup-from-y, -0\.3rem\)\)/);
+    expect(from('top')).toEqual({ x: undefined, y: '0.3rem' });
+    expect(from('right')).toEqual({ x: '-0.3rem', y: '0' });
+    expect(from('left')).toEqual({ x: '0.3rem', y: '0' });
+  });
 });

@@ -10,8 +10,8 @@
    * outside and a dialog opening over it close it, and focus goes back when it does. Opened at the
    * pointer it sits at that point and closes when the page under it scrolls (the document, or a
    * container holding `source`), the window resizes or loses focus;
-   * opened next to an element (a keyboard open, a menu button) it follows that element and closes when
-   * the element leaves sight, which is first brought into view. A pick closes the menu before
+   * opened next to an element (a keyboard open, a menu button) it sits beside it (right, else left),
+   * follows it and closes when it leaves sight; the element is first brought into view. A pick closes the menu before
    * `onselect` runs, so focus is back where the menu came from and a dialog the pick opens returns
    * focus there; an independent check (`MenuItem.independent`) keeps it open.
    */
@@ -71,7 +71,9 @@
     // A focused control scrolled out of sight would close its menu at once as hidden.
     const element = anchor();
     if (element && outOfSight(element)) element.scrollIntoView({ block: 'nearest' });
-    return anchorTo(node, anchor, { placement: 'bottom-start', offset: 4, onhide: onclose });
+    // Beside the control, top-aligned, sliding along the window so the whole menu shows: below or
+    // above it a long menu would be cut to the room left there.
+    return anchorTo(node, anchor, { placement: 'right-start', offset: 4, onhide: onclose });
   };
 </script>
 

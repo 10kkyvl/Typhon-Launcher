@@ -89,6 +89,41 @@ describe('computePosition', () => {
   });
 });
 
+describe('computePosition beside the anchor (a context menu next to a control)', () => {
+  const wide = { width: 1024, height: 768 };
+  const tall = { width: 200, height: 300 };
+  const pad = { top: 48, right: 8, bottom: 8, left: 8 };
+
+  it('opens to the right, top-aligned with the anchor', () => {
+    const r = computePosition({ left: 300, top: 200, width: 80, height: 20 }, tall, { viewport: wide, placement: 'right-start', padding: pad });
+    expect(r).toEqual({ x: 384, y: 200, placement: 'right-start' });
+  });
+
+  it('slides up along the window to show the whole menu next to an anchor near the bottom, without a max height', () => {
+    const r = computePosition({ left: 300, top: 700, width: 80, height: 20 }, tall, { viewport: wide, placement: 'right-start', padding: pad });
+    expect(r).toEqual({ x: 384, y: 768 - 8 - 300, placement: 'right-start' });
+  });
+
+  it('slides down below the title bar next to an anchor at the top', () => {
+    const r = computePosition({ left: 300, top: 10, width: 80, height: 20 }, tall, { viewport: wide, placement: 'right-start', padding: pad });
+    expect(r).toEqual({ x: 384, y: 48, placement: 'right-start' });
+  });
+
+  it('flips to the left when there is no room on the right', () => {
+    const r = computePosition({ left: 900, top: 200, width: 80, height: 20 }, tall, { viewport: wide, placement: 'right-start', padding: pad });
+    expect(r).toEqual({ x: 900 - 4 - 200, y: 200, placement: 'left-start' });
+  });
+
+  it('limits the height only when the window itself is shorter than the menu', () => {
+    const r = computePosition({ left: 300, top: 100, width: 80, height: 20 }, tall, {
+      viewport: { width: 1024, height: 250 },
+      placement: 'right-start',
+      padding: 8,
+    });
+    expect(r).toEqual({ x: 384, y: 8, placement: 'right-start', maxHeight: 234 });
+  });
+});
+
 describe('computePosition under the title bar', () => {
   const pad: Insets = { top: 40 + 8, right: 8, bottom: 8, left: 8 };
 

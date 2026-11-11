@@ -198,7 +198,7 @@ describe('game context menu from the keyboard', () => {
     const opened = screen.getByRole('menu', { name: menuName('Hades') });
     expect(document.activeElement).toBe(items()[0]);
     expect(items()[0].textContent?.trim()).toBe(msg('games.play'));
-    expect([opened.style.left, opened.style.top]).toEqual(['300px', '224px']);
+    expect([opened.style.left, opened.style.top]).toEqual(['384px', '200px']);
   });
 
   it('a contextmenu event without a pointer position opens next to the focused game, not in the corner', async () => {
@@ -210,7 +210,7 @@ describe('game context menu from the keyboard', () => {
     await tick();
 
     const opened = screen.getByRole('menu', { name: menuName('Celeste') });
-    expect([opened.style.left, opened.style.top]).toEqual(['300px', '224px']);
+    expect([opened.style.left, opened.style.top]).toEqual(['384px', '200px']);
     expect(document.activeElement).toBe(items()[0]);
   });
 
@@ -300,7 +300,75 @@ describe('game context menu from the keyboard', () => {
 
     expect(reveal).toHaveBeenCalledExactlyOnceWith({ block: 'nearest' });
     expect(menu()).not.toBeNull();
-    expect((menu() as HTMLElement).style.top).toBe('324px');
+    expect((menu() as HTMLElement).style.top).toBe('300px');
+  });
+});
+
+describe('a game menu opened next to a control', () => {
+  // The menu is 200 by 300 px; jsdom's window is 1024 by 768.
+  function sized() {
+    const rect = HTMLElement.prototype.getBoundingClientRect;
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      return this.getAttribute('role') === 'menu' ? DOMRect.fromRect({ width: 200, height: 300 }) : rect.call(this);
+    });
+  }
+
+  async function openFromKeyboard(keys: ReturnType<typeof user>, control: HTMLElement) {
+    control.focus();
+    await keys.keyboard('{Shift>}{F10}{/Shift}');
+    return screen.getByRole('menu');
+  }
+
+  it('opens beside the control, top-aligned, and slides up along the window to show whole near the bottom', async () => {
+    sized();
+    const keys = setup();
+    link('Hades').getBoundingClientRect = box(300, 600, 80, 20);
+
+    const opened = await openFromKeyboard(keys, link('Hades'));
+
+    expect(opened.dataset.placement).toBe('right-start');
+    expect([opened.style.left, opened.style.top]).toEqual(['384px', `${window.innerHeight - 8 - 300}px`]);
+    expect(opened.style.maxHeight).toBe('');
+  });
+
+  it('opens on the left of a control at the right edge of the window', async () => {
+    sized();
+    const keys = setup();
+    link('Hades').getBoundingClientRect = box(window.innerWidth - 100, 100, 80, 20);
+
+    const opened = await openFromKeyboard(keys, link('Hades'));
+
+    expect(opened.dataset.placement).toBe('left-start');
+    expect([opened.style.left, opened.style.top]).toEqual([`${window.innerWidth - 100 - 4 - 200}px`, '100px']);
+  });
+
+  it('the "…" button on the first row: the whole menu shows, below the title bar, with no scroll', async () => {
+    const root = document.documentElement;
+    root.style.fontSize = '10px';
+    root.style.setProperty('--titlebar-h', '4rem');
+    root.style.setProperty('--popup-edge', '0.8rem');
+    sized();
+    const keys = setup({ cards: true });
+    const more = screen.getByRole('button', { name: menuName('Hades') });
+    more.getBoundingClientRect = box(400, 20, 30, 30);
+
+    await keys.click(more);
+
+    const opened = screen.getByRole('menu');
+    expect(opened.dataset.placement).toBe('right-start');
+    expect([opened.style.left, opened.style.top]).toEqual(['434px', '48px']);
+    expect(opened.style.maxHeight).toBe('');
+  });
+
+  it('gets a scroll only when the window itself is shorter than the menu', async () => {
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(250);
+    sized();
+    const keys = setup();
+    link('Hades').getBoundingClientRect = box(300, 100, 80, 20);
+
+    const opened = await openFromKeyboard(keys, link('Hades'));
+
+    expect([opened.style.top, opened.style.maxHeight]).toEqual(['8px', '234px']);
   });
 });
 
@@ -318,7 +386,7 @@ describe('the "…" menu button of a game card', () => {
     const opened = screen.getByRole('menu', { name: menuName('Hades') });
     expect(button().getAttribute('aria-expanded')).toBe('true');
     expect(button().getAttribute('aria-controls')).toBe(opened.id);
-    expect([opened.style.left, opened.style.top]).toEqual(['400px', '134px']);
+    expect([opened.style.left, opened.style.top]).toEqual(['434px', '100px']);
 
     await keys.click(button());
     expect(menu()).toBeNull();
@@ -355,7 +423,7 @@ describe('the "…" menu button of a game card', () => {
     cover.focus();
     await keys.keyboard('{Shift>}{F10}{/Shift}');
     const opened = screen.getByRole('menu', { name: menuName('Hades') });
-    expect([opened.style.left, opened.style.top]).toEqual(['200px', '294px']);
+    expect([opened.style.left, opened.style.top]).toEqual(['304px', '150px']);
     expect(document.activeElement).toBe(items()[0]);
   });
 
