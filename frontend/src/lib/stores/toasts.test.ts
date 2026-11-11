@@ -474,3 +474,16 @@ describe('the order of the queue', () => {
     expect(shown()).toEqual(['two', 'again']);
   });
 });
+
+describe('repeats', () => {
+  it('a toast with an action is never folded: the same words can offer two different things', () => {
+    const hades = vi.fn();
+    const celeste = vi.fn();
+
+    const first = toast('Mark as 100%?', 'info', { label: 'Mark', run: hades });
+    const second = toast('Mark as 100%?', 'info', { label: 'Mark', run: celeste });
+
+    expect(second).not.toBe(first);
+    expect(get(toasts).map((item) => item.action?.run)).toEqual([hades, celeste]);
+  });
+});

@@ -6,7 +6,8 @@ import { writable, type Readable } from 'svelte/store';
  * - a plain one stays `PLAIN_MS`, a warning or an error `URGENT_MS`, one with an action `ACTION_MS`;
  * - the clock stops while the toast is being read (`pauseToast`: the pointer over it, focus inside it)
  *   and gives at least `RESUME_FLOOR_MS` after `resumeToast`;
- * - the same message raised again does not stack: the one already shown or waiting takes it;
+ * - the same plain message raised again does not stack: the one already shown or waiting takes it.
+ *   A toast with an action is always its own: the same words can offer different things;
  * - at most `MAX_VISIBLE` are on screen, the rest wait: errors and warnings ahead of plain ones, each
  *   group in the order raised. A plain one that has waited `QUEUE_STALE_MS` is dropped at its turn
  *   (a burst of twenty would otherwise show old news for a minute); an error, a warning or a toast
@@ -131,7 +132,9 @@ export const toasts: Readable<Toast[]> & { set(list: Toast[]): void } = {
 
 /** Shows a message. Returns the id `dismissToast` takes: of the new toast, or of the one that took a repeat. */
 export function toast(message: string, kind: ToastKind = 'info', action?: ToastAction): number {
-  const same = (item: Toast) => item.message === message && item.kind === kind && item.action?.label === action?.label;
+  // A toast with an action is never folded: the same words can offer different things (two games
+  // that can each be marked as completed), and the second offer would be lost.
+  const same = (item: Toast) => !action && !item.action && item.message === message && item.kind === kind;
   const repeated = shown.find(same);
   if (repeated) {
     const clock = clocks.get(repeated.id);
