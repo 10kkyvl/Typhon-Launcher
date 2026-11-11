@@ -1,0 +1,24 @@
+<script lang="ts">
+  import Modal from '../components/Modal.svelte';
+  import PlayerCardPopover from '../components/PlayerCardPopover.svelte';
+  import type { UserCard } from '../services/social';
+
+  // A friend row's name with its hover card, between two other controls, and a dialog a test opens
+  // over it. For PlayerCardPopover.dom.test.ts.
+  let { other = false }: { other?: boolean } = $props();
+
+  let anchor = $state<HTMLElement>();
+  const user: UserCard = { id: 'u1', username: 'ann', displayName: 'Ann Lee', avatarUrl: '' };
+</script>
+
+<section>
+  <button type="button">Before</button>
+  <button type="button" class="who" bind:this={anchor}>Ann Lee</button>
+  <PlayerCardPopover {anchor} {user} />
+  <button type="button">After</button>
+  <div data-testid="unrelated" style="overflow: auto"><p>Elsewhere</p></div>
+</section>
+
+<Modal open={other} title="Other">
+  <p>Over it</p>
+</Modal>

@@ -1,77 +1,38 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
+  import type { Attachment } from 'svelte/attachments';
   import PlayerCard from './PlayerCard.svelte';
+  import { layer } from '../layers';
+  import { hintBubble, hintTrigger, usable } from './hint';
   import { createHoverIntent } from './hoverIntent';
-  import { placePopover } from './playerCardPopover';
   import type { PresenceView, UserCard } from '../services/social';
-  import { portal } from '../utils/portal';
 
+  /**
+   * The hover card of a friend row: a description of the row's name, shown by the same rules as a
+   * tooltip (hint.ts, hoverIntent.ts) and as a non-modal layer on the stack. It has no controls.
+   */
   let { anchor, user, presence }: { anchor?: HTMLElement | null; user: UserCard; presence?: PresenceView | null } = $props();
 
-  const id = `player-card-${Math.random().toString(36).slice(2, 10)}`;
+  const uid = $props.id();
+  const id = `${uid}-card`;
   let open = $state(false);
-  let place = $state<{ left: number; top: number } | null>(null);
-  let popover: HTMLDivElement | undefined = $state();
+
+  const control = (): HTMLElement | null => anchor ?? null;
 
   const intent = createHoverIntent((next) => {
-    open = next;
-    if (!next) place = null;
+    if (next && !usable(control())) intent.dismiss();
+    else open = next;
   });
   onDestroy(() => intent.destroy());
 
   $effect(() => {
     const el = anchor;
     if (!el) return;
-    const enter = (event: PointerEvent) => { if (event.pointerType !== 'touch') intent.hover(); };
-    const leave = () => intent.unhover();
-    const focusin = (event: FocusEvent) => {
-      if (event.target instanceof HTMLElement && event.target.matches(':focus-visible')) intent.focus();
-    };
-    const focusout = (event: FocusEvent) => {
-      if (event.relatedTarget instanceof Node && el.contains(event.relatedTarget)) return;
-      intent.blur();
-    };
-    el.addEventListener('pointerenter', enter);
-    el.addEventListener('pointerleave', leave);
-    el.addEventListener('focusin', focusin);
-    el.addEventListener('focusout', focusout);
+    const stop = untrack(() => hintTrigger(el, { intent, control: () => el }));
     return () => {
-      el.removeEventListener('pointerenter', enter);
-      el.removeEventListener('pointerleave', leave);
-      el.removeEventListener('focusin', focusin);
-      el.removeEventListener('focusout', focusout);
-      intent.unhover();
-      intent.blur();
+      stop();
+      intent.dismiss();
     };
-  });
-
-  $effect(() => {
-    if (!open) return;
-    const close = () => intent.dismiss();
-    const key = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      event.stopPropagation();
-      intent.escape();
-    };
-    window.addEventListener('keydown', key, true);
-    window.addEventListener('scroll', close, true);
-    window.addEventListener('blur', close);
-    return () => {
-      window.removeEventListener('keydown', key, true);
-      window.removeEventListener('scroll', close, true);
-      window.removeEventListener('blur', close);
-    };
-  });
-
-  $effect(() => {
-    const el = anchor;
-    if (!open || !el || !popover) return;
-    const a = el.getBoundingClientRect();
-    place = placePopover(
-      { left: a.left, top: a.top, width: a.width, height: a.height },
-      { width: popover.offsetWidth, height: popover.offsetHeight },
-      { width: window.innerWidth, height: window.innerHeight },
-    );
   });
 
   $effect(() => {
@@ -80,11 +41,21 @@
     el.setAttribute('aria-describedby', id);
     return () => el.removeAttribute('aria-describedby');
   });
+
+  const card: Attachment<HTMLElement> = (node) =>
+    untrack(() =>
+      hintBubble(node, { intent, control, placement: 'right-start', fallback: 'bottom', offset: 8, watch: anchor?.parentElement ?? null }),
+    );
 </script>
 
 {#if open}
-  <div {id} class="popover" role="tooltip" {@attach portal} bind:this={popover}
-    style:left={place ? `${place.left}px` : '0'} style:top={place ? `${place.top}px` : '0'} style:visibility={place ? 'visible' : 'hidden'}>
+  <div
+    {id}
+    class="popover"
+    role="tooltip"
+    {@attach layer({ modal: false, outsidePress: false, owner: control, dismiss: () => intent.escape() })}
+    {@attach card}
+  >
     <PlayerCard {user} {presence} />
   </div>
 {/if}
@@ -92,10 +63,9 @@
 <style>
   .popover {
     position: fixed;
-    z-index: var(--z-tooltip);
-    pointer-events: none;
+    z-index: var(--z-layer);
     box-shadow: var(--shadow-pop);
     border-radius: var(--radius-lg);
-    animation: pop-in var(--dur) var(--ease);
+    animation: popup-in var(--dur) var(--ease);
   }
 </style>
