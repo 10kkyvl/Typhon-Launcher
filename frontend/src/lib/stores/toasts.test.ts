@@ -365,3 +365,42 @@ describe('a toast with an action while a dialog is open', () => {
     expect(shown()).toEqual([]);
   });
 });
+
+describe('a dialog open with held toasts on screen', () => {
+  const offer = (label: string) => ({ label, run: () => {} });
+
+  it('held toasts take no slot: an error raised by the dialog shows at once and times out normally', () => {
+    holdToasts(true);
+    toast('Mark Hades as 100%?', 'info', offer('Mark'));
+    toast('The emulator closed at once', 'info', offer('Settings'));
+
+    toast('Install failed', 'danger');
+
+    expect(shown()).toEqual(['Mark Hades as 100%?', 'The emulator closed at once', 'Install failed']);
+    vi.advanceTimersByTime(URGENT_MS);
+    expect(shown()).toEqual(['Mark Hades as 100%?', 'The emulator closed at once']);
+  });
+
+  it('toasts already on screen free their slots when the dialog opens over them', () => {
+    toast('Mark Hades as 100%?', 'info', offer('Mark'));
+    toast('The emulator closed at once', 'info', offer('Settings'));
+    toast('Saved');
+    expect(waiting()).toEqual(['Saved']);
+
+    holdToasts(true);
+
+    expect(shown()).toContain('Saved');
+    expect(waiting()).toEqual([]);
+  });
+
+  it('after the dialog they count again: nothing new is shown until there is room', () => {
+    holdToasts(true);
+    toast('Mark Hades as 100%?', 'info', offer('Mark'));
+    toast('The emulator closed at once', 'info', offer('Settings'));
+    holdToasts(false);
+
+    toast('Saved');
+
+    expect(waiting()).toEqual(['Saved']);
+  });
+});

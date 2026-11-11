@@ -10,7 +10,8 @@ import { writable, type Readable } from 'svelte/store';
  * - at most `MAX_VISIBLE` are on screen, the rest wait in the order raised;
  * - while a dialog is open (`holdToasts(true)`, told by the host: this store knows nothing of layers)
  *   a toast with an action does not run out, since its action cannot be reached by Tab from inside
- *   the dialog. Its clock starts when the dialog closes.
+ *   the dialog. Its clock starts when the dialog closes. While held it takes none of the
+ *   `MAX_VISIBLE` slots, so what the dialog itself raises is still shown at once.
  */
 
 export type ToastKind = 'info' | 'success' | 'warning' | 'danger';
@@ -76,11 +77,19 @@ function run(item: Toast, clock: Clock): void {
   clock.handle = setTimeout(() => dismissToast(item.id), clock.remaining);
 }
 
+// A toast held by the dialog has no clock, so it takes no slot: two of them would otherwise keep an
+// error raised by the dialog's own action waiting until the dialog closed.
 function promote(): void {
-  const room = MAX_VISIBLE - shown.length;
-  if (room <= 0 || queue.length === 0) return;
-  const next = queue.slice(0, room);
-  queue = queue.slice(room);
+  let room = MAX_VISIBLE - shown.filter((item) => !heldByDialog(item, dialogOpen)).length;
+  const next: Toast[] = [];
+  while (queue.length > 0) {
+    const held = heldByDialog(queue[0], dialogOpen);
+    if (!held && room <= 0) break;
+    const item = queue.shift() as Toast;
+    if (!held) room -= 1;
+    next.push(item);
+  }
+  if (next.length === 0) return;
   for (const item of next) {
     const clock: Clock = { handle: undefined, remaining: toastDuration(item), startedAt: 0, paused: false };
     clocks.set(item.id, clock);
@@ -169,6 +178,7 @@ export function holdToasts(open: boolean): void {
       run(item, clock);
     }
   }
+  promote();
 }
 
 /** The toasts waiting for room on screen, in order. */
