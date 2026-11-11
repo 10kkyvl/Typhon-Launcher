@@ -3,6 +3,7 @@
   import Button from '../../lib/components/Button.svelte';
   import Spinner from '../../lib/components/Spinner.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import { AccountError } from '../../lib/services/account';
   import { list as listReviews, type Review, type ReviewFilter, type ReviewSort } from '../../lib/services/reviews';
@@ -133,8 +134,12 @@
       </div>
     {:else if failed && items.length === 0}
       <div class="state">
-        <p class="muted error">{msg('reviews.loadError')}</p>
-        <Button size="sm" onclick={() => loadFirst(canonicalGameId, sort, filter)}>{msg('common.retry')}</Button>
+        <Notice tone="danger">
+          {msg('reviews.loadError')}
+          {#snippet action()}
+            <Button size="sm" onclick={() => loadFirst(canonicalGameId, sort, filter)}>{msg('common.retry')}</Button>
+          {/snippet}
+        </Notice>
       </div>
     {:else if loaded && items.length === 0}
       <EmptyState level={3} title={msg('reviews.emptyTitle')} description={msg('reviews.emptyDescription')} />
@@ -145,7 +150,7 @@
         {/each}
       </div>
       {#if moreFailed}
-        <p class="muted error">{msg('reviews.loadError')}</p>
+        <Notice tone="danger" compact>{msg('reviews.loadError')}</Notice>
       {/if}
       {#if cursor}
         <div class="more">
@@ -217,10 +222,6 @@
   .muted {
     font-size: var(--font-sm);
     color: var(--text-3);
-  }
-
-  .error {
-    color: var(--danger);
   }
 
   .more {

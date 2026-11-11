@@ -1,5 +1,6 @@
 <script lang="ts">
   import Button from '../Button.svelte';
+  import Notice from '../Notice.svelte';
   import SearchInput from '../SearchInput.svelte';
   import { msg } from '../../i18n';
   import { refOfLibrary } from '../../profile/layoutView';
@@ -62,7 +63,7 @@
 <div class="picker">
   <SearchInput bind:value={query} placeholder={msg('profile.pickerSearch')} />
   {#if failure}
-    <p class="error" role="alert">{failure}</p>
+    <Notice tone="danger" compact>{failure}</Notice>
     <div><Button size="sm" onclick={() => attempt++}>{msg('common.retry')}</Button></div>
   {:else if loading}
     <p class="hint">{msg('social.loadingEllipsis')}</p>
@@ -154,13 +155,6 @@
     margin: 0;
     font-size: var(--font-xs);
     color: var(--text-3);
-    line-height: 1.5;
-  }
-
-  .error {
-    margin: 0;
-    font-size: var(--font-xs);
-    color: var(--danger);
     line-height: 1.5;
   }
 </style>

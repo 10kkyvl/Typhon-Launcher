@@ -4,6 +4,7 @@
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import Lightbox from '../../lib/components/Lightbox.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
   import { deleteScreenshotPrompt } from '../../lib/confirm/prompts';
   import {
     DEFAULT_SCREENSHOT_HOTKEY,
@@ -132,7 +133,7 @@
   {:else if noLibrary}
     <p class="note">{msg('screenshots.noLibrary')}</p>
   {:else if loadFailed}
-    <p class="note danger" role="alert">{msg('screenshots.loadError')}</p>
+    <Notice tone="danger" compact>{msg('screenshots.loadError')}</Notice>
   {:else if shots.length === 0}
     <p class="note">{!statusKnown ? msg('screenshots.emptyNoHotkey') : enabled ? msg('screenshots.empty', { hotkey }) : msg('screenshots.disabledNote')}</p>
   {:else}
@@ -194,10 +195,6 @@
   .note {
     font-size: var(--font-sm);
     color: var(--text-3);
-  }
-
-  .note.danger {
-    color: var(--danger);
   }
 
   .grid {

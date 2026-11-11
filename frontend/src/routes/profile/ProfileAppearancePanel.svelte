@@ -367,9 +367,9 @@
   h3 { font-size: var(--font-sm); font-weight: 600; margin-bottom: 1.2rem; }
   fieldset { border: 0; padding: 0; min-width: 0; } fieldset:disabled { opacity: .65; }
   section { padding: 1.7rem 0; border-bottom: 1px solid var(--border); }
-  .status-error { color: var(--danger); font-size: var(--font-xs); line-height: 1.5; margin-top: .8rem; }
+  .status-error { width: fit-content; padding: 0 var(--space-1); border-radius: var(--radius-xs); background: var(--surface-2); color: var(--danger); font-size: var(--font-xs); line-height: 1.5; margin-top: .8rem; }
   .hint { color: var(--text-3); font-size: var(--font-xs); line-height: 1.5; margin-top: .8rem; }
-  .danger { color: var(--danger); }
+  .danger { width: fit-content; padding: 0 var(--space-1); border-radius: var(--radius-xs); background: var(--surface-2); color: var(--danger); }
   .themes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; }
   .theme { background: transparent; border: 1px solid var(--border); border-radius: var(--radius-md); padding: .5rem; color: var(--text-2); font: inherit; font-size: 1.05rem; cursor: pointer; min-width: 0; }
   .theme-swatch { display: block; height: 4rem; border-radius: .4rem; margin-bottom: .5rem; }
@@ -405,7 +405,7 @@
   .emoji { font-size: 1.8rem; line-height: 1; }
   .text { flex: 1; min-width: 0; height: var(--control-md); padding: 0 1.2rem; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--radius-md); color: var(--text); font: inherit; font-size: var(--font-sm); }
   .text:focus { outline: none; border-color: var(--accent-ring); box-shadow: 0 0 0 3px var(--accent-subtle); }
-  .counter { flex-shrink: 0; font-size: var(--font-xs); color: var(--text-3); font-variant-numeric: tabular-nums; } .counter.full { color: var(--danger); }
+  .counter { flex-shrink: 0; font-size: var(--font-xs); color: var(--text-3); font-variant-numeric: tabular-nums; } .counter.full { padding: 0 var(--space-1); border-radius: var(--radius-xs); background: var(--surface-2); color: var(--danger); }
   .emoji-grid { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: .3rem; margin: 1rem 0; padding: .6rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); }
   .emoji-cell { aspect-ratio: 1; background: transparent; border: 0; border-radius: var(--radius-sm); font-size: 1.8rem; line-height: 1; cursor: pointer; }
   .emoji-cell:hover { background: var(--hover); }

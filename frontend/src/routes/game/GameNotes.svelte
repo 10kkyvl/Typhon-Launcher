@@ -158,6 +158,9 @@
 
   .status.error,
   .counter.over {
+    padding: 0 var(--space-1);
+    border-radius: var(--radius-xs);
+    background: var(--surface-2);
     color: var(--danger);
   }
 </style>

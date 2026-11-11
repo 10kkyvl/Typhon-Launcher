@@ -1,6 +1,7 @@
 <script lang="ts">
   import Button from '../../lib/components/Button.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
   import { AccountError } from '../../lib/services/account';
   import {
     limits as fetchLimits,
@@ -149,8 +150,12 @@
 {:else if phase === 'loading'}
   <p class="muted">{msg('reviews.loading')}</p>
 {:else if phase === 'error'}
-  <p class="muted error">{msg('reviews.loadError')}</p>
-  <Button size="sm" onclick={() => load(canonicalGameId)}>{msg('common.retry')}</Button>
+  <Notice tone="danger">
+    {msg('reviews.loadError')}
+    {#snippet action()}
+      <Button size="sm" onclick={() => load(canonicalGameId)}>{msg('common.retry')}</Button>
+    {/snippet}
+  </Notice>
 {:else if mine}
   {#if formVisible}
     <div class="form">
@@ -257,10 +262,6 @@
     color: var(--text-3);
   }
 
-  .error {
-    color: var(--danger);
-  }
-
   .form {
     display: flex;
     flex-direction: column;
@@ -296,7 +297,7 @@
   }
 
   .toggle.negative.active {
-    background: var(--danger-subtle);
+    background: var(--surface-2);
     border-color: var(--danger);
     color: var(--danger);
   }
@@ -333,6 +334,9 @@
 
   .hint.danger,
   .counter.danger {
+    padding: 0 var(--space-1);
+    border-radius: var(--radius-xs);
+    background: var(--surface-2);
     color: var(--danger);
   }
 

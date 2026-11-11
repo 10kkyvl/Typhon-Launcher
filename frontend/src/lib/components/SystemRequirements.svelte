@@ -182,7 +182,9 @@
     gap: var(--space-3);
     list-style: none;
     margin: 0;
-    padding: 0;
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
   }
 
   .check {
