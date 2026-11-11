@@ -99,6 +99,22 @@ describe('game context menu by pointer', () => {
     const opened = screen.getByRole('menu', { name: menuName('Celeste') });
     expect([opened.style.left, opened.style.top]).toEqual(['300px', '200px']);
     expect(document.activeElement).toBe(opened);
+
+    await keys.keyboard('{Escape}');
+    expect(menu()).toBeNull();
+    expect(document.activeElement).toBe(link('Celeste'));
+  });
+
+  it('after a re-target by right-clicks that move no focus (WebKit), Escape puts focus on the second game', async () => {
+    const keys = setup();
+    await fireEvent.contextMenu(link('Hades'), { clientX: 100, clientY: 100, button: 2 });
+    await fireEvent.pointerDown(link('Celeste'), { button: 2 });
+    await fireEvent.contextMenu(link('Celeste'), { clientX: 300, clientY: 200, button: 2 });
+    expect(document.activeElement).toBe(screen.getByRole('menu', { name: menuName('Celeste') }));
+
+    await keys.keyboard('{Escape}');
+
+    expect(document.activeElement).toBe(link('Celeste'));
   });
 
   it('a right-click on a game swallows the browser menu, also inside the open menu', async () => {

@@ -1,5 +1,5 @@
 import { tick } from 'svelte';
-import { render, screen, within } from '@testing-library/svelte';
+import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import GameQuickMenu from '../lib/components/GameQuickMenu.svelte';
 import { msg } from '../lib/i18n';
@@ -9,7 +9,9 @@ import { closeGameMenu, GAME_MENU_ID } from '../lib/stores/gameMenu';
 import { libraryGames } from '../lib/stores/library';
 import { installedView, libraryView } from '../lib/stores/ui';
 import { user } from '../lib/testing/dom';
+import Catalog from './catalog/Catalog.svelte';
 import Installed from './installed/Installed.svelte';
+import Library from './library/Library.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../lib/testing/dom')).wailsRuntime());
 vi.mock('../lib/services/backend', () => ({ inWails: false }));
@@ -38,6 +40,7 @@ const games = [
 ].map((game, i) => ({ ...game, installDir: `C:\\Games\\${i}`, executable: 'game.exe', sizeBytes: 0, uninstalled: false, tags: [] }) as unknown as LibraryGame);
 
 const menuFor = (title: string) => msg('games.installedMenuFor', { title });
+const RIGHT_CLICK = { button: 2, clientX: 120, clientY: 80 };
 
 let app: HTMLDivElement;
 
@@ -56,7 +59,7 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-function mount(page: typeof Installed) {
+function mount(page: typeof Installed | typeof Library | typeof Catalog) {
   render(page, { target: app });
   render(GameQuickMenu, { target: app });
   return user();
@@ -70,7 +73,36 @@ function gameMenuOf(title: string): HTMLElement {
   return menus[0];
 }
 
+async function opensByPointerAndKeyboard(keys: ReturnType<typeof user>, control: HTMLElement, title: string) {
+  await fireEvent.contextMenu(control, RIGHT_CLICK);
+  const byPointer = gameMenuOf(title);
+  expect(document.activeElement).toBe(byPointer);
+  await keys.keyboard('{Escape}');
+  expect(screen.queryByRole('menu')).toBeNull();
+
+  control.focus();
+  await keys.keyboard('{Shift>}{F10}{/Shift}');
+  gameMenuOf(title);
+  expect(document.activeElement).toBe(screen.getAllByRole('menuitem')[0]);
+  await keys.keyboard('{Escape}');
+  expect(document.activeElement).toBe(control);
+}
+
 describe('the game menu from the Installed page', () => {
+  it('a row: right-click and Shift+F10 open the menu of that row’s game', async () => {
+    const keys = mount(Installed);
+    const row = screen.getByRole('button', { name: menuFor('Celeste') }).closest('[role="presentation"]') as HTMLElement;
+
+    await opensByPointerAndKeyboard(keys, within(row).getByRole('button', { name: msg('games.openFolder') }), 'Celeste');
+  });
+
+  it('a card: right-click and Shift+F10 open the menu of that card’s game', async () => {
+    installedView.set('grid');
+    const keys = mount(Installed);
+
+    await opensByPointerAndKeyboard(keys, screen.getByRole('button', { name: 'Celeste' }), 'Celeste');
+  });
+
   it('a right-click on a row’s own "…" while its menu is open leaves one menu open: the game menu, holding focus', async () => {
     const keys = mount(Installed);
     const more = screen.getByRole('button', { name: menuFor('Hades') });
@@ -86,5 +118,52 @@ describe('the game menu from the Installed page', () => {
     expect(document.activeElement).toBe(opened);
     await keys.keyboard('{ArrowDown}');
     expect(document.activeElement).toBe(within(opened).getAllByRole('menuitem')[0]);
+  });
+});
+
+describe('the game menu from the Library page', () => {
+  it('a card: right-click and Shift+F10 open the menu of that card’s game', async () => {
+    const keys = mount(Library);
+    const cover = screen.getAllByRole('button', { name: 'Celeste' })[0];
+
+    await opensByPointerAndKeyboard(keys, cover, 'Celeste');
+  });
+
+  it('the hero: right-click and Shift+F10 open the menu of the game it shows', async () => {
+    const keys = mount(Library);
+    const hero = screen.getByRole('region', { name: msg('games.libraryContinuePlayingTitle') });
+
+    await opensByPointerAndKeyboard(keys, within(hero).getByRole('button', { name: msg('games.libraryMoreDetailsButton') }), 'Hades');
+  });
+
+  it('a list row: right-click and Shift+F10 open the menu of that row’s game', async () => {
+    libraryView.set('list');
+    const keys = mount(Library);
+    const row = screen.getAllByRole('button').find((button) => button.classList.contains('list-row') && button.textContent?.includes('Celeste')) as HTMLElement;
+
+    await opensByPointerAndKeyboard(keys, row, 'Celeste');
+  });
+});
+
+describe('the game menu from the Catalog page', () => {
+  it('a card’s "…" opens the menu of the library game it stands for and says so while it is open', async () => {
+    const keys = mount(Catalog);
+    const more = await screen.findByRole('button', { name: menuFor('Celeste') });
+    expect(more.getAttribute('aria-haspopup')).toBe('menu');
+    expect(more.getAttribute('aria-expanded')).toBe('false');
+
+    await keys.click(more);
+    const opened = gameMenuOf('Celeste');
+    expect(more.getAttribute('aria-expanded')).toBe('true');
+    expect(more.getAttribute('aria-controls')).toBe(opened.id);
+
+    await keys.keyboard('{Escape}');
+    expect(more.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(more);
+
+    await keys.keyboard('{Enter}');
+    gameMenuOf('Celeste');
+    expect(document.activeElement).toBe(screen.getAllByRole('menuitem')[0]);
+    expect(screen.getByRole('button', { name: menuFor('Hades') }).getAttribute('aria-expanded')).toBe('false');
   });
 });
