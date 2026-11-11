@@ -239,3 +239,25 @@ func TestSkillExampleThemeIsAccepted(t *testing.T) {
 		t.Fatalf("example theme refused: %v", err)
 	}
 }
+
+// An agent writes values from the kinds table; a kind the whitelist uses but the table lacks leaves it
+// guessing the syntax.
+func TestSkillDescribesEveryTokenKind(t *testing.T) {
+	section, ok := skillSections(t, "../../skills/typhon-theme/SKILL.md")["Values the launcher accepts"]
+	if !ok {
+		t.Fatal("SKILL.md has no Values the launcher accepts section")
+	}
+	rows := map[string]bool{}
+	for _, m := range regexp.MustCompile("(?m)^\\| ([a-z]+) \\|").FindAllStringSubmatch(section, -1) {
+		rows[m[1]] = true
+	}
+	used := map[Kind]bool{}
+	for _, tok := range allowedTokens {
+		used[tok.Kind] = true
+	}
+	for kind := range used {
+		if !rows[string(kind)] {
+			t.Errorf("SKILL.md's value table has no row for kind %s", kind)
+		}
+	}
+}
