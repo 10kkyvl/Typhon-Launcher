@@ -30,6 +30,11 @@ function tabbable(el: HTMLElement): boolean {
   return shown(el);
 }
 
+/** `el` can take focus from script: a control, a link, or anything with a tabindex, not disabled. */
+export function canTakeFocus(el: Element): boolean {
+  return el.matches(FOCUSABLE) && !(el as HTMLButtonElement).disabled;
+}
+
 /** Tabbable elements inside `root`, in DOM order. */
 export function focusableIn(root: ParentNode): HTMLElement[] {
   return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(tabbable);

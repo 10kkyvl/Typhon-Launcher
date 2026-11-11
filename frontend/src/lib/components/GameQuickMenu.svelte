@@ -44,7 +44,7 @@
   import { externalLabel, isExternal, isLaunchable } from '../library/external';
   import { errorMessage } from '../utils/errors';
   import { msg } from '../i18n';
-  import { initialFocus } from '../layers/focus';
+  import { canTakeFocus, initialFocus } from '../layers/focus';
 
   const game = $derived($gameMenu ? ($libraryGames.find((g) => g.id === $gameMenu?.gameId) ?? null) : null);
 
@@ -54,7 +54,7 @@
   // own control, else (the game was removed) the next game in the same list, else the page heading.
   // Picked while the page is live: once a dialog is open the page is inert and has nothing to focus.
   let homes: HTMLElement[] = [];
-  const returnHome = () => homes.find((home) => home.isConnected) ?? null;
+  const returnHome = () => homes.find((home) => home.isConnected && canTakeFocus(home)) ?? null;
 
   function homesOf(source: HTMLElement | null | undefined): HTMLElement[] {
     if (!source) return [];

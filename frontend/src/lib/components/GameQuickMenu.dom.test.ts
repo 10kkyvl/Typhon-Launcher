@@ -103,12 +103,12 @@ describe('dialogs opened from the game context menu return focus to the game', (
   describe('the remove dialog', () => {
     const info = { gameId: 'g1', title: 'Hades', installDir: '', installType: '', method: 'none', owned: false, uninstallUnknown: false, sizeBytes: 0, sizeUnknown: true, dirMissing: false, quietUninstall: false, running: false, busy: false, downloadId: '' } as unknown as RemovalInfo;
 
-    async function remove() {
+    async function remove(note = false) {
       vi.mocked(inspectRemoval).mockResolvedValueOnce(info);
       vi.mocked(removeGame).mockImplementationOnce(async () => {
         libraryGames.update((list) => list.filter((game) => game.id !== 'g1'));
       });
-      render(GameMenuHarness, { target: app });
+      render(GameMenuHarness, { target: app, props: { note } });
       const picked = await pick('Hades', msg('games.actionRemoveLibrary'));
       const dialog = await screen.findByRole('dialog', { name: msg('modals.removeGameTitle') });
       return { ...picked, dialog };
@@ -135,6 +135,17 @@ describe('dialogs opened from the game context menu return focus to the game', (
 
     it('removed, and it was the only game: to the page heading', async () => {
       const { keys, dialog } = await remove();
+
+      const confirm = (await within(dialog).findAllByRole('button', { name: msg('modals.removeGameModeLibraryLabel') })).at(-1) as HTMLElement;
+      await keys.click(confirm);
+
+      await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Library' }));
+    });
+  
+
+    it('removed, next to an item with nothing to focus: past it, to the page heading', async () => {
+      const { keys, dialog } = await remove(true);
 
       const confirm = (await within(dialog).findAllByRole('button', { name: msg('modals.removeGameModeLibraryLabel') })).at(-1) as HTMLElement;
       await keys.click(confirm);

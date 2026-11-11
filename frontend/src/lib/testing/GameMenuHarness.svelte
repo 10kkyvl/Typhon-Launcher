@@ -4,7 +4,9 @@
   import { openGameMenu } from '../stores/gameMenu';
   import { libraryGames } from '../stores/library';
 
-  // A page of game cards, each with its context menu, as on the library page. For GameQuickMenu.dom.test.ts.
+  // A page of game cards, each with its context menu, as on the library page; optionally a plain
+  // note after them in the list (nothing to focus). For GameQuickMenu.dom.test.ts.
+  let { note = false }: { note?: boolean } = $props();
 </script>
 
 <PageHeader title="Library" />
@@ -14,5 +16,6 @@
       <a href={`#${game.id}`}>{game.title}</a>
     </li>
   {/each}
+  {#if note}<li>That is the whole library.</li>{/if}
 </ul>
 <GameQuickMenu />
