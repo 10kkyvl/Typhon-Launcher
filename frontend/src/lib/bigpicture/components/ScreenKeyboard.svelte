@@ -70,7 +70,7 @@
 </div>
 
 <style>
-  .keyboard-veil { position: absolute; inset: 0 0 68px; z-index: 4; display: flex; align-items: flex-start; justify-content: center; padding: 24px; background: #050910dd; backdrop-filter: blur(12px); overflow: auto; }
+  .keyboard-veil { position: absolute; inset: 0 0 68px; z-index: var(--z-bp-keyboard); display: flex; align-items: flex-start; justify-content: center; padding: 24px; background: #050910dd; backdrop-filter: blur(12px); overflow: auto; }
   .keyboard { width: min(920px, 100%); flex-shrink: 0; margin-block: auto; padding: 28px; border: 1px solid var(--border-strong); border-radius: 20px; background: var(--surface-3); }
   h2 { font-size: 1.4em; margin-bottom: 16px; }
   input { width: 100%; padding: 14px 18px; background: var(--bg); border: 1px solid var(--border-strong); border-radius: 10px; color: var(--text); font: inherit; }

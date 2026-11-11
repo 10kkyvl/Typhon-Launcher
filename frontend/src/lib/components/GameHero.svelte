@@ -32,6 +32,7 @@
 <style>
   .hero {
     position: relative;
+    isolation: isolate;
     width: 100%;
     border-radius: var(--radius-xl);
     overflow: hidden;

@@ -60,7 +60,7 @@
 <style>
   .corner {
     position: fixed;
-    z-index: 120;
+    z-index: var(--z-corner);
     right: 2.4rem;
     bottom: 2.4rem;
     display: flex;

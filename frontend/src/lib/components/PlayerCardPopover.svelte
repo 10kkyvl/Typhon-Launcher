@@ -95,7 +95,7 @@
 <style>
   .popover {
     position: fixed;
-    z-index: 80;
+    z-index: var(--z-tooltip);
     pointer-events: none;
     box-shadow: var(--shadow-pop);
     border-radius: var(--radius-lg);

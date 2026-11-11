@@ -1652,7 +1652,7 @@
   .tabs-wrap {
     position: sticky;
     top: 0;
-    z-index: 5;
+    z-index: var(--z-sticky);
     margin: var(--space-2) 0 var(--space-6);
     padding: 0 var(--space-4);
     background: var(--island-fill);

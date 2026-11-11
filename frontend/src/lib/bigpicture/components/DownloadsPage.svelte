@@ -1246,7 +1246,7 @@
   .transfer-empty h2, .transfer-empty p { margin: 0; }
   .transfer-empty p { max-width: 37.4rem; color: var(--text-3); }
 
-  .dialog-veil { position: fixed; inset: 0; z-index: 150; display: flex; align-items: center; justify-content: center; padding: 2.2rem; background: rgba(4, 7, 12, .78); }
+  .dialog-veil { position: fixed; inset: 0; z-index: var(--z-bp-dialog); display: flex; align-items: center; justify-content: center; padding: 2.2rem; background: rgba(4, 7, 12, .78); }
   .transfer-dialog { width: min(70.4rem, 100%); max-height: min(90vh, 68.2rem); overflow: auto; display: flex; flex-direction: column; gap: 1.1rem; padding: 1.65rem; border: 1px solid var(--border-strong); border-radius: 1.21rem; background: var(--surface-2); color: var(--text); box-shadow: 0 1.65rem 5.5rem rgba(0, 0, 0, .45); }
   .transfer-dialog h2 { margin: 0; font-size: 1.25em; }
   .dialog-note { margin: 0; color: var(--text-2); font-size: .9em; line-height: 1.5; }

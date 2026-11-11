@@ -121,7 +121,7 @@
   .screen {
     position: fixed;
     inset: 0;
-    z-index: 100;
+    z-index: var(--z-gate);
     padding-top: var(--titlebar-h);
     display: flex;
     align-items: center;

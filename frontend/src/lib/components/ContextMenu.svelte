@@ -74,7 +74,7 @@
 <style>
   .menu {
     position: fixed;
-    z-index: 90;
+    z-index: var(--z-menu);
     min-width: 20rem;
     padding: 0.4rem;
     background: var(--surface-3);

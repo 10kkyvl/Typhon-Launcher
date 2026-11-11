@@ -23,7 +23,7 @@
 
   .tip {
     position: absolute;
-    z-index: 60;
+    z-index: var(--z-tooltip);
     bottom: calc(100% + 0.6rem);
     left: 50%;
     transform: translateX(-50%) translateY(2px);

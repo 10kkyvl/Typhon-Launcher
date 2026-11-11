@@ -194,7 +194,7 @@
   }
 
   .framed .dot {
-    z-index: 2;
+    z-index: 1;
   }
 
   .dot.changed {

@@ -93,7 +93,7 @@
 
   .menu {
     position: absolute;
-    z-index: 40;
+    z-index: var(--z-popover);
     top: calc(100% + 0.4rem);
     left: 0;
     right: 0;

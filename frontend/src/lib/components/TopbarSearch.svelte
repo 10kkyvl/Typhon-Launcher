@@ -223,7 +223,7 @@
 
   .results {
     position: absolute;
-    z-index: 50;
+    z-index: var(--z-popover);
     top: calc(100% + 0.6rem);
     left: 0;
     right: 0;

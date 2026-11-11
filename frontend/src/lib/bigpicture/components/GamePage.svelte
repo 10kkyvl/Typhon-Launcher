@@ -952,7 +952,7 @@
   .loading-state.compact { min-height: 15.4rem; flex-direction: row; justify-content: flex-start; }
   .spinner { width: 3.3rem; height: 3.3rem; flex: 0 0 auto; border: 3px solid color-mix(in srgb, var(--accent) 22%, transparent); border-top-color: var(--accent-bright); border-radius: 50%; animation: spin 850ms linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .dialog-backdrop { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 2.2rem; background: rgba(0,0,0,.76); }
+  .dialog-backdrop { position: fixed; z-index: var(--z-bp-dialog); inset: 0; display: grid; place-items: center; padding: 2.2rem; background: rgba(0,0,0,.76); }
   .bp-dialog { display: flex; width: min(96.8rem, 100%); max-height: min(90vh, 110rem); flex-direction: column; gap: 1.65rem; overflow: auto; padding: 2.64rem; border: 1px solid var(--border); border-radius: 1.98rem; background: var(--surface-2); box-shadow: 0 3.3rem 8.8rem rgba(0,0,0,.5); }
   .dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 2.2rem; }
   .dialog-head h2 { margin: .55rem 0 0; font-size: 2.75rem; }

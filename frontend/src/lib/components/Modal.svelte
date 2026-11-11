@@ -79,7 +79,7 @@
   .overlay {
     position: fixed;
     inset: 0;
-    z-index: 100;
+    z-index: var(--z-dialog);
     padding-top: var(--titlebar-h);
     display: flex;
     align-items: center;

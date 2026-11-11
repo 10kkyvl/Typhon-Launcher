@@ -21,4 +21,27 @@
 
   --motion-fast: var(--dur);
   --ease-out: var(--ease);
+
+  /* Window layers, bottom to top (z-index.test.ts holds the order). Dialogs sit above Big Picture and
+     the chat so a prompt opened there is seen and answered; the title bar sits above dialog scrims so
+     the window can still be moved and closed; the image viewer and the update screen cover it. */
+  --z-backdrop: -1; /* the window backdrop behind the shell */
+  --z-sticky: 10; /* sticky bars inside a page */
+  --z-popover: 50; /* popovers and menus anchored in a page or the top bar */
+  --z-tooltip: 60; /* tooltips, the hover player card */
+  --z-menu: 90; /* the context menu, placed at the pointer anywhere in the window */
+  --z-corner: 120; /* toasts, the activity dock, the self-update card */
+  --z-bigpicture: 130;
+  --z-chat: 140;
+  --z-gate: 150; /* consent and legal screens */
+  --z-dialog: 160;
+  --z-titlebar: 170;
+  --z-lightbox: 180;
+  --z-update: 200;
+
+  /* Inside Big Picture's own stacking context (.big-picture). */
+  --z-bp-menu: 2;
+  --z-bp-keyboard: 4;
+  --z-bp-toasts: 10;
+  --z-bp-dialog: 100;
 }

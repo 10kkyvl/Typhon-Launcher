@@ -130,7 +130,7 @@
   .topbar {
     container: topbar / inline-size;
     position: relative;
-    z-index: 50;
+    z-index: var(--z-popover);
     display: flex;
     align-items: center;
     gap: var(--space-3);
@@ -290,7 +290,7 @@
 
   .notifications {
     position: absolute;
-    z-index: 50;
+    z-index: var(--z-popover);
     top: calc(100% + 0.6rem);
     right: 0;
     width: 32rem;

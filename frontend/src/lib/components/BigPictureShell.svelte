@@ -304,7 +304,7 @@
 </div>
 
 <style>
-  .big-picture { --bp-unit: clamp(16px, 1.25vw, 28px); position: fixed; inset: 0; z-index: 130; overflow: hidden; background: var(--bg); color: var(--text); font-size: var(--bp-unit); line-height: 1.45; }
+  .big-picture { --bp-unit: clamp(16px, 1.25vw, 28px); position: fixed; inset: 0; z-index: var(--z-bigpicture); overflow: hidden; background: var(--bg); color: var(--text); font-size: var(--bp-unit); line-height: 1.45; }
   .stage { position: relative; height: calc(100% - 68px); display: flex; flex-direction: column; }
   header { padding: 18px 3vw 12px; display: flex; gap: 20px; justify-content: space-between; align-items: center; flex: none; border-bottom: 1px solid var(--border); }
   .brand { display: flex; align-items: center; gap: 12px; font-size: 16px; white-space: nowrap; letter-spacing: .04em; }.brand img { width: 34px; height: 34px; }
@@ -314,7 +314,7 @@
   footer { position: absolute; bottom: 0; inset-inline: 0; height: 68px; padding: 0 3vw; display: flex; justify-content: space-between; gap: 24px; align-items: center; background: color-mix(in srgb, var(--bg) 96%, transparent); border-top: 1px solid var(--border); font-size: clamp(13px, .86vw, 20px); }
   .hints, .hints > span, .input-device { display: flex; align-items: center; gap: 9px; }.hints { gap: 20px; color: var(--text-2); }kbd { display: inline-flex; justify-content: center; align-items: center; min-width: 26px; padding: 3px 6px; font: inherit; font-weight: 600; border: 1px solid var(--border-strong); border-radius: 6px; color: var(--text); }.input-device { color: var(--text-3); font-size: .9em; max-width: 230px; }
   .menu-dialog { width: min(760px, 95vw); }.menu-items { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }.menu-items button { justify-content: flex-start; text-align: left; }.floating { position: absolute; bottom: 85px; left: 4vw; right: 4vw; }
-  .toast-corner { position: absolute; z-index: 10; right: 3vw; bottom: 85px; pointer-events: none; }.toast-corner > :global(*) { pointer-events: auto; }
+  .toast-corner { position: absolute; z-index: var(--z-bp-toasts); right: 3vw; bottom: 85px; pointer-events: none; }.toast-corner > :global(*) { pointer-events: auto; }
   @media (max-width: 1150px) { .input-device { display: none; }.brand span { display: none; } }
   @media (max-width: 700px) { nav button span { display: none; }.extra-hint { display: none !important; }.menu-items { grid-template-columns: 1fr; } }
   @media (prefers-reduced-motion: reduce) { .page-slot { scroll-behavior: auto; } }

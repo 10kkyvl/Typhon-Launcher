@@ -34,8 +34,8 @@
 <style>
   .titlebar {
     position: relative;
-    /* Above the dialog and consent backdrops (z-index 100), so the window stays movable behind them. */
-    z-index: 110;
+    /* Above dialog and consent scrims, so the window stays movable and closable behind them. */
+    z-index: var(--z-titlebar);
     display: flex;
     justify-content: flex-end;
     flex-shrink: 0;

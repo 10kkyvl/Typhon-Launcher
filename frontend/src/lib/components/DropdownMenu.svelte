@@ -66,7 +66,7 @@
 
   .menu {
     position: absolute;
-    z-index: 50;
+    z-index: var(--z-popover);
     top: calc(100% + 0.4rem);
     min-width: 19rem;
     padding: 0.4rem;

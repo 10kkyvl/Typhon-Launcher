@@ -141,6 +141,7 @@
 <style>
   .sidebar {
     position: relative;
+    isolation: isolate;
     display: flex;
     flex-direction: column;
     width: var(--sidebar-w);

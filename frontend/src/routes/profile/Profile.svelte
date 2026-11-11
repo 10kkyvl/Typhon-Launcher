@@ -521,7 +521,7 @@
   .topbar {
     position: sticky;
     top: 0;
-    z-index: 5;
+    z-index: var(--z-sticky);
     display: flex;
     align-items: center;
     gap: var(--space-3);

@@ -181,7 +181,7 @@
   .backdrop {
     position: fixed;
     inset: 0;
-    z-index: 150;
+    z-index: var(--z-lightbox);
     pointer-events: auto;
     display: flex;
     align-items: center;

@@ -88,7 +88,7 @@
   .overlay {
     position: fixed;
     inset: 0;
-    z-index: 200;
+    z-index: var(--z-update);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -150,7 +150,7 @@
     position: fixed;
     left: calc(var(--sidebar-now) + 2.4rem);
     bottom: 2.4rem;
-    z-index: 150;
+    z-index: var(--z-corner);
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
