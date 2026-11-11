@@ -25,6 +25,7 @@
   );
 
   $effect(() => {
+    if (!look) return;
     const ids = playedArtRequests($libraryGames, $gameArt);
     const own = target ? artRequest(target, $libraryGames, $gameArt) : null;
     if (own && !ids.includes(own)) ids.push(own);
@@ -38,8 +39,9 @@
   const look = $derived.by((): BackdropLook | null => {
     void $activeTheme;
     void $displayedAccent;
-    const saturate = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ambient-saturate'));
-    return backdropLook(resolveColors({}, BACKDROP_LOOK_COLORS), saturate);
+    const root = getComputedStyle(document.documentElement);
+    const number = (name: string) => Number.parseFloat(root.getPropertyValue(name));
+    return backdropLook(resolveColors({}, BACKDROP_LOOK_COLORS), number('--ambient-saturate'), number('--ambient-dim'));
   });
 
   $effect(() => {

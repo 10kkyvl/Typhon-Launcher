@@ -41,6 +41,13 @@ The personal accent from Settings is applied on top of the theme and derives eve
 The top bar's search field and button groups are rounded by `--radius-control` (`999px`, pills);
 to get square controls back, set it to a small length such as `0.8rem`.
 
+Behind the main window's interface a blurred picture of the game's art shows. It is always dimmed
+toward the page colour `--bg`; a theme sets only how strongly: `--ambient-dim` is a number from 0
+to 1, the share of the page colour laid over the art (`0.6` in the dark theme, `0.74` in the light
+ones, `1` turns the art off, as High contrast does). The launcher limits the art's brightness
+itself so text and status colours on it read at AA or better. How fast the art flows from one game
+to the next is `--motion-backdrop`.
+
 ## What happens to a 1.x theme
 
 Typhon converts such a theme to the new contract whenever it reads one: from its own storage at

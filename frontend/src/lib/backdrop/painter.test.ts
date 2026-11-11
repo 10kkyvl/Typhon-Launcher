@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { BackdropPainter, PICTURE_TIMEOUT_MS, type PainterDeps } from './painter';
 import type { BackdropLook } from './pixels';
 
-const LOOK: BackdropLook = { saturate: 0.75, dim: [14, 15, 17, 0.6], limit: { max: 0.03 } };
+const LOOK: BackdropLook = { saturate: 0.75, page: [14, 15, 17], dim: 0.6, limit: { max: 0.03 } };
 const KEY = 'dark';
 
 function deferred<T>() {

@@ -22,11 +22,16 @@ type Token struct {
 // owners to one value and make the last writer win at random.
 var settingsOwnedTokens = []string{"--ui-scale"}
 
+// numberRanges bounds the number tokens that are a share: a value outside is
+// refused like any value of the wrong kind, never clamped behind the user.
+var numberRanges = map[string][2]float64{
+	"--ambient-dim": {0, 1},
+}
+
 var allowedTokens = []Token{
 	{"--bg", KindColor},
 	{"--bg-sidebar", KindColor},
 	{"--island-fill", KindColor},
-	{"--ambient-dim", KindColor},
 	{"--surface", KindColor},
 	{"--surface-2", KindColor},
 	{"--surface-3", KindColor},
@@ -93,6 +98,7 @@ var allowedTokens = []Token{
 	{"--dur-panel", KindTime},
 	{"--dur-slow", KindTime},
 	{"--motion-backdrop", KindTime},
+	{"--ambient-dim", KindNumber},
 	{"--shadow-pop", KindShadow},
 	{"--shadow-modal", KindShadow},
 	{"--shadow-lift", KindShadow},

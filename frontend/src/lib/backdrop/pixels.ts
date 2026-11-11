@@ -23,8 +23,10 @@ export interface WashLimit {
 export interface BackdropLook {
   /** 1 keeps the art's colours, 0 makes it grey. */
   saturate: number;
-  /** The colour every pixel is pulled toward, by its alpha. */
-  dim: RGBA;
+  /** The page colour (`--bg`): every pixel is pulled toward it, and the art is laid over it. */
+  page: RGB;
+  /** How far every pixel is pulled toward the page, 0..1 (`--ambient-dim`). */
+  dim: number;
   limit: WashLimit;
 }
 
@@ -44,7 +46,7 @@ export const WASH_TEXT: readonly { name: string; min: number }[] = [
 ];
 const WASH_MARGIN = 0.1;
 
-export const BACKDROP_LOOK_COLORS: readonly string[] = ['--bg', '--ambient-dim', ...WASH_TEXT.map((t) => t.name)];
+export const BACKDROP_LOOK_COLORS: readonly string[] = ['--bg', ...WASH_TEXT.map((t) => t.name)];
 
 const over = (c: RGBA, below: RGB): RGB => [0, 1, 2].map((i) => c[i] * c[3] + below[i] * (1 - c[3])) as RGB;
 
@@ -64,13 +66,13 @@ export function washLimit(texts: readonly { color: RGB; ratio: number }[], dark:
 }
 
 /**
- * The look for the theme on screen, from its resolved colours. Null means no wash: a colour could not be
- * read, the dim is opaque (nothing of the art would show) or no luminance keeps the text readable.
+ * The look for the theme on screen, from its resolved colours, the shell's saturation and the theme's
+ * dim share. Null means no wash: a colour or the share could not be read, the share is 1 (nothing of
+ * the art would show) or no luminance keeps the text readable.
  */
-export function backdropLook(colors: Readonly<Record<string, RGBA | undefined>>, saturate: number): BackdropLook | null {
+export function backdropLook(colors: Readonly<Record<string, RGBA | undefined>>, saturate: number, dim: number): BackdropLook | null {
   const bgValue = colors['--bg'];
-  const dim = colors['--ambient-dim'];
-  if (!bgValue || !dim || dim[3] >= 1) return null;
+  if (!bgValue || !(dim >= 0 && dim < 1)) return null;
   const bg = over(bgValue, [0, 0, 0]);
   const texts: { color: RGB; ratio: number }[] = [];
   for (const text of WASH_TEXT) {
@@ -80,7 +82,7 @@ export function backdropLook(colors: Readonly<Record<string, RGBA | undefined>>,
   }
   const limit = washLimit(texts, !isLight(bg));
   if (!limit) return null;
-  return { saturate: Number.isNaN(saturate) ? 1 : Math.min(1, Math.max(0, saturate)), dim: [...dim], limit };
+  return { saturate: Number.isNaN(saturate) ? 1 : Math.min(1, Math.max(0, saturate)), page: bg, dim, limit };
 }
 
 /** Separable box blur, `passes` times, radius `r`, edges clamped. In place. */
@@ -132,7 +134,8 @@ function clampLuminance(px: Pixels, i: number, limit: WashLimit) {
 /** Softens, desaturates, dims and luminance-limits an opaque picture in place. */
 export function lookPixels(px: Pixels, w: number, h: number, look: BackdropLook) {
   boxBlur(px, w, h, 2, 2);
-  const [dr, dg, db, da] = look.dim;
+  const [dr, dg, db] = look.page;
+  const da = look.dim;
   for (let i = 0; i + 3 < px.length; i += 4) {
     const grey = 0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2];
     const r = grey + (px[i] - grey) * look.saturate;
@@ -166,11 +169,28 @@ export function mixPixels(from: Pixels, to: Pixels, t: number, out: Pixels) {
   }
 }
 
+type ArtContext = Pick<CanvasRenderingContext2D, 'fillStyle' | 'fillRect' | 'drawImage' | 'imageSmoothingQuality'>;
+
+/**
+ * Cover-fits the art into BACKDROP_W x BACKDROP_H over the page colour, so the transparent parts of a
+ * cover or logo show the page, as they would on screen, instead of baking as black.
+ */
+export function drawArt(ctx: ArtContext, img: HTMLImageElement, look: BackdropLook) {
+  const [r, g, b] = look.page.map(Math.round);
+  ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+  ctx.fillRect(0, 0, BACKDROP_W, BACKDROP_H);
+  const scale = Math.max(BACKDROP_W / img.naturalWidth, BACKDROP_H / img.naturalHeight);
+  const dw = img.naturalWidth * scale;
+  const dh = img.naturalHeight * scale;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, (BACKDROP_W - dw) / 2, (BACKDROP_H - dh) / 2, dw, dh);
+}
+
 let bakeCanvas: HTMLCanvasElement | undefined;
 
 /**
- * The picture for a loaded image: cover-fitted into BACKDROP_W x BACKDROP_H, then given the look.
- * Null when there is nothing to read: an empty image, no 2D context, or a canvas the image tainted.
+ * The picture for a loaded image, drawn by `drawArt` and given the look. Null when there is nothing to
+ * read: an empty image, no 2D context, or a canvas the image tainted.
  */
 export function bakeImage(img: HTMLImageElement, look: BackdropLook): Uint8ClampedArray | null {
   if (!img.complete || img.naturalWidth === 0 || img.naturalHeight === 0) return null;
@@ -179,12 +199,7 @@ export function bakeImage(img: HTMLImageElement, look: BackdropLook): Uint8Clamp
   bakeCanvas.height = BACKDROP_H;
   const ctx = bakeCanvas.getContext('2d');
   if (!ctx) return null;
-  const scale = Math.max(BACKDROP_W / img.naturalWidth, BACKDROP_H / img.naturalHeight);
-  const dw = img.naturalWidth * scale;
-  const dh = img.naturalHeight * scale;
-  ctx.clearRect(0, 0, BACKDROP_W, BACKDROP_H);
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(img, (BACKDROP_W - dw) / 2, (BACKDROP_H - dh) / 2, dw, dh);
+  drawArt(ctx, img, look);
   let data: ImageData;
   try {
     data = ctx.getImageData(0, 0, BACKDROP_W, BACKDROP_H);

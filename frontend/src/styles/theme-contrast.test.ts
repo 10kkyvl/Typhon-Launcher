@@ -165,7 +165,7 @@ const ON_WASH: { fg: string; min: number }[] = [
 
 function washLook(tokens: Record<string, string>) {
   const colors = Object.fromEntries(BACKDROP_LOOK_COLORS.map((name) => [name, rgba(tokens[name] ?? name)]));
-  return backdropLook(colors, shellNumber('--ambient-saturate'));
+  return backdropLook(colors, shellNumber('--ambient-saturate'), Number(tokens['--ambient-dim']));
 }
 
 function washFailures(tokens: Record<string, string>): string[] {

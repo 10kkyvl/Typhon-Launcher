@@ -88,7 +88,7 @@ func validTokenKind(name string, kind Kind, value string) bool {
 	case KindLength:
 		return c.isLength(v)
 	case KindNumber:
-		return numberRe.MatchString(v)
+		return numberRe.MatchString(v) && c.inNumberRange(v)
 	case KindTime:
 		return c.isTime(v)
 	case KindEase:
@@ -99,6 +99,15 @@ func validTokenKind(name string, kind Kind, value string) bool {
 		return c.isFont(v)
 	}
 	return false
+}
+
+func (c checker) inNumberRange(v string) bool {
+	bounds, ok := numberRanges[c.self]
+	if !ok {
+		return true
+	}
+	n, err := strconv.ParseFloat(v, 64)
+	return err == nil && n >= bounds[0] && n <= bounds[1]
 }
 
 func (c checker) isVar(v string, kind Kind) bool {

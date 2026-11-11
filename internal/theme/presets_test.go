@@ -99,6 +99,10 @@ func TestBuiltInPresetsListedInOrder(t *testing.T) {
 
 var shadowColor = regexp.MustCompile(`rgba?\([^)]*\)|#[0-9a-fA-F]+`)
 
+// How far the backdrop is dimmed toward the page is tuned with the palette:
+// a light page needs more of itself over the art than a dark one.
+var paletteNumbers = map[string]bool{"--ambient-dim": true}
+
 // Presets differ in colour only: shape, motion and type are one design, so a
 // value tuned in one preset and forgotten in another shows up here.
 func TestPresetsShareEverythingButColour(t *testing.T) {
@@ -114,9 +118,9 @@ func TestPresetsShareEverythingButColour(t *testing.T) {
 					t.Errorf("%s = %q is not a valid %s", tok.Name, value, tok.Kind)
 				}
 				dark := presetDark.Tokens[tok.Name]
-				switch tok.Kind {
-				case KindColor:
-				case KindShadow:
+				switch {
+				case tok.Kind == KindColor || paletteNumbers[tok.Name]:
+				case tok.Kind == KindShadow:
 					if got, want := shadowColor.ReplaceAllString(value, "C"), shadowColor.ReplaceAllString(dark, "C"); got != want {
 						t.Errorf("%s geometry = %q, dark has %q", tok.Name, got, want)
 					}

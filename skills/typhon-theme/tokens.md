@@ -9,7 +9,6 @@ Every token a `.typhontheme` file may set. *Default* is the built-in dark value 
 | `--bg` | color | Window background: The main background behind everything in the window | `#0e0f11` |
 | `--bg-sidebar` | color | Avatar ring: The ring around the status dot of the avatar on the sidebar island; set it to the colour `--island-fill` shows over `--bg` | `#0b0c0e` |
 | `--island-fill` | color | Islands: fill: Fill of the floating panels of the interface; translucent, the window shows through it. Text on it has to stay readable over black and over white as well as over `--bg` | `rgba(11, 12, 14, 0.88)` |
-| `--ambient-dim` | color | Game backdrop: dim: Colour the game art behind the interface is pulled toward, its alpha sets how far: the more opaque, the calmer the art. The launcher still limits the art's brightness so text stays readable; an opaque colour turns the art off | `rgba(14, 15, 17, 0.6)` |
 
 ## Surfaces and borders
 
@@ -106,6 +105,7 @@ Every token a `.typhontheme` file may set. *Default* is the built-in dark value 
 | `--dur-panel` | time | Animation duration: panels: Showing and hiding panels and lists | `200ms` |
 | `--dur-slow` | time | Animation duration: slow: Slow effects: game covers, avatars appearing | `450ms` |
 | `--motion-backdrop` | time | Animation duration: game backdrop: How long the art behind the interface takes to flow from one game to the next | `600ms` |
+| `--ambient-dim` | number | Game backdrop: dim: Share of the page colour (`--bg`) laid over the game art behind the interface, from 0 to 1: the more, the calmer the art; 1 turns the art off. The launcher still limits the art's brightness so text stays readable | `0.6` |
 | `--shadow-pop` | shadow | Shadow: menus and tooltips: Shadow of drop-down menus, tooltips and notifications | `0 0.8rem 2.4rem rgba(0, 0, 0, 0.5), 0 1px 0 rgba(255, 255, 255, 0.04) inset` |
 | `--shadow-modal` | shadow | Shadow: dialogs: Shadow of dialog windows and full-screen viewers | `0 2.4rem 6rem rgba(0, 0, 0, 0.6)` |
 | `--shadow-lift` | shadow | Shadow: raised card: Shadow of a game cover on hover | `0 1.2rem 2.8rem -0.8rem rgba(0, 0, 0, 0.65)` |

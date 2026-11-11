@@ -4,7 +4,6 @@
   --bg: #0e0f11;
   --bg-sidebar: #0b0c0e;
   --island-fill: rgba(11, 12, 14, 0.88);
-  --ambient-dim: rgba(14, 15, 17, 0.6);
   --surface: #16181b;
   --surface-2: #1e2024;
   --surface-3: #25282c;
@@ -81,6 +80,7 @@
   --dur-panel: 200ms;
   --dur-slow: 450ms;
   --motion-backdrop: 600ms;
+  --ambient-dim: 0.6;
   --ease-spring: cubic-bezier(0.34, 1.36, 0.64, 1);
 
   --shadow-pop: 0 0.8rem 2.4rem rgba(0, 0, 0, 0.5), 0 1px 0 rgba(255, 255, 255, 0.04) inset;

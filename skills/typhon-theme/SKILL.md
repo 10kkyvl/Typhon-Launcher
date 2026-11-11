@@ -44,7 +44,7 @@ The file is exactly this object and nothing else (unknown keys are refused):
 
 ## Writing the tokens
 
-1. **Always set all 27 color tokens** (groups Background, Surfaces, Text, Accent, Status in
+1. **Always set all 26 color tokens** (groups Background, Surfaces, Text, Accent, Status in
    [tokens.md](tokens.md)). A token left out falls back to the built-in *dark* value, so a light
    theme with missing colors ends up half dark.
 2. Size, font, animation and shadow tokens are optional. Leave them out unless the user asked for
@@ -55,6 +55,9 @@ The file is exactly this object and nothing else (unknown keys are refused):
    `--shadow-modal`: `0 2.4rem 6rem rgba(15, 23, 32, 0.16)`,
    `--shadow-lift`: `0 1.2rem 2.8rem -0.8rem rgba(15, 23, 32, 0.22)` (tint them to the theme if you like).
    For square controls instead of pills, set `--radius-control` to a small length such as `0.8rem`.
+   With `"base": "light"` also set `--ambient-dim` to `0.74`: the game art behind the interface
+   is dimmed toward `--bg` by that share, and a light page needs more of itself over the art.
+   `1` turns the art off; the launcher limits the art's brightness for the text itself.
 3. Keep the surface ladder ordered by elevation: `--bg` → `--surface` → `--surface-2` →
    `--surface-3` → `--surface-4`, each a small step lighter (dark base) or darker (light base).
 4. Keep text readable. Contrast ratio (WCAG) of `--text` on `--bg` and on `--surface-2` at least
@@ -64,10 +67,7 @@ The file is exactly this object and nothing else (unknown keys are refused):
    against every surface. `--island-fill` (the floating sidebar) is translucent: measure the
    text levels on it painted over `--bg`, over black and over white, and raise its alpha until
    they hold. Set `--bg-sidebar` to the colour `--island-fill` shows over `--bg` (it rings the
-   status dot of the avatar on the island). `--ambient-dim` is the colour the game art behind
-   the interface is pulled toward: `--bg` at 0.6 alpha (dark base) or 0.74 (light base); the
-   launcher limits the art's brightness for the text levels itself, and an opaque value turns
-   the art off. The launcher does not check contrast for you —
+   status dot of the avatar on the island). The launcher does not check contrast for you —
    compute it before writing the file.
 5. Derive the accent family from one hue: `--accent-hover` a step lighter (dark base) or darker
    (light base); `--accent-subtle` the accent at 0.12–0.18 alpha; `--accent-bright` a lighter
@@ -133,7 +133,6 @@ A complete dark theme ("night ocean": deep blue with a teal accent):
       "--bg": "#06111c",
       "--bg-sidebar": "#06111c",
       "--island-fill": "rgba(6, 17, 28, 0.92)",
-      "--ambient-dim": "rgba(6, 17, 28, 0.6)",
       "--surface": "#0a1826",
       "--surface-2": "#0e1f31",
       "--surface-3": "#14283d",
@@ -169,7 +168,7 @@ A complete dark theme ("night ocean": deep blue with a teal accent):
       `name`, `base`, `tokens`, `css` and, if the user asked to move or hide something, `layout`.
 - [ ] Every `layout` id is in layout.md, none appears twice, `settings` is not hidden.
 - [ ] `css` has no backslash and nothing from the refused list in Custom CSS.
-- [ ] All 27 color tokens are present (plus the three shadows for a light base); every token name
+- [ ] All 26 color tokens are present (plus the three shadows and `--ambient-dim` for a light base); every token name
       is in tokens.md; no `--ui-scale`.
 - [ ] Every value matches its kind; no quotes anywhere inside values.
 - [ ] Contrast targets from step 4 hold (state the ratios you computed).
