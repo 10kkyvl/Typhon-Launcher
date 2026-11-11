@@ -5,7 +5,6 @@
   import { incomingCount } from '../stores/social';
   import { toast } from '../stores/toasts';
   import { runWindowAction } from '../stores/window';
-  import { clickOutside } from '../utils/clickOutside';
   import { msg } from '../i18n';
   import { enterBigPicture } from '../bigpicture/mode';
   import { themeLayout } from '../stores/layout';
@@ -14,7 +13,6 @@
   import NotificationsPanel from './NotificationsPanel.svelte';
   import TopbarSearch from './TopbarSearch.svelte';
 
-  let notificationsOpen = $state(false);
   let enteringBigPicture = $state(false);
 
   async function openBigPicture() {
@@ -62,13 +60,8 @@
             </IconButton>
           </div>
         {:else if id === 'notifications'}
-          <div
-            class="icon-slot"
-            data-part="topbar-action"
-            data-id="notifications"
-            use:clickOutside={() => (notificationsOpen = false)}
-          >
-            <NotificationsPanel bind:open={notificationsOpen} />
+          <div class="icon-slot" data-part="topbar-action" data-id="notifications">
+            <NotificationsPanel />
             {#if $notifications.length > 0}
               <span class="badge">{$notifications.length}</span>
             {/if}
@@ -92,7 +85,7 @@
 <style>
   /* The account chip reads this container's width (AccountMenu) to drop its text before the search shrinks;
      the centred row has its own name because it runs out of room sooner. The row is lifted as a whole so
-     the popovers hanging below it stay over the page even where the container confines their z-index. */
+     the search results hanging below it stay over the page even where the container confines their z-index. */
   .topbar {
     container: topbar / inline-size;
     position: relative;

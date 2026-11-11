@@ -1,49 +1,69 @@
 <script lang="ts">
   import { Bell } from '@lucide/svelte';
-  import { navigate } from '../stores/router';
+  import { untrack } from 'svelte';
+  import { navigate, route } from '../stores/router';
   import { markAllRead, notifications, openHistory, type Notification } from '../stores/notifications';
   import { msg } from '../i18n';
   import IconButton from './IconButton.svelte';
+  import Popover from './Popover.svelte';
 
-  let { open = $bindable(false) }: { open?: boolean } = $props();
+  /**
+   * The top bar's notifications: the bell and, under it, the unread notifications with "mark all read"
+   * and the way to the full history. Pressing a notification closes the panel and opens its page.
+   */
+  let open = $state(false);
 
-  function openNotification(item: Notification) {
-    open = false;
+  // The panel belongs to the page it was opened on: a route change, whatever made it, closes it.
+  const routeKey = $derived($route.key);
+  $effect(() => {
+    void routeKey;
+    untrack(() => (open = false));
+  });
+
+  function openNotification(item: Notification, close: () => void) {
+    close();
     navigate(item.route, item.params);
     item.onOpen?.();
   }
 </script>
 
-<IconButton label={msg('ui.notifications')} active={open} onclick={() => (open = !open)}>
-  <Bell size="1.8rem" strokeWidth={1.8} />
-</IconButton>
-{#if open}
-  <div class="notifications">
+<Popover bind:open label={msg('ui.notifications')} placement="bottom-end" width="32rem" partId="notifications">
+  {#snippet trigger({ open, props })}
+    <IconButton label={msg('ui.notifications')} active={open} {...props}>
+      <Bell size="1.8rem" strokeWidth={1.8} />
+    </IconButton>
+  {/snippet}
+  {#snippet children({ close })}
     <div class="notifications-head-row">
-      <div class="notifications-head">{msg('ui.notifications')}</div>
+      <div class="notifications-head" aria-hidden="true">{msg('ui.notifications')}</div>
       {#if $notifications.length > 0}
-        <button class="notifications-mark-read" onclick={markAllRead}>{msg('ui.markAllRead')}</button>
+        <button type="button" class="notifications-mark-read" onclick={markAllRead}>{msg('ui.markAllRead')}</button>
       {/if}
     </div>
     {#if $notifications.length === 0}
       <div class="notifications-empty">{msg('ui.nothingNewYet')}</div>
     {:else}
-      {#each $notifications as n (n.id)}
-        <button class="notification" onclick={() => openNotification(n)}>
-          <span class="notification-title">{n.title}</span>
-          <span class="notification-text">{n.text}</span>
-        </button>
-      {/each}
+      <div role="list">
+        {#each $notifications as n (n.id)}
+          <div role="listitem">
+            <button type="button" class="notification" onclick={() => openNotification(n, close)}>
+              <span class="notification-title">{n.title}</span>
+              <span class="notification-text">{n.text}</span>
+            </button>
+          </div>
+        {/each}
+      </div>
     {/if}
     <button
+      type="button"
       class="notifications-all"
       onclick={() => {
-        open = false;
+        close();
         openHistory();
       }}>{msg('ui.allHistory')}</button
     >
-  </div>
-{/if}
+  {/snippet}
+</Popover>
 
 <style>
   .notifications-head {
@@ -124,30 +144,5 @@
     padding: 0.8rem 1rem 1.2rem;
     font-size: var(--font-xs);
     color: var(--text-3);
-  }
-
-  .notifications {
-    position: absolute;
-    z-index: var(--z-popover);
-    top: calc(100% + 0.6rem);
-    right: 0;
-    width: 32rem;
-    padding: 0.5rem;
-    background: var(--surface-3);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-pop);
-    animation: pop var(--dur-fast) var(--ease);
-  }
-
-  @keyframes pop {
-    from {
-      opacity: 0;
-      transform: translateY(-0.3rem);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
   }
 </style>
