@@ -1,130 +1,84 @@
 <script lang="ts">
-  import { clickOutside } from '../utils/clickOutside';
+  import { flushSync, untrack } from 'svelte';
+  import type { ContextPlace } from '../utils/contextmenu';
+  import { anchorTo, outOfSight, placeAtPoint } from '../utils/position';
+  import MenuList from './MenuList.svelte';
+  import { closesOnPick, type MenuFocus, type MenuItem } from './menu';
 
-  interface Item {
-    id: string;
-    label: string;
-    danger?: boolean;
-    separator?: boolean;
-  }
-
+  /**
+   * A context menu (WAI-ARIA menu), mounted while open: MenuList on the layer stack, so Escape, a press
+   * outside and a dialog opening over it close it, and focus goes back when it does. Opened at the
+   * pointer it sits at that point and closes when the page scrolls, the window resizes or loses focus;
+   * opened next to an element (a keyboard open, a menu button) it follows that element and closes when
+   * the element leaves sight, which is first brought into view. A pick closes the menu before
+   * `onselect` runs, so focus is back where the menu came from and a dialog the pick opens returns
+   * focus there; an independent check (`MenuItem.independent`) keeps it open.
+   */
   let {
     items,
-    x,
-    y,
+    id,
+    label,
+    at,
+    initial = 'menu',
+    trigger,
+    returnFocus,
     onselect,
     onclose,
   }: {
-    items: Item[];
-    x: number;
-    y: number;
-    onselect: (id: string) => void;
+    items: MenuItem[];
+    id: string;
+    /** The menu's name (what it acts on). */
+    label: string;
+    at: ContextPlace;
+    initial?: MenuFocus;
+    /** The menu button it was opened from, if any: a press on it is its own, and focus returns to it. */
+    trigger?: () => HTMLElement | null | undefined;
+    /** Where focus goes on close when what had it before the menu opened is gone; default the trigger. */
+    returnFocus?: () => HTMLElement | null | undefined;
+    onselect: (id: string, item: MenuItem) => void;
+    /** Unmount the menu. */
     onclose: () => void;
   } = $props();
 
-  const edge = 8;
+  // Taken once: the menu is mounted per opening, and the layer asks these as it closes, when the
+  // parent's state for this opening may already be gone.
+  const { triggerOf, homeOf } = untrack(() => ({ triggerOf: trigger, homeOf: returnFocus }));
+  const owner = () => triggerOf?.() ?? null;
+  const home = () => homeOf?.() ?? owner();
 
-  let menu = $state<HTMLDivElement | null>(null);
-  let left = $state(0);
-  let top = $state(0);
-  let placed = $state(false);
-
-  $effect(() => {
-    if (!menu) return;
-    const width = menu.offsetWidth;
-    const height = menu.offsetHeight;
-    left = Math.max(edge, Math.min(x, window.innerWidth - width - edge));
-    top = Math.max(edge, Math.min(y, window.innerHeight - height - edge));
-    placed = true;
-  });
-
-  function onKey(event: KeyboardEvent) {
-    if (event.key === 'Escape') onclose();
-  }
-
-  function pick(id: string) {
-    onselect(id);
+  // Unmounts the menu now, so the layer stack has put focus back when this returns. Only from event
+  // handlers: a dismissal from the stack runs inside effects, where flushSync may not.
+  function close() {
     onclose();
+    flushSync();
   }
+
+  function pick(item: MenuItem) {
+    // Read before the menu goes: the parent's handler may be bound to what the menu was open for.
+    const select = onselect;
+    if (closesOnPick(item)) close();
+    select(item.id, item);
+  }
+
+  const place = (node: HTMLElement) => {
+    const where = untrack(() => at);
+    if (!('anchor' in where)) return placeAtPoint(node, where.x, where.y, { onleave: onclose });
+    const anchor = () => (typeof where.anchor === 'function' ? where.anchor() : where.anchor);
+    // A focused control scrolled out of sight would close its menu at once as hidden.
+    const element = anchor();
+    if (element && outOfSight(element)) element.scrollIntoView({ block: 'nearest' });
+    return anchorTo(node, anchor, { placement: 'bottom-start', offset: 4, onhide: onclose });
+  };
 </script>
 
-<svelte:window onkeydown={onKey} onresize={onclose} onblur={onclose} />
-
-<div
-  class="menu"
-  role="menu"
-  tabindex="-1"
-  bind:this={menu}
-  style:left="{left}px"
-  style:top="{top}px"
-  style:visibility={placed ? 'visible' : 'hidden'}
-  use:clickOutside={onclose}
-  oncontextmenu={(event) => event.preventDefault()}
->
-  {#each items as item (item.id)}
-    {#if item.separator}
-      <div class="separator"></div>
-    {/if}
-    <button class="item" class:danger={item.danger} role="menuitem" onclick={() => pick(item.id)}>
-      {item.label}
-    </button>
-  {/each}
-</div>
-
-<style>
-  .menu {
-    position: fixed;
-    z-index: var(--z-menu);
-    min-width: 20rem;
-    padding: 0.4rem;
-    background: var(--surface-3);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-pop);
-    animation: pop var(--dur-fast) var(--ease);
-  }
-
-  .item {
-    display: block;
-    width: 100%;
-    padding: 0.7rem 1rem;
-    border-radius: var(--radius-sm);
-    font-size: var(--font-sm);
-    color: var(--text-2);
-    text-align: left;
-    white-space: nowrap;
-    transition:
-      background var(--dur-fast) var(--ease),
-      color var(--dur-fast) var(--ease);
-  }
-
-  .item:hover {
-    background: var(--hover-strong);
-    color: var(--text);
-  }
-
-  .item.danger {
-    color: var(--danger);
-  }
-
-  .item.danger:hover {
-    background: var(--danger-subtle);
-  }
-
-  .separator {
-    height: 1px;
-    margin: 0.4rem;
-    background: var(--border);
-  }
-
-  @keyframes pop {
-    from {
-      opacity: 0;
-      transform: scale(0.98);
-    }
-    to {
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
-</style>
+<MenuList
+  {items}
+  {id}
+  {label}
+  {initial}
+  {owner}
+  returnFocus={home}
+  {place}
+  onpick={pick}
+  onclose={(reason) => (reason === 'tab' ? close() : onclose())}
+/>

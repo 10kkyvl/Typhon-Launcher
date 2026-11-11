@@ -6,7 +6,8 @@ const fs = (globalThis as unknown as { process: { getBuiltinModule(id: 'node:fs'
 
 // The menu is a layer: Escape, presses outside, paint order and motion are the stack's and the shared
 // stylesheet's, so the menu components keep no copy of their own.
-const MENU = ['lib/components/DropdownMenu.svelte', 'lib/components/MenuList.svelte'];
+const MENU = ['lib/components/DropdownMenu.svelte', 'lib/components/ContextMenu.svelte', 'lib/components/MenuList.svelte'];
+const CONTEXT_MENU = 'lib/components/ContextMenu.svelte';
 const source = (path: string) => frontendSources[path] ?? '';
 const style = (text: string) => [...text.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join('\n');
 
@@ -24,8 +25,20 @@ describe('menu components', () => {
     }
   });
 
+  // A menu at a point closes on scroll, resize and window blur through placeAtPoint, the one place
+  // every popup at a point gets that from; the context menu adds no listener of its own.
+  it('the context menu keeps no item type, listener or stylesheet of its own: MenuList is its body', () => {
+    const text = source(CONTEXT_MENU);
+    expect(text).not.toMatch(/addEventListener|<svelte:window|<svelte:document|\bon(resize|blur|scroll)=/);
+    expect(text).not.toMatch(/interface Item\b|type Item\b/);
+    expect(text).toMatch(/<MenuList\b/);
+    expect(text).toMatch(/placeAtPoint\([^)]*onleave/);
+    expect(style(text)).toBe('');
+  });
+
   it('take their z-index from the layer token only, the trigger side none', () => {
     expect(style(source('lib/components/DropdownMenu.svelte'))).not.toMatch(/z-index/);
+    expect(style(source(CONTEXT_MENU))).not.toMatch(/z-index/);
     const values = [...style(source('lib/components/MenuList.svelte')).matchAll(/z-index\s*:\s*([^;}]+)/g)].map((m) => m[1].trim());
     expect(values).toEqual(['var(--z-layer)']);
   });

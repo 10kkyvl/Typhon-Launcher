@@ -42,7 +42,7 @@
   import { inWails } from '../../lib/services/backend';
   import { getAppInfo } from '../../lib/services/system';
   import type { MetadataView } from '../../lib/services/metadata';
-  import { openGameMenu } from '../../lib/stores/gameMenu';
+  import { gameMenu, gameMenuButton } from '../../lib/stores/gameMenu';
   import { installedGames, libraryGames, runningGames } from '../../lib/stores/library';
   import { gameArt, gameInfo } from '../../lib/stores/metadata';
   import { currentRouteKey, navigate, recallRoute, route, stashRoute } from '../../lib/stores/router';
@@ -616,7 +616,7 @@
 
   function listMeta(game: CatalogGame) { return [game.releaseYear, game.developer].filter(Boolean).join(" · "); }
 
-  function cardActions(game: CatalogGame, libId: string | undefined, favorite: boolean): GameCardAction[] {
+  function cardActions(game: CatalogGame, title: string, libId: string | undefined, favorite: boolean): GameCardAction[] {
     const dismissed = isDismissed(game);
     const dismissAction: GameCardAction = {
       id: 'dismiss',
@@ -630,9 +630,9 @@
     if (!libId) return [dismissAction];
     const moreAction: GameCardAction = {
       id: 'more',
-      label: msg('games.moreLabel'),
+      label: msg('games.installedMenuFor', { title }),
       icon: Ellipsis,
-      onclick: (event) => openGameMenu(event, libId),
+      menu: gameMenuButton(libId, `catalog-more-${game.id}`, $gameMenu),
     };
     const favoriteAction: GameCardAction = {
       id: 'favorite',
@@ -873,7 +873,7 @@
             running={$runningGames.has(installedByGame.get(game.id) ?? '')}
             meta={catalogMeta(shown)}
             compat={compatRelevant ? compatByGame[game.id] : undefined}
-            actions={cardActions(game, libId, isFav)}
+            actions={cardActions(game, shown.title, libId, isFav)}
             footer={isInstalled ? installedStatus : undefined}
             onplay={playableIds.has(installedByGame.get(game.id) ?? '') ? () => toggleRun(installedByGame.get(game.id) ?? '') : undefined}
           />

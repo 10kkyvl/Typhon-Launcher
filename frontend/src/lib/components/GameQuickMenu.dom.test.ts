@@ -26,6 +26,10 @@ vi.mock('../services/install', async (importOriginal) => ({
 const hades = { id: 'g1', title: 'Hades', uninstalled: false, executable: 'Hades.exe' } as LibraryGame;
 const celeste = { id: 'g2', title: 'Celeste', uninstalled: false, executable: 'Celeste.exe' } as LibraryGame;
 
+// A right-click: a contextmenu event with the right button at a pointer position (one at 0,0 without
+// it is the keyboard's).
+const RIGHT_CLICK = { button: 2, clientX: 120, clientY: 80 };
+
 let app: HTMLDivElement;
 
 beforeEach(() => {
@@ -47,7 +51,7 @@ describe('a confirmation opened from the game context menu', () => {
     render(GameMenuHarness, { target: app });
     const keys = user();
     const game = screen.getByRole('link', { name: 'Hades' });
-    await fireEvent.contextMenu(game);
+    await fireEvent.contextMenu(game, RIGHT_CLICK);
 
     await keys.click(await screen.findByRole('menuitem', { name: msg('games.actionSteamAdd') }));
     const dialog = screen.getByRole('dialog', { name: msg('games.steamAddTitle') });
@@ -60,11 +64,21 @@ describe('a confirmation opened from the game context menu', () => {
   });
 });
 
-async function pick(game: string, item: string | RegExp) {
+async function pick(game: string, item: string | RegExp, how: 'pointer' | 'keyboard' = 'pointer') {
   const keys = user();
   const link = screen.getByRole('link', { name: game });
-  await fireEvent.contextMenu(link);
-  await keys.click(await screen.findByRole('menuitem', { name: item }));
+  if (how === 'pointer') {
+    await fireEvent.contextMenu(link, RIGHT_CLICK);
+    await keys.click(await screen.findByRole('menuitem', { name: item }));
+    return { keys, link };
+  }
+  link.focus();
+  await keys.keyboard('{Shift>}{F10}{/Shift}');
+  const target = screen.getByRole('menuitem', { name: item });
+  const steps = screen.getAllByRole('menuitem').indexOf(target);
+  if (steps > 0) await keys.keyboard(`{ArrowDown>${steps}}{/ArrowDown}`);
+  expect(document.activeElement).toBe(target);
+  await keys.keyboard('{Enter}');
   return { keys, link };
 }
 
@@ -103,28 +117,28 @@ describe('dialogs opened from the game context menu return focus to the game', (
   describe('the remove dialog', () => {
     const info = { gameId: 'g1', title: 'Hades', installDir: '', installType: '', method: 'none', owned: false, uninstallUnknown: false, sizeBytes: 0, sizeUnknown: true, dirMissing: false, quietUninstall: false, running: false, busy: false, downloadId: '' } as unknown as RemovalInfo;
 
-    async function remove(note = false) {
+    async function remove(note = false, how: 'pointer' | 'keyboard' = 'pointer') {
       vi.mocked(inspectRemoval).mockResolvedValueOnce(info);
       vi.mocked(removeGame).mockImplementationOnce(async () => {
         libraryGames.update((list) => list.filter((game) => game.id !== 'g1'));
       });
       render(GameMenuHarness, { target: app, props: { note } });
-      const picked = await pick('Hades', msg('games.actionRemoveLibrary'));
+      const picked = await pick('Hades', msg('games.actionRemoveLibrary'), how);
       const dialog = await screen.findByRole('dialog', { name: msg('modals.removeGameTitle') });
       return { ...picked, dialog };
     }
 
-    it('cancelled: to the game', async () => {
-      const { keys, link } = await remove();
+    it.each(['pointer', 'keyboard'] as const)('cancelled (menu opened by %s): to the game', async (how) => {
+      const { keys, link } = await remove(false, how);
 
       await keys.keyboard('{Escape}');
 
       expect(document.activeElement).toBe(link);
     });
 
-    it('removed: to the next game in the list', async () => {
+    it.each(['pointer', 'keyboard'] as const)('removed (menu opened by %s): to the next game in the list', async (how) => {
       libraryGames.set([hades, celeste]);
-      const { keys, dialog } = await remove();
+      const { keys, dialog } = await remove(false, how);
 
       const confirm = (await within(dialog).findAllByRole('button', { name: msg('modals.removeGameModeLibraryLabel') })).at(-1) as HTMLElement;
       await keys.click(confirm);
@@ -142,7 +156,6 @@ describe('dialogs opened from the game context menu return focus to the game', (
       await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
       expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Library' }));
     });
-  
 
     it('removed, next to an item with nothing to focus: past it, to the page heading', async () => {
       const { keys, dialog } = await remove(true);

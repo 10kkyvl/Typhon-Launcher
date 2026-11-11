@@ -9,50 +9,51 @@ vi.mock('../services/library', () => ({
   getRunningGames: vi.fn(async () => []),
 }));
 
-import { closeGameMenu, gameMenu, openGameMenu } from './gameMenu';
+import { closeGameMenu, gameMenu, gameMenuButton, openGameMenu, type GameMenuState } from './gameMenu';
 import { libraryGames } from './library';
 
-function mouse(x: number, y: number) {
-  return { clientX: x, clientY: y, preventDefault: vi.fn(), stopPropagation: vi.fn() };
-}
+const atPointer = (x: number, y: number): Omit<GameMenuState, 'gameId'> => ({ at: { x, y }, focus: 'menu', trigger: null, source: null });
 
 beforeEach(() => {
   gameMenu.set(null);
   libraryGames.set([{ id: 'g1', title: 'Hades', uninstalled: false } as LibraryGame]);
 });
 
-describe('game context menu', () => {
-  it('opens at the pointer for a game in the library and swallows the browser menu', () => {
-    const event = mouse(120, 80);
+describe('game menu', () => {
+  it('opens for a game in the library, where and how it was asked for', () => {
+    expect(openGameMenu('g1', atPointer(120, 80))).toBe(true);
 
-    openGameMenu(event as unknown as MouseEvent, 'g1');
-
-    expect(get(gameMenu)).toEqual({ gameId: 'g1', x: 120, y: 80, source: null });
-    expect(event.preventDefault).toHaveBeenCalledTimes(1);
-    expect(event.stopPropagation).toHaveBeenCalledTimes(1);
+    expect(get(gameMenu)).toEqual({ gameId: 'g1', at: { x: 120, y: 80 }, focus: 'menu', trigger: null, source: null });
   });
 
-  it('leaves the browser menu alone for a game the library does not have', () => {
-    const event = mouse(10, 10);
-
-    openGameMenu(event as unknown as MouseEvent, 'catalog-only');
+  it('does not open for a game the library does not have', () => {
+    expect(openGameMenu('catalog-only', atPointer(10, 10))).toBe(false);
 
     expect(get(gameMenu)).toBeNull();
-    expect(event.preventDefault).not.toHaveBeenCalled();
   });
 
-  it('moves to the new spot when it is opened again', () => {
-    openGameMenu(mouse(1, 2) as unknown as MouseEvent, 'g1');
-    openGameMenu(mouse(30, 40) as unknown as MouseEvent, 'g1');
+  it('each opening is a new one, also at the same spot', () => {
+    openGameMenu('g1', atPointer(1, 2));
+    const first = get(gameMenu);
+    openGameMenu('g1', atPointer(1, 2));
 
-    expect(get(gameMenu)).toEqual({ gameId: 'g1', x: 30, y: 40, source: null });
+    expect(get(gameMenu)).not.toBe(first);
+    expect(get(gameMenu)).toEqual(first);
   });
 
   it('closes', () => {
-    openGameMenu(mouse(1, 2) as unknown as MouseEvent, 'g1');
+    openGameMenu('g1', atPointer(1, 2));
 
     closeGameMenu();
 
     expect(get(gameMenu)).toBeNull();
+  });
+
+  it('a menu button says its menu is open only while the menu is open from that button', () => {
+    expect(gameMenuButton('g1', 'more-g1', null)).toMatchObject({ id: 'more-g1', 'aria-haspopup': 'menu', 'aria-expanded': false, 'aria-controls': undefined });
+
+    openGameMenu('g1', { at: { anchor: () => null }, focus: 'first', trigger: 'more-g1', source: null });
+    expect(gameMenuButton('g1', 'more-g1', get(gameMenu))).toMatchObject({ 'aria-expanded': true, 'aria-controls': 'game-menu' });
+    expect(gameMenuButton('g1', 'other', get(gameMenu))).toMatchObject({ 'aria-expanded': false, 'aria-controls': undefined });
   });
 });

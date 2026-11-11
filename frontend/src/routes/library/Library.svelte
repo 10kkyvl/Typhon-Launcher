@@ -40,7 +40,7 @@
   import { libraryGenres, requestLibraryGenres } from '../../lib/stores/genres';
   import { installedGames, libraryGames, runningGames } from '../../lib/stores/library';
   import { gameArt, requestArt } from '../../lib/stores/metadata';
-  import { openGameMenu } from '../../lib/stores/gameMenu';
+  import { gameContextMenu } from '../../lib/stores/gameMenu';
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
   import { toggleWatch, watchlist } from '../../lib/stores/watchlist';
@@ -395,7 +395,7 @@
         class="hero"
         class:plain={!heroArtShown}
         aria-label={msg('games.libraryContinuePlayingTitle')}
-        oncontextmenu={(event) => openGameMenu(event, hero.id)}
+        {@attach gameContextMenu(hero.id)}
       >
         {#if heroArtShown}
           <div class="hero-art">
@@ -625,7 +625,7 @@
             class="list-row"
             use:ambientHover={entry.id}
             onclick={() => navigate('game', { id: entry.id })}
-            oncontextmenu={(event) => openGameMenu(event, entry.id)}
+            {@attach gameContextMenu(entry.id)}
           >
             <div class="list-thumb">
               <Artwork src={entry.cover} alt={entry.title} radius="var(--radius-xs)" />

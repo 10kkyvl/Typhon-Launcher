@@ -178,7 +178,7 @@ describe('z-index scale', () => {
 
   // An isolated root confines whatever it renders: a popover inside it is painted under later page
   // content where it sticks out. Limit: only components imported by path are followed; a popover passed
-  // in as a snippet by the parent is not seen. A popup on the layer stack (DropdownMenu) is portalled
+  // in as a snippet by the parent is not seen. A popup on the layer stack (DropdownMenu, ContextMenu) is portalled
   // out of every root and is not listed.
   it('does not isolate the root of a component that renders a popover, directly or through its children', () => {
     expect(isolatedPopoverHosts()).toEqual([]);
@@ -199,7 +199,7 @@ function layerRoots(path: string, text: string): { path: string; root: string; z
 const THEME_GUARD = 'lib/components/ThemeGuard.ts';
 const SCRIPT_Z = /\.zIndex\b|setProperty\(\s*['"`]z-index|cssText[^\n]*z-index|['"`]z-index\s*:/;
 
-const POPOVERS = ['Select', 'Tooltip', 'ContextMenu'];
+const POPOVERS = ['Select', 'Tooltip'];
 
 function svelteImports(path: string, text: string): string[] {
   const dir = path.slice(0, path.lastIndexOf('/') + 1);

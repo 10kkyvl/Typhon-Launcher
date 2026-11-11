@@ -4,12 +4,12 @@
   import { Check } from '@lucide/svelte';
   import { cycleFocus, layer, topModalLayer } from '../layers';
   import { createTypeahead, isTypeaheadKey, nextIndex } from '../utils/roving';
-  import { menuItemRole, type MenuItem } from './menu';
+  import { menuItemRole, type MenuFocus, type MenuItem } from './menu';
 
   /**
    * The body of a menu (WAI-ARIA menu): a non-modal layer owned by the element it was opened from,
-   * with roving focus, typeahead and Enter/Space activation. DropdownMenu renders it under a trigger;
-   * the context menu and the account menu are to reuse it. The layer stack answers Escape, presses
+   * with roving focus, typeahead and Enter/Space activation. DropdownMenu renders it under a trigger,
+   * ContextMenu at a point or next to an element. The layer stack answers Escape, presses
    * outside and a dialog opening over it (`onclose('dismiss')`); Tab closes it (`onclose('tab')`) and
    * focus moves on from the owner, inside the dialog the owner sits in when there is one. Where it
    * appears is the parent's `place` attachment; which items close it on pick is the parent's call.
@@ -21,6 +21,7 @@
     label,
     initial = 'menu',
     owner,
+    returnFocus = owner,
     place,
     onpick,
     onclose,
@@ -31,9 +32,11 @@
     labelledby?: string;
     label?: string;
     /** Focus on open: the first or last enabled item (opened from the keyboard), or the menu itself (by pointer). */
-    initial?: 'first' | 'last' | 'menu';
+    initial?: MenuFocus;
     /** The element the menu was opened from: a press on it is its own, and focus goes back to it. */
     owner: () => HTMLElement | null | undefined;
+    /** Where focus goes on close when what had it before the menu opened is gone; default the owner. */
+    returnFocus?: () => HTMLElement | null | undefined;
     /** Puts the menu on screen (`anchorTo`, a point). */
     place?: Attachment<HTMLElement>;
     onpick: (item: MenuItem) => void;
@@ -136,6 +139,7 @@
   bind:this={root}
   class="menu"
   role="menu"
+  tabindex="-1"
   data-part="menu"
   {id}
   aria-labelledby={label ? undefined : labelledby}
@@ -147,7 +151,11 @@
     // Items run on keydown; the browser's Space-keyup click on an item would run it again.
     if (event.key === ' ') event.preventDefault();
   }}
-  {@attach layer({ modal: false, owner: () => owner(), returnFocus: () => owner(), initialFocus: entry, dismiss: () => onclose('dismiss') })}
+  oncontextmenu={(event) => {
+    // A right-click on the menu, or the browser answering the ContextMenu key that opened it, shows no browser menu over it.
+    event.preventDefault();
+  }}
+  {@attach layer({ modal: false, owner: () => owner(), returnFocus: () => returnFocus(), initialFocus: entry, dismiss: () => onclose('dismiss') })}
   {@attach place}
 >
   {#each items as item, index (item.id)}

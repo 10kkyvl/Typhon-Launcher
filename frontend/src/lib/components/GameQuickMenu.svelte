@@ -30,7 +30,7 @@
   import { chooseSavesDir } from '../game/actions/saves';
   import { share as shareLan, shares, unshare as unshareLan } from '../stores/lan';
   import { settings } from '../stores/settings';
-  import { closeGameMenu, gameMenu } from '../stores/gameMenu';
+  import { closeGameMenu, GAME_MENU_ID, gameMenu, type GameMenuState } from '../stores/gameMenu';
   import { libraryGames, runningGames } from '../stores/library';
   import { navigate } from '../stores/router';
   import { openGameProperties } from '../stores/gameProperties';
@@ -50,21 +50,39 @@
 
   let steam = $state<{ id: string; added: boolean } | null>(null);
   let steamConfirmID = $state<string | null>(null);
-  // The menu item that opened a dialog is gone by the time the dialog closes. Focus goes to the game's
-  // own control, else (the game was removed) the next game in the same list, else the page heading.
-  // Picked while the page is live: once a dialog is open the page is inert and has nothing to focus.
+  // The menu closes before its pick runs, so focus is back on the game and a dialog the pick opens
+  // returns it there. When the game is gone by then (removed), focus goes to the next game in the same
+  // list, else to the page heading. Picked while the page is live: once a dialog is open the page is
+  // inert and has nothing to focus.
   let homes: HTMLElement[] = [];
   const returnHome = () => homes.find((home) => home.isConnected && canTakeFocus(home)) ?? null;
 
-  function homesOf(source: HTMLElement | null | undefined): HTMLElement[] {
+  function homesOf(source: HTMLElement | null): HTMLElement[] {
     if (!source) return [];
     let item = source;
     while (item.parentElement && item.parentElement.children.length === 1) item = item.parentElement;
     const neighbour = item.nextElementSibling ?? item.previousElementSibling;
     const heading = source.closest('main')?.querySelector<HTMLElement>('h1') ?? document.querySelector<HTMLElement>('h1');
-    return [initialFocus(source), neighbour instanceof HTMLElement ? initialFocus(neighbour) : null, heading].filter(
+    return [neighbour instanceof HTMLElement ? initialFocus(neighbour) : null, heading].filter(
       (home): home is HTMLElement => home !== null,
     );
+  }
+
+  // The menu's getters are bound to one opening: the store is cleared by the time the menu asks them.
+  function triggerOf(menu: GameMenuState): (() => HTMLElement | null) | undefined {
+    const id = menu.trigger;
+    return id ? () => document.getElementById(id) : undefined;
+  }
+
+  // Where focus goes when the menu closes and what had focus before it is gone: the control it was
+  // opened next to, or for a pointer open (no control of its own) the game's first control.
+  function homeOf(menu: GameMenuState): () => HTMLElement | null {
+    const { at, source } = menu;
+    return () => {
+      const anchor = 'anchor' in at ? (typeof at.anchor === 'function' ? at.anchor() : at.anchor) : null;
+      const home = anchor ?? source;
+      return home ? initialFocus(home) : null;
+    };
   }
 
   $effect(() => {
@@ -134,8 +152,8 @@
   let tagsID = $state<string | null>(null);
   const tagsGame = $derived(tagsID ? ($libraryGames.find((g) => g.id === tagsID) ?? null) : null);
 
-  function run(current: LibraryGame, action: QuickAction) {
-    homes = homesOf(get(gameMenu)?.source);
+  function run(current: LibraryGame, action: QuickAction, source: HTMLElement | null) {
+    homes = homesOf(source);
     switch (action) {
       case 'play':
         return guard(() => playGame(current.id));
@@ -280,25 +298,35 @@
     });
   }
 
-  function onSelect(id: string) {
-    if (!game) return;
-    const profileID = profileIdFromItem(id);
-    if (profileID !== null) {
-      void guard(() => playGameProfile(game.id, profileID));
-      return;
-    }
-    void run(game, id as QuickAction);
+  // Bound to the game and the opening while the menu is shown: the menu closes, and the store with it,
+  // before the pick runs.
+  function selectFor(current: LibraryGame, menu: GameMenuState) {
+    return (id: string) => {
+      const profileID = profileIdFromItem(id);
+      if (profileID !== null) {
+        void guard(() => playGameProfile(current.id, profileID));
+        return;
+      }
+      void run(current, id as QuickAction, menu.source);
+    };
   }
 </script>
 
 {#if $gameMenu && game && items.length > 0}
-  <ContextMenu
-    items={items}
-    x={$gameMenu.x}
-    y={$gameMenu.y}
-    onselect={onSelect}
-    onclose={closeGameMenu}
-  />
+  {@const menu = $gameMenu}
+  {#key menu}
+    <ContextMenu
+      {items}
+      id={GAME_MENU_ID}
+      label={msg('games.installedMenuFor', { title: game.title })}
+      at={menu.at}
+      initial={menu.focus}
+      trigger={triggerOf(menu)}
+      returnFocus={homeOf(menu)}
+      onselect={selectFor(game, menu)}
+      onclose={closeGameMenu}
+    />
+  {/key}
 {/if}
 
 {#if steamConfirmID}

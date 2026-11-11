@@ -51,7 +51,7 @@
   import { externalLabel, isExternal, isLaunchable } from '../../lib/library/external';
   import { gamesOnVolume } from '../../lib/library/folders';
   import { gameArt, loadArt } from '../../lib/stores/metadata';
-  import { openGameMenu } from '../../lib/stores/gameMenu';
+  import { gameContextMenu } from '../../lib/stores/gameMenu';
   import { navigate } from '../../lib/stores/router';
   import { settings } from '../../lib/stores/settings';
   import { refreshStorage, storageFailed, storageInfo } from '../../lib/stores/storage';
@@ -534,7 +534,7 @@
         {@const running = $runningGames.has(game.id)}
         {@const update = $updatesByGame.get(game.id)?.availability}
         {@const updateText = updateLabel(update)}
-        <div class="row" role="presentation" oncontextmenu={(event) => openGameMenu(event, game.id)}>
+        <div class="row" role="presentation" {@attach gameContextMenu(game.id)}>
           <button class="game" onclick={() => navigate('game', { id: game.id })}>
             <div class="thumb">
               <Artwork src={heroFor(game)} alt={game.title} radius="var(--radius-sm)" />
@@ -614,7 +614,7 @@
         {@const running = $runningGames.has(game.id)}
         {@const update = $updatesByGame.get(game.id)?.availability}
         {@const updateText = updateLabel(update)}
-        <div class="card" role="presentation" oncontextmenu={(event) => openGameMenu(event, game.id)}>
+        <div class="card" role="presentation" {@attach gameContextMenu(game.id)}>
           <div class="card-media">
             <button
               class="card-cover"

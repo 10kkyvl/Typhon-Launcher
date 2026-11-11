@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { Play, Square, type LucideIcon } from '@lucide/svelte';
-  import { openGameMenu } from '../stores/gameMenu';
+  import { gameContextMenu } from '../stores/gameMenu';
+  import type { MenuTriggerProps } from './menu';
   import { navigate } from '../stores/router';
   import { msg } from '../i18n';
   import Artwork from './Artwork.svelte';
@@ -21,7 +22,9 @@
     pinned?: boolean;
     quiet?: boolean;
     disabled?: boolean;
-    onclick: (event: MouseEvent) => void;
+    onclick?: (event: MouseEvent) => void;
+    /** The action opens a menu: its button is that menu's button (`gameMenuButton`), instead of `onclick`. */
+    menu?: MenuTriggerProps;
   }
 
   let {
@@ -75,7 +78,7 @@
   );
 </script>
 
-<div class="card" role="presentation" oncontextmenu={(event) => openGameMenu(event, id)} use:ambientHover={ambient ? id : null}>
+<div class="card" role="presentation" {@attach gameContextMenu(id)} use:ambientHover={ambient ? id : null}>
   <div class="cover-wrap">
     <button class="cover" onclick={() => navigate('game', { id })} aria-label={title}>
       <Artwork src={cover} alt={title} {ratio} radius="var(--radius-md)" />
@@ -102,6 +105,7 @@
       <div class="quick">
         {#each actions as action (action.id)}
           <button
+            {...action.menu}
             class="quick-btn"
             class:active={action.active}
             class:pinned={action.pinned}
@@ -112,7 +116,7 @@
             disabled={action.disabled}
             onclick={(event) => {
               popped = action.active ? '' : action.id;
-              action.onclick(event);
+              (action.menu?.onclick ?? action.onclick)?.(event);
             }}
           >
             <action.icon size="1.5rem" strokeWidth={1.8} fill={action.filled ? 'currentColor' : 'none'} />
