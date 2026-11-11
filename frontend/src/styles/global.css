@@ -170,6 +170,19 @@ h4 {
   background-clip: padding-box;
 }
 
+/* Big Picture (with the dialogs it opens, which are portalled out of it) and the overlay window keep
+   the thumb they were drawn with: they sit on their own dark ground, whatever the theme. */
+html:has(.big-picture) ::-webkit-scrollbar-thumb,
+html.overlay-window ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.09);
+  border-radius: 0.8rem;
+}
+
+html:has(.big-picture) ::-webkit-scrollbar-thumb:hover,
+html.overlay-window ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
 ::-webkit-scrollbar-corner {
   background: transparent;
 }

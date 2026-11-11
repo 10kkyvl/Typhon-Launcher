@@ -16,6 +16,31 @@ function body(selector: string): string {
   return new RegExp(`(?:^|\\})\\s*${escaped}\\s*\\{([^}]*)\\}`).exec(css)?.[1] ?? '';
 }
 
+// Every rule whose selector list holds this selector, as written.
+function rules(selector: string): string[] {
+  return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .filter((m) => m[1].split(',').map((part) => part.trim()).includes(selector))
+    .map((m) => m[2]);
+}
+
+// The look Big Picture and the overlay window were drawn with (redesign-2.0's global.css).
+const PINNED_SCOPES = ['html:has(.big-picture)', 'html.overlay-window'];
+
+describe('the scrollbar', () => {
+  it('is drawn from the theme in the main window', () => {
+    expect(body('::-webkit-scrollbar-thumb')).toMatch(/background: color-mix\(in srgb, var\(--text-3\) \d+%, transparent\);/);
+  });
+
+  it('keeps the thumb Big Picture and the overlay window had, with the dialogs Big Picture opens', () => {
+    for (const scope of PINNED_SCOPES) {
+      const thumb = rules(`${scope} ::-webkit-scrollbar-thumb`).join('');
+      expect(thumb, scope).toMatch(/background: rgba\(255, 255, 255, 0\.09\);/);
+      expect(thumb, scope).toMatch(/border-radius: 0\.8rem;/);
+      expect(rules(`${scope} ::-webkit-scrollbar-thumb:hover`).join(''), `${scope} hover`).toMatch(/background: rgba\(255, 255, 255, 0\.16\);/);
+    }
+  });
+});
+
 describe('a text field', () => {
   // The field's border takes the focus colour; the outline every control gets on keyboard focus is
   // drawn over that border, not as a second ring around it.
