@@ -557,7 +557,7 @@ describe('TopbarSearch: what closes it and what it says', () => {
     expect(document.activeElement).toBe(inDialog);
   });
 
-  it('Ctrl+K and Cmd+K go by where the key sits: a Russian layout focuses the field too, AltGr does not', async () => {
+  it('Ctrl+K and Cmd+K go by the Latin letter typed, and by where K sits on a non-Latin layout; AltGr does not', async () => {
     const { field } = setup();
     const after = screen.getByRole('button', { name: 'After' });
     const press = async (init: KeyboardEventInit) => {
@@ -566,12 +566,21 @@ describe('TopbarSearch: what closes it and what it says', () => {
       return document.activeElement === field();
     };
 
+    // QWERTY.
+    expect(await press({ key: 'k', code: 'KeyK', ctrlKey: true })).toBe(true);
+    expect(await press({ key: 'K', code: 'KeyK', ctrlKey: true, shiftKey: true })).toBe(true);
+    // Dvorak: K is on KeyV, and KeyK types T.
+    expect(await press({ key: 'k', code: 'KeyV', ctrlKey: true })).toBe(true);
+    expect(await press({ key: 'k', code: 'KeyV', metaKey: true })).toBe(true);
+    expect(await press({ key: 't', code: 'KeyK', ctrlKey: true })).toBe(false);
+    // Russian: the key types Л.
     expect(await press({ key: 'л', code: 'KeyK', ctrlKey: true })).toBe(true);
     expect(await press({ key: 'л', code: 'KeyK', metaKey: true })).toBe(true);
-    expect(await press({ key: 'k', code: 'KeyK', ctrlKey: true })).toBe(true);
+    expect(await press({ key: 'ы', code: 'KeyS', ctrlKey: true })).toBe(false);
+    // AltGr is Ctrl+Alt; and no modifier at all.
     expect(await press({ key: 'k', code: 'KeyK', ctrlKey: true, altKey: true })).toBe(false);
+    expect(await press({ key: 'л', code: 'KeyK', ctrlKey: true, altKey: true })).toBe(false);
     expect(await press({ key: 'л', code: 'KeyK' })).toBe(false);
-    expect(await press({ key: 'k', code: 'KeyL', ctrlKey: true })).toBe(false);
   });
 
   it('says that it is searching, then how many results came back', async () => {

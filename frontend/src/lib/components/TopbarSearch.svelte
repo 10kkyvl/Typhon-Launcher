@@ -174,9 +174,15 @@
     searchInput?.focus();
   }
 
+  // A key that types a Latin letter is that letter (Dvorak has K on another key); one that types
+  // another script (a Russian layout gives 'л') goes by where K sits.
+  function isK(event: KeyboardEvent): boolean {
+    return /^[a-z]$/i.test(event.key) ? event.key.toLowerCase() === 'k' : event.code === 'KeyK';
+  }
+
   function onShortcut(event: KeyboardEvent) {
-    // By the key's place, not its letter: on a Russian layout `key` is 'л'. Ctrl+Alt is AltGr, a character.
-    if (!(event.ctrlKey || event.metaKey) || event.altKey || event.code !== 'KeyK') return;
+    // Ctrl+Alt is AltGr, which types a character.
+    if (!(event.ctrlKey || event.metaKey) || event.altKey || !isK(event)) return;
     // A dialog owns the keyboard: the page under it is inert and takes no focus from it.
     if (topModalLayer()) return;
     event.preventDefault();
