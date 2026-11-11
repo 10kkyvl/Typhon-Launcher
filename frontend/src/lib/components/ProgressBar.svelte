@@ -34,8 +34,10 @@
     stretch?: boolean;
   } = $props();
 
-  const now = $derived(max > 0 ? Math.min(max, Math.max(0, value)) : 0);
+  const now = $derived(max > 0 && Number.isFinite(value) ? Math.min(max, Math.max(0, value)) : 0);
   const pct = $derived(max > 0 ? (now / max) * 100 : 0);
+  // A count stays exact; a fraction is cut to the whole percent, the way `progressPercent` shows it.
+  const exposed = $derived(Number.isInteger(now) ? now : (Math.floor(pct) * max) / 100);
 </script>
 
 <div
@@ -47,7 +49,7 @@
   aria-labelledby={label ? undefined : labelledby}
   aria-valuemin={0}
   aria-valuemax={max}
-  aria-valuenow={indeterminate ? undefined : now}
+  aria-valuenow={indeterminate ? undefined : exposed}
   aria-valuetext={indeterminate ? undefined : valueText}
   aria-busy={indeterminate ? 'true' : undefined}
   style:height="{height / 10}rem"

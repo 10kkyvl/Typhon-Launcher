@@ -21,6 +21,23 @@ describe('ProgressBar in a DOM', () => {
     expect(under.getByRole('progressbar', { name: 'Under' }).getAttribute('aria-valuenow')).toBe('0');
   });
 
+  it('exposes the whole percent the page shows, not the float behind it', () => {
+    const percent = renderDom(ProgressBar, { value: 0.29 * 100, label: 'Float' });
+    expect(percent.getByRole('progressbar', { name: 'Float' }).getAttribute('aria-valuenow')).toBe('28');
+    const fraction = renderDom(ProgressBar, { value: 0.29, max: 1, label: 'Fraction' });
+    expect(fraction.getByRole('progressbar', { name: 'Fraction' }).getAttribute('aria-valuenow')).toBe('0.28');
+    const count = renderDom(ProgressBar, { value: 3, max: 7, label: 'Count' });
+    expect(count.getByRole('progressbar', { name: 'Count' }).getAttribute('aria-valuenow')).toBe('3');
+  });
+
+  it('reads a value that is not a number as nothing done, and draws it empty', () => {
+    const { getByRole } = renderDom(ProgressBar, { value: 0 / 0, label: 'Empty total' });
+    const bar = getByRole('progressbar', { name: 'Empty total' });
+
+    expect(bar.getAttribute('aria-valuenow')).toBe('0');
+    expect(bar.querySelector<HTMLElement>('.fill')?.style.getPropertyValue('--pct')).toBe('0%');
+  });
+
   it('reads the caller’s words for the value when given them', () => {
     const { getByRole } = renderDom(ProgressBar, { value: 3, max: 10, label: 'Achievements', valueText: '3 of 10' });
     expect(getByRole('progressbar', { name: 'Achievements' }).getAttribute('aria-valuetext')).toBe('3 of 10');

@@ -47,7 +47,7 @@
     </div>
     <div class="progress">
       <ProgressBar
-        value={pct}
+        value={Math.round(pct)}
         stretch
         label={msg(status.delta ? 'ui.downloadingUpdatePatch' : 'ui.downloadingUpdate', { version: status.availableVersion ?? '' })}
       />

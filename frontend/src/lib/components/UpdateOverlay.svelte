@@ -52,7 +52,7 @@
         <X size="1.6rem" strokeWidth={1.8} />
       </IconButton>
     </div>
-    <ProgressBar value={pct} label={msg(status.delta ? 'ui.downloadingUpdatePatch' : 'ui.downloadingUpdate', { version })} />
+    <ProgressBar value={Math.round(pct)} label={msg(status.delta ? 'ui.downloadingUpdatePatch' : 'ui.downloadingUpdate', { version })} />
     <span class="meta">{msg('ui.bytesOfBytes', { done: bytesSize(downloadedBytes), total: bytesSize(totalBytes) })} · {Math.round(pct)}%</span>
   </div>
 {:else if outcome && !$bigPictureActive}
