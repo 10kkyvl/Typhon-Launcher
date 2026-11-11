@@ -1,3 +1,4 @@
+import { on } from 'svelte/events';
 import { anchorTo, scrolledUnder, type Placement } from '../utils/position';
 import type { HoverIntent } from './hoverIntent';
 
@@ -57,18 +58,18 @@ export function hintTrigger(node: HTMLElement, { intent, control }: HintSource):
   });
   collapsed.observe(node, { subtree: true, attributes: true, attributeFilter: ['aria-expanded'], attributeOldValue: true });
 
-  node.addEventListener('pointerover', onPointerover);
-  node.addEventListener('pointerout', onPointerout);
-  node.addEventListener('focusin', onFocusin);
-  node.addEventListener('focusout', onFocusout);
-  node.addEventListener('pointerdown', onPointerdown);
+  // `on`, not addEventListener: a browser tells a focused control it lost focus while the page update
+  // that removes it is still running, and a plain listener changing state there is an error in Svelte.
+  const off = [
+    on(node, 'pointerover', onPointerover),
+    on(node, 'pointerout', onPointerout),
+    on(node, 'focusin', onFocusin),
+    on(node, 'focusout', onFocusout),
+    on(node, 'pointerdown', onPointerdown),
+  ];
   return () => {
     collapsed.disconnect();
-    node.removeEventListener('pointerover', onPointerover);
-    node.removeEventListener('pointerout', onPointerout);
-    node.removeEventListener('focusin', onFocusin);
-    node.removeEventListener('focusout', onFocusout);
-    node.removeEventListener('pointerdown', onPointerdown);
+    for (const stop of off) stop();
   };
 }
 
@@ -107,18 +108,16 @@ export function hintBubble(node: HTMLElement, options: HintBubbleOptions): () =>
     if (!usable(control())) intent.dismiss();
   });
   if (watch) watcher.observe(watch, { subtree: true, childList: true, attributes: true, attributeFilter: ['disabled', 'aria-expanded'] });
-  node.addEventListener('pointerenter', enter);
-  node.addEventListener('pointerleave', leave);
-  node.addEventListener('mousedown', keepFocus);
-  window.addEventListener('scroll', onScroll, true);
-  window.addEventListener('blur', onBlur);
+  const off = [
+    on(node, 'pointerenter', enter),
+    on(node, 'pointerleave', leave),
+    on(node, 'mousedown', keepFocus),
+    on(window, 'scroll', onScroll, { capture: true }),
+    on(window, 'blur', onBlur),
+  ];
   return () => {
     stopAnchor();
     watcher.disconnect();
-    node.removeEventListener('pointerenter', enter);
-    node.removeEventListener('pointerleave', leave);
-    node.removeEventListener('mousedown', keepFocus);
-    window.removeEventListener('scroll', onScroll, true);
-    window.removeEventListener('blur', onBlur);
+    for (const stop of off) stop();
   };
 }

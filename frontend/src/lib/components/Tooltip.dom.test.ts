@@ -40,6 +40,45 @@ function setup(props: Record<string, unknown> = {}) {
   return { keys, control, bubble, shown, wait, focusByKeyboard, rerender: view.rerender };
 }
 
+// Chromium tells a focused control it lost focus while the control is being taken out of the page,
+// inside the update that removes it; jsdom says nothing. This makes jsdom's removal say it too.
+function removalBlurs(): () => void {
+  const remove = Element.prototype.remove;
+  const spy = vi.spyOn(Element.prototype, 'remove').mockImplementation(function (this: Element) {
+    const active = document.activeElement;
+    if (active && active !== document.body && this.contains(active)) {
+      active.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: null }));
+    }
+    remove.call(this);
+  });
+  return () => spy.mockRestore();
+}
+
+describe('Tooltip: a control removed while it has focus', () => {
+  it('lets go of its hint without an error from the update that removed it', async () => {
+    const { shown, wait, focusByKeyboard, rerender } = setup();
+    await focusByKeyboard();
+    await wait(0);
+    expect(shown()).toBe(true);
+    const errors: string[] = [];
+    const onError = (event: ErrorEvent) => {
+      errors.push(String(event.error?.message ?? event.message));
+      event.preventDefault();
+    };
+    window.addEventListener('error', onError);
+    const restore = removalBlurs();
+    try {
+      await rerender({ present: false });
+      await wait(0);
+    } finally {
+      restore();
+      window.removeEventListener('error', onError);
+    }
+    expect(errors).toEqual([]);
+    expect(shown()).toBe(false);
+  });
+});
+
 describe('Tooltip: pointer', () => {
   it('shows after the pointer rests on the control for the delay, not before', async () => {
     const { keys, control, shown, wait } = setup();
