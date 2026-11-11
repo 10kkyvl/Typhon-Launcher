@@ -378,6 +378,29 @@ describe('TopbarSearch: pointer', () => {
     expect(active()?.textContent).toContain('DOOM-GOG');
   });
 
+  it('rows passing under a resting pointer do not take the active row from the keyboard; a moving pointer does', async () => {
+    const { keys, find, active } = setup();
+    await find();
+    await keys.keyboard('{ArrowDown}');
+    const first = active();
+    const second = cellsOf(rowOf(/Doom II/))[0];
+    const watch = cellsOf(screen.getAllByRole('row')[0])[1];
+
+    // What a browser sends when the list scrolls under a pointer that has not moved.
+    for (const cell of [second, watch]) {
+      await fireEvent.pointerOver(cell);
+      await fireEvent.pointerEnter(cell);
+      await fireEvent.mouseOver(cell);
+      await fireEvent.mouseEnter(cell);
+    }
+    expect(active()).toBe(first);
+
+    await fireEvent.pointerMove(watch);
+    expect(active()).toBe(watch);
+    await fireEvent.pointerMove(second);
+    expect(active()).toBe(second);
+  });
+
   it('a press outside closes the results; a press in the island beside the text keeps them and the focus', async () => {
     const { keys, find, grid, field } = setup();
     await find();
