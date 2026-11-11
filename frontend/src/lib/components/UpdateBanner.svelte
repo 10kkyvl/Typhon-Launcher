@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { AlertTriangle, Download, RefreshCw, X } from '@lucide/svelte';
+  import { Download, RefreshCw, X } from '@lucide/svelte';
   import Button from './Button.svelte';
+  import Notice from './Notice.svelte';
   import ProgressBar from './ProgressBar.svelte';
   import UpdateRestartModal from './UpdateRestartModal.svelte';
   import {
@@ -30,15 +31,16 @@
 </script>
 
 {#if view === 'failed'}
-  <div class="banner banner-danger">
-    <div class="banner-text">
-      <AlertTriangle size="1.8rem" strokeWidth={1.8} />
-      <span>{statusReason(status) || msg('ui.updateCheckFailed')}</span>
-    </div>
-    <Button size="sm" onclick={retryFailed}>
-      <RefreshCw size="1.5rem" strokeWidth={1.8} />
-      {msg('common.retry')}
-    </Button>
+  <div class="failed">
+    <Notice tone="danger">
+      {statusReason(status) || msg('ui.updateCheckFailed')}
+      {#snippet action()}
+        <Button size="sm" onclick={retryFailed}>
+          <RefreshCw size="1.5rem" strokeWidth={1.8} />
+          {msg('common.retry')}
+        </Button>
+      {/snippet}
+    </Notice>
   </div>
 {:else if downloading || view === 'downloading'}
   <div class="banner">
@@ -106,8 +108,8 @@
     background: var(--surface-3);
   }
 
-  .banner-danger {
-    background: var(--danger-subtle);
+  .failed {
+    margin-top: var(--space-4);
   }
 
   .banner-text {
@@ -116,10 +118,6 @@
     gap: var(--space-3);
     font-size: var(--font-sm);
     font-weight: 500;
-  }
-
-  .banner-danger .banner-text {
-    color: var(--danger);
   }
 
   .progress {

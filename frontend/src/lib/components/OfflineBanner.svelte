@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { Activity, RefreshCw, WifiOff, X } from '@lucide/svelte';
-  import Tooltip from './Tooltip.svelte';
+  import { Activity, RefreshCw, WifiOff } from '@lucide/svelte';
   import Button from './Button.svelte';
+  import Notice from './Notice.svelte';
   import { retryBootstrap } from '../stores/user';
   import { openStatusPage } from '../services/account';
   import { toast } from '../stores/toasts';
@@ -31,66 +31,29 @@
 </script>
 
 {#if !dismissed}
-  <div class="offline-banner" role="status">
-    <span class="icon"><WifiOff size="1.6rem" strokeWidth={1.8} /></span>
-    <span class="text">
+  <div class="offline-banner">
+    <Notice tone="warning" onclose={() => (dismissed = true)}>
+      {#snippet icon()}
+        <WifiOff size="1.6rem" strokeWidth={1.8} />
+      {/snippet}
       {msg('ui.offlineBannerText')}
-    </span>
-    <Button size="sm" variant="ghost" onclick={openStatus}>
-      <Activity size="1.4rem" strokeWidth={1.8} />
-      {msg('ui.offlineBannerStatus')}
-    </Button>
-    <Button size="sm" busy={retrying} onclick={retry}>
-      {#if !retrying}<RefreshCw size="1.4rem" strokeWidth={1.8} />{/if}
-      {retrying ? msg('ui.checkingConnection') : msg('common.retry')}
-    </Button>
-    <Tooltip text={msg('common.close')} describe={false}>
-      <button type="button" class="close" aria-label={msg('common.close')} onclick={() => (dismissed = true)}>
-        <X size="1.4rem" strokeWidth={1.8} />
-      </button>
-    </Tooltip>
+      {#snippet action()}
+        <Button size="sm" variant="ghost" onclick={openStatus}>
+          <Activity size="1.4rem" strokeWidth={1.8} />
+          {msg('ui.offlineBannerStatus')}
+        </Button>
+        <Button size="sm" busy={retrying} onclick={retry}>
+          {#if !retrying}<RefreshCw size="1.4rem" strokeWidth={1.8} />{/if}
+          {retrying ? msg('ui.checkingConnection') : msg('common.retry')}
+        </Button>
+      {/snippet}
+    </Notice>
   </div>
 {/if}
 
 <style>
   .offline-banner {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
     margin: 0 var(--page-x) var(--space-3);
-    padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
-    background: var(--warning-subtle);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
     flex-shrink: 0;
-  }
-
-  .icon {
-    display: flex;
-    flex-shrink: 0;
-    color: var(--warning);
-  }
-
-  .text {
-    flex: 1;
-    min-width: 0;
-    font-size: var(--font-xs);
-    color: var(--text-2);
-  }
-
-  .close {
-    display: flex;
-    flex-shrink: 0;
-    padding: var(--space-1);
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--text-2);
-    cursor: pointer;
-  }
-
-  .close:hover {
-    color: var(--text);
-    background: var(--surface);
   }
 </style>
