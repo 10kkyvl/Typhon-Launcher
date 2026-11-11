@@ -9,7 +9,16 @@
   import { toast } from '../stores/toasts';
   import { msg } from '../i18n';
 
-  let { open = $bindable(false), game }: { open?: boolean; game: LibraryGame } = $props();
+  let {
+    open = $bindable(false),
+    game,
+    returnFocus,
+  }: {
+    open?: boolean;
+    game: LibraryGame;
+    /** Where focus goes on close when the element that opened the dialog is gone (a menu item). */
+    returnFocus?: () => HTMLElement | null | undefined;
+  } = $props();
 
   const current = $derived(game.status ?? '');
 
@@ -58,7 +67,7 @@
   }
 </script>
 
-<Modal dismissible={!saving} bind:open title={msg('modals.gameStatusTitle')}>
+<Modal dismissible={!saving} bind:open title={msg('modals.gameStatusTitle')} {returnFocus}>
   <div class="options" role="group" aria-label={msg('modals.gameStatusTitle')}>
     {#each options as option (option.value)}
       <Button

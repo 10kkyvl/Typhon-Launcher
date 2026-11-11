@@ -1,11 +1,18 @@
 <script lang="ts">
   import GameQuickMenu from '../components/GameQuickMenu.svelte';
+  import PageHeader from '../components/PageHeader.svelte';
   import { openGameMenu } from '../stores/gameMenu';
+  import { libraryGames } from '../stores/library';
 
-  // A game card with its context menu, as on the library page. For GameQuickMenu.dom.test.ts.
+  // A page of game cards, each with its context menu, as on the library page. For GameQuickMenu.dom.test.ts.
 </script>
 
-<div class="card" role="presentation" oncontextmenu={(event) => openGameMenu(event, 'g1')}>
-  <a href="#g1">Hades</a>
-</div>
+<PageHeader title="Library" />
+<ul>
+  {#each $libraryGames as game (game.id)}
+    <li class="card" oncontextmenu={(event) => openGameMenu(event, game.id)}>
+      <a href={`#${game.id}`}>{game.title}</a>
+    </li>
+  {/each}
+</ul>
 <GameQuickMenu />

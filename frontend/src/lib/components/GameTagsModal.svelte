@@ -8,7 +8,16 @@
   import { toast } from '../stores/toasts';
   import { msg } from '../i18n';
 
-  let { open = $bindable(false), game }: { open?: boolean; game: LibraryGame } = $props();
+  let {
+    open = $bindable(false),
+    game,
+    returnFocus,
+  }: {
+    open?: boolean;
+    game: LibraryGame;
+    /** Where focus goes on close when the element that opened the dialog is gone (a menu item). */
+    returnFocus?: () => HTMLElement | null | undefined;
+  } = $props();
 
   let tags = $state<string[]>(untrack(() => [...(game.tags ?? [])]));
   let suggestions = $state<string[]>([]);
@@ -42,7 +51,7 @@
   }
 </script>
 
-<Modal dismissible={!saving} bind:open title={msg('modals.gameTagsTitle')}>
+<Modal dismissible={!saving} bind:open title={msg('modals.gameTagsTitle')} {returnFocus}>
   <TagEditor bind:this={editor} bind:tags {suggestions} placeholder={msg('modals.gameTagsPlaceholder')} disabled={saving} />
   {#if tags.length === 0}
     <p class="empty">{msg('modals.gameTagsEmpty')}</p>

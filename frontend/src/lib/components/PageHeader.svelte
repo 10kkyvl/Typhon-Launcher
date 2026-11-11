@@ -17,7 +17,8 @@
 <header class="page-header">
   <div class="text">
     <div class="heading">
-      <h1>{title}</h1>
+      <!-- Focusable by script only: focus lands here when the item it was on is gone (a removed game). -->
+      <h1 tabindex="-1">{title}</h1>
       {#if count}
         <span class="count">{count}</span>
       {/if}

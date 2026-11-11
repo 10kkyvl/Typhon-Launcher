@@ -10,16 +10,19 @@
     candidates,
     onpick,
     onbrowse,
+    returnFocus,
   }: {
     open?: boolean;
     title: string;
     candidates: string[];
     onpick: (dir: string) => void;
     onbrowse: () => void;
+    /** Where focus goes on close when the element that opened the dialog is gone (a menu item). */
+    returnFocus?: () => HTMLElement | null | undefined;
   } = $props();
 </script>
 
-<Modal bind:open title={msg('ui.savesDirTitle')} width="52rem">
+<Modal bind:open title={msg('ui.savesDirTitle')} width="52rem" {returnFocus}>
   <p class="hint">{msg('ui.savesMultipleCandidates', { title })}</p>
   <div class="candidates">
     {#each candidates as candidate (candidate)}

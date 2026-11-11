@@ -18,6 +18,7 @@
     external = '',
     emulated = false,
     onremoved,
+    returnFocus,
   }: {
     open?: boolean;
     gameId: string;
@@ -26,6 +27,8 @@
     external?: string;
     emulated?: boolean;
     onremoved?: (mode: Mode) => void;
+    /** Where focus goes on close when the element that opened the dialog is gone (a menu item). */
+    returnFocus?: () => HTMLElement | null | undefined;
   } = $props();
 
   let info = $state<RemovalInfo | null>(null);
@@ -128,7 +131,7 @@
   });
 </script>
 
-<Modal dismissible={!working} bind:open title={msg('modals.removeGameTitle')}>
+<Modal dismissible={!working} bind:open title={msg('modals.removeGameTitle')} {returnFocus}>
   {#if loading}
     <p class="text">{msg('modals.removeGameLoading', { title })}</p>
   {:else if info}

@@ -50,10 +50,22 @@
 
   let steam = $state<{ id: string; added: boolean } | null>(null);
   let steamConfirmID = $state<string | null>(null);
-  // The menu item that opened the confirmation is gone by the time it closes; focus goes to the game.
+  // The menu item that opened a dialog is gone by the time the dialog closes. Focus goes to the game's
+  // own control, else (the game was removed) the next game in the same list, else the page heading.
   // Picked while the page is live: once a dialog is open the page is inert and has nothing to focus.
-  let steamHome: HTMLElement | null = null;
-  const focusHome = (source: HTMLElement | null | undefined) => (source ? initialFocus(source) : null);
+  let homes: HTMLElement[] = [];
+  const returnHome = () => homes.find((home) => home.isConnected) ?? null;
+
+  function homesOf(source: HTMLElement | null | undefined): HTMLElement[] {
+    if (!source) return [];
+    let item = source;
+    while (item.parentElement && item.parentElement.children.length === 1) item = item.parentElement;
+    const neighbour = item.nextElementSibling ?? item.previousElementSibling;
+    const heading = source.closest('main')?.querySelector<HTMLElement>('h1') ?? document.querySelector<HTMLElement>('h1');
+    return [initialFocus(source), neighbour instanceof HTMLElement ? initialFocus(neighbour) : null, heading].filter(
+      (home): home is HTMLElement => home !== null,
+    );
+  }
 
   $effect(() => {
     const menu = $gameMenu;
@@ -123,6 +135,7 @@
   const tagsGame = $derived(tagsID ? ($libraryGames.find((g) => g.id === tagsID) ?? null) : null);
 
   function run(current: LibraryGame, action: QuickAction) {
+    homes = homesOf(get(gameMenu)?.source);
     switch (action) {
       case 'play':
         return guard(() => playGame(current.id));
@@ -171,7 +184,6 @@
       case 'shortcut-remove':
         return guard(() => removeShortcut(current.id));
       case 'steam-add':
-        steamHome = focusHome(get(gameMenu)?.source);
         steamConfirmID = current.id;
         return;
       case 'steam-remove':
@@ -291,25 +303,26 @@
 
 {#if steamConfirmID}
   <ConfirmModal prompt={addToSteamPrompt()} onconfirm={confirmSteamAdd} onclose={() => (steamConfirmID = null)}
-    returnFocus={() => (steamHome?.isConnected ? steamHome : null)} errorText={(err) => libraryErrorText(err, msg('games.steamFailed'))} />
+    returnFocus={returnHome} errorText={(err) => libraryErrorText(err, msg('games.steamFailed'))} />
 {/if}
 
 {#if statusGame && statusOpen}
-  <GameStatusModal bind:open={statusOpen} game={statusGame} />
+  <GameStatusModal bind:open={statusOpen} game={statusGame} returnFocus={returnHome} />
 {/if}
 
 {#if tagsGame && tagsOpen}
-  <GameTagsModal bind:open={tagsOpen} game={tagsGame} />
+  <GameTagsModal bind:open={tagsOpen} game={tagsGame} returnFocus={returnHome} />
 {/if}
 
 {#if target}
-  <RemoveGameModal bind:open={removeOpen} bind:mode={removeMode} gameId={target.id} title={target.title} external={externalLabel(target)} emulated={isEmulated(target)} />
+  <RemoveGameModal bind:open={removeOpen} bind:mode={removeMode} gameId={target.id} title={target.title} external={externalLabel(target)} emulated={isEmulated(target)} returnFocus={returnHome} />
 
   <SavesCandidatesModal
     bind:open={savesOpen}
     title={target.title}
     candidates={savesCandidates}
     onpick={useCandidate}
+    returnFocus={returnHome}
     onbrowse={() => {
       const current = target;
       savesOpen = false;
