@@ -118,7 +118,7 @@
 </script>
 
 {#if shown}
-  <Card title={$t('games.achievementsTitle')} surface="panel" padding="var(--space-5)">
+  <Card title={$t('games.achievementsTitle')} surface="panel" padding="md-even">
     {#snippet action()}
       {#if view}
         <button class="refresh" type="button" disabled={refreshing} onclick={refresh}>

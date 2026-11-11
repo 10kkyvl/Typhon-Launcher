@@ -45,8 +45,10 @@
     margin-bottom: var(--space-6);
   }
 
+  /* The row is bottom-aligned for the buttons; the title stays at the top whatever stands beside it. */
   .text {
     flex: 1 1 24rem;
+    align-self: flex-start;
     min-width: 0;
   }
 

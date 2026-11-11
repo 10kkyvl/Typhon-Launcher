@@ -58,7 +58,7 @@
   });
 </script>
 
-<Card padding="var(--space-4) var(--space-5)">
+<Card padding="sm">
   <div class="card">
     <div class="text">
       <span class="label">{msg('social.friendsYourCode')}</span>

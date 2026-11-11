@@ -1296,7 +1296,7 @@
   {#if gameFacts.length > 0}
     <div class="gsec" class:moved={moved('about')} {...part('about')}>
       {#if gameFacts.length > 0}
-        <Card title={msg('games.detailAboutTitle')} surface="panel" padding="var(--space-5)">
+        <Card title={msg('games.detailAboutTitle')} surface="panel" padding="md-even">
           <dl class="facts about">
             {#each gameFacts as fact (fact.label)}
               <div class="fact">

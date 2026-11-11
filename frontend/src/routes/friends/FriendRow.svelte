@@ -76,7 +76,7 @@
 {/snippet}
 
 {#if variant === 'grid'}
-  <Card padding="var(--space-4)">
+  <Card padding="sm-even">
     <div class="grid-card edged" class:offline={status === 'offline'} style:--edge={edge}>
       {@render identity()}
       <span class="presence">
@@ -89,7 +89,7 @@
     </div>
   </Card>
 {:else if variant === 'card'}
-  <Card padding="var(--space-4)">
+  <Card padding="sm-even">
     <div class="card-row edged" style:--edge={edge}>
       {@render identity()}
       {#if stats && stats.length > 0}
