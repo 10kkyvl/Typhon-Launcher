@@ -100,6 +100,14 @@ describe('reactionLabel', () => {
   it('незнакомую реакцию возвращает как есть', () => {
     expect(reactionLabel('poop')).toBe('poop');
   });
+
+  it('имя свойства из прототипа объекта реакцией не считает', () => {
+    for (const name of ['constructor', 'toString', 'hasOwnProperty', '__proto__']) {
+      expect(reactionLabel(name)).toBe(name);
+      const before = event();
+      expect(toggleReaction(before, name)).toBe(before);
+    }
+  });
 });
 
 describe('REACTIONS', () => {

@@ -50,13 +50,13 @@ export interface FeedDayGroup {
   events: FeedEvent[];
 }
 
-export function reactionLabel(emoji: string): string {
-  const key = REACTION_KEYS[emoji as ReactionId];
-  return key ? msg(key) : emoji;
+// Reaction ids arrive from other users: only the table's own keys count, never an inherited name.
+export function isReaction(emoji: string): emoji is ReactionId {
+  return Object.hasOwn(REACTION_KEYS, emoji);
 }
 
-export function isReaction(emoji: string): emoji is ReactionId {
-  return emoji in REACTION_KEYS;
+export function reactionLabel(emoji: string): string {
+  return isReaction(emoji) ? msg(REACTION_KEYS[emoji]) : emoji;
 }
 
 export function kindLabel(kind: string): string {
