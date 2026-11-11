@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ChevronDown, Check } from '@lucide/svelte';
   import { clickOutside } from '../utils/clickOutside';
+  import type { SelectOption } from './select';
 
   let {
     options,
@@ -8,7 +9,7 @@
     width = '22rem',
     onchange,
   }: {
-    options: { id: string; label: string }[];
+    options: SelectOption[];
     value: string;
     width?: string;
     onchange?: (id: string) => void;
