@@ -1,3 +1,32 @@
+<script lang="ts" module>
+  interface OpenMenu {
+    root: HTMLElement;
+    owner: () => HTMLElement | null | undefined;
+    dismiss: () => void;
+  }
+
+  // One menu at a time, as with native menus: a menu opening closes every other open menu but the
+  // ones it was opened from (a submenu keeps its parent). Only menus take part: a tooltip or another
+  // non-modal layer neither closes a menu by appearing nor has to close for a menu to open.
+  const openMenus = new Set<OpenMenu>();
+
+  function closeOthers(menu: OpenMenu) {
+    const keep = new Set<OpenMenu>();
+    for (let from = menu.owner(); from; ) {
+      const inside = from;
+      const parent = [...openMenus].find((other) => other.root.contains(inside));
+      if (!parent || keep.has(parent)) break;
+      keep.add(parent);
+      from = parent.owner();
+    }
+    for (const other of [...openMenus]) {
+      if (keep.has(other)) continue;
+      openMenus.delete(other);
+      other.dismiss();
+    }
+  }
+</script>
+
 <script lang="ts">
   import { untrack } from 'svelte';
   import type { Attachment } from 'svelte/attachments';
@@ -43,6 +72,15 @@
     /** Close now. On 'tab' focus must be back on the owner when this returns. */
     onclose: (reason: 'dismiss' | 'tab') => void;
   } = $props();
+
+  const alone: Attachment<HTMLElement> = (node) => {
+    const menu: OpenMenu = { root: node, owner: () => owner(), dismiss: () => onclose('dismiss') };
+    untrack(() => closeOthers(menu));
+    openMenus.add(menu);
+    return () => {
+      openMenus.delete(menu);
+    };
+  };
 
   const typeahead = createTypeahead();
   const isDisabled = (index: number) => Boolean(items[index]?.disabled);
@@ -155,6 +193,7 @@
     // A right-click on the menu, or the browser answering the ContextMenu key that opened it, shows no browser menu over it.
     event.preventDefault();
   }}
+  {@attach alone}
   {@attach layer({ modal: false, owner: () => owner(), returnFocus: () => returnFocus(), initialFocus: entry, dismiss: () => onclose('dismiss') })}
   {@attach place}
 >
