@@ -6,6 +6,7 @@
   import Button from '../../lib/components/Button.svelte';
   import Chip from '../../lib/components/Chip.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import StatTile from '../../lib/components/StatTile.svelte';
   import { coverOf } from '../../lib/profile/view';
@@ -120,7 +121,7 @@
     <p class="muted" role="status">{msg('stats.loading')}</p>
   {:else if summary && data}
     {#if failed}
-      <p class="muted danger" role="alert">{msg('stats.loadError')}</p>
+      <div class="load-error"><Notice tone="danger">{msg('stats.loadError')}</Notice></div>
     {/if}
     {#if summary.empty}
       <EmptyState level={2} title={msg('stats.title')} description={msg('stats.empty')}>
@@ -367,8 +368,8 @@
     color: var(--text-3);
   }
 
-  .danger {
-    color: var(--danger);
+  .load-error {
+    margin-bottom: var(--space-4);
   }
 
   @media (max-width: 720px) {

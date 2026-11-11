@@ -1,8 +1,9 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
-  import { ArrowLeft, CircleAlert, Paperclip } from '@lucide/svelte';
+  import { ArrowLeft, Paperclip } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import type { ConfirmPrompt } from '../../lib/confirm/prompts';
@@ -155,10 +156,13 @@
 </div>
 
 {#if failure}
-  <div class="banner" role="alert">
-    <CircleAlert size="1.6rem" strokeWidth={1.8} />
-    <span class="banner-text">{failure}</span>
-    <Button size="sm" onclick={retry}>{msg('common.retry')}</Button>
+  <div class="banner">
+    <Notice tone="danger">
+      {failure}
+      {#snippet action()}
+        <Button size="sm" onclick={retry}>{msg('common.retry')}</Button>
+      {/snippet}
+    </Notice>
   </div>
 {/if}
 
@@ -199,11 +203,12 @@
       <p class="hint">{msg('tickets.reopenNote')}</p>
     {/if}
     {#if limitsFailure}
-      <div class="banner" role="alert">
-        <CircleAlert size="1.6rem" strokeWidth={1.8} />
-        <span class="banner-text">{limitsFailure}</span>
-        <Button size="sm" onclick={loadLimits}>{msg('common.retry')}</Button>
-      </div>
+      <Notice tone="danger">
+        {limitsFailure}
+        {#snippet action()}
+          <Button size="sm" onclick={loadLimits}>{msg('common.retry')}</Button>
+        {/snippet}
+      </Notice>
     {:else if limits}
       <label class="field">
         <span class="label">
@@ -266,25 +271,7 @@
   }
 
   .banner {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
     margin-bottom: var(--space-4);
-    padding: 0.9rem 1.2rem;
-    border-radius: var(--radius-md);
-    background: var(--danger-subtle);
-    color: var(--danger);
-    font-size: var(--font-sm);
-  }
-
-  .banner :global(svg) {
-    flex-shrink: 0;
-  }
-
-  .banner-text {
-    flex: 1;
-    min-width: 0;
-    line-height: 1.4;
   }
 
   .head {
@@ -420,7 +407,12 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* A field message keeps its place next to the field, on a plate of its own: the page behind it is
+     the window backdrop. */
   .counter.over {
+    padding: 0 var(--space-1);
+    border-radius: var(--radius-xs);
+    background: var(--surface-2);
     color: var(--danger);
   }
 
@@ -455,6 +447,10 @@
   }
 
   .error {
+    align-self: flex-start;
+    padding: 0 var(--space-1);
+    border-radius: var(--radius-xs);
+    background: var(--surface-2);
     font-size: var(--font-xs);
     color: var(--danger);
   }

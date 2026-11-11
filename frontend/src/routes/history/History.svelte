@@ -1,7 +1,6 @@
 <script lang="ts">
   import Page from '../../lib/components/Page.svelte';
   import {
-    CircleAlert,
     Download,
     History as HistoryIcon,
     Move,
@@ -16,6 +15,7 @@
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import ConsoleTag from '../../lib/components/ConsoleTag.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import SearchInput from '../../lib/components/SearchInput.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
@@ -134,8 +134,7 @@
 
   {#if $historyStatus.degraded}
     <div class="banner">
-      <span class="icon"><CircleAlert size="1.6rem" strokeWidth={1.8} /></span>
-      <span class="text">{msg('transfers.historyDegradedBanner', { message: $historyStatus.message })}</span>
+      <Notice tone="danger">{msg('transfers.historyDegradedBanner', { message: $historyStatus.message })}</Notice>
     </div>
   {/if}
 
@@ -194,24 +193,7 @@
 
 <style>
   .banner {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    padding: var(--space-3) var(--space-4);
     margin-bottom: var(--space-5);
-    background: var(--danger-subtle);
-    border-radius: var(--radius-md);
-  }
-
-  .banner .icon {
-    display: flex;
-    flex-shrink: 0;
-    color: var(--danger);
-  }
-
-  .banner .text {
-    font-size: var(--font-sm);
-    color: var(--text);
   }
 
   .toolbar {

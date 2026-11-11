@@ -4,6 +4,7 @@
   import { gameInEmulator, listPlatforms, type PlatformStatus } from '../services/emulators';
   import { toast } from '../stores/toasts';
   import { msg } from '../i18n';
+  import Notice from './Notice.svelte';
 
   let { platform, game = null }: { platform: string; game?: EmulatedGame | null } = $props();
 
@@ -50,7 +51,7 @@
   <p class="hint">{msg('emul.vitaFirstLaunch')}</p>
 {/if}
 {#if row?.warnings.includes('discord_exit_hang')}
-  <p class="hint warning">{msg('emul.discordExitHang')}</p>
+  <Notice tone="warning" compact>{msg('emul.discordExitHang')}</Notice>
 {/if}
 
 <style>
@@ -59,9 +60,5 @@
     font-size: var(--font-xs);
     line-height: 1.5;
     color: var(--text-3);
-  }
-
-  .warning {
-    color: var(--warning);
   }
 </style>

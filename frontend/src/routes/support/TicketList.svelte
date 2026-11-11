@@ -1,8 +1,9 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
-  import { Activity, CircleAlert, LifeBuoy, Plus } from '@lucide/svelte';
+  import { Activity, LifeBuoy, Plus } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { msg } from '../../lib/i18n';
@@ -113,10 +114,13 @@
 </PageHeader>
 
 {#if failure}
-  <div class="banner" role="alert">
-    <CircleAlert size="1.6rem" strokeWidth={1.8} />
-    <span class="banner-text">{failure}</span>
-    <Button size="sm" onclick={retry}>{msg('common.retry')}</Button>
+  <div class="banner">
+    <Notice tone="danger">
+      {failure}
+      {#snippet action()}
+        <Button size="sm" onclick={retry}>{msg('common.retry')}</Button>
+      {/snippet}
+    </Notice>
   </div>
 {/if}
 
@@ -170,25 +174,7 @@
   }
 
   .banner {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
     margin-bottom: var(--space-4);
-    padding: 0.9rem 1.2rem;
-    border-radius: var(--radius-md);
-    background: var(--danger-subtle);
-    color: var(--danger);
-    font-size: var(--font-sm);
-  }
-
-  .banner :global(svg) {
-    flex-shrink: 0;
-  }
-
-  .banner-text {
-    flex: 1;
-    min-width: 0;
-    line-height: 1.4;
   }
 
   .list {

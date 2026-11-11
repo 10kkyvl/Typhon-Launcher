@@ -7,6 +7,7 @@
   import Card from '../../lib/components/Card.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import GameCard from '../../lib/components/GameCard.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import ProfileCanvas from '../../lib/components/ProfileCanvas.svelte';
   import ProfileCover from '../../lib/components/ProfileCover.svelte';
@@ -384,11 +385,11 @@
   <PageHeader title={msg('social.profileLabel')} />
 
   {#if $profileFailed}
-    <p class="load-error" role="alert">{msg('profile.loadFailed')}</p>
+    <div class="load-error"><Notice tone="danger">{msg('profile.loadFailed')}</Notice></div>
   {/if}
 
   {#if previewFailed}
-    <p class="load-error" role="alert">{msg('profile.previewLoadFailed')}</p>
+    <div class="load-error"><Notice tone="danger">{msg('profile.previewLoadFailed')}</Notice></div>
   {/if}
 
   <div class="workspace" class:editing>
@@ -488,8 +489,6 @@
 <style>
   .load-error {
     margin: 0 0 var(--space-4);
-    font-size: var(--font-sm);
-    color: var(--danger);
   }
 
   .workspace {

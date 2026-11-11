@@ -9,12 +9,16 @@ describe('screens show a failed load instead of an empty state', () => {
     expect(installed).toMatch(/\{:else if \$storageFailed\}[\s\S]*?role="alert"[\s\S]*?games\.installedStorageLoadFailed[\s\S]*?onclick=\{refreshStorage\}/);
   });
 
+  // A danger Notice is an alert by its tone; Big Picture has no backdrop and keeps its own line.
+  const NOTICE = /\{#if \$profileFailed\}\s*(<div[^>]*>)?<Notice tone="danger">/;
+  const LINE = /\{#if \$profileFailed\}\s*<p[^>]*role="alert"/;
+
   it.each([
-    ['profile', profile, "msg('profile.loadFailed')"],
-    ['activity', activity, "msg('profile.loadFailed')"],
-    ['big picture profile', bigPictureProfile, "$t('bp.profile.loadFailed')"],
-  ])('the %s screen shows the profile statistics failure', (_name, source, text) => {
-    expect(source).toMatch(/\{#if \$profileFailed\}\s*<p[^>]*role="alert"/);
+    ['profile', profile, NOTICE, "msg('profile.loadFailed')"],
+    ['activity', activity, NOTICE, "msg('profile.loadFailed')"],
+    ['big picture profile', bigPictureProfile, LINE, "$t('bp.profile.loadFailed')"],
+  ])('the %s screen shows the profile statistics failure', (_name, source, shape, text) => {
+    expect(source).toMatch(shape);
     expect(source).toContain(text);
   });
 });

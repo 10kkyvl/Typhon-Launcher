@@ -8,6 +8,7 @@
   import Card from '../../lib/components/Card.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import FeedRow from '../../lib/components/FeedRow.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import SocialConsentScreen from '../../lib/components/SocialConsentScreen.svelte';
   import StatTile from '../../lib/components/StatTile.svelte';
@@ -91,7 +92,7 @@
   <PageHeader title={msg('transfers.activityTitle')} subtitle={msg('transfers.activitySubtitle')} />
 
   {#if $profileFailed}
-    <p class="load-error" role="alert">{msg('profile.loadFailed')}</p>
+    <div class="load-error"><Notice tone="danger">{msg('profile.loadFailed')}</Notice></div>
   {/if}
 
   {#if isGuest}
@@ -208,8 +209,6 @@
 <style>
   .load-error {
     margin: 0 0 var(--space-4);
-    font-size: var(--font-sm);
-    color: var(--danger);
   }
 
   .layout {

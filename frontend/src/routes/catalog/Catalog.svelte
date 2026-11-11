@@ -12,6 +12,7 @@
   import { identityEvidenceChanged, identityFingerprint, matchesCatalogIdentity } from '../../lib/catalog/identity';
   import { onDestroy, onMount } from 'svelte';
   import { get } from 'svelte/store';
+  import Notice from '../../lib/components/Notice.svelte';
   import RecommendationShelf from '../../lib/components/RecommendationShelf.svelte';
   import { genreLabel, type Recommendation } from '../../lib/recommendations/display';
   import { discoveryCache } from '../../lib/recommendations/cache';
@@ -915,7 +916,7 @@
       {#if showMoreButton}<Button onclick={() => { autoPages = 0; void fetchPage(page + 1); }} disabled={loading}>
         {appending ? msg('games.catalogLoadingMore') : msg('games.catalogShowMore')}
       </Button>{:else if hasMore && appending}<span class="muted" role="status">{msg('games.catalogLoadingMore')}</span>{/if}
-      {#if failed}<span class="more-error" role="alert">{msg('games.catalogMoreFailed')}</span>{/if}
+      {#if failed}<Notice tone="danger" compact>{msg('games.catalogMoreFailed')}</Notice>{/if}
       <span class="muted">{msg('games.catalogShownOf', { shown: items.length, total })}</span>
     </div>
   {/if}
@@ -929,7 +930,6 @@
   .list-action { display: inline-flex; opacity: 0; pointer-events: none; transition: opacity var(--dur) var(--ease); }
   .list-entry:hover .list-action, .list-entry:focus-within .list-action, .list-action.pinned { opacity: 1; pointer-events: auto; }
 
-  .more-error { color: var(--danger); }
   .catalog-skeleton { margin-top: var(--space-4); }
   .loading-item { min-width: 0; }
   .loading-cover { aspect-ratio: 3 / 4; border-radius: var(--radius-md); }

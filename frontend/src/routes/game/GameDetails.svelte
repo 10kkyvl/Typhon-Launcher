@@ -39,6 +39,7 @@
   import Lightbox from '../../lib/components/Lightbox.svelte';
   import MetadataMatchModal from '../../lib/components/MetadataMatchModal.svelte';
   import Modal from '../../lib/components/Modal.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import ReleaseList from '../../lib/components/ReleaseList.svelte';
   import SimilarReleases from '../../lib/components/SimilarReleases.svelte';
@@ -1552,7 +1553,7 @@
         </div>
 
         {#if primary.kind === 'retry-download' && terminalDownload?.error}
-          <p class="note danger">{installErrorText(terminalDownload.error)}</p>
+          <div class="note-plate"><Notice tone="danger">{installErrorText(terminalDownload.error)}</Notice></div>
         {:else if localGame && !installed && wasInstalled}
           <p class="note">
             {primary.kind === 'install-download'
@@ -1949,8 +1950,9 @@
     color: var(--text-2);
   }
 
-  .note.danger {
-    color: var(--danger);
+  .note-plate {
+    margin-top: var(--space-4);
+    max-width: 56rem;
   }
 
   .tabs-wrap {

@@ -8,6 +8,7 @@
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import RemoveGameModal from '../../lib/components/RemoveGameModal.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
@@ -214,7 +215,7 @@
   </PageHeader>
 
   {#if scanError}
-    <p class="error" role="alert">{scanError}</p>
+    <div class="error"><Notice tone="danger">{scanError}</Notice></div>
   {/if}
 
   {#if !report}
@@ -240,13 +241,14 @@
     </Card>
 
     {#if report.warnings.length > 0}
-      <div class="warnings" role="alert">
-        <h2>{msg('diskusage.warningsTitle')}</h2>
-        <ul>
-          {#each report.warnings as warning, index (index)}
-            <li>{msg('diskusage.warningLine', { area: warning.area, message: warning.message })}</li>
-          {/each}
-        </ul>
+      <div class="warnings">
+        <Notice tone="danger" title={msg('diskusage.warningsTitle')}>
+          <ul>
+            {#each report.warnings as warning, index (index)}
+              <li>{msg('diskusage.warningLine', { area: warning.area, message: warning.message })}</li>
+            {/each}
+          </ul>
+        </Notice>
       </div>
     {/if}
 
@@ -511,11 +513,6 @@
 
   .error {
     margin-bottom: var(--space-4);
-    padding: var(--space-3) var(--space-4);
-    border: 1px solid var(--danger);
-    border-radius: var(--radius-md);
-    color: var(--danger);
-    font-size: var(--font-sm);
   }
 
   .summary {
@@ -554,21 +551,10 @@
 
   .warnings {
     margin-top: var(--space-4);
-    padding: var(--space-3) var(--space-4);
-    border: 1px solid var(--danger);
-    border-radius: var(--radius-md);
-  }
-
-  .warnings h2 {
-    font-size: var(--font-md);
-    color: var(--danger);
   }
 
   .warnings ul {
-    margin-top: var(--space-2);
     padding-left: var(--space-5);
-    font-size: var(--font-sm);
-    color: var(--text-2);
   }
 
   .section-head {
