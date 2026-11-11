@@ -280,7 +280,6 @@
   let cloudConsentOpen = $state(false);
   let cloudDisableOpen = $state(false);
   let cloudBusy = $state(false);
-  let cloudToggleKey = $state(0);
   let cloudForgetFailed = $state(false);
 
   const cloudUsage = $derived.by(() => {
@@ -293,7 +292,6 @@
   });
 
   function changeCloudSaves(on: boolean) {
-    cloudToggleKey++;
     if (on) cloudConsentOpen = true;
     else cloudDisableOpen = true;
   }
@@ -1267,15 +1265,13 @@
                   {msg('cloudsaves.retryForget')}
                 </Button>
               {/if}
-              {#key cloudToggleKey}
-                <Toggle
-                  checked={current?.cloudSaves ?? false}
-                  labelledby={labelId('settings')}
-                  describedby={subId('settings')}
-                  disabled={!accountReady && !current?.cloudSaves}
-                  onchange={changeCloudSaves}
-                />
-              {/key}
+              <Toggle
+                checked={current?.cloudSaves ?? false}
+                labelledby={labelId('settings')}
+                describedby={subId('settings')}
+                disabled={!accountReady && !current?.cloudSaves}
+                onchange={changeCloudSaves}
+              />
             </div>
             <div class="row">
               <div class="row-text">

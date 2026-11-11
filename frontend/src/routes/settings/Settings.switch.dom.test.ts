@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/svelte';
+import { render, screen, within } from '@testing-library/svelte';
 import { msg } from '../../lib/i18n';
 import { saveSettingsPatch, type Settings as SettingsData } from '../../lib/services/settings';
 import { settings } from '../../lib/stores/settings';
 import { toasts } from '../../lib/stores/toasts';
+import { authState } from '../../lib/stores/user';
 import { user } from '../../lib/testing/dom';
 import { description } from '../../lib/testing/hints';
 import Settings from './Settings.svelte';
@@ -14,6 +15,14 @@ vi.mock('../../lib/services/settings', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/settings')>()),
   saveSettingsPatch: vi.fn(),
 }));
+// Without a backend the Discord card's first request reads as a lost session and signs the account out.
+vi.mock('../../lib/services/discord', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../../lib/services/discord')>();
+  return {
+    ...original,
+    discordApi: { ...original.discordApi, getLink: async () => ({ linked: false, discordId: '', discordUsername: '', linkedAt: '' }) },
+  };
+});
 
 let app: HTMLDivElement;
 
@@ -34,6 +43,7 @@ beforeEach(() => {
 afterEach(() => {
   settings.set(null);
   toasts.set([]);
+  authState.set('bootstrapping');
   document.body.replaceChildren();
   vi.mocked(saveSettingsPatch).mockReset();
   vi.restoreAllMocks();
@@ -68,6 +78,28 @@ describe('Settings: a switch row', () => {
 
     refuse(new Error('disk full'));
     await vi.waitFor(() => expect(tray.getAttribute('aria-checked')).toBe('true'));
+  });
+});
+
+describe('Settings: the Cloud saves switch', () => {
+  it.each(['Cancel', 'Escape'])('keeps focus and the held state when the consent dialog is closed with %s', async (how) => {
+    authState.set('authenticated');
+    render(Settings, { target: app });
+    await user().click(screen.getByRole('tab', { name: msg('settings.downloadsTab') }));
+    const cloud = screen.getByRole('switch', { name: msg('cloudsaves.settingsLabel') });
+    expect(cloud.getAttribute('aria-checked')).toBe('false');
+
+    cloud.focus();
+    await user().keyboard(' ');
+    const dialog = await screen.findByRole('dialog', { name: msg('cloudsaves.consentTitle') });
+    if (how === 'Escape') await user().keyboard('{Escape}');
+    else await user().click(within(dialog).getByRole('button', { name: msg('common.cancel') }));
+
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(document.activeElement).toBe(cloud);
+    expect(cloud.isConnected).toBe(true);
+    expect(cloud.getAttribute('aria-checked')).toBe('false');
+    expect(saveSettingsPatch).not.toHaveBeenCalled();
   });
 });
 
