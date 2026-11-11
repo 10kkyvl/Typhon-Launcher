@@ -23,8 +23,26 @@ function literals(css: string): string[] {
   return found;
 }
 
+/** Opening tags of a component, read to their closing `>`: a `>` inside `{…}` or a quoted value is part of an attribute. */
 function tags(source: string, name: string): string[] {
-  return [...source.matchAll(new RegExp(`<${name}\\b[^>]*?/>`, 'g'))].map((match) => match[0]);
+  const found: string[] = [];
+  for (const match of source.matchAll(new RegExp(`<${name}\\b`, 'g'))) {
+    let depth = 0;
+    let quote = '';
+    for (let i = match.index + match[0].length; i < source.length; i++) {
+      const char = source[i];
+      if (quote) {
+        if (char === quote) quote = '';
+      } else if (char === '{') depth++;
+      else if (char === '}') depth--;
+      else if (char === '"' || (depth > 0 && (char === "'" || char === '`'))) quote = char;
+      else if (char === '>' && depth === 0) {
+        found.push(source.slice(match.index, i + 1));
+        break;
+      }
+    }
+  }
+  return found;
 }
 
 describe('status components take their look from tokens', () => {
@@ -63,11 +81,16 @@ describe('every progress bar', () => {
     .filter(([file]) => file.endsWith('.svelte'))
     .flatMap(([file, source]) => tags(source, 'ProgressBar').map((tag) => ({ file, tag })));
 
-  it('is found where the app draws one', () => {
+  it('is read in full wherever the app draws one', () => {
+    const written = Object.entries(frontendSources)
+      .filter(([file]) => file.endsWith('.svelte'))
+      .reduce((sum, [, source]) => sum + [...source.matchAll(/<ProgressBar\b/g)].length, 0);
+    expect(uses.length).toBe(written);
     expect(uses.length).toBeGreaterThan(20);
   });
 
   it('reads a tag the way the rules below need', () => {
+    expect(tags('<ProgressBar value={a > 0 ? 1 : 0} color="red" />', 'ProgressBar')).toEqual(['<ProgressBar value={a > 0 ? 1 : 0} color="red" />']);
     expect(tags('<ProgressBar value={1} color="red" />', 'ProgressBar')).toHaveLength(1);
     expect(/\bcolor=/.test('<ProgressBar value={1} color="red" />')).toBe(true);
     expect(/\b(label|labelledby)=/.test('<ProgressBar value={1} />')).toBe(false);
@@ -97,7 +120,9 @@ describe('every card', () => {
   it('takes its padding as a named size, not a CSS value', () => {
     const offenders = Object.entries(frontendSources)
       .filter(([file]) => file.endsWith('.svelte'))
-      .flatMap(([file, source]) => [...source.matchAll(/<Card\b[^>]*?\bpadding=("[^"]*"|\{[^}]*\})/g)].map((match) => `${file}: ${match[1]}`))
+      .flatMap(([file, source]) =>
+        tags(source, 'Card').flatMap((tag) => [...tag.matchAll(/\bpadding=("[^"]*"|\{[^}]*\})/g)].map((match) => `${file}: ${match[1]}`)),
+      )
       .filter((use) => !/: "(md|md-even|sm|sm-even)"$/.test(use));
     expect(offenders).toEqual([]);
   });
