@@ -1,3 +1,4 @@
+import { compile } from 'svelte/compiler';
 import { describe, expect, it } from 'vitest';
 import { CONTRAST_FALLBACKS } from '../lib/theme/contrastReport';
 
@@ -69,22 +70,69 @@ describe('a base control is restyled by a prop, never from outside', () => {
     .map((path) => path.replaceAll('\\', '/'))
     .filter((path) => path.endsWith('.svelte'));
 
+  // Svelte gives every selector of a component its scope class, except what is written to be global,
+  // in whichever form. The compiled CSS is read, not the source, so no form of :global slips by.
+  const SCOPE = 'guard-scope';
+  const scoped = new RegExp(`\\.${SCOPE}(?![\\w-])`);
+
+  function compounds(selector: string): string[] {
+    const out: string[] = [];
+    let depth = 0;
+    let part = '';
+    for (const c of selector) {
+      if (c === '(') depth++;
+      else if (c === ')') depth--;
+      if (depth === 0 && /[\s>+~]/.test(c)) {
+        if (part) out.push(part);
+        part = '';
+      } else part += c;
+    }
+    return part ? [...out, part] : out;
+  }
+
+  // The base classes a component's styles reach without its own scope.
+  function reachIns(component: string, filename = 'Sample.svelte'): string[] {
+    if (!component.includes('<style')) return [];
+    const css = compile(component, { filename, css: 'external', cssHash: () => SCOPE }).css?.code ?? '';
+    const found: string[] = [];
+    for (const m of css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{};]+)\{/g)) {
+      const prelude = m[1].trim();
+      if (prelude.startsWith('@') || /^(?:from|to|[\d.]+%)\b/.test(prelude)) continue;
+      for (const selector of topLevel(prelude)) {
+        for (const compound of compounds(selector)) {
+          if (scoped.test(compound)) continue;
+          for (const c of compound.matchAll(/\.(btn|icon-btn|chip)(?![\w-])/g)) found.push(c[1]);
+        }
+      }
+    }
+    return found;
+  }
+
   it('no component reaches into Button, IconButton or Chip through :global', () => {
     const found: string[] = [];
     for (const path of sources) {
       const text = read(path);
-      for (const m of text.matchAll(/:global\(\s*[^)]*?\.(btn|icon-btn|chip)(?![\w-])/g)) {
-        if (path === `lib/components/${OWNERS[m[1]]}.svelte`) continue;
-        found.push(`${path}:${text.slice(0, m.index).split('\n').length} .${m[1]}`);
+      for (const name of reachIns(text, path)) {
+        if (path !== `lib/components/${OWNERS[name]}.svelte`) found.push(`${path} .${name}`);
       }
     }
     expect(sources.length).toBeGreaterThan(200);
     expect(found).toEqual([]);
   });
 
-  it('sees a reach-in when there is one', () => {
-    const sample = '.lead :global(.btn) { min-width: 18rem; } .cta :global(.icon-btn:hover) {}';
-    expect([...sample.matchAll(/:global\(\s*[^)]*?\.(btn|icon-btn|chip)(?![\w-])/g)].map((m) => m[1])).toEqual(['btn', 'icon-btn']);
+  // Every form Svelte 5 accepts for a selector outside the component's scope.
+  it.each([
+    ['a :global() selector', '.lead :global(.btn) { min-width: 18rem; }', ['btn']],
+    ['one inside a nested rule', '.cta { :global(.icon-btn:hover) { color: var(--text); } }', ['icon-btn']],
+    ['a :global block', ':global { .chip { color: var(--text); } }', ['chip']],
+    ['a :global block under a scoped selector', '.lead :global { .btn { padding: 0; } }', ['btn']],
+    ['a :global block nested in a rule', '.lead { :global { .btn, .icon-btn:hover { padding: 0; } } }', ['btn', 'icon-btn']],
+    ['a bare :global before the class', '.lead :global .btn { padding: 0; }', ['btn']],
+    ['a :global block in a media query', '@media (width > 1px) { :global { .chip { padding: 0; } } }', ['chip']],
+    ['none: its own class of the same name', '.btn { padding: 0; }', []],
+  ])('sees %s', (_, css, names) => {
+    const markup = '<div class="lead cta"><span class="btn"></span></div>';
+    expect(reachIns(`${markup}<style>${css}</style>`)).toEqual(names);
   });
 });
 
