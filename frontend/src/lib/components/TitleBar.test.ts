@@ -1,5 +1,5 @@
 import { readable } from 'svelte/store';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppInfo } from '../services/system';
 
 const handlers = new Map<string, () => void>();
@@ -51,6 +51,12 @@ function controls(html: string): string {
 function buttons(html: string): string[] {
   return [...controls(html).matchAll(/<button[^>]*>/g)].map((match) => match[0]);
 }
+
+// The first import transforms the component and the i18n catalogs (seconds on a busy machine): that is
+// paid here, not inside the first case's own time limit.
+beforeAll(async () => {
+  await bar();
+}, 60_000);
 
 beforeEach(() => {
   platform = 'windows';
