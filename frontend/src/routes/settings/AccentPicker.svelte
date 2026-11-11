@@ -11,6 +11,8 @@
   import Button from '../../lib/components/Button.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
   import { appearanceResetVersion } from '../../lib/stores/theme';
+
+  const uid = $props.id();
   const presetLabels: MessageKey[] = [
     'settings.accentPreset1', 'settings.accentPreset2', 'settings.accentPreset3', 'settings.accentPreset4',
     'settings.accentPreset5', 'settings.accentPreset6', 'settings.accentPreset7', 'settings.accentPreset8',
@@ -67,7 +69,7 @@
   {:else}
     <div class="editor"><HexColorField value={selected || $displayedAccent} readonly /></div>
   {/if}
-  <div class="tint"><span>{msg('settings.accentTintLogo')}</span><Toggle checked={$settings?.tintLogo ?? false} disabled={busy || editing} label={msg('settings.accentTintLogo')} onchange={tint} /></div>
+  <div class="tint"><span id="{uid}-tint-label">{msg('settings.accentTintLogo')}</span><Toggle checked={$settings?.tintLogo ?? false} disabled={busy || editing} labelledby="{uid}-tint-label" onchange={tint} /></div>
 </Card>
 
 <style>

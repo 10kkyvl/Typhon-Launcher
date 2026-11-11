@@ -35,7 +35,11 @@ function stored(version: number, usage: boolean, diagnostics: boolean): Settings
 }
 
 function toggles(html: string, label: string): boolean {
-  const tag = new RegExp(`<button[^>]*aria-label="${label}"[^>]*>`).exec(html)?.[0];
+  // A switch is named by its own label, or by the visible row label it points to.
+  const row = new RegExp(`id="([^"]+)"[^>]*>${label}<`).exec(html)?.[1];
+  const tag =
+    new RegExp(`<button[^>]*aria-label="${label}"[^>]*>`).exec(html)?.[0] ??
+    (row ? new RegExp(`<button[^>]*aria-labelledby="${row}"[^>]*>`).exec(html)?.[0] : undefined);
   expect(tag, label).toBeDefined();
   const checked = /aria-checked="(true|false)"/.exec(tag ?? '')?.[1];
   expect(checked, label).toBeDefined();

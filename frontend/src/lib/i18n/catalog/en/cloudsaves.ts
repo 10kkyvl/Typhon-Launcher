@@ -91,7 +91,6 @@ export const cloudsaves: Record<CloudsavesKey, Message> = {
   'cloudsaves.conflictTookRemote': 'Saves taken from the cloud',
   'cloudsaves.settingsLabel': 'Cloud saves',
   'cloudsaves.settingsSub': 'Keep a copy of catalog games’ saves in your account and sync them between devices',
-  'cloudsaves.settingsToggle': 'Cloud saves',
   'cloudsaves.settingsNeedsAccount': 'Sign-in required.',
   'cloudsaves.usage': 'Used: {used} of {quota}',
   'cloudsaves.usageUnknown': 'Used: {used}',

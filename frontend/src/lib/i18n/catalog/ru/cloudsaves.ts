@@ -88,7 +88,6 @@ export const cloudsaves = {
   'cloudsaves.conflictTookRemote': 'Сохранения взяты из облака',
   'cloudsaves.settingsLabel': 'Облачные сохранения',
   'cloudsaves.settingsSub': 'Хранить копию сохранений игр из каталога в вашем аккаунте и синхронизировать между устройствами',
-  'cloudsaves.settingsToggle': 'Облачные сохранения',
   'cloudsaves.settingsNeedsAccount': 'Нужен вход в аккаунт.',
   'cloudsaves.usage': 'Занято: {used} из {quota}',
   'cloudsaves.usageUnknown': 'Занято: {used}',

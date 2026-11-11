@@ -20,6 +20,8 @@
   } from '../../lib/services/emulators';
   import { toast } from '../../lib/stores/toasts';
 
+  const uid = $props.id();
+
   let rows = $state<PlatformStatus[]>([]);
   let loading = $state(true);
   let loadFailed = $state(false);
@@ -238,10 +240,10 @@
       {#each found.found as item (item.platform)}
         <div class="found-row">
           <div class="row-text">
-            <span class="row-label">{nameOf(item.platform)}</span>
-            <span class="row-sub path" title={item.path}>{item.path}</span>
+            <span class="row-label" id="{uid}-found-{item.platform}-label">{nameOf(item.platform)}</span>
+            <span class="row-sub path" id="{uid}-found-{item.platform}-sub" title={item.path}>{item.path}</span>
           </div>
-          <Toggle bind:checked={picked[item.platform]} label={nameOf(item.platform)} />
+          <Toggle bind:checked={picked[item.platform]} labelledby="{uid}-found-{item.platform}-label" describedby="{uid}-found-{item.platform}-sub" />
         </div>
       {/each}
     </div>

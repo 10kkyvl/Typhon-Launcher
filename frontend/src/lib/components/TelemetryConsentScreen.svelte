@@ -7,6 +7,8 @@
   import Toggle from './Toggle.svelte';
   import { msg } from '../i18n';
 
+  const uid = $props.id();
+
   // На свежей установке оба переключателя выключены — их включают отдельным
   // действием. Но этот же экран показывается повторно, когда состав данных
   // расширился, и там предвыбор обязан повторять прошлый ответ: иначе человек,
@@ -106,21 +108,21 @@
       <div class="row">
         <div class="row-text">
           <span class="row-title">{msg('modals.telemetryConsentUsageTitle')}</span>
-          <span class="row-note">
+          <span class="row-note" id="{uid}-telemetry-consent-usage-sub">
             {msg('modals.telemetryConsentUsageNote')}
           </span>
         </div>
-        <Toggle checked={usageStats} label={msg('modals.telemetryConsentUsageToggleLabel')} onchange={(v) => (usageStats = v)} />
+        <Toggle checked={usageStats} label={msg('modals.telemetryConsentUsageToggleLabel')} describedby="{uid}-telemetry-consent-usage-sub" onchange={(v) => (usageStats = v)} />
       </div>
 
       <div class="row">
         <div class="row-text">
-          <span class="row-title">{msg('settings.generalPrivacyDiagLabel')}</span>
-          <span class="row-note">
+          <span class="row-title" id="{uid}-general-privacy-diag-label">{msg('settings.generalPrivacyDiagLabel')}</span>
+          <span class="row-note" id="{uid}-general-privacy-diag-sub">
             {msg('settings.generalPrivacyDiagSub')}
           </span>
         </div>
-        <Toggle checked={diagnostics} label={msg('settings.generalPrivacyDiagLabel')} onchange={(v) => (diagnostics = v)} />
+        <Toggle checked={diagnostics} labelledby="{uid}-general-privacy-diag-label" describedby="{uid}-general-privacy-diag-sub" onchange={(v) => (diagnostics = v)} />
       </div>
 
       <details class="disclosure">

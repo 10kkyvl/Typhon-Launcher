@@ -3,16 +3,19 @@
   import Toggle from '../../lib/components/Toggle.svelte';
   import { lanStats } from '../../lib/stores/lan';
   import { settings, updateSettings } from '../../lib/stores/settings';
+
+  const uid = $props.id();
 </script>
 
 <div class="row">
   <div class="row-text">
-    <span class="row-label">{msg('settings.generalLanLabel')}</span>
-    <span class="row-sub">{msg('settings.generalLanSub')}</span>
+    <span class="row-label" id="{uid}-general-lan-label">{msg('settings.generalLanLabel')}</span>
+    <span class="row-sub" id="{uid}-general-lan-sub">{msg('settings.generalLanSub')}</span>
   </div>
   <Toggle
     checked={$settings?.lanSharing ?? false}
-    label={msg('settings.generalLanLabel')}
+    labelledby="{uid}-general-lan-label"
+    describedby="{uid}-general-lan-sub"
     onchange={(v) => updateSettings({ lanSharing: v })}
   />
 </div>

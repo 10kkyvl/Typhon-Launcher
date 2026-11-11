@@ -194,7 +194,6 @@ export const modals = {
   'modals.removeGameDeleteDownloadLabel': 'Удалить скачанные файлы, из которых ставили',
   'modals.removeGameSeedingWillStop': 'Раздача этих файлов будет остановлена',
   'modals.removeGameDownloadInFolder': '{size} в папке загрузок',
-  'modals.removeGameDeleteDownloadedFiles': 'Удалить скачанные файлы',
   'modals.removeGameWorking': 'Удаляем...',
 
   // MoveGameModal.svelte

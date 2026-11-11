@@ -31,6 +31,8 @@
     returnFocus?: () => HTMLElement | null | undefined;
   } = $props();
 
+  const uid = $props.id();
+
   let info = $state<RemovalInfo | null>(null);
   let loading = $state(false);
   let working = $state(false);
@@ -189,10 +191,10 @@
       {:else}
         <div class="row" class:off={!canDeleteFiles}>
           <div class="row-text">
-            <span class="row-label">
+            <span class="row-label" id="{uid}-delete-files-label">
               {info.method === 'installer' ? msg('modals.removeGameDeleteLeftoverFolder') : msg('modals.removeGameDeleteGameFiles')}
             </span>
-            <span class="row-sub">
+            <span class="row-sub" id="{uid}-delete-files-sub">
               {#if info.dirMissing}
                 {msg('modals.removeGameDirAlreadyGone')}
               {:else if !info.owned && info.method === 'installer'}
@@ -208,15 +210,15 @@
               {/if}
             </span>
           </div>
-          <Toggle bind:checked={deleteFiles} label={msg('modals.removeGameDeleteGameFiles')} disabled={!canDeleteFiles} />
+          <Toggle bind:checked={deleteFiles} labelledby="{uid}-delete-files-label" describedby="{uid}-delete-files-sub" disabled={!canDeleteFiles} />
         </div>
       {/if}
 
       {#if info.downloadPresent}
         <div class="row">
           <div class="row-text">
-            <span class="row-label">{msg('modals.removeGameDeleteDownloadLabel')}</span>
-            <span class="row-sub">
+            <span class="row-label" id="{uid}-remove-game-delete-download-label">{msg('modals.removeGameDeleteDownloadLabel')}</span>
+            <span class="row-sub" id="{uid}-remove-game-delete-download-sub">
               {#if info.downloadSeeding}
                 {msg('modals.removeGameSeedingWillStop')}
               {:else}
@@ -224,7 +226,7 @@
               {/if}
             </span>
           </div>
-          <Toggle bind:checked={deleteDownload} label={msg('modals.removeGameDeleteDownloadedFiles')} />
+          <Toggle bind:checked={deleteDownload} labelledby="{uid}-remove-game-delete-download-label" describedby="{uid}-remove-game-delete-download-sub" />
         </div>
       {/if}
     </div>

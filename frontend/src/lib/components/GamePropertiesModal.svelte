@@ -482,12 +482,15 @@
       {#if adminShown && !emulated}
         <section class="section">
           <div class="row spread">
-            <h4>{msg('modals.propertiesAdminTitle')}</h4>
+            <h4 id="{uid}-properties-admin-label">{msg('modals.propertiesAdminTitle')}</h4>
             <Toggle
-              bind:checked={admin}
-              label={msg('modals.propertiesAdminTitle')}
+              checked={admin}
+              labelledby="{uid}-properties-admin-label"
               disabled={adminBusy}
-              onchange={changeAdmin}
+              onchange={(on) => {
+                admin = on;
+                void changeAdmin(on);
+              }}
             />
           </div>
           <p class="hint">{msg('modals.propertiesAdminHint')}</p>
@@ -507,10 +510,13 @@
           <div class="row spread">
             <h4>{msg('modals.compatTitle')}</h4>
             <Toggle
-              bind:checked={compatOn}
+              checked={compatOn}
               label={msg('modals.compatToggle')}
               disabled={compatBusy || running || (compatLocked && !compat.active)}
-              onchange={changeCompat}
+              onchange={(on) => {
+                compatOn = on;
+                void changeCompat(on);
+              }}
             />
           </div>
           {#if compat.active}
@@ -638,12 +644,15 @@
 
       <section class="section">
         <div class="row spread">
-          <h4>{msg('modals.propertiesPresenceTitle')}</h4>
+          <h4 id="{uid}-properties-presence-label">{msg('modals.propertiesPresenceTitle')}</h4>
           <Toggle
-            bind:checked={presence}
-            label={msg('modals.propertiesPresenceTitle')}
+            checked={presence}
+            labelledby="{uid}-properties-presence-label"
             disabled={presenceBusy}
-            onchange={changePresence}
+            onchange={(on) => {
+              presence = on;
+              void changePresence(on);
+            }}
           />
         </div>
         <p class="hint">{msg('modals.propertiesPresenceHint')}</p>

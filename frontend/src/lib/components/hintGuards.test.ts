@@ -118,7 +118,7 @@ describe('hints', () => {
   });
 
   it('knows the components that forward attributes to a control', () => {
-    expect(forwardersIn(svelteSources())).toEqual(['Button', 'Chip', 'IconButton']);
+    expect(forwardersIn(svelteSources())).toEqual(['Button', 'Chip', 'IconButton', 'Toggle']);
   });
 
   it('sees a hover timer in a Svelte event attribute as well as in addEventListener', () => {

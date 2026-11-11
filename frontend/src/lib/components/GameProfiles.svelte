@@ -36,6 +36,8 @@
     adminShown: boolean;
   } = $props();
 
+  const uid = $props.id();
+
   interface Editor {
     id: string | null;
     name: string;
@@ -314,8 +316,8 @@
 
       {#if adminShown}
         <div class="row spread">
-          <span class="label">{msg('modals.propertiesAdminTitle')}</span>
-          <Toggle bind:checked={editor.admin} label={msg('modals.propertiesAdminTitle')} />
+          <span class="label" id="{uid}-properties-admin-label">{msg('modals.propertiesAdminTitle')}</span>
+          <Toggle bind:checked={editor.admin} labelledby="{uid}-properties-admin-label" />
         </div>
       {/if}
 

@@ -35,6 +35,8 @@
 
   let { draft = $bindable(), disabled, autoArt }: { draft: ProfileSettings; disabled: boolean; autoArt?: string } = $props();
 
+  const uid = $props.id();
+
   const COVER_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
   const a = $derived(appearanceOf(draft.appearance));
@@ -210,10 +212,10 @@
           </label>
           <div class="toggle-row">
             <div>
-              <span class="pick-label">{msg('profileStyle.customPure')}</span>
-              <p class="hint">{msg('profileStyle.customPureHint')}</p>
+              <span class="pick-label" id="{uid}-custom-pure-label">{msg('profileStyle.customPure')}</span>
+              <p class="hint" id="{uid}-custom-pure-sub">{msg('profileStyle.customPureHint')}</p>
             </div>
-            <Toggle label={msg('profileStyle.customPure')} checked={a.customPure} disabled={locked} onchange={(value) => patch({ customPure: value })} />
+            <Toggle labelledby="{uid}-custom-pure-label" describedby="{uid}-custom-pure-sub" checked={a.customPure} disabled={locked} onchange={(value) => patch({ customPure: value })} />
           </div>
         {/if}
       </div>
@@ -321,10 +323,10 @@
     <section>
       <div class="toggle-row">
         <div>
-          <h3>{msg('profileStyle.parallax')}</h3>
-          <p class="hint">{msg('profileStyle.parallaxHint')}</p>
+          <h3 id="{uid}-parallax-label">{msg('profileStyle.parallax')}</h3>
+          <p class="hint" id="{uid}-parallax-sub">{msg('profileStyle.parallaxHint')}</p>
         </div>
-        <Toggle label={msg('profileStyle.parallax')} checked={a.parallax} disabled={locked} onchange={(value) => patch({ parallax: value })} />
+        <Toggle labelledby="{uid}-parallax-label" describedby="{uid}-parallax-sub" checked={a.parallax} disabled={locked} onchange={(value) => patch({ parallax: value })} />
       </div>
     </section>
 

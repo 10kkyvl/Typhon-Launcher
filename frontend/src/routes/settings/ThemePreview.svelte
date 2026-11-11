@@ -382,14 +382,14 @@
     height: var(--space-5);
     padding: var(--space-1);
     background: var(--accent-bright);
-    border-radius: var(--space-5);
+    border-radius: var(--radius-sm);
   }
 
   .knob {
     width: calc(var(--space-5) - var(--space-2));
     height: calc(var(--space-5) - var(--space-2));
     background: var(--accent-on, var(--bg));
-    border-radius: 50%;
+    border-radius: calc(var(--radius-sm) - var(--space-1));
   }
 
   .box {

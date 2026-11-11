@@ -22,6 +22,8 @@
     settings: ProfileSettings;
   } = $props();
 
+  const uid = $props.id();
+
   function toVisibility(value: string): Visibility {
     return VISIBILITIES.includes(value as Visibility) ? (value as Visibility) : 'friends';
   }
@@ -88,10 +90,16 @@
       {#each flags as flag (flag.key)}
         <div class="row">
           <div class="row-text">
-            <span class="row-label">{flag.label}</span>
-            <span class="row-sub">{flag.sub}</span>
+            <span class="row-label" id="{uid}-{flag.key}-label">{flag.label}</span>
+            <span class="row-sub" id="{uid}-{flag.key}-sub">{flag.sub}</span>
           </div>
-          <Toggle checked={draft[flag.key]} label={flag.label} disabled={$isOffline} onchange={(v) => (draft[flag.key] = v)} />
+          <Toggle
+            checked={draft[flag.key]}
+            labelledby="{uid}-{flag.key}-label"
+            describedby="{uid}-{flag.key}-sub"
+            disabled={$isOffline}
+            onchange={(v) => (draft[flag.key] = v)}
+          />
         </div>
       {/each}
     </div>
@@ -105,12 +113,13 @@
         {@const label = msg(FEED_KIND_LABELS[kind])}
         <div class="row">
           <div class="row-text">
-            <span class="row-label">{label}</span>
-            {#if kind === 'played'}<span class="row-sub">{msg('social.feedKindPlayedSub')}</span>{/if}
+            <span class="row-label" id="{uid}-feed-{kind}-label">{label}</span>
+            {#if kind === 'played'}<span class="row-sub" id="{uid}-feed-{kind}-sub">{msg('social.feedKindPlayedSub')}</span>{/if}
           </div>
           <Toggle
             checked={!(draft.feedHidden ?? []).includes(kind)}
-            {label}
+            labelledby="{uid}-feed-{kind}-label"
+            describedby={kind === 'played' ? `${uid}-feed-${kind}-sub` : undefined}
             disabled={$isOffline || !draft.showActivity}
             onchange={(v) => {
               draft.feedHidden = withFeedKind(draft.feedHidden, kind, v);

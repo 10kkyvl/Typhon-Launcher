@@ -373,6 +373,7 @@
   // Ids of the row labels that name the fields next to them.
   const uid = $props.id();
   const labelId = (name: string) => `${uid}-${name}-label`;
+  const subId = (name: string) => `${uid}-${name}-sub`;
 
   const portable = $derived(appInfo?.portable ?? false);
   const betaShown = $derived(betaToggleShown($authState, $currentUser));
@@ -594,35 +595,38 @@
           <div class="rows">
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.generalLaunchOnStartupLabel')}</span>
-                <span class="row-sub">{portable ? msg('settings.generalLaunchOnStartupPortable') : msg('settings.generalLaunchOnStartupSub')}</span>
+                <span class="row-label" id={labelId('general-launch-on-startup')}>{msg('settings.generalLaunchOnStartupLabel')}</span>
+                <span class="row-sub" id={subId('general-launch-on-startup')}>{portable ? msg('settings.generalLaunchOnStartupPortable') : msg('settings.generalLaunchOnStartupSub')}</span>
               </div>
               <Toggle
                 checked={!portable && (current?.launchOnStartup ?? false)}
                 disabled={portable}
-                label={msg('settings.generalLaunchOnStartupLabel')}
+                labelledby={labelId('general-launch-on-startup')}
+                describedby={subId('general-launch-on-startup')}
                 onchange={(v) => void setLaunchOnStartup(v)}
               />
             </div>
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.generalMinimizeToTrayLabel')}</span>
-                <span class="row-sub">{msg('settings.generalMinimizeToTraySub')}</span>
+                <span class="row-label" id={labelId('general-minimize-to-tray')}>{msg('settings.generalMinimizeToTrayLabel')}</span>
+                <span class="row-sub" id={subId('general-minimize-to-tray')}>{msg('settings.generalMinimizeToTraySub')}</span>
               </div>
               <Toggle
                 checked={current?.minimizeToTray ?? true}
-                label={msg('settings.generalMinimizeToTrayLabel')}
+                labelledby={labelId('general-minimize-to-tray')}
+                describedby={subId('general-minimize-to-tray')}
                 onchange={(v) => set({ minimizeToTray: v })}
               />
             </div>
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.generalDiscordRpcLabel')}</span>
-                <span class="row-sub">{msg('settings.generalDiscordRpcSub')}</span>
+                <span class="row-label" id={labelId('general-discord-rpc')}>{msg('settings.generalDiscordRpcLabel')}</span>
+                <span class="row-sub" id={subId('general-discord-rpc')}>{msg('settings.generalDiscordRpcSub')}</span>
               </div>
               <Toggle
                 checked={current?.discordRichPresence ?? false}
-                label={msg('settings.generalDiscordRpcLabel')}
+                labelledby={labelId('general-discord-rpc')}
+                describedby={subId('general-discord-rpc')}
                 onchange={(v) => set({ discordRichPresence: v })}
               />
             </div>
@@ -635,20 +639,21 @@
             {#if !gameModeMac}
               <div class="row">
                 <div class="row-text">
-                  <span class="row-label">{msg('settings.gameModePowerLabel')}</span>
-                  <span class="row-sub">{msg('settings.gameModePowerSub')}</span>
+                  <span class="row-label" id={labelId('game-mode-power')}>{msg('settings.gameModePowerLabel')}</span>
+                  <span class="row-sub" id={subId('game-mode-power')}>{msg('settings.gameModePowerSub')}</span>
                 </div>
                 <Toggle
                   checked={current?.gameMode?.highPerformance ?? false}
-                  label={msg('settings.gameModePowerLabel')}
+                  labelledby={labelId('game-mode-power')}
+                  describedby={subId('game-mode-power')}
                   onchange={(v) => setGameMode({ highPerformance: v })}
                 />
               </div>
             {/if}
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.gameModeHideLabel')}</span>
-                <span class="row-sub">{msg('settings.gameModeHideSub')}</span>
+                <span class="row-label" id={labelId('game-mode-hide')}>{msg('settings.gameModeHideLabel')}</span>
+                <span class="row-sub" id={subId('game-mode-hide')}>{msg('settings.gameModeHideSub')}</span>
                 {#if !trayEnabled}
                   <span class="row-sub">{msg('settings.gameModeHideNeedsTray')}</span>
                 {/if}
@@ -656,19 +661,21 @@
               <Toggle
                 checked={trayEnabled && (current?.gameMode?.hideLauncher ?? false)}
                 disabled={!trayEnabled}
-                label={msg('settings.gameModeHideLabel')}
+                labelledby={labelId('game-mode-hide')}
+                describedby={subId('game-mode-hide')}
                 onchange={(v) => setGameMode({ hideLauncher: v })}
               />
             </div>
             {#if !gameModeMac}
               <div class="row">
                 <div class="row-text">
-                  <span class="row-label">{msg('settings.gameModePriorityLabel')}</span>
-                  <span class="row-sub">{msg('settings.gameModePrioritySub')}</span>
+                  <span class="row-label" id={labelId('game-mode-priority')}>{msg('settings.gameModePriorityLabel')}</span>
+                  <span class="row-sub" id={subId('game-mode-priority')}>{msg('settings.gameModePrioritySub')}</span>
                 </div>
                 <Toggle
                   checked={current?.gameMode?.raisePriority ?? false}
-                  label={msg('settings.gameModePriorityLabel')}
+                  labelledby={labelId('game-mode-priority')}
+                  describedby={subId('game-mode-priority')}
                   onchange={(v) => setGameMode({ raisePriority: v })}
                 />
               </div>
@@ -680,13 +687,14 @@
           <div class="rows">
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.overlayEnabledLabel')}</span>
-                <span class="row-sub">{msg('settings.overlayEnabledSub')}</span>
+                <span class="row-label" id={labelId('overlay-enabled')}>{msg('settings.overlayEnabledLabel')}</span>
+                <span class="row-sub" id={subId('overlay-enabled')}>{msg('settings.overlayEnabledSub')}</span>
                 <span class="row-sub">{msg('settings.overlayExclusiveNote')}</span>
               </div>
               <Toggle
                 checked={current?.overlayEnabled ?? true}
-                label={msg('settings.overlayEnabledLabel')}
+                labelledby={labelId('overlay-enabled')}
+                describedby={subId('overlay-enabled')}
                 onchange={(v) => setOverlay({ overlayEnabled: v })}
               />
             </div>
@@ -705,12 +713,13 @@
             </div>
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.screenshotsEnabledLabel')}</span>
-                <span class="row-sub">{msg('settings.screenshotsEnabledSub')}</span>
+                <span class="row-label" id={labelId('screenshots-enabled')}>{msg('settings.screenshotsEnabledLabel')}</span>
+                <span class="row-sub" id={subId('screenshots-enabled')}>{msg('settings.screenshotsEnabledSub')}</span>
               </div>
               <Toggle
                 checked={current?.screenshotsEnabled ?? true}
-                label={msg('settings.screenshotsEnabledLabel')}
+                labelledby={labelId('screenshots-enabled')}
+                describedby={subId('screenshots-enabled')}
                 onchange={(v) => setScreenshots({ screenshotsEnabled: v })}
               />
             </div>
@@ -867,23 +876,25 @@
             </div>
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.generalAnimationsLabel')}</span>
-                <span class="row-sub">{msg('settings.generalAnimationsSub')}</span>
+                <span class="row-label" id={labelId('general-animations')}>{msg('settings.generalAnimationsLabel')}</span>
+                <span class="row-sub" id={subId('general-animations')}>{msg('settings.generalAnimationsSub')}</span>
               </div>
               <Toggle
                 checked={current?.animationsEnabled ?? true}
-                label={msg('settings.generalAnimationsToggleLabel')}
+                labelledby={labelId('general-animations')}
+                describedby={subId('general-animations')}
                 onchange={(v) => set({ animationsEnabled: v })}
               />
             </div>
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.generalHwAccelLabel')}</span>
-                <span class="row-sub">{msg('settings.generalHwAccelSub')}</span>
+                <span class="row-label" id={labelId('general-hw-accel')}>{msg('settings.generalHwAccelLabel')}</span>
+                <span class="row-sub" id={subId('general-hw-accel')}>{msg('settings.generalHwAccelSub')}</span>
               </div>
               <Toggle
                 checked={current?.hardwareAcceleration ?? true}
-                label={msg('settings.generalHwAccelLabel')}
+                labelledby={labelId('general-hw-accel')}
+                describedby={subId('general-hw-accel')}
                 onchange={(v) => set({ hardwareAcceleration: v })}
               />
             </div>
@@ -894,34 +905,37 @@
           <div class="rows">
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.generalPrivacyStatsLabel')}</span>
-                <span class="row-sub">{msg('settings.generalPrivacyStatsSub')}</span>
+                <span class="row-label" id={labelId('general-privacy-stats')}>{msg('settings.generalPrivacyStatsLabel')}</span>
+                <span class="row-sub" id={subId('general-privacy-stats')}>{msg('settings.generalPrivacyStatsSub')}</span>
               </div>
               <Toggle
                 checked={current?.anonymousUsageStats ?? false}
-                label={msg('settings.generalPrivacyStatsLabel')}
+                labelledby={labelId('general-privacy-stats')}
+                describedby={subId('general-privacy-stats')}
                 onchange={(v) => set({ anonymousUsageStats: v })}
               />
             </div>
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.generalPrivacyDiagLabel')}</span>
-                <span class="row-sub">{msg('settings.generalPrivacyDiagSub')}</span>
+                <span class="row-label" id={labelId('general-privacy-diag')}>{msg('settings.generalPrivacyDiagLabel')}</span>
+                <span class="row-sub" id={subId('general-privacy-diag')}>{msg('settings.generalPrivacyDiagSub')}</span>
               </div>
               <Toggle
                 checked={current?.anonymousDiagnostics ?? false}
-                label={msg('settings.generalPrivacyDiagLabel')}
+                labelledby={labelId('general-privacy-diag')}
+                describedby={subId('general-privacy-diag')}
                 onchange={(v) => set({ anonymousDiagnostics: v })}
               />
             </div>
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.generalPrivacyHeartbeatLabel')}</span>
-                <span class="row-sub">{msg('settings.generalPrivacyHeartbeatSub')}</span>
+                <span class="row-label" id={labelId('general-privacy-heartbeat')}>{msg('settings.generalPrivacyHeartbeatLabel')}</span>
+                <span class="row-sub" id={subId('general-privacy-heartbeat')}>{msg('settings.generalPrivacyHeartbeatSub')}</span>
               </div>
               <Toggle
                 checked={current?.sessionHeartbeat ?? true}
-                label={msg('settings.generalPrivacyHeartbeatLabel')}
+                labelledby={labelId('general-privacy-heartbeat')}
+                describedby={subId('general-privacy-heartbeat')}
                 onchange={(v) => set({ sessionHeartbeat: v })}
               />
             </div>
@@ -955,27 +969,29 @@
           <div class="rows">
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.generalSyncEnableLabel')}</span>
-                <span class="row-sub">{msg('settings.generalSyncEnableSub')}</span>
+                <span class="row-label" id={labelId('general-sync-enable')}>{msg('settings.generalSyncEnableLabel')}</span>
+                <span class="row-sub" id={subId('general-sync-enable')}>{msg('settings.generalSyncEnableSub')}</span>
                 {#if !accountReady}
                   <span class="row-sub">{msg('settings.generalSyncNeedsAccountSub')}</span>
                 {/if}
               </div>
               <Toggle
                 checked={current?.accountSync ?? false}
-                label={msg('settings.generalSyncEnableLabel')}
+                labelledby={labelId('general-sync-enable')}
+                describedby={subId('general-sync-enable')}
                 disabled={!accountReady}
                 onchange={(v) => set({ accountSync: v })}
               />
             </div>
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.generalAutoAwayLabel')}</span>
-                <span class="row-sub">{msg('settings.generalAutoAwaySub')}</span>
+                <span class="row-label" id={labelId('general-auto-away')}>{msg('settings.generalAutoAwayLabel')}</span>
+                <span class="row-sub" id={subId('general-auto-away')}>{msg('settings.generalAutoAwaySub')}</span>
               </div>
               <Toggle
                 checked={current?.presenceAutoAway ?? true}
-                label={msg('settings.generalAutoAwayLabel')}
+                labelledby={labelId('general-auto-away')}
+                describedby={subId('general-auto-away')}
                 disabled={!accountReady || !current?.accountSync}
                 onchange={(v) => set({ presenceAutoAway: v })}
               />
@@ -1100,23 +1116,25 @@
             </div>
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.downloadsUploadWhileDownloadingLabel')}</span>
-                <span class="row-sub">{msg('settings.downloadsUploadWhileDownloadingSub')}</span>
+                <span class="row-label" id={labelId('downloads-upload-while-downloading')}>{msg('settings.downloadsUploadWhileDownloadingLabel')}</span>
+                <span class="row-sub" id={subId('downloads-upload-while-downloading')}>{msg('settings.downloadsUploadWhileDownloadingSub')}</span>
               </div>
               <Toggle
                 checked={current?.uploadWhileDownloading ?? false}
-                label={msg('settings.downloadsUploadWhileDownloadingToggle')}
+                labelledby={labelId('downloads-upload-while-downloading')}
+                describedby={subId('downloads-upload-while-downloading')}
                 onchange={(v) => set({ uploadWhileDownloading: v })}
               />
             </div>
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.downloadsSeedAfterLabel')}</span>
-                <span class="row-sub">{msg('settings.downloadsSeedAfterSub')}</span>
+                <span class="row-label" id={labelId('downloads-seed-after')}>{msg('settings.downloadsSeedAfterLabel')}</span>
+                <span class="row-sub" id={subId('downloads-seed-after')}>{msg('settings.downloadsSeedAfterSub')}</span>
               </div>
               <Toggle
                 checked={current?.seedAfterDownload ?? false}
-                label={msg('settings.downloadsSeedAfterToggle')}
+                labelledby={labelId('downloads-seed-after')}
+                describedby={subId('downloads-seed-after')}
                 onchange={(v) => set({ seedAfterDownload: v })}
               />
             </div>
@@ -1142,35 +1160,38 @@
           <div class="rows">
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.downloadsUpdateCheckAutoLabel')}</span>
-                <span class="row-sub">{msg('settings.downloadsUpdateCheckAutoSub')}</span>
+                <span class="row-label" id={labelId('downloads-update-check-auto')}>{msg('settings.downloadsUpdateCheckAutoLabel')}</span>
+                <span class="row-sub" id={subId('downloads-update-check-auto')}>{msg('settings.downloadsUpdateCheckAutoSub')}</span>
               </div>
               <Toggle
                 checked={current?.updateCheckAutomatically ?? true}
-                label={msg('settings.downloadsUpdateCheckAutoToggle')}
+                labelledby={labelId('downloads-update-check-auto')}
+                describedby={subId('downloads-update-check-auto')}
                 onchange={(v) => set({ updateCheckAutomatically: v })}
               />
             </div>
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.downloadsUpdateAutoDownloadLabel')}</span>
-                <span class="row-sub">{msg('settings.downloadsUpdateAutoDownloadSub')}</span>
+                <span class="row-label" id={labelId('downloads-update-auto-download')}>{msg('settings.downloadsUpdateAutoDownloadLabel')}</span>
+                <span class="row-sub" id={subId('downloads-update-auto-download')}>{msg('settings.downloadsUpdateAutoDownloadSub')}</span>
               </div>
               <Toggle
                 checked={current?.updateAutoDownload ?? false}
-                label={msg('settings.downloadsUpdateAutoDownloadToggle')}
+                labelledby={labelId('downloads-update-auto-download')}
+                describedby={subId('downloads-update-auto-download')}
                 onchange={(v) => set({ updateAutoDownload: v })}
               />
             </div>
             {#if betaShown}
               <div class="row">
                 <div class="row-text">
-                  <span class="row-label">{msg('settings.downloadsBetaLabel')}{#if onBeta} · {msg('settings.downloadsBetaChannelMark')}{/if}</span>
-                  <span class="row-sub">{msg('settings.downloadsBetaSub')}</span>
+                  <span class="row-label" id={labelId('downloads-beta')}>{msg('settings.downloadsBetaLabel')}{#if onBeta} · {msg('settings.downloadsBetaChannelMark')}{/if}</span>
+                  <span class="row-sub" id={subId('downloads-beta')}>{msg('settings.downloadsBetaSub')}</span>
                 </div>
                 <Toggle
                   checked={current?.updateBetaChannel ?? false}
-                  label={msg('settings.downloadsBetaToggle')}
+                  labelledby={labelId('downloads-beta')}
+                  describedby={subId('downloads-beta')}
                   onchange={setBetaChannel}
                 />
               </div>
@@ -1178,35 +1199,38 @@
             <StableOffer />
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.downloadsSaveBackupLabel')}</span>
-                <span class="row-sub">{msg('settings.downloadsSaveBackupSub')}</span>
+                <span class="row-label" id={labelId('downloads-save-backup')}>{msg('settings.downloadsSaveBackupLabel')}</span>
+                <span class="row-sub" id={subId('downloads-save-backup')}>{msg('settings.downloadsSaveBackupSub')}</span>
               </div>
               <Toggle
                 checked={current?.updateSaveBackup ?? true}
-                label={msg('settings.downloadsSaveBackupToggle')}
+                labelledby={labelId('downloads-save-backup')}
+                describedby={subId('downloads-save-backup')}
                 onchange={(v) => set({ updateSaveBackup: v })}
               />
             </div>
             {#if $saveBackupsEnabled}
               <div class="row">
                 <div class="row-text">
-                  <span class="row-label">{msg('settings.downloadsSaveBackupAfterSessionLabel')}</span>
-                  <span class="row-sub">{msg('settings.downloadsSaveBackupAfterSessionSub')}</span>
+                  <span class="row-label" id={labelId('downloads-save-backup-after-session')}>{msg('settings.downloadsSaveBackupAfterSessionLabel')}</span>
+                  <span class="row-sub" id={subId('downloads-save-backup-after-session')}>{msg('settings.downloadsSaveBackupAfterSessionSub')}</span>
                 </div>
                 <Toggle
                   checked={current?.saveBackupAfterSession ?? true}
-                  label={msg('settings.downloadsSaveBackupAfterSessionToggle')}
+                  labelledby={labelId('downloads-save-backup-after-session')}
+                  describedby={subId('downloads-save-backup-after-session')}
                   onchange={(v) => set({ saveBackupAfterSession: v })}
                 />
               </div>
               <div class="row">
                 <div class="row-text">
-                  <span class="row-label">{msg('settings.downloadsSaveBackupBeforeLaunchLabel')}</span>
-                  <span class="row-sub">{msg('settings.downloadsSaveBackupBeforeLaunchSub')}</span>
+                  <span class="row-label" id={labelId('downloads-save-backup-before-launch')}>{msg('settings.downloadsSaveBackupBeforeLaunchLabel')}</span>
+                  <span class="row-sub" id={subId('downloads-save-backup-before-launch')}>{msg('settings.downloadsSaveBackupBeforeLaunchSub')}</span>
                 </div>
                 <Toggle
                   checked={current?.saveBackupBeforeLaunch ?? true}
-                  label={msg('settings.downloadsSaveBackupBeforeLaunchToggle')}
+                  labelledby={labelId('downloads-save-backup-before-launch')}
+                  describedby={subId('downloads-save-backup-before-launch')}
                   onchange={(v) => set({ saveBackupBeforeLaunch: v })}
                 />
               </div>
@@ -1226,8 +1250,8 @@
             {/if}
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('cloudsaves.settingsLabel')}</span>
-                <span class="row-sub">{msg('cloudsaves.settingsSub')}</span>
+                <span class="row-label" id={labelId('settings')}>{msg('cloudsaves.settingsLabel')}</span>
+                <span class="row-sub" id={subId('settings')}>{msg('cloudsaves.settingsSub')}</span>
                 {#if !accountReady}
                   <span class="row-sub">{msg('cloudsaves.settingsNeedsAccount')}</span>
                 {:else if cloudUsage}
@@ -1245,7 +1269,8 @@
               {#key cloudToggleKey}
                 <Toggle
                   checked={current?.cloudSaves ?? false}
-                  label={msg('cloudsaves.settingsToggle')}
+                  labelledby={labelId('settings')}
+                  describedby={subId('settings')}
                   disabled={!accountReady && !current?.cloudSaves}
                   onchange={changeCloudSaves}
                 />
@@ -1266,12 +1291,13 @@
             </div>
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.downloadsTorrentReuseLabel')}</span>
-                <span class="row-sub">{msg('settings.downloadsTorrentReuseSub')}</span>
+                <span class="row-label" id={labelId('downloads-torrent-reuse')}>{msg('settings.downloadsTorrentReuseLabel')}</span>
+                <span class="row-sub" id={subId('downloads-torrent-reuse')}>{msg('settings.downloadsTorrentReuseSub')}</span>
               </div>
               <Toggle
                 checked={current?.allowTorrentReuse ?? true}
-                label={msg('settings.downloadsTorrentReuseToggle')}
+                labelledby={labelId('downloads-torrent-reuse')}
+                describedby={subId('downloads-torrent-reuse')}
                 onchange={(v) => set({ allowTorrentReuse: v })}
               />
             </div>
@@ -1296,80 +1322,87 @@
             </div>
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.downloadsAutoInstallLabel')}</span>
-                <span class="row-sub">{msg('settings.downloadsAutoInstallSub')}</span>
+                <span class="row-label" id={labelId('downloads-auto-install')}>{msg('settings.downloadsAutoInstallLabel')}</span>
+                <span class="row-sub" id={subId('downloads-auto-install')}>{msg('settings.downloadsAutoInstallSub')}</span>
               </div>
               <Toggle
                 checked={current?.autoInstall ?? false}
-                label={msg('settings.downloadsAutoInstallToggle')}
+                labelledby={labelId('downloads-auto-install')}
+                describedby={subId('downloads-auto-install')}
                 onchange={(v) => set({ autoInstall: v })}
               />
             </div>
             {#if appInfo && elevationSupported(appInfo)}
               <div class="row">
                 <div class="row-text">
-                  <span class="row-label">{msg('settings.downloadsElevateAheadLabel')}</span>
-                  <span class="row-sub">{msg('settings.downloadsElevateAheadSub')}</span>
+                  <span class="row-label" id={labelId('downloads-elevate-ahead')}>{msg('settings.downloadsElevateAheadLabel')}</span>
+                  <span class="row-sub" id={subId('downloads-elevate-ahead')}>{msg('settings.downloadsElevateAheadSub')}</span>
                 </div>
                 <Toggle
                   checked={current?.elevateAhead ?? false}
-                  label={msg('settings.downloadsElevateAheadToggle')}
+                  labelledby={labelId('downloads-elevate-ahead')}
+                  describedby={subId('downloads-elevate-ahead')}
                   onchange={(v) => set({ elevateAhead: v })}
                 />
               </div>
             {/if}
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.downloadsSkipShortcutsLabel')}</span>
-                <span class="row-sub">{msg('settings.downloadsSkipShortcutsSub')}</span>
+                <span class="row-label" id={labelId('downloads-skip-shortcuts')}>{msg('settings.downloadsSkipShortcutsLabel')}</span>
+                <span class="row-sub" id={subId('downloads-skip-shortcuts')}>{msg('settings.downloadsSkipShortcutsSub')}</span>
               </div>
               <Toggle
                 checked={current?.installSkipShortcuts ?? true}
-                label={msg('settings.downloadsSkipShortcutsToggle')}
+                labelledby={labelId('downloads-skip-shortcuts')}
+                describedby={subId('downloads-skip-shortcuts')}
                 onchange={(v) => set({ installSkipShortcuts: v })}
               />
             </div>
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.downloadsDesktopShortcutsLabel')}</span>
-                <span class="row-sub">{msg('settings.downloadsDesktopShortcutsSub')}</span>
+                <span class="row-label" id={labelId('downloads-desktop-shortcuts')}>{msg('settings.downloadsDesktopShortcutsLabel')}</span>
+                <span class="row-sub" id={subId('downloads-desktop-shortcuts')}>{msg('settings.downloadsDesktopShortcutsSub')}</span>
               </div>
               <Toggle
                 checked={current?.desktopShortcuts ?? true}
-                label={msg('settings.downloadsDesktopShortcutsToggle')}
+                labelledby={labelId('downloads-desktop-shortcuts')}
+                describedby={subId('downloads-desktop-shortcuts')}
                 onchange={(v) => set({ desktopShortcuts: v })}
               />
             </div>
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.downloadsSkipExtrasLabel')}</span>
-                <span class="row-sub">{msg('settings.downloadsSkipExtrasSub')}</span>
+                <span class="row-label" id={labelId('downloads-skip-extras')}>{msg('settings.downloadsSkipExtrasLabel')}</span>
+                <span class="row-sub" id={subId('downloads-skip-extras')}>{msg('settings.downloadsSkipExtrasSub')}</span>
               </div>
               <Toggle
                 checked={current?.installSkipExtras ?? true}
-                label={msg('settings.downloadsSkipExtrasToggle')}
+                labelledby={labelId('downloads-skip-extras')}
+                describedby={subId('downloads-skip-extras')}
                 onchange={(v) => set({ installSkipExtras: v })}
               />
             </div>
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.downloadsVerifyAfterInstallLabel')}</span>
-                <span class="row-sub">{msg('settings.downloadsVerifyAfterInstallSub')}</span>
+                <span class="row-label" id={labelId('downloads-verify-after-install')}>{msg('settings.downloadsVerifyAfterInstallLabel')}</span>
+                <span class="row-sub" id={subId('downloads-verify-after-install')}>{msg('settings.downloadsVerifyAfterInstallSub')}</span>
               </div>
               <Toggle
                 checked={current?.verifyAfterInstall ?? true}
-                label={msg('settings.downloadsVerifyAfterInstallToggle')}
+                labelledby={labelId('downloads-verify-after-install')}
+                describedby={subId('downloads-verify-after-install')}
                 onchange={(v) => set({ verifyAfterInstall: v })}
               />
             </div>
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.downloadsVerifyRepackLabel')}</span>
-                <span class="row-sub">{msg('settings.downloadsVerifyRepackSub')}</span>
+                <span class="row-label" id={labelId('downloads-verify-repack')}>{msg('settings.downloadsVerifyRepackLabel')}</span>
+                <span class="row-sub" id={subId('downloads-verify-repack')}>{msg('settings.downloadsVerifyRepackSub')}</span>
               </div>
               <Toggle
                 checked={current?.installVerifyRepack ?? false}
-                label={msg('settings.downloadsVerifyRepackToggle')}
+                labelledby={labelId('downloads-verify-repack')}
+                describedby={subId('downloads-verify-repack')}
                 onchange={(v) => set({ installVerifyRepack: v })}
               />
             </div>

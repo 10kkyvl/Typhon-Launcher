@@ -169,6 +169,8 @@
 
   let { id }: { id: string } = $props();
 
+  const uid = $props.id();
+
   const pageOwn = $derived(
     $libraryGames.find((g) => g.id === id) ?? $libraryGames.find((g) => g.canonicalGameId === id || catalogGame?.aliasIds?.includes(g.canonicalGameId ?? '')),
   );
@@ -1133,14 +1135,18 @@
           {#if wineStatus?.required && !emulated}
             <div class="steam-row">
               <div class="steam-row-text">
-                <span class="steam-row-label">{msg('games.detailSteamBottleLabel')}</span>
-                <span class="steam-row-hint">{msg('games.detailSteamBottleHint')}</span>
+                <span class="steam-row-label" id="{uid}-detail-steam-bottle-label">{msg('games.detailSteamBottleLabel')}</span>
+                <span class="steam-row-hint" id="{uid}-detail-steam-bottle-sub">{msg('games.detailSteamBottleHint')}</span>
               </div>
               <Toggle
-                bind:checked={requiresSteam}
-                label={msg('games.detailSteamBottleLabel')}
+                checked={requiresSteam}
+                labelledby="{uid}-detail-steam-bottle-label"
+                describedby="{uid}-detail-steam-bottle-sub"
                 disabled={requiresSteamSaving}
-                onchange={(on) => void toggleRequiresSteam(on)}
+                onchange={(on) => {
+                  requiresSteam = on;
+                  void toggleRequiresSteam(on);
+                }}
               />
             </div>
           {/if}

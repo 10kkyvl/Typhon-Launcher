@@ -20,6 +20,8 @@
 
   let { api = discordApi }: { api?: DiscordApi } = $props();
 
+  const uid = $props.id();
+
   // The flow owns one session of polling; the prop is a test seam fixed at mount.
   // svelte-ignore state_referenced_locally
   const flow = createDiscordFlow(api, { onUnauthenticated: handleSessionLost });
@@ -104,30 +106,31 @@
       </div>
       <div class="row">
         <div class="text">
-          <span class="label">{msg('discord.remoteLabel')}</span>
-          <span class="sub">{msg('discord.remoteSub')}</span>
+          <span class="label" id="{uid}-remote-label">{msg('discord.remoteLabel')}</span>
+          <span class="sub" id="{uid}-remote-sub">{msg('discord.remoteSub')}</span>
         </div>
-        <Toggle checked={remoteOn} label={msg('discord.remoteLabel')} onchange={setRemote} />
+        <Toggle checked={remoteOn} labelledby="{uid}-remote-label" describedby="{uid}-remote-sub" onchange={setRemote} />
       </div>
       {#if remoteOn}
         <div class="row nested">
           <div class="text">
-            <span class="label">{msg('discord.remoteDownloadsLabel')}</span>
-            <span class="sub">{msg('discord.remoteDownloadsSub')}</span>
+            <span class="label" id="{uid}-remote-downloads-label">{msg('discord.remoteDownloadsLabel')}</span>
+            <span class="sub" id="{uid}-remote-downloads-sub">{msg('discord.remoteDownloadsSub')}</span>
           </div>
           <Toggle
             checked={remoteDownloadsOn}
-            label={msg('discord.remoteDownloadsLabel')}
+            labelledby="{uid}-remote-downloads-label"
+            describedby="{uid}-remote-downloads-sub"
             onchange={(on) => setSetting({ discordRemoteDownloads: on })}
           />
         </div>
       {/if}
       <div class="row">
         <div class="text">
-          <span class="label">{msg('discord.notifyLabel')}</span>
-          <span class="sub">{msg('discord.notifySub')}</span>
+          <span class="label" id="{uid}-notify-label">{msg('discord.notifyLabel')}</span>
+          <span class="sub" id="{uid}-notify-sub">{msg('discord.notifySub')}</span>
         </div>
-        <Toggle checked={notifyOn} label={msg('discord.notifyLabel')} onchange={(on) => setSetting({ discordNotifications: on })} />
+        <Toggle checked={notifyOn} labelledby="{uid}-notify-label" describedby="{uid}-notify-sub" onchange={(on) => setSetting({ discordNotifications: on })} />
       </div>
     {:else if $view.phase === 'code'}
       <div class="code-block">

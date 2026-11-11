@@ -261,6 +261,27 @@ describe('built-in themes', () => {
       expect(failures((preset as Preset).tokens, INDICATORS)).toEqual([]);
     });
 
+    // What shows a control's state without text must stand out at 3:1 (WCAG 1.4.11): the knob of an
+    // OFF switch on its track (Toggle.svelte: --text-2 on --hover-strong over the surface it sits on).
+    it(`${id} shows an OFF switch on every surface`, () => {
+      const preset = builtIns().find((p) => p.id === id);
+      expect(preset, id).toBeDefined();
+      const tokens = (preset as Preset).tokens;
+      const toggle = fs.readFileSync(new URL('../lib/components/Toggle.svelte', import.meta.url), 'utf8');
+      expect(toggle).toMatch(/\.track \{[^}]*background: var\(--hover-strong\);/);
+      expect(toggle).toMatch(/\.knob \{[^}]*background: var\(--text-2\);/);
+
+      const out: string[] = [];
+      const bg = paint(tokens, '--bg', BLACK);
+      for (const surface of PAGE) {
+        const under = surface === '--bg' ? bg : paint(tokens, surface, bg);
+        const track = paint(tokens, '--hover-strong', under);
+        const knob = ratio(paint(tokens, '--text-2', track), track);
+        if (knob < 3) out.push(`OFF knob on its track over ${surface}: ${knob.toFixed(2)} < 3`);
+      }
+      expect(out).toEqual([]);
+    });
+
     it(`${id} keeps text and markers readable on the sidebar island over any backdrop`, () => {
       const preset = builtIns().find((p) => p.id === id);
       expect(preset, id).toBeDefined();

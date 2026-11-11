@@ -41,6 +41,14 @@
      --accent-on (lib/theme/accent.ts), which the components read first. */
   --accent-on-default: #fff;
 
+  /* The switch: a 4 by 2.4 rem track with a knob 0.3 rem in from its edge; its press target is as high
+     as the track (24 px at the default zoom). */
+  --toggle-w: 4rem;
+  --toggle-h: 2.4rem;
+  --toggle-knob: 1.6rem;
+  --toggle-gap: 0.3rem;
+  --toggle-target: 2.4rem;
+
   /* Window layers, bottom to top (z-index.test.ts holds the order). Layers (dialogs, the image viewer)
      sit above Big Picture and the chat so a prompt opened there is seen and answered. Every layer root
      on the layer stack uses --z-layer: roots are portalled to the end of <body> as they open, so the one

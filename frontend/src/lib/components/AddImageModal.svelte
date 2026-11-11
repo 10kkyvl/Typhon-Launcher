@@ -199,10 +199,10 @@
     </label>
     <div class="toggle-row">
       <div class="field">
-        <span class="field-label">{msg('emul.addFindCover')}</span>
-        <span class="form-hint">{msg('emul.addFindCoverHint')}</span>
+        <span class="field-label" id="{uid}-add-find-cover-label">{msg('emul.addFindCover')}</span>
+        <span class="form-hint" id="{uid}-add-find-cover-sub">{msg('emul.addFindCoverHint')}</span>
       </div>
-      <Toggle bind:checked={findCover} label={msg('emul.addFindCover')} />
+      <Toggle bind:checked={findCover} labelledby="{uid}-add-find-cover-label" describedby="{uid}-add-find-cover-sub" />
     </div>
     {#if failure}<p class="failure" role="alert">{failure}</p>{/if}
   </div>

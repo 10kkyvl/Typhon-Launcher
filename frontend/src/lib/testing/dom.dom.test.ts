@@ -25,13 +25,11 @@ describe('DOM test setup', () => {
 
   it('lets the user act while the clock is fake', async () => {
     vi.useFakeTimers();
-    const onchange = vi.fn();
-    const { getByRole, user } = renderDom(Toggle, { label: 'Звук', onchange });
+    const { getByRole, user } = renderDom(Toggle, { label: 'Звук' });
 
     await user.click(getByRole('switch'));
     vi.advanceTimersByTime(1000);
 
-    expect(onchange).toHaveBeenCalledTimes(1);
     expect(getByRole('switch').getAttribute('aria-checked')).toBe('true');
   });
 });

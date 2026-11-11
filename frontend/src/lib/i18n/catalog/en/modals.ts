@@ -197,7 +197,6 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.removeGameDeleteDownloadLabel': 'Delete the downloaded files it was installed from',
   'modals.removeGameSeedingWillStop': 'Seeding of these files will be stopped',
   'modals.removeGameDownloadInFolder': '{size} in the downloads folder',
-  'modals.removeGameDeleteDownloadedFiles': 'Delete downloaded files',
   'modals.removeGameWorking': 'Removing...',
 
   // MoveGameModal.svelte
