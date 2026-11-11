@@ -302,7 +302,7 @@
               }}
             >
               {#snippet trigger({ props })}
-                <IconButton {...props} label={msg('transfers.downloadsQueueActionsLabel')} size="sm">
+                <IconButton {...props} label={msg('transfers.downloadsQueueActionsFor', { name: q.name })} size="sm">
                   <Menu size="1.6rem" strokeWidth={1.8} />
                 </IconButton>
               {/snippet}

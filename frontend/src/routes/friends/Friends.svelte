@@ -303,7 +303,7 @@
   </Button>
   <DropdownMenu items={menuItems} onselect={(item) => onMenu(friend, item)}>
     {#snippet trigger({ props })}
-      <IconButton {...props} label={msg('social.moreLabel')} size="sm">
+      <IconButton {...props} label={msg('social.friendMenuFor', { name: friend.displayName || friend.username })} size="sm">
         <EllipsisVertical size="1.7rem" strokeWidth={1.8} />
       </IconButton>
     {/snippet}

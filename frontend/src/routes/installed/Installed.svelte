@@ -599,7 +599,7 @@
             </Button>
             <DropdownMenu items={isExternal(game) ? externalMenuItems : isInstalledImage(game) ? imageMenuItems : isEmulated(game) ? emulatedMenuItems : menuItems} onselect={(id) => onMenu(game, id)}>
               {#snippet trigger({ props })}
-                <IconButton {...props} label={msg('games.installedMenuLabel')} size="sm">
+                <IconButton {...props} label={msg('games.installedMenuFor', { title: game.title })} size="sm">
                   <EllipsisVertical size="1.6rem" strokeWidth={1.8} />
                 </IconButton>
               {/snippet}

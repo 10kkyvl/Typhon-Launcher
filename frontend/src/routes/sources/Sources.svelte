@@ -311,7 +311,7 @@
             <span class="cell menu-cell">
               <DropdownMenu items={sourceMenu(source)} onselect={(id) => onSourceMenu(source, id)}>
                 {#snippet trigger({ props })}
-                  <IconButton {...props} label={msg('transfers.sourcesMenuLabel')} size="sm">
+                  <IconButton {...props} label={msg('transfers.sourcesMenuFor', { name: source.name })} size="sm">
                     <EllipsisVertical size="1.6rem" strokeWidth={1.8} />
                   </IconButton>
                 {/snippet}
