@@ -1,14 +1,18 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import type { HTMLButtonAttributes } from 'svelte/elements';
 
+  // Other attributes (id, aria-*, data-*, handlers, attachments) go to the <button>.
   let {
     label,
     size = 'md',
+    type = 'button',
     active = false,
     disabled = false,
     onclick,
     children,
-  }: {
+    ...rest
+  }: Omit<HTMLButtonAttributes, 'class' | 'onclick' | 'children'> & {
     label: string;
     size?: 'md' | 'sm';
     active?: boolean;
@@ -18,7 +22,7 @@
   } = $props();
 </script>
 
-<button class="icon-btn {size}" class:active aria-label={label} title={label} {disabled} {onclick}>
+<button {...rest} {type} class="icon-btn {size}" class:active aria-label={label} title={label} {disabled} {onclick}>
   {@render children?.()}
 </button>
 

@@ -1,13 +1,17 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import type { HTMLButtonAttributes } from 'svelte/elements';
 
+  // Other attributes (id, aria-*, data-*, handlers, attachments) go to the <button>.
   let {
     selected = false,
     variant = 'outline',
+    type = 'button',
     title,
     onclick,
     children,
-  }: {
+    ...rest
+  }: Omit<HTMLButtonAttributes, 'class' | 'onclick' | 'children'> & {
     selected?: boolean;
     variant?: 'filled' | 'outline' | 'quiet';
     title?: string;
@@ -16,7 +20,7 @@
   } = $props();
 </script>
 
-<button type="button" class="chip {variant}" class:selected {title} {onclick}>
+<button {...rest} {type} class="chip {variant}" class:selected {title} {onclick}>
   {@render children?.()}
 </button>
 
