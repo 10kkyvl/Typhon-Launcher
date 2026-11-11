@@ -169,11 +169,8 @@ describe('Topbar islands', () => {
     expect(pill).toContain('border-radius: var(--radius-control)');
   });
 
-  it('shows the badges', () => {
-    notes.set([
-      { id: 'a', title: 'A', text: '', route: 'library', terminal: true },
-      { id: 'b', title: 'B', text: '', route: 'library', terminal: true },
-    ]);
+  // The notifications badge is held by NotificationsPanel.dom.test.ts through the bell's name.
+  it('shows the friend requests badge', () => {
     incoming.set(3);
     const body = html();
     const slot = (id: string) => {
@@ -181,7 +178,6 @@ describe('Topbar islands', () => {
       const next = body.indexOf('data-part="topbar-action"', start + 1);
       return body.slice(start, next < 0 ? undefined : next);
     };
-    expect(slot('notifications')).toMatch(/<span class="badge[^"]*">2<\/span>/);
     expect(slot('friends')).toMatch(/<span class="badge[^"]*">3<\/span>/);
   });
 });

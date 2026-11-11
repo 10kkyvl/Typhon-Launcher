@@ -63,7 +63,7 @@
           <div class="icon-slot" data-part="topbar-action" data-id="notifications">
             <NotificationsPanel />
             {#if $notifications.length > 0}
-              <span class="badge">{$notifications.length}</span>
+              <span class="badge" aria-hidden="true">{$notifications.length}</span>
             {/if}
           </div>
         {:else if id === 'friends'}

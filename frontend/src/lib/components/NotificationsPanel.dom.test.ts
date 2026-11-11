@@ -16,7 +16,7 @@ vi.mock('../stores/notifications', async (actual) => {
   };
 });
 
-import { msg } from '../i18n';
+import { locale, msg } from '../i18n';
 import { markAllRead, notifications, type Notification } from '../stores/notifications';
 import { navigate, resetHistory, route } from '../stores/router';
 import { user } from '../testing/dom';
@@ -45,6 +45,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  locale.set('ru');
   notes.set([]);
   resetHistory();
   document.body.replaceChildren();
@@ -60,6 +61,35 @@ function setup(list: Notification[] = UNREAD) {
   const panel = () => screen.queryByRole('dialog', { name: msg('ui.notifications') });
   return { keys, slot, bell, panel };
 }
+
+describe('Notifications bell', () => {
+  // The badge is a picture of the count: the bell's name is what a screen reader hears.
+  const badge = (slot: HTMLElement) => slot.querySelector('.badge');
+
+  it('carries the unread count in its name, the badge hidden from assistive tech', () => {
+    locale.set('en');
+    const { slot, bell } = setup();
+    expect(bell().getAttribute('aria-label')).toBe('Notifications, 2 unread');
+    expect(badge(slot)?.textContent?.trim()).toBe('2');
+    expect(badge(slot)?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('names the count with the Russian plural forms', async () => {
+    locale.set('ru');
+    const { bell } = setup([UNREAD[0]]);
+    expect(bell().getAttribute('aria-label')).toBe('Уведомления, 1 новое');
+    notes.set([...UNREAD, { ...UNREAD[1], id: 'c' }]);
+    await Promise.resolve();
+    expect(bell().getAttribute('aria-label')).toBe('Уведомления, 3 новых');
+  });
+
+  it('with nothing unread is named "Notifications" and shows no badge', () => {
+    locale.set('en');
+    const { slot, bell } = setup([]);
+    expect(bell().getAttribute('aria-label')).toBe('Notifications');
+    expect(badge(slot)).toBeNull();
+  });
+});
 
 describe('Notifications panel', () => {
   it('the bell in its slot says it opens a dialog and is not expanded', () => {
