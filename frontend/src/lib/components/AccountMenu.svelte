@@ -2,7 +2,7 @@
   import { navigate, route } from '../stores/router';
   import { accountErrorText } from '../services/accountMessages';
   import type { PresenceStatus } from '../services/online';
-  import { statusDot } from '../social/presence';
+  import { libraryGames, runningGames } from '../stores/library';
   import { autoAway, presenceStatus, shownPresence, updatePresenceStatus } from '../stores/presence';
   import { authState, currentUser, isOffline, signOut } from '../stores/user';
   import { ownFrame } from '../profile/frameSources';
@@ -12,7 +12,7 @@
   import Avatar from './Avatar.svelte';
   import ConfirmModal from './ConfirmModal.svelte';
   import DropdownMenu from './DropdownMenu.svelte';
-  import { accountMenuItems } from './accountMenu';
+  import { accountMenuItems, chipPresence } from './accountMenu';
   import { signInFromGuest } from './sidebarStatus';
 
   let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
@@ -22,6 +22,10 @@
   const avatarName = $derived($currentUser ? $currentUser.displayName || $currentUser.username : isGuest ? msg('ui.guest') : '');
 
   const profileMenu = $derived(accountMenuItems(isGuest, $presenceStatus));
+
+  const presence = $derived(
+    chipPresence($currentUser ? 'user' : isGuest ? 'guest' : 'none', $shownPresence, $runningGames, $libraryGames),
+  );
 
   async function onProfileSelect(id: string) {
     if (id === 'profile') {
@@ -68,17 +72,17 @@
           size="sm"
           name={avatarName}
           src={$currentUser?.avatarUrl}
-          status={$currentUser ? statusDot($shownPresence) : undefined}
+          status={presence.dot}
           {...ownFrame($currentUser)}
         />
       </span>
       <span class="chip-text">
         {#if $currentUser}
           <span class="chip-name">{$currentUser.displayName}</span>
-          <span class="chip-status">@{$currentUser.username}{#if $isOffline}<span class="offline-mark" title={msg('ui.offlineProfileTooltip')}>{msg('ui.offlineSuffix')}</span>{/if}</span>
+          <span class="chip-status">{presence.line}{#if $isOffline}<span class="offline-mark" title={msg('ui.offlineProfileTooltip')}>{msg('ui.offlineSuffix')}</span>{/if}</span>
         {:else if isGuest}
           <span class="chip-name">{msg('ui.guest')}</span>
-          <span class="chip-status">{msg('ui.noAccount')}</span>
+          <span class="chip-status">{presence.line}</span>
         {:else}
           <span class="chip-name">{msg('ui.notAuthorized')}</span>
         {/if}

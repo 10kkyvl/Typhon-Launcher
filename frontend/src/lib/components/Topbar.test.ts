@@ -21,7 +21,11 @@ import { activeTheme } from '../stores/theme';
 import { notifications, type Notification } from '../stores/notifications';
 import { incomingCount } from '../stores/social';
 import { authState, currentUser, isOffline } from '../stores/user';
+import { libraryGames, runningGames } from '../stores/library';
+import { shownPresence } from '../stores/presence';
+import { STATUS_LABELS } from '../social/presence';
 import { msg } from '../i18n';
+import type { LibraryGame } from '../services/library';
 import type { Writable } from 'svelte/store';
 import type { Theme } from '../services/theme';
 import type { CurrentUser } from '../services/account';
@@ -56,7 +60,18 @@ afterEach(() => {
   offline.set(false);
   currentUser.set(null);
   authState.set('bootstrapping');
+  shownPresence.set('online');
+  runningGames.set(new Set());
+  libraryGames.set([]);
 });
+
+const signedIn = () => {
+  authState.set('authenticated');
+  currentUser.set(user);
+};
+const dot = (part: string) => /<span class="dot ([a-z]+)/.exec(part)?.[1];
+const line = (part: string) =>
+  (/<span class="chip-status[^"]*">([\s\S]*?)<\/span>/.exec(part)?.[1] ?? '').replace(/<!--[\s\S]*?-->/g, '');
 
 // The chip: from the account part's opening tag to the end of its button.
 function chip(body: string): string {
@@ -172,30 +187,53 @@ describe('Topbar islands', () => {
 });
 
 describe('Topbar account chip', () => {
-  it('shows a signed-in user with their frame, presence dot, name and handle', () => {
-    authState.set('authenticated');
-    currentUser.set(user);
+  it('shows a signed-in user online with their frame, name and presence, without the handle', () => {
+    signedIn();
     const part = chip(html());
     expect(part).toContain(escape('Neo Anderson'));
-    expect(part).toContain('@neo');
+    expect(line(part)).toBe(escape(STATUS_LABELS.online));
+    expect(dot(part)).toBe('online');
+    expect(part).not.toContain('@neo');
     expect(part).toMatch(/class="frame frame-neon/);
     expect(part).toContain('--frame-color: #00ff00');
-    expect(part).toMatch(/class="dot /);
   });
 
-  it('marks the handle offline when the launcher is offline', () => {
-    authState.set('authenticated');
+  it('shows an away user as away', () => {
+    signedIn();
+    shownPresence.set('away');
+    const part = chip(html());
+    expect(line(part)).toBe(escape(STATUS_LABELS.away));
+    expect(dot(part)).toBe('away');
+  });
+
+  it('names the running game with the in-game dot, and returns to the status when it stops', () => {
+    signedIn();
+    shownPresence.set('away');
+    libraryGames.set([{ id: 'g1', title: 'Hollow Knight' }] as LibraryGame[]);
+    runningGames.set(new Set(['g1']));
+    const playing = chip(html());
+    expect(line(playing)).toBe(escape(msg('social.playingNamed', { name: 'Hollow Knight' })));
+    expect(dot(playing)).toBe('online');
+    runningGames.set(new Set());
+    const stopped = chip(html());
+    expect(line(stopped)).toBe(escape(STATUS_LABELS.away));
+    expect(dot(stopped)).toBe('away');
+  });
+
+  it('keeps the offline mark after the presence when the launcher is offline', () => {
+    signedIn();
     offline.set(true);
-    currentUser.set(user);
-    expect(chip(html())).toContain(escape(msg('ui.offlineSuffix')));
+    const part = chip(html());
+    expect(line(part)).toContain(escape(STATUS_LABELS.online));
+    expect(part).toContain(escape(msg('ui.offlineSuffix')));
   });
 
   it('shows a guest as a guest without a presence dot', () => {
     authState.set('guest');
     const part = chip(html());
     expect(part).toContain(escape(msg('ui.guest')));
-    expect(part).toContain(escape(msg('ui.noAccount')));
-    expect(part).not.toMatch(/class="dot /);
+    expect(line(part)).toBe(escape(msg('ui.noAccount')));
+    expect(dot(part)).toBeUndefined();
   });
 
   it('rings the presence dot with the island colour', () => {
