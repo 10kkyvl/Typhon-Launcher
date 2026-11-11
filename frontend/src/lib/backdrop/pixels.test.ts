@@ -1,7 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { luminance } from '../theme/accent';
 import type { RGBA } from '../theme/contrastReport';
-import { BACKDROP_LOOK_COLORS, WASH_TEXT, backdropLook, drawArt, lookPixels, mixPixels, washLimit, type BackdropLook } from './pixels';
+import {
+  BACKDROP_LOOK_COLORS,
+  MIN_SPREAD,
+  WASH_TEXT,
+  backdropLook,
+  drawArt,
+  lookPixels,
+  mixPixels,
+  washLimit,
+  washSpread,
+  type BackdropLook,
+  type WashLimit,
+} from './pixels';
 
 type RGB = [number, number, number];
 const px = (r: number, g: number, b: number, a = 255) => [r, g, b, a];
@@ -23,6 +35,19 @@ const DARK: Record<string, RGBA> = {
   '--danger': [239, 112, 112, 1],
 };
 
+// A light base whose text is dark enough to leave the art room: the light presets' own band is narrower.
+const LIGHT: Record<string, RGBA> = {
+  '--bg': [245, 245, 245, 1],
+  '--text': [17, 17, 17, 1],
+  '--text-2': [34, 34, 34, 1],
+  '--text-3': [48, 48, 48, 1],
+  '--accent-text': [40, 26, 32, 1],
+  '--accent-bright': [60, 60, 60, 1],
+  '--success': [10, 64, 32, 1],
+  '--warning': [74, 48, 0, 1],
+  '--danger': [106, 0, 16, 1],
+};
+
 const BLUSH: Record<string, RGBA> = {
   '--bg': [236, 217, 220, 1],
   '--text': [31, 26, 28, 1],
@@ -33,6 +58,18 @@ const BLUSH: Record<string, RGBA> = {
   '--success': [22, 95, 56, 1],
   '--warning': [122, 76, 6, 1],
   '--danger': [168, 32, 41, 1],
+};
+
+const LIGHT_PRESET: Record<string, RGBA> = {
+  '--bg': [238, 241, 244, 1],
+  '--text': [16, 22, 29, 1],
+  '--text-2': [75, 85, 99, 1],
+  '--text-3': [94, 102, 114, 1],
+  '--accent-text': [9, 95, 111, 1],
+  '--accent-bright': [11, 114, 133, 1],
+  '--success': [41, 124, 79, 1],
+  '--warning': [149, 100, 26, 1],
+  '--danger': [197, 60, 60, 1],
 };
 
 // Every corner of the colour cube, a grey ramp and a noisy picture: the art can be anything.
@@ -61,20 +98,20 @@ describe('the look of the backdrop', () => {
 
   it('keeps the wash dark under light text and light under dark text', () => {
     expect(backdropLook(DARK, 0.75, 0.6)?.limit).toEqual({ max: expect.any(Number) });
-    expect(backdropLook(BLUSH, 0.75, 0.74)?.limit).toEqual({ min: expect.any(Number) });
+    expect(backdropLook(LIGHT, 0.75, 0.5)?.limit).toEqual({ min: expect.any(Number) });
   });
 
   it('limits luminance by the faintest of the text colours', () => {
     const look = backdropLook(DARK, 0.75, 0.6);
     const text3 = (luminance(rgbOf(DARK['--text-3'])) + 0.05) / 4.6 - 0.05;
     expect(look?.limit.max).toBeCloseTo(text3, 6);
-    const dimmer = backdropLook({ ...DARK, '--accent-text': [130, 130, 130, 1] }, 0.75, 0.6);
-    expect(dimmer?.limit.max).toBeLessThan(text3);
+    const texts = WASH_TEXT.map((t) => ({ color: t.name === '--accent-text' ? ([130, 130, 130] as RGB) : rgbOf(DARK[t.name]), ratio: t.min + 0.1 }));
+    expect(washLimit(texts, true)?.max).toBeLessThan(text3);
   });
 
   it('measures translucent text as painted over the page', () => {
-    const half = backdropLook({ ...DARK, '--text-3': [255, 255, 255, 0.5] }, 0.75, 0.6);
-    const shown: RGB = [255 * 0.5 + 14 * 0.5, 255 * 0.5 + 15 * 0.5, 255 * 0.5 + 17 * 0.5];
+    const half = backdropLook({ ...DARK, '--text-3': [255, 255, 255, 0.55] }, 0.75, 0.6);
+    const shown: RGB = [255 * 0.55 + 14 * 0.45, 255 * 0.55 + 15 * 0.45, 255 * 0.55 + 17 * 0.45];
     const bound = (c: RGB, r: number) => (luminance(c) + 0.05) / r - 0.05;
     const expected = Math.min(
       ...WASH_TEXT.map((t) => bound(t.name === '--text-3' ? shown : rgbOf(DARK[t.name]), t.min + 0.1)),
@@ -101,7 +138,29 @@ describe('the look of the backdrop', () => {
 
   it('draws nothing for a share it cannot read or outside 0..1', () => {
     for (const dim of [Number.NaN, -0.1, 1.5]) expect(backdropLook(DARK, 0.75, dim), String(dim)).toBeNull();
-    expect(backdropLook(DARK, 0.75, 0)?.dim).toBe(0);
+    expect(backdropLook(LIGHT, 0.75, 0)?.dim).toBe(0);
+  });
+
+  it('draws nothing when the readable band leaves out the page colour itself', () => {
+    // The light preset: its status colours need a wash lighter than its own page.
+    const bound = washLimit(
+      WASH_TEXT.map((t) => ({ color: rgbOf(LIGHT_PRESET[t.name]), ratio: t.min + 0.1 })),
+      false,
+    );
+    expect(bound?.min).toBeGreaterThan(luminance(rgbOf(LIGHT_PRESET['--bg'])));
+    expect(backdropLook(LIGHT_PRESET, 0.75, 0.74)).toBeNull();
+  });
+
+  it('draws nothing when the art has fewer than MIN_SPREAD grey levels left between its mid tones', () => {
+    // Blush: the band holds the page, but the art's mid tones land within a few grey levels of each other.
+    const limit = washLimit(
+      WASH_TEXT.map((t) => ({ color: rgbOf(BLUSH[t.name]), ratio: t.min + 0.1 })),
+      false,
+    ) as WashLimit;
+    expect(limit.min).toBeLessThan(luminance(rgbOf(BLUSH['--bg'])));
+    expect(washSpread({ saturate: 0.75, page: rgbOf(BLUSH['--bg']), dim: 0.74, limit })).toBeLessThan(MIN_SPREAD);
+    expect(backdropLook(BLUSH, 0.75, 0.74)).toBeNull();
+    expect(washSpread(backdropLook(DARK, 0.75, 0.6) as BackdropLook)).toBeGreaterThanOrEqual(MIN_SPREAD);
   });
 
   it('draws nothing when no luminance keeps every text readable', () => {
@@ -147,8 +206,8 @@ describe('backdrop pixels', () => {
   });
 
   it('keeps every text and status colour readable over any art on a light base', () => {
-    const look = backdropLook(BLUSH, 0.7, 0.74) as BackdropLook;
-    for (const t of WASH_TEXT) expect(worstRatio(look, rgbOf(BLUSH[t.name])), t.name).toBeGreaterThanOrEqual(t.min);
+    const look = backdropLook(LIGHT, 0.7, 0.5) as BackdropLook;
+    for (const t of WASH_TEXT) expect(worstRatio(look, rgbOf(LIGHT[t.name])), t.name).toBeGreaterThanOrEqual(t.min);
   });
 
   it('pulls white art down to the limit on a dark base and black art up to it on a light one', () => {
@@ -156,7 +215,7 @@ describe('backdrop pixels', () => {
     const white = Uint8ClampedArray.from(px(255, 255, 255));
     lookPixels(white, 1, 1, dark);
     expect(luminance([white[0], white[1], white[2]])).toBeCloseTo(dark.limit.max as number, 3);
-    const light = backdropLook(BLUSH, 0.7, 0.74) as BackdropLook;
+    const light = backdropLook(LIGHT, 0.7, 0.5) as BackdropLook;
     const black = Uint8ClampedArray.from(px(0, 0, 0));
     lookPixels(black, 1, 1, light);
     expect(luminance([black[0], black[1], black[2]])).toBeCloseTo(light.limit.min as number, 2);

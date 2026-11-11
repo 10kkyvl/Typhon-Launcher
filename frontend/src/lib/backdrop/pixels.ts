@@ -45,6 +45,8 @@ export const WASH_TEXT: readonly { name: string; min: number }[] = [
   { name: '--danger', min: 4.5 },
 ];
 const WASH_MARGIN = 0.1;
+/** Fewer grey levels than this between the art's mid tones is a flat tint, not art: no wash is drawn. */
+export const MIN_SPREAD = 8;
 
 export const BACKDROP_LOOK_COLORS: readonly string[] = ['--bg', ...WASH_TEXT.map((t) => t.name)];
 
@@ -68,7 +70,8 @@ export function washLimit(texts: readonly { color: RGB; ratio: number }[], dark:
 /**
  * The look for the theme on screen, from its resolved colours, the shell's saturation and the theme's
  * dim share. Null means no wash: a colour or the share could not be read, the share is 1 (nothing of
- * the art would show) or no luminance keeps the text readable.
+ * the art would show), no luminance keeps the text readable, the readable band leaves out the page
+ * colour itself, or the art's mid tones would land fewer than MIN_SPREAD grey levels apart.
  */
 export function backdropLook(colors: Readonly<Record<string, RGBA | undefined>>, saturate: number, dim: number): BackdropLook | null {
   const bgValue = colors['--bg'];
@@ -82,7 +85,11 @@ export function backdropLook(colors: Readonly<Record<string, RGBA | undefined>>,
   }
   const limit = washLimit(texts, !isLight(bg));
   if (!limit) return null;
-  return { saturate: Number.isNaN(saturate) ? 1 : Math.min(1, Math.max(0, saturate)), page: bg, dim, limit };
+  // A band that leaves out the page colour itself would lift (or sink) every pixel past the page.
+  const pageL = luminance(bg);
+  if ((limit.max !== undefined && limit.max < pageL) || (limit.min !== undefined && limit.min > pageL)) return null;
+  const look = { saturate: Number.isNaN(saturate) ? 1 : Math.min(1, Math.max(0, saturate)), page: bg, dim, limit };
+  return washSpread(look) < MIN_SPREAD ? null : look;
 }
 
 /** Separable box blur, `passes` times, radius `r`, edges clamped. In place. */
@@ -134,19 +141,35 @@ function clampLuminance(px: Pixels, i: number, limit: WashLimit) {
 /** Softens, desaturates, dims and luminance-limits an opaque picture in place. */
 export function lookPixels(px: Pixels, w: number, h: number, look: BackdropLook) {
   boxBlur(px, w, h, 2, 2);
+  for (let i = 0; i + 3 < px.length; i += 4) lookPixel(px, i, look);
+}
+
+/** Desaturates one pixel, pulls it toward the page by the dim share and limits its luminance. */
+function lookPixel(px: Pixels, i: number, look: BackdropLook) {
   const [dr, dg, db] = look.page;
   const da = look.dim;
-  for (let i = 0; i + 3 < px.length; i += 4) {
-    const grey = 0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2];
-    const r = grey + (px[i] - grey) * look.saturate;
-    const g = grey + (px[i + 1] - grey) * look.saturate;
-    const b = grey + (px[i + 2] - grey) * look.saturate;
-    px[i] = r + (dr - r) * da;
-    px[i + 1] = g + (dg - g) * da;
-    px[i + 2] = b + (db - b) * da;
-    px[i + 3] = 255;
-    clampLuminance(px, i, look.limit);
-  }
+  const grey = 0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2];
+  const r = grey + (px[i] - grey) * look.saturate;
+  const g = grey + (px[i + 1] - grey) * look.saturate;
+  const b = grey + (px[i + 2] - grey) * look.saturate;
+  px[i] = r + (dr - r) * da;
+  px[i + 1] = g + (dg - g) * da;
+  px[i + 2] = b + (db - b) * da;
+  px[i + 3] = 255;
+  clampLuminance(px, i, look.limit);
+}
+
+/** Art between a quarter and three quarters grey: the tones most game art lives in. */
+const MID_TONES = [64, 192] as const;
+
+/** How many grey levels apart the look puts the mid tones of the art: the room the art has to show. */
+export function washSpread(look: BackdropLook): number {
+  const [low, high] = MID_TONES.map((v) => {
+    const px = [v, v, v, 255];
+    lookPixel(px, 0, look);
+    return toSrgb(luminance([px[0], px[1], px[2]]));
+  });
+  return Math.abs(high - low);
 }
 
 /**

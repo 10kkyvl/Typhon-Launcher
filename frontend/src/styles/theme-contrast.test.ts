@@ -163,6 +163,13 @@ const ON_WASH: { fg: string; min: number }[] = [
   { fg: '--danger', min: 4.5 },
 ];
 
+// Which presets the bake leaves without a wash, and why; the others must draw one and keep it readable.
+const NO_WASH: Record<string, string> = {
+  light: 'its status colours need a wash lighter than its own page',
+  contrast: 'its dim share is 1, nothing of the art would show',
+  blush: 'the art mid tones would land under MIN_SPREAD grey levels apart, a flat tint',
+};
+
 function washLook(tokens: Record<string, string>) {
   const colors = Object.fromEntries(BACKDROP_LOOK_COLORS.map((name) => [name, rgba(tokens[name] ?? name)]));
   return backdropLook(colors, shellNumber('--ambient-saturate'), Number(tokens['--ambient-dim']));
@@ -236,9 +243,9 @@ describe('built-in themes', () => {
       });
     }
 
-    if (id === 'contrast') {
-      // High contrast keeps its plain black page: an opaque dim leaves nothing of the art to show.
-      it('contrast draws no backdrop wash', () => {
+    const why = NO_WASH[id];
+    if (why) {
+      it(`${id} draws no backdrop wash: ${why}`, () => {
         const preset = builtIns().find((p) => p.id === id);
         expect(preset, id).toBeDefined();
         expect(washLook((preset as Preset).tokens)).toBeNull();
