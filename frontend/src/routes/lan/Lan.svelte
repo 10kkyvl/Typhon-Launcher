@@ -7,7 +7,8 @@
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import StatTile from '../../lib/components/StatTile.svelte';
-  import { offerLabel, rejectedSummary, transferLabel } from '../../lib/lan/lanText';
+  import { offerLabel, rejectedSummary, sharedGameTitle, transferLabel } from '../../lib/lan/lanText';
+  import { libraryGames } from '../../lib/stores/library';
   import { cancel, hashing, lanStats, offers, receive, shares, transfers, unshare } from '../../lib/stores/lan';
   import { bytesSize, formatCount, relativeDate } from '../../lib/utils/format';
   import { msg } from '../../lib/i18n';
@@ -96,14 +97,13 @@
     {:else}
       <div class="rows">
         {#each preparing as progress (progress.gameId)}
+          {@const title = sharedGameTitle(progress.gameId, $libraryGames)}
+          {@const percent = Math.round(hashPct(progress.processedBytes, progress.totalBytes))}
           <div class="row">
             <div class="row-text">
-              <span class="row-title">{msg('transfers.lanPreparingPercent', { percent: Math.round(hashPct(progress.processedBytes, progress.totalBytes)) })}</span>
-              <ProgressBar
-                value={hashPct(progress.processedBytes, progress.totalBytes)}
-                height={4}
-                label={msg('transfers.lanPreparingPercent', { percent: Math.round(hashPct(progress.processedBytes, progress.totalBytes)) })}
-              />
+              <span class="row-title">{title}</span>
+              <ProgressBar value={percent} height={4} label={title} />
+              <span class="row-sub">{msg('transfers.lanPreparingPercent', { percent })}</span>
             </div>
           </div>
         {/each}

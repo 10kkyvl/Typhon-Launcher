@@ -570,7 +570,7 @@
           {/if}
           {#if compatView}
             <p class="hint">{compatView.text}</p>
-            <ProgressBar value={compatView.fraction ?? 0} max={1} indeterminate={compatView.fraction === null} label={compatView.text} />
+            <ProgressBar value={compatView.fraction ?? 0} max={1} indeterminate={compatView.fraction === null} label={msg('modals.compatTitle')} valueText={compatView.text} />
           {/if}
           {#if running}
             <p class="hint">{msg('modals.compatRunning')}</p>

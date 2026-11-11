@@ -76,7 +76,7 @@
 {#if job}
   <div class="row progress-row">
     <div class="progress-body">
-      <ProgressBar value={movePercent(job)} label={stageLabel(job.stage)} />
+      <ProgressBar value={movePercent(job)} label={msg('settings.generalLibraryMoveLabel')} />
       <span class="row-sub">
         {stageLabel(job.stage)}{job.title ? ` · ${job.title}` : ''}
         {#if queueLeft > 0}

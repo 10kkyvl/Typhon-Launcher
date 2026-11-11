@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { applyLanguage, msg } from '../i18n';
 import type { Offer, Stats, Transfer } from '../services/lan';
-import { offerLabel, rejectedSummary, transferLabel } from './lanText';
+import { offerLabel, rejectedSummary, sharedGameTitle, transferLabel } from './lanText';
 
 afterEach(() => applyLanguage('ru'));
 
@@ -117,5 +117,18 @@ describe('rejectedSummary', () => {
 
   it('не роняет рендер на неизвестном ключе', () => {
     expect(rejectedSummary(stats({ rejected: { some_future_reason: 3 } }))).toBe('some_future_reason: 3');
+  });
+});
+
+describe('sharedGameTitle', () => {
+  const games = [{ id: 'g1', title: 'Hades' }, { id: 'g2', title: '' }];
+
+  it('takes the title from the library', () => {
+    expect(sharedGameTitle('g1', games)).toBe('Hades');
+  });
+
+  it('names a game without a title or gone from the library generically', () => {
+    expect(sharedGameTitle('g2', games)).toBe(msg('ui.game'));
+    expect(sharedGameTitle('gone', games)).toBe(msg('ui.game'));
   });
 });

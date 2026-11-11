@@ -142,6 +142,14 @@ describe('every progress bar', () => {
     expect(offenders).toEqual([]);
   });
 
+  // A tripwire for the usual ways a name picks up the amount: a percent, a progress or summary line, a stage.
+  it('is named for what it measures, the amount left to its value', () => {
+    const offenders = uses
+      .filter(({ tag }) => /\blabel=\{[^}]*(?:[Pp]ercent|Progress|Summary|\.text\b|\bstage)/.test(tag))
+      .map(({ file, tag }) => `${file}: ${tag.slice(0, 80)}`);
+    expect(offenders).toEqual([]);
+  });
+
   it('says its state as a tone, never a colour', () => {
     expect(uses.filter(({ tag }) => /\bcolor=/.test(tag)).map(({ file }) => file)).toEqual([]);
   });

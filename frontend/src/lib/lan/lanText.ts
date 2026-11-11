@@ -2,6 +2,7 @@ import { msg } from '../i18n';
 import { sourceErrorText } from '../sources/sourceErrors';
 import { bytesSize, progressPercent } from '../utils/format';
 import type { Offer, Stats, Transfer } from '../services/lan';
+import type { LibraryGame } from '../services/library';
 import type { MessageKey } from '../i18n';
 
 const REJECT_KEYS: Record<string, MessageKey> = {
@@ -28,6 +29,11 @@ const REJECT_KEYS: Record<string, MessageKey> = {
 function rejectedLabel(key: string): string | undefined {
   const messageKey = REJECT_KEYS[key];
   return messageKey ? msg(messageKey) : undefined;
+}
+
+/** The library title of a game being prepared for sharing; one the library no longer lists is "Game". */
+export function sharedGameTitle(gameId: string, games: readonly Pick<LibraryGame, 'id' | 'title'>[]): string {
+  return games.find((game) => game.id === gameId)?.title || msg('ui.game');
 }
 
 export function transferLabel(transfer: Transfer): string {
