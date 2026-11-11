@@ -224,7 +224,7 @@
         <label class="field">
           <span class="field-label">{msg('social.displayNameLabel')}</span>
           <input class="input" type="text" maxlength="32" disabled={$isOffline} bind:value={draft.displayName} />
-          {#if fieldErrors.displayName}<span class="error">{fieldErrors.displayName}</span>{/if}
+          {#if fieldErrors.displayName}<span class="error" role="alert">{fieldErrors.displayName}</span>{/if}
         </label>
         <label class="field">
           <span class="field-label">{msg('social.usernameLabel')}</span>
@@ -232,7 +232,7 @@
             <span class="username-prefix">@</span>
             <input class="input" type="text" maxlength="24" disabled={$isOffline} bind:value={draft.username} />
           </div>
-          {#if fieldErrors.username}<span class="error">{fieldErrors.username}</span>{/if}
+          {#if fieldErrors.username}<span class="error" role="alert">{fieldErrors.username}</span>{/if}
         </label>
         <label class="field">
           <span class="field-label">
@@ -246,7 +246,7 @@
             disabled={$isOffline}
             bind:value={draft.bio}
           ></textarea>
-          {#if fieldErrors.bio}<span class="error">{fieldErrors.bio}</span>{/if}
+          {#if fieldErrors.bio}<span class="error" role="alert">{fieldErrors.bio}</span>{/if}
         </label>
         <div class="field">
           <span class="field-label">{msg('common.email')}</span>

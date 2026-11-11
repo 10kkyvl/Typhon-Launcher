@@ -62,6 +62,12 @@ textarea {
   user-select: text;
 }
 
+/* A message (an error, a status line) is content even inside a label or a control: its role, not the
+   tag around it, decides. Big Picture and the overlay window keep theirs unselectable. */
+html:not(.overlay-window):not(:has(.big-picture)) :is([role='alert'], [role='status']) {
+  user-select: text;
+}
+
 html.overlay-window,
 html.overlay-window body {
   background: transparent;

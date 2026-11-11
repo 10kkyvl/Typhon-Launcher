@@ -16,11 +16,22 @@ function body(selector: string): string {
   return new RegExp(`(?:^|\\})\\s*${escaped}\\s*\\{([^}]*)\\}`).exec(css)?.[1] ?? '';
 }
 
+// The selectors of a list, split on the commas outside parentheses (`:is(a, b)` is one selector).
+function selectors(list: string): string[] {
+  const out = [''];
+  let depth = 0;
+  for (const ch of list) {
+    if (ch === '(') depth++;
+    if (ch === ')') depth--;
+    if (ch === ',' && depth === 0) out.push('');
+    else out[out.length - 1] += ch;
+  }
+  return out.map((part) => part.trim());
+}
+
 // Every rule whose selector list holds this selector, as written.
 function rules(selector: string): string[] {
-  return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
-    .filter((m) => m[1].split(',').map((part) => part.trim()).includes(selector))
-    .map((m) => m[2]);
+  return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((m) => selectors(m[1]).includes(selector)).map((m) => m[2]);
 }
 
 // The look Big Picture and the overlay window were drawn with (redesign-2.0's global.css).
@@ -72,6 +83,25 @@ describe('selecting text', () => {
   it('stays off everywhere in Big Picture, the dialogs it opens included, and in the overlay window, as before', () => {
     expect(list).toContain('html:has(.big-picture) body');
     expect(list).toContain('html.overlay-window body');
+  });
+
+  // An error inside a <label> (the label is furniture) must still be copied: a message says what it is
+  // with its role, and the role makes it selectable, in the main window only.
+  it('is possible in a message wherever it sits, by its role, except in Big Picture and the overlay window', () => {
+    const rule = rules("html:not(.overlay-window):not(:has(.big-picture)) :is([role='alert'], [role='status'])").join('');
+    expect(rule).toMatch(/user-select: text;/);
+  });
+
+  it('finds every error message inside a label saying what it is', () => {
+    const messages = Object.entries(frontendSources)
+      .filter(([path]) => path.endsWith('.svelte'))
+      .flatMap(([path, text]) =>
+        [...text.matchAll(/<label\b[\s\S]*?<\/label>/g)].flatMap((label) =>
+          [...label[0].matchAll(/<\w+\b[^<>]*\bclass="(?:error|failure)\b[^"]*"[^<>]*>/g)].map((tag) => `${path}: ${tag[0]}`),
+        ),
+      );
+    expect(messages.length).toBeGreaterThanOrEqual(15);
+    expect(messages.filter((tag) => !/\brole="(?:alert|status)"/.test(tag))).toEqual([]);
   });
 
   it('is always possible in a text field, whatever it sits in', () => {
