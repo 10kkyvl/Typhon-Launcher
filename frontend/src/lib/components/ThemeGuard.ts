@@ -4,7 +4,7 @@ import { locale, msg } from '../i18n';
 import type { Theme } from '../services/theme';
 
 const guardAfterChangeMs = 8000;
-const UNSTACKED_POPUPS = '[role="dialog"], [role="listbox"]';
+const UNSTACKED_POPUPS = '[role="dialog"]';
 
 function randomHostId(): string {
   const bytes = new Uint32Array(4);
@@ -148,9 +148,9 @@ export function mountThemeGuard(): () => void {
 
   // Escape belongs to an open dialog or menu first; it ends only a timed trial,
   // the one that exists to get the user out of CSS that hides the interface.
-  // A layer (dialog, menu) answers Escape through the stack, which stops it
-  // before this listener; while one is open the guard leaves Escape alone. The
-  // role query is for the popups not on the stack yet (Select's listbox, Big
+  // A layer (dialog, menu, a select's list) answers Escape through the stack,
+  // which stops it before this listener; while one is open the guard leaves
+  // Escape alone. The role query is for the popups not on the stack yet (Big
   // Picture's own dialogs, the consent screens); it goes when they move onto it.
   function onKey(event: KeyboardEvent) {
     if (event.key !== 'Escape') return;

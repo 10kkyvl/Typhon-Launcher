@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
 import { user } from '../testing/dom';
 import MenuHarness from '../testing/MenuHarness.svelte';
+import SelectHarness from '../testing/SelectHarness.svelte';
 import type { Theme } from '../services/theme';
 import { activeTheme, endTrial, themeTrial, tryTheme } from '../stores/theme';
 import ContextMenu from './ContextMenu.svelte';
@@ -60,6 +61,28 @@ describe('theme trial and Escape', () => {
     expect(onclose).toHaveBeenCalledTimes(1);
     expect(get(themeTrial)).not.toBeNull();
     view.unmount();
+  });
+
+  it('Escape that closes the list of a select belongs to the list: the trial goes on', async () => {
+    render(SelectHarness, { target: app, props: { options: [{ id: 'ru', label: 'Russian' }, { id: 'en', label: 'English' }], value: 'ru' } });
+    const keys = user();
+    await keys.click(screen.getByRole('combobox', { name: 'Language' }));
+    expect(screen.getByRole('listbox')).toBeTruthy();
+
+    await keys.keyboard('{Escape}');
+
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(get(themeTrial)).not.toBeNull();
+  });
+
+  it('Escape on a select with its list closed ends the trial', async () => {
+    render(SelectHarness, { target: app, props: { options: [{ id: 'ru', label: 'Russian' }], value: 'ru' } });
+    const keys = user();
+    screen.getByRole('combobox', { name: 'Language' }).focus();
+
+    await keys.keyboard('{Escape}');
+
+    expect(get(themeTrial)).toBeNull();
   });
 
   it('Escape with nothing open ends the trial', async () => {
