@@ -1,0 +1,91 @@
+<script lang="ts">
+  import { ambientTarget, rememberAmbient } from '../stores/ambient';
+  import { libraryGames } from '../stores/library';
+  import { gameArt, requestArt } from '../stores/metadata';
+  import { activeTheme } from '../stores/theme';
+  import { displayedAccent } from '../theme/apply';
+  import { resolveColors } from '../theme/resolveColors';
+  import { documentMotion, tokenMs } from '../motion/plate';
+  import { BackdropPainter } from '../backdrop/painter';
+  import { BACKDROP_H, BACKDROP_LOOK_COLORS, BACKDROP_W, backdropLook, bakeImage, loadImage, type BackdropLook } from '../backdrop/pixels';
+  import { artRequest, backdropArt, playedArtRequests, rememberedGame } from '../backdrop/source';
+
+  /**
+   * The window backdrop: the art of the game the user is looking at, baked into a 64 px picture
+   * (blurred by its size, dimmed and luminance-limited for the theme's text) and stretched under the
+   * whole shell, the islands included. A cross-fade between games runs on those pixels in a script;
+   * with animations off, reduced motion or a hidden window the picture swaps at once.
+   */
+
+  let canvas = $state<HTMLCanvasElement>();
+  let painter = $state.raw<BackdropPainter | null>(null);
+
+  $effect(() => rememberAmbient(rememberedGame($libraryGames, $gameArt)));
+
+  $effect(() => {
+    const ids = playedArtRequests($libraryGames, $gameArt);
+    const target = $ambientTarget;
+    const own = target ? artRequest(target, $libraryGames, $gameArt) : null;
+    if (own && !ids.includes(own)) ids.push(own);
+    if (ids.length > 0) requestArt(ids);
+  });
+
+  const url = $derived($ambientTarget ? backdropArt($ambientTarget, $libraryGames, $gameArt) : '');
+
+  // Read from the window, not the theme file: custom CSS, a personal accent and any colour syntax are
+  // already resolved there. The theme and accent stores change only after the window has them.
+  const look = $derived.by((): BackdropLook | null => {
+    void $activeTheme;
+    void $displayedAccent;
+    const saturate = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ambient-saturate'));
+    return backdropLook(resolveColors({}, BACKDROP_LOOK_COLORS), saturate);
+  });
+
+  $effect(() => {
+    const context = canvas?.getContext('2d');
+    if (!context) return;
+    const image = new ImageData(BACKDROP_W, BACKDROP_H);
+    const next = new BackdropPainter(image.data, {
+      picture: async (src, style) => {
+        const img = await loadImage(src);
+        return img ? bakeImage(img, style) : null;
+      },
+      put: () => context.putImageData(image, 0, 0),
+      frame: (step) => requestAnimationFrame(step),
+      cancelFrame: (id) => cancelAnimationFrame(id),
+      now: () => performance.now(),
+    });
+    painter = next;
+    return () => {
+      next.dispose();
+      painter = null;
+    };
+  });
+
+  $effect(() => {
+    const target = painter;
+    if (!target) return;
+    const ms = documentMotion() && !document.hidden ? tokenMs('--motion-backdrop', 600) : 0;
+    target.show(url, look, look ? JSON.stringify(look) : '', ms).catch((err: unknown) => {
+      console.warn('backdrop: the picture could not be drawn', err);
+    });
+  });
+</script>
+
+<canvas class="backdrop" bind:this={canvas} width={BACKDROP_W} height={BACKDROP_H} aria-hidden="true"></canvas>
+
+<style>
+  /* The window below the title bar, where the shell is, at the bottom of the window's stacking order:
+     the islands, the banners, the page and everything outside the shell paint over it. Fixed rather
+     than absolute, so the shell does not become a containing block for its absolutely placed parts. */
+  .backdrop {
+    position: fixed;
+    inset: var(--titlebar-h) 0 0;
+    z-index: -1;
+    display: block;
+    width: 100%;
+    height: calc(100% - var(--titlebar-h));
+    opacity: var(--ambient-opacity);
+    pointer-events: none;
+  }
+</style>

@@ -10,6 +10,7 @@
   import type { GameSource } from '../library/source';
   import SourceBadge from './SourceBadge.svelte';
   import ConsoleTag from './ConsoleTag.svelte';
+  import { ambientHover } from '../utils/ambientHover';
 
   export interface GameCardAction {
     id: string;
@@ -37,6 +38,7 @@
     footer,
     actions,
     onplay,
+    ambient = false,
   }: {
     id: string;
     title: string;
@@ -51,6 +53,8 @@
     footer?: Snippet;
     actions?: GameCardAction[];
     onplay?: () => void;
+    /** The window backdrop follows this card's game while the pointer rests on it (library only). */
+    ambient?: boolean;
   } = $props();
 
   let popped = $state('');
@@ -71,7 +75,7 @@
   );
 </script>
 
-<div class="card" role="presentation" oncontextmenu={(event) => openGameMenu(event, id)}>
+<div class="card" role="presentation" oncontextmenu={(event) => openGameMenu(event, id)} use:ambientHover={ambient ? id : null}>
   <div class="cover-wrap">
     <button class="cover" onclick={() => navigate('game', { id })} aria-label={title}>
       <Artwork src={cover} alt={title} {ratio} radius="var(--radius-md)" />

@@ -47,6 +47,7 @@
   import { libraryView } from '../../lib/stores/ui';
   import { bytesSize, playtime, relativeDate } from '../../lib/utils/format';
   import { revealImage } from '../../lib/utils/revealImage';
+  import { ambientHover } from '../../lib/utils/ambientHover';
   import { msg } from '../../lib/i18n';
   import { libraryErrorText } from '../../lib/library/errors';
   import { metadataErrorText } from '../../lib/metadata/metadataErrors';
@@ -461,6 +462,7 @@
               title={entry.title}
               cover={entry.hero || entry.cover}
               variant="capsule"
+              ambient
               installed={entry.installed}
               running={$runningGames.has(entry.id)}
               source={entry.source}
@@ -608,6 +610,7 @@
             id={entry.id}
             title={entry.title}
             cover={entry.cover}
+            ambient
             installed={entry.installed}
             running={$runningGames.has(entry.id)}
             source={entry.source}
@@ -623,6 +626,7 @@
         {#each visibleGames as entry (entry.id)}
           <button
             class="list-row"
+            use:ambientHover={entry.id}
             onclick={() => navigate('game', { id: entry.id })}
             oncontextmenu={(event) => openGameMenu(event, entry.id)}
           >

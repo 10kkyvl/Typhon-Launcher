@@ -73,13 +73,13 @@ export function motionAllowed(root: { classList: { contains(name: string): boole
   return !root.classList.contains('no-anim') && !reducedMotion;
 }
 
-function documentMotion(): boolean {
+export function documentMotion(): boolean {
   if (typeof document === 'undefined') return false;
   const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   return motionAllowed(document.documentElement, reduced);
 }
 
-function tokenMs(name: string, fallback: number): number {
+export function tokenMs(name: string, fallback: number): number {
   if (typeof document === 'undefined' || typeof getComputedStyle !== 'function') return fallback;
   const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   const n = parseFloat(raw);

@@ -10,6 +10,7 @@
   import ChatPanel from './ChatPanel.svelte';
   import NetworkBanner from './NetworkBanner.svelte';
   import OfflineBanner from './OfflineBanner.svelte';
+  import ShellBackdrop from './ShellBackdrop.svelte';
   import Sidebar from './Sidebar.svelte';
   import GameQuickMenu from './GameQuickMenu.svelte';
   import Toasts from './Toasts.svelte';
@@ -21,6 +22,7 @@
 </script>
 
 <div class="shell" class:right={$themeLayout.side === 'right'} data-part="app-shell">
+  <ShellBackdrop />
   <Sidebar />
   <div class="main" data-part="main">
     <Topbar />
