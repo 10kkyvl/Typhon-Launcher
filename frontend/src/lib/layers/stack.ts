@@ -20,10 +20,13 @@ export interface LayerSpec<E, F> {
   opener: F | null;
   /** Where focus goes when the opener is gone. */
   returnFocus?: () => F | null | undefined;
-  /** The layer this one belongs to (non-modal layers only). */
-  owner?: E | null;
-  /** The element it was opened from (its trigger): a press on it is the trigger's, not an outside press. */
-  anchor?: F | null;
+  /**
+   * The layer this one belongs to (non-modal layers only). A getter is read each time it is needed:
+   * the trigger it comes from may be re-created while the layer is open.
+   */
+  owner?: Live<E>;
+  /** The element it was opened from (its trigger): a press on it is the trigger's, not an outside press. Read live too. */
+  anchor?: Live<F>;
   /**
    * Where focus goes when the opener is gone, ahead of `returnFocus`: the triggers of the menus this
    * dialog closed as it opened from one of their items (see dismissNonModal).
@@ -31,6 +34,13 @@ export interface LayerSpec<E, F> {
   adopted?: F[];
   /** A press outside this layer and the layers it owns closes it (non-modal layers only). */
   outsidePress?: boolean;
+}
+
+/** A value, or a getter for one that may change while the layer is open. */
+export type Live<T> = T | null | (() => T | null | undefined);
+
+function now<T>(value: Live<T> | undefined): T | null {
+  return (typeof value === 'function' ? (value as () => T | null | undefined)() : value) ?? null;
 }
 
 interface Entry<E, F> extends LayerSpec<E, F> {
@@ -110,7 +120,8 @@ export class LayerStack<E, F> {
     const owners = new Set([element]);
     const found: { element: E; opener: F | null }[] = [];
     for (const entry of this.#entries) {
-      if (entry.owner === undefined || entry.owner === null || !owners.has(entry.owner)) continue;
+      const owner = now(entry.owner);
+      if (owner === null || !owners.has(owner)) continue;
       owners.add(entry.element);
       found.push({ element: entry.element, opener: entry.opener });
     }
@@ -177,7 +188,7 @@ export class LayerStack<E, F> {
     const homes = closing
       .filter((entry) => opener !== null && this.env.contains(entry.element, opener))
       .reverse()
-      .flatMap((entry) => [entry.anchor, entry.opener, ...entry.inherited])
+      .flatMap((entry) => [now(entry.anchor), entry.opener, ...entry.inherited])
       .filter((home): home is F => home !== null && home !== undefined && !closing.some((other) => this.env.contains(other.element, home)));
     return { dismiss: closing.map((entry) => entry.dismiss), homes: [...new Set(homes)] };
   }
@@ -210,11 +221,13 @@ export class LayerStack<E, F> {
   #pressedIn(entry: Entry<E, F>, target: F): boolean {
     const owners = new Set([entry.element]);
     for (const candidate of this.#entries) {
-      const mine = candidate === entry || (candidate.owner !== undefined && candidate.owner !== null && owners.has(candidate.owner));
+      const owner = now(candidate.owner);
+      const mine = candidate === entry || (owner !== null && owners.has(owner));
       if (!mine) continue;
       owners.add(candidate.element);
       if (this.env.contains(candidate.element, target)) return true;
-      if (candidate.anchor && this.env.holds(candidate.anchor, target)) return true;
+      const anchor = now(candidate.anchor);
+      if (anchor !== null && this.env.holds(anchor, target)) return true;
     }
     return false;
   }

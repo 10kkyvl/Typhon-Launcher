@@ -1,3 +1,4 @@
+import { untrack } from 'svelte';
 import type { Attachment } from 'svelte/attachments';
 import { portal } from '../utils/portal';
 import { focusableIn, focusQuietly, initialFocus, nextFocusTarget } from './focus';
@@ -53,7 +54,9 @@ const closingPresses = new WeakSet<Event>();
  *   is gone by then), ahead of its own `returnFocus`, which is used when the trigger is gone too.
  * - A menu, a select's listbox, a popover or a tooltip is non-modal (`modal: false`): it inerts nothing
  *   and takes focus only when given `initialFocus` (only then is its root made focusable). Its `owner`
- *   is the element it was opened from (the trigger), in a dialog or on the bare page. Inside a dialog
+ *   is the element it was opened from (the trigger), in a dialog or on the bare page; the getter is read
+ *   each time it is needed, so a trigger re-created while the layer is open (a re-keyed row) still
+ *   counts. Option getters are read untracked: a re-render does not reopen the layer. Inside a dialog
  *   it counts as part of that dialog for the Tab trap (its controls follow the trigger in Tab order)
  *   and for where focus may return.
  * - Presses. A press (on any element, an icon's <svg> or <path> included) outside the top non-modal
@@ -232,7 +235,8 @@ export function enterLayer(element: HTMLElement): void {
 export function openLayer(element: HTMLElement, options: LayerOptions): () => void {
   const modal = options.modal ?? true;
   const active = document.activeElement;
-  const owner = modal ? null : options.owner?.();
+  // Read on every use, not once: the trigger may be re-created while the layer is open.
+  const trigger = (): HTMLElement | null => (modal ? null : (options.owner?.() ?? null));
   const opener = active instanceof HTMLElement && active !== document.body ? active : null;
   const dismissed = modal ? stack.dismissNonModal(opener) : { dismiss: [], homes: [] };
   for (const dismiss of dismissed.dismiss) dismiss();
@@ -244,8 +248,11 @@ export function openLayer(element: HTMLElement, options: LayerOptions): () => vo
     opener,
     adopted: dismissed.homes,
     returnFocus: options.returnFocus,
-    owner: owner ? stack.holding(owner) : null,
-    anchor: owner ?? null,
+    owner: () => {
+      const element = trigger();
+      return element ? stack.holding(element) : null;
+    },
+    anchor: trigger,
     outsidePress: !modal && options.outsidePress !== false,
   });
   const focus = options.initialFocus?.();
@@ -282,11 +289,15 @@ export function openLayer(element: HTMLElement, options: LayerOptions): () => vo
   };
 }
 
-/** `{@attach layer({...})}`: portals the element and keeps it registered while it is mounted. */
+/**
+ * `{@attach layer({...})}`: portals the element and keeps it registered while it is mounted. The
+ * option getters are read untracked: state they read changing later (a re-rendered trigger, a new
+ * `initialFocus`) must not close and reopen the layer, which would move focus and reset its opener.
+ */
 export function layer(options: LayerOptions): Attachment<HTMLElement> {
   return (node) => {
     const unportal = portal(node);
-    const close = openLayer(node, options);
+    const close = untrack(() => openLayer(node, options));
     return () => {
       close();
       unportal?.();

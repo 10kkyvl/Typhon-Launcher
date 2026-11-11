@@ -1,3 +1,4 @@
+import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
 import { user } from '../testing/dom';
@@ -334,5 +335,36 @@ describe('presses around a non-modal layer', () => {
     await keys.keyboard('{Escape}');
 
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Fallback' }));
+  });
+
+  it('a trigger re-created while its listbox is open still counts as the trigger', async () => {
+    app.replaceChildren();
+    const view = render(ListboxHarness, { target: app, props: { inDialog: false } });
+    const keys = user();
+    await keys.click(screen.getByRole('button', { name: 'Russian' }));
+    const before = screen.getByRole('button', { name: 'Russian' });
+
+    view.component.rekeyTrigger();
+    await tick();
+    const after = screen.getByRole('button', { name: 'Russian' });
+    expect(after).not.toBe(before);
+    expect(screen.getByRole('listbox', { name: 'Language' })).toBeTruthy();
+    await keys.click(after);
+
+    expect(screen.queryByRole('listbox', { name: 'Language' })).toBeNull();
+  });
+
+  it('a re-render that changes what its option getters read leaves the open layer alone (no re-open, focus stays)', async () => {
+    app.replaceChildren();
+    const view = render(ListboxHarness, { target: app, props: { inDialog: false } });
+    const keys = user();
+    await keys.click(screen.getByRole('button', { name: 'Russian' }));
+    const english = screen.getByRole('option', { name: 'English' });
+    english.focus();
+
+    view.component.rekeyTrigger();
+    await tick();
+
+    expect(document.activeElement).toBe(english);
   });
 });

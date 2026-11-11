@@ -19,12 +19,20 @@
   let deleting = $state(false);
   let triggerShown = $state(true);
   let fallback = $state<HTMLButtonElement>();
+  let triggerKey = $state(0);
+
+  // Re-creates the trigger element while the listbox stays open (a re-keyed row, a {#key} block).
+  export function rekeyTrigger() {
+    triggerKey += 1;
+  }
 </script>
 
 {#snippet select()}
   <p>Language</p>
   {#if triggerShown}
-    <button type="button" bind:this={trigger} aria-haspopup="listbox" onclick={() => (listbox = !listbox)}>Russian</button>
+    {#key triggerKey}
+      <button type="button" bind:this={trigger} aria-haspopup="listbox" onclick={() => (listbox = !listbox)}>Russian</button>
+    {/key}
   {/if}
   <button type="button" bind:this={fallback}>Fallback</button>
   <button type="button">Save</button>
