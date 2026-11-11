@@ -25,6 +25,11 @@
 
   --motion-fast: var(--dur);
   --ease-out: var(--ease);
+  --motion-spin: 800ms; /* one turn of a spinner */
+
+  /* The label on an --accent fill. A theme does not set it; a personal accent computes its own
+     --accent-on (lib/theme/accent.ts), which the components read first. */
+  --accent-on-default: #fff;
 
   /* Window layers, bottom to top (z-index.test.ts holds the order). Layers (dialogs, the image viewer)
      sit above Big Picture and the chat so a prompt opened there is seen and answered. Every layer root
