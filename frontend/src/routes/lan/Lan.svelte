@@ -54,7 +54,7 @@
   <section class="section">
     <h2>{msg('transfers.lanNearbyHeading')} <span class="count">{$offers.length}</span></h2>
     {#if $offers.length === 0}
-      <EmptyState
+      <EmptyState level={3}
         title={msg('transfers.lanEmptyTitle')}
         description={msg('transfers.lanEmptyDescription')}
       >

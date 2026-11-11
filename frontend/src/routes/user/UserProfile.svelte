@@ -235,7 +235,7 @@
   <PageHeader title={username ? `@${username}` : msg('social.profileLabel')} />
 
   {#if isGuest}
-    <EmptyState
+    <EmptyState level={2}
       title={msg('social.userGuestTitle')}
       description={msg('social.userGuestDesc')}
     >
@@ -253,13 +253,13 @@
   {:else if loading}
     <p class="muted">{msg('social.loadingEllipsis')}</p>
   {:else if missing}
-    <EmptyState title={msg('social.userNotFoundTitle')} description={msg('social.userNotFoundDesc')}>
+    <EmptyState level={2} title={msg('social.userNotFoundTitle')} description={msg('social.userNotFoundDesc')}>
       {#snippet icon()}
         <UserRound size="2.2rem" strokeWidth={1.6} />
       {/snippet}
     </EmptyState>
   {:else if failure}
-    <EmptyState title={msg('social.userLoadFailed')} description={failure}>
+    <EmptyState level={2} title={msg('social.userLoadFailed')} description={failure}>
       {#snippet icon()}
         <UserRound size="2.2rem" strokeWidth={1.6} />
       {/snippet}

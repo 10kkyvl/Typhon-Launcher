@@ -251,7 +251,7 @@
     {/if}
 
     {#if isEmpty}
-      <EmptyState title={msg('diskusage.emptyTitle')} description={msg('diskusage.emptyText')}>
+      <EmptyState level={2} title={msg('diskusage.emptyTitle')} description={msg('diskusage.emptyText')}>
         {#snippet icon()}
           <HardDrive size="2rem" strokeWidth={1.8} />
         {/snippet}

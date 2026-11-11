@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/svelte';
+import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import type { Source } from '../../lib/services/sources';
@@ -102,6 +102,23 @@ describe('Sources: the status filter', () => {
     expect(all.getAttribute('aria-checked')).toBe('false');
     expect(screen.queryByText('Main feed')).toBeNull();
     expect(screen.getByText('Old feed')).toBeTruthy();
+  });
+});
+
+describe('Sources: an empty list', () => {
+  it('says so in a heading right under the page title', () => {
+    render(Sources, { target: app, props: {} });
+
+    expect(screen.getByRole('heading', { level: 1, name: msg('transfers.sourcesTitle') })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 2, name: msg('transfers.sourcesEmptyTitle') })).toBeTruthy();
+  });
+
+  it('with sources filtered away, says so at the same level', async () => {
+    sources.set([source({})]);
+    render(Sources, { target: app, props: {} });
+    await fireEvent.click(screen.getByRole('radio', { name: (name) => name.startsWith(msg('transfers.sourcesTabDisabled')) }));
+
+    expect(screen.getByRole('heading', { level: 2, name: msg('transfers.sourcesEmptyFilteredTitle') })).toBeTruthy();
   });
 });
 

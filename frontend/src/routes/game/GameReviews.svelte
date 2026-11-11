@@ -137,7 +137,7 @@
         <Button size="sm" onclick={() => loadFirst(canonicalGameId, sort, filter)}>{msg('common.retry')}</Button>
       </div>
     {:else if loaded && items.length === 0}
-      <EmptyState title={msg('reviews.emptyTitle')} description={msg('reviews.emptyDescription')} />
+      <EmptyState level={3} title={msg('reviews.emptyTitle')} description={msg('reviews.emptyDescription')} />
     {:else if items.length > 0}
       <div class="list">
         {#each items as review (review.id)}

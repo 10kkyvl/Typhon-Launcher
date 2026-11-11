@@ -203,7 +203,7 @@
   </div>
 
   {#if $sources.length === 0}
-    <EmptyState
+    <EmptyState level={2}
       title={msg('transfers.sourcesEmptyTitle')}
       description={msg('transfers.sourcesEmptyDescription')}
     >
@@ -221,7 +221,7 @@
     <SegmentedControl options={statusTabs} label={msg('transfers.sourcesStatusFilterLabel')} variant="pill" bind:value={statusFilter} />
 
     {#if filteredSources.length === 0}
-      <EmptyState title={msg('transfers.sourcesEmptyFilteredTitle')} description={msg('transfers.sourcesEmptyFilteredDescription')} />
+      <EmptyState level={2} title={msg('transfers.sourcesEmptyFilteredTitle')} description={msg('transfers.sourcesEmptyFilteredDescription')} />
     {:else}
       {#key statusFilter}
       <div class="table">

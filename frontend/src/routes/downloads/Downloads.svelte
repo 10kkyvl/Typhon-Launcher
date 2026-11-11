@@ -185,7 +185,7 @@
   {/if}
 
   {#if nothing}
-  <EmptyState
+  <EmptyState level={2}
     title={msg('transfers.downloadsEmptyActiveTitle')}
     description={msg('transfers.downloadsEmptyActiveDescription')}
   >

@@ -70,7 +70,7 @@
   {:else if failed}
     <p class="status error">{msg('modals.sentDataLoadFailed')}</p>
   {:else if entries.length === 0}
-    <EmptyState
+    <EmptyState level={4}
       title={msg('modals.sentDataEmptyTitle')}
       description={msg('modals.sentDataEmptyDescription')}
     />

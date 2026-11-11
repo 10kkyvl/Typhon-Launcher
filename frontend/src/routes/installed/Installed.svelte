@@ -501,7 +501,7 @@
   {/if}
 
   {#if $installedGames.length === 0}
-    <EmptyState
+    <EmptyState level={2}
       title={msg('games.installedNoGamesTitle')}
       description={msg('games.installedNoGamesDescription')}
     >
@@ -524,7 +524,7 @@
       {/snippet}
     </EmptyState>
   {:else if filteredGames.length === 0}
-    <EmptyState title={msg('games.nothingFoundTitle')} description={msg('games.installedNothingFoundDescription')}>
+    <EmptyState level={2} title={msg('games.nothingFoundTitle')} description={msg('games.installedNothingFoundDescription')}>
       {#snippet icon()}
         <Search size="2rem" strokeWidth={1.8} />
       {/snippet}

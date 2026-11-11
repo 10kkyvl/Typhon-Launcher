@@ -123,7 +123,7 @@
 {#if loading}
   <p class="muted">{msg('tickets.loading')}</p>
 {:else if tickets.length === 0 && !failure}
-  <EmptyState title={msg('tickets.emptyTitle')} description={msg('tickets.emptyText')}>
+  <EmptyState level={2} title={msg('tickets.emptyTitle')} description={msg('tickets.emptyText')}>
     {#snippet icon()}
       <LifeBuoy size="2rem" strokeWidth={1.8} />
     {/snippet}

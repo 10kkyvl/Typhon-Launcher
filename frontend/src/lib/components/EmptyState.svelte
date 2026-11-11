@@ -18,8 +18,11 @@
     description?: string;
     icon?: Snippet;
     actions?: Snippet;
-    /** Heading level of the title on a page: one below the heading it sits under. */
-    level?: 2 | 3 | 4;
+    /**
+     * Heading level of the title on a page or in a dialog: one below the heading it sits under (2 under
+     * the page title, 4 under a dialog's), 1 when it is all a page shows.
+     */
+    level?: 1 | 2 | 3 | 4 | 5;
     size?: 'page' | 'inline';
     align?: 'start' | 'center';
   } = $props();

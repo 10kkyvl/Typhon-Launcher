@@ -111,7 +111,7 @@
   </PageHeader>
 
   {#if failed && !data}
-    <EmptyState title={msg('stats.loadError')}>
+    <EmptyState level={2} title={msg('stats.loadError')}>
       {#snippet actions()}
         <Button onclick={() => load(period)}>{msg('stats.retry')}</Button>
       {/snippet}
@@ -123,7 +123,7 @@
       <p class="muted danger" role="alert">{msg('stats.loadError')}</p>
     {/if}
     {#if summary.empty}
-      <EmptyState title={msg('stats.title')} description={msg('stats.empty')}>
+      <EmptyState level={2} title={msg('stats.title')} description={msg('stats.empty')}>
         {#snippet icon()}<ChartColumn size="3.2rem" strokeWidth={1.6} />{/snippet}
       </EmptyState>
     {:else}

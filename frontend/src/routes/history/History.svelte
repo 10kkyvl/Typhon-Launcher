@@ -140,7 +140,7 @@
   {/if}
 
   {#if $history.length === 0}
-    <EmptyState title={msg('transfers.historyEmptyTitle')} description={msg('transfers.historyEmptyDescription')}>
+    <EmptyState level={2} title={msg('transfers.historyEmptyTitle')} description={msg('transfers.historyEmptyDescription')}>
       {#snippet icon()}
         <HistoryIcon size="2rem" strokeWidth={1.8} />
       {/snippet}
@@ -154,7 +154,7 @@
     </div>
 
     {#if filtered.length === 0}
-      <EmptyState title={msg('transfers.historyNoResultsTitle')} description={msg('transfers.historyNoResultsDescription')} />
+      <EmptyState level={2} title={msg('transfers.historyNoResultsTitle')} description={msg('transfers.historyNoResultsDescription')} />
     {:else}
       {#key segment}
         <div class="days">

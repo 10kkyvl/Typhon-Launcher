@@ -171,6 +171,16 @@ describe('an empty place', () => {
       .map(([file]) => file);
     expect(offenders).toEqual([]);
   });
+
+  // The level depends on where the empty state sits, which only the caller knows; inline it has no heading.
+  it('on a page or in a dialog, gives its heading level; inline, gives none', () => {
+    const offenders = Object.entries(frontendSources)
+      .filter(([file]) => file.endsWith('.svelte'))
+      .flatMap(([file, source]) => tags(source, 'EmptyState').map((tag) => ({ file, tag })))
+      .filter(({ tag }) => /\bsize="inline"/.test(tag) === /\blevel=/.test(tag))
+      .map(({ file, tag }) => `${file}: ${tag.slice(0, 70)}`);
+    expect(offenders).toEqual([]);
+  });
 });
 
 describe('every card', () => {

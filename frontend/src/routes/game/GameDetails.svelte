@@ -1566,13 +1566,13 @@
 
 <Page bleed={gameShown ? hero : undefined}>
   {#if missing}
-    <EmptyState title={msg('games.detailMissingTitle')} description={msg('games.detailMissingDescription')}>
+    <EmptyState level={1} title={msg('games.detailMissingTitle')} description={msg('games.detailMissingDescription')}>
       {#snippet actions()}
         <Button onclick={() => navigate('library')}>{msg('games.detailBackToLibrary')}</Button>
       {/snippet}
     </EmptyState>
   {:else if loadFailed}
-    <EmptyState title={msg('games.detailCatalogLoadError')}>
+    <EmptyState level={1} title={msg('games.detailCatalogLoadError')}>
       {#snippet actions()}
         <Button onclick={() => loadCatalogGame(id)}>{msg('common.retry')}</Button>
         <Button onclick={() => navigate('library')}>{msg('games.detailBackToLibrary')}</Button>

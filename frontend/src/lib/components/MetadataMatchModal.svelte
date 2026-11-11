@@ -137,9 +137,9 @@
       <section class="block">
         <h4>{msg('modals.metadataMatchCandidates')}</h4>
         {#if loadingCandidates}
-          <EmptyState title={msg('modals.metadataMatchSearchingCandidates')} description={msg('modals.metadataMatchSearchingCandidatesDesc', { gameTitle })} />
+          <EmptyState level={5} title={msg('modals.metadataMatchSearchingCandidates')} description={msg('modals.metadataMatchSearchingCandidatesDesc', { gameTitle })} />
         {:else if candidates.length === 0}
-          <EmptyState
+          <EmptyState level={5}
             title={msg('modals.metadataMatchNoCandidatesTitle')}
             description={msg('modals.metadataMatchNoCandidatesDesc')}
           />

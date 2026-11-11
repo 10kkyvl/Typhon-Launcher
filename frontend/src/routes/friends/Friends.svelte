@@ -323,7 +323,7 @@
   </PageHeader>
 
   {#if isGuest}
-    <EmptyState
+    <EmptyState level={2}
       title={msg('social.friendsGuestTitle')}
       description={msg('social.friendsGuestDesc')}
     >
@@ -339,7 +339,7 @@
       {/snippet}
     </EmptyState>
   {:else if $needsSocialConsent}
-    <EmptyState
+    <EmptyState level={2}
       title={msg('social.friendsConsentTitle')}
       description={msg('social.friendsConsentDesc')}
     >
@@ -411,7 +411,7 @@
 
       {#if visibleFriends.length === 0}
         {#if page.friends.length === 0}
-          <EmptyState title={msg('social.friendsEmptyNobodyTitle')} description={msg('social.friendsEmptyNobodyDesc')}>
+          <EmptyState level={2} title={msg('social.friendsEmptyNobodyTitle')} description={msg('social.friendsEmptyNobodyDesc')}>
             {#snippet icon()}
               <Users size="2.2rem" strokeWidth={1.6} />
             {/snippet}
@@ -423,11 +423,11 @@
             {/snippet}
           </EmptyState>
         {:else if search.trim()}
-          <EmptyState title={msg('social.friendsEmptySearchTitle')} description={msg('social.friendsEmptySearchDesc')} />
+          <EmptyState level={2} title={msg('social.friendsEmptySearchTitle')} description={msg('social.friendsEmptySearchDesc')} />
         {:else if groupEmptyCopy[tab]}
-          <EmptyState title={groupEmptyCopy[tab].title} description={groupEmptyCopy[tab].description} />
+          <EmptyState level={2} title={groupEmptyCopy[tab].title} description={groupEmptyCopy[tab].description} />
         {:else}
-          <EmptyState title={msg('social.friendsEmptyNobodyTitle')} description={msg('social.friendsEmptyNobodyDesc')} />
+          <EmptyState level={2} title={msg('social.friendsEmptyNobodyTitle')} description={msg('social.friendsEmptyNobodyDesc')} />
         {/if}
       {:else if $friendsView === 'grid'}
         <div class="grid">
@@ -468,7 +468,7 @@
       {/if}
     {:else if tab === 'requests'}
       {#if page.incoming.length === 0 && page.outgoing.length === 0}
-        <EmptyState title={msg('social.friendsEmptyRequestsTitle')} description={msg('social.friendsEmptyRequestsDesc')} />
+        <EmptyState level={2} title={msg('social.friendsEmptyRequestsTitle')} description={msg('social.friendsEmptyRequestsDesc')} />
       {:else}
         {#if page.incoming.length > 0}
           <h4 class="eyebrow">
@@ -515,7 +515,7 @@
         </div>
       </div>
     {:else if blocked.length === 0}
-      <EmptyState
+      <EmptyState level={2}
         title={msg('social.friendsEmptyBlockedTitle')}
         description={msg('social.friendsEmptyBlockedDesc')}
       />

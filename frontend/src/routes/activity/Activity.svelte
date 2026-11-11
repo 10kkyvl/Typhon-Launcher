@@ -95,7 +95,7 @@
   {/if}
 
   {#if isGuest}
-    <EmptyState
+    <EmptyState level={2}
       title={msg('transfers.activityGuestTitle')}
       description={msg('transfers.activityGuestDescription')}
     >
@@ -111,7 +111,7 @@
       {/snippet}
     </EmptyState>
   {:else if $needsSocialConsent}
-    <EmptyState
+    <EmptyState level={2}
       title={msg('transfers.activityConsentTitle')}
       description={msg('transfers.activityConsentDescription')}
     >
@@ -147,7 +147,7 @@
           {#if $feedLoading}
             <p class="muted">{msg('transfers.activityLoading')}</p>
           {:else}
-            <EmptyState
+            <EmptyState level={2}
               title={msg('transfers.activityFeedEmptyTitle')}
               description={msg('transfers.activityFeedEmptyDescription')}
             >

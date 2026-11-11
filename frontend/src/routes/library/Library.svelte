@@ -596,9 +596,9 @@
 
     {#if visibleGames.length === 0}
       {#if search.trim()}
-        <EmptyState title={msg('games.nothingFoundTitle')} description={msg('games.libraryNothingFoundDescription')} />
+        <EmptyState level={3} title={msg('games.nothingFoundTitle')} description={msg('games.libraryNothingFoundDescription')} />
       {:else}
-        <EmptyState
+        <EmptyState level={3}
           title={msg('games.libraryEmptyTitle')}
           description={msg('games.libraryEmptyDescription')}
         />

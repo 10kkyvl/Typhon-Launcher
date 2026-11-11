@@ -844,16 +844,16 @@
         {/each}
       </div>
     {:else if failed}
-      <EmptyState
+      <EmptyState level={2}
         title={msg('games.catalogUnavailableTitle')}
         description={msg(backendOutdated ? 'games.catalogBackendOutdated' : 'games.catalogUnavailableDescription')}
       />
     {:else if discoveryVisible && discovery.length > 0}
       <p class="muted" role="status">{msg('games.catalogAllInDiscovery')}</p>
     {:else if search.trim() || genre || platform || kind || compatOnly}
-      <EmptyState title={msg('games.nothingFoundTitle')} description={msg('games.catalogNothingFoundDescription')} />
+      <EmptyState level={2} title={msg('games.nothingFoundTitle')} description={msg('games.catalogNothingFoundDescription')} />
     {:else}
-      <EmptyState
+      <EmptyState level={2}
         title={msg('games.catalogEmptyTitle')}
         description={msg('games.catalogEmptyDescription')}
       />
