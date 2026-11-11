@@ -57,6 +57,12 @@ describe('Notice', () => {
     expect(screen.getByRole('alert')).not.toBeNull();
   });
 
+  it('adds no room for an action the page does not give it', () => {
+    setup({ tone: 'danger' });
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+    expect(document.querySelector('.notice .action')).toBeNull();
+  });
+
   it('has no close button unless the page lets it be closed', () => {
     setup({ tone: 'danger' });
     expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();

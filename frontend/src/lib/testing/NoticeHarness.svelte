@@ -3,7 +3,7 @@
   import Notice from '../components/Notice.svelte';
 
   // A notice between two other controls, as it sits on a page; `closable` removes it on close, the way
-  // a page does. For Notice.dom.test.ts.
+  // a page does, and `withAction` is the only way an action reaches it. For Notice.dom.test.ts.
   let {
     tone = 'info',
     title,
@@ -25,13 +25,14 @@
   let shown = $state(true);
 </script>
 
+{#snippet retry()}
+  <Button size="sm" onclick={onretry}>Retry</Button>
+{/snippet}
+
 <button type="button">Before</button>
 {#if shown}
-  <Notice {tone} {title} {compact} onclose={closable ? () => (shown = false) : undefined}>
+  <Notice {tone} {title} {compact} action={withAction ? retry : undefined} onclose={closable ? () => (shown = false) : undefined}>
     {text}
-    {#snippet action()}
-      {#if withAction}<Button size="sm" onclick={onretry}>Retry</Button>{/if}
-    {/snippet}
   </Notice>
 {/if}
 <button type="button">After</button>
