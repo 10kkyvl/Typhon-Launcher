@@ -293,6 +293,7 @@
 
   .cover-wrap:hover .quick-btn,
   .cover-wrap:focus-within .quick-btn,
+  .quick-btn[aria-expanded='true'],
   .quick-btn.pinned {
     opacity: 1;
     transform: scale(1);
