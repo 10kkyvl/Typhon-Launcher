@@ -108,6 +108,12 @@
     } else if (event.key === 'ArrowLeft') {
       event.preventDefault();
       step(-1);
+    } else if (event.key === 'Home') {
+      event.preventDefault();
+      index = 0;
+    } else if (event.key === 'End') {
+      event.preventDefault();
+      index = items.length - 1;
     }
   }
 </script>
@@ -115,9 +121,14 @@
 <svelte:window onkeydown={open ? onKeydown : undefined} onresize={clampPosition} />
 
 {#if open && current}
+  <!-- The dialog root holds every control. A click on its bare scrim closes it; Escape (the layer stack) is the keyboard way. -->
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div
     class="backdrop"
-    role="presentation"
+    role="dialog"
+    aria-modal="true"
+    aria-label={label}
+    tabindex="-1"
     bind:this={backdrop}
     {@attach layer({ dismiss: close })}
     onpointerdown={(event) => (pressedOnScrim = event.target === event.currentTarget)}
@@ -126,7 +137,7 @@
       pressedOnScrim = false;
     }}
   >
-    <div class="frame" bind:this={viewport} role="dialog" aria-modal="true" aria-label={label}>
+    <div class="frame" bind:this={viewport}>
       {#if broken}
         <p class="broken">{msg('ui.imageUnavailable')}</p>
       {:else}
@@ -156,7 +167,7 @@
           <ChevronRight size="2.4rem" strokeWidth={1.6} />
         </IconButton>
       </div>
-      <span class="counter">{index + 1} / {items.length}</span>
+      <span class="counter" role="status">{index + 1} / {items.length}</span>
     {/if}
 
     {#if !broken}

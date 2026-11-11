@@ -160,3 +160,41 @@ describe('Lightbox under a dialog that opens after it', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 });
+
+describe('Lightbox semantics', () => {
+  const three = [...items, { id: 'c', url: 'https://img.test/c.png' }];
+
+  it('is one dialog that contains every control, and Tab never leaves it', async () => {
+    render(LightboxHarness, { target: app, props: { items: three } });
+    const keys = user();
+    await keys.click(screen.getByRole('button', { name: 'Screenshot' }));
+    const dialog = screen.getByRole('dialog', { name: msg('ui.imageViewer') });
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+
+    for (const name of [msg('ui.previous'), msg('ui.next'), msg('ui.imageZoomIn'), msg('common.close')]) {
+      expect(dialog.contains(screen.getByRole('button', { name })), name).toBe(true);
+    }
+    for (let step = 0; step < 10; step += 1) {
+      await keys.tab();
+      expect(document.activeElement?.closest('[role="dialog"]')).toBe(dialog);
+    }
+  });
+
+  it('announces the position when the image changes, and Home/End jump to the first and last image', async () => {
+    document.documentElement.classList.add('no-anim');
+    render(LightboxHarness, { target: app, props: { items: three } });
+    const keys = user();
+    await keys.click(screen.getByRole('button', { name: 'Screenshot' }));
+    const status = screen.getByRole('status');
+    const image = () => document.querySelector('img')?.getAttribute('src');
+    expect(status.textContent?.trim()).toBe('1 / 3');
+
+    await keys.keyboard('{ArrowRight}');
+    expect(status.textContent?.trim()).toBe('2 / 3');
+    await keys.keyboard('{End}');
+    expect(image()).toBe(three[2].url);
+    expect(status.textContent?.trim()).toBe('3 / 3');
+    await keys.keyboard('{Home}');
+    expect(image()).toBe(three[0].url);
+  });
+});
