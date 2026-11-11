@@ -110,8 +110,11 @@ describe('hints that describe a control', () => {
     expect(missing.classList.contains('selected')).toBe(false);
   });
 
-  it('a tag chip: pressing it removes the tag', async () => {
+  it('a tag chip: the tag is its text, and its remove button is named for the tag', () => {
     render(TagEditor, { target: app, props: { tags: ['coop'], placeholder: 'Tag' } });
-    await expectDescribed(screen.getByRole('button', { name: /coop/ }), msg('modals.gameTagsRemove', { tag: 'coop' }));
+    const remove = screen.getByRole('button', { name: msg('modals.gameTagsRemove', { tag: 'coop' }) });
+    expect(remove.hasAttribute('title')).toBe(false);
+    expect(remove.closest('.chip')?.textContent).toContain('coop');
+    expect(screen.queryByRole('button', { name: 'coop' })).toBeNull();
   });
 });

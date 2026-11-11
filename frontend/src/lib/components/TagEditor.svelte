@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { X } from '@lucide/svelte';
   import Button from './Button.svelte';
   import Chip from './Chip.svelte';
   import { msg } from '../i18n';
@@ -52,10 +51,7 @@
   {#if tags.length > 0}
     <div class="chips">
       {#each tags as tag (tag)}
-        <Chip selected hint={msg('modals.gameTagsRemove', { tag })} onclick={() => remove(tag)}>
-          {tag}
-          <X size="1.2rem" strokeWidth={2} />
-        </Chip>
+        <Chip selected onremove={() => remove(tag)} removeLabel={msg('modals.gameTagsRemove', { tag })}>{tag}</Chip>
       {/each}
     </div>
   {/if}
