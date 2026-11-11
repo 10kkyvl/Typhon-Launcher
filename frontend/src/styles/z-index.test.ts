@@ -36,7 +36,6 @@ const files = fs
 const ORDER = [
   'backdrop',
   'sticky',
-  'popover',
   'corner',
   'bigpicture',
   'chat',
