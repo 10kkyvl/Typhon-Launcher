@@ -24,6 +24,14 @@ export function backdropArt(id: string, games: readonly LibraryGame[], art: ArtM
   return clean(known?.hero) || clean(known?.cover) || clean(game?.cover);
 }
 
+/**
+ * The game a game page claims: a library game by its own id, else the catalog game by its canonical id,
+ * whether or not the art store knows it yet (the backdrop asks for the art and stays bare meanwhile).
+ */
+export function pageAmbient(libraryId: string | undefined, canonicalId: string | null | undefined): string | null {
+  return libraryId || canonicalId || null;
+}
+
 /** The id to ask the art store for, when it has not answered for this game yet. */
 export function artRequest(id: string, games: readonly LibraryGame[], art: ArtMap): string | null {
   const { key } = artKey(id, games);

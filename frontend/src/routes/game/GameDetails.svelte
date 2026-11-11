@@ -143,8 +143,9 @@
   import { emulationPlatform, isEmulated, isInstalledImage, pageGame, platformBadge } from '../../lib/library/emulation';
   import { externalLabel, isExternal } from '../../lib/library/external';
   import ConsoleTag from '../../lib/components/ConsoleTag.svelte';
-  import { gameArt, metadataAvailable } from '../../lib/stores/metadata';
+  import { metadataAvailable } from '../../lib/stores/metadata';
   import { claimAmbient } from '../../lib/stores/ambient';
+  import { pageAmbient } from '../../lib/backdrop/source';
   import { navigate } from '../../lib/stores/router';
   import { openRedist } from '../../lib/stores/redist';
   import { toast } from '../../lib/stores/toasts';
@@ -288,11 +289,8 @@
   });
 
   const canonicalId = $derived(localGame && !viaCatalog ? localGame.canonicalGameId : catalogGame?.id || id);
-  // The window backdrop shows this game: a library game by its own id, a catalog game once the art store has its art.
-  const ambientId = $derived(localGame?.id ?? (canonicalId && $gameArt[canonicalId] ? canonicalId : null));
-  $effect(() => {
-    if (ambientId) return claimAmbient(ambientId);
-  });
+  const ambientId = $derived(pageAmbient(localGame?.id, canonicalId));
+  $effect(() => claimAmbient(ambientId));
   const releaseTitle = $derived(pageTitle(localGame, viaCatalog, catalogGame?.title));
   const sideloaded = $derived(emulated && !viaCatalog);
   const releaseKey = $derived(

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { LibraryGame } from '../services/library';
 import type { GameArt } from '../services/metadata';
-import { artRequest, backdropArt, playedArtRequests, rememberedGame } from './source';
+import { artRequest, backdropArt, pageAmbient, playedArtRequests, rememberedGame } from './source';
 
 function game(id: string, extra: Partial<LibraryGame> = {}): LibraryGame {
   return {
@@ -83,5 +83,22 @@ describe('the remembered game', () => {
     expect(rememberedGame([game('a', { cover: '/media/a.jpg' })], {})).toBeNull();
     expect(rememberedGame([game('h', { cover: '/media/h.jpg', lastPlayed: at(3), hidden: true })], {})).toBeNull();
     expect(rememberedGame([game('bad', { cover: '/media/b.jpg', lastPlayed: 'not a date' })], {})).toBeNull();
+  });
+});
+
+describe('the game a game page shows behind the window', () => {
+  it('is the library game by its own id', () => {
+    expect(pageAmbient('lib-1', 'c1')).toBe('lib-1');
+  });
+
+  it('is a catalog game by its canonical id, before the art store knows it', () => {
+    expect(pageAmbient(undefined, 'catalog-7')).toBe('catalog-7');
+    expect(artRequest('catalog-7', [], {})).toBe('catalog-7');
+    expect(backdropArt('catalog-7', [], {})).toBe('');
+  });
+
+  it('is nothing for a page without a game', () => {
+    expect(pageAmbient(undefined, undefined)).toBeNull();
+    expect(pageAmbient(undefined, '')).toBeNull();
   });
 });
