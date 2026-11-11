@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Page from '../../lib/components/Page.svelte';
   import { onMount } from 'svelte';
   import { ChevronDown, HardDrive, RefreshCw } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
@@ -202,301 +203,303 @@
   }
 </script>
 
-<PageHeader title={msg('diskusage.title')} subtitle={msg('diskusage.subtitle')}>
-  {#snippet actions()}
-    <Button onclick={refresh} disabled={scanning}>
-      <RefreshCw size="1.5rem" strokeWidth={2} class={scanning ? 'spin' : ''} />
-      {scanning ? msg('diskusage.scanning') : msg('diskusage.rescan')}
-    </Button>
-  {/snippet}
-</PageHeader>
+<Page>
+  <PageHeader title={msg('diskusage.title')} subtitle={msg('diskusage.subtitle')}>
+    {#snippet actions()}
+      <Button onclick={refresh} disabled={scanning}>
+        <RefreshCw size="1.5rem" strokeWidth={2} class={scanning ? 'spin' : ''} />
+        {scanning ? msg('diskusage.scanning') : msg('diskusage.rescan')}
+      </Button>
+    {/snippet}
+  </PageHeader>
 
-{#if scanError}
-  <p class="error" role="alert">{scanError}</p>
-{/if}
-
-{#if !report}
-  {#if scanning}
-    <p class="muted">{msg('diskusage.scanning')}</p>
+  {#if scanError}
+    <p class="error" role="alert">{scanError}</p>
   {/if}
-{:else}
-  <Card>
-    <div class="summary">
-      <span class="summary-icon"><HardDrive size="1.8rem" strokeWidth={1.8} /></span>
-      <div class="figure">
-        <span class="figure-label">{msg('diskusage.used')}</span>
-        <span class="figure-value">{total(report.totals.totalBytes, report.totals.unknownSizes)}</span>
-      </div>
-      <div class="figure">
-        <span class="figure-label">{msg('diskusage.reclaimable')}</span>
-        <span class="figure-value">{total(report.totals.reclaimableBytes, report.totals.unknownSizes)}</span>
-      </div>
-    </div>
-    {#if report.totals.unknownSizes}
-      <p class="note">{msg('diskusage.unknownNote', { count: unknownCount })}</p>
+
+  {#if !report}
+    {#if scanning}
+      <p class="muted">{msg('diskusage.scanning')}</p>
     {/if}
-  </Card>
-
-  {#if report.warnings.length > 0}
-    <div class="warnings" role="alert">
-      <h2>{msg('diskusage.warningsTitle')}</h2>
-      <ul>
-        {#each report.warnings as warning, index (index)}
-          <li>{msg('diskusage.warningLine', { area: warning.area, message: warning.message })}</li>
-        {/each}
-      </ul>
-    </div>
-  {/if}
-
-  {#if isEmpty}
-    <EmptyState title={msg('diskusage.emptyTitle')} description={msg('diskusage.emptyText')}>
-      {#snippet icon()}
-        <HardDrive size="2rem" strokeWidth={1.8} />
-      {/snippet}
-    </EmptyState>
   {:else}
-    {#if games.length > 0}
+    <Card>
+      <div class="summary">
+        <span class="summary-icon"><HardDrive size="1.8rem" strokeWidth={1.8} /></span>
+        <div class="figure">
+          <span class="figure-label">{msg('diskusage.used')}</span>
+          <span class="figure-value">{total(report.totals.totalBytes, report.totals.unknownSizes)}</span>
+        </div>
+        <div class="figure">
+          <span class="figure-label">{msg('diskusage.reclaimable')}</span>
+          <span class="figure-value">{total(report.totals.reclaimableBytes, report.totals.unknownSizes)}</span>
+        </div>
+      </div>
+      {#if report.totals.unknownSizes}
+        <p class="note">{msg('diskusage.unknownNote', { count: unknownCount })}</p>
+      {/if}
+    </Card>
+
+    {#if report.warnings.length > 0}
+      <div class="warnings" role="alert">
+        <h2>{msg('diskusage.warningsTitle')}</h2>
+        <ul>
+          {#each report.warnings as warning, index (index)}
+            <li>{msg('diskusage.warningLine', { area: warning.area, message: warning.message })}</li>
+          {/each}
+        </ul>
+      </div>
+    {/if}
+
+    {#if isEmpty}
+      <EmptyState title={msg('diskusage.emptyTitle')} description={msg('diskusage.emptyText')}>
+        {#snippet icon()}
+          <HardDrive size="2rem" strokeWidth={1.8} />
+        {/snippet}
+      </EmptyState>
+    {:else}
+      {#if games.length > 0}
+        <section>
+          <div class="section-head">
+            <div>
+              <h2>{msg('diskusage.gamesTitle')}</h2>
+              <p class="muted">{msg('diskusage.gamesHint')}</p>
+            </div>
+            <div class="section-tools">
+              <span class="section-total">{total(report.totals.gamesBytes, games.some((g) => g.sizeUnknown))}</span>
+              <DropdownMenu
+                items={[
+                  { id: 'size', label: sortLabels.size },
+                  { id: 'played', label: sortLabels.played },
+                ]}
+                onselect={(id) => (sort = id as GameSort)}
+              >
+                {#snippet trigger({ open, toggle })}
+                  <Chip selected={open} onclick={toggle}>
+                    {msg('diskusage.sortLabel', { sort: sortLabels[sort] })}
+                    <ChevronDown size="1.4rem" strokeWidth={1.8} />
+                  </Chip>
+                {/snippet}
+              </DropdownMenu>
+            </div>
+          </div>
+          <div class="list">
+            {#each games as game (game.id)}
+              {@const blocked = gameBlockedKey(game)}
+              {@const manage = canManageGame(game)}
+              <div class="row">
+                <div class="main">
+                  <span class="title">{game.title}</span>
+                  <span class="path" title={game.installDir}>{game.installDir}</span>
+                </div>
+                <div class="badges">
+                  {#if game.external}
+                    <StatusBadge kind="neutral" label={msg('diskusage.external')} plain />
+                  {/if}
+                  {#if game.linked}
+                    <span title={msg('diskusage.linkedHint')}>
+                      <StatusBadge kind="neutral" label={msg('diskusage.linked')} plain />
+                    </span>
+                  {/if}
+                  {#if game.missing}
+                    <StatusBadge kind="warning" label={msg('diskusage.missing')} plain />
+                  {/if}
+                  {#if game.running}
+                    <StatusBadge kind="accent" label={msg('diskusage.running')} plain />
+                  {/if}
+                  {#if isStale(game.lastPlayed, now)}
+                    <StatusBadge kind="warning" label={msg('diskusage.stale')} plain />
+                  {/if}
+                </div>
+                <span class="played">{ageText(ageOf(game.lastPlayed, now))}</span>
+                <span class="size">{size(game)}</span>
+                <div class="actions">
+                  {#if !game.external}
+                    <span title={blocked ? msg(blocked) : undefined}>
+                      <Button size="sm" disabled={!manage} onclick={() => openMoveGame(game.id)}>
+                        {msg('diskusage.move')}
+                      </Button>
+                    </span>
+                    <span title={blocked ? msg(blocked) : undefined}>
+                      <Button size="sm" variant="danger" disabled={!manage} onclick={() => openRemove(game)}>
+                        {msg('diskusage.remove')}
+                      </Button>
+                    </span>
+                  {/if}
+                </div>
+              </div>
+            {/each}
+          </div>
+        </section>
+      {/if}
+
       <section>
         <div class="section-head">
           <div>
-            <h2>{msg('diskusage.gamesTitle')}</h2>
-            <p class="muted">{msg('diskusage.gamesHint')}</p>
+            <h2>{msg('diskusage.downloadsTitle')}</h2>
+            <p class="muted">{msg('diskusage.downloadsHint')}</p>
           </div>
-          <div class="section-tools">
-            <span class="section-total">{total(report.totals.gamesBytes, games.some((g) => g.sizeUnknown))}</span>
-            <DropdownMenu
-              items={[
-                { id: 'size', label: sortLabels.size },
-                { id: 'played', label: sortLabels.played },
-              ]}
-              onselect={(id) => (sort = id as GameSort)}
-            >
-              {#snippet trigger({ open, toggle })}
-                <Chip selected={open} onclick={toggle}>
-                  {msg('diskusage.sortLabel', { sort: sortLabels[sort] })}
-                  <ChevronDown size="1.4rem" strokeWidth={1.8} />
-                </Chip>
-              {/snippet}
-            </DropdownMenu>
+          <span class="section-total">{total(report.totals.downloadsBytes, downloads.some((d) => d.sizeUnknown))}</span>
+        </div>
+        {#if downloads.length === 0}
+          <p class="muted">{msg('diskusage.downloadsEmpty')}</p>
+        {:else}
+          <div class="list">
+            {#each downloads as download (download.id)}
+              {@const blocked = downloadBlocked(download)}
+              <div class="row">
+                <div class="main">
+                  <span class="title">{download.name}</span>
+                  <span class="path" title={download.root}>{download.root}</span>
+                  {#if blocked}
+                    <span class="reason">{reasonLabel(download.reasonCode, download.reason)}</span>
+                  {:else if download.seeding}
+                    <span class="reason">{msg('diskusage.reason.seeding')}</span>
+                  {/if}
+                </div>
+                <div class="badges">
+                  {#if download.seeding}
+                    <StatusBadge kind="accent" label={msg('diskusage.downloadSeeding')} plain />
+                  {/if}
+                  {#if download.installed}
+                    <StatusBadge kind="success" label={msg('diskusage.downloadInstalled')} plain />
+                  {/if}
+                  {#if download.missing}
+                    <StatusBadge kind="warning" label={msg('diskusage.missing')} plain />
+                  {/if}
+                </div>
+                <span class="size">{size(download)}</span>
+                <div class="actions">
+                  <Button size="sm" variant="danger" disabled={blocked} onclick={() => askDownload(download)}>
+                    {msg('diskusage.downloadDelete')}
+                  </Button>
+                </div>
+              </div>
+            {/each}
           </div>
+        {/if}
+      </section>
+
+      <section>
+        <div class="section-head">
+          <div>
+            <h2>{msg('diskusage.leftoversTitle')}</h2>
+            <p class="muted">{msg('diskusage.leftoversHint')}</p>
+          </div>
+          <span class="section-total">{total(report.totals.leftoversBytes, leftovers.some((l) => l.sizeUnknown))}</span>
         </div>
-        <div class="list">
-          {#each games as game (game.id)}
-            {@const blocked = gameBlockedKey(game)}
-            {@const manage = canManageGame(game)}
-            <div class="row">
-              <div class="main">
-                <span class="title">{game.title}</span>
-                <span class="path" title={game.installDir}>{game.installDir}</span>
+        {#if leftovers.length === 0}
+          <p class="muted">{msg('diskusage.leftoversEmpty')}</p>
+        {:else}
+          <div class="list">
+            {#each leftovers as leftover (leftover.path)}
+              <div class="row">
+                <div class="main">
+                  <span class="title">{msg(leftoverKindKey(leftover.kind))}</span>
+                  <span class="path" title={leftover.path}>{leftover.path}</span>
+                  {#if !leftover.deletable}
+                    <span class="reason">{reasonLabel(leftover.reasonCode, leftover.reason)}</span>
+                  {/if}
+                </div>
+                <span class="size">{size(leftover)}</span>
+                <div class="actions">
+                  <Button size="sm" variant="danger" disabled={!leftover.deletable} onclick={() => askLeftover(leftover)}>
+                    {msg('diskusage.leftoverDelete')}
+                  </Button>
+                </div>
               </div>
-              <div class="badges">
-                {#if game.external}
-                  <StatusBadge kind="neutral" label={msg('diskusage.external')} plain />
-                {/if}
-                {#if game.linked}
-                  <span title={msg('diskusage.linkedHint')}>
-                    <StatusBadge kind="neutral" label={msg('diskusage.linked')} plain />
-                  </span>
-                {/if}
-                {#if game.missing}
-                  <StatusBadge kind="warning" label={msg('diskusage.missing')} plain />
-                {/if}
-                {#if game.running}
-                  <StatusBadge kind="accent" label={msg('diskusage.running')} plain />
-                {/if}
-                {#if isStale(game.lastPlayed, now)}
-                  <StatusBadge kind="warning" label={msg('diskusage.stale')} plain />
-                {/if}
-              </div>
-              <span class="played">{ageText(ageOf(game.lastPlayed, now))}</span>
-              <span class="size">{size(game)}</span>
-              <div class="actions">
-                {#if !game.external}
-                  <span title={blocked ? msg(blocked) : undefined}>
-                    <Button size="sm" disabled={!manage} onclick={() => openMoveGame(game.id)}>
-                      {msg('diskusage.move')}
-                    </Button>
-                  </span>
-                  <span title={blocked ? msg(blocked) : undefined}>
-                    <Button size="sm" variant="danger" disabled={!manage} onclick={() => openRemove(game)}>
-                      {msg('diskusage.remove')}
-                    </Button>
-                  </span>
-                {/if}
-              </div>
-            </div>
-          {/each}
+            {/each}
+          </div>
+        {/if}
+      </section>
+
+      <section>
+        <div class="section-head">
+          <div>
+            <h2>{msg('diskusage.screenshotsTitle')}</h2>
+            <p class="muted">{msg('diskusage.screenshotsHint')}</p>
+          </div>
+          <span class="section-total">{total(report.totals.screenshotsBytes, screenshots.some((s) => s.sizeUnknown))}</span>
         </div>
+        {#if screenshots.length === 0}
+          <p class="muted">{msg('diskusage.screenshotsEmpty')}</p>
+        {:else}
+          <div class="list">
+            {#each screenshots as group (group.gameId)}
+              <div class="row">
+                <div class="main">
+                  <span class="title">{group.title}</span>
+                  <span class="path">{msg('diskusage.screenshotsCount', { count: group.count })}</span>
+                </div>
+                <div class="badges">
+                  {#if !group.inLibrary}
+                    <StatusBadge kind="warning" label={msg('diskusage.leftLibrary')} plain />
+                  {/if}
+                </div>
+                <span class="size">{size(group)}</span>
+                <div class="actions">
+                  <Button size="sm" variant="danger" onclick={() => askScreenshots(group)}>
+                    {msg('diskusage.deleteAll')}
+                  </Button>
+                </div>
+              </div>
+            {/each}
+          </div>
+        {/if}
+      </section>
+
+      <section>
+        <div class="section-head">
+          <div>
+            <h2>{msg('diskusage.snapshotsTitle')}</h2>
+            <p class="muted">{msg('diskusage.snapshotsHint')}</p>
+          </div>
+          <span class="section-total">{total(report.totals.snapshotsBytes, snapshots.some((s) => s.sizeUnknown))}</span>
+        </div>
+        {#if snapshots.length === 0}
+          <p class="muted">{msg('diskusage.snapshotsEmpty')}</p>
+        {:else}
+          <div class="list">
+            {#each snapshots as group (group.gameId)}
+              <div class="row">
+                <div class="main">
+                  <span class="title">{group.title}</span>
+                  <span class="path">{msg('diskusage.snapshotsCount', { count: group.count })}</span>
+                </div>
+                <div class="badges">
+                  {#if !group.inLibrary}
+                    <StatusBadge kind="warning" label={msg('diskusage.leftLibrary')} plain />
+                  {/if}
+                </div>
+                <span class="size">{size(group)}</span>
+                <div class="actions">
+                  <Button size="sm" variant="danger" onclick={() => askSnapshots(group)}>
+                    {msg('diskusage.deleteAll')}
+                  </Button>
+                </div>
+              </div>
+            {/each}
+          </div>
+        {/if}
       </section>
     {/if}
-
-    <section>
-      <div class="section-head">
-        <div>
-          <h2>{msg('diskusage.downloadsTitle')}</h2>
-          <p class="muted">{msg('diskusage.downloadsHint')}</p>
-        </div>
-        <span class="section-total">{total(report.totals.downloadsBytes, downloads.some((d) => d.sizeUnknown))}</span>
-      </div>
-      {#if downloads.length === 0}
-        <p class="muted">{msg('diskusage.downloadsEmpty')}</p>
-      {:else}
-        <div class="list">
-          {#each downloads as download (download.id)}
-            {@const blocked = downloadBlocked(download)}
-            <div class="row">
-              <div class="main">
-                <span class="title">{download.name}</span>
-                <span class="path" title={download.root}>{download.root}</span>
-                {#if blocked}
-                  <span class="reason">{reasonLabel(download.reasonCode, download.reason)}</span>
-                {:else if download.seeding}
-                  <span class="reason">{msg('diskusage.reason.seeding')}</span>
-                {/if}
-              </div>
-              <div class="badges">
-                {#if download.seeding}
-                  <StatusBadge kind="accent" label={msg('diskusage.downloadSeeding')} plain />
-                {/if}
-                {#if download.installed}
-                  <StatusBadge kind="success" label={msg('diskusage.downloadInstalled')} plain />
-                {/if}
-                {#if download.missing}
-                  <StatusBadge kind="warning" label={msg('diskusage.missing')} plain />
-                {/if}
-              </div>
-              <span class="size">{size(download)}</span>
-              <div class="actions">
-                <Button size="sm" variant="danger" disabled={blocked} onclick={() => askDownload(download)}>
-                  {msg('diskusage.downloadDelete')}
-                </Button>
-              </div>
-            </div>
-          {/each}
-        </div>
-      {/if}
-    </section>
-
-    <section>
-      <div class="section-head">
-        <div>
-          <h2>{msg('diskusage.leftoversTitle')}</h2>
-          <p class="muted">{msg('diskusage.leftoversHint')}</p>
-        </div>
-        <span class="section-total">{total(report.totals.leftoversBytes, leftovers.some((l) => l.sizeUnknown))}</span>
-      </div>
-      {#if leftovers.length === 0}
-        <p class="muted">{msg('diskusage.leftoversEmpty')}</p>
-      {:else}
-        <div class="list">
-          {#each leftovers as leftover (leftover.path)}
-            <div class="row">
-              <div class="main">
-                <span class="title">{msg(leftoverKindKey(leftover.kind))}</span>
-                <span class="path" title={leftover.path}>{leftover.path}</span>
-                {#if !leftover.deletable}
-                  <span class="reason">{reasonLabel(leftover.reasonCode, leftover.reason)}</span>
-                {/if}
-              </div>
-              <span class="size">{size(leftover)}</span>
-              <div class="actions">
-                <Button size="sm" variant="danger" disabled={!leftover.deletable} onclick={() => askLeftover(leftover)}>
-                  {msg('diskusage.leftoverDelete')}
-                </Button>
-              </div>
-            </div>
-          {/each}
-        </div>
-      {/if}
-    </section>
-
-    <section>
-      <div class="section-head">
-        <div>
-          <h2>{msg('diskusage.screenshotsTitle')}</h2>
-          <p class="muted">{msg('diskusage.screenshotsHint')}</p>
-        </div>
-        <span class="section-total">{total(report.totals.screenshotsBytes, screenshots.some((s) => s.sizeUnknown))}</span>
-      </div>
-      {#if screenshots.length === 0}
-        <p class="muted">{msg('diskusage.screenshotsEmpty')}</p>
-      {:else}
-        <div class="list">
-          {#each screenshots as group (group.gameId)}
-            <div class="row">
-              <div class="main">
-                <span class="title">{group.title}</span>
-                <span class="path">{msg('diskusage.screenshotsCount', { count: group.count })}</span>
-              </div>
-              <div class="badges">
-                {#if !group.inLibrary}
-                  <StatusBadge kind="warning" label={msg('diskusage.leftLibrary')} plain />
-                {/if}
-              </div>
-              <span class="size">{size(group)}</span>
-              <div class="actions">
-                <Button size="sm" variant="danger" onclick={() => askScreenshots(group)}>
-                  {msg('diskusage.deleteAll')}
-                </Button>
-              </div>
-            </div>
-          {/each}
-        </div>
-      {/if}
-    </section>
-
-    <section>
-      <div class="section-head">
-        <div>
-          <h2>{msg('diskusage.snapshotsTitle')}</h2>
-          <p class="muted">{msg('diskusage.snapshotsHint')}</p>
-        </div>
-        <span class="section-total">{total(report.totals.snapshotsBytes, snapshots.some((s) => s.sizeUnknown))}</span>
-      </div>
-      {#if snapshots.length === 0}
-        <p class="muted">{msg('diskusage.snapshotsEmpty')}</p>
-      {:else}
-        <div class="list">
-          {#each snapshots as group (group.gameId)}
-            <div class="row">
-              <div class="main">
-                <span class="title">{group.title}</span>
-                <span class="path">{msg('diskusage.snapshotsCount', { count: group.count })}</span>
-              </div>
-              <div class="badges">
-                {#if !group.inLibrary}
-                  <StatusBadge kind="warning" label={msg('diskusage.leftLibrary')} plain />
-                {/if}
-              </div>
-              <span class="size">{size(group)}</span>
-              <div class="actions">
-                <Button size="sm" variant="danger" onclick={() => askSnapshots(group)}>
-                  {msg('diskusage.deleteAll')}
-                </Button>
-              </div>
-            </div>
-          {/each}
-        </div>
-      {/if}
-    </section>
   {/if}
-{/if}
 
-{#if removeTarget}
-  <RemoveGameModal
-    bind:open={removeOpen}
-    bind:mode={removeMode}
-    gameId={removeTarget.id}
-    title={removeTarget.title}
-    emulated={isEmulated($libraryGames.find((game) => game.id === removeTarget?.id))}
-    onremoved={() => void refresh()}
-  />
-{/if}
+  {#if removeTarget}
+    <RemoveGameModal
+      bind:open={removeOpen}
+      bind:mode={removeMode}
+      gameId={removeTarget.id}
+      title={removeTarget.title}
+      emulated={isEmulated($libraryGames.find((game) => game.id === removeTarget?.id))}
+      onremoved={() => void refresh()}
+    />
+  {/if}
 
-{#if pending}
-  {@const current = pending}
-  <ConfirmModal prompt={current.prompt} onconfirm={current.run} onclose={() => (pending = null)} />
-{/if}
+  {#if pending}
+    {@const current = pending}
+    <ConfirmModal prompt={current.prompt} onconfirm={current.run} onclose={() => (pending = null)} />
+  {/if}
+</Page>
 
 <style>
   section {

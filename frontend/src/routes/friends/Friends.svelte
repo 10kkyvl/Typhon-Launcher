@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Page from '../../lib/components/Page.svelte';
   import { onMount, untrack } from 'svelte';
   import { fade, fly } from 'svelte/transition';
   import {
@@ -14,7 +15,6 @@
     Users,
   } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
-  import Card from '../../lib/components/Card.svelte';
   import Chip from '../../lib/components/Chip.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
@@ -310,7 +310,7 @@
   </DropdownMenu>
 {/snippet}
 
-<Card surface="page">
+<Page>
   <PageHeader title={msg('social.friendsTitle')} subtitle={msg('social.friendsSubtitle')}>
     {#snippet actions()}
       {#if !isGuest && !$needsSocialConsent}
@@ -548,15 +548,17 @@
       </div>
     {/if}
   {/if}
-</Card>
 
-{#if !isGuest && !$needsSocialConsent}
-  <AddFriendModal bind:open={addOpen} onsent={reload} />
-{/if}
-<SocialConsentScreen bind:open={consentOpen} />
-{#if pending}
-  <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
-{/if}
+  {#if !isGuest && !$needsSocialConsent}
+    <AddFriendModal bind:open={addOpen} onsent={reload} />
+  {/if}
+
+  <SocialConsentScreen bind:open={consentOpen} />
+
+  {#if pending}
+    <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
+  {/if}
+</Page>
 
 <style>
   .code {

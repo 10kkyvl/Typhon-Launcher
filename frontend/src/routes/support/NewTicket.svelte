@@ -2,7 +2,6 @@
   import { onMount, untrack } from 'svelte';
   import { CircleAlert, X } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
-  import Card from '../../lib/components/Card.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import Select from '../../lib/components/Select.svelte';
@@ -113,119 +112,117 @@
   }
 </script>
 
-<Card surface="page">
-  <PageHeader title={msg('tickets.formTitle')} subtitle={msg('tickets.subtitle')} />
+<PageHeader title={msg('tickets.formTitle')} subtitle={msg('tickets.subtitle')} />
 
-  {#if limitsFailure}
-    <div class="banner" role="alert">
-      <CircleAlert size="1.6rem" strokeWidth={1.8} />
-      <span class="banner-text">{limitsFailure}</span>
-      <Button size="sm" onclick={loadLimits}>{msg('common.retry')}</Button>
+{#if limitsFailure}
+  <div class="banner" role="alert">
+    <CircleAlert size="1.6rem" strokeWidth={1.8} />
+    <span class="banner-text">{limitsFailure}</span>
+    <Button size="sm" onclick={loadLimits}>{msg('common.retry')}</Button>
+  </div>
+{:else if !limits}
+  <p class="muted">{msg('tickets.loading')}</p>
+{:else}
+  <div class="form">
+    <div class="field">
+      <span class="label">{msg('tickets.topicLabel')}</span>
+      <Select options={topics} bind:value={topic} width="100%" onchange={changeTopic} />
     </div>
-  {:else if !limits}
-    <p class="muted">{msg('tickets.loading')}</p>
-  {:else}
-    <div class="form">
-      <div class="field">
-        <span class="label">{msg('tickets.topicLabel')}</span>
-        <Select options={topics} bind:value={topic} width="100%" onchange={changeTopic} />
-      </div>
 
-      <div class="field">
-        <span class="label">{msg('tickets.gameLabel')}</span>
-        {#if game}
-          <div class="chosen">
-            <span class="chosen-title" dir="auto">{game.title}</span>
-            <button type="button" class="clear" aria-label={msg('tickets.gameClear')} disabled={sending} onclick={() => (game = null)}>
-              <X size="1.5rem" strokeWidth={1.8} />
-            </button>
-          </div>
-        {:else}
-          <p class="hint">{msg('tickets.gameNone')}</p>
-        {/if}
-        <div class="picker-toggle">
-          <Button size="sm" disabled={sending} onclick={() => (pickerOpen = !pickerOpen)}>
-            {pickerOpen ? msg('tickets.gameCollapse') : msg('tickets.gameChoose')}
-          </Button>
+    <div class="field">
+      <span class="label">{msg('tickets.gameLabel')}</span>
+      {#if game}
+        <div class="chosen">
+          <span class="chosen-title" dir="auto">{game.title}</span>
+          <button type="button" class="clear" aria-label={msg('tickets.gameClear')} disabled={sending} onclick={() => (game = null)}>
+            <X size="1.5rem" strokeWidth={1.8} />
+          </button>
         </div>
-        {#if pickerOpen}
-          <GamePicker chosen={game ? [game.igdbId] : []} disabled={sending} onpick={pickGame} />
-        {/if}
-      </div>
-
-      <label class="field">
-        <span class="label">
-          {msg('tickets.subjectLabel')}
-          <span class="counter" class:over={runeCount(subject.trim()) > limits.maxSubjectRunes}>
-            {msg('tickets.counter', { count: runeCount(subject.trim()), max: limits.maxSubjectRunes })}
-          </span>
-        </span>
-        <input
-          class="input"
-          class:invalid={!!errors.subject}
-          type="text"
-          dir="auto"
-          autocomplete="off"
-          bind:value={subject}
-          disabled={sending}
-          oninput={() => (errors = { ...errors, subject: undefined })}
-        />
-        {#if errors.subject}<span class="error" role="alert">{errors.subject}</span>{/if}
-      </label>
-
-      <label class="field">
-        <span class="label">
-          {msg('tickets.bodyLabel')}
-          <span class="counter" class:over={bodyLength(body) > limits.maxBodyRunes}>
-            {msg('tickets.counter', { count: bodyLength(body), max: limits.maxBodyRunes })}
-          </span>
-        </span>
-        <textarea
-          class="input area"
-          class:invalid={!!errors.body}
-          rows="8"
-          dir="auto"
-          placeholder={msg('tickets.bodyPlaceholder')}
-          bind:value={body}
-          disabled={sending}
-          oninput={() => (errors = { ...errors, body: undefined })}
-        ></textarea>
-        {#if errors.body}<span class="error" role="alert">{errors.body}</span>{/if}
-      </label>
-
-      <AttachLogs
-        bind:checked={attachLogs}
-        disabled={sending}
-        onchange={() => (logsTouched = true)}
-      />
-
-      {#if formError}
-        <p class="error general" role="alert">
-          <CircleAlert size="1.6rem" strokeWidth={1.8} />
-          <span>{formError}</span>
-        </p>
+      {:else}
+        <p class="hint">{msg('tickets.gameNone')}</p>
       {/if}
-
-      {#if sending && stage}
-        <div class="progress">
-          <span class="hint">{stage}</span>
-          <ProgressBar
-            value={upload ? uploadPercent(upload) : 0}
-            indeterminate={upload?.state !== 'sending' || !upload.totalBytes}
-            height={5}
-          />
-        </div>
-      {/if}
-
-      <div class="actions">
-        <Button disabled={sending} onclick={goBack}>{msg('common.cancel')}</Button>
-        <Button variant="primary" disabled={sending} onclick={submit}>
-          {sending ? msg('tickets.submitting') : msg('tickets.submit')}
+      <div class="picker-toggle">
+        <Button size="sm" disabled={sending} onclick={() => (pickerOpen = !pickerOpen)}>
+          {pickerOpen ? msg('tickets.gameCollapse') : msg('tickets.gameChoose')}
         </Button>
       </div>
+      {#if pickerOpen}
+        <GamePicker chosen={game ? [game.igdbId] : []} disabled={sending} onpick={pickGame} />
+      {/if}
     </div>
-  {/if}
-</Card>
+
+    <label class="field">
+      <span class="label">
+        {msg('tickets.subjectLabel')}
+        <span class="counter" class:over={runeCount(subject.trim()) > limits.maxSubjectRunes}>
+          {msg('tickets.counter', { count: runeCount(subject.trim()), max: limits.maxSubjectRunes })}
+        </span>
+      </span>
+      <input
+        class="input"
+        class:invalid={!!errors.subject}
+        type="text"
+        dir="auto"
+        autocomplete="off"
+        bind:value={subject}
+        disabled={sending}
+        oninput={() => (errors = { ...errors, subject: undefined })}
+      />
+      {#if errors.subject}<span class="error" role="alert">{errors.subject}</span>{/if}
+    </label>
+
+    <label class="field">
+      <span class="label">
+        {msg('tickets.bodyLabel')}
+        <span class="counter" class:over={bodyLength(body) > limits.maxBodyRunes}>
+          {msg('tickets.counter', { count: bodyLength(body), max: limits.maxBodyRunes })}
+        </span>
+      </span>
+      <textarea
+        class="input area"
+        class:invalid={!!errors.body}
+        rows="8"
+        dir="auto"
+        placeholder={msg('tickets.bodyPlaceholder')}
+        bind:value={body}
+        disabled={sending}
+        oninput={() => (errors = { ...errors, body: undefined })}
+      ></textarea>
+      {#if errors.body}<span class="error" role="alert">{errors.body}</span>{/if}
+    </label>
+
+    <AttachLogs
+      bind:checked={attachLogs}
+      disabled={sending}
+      onchange={() => (logsTouched = true)}
+    />
+
+    {#if formError}
+      <p class="error general" role="alert">
+        <CircleAlert size="1.6rem" strokeWidth={1.8} />
+        <span>{formError}</span>
+      </p>
+    {/if}
+
+    {#if sending && stage}
+      <div class="progress">
+        <span class="hint">{stage}</span>
+        <ProgressBar
+          value={upload ? uploadPercent(upload) : 0}
+          indeterminate={upload?.state !== 'sending' || !upload.totalBytes}
+          height={5}
+        />
+      </div>
+    {/if}
+
+    <div class="actions">
+      <Button disabled={sending} onclick={goBack}>{msg('common.cancel')}</Button>
+      <Button variant="primary" disabled={sending} onclick={submit}>
+        {sending ? msg('tickets.submitting') : msg('tickets.submit')}
+      </Button>
+    </div>
+  </div>
+{/if}
 
 <LogsConfirm bind:this={confirm} />
 

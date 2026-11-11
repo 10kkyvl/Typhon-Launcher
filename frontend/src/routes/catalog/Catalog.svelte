@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Page from '../../lib/components/Page.svelte';
   import { ArrowDownUp, ChevronDown, Ellipsis, Heart, LayoutGrid, List, ThumbsDown, Undo2 } from '@lucide/svelte';
   import { Events } from '@wailsio/runtime';
   import { createPagePrefetch } from '../../lib/catalog/prefetch';
@@ -17,7 +18,6 @@
   import { defaultPreferences, emptyProfile, getDiscovery, getRecommendationPreferences, getRecommendationProfile, saveRecommendationPreferences, setNotInterested, type CatalogSort } from '../../lib/services/recommendations';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
-  import Card from '../../lib/components/Card.svelte';
   import Chip from '../../lib/components/Chip.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
@@ -741,7 +741,7 @@
   <span class="status"><span class="dot"></span>{msg('games.gameInstalledWord')}</span>
 {/snippet}
 
-<Card surface="page">
+<Page>
   <PageHeader
     title={msg('games.allGamesTitle')}
     count={total > 0 ? msg('games.catalogTotalCount', { count: total }) : undefined}
@@ -916,7 +916,7 @@
       <span class="muted">{msg('games.catalogShownOf', { shown: items.length, total })}</span>
     </div>
   {/if}
-</Card>
+</Page>
 
 <style>
   .dismissal { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin: var(--space-4) 0; padding: var(--space-3); border-radius: var(--radius-md); background: var(--surface-2); font-size: var(--font-sm); }
@@ -942,8 +942,6 @@
     position: sticky;
     top: 0;
     z-index: 5;
-    margin-top: calc(-1 * var(--space-2));
-    padding-top: var(--space-2);
   }
 
   .toolbar-row {
@@ -959,7 +957,9 @@
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   }
 
+  /* Stuck over the scrolled catalog, the toolbar is an island like the top bar's. */
   .toolbar-row.stuck {
+    background: var(--island-fill);
     border-radius: var(--radius-lg);
   }
 

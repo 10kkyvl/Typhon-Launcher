@@ -123,12 +123,10 @@
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
-    padding: 0 var(--page-x) var(--space-10);
   }
 
+  /* The inset and width are the route's Page container's; this wrapper only animates the page in. */
   .page {
-    max-width: var(--page-max);
-    margin: 0 auto;
     animation: page-in var(--dur-panel) var(--ease);
   }
 

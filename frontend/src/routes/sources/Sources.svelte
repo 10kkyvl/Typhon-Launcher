@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Page from '../../lib/components/Page.svelte';
   import { sourceWarningText } from '../../lib/sources/sourceWarnings';
   import { sourceErrorText } from '../../lib/sources/sourceErrors';
   import { untrack } from 'svelte';
@@ -18,7 +19,6 @@
   import AddSourceModal from '../../lib/components/AddSourceModal.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import Button from '../../lib/components/Button.svelte';
-  import Card from '../../lib/components/Card.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
@@ -171,7 +171,7 @@
   }
 </script>
 
-<Card surface="page">
+<Page>
   <PageHeader title={msg('transfers.sourcesTitle')} subtitle={msg('transfers.sourcesSubtitle')}>
     {#snippet actions()}
       <Button variant="ghost" disabled={$refreshingAll} onclick={refreshAll}>
@@ -319,14 +319,17 @@
       {/key}
     {/if}
   {/if}
-</Card>
 
-<AddSourceModal bind:open={addOpen} />
-<SourcesNoticeModal bind:open={noticeOpen} onaccepted={() => (addOpen = true)} />
-<SourceDetailsModal bind:open={detailsOpen} sourceId={detailsId} focusReleaseId={detailsReleaseId} />
-{#if pending}
-  <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
-{/if}
+  <AddSourceModal bind:open={addOpen} />
+
+  <SourcesNoticeModal bind:open={noticeOpen} onaccepted={() => (addOpen = true)} />
+
+  <SourceDetailsModal bind:open={detailsOpen} sourceId={detailsId} focusReleaseId={detailsReleaseId} />
+
+  {#if pending}
+    <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
+  {/if}
+</Page>
 
 <style>
   .notice {

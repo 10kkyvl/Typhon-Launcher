@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Page from '../../lib/components/Page.svelte';
   import {
     ArrowDown,
     ArrowUp,
@@ -19,7 +20,6 @@
   import AddDownloadModal from '../../lib/components/AddDownloadModal.svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
-  import Card from '../../lib/components/Card.svelte';
   import DownloadDetailsModal from '../../lib/components/DownloadDetailsModal.svelte';
   import DownloadItem from '../../lib/components/DownloadItem.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
@@ -145,8 +145,8 @@
   }
 </script>
 
-<Card surface="page">
-<PageHeader title={msg('transfers.downloadsTitle')}>
+<Page>
+  <PageHeader title={msg('transfers.downloadsTitle')}>
   {#snippet actions()}
     <DropdownMenu
       items={maxActiveDownloadOptions.map((o) => ({ ...o, checked: o.id === concurrencyValue }))}
@@ -167,9 +167,9 @@
       {msg('transfers.downloadsAddAction')}
     </Button>
   {/snippet}
-</PageHeader>
+  </PageHeader>
 
-{#if playBanner}
+  {#if playBanner}
   <div class="play-banner" role="status">
     {#if playBanner.kind === 'schedule'}
       <CalendarClock size="1.5rem" strokeWidth={1.8} />
@@ -181,9 +181,9 @@
     <span class="play-text">{playBannerText}</span>
     <Button size="sm" onclick={() => navigate('settings', { tab: 'downloads' })}>{msg('transfers.playBannerSettings')}</Button>
   </div>
-{/if}
+  {/if}
 
-{#if nothing}
+  {#if nothing}
   <EmptyState
     title={msg('transfers.downloadsEmptyActiveTitle')}
     description={msg('transfers.downloadsEmptyActiveDescription')}
@@ -198,7 +198,7 @@
       </Button>
     {/snippet}
   </EmptyState>
-{:else}
+  {:else}
   <div class="summary">
     <span class="sum speed"><ArrowDown size="1.5rem" strokeWidth={2} />{speedBytes($stats.downSpeed)}</span>
     <span class="sum speed dim"><ArrowUp size="1.5rem" strokeWidth={2} />{speedBytes($stats.upSpeed)}</span>
@@ -219,9 +219,9 @@
       </div>
     {/if}
   </section>
-{/if}
+  {/if}
 
-{#if $failed.length > 0}
+  {#if $failed.length > 0}
   <section class="section">
     <h2>{msg('transfers.downloadsFailedHeading')} <span class="count">{$failed.length}</span></h2>
     <div class="rows">
@@ -255,10 +255,10 @@
       {/each}
     </div>
   </section>
-{/if}
+  {/if}
 
-{#if $queue.length > 0}
-<section class="section">
+  {#if $queue.length > 0}
+  <section class="section">
   <h2>{msg('transfers.downloadsQueueHeading')} <span class="count">{$queue.length}</span></h2>
     <div class="rows">
       {#each $queue as q, i (q.id)}
@@ -314,10 +314,10 @@
         </div>
       {/each}
     </div>
-</section>
-{/if}
+  </section>
+  {/if}
 
-{#if $completed.length > 0}
+  {#if $completed.length > 0}
   <section class="section">
     <h2>{msg('transfers.downloadsCompletedHeading')} <span class="count">{$completed.length}</span></h2>
     <div class="rows">
@@ -384,17 +384,19 @@
       {/each}
     </div>
   </section>
-{/if}
+  {/if}
 
-<p class="footer-hint">
+  <p class="footer-hint">
   {msg('transfers.downloadsFooterHintQuestion')}
   <button class="link" onclick={() => navigate('history')}>{msg('transfers.downloadsOpenHistoryLog')}</button>
-</p>
-</Card>
+  </p>
 
-<AddDownloadModal bind:open={addOpen} />
-<DownloadDetailsModal bind:open={detailsOpen} id={detailsId} />
-<InstallModal bind:open={installOpen} downloadId={installDownloadId} />
+  <AddDownloadModal bind:open={addOpen} />
+
+  <DownloadDetailsModal bind:open={detailsOpen} id={detailsId} />
+
+  <InstallModal bind:open={installOpen} downloadId={installDownloadId} />
+</Page>
 
 <style>
   .play-banner {

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Page from '../../lib/components/Page.svelte';
   import {
     ArrowUp,
     ChevronDown,
@@ -355,351 +356,354 @@
   let librarySetupOpen = $state(false);
 </script>
 
-<PageHeader
-  title={msg('games.installedStatusWord')}
-  subtitle={$installedGames.length > 0
-    ? msg('installed.youHave', { count: $installedGames.length })
-    : msg('games.installedEmptySubtitle')}
->
-  {#snippet actions()}
-    <div class="search-wrap">
-      <SearchInput bind:value={search} placeholder={msg('games.installedSearchPlaceholder')} />
-    </div>
-    <DropdownMenu
-      items={[
-        { id: 'recent', label: sortLabels.recent },
-        { id: 'alpha', label: sortLabels.alpha },
-        { id: 'size', label: sortLabels.size },
-      ]}
-      onselect={(id) => (sort = id as Sort)}
-    >
-      {#snippet trigger({ open, toggle })}
-        <Chip selected={open} onclick={toggle}>
-          {msg('games.installedSortByLabel', { sort: sortLabels[sort] })}
-          <ChevronDown size="1.4rem" strokeWidth={1.8} />
-        </Chip>
-      {/snippet}
-    </DropdownMenu>
-    <SegmentedControl
-      bind:value={$installedView}
-      options={[
-        { id: 'grid', label: msg('games.viewGrid') },
-        { id: 'list', label: msg('games.viewList') },
-      ]}
-    >
-      {#snippet item(option)}
-        {#if option.id === 'grid'}
-          <LayoutGrid size="1.6rem" strokeWidth={1.8} />
-        {:else}
-          <List size="1.6rem" strokeWidth={1.8} />
-        {/if}
-      {/snippet}
-    </SegmentedControl>
-    <Button onclick={findGames} disabled={$scanning}>
-      <RefreshCw size="1.5rem" strokeWidth={2} class={$scanning ? 'spin' : ''} />
-      {$scanning ? scanLabel : msg('games.installedFindGames')}
-    </Button>
-    <Button onclick={openImageDialog}>
-      <Plus size="1.5rem" strokeWidth={2} />
-      {msg('emul.addButton')}
-    </Button>
-    <Button variant="primary" onclick={openAddDialog}>
-      <Plus size="1.5rem" strokeWidth={2} />
-      {msg('games.installedAddGameButton')}
-    </Button>
-  {/snippet}
-</PageHeader>
-
-{#if !$settings?.libraryPath}
-  <div class="storage-block">
-    <Card>
-      <div class="storage-empty">
-        <div class="disk">
-          <HardDrive size="1.8rem" strokeWidth={1.8} />
-          <div class="disk-text">
-            <span class="disk-name">{msg('games.installedLibraryNotSetTitle')}</span>
-            <span class="disk-meta">{msg('games.installedLibraryNotSetHint')}</span>
-          </div>
-        </div>
-        <Button size="sm" variant="primary" onclick={() => (librarySetupOpen = true)}>
-          <FolderOpen size="1.5rem" strokeWidth={1.8} />
-          {msg('games.installedChooseFolderButton')}
-        </Button>
-      </div>
-    </Card>
-  </div>
-{:else if $storageInfo}
-  <div class="storage-block">
-    <Card>
-      <div class="storage">
-        <div class="storage-head">
-          <span class="disk-icon">
-            <HardDrive size="1.8rem" strokeWidth={1.8} />
-          </span>
-          <div class="disk-text">
-            <span class="disk-name">{msg('games.installedStorageTitle')}</span>
-            <span class="disk-meta">
-              {msg('games.installedStorageUsage', {
-                used: bytesSize($storageInfo.usedBytes),
-                total: bytesSize($storageInfo.totalBytes),
-              })}
-            </span>
-          </div>
-          <Button onclick={() => navigate('settings', { tab: 'general' })}>{msg('games.installedManageStorage')}</Button>
-        </div>
-        <div class="storage-bar">
-          <div class="segments" aria-hidden="true">
-            {#each segments as segment (segment.id)}
-              <span class="segment {segment.id}" style:width="{segment.pct}%"></span>
-            {/each}
-            <span class="segment free"></span>
-          </div>
-          <span class="storage-pct">{Math.round(usedPct)}%</span>
-        </div>
-        <ul class="storage-legend">
-          {#if otherBytes !== null}
-            <li>
-              <span class="dot games"></span>
-              <span class="legend-label">{msg('games.installedLegendGames')}</span>
-              <span class="legend-value">{bytesSize(gamesBytes)}</span>
-            </li>
-            <li>
-              <span class="dot other"></span>
-              <span class="legend-label">{msg('games.installedLegendOther')}</span>
-              <span class="legend-value">{bytesSize(otherBytes)}</span>
-            </li>
-          {:else}
-            <li>
-              <span class="dot used"></span>
-              <span class="legend-label">{msg('games.installedLegendUsed')}</span>
-              <span class="legend-value">{bytesSize($storageInfo.usedBytes)}</span>
-            </li>
-          {/if}
-          <li>
-            <span class="dot free"></span>
-            <span class="legend-label">{msg('games.installedLegendFree')}</span>
-            <span class="legend-value">{bytesSize($storageInfo.freeBytes)}</span>
-          </li>
-        </ul>
-      </div>
-    </Card>
-  </div>
-{:else if $storageFailed}
-  <div class="storage-block">
-    <Card>
-      <div class="storage-empty" role="alert">
-        <div class="disk">
-          <HardDrive size="1.8rem" strokeWidth={1.8} />
-          <span class="storage-error">{msg('games.installedStorageLoadFailed')}</span>
-        </div>
-        <Button size="sm" onclick={refreshStorage}>
-          <RefreshCw size="1.5rem" strokeWidth={1.8} />
-          {msg('common.retry')}
-        </Button>
-      </div>
-    </Card>
-  </div>
-{/if}
-
-{#if $installedGames.length === 0}
-  <EmptyState
-    title={msg('games.installedNoGamesTitle')}
-    description={msg('games.installedNoGamesDescription')}
+<Page>
+  <PageHeader
+    title={msg('games.installedStatusWord')}
+    subtitle={$installedGames.length > 0
+      ? msg('installed.youHave', { count: $installedGames.length })
+      : msg('games.installedEmptySubtitle')}
   >
-    {#snippet icon()}
-      <Gamepad2 size="2rem" strokeWidth={1.8} />
-    {/snippet}
     {#snippet actions()}
-      <Button variant="primary" onclick={findGames} disabled={$scanning}>
+      <div class="search-wrap">
+        <SearchInput bind:value={search} placeholder={msg('games.installedSearchPlaceholder')} />
+      </div>
+      <DropdownMenu
+        items={[
+          { id: 'recent', label: sortLabels.recent },
+          { id: 'alpha', label: sortLabels.alpha },
+          { id: 'size', label: sortLabels.size },
+        ]}
+        onselect={(id) => (sort = id as Sort)}
+      >
+        {#snippet trigger({ open, toggle })}
+          <Chip selected={open} onclick={toggle}>
+            {msg('games.installedSortByLabel', { sort: sortLabels[sort] })}
+            <ChevronDown size="1.4rem" strokeWidth={1.8} />
+          </Chip>
+        {/snippet}
+      </DropdownMenu>
+      <SegmentedControl
+        bind:value={$installedView}
+        options={[
+          { id: 'grid', label: msg('games.viewGrid') },
+          { id: 'list', label: msg('games.viewList') },
+        ]}
+      >
+        {#snippet item(option)}
+          {#if option.id === 'grid'}
+            <LayoutGrid size="1.6rem" strokeWidth={1.8} />
+          {:else}
+            <List size="1.6rem" strokeWidth={1.8} />
+          {/if}
+        {/snippet}
+      </SegmentedControl>
+      <Button onclick={findGames} disabled={$scanning}>
         <RefreshCw size="1.5rem" strokeWidth={2} class={$scanning ? 'spin' : ''} />
         {$scanning ? scanLabel : msg('games.installedFindGames')}
-      </Button>
-      <Button onclick={openAddDialog}>
-        <Plus size="1.5rem" strokeWidth={2} />
-        {msg('games.installedAddGameButton')}
       </Button>
       <Button onclick={openImageDialog}>
         <Plus size="1.5rem" strokeWidth={2} />
         {msg('emul.addButton')}
       </Button>
+      <Button variant="primary" onclick={openAddDialog}>
+        <Plus size="1.5rem" strokeWidth={2} />
+        {msg('games.installedAddGameButton')}
+      </Button>
     {/snippet}
-  </EmptyState>
-{:else if filteredGames.length === 0}
-  <EmptyState title={msg('games.nothingFoundTitle')} description={msg('games.installedNothingFoundDescription')}>
-    {#snippet icon()}
-      <Search size="2rem" strokeWidth={1.8} />
-    {/snippet}
-  </EmptyState>
-{:else if $installedView === 'list'}
-  <div class="list">
-    {#each filteredGames as game (game.id)}
-      {@const running = $runningGames.has(game.id)}
-      {@const update = $updatesByGame.get(game.id)?.availability}
-      {@const updateText = updateLabel(update)}
-      <div class="row" role="presentation" oncontextmenu={(event) => openGameMenu(event, game.id)}>
-        <button class="game" onclick={() => navigate('game', { id: game.id })}>
-          <div class="thumb">
-            <Artwork src={heroFor(game)} alt={game.title} radius="var(--radius-sm)" />
+  </PageHeader>
+
+  {#if !$settings?.libraryPath}
+    <div class="storage-block">
+      <Card>
+        <div class="storage-empty">
+          <div class="disk">
+            <HardDrive size="1.8rem" strokeWidth={1.8} />
+            <div class="disk-text">
+              <span class="disk-name">{msg('games.installedLibraryNotSetTitle')}</span>
+              <span class="disk-meta">{msg('games.installedLibraryNotSetHint')}</span>
+            </div>
           </div>
-          <div class="titles">
-            <span class="title-line">
-              <span class="title">{game.title}</span>
-              {#if isEmulated(game)}<ConsoleTag platform={emulationPlatform(game)} />{/if}
-            </span>
-            <span class="path">{game.installDir}</span>
-            {#if sizeLabel(game) || updateText}
-              <span class="size">
-                {sizeLabel(game)}
-                {#if updateText}
-                  <span class="row-update" class:release={update?.kind !== 'update'}>
-                    {#if update?.kind === 'update'}
-                      <ArrowUp size="1.2rem" strokeWidth={2.2} />
-                    {:else}
-                      <Sparkles size="1.2rem" strokeWidth={2} />
-                    {/if}
-                    {updateText}
-                  </span>
-                {/if}
-              </span>
-            {/if}
-          </div>
-        </button>
-        <div class="status">
-          <span class="status-label">{msg('games.lastPlayedLabel')}</span>
-          <StatusBadge kind={statusKind(game, running, update?.kind)} label={statusLabel(game, running)} plain />
-          {#if brokenNote(game)}
-            <span class="compat" title={brokenNote(game)}>
-              <StatusBadge kind="danger" label={msg('games.compatBrokenBadge')} plain />
-            </span>
-          {/if}
-        </div>
-        <div class="actions">
-          {#if running}
-            <Button size="sm" onclick={() => stop(game)}>
-              <Square size="1.2rem" strokeWidth={2} fill="currentColor" />
-              {msg('games.installedStopButton')}
-            </Button>
-          {:else if $missingImages.has(game.id)}
-            <Button size="sm" onclick={() => chooseImage(game)}>
-              <FolderOpen size="1.3rem" strokeWidth={1.8} />
-              {msg('emul.pickImage')}
-            </Button>
-          {:else if !isLaunchable(game)}
-            <Button size="sm" onclick={() => chooseExecutable(game)}>
-              <FolderOpen size="1.3rem" strokeWidth={1.8} />
-              {msg('games.installedSetExeButton')}
-            </Button>
-          {:else}
-            <Button variant="primary" size="sm" onclick={() => play(game)}>
-              <Gamepad2 size="1.3rem" strokeWidth={2} />
-              {msg('games.play')}
-            </Button>
-          {/if}
-          <Button size="sm" onclick={() => openInstallDir(game)}>
-            <FolderOpen size="1.3rem" strokeWidth={1.8} />
-            {msg('games.openFolder')}
+          <Button size="sm" variant="primary" onclick={() => (librarySetupOpen = true)}>
+            <FolderOpen size="1.5rem" strokeWidth={1.8} />
+            {msg('games.installedChooseFolderButton')}
           </Button>
-          <DropdownMenu items={isExternal(game) ? externalMenuItems : isInstalledImage(game) ? imageMenuItems : isEmulated(game) ? emulatedMenuItems : menuItems} onselect={(id) => onMenu(game, id)}>
-            {#snippet trigger({ toggle })}
-              <IconButton label={msg('games.installedMenuLabel')} size="sm" onclick={toggle}>
-                <EllipsisVertical size="1.6rem" strokeWidth={1.8} />
-              </IconButton>
-            {/snippet}
-          </DropdownMenu>
         </div>
-      </div>
-    {/each}
-  </div>
-{:else}
-  <div class="grid">
-    {#each filteredGames as game (game.id)}
-      {@const running = $runningGames.has(game.id)}
-      {@const update = $updatesByGame.get(game.id)?.availability}
-      {@const updateText = updateLabel(update)}
-      <div class="card" role="presentation" oncontextmenu={(event) => openGameMenu(event, game.id)}>
-        <div class="card-media">
-          <button
-            class="card-cover"
-            onclick={() => navigate('game', { id: game.id })}
-            aria-label={updateText ? `${game.title} — ${updateText}` : game.title}
-          >
-            <Artwork src={coverFor(game)} alt={game.title} ratio="3 / 4" radius="var(--radius-md)" />
-            {#if updateText}
-              <span class="card-badge" class:release={update?.kind !== 'update'}>
-                {#if update?.kind === 'update'}
-                  <ArrowUp size="1.3rem" strokeWidth={2.4} />
-                {:else}
-                  <Sparkles size="1.3rem" strokeWidth={2} />
-                {/if}
-                <span class="card-badge-text">{updateText}</span>
+      </Card>
+    </div>
+  {:else if $storageInfo}
+    <div class="storage-block">
+      <Card>
+        <div class="storage">
+          <div class="storage-head">
+            <span class="disk-icon">
+              <HardDrive size="1.8rem" strokeWidth={1.8} />
+            </span>
+            <div class="disk-text">
+              <span class="disk-name">{msg('games.installedStorageTitle')}</span>
+              <span class="disk-meta">
+                {msg('games.installedStorageUsage', {
+                  used: bytesSize($storageInfo.usedBytes),
+                  total: bytesSize($storageInfo.totalBytes),
+                })}
+              </span>
+            </div>
+            <Button onclick={() => navigate('settings', { tab: 'general' })}>{msg('games.installedManageStorage')}</Button>
+          </div>
+          <div class="storage-bar">
+            <div class="segments" aria-hidden="true">
+              {#each segments as segment (segment.id)}
+                <span class="segment {segment.id}" style:width="{segment.pct}%"></span>
+              {/each}
+              <span class="segment free"></span>
+            </div>
+            <span class="storage-pct">{Math.round(usedPct)}%</span>
+          </div>
+          <ul class="storage-legend">
+            {#if otherBytes !== null}
+              <li>
+                <span class="dot games"></span>
+                <span class="legend-label">{msg('games.installedLegendGames')}</span>
+                <span class="legend-value">{bytesSize(gamesBytes)}</span>
+              </li>
+              <li>
+                <span class="dot other"></span>
+                <span class="legend-label">{msg('games.installedLegendOther')}</span>
+                <span class="legend-value">{bytesSize(otherBytes)}</span>
+              </li>
+            {:else}
+              <li>
+                <span class="dot used"></span>
+                <span class="legend-label">{msg('games.installedLegendUsed')}</span>
+                <span class="legend-value">{bytesSize($storageInfo.usedBytes)}</span>
+              </li>
+            {/if}
+            <li>
+              <span class="dot free"></span>
+              <span class="legend-label">{msg('games.installedLegendFree')}</span>
+              <span class="legend-value">{bytesSize($storageInfo.freeBytes)}</span>
+            </li>
+          </ul>
+        </div>
+      </Card>
+    </div>
+  {:else if $storageFailed}
+    <div class="storage-block">
+      <Card>
+        <div class="storage-empty" role="alert">
+          <div class="disk">
+            <HardDrive size="1.8rem" strokeWidth={1.8} />
+            <span class="storage-error">{msg('games.installedStorageLoadFailed')}</span>
+          </div>
+          <Button size="sm" onclick={refreshStorage}>
+            <RefreshCw size="1.5rem" strokeWidth={1.8} />
+            {msg('common.retry')}
+          </Button>
+        </div>
+      </Card>
+    </div>
+  {/if}
+
+  {#if $installedGames.length === 0}
+    <EmptyState
+      title={msg('games.installedNoGamesTitle')}
+      description={msg('games.installedNoGamesDescription')}
+    >
+      {#snippet icon()}
+        <Gamepad2 size="2rem" strokeWidth={1.8} />
+      {/snippet}
+      {#snippet actions()}
+        <Button variant="primary" onclick={findGames} disabled={$scanning}>
+          <RefreshCw size="1.5rem" strokeWidth={2} class={$scanning ? 'spin' : ''} />
+          {$scanning ? scanLabel : msg('games.installedFindGames')}
+        </Button>
+        <Button onclick={openAddDialog}>
+          <Plus size="1.5rem" strokeWidth={2} />
+          {msg('games.installedAddGameButton')}
+        </Button>
+        <Button onclick={openImageDialog}>
+          <Plus size="1.5rem" strokeWidth={2} />
+          {msg('emul.addButton')}
+        </Button>
+      {/snippet}
+    </EmptyState>
+  {:else if filteredGames.length === 0}
+    <EmptyState title={msg('games.nothingFoundTitle')} description={msg('games.installedNothingFoundDescription')}>
+      {#snippet icon()}
+        <Search size="2rem" strokeWidth={1.8} />
+      {/snippet}
+    </EmptyState>
+  {:else if $installedView === 'list'}
+    <div class="list">
+      {#each filteredGames as game (game.id)}
+        {@const running = $runningGames.has(game.id)}
+        {@const update = $updatesByGame.get(game.id)?.availability}
+        {@const updateText = updateLabel(update)}
+        <div class="row" role="presentation" oncontextmenu={(event) => openGameMenu(event, game.id)}>
+          <button class="game" onclick={() => navigate('game', { id: game.id })}>
+            <div class="thumb">
+              <Artwork src={heroFor(game)} alt={game.title} radius="var(--radius-sm)" />
+            </div>
+            <div class="titles">
+              <span class="title-line">
+                <span class="title">{game.title}</span>
+                {#if isEmulated(game)}<ConsoleTag platform={emulationPlatform(game)} />{/if}
+              </span>
+              <span class="path">{game.installDir}</span>
+              {#if sizeLabel(game) || updateText}
+                <span class="size">
+                  {sizeLabel(game)}
+                  {#if updateText}
+                    <span class="row-update" class:release={update?.kind !== 'update'}>
+                      {#if update?.kind === 'update'}
+                        <ArrowUp size="1.2rem" strokeWidth={2.2} />
+                      {:else}
+                        <Sparkles size="1.2rem" strokeWidth={2} />
+                      {/if}
+                      {updateText}
+                    </span>
+                  {/if}
+                </span>
+              {/if}
+            </div>
+          </button>
+          <div class="status">
+            <span class="status-label">{msg('games.lastPlayedLabel')}</span>
+            <StatusBadge kind={statusKind(game, running, update?.kind)} label={statusLabel(game, running)} plain />
+            {#if brokenNote(game)}
+              <span class="compat" title={brokenNote(game)}>
+                <StatusBadge kind="danger" label={msg('games.compatBrokenBadge')} plain />
               </span>
             {/if}
-          </button>
-          {#if running}
-            <button class="card-play running" aria-label={msg('games.installedStopButton')} onclick={() => stop(game)}>
-              <Square size="1.2rem" strokeWidth={2} fill="currentColor" />
-            </button>
-          {:else if isLaunchable(game) && !$missingImages.has(game.id)}
-            <button class="card-play" aria-label={msg('games.play')} onclick={() => play(game)}>
-              <Play size="1.4rem" strokeWidth={2} fill="currentColor" />
-            </button>
-          {/if}
+          </div>
+          <div class="actions">
+            {#if running}
+              <Button size="sm" onclick={() => stop(game)}>
+                <Square size="1.2rem" strokeWidth={2} fill="currentColor" />
+                {msg('games.installedStopButton')}
+              </Button>
+            {:else if $missingImages.has(game.id)}
+              <Button size="sm" onclick={() => chooseImage(game)}>
+                <FolderOpen size="1.3rem" strokeWidth={1.8} />
+                {msg('emul.pickImage')}
+              </Button>
+            {:else if !isLaunchable(game)}
+              <Button size="sm" onclick={() => chooseExecutable(game)}>
+                <FolderOpen size="1.3rem" strokeWidth={1.8} />
+                {msg('games.installedSetExeButton')}
+              </Button>
+            {:else}
+              <Button variant="primary" size="sm" onclick={() => play(game)}>
+                <Gamepad2 size="1.3rem" strokeWidth={2} />
+                {msg('games.play')}
+              </Button>
+            {/if}
+            <Button size="sm" onclick={() => openInstallDir(game)}>
+              <FolderOpen size="1.3rem" strokeWidth={1.8} />
+              {msg('games.openFolder')}
+            </Button>
+            <DropdownMenu items={isExternal(game) ? externalMenuItems : isInstalledImage(game) ? imageMenuItems : isEmulated(game) ? emulatedMenuItems : menuItems} onselect={(id) => onMenu(game, id)}>
+              {#snippet trigger({ toggle })}
+                <IconButton label={msg('games.installedMenuLabel')} size="sm" onclick={toggle}>
+                  <EllipsisVertical size="1.6rem" strokeWidth={1.8} />
+                </IconButton>
+              {/snippet}
+            </DropdownMenu>
+          </div>
         </div>
-        <div class="card-info">
-          <span class="card-title">{game.title}</span>
-          <span class="card-meta">
-            {#if isEmulated(game)}<ConsoleTag platform={emulationPlatform(game)} />{/if}
-            {sizeLabel(game)}
-            {#if $missingImages.has(game.id)}<StatusBadge kind="danger" label={msg('emul.imageMissing')} plain />{/if}
-          </span>
+      {/each}
+    </div>
+  {:else}
+    <div class="grid">
+      {#each filteredGames as game (game.id)}
+        {@const running = $runningGames.has(game.id)}
+        {@const update = $updatesByGame.get(game.id)?.availability}
+        {@const updateText = updateLabel(update)}
+        <div class="card" role="presentation" oncontextmenu={(event) => openGameMenu(event, game.id)}>
+          <div class="card-media">
+            <button
+              class="card-cover"
+              onclick={() => navigate('game', { id: game.id })}
+              aria-label={updateText ? `${game.title} — ${updateText}` : game.title}
+            >
+              <Artwork src={coverFor(game)} alt={game.title} ratio="3 / 4" radius="var(--radius-md)" />
+              {#if updateText}
+                <span class="card-badge" class:release={update?.kind !== 'update'}>
+                  {#if update?.kind === 'update'}
+                    <ArrowUp size="1.3rem" strokeWidth={2.4} />
+                  {:else}
+                    <Sparkles size="1.3rem" strokeWidth={2} />
+                  {/if}
+                  <span class="card-badge-text">{updateText}</span>
+                </span>
+              {/if}
+            </button>
+            {#if running}
+              <button class="card-play running" aria-label={msg('games.installedStopButton')} onclick={() => stop(game)}>
+                <Square size="1.2rem" strokeWidth={2} fill="currentColor" />
+              </button>
+            {:else if isLaunchable(game) && !$missingImages.has(game.id)}
+              <button class="card-play" aria-label={msg('games.play')} onclick={() => play(game)}>
+                <Play size="1.4rem" strokeWidth={2} fill="currentColor" />
+              </button>
+            {/if}
+          </div>
+          <div class="card-info">
+            <span class="card-title">{game.title}</span>
+            <span class="card-meta">
+              {#if isEmulated(game)}<ConsoleTag platform={emulationPlatform(game)} />{/if}
+              {sizeLabel(game)}
+              {#if $missingImages.has(game.id)}<StatusBadge kind="danger" label={msg('emul.imageMissing')} plain />{/if}
+            </span>
+          </div>
         </div>
-      </div>
-    {/each}
-  </div>
-{/if}
+      {/each}
+    </div>
+  {/if}
 
-{#if $installedGames.length > 0}
-  <p class="count">
-    {msg('installed.shownOf', { shown: filteredGames.length, count: $installedGames.length })}
-  </p>
-{/if}
+  {#if $installedGames.length > 0}
+    <p class="count">
+      {msg('installed.shownOf', { shown: filteredGames.length, count: $installedGames.length })}
+    </p>
+  {/if}
 
-<LibrarySetupModal bind:open={librarySetupOpen} />
-<AddImageModal bind:open={imageOpen} />
+  <LibrarySetupModal bind:open={librarySetupOpen} />
 
-{#if removeTarget}
-  <RemoveGameModal
-    bind:open={removeOpen}
-    bind:mode={removeMode}
-    gameId={removeTarget.id}
-    title={removeTarget.title}
-    external={externalLabel(removeTarget)}
-    emulated={isEmulated(removeTarget)}
-  />
-{/if}
+  <AddImageModal bind:open={imageOpen} />
 
-<Modal bind:open={addOpen} title={msg('games.installedAddGameModalTitle')}>
-  <div class="form">
-    <label class="field">
-      <span class="field-label">{msg('games.executableLabel')}</span>
-      <div class="field-row">
-        <input class="input" type="text" placeholder="C:\Games\Game\game.exe" bind:value={newExecutable} />
-        <Button onclick={browseExecutable}>{msg('games.installedBrowseButton')}</Button>
-      </div>
-    </label>
-    <label class="field">
-      <span class="field-label">{msg('games.installedTitleFieldLabel')}</span>
-      <input class="input" type="text" placeholder={msg('games.installedTitlePlaceholder')} bind:value={newTitle} />
-    </label>
-    <p class="form-hint">{msg('games.installedFolderAutoHint')}</p>
-  </div>
-  {#snippet footer()}
-    <Button onclick={() => (addOpen = false)}>{msg('common.cancel')}</Button>
-    <Button variant="primary" disabled={!newExecutable.trim() || adding} onclick={submitAdd}>
-      {adding ? msg('games.installedAddingLabel') : msg('common.add')}
-    </Button>
-  {/snippet}
-</Modal>
+  {#if removeTarget}
+    <RemoveGameModal
+      bind:open={removeOpen}
+      bind:mode={removeMode}
+      gameId={removeTarget.id}
+      title={removeTarget.title}
+      external={externalLabel(removeTarget)}
+      emulated={isEmulated(removeTarget)}
+    />
+  {/if}
+
+  <Modal bind:open={addOpen} title={msg('games.installedAddGameModalTitle')}>
+    <div class="form">
+      <label class="field">
+        <span class="field-label">{msg('games.executableLabel')}</span>
+        <div class="field-row">
+          <input class="input" type="text" placeholder="C:\Games\Game\game.exe" bind:value={newExecutable} />
+          <Button onclick={browseExecutable}>{msg('games.installedBrowseButton')}</Button>
+        </div>
+      </label>
+      <label class="field">
+        <span class="field-label">{msg('games.installedTitleFieldLabel')}</span>
+        <input class="input" type="text" placeholder={msg('games.installedTitlePlaceholder')} bind:value={newTitle} />
+      </label>
+      <p class="form-hint">{msg('games.installedFolderAutoHint')}</p>
+    </div>
+    {#snippet footer()}
+      <Button onclick={() => (addOpen = false)}>{msg('common.cancel')}</Button>
+      <Button variant="primary" disabled={!newExecutable.trim() || adding} onclick={submitAdd}>
+        {adding ? msg('games.installedAddingLabel') : msg('common.add')}
+      </Button>
+    {/snippet}
+  </Modal>
+</Page>
 
 <style>
   :global(.spin) {

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Page from '../../lib/components/Page.svelte';
   import { LifeBuoy } from '@lucide/svelte';
   import AiSkillButton from '../../lib/components/AiSkillButton.svelte';
   import Button from '../../lib/components/Button.svelte';
@@ -48,8 +49,8 @@
   }
 </script>
 
-{#if needsAccount}
-  <Card surface="page">
+<Page>
+  {#if needsAccount}
     <PageHeader title={msg('tickets.title')} subtitle={msg('tickets.subtitle')} />
     <EmptyState title={msg('tickets.guestTitle')} description={msg('tickets.guestText')}>
       {#snippet icon()}
@@ -61,28 +62,28 @@
         <Button variant="ghost" onclick={openStatus}>{msg('tickets.statusPage')}</Button>
       {/snippet}
     </EmptyState>
-  </Card>
-{:else if number !== null}
-  {#key number}
-    <TicketView {number} />
-  {/key}
-{:else if view === 'new'}
-  <NewTicket initialTopic={parseTopic(topic)} initialSubject={subject ?? ''} />
-{:else}
-  <TicketList />
-  <Card title={msg('settings.aiSkillSupportTitle')}>
-    <div class="skill-row">
-      <span class="skill-sub">{msg('settings.aiSkillSupportSub')}</span>
-      <AiSkillButton label={msg('settings.aiSkillSupportButton')} />
-    </div>
-  </Card>
-  <Card title={msg('discord.communityLabel')}>
-    <div class="skill-row">
-      <span class="skill-sub">{msg('discord.communitySub')}</span>
-      <DiscordJoinButton />
-    </div>
-  </Card>
-{/if}
+  {:else if number !== null}
+    {#key number}
+      <TicketView {number} />
+    {/key}
+  {:else if view === 'new'}
+    <NewTicket initialTopic={parseTopic(topic)} initialSubject={subject ?? ''} />
+  {:else}
+    <TicketList />
+    <Card title={msg('settings.aiSkillSupportTitle')}>
+      <div class="skill-row">
+        <span class="skill-sub">{msg('settings.aiSkillSupportSub')}</span>
+        <AiSkillButton label={msg('settings.aiSkillSupportButton')} />
+      </div>
+    </Card>
+    <Card title={msg('discord.communityLabel')}>
+      <div class="skill-row">
+        <span class="skill-sub">{msg('discord.communitySub')}</span>
+        <DiscordJoinButton />
+      </div>
+    </Card>
+  {/if}
+</Page>
 
 <style>
   .skill-row {

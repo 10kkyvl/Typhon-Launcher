@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Page from '../../lib/components/Page.svelte';
   import {
     ArrowDownUp,
     BellOff,
@@ -21,7 +22,6 @@
   import { get } from 'svelte/store';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
-  import Card from '../../lib/components/Card.svelte';
   import Chip from '../../lib/components/Chip.svelte';
   import CollectionModal from '../../lib/components/CollectionModal.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
@@ -386,7 +386,7 @@
   }
 </script>
 
-<Card surface="page">
+<Page>
   <PageHeader title={msg('games.libraryWord')} />
 
   {#if hero && !heroHidden}
@@ -646,15 +646,15 @@
       </div>
     {/if}
   </section>
-</Card>
 
-{#if randomOpen}
-  <RandomGameModal onclose={() => (randomOpen = false)} />
-{/if}
+  {#if randomOpen}
+    <RandomGameModal onclose={() => (randomOpen = false)} />
+  {/if}
 
-{#if collectionOpen}
-  <CollectionModal bind:open={collectionOpen} collection={collectionTarget} genres={knownGenres} />
-{/if}
+  {#if collectionOpen}
+    <CollectionModal bind:open={collectionOpen} collection={collectionTarget} genres={knownGenres} />
+  {/if}
+</Page>
 
 <style>
   .hero {

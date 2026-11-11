@@ -2,7 +2,6 @@
   import { onMount, untrack } from 'svelte';
   import { ArrowLeft, CircleAlert, Paperclip } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
-  import Card from '../../lib/components/Card.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
@@ -148,107 +147,105 @@
   }
 </script>
 
-<Card surface="page">
-  <div class="top">
-    <Button variant="ghost" size="sm" onclick={() => navigate('support')}>
-      <ArrowLeft size="1.5rem" strokeWidth={1.8} />
-      {msg('tickets.back')}
-    </Button>
+<div class="top">
+  <Button variant="ghost" size="sm" onclick={() => navigate('support')}>
+    <ArrowLeft size="1.5rem" strokeWidth={1.8} />
+    {msg('tickets.back')}
+  </Button>
+</div>
+
+{#if failure}
+  <div class="banner" role="alert">
+    <CircleAlert size="1.6rem" strokeWidth={1.8} />
+    <span class="banner-text">{failure}</span>
+    <Button size="sm" onclick={retry}>{msg('common.retry')}</Button>
   </div>
+{/if}
 
-  {#if failure}
-    <div class="banner" role="alert">
-      <CircleAlert size="1.6rem" strokeWidth={1.8} />
-      <span class="banner-text">{failure}</span>
-      <Button size="sm" onclick={retry}>{msg('common.retry')}</Button>
-    </div>
-  {/if}
-
-  {#if loading}
-    <p class="muted">{msg('tickets.loading')}</p>
-  {:else if ticket && thread}
-    <header class="head">
-      <div class="heading">
-        <h1 dir="auto">{ticket.subject}</h1>
-        <div class="meta">
-          <span class="ref">{ticket.ref}</span>
-          <span>{topicLabel(ticket.topic)}</span>
-          {#if status}<StatusBadge kind={status.kind} label={status.label} />{/if}
-        </div>
+{#if loading}
+  <p class="muted">{msg('tickets.loading')}</p>
+{:else if ticket && thread}
+  <header class="head">
+    <div class="heading">
+      <h1 dir="auto">{ticket.subject}</h1>
+      <div class="meta">
+        <span class="ref">{ticket.ref}</span>
+        <span>{topicLabel(ticket.topic)}</span>
+        {#if status}<StatusBadge kind={status.kind} label={status.label} />{/if}
       </div>
-      {#if !resolved}
-        <Button onclick={askResolve}>{msg('tickets.resolve')}</Button>
-      {/if}
-    </header>
-
-    <ul class="thread">
-      {#each thread.messages as message (message.id)}
-        <li class="bubble" class:mine={message.author === 'user'} class:staff={message.author !== 'user'}>
-          <div class="bubble-head">
-            <span class="author">{message.author === 'user' ? msg('tickets.you') : msg('tickets.staff')}</span>
-            <span class="time">{when(message.createdAt)}</span>
-          </div>
-          <p class="text" dir="auto">{message.body}</p>
-          {#if message.logBundleId}
-            <span class="logs"><Paperclip size="1.4rem" strokeWidth={1.8} />{msg('tickets.logsAttached')}</span>
-          {/if}
-        </li>
-      {/each}
-    </ul>
-
-    <div class="reply">
-      {#if resolved}
-        <p class="hint">{msg('tickets.reopenNote')}</p>
-      {/if}
-      {#if limitsFailure}
-        <div class="banner" role="alert">
-          <CircleAlert size="1.6rem" strokeWidth={1.8} />
-          <span class="banner-text">{limitsFailure}</span>
-          <Button size="sm" onclick={loadLimits}>{msg('common.retry')}</Button>
-        </div>
-      {:else if limits}
-        <label class="field">
-          <span class="label">
-            {msg('tickets.replyLabel')}
-            <span class="counter" class:over={bodyLength(reply) > limits.maxBodyRunes}>
-              {msg('tickets.counter', { count: bodyLength(reply), max: limits.maxBodyRunes })}
-            </span>
-          </span>
-          <textarea
-            class="input area"
-            class:invalid={!!replyError}
-            rows="5"
-            dir="auto"
-            placeholder={msg('tickets.replyPlaceholder')}
-            bind:value={reply}
-            disabled={sending}
-            oninput={() => (replyError = '')}
-          ></textarea>
-          {#if replyError}<span class="error" role="alert">{replyError}</span>{/if}
-        </label>
-
-        <AttachLogs bind:checked={attachLogs} disabled={sending} />
-
-        {#if sending && stage}
-          <div class="progress">
-            <span class="hint">{stage}</span>
-            <ProgressBar
-              value={upload ? uploadPercent(upload) : 0}
-              indeterminate={upload?.state !== 'sending' || !upload.totalBytes}
-              height={5}
-            />
-          </div>
-        {/if}
-
-        <div class="actions">
-          <Button variant="primary" disabled={sending} onclick={submitReply}>
-            {sending ? msg('tickets.replySending') : msg('tickets.reply')}
-          </Button>
-        </div>
-      {/if}
     </div>
-  {/if}
-</Card>
+    {#if !resolved}
+      <Button onclick={askResolve}>{msg('tickets.resolve')}</Button>
+    {/if}
+  </header>
+
+  <ul class="thread">
+    {#each thread.messages as message (message.id)}
+      <li class="bubble" class:mine={message.author === 'user'} class:staff={message.author !== 'user'}>
+        <div class="bubble-head">
+          <span class="author">{message.author === 'user' ? msg('tickets.you') : msg('tickets.staff')}</span>
+          <span class="time">{when(message.createdAt)}</span>
+        </div>
+        <p class="text" dir="auto">{message.body}</p>
+        {#if message.logBundleId}
+          <span class="logs"><Paperclip size="1.4rem" strokeWidth={1.8} />{msg('tickets.logsAttached')}</span>
+        {/if}
+      </li>
+    {/each}
+  </ul>
+
+  <div class="reply">
+    {#if resolved}
+      <p class="hint">{msg('tickets.reopenNote')}</p>
+    {/if}
+    {#if limitsFailure}
+      <div class="banner" role="alert">
+        <CircleAlert size="1.6rem" strokeWidth={1.8} />
+        <span class="banner-text">{limitsFailure}</span>
+        <Button size="sm" onclick={loadLimits}>{msg('common.retry')}</Button>
+      </div>
+    {:else if limits}
+      <label class="field">
+        <span class="label">
+          {msg('tickets.replyLabel')}
+          <span class="counter" class:over={bodyLength(reply) > limits.maxBodyRunes}>
+            {msg('tickets.counter', { count: bodyLength(reply), max: limits.maxBodyRunes })}
+          </span>
+        </span>
+        <textarea
+          class="input area"
+          class:invalid={!!replyError}
+          rows="5"
+          dir="auto"
+          placeholder={msg('tickets.replyPlaceholder')}
+          bind:value={reply}
+          disabled={sending}
+          oninput={() => (replyError = '')}
+        ></textarea>
+        {#if replyError}<span class="error" role="alert">{replyError}</span>{/if}
+      </label>
+
+      <AttachLogs bind:checked={attachLogs} disabled={sending} />
+
+      {#if sending && stage}
+        <div class="progress">
+          <span class="hint">{stage}</span>
+          <ProgressBar
+            value={upload ? uploadPercent(upload) : 0}
+            indeterminate={upload?.state !== 'sending' || !upload.totalBytes}
+            height={5}
+          />
+        </div>
+      {/if}
+
+      <div class="actions">
+        <Button variant="primary" disabled={sending} onclick={submitReply}>
+          {sending ? msg('tickets.replySending') : msg('tickets.reply')}
+        </Button>
+      </div>
+    {/if}
+  </div>
+{/if}
 
 <LogsConfirm bind:this={confirm} />
 

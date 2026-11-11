@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Page from '../../lib/components/Page.svelte';
   import './settings-layout.css';
   import { Clipboard } from '@wailsio/runtime';
   import { Copy, Download, Eye, FolderOpen, HardDrive, LifeBuoy, ListChecks, RefreshCw, ScrollText, Send, Trash2 } from '@lucide/svelte';
@@ -572,1080 +573,1095 @@
 
 </script>
 
-<PageHeader title={msg('settings.pageTitle')} />
+<Page>
+  <PageHeader title={msg('settings.pageTitle')} />
 
-<div class="tabs-wrap">
-  <Tabs {tabs} bind:value={tab} />
-</div>
-
-<div class="settings-page">
-{#key tab}
-<div class="tab-body">
-{#if tab === 'general'}
-  <div class="settings-grid">
-    <div class="settings-column">
-      <Card title={msg('settings.generalStartupCardTitle')}>
-        <div class="rows">
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.generalLaunchOnStartupLabel')}</span>
-              <span class="row-sub">{portable ? msg('settings.generalLaunchOnStartupPortable') : msg('settings.generalLaunchOnStartupSub')}</span>
-            </div>
-            <Toggle
-              checked={!portable && (current?.launchOnStartup ?? false)}
-              disabled={portable}
-              label={msg('settings.generalLaunchOnStartupLabel')}
-              onchange={(v) => void setLaunchOnStartup(v)}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.generalMinimizeToTrayLabel')}</span>
-              <span class="row-sub">{msg('settings.generalMinimizeToTraySub')}</span>
-            </div>
-            <Toggle
-              checked={current?.minimizeToTray ?? true}
-              label={msg('settings.generalMinimizeToTrayLabel')}
-              onchange={(v) => set({ minimizeToTray: v })}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.generalDiscordRpcLabel')}</span>
-              <span class="row-sub">{msg('settings.generalDiscordRpcSub')}</span>
-            </div>
-            <Toggle
-              checked={current?.discordRichPresence ?? false}
-              label={msg('settings.generalDiscordRpcLabel')}
-              onchange={(v) => set({ discordRichPresence: v })}
-            />
-          </div>
-        </div>
-      </Card>
-
-      <Card title={msg('settings.gameModeCardTitle')}>
-        <div class="rows">
-          <span class="row-sub">{msg('settings.gameModeDuring')}</span>
-          {#if !gameModeMac}
-            <div class="row">
-              <div class="row-text">
-                <span class="row-label">{msg('settings.gameModePowerLabel')}</span>
-                <span class="row-sub">{msg('settings.gameModePowerSub')}</span>
-              </div>
-              <Toggle
-                checked={current?.gameMode?.highPerformance ?? false}
-                label={msg('settings.gameModePowerLabel')}
-                onchange={(v) => setGameMode({ highPerformance: v })}
-              />
-            </div>
-          {/if}
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.gameModeHideLabel')}</span>
-              <span class="row-sub">{msg('settings.gameModeHideSub')}</span>
-              {#if !trayEnabled}
-                <span class="row-sub">{msg('settings.gameModeHideNeedsTray')}</span>
-              {/if}
-            </div>
-            <Toggle
-              checked={trayEnabled && (current?.gameMode?.hideLauncher ?? false)}
-              disabled={!trayEnabled}
-              label={msg('settings.gameModeHideLabel')}
-              onchange={(v) => setGameMode({ hideLauncher: v })}
-            />
-          </div>
-          {#if !gameModeMac}
-            <div class="row">
-              <div class="row-text">
-                <span class="row-label">{msg('settings.gameModePriorityLabel')}</span>
-                <span class="row-sub">{msg('settings.gameModePrioritySub')}</span>
-              </div>
-              <Toggle
-                checked={current?.gameMode?.raisePriority ?? false}
-                label={msg('settings.gameModePriorityLabel')}
-                onchange={(v) => setGameMode({ raisePriority: v })}
-              />
-            </div>
-          {/if}
-        </div>
-      </Card>
-
-      <Card title={msg('settings.overlayCardTitle')}>
-        <div class="rows">
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.overlayEnabledLabel')}</span>
-              <span class="row-sub">{msg('settings.overlayEnabledSub')}</span>
-              <span class="row-sub">{msg('settings.overlayExclusiveNote')}</span>
-            </div>
-            <Toggle
-              checked={current?.overlayEnabled ?? true}
-              label={msg('settings.overlayEnabledLabel')}
-              onchange={(v) => setOverlay({ overlayEnabled: v })}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.overlayHotkeyLabel')}</span>
-              <span class="row-sub">{msg('settings.overlayHotkeySub')}</span>
-            </div>
-            <Select
-              value={overlayHotkey}
-              width="22rem"
-              options={overlayHotkeyOptions}
-              onchange={(id) => setOverlay({ overlayHotkey: id })}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.screenshotsEnabledLabel')}</span>
-              <span class="row-sub">{msg('settings.screenshotsEnabledSub')}</span>
-            </div>
-            <Toggle
-              checked={current?.screenshotsEnabled ?? true}
-              label={msg('settings.screenshotsEnabledLabel')}
-              onchange={(v) => setScreenshots({ screenshotsEnabled: v })}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.screenshotHotkeyLabel')}</span>
-              <span class="row-sub">{msg('settings.screenshotHotkeySub')}</span>
-            </div>
-            <Select
-              value={screenshotHotkey}
-              width="22rem"
-              options={screenshotHotkeyOptions}
-              onchange={(id) => setScreenshots({ screenshotHotkey: id })}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.overlayStatusLabel')}</span>
-              <span class="row-sub" class:row-error={overlayStatusFailed} role="status">{overlayStatusText}</span>
-              {#if overlayError}<span class="row-sub row-error" role="alert">{overlayError}</span>{/if}
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      <Card title={msg('settings.generalLibraryCardTitle')}>
-        <div class="rows">
-          <div class="row folder-row">
-            <span class="row-label folder-label">{msg('settings.generalLibraryPathLabel')}</span>
-            <div class="folder-controls">
-              <input
-                class="input sm"
-                type="text"
-                readonly
-                placeholder={msg('settings.generalLibraryPathPlaceholder')}
-                value={current?.libraryPath ?? ''}
-              />
-              <Button size="sm" onclick={openLibrarySetup}>
-                {current?.libraryPath ? msg('common.edit') : msg('common.select')}
-              </Button>
-              <IconButton
-                label={msg('settings.generalLibraryOpenFolderLabel')}
-                size="sm"
-                disabled={!current?.libraryPath}
-                onclick={() => openPath(current?.libraryPath)}
-              >
-                <FolderOpen size="1.6rem" strokeWidth={1.8} />
-              </IconButton>
-            </div>
-          </div>
-          {#if current?.libraryPath}
-            {#each folderRows as folder (folder.key)}
-              <div class="row folder-row">
-                <span class="row-label folder-label">{folder.label}</span>
-                <div class="folder-controls">
-                  <input class="input sm" type="text" readonly value={current?.[folder.key] ?? ''} />
-                  <IconButton label={msg('settings.generalLibraryOpenFolderLabel')} size="sm" onclick={() => openPath(current?.[folder.key])}>
-                    <FolderOpen size="1.6rem" strokeWidth={1.8} />
-                  </IconButton>
-                </div>
-              </div>
-            {/each}
-          {:else}
-            <span class="row-sub">
-              {msg('settings.generalLibraryEmptyHint')}
-            </span>
-          {/if}
-          {#if current?.libraryPath}
-            <LibraryFoldersRow />
-          {/if}
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('diskusage.settingsLabel')}</span>
-              <span class="row-sub">{msg('diskusage.settingsSub')}</span>
-            </div>
-            <Button size="sm" onclick={() => navigate('diskusage')}>
-              <HardDrive size="1.5rem" strokeWidth={1.8} />
-              {msg('diskusage.settingsOpen')}
-            </Button>
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.extlibLabel')}</span>
-              <span class="row-sub">{msg('settings.extlibSub')}</span>
-            </div>
-            {#if appInfo?.platform === 'windows'}
-              <Button size="sm" disabled={importing} onclick={runImportExternal}>
-                <RefreshCw size="1.5rem" strokeWidth={1.8} />
-                {importing ? msg('settings.extlibRunning') : msg('settings.extlibLabel')}
-              </Button>
-            {:else}
-              <span class="row-sub">{msg('settings.extlibWindowsOnly')}</span>
-            {/if}
-          </div>
-          {#if importDetails.length > 0}
-            <details class="import-details" open>
-              <summary class="row-label">{msg('settings.extlibDetailsTitle')}</summary>
-              <ul>
-                {#each importDetails as line, index (index)}
-                  <li class="row-sub">{line}</li>
-                {/each}
-              </ul>
-            </details>
-          {/if}
-          <LibraryLocationRow />
-        </div>
-      </Card>
-
-      <Card title={msg('settings.generalExperimentalCardTitle')}>
-        <div class="rows">
-          <LanSettingsRow />
-        </div>
-      </Card>
-    </div>
-
-    <div class="settings-column">
-      <Card title={msg('settings.generalInterfaceCardTitle')}>
-        <div class="rows">
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.language')}</span>
-              <span class="row-sub">{msg('settings.languageSub')}</span>
-            </div>
-            <Select
-              value={$settings?.language ?? 'system'}
-              width="22rem"
-              options={[
-                { id: 'system', label: msg('settings.languageSystem') },
-                { id: 'ru', label: 'Русский' },
-                { id: 'en', label: 'English' },
-              ]}
-              onchange={(id) => set({ language: id })}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.generalUiScaleLabel')}</span>
-              <span class="row-sub">{msg('settings.generalUiScaleSub')}</span>
-            </div>
-            <Select
-              value={scaleValue}
-              width="22rem"
-              options={[
-                { id: '90', label: '90%' },
-                { id: '100', label: msg('settings.generalUiScaleDefaultOption') },
-                { id: '110', label: '110%' },
-                { id: '125', label: '125%' },
-              ]}
-              onchange={(id) => set({ uiScale: Number(id) / 100 })}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.generalAnimationsLabel')}</span>
-              <span class="row-sub">{msg('settings.generalAnimationsSub')}</span>
-            </div>
-            <Toggle
-              checked={current?.animationsEnabled ?? true}
-              label={msg('settings.generalAnimationsToggleLabel')}
-              onchange={(v) => set({ animationsEnabled: v })}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.generalHwAccelLabel')}</span>
-              <span class="row-sub">{msg('settings.generalHwAccelSub')}</span>
-            </div>
-            <Toggle
-              checked={current?.hardwareAcceleration ?? true}
-              label={msg('settings.generalHwAccelLabel')}
-              onchange={(v) => set({ hardwareAcceleration: v })}
-            />
-          </div>
-        </div>
-      </Card>
-
-      <Card title={msg('settings.generalPrivacyCardTitle')}>
-        <div class="rows">
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.generalPrivacyStatsLabel')}</span>
-              <span class="row-sub">{msg('settings.generalPrivacyStatsSub')}</span>
-            </div>
-            <Toggle
-              checked={current?.anonymousUsageStats ?? false}
-              label={msg('settings.generalPrivacyStatsLabel')}
-              onchange={(v) => set({ anonymousUsageStats: v })}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.generalPrivacyDiagLabel')}</span>
-              <span class="row-sub">{msg('settings.generalPrivacyDiagSub')}</span>
-            </div>
-            <Toggle
-              checked={current?.anonymousDiagnostics ?? false}
-              label={msg('settings.generalPrivacyDiagLabel')}
-              onchange={(v) => set({ anonymousDiagnostics: v })}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.generalPrivacyHeartbeatLabel')}</span>
-              <span class="row-sub">{msg('settings.generalPrivacyHeartbeatSub')}</span>
-            </div>
-            <Toggle
-              checked={current?.sessionHeartbeat ?? true}
-              label={msg('settings.generalPrivacyHeartbeatLabel')}
-              onchange={(v) => set({ sessionHeartbeat: v })}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.generalPrivacyShowSentLabel')}</span>
-              <span class="row-sub">{msg('settings.generalPrivacyShowSentSub')}</span>
-            </div>
-            <Button size="sm" onclick={() => (sentDataOpen = true)}>
-              <Eye size="1.5rem" strokeWidth={1.8} />
-              {msg('settings.generalPrivacyShowSentButton')}
-            </Button>
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.generalPrivacySessionStateLabel')}</span>
-              <span class="row-sub">{msg('settings.generalPrivacySessionStateSub')}</span>
-              <button
-                type="button"
-                class="privacy-link"
-                onclick={() => openLegalDoc({ id: 'privacy', title: msg('settings.generalPrivacyPolicyLinkLabel') })}
-              >
-                {msg('settings.generalPrivacyPolicyLinkLabel')}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      <Card title={msg('settings.generalSyncCardTitle')}>
-        <div class="rows">
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.generalSyncEnableLabel')}</span>
-              <span class="row-sub">{msg('settings.generalSyncEnableSub')}</span>
-              {#if !accountReady}
-                <span class="row-sub">{msg('settings.generalSyncNeedsAccountSub')}</span>
-              {/if}
-            </div>
-            <Toggle
-              checked={current?.accountSync ?? false}
-              label={msg('settings.generalSyncEnableLabel')}
-              disabled={!accountReady}
-              onchange={(v) => set({ accountSync: v })}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.generalAutoAwayLabel')}</span>
-              <span class="row-sub">{msg('settings.generalAutoAwaySub')}</span>
-            </div>
-            <Toggle
-              checked={current?.presenceAutoAway ?? true}
-              label={msg('settings.generalAutoAwayLabel')}
-              disabled={!accountReady || !current?.accountSync}
-              onchange={(v) => set({ presenceAutoAway: v })}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.generalSyncNowLabel')}</span>
-              <span class="row-sub">{msg('settings.generalSyncNowSub')}</span>
-            </div>
-            <Button size="sm" disabled={!accountReady || !current?.accountSync || syncingNow} onclick={runSyncNow}>
-              <RefreshCw size="1.5rem" strokeWidth={1.8} />
-              {syncingNow ? msg('settings.generalSyncNowRunning') : msg('settings.generalSyncNowLabel')}
-            </Button>
-          </div>
-          <div class="row danger-zone">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.generalSyncForgetLabel')}</span>
-              <span class="row-sub">{msg('settings.generalSyncForgetSub')}</span>
-            </div>
-            <Button
-              size="sm"
-              variant="danger"
-              disabled={!accountReady || forgettingRemote}
-              onclick={askForgetRemote}
-            >
-              <Trash2 size="1.5rem" strokeWidth={1.8} />
-              {forgettingRemote ? msg('settings.generalSyncForgetRunning') : msg('settings.generalSyncForgetLabel')}
-            </Button>
-          </div>
-        </div>
-      </Card>
-
-      {#if accountReady}
-        <DiscordCard />
-      {/if}
-    </div>
+  <div class="tabs-wrap">
+    <Tabs {tabs} bind:value={tab} />
   </div>
-{:else if tab === 'downloads'}
-  <div class="settings-grid">
-    <div class="settings-column">
-      <Card title={msg('settings.downloadsTab')}>
-        <div class="rows">
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.downloadsRateLimitLabel')}</span>
-              <span class="row-sub">{msg('settings.downloadsRateLimitSub')}</span>
-            </div>
-            <RateLimitInput
-              value={current?.downloadRateLimit ?? 0}
-              presets={downloadLimitPresets}
-              onchange={(bytes) => set({ downloadRateLimit: bytes })}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.downloadsUploadLimitLabel')}</span>
-              <span class="row-sub">{msg('settings.downloadsUploadLimitSub')}</span>
-            </div>
-            <RateLimitInput
-              value={current?.uploadRateLimit ?? 0}
-              presets={uploadLimitPresets}
-              onchange={(bytes) => set({ uploadRateLimit: bytes })}
-            />
-          </div>
-          <div class='row'>
-            <div class='row-text'>
-              <span class='row-label'>{msg('settings.downloadsPlayLabel')}</span>
-              <span class='row-sub'>{msg('settings.downloadsPlaySub')}</span>
-            </div>
-            <Select value={playModeValue} width='20rem' options={playModeOptions} onchange={pickPlayMode} />
-          </div>
-          {#if playModeValue === 'limit'}
-            <div class='row'>
-              <div class='row-text'>
-                <span class='row-label'>{msg('settings.downloadsPlayLimitDownLabel')}</span>
-              </div>
-              <RateLimitInput
-                value={current?.playDownloadRateLimit ?? 0}
-                presets={playDownloadPresets}
-                allowUnlimited={false}
-                onchange={(bytes) => set({ playDownloadRateLimit: bytes })}
-              />
-            </div>
-            <div class='row'>
-              <div class='row-text'>
-                <span class='row-label'>{msg('settings.downloadsPlayLimitUpLabel')}</span>
-              </div>
-              <RateLimitInput
-                value={current?.playUploadRateLimit ?? 0}
-                presets={playUploadPresets}
-                allowUnlimited={false}
-                onchange={(bytes) => set({ playUploadRateLimit: bytes })}
-              />
-            </div>
-          {/if}
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.downloadsScheduleLabel')}</span>
-              <span class="row-sub">{msg('settings.downloadsScheduleSub')}</span>
-              {#if scheduleError}<span class="row-sub row-error" role="alert">{scheduleError}</span>{/if}
-            </div>
-            <div class="schedule-body">
-              <ScheduleEditor windows={current?.downloadSchedule ?? []} onchange={setSchedule} />
-            </div>
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.downloadsMaxActiveLabel')}</span>
-              <span class="row-sub">{msg('settings.downloadsMaxActiveSub')}</span>
-            </div>
-            <Select
-              value={maxActiveValue}
-              width="20rem"
-              options={maxActiveDownloadOptions}
-              onchange={(id) => set({ maxActiveDownloads: Number(id) })}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.downloadsUploadWhileDownloadingLabel')}</span>
-              <span class="row-sub">{msg('settings.downloadsUploadWhileDownloadingSub')}</span>
-            </div>
-            <Toggle
-              checked={current?.uploadWhileDownloading ?? false}
-              label={msg('settings.downloadsUploadWhileDownloadingToggle')}
-              onchange={(v) => set({ uploadWhileDownloading: v })}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.downloadsSeedAfterLabel')}</span>
-              <span class="row-sub">{msg('settings.downloadsSeedAfterSub')}</span>
-            </div>
-            <Toggle
-              checked={current?.seedAfterDownload ?? false}
-              label={msg('settings.downloadsSeedAfterToggle')}
-              onchange={(v) => set({ seedAfterDownload: v })}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.downloadsSourceRefreshLabel')}</span>
-              <span class="row-sub">{msg('settings.downloadsSourceRefreshSub')}</span>
-            </div>
-            <Select
-              value={sourceRefreshInterval}
-              width="20rem"
-              options={sourceRefreshOptions}
-              onchange={(id) => set({ sourceRefreshInterval: id })}
-            />
-          </div>
-        </div>
-      </Card>
 
-      <NetworkSettingsCard />
-
-      <Card title={msg('settings.downloadsUpdatesCardTitle')}>
-        <div class="rows">
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.downloadsUpdateCheckAutoLabel')}</span>
-              <span class="row-sub">{msg('settings.downloadsUpdateCheckAutoSub')}</span>
-            </div>
-            <Toggle
-              checked={current?.updateCheckAutomatically ?? true}
-              label={msg('settings.downloadsUpdateCheckAutoToggle')}
-              onchange={(v) => set({ updateCheckAutomatically: v })}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.downloadsUpdateAutoDownloadLabel')}</span>
-              <span class="row-sub">{msg('settings.downloadsUpdateAutoDownloadSub')}</span>
-            </div>
-            <Toggle
-              checked={current?.updateAutoDownload ?? false}
-              label={msg('settings.downloadsUpdateAutoDownloadToggle')}
-              onchange={(v) => set({ updateAutoDownload: v })}
-            />
-          </div>
-          {#if betaShown}
-            <div class="row">
-              <div class="row-text">
-                <span class="row-label">{msg('settings.downloadsBetaLabel')}{#if onBeta} · {msg('settings.downloadsBetaChannelMark')}{/if}</span>
-                <span class="row-sub">{msg('settings.downloadsBetaSub')}</span>
-              </div>
-              <Toggle
-                checked={current?.updateBetaChannel ?? false}
-                label={msg('settings.downloadsBetaToggle')}
-                onchange={setBetaChannel}
-              />
-            </div>
-          {/if}
-          <StableOffer />
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.downloadsSaveBackupLabel')}</span>
-              <span class="row-sub">{msg('settings.downloadsSaveBackupSub')}</span>
-            </div>
-            <Toggle
-              checked={current?.updateSaveBackup ?? true}
-              label={msg('settings.downloadsSaveBackupToggle')}
-              onchange={(v) => set({ updateSaveBackup: v })}
-            />
-          </div>
-          {#if $saveBackupsEnabled}
-            <div class="row">
-              <div class="row-text">
-                <span class="row-label">{msg('settings.downloadsSaveBackupAfterSessionLabel')}</span>
-                <span class="row-sub">{msg('settings.downloadsSaveBackupAfterSessionSub')}</span>
-              </div>
-              <Toggle
-                checked={current?.saveBackupAfterSession ?? true}
-                label={msg('settings.downloadsSaveBackupAfterSessionToggle')}
-                onchange={(v) => set({ saveBackupAfterSession: v })}
-              />
-            </div>
-            <div class="row">
-              <div class="row-text">
-                <span class="row-label">{msg('settings.downloadsSaveBackupBeforeLaunchLabel')}</span>
-                <span class="row-sub">{msg('settings.downloadsSaveBackupBeforeLaunchSub')}</span>
-              </div>
-              <Toggle
-                checked={current?.saveBackupBeforeLaunch ?? true}
-                label={msg('settings.downloadsSaveBackupBeforeLaunchToggle')}
-                onchange={(v) => set({ saveBackupBeforeLaunch: v })}
-              />
-            </div>
-            <div class="row">
-              <div class="row-text">
-                <span class="row-label">{msg('settings.downloadsSaveBackupLimitLabel')}</span>
-                <span class="row-sub">{msg('settings.downloadsSaveBackupLimitSub')}</span>
-              </div>
-              <IntegerInput
-                value={current?.saveBackupLimit ?? 5}
-                min={1}
-                max={50}
-                label={msg('settings.downloadsSaveBackupLimitField')}
-                onchange={(n) => set({ saveBackupLimit: n })}
-              />
-            </div>
-          {/if}
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('cloudsaves.settingsLabel')}</span>
-              <span class="row-sub">{msg('cloudsaves.settingsSub')}</span>
-              {#if !accountReady}
-                <span class="row-sub">{msg('cloudsaves.settingsNeedsAccount')}</span>
-              {:else if cloudUsage}
-                <span class="row-sub">{cloudUsage}{$cloudStatus?.pending ? ` · ${msg('cloudsaves.pending')}` : ''}</span>
-              {/if}
-              {#if cloudForgetFailed && !current?.cloudSaves}
-                <span class="row-sub">{msg('cloudsaves.retryForgetHint')}</span>
-              {/if}
-            </div>
-            {#if cloudForgetFailed && !current?.cloudSaves}
-              <Button size="sm" variant="danger" disabled={cloudBusy || !accountReady} onclick={retryCloudForget}>
-                {msg('cloudsaves.retryForget')}
-              </Button>
-            {/if}
-            {#key cloudToggleKey}
-              <Toggle
-                checked={current?.cloudSaves ?? false}
-                label={msg('cloudsaves.settingsToggle')}
-                disabled={!accountReady && !current?.cloudSaves}
-                onchange={changeCloudSaves}
-              />
-            {/key}
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.downloadsKeepPreviousLabel')}</span>
-              <span class="row-sub">{msg('settings.downloadsKeepPreviousSub')}</span>
-            </div>
-            <Select
-              value={keepPreviousVersion}
-              width="28rem"
-              options={keepPreviousOptions}
-              onchange={(id) => set({ keepPreviousVersion: id })}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.downloadsTorrentReuseLabel')}</span>
-              <span class="row-sub">{msg('settings.downloadsTorrentReuseSub')}</span>
-            </div>
-            <Toggle
-              checked={current?.allowTorrentReuse ?? true}
-              label={msg('settings.downloadsTorrentReuseToggle')}
-              onchange={(v) => set({ allowTorrentReuse: v })}
-            />
-          </div>
-        </div>
-      </Card>
-    </div>
-    <div class="settings-column">
-      <Card title={msg('settings.downloadsInstallCardTitle')}>
-        <div class="rows">
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.downloadsAfterInstallLabel')}</span>
-              <span class="row-sub">{msg('settings.downloadsAfterInstallSub')}</span>
-            </div>
-            <Select
-              value={cleanupPolicy}
-              width="26rem"
-              options={cleanupPolicyOptions}
-              onchange={(id) => set({ installCleanupPolicy: id })}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.downloadsAutoInstallLabel')}</span>
-              <span class="row-sub">{msg('settings.downloadsAutoInstallSub')}</span>
-            </div>
-            <Toggle
-              checked={current?.autoInstall ?? false}
-              label={msg('settings.downloadsAutoInstallToggle')}
-              onchange={(v) => set({ autoInstall: v })}
-            />
-          </div>
-          {#if appInfo && elevationSupported(appInfo)}
-            <div class="row">
-              <div class="row-text">
-                <span class="row-label">{msg('settings.downloadsElevateAheadLabel')}</span>
-                <span class="row-sub">{msg('settings.downloadsElevateAheadSub')}</span>
-              </div>
-              <Toggle
-                checked={current?.elevateAhead ?? false}
-                label={msg('settings.downloadsElevateAheadToggle')}
-                onchange={(v) => set({ elevateAhead: v })}
-              />
-            </div>
-          {/if}
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.downloadsSkipShortcutsLabel')}</span>
-              <span class="row-sub">{msg('settings.downloadsSkipShortcutsSub')}</span>
-            </div>
-            <Toggle
-              checked={current?.installSkipShortcuts ?? true}
-              label={msg('settings.downloadsSkipShortcutsToggle')}
-              onchange={(v) => set({ installSkipShortcuts: v })}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.downloadsDesktopShortcutsLabel')}</span>
-              <span class="row-sub">{msg('settings.downloadsDesktopShortcutsSub')}</span>
-            </div>
-            <Toggle
-              checked={current?.desktopShortcuts ?? true}
-              label={msg('settings.downloadsDesktopShortcutsToggle')}
-              onchange={(v) => set({ desktopShortcuts: v })}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.downloadsSkipExtrasLabel')}</span>
-              <span class="row-sub">{msg('settings.downloadsSkipExtrasSub')}</span>
-            </div>
-            <Toggle
-              checked={current?.installSkipExtras ?? true}
-              label={msg('settings.downloadsSkipExtrasToggle')}
-              onchange={(v) => set({ installSkipExtras: v })}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.downloadsVerifyAfterInstallLabel')}</span>
-              <span class="row-sub">{msg('settings.downloadsVerifyAfterInstallSub')}</span>
-            </div>
-            <Toggle
-              checked={current?.verifyAfterInstall ?? true}
-              label={msg('settings.downloadsVerifyAfterInstallToggle')}
-              onchange={(v) => set({ verifyAfterInstall: v })}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.downloadsVerifyRepackLabel')}</span>
-              <span class="row-sub">{msg('settings.downloadsVerifyRepackSub')}</span>
-            </div>
-            <Toggle
-              checked={current?.installVerifyRepack ?? false}
-              label={msg('settings.downloadsVerifyRepackToggle')}
-              onchange={(v) => set({ installVerifyRepack: v })}
-            />
-          </div>
-        </div>
-      </Card>
-
-      <EmulatorsCard />
-    </div>
-  </div>
-{:else if tab === 'appearance'}
-  <AppearanceTab />
-{:else if tab === 'about'}
-  <div class="settings-grid">
-    <div class="settings-column">
-      <Card>
-        <div class="about-logo">
-          <img src="/typhon.png" alt="" width="44" height="44" draggable="false" />
-          <div>
-            <h3>Typhon Launcher</h3>
-            <span class="row-sub">{msg(onBeta ? 'settings.aboutVersionBetaLabel' : 'settings.aboutVersionLabel', { version: appInfo?.version ?? '—' })} · {appInfo?.platform ?? ''}/{appInfo?.arch ?? ''}{appInfo?.devMock ? ' · devmock' : ''}</span>
-          </div>
-        </div>
-        <div class="rows">
-          {#if appInfo?.portable}
-            <div class="row">
-              <div class="row-text">
-                <span class="row-label">{msg('settings.aboutPortableLabel')}</span>
-                <span class="row-sub">{msg('settings.aboutPortableDataDir', { path: appInfo.dataDir })}</span>
-              </div>
-            </div>
-          {/if}
-          {#if systemInfo}
-            <div class="row">
-              <div class="row-text">
-                <span class="row-label">{msg('settings.aboutSystemLabel')}</span>
-                <span class="row-sub">{systemInfo.osUnknown ? msg('settings.aboutUnknown') : systemInfo.os}</span>
-              </div>
-            </div>
-            <div class="row">
-              <div class="row-text">
-                <span class="row-label">{msg('settings.aboutCpuLabel')}</span>
-                <span class="row-sub">{cpuLine(systemInfo)}</span>
-              </div>
-            </div>
-            <div class="row">
-              <div class="row-text">
-                <span class="row-label">{msg('settings.aboutMemoryLabel')}</span>
-                <span class="row-sub">{systemInfo.ramBytes > 0 ? bytesLabel(systemInfo.ramBytes) : msg('settings.aboutUnknown')}</span>
-              </div>
-            </div>
-          {:else if systemFailed}
-            <div class="row">
-              <div class="row-text">
-                <span class="row-label">{msg('settings.aboutSystemLabel')}</span>
-                <span class="row-sub">{msg('settings.aboutSystemFailed')}</span>
-              </div>
-            </div>
-          {/if}
-          {#if wineStatus?.required}
-            <div class="row">
-              <div class="row-text">
-                <span class="row-label">{msg('settings.aboutRuntimeLabel')}</span>
-                <span class="row-sub">
-                  {#if wineStatus.installed}
-                    CrossOver {wineStatus.version}
-                  {:else}
-                    {msg('settings.aboutRuntimeMissing')}
-                  {/if}
-                </span>
-              </div>
-            </div>
-          {/if}
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.aboutCheckUpdatesLabel')}</span>
-              <span class="row-sub">
-                {#if $selfUpdateChecking}
-                  {msg('settings.aboutCheckUpdatesChecking')}
-                {:else}
-                  {msg('settings.aboutInstalledVersion', { version: $selfUpdateStatus.currentVersion || appInfo?.version || '—' })}
-                  {#if $selfUpdateStatus.checkedAt}
-                    · {msg('settings.aboutCheckedAt', { date: relativeDate($selfUpdateStatus.checkedAt) })}
-                  {/if}
-                {/if}
-              </span>
-            </div>
-            <Button size="sm" disabled={$selfUpdateChecking} onclick={requestCheck}>
-              <ListChecks size="1.5rem" strokeWidth={1.8} />
-              {$selfUpdateChecking ? msg('settings.aboutCheckingEllipsis') : msg('settings.aboutCheckButtonLabel')}
-            </Button>
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.aboutHistoryLabel')}</span>
-              <span class="row-sub">
-                {#if $releaseNotesHistory.length > 0}
-                  {msg('settings.aboutHistoryHasNotes')}
-                {:else}
-                  {msg('settings.aboutHistoryEmpty')}
-                {/if}
-              </span>
-            </div>
-            <Button size="sm" disabled={$releaseNotesHistory.length === 0} onclick={() => (historyOpen = true)}>
-              <ScrollText size="1.5rem" strokeWidth={1.8} />
-              {msg('settings.aboutHistoryButtonLabel')}
-            </Button>
-          </div>
-          {#if rollbackShown($rollbackInfo)}
-            <div class="row">
-              <div class="row-text">
-                <span class="row-label">{msg('settings.aboutRollbackLabel')}</span>
-                <span class="row-sub">
-                  {#if $rollbackInfo.available}
-                    {msg('settings.aboutRollbackAvailable', { version: $rollbackInfo.version })}
-                  {:else}
-                    {rollbackReason($rollbackInfo)}
-                  {/if}
-                </span>
-              </div>
-              <RollbackAction />
-            </div>
-          {/if}
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.aboutLicenseLabel')}</span>
-              <span class="row-sub">{msg('settings.aboutLicenseText')}</span>
-            </div>
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('discord.communityLabel')}</span>
-              <span class="row-sub">{msg('discord.communitySub')}</span>
-            </div>
-            <DiscordJoinButton />
-          </div>
-          <UpdateBanner />
-          <StableOffer />
-        </div>
-      </Card>
-
-    </div>
-    <div class="settings-column">
-      <Card title={msg('settings.aboutDiagnosticsCardTitle')}>
-        <div class="rows">
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.aboutLogsLabel')}</span>
-              <span class="row-sub">
-                {#if logsBundle}
-                  {logsBundle.name} · {bytesLabel(logsBundle.sizeBytes)} {msg('settings.aboutLogsAttachHint')}
-                {:else}
-                  {msg('settings.aboutLogsSaveHint')}
-                {/if}
-              </span>
-            </div>
-            <Button size="sm" disabled={logsSaving} onclick={saveLogs}>
-              <Download size="1.5rem" strokeWidth={1.8} />
-              {logsSaving ? msg('settings.aboutLogsSavingEllipsis') : msg('settings.aboutLogsDownloadButton')}
-            </Button>
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.aboutLogsSendButton')}</span>
-              <span class="row-sub">
-                {#if logsStage === 'preparing'}
-                  {msg('settings.aboutLogsPreparingEllipsis')}
-                {:else if logsStage === 'sending' && logsProgress}
-                  {msg('settings.aboutLogsSendingProgress', { percent: logsProgressPercent })}
-                {:else if logsStage === 'sending'}
-                  {msg('settings.aboutLogsSendingEllipsis')}
-                {:else if logsStage === 'waiting'}
-                  {msg('settings.aboutLogsWaitingEllipsis')}
-                {:else if logsSendFailure}
-                  {logsSendFailure}
-                {:else if logsSendResult}
-                  {msg('settings.aboutLogsSentStatus')}
-                {:else}
-                  {msg('settings.aboutLogsSendConfirmNote')}
-                {/if}
-              </span>
-              {#if logsSending}
-                <div class="logs-upload-progress">
-                  <ProgressBar
-                    value={logsProgressPercent}
-                    indeterminate={logsStage !== 'sending' || !logsProgress}
-                    height={5}
-                  />
-                </div>
-              {/if}
-            </div>
-            <Button size="sm" disabled={logsSending} onclick={openSendLogsConfirm}>
-              <Send size="1.5rem" strokeWidth={1.8} />
-              {logsSending ? msg('settings.aboutLogsSendingEllipsis') : msg('settings.aboutLogsSendButton')}
-            </Button>
-          </div>
-          {#if logsSendResult}
-            <div class="row">
-              <div class="row-text">
-                <span class="row-label">{msg('settings.aboutLogsSendResultLabel')}</span>
-                <span class="row-sub logs-send-id">{logsSendResult.id}</span>
-              </div>
-              <IconButton label={msg('settings.aboutLogsSendIdCopyLabel')} size="sm" onclick={copySendLogsId}>
-                <Copy size="1.5rem" strokeWidth={1.8} />
-              </IconButton>
-            </div>
-            {#if logsSendResult.dropped.length > 0}
-              <p class="row-sub">{msg('settings.aboutLogsSendDroppedNote', { files: logsSendResult.dropped.join(', ') })}</p>
-            {/if}
-          {/if}
-          {#if logsSendFailure}
-            <p class="row-sub">{msg('settings.aboutLogsSendFailedHint')}</p>
-          {/if}
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('tickets.settingsLabel')}</span>
-              <span class="row-sub">{msg('tickets.settingsHint')}</span>
-            </div>
-            <Button size="sm" onclick={() => navigate('support', { view: 'new', topic: 'launcher' })}>
-              <LifeBuoy size="1.5rem" strokeWidth={1.8} />
-              {msg('tickets.writeSupport')}
-            </Button>
-          </div>
-        </div>
-      </Card>
-
-      <Card title={msg('settings.aboutLegalCardTitle')}>
-        {#if legalError}
-          <p class="row-sub">{legalError}</p>
-        {:else}
+  <div class="settings-page">
+  {#key tab}
+  <div class="tab-body">
+  {#if tab === 'general'}
+    <div class="settings-grid">
+      <div class="settings-column">
+        <Card title={msg('settings.generalStartupCardTitle')}>
           <div class="rows">
-            {#each legalDocs as meta (meta.id)}
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.generalLaunchOnStartupLabel')}</span>
+                <span class="row-sub">{portable ? msg('settings.generalLaunchOnStartupPortable') : msg('settings.generalLaunchOnStartupSub')}</span>
+              </div>
+              <Toggle
+                checked={!portable && (current?.launchOnStartup ?? false)}
+                disabled={portable}
+                label={msg('settings.generalLaunchOnStartupLabel')}
+                onchange={(v) => void setLaunchOnStartup(v)}
+              />
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.generalMinimizeToTrayLabel')}</span>
+                <span class="row-sub">{msg('settings.generalMinimizeToTraySub')}</span>
+              </div>
+              <Toggle
+                checked={current?.minimizeToTray ?? true}
+                label={msg('settings.generalMinimizeToTrayLabel')}
+                onchange={(v) => set({ minimizeToTray: v })}
+              />
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.generalDiscordRpcLabel')}</span>
+                <span class="row-sub">{msg('settings.generalDiscordRpcSub')}</span>
+              </div>
+              <Toggle
+                checked={current?.discordRichPresence ?? false}
+                label={msg('settings.generalDiscordRpcLabel')}
+                onchange={(v) => set({ discordRichPresence: v })}
+              />
+            </div>
+          </div>
+        </Card>
+
+        <Card title={msg('settings.gameModeCardTitle')}>
+          <div class="rows">
+            <span class="row-sub">{msg('settings.gameModeDuring')}</span>
+            {#if !gameModeMac}
               <div class="row">
                 <div class="row-text">
-                  <span class="row-label">{meta.title}</span>
+                  <span class="row-label">{msg('settings.gameModePowerLabel')}</span>
+                  <span class="row-sub">{msg('settings.gameModePowerSub')}</span>
                 </div>
-                <Button size="sm" onclick={() => openLegalDoc(meta)}>{msg('common.open')}</Button>
+                <Toggle
+                  checked={current?.gameMode?.highPerformance ?? false}
+                  label={msg('settings.gameModePowerLabel')}
+                  onchange={(v) => setGameMode({ highPerformance: v })}
+                />
               </div>
-            {/each}
+            {/if}
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.aboutSourcesNoticeLabel')}</span>
-                <span class="row-sub">{msg('settings.aboutSourcesNoticeSub')}</span>
+                <span class="row-label">{msg('settings.gameModeHideLabel')}</span>
+                <span class="row-sub">{msg('settings.gameModeHideSub')}</span>
+                {#if !trayEnabled}
+                  <span class="row-sub">{msg('settings.gameModeHideNeedsTray')}</span>
+                {/if}
               </div>
-              <Button size="sm" onclick={() => (sourcesNoticeReviewOpen = true)}>{msg('common.open')}</Button>
+              <Toggle
+                checked={trayEnabled && (current?.gameMode?.hideLauncher ?? false)}
+                disabled={!trayEnabled}
+                label={msg('settings.gameModeHideLabel')}
+                onchange={(v) => setGameMode({ hideLauncher: v })}
+              />
+            </div>
+            {#if !gameModeMac}
+              <div class="row">
+                <div class="row-text">
+                  <span class="row-label">{msg('settings.gameModePriorityLabel')}</span>
+                  <span class="row-sub">{msg('settings.gameModePrioritySub')}</span>
+                </div>
+                <Toggle
+                  checked={current?.gameMode?.raisePriority ?? false}
+                  label={msg('settings.gameModePriorityLabel')}
+                  onchange={(v) => setGameMode({ raisePriority: v })}
+                />
+              </div>
+            {/if}
+          </div>
+        </Card>
+
+        <Card title={msg('settings.overlayCardTitle')}>
+          <div class="rows">
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.overlayEnabledLabel')}</span>
+                <span class="row-sub">{msg('settings.overlayEnabledSub')}</span>
+                <span class="row-sub">{msg('settings.overlayExclusiveNote')}</span>
+              </div>
+              <Toggle
+                checked={current?.overlayEnabled ?? true}
+                label={msg('settings.overlayEnabledLabel')}
+                onchange={(v) => setOverlay({ overlayEnabled: v })}
+              />
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.overlayHotkeyLabel')}</span>
+                <span class="row-sub">{msg('settings.overlayHotkeySub')}</span>
+              </div>
+              <Select
+                value={overlayHotkey}
+                width="22rem"
+                options={overlayHotkeyOptions}
+                onchange={(id) => setOverlay({ overlayHotkey: id })}
+              />
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.screenshotsEnabledLabel')}</span>
+                <span class="row-sub">{msg('settings.screenshotsEnabledSub')}</span>
+              </div>
+              <Toggle
+                checked={current?.screenshotsEnabled ?? true}
+                label={msg('settings.screenshotsEnabledLabel')}
+                onchange={(v) => setScreenshots({ screenshotsEnabled: v })}
+              />
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.screenshotHotkeyLabel')}</span>
+                <span class="row-sub">{msg('settings.screenshotHotkeySub')}</span>
+              </div>
+              <Select
+                value={screenshotHotkey}
+                width="22rem"
+                options={screenshotHotkeyOptions}
+                onchange={(id) => setScreenshots({ screenshotHotkey: id })}
+              />
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.overlayStatusLabel')}</span>
+                <span class="row-sub" class:row-error={overlayStatusFailed} role="status">{overlayStatusText}</span>
+                {#if overlayError}<span class="row-sub row-error" role="alert">{overlayError}</span>{/if}
+              </div>
             </div>
           </div>
+        </Card>
+
+        <Card title={msg('settings.generalLibraryCardTitle')}>
+          <div class="rows">
+            <div class="row folder-row">
+              <span class="row-label folder-label">{msg('settings.generalLibraryPathLabel')}</span>
+              <div class="folder-controls">
+                <input
+                  class="input sm"
+                  type="text"
+                  readonly
+                  placeholder={msg('settings.generalLibraryPathPlaceholder')}
+                  value={current?.libraryPath ?? ''}
+                />
+                <Button size="sm" onclick={openLibrarySetup}>
+                  {current?.libraryPath ? msg('common.edit') : msg('common.select')}
+                </Button>
+                <IconButton
+                  label={msg('settings.generalLibraryOpenFolderLabel')}
+                  size="sm"
+                  disabled={!current?.libraryPath}
+                  onclick={() => openPath(current?.libraryPath)}
+                >
+                  <FolderOpen size="1.6rem" strokeWidth={1.8} />
+                </IconButton>
+              </div>
+            </div>
+            {#if current?.libraryPath}
+              {#each folderRows as folder (folder.key)}
+                <div class="row folder-row">
+                  <span class="row-label folder-label">{folder.label}</span>
+                  <div class="folder-controls">
+                    <input class="input sm" type="text" readonly value={current?.[folder.key] ?? ''} />
+                    <IconButton label={msg('settings.generalLibraryOpenFolderLabel')} size="sm" onclick={() => openPath(current?.[folder.key])}>
+                      <FolderOpen size="1.6rem" strokeWidth={1.8} />
+                    </IconButton>
+                  </div>
+                </div>
+              {/each}
+            {:else}
+              <span class="row-sub">
+                {msg('settings.generalLibraryEmptyHint')}
+              </span>
+            {/if}
+            {#if current?.libraryPath}
+              <LibraryFoldersRow />
+            {/if}
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('diskusage.settingsLabel')}</span>
+                <span class="row-sub">{msg('diskusage.settingsSub')}</span>
+              </div>
+              <Button size="sm" onclick={() => navigate('diskusage')}>
+                <HardDrive size="1.5rem" strokeWidth={1.8} />
+                {msg('diskusage.settingsOpen')}
+              </Button>
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.extlibLabel')}</span>
+                <span class="row-sub">{msg('settings.extlibSub')}</span>
+              </div>
+              {#if appInfo?.platform === 'windows'}
+                <Button size="sm" disabled={importing} onclick={runImportExternal}>
+                  <RefreshCw size="1.5rem" strokeWidth={1.8} />
+                  {importing ? msg('settings.extlibRunning') : msg('settings.extlibLabel')}
+                </Button>
+              {:else}
+                <span class="row-sub">{msg('settings.extlibWindowsOnly')}</span>
+              {/if}
+            </div>
+            {#if importDetails.length > 0}
+              <details class="import-details" open>
+                <summary class="row-label">{msg('settings.extlibDetailsTitle')}</summary>
+                <ul>
+                  {#each importDetails as line, index (index)}
+                    <li class="row-sub">{line}</li>
+                  {/each}
+                </ul>
+              </details>
+            {/if}
+            <LibraryLocationRow />
+          </div>
+        </Card>
+
+        <Card title={msg('settings.generalExperimentalCardTitle')}>
+          <div class="rows">
+            <LanSettingsRow />
+          </div>
+        </Card>
+      </div>
+
+      <div class="settings-column">
+        <Card title={msg('settings.generalInterfaceCardTitle')}>
+          <div class="rows">
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.language')}</span>
+                <span class="row-sub">{msg('settings.languageSub')}</span>
+              </div>
+              <Select
+                value={$settings?.language ?? 'system'}
+                width="22rem"
+                options={[
+                  { id: 'system', label: msg('settings.languageSystem') },
+                  { id: 'ru', label: 'Русский' },
+                  { id: 'en', label: 'English' },
+                ]}
+                onchange={(id) => set({ language: id })}
+              />
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.generalUiScaleLabel')}</span>
+                <span class="row-sub">{msg('settings.generalUiScaleSub')}</span>
+              </div>
+              <Select
+                value={scaleValue}
+                width="22rem"
+                options={[
+                  { id: '90', label: '90%' },
+                  { id: '100', label: msg('settings.generalUiScaleDefaultOption') },
+                  { id: '110', label: '110%' },
+                  { id: '125', label: '125%' },
+                ]}
+                onchange={(id) => set({ uiScale: Number(id) / 100 })}
+              />
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.generalAnimationsLabel')}</span>
+                <span class="row-sub">{msg('settings.generalAnimationsSub')}</span>
+              </div>
+              <Toggle
+                checked={current?.animationsEnabled ?? true}
+                label={msg('settings.generalAnimationsToggleLabel')}
+                onchange={(v) => set({ animationsEnabled: v })}
+              />
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.generalHwAccelLabel')}</span>
+                <span class="row-sub">{msg('settings.generalHwAccelSub')}</span>
+              </div>
+              <Toggle
+                checked={current?.hardwareAcceleration ?? true}
+                label={msg('settings.generalHwAccelLabel')}
+                onchange={(v) => set({ hardwareAcceleration: v })}
+              />
+            </div>
+          </div>
+        </Card>
+
+        <Card title={msg('settings.generalPrivacyCardTitle')}>
+          <div class="rows">
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.generalPrivacyStatsLabel')}</span>
+                <span class="row-sub">{msg('settings.generalPrivacyStatsSub')}</span>
+              </div>
+              <Toggle
+                checked={current?.anonymousUsageStats ?? false}
+                label={msg('settings.generalPrivacyStatsLabel')}
+                onchange={(v) => set({ anonymousUsageStats: v })}
+              />
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.generalPrivacyDiagLabel')}</span>
+                <span class="row-sub">{msg('settings.generalPrivacyDiagSub')}</span>
+              </div>
+              <Toggle
+                checked={current?.anonymousDiagnostics ?? false}
+                label={msg('settings.generalPrivacyDiagLabel')}
+                onchange={(v) => set({ anonymousDiagnostics: v })}
+              />
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.generalPrivacyHeartbeatLabel')}</span>
+                <span class="row-sub">{msg('settings.generalPrivacyHeartbeatSub')}</span>
+              </div>
+              <Toggle
+                checked={current?.sessionHeartbeat ?? true}
+                label={msg('settings.generalPrivacyHeartbeatLabel')}
+                onchange={(v) => set({ sessionHeartbeat: v })}
+              />
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.generalPrivacyShowSentLabel')}</span>
+                <span class="row-sub">{msg('settings.generalPrivacyShowSentSub')}</span>
+              </div>
+              <Button size="sm" onclick={() => (sentDataOpen = true)}>
+                <Eye size="1.5rem" strokeWidth={1.8} />
+                {msg('settings.generalPrivacyShowSentButton')}
+              </Button>
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.generalPrivacySessionStateLabel')}</span>
+                <span class="row-sub">{msg('settings.generalPrivacySessionStateSub')}</span>
+                <button
+                  type="button"
+                  class="privacy-link"
+                  onclick={() => openLegalDoc({ id: 'privacy', title: msg('settings.generalPrivacyPolicyLinkLabel') })}
+                >
+                  {msg('settings.generalPrivacyPolicyLinkLabel')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <Card title={msg('settings.generalSyncCardTitle')}>
+          <div class="rows">
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.generalSyncEnableLabel')}</span>
+                <span class="row-sub">{msg('settings.generalSyncEnableSub')}</span>
+                {#if !accountReady}
+                  <span class="row-sub">{msg('settings.generalSyncNeedsAccountSub')}</span>
+                {/if}
+              </div>
+              <Toggle
+                checked={current?.accountSync ?? false}
+                label={msg('settings.generalSyncEnableLabel')}
+                disabled={!accountReady}
+                onchange={(v) => set({ accountSync: v })}
+              />
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.generalAutoAwayLabel')}</span>
+                <span class="row-sub">{msg('settings.generalAutoAwaySub')}</span>
+              </div>
+              <Toggle
+                checked={current?.presenceAutoAway ?? true}
+                label={msg('settings.generalAutoAwayLabel')}
+                disabled={!accountReady || !current?.accountSync}
+                onchange={(v) => set({ presenceAutoAway: v })}
+              />
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.generalSyncNowLabel')}</span>
+                <span class="row-sub">{msg('settings.generalSyncNowSub')}</span>
+              </div>
+              <Button size="sm" disabled={!accountReady || !current?.accountSync || syncingNow} onclick={runSyncNow}>
+                <RefreshCw size="1.5rem" strokeWidth={1.8} />
+                {syncingNow ? msg('settings.generalSyncNowRunning') : msg('settings.generalSyncNowLabel')}
+              </Button>
+            </div>
+            <div class="row danger-zone">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.generalSyncForgetLabel')}</span>
+                <span class="row-sub">{msg('settings.generalSyncForgetSub')}</span>
+              </div>
+              <Button
+                size="sm"
+                variant="danger"
+                disabled={!accountReady || forgettingRemote}
+                onclick={askForgetRemote}
+              >
+                <Trash2 size="1.5rem" strokeWidth={1.8} />
+                {forgettingRemote ? msg('settings.generalSyncForgetRunning') : msg('settings.generalSyncForgetLabel')}
+              </Button>
+            </div>
+          </div>
+        </Card>
+
+        {#if accountReady}
+          <DiscordCard />
         {/if}
-      </Card>
+      </div>
     </div>
+  {:else if tab === 'downloads'}
+    <div class="settings-grid">
+      <div class="settings-column">
+        <Card title={msg('settings.downloadsTab')}>
+          <div class="rows">
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.downloadsRateLimitLabel')}</span>
+                <span class="row-sub">{msg('settings.downloadsRateLimitSub')}</span>
+              </div>
+              <RateLimitInput
+                value={current?.downloadRateLimit ?? 0}
+                presets={downloadLimitPresets}
+                onchange={(bytes) => set({ downloadRateLimit: bytes })}
+              />
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.downloadsUploadLimitLabel')}</span>
+                <span class="row-sub">{msg('settings.downloadsUploadLimitSub')}</span>
+              </div>
+              <RateLimitInput
+                value={current?.uploadRateLimit ?? 0}
+                presets={uploadLimitPresets}
+                onchange={(bytes) => set({ uploadRateLimit: bytes })}
+              />
+            </div>
+            <div class='row'>
+              <div class='row-text'>
+                <span class='row-label'>{msg('settings.downloadsPlayLabel')}</span>
+                <span class='row-sub'>{msg('settings.downloadsPlaySub')}</span>
+              </div>
+              <Select value={playModeValue} width='20rem' options={playModeOptions} onchange={pickPlayMode} />
+            </div>
+            {#if playModeValue === 'limit'}
+              <div class='row'>
+                <div class='row-text'>
+                  <span class='row-label'>{msg('settings.downloadsPlayLimitDownLabel')}</span>
+                </div>
+                <RateLimitInput
+                  value={current?.playDownloadRateLimit ?? 0}
+                  presets={playDownloadPresets}
+                  allowUnlimited={false}
+                  onchange={(bytes) => set({ playDownloadRateLimit: bytes })}
+                />
+              </div>
+              <div class='row'>
+                <div class='row-text'>
+                  <span class='row-label'>{msg('settings.downloadsPlayLimitUpLabel')}</span>
+                </div>
+                <RateLimitInput
+                  value={current?.playUploadRateLimit ?? 0}
+                  presets={playUploadPresets}
+                  allowUnlimited={false}
+                  onchange={(bytes) => set({ playUploadRateLimit: bytes })}
+                />
+              </div>
+            {/if}
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.downloadsScheduleLabel')}</span>
+                <span class="row-sub">{msg('settings.downloadsScheduleSub')}</span>
+                {#if scheduleError}<span class="row-sub row-error" role="alert">{scheduleError}</span>{/if}
+              </div>
+              <div class="schedule-body">
+                <ScheduleEditor windows={current?.downloadSchedule ?? []} onchange={setSchedule} />
+              </div>
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.downloadsMaxActiveLabel')}</span>
+                <span class="row-sub">{msg('settings.downloadsMaxActiveSub')}</span>
+              </div>
+              <Select
+                value={maxActiveValue}
+                width="20rem"
+                options={maxActiveDownloadOptions}
+                onchange={(id) => set({ maxActiveDownloads: Number(id) })}
+              />
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.downloadsUploadWhileDownloadingLabel')}</span>
+                <span class="row-sub">{msg('settings.downloadsUploadWhileDownloadingSub')}</span>
+              </div>
+              <Toggle
+                checked={current?.uploadWhileDownloading ?? false}
+                label={msg('settings.downloadsUploadWhileDownloadingToggle')}
+                onchange={(v) => set({ uploadWhileDownloading: v })}
+              />
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.downloadsSeedAfterLabel')}</span>
+                <span class="row-sub">{msg('settings.downloadsSeedAfterSub')}</span>
+              </div>
+              <Toggle
+                checked={current?.seedAfterDownload ?? false}
+                label={msg('settings.downloadsSeedAfterToggle')}
+                onchange={(v) => set({ seedAfterDownload: v })}
+              />
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.downloadsSourceRefreshLabel')}</span>
+                <span class="row-sub">{msg('settings.downloadsSourceRefreshSub')}</span>
+              </div>
+              <Select
+                value={sourceRefreshInterval}
+                width="20rem"
+                options={sourceRefreshOptions}
+                onchange={(id) => set({ sourceRefreshInterval: id })}
+              />
+            </div>
+          </div>
+        </Card>
+
+        <NetworkSettingsCard />
+
+        <Card title={msg('settings.downloadsUpdatesCardTitle')}>
+          <div class="rows">
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.downloadsUpdateCheckAutoLabel')}</span>
+                <span class="row-sub">{msg('settings.downloadsUpdateCheckAutoSub')}</span>
+              </div>
+              <Toggle
+                checked={current?.updateCheckAutomatically ?? true}
+                label={msg('settings.downloadsUpdateCheckAutoToggle')}
+                onchange={(v) => set({ updateCheckAutomatically: v })}
+              />
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.downloadsUpdateAutoDownloadLabel')}</span>
+                <span class="row-sub">{msg('settings.downloadsUpdateAutoDownloadSub')}</span>
+              </div>
+              <Toggle
+                checked={current?.updateAutoDownload ?? false}
+                label={msg('settings.downloadsUpdateAutoDownloadToggle')}
+                onchange={(v) => set({ updateAutoDownload: v })}
+              />
+            </div>
+            {#if betaShown}
+              <div class="row">
+                <div class="row-text">
+                  <span class="row-label">{msg('settings.downloadsBetaLabel')}{#if onBeta} · {msg('settings.downloadsBetaChannelMark')}{/if}</span>
+                  <span class="row-sub">{msg('settings.downloadsBetaSub')}</span>
+                </div>
+                <Toggle
+                  checked={current?.updateBetaChannel ?? false}
+                  label={msg('settings.downloadsBetaToggle')}
+                  onchange={setBetaChannel}
+                />
+              </div>
+            {/if}
+            <StableOffer />
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.downloadsSaveBackupLabel')}</span>
+                <span class="row-sub">{msg('settings.downloadsSaveBackupSub')}</span>
+              </div>
+              <Toggle
+                checked={current?.updateSaveBackup ?? true}
+                label={msg('settings.downloadsSaveBackupToggle')}
+                onchange={(v) => set({ updateSaveBackup: v })}
+              />
+            </div>
+            {#if $saveBackupsEnabled}
+              <div class="row">
+                <div class="row-text">
+                  <span class="row-label">{msg('settings.downloadsSaveBackupAfterSessionLabel')}</span>
+                  <span class="row-sub">{msg('settings.downloadsSaveBackupAfterSessionSub')}</span>
+                </div>
+                <Toggle
+                  checked={current?.saveBackupAfterSession ?? true}
+                  label={msg('settings.downloadsSaveBackupAfterSessionToggle')}
+                  onchange={(v) => set({ saveBackupAfterSession: v })}
+                />
+              </div>
+              <div class="row">
+                <div class="row-text">
+                  <span class="row-label">{msg('settings.downloadsSaveBackupBeforeLaunchLabel')}</span>
+                  <span class="row-sub">{msg('settings.downloadsSaveBackupBeforeLaunchSub')}</span>
+                </div>
+                <Toggle
+                  checked={current?.saveBackupBeforeLaunch ?? true}
+                  label={msg('settings.downloadsSaveBackupBeforeLaunchToggle')}
+                  onchange={(v) => set({ saveBackupBeforeLaunch: v })}
+                />
+              </div>
+              <div class="row">
+                <div class="row-text">
+                  <span class="row-label">{msg('settings.downloadsSaveBackupLimitLabel')}</span>
+                  <span class="row-sub">{msg('settings.downloadsSaveBackupLimitSub')}</span>
+                </div>
+                <IntegerInput
+                  value={current?.saveBackupLimit ?? 5}
+                  min={1}
+                  max={50}
+                  label={msg('settings.downloadsSaveBackupLimitField')}
+                  onchange={(n) => set({ saveBackupLimit: n })}
+                />
+              </div>
+            {/if}
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('cloudsaves.settingsLabel')}</span>
+                <span class="row-sub">{msg('cloudsaves.settingsSub')}</span>
+                {#if !accountReady}
+                  <span class="row-sub">{msg('cloudsaves.settingsNeedsAccount')}</span>
+                {:else if cloudUsage}
+                  <span class="row-sub">{cloudUsage}{$cloudStatus?.pending ? ` · ${msg('cloudsaves.pending')}` : ''}</span>
+                {/if}
+                {#if cloudForgetFailed && !current?.cloudSaves}
+                  <span class="row-sub">{msg('cloudsaves.retryForgetHint')}</span>
+                {/if}
+              </div>
+              {#if cloudForgetFailed && !current?.cloudSaves}
+                <Button size="sm" variant="danger" disabled={cloudBusy || !accountReady} onclick={retryCloudForget}>
+                  {msg('cloudsaves.retryForget')}
+                </Button>
+              {/if}
+              {#key cloudToggleKey}
+                <Toggle
+                  checked={current?.cloudSaves ?? false}
+                  label={msg('cloudsaves.settingsToggle')}
+                  disabled={!accountReady && !current?.cloudSaves}
+                  onchange={changeCloudSaves}
+                />
+              {/key}
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.downloadsKeepPreviousLabel')}</span>
+                <span class="row-sub">{msg('settings.downloadsKeepPreviousSub')}</span>
+              </div>
+              <Select
+                value={keepPreviousVersion}
+                width="28rem"
+                options={keepPreviousOptions}
+                onchange={(id) => set({ keepPreviousVersion: id })}
+              />
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.downloadsTorrentReuseLabel')}</span>
+                <span class="row-sub">{msg('settings.downloadsTorrentReuseSub')}</span>
+              </div>
+              <Toggle
+                checked={current?.allowTorrentReuse ?? true}
+                label={msg('settings.downloadsTorrentReuseToggle')}
+                onchange={(v) => set({ allowTorrentReuse: v })}
+              />
+            </div>
+          </div>
+        </Card>
+      </div>
+      <div class="settings-column">
+        <Card title={msg('settings.downloadsInstallCardTitle')}>
+          <div class="rows">
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.downloadsAfterInstallLabel')}</span>
+                <span class="row-sub">{msg('settings.downloadsAfterInstallSub')}</span>
+              </div>
+              <Select
+                value={cleanupPolicy}
+                width="26rem"
+                options={cleanupPolicyOptions}
+                onchange={(id) => set({ installCleanupPolicy: id })}
+              />
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.downloadsAutoInstallLabel')}</span>
+                <span class="row-sub">{msg('settings.downloadsAutoInstallSub')}</span>
+              </div>
+              <Toggle
+                checked={current?.autoInstall ?? false}
+                label={msg('settings.downloadsAutoInstallToggle')}
+                onchange={(v) => set({ autoInstall: v })}
+              />
+            </div>
+            {#if appInfo && elevationSupported(appInfo)}
+              <div class="row">
+                <div class="row-text">
+                  <span class="row-label">{msg('settings.downloadsElevateAheadLabel')}</span>
+                  <span class="row-sub">{msg('settings.downloadsElevateAheadSub')}</span>
+                </div>
+                <Toggle
+                  checked={current?.elevateAhead ?? false}
+                  label={msg('settings.downloadsElevateAheadToggle')}
+                  onchange={(v) => set({ elevateAhead: v })}
+                />
+              </div>
+            {/if}
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.downloadsSkipShortcutsLabel')}</span>
+                <span class="row-sub">{msg('settings.downloadsSkipShortcutsSub')}</span>
+              </div>
+              <Toggle
+                checked={current?.installSkipShortcuts ?? true}
+                label={msg('settings.downloadsSkipShortcutsToggle')}
+                onchange={(v) => set({ installSkipShortcuts: v })}
+              />
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.downloadsDesktopShortcutsLabel')}</span>
+                <span class="row-sub">{msg('settings.downloadsDesktopShortcutsSub')}</span>
+              </div>
+              <Toggle
+                checked={current?.desktopShortcuts ?? true}
+                label={msg('settings.downloadsDesktopShortcutsToggle')}
+                onchange={(v) => set({ desktopShortcuts: v })}
+              />
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.downloadsSkipExtrasLabel')}</span>
+                <span class="row-sub">{msg('settings.downloadsSkipExtrasSub')}</span>
+              </div>
+              <Toggle
+                checked={current?.installSkipExtras ?? true}
+                label={msg('settings.downloadsSkipExtrasToggle')}
+                onchange={(v) => set({ installSkipExtras: v })}
+              />
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.downloadsVerifyAfterInstallLabel')}</span>
+                <span class="row-sub">{msg('settings.downloadsVerifyAfterInstallSub')}</span>
+              </div>
+              <Toggle
+                checked={current?.verifyAfterInstall ?? true}
+                label={msg('settings.downloadsVerifyAfterInstallToggle')}
+                onchange={(v) => set({ verifyAfterInstall: v })}
+              />
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.downloadsVerifyRepackLabel')}</span>
+                <span class="row-sub">{msg('settings.downloadsVerifyRepackSub')}</span>
+              </div>
+              <Toggle
+                checked={current?.installVerifyRepack ?? false}
+                label={msg('settings.downloadsVerifyRepackToggle')}
+                onchange={(v) => set({ installVerifyRepack: v })}
+              />
+            </div>
+          </div>
+        </Card>
+
+        <EmulatorsCard />
+      </div>
+    </div>
+  {:else if tab === 'appearance'}
+    <AppearanceTab />
+  {:else if tab === 'about'}
+    <div class="settings-grid">
+      <div class="settings-column">
+        <Card>
+          <div class="about-logo">
+            <img src="/typhon.png" alt="" width="44" height="44" draggable="false" />
+            <div>
+              <h3>Typhon Launcher</h3>
+              <span class="row-sub">{msg(onBeta ? 'settings.aboutVersionBetaLabel' : 'settings.aboutVersionLabel', { version: appInfo?.version ?? '—' })} · {appInfo?.platform ?? ''}/{appInfo?.arch ?? ''}{appInfo?.devMock ? ' · devmock' : ''}</span>
+            </div>
+          </div>
+          <div class="rows">
+            {#if appInfo?.portable}
+              <div class="row">
+                <div class="row-text">
+                  <span class="row-label">{msg('settings.aboutPortableLabel')}</span>
+                  <span class="row-sub">{msg('settings.aboutPortableDataDir', { path: appInfo.dataDir })}</span>
+                </div>
+              </div>
+            {/if}
+            {#if systemInfo}
+              <div class="row">
+                <div class="row-text">
+                  <span class="row-label">{msg('settings.aboutSystemLabel')}</span>
+                  <span class="row-sub">{systemInfo.osUnknown ? msg('settings.aboutUnknown') : systemInfo.os}</span>
+                </div>
+              </div>
+              <div class="row">
+                <div class="row-text">
+                  <span class="row-label">{msg('settings.aboutCpuLabel')}</span>
+                  <span class="row-sub">{cpuLine(systemInfo)}</span>
+                </div>
+              </div>
+              <div class="row">
+                <div class="row-text">
+                  <span class="row-label">{msg('settings.aboutMemoryLabel')}</span>
+                  <span class="row-sub">{systemInfo.ramBytes > 0 ? bytesLabel(systemInfo.ramBytes) : msg('settings.aboutUnknown')}</span>
+                </div>
+              </div>
+            {:else if systemFailed}
+              <div class="row">
+                <div class="row-text">
+                  <span class="row-label">{msg('settings.aboutSystemLabel')}</span>
+                  <span class="row-sub">{msg('settings.aboutSystemFailed')}</span>
+                </div>
+              </div>
+            {/if}
+            {#if wineStatus?.required}
+              <div class="row">
+                <div class="row-text">
+                  <span class="row-label">{msg('settings.aboutRuntimeLabel')}</span>
+                  <span class="row-sub">
+                    {#if wineStatus.installed}
+                      CrossOver {wineStatus.version}
+                    {:else}
+                      {msg('settings.aboutRuntimeMissing')}
+                    {/if}
+                  </span>
+                </div>
+              </div>
+            {/if}
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.aboutCheckUpdatesLabel')}</span>
+                <span class="row-sub">
+                  {#if $selfUpdateChecking}
+                    {msg('settings.aboutCheckUpdatesChecking')}
+                  {:else}
+                    {msg('settings.aboutInstalledVersion', { version: $selfUpdateStatus.currentVersion || appInfo?.version || '—' })}
+                    {#if $selfUpdateStatus.checkedAt}
+                      · {msg('settings.aboutCheckedAt', { date: relativeDate($selfUpdateStatus.checkedAt) })}
+                    {/if}
+                  {/if}
+                </span>
+              </div>
+              <Button size="sm" disabled={$selfUpdateChecking} onclick={requestCheck}>
+                <ListChecks size="1.5rem" strokeWidth={1.8} />
+                {$selfUpdateChecking ? msg('settings.aboutCheckingEllipsis') : msg('settings.aboutCheckButtonLabel')}
+              </Button>
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.aboutHistoryLabel')}</span>
+                <span class="row-sub">
+                  {#if $releaseNotesHistory.length > 0}
+                    {msg('settings.aboutHistoryHasNotes')}
+                  {:else}
+                    {msg('settings.aboutHistoryEmpty')}
+                  {/if}
+                </span>
+              </div>
+              <Button size="sm" disabled={$releaseNotesHistory.length === 0} onclick={() => (historyOpen = true)}>
+                <ScrollText size="1.5rem" strokeWidth={1.8} />
+                {msg('settings.aboutHistoryButtonLabel')}
+              </Button>
+            </div>
+            {#if rollbackShown($rollbackInfo)}
+              <div class="row">
+                <div class="row-text">
+                  <span class="row-label">{msg('settings.aboutRollbackLabel')}</span>
+                  <span class="row-sub">
+                    {#if $rollbackInfo.available}
+                      {msg('settings.aboutRollbackAvailable', { version: $rollbackInfo.version })}
+                    {:else}
+                      {rollbackReason($rollbackInfo)}
+                    {/if}
+                  </span>
+                </div>
+                <RollbackAction />
+              </div>
+            {/if}
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.aboutLicenseLabel')}</span>
+                <span class="row-sub">{msg('settings.aboutLicenseText')}</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('discord.communityLabel')}</span>
+                <span class="row-sub">{msg('discord.communitySub')}</span>
+              </div>
+              <DiscordJoinButton />
+            </div>
+            <UpdateBanner />
+            <StableOffer />
+          </div>
+        </Card>
+
+      </div>
+      <div class="settings-column">
+        <Card title={msg('settings.aboutDiagnosticsCardTitle')}>
+          <div class="rows">
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.aboutLogsLabel')}</span>
+                <span class="row-sub">
+                  {#if logsBundle}
+                    {logsBundle.name} · {bytesLabel(logsBundle.sizeBytes)} {msg('settings.aboutLogsAttachHint')}
+                  {:else}
+                    {msg('settings.aboutLogsSaveHint')}
+                  {/if}
+                </span>
+              </div>
+              <Button size="sm" disabled={logsSaving} onclick={saveLogs}>
+                <Download size="1.5rem" strokeWidth={1.8} />
+                {logsSaving ? msg('settings.aboutLogsSavingEllipsis') : msg('settings.aboutLogsDownloadButton')}
+              </Button>
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('settings.aboutLogsSendButton')}</span>
+                <span class="row-sub">
+                  {#if logsStage === 'preparing'}
+                    {msg('settings.aboutLogsPreparingEllipsis')}
+                  {:else if logsStage === 'sending' && logsProgress}
+                    {msg('settings.aboutLogsSendingProgress', { percent: logsProgressPercent })}
+                  {:else if logsStage === 'sending'}
+                    {msg('settings.aboutLogsSendingEllipsis')}
+                  {:else if logsStage === 'waiting'}
+                    {msg('settings.aboutLogsWaitingEllipsis')}
+                  {:else if logsSendFailure}
+                    {logsSendFailure}
+                  {:else if logsSendResult}
+                    {msg('settings.aboutLogsSentStatus')}
+                  {:else}
+                    {msg('settings.aboutLogsSendConfirmNote')}
+                  {/if}
+                </span>
+                {#if logsSending}
+                  <div class="logs-upload-progress">
+                    <ProgressBar
+                      value={logsProgressPercent}
+                      indeterminate={logsStage !== 'sending' || !logsProgress}
+                      height={5}
+                    />
+                  </div>
+                {/if}
+              </div>
+              <Button size="sm" disabled={logsSending} onclick={openSendLogsConfirm}>
+                <Send size="1.5rem" strokeWidth={1.8} />
+                {logsSending ? msg('settings.aboutLogsSendingEllipsis') : msg('settings.aboutLogsSendButton')}
+              </Button>
+            </div>
+            {#if logsSendResult}
+              <div class="row">
+                <div class="row-text">
+                  <span class="row-label">{msg('settings.aboutLogsSendResultLabel')}</span>
+                  <span class="row-sub logs-send-id">{logsSendResult.id}</span>
+                </div>
+                <IconButton label={msg('settings.aboutLogsSendIdCopyLabel')} size="sm" onclick={copySendLogsId}>
+                  <Copy size="1.5rem" strokeWidth={1.8} />
+                </IconButton>
+              </div>
+              {#if logsSendResult.dropped.length > 0}
+                <p class="row-sub">{msg('settings.aboutLogsSendDroppedNote', { files: logsSendResult.dropped.join(', ') })}</p>
+              {/if}
+            {/if}
+            {#if logsSendFailure}
+              <p class="row-sub">{msg('settings.aboutLogsSendFailedHint')}</p>
+            {/if}
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">{msg('tickets.settingsLabel')}</span>
+                <span class="row-sub">{msg('tickets.settingsHint')}</span>
+              </div>
+              <Button size="sm" onclick={() => navigate('support', { view: 'new', topic: 'launcher' })}>
+                <LifeBuoy size="1.5rem" strokeWidth={1.8} />
+                {msg('tickets.writeSupport')}
+              </Button>
+            </div>
+          </div>
+        </Card>
+
+        <Card title={msg('settings.aboutLegalCardTitle')}>
+          {#if legalError}
+            <p class="row-sub">{legalError}</p>
+          {:else}
+            <div class="rows">
+              {#each legalDocs as meta (meta.id)}
+                <div class="row">
+                  <div class="row-text">
+                    <span class="row-label">{meta.title}</span>
+                  </div>
+                  <Button size="sm" onclick={() => openLegalDoc(meta)}>{msg('common.open')}</Button>
+                </div>
+              {/each}
+              <div class="row">
+                <div class="row-text">
+                  <span class="row-label">{msg('settings.aboutSourcesNoticeLabel')}</span>
+                  <span class="row-sub">{msg('settings.aboutSourcesNoticeSub')}</span>
+                </div>
+                <Button size="sm" onclick={() => (sourcesNoticeReviewOpen = true)}>{msg('common.open')}</Button>
+              </div>
+            </div>
+          {/if}
+        </Card>
+      </div>
+    </div>
+  {/if}
   </div>
-{/if}
-</div>
-{/key}
+  {/key}
 
-</div>
+  </div>
 
-<LibrarySetupModal
-  bind:open={librarySetupOpen}
-  title={current?.libraryPath ? msg('settings.generalLibrarySetupTitleChange') : msg('settings.generalLibrarySetupTitleNew')}
-  note={current?.libraryPath
-    ? msg('settings.generalLibrarySetupChangeNote')
-    : ''}
-/>
+  <LibrarySetupModal
+    bind:open={librarySetupOpen}
+    title={current?.libraryPath ? msg('settings.generalLibrarySetupTitleChange') : msg('settings.generalLibrarySetupTitleNew')}
+    note={current?.libraryPath
+      ? msg('settings.generalLibrarySetupChangeNote')
+      : ''}
+  />
 
-<CloudConsentModal
-  bind:open={cloudConsentOpen}
-  busy={cloudBusy}
-  onenable={enableCloudSaves}
-  onpolicy={() => openLegalDoc({ id: 'privacy', title: msg('settings.generalPrivacyPolicyLinkLabel') })}
-/>
-<CloudDisableModal
-  bind:open={cloudDisableOpen}
-  busy={cloudBusy}
-  ondelete={() => disableCloudSaves(true)}
-  onkeep={() => disableCloudSaves(false)}
-/>
-<LegalDocumentModal bind:open={legalOpen} documentId={legalActiveId} title={legalActiveTitle} />
-<SourcesNoticeModal bind:open={sourcesNoticeReviewOpen} mode="review" />
-<SentDataModal bind:open={sentDataOpen} />
-{#if pending}
-  <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
-{/if}
-<Modal bind:open={historyOpen} title={msg('settings.aboutHistoryLabel')} width="104rem">
-  <ReleaseNotesList notes={$releaseNotesHistory} currentVersion={$selfUpdateStatus.currentVersion} />
-</Modal>
+  <CloudConsentModal
+    bind:open={cloudConsentOpen}
+    busy={cloudBusy}
+    onenable={enableCloudSaves}
+    onpolicy={() => openLegalDoc({ id: 'privacy', title: msg('settings.generalPrivacyPolicyLinkLabel') })}
+  />
+
+  <CloudDisableModal
+    bind:open={cloudDisableOpen}
+    busy={cloudBusy}
+    ondelete={() => disableCloudSaves(true)}
+    onkeep={() => disableCloudSaves(false)}
+  />
+
+  <LegalDocumentModal bind:open={legalOpen} documentId={legalActiveId} title={legalActiveTitle} />
+
+  <SourcesNoticeModal bind:open={sourcesNoticeReviewOpen} mode="review" />
+
+  <SentDataModal bind:open={sentDataOpen} />
+
+  {#if pending}
+    <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
+  {/if}
+
+  <Modal bind:open={historyOpen} title={msg('settings.aboutHistoryLabel')} width="104rem">
+    <ReleaseNotesList notes={$releaseNotesHistory} currentVersion={$selfUpdateStatus.currentVersion} />
+  </Modal>
+</Page>
 
 <style>
+  /* Stuck over the scrolled settings, the tabs are an island like the top bar's. */
   .tabs-wrap {
     position: sticky;
     top: 0;
     z-index: 5;
-    margin-bottom: var(--space-6);
-    padding-top: var(--space-2);
-    background: var(--bg);
+    margin: var(--space-2) 0 var(--space-6);
+    padding: 0 var(--space-4);
+    background: var(--island-fill);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+  }
+
+  .tabs-wrap :global(.tabs.underline) {
+    border-bottom: 0;
   }
 
   .tab-body {

@@ -11,7 +11,7 @@
     padding?: string;
     title?: string;
     action?: Snippet;
-    surface?: 'page' | 'panel' | 'card';
+    surface?: 'panel' | 'card';
     children?: Snippet;
   } = $props();
 </script>
@@ -37,13 +37,6 @@
 
   .card.panel {
     background: var(--surface);
-  }
-
-  /* A whole page: the panel's padding and border width, so content keeps its place, and nothing
-     painted, so the window backdrop shows around and between the page's own blocks. */
-  .card.page {
-    background: none;
-    border-color: transparent;
   }
 
   .head {

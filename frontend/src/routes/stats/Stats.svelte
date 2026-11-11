@@ -1,9 +1,9 @@
 <script lang="ts">
+  import Page from '../../lib/components/Page.svelte';
   import { onMount } from 'svelte';
   import { ChartColumn } from '@lucide/svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
-  import Card from '../../lib/components/Card.svelte';
   import Chip from '../../lib/components/Chip.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
@@ -99,7 +99,7 @@
   });
 </script>
 
-<Card surface="page">
+<Page>
   <PageHeader title={msg('stats.title')} subtitle={msg('stats.subtitle')}>
     {#snippet actions()}
       <div class="periods" role="group" aria-label={msg('stats.periodLabel')}>
@@ -186,7 +186,7 @@
       </div>
     {/if}
   {/if}
-</Card>
+</Page>
 
 <style>
   .periods {

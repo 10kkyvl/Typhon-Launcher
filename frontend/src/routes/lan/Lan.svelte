@@ -1,7 +1,7 @@
 <script lang="ts">
+  import Page from '../../lib/components/Page.svelte';
   import { Download, MonitorSmartphone, Share2, Wifi, X } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
-  import Card from '../../lib/components/Card.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
@@ -29,7 +29,7 @@
   }
 </script>
 
-<Card surface="page">
+<Page>
   <PageHeader title={msg('transfers.lanTitle')} subtitle={msg('transfers.lanSubtitle')} />
 
   <div class="stats">
@@ -140,7 +140,7 @@
       </div>
     {/if}
   </section>
-</Card>
+</Page>
 
 <style>
   .stats {

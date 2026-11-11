@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Page from '../../lib/components/Page.svelte';
   import { onDestroy, onMount } from 'svelte';
   import { get } from 'svelte/store';
   import { RotateCcw } from '@lucide/svelte';
@@ -338,15 +339,6 @@
   });
 </script>
 
-<PageHeader title={msg('social.profileLabel')} />
-
-{#if $profileFailed}
-  <p class="load-error" role="alert">{msg('profile.loadFailed')}</p>
-{/if}
-{#if previewFailed}
-  <p class="load-error" role="alert">{msg('profile.previewLoadFailed')}</p>
-{/if}
-
 {#snippet flag()}
   <HiddenBadge text={msg('social.hiddenGenericHint')} />
 {/snippet}
@@ -388,98 +380,110 @@
   {/if}
 {/snippet}
 
-<div class="workspace" class:editing>
-  <div class="profile">
-    <ProfileCanvas {appearance} {autoArt}>
-      {#if editing}
-        <div class="topbar">
-          <div class="topbar-text">
-            <strong>{msg('profile.editingTitle')}</strong>
-            {#if saveError || layoutError}
-              <span class="topbar-sub error" role="alert">{saveError || layoutError}</span>
-            {:else if statusProblem}
-              <span class="topbar-sub error" role="alert">{layoutErrorText(statusProblem)}</span>
-            {:else if issues.length > 0}
-              <span class="topbar-sub">{msg('profile.fillBlocks')}</span>
-            {:else}
-              <span class="topbar-sub">{msg('profile.editingHint')}</span>
+<Page>
+  <PageHeader title={msg('social.profileLabel')} />
+
+  {#if $profileFailed}
+    <p class="load-error" role="alert">{msg('profile.loadFailed')}</p>
+  {/if}
+
+  {#if previewFailed}
+    <p class="load-error" role="alert">{msg('profile.previewLoadFailed')}</p>
+  {/if}
+
+  <div class="workspace" class:editing>
+    <div class="profile">
+      <ProfileCanvas {appearance} {autoArt}>
+        {#if editing}
+          <div class="topbar">
+            <div class="topbar-text">
+              <strong>{msg('profile.editingTitle')}</strong>
+              {#if saveError || layoutError}
+                <span class="topbar-sub error" role="alert">{saveError || layoutError}</span>
+              {:else if statusProblem}
+                <span class="topbar-sub error" role="alert">{layoutErrorText(statusProblem)}</span>
+              {:else if issues.length > 0}
+                <span class="topbar-sub">{msg('profile.fillBlocks')}</span>
+              {:else}
+                <span class="topbar-sub">{msg('profile.editingHint')}</span>
+              {/if}
+            </div>
+            <Button size="sm" variant="ghost" disabled={saving} onclick={askReset}>
+              <RotateCcw size="1.4rem" strokeWidth={1.8} />{msg('profile.resetLayout')}
+            </Button>
+            <Button variant="ghost" disabled={saving} onclick={cancel}>{msg('common.cancel')}</Button>
+            <Button variant="primary" disabled={!canSave} onclick={save}>
+              {saving ? msg('social.saving') : msg('common.save')}
+            </Button>
+          </div>
+        {/if}
+        <ProfileCover {appearance} {autoArt} />
+        <ProfileHeader
+          running={$profileSnapshot.running}
+          stats={$profileSnapshot.stats}
+          showOnline={shown.showOnline}
+          showPlaying={shown.showPlaying}
+          showStats={shown.showStats}
+          {appearance}
+          statusEmoji={shown.statusEmoji ?? ''}
+          statusText={shown.statusText ?? ''}
+          onedit={startEditing}
+          onsettings={openSettings}
+        />
+
+        {#if !isGuest}
+          <div class="blocks">
+            <BlockGrid
+              blocks={gridBlocks}
+              {external}
+              {flag}
+              {editing}
+              {selectedId}
+              onselect={(id) => (selectedId = id)}
+              onmove={move}
+              onwidth={resize}
+              onremove={remove}
+            />
+            {#if editing}
+              <BlockPicker {layout} disabled={saving} onadd={add} />
             {/if}
           </div>
-          <Button size="sm" variant="ghost" disabled={saving} onclick={askReset}>
-            <RotateCcw size="1.4rem" strokeWidth={1.8} />{msg('profile.resetLayout')}
-          </Button>
-          <Button variant="ghost" disabled={saving} onclick={cancel}>{msg('common.cancel')}</Button>
-          <Button variant="primary" disabled={!canSave} onclick={save}>
-            {saving ? msg('social.saving') : msg('common.save')}
-          </Button>
-        </div>
-      {/if}
-      <ProfileCover {appearance} {autoArt} />
-      <ProfileHeader
-        running={$profileSnapshot.running}
-        stats={$profileSnapshot.stats}
-        showOnline={shown.showOnline}
-        showPlaying={shown.showPlaying}
-        showStats={shown.showStats}
-        {appearance}
-        statusEmoji={shown.statusEmoji ?? ''}
-        statusText={shown.statusText ?? ''}
-        onedit={startEditing}
-        onsettings={openSettings}
-      />
-
-      {#if !isGuest}
-        <div class="blocks">
-          <BlockGrid
-            blocks={gridBlocks}
-            {external}
-            {flag}
-            {editing}
-            {selectedId}
-            onselect={(id) => (selectedId = id)}
-            onmove={move}
-            onwidth={resize}
-            onremove={remove}
-          />
-          {#if editing}
-            <BlockPicker {layout} disabled={saving} onadd={add} />
-          {/if}
-        </div>
-      {/if}
-    </ProfileCanvas>
-  </div>
-  {#if !isGuest && editing}
-    <div class="side">
-      {#if selected}
-        {#key selected.id}
-          <BlockSettings
-            block={selected}
-            {layout}
-            {titleOf}
-            issue={blockIssue(selected)}
-            disabled={saving}
-            onconfig={(patch) => configure(selected.id, patch)}
-            onremember={remember}
-            onremove={() => remove(selected.id)}
-            onclose={() => (selectedId = '')}
-          />
-        {/key}
-      {:else}
-        {#key $currentUser?.id}
-          <ProfileAppearancePanel bind:draft disabled={saving} {autoArt} />
-        {/key}
-      {/if}
+        {/if}
+      </ProfileCanvas>
     </div>
+    {#if !isGuest && editing}
+      <div class="side">
+        {#if selected}
+          {#key selected.id}
+            <BlockSettings
+              block={selected}
+              {layout}
+              {titleOf}
+              issue={blockIssue(selected)}
+              disabled={saving}
+              onconfig={(patch) => configure(selected.id, patch)}
+              onremember={remember}
+              onremove={() => remove(selected.id)}
+              onclose={() => (selectedId = '')}
+            />
+          {/key}
+        {:else}
+          {#key $currentUser?.id}
+            <ProfileAppearancePanel bind:draft disabled={saving} {autoArt} />
+          {/key}
+        {/if}
+      </div>
+    {/if}
+  </div>
+
+  {#if !isGuest && settingsOpen}
+    <ProfileSettingsModal bind:open={settingsOpen} {settings} />
   {/if}
-</div>
 
-{#if !isGuest && settingsOpen}
-  <ProfileSettingsModal bind:open={settingsOpen} {settings} />
-{/if}
-
-{#if pending}
-  <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
-{/if}
+  {#if pending}
+    <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
+  {/if}
+</Page>
 
 <style>
   .load-error {
@@ -522,7 +526,7 @@
     gap: var(--space-3);
     margin: var(--space-4) 0;
     padding: var(--space-3) var(--space-4);
-    background: var(--surface-2);
+    background: var(--island-fill);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-pop);

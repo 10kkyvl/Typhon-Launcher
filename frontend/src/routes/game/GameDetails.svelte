@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Page from '../../lib/components/Page.svelte';
   import { genreLabel, themeLabel } from '../../lib/metadata/labels';
   import { revealImage } from '../../lib/utils/revealImage';
   import { locale } from '../../lib/i18n/locale';
@@ -1010,6 +1011,8 @@
       hasOwnDownload: Boolean(anyOwnDownload),
     }),
   );
+  const loadFailed = $derived(catalogFailed && !localGame && !catalogGame && !anyOwnDownload);
+  const gameShown = $derived(!missing && !loadFailed);
 
   // The main button scrolls to or drives these sections, so a theme that hides
   // them must not leave the button doing nothing.
@@ -1554,153 +1557,153 @@
   </section>
 {/snippet}
 
-{#if missing}
-  <EmptyState title={msg('games.detailMissingTitle')} description={msg('games.detailMissingDescription')}>
-    {#snippet actions()}
-      <Button onclick={() => navigate('library')}>{msg('games.detailBackToLibrary')}</Button>
-    {/snippet}
-  </EmptyState>
-{:else if catalogFailed && !localGame && !catalogGame && !anyOwnDownload}
-  <EmptyState title={msg('games.detailCatalogLoadError')}>
-    {#snippet actions()}
-      <Button onclick={() => loadCatalogGame(id)}>{msg('common.retry')}</Button>
-      <Button onclick={() => navigate('library')}>{msg('games.detailBackToLibrary')}</Button>
-    {/snippet}
-  </EmptyState>
-{:else}
-  {@render hero()}
+<Page bleed={gameShown ? hero : undefined}>
+  {#if missing}
+    <EmptyState title={msg('games.detailMissingTitle')} description={msg('games.detailMissingDescription')}>
+      {#snippet actions()}
+        <Button onclick={() => navigate('library')}>{msg('games.detailBackToLibrary')}</Button>
+      {/snippet}
+    </EmptyState>
+  {:else if loadFailed}
+    <EmptyState title={msg('games.detailCatalogLoadError')}>
+      {#snippet actions()}
+        <Button onclick={() => loadCatalogGame(id)}>{msg('common.retry')}</Button>
+        <Button onclick={() => navigate('library')}>{msg('games.detailBackToLibrary')}</Button>
+      {/snippet}
+    </EmptyState>
+  {:else}
 
-  {#if tabs.length > 1}
-    <div class="tabs-wrap" data-part="game-tabs">
-      <Tabs {tabs} bind:value={activeTab} />
-    </div>
-  {/if}
-
-  <div class="body">
-    <div class="main" data-part="game-main">
-      {#if activeTab === 'screenshots'}
-        {#if localGame && ownShots}
-          <GameScreenshots gameId={localGame.id} {title} />
-        {/if}
-        <div
-          class="shots"
-          class:featured={shots.length >= 5}
-          class:one={shots.length === 1}
-          style:--cols={shotCols}
-        >
-          {#each shots as shot, index (shot.id)}
-            <button class="shot" onclick={() => openShot(index)} aria-label={msg('games.detailOpenScreenshotLabel')}>
-              <Artwork src={shot.url ?? ''} alt="" ratio="16 / 9" radius="var(--radius-sm)" />
-            </button>
-          {/each}
-        </div>
-        {@render column(columns.main)}
-      {:else}
-        {#if metaState === 'searching'}
-          <div class="meta-note" role="status">
-            <span class="spinner"></span>
-            <div class="meta-text">
-              <p class="meta-title">{msg('games.detailMetaSearchingTitle')}</p>
-              <p class="meta-hint">
-                {msg('games.detailMetaSearchingHint', { title: title || msg('games.detailFallbackGameWord') })}
-              </p>
-            </div>
-          </div>
-        {:else if metaState === 'unmatched' || metaState === 'failed'}
-          <div class="meta-note">
-            <div class="meta-text">
-              <p class="meta-title">
-                {metaState === 'unmatched' ? msg('games.detailMetaUnmatchedTitle') : msg('games.detailMetaFailedTitle')}
-              </p>
-              <p class="meta-hint">
-                {metaState === 'unmatched'
-                  ? msg('games.detailMetaUnmatchedHint')
-                  : msg('games.detailMetaFailedHint')}
-              </p>
-            </div>
-            <div class="meta-actions">
-              {#if metaState === 'failed'}
-                <Button size="sm" variant="primary" disabled={metaRefreshing} onclick={refreshMeta}>
-                  {metaRefreshing ? msg('games.detailMetaRetrying') : msg('common.retry')}
-                </Button>
-                <Button size="sm" onclick={() => openMatch('find')}>{msg('games.detailChooseManually')}</Button>
-              {:else}
-                <Button size="sm" variant="primary" onclick={() => openMatch('find')}>{msg('games.detailChooseManually')}</Button>
-              {/if}
-              <Button size="sm" variant="ghost" disabled={metaSkipping} onclick={skipMeta}>{msg('games.detailSkipSearch')}</Button>
-            </div>
-          </div>
-        {/if}
-
-        {@render column(columns.main)}
-      {/if}
-    </div>
-
-    <aside class="side" data-part="game-side">
-      {@render column(columns.side)}
-    </aside>
-  </div>
-
-  {#if localGame}
-    <GameStatusModal bind:open={statusOpen} game={localGame} />
-
-    {#if tagsOpen}
-      <GameTagsModal bind:open={tagsOpen} game={localGame} />
+    {#if tabs.length > 1}
+      <div class="tabs-wrap" data-part="game-tabs">
+        <Tabs {tabs} bind:value={activeTab} />
+      </div>
     {/if}
 
-    <RemoveGameModal
-      bind:open={removeOpen}
-      bind:mode={removeMode}
-      gameId={localGame.id}
-      title={localGame.title}
-      external={externalLabel(localGame)}
-      emulated={emulated}
-      onremoved={(removed) => {
-        if (removed === 'library') navigate('installed');
-      }}
+    <div class="body">
+      <div class="main" data-part="game-main">
+        {#if activeTab === 'screenshots'}
+          {#if localGame && ownShots}
+            <GameScreenshots gameId={localGame.id} {title} />
+          {/if}
+          <div
+            class="shots"
+            class:featured={shots.length >= 5}
+            class:one={shots.length === 1}
+            style:--cols={shotCols}
+          >
+            {#each shots as shot, index (shot.id)}
+              <button class="shot" onclick={() => openShot(index)} aria-label={msg('games.detailOpenScreenshotLabel')}>
+                <Artwork src={shot.url ?? ''} alt="" ratio="16 / 9" radius="var(--radius-sm)" />
+              </button>
+            {/each}
+          </div>
+          {@render column(columns.main)}
+        {:else}
+          {#if metaState === 'searching'}
+            <div class="meta-note" role="status">
+              <span class="spinner"></span>
+              <div class="meta-text">
+                <p class="meta-title">{msg('games.detailMetaSearchingTitle')}</p>
+                <p class="meta-hint">
+                  {msg('games.detailMetaSearchingHint', { title: title || msg('games.detailFallbackGameWord') })}
+                </p>
+              </div>
+            </div>
+          {:else if metaState === 'unmatched' || metaState === 'failed'}
+            <div class="meta-note">
+              <div class="meta-text">
+                <p class="meta-title">
+                  {metaState === 'unmatched' ? msg('games.detailMetaUnmatchedTitle') : msg('games.detailMetaFailedTitle')}
+                </p>
+                <p class="meta-hint">
+                  {metaState === 'unmatched'
+                    ? msg('games.detailMetaUnmatchedHint')
+                    : msg('games.detailMetaFailedHint')}
+                </p>
+              </div>
+              <div class="meta-actions">
+                {#if metaState === 'failed'}
+                  <Button size="sm" variant="primary" disabled={metaRefreshing} onclick={refreshMeta}>
+                    {metaRefreshing ? msg('games.detailMetaRetrying') : msg('common.retry')}
+                  </Button>
+                  <Button size="sm" onclick={() => openMatch('find')}>{msg('games.detailChooseManually')}</Button>
+                {:else}
+                  <Button size="sm" variant="primary" onclick={() => openMatch('find')}>{msg('games.detailChooseManually')}</Button>
+                {/if}
+                <Button size="sm" variant="ghost" disabled={metaSkipping} onclick={skipMeta}>{msg('games.detailSkipSearch')}</Button>
+              </div>
+            </div>
+          {/if}
+
+          {@render column(columns.main)}
+        {/if}
+      </div>
+
+      <aside class="side" data-part="game-side">
+        {@render column(columns.side)}
+      </aside>
+    </div>
+
+    {#if localGame}
+      <GameStatusModal bind:open={statusOpen} game={localGame} />
+
+      {#if tagsOpen}
+        <GameTagsModal bind:open={tagsOpen} game={localGame} />
+      {/if}
+
+      <RemoveGameModal
+        bind:open={removeOpen}
+        bind:mode={removeMode}
+        gameId={localGame.id}
+        title={localGame.title}
+        external={externalLabel(localGame)}
+        emulated={emulated}
+        onremoved={(removed) => {
+          if (removed === 'library') navigate('installed');
+        }}
+      />
+    {/if}
+
+    <Modal bind:open={pickerOpen} title={msg('games.detailChooseDownloadTitle')} width="86rem">
+      <ReleaseList
+        groups={downloadPool}
+        currentReleaseId={localGame?.releaseId ?? ''}
+        ondownload={(group) => {
+          pickerOpen = false;
+          downloadRelease(group);
+        }}
+      />
+    </Modal>
+
+    <Lightbox
+      bind:open={lightboxOpen}
+      bind:index={lightboxIndex}
+      items={shots.map((shot) => ({ id: shot.id, url: shot.url ?? '' }))}
+      label={title}
     />
+
+    <MetadataMatchModal
+      bind:open={matchOpen}
+      gameId={canonicalId ?? ''}
+      gameTitle={title}
+      mode={matchMode}
+      onapplied={(view) => (metaView = view)}
+    />
+
+    <AddDownloadModal bind:open={downloadModalOpen} initialSource={downloadSource} origin={downloadOrigin} />
+    <InstallModal bind:open={installModalOpen} downloadId={installModalDownloadId} />
   {/if}
 
-  <Modal bind:open={pickerOpen} title={msg('games.detailChooseDownloadTitle')} width="86rem">
-    <ReleaseList
-      groups={downloadPool}
-      currentReleaseId={localGame?.releaseId ?? ''}
-      ondownload={(group) => {
-        pickerOpen = false;
-        downloadRelease(group);
-      }}
-    />
-  </Modal>
-
-  <Lightbox
-    bind:open={lightboxOpen}
-    bind:index={lightboxIndex}
-    items={shots.map((shot) => ({ id: shot.id, url: shot.url ?? '' }))}
-    label={title}
-  />
-
-  <MetadataMatchModal
-    bind:open={matchOpen}
-    gameId={canonicalId ?? ''}
-    gameTitle={title}
-    mode={matchMode}
-    onapplied={(view) => (metaView = view)}
-  />
-
-  <AddDownloadModal bind:open={downloadModalOpen} initialSource={downloadSource} origin={downloadOrigin} />
-  <InstallModal bind:open={installModalOpen} downloadId={installModalDownloadId} />
-{/if}
-
-{#if pending}
-  <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
-{/if}
+  {#if pending}
+    <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
+  {/if}
+</Page>
 
 <style>
   .hero {
     position: relative;
-    margin-inline: calc(var(--page-x) * -1);
     margin-bottom: var(--space-8);
-    padding: var(--space-4) var(--page-x) var(--space-5);
+    padding: var(--space-4) var(--page-inset) var(--space-5);
     min-height: clamp(31rem, 42vh, 48rem);
     display: flex;
     flex-direction: column;
@@ -1712,7 +1715,13 @@
     position: absolute;
     inset: 0;
     overflow: hidden;
-    background: var(--bg);
+  }
+
+  /* The art and its veil melt into the window backdrop below the hero instead of ending on the page colour. */
+  .art,
+  .veil {
+    -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent 100%);
+    mask-image: linear-gradient(180deg, #000 55%, transparent 100%);
   }
 
   .art img {

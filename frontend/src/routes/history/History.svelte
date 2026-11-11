@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Page from '../../lib/components/Page.svelte';
   import {
     CircleAlert,
     Download,
@@ -12,7 +13,6 @@
     Wifi,
   } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
-  import Card from '../../lib/components/Card.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import ConsoleTag from '../../lib/components/ConsoleTag.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
@@ -122,7 +122,7 @@
   }
 </script>
 
-<Card surface="page">
+<Page>
   <PageHeader title={msg('transfers.historyTitle')} subtitle={msg('transfers.historySubtitle')}>
     {#snippet actions()}
       <Button variant="ghost" disabled={$history.length === 0} onclick={() => (clearOpen = true)}>
@@ -186,11 +186,11 @@
       {/key}
     {/if}
   {/if}
-</Card>
 
-{#if clearOpen}
-  <ConfirmModal prompt={clearHistoryPrompt()} onconfirm={confirmClear} onclose={() => (clearOpen = false)} />
-{/if}
+  {#if clearOpen}
+    <ConfirmModal prompt={clearHistoryPrompt()} onconfirm={confirmClear} onclose={() => (clearOpen = false)} />
+  {/if}
+</Page>
 
 <style>
   .banner {

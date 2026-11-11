@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Page from '../../lib/components/Page.svelte';
   import { Lock, LogIn, UserRound } from '@lucide/svelte';
   import ProfileCanvas from '../../lib/components/ProfileCanvas.svelte';
   import ProfileCover from '../../lib/components/ProfileCover.svelte';
@@ -204,8 +205,6 @@
   });
 </script>
 
-<PageHeader title={username ? `@${username}` : msg('social.profileLabel')} />
-
 {#snippet external(block: GridBlock)}
   {#if data}
     {#if block.type === 'playing' && presenceGame}
@@ -232,73 +231,77 @@
   <HiddenBadge text={msg('social.statsHiddenHint')} />
 {/snippet}
 
-{#if isGuest}
-  <EmptyState
-    title={msg('social.userGuestTitle')}
-    description={msg('social.userGuestDesc')}
-  >
-    {#snippet icon()}
-      <UserRound size="2.2rem" strokeWidth={1.6} />
-    {/snippet}
-    {#snippet actions()}
-      <Button variant="primary" onclick={() => signIn('login')}>
-        <LogIn size="1.5rem" strokeWidth={1.8} />
-        {msg('social.signInButton')}
-      </Button>
-      <Button onclick={() => signIn('register')}>{msg('social.createAccountButton')}</Button>
-    {/snippet}
-  </EmptyState>
-{:else if loading}
-  <p class="muted">{msg('social.loadingEllipsis')}</p>
-{:else if missing}
-  <EmptyState title={msg('social.userNotFoundTitle')} description={msg('social.userNotFoundDesc')}>
-    {#snippet icon()}
-      <UserRound size="2.2rem" strokeWidth={1.6} />
-    {/snippet}
-  </EmptyState>
-{:else if failure}
-  <EmptyState title={msg('social.userLoadFailed')} description={failure}>
-    {#snippet icon()}
-      <UserRound size="2.2rem" strokeWidth={1.6} />
-    {/snippet}
-    {#snippet actions()}
-      <Button variant="primary" onclick={() => load(username ?? '')}>{msg('common.retry')}</Button>
-    {/snippet}
-  </EmptyState>
-{:else if data}
-  <div class="profile" class:refreshing>
-    <ProfileCanvas appearance={data.appearance} {autoArt}>
-    <ProfileCover appearance={data.appearance} {autoArt} />
-    <UserHeader profile={data} {busy} onaction={act} onmessage={() => data && openChat(chatPeerOf(data))} />
-    {#if closed}
-      <p class="notice"><Lock size="1.8rem" strokeWidth={1.6} />{msg('social.userProfileClosed')}</p>
-    {:else if restricted}
-      <p class="notice"><Lock size="1.8rem" strokeWidth={1.6} />{msg('social.userRestToFriends')}</p>
-    {:else}
-      <div class="columns">
-        <div class="main">
-          <BlockGrid blocks={gridBlocks} {external} {masked} />
-          {#if common}
-            <UserCommon
-              {common}
-              {name}
-              username={data.username}
-              oninvite={data.relation === 'friend' ? (game) => inviteToPlay(data!, game.title) : undefined}
-            />
-          {/if}
-          {#if mutual.length > 0}
-            <UserMutual friends={mutual} count={data.mutualCount} />
-          {/if}
-        </div>
-      </div>
-    {/if}
-    </ProfileCanvas>
-  </div>
-{/if}
+<Page>
+  <PageHeader title={username ? `@${username}` : msg('social.profileLabel')} />
 
-{#if pending}
-  <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
-{/if}
+  {#if isGuest}
+    <EmptyState
+      title={msg('social.userGuestTitle')}
+      description={msg('social.userGuestDesc')}
+    >
+      {#snippet icon()}
+        <UserRound size="2.2rem" strokeWidth={1.6} />
+      {/snippet}
+      {#snippet actions()}
+        <Button variant="primary" onclick={() => signIn('login')}>
+          <LogIn size="1.5rem" strokeWidth={1.8} />
+          {msg('social.signInButton')}
+        </Button>
+        <Button onclick={() => signIn('register')}>{msg('social.createAccountButton')}</Button>
+      {/snippet}
+    </EmptyState>
+  {:else if loading}
+    <p class="muted">{msg('social.loadingEllipsis')}</p>
+  {:else if missing}
+    <EmptyState title={msg('social.userNotFoundTitle')} description={msg('social.userNotFoundDesc')}>
+      {#snippet icon()}
+        <UserRound size="2.2rem" strokeWidth={1.6} />
+      {/snippet}
+    </EmptyState>
+  {:else if failure}
+    <EmptyState title={msg('social.userLoadFailed')} description={failure}>
+      {#snippet icon()}
+        <UserRound size="2.2rem" strokeWidth={1.6} />
+      {/snippet}
+      {#snippet actions()}
+        <Button variant="primary" onclick={() => load(username ?? '')}>{msg('common.retry')}</Button>
+      {/snippet}
+    </EmptyState>
+  {:else if data}
+    <div class="profile" class:refreshing>
+      <ProfileCanvas appearance={data.appearance} {autoArt}>
+      <ProfileCover appearance={data.appearance} {autoArt} />
+      <UserHeader profile={data} {busy} onaction={act} onmessage={() => data && openChat(chatPeerOf(data))} />
+      {#if closed}
+        <p class="notice"><Lock size="1.8rem" strokeWidth={1.6} />{msg('social.userProfileClosed')}</p>
+      {:else if restricted}
+        <p class="notice"><Lock size="1.8rem" strokeWidth={1.6} />{msg('social.userRestToFriends')}</p>
+      {:else}
+        <div class="columns">
+          <div class="main">
+            <BlockGrid blocks={gridBlocks} {external} {masked} />
+            {#if common}
+              <UserCommon
+                {common}
+                {name}
+                username={data.username}
+                oninvite={data.relation === 'friend' ? (game) => inviteToPlay(data!, game.title) : undefined}
+              />
+            {/if}
+            {#if mutual.length > 0}
+              <UserMutual friends={mutual} count={data.mutualCount} />
+            {/if}
+          </div>
+        </div>
+      {/if}
+      </ProfileCanvas>
+    </div>
+  {/if}
+
+  {#if pending}
+    <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
+  {/if}
+</Page>
 
 <style>
   .muted {

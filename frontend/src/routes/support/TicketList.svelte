@@ -2,7 +2,6 @@
   import { onMount, untrack } from 'svelte';
   import { Activity, CircleAlert, LifeBuoy, Plus } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
-  import Card from '../../lib/components/Card.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
@@ -100,70 +99,68 @@
   }
 </script>
 
-<Card surface="page">
-  <PageHeader title={msg('tickets.title')} subtitle={msg('tickets.subtitle')}>
-    {#snippet actions()}
-      <Button variant="ghost" onclick={openStatus}>
-        <Activity size="1.5rem" strokeWidth={1.8} />
-        {msg('tickets.statusPage')}
-      </Button>
-      <Button variant="primary" onclick={newTicket}>
-        <Plus size="1.5rem" strokeWidth={1.8} />
-        {msg('tickets.new')}
-      </Button>
-    {/snippet}
-  </PageHeader>
+<PageHeader title={msg('tickets.title')} subtitle={msg('tickets.subtitle')}>
+  {#snippet actions()}
+    <Button variant="ghost" onclick={openStatus}>
+      <Activity size="1.5rem" strokeWidth={1.8} />
+      {msg('tickets.statusPage')}
+    </Button>
+    <Button variant="primary" onclick={newTicket}>
+      <Plus size="1.5rem" strokeWidth={1.8} />
+      {msg('tickets.new')}
+    </Button>
+  {/snippet}
+</PageHeader>
 
-  {#if failure}
-    <div class="banner" role="alert">
-      <CircleAlert size="1.6rem" strokeWidth={1.8} />
-      <span class="banner-text">{failure}</span>
-      <Button size="sm" onclick={retry}>{msg('common.retry')}</Button>
+{#if failure}
+  <div class="banner" role="alert">
+    <CircleAlert size="1.6rem" strokeWidth={1.8} />
+    <span class="banner-text">{failure}</span>
+    <Button size="sm" onclick={retry}>{msg('common.retry')}</Button>
+  </div>
+{/if}
+
+{#if loading}
+  <p class="muted">{msg('tickets.loading')}</p>
+{:else if tickets.length === 0 && !failure}
+  <EmptyState title={msg('tickets.emptyTitle')} description={msg('tickets.emptyText')}>
+    {#snippet icon()}
+      <LifeBuoy size="2rem" strokeWidth={1.8} />
+    {/snippet}
+    {#snippet actions()}
+      <Button variant="primary" onclick={newTicket}>{msg('tickets.new')}</Button>
+    {/snippet}
+  </EmptyState>
+{:else}
+  <ul class="list">
+    {#each tickets as item (item.number)}
+      {@const status = statusView(item.status)}
+      <li>
+        <button class="row" class:unread={item.unread} onclick={() => open(item)}>
+          <span class="dot" class:on={item.unread} role={item.unread ? 'img' : undefined} aria-label={item.unread ? msg('tickets.unreadMark') : undefined}></span>
+          <span class="main">
+            <span class="subject" dir="auto">{item.subject}</span>
+            <span class="meta">
+              <span class="ref">{item.ref}</span>
+              <span>{topicLabel(item.topic)}</span>
+              <span>{msg('tickets.updated', { when: relativeDate(item.updatedAt) })}</span>
+            </span>
+          </span>
+          {#if status}
+            <StatusBadge kind={status.kind} label={status.label} />
+          {/if}
+        </button>
+      </li>
+    {/each}
+  </ul>
+  {#if next}
+    <div class="more">
+      <Button disabled={loadingMore} onclick={more}>
+        {loadingMore ? msg('tickets.loadingMore') : msg('tickets.loadMore')}
+      </Button>
     </div>
   {/if}
-
-  {#if loading}
-    <p class="muted">{msg('tickets.loading')}</p>
-  {:else if tickets.length === 0 && !failure}
-    <EmptyState title={msg('tickets.emptyTitle')} description={msg('tickets.emptyText')}>
-      {#snippet icon()}
-        <LifeBuoy size="2rem" strokeWidth={1.8} />
-      {/snippet}
-      {#snippet actions()}
-        <Button variant="primary" onclick={newTicket}>{msg('tickets.new')}</Button>
-      {/snippet}
-    </EmptyState>
-  {:else}
-    <ul class="list">
-      {#each tickets as item (item.number)}
-        {@const status = statusView(item.status)}
-        <li>
-          <button class="row" class:unread={item.unread} onclick={() => open(item)}>
-            <span class="dot" class:on={item.unread} role={item.unread ? 'img' : undefined} aria-label={item.unread ? msg('tickets.unreadMark') : undefined}></span>
-            <span class="main">
-              <span class="subject" dir="auto">{item.subject}</span>
-              <span class="meta">
-                <span class="ref">{item.ref}</span>
-                <span>{topicLabel(item.topic)}</span>
-                <span>{msg('tickets.updated', { when: relativeDate(item.updatedAt) })}</span>
-              </span>
-            </span>
-            {#if status}
-              <StatusBadge kind={status.kind} label={status.label} />
-            {/if}
-          </button>
-        </li>
-      {/each}
-    </ul>
-    {#if next}
-      <div class="more">
-        <Button disabled={loadingMore} onclick={more}>
-          {loadingMore ? msg('tickets.loadingMore') : msg('tickets.loadMore')}
-        </Button>
-      </div>
-    {/if}
-  {/if}
-</Card>
+{/if}
 
 <style>
   .muted {
