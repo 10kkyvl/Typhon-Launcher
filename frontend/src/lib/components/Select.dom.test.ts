@@ -252,6 +252,26 @@ describe('Select: keys with the list open', () => {
     expect(document.activeElement).toBe(field());
   });
 
+  // The settings limits read "1 MB/s", "5 MB/s": Space right after a typed character is not part of
+  // the word, it chooses.
+  it('Space right after a typed character chooses the option it moved to and closes the list', async () => {
+    const LIMITS = [
+      { id: 'none', label: 'No limit' },
+      { id: '5', label: '5 MB/s' },
+      { id: '1', label: '1 MB/s' },
+      { id: '10', label: '10 MB/s' },
+    ];
+    const { keys, onchange, field, list } = setup({ options: LIMITS, value: 'none', controlled: true });
+    field().focus();
+    await keys.keyboard('{ArrowDown}');
+
+    await keys.keyboard('1 ');
+
+    expect(onchange).toHaveBeenCalledExactlyOnceWith('1');
+    expect(list()).toBeNull();
+    expect(document.activeElement).toBe(field());
+  });
+
   it('Tab chooses the active option, closes the list and moves on', async () => {
     const { keys, field, list, held } = setup();
     field().focus();

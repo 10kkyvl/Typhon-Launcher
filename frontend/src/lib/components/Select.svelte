@@ -146,12 +146,9 @@
     }
     if (key === 'Enter' || key === ' ') {
       event.preventDefault();
-      // A held key chooses once.
-      if (event.repeat) return;
-      // A space inside a typed word is part of it.
-      const typed = key === ' ' ? typeahead(key, labels, active, isDisabled) : null;
-      if (typed !== null) move(typed);
-      else commit();
+      // A held key chooses once. Space always chooses, also right after a typed character: labels such
+      // as "1 MB/s" would otherwise swallow it as part of the typed word.
+      if (!event.repeat) commit();
       return;
     }
     const next =
