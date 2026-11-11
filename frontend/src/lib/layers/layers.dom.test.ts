@@ -74,6 +74,23 @@ describe('a layer that never took focus', () => {
   });
 });
 
+describe('a layer that took focus', () => {
+  it('gives focus back when the item under focus was removed and <body> holds it', () => {
+    const box = document.createElement('div');
+    box.innerHTML = '<button id="item">item</button>';
+    document.body.append(box);
+    byId('opener').focus();
+    const close = register(box, { modal: false, initialFocus: () => '#item', dismiss: () => {} });
+    expect(document.activeElement).toBe(byId('item'));
+
+    byId('item').remove();
+    expect(document.activeElement).toBe(document.body);
+    close();
+
+    expect(document.activeElement).toBe(byId('opener'));
+  });
+});
+
 describe('layer stack and the app content', () => {
   it('inerts the app content, not the window chrome, until the last of nested layers closes, and restores it exactly', () => {
     const closeOuter = openLayer(dialog('<button>a</button>'), { dismiss: vi.fn() });
