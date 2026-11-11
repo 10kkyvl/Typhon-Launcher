@@ -65,6 +65,32 @@ describe('GamePropertiesModal while compatibility mode downloads', () => {
   });
 });
 
+describe('GamePropertiesModal while compatibility mode turns on', () => {
+  // The enable reads the wrapper and preset chosen when it started; loadCompat then puts back the ones
+  // it applied, so a choice made meanwhile would be dropped without a word.
+  it('the wrapper and preset fields are disabled until it is done, as the switch is', async () => {
+    let finish!: () => void;
+    vi.mocked(enableWrapper).mockReturnValueOnce(new Promise<void>((resolve) => (finish = resolve)));
+    render(GamePropertiesModal, { target: app });
+    const keys = user();
+    openGameProperties('g1');
+    const wrapper = await screen.findByRole('combobox', { name: msg('modals.compatWrapper') });
+    const preset = screen.getByRole('combobox', { name: msg('modals.compatPresetLabel') });
+    expect(wrapper).toHaveProperty('disabled', false);
+    expect(preset).toHaveProperty('disabled', false);
+
+    await keys.click(screen.getByRole('switch', { name: msg('modals.compatToggle') }));
+
+    expect(wrapper).toHaveProperty('disabled', true);
+    expect(preset).toHaveProperty('disabled', true);
+    await keys.click(preset);
+    expect(screen.queryByRole('listbox')).toBeNull();
+
+    finish();
+    await vi.waitFor(() => expect(screen.getByRole('switch', { name: msg('modals.compatToggle') })).toHaveProperty('disabled', false));
+  });
+});
+
 describe('GamePropertiesModal reports a failed switch wherever the user is', () => {
   const failure = new Error('typhon:wrappers.download_failed: offline');
   // The dialog's own wording for a failed enable: the code's message, else the install table's, else the fallback.

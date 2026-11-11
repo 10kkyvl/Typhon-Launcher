@@ -541,6 +541,7 @@
                   labelledby="{uid}-wrapper-label"
                   value={compatWrapper}
                   width="26rem"
+                  disabled={compatBusy || running}
                   options={WRAPPERS.map((id) => ({ id, label: wrapperName(id) }))}
                   onchange={pickWrapper}
                 />
@@ -552,6 +553,7 @@
                     labelledby="{uid}-preset-label"
                     bind:value={compatPreset}
                     width="26rem"
+                    disabled={compatBusy || running}
                     options={presetsFor(compatWrapper).map((id) => ({ id, label: presetLabel(id) }))}
                   />
                 </div>
