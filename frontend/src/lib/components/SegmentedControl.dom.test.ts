@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderDom } from '../testing/dom';
+import { hintOnFocus } from '../testing/hints';
 import SegmentedHarness from '../testing/SegmentedHarness.svelte';
 import type { SegmentOption } from './segmented';
 
@@ -109,11 +110,17 @@ describe('SegmentedControl', () => {
     expect(through.mock.calls).toEqual([['grid'], ['list']]);
   });
 
-  it('names a segment drawn as an icon and shows that name as a hint', () => {
+  it('names a segment drawn as an icon and shows that name as a hint', async () => {
     const { getByRole } = renderDom(SegmentedHarness, { options: VIEWS, start: 'list', icons: true });
     const grid = getByRole('radio', { name: 'Grid' });
     expect(grid.querySelector('[data-icon="grid"]')).not.toBeNull();
     expect(grid.hasAttribute('title')).toBe(false);
+    expect(await hintOnFocus(getByRole('radio', { name: 'List' }))).toBe('List');
+  });
+
+  it('shows no hint on a segment whose label is its text', async () => {
+    const { getByRole } = renderDom(SegmentedHarness, { options: VIEWS, start: 'list' });
+    expect(await hintOnFocus(getByRole('radio', { name: 'List' }))).toBeNull();
   });
 
   it('shows a count next to an option and reads it in the name (the filter strips)', () => {
