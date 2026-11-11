@@ -246,15 +246,17 @@
     padding: 0;
   }
 
+  /* The 1.x border was a muted red: --danger a ninth of the way to the top surface draws it in the
+     dark palette (control-tokens.test.ts) and follows any other theme. */
   :global([data-controls='1x']) .danger {
     background: transparent;
-    border-color: color-mix(in srgb, var(--danger) 30%, transparent);
+    border-color: color-mix(in srgb, color-mix(in srgb, var(--danger) 88.7%, var(--surface-4)) 30%, transparent);
     color: var(--danger);
   }
 
   :global([data-controls='1x']) .danger:hover:not(:disabled, [aria-disabled='true']) {
     background: var(--danger-subtle);
-    border-color: color-mix(in srgb, var(--danger) 50%, transparent);
+    border-color: color-mix(in srgb, color-mix(in srgb, var(--danger) 88.7%, var(--surface-4)) 50%, transparent);
     color: var(--danger);
   }
 </style>

@@ -165,6 +165,93 @@ describe('one spinner', () => {
   });
 });
 
+type RGBA = [number, number, number, number];
+
+function topLevel(text: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let from = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '(') depth++;
+    else if (text[i] === ')') depth--;
+    else if (text[i] === ',' && depth === 0) {
+      parts.push(text.slice(from, i).trim());
+      from = i + 1;
+    }
+  }
+  return [...parts, text.slice(from).trim()];
+}
+
+// What the browser computes for a colour written with tokens: var(), hex, rgb(a), transparent and
+// color-mix() in srgb, which mixes premultiplied by alpha.
+function colour(expr: string, tokens: Record<string, string>): RGBA {
+  const value = expr.trim();
+  const ref = /^var\((--[\w-]+)\)$/.exec(value);
+  if (ref) {
+    expect(tokens[ref[1]], ref[1]).toBeTypeOf('string');
+    return colour(tokens[ref[1]], tokens);
+  }
+  if (value === 'transparent') return [0, 0, 0, 0];
+  const hex = /^#([0-9a-f]{6})$/i.exec(value);
+  if (hex) return [0, 2, 4].map((i) => parseInt(hex[1].slice(i, i + 2), 16)).concat(1) as RGBA;
+  const fn = /^rgba?\(([^()]*)\)$/.exec(value);
+  if (fn) {
+    const [r, g, b, a = '1'] = fn[1].split(',').map((s) => s.trim());
+    return [Number(r), Number(g), Number(b), Number(a)];
+  }
+  const mix = /^color-mix\(([\s\S]*)\)$/.exec(value);
+  expect(mix, value).not.toBeNull();
+  const [space, ...sides] = topLevel((mix as RegExpExecArray)[1]);
+  expect(space).toBe('in srgb');
+  const parsed = sides.map((side) => {
+    const m = /^([\s\S]*?)(?:\s+([\d.]+)%)?$/.exec(side) as RegExpExecArray;
+    return { c: colour(m[1], tokens), p: m[2] === undefined ? undefined : Number(m[2]) / 100 };
+  });
+  const [a, b] = parsed;
+  const p = a.p ?? (b.p === undefined ? 0.5 : 1 - b.p);
+  const alpha = a.c[3] * p + b.c[3] * (1 - p);
+  if (alpha === 0) return [0, 0, 0, 0];
+  const channel = (i: number) => (a.c[i] * a.c[3] * p + b.c[i] * b.c[3] * (1 - p)) / alpha;
+  return [channel(0), channel(1), channel(2), alpha];
+}
+
+function darkPalette(): Record<string, string> {
+  const css = read('styles/tokens.css');
+  const body = css.slice(css.indexOf('{', css.indexOf(':root {')) + 1, css.indexOf('\n}', css.indexOf(':root {')));
+  return Object.fromEntries([...body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
+}
+
+function ruleBody(css: string, selector: string): Record<string, string> {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const body = new RegExp(`(?:^|\\})\\s*${escaped}\\s*\\{([^}]*)\\}`, 'm').exec(css)?.[1];
+  expect(body, selector).toBeTypeOf('string');
+  return Object.fromEntries(declarations(`{${body}`).map((d) => [d.prop, d.value]));
+}
+
+// The overlay keeps the danger button it had before 2.0 (Button.svelte, data-controls="1x"), whose
+// border was the literal rgba(217, 105, 105, 0.3), 0.5 hovered. A literal ignored the theme; the
+// tokens that replace it must draw the same border in the dark palette, to the rounding of a pixel.
+describe('the overlay keeps its danger button', () => {
+  const css = style('lib/components/Button.svelte');
+  const dark = darkPalette();
+  const near = (got: RGBA, want: RGBA) =>
+    got.slice(0, 3).every((c, i) => Math.abs(c - want[i]) <= 0.5) && Math.abs(got[3] - want[3]) < 0.001;
+
+  it('draws its border in the colour it had, at rest and hovered', () => {
+    const rest = colour(ruleBody(css, ":global([data-controls='1x']) .danger")['border-color'], dark);
+    const hover = colour(ruleBody(css, ":global([data-controls='1x']) .danger:hover:not(:disabled, [aria-disabled='true'])")['border-color'], dark);
+    expect(near(rest, [217, 105, 105, 0.3]), `rest ${rest.map((c) => c.toFixed(2))}`).toBe(true);
+    expect(near(hover, [217, 105, 105, 0.5]), `hover ${hover.map((c) => c.toFixed(2))}`).toBe(true);
+  });
+
+  it('computes a mix the way the browser does', () => {
+    const tokens = { '--a': '#ff0000', '--b': '#0000ff', '--t': 'rgba(0, 0, 255, 0.5)' };
+    expect(colour('color-mix(in srgb, var(--a) 25%, var(--b))', tokens)).toEqual([63.75, 0, 191.25, 1]);
+    expect(colour('color-mix(in srgb, var(--a) 30%, transparent)', tokens)).toEqual([255, 0, 0, 0.3]);
+    expect(colour('color-mix(in srgb, var(--a), var(--t))', tokens).map((c) => +c.toFixed(3))).toEqual([170, 0, 85, 0.75]);
+  });
+});
+
 // The theme editor's preview is a miniature drawn by hand, not the components themselves: it must
 // take the same tokens for the same parts, or a theme author tunes a button that does not exist.
 describe('the theme preview draws the button the app draws', () => {

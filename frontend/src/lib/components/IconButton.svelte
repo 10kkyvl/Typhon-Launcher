@@ -126,6 +126,7 @@
   :global([data-controls='1x']) .icon-btn {
     width: 3.6rem;
     height: 3.6rem;
+    border: 0;
     border-radius: var(--radius-sm);
   }
 

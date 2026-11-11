@@ -130,4 +130,10 @@ describe('IconButton', () => {
     expect(pin('')).toBe('background: transparent;');
     expect(pin(':hover:not\\(:disabled\\)')).toBe('background: var(--hover-strong);');
   });
+
+  // The 1.x icon button had no border; a transparent one still shifts the anti-aliasing of the round
+  // corners of the hover fill.
+  it('in the overlay draws no border', () => {
+    expect(source).toMatch(/:global\(\[data-controls='1x'\]\) \.icon-btn \{[^}]*border: 0;/);
+  });
 });
