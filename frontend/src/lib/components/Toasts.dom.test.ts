@@ -3,10 +3,18 @@ import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
+import type { Theme } from '../services/theme';
+import { activeTheme, endTrial, themeTrial, tryTheme } from '../stores/theme';
 import { ACTION_MS, PLAIN_MS, RESUME_FLOOR_MS, holdToasts, toast, toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
 import ToastsHarness from '../testing/ToastsHarness.svelte';
+import { mountThemeGuard } from './ThemeGuard';
 import source from './Toasts.svelte?raw';
+
+vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
+vi.mock('../services/backend', () => ({ inWails: false }));
+
+const theme = (id: string): Theme => ({ id, name: id, base: 'dark', tokens: {}, builtIn: id === 'dark', updatedAt: '' });
 
 let app: HTMLDivElement;
 
@@ -160,18 +168,53 @@ describe('Toasts: closing', () => {
     expect(shown()).toEqual([]);
   });
 
-  it('Escape inside a toast closes it and puts focus back where it was', async () => {
+  it('reached by Tab, one Escape closes the toast and puts focus back where it was', async () => {
     const { keys, close, shown } = setup();
     const before = screen.getByRole('button', { name: 'Before' });
     toast('Saved');
     await tick();
     before.focus();
-    close('Saved').focus();
+    await keys.tab();
+    expect(document.activeElement).toBe(close('Saved'));
 
     await keys.keyboard('{Escape}');
 
     expect(shown()).toEqual([]);
     expect(document.activeElement).toBe(before);
+  });
+
+  it('shows no hint of its own on the close button: nothing stands between Escape and the toast', async () => {
+    const { keys, close, pass } = setup();
+    toast('Saved');
+    await tick();
+    screen.getByRole('button', { name: 'Before' }).focus();
+    await keys.tab();
+    await pass(1000);
+
+    expect(document.querySelector('[data-part="tooltip"]')).toBeNull();
+    expect(close('Saved').getAttribute('aria-label')).toBe(msg('ui.toastDismiss'));
+  });
+
+  it('keeps its Escape to itself: a theme being tried is not ended by closing a toast', async () => {
+    const unmount = mountThemeGuard();
+    activeTheme.set(theme('dark'));
+    expect(tryTheme(theme('draft'))).toBeNull();
+    try {
+      const { keys, shown } = setup();
+      toast('Saved');
+      await tick();
+      screen.getByRole('button', { name: 'Before' }).focus();
+      await keys.tab();
+
+      await keys.keyboard('{Escape}');
+
+      expect(shown()).toEqual([]);
+      expect(get(themeTrial)).not.toBeNull();
+    } finally {
+      endTrial();
+      unmount();
+      activeTheme.set(null);
+    }
   });
 
   it('closing by its button from the keyboard puts focus back where it was too', async () => {
