@@ -1,21 +1,8 @@
-<script lang="ts" module>
-  /** What the trigger element needs: spread it on the button (`<Button {...props}>`), wire nothing by hand. */
-  export interface MenuTriggerProps {
-    id: string;
-    'aria-haspopup': 'menu';
-    'aria-expanded': boolean;
-    'aria-controls': string | undefined;
-    onclick: (event: MouseEvent) => void;
-    onkeydown: (event: KeyboardEvent) => void;
-    onkeyup: (event: KeyboardEvent) => void;
-  }
-</script>
-
 <script lang="ts">
   import { flushSync, type Snippet } from 'svelte';
   import { anchorTo, outOfSight, type Placement } from '../utils/position';
   import MenuList from './MenuList.svelte';
-  import { closesOnPick, type MenuItem } from './menu';
+  import { closesOnPick, menuButtonHandlers, type MenuFocus, type MenuItem, type MenuTriggerProps } from './menu';
 
   /**
    * Menu button (WAI-ARIA menu button). The trigger snippet renders the button and spreads `props` on it:
@@ -53,14 +40,14 @@
   const menuId = `${uid}-menu`;
 
   let open = $state(false);
-  let initial = $state<'first' | 'last' | 'menu'>('menu');
+  let initial = $state<MenuFocus>('menu');
 
   const side = $derived<Placement>(`${placement === 'up' ? 'top' : 'bottom'}-${align === 'left' ? 'start' : 'end'}`);
 
   // Looked up each time: a trigger re-created while the menu is open (a re-keyed row) still counts.
   const triggerElement = () => document.getElementById(triggerId);
 
-  function show(focus: 'first' | 'last' | 'menu') {
+  function show(focus: MenuFocus) {
     // A trigger scrolled out of sight can still hold focus; its menu would close at once as hidden.
     const element = triggerElement();
     if (element && outOfSight(element)) element.scrollIntoView({ block: 'nearest' });
@@ -81,35 +68,14 @@
     else show('menu');
   }
 
+  const handlers = menuButtonHandlers({ open: () => open, show, close });
+
   const triggerProps: MenuTriggerProps = $derived({
     id: triggerId,
     'aria-haspopup': 'menu',
     'aria-expanded': open,
     'aria-controls': open ? menuId : undefined,
-    onclick: (event: MouseEvent) => {
-      if (open) close();
-      // detail 0: a click from script (Big Picture's confirm), treated as the keyboard.
-      else show(event.detail === 0 ? 'first' : 'menu');
-    },
-    // Enter and Space act on keydown, never on the browser's click: a held key repeats keydown (and
-    // Enter its click), and the Space keyup after a pick would land on the trigger and reopen.
-    onkeydown: (event: KeyboardEvent) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        if (event.repeat) return;
-        if (open) close();
-        else show('first');
-        return;
-      }
-      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
-      event.preventDefault();
-      if (event.repeat && open) return;
-      close();
-      show(event.key === 'ArrowDown' ? 'first' : 'last');
-    },
-    onkeyup: (event: KeyboardEvent) => {
-      if (event.key === ' ') event.preventDefault();
-    },
+    ...handlers,
   });
 
   function pick(item: MenuItem) {
