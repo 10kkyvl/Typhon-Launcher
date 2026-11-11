@@ -201,6 +201,8 @@ export const themeTokens = {
   'settings.themeContrast.text2': 'Второстепенный текст',
   'settings.themeContrast.text3': 'Приглушённый текст и подсказки',
   'settings.themeContrast.button': 'Текст на кнопке акцента',
+  'settings.themeContrast.dangerButton': 'Текст на кнопке опасного действия',
+  'settings.themeContrast.dangerButtonHover': 'Текст на кнопке опасного действия под курсором',
   'settings.themeContrast.links': 'Ссылки и текст цвета акцента',
   'settings.themeContrast.accent': 'Индикаторы: переключатели, прогресс, выделение',
   'settings.themeContrast.ring': 'Обводка фокуса',

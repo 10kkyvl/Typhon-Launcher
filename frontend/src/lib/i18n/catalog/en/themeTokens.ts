@@ -204,6 +204,8 @@ export const themeTokens: Record<ThemeTokensKey, Message> = {
   'settings.themeContrast.text2': 'Secondary text',
   'settings.themeContrast.text3': 'Muted text and hints',
   'settings.themeContrast.button': 'Text on the accent button',
+  'settings.themeContrast.dangerButton': 'Text on the danger button',
+  'settings.themeContrast.dangerButtonHover': 'Text on the danger button under the pointer',
   'settings.themeContrast.links': 'Links and accent-coloured text',
   'settings.themeContrast.accent': 'Indicators: switches, progress, selection',
   'settings.themeContrast.ring': 'Focus outline',
