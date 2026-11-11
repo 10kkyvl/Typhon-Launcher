@@ -1,90 +1,175 @@
 <script lang="ts">
-  import { CircleCheck, CircleAlert, Info } from '@lucide/svelte';
-  import { dismissToast, toasts, type Toast } from '../stores/toasts';
+  import { CircleAlert, CircleCheck, Info, TriangleAlert, X } from '@lucide/svelte';
+  import { msg } from '../i18n';
+  import { modalOpen } from '../layers';
+  import { dismissToast, holdToasts, pauseToast, resumeToast, toasts, type Toast, type ToastKind } from '../stores/toasts';
+  import Button from './Button.svelte';
+  import IconButton from './IconButton.svelte';
 
-  function act(t: Toast) {
-    dismissToast(t.id);
-    t.action?.run();
+  /**
+   * The stack of toasts, mounted by a shell in a part the layer stack leaves live (`data-layer-keep`).
+   * A named region holding two live regions that exist before any toast does, so the first toast is
+   * announced too: errors and warnings go to the `alert` one (said at once), the rest to the `status`
+   * one (said when the reader is free). Timing, the queue and repeats are the store's (stores/toasts.ts);
+   * this component tells it when a toast is being read and whether a dialog is open.
+   */
+
+  const icons = { info: Info, success: CircleCheck, warning: TriangleAlert, danger: CircleAlert };
+  const URGENT: readonly ToastKind[] = ['danger', 'warning'];
+
+  const urgent = $derived($toasts.filter((item) => URGENT.includes(item.kind)));
+  const polite = $derived($toasts.filter((item) => !URGENT.includes(item.kind)));
+
+  $effect(() => holdToasts($modalOpen));
+
+  // Being read: the pointer is over the toast, or focus is inside it. Either one stops its clock.
+  const reading = new Map<number, { hover: boolean; focus: boolean }>();
+  // Where focus was before it entered a toast: it goes back there when the toast is closed from inside.
+  const cameFrom = new Map<number, HTMLElement>();
+
+  function read(id: number, change: { hover?: boolean; focus?: boolean }) {
+    const state = { hover: false, focus: false, ...reading.get(id), ...change };
+    reading.set(id, state);
+    if (state.hover || state.focus) pauseToast(id);
+    else resumeToast(id);
+  }
+
+  function forget(id: number) {
+    reading.delete(id);
+    cameFrom.delete(id);
+  }
+
+  function onfocusin(item: Toast, event: FocusEvent) {
+    const card = event.currentTarget as HTMLElement;
+    const from = event.relatedTarget;
+    if (from instanceof HTMLElement && !card.contains(from)) cameFrom.set(item.id, from);
+    read(item.id, { focus: true });
+  }
+
+  function onfocusout(item: Toast, event: FocusEvent) {
+    const card = event.currentTarget as HTMLElement;
+    if (event.relatedTarget instanceof Node && card.contains(event.relatedTarget)) return;
+    read(item.id, { focus: false });
+  }
+
+  // Closing a toast that holds focus would drop focus to the page's top.
+  function close(item: Toast, card: HTMLElement | null) {
+    const back = card?.contains(document.activeElement) ? cameFrom.get(item.id) : undefined;
+    forget(item.id);
+    dismissToast(item.id);
+    if (back?.isConnected) back.focus({ preventScroll: true });
+  }
+
+  function act(item: Toast, event: MouseEvent) {
+    close(item, (event.currentTarget as HTMLElement).closest<HTMLElement>('.toast'));
+    item.action?.run();
+  }
+
+  function onkeydown(item: Toast, event: KeyboardEvent) {
+    if (event.key !== 'Escape' || event.defaultPrevented) return;
+    event.preventDefault();
+    close(item, event.currentTarget as HTMLElement);
   }
 </script>
 
-{#if $toasts.length > 0}
-  <div class="toasts">
-    {#each $toasts as t (t.id)}
-      <div class="toast {t.kind}">
-        {#if t.kind === 'success'}
-          <CircleCheck size="1.6rem" strokeWidth={1.8} />
-        {:else if t.kind === 'danger'}
-          <CircleAlert size="1.6rem" strokeWidth={1.8} />
-        {:else}
-          <Info size="1.6rem" strokeWidth={1.8} />
-        {/if}
-        <span>{t.message}</span>
-        {#if t.action}
-          <button class="action" type="button" onclick={() => act(t)}>{t.action.label}</button>
-        {/if}
-      </div>
+{#snippet card(item: Toast)}
+  {@const Icon = icons[item.kind]}
+  <!-- svelte-ignore a11y_no_static_element_interactions: the listeners only watch the toast being read and take Escape from its own buttons -->
+  <div
+    class="toast {item.kind}"
+    data-part="toast"
+    onpointerenter={() => read(item.id, { hover: true })}
+    onpointerleave={() => read(item.id, { hover: false })}
+    onfocusin={(event) => onfocusin(item, event)}
+    onfocusout={(event) => onfocusout(item, event)}
+    onkeydown={(event) => onkeydown(item, event)}
+  >
+    <Icon size="1.6rem" strokeWidth={1.8} aria-hidden="true" />
+    <p class="message">{item.message}</p>
+    {#if item.action}
+      <Button size="sm" onclick={(event) => act(item, event)}>{item.action.label}</Button>
+    {/if}
+    <IconButton
+      size="sm"
+      label={msg('ui.toastDismiss')}
+      onclick={(event) => close(item, (event.currentTarget as HTMLElement).closest<HTMLElement>('.toast'))}
+    >
+      <X size="1.4rem" strokeWidth={1.8} />
+    </IconButton>
+  </div>
+{/snippet}
+
+<section class="toasts" aria-label={msg('ui.toastsLabel')}>
+  <div class="lane" role="alert">
+    {#each urgent as item (item.id)}
+      {@render card(item)}
     {/each}
   </div>
-{/if}
+  <div class="lane" role="status">
+    {#each polite as item (item.id)}
+      {@render card(item)}
+    {/each}
+  </div>
+</section>
 
 <style>
-  .toasts {
+  .toasts,
+  .lane {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    gap: 0.8rem;
+  }
+
+  .lane {
+    gap: var(--space-2);
+  }
+
+  .lane:has(.toast) + .lane:has(.toast) {
+    margin-top: var(--space-2);
   }
 
   .toast {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    max-width: 38rem;
-    padding: 1.1rem 1.4rem;
+    gap: var(--space-2);
+    max-width: min(38rem, calc(100vw - var(--space-12)));
+    padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
     background: var(--surface-4);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-pop);
     font-size: var(--font-sm);
     color: var(--text);
-    animation: slide var(--dur-panel) var(--ease);
+    animation: toast-in var(--dur-panel) var(--ease);
   }
 
-  .action {
+  .message {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    padding: var(--space-2) 0;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+
+  .toast > :global(svg) {
     flex-shrink: 0;
-    padding: 0.4rem 0.9rem;
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-sm);
-    background: var(--hover);
     color: var(--accent-text);
-    font: inherit;
-    font-weight: 600;
-    cursor: pointer;
   }
 
-  .action:hover,
-  .action:focus-visible {
-    background: var(--hover-strong);
-  }
-
-  .toast :global(svg) {
-    flex-shrink: 0;
-  }
-
-  .toast.success :global(svg) {
+  .toast.success > :global(svg) {
     color: var(--success);
   }
 
-  .toast.danger :global(svg) {
+  .toast.warning > :global(svg) {
+    color: var(--warning);
+  }
+
+  .toast.danger > :global(svg) {
     color: var(--danger);
   }
 
-  .toast.info :global(svg) {
-    color: var(--accent-text);
-  }
-
-  @keyframes slide {
+  @keyframes toast-in {
     from {
       opacity: 0;
       transform: translateY(0.6rem);
