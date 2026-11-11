@@ -24,7 +24,6 @@
   import SearchInput from '../../lib/components/SearchInput.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import SocialConsentScreen from '../../lib/components/SocialConsentScreen.svelte';
-  import Tabs from '../../lib/components/Tabs.svelte';
   import { AccountError } from '../../lib/services/account';
   import { accountErrorText } from '../../lib/services/accountMessages';
   import {
@@ -358,7 +357,7 @@
       </div>
     {/if}
 
-    <Tabs {tabs} bind:value={tab} variant="pill" />
+    <SegmentedControl options={tabs} label={msg('social.friendsTabLabel')} variant="pill" bind:value={tab} />
 
     {#if presenceTabs.has(tab)}
       {#if page.incoming.length > 0}
@@ -391,6 +390,7 @@
               {/snippet}
             </DropdownMenu>
             <SegmentedControl
+              label={msg('social.friendsViewLabel')}
               bind:value={$friendsView}
               options={[
                 { id: 'grid', label: msg('social.friendsViewGrid') },

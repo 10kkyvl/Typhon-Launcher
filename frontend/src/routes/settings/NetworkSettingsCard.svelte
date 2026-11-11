@@ -227,10 +227,10 @@
   <div class="rows">
     <div class="row">
       <div class="row-text">
-        <span class="row-label">{msg('settings.networkModeLabel')}</span>
+        <span class="row-label" id="{uid}-mode-label">{msg('settings.networkModeLabel')}</span>
         <span class="row-sub">{msg('settings.networkModeSub')}</span>
       </div>
-      <SegmentedControl options={modeOptions} bind:value={mode} disabled={applying} />
+      <SegmentedControl options={modeOptions} labelledby="{uid}-mode-label" bind:value={mode} disabled={applying} />
     </div>
 
     {#if mode === 'interface'}

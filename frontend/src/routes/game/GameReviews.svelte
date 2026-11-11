@@ -3,7 +3,7 @@
   import Button from '../../lib/components/Button.svelte';
   import Spinner from '../../lib/components/Spinner.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
-  import Tabs from '../../lib/components/Tabs.svelte';
+  import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import { AccountError } from '../../lib/services/account';
   import { list as listReviews, type Review, type ReviewFilter, type ReviewSort } from '../../lib/services/reviews';
   import { reviewsChanged } from '../../lib/game/reviewsRefresh';
@@ -116,8 +116,8 @@
     <div class="header">
       <h2 class="heading">{msg('reviews.sectionTitle')}</h2>
       <div class="controls">
-        <Tabs tabs={sortTabs} bind:value={sort} variant="pill" />
-        <Tabs tabs={filterTabs} bind:value={filter} variant="pill" />
+        <SegmentedControl options={sortTabs} label={msg('reviews.sortLabel')} variant="pill" bind:value={sort} />
+        <SegmentedControl options={filterTabs} label={msg('reviews.filterLabel')} variant="pill" bind:value={filter} />
       </div>
     </div>
 

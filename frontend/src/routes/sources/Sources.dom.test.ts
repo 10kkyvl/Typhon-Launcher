@@ -1,9 +1,10 @@
-import { render, screen } from '@testing-library/svelte';
+import { render, screen, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import type { Source } from '../../lib/services/sources';
 import { sourceErrorText } from '../../lib/sources/sourceErrors';
 import { sources } from '../../lib/stores/sources';
+import { user } from '../../lib/testing/dom';
 import { describedControls, hintOnFocus } from '../../lib/testing/hints';
 import Sources from './Sources.svelte';
 
@@ -21,7 +22,7 @@ function source(over: Partial<Source>): Source {
 let app: HTMLDivElement;
 
 beforeEach(() => {
-  // jsdom has no ResizeObserver; the status filter tabs measure their indicator with one.
+  // jsdom has no ResizeObserver; the status filter measures its plate with one.
   vi.stubGlobal('ResizeObserver', class {
     observe() {}
     unobserve() {}
@@ -75,5 +76,30 @@ describe('Sources: row hints without a mouse', () => {
     sources.set([source({})]);
     render(Sources, { target: app, props: {} });
     await expectReachable(msg('transfers.sourcesMatchTooltip', { matched: '7', review: '2', unmatched: '1' }));
+  });
+});
+
+describe('Sources: the status filter', () => {
+  it('is a named radio group with a count on every choice, and choosing one filters the list', async () => {
+    sources.set([
+      source({ id: 's1', name: 'Main feed', status: 'active' }),
+      source({ id: 's2', name: 'Old feed', status: 'disabled', enabled: false }),
+    ]);
+    render(Sources, { target: app, props: {} });
+
+    const filter = screen.getByRole('radiogroup', { name: msg('transfers.sourcesStatusFilterLabel') });
+    const all = within(filter).getByRole('radio', { name: `${msg('transfers.sourcesTabAll')} 2` });
+    expect(all.getAttribute('aria-checked')).toBe('true');
+    expect(screen.queryByRole('tablist')).toBeNull();
+    expect(screen.getByText('Main feed')).toBeTruthy();
+    expect(screen.getByText('Old feed')).toBeTruthy();
+
+    const disabled = within(filter).getByRole('radio', { name: `${msg('transfers.sourcesTabDisabled')} 1` });
+    await user().click(disabled);
+
+    expect(disabled.getAttribute('aria-checked')).toBe('true');
+    expect(all.getAttribute('aria-checked')).toBe('false');
+    expect(screen.queryByText('Main feed')).toBeNull();
+    expect(screen.getByText('Old feed')).toBeTruthy();
   });
 });

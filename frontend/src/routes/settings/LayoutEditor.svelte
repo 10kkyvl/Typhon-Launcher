@@ -224,6 +224,7 @@
     <div class="group-body">
       <SegmentedControl
         options={sideOptions}
+        label={msg('settings.layoutSidebarSideLabel')}
         bind:value={() => st.sidebarSide, (v) => apply({ ...st, sidebarSide: v === 'right' ? 'right' : 'left' })}
       />
       {@render rows('sidebar', '')}
@@ -254,6 +255,7 @@
     <div class="group-body">
       <SegmentedControl
         options={searchOptions}
+        label={msg('settings.layoutSearchPlaceLabel')}
         bind:value={() => st.search, (v) => apply({ ...st, search: v === 'center' ? 'center' : 'left' })}
       />
       {@render rows('topbar', '')}

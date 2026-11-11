@@ -82,10 +82,10 @@
     <div class="rows">
       <div class="row">
         <div class="row-text">
-          <span class="row-label">{msg('social.whoSeesProfile')}</span>
+          <span class="row-label" id="{uid}-visibility-label">{msg('social.whoSeesProfile')}</span>
           <span class="row-sub">{msg('social.friendsSeeMore')}</span>
         </div>
-        <SegmentedControl options={visibilityOptions} bind:value={visibility} disabled={$isOffline} />
+        <SegmentedControl options={visibilityOptions} labelledby="{uid}-visibility-label" bind:value={visibility} disabled={$isOffline} />
       </div>
       {#each flags as flag (flag.key)}
         <div class="row">

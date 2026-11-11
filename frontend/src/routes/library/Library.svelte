@@ -556,6 +556,7 @@
           {/snippet}
         </DropdownMenu>
         <SegmentedControl
+          label={msg('games.viewLabel')}
           bind:value={$libraryView}
           options={[
             { id: 'grid', label: msg('games.viewGrid') },

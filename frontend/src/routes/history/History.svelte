@@ -18,7 +18,7 @@
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import SearchInput from '../../lib/components/SearchInput.svelte';
-  import Tabs from '../../lib/components/Tabs.svelte';
+  import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import { clearHistoryPrompt } from '../../lib/confirm/prompts';
   import { filterHistory } from '../../lib/history/historyFilter';
   import { historyLabel } from '../../lib/history/historyText';
@@ -147,7 +147,7 @@
     </EmptyState>
   {:else}
     <div class="toolbar">
-      <Tabs {tabs} bind:value={segment} variant="pill" />
+      <SegmentedControl options={tabs} label={msg('transfers.historySegmentLabel')} variant="pill" bind:value={segment} />
       <div class="search-slot">
         <SearchInput bind:value={query} placeholder={msg('transfers.historySearchPlaceholder')} />
       </div>

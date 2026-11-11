@@ -9,8 +9,8 @@ import { frontendSources } from '../lib/testing/sources';
  * the reach-in rule sees `:global(` selectors that name the component's root class.
  */
 
-const COMPONENTS = ['Toggle'] as const;
-const ROOTS: Record<(typeof COMPONENTS)[number], string> = { Toggle: 'toggle' };
+const COMPONENTS = ['Toggle', 'SegmentedControl'] as const;
+const ROOTS: Record<(typeof COMPONENTS)[number], string> = { Toggle: 'toggle', SegmentedControl: 'segmented' };
 
 function style(path: string): string {
   const text = frontendSources[path];
@@ -56,6 +56,15 @@ describe('switch, segmented control and tabs', () => {
       .filter(([path, text]) => path.endsWith('.svelte') && !own.has(path) && reach.test(text))
       .map(([path]) => path);
     expect(bad).toEqual([]);
+  });
+
+  // A group of choices with no name is announced as a bare "radio group".
+  it('every segmented control is named, by a visible label or its own', () => {
+    const tags = Object.entries(frontendSources)
+      .filter(([path]) => path.endsWith('.svelte') && !path.startsWith('lib/testing/'))
+      .flatMap(([path, text]) => [...text.matchAll(/<SegmentedControl\b[^]*?(?:\/>|>\s*\n)/g)].map((m) => ({ path, tag: m[0] })));
+    expect(tags.length).toBeGreaterThanOrEqual(14);
+    expect(tags.filter(({ tag }) => !/\blabel(?:ledby)?=/.test(tag)).map(({ path, tag }) => `${path}: ${tag.trim()}`)).toEqual([]);
   });
 
   // The theme editor's preview draws a switch of its own inside its scoped tokens; it must look like

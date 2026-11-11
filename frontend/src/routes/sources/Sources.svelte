@@ -28,7 +28,7 @@
   import SourceDetailsModal from '../../lib/components/SourceDetailsModal.svelte';
   import SourcesNoticeModal from '../../lib/components/SourcesNoticeModal.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
-  import Tabs from '../../lib/components/Tabs.svelte';
+  import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import Tooltip from '../../lib/components/Tooltip.svelte';
   import { route } from '../../lib/stores/router';
   import { removeSourcePrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
@@ -218,7 +218,7 @@
       {/snippet}
     </EmptyState>
   {:else}
-    <Tabs tabs={statusTabs} bind:value={statusFilter} variant="pill" />
+    <SegmentedControl options={statusTabs} label={msg('transfers.sourcesStatusFilterLabel')} variant="pill" bind:value={statusFilter} />
 
     {#if filteredSources.length === 0}
       <EmptyState title={msg('transfers.sourcesEmptyFilteredTitle')} description={msg('transfers.sourcesEmptyFilteredDescription')} />

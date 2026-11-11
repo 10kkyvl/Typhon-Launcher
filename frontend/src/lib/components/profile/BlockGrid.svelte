@@ -208,6 +208,7 @@
             <span class="spacer"></span>
             <SegmentedControl
               options={WIDTHS}
+              label={msg('profile.blockWidthFor', { name })}
               bind:value={() => block.width, (value) => onwidth?.(block.id, value as BlockWidth)}
             >
               {#snippet item(option)}{WIDTH_SHORT[option.id]}{/snippet}

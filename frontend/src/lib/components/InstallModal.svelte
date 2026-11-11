@@ -533,8 +533,8 @@
           <p class="note">{msg('modals.installSeedingCopyNote')}</p>
         {:else}
           <div class="field">
-            <span class="field-label">{msg('modals.installModeLabel')}</span>
-            <SegmentedControl options={modeOptions} bind:value={() => mode, setMode} />
+            <span class="field-label" id="{uid}-mode-label">{msg('modals.installModeLabel')}</span>
+            <SegmentedControl options={modeOptions} labelledby="{uid}-mode-label" bind:value={() => mode, setMode} />
           </div>
         {/if}
         {#if movesInPlace}
