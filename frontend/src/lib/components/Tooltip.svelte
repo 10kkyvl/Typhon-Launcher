@@ -2,7 +2,8 @@
   import { onDestroy, untrack, type Snippet } from 'svelte';
   import type { Attachment } from 'svelte/attachments';
   import { layer } from '../layers';
-  import { anchorTo, scrolledUnder, type Placement } from '../utils/position';
+  import type { Placement } from '../utils/position';
+  import { hintBubble, hintTrigger, usable } from './hint';
   import { createHoverIntent } from './hoverIntent';
 
   /**
@@ -42,14 +43,9 @@
   let open = $state(false);
 
   const control = (): HTMLElement | null => host?.querySelector<HTMLElement>(CONTROL) ?? null;
-  const usable = (): boolean => {
-    const element = control();
-    return element !== null && !element.matches(':disabled');
-  };
-  const inControl = (target: EventTarget | null): boolean => target instanceof Node && Boolean(control()?.contains(target));
 
   const intent = createHoverIntent((next) => {
-    if (next && !usable()) intent.dismiss();
+    if (next && !usable(control())) intent.dismiss();
     else open = next;
   });
   onDestroy(() => intent.destroy());
@@ -84,79 +80,12 @@
     };
   });
 
-  function onPointerover(event: PointerEvent) {
-    if (event.pointerType === 'touch' || !inControl(event.target) || !usable()) return;
-    intent.hover();
-  }
+  // Events of the control reach the host as they bubble, so a control created again inside it still counts.
+  const listen: Attachment<HTMLElement> = (node) => hintTrigger(node, { intent, control });
 
-  function onPointerout(event: PointerEvent) {
-    if (!inControl(event.target) || inControl(event.relatedTarget)) return;
-    intent.unhover();
-  }
-
-  function onFocusin(event: FocusEvent) {
-    const target = event.target;
-    if (target instanceof HTMLElement && inControl(target) && target.matches(':focus-visible')) intent.focus();
-  }
-
-  function onFocusout(event: FocusEvent) {
-    if (inControl(event.relatedTarget)) return;
-    intent.blur();
-  }
-
-  function onPointerdown(event: PointerEvent) {
-    if (inControl(event.target)) intent.escape();
-  }
-
-  // Events of the control reach the host as they bubble, so a control re-created inside it still counts.
-  const listen: Attachment<HTMLElement> = (node) => {
-    node.addEventListener('pointerover', onPointerover);
-    node.addEventListener('pointerout', onPointerout);
-    node.addEventListener('focusin', onFocusin);
-    node.addEventListener('focusout', onFocusout);
-    node.addEventListener('pointerdown', onPointerdown);
-    return () => {
-      node.removeEventListener('pointerover', onPointerover);
-      node.removeEventListener('pointerout', onPointerout);
-      node.removeEventListener('focusin', onFocusin);
-      node.removeEventListener('focusout', onFocusout);
-      node.removeEventListener('pointerdown', onPointerdown);
-    };
-  };
-
-  // While shown: follows the control, keeps itself under the pointer, and goes away with the control.
-  // Untracked: a re-render of the control must not set the hint up again (and miss its own removal).
-  const bubble: Attachment<HTMLElement> = (node) => untrack(() => follow(node));
-
-  function follow(node: HTMLElement): () => void {
-    const stopAnchor = anchorTo(node, () => control(), { placement, offset: 6, onhide: () => intent.dismiss() });
-    const enter = () => intent.hover();
-    const leave = () => intent.unhover();
-    // A press on the hint must not take focus off the control it describes.
-    const keepFocus = (event: MouseEvent) => event.preventDefault();
-    const onScroll = (event: Event) => {
-      if (scrolledUnder(event.target, control())) intent.dismiss();
-    };
-    const onBlur = () => intent.dismiss();
-    const watcher = new MutationObserver(() => {
-      if (!usable()) intent.dismiss();
-    });
-    if (host) watcher.observe(host, { subtree: true, childList: true, attributes: true, attributeFilter: ['disabled'] });
-    node.addEventListener('pointerenter', enter);
-    node.addEventListener('pointerleave', leave);
-    node.addEventListener('mousedown', keepFocus);
-    window.addEventListener('scroll', onScroll, true);
-    window.addEventListener('blur', onBlur);
-    return () => {
-      stopAnchor();
-      watcher.disconnect();
-      node.removeEventListener('pointerenter', enter);
-      node.removeEventListener('pointerleave', leave);
-      node.removeEventListener('mousedown', keepFocus);
-      window.removeEventListener('scroll', onScroll, true);
-      window.removeEventListener('blur', onBlur);
-    };
-  }
+  // Untracked: a re-render of the control must not set the shown hint up again (and miss its own removal).
+  const bubble: Attachment<HTMLElement> = (node) =>
+    untrack(() => hintBubble(node, { intent, control, placement, watch: host ?? null }));
 </script>
 
 <span class="tooltip-host" bind:this={host} {@attach listen}>
