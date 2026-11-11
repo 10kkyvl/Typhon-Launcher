@@ -248,7 +248,7 @@ func TestSkillDescribesEveryTokenKind(t *testing.T) {
 		t.Fatal("SKILL.md has no Values the launcher accepts section")
 	}
 	rows := map[string]bool{}
-	for _, m := range regexp.MustCompile("(?m)^\\| ([a-z]+) \\|").FindAllStringSubmatch(section, -1) {
+	for _, m := range regexp.MustCompile(`(?m)^\| ([a-z]+) \|`).FindAllStringSubmatch(section, -1) {
 		rows[m[1]] = true
 	}
 	used := map[Kind]bool{}
