@@ -15,6 +15,10 @@
   --topbar-search-max: 44rem;
   --topbar-chip-max: 20rem;
 
+  /* The least distance between a popup (menu, listbox, tooltip) and the window edge; at the top it is
+     added below the title bar (utils/position.ts). */
+  --popup-edge: 0.8rem;
+
   /* The window backdrop: how much of the art's colour survives the bake, and how strongly the wash shows. */
   --ambient-saturate: 0.75;
   --ambient-opacity: 1;
