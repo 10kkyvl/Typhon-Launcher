@@ -19,6 +19,8 @@ export interface PlateStep {
   from: Box | null;
 }
 
+import { documentMotion, tokenEase, tokenMs } from './motion';
+
 const place = (b: Box) => `translate(${b.x}px, ${b.y}px)`;
 
 export function plateRest(b: Box): string {
@@ -67,29 +69,6 @@ export function scrollToShow(itemTop: number, itemHeight: number, scrollTop: num
 export function partsThatMove(container: Element): Element[] {
   const children = [...container.children];
   return [container, ...children, ...children.flatMap((child) => [...child.children])];
-}
-
-export function motionAllowed(root: { classList: { contains(name: string): boolean } }, reducedMotion: boolean): boolean {
-  return !root.classList.contains('no-anim') && !reducedMotion;
-}
-
-export function documentMotion(): boolean {
-  if (typeof document === 'undefined') return false;
-  const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  return motionAllowed(document.documentElement, reduced);
-}
-
-export function tokenMs(name: string, fallback: number): number {
-  if (typeof document === 'undefined' || typeof getComputedStyle !== 'function') return fallback;
-  const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  const n = parseFloat(raw);
-  if (!Number.isFinite(n)) return fallback;
-  return raw.endsWith('ms') ? n : raw.endsWith('s') ? n * 1000 : fallback;
-}
-
-function tokenEase(name: string, fallback: string): string {
-  if (typeof document === 'undefined' || typeof getComputedStyle !== 'function') return fallback;
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 }
 
 export class Plate {

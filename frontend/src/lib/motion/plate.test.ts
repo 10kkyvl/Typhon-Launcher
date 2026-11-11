@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { afterEach, beforeEach } from 'vitest';
-import { measure, motionAllowed, partsThatMove, Plate, plateKeyframes, plateStep, scrollToShow, type Box } from './plate';
+import { measure, partsThatMove, Plate, plateKeyframes, plateStep, scrollToShow, type Box } from './plate';
 
 const library: Box = { x: 12, y: 80, w: 200, h: 40 };
 const friends: Box = { x: 12, y: 200, w: 200, h: 40 };
@@ -22,7 +22,6 @@ function plateElement() {
   return { el: { style: {} as Record<string, string>, animate } as unknown as HTMLElement & { animate: typeof animate }, animate };
 }
 
-const root = (classes: string[] = []) => ({ classList: { contains: (name: string) => classes.includes(name) } });
 
 describe('plateStep', () => {
   it('sits on the first item without sliding in', () => {
@@ -67,14 +66,6 @@ describe('measure', () => {
   it('has nothing to measure for a missing or collapsed item', () => {
     expect(measure(null)).toBeNull();
     expect(measure(element(null))).toBeNull();
-  });
-});
-
-describe('motionAllowed', () => {
-  it('follows the animations setting and the system reduced-motion request', () => {
-    expect(motionAllowed(root(), false)).toBe(true);
-    expect(motionAllowed(root(['no-anim']), false)).toBe(false);
-    expect(motionAllowed(root(), true)).toBe(false);
   });
 });
 

@@ -5,7 +5,7 @@
   import { gameArt, requestArt } from '../stores/metadata';
   import { themeApplied } from '../theme/apply';
   import { resolveColors } from '../theme/resolveColors';
-  import { documentMotion, tokenMs } from '../motion/plate';
+  import { documentMotion, tokenMs } from '../motion/motion';
   import { BackdropPainter } from '../backdrop/painter';
   import { LookReader } from '../backdrop/lookReader';
   import { BACKDROP_H, BACKDROP_LOOK_COLORS, BACKDROP_W, backdropLook, bakeImage, loadImage, type BackdropLook } from '../backdrop/pixels';
