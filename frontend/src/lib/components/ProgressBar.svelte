@@ -54,7 +54,10 @@
   aria-busy={indeterminate ? 'true' : undefined}
   style:height="{height / 10}rem"
 >
-  <div class="fill" class:indeterminate style:--pct={indeterminate ? undefined : `${pct}%`}></div>
+  <!-- A new node when the mode changes: it starts at its value instead of sliding there from the sweep. -->
+  {#key indeterminate}
+    <div class="fill" class:indeterminate style:--pct={indeterminate ? undefined : `${pct}%`}></div>
+  {/key}
 </div>
 
 <style>

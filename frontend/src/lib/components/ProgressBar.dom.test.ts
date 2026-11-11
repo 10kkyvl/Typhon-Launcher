@@ -75,6 +75,22 @@ describe('ProgressBar in a DOM', () => {
     expect(wide.getByRole('progressbar', { name: 'Wide' }).classList.contains('stretch')).toBe(true);
   });
 
+  // A kept node would carry the sweep's transform into the shift transition and slide a full bar across.
+  it('draws a new fill when the amount becomes known, and keeps it while the value moves', async () => {
+    const { getByRole, rerender } = renderDom(ProgressBar, { value: 0, indeterminate: true, label: 'Known' });
+    const fill = () => getByRole('progressbar', { name: 'Known' }).querySelector<HTMLElement>('.fill');
+    const sweeping = fill();
+
+    await rerender({ value: 40, indeterminate: false, label: 'Known' });
+    const known = fill();
+    expect(known).not.toBe(sweeping);
+    expect(known?.classList.contains('indeterminate')).toBe(false);
+    expect(known?.style.getPropertyValue('--pct')).toBe('40%');
+
+    await rerender({ value: 60, indeterminate: false, label: 'Known' });
+    expect(fill()).toBe(known);
+  });
+
   it('moves its fill without resizing it: the value is a shift, not a width', () => {
     const { getByRole } = renderDom(ProgressBar, { value: 25, label: 'Shift' });
     const fill = getByRole('progressbar', { name: 'Shift' }).querySelector<HTMLElement>('.fill');
