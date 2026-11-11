@@ -49,6 +49,7 @@
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import SystemRequirements from '../../lib/components/SystemRequirements.svelte';
   import Tabs from '../../lib/components/Tabs.svelte';
+  import { tabPanel } from '../../lib/components/tabs';
   import Toggle from '../../lib/components/Toggle.svelte';
   import UpdateCard from '../../lib/components/UpdateCard.svelte';
   import VerifyCard from '../../lib/components/VerifyCard.svelte';
@@ -1581,12 +1582,12 @@
 
     {#if tabs.length > 1}
       <div class="tabs-wrap" data-part="game-tabs">
-        <Tabs {tabs} bind:value={activeTab} />
+        <Tabs {tabs} idPrefix="{uid}-game" label={title} bind:value={activeTab} />
       </div>
     {/if}
 
     <div class="body">
-      <div class="main" data-part="game-main">
+      <div class="main" data-part="game-main" {...tabs.length > 1 ? tabPanel(`${uid}-game`, activeTab) : {}}>
         {#if activeTab === 'screenshots'}
           {#if localGame && ownShots}
             <GameScreenshots gameId={localGame.id} {title} />

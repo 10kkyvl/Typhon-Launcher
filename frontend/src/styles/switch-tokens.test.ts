@@ -9,8 +9,8 @@ import { frontendSources } from '../lib/testing/sources';
  * the reach-in rule sees `:global(` selectors that name the component's root class.
  */
 
-const COMPONENTS = ['Toggle', 'SegmentedControl'] as const;
-const ROOTS: Record<(typeof COMPONENTS)[number], string> = { Toggle: 'toggle', SegmentedControl: 'segmented' };
+const COMPONENTS = ['Toggle', 'SegmentedControl', 'Tabs'] as const;
+const ROOTS: Record<(typeof COMPONENTS)[number], string> = { Toggle: 'toggle', SegmentedControl: 'segmented', Tabs: 'tabs' };
 
 function style(path: string): string {
   const text = frontendSources[path];
@@ -65,6 +65,17 @@ describe('switch, segmented control and tabs', () => {
       .flatMap(([path, text]) => [...text.matchAll(/<SegmentedControl\b[^]*?(?:\/>|>\s*\n)/g)].map((m) => ({ path, tag: m[0] })));
     expect(tags.length).toBeGreaterThanOrEqual(14);
     expect(tags.filter(({ tag }) => !/\blabel(?:ledby)?=/.test(tag)).map(({ path, tag }) => `${path}: ${tag.trim()}`)).toEqual([]);
+  });
+
+  // Tabs switch a body: the page wires the chosen tab to its panel (tabs.ts), or it is not tabs but a
+  // single choice (SegmentedControl).
+  it('every tab strip is named and its page marks the panel of the chosen tab', () => {
+    const sites = Object.entries(frontendSources)
+      .filter(([path]) => path.endsWith('.svelte') && !path.startsWith('lib/testing/'))
+      .flatMap(([path, text]) => [...text.matchAll(/<Tabs\b[^\n]*\/>/g)].map((m) => ({ path, tag: m[0], text })));
+    expect(sites.length).toBeGreaterThanOrEqual(4);
+    const bad = sites.filter(({ tag, text }) => !/\bidPrefix=/.test(tag) || !/\blabel(?:ledby)?=/.test(tag) || !/\{\.\.\.[^}]*tabPanel\(/.test(text));
+    expect(bad.map(({ path, tag }) => `${path}: ${tag}`)).toEqual([]);
   });
 
   // The theme editor's preview draws a switch of its own inside its scoped tokens; it must look like

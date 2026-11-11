@@ -25,6 +25,7 @@
   import ReleaseNotesList from '../../lib/components/ReleaseNotesList.svelte';
   import SourcesNoticeModal from '../../lib/components/SourcesNoticeModal.svelte';
   import Tabs from '../../lib/components/Tabs.svelte';
+  import { tabPanel } from '../../lib/components/tabs';
   import Toggle from '../../lib/components/Toggle.svelte';
   import RollbackAction from '../../lib/components/RollbackAction.svelte';
   import StableOffer from '../../lib/components/StableOffer.svelte';
@@ -582,12 +583,12 @@
   <PageHeader title={msg('settings.pageTitle')} />
 
   <div class="tabs-wrap">
-    <Tabs {tabs} bind:value={tab} />
+    <Tabs {tabs} idPrefix={uid} label={msg('settings.pageTitle')} divider={false} bind:value={tab} />
   </div>
 
   <div class="settings-page">
   {#key tab}
-  <div class="tab-body">
+  <div class="tab-body" {...tabPanel(uid, tab)}>
   {#if tab === 'general'}
     <div class="settings-grid">
       <div class="settings-column">
@@ -1707,10 +1708,6 @@
     background: var(--island-fill);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-  }
-
-  .tabs-wrap :global(.tabs.underline) {
-    border-bottom: 0;
   }
 
   .tab-body {

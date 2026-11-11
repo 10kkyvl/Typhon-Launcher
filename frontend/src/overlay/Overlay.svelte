@@ -3,6 +3,7 @@
   import { onMount } from 'svelte';
   import IconButton from '../lib/components/IconButton.svelte';
   import Tabs from '../lib/components/Tabs.svelte';
+  import { tabPanel } from '../lib/components/tabs';
   import { msg } from '../lib/i18n';
   import { pinnedSizesStyle } from '../lib/theme/pinnedSizes';
   import type { ChatPeer } from '../lib/services/messaging';
@@ -21,6 +22,8 @@
   import OverlayMusic from './OverlayMusic.svelte';
 
   let { settingsFailed = false }: { settingsFailed?: boolean } = $props();
+
+  const uid = $props.id();
 
   let tab = $state('chat');
   let shown = $state(true);
@@ -147,12 +150,12 @@
       <div class="state">{msg('overlay.consentNeeded')}</div>
     {:else}
       <div class="tabs">
-        <Tabs {tabs} bind:value={tab} />
+        <Tabs {tabs} idPrefix={uid} label={msg('overlay.panelLabel')} bind:value={tab} />
       </div>
-      <div class="pane" class:off={tab !== 'chat'}>
+      <div class="pane" class:off={tab !== 'chat'} {...tabPanel(uid, 'chat')}>
         <OverlayChat active={shown && tab === 'chat'} {focusTick} />
       </div>
-      <div class="pane" class:off={tab !== 'friends'}>
+      <div class="pane" class:off={tab !== 'friends'} {...tabPanel(uid, 'friends')}>
         <OverlayFriends onchat={chatWith} />
       </div>
     {/if}

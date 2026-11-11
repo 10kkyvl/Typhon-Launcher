@@ -4,8 +4,11 @@
   import { dlcView, hasRequirements, requirementColumns } from '../game/extras';
   import type { SteamInfo } from '../services/metadata';
   import Tabs from './Tabs.svelte';
+  import { tabPanel } from './tabs';
 
   let { steam, onopendlc }: { steam: SteamInfo | null | undefined; onopendlc: (appId: number) => void } = $props();
+
+  const uid = $props.id();
 
   let requirementsTab = $state('minimum');
   let dlcExpanded = $state(false);
@@ -25,22 +28,24 @@
 
 {#if hasRequirements(columns)}
   <section class="block">
-    <h2 class="heading">{$t('games.detailRequirementsHeading')}</h2>
+    <h2 class="heading" id="{uid}-requirements">{$t('games.detailRequirementsHeading')}</h2>
     {#if bothColumns}
-      <Tabs tabs={requirementTabs} bind:value={requirementsTab} variant="pill" />
+      <Tabs tabs={requirementTabs} idPrefix={uid} labelledby="{uid}-requirements" variant="pill" bind:value={requirementsTab} />
     {:else}
       <p class="column-title">
         {shown === 'minimum' ? $t('games.detailRequirementsMinimum') : $t('games.detailRequirementsRecommended')}
       </p>
     {/if}
-    <dl class="rows">
-      {#each rows as row (row.key)}
-        <div class="row">
-          <dt>{row.label}</dt>
-          <dd>{row.value}</dd>
-        </div>
-      {/each}
-    </dl>
+    <div {...bothColumns ? tabPanel(uid, requirementsTab) : {}}>
+      <dl class="rows">
+        {#each rows as row (row.key)}
+          <div class="row">
+            <dt>{row.label}</dt>
+            <dd>{row.value}</dd>
+          </div>
+        {/each}
+      </dl>
+    </div>
   </section>
 {/if}
 

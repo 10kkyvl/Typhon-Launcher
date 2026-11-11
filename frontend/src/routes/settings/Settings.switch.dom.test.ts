@@ -70,3 +70,22 @@ describe('Settings: a switch row', () => {
     await vi.waitFor(() => expect(tray.getAttribute('aria-checked')).toBe('true'));
   });
 });
+
+describe('Settings: the tabs', () => {
+  it('name the panel they show, and an arrow key shows the next one', async () => {
+    render(Settings, { target: app });
+    const tabs = screen.getAllByRole('tab');
+    const first = tabs[0];
+    expect(first.getAttribute('aria-selected')).toBe('true');
+    const panel = screen.getByRole('tabpanel');
+    expect(panel.getAttribute('aria-labelledby')).toBe(first.id);
+    expect(first.getAttribute('aria-controls')).toBe(panel.id);
+
+    first.focus();
+    await user().keyboard('{ArrowRight}');
+
+    expect(tabs[1].getAttribute('aria-selected')).toBe('true');
+    expect(document.activeElement).toBe(tabs[1]);
+    expect(screen.getByRole('tabpanel').getAttribute('aria-labelledby')).toBe(tabs[1].id);
+  });
+});
