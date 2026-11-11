@@ -48,3 +48,21 @@ The frontend is rebuilt to stay for years and to be extended by themes, later by
   component in `lib/components/` (`Page.svelte` is the page container). A missing variant is added to
   the base component; no local copies, no `:global` reach-in.
 - `$derived` before `$effect`; every effect and listener cleans up.
+
+## Learned the hard way
+
+Add a line when a mistake repeats; drop one a guard now enforces.
+
+- Anything that opens over the page (menu, list, hint, panel, results) is a layer: `lib/layers`
+  decides Escape, outside presses, Tab and focus return; `anchorTo` (`lib/utils/position.ts`) places
+  it. No new `clickOutside`, window listener, z-index or keyframes (`utils/clickOutside.ts` remains
+  only for components not rebuilt yet; do not copy them).
+- jsdom does not prove focus order, held keys (a repeated keydown, `event.repeat`, activates nothing),
+  scrolling or placement. Drive those in a real browser before the stage is called done. A
+  source-text guard is a tripwire, not proof.
+- A control that reports through `onchange` never writes the value itself: it shows what the caller
+  holds, so a refused or failed change does not stay on screen as a guess.
+- A hint on a control goes through `Tooltip`, never a native `title`. State is exposed
+  (`aria-pressed`, `aria-expanded`), not only coloured.
+- New i18n strings (`lib/i18n/catalog/{ru,en}`) land in a commit before the one that uses them; fold
+  fixes of unpublished commits into them.
