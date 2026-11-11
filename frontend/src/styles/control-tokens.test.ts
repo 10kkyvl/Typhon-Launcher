@@ -45,6 +45,24 @@ describe('base controls take their look from tokens', () => {
     });
   }
 
+  // The launcher setting and the system request both turn motion off; a press or a hover then changes
+  // colour only. Each rule comes after the one that moves the control, at the same specificity or more.
+  it.each([
+    ['lib/components/Button.svelte', ".btn:is(:hover, :active):not(:disabled, [aria-disabled='true'])", ".btn:active:not(:disabled, [aria-disabled='true'])"],
+    ['lib/components/IconButton.svelte', '.icon-btn:active:not(:disabled)', '.icon-btn:active:not(:disabled)'],
+    ['lib/components/Chip.svelte', 'button.chip:active', 'button.chip:active'],
+  ])('%s moves nothing when animations are off', (path, still, moving) => {
+    const css = style(path);
+    const escaped = still.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const reduced = new RegExp(`@media \\(prefers-reduced-motion: reduce\\) \\{\\s*${escaped} \\{\\s*transform: none;\\s*\\}\\s*\\}`).exec(css);
+    expect(reduced, `${path} under reduced motion`).not.toBeNull();
+    expect(ruleBody(css, `:global(.no-anim) ${still}`)).toEqual({ transform: 'none' });
+    const moves = css.indexOf(`${moving} {`);
+    expect(moves).toBeGreaterThan(-1);
+    expect((reduced as RegExpExecArray).index).toBeGreaterThan(moves);
+    expect(css.indexOf(`:global(.no-anim) ${still} {`)).toBeGreaterThan(moves);
+  });
+
   it('finds the rules it checks', () => {
     for (const path of CONTROLS) expect(declarations(style(path)).length, path).toBeGreaterThan(5);
   });

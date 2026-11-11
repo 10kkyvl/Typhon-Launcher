@@ -84,6 +84,17 @@
     transform: scale(0.9);
   }
 
+  /* With animations off a press changes nothing but the colour. */
+  @media (prefers-reduced-motion: reduce) {
+    .icon-btn:active:not(:disabled) {
+      transform: none;
+    }
+  }
+
+  :global(.no-anim) .icon-btn:active:not(:disabled) {
+    transform: none;
+  }
+
   .sm {
     width: var(--control-sm);
     height: var(--control-sm);

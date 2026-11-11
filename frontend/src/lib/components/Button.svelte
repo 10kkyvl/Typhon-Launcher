@@ -221,6 +221,24 @@
     box-shadow: none;
   }
 
+  /* The two halves of a split button read as one control: one half lifting or pressing in alone would
+     step the seam between them, so a joined half stays where it is. */
+  .btn:is(.join-start, .join-end):is(:hover, :active):not(:disabled, [aria-disabled='true']) {
+    transform: none;
+    box-shadow: none;
+  }
+
+  /* With animations off a hover or a press changes colour only. */
+  @media (prefers-reduced-motion: reduce) {
+    .btn:is(:hover, :active):not(:disabled, [aria-disabled='true']) {
+      transform: none;
+    }
+  }
+
+  :global(.no-anim) .btn:is(:hover, :active):not(:disabled, [aria-disabled='true']) {
+    transform: none;
+  }
+
   /* The in-game overlay is drawn at the density the main window had before 2.0 and keeps the controls
      of that time until it gets its own pass (the root says so with data-controls="1x"). */
   :global([data-controls='1x']) .btn {

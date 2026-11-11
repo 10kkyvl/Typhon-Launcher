@@ -80,6 +80,17 @@
     transform: scale(0.96);
   }
 
+  /* With animations off a press changes nothing but the colour. */
+  @media (prefers-reduced-motion: reduce) {
+    button.chip:active {
+      transform: none;
+    }
+  }
+
+  :global(.no-anim) button.chip:active {
+    transform: none;
+  }
+
   .outline {
     background: transparent;
     border-color: var(--border-strong);

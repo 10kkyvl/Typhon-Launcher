@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { user } from '../testing/dom';
 import ButtonHarness from '../testing/ButtonHarness.svelte';
 import buttonSource from './Button.svelte?raw';
+import { ruleBody, styleOf } from '../testing/css';
 
 let app: HTMLDivElement;
 
@@ -201,6 +202,16 @@ describe('Button shapes', () => {
     const { button } = setup({ block: true });
     expect(button().classList.contains('block')).toBe(true);
     expect(buttonSource).toMatch(/\.block \{\s*width: 100%;/);
+  });
+
+  // Lifting or pressing one half alone would step the seam between the two.
+  it('a joined half neither lifts nor presses in on its own: the pair stays still', () => {
+    const css = styleOf(buttonSource, 'Button.svelte');
+    const still = ".btn:is(.join-start, .join-end):is(:hover, :active):not(:disabled, [aria-disabled='true'])";
+    expect(ruleBody(css, still)).toEqual({ transform: 'none', 'box-shadow': 'none' });
+    const at = (selector: string) => css.indexOf(`${selector} {`);
+    expect(at(still)).toBeGreaterThan(at(".primary:hover:not(:disabled, [aria-disabled='true'])"));
+    expect(at(still)).toBeGreaterThan(at(".btn:active:not(:disabled, [aria-disabled='true'])"));
   });
 
   it('joins a neighbour on one side: no rounding there', () => {
