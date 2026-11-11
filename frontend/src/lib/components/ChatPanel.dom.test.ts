@@ -11,6 +11,7 @@ vi.mock('../stores/presence', () => ({ presenceStatus: writable('online') }));
 import { locale } from '../i18n';
 import * as chat from '../stores/messaging';
 import { user } from '../testing/dom';
+import { description, hintOnFocus } from '../testing/hints';
 import ChatPanel from './ChatPanel.svelte';
 
 const peer = { id: 'peer', username: 'friend', displayName: 'Friend', avatarUrl: '' };
@@ -47,5 +48,13 @@ describe('ChatPanel reaction choices', () => {
     const unnamed = within(article).getAllByRole('button').filter((button) => !button.getAttribute('aria-label') && !button.textContent?.trim());
     expect(unnamed).toEqual([]);
     expect(within(article).getAllByRole('button').length).toBeGreaterThan(2);
+  });
+
+  it('the attach button says how many images of what size it takes', async () => {
+    render(ChatPanel, { target: app });
+    const attach = screen.getByRole('button', { name: 'Attach an image' });
+    expect(attach.hasAttribute('title')).toBe(false);
+    expect(description(attach)).toBe('Up to 4 images of 8 MB each, you can paste them from the clipboard');
+    expect(await hintOnFocus(attach)).toBe('Up to 4 images of 8 MB each, you can paste them from the clipboard');
   });
 });

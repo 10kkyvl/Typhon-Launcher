@@ -479,7 +479,9 @@
             {/if}
           {/if}
           <div class="composer">
-            <button class="attach" type="button" title={msg('social.chatAttachHint')} aria-label={msg('social.chatAttach')} disabled={sending} onclick={() => attach()}><Paperclip size="1.7rem" /></button>
+            <Tooltip text={msg('social.chatAttachHint')}>
+              <button class="attach" type="button" aria-label={msg('social.chatAttach')} disabled={sending} onclick={() => attach()}><Paperclip size="1.7rem" /></button>
+            </Tooltip>
             <textarea
               bind:this={composer}
               value={draft}

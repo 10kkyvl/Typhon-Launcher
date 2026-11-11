@@ -8,6 +8,7 @@
   import { ownFrame } from '../profile/frameSources';
   import { toast } from '../stores/toasts';
   import { msg } from '../i18n';
+  import Tooltip from './Tooltip.svelte';
   import { signOutPrompt, type ConfirmPrompt } from '../confirm/prompts';
   import Avatar from './Avatar.svelte';
   import ConfirmModal from './ConfirmModal.svelte';
@@ -59,13 +60,13 @@
 
 <DropdownMenu items={profileMenu} placement="down" align="right" onselect={onProfileSelect}>
   {#snippet trigger({ props })}
+    <Tooltip text={$currentUser && $autoAway ? msg('ui.presenceAutoAwayHint') : ''} placement="bottom">
     <button
       {...props}
       type="button"
       class="chip"
       data-part="topbar-account"
       class:active={$route.name === 'profile'}
-      title={$currentUser && $autoAway ? msg('ui.presenceAutoAwayHint') : undefined}
     >
       <span class="avatar">
         <Avatar
@@ -88,6 +89,7 @@
         {/if}
       </span>
     </button>
+    </Tooltip>
   {/snippet}
 </DropdownMenu>
 

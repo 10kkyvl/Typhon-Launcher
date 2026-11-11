@@ -215,7 +215,9 @@ describe('Sidebar status row', () => {
         expect(right).toContain(`data-update="${u.kind}"`);
         expect(right.startsWith('<button')).toBe(u.button);
         expect(right).toMatch(new RegExp(`<span class="sr-only[^"]*">${escapeRe(escape(u.name))}</span>`));
-        expect(right).toMatch(/title="[^"]+"/);
+        // A button shows its hint through the tooltip; a plain state keeps the native title.
+        if (u.button) expect(right).not.toMatch(/title=/);
+        else expect(right).toMatch(/title="[^"]+"/);
       });
     }
   }

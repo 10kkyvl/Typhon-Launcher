@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Tooltip from '../../lib/components/Tooltip.svelte';
   import { TOKEN_RANGES, tokenRangeProblem, tokenRangeText } from '../../lib/theme/tokenRanges';
 
   let {
@@ -22,7 +23,9 @@
   const described = $derived([describedBy, problem ? problemId : ''].filter(Boolean).join(' ') || undefined);
 </script>
 
+<!-- The token's CSS name is the field's description: a theme author looks it up in THEMING.md. -->
 <span class="token-field">
+  <Tooltip text={name}>
   {#if range}
     <input
       {id}
@@ -31,7 +34,6 @@
       min={range.min}
       max={range.max}
       step={range.step}
-      title={name}
       aria-invalid={problem ? 'true' : undefined}
       aria-describedby={described}
       {value}
@@ -42,12 +44,12 @@
       {id}
       class="input sm token-value"
       type="text"
-      title={name}
       aria-describedby={describedBy}
       {value}
       oninput={(e) => onchange((e.currentTarget as HTMLInputElement).value)}
     />
   {/if}
+  </Tooltip>
   {#if problem}
     <span class="token-problem" id={problemId}>{tokenRangeText(problem)}</span>
   {/if}

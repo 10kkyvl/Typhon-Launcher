@@ -9,6 +9,7 @@
   import TokenValueInput from './TokenValueInput.svelte';
   import AiSkillButton from '../../lib/components/AiSkillButton.svelte';
   import Button from '../../lib/components/Button.svelte';
+  import Tooltip from '../../lib/components/Tooltip.svelte';
   import Card from '../../lib/components/Card.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import ThemeTextImportModal from '../../lib/components/ThemeTextImportModal.svelte';
@@ -400,7 +401,7 @@
                       {@const fieldId = `theme-token-${tokenKey(name)}`}
                       <div class="token-row">
                         <div class="token-text">
-                          <label class="token-label" for={fieldId} title={name}>{label}</label>
+                          <label class="token-label" for={fieldId}>{label}</label>
                           {#if known}
                             <span class="token-hint" id={`${fieldId}-hint`}>{msg(tokenHintKey(name))}</span>
                           {/if}
@@ -408,14 +409,15 @@
                         <div class="token-controls">
                           {#if section.colors}
                             {#if isHexColor(value)}
-                              <input
-                                class="color-input"
-                                type="color"
-                                aria-label={label}
-                                title={name}
-                                {value}
-                                oninput={(e) => setToken(name, (e.currentTarget as HTMLInputElement).value)}
-                              />
+                              <Tooltip text={name}>
+                                <input
+                                  class="color-input"
+                                  type="color"
+                                  aria-label={label}
+                                  {value}
+                                  oninput={(e) => setToken(name, (e.currentTarget as HTMLInputElement).value)}
+                                />
+                              </Tooltip>
                             {:else}
                               <span class="swatch" style:background={value} aria-hidden="true"></span>
                             {/if}

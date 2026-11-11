@@ -1,5 +1,5 @@
-import { fireEvent } from '@testing-library/svelte';
 import { tick } from 'svelte';
+import { user } from './dom';
 
 // For *.dom.test.ts: whether a hint reaches a user who has no mouse.
 
@@ -19,16 +19,16 @@ export function describedControls(root: ParentNode, text: string): HTMLElement[]
   return [...root.querySelectorAll<HTMLElement>('[aria-describedby]')].filter((element) => tabbable(element) && description(element) === text);
 }
 
-/** The shown tooltip's text after `element` gets keyboard focus, or null when none shows. */
+/**
+ * The shown tooltip's text once Tab has brought keyboard focus to `element`, or null when none shows.
+ * Focus then moves on with Tab again.
+ */
 export async function hintOnFocus(element: HTMLElement): Promise<string | null> {
-  element.focus();
-  // jsdom's focus() does not dispatch focusin, which a browser does.
-  await fireEvent.focusIn(element);
+  const keys = user();
+  for (let step = 0; step < 300 && document.activeElement !== element; step += 1) await keys.tab();
+  if (document.activeElement !== element) throw new Error('Tab never reaches the element');
   await tick();
-  const bubble = document.querySelector('[data-part="tooltip"]');
-  const text = bubble?.textContent?.trim() ?? null;
-  element.blur();
-  await fireEvent.focusOut(element);
-  await tick();
+  const text = document.querySelector('[data-part="tooltip"]')?.textContent?.trim() ?? null;
+  await keys.tab();
   return text;
 }

@@ -7,6 +7,7 @@
   import { statusReason } from '../services/selfupdateMessages';
   import { cloudCodeText } from '../cloudsaves/messages';
   import { msg } from '../i18n';
+  import Tooltip from './Tooltip.svelte';
   import UpdateRestartModal from './UpdateRestartModal.svelte';
   import { cloudRow, openCloudRow, runUpdateRow, updateRow } from './sidebarStatus';
 
@@ -94,40 +95,30 @@
     <span class="item ver" data-update="version" title={full}>{@render words(update.version, full)}</span>
   {:else if update.kind === 'available'}
     {@const full = msg('ui.statusUpdateDownload', { version: update.version })}
-    <button
-      type="button"
-      class="item ver accent"
-      data-update="available"
-      title={msg('ui.versionAvailable', { version: update.version })}
-      onclick={() => void runUpdateRow(update, () => (restartOpen = true))}
-    >
-      <ArrowDownToLine aria-hidden="true" />{@render words(update.version, full)}
-    </button>
+    <Tooltip text={msg('ui.versionAvailable', { version: update.version })}>
+      <button type="button" class="item ver accent" data-update="available" onclick={() => void runUpdateRow(update, () => (restartOpen = true))}>
+        <ArrowDownToLine aria-hidden="true" />{@render words(update.version, full)}
+      </button>
+    </Tooltip>
   {:else if update.kind === 'downloading'}
     {@const full = `${msg('ui.downloadingUpdate', { version: update.version })} · ${update.percent}%`}
     <span class="item ver accent" data-update="downloading" title={full}>
       <ArrowDownToLine aria-hidden="true" />{@render words(`${update.percent}%`, full)}
     </span>
   {:else if update.kind === 'ready'}
-    <button
-      type="button"
-      class="item ver accent"
-      data-update="ready"
-      title={msg('ui.updateReadyMessage', { version: update.version })}
-      onclick={() => void runUpdateRow(update, () => (restartOpen = true))}
-    >
-      <RotateCcw aria-hidden="true" />{@render words(msg('ui.statusUpdateReadyShort'), msg('ui.restartAndUpdate'))}
-    </button>
+    <Tooltip text={msg('ui.updateReadyMessage', { version: update.version })}>
+      <button type="button" class="item ver accent" data-update="ready" onclick={() => void runUpdateRow(update, () => (restartOpen = true))}>
+        <RotateCcw aria-hidden="true" />{@render words(msg('ui.statusUpdateReadyShort'), msg('ui.restartAndUpdate'))}
+      </button>
+    </Tooltip>
   {:else if update.kind === 'failed'}
-    <button
-      type="button"
-      class="item ver danger"
-      data-update="failed"
-      title={statusReason($selfUpdateStatus) || retryName}
-      onclick={() => void runUpdateRow(update, () => (restartOpen = true))}
-    >
-      <TriangleAlert aria-hidden="true" />{@render words(msg('ui.statusUpdateFailedShort'), retryName)}
-    </button>
+    {@const reason = statusReason($selfUpdateStatus)}
+    <!-- Without a reason the hint shows the full name the short word stands for. -->
+    <Tooltip text={reason || retryName} describe={Boolean(reason)}>
+      <button type="button" class="item ver danger" data-update="failed" onclick={() => void runUpdateRow(update, () => (restartOpen = true))}>
+        <TriangleAlert aria-hidden="true" />{@render words(msg('ui.statusUpdateFailedShort'), retryName)}
+      </button>
+    </Tooltip>
   {/if}
 </div>
 

@@ -17,6 +17,7 @@
   import { bytesSize, relativeDate } from '../utils/format';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
+  import Tooltip from './Tooltip.svelte';
   import { msg } from '../i18n';
 
   let {
@@ -166,12 +167,15 @@
           <div class="candidates">
             {#each ordered as candidate (candidate.gameId)}
               {@const missing = candidate.inCatalog === false}
+              <!-- Not disabled: a disabled button cannot take focus, and the reason would reach no keyboard. -->
+              <Tooltip text={missing ? msg('modals.releaseMatchNotInCatalog') : ''}>
               <button
                 class="candidate"
                 class:selected={selectedGameId === candidate.gameId}
-                disabled={missing}
-                title={missing ? msg('modals.releaseMatchNotInCatalog') : undefined}
-                onclick={() => (selectedGameId = candidate.gameId)}
+                aria-disabled={missing || undefined}
+                onclick={() => {
+                  if (!missing) selectedGameId = candidate.gameId;
+                }}
               >
                 <span class="radio" class:on={selectedGameId === candidate.gameId}>
                   {#if selectedGameId === candidate.gameId}<Check size="1.2rem" strokeWidth={2.6} />{/if}
@@ -192,6 +196,7 @@
                   <span class="candidate-score">{Math.round(candidate.score * 100)}%</span>
                 {/if}
               </button>
+              </Tooltip>
             {/each}
           </div>
         {/if}
@@ -306,11 +311,11 @@
     transition: background var(--dur-fast) var(--ease);
   }
 
-  .candidate:hover {
+  .candidate:hover:not([aria-disabled='true']) {
     background: var(--hover);
   }
 
-  .candidate:disabled {
+  .candidate[aria-disabled='true'] {
     opacity: 0.5;
     cursor: not-allowed;
   }

@@ -4,6 +4,7 @@
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import Modal from '../../lib/components/Modal.svelte';
+  import Tooltip from '../../lib/components/Tooltip.svelte';
   import { accountErrorText } from '../../lib/services/accountMessages';
   import { friendCode, rotateFriendCode } from '../../lib/services/social';
   import { toast } from '../../lib/stores/toasts';
@@ -64,7 +65,9 @@
       {#if loading || !code}
         <span class="code pending">{loading ? msg('social.loadingEllipsis') : '—'}</span>
       {:else}
-        <button class="code copy" type="button" title={msg('social.friendsCopyCode')} onclick={copy}>{code}</button>
+        <Tooltip text={msg('social.friendsCopyCode')}>
+          <button class="code copy" type="button" onclick={copy}>{code}</button>
+        </Tooltip>
       {/if}
     </div>
     <div class="actions">

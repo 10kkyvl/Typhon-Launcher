@@ -1,6 +1,7 @@
 <script lang="ts">
   import Artwork from '../../lib/components/Artwork.svelte';
   import Card from '../../lib/components/Card.svelte';
+  import Tooltip from '../../lib/components/Tooltip.svelte';
   import { openGameByIGDB } from '../../lib/social/openGame';
   import type { PopularGame } from '../../lib/social/popular';
   import { msg } from '../../lib/i18n';
@@ -14,12 +15,8 @@
   {:else}
     <div class="list">
       {#each games as item (item.game.igdbId)}
-        <button
-          class="row"
-          type="button"
-          title={item.names.join(', ')}
-          onclick={() => openGameByIGDB(item.game.igdbId, item.game.title)}
-        >
+        <Tooltip text={item.names.join(', ')}>
+        <button class="row" type="button" onclick={() => openGameByIGDB(item.game.igdbId, item.game.title)}>
           <span class="cover">
             <Artwork src={item.game.coverUrl} alt={item.game.title} ratio="3 / 4" radius="var(--radius-sm)" />
           </span>
@@ -33,6 +30,7 @@
             </span>
           </span>
         </button>
+        </Tooltip>
       {/each}
     </div>
   {/if}
