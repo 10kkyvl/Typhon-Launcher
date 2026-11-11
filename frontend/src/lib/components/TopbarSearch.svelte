@@ -144,7 +144,7 @@
             <IconButton
               size="sm"
               label={watching ? msg('games.unwatchAction') : msg('games.watchAction')}
-              pressed={watching}
+              lit={watching}
               onclick={() => toggleWatch(hit.id)}
             >
               {#if watching}

@@ -1506,7 +1506,7 @@
 
           {#if !installed && canonicalId}
             {@const watching = $watchedIds.has(canonicalId)}
-            <Button size="lg" pressed={watching} onclick={() => toggleWatch(canonicalId)}>
+            <Button size="lg" onclick={() => toggleWatch(canonicalId)}>
               {#if watching}
                 <BellRing size="1.5rem" strokeWidth={1.8} />
                 {msg('games.watchingButton')}
@@ -1522,7 +1522,7 @@
               size="lg"
               variant="secondary"
               label={localGame.favorite ? msg('games.actionFavoriteRemove') : msg('games.actionFavoriteAdd')}
-              pressed={Boolean(localGame.favorite)}
+              lit={Boolean(localGame.favorite)}
               onclick={toggleFavorite}
             >
               <span class="heart" class:pulse={favoritePulse} onanimationend={() => (favoritePulse = false)}>

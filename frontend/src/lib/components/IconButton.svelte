@@ -10,6 +10,7 @@
     type = 'button',
     variant = 'ghost',
     pressed,
+    lit = false,
     disabled = false,
     tooltip = true,
     onclick,
@@ -22,10 +23,18 @@
     /** `secondary` stands on a surface of its own with a border, next to full buttons. */
     variant?: 'ghost' | 'secondary';
     /**
-     * For a toggle (favourite, watch): whether it is on. Leave it out for a plain action, and for a
-     * button that opens a menu or a panel, which says `aria-expanded` through its trigger props.
+     * For a toggle whose name stays the same in both states: whether it is on (aria-pressed). Leave it
+     * out for a plain action, and for a button that opens a menu or a panel, which says
+     * `aria-expanded` through its trigger props.
      */
     pressed?: boolean;
+    /**
+     * Drawn in the accent, as an "on" toggle is, and nothing more: it tells assistive technology
+     * nothing. For a button whose name already says the state ("Add to favourites" / "Remove from
+     * favourites"), and for one whose state another attribute tells (`aria-current` for the selected
+     * item, `aria-expanded` for the trigger of what it opened).
+     */
+    lit?: boolean;
     disabled?: boolean;
     /**
      * Off: no tooltip on the layer stack; the browser's own title shows the label instead. For the
@@ -42,7 +51,7 @@
 </script>
 
 {#snippet button()}
-  <button {...rest} {type} class="icon-btn {size} {variant}" aria-label={label} aria-pressed={pressed} title={nativeTitle} {disabled} {onclick}>
+  <button {...rest} {type} class="icon-btn {size} {variant}" class:lit aria-label={label} aria-pressed={pressed} title={nativeTitle} {disabled} {onclick}>
     {@render children?.()}
   </button>
 {/snippet}
@@ -102,7 +111,7 @@
     background: var(--surface-4);
   }
 
-  .icon-btn[aria-pressed='true'] {
+  .icon-btn:is(.lit, [aria-pressed='true']) {
     background: var(--accent-subtle);
     color: var(--accent-text);
   }
@@ -125,12 +134,11 @@
     height: 3.2rem;
   }
 
-  :global([data-controls='1x']) .icon-btn[aria-pressed='true'] {
+  :global([data-controls='1x']) .icon-btn:is(.lit, [aria-pressed='true'], [aria-expanded='true']) {
     background: transparent;
-    color: var(--accent-text);
   }
 
-  :global([data-controls='1x']) .icon-btn[aria-pressed='true']:hover:not(:disabled) {
+  :global([data-controls='1x']) .icon-btn:is(.lit, [aria-pressed='true'], [aria-expanded='true']):hover:not(:disabled) {
     background: var(--hover-strong);
   }
 </style>

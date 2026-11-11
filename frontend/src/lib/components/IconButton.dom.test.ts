@@ -72,11 +72,37 @@ describe('IconButton', () => {
     expect(button.getAttribute('title')).toBe('Back');
   });
 
-  it('a toggle says whether it is on; a plain action says nothing of the kind', async () => {
-    const view = render(IconButton, { target: app, props: { label: 'Favourite', pressed: false } });
-    const button = screen.getByRole('button', { name: 'Favourite' });
+  it('the favourite button, whose name says its state, is lit without claiming a pressed state', async () => {
+    const view = render(IconButton, { target: app, props: { label: 'Add to favourites', lit: false } });
+    const button = screen.getByRole('button', { name: 'Add to favourites' });
+    expect(button.classList.contains('lit')).toBe(false);
+
+    await view.rerender({ label: 'Remove from favourites', lit: true });
+    expect(screen.getByRole('button', { name: 'Remove from favourites' })).toBe(button);
+    expect(button.classList.contains('lit')).toBe(true);
+    expect(button.hasAttribute('aria-pressed')).toBe(false);
+    expect(button.hasAttribute('lit')).toBe(false);
+  });
+
+  it('a lit button that is the current item, or the trigger of what it opened, says that instead', () => {
+    render(IconButton, { target: app, props: { label: 'Settings of Pinned', lit: true, 'aria-current': 'true' } });
+    render(IconButton, { target: app, props: { label: 'Open the browser', lit: true, 'aria-expanded': true } });
+    const current = screen.getByRole('button', { name: 'Settings of Pinned' });
+    const trigger = screen.getByRole('button', { name: 'Open the browser' });
+    expect(current.getAttribute('aria-current')).toBe('true');
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    for (const button of [current, trigger]) {
+      expect(button.classList.contains('lit')).toBe(true);
+      expect(button.hasAttribute('aria-pressed')).toBe(false);
+    }
+  });
+
+  // No icon button in the app is a fixed-name toggle today; the state stays for the first one.
+  it('a toggle with a fixed name says whether it is on; a plain action says nothing of the kind', async () => {
+    const view = render(IconButton, { target: app, props: { label: 'Mute the chat', pressed: false } });
+    const button = screen.getByRole('button', { name: 'Mute the chat' });
     expect(button.getAttribute('aria-pressed')).toBe('false');
-    await view.rerender({ label: 'Favourite', pressed: true });
+    await view.rerender({ label: 'Mute the chat', pressed: true });
     expect(button.getAttribute('aria-pressed')).toBe('true');
 
     render(IconButton, { target: app, props: { label: 'Close' } });
@@ -92,7 +118,16 @@ describe('IconButton', () => {
 
   it('shows an open menu or panel on its trigger, and an "on" toggle, without a class from the caller', () => {
     expect(source).toMatch(/\.icon-btn\[aria-expanded='true'\] \{\s*background: var\(--hover-strong\);/);
-    expect(source).toMatch(/\.icon-btn\[aria-pressed='true'\] \{\s*background: var\(--accent-subtle\);\s*color: var\(--accent-text\);/);
+    expect(source).toMatch(/\.icon-btn:is\(\.lit, \[aria-pressed='true'\]\) \{\s*background: var\(--accent-subtle\);\s*color: var\(--accent-text\);/);
     expect(source).not.toMatch(/class:active|\.active\b/);
+  });
+
+  // The overlay drew "on" as accent text on no fill, and its hover as any other hover (the text colour
+  // on the hover fill): the pin takes the fill away and leaves the colour to the rules above.
+  it('in the overlay a lit or open button keeps the look it had: no fill at rest, the plain hover', () => {
+    const lit = ":is(.lit, [aria-pressed='true'], [aria-expanded='true'])";
+    const pin = (tail: string) => new RegExp(`:global\\(\\[data-controls='1x'\\]\\) \\.icon-btn${lit.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}${tail} \\{([^}]*)\\}`).exec(source)?.[1].trim();
+    expect(pin('')).toBe('background: transparent;');
+    expect(pin(':hover:not\\(:disabled\\)')).toBe('background: var(--hover-strong);');
   });
 });

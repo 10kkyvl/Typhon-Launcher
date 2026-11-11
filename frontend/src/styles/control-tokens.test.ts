@@ -88,6 +88,57 @@ describe('a base control is restyled by a prop, never from outside', () => {
   });
 });
 
+// A toggle keeps its name and tells its state through aria-pressed. A button whose name flips with the
+// state ("Watch" / "Watching") already says it: aria-pressed on it would announce the state twice and
+// contradict the name ("Watching, pressed"), so it is drawn `lit` instead.
+describe('a pressed button keeps its name', () => {
+  const sources = fs
+    .readdirSync(new URL('../', import.meta.url), { recursive: true })
+    .map((path) => path.replaceAll('\\', '/'))
+    .filter((path) => path.endsWith('.svelte'));
+
+  function elements(text: string): { at: number; markup: string }[] {
+    const found: { at: number; markup: string }[] = [];
+    for (const m of text.matchAll(/<(IconButton|Button)\b/g)) {
+      let depth = 0;
+      let end = m.index;
+      for (; end < text.length; end++) {
+        const c = text[end];
+        if (c === '{') depth++;
+        else if (c === '}') depth--;
+        else if (c === '>' && depth === 0) break;
+      }
+      const selfClosing = text[end - 1] === '/';
+      const close = selfClosing ? end + 1 : text.indexOf(`</${m[1]}>`, end);
+      found.push({ at: m.index, markup: text.slice(m.index, close < 0 ? end + 1 : close) });
+    }
+    return found;
+  }
+
+  const flips = (markup: string) =>
+    /\?\s*msg\([^)]*\)\s*:\s*msg\(/.test(markup) || /\{#if [^}]*\}[\s\S]*?msg\([\s\S]*?\{:else\}[\s\S]*?msg\(/.test(markup);
+  const pressed = (markup: string) => /(?<![\w-])pressed=/.test(markup);
+
+  it('no button that is pressed changes its name with the state', () => {
+    const found: string[] = [];
+    for (const path of sources) {
+      const text = read(path);
+      for (const { at, markup } of elements(text)) {
+        if (pressed(markup) && flips(markup)) found.push(`${path}:${text.slice(0, at).split('\n').length}`);
+      }
+    }
+    expect(sources.length).toBeGreaterThan(200);
+    expect(found).toEqual([]);
+  });
+
+  it('sees one when there is one, in a label or in the text', () => {
+    const label = `<IconButton label={on ? msg('a.off') : msg('a.on')} pressed={on} onclick={() => (on = !on)}><X /></IconButton>`;
+    const text = `<Button pressed={on} onclick={go}>{#if on}<BellRing />{msg('a.watching')}{:else}<Bell />{msg('a.watch')}{/if}</Button>`;
+    const fixed = `<Button pressed={on} onclick={go}>{msg('a.mute')}</Button><IconButton label={msg('a.x')} lit={on} />`;
+    expect(elements(label + text + fixed).map(({ markup }) => pressed(markup) && flips(markup))).toEqual([true, true, false, false]);
+  });
+});
+
 describe('one spinner', () => {
   const sources = fs
     .readdirSync(new URL('../', import.meta.url), { recursive: true })
