@@ -84,12 +84,10 @@
 
 <style>
   /* The account chip reads this container's width (AccountMenu) to drop its text before the search shrinks;
-     the centred row has its own name because it runs out of room sooner. The row is lifted as a whole so
-     the search results hanging below it stay over the page even where the container confines their z-index. */
+     the centred row has its own name because it runs out of room sooner. */
   .topbar {
     container: topbar / inline-size;
     position: relative;
-    z-index: var(--z-popover);
     display: flex;
     align-items: center;
     gap: var(--space-3);

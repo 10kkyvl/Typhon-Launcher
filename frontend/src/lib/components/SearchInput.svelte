@@ -45,10 +45,12 @@
     onkeydown={(event) => onkeydown?.(event)}
   />
   {#if loading}
-    <span class="spinner" aria-label={msg('ui.search')}></span>
+    <span class="spinner" aria-hidden="true"></span>
   {:else if shortcut}
     <kbd>{shortcut}</kbd>
   {/if}
+  <!-- The spinner is a picture: that a search is running is said here. -->
+  <span class="sr-only" role="status">{loading ? msg('search.searching') : ''}</span>
 </div>
 
 <style>
