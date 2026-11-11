@@ -41,7 +41,7 @@
   {#if size === 'inline'}
     <p class="title">{title}</p>
   {:else}
-    <svelte:element this={`h${level}`} class="title">{title}</svelte:element>
+    <svelte:element this={`h${level}`} class="title heading">{title}</svelte:element>
   {/if}
   {#if description}
     <p class="description">{description}</p>
@@ -87,6 +87,12 @@
     border-radius: var(--radius-md);
     background: var(--surface-2);
     color: var(--text-2);
+  }
+
+  /* The global h1–h4 type, held here so a deeper level keeps it. */
+  .heading {
+    line-height: 1.2;
+    letter-spacing: var(--tracking-heading);
   }
 
   .title {

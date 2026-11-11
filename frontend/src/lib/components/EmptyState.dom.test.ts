@@ -1,7 +1,9 @@
 import { createRawSnippet } from 'svelte';
 import { describe, expect, it } from 'vitest';
 import { renderDom } from '../testing/dom';
+import { applyStyles } from '../testing/styles';
 import EmptyState from './EmptyState.svelte';
+import source from './EmptyState.svelte?raw';
 
 const actions = createRawSnippet(() => ({ render: () => '<button type="button">Add a source</button>' }));
 
@@ -14,6 +16,18 @@ describe('EmptyState in a DOM', () => {
     const top = renderDom(EmptyState, { title: 'Nothing found', level: 2 });
     expect(top.container.querySelector('h2')?.textContent).toBe('Nothing found');
     expect(top.container.querySelector('h3')).toBeNull();
+  });
+
+  // The app styles h1–h4 globally; a title one level deeper must not lose that type.
+  it('sets the heading’s type itself, the same at every level', () => {
+    for (const level of [1, 2, 3, 4, 5] as const) {
+      const { container } = renderDom(EmptyState, { title: `Level ${level}`, level });
+      const heading = container.querySelector(`h${level}`) as HTMLElement;
+      applyStyles(heading, source);
+
+      expect(getComputedStyle(heading).lineHeight, `h${level}`).toBe('1.2');
+      expect(getComputedStyle(heading).letterSpacing, `h${level}`).toBe('var(--tracking-heading)');
+    }
   });
 
   it('inline, in a dialog or a card, it is a quiet note and adds no heading', () => {
