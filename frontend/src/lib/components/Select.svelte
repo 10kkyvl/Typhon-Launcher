@@ -116,6 +116,12 @@
     }
     return null;
   }
+
+  // A field that turns disabled or loses its options while the list is open takes the list with it.
+  $effect(() => {
+    if (open && (disabled || options.length === 0)) hide();
+  });
+
   function onClosedKeydown(event: KeyboardEvent) {
     const { key } = event;
     if (event.altKey ? key === 'ArrowDown' : key === 'ArrowDown' || key === 'ArrowUp' || key === 'Enter' || key === ' ') {

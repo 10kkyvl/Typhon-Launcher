@@ -44,7 +44,7 @@ type Props = {
 
 function setup(props: Props = {}) {
   const onchange = props.onchange ?? vi.fn();
-  render(SelectHarness, { target: app, props: { options: LANGUAGES, value: 'ru', ...props, onchange } });
+  const view = render(SelectHarness, { target: app, props: { options: LANGUAGES, value: 'ru', ...props, onchange } });
   const keys = user();
   const field = () => screen.getByRole('combobox', { name: 'Language' });
   const list = () => screen.queryByRole('listbox');
@@ -54,7 +54,7 @@ function setup(props: Props = {}) {
     return id ? document.getElementById(id) : null;
   };
   const held = () => document.querySelector('output')?.textContent ?? '';
-  return { keys, onchange, field, list, option, active, held };
+  return { keys, onchange, field, list, option, active, held, rerender: view.rerender };
 }
 
 function shown(field: HTMLElement): string {
@@ -626,6 +626,20 @@ describe('Select with nothing to choose', () => {
     expect(list()).toBeNull();
     expect(field().getAttribute('aria-expanded')).toBe('false');
     expect(shown(field())).toBe('No consoles');
+  });
+
+  it.each([
+    ['the field turns disabled', { disabled: true }],
+    ['its options go away', { options: [] }],
+  ])('an open list closes when %s', async (_what, change) => {
+    const { keys, field, list, rerender } = setup();
+    await keys.click(field());
+    expect(list()).not.toBeNull();
+
+    await rerender(change);
+
+    expect(list()).toBeNull();
+    expect(field().getAttribute('aria-expanded')).toBe('false');
   });
 });
 
