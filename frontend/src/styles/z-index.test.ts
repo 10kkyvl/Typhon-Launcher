@@ -38,7 +38,6 @@ const ORDER = [
   'sticky',
   'popover',
   'tooltip',
-  'menu',
   'corner',
   'bigpicture',
   'chat',
