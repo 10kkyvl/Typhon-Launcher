@@ -415,7 +415,7 @@
 
   .play-text {
     flex: 1;
-    color: var(--text-1);
+    color: var(--text);
   }
 
   .summary {

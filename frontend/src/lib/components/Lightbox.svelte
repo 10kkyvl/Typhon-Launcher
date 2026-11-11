@@ -5,7 +5,8 @@
   import { stepIndex } from '../game/view';
   import { msg } from '../i18n';
   import IconButton from './IconButton.svelte';
-  import { portal } from '../utils/portal';
+  import { layer } from '../layers';
+  import { documentMotion, tokenMs } from '../motion/motion';
 
   export interface LightboxItem {
     id: string;
@@ -36,13 +37,9 @@
   let picture = $state<HTMLImageElement>();
   let drag = $state<{ id: number; x: number; y: number; startX: number; startY: number; moved: boolean } | null>(null);
 
-  let reducedMotion = $state(false);
+  // One network blip must not mark an image unavailable for the rest of the session.
   $effect(() => {
-    const preference = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const update = () => { reducedMotion = preference.matches; };
-    update();
-    preference.addEventListener('change', update);
-    return () => preference.removeEventListener('change', update);
+    if (open) failed = {};
   });
 
   // Warm adjacent images so their fade does not finish before the image arrives.
@@ -90,11 +87,13 @@
     index = stepIndex(index, items.length, delta);
   }
 
+  function close() {
+    open = false;
+  }
+
+  let pressedOnScrim = false;
+
   function onKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape') {
-      open = false;
-      return;
-    }
     if (event.target instanceof HTMLInputElement) return;
     if (event.key === '+' || event.key === '=') { event.preventDefault(); setZoom(zoom + 0.25); }
     if (event.key === '-') { event.preventDefault(); setZoom(zoom - 0.25); }
@@ -115,9 +114,13 @@
 {#if open && current}
   <div
     class="backdrop"
-    {@attach portal}
     role="presentation"
-    onpointerdown={(e) => e.target === e.currentTarget && (open = false)}
+    {@attach layer({ dismiss: close })}
+    onpointerdown={(event) => (pressedOnScrim = event.target === event.currentTarget)}
+    onclick={(event) => {
+      if (pressedOnScrim && event.target === event.currentTarget) close();
+      pressedOnScrim = false;
+    }}
   >
     <div class="frame" bind:this={viewport} role="dialog" aria-modal="true" aria-label={label}>
       {#if broken}
@@ -131,7 +134,7 @@
           class:zoomed={zoom > 1} class:dragging={drag?.moved}
           style:transform={`translate(${x}px, ${y}px) scale(${zoom})`}>
           {#key current.url}
-          <img transition:fade={{ duration: reducedMotion ? 0 : 180 }} bind:this={picture} src={current.url} alt="" draggable="false" onload={clampPosition}
+          <img transition:fade={{ duration: documentMotion() ? tokenMs('--dur-panel', 200) : 0 }} bind:this={picture} src={current.url} alt="" draggable="false" onload={clampPosition}
             onerror={() => (failed = { ...failed, [current.id]: true })} />
           {/key}
         </div>
@@ -163,7 +166,7 @@
       </div>
     {/if}
     <div class="close">
-      <IconButton label={msg('common.close')} onclick={() => (open = false)}>
+      <IconButton label={msg('common.close')} onclick={close}>
         <X size="2rem" strokeWidth={1.8} />
       </IconButton>
     </div>
@@ -180,8 +183,8 @@
     align-items: center;
     justify-content: center;
     padding: 6rem;
-    background: rgba(4, 6, 10, 0.9);
-    animation: fade var(--dur-panel) var(--ease);
+    background: var(--scrim-strong);
+    animation: scrim-in var(--dur-panel) var(--ease);
   }
 
   .frame {
@@ -198,8 +201,8 @@
   .image-control { display: grid; place-items: center; pointer-events: auto; cursor: zoom-in; touch-action: none; line-height: 0; flex-shrink: 0; max-width: 100%; }
   .image-control.zoomed { cursor: grab; }
   .image-control.dragging { cursor: grabbing; }
-  .image-control:focus-visible { outline: 2px solid var(--text-1); outline-offset: 3px; }
-  .zoom-controls { position: absolute; bottom: 1.6rem; display: flex; align-items: center; gap: 0.6rem; padding: 0.4rem 0.8rem; border-radius: 1.2rem; background: #181b24; box-shadow: var(--shadow-modal); }
+  .image-control:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 3px; }
+  .zoom-controls { position: absolute; bottom: 1.6rem; display: flex; align-items: center; gap: 0.6rem; padding: 0.4rem 0.8rem; border-radius: var(--radius-md); background: var(--surface-2); box-shadow: var(--shadow-modal); }
   .zoom-controls input { width: clamp(8rem, 18vw, 18rem); }
   .zoom-value { min-width: 4.5rem; text-align: center; font-size: var(--font-xs); font-variant-numeric: tabular-nums; }
   img {
@@ -248,12 +251,6 @@
     font-size: var(--font-xs);
     color: var(--text-2);
     font-variant-numeric: tabular-nums;
-  }
-
-  @keyframes fade {
-    from {
-      opacity: 0;
-    }
   }
 
 </style>
