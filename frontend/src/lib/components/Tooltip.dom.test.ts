@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { user } from '../testing/dom';
+import { description } from '../testing/hints';
 import TooltipHarness from '../testing/TooltipHarness.svelte';
 import { HOVER_DELAY, LEAVE_GRACE } from './hoverIntent';
 
@@ -160,15 +161,38 @@ describe('Tooltip: keyboard', () => {
 describe('Tooltip: screen reader', () => {
   it('a description is the control description; the name stays the control own', async () => {
     const { control } = setup();
-    const ids = control().getAttribute('aria-describedby')?.split(' ') ?? [];
-    expect(ids.map((id) => document.getElementById(id)?.textContent?.trim())).toEqual([TEXT]);
+    expect(description(control())).toBe(`Takes a minute ${TEXT}`);
     expect(control().getAttribute('aria-label')).toBeNull();
     expect(control().textContent?.trim()).toBe('Clear');
   });
 
+  it('a control that sets its own description keeps the hint in it as that changes', async () => {
+    const { keys, control } = setup();
+    expect(description(control())).toBe(`Takes a minute ${TEXT}`);
+    await keys.click(screen.getByRole('button', { name: 'Change note' }));
+    expect(control().getAttribute('aria-describedby')?.split(' ')[0]).toBe('note-b');
+    expect(description(control())).toBe(`Cannot be undone ${TEXT}`);
+  });
+
+  it('a control created again inside the tooltip is described too', async () => {
+    const { keys, control } = setup();
+    const first = control();
+    await keys.click(screen.getByRole('button', { name: 'Rebuild' }));
+    expect(control()).not.toBe(first);
+    expect(description(control())).toBe(`Takes a minute ${TEXT}`);
+  });
+
+  it('an empty text describes nothing and shows nothing', async () => {
+    const { keys, control, bubble, wait } = setup({ text: '' });
+    expect(description(control())).toBe('Takes a minute');
+    await keys.hover(control());
+    await wait(1000);
+    expect(bubble()).toBeNull();
+  });
+
   it('a visual label is not announced again as a description, and the bubble is hidden from the tree', async () => {
     const { keys, control, bubble, shown } = setup({ describe: false });
-    expect(control().hasAttribute('aria-describedby')).toBe(false);
+    expect(description(control())).toBe('Takes a minute');
     await keys.tab();
     await keys.tab();
     expect(shown()).toBe(true);

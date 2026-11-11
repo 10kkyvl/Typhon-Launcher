@@ -54,15 +54,33 @@
   });
   onDestroy(() => intent.destroy());
 
+  const describedIds = (element: Element) => (element.getAttribute('aria-describedby') ?? '').split(/\s+/).filter(Boolean);
+
+  function undescribe(element: Element) {
+    const rest = describedIds(element).filter((id) => id !== descriptionId);
+    if (rest.length) element.setAttribute('aria-describedby', rest.join(' '));
+    else element.removeAttribute('aria-describedby');
+  }
+
+  // The hint joins whatever description the control has of its own. The page may rewrite that
+  // attribute (a field gaining an error message) or create the control again: the id goes back on.
   $effect(() => {
-    const element = describe && host ? control() : null;
-    if (!element) return;
-    const own = element.getAttribute('aria-describedby');
-    element.setAttribute('aria-describedby', own ? `${own} ${descriptionId}` : descriptionId);
+    const root = host;
+    if (!root || !describe || !text) return;
+    let described: HTMLElement | null = null;
+    const apply = () => {
+      const element = control();
+      if (described && described !== element) undescribe(described);
+      described = element;
+      const ids = element ? describedIds(element) : [];
+      if (element && !ids.includes(descriptionId)) element.setAttribute('aria-describedby', [...ids, descriptionId].join(' '));
+    };
+    apply();
+    const watcher = new MutationObserver(apply);
+    watcher.observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ['aria-describedby'] });
     return () => {
-      const rest = (element.getAttribute('aria-describedby') ?? '').split(/\s+/).filter((id) => id && id !== descriptionId);
-      if (rest.length) element.setAttribute('aria-describedby', rest.join(' '));
-      else element.removeAttribute('aria-describedby');
+      watcher.disconnect();
+      if (described) undescribe(described);
     };
   });
 
@@ -143,7 +161,7 @@
 
 <span class="tooltip-host" bind:this={host} {@attach listen}>
   {@render children()}
-  {#if describe}<span id={descriptionId} hidden>{text}</span>{/if}
+  {#if describe && text}<span id={descriptionId} hidden>{text}</span>{/if}
 </span>
 
 {#if open && text}

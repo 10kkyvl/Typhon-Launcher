@@ -14,6 +14,7 @@
     present = true,
     placement,
     other = false,
+    text = 'Removes the cached covers',
   }: {
     inDialog?: boolean;
     describe?: boolean;
@@ -21,19 +22,30 @@
     present?: boolean;
     placement?: Placement;
     other?: boolean;
+    text?: string;
   } = $props();
 
   let settings = $state(true);
+  // Changed by the page, not through the tooltip's props: the control's own description and the
+  // control itself being created again.
+  let note = $state('note-a');
+  let generation = $state(0);
 </script>
 
 {#snippet toolbar()}
   <button type="button">Before</button>
-  <Tooltip text="Removes the cached covers" {describe} {placement}>
+  <Tooltip {text} {describe} {placement}>
     {#if present}
-      <button type="button" {disabled}>Clear</button>
+      {#key generation}
+        <button type="button" {disabled} aria-describedby={note}>Clear</button>
+      {/key}
     {/if}
   </Tooltip>
   <button type="button">After</button>
+  <p id="note-a">Takes a minute</p>
+  <p id="note-b">Cannot be undone</p>
+  <button type="button" onclick={() => (note = 'note-b')}>Change note</button>
+  <button type="button" onclick={() => (generation += 1)}>Rebuild</button>
 {/snippet}
 
 {#if inDialog}
