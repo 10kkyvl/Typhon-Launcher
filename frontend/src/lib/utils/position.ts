@@ -342,15 +342,40 @@ export function anchorTo(node: HTMLElement, anchor: Anchor, options: AnchorOptio
   };
 }
 
-/** Places a `position: fixed` element at a point (context menu). Returns a cleanup function. */
-export function placeAtPoint(node: HTMLElement, x: number, y: number, padding?: number | Insets): () => void {
+export interface PointOptions {
+  /** Default: `windowInsets()`, read on every placement. */
+  padding?: number | Insets;
+  /**
+   * Called when the point stops meaning anything: the page scrolled under it (not the element's own
+   * content), the window resized or lost focus. A popup at a point closes then, as a native context
+   * menu does; it has no anchor to follow.
+   */
+  onleave?: () => void;
+}
+
+/** Places a `position: fixed` element at a point (context menu), re-placed when its size changes. Returns a cleanup function. */
+export function placeAtPoint(node: HTMLElement, x: number, y: number, options: PointOptions = {}): () => void {
   node.style.position = 'fixed';
   const place = () =>
     keepScroll(node, () =>
-      apply(node, positionAtPoint(x, y, natural(node), { viewport: viewportSize(), padding: padding ?? windowInsets() })),
+      apply(node, positionAtPoint(x, y, natural(node), { viewport: viewportSize(), padding: options.padding ?? windowInsets() })),
     );
   place();
   const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(() => place()) : null;
   observer?.observe(node);
-  return () => observer?.disconnect();
+
+  const leave = () => options.onleave?.();
+  const onScroll = (event: Event) => {
+    if (event.target instanceof Node && node.contains(event.target)) return;
+    leave();
+  };
+  window.addEventListener('scroll', onScroll, true);
+  window.addEventListener('resize', leave);
+  window.addEventListener('blur', leave);
+  return () => {
+    observer?.disconnect();
+    window.removeEventListener('scroll', onScroll, true);
+    window.removeEventListener('resize', leave);
+    window.removeEventListener('blur', leave);
+  };
 }

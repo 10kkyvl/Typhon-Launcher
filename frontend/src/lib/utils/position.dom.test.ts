@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { anchorTo, windowInsets, type Rect } from './position';
+import { anchorTo, placeAtPoint, windowInsets, type Rect } from './position';
 
 function box(rect: Rect): DOMRect {
   return { ...rect, x: rect.left, y: rect.top, right: rect.left + rect.width, bottom: rect.top + rect.height, toJSON: () => rect } as DOMRect;
@@ -156,5 +156,66 @@ describe('anchorTo', () => {
 
     expect(floating.scrollTop).toBe(120);
     stop();
+  });
+});
+
+describe('placeAtPoint', () => {
+  function atPoint() {
+    const floating = document.createElement('div');
+    const inner = document.createElement('div');
+    const page = document.createElement('div');
+    floating.append(inner);
+    document.body.append(page, floating);
+    floating.getBoundingClientRect = () => box({ left: 0, top: 0, width: 200, height: 300 });
+    return { floating, inner, page };
+  }
+
+  it('puts the corner at the point, below the title bar and flipped at the window edges', () => {
+    const root = document.documentElement;
+    root.style.fontSize = '10px';
+    root.style.setProperty('--titlebar-h', '4rem');
+    root.style.setProperty('--popup-edge', '0.8rem');
+    const { floating } = atPoint();
+
+    const stop = placeAtPoint(floating, 120, 10);
+    expect(floating.style.position).toBe('fixed');
+    expect([floating.style.left, floating.style.top]).toEqual(['120px', '48px']);
+    stop();
+
+    const flipped = placeAtPoint(floating, window.innerWidth - 20, window.innerHeight - 20);
+    expect([floating.style.left, floating.style.top]).toEqual([`${window.innerWidth - 220}px`, `${window.innerHeight - 320}px`]);
+    flipped();
+  });
+
+  it.each([
+    ['the page scrolls', (page: HTMLElement) => page.dispatchEvent(new Event('scroll', { bubbles: false }))],
+    ['the window resizes', () => window.dispatchEvent(new Event('resize'))],
+    ['the window loses focus', () => window.dispatchEvent(new Event('blur'))],
+  ])('reports that the point no longer holds when %s', (_case, happen) => {
+    const { floating, page } = atPoint();
+    const onleave = vi.fn();
+
+    const stop = placeAtPoint(floating, 50, 60, { onleave });
+    expect(onleave).not.toHaveBeenCalled();
+    happen(page);
+
+    expect(onleave).toHaveBeenCalledTimes(1);
+    stop();
+  });
+
+  it('stays when its own content scrolls, and listens to nothing once stopped', () => {
+    const { floating, inner, page } = atPoint();
+    const onleave = vi.fn();
+
+    const stop = placeAtPoint(floating, 50, 60, { onleave });
+    floating.dispatchEvent(new Event('scroll'));
+    inner.dispatchEvent(new Event('scroll'));
+    expect(onleave).not.toHaveBeenCalled();
+
+    stop();
+    page.dispatchEvent(new Event('scroll'));
+    window.dispatchEvent(new Event('resize'));
+    window.dispatchEvent(new Event('blur'));
+    expect(onleave).not.toHaveBeenCalled();
   });
 });
