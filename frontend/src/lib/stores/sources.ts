@@ -137,13 +137,10 @@ export async function toggle(id: string, enabled: boolean) {
   }
 }
 
+/** Rejects when the backend refused: both callers ask through a confirmation, which shows the reason. */
 export async function remove(id: string) {
-  try {
-    await removeSourceRequest(id);
-    sources.update((list) => list.filter((s) => s.id !== id));
-  } catch (err) {
-    toast(sourceErrorText(err), 'danger');
-  }
+  await removeSourceRequest(id);
+  sources.update((list) => list.filter((s) => s.id !== id));
 }
 
 export async function add(url: string) {

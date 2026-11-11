@@ -139,14 +139,14 @@ describe('source actions', () => {
     expect(toast.mock.calls[0][1]).toBe('danger');
   });
 
-  it('removes a source from the list only after the backend removed it', async () => {
+  it('removes a source from the list only after the backend removed it, and hands a refusal to the caller', async () => {
     seeded = [source('a'), source('b')];
     api.removeSource.mockRejectedValueOnce(new Error('typhon:sources.source_busy: busy'));
     const { store, toast } = await load();
 
-    await store.remove('a');
+    await expect(store.remove('a')).rejects.toThrow('typhon:sources.source_busy');
     expect(get(store.sources).map((item) => item.id)).toEqual(['a', 'b']);
-    expect(toast).toHaveBeenCalledTimes(1);
+    expect(toast).not.toHaveBeenCalled();
 
     api.removeSource.mockResolvedValueOnce(undefined);
     await store.remove('a');
