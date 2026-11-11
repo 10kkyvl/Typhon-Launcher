@@ -345,12 +345,22 @@ export function anchorTo(node: HTMLElement, anchor: Anchor, options: AnchorOptio
 export interface PointOptions {
   /** Default: `windowInsets()`, read on every placement. */
   padding?: number | Insets;
+  /** What the popup was opened on (the right-clicked card): a scroll of a container holding it moves it away. */
+  source?: Element | null;
   /**
-   * Called when the point stops meaning anything: the page scrolled under it (not the element's own
-   * content), the window resized or lost focus. A popup at a point closes then, as a native context
-   * menu does; it has no anchor to follow.
+   * Called when the point stops meaning anything: the page scrolled under it (the document, or a
+   * container holding `source`), the window resized or lost focus. A popup at a point closes then, as
+   * a native context menu does; it has no anchor to follow. Other scrolls leave it: its own content,
+   * a chat list moving to a new message, a panel clamping its scroll position.
    */
   onleave?: () => void;
+}
+
+// A scroll of the document itself, or of a container that holds `source`.
+function scrolledUnder(target: EventTarget | null, source: Element | null | undefined): boolean {
+  if (!(target instanceof Node)) return true;
+  if (target === document || target === document.documentElement || target === document.body) return true;
+  return Boolean(source && target.contains(source));
 }
 
 /** Places a `position: fixed` element at a point (context menu), re-placed when its size changes. Returns a cleanup function. */
@@ -366,8 +376,7 @@ export function placeAtPoint(node: HTMLElement, x: number, y: number, options: P
 
   const leave = () => options.onleave?.();
   const onScroll = (event: Event) => {
-    if (event.target instanceof Node && node.contains(event.target)) return;
-    leave();
+    if (scrolledUnder(event.target, options.source)) leave();
   };
   window.addEventListener('scroll', onScroll, true);
   window.addEventListener('resize', leave);

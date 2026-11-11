@@ -148,6 +148,21 @@ describe('game context menu by pointer', () => {
     expect(menu()).toBeNull();
   });
 
+  it('closes when the list holding the game scrolls, stays when an unrelated scroller does', async () => {
+    const keys = setup();
+    const chat = document.createElement('div');
+    document.body.append(chat);
+    await rightClick(keys, link('Hades'), 120, 80);
+
+    chat.dispatchEvent(new Event('scroll', { bubbles: false }));
+    await tick();
+    expect(menu()).not.toBeNull();
+
+    (link('Hades').closest('ul') as HTMLElement).dispatchEvent(new Event('scroll', { bubbles: false }));
+    await tick();
+    expect(menu()).toBeNull();
+  });
+
   it('stays open when its own list scrolls', async () => {
     const keys = setup();
     await rightClick(keys, link('Hades'), 120, 80);

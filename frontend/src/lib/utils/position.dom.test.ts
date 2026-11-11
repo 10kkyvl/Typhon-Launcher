@@ -164,10 +164,13 @@ describe('placeAtPoint', () => {
     const floating = document.createElement('div');
     const inner = document.createElement('div');
     const page = document.createElement('div');
+    const source = document.createElement('button');
+    const other = document.createElement('div');
+    page.append(source);
     floating.append(inner);
-    document.body.append(page, floating);
+    document.body.append(page, other, floating);
     floating.getBoundingClientRect = () => box({ left: 0, top: 0, width: 200, height: 300 });
-    return { floating, inner, page };
+    return { floating, inner, page, source, other };
   }
 
   it('puts the corner at the point, below the title bar and flipped at the window edges', () => {
@@ -188,14 +191,15 @@ describe('placeAtPoint', () => {
   });
 
   it.each([
-    ['the page scrolls', (page: HTMLElement) => page.dispatchEvent(new Event('scroll', { bubbles: false }))],
+    ['the document scrolls', () => document.dispatchEvent(new Event('scroll'))],
+    ['the container holding what it was opened on scrolls', (page: HTMLElement) => page.dispatchEvent(new Event('scroll', { bubbles: false }))],
     ['the window resizes', () => window.dispatchEvent(new Event('resize'))],
     ['the window loses focus', () => window.dispatchEvent(new Event('blur'))],
   ])('reports that the point no longer holds when %s', (_case, happen) => {
-    const { floating, page } = atPoint();
+    const { floating, page, source } = atPoint();
     const onleave = vi.fn();
 
-    const stop = placeAtPoint(floating, 50, 60, { onleave });
+    const stop = placeAtPoint(floating, 50, 60, { onleave, source });
     expect(onleave).not.toHaveBeenCalled();
     happen(page);
 
@@ -203,11 +207,22 @@ describe('placeAtPoint', () => {
     stop();
   });
 
-  it('stays when its own content scrolls, and listens to nothing once stopped', () => {
-    const { floating, inner, page } = atPoint();
+  it('stays when a scroller that does not hold what it was opened on scrolls (a chat list, a clamped panel)', () => {
+    const { floating, other, source } = atPoint();
     const onleave = vi.fn();
 
-    const stop = placeAtPoint(floating, 50, 60, { onleave });
+    const stop = placeAtPoint(floating, 50, 60, { onleave, source });
+    other.dispatchEvent(new Event('scroll', { bubbles: false }));
+
+    expect(onleave).not.toHaveBeenCalled();
+    stop();
+  });
+
+  it('stays when its own content scrolls, and listens to nothing once stopped', () => {
+    const { floating, inner, page, source } = atPoint();
+    const onleave = vi.fn();
+
+    const stop = placeAtPoint(floating, 50, 60, { onleave, source });
     floating.dispatchEvent(new Event('scroll'));
     inner.dispatchEvent(new Event('scroll'));
     expect(onleave).not.toHaveBeenCalled();

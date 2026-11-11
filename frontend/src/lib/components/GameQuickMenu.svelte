@@ -323,6 +323,7 @@
       initial={menu.focus}
       trigger={triggerOf(menu)}
       returnFocus={homeOf(menu)}
+      source={menu.source}
       onselect={selectFor(game, menu)}
       onclose={closeGameMenu}
     />

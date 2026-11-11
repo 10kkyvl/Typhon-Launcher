@@ -8,7 +8,8 @@
   /**
    * A context menu (WAI-ARIA menu), mounted while open: MenuList on the layer stack, so Escape, a press
    * outside and a dialog opening over it close it, and focus goes back when it does. Opened at the
-   * pointer it sits at that point and closes when the page scrolls, the window resizes or loses focus;
+   * pointer it sits at that point and closes when the page under it scrolls (the document, or a
+   * container holding `source`), the window resizes or loses focus;
    * opened next to an element (a keyboard open, a menu button) it follows that element and closes when
    * the element leaves sight, which is first brought into view. A pick closes the menu before
    * `onselect` runs, so focus is back where the menu came from and a dialog the pick opens returns
@@ -22,6 +23,7 @@
     initial = 'menu',
     trigger,
     returnFocus,
+    source,
     onselect,
     onclose,
   }: {
@@ -35,6 +37,8 @@
     trigger?: () => HTMLElement | null | undefined;
     /** Where focus goes on close when what had it before the menu opened is gone; default the trigger. */
     returnFocus?: () => HTMLElement | null | undefined;
+    /** What it was opened on (the right-clicked card or row). */
+    source?: HTMLElement | null;
     onselect: (id: string, item: MenuItem) => void;
     /** Unmount the menu. */
     onclose: () => void;
@@ -61,8 +65,8 @@
   }
 
   const place = (node: HTMLElement) => {
-    const where = untrack(() => at);
-    if (!('anchor' in where)) return placeAtPoint(node, where.x, where.y, { onleave: onclose });
+    const { where, opener } = untrack(() => ({ where: at, opener: source }));
+    if (!('anchor' in where)) return placeAtPoint(node, where.x, where.y, { onleave: onclose, source: opener });
     const anchor = () => (typeof where.anchor === 'function' ? where.anchor() : where.anchor);
     // A focused control scrolled out of sight would close its menu at once as hidden.
     const element = anchor();
