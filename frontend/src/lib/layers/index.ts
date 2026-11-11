@@ -31,18 +31,39 @@ const stack = new LayerStack<HTMLElement, HTMLElement>({
 const inerted = new Set<HTMLElement>();
 let appObserver: MutationObserver | null = null;
 let listening = false;
+const outsidePress = new Map<HTMLElement, 'close' | 'swallow'>();
 
+/**
+ * Options of a layer: the extension point for every kind of layer, built-in or from a plugin.
+ *
+ * - A dialog (Modal, Lightbox) is modal: it makes everything under it inert, takes focus on open
+ *   (`initialFocus`), traps Tab and returns focus on close (`returnFocus` when its opener is gone).
+ * - A menu, a select's listbox, a popover or a tooltip is non-modal (`modal: false`): it inerts
+ *   nothing and takes focus only when given `initialFocus`. Opened from inside a dialog and portalled
+ *   out of it, it names its `owner` (the trigger, or any element inside the owning layer): it then
+ *   counts as part of that dialog for the Tab trap (its controls follow the trigger in Tab order), for
+ *   where focus may return, and for presses. A press outside it and the layers it owns closes it
+ *   (`outsidePress`, default `'close'`; `'swallow'` also eats that press so it does not reach what is
+ *   under it; `false` keeps it open). The press that opened it never closes it.
+ * - Escape (and Big Picture's back) closes only the top layer, if `dismissible()` allows; an element
+ *   inside a layer can claim Escape first with `preventDefault` or `stopPropagation`; a held Escape
+ *   (auto-repeat) closes nothing more.
+ */
 export interface LayerOptions {
   /** A modal layer inerts everything under it and traps Tab. Default true. */
   modal?: boolean;
-  /** Read when Escape (or Big Picture's back) arrives. Default: always. */
+  /** Read when Escape (or Big Picture's back, or an outside press) arrives. Default: always. */
   dismissible?: () => boolean;
-  /** The user asked to close the layer (Escape, back). */
+  /** The user asked to close the layer (Escape, back, an outside press). */
   dismiss: () => void;
   /** An element or a selector inside the layer to focus on open; default per `initialFocus` in focus.ts. */
   initialFocus?: () => HTMLElement | string | null | undefined;
   /** Where focus goes on close when the element that opened the layer is gone. */
   returnFocus?: () => HTMLElement | null | undefined;
+  /** Non-modal: an element inside the layer this one belongs to (usually the trigger). */
+  owner?: () => HTMLElement | null | undefined;
+  /** Non-modal: what a press outside this layer and the layers it owns does. Default 'close'. */
+  outsidePress?: 'close' | 'swallow' | false;
 }
 
 function appContent(): HTMLElement[] {
@@ -83,8 +104,14 @@ function watchApp(on: boolean): void {
 function listen(on: boolean): void {
   if (on === listening) return;
   listening = on;
-  if (on) window.addEventListener('keydown', onWindowKeydown, true);
-  else window.removeEventListener('keydown', onWindowKeydown, true);
+  // Capture: an Escape outside every layer and a press outside a menu are seen before anything below.
+  if (on) {
+    window.addEventListener('keydown', onWindowKeydown, true);
+    window.addEventListener('pointerdown', onWindowPointerdown, true);
+  } else {
+    window.removeEventListener('keydown', onWindowKeydown, true);
+    window.removeEventListener('pointerdown', onWindowPointerdown, true);
+  }
 }
 
 function isEscape(event: KeyboardEvent): boolean {
@@ -96,26 +123,50 @@ function onWindowKeydown(event: KeyboardEvent): void {
   if (event.target instanceof Node && stack.holding(event.target as HTMLElement)) return;
   event.preventDefault();
   event.stopPropagation();
-  dismissTopLayer();
+  if (!event.repeat) dismissTopLayer();
 }
 
-function settle(closed: Closed<HTMLElement, HTMLElement> | null, leaving: HTMLElement | null): void {
+function onWindowPointerdown(event: PointerEvent): void {
+  if (!(event.target instanceof HTMLElement)) return;
+  const swallow = outsidePress.get(stack.top() as HTMLElement) === 'swallow';
+  const leaving = leavingSet();
+  const dismissal = stack.pressOutside(event.target);
+  if (!dismissal) return;
+  if (swallow) {
+    event.preventDefault();
+    event.stopPropagation();
+    window.addEventListener('click', (click) => click.stopPropagation(), { capture: true, once: true });
+  }
+  apply(dismissal.closed, dismissal.dismiss, leaving);
+}
+
+// The top layer and the layers it owns: where focus may be when it closes.
+function leavingSet(): HTMLElement[] {
+  const top = stack.top();
+  return top ? [top, ...stack.owned(top).map((layer) => layer.element)] : [];
+}
+
+function settle(closed: Closed<HTMLElement, HTMLElement> | null, leaving: HTMLElement[]): void {
   if (!closed) return;
   const active = document.activeElement;
-  const lost = !active || active === document.body || !active.isConnected || (leaving?.contains(active) ?? false);
+  const lost = !active || active === document.body || !active.isConnected || leaving.some((el) => el.contains(active));
   if (!lost) return;
   if (closed.focus) focusQuietly(closed.focus);
   else if (closed.enter) enterLayer(closed.enter);
 }
 
-/** Escape's effect: closes the top layer if it may close. False when no layer is open. */
-export function dismissTopLayer(): boolean {
-  const leaving = stack.top();
-  const { consumed, closed, dismiss } = stack.dismissTop();
-  if (!dismiss) return consumed;
+function apply(closed: Closed<HTMLElement, HTMLElement> | null, dismiss: (() => void) | null, leaving: HTMLElement[]): void {
+  if (!dismiss) return;
   sync();
   settle(closed, leaving);
   dismiss();
+}
+
+/** Escape's effect: closes the top layer if it may close. False when no layer is open. */
+export function dismissTopLayer(): boolean {
+  const leaving = leavingSet();
+  const { consumed, closed, dismiss } = stack.dismissTop();
+  apply(closed, dismiss, leaving);
   return consumed;
 }
 
@@ -124,14 +175,27 @@ export function topLayer(): HTMLElement | null {
   return stack.top();
 }
 
+// Tab order of a trap: the layer's controls, each owned layer's controls right after its trigger.
+function trapList(root: HTMLElement): HTMLElement[] {
+  const list = focusableIn(root);
+  for (const layer of stack.owned(root)) {
+    const at = layer.opener ? list.indexOf(layer.opener) : -1;
+    list.splice(at < 0 ? list.length : at + 1, 0, ...focusableIn(layer.element));
+  }
+  return list;
+}
+
+function moveFocus(root: HTMLElement, backwards: boolean): void {
+  const list = trapList(root);
+  const active = document.activeElement as HTMLElement | null;
+  const next = nextFocusTarget(list, active && list.includes(active) ? active : null, backwards);
+  focusQuietly(next ?? root);
+}
+
 /** Moves focus to the next (previous) tabbable element of the top layer, wrapping at the ends. */
 export function cycleFocus(backwards: boolean): void {
   const top = stack.top();
-  if (!top) return;
-  const list = focusableIn(top);
-  const active = document.activeElement as HTMLElement | null;
-  const next = nextFocusTarget(list, active && list.includes(active) ? active : null, backwards);
-  focusQuietly(next ?? top);
+  if (top) moveFocus(top, backwards);
 }
 
 /** Puts focus where the layer would on open (focus fell out of it, or never got in). */
@@ -143,6 +207,7 @@ export function enterLayer(element: HTMLElement): void {
 export function openLayer(element: HTMLElement, options: LayerOptions): () => void {
   const modal = options.modal ?? true;
   const active = document.activeElement;
+  const owner = modal ? null : options.owner?.();
   const id = stack.open({
     element,
     modal,
@@ -150,7 +215,10 @@ export function openLayer(element: HTMLElement, options: LayerOptions): () => vo
     dismiss: options.dismiss,
     opener: active instanceof HTMLElement && active !== document.body ? active : null,
     returnFocus: options.returnFocus,
+    owner: owner ? stack.holding(owner) : null,
+    outsidePress: !modal && options.outsidePress !== false,
   });
+  if (!modal && options.outsidePress) outsidePress.set(element, options.outsidePress);
   if (!element.hasAttribute('tabindex')) element.setAttribute('tabindex', '-1');
 
   function onKeydown(event: KeyboardEvent) {
@@ -159,27 +227,28 @@ export function openLayer(element: HTMLElement, options: LayerOptions): () => vo
       event.stopPropagation();
       if (event.defaultPrevented) return;
       event.preventDefault();
-      dismissTopLayer();
+      if (!event.repeat) dismissTopLayer();
       return;
     }
-    if (event.key === 'Tab' && !event.defaultPrevented && stack.isTopModal(id)) {
-      const list = focusableIn(element);
-      const current = document.activeElement as HTMLElement | null;
-      const next = nextFocusTarget(list, current && list.includes(current) ? current : null, event.shiftKey);
+    const trap = event.key === 'Tab' && !event.defaultPrevented ? stack.trapFor(id) : null;
+    if (trap) {
       event.preventDefault();
-      focusQuietly(next ?? element);
+      moveFocus(trap, event.shiftKey);
     }
   }
 
   element.addEventListener('keydown', onKeydown);
   sync();
-  if (modal) focusQuietly(initialFocus(element, options.initialFocus?.()));
+  const focus = options.initialFocus?.();
+  if (modal || focus) focusQuietly(initialFocus(element, focus));
 
   return () => {
     element.removeEventListener('keydown', onKeydown);
+    outsidePress.delete(element);
+    const leaving = [element, ...stack.owned(element).map((layer) => layer.element)];
     const closed = stack.close(id);
     sync();
-    settle(closed, element);
+    settle(closed, leaving);
   };
 }
 

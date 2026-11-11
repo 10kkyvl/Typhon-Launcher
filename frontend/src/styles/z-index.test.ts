@@ -151,10 +151,11 @@ describe('z-index scale', () => {
     expect(z('toast')).toBeGreaterThan(z('corner'));
   });
 
-  // Paint order of modal layers follows the stack: every component that registers a layer puts its
+  // Paint order of modal layers follows the stack: every component that registers a modal layer puts its
   // root on the one dialog token, and portal() appends each at the end of <body> when it opens.
   it('stacks every layer root on --z-dialog, so the layer opened last paints on top', () => {
-    const layered = files.filter((path) => path.endsWith('.svelte') && /\{@attach layer\(/.test(read(path)));
+    // Modal layers only; where non-modal ones (menus, listboxes) stack is the menus pass's to set.
+    const layered = files.filter((path) => path.endsWith('.svelte') && /\{@attach layer\((?![^)]*modal: false)/.test(read(path)));
     expect(layered.length).toBeGreaterThan(1);
     const tokensUsed = layered.map((path) => [path, [...styles(path, read(path)).matchAll(/z-index:\s*var\(--z-([a-z-]+)\)/g)].map((m) => m[1])]);
     expect(tokensUsed).toEqual(layered.map((path) => [path, ['dialog']]));

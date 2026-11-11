@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen } from '@testing-library/svelte';
 import { user } from '../testing/dom';
+import ListboxHarness from '../testing/ListboxHarness.svelte';
 import { focusableIn, initialFocus, nextFocusTarget } from './focus';
 import { dismissTopLayer, openLayer as register, type LayerOptions } from './index';
 
@@ -170,5 +172,73 @@ describe('focus helpers', () => {
     expect(initialFocus(root, byId('x')).id).toBe('x');
     byId('safe').parentElement?.removeAttribute('data-autofocus');
     expect(initialFocus(root).id).toBe('field');
+  });
+});
+
+describe('a listbox portalled out of a dialog, owned by it', () => {
+  async function select() {
+    app.replaceChildren();
+    render(ListboxHarness, { target: app });
+    const keys = user();
+    const opener = screen.getByRole('button', { name: 'Open settings' });
+    await keys.click(opener);
+    const dialog = screen.getByRole('dialog', { name: 'Settings' });
+    const trigger = screen.getByRole('button', { name: 'Russian' });
+    await keys.click(trigger);
+    const listbox = screen.getByRole('listbox', { name: 'Language' });
+    return { keys, opener, dialog, trigger, listbox };
+  }
+
+  it('opens on the press that opened it and takes focus; the dialog stays live under it', async () => {
+    const { dialog, listbox } = await select();
+    expect(dialog.contains(listbox)).toBe(false);
+    expect(listbox.contains(document.activeElement)).toBe(true);
+    expect(dialog.closest('[inert]')).toBeNull();
+  });
+
+  it('Tab stays within the dialog and the listbox, the options following their trigger', async () => {
+    const { keys, dialog, trigger, listbox } = await select();
+    const seen: Element[] = [];
+    for (let step = 0; step < 8; step += 1) {
+      await keys.tab();
+      const active = document.activeElement as Element;
+      expect(dialog.contains(active) || listbox.contains(active), active.outerHTML).toBe(true);
+      seen.push(active);
+    }
+    const options = screen.getAllByRole('option');
+    const order = seen.slice(0, 6);
+    expect(order.indexOf(options[0]) - order.indexOf(trigger)).toBe(1);
+  });
+
+  it('Escape closes the listbox first, focus back on its trigger, then the dialog, focus back on its opener', async () => {
+    const { keys, opener, trigger } = await select();
+
+    await keys.keyboard('{Escape}');
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeTruthy();
+    expect(document.activeElement).toBe(trigger);
+
+    await keys.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it('a press on the dialog body closes the listbox only', async () => {
+    const { keys } = await select();
+
+    await keys.click(screen.getByText('Language', { selector: 'p' }));
+
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeTruthy();
+  });
+
+  it('holding Escape closes one layer, not the listbox and then the dialog', async () => {
+    const { keys } = await select();
+
+    await keys.keyboard('{Escape>4}');
+    await keys.keyboard('{/Escape}');
+
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeTruthy();
   });
 });

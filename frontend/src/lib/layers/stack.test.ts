@@ -182,3 +182,68 @@ describe('LayerStack focus return', () => {
     expect(stack.close(id)).toBeNull();
   });
 });
+
+describe('LayerStack owned layers', () => {
+  it('a listbox owned by a dialog counts as inside it, transitively, and for the dialog Tab trap', () => {
+    const { stack, box, open } = world();
+    const dialog = box('dialog', 'trigger');
+    const dialogId = open(dialog);
+    const listbox = box('listbox', 'option');
+    const listboxId = open(listbox, { modal: false, owner: dialog, opener: 'trigger' });
+    const submenu = box('submenu', 'deep');
+    open(submenu, { modal: false, owner: listbox });
+    const page = box('page menu', 'page item');
+    const pageId = open(page, { modal: false });
+
+    expect(stack.owned(dialog)).toEqual([
+      { element: listbox, opener: 'trigger' },
+      { element: submenu, opener: null },
+    ]);
+    expect(stack.within(dialog, 'option')).toBe(true);
+    expect(stack.within(dialog, 'deep')).toBe(true);
+    expect(stack.within(dialog, 'page item')).toBe(false);
+    expect(stack.trapFor(dialogId)).toBe(dialog);
+    expect(stack.trapFor(listboxId)).toBe(dialog);
+    expect(stack.trapFor(pageId)).toBeNull();
+  });
+
+  it('focus may return into a layer the top dialog owns', () => {
+    const { stack, box, open } = world();
+    const dialog = box('dialog');
+    open(dialog);
+    const listbox = box('listbox', 'option');
+    open(listbox, { modal: false, owner: dialog });
+    const nested = open(box('confirm'), { opener: 'option' });
+
+    expect(stack.close(nested)).toEqual({ focus: 'option', enter: null });
+  });
+});
+
+describe('LayerStack outside press', () => {
+  it('a press outside the top menu and what it owns closes it; inside, or for a dialog, nothing closes', () => {
+    const { stack, box, open } = world();
+    const dialog = box('dialog', 'dialog body', 'trigger');
+    const dialogDismiss = vi.fn();
+    open(dialog, { dismiss: dialogDismiss });
+    expect(stack.pressOutside('page')).toBeNull();
+
+    const listbox = box('listbox', 'option');
+    const listboxDismiss = vi.fn();
+    open(listbox, { modal: false, owner: dialog, opener: 'trigger', outsidePress: true, dismiss: listboxDismiss });
+
+    expect(stack.pressOutside('option')).toBeNull();
+    const press = stack.pressOutside('dialog body');
+    press?.dismiss?.();
+    expect(listboxDismiss).toHaveBeenCalledTimes(1);
+    expect(press?.closed).toEqual({ focus: 'trigger', enter: null });
+    expect(dialogDismiss).not.toHaveBeenCalled();
+    expect(stack.pressOutside('dialog body')).toBeNull();
+  });
+
+  it('a menu that stays open on outside presses is left alone', () => {
+    const { stack, box, open } = world();
+    open(box('menu'), { modal: false, outsidePress: false });
+    expect(stack.pressOutside('page')).toBeNull();
+    expect(stack.size).toBe(1);
+  });
+});
