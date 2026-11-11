@@ -103,15 +103,19 @@
   }
 
   function move(index: number | null) {
-    if (index !== null && index >= 0) activeId = options[index].id;
+    const option = index === null ? undefined : options[index];
+    if (option) activeId = option.id;
   }
 
-  function page(step: number): number {
-    let index = Math.min(Math.max(active + step, 0), options.length - 1);
-    while (index !== active && isDisabled(index)) index -= Math.sign(step);
-    return index;
+  // Ten options on, or the last enabled one short of that; null when none lies between.
+  function page(step: number): number | null {
+    if (options.length === 0) return null;
+    const back = -Math.sign(step);
+    for (let index = Math.min(Math.max(active + step, 0), options.length - 1); index !== active && index >= 0 && index < options.length; index += back) {
+      if (!isDisabled(index)) return index;
+    }
+    return null;
   }
-
   function onClosedKeydown(event: KeyboardEvent) {
     const { key } = event;
     if (event.altKey ? key === 'ArrowDown' : key === 'ArrowDown' || key === 'ArrowUp' || key === 'Enter' || key === ' ') {
@@ -151,10 +155,12 @@
       if (!event.repeat) commit();
       return;
     }
-    const next =
-      key === 'PageDown' || key === 'PageUp'
-        ? page(key === 'PageDown' ? 10 : -10)
-        : nextIndex(active, options.length, key, { isDisabled, loop: false });
+    if (key === 'PageDown' || key === 'PageUp') {
+      event.preventDefault();
+      move(page(key === 'PageDown' ? 10 : -10));
+      return;
+    }
+    const next = nextIndex(active, options.length, key, { isDisabled, loop: false });
     if (next !== null) {
       event.preventDefault();
       move(next);

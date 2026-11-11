@@ -579,6 +579,56 @@ describe('Select inside a dialog', () => {
   });
 });
 
+describe('Select with nothing to choose', () => {
+  // A handler that throws in a key or pointer event reaches the window as an error event, not the test.
+  function windowErrors() {
+    const errors: unknown[] = [];
+    const onError = (event: ErrorEvent) => {
+      event.preventDefault();
+      errors.push(event.error);
+    };
+    window.addEventListener('error', onError);
+    return { errors, stop: () => window.removeEventListener('error', onError) };
+  }
+
+  const ALL_DISABLED: SelectOption[] = LANGUAGES.map((option) => ({ ...option, disabled: true }));
+  const EVERY_KEY = ['{ArrowDown}', '{ArrowUp}', '{Home}', '{End}', '{PageDown}', '{PageUp}', 'e', '{Alt>}{ArrowUp}{/Alt}', '{Enter}', ' '];
+
+  it.each(EVERY_KEY)('every option disabled and none active: %s throws nothing and chooses nothing', async (press) => {
+    const { errors, stop } = windowErrors();
+    const { keys, onchange, field, list } = setup({ options: ALL_DISABLED, value: '', controlled: true });
+    try {
+      field().focus();
+      await keys.keyboard('{ArrowDown}');
+      expect(list()).not.toBeNull();
+      expect(field().hasAttribute('aria-activedescendant')).toBe(false);
+
+      await keys.keyboard(press);
+    } finally {
+      stop();
+    }
+
+    expect(errors).toEqual([]);
+    expect(onchange).not.toHaveBeenCalled();
+  });
+
+  it('an empty list does not open; the field shows the placeholder the caller gives', async () => {
+    const { errors, stop } = windowErrors();
+    const { keys, field, list } = setup({ options: [], value: '', placeholder: 'No consoles' });
+    try {
+      await keys.click(field());
+      await keys.keyboard('{ArrowDown}{End}e');
+    } finally {
+      stop();
+    }
+
+    expect(errors).toEqual([]);
+    expect(list()).toBeNull();
+    expect(field().getAttribute('aria-expanded')).toBe('false');
+    expect(shown(field())).toBe('No consoles');
+  });
+});
+
 describe('Select and other layers', () => {
   it('a dialog that opens while the list is open closes the list', async () => {
     const { keys, field, list } = setup();
