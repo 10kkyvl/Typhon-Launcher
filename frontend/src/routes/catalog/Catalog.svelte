@@ -753,9 +753,9 @@
         <SearchInput bind:value={search} placeholder={msg('games.catalogSearchPlaceholder')} loading={loading && !appending} oninput={onSearch} />
       </div>
       <fieldset class="controls" disabled={!ready}>
-        <Select bind:value={platform} width="20rem" onchange={() => void preferencesChanged()}
+        <Select value={platform} width="20rem" onchange={(id) => { platform = id; void preferencesChanged(); }}
           options={[{id:'',label:msg('games.catalogAllPlatforms')}, ...platforms.map((p) => ({id:p.label,label:p.label}))]} />
-        <Select bind:value={kind} width="13rem" onchange={() => void preferencesChanged()}
+        <Select value={kind} width="13rem" onchange={(id) => { kind = id; void preferencesChanged(); }}
           options={[{id:'',label:msg('games.catalogGames')},{id:'all',label:msg('games.catalogAllContent')},{id:'dlc',label:'DLC'},{id:'demo',label:msg('games.catalogDemos')},{id:'soundtrack',label:msg('games.catalogSoundtracks')},{id:'Bundle',label:msg('games.catalogBundles')},{id:'Edition',label:msg('games.catalogEditions')}]} />
         <DropdownMenu
           items={(['auto', 'for-you', 'popular', 'rating', 'year', 'title'] as Sort[]).map((id) => ({

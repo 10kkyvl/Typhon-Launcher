@@ -70,6 +70,7 @@
   });
 
   function changeTopic(id: string) {
+    topic = id;
     if (!logsTouched && isTopic(id)) attachLogs = attachLogsByDefault(id);
   }
 
@@ -126,7 +127,7 @@
   <div class="form">
     <div class="field">
       <span class="label">{msg('tickets.topicLabel')}</span>
-      <Select options={topics} bind:value={topic} width="100%" onchange={changeTopic} />
+      <Select options={topics} value={topic} width="100%" onchange={changeTopic} />
     </div>
 
     <div class="field">

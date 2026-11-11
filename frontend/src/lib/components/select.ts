@@ -2,4 +2,6 @@
 export interface SelectOption {
   id: string;
   label: string;
+  /** Shown and announced, skipped by the keys and typeahead, not chosen when pressed. */
+  disabled?: boolean;
 }

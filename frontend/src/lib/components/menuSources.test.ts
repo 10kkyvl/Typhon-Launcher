@@ -65,3 +65,34 @@ describe('menu components', () => {
     expect(from('left')).toEqual({ x: '0.3rem', y: '0' });
   });
 });
+
+// The select's list is a layer like the menus: the stack answers Escape and presses outside, anchorTo
+// places it, the layer token stacks it and the shared popup-in moves it in.
+const SELECT = 'lib/components/Select.svelte';
+
+describe('select', () => {
+  it('listens for no Escape or press of its own: no clickOutside, no window or document listener', () => {
+    const text = source(SELECT);
+    expect(text.length).toBeGreaterThan(0);
+    expect(text).not.toMatch(/clickOutside/);
+    expect(text).not.toMatch(/<svelte:(window|document|body)\b/);
+    expect(text).not.toMatch(/addEventListener/);
+  });
+
+  it('puts its list on the layer stack, owned by the field and taking no focus, placed by anchorTo as wide as the field', () => {
+    const text = source(SELECT);
+    const attach = /\{@attach layer\(\{([^}]*)\}\)\}/.exec(text)?.[1] ?? '';
+    expect(attach).toMatch(/modal: false/);
+    expect(attach).toMatch(/owner:/);
+    expect(attach).not.toMatch(/initialFocus/);
+    expect(text).toMatch(/anchorTo\([^;]*matchWidth: true/);
+  });
+
+  it('takes its z-index from the layer token only and declares no keyframes', () => {
+    const css = style(source(SELECT));
+    const values = [...css.matchAll(/z-index\s*:\s*([^;}]+)/g)].map((m) => m[1].trim());
+    expect(values).toEqual(['var(--z-layer)']);
+    expect(css).not.toMatch(/@keyframes/);
+    expect(css).toMatch(/animation:\s*popup-in\b/);
+  });
+});

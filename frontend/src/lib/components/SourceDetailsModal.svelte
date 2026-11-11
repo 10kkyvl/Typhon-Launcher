@@ -146,7 +146,8 @@
     loadReleases(sourceId);
   }
 
-  function onFilterChange() {
+  function onFilterChange(status: string) {
+    filterStatus = status;
     page = 1;
     if (sourceId) loadReleases(sourceId);
   }
@@ -250,7 +251,7 @@
       {/if}
 
       <section class="filters">
-        <Select options={statusOptions} bind:value={filterStatus} width="18rem" onchange={onFilterChange} />
+        <Select options={statusOptions} value={filterStatus} width="18rem" onchange={onFilterChange} />
         <SearchInput bind:value={search} placeholder={msg('modals.sourceDetailsSearchPlaceholder')} oninput={onSearchInput} />
       </section>
 
