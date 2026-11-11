@@ -447,6 +447,37 @@ describe('TopbarSearch: what closes it and what it says', () => {
     expect(said()).toEqual(['Search unavailable']);
   });
 
+  it('keeps "nothing found" on screen, marked busy, while the next search runs', async () => {
+    vi.mocked(searchAll).mockResolvedValue(NOTHING);
+    const { keys, find, popup, settle } = setup();
+    await find('zzz');
+    await keys.keyboard('z');
+    await tick();
+    expect(popup()?.textContent).toContain('Nothing found');
+    expect(screen.getByText('Nothing found', { selector: '.results-note' }).getAttribute('aria-busy')).toBe('true');
+    await keys.keyboard('z');
+    await tick();
+    expect(popup()).not.toBeNull();
+
+    await settle();
+    expect(searchAll).toHaveBeenLastCalledWith('zzzzz');
+    expect(screen.getByText('Nothing found', { selector: '.results-note' }).getAttribute('aria-busy')).toBe('false');
+  });
+
+  it('keeps the error on screen, marked busy, while the next search runs', async () => {
+    vi.mocked(searchAll).mockRejectedValueOnce(new Error('down'));
+    const { keys, find, popup, settle, grid } = setup();
+    await find();
+    await keys.keyboard('s');
+    await tick();
+    expect(popup()?.textContent).toContain('Search unavailable');
+    expect(screen.getByText('Search unavailable', { selector: '.results-note' }).getAttribute('aria-busy')).toBe('true');
+
+    await settle();
+    expect(popup()?.textContent).not.toContain('Search unavailable');
+    expect(grid()).not.toBeNull();
+  });
+
   it('shows nothing while the first search is still running: no empty box', async () => {
     const { keys, field, popup } = setup();
     await keys.click(field());

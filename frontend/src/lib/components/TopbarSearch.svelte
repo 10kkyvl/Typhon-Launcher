@@ -45,7 +45,8 @@
   const firstRelease = $derived(rows.length - results.releases.length);
   const total = $derived(results.games.length + results.releases.length);
   const settled = $derived(results.searched && !results.loading);
-  const showEmpty = $derived(settled && !results.error && total === 0);
+  // Once a search has answered, what it came to stays on screen, dimmed, while the next one runs.
+  const showEmpty = $derived(results.searched && !results.error && total === 0);
   // Nothing to show yet (the first search is still running) shows nothing, not an empty box.
   const shown = $derived(results.open && results.query.trim() !== '' && (rows.length > 0 || results.error !== '' || showEmpty));
   const expanded = $derived(shown && rows.length > 0);
@@ -322,14 +323,14 @@
         {/if}
       </div>
       {#if results.releases.length > 0 && results.moreReleases > 0}
-        <div class="results-note">{msg('search.more', { count: results.moreReleases })}</div>
+        <div class="results-note" aria-busy={results.loading}>{msg('search.more', { count: results.moreReleases })}</div>
       {/if}
     {/if}
 
     {#if results.error}
-      <div class="results-note error">{results.error}</div>
+      <div class="results-note error" aria-busy={results.loading}>{results.error}</div>
     {:else if showEmpty}
-      <div class="results-note">{msg('search.nothingFound')}</div>
+      <div class="results-note" aria-busy={results.loading}>{msg('search.nothingFound')}</div>
     {/if}
   </div>
 {/if}
@@ -365,7 +366,8 @@
   }
 
   /* Results still on screen while a newer search runs. */
-  .grid[aria-busy='true'] {
+  .grid[aria-busy='true'],
+  .results-note[aria-busy='true'] {
     opacity: 0.6;
   }
 
@@ -466,6 +468,7 @@
 
   .results-note {
     padding: 0.8rem 1rem;
+    transition: opacity var(--dur) var(--ease);
     font-size: var(--font-xs);
     color: var(--text-3);
   }

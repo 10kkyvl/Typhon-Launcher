@@ -169,7 +169,8 @@ export class SearchOverlay {
       });
       return;
     }
-    this.patch({ loading: true, error: '' });
+    // What the last search came to (an error included) stays until the next one answers.
+    this.patch({ loading: true });
     this.timer = setTimeout(() => {
       this.timer = undefined;
       void this.run(trimmed);

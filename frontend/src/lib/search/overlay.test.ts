@@ -409,6 +409,20 @@ describe('SearchOverlay error path', () => {
     expect(tracker.state.error).toBe('Search unavailable');
   });
 
+  it('keeps the error while the next search runs, and drops it when that one answers', async () => {
+    const search = vi.fn().mockRejectedValueOnce(new Error('network down')).mockResolvedValueOnce(makeResult([gameA], []));
+    const tracker = track();
+    const overlay = new SearchOverlay({ search, onState: tracker.onState, delay: 50, errorText: 'Search unavailable' });
+    overlay.setQuery('portal');
+    await vi.advanceTimersByTimeAsync(50);
+
+    overlay.setQuery('portals');
+    expect([tracker.state.loading, tracker.state.error, tracker.state.searched]).toEqual([true, 'Search unavailable', true]);
+
+    await vi.advanceTimersByTimeAsync(50);
+    expect([tracker.state.loading, tracker.state.error, tracker.state.games]).toEqual([false, '', [gameA]]);
+  });
+
   it('falls back to errorText when the rejection carries no message at all', async () => {
     const search = vi.fn().mockRejectedValue(new Error());
     const tracker = track();
