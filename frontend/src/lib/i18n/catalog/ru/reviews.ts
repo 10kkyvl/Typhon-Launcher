@@ -19,9 +19,11 @@ export const reviews = {
   'reviews.sectionTitle': 'Отзывы пользователей',
   'reviews.sortHelpful': 'Полезные',
   'reviews.sortRecent': 'Новые',
+  'reviews.sortLabel': 'Порядок отзывов',
   'reviews.filterAll': 'Все',
   'reviews.filterPositive': 'Положительные',
   'reviews.filterNegative': 'Отрицательные',
+  'reviews.filterLabel': 'Какие отзывы показывать',
 
   'reviews.composerSignInPrompt': 'Войдите, чтобы написать отзыв',
   'reviews.composerRecommend': 'Рекомендую',

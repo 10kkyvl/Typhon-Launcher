@@ -149,6 +149,7 @@ export const games = {
   'games.moreLabel': 'Ещё',
   'games.viewList': 'Список',
   'games.viewGrid': 'Сетка',
+  'games.viewLabel': 'Вид списка',
   'games.sortAlpha': 'По алфавиту',
   'games.sortSize': 'По размеру',
   'games.recentLabel': 'Недавние',

@@ -22,9 +22,11 @@ export const reviews: Record<ReviewsKey, Message> = {
   'reviews.sectionTitle': 'User Reviews',
   'reviews.sortHelpful': 'Helpful',
   'reviews.sortRecent': 'Recent',
+  'reviews.sortLabel': 'Order of reviews',
   'reviews.filterAll': 'All',
   'reviews.filterPositive': 'Positive',
   'reviews.filterNegative': 'Negative',
+  'reviews.filterLabel': 'Which reviews to show',
 
   'reviews.composerSignInPrompt': 'Sign in to write a review',
   'reviews.composerRecommend': 'Recommended',

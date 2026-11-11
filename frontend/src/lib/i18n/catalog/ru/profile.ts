@@ -77,6 +77,7 @@ export const profile = {
   'profile.widthFull': 'Во всю ширину',
   'profile.widthHalf': 'Половина ширины',
   'profile.widthThird': 'Треть ширины',
+  'profile.blockWidthFor': 'Ширина блока «{name}»',
   'profile.dragBlock': 'Перетащить блок: {name}',
   'profile.blockSettings': 'Настройки блока: {name}',
   'profile.removeBlock': 'Убрать блок: {name}',

@@ -151,6 +151,7 @@ export const games: Record<GamesKey, Message> = {
   'games.moreLabel': 'More',
   'games.viewList': 'List',
   'games.viewGrid': 'Grid',
+  'games.viewLabel': 'List view',
   'games.sortAlpha': 'Alphabetical',
   'games.sortSize': 'By size',
   'games.recentLabel': 'Recent',

@@ -80,6 +80,7 @@ export const profile: Record<ProfileKey, Message> = {
   'profile.widthFull': 'Full width',
   'profile.widthHalf': 'Half width',
   'profile.widthThird': 'One third width',
+  'profile.blockWidthFor': 'Width of the block {name}',
   'profile.dragBlock': 'Drag block: {name}',
   'profile.blockSettings': 'Block settings: {name}',
   'profile.removeBlock': 'Remove block: {name}',
