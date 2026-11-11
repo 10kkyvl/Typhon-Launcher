@@ -182,8 +182,9 @@
                     <span class="title">{titleOf(item.gameId, item.title)}</span>
                     <span class="sub">
                       {playtime(item.seconds)} · {msg('stats.topSessions', { count: item.sessions })}
+                      <span class="sr-only">· {Math.round(item.share * 100)}%</span>
                     </span>
-                    <span class="share"><span class="share-fill" style:width="{Math.round(item.share * 100)}%"></span></span>
+                    <span class="share" aria-hidden="true"><span class="share-fill" style:width="{Math.round(item.share * 100)}%"></span></span>
                   </span>
                 </button>
               {/each}
