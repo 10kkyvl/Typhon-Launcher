@@ -7,7 +7,7 @@ import { CONTRAST_FALLBACKS } from '../lib/theme/contrastReport';
  * token holds becomes a token (styles/tokens.css for themes, styles/shell.css fixed).
  */
 
-type Fs = { readFileSync(path: URL, encoding: 'utf8'): string };
+type Fs = { readFileSync(path: URL, encoding: 'utf8'): string; readdirSync(path: URL, options: { recursive: true }): string[] };
 const fs = (globalThis as unknown as { process: { getBuiltinModule(id: 'node:fs'): Fs } }).process.getBuiltinModule('node:fs');
 const read = (path: string) => fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 
@@ -61,3 +61,30 @@ describe('base controls take their look from tokens', () => {
     expect(fixed).toBe(CONTRAST_FALLBACKS['--accent-on']);
   });
 });
+
+describe('a base control is restyled by a prop, never from outside', () => {
+  const OWNERS: Record<string, string> = { btn: 'Button', 'icon-btn': 'IconButton', chip: 'Chip' };
+  const sources = fs
+    .readdirSync(new URL('../', import.meta.url), { recursive: true })
+    .map((path) => path.replaceAll('\\', '/'))
+    .filter((path) => path.endsWith('.svelte'));
+
+  it('no component reaches into Button, IconButton or Chip through :global', () => {
+    const found: string[] = [];
+    for (const path of sources) {
+      const text = read(path);
+      for (const m of text.matchAll(/:global\(\s*[^)]*?\.(btn|icon-btn|chip)(?![\w-])/g)) {
+        if (path === `lib/components/${OWNERS[m[1]]}.svelte`) continue;
+        found.push(`${path}:${text.slice(0, m.index).split('\n').length} .${m[1]}`);
+      }
+    }
+    expect(sources.length).toBeGreaterThan(200);
+    expect(found).toEqual([]);
+  });
+
+  it('sees a reach-in when there is one', () => {
+    const sample = '.lead :global(.btn) { min-width: 18rem; } .cta :global(.icon-btn:hover) {}';
+    expect([...sample.matchAll(/:global\(\s*[^)]*?\.(btn|icon-btn|chip)(?![\w-])/g)].map((m) => m[1])).toEqual(['btn', 'icon-btn']);
+  });
+});
+

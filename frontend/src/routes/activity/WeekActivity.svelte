@@ -62,7 +62,7 @@
   {/if}
 
   <div class="all">
-    <Button onclick={() => navigate('profile')}>{msg('social.viewAllActivity')}</Button>
+    <Button block onclick={() => navigate('profile')}>{msg('social.viewAllActivity')}</Button>
   </div>
 </Card>
 
@@ -198,7 +198,4 @@
     margin-top: var(--space-4);
   }
 
-  .all :global(.btn) {
-    width: 100%;
-  }
 </style>

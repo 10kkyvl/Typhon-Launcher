@@ -3,6 +3,8 @@ import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { user } from '../testing/dom';
 import ButtonHarness from '../testing/ButtonHarness.svelte';
+import SplitButtonHarness from '../testing/SplitButtonHarness.svelte';
+import { msg } from '../i18n';
 import buttonSource from './Button.svelte?raw';
 
 let app: HTMLDivElement;
@@ -145,5 +147,33 @@ describe('Button shapes', () => {
   it('joins a neighbour on one side: no rounding there', () => {
     expect(buttonSource).toMatch(/\.join-end \{\s*border-top-right-radius: 0;\s*border-bottom-right-radius: 0;/);
     expect(buttonSource).toMatch(/\.join-start \{[^}]*border-top-left-radius: 0;\s*border-bottom-left-radius: 0;/);
+  });
+});
+
+describe('a split button: an action with its chooser attached', () => {
+  it('is a named group of two buttons, each with its own name, joined edge to edge and in Tab order', async () => {
+    const onplay = vi.fn();
+    render(SplitButtonHarness, { target: app, props: { onplay } });
+    const group = screen.getByRole('group', { name: 'Play' });
+    const play = screen.getByRole('button', { name: 'Play' });
+    const chooser = screen.getByRole('button', { name: msg('games.playProfileChoose') });
+    expect(group.contains(play) && group.contains(chooser)).toBe(true);
+    expect(play.classList.contains('join-end')).toBe(true);
+    expect(chooser.classList.contains('join-start')).toBe(true);
+    expect(chooser.classList.contains('icon')).toBe(true);
+    expect(chooser.getAttribute('aria-haspopup')).toBe('menu');
+
+    const keys = user();
+    screen.getByRole('button', { name: 'Before' }).focus();
+    await keys.tab();
+    expect(document.activeElement).toBe(play);
+    await keys.tab();
+    expect(document.activeElement).toBe(chooser);
+    await keys.tab();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'After' }));
+
+    await keys.click(play);
+    expect(onplay).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('menu')).toBeNull();
   });
 });

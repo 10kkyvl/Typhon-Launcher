@@ -57,7 +57,7 @@
   import GameScreenshots from './GameScreenshots.svelte';
   import ReviewSummary from './ReviewSummary.svelte';
   import { discardDownloadPrompt, removeDownloadPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
-  import { playLabel } from '../../lib/game/profiles';
+  import { playLabel, profileChoices } from '../../lib/game/profiles';
   import PlayProfileMenu from '../../lib/components/PlayProfileMenu.svelte';
   import { consoleOrigin, firstWebUrl, relationKey, releaseOrigin, sharedPlatform, splitReleases } from '../../lib/game/releases';
   import { catalogLoadKey, pageTitle, releaseLoadKey, sameGameIds } from '../../lib/game/pageLoad';
@@ -176,6 +176,8 @@
   const viaCatalog = $derived(found.viaCatalog);
   const wasInstalled = $derived(Boolean(localGame?.installedAt && Date.parse(localGame.installedAt) > 0));
   const installed = $derived(Boolean(localGame) && !localGame?.uninstalled);
+  // The play button and the chevron that picks a launch profile read as one control when the chevron is there.
+  const profileSplit = $derived(localGame ? profileChoices(localGame).length > 1 : false);
   const running = $derived(localGame ? $runningGames.has(localGame.id) : false);
 
   let removeOpen = $state(false);
@@ -1446,8 +1448,8 @@
               {#if !busy?.indeterminate}<span class="progress-pct">{busyPercent}%</span>{/if}
             </div>
           {:else if primary.kind === 'update'}
-            <span class="lead" class:split={Boolean(localGame?.profiles?.length)}>
-              <Button variant="primary" size="lg" onclick={play}>
+            <span class="lead" role={profileSplit ? 'group' : undefined} aria-label={profileSplit ? msg('games.play') : undefined}>
+              <Button variant="primary" size="lg" minWidth="18rem" join={profileSplit ? 'end' : undefined} onclick={play}>
                 <Play size="1.8rem" strokeWidth={2} fill="currentColor" />
                 {localGame ? playLabel(localGame) : msg('games.play')}
               </Button>
@@ -1464,8 +1466,19 @@
               {primary.label}
             </Button>
           {:else}
-            <span class="lead" class:split={primary.kind === 'play' && Boolean(localGame?.profiles?.length)}>
-              <Button variant="primary" size="lg" disabled={primary.disabled} onclick={runPrimary}>
+            <span
+              class="lead"
+              role={primary.kind === 'play' && profileSplit ? 'group' : undefined}
+              aria-label={primary.kind === 'play' && profileSplit ? msg('games.play') : undefined}
+            >
+              <Button
+                variant="primary"
+                size="lg"
+                minWidth="18rem"
+                join={primary.kind === 'play' && profileSplit ? 'end' : undefined}
+                disabled={primary.disabled}
+                onclick={runPrimary}
+              >
                 {#if primary.kind === 'play'}
                   <Play size="1.8rem" strokeWidth={2} fill="currentColor" />
                 {:else if primary.kind === 'stop'}
@@ -1909,16 +1922,6 @@
 
   .lead {
     display: inline-flex;
-  }
-
-  .lead :global(.btn) {
-    min-width: 18rem;
-    padding: 0 2.8rem;
-  }
-
-  .lead.split :global(.btn) {
-    border-top-right-radius: 0;
-    border-bottom-right-radius: 0;
   }
 
   .heart {

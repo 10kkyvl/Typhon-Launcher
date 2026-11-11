@@ -132,6 +132,7 @@
       {#if downloading}
         <Button
           size="sm"
+          minWidth="12.4rem"
           onclick={(e) => {
             stop(e);
             pause(download.id);
@@ -144,6 +145,7 @@
         <Button
           size="sm"
           variant="primary"
+          minWidth="12.4rem"
           onclick={(e) => {
             stop(e);
             resume(download.id);
@@ -337,10 +339,6 @@
     flex: 1;
     min-width: 0;
     margin-right: 0.4rem;
-  }
-
-  .toggle :global(.btn) {
-    min-width: 12.4rem;
   }
 
   @media (max-width: 1300px) {
