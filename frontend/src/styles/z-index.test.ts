@@ -174,14 +174,6 @@ describe('z-index scale', () => {
     expect(writes).toEqual([THEME_GUARD]);
     expect(read(THEME_GUARD)).toMatch(/setProperty\('z-index', '2147483647', 'important'\)/);
   });
-
-  // An isolated root confines whatever it renders: a popover inside it is painted under later page
-  // content where it sticks out. Limit: only components imported by path are followed; a popover passed
-  // in as a snippet by the parent is not seen. A popup on the layer stack (DropdownMenu, ContextMenu, Select's
-  // list) is portalled out of every root and is not listed.
-  it('does not isolate the root of a component that renders a popover, directly or through its children', () => {
-    expect(isolatedPopoverHosts()).toEqual([]);
-  });
 });
 
 // Every element that carries `{@attach layer(…)}`: its first static class and that class's z-index.
@@ -198,38 +190,3 @@ function layerRoots(path: string, text: string): { path: string; root: string; z
 const THEME_GUARD = 'lib/components/ThemeGuard.ts';
 const SCRIPT_Z = /\.zIndex\b|setProperty\(\s*['"`]z-index|cssText[^\n]*z-index|['"`]z-index\s*:/;
 
-const POPOVERS = ['Tooltip'];
-
-function svelteImports(path: string, text: string): string[] {
-  const dir = path.slice(0, path.lastIndexOf('/') + 1);
-  return [...text.matchAll(/from\s+['"](\.{1,2}\/[^'"]+\.svelte)['"]/g)].map((m) => new URL(m[1], `file:///${dir}`).pathname.slice(1));
-}
-
-function isolatedPopoverHosts(): string[] {
-  const svelte = files.filter((path) => path.endsWith('.svelte'));
-  const imports = new Map(svelte.map((path) => [path, svelteImports(path, read(path))]));
-  const reaches = (start: string): boolean => {
-    const seen = new Set<string>();
-    const queue = [start];
-    while (queue.length) {
-      const next = queue.pop() as string;
-      for (const child of imports.get(next) ?? []) {
-        if (POPOVERS.some((name) => child.endsWith(`/${name}.svelte`))) return true;
-        if (!seen.has(child)) {
-          seen.add(child);
-          queue.push(child);
-        }
-      }
-    }
-    return false;
-  };
-  return svelte.filter((path) => {
-    const text = read(path);
-    const root = rootClass(path, text);
-    if (!root) return false;
-    const isolates = [...styles(path, text).matchAll(RULE)].some(
-      (m) => selectsRoot(m[1].trim().split('\n').pop()?.trim() ?? '', root) && /(?<![-\w])isolation\s*:\s*isolate/.test(m[2]),
-    );
-    return isolates && reaches(path);
-  });
-}

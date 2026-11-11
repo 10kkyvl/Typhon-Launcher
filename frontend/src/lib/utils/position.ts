@@ -361,8 +361,8 @@ export interface PointOptions {
   onleave?: () => void;
 }
 
-// A scroll of the document itself, or of a container that holds `source`.
-function scrolledUnder(target: EventTarget | null, source: Element | null | undefined): boolean {
+/** A scroll of the document itself, or of a container that holds `source`: what moves an element on the page. */
+export function scrolledUnder(target: EventTarget | null, source: Element | null | undefined): boolean {
   if (!(target instanceof Node)) return true;
   if (target === document || target === document.documentElement || target === document.body) return true;
   return Boolean(source && target.contains(source));

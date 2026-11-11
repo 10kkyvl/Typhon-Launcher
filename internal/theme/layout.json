@@ -39,7 +39,8 @@
     "game-section",
     "dialog",
     "menu",
-    "listbox"
+    "listbox",
+    "tooltip"
   ],
   "partsWithId": ["sidebar-item", "topbar-action", "game-section"]
 }
