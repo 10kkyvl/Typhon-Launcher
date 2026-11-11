@@ -7,7 +7,8 @@
  * - the pointer may leave for `grace` without hiding it, long enough to cross onto the hint, where
  *   `hover()` keeps it (WCAG 1.4.13: hoverable);
  * - `escape()` (Escape, a press on the control, a dialog over it) hides it until both the pointer and
- *   focus have left, so it does not come back while the user is still there;
+ *   focus have left, so it does not come back while the user is still there; a press before the hint
+ *   has shown counts too (focus then leaving for what the press opened does not bring it up);
  * - `dismiss()` (scroll, the window losing focus, the control gone or disabled) hides it and forgets
  *   hover and focus: the next hover or focus starts afresh.
  */
@@ -50,8 +51,9 @@ export function createHoverIntent(onchange: (open: boolean) => void, options: Ho
     open = next;
     onchange(next);
   };
+  // The dismissal lasts while the user is still there: hovering, focused, or resting towards a show.
   const settle = () => {
-    if (!hovered && !focused) dismissed = false;
+    if (!hovered && !focused && showTimer === null) dismissed = false;
     update();
   };
   const leave = () => {

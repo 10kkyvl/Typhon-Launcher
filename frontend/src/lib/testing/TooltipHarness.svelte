@@ -16,6 +16,7 @@
     placement,
     other = false,
     text = 'Removes the cached covers',
+    expanded,
   }: {
     inDialog?: boolean;
     describe?: boolean;
@@ -24,6 +25,8 @@
     placement?: Placement;
     other?: boolean;
     text?: string;
+    /** The control has a popup of its own and says whether it is open. */
+    expanded?: boolean;
   } = $props();
 
   let settings = $state(true);
@@ -43,7 +46,7 @@
   <Tooltip {text} {describe} {placement}>
     {#if present}
       {#key generation}
-        <button type="button" {disabled} aria-describedby={note}>Clear</button>
+        <button type="button" {disabled} aria-describedby={note} aria-expanded={expanded}>Clear</button>
       {/key}
     {/if}
   </Tooltip>

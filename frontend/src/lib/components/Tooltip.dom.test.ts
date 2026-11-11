@@ -81,6 +81,34 @@ describe('Tooltip: pointer', () => {
     expect(shown()).toBe(false);
   });
 
+  it('a control whose own popup is open shows no hint, by hover or by keyboard focus', async () => {
+    const { keys, control, shown, wait, focusByKeyboard } = setup({ expanded: true });
+    await keys.hover(control());
+    await wait(1000);
+    expect(shown()).toBe(false);
+    await focusByKeyboard();
+    await wait(1000);
+    expect(shown()).toBe(false);
+  });
+
+  it('a hint showing when the control opens its popup hides, and shows again once the popup has closed', async () => {
+    const { keys, control, shown, wait, rerender } = setup({ expanded: false });
+    await keys.hover(control());
+    await wait(HOVER_DELAY);
+    expect(shown()).toBe(true);
+
+    await rerender({ expanded: true });
+    await wait(0);
+    expect(shown()).toBe(false);
+
+    await rerender({ expanded: false });
+    await keys.unhover(control());
+    await wait(LEAVE_GRACE);
+    await keys.hover(control());
+    await wait(HOVER_DELAY);
+    expect(shown()).toBe(true);
+  });
+
   it('a click focuses the control without showing the hint (pointer focus is not keyboard focus)', async () => {
     const { keys, control, shown, wait } = setup();
     await keys.click(control());

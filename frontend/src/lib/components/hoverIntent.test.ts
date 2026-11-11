@@ -68,6 +68,21 @@ describe('hover intent', () => {
     expect(changes).toEqual([true]);
   });
 
+  it('a press before the delay keeps it closed when focus then moves off the control into what the press opened', () => {
+    const { intent, changes } = make();
+    intent.hover();
+    vi.advanceTimersByTime(100);
+    intent.escape();
+    intent.blur();
+    vi.advanceTimersByTime(HOVER_DELAY * 3);
+    expect(changes).toEqual([]);
+    intent.unhover();
+    vi.advanceTimersByTime(LEAVE_GRACE);
+    intent.hover();
+    vi.advanceTimersByTime(HOVER_DELAY);
+    expect(changes).toEqual([true]);
+  });
+
   it('a press while open hides it, and coming back inside the grace does not show it again', () => {
     const { intent, changes } = make();
     intent.hover();

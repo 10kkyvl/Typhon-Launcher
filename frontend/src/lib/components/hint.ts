@@ -12,9 +12,12 @@ export interface HintSource {
   control: () => HTMLElement | null;
 }
 
-/** A hint shows for a control on the page that is not disabled. */
+/**
+ * A hint shows for a control on the page that is not disabled and has no popup of its own open: over
+ * its own menu or panel the hint only covers what the user asked for.
+ */
 export function usable(control: HTMLElement | null): boolean {
-  return control !== null && control.isConnected && !control.matches(':disabled');
+  return control !== null && control.isConnected && !control.matches(':disabled') && control.getAttribute('aria-expanded') !== 'true';
 }
 
 /**
@@ -35,7 +38,7 @@ export function hintTrigger(node: HTMLElement, { intent, control }: HintSource):
   };
   const onFocusin = (event: FocusEvent) => {
     const target = event.target;
-    if (target instanceof HTMLElement && inControl(target) && target.matches(':focus-visible')) intent.focus();
+    if (target instanceof HTMLElement && inControl(target) && target.matches(':focus-visible') && usable(control())) intent.focus();
   };
   const onFocusout = (event: FocusEvent) => {
     if (inControl(event.relatedTarget)) return;
@@ -64,15 +67,15 @@ export interface HintBubbleOptions extends HintSource {
   /** Used when the hint fits on neither side of `placement`'s axis. */
   fallback?: Placement;
   offset?: number;
-  /** Where the control lives: the control removed from it, or turning disabled, hides the hint. */
+  /** Where the control lives: the control removed from it, turning disabled or opening its popup hides the hint. */
   watch: HTMLElement | null;
 }
 
 /**
  * While a hint is shown (`node`, a layer on the stack): it stays next to the control (anchorTo), stays
  * while the pointer is over it, keeps focus on the control when pressed, and goes away on a scroll of
- * the page under the control, the window losing focus, the control scrolled out of sight, removed or
- * disabled. Returns a cleanup function.
+ * the page under the control, the window losing focus, the control scrolled out of sight, removed,
+ * disabled or opening its own popup. Returns a cleanup function.
  */
 export function hintBubble(node: HTMLElement, options: HintBubbleOptions): () => void {
   const { intent, control, watch } = options;
@@ -93,7 +96,7 @@ export function hintBubble(node: HTMLElement, options: HintBubbleOptions): () =>
   const watcher = new MutationObserver(() => {
     if (!usable(control())) intent.dismiss();
   });
-  if (watch) watcher.observe(watch, { subtree: true, childList: true, attributes: true, attributeFilter: ['disabled'] });
+  if (watch) watcher.observe(watch, { subtree: true, childList: true, attributes: true, attributeFilter: ['disabled', 'aria-expanded'] });
   node.addEventListener('pointerenter', enter);
   node.addEventListener('pointerleave', leave);
   node.addEventListener('mousedown', keepFocus);
