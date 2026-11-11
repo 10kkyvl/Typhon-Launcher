@@ -230,7 +230,7 @@ export const themeTokens: Record<ThemeTokensKey, Message> = {
   'settings.themeToken.radius-control': 'Corner radius: controls',
   'settings.themeTokenHint.radius-control': 'The search field and the button groups of the top bar; 999px draws them as pills, a value like 0.8rem brings square corners back',
   'settings.themeToken.ambient-dim': 'Game backdrop: dim',
-  'settings.themeTokenHint.ambient-dim': 'Colour the game art behind the interface is pulled toward, its alpha sets how far: the more opaque, the calmer the art. The launcher still limits the art\'s brightness so text stays readable; an opaque colour turns the art off',
+  'settings.themeTokenHint.ambient-dim': 'Share of the page colour laid over the game art behind the interface, from 0 to 1: the more, the calmer the art; 1 turns the art off. The launcher still limits the art\'s brightness so text stays readable',
   'settings.themeToken.motion-backdrop': 'Animation duration: game backdrop',
   'settings.themeTokenHint.motion-backdrop': 'How long the art behind the interface takes to flow from one game to the next',
 };
