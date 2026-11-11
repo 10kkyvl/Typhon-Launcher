@@ -80,6 +80,23 @@ describe('Toasts: what a screen reader is told', () => {
     expect([urgent(), polite()]).toEqual(before);
   });
 
+  it('says a new toast alone: the lanes are not atomic, so the toasts already there are not read again', () => {
+    const { urgent, polite } = setup();
+
+    expect(urgent().getAttribute('aria-atomic')).toBe('false');
+    expect(polite().getAttribute('aria-atomic')).toBe('false');
+  });
+
+  it('gives the close button a name but no text of its own to be read out with the message', async () => {
+    const { close } = setup();
+    toast('Saved');
+    await tick();
+
+    expect(close('Saved').getAttribute('aria-label')).toBe(msg('ui.toastDismiss'));
+    expect(close('Saved').textContent?.trim()).toBe('');
+    expect(close('Saved').closest('[aria-hidden="true"]')).toBeNull();
+  });
+
   it('marks each toast as a theme part and hides its icon from the tree', async () => {
     const { card } = setup();
     toast('Saved');

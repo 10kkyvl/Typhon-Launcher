@@ -10,8 +10,10 @@
    * The stack of toasts, mounted by a shell in a part the layer stack leaves live (`data-layer-keep`).
    * A named region holding two live regions that exist before any toast does, so the first toast is
    * announced too: errors and warnings go to the `alert` one (said at once), the rest to the `status`
-   * one (said when the reader is free). Timing, the queue and repeats are the store's (stores/toasts.ts);
-   * this component tells it when a toast is being read and whether a dialog is open.
+   * one (said when the reader is free). What a new toast adds to its lane is its message, the label of
+   * its action (an offer worth hearing) and a close button that has a name but no text. Timing, the
+   * queue and repeats are the store's (stores/toasts.ts); this component tells it when a toast is being
+   * read and whether a dialog is open.
    */
 
   const icons = { info: Info, success: CircleCheck, warning: TriangleAlert, danger: CircleAlert };
@@ -108,12 +110,14 @@
 {/snippet}
 
 <section class="toasts" aria-label={msg('ui.toastsLabel')}>
-  <div class="lane" role="alert">
+  <!-- Not atomic (an alert and a status are by default): a second toast is said alone, without the
+       ones already in its lane. -->
+  <div class="lane" role="alert" aria-atomic="false">
     {#each urgent as item (item.id)}
       {@render card(item)}
     {/each}
   </div>
-  <div class="lane" role="status">
+  <div class="lane" role="status" aria-atomic="false">
     {#each polite as item (item.id)}
       {@render card(item)}
     {/each}
