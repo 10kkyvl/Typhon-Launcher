@@ -64,7 +64,7 @@
       {@render who()}
     </div>
   {/if}
-  <PlayerCardPopover anchor={whoEl} {user} {presence} />
+  <PlayerCardPopover anchor={whoEl} {user} {presence} beside={variant === 'grid'} />
 {/snippet}
 
 {#snippet metaLine()}

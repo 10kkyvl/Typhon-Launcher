@@ -11,7 +11,18 @@
    * The hover card of a friend row: a description of the row's name, shown by the same rules as a
    * tooltip (hint.ts, hoverIntent.ts) and as a non-modal layer on the stack. It has no controls.
    */
-  let { anchor, user, presence }: { anchor?: HTMLElement | null; user: UserCard; presence?: PresenceView | null } = $props();
+  let {
+    anchor,
+    user,
+    presence,
+    beside = false,
+  }: {
+    anchor?: HTMLElement | null;
+    user: UserCard;
+    presence?: PresenceView | null;
+    /** The row keeps its links and actions under the name (a grid tile): the card opens beside it. */
+    beside?: boolean;
+  } = $props();
 
   const uid = $props.id();
   const id = `${uid}-card`;
@@ -42,11 +53,18 @@
     return () => el.removeAttribute('aria-describedby');
   });
 
-  // Under the name, not beside it: beside it the card covers the row's own links and actions, and the
-  // pointer on its way to them would keep the card open.
+  // Away from the row's own links and actions: over them the card would cover them, and the pointer on
+  // its way to them would keep it open. A row has them beside the name, a grid tile under it.
   const card: Attachment<HTMLElement> = (node) =>
     untrack(() =>
-      hintBubble(node, { intent, control, placement: 'bottom-start', fallback: 'top-start', offset: 8, watch: anchor?.parentElement ?? null }),
+      hintBubble(node, {
+        intent,
+        control,
+        placement: beside ? 'right-start' : 'bottom-start',
+        fallback: beside ? 'bottom-start' : 'top-start',
+        offset: 8,
+        watch: anchor?.parentElement ?? null,
+      }),
     );
 </script>
 

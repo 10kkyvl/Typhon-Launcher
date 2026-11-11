@@ -78,6 +78,16 @@ describe('PlayerCardPopover', () => {
       expect(parseFloat(shown.style.top)).toBeGreaterThanOrEqual(140);
     });
 
+    it('opens beside the name where the row keeps its controls under it (the grid tile)', async () => {
+      name = DOMRect.fromRect({ x: 100, y: 100, width: 160, height: 40 });
+      const { card, hover } = setup({ beside: true });
+      await hover();
+      const shown = card() as HTMLElement;
+      expect(shown.dataset.placement).toBe('right-start');
+      expect(parseFloat(shown.style.left)).toBeGreaterThanOrEqual(260);
+      expect(shown.style.top).toBe('100px');
+    });
+
     it('opens above the name when there is no room under it', async () => {
       name = DOMRect.fromRect({ x: 100, y: 660, width: 160, height: 40 });
       const { card, hover } = setup();
