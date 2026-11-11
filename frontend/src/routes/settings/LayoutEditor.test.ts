@@ -17,7 +17,7 @@ describe('LayoutEditor', () => {
   });
 
   it('disables the reset button for the default layout only', () => {
-    const resetTag = (out: string) => out.match(/<button[^>]*>(?:<!---->)?Сбросить раскладку/)?.[0] ?? '';
+    const resetTag = (out: string) => out.match(/<button[^>]*>(?:<!--[^>]*-->)*Сбросить раскладку/)?.[0] ?? '';
     expect(resetTag(html())).toContain('disabled');
     expect(resetTag(html({ sidebar: { side: 'right' } }))).not.toContain('disabled');
   });

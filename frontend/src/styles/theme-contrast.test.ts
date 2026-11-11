@@ -224,6 +224,27 @@ describe('built-in themes', () => {
   }
 
   for (const id of ['dark', 'light', 'contrast', 'blush']) {
+    // Button.svelte `.danger`: the label is --danger leaning 20 % towards --text, on the --danger-subtle
+    // tint over whatever surface the button stands on; hovered it is --bg on a full --danger fill.
+    it(`${id} keeps the danger button's label readable at rest and hovered`, () => {
+      const preset = builtIns().find((p) => p.id === id);
+      expect(preset, id).toBeDefined();
+      const tokens = (preset as Preset).tokens;
+      const bg = paint(tokens, '--bg', BLACK);
+      const out: string[] = [];
+      for (const surface of PAGE) {
+        const under = paint(tokens, '--danger-subtle', surface === '--bg' ? bg : paint(tokens, surface, bg));
+        const danger = paint(tokens, '--danger', under);
+        const text = paint(tokens, '--text', under);
+        const label = danger.map((channel, i) => channel * 0.8 + text[i] * 0.2) as RGB;
+        const r = ratio(label, under);
+        if (r < 4.5) out.push(`label on the tint over ${surface}: ${r.toFixed(2)}`);
+      }
+      const fill = paint(tokens, '--danger', bg);
+      if (ratio(bg, fill) < 4.5) out.push(`--bg on --danger: ${ratio(bg, fill).toFixed(2)}`);
+      expect(out).toEqual([]);
+    });
+
     it(`${id} keeps indicators and the focus ring at 3:1 on every surface`, () => {
       const preset = builtIns().find((p) => p.id === id);
       expect(preset, id).toBeDefined();

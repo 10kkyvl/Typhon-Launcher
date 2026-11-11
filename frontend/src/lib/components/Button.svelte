@@ -2,6 +2,7 @@
   import type { Snippet } from 'svelte';
   import type { Attachment } from 'svelte/attachments';
   import type { HTMLButtonAttributes } from 'svelte/elements';
+  import Spinner from './Spinner.svelte';
   import Tooltip from './Tooltip.svelte';
 
   // Other attributes (id, aria-*, data-*, handlers, attachments) go to the <button>.
@@ -12,6 +13,11 @@
     disabled = false,
     pressed,
     reason,
+    busy = false,
+    block = false,
+    icon = false,
+    join,
+    minWidth,
     onclick,
     children,
     ...rest
@@ -28,11 +34,28 @@
      * button then stays one element, and keeps focus, as the state flips.
      */
     reason?: string;
+    /**
+     * The button's own action is running: a spinner joins the label (which stays, so the width does
+     * not jump), activations are ignored and it says it is busy. It is not disabled: focus stays on it.
+     */
+    busy?: boolean;
+    /** Fills the width of its row. */
+    block?: boolean;
+    /** Holds one icon and no text: as wide as it is high. It needs an `aria-label`. */
+    icon?: boolean;
+    /**
+     * The side on which a neighbour is attached, the two reading as one control (the play button and
+     * its profile chevron): no rounding and no gap on that side.
+     */
+    join?: 'start' | 'end';
+    /** A CSS length the button never gets narrower than, so a label that changes does not move its row. */
+    minWidth?: string;
     onclick?: (e: MouseEvent) => void;
     children?: Snippet;
   } = $props();
 
-  const blocked = $derived(disabled && Boolean(reason));
+  const refused = $derived(disabled && Boolean(reason));
+  const blocked = $derived(refused || busy);
 
   // Keys that do not activate it still work: Tab moves on, Escape closes the dialog or hint around it.
   const PASSING_KEYS = new Set(['Tab', 'Escape']);
@@ -59,18 +82,24 @@
     {...rest}
     {type}
     class="btn {variant} {size}"
+    class:block
+    class:icon
+    class:join-start={join === 'start'}
+    class:join-end={join === 'end'}
+    style:min-width={minWidth}
     disabled={disabled && !(guarded && reason)}
-    aria-disabled={guarded && blocked ? 'true' : undefined}
+    aria-disabled={(guarded && refused) || busy ? 'true' : undefined}
+    aria-busy={busy || undefined}
     aria-pressed={pressed}
     {onclick}
-    {@attach guarded ? guard : undefined}
+    {@attach guarded || busy ? guard : undefined}
   >
-    {@render children?.()}
+    {#if busy}<Spinner size="sm" tone="current" />{/if}{@render children?.()}
   </button>
 {/snippet}
 
 {#if reason !== undefined}
-  <Tooltip text={blocked ? (reason ?? '') : ''}>{@render button(true)}</Tooltip>
+  <Tooltip text={refused ? (reason ?? '') : ''}>{@render button(true)}</Tooltip>
 {:else}
   {@render button(false)}
 {/if}
@@ -81,10 +110,12 @@
     align-items: center;
     justify-content: center;
     vertical-align: middle;
-    gap: 0.7rem;
-    font-size: var(--font-sm);
-    font-weight: 500;
-    border-radius: var(--radius-md);
+    gap: var(--space-2);
+    height: var(--control-md);
+    padding: 0 var(--space-4);
+    font-size: var(--font-md);
+    font-weight: 550;
+    border-radius: var(--radius-control);
     border: 1px solid transparent;
     white-space: nowrap;
     transition:
@@ -101,28 +132,47 @@
     cursor: default;
   }
 
-  .md {
-    height: var(--control-md);
-    padding: 0 1.5rem;
+  /* Busy is not unavailable: it keeps its full colour while its own action runs. */
+  .btn[aria-busy='true'] {
+    opacity: 1;
+    cursor: progress;
   }
 
   .sm {
     height: var(--control-sm);
-    padding: 0 1.2rem;
-    font-size: var(--font-xs);
+    padding: 0 var(--space-3);
+    font-size: var(--font-sm);
   }
 
   .lg {
     height: var(--control-lg);
-    padding: 0 2rem;
-    font-size: var(--font-md);
-    font-weight: 600;
+    padding: 0 var(--space-5);
+    font-size: var(--font-lg);
+  }
+
+  .block {
+    width: 100%;
+  }
+
+  .icon {
+    aspect-ratio: 1;
+    padding: 0;
+  }
+
+  .join-end {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+
+  .join-start {
+    margin-left: 1px;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
   }
 
   .primary {
     background: var(--accent);
-    color: var(--accent-on, #fff);
-    border-radius: var(--radius-md);
+    color: var(--accent-on, var(--accent-on-default));
   }
 
   .primary:hover:not(:disabled, [aria-disabled='true']) {
@@ -152,19 +202,58 @@
     color: var(--text);
   }
 
+  /* A tinted fill with a full border. On the tint --danger alone is under 4.5:1, so the label leans
+     towards the text colour: lighter on a dark theme, darker on a light one (theme-contrast.test.ts). */
   .danger {
-    background: transparent;
-    border-color: rgba(217, 105, 105, 0.3);
-    color: var(--danger);
+    background: var(--danger-subtle);
+    border-color: var(--danger);
+    color: color-mix(in srgb, var(--danger) 80%, var(--text));
   }
 
   .danger:hover:not(:disabled, [aria-disabled='true']) {
-    background: var(--danger-subtle);
-    border-color: rgba(217, 105, 105, 0.5);
+    background: var(--danger);
+    color: var(--bg);
   }
 
   .btn:active:not(:disabled, [aria-disabled='true']) {
     transform: scale(0.97);
     box-shadow: none;
+  }
+
+  /* The in-game overlay is drawn at the density the main window had before 2.0 and keeps the controls
+     of that time until it gets its own pass (the root says so with data-controls="1x"). */
+  :global([data-controls='1x']) .btn {
+    gap: 0.7rem;
+    padding: 0 1.5rem;
+    font-size: var(--font-sm);
+    font-weight: 500;
+    border-radius: var(--radius-md);
+  }
+
+  :global([data-controls='1x']) .sm {
+    padding: 0 1.2rem;
+    font-size: var(--font-xs);
+  }
+
+  :global([data-controls='1x']) .lg {
+    padding: 0 2rem;
+    font-size: var(--font-md);
+    font-weight: 600;
+  }
+
+  :global([data-controls='1x']) .icon {
+    padding: 0;
+  }
+
+  :global([data-controls='1x']) .danger {
+    background: transparent;
+    border-color: color-mix(in srgb, var(--danger) 30%, transparent);
+    color: var(--danger);
+  }
+
+  :global([data-controls='1x']) .danger:hover:not(:disabled, [aria-disabled='true']) {
+    background: var(--danger-subtle);
+    border-color: color-mix(in srgb, var(--danger) 50%, transparent);
+    color: var(--danger);
   }
 </style>

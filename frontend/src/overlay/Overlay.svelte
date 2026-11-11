@@ -101,7 +101,7 @@
 
 <svelte:window onkeydown={onKeydown} onfocus={onFocus} />
 
-<div class="overlay" style={pinnedSizesStyle} bind:this={root}>
+<div class="overlay" style={pinnedSizesStyle} data-controls="1x" bind:this={root}>
   <button class="backdrop" type="button" tabindex="-1" aria-label={msg('common.close')} onclick={hide}></button>
   {#if browser}
     <OverlayBrowser {shown} onclose={() => (browser = false)} />
