@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
-import { removeSource, type Source } from '../services/sources';
+import { queryReleases, removeSource, type Source } from '../services/sources';
 import { sourceErrorText } from '../sources/sourceErrors';
 import { sources } from '../stores/sources';
 import { toasts } from '../stores/toasts';
@@ -80,5 +80,23 @@ describe('removing a source from its details', () => {
     await keys.click(within(confirm).getByRole('button', { name: msg('transfers.sourcesRemoveAction') }));
 
     await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+});
+
+describe('the status filter of a source', () => {
+  it('is named by its label, as is its list, and choosing a status reloads the releases with it', async () => {
+    render(SourceDetailsModal, { target: app, props: { open: true, sourceId: 's1' } });
+    const keys = user();
+    const details = await screen.findByRole('dialog', { name: 'FitGirl' });
+    const status = screen.getByRole('combobox', { name: msg('modals.sourceDetailsColStatus') });
+    expect(status.textContent?.trim()).toBe(msg('modals.sourceDetailsStatusAll'));
+
+    await keys.click(status);
+    const list = screen.getByRole('listbox', { name: msg('modals.sourceDetailsColStatus') });
+    expect(details.contains(list)).toBe(false);
+    await keys.click(screen.getByRole('option', { name: msg('modals.sourceDetailsStatusMatched') }));
+
+    expect(status.textContent?.trim()).toBe(msg('modals.sourceDetailsStatusMatched'));
+    expect(queryReleases).toHaveBeenLastCalledWith(expect.objectContaining({ sourceId: 's1', status: 'matched', page: 1 }));
   });
 });
