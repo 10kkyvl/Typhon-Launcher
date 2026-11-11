@@ -114,3 +114,34 @@ describe('one spinner', () => {
   });
 });
 
+// The theme editor's preview is a miniature drawn by hand, not the components themselves: it must
+// take the same tokens for the same parts, or a theme author tunes a button that does not exist.
+describe('the theme preview draws the button the app draws', () => {
+  const rule = (css: string, selector: string) => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const body = new RegExp(`(?:^|\\})\\s*${escaped}\\s*\\{([^}]*)\\}`, 'm').exec(css)?.[1];
+    expect(body, selector).toBeTypeOf('string');
+    return Object.fromEntries(declarations(`{${body}`).map((d) => [d.prop, d.value]));
+  };
+  const button = style('lib/components/Button.svelte');
+  const preview = style('routes/settings/ThemePreview.svelte');
+
+  it('same radius and weight', () => {
+    expect(rule(preview, '.btn')['border-radius']).toBe(rule(button, '.btn')['border-radius']);
+    expect(rule(preview, '.btn')['font-weight']).toBe(rule(button, '.btn')['font-weight']);
+  });
+
+  it('same fill and label for the primary button, at rest and hovered', () => {
+    expect(rule(preview, '.btn.primary')).toEqual(rule(button, '.primary'));
+    expect(rule(preview, '.btn.primary.hover').background).toBe(rule(button, ".primary:hover:not(:disabled, [aria-disabled='true'])").background);
+  });
+
+  it('same surface, border and text for the secondary button', () => {
+    const real = rule(button, '.secondary');
+    const drawn = rule(preview, '.btn.secondary');
+    expect(drawn.background).toBe(real.background);
+    expect(drawn.color).toBe(real.color);
+    expect(drawn.border).toBe(`1px solid ${real['border-color']}`);
+  });
+});
+

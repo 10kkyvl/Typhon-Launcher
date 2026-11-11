@@ -279,14 +279,14 @@
 
   .btn {
     padding: var(--space-1) var(--space-3);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-control);
     font-size: var(--font-xs);
-    font-weight: 500;
+    font-weight: 550;
   }
 
   .btn.primary {
     background: var(--accent);
-    color: var(--accent-on, #fff);
+    color: var(--accent-on, var(--accent-on-default));
   }
 
   .btn.primary.hover {
