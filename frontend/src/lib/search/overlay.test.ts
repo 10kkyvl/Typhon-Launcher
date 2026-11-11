@@ -330,7 +330,10 @@ describe('SearchOverlay rows and cells', () => {
   });
 
   it('keeps the active result and its cell when fresh results still hold it, wherever it now is', async () => {
-    const search = vi.fn().mockResolvedValueOnce(makeResult([gameA, gameB], [])).mockResolvedValueOnce(makeResult([installed, gameB], []));
+    const search = vi
+      .fn()
+      .mockResolvedValueOnce(makeResult([gameA, gameB], []))
+      .mockResolvedValueOnce(makeResult([installed, gameA, gameB], [releaseA], 4));
     const tracker = track();
     const overlay = new SearchOverlay({ search, onState: tracker.onState, delay: 50 });
     overlay.setQuery('qua');
@@ -341,7 +344,40 @@ describe('SearchOverlay rows and cells', () => {
     await vi.advanceTimersByTimeAsync(50);
 
     expect(overlay.activeRow()).toMatchObject({ kind: 'game', hit: gameB });
-    expect([tracker.state.active, tracker.state.cell]).toEqual([1, 1]);
+    expect([tracker.state.active, tracker.state.cell]).toEqual([2, 1]);
+  });
+
+  it('takes no row or cell while closed', async () => {
+    const { overlay, tracker } = await opened(makeResult([gameA, gameB], []));
+    overlay.close();
+
+    overlay.setActive(1, 1);
+    overlay.move(1);
+    expect(overlay.moveCell(1)).toBe(false);
+    expect([tracker.state.active, tracker.state.cell, tracker.state.open]).toEqual([-1, 0, false]);
+  });
+
+  it('forgets the row and its cell when a search fails', async () => {
+    const search = vi.fn().mockResolvedValueOnce(makeResult([gameA], [])).mockRejectedValueOnce(new Error('down'));
+    const tracker = track();
+    const overlay = new SearchOverlay({ search, onState: tracker.onState, delay: 50, errorText: 'Search unavailable' });
+    overlay.setQuery('qua');
+    await vi.advanceTimersByTimeAsync(50);
+    overlay.setActive(0, 1);
+
+    overlay.setQuery('quak');
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect([tracker.state.active, tracker.state.cell, tracker.state.error]).toEqual([-1, 0, 'Search unavailable']);
+  });
+
+  it('forgets the row and its cell when the query is emptied', async () => {
+    const { overlay, tracker } = await opened(makeResult([gameA], []));
+    overlay.setActive(0, 1);
+
+    overlay.setQuery('');
+
+    expect([tracker.state.active, tracker.state.cell, tracker.state.open]).toEqual([-1, 0, true]);
   });
 
   it('drops the active row when fresh results no longer hold it, and a cell the row no longer has', async () => {
