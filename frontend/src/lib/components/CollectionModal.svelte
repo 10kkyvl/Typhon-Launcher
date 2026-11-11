@@ -17,6 +17,7 @@
     collection = null,
     genres,
   }: { open?: boolean; collection?: LibraryCollection | null; genres: string[] } = $props();
+  const uid = $props.id();
 
   let name = $state(untrack(() => collection?.name ?? ''));
   let tags = $state<string[]>(untrack(() => [...(collection?.tags ?? [])]));
@@ -126,8 +127,8 @@
     </div>
 
     <div class="field">
-      <span class="field-label">{msg('modals.collectionStatusLabel')}</span>
-      <Select options={statusOptions} bind:value={status} />
+      <span class="field-label" id="{uid}-status-label">{msg('modals.collectionStatusLabel')}</span>
+      <Select options={statusOptions} bind:value={status} labelledby="{uid}-status-label" />
     </div>
   </div>
 

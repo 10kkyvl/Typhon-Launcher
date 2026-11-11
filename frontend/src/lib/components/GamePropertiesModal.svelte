@@ -59,6 +59,7 @@
   import { toast } from '../stores/toasts';
   import { bytesSize, truncateMiddle } from '../utils/format';
 
+  const uid = $props.id();
   const target = $derived($gamePropertiesTarget);
   const game = $derived(target ? ($libraryGames.find((g) => g.id === target.gameId) ?? null) : null);
 
@@ -535,8 +536,9 @@
             {/if}
             {#if !compatLocked}
               <div class="row spread">
-                <span class="label">{msg('modals.compatWrapper')}</span>
+                <span class="label" id="{uid}-wrapper-label">{msg('modals.compatWrapper')}</span>
                 <Select
+                  labelledby="{uid}-wrapper-label"
                   value={compatWrapper}
                   width="26rem"
                   options={WRAPPERS.map((id) => ({ id, label: wrapperName(id) }))}
@@ -545,8 +547,9 @@
               </div>
               {#if presetsFor(compatWrapper).length > 1}
                 <div class="row spread">
-                  <span class="label">{msg('modals.compatPresetLabel')}</span>
+                  <span class="label" id="{uid}-preset-label">{msg('modals.compatPresetLabel')}</span>
                   <Select
+                    labelledby="{uid}-preset-label"
                     bind:value={compatPreset}
                     width="26rem"
                     options={presetsFor(compatWrapper).map((id) => ({ id, label: presetLabel(id) }))}
@@ -612,8 +615,9 @@
           <h4>{msg('modals.propertiesGameModeTitle')}</h4>
           {#each gameModeRows as row (row.key)}
             <div class="row spread">
-              <span class="label">{row.title}</span>
+              <span class="label" id="{uid}-gamemode-{row.key}-label">{row.title}</span>
               <Select
+                labelledby="{uid}-gamemode-{row.key}-label"
                 value={overrideState(game.gameMode, row.key)}
                 width="26rem"
                 options={row.options}

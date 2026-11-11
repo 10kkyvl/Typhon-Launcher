@@ -251,7 +251,7 @@
       {/if}
 
       <section class="filters">
-        <Select options={statusOptions} value={filterStatus} width="18rem" onchange={onFilterChange} />
+        <Select options={statusOptions} value={filterStatus} width="18rem" label={msg('modals.sourceDetailsColStatus')} onchange={onFilterChange} />
         <SearchInput bind:value={search} placeholder={msg('modals.sourceDetailsSearchPlaceholder')} oninput={onSearchInput} />
       </section>
 

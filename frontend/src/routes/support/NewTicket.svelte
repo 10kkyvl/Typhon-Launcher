@@ -28,6 +28,7 @@
   import LogsConfirm from './LogsConfirm.svelte';
 
   let { initialTopic, initialSubject = '' }: { initialTopic: SupportTopic; initialSubject?: string } = $props();
+  const uid = $props.id();
 
   let topic = $state<string>(untrack(() => initialTopic));
   let attachLogs = $state(untrack(() => attachLogsByDefault(initialTopic)));
@@ -126,8 +127,8 @@
 {:else}
   <div class="form">
     <div class="field">
-      <span class="label">{msg('tickets.topicLabel')}</span>
-      <Select options={topics} value={topic} width="100%" onchange={changeTopic} />
+      <span class="label" id="{uid}-topic-label">{msg('tickets.topicLabel')}</span>
+      <Select options={topics} value={topic} width="100%" labelledby="{uid}-topic-label" onchange={changeTopic} />
     </div>
 
     <div class="field">

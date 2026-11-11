@@ -370,6 +370,10 @@
     updateSettings(patch);
   }
 
+  // Ids of the row labels that name the fields next to them.
+  const uid = $props.id();
+  const labelId = (name: string) => `${uid}-${name}-label`;
+
   const portable = $derived(appInfo?.portable ?? false);
   const betaShown = $derived(betaToggleShown($authState, $currentUser));
   const onBeta = $derived(isBeta($selfUpdateStatus.channel) || isBeta(appInfo?.channel));
@@ -688,10 +692,11 @@
             </div>
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.overlayHotkeyLabel')}</span>
+                <span class="row-label" id={labelId('overlay-hotkey')}>{msg('settings.overlayHotkeyLabel')}</span>
                 <span class="row-sub">{msg('settings.overlayHotkeySub')}</span>
               </div>
               <Select
+                labelledby={labelId('overlay-hotkey')}
                 value={overlayHotkey}
                 width="22rem"
                 options={overlayHotkeyOptions}
@@ -711,10 +716,11 @@
             </div>
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.screenshotHotkeyLabel')}</span>
+                <span class="row-label" id={labelId('screenshot-hotkey')}>{msg('settings.screenshotHotkeyLabel')}</span>
                 <span class="row-sub">{msg('settings.screenshotHotkeySub')}</span>
               </div>
               <Select
+                labelledby={labelId('screenshot-hotkey')}
                 value={screenshotHotkey}
                 width="22rem"
                 options={screenshotHotkeyOptions}
@@ -826,10 +832,11 @@
           <div class="rows">
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.language')}</span>
+                <span class="row-label" id={labelId('language')}>{msg('settings.language')}</span>
                 <span class="row-sub">{msg('settings.languageSub')}</span>
               </div>
               <Select
+                labelledby={labelId('language')}
                 value={$settings?.language ?? 'system'}
                 width="22rem"
                 options={[
@@ -842,10 +849,11 @@
             </div>
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.generalUiScaleLabel')}</span>
+                <span class="row-label" id={labelId('ui-scale')}>{msg('settings.generalUiScaleLabel')}</span>
                 <span class="row-sub">{msg('settings.generalUiScaleSub')}</span>
               </div>
               <Select
+                labelledby={labelId('ui-scale')}
                 value={scaleValue}
                 width="22rem"
                 options={[
@@ -1012,10 +1020,11 @@
           <div class="rows">
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.downloadsRateLimitLabel')}</span>
+                <span class="row-label" id={labelId('download-limit')}>{msg('settings.downloadsRateLimitLabel')}</span>
                 <span class="row-sub">{msg('settings.downloadsRateLimitSub')}</span>
               </div>
               <RateLimitInput
+                labelledby={labelId('download-limit')}
                 value={current?.downloadRateLimit ?? 0}
                 presets={downloadLimitPresets}
                 onchange={(bytes) => set({ downloadRateLimit: bytes })}
@@ -1023,10 +1032,11 @@
             </div>
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.downloadsUploadLimitLabel')}</span>
+                <span class="row-label" id={labelId('upload-limit')}>{msg('settings.downloadsUploadLimitLabel')}</span>
                 <span class="row-sub">{msg('settings.downloadsUploadLimitSub')}</span>
               </div>
               <RateLimitInput
+                labelledby={labelId('upload-limit')}
                 value={current?.uploadRateLimit ?? 0}
                 presets={uploadLimitPresets}
                 onchange={(bytes) => set({ uploadRateLimit: bytes })}
@@ -1034,17 +1044,18 @@
             </div>
             <div class='row'>
               <div class='row-text'>
-                <span class='row-label'>{msg('settings.downloadsPlayLabel')}</span>
+                <span class='row-label' id={labelId('play-mode')}>{msg('settings.downloadsPlayLabel')}</span>
                 <span class='row-sub'>{msg('settings.downloadsPlaySub')}</span>
               </div>
-              <Select value={playModeValue} width='20rem' options={playModeOptions} onchange={pickPlayMode} />
+              <Select labelledby={labelId('play-mode')} value={playModeValue} width='20rem' options={playModeOptions} onchange={pickPlayMode} />
             </div>
             {#if playModeValue === 'limit'}
               <div class='row'>
                 <div class='row-text'>
-                  <span class='row-label'>{msg('settings.downloadsPlayLimitDownLabel')}</span>
+                  <span class='row-label' id={labelId('play-download-limit')}>{msg('settings.downloadsPlayLimitDownLabel')}</span>
                 </div>
                 <RateLimitInput
+                  labelledby={labelId('play-download-limit')}
                   value={current?.playDownloadRateLimit ?? 0}
                   presets={playDownloadPresets}
                   allowUnlimited={false}
@@ -1053,9 +1064,10 @@
               </div>
               <div class='row'>
                 <div class='row-text'>
-                  <span class='row-label'>{msg('settings.downloadsPlayLimitUpLabel')}</span>
+                  <span class='row-label' id={labelId('play-upload-limit')}>{msg('settings.downloadsPlayLimitUpLabel')}</span>
                 </div>
                 <RateLimitInput
+                  labelledby={labelId('play-upload-limit')}
                   value={current?.playUploadRateLimit ?? 0}
                   presets={playUploadPresets}
                   allowUnlimited={false}
@@ -1075,10 +1087,11 @@
             </div>
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.downloadsMaxActiveLabel')}</span>
+                <span class="row-label" id={labelId('max-active')}>{msg('settings.downloadsMaxActiveLabel')}</span>
                 <span class="row-sub">{msg('settings.downloadsMaxActiveSub')}</span>
               </div>
               <Select
+                labelledby={labelId('max-active')}
                 value={maxActiveValue}
                 width="20rem"
                 options={maxActiveDownloadOptions}
@@ -1109,10 +1122,11 @@
             </div>
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.downloadsSourceRefreshLabel')}</span>
+                <span class="row-label" id={labelId('source-refresh')}>{msg('settings.downloadsSourceRefreshLabel')}</span>
                 <span class="row-sub">{msg('settings.downloadsSourceRefreshSub')}</span>
               </div>
               <Select
+                labelledby={labelId('source-refresh')}
                 value={sourceRefreshInterval}
                 width="20rem"
                 options={sourceRefreshOptions}
@@ -1239,10 +1253,11 @@
             </div>
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.downloadsKeepPreviousLabel')}</span>
+                <span class="row-label" id={labelId('keep-previous')}>{msg('settings.downloadsKeepPreviousLabel')}</span>
                 <span class="row-sub">{msg('settings.downloadsKeepPreviousSub')}</span>
               </div>
               <Select
+                labelledby={labelId('keep-previous')}
                 value={keepPreviousVersion}
                 width="28rem"
                 options={keepPreviousOptions}
@@ -1268,10 +1283,11 @@
           <div class="rows">
             <div class="row">
               <div class="row-text">
-                <span class="row-label">{msg('settings.downloadsAfterInstallLabel')}</span>
+                <span class="row-label" id={labelId('after-install')}>{msg('settings.downloadsAfterInstallLabel')}</span>
                 <span class="row-sub">{msg('settings.downloadsAfterInstallSub')}</span>
               </div>
               <Select
+                labelledby={labelId('after-install')}
                 value={cleanupPolicy}
                 width="26rem"
                 options={cleanupPolicyOptions}

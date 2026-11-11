@@ -49,6 +49,7 @@
   import { msg } from '../i18n';
 
   let { open = $bindable(false), downloadId }: { open?: boolean; downloadId: string | null } = $props();
+  const uid = $props.id();
 
   const modeOptions = $derived([
     { id: 'move', label: msg('modals.installModeMove') },
@@ -493,8 +494,8 @@
 
       {#if (controlled || silent) && roots.length > 1}
         <div class="field">
-          <span class="field-label">{msg('modals.installRootLabel')}</span>
-          <Select width="100%" options={rootOptions} bind:value={() => rootChoice, pickRoot} />
+          <span class="field-label" id="{uid}-root-label">{msg('modals.installRootLabel')}</span>
+          <Select width="100%" options={rootOptions} labelledby="{uid}-root-label" bind:value={() => rootChoice, pickRoot} />
         </div>
       {/if}
 

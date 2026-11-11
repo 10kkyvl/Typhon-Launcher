@@ -9,12 +9,15 @@
     presets,
     width = '20rem',
     allowUnlimited = true,
+    labelledby,
     onchange,
   }: {
     value: number;
     presets: number[];
     width?: string;
     allowUnlimited?: boolean;
+    /** Id of the visible label that names the limit field. */
+    labelledby: string;
     onchange: (bytes: number) => void;
   } = $props();
 
@@ -96,7 +99,7 @@
 </script>
 
 <div class="limit" style:width>
-  <Select value={mode} {options} width="100%" onchange={select} />
+  <Select value={mode} {options} width="100%" {labelledby} onchange={select} />
   {#if mode === 'custom'}
     <div class="custom">
       <input

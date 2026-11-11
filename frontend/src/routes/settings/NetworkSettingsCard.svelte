@@ -27,6 +27,7 @@
   import { toast } from '../../lib/stores/toasts';
 
   const portPattern = /^\d{1,5}$/;
+  const uid = $props.id();
 
   const saved = $derived({
     mode: $settings?.networkMode ?? 'direct',
@@ -235,7 +236,7 @@
     {#if mode === 'interface'}
       <div class="row">
         <div class="row-text">
-          <span class="row-label">{msg('settings.networkInterfaceLabel')}</span>
+          <span class="row-label" id="{uid}-interface-label">{msg('settings.networkInterfaceLabel')}</span>
           <span class="row-sub">{msg('settings.networkInterfaceSub')}</span>
           {#if interfacesError}
             <span class="failure">{interfacesError}</span>
@@ -245,6 +246,7 @@
         </div>
         <div class="control">
           <Select
+            labelledby="{uid}-interface-label"
             value={iface}
             width="32rem"
             options={interfaceOptions}
@@ -261,9 +263,9 @@
     {#if mode === 'proxy'}
       <div class="row">
         <div class="row-text">
-          <span class="row-label">{msg('settings.networkProxyTypeLabel')}</span>
+          <span class="row-label" id="{uid}-proxy-type-label">{msg('settings.networkProxyTypeLabel')}</span>
         </div>
-        <Select value={proxyType} width="20rem" options={proxyTypeOptions} onchange={(id) => (proxyType = id)} />
+        <Select labelledby="{uid}-proxy-type-label" value={proxyType} width="20rem" options={proxyTypeOptions} onchange={(id) => (proxyType = id)} />
       </div>
       <div class="row">
         <div class="row-text">

@@ -30,6 +30,7 @@
   import { relativeDate } from '../utils/format';
 
   let { onclose }: { onclose: () => void } = $props();
+  const uid = $props.id();
 
   type Phase = 'setup' | 'spinning' | 'result' | 'empty';
 
@@ -139,7 +140,7 @@
         </div>
         {#if filters.source === 'collection'}
           {#if collectionOptions.length > 0}
-            <Select options={collectionOptions} bind:value={filters.collectionId} width="100%" />
+            <Select options={collectionOptions} bind:value={filters.collectionId} width="100%" label={msg('games.randomSourceCollection')} />
           {:else}
             <p class="hint">{msg('games.randomNoCollections')}</p>
           {/if}
@@ -152,8 +153,8 @@
       </div>
       {#if knownGenres.length > 0}
         <div class="group">
-          <span class="label">{msg('games.randomGenreLabel')}</span>
-          <Select options={genreOptions} bind:value={filters.genre} width="100%" />
+          <span class="label" id="{uid}-genre-label">{msg('games.randomGenreLabel')}</span>
+          <Select options={genreOptions} bind:value={filters.genre} width="100%" labelledby="{uid}-genre-label" />
         </div>
       {/if}
       {#if phase === 'empty'}

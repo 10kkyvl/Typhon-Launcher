@@ -37,6 +37,19 @@ describe('Select call sites', () => {
     expect(uses('Select').length).toBeGreaterThanOrEqual(25);
   });
 
+  // A screen reader announces an unnamed field as a bare combobox. A visible label next to the field
+  // names it through `labelledby` (the same id expression is on an element of that file); `label` is for
+  // a field with no visible label; RateLimitInput passes its caller's `labelledby` on.
+  it('name every field: from the visible label next to it, or with label where none is shown', () => {
+    const unnamed = [...uses('Select'), ...uses('RateLimitInput')].filter(({ path, tag }) => {
+      if (/\blabel=\{msg\(/.test(tag)) return false;
+      const by = /\blabelledby=("[^"]*"|\{[^}]*\})/.exec(tag)?.[1];
+      if (!by) return !(path === 'lib/components/RateLimitInput.svelte' && /\{labelledby\}/.test(tag));
+      return !(frontendSources[path] ?? '').includes(`id=${by}`);
+    });
+    expect(unnamed.map(({ path, tag }) => `${path}: ${tag}`)).toEqual([]);
+  });
+
   it('bind the value or hold it with onchange, never both', () => {
     const both = uses('Select').filter(({ tag }) => /\bbind:value\b/.test(tag) && /\bonchange=/.test(tag));
     expect(both.map(({ path, tag }) => `${path}: ${tag}`)).toEqual([]);

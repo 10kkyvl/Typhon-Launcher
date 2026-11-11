@@ -26,6 +26,7 @@
     open?: boolean;
     onadded?: (game: LibraryGame) => void;
   } = $props();
+  const uid = $props.id();
 
   let platforms = $state<PlatformStatus[]>([]);
   let loadFailed = $state(false);
@@ -179,8 +180,8 @@
       </p>
     {:else if image}
       <div class="field">
-        <span class="field-label">{msg('emul.addConsoleLabel')}</span>
-        <Select bind:value={platform} {options} width="100%" />
+        <span class="field-label" id="{uid}-console-label">{msg('emul.addConsoleLabel')}</span>
+        <Select bind:value={platform} {options} width="100%" labelledby="{uid}-console-label" />
         {#if matching.length > 1}
           <p class="form-hint">{msg('emul.addConsoleAmbiguous')}</p>
         {/if}

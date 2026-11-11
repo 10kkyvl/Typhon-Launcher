@@ -41,6 +41,7 @@
     onclose: () => void;
   } = $props();
 
+  const uid = $props.id();
   const config = $derived(block.config);
   const name = $derived(blockLabel(block.type));
   const charError = (field: string) => (issue?.code === 'bad_chars' && issue.field === field ? layoutErrorText(issue) : '');
@@ -113,8 +114,8 @@
         </label>
       {:else if block.type === 'collection'}
         <div class="field">
-          <span class="field-label">{msg('profile.collectionSource')}</span>
-          <Select options={sources} value={source} width="100%" onchange={changeSource} />
+          <span class="field-label" id="{uid}-source-label">{msg('profile.collectionSource')}</span>
+          <Select options={sources} value={source} width="100%" labelledby="{uid}-source-label" onchange={changeSource} />
         </div>
         {#if source === 'manual'}
           <label class="field">
