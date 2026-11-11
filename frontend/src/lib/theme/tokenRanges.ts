@@ -32,7 +32,7 @@ export function tokenRangeProblem(name: string, value: string): RangeProblem | n
 }
 
 // The key arrives with the catalog strings; until then the lookup falls back like any missing key.
-export const TOKEN_RANGE_KEY = 'theme.token_range' as MessageKey;
+export const TOKEN_RANGE_KEY: MessageKey = 'theme.token_range';
 
 export function tokenRangeText(problem: RangeProblem): string {
   return msg(TOKEN_RANGE_KEY, { name: problem.name, min: problem.min, max: problem.max });

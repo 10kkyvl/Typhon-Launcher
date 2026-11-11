@@ -73,6 +73,7 @@ export const errLibrary = {
   'theme.invalid_path': 'недопустимый путь к файлу темы',
   'theme.dialog_unavailable': 'диалог выбора файла недоступен',
   'theme.token_kind': 'значение токена не подходит по типу',
+  'theme.token_range': '{name}: нужно число от {min} до {max}',
   'theme.skill_invalid_path': 'эта папка не подходит для скилла',
   'theme.skill_write_failed': 'не удалось записать скилл в эту папку',
   'theme.invalid_format': 'Текст не похож на файл темы Typhon — вставьте его целиком, вместе с "version"',
