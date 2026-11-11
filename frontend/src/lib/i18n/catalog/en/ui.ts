@@ -159,6 +159,7 @@ export const ui: Record<UiKey, Message> = {
   'ui.allHistory': 'All history',
   'ui.toastsLabel': 'Messages',
   'ui.toastDismiss': 'Dismiss message',
+  'ui.toastRepeated': { one: 'happened {count} time', other: 'happened {count} times' },
   'ui.minimize': 'Minimize',
   'ui.maximize': 'Maximize',
   'ui.restore': 'Restore',
