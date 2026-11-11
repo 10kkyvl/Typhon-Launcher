@@ -182,6 +182,34 @@ describe('TopbarSearch: keys', () => {
     expect(box.scrollTop).toBe(0);
   });
 
+  it('keeps the active row in view when a newer answer moves it further down', async () => {
+    const moved: SearchResult = { query: 'doom', games: [game('g3', 'Doom 3'), game('g4', 'Doom Eternal'), DOOM], releases: [], moreGames: 0, moreReleases: 0 };
+    vi.mocked(searchAll).mockResolvedValueOnce(FOUND).mockResolvedValueOnce(moved);
+    // Each row 60px high, stacked in document order.
+    vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.getAttribute('role') === 'row' ? [...document.querySelectorAll('[role="row"]')].indexOf(this) * 60 : 0;
+    });
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.getAttribute('role') === 'row' ? 60 : 0;
+    });
+    const { keys, find, popup, active, settle } = setup();
+    await find('doo');
+    const box = popup() as HTMLElement;
+    Object.defineProperty(box, 'clientHeight', { configurable: true, value: 130 });
+
+    // The keys go down while the search for the next letter is running.
+    await keys.keyboard('m');
+    await keys.keyboard('{ArrowDown}');
+    expect(active()?.textContent).toContain('Doom');
+    expect(box.scrollTop).toBe(0);
+
+    await settle();
+    expect(popup()).toBe(box);
+    const kept = active() as HTMLElement;
+    expect(kept.closest('[role="row"]')).toBe(screen.getAllByRole('row')[2]);
+    expect(box.scrollTop).toBe(2 * 60 + 60 - 130);
+  });
+
   it('ArrowRight and ArrowLeft move between the cells of the active row, and are the caret\'s keys with none active', async () => {
     const { keys, find, active, field } = setup();
     await find();

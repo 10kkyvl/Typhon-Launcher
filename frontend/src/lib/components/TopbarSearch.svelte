@@ -52,6 +52,8 @@
   const expanded = $derived(shown && rows.length > 0);
   const activeRow = $derived(expanded && results.active >= 0 ? rows[results.active] : undefined);
   const activeCell = $derived(activeRow ? cellId(activeRow, results.cell) : undefined);
+  // Its place as well: a newer answer can move the kept row, id and all, to another index.
+  const activeIndex = $derived(activeRow ? results.active : -1);
 
   // What a search came to, for a screen reader; that it is running is the field's own to say.
   const outcome = $derived.by(() => {
@@ -182,11 +184,13 @@
   const place: Attachment<HTMLElement> = (node) =>
     untrack(() => anchorTo(node, () => island, { placement: 'bottom-start', offset: 6, matchWidth: true, onhide: () => overlay.close() }));
 
-  // Scrolls the results, and only them, to the active row. Runs again when the active cell changes.
+  // Scrolls the results, and only them, to the active row. Runs again when the active cell or its row's
+  // place changes.
   const reveal: Attachment<HTMLElement> = (node) => {
     const id = activeCell;
+    const index = activeIndex;
     untrack(() => {
-      const row = id ? document.getElementById(id)?.closest<HTMLElement>('[role="row"]') : null;
+      const row = id && index >= 0 ? document.getElementById(id)?.closest<HTMLElement>('[role="row"]') : null;
       if (!row) return;
       const top = row.offsetTop;
       const bottom = top + row.offsetHeight;
