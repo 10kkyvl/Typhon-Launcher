@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { frontendSources } from '../lib/testing/sources';
 
 /**
- * The status components (progress bar, badges, empty state, page header, card) take every colour,
+ * The status components (progress bar, badges, empty state, page header, card) take every colour, font size,
  * radius and duration from tokens, are not restyled from outside, and the progress bar gets its
  * colour as a tone and always has a name. These checks read source text: they catch the habit coming
  * back, the behaviour itself is held by the components' DOM tests.
@@ -22,6 +22,9 @@ function literals(css: string): string[] {
   for (const match of bare.matchAll(/(?<![\w-])\d*\.?\d+m?s\b/g)) found.push(`duration ${match[0]}`);
   for (const match of bare.matchAll(/border-radius:\s*([^;]+);/g)) {
     if (/\d/.test(match[1].replace(/var\([^)]*\)/g, ''))) found.push(`radius ${match[1].trim()}`);
+  }
+  for (const match of bare.matchAll(/font-size:\s*([^;]+);/g)) {
+    if (/\d/.test(match[1].replace(/var\([^)]*\)/g, ''))) found.push(`font size ${match[1].trim()}`);
   }
   return found;
 }
@@ -79,16 +82,19 @@ function barsInMarkup(source: string): { tag: string; inControl: boolean }[] {
 
 describe('status components take their look from tokens', () => {
   it('finds a literal when there is one', () => {
-    expect(literals('.a { color: #fff; transition: width 600ms linear; border-radius: 99rem; }')).toEqual([
+    expect(literals('.a { color: #fff; transition: width 600ms linear; border-radius: 99rem; font-size: 1.1rem; }')).toEqual([
       'colour #fff',
       'duration 600ms',
       'radius 99rem',
+      'font size 1.1rem',
     ]);
-    expect(literals('.a { border-radius: var(--radius-bar); transition: transform var(--progress-step) linear; }')).toEqual([]);
+    expect(
+      literals('.a { border-radius: var(--radius-bar); transition: transform var(--progress-step) linear; font-size: var(--font-xs); }'),
+    ).toEqual([]);
   });
 
   for (const name of COMPONENTS) {
-    it(`${name} writes no colour, radius or duration of its own`, () => {
+    it(`${name} writes no colour, radius, duration or font size of its own`, () => {
       const css = styleOf(frontendSources[path(name)] ?? '');
       expect(css, `${name} has a style block`).not.toBe('');
       expect(literals(css)).toEqual([]);

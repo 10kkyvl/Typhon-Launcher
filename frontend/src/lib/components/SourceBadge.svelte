@@ -24,7 +24,7 @@
     border-radius: var(--radius-sm);
     background: var(--source-badge-fill);
     color: var(--source-badge-text);
-    font-size: 1.1rem;
+    font-size: var(--font-xs);
     line-height: 1.2;
     white-space: nowrap;
   }
