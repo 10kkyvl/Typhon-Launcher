@@ -180,6 +180,15 @@ h4 {
   100% { transform: scale(1); }
 }
 
+/* A layer entering: its scrim fades in, a dialog rises into place (Modal, Lightbox). */
+@keyframes scrim-in {
+  from { opacity: 0; }
+}
+
+@keyframes dialog-in {
+  from { opacity: 0; transform: translateY(0.8rem) scale(0.98); }
+}
+
 .no-anim *,
 .no-anim *::before,
 .no-anim *::after {

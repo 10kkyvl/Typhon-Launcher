@@ -4,9 +4,10 @@
   import { captionDoubleClick, runWindowAction, windowControls, windowMaximised } from '../stores/window';
 </script>
 
-<!-- The frameless window's caption: the band drags the window, double-click toggles maximise. -->
+<!-- The frameless window's caption: the band drags the window, double-click toggles maximise. It stays usable
+     (data-layer-keep) while a dialog makes the rest of the app inert. -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="titlebar" class:native={$windowControls === 'native'} style="--wails-draggable: drag" ondblclick={(event) => captionDoubleClick(event.target)}>
+<div class="titlebar" class:native={$windowControls === 'native'} style="--wails-draggable: drag" data-layer-keep ondblclick={(event) => captionDoubleClick(event.target)}>
   {#if $windowControls === 'native'}
     <div class="traffic-lights" aria-hidden="true"></div>
   {:else}

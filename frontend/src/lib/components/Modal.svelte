@@ -1,62 +1,83 @@
-<script module lang="ts">
-  let stack = $state<symbol[]>([]);
-</script>
-
 <script lang="ts">
-  import { untrack, type Snippet } from 'svelte';
+  import type { Snippet } from 'svelte';
   import { X } from '@lucide/svelte';
   import IconButton from './IconButton.svelte';
   import { msg } from '../i18n';
-  import { portal } from '../utils/portal';
+  import { layer } from '../layers';
 
   let {
     open = $bindable(false),
     title,
     width = '46rem',
+    dismissible = true,
+    busy = false,
+    describedby,
+    initialFocus,
+    returnFocus,
     onclose,
     children,
     footer,
   }: {
     open?: boolean;
+    /** The visible heading and the dialog's accessible name. */
     title: string;
     width?: string;
+    /** Escape, the close button and a click on the scrim close the dialog. Off while a flow must not be interrupted. */
+    dismissible?: boolean;
+    /** A flow is running inside (aria-busy). */
+    busy?: boolean;
+    /** Id of a short text in the body that describes the dialog. */
+    describedby?: string;
+    /** An element or a selector inside the dialog to focus on open. Default: `[data-autofocus]`, else the first control. */
+    initialFocus?: HTMLElement | string;
+    /** Where focus goes on close when the element that opened the dialog is gone. */
+    returnFocus?: () => HTMLElement | null | undefined;
+    /** The user closed the dialog (Escape, the close button, the scrim); not called when code sets `open` to false. */
     onclose?: () => void;
     children?: Snippet;
     footer?: Snippet;
   } = $props();
 
-  const id = Symbol();
+  const uid = $props.id();
+  const titleId = `${uid}-title`;
 
-  $effect(() => {
-    if (!open) return;
-    untrack(() => { stack = [...stack, id]; });
-    return () => {
-      stack = stack.filter((entry) => entry !== id);
-    };
-  });
-
-  const topmost = $derived(stack.length === 0 || stack[stack.length - 1] === id);
-
-  function close() {
+  function dismiss() {
+    if (!dismissible) return;
     open = false;
     onclose?.();
   }
 
-  function onKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape' && stack[stack.length - 1] === id) close();
-  }
+  // A drag that starts in the dialog and ends on the scrim (selecting text in a field) is not a click on the scrim.
+  let pressedOnScrim = false;
 </script>
 
-<svelte:window onkeydown={open ? onKeydown : undefined} />
-
 {#if open}
-  <div class="overlay" {@attach portal} inert={!topmost} aria-hidden={!topmost} role="presentation" onpointerdown={(e) => e.target === e.currentTarget && close()}>
-    <div class="modal" style:width role="dialog" aria-modal={topmost} aria-label={title}>
+  <div
+    class="overlay"
+    role="presentation"
+    {@attach layer({ dismiss, dismissible: () => dismissible, initialFocus: () => initialFocus, returnFocus: () => returnFocus?.() })}
+    onpointerdown={(event) => (pressedOnScrim = event.target === event.currentTarget)}
+    onclick={(event) => {
+      if (pressedOnScrim && event.target === event.currentTarget) dismiss();
+      pressedOnScrim = false;
+    }}
+  >
+    <div
+      class="modal"
+      style:width
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      aria-describedby={describedby}
+      aria-busy={busy || undefined}
+    >
       <div class="head">
-        <h3>{title}</h3>
-        <IconButton label={msg('common.close')} size="sm" onclick={close}>
-          <X size="1.7rem" strokeWidth={1.8} />
-        </IconButton>
+        <h3 id={titleId}>{title}</h3>
+        <span class="close" data-skip-autofocus>
+          <IconButton label={msg('common.close')} size="sm" disabled={!dismissible} onclick={dismiss}>
+            <X size="1.7rem" strokeWidth={1.8} />
+          </IconButton>
+        </span>
       </div>
       <div class="body">
         {@render children?.()}
@@ -79,8 +100,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(4, 6, 10, 0.62);
-    animation: fade var(--dur-panel) var(--ease);
+    background: var(--scrim);
+    animation: scrim-in var(--dur-panel) var(--ease);
   }
 
   .modal {
@@ -92,7 +113,7 @@
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-xl);
     box-shadow: var(--shadow-modal);
-    animation: rise var(--dur-panel) var(--ease);
+    animation: dialog-in var(--dur-panel) var(--ease);
   }
 
   .head {
@@ -108,9 +129,14 @@
     font-weight: 600;
   }
 
+  .close {
+    display: contents;
+  }
+
   .body {
     padding: 1.6rem 2.4rem 2.4rem;
     overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   .foot {
@@ -119,25 +145,5 @@
     gap: 0.8rem;
     padding: 1.4rem 2.4rem;
     border-top: 1px solid var(--border);
-  }
-
-  @keyframes fade {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-
-  @keyframes rise {
-    from {
-      opacity: 0;
-      transform: translateY(0.8rem) scale(0.98);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-    }
   }
 </style>
