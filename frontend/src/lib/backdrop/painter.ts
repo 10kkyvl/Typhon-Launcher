@@ -10,8 +10,8 @@ export interface PainterDeps {
   now(): number;
 }
 
-/** Baked pictures kept for going back and forth between games; each is a few kilobytes. */
-const CACHE_SIZE = 32;
+/** Baked pictures kept for going back and forth between games, least recently used out first; each is a few kilobytes. */
+export const PICTURE_CACHE_SIZE = 32;
 /** A picture that has neither loaded nor failed by then counts as failed. */
 export const PICTURE_TIMEOUT_MS = 10_000;
 
@@ -24,6 +24,8 @@ export const PICTURE_TIMEOUT_MS = 10_000;
  */
 export class BackdropPainter {
   private readonly pictures = new Map<string, Promise<Pixels | null>>();
+  /** Stall timers of pictures still loading, each with the way to drop it quietly. */
+  private readonly stalls = new Set<() => void>();
   private readonly from: Uint8ClampedArray;
   private readonly empty: Uint8ClampedArray;
   private drawn = '';
@@ -61,16 +63,50 @@ export class BackdropPainter {
     this.deps.cancelFrame(this.frameId);
     this.frameId = 0;
     this.pictures.clear();
+    for (const drop of [...this.stalls]) drop();
   }
 
   private picture(key: string, url: string, look: BackdropLook): Promise<Pixels | null> {
-    let pending = this.pictures.get(key);
-    if (!pending) {
-      pending = settle(this.deps.picture(url, look), url);
-      this.pictures.set(key, pending);
-      if (this.pictures.size > CACHE_SIZE) this.pictures.delete(this.pictures.keys().next().value as string);
+    const cached = this.pictures.get(key);
+    if (cached) {
+      // A hit makes the picture the most recently used.
+      this.pictures.delete(key);
+      this.pictures.set(key, cached);
+      return cached;
     }
+    const pending = this.settle(this.deps.picture(url, look), url).then(({ pixels, stalled }) => {
+      // A stall may be the network, not the art: the next showing tries again. A failure is the art's.
+      if (stalled && this.pictures.get(key) === pending) this.pictures.delete(key);
+      return pixels;
+    });
+    this.pictures.set(key, pending);
+    if (this.pictures.size > PICTURE_CACHE_SIZE) this.pictures.delete(this.pictures.keys().next().value as string);
     return pending;
+  }
+
+  /** The picture, or null once it fails, rejects or stalls past PICTURE_TIMEOUT_MS. */
+  private settle(picture: Promise<Pixels | null>, url: string): Promise<{ pixels: Pixels | null; stalled: boolean }> {
+    return new Promise((resolve) => {
+      const done = (pixels: Pixels | null, stalled: boolean) => {
+        clearTimeout(timer);
+        this.stalls.delete(drop);
+        resolve({ pixels, stalled });
+      };
+      const drop = () => done(null, true);
+      const timer = setTimeout(() => {
+        console.warn('backdrop: art took too long to load', url);
+        done(null, true);
+      }, PICTURE_TIMEOUT_MS);
+      this.stalls.add(drop);
+      picture.then(
+        (pixels) => done(pixels, false),
+        (err: unknown) => {
+          // A broken image is the art's problem, not the window's: no wash from it, and no retry.
+          console.warn('backdrop: art could not be baked', url, err);
+          done(null, false);
+        },
+      );
+    });
   }
 
   private fade(to: Pixels, ms: number) {
@@ -92,26 +128,4 @@ export class BackdropPainter {
     };
     this.frameId = this.deps.frame(step);
   }
-}
-
-/** The picture, or null once it fails, rejects or stalls past PICTURE_TIMEOUT_MS. */
-function settle(picture: Promise<Pixels | null>, url: string): Promise<Pixels | null> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      console.warn('backdrop: art took too long to load', url);
-      resolve(null);
-    }, PICTURE_TIMEOUT_MS);
-    picture.then(
-      (pixels) => {
-        clearTimeout(timer);
-        resolve(pixels);
-      },
-      (err: unknown) => {
-        clearTimeout(timer);
-        // A broken image is the art's problem, not the window's: no wash from it, and no retry.
-        console.warn('backdrop: art could not be baked', url, err);
-        resolve(null);
-      },
-    );
-  });
 }

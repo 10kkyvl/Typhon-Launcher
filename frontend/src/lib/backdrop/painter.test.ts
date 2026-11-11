@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { BackdropPainter, PICTURE_TIMEOUT_MS, type PainterDeps } from './painter';
+import { BackdropPainter, PICTURE_CACHE_SIZE, PICTURE_TIMEOUT_MS, type PainterDeps } from './painter';
 import type { BackdropLook } from './pixels';
 
 const LOOK: BackdropLook = { saturate: 0.75, page: [14, 15, 17], dim: 0.6, limit: { max: 0.03 } };
@@ -183,5 +183,58 @@ describe('the backdrop painter', () => {
     await pending;
     await flush();
     expect(h.deps.put).not.toHaveBeenCalled();
+  });
+
+  it('tries a stalled picture again on the next showing, while a broken one stays failed', async () => {
+    vi.useFakeTimers();
+    try {
+      let stall = true;
+      const h = harness({ slow: () => (stall ? new Promise(() => {}) : Promise.resolve(solid(90))), broken: () => Promise.resolve(null) });
+      const first = h.painter.show(['slow'], LOOK, KEY, 0);
+      await vi.advanceTimersByTimeAsync(PICTURE_TIMEOUT_MS);
+      await first;
+      await h.painter.show(['broken'], LOOK, KEY, 0);
+      stall = false;
+      await h.painter.show(['slow'], LOOK, KEY, 0);
+      expect([...h.screen]).toEqual([...solid(90)]);
+      await h.painter.show(['broken'], LOOK, KEY, 0);
+      const calls = vi.mocked(h.deps.picture).mock.calls.map(([url]) => url);
+      expect(calls.filter((url) => url === 'slow')).toHaveLength(2);
+      expect(calls.filter((url) => url === 'broken')).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('leaves no stall timer behind once it is disposed', async () => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const h = harness({ slow: () => new Promise(() => {}) });
+      const pending = h.painter.show(['slow'], LOOK, KEY, 0);
+      await vi.advanceTimersByTimeAsync(1);
+      h.painter.dispose();
+      expect(vi.getTimerCount()).toBe(0);
+      await vi.advanceTimersByTimeAsync(PICTURE_TIMEOUT_MS * 2);
+      await pending;
+      expect(warn).not.toHaveBeenCalled();
+      expect(h.deps.put).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the pictures in use: a picture shown again is not the next one evicted', async () => {
+    const pictures = Object.fromEntries(Array.from({ length: 40 }, (_, i) => [`a${i}`, () => Promise.resolve(solid(i))]));
+    const h = harness(pictures);
+    for (let i = 0; i < PICTURE_CACHE_SIZE; i++) await h.painter.show([`a${i}`], LOOK, KEY, 0);
+    await h.painter.show(['a0'], LOOK, KEY, 0);
+    await h.painter.show([`a${PICTURE_CACHE_SIZE}`], LOOK, KEY, 0);
+    const count = (url: string) => vi.mocked(h.deps.picture).mock.calls.filter(([u]) => u === url).length;
+    await h.painter.show(['a0'], LOOK, KEY, 0);
+    expect(count('a0')).toBe(1);
+    await h.painter.show(['a1'], LOOK, KEY, 0);
+    expect(count('a1')).toBe(2);
   });
 });
