@@ -42,9 +42,11 @@
     return () => el.removeAttribute('aria-describedby');
   });
 
+  // Under the name, not beside it: beside it the card covers the row's own links and actions, and the
+  // pointer on its way to them would keep the card open.
   const card: Attachment<HTMLElement> = (node) =>
     untrack(() =>
-      hintBubble(node, { intent, control, placement: 'right-start', fallback: 'bottom', offset: 8, watch: anchor?.parentElement ?? null }),
+      hintBubble(node, { intent, control, placement: 'bottom-start', fallback: 'top-start', offset: 8, watch: anchor?.parentElement ?? null }),
     );
 </script>
 

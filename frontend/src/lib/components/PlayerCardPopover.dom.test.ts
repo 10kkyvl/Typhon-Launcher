@@ -39,7 +39,6 @@ function setup(props: Record<string, unknown> = {}) {
 describe('PlayerCardPopover', () => {
   it('shows after the pointer rests on the name, as its description, out of the page and placed beside it', async () => {
     const { keys, anchor, card, wait } = setup();
-    anchor().getBoundingClientRect = () => DOMRect.fromRect({ x: 900, y: 200, width: 120, height: 40 });
     await keys.hover(anchor());
     await wait(HOVER_DELAY - 50);
     expect(card()).toBeNull();
@@ -49,8 +48,45 @@ describe('PlayerCardPopover', () => {
     expect(anchor().getAttribute('aria-describedby')).toBe(shown.id);
     expect(app.contains(shown)).toBe(false);
     expect(shown.style.position).toBe('fixed');
-    // Near the right edge of a 1024px window there is no room on the right: it opens on the left.
-    expect(shown.dataset.placement?.startsWith('left')).toBe(true);
+  });
+
+  // The card opens under the name, never beside it: beside it, it covered the row's own presence link
+  // and actions, and the pointer travelling to them kept it open and pressed it instead.
+  describe('placement, with the name and the card measured', () => {
+    const CARD = { width: 320, height: 200 };
+    let name = DOMRect.fromRect({ x: 100, y: 100, width: 160, height: 40 });
+
+    beforeEach(() => {
+      vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+        if (this.getAttribute('role') === 'tooltip') return DOMRect.fromRect({ x: 0, y: 0, ...CARD });
+        if (this.classList.contains('who')) return name;
+        return DOMRect.fromRect({ x: 0, y: 0, width: 0, height: 0 });
+      });
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('opens under the name, lined up with its start, leaving the row to its right uncovered', async () => {
+      name = DOMRect.fromRect({ x: 100, y: 100, width: 160, height: 40 });
+      const { card, hover } = setup();
+      await hover();
+      const shown = card() as HTMLElement;
+      expect(shown.dataset.placement).toBe('bottom-start');
+      expect(shown.style.left).toBe('100px');
+      expect(parseFloat(shown.style.top)).toBeGreaterThanOrEqual(140);
+    });
+
+    it('opens above the name when there is no room under it', async () => {
+      name = DOMRect.fromRect({ x: 100, y: 660, width: 160, height: 40 });
+      const { card, hover } = setup();
+      await hover();
+      const shown = card() as HTMLElement;
+      expect(shown.dataset.placement).toBe('top-start');
+      expect(shown.style.left).toBe('100px');
+      expect(parseFloat(shown.style.top) + CARD.height).toBeLessThanOrEqual(660);
+    });
   });
 
   it('keyboard focus shows it and blur hides it; it never takes focus', async () => {
