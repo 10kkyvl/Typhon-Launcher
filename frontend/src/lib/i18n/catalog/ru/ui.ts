@@ -155,6 +155,8 @@ export const ui = {
   'ui.markAllRead': 'Прочитать все',
   'ui.nothingNewYet': 'Пока ничего нового',
   'ui.allHistory': 'Вся история',
+  'ui.toastsLabel': 'Всплывающие сообщения',
+  'ui.toastDismiss': 'Закрыть сообщение',
   'ui.minimize': 'Свернуть',
   'ui.maximize': 'Развернуть',
   'ui.restore': 'Восстановить',

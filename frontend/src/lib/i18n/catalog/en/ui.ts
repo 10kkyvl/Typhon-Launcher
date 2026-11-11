@@ -157,6 +157,8 @@ export const ui: Record<UiKey, Message> = {
   'ui.markAllRead': 'Mark all read',
   'ui.nothingNewYet': 'Nothing new yet',
   'ui.allHistory': 'All history',
+  'ui.toastsLabel': 'Messages',
+  'ui.toastDismiss': 'Dismiss message',
   'ui.minimize': 'Minimize',
   'ui.maximize': 'Maximize',
   'ui.restore': 'Restore',
