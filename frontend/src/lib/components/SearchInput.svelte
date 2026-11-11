@@ -1,31 +1,41 @@
 <script lang="ts">
   import { Search } from '@lucide/svelte';
+  import type { HTMLInputAttributes } from 'svelte/elements';
   import { msg } from '../i18n';
 
+  /**
+   * A search field. Attributes it does not know (a role, `aria-*`, an id) go to its `<input>`, so a
+   * caller that builds a combobox on it wires the input without reaching into the component.
+   */
   let {
     value = $bindable(''),
     placeholder = msg('ui.search'),
     shortcut,
     loading = false,
+    variant = 'field',
     oninput,
     onfocus,
     onkeydown,
     input = $bindable<HTMLInputElement | undefined>(undefined),
+    ...rest
   }: {
     value?: string;
     placeholder?: string;
     shortcut?: string;
     loading?: boolean;
+    /** `island`: the top bar's look, a pill on the window's backdrop. */
+    variant?: 'field' | 'island';
     oninput?: (value: string) => void;
     onfocus?: () => void;
     onkeydown?: (event: KeyboardEvent) => void;
     input?: HTMLInputElement;
-  } = $props();
+  } & Omit<HTMLInputAttributes, 'value' | 'type' | 'placeholder' | 'class' | 'oninput' | 'onfocus' | 'onkeydown'> = $props();
 </script>
 
-<div class="search">
+<div class="search" class:island={variant === 'island'}>
   <Search size="1.6rem" strokeWidth={1.8} />
   <input
+    {...rest}
     type="text"
     {placeholder}
     bind:value
@@ -55,6 +65,12 @@
     transition:
       border-color var(--dur) var(--ease),
       background var(--dur) var(--ease);
+  }
+
+  .search.island {
+    background: var(--island-fill);
+    border-color: var(--border-strong);
+    border-radius: var(--radius-control);
   }
 
   .search:hover {

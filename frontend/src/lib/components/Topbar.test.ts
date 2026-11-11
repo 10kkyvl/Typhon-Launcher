@@ -164,7 +164,9 @@ describe('Topbar islands', () => {
     const body = html();
     expect(body).toMatch(/<div class="[^"]*\bisland\b[^"]*"[^>]*data-part="topbar-history"/);
     expect(body).toMatch(/<div class="[^"]*\bisland\b[^"]*"[^>]*>(<!--[^>]*-->|\s)*<div class="actions[^"]*" data-part="topbar-actions"/);
-    const pill = /\n {2}\.search-wrap :global\(\.search\) \{([^}]*)\}/.exec(source('./TopbarSearch.svelte'))?.[1] ?? '';
+    const search = body.slice(body.indexOf('data-part="topbar-search"'));
+    expect(search.slice(0, search.indexOf('<input'))).toMatch(/<div class="search [^"]*\bisland\b/);
+    const pill = /\n {2}\.search\.island \{([^}]*)\}/.exec(source('./SearchInput.svelte'))?.[1] ?? '';
     expect(pill).toContain('background: var(--island-fill)');
     expect(pill).toContain('border-radius: var(--radius-control)');
   });
