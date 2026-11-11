@@ -119,6 +119,7 @@ export const social: Record<SocialKey, Message> = {
   'social.copyFailed': 'Could not copy',
   'social.loadingEllipsis': 'Loading…',
   'social.moreLabel': 'More',
+  'social.friendMenuFor': 'Actions for {name}',
   'social.declineButton': 'Decline',
   'social.unfriendLabel': 'Remove friend',
   'social.blockLabel': 'Block',

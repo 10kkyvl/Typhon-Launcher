@@ -117,6 +117,7 @@ export const social = {
   'social.copyFailed': 'Не удалось скопировать',
   'social.loadingEllipsis': 'Загрузка…',
   'social.moreLabel': 'Ещё',
+  'social.friendMenuFor': 'Действия с другом {name}',
   'social.declineButton': 'Отклонить',
   'social.unfriendLabel': 'Удалить из друзей',
   'social.blockLabel': 'Заблокировать',

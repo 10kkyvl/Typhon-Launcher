@@ -33,6 +33,7 @@ export const transfers: Record<TransfersKey, Message> = {
   'transfers.downloadsMoveDown': 'Move down',
   'transfers.downloadsStartNow': 'Start now',
   'transfers.downloadsQueueActionsLabel': 'Queue actions',
+  'transfers.downloadsQueueActionsFor': 'Actions for {name}',
   'transfers.downloadsCancelLabel': 'Cancel',
   'transfers.downloadsCompletedHeading': 'Completed',
   'transfers.downloadsFailedHeading': 'Failed',
@@ -90,6 +91,7 @@ export const transfers: Record<TransfersKey, Message> = {
   'transfers.sourcesColMatched': 'Matched',
   'transfers.sourcesMatchTooltip': 'Matched {matched} · to review {review} · unmatched {unmatched}',
   'transfers.sourcesMenuLabel': 'Source menu',
+  'transfers.sourcesMenuFor': 'Actions for the source {name}',
 
   'transfers.lanTitle': 'Local network',
   'transfers.lanSubtitle': 'Transfer games directly to other computers on your local network.',

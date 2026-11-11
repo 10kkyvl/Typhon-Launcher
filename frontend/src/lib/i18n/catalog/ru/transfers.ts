@@ -30,6 +30,7 @@ export const transfers = {
   'transfers.downloadsMoveDown': 'Переместить ниже',
   'transfers.downloadsStartNow': 'Начать сейчас',
   'transfers.downloadsQueueActionsLabel': 'Действия с очередью',
+  'transfers.downloadsQueueActionsFor': 'Действия с загрузкой «{name}»',
   'transfers.downloadsCancelLabel': 'Отменить',
   'transfers.downloadsCompletedHeading': 'Завершённые',
   'transfers.downloadsFailedHeading': 'С ошибкой',
@@ -87,6 +88,7 @@ export const transfers = {
   'transfers.sourcesColMatched': 'Сопоставлено',
   'transfers.sourcesMatchTooltip': 'Сопоставлено {matched} · на проверку {review} · без совпадения {unmatched}',
   'transfers.sourcesMenuLabel': 'Меню источника',
+  'transfers.sourcesMenuFor': 'Действия с источником «{name}»',
 
   'transfers.lanTitle': 'Локальная сеть',
   'transfers.lanSubtitle': 'Передача игр напрямую другим компьютерам в вашей локальной сети.',

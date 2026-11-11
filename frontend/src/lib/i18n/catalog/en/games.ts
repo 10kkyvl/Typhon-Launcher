@@ -356,6 +356,7 @@ export const games: Record<GamesKey, Message> = {
   'games.installedStopButton': 'Stop',
   'games.installedSetExeButton': 'Set file',
   'games.installedMenuLabel': 'Menu',
+  'games.installedMenuFor': 'Actions for {title}',
   'games.installedAddGameModalTitle': 'Add an installed game',
   'games.installedBrowseButton': 'Browse',
   'games.installedTitleFieldLabel': 'Title',
