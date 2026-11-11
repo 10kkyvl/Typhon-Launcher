@@ -218,7 +218,7 @@
             <IconButton size="sm" label={msg('social.moveDown', { title: name })} onclick={() => shift(block, 1)}>
               <ArrowDown size="1.5rem" strokeWidth={1.8} />
             </IconButton>
-            <IconButton size="sm" label={msg('profile.blockSettings', { name })} active={selectedId === block.id} onclick={() => onselect?.(block.id)}>
+            <IconButton size="sm" label={msg('profile.blockSettings', { name })} pressed={selectedId === block.id} onclick={() => onselect?.(block.id)}>
               <Settings2 size="1.5rem" strokeWidth={1.8} />
             </IconButton>
             <IconButton size="sm" label={msg('profile.removeBlock', { name })} onclick={() => onremove?.(block.id)}>

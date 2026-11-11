@@ -112,10 +112,6 @@
     border-radius: var(--radius-control);
   }
 
-  .island :global(.icon-btn) {
-    border-radius: var(--radius-control);
-  }
-
   .history {
     gap: 0;
   }

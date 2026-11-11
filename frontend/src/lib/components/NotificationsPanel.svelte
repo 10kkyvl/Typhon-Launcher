@@ -33,8 +33,8 @@
 </script>
 
 <Popover bind:open label={msg('ui.notifications')} placement="bottom-end" width="32rem" partId="notifications">
-  {#snippet trigger({ open, props })}
-    <IconButton label={bellName} active={open} {...props}>
+  {#snippet trigger({ props })}
+    <IconButton label={bellName} {...props}>
       <Bell size="1.8rem" strokeWidth={1.8} />
     </IconButton>
   {/snippet}

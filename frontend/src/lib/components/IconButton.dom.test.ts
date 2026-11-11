@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { user } from '../testing/dom';
 import { HOVER_DELAY } from './hoverIntent';
 import IconButton from './IconButton.svelte';
+import source from './IconButton.svelte?raw';
 
 let app: HTMLDivElement;
 
@@ -69,5 +70,29 @@ describe('IconButton', () => {
     expect(button.hasAttribute('title')).toBe(false);
     await rerender({ label: 'Back', disabled: true });
     expect(button.getAttribute('title')).toBe('Back');
+  });
+
+  it('a toggle says whether it is on; a plain action says nothing of the kind', async () => {
+    const view = render(IconButton, { target: app, props: { label: 'Favourite', pressed: false } });
+    const button = screen.getByRole('button', { name: 'Favourite' });
+    expect(button.getAttribute('aria-pressed')).toBe('false');
+    await view.rerender({ label: 'Favourite', pressed: true });
+    expect(button.getAttribute('aria-pressed')).toBe('true');
+
+    render(IconButton, { target: app, props: { label: 'Close' } });
+    expect(screen.getByRole('button', { name: 'Close' }).hasAttribute('aria-pressed')).toBe(false);
+  });
+
+  it('comes large and on a surface of its own when asked', () => {
+    render(IconButton, { target: app, props: { label: 'Favourite', size: 'lg', variant: 'secondary' } });
+    const button = screen.getByRole('button', { name: 'Favourite' });
+    expect(button.classList.contains('lg')).toBe(true);
+    expect(button.classList.contains('secondary')).toBe(true);
+  });
+
+  it('shows an open menu or panel on its trigger, and an "on" toggle, without a class from the caller', () => {
+    expect(source).toMatch(/\.icon-btn\[aria-expanded='true'\] \{\s*background: var\(--hover-strong\);/);
+    expect(source).toMatch(/\.icon-btn\[aria-pressed='true'\] \{\s*background: var\(--accent-subtle\);\s*color: var\(--accent-text\);/);
+    expect(source).not.toMatch(/class:active|\.active\b/);
   });
 });

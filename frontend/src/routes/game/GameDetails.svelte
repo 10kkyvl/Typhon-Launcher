@@ -1505,8 +1505,10 @@
 
           {#if localGame}
             <IconButton
+              size="lg"
+              variant="secondary"
               label={localGame.favorite ? msg('games.actionFavoriteRemove') : msg('games.actionFavoriteAdd')}
-              active={Boolean(localGame.favorite)}
+              pressed={Boolean(localGame.favorite)}
               onclick={toggleFavorite}
             >
               <span class="heart" class:pulse={favoritePulse} onanimationend={() => (favoritePulse = false)}>
@@ -1515,7 +1517,7 @@
             </IconButton>
 
             {#if installed}
-              <IconButton label={msg('games.actionProperties')} onclick={() => openGameProperties(localGame.id)}>
+              <IconButton size="lg" variant="secondary" label={msg('games.actionProperties')} onclick={() => openGameProperties(localGame.id)}>
                 <SlidersHorizontal size="1.8rem" strokeWidth={1.8} />
               </IconButton>
             {/if}
@@ -1525,6 +1527,8 @@
             </Button>
 
             <IconButton
+              size="lg"
+              variant="secondary"
               label={localGame.tags?.length ? msg('games.tagsEditLabel') : msg('games.tagsAddLabel')}
               onclick={() => (tagsOpen = true)}
             >
@@ -1535,7 +1539,7 @@
           {#if menuItems.length > 0}
             <DropdownMenu items={menuItems} onselect={onMenu}>
               {#snippet trigger({ props })}
-                <IconButton {...props} label={msg('games.moreLabel')}>
+                <IconButton {...props} size="lg" variant="secondary" label={msg('games.moreLabel')}>
                   <EllipsisVertical size="1.8rem" strokeWidth={1.8} />
                 </IconButton>
               {/snippet}
@@ -1915,18 +1919,6 @@
   .lead.split :global(.btn) {
     border-top-right-radius: 0;
     border-bottom-right-radius: 0;
-  }
-
-  .cta :global(.icon-btn) {
-    width: var(--control-lg);
-    height: var(--control-lg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface-3);
-  }
-
-  .cta :global(.icon-btn:hover:not(:disabled)) {
-    background: var(--surface-4);
   }
 
   .heart {

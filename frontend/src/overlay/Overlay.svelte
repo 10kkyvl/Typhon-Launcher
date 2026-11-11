@@ -113,7 +113,7 @@
         <span>{msg('overlay.hint', { key: hotkey })}</span>
       </div>
       <div class="actions">
-        <IconButton tooltip={false} label={msg('overlay.browserOpen')} active={browser} onclick={() => (browser = true)}>
+        <IconButton tooltip={false} label={msg('overlay.browserOpen')} pressed={browser} onclick={() => (browser = true)}>
           <Globe size="1.98rem" strokeWidth={1.8} />
         </IconButton>
         <IconButton tooltip={false} label={msg('common.close')} onclick={hide}><X size="1.98rem" strokeWidth={1.8} /></IconButton>
