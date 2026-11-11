@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { CheckCircle2, Download, RotateCcw, TriangleAlert, X } from '@lucide/svelte';
+  import { CheckCircle2, Download, TriangleAlert, X } from '@lucide/svelte';
+  import Spinner from './Spinner.svelte';
   import { fade, fly } from 'svelte/transition';
   import IconButton from './IconButton.svelte';
   import ProgressBar from './ProgressBar.svelte';
@@ -34,7 +35,7 @@
 {#if applying}
   <div class="overlay" role="dialog" aria-modal="true" aria-label={msg('ui.installingUpdateTitle')}>
     <div class="panel">
-      <RotateCcw class="spin" size="3.2rem" strokeWidth={1.6} />
+      <Spinner size="lg" />
       <h3>{msg('ui.installingVersion', { version })}</h3>
       <p>{msg('ui.launcherWillRestartShort')}</p>
       <div class="marquee"><span></span></div>
@@ -122,11 +123,6 @@
     line-height: 1.5;
   }
 
-  .panel :global(.spin) {
-    color: var(--accent-text);
-    animation: spin 1.6s linear infinite;
-  }
-
   .marquee {
     position: relative;
     width: 100%;
@@ -190,12 +186,6 @@
 
   .card-danger .meta {
     color: var(--danger);
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
 
   @keyframes slide {

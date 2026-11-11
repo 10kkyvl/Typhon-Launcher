@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
+  import Spinner from '../../lib/components/Spinner.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import Tabs from '../../lib/components/Tabs.svelte';
   import { AccountError } from '../../lib/services/account';
@@ -126,8 +127,8 @@
 
     <div class="results" bind:this={results} style:min-height={floor > 0 ? `${floor}px` : undefined}>
     {#if loading && items.length === 0}
-      <div class="state">
-        <span class="spinner"></span>
+      <div class="state" role="status">
+        <Spinner />
         <p class="muted">{msg('reviews.loading')}</p>
       </div>
     {:else if failed && items.length === 0}
@@ -226,21 +227,5 @@
     display: flex;
     justify-content: center;
     padding-top: var(--space-2);
-  }
-
-  .spinner {
-    width: 2rem;
-    height: 2rem;
-    flex-shrink: 0;
-    border-radius: 50%;
-    border: 2px solid var(--border);
-    border-top-color: var(--accent-bright);
-    animation: spin 0.8s linear infinite;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
 </style>

@@ -14,6 +14,7 @@
   import { dateTime } from '../utils/format';
   import { errorMessage } from '../utils/errors';
   import Card from './Card.svelte';
+  import Spinner from './Spinner.svelte';
   import ProgressBar from './ProgressBar.svelte';
 
   let { gameId }: { gameId: string } = $props();
@@ -121,7 +122,7 @@
     {#snippet action()}
       {#if view}
         <button class="refresh" type="button" disabled={refreshing} onclick={refresh}>
-          <RefreshCw size="1.4rem" strokeWidth={1.8} class={refreshing ? 'spin' : ''} />
+          {#if refreshing}<Spinner size="sm" tone="current" />{:else}<RefreshCw size="1.4rem" strokeWidth={1.8} />{/if}
           {$t('games.achievementsRefresh')}
         </button>
       {/if}
@@ -219,10 +220,6 @@
   .refresh:disabled {
     color: var(--text-3);
     cursor: default;
-  }
-
-  .refresh :global(.spin) {
-    animation: achievements-spin 1s linear infinite;
   }
 
   .progress {
@@ -335,11 +332,5 @@
   .state.error {
     margin-bottom: var(--space-2);
     color: var(--danger);
-  }
-
-  @keyframes achievements-spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
 </style>

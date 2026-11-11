@@ -252,8 +252,8 @@
             options={interfaceOptions}
             onchange={(id) => (iface = id)}
           />
-          <Button size="sm" disabled={interfacesLoading} onclick={loadInterfaces}>
-            <RefreshCw size="1.4rem" strokeWidth={1.8} class={interfacesLoading ? 'spin' : ''} />
+          <Button size="sm" busy={interfacesLoading} onclick={loadInterfaces}>
+            {#if !interfacesLoading}<RefreshCw size="1.4rem" strokeWidth={1.8} />{/if}
             {msg('settings.networkInterfaceRefresh')}
           </Button>
         </div>
@@ -472,15 +472,5 @@
   .success {
     font-size: var(--font-xs);
     color: var(--success);
-  }
-
-  .control :global(.spin) {
-    animation: spin 900ms linear infinite;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
 </style>

@@ -27,6 +27,7 @@
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
+  import Spinner from '../../lib/components/Spinner.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
@@ -1618,7 +1619,7 @@
         {:else}
           {#if metaState === 'searching'}
             <div class="meta-note" role="status">
-              <span class="spinner"></span>
+              <Spinner />
               <div class="meta-text">
                 <p class="meta-title">{msg('games.detailMetaSearchingTitle')}</p>
                 <p class="meta-hint">
@@ -2052,22 +2053,6 @@
     align-items: center;
     gap: var(--space-2);
     flex-wrap: wrap;
-  }
-
-  .spinner {
-    width: 2rem;
-    height: 2rem;
-    flex-shrink: 0;
-    border-radius: 50%;
-    border: 2px solid var(--border);
-    border-top-color: var(--accent-bright);
-    animation: spin 800ms linear infinite;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
 
   .summary {

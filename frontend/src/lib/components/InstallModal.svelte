@@ -42,6 +42,7 @@
   import ConsoleTag from './ConsoleTag.svelte';
   import EmulatorHint from './EmulatorHint.svelte';
   import Modal from './Modal.svelte';
+  import Spinner from './Spinner.svelte';
   import Select from './Select.svelte';
   import ProgressBar from './ProgressBar.svelte';
   import SegmentedControl from './SegmentedControl.svelte';
@@ -454,8 +455,8 @@
 
 <Modal dismissible={!busy} bind:open title={msg('modals.installTitle')} width="54rem">
   {#if phase === 'loading'}
-    <div class="loading">
-      <span class="spinner"></span>
+    <div class="loading" role="status">
+      <Spinner size="lg" />
       <span class="loading-text">{msg('modals.installAnalyzing')}</span>
     </div>
   {:else if phase === 'plan' && info && plan}
@@ -741,15 +742,6 @@
     padding: 3.2rem 0;
   }
 
-  .spinner {
-    width: 3.2rem;
-    height: 3.2rem;
-    border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.1);
-    border-top-color: var(--accent-bright);
-    animation: spin 800ms linear infinite;
-  }
-
   .loading-text {
     font-size: var(--font-md);
     font-weight: 500;
@@ -971,11 +963,5 @@
   .cleanup-actions {
     display: flex;
     gap: 0.8rem;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
 </style>

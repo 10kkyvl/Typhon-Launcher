@@ -393,8 +393,8 @@
           {/if}
         {/snippet}
       </SegmentedControl>
-      <Button onclick={findGames} disabled={$scanning}>
-        <RefreshCw size="1.5rem" strokeWidth={2} class={$scanning ? 'spin' : ''} />
+      <Button onclick={findGames} busy={$scanning}>
+        {#if !$scanning}<RefreshCw size="1.5rem" strokeWidth={2} />{/if}
         {$scanning ? scanLabel : msg('games.installedFindGames')}
       </Button>
       <Button onclick={openImageDialog}>
@@ -508,8 +508,8 @@
         <Gamepad2 size="2rem" strokeWidth={1.8} />
       {/snippet}
       {#snippet actions()}
-        <Button variant="primary" onclick={findGames} disabled={$scanning}>
-          <RefreshCw size="1.5rem" strokeWidth={2} class={$scanning ? 'spin' : ''} />
+        <Button variant="primary" onclick={findGames} busy={$scanning}>
+          {#if !$scanning}<RefreshCw size="1.5rem" strokeWidth={2} />{/if}
           {$scanning ? scanLabel : msg('games.installedFindGames')}
         </Button>
         <Button onclick={openAddDialog}>
@@ -702,15 +702,6 @@
 </Page>
 
 <style>
-  :global(.spin) {
-    animation: spin 1s linear infinite;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
 
   .search-wrap {
     width: 26rem;

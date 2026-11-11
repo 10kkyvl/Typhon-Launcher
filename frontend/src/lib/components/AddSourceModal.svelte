@@ -7,6 +7,7 @@
   import { toast } from '../stores/toasts';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
+  import Spinner from './Spinner.svelte';
   import { msg } from '../i18n';
 
   let { open = $bindable(false) }: { open?: boolean } = $props();
@@ -132,8 +133,8 @@
       {/if}
     </div>
   {:else if step === 'checking'}
-    <div class="loading">
-      <span class="spinner"></span>
+    <div class="loading" role="status">
+      <Spinner size="lg" />
       <span class="loading-text">{msg('modals.addSourceChecking')}</span>
       <span class="loading-note">{msg('modals.addSourceCheckingNote')}</span>
     </div>
@@ -283,15 +284,6 @@
     padding: 3.2rem 0;
   }
 
-  .spinner {
-    width: 3.2rem;
-    height: 3.2rem;
-    border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.1);
-    border-top-color: var(--accent-bright);
-    animation: spin 800ms linear infinite;
-  }
-
   .loading-text {
     font-size: var(--font-md);
     font-weight: 500;
@@ -355,11 +347,5 @@
     background: var(--warning-subtle);
     border-radius: var(--radius-md);
     padding: 0.8rem 1rem;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
 </style>

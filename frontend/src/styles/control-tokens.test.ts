@@ -88,3 +88,29 @@ describe('a base control is restyled by a prop, never from outside', () => {
   });
 });
 
+describe('one spinner', () => {
+  const sources = fs
+    .readdirSync(new URL('../', import.meta.url), { recursive: true })
+    .map((path) => path.replaceAll('\\', '/'))
+    .filter((path) => path.endsWith('.svelte') || path.endsWith('.css'));
+  // Big Picture and the overlay keep their own until their pass; the search field is rebuilt on its own branch.
+  const LATER = /^lib\/bigpicture\/|^lib\/components\/BigPictureShell\.svelte$|^overlay\/|^lib\/components\/SearchInput\.svelte$/;
+  const turning = (text: string) => [...text.matchAll(/@keyframes\s+([\w-]+)\s*\{\s*(?:from\s*\{[^}]*\}\s*)?to\s*\{\s*transform:\s*rotate\(360deg\);?\s*\}\s*\}/g)].map((m) => m[1]);
+
+  // A turn that is not a "working" mark: the animated frame around an avatar.
+  const DECORATION = ['lib/components/Avatar.svelte @keyframes frame-spin'];
+
+  it('nothing but the Spinner turns a ring or an icon on its own keyframes', () => {
+    const found = sources
+      .filter((path) => path !== 'lib/components/Spinner.svelte' && !LATER.test(path))
+      .flatMap((path) => turning(read(path)).map((name) => `${path} @keyframes ${name}`))
+      .filter((use) => !DECORATION.includes(use));
+    expect(turning(read('lib/components/Spinner.svelte'))).toEqual(['spinner-turn']);
+    expect(found).toEqual([]);
+  });
+
+  it('sees a copied spinner when there is one', () => {
+    expect(turning('@keyframes spin {\n  to {\n    transform: rotate(360deg);\n  }\n}')).toEqual(['spin']);
+  });
+});
+

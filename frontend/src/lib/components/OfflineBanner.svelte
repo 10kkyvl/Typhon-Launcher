@@ -40,8 +40,8 @@
       <Activity size="1.4rem" strokeWidth={1.8} />
       {msg('ui.offlineBannerStatus')}
     </Button>
-    <Button size="sm" disabled={retrying} onclick={retry}>
-      <RefreshCw size="1.4rem" strokeWidth={1.8} class={retrying ? 'spin' : ''} />
+    <Button size="sm" busy={retrying} onclick={retry}>
+      {#if !retrying}<RefreshCw size="1.4rem" strokeWidth={1.8} />{/if}
       {retrying ? msg('ui.checkingConnection') : msg('common.retry')}
     </Button>
     <Tooltip text={msg('common.close')} describe={false}>
@@ -92,15 +92,5 @@
   .close:hover {
     color: var(--text);
     background: var(--surface);
-  }
-
-  .offline-banner :global(.spin) {
-    animation: spin 900ms linear infinite;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
 </style>

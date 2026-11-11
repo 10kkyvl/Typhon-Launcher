@@ -25,6 +25,7 @@
   import EmulatorHint from './EmulatorHint.svelte';
   import LibrarySetupModal from './LibrarySetupModal.svelte';
   import Modal from './Modal.svelte';
+  import Spinner from './Spinner.svelte';
 
   let {
     open = $bindable(false),
@@ -197,8 +198,8 @@
       </Button>
     </div>
   {:else if step === 'loading'}
-    <div class="loading">
-      <span class="spinner"></span>
+    <div class="loading" role="status">
+      <Spinner size="lg" />
       <span class="loading-text">{msg('modals.addDownloadFetchingMetadata')}</span>
       <span class="loading-note">{msg('modals.addDownloadFetchingNote')}</span>
     </div>
@@ -331,15 +332,6 @@
     align-items: center;
     gap: 1.2rem;
     padding: 3.2rem 0;
-  }
-
-  .spinner {
-    width: 3.2rem;
-    height: 3.2rem;
-    border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.1);
-    border-top-color: var(--accent-bright);
-    animation: spin 800ms linear infinite;
   }
 
   .loading-text {
@@ -530,11 +522,5 @@
     font-size: var(--font-xs);
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
 </style>

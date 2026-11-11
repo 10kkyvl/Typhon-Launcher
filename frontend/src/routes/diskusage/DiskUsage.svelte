@@ -206,8 +206,8 @@
 <Page>
   <PageHeader title={msg('diskusage.title')} subtitle={msg('diskusage.subtitle')}>
     {#snippet actions()}
-      <Button onclick={refresh} disabled={scanning}>
-        <RefreshCw size="1.5rem" strokeWidth={2} class={scanning ? 'spin' : ''} />
+      <Button onclick={refresh} busy={scanning}>
+        {#if !scanning}<RefreshCw size="1.5rem" strokeWidth={2} />{/if}
         {scanning ? msg('diskusage.scanning') : msg('diskusage.rescan')}
       </Button>
     {/snippet}

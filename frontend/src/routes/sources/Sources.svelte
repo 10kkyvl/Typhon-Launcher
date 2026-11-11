@@ -19,6 +19,7 @@
   import AddSourceModal from '../../lib/components/AddSourceModal.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import Button from '../../lib/components/Button.svelte';
+  import Spinner from '../../lib/components/Spinner.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
@@ -178,10 +179,8 @@
 <Page>
   <PageHeader title={msg('transfers.sourcesTitle')} subtitle={msg('transfers.sourcesSubtitle')}>
     {#snippet actions()}
-      <Button variant="ghost" disabled={$refreshingAll} onclick={refreshAll}>
-        <span class="spin" class:on={$refreshingAll}>
-          <RefreshCw size="1.5rem" strokeWidth={1.8} />
-        </span>
+      <Button variant="ghost" busy={$refreshingAll} onclick={refreshAll}>
+        {#if !$refreshingAll}<RefreshCw size="1.5rem" strokeWidth={1.8} />{/if}
         {#if $refreshingAll && progressList.length > 0}
           <span class="all-progress">
             <span>{msg('transfers.sourcesRefreshAllProgress', { percent: allPercent })}</span>
@@ -280,7 +279,7 @@
               {:else}
                 <StatusBadge kind={badge.kind} label={badge.label} plain />
                 {#if source.status === 'updating'}
-                  <span class="spin on busy"><RefreshCw size="1.3rem" strokeWidth={2} /></span>
+                  <Spinner size="sm" />
                 {/if}
               {/if}
               {#if source.lastError}
@@ -385,10 +384,6 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  .busy {
-    color: var(--text-3);
   }
 
   .all-progress {
@@ -577,20 +572,6 @@
 
   .menu-cell {
     justify-self: end;
-  }
-
-  .spin {
-    display: inline-flex;
-  }
-
-  .spin.on :global(svg) {
-    animation: spin 900ms linear infinite;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
 
   @media (max-width: 1300px) {
