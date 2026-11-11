@@ -741,7 +741,7 @@
   <span class="status"><span class="dot"></span>{msg('games.gameInstalledWord')}</span>
 {/snippet}
 
-<Card surface="panel">
+<Card surface="page">
   <PageHeader
     title={msg('games.allGamesTitle')}
     count={total > 0 ? msg('games.catalogTotalCount', { count: total }) : undefined}
@@ -944,7 +944,6 @@
     z-index: 5;
     margin-top: calc(-1 * var(--space-2));
     padding-top: var(--space-2);
-    background: var(--surface);
   }
 
   .toolbar-row {

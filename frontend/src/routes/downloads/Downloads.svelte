@@ -145,7 +145,7 @@
   }
 </script>
 
-<Card surface="panel">
+<Card surface="page">
 <PageHeader title={msg('transfers.downloadsTitle')}>
   {#snippet actions()}
     <DropdownMenu

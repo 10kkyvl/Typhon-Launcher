@@ -113,7 +113,7 @@
   }
 </script>
 
-<Card surface="panel">
+<Card surface="page">
   <PageHeader title={msg('tickets.formTitle')} subtitle={msg('tickets.subtitle')} />
 
   {#if limitsFailure}

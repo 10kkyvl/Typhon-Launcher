@@ -386,7 +386,7 @@
   }
 </script>
 
-<Card surface="panel">
+<Card surface="page">
   <PageHeader title={msg('games.libraryWord')} />
 
   {#if hero && !heroHidden}

@@ -100,7 +100,7 @@
   }
 </script>
 
-<Card surface="panel">
+<Card surface="page">
   <PageHeader title={msg('tickets.title')} subtitle={msg('tickets.subtitle')}>
     {#snippet actions()}
       <Button variant="ghost" onclick={openStatus}>

@@ -49,7 +49,7 @@
 </script>
 
 {#if needsAccount}
-  <Card surface="panel">
+  <Card surface="page">
     <PageHeader title={msg('tickets.title')} subtitle={msg('tickets.subtitle')} />
     <EmptyState title={msg('tickets.guestTitle')} description={msg('tickets.guestText')}>
       {#snippet icon()}

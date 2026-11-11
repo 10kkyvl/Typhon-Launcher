@@ -310,7 +310,7 @@
   </DropdownMenu>
 {/snippet}
 
-<Card surface="panel">
+<Card surface="page">
   <PageHeader title={msg('social.friendsTitle')} subtitle={msg('social.friendsSubtitle')}>
     {#snippet actions()}
       {#if !isGuest && !$needsSocialConsent}

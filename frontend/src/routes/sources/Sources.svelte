@@ -171,7 +171,7 @@
   }
 </script>
 
-<Card surface="panel">
+<Card surface="page">
   <PageHeader title={msg('transfers.sourcesTitle')} subtitle={msg('transfers.sourcesSubtitle')}>
     {#snippet actions()}
       <Button variant="ghost" disabled={$refreshingAll} onclick={refreshAll}>

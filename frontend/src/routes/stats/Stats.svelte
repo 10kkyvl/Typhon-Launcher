@@ -99,7 +99,7 @@
   });
 </script>
 
-<Card surface="panel">
+<Card surface="page">
   <PageHeader title={msg('stats.title')} subtitle={msg('stats.subtitle')}>
     {#snippet actions()}
       <div class="periods" role="group" aria-label={msg('stats.periodLabel')}>

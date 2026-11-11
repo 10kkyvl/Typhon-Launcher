@@ -148,7 +148,7 @@
   }
 </script>
 
-<Card surface="panel">
+<Card surface="page">
   <div class="top">
     <Button variant="ghost" size="sm" onclick={() => navigate('support')}>
       <ArrowLeft size="1.5rem" strokeWidth={1.8} />

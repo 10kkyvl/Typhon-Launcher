@@ -122,7 +122,7 @@
   }
 </script>
 
-<Card surface="panel">
+<Card surface="page">
   <PageHeader title={msg('transfers.historyTitle')} subtitle={msg('transfers.historySubtitle')}>
     {#snippet actions()}
       <Button variant="ghost" disabled={$history.length === 0} onclick={() => (clearOpen = true)}>

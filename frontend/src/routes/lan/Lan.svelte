@@ -29,7 +29,7 @@
   }
 </script>
 
-<Card surface="panel">
+<Card surface="page">
   <PageHeader title={msg('transfers.lanTitle')} subtitle={msg('transfers.lanSubtitle')} />
 
   <div class="stats">
