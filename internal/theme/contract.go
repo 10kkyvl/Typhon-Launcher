@@ -22,6 +22,17 @@ var (
 // that --island-fill paints now.
 var rolesTakenOver = map[string]string{"--accent-bright": "--accent", "--island-fill": "--bg-sidebar"}
 
+// renamedParts maps a data-part name of a 1.x release to the part that holds
+// the same element now. Part names are public API for theme CSS, so a 1.x
+// selector on an old name is rewritten instead of silently matching nothing.
+var renamedParts = map[string]string{"sidebar-account": "topbar-account"}
+
+// partSelector matches one attribute selector on data-part at the start of
+// the text: any of the CSS operators, a double-quoted, single-quoted or bare
+// value, and an optional i/s flag. Backslash escapes need no handling:
+// validateCSS refuses every backslash.
+var partSelector = regexp.MustCompile(`^\[\s*(?i:data-part)\s*[~|^$*]?=\s*(?:"([^"]*)"|'([^']*)'|([A-Za-z0-9_-]+))\s*(?:([iIsS])\s*)?\]`)
+
 // toCurrentContract brings a theme saved under the 1.x contract to the
 // current one. A fork stores the whole preset it came from, so values equal
 // to that preset as released are taken as never touched and follow the
@@ -72,8 +83,82 @@ func toCurrentContract(t Theme) Theme {
 		}
 	}
 	t.Tokens = tokens
+	t.CSS = cssWithCurrentParts(t.CSS)
 	t.Contract = currentContract
 	return t
+}
+
+// cssWithCurrentParts renames old part names in data-part selectors. CSS the
+// current rules refuse keeps its stored text, so it is blocked as before.
+func cssWithCurrentParts(css string) string {
+	renamed := renamePartSelectors(css)
+	if renamed != css && validateCSS(renamed) != nil {
+		return css
+	}
+	return renamed
+}
+
+// renamePartSelectors rewrites the value of data-part attribute selectors
+// whose value is a renamed part, outside comments and strings, and leaves
+// every other byte as it is. A value that names only a piece of an old part
+// (^="sidebar-acc") is not rewritten.
+func renamePartSelectors(css string) string {
+	var b strings.Builder
+	last := 0
+	for i := 0; i < len(css); {
+		switch {
+		case strings.HasPrefix(css[i:], "/*"):
+			end := strings.Index(css[i+2:], "*/")
+			if end < 0 {
+				i = len(css)
+			} else {
+				i += 2 + end + 2
+			}
+		case css[i] == '"' || css[i] == '\'':
+			end := strings.IndexByte(css[i+1:], css[i])
+			if end < 0 {
+				i = len(css)
+			} else {
+				i += 1 + end + 1
+			}
+		case css[i] == '[':
+			m := partSelector.FindStringSubmatchIndex(css[i:])
+			if m == nil {
+				i++
+				continue
+			}
+			start, end := -1, -1
+			for g := 1; g <= 3; g++ {
+				if m[2*g] >= 0 {
+					start, end = i+m[2*g], i+m[2*g+1]
+					break
+				}
+			}
+			foldCase := m[8] >= 0 && strings.EqualFold(css[i+m[8]:i+m[9]], "i")
+			if now, ok := renamedPart(css[start:end], foldCase); ok {
+				b.WriteString(css[last:start])
+				b.WriteString(now)
+				last = end
+			}
+			i += m[1]
+		default:
+			i++
+		}
+	}
+	if last == 0 {
+		return css
+	}
+	b.WriteString(css[last:])
+	return b.String()
+}
+
+func renamedPart(value string, foldCase bool) (string, bool) {
+	for old, now := range renamedParts {
+		if value == old || foldCase && strings.EqualFold(value, old) {
+			return now, true
+		}
+	}
+	return "", false
 }
 
 // forkedGenerations lists the released generations the theme holds every

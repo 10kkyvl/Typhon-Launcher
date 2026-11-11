@@ -62,15 +62,25 @@ startup, from a file, from pasted text, or from a watched file.
 4. New tokens are added from the same built-in theme. If you set your own `--accent`, it also
    becomes `--accent-bright`: in 1.x the accent painted the indicators too. Likewise your own
    `--bg-sidebar` becomes `--island-fill`, the fill of the floating sidebar.
-5. The theme is marked `"contract": 2` and is not converted again.
+5. In your custom CSS, renamed window parts get their new names, see below.
+6. The theme is marked `"contract": 2` and is not converted again.
 
 The stored file is not rewritten at startup: the new form reaches the disk the first time a theme
 is saved or switched.
 
+### Window part names
+
+Tokens, `data-part` names and layout ids are part of the theme format: they are not removed or
+renamed without converting older themes. 2.0 renames one part: the account block moved to the top
+bar, and `sidebar-account` became `topbar-account`. In a 1.x theme a selector
+`[data-part="sidebar-account"]` (any quoting, any operator, as long as the value is the whole name)
+is rewritten to the new name on read; the rest of the CSS stays as it is, and comments and strings
+are not touched. In a theme with `"contract": 2` write `topbar-account` yourself.
+
 ### Limits
 
-- **Custom CSS is not converted.** `rem` sizes inside the `css` field come out about 9 % smaller.
-  Fix them by hand: multiply by 1.1.
+- **Sizes in custom CSS are not converted.** `rem` sizes inside the `css` field come out about
+  9 % smaller. Fix them by hand: multiply by 1.1. Only window part names are converted.
 - **A partial theme is compared with the last 1.x release only.** In a theme with just a few
   tokens every one of them counts as yours, unless it equals the 1.4 preset.
 - **Typhon 1.x does not open 2.0 theme files.** It refuses a file with the `contract` field.

@@ -91,8 +91,9 @@ section). Select them with attribute selectors in `theme.css`:
 ```
 
 The account chip (avatar, name, the account menu) sits in the top bar since theme contract 2:
-its part is `topbar-account`. The 1.x name `sidebar-account` no longer matches anything, so
-rewrite a selector that uses it.
+its part is `topbar-account`. In a theme with `"contract": 2` write `topbar-account`; the 1.x
+name `sidebar-account` matches nothing there. Typhon renames it by itself only in themes without
+`contract` (1.x themes), inside `[data-part=…]` selectors whose value is the whole old name.
 
 | Part | data-id |
 |---|---|
