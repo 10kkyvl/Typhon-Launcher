@@ -293,6 +293,36 @@ describe('DropdownMenu: its trigger scrolled away', () => {
       vi.unstubAllGlobals();
     }
   });
+
+  it('a keyboard open on a trigger scrolled out of sight brings it back, so the menu opens', async () => {
+    const { keys, trigger, menu } = setup();
+    let top = -60;
+    trigger().getBoundingClientRect = () => DOMRect.fromRect({ x: 200, y: top, width: 80, height: 32 });
+    const reveal = vi.fn(() => {
+      top = 300;
+    });
+    trigger().scrollIntoView = reveal;
+    trigger().focus();
+
+    await keys.keyboard('{Enter}');
+
+    expect(reveal).toHaveBeenCalledExactlyOnceWith({ block: 'nearest' });
+    expect(menu()).not.toBeNull();
+    expect(trigger().getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('opening on a trigger in sight scrolls nothing', async () => {
+    const { keys, trigger, menu } = setup();
+    trigger().getBoundingClientRect = () => DOMRect.fromRect({ x: 200, y: 300, width: 80, height: 32 });
+    const reveal = vi.fn();
+    trigger().scrollIntoView = reveal;
+    trigger().focus();
+
+    await keys.keyboard('{Enter}');
+
+    expect(reveal).not.toHaveBeenCalled();
+    expect(menu()).not.toBeNull();
+  });
 });
 
 describe('DropdownMenu: pointer', () => {

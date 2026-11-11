@@ -13,7 +13,7 @@
 
 <script lang="ts">
   import { flushSync, type Snippet } from 'svelte';
-  import { anchorTo, type Placement } from '../utils/position';
+  import { anchorTo, outOfSight, type Placement } from '../utils/position';
   import MenuList from './MenuList.svelte';
   import { closesOnPick, type MenuItem } from './menu';
 
@@ -61,6 +61,9 @@
   const triggerElement = () => document.getElementById(triggerId);
 
   function show(focus: 'first' | 'last' | 'menu') {
+    // A trigger scrolled out of sight can still hold focus; its menu would close at once as hidden.
+    const element = triggerElement();
+    if (element && outOfSight(element)) element.scrollIntoView({ block: 'nearest' });
     initial = focus;
     open = true;
   }

@@ -196,6 +196,11 @@ function clipRects(element: Element): Rect[] {
   return clips;
 }
 
+/** Nothing of `element` is on screen: scrolled out of the window or clipped away by a scroll container. */
+export function outOfSight(element: Element): boolean {
+  return visiblePart(element.getBoundingClientRect(), clipRects(element), viewportSize()) === null;
+}
+
 /** A CSS length token (`4rem`, `8px`) in px; `fallback` for anything else (a calc, an unset token). */
 export function lengthPx(raw: string, remPx: number, fallback: number): number {
   const value = raw.trim();
