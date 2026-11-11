@@ -151,6 +151,7 @@ export const ui = {
   'ui.desktopOnly': 'Доступно только в desktop-сборке',
   'ui.forward': 'Вперёд',
   'ui.notifications': 'Уведомления',
+  'ui.notificationsUnread': { one: 'Уведомления, {count} новое', few: 'Уведомления, {count} новых', many: 'Уведомления, {count} новых' },
   'ui.markAllRead': 'Прочитать все',
   'ui.nothingNewYet': 'Пока ничего нового',
   'ui.allHistory': 'Вся история',

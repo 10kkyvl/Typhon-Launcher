@@ -153,6 +153,7 @@ export const ui: Record<UiKey, Message> = {
   'ui.desktopOnly': 'Available only in the desktop build',
   'ui.forward': 'Forward',
   'ui.notifications': 'Notifications',
+  'ui.notificationsUnread': { one: 'Notifications, {count} unread', other: 'Notifications, {count} unread' },
   'ui.markAllRead': 'Mark all read',
   'ui.nothingNewYet': 'Nothing new yet',
   'ui.allHistory': 'All history',
