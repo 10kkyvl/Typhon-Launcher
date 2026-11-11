@@ -58,8 +58,8 @@
   import GameScreenshots from './GameScreenshots.svelte';
   import ReviewSummary from './ReviewSummary.svelte';
   import { discardDownloadPrompt, removeDownloadPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
-  import { playLabel, profileChoices } from '../../lib/game/profiles';
-  import PlayProfileMenu from '../../lib/components/PlayProfileMenu.svelte';
+  import { playLabel } from '../../lib/game/profiles';
+  import LeadAction from './LeadAction.svelte';
   import { consoleOrigin, firstWebUrl, relationKey, releaseOrigin, sharedPlatform, splitReleases } from '../../lib/game/releases';
   import { catalogLoadKey, pageTitle, releaseLoadKey, sameGameIds } from '../../lib/game/pageLoad';
   import { familyIds, showSimilar } from '../../lib/game/similar';
@@ -177,8 +177,6 @@
   const viaCatalog = $derived(found.viaCatalog);
   const wasInstalled = $derived(Boolean(localGame?.installedAt && Date.parse(localGame.installedAt) > 0));
   const installed = $derived(Boolean(localGame) && !localGame?.uninstalled);
-  // The play button and the chevron that picks a launch profile read as one control when the chevron is there.
-  const profileSplit = $derived(localGame ? profileChoices(localGame).length > 1 : false);
   const running = $derived(localGame ? $runningGames.has(localGame.id) : false);
 
   let removeOpen = $state(false);
@@ -1449,15 +1447,10 @@
               {#if !busy?.indeterminate}<span class="progress-pct">{busyPercent}%</span>{/if}
             </div>
           {:else if primary.kind === 'update'}
-            <span class="lead" role={profileSplit ? 'group' : undefined} aria-label={profileSplit ? msg('games.play') : undefined}>
-              <Button variant="primary" size="lg" minWidth="18rem" join={profileSplit ? 'end' : undefined} onclick={play}>
-                <Play size="1.8rem" strokeWidth={2} fill="currentColor" />
-                {localGame ? playLabel(localGame) : msg('games.play')}
-              </Button>
-              {#if localGame}
-                <PlayProfileMenu game={localGame} onpick={playProfile} />
-              {/if}
-            </span>
+            <LeadAction game={localGame} onclick={play} onpick={playProfile}>
+              <Play size="1.8rem" strokeWidth={2} fill="currentColor" />
+              {localGame ? playLabel(localGame) : msg('games.play')}
+            </LeadAction>
             <Button size="lg" disabled={primary.disabled} onclick={runPrimary}>
               {#if updateIsRelease}
                 <Sparkles size="1.5rem" strokeWidth={1.8} />
@@ -1467,34 +1460,23 @@
               {primary.label}
             </Button>
           {:else}
-            <span
-              class="lead"
-              role={primary.kind === 'play' && profileSplit ? 'group' : undefined}
-              aria-label={primary.kind === 'play' && profileSplit ? msg('games.play') : undefined}
+            <LeadAction
+              game={primary.kind === 'play' ? localGame : undefined}
+              disabled={primary.disabled}
+              onclick={runPrimary}
+              onpick={playProfile}
             >
-              <Button
-                variant="primary"
-                size="lg"
-                minWidth="18rem"
-                join={primary.kind === 'play' && profileSplit ? 'end' : undefined}
-                disabled={primary.disabled}
-                onclick={runPrimary}
-              >
-                {#if primary.kind === 'play'}
-                  <Play size="1.8rem" strokeWidth={2} fill="currentColor" />
-                {:else if primary.kind === 'stop'}
-                  <Square size="1.4rem" strokeWidth={2} fill="currentColor" />
-                {:else if primary.kind === 'download'}
-                  <Download size="1.6rem" strokeWidth={1.8} />
-                {:else if primary.kind === 'install-download'}
-                  <HardDriveDownload size="1.6rem" strokeWidth={1.8} />
-                {/if}
-                {primary.kind === 'play' && localGame ? playLabel(localGame) : primary.label}
-              </Button>
-              {#if primary.kind === 'play' && localGame}
-                <PlayProfileMenu game={localGame} disabled={primary.disabled} onpick={playProfile} />
+              {#if primary.kind === 'play'}
+                <Play size="1.8rem" strokeWidth={2} fill="currentColor" />
+              {:else if primary.kind === 'stop'}
+                <Square size="1.4rem" strokeWidth={2} fill="currentColor" />
+              {:else if primary.kind === 'download'}
+                <Download size="1.6rem" strokeWidth={1.8} />
+              {:else if primary.kind === 'install-download'}
+                <HardDriveDownload size="1.6rem" strokeWidth={1.8} />
               {/if}
-            </span>
+              {primary.kind === 'play' && localGame ? playLabel(localGame) : primary.label}
+            </LeadAction>
           {/if}
 
           {#if !localGame && canonicalId}
@@ -1919,10 +1901,6 @@
     flex-wrap: wrap;
     margin-top: var(--space-5);
     animation: rise-in var(--dur-panel) var(--ease) backwards;
-  }
-
-  .lead {
-    display: inline-flex;
   }
 
   .heart {
