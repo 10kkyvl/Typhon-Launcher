@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { Plus } from '@lucide/svelte';
   import Tooltip from '../Tooltip.svelte';
   import ReactionPicker from './ReactionPicker.svelte';
@@ -18,13 +19,24 @@
   } = $props();
 
   let popped = $state('');
+  let bar = $state<HTMLElement>();
 
   const used = $derived(REACTIONS.filter((id) => reactionCount(event, id) > 0));
   const idle = $derived(REACTIONS.filter((id) => reactionCount(event, id) === 0));
 
-  function toggle(id: ReactionId) {
-    popped = hasReacted(event, id) ? '' : id;
+  // While a reaction is being sent the bar takes no other (`disabled`), but its controls keep focus:
+  // a disabled button would drop it, and a keyboard user would lose their place in the feed.
+  async function toggle(id: ReactionId) {
+    if (disabled) return;
+    const adding = !hasReacted(event, id);
+    popped = adding ? id : '';
     ontoggle(id);
+    await tick();
+    // Focus follows the reaction: onto the chip a pick has just added, and off a chip that has gone
+    // (the user's own, taken back) to the "+".
+    const chip = bar?.querySelector<HTMLElement>(`[data-reaction="${id}"]`);
+    if (adding) chip?.focus();
+    else if (!chip && !bar?.contains(document.activeElement)) bar?.querySelector<HTMLElement>('.add')?.focus();
   }
 </script>
 
@@ -37,7 +49,8 @@
       class="reaction"
       class:mine
       type="button"
-      {disabled}
+      data-reaction={id}
+      aria-disabled={disabled || undefined}
       aria-pressed={mine}
       aria-label={reactionLabel(id)}
       onclick={() => toggle(id)}
@@ -48,7 +61,7 @@
   </Tooltip>
 {/snippet}
 
-<div class="bar">
+<div class="bar" bind:this={bar}>
   {#each used as id (id)}
     {@render reaction(id)}
   {/each}
@@ -56,7 +69,20 @@
     <ReactionPicker options={idle} label={msg('social.reactionAdd')} onpick={toggle}>
       {#snippet trigger({ open, props })}
         <Tooltip text={msg('social.reactionAdd')} describe={false}>
-          <button class="reaction add" class:open type="button" {disabled} aria-label={msg('social.reactionAdd')} {...props}>
+          <button
+            class="reaction add"
+            class:open
+            type="button"
+            aria-label={msg('social.reactionAdd')}
+            {...props}
+            aria-disabled={disabled || undefined}
+            onclick={(press) => {
+              if (!disabled) props.onclick(press);
+            }}
+            onkeydown={(key) => {
+              if (!disabled) props.onkeydown(key);
+            }}
+          >
             <span class="plus"><Plus size="1.4rem" strokeWidth={2} /></span>
           </button>
         </Tooltip>
@@ -108,12 +134,12 @@
     transform: rotate(45deg);
   }
 
-  .reaction:hover:not(:disabled) {
+  .reaction:hover:not([aria-disabled='true']) {
     background: var(--hover-strong);
     color: var(--text);
   }
 
-  .reaction:active:not(:disabled) {
+  .reaction:active:not([aria-disabled='true']) {
     transform: scale(0.94);
   }
 
@@ -123,7 +149,7 @@
     color: var(--accent-text);
   }
 
-  .reaction:disabled {
+  .reaction[aria-disabled='true'] {
     cursor: default;
   }
 
