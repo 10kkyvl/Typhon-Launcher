@@ -267,14 +267,11 @@
             <div class="section-tools">
               <span class="section-total">{total(report.totals.gamesBytes, games.some((g) => g.sizeUnknown))}</span>
               <DropdownMenu
-                items={[
-                  { id: 'size', label: sortLabels.size },
-                  { id: 'played', label: sortLabels.played },
-                ]}
+                items={(['size', 'played'] as const).map((id) => ({ id, label: sortLabels[id], checked: sort === id }))}
                 onselect={(id) => (sort = id as GameSort)}
               >
-                {#snippet trigger({ open, toggle })}
-                  <Chip selected={open} onclick={toggle}>
+                {#snippet trigger({ props })}
+                  <Chip {...props}>
                     {msg('diskusage.sortLabel', { sort: sortLabels[sort] })}
                     <ChevronDown size="1.4rem" strokeWidth={1.8} />
                   </Chip>

@@ -1534,8 +1534,8 @@
 
           {#if menuItems.length > 0}
             <DropdownMenu items={menuItems} onselect={onMenu}>
-              {#snippet trigger({ toggle })}
-                <IconButton label={msg('games.moreLabel')} onclick={toggle}>
+              {#snippet trigger({ props })}
+                <IconButton {...props} label={msg('games.moreLabel')}>
                   <EllipsisVertical size="1.8rem" strokeWidth={1.8} />
                 </IconButton>
               {/snippet}

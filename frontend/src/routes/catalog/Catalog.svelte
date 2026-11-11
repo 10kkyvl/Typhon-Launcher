@@ -758,13 +758,15 @@
         <Select bind:value={kind} width="13rem" onchange={() => void preferencesChanged()}
           options={[{id:'',label:msg('games.catalogGames')},{id:'all',label:msg('games.catalogAllContent')},{id:'dlc',label:'DLC'},{id:'demo',label:msg('games.catalogDemos')},{id:'soundtrack',label:msg('games.catalogSoundtracks')},{id:'Bundle',label:msg('games.catalogBundles')},{id:'Edition',label:msg('games.catalogEditions')}]} />
         <DropdownMenu
-          items={[
-            ...(['auto', 'for-you', 'popular', 'rating', 'year', 'title'] as Sort[]).map((id) => ({ id, label: sortLabels[id] })),
-          ]}
+          items={(['auto', 'for-you', 'popular', 'rating', 'year', 'title'] as Sort[]).map((id) => ({
+            id,
+            label: sortLabels[id],
+            checked: sort === id,
+          }))}
           onselect={(id) => onSort(id as Sort)}
         >
-          {#snippet trigger({ open, toggle })}
-            <Chip selected={open} onclick={toggle}>
+          {#snippet trigger({ props })}
+            <Chip {...props}>
               <ArrowDownUp size="1.4rem" strokeWidth={1.8} />
               {sortLabels[(effectiveSort || 'popular') as Sort]}
               <ChevronDown size="1.4rem" strokeWidth={1.8} />

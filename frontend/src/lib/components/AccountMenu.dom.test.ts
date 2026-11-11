@@ -14,12 +14,10 @@ vi.mock('../services/account', async (importOriginal) => ({
   logout: vi.fn(async () => {}),
 }));
 
-const GAP = 'rebuilt in the base components stage';
-
 function guestMenu() {
   const view = renderDom(AccountMenu);
   const chip = view.getByRole('button', { name: new RegExp(msg('ui.guest')) });
-  const item = (key: 'ui.profile' | 'ui.signIn') => view.queryByRole('button', { name: msg(key) });
+  const item = (key: 'ui.profile' | 'ui.signIn') => view.queryByRole('menuitem', { name: msg(key) });
   return { ...view, chip, item };
 }
 
@@ -35,18 +33,38 @@ afterEach(() => {
 });
 
 describe('AccountMenu in a DOM', () => {
-  it('a click on the chip opens the menu and Tab reaches its items', async () => {
-    const { user, chip, item } = guestMenu();
+  it('a click on the chip opens the account menu, named by the chip, and the arrows reach its items', async () => {
+    const { user, chip, item, getByRole } = guestMenu();
     expect(item('ui.profile')).toBeNull();
+    expect(chip.getAttribute('aria-haspopup')).toBe('menu');
 
     await user.click(chip);
 
+    expect(chip.getAttribute('aria-expanded')).toBe('true');
+    expect(getByRole('menu', { name: new RegExp(msg('ui.guest')) }).id).toBe(chip.getAttribute('aria-controls'));
     expect(item('ui.profile')).not.toBeNull();
     expect(item('ui.signIn')).not.toBeNull();
-    await user.tab();
+    await user.keyboard('{ArrowDown}');
     expect(document.activeElement).toBe(item('ui.profile'));
-    await user.tab();
+    await user.keyboard('{ArrowDown}');
     expect(document.activeElement).toBe(item('ui.signIn'));
+  });
+
+  it('opens the menu down from the chip, its right edge on the chip\'s right edge', async () => {
+    const { user, chip, getByRole } = guestMenu();
+    const rects = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this === chip) return DOMRect.fromRect({ x: 700, y: 4, width: 200, height: 36 });
+      if (this.getAttribute('role') === 'menu') return DOMRect.fromRect({ x: 0, y: 0, width: 190, height: 120 });
+      return DOMRect.fromRect();
+    });
+    try {
+      await user.click(chip);
+      const menu = getByRole('menu');
+      expect(menu.dataset.placement).toBe('bottom-end');
+      expect([menu.style.left, menu.style.top]).toEqual([`${900 - 190}px`, `${40 + 4}px`]);
+    } finally {
+      rects.mockRestore();
+    }
   });
 
   it('a click outside closes the menu', async () => {
@@ -63,14 +81,14 @@ describe('AccountMenu in a DOM', () => {
     const { user, chip, item, getByRole } = guestMenu();
     await user.click(chip);
 
-    await user.click(getByRole('button', { name: msg('ui.signIn') }));
+    await user.click(getByRole('menuitem', { name: msg('ui.signIn') }));
 
     expect(vi.mocked(logout)).toHaveBeenCalledTimes(1);
     expect(get(authState)).toBe('unauthenticated');
     expect(item('ui.signIn')).toBeNull();
   });
 
-  it.fails(`Escape closes the open menu (${GAP})`, async () => {
+  it('Escape closes the open menu and focus is on the chip', async () => {
     const { user, chip, item } = guestMenu();
     await user.click(chip);
     expect(item('ui.profile')).not.toBeNull();
@@ -78,9 +96,10 @@ describe('AccountMenu in a DOM', () => {
     await user.keyboard('{Escape}');
 
     expect(item('ui.profile')).toBeNull();
+    expect(document.activeElement).toBe(chip);
   });
 
-  it.fails(`opening the menu from the keyboard moves focus to its first item (${GAP})`, async () => {
+  it('opening the menu from the keyboard moves focus to its first item', async () => {
     const { user, chip, item } = guestMenu();
     chip.focus();
 
@@ -90,11 +109,10 @@ describe('AccountMenu in a DOM', () => {
     expect(document.activeElement).toBe(item('ui.profile'));
   });
 
-  it.fails(`picking an item from the keyboard returns focus to the chip (${GAP})`, async () => {
+  it('picking an item from the keyboard returns focus to the chip', async () => {
     const { user, chip, item } = guestMenu();
     chip.focus();
     await user.keyboard('{Enter}');
-    await user.tab();
     expect(document.activeElement).toBe(item('ui.profile'));
 
     await user.keyboard('{Enter}');

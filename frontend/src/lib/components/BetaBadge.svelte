@@ -45,8 +45,8 @@
 
 {#if isBeta(channel)}
   <DropdownMenu {items} align="left" onselect={report}>
-    {#snippet trigger({ toggle })}
-      <button class="badge" title={msg('ui.betaBadgeTitle', { version })} onclick={toggle}>{msg('ui.betaBadge')}</button>
+    {#snippet trigger({ props })}
+      <button {...props} type="button" class="badge" aria-label={msg('ui.betaBadgeTitle', { version })}>{msg('ui.betaBadge')}</button>
     {/snippet}
   </DropdownMenu>
 {/if}

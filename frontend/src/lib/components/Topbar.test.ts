@@ -240,8 +240,4 @@ describe('Topbar account chip', () => {
     const rule = /\n {2}\.avatar \{([^}]*)\}/.exec(source('./AccountMenu.svelte'))?.[1] ?? '';
     expect(rule).toContain('--avatar-ring: var(--bg-sidebar)');
   });
-
-  it('opens the menu down from the chip, aligned to its right edge', () => {
-    expect(source('./AccountMenu.svelte')).toMatch(/<DropdownMenu items=\{profileMenu\} placement="down" align="right"/);
-  });
 });

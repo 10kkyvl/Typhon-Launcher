@@ -22,8 +22,8 @@
 
 {#if choices.length > 1}
   <DropdownMenu {items} align="left" onselect={onpick}>
-    {#snippet trigger({ toggle })}
-      <button class="chevron" aria-label={msg('games.playProfileChoose')} {disabled} onclick={toggle}>
+    {#snippet trigger({ props })}
+      <button {...props} type="button" class="chevron" aria-label={msg('games.playProfileChoose')} {disabled}>
         <ChevronDown size="1.8rem" strokeWidth={2} />
       </button>
     {/snippet}

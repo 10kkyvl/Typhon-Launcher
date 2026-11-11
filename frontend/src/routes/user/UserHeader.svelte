@@ -79,8 +79,8 @@
             <StatusBadge kind="success" label={relationLabel('friend')} />
             {#if onmessage}<Button variant="primary" onclick={onmessage}>{msg('social.chatWrite')}</Button>{/if}
             <DropdownMenu items={friendMenu} onselect={onaction}>
-              {#snippet trigger({ toggle })}
-                <IconButton label={msg('social.moreLabel')} onclick={toggle}>
+              {#snippet trigger({ props })}
+                <IconButton {...props} label={msg('social.moreLabel')}>
                   <EllipsisVertical size="1.8rem" strokeWidth={1.8} />
                 </IconButton>
               {/snippet}
@@ -100,8 +100,8 @@
               <Button disabled={busy} onclick={() => onaction('decline')}>{msg('social.declineButton')}</Button>
             {/if}
             <DropdownMenu items={blockMenu} onselect={onaction}>
-              {#snippet trigger({ toggle })}
-                <IconButton label={msg('social.moreLabel')} onclick={toggle}>
+              {#snippet trigger({ props })}
+                <IconButton {...props} label={msg('social.moreLabel')}>
                   <EllipsisVertical size="1.8rem" strokeWidth={1.8} />
                 </IconButton>
               {/snippet}

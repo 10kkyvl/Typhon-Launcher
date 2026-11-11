@@ -213,8 +213,7 @@
     border-top: 1px solid var(--border);
   }
 
-  /* Positioned after the plate (the aside's first child), so items paint over it without a z-index;
-     the aside does not isolate, so the beta badge's menu can reach past it. */
+  /* Positioned after the plate (the aside's first child), so items paint over it without a z-index. */
   .nav-item {
     position: relative;
     display: flex;

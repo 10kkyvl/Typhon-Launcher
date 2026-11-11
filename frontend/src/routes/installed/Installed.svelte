@@ -368,15 +368,11 @@
         <SearchInput bind:value={search} placeholder={msg('games.installedSearchPlaceholder')} />
       </div>
       <DropdownMenu
-        items={[
-          { id: 'recent', label: sortLabels.recent },
-          { id: 'alpha', label: sortLabels.alpha },
-          { id: 'size', label: sortLabels.size },
-        ]}
+        items={(['recent', 'alpha', 'size'] as const).map((id) => ({ id, label: sortLabels[id], checked: sort === id }))}
         onselect={(id) => (sort = id as Sort)}
       >
-        {#snippet trigger({ open, toggle })}
-          <Chip selected={open} onclick={toggle}>
+        {#snippet trigger({ props })}
+          <Chip {...props}>
             {msg('games.installedSortByLabel', { sort: sortLabels[sort] })}
             <ChevronDown size="1.4rem" strokeWidth={1.8} />
           </Chip>
@@ -602,8 +598,8 @@
               {msg('games.openFolder')}
             </Button>
             <DropdownMenu items={isExternal(game) ? externalMenuItems : isInstalledImage(game) ? imageMenuItems : isEmulated(game) ? emulatedMenuItems : menuItems} onselect={(id) => onMenu(game, id)}>
-              {#snippet trigger({ toggle })}
-                <IconButton label={msg('games.installedMenuLabel')} size="sm" onclick={toggle}>
+              {#snippet trigger({ props })}
+                <IconButton {...props} label={msg('games.installedMenuLabel')} size="sm">
                   <EllipsisVertical size="1.6rem" strokeWidth={1.8} />
                 </IconButton>
               {/snippet}

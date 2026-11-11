@@ -59,7 +59,8 @@
     color: var(--text);
   }
 
-  .outline.selected {
+  .outline.selected,
+  .outline[aria-expanded='true'] {
     border-color: var(--accent-bright);
     background: var(--accent-subtle);
     color: var(--accent-text);
@@ -75,7 +76,8 @@
     color: var(--text);
   }
 
-  .filled.selected {
+  .filled.selected,
+  .filled[aria-expanded='true'] {
     background: var(--accent);
     color: var(--accent-on, #fff);
   }
@@ -86,7 +88,8 @@
   }
 
   .quiet:hover,
-  .quiet.selected {
+  .quiet.selected,
+  .quiet[aria-expanded='true'] {
     background: var(--hover);
     color: var(--text);
   }

@@ -152,8 +152,8 @@
       items={maxActiveDownloadOptions.map((o) => ({ ...o, checked: o.id === concurrencyValue }))}
       onselect={pickConcurrency}
     >
-      {#snippet trigger({ toggle })}
-        <Button onclick={toggle}>
+      {#snippet trigger({ props })}
+        <Button {...props}>
           {msg('transfers.downloadsConcurrency', { value: concurrencyValue })}
           <ChevronDown size="1.4rem" strokeWidth={1.8} />
         </Button>
@@ -301,8 +301,8 @@
                 else forceStart(q.id);
               }}
             >
-              {#snippet trigger({ toggle })}
-                <IconButton label={msg('transfers.downloadsQueueActionsLabel')} size="sm" onclick={toggle}>
+              {#snippet trigger({ props })}
+                <IconButton {...props} label={msg('transfers.downloadsQueueActionsLabel')} size="sm">
                   <Menu size="1.6rem" strokeWidth={1.8} />
                 </IconButton>
               {/snippet}

@@ -120,7 +120,7 @@
     }
   }
 
-  async function onMenu(id: string) {
+  function onMenu(id: string) {
     if (id === 'edit') {
       if ($isOffline) toast(msg('social.editRequiresConnection'));
       else startEditing();
@@ -203,8 +203,8 @@
             <Button size="sm" onclick={onedit}>{msg('profileStyle.edit')}</Button>
             <AvatarEditor size="sm" disabled={$isOffline} />
             <DropdownMenu items={menuItems} onselect={onMenu}>
-              {#snippet trigger({ toggle })}
-                <IconButton label={msg('social.moreLabel')} onclick={toggle}>
+              {#snippet trigger({ props })}
+                <IconButton {...props} label={msg('social.moreLabel')}>
                   <EllipsisVertical size="1.8rem" strokeWidth={1.8} />
                 </IconButton>
               {/snippet}

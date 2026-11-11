@@ -516,8 +516,8 @@
             ]}
             onselect={(id) => (sourceFilter = id as GameSource | 'all')}
           >
-            {#snippet trigger({ open, toggle })}
-              <Chip selected={open || sourceFilter !== 'all'} onclick={toggle}>
+            {#snippet trigger({ props })}
+              <Chip {...props} selected={sourceFilter !== 'all'}>
                 {sourceFilter === 'all' ? msg('games.filterSourceAll') : sourceLabel(sourceFilter)}
                 <ChevronDown size="1.4rem" strokeWidth={1.8} />
               </Chip>
@@ -529,8 +529,8 @@
             items={STATUS_FILTERS.map((id) => ({ id, label: statusFilterLabel(id), checked: statusFilter === id }))}
             onselect={(id) => (statusFilter = id as StatusFilter)}
           >
-            {#snippet trigger({ open, toggle })}
-              <Chip selected={open || statusFilter !== 'all'} onclick={toggle}>
+            {#snippet trigger({ props })}
+              <Chip {...props} selected={statusFilter !== 'all'}>
                 {statusFilterLabel(statusFilter)}
                 <ChevronDown size="1.4rem" strokeWidth={1.8} />
               </Chip>
@@ -538,18 +538,15 @@
           </DropdownMenu>
         {/if}
         <DropdownMenu
-          items={[
-            { id: 'alpha', label: sortLabels.alpha },
-            { id: 'recent', label: sortLabels.recent },
-            { id: 'playtime', label: sortLabels.playtime },
-            { id: 'size', label: sortLabels.size },
-            { id: 'status', label: sortLabels.status },
-            { id: 'completed', label: sortLabels.completed },
-          ]}
+          items={(['alpha', 'recent', 'playtime', 'size', 'status', 'completed'] as const).map((id) => ({
+            id,
+            label: sortLabels[id],
+            checked: sort === id,
+          }))}
           onselect={(id) => (sort = id as Sort)}
         >
-          {#snippet trigger({ open, toggle })}
-            <Chip selected={open} onclick={toggle}>
+          {#snippet trigger({ props })}
+            <Chip {...props}>
               <ArrowDownUp size="1.4rem" strokeWidth={1.8} />
               {sortLabels[sort]}
               <ChevronDown size="1.4rem" strokeWidth={1.8} />

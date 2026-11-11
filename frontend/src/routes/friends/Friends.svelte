@@ -302,8 +302,8 @@
     {msg('social.chatWrite')}
   </Button>
   <DropdownMenu items={menuItems} onselect={(item) => onMenu(friend, item)}>
-    {#snippet trigger({ toggle })}
-      <IconButton label={msg('social.moreLabel')} size="sm" onclick={toggle}>
+    {#snippet trigger({ props })}
+      <IconButton {...props} label={msg('social.moreLabel')} size="sm">
         <EllipsisVertical size="1.7rem" strokeWidth={1.8} />
       </IconButton>
     {/snippet}
@@ -379,14 +379,11 @@
           </div>
           <div class="toolbar-right">
             <DropdownMenu
-              items={[
-                { id: 'status', label: sortLabels.status },
-                { id: 'name', label: sortLabels.name },
-              ]}
+              items={(['status', 'name'] as const).map((id) => ({ id, label: sortLabels[id], checked: sortBy === id }))}
               onselect={(id) => (sortBy = id as 'name' | 'status')}
             >
-              {#snippet trigger({ open, toggle })}
-                <Chip selected={open} onclick={toggle}>
+              {#snippet trigger({ props })}
+                <Chip {...props}>
                   <ArrowDownUp size="1.4rem" strokeWidth={1.8} />
                   {sortLabels[sortBy]}
                   <ChevronDown size="1.4rem" strokeWidth={1.8} />

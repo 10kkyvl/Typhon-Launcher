@@ -58,14 +58,14 @@
 </script>
 
 <DropdownMenu items={profileMenu} placement="down" align="right" onselect={onProfileSelect}>
-  {#snippet trigger({ open, toggle })}
+  {#snippet trigger({ props })}
     <button
+      {...props}
+      type="button"
       class="chip"
       data-part="topbar-account"
       class:active={$route.name === 'profile'}
-      class:open
       title={$currentUser && $autoAway ? msg('ui.presenceAutoAwayHint') : undefined}
-      onclick={toggle}
     >
       <span class="avatar">
         <Avatar
@@ -112,7 +112,7 @@
 
   .chip:hover,
   .chip.active,
-  .chip.open {
+  .chip[aria-expanded='true'] {
     background: var(--hover-strong);
   }
 

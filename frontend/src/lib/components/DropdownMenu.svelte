@@ -1,9 +1,36 @@
-<script lang="ts">
-  import type { Snippet } from 'svelte';
-  import { Check } from '@lucide/svelte';
-  import { clickOutside } from '../utils/clickOutside';
-  import type { MenuItem } from './menu';
+<script lang="ts" module>
+  /** What the trigger element needs: spread it on the button (`<Button {...props}>`), wire nothing by hand. */
+  export interface MenuTriggerProps {
+    id: string;
+    'aria-haspopup': 'menu';
+    'aria-expanded': boolean;
+    'aria-controls': string | undefined;
+    onclick: (event: MouseEvent) => void;
+    onkeydown: (event: KeyboardEvent) => void;
+  }
+</script>
 
+<script lang="ts">
+  import { flushSync, type Snippet } from 'svelte';
+  import { anchorTo, type Placement, type Rect } from '../utils/position';
+  import MenuList from './MenuList.svelte';
+  import { closesOnPick, type MenuItem } from './menu';
+
+  /**
+   * Menu button (WAI-ARIA menu button). The trigger snippet renders the button and spreads `props` on it:
+   *
+   *   <DropdownMenu {items} onselect={run}>
+   *     {#snippet trigger({ props })}
+   *       <IconButton label={msg('games.moreLabel')} {...props}><EllipsisVertical /></IconButton>
+   *     {/snippet}
+   *   </DropdownMenu>
+   *
+   * The menu opens next to the trigger, out of the page (a layer, see lib/layers), flipping and shifting
+   * to stay in the window and following the trigger on scroll and resize. A pick closes the menu and
+   * puts focus back on the trigger before `onselect` runs, so a dialog the pick opens returns focus
+   * there; an independent check (`MenuItem.independent`) keeps the menu open. The open state shows on
+   * the trigger as `[aria-expanded="true"]`.
+   */
   let {
     items,
     align = 'right',
@@ -12,155 +39,87 @@
     trigger,
   }: {
     items: MenuItem[];
+    /** Which edge of the trigger the menu lines up with. */
     align?: 'left' | 'right';
     placement?: 'down' | 'up';
-    onselect?: (id: string) => void;
-    trigger: Snippet<[{ open: boolean; toggle: () => void }]>;
+    onselect?: (id: string, item: MenuItem) => void;
+    trigger: Snippet<[{ open: boolean; toggle: () => void; props: MenuTriggerProps }]>;
   } = $props();
 
-  let open = $state(false);
+  const uid = $props.id();
+  const triggerId = `${uid}-trigger`;
+  const menuId = `${uid}-menu`;
 
-  function pick(id: string) {
-    open = false;
-    onselect?.(id);
+  let open = $state(false);
+  let initial = $state<'first' | 'last' | 'menu'>('menu');
+
+  const side = $derived<Placement>(`${placement === 'up' ? 'top' : 'bottom'}-${align === 'left' ? 'start' : 'end'}`);
+
+  // Looked up each time: a trigger re-created while the menu is open (a re-keyed row) still counts.
+  const triggerElement = () => document.getElementById(triggerId);
+
+  function show(focus: 'first' | 'last' | 'menu') {
+    initial = focus;
+    open = true;
   }
+
+  // Unmounts the menu now, so the layer stack has put focus back on the trigger when this returns.
+  // Only from event handlers: a dismissal from the stack runs inside effects, where flushSync may not.
+  function close() {
+    if (!open) return;
+    open = false;
+    flushSync();
+  }
+
+  function toggle() {
+    if (open) close();
+    else show('menu');
+  }
+
+  const triggerProps: MenuTriggerProps = $derived({
+    id: triggerId,
+    'aria-haspopup': 'menu',
+    'aria-expanded': open,
+    'aria-controls': open ? menuId : undefined,
+    onclick: (event: MouseEvent) => {
+      if (open) close();
+      // detail 0: activated from the keyboard (Enter, Space) or by script (Big Picture's confirm).
+      else show(event.detail === 0 ? 'first' : 'menu');
+    },
+    onkeydown: (event: KeyboardEvent) => {
+      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+      event.preventDefault();
+      close();
+      show(event.key === 'ArrowDown' ? 'first' : 'last');
+    },
+  });
+
+  function pick(item: MenuItem) {
+    if (closesOnPick(item)) close();
+    onselect?.(item.id, item);
+  }
+
+  let lastRect: Rect = { left: 0, top: 0, width: 0, height: 0 };
+  const anchorRect = (): Rect => {
+    const element = triggerElement();
+    if (element) lastRect = element.getBoundingClientRect();
+    return lastRect;
+  };
+
+  const place = (node: HTMLElement) => anchorTo(node, anchorRect, { placement: side, offset: 4 });
 </script>
 
-<div class="dropdown" use:clickOutside={() => (open = false)}>
-  {@render trigger({ open, toggle: () => (open = !open) })}
-  {#if open}
-    <div
-      class="menu"
-      class:up={placement === 'up'}
-      style:left={align === 'left' ? '0' : 'auto'}
-      style:right={align === 'right' ? '0' : 'auto'}
-    >
-      {#each items as item (item.id)}
-        {#if item.separator}
-          <div class="separator"></div>
-        {/if}
-        <button class="item" class:danger={item.danger} onclick={() => pick(item.id)}>
-          {#if item.dot}<span class="dot {item.dot}"></span>{/if}
-          <span class="label">{item.label}</span>
-          {#if item.checked}<Check size="1.5rem" strokeWidth={2.2} />{/if}
-        </button>
-      {/each}
-    </div>
-  {/if}
-</div>
+{@render trigger({ open, toggle, props: triggerProps })}
 
-<style>
-  .dropdown {
-    position: relative;
-    display: inline-flex;
-  }
-
-  .menu {
-    position: absolute;
-    z-index: var(--z-popover);
-    top: calc(100% + 0.4rem);
-    min-width: 19rem;
-    padding: 0.4rem;
-    background: var(--surface-3);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-pop);
-    animation: pop var(--dur-fast) var(--ease);
-  }
-
-  .menu.up {
-    top: auto;
-    bottom: calc(100% + 0.4rem);
-    animation: pop-up var(--dur-fast) var(--ease);
-  }
-
-  .item {
-    display: flex;
-    align-items: center;
-    gap: 0.8rem;
-    width: 100%;
-    padding: 0.7rem 1rem;
-    border-radius: var(--radius-sm);
-    font-size: var(--font-sm);
-    color: var(--text-2);
-    text-align: left;
-    white-space: nowrap;
-    transition:
-      background var(--dur-fast) var(--ease),
-      color var(--dur-fast) var(--ease);
-  }
-
-  .item:hover {
-    background: var(--hover-strong);
-    color: var(--text);
-  }
-
-  .label {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .item :global(svg) {
-    flex-shrink: 0;
-    color: var(--text-3);
-  }
-
-  .dot {
-    width: 0.8rem;
-    height: 0.8rem;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-
-  .dot.online {
-    background: var(--success);
-  }
-
-  .dot.away {
-    background: var(--warning);
-  }
-
-  .dot.busy {
-    background: var(--danger);
-  }
-
-  .dot.offline {
-    background: var(--text-3);
-  }
-
-  .item.danger {
-    color: var(--danger);
-  }
-
-  .item.danger:hover {
-    background: var(--danger-subtle);
-  }
-
-  .separator {
-    height: 1px;
-    margin: 0.4rem 0.4rem;
-    background: var(--border);
-  }
-
-  @keyframes pop {
-    from {
-      opacity: 0;
-      transform: translateY(-0.3rem);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  @keyframes pop-up {
-    from {
-      opacity: 0;
-      transform: translateY(0.3rem);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-</style>
+{#if open}
+  <MenuList
+    {items}
+    id={menuId}
+    labelledby={triggerId}
+    {initial}
+    owner={triggerElement}
+    {place}
+    onpick={pick}
+    onclose={(reason) => (reason === 'tab' ? close() : (open = false))}
+  />
+{/if}

@@ -150,7 +150,11 @@
 
   function sourceMenu(source: Source) {
     return [
-      { id: 'refresh', label: source.status === 'updating' ? msg('transfers.sourcesUpdatingEllipsis') : msg('transfers.sourcesRefreshNow') },
+      {
+        id: 'refresh',
+        label: source.status === 'updating' ? msg('transfers.sourcesUpdatingEllipsis') : msg('transfers.sourcesRefreshNow'),
+        disabled: source.status === 'updating',
+      },
       { id: 'toggle', label: source.enabled ? msg('transfers.sourcesDisableAction') : msg('transfers.sourcesEnableAction') },
       { id: 'details', label: msg('transfers.sourcesDetailsAction') },
       { id: 'remove', label: msg('transfers.sourcesRemoveAction'), danger: true, separator: true },
@@ -306,8 +310,8 @@
             </span>
             <span class="cell menu-cell">
               <DropdownMenu items={sourceMenu(source)} onselect={(id) => onSourceMenu(source, id)}>
-                {#snippet trigger({ toggle: toggleMenu })}
-                  <IconButton label={msg('transfers.sourcesMenuLabel')} size="sm" onclick={toggleMenu}>
+                {#snippet trigger({ props })}
+                  <IconButton {...props} label={msg('transfers.sourcesMenuLabel')} size="sm">
                     <EllipsisVertical size="1.6rem" strokeWidth={1.8} />
                   </IconButton>
                 {/snippet}
@@ -524,7 +528,11 @@
   }
 
   .cell.status,
-  .cell.counts,
+  .cell.counts {
+    overflow: visible;
+  }
+
+  /* The menu button's focus ring is drawn outside it. */
   .cell.menu-cell {
     overflow: visible;
   }
