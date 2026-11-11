@@ -38,6 +38,7 @@ export const social: Record<SocialKey, Message> = {
   'social.reactionEyes': 'Eyes',
   'social.reactionJoy': 'Laugh',
   'social.reactionAdd': 'Add a reaction',
+  'social.reactionWithCount': '{reaction}, {count}',
 
   // lib/social/feed.ts — event kind labels
   'social.feedCompleted': 'Completed',
