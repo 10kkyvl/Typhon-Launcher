@@ -84,13 +84,31 @@ describe('the page container', () => {
     expect(painted).toEqual([]);
   });
 
-  it('a bar that sticks over the scrolled page is an island, not a raw page or surface fill', () => {
-    const raw = routeFiles().flatMap((path) =>
+  // A sticky bar over the scrolled page sits on the wash, so it is an island. A bar that sticks over
+  // something that sets its own colours says so in a `/* sticks over: <surface> */` comment on its rule, and
+  // then wears a colour that surface sets. The check sees the fill of the sticky rule itself only.
+  const STICKS_OVER: Record<string, { file: string; why: string }> = {
+    'profile canvas': {
+      file: 'lib/components/ProfileCanvas.svelte',
+      why: 'the profile theme, not the window theme, sets the surfaces and ink inside the canvas',
+    },
+  };
+
+  it('a bar that sticks over the scrolled page is an island; one over a themed surface wears that surface', () => {
+    const wrong = routeFiles().flatMap((path) =>
       styleRules(frontendSources[path])
         .filter((rule) => /position\s*:\s*sticky/.test(rule.body) && /background/.test(rule.body))
-        .filter((rule) => !/background\s*:\s*var\(--island-fill\)/.test(rule.body))
-        .map((rule) => `${path}: ${rule.selector}`),
+        .flatMap((rule) => {
+          const over = /\/\*\s*sticks over:\s*([a-z ]+?)\s*[.*]/.exec(rule.selector)?.[1];
+          const fill = /background\s*:\s*var\((--[\w-]+)\)\s*;/.exec(rule.body)?.[1];
+          const where = `${path}: ${rule.selector.replace(/\/\*[\s\S]*?\*\//g, '').trim()}`;
+          if (!over) return fill === '--island-fill' ? [] : [`${where} paints ${fill ?? 'a raw fill'} over the wash`];
+          const surface = STICKS_OVER[over];
+          if (!surface) return [`${where} sticks over an unknown surface: ${over}`];
+          const sets = [...frontendSources[surface.file].matchAll(/style:(--[\w-]+)=/g)].map((m) => m[1]);
+          return fill && sets.includes(fill) ? [] : [`${where} paints ${fill ?? 'a raw fill'}, which the ${over} does not set`];
+        }),
     );
-    expect(raw).toEqual([]);
+    expect(wrong).toEqual([]);
   });
 });

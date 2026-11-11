@@ -517,6 +517,7 @@
     padding: var(--space-1);
   }
 
+  /* sticks over: profile canvas. The canvas sets its own surfaces and ink, so the bar wears them. */
   .topbar {
     position: sticky;
     top: 0;
@@ -526,7 +527,7 @@
     gap: var(--space-3);
     margin: var(--space-4) 0;
     padding: var(--space-3) var(--space-4);
-    background: var(--island-fill);
+    background: var(--surface-2);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-pop);
