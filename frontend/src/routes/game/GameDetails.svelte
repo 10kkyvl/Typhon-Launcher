@@ -290,8 +290,6 @@
   });
 
   const canonicalId = $derived(localGame && !viaCatalog ? localGame.canonicalGameId : catalogGame?.id || id);
-  const ambientId = $derived(pageAmbient(localGame?.id, canonicalId));
-  $effect(() => claimAmbient(ambientId));
   const releaseTitle = $derived(pageTitle(localGame, viaCatalog, catalogGame?.title));
   const sideloaded = $derived(emulated && !viaCatalog);
   const releaseKey = $derived(
@@ -1013,6 +1011,8 @@
   );
   const loadFailed = $derived(catalogFailed && !localGame && !catalogGame && !anyOwnDownload);
   const gameShown = $derived(!missing && !loadFailed);
+  const ambientId = $derived(pageAmbient(localGame?.id, canonicalId, gameShown));
+  $effect(() => claimAmbient(ambientId));
 
   // The main button scrolls to or drives these sections, so a theme that hides
   // them must not leave the button doing nothing.

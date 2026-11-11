@@ -97,17 +97,22 @@ describe('the remembered game', () => {
 
 describe('the game a game page shows behind the window', () => {
   it('is the library game by its own id', () => {
-    expect(pageAmbient('lib-1', 'c1')).toBe('lib-1');
+    expect(pageAmbient('lib-1', 'c1', true)).toBe('lib-1');
   });
 
   it('is a catalog game by its canonical id, before the art store knows it', () => {
-    expect(pageAmbient(undefined, 'catalog-7')).toBe('catalog-7');
+    expect(pageAmbient(undefined, 'catalog-7', true)).toBe('catalog-7');
     expect(artRequest('catalog-7', [], {})).toBe('catalog-7');
     expect(backdropSources('catalog-7', [], {})).toEqual([]);
   });
 
   it('is nothing for a page without a game', () => {
-    expect(pageAmbient(undefined, undefined)).toBeNull();
-    expect(pageAmbient(undefined, '')).toBeNull();
+    expect(pageAmbient(undefined, undefined, true)).toBeNull();
+    expect(pageAmbient(undefined, '', true)).toBeNull();
+  });
+
+  it('is nothing for a game the page could not find or load: its id is not a game to ask art for', () => {
+    expect(pageAmbient(undefined, 'route-id', false)).toBeNull();
+    expect(pageAmbient('lib-1', 'c1', false)).toBeNull();
   });
 });

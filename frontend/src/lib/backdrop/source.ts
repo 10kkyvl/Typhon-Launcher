@@ -27,8 +27,10 @@ export function backdropSources(id: string, games: readonly LibraryGame[], art: 
 /**
  * The game a game page claims: a library game by its own id, else the catalog game by its canonical id,
  * whether or not the art store knows it yet (the backdrop asks for the art and stays bare meanwhile).
+ * Nothing while the page shows no game: an id it could not find or load is not a game to ask art for.
  */
-export function pageAmbient(libraryId: string | undefined, canonicalId: string | null | undefined): string | null {
+export function pageAmbient(libraryId: string | undefined, canonicalId: string | null | undefined, shown: boolean): string | null {
+  if (!shown) return null;
   return libraryId || canonicalId || null;
 }
 
