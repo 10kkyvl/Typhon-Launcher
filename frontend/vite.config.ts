@@ -3,6 +3,10 @@ import { resolve } from "node:path";
 import { defineConfig, type Plugin } from "vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import wails from "@wailsio/runtime/plugins/vite";
+import { svelteTesting } from "@testing-library/svelte/vite";
+import { configDefaults } from "vitest/config";
+
+const DOM_TESTS = "src/**/*.dom.test.ts";
 
 // dist очищается при каждой сборке, а //go:embed all:frontend/dist требует
 // существования каталога в свежем клоне до первой сборки фронтенда.
@@ -25,7 +29,31 @@ export default defineConfig({
     strictPort: true,
   },
   plugins: [svelte(), wails("./bindings"), keepDist()],
+  // A test that needs a DOM says so in its name; everything else stays in node and renders through
+  // svelte/server. The name is the only switch: domConvention.test.ts rejects a per-file
+  // `@vitest-environment` docblock.
   test: {
-    setupFiles: ["./vitest.setup.ts"],
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: "node",
+          exclude: [...configDefaults.exclude, DOM_TESTS],
+          setupFiles: ["./vitest.setup.ts"],
+        },
+      },
+      {
+        extends: true,
+        // Resolves `svelte` to the client runtime for this project only; the cleanup hook is
+        // imported by vitest.dom.setup.ts, not added to every project's setup files.
+        plugins: [svelteTesting({ autoCleanup: false })],
+        test: {
+          name: "dom",
+          include: [DOM_TESTS],
+          environment: "jsdom",
+          setupFiles: ["./vitest.dom.setup.ts"],
+        },
+      },
+    ],
   },
 });
