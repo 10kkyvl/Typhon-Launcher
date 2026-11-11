@@ -77,16 +77,17 @@
 <canvas class="backdrop" bind:this={canvas} width={BACKDROP_W} height={BACKDROP_H} aria-hidden="true"></canvas>
 
 <style>
-  /* The window below the title bar, where the shell is, at the bottom of the window's stacking order:
-     the islands, the banners, the page and everything outside the shell paint over it. Fixed rather
-     than absolute, so the shell does not become a containing block for its absolutely placed parts. */
+  /* The whole window, title bar included (it paints no background of its own), at the bottom of the
+     window's stacking order: the islands, the banners, the page and everything outside the shell paint
+     over it. Fixed rather than absolute, so the shell does not become a containing block for its
+     absolutely placed parts. */
   .backdrop {
     position: fixed;
-    inset: var(--titlebar-h) 0 0;
+    inset: 0;
     z-index: -1;
     display: block;
     width: 100%;
-    height: calc(100% - var(--titlebar-h));
+    height: 100%;
     opacity: var(--ambient-opacity);
     pointer-events: none;
   }

@@ -53,6 +53,15 @@ describe('the window backdrop', () => {
     }
   });
 
+  it('covers the whole window, under a title bar that paints no background of its own', () => {
+    const layer = /\.backdrop\s*\{([^}]*)\}/.exec(frontendSources['lib/components/ShellBackdrop.svelte'])?.[1] ?? '';
+    expect(layer).toMatch(/position:\s*fixed/);
+    expect(layer).toMatch(/inset:\s*0;/);
+    const bar = /\.titlebar\s*\{([^}]*)\}/.exec(frontendSources['lib/components/TitleBar.svelte'])?.[1];
+    expect(bar).toBeTypeOf('string');
+    expect(bar).not.toMatch(/background/);
+  });
+
   // The look is read from the DOM (a probe element and a canvas), which must happen in an effect that the
   // theme-applied signal drives, never lazily in a derived that may run before the theme reaches the window.
   it('reads the theme from the window when it has been applied, in an effect, never in a derived', () => {
