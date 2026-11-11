@@ -7,7 +7,22 @@ export interface ContrastCheck {
   fg: string;
   backgrounds: readonly string[];
   min: number;
+  /** The surfaces a translucent background is laid over: where the control stands. --bg by default. */
+  grounds?: readonly string[];
 }
+
+// The label of the danger button: no token holds it, the button mixes it from two (Button.svelte;
+// theme-contrast.test.ts holds the two equal).
+export const DANGER_LABEL = 'danger-button-label';
+
+// Colours a control draws that no single token holds, written exactly as the component writes them.
+// The browser computes them from the theme like a token (resolveColors).
+export const DERIVED_COLORS: Readonly<Record<string, string>> = {
+  [DANGER_LABEL]: 'color-mix(in srgb, var(--danger) 80%, var(--text))',
+};
+
+// Where a button can stand: the page, a card, a raised panel.
+const CONTROL_GROUNDS = ['--bg', '--surface', '--surface-2'];
 
 // WCAG 2.2: 4.5:1 for body text, 3:1 for large or secondary text and for
 // controls that carry meaning. The report warns, it never blocks a save:
@@ -17,6 +32,8 @@ export const CONTRAST_CHECKS: readonly ContrastCheck[] = [
   { id: 'text2', fg: '--text-2', backgrounds: ['--bg', '--island-fill', '--surface', '--surface-2'], min: 4.5 },
   { id: 'text3', fg: '--text-3', backgrounds: ['--bg', '--surface', '--surface-2'], min: 3 },
   { id: 'button', fg: '--accent-on', backgrounds: ['--accent', '--accent-hover'], min: 4.5 },
+  { id: 'dangerButton', fg: DANGER_LABEL, backgrounds: ['--danger-subtle'], grounds: CONTROL_GROUNDS, min: 4.5 },
+  { id: 'dangerButtonHover', fg: '--bg', backgrounds: ['--danger'], grounds: CONTROL_GROUNDS, min: 4.5 },
   { id: 'links', fg: '--accent-text', backgrounds: ['--accent-subtle', '--surface', '--bg'], min: 4.5 },
   { id: 'accent', fg: '--accent-bright', backgrounds: ['--bg', '--surface', '--surface-2'], min: 3 },
   { id: 'ring', fg: '--accent-ring', backgrounds: ['--bg', '--surface', '--surface-2'], min: 3 },
@@ -25,11 +42,21 @@ export const CONTRAST_CHECKS: readonly ContrastCheck[] = [
   { id: 'warning', fg: '--warning', backgrounds: ['--bg', '--surface'], min: 3 },
 ];
 
-export const CONTRAST_TOKENS: readonly string[] = [...new Set(CONTRAST_CHECKS.flatMap((c) => [c.fg, ...c.backgrounds]))];
+export const CONTRAST_TOKENS: readonly string[] = [
+  ...new Set(CONTRAST_CHECKS.flatMap((c) => [c.fg, ...c.backgrounds, ...(c.grounds ?? [])])),
+];
 
 // Not theme tokens: values the window falls back to where it reads them.
 // --accent-on comes from a personal accent; without one, buttons draw white.
 export const CONTRAST_FALLBACKS: Readonly<Record<string, string>> = { '--accent-on': '#fff' };
+
+/** The CSS value whose computed colour is the one a name stands for. */
+export function colorExpression(name: string): string {
+  const derived = DERIVED_COLORS[name];
+  if (derived) return derived;
+  const fallback = CONTRAST_FALLBACKS[name];
+  return fallback ? `var(${name}, ${fallback})` : `var(${name})`;
+}
 
 export interface ContrastRow {
   id: string;
@@ -52,28 +79,32 @@ function ratio(a: RGBA, b: RGBA): number {
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
 }
 
-// Surfaces may be translucent, so each one is laid over --bg, and the
-// foreground over that, the way the window paints them.
+// Surfaces may be translucent, so each one is laid over --bg (or over the
+// surfaces the check names), and the foreground over that, the way the
+// window paints them.
 export function contrastReport(colors: Record<string, RGBA | undefined>): ContrastRow[] {
   const base = colors['--bg'];
-  const opaque = (name: string): RGBA | undefined => {
+  const opaque = (name: string, ground: RGBA | undefined = base): RGBA | undefined => {
     const c = colors[name];
     if (!c) return undefined;
     if (c[3] >= 1 || name === '--bg') return c;
-    return base ? over(c, base) : undefined;
+    return ground ? over(c, ground) : undefined;
   };
   return CONTRAST_CHECKS.map((check) => {
     const fg = colors[check.fg];
     let worst: { ratio: number; against: string } | null = null;
     let unknown = !fg;
+    const grounds = check.grounds ? check.grounds.map((name) => opaque(name)) : [base];
     for (const name of check.backgrounds) {
-      const bg = opaque(name);
-      if (!bg || !fg) {
-        unknown = true;
-        continue;
+      for (const ground of grounds) {
+        const bg = ground ? opaque(name, ground) : undefined;
+        if (!bg || !fg) {
+          unknown = true;
+          continue;
+        }
+        const r = ratio(over(fg, bg), bg);
+        if (!worst || r < worst.ratio) worst = { ratio: r, against: name };
       }
-      const r = ratio(over(fg, bg), bg);
-      if (!worst || r < worst.ratio) worst = { ratio: r, against: name };
     }
     if (!worst) return { id: check.id, min: check.min, ratio: null, against: null, ok: null };
     const ok = worst.ratio >= check.min ? (unknown ? null : true) : false;

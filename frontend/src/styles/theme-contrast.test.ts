@@ -3,7 +3,7 @@ import buttonSource from '../lib/components/Button.svelte?raw';
 import { cssColor, ruleBody, styleOf } from '../lib/testing/css';
 import { goSources } from '../lib/testing/sources';
 import { luminance, rgb } from '../lib/theme/accent';
-import { CONTRAST_FALLBACKS, CONTRAST_TOKENS, contrastReport, type RGBA } from '../lib/theme/contrastReport';
+import { CONTRAST_CHECKS, CONTRAST_FALLBACKS, CONTRAST_TOKENS, DERIVED_COLORS, contrastReport, type RGBA } from '../lib/theme/contrastReport';
 import { BACKDROP_LOOK_COLORS, WASH_TEXT, backdropLook, lookPixels, type BackdropLook } from '../lib/backdrop/pixels';
 
 /**
@@ -304,10 +304,27 @@ describe('built-in themes', () => {
       const preset = builtIns().find((p) => p.id === id);
       expect(preset, id).toBeDefined();
       const tokens = { ...CONTRAST_FALLBACKS, ...(preset as Preset).tokens };
-      const colors = Object.fromEntries(CONTRAST_TOKENS.map((name) => [name, rgba(tokens[name] ?? name)]));
+      const colors = Object.fromEntries(
+        CONTRAST_TOKENS.map((name) => [name, name in DERIVED_COLORS ? cssColor(DERIVED_COLORS[name], tokens) : rgba(tokens[name] ?? name)]),
+      );
       expect(contrastReport(colors).filter((row) => row.ok !== true)).toEqual([]);
     });
   }
+
+  // A theme of the user's own is checked only by the Settings panel: it must measure the same pairs.
+  it('the readability panel measures the danger button Button.svelte draws, at rest and hovered', () => {
+    const name = (value: string) => /^var\((--[\w-]+)\)$/.exec(value)?.[1] ?? value;
+    const check = (id: string) => CONTRAST_CHECKS.find((c) => c.id === id);
+    const rest = check('dangerButton');
+    expect(rest).toBeDefined();
+    expect(DERIVED_COLORS[rest?.fg ?? '']).toBe(DANGER.color);
+    expect(rest?.backgrounds).toEqual([name(DANGER.background)]);
+    const hover = check('dangerButtonHover');
+    expect(hover).toBeDefined();
+    expect(hover?.fg).toBe(name(DANGER_HOVER.color));
+    expect(hover?.backgrounds).toEqual([name(DANGER_HOVER.background)]);
+    for (const c of [rest, hover]) expect(c?.min).toBe(4.5);
+  });
 
   // High contrast keeps the accent itself an indicator (focus ring, toggles) on every level.
   it('contrast keeps its accent at 3:1 on every surface', () => {

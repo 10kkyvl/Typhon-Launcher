@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { CONTRAST_CHECKS, CONTRAST_FALLBACKS, CONTRAST_TOKENS, contrastReport, formatRatio, type RGBA } from './contrastReport';
+import {
+  CONTRAST_CHECKS,
+  CONTRAST_FALLBACKS,
+  CONTRAST_TOKENS,
+  DANGER_LABEL,
+  DERIVED_COLORS,
+  colorExpression,
+  contrastReport,
+  formatRatio,
+  type RGBA,
+} from './contrastReport';
 import { tokenGroups } from './tokens';
 
 const black: RGBA = [0, 0, 0, 1];
@@ -60,8 +70,29 @@ describe('contrastReport', () => {
   });
 
   it('only names tokens the theme editor knows, or ones with a fallback', () => {
-    const known = new Set([...tokenGroups.flatMap((group) => group.tokens), ...Object.keys(CONTRAST_FALLBACKS)]);
+    const known = new Set([...tokenGroups.flatMap((group) => group.tokens), ...Object.keys(CONTRAST_FALLBACKS), ...Object.keys(DERIVED_COLORS)]);
     expect(CONTRAST_TOKENS.filter((name) => !known.has(name))).toEqual([]);
+  });
+
+  it('warns when the danger button label is unreadable on its tint, over any surface it stands on', () => {
+    const dark = { ...all(black), '--text': white, '--danger': [239, 112, 112, 1] as RGBA, '--danger-subtle': [239, 112, 112, 0.13] as RGBA };
+    expect(row({ ...dark, [DANGER_LABEL]: [250, 210, 210, 1] }, 'dangerButton').ok).toBe(true);
+    expect(row({ ...dark, [DANGER_LABEL]: [120, 60, 60, 1] }, 'dangerButton')).toMatchObject({ ok: false, against: '--danger-subtle' });
+    // Fine over the page, unreadable where the button stands on a light card.
+    const card = { ...dark, [DANGER_LABEL]: [230, 230, 230, 1] as RGBA };
+    expect(row(card, 'dangerButton').ok).toBe(true);
+    expect(row({ ...card, '--surface-2': [235, 235, 235, 1] }, 'dangerButton').ok).toBe(false);
+  });
+
+  it('warns when the hovered danger button, the page colour on the full danger fill, is unreadable', () => {
+    expect(row({ ...all(black), '--danger': [239, 112, 112, 1] }, 'dangerButtonHover').ok).toBe(true);
+    expect(row({ ...all(black), '--danger': [40, 10, 10, 1] }, 'dangerButtonHover')).toMatchObject({ ok: false, against: '--danger' });
+  });
+
+  it('asks the browser for a derived colour by the expression the component writes, for a token by its variable', () => {
+    expect(colorExpression(DANGER_LABEL)).toBe(DERIVED_COLORS[DANGER_LABEL]);
+    expect(colorExpression('--text')).toBe('var(--text)');
+    expect(colorExpression('--accent-on')).toBe(`var(--accent-on, ${CONTRAST_FALLBACKS['--accent-on']})`);
   });
 
   it('rounds the ratio down so a near miss never reads as a pass', () => {
