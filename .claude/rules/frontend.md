@@ -59,7 +59,9 @@ Add a line when a mistake repeats; drop one a guard now enforces.
   only for components not rebuilt yet; do not copy them).
 - jsdom does not prove focus order, held keys (a repeated keydown, `event.repeat`, activates nothing),
   scrolling or placement. Drive those in a real browser before the stage is called done. A
-  source-text guard is a tripwire, not proof.
+  source-text guard is a tripwire, not proof. jsdom 30's `:focus-visible` is stateful
+  (`#lastFocusVisible` in `@asamuzakjp/dom-selector`): a second `matches` on the same focused element
+  can differ from the first, so assert it once, right after the real key event.
 - A control that reports through `onchange` never writes the value itself: it shows what the caller
   holds, so a refused or failed change does not stay on screen as a guess.
 - A hint on a control goes through `Tooltip`, never a native `title`. State is exposed
