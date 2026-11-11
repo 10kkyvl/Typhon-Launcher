@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished } from 'vitest';
 import { renderDom } from '../testing/dom';
+import { applyStyles } from '../testing/styles';
 import ProgressBar from './ProgressBar.svelte';
 import source from './ProgressBar.svelte?raw';
 
@@ -110,18 +111,28 @@ describe('ProgressBar in a DOM', () => {
   });
 });
 
-// jsdom applies no component CSS: the still look of an unknown amount is held on the stylesheet.
 describe('ProgressBar with animations off', () => {
   const css = source.slice(source.indexOf('<style>'));
 
-  it('has a still look of its own for an unknown amount, under the setting and under reduced motion', () => {
-    const still = /:global\(\.no-anim\) \.fill\.indeterminate\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
-    expect(still).toMatch(/animation:\s*none/);
-    expect(still).toMatch(/width:\s*100%/);
-    expect(still).toMatch(/repeating-linear-gradient/);
+  // With animations off a still 30 % sweep reads as "30 % done"; the unknown amount fills the track
+  // instead. The stripes and the stopped sweep go through var() and shorthands jsdom does not compute:
+  // a browser shows them.
+  it('under the setting, draws an unknown amount across the whole track, not as a short bar', () => {
+    const { container } = renderDom(ProgressBar, { value: 0, indeterminate: true, label: 'Unknown' });
+    const fill = container.querySelector('.fill') as HTMLElement;
+    applyStyles(fill, source);
 
+    expect(getComputedStyle(fill).width).toBe('30%');
+    document.documentElement.classList.add('no-anim');
+    onTestFinished(() => document.documentElement.classList.remove('no-anim'));
+    expect(getComputedStyle(fill).width).toBe('100%');
+  });
+
+  // jsdom applies no @media rule: this one stays a check of the stylesheet's text.
+  it('under reduced motion, has the same still look', () => {
     const reduced = /@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.fill\.indeterminate\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
     expect(reduced).toMatch(/animation:\s*none/);
+    expect(reduced).toMatch(/width:\s*100%/);
     expect(reduced).toMatch(/repeating-linear-gradient/);
   });
 

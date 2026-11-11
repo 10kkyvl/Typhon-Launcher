@@ -1,6 +1,7 @@
 import { createRawSnippet } from 'svelte';
 import { describe, expect, it } from 'vitest';
 import { renderDom } from '../testing/dom';
+import { applyStyles } from '../testing/styles';
 import PageHeader from './PageHeader.svelte';
 import source from './PageHeader.svelte?raw';
 
@@ -14,28 +15,20 @@ describe('PageHeader in a DOM', () => {
     expect(heading.getAttribute('tabindex')).toBe('-1');
   });
 
-  it('keeps the title in the same block with and without a subtitle or actions', () => {
-    const bare = renderDom(PageHeader, { title: 'Downloads' });
-    const full = renderDom(PageHeader, { title: 'Sources', subtitle: 'Where releases come from', actions });
+  // The row is bottom-aligned so the buttons sit on the subtitle's line; a header whose buttons are
+  // taller than its title (actions, no subtitle: Downloads) would push the title down with them. The
+  // text block opts out and starts at the top of the row. Where the title then lands, in pixels, and
+  // how the row wraps on a narrow window, only a browser shows.
+  it('starts the title at the top of the row whatever stands beside it', () => {
+    for (const props of [{ title: 'Downloads', actions }, { title: 'Sources', subtitle: 'Where releases come from', actions }, { title: 'Library' }]) {
+      const { container } = renderDom(PageHeader, props);
+      const header = container.querySelector('header') as HTMLElement;
+      applyStyles(header, source);
+      const text = header.querySelector('.text') as HTMLElement;
 
-    for (const view of [bare, full]) {
-      const heading = view.container.querySelector('h1');
-      expect(heading?.parentElement?.className).toContain('heading');
-      expect(heading?.parentElement?.parentElement?.className).toContain('text');
+      expect(text.firstElementChild?.querySelector('h1')?.textContent, props.title).toBe(props.title);
+      expect(getComputedStyle(header).alignItems, props.title).toBe('flex-end');
+      expect(getComputedStyle(text).alignSelf, props.title).toBe('flex-start');
     }
-    expect(full.container.querySelector('.actions button')?.textContent).toBe('Pause all');
-    expect(bare.container.querySelector('.actions')).toBeNull();
-  });
-});
-
-// jsdom lays nothing out: where the title sits is held on the stylesheet. The row is bottom-aligned
-// for the action buttons; the text block must opt out, or a header whose buttons are taller than its
-// title (actions, no subtitle) pushes the title down.
-describe('PageHeader title height', () => {
-  const css = source.slice(source.indexOf('<style>'));
-  const rule = (selector: string) => new RegExp(`\\${selector}\\s*\\{([^}]*)\\}`).exec(css)?.[1] ?? '';
-
-  it('pins the text block to the top of the header row', () => {
-    expect(rule('.text')).toMatch(/align-self:\s*flex-start/);
   });
 });
