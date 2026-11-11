@@ -355,7 +355,6 @@ export const games: Record<GamesKey, Message> = {
   'games.installedNothingFoundDescription': 'Try changing your search query.',
   'games.installedStopButton': 'Stop',
   'games.installedSetExeButton': 'Set file',
-  'games.installedMenuLabel': 'Menu',
   'games.installedMenuFor': 'Actions for {title}',
   'games.installedAddGameModalTitle': 'Add an installed game',
   'games.installedBrowseButton': 'Browse',

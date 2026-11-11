@@ -29,7 +29,6 @@ export const transfers = {
   'transfers.downloadsMoveUp': 'Переместить выше',
   'transfers.downloadsMoveDown': 'Переместить ниже',
   'transfers.downloadsStartNow': 'Начать сейчас',
-  'transfers.downloadsQueueActionsLabel': 'Действия с очередью',
   'transfers.downloadsQueueActionsFor': 'Действия с загрузкой «{name}»',
   'transfers.downloadsCancelLabel': 'Отменить',
   'transfers.downloadsCompletedHeading': 'Завершённые',
@@ -87,7 +86,6 @@ export const transfers = {
   'transfers.sourcesColEntries': 'Записей',
   'transfers.sourcesColMatched': 'Сопоставлено',
   'transfers.sourcesMatchTooltip': 'Сопоставлено {matched} · на проверку {review} · без совпадения {unmatched}',
-  'transfers.sourcesMenuLabel': 'Меню источника',
   'transfers.sourcesMenuFor': 'Действия с источником «{name}»',
 
   'transfers.lanTitle': 'Локальная сеть',

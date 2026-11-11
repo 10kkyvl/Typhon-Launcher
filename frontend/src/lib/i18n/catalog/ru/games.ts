@@ -353,7 +353,6 @@ export const games = {
   'games.installedNothingFoundDescription': 'Попробуйте изменить поисковый запрос.',
   'games.installedStopButton': 'Стоп',
   'games.installedSetExeButton': 'Указать файл',
-  'games.installedMenuLabel': 'Меню',
   'games.installedMenuFor': 'Действия с игрой «{title}»',
   'games.installedAddGameModalTitle': 'Добавить установленную игру',
   'games.installedBrowseButton': 'Обзор',
