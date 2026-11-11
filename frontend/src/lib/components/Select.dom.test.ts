@@ -75,6 +75,7 @@ describe('Select: the field', () => {
 
     const opened = screen.getByRole('listbox', { name: 'Language' });
     expect(list()).toBe(opened);
+    expect(opened.dataset.part).toBe('listbox');
     expect(app.contains(opened)).toBe(false);
     expect(field().getAttribute('aria-expanded')).toBe('true');
     expect(field().getAttribute('aria-controls')).toBe(opened.id);

@@ -38,7 +38,8 @@
     "game-side",
     "game-section",
     "dialog",
-    "menu"
+    "menu",
+    "listbox"
   ],
   "partsWithId": ["sidebar-item", "topbar-action", "game-section"]
 }

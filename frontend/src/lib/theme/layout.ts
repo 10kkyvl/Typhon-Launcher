@@ -74,6 +74,7 @@ export const LAYOUT_PARTS = [
   'game-section',
   'dialog',
   'menu',
+  'listbox',
 ] as const;
 export const PARTS_WITH_ID = ['sidebar-item', 'topbar-action', 'game-section'] as const;
 

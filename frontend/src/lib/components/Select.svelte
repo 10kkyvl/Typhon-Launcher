@@ -226,6 +226,7 @@
   <div
     class="listbox"
     role="listbox"
+    data-part="listbox"
     id={listId}
     aria-label={label}
     aria-labelledby={label ? undefined : (labelledby ?? fieldId)}
