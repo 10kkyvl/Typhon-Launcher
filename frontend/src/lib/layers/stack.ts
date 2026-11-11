@@ -22,6 +22,8 @@ export interface LayerSpec<E, F> {
   returnFocus?: () => F | null | undefined;
   /** The layer this one belongs to (non-modal layers only). */
   owner?: E | null;
+  /** The element it was opened from (its trigger): a press on it is the trigger's, not an outside press. */
+  anchor?: F | null;
   /** A press outside this layer and the layers it owns closes it (non-modal layers only). */
   outsidePress?: boolean;
 }
@@ -47,6 +49,8 @@ export interface Dismissal<E, F> {
 
 export interface StackEnv<E, F> {
   contains(element: E, target: F): boolean;
+  /** `target` is `anchor` or inside it. */
+  holds(anchor: F, target: F): boolean;
   alive(target: F): boolean;
 }
 
@@ -160,8 +164,21 @@ export class LayerStack<E, F> {
    */
   pressOutside(target: F): Dismissal<E, F> | null {
     const top = this.#entries.at(-1);
-    if (!top || top.modal || !top.outsidePress || this.within(top.element, target)) return null;
+    if (!top || top.modal || !top.outsidePress || this.#pressedIn(top, target)) return null;
     return this.dismissTop();
+  }
+
+  // A press belongs to a layer when it lands in it, on its trigger, or in a layer it owns (or on that one's trigger).
+  #pressedIn(entry: Entry<E, F>, target: F): boolean {
+    const owners = new Set([entry.element]);
+    for (const candidate of this.#entries) {
+      const mine = candidate === entry || (candidate.owner !== undefined && candidate.owner !== null && owners.has(candidate.owner));
+      if (!mine) continue;
+      owners.add(candidate.element);
+      if (this.env.contains(candidate.element, target)) return true;
+      if (candidate.anchor && this.env.holds(candidate.anchor, target)) return true;
+    }
+    return false;
   }
 
   #topModal(): Entry<E, F> | undefined {

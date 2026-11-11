@@ -262,4 +262,15 @@ describe('presses around a non-modal layer', () => {
 
     expect(screen.queryByRole('listbox', { name: 'Language' })).toBeNull();
   });
+
+  it.each([
+    ['in a dialog', true],
+    ['on the bare page', false],
+  ])('a press on its own trigger %s leaves the decision to the trigger: it closes and stays closed', async (_where, inDialog) => {
+    const { keys, trigger } = await pageSelect(inDialog);
+
+    await keys.click(trigger);
+
+    expect(screen.queryByRole('listbox', { name: 'Language' })).toBeNull();
+  });
 });

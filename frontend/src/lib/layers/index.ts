@@ -27,6 +27,7 @@ const KEEP = 'data-layer-keep';
 // Focus targets and press targets are any Element: a press often lands on an icon's <svg> or <path>.
 const stack = new LayerStack<HTMLElement, Element>({
   contains: (element, target) => element.contains(target),
+  holds: (anchor, target) => anchor.contains(target),
   alive: (target) => target.isConnected,
 });
 const inerted = new Set<HTMLElement>();
@@ -217,6 +218,7 @@ export function openLayer(element: HTMLElement, options: LayerOptions): () => vo
     opener: active instanceof HTMLElement && active !== document.body ? active : null,
     returnFocus: options.returnFocus,
     owner: owner ? stack.holding(owner) : null,
+    anchor: owner ?? null,
     outsidePress: !modal && options.outsidePress !== false,
   });
   if (!modal && options.outsidePress) outsidePress.set(element, options.outsidePress);

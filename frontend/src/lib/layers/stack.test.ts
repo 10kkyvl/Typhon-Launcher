@@ -11,6 +11,7 @@ function world() {
   const gone = new Set<string>();
   const stack = new LayerStack<Box, string>({
     contains: (element, target) => element.inside.has(target),
+    holds: (anchor, target) => anchor === target,
     alive: (target) => !gone.has(target),
   });
   const box = (name: string, ...inside: string[]): Box => ({ name, inside: new Set(inside) });
@@ -238,6 +239,13 @@ describe('LayerStack outside press', () => {
     expect(press?.closed).toEqual({ focus: 'trigger', enter: null });
     expect(dialogDismiss).not.toHaveBeenCalled();
     expect(stack.pressOutside('dialog body')).toBeNull();
+  });
+
+  it('a press on the trigger it was opened from is not an outside press, on the page or in a dialog', () => {
+    const { stack, box, open } = world();
+    open(box('menu', 'item'), { modal: false, outsidePress: true, anchor: 'trigger' });
+    expect(stack.pressOutside('trigger')).toBeNull();
+    expect(stack.pressOutside('elsewhere')?.consumed).toBe(true);
   });
 
   it('a menu that stays open on outside presses is left alone', () => {
