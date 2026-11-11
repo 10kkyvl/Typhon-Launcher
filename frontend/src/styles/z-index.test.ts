@@ -12,9 +12,10 @@ import { describe, expect, it } from 'vitest';
  *   HTML element (not a component such as `<Page>`), matched by a selector made of
  *   its first static class with no combinator (`.avatar.framed` counts for `<span class="avatar …">`).
  *
- * Nothing else: no other integer, no file exceptions. The one z-index outside stylesheets is the theme
- * guard's host (ThemeGuard.ts), pinned inline with `!important` above every layer on purpose: a theme's
- * CSS can redefine any custom property, so that host cannot take its place from this scale.
+ * Nothing else: no other integer, no file exceptions. Script does not write z-index (`style.zIndex`,
+ * `setProperty('z-index', …)`, `cssText`, a quoted `z-index:`) with one named exception: the theme
+ * guard's host (ThemeGuard.ts), pinned inline with `!important` above every layer on purpose, because a
+ * theme's CSS can redefine any custom property and so could hide it if it took its place from this scale.
  */
 
 type Fs = {
@@ -153,6 +154,19 @@ describe('z-index scale', () => {
     expect(violations()).toEqual([]);
   });
 
+  // Script can stack an element too. The only z-index written from script is the theme guard host's:
+  // a theme's CSS can redefine any custom property, so that host pins a literal inline with !important
+  // above every layer; the exception is named here and must stay true of that file.
+  it('writes no z-index from script, except the theme guard host', () => {
+    const scripts = fs
+      .readdirSync(SRC, { recursive: true })
+      .map((path) => path.replaceAll('\\', '/'))
+      .filter((path) => /\.(ts|js|svelte)$/.test(path) && !/\.test\.ts$/.test(path));
+    const writes = scripts.filter((path) => SCRIPT_Z.test(read(path)));
+    expect(writes).toEqual([THEME_GUARD]);
+    expect(read(THEME_GUARD)).toMatch(/setProperty\('z-index', '2147483647', 'important'\)/);
+  });
+
   // An isolated root confines whatever it renders: a popover inside it (the beta badge's menu in the
   // sidebar) is painted under later page content where it sticks out. Limit: only components imported
   // by path are followed; a popover passed in as a snippet by the parent is not seen.
@@ -160,6 +174,9 @@ describe('z-index scale', () => {
     expect(isolatedPopoverHosts()).toEqual([]);
   });
 });
+
+const THEME_GUARD = 'lib/components/ThemeGuard.ts';
+const SCRIPT_Z = /\.zIndex\b|setProperty\(\s*['"`]z-index|cssText[^\n]*z-index|['"`]z-index\s*:/;
 
 const POPOVERS = ['DropdownMenu', 'Select', 'Tooltip', 'ContextMenu'];
 
