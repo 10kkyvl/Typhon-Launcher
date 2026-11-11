@@ -112,7 +112,9 @@
 
   let compat = $state<WrapperInfo | null>(null);
   let compatLoading = $state(false);
-  let compatBusy = $state(false);
+  // Games whose compatibility mode is being switched. The component outlives the dialog (App mounts it
+  // once), so a switch that goes on after the dialog closed is still known when it opens again.
+  let compatBusyFor = $state<string[]>([]);
   let compatError = $state('');
   let compatOn = $state(false);
   let compatForce = $state(false);
@@ -122,6 +124,7 @@
   let compatKeepOffer = $state(false);
 
   const running = $derived(Boolean(game && $runningGames.has(game.id)));
+  const compatBusy = $derived(game ? compatBusyFor.includes(game.id) : false);
   const compatVisible = $derived(Boolean(compat && (compat.supported || compat.active || compat.problem)));
   const compatSuggested = $derived(compat?.suggested ?? '');
   const compatLocked = $derived(!compat?.active && compatSuggested === '' && !compatForce);
@@ -251,22 +254,27 @@
 
   async function changeCompat(on: boolean, keepChanged = false) {
     if (!game || compatBusy) return;
-    compatBusy = true;
+    const id = game.id;
+    compatBusyFor = [...compatBusyFor, id];
     compatError = '';
     compatKeepOffer = false;
     compatProgress = null;
+    // The dialog may have closed, or opened for another game, while this ran: report only where it is shown.
+    const shown = () => target?.gameId === id;
     try {
-      if (on) await enableWrapper(game.id, compatWrapper, compatPreset);
-      else if (keepChanged) await disableWrapperKeepChanged(game.id);
-      else await disableWrapper(game.id);
+      if (on) await enableWrapper(id, compatWrapper, compatPreset);
+      else if (keepChanged) await disableWrapperKeepChanged(id);
+      else await disableWrapper(id);
     } catch (err) {
-      compatKeepOffer = !on && errorCode(err) === 'wrappers.tampered';
-      compatError = errorText(err, msg(on ? 'modals.compatEnableFailed' : 'modals.compatDisableFailed'));
+      if (shown()) {
+        compatKeepOffer = !on && errorCode(err) === 'wrappers.tampered';
+        compatError = errorText(err, msg(on ? 'modals.compatEnableFailed' : 'modals.compatDisableFailed'));
+      }
     } finally {
-      compatBusy = false;
-      compatProgress = null;
+      compatBusyFor = compatBusyFor.filter((busy) => busy !== id);
+      if (shown()) compatProgress = null;
     }
-    await loadCompat(game.id);
+    if (shown()) await loadCompat(id);
   }
 
   async function pickCandidate(path: string) {
@@ -390,8 +398,8 @@
   }
 </script>
 
+<!-- dismissible while compatBusy: the wrapper download has no cancel and may take minutes; it goes on with the dialog closed, and reopening shows it still running. -->
 <Modal
-  dismissible={!compatBusy}
   open={Boolean(target && game)}
   title={game ? msg('modals.propertiesTitle', { title: game.title }) : msg('games.actionProperties')}
   width="56rem"
