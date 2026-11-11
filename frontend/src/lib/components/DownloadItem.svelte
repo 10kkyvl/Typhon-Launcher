@@ -101,7 +101,7 @@
     </div>
     <div class="progress-row">
       <div class="bar">
-        <ProgressBar value={pct} tone={barTone} height={6} indeterminate={download.status === 'metadata'} label={download.name} />
+        <ProgressBar value={pct} tone={barTone} height={6} indeterminate={download.status === 'metadata'} decorative />
       </div>
       <span class="pct">{download.status === 'metadata' ? '' : `${Math.floor(pct)}%`}</span>
     </div>

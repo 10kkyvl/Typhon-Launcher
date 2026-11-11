@@ -23,26 +23,55 @@ function literals(css: string): string[] {
   return found;
 }
 
-/** Opening tags of a component, read to their closing `>`: a `>` inside `{…}` or a quoted value is part of an attribute. */
-function tags(source: string, name: string): string[] {
-  const found: string[] = [];
-  for (const match of source.matchAll(new RegExp(`<${name}\\b`, 'g'))) {
-    let depth = 0;
-    let quote = '';
-    for (let i = match.index + match[0].length; i < source.length; i++) {
-      const char = source[i];
-      if (quote) {
-        if (char === quote) quote = '';
-      } else if (char === '{') depth++;
-      else if (char === '}') depth--;
-      else if (char === '"' || (depth > 0 && (char === "'" || char === '`'))) quote = char;
-      else if (char === '>' && depth === 0) {
-        found.push(source.slice(match.index, i + 1));
-        break;
-      }
-    }
+/** Index of the `>` that closes a tag whose name ends at `from`: a `>` inside `{…}` or a quoted value is part of an attribute. */
+function tagEnd(source: string, from: number): number {
+  let depth = 0;
+  let quote = '';
+  for (let i = from; i < source.length; i++) {
+    const char = source[i];
+    if (quote) {
+      if (char === quote) quote = '';
+    } else if (char === '{') depth++;
+    else if (char === '}') depth--;
+    else if (char === '"' || char === "'" || (depth > 0 && char === '`')) quote = char;
+    else if (char === '>' && depth === 0) return i;
   }
-  return found;
+  return -1;
+}
+
+/** Opening tags of a component, read to their closing `>`. */
+function tags(source: string, name: string): string[] {
+  return [...source.matchAll(new RegExp(`<${name}\\b`, 'g'))]
+    .map((match) => ({ start: match.index, end: tagEnd(source, match.index + match[0].length) }))
+    .filter(({ end }) => end >= 0)
+    .map(({ start, end }) => source.slice(start, end + 1));
+}
+
+const VOID = new Set(['area', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr']);
+const CONTROL = /^<(?:Button|IconButton|button|a)\b|\brole="(?:button|link|menuitem|tab|option|switch|checkbox)"/;
+
+/** Every progress bar tag of a component's markup, and whether an element that is a control encloses it. */
+function barsInMarkup(source: string): { tag: string; inControl: boolean }[] {
+  const markup = source.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<!--[\s\S]*?-->/g, (block) => ' '.repeat(block.length));
+  const open: { name: string; control: boolean }[] = [];
+  const bars: { tag: string; inControl: boolean }[] = [];
+  const pattern = /<(\/?)([A-Za-z][\w.:-]*)/g;
+  for (let match = pattern.exec(markup); match; match = pattern.exec(markup)) {
+    const end = tagEnd(markup, match.index + match[0].length);
+    if (end < 0) break;
+    pattern.lastIndex = end + 1;
+    const [, closing, name] = match;
+    const tag = markup.slice(match.index, end + 1);
+    if (closing) {
+      const at = open.map((element) => element.name).lastIndexOf(name);
+      if (at >= 0) open.length = at;
+      continue;
+    }
+    if (name === 'ProgressBar') bars.push({ tag, inControl: open.some((element) => element.control) });
+    if (tag.endsWith('/>') || VOID.has(name)) continue;
+    open.push({ name, control: CONTROL.test(tag) });
+  }
+  return bars;
 }
 
 describe('status components take their look from tokens', () => {
@@ -96,12 +125,32 @@ describe('every progress bar', () => {
     expect(/\b(label|labelledby)=/.test('<ProgressBar value={1} />')).toBe(false);
   });
 
+  it('knows when a control encloses it', () => {
+    const markup =
+      '<script>const a = 1;</script><Button onclick={() => go(a > 0)}><span><ProgressBar value={1} decorative /></span></Button>' +
+      '<div><input /><ProgressBar value={2} label="x" /></div><div role="button"><ProgressBar value={3} /></div>';
+    expect(barsInMarkup(markup).map(({ inControl }) => inControl)).toEqual([true, false, true]);
+  });
+
+  // A control's content is its name: a bar in it adds its value to that name, and the control already says the progress.
+  it('is decorative exactly when it sits inside a control', () => {
+    const offenders = Object.entries(frontendSources)
+      .filter(([file]) => file.endsWith('.svelte'))
+      .flatMap(([file, source]) => barsInMarkup(source).map((bar) => ({ file, ...bar })))
+      .filter(({ tag, inControl }) => inControl !== /\bdecorative\b/.test(tag))
+      .map(({ file, tag, inControl }) => `${file}: ${inControl ? 'in a control' : 'decorative outside a control'}: ${tag.slice(0, 50)}`);
+    expect(offenders).toEqual([]);
+  });
+
   it('says its state as a tone, never a colour', () => {
     expect(uses.filter(({ tag }) => /\bcolor=/.test(tag)).map(({ file }) => file)).toEqual([]);
   });
 
-  it('has a name', () => {
-    expect(uses.filter(({ tag }) => !/\b(label|labelledby)=/.test(tag)).map(({ file, tag }) => `${file}: ${tag.slice(0, 60)}`)).toEqual([]);
+  it('has a name, unless it is decorative and has none to give', () => {
+    const offenders = uses
+      .filter(({ tag }) => (/\bdecorative\b/.test(tag) ? /\b(label|labelledby|valueText)=/.test(tag) : !/\b(label|labelledby)=/.test(tag)))
+      .map(({ file, tag }) => `${file}: ${tag.slice(0, 60)}`);
+    expect(offenders).toEqual([]);
   });
 });
 

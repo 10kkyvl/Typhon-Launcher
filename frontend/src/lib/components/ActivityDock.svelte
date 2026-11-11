@@ -172,7 +172,7 @@
                   <span class="row-name">{item.name}</span>
                   {#if !item.indeterminate}<span class="row-pct">{progressPercent(item.progress)}%</span>{/if}
                 </span>
-                <ProgressBar indeterminate={item.indeterminate} value={progressPercent(item.progress)} tone={item.tone} height={3} label={item.name} />
+                <ProgressBar indeterminate={item.indeterminate} value={progressPercent(item.progress)} tone={item.tone} height={3} decorative />
                 <span class="row-foot">
                   <span class="row-status">{item.status}</span>
                   {#if item.detail}

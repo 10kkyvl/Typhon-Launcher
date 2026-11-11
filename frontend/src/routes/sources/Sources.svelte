@@ -184,7 +184,7 @@
         {#if $refreshingAll && progressList.length > 0}
           <span class="all-progress">
             <span>{msg('transfers.sourcesRefreshAllProgress', { percent: allPercent })}</span>
-            <ProgressBar value={allPercent} height={3} label={msg('transfers.sourcesRefreshAllProgress', { percent: allPercent })} />
+            <ProgressBar value={allPercent} height={3} decorative />
           </span>
         {:else}
           {$refreshingAll ? msg('transfers.sourcesUpdatingEllipsis') : msg('transfers.sourcesRefreshAll')}

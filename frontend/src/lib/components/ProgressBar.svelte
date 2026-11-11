@@ -20,6 +20,7 @@
     labelledby,
     valueText,
     stretch = false,
+    decorative = false,
   }: {
     value: number;
     indeterminate?: boolean;
@@ -32,6 +33,11 @@
     valueText?: string;
     /** Takes the free room of the row it sits in. */
     stretch?: boolean;
+    /**
+     * Draws the progress of the control it sits in, whose name already says it: no role, hidden from
+     * assistive tech. A control's content is its name and hides any progress bar inside it.
+     */
+    decorative?: boolean;
   } = $props();
 
   const now = $derived(max > 0 && Number.isFinite(value) ? Math.min(max, Math.max(0, value)) : 0);
@@ -40,25 +46,35 @@
   const exposed = $derived(Number.isInteger(now) ? now : (Math.floor(pct) * max) / 100);
 </script>
 
-<div
-  class="track"
-  class:stretch
-  data-tone={tone}
-  role="progressbar"
-  aria-label={label}
-  aria-labelledby={label ? undefined : labelledby}
-  aria-valuemin={0}
-  aria-valuemax={max}
-  aria-valuenow={indeterminate ? undefined : exposed}
-  aria-valuetext={indeterminate ? undefined : valueText}
-  aria-busy={indeterminate ? 'true' : undefined}
-  style:height="{height / 10}rem"
->
+{#snippet fill()}
   <!-- A new node when the mode changes: it starts at its value instead of sliding there from the sweep. -->
   {#key indeterminate}
     <div class="fill" class:indeterminate style:--pct={indeterminate ? undefined : `${pct}%`}></div>
   {/key}
-</div>
+{/snippet}
+
+{#if decorative}
+  <div class="track" class:stretch data-tone={tone} aria-hidden="true" style:height="{height / 10}rem">
+    {@render fill()}
+  </div>
+{:else}
+  <div
+    class="track"
+    class:stretch
+    data-tone={tone}
+    role="progressbar"
+    aria-label={label}
+    aria-labelledby={label ? undefined : labelledby}
+    aria-valuemin={0}
+    aria-valuemax={max}
+    aria-valuenow={indeterminate ? undefined : exposed}
+    aria-valuetext={indeterminate ? undefined : valueText}
+    aria-busy={indeterminate ? 'true' : undefined}
+    style:height="{height / 10}rem"
+  >
+    {@render fill()}
+  </div>
+{/if}
 
 <style>
   .track {

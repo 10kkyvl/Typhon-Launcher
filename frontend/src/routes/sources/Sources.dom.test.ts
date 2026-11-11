@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import type { Source } from '../../lib/services/sources';
 import { sourceErrorText } from '../../lib/sources/sourceErrors';
-import { sources } from '../../lib/stores/sources';
+import { sourceProgress } from '../../lib/stores/sourceProgress';
+import { refreshingAll, sources } from '../../lib/stores/sources';
 import { user } from '../../lib/testing/dom';
 import { describedControls, hintOnFocus } from '../../lib/testing/hints';
 import Sources from './Sources.svelte';
@@ -101,5 +102,23 @@ describe('Sources: the status filter', () => {
     expect(all.getAttribute('aria-checked')).toBe('false');
     expect(screen.queryByText('Main feed')).toBeNull();
     expect(screen.getByText('Old feed')).toBeTruthy();
+  });
+});
+
+describe('Sources: refreshing all', () => {
+  afterEach(() => {
+    refreshingAll.set(false);
+    sourceProgress.set({});
+  });
+
+  // The button's text already says how far the refresh is; the bar inside only draws it.
+  it('the refresh-all button is named by its text alone, the bar in it is hidden', () => {
+    sources.set([source({ status: 'updating' })]);
+    sourceProgress.set({ s1: { stage: 'match', done: 5, total: 10, startedAt: 0, sawMatch: true } });
+    refreshingAll.set(true);
+    render(Sources, { target: app, props: {} });
+
+    expect(screen.getByRole('button', { name: msg('transfers.sourcesRefreshAllProgress', { percent: 55 }) })).toBeTruthy();
+    expect(screen.getAllByRole('progressbar').map((bar) => bar.getAttribute('aria-label'))).toEqual(['Main feed']);
   });
 });

@@ -68,6 +68,16 @@ describe('ProgressBar in a DOM', () => {
     expect(paused.getByRole('progressbar', { name: 'Paused' }).dataset.tone).toBe('muted');
   });
 
+  it('inside a control that already says the progress, it is drawn only: no role, hidden', () => {
+    const { container, queryAllByRole } = renderDom(ProgressBar, { value: 40, decorative: true });
+    const track = container.querySelector('.track');
+
+    expect(queryAllByRole('progressbar')).toEqual([]);
+    expect(track?.getAttribute('aria-hidden')).toBe('true');
+    expect(track?.hasAttribute('aria-valuenow')).toBe(false);
+    expect(track?.querySelector<HTMLElement>('.fill')?.style.getPropertyValue('--pct')).toBe('40%');
+  });
+
   it('stretches along its row when asked, and only then', () => {
     const fixed = renderDom(ProgressBar, { value: 10, label: 'Fixed' });
     expect(fixed.getByRole('progressbar', { name: 'Fixed' }).classList.contains('stretch')).toBe(false);

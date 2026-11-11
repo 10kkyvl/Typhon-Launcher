@@ -5,6 +5,7 @@ vi.mock('../services/backend', () => ({ inWails: false }));
 
 import { locale } from '../i18n';
 import type { Download } from '../services/downloads';
+import { statusLabels } from '../stores/downloads';
 import { renderDom } from '../testing/dom';
 import DownloadItem from './DownloadItem.svelte';
 
@@ -41,26 +42,42 @@ beforeEach(() => {
   locale.set('en');
 });
 
+// The row is a button, and a button's content is its name: the row's text says the download and its
+// percent, and the bar in it only draws them (a button exposes no progress bar inside it).
 describe('a download row', () => {
-  it('has a progress bar named after the download that reads its percent', () => {
-    const { getByRole } = renderDom(DownloadItem, { download: download() });
-    const bar = getByRole('progressbar', { name: 'Game One' });
+  function rowName(view: ReturnType<typeof renderDom>, row: Element | null): string {
+    let name = '';
+    view.getByRole('button', {
+      name: (computed, element) => {
+        if (element === row) name = computed;
+        return element === row;
+      },
+    });
+    return name;
+  }
 
-    expect(bar.getAttribute('aria-valuenow')).toBe('42');
-    expect(bar.getAttribute('aria-valuemax')).toBe('100');
-    expect(bar.dataset.tone).toBe('accent');
+  it('is named after the download and says its percent once, the bar hidden', () => {
+    const view = renderDom(DownloadItem, { download: download() });
+    const row = view.container.querySelector('.item');
+
+    expect(rowName(view, row)).toContain('Game One 42% ');
+    expect(rowName(view, row)).not.toMatch(/42% 42\b/);
+    expect(view.queryAllByRole('progressbar')).toEqual([]);
+    expect(row?.querySelector<HTMLElement>('.track')?.getAttribute('aria-hidden')).toBe('true');
+    expect(row?.querySelector<HTMLElement>('.track')?.dataset.tone).toBe('accent');
   });
 
   it('shows a paused download in the muted tone', () => {
-    const { getByRole } = renderDom(DownloadItem, { download: download({ status: 'paused' }) });
-    expect(getByRole('progressbar', { name: 'Game One' }).dataset.tone).toBe('muted');
+    const { container } = renderDom(DownloadItem, { download: download({ status: 'paused' }) });
+    expect(container.querySelector<HTMLElement>('.track')?.dataset.tone).toBe('muted');
   });
 
-  it('claims no value while the torrent is still fetching its metadata', () => {
-    const { getByRole } = renderDom(DownloadItem, { download: download({ status: 'metadata', progress: 0 }) });
-    const bar = getByRole('progressbar', { name: 'Game One' });
+  it('says the metadata stage in words and draws the unknown amount while the torrent fetches it', () => {
+    const view = renderDom(DownloadItem, { download: download({ status: 'metadata', progress: 0 }) });
+    const row = view.container.querySelector('.item');
 
-    expect(bar.hasAttribute('aria-valuenow')).toBe(false);
-    expect(bar.getAttribute('aria-busy')).toBe('true');
+    expect(rowName(view, row)).toContain(statusLabels('metadata'));
+    expect(rowName(view, row)).not.toContain('%');
+    expect(row?.querySelector('.fill')?.classList.contains('indeterminate')).toBe(true);
   });
 });
