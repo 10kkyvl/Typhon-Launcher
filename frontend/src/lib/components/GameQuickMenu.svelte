@@ -75,15 +75,22 @@
   }
 
   // Where focus goes when the menu closes and what had focus before it is gone: the control it was
-  // opened next to, or for a pointer open (no control of its own) the game's first control.
+  // opened next to, or for a pointer open (no control of its own) the game's first control; when the
+  // game is gone, the same fallbacks as after a dialog, picked as the menu opens, while the game is there.
   function homeOf(menu: GameMenuState): () => HTMLElement | null {
     const { at, source } = menu;
+    const fallbacks = homesOf(source);
     return () => {
       const anchor = 'anchor' in at ? (typeof at.anchor === 'function' ? at.anchor() : at.anchor) : null;
       const home = anchor ?? source;
-      return home ? initialFocus(home) : null;
+      return [home ? initialFocus(home) : null, ...fallbacks].find((el) => el?.isConnected && canTakeFocus(el)) ?? null;
     };
   }
+
+  // A game that leaves the library (a background reload) takes its open menu with it.
+  $effect(() => {
+    if ($gameMenu && !game) closeGameMenu();
+  });
 
   $effect(() => {
     const menu = $gameMenu;

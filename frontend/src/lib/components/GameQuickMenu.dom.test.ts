@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { inspectRemoval, removeGame, type RemovalInfo } from '../services/install';
 import { addToSteam, locateSaves, type LibraryGame } from '../services/library';
-import { closeGameMenu } from '../stores/gameMenu';
+import { get } from 'svelte/store';
+import { tick } from 'svelte';
+import { closeGameMenu, gameMenu } from '../stores/gameMenu';
 import { libraryGames } from '../stores/library';
 import { toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
@@ -44,6 +46,42 @@ afterEach(() => {
   libraryGames.set([]);
   toasts.set([]);
   app.remove();
+});
+
+describe('the game leaving the library while its menu is open', () => {
+  it.each(['keyboard', 'pointer'])('closes the menu (opened by %s) and focus goes to the next game', async (how) => {
+    libraryGames.set([hades, celeste]);
+    render(GameMenuHarness, { target: app });
+    const keys = user();
+    const link = screen.getByRole('link', { name: 'Hades' });
+    if (how === 'keyboard') {
+      link.focus();
+      await keys.keyboard('{Shift>}{F10}{/Shift}');
+    } else {
+      await fireEvent.contextMenu(link, RIGHT_CLICK);
+    }
+    expect(screen.getByRole('menu')).toBeTruthy();
+
+    libraryGames.update((list) => list.filter((game) => game.id !== 'g1'));
+    await tick();
+
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(get(gameMenu)).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('link', { name: 'Celeste' }));
+  });
+
+  it('closes the menu of the only game and focus goes to the page heading', async () => {
+    render(GameMenuHarness, { target: app });
+    const keys = user();
+    screen.getByRole('link', { name: 'Hades' }).focus();
+    await keys.keyboard('{Shift>}{F10}{/Shift}');
+
+    libraryGames.set([]);
+    await tick();
+
+    expect(get(gameMenu)).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Library' }));
+  });
 });
 
 describe('a confirmation opened from the game context menu', () => {
