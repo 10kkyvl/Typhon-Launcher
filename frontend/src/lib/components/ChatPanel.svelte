@@ -52,6 +52,7 @@
   import { appendDrafts, attachmentsOf, checkChatImage, clipboardImages, draftFromFile, draftFromPicked, messagePreview, type ChatAttachmentDraft } from '../social/chatImage';
   import { pickChatImages, uploadChatImage, REACTION_KEYS, type Attachment, type ChatPeer, type Message, type ReactionKey } from '../services/messaging';
   import { reactionIcons } from './reactions/icons';
+  import { reactionLabel } from '../social/feed';
   import { msg, t } from '../i18n';
 
   let draft = $state('');
@@ -425,7 +426,14 @@
                       <div class="reactions">
                         {#each message.reactions as reaction (reaction.emoji)}
                           {@const ReactionIcon = Object.hasOwn(reactionIcons, reaction.emoji) ? reactionIcons[reaction.emoji as ReactionKey] : undefined}
-                          <button class:reacted={reaction.userIds.includes($currentUser?.id ?? '')} type="button" onclick={() => chooseReaction(message, reaction.emoji as ReactionKey)}>
+                          {@const own = reaction.userIds.includes($currentUser?.id ?? '')}
+                          <button
+                            class:reacted={own}
+                            type="button"
+                            aria-pressed={own}
+                            aria-label={msg('social.reactionWithCount', { reaction: reactionLabel(reaction.emoji), count: reaction.userIds.length })}
+                            onclick={() => chooseReaction(message, reaction.emoji as ReactionKey)}
+                          >
                             {#if ReactionIcon}<ReactionIcon />{:else}{reaction.emoji}{/if} {reaction.userIds.length}
                           </button>
                         {/each}

@@ -52,7 +52,7 @@
       data-reaction={id}
       aria-disabled={disabled || undefined}
       aria-pressed={mine}
-      aria-label={reactionLabel(id)}
+      aria-label={msg('social.reactionWithCount', { reaction: reactionLabel(id), count })}
       onclick={() => toggle(id)}
     >
       <span class="glyph" class:pop={mine && popped === id}><Icon /></span>

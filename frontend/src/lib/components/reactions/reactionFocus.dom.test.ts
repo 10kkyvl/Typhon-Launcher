@@ -90,12 +90,12 @@ describe('feed reactions keep the keyboard user in place', () => {
     expect(react).toHaveBeenCalledExactlyOnceWith('7', 'joy');
     expect(picker()).toBeNull();
     expect(add()).toBeNull();
-    expect(focusedControl()).toBe(chip('Laugh'));
-    expect(chip('Laugh').getAttribute('aria-disabled')).toBe('true');
+    expect(focusedControl()).toBe(chip('Laugh, 1'));
+    expect(chip('Laugh, 1').getAttribute('aria-disabled')).toBe('true');
 
     await settle();
-    expect(focusedControl()).toBe(chip('Laugh'));
-    expect(chip('Laugh').hasAttribute('aria-disabled')).toBe(false);
+    expect(focusedControl()).toBe(chip('Laugh, 1'));
+    expect(chip('Laugh, 1').hasAttribute('aria-disabled')).toBe(false);
   });
 
   it('adding a reaction that leaves the "+" puts focus on its new chip, which holds it while the request runs', async () => {
@@ -107,11 +107,11 @@ describe('feed reactions keep the keyboard user in place', () => {
     await keys.keyboard('{Enter}');
 
     expect(react).toHaveBeenCalledExactlyOnceWith('7', 'heart');
-    expect(focusedControl()).toBe(chip('Heart'));
+    expect(focusedControl()).toBe(chip('Heart, 1'));
     expect(add()?.getAttribute('aria-disabled')).toBe('true');
 
     await settle();
-    expect(focusedControl()).toBe(chip('Heart'));
+    expect(focusedControl()).toBe(chip('Heart, 1'));
   });
 
   it('while the request runs, the bar takes no second reaction and the "+" opens nothing', async () => {
@@ -120,7 +120,7 @@ describe('feed reactions keep the keyboard user in place', () => {
     await keys.click(within(picker() as HTMLElement).getByRole('button', { name: 'Party' }));
     expect(react).toHaveBeenCalledOnce();
 
-    await keys.click(chip('Fire'));
+    await keys.click(chip('Fire, 2'));
     await keys.click(add() as HTMLElement);
 
     expect(unreact).not.toHaveBeenCalled();
@@ -130,12 +130,12 @@ describe('feed reactions keep the keyboard user in place', () => {
 
   it('taking back a reaction only the user gave moves focus from its chip, which goes, to the "+"', async () => {
     const { keys, add, chip } = setup(feedEvent([{ emoji: 'fire', count: 1 }, { emoji: 'heart', count: 3 }], ['fire']));
-    chip('Fire').focus();
+    chip('Fire, 1').focus();
 
     await keys.keyboard('{Enter}');
 
     expect(unreact).toHaveBeenCalledExactlyOnceWith('7', 'fire');
-    expect(screen.queryByRole('button', { name: 'Fire' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Fire/ })).toBeNull();
     expect(focusedControl()).toBe(add());
   });
 });

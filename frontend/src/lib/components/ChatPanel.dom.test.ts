@@ -118,6 +118,18 @@ describe('ChatPanel reaction picker', () => {
     expect(pressed).toEqual(['Heart']);
   });
 
+  it('names each reaction under a message with its count and says which is the user\'s own', async () => {
+    chat.messagesByPeer.set({
+      peer: [message('m-chips', 'c-chips', [{ emoji: 'heart', userIds: ['peer', 'me'] }, { emoji: 'fire', userIds: ['peer'] }])],
+    });
+    setup();
+
+    const heart = screen.getByRole('button', { name: 'Heart, 2' });
+    const fire = screen.getByRole('button', { name: 'Fire, 1' });
+    expect(heart.getAttribute('aria-pressed')).toBe('true');
+    expect(fire.getAttribute('aria-pressed')).toBe('false');
+  });
+
   it('picking the user\'s own reaction takes it back, closes the picker and puts focus back on the control', async () => {
     const { keys, opener, picker } = reacted('m-undo');
     await keys.click(opener());

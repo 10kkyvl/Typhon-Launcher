@@ -109,7 +109,7 @@ describe('feed reaction picker', () => {
   it('a reaction already on the event stays in the bar and toggles from there', async () => {
     const { keys, onreact } = setup();
 
-    await keys.click(screen.getByRole('button', { name: 'Fire' }));
+    await keys.click(screen.getByRole('button', { name: 'Fire, 2' }));
 
     expect(onreact).toHaveBeenCalledExactlyOnceWith('fire');
   });
