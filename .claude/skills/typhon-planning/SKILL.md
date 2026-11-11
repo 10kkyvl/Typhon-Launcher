@@ -31,7 +31,8 @@ scenario (state → action → result, including the failure path); contract (si
 codes, events, state files that may change, and those that must not); package(s) and the files the
 scout pointed at; invariants (I-numbers) with the proof each needs; acceptance criteria as
 observable checks; the test text from `typhon-test-author` when it exists; what is already ruled out
-and why; shared files the implementer must not touch. Do not include the orchestrator's guesses at
+and why; for a frontend port or rebuild, the defects to remove (hunter findings) and the behaviour
+to keep; shared files the implementer must not touch. Do not include the orchestrator's guesses at
 the implementation.
 
 ## Mandatory tail of every plan

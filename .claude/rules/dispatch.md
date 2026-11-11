@@ -10,6 +10,7 @@ work itself. Agents are listed in `CLAUDE.md`; their briefs follow `typhon-plann
 | Behavioural fix or feature in one package group | scout → brief → `typhon-test-author` → `typhon-implementer` (worktree) → `typhon-reviewer` → merge | the full pipeline; drop test-author when the test is obvious from the brief |
 | Batch of independent items (roadmap, audit findings) | scout per item in parallel, then up to 5 implementers on disjoint packages, one reviewer per branch | parallel where packages do not overlap; shared files at integration by the orchestrator |
 | Pure move or split (file, function, component) | implementer with a "pure move" brief, or alone when small | behaviour-free commit before the change that needs it |
+| Rebuild or port of a frontend part | `typhon-hunter` on the old code first, then the pipeline above | the brief carries the defect list the rebuild must close |
 | Frontend change with visible behaviour | pipeline as above, then the orchestrator runs `typhon-live-smoke` with screenshots (desktop and Big Picture) | agents cannot drive the live app; the orchestrator can |
 | Bug report, log excerpt, state files, CI failure, flaky test | `typhon-triage` → then the fix pipeline for the package it names | diagnosis before any edit |
 | "Is this code correct?", audit of a package or flow, pre-release sweep | `typhon-hunter` per scope chunk (one package or flow per message) | scope without a diff |

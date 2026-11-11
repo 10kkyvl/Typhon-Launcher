@@ -75,6 +75,7 @@ go run ./tools/lintbaseline -tags devmock
 
 # frontend (from frontend/)
 npm run check && npm run test && npm run build          # bindings: wails3 task common:generate:bindings
+npx vitest run --project dom                            # only the *.dom.test.ts behaviour tests (jsdom); --project node for the rest
 ```
 
 Live-window verification on macOS (screenshots, clicks, single instance): [typhon-live-check](../../.agents/skills/typhon-live-check/SKILL.md). Never use the user's real `<ConfigDir>` as a test fixture; tests use `t.TempDir()` and `NewServiceAt(...)` constructors.

@@ -42,7 +42,8 @@ or rewritten.
 - Isolation: `t.TempDir()`, stubbed `prepareRuntime`/`releaseRuntime` (otherwise real bottles),
   test-only LAN ports. Never real user data.
 - Frontend: stores and services are tested with vitest by behaviour (event arrived → state changed);
-  an SSR snapshot does not prove clicks, interactions need a live run or a DOM environment.
+  interactions go in a `*.dom.test.ts` (see `.claude/rules/frontend.md`); an SSR snapshot proves
+  markup only.
 
 ## When not to write one
 

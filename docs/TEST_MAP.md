@@ -45,6 +45,7 @@ What is covered where, how (unit vs integration), and what is not. Snapshot: 202
 | misc | `lib/{relocate,history,lan,profile,social,theme,utils,notifications,search,confirm}/**.test.ts` | text builders, filters, theme validation, formatting |
 | style guards | `styles/font-tokens.test.ts` | font families only through `--font-sans`/`--font-mono`, no typeface in the `font` shorthand, ligatures off on monospace text, first family of both tokens in `tokens.css` and `presets.go` is a bundled face |
 | | `styles/theme-contrast.test.ts`, `styles/accent-roles.test.ts`, `lib/bigpicture/palette.test.ts` | every built-in preset passes the readability report, indicators and the focus ring at 3:1; `--accent` only as a fill behind a label (text → `--accent-text`, focus → `--accent-ring`, indicators → `--accent-bright`); Big Picture pins dark neutrals and status colours and a readable accent family for any theme and personal accent |
+| DOM behaviour | `**/*.dom.test.ts` (helper `lib/testing/dom.ts`; Vitest project `dom` in `vite.config.ts`; `lib/testing/domConvention.test.ts` keeps the file name the only switch) | click, typing, Tab order, Escape, focus return, ARIA state in jsdom with Testing Library and user-event |
 
 Not covered by vitest: visual layout, Wails runtime integration, real event delivery — use the [typhon-live-check](../../.agents/skills/typhon-live-check/SKILL.md) skill for those.
 

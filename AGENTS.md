@@ -36,6 +36,8 @@ claims against current code.
 - State, filesystem, cancellation, identity or concurrency: the relevant entries in
   [INVARIANTS](docs/INVARIANTS.md) (I-1…I-17 and the list of recurring agent mistakes).
 - Test selection: [TEST_MAP](docs/TEST_MAP.md). Logs, state locations, commands: [DEBUGGING](docs/DEBUGGING.md).
+- Frontend rules, including the DOM-test convention, the theme API and the base components:
+  [.claude/rules/frontend.md](.claude/rules/frontend.md).
 - Refactor queue: `docs/REFACTOR_ROADMAP.md` (local working file, ignored by git; ask the user when it is missing).
 - Workspace skills in `../.agents/skills/`: `typhon-workflow`, `typhon-live-check`, `typhon-release`,
   `typhon-lint-baseline`, `project-review`. Use the one that matches the task.
