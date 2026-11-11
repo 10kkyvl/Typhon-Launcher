@@ -41,7 +41,8 @@
     "menu",
     "listbox",
     "tooltip",
-    "popover"
+    "popover",
+    "toast"
   ],
   "partsWithId": ["sidebar-item", "topbar-action", "game-section", "popover"]
 }

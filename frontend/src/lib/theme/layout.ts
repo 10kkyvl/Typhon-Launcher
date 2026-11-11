@@ -77,6 +77,7 @@ export const LAYOUT_PARTS = [
   'listbox',
   'tooltip',
   'popover',
+  'toast',
 ] as const;
 export const PARTS_WITH_ID = ['sidebar-item', 'topbar-action', 'game-section', 'popover'] as const;
 
