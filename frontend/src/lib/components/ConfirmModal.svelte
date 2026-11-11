@@ -10,6 +10,7 @@
     onconfirm,
     onclose,
     errorText = (err: unknown) => codeText(err),
+    returnFocus,
   }: {
     prompt: ConfirmPrompt;
     /** The action. While it runs the dialog cannot be dismissed; when it rejects, the dialog stays open with the error. */
@@ -21,6 +22,8 @@
      * (ConfirmModal.callers.test.ts); the default only maps a backend code that has a message, else "error".
      */
     errorText?: (err: unknown) => string;
+    /** Where focus goes on close when the element that opened the dialog is gone (a menu item). */
+    returnFocus?: () => HTMLElement | null | undefined;
   } = $props();
 
   const uid = $props.id();
@@ -54,7 +57,7 @@
   }
 </script>
 
-<Modal open title={prompt.title} width="44rem" dismissible={!running} busy={running} describedby={textId} onclose={cancel}>
+<Modal open title={prompt.title} width="44rem" dismissible={!running} busy={running} describedby={textId} {returnFocus} onclose={cancel}>
   <p class="text" id={textId}>{prompt.text}</p>
   {#if prompt.note}
     <p class="note">{prompt.note}</p>

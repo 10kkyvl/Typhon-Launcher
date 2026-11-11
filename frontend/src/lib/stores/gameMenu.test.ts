@@ -27,7 +27,7 @@ describe('game context menu', () => {
 
     openGameMenu(event as unknown as MouseEvent, 'g1');
 
-    expect(get(gameMenu)).toEqual({ gameId: 'g1', x: 120, y: 80 });
+    expect(get(gameMenu)).toEqual({ gameId: 'g1', x: 120, y: 80, source: null });
     expect(event.preventDefault).toHaveBeenCalledTimes(1);
     expect(event.stopPropagation).toHaveBeenCalledTimes(1);
   });
@@ -45,7 +45,7 @@ describe('game context menu', () => {
     openGameMenu(mouse(1, 2) as unknown as MouseEvent, 'g1');
     openGameMenu(mouse(30, 40) as unknown as MouseEvent, 'g1');
 
-    expect(get(gameMenu)).toEqual({ gameId: 'g1', x: 30, y: 40 });
+    expect(get(gameMenu)).toEqual({ gameId: 'g1', x: 30, y: 40, source: null });
   });
 
   it('closes', () => {

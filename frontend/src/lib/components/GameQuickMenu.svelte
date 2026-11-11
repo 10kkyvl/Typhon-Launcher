@@ -44,11 +44,16 @@
   import { externalLabel, isExternal, isLaunchable } from '../library/external';
   import { errorMessage } from '../utils/errors';
   import { msg } from '../i18n';
+  import { initialFocus } from '../layers/focus';
 
   const game = $derived($gameMenu ? ($libraryGames.find((g) => g.id === $gameMenu?.gameId) ?? null) : null);
 
   let steam = $state<{ id: string; added: boolean } | null>(null);
   let steamConfirmID = $state<string | null>(null);
+  // The menu item that opened the confirmation is gone by the time it closes; focus goes to the game.
+  // Picked while the page is live: once a dialog is open the page is inert and has nothing to focus.
+  let steamHome: HTMLElement | null = null;
+  const focusHome = (source: HTMLElement | null | undefined) => (source ? initialFocus(source) : null);
 
   $effect(() => {
     const menu = $gameMenu;
@@ -166,6 +171,7 @@
       case 'shortcut-remove':
         return guard(() => removeShortcut(current.id));
       case 'steam-add':
+        steamHome = focusHome(get(gameMenu)?.source);
         steamConfirmID = current.id;
         return;
       case 'steam-remove':
@@ -284,7 +290,8 @@
 {/if}
 
 {#if steamConfirmID}
-  <ConfirmModal prompt={addToSteamPrompt()} onconfirm={confirmSteamAdd} onclose={() => (steamConfirmID = null)} errorText={(err) => libraryErrorText(err, msg('games.steamFailed'))} />
+  <ConfirmModal prompt={addToSteamPrompt()} onconfirm={confirmSteamAdd} onclose={() => (steamConfirmID = null)}
+    returnFocus={() => (steamHome?.isConnected ? steamHome : null)} errorText={(err) => libraryErrorText(err, msg('games.steamFailed'))} />
 {/if}
 
 {#if statusGame && statusOpen}
