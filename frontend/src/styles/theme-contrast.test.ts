@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import buttonSource from '../lib/components/Button.svelte?raw';
+import { cssColor, ruleBody, styleOf } from '../lib/testing/css';
 import { goSources } from '../lib/testing/sources';
 import { luminance, rgb } from '../lib/theme/accent';
 import { CONTRAST_FALLBACKS, CONTRAST_TOKENS, contrastReport, type RGBA } from '../lib/theme/contrastReport';
@@ -68,10 +70,20 @@ function ratio(a: RGB, b: RGB): number {
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
 }
 
+// Button.svelte's danger button as it is written: the guard measures what the component draws.
+const BUTTON = styleOf(buttonSource, 'Button.svelte');
+const DANGER = ruleBody(BUTTON, '.danger');
+const DANGER_HOVER = ruleBody(BUTTON, ".danger:hover:not(:disabled, [aria-disabled='true'])");
+
+function over(top: RGBA, below: RGB): RGB {
+  return [0, 1, 2].map((i) => top[i] * top[3] + below[i] * (1 - top[3])) as RGB;
+}
+
 const PAGE = ['--bg', '--bg-sidebar', '--surface', '--surface-2', '--surface-3', '--surface-4'];
 const LOW = ['--bg', '--surface', '--surface-2'];
-// Buttons, the card's Play and every other accent fill draw `var(--accent-on, #fff)`; --accent-on is
-// set only by a personal accent, so on a theme's own accent the label is the fallback.
+// Buttons, the card's Play and every other accent fill draw `var(--accent-on, var(--accent-on-default))`;
+// --accent-on is set only by a personal accent, so on a theme's own accent the label is the fixed default
+// (shell.css; control-tokens.test.ts holds it equal to this fallback).
 const ON_ACCENT = CONTRAST_FALLBACKS['--accent-on'];
 
 const PAIRS: { fg: string; on: string[]; min: number }[] = [
@@ -224,8 +236,8 @@ describe('built-in themes', () => {
   }
 
   for (const id of ['dark', 'light', 'contrast', 'blush']) {
-    // Button.svelte `.danger`: the label is --danger leaning 20 % towards --text, on the --danger-subtle
-    // tint over whatever surface the button stands on; hovered it is --bg on a full --danger fill.
+    // The fill and the label Button.svelte writes for `.danger`, at rest and hovered, measured on every
+    // surface the button can stand on.
     it(`${id} keeps the danger button's label readable at rest and hovered`, () => {
       const preset = builtIns().find((p) => p.id === id);
       expect(preset, id).toBeDefined();
@@ -233,15 +245,13 @@ describe('built-in themes', () => {
       const bg = paint(tokens, '--bg', BLACK);
       const out: string[] = [];
       for (const surface of PAGE) {
-        const under = paint(tokens, '--danger-subtle', surface === '--bg' ? bg : paint(tokens, surface, bg));
-        const danger = paint(tokens, '--danger', under);
-        const text = paint(tokens, '--text', under);
-        const label = danger.map((channel, i) => channel * 0.8 + text[i] * 0.2) as RGB;
-        const r = ratio(label, under);
-        if (r < 4.5) out.push(`label on the tint over ${surface}: ${r.toFixed(2)}`);
+        const ground = surface === '--bg' ? bg : paint(tokens, surface, bg);
+        for (const [state, rule] of [['at rest', DANGER], ['hovered', DANGER_HOVER]] as const) {
+          const fill = over(cssColor(rule.background, tokens), ground);
+          const r = ratio(over(cssColor(rule.color, tokens), fill), fill);
+          if (r < 4.5) out.push(`${state} over ${surface}: ${r.toFixed(2)}`);
+        }
       }
-      const fill = paint(tokens, '--danger', bg);
-      if (ratio(bg, fill) < 4.5) out.push(`--bg on --danger: ${ratio(bg, fill).toFixed(2)}`);
       expect(out).toEqual([]);
     });
 
