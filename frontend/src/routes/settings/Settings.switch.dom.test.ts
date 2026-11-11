@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/svelte';
+import { get } from 'svelte/store';
 import { msg } from '../../lib/i18n';
 import { saveSettingsPatch, type Settings as SettingsData } from '../../lib/services/settings';
 import { settings } from '../../lib/stores/settings';
@@ -59,25 +60,22 @@ describe('Settings: a switch row', () => {
     expect(screen.getByRole('switch', { name: msg('settings.generalAnimationsLabel') })).toBeTruthy();
   });
 
-  it('shows the new state while it saves and the held one again when the save fails', async () => {
-    let refuse: (err: Error) => void = () => {};
-    vi.mocked(saveSettingsPatch).mockImplementation(
-      () =>
-        new Promise<SettingsData>((_resolve, reject) => {
-          refuse = reject;
-        }),
-    );
+  // The settings store refuses a change it cannot save (not loaded) before it changes anything, so the
+  // switch must not show the press. Found through its row, not its name, so the case reads the same
+  // against a switch that names itself differently.
+  it('shows the held state when the page refuses the change', async () => {
+    settings.set(null);
     render(Settings, { target: app });
-    const tray = screen.getByRole('switch', { name: msg('settings.generalMinimizeToTrayLabel') });
+    const row = screen.getByText(msg('settings.generalMinimizeToTrayLabel')).closest('.row');
+    expect(row).toBeInstanceOf(HTMLElement);
+    const tray = within(row as HTMLElement).getByRole('switch');
     expect(tray.getAttribute('aria-checked')).toBe('true');
 
     await user().click(tray);
 
-    expect(saveSettingsPatch).toHaveBeenCalledExactlyOnceWith({ minimizeToTray: false });
-    expect(tray.getAttribute('aria-checked')).toBe('false');
-
-    refuse(new Error('disk full'));
-    await vi.waitFor(() => expect(tray.getAttribute('aria-checked')).toBe('true'));
+    expect(get(toasts).map((item) => item.message)).toEqual([msg('state.settingsNotLoaded')]);
+    expect(saveSettingsPatch).not.toHaveBeenCalled();
+    expect(tray.getAttribute('aria-checked')).toBe('true');
   });
 });
 
