@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import Button from './Button.svelte';
+  import EmptyState from './EmptyState.svelte';
   import Modal from './Modal.svelte';
   import TagEditor from './TagEditor.svelte';
   import { libraryErrorText } from '../library/errors';
@@ -54,7 +55,7 @@
 <Modal dismissible={!saving} bind:open title={msg('modals.gameTagsTitle')} {returnFocus}>
   <TagEditor bind:this={editor} bind:tags {suggestions} placeholder={msg('modals.gameTagsPlaceholder')} disabled={saving} />
   {#if tags.length === 0}
-    <p class="empty">{msg('modals.gameTagsEmpty')}</p>
+    <EmptyState size="inline" title={msg('modals.gameTagsEmpty')} />
   {/if}
   {#snippet footer()}
     <Button disabled={saving} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
@@ -62,10 +63,4 @@
   {/snippet}
 </Modal>
 
-<style>
-  .empty {
-    margin: var(--space-3) 0 0;
-    font-size: var(--font-sm);
-    color: var(--text-3);
-  }
-</style>
+<style></style>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { RefreshCw, ThumbsDown } from '@lucide/svelte';
   import Button from './Button.svelte';
+  import EmptyState from './EmptyState.svelte';
   import GameCard from './GameCard.svelte';
   import { msg } from '../i18n';
   import { genreLabel, recommendationReason, type Recommendation } from '../recommendations/display';
@@ -50,7 +51,13 @@
       {/each}
     </div>
   {:else}
-    <p class="empty" role="status">{loading ? msg('games.recommendationLoading') : emptyText}</p>
+    <div role="status">
+      {#if loading}
+        <p class="loading">{msg('games.recommendationLoading')}</p>
+      {:else}
+        <EmptyState size="inline" title={emptyText} />
+      {/if}
+    </div>
   {/if}
 </section>
 
@@ -60,7 +67,7 @@
   h2 { font-size: var(--font-xl); }
   .picks { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-5); }
   .pick { min-width: 0; }
-  .genre, .empty { font-size: var(--font-sm); color: var(--text-3); }
+  .genre, .loading { font-size: var(--font-sm); color: var(--text-3); }
   .genre { white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
   @media (max-width: 900px) { .picks { grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); } }
 </style>

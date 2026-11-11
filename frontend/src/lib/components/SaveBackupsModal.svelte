@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import Button from './Button.svelte';
+  import EmptyState from './EmptyState.svelte';
   import ConfirmModal from './ConfirmModal.svelte';
   import Modal from './Modal.svelte';
   import SavesCandidatesModal from './SavesCandidatesModal.svelte';
@@ -482,10 +483,7 @@
         {:else if listLoading}
           <p class="hint">{msg('common.loading')}</p>
         {:else if !listError}
-          <div class="empty">
-            <span class="empty-title">{msg('saves.empty')}</span>
-            <span class="hint">{msg('saves.emptyHint')}</span>
-          </div>
+          <EmptyState size="inline" align="center" title={msg('saves.empty')} description={msg('saves.emptyHint')} />
         {/if}
       </div>
     </div>
@@ -650,16 +648,4 @@
     word-break: break-word;
   }
 
-  .empty {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-    padding: var(--space-5) 0;
-    text-align: center;
-  }
-
-  .empty-title {
-    font-size: var(--font-md);
-    color: var(--text);
-  }
 </style>

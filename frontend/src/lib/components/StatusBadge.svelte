@@ -39,7 +39,7 @@
     height: 2.4rem;
     padding: 0 0.9rem;
     border-radius: var(--radius-sm);
-    font-size: 1.2rem;
+    font-size: var(--font-xs);
     font-weight: 500;
     white-space: nowrap;
   }
@@ -57,7 +57,7 @@
   .dot {
     width: 0.6rem;
     height: 0.6rem;
-    border-radius: 50%;
+    border-radius: var(--radius-round);
     background: currentColor;
     flex-shrink: 0;
   }

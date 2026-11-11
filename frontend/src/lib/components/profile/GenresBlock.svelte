@@ -1,5 +1,6 @@
 <script lang="ts">
   import Card from '../Card.svelte';
+  import EmptyState from '../EmptyState.svelte';
   import { msg } from '../../i18n';
   import type { GenreBreakdown } from '../../services/social';
 
@@ -32,7 +33,7 @@
 
 <Card title={msg('profile.blockGenres')}>
   {#if segments.length === 0}
-    <p class="empty">{msg('profile.genresEmpty')}</p>
+    <EmptyState size="inline" title={msg('profile.genresEmpty')} />
   {:else}
     <div class="bar" role="img" aria-label={segments.map((item) => `${item.name} ${percent(item.share)}`).join(', ')}>
       {#each segments as item (item.id)}
@@ -52,12 +53,6 @@
 </Card>
 
 <style>
-  .empty {
-    padding: var(--space-4) 0;
-    font-size: var(--font-sm);
-    color: var(--text-3);
-  }
-
   .bar {
     display: flex;
     gap: 2px;

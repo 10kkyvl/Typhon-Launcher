@@ -22,8 +22,8 @@
     max-width: 100%;
     padding: 0.25rem 0.55rem;
     border-radius: var(--radius-sm);
-    background: rgba(5, 8, 12, 0.72);
-    color: #fff;
+    background: var(--source-badge-fill);
+    color: var(--source-badge-text);
     font-size: 1.1rem;
     line-height: 1.2;
     white-space: nowrap;
@@ -31,19 +31,19 @@
 
   .badge[data-source='typhon'] {
     background: var(--accent);
-    color: var(--accent-on, #fff);
+    color: var(--accent-on, var(--source-badge-text));
   }
 
   .badge[data-source='steam'] {
-    background: #1b2838;
-    color: #66c0f4;
+    background: var(--source-steam-fill);
+    color: var(--source-steam-text);
   }
 
   .badge[data-source='epic'] {
-    background: #2a2a2a;
+    background: var(--source-epic-fill);
   }
 
   .badge[data-source='gog'] {
-    background: #6b2c91;
+    background: var(--source-gog-fill);
   }
 </style>

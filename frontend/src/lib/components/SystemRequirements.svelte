@@ -21,6 +21,7 @@
     verdictTone,
   } from '../game/sysreq';
   import Button from './Button.svelte';
+  import StatusBadge from './StatusBadge.svelte';
 
   let {
     gameId,
@@ -89,7 +90,7 @@
       </div>
     {:else if report}
       <div class="line">
-        <span class="badge {tone}">{msg(verdictLabelKey(report))}</span>
+        <StatusBadge kind={tone} label={msg(verdictLabelKey(report))} dot={false} />
         {#if checks.length > 0}
           <button class="toggle" aria-expanded={expanded} onclick={() => (expanded = !expanded)}>
             {expanded ? msg('sysreq.hide') : msg('sysreq.show')}
@@ -151,32 +152,6 @@
   .estimate {
     font-size: var(--font-sm);
     color: var(--text-3);
-  }
-
-  .badge {
-    display: inline-flex;
-    align-items: center;
-    padding: var(--space-1) var(--space-3);
-    border-radius: var(--radius-md);
-    font-size: var(--font-sm);
-    font-weight: 600;
-    background: var(--surface-3);
-    color: var(--text-2);
-  }
-
-  .badge.success {
-    background: var(--success-subtle);
-    color: var(--success);
-  }
-
-  .badge.warning {
-    background: var(--warning-subtle);
-    color: var(--warning);
-  }
-
-  .badge.danger {
-    background: var(--danger-subtle);
-    color: var(--danger);
   }
 
   .toggle {

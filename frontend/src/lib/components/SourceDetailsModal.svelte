@@ -16,6 +16,7 @@
   import { refresh as refreshSource, remove as removeSource, sources, toggle as toggleSource } from '../stores/sources';
   import { relativeDate, bytesSize } from '../utils/format';
   import Button from './Button.svelte';
+  import EmptyState from './EmptyState.svelte';
   import ConfirmModal from './ConfirmModal.svelte';
   import Modal from './Modal.svelte';
   import ReleaseMatchModal from './ReleaseMatchModal.svelte';
@@ -265,14 +266,14 @@
           <span class="th">{msg('modals.sourceDetailsColStatus')}</span>
         </div>
         {#if loadingReleases}
-          <p class="empty">{msg('modals.sourceDetailsLoading')}</p>
+          <p class="list-note">{msg('modals.sourceDetailsLoading')}</p>
         {:else if releasesError}
-          <div class="empty load-error" role="alert">
+          <div class="list-note load-error" role="alert">
             <span>{releasesError}</span>
             <Button size="sm" onclick={() => sourceId && loadReleases(sourceId)}>{msg('common.retry')}</Button>
           </div>
         {:else if releases.length === 0}
-          <p class="empty">{msg('modals.sourceDetailsNoReleases')}</p>
+          <EmptyState size="inline" align="center" title={msg('modals.sourceDetailsNoReleases')} />
         {:else}
           {#each releases as view (view.release.id)}
             {@const badge = matchLabel(view)}
@@ -496,7 +497,7 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .empty {
+  .list-note {
     padding: var(--space-6);
     text-align: center;
     font-size: var(--font-sm);

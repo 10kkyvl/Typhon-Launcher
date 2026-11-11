@@ -240,7 +240,7 @@ describe('focusing a release from a notification', () => {
 describe('source details template', () => {
   it('shows each load failure as an alert with a retry, ahead of the empty state', () => {
     expect(/\{#if detailsError\}\s*<section class="load-error" role="alert">[\s\S]*?loadDetails\(sourceId\)/.test(source)).toBe(true);
-    expect(/\{:else if releasesError\}\s*<div class="empty load-error" role="alert">[\s\S]*?loadReleases\(sourceId\)[\s\S]*?\{:else if releases\.length === 0\}/.test(source)).toBe(true);
+    expect(/\{:else if releasesError\}\s*<div class="list-note load-error" role="alert">[\s\S]*?loadReleases\(sourceId\)[\s\S]*?\{:else if releases\.length === 0\}/.test(source)).toBe(true);
   });
 
   it('keeps the pager on a later page in error, with the range text hidden', () => {

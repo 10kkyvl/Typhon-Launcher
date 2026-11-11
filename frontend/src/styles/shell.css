@@ -80,4 +80,15 @@
   --radius-bar: 99rem;
   --progress-step: 600ms;
   --progress-sweep: 1.4s;
+
+  /* A dot is round whatever radii a theme sets. */
+  --radius-round: 50%;
+
+  /* Where a game came from, on its cover: the stores' own colours, the same in every theme. */
+  --source-badge-fill: rgba(5, 8, 12, 0.72);
+  --source-badge-text: #fff;
+  --source-steam-fill: #1b2838;
+  --source-steam-text: #66c0f4;
+  --source-epic-fill: #2a2a2a;
+  --source-gog-fill: #6b2c91;
 }

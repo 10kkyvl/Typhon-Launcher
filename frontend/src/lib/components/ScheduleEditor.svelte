@@ -4,6 +4,7 @@
   import type { ScheduleWindow } from '../services/settings';
   import { msg } from '../i18n';
   import Button from './Button.svelte';
+  import EmptyState from './EmptyState.svelte';
   import Chip from './Chip.svelte';
   import IconButton from './IconButton.svelte';
 
@@ -57,7 +58,7 @@
 
 <div class="schedule">
   {#if draft.length === 0}
-    <p class="empty">{msg('settings.downloadsScheduleEmpty')}</p>
+    <EmptyState size="inline" title={msg('settings.downloadsScheduleEmpty')} />
   {:else}
     {#each draft as item, i (i)}
       <div class="row">
@@ -140,7 +141,6 @@
     color: var(--text-3);
   }
 
-  .empty,
   .hint {
     margin: 0;
     font-size: var(--font-sm);

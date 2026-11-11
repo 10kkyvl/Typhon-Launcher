@@ -326,7 +326,7 @@
 
   .badge {
     padding: var(--space-1) var(--space-2);
-    border-radius: var(--radius-xs);
+    border-radius: var(--radius-sm);
     font-size: var(--font-xs);
     font-weight: 500;
   }

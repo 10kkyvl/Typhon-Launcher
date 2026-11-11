@@ -158,7 +158,7 @@
         </div>
       {/if}
       {#if phase === 'empty'}
-        <p class="empty" role="alert">{msg('games.randomEmpty')}</p>
+        <p class="no-match" role="alert">{msg('games.randomEmpty')}</p>
       {/if}
     </div>
   {:else if shown}
@@ -235,13 +235,13 @@
   }
 
   .hint,
-  .empty {
+  .no-match {
     margin: 0;
     color: var(--text-2);
     line-height: 1.55;
   }
 
-  .empty {
+  .no-match {
     color: var(--warning);
   }
 

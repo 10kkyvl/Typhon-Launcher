@@ -8,7 +8,7 @@ import { frontendSources } from '../lib/testing/sources';
  * back, the behaviour itself is held by the components' DOM tests.
  */
 
-const COMPONENTS = ['ProgressBar', 'PageHeader', 'Card'];
+const COMPONENTS = ['ProgressBar', 'PageHeader', 'Card', 'StatusBadge', 'SourceBadge', 'EmptyState'];
 const path = (name: string) => `lib/components/${name}.svelte`;
 const styleOf = (source: string) => /<style[^>]*>([\s\S]*?)<\/style>/.exec(source)?.[1] ?? '';
 
@@ -47,7 +47,7 @@ describe('status components take their look from tokens', () => {
 });
 
 describe('status components are not restyled from outside', () => {
-  const REACH = /:global\(\s*\.(track|page-header|card)\b/;
+  const REACH = /:global\(\s*\.(track|page-header|card|badge|empty)\b/;
 
   it('no other component reaches into them through :global', () => {
     const owners = new Set(COMPONENTS.map(path));
@@ -82,6 +82,17 @@ describe('every progress bar', () => {
   });
 });
 
+describe('an empty place', () => {
+  // Big Picture keeps its own set of components.
+  it('is the EmptyState component, not a local paragraph', () => {
+    const offenders = Object.entries(frontendSources)
+      .filter(([file]) => file.endsWith('.svelte') && file !== path('EmptyState') && !file.startsWith('lib/bigpicture/'))
+      .filter(([, source]) => /class="empty[" ]/.test(source))
+      .map(([file]) => file);
+    expect(offenders).toEqual([]);
+  });
+});
+
 describe('every card', () => {
   it('takes its padding as a named size, not a CSS value', () => {
     const offenders = Object.entries(frontendSources)
@@ -107,6 +118,18 @@ describe('the theme preview follows the components', () => {
     expect(value(rule(preview, '.progress'), 'border-radius')).toBe(value(track, 'border-radius'));
     expect(value(rule(preview, '.progress-fill'), 'border-radius')).toBe(value(rule(bar, '.fill'), 'border-radius'));
     expect(value(rule(preview, '.progress-fill'), 'background')).toBe(value(track, '--bar'));
+  });
+
+  it('status badge: shape, type and the tone colours', () => {
+    const badge = styleOf(frontendSources[path('StatusBadge')] ?? '');
+    for (const property of ['border-radius', 'font-size', 'font-weight']) {
+      expect(value(rule(badge, '.badge'), property), property).toBeDefined();
+      expect(value(rule(preview, '.badge'), property), property).toBe(value(rule(badge, '.badge'), property));
+    }
+    for (const tone of ['success', 'warning', 'danger']) {
+      expect(value(rule(preview, `.badge.${tone}`), 'background'), tone).toBe(value(rule(badge, `.${tone}`), 'background'));
+      expect(value(rule(preview, `.badge.${tone}`), 'color'), tone).toBe(value(rule(badge, `.${tone}`), 'color'));
+    }
   });
 });
 

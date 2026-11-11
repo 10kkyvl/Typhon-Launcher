@@ -2,6 +2,7 @@
   import { Heart } from '@lucide/svelte';
   import Artwork from '../Artwork.svelte';
   import Card from '../Card.svelte';
+  import EmptyState from '../EmptyState.svelte';
   import Tooltip from '../Tooltip.svelte';
   import { msg } from '../../i18n';
   import type { BlockGame } from '../../profile/layoutView';
@@ -13,7 +14,7 @@
 
 <Card title={title || undefined}>
   {#if games.length === 0}
-    <p class="empty">{msg('profile.showcaseEmpty')}</p>
+    <EmptyState size="inline" title={msg('profile.showcaseEmpty')} />
   {:else}
     <div class="grid">
       {#each games as game (game.key)}
@@ -40,12 +41,6 @@
 </Card>
 
 <style>
-  .empty {
-    padding: var(--space-4) 0;
-    font-size: var(--font-sm);
-    color: var(--text-3);
-  }
-
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
