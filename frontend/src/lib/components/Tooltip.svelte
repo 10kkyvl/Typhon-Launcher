@@ -90,6 +90,22 @@
     if (inControl(event.target)) intent.escape();
   }
 
+  // Events of the control reach the host as they bubble, so a control re-created inside it still counts.
+  const listen: Attachment<HTMLElement> = (node) => {
+    node.addEventListener('pointerover', onPointerover);
+    node.addEventListener('pointerout', onPointerout);
+    node.addEventListener('focusin', onFocusin);
+    node.addEventListener('focusout', onFocusout);
+    node.addEventListener('pointerdown', onPointerdown);
+    return () => {
+      node.removeEventListener('pointerover', onPointerover);
+      node.removeEventListener('pointerout', onPointerout);
+      node.removeEventListener('focusin', onFocusin);
+      node.removeEventListener('focusout', onFocusout);
+      node.removeEventListener('pointerdown', onPointerdown);
+    };
+  };
+
   // While shown: follows the control, keeps itself under the pointer, and goes away with the control.
   // Untracked: a re-render of the control must not set the hint up again (and miss its own removal).
   const bubble: Attachment<HTMLElement> = (node) => untrack(() => follow(node));
@@ -125,16 +141,7 @@
   }
 </script>
 
-<span
-  class="tooltip-host"
-  bind:this={host}
-  role="presentation"
-  onpointerover={onPointerover}
-  onpointerout={onPointerout}
-  onfocusin={onFocusin}
-  onfocusout={onFocusout}
-  onpointerdown={onPointerdown}
->
+<span class="tooltip-host" bind:this={host} {@attach listen}>
   {@render children()}
   {#if describe}<span id={descriptionId} hidden>{text}</span>{/if}
 </span>
