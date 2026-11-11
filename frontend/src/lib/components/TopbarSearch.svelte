@@ -67,22 +67,26 @@
     untrack(() => overlay.close());
   });
 
-  function openGame(hit: GameHit) {
+  // A pick that leads elsewhere lets go of the field, by pointer and by keyboard alike: on the new
+  // page Space and the arrows are that page's, not the search's.
+  function go(...to: Parameters<typeof navigate>) {
     overlay.close();
-    navigate('game', { id: hit.id });
+    searchInput?.blur();
+    navigate(...to);
+  }
+
+  function openGame(hit: GameHit) {
+    go('game', { id: hit.id });
   }
 
   function openRelease(hit: ReleaseHit) {
-    overlay.close();
-    navigate('sources', { sourceId: hit.sourceId, releaseId: hit.id });
+    go('sources', { sourceId: hit.sourceId, releaseId: hit.id });
   }
 
   function openCatalog() {
     const query = results.query.trim();
     if (query === '') return;
-    overlay.close();
-    searchInput?.blur();
-    navigate('catalog', { q: query });
+    go('catalog', { q: query });
   }
 
   // toggleWatch reports its own failure (a toast); the results stay as they are.

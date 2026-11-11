@@ -219,33 +219,39 @@ describe('TopbarSearch: keys', () => {
     expect(active()).toBeNull();
   });
 
-  it('Enter on a result opens it and closes the results; focus stays in the field', async () => {
+  it('Enter on a result opens it, closes the results and leaves the field: the new page has the keys', async () => {
     const { keys, find, grid, field } = setup();
     await find();
     await keys.keyboard('{ArrowDown}{Enter}');
     expect(get(route)).toMatchObject({ name: 'game', params: { id: 'g1' } });
     expect(grid()).toBeNull();
-    expect(document.activeElement).toBe(field());
+    expect(document.activeElement).not.toBe(field());
+
+    await keys.keyboard('{ArrowDown}');
+    expect(grid()).toBeNull();
   });
 
-  it('Enter on a release opens it in its source', async () => {
-    const { keys, find } = setup();
+  it('Enter on a release opens it in its source and leaves the field', async () => {
+    const { keys, find, field } = setup();
     await find();
     await keys.keyboard('{ArrowUp}{Enter}');
     expect(get(route)).toMatchObject({ name: 'sources', params: { sourceId: 'feed', releaseId: 'r1' } });
+    expect(document.activeElement).not.toBe(field());
   });
 
-  it('Enter on "more in the catalog", and Enter with no row active, search the catalog', async () => {
+  it('Enter on "more in the catalog", and Enter with no row active, search the catalog and leave the field', async () => {
     const first = setup();
     await first.find();
     await first.keys.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}{Enter}');
     expect(get(route)).toMatchObject({ name: 'catalog', params: { q: 'doom' } });
+    expect(document.activeElement).not.toBe(first.field());
 
     resetHistory();
     await first.keys.click(first.field());
     await first.settle();
     await first.keys.keyboard('{Enter}');
     expect(get(route)).toMatchObject({ name: 'catalog', params: { q: 'doom' } });
+    expect(document.activeElement).not.toBe(first.field());
   });
 
   it('Enter on a watch cell toggles the watch and keeps the results open and the focus in the field', async () => {
@@ -322,12 +328,29 @@ describe('TopbarSearch: keys', () => {
 });
 
 describe('TopbarSearch: pointer', () => {
-  it('a press on a result opens it; the results close', async () => {
-    const { keys, find, grid } = setup();
+  it('a press on a result opens it; the results close and the field lets go, so the arrows do not bring them back', async () => {
+    const { keys, find, grid, field } = setup();
     await find();
     await keys.click(cellsOf(rowOf(/Doom II/))[0]);
     expect(get(route)).toMatchObject({ name: 'game', params: { id: 'g2' } });
     expect(grid()).toBeNull();
+    expect(document.activeElement).not.toBe(field());
+
+    await keys.keyboard('{ArrowDown}');
+    expect(grid()).toBeNull();
+  });
+
+  it('a press on a release or on "more in the catalog" leaves the field too', async () => {
+    const { keys, find, field } = setup();
+    await find();
+    await keys.click(cellsOf(rowOf(/DOOM-GOG/))[0]);
+    expect(get(route).name).toBe('sources');
+    expect(document.activeElement).not.toBe(field());
+
+    await keys.click(field());
+    await keys.click(cellsOf(rowOf(/more in the catalog/))[0]);
+    expect(get(route)).toMatchObject({ name: 'catalog', params: { q: 'doom' } });
+    expect(document.activeElement).not.toBe(field());
   });
 
   it('a press on a watch toggle toggles it, keeps the results open and the focus in the field', async () => {
