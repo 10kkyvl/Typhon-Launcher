@@ -166,6 +166,23 @@ describe('TopbarSearch: keys', () => {
     expect(document.activeElement).toBe(field());
   });
 
+  it('gives every result its own cell ids, however alike their keys, and none with a space in it', async () => {
+    const alike = [game('a.b', 'Dotted'), game('a_b', 'Underscored'), game('a b', 'Spaced'), game('a%20b', 'Escaped')];
+    vi.mocked(searchAll).mockResolvedValue({ query: 'a', games: alike, releases: [], moreGames: 0, moreReleases: 0 });
+    const { keys, find, active } = setup();
+    await find('a');
+    const ids = screen.getAllByRole('gridcell').map((cell) => cell.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids.filter((id) => /\s/.test(id))).toEqual([]);
+
+    const seen: string[] = [];
+    for (let i = 0; i < alike.length; i++) {
+      await keys.keyboard('{ArrowDown}');
+      seen.push(active()?.querySelector('.result-title')?.textContent ?? '');
+    }
+    expect(seen).toEqual(['Dotted', 'Underscored', 'Spaced', 'Escaped']);
+  });
+
   it('scrolls the results, and only them, to the active row', async () => {
     const { keys, find, popup } = setup();
     await find();

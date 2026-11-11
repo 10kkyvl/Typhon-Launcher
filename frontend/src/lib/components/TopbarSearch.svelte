@@ -26,8 +26,10 @@
   const uid = $props.id();
   const gridId = `${uid}-results`;
   const headId = (group: 'games' | 'releases') => `${uid}-${group}`;
-  // By the result, not its place: the active cell keeps its id through a refresh of the results.
-  const cellId = (row: Row, cell: number) => `${uid}-${row.key.replace(/[^\w-]/g, '_')}-${cell}`;
+  // By the result, not its place: the active cell keeps its id through a refresh of the results. An id
+  // may hold anything but ASCII whitespace; escaping that and '%' alone keeps distinct keys distinct.
+  const idPart = (key: string) => key.replace(/[%\t\n\f\r ]/g, (char) => `%${char.charCodeAt(0).toString(16).padStart(2, '0')}`);
+  const cellId = (row: Row, cell: number) => `${uid}-${idPart(row.key)}-${cell}`;
 
   let search = $state('');
   let searchInput = $state<HTMLInputElement | undefined>(undefined);
