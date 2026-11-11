@@ -142,25 +142,52 @@ describe('the look of the backdrop', () => {
   });
 
   it('draws nothing when the readable band leaves out the page colour itself', () => {
-    // The light preset: its status colours need a wash lighter than its own page.
+    // A faint text so light that it needs a wash lighter than the page it is on.
+    const faint: Record<string, RGBA> = { ...LIGHT_PRESET, '--text-3': [112, 112, 112, 1] };
     const bound = washLimit(
-      WASH_TEXT.map((t) => ({ color: rgbOf(LIGHT_PRESET[t.name]), ratio: t.min + 0.1 })),
+      WASH_TEXT.map((t) => ({ color: rgbOf(faint[t.name]), ratio: t.min + 0.1 })),
       false,
     );
-    expect(bound?.min).toBeGreaterThan(luminance(rgbOf(LIGHT_PRESET['--bg'])));
-    expect(backdropLook(LIGHT_PRESET, 0.75, 0.74)).toBeNull();
+    expect(bound?.min).toBeGreaterThan(luminance(rgbOf(faint['--bg'])));
+    expect(bound?.min).toBeLessThan(1);
+    expect(backdropLook(faint, 0.75, 0.74)).toBeNull();
   });
 
   it('draws nothing when the art has fewer than MIN_SPREAD grey levels left between its mid tones', () => {
-    // Blush: the band holds the page, but the art's mid tones land within a few grey levels of each other.
+    // The light preset: the band holds the page, but its faint text keeps the wash so light that the
+    // art's mid tones both land on the limit.
     const limit = washLimit(
-      WASH_TEXT.map((t) => ({ color: rgbOf(BLUSH[t.name]), ratio: t.min + 0.1 })),
+      WASH_TEXT.map((t) => ({ color: rgbOf(LIGHT_PRESET[t.name]), ratio: t.min + 0.1 })),
       false,
     ) as WashLimit;
-    expect(limit.min).toBeLessThan(luminance(rgbOf(BLUSH['--bg'])));
-    expect(washSpread({ saturate: 0.75, page: rgbOf(BLUSH['--bg']), dim: 0.74, limit })).toBeLessThan(MIN_SPREAD);
-    expect(backdropLook(BLUSH, 0.75, 0.74)).toBeNull();
+    expect(limit.min).toBeLessThan(luminance(rgbOf(LIGHT_PRESET['--bg'])));
+    expect(washSpread({ saturate: 0.75, page: rgbOf(LIGHT_PRESET['--bg']), dim: 0.74, limit })).toBeLessThan(MIN_SPREAD);
+    expect(backdropLook(LIGHT_PRESET, 0.75, 0.74)).toBeNull();
     expect(washSpread(backdropLook(DARK, 0.75, 0.6) as BackdropLook)).toBeGreaterThanOrEqual(MIN_SPREAD);
+  });
+
+  // Status text sits on a surface, so on the page the status colours are marks at 3:1: the faint text
+  // sets the band, and blush, whose danger red used to push the wash up to a flat tint, draws its art.
+  it.each([
+    ['dark', DARK, 'max'],
+    ['light', LIGHT_PRESET, 'min'],
+    ['blush', BLUSH, 'min'],
+  ] as const)('%s: the faint text sets the strength of the wash, not the status colours', (_id, colors, side) => {
+    const bound = (names: readonly { name: string; min: number }[]) =>
+      washLimit(
+        names.map((t) => ({ color: rgbOf(colors[t.name]), ratio: t.min + 0.1 })),
+        side === 'max',
+      )?.[side];
+    const faint = luminance(rgbOf(colors['--text-3'])) + 0.05;
+    expect(bound(WASH_TEXT)).toBeCloseTo(side === 'max' ? faint / 4.6 - 0.05 : faint * 4.6 - 0.05, 6);
+    expect(bound(WASH_TEXT)).toBe(bound(WASH_TEXT.filter((t) => !/success|warning|danger/.test(t.name))));
+  });
+
+  it('draws the art in blush and leaves it more than MIN_SPREAD grey levels between its mid tones', () => {
+    const look = backdropLook(BLUSH, 0.75, 0.74) as BackdropLook;
+    expect(look).not.toBeNull();
+    expect(look.limit.min).toBeCloseTo(0.5312, 3);
+    expect(washSpread(look)).toBeGreaterThan(2 * MIN_SPREAD);
   });
 
   it('draws nothing when no luminance keeps every text readable', () => {
@@ -200,14 +227,19 @@ describe('backdrop pixels', () => {
     expect(out).toEqual([0, 0, 0, 0]);
   });
 
-  it('keeps every text and status colour readable over any art on a dark base', () => {
+  it('keeps every text colour and status mark readable over any art on a dark base', () => {
     const look = backdropLook(DARK, 0.75, 0.6) as BackdropLook;
     for (const t of WASH_TEXT) expect(worstRatio(look, rgbOf(DARK[t.name])), t.name).toBeGreaterThanOrEqual(t.min);
   });
 
-  it('keeps every text and status colour readable over any art on a light base', () => {
+  it('keeps every text colour and status mark readable over any art on a light base', () => {
     const look = backdropLook(LIGHT, 0.7, 0.5) as BackdropLook;
     for (const t of WASH_TEXT) expect(worstRatio(look, rgbOf(LIGHT[t.name])), t.name).toBeGreaterThanOrEqual(t.min);
+  });
+
+  it('keeps every text colour and status mark readable over any art in blush', () => {
+    const look = backdropLook(BLUSH, 0.75, 0.74) as BackdropLook;
+    for (const t of WASH_TEXT) expect(worstRatio(look, rgbOf(BLUSH[t.name])), t.name).toBeGreaterThanOrEqual(t.min);
   });
 
   it('pulls white art down to the limit on a dark base and black art up to it on a light one', () => {

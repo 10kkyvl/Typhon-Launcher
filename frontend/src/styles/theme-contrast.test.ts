@@ -168,20 +168,27 @@ function anyArt(): Uint8ClampedArray {
   return Uint8ClampedArray.from(data);
 }
 
-// Every colour the frontend paints as text straight on the page, which the wash now is: the text levels,
-// links, indicators and the status colours of errors, warnings and done states.
-const ON_WASH: { fg: string; min: number }[] = [
+// Every colour the frontend paints straight on the page, which the wash now is: the text levels, links
+// and indicators. Status text sits on a surface (status-surface.test.ts): on the bare page a status
+// colour is a mark, a dot or a badge at 3:1, and on the island it is still text.
+const ON_WASH: { fg: string; min: number; island?: number }[] = [
   ...ON_ISLAND,
-  { fg: '--success', min: 4.5 },
-  { fg: '--warning', min: 4.5 },
-  { fg: '--danger', min: 4.5 },
+  { fg: '--success', min: 3, island: 4.5 },
+  { fg: '--warning', min: 3, island: 4.5 },
+  { fg: '--danger', min: 3, island: 4.5 },
 ];
 
 // Which presets the bake leaves without a wash, and why; the others must draw one and keep it readable.
 const NO_WASH: Record<string, string> = {
-  light: 'its status colours need a wash lighter than its own page',
+  light: 'its faint text keeps the wash so light that the art mid tones land under MIN_SPREAD grey levels apart',
   contrast: 'its dim share is 1, nothing of the art would show',
-  blush: 'the art mid tones would land under MIN_SPREAD grey levels apart, a flat tint',
+};
+
+// The luminance the wash is held to in the presets that draw one: under it on a dark page, over it on a
+// light one. It follows from --text-3 at 4.5:1 and moves only when that colour or the page does.
+const WASH_LIMIT: Record<string, { side: 'max' | 'min'; at: number }> = {
+  dark: { side: 'max', at: 0.0278 },
+  blush: { side: 'min', at: 0.5312 },
 };
 
 function washLook(tokens: Record<string, string>) {
@@ -209,7 +216,8 @@ function washFailures(tokens: Record<string, string>): string[] {
       const direct = ratio(paint(tokens, pair.fg, wash), wash);
       if (direct < pair.min) out.add(`${pair.fg} on the wash: ${direct.toFixed(2)} < ${pair.min}`);
       const on = ratio(paint(tokens, pair.fg, island), island);
-      if (on < pair.min) out.add(`${pair.fg} on --island-fill over the wash: ${on.toFixed(2)} < ${pair.min}`);
+      const min = pair.island ?? pair.min;
+      if (on < min) out.add(`${pair.fg} on --island-fill over the wash: ${on.toFixed(2)} < ${min}`);
     }
   }
   return [...out];
@@ -331,6 +339,14 @@ describe('built-in themes', () => {
         const preset = builtIns().find((p) => p.id === id);
         expect(preset, id).toBeDefined();
         expect(washFailures((preset as Preset).tokens)).toEqual([]);
+      });
+
+      it(`${id} holds the wash to the luminance its faint text allows`, () => {
+        const preset = builtIns().find((p) => p.id === id);
+        expect(preset, id).toBeDefined();
+        const expected = WASH_LIMIT[id];
+        expect(expected, id).toBeDefined();
+        expect(washLook((preset as Preset).tokens)?.limit[expected.side]).toBeCloseTo(expected.at, 3);
       });
     }
 

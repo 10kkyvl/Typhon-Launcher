@@ -33,6 +33,8 @@ export interface BackdropLook {
 /**
  * Every colour the frontend paints as text or a marker straight on the page, which the wash is, and the
  * WCAG contrast it keeps there. The bake adds WASH_MARGIN for the rounding of the 8-bit picture.
+ * The status colours are on the page only as marks, dots and badges: their text sits on a surface
+ * (styles/status-surface.test.ts), so they keep the 3:1 of a marker and do not narrow the band.
  */
 export const WASH_TEXT: readonly { name: string; min: number }[] = [
   { name: '--text', min: 4.5 },
@@ -40,9 +42,9 @@ export const WASH_TEXT: readonly { name: string; min: number }[] = [
   { name: '--text-3', min: 4.5 },
   { name: '--accent-text', min: 4.5 },
   { name: '--accent-bright', min: 3 },
-  { name: '--success', min: 4.5 },
-  { name: '--warning', min: 4.5 },
-  { name: '--danger', min: 4.5 },
+  { name: '--success', min: 3 },
+  { name: '--warning', min: 3 },
+  { name: '--danger', min: 3 },
 ];
 const WASH_MARGIN = 0.1;
 /** Fewer grey levels than this between the art's mid tones is a flat tint, not art: no wash is drawn. */

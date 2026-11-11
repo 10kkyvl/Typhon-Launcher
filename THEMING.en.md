@@ -45,7 +45,9 @@ Behind the main window's interface a blurred picture of the game's art shows. It
 toward the page colour `--bg`; a theme sets only how strongly: `--ambient-dim` is a number from 0
 to 1, the share of the page colour laid over the art (`0.6` in the dark theme, `0.74` in the light
 ones, `1` turns the art off, as High contrast does). The launcher limits the art's brightness
-itself so text and status colours on it read at AA or better. How fast the art flows from one game
+itself so text on it reads at AA or better. Status colours are text only on surfaces; on the art
+they are marks and keep 3:1 or better. When the faint text `--text-3` leaves the art too little
+room, as in the built-in light theme, the art is not drawn. How fast the art flows from one game
 to the next is `--motion-backdrop`.
 
 ## What happens to a 1.x theme
