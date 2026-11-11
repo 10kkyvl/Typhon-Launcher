@@ -226,6 +226,10 @@ export const themeTokens = {
   'settings.themeTokenHint.island-gap': 'Расстояние от парящих панелей до краёв окна',
   'settings.themeToken.radius-control': 'Скругление: элементы управления',
   'settings.themeTokenHint.radius-control': 'Поле поиска и группы кнопок верхней панели; 999px рисует их таблетками, небольшое значение вроде 0.8rem возвращает прямоугольные углы',
+  'settings.themeToken.ambient-dim': 'Фон игры: приглушение',
+  'settings.themeTokenHint.ambient-dim': 'Цвет, к которому лаунчер притягивает арт игры за интерфейсом, а прозрачность задаёт силу: чем плотнее, тем спокойнее арт. Яркость арта лаунчер всё равно ограничивает так, чтобы текст оставался читаемым; непрозрачный цвет убирает арт совсем',
+  'settings.themeToken.motion-backdrop': 'Длительность анимации: фон игры',
+  'settings.themeTokenHint.motion-backdrop': 'За сколько арт за интерфейсом перетекает от одной игры к другой',
 } as const;
 
 export type ThemeTokensKey = keyof typeof themeTokens;
