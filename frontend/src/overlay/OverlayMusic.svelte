@@ -74,10 +74,11 @@
     </div>
     {#if track}
       <div class="controls">
-        <IconButton label={msg('overlay.musicPrevious')} size="sm" disabled={!track.canPrev} onclick={() => command(mediaPrevious)}>
+        <IconButton tooltip={false} label={msg('overlay.musicPrevious')} size="sm" disabled={!track.canPrev} onclick={() => command(mediaPrevious)}>
           <SkipBack size="1.76rem" strokeWidth={1.8} />
         </IconButton>
         <IconButton
+          tooltip={false}
           label={track.playing ? msg('overlay.musicPause') : msg('overlay.musicPlay')}
           size="sm"
           disabled={!track.canPlayPause}
@@ -89,7 +90,7 @@
             <Play size="1.76rem" strokeWidth={1.8} />
           {/if}
         </IconButton>
-        <IconButton label={msg('overlay.musicNext')} size="sm" disabled={!track.canNext} onclick={() => command(mediaNext)}>
+        <IconButton tooltip={false} label={msg('overlay.musicNext')} size="sm" disabled={!track.canNext} onclick={() => command(mediaNext)}>
           <SkipForward size="1.76rem" strokeWidth={1.8} />
         </IconButton>
       </div>

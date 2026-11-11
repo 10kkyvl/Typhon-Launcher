@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import type { HTMLButtonAttributes } from 'svelte/elements';
+  import Tooltip from './Tooltip.svelte';
 
   // Other attributes (id, aria-*, data-*, handlers, attachments) go to the <button>.
   let {
@@ -9,22 +10,37 @@
     type = 'button',
     active = false,
     disabled = false,
+    tooltip = true,
     onclick,
     children,
     ...rest
-  }: Omit<HTMLButtonAttributes, 'class' | 'onclick' | 'children'> & {
+  }: Omit<HTMLButtonAttributes, 'class' | 'onclick' | 'children' | 'title'> & {
+    /** The button's name; shown as its tooltip too. */
     label: string;
     size?: 'md' | 'sm';
     active?: boolean;
     disabled?: boolean;
+    /**
+     * Off: no tooltip on the layer stack; the browser's own title shows the label instead. For the
+     * overlay window, whose Escape hides the overlay and must not close a hint first.
+     */
+    tooltip?: boolean;
     onclick?: (e: MouseEvent) => void;
     children?: Snippet;
   } = $props();
 </script>
 
-<button {...rest} {type} class="icon-btn {size}" class:active aria-label={label} title={label} {disabled} {onclick}>
-  {@render children?.()}
-</button>
+{#snippet button(title: string | undefined)}
+  <button {...rest} {type} class="icon-btn {size}" class:active aria-label={label} {title} {disabled} {onclick}>
+    {@render children?.()}
+  </button>
+{/snippet}
+
+{#if tooltip}
+  <Tooltip text={label} describe={false}>{@render button(undefined)}</Tooltip>
+{:else}
+  {@render button(label)}
+{/if}
 
 <style>
   .icon-btn {

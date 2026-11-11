@@ -46,7 +46,7 @@
         onopen={() => onchat(peerOf(friend))}
       >
         {#snippet actions()}
-          <IconButton label={msg('social.chatWrite')} size="sm" onclick={() => onchat(peerOf(friend))}>
+          <IconButton tooltip={false} label={msg('social.chatWrite')} size="sm" onclick={() => onchat(peerOf(friend))}>
             <MessageCircle size="1.76rem" strokeWidth={1.8} />
           </IconButton>
         {/snippet}

@@ -93,6 +93,12 @@ describe('Lightbox as a layer', () => {
       expect(viewer.contains(document.activeElement)).toBe(true);
     }
 
+    // Tab ended on one of the viewer's icon buttons, whose label shows as a hint: the first Escape
+    // hides the hint, the next one closes the viewer.
+    expect(document.querySelector('[data-part="tooltip"]')).not.toBeNull();
+    await keys.keyboard('{Escape}');
+    expect(document.querySelector('[data-part="tooltip"]')).toBeNull();
+    expect(screen.queryByRole('dialog')).not.toBeNull();
     await keys.keyboard('{Escape}');
 
     expect(screen.queryByRole('dialog')).toBeNull();
