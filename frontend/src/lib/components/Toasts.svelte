@@ -5,6 +5,7 @@
   import { dismissToast, holdToasts, pauseToast, resumeToast, toasts, type Toast, type ToastKind } from '../stores/toasts';
   import Button from './Button.svelte';
   import IconButton from './IconButton.svelte';
+  import { createToastWatch } from './toastWatch';
 
   /**
    * The stack of toasts, mounted by a shell in a part the layer stack leaves live (`data-layer-keep`).
@@ -24,27 +25,17 @@
 
   $effect(() => holdToasts($modalOpen));
 
-  // Being read: the pointer is over the toast, or focus is inside it. Either one stops its clock.
-  const reading = new Map<number, { hover: boolean; focus: boolean }>();
-  // Where focus was before it entered a toast: it goes back there when the toast is closed from inside.
-  const cameFrom = new Map<number, HTMLElement>();
+  const watch = createToastWatch<HTMLElement>();
 
   function read(id: number, change: { hover?: boolean; focus?: boolean }) {
-    const state = { hover: false, focus: false, ...reading.get(id), ...change };
-    reading.set(id, state);
-    if (state.hover || state.focus) pauseToast(id);
+    if (watch.read(id, change)) pauseToast(id);
     else resumeToast(id);
-  }
-
-  function forget(id: number) {
-    reading.delete(id);
-    cameFrom.delete(id);
   }
 
   function onfocusin(item: Toast, event: FocusEvent) {
     const card = event.currentTarget as HTMLElement;
     const from = event.relatedTarget;
-    if (from instanceof HTMLElement && !card.contains(from)) cameFrom.set(item.id, from);
+    if (from instanceof HTMLElement && !card.contains(from)) watch.entered(item.id, from);
     read(item.id, { focus: true });
   }
 
@@ -56,8 +47,8 @@
 
   // Closing a toast that holds focus would drop focus to the page's top.
   function close(item: Toast, card: HTMLElement | null) {
-    const back = card?.contains(document.activeElement) ? cameFrom.get(item.id) : undefined;
-    forget(item.id);
+    const back = card?.contains(document.activeElement) ? watch.origin(item.id) : undefined;
+    watch.forget(item.id);
     dismissToast(item.id);
     if (back?.isConnected) back.focus({ preventScroll: true });
   }
