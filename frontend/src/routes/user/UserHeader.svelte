@@ -4,6 +4,7 @@
   import { publicFrame } from '../../lib/profile/frameSources';
   import Button from '../../lib/components/Button.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
+  import type { MenuItem } from '../../lib/components/menu';
   import IconButton from '../../lib/components/IconButton.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import StyledName from '../../lib/components/StyledName.svelte';
@@ -25,8 +26,6 @@
     onaction: (id: string) => void;
     onmessage?: () => void;
   } = $props();
-
-  type MenuItem = { id: string; label: string; danger?: boolean; separator?: boolean };
 
   const name = $derived(profile.displayName || profile.username);
   const look = $derived(appearanceOf(profile.appearance));

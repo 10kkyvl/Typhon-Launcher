@@ -1,7 +1,7 @@
 import { msg } from '../i18n';
 import { PRESENCE_STATUSES, type PresenceStatus } from '../services/online';
 import { STATUS_LABELS, ownStatusLine, statusDot, type PresenceDot } from '../social/presence';
-import type { MenuItem } from './DropdownMenu.svelte';
+import type { MenuItem } from './menu';
 
 export function accountMenuItems(guest: boolean, current: PresenceStatus): MenuItem[] {
   if (guest) {

@@ -6,6 +6,7 @@
   import Button from '../../lib/components/Button.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
+  import type { MenuItem } from '../../lib/components/menu';
   import IconButton from '../../lib/components/IconButton.svelte';
   import MaskedEmail from '../../lib/components/MaskedEmail.svelte';
   import StyledName from '../../lib/components/StyledName.svelte';
@@ -22,8 +23,6 @@
   import { msg } from '../../lib/i18n';
   import HiddenBadge from './HiddenBadge.svelte';
   import ProfileStats from './ProfileStats.svelte';
-
-  type MenuItem = { id: string; label: string; danger?: boolean; separator?: boolean };
 
   let {
     running,

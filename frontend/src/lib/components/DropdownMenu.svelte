@@ -2,16 +2,7 @@
   import type { Snippet } from 'svelte';
   import { Check } from '@lucide/svelte';
   import { clickOutside } from '../utils/clickOutside';
-  import type { PresenceDot } from '../social/presence';
-
-  export interface MenuItem {
-    id: string;
-    label: string;
-    danger?: boolean;
-    separator?: boolean;
-    checked?: boolean;
-    dot?: PresenceDot;
-  }
+  import type { MenuItem } from './menu';
 
   let {
     items,

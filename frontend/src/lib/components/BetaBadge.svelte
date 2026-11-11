@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import DropdownMenu from './DropdownMenu.svelte';
-  import type { MenuItem } from './DropdownMenu.svelte';
+  import type { MenuItem } from './menu';
   import { inWails } from '../services/backend';
   import { betaReportRoute, isBeta } from '../services/selfupdateChannel';
   import { logsReason } from '../services/logsMessages';
