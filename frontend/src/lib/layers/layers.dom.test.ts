@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
 import { user } from '../testing/dom';
 import ListboxHarness from '../testing/ListboxHarness.svelte';
+import Modal from '../components/Modal.svelte';
 import { focusableIn, initialFocus, nextFocusTarget } from './focus';
 import { dismissTopLayer, openLayer as register, type LayerOptions } from './index';
 
@@ -301,5 +302,14 @@ describe('presses around a non-modal layer', () => {
     expect(screen.queryByRole('listbox', { name: 'More languages' })).toBeNull();
     expect(screen.queryByRole('listbox', { name: 'Language' })).toBeNull();
     expect(screen.getByRole('dialog', { name: 'Settings' })).toBeTruthy();
+  });
+
+  it('a dialog that opens while a page menu is open closes the menu first and takes focus', async () => {
+    await pageSelect(false);
+
+    render(Modal, { target: app, props: { open: true, title: 'The game closed' } });
+
+    expect(screen.queryByRole('listbox', { name: 'Language' })).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'The game closed' }).parentElement?.contains(document.activeElement)).toBe(true);
   });
 });

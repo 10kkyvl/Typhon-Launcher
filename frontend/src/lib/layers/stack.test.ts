@@ -283,3 +283,24 @@ describe('LayerStack outside press', () => {
     expect(stack.size).toBe(1);
   });
 });
+
+describe('LayerStack a dialog opening over menus', () => {
+  it('closes every non-modal layer open at that moment, menus owned by a lower dialog included', () => {
+    const { stack, box, open } = world();
+    const lower = box('lower dialog');
+    open(lower);
+    const listbox = vi.fn();
+    const pageTip = vi.fn();
+    const sticky = vi.fn();
+    open(box('listbox'), { modal: false, owner: lower, dismiss: listbox });
+    open(box('tooltip'), { modal: false, dismiss: pageTip });
+    open(box('busy popover'), { modal: false, dismiss: sticky, dismissible: () => false });
+
+    for (const dismiss of stack.dismissNonModal()) dismiss();
+
+    expect(listbox).toHaveBeenCalledTimes(1);
+    expect(pageTip).toHaveBeenCalledTimes(1);
+    expect(sticky).not.toHaveBeenCalled();
+    expect(stack.elements().map((element) => element.name)).toEqual(['lower dialog', 'busy popover']);
+  });
+});

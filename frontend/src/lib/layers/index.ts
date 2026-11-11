@@ -39,34 +39,47 @@ const closingPresses = new WeakSet<Event>();
 /**
  * Options of a layer: the extension point for every kind of layer, built-in or from a plugin.
  *
- * - A dialog (Modal, Lightbox) is modal: it makes everything under it inert, takes focus on open
- *   (`initialFocus`), traps Tab and returns focus on close (`returnFocus` when its opener is gone).
- * - A menu, a select's listbox, a popover or a tooltip is non-modal (`modal: false`): it inerts
- *   nothing and takes focus only when given `initialFocus`. Opened from inside a dialog and portalled
- *   out of it, it names its `owner` (the trigger, or any element inside the owning layer): it then
- *   counts as part of that dialog for the Tab trap (its controls follow the trigger in Tab order), for
- *   where focus may return, and for presses. A press outside it, its trigger and the layers it owns
- *   closes it (`outsidePress: false` keeps it open); the press still reaches what is under it, and a
- *   dialog's scrim does not take it as its own (`pressClosedLayer`). A press on the trigger is the
- *   trigger's to handle.
+ * - Paint order. Every layer root, modal or not, is portalled to the end of <body> when it opens and
+ *   sits on `--z-layer` (z-index.test.ts holds this), so the layer opened last paints on top, as the
+ *   stack orders them.
+ * - A dialog (Modal, Lightbox) is modal: it makes everything under it inert (the app content and every
+ *   layer under it), takes focus on open (`initialFocus`), traps Tab and returns focus on close
+ *   (`returnFocus` when its opener is gone). It owns the keyboard: `topModalLayer()` is the dialog that
+ *   key handlers and Big Picture act on, whatever non-modal layer sits above it. A dialog that opens
+ *   first closes every non-modal layer open at that moment (menus, tooltips, a listbox of a dialog
+ *   under it), each that `dismissible()` allows; otherwise they would be left inert under or over
+ *   its scrim. A non-modal layer opened afterwards from inside the dialog stays.
+ * - A menu, a select's listbox, a popover or a tooltip is non-modal (`modal: false`): it inerts nothing
+ *   and takes focus only when given `initialFocus` (only then is its root made focusable). Its `owner`
+ *   is the element it was opened from (the trigger), in a dialog or on the bare page. Inside a dialog
+ *   it counts as part of that dialog for the Tab trap (its controls follow the trigger in Tab order)
+ *   and for where focus may return.
+ * - Presses. A press (on any element, an icon's <svg> or <path> included) outside the top non-modal
+ *   layer closes it, and keeps closing the non-modal layers under it until one holds the press: a press
+ *   inside a layer, on its trigger or in a layer it owns belongs to that layer. So a press in a parent
+ *   menu closes its submenu only, a press outside both closes both, and a press on a trigger is the
+ *   trigger's own handler to decide (no close-then-reopen). `outsidePress: false` keeps a layer open.
+ *   The press still reaches what is under it, but a dialog's scrim does not take a press that closed a
+ *   layer as its own (`pressClosedLayer`): one press closes the menu, the next one the dialog. The
+ *   press that opened a layer never closes it.
  * - Escape (and Big Picture's back) closes only the top layer, if `dismissible()` allows; an element
  *   inside a layer can claim Escape first with `preventDefault` or `stopPropagation`; a held Escape
  *   (auto-repeat) closes nothing more.
  */
 export interface LayerOptions {
-  /** A modal layer inerts everything under it and traps Tab. Default true. */
+  /** A modal layer inerts everything under it, takes focus and traps Tab. Default true. */
   modal?: boolean;
-  /** Read when Escape (or Big Picture's back, or an outside press) arrives. Default: always. */
+  /** Read when Escape, Big Picture's back, an outside press or a dialog opening would close it. Default: always. */
   dismissible?: () => boolean;
-  /** The user asked to close the layer (Escape, back, an outside press). */
+  /** The layer is being closed by the user or by a dialog opening over it: unmount it. */
   dismiss: () => void;
   /** An element or a selector inside the layer to focus on open; default per `initialFocus` in focus.ts. */
   initialFocus?: () => HTMLElement | string | null | undefined;
   /** Where focus goes on close when the element that opened the layer is gone. */
   returnFocus?: () => HTMLElement | null | undefined;
-  /** Non-modal: an element inside the layer this one belongs to (usually the trigger). */
+  /** Non-modal: the element it was opened from (its trigger), in a dialog or on the bare page. */
   owner?: () => HTMLElement | null | undefined;
-  /** Non-modal: a press outside this layer, its trigger and the layers it owns closes it. Default true. */
+  /** Non-modal: a press outside it, its trigger and the layers it owns closes it. Default true. */
   outsidePress?: boolean;
 }
 
@@ -218,6 +231,7 @@ export function openLayer(element: HTMLElement, options: LayerOptions): () => vo
   const modal = options.modal ?? true;
   const active = document.activeElement;
   const owner = modal ? null : options.owner?.();
+  if (modal) for (const dismiss of stack.dismissNonModal()) dismiss();
   const id = stack.open({
     element,
     modal,

@@ -159,6 +159,17 @@ export class LayerStack<E, F> {
     return { focus, enter: focus === null ? (modal?.element ?? null) : null };
   }
 
+  /**
+   * A modal layer is opening: every non-modal layer open now (a page menu, a tooltip, a listbox owned
+   * by a lower dialog) would be left inert under or over the new scrim, so each that may close is
+   * removed; their `dismiss` functions are returned for the caller to run.
+   */
+  dismissNonModal(): (() => void)[] {
+    const closing = this.#entries.filter((entry) => !entry.modal && entry.dismissible());
+    this.#entries = this.#entries.filter((entry) => !closing.includes(entry));
+    return closing.map((entry) => entry.dismiss);
+  }
+
   /** Escape: the top layer closes if it may; a layer that may not still swallows the key. */
   dismissTop(): Dismissal<E, F> {
     const top = this.#entries.at(-1);
