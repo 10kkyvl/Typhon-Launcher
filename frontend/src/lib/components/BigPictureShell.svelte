@@ -3,8 +3,7 @@
   import { ArrowLeft, Download, Gamepad2, House, Library, Menu, Monitor, Search, Settings, User, Users, WifiOff } from '@lucide/svelte';
   import { startBigPictureInput, type BigPictureCommand, type BigPictureDevice } from '../bigpicture/input';
   import { focusControl, moveFocus } from '../bigpicture/navigation';
-  import { layerCommand } from '../bigpicture/layers';
-  import { topLayer } from '../layers';
+  import { layerCommand, layerTakesInput } from '../bigpicture/layers';
   import { exitBigPicture, restoreBigPictureWindow } from '../bigpicture/mode';
   import { createBigPictureSession } from '../bigpicture/session';
   import { entry, popPage, pushPage, type Page, type Section } from '../bigpicture/router';
@@ -202,7 +201,7 @@
     moveFocus(root, command);
   }
   function trapTab(event: KeyboardEvent) {
-    if (event.key !== 'Tab' || event.metaKey || event.ctrlKey || event.altKey || applyingUpdate || topLayer()) return;
+    if (event.key !== 'Tab' || event.metaKey || event.ctrlKey || event.altKey || applyingUpdate || layerTakesInput()) return;
     const nodes = controls(scope());
     if (!nodes.length) return;
     event.preventDefault();
@@ -222,7 +221,7 @@
     // A completed request can remove/disable the focused button. Recover only
     // when focus is actually lost, never when live progress changes elsewhere.
     const observer = new MutationObserver(() => {
-      if (disposed || applyingUpdate || !document.hasFocus() || textRequest || topLayer()) return;
+      if (disposed || applyingUpdate || !document.hasFocus() || textRequest || layerTakesInput()) return;
       const buttons = controls(scope());
       if (buttons.includes(document.activeElement as HTMLButtonElement)) return;
       // Pending controls are often disabled for one RPC. Wait for that same

@@ -11,6 +11,11 @@ function commandRoot(): HTMLElement | null {
   return top && focusableIn(top).length > 0 ? top : null;
 }
 
+/** A layer takes Big Picture's input: the shell's commands, its Tab trap and its focus recovery stand aside. */
+export function layerTakesInput(): boolean {
+  return commandRoot() !== null;
+}
+
 /**
  * While a shared dialog (an emulator or BIOS prompt, a confirmation) is open over Big Picture, the
  * shell's commands act on it instead of on the inert shell behind: back closes the top layer as Escape
