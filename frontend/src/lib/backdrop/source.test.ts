@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { LibraryGame } from '../services/library';
 import type { GameArt } from '../services/metadata';
-import { artRequest, backdropArt, pageAmbient, playedArtRequests, rememberedGame } from './source';
+import { artRequest, backdropSources, pageAmbient, playedArtRequests, rememberedGame } from './source';
 
 function game(id: string, extra: Partial<LibraryGame> = {}): LibraryGame {
   return {
@@ -22,29 +22,38 @@ function game(id: string, extra: Partial<LibraryGame> = {}): LibraryGame {
 const art = (cover: string, hero: string): GameArt => ({ cover, hero });
 
 describe('the art behind a game', () => {
-  it('prefers the hero, then the cover of the canonical game, then the library cover', () => {
+  it('tries the hero, then the cover of the canonical game, then the library cover', () => {
     const games = [game('lib-1', { canonicalGameId: 'c1', cover: '/media/own.jpg' })];
-    expect(backdropArt('lib-1', games, { c1: art('/media/cover.jpg', '/media/hero.jpg') })).toBe('/media/hero.jpg');
-    expect(backdropArt('lib-1', games, { c1: art('/media/cover.jpg', '') })).toBe('/media/cover.jpg');
-    expect(backdropArt('lib-1', games, { c1: art('', '') })).toBe('/media/own.jpg');
-    expect(backdropArt('lib-1', games, {})).toBe('/media/own.jpg');
+    expect(backdropSources('lib-1', games, { c1: art('/media/cover.jpg', '/media/hero.jpg') })).toEqual([
+      '/media/hero.jpg',
+      '/media/cover.jpg',
+      '/media/own.jpg',
+    ]);
+    expect(backdropSources('lib-1', games, { c1: art('/media/cover.jpg', '') })).toEqual(['/media/cover.jpg', '/media/own.jpg']);
+    expect(backdropSources('lib-1', games, { c1: art('', '') })).toEqual(['/media/own.jpg']);
+    expect(backdropSources('lib-1', games, {})).toEqual(['/media/own.jpg']);
+  });
+
+  it('lists a picture once even when two sources name it', () => {
+    const games = [game('lib-1', { canonicalGameId: 'c1', cover: '/media/same.jpg' })];
+    expect(backdropSources('lib-1', games, { c1: art('/media/same.jpg', '/media/same.jpg') })).toEqual(['/media/same.jpg']);
   });
 
   it('maps a library id through its canonical id, never through another game that shares the art key', () => {
     const games = [game('lib-1', { canonicalGameId: 'c1' }), game('c2')];
     const map = { c1: art('', '/media/one.jpg'), 'lib-1': art('', '/media/wrong.jpg'), c2: art('', '/media/two.jpg') };
-    expect(backdropArt('lib-1', games, map)).toBe('/media/one.jpg');
-    expect(backdropArt('c2', games, map)).toBe('');
+    expect(backdropSources('lib-1', games, map)).toEqual(['/media/one.jpg']);
+    expect(backdropSources('c2', games, map)).toEqual([]);
   });
 
   it('takes the art store directly for a game outside the library', () => {
-    expect(backdropArt('catalog-7', [], { 'catalog-7': art('/media/c.jpg', '/media/h.jpg') })).toBe('/media/h.jpg');
-    expect(backdropArt('catalog-7', [], {})).toBe('');
+    expect(backdropSources('catalog-7', [], { 'catalog-7': art('/media/c.jpg', '/media/h.jpg') })).toEqual(['/media/h.jpg', '/media/c.jpg']);
+    expect(backdropSources('catalog-7', [], {})).toEqual([]);
   });
 
   it('treats blank placeholders as no art', () => {
     const games = [game('lib-1', { canonicalGameId: 'c1', cover: ' ' })];
-    expect(backdropArt('lib-1', games, { c1: art('—', 'null') })).toBe('');
+    expect(backdropSources('lib-1', games, { c1: art('—', 'null') })).toEqual([]);
   });
 });
 
@@ -94,7 +103,7 @@ describe('the game a game page shows behind the window', () => {
   it('is a catalog game by its canonical id, before the art store knows it', () => {
     expect(pageAmbient(undefined, 'catalog-7')).toBe('catalog-7');
     expect(artRequest('catalog-7', [], {})).toBe('catalog-7');
-    expect(backdropArt('catalog-7', [], {})).toBe('');
+    expect(backdropSources('catalog-7', [], {})).toEqual([]);
   });
 
   it('is nothing for a page without a game', () => {

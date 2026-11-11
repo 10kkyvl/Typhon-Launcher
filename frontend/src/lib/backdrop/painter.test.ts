@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { BackdropPainter, type PainterDeps } from './painter';
+import { BackdropPainter, PICTURE_TIMEOUT_MS, type PainterDeps } from './painter';
 import type { BackdropLook } from './pixels';
 
 const LOOK: BackdropLook = { saturate: 0.75, dim: [14, 15, 17, 0.6], limit: { max: 0.03 } };
@@ -49,7 +49,7 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 describe('the backdrop painter', () => {
   it('swaps at once when motion is off', async () => {
     const h = harness({ a: () => Promise.resolve(solid(40)) });
-    await h.painter.show('a', LOOK, KEY, 0);
+    await h.painter.show(['a'], LOOK, KEY, 0);
     expect([...h.screen]).toEqual([...solid(40)]);
     expect(h.deps.frame).not.toHaveBeenCalled();
     expect(h.deps.put).toHaveBeenCalledTimes(1);
@@ -57,8 +57,8 @@ describe('the backdrop painter', () => {
 
   it('cross-fades over the given time and stops asking for frames once it is done', async () => {
     const h = harness({ a: () => Promise.resolve(solid(40)), b: () => Promise.resolve(solid(200)) });
-    await h.painter.show('a', LOOK, KEY, 0);
-    await h.painter.show('b', LOOK, KEY, 600);
+    await h.painter.show(['a'], LOOK, KEY, 0);
+    await h.painter.show(['b'], LOOK, KEY, 600);
     expect(h.deps.frame).toHaveBeenCalledTimes(1);
     h.tick(300);
     expect(h.screen[0]).toBeGreaterThan(40);
@@ -71,8 +71,8 @@ describe('the backdrop painter', () => {
   it('the newest target wins: a late picture for an older one is never drawn', async () => {
     const slow = deferred<Uint8ClampedArray | null>();
     const h = harness({ old: () => slow.promise, new: () => Promise.resolve(solid(90)) });
-    const first = h.painter.show('old', LOOK, KEY, 0);
-    await h.painter.show('new', LOOK, KEY, 0);
+    const first = h.painter.show(['old'], LOOK, KEY, 0);
+    await h.painter.show(['new'], LOOK, KEY, 0);
     slow.resolve(solid(250));
     await first;
     expect([...h.screen]).toEqual([...solid(90)]);
@@ -81,61 +81,92 @@ describe('the backdrop painter', () => {
   it('a target that comes back to what is drawn still cancels the load in flight', async () => {
     const slow = deferred<Uint8ClampedArray | null>();
     const h = harness({ a: () => Promise.resolve(solid(40)), b: () => slow.promise });
-    await h.painter.show('a', LOOK, KEY, 0);
-    const toB = h.painter.show('b', LOOK, KEY, 0);
-    await h.painter.show('a', LOOK, KEY, 0);
+    await h.painter.show(['a'], LOOK, KEY, 0);
+    const toB = h.painter.show(['b'], LOOK, KEY, 0);
+    await h.painter.show(['a'], LOOK, KEY, 0);
     slow.resolve(solid(250));
     await toB;
     expect([...h.screen]).toEqual([...solid(40)]);
   });
 
-  it('keeps the previous wash when a picture fails, and does not try it again', async () => {
+  it('fades to the plain page when every picture of the next game fails, and does not try them again', async () => {
     const h = harness({ a: () => Promise.resolve(solid(40)), broken: () => Promise.resolve(null) });
-    await h.painter.show('a', LOOK, KEY, 0);
-    await h.painter.show('broken', LOOK, KEY, 0);
-    expect([...h.screen]).toEqual([...solid(40)]);
-    await h.painter.show('a', LOOK, KEY, 0);
-    await h.painter.show('broken', LOOK, KEY, 0);
-    await h.painter.show('broken', LOOK, KEY, 0);
+    await h.painter.show(['a'], LOOK, KEY, 0);
+    await h.painter.show(['broken'], LOOK, KEY, 0);
+    expect([...h.screen]).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
+    await h.painter.show(['a'], LOOK, KEY, 0);
+    await h.painter.show(['broken'], LOOK, KEY, 0);
+    await h.painter.show(['broken'], LOOK, KEY, 0);
     expect(vi.mocked(h.deps.picture).mock.calls.filter(([url]) => url === 'broken')).toHaveLength(1);
+  });
+
+  it('falls back to the next picture of the same game, each tried once', async () => {
+    const h = harness({ hero: () => Promise.resolve(null), cover: () => Promise.resolve(solid(70)), own: () => Promise.resolve(solid(10)) });
+    await h.painter.show(['hero', 'cover', 'own'], LOOK, KEY, 0);
+    expect([...h.screen]).toEqual([...solid(70)]);
+    await h.painter.show([], LOOK, KEY, 0);
+    await h.painter.show(['hero', 'cover', 'own'], LOOK, KEY, 0);
+    expect(vi.mocked(h.deps.picture).mock.calls.map(([url]) => url)).toEqual(['hero', 'cover']);
+  });
+
+  it('a theme change whose picture fails leaves no pixels of the old theme', async () => {
+    const h = harness({});
+    const pictures = vi.mocked(h.deps.picture);
+    pictures.mockImplementationOnce(() => Promise.resolve(solid(40)));
+    await h.painter.show(['a'], LOOK, KEY, 0);
+    await h.painter.show(['a'], { ...LOOK, limit: { min: 0.7 } }, 'light', 0);
+    expect([...h.screen]).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
   });
 
   it('treats a rejected load as a failed one', async () => {
     const h = harness({ a: () => Promise.resolve(solid(40)), bad: () => Promise.reject(new Error('decode')) });
-    await h.painter.show('a', LOOK, KEY, 0);
-    await expect(h.painter.show('bad', LOOK, KEY, 0)).resolves.toBeUndefined();
-    expect([...h.screen]).toEqual([...solid(40)]);
+    await h.painter.show(['a'], LOOK, KEY, 0);
+    await expect(h.painter.show(['bad'], LOOK, KEY, 0)).resolves.toBeUndefined();
+    expect([...h.screen]).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
+  });
+
+  it('gives up on a picture that stalls, so the next one gets its turn', async () => {
+    vi.useFakeTimers();
+    try {
+      const h = harness({ stalled: () => new Promise(() => {}), cover: () => Promise.resolve(solid(70)) });
+      const shown = h.painter.show(['stalled', 'cover'], LOOK, KEY, 0);
+      await vi.advanceTimersByTimeAsync(PICTURE_TIMEOUT_MS);
+      await shown;
+      expect([...h.screen]).toEqual([...solid(70)]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('fades to the plain page when there is no art or no look', async () => {
     const h = harness({ a: () => Promise.resolve(solid(40)) });
-    await h.painter.show('a', LOOK, KEY, 0);
-    await h.painter.show('', LOOK, KEY, 0);
+    await h.painter.show(['a'], LOOK, KEY, 0);
+    await h.painter.show([], LOOK, KEY, 0);
     expect([...h.screen]).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
-    await h.painter.show('a', LOOK, KEY, 0);
-    await h.painter.show('a', null, '', 0);
+    await h.painter.show(['a'], LOOK, KEY, 0);
+    await h.painter.show(['a'], null, '', 0);
     expect([...h.screen]).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
     expect(vi.mocked(h.deps.picture).mock.calls).toHaveLength(1);
   });
 
   it('bakes again for a new look, and does nothing for the same target and look', async () => {
     const h = harness({ a: () => Promise.resolve(solid(40)) });
-    await h.painter.show('a', LOOK, KEY, 0);
-    await h.painter.show('a', LOOK, KEY, 0);
+    await h.painter.show(['a'], LOOK, KEY, 0);
+    await h.painter.show(['a'], LOOK, KEY, 0);
     expect(h.deps.put).toHaveBeenCalledTimes(1);
-    await h.painter.show('a', { ...LOOK, saturate: 0.5 }, 'other', 0);
+    await h.painter.show(['a'], { ...LOOK, saturate: 0.5 }, 'other', 0);
     expect(h.deps.picture).toHaveBeenCalledTimes(2);
     expect(vi.mocked(h.deps.picture).mock.calls[1][1].saturate).toBe(0.5);
   });
 
   it('a new target in the middle of a fade starts from what is on screen', async () => {
     const h = harness({ a: () => Promise.resolve(solid(0)), b: () => Promise.resolve(solid(200)), c: () => Promise.resolve(solid(100)) });
-    await h.painter.show('a', LOOK, KEY, 0);
-    await h.painter.show('b', LOOK, KEY, 600);
+    await h.painter.show(['a'], LOOK, KEY, 0);
+    await h.painter.show(['b'], LOOK, KEY, 600);
     h.tick(300);
     const mid = h.screen[0];
     expect(mid).toBeGreaterThan(0);
-    await h.painter.show('c', LOOK, KEY, 600);
+    await h.painter.show(['c'], LOOK, KEY, 600);
     expect(h.frames.size).toBe(1);
     h.tick(0);
     expect(h.screen[0]).toBe(mid);
@@ -146,7 +177,7 @@ describe('the backdrop painter', () => {
   it('draws nothing more after it is disposed', async () => {
     const slow = deferred<Uint8ClampedArray | null>();
     const h = harness({ a: () => slow.promise });
-    const pending = h.painter.show('a', LOOK, KEY, 0);
+    const pending = h.painter.show(['a'], LOOK, KEY, 0);
     h.painter.dispose();
     slow.resolve(solid(40));
     await pending;

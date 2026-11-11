@@ -15,13 +15,13 @@ function artKey(id: string, games: readonly LibraryGame[]): { game?: LibraryGame
 }
 
 /**
- * The picture behind a game: its hero (the user's pick or a landscape screenshot), else its cover from
- * the art store, else the cover the library holds for it. Empty when there is none.
+ * The pictures behind a game, in the order they are tried: its hero (the user's pick or a landscape
+ * screenshot), its cover from the art store, the cover the library holds for it. Empty when there is none.
  */
-export function backdropArt(id: string, games: readonly LibraryGame[], art: ArtMap): string {
+export function backdropSources(id: string, games: readonly LibraryGame[], art: ArtMap): string[] {
   const { game, key } = artKey(id, games);
   const known = key ? art[key] : undefined;
-  return clean(known?.hero) || clean(known?.cover) || clean(game?.cover);
+  return [...new Set([clean(known?.hero), clean(known?.cover), clean(game?.cover)].filter(Boolean))];
 }
 
 /**
@@ -48,7 +48,7 @@ function played(games: readonly LibraryGame[]): LibraryGame[] {
 
 /** The most recently played library game that has art; null before any is played. */
 export function rememberedGame(games: readonly LibraryGame[], art: ArtMap): string | null {
-  return played(games).find((game) => backdropArt(game.id, games, art))?.id ?? null;
+  return played(games).find((game) => backdropSources(game.id, games, art).length > 0)?.id ?? null;
 }
 
 /** Canonical ids of the last few played games the art store has not answered for yet. */

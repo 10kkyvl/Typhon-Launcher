@@ -12,11 +12,15 @@ export interface PainterDeps {
 
 /** Baked pictures kept for going back and forth between games; each is a few kilobytes. */
 const CACHE_SIZE = 32;
+/** A picture that has neither loaded nor failed by then counts as failed. */
+export const PICTURE_TIMEOUT_MS = 10_000;
 
 /**
- * Draws the backdrop into one small buffer: a picture per art and look, baked once, and a cross-fade
- * between the picture on screen and the next one. Only the newest target is ever drawn, a picture that
- * fails stays failed for that look, and frames are requested only while a fade runs.
+ * Draws the backdrop into one small buffer: a picture per art URL and look, baked once, and a
+ * cross-fade from the picture on screen to the next one. A game's pictures are tried in order, each
+ * once per look; when none works the backdrop fades to the plain page, never keeping another game's
+ * or another theme's pixels. Only the newest target is ever drawn, and frames are requested only
+ * while a fade runs.
  */
 export class BackdropPainter {
   private readonly pictures = new Map<string, Promise<Pixels | null>>();
@@ -34,16 +38,22 @@ export class BackdropPainter {
     this.empty = new Uint8ClampedArray(screen.length);
   }
 
-  /** Shows the art at `url` in `look` (no art without either), fading over `ms`; resolves once settled. */
-  async show(url: string, look: BackdropLook | null, lookKey: string, ms: number): Promise<void> {
-    const key = url && look ? `${lookKey}\n${url}` : '';
+  /** Shows the first of `sources` that bakes in `look` (none without a look), fading over `ms`. */
+  async show(sources: readonly string[], look: BackdropLook | null, lookKey: string, ms: number): Promise<void> {
+    const key = sources.length > 0 && look ? [lookKey, ...sources].join('\n') : '';
     // Any new target invalidates loads in flight, even one that returns to what is already drawn.
     const mine = ++this.generation;
     if (key === this.drawn) return;
-    const to = key && look ? await this.picture(key, url, look) : this.empty;
-    if (mine !== this.generation) return;
+    let to: Pixels | null = null;
+    if (look) {
+      for (const url of sources) {
+        to = await this.picture(`${lookKey}\n${url}`, url, look);
+        if (mine !== this.generation) return;
+        if (to) break;
+      }
+    }
     this.drawn = key;
-    if (to) this.fade(to, ms);
+    this.fade(to ?? this.empty, ms);
   }
 
   dispose() {
@@ -56,11 +66,7 @@ export class BackdropPainter {
   private picture(key: string, url: string, look: BackdropLook): Promise<Pixels | null> {
     let pending = this.pictures.get(key);
     if (!pending) {
-      pending = this.deps.picture(url, look).catch((err: unknown) => {
-        // A broken image is the art's problem, not the window's: no wash for it, and no retry.
-        console.warn('backdrop: art could not be baked', url, err);
-        return null;
-      });
+      pending = settle(this.deps.picture(url, look), url);
       this.pictures.set(key, pending);
       if (this.pictures.size > CACHE_SIZE) this.pictures.delete(this.pictures.keys().next().value as string);
     }
@@ -86,4 +92,26 @@ export class BackdropPainter {
     };
     this.frameId = this.deps.frame(step);
   }
+}
+
+/** The picture, or null once it fails, rejects or stalls past PICTURE_TIMEOUT_MS. */
+function settle(picture: Promise<Pixels | null>, url: string): Promise<Pixels | null> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      console.warn('backdrop: art took too long to load', url);
+      resolve(null);
+    }, PICTURE_TIMEOUT_MS);
+    picture.then(
+      (pixels) => {
+        clearTimeout(timer);
+        resolve(pixels);
+      },
+      (err: unknown) => {
+        clearTimeout(timer);
+        // A broken image is the art's problem, not the window's: no wash from it, and no retry.
+        console.warn('backdrop: art could not be baked', url, err);
+        resolve(null);
+      },
+    );
+  });
 }

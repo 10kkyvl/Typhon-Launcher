@@ -8,7 +8,7 @@
   import { documentMotion, tokenMs } from '../motion/plate';
   import { BackdropPainter } from '../backdrop/painter';
   import { BACKDROP_H, BACKDROP_LOOK_COLORS, BACKDROP_W, backdropLook, bakeImage, loadImage, type BackdropLook } from '../backdrop/pixels';
-  import { artRequest, backdropArt, playedArtRequests, rememberedGame } from '../backdrop/source';
+  import { artRequest, backdropSources, playedArtRequests, rememberedGame } from '../backdrop/source';
 
   /**
    * The window backdrop: the art of the game the user is looking at, baked into a 64 px picture
@@ -21,7 +21,7 @@
   let painter = $state.raw<BackdropPainter | null>(null);
 
   const target = $derived(
-    pickAmbient($ambientState, rememberedGame($libraryGames, $gameArt), (id) => backdropArt(id, $libraryGames, $gameArt) !== ''),
+    pickAmbient($ambientState, rememberedGame($libraryGames, $gameArt), (id) => backdropSources(id, $libraryGames, $gameArt).length > 0),
   );
 
   $effect(() => {
@@ -31,7 +31,7 @@
     if (ids.length > 0) requestArt(ids);
   });
 
-  const url = $derived(target ? backdropArt(target, $libraryGames, $gameArt) : '');
+  const sources = $derived(target ? backdropSources(target, $libraryGames, $gameArt) : []);
 
   // Read from the window, not the theme file: custom CSS, a personal accent and any colour syntax are
   // already resolved there. The theme and accent stores change only after the window has them.
@@ -67,7 +67,7 @@
     const target = painter;
     if (!target) return;
     const ms = documentMotion() && !document.hidden ? tokenMs('--motion-backdrop', 600) : 0;
-    target.show(url, look, look ? JSON.stringify(look) : '', ms).catch((err: unknown) => {
+    target.show(sources, look, look ? JSON.stringify(look) : '', ms).catch((err: unknown) => {
       console.warn('backdrop: the picture could not be drawn', err);
     });
   });
