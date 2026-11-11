@@ -32,12 +32,23 @@
     popped = adding ? id : '';
     ontoggle(id);
     await tick();
-    // Focus follows the reaction: onto the chip a pick has just added, and off a chip that has gone
-    // (the user's own, taken back) to the "+".
-    const chip = bar?.querySelector<HTMLElement>(`[data-reaction="${id}"]`);
-    if (adding) chip?.focus();
-    else if (!chip && !bar?.contains(document.activeElement)) bar?.querySelector<HTMLElement>('.add')?.focus();
+    // Focus follows the reaction onto the chip a pick has just added.
+    if (adding) bar?.querySelector<HTMLElement>(`[data-reaction="${id}"]`)?.focus();
   }
+
+  // A chip goes with its last reaction: taken back by the user, rolled back when the request failed,
+  // or withdrawn by its only other author. Focus that was on it moves to the "+", not off the feed.
+  $effect.pre(() => {
+    void used;
+    const active = document.activeElement;
+    const held = active instanceof HTMLElement && active.matches('[data-reaction]') && bar?.contains(active) ? active : null;
+    if (!held) return;
+    void tick().then(() => {
+      const now = document.activeElement;
+      if (held.isConnected || (now !== null && now !== document.body)) return;
+      bar?.querySelector<HTMLElement>('.add')?.focus();
+    });
+  });
 </script>
 
 {#snippet reaction(id: ReactionId)}

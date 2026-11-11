@@ -36,12 +36,16 @@ function feedEvent(reactions: { emoji: string; count: number }[], mine: string[]
 
 let app: HTMLDivElement;
 let release: () => void = () => {};
+let fail: (reason: Error) => void = () => {};
 
 beforeEach(() => {
   locale.set('en');
   for (const call of [react, unreact]) {
     vi.mocked(call).mockReset();
-    vi.mocked(call).mockImplementation(() => new Promise<void>((resolve) => (release = resolve)));
+    vi.mocked(call).mockImplementation(() => new Promise<void>((resolve, reject) => {
+      release = resolve;
+      fail = reject;
+    }));
   }
   app = document.createElement('div');
   app.id = 'app';
@@ -137,5 +141,41 @@ describe('feed reactions keep the keyboard user in place', () => {
     expect(unreact).toHaveBeenCalledExactlyOnceWith('7', 'fire');
     expect(screen.queryByRole('button', { name: /^Fire/ })).toBeNull();
     expect(focusedControl()).toBe(add());
+  });
+
+  it('a reaction the server refuses takes its new chip away and leaves focus on the "+"', async () => {
+    const { keys, add, chip } = setup(feedEvent([{ emoji: 'fire', count: 2 }], ['fire']));
+    (add() as HTMLElement).focus();
+    await keys.keyboard('{Enter}');
+    await keys.tab();
+    await keys.keyboard('{Enter}');
+    expect(focusedControl()).toBe(chip('Heart, 1'));
+
+    fail(new Error('offline'));
+    await Promise.resolve();
+    await tick();
+    await tick();
+
+    expect(screen.queryByRole('button', { name: /^Heart/ })).toBeNull();
+    expect(focusedControl()).toBe(add());
+  });
+
+  it('a chip that goes while focus is elsewhere does not pull focus into the bar', async () => {
+    const { keys, add, chip } = setup(feedEvent([{ emoji: 'fire', count: 2 }], ['fire']));
+    const outside = document.createElement('button');
+    document.body.append(outside);
+    (add() as HTMLElement).focus();
+    await keys.keyboard('{Enter}');
+    await keys.tab();
+    await keys.keyboard('{Enter}');
+    expect(focusedControl()).toBe(chip('Heart, 1'));
+    outside.focus();
+
+    fail(new Error('offline'));
+    await Promise.resolve();
+    await tick();
+    await tick();
+
+    expect(document.activeElement).toBe(outside);
   });
 });
