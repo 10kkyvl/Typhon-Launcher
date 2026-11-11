@@ -116,6 +116,8 @@ const INDICATORS: { fg: string; on: string[]; min: number }[] = [
   { fg: '--accent-bright', on: PAGE, min: 3 },
   { fg: '--accent-bright', on: LOW, min: 4.5 },
   { fg: '--accent-ring', on: PAGE, min: 3 },
+  // A focused field with a bad value draws its ring in --danger (global.css).
+  { fg: '--danger', on: PAGE, min: 3 },
   // An ON switch draws its knob in `--accent-on, var(--bg)` on the bright track; presets set no --accent-on.
   { fg: '--bg', on: ['--accent-bright'], min: 3 },
 ];

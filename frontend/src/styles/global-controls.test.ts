@@ -49,6 +49,11 @@ describe('a text field', () => {
     expect(body('.input:focus-visible')).toMatch(/outline: 2px solid var\(--accent-ring\);/);
     expect(body('.input:focus-visible')).toMatch(/outline-offset: -1px;/);
   });
+
+  // The ring is drawn over the border, so an invalid field would lose its red edge while focused.
+  it('keeps saying it holds a bad value while focused: the ring takes the danger colour', () => {
+    expect(body(".input[aria-invalid='true']:focus-visible")).toMatch(/outline-color: var\(--danger\);/);
+  });
 });
 
 describe('selecting text', () => {

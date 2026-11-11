@@ -133,6 +133,11 @@ h4 {
   outline-offset: -1px;
 }
 
+/* The ring covers the border, so a field holding a bad value keeps saying so while focused. */
+.input[aria-invalid='true']:focus-visible {
+  outline-color: var(--danger);
+}
+
 .input::placeholder {
   color: var(--text-3);
 }
