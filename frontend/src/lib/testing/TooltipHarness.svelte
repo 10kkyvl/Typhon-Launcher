@@ -6,8 +6,9 @@
   import Tooltip from '../components/Tooltip.svelte';
   import type { Placement } from '../utils/position';
 
-  // A control with a hint between two plain buttons, on the bare page (next to a menu button) or
-  // inside a dialog, and a second dialog a test opens over it. For Tooltip.dom.test.ts.
+  // A control with a hint between two plain buttons, on the bare page (next to a menu button, and a
+  // menu button with a hint of its own) or inside a dialog, and a second dialog a test opens over it.
+  // For Tooltip.dom.test.ts.
   let {
     inDialog = false,
     describe = true,
@@ -73,6 +74,13 @@
     <Select options={LANGUAGES} bind:value={language} label="Language" />
     <input aria-label="Search" />
     <p data-testid="blank">Nothing to press here</p>
+    <DropdownMenu items={[{ id: 'rename', label: 'Rename' }]}>
+      {#snippet trigger({ props })}
+        <Tooltip text="More actions" describe={false}>
+          <button type="button" aria-label="More" {...props}>…</button>
+        </Tooltip>
+      {/snippet}
+    </DropdownMenu>
   </section>
 {/if}
 

@@ -109,6 +109,44 @@ describe('Tooltip: pointer', () => {
     expect(shown()).toBe(true);
   });
 
+  it('a menu opened and answered with the pointer gives its button focus back without the hint', async () => {
+    const { keys, wait } = setup();
+    const more = screen.getByRole('button', { name: 'More' });
+    const hint = () => [...document.querySelectorAll('[data-part="tooltip"]')].some((tip) => tip.textContent?.trim() === 'More actions');
+    await keys.click(more);
+    await wait(0);
+    const item = screen.getByRole('menuitem', { name: 'Rename' });
+    await keys.hover(item);
+    await wait(1000);
+
+    await keys.click(item);
+    await wait(1000);
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(document.activeElement).toBe(more);
+    expect(hint()).toBe(false);
+  });
+
+  it('a menu opened with Enter and closed with Escape leaves its button focused with its hint shown', async () => {
+    const { keys, wait } = setup();
+    const more = screen.getByRole('button', { name: 'More' });
+    const hint = () => [...document.querySelectorAll('[data-part="tooltip"]')].some((tip) => tip.textContent?.trim() === 'More actions');
+    screen.getByRole('textbox', { name: 'Search' }).focus();
+    await keys.tab();
+    expect(document.activeElement).toBe(more);
+    expect(hint()).toBe(true);
+
+    await keys.keyboard('{Enter}');
+    await wait(0);
+    expect(screen.queryByRole('menu')).not.toBeNull();
+    expect(hint()).toBe(false);
+
+    await keys.keyboard('{Escape}');
+    await wait(0);
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(document.activeElement).toBe(more);
+    expect(hint()).toBe(true);
+  });
+
   it('a click focuses the control without showing the hint (pointer focus is not keyboard focus)', async () => {
     const { keys, control, shown, wait } = setup();
     await keys.click(control());

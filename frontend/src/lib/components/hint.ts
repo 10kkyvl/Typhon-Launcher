@@ -23,7 +23,9 @@ export function usable(control: HTMLElement | null): boolean {
 /**
  * Feeds `intent` from the control's events as they reach `node` (the control, or an element around
  * it): the pointer resting on it (touch aside), keyboard focus (`:focus-visible`), blur, and a press,
- * which hides the hint until the pointer and focus have left. Returns a cleanup function.
+ * which hides the hint until the pointer and focus have left. A popup that closes gives focus back
+ * while its control still says it is expanded, so keyboard focus is read again once it no longer does.
+ * Returns a cleanup function.
  */
 export function hintTrigger(node: HTMLElement, { intent, control }: HintSource): () => void {
   const inControl = (target: EventTarget | null): boolean => target instanceof Node && Boolean(control()?.contains(target));
@@ -48,12 +50,20 @@ export function hintTrigger(node: HTMLElement, { intent, control }: HintSource):
     if (inControl(event.target)) intent.escape();
   };
 
+  const collapsed = new MutationObserver((records) => {
+    const target = control();
+    if (!target || !records.some((record) => record.target === target && record.oldValue === 'true')) return;
+    if (usable(target) && target.matches(':focus-visible')) intent.focus();
+  });
+  collapsed.observe(node, { subtree: true, attributes: true, attributeFilter: ['aria-expanded'], attributeOldValue: true });
+
   node.addEventListener('pointerover', onPointerover);
   node.addEventListener('pointerout', onPointerout);
   node.addEventListener('focusin', onFocusin);
   node.addEventListener('focusout', onFocusout);
   node.addEventListener('pointerdown', onPointerdown);
   return () => {
+    collapsed.disconnect();
     node.removeEventListener('pointerover', onPointerover);
     node.removeEventListener('pointerout', onPointerout);
     node.removeEventListener('focusin', onFocusin);
