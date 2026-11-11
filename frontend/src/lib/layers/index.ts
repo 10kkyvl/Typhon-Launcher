@@ -38,6 +38,8 @@ let listening = false;
 const closingPresses = new WeakSet<Event>();
 // Layer roots that took focus when they opened (dialogs, menus, popovers).
 const holders = new WeakSet<HTMLElement>();
+// The owners of non-modal layers that took no focus, to tell a field blurring from a field unmounted.
+const owners = new WeakMap<HTMLElement, () => HTMLElement | null>();
 
 /**
  * Options of a layer: the extension point for every kind of layer, built-in or from a plugin.
@@ -56,7 +58,9 @@ const holders = new WeakSet<HTMLElement>();
  *   is gone by then), ahead of its own `returnFocus`, which is used when the trigger is gone too.
  * - A menu, a select's listbox, a popover or a tooltip is non-modal (`modal: false`): it inerts nothing
  *   and takes focus only when given `initialFocus` (only then is its root made focusable). One that
- *   takes none (a listbox under its field) gives none back on close, unless focus was inside it. Its
+ *   takes none (a listbox under its field) gives none back on close, unless focus was inside it, or its
+ *   `owner` left the document while a dialog is open and <body> has focus (a parent `{#if}` unmounted the
+ *   field with its list open): then focus goes back into the dialog. Its
  *   `owner` is the element it was opened from (the trigger), in a dialog or on the bare page; the getter is read
  *   each time it is needed, so a trigger re-created while the layer is open (a re-keyed row) still
  *   counts. Option getters are read untracked: a re-render does not reopen the layer. Inside a dialog
@@ -184,13 +188,16 @@ function leavingSet(): HTMLElement[] {
 // Focus is given back when it was inside what closed, or has fallen out of a layer that held it (the
 // item under focus removed). A layer that never took focus (a listbox under its field, results under a
 // search field) has none to give back: while its field blurs, on the way to the next control, <body>
-// is the active element for a moment, and that is not a loss.
+// is the active element for a moment, and that is not a loss. Its field unmounted with it is one: in a
+// dialog, focus would otherwise stay on <body> with the dialog open.
 function settle(closed: Closed<HTMLElement, Element> | null, leaving: HTMLElement[]): void {
   if (!closed) return;
   const active = document.activeElement;
   const inside = active !== null && leaving.some((el) => el.contains(active));
   const gone = !active || active === document.body || !active.isConnected;
-  if (!inside && !(gone && leaving.some((el) => holders.has(el)))) return;
+  const held = leaving.some((el) => holders.has(el));
+  const orphaned = stack.topModal() !== null && leaving.some((el) => owners.has(el) && !owners.get(el)?.()?.isConnected);
+  if (!inside && !(gone && (held || orphaned))) return;
   if (closed.focus) focusQuietly(closed.focus);
   else if (closed.enter) enterLayer(closed.enter);
 }
@@ -289,6 +296,7 @@ export function openLayer(element: HTMLElement, options: LayerOptions): () => vo
   // Only a layer that takes focus can hold it itself (a click on its bare background keeps it inside).
   if (takesFocus && !element.hasAttribute('tabindex')) element.setAttribute('tabindex', '-1');
   if (takesFocus) holders.add(element);
+  else if (!modal && options.owner) owners.set(element, trigger);
 
   function onKeydown(event: KeyboardEvent) {
     if (!stack.has(id)) return;

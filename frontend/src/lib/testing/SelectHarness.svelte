@@ -17,6 +17,7 @@
     placeholder,
     disabled = false,
     naming = 'labelledby',
+    shown = true,
     onchange,
   }: {
     options: SelectOption[];
@@ -28,6 +29,8 @@
     disabled?: boolean;
     /** How the field gets its name "Language": a visible label it points at, `label`, or `<label for>` + `id`. */
     naming?: 'labelledby' | 'label' | 'for';
+    /** False unmounts the select, as a parent `{#if}` flipping under a backend event does. */
+    shown?: boolean;
     onchange?: (id: string) => void;
   } = $props();
 
@@ -51,7 +54,9 @@
   {:else if naming === 'for'}
     <label for="language-field">Language</label>
   {/if}
-  {#if controlled}
+  {#if !shown}
+    <!-- unmounted -->
+  {:else if controlled}
     <Select {options} {value} {...names} {placeholder} {disabled} onchange={change} />
   {:else}
     <Select {options} bind:value {...names} {placeholder} {disabled} />

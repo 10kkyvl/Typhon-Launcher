@@ -39,6 +39,7 @@ type Props = {
   placeholder?: string;
   disabled?: boolean;
   naming?: 'labelledby' | 'label' | 'for';
+  shown?: boolean;
   onchange?: (id: string) => void;
 };
 
@@ -524,6 +525,14 @@ describe('Select inside a dialog', () => {
     expect(view.list()).not.toBeNull();
     return { ...view, dialog };
   }
+
+  it('a field unmounted with its list open leaves focus in the dialog, not on the page under it', async () => {
+    const { dialog, list, rerender } = await inDialog();
+    await rerender({ shown: false });
+    expect(list()).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toBe(dialog);
+    expect(dialog.contains(document.activeElement)).toBe(true);
+  });
 
   it('the list is not inside the dialog, so its scrolling body cannot cut it', async () => {
     const { dialog, list } = await inDialog();

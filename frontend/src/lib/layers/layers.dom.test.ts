@@ -72,6 +72,52 @@ describe('a layer that never took focus', () => {
 
     expect(document.activeElement).toBe(field);
   });
+
+  it('in a dialog, gives none back while its field blurs on the way to the next control', () => {
+    const shell = dialog('<input id="dialog-field"><button id="dialog-next">next</button>');
+    openLayer(shell, { dismiss: () => {} });
+    const field = byId('dialog-field');
+    field.focus();
+    const box = document.createElement('div');
+    document.body.append(box);
+    const close = register(box, { modal: false, owner: () => field, dismiss: () => {} });
+
+    field.blur();
+    close();
+
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('in a dialog, puts focus back in the dialog when its field was unmounted under it', () => {
+    const shell = dialog('<button id="dialog-first">first</button><input id="dialog-field">');
+    openLayer(shell, { dismiss: () => {} });
+    const field = byId('dialog-field');
+    field.focus();
+    const box = document.createElement('div');
+    document.body.append(box);
+    const close = register(box, { modal: false, owner: () => field, dismiss: () => {} });
+
+    // A parent {#if} flipping under a backend event: the field and its list go together.
+    field.remove();
+    expect(document.activeElement).toBe(document.body);
+    close();
+
+    expect(document.activeElement).toBe(byId('dialog-first'));
+  });
+
+  it('on the bare page, leaves focus alone when its field was unmounted under it', () => {
+    const field = document.createElement('input');
+    const box = document.createElement('div');
+    app.append(field);
+    document.body.append(box);
+    field.focus();
+    const close = register(box, { modal: false, owner: () => field, dismiss: () => {} });
+
+    field.remove();
+    close();
+
+    expect(document.activeElement).toBe(document.body);
+  });
 });
 
 describe('a layer that took focus', () => {
