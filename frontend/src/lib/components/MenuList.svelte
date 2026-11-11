@@ -80,7 +80,8 @@
     }
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      if (current >= 0) pick(items[current]);
+      // A held key repeats keydown: one press runs one item.
+      if (!event.repeat && current >= 0) pick(items[current]);
       return;
     }
     const next = nextIndex(current, items.length, event.key, { isDisabled });
@@ -100,6 +101,10 @@
   aria-labelledby={label ? undefined : labelledby}
   aria-label={label}
   onkeydowncapture={onKeydown}
+  onkeyupcapture={(event) => {
+    // Items run on keydown; the browser's Space-keyup click on an item would run it again.
+    if (event.key === ' ') event.preventDefault();
+  }}
   {@attach layer({ modal: false, owner: () => owner(), returnFocus: () => owner(), initialFocus: entry, dismiss: () => onclose('dismiss') })}
   {@attach place}
 >

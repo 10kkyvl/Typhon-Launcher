@@ -7,6 +7,7 @@
     'aria-controls': string | undefined;
     onclick: (event: MouseEvent) => void;
     onkeydown: (event: KeyboardEvent) => void;
+    onkeyup: (event: KeyboardEvent) => void;
   }
 </script>
 
@@ -83,14 +84,27 @@
     'aria-controls': open ? menuId : undefined,
     onclick: (event: MouseEvent) => {
       if (open) close();
-      // detail 0: activated from the keyboard (Enter, Space) or by script (Big Picture's confirm).
+      // detail 0: a click from script (Big Picture's confirm), treated as the keyboard.
       else show(event.detail === 0 ? 'first' : 'menu');
     },
+    // Enter and Space act on keydown, never on the browser's click: a held key repeats keydown (and
+    // Enter its click), and the Space keyup after a pick would land on the trigger and reopen.
     onkeydown: (event: KeyboardEvent) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        if (event.repeat) return;
+        if (open) close();
+        else show('first');
+        return;
+      }
       if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
       event.preventDefault();
+      if (event.repeat && open) return;
       close();
       show(event.key === 'ArrowDown' ? 'first' : 'last');
+    },
+    onkeyup: (event: KeyboardEvent) => {
+      if (event.key === ' ') event.preventDefault();
     },
   });
 

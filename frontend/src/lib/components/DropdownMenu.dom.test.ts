@@ -186,6 +186,46 @@ describe('DropdownMenu: keyboard inside', () => {
   });
 });
 
+describe('DropdownMenu: held keys', () => {
+  it('Enter held on the trigger opens the menu once and runs nothing', async () => {
+    const { keys, onselect, trigger, item } = setup();
+    trigger().focus();
+
+    await keys.keyboard('{Enter>7}');
+    await keys.keyboard('{/Enter}');
+
+    expect(onselect).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(item('Open folder'));
+  });
+
+  it('Space held on the trigger opens the menu once; releasing it on the item runs nothing', async () => {
+    const { keys, onselect, trigger, item } = setup();
+    trigger().focus();
+
+    await keys.keyboard('[Space>7]');
+    await keys.keyboard('[/Space]');
+
+    expect(onselect).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(item('Open folder'));
+  });
+
+  it.each([
+    ['Enter', '{Enter>6}', '{/Enter}'],
+    ['Space', '[Space>6]', '[/Space]'],
+  ])('%s held on an item runs it once and does not reopen the menu', async (_key, hold, release) => {
+    const { keys, onselect, trigger, menu } = setup();
+    trigger().focus();
+    await keys.keyboard('{ArrowDown}{ArrowDown}');
+
+    await keys.keyboard(hold);
+    await keys.keyboard(release);
+
+    expect(onselect).toHaveBeenCalledExactlyOnceWith('move', expect.objectContaining({ id: 'move' }));
+    expect(menu()).toBeNull();
+    expect(document.activeElement).toBe(trigger());
+  });
+});
+
 describe('DropdownMenu: pointer', () => {
   it('a press on an item runs it, closes the menu and leaves focus on the trigger', async () => {
     const { keys, onselect, trigger, item, menu } = setup();
