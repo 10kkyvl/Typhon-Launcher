@@ -15,6 +15,10 @@
   --topbar-search-max: 44rem;
   --topbar-chip-max: 20rem;
 
+  /* The window backdrop: how much of the art's colour survives the bake, and how strongly the wash shows. */
+  --ambient-saturate: 0.75;
+  --ambient-opacity: 1;
+
   --motion-fast: var(--dur);
   --ease-out: var(--ease);
 }

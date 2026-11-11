@@ -20,6 +20,9 @@ const notPreviewed = new Set([
   '--dur-fast',
   '--dur-panel',
   '--dur-slow',
+  // The backdrop wash is baked from a game's art in a script; the static preview has neither.
+  '--ambient-dim',
+  '--motion-backdrop',
   '--shadow-lift',
   '--font-hero',
   '--font-mono',

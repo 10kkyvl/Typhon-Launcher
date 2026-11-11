@@ -10,7 +10,7 @@ export interface TokenGroup {
 }
 
 export const tokenGroups: readonly TokenGroup[] = [
-  { id: 'background', colors: true, collapsed: false, tokens: ['--bg', '--bg-sidebar', '--island-fill'] },
+  { id: 'background', colors: true, collapsed: false, tokens: ['--bg', '--bg-sidebar', '--island-fill', '--ambient-dim'] },
   {
     id: 'surfaces',
     colors: true,
@@ -93,6 +93,7 @@ export const tokenGroups: readonly TokenGroup[] = [
       '--dur-fast',
       '--dur-panel',
       '--dur-slow',
+      '--motion-backdrop',
       '--shadow-pop',
       '--shadow-modal',
       '--shadow-lift',

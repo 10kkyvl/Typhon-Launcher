@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { goSources } from '../lib/testing/sources';
 import { luminance, rgb } from '../lib/theme/accent';
 import { CONTRAST_FALLBACKS, CONTRAST_TOKENS, contrastReport, type RGBA } from '../lib/theme/contrastReport';
+import { BACKDROP_LOOK_COLORS, backdropLook, lookPixels, type BackdropLook } from '../lib/backdrop/pixels';
 
 /**
  * WCAG 2.2 AA for every built-in theme, measured on the preset values in internal/theme/presets.go:
@@ -135,6 +136,55 @@ function islandFailures(tokens: Record<string, string>): string[] {
   return out;
 }
 
+// The window backdrop is the game's art baked by the same code the window runs, with the theme's own
+// colours and the shell's saturation. Every kind of art goes through it: the corners of the colour cube,
+// a grey ramp and noise. The text levels must read on what comes out, and on the island over it.
+function shellNumber(name: string): number {
+  const css = fs.readFileSync(new URL('./shell.css', import.meta.url), 'utf8');
+  const value = new RegExp(`${name}\\s*:\\s*([^;]+);`).exec(css)?.[1];
+  expect(value, `${name} in shell.css`).toBeTypeOf('string');
+  return Number(value);
+}
+
+function anyArt(): Uint8ClampedArray {
+  const data: number[] = [];
+  for (const r of [0, 255]) for (const g of [0, 255]) for (const b of [0, 255]) data.push(r, g, b, 255);
+  for (let v = 0; v < 256; v += 5) data.push(v, v, v, 255);
+  for (let i = data.length / 4; i < 64 * 64; i++) data.push((i * 97) % 256, (i * 57) % 256, (i * 193) % 256, 255);
+  return Uint8ClampedArray.from(data);
+}
+
+function washLook(tokens: Record<string, string>) {
+  const colors = Object.fromEntries(BACKDROP_LOOK_COLORS.map((name) => [name, rgba(tokens[name] ?? name)]));
+  return backdropLook(colors, shellNumber('--ambient-saturate'));
+}
+
+function washFailures(tokens: Record<string, string>): string[] {
+  const look = washLook(tokens);
+  expect(look, 'the theme draws a wash').not.toBeNull();
+  const limit = (look as BackdropLook).limit;
+  const art = anyArt();
+  lookPixels(art, 64, 64, look as BackdropLook);
+  // The worst the bake allows is a pixel right at its luminance limit; it is measured alongside the art.
+  const bound = limit.max ?? limit.min;
+  expect(bound, 'luminance limit').toBeTypeOf('number');
+  const at = bound as number;
+  const grey = 255 * (at <= 0.0031308 ? at * 12.92 : 1.055 * at ** (1 / 2.4) - 0.055);
+  const washes: RGB[] = [[grey, grey, grey]];
+  for (let i = 0; i < art.length; i += 4) washes.push([art[i], art[i + 1], art[i + 2]]);
+  const out = new Set<string>();
+  for (const wash of washes) {
+    const island = paint(tokens, '--island-fill', wash);
+    for (const pair of ON_ISLAND) {
+      const direct = ratio(paint(tokens, pair.fg, wash), wash);
+      if (direct < pair.min) out.add(`${pair.fg} on the wash: ${direct.toFixed(2)} < ${pair.min}`);
+      const on = ratio(paint(tokens, pair.fg, island), island);
+      if (on < pair.min) out.add(`${pair.fg} on --island-fill over the wash: ${on.toFixed(2)} < ${pair.min}`);
+    }
+  }
+  return [...out];
+}
+
 function rgba(value: string): RGBA {
   expect(value).toMatch(MEASURABLE);
   const [r, g, b] = rgb(value, BLACK);
@@ -169,6 +219,21 @@ describe('built-in themes', () => {
       expect(preset, id).toBeDefined();
       expect(islandFailures((preset as Preset).tokens)).toEqual([]);
     });
+
+    if (id === 'contrast') {
+      // High contrast keeps its plain black page: an opaque dim leaves nothing of the art to show.
+      it('contrast draws no backdrop wash', () => {
+        const preset = builtIns().find((p) => p.id === id);
+        expect(preset, id).toBeDefined();
+        expect(washLook((preset as Preset).tokens)).toBeNull();
+      });
+    } else {
+      it(`${id} keeps text and markers readable on the backdrop wash over any art, and on the island over it`, () => {
+        const preset = builtIns().find((p) => p.id === id);
+        expect(preset, id).toBeDefined();
+        expect(washFailures((preset as Preset).tokens)).toEqual([]);
+      });
+    }
 
     // --bg-sidebar rings the presence dot on the account avatar inside the island: it is the colour
     // the island shows over the page, or the ring reads as a halo.
