@@ -2,6 +2,7 @@
   import Button from '../components/Button.svelte';
   import DropdownMenu from '../components/DropdownMenu.svelte';
   import Modal from '../components/Modal.svelte';
+  import Select from '../components/Select.svelte';
   import Tooltip from '../components/Tooltip.svelte';
   import type { Placement } from '../utils/position';
 
@@ -30,6 +31,11 @@
   // control itself being created again.
   let note = $state('note-a');
   let generation = $state(0);
+  let language = $state('en');
+  const LANGUAGES = [
+    { id: 'en', label: 'English' },
+    { id: 'ru', label: 'Русский' },
+  ];
 </script>
 
 {#snippet toolbar()}
@@ -61,6 +67,9 @@
         <Button {...props}>Sort</Button>
       {/snippet}
     </DropdownMenu>
+    <Select options={LANGUAGES} bind:value={language} label="Language" />
+    <input aria-label="Search" />
+    <p data-testid="blank">Nothing to press here</p>
   </section>
 {/if}
 

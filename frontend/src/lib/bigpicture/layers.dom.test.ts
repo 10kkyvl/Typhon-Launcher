@@ -48,6 +48,15 @@ describe('one rule for when a layer takes Big Picture input', () => {
     expect(layerTakesInput()).toBe(true);
   });
 
+  it('a hint over a menu leaves the input to the menu', () => {
+    layerOf('<button>Pick</button>', false);
+    const hint = document.createElement('div');
+    hint.textContent = 'Hint';
+    document.body.append(hint);
+    closers.push(openLayer(hint, { modal: false, outsidePress: false, dismiss: () => {} }));
+    expect(layerTakesInput()).toBe(true);
+  });
+
   it("the shell's Tab trap and focus recovery stand aside on that same rule, not on any layer", () => {
     expect(shellSource).not.toMatch(/\btopLayer\(\)/);
     expect(shellSource.match(/\blayerTakesInput\(\)/g)).toHaveLength(2);

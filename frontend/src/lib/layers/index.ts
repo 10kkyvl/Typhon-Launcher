@@ -63,13 +63,21 @@ const closingPresses = new WeakSet<Event>();
  *   layer closes it, and keeps closing the non-modal layers under it until one holds the press: a press
  *   inside a layer, on its trigger or in a layer it owns belongs to that layer. So a press in a parent
  *   menu closes its submenu only, a press outside both closes both, and a press on a trigger is the
- *   trigger's own handler to decide (no close-then-reopen). `outsidePress: false` keeps a layer open.
+ *   trigger's own handler to decide (no close-then-reopen). `outsidePress: false` keeps a layer open
+ *   (and when it takes no focus either, makes it passive: see below).
  *   The press still reaches what is under it, but a dialog's scrim does not take a press that closed a
  *   layer as its own (`pressClosedLayer`): one press closes the menu, the next one the dialog. The
  *   press that opened a layer never closes it.
  * - Escape (and Big Picture's back) closes only the top layer, if `dismissible()` allows; an element
  *   inside a layer can claim Escape first with `preventDefault` or `stopPropagation`; a held Escape
  *   (auto-repeat) closes nothing more.
+ * - Passive layers. A non-modal layer with neither `initialFocus` nor outside presses
+ *   (`outsidePress: false`) is passive: a hint (Tooltip, the hover card of a friend row). It never
+ *   stands in the way of the layers under it. A press passes over it to them (a press outside a menu
+ *   closes the menu though a hint shows above it); a press on the hint itself closes nothing. It
+ *   records no opener and never moves focus when it closes. A layer under it closes as if it were the
+ *   top one, so focus goes where that layer's close puts it. `topActiveLayer()` skips it. Escape still
+ *   closes the top layer first, a hint included.
  */
 export interface LayerOptions {
   /** A modal layer inerts everything under it, takes focus and traps Tab. Default true. */
@@ -204,6 +212,11 @@ export function withinLayer(root: HTMLElement, target: Element): boolean {
   return stack.within(root, target);
 }
 
+/** The root of the topmost layer that is not passive (the hints above it aside), modal or not, or null. */
+export function topActiveLayer(): HTMLElement | null {
+  return stack.topActive();
+}
+
 /** The root of the topmost modal layer (the dialog that owns the keyboard and the Tab trap), or null. */
 export function topModalLayer(): HTMLElement | null {
   return stack.topModal();
@@ -239,10 +252,12 @@ export function enterLayer(element: HTMLElement): void {
 /** Registers `element` as an open layer; the returned function closes it. */
 export function openLayer(element: HTMLElement, options: LayerOptions): () => void {
   const modal = options.modal ?? true;
+  const passive = !modal && options.outsidePress === false && !options.initialFocus;
   const active = document.activeElement;
   // Read on every use, not once: the trigger may be re-created while the layer is open.
   const trigger = (): HTMLElement | null => (modal ? null : (options.owner?.() ?? null));
-  const opener = active instanceof HTMLElement && active !== document.body ? active : null;
+  // A passive layer never had focus to give back.
+  const opener = !passive && active instanceof HTMLElement && active !== document.body ? active : null;
   const dismissed = modal ? stack.dismissNonModal(opener) : { dismiss: [], homes: [] };
   for (const dismiss of dismissed.dismiss) dismiss();
   const id = stack.open({
@@ -259,6 +274,7 @@ export function openLayer(element: HTMLElement, options: LayerOptions): () => vo
     },
     anchor: trigger,
     outsidePress: !modal && options.outsidePress !== false,
+    passive,
   });
   const focus = options.initialFocus?.();
   const takesFocus = modal || Boolean(focus);

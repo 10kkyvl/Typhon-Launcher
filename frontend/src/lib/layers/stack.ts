@@ -34,6 +34,12 @@ export interface LayerSpec<E, F> {
   adopted?: F[];
   /** A press outside this layer and the layers it owns closes it (non-modal layers only). */
   outsidePress?: boolean;
+  /**
+   * A hint: non-modal, takes no focus, stays open on outside presses. It never stands in the way of
+   * the layers under it: presses pass over it, it answers no focus when it closes, and a layer under it
+   * closes as if it were the top one.
+   */
+  passive?: boolean;
 }
 
 /** A value, or a getter for one that may change while the layer is open. */
@@ -97,6 +103,11 @@ export class LayerStack<E, F> {
     return this.#entries.at(-1)?.element ?? null;
   }
 
+  /** The element of the topmost layer that is not passive (the hints above it aside), or null. */
+  topActive(): E | null {
+    return this.#entries.findLast((entry) => !entry.passive)?.element ?? null;
+  }
+
   /** The element of the topmost modal layer: the dialog that owns the keyboard. */
   topModal(): E | null {
     return this.#topModal()?.element ?? null;
@@ -153,14 +164,16 @@ export class LayerStack<E, F> {
    * Removes a layer. Closing the top layer answers where focus goes: its opener, else its fallback,
    * else the opener of a layer that closed under it; a target must be reachable (inside the modal layer
    * that is now on top, or anywhere when none is). When nothing is, focus enters the new top modal.
-   * Closing a layer under the top one moves its own return target to the layers above it that were
-   * opened from inside it, and leaves focus alone.
+   * Only passive layers above it still count as the top. Closing a layer under the top one moves its
+   * own return target to the layers above it that were opened from inside it, and leaves focus alone.
+   * A passive layer answers nothing: focus was never its own.
    */
   close(id: symbol): Closed<E, F> | null {
     const index = this.#entries.findIndex((entry) => entry.id === id);
     if (index < 0) return null;
-    const wasTop = index === this.#entries.length - 1;
+    const wasTop = this.#entries.slice(index + 1).every((above) => above.passive);
     const [entry] = this.#entries.splice(index, 1);
+    if (entry.passive) return null;
     if (!wasTop) {
       const home = [entry.opener, ...entry.inherited].filter((target): target is F => target !== null);
       for (const above of this.#entries.slice(index)) {
@@ -203,16 +216,20 @@ export class LayerStack<E, F> {
 
   /**
    * A press on `target`: non-modal layers on top that close on an outside press close, top first, as
-   * with Escape, until one holds the press (in it, on its trigger, in a layer it owns) or a modal layer
-   * or one that stays open is reached. A press in a parent menu closes its submenu only; a press
-   * outside both closes both. Empty when the press belongs to the layers.
+   * with Escape, until one holds the press (in it, on its trigger, in a layer it owns), may not close,
+   * or a modal layer or one that stays open is reached. A passive layer (a hint) is passed over, unless
+   * the press lands in it: the press is for what lies under it. A press in a parent menu closes its
+   * submenu only; a press outside both closes both. Empty when the press belongs to the layers.
    */
   pressOutside(target: F): Dismissal<E, F>[] {
     const closed: Dismissal<E, F>[] = [];
-    for (let top = this.#entries.at(-1); top && !top.modal && top.outsidePress && !this.#pressedIn(top, target); top = this.#entries.at(-1)) {
-      const dismissal = this.dismissTop();
-      if (!dismissal.dismiss) break;
-      closed.push(dismissal);
+    for (const entry of [...this.#entries].reverse()) {
+      if (entry.passive) {
+        if (this.env.contains(entry.element, target)) break;
+        continue;
+      }
+      if (entry.modal || !entry.outsidePress || this.#pressedIn(entry, target) || !entry.dismissible()) break;
+      closed.push({ consumed: true, closed: this.close(entry.id), dismiss: entry.dismiss });
     }
     return closed;
   }

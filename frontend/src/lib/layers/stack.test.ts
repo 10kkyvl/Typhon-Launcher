@@ -284,6 +284,81 @@ describe('LayerStack outside press', () => {
   });
 });
 
+// A passive layer (a hint) takes no focus and stays open on outside presses: it must never stand in
+// the way of the layers under it.
+const HINT = { modal: false, outsidePress: false, passive: true } as const;
+
+describe('LayerStack passive layers', () => {
+  it('a press outside passes over a hint on top and closes the menu under it, answering focus as the top', () => {
+    const { stack, box, open } = world();
+    const menuDismiss = vi.fn();
+    open(box('menu', 'item'), { modal: false, outsidePress: true, opener: 'trigger', dismiss: menuDismiss });
+    const hint = box('hint', 'hint text');
+    open(hint, HINT);
+
+    const closed = stack.pressOutside('page');
+
+    expect(closed.map((dismissal) => dismissal.dismiss)).toEqual([menuDismiss]);
+    expect(closed[0].closed).toEqual({ focus: 'trigger', enter: null });
+    expect(stack.elements()).toEqual([hint]);
+  });
+
+  it('a press on the hint itself, or in the menu under it, closes nothing', () => {
+    const { stack, box, open } = world();
+    open(box('menu', 'item'), { modal: false, outsidePress: true });
+    open(box('hint', 'hint text'), HINT);
+
+    expect(stack.pressOutside('hint text')).toEqual([]);
+    expect(stack.pressOutside('item')).toEqual([]);
+    expect(stack.size).toBe(2);
+  });
+
+  it('a layer that stays open but takes focus is not passive: it still holds the press back', () => {
+    const { stack, box, open } = world();
+    open(box('menu', 'item'), { modal: false, outsidePress: true });
+    open(box('panel', 'field'), { modal: false, outsidePress: false });
+    expect(stack.pressOutside('page')).toEqual([]);
+    expect(stack.size).toBe(2);
+  });
+
+  it('a passive layer never answers focus when it closes, whatever it was given', () => {
+    const { stack, box, open } = world();
+    open(box('dialog', 'field'));
+    const id = open(box('hint'), { ...HINT, opener: 'field', returnFocus: () => 'field' });
+    expect(stack.close(id)).toBeNull();
+    open(box('hint'), { ...HINT, opener: 'field' });
+    expect(stack.dismissTop().closed).toBeNull();
+  });
+
+  it('closing a menu with only hints above it answers focus as if it were the top layer', () => {
+    const { stack, box, open } = world();
+    const menu = open(box('menu', 'item'), { modal: false, opener: 'trigger' });
+    open(box('hint'), HINT);
+    open(box('another hint'), HINT);
+    expect(stack.close(menu)).toEqual({ focus: 'trigger', enter: null });
+  });
+
+  it('Escape still closes the top layer first, a hint included', () => {
+    const { stack, box, open } = world();
+    const menuDismiss = vi.fn();
+    const hintDismiss = vi.fn();
+    open(box('menu'), { modal: false, dismiss: menuDismiss });
+    open(box('hint'), { ...HINT, dismiss: hintDismiss });
+    expect(stack.dismissTop().dismiss).toBe(hintDismiss);
+    expect(stack.dismissTop().dismiss).toBe(menuDismiss);
+  });
+
+  it('the top active layer is the one under the hints', () => {
+    const { stack, box, open } = world();
+    expect(stack.topActive()).toBeNull();
+    const menu = box('menu');
+    open(menu, { modal: false });
+    open(box('hint'), HINT);
+    expect(stack.top()).not.toBe(menu);
+    expect(stack.topActive()).toBe(menu);
+  });
+});
+
 describe('LayerStack a dialog opening over menus', () => {
   it('closes every non-modal layer open at that moment, menus owned by a lower dialog included', () => {
     const { stack, box, open } = world();

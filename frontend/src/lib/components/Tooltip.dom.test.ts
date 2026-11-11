@@ -223,6 +223,67 @@ describe('Tooltip: placement and the stack', () => {
     expect(screen.queryByRole('menu')).not.toBeNull();
   });
 
+  it('a press outside a menu with a hint shown above it closes the menu and the hint; focus goes where the press put it', async () => {
+    const { keys, control, shown, wait } = setup();
+    await keys.click(screen.getByRole('button', { name: 'Sort' }));
+    await keys.hover(control());
+    await wait(HOVER_DELAY);
+    expect(shown()).toBe(true);
+    const after = screen.getByRole('button', { name: 'After' });
+    await keys.click(after);
+    await wait(LEAVE_GRACE);
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(shown()).toBe(false);
+    expect(document.activeElement).toBe(after);
+  });
+
+  it('a menu closed under a shown hint puts focus back on its trigger at once: Tab goes on from there', async () => {
+    const { keys, control, shown, wait } = setup();
+    await keys.click(screen.getByRole('button', { name: 'Sort' }));
+    await keys.hover(control());
+    await wait(HOVER_DELAY);
+    expect(shown()).toBe(true);
+    await keys.tab();
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('combobox', { name: 'Language' }));
+  });
+
+  it('a press on the hinted control closes a select list open under the hint', async () => {
+    const { keys, control, shown, wait } = setup();
+    await keys.click(screen.getByRole('combobox', { name: 'Language' }));
+    expect(screen.queryByRole('listbox')).not.toBeNull();
+    await keys.hover(control());
+    await wait(HOVER_DELAY);
+    expect(shown()).toBe(true);
+    await keys.click(control());
+    expect(screen.queryByRole('listbox')).toBeNull();
+  });
+
+  it('a press on the hint itself closes nothing', async () => {
+    const { keys, control, bubble, shown, wait } = setup();
+    await keys.click(screen.getByRole('button', { name: 'Sort' }));
+    await keys.hover(control());
+    await wait(HOVER_DELAY);
+    await keys.click(bubble() as HTMLElement);
+    await wait(0);
+    expect(screen.queryByRole('menu')).not.toBeNull();
+    expect(shown()).toBe(true);
+  });
+
+  it('a hint closing never moves focus, even when focus left the page in between', async () => {
+    const { keys, control, shown, wait } = setup();
+    const search = screen.getByRole('textbox', { name: 'Search' });
+    await keys.click(search);
+    await keys.hover(control());
+    await wait(HOVER_DELAY);
+    expect(shown()).toBe(true);
+    await keys.click(screen.getByTestId('blank'));
+    expect(document.activeElement).toBe(document.body);
+    await wait(LEAVE_GRACE);
+    expect(shown()).toBe(false);
+    expect(document.activeElement).toBe(document.body);
+  });
+
   it('a dialog opening hides it', async () => {
     const { shown, rerender, focusByKeyboard } = setup();
     await focusByKeyboard();

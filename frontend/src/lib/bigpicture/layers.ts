@@ -1,13 +1,14 @@
-import { cycleFocus, dismissTopLayer, enterLayer, topLayer, topModalLayer, withinLayer } from '../layers';
+import { cycleFocus, dismissTopLayer, enterLayer, topActiveLayer, topModalLayer, withinLayer } from '../layers';
 import { focusableIn } from '../layers/focus';
 import type { BigPictureCommand } from './input';
 
-// The layer the commands act on: the top dialog (with the menus it owns), else a top layer with
-// something to focus. A tooltip alone has nothing to answer, so the shell keeps its commands.
+// The layer the commands act on: the top dialog (with the menus it owns), else the top layer that is
+// not a hint, when it has something to focus. A hint has nothing to answer: over the shell the shell
+// keeps its commands, over a menu the menu does.
 function commandRoot(): HTMLElement | null {
   const dialog = topModalLayer();
   if (dialog) return dialog;
-  const top = topLayer();
+  const top = topActiveLayer();
   return top && focusableIn(top).length > 0 ? top : null;
 }
 
