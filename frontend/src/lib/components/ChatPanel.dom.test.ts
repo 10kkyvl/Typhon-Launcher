@@ -14,7 +14,7 @@ vi.mock('../services/messaging', async (actual) => ({
 }));
 
 import { locale } from '../i18n';
-import { react } from '../services/messaging';
+import { react, unreact } from '../services/messaging';
 import * as chat from '../stores/messaging';
 import { user } from '../testing/dom';
 import { description, hintOnFocus } from '../testing/hints';
@@ -23,10 +23,10 @@ import ChatPanel from './ChatPanel.svelte';
 const peer = { id: 'peer', username: 'friend', displayName: 'Friend', avatarUrl: '' };
 const REACTIONS = ['Fire', 'Salute', 'Heart', 'Applause', 'Skull', 'Party', 'Eyes', 'Laugh'];
 
-function message(id: string, clientId = 'c1') {
+function message(id: string, clientId = 'c1', reactions: { emoji: string; userIds: string[] }[] = []) {
   return {
     id, clientId, senderId: 'peer', recipientId: 'me', text: 'Hello', createdAt: new Date().toISOString(),
-    expiresAt: new Date(Date.now() + 86400000).toISOString(), reactions: [],
+    expiresAt: new Date(Date.now() + 86400000).toISOString(), reactions,
   };
 }
 
@@ -35,6 +35,8 @@ let app: HTMLDivElement;
 beforeEach(() => {
   vi.mocked(react).mockReset();
   vi.mocked(react).mockResolvedValue(undefined);
+  vi.mocked(unreact).mockReset();
+  vi.mocked(unreact).mockResolvedValue(undefined);
   locale.set('en');
   chat.chatOpen.set(true);
   chat.activePeer.set(peer);
@@ -95,6 +97,47 @@ describe('ChatPanel reaction picker', () => {
     await keys.click(within(picker() as HTMLElement).getByRole('button', { name: 'Fire' }));
 
     expect(react).toHaveBeenCalledOnce();
+    expect(await screen.findByText('Could not update the reaction.')).toBeTruthy();
+  });
+
+  // The user already reacted to the message with a heart (and so did the friend): the picker says so,
+  // and picking it again takes the user's heart back.
+  function reacted(id: string) {
+    chat.messagesByPeer.set({ peer: [message(id, `c-${id}`, [{ emoji: 'heart', userIds: ['peer', 'me'] }])] });
+    return setup();
+  }
+
+  it('shows the user\'s own reaction pressed, and only that one', async () => {
+    const { keys, opener, picker } = reacted('m-pressed');
+    await keys.click(opener());
+
+    const pressed = within(picker() as HTMLElement)
+      .getAllByRole('button')
+      .filter((button) => button.getAttribute('aria-pressed') === 'true')
+      .map((button) => button.getAttribute('aria-label'));
+    expect(pressed).toEqual(['Heart']);
+  });
+
+  it('picking the user\'s own reaction takes it back, closes the picker and puts focus back on the control', async () => {
+    const { keys, opener, picker } = reacted('m-undo');
+    await keys.click(opener());
+
+    await keys.click(within(picker() as HTMLElement).getByRole('button', { name: 'Heart' }));
+
+    expect(unreact).toHaveBeenCalledExactlyOnceWith('peer', 'm-undo', 'heart');
+    expect(react).not.toHaveBeenCalled();
+    expect(picker()).toBeNull();
+    expect(document.activeElement).toBe(opener());
+  });
+
+  it('taking a reaction back that fails says so in the chat', async () => {
+    vi.mocked(unreact).mockRejectedValue(new Error('offline'));
+    const { keys, opener, picker } = reacted('m-undo-fails');
+    await keys.click(opener());
+
+    await keys.click(within(picker() as HTMLElement).getByRole('button', { name: 'Heart' }));
+
+    expect(unreact).toHaveBeenCalledOnce();
     expect(await screen.findByText('Could not update the reaction.')).toBeTruthy();
   });
 
