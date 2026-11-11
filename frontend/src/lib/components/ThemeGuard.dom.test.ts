@@ -5,6 +5,7 @@ import { user } from '../testing/dom';
 import MenuHarness from '../testing/MenuHarness.svelte';
 import type { Theme } from '../services/theme';
 import { activeTheme, endTrial, themeTrial, tryTheme } from '../stores/theme';
+import ContextMenu from './ContextMenu.svelte';
 import { mountThemeGuard } from './ThemeGuard';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
@@ -43,6 +44,22 @@ describe('theme trial and Escape', () => {
 
     expect(screen.queryByRole('menu')).toBeNull();
     expect(get(themeTrial)).not.toBeNull();
+  });
+
+  it('Escape that closes a context menu belongs to the menu: the trial goes on', async () => {
+    const onclose = vi.fn();
+    const view = render(ContextMenu, {
+      target: app,
+      props: { items: [{ id: 'a', label: 'Play' }], id: 'game-menu', label: 'Hades', at: { x: 40, y: 40 }, onselect: vi.fn(), onclose },
+    });
+    const keys = user();
+    expect(document.activeElement).toBe(screen.getByRole('menu'));
+
+    await keys.keyboard('{Escape}');
+
+    expect(onclose).toHaveBeenCalledTimes(1);
+    expect(get(themeTrial)).not.toBeNull();
+    view.unmount();
   });
 
   it('Escape with nothing open ends the trial', async () => {
