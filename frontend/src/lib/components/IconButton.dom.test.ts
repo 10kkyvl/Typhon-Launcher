@@ -53,9 +53,21 @@ describe('IconButton', () => {
     expect(bubble()).toBeNull();
   });
 
-  it('a disabled button shows no tooltip', async () => {
+  it('a disabled button shows no tooltip; the native title tells a mouse user what the icon is', async () => {
     render(IconButton, { target: app, props: { label: 'Close', disabled: true } });
-    await rest(screen.getByRole('button', { name: 'Close' }));
+    const button = screen.getByRole('button', { name: 'Close' });
+    expect(button.getAttribute('title')).toBe('Close');
+    await rest(button);
     expect(bubble()).toBeNull();
+  });
+
+  it('the native title comes and goes with the disabled state, on the same button', async () => {
+    const { rerender } = render(IconButton, { target: app, props: { label: 'Back', disabled: true } });
+    const button = screen.getByRole('button', { name: 'Back' });
+    await rerender({ label: 'Back', disabled: false });
+    expect(screen.getByRole('button', { name: 'Back' })).toBe(button);
+    expect(button.hasAttribute('title')).toBe(false);
+    await rerender({ label: 'Back', disabled: true });
+    expect(button.getAttribute('title')).toBe('Back');
   });
 });

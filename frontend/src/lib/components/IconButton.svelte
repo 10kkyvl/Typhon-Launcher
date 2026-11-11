@@ -28,18 +28,22 @@
     onclick?: (e: MouseEvent) => void;
     children?: Snippet;
   } = $props();
+
+  // The browser's own title shows the label where the tooltip cannot: the overlay window, and a
+  // disabled button, which takes no focus and shows no tooltip (it cannot be announced twice).
+  const nativeTitle = $derived(!tooltip || disabled ? label : undefined);
 </script>
 
-{#snippet button(title: string | undefined)}
-  <button {...rest} {type} class="icon-btn {size}" class:active aria-label={label} {title} {disabled} {onclick}>
+{#snippet button()}
+  <button {...rest} {type} class="icon-btn {size}" class:active aria-label={label} title={nativeTitle} {disabled} {onclick}>
     {@render children?.()}
   </button>
 {/snippet}
 
 {#if tooltip}
-  <Tooltip text={label} describe={false}>{@render button(undefined)}</Tooltip>
+  <Tooltip text={label} describe={false}>{@render button()}</Tooltip>
 {:else}
-  {@render button(label)}
+  {@render button()}
 {/if}
 
 <style>
