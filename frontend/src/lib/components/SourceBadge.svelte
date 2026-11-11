@@ -5,11 +5,13 @@
   let { source }: { source: GameSource } = $props();
 </script>
 
+<!-- The short label is shown; the full sentence is what a screen reader reads, and the mouse hint. -->
 <span class="badge" data-source={source} title={sourceTitle(source)}>
   {#if source === 'disk'}
-    <HardDrive size="1.2rem" strokeWidth={2} />
+    <HardDrive size="1.2rem" strokeWidth={2} aria-hidden="true" />
   {/if}
-  {sourceLabel(source)}
+  <span aria-hidden="true">{sourceLabel(source)}</span>
+  <span class="sr-only">{sourceTitle(source)}</span>
 </span>
 
 <style>

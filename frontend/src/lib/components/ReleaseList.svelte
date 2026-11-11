@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Download } from '@lucide/svelte';
+  import Tooltip from './Tooltip.svelte';
   import { buildKind, buildLabel, consoleGroupStart, orderReleases, releaseBadge, repackNote } from '../game/releases';
   import { languageLabel } from '../game/view';
   import type { ReleaseGroup } from '../services/sources';
@@ -74,13 +75,13 @@
             <span class="release-repack">({repack})</span>
           {/if}
           {#if group.duplicates && group.duplicates.length > 0}
-            <span
-              class="release-dup"
-              title={group.duplicates.map((d) => d.sourceName).join(', ')}
-            >
-              +{group.duplicates.length}
-              {msg('release.duplicateSources', { count: group.duplicates.length })}
-            </span>
+            <Tooltip text={group.duplicates.map((d) => d.sourceName).join(', ')}>
+              <!-- svelte-ignore a11y_no_noninteractive_tabindex (A stop in the Tab order so the names of the other sources reach keyboard users; pressing it does nothing.) -->
+              <span class="release-dup" tabindex="0">
+                +{group.duplicates.length}
+                {msg('release.duplicateSources', { count: group.duplicates.length })}
+              </span>
+            </Tooltip>
           {/if}
         </span>
         <span class="release-date">{relativeDate(release.uploadedAt)}</span>

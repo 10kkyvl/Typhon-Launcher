@@ -147,13 +147,20 @@
 
         <section class="section">
           <h2>{data.period === 'year' ? msg('stats.chartTitleYear') : msg('stats.chartTitle')}</h2>
-          <div class="chart" style:--count={buckets.length}>
+          <!-- Each bar reads as its date and play time: the bars and the tick labels are for the eye. -->
+          <div
+            class="chart"
+            style:--count={buckets.length}
+            role="list"
+            aria-label={data.period === 'year' ? msg('stats.chartTitleYear') : msg('stats.chartTitle')}
+          >
             {#each buckets as bucket, index (bucket.key)}
-              <span class="col" title={barTitle(bucket)}>
-                <span class="track">
+              <span class="col" role="listitem" title={barTitle(bucket)}>
+                <span class="track" aria-hidden="true">
                   <span class="fill" style:height="{barHeight(bucket.seconds, best)}%"></span>
                 </span>
-                <span class="tick">{barLabel(bucket, index)}</span>
+                <span class="tick" aria-hidden="true">{barLabel(bucket, index)}</span>
+                <span class="sr-only">{barTitle(bucket)}</span>
               </span>
             {/each}
           </div>

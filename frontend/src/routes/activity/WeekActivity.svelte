@@ -31,13 +31,15 @@
       <span class="window">{msg('transfers.activityWeekWindow')}</span>
     </div>
 
-    <div class="chart">
+    <!-- Each bar reads as its date and play time: the bars and the weekday letters are for the eye. -->
+    <div class="chart" role="list" aria-label={msg('transfers.activityWeekTitle')}>
       {#each week.days as day (day.date)}
-        <span class="col" class:today={day.today} title={dayTitle(day)}>
-          <span class="track">
+        <span class="col" class:today={day.today} role="listitem" title={dayTitle(day)}>
+          <span class="track" aria-hidden="true">
             <span class="fill" style:height={barHeight(day)}></span>
           </span>
-          <span class="day">{weekday(day.at)}</span>
+          <span class="day" aria-hidden="true">{weekday(day.at)}</span>
+          <span class="sr-only">{dayTitle(day)}</span>
         </span>
       {/each}
     </div>
