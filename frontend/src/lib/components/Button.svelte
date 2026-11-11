@@ -1,9 +1,10 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import type { Attachment } from 'svelte/attachments';
   import type { HTMLButtonAttributes } from 'svelte/elements';
   import Tooltip from './Tooltip.svelte';
 
-  // Other attributes (id, aria-*, data-*, title, handlers, attachments) go to the <button>.
+  // Other attributes (id, aria-*, data-*, handlers, attachments) go to the <button>.
   let {
     variant = 'secondary',
     size = 'md',
@@ -14,32 +15,64 @@
     onclick,
     children,
     ...rest
-  }: Omit<HTMLButtonAttributes, 'class' | 'onclick' | 'children'> & {
+  }: Omit<HTMLButtonAttributes, 'class' | 'onclick' | 'children' | 'title'> & {
     variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
     size?: 'md' | 'sm' | 'lg';
     disabled?: boolean;
     pressed?: boolean;
     /**
      * Why the button is disabled. A disabled button cannot take focus, so its reason would reach no
-     * keyboard: with a reason it stays in the Tab order (aria-disabled), ignores presses and shows the
-     * reason as its description.
+     * keyboard: while disabled with a reason it stays in the Tab order (aria-disabled), ignores every
+     * activation (press, Enter, Space, a form submit, handlers spread onto it) and is described by the
+     * reason. A caller whose reason comes and goes passes '' while there is none, not undefined: the
+     * button then stays one element, and keeps focus, as the state flips.
      */
     reason?: string;
     onclick?: (e: MouseEvent) => void;
     children?: Snippet;
   } = $props();
+
+  const blocked = $derived(disabled && Boolean(reason));
+
+  // Keys that do not activate it still work: Tab moves on, Escape closes the dialog or hint around it.
+  const PASSING_KEYS = new Set(['Tab', 'Escape']);
+  const ACTIVATIONS = ['click', 'pointerdown', 'pointerup', 'mousedown', 'mouseup', 'keydown', 'keyup'];
+
+  // Capture on the button itself runs before any handler on it or above it (Svelte's delegated ones
+  // included), so nothing spread onto it sees a blocked activation.
+  const guard: Attachment<HTMLButtonElement> = (node) => {
+    const stop = (event: Event) => {
+      if (!blocked) return;
+      if (event instanceof KeyboardEvent && PASSING_KEYS.has(event.key)) return;
+      if (event.type !== 'pointerdown' && event.type !== 'mousedown') event.preventDefault();
+      event.stopImmediatePropagation();
+    };
+    for (const type of ACTIVATIONS) node.addEventListener(type, stop, true);
+    return () => {
+      for (const type of ACTIVATIONS) node.removeEventListener(type, stop, true);
+    };
+  };
 </script>
 
-{#if disabled && reason}
-  <Tooltip text={reason}>
-    <button {...rest} {type} class="btn {variant} {size}" aria-disabled="true" aria-pressed={pressed}>
-      {@render children?.()}
-    </button>
-  </Tooltip>
-{:else}
-  <button {...rest} {type} class="btn {variant} {size}" {disabled} aria-pressed={pressed} {onclick}>
+{#snippet button(guarded: boolean)}
+  <button
+    {...rest}
+    {type}
+    class="btn {variant} {size}"
+    disabled={disabled && !(guarded && reason)}
+    aria-disabled={guarded && blocked ? 'true' : undefined}
+    aria-pressed={pressed}
+    {onclick}
+    {@attach guarded ? guard : undefined}
+  >
     {@render children?.()}
   </button>
+{/snippet}
+
+{#if reason !== undefined}
+  <Tooltip text={blocked ? (reason ?? '') : ''}>{@render button(true)}</Tooltip>
+{:else}
+  {@render button(false)}
 {/if}
 
 <style>

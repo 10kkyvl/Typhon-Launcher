@@ -309,10 +309,10 @@
                 <span class="size">{size(game)}</span>
                 <div class="actions">
                   {#if !game.external}
-                    <Button size="sm" disabled={!manage} reason={blocked ? msg(blocked) : undefined} onclick={() => openMoveGame(game.id)}>
+                    <Button size="sm" disabled={!manage} reason={blocked ? msg(blocked) : ''} onclick={() => openMoveGame(game.id)}>
                       {msg('diskusage.move')}
                     </Button>
-                    <Button size="sm" variant="danger" disabled={!manage} reason={blocked ? msg(blocked) : undefined} onclick={() => openRemove(game)}>
+                    <Button size="sm" variant="danger" disabled={!manage} reason={blocked ? msg(blocked) : ''} onclick={() => openRemove(game)}>
                       {msg('diskusage.remove')}
                     </Button>
                   {/if}
