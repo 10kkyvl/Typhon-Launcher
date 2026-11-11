@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { SearchOverlay } from './overlay';
+import { SearchOverlay, rowsOf } from './overlay';
 import type { OverlayState } from './overlay';
 import type { GameHit, ReleaseHit, SearchResult } from '../services/search';
 import { locale } from '../i18n';
@@ -204,23 +204,23 @@ describe('SearchOverlay keyboard navigation', () => {
 
     overlay.move(1);
     expect(tracker.state.active).toBe(0);
-    expect(overlay.activeHit()).toEqual({ kind: 'game', hit: gameA });
+    expect(overlay.activeRow()).toMatchObject({ kind: 'game', hit: gameA });
 
     overlay.move(1);
     expect(tracker.state.active).toBe(1);
-    expect(overlay.activeHit()).toEqual({ kind: 'game', hit: gameB });
+    expect(overlay.activeRow()).toMatchObject({ kind: 'game', hit: gameB });
 
     overlay.move(1);
     expect(tracker.state.active).toBe(2);
-    expect(overlay.activeHit()).toEqual({ kind: 'release', hit: releaseA });
+    expect(overlay.activeRow()).toMatchObject({ kind: 'release', hit: releaseA });
 
     overlay.move(1);
     expect(tracker.state.active).toBe(3);
-    expect(overlay.activeHit()).toEqual({ kind: 'release', hit: releaseB });
+    expect(overlay.activeRow()).toMatchObject({ kind: 'release', hit: releaseB });
 
     overlay.move(1);
     expect(tracker.state.active).toBe(0);
-    expect(overlay.activeHit()).toEqual({ kind: 'game', hit: gameA });
+    expect(overlay.activeRow()).toMatchObject({ kind: 'game', hit: gameA });
   });
 
   it('moves backward from the initial position to the last index', async () => {
@@ -235,7 +235,143 @@ describe('SearchOverlay keyboard navigation', () => {
 
     overlay.move(-1);
     expect(tracker.state.active).toBe(3);
-    expect(overlay.activeHit()).toEqual({ kind: 'release', hit: releaseB });
+    expect(overlay.activeRow()).toMatchObject({ kind: 'release', hit: releaseB });
+  });
+});
+
+describe('SearchOverlay rows and cells', () => {
+  const installed: GameHit = { ...makeGame('game-installed'), installed: true };
+
+  async function opened(result: SearchResult) {
+    const search = vi.fn().mockResolvedValue(result);
+    const tracker = track();
+    const overlay = new SearchOverlay({ search, onState: tracker.onState, delay: 50 });
+    overlay.setQuery('quake');
+    await vi.advanceTimersByTimeAsync(50);
+    return { overlay, tracker, search };
+  }
+
+  it('lists a row per game, then "more in the catalog" when there is more, then a row per release', async () => {
+    const { tracker } = await opened(makeResult([gameA, installed], [releaseA], 7, 3));
+    expect(rowsOf(tracker.state).map((row) => [row.kind, row.key, row.cells])).toEqual([
+      ['game', 'game:game-a', 2],
+      ['game', 'game:game-installed', 1],
+      ['more', 'more', 1],
+      ['release', 'release:src:release-a', 1],
+    ]);
+  });
+
+  it('walks through "more in the catalog" on the way from the games to the releases', async () => {
+    const { overlay } = await opened(makeResult([gameA], [releaseA], 7));
+    overlay.move(1);
+    overlay.move(1);
+    expect(overlay.activeRow()).toMatchObject({ kind: 'more' });
+    overlay.move(1);
+    expect(overlay.activeRow()).toMatchObject({ kind: 'release', hit: releaseA });
+    overlay.move(1);
+    expect(overlay.activeRow()).toMatchObject({ kind: 'game', hit: gameA });
+  });
+
+  it('moves between the cells of the active row and stops at its ends', async () => {
+    const { overlay, tracker } = await opened(makeResult([gameA], [releaseA]));
+    overlay.move(1);
+    expect(tracker.state.cell).toBe(0);
+
+    expect(overlay.moveCell(1)).toBe(true);
+    expect(tracker.state.cell).toBe(1);
+    expect(overlay.moveCell(1)).toBe(true);
+    expect(tracker.state.cell).toBe(1);
+    expect(overlay.moveCell(-1)).toBe(true);
+    expect(tracker.state.cell).toBe(0);
+    expect(overlay.moveCell(-1)).toBe(true);
+    expect(tracker.state.cell).toBe(0);
+  });
+
+  it('has nowhere to go sideways in a row with one cell, and takes no cell key with no row active', async () => {
+    const { overlay, tracker } = await opened(makeResult([installed], [releaseA]));
+    expect(overlay.moveCell(1)).toBe(false);
+    expect(tracker.state.active).toBe(-1);
+
+    overlay.move(1);
+    expect(overlay.moveCell(1)).toBe(true);
+    expect(tracker.state.cell).toBe(0);
+    overlay.move(1);
+    expect(overlay.moveCell(1)).toBe(true);
+    expect(tracker.state.cell).toBe(0);
+  });
+
+  it('starts every row at its first cell', async () => {
+    const { overlay, tracker } = await opened(makeResult([gameA, gameB], []));
+    overlay.move(1);
+    overlay.moveCell(1);
+    overlay.move(1);
+    expect(tracker.state.active).toBe(1);
+    expect(tracker.state.cell).toBe(0);
+  });
+
+  it('takes a row and a cell from the pointer and ignores what is not there', async () => {
+    const { overlay, tracker } = await opened(makeResult([gameA, installed], []));
+    overlay.setActive(0, 1);
+    expect([tracker.state.active, tracker.state.cell]).toEqual([0, 1]);
+    overlay.setActive(1, 1);
+    expect([tracker.state.active, tracker.state.cell]).toEqual([0, 1]);
+    overlay.setActive(5, 0);
+    expect([tracker.state.active, tracker.state.cell]).toEqual([0, 1]);
+    overlay.setActive(1, 0);
+    expect([tracker.state.active, tracker.state.cell]).toEqual([1, 0]);
+  });
+
+  it('leaves the rows for the text without closing', async () => {
+    const { overlay, tracker } = await opened(makeResult([gameA], []));
+    overlay.move(1);
+    overlay.moveCell(1);
+    overlay.leave();
+    expect([tracker.state.active, tracker.state.cell, tracker.state.open]).toEqual([-1, 0, true]);
+  });
+
+  it('keeps the active result and its cell when fresh results still hold it, wherever it now is', async () => {
+    const search = vi.fn().mockResolvedValueOnce(makeResult([gameA, gameB], [])).mockResolvedValueOnce(makeResult([installed, gameB], []));
+    const tracker = track();
+    const overlay = new SearchOverlay({ search, onState: tracker.onState, delay: 50 });
+    overlay.setQuery('qua');
+    await vi.advanceTimersByTimeAsync(50);
+    overlay.setActive(1, 1);
+
+    overlay.setQuery('quak');
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(overlay.activeRow()).toMatchObject({ kind: 'game', hit: gameB });
+    expect([tracker.state.active, tracker.state.cell]).toEqual([1, 1]);
+  });
+
+  it('drops the active row when fresh results no longer hold it, and a cell the row no longer has', async () => {
+    const watchable = makeGame('game-a');
+    const nowInstalled: GameHit = { ...watchable, installed: true };
+    const search = vi
+      .fn()
+      .mockResolvedValueOnce(makeResult([watchable, gameB], []))
+      .mockResolvedValueOnce(makeResult([nowInstalled, gameB], []))
+      .mockResolvedValueOnce(makeResult([gameB], []));
+    const tracker = track();
+    const overlay = new SearchOverlay({ search, onState: tracker.onState, delay: 50 });
+    overlay.setQuery('q');
+    await vi.advanceTimersByTimeAsync(50);
+    overlay.setActive(0, 1);
+
+    overlay.setQuery('qu');
+    await vi.advanceTimersByTimeAsync(50);
+    expect([tracker.state.active, tracker.state.cell]).toEqual([0, 0]);
+
+    overlay.setQuery('qua');
+    await vi.advanceTimersByTimeAsync(50);
+    expect([tracker.state.active, tracker.state.cell]).toEqual([-1, 0]);
+  });
+
+  it('closing forgets the cell as well as the row', async () => {
+    const { overlay, tracker } = await opened(makeResult([gameA], []));
+    overlay.setActive(0, 1);
+    overlay.close();
+    expect([tracker.state.active, tracker.state.cell]).toEqual([-1, 0]);
   });
 });
 

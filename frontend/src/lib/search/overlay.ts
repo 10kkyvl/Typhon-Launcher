@@ -3,9 +3,24 @@ import { errorCode, hasMessage, msg } from '../i18n';
 
 export const debounceMs = 220;
 
-export type ActiveHit =
-  | { kind: 'game'; hit: GameHit }
-  | { kind: 'release'; hit: ReleaseHit };
+/**
+ * What the keys walk through, top to bottom: a row per game, "more in the catalog" when the catalog
+ * holds more, then a row per release. A game that is not installed has a second cell, its watch
+ * toggle. `key` names the result itself, so the active row survives a refresh of the results.
+ */
+export type Row =
+  | { kind: 'game'; key: string; cells: 1 | 2; hit: GameHit }
+  | { kind: 'more'; key: 'more'; cells: 1 }
+  | { kind: 'release'; key: string; cells: 1; hit: ReleaseHit };
+
+type Results = Pick<OverlayState, 'games' | 'releases' | 'moreGames'>;
+
+export function rowsOf({ games, releases, moreGames }: Results): Row[] {
+  const rows: Row[] = games.map((hit) => ({ kind: 'game', key: `game:${hit.id}`, cells: hit.installed ? 1 : 2, hit }));
+  if (games.length > 0 && moreGames > 0) rows.push({ kind: 'more', key: 'more', cells: 1 });
+  for (const hit of releases) rows.push({ kind: 'release', key: `release:${hit.sourceId}:${hit.id}`, cells: 1, hit });
+  return rows;
+}
 
 export interface OverlayState {
   query: string;
@@ -17,7 +32,10 @@ export interface OverlayState {
   releases: ReleaseHit[];
   moreGames: number;
   moreReleases: number;
+  /** Index into `rowsOf(state)` of the row the keys are on, -1 while they are in the text. */
   active: number;
+  /** The cell of the active row: 0 the result, 1 its watch toggle. */
+  cell: number;
 }
 
 export interface OverlayOptions {
@@ -38,6 +56,7 @@ const blank = (): OverlayState => ({
   moreGames: 0,
   moreReleases: 0,
   active: -1,
+  cell: 0,
 });
 
 export function initialState(): OverlayState {
@@ -65,8 +84,8 @@ export class SearchOverlay {
     return this.state;
   }
 
-  get total(): number {
-    return this.state.games.length + this.state.releases.length;
+  get rows(): Row[] {
+    return rowsOf(this.state);
   }
 
   setQuery(value: string) {
@@ -84,22 +103,43 @@ export class SearchOverlay {
 
   close() {
     if (!this.state.open) return;
-    this.patch({ open: false, active: -1 });
+    this.patch({ open: false, active: -1, cell: 0 });
   }
 
+  /** Up or down a row, wrapping; every row starts at its first cell. */
   move(delta: number) {
-    const total = this.total;
+    const total = this.rows.length;
     if (!this.state.open || total === 0) return;
     const next = this.state.active < 0 && delta < 0 ? total - 1 : this.state.active + delta;
-    this.patch({ active: ((next % total) + total) % total });
+    this.patch({ active: ((next % total) + total) % total, cell: 0 });
   }
 
-  activeHit(): ActiveHit | undefined {
-    const { active, games, releases } = this.state;
-    if (active < 0) return undefined;
-    if (active < games.length) return { kind: 'game', hit: games[active] };
-    const release = releases[active - games.length];
-    return release ? { kind: 'release', hit: release } : undefined;
+  /**
+   * Left or right within the active row, stopping at its ends. False with no row active: the key is
+   * then the text's own (the caret).
+   */
+  moveCell(delta: number): boolean {
+    const row = this.activeRow();
+    if (!this.state.open || !row) return false;
+    const cell = Math.min(Math.max(this.state.cell + delta, 0), row.cells - 1);
+    if (cell !== this.state.cell) this.patch({ cell });
+    return true;
+  }
+
+  /** The pointer's row and cell; one that is not there is ignored. */
+  setActive(index: number, cell = 0) {
+    const row = this.rows[index];
+    if (!this.state.open || !row || cell < 0 || cell >= row.cells) return;
+    if (index !== this.state.active || cell !== this.state.cell) this.patch({ active: index, cell });
+  }
+
+  /** Back from the rows to the text, the results staying open. */
+  leave() {
+    if (this.state.active >= 0) this.patch({ active: -1, cell: 0 });
+  }
+
+  activeRow(): Row | undefined {
+    return this.state.active < 0 ? undefined : this.rows[this.state.active];
   }
 
   destroy() {
@@ -125,6 +165,7 @@ export class SearchOverlay {
         moreGames: 0,
         moreReleases: 0,
         active: -1,
+        cell: 0,
       });
       return;
     }
@@ -141,6 +182,9 @@ export class SearchOverlay {
     try {
       const result = await this.search(query);
       if (token !== this.token) return;
+      const held = this.activeRow();
+      const fresh = rowsOf(result);
+      const active = held ? fresh.findIndex((row) => row.key === held.key) : -1;
       this.patch({
         loading: false,
         error: '',
@@ -149,7 +193,8 @@ export class SearchOverlay {
         releases: result.releases,
         moreGames: result.moreGames,
         moreReleases: result.moreReleases,
-        active: -1,
+        active,
+        cell: active >= 0 && this.state.cell < fresh[active].cells ? this.state.cell : 0,
       });
     } catch (err) {
       if (token !== this.token) return;
@@ -163,6 +208,7 @@ export class SearchOverlay {
         moreGames: 0,
         moreReleases: 0,
         active: -1,
+        cell: 0,
       });
     }
   }

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ArrowRight, Bell, BellRing } from '@lucide/svelte';
   import { onDestroy } from 'svelte';
-  import { SearchOverlay, initialState } from '../search/overlay';
+  import { SearchOverlay, initialState, rowsOf } from '../search/overlay';
   import { searchAll, type GameHit, type ReleaseHit } from '../services/search';
   import { navigate } from '../stores/router';
   import { toggleWatch, watchedIds } from '../stores/watchlist';
@@ -26,6 +26,8 @@
   onDestroy(() => overlay.destroy());
 
   const total = $derived(results.games.length + results.releases.length);
+  const rows = $derived(rowsOf(results));
+  const firstRelease = $derived(rows.length - results.releases.length);
   const showEmpty = $derived(
     results.searched && !results.loading && !results.error && total === 0,
   );
@@ -33,7 +35,7 @@
   $effect(() => {
     const index = results.active;
     if (index < 0 || !resultsBox) return;
-    resultsBox.querySelectorAll('.result')[index]?.scrollIntoView({ block: 'nearest' });
+    resultsBox.querySelectorAll('[data-row]')[index]?.scrollIntoView({ block: 'nearest' });
   });
 
   function openGame(hit: GameHit) {
@@ -55,10 +57,11 @@
   }
 
   function openActive() {
-    const active = overlay.activeHit();
-    if (!active) return;
-    if (active.kind === 'game') openGame(active.hit);
-    else openRelease(active.hit);
+    const row = overlay.activeRow();
+    if (!row) return;
+    if (row.kind === 'game') openGame(row.hit);
+    else if (row.kind === 'release') openRelease(row.hit);
+    else openCatalog();
   }
 
   function onSearchKeydown(event: KeyboardEvent) {
@@ -124,7 +127,7 @@
         <div class="results-head">{msg('search.games')}</div>
         {#each results.games as hit, i (hit.id)}
           <div class="result-row">
-          <button class="result" class:active={results.active === i} onclick={() => openGame(hit)}>
+          <button class="result" class:active={results.active === i} data-row onclick={() => openGame(hit)}>
             <span class="result-art">
               <Artwork src={hit.cover ?? ''} alt={hit.title} ratio="3 / 4" radius="var(--radius-xs)" />
             </span>
@@ -158,7 +161,7 @@
           </div>
         {/each}
         {#if results.moreGames > 0}
-          <button class="results-more results-link" onclick={openCatalog}>
+          <button class="results-more results-link" class:active={results.active === results.games.length} data-row onclick={openCatalog}>
             {msg('search.moreInCatalog', { count: results.moreGames })}
             <ArrowRight size="1.4rem" strokeWidth={1.8} />
           </button>
@@ -170,7 +173,8 @@
         {#each results.releases as hit, i (hit.id)}
           <button
             class="result"
-            class:active={results.active === results.games.length + i}
+            class:active={results.active === firstRelease + i}
+            data-row
             onclick={() => openRelease(hit)}
           >
             <span class="result-body">
@@ -324,7 +328,8 @@
     transition: background var(--dur-fast) var(--ease);
   }
 
-  .results-link:hover {
+  .results-link:hover,
+  .results-link.active {
     background: var(--hover-strong);
   }
 
