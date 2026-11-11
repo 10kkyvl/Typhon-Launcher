@@ -52,11 +52,9 @@ export function initialFocus(root: HTMLElement, choice?: HTMLElement | string | 
   if (choice instanceof HTMLElement && root.contains(choice)) return choice;
   const picked = typeof choice === 'string' ? root.querySelector<HTMLElement>(choice) : null;
   const marked = picked ?? root.querySelector<HTMLElement>('[data-autofocus]');
-  if (marked && shown(marked)) {
-    if (tabbable(marked)) return marked;
-    const inside = focusableIn(marked)[0];
-    if (inside) return inside;
-  }
+  // The marked element may be a `display: contents` wrapper around a control: it has no box of its own.
+  const target = marked && (tabbable(marked) ? marked : focusableIn(marked)[0]);
+  if (target) return target;
   return focusableIn(root).find((el) => !el.closest('[data-skip-autofocus]')) ?? root;
 }
 
