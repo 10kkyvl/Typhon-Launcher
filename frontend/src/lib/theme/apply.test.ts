@@ -236,3 +236,25 @@ describe('fallback colours', () => {
     expect(fallbackBackground.light).toBe(await presetToken('presetLight', '--bg'));
   });
 });
+
+describe('the theme-applied signal', () => {
+  it('moves only after the window holds the new variables, for a theme, a cleared theme and a personal accent', async () => {
+    const { fakeDocument, rootProps, elements } = createFakeDocument();
+    vi.stubGlobal('document', fakeDocument);
+    const { applyTheme, applyPersonalAccent, clearTheme, themeApplied } = await import('./apply');
+    const seen: { bg: string | undefined; accent: string | undefined; css: string | undefined }[] = [];
+    const stop = themeApplied.subscribe(() => {
+      seen.push({ bg: rootProps.get('--bg'), accent: rootProps.get('--accent'), css: elements.get('typhon-theme')?.textContent });
+    });
+    seen.length = 0;
+    applyTheme(baseTheme({ tokens: { '--bg': '#123456' }, css: '.x { color: red; }' }));
+    applyPersonalAccent('#E45D87');
+    clearTheme();
+    stop();
+    expect(seen).toHaveLength(3);
+    expect(seen[0]).toEqual({ bg: '#123456', accent: undefined, css: '.x { color: red; }' });
+    expect(seen[1].accent).toMatch(/^#[0-9a-f]{6}$/);
+    expect(seen[2]).toEqual({ bg: undefined, accent: undefined, css: '' });
+    vi.unstubAllGlobals();
+  });
+});

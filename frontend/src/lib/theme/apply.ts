@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store';
+import { writable, type Readable } from 'svelte/store';
 import { accentPalette, contrast, validAccent } from './accent';
 import type { Theme } from '../../../bindings/typhon/internal/theme';
 import { msg, type MessageKey } from '../i18n';
@@ -9,6 +9,15 @@ const STYLE_ELEMENT_ID = 'typhon-theme';
 export const fallbackAccent = '#0B7285';
 export const fallbackBackground = { dark: '#0e0f11', light: '#eef1f4' } as const;
 export const displayedAccent = writable<string>(fallbackAccent);
+
+const applied = writable(0);
+/**
+ * Moves each time the window has taken a new look: a theme's variables and custom CSS, a cleared
+ * theme or a personal accent are on the root by then. Whatever reads the window's computed colours
+ * recomputes on it.
+ */
+export const themeApplied: Readable<number> = { subscribe: applied.subscribe };
+const announce = () => applied.update((n) => n + 1);
 
 interface NamedTheme {
   id: string;
@@ -60,6 +69,7 @@ export function applyPersonalAccent(color: string): void {
   for (const [name, value] of Object.entries(vars)) root.style.setProperty(name, value, 'important');
   appliedTokenNames = Object.keys(vars);
   displayedAccent.set(personalColor || computed?.getPropertyValue('--accent').trim() || fallbackAccent);
+  announce();
 }
 
 export function personalThemeVars(theme: Theme): Record<string, string> {
@@ -103,6 +113,7 @@ export function applyTheme(theme: Theme): void {
     ? getComputedStyle(root).getPropertyValue('--accent').trim()
     : vars['--accent'];
   displayedAccent.set(personalColor || themeAccent || fallbackAccent);
+  announce();
 }
 
 export function clearTheme(): void {
@@ -114,4 +125,5 @@ export function clearTheme(): void {
   appliedTokenNames = [];
   const existing = document.getElementById(STYLE_ELEMENT_ID) as HTMLStyleElement | null;
   if (existing) existing.textContent = '';
+  announce();
 }

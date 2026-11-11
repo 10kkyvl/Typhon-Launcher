@@ -2,8 +2,7 @@
   import { ambientState, pickAmbient } from '../stores/ambient';
   import { libraryGames } from '../stores/library';
   import { gameArt, requestArt } from '../stores/metadata';
-  import { activeTheme } from '../stores/theme';
-  import { displayedAccent } from '../theme/apply';
+  import { themeApplied } from '../theme/apply';
   import { resolveColors } from '../theme/resolveColors';
   import { documentMotion, tokenMs } from '../motion/plate';
   import { BackdropPainter } from '../backdrop/painter';
@@ -19,6 +18,16 @@
 
   let canvas = $state<HTMLCanvasElement>();
   let painter = $state.raw<BackdropPainter | null>(null);
+  let look = $state.raw<BackdropLook | null>(null);
+
+  // Read from the window, not the theme file: custom CSS, a personal accent and any colour syntax are
+  // resolved there. themeApplied moves once the window holds a new look.
+  $effect(() => {
+    void $themeApplied;
+    const root = getComputedStyle(document.documentElement);
+    const number = (name: string) => Number.parseFloat(root.getPropertyValue(name));
+    look = backdropLook(resolveColors({}, BACKDROP_LOOK_COLORS), number('--ambient-saturate'), number('--ambient-dim'));
+  });
 
   const target = $derived(
     pickAmbient($ambientState, rememberedGame($libraryGames, $gameArt), (id) => backdropSources(id, $libraryGames, $gameArt).length > 0),
@@ -33,16 +42,6 @@
   });
 
   const sources = $derived(target ? backdropSources(target, $libraryGames, $gameArt) : []);
-
-  // Read from the window, not the theme file: custom CSS, a personal accent and any colour syntax are
-  // already resolved there. The theme and accent stores change only after the window has them.
-  const look = $derived.by((): BackdropLook | null => {
-    void $activeTheme;
-    void $displayedAccent;
-    const root = getComputedStyle(document.documentElement);
-    const number = (name: string) => Number.parseFloat(root.getPropertyValue(name));
-    return backdropLook(resolveColors({}, BACKDROP_LOOK_COLORS), number('--ambient-saturate'), number('--ambient-dim'));
-  });
 
   $effect(() => {
     const context = canvas?.getContext('2d');
