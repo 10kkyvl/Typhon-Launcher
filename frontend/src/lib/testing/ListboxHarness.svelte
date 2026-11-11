@@ -5,18 +5,28 @@
   // A select whose listbox is portalled out and registered as a non-modal layer owned by its trigger,
   // inside a dialog or on the bare page, with a submenu owned by one of its options: the shapes the
   // menus and selects pass builds. For layers.dom.test.ts.
-  let { onpick, inDialog = true }: { onpick?: (value: string) => void; inDialog?: boolean } = $props();
+  let {
+    onpick,
+    inDialog = true,
+    dropTrigger = false,
+  }: { onpick?: (value: string) => void; inDialog?: boolean; dropTrigger?: boolean } = $props();
 
   let open = $state(false);
   let listbox = $state(false);
   let submenu = $state(false);
   let trigger = $state<HTMLButtonElement>();
   let more = $state<HTMLElement>();
+  let deleting = $state(false);
+  let triggerShown = $state(true);
+  let fallback = $state<HTMLButtonElement>();
 </script>
 
 {#snippet select()}
   <p>Language</p>
-  <button type="button" bind:this={trigger} aria-haspopup="listbox" onclick={() => (listbox = !listbox)}>Russian</button>
+  {#if triggerShown}
+    <button type="button" bind:this={trigger} aria-haspopup="listbox" onclick={() => (listbox = !listbox)}>Russian</button>
+  {/if}
+  <button type="button" bind:this={fallback}>Fallback</button>
   <button type="button">Save</button>
   <button type="button" aria-label="Help">
     <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0h10v10H0z" /></svg>
@@ -56,9 +66,25 @@
         {value}
       </li>
     {/each}
+    <li
+      role="option"
+      aria-selected="false"
+      tabindex="0"
+      onclick={() => {
+        deleting = true;
+        if (dropTrigger) triggerShown = false;
+      }}
+      onkeydown={() => {}}
+    >
+      Forget language
+    </li>
     <li role="option" aria-selected="false" tabindex="0" bind:this={more} onclick={() => (submenu = true)} onkeydown={() => {}}>More languages</li>
   </ul>
 {/if}
+
+<Modal bind:open={deleting} title="Forget language" returnFocus={() => fallback}>
+  <p>The language list is reset.</p>
+</Modal>
 
 {#if submenu}
   <ul class="listbox" role="listbox" aria-label="More languages" {@attach layer({ modal: false, owner: () => more, dismiss: () => (submenu = false) })}>

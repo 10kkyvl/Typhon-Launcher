@@ -48,7 +48,9 @@ const closingPresses = new WeakSet<Event>();
  *   key handlers and Big Picture act on, whatever non-modal layer sits above it. A dialog that opens
  *   first closes every non-modal layer open at that moment (menus, tooltips, a listbox of a dialog
  *   under it), each that `dismissible()` allows; otherwise they would be left inert under or over
- *   its scrim. A non-modal layer opened afterwards from inside the dialog stays.
+ *   its scrim. A non-modal layer opened afterwards from inside the dialog stays. A dialog opened from
+ *   an item of such a menu adopts the menu's trigger as where focus returns when it closes (the item
+ *   is gone by then), ahead of its own `returnFocus`, which is used when the trigger is gone too.
  * - A menu, a select's listbox, a popover or a tooltip is non-modal (`modal: false`): it inerts nothing
  *   and takes focus only when given `initialFocus` (only then is its root made focusable). Its `owner`
  *   is the element it was opened from (the trigger), in a dialog or on the bare page. Inside a dialog
@@ -231,13 +233,16 @@ export function openLayer(element: HTMLElement, options: LayerOptions): () => vo
   const modal = options.modal ?? true;
   const active = document.activeElement;
   const owner = modal ? null : options.owner?.();
-  if (modal) for (const dismiss of stack.dismissNonModal()) dismiss();
+  const opener = active instanceof HTMLElement && active !== document.body ? active : null;
+  const dismissed = modal ? stack.dismissNonModal(opener) : { dismiss: [], homes: [] };
+  for (const dismiss of dismissed.dismiss) dismiss();
   const id = stack.open({
     element,
     modal,
     dismissible: options.dismissible ?? (() => true),
     dismiss: options.dismiss,
-    opener: active instanceof HTMLElement && active !== document.body ? active : null,
+    opener,
+    adopted: dismissed.homes,
     returnFocus: options.returnFocus,
     owner: owner ? stack.holding(owner) : null,
     anchor: owner ?? null,

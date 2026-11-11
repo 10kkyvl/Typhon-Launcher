@@ -296,11 +296,30 @@ describe('LayerStack a dialog opening over menus', () => {
     open(box('tooltip'), { modal: false, dismiss: pageTip });
     open(box('busy popover'), { modal: false, dismiss: sticky, dismissible: () => false });
 
-    for (const dismiss of stack.dismissNonModal()) dismiss();
+    for (const dismiss of stack.dismissNonModal().dismiss) dismiss();
 
     expect(listbox).toHaveBeenCalledTimes(1);
     expect(pageTip).toHaveBeenCalledTimes(1);
     expect(sticky).not.toHaveBeenCalled();
     expect(stack.elements().map((element) => element.name)).toEqual(['lower dialog', 'busy popover']);
+  });
+});
+
+describe('LayerStack a dialog opened from a menu item', () => {
+  it('adopts the menu trigger as the way home, ahead of its own fallback', () => {
+    const { stack, gone, box, open } = world();
+    open(box('menu', 'item'), { modal: false, anchor: 'trigger', opener: 'trigger' });
+    const { homes } = stack.dismissNonModal('item');
+    expect(homes).toEqual(['trigger']);
+
+    gone.add('item');
+    const dialog = open(box('confirm'), { opener: 'item', adopted: homes, returnFocus: () => 'fallback' });
+    expect(stack.close(dialog)).toEqual({ focus: 'trigger', enter: null });
+
+    open(box('menu', 'item'), { modal: false, anchor: 'trigger' });
+    const again = stack.dismissNonModal('item');
+    gone.add('trigger');
+    const second = open(box('confirm'), { opener: 'item', adopted: again.homes, returnFocus: () => 'fallback' });
+    expect(stack.close(second)).toEqual({ focus: 'fallback', enter: null });
   });
 });

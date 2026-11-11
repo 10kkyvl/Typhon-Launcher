@@ -24,6 +24,11 @@ export interface LayerSpec<E, F> {
   owner?: E | null;
   /** The element it was opened from (its trigger): a press on it is the trigger's, not an outside press. */
   anchor?: F | null;
+  /**
+   * Where focus goes when the opener is gone, ahead of `returnFocus`: the triggers of the menus this
+   * dialog closed as it opened from one of their items (see dismissNonModal).
+   */
+  adopted?: F[];
   /** A press outside this layer and the layers it owns closes it (non-modal layers only). */
   outsidePress?: boolean;
 }
@@ -155,19 +160,26 @@ export class LayerStack<E, F> {
     const modal = this.#topModal();
     const reachable = (target: F | null | undefined): target is F =>
       target !== null && target !== undefined && this.env.alive(target) && (!modal || this.within(modal.element, target));
-    const focus = [entry.opener, entry.returnFocus?.(), ...entry.inherited].find(reachable) ?? null;
+    const focus = [entry.opener, ...(entry.adopted ?? []), entry.returnFocus?.(), ...entry.inherited].find(reachable) ?? null;
     return { focus, enter: focus === null ? (modal?.element ?? null) : null };
   }
 
   /**
    * A modal layer is opening: every non-modal layer open now (a page menu, a tooltip, a listbox owned
    * by a lower dialog) would be left inert under or over the new scrim, so each that may close is
-   * removed; their `dismiss` functions are returned for the caller to run.
+   * removed; their `dismiss` functions are returned for the caller to run. When the dialog opens from
+   * an item of one of them (`opener` inside it), that layer's way home (its trigger, then its opener)
+   * is returned as `homes`, for the dialog to adopt: the item is gone when the dialog closes.
    */
-  dismissNonModal(): (() => void)[] {
+  dismissNonModal(opener: F | null = null): { dismiss: (() => void)[]; homes: F[] } {
     const closing = this.#entries.filter((entry) => !entry.modal && entry.dismissible());
     this.#entries = this.#entries.filter((entry) => !closing.includes(entry));
-    return closing.map((entry) => entry.dismiss);
+    const homes = closing
+      .filter((entry) => opener !== null && this.env.contains(entry.element, opener))
+      .reverse()
+      .flatMap((entry) => [entry.anchor, entry.opener, ...entry.inherited])
+      .filter((home): home is F => home !== null && home !== undefined && !closing.some((other) => this.env.contains(other.element, home)));
+    return { dismiss: closing.map((entry) => entry.dismiss), homes: [...new Set(homes)] };
   }
 
   /** Escape: the top layer closes if it may; a layer that may not still swallows the key. */

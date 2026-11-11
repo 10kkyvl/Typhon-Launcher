@@ -312,4 +312,27 @@ describe('presses around a non-modal layer', () => {
     expect(screen.queryByRole('listbox', { name: 'Language' })).toBeNull();
     expect(screen.getByRole('dialog', { name: 'The game closed' }).parentElement?.contains(document.activeElement)).toBe(true);
   });
+
+  it('an option that opens a dialog: when the dialog closes, focus goes back to the menu trigger', async () => {
+    const { keys, trigger } = await pageSelect(false);
+
+    await keys.click(screen.getByRole('option', { name: 'Forget language' }));
+    expect(screen.queryByRole('listbox', { name: 'Language' })).toBeNull();
+    await keys.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('an option that opens a dialog, with the trigger gone by then: focus goes to the dialog fallback', async () => {
+    app.replaceChildren();
+    render(ListboxHarness, { target: app, props: { inDialog: false, dropTrigger: true } });
+    const keys = user();
+    await keys.click(screen.getByRole('button', { name: 'Russian' }));
+
+    await keys.click(screen.getByRole('option', { name: 'Forget language' }));
+    await keys.keyboard('{Escape}');
+
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Fallback' }));
+  });
 });
