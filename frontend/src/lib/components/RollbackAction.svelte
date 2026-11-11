@@ -3,7 +3,7 @@
   import Button from './Button.svelte';
   import ConfirmModal from './ConfirmModal.svelte';
   import { rollbackPrompt } from '../confirm/prompts';
-  import { rollbackReason } from '../services/selfupdateMessages';
+  import { rollbackReason, updateReason } from '../services/selfupdateMessages';
   import { rollbackShown } from '../services/selfupdate';
   import { requestRollback, rollbackBusy, rollbackInfo, selfUpdateStatus } from '../stores/selfupdate';
   import { msg } from '../i18n';
@@ -35,5 +35,5 @@
 {/if}
 
 {#if confirmOpen}
-  <ConfirmModal {prompt} onconfirm={requestRollback} onclose={() => (confirmOpen = false)} />
+  <ConfirmModal {prompt} onconfirm={requestRollback} onclose={() => (confirmOpen = false)} errorText={updateReason} />
 {/if}

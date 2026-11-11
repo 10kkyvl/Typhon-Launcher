@@ -134,15 +134,13 @@
   }
 
   async function confirmDelete() {
-    try {
-      await removeReview(canonicalGameId);
-      notifyReviewsChanged();
-      void load(canonicalGameId);
-    } catch (err) {
-      const code = err instanceof AccountError ? err.code : '';
-      toast(reviewToastMessage(code, msg('reviews.composerDeleteError')), 'danger');
-      throw err;
-    }
+    await removeReview(canonicalGameId);
+    notifyReviewsChanged();
+    void load(canonicalGameId);
+  }
+
+  function deleteErrorText(err: unknown): string {
+    return reviewToastMessage(err instanceof AccountError ? err.code : '', msg('reviews.composerDeleteError'));
   }
 </script>
 
@@ -248,6 +246,7 @@
     }}
     onconfirm={confirmDelete}
     onclose={() => (confirmDeleteOpen = false)}
+    errorText={deleteErrorText}
   />
 {/if}
 

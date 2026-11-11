@@ -319,7 +319,7 @@
 
 <ReleaseMatchModal bind:open={matchOpen} release={matchRelease} onchanged={reloadAll} />
 {#if pending}
-  <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
+  <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} errorText={(err) => sourceErrorText(err)} />
 {/if}
 
 <style>

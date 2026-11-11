@@ -162,7 +162,7 @@
 />
 
 {#if pending}
-  <ConfirmModal prompt={deleteScreenshotPrompt(pending.shot.name)} onconfirm={pending.run} onclose={() => (pending = null)} />
+  <ConfirmModal prompt={deleteScreenshotPrompt(pending.shot.name)} onconfirm={pending.run} onclose={() => (pending = null)} errorText={(err) => screenshotErrorText(err)} />
 {/if}
 
 <style>

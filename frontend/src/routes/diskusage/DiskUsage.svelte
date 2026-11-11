@@ -497,7 +497,7 @@
 
   {#if pending}
     {@const current = pending}
-    <ConfirmModal prompt={current.prompt} onconfirm={current.run} onclose={() => (pending = null)} />
+    <ConfirmModal prompt={current.prompt} onconfirm={current.run} onclose={() => (pending = null)} errorText={(err) => installErrorText(err)} />
   {/if}
 </Page>
 

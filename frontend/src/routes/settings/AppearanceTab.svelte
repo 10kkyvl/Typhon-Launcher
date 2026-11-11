@@ -487,7 +487,7 @@
 <ThemeTextImportModal bind:open={textImportOpen} onimported={onTextImported} />
 
 {#if pending}
-  <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
+  <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} errorText={(err) => themeErrorText(err)} />
 {/if}
 
 <style>

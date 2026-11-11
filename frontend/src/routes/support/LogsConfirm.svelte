@@ -1,5 +1,6 @@
 <script lang="ts">
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
+  import { supportErrorText } from '../../lib/services/supportMessages';
   import { ticketLogsPrompt } from '../../lib/support/logsPrompt';
 
   let settle = $state<((confirmed: boolean) => void) | null>(null);
@@ -19,5 +20,5 @@
 </script>
 
 {#if settle}
-  <ConfirmModal prompt={ticketLogsPrompt()} onconfirm={() => finish(true)} onclose={() => finish(false)} />
+  <ConfirmModal prompt={ticketLogsPrompt()} onconfirm={() => finish(true)} onclose={() => finish(false)} errorText={(err) => supportErrorText(err)} />
 {/if}

@@ -284,7 +284,7 @@
 {/if}
 
 {#if steamConfirmID}
-  <ConfirmModal prompt={addToSteamPrompt()} onconfirm={confirmSteamAdd} onclose={() => (steamConfirmID = null)} />
+  <ConfirmModal prompt={addToSteamPrompt()} onconfirm={confirmSteamAdd} onclose={() => (steamConfirmID = null)} errorText={(err) => libraryErrorText(err, msg('games.steamFailed'))} />
 {/if}
 
 {#if statusGame && statusOpen}

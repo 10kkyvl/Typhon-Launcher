@@ -11,6 +11,7 @@
   import { createDiscordFlow } from '../../lib/discord/flow';
   import { formatCountdown, formatLinkCode } from '../../lib/discord/format';
   import { msg } from '../../lib/i18n';
+  import { accountErrorText } from '../../lib/services/accountMessages';
   import { accountMessage } from '../../lib/services/accountMessages';
   import { discordApi, type DiscordApi } from '../../lib/services/discord';
   import { settings, updateSettingsReporting } from '../../lib/stores/settings';
@@ -170,7 +171,7 @@
 </Card>
 
 {#if confirming}
-  <ConfirmModal prompt={confirming} onconfirm={unlink} onclose={() => (confirming = null)} />
+  <ConfirmModal prompt={confirming} onconfirm={unlink} onclose={() => (confirming = null)} errorText={(err) => accountErrorText(err)} />
 {/if}
 
 <style>

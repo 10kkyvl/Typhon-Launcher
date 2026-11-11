@@ -6,6 +6,7 @@
   import { stableOfferVersion } from '../services/selfupdateChannel';
   import { requestInstallStable, selfUpdateBusy, selfUpdateStatus, stableBusy } from '../stores/selfupdate';
   import { msg } from '../i18n';
+  import { updateReason } from '../services/selfupdateMessages';
 
   let confirmOpen = $state(false);
 
@@ -24,7 +25,7 @@
 {/if}
 
 {#if confirmOpen}
-  <ConfirmModal prompt={stableOfferPrompt(version)} onconfirm={requestInstallStable} onclose={() => (confirmOpen = false)} />
+  <ConfirmModal prompt={stableOfferPrompt(version)} onconfirm={requestInstallStable} onclose={() => (confirmOpen = false)} errorText={updateReason} />
 {/if}
 
 <style>

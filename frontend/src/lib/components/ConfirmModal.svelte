@@ -2,22 +2,24 @@
   import { tick } from 'svelte';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
-  import { msg } from '../i18n';
-  import { libraryErrorText } from '../library/errors';
+  import { codeText, msg } from '../i18n';
   import type { ConfirmPrompt } from '../confirm/prompts';
 
   let {
     prompt,
     onconfirm,
     onclose,
-    errorText = (err: unknown) => libraryErrorText(err, msg('common.error')),
+    errorText = (err: unknown) => codeText(err),
   }: {
     prompt: ConfirmPrompt;
     /** The action. While it runs the dialog cannot be dismissed; when it rejects, the dialog stays open with the error. */
     onconfirm: () => void | Promise<void>;
     /** The dialog is done: the action resolved, or the user cancelled. */
     onclose: () => void;
-    /** Text for a failed action, from the domain's error table. Default: the backend code's message, else a plain "error". */
+    /**
+     * Text for a failed action, from the domain's error table. Pass it whenever the action may reject
+     * (ConfirmModal.callers.test.ts); the default only maps a backend code that has a message, else "error".
+     */
     errorText?: (err: unknown) => string;
   } = $props();
 

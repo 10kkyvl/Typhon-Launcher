@@ -358,7 +358,7 @@
   <BannerCropModal bind:open={cropOpen} src={cropSource} onsave={applyCrop} />
 {/if}
 {#if pending}
-  <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
+  <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} errorText={(err) => accountErrorText(err)} />
 {/if}
 <style>
   .panel { min-width: 0; }

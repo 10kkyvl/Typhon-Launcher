@@ -34,7 +34,7 @@
   import { initInstalls } from './lib/stores/install';
   import { initLan } from './lib/stores/lan';
   import { initNetwork } from './lib/stores/network';
-  import { locale } from './lib/i18n';
+  import { codeText, locale } from './lib/i18n';
   import { confirmLeave, leaveRequest, route, stayHere } from './lib/stores/router';
   import ConfirmModal from './lib/components/ConfirmModal.svelte';
   import { initCollections } from './lib/stores/collections';
@@ -188,7 +188,7 @@
       <RedistModal />
       <CloudConflictModal />
       {#if $leaveRequest}
-        <ConfirmModal prompt={$leaveRequest.prompt()} onconfirm={confirmLeave} onclose={stayHere} />
+        <ConfirmModal prompt={$leaveRequest.prompt()} onconfirm={confirmLeave} onclose={stayHere} errorText={(err) => codeText(err)} />
       {/if}
     <UpdateOverlay />
   {:else}

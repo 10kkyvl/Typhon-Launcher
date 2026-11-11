@@ -518,6 +518,7 @@
     prompt={pending.kind === 'restore' ? restoreSavesPrompt() : deleteSaveBackupPrompt(snapshotWhen(pending.snapshot))}
     onconfirm={runPending}
     onclose={() => (pending = null)}
+    errorText={(err) => saveBackupErrorText(err)}
   />
 {/if}
 

@@ -556,7 +556,7 @@
   <SocialConsentScreen bind:open={consentOpen} />
 
   {#if pending}
-    <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
+    <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} errorText={(err) => accountErrorText(err)} />
   {/if}
 </Page>
 

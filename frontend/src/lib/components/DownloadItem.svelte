@@ -9,6 +9,7 @@
   import { sources } from '../stores/sources';
   import { bytesSize, etaLabel, speedBytes } from '../utils/format';
   import { msg } from '../i18n';
+  import { installErrorText } from '../install/installErrors';
   import Artwork from './Artwork.svelte';
   import Button from './Button.svelte';
   import ConfirmModal from './ConfirmModal.svelte';
@@ -193,6 +194,7 @@
     prompt={cancelDownloadPrompt(download.name)}
     onconfirm={() => cancel(download.id)}
     onclose={() => (confirmOpen = false)}
+    errorText={(err) => installErrorText(err)}
   />
 {/if}
 
