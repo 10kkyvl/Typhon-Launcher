@@ -41,6 +41,39 @@ afterEach(() => {
 
 const byId = (id: string) => document.getElementById(id) as HTMLElement;
 
+describe('a layer that never took focus', () => {
+  it('gives none back when it closes while focus is on its way elsewhere', () => {
+    const field = document.createElement('input');
+    const box = document.createElement('div');
+    app.append(field);
+    document.body.append(box);
+    field.focus();
+    const close = register(box, { modal: false, dismiss: () => {} });
+
+    // As in a browser during a blur: the field has lost focus and nothing has it yet.
+    field.blur();
+    close();
+
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('still gives focus back when focus was inside it', () => {
+    const field = document.createElement('input');
+    const box = document.createElement('div');
+    const inner = document.createElement('button');
+    box.append(inner);
+    app.append(field);
+    document.body.append(box);
+    field.focus();
+    const close = register(box, { modal: false, dismiss: () => {} });
+
+    inner.focus();
+    close();
+
+    expect(document.activeElement).toBe(field);
+  });
+});
+
 describe('layer stack and the app content', () => {
   it('inerts the app content, not the window chrome, until the last of nested layers closes, and restores it exactly', () => {
     const closeOuter = openLayer(dialog('<button>a</button>'), { dismiss: vi.fn() });
