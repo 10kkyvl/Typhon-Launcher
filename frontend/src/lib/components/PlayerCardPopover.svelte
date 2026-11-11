@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import PlayerCard from './PlayerCard.svelte';
-  import { createHoverIntent, placePopover } from './playerCardPopover';
+  import { createHoverIntent } from './hoverIntent';
+  import { placePopover } from './playerCardPopover';
   import type { PresenceView, UserCard } from '../services/social';
   import { portal } from '../utils/portal';
 
