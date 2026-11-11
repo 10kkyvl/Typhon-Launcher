@@ -327,6 +327,23 @@ describe('the "…" menu button of a game card', () => {
     expect(document.activeElement).toBe(button());
   });
 
+  it('the card itself: a right-click opens the menu at the pointer, Shift+F10 on its cover next to the cover', async () => {
+    const keys = setup({ cards: true });
+    const cover = screen.getAllByRole('button', { name: 'Hades' })[0];
+
+    await rightClick(keys, cover, 60, 70);
+    expect([(menu() as HTMLElement).style.left, (menu() as HTMLElement).style.top]).toEqual(['60px', '70px']);
+    await keys.keyboard('{Escape}');
+    expect(menu()).toBeNull();
+
+    cover.getBoundingClientRect = box(200, 150, 100, 140);
+    cover.focus();
+    await keys.keyboard('{Shift>}{F10}{/Shift}');
+    const opened = screen.getByRole('menu', { name: menuName('Hades') });
+    expect([opened.style.left, opened.style.top]).toEqual(['200px', '294px']);
+    expect(document.activeElement).toBe(items()[0]);
+  });
+
   it('Enter held on the button opens the menu once and runs nothing', async () => {
     const keys = setup({ cards: true });
     button().focus();
