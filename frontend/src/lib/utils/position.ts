@@ -188,7 +188,8 @@ export function viewportSize(): Size {
 }
 
 function natural(node: HTMLElement): Size {
-  // Measure without the limits from a previous pass so it can grow back.
+  // Measure without the limits from a previous pass so it can grow back. The scroll position this
+  // loses is put back by keepScroll.
   const { maxWidth, maxHeight } = node.style;
   node.style.maxWidth = '';
   node.style.maxHeight = '';
@@ -196,6 +197,16 @@ function natural(node: HTMLElement): Size {
   node.style.maxWidth = maxWidth;
   node.style.maxHeight = maxHeight;
   return { width: rect.width, height: rect.height };
+}
+
+// Measuring a height-limited element without its limit resets its scroll position; the user's place
+// in a long list must survive a re-place.
+function keepScroll<T>(node: HTMLElement, place: () => T): T {
+  const { scrollTop, scrollLeft } = node;
+  const result = place();
+  if (node.scrollTop !== scrollTop) node.scrollTop = scrollTop;
+  if (node.scrollLeft !== scrollLeft) node.scrollLeft = scrollLeft;
+  return result;
 }
 
 function apply(node: HTMLElement, result: PositionResult): void {
@@ -232,22 +243,30 @@ export function anchorTo(node: HTMLElement, anchor: HTMLElement | (() => Rect), 
     frame = 0;
     const rect = typeof anchor === 'function' ? anchor() : anchor.getBoundingClientRect();
     if (options.matchWidth) node.style.minWidth = `${Math.round(rect.width)}px`;
-    const result = computePosition(rect, natural(node), {
-      placement: options.placement,
-      offset: options.offset,
-      padding: options.padding ?? windowInsets(),
-      viewport: viewportSize(),
+    const result = keepScroll(node, () => {
+      const placed = computePosition(rect, natural(node), {
+        placement: options.placement,
+        offset: options.offset,
+        padding: options.padding ?? windowInsets(),
+        viewport: viewportSize(),
+      });
+      apply(node, placed);
+      return placed;
     });
-    apply(node, result);
     options.onplace?.(result);
   };
   const schedule = () => {
     if (!frame) frame = requestAnimationFrame(place);
   };
+  // The page scrolling moves the anchor; the floating element scrolling its own content does not.
+  const onScroll = (event: Event) => {
+    if (event.target instanceof Node && node.contains(event.target)) return;
+    schedule();
+  };
 
   place();
   window.addEventListener('resize', schedule);
-  window.addEventListener('scroll', schedule, true);
+  window.addEventListener('scroll', onScroll, true);
   const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(schedule) : null;
   observer?.observe(node);
   if (anchor instanceof HTMLElement) observer?.observe(anchor);
@@ -255,7 +274,7 @@ export function anchorTo(node: HTMLElement, anchor: HTMLElement | (() => Rect), 
   return () => {
     cancelAnimationFrame(frame);
     window.removeEventListener('resize', schedule);
-    window.removeEventListener('scroll', schedule, true);
+    window.removeEventListener('scroll', onScroll, true);
     observer?.disconnect();
   };
 }
@@ -264,7 +283,9 @@ export function anchorTo(node: HTMLElement, anchor: HTMLElement | (() => Rect), 
 export function placeAtPoint(node: HTMLElement, x: number, y: number, padding?: number | Insets): () => void {
   node.style.position = 'fixed';
   const place = () =>
-    apply(node, positionAtPoint(x, y, natural(node), { viewport: viewportSize(), padding: padding ?? windowInsets() }));
+    keepScroll(node, () =>
+      apply(node, positionAtPoint(x, y, natural(node), { viewport: viewportSize(), padding: padding ?? windowInsets() })),
+    );
   place();
   const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(() => place()) : null;
   observer?.observe(node);
