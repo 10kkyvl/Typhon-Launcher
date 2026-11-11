@@ -1,4 +1,5 @@
 import { untrack } from 'svelte';
+import { writable, type Readable } from 'svelte/store';
 import type { Attachment } from 'svelte/attachments';
 import { portal } from '../utils/portal';
 import { focusableIn, focusQuietly, initialFocus, nextFocusTarget } from './focus';
@@ -32,6 +33,7 @@ const stack = new LayerStack<HTMLElement, Element>({
   alive: (target) => target.isConnected,
 });
 const inerted = new Set<HTMLElement>();
+const modal = writable(false);
 let appObserver: MutationObserver | null = null;
 let listening = false;
 // Presses that closed a layer: the scrim under it must not take the same press as its own.
@@ -124,7 +126,11 @@ function sync(): void {
   }
   watchApp(want.app);
   listen(stack.size > 0);
+  modal.set(want.app);
 }
+
+/** True while a dialog is open, for what lives outside the layers and must know (the toast stack). */
+export const modalOpen: Readable<boolean> = { subscribe: modal.subscribe };
 
 function watchApp(on: boolean): void {
   if (!on) {
