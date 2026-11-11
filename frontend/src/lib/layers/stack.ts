@@ -73,6 +73,11 @@ export class LayerStack<E, F> {
     return this.#entries.some((entry) => entry.id === id);
   }
 
+  /** Every open layer's element, bottom to top. */
+  elements(): E[] {
+    return this.#entries.map((entry) => entry.element);
+  }
+
   top(): E | null {
     return this.#entries.at(-1)?.element ?? null;
   }
@@ -158,14 +163,19 @@ export class LayerStack<E, F> {
   }
 
   /**
-   * A press on `target`: when the top layer is a non-modal one that closes on an outside press and
-   * `target` is outside it and the layers it owns, it closes as with Escape. Null when the press
-   * belongs to the layers.
+   * A press on `target`: non-modal layers on top that close on an outside press close, top first, as
+   * with Escape, until one holds the press (in it, on its trigger, in a layer it owns) or a modal layer
+   * or one that stays open is reached. A press in a parent menu closes its submenu only; a press
+   * outside both closes both. Empty when the press belongs to the layers.
    */
-  pressOutside(target: F): Dismissal<E, F> | null {
-    const top = this.#entries.at(-1);
-    if (!top || top.modal || !top.outsidePress || this.#pressedIn(top, target)) return null;
-    return this.dismissTop();
+  pressOutside(target: F): Dismissal<E, F>[] {
+    const closed: Dismissal<E, F>[] = [];
+    for (let top = this.#entries.at(-1); top && !top.modal && top.outsidePress && !this.#pressedIn(top, target); top = this.#entries.at(-1)) {
+      const dismissal = this.dismissTop();
+      if (!dismissal.dismiss) break;
+      closed.push(dismissal);
+    }
+    return closed;
   }
 
   // A press belongs to a layer when it lands in it, on its trigger, or in a layer it owns (or on that one's trigger).

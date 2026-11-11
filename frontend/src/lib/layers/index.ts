@@ -132,11 +132,13 @@ function onWindowKeydown(event: KeyboardEvent): void {
 
 function onWindowPointerdown(event: PointerEvent): void {
   if (!(event.target instanceof Element)) return;
-  const leaving = leavingSet();
-  const dismissal = stack.pressOutside(event.target);
-  if (!dismissal) return;
+  const before = stack.elements();
+  const closed = stack.pressOutside(event.target);
+  if (closed.length === 0) return;
+  const open = new Set(stack.elements());
+  const leaving = before.filter((element) => !open.has(element));
   closingPresses.add(event);
-  apply(dismissal.closed, dismissal.dismiss, leaving);
+  for (const dismissal of closed) apply(dismissal.closed, dismissal.dismiss, leaving);
 }
 
 /** This press closed a menu or another non-modal layer: a dialog's scrim must not also close the dialog. */

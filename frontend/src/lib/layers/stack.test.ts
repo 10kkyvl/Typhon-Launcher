@@ -226,32 +226,60 @@ describe('LayerStack outside press', () => {
     const dialog = box('dialog', 'dialog body', 'trigger');
     const dialogDismiss = vi.fn();
     open(dialog, { dismiss: dialogDismiss });
-    expect(stack.pressOutside('page')).toBeNull();
+    expect(stack.pressOutside('page')).toEqual([]);
 
     const listbox = box('listbox', 'option');
     const listboxDismiss = vi.fn();
     open(listbox, { modal: false, owner: dialog, opener: 'trigger', outsidePress: true, dismiss: listboxDismiss });
 
-    expect(stack.pressOutside('option')).toBeNull();
-    const press = stack.pressOutside('dialog body');
+    expect(stack.pressOutside('option')).toEqual([]);
+    const [press] = stack.pressOutside('dialog body');
     press?.dismiss?.();
     expect(listboxDismiss).toHaveBeenCalledTimes(1);
     expect(press?.closed).toEqual({ focus: 'trigger', enter: null });
     expect(dialogDismiss).not.toHaveBeenCalled();
-    expect(stack.pressOutside('dialog body')).toBeNull();
+    expect(stack.pressOutside('dialog body')).toEqual([]);
   });
 
   it('a press on the trigger it was opened from is not an outside press, on the page or in a dialog', () => {
     const { stack, box, open } = world();
     open(box('menu', 'item'), { modal: false, outsidePress: true, anchor: 'trigger' });
-    expect(stack.pressOutside('trigger')).toBeNull();
-    expect(stack.pressOutside('elsewhere')?.consumed).toBe(true);
+    expect(stack.pressOutside('trigger')).toEqual([]);
+    expect(stack.pressOutside('elsewhere')).toHaveLength(1);
+  });
+
+  it('nested menus: a press outside both closes both, a press in the parent closes the submenu only', () => {
+    const { stack, box, open } = world();
+    const menu = box('menu', 'menu item', 'other item');
+    const menuDismiss = vi.fn();
+    const subDismiss = vi.fn();
+    const openBoth = () => {
+      open(menu, { modal: false, outsidePress: true, dismiss: menuDismiss });
+      open(box('submenu', 'sub item'), { modal: false, outsidePress: true, owner: menu, anchor: 'menu item', dismiss: subDismiss });
+    };
+    openBoth();
+
+    const presses = stack.pressOutside('page');
+    for (const press of presses) press.dismiss?.();
+    expect(presses).toHaveLength(2);
+    expect(subDismiss).toHaveBeenCalledTimes(1);
+    expect(menuDismiss).toHaveBeenCalledTimes(1);
+    expect(stack.size).toBe(0);
+
+    openBoth();
+    expect(stack.pressOutside('menu item')).toEqual([]);
+    const inParent = stack.pressOutside('other item');
+    for (const press of inParent) press.dismiss?.();
+    expect(inParent).toHaveLength(1);
+    expect(subDismiss).toHaveBeenCalledTimes(2);
+    expect(menuDismiss).toHaveBeenCalledTimes(1);
+    expect(stack.size).toBe(1);
   });
 
   it('a menu that stays open on outside presses is left alone', () => {
     const { stack, box, open } = world();
     open(box('menu'), { modal: false, outsidePress: false });
-    expect(stack.pressOutside('page')).toBeNull();
+    expect(stack.pressOutside('page')).toEqual([]);
     expect(stack.size).toBe(1);
   });
 });

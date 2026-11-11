@@ -285,4 +285,21 @@ describe('presses around a non-modal layer', () => {
     await keys.click(scrim);
     expect(screen.queryByRole('dialog', { name: 'Settings' })).toBeNull();
   });
+
+  it('nested: a press in the listbox closes only its submenu, a press outside both closes both', async () => {
+    const { keys } = await pageSelect(true);
+    const listbox = screen.getByRole('listbox', { name: 'Language' });
+    await keys.click(screen.getByRole('option', { name: 'More languages' }));
+    expect(screen.getByRole('listbox', { name: 'More languages' })).toBeTruthy();
+
+    await keys.pointer({ keys: '[MouseLeft]', target: listbox });
+    expect(screen.queryByRole('listbox', { name: 'More languages' })).toBeNull();
+    expect(screen.getByRole('listbox', { name: 'Language' })).toBeTruthy();
+
+    await keys.click(screen.getByRole('option', { name: 'More languages' }));
+    await keys.click(screen.getByText('Language', { selector: 'p' }));
+    expect(screen.queryByRole('listbox', { name: 'More languages' })).toBeNull();
+    expect(screen.queryByRole('listbox', { name: 'Language' })).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeTruthy();
+  });
 });
