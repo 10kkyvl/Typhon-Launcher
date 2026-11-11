@@ -56,7 +56,29 @@ describe('Select call sites', () => {
   });
 
   it('bind the value or hold it with onchange, never both', () => {
-    const both = uses('Select').filter(({ tag }) => /\bbind:value\b/.test(tag) && /\bonchange=/.test(tag));
+    expect(bothWays('<Select bind:value={x} onchange={save} />')).toBe(true);
+    expect(bothWays('<Select bind:value={x} {onchange} />')).toBe(true);
+    expect(bothWays('<Select value={x} {onchange} />')).toBe(false);
+    expect(bothWays('<Select bind:value={x} {options} />')).toBe(false);
+    const both = uses('Select').filter(({ tag }) => bothWays(tag));
     expect(both.map(({ path, tag }) => `${path}: ${tag}`)).toEqual([]);
   });
+
+  // A spread hides which of the two ways a caller took, and whether it names the field.
+  it('spread nothing onto a select', () => {
+    expect(spreads('<Select {...props} />')).toBe(true);
+    expect(spreads('<Select options={[...a, ...b]} value={x} />')).toBe(false);
+    const spread = uses('Select').filter(({ path, tag }) => spreads(tag) && !SPREAD_ALLOWED.includes(path));
+    expect(spread.map(({ path, tag }) => `${path}: ${tag}`)).toEqual([]);
+  });
 });
+
+const SPREAD_ALLOWED: string[] = [];
+
+function bothWays(tag: string): boolean {
+  return /\bbind:value\b/.test(tag) && /(\bonchange=|\{\s*onchange\s*\})/.test(tag);
+}
+
+function spreads(tag: string): boolean {
+  return /\s\{\s*\.\.\./.test(tag);
+}
