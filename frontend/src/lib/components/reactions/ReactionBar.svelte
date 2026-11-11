@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Plus } from '@lucide/svelte';
   import Tooltip from '../Tooltip.svelte';
+  import ReactionPicker from './ReactionPicker.svelte';
   import type { FeedEvent } from '../../services/social';
   import { REACTIONS, hasReacted, reactionCount, reactionLabel, type ReactionId } from '../../social/feed';
   import { msg } from '../../i18n';
@@ -16,7 +17,6 @@
     ontoggle: (emoji: string) => void;
   } = $props();
 
-  let open = $state(false);
   let popped = $state('');
 
   const used = $derived(REACTIONS.filter((id) => reactionCount(event, id) > 0));
@@ -24,7 +24,6 @@
 
   function toggle(id: ReactionId) {
     popped = hasReacted(event, id) ? '' : id;
-    open = false;
     ontoggle(id);
   }
 </script>
@@ -37,7 +36,6 @@
     <button
       class="reaction"
       class:mine
-      class:idle={count === 0}
       type="button"
       {disabled}
       aria-pressed={mine}
@@ -45,9 +43,7 @@
       onclick={() => toggle(id)}
     >
       <span class="glyph" class:pop={mine && popped === id}><Icon /></span>
-      {#if count > 0}
-        <span class="count">{count}</span>
-      {/if}
+      <span class="count">{count}</span>
     </button>
   </Tooltip>
 {/snippet}
@@ -57,39 +53,23 @@
     {@render reaction(id)}
   {/each}
   {#if idle.length > 0}
-    <Tooltip text={msg('social.reactionAdd')} describe={false}>
-      <button
-        class="reaction add"
-        class:open
-        type="button"
-        {disabled}
-        aria-expanded={open}
-        aria-label={msg('social.reactionAdd')}
-        onclick={() => (open = !open)}
-      >
-        <span class="plus"><Plus size="1.4rem" strokeWidth={2} /></span>
-      </button>
-    </Tooltip>
-    {#if open}
-      <span class="tray">
-        {#each idle as id (id)}
-          {@render reaction(id)}
-        {/each}
-      </span>
-    {/if}
+    <ReactionPicker options={idle} label={msg('social.reactionAdd')} onpick={toggle}>
+      {#snippet trigger({ open, props })}
+        <Tooltip text={msg('social.reactionAdd')} describe={false}>
+          <button class="reaction add" class:open type="button" {disabled} aria-label={msg('social.reactionAdd')} {...props}>
+            <span class="plus"><Plus size="1.4rem" strokeWidth={2} /></span>
+          </button>
+        </Tooltip>
+      {/snippet}
+    </ReactionPicker>
   {/if}
 </div>
 
 <style>
-  .bar,
-  .tray {
+  .bar {
     display: flex;
     flex-wrap: wrap;
     gap: 0.4rem;
-  }
-
-  .tray {
-    animation: media-in var(--dur) var(--ease);
   }
 
   .reaction {
@@ -111,7 +91,6 @@
       transform var(--dur-fast) var(--ease);
   }
 
-  .reaction.idle,
   .reaction.add {
     background: transparent;
   }

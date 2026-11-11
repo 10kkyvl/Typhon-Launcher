@@ -4,7 +4,12 @@ import { frontendSources } from '../testing/sources';
 // A popover is a layer: Escape, presses outside, paint order and motion are the stack's and the shared
 // stylesheet's, so neither the base component nor what is built on it keeps a copy of its own.
 const POPOVER = 'lib/components/Popover.svelte';
-const BUILT_ON_IT = [POPOVER, 'lib/components/NotificationsPanel.svelte'];
+const BUILT_ON_IT = [
+  POPOVER,
+  'lib/components/NotificationsPanel.svelte',
+  'lib/components/reactions/ReactionPicker.svelte',
+  'lib/components/reactions/ReactionBar.svelte',
+];
 const source = (path: string) => frontendSources[path] ?? '';
 const style = (text: string) => [...text.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join('\n');
 

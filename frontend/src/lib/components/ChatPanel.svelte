@@ -10,6 +10,7 @@
   import ChatAttachments from './ChatAttachments.svelte';
   import Lightbox, { type LightboxItem } from './Lightbox.svelte';
   import Tooltip from './Tooltip.svelte';
+  import ReactionPicker from './reactions/ReactionPicker.svelte';
   import {
     activePeer,
     attachmentDrafts,
@@ -63,7 +64,6 @@
   let lightboxIndex = $state(0);
   let lightboxItems = $state<LightboxItem[]>([]);
   let error = $state('');
-  let reactionMenu = $state<string | null>(null);
   let now = $state(new Date());
   let lastRenderedLastMessage = '';
 
@@ -79,19 +79,13 @@
     return target.displayName || target.username;
   }
 
-  const reactionLabels: Record<ReactionKey, Parameters<typeof msg>[0]> = {
-    fire: 'social.reactionFire',
-    salute: 'social.reactionSalute',
-    heart: 'social.reactionHeart',
-    clap: 'social.reactionClap',
-    skull: 'social.reactionSkull',
-    party: 'social.reactionParty',
-    eyes: 'social.reactionEyes',
-    joy: 'social.reactionJoy',
-  };
-
   function isOwn(message: Message): boolean {
     return message.senderId === $currentUser?.id;
+  }
+
+  function myReactions(message: Message): string[] {
+    const me = $currentUser?.id ?? '';
+    return message.reactions.filter((reaction) => reaction.userIds.includes(me)).map((reaction) => reaction.emoji);
   }
 
   function time(iso: string, current: Date, yesterdayLabel: string): string {
@@ -221,7 +215,6 @@
   function startEdit(message: Message): void {
     editingMessageId.set(message.id);
     editDraft = message.text;
-    reactionMenu = null;
   }
 
   async function saveEdit(message: Message): Promise<void> {
@@ -264,7 +257,6 @@
   async function chooseReaction(message: Message, key: ReactionKey): Promise<void> {
     if (!peer || !isOwn(message) && !conversation?.canSend) return;
     const targetPeerId = peer.id;
-    reactionMenu = null;
     error = '';
     try {
       await toggleReaction(targetPeerId, message, key);
@@ -303,7 +295,6 @@
     const target = peer;
     draft = target ? getDraft(target.id) : '';
     error = '';
-    reactionMenu = null;
   });
 
   $effect(() => {
@@ -421,9 +412,13 @@
                         <button class="retry" type="button" onclick={() => retry(message)}><RefreshCw size="1.25rem" /> {msg('social.chatRetry')}</button>
                       {/if}
                       {#if !message.id.startsWith('local:')}
-                      <Tooltip text={msg('social.chatReaction')} describe={false}>
-                        <button class="tiny-action" type="button" aria-label={msg('social.chatReaction')} onclick={() => (reactionMenu = reactionMenu === message.id ? null : message.id)}><MoreHorizontal size="1.3rem" /></button>
-                      </Tooltip>
+                        <ReactionPicker options={REACTION_KEYS} label={msg('social.chatReaction')} chosen={myReactions(message)} placement="bottom-end" onpick={(key) => void chooseReaction(message, key)}>
+                          {#snippet trigger({ props })}
+                            <Tooltip text={msg('social.chatReaction')} describe={false}>
+                              <button class="tiny-action" type="button" aria-label={msg('social.chatReaction')} {...props}><MoreHorizontal size="1.3rem" /></button>
+                            </Tooltip>
+                          {/snippet}
+                        </ReactionPicker>
                       {/if}
                     </div>
                     {#if message.reactions.length > 0}
@@ -433,16 +428,6 @@
                           <button class:reacted={reaction.userIds.includes($currentUser?.id ?? '')} type="button" onclick={() => chooseReaction(message, reaction.emoji as ReactionKey)}>
                             {#if ReactionIcon}<ReactionIcon />{:else}{reaction.emoji}{/if} {reaction.userIds.length}
                           </button>
-                        {/each}
-                      </div>
-                    {/if}
-                    {#if reactionMenu === message.id}
-                      <div class="reaction-menu">
-                        {#each REACTION_KEYS as key}
-                          {@const MenuIcon = reactionIcons[key]}
-                          <Tooltip text={msg(reactionLabels[key])} describe={false}>
-                            <button type="button" aria-label={msg(reactionLabels[key])} onclick={() => chooseReaction(message, key)}><MenuIcon /></button>
-                          </Tooltip>
                         {/each}
                       </div>
                     {/if}
@@ -560,11 +545,10 @@
   .message-footer { display: flex; justify-content: flex-end; gap: 0.3rem; margin-top: 0.35rem; }
   .tiny-action, .retry { display: inline-flex; align-items: center; gap: 0.3rem; border: 0; padding: 0.25rem; background: transparent; color: var(--text-3); font-size: 1rem; cursor: pointer; }
   .retry { color: var(--danger); }
-  .reactions, .reaction-menu { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.45rem; }
-  .reactions button, .reaction-menu button { display: inline-flex; align-items: center; gap: 0.3rem; border: 1px solid var(--border); border-radius: 1rem; padding: 0.2rem 0.45rem; background: var(--surface-2); cursor: pointer; font-size: 1.2rem; }
-  .reactions button :global(svg), .reaction-menu button :global(svg) { width: 1.4em; height: 1.4em; }
+  .reactions { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.45rem; }
+  .reactions button { display: inline-flex; align-items: center; gap: 0.3rem; border: 1px solid var(--border); border-radius: 1rem; padding: 0.2rem 0.45rem; background: var(--surface-2); cursor: pointer; font-size: 1.2rem; }
+  .reactions button :global(svg) { width: 1.4em; height: 1.4em; }
   .reactions button.reacted { border-color: var(--accent-bright); background: var(--accent-subtle); }
-  .reaction-menu { padding: 0.4rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-4); }
   .typing { margin: 0.6rem 0; color: var(--text-3); font-size: var(--font-xs); font-style: italic; }
   .edit-input, .composer textarea { width: 100%; resize: none; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); padding: 0.7rem; font: inherit; font-size: var(--font-sm); outline: none; }
   .edit-input:focus, .composer textarea:focus { border-color: var(--accent-ring); }
