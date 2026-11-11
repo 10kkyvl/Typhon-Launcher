@@ -43,18 +43,35 @@ describe('chat panel recovery', () => {
     expect(html).toContain('class="conversation ');
   });
 
-  it('shows sending status without edit or reaction actions on a pending message', () => {
-    chat.messagesByPeer.set({ peer: [{
-      id: 'local:client', clientId: 'client', senderId: 'me', recipientId: 'peer',
-      text: 'Pending text', createdAt: new Date().toISOString(),
+  // The names of the buttons in the markup: what a screen reader announces for each control.
+  function buttonNames(html: string): string[] {
+    return [...html.matchAll(/<button\b[^>]*>/g)].map((m) => /aria-label="([^"]*)"/.exec(m[0])?.[1] ?? '');
+  }
+
+  function ownMessage(id: string) {
+    return {
+      id, clientId: 'client', senderId: 'me', recipientId: 'peer',
+      text: 'Some text', createdAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 86400000).toISOString(), reactions: [],
-    }] });
+    };
+  }
+
+  it('offers a sent message of your own the edit and reaction controls, each by its name', () => {
+    chat.messagesByPeer.set({ peer: [ownMessage('m1')] });
+    const names = buttonNames(render(ChatPanel).body);
+    expect(names).toContain('Edit');
+    expect(names).toContain('Reaction');
+  });
+
+  it('shows sending status without edit or reaction controls on a pending message', () => {
+    chat.messagesByPeer.set({ peer: [ownMessage('local:client')] });
     chat.pendingMessages.set(new Set(['client']));
     const html = render(ChatPanel).body;
     expect(html).toContain('Sending…');
     expect(html).toContain('aria-busy="true"');
-    expect(html).not.toContain('title="Edit"');
-    expect(html).not.toContain('title="Reaction"');
+    const names = buttonNames(html);
+    expect(names).not.toContain('Edit');
+    expect(names).not.toContain('Reaction');
   });
 });
 

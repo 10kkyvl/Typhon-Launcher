@@ -9,6 +9,7 @@
   import IconButton from './IconButton.svelte';
   import ChatAttachments from './ChatAttachments.svelte';
   import Lightbox, { type LightboxItem } from './Lightbox.svelte';
+  import Tooltip from './Tooltip.svelte';
   import {
     activePeer,
     attachmentDrafts,
@@ -412,13 +413,17 @@
                         <span class="sending-status" role="status">{msg('social.chatSending')}</span>
                       {/if}
                       {#if isOwn(message) && !message.id.startsWith('local:')}
-                        <button class="tiny-action" type="button" title={msg('social.chatEdit')} onclick={() => startEdit(message)}><Pencil size="1.25rem" /></button>
+                        <Tooltip text={msg('social.chatEdit')} describe={false}>
+                          <button class="tiny-action" type="button" aria-label={msg('social.chatEdit')} onclick={() => startEdit(message)}><Pencil size="1.25rem" /></button>
+                        </Tooltip>
                       {/if}
                       {#if $failedMessages.has(message.clientId)}
                         <button class="retry" type="button" onclick={() => retry(message)}><RefreshCw size="1.25rem" /> {msg('social.chatRetry')}</button>
                       {/if}
                       {#if !message.id.startsWith('local:')}
-                      <button class="tiny-action" type="button" title={msg('social.chatReaction')} onclick={() => (reactionMenu = reactionMenu === message.id ? null : message.id)}><MoreHorizontal size="1.3rem" /></button>
+                      <Tooltip text={msg('social.chatReaction')} describe={false}>
+                        <button class="tiny-action" type="button" aria-label={msg('social.chatReaction')} onclick={() => (reactionMenu = reactionMenu === message.id ? null : message.id)}><MoreHorizontal size="1.3rem" /></button>
+                      </Tooltip>
                       {/if}
                     </div>
                     {#if message.reactions.length > 0}
@@ -435,7 +440,9 @@
                       <div class="reaction-menu">
                         {#each REACTION_KEYS as key}
                           {@const MenuIcon = reactionIcons[key]}
-                          <button type="button" title={msg(reactionLabels[key])} onclick={() => chooseReaction(message, key)}><MenuIcon /></button>
+                          <Tooltip text={msg(reactionLabels[key])} describe={false}>
+                            <button type="button" aria-label={msg(reactionLabels[key])} onclick={() => chooseReaction(message, key)}><MenuIcon /></button>
+                          </Tooltip>
                         {/each}
                       </div>
                     {/if}
