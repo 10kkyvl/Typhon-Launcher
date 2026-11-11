@@ -105,13 +105,68 @@ describe('a layer that never took focus', () => {
     expect(document.activeElement).toBe(byId('dialog-first'));
   });
 
-  it('on the bare page, leaves focus alone when its field was unmounted under it', () => {
+  it('in a dialog, leaves focus where code moved it before its field was unmounted', () => {
+    const shell = dialog('<button id="dialog-first">first</button><input id="dialog-field"><button id="dialog-other">other</button>');
+    openLayer(shell, { dismiss: () => {} });
+    const field = byId('dialog-field');
+    field.focus();
+    const box = document.createElement('div');
+    document.body.append(box);
+    const close = register(box, { modal: false, owner: () => field, dismiss: () => {} });
+
+    byId('dialog-other').focus();
+    field.remove();
+    close();
+
+    expect(document.activeElement).toBe(byId('dialog-other'));
+  });
+
+  it('in a dialog, asks for its owner when it closes: a field re-created while the list is open and then blurring is not gone', () => {
+    const shell = dialog('<button id="dialog-first">first</button><input id="dialog-field">');
+    openLayer(shell, { dismiss: () => {} });
+    let field = byId('dialog-field');
+    field.focus();
+    const box = document.createElement('div');
+    document.body.append(box);
+    const close = register(box, { modal: false, owner: () => field, dismiss: () => {} });
+
+    // A re-keyed field: the element the list was opened from is replaced by a new one.
+    const again = document.createElement('input');
+    field.replaceWith(again);
+    field = again;
+    again.focus();
+    again.blur();
+    close();
+
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('in a dialog, asks for its owner when it closes: a field re-created and then unmounted is gone', () => {
+    const shell = dialog('<button id="dialog-first">first</button><input id="dialog-field">');
+    openLayer(shell, { dismiss: () => {} });
+    let field = byId('dialog-field');
+    field.focus();
+    const box = document.createElement('div');
+    document.body.append(box);
+    const close = register(box, { modal: false, owner: () => field, dismiss: () => {} });
+
+    const again = document.createElement('input');
+    field.replaceWith(again);
+    field = again;
+    again.focus();
+    again.remove();
+    close();
+
+    expect(document.activeElement).toBe(byId('dialog-first'));
+  });
+
+  it('on the bare page, leaves focus alone when its field was unmounted under it, though it has somewhere to return to', () => {
     const field = document.createElement('input');
     const box = document.createElement('div');
     app.append(field);
     document.body.append(box);
     field.focus();
-    const close = register(box, { modal: false, owner: () => field, dismiss: () => {} });
+    const close = register(box, { modal: false, owner: () => field, returnFocus: () => byId('other'), dismiss: () => {} });
 
     field.remove();
     close();
