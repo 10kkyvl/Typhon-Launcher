@@ -85,7 +85,15 @@
     onkeydown={(event) => onkeydown(item, event)}
   >
     <Icon size="1.6rem" strokeWidth={1.8} aria-hidden="true" />
-    <p class="message">{item.message}</p>
+    <!-- One atomic piece inside the lane: when the count changes, the message is said again with it,
+         and the buttons beside it are not. -->
+    <p class="message" aria-atomic="true">
+      {item.message}
+      {#if item.count}
+        <span class="times" aria-hidden="true">×{item.count}</span>
+        <span class="sr-only">{msg('ui.toastRepeated', { count: item.count })}</span>
+      {/if}
+    </p>
     {#if item.action}
       <Button size="sm" onclick={(event) => act(item, event)}>{item.action.label}</Button>
     {/if}
@@ -150,6 +158,12 @@
     padding: var(--space-2) 0;
     line-height: 1.4;
     overflow-wrap: anywhere;
+  }
+
+  .times {
+    margin-left: var(--space-1);
+    color: var(--text-2);
+    font-variant-numeric: tabular-nums;
   }
 
   .toast > :global(svg) {

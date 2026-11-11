@@ -6,7 +6,8 @@ import { writable, type Readable } from 'svelte/store';
  * - a plain one stays `PLAIN_MS`, a warning or an error `URGENT_MS`, one with an action `ACTION_MS`;
  * - the clock stops while the toast is being read (`pauseToast`: the pointer over it, focus inside it)
  *   and gives at least `RESUME_FLOOR_MS` after `resumeToast`;
- * - the same plain message raised again does not stack: the one already shown or waiting takes it.
+ * - the same plain message raised again does not stack: the one already shown or waiting takes it
+ *   and counts the repeats (`count`), so a second failure is not mistaken for none.
  *   A toast with an action is always its own: the same words can offer different things;
  * - at most `MAX_VISIBLE` are on screen, the rest wait: errors and warnings ahead of plain ones, each
  *   group in the order raised. A plain one that has waited `QUEUE_STALE_MS` is dropped at its turn
@@ -30,6 +31,8 @@ export interface Toast {
   message: string;
   kind: ToastKind;
   action?: ToastAction;
+  /** How many times a plain toast was raised, once it is more than one. */
+  count?: number;
 }
 
 export const PLAIN_MS = 4000;
@@ -135,8 +138,11 @@ export function toast(message: string, kind: ToastKind = 'info', action?: ToastA
   // A toast with an action is never folded: the same words can offer different things (two games
   // that can each be marked as completed), and the second offer would be lost.
   const same = (item: Toast) => !action && !item.action && item.message === message && item.kind === kind;
+  // A repeat is counted on the toast that takes it: folding must not hide that it happened again.
+  const again = (item: Toast): Toast => (same(item) ? { ...item, count: (item.count ?? 1) + 1 } : item);
   const repeated = shown.find(same);
   if (repeated) {
+    publish(shown.map(again));
     const clock = clocks.get(repeated.id);
     if (clock) {
       stop(clock);
@@ -147,6 +153,7 @@ export function toast(message: string, kind: ToastKind = 'info', action?: ToastA
   }
   const waiting = queue.find(same);
   if (waiting) {
+    queue = queue.map(again);
     queuedAt.set(waiting.id, Date.now());
     return waiting.id;
   }

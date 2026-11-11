@@ -90,6 +90,35 @@ describe('Toasts: what a screen reader is told', () => {
   });
 });
 
+describe('Toasts: a message raised again', () => {
+  it('shows how many times it happened, in a sign for the eye and in words for a screen reader', async () => {
+    const { card } = setup();
+    toast('Image is too large', 'danger');
+    await tick();
+    expect(card('Image is too large').querySelector('.times')).toBeNull();
+
+    toast('Image is too large', 'danger');
+    toast('Image is too large', 'danger');
+    await tick();
+
+    const message = card('Image is too large').querySelector('.message') as HTMLElement;
+    const sign = message.querySelector('.times') as HTMLElement;
+    expect(sign.textContent?.trim()).toBe('×3');
+    expect(sign.getAttribute('aria-hidden')).toBe('true');
+    expect(message.querySelector('.sr-only')?.textContent?.trim()).toBe(msg('ui.toastRepeated', { count: 3 }));
+  });
+
+  it('is said again whole when the count changes: the message is one atomic piece, without the buttons', async () => {
+    const { card } = setup();
+    toast('Install failed', 'danger');
+    await tick();
+
+    const message = card('Install failed').querySelector('.message') as HTMLElement;
+    expect(message.getAttribute('aria-atomic')).toBe('true');
+    expect(message.querySelector('button')).toBeNull();
+  });
+});
+
 describe('Toasts: closing', () => {
   it('every toast has a named close button that closes it', async () => {
     const { keys, close, shown } = setup();

@@ -487,3 +487,30 @@ describe('repeats', () => {
     expect(get(toasts).map((item) => item.action?.run)).toEqual([hades, celeste]);
   });
 });
+
+describe('a repeated plain toast', () => {
+  it('a plain toast says how many times it was raised, on screen and while waiting', () => {
+    toast('Image is too large', 'danger');
+    expect('count' in get(toasts)[0]).toBe(false);
+
+    toast('Image is too large', 'danger');
+    toast('Image is too large', 'danger');
+    expect(get(toasts).map((item) => item.count)).toEqual([3]);
+
+    toast('two');
+    toast('waiting');
+    toast('waiting');
+    expect(queuedToasts().map((item) => item.count)).toEqual([2]);
+  });
+
+  it('gives a new list when the count changes, so what shows it is redrawn', () => {
+    toast('again');
+    const before = get(toasts);
+
+    toast('again');
+
+    expect(get(toasts)).not.toBe(before);
+    expect(get(toasts)[0]).not.toBe(before[0]);
+    expect(get(toasts)[0].id).toBe(before[0].id);
+  });
+});
