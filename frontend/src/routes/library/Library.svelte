@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Tooltip from '../../lib/components/Tooltip.svelte';
   import Page from '../../lib/components/Page.svelte';
   import {
     ArrowDownUp,
@@ -433,14 +434,15 @@
             <Button size="lg" onclick={() => navigate('game', { id: hero.id })}>{msg('games.libraryMoreDetailsButton')}</Button>
           </div>
         </div>
-        <button
-          class="hero-close"
-          aria-label={msg('games.libraryHideLabel')}
-          title={msg('games.libraryHideLabel')}
-          onclick={() => (heroHidden = true)}
-        >
-          <X size="1.6rem" strokeWidth={1.8} />
-        </button>
+        <Tooltip text={msg('games.libraryHideLabel')} describe={false}>
+          <button
+            class="hero-close"
+            aria-label={msg('games.libraryHideLabel')}
+            onclick={() => (heroHidden = true)}
+          >
+            <X size="1.6rem" strokeWidth={1.8} />
+          </button>
+        </Tooltip>
       </section>
     {/key}
   {/if}

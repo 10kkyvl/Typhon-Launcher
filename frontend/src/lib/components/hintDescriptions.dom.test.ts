@@ -13,6 +13,7 @@ import PopularGames from '../../routes/activity/PopularGames.svelte';
 import TokenValueInput from '../../routes/settings/TokenValueInput.svelte';
 import AccountMenu from './AccountMenu.svelte';
 import ReleaseMatchModal from './ReleaseMatchModal.svelte';
+import TagEditor from './TagEditor.svelte';
 import SidebarStatus from './SidebarStatus.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
@@ -107,5 +108,10 @@ describe('hints that describe a control', () => {
     expect(missing.getAttribute('aria-disabled')).toBe('true');
     missing.click();
     expect(missing.classList.contains('selected')).toBe(false);
+  });
+
+  it('a tag chip: pressing it removes the tag', async () => {
+    render(TagEditor, { target: app, props: { tags: ['coop'], placeholder: 'Tag' } });
+    await expectDescribed(screen.getByRole('button', { name: /coop/ }), msg('modals.gameTagsRemove', { tag: 'coop' }));
   });
 });

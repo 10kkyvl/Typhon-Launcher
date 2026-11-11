@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Tooltip from '../../lib/components/Tooltip.svelte';
   import Page from '../../lib/components/Page.svelte';
   import {
     ArrowDown,
@@ -231,7 +232,9 @@
             <Artwork src={coverOf(item)} alt={item.name} ratio="3 / 4" radius="var(--radius-sm)" />
           </div>
           <div class="info">
-            <button class="title link" title={item.name} onclick={() => openDetails(item.id)}>{item.name}</button>
+            <Tooltip text={item.name} describe={false}>
+              <button class="title link" onclick={() => openDetails(item.id)}>{item.name}</button>
+            </Tooltip>
             <span class="error-text">
               <CircleAlert size="1.4rem" strokeWidth={1.8} />
               <span>{installErrorText(item.error)}</span>
@@ -328,7 +331,9 @@
             <Artwork src={coverOf(item)} alt={item.name} ratio="3 / 4" radius="var(--radius-sm)" />
           </div>
           <div class="info inline">
-            <button class="title link" title={item.name} onclick={() => openDetails(item.id)}>{item.name}</button>
+            <Tooltip text={item.name} describe={false}>
+              <button class="title link" onclick={() => openDetails(item.id)}>{item.name}</button>
+            </Tooltip>
             {#if typeTag(item) || sourceTag(item)}
               <div class="tags">
                 {#if typeTag(item)}<StatusBadge kind="neutral" label={typeTag(item)} dot={false} />{/if}

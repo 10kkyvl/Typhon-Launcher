@@ -5,6 +5,7 @@
   import type { MenuTriggerProps } from './menu';
   import { navigate } from '../stores/router';
   import { msg } from '../i18n';
+  import Tooltip from './Tooltip.svelte';
   import Artwork from './Artwork.svelte';
   import type { CompatInfo } from '../services/sources';
   import { compatBadge } from '../game/compat';
@@ -104,23 +105,24 @@
     {#if actions && actions.length > 0}
       <div class="quick">
         {#each actions as action (action.id)}
-          <button
-            {...action.menu}
-            class="quick-btn"
-            class:active={action.active}
-            class:pinned={action.pinned}
-            class:quiet={action.pinned && action.quiet}
-            class:pop={action.active && popped === action.id}
-            aria-label={action.label}
-            title={action.label}
-            disabled={action.disabled}
-            onclick={(event) => {
-              popped = action.active ? '' : action.id;
-              (action.menu?.onclick ?? action.onclick)?.(event);
-            }}
-          >
-            <action.icon size="1.5rem" strokeWidth={1.8} fill={action.filled ? 'currentColor' : 'none'} />
-          </button>
+          <Tooltip text={action.label} describe={false}>
+            <button
+              {...action.menu}
+              class="quick-btn"
+              class:active={action.active}
+              class:pinned={action.pinned}
+              class:quiet={action.pinned && action.quiet}
+              class:pop={action.active && popped === action.id}
+              aria-label={action.label}
+              disabled={action.disabled}
+              onclick={(event) => {
+                popped = action.active ? '' : action.id;
+                (action.menu?.onclick ?? action.onclick)?.(event);
+              }}
+            >
+              <action.icon size="1.5rem" strokeWidth={1.8} fill={action.filled ? 'currentColor' : 'none'} />
+            </button>
+          </Tooltip>
         {/each}
       </div>
     {/if}

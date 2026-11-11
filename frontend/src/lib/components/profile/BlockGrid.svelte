@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick, type Snippet } from 'svelte';
   import { ArrowDown, ArrowUp, GripVertical, Settings2, Trash2 } from '@lucide/svelte';
+  import Tooltip from '../Tooltip.svelte';
   import Card from '../Card.svelte';
   import IconButton from '../IconButton.svelte';
   import SegmentedControl from '../SegmentedControl.svelte';
@@ -186,20 +187,21 @@
         {@const name = blockLabel(block.type)}
         <div class="frame" class:selected={selectedId === block.id} class:issue={block.issue}>
           <div class="bar">
-            <button
-              class="handle"
-              type="button"
-              data-handle={block.id}
-              aria-label={msg('profile.dragBlock', { name })}
-              title={msg('profile.dragBlock', { name })}
-              onpointerdown={(event) => grab(event, block)}
-              onpointermove={track}
-              onpointerup={() => drop(block)}
-              onpointercancel={release}
-              onkeydown={(event) => key(event, block)}
-            >
-              <GripVertical size="1.6rem" strokeWidth={1.8} />
-            </button>
+            <Tooltip text={msg('profile.dragBlock', { name })} describe={false}>
+              <button
+                class="handle"
+                type="button"
+                data-handle={block.id}
+                aria-label={msg('profile.dragBlock', { name })}
+                onpointerdown={(event) => grab(event, block)}
+                onpointermove={track}
+                onpointerup={() => drop(block)}
+                onpointercancel={release}
+                onkeydown={(event) => key(event, block)}
+              >
+                <GripVertical size="1.6rem" strokeWidth={1.8} />
+              </button>
+            </Tooltip>
             <span class="name">{name}</span>
             {#if block.issue}<span class="issue-tag">{msg('profile.blockIncomplete')}</span>{/if}
             {#if block.hidden && flag}{@render flag()}{/if}

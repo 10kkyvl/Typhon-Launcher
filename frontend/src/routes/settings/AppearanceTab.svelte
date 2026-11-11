@@ -309,16 +309,17 @@
             </button>
             {#if !theme.builtIn}
               {@const deleteLabel = msg('settings.appearanceDeleteTile', { name: themeDisplayName(theme) })}
-              <button
-                type="button"
-                class="preset-delete"
-                aria-label={deleteLabel}
-                title={deleteLabel}
-                disabled={deleting}
-                onclick={() => askRemove(theme)}
-              >
-                <Trash2 size={14} />
-              </button>
+              <Tooltip text={deleteLabel} describe={false}>
+                <button
+                  type="button"
+                  class="preset-delete"
+                  aria-label={deleteLabel}
+                  disabled={deleting}
+                  onclick={() => askRemove(theme)}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </Tooltip>
             {/if}
           </div>
         {/each}

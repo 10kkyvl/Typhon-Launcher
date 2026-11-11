@@ -208,7 +208,8 @@ describe('Sidebar status row', () => {
         const left = part(body, 'cloud');
         expect(left).toContain(`data-cloud="${c.kind}"`);
         expect(left.startsWith('<button')).toBe(c.button);
-        expect(left).toContain(`title="${escape(c.name)}"`);
+        if (c.button) expect(left).not.toMatch(/title=/);
+        else expect(left).toContain(`title="${escape(c.name)}"`);
         expect(left).toMatch(new RegExp(`<span class="sr-only[^"]*">${escapeRe(escape(c.name))}</span>`));
 
         const right = part(body, 'update');

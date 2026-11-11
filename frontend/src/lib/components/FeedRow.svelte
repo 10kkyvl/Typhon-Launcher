@@ -8,6 +8,7 @@
   import { relativeDate } from '../utils/format';
   import { ThumbsDown, ThumbsUp } from '@lucide/svelte';
   import { msg } from '../i18n';
+  import Tooltip from './Tooltip.svelte';
   import Artwork from './Artwork.svelte';
   import Avatar from './Avatar.svelte';
   import { cardFrame } from '../profile/frameLook';
@@ -43,12 +44,14 @@
 </script>
 
 <div class="row" class:compact>
-  <button class="who" type="button" aria-label={name} title={name} onclick={openUser}>
-    <Avatar src={event.user.avatarUrl} {name} size="sm" {...cardFrame(event.user.card)} />
-    {#if compact}
-      <span class="name">{name}</span>
-    {/if}
-  </button>
+  <Tooltip text={name} describe={false}>
+    <button class="who" type="button" aria-label={name} onclick={openUser}>
+      <Avatar src={event.user.avatarUrl} {name} size="sm" {...cardFrame(event.user.card)} />
+      {#if compact}
+        <span class="name">{name}</span>
+      {/if}
+    </button>
+  </Tooltip>
 
   <div class="body">
     {#if !compact}

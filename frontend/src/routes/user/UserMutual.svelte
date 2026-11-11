@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Tooltip from '../../lib/components/Tooltip.svelte';
   import Avatar from '../../lib/components/Avatar.svelte';
   import { cardFrame } from '../../lib/profile/frameLook';
   import Card from '../../lib/components/Card.svelte';
@@ -19,15 +20,16 @@
   {/snippet}
   <div class="row">
     {#each shown as friend (friend.id)}
-      <button
-        class="person"
-        type="button"
-        aria-label={friend.displayName || friend.username}
-        title={friend.displayName || friend.username}
-        onclick={() => navigate('user', { username: friend.username })}
-      >
-        <Avatar size="sm" name={friend.displayName || friend.username} src={friend.avatarUrl} {...cardFrame(friend.card)} />
-      </button>
+      <Tooltip text={friend.displayName || friend.username} describe={false}>
+        <button
+          class="person"
+          type="button"
+          aria-label={friend.displayName || friend.username}
+          onclick={() => navigate('user', { username: friend.username })}
+        >
+          <Avatar size="sm" name={friend.displayName || friend.username} src={friend.avatarUrl} {...cardFrame(friend.card)} />
+        </button>
+      </Tooltip>
     {/each}
     {#if more}<span class="more">{more}</span>{/if}
   </div>

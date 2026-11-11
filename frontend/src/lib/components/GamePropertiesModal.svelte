@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { FolderOpen } from '@lucide/svelte';
+  import Tooltip from './Tooltip.svelte';
   import Button from './Button.svelte';
   import ProgressBar from './ProgressBar.svelte';
   import Modal from './Modal.svelte';
@@ -429,15 +430,16 @@
           <span class="label">{msg('modals.propertiesExeCandidates')}</span>
           <div class="candidates">
             {#each candidates as candidate (candidate.path)}
-              <button
-                class="candidate"
-                class:current={candidate.path === game.executable}
-                disabled={exeBusy}
-                title={candidate.path}
-                onclick={() => pickCandidate(candidate.path)}
-              >
-                {truncateMiddle(candidate.path, 70)}
-              </button>
+              <Tooltip text={candidate.path}>
+                <button
+                  class="candidate"
+                  class:current={candidate.path === game.executable}
+                  disabled={exeBusy}
+                  onclick={() => pickCandidate(candidate.path)}
+                >
+                  {truncateMiddle(candidate.path, 70)}
+                </button>
+              </Tooltip>
             {/each}
           </div>
         {/if}

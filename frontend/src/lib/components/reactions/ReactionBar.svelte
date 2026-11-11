@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Plus } from '@lucide/svelte';
+  import Tooltip from '../Tooltip.svelte';
   import type { FeedEvent } from '../../services/social';
   import { REACTIONS, hasReacted, reactionCount, reactionLabel, type ReactionId } from '../../social/feed';
   import { msg } from '../../i18n';
@@ -32,22 +33,23 @@
   {@const Icon = reactionIcons[id]}
   {@const count = reactionCount(event, id)}
   {@const mine = hasReacted(event, id)}
-  <button
-    class="reaction"
-    class:mine
-    class:idle={count === 0}
-    type="button"
-    {disabled}
-    aria-pressed={mine}
-    aria-label={reactionLabel(id)}
-    title={reactionLabel(id)}
-    onclick={() => toggle(id)}
-  >
-    <span class="glyph" class:pop={mine && popped === id}><Icon /></span>
-    {#if count > 0}
-      <span class="count">{count}</span>
-    {/if}
-  </button>
+  <Tooltip text={reactionLabel(id)} describe={false}>
+    <button
+      class="reaction"
+      class:mine
+      class:idle={count === 0}
+      type="button"
+      {disabled}
+      aria-pressed={mine}
+      aria-label={reactionLabel(id)}
+      onclick={() => toggle(id)}
+    >
+      <span class="glyph" class:pop={mine && popped === id}><Icon /></span>
+      {#if count > 0}
+        <span class="count">{count}</span>
+      {/if}
+    </button>
+  </Tooltip>
 {/snippet}
 
 <div class="bar">
@@ -55,18 +57,19 @@
     {@render reaction(id)}
   {/each}
   {#if idle.length > 0}
-    <button
-      class="reaction add"
-      class:open
-      type="button"
-      {disabled}
-      aria-expanded={open}
-      aria-label={msg('social.reactionAdd')}
-      title={msg('social.reactionAdd')}
-      onclick={() => (open = !open)}
-    >
-      <span class="plus"><Plus size="1.4rem" strokeWidth={2} /></span>
-    </button>
+    <Tooltip text={msg('social.reactionAdd')} describe={false}>
+      <button
+        class="reaction add"
+        class:open
+        type="button"
+        {disabled}
+        aria-expanded={open}
+        aria-label={msg('social.reactionAdd')}
+        onclick={() => (open = !open)}
+      >
+        <span class="plus"><Plus size="1.4rem" strokeWidth={2} /></span>
+      </button>
+    </Tooltip>
     {#if open}
       <span class="tray">
         {#each idle as id (id)}

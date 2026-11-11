@@ -52,7 +52,7 @@
   {#if tags.length > 0}
     <div class="chips">
       {#each tags as tag (tag)}
-        <Chip selected title={msg('modals.gameTagsRemove', { tag })} onclick={() => remove(tag)}>
+        <Chip selected hint={msg('modals.gameTagsRemove', { tag })} onclick={() => remove(tag)}>
           {tag}
           <X size="1.2rem" strokeWidth={2} />
         </Chip>

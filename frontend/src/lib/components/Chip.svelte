@@ -1,28 +1,38 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import type { HTMLButtonAttributes } from 'svelte/elements';
+  import Tooltip from './Tooltip.svelte';
 
   // Other attributes (id, aria-*, data-*, handlers, attachments) go to the <button>.
   let {
     selected = false,
     variant = 'outline',
     type = 'button',
-    title,
+    hint,
     onclick,
     children,
     ...rest
-  }: Omit<HTMLButtonAttributes, 'class' | 'onclick' | 'children'> & {
+  }: Omit<HTMLButtonAttributes, 'class' | 'onclick' | 'children' | 'title'> & {
     selected?: boolean;
     variant?: 'filled' | 'outline' | 'quiet';
-    title?: string;
+    /** What pressing the chip does, when its text does not say it: shown as a tooltip, its description. */
+    hint?: string;
     onclick?: (e: MouseEvent) => void;
     children?: Snippet;
   } = $props();
 </script>
 
-<button {...rest} {type} class="chip {variant}" class:selected {title} {onclick}>
-  {@render children?.()}
-</button>
+{#snippet chip()}
+  <button {...rest} {type} class="chip {variant}" class:selected {onclick}>
+    {@render children?.()}
+  </button>
+{/snippet}
+
+{#if hint}
+  <Tooltip text={hint}>{@render chip()}</Tooltip>
+{:else}
+  {@render chip()}
+{/if}
 
 <style>
   .chip {

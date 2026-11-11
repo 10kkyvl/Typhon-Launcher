@@ -54,9 +54,11 @@
 
 <div class="status" role="group" aria-label={msg('ui.sidebarStatusLabel')}>
   {#if cloud.kind === 'off' || cloud.kind === 'signIn'}
-    <button type="button" class="item" data-cloud={cloud.kind} title={cloudName} onclick={() => void openCloudRow(cloud)}>
-      <CloudOff aria-hidden="true" />{@render words(msg(cloud.kind === 'off' ? 'ui.statusCloudOffShort' : 'ui.statusCloudSignInShort'), cloudName)}
-    </button>
+    <Tooltip text={cloudName} describe={false}>
+      <button type="button" class="item" data-cloud={cloud.kind} onclick={() => void openCloudRow(cloud)}>
+        <CloudOff aria-hidden="true" />{@render words(msg(cloud.kind === 'off' ? 'ui.statusCloudOffShort' : 'ui.statusCloudSignInShort'), cloudName)}
+      </button>
+    </Tooltip>
   {:else if cloud.kind === 'account'}
     <span class="item" data-cloud="account" title={cloudName}>
       <CloudOff aria-hidden="true" />{@render words(msg('ui.statusCloudAccountShort'), cloudName)}
@@ -78,16 +80,20 @@
       <CloudCheck aria-hidden="true" />{@render words(msg('cloudsaves.stateSynced'), cloudName)}
     </span>
   {:else if cloud.kind === 'conflict'}
-    <button type="button" class="item warn" data-cloud="conflict" title={cloudName} onclick={() => void openCloudRow(cloud)}>
-      <CloudAlert aria-hidden="true" />{@render words(
-        cloud.count > 1 ? msg('ui.statusCloudConflictsShort', { count: cloud.count }) : msg('cloudsaves.stateConflict'),
-        cloudName,
-      )}
-    </button>
+    <Tooltip text={cloudName} describe={false}>
+      <button type="button" class="item warn" data-cloud="conflict" onclick={() => void openCloudRow(cloud)}>
+        <CloudAlert aria-hidden="true" />{@render words(
+          cloud.count > 1 ? msg('ui.statusCloudConflictsShort', { count: cloud.count }) : msg('cloudsaves.stateConflict'),
+          cloudName,
+        )}
+      </button>
+    </Tooltip>
   {:else if cloud.kind === 'failed'}
-    <button type="button" class="item danger" data-cloud="failed" title={cloudName} onclick={() => void openCloudRow(cloud)}>
-      <CloudAlert aria-hidden="true" />{@render words(msg('cloudsaves.stateFailed'), cloudName)}
-    </button>
+    <Tooltip text={cloudName} describe={false}>
+      <button type="button" class="item danger" data-cloud="failed" onclick={() => void openCloudRow(cloud)}>
+        <CloudAlert aria-hidden="true" />{@render words(msg('cloudsaves.stateFailed'), cloudName)}
+      </button>
+    </Tooltip>
   {/if}
 
   {#if update.kind === 'version'}

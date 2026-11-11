@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Activity, RefreshCw, WifiOff, X } from '@lucide/svelte';
+  import Tooltip from './Tooltip.svelte';
   import Button from './Button.svelte';
   import { retryBootstrap } from '../stores/user';
   import { openStatusPage } from '../services/account';
@@ -43,9 +44,11 @@
       <RefreshCw size="1.4rem" strokeWidth={1.8} class={retrying ? 'spin' : ''} />
       {retrying ? msg('ui.checkingConnection') : msg('common.retry')}
     </Button>
-    <button type="button" class="close" aria-label={msg('common.close')} title={msg('common.close')} onclick={() => (dismissed = true)}>
-      <X size="1.4rem" strokeWidth={1.8} />
-    </button>
+    <Tooltip text={msg('common.close')} describe={false}>
+      <button type="button" class="close" aria-label={msg('common.close')} onclick={() => (dismissed = true)}>
+        <X size="1.4rem" strokeWidth={1.8} />
+      </button>
+    </Tooltip>
   </div>
 {/if}
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Tooltip from './Tooltip.svelte';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
   import { truncateMiddle } from '../utils/format';
@@ -26,9 +27,11 @@
   <p class="hint">{msg('ui.savesMultipleCandidates', { title })}</p>
   <div class="candidates">
     {#each candidates as candidate (candidate)}
-      <button class="candidate" onclick={() => onpick(candidate)} title={candidate}>
-        {truncateMiddle(candidate, 70)}
-      </button>
+      <Tooltip text={candidate}>
+        <button class="candidate" onclick={() => onpick(candidate)}>
+          {truncateMiddle(candidate, 70)}
+        </button>
+      </Tooltip>
     {/each}
   </div>
   {#snippet footer()}

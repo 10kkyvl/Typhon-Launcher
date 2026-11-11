@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import Tooltip from '../../lib/components/Tooltip.svelte';
   import Avatar from '../../lib/components/Avatar.svelte';
   import type { FrameReserve } from '../../lib/profile/frameLook';
   import Card from '../../lib/components/Card.svelte';
@@ -68,7 +69,7 @@
 
 {#snippet metaLine()}
   {#if game}
-    <span class="playing"><span class="playing-label">{msg('social.playingLabel')}</span> <button type="button" class="game-link" title={game.title} onclick={openGame}>{game.title}</button></span>
+    <span class="playing"><span class="playing-label">{msg('social.playingLabel')}</span> <Tooltip text={game.title} describe={false}><button type="button" class="game-link" onclick={openGame}>{game.title}</button></Tooltip></span>
   {:else}
     <span class="meta">{meta || '—'}</span>
   {/if}

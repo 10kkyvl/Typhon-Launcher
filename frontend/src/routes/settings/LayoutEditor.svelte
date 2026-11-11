@@ -1,5 +1,6 @@
 <script lang="ts">
   import { ArrowLeft, ArrowRight, ChevronDown, ChevronUp, Eye, EyeOff, GripVertical, Plus, X } from '@lucide/svelte';
+  import Tooltip from '../../lib/components/Tooltip.svelte';
   import Button from '../../lib/components/Button.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import { msg } from '../../lib/i18n';
@@ -141,61 +142,66 @@
           <span class="grip" aria-hidden="true"><GripVertical size={14} /></span>
           <span class="item-name">{label(key, id)}</span>
           <div class="item-actions">
-            <button
-              type="button"
-              class="mini"
-              aria-label={msg('settings.layoutMoveUp')}
-              title={msg('settings.layoutMoveUp')}
-              disabled={index === 0}
-              onclick={() => apply(step(st, key, index, -1))}
-            >
-              <ChevronUp size={14} />
-            </button>
-            <button
-              type="button"
-              class="mini"
-              aria-label={msg('settings.layoutMoveDown')}
-              title={msg('settings.layoutMoveDown')}
-              disabled={index === list.length - 1}
-              onclick={() => apply(step(st, key, index, 1))}
-            >
-              <ChevronDown size={14} />
-            </button>
+            <Tooltip text={msg('settings.layoutMoveUp')} describe={false}>
+              <button
+                type="button"
+                class="mini"
+                aria-label={msg('settings.layoutMoveUp')}
+                disabled={index === 0}
+                onclick={() => apply(step(st, key, index, -1))}
+              >
+                <ChevronUp size={14} />
+              </button>
+            </Tooltip>
+            <Tooltip text={msg('settings.layoutMoveDown')} describe={false}>
+              <button
+                type="button"
+                class="mini"
+                aria-label={msg('settings.layoutMoveDown')}
+                disabled={index === list.length - 1}
+                onclick={() => apply(step(st, key, index, 1))}
+              >
+                <ChevronDown size={14} />
+              </button>
+            </Tooltip>
             {#if key === 'main' || key === 'side'}
               {@const other = key === 'main' ? 'side' : 'main'}
               {@const moveLabel = key === 'main' ? msg('settings.layoutToSide') : msg('settings.layoutToMain')}
-              <button
-                type="button"
-                class="mini"
-                aria-label={moveLabel}
-                title={moveLabel}
-                onclick={() => apply(moveToColumn(st, key, index, other))}
-              >
-                {#if key === 'main'}<ArrowRight size={14} />{:else}<ArrowLeft size={14} />{/if}
-              </button>
+              <Tooltip text={moveLabel} describe={false}>
+                <button
+                  type="button"
+                  class="mini"
+                  aria-label={moveLabel}
+                  onclick={() => apply(moveToColumn(st, key, index, other))}
+                >
+                  {#if key === 'main'}<ArrowRight size={14} />{:else}<ArrowLeft size={14} />{/if}
+                </button>
+              </Tooltip>
             {/if}
             {#if separator}
-              <button
-                type="button"
-                class="mini"
-                aria-label={msg('settings.layoutRemoveSeparator')}
-                title={msg('settings.layoutRemoveSeparator')}
-                onclick={() => apply(removeSeparator(st, index))}
-              >
-                <X size={14} />
-              </button>
+              <Tooltip text={msg('settings.layoutRemoveSeparator')} describe={false}>
+                <button
+                  type="button"
+                  class="mini"
+                  aria-label={msg('settings.layoutRemoveSeparator')}
+                  onclick={() => apply(removeSeparator(st, index))}
+                >
+                  <X size={14} />
+                </button>
+              </Tooltip>
             {:else}
               {@const eyeLabel = hidden ? msg('settings.layoutShow') : msg('settings.layoutHide')}
-              <button
-                type="button"
-                class="mini"
-                aria-label={eyeLabel}
-                aria-pressed={hidden}
-                title={eyeLabel}
-                onclick={() => apply(toggleHidden(st, scope, id))}
-              >
-                {#if hidden}<EyeOff size={14} />{:else}<Eye size={14} />{/if}
-              </button>
+              <Tooltip text={eyeLabel} describe={false}>
+                <button
+                  type="button"
+                  class="mini"
+                  aria-label={eyeLabel}
+                  aria-pressed={hidden}
+                  onclick={() => apply(toggleHidden(st, scope, id))}
+                >
+                  {#if hidden}<EyeOff size={14} />{:else}<Eye size={14} />{/if}
+                </button>
+              </Tooltip>
             {/if}
           </div>
         </li>
@@ -228,16 +234,17 @@
       </div>
       <div class="support-row">
         <span class="item-name">{msg('tickets.nav')}</span>
-        <button
-          type="button"
-          class="mini"
-          aria-label={isHidden(st, 'sidebar', 'support') ? msg('settings.layoutShow') : msg('settings.layoutHide')}
-          title={isHidden(st, 'sidebar', 'support') ? msg('settings.layoutShow') : msg('settings.layoutHide')}
-          aria-pressed={isHidden(st, 'sidebar', 'support')}
-          onclick={() => apply(toggleHidden(st, 'sidebar', 'support'))}
-        >
-          {#if isHidden(st, 'sidebar', 'support')}<EyeOff size={14} />{:else}<Eye size={14} />{/if}
-        </button>
+        <Tooltip text={isHidden(st, 'sidebar', 'support') ? msg('settings.layoutShow') : msg('settings.layoutHide')} describe={false}>
+          <button
+            type="button"
+            class="mini"
+            aria-label={isHidden(st, 'sidebar', 'support') ? msg('settings.layoutShow') : msg('settings.layoutHide')}
+            aria-pressed={isHidden(st, 'sidebar', 'support')}
+            onclick={() => apply(toggleHidden(st, 'sidebar', 'support'))}
+          >
+            {#if isHidden(st, 'sidebar', 'support')}<EyeOff size={14} />{:else}<Eye size={14} />{/if}
+          </button>
+        </Tooltip>
       </div>
     </div>
   </details>

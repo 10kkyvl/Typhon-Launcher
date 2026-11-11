@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { FolderOpen, Pencil, Plus, Trash2 } from '@lucide/svelte';
+  import Tooltip from './Tooltip.svelte';
   import Button from './Button.svelte';
   import ConfirmModal from './ConfirmModal.svelte';
   import Toggle from './Toggle.svelte';
@@ -220,12 +221,16 @@
           {#if p.runAsAdmin}<span class="tag">{msg('modals.propertiesAdminTitle')}</span>{/if}
           {#if !p.isDefault}
             <span class="grow"></span>
-            <button class="icon" title={msg('modals.profilesEdit')} aria-label={msg('modals.profilesEdit')} disabled={busy || editor !== null} onclick={() => startEdit(p)}>
-              <Pencil size="1.5rem" strokeWidth={1.8} />
-            </button>
-            <button class="icon" title={msg('modals.profilesDelete')} aria-label={msg('modals.profilesDelete')} disabled={busy} onclick={() => (deleting = p)}>
-              <Trash2 size="1.5rem" strokeWidth={1.8} />
-            </button>
+            <Tooltip text={msg('modals.profilesEdit')} describe={false}>
+              <button class="icon" aria-label={msg('modals.profilesEdit')} disabled={busy || editor !== null} onclick={() => startEdit(p)}>
+                <Pencil size="1.5rem" strokeWidth={1.8} />
+              </button>
+            </Tooltip>
+            <Tooltip text={msg('modals.profilesDelete')} describe={false}>
+              <button class="icon" aria-label={msg('modals.profilesDelete')} disabled={busy} onclick={() => (deleting = p)}>
+                <Trash2 size="1.5rem" strokeWidth={1.8} />
+              </button>
+            </Tooltip>
           {/if}
         </div>
         <p class="path" title={p.executable}>{truncateMiddle(p.executable, 70)}</p>
@@ -275,14 +280,15 @@
         {#if candidates.length > 0}
           <div class="candidates">
             {#each candidates as candidate (candidate.path)}
-              <button
-                class="candidate"
-                class:current={candidate.path === editor.executable}
-                title={candidate.path}
-                onclick={() => editor && (editor.executable = candidate.path)}
-              >
-                {truncateMiddle(candidate.path, 70)}
-              </button>
+              <Tooltip text={candidate.path}>
+                <button
+                  class="candidate"
+                  class:current={candidate.path === editor.executable}
+                  onclick={() => editor && (editor.executable = candidate.path)}
+                >
+                  {truncateMiddle(candidate.path, 70)}
+                </button>
+              </Tooltip>
             {/each}
           </div>
         {/if}

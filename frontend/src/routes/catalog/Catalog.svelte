@@ -804,7 +804,7 @@
       <Chip
         variant="outline"
         selected={compatOnly}
-        title={msg('games.compatFilterHint')}
+        hint={msg('games.compatFilterHint')}
         onclick={onCompatOnly}
       >
         {msg('games.compatFilterLabel')}

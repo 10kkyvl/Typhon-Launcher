@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import Tooltip from './Tooltip.svelte';
 
   let {
     options,
@@ -16,21 +17,23 @@
 
 <div class="segmented">
   {#each options as option (option.id)}
-    <button
-      class="segment"
-      class:selected={value === option.id}
-      aria-label={option.label}
-      aria-pressed={value === option.id}
-      title={option.label}
-      {disabled}
-      onclick={() => (value = option.id)}
-    >
-      {#if item}
-        {@render item(option)}
-      {:else}
-        {option.label}
-      {/if}
-    </button>
+    <!-- A segment drawn by `item` (an icon) shows its label as a tooltip; a text segment shows it already. -->
+    <Tooltip text={item ? option.label : ''} describe={false}>
+      <button
+        class="segment"
+        class:selected={value === option.id}
+        aria-label={option.label}
+        aria-pressed={value === option.id}
+        {disabled}
+        onclick={() => (value = option.id)}
+      >
+        {#if item}
+          {@render item(option)}
+        {:else}
+          {option.label}
+        {/if}
+      </button>
+    </Tooltip>
   {/each}
 </div>
 

@@ -470,7 +470,9 @@
                     <strong>{item.name}</strong>
                     <span>{bytesSize(item.bytes)}</span>
                   </span>
-                  <button class="tiny-action" type="button" title={msg('social.chatAttachRemove')} aria-label={msg('social.chatAttachRemove')} disabled={sending} onclick={() => removeAttachment(item.key)}><X size="1.4rem" /></button>
+                  <Tooltip text={msg('social.chatAttachRemove')} describe={false}>
+                    <button class="tiny-action" type="button" aria-label={msg('social.chatAttachRemove')} disabled={sending} onclick={() => removeAttachment(item.key)}><X size="1.4rem" /></button>
+                  </Tooltip>
                 </div>
               {/each}
             </div>
