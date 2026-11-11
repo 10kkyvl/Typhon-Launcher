@@ -7,6 +7,7 @@
   import { X } from '@lucide/svelte';
   import IconButton from './IconButton.svelte';
   import { msg } from '../i18n';
+  import { portal } from '../utils/portal';
 
   let {
     open = $bindable(false),
@@ -25,12 +26,6 @@
   } = $props();
 
   const id = Symbol();
-
-  // Fixed overlays must escape layout/size containment in settings and cards.
-  function portal(node: HTMLDivElement) {
-    document.body.appendChild(node);
-    return { destroy: () => node.remove() };
-  }
 
   $effect(() => {
     if (!open) return;
@@ -55,7 +50,7 @@
 <svelte:window onkeydown={open ? onKeydown : undefined} />
 
 {#if open}
-  <div class="overlay" use:portal inert={!topmost} aria-hidden={!topmost} role="presentation" onpointerdown={(e) => e.target === e.currentTarget && close()}>
+  <div class="overlay" {@attach portal} inert={!topmost} aria-hidden={!topmost} role="presentation" onpointerdown={(e) => e.target === e.currentTarget && close()}>
     <div class="modal" style:width role="dialog" aria-modal={topmost} aria-label={title}>
       <div class="head">
         <h3>{title}</h3>

@@ -3,6 +3,7 @@
   import PlayerCard from './PlayerCard.svelte';
   import { createHoverIntent, placePopover } from './playerCardPopover';
   import type { PresenceView, UserCard } from '../services/social';
+  import { portal } from '../utils/portal';
 
   let { anchor, user, presence }: { anchor?: HTMLElement | null; user: UserCard; presence?: PresenceView | null } = $props();
 
@@ -16,11 +17,6 @@
     if (!next) place = null;
   });
   onDestroy(() => intent.destroy());
-
-  function portal(node: HTMLDivElement) {
-    document.body.appendChild(node);
-    return { destroy: () => node.remove() };
-  }
 
   $effect(() => {
     const el = anchor;
@@ -86,7 +82,7 @@
 </script>
 
 {#if open}
-  <div {id} class="popover" role="tooltip" use:portal bind:this={popover}
+  <div {id} class="popover" role="tooltip" {@attach portal} bind:this={popover}
     style:left={place ? `${place.left}px` : '0'} style:top={place ? `${place.top}px` : '0'} style:visibility={place ? 'visible' : 'hidden'}>
     <PlayerCard {user} {presence} />
   </div>
