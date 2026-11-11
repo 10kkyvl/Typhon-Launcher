@@ -151,14 +151,12 @@ describe('z-index scale', () => {
     expect(z('toast')).toBeGreaterThan(z('corner'));
   });
 
-  // Paint order of modal layers follows the stack: every component that registers a modal layer puts its
-  // root on the one dialog token, and portal() appends each at the end of <body> when it opens.
+  // Paint order follows the stack: the root of every layer, modal or not, sits on the one layer token,
+  // and portal() appends each at the end of <body> as it opens, so the one opened last paints on top.
   it('stacks every layer root on --z-layer, so the layer opened last paints on top', () => {
-    // Modal layers only; where non-modal ones (menus, listboxes) stack is the menus pass's to set.
-    const layered = files.filter((path) => path.endsWith('.svelte') && /\{@attach layer\((?![^)]*modal: false)/.test(read(path)));
-    expect(layered.length).toBeGreaterThan(1);
-    const tokensUsed = layered.map((path) => [path, [...styles(path, read(path)).matchAll(/z-index:\s*var\(--z-([a-z-]+)\)/g)].map((m) => m[1])]);
-    expect(tokensUsed).toEqual(layered.map((path) => [path, ['layer']]));
+    const roots = files.filter((path) => path.endsWith('.svelte')).flatMap((path) => layerRoots(path, read(path)));
+    expect(roots.length).toBeGreaterThan(2);
+    expect(roots.filter((root) => root.z !== 'var(--z-layer)')).toEqual([]);
   });
 
   it('takes every z-index from the scale or stacks locally inside an isolated component', () => {
@@ -185,6 +183,17 @@ describe('z-index scale', () => {
     expect(isolatedPopoverHosts()).toEqual([]);
   });
 });
+
+// Every element that carries `{@attach layer(…)}`: its first static class and that class's z-index.
+function layerRoots(path: string, text: string): { path: string; root: string; z: string | undefined }[] {
+  const css = [...styles(path, text).matchAll(RULE)];
+  return [...text.matchAll(/\{@attach layer\(/g)].map((m) => {
+    const tag = text.slice(text.lastIndexOf('<', m.index), m.index);
+    const root = /\bclass="([\w-]+)/.exec(tag)?.[1] ?? '(no class)';
+    const rule = css.find((r) => selectsRoot(r[1].trim().split('\n').pop()?.trim() ?? '', root) && /z-index/.test(r[2]));
+    return { path, root, z: rule ? /z-index:\s*([^;}]+)/.exec(rule[2])?.[1].trim() : undefined };
+  });
+}
 
 const THEME_GUARD = 'lib/components/ThemeGuard.ts';
 const SCRIPT_Z = /\.zIndex\b|setProperty\(\s*['"`]z-index|cssText[^\n]*z-index|['"`]z-index\s*:/;

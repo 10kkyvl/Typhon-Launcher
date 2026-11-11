@@ -21,6 +21,7 @@
 
 {#if listbox}
   <ul
+    class="listbox"
     role="listbox"
     aria-label="Language"
     {@attach layer({ modal: false, owner: () => trigger, initialFocus: () => '[role=option]', dismiss: () => (listbox = false) })}
@@ -41,3 +42,10 @@
     {/each}
   </ul>
 {/if}
+
+<style>
+  .listbox {
+    position: fixed;
+    z-index: var(--z-layer);
+  }
+</style>
