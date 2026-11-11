@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { luminance } from '../theme/accent';
 import type { RGBA } from '../theme/contrastReport';
-import { BACKDROP_LOOK_COLORS, backdropLook, lookPixels, mixPixels, washLimit, type BackdropLook } from './pixels';
+import { BACKDROP_LOOK_COLORS, WASH_TEXT, backdropLook, lookPixels, mixPixels, washLimit, type BackdropLook } from './pixels';
 
 type RGB = [number, number, number];
 const px = (r: number, g: number, b: number, a = 255) => [r, g, b, a];
@@ -19,6 +19,9 @@ const DARK: Record<string, RGBA> = {
   '--text-3': [147, 151, 158, 1],
   '--accent-text': [139, 233, 247, 1],
   '--accent-bright': [44, 207, 232, 1],
+  '--success': [85, 207, 141, 1],
+  '--warning': [224, 168, 90, 1],
+  '--danger': [239, 112, 112, 1],
 };
 
 const BLUSH: Record<string, RGBA> = {
@@ -29,6 +32,9 @@ const BLUSH: Record<string, RGBA> = {
   '--text-3': [90, 74, 79, 1],
   '--accent-text': [105, 65, 78, 1],
   '--accent-bright': [95, 74, 77, 1],
+  '--success': [22, 95, 56, 1],
+  '--warning': [122, 76, 6, 1],
+  '--danger': [168, 32, 41, 1],
 };
 
 // Every corner of the colour cube, a grey ramp and a noisy picture: the art can be anything.
@@ -73,11 +79,7 @@ describe('the look of the backdrop', () => {
     const shown: RGB = [255 * 0.5 + 14 * 0.5, 255 * 0.5 + 15 * 0.5, 255 * 0.5 + 17 * 0.5];
     const bound = (c: RGB, r: number) => (luminance(c) + 0.05) / r - 0.05;
     const expected = Math.min(
-      bound(rgbOf(DARK['--text']), 4.6),
-      bound(rgbOf(DARK['--text-2']), 4.6),
-      bound(shown, 4.6),
-      bound(rgbOf(DARK['--accent-text']), 4.6),
-      bound(rgbOf(DARK['--accent-bright']), 3.1),
+      ...WASH_TEXT.map((t) => bound(t.name === '--text-3' ? shown : rgbOf(DARK[t.name]), t.min + 0.1)),
     );
     expect(half?.limit.max).toBeCloseTo(expected, 6);
   });
@@ -130,16 +132,14 @@ describe('backdrop pixels', () => {
     expect(out).toEqual([0, 0, 0, 0]);
   });
 
-  it('keeps every text level readable over any art on a dark base', () => {
+  it('keeps every text and status colour readable over any art on a dark base', () => {
     const look = backdropLook(DARK, 0.75) as BackdropLook;
-    for (const name of ['--text', '--text-2', '--text-3', '--accent-text']) expect(worstRatio(look, rgbOf(DARK[name])), name).toBeGreaterThanOrEqual(4.5);
-    expect(worstRatio(look, rgbOf(DARK['--accent-bright']))).toBeGreaterThanOrEqual(3);
+    for (const t of WASH_TEXT) expect(worstRatio(look, rgbOf(DARK[t.name])), t.name).toBeGreaterThanOrEqual(t.min);
   });
 
-  it('keeps every text level readable over any art on a light base', () => {
+  it('keeps every text and status colour readable over any art on a light base', () => {
     const look = backdropLook(BLUSH, 0.7) as BackdropLook;
-    for (const name of ['--text', '--text-2', '--text-3', '--accent-text']) expect(worstRatio(look, rgbOf(BLUSH[name])), name).toBeGreaterThanOrEqual(4.5);
-    expect(worstRatio(look, rgbOf(BLUSH['--accent-bright']))).toBeGreaterThanOrEqual(3);
+    for (const t of WASH_TEXT) expect(worstRatio(look, rgbOf(BLUSH[t.name])), t.name).toBeGreaterThanOrEqual(t.min);
   });
 
   it('pulls white art down to the limit on a dark base and black art up to it on a light one', () => {

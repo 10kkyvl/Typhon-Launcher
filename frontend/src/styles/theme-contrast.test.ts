@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { goSources } from '../lib/testing/sources';
 import { luminance, rgb } from '../lib/theme/accent';
 import { CONTRAST_FALLBACKS, CONTRAST_TOKENS, contrastReport, type RGBA } from '../lib/theme/contrastReport';
-import { BACKDROP_LOOK_COLORS, backdropLook, lookPixels, type BackdropLook } from '../lib/backdrop/pixels';
+import { BACKDROP_LOOK_COLORS, WASH_TEXT, backdropLook, lookPixels, type BackdropLook } from '../lib/backdrop/pixels';
 
 /**
  * WCAG 2.2 AA for every built-in theme, measured on the preset values in internal/theme/presets.go:
@@ -154,6 +154,15 @@ function anyArt(): Uint8ClampedArray {
   return Uint8ClampedArray.from(data);
 }
 
+// Every colour the frontend paints as text straight on the page, which the wash now is: the text levels,
+// links, indicators and the status colours of errors, warnings and done states.
+const ON_WASH: { fg: string; min: number }[] = [
+  ...ON_ISLAND,
+  { fg: '--success', min: 4.5 },
+  { fg: '--warning', min: 4.5 },
+  { fg: '--danger', min: 4.5 },
+];
+
 function washLook(tokens: Record<string, string>) {
   const colors = Object.fromEntries(BACKDROP_LOOK_COLORS.map((name) => [name, rgba(tokens[name] ?? name)]));
   return backdropLook(colors, shellNumber('--ambient-saturate'));
@@ -175,7 +184,7 @@ function washFailures(tokens: Record<string, string>): string[] {
   const out = new Set<string>();
   for (const wash of washes) {
     const island = paint(tokens, '--island-fill', wash);
-    for (const pair of ON_ISLAND) {
+    for (const pair of ON_WASH) {
       const direct = ratio(paint(tokens, pair.fg, wash), wash);
       if (direct < pair.min) out.add(`${pair.fg} on the wash: ${direct.toFixed(2)} < ${pair.min}`);
       const on = ratio(paint(tokens, pair.fg, island), island);
@@ -219,6 +228,13 @@ describe('built-in themes', () => {
       expect(preset, id).toBeDefined();
       expect(islandFailures((preset as Preset).tokens)).toEqual([]);
     });
+
+    if (id === 'dark') {
+      it('the bake limits the wash for every colour that sits on it, at its own target', () => {
+        const limited = new Map(WASH_TEXT.map((t) => [t.name, t.min]));
+        expect(ON_WASH.filter((pair) => limited.get(pair.fg) !== pair.min).map((pair) => pair.fg)).toEqual([]);
+      });
+    }
 
     if (id === 'contrast') {
       // High contrast keeps its plain black page: an opaque dim leaves nothing of the art to show.

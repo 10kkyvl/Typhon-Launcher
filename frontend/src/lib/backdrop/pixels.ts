@@ -28,14 +28,21 @@ export interface BackdropLook {
   limit: WashLimit;
 }
 
-/** What sits straight on the wash and the contrast it keeps there: AA with a margin for the 8-bit picture. */
-export const WASH_TEXT: readonly { name: string; ratio: number }[] = [
-  { name: '--text', ratio: 4.6 },
-  { name: '--text-2', ratio: 4.6 },
-  { name: '--text-3', ratio: 4.6 },
-  { name: '--accent-text', ratio: 4.6 },
-  { name: '--accent-bright', ratio: 3.1 },
+/**
+ * Every colour the frontend paints as text or a marker straight on the page, which the wash is, and the
+ * WCAG contrast it keeps there. The bake adds WASH_MARGIN for the rounding of the 8-bit picture.
+ */
+export const WASH_TEXT: readonly { name: string; min: number }[] = [
+  { name: '--text', min: 4.5 },
+  { name: '--text-2', min: 4.5 },
+  { name: '--text-3', min: 4.5 },
+  { name: '--accent-text', min: 4.5 },
+  { name: '--accent-bright', min: 3 },
+  { name: '--success', min: 4.5 },
+  { name: '--warning', min: 4.5 },
+  { name: '--danger', min: 4.5 },
 ];
+const WASH_MARGIN = 0.1;
 
 export const BACKDROP_LOOK_COLORS: readonly string[] = ['--bg', '--ambient-dim', ...WASH_TEXT.map((t) => t.name)];
 
@@ -69,7 +76,7 @@ export function backdropLook(colors: Readonly<Record<string, RGBA | undefined>>,
   for (const text of WASH_TEXT) {
     const value = colors[text.name];
     if (!value) return null;
-    texts.push({ color: over(value, bg), ratio: text.ratio });
+    texts.push({ color: over(value, bg), ratio: text.min + WASH_MARGIN });
   }
   const limit = washLimit(texts, !isLight(bg));
   if (!limit) return null;
