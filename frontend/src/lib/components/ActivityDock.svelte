@@ -58,13 +58,6 @@
   const expanded = $derived(items.length > 0 && (pinned || ((hovered || focused) && !dismissed)));
   const headline = $derived(summary.primary ? `${summary.primary.status} · ${summary.primary.name}` : '');
 
-  function toneColor(tone: ActivityItem['tone']) {
-    if (tone === 'warning') return 'var(--warning)';
-    if (tone === 'danger') return 'var(--danger)';
-    if (tone === 'muted') return 'var(--text-3)';
-    return 'var(--accent-bright)';
-  }
-
   function toggle() {
     if (expanded) {
       pinned = false;
@@ -179,7 +172,7 @@
                   <span class="row-name">{item.name}</span>
                   {#if !item.indeterminate}<span class="row-pct">{progressPercent(item.progress)}%</span>{/if}
                 </span>
-                <ProgressBar indeterminate={item.indeterminate} value={progressPercent(item.progress)} color={toneColor(item.tone)} height={3} />
+                <ProgressBar indeterminate={item.indeterminate} value={progressPercent(item.progress)} tone={item.tone} height={3} label={item.name} />
                 <span class="row-foot">
                   <span class="row-status">{item.status}</span>
                   {#if item.detail}

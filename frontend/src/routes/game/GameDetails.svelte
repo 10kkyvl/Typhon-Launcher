@@ -1450,7 +1450,7 @@
           {#if primary.kind === 'progress'}
             <div class="progress">
               <span class="progress-label">{primary.label}</span>
-              <ProgressBar value={busyPercent} indeterminate={busy?.indeterminate} />
+              <ProgressBar value={busyPercent} indeterminate={busy?.indeterminate} stretch label={primary.label} />
               {#if !busy?.indeterminate}<span class="progress-pct">{busyPercent}%</span>{/if}
             </div>
           {:else if primary.kind === 'update'}
@@ -1933,10 +1933,6 @@
     font-size: var(--font-sm);
     font-weight: 500;
     white-space: nowrap;
-  }
-
-  .progress :global(.track) {
-    flex: 1;
   }
 
   .progress-pct {

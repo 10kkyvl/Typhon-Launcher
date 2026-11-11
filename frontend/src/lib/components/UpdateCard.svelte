@@ -163,7 +163,7 @@
     <p class="muted reason">{msg('ui.calculatingDownloadSize')}</p>
   {:else if busy}
     <div class="progress">
-      <ProgressBar value={update.progress * 100} />
+      <ProgressBar value={update.progress * 100} stretch label={headline} />
       <span class="muted">{progressPercent(update.progress)}%</span>
     </div>
   {/if}
@@ -469,10 +469,6 @@
     align-items: center;
     gap: var(--space-4);
     margin-bottom: var(--space-4);
-  }
-
-  .progress :global(.track) {
-    flex: 1;
   }
 
   .actions {

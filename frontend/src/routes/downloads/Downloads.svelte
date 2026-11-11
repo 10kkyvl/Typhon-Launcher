@@ -352,7 +352,7 @@
             {:else if installActive(install.status)}
               <div class="install-progress">
                 <span class="install-status">{installStatusLabels(install.status)}</span>
-                <ProgressBar value={install.progress * 100} indeterminate={installIndeterminate(install)} height={4} />
+                <ProgressBar value={install.progress * 100} indeterminate={installIndeterminate(install)} height={4} label={item.name} />
               </div>
             {:else if install.status === 'waiting_for_user'}
               <Button size="sm" variant="primary" onclick={() => openInstall(item.id)}>{msg('transfers.downloadsContinueInstallAction')}</Button>

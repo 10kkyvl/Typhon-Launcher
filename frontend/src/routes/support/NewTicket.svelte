@@ -213,6 +213,7 @@
           value={upload ? uploadPercent(upload) : 0}
           indeterminate={upload?.state !== 'sending' || !upload.totalBytes}
           height={5}
+          label={stage}
         />
       </div>
     {/if}

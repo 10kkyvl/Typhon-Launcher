@@ -119,7 +119,8 @@
               <ProgressBar
                 value={file.selected && file.size > 0 ? (file.bytesDone / file.size) * 100 : 0}
                 height={4}
-                color={file.selected ? 'var(--accent-text)' : 'var(--text-3)'}
+                tone={file.selected ? 'accent' : 'muted'}
+                label={file.path}
               />
             </div>
           {/each}

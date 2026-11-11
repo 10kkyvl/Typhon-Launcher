@@ -1586,6 +1586,7 @@
                       value={logsProgressPercent}
                       indeterminate={logsStage !== 'sending' || !logsProgress}
                       height={5}
+                      label={msg('settings.aboutLogsSendingEllipsis')}
                     />
                   </div>
                 {/if}

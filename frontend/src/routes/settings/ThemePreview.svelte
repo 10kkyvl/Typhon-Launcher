@@ -348,14 +348,15 @@
 
   .progress {
     height: var(--space-2);
-    background: var(--surface-3);
-    border-radius: var(--radius-xs);
+    background: var(--hover-strong);
+    border-radius: var(--radius-bar);
     overflow: hidden;
   }
 
   .progress-fill {
     width: 64%;
     height: 100%;
+    border-radius: var(--radius-bar);
     background: var(--accent-bright);
   }
 

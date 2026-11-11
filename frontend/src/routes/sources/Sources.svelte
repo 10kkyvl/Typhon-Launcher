@@ -184,7 +184,7 @@
         {#if $refreshingAll && progressList.length > 0}
           <span class="all-progress">
             <span>{msg('transfers.sourcesRefreshAllProgress', { percent: allPercent })}</span>
-            <ProgressBar value={allPercent} height={3} />
+            <ProgressBar value={allPercent} height={3} label={msg('transfers.sourcesRefreshAllProgress', { percent: allPercent })} />
           </span>
         {:else}
           {$refreshingAll ? msg('transfers.sourcesUpdatingEllipsis') : msg('transfers.sourcesRefreshAll')}
@@ -272,7 +272,7 @@
                 <span class="live" title={stageLabel(live)}>
                   <span class="live-label">{stageLabel(live)}</span>
                   <span class="live-bar">
-                    <ProgressBar value={percent} indeterminate={isIndeterminate(live)} height={4} />
+                    <ProgressBar value={percent} indeterminate={isIndeterminate(live)} height={4} label={source.name} valueText={`${stageLabel(live)}, ${percent}%`} />
                     {#if !isIndeterminate(live)}<span class="live-percent">{percent}%</span>{/if}
                   </span>
                 </span>

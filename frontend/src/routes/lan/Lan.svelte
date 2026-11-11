@@ -99,7 +99,11 @@
           <div class="row">
             <div class="row-text">
               <span class="row-title">{msg('transfers.lanPreparingPercent', { percent: Math.round(hashPct(progress.processedBytes, progress.totalBytes)) })}</span>
-              <ProgressBar value={hashPct(progress.processedBytes, progress.totalBytes)} height={4} />
+              <ProgressBar
+                value={hashPct(progress.processedBytes, progress.totalBytes)}
+                height={4}
+                label={msg('transfers.lanPreparingPercent', { percent: Math.round(hashPct(progress.processedBytes, progress.totalBytes)) })}
+              />
             </div>
           </div>
         {/each}
@@ -127,7 +131,7 @@
           <div class="row">
             <div class="row-text">
               <span class="row-title">{transfer.title}</span>
-              <ProgressBar value={transferPct(transfer.downloaded, transfer.total)} height={4} />
+              <ProgressBar value={transferPct(transfer.downloaded, transfer.total)} height={4} label={transfer.title} />
               <span class="row-sub">{transferLabel(transfer)}</span>
             </div>
             <div class="row-actions">

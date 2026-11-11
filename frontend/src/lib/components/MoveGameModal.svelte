@@ -166,7 +166,7 @@
 
       {#if jobActive && job}
         <div class="progress">
-          <ProgressBar value={movePercent(job)} />
+          <ProgressBar value={movePercent(job)} label={moveSummary(job)} />
           <div class="progress-text">
             <span>{moveSummary(job)}</span>
             <span>{movePercent(job)}%</span>

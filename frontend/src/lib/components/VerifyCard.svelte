@@ -59,7 +59,7 @@
     {/if}
   {:else if busy}
     <div class="progress">
-      <ProgressBar value={(state?.progress ?? 0) * 100} />
+      <ProgressBar value={(state?.progress ?? 0) * 100} stretch label={msg('verify.fileIntegrity')} />
       <span class="muted">{progressPercent(state?.progress ?? 0)}%</span>
     </div>
     {#if state?.currentFile}
@@ -175,10 +175,6 @@
     align-items: center;
     gap: var(--space-4);
     margin-bottom: var(--space-3);
-  }
-
-  .progress :global(.track) {
-    flex: 1;
   }
 
   .actions {

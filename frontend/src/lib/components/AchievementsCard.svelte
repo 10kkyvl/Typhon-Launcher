@@ -131,7 +131,13 @@
     {#if view}
       <div class="progress">
         <span class="count">{$t('games.achievementsProgress', { unlocked: view.unlocked, total: view.total })}</span>
-        <ProgressBar value={view.unlocked} max={view.total} height={6} />
+        <ProgressBar
+          value={view.unlocked}
+          max={view.total}
+          height={6}
+          label={$t('games.achievementsTitle')}
+          valueText={$t('games.achievementsProgress', { unlocked: view.unlocked, total: view.total })}
+        />
       </div>
 
       {#if namesMissing}

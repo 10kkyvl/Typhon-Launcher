@@ -598,7 +598,7 @@
       {#if externalWait}
         <p class="note">{msg('modals.installWaitingExternal')}</p>
       {:else}
-        <ProgressBar value={installation.progress * 100} indeterminate={installIndeterminate(installation)} />
+        <ProgressBar value={installation.progress * 100} indeterminate={installIndeterminate(installation)} label={installation.name} />
         {#if installTotalUnknown(installation)}
         <div class="progress-foot">
           <span class="size">{msg('modals.installWritten', { size: bytesSize(installation.bytesDone) })}</span>

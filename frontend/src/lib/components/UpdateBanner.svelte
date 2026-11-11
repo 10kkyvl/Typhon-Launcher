@@ -46,7 +46,11 @@
       <span>{msg(status.delta ? 'ui.downloadingUpdatePatch' : 'ui.downloadingUpdate', { version: status.availableVersion ?? '' })}</span>
     </div>
     <div class="progress">
-      <ProgressBar value={pct} />
+      <ProgressBar
+        value={pct}
+        stretch
+        label={msg(status.delta ? 'ui.downloadingUpdatePatch' : 'ui.downloadingUpdate', { version: status.availableVersion ?? '' })}
+      />
       <span class="muted">{msg('ui.bytesOfBytes', { done: bytesSize(downloadedBytes), total: bytesSize(totalBytes) })} · {Math.round(pct)}%</span>
       <Button size="sm" onclick={requestCancelDownload}>
         <X size="1.5rem" strokeWidth={1.8} />
@@ -122,10 +126,6 @@
     display: flex;
     align-items: center;
     gap: var(--space-4);
-  }
-
-  .progress :global(.track) {
-    flex: 1;
   }
 
   .actions {

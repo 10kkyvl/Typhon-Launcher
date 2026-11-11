@@ -28,7 +28,7 @@
 
   const downloading = $derived(download.status === 'downloading');
   const pct = $derived(download.progress * 100);
-  const barColor = $derived(download.status === 'paused' ? 'var(--text-3)' : 'var(--accent-bright)');
+  const barTone = $derived(download.status === 'paused' ? 'muted' : 'accent');
 
   const typeTag = $derived.by(() => {
     if (download.origin.platform) return msg('state.installTypeImage');
@@ -101,7 +101,7 @@
     </div>
     <div class="progress-row">
       <div class="bar">
-        <ProgressBar value={pct} color={barColor} height={6} indeterminate={download.status === 'metadata'} />
+        <ProgressBar value={pct} tone={barTone} height={6} indeterminate={download.status === 'metadata'} label={download.name} />
       </div>
       <span class="pct">{download.status === 'metadata' ? '' : `${Math.floor(pct)}%`}</span>
     </div>

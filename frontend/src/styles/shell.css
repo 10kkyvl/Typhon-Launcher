@@ -74,4 +74,10 @@
   /* Behind a dialog, and behind the image viewer. */
   --scrim: rgba(4, 6, 10, 0.62);
   --scrim-strong: rgba(4, 6, 10, 0.9);
+
+  /* Progress bars: always a pill; how long a new value takes to arrive, and one pass of the sweep
+     that stands for an unknown amount. */
+  --radius-bar: 99rem;
+  --progress-step: 600ms;
+  --progress-sweep: 1.4s;
 }
