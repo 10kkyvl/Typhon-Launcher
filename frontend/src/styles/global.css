@@ -26,7 +26,38 @@ body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   overflow: hidden;
+}
+
+/* Text is content: an error, a path, a description, a toast can be selected and copied. The window's
+   own furniture cannot: controls with their labels, popups of choices, navigation, the title bar and
+   the top bar, pictures. Big Picture and the overlay window stay unselectable but for what they mark
+   themselves. A text field is always selectable, whatever it sits in. */
+button,
+a,
+label,
+summary,
+nav,
+img,
+svg,
+[role='button'],
+[role='tab'],
+[role='switch'],
+[role='radio'],
+[role='menu'],
+[role='listbox'],
+[role='grid'],
+[role='tooltip'],
+[data-part='sidebar'],
+[data-part='topbar'],
+.titlebar,
+.big-picture,
+html.overlay-window body {
   user-select: none;
+}
+
+input,
+textarea {
+  user-select: text;
 }
 
 html.overlay-window,

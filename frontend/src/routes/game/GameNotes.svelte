@@ -140,7 +140,6 @@
     line-height: 1.55;
     resize: none;
     overflow: hidden;
-    user-select: text;
   }
 
   textarea:focus {

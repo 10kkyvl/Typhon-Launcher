@@ -165,7 +165,6 @@
   .path {
     font-size: var(--font-sm);
     overflow-wrap: anywhere;
-    user-select: text;
   }
 
   .folder.unavailable .path {

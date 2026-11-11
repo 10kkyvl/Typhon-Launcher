@@ -76,7 +76,6 @@
     color: var(--text);
     font-size: var(--font-sm);
     line-height: 1.5;
-    user-select: text;
   }
 
   .notice-text {

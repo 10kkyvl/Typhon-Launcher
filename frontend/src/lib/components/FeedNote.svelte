@@ -136,7 +136,6 @@
     font-size: var(--font-sm);
     line-height: 1.55;
     resize: vertical;
-    user-select: text;
   }
 
   textarea:focus {
