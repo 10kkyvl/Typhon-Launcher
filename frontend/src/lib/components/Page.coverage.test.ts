@@ -14,7 +14,8 @@ interface Node {
   data?: string;
 }
 
-const SKIP = new Set(['Comment', 'SnippetBlock']);
+// Snippets are declarations, and Svelte requires its special elements at the top level of a component.
+const SKIP = new Set(['Comment', 'SnippetBlock', 'SvelteWindow', 'SvelteDocument', 'SvelteBody', 'SvelteHead']);
 
 function routeRoots(): string[] {
   const app = frontendSources['App.svelte'];
@@ -23,9 +24,14 @@ function routeRoots(): string[] {
   return [...app.matchAll(/import (\w+) from '\.\/(routes\/[^']+\.svelte)'/g)].filter((m) => used.has(m[1])).map((m) => m[2]);
 }
 
-function topLevel(path: string): Node[] {
-  const ast = parse(frontendSources[path], { modern: true }) as unknown as { fragment: { nodes: Node[] } };
+function topLevel(source: string): Node[] {
+  const ast = parse(source, { modern: true }) as unknown as { fragment: { nodes: Node[] } };
   return ast.fragment.nodes.filter((node) => !SKIP.has(node.type) && !(node.type === 'Text' && !node.data?.trim()));
+}
+
+function rooted(source: string): boolean {
+  const nodes = topLevel(source);
+  return nodes.length === 1 && nodes[0].type === 'Component' && nodes[0].name === 'Page';
 }
 
 function styleRules(source: string): { selector: string; body: string }[] {
@@ -41,11 +47,17 @@ describe('the page container', () => {
   });
 
   it('roots every route the shell renders, and nothing else of the route sits outside it', () => {
-    const outside = routeRoots().flatMap((path) => {
-      const nodes = topLevel(path);
-      return nodes.length === 1 && nodes[0].type === 'Component' && nodes[0].name === 'Page' ? [] : [`${path}: ${nodes.map((n) => n.name ?? n.type).join(', ')}`];
-    });
+    const outside = routeRoots().flatMap((path) =>
+      rooted(frontendSources[path]) ? [] : [`${path}: ${topLevel(frontendSources[path]).map((n) => n.name ?? n.type).join(', ')}`],
+    );
     expect(outside).toEqual([]);
+  });
+
+  it('lets a route keep the elements Svelte requires at the top level next to its page', () => {
+    for (const special of ['<svelte:window onkeydown={key} />', '<svelte:document onvisibilitychange={key} />', '<svelte:body onclick={key} />', '<svelte:head><title>x</title></svelte:head>']) {
+      expect(rooted(`<script>let key = () => {};</script>\n${special}\n<Page><p>x</p></Page>`), special).toBe(true);
+    }
+    expect(rooted('<Page></Page>\n<div>outside</div>')).toBe(false);
   });
 
   it('is never nested: route sub-views and components render inside the route page', () => {
@@ -86,7 +98,9 @@ describe('the page container', () => {
 
   // A sticky bar over the scrolled page sits on the wash, so it is an island. A bar that sticks over
   // something that sets its own colours says so in a `/* sticks over: <surface> */` comment on its rule, and
-  // then wears a colour that surface sets. The check sees the fill of the sticky rule itself only.
+  // then wears a colour that surface sets. The check sees the fill of the sticky rule itself only: a fill
+  // on a child of a sticky wrapper (the catalog toolbar row in its dock) is not tied to the sticky rule
+  // by the stylesheet alone and is left to review.
   const STICKS_OVER: Record<string, { file: string; why: string }> = {
     'profile canvas': {
       file: 'lib/components/ProfileCanvas.svelte',
@@ -94,7 +108,7 @@ describe('the page container', () => {
     },
   };
 
-  it('a bar that sticks over the scrolled page is an island; one over a themed surface wears that surface', () => {
+  it('a bar that sticks over the scrolled page is an island; one over a themed surface wears that surface (fill of the sticky rule itself only)', () => {
     const wrong = routeFiles().flatMap((path) =>
       styleRules(frontendSources[path])
         .filter((rule) => /position\s*:\s*sticky/.test(rule.body) && /background/.test(rule.body))
