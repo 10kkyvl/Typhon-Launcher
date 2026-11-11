@@ -137,6 +137,67 @@ describe('Button busy with its own action', () => {
   });
 });
 
+describe.each([
+  ['busy', { busy: true }],
+  ['disabled with a reason', { disabled: true, reason: 'The game is running' }],
+])('Button %s blocks activations only', (_, props) => {
+  function listen(type: 'keydown' | 'keyup') {
+    const seen: KeyboardEvent[] = [];
+    const record = (event: Event) => {
+      if (event instanceof KeyboardEvent) seen.push(event);
+    };
+    window.addEventListener(type, record);
+    return { seen, stop: () => window.removeEventListener(type, record) };
+  }
+
+  it('a shortcut pressed on it reaches the window: Ctrl+K, the appearance reset', async () => {
+    const { keys, button } = setup(props);
+    const down = listen('keydown');
+    try {
+      button().focus();
+      await keys.keyboard('{Control>}k{/Control}');
+      await keys.keyboard('{Control>}{Shift>}{Alt>}T{/Alt}{/Shift}{/Control}');
+      expect(down.seen.filter((e) => e.ctrlKey).map((e) => e.key)).toEqual(['Control', 'k', 'Control', 'Shift', 'Alt', 'T']);
+      expect(down.seen.at(-1)?.code).toBe('KeyT');
+      expect(down.seen.every((e) => !e.defaultPrevented)).toBe(true);
+    } finally {
+      down.stop();
+    }
+  });
+
+  it('arrows and page keys pass untouched, so the page around it still scrolls and moves focus', async () => {
+    const { keys, button } = setup(props);
+    const down = listen('keydown');
+    const up = listen('keyup');
+    try {
+      button().focus();
+      await keys.keyboard('{ArrowDown}{ArrowUp}{PageDown}{PageUp}{Home}{End}');
+      expect(down.seen.map((e) => e.key)).toEqual(['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End']);
+      expect(down.seen.some((e) => e.defaultPrevented)).toBe(false);
+      expect(up.seen.map((e) => e.key)).toEqual(['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End']);
+    } finally {
+      down.stop();
+      up.stop();
+    }
+  });
+
+  it('Enter and Space, held or tapped, still do nothing', async () => {
+    const { keys, button, onclick, onsubmit, onkeydown } = setup(props);
+    const down = listen('keydown');
+    try {
+      button().focus();
+      await keys.keyboard('{Enter>3}{/Enter}');
+      await keys.keyboard('{ >3}{/ }');
+      expect(onclick).not.toHaveBeenCalled();
+      expect(onsubmit).not.toHaveBeenCalled();
+      expect(onkeydown).not.toHaveBeenCalled();
+      expect(down.seen).toEqual([]);
+    } finally {
+      down.stop();
+    }
+  });
+});
+
 describe('Button shapes', () => {
   it('fills its row when asked', () => {
     const { button } = setup({ block: true });

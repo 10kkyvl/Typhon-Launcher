@@ -29,8 +29,8 @@
     /**
      * Why the button is disabled. A disabled button cannot take focus, so its reason would reach no
      * keyboard: while disabled with a reason it stays in the Tab order (aria-disabled), ignores every
-     * activation (press, Enter, Space, a form submit, handlers spread onto it) and is described by the
-     * reason. A caller whose reason comes and goes passes '' while there is none, not undefined: the
+     * activation (press, Enter, Space, a form submit), handlers spread onto it included, and is
+     * described by the reason. Every other key passes. A caller whose reason comes and goes passes '' while there is none, not undefined: the
      * button then stays one element, and keeps focus, as the state flips.
      */
     reason?: string;
@@ -57,8 +57,9 @@
   const refused = $derived(disabled && Boolean(reason));
   const blocked = $derived(refused || busy);
 
-  // Keys that do not activate it still work: Tab moves on, Escape closes the dialog or hint around it.
-  const PASSING_KEYS = new Set(['Tab', 'Escape']);
+  // Only the keys that press a button are held back. Focus stays on a busy button for as long as its
+  // action runs, so every other key (Tab, Escape, the arrows, the window's shortcuts) must pass.
+  const ACTIVATION_KEYS = new Set(['Enter', ' ']);
   const ACTIVATIONS = ['click', 'pointerdown', 'pointerup', 'mousedown', 'mouseup', 'keydown', 'keyup'];
 
   // Capture on the button itself runs before any handler on it or above it (Svelte's delegated ones
@@ -66,7 +67,7 @@
   const guard: Attachment<HTMLButtonElement> = (node) => {
     const stop = (event: Event) => {
       if (!blocked) return;
-      if (event instanceof KeyboardEvent && PASSING_KEYS.has(event.key)) return;
+      if (event instanceof KeyboardEvent && !ACTIVATION_KEYS.has(event.key)) return;
       if (event.type !== 'pointerdown' && event.type !== 'mousedown') event.preventDefault();
       event.stopImmediatePropagation();
     };
