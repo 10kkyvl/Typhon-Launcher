@@ -81,7 +81,6 @@ h4 {
   border-radius: var(--radius-md);
   font-size: var(--font-md);
   color: var(--text);
-  outline: none;
   transition:
     border-color var(--dur) var(--ease),
     background var(--dur) var(--ease);
@@ -91,9 +90,16 @@ h4 {
   border-color: var(--border-strong);
 }
 
+/* One ring: the field's own border takes the focus colour, and the outline every other control gets
+   on keyboard focus is drawn over that border, not around it. */
 .input:focus {
   border-color: var(--accent-ring);
   background: var(--surface-3);
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: -1px;
 }
 
 .input::placeholder {
