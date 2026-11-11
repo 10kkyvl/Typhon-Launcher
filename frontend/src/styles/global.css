@@ -31,7 +31,9 @@ body {
 /* Text is content: an error, a path, a description, a toast can be selected and copied. The window's
    own furniture cannot: controls with their labels, popups of choices, navigation, the title bar and
    the top bar, pictures. Big Picture and the overlay window stay unselectable but for what they mark
-   themselves. A text field is always selectable, whatever it sits in. */
+   themselves; for Big Picture that is the whole document while its shell is in it, because the
+   shared dialogs it opens are portalled to the end of <body>, outside the shell. A text field is
+   always selectable, whatever it sits in. */
 button,
 a,
 label,
@@ -50,7 +52,7 @@ svg,
 [data-part='sidebar'],
 [data-part='topbar'],
 .titlebar,
-.big-picture,
+html:has(.big-picture) body,
 html.overlay-window body {
   user-select: none;
 }

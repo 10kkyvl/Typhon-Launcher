@@ -67,8 +67,10 @@ describe('selecting text', () => {
     }
   });
 
-  it('stays off everywhere in Big Picture and the overlay window, as before', () => {
-    expect(list).toContain('.big-picture');
+  // Shared dialogs over Big Picture are portalled to the end of <body>, outside `.big-picture`: the
+  // document is in Big Picture while the shell is in it, so the rule is set on <body> from there.
+  it('stays off everywhere in Big Picture, the dialogs it opens included, and in the overlay window, as before', () => {
+    expect(list).toContain('html:has(.big-picture) body');
     expect(list).toContain('html.overlay-window body');
   });
 
