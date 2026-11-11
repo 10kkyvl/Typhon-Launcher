@@ -19,6 +19,9 @@
   let { children }: { children?: Snippet } = $props();
 
   const chatShown = $derived($authState === 'authenticated' && !$needsSocialConsent);
+
+  // Toasts stand on top of the activity dock, as one column in the corner.
+  let dockHeight = $state(0);
 </script>
 
 <div class="shell" class:right={$themeLayout.side === 'right'} data-part="app-shell">
@@ -45,11 +48,24 @@
   class:above-chat={chatShown && !$chatOpen}
   class:beside-chat={chatShown && $chatOpen}
   class:sidebar-right={$themeLayout.side === 'right'}
+  bind:clientHeight={dockHeight}
 >
-  <Toasts />
   {#if $route.name !== 'downloads'}
     <ActivityDock />
   {/if}
+</div>
+
+<!-- Its own region above dialogs, left live while they make the app inert (data-layer-keep):
+     a toast raised from an open dialog is seen and its action can be pressed. -->
+<div
+  class="corner toast-region"
+  class:above-chat={chatShown && !$chatOpen}
+  class:beside-chat={chatShown && $chatOpen}
+  class:sidebar-right={$themeLayout.side === 'right'}
+  style:--dock-offset={dockHeight > 0 ? `calc(${dockHeight}px + 0.8rem)` : '0px'}
+  data-layer-keep
+>
+  <Toasts />
 </div>
 
 <GameQuickMenu />
@@ -59,10 +75,11 @@
 
 <style>
   .corner {
+    --corner-bottom: 2.4rem;
     position: fixed;
     z-index: var(--z-corner);
     right: 2.4rem;
-    bottom: 2.4rem;
+    bottom: var(--corner-bottom);
     display: flex;
     flex-direction: column;
     align-items: flex-end;
@@ -71,7 +88,12 @@
   }
 
   .corner.above-chat {
-    bottom: calc(2.4rem + 4.8rem + 1.2rem);
+    --corner-bottom: calc(2.4rem + 4.8rem + 1.2rem);
+  }
+
+  .toast-region {
+    z-index: var(--z-toast);
+    bottom: calc(var(--corner-bottom) + var(--dock-offset, 0px));
   }
 
   .corner.beside-chat {

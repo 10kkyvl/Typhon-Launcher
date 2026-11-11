@@ -37,13 +37,13 @@
   --z-chat: 140;
   --z-gate: 150; /* consent and legal screens */
   --z-dialog: 160;
+  --z-toast: 165; /* the toast region, above dialogs so a toast raised from one is seen */
   --z-titlebar: 170;
   --z-update: 200;
 
   /* Inside Big Picture's own stacking context (.big-picture). */
   --z-bp-menu: 2;
   --z-bp-keyboard: 4;
-  --z-bp-toasts: 10;
   --z-bp-dialog: 100;
 
   /* Behind a dialog, and behind the image viewer. */

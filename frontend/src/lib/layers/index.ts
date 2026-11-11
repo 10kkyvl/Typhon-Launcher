@@ -8,8 +8,8 @@ import { LayerStack, type Closed } from './stack';
  * viewer) registered here while it is open. The stack:
  *
  * - makes the app content inert while a modal layer is open: every element child of `#app` except
- *   the window chrome marked `data-layer-keep` (the title bar stays usable to move and close the
- *   window), including children mounted later (`{#key $locale}`, Big Picture swapping the shell);
+ *   the parts marked `data-layer-keep`: the title bar (the window can still be moved and closed) and
+ *   the toast regions (a toast raised from a dialog is seen and its action pressed), including children mounted later (`{#key $locale}`, Big Picture swapping the shell);
  *   and every layer under the topmost modal one. It clears only the `inert` it set itself;
  * - answers Escape for the top layer only: a key pressed inside any layer, or anywhere outside them,
  *   closes the top one (if it may close) and goes no further, so pages and Big Picture never see it;

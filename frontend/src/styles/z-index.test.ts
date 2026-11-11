@@ -44,10 +44,11 @@ const ORDER = [
   'chat',
   'gate',
   'dialog',
+  'toast',
   'titlebar',
   'update',
 ];
-const BIG_PICTURE_ORDER = ['bp-menu', 'bp-keyboard', 'bp-toasts', 'bp-dialog'];
+const BIG_PICTURE_ORDER = ['bp-menu', 'bp-keyboard', 'bp-dialog'];
 
 const LOCAL = new Set(['auto', '0', '1', '-1']);
 const TOKEN = /^var\(--z-([a-z-]+)\)$/;
@@ -145,6 +146,9 @@ describe('z-index scale', () => {
     expect(z('dialog')).toBeGreaterThan(z('bigpicture'));
     expect(z('dialog')).toBeGreaterThan(z('chat'));
     expect(z('update')).toBeGreaterThan(z('titlebar'));
+    expect(z('toast')).toBeGreaterThan(z('dialog'));
+    expect(z('toast')).toBeLessThan(z('titlebar'));
+    expect(z('toast')).toBeGreaterThan(z('corner'));
   });
 
   // Paint order of modal layers follows the stack: every component that registers a layer puts its

@@ -49,6 +49,7 @@
   const handles: Record<number, unknown> = {};
   const launchPlaces = new Map<string, { key: number; focus: string }>();
   const active = $derived(pages[pages.length - 1]);
+  const palette = $derived(bigPictureStyle({ shown: $displayedAccent, theme: $activeTheme, personal: $settings?.accentColor ?? '' }));
   const applyingUpdate = $derived($selfUpdateStatus.state === 'applying');
   const currentDownloads = $derived($downloads.filter((item) => item.status !== 'completed'));
   function activeHandle() { return handles[active.key] as BigPicturePageHandle | undefined; }
@@ -239,7 +240,7 @@
 </script>
 
 <svelte:window onkeydown={trapTab} />
-<div class="big-picture" data-big-picture style={bigPictureStyle({ shown: $displayedAccent, theme: $activeTheme, personal: $settings?.accentColor ?? '' })} bind:this={shell}>
+<div class="big-picture" data-big-picture style={palette} bind:this={shell}>
   <div class="stage" bind:this={stage} inert={menu || !!textRequest || applyingUpdate}>
     <header>
       <div class="brand"><img src="/typhon.png" alt="Typhon" /><span>Big Picture</span></div>
@@ -302,8 +303,9 @@
   {/if}
   {#if textRequest}<ScreenKeyboard request={textRequest} ondone={finishText} />{/if}
   {#if failure && !menu}<p class="bp-error floating" role="alert">{failure}</p>{/if}
-  <div class="toast-corner"><Toasts /></div>
 </div>
+<!-- Outside the shell, which goes inert under a shared dialog: toasts stay above such a dialog and usable. -->
+<div class="toast-corner" style={palette} data-layer-keep><Toasts /></div>
 
 <style>
   .big-picture { --bp-unit: clamp(16px, 1.25vw, 28px); position: fixed; inset: 0; z-index: var(--z-bigpicture); overflow: hidden; background: var(--bg); color: var(--text); font-size: var(--bp-unit); line-height: 1.45; }
@@ -316,7 +318,7 @@
   footer { position: absolute; bottom: 0; inset-inline: 0; height: 68px; padding: 0 3vw; display: flex; justify-content: space-between; gap: 24px; align-items: center; background: color-mix(in srgb, var(--bg) 96%, transparent); border-top: 1px solid var(--border); font-size: clamp(13px, .86vw, 20px); }
   .hints, .hints > span, .input-device { display: flex; align-items: center; gap: 9px; }.hints { gap: 20px; color: var(--text-2); }kbd { display: inline-flex; justify-content: center; align-items: center; min-width: 26px; padding: 3px 6px; font: inherit; font-weight: 600; border: 1px solid var(--border-strong); border-radius: 6px; color: var(--text); }.input-device { color: var(--text-3); font-size: .9em; max-width: 230px; }
   .menu-dialog { width: min(760px, 95vw); }.menu-items { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }.menu-items button { justify-content: flex-start; text-align: left; }.floating { position: absolute; bottom: 85px; left: 4vw; right: 4vw; }
-  .toast-corner { position: absolute; z-index: var(--z-bp-toasts); right: 3vw; bottom: 85px; pointer-events: none; }.toast-corner > :global(*) { pointer-events: auto; }
+  .toast-corner { position: fixed; z-index: var(--z-toast); right: 3vw; bottom: 85px; pointer-events: none; }.toast-corner > :global(*) { pointer-events: auto; }
   @media (max-width: 1150px) { .input-device { display: none; }.brand span { display: none; } }
   @media (max-width: 700px) { nav button span { display: none; }.extra-hint { display: none !important; }.menu-items { grid-template-columns: 1fr; } }
   @media (prefers-reduced-motion: reduce) { .page-slot { scroll-behavior: auto; } }

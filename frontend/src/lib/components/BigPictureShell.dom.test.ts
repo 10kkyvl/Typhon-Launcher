@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { selectEmulatorFile, setEmulatorPath } from '../services/emulators';
 import { emulatorPrompt } from '../stores/emulatorPrompt';
+import { toast, toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
 import BigPictureHarness from '../testing/BigPictureHarness.svelte';
 import modalSource from './Modal.svelte?raw';
@@ -55,6 +56,7 @@ beforeEach(() => {
 
 afterEach(() => {
   get(emulatorPrompt)?.settle(false);
+  toasts.set([]);
   app.remove();
   vi.restoreAllMocks();
   Reflect.deleteProperty(navigator, 'getGamepads');
@@ -145,5 +147,20 @@ describe('a shared dialog over Big Picture', () => {
 
     expect(await screen.findByText('true')).toBeTruthy();
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('a toast raised while the prompt is open is outside the inert shell, above the dialog, and its action works', async () => {
+    const { keys, shell } = await launchToPrompt('keyboard');
+    const run = vi.fn();
+
+    toast('Save uploaded', 'info', { label: 'Open', run });
+    const message = await screen.findByText('Save uploaded');
+
+    expect(shell.contains(message)).toBe(false);
+    expect(message.closest('[inert]')).toBeNull();
+    expect(shellSource).toMatch(/\.toast-corner \{[^}]*z-index: var\(--z-toast\)/);
+    expect(z('toast')).toBeGreaterThan(z('dialog'));
+    await keys.click(screen.getByRole('button', { name: 'Open' }));
+    expect(run).toHaveBeenCalledTimes(1);
   });
 });
