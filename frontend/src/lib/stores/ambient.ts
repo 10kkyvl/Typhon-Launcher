@@ -1,43 +1,63 @@
-import { derived, get, writable } from 'svelte/store';
+import { get, writable, type Readable } from 'svelte/store';
 
 /** The pointer must rest on a card this long before the backdrop flows to its game. */
 export const HOVER_REST_MS = 300;
 /** Leaving a card keeps its game this long, so crossing the gap to a neighbour does not bounce back. */
 export const HOVER_LEAVE_MS = 250;
+/** How many claimed games are remembered for the screens that claim none. */
+const HISTORY = 16;
 
-const claimed = writable<string | null>(null);
-const hovered = writable<string | null>(null);
-const remembered = writable<string | null>(null);
-let claimedOnce = false;
+export interface AmbientState {
+  /** The newest live claim. */
+  claim: string | null;
+  /** The library card the pointer has rested on. */
+  hover: string | null;
+  /** Games claimed this session, newest first. */
+  history: readonly string[];
+}
 
-claimed.subscribe((id) => {
-  if (!id) return;
-  claimedOnce = true;
-  remembered.set(id);
-});
+interface Claim {
+  token: symbol;
+  id: string;
+}
+
+let claims: Claim[] = [];
+const state = writable<AmbientState>({ claim: null, hover: null, history: [] });
+
+/** What screens and cards ask of the backdrop; `pickAmbient` turns it into the game to show. */
+export const ambientState: Readable<AmbientState> = { subscribe: state.subscribe };
+
+function publish(update: Partial<AmbientState>) {
+  state.update((current) => ({ ...current, ...update }));
+}
 
 /**
- * The game whose art the window backdrop shows: the game a screen claims, else the library card the
- * pointer rests on, else the remembered game (the last one a screen claimed, or before any claim the
- * suggested one: the last played game that has art). Ids are library ids or canonical game ids.
- */
-export const ambientTarget = derived([claimed, hovered, remembered], ([claim, hover, last]) => claim ?? hover ?? last);
-
-/**
- * Claims the backdrop for a screen's game and returns the release, which restores the previous claim
- * unless someone claimed since. From an effect: `$effect(() => claimAmbient(id))`.
+ * The extension point for anything that shows a game (a screen, a slide, a plugin view): while the
+ * claim is live the window backdrop shows `gameId`, the newest live claim winning over older ones and
+ * over hovered cards. The caller must call the returned release once it stops showing the game,
+ * usually as an effect's cleanup: `$effect(() => claimAmbient(id))`. A release removes only its own
+ * claim, in any order and at most once; `null` claims nothing and leaves other claims alone.
  */
 export function claimAmbient(gameId: string | null): () => void {
-  const previous = get(claimed);
-  claimed.set(gameId);
+  if (!gameId) return () => {};
+  const token = Symbol(gameId);
+  claims = [...claims, { token, id: gameId }];
+  const history = [gameId, ...get(state).history.filter((id) => id !== gameId)].slice(0, HISTORY);
+  publish({ claim: gameId, history });
   return () => {
-    if (get(claimed) === gameId) claimed.set(previous === gameId ? null : previous);
+    const before = claims.length;
+    claims = claims.filter((claim) => claim.token !== token);
+    if (claims.length !== before) publish({ claim: claims.at(-1)?.id ?? null });
   };
 }
 
-/** The game to start from; it follows the library until a screen has claimed a game. */
-export function rememberAmbient(gameId: string | null) {
-  if (!claimedOnce) remembered.set(gameId);
+/**
+ * The game the backdrop shows: the newest live claim, else the rested card, else the last claimed game
+ * whose art resolves (one without art, or one no longer in the library, is skipped), else the
+ * suggestion: the last played library game with art.
+ */
+export function pickAmbient(current: AmbientState, suggestion: string | null, hasArt: (id: string) => boolean): string | null {
+  return current.claim ?? current.hover ?? current.history.find(hasArt) ?? suggestion;
 }
 
 let enterTimer: ReturnType<typeof setTimeout> | undefined;
@@ -54,12 +74,12 @@ export function hoverAmbient(gameId: string): () => void {
   if (globalThis.matchMedia?.('(hover: none)').matches) return () => {};
   pointerOn = gameId;
   clearTimeout(leaveTimer);
-  if (get(hovered) !== gameId) {
+  if (get(state).hover !== gameId) {
     clearTimeout(enterTimer);
     enterId = gameId;
     enterTimer = setTimeout(() => {
       enterId = null;
-      hovered.set(gameId);
+      publish({ hover: gameId });
     }, HOVER_REST_MS);
   }
   return () => {
@@ -72,7 +92,7 @@ export function hoverAmbient(gameId: string): () => void {
     pointerOn = null;
     clearTimeout(leaveTimer);
     leaveTimer = setTimeout(() => {
-      if (pointerOn === null) hovered.set(null);
+      if (pointerOn === null) publish({ hover: null });
     }, HOVER_LEAVE_MS);
   };
 }

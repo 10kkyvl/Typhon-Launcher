@@ -15,16 +15,23 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-const target = () => get(ambient.ambientTarget);
+let withArt = new Set<string>();
+let suggestion: string | null = null;
+const target = () => ambient.pickAmbient(get(ambient.ambientState), suggestion, (id) => withArt.has(id));
+
+beforeEach(() => {
+  withArt = new Set(['last-played', 'home', 'elden', 'a', 'b', 'card', 'page']);
+  suggestion = null;
+});
 
 describe('which game the backdrop follows', () => {
   it('shows nothing before any game is known', () => {
     expect(target()).toBeNull();
   });
 
-  it('a screen claim wins over a rested card and over the remembered game', () => {
-    const { HOVER_REST_MS, claimAmbient, hoverAmbient, rememberAmbient } = ambient;
-    rememberAmbient('last-played');
+  it('a screen claim wins over a rested card, which wins over the suggestion', () => {
+    const { HOVER_REST_MS, claimAmbient, hoverAmbient } = ambient;
+    suggestion = 'last-played';
     const leave = hoverAmbient('card');
     vi.advanceTimersByTime(HOVER_REST_MS);
     expect(target()).toBe('card');
@@ -33,59 +40,94 @@ describe('which game the backdrop follows', () => {
     release();
     expect(target()).toBe('card');
     leave();
+    vi.advanceTimersByTime(ambient.HOVER_LEAVE_MS);
+    expect(target()).toBe('page');
   });
 
-  it('a rested card wins over the remembered game', () => {
-    ambient.rememberAmbient('last-played');
+  it('a claim wins even before its art is known: the page shows its own game or nothing', () => {
+    suggestion = 'last-played';
+    const release = ambient.claimAmbient('catalog-new');
+    expect(target()).toBe('catalog-new');
+    release();
+    expect(target()).toBe('last-played');
+  });
+
+  it('keeps the last claimed game when a screen without a game of its own takes over', () => {
+    suggestion = 'last-played';
+    ambient.claimAmbient('elden')();
+    expect(target()).toBe('elden');
+  });
+
+  it('never keeps a claimed game that has no art, or one that is gone', () => {
+    suggestion = 'last-played';
+    ambient.claimAmbient('elden')();
+    ambient.claimAmbient('sideloaded-no-art')();
+    expect(target()).toBe('elden');
+    withArt.delete('elden');
+    expect(target()).toBe('last-played');
+  });
+
+  it('remembers a claimed game once its art arrives', () => {
+    suggestion = 'last-played';
+    ambient.claimAmbient('late-art')();
+    expect(target()).toBe('last-played');
+    withArt.add('late-art');
+    expect(target()).toBe('late-art');
+  });
+});
+
+describe('overlapping claims', () => {
+  it('releases in any order leave no claim behind', () => {
+    const { claimAmbient } = ambient;
+    suggestion = 'home';
+    const first = claimAmbient('a');
+    const second = claimAmbient('b');
+    first();
+    expect(get(ambient.ambientState).claim).toBe('b');
+    second();
+    expect(get(ambient.ambientState).claim).toBeNull();
     const leave = ambient.hoverAmbient('card');
     vi.advanceTimersByTime(ambient.HOVER_REST_MS);
     expect(target()).toBe('card');
     leave();
-    vi.advanceTimersByTime(ambient.HOVER_LEAVE_MS);
-    expect(target()).toBe('last-played');
   });
 
-  it('follows the suggested game until a screen has claimed one, then keeps the last claimed', () => {
-    const { claimAmbient, rememberAmbient } = ambient;
-    rememberAmbient('older');
-    rememberAmbient('newer');
-    expect(target()).toBe('newer');
-    rememberAmbient(null);
-    expect(target()).toBeNull();
-    rememberAmbient('newer');
-    claimAmbient('elden')();
-    rememberAmbient('last-played');
-    expect(target()).toBe('elden');
-  });
-
-  it('keeps the last game when a screen without a game of its own takes over', () => {
-    const release = ambient.claimAmbient('elden');
-    release();
-    expect(target()).toBe('elden');
-  });
-
-  it('a release restores the claim it replaced, and only its own', () => {
+  it('the newest live claim wins and an older one takes over when it is released', () => {
     const { claimAmbient } = ambient;
     const first = claimAmbient('a');
     const second = claimAmbient('b');
-    first();
     expect(target()).toBe('b');
     second();
     expect(target()).toBe('a');
+    first();
+    expect(get(ambient.ambientState).claim).toBeNull();
   });
 
-  it('a claim of no game leaves the backdrop to the cards and the remembered game', () => {
-    ambient.rememberAmbient('last-played');
-    const release = ambient.claimAmbient(null);
-    expect(target()).toBe('last-played');
+  it('a release runs once: calling it again does not remove another claim of the same game', () => {
+    const { claimAmbient } = ambient;
+    const first = claimAmbient('a');
+    const second = claimAmbient('a');
+    first();
+    first();
+    expect(get(ambient.ambientState).claim).toBe('a');
+    second();
+    expect(get(ambient.ambientState).claim).toBeNull();
+  });
+
+  it('a claim of no game never wipes another claimant', () => {
+    const release = ambient.claimAmbient('a');
+    const none = ambient.claimAmbient(null);
+    expect(target()).toBe('a');
+    none();
+    expect(target()).toBe('a');
     release();
   });
 });
 
 describe('hover intent on the backdrop', () => {
   it('follows a card only after the pointer has rested on it', () => {
-    const { HOVER_REST_MS, hoverAmbient, rememberAmbient } = ambient;
-    rememberAmbient('home');
+    const { HOVER_REST_MS, hoverAmbient } = ambient;
+    suggestion = 'home';
     const leave = hoverAmbient('a');
     vi.advanceTimersByTime(HOVER_REST_MS - 1);
     expect(target()).toBe('home');
@@ -95,8 +137,8 @@ describe('hover intent on the backdrop', () => {
   });
 
   it('a fast pass over several cards changes nothing', () => {
-    const { HOVER_LEAVE_MS, HOVER_REST_MS, hoverAmbient, rememberAmbient } = ambient;
-    rememberAmbient('home');
+    const { HOVER_LEAVE_MS, HOVER_REST_MS, hoverAmbient } = ambient;
+    suggestion = 'home';
     for (const id of ['a', 'b', 'c', 'd', 'e']) {
       const leave = hoverAmbient(id);
       vi.advanceTimersByTime(60);
@@ -107,8 +149,8 @@ describe('hover intent on the backdrop', () => {
   });
 
   it('crossing the gap to a neighbour does not bounce back, leaving the grid does', () => {
-    const { HOVER_LEAVE_MS, HOVER_REST_MS, hoverAmbient, rememberAmbient } = ambient;
-    rememberAmbient('home');
+    const { HOVER_LEAVE_MS, HOVER_REST_MS, hoverAmbient } = ambient;
+    suggestion = 'home';
     const leaveA = hoverAmbient('a');
     vi.advanceTimersByTime(HOVER_REST_MS);
     expect(target()).toBe('a');
@@ -129,8 +171,8 @@ describe('hover intent on the backdrop', () => {
   });
 
   it('a quick pass after a rested card still lets that card go once the pointer leaves the grid', () => {
-    const { HOVER_LEAVE_MS, HOVER_REST_MS, hoverAmbient, rememberAmbient } = ambient;
-    rememberAmbient('home');
+    const { HOVER_LEAVE_MS, HOVER_REST_MS, hoverAmbient } = ambient;
+    suggestion = 'home';
     const leaveA = hoverAmbient('a');
     vi.advanceTimersByTime(HOVER_REST_MS);
     leaveA();
@@ -155,7 +197,7 @@ describe('hover intent on the backdrop', () => {
   it('does nothing on a device without hover', () => {
     const matchMedia = vi.fn((query: string) => ({ matches: query === '(hover: none)' }));
     vi.stubGlobal('matchMedia', matchMedia);
-    ambient.rememberAmbient('home');
+    suggestion = 'home';
     const leave = ambient.hoverAmbient('a');
     vi.advanceTimersByTime(ambient.HOVER_REST_MS * 2);
     expect(target()).toBe('home');

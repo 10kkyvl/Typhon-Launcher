@@ -21,7 +21,7 @@ function pointer(type: 'pointerenter' | 'pointerleave', pointerType = 'mouse'): 
   return Object.assign(new Event(type), { pointerType });
 }
 
-const target = () => get(ambient.ambientTarget);
+const target = () => ambient.pickAmbient(get(ambient.ambientState), null, () => true);
 const rest = () => vi.advanceTimersByTime(ambient.HOVER_REST_MS);
 const leaveTime = () => vi.advanceTimersByTime(ambient.HOVER_LEAVE_MS);
 

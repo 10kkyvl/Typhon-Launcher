@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ambientTarget, rememberAmbient } from '../stores/ambient';
+  import { ambientState, pickAmbient } from '../stores/ambient';
   import { libraryGames } from '../stores/library';
   import { gameArt, requestArt } from '../stores/metadata';
   import { activeTheme } from '../stores/theme';
@@ -20,17 +20,18 @@
   let canvas = $state<HTMLCanvasElement>();
   let painter = $state.raw<BackdropPainter | null>(null);
 
-  $effect(() => rememberAmbient(rememberedGame($libraryGames, $gameArt)));
+  const target = $derived(
+    pickAmbient($ambientState, rememberedGame($libraryGames, $gameArt), (id) => backdropArt(id, $libraryGames, $gameArt) !== ''),
+  );
 
   $effect(() => {
     const ids = playedArtRequests($libraryGames, $gameArt);
-    const target = $ambientTarget;
     const own = target ? artRequest(target, $libraryGames, $gameArt) : null;
     if (own && !ids.includes(own)) ids.push(own);
     if (ids.length > 0) requestArt(ids);
   });
 
-  const url = $derived($ambientTarget ? backdropArt($ambientTarget, $libraryGames, $gameArt) : '');
+  const url = $derived(target ? backdropArt(target, $libraryGames, $gameArt) : '');
 
   // Read from the window, not the theme file: custom CSS, a personal accent and any colour syntax are
   // already resolved there. The theme and accent stores change only after the window has them.
