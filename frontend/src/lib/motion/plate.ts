@@ -7,6 +7,8 @@
  * nothing plays and the indicator just sits on the target.
  */
 
+import { documentMotion, tokenEase, tokenMs } from './motion';
+
 export interface Box {
   x: number;
   y: number;
@@ -18,8 +20,6 @@ export interface PlateStep {
   rest: Box | null;
   from: Box | null;
 }
-
-import { documentMotion, tokenEase, tokenMs } from './motion';
 
 const place = (b: Box) => `translate(${b.x}px, ${b.y}px)`;
 
