@@ -1,4 +1,4 @@
-import { cycleFocus, dismissTopLayer, enterLayer, topLayer, topModalLayer } from '../layers';
+import { cycleFocus, dismissTopLayer, enterLayer, topLayer, topModalLayer, withinLayer } from '../layers';
 import { focusableIn } from '../layers/focus';
 import type { BigPictureCommand } from './input';
 
@@ -32,9 +32,7 @@ export function layerCommand(command: BigPictureCommand): boolean {
       break;
     case 'confirm': {
       const active = document.activeElement;
-      const top = topLayer();
-      const inside = active instanceof HTMLElement && active !== root && (root.contains(active) || (top?.contains(active) ?? false));
-      if (inside) active.click();
+      if (active instanceof HTMLElement && active !== root && withinLayer(root, active)) active.click();
       else enterLayer(root);
       break;
     }

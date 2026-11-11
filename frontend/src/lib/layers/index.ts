@@ -199,6 +199,11 @@ export function topLayer(): HTMLElement | null {
   return stack.top();
 }
 
+/** `target` is inside the layer `root` or inside a layer it owns, at any depth (a listbox, its submenu). */
+export function withinLayer(root: HTMLElement, target: Element): boolean {
+  return stack.within(root, target);
+}
+
 /** The root of the topmost modal layer (the dialog that owns the keyboard and the Tab trap), or null. */
 export function topModalLayer(): HTMLElement | null {
   return stack.topModal();

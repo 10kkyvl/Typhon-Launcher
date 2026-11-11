@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { openLayer } from '../layers';
 import { layerCommand, layerTakesInput } from './layers';
 import shellSource from '../components/BigPictureShell.svelte?raw';
@@ -51,5 +51,30 @@ describe('one rule for when a layer takes Big Picture input', () => {
   it("the shell's Tab trap and focus recovery stand aside on that same rule, not on any layer", () => {
     expect(shellSource).not.toMatch(/\btopLayer\(\)/);
     expect(shellSource.match(/\blayerTakesInput\(\)/g)).toHaveLength(2);
+  });
+});
+
+describe('confirm inside layers a dialog owns', () => {
+  it('presses the focused option of a listbox that sits between the dialog and its submenu', () => {
+    const dialog = layerOf('<button id="trigger">Language</button>', true);
+    const trigger = dialog.querySelector('#trigger') as HTMLElement;
+    const listbox = document.createElement('div');
+    listbox.innerHTML = '<button id="english">English</button><button id="more">More</button>';
+    document.body.append(listbox);
+    closers.push(openLayer(listbox, { modal: false, owner: () => trigger, dismiss: () => {} }));
+    const more = listbox.querySelector('#more') as HTMLElement;
+    const submenu = document.createElement('div');
+    submenu.innerHTML = '<button>Deutsch</button>';
+    document.body.append(submenu);
+    closers.push(openLayer(submenu, { modal: false, owner: () => more, dismiss: () => {} }));
+    const english = listbox.querySelector('#english') as HTMLElement;
+    const picked = vi.fn();
+    english.addEventListener('click', picked);
+    english.focus();
+
+    expect(layerCommand('confirm')).toBe(true);
+
+    expect(picked).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(english);
   });
 });
