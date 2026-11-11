@@ -77,10 +77,13 @@ bar, and `sidebar-account` became `topbar-account`. In a 1.x theme a selector
 is rewritten to the new name on read; the rest of the CSS stays as it is, and comments and strings
 are not touched. In a theme with `"contract": 2` write `topbar-account` yourself.
 
-2.0 adds four parts: `dialog` (a dialog's panel), `menu` (a dropdown menu), `listbox` (the list
-of a select field) and `tooltip` (the hint next to a button or a field). They are drawn above the
-window, outside the part that opened them. A selector such as `[data-part="topbar-account"] .menu`
-no longer finds the account menu: write `[data-part="menu"]`.
+2.0 adds five parts: `dialog` (a dialog's panel), `menu` (a dropdown menu), `listbox` (the list
+of a select field), `tooltip` (the hint next to a button or a field) and `popover` (a small panel
+next to a button: the notifications, a reaction picker). They are drawn above the window, outside
+the part that opened them. A selector such as `[data-part="topbar-account"] .menu` no longer finds
+the account menu: write `[data-part="menu"]`. The notifications panel is no longer inside
+`[data-part="topbar-action"][data-id="notifications"]`: write
+`[data-part="popover"][data-id="notifications"]`.
 
 ### Limits
 

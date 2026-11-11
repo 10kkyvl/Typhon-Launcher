@@ -83,7 +83,8 @@ layout with nothing in it is dropped, so a theme without layout wishes has no `l
 
 Elements of the window carry `data-part="<name>"`. The parts marked *data-id* also carry
 `data-id="<id>"` with the ids from the tables above (sidebar item, top bar button, game
-section). Select them with attribute selectors in `theme.css`:
+section; a popover carries the id of the top bar button it opens from, `notifications`). Select
+them with attribute selectors in `theme.css`:
 
 ```css
 [data-part="sidebar-item"][data-id="library"] { font-weight: 600; }
@@ -122,12 +123,14 @@ name `sidebar-account` matches nothing there. Typhon renames it by itself only i
 | `menu` | no |
 | `listbox` | no |
 | `tooltip` | no |
+| `popover` | yes |
 
-Dialogs, menus, the lists of select fields and tooltips are drawn above the window, outside the
-part that opened them: select their panel as `[data-part="dialog"]`, `[data-part="menu"]`,
-`[data-part="listbox"]` or `[data-part="tooltip"]`, not as a descendant of the page or the control
-they came from. A menu, a list or a tooltip marks the side it opened on in `data-placement`
-(`bottom-start`, `top-end` and so on).
+Dialogs, menus, the lists of select fields, tooltips and popovers (the notifications panel, the
+reaction pickers) are drawn above the window, outside the part that opened them: select their panel
+as `[data-part="dialog"]`, `[data-part="menu"]`, `[data-part="listbox"]`, `[data-part="tooltip"]`
+or `[data-part="popover"]` (`[data-part="popover"][data-id="notifications"]` for the notifications
+panel), not as a descendant of the page or the control they came from. A menu, a list, a tooltip or
+a popover marks the side it opened on in `data-placement` (`bottom-start`, `top-end` and so on).
 
 Use `layout` to reorder or hide; use CSS only for looks. Hiding a part with CSS that `layout`
 cannot hide (window controls, settings) leaves the user without a way back.

@@ -51,7 +51,7 @@
     placement?: Placement;
     /** A CSS width; by default the content's own. */
     width?: string;
-    /** `data-id` next to `data-part="popover"`, for themes. */
+    /** For themes: the `data-id` of the panel, whose part is `popover`. */
     partId?: string;
     trigger: Snippet<[{ open: boolean; toggle: () => void; props: PopoverTriggerProps }]>;
     children: Snippet<[{ close: () => void }]>;

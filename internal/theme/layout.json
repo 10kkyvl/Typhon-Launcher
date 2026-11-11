@@ -40,7 +40,8 @@
     "dialog",
     "menu",
     "listbox",
-    "tooltip"
+    "tooltip",
+    "popover"
   ],
-  "partsWithId": ["sidebar-item", "topbar-action", "game-section"]
+  "partsWithId": ["sidebar-item", "topbar-action", "game-section", "popover"]
 }

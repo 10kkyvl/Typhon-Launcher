@@ -76,8 +76,9 @@ export const LAYOUT_PARTS = [
   'menu',
   'listbox',
   'tooltip',
+  'popover',
 ] as const;
-export const PARTS_WITH_ID = ['sidebar-item', 'topbar-action', 'game-section'] as const;
+export const PARTS_WITH_ID = ['sidebar-item', 'topbar-action', 'game-section', 'popover'] as const;
 
 export type SidebarSide = (typeof SIDEBAR_SIDES)[number];
 export type SidebarItem = (typeof SIDEBAR_ITEMS)[number];
