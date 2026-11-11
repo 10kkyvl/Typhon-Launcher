@@ -16,7 +16,7 @@ import { locale } from '../i18n';
 import { debounceMs } from '../search/overlay';
 import { searchAll, type GameHit, type ReleaseHit, type SearchResult } from '../services/search';
 import { watchGame } from '../services/watchlist';
-import { navigate, resetHistory, route } from '../stores/router';
+import { navigate, registerLeaveGuard, resetHistory, route } from '../stores/router';
 import { toasts } from '../stores/toasts';
 import { watchlist } from '../stores/watchlist';
 import { user } from '../testing/dom';
@@ -274,6 +274,48 @@ describe('TopbarSearch: keys', () => {
 
     await keys.keyboard('{ArrowDown}');
     expect(grid()).toBeNull();
+  });
+
+  it('a pick a leave guard holds keeps the field: "Stay" puts focus back in it, "Leave" goes and lets it go', async () => {
+    const unguard = registerLeaveGuard({
+      dirty: () => true,
+      prompt: () => ({ title: 'Unsaved changes', text: 'Leave the page?', confirm: 'Leave', cancel: 'Stay' }),
+    });
+    try {
+      const { keys, find, grid, field } = setup();
+      await find();
+      await keys.keyboard('{ArrowDown}{Enter}');
+      const asked = screen.getByRole('dialog', { name: 'Unsaved changes' });
+      expect(asked.contains(document.activeElement)).toBe(true);
+      expect(get(route).name).toBe('library');
+
+      await keys.click(screen.getByRole('button', { name: 'Stay' }));
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(get(route).name).toBe('library');
+      expect(document.activeElement).toBe(field());
+
+      await tick();
+      expect(grid()).not.toBeNull();
+      await keys.keyboard('{ArrowDown}{Enter}');
+      await keys.click(screen.getByRole('button', { name: 'Leave' }));
+      await tick();
+      expect(get(route)).toMatchObject({ name: 'game', params: { id: 'g1' } });
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(grid()).toBeNull();
+      expect(document.activeElement).not.toBe(field());
+    } finally {
+      unguard();
+    }
+  });
+
+  it('a pick of the page already open changes nothing and keeps the field', async () => {
+    navigate('game', { id: 'g1' });
+    const { keys, find, grid, field } = setup();
+    await find();
+    await keys.keyboard('{ArrowDown}{Enter}');
+    expect(get(route)).toMatchObject({ name: 'game', params: { id: 'g1' } });
+    expect(grid()).toBeNull();
+    expect(document.activeElement).toBe(field());
   });
 
   it('Enter on a release opens it in its source and leaves the field', async () => {

@@ -1,11 +1,12 @@
 <script lang="ts">
   import { ArrowRight, Bell, BellRing } from '@lucide/svelte';
   import { onDestroy, untrack } from 'svelte';
+  import { get } from 'svelte/store';
   import type { Attachment } from 'svelte/attachments';
   import { layer, topModalLayer } from '../layers';
   import { SearchOverlay, initialState, rowsOf, type Row } from '../search/overlay';
   import { searchAll, type GameHit, type ReleaseHit } from '../services/search';
-  import { navigate, route } from '../stores/router';
+  import { leaveRequest, navigate, route } from '../stores/router';
   import { toggleWatch, watchedIds } from '../stores/watchlist';
   import { bytesSize } from '../utils/format';
   import { anchorTo } from '../utils/position';
@@ -72,12 +73,28 @@
   });
 
   // A pick that leads elsewhere lets go of the field, by pointer and by keyboard alike: on the new
-  // page Space and the arrows are that page's, not the search's.
+  // page Space and the arrows are that page's, not the search's. One that leads nowhere (the page is
+  // already open) keeps the field, and so does one a leave guard holds until the user answers: its
+  // dialog gives focus back here on "Stay", and on "Leave" the field lets go once the route changed.
+  let heldFrom: number | null = null;
+
   function go(...to: Parameters<typeof navigate>) {
+    const from = get(route).key;
     overlay.close();
-    searchInput?.blur();
     navigate(...to);
+    if (get(route).key !== from) searchInput?.blur();
+    else if (get(leaveRequest)) heldFrom = from;
   }
+
+  // After the render effects: the dialog has closed and given focus back to the field by then.
+  const asking = $derived($leaveRequest !== null);
+  $effect(() => {
+    if (asking) return;
+    untrack(() => {
+      if (heldFrom !== null && heldFrom !== routeKey) searchInput?.blur();
+      heldFrom = null;
+    });
+  });
 
   function openGame(hit: GameHit) {
     go('game', { id: hit.id });
