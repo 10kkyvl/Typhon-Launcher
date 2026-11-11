@@ -105,7 +105,7 @@ function settle(closed: Closed<HTMLElement, HTMLElement> | null, leaving: HTMLEl
   const lost = !active || active === document.body || !active.isConnected || (leaving?.contains(active) ?? false);
   if (!lost) return;
   if (closed.focus) focusQuietly(closed.focus);
-  else if (closed.enter) focusQuietly(initialFocus(closed.enter));
+  else if (closed.enter) enterLayer(closed.enter);
 }
 
 /** Escape's effect: closes the top layer if it may close. False when no layer is open. */
@@ -132,6 +132,11 @@ export function cycleFocus(backwards: boolean): void {
   const active = document.activeElement as HTMLElement | null;
   const next = nextFocusTarget(list, active && list.includes(active) ? active : null, backwards);
   focusQuietly(next ?? top);
+}
+
+/** Puts focus where the layer would on open (focus fell out of it, or never got in). */
+export function enterLayer(element: HTMLElement): void {
+  focusQuietly(initialFocus(element));
 }
 
 /** Registers `element` as an open layer; the returned function closes it. */
