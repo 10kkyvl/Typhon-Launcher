@@ -1,7 +1,9 @@
 import { render, screen } from '@testing-library/svelte';
+import { createRawSnippet } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { user } from '../testing/dom';
 import ChipHarness from '../testing/ChipHarness.svelte';
+import Chip from './Chip.svelte';
 
 let app: HTMLDivElement;
 
@@ -59,5 +61,29 @@ describe('Chip', () => {
     await user().keyboard('{Enter}');
 
     expect(onremove).toHaveBeenCalledExactlyOnceWith('rpg');
+  });
+
+  it('the remove button shows its name as a hint, and is named once', async () => {
+    const children = createRawSnippet(() => ({ render: () => '<span>rpg</span>' }));
+    render(Chip, { target: app, props: { onremove: vi.fn(), removeLabel: 'Remove the tag rpg', children } });
+    await user().tab();
+    const remove = screen.getByRole('button', { name: 'Remove the tag rpg' });
+    expect(document.activeElement).toBe(remove);
+    const bubble = document.querySelector<HTMLElement>('[data-part="tooltip"]');
+    expect(bubble?.textContent?.trim()).toBe('Remove the tag rpg');
+    expect(bubble?.getAttribute('aria-hidden')).toBe('true');
+    expect(remove.hasAttribute('title')).toBe(false);
+    expect(remove.hasAttribute('aria-describedby')).toBe(false);
+  });
+
+  it('Backspace and Delete remove nothing: the remove button, pressed, is the keyboard path', async () => {
+    const onremove = vi.fn();
+    render(ChipHarness, { target: app, props: { onremove } });
+    screen.getByRole('button', { name: 'Remove the tag rpg' }).focus();
+    const keys = user();
+    await keys.keyboard('{Backspace}{Delete}');
+    expect(onremove).not.toHaveBeenCalled();
+    await keys.keyboard(' ');
+    expect(onremove).toHaveBeenCalledTimes(1);
   });
 });

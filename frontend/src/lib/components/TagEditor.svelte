@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { flushSync } from 'svelte';
   import Button from './Button.svelte';
   import Chip from './Chip.svelte';
   import { msg } from '../i18n';
@@ -12,6 +13,8 @@
 
   const listId = `tag-suggestions-${Math.random().toString(36).slice(2)}`;
   let draft = $state('');
+  let field = $state<HTMLInputElement>();
+  let list = $state<HTMLElement>();
 
   const fold = (value: string) => value.normalize('NFKC').toLocaleLowerCase();
   const offered = $derived(suggestions.filter((tag) => !tags.some((own) => fold(own) === fold(tag))));
@@ -27,8 +30,15 @@
     add();
   }
 
+  // The pressed remove button goes with its tag; focus moves to the tag that took its place, else the
+  // one before it, else the field, so the keyboard stays in the list instead of falling to the page.
   function remove(tag: string) {
-    tags = tags.filter((own) => own !== tag);
+    const at = tags.indexOf(tag);
+    flushSync(() => {
+      tags = tags.filter((own) => own !== tag);
+    });
+    const buttons = list?.querySelectorAll<HTMLButtonElement>('button') ?? [];
+    (buttons[at] ?? buttons[at - 1] ?? field)?.focus();
   }
 
   function onkeydown(event: KeyboardEvent) {
@@ -40,7 +50,7 @@
 
 <div class="editor">
   <div class="row">
-    <input class="input" type="text" list={listId} {placeholder} {disabled} bind:value={draft} {onkeydown} />
+    <input class="input" type="text" list={listId} {placeholder} {disabled} bind:value={draft} bind:this={field} {onkeydown} />
     <Button disabled={disabled || !draft.trim()} onclick={add}>{msg('modals.gameTagsAdd')}</Button>
     <datalist id={listId}>
       {#each offered as tag (tag)}
@@ -49,7 +59,7 @@
     </datalist>
   </div>
   {#if tags.length > 0}
-    <div class="chips">
+    <div class="chips" bind:this={list}>
       {#each tags as tag (tag)}
         <Chip selected onremove={() => remove(tag)} removeLabel={msg('modals.gameTagsRemove', { tag })}>{tag}</Chip>
       {/each}

@@ -4,6 +4,22 @@
   import { X } from '@lucide/svelte';
   import Tooltip from './Tooltip.svelte';
 
+  /**
+   * A tag that can be taken away (`onremove`) is its text and a remove button named `removeLabel`,
+   * shown as that button's hint. The remove button is the keyboard path: Tab reaches it, Enter or Space
+   * presses it. Backspace and Delete on a chip do nothing: a chip is not a text field, and a key that
+   * deletes what the user cannot see targeted would surprise. Where focus goes after a removal is the
+   * list's to decide (TagEditor), since only the list knows the neighbours.
+   */
+  type Removable =
+    | { onremove?: undefined; removeLabel?: undefined }
+    | {
+        onremove: () => void;
+        removeLabel: string;
+        /** Not on a removable chip: the hint would land on its remove button. */
+        hint?: undefined;
+      };
+
   // Other attributes (id, aria-*, data-*, handlers, attachments) go to the <button>.
   let {
     selected,
@@ -26,22 +42,21 @@
     /** What pressing the chip does, when its text does not say it: shown as a tooltip, its description. */
     hint?: string;
     onclick?: (e: MouseEvent) => void;
-    /** Makes it a tag that can be taken away: its text, then a remove button named `removeLabel`. */
-    onremove?: () => void;
-    removeLabel?: string;
     children?: Snippet;
-  } = $props();
+  } & Removable = $props();
 
   const toggle = $derived(selected !== undefined && onclick !== undefined && !rest['aria-haspopup']);
 </script>
 
 {#snippet chip()}
-  {#if onremove}
+  {#if onremove !== undefined && removeLabel !== undefined}
     <span class="chip removable {variant}" class:selected>
       <span class="text">{@render children?.()}</span>
-      <button type="button" class="remove" aria-label={removeLabel} onclick={onremove}>
-        <X size="1.2rem" strokeWidth={2} aria-hidden="true" />
-      </button>
+      <Tooltip text={removeLabel} describe={false}>
+        <button type="button" class="remove" aria-label={removeLabel} onclick={onremove}>
+          <X size="1.2rem" strokeWidth={2} aria-hidden="true" />
+        </button>
+      </Tooltip>
     </span>
   {:else}
     <button {...rest} {type} class="chip {variant}" class:selected aria-pressed={toggle ? selected : undefined} {onclick}>
