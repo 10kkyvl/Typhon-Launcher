@@ -77,6 +77,10 @@ bar, and `sidebar-account` became `topbar-account`. In a 1.x theme a selector
 is rewritten to the new name on read; the rest of the CSS stays as it is, and comments and strings
 are not touched. In a theme with `"contract": 2` write `topbar-account` yourself.
 
+2.0 adds two parts: `dialog` (a dialog's panel) and `menu` (a dropdown menu). Dialogs and menus are
+drawn above the window, outside the part that opened them. A selector such as
+`[data-part="topbar-account"] .menu` no longer finds the account menu: write `[data-part="menu"]`.
+
 ### Limits
 
 - **Sizes in custom CSS are not converted.** `rem` sizes inside the `css` field come out about

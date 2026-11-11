@@ -36,7 +36,9 @@
     "game-tabs",
     "game-main",
     "game-side",
-    "game-section"
+    "game-section",
+    "dialog",
+    "menu"
   ],
   "partsWithId": ["sidebar-item", "topbar-action", "game-section"]
 }

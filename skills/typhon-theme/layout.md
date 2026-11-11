@@ -118,6 +118,13 @@ name `sidebar-account` matches nothing there. Typhon renames it by itself only i
 | `game-main` | no |
 | `game-side` | no |
 | `game-section` | yes |
+| `dialog` | no |
+| `menu` | no |
+
+Dialogs and menus are drawn above the window, outside the part that opened them: select their
+panel as `[data-part="dialog"]` or `[data-part="menu"]`, not as a descendant of the page or the
+button they came from. A menu marks the side it opened on in `data-placement` (`bottom-start`,
+`top-end` and so on).
 
 Use `layout` to reorder or hide; use CSS only for looks. Hiding a part with CSS that `layout`
 cannot hide (window controls, settings) leaves the user without a way back.

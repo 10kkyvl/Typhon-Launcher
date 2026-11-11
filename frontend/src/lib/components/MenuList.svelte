@@ -95,6 +95,7 @@
 <div
   class="menu"
   role="menu"
+  data-part="menu"
   {id}
   aria-labelledby={label ? undefined : labelledby}
   aria-label={label}

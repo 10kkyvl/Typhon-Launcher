@@ -66,6 +66,7 @@
       class="modal"
       style:width
       role="dialog"
+      data-part="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
       aria-describedby={describedby}
