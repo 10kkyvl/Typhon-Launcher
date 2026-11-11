@@ -273,4 +273,16 @@ describe('presses around a non-modal layer', () => {
 
     expect(screen.queryByRole('listbox', { name: 'Language' })).toBeNull();
   });
+
+  it('one press on the dialog scrim closes the listbox only; the next one closes the dialog', async () => {
+    const { keys } = await pageSelect(true);
+    const scrim = screen.getByRole('dialog', { name: 'Settings' }).parentElement as HTMLElement;
+
+    await keys.click(scrim);
+    expect(screen.queryByRole('listbox', { name: 'Language' })).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeTruthy();
+
+    await keys.click(scrim);
+    expect(screen.queryByRole('dialog', { name: 'Settings' })).toBeNull();
+  });
 });

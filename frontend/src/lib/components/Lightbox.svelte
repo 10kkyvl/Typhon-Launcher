@@ -5,7 +5,7 @@
   import { stepIndex } from '../game/view';
   import { msg } from '../i18n';
   import IconButton from './IconButton.svelte';
-  import { layer, topLayer } from '../layers';
+  import { layer, pressClosedLayer, topLayer } from '../layers';
   import { documentMotion, tokenMs } from '../motion/motion';
 
   export interface LightboxItem {
@@ -131,7 +131,7 @@
     tabindex="-1"
     bind:this={backdrop}
     {@attach layer({ dismiss: close })}
-    onpointerdown={(event) => (pressedOnScrim = event.target === event.currentTarget)}
+    onpointerdown={(event) => (pressedOnScrim = event.target === event.currentTarget && !pressClosedLayer(event))}
     onclick={(event) => {
       if (pressedOnScrim && event.target === event.currentTarget) close();
       pressedOnScrim = false;

@@ -3,7 +3,7 @@
   import { X } from '@lucide/svelte';
   import IconButton from './IconButton.svelte';
   import { msg } from '../i18n';
-  import { layer } from '../layers';
+  import { layer, pressClosedLayer } from '../layers';
 
   let {
     open = $bindable(false),
@@ -56,7 +56,7 @@
     class="overlay"
     role="presentation"
     {@attach layer({ dismiss, dismissible: () => dismissible, initialFocus: () => initialFocus, returnFocus: () => returnFocus?.() })}
-    onpointerdown={(event) => (pressedOnScrim = event.target === event.currentTarget)}
+    onpointerdown={(event) => (pressedOnScrim = event.target === event.currentTarget && !pressClosedLayer(event))}
     onclick={(event) => {
       if (pressedOnScrim && event.target === event.currentTarget) dismiss();
       pressedOnScrim = false;

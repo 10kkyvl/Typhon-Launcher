@@ -33,7 +33,8 @@ const stack = new LayerStack<HTMLElement, Element>({
 const inerted = new Set<HTMLElement>();
 let appObserver: MutationObserver | null = null;
 let listening = false;
-const outsidePress = new Map<HTMLElement, 'close' | 'swallow'>();
+// Presses that closed a layer: the scrim under it must not take the same press as its own.
+const closingPresses = new WeakSet<Event>();
 
 /**
  * Options of a layer: the extension point for every kind of layer, built-in or from a plugin.
@@ -44,9 +45,10 @@ const outsidePress = new Map<HTMLElement, 'close' | 'swallow'>();
  *   nothing and takes focus only when given `initialFocus`. Opened from inside a dialog and portalled
  *   out of it, it names its `owner` (the trigger, or any element inside the owning layer): it then
  *   counts as part of that dialog for the Tab trap (its controls follow the trigger in Tab order), for
- *   where focus may return, and for presses. A press outside it and the layers it owns closes it
- *   (`outsidePress`, default `'close'`; `'swallow'` also eats that press so it does not reach what is
- *   under it; `false` keeps it open). The press that opened it never closes it.
+ *   where focus may return, and for presses. A press outside it, its trigger and the layers it owns
+ *   closes it (`outsidePress: false` keeps it open); the press still reaches what is under it, and a
+ *   dialog's scrim does not take it as its own (`pressClosedLayer`). A press on the trigger is the
+ *   trigger's to handle.
  * - Escape (and Big Picture's back) closes only the top layer, if `dismissible()` allows; an element
  *   inside a layer can claim Escape first with `preventDefault` or `stopPropagation`; a held Escape
  *   (auto-repeat) closes nothing more.
@@ -64,8 +66,8 @@ export interface LayerOptions {
   returnFocus?: () => HTMLElement | null | undefined;
   /** Non-modal: an element inside the layer this one belongs to (usually the trigger). */
   owner?: () => HTMLElement | null | undefined;
-  /** Non-modal: what a press outside this layer and the layers it owns does. Default 'close'. */
-  outsidePress?: 'close' | 'swallow' | false;
+  /** Non-modal: a press outside this layer, its trigger and the layers it owns closes it. Default true. */
+  outsidePress?: boolean;
 }
 
 function appContent(): HTMLElement[] {
@@ -130,16 +132,16 @@ function onWindowKeydown(event: KeyboardEvent): void {
 
 function onWindowPointerdown(event: PointerEvent): void {
   if (!(event.target instanceof Element)) return;
-  const swallow = outsidePress.get(stack.top() as HTMLElement) === 'swallow';
   const leaving = leavingSet();
   const dismissal = stack.pressOutside(event.target);
   if (!dismissal) return;
-  if (swallow) {
-    event.preventDefault();
-    event.stopPropagation();
-    window.addEventListener('click', (click) => click.stopPropagation(), { capture: true, once: true });
-  }
+  closingPresses.add(event);
   apply(dismissal.closed, dismissal.dismiss, leaving);
+}
+
+/** This press closed a menu or another non-modal layer: a dialog's scrim must not also close the dialog. */
+export function pressClosedLayer(event: Event): boolean {
+  return closingPresses.has(event);
 }
 
 // The top layer and the layers it owns: where focus may be when it closes.
@@ -221,7 +223,6 @@ export function openLayer(element: HTMLElement, options: LayerOptions): () => vo
     anchor: owner ?? null,
     outsidePress: !modal && options.outsidePress !== false,
   });
-  if (!modal && options.outsidePress) outsidePress.set(element, options.outsidePress);
   if (!element.hasAttribute('tabindex')) element.setAttribute('tabindex', '-1');
 
   function onKeydown(event: KeyboardEvent) {
@@ -247,7 +248,6 @@ export function openLayer(element: HTMLElement, options: LayerOptions): () => vo
 
   return () => {
     element.removeEventListener('keydown', onKeydown);
-    outsidePress.delete(element);
     const leaving = [element, ...stack.owned(element).map((layer) => layer.element)];
     const closed = stack.close(id);
     sync();
