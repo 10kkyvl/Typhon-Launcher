@@ -5,6 +5,7 @@
   import { needsSocialConsent } from '../stores/social';
   import { chatOpen } from '../stores/messaging';
   import { themeLayout } from '../stores/layout';
+  import { modalOpen } from '../layers';
   import { scrollmemory } from '../utils/scrollmemory';
   import ActivityDock from './ActivityDock.svelte';
   import ChatPanel from './ChatPanel.svelte';
@@ -56,9 +57,12 @@
 </div>
 
 <!-- Its own region above dialogs, left live while they make the app inert (data-layer-keep):
-     a toast raised from an open dialog is seen and its action can be pressed. -->
+     a toast raised from an open dialog is seen and its action can be pressed. While a dialog is open
+     it stands at the top right, where a dialog has no controls: in the corner it would lie over the
+     buttons of a tall dialog's footer. -->
 <div
   class="corner toast-region"
+  class:over-dialog={$modalOpen}
   class:above-chat={chatShown && !$chatOpen}
   class:beside-chat={chatShown && $chatOpen}
   class:sidebar-right={$themeLayout.side === 'right'}
@@ -94,6 +98,11 @@
   .toast-region {
     z-index: var(--z-toast);
     bottom: calc(var(--corner-bottom) + var(--dock-offset, 0px));
+  }
+
+  .toast-region.over-dialog {
+    top: calc(var(--titlebar-h) + var(--space-2));
+    bottom: auto;
   }
 
   .corner.beside-chat {
