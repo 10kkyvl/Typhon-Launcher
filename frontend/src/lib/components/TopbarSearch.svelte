@@ -286,7 +286,6 @@
           tabindex={-1}
           label={watching ? msg('games.unwatchAction') : msg('games.watchAction')}
           lit={watching}
-          aria-pressed={watching}
           onclick={() => watch(row.hit)}
         >
           {#if watching}

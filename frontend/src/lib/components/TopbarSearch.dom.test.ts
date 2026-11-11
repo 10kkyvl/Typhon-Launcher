@@ -291,7 +291,20 @@ describe('TopbarSearch: keys', () => {
     expect(get(route).name).toBe('library');
     expect(grid()).not.toBeNull();
     expect(document.activeElement).toBe(field());
-    expect(within(active() as HTMLElement).getByRole('button', { name: 'Stop watching' }).getAttribute('aria-pressed')).toBe('true');
+    expect(within(active() as HTMLElement).getByRole('button', { name: 'Stop watching' })).toBeTruthy();
+  });
+
+  it('the watch toggle says what pressing it does, by its name alone: no "pressed" on top of "Stop watching"', async () => {
+    const { keys, find } = setup();
+    await find();
+    const toggle = screen.getByRole('button', { name: 'Watch for releases' });
+    expect(toggle.hasAttribute('aria-pressed')).toBe(false);
+
+    await keys.click(toggle);
+    await tick();
+    const watching = screen.getByRole('button', { name: 'Stop watching' });
+    expect(watching.hasAttribute('aria-pressed')).toBe(false);
+    expect(screen.queryByRole('button', { name: 'Watch for releases' })).toBeNull();
   });
 
   it('a watch that fails says so and leaves the results as they were', async () => {
