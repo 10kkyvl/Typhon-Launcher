@@ -12,10 +12,16 @@
 
 {#if games.length === 0}
   <Card {title}>
-    <EmptyState size="inline" title={msg('profile.completedEmpty')} />
+    <div class="none">
+      <EmptyState size="inline" title={msg('profile.completedEmpty')} />
+    </div>
   </Card>
 {:else}
   <CollectionBlock {title} {games} dated />
 {/if}
 
-<style></style>
+<style>
+  .none {
+    padding: var(--space-4) 0;
+  }
+</style>

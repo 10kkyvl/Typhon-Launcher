@@ -14,7 +14,9 @@
 
 <Card title={title || undefined}>
   {#if games.length === 0}
-    <EmptyState size="inline" title={msg('profile.showcaseEmpty')} />
+    <div class="none">
+      <EmptyState size="inline" title={msg('profile.showcaseEmpty')} />
+    </div>
   {:else}
     <div class="grid">
       {#each games as game (game.key)}
@@ -41,6 +43,10 @@
 </Card>
 
 <style>
+  .none {
+    padding: var(--space-4) 0;
+  }
+
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));

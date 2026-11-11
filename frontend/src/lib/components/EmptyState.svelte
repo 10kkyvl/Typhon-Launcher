@@ -3,7 +3,8 @@
 
   /**
    * "Nothing here yet". On a page (`size="page"`) the title is a heading of the given `level`; inline,
-   * inside a dialog or a card that already has its heading, it is a quiet note and adds none.
+   * inside a dialog or a card that already has its heading, it is a quiet note and adds none. Inline it
+   * sets no spacing around itself: the place it sits in keeps its own.
    */
   let {
     title,
@@ -13,6 +14,7 @@
     level = 3,
     size = 'page',
     align = 'start',
+    lead = false,
   }: {
     title: string;
     description?: string;
@@ -25,10 +27,12 @@
     level?: 1 | 2 | 3 | 4 | 5;
     size?: 'page' | 'inline';
     align?: 'start' | 'center';
+    /** Inline: the title is a line of body text and the description its quieter hint, as in a dialog's list. */
+    lead?: boolean;
   } = $props();
 </script>
 
-<div class="empty" class:inline={size === 'inline'} class:center={align === 'center'}>
+<div class="empty" class:inline={size === 'inline'} class:lead={size === 'inline' && lead} class:center={align === 'center'}>
   {#if icon}
     <div class="icon">
       {@render icon()}
@@ -67,7 +71,7 @@
   }
 
   .empty.inline {
-    padding: var(--space-4) 0;
+    padding: 0;
     max-width: none;
     animation: none;
   }
@@ -106,6 +110,16 @@
   .inline .description {
     margin-top: 0.4rem;
     font-size: var(--font-xs);
+  }
+
+  .lead .title {
+    font-size: var(--font-md);
+    color: var(--text);
+  }
+
+  .lead .description {
+    font-size: var(--font-sm);
+    color: var(--text-2);
   }
 
   .actions {

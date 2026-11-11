@@ -11,6 +11,9 @@ import { frontendSources } from '../lib/testing/sources';
 const COMPONENTS = ['ProgressBar', 'PageHeader', 'Card', 'StatusBadge', 'SourceBadge', 'EmptyState'];
 const path = (name: string) => `lib/components/${name}.svelte`;
 const styleOf = (source: string) => /<style[^>]*>([\s\S]*?)<\/style>/.exec(source)?.[1] ?? '';
+const rule = (css: string, selector: string) =>
+  new RegExp(`(?:^|\\})\\s*${selector.replace(/[.[\]'=]/g, '\\$&')}\\s*\\{([^}]*)\\}`).exec(css.replace(/\/\*[\s\S]*?\*\//g, ''))?.[1] ?? '';
+const value = (body: string, property: string) => new RegExp(`(?:^|;|\\s)${property}:\\s*([^;]+);`).exec(body)?.[1].trim();
 
 function literals(css: string): string[] {
   const found: string[] = [];
@@ -172,6 +175,14 @@ describe('an empty place', () => {
     expect(offenders).toEqual([]);
   });
 
+  // jsdom applies no component CSS: the rule is read from the stylesheet.
+  it('inline, sets no spacing around itself: the place it sits in does', () => {
+    const inline = rule(styleOf(frontendSources[path('EmptyState')] ?? ''), '.empty.inline');
+    expect(inline).not.toBe('');
+    expect(value(inline, 'padding')).toBe('0');
+    expect(value(inline, 'margin')).toBeUndefined();
+  });
+
   // The level depends on where the empty state sits, which only the caller knows; inline it has no heading.
   it('on a page or in a dialog, gives its heading level; inline, gives none', () => {
     const offenders = Object.entries(frontendSources)
@@ -198,9 +209,6 @@ describe('every card', () => {
 // The theme editor's preview draws its own copies; each must keep the look of the component it stands for.
 describe('the theme preview follows the components', () => {
   const preview = styleOf(frontendSources['routes/settings/ThemePreview.svelte'] ?? '');
-  const rule = (css: string, selector: string) =>
-    new RegExp(`(?:^|\\})\\s*${selector.replace(/[.[\]'=]/g, '\\$&')}\\s*\\{([^}]*)\\}`).exec(css.replace(/\/\*[\s\S]*?\*\//g, ''))?.[1] ?? '';
-  const value = (body: string, property: string) => new RegExp(`(?:^|;|\\s)${property}:\\s*([^;]+);`).exec(body)?.[1].trim();
 
   it('progress bar: track, shape and the default tone', () => {
     const bar = styleOf(frontendSources[path('ProgressBar')] ?? '');

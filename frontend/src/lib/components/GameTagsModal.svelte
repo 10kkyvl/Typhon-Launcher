@@ -55,7 +55,9 @@
 <Modal dismissible={!saving} bind:open title={msg('modals.gameTagsTitle')} {returnFocus}>
   <TagEditor bind:this={editor} bind:tags {suggestions} placeholder={msg('modals.gameTagsPlaceholder')} disabled={saving} />
   {#if tags.length === 0}
-    <EmptyState size="inline" title={msg('modals.gameTagsEmpty')} />
+    <div class="no-tags">
+      <EmptyState size="inline" title={msg('modals.gameTagsEmpty')} />
+    </div>
   {/if}
   {#snippet footer()}
     <Button disabled={saving} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
@@ -63,4 +65,8 @@
   {/snippet}
 </Modal>
 
-<style></style>
+<style>
+  .no-tags {
+    margin-top: var(--space-3);
+  }
+</style>

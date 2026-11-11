@@ -273,7 +273,9 @@
             <Button size="sm" onclick={() => sourceId && loadReleases(sourceId)}>{msg('common.retry')}</Button>
           </div>
         {:else if releases.length === 0}
-          <EmptyState size="inline" align="center" title={msg('modals.sourceDetailsNoReleases')} />
+          <div class="list-note">
+            <EmptyState size="inline" align="center" title={msg('modals.sourceDetailsNoReleases')} />
+          </div>
         {:else}
           {#each releases as view (view.release.id)}
             {@const badge = matchLabel(view)}

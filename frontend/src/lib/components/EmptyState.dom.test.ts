@@ -26,6 +26,17 @@ describe('EmptyState in a DOM', () => {
     expect(root?.textContent).toContain('Type one above.');
   });
 
+  it('inline, reads as a quiet note unless its title leads a description', () => {
+    const quiet = renderDom(EmptyState, { title: 'No tags yet', size: 'inline' });
+    expect(quiet.container.querySelector('.empty')?.classList.contains('lead')).toBe(false);
+
+    const lead = renderDom(EmptyState, { title: 'No backups', description: 'One is made before each launch.', size: 'inline', lead: true });
+    const root = lead.container.querySelector('.empty');
+    expect(root?.classList.contains('lead')).toBe(true);
+    expect(root?.querySelector('.title')?.textContent).toBe('No backups');
+    expect(root?.querySelector('.description')?.textContent).toBe('One is made before each launch.');
+  });
+
   it('is left-aligned unless centred, and keeps its actions', () => {
     const left = renderDom(EmptyState, { title: 'No sources' });
     expect(left.container.querySelector('.empty')?.classList.contains('center')).toBe(false);

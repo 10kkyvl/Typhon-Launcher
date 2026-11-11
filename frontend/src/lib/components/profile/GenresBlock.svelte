@@ -33,7 +33,9 @@
 
 <Card title={msg('profile.blockGenres')}>
   {#if segments.length === 0}
-    <EmptyState size="inline" title={msg('profile.genresEmpty')} />
+    <div class="none">
+      <EmptyState size="inline" title={msg('profile.genresEmpty')} />
+    </div>
   {:else}
     <div class="bar" role="img" aria-label={segments.map((item) => `${item.name} ${percent(item.share)}`).join(', ')}>
       {#each segments as item (item.id)}
@@ -53,6 +55,10 @@
 </Card>
 
 <style>
+  .none {
+    padding: var(--space-4) 0;
+  }
+
   .bar {
     display: flex;
     gap: 2px;

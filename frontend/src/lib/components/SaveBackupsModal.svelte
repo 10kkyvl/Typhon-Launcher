@@ -483,7 +483,9 @@
         {:else if listLoading}
           <p class="hint">{msg('common.loading')}</p>
         {:else if !listError}
-          <EmptyState size="inline" align="center" title={msg('saves.empty')} description={msg('saves.emptyHint')} />
+          <div class="no-saves">
+            <EmptyState size="inline" align="center" lead title={msg('saves.empty')} description={msg('saves.emptyHint')} />
+          </div>
         {/if}
       </div>
     </div>
@@ -648,4 +650,7 @@
     word-break: break-word;
   }
 
+  .no-saves {
+    padding: var(--space-5) 0;
+  }
 </style>
