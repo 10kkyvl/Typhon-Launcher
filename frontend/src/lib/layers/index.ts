@@ -24,7 +24,8 @@ import { LayerStack, type Closed } from './stack';
 const APP_ROOT_ID = 'app';
 const KEEP = 'data-layer-keep';
 
-const stack = new LayerStack<HTMLElement, HTMLElement>({
+// Focus targets and press targets are any Element: a press often lands on an icon's <svg> or <path>.
+const stack = new LayerStack<HTMLElement, Element>({
   contains: (element, target) => element.contains(target),
   alive: (target) => target.isConnected,
 });
@@ -120,14 +121,14 @@ function isEscape(event: KeyboardEvent): boolean {
 
 function onWindowKeydown(event: KeyboardEvent): void {
   if (!isEscape(event)) return;
-  if (event.target instanceof Node && stack.holding(event.target as HTMLElement)) return;
+  if (event.target instanceof Element && stack.holding(event.target)) return;
   event.preventDefault();
   event.stopPropagation();
   if (!event.repeat) dismissTopLayer();
 }
 
 function onWindowPointerdown(event: PointerEvent): void {
-  if (!(event.target instanceof HTMLElement)) return;
+  if (!(event.target instanceof Element)) return;
   const swallow = outsidePress.get(stack.top() as HTMLElement) === 'swallow';
   const leaving = leavingSet();
   const dismissal = stack.pressOutside(event.target);
@@ -146,7 +147,7 @@ function leavingSet(): HTMLElement[] {
   return top ? [top, ...stack.owned(top).map((layer) => layer.element)] : [];
 }
 
-function settle(closed: Closed<HTMLElement, HTMLElement> | null, leaving: HTMLElement[]): void {
+function settle(closed: Closed<HTMLElement, Element> | null, leaving: HTMLElement[]): void {
   if (!closed) return;
   const active = document.activeElement;
   const lost = !active || active === document.body || !active.isConnected || leaving.some((el) => el.contains(active));
@@ -155,7 +156,7 @@ function settle(closed: Closed<HTMLElement, HTMLElement> | null, leaving: HTMLEl
   else if (closed.enter) enterLayer(closed.enter);
 }
 
-function apply(closed: Closed<HTMLElement, HTMLElement> | null, dismiss: (() => void) | null, leaving: HTMLElement[]): void {
+function apply(closed: Closed<HTMLElement, Element> | null, dismiss: (() => void) | null, leaving: HTMLElement[]): void {
   if (!dismiss) return;
   sync();
   settle(closed, leaving);
@@ -179,7 +180,7 @@ export function topLayer(): HTMLElement | null {
 function trapList(root: HTMLElement): HTMLElement[] {
   const list = focusableIn(root);
   for (const layer of stack.owned(root)) {
-    const at = layer.opener ? list.indexOf(layer.opener) : -1;
+    const at = layer.opener instanceof HTMLElement ? list.indexOf(layer.opener) : -1;
     list.splice(at < 0 ? list.length : at + 1, 0, ...focusableIn(layer.element));
   }
   return list;

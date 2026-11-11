@@ -58,6 +58,6 @@ export function initialFocus(root: HTMLElement, choice?: HTMLElement | string | 
   return focusableIn(root).find((el) => !el.closest('[data-skip-autofocus]')) ?? root;
 }
 
-export function focusQuietly(el: HTMLElement): void {
-  el.focus({ preventScroll: true });
+export function focusQuietly(el: Element): void {
+  if (el instanceof HTMLElement || el instanceof SVGElement) el.focus({ preventScroll: true });
 }

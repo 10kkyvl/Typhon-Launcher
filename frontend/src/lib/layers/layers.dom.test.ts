@@ -199,15 +199,14 @@ describe('a listbox portalled out of a dialog, owned by it', () => {
   it('Tab stays within the dialog and the listbox, the options following their trigger', async () => {
     const { keys, dialog, trigger, listbox } = await select();
     const seen: Element[] = [];
-    for (let step = 0; step < 8; step += 1) {
+    for (let step = 0; step < 14; step += 1) {
       await keys.tab();
       const active = document.activeElement as Element;
       expect(dialog.contains(active) || listbox.contains(active), active.outerHTML).toBe(true);
       seen.push(active);
     }
     const options = screen.getAllByRole('option');
-    const order = seen.slice(0, 6);
-    expect(order.indexOf(options[0]) - order.indexOf(trigger)).toBe(1);
+    expect(seen[seen.indexOf(trigger) + 1]).toBe(options[0]);
   });
 
   it('Escape closes the listbox first, focus back on its trigger, then the dialog, focus back on its opener', async () => {
@@ -240,5 +239,27 @@ describe('a listbox portalled out of a dialog, owned by it', () => {
 
     expect(screen.queryByRole('listbox')).toBeNull();
     expect(screen.getByRole('dialog', { name: 'Settings' })).toBeTruthy();
+  });
+});
+
+describe('presses around a non-modal layer', () => {
+  async function pageSelect(inDialog: boolean) {
+    app.replaceChildren();
+    render(ListboxHarness, { target: app, props: { inDialog } });
+    const keys = user();
+    if (inDialog) await keys.click(screen.getByRole('button', { name: 'Open settings' }));
+    const trigger = screen.getByRole('button', { name: 'Russian' });
+    await keys.click(trigger);
+    expect(screen.getByRole('listbox', { name: 'Language' })).toBeTruthy();
+    return { keys, trigger };
+  }
+
+  it('a press on an icon (an <svg> inside a button) outside the listbox closes it', async () => {
+    const { keys } = await pageSelect(true);
+    const icon = screen.getByRole('button', { name: 'Help' }).querySelector('path') as Element;
+
+    await keys.pointer({ keys: '[MouseLeft]', target: icon });
+
+    expect(screen.queryByRole('listbox', { name: 'Language' })).toBeNull();
   });
 });
