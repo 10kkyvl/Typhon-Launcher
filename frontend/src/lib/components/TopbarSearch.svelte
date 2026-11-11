@@ -154,7 +154,8 @@
   }
 
   function onShortcut(event: KeyboardEvent) {
-    if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'k') return;
+    // By the key's place, not its letter: on a Russian layout `key` is 'л'. Ctrl+Alt is AltGr, a character.
+    if (!(event.ctrlKey || event.metaKey) || event.altKey || event.code !== 'KeyK') return;
     // A dialog owns the keyboard: the page under it is inert and takes no focus from it.
     if (topModalLayer()) return;
     event.preventDefault();

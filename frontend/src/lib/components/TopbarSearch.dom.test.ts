@@ -457,6 +457,23 @@ describe('TopbarSearch: what closes it and what it says', () => {
     expect(document.activeElement).toBe(inDialog);
   });
 
+  it('Ctrl+K and Cmd+K go by where the key sits: a Russian layout focuses the field too, AltGr does not', async () => {
+    const { field } = setup();
+    const after = screen.getByRole('button', { name: 'After' });
+    const press = async (init: KeyboardEventInit) => {
+      after.focus();
+      await fireEvent.keyDown(after, init);
+      return document.activeElement === field();
+    };
+
+    expect(await press({ key: 'л', code: 'KeyK', ctrlKey: true })).toBe(true);
+    expect(await press({ key: 'л', code: 'KeyK', metaKey: true })).toBe(true);
+    expect(await press({ key: 'k', code: 'KeyK', ctrlKey: true })).toBe(true);
+    expect(await press({ key: 'k', code: 'KeyK', ctrlKey: true, altKey: true })).toBe(false);
+    expect(await press({ key: 'л', code: 'KeyK' })).toBe(false);
+    expect(await press({ key: 'k', code: 'KeyL', ctrlKey: true })).toBe(false);
+  });
+
   it('says that it is searching, then how many results came back', async () => {
     const { keys, field, said, settle } = setup();
     await keys.click(field());
