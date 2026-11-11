@@ -7,7 +7,10 @@ import { writable, type Readable } from 'svelte/store';
  * - the clock stops while the toast is being read (`pauseToast`: the pointer over it, focus inside it)
  *   and gives at least `RESUME_FLOOR_MS` after `resumeToast`;
  * - the same message raised again does not stack: the one already shown or waiting takes it;
- * - at most `MAX_VISIBLE` are on screen, the rest wait in the order raised;
+ * - at most `MAX_VISIBLE` are on screen, the rest wait: errors and warnings ahead of plain ones, each
+ *   group in the order raised. A plain one that has waited `QUEUE_STALE_MS` is dropped at its turn
+ *   (a burst of twenty would otherwise show old news for a minute); an error, a warning or a toast
+ *   with an action is never dropped;
  * - while a dialog is open (`holdToasts(true)`, told by the host: this store knows nothing of layers)
  *   a toast with an action does not run out, since its action cannot be reached by Tab from inside
  *   the dialog. Its clock starts when the dialog closes. While held it takes none of the
@@ -33,10 +36,14 @@ export const URGENT_MS = 6000;
 export const ACTION_MS = 9000;
 export const RESUME_FLOOR_MS = 1500;
 export const MAX_VISIBLE = 2;
+/** A plain toast that has waited this long for a slot is no longer news and is dropped at its turn. */
+export const QUEUE_STALE_MS = 12_000;
+
+const urgent = (item: Pick<Toast, 'kind'>) => item.kind === 'danger' || item.kind === 'warning';
 
 export function toastDuration(item: Pick<Toast, 'kind' | 'action'>): number {
   if (item.action) return ACTION_MS;
-  return item.kind === 'danger' || item.kind === 'warning' ? URGENT_MS : PLAIN_MS;
+  return urgent(item) ? URGENT_MS : PLAIN_MS;
 }
 
 /** A toast with an action waits out a dialog: the dialog's Tab trap keeps the keyboard away from it. */
@@ -58,6 +65,8 @@ let queue: Toast[] = [];
 let nextId = 1;
 let dialogOpen = false;
 const clocks = new Map<number, Clock>();
+/** When each waiting toast joined the queue, or was last raised again. */
+const queuedAt = new Map<number, number>();
 
 function publish(list: Toast[]): void {
   shown = list;
@@ -86,6 +95,10 @@ function promote(): void {
     const held = heldByDialog(queue[0], dialogOpen);
     if (!held && room <= 0) break;
     const item = queue.shift() as Toast;
+    const waited = Date.now() - (queuedAt.get(item.id) ?? Date.now());
+    queuedAt.delete(item.id);
+    // Only a plain message goes stale: an error must be seen, and an offer is not made twice.
+    if (!urgent(item) && !item.action && waited > QUEUE_STALE_MS) continue;
     if (!held) room -= 1;
     next.push(item);
   }
@@ -101,6 +114,7 @@ function promote(): void {
 function reset(list: Toast[]): void {
   for (const clock of clocks.values()) clearTimeout(clock.handle);
   clocks.clear();
+  queuedAt.clear();
   queue = [];
   publish(list);
 }
@@ -129,9 +143,16 @@ export function toast(message: string, kind: ToastKind = 'info', action?: ToastA
     return repeated.id;
   }
   const waiting = queue.find(same);
-  if (waiting) return waiting.id;
+  if (waiting) {
+    queuedAt.set(waiting.id, Date.now());
+    return waiting.id;
+  }
   const id = nextId++;
-  queue.push(action ? { id, message, kind, action } : { id, message, kind });
+  const item: Toast = action ? { id, message, kind, action } : { id, message, kind };
+  // An error or a warning goes ahead of the plain ones still waiting, behind the urgent ones.
+  const behind = urgent(item) ? queue.findIndex((other) => !urgent(other)) : -1;
+  queue.splice(behind < 0 ? queue.length : behind, 0, item);
+  queuedAt.set(id, Date.now());
   promote();
   return id;
 }
@@ -140,6 +161,7 @@ export function dismissToast(id: number): void {
   const clock = clocks.get(id);
   if (clock) clearTimeout(clock.handle);
   clocks.delete(id);
+  queuedAt.delete(id);
   queue = queue.filter((item) => item.id !== id);
   if (shown.some((item) => item.id === id)) publish(shown.filter((item) => item.id !== id));
   promote();

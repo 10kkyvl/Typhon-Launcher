@@ -4,6 +4,7 @@ import {
   ACTION_MS,
   MAX_VISIBLE,
   PLAIN_MS,
+  QUEUE_STALE_MS,
   RESUME_FLOOR_MS,
   URGENT_MS,
   dismissToast,
@@ -402,5 +403,74 @@ describe('a dialog open with held toasts on screen', () => {
     toast('Saved');
 
     expect(waiting()).toEqual(['Saved']);
+  });
+});
+
+describe('the order of the queue', () => {
+  it('an error or a warning goes ahead of waiting plain ones, after the urgent ones already waiting', () => {
+    toast('one');
+    toast('two');
+    toast('three');
+    toast('broke', 'danger');
+    toast('four');
+    toast('careful', 'warning');
+
+    expect(shown()).toEqual(['one', 'two']);
+    expect(waiting()).toEqual(['broke', 'careful', 'three', 'four']);
+  });
+
+  it('a burst of plain ones, then an error: the error is next', () => {
+    for (let i = 1; i <= 10; i++) toast(`update ${i}`);
+    toast('broke', 'danger');
+
+    vi.advanceTimersByTime(PLAIN_MS);
+
+    expect(shown()).toContain('broke');
+  });
+
+  it('a plain one that waited too long is dropped when its turn comes; a fresh one is shown', () => {
+    expect(QUEUE_STALE_MS).toBe(12_000);
+    const first = toast('one');
+    const second = toast('two');
+    pauseToast(first);
+    pauseToast(second);
+    toast('stale');
+    vi.advanceTimersByTime(QUEUE_STALE_MS + 1);
+    toast('fresh');
+
+    dismissToast(first);
+
+    expect(shown()).toEqual(['two', 'fresh']);
+    expect(waiting()).toEqual([]);
+  });
+
+  it('an error is never dropped however long it waited, nor is an offer with an action', () => {
+    const first = toast('one');
+    const second = toast('two');
+    pauseToast(first);
+    pauseToast(second);
+    toast('broke', 'danger');
+    toast('Mark Hades as 100%?', 'info', { label: 'Mark', run: () => {} });
+    vi.advanceTimersByTime(QUEUE_STALE_MS * 5);
+
+    dismissToast(first);
+    dismissToast(second);
+
+    expect(shown()).toEqual(['broke', 'Mark Hades as 100%?']);
+  });
+
+  it('a waiting one that is raised again counts as fresh', () => {
+    const first = toast('one');
+    const second = toast('two');
+    pauseToast(first);
+    pauseToast(second);
+    toast('again');
+    vi.advanceTimersByTime(QUEUE_STALE_MS - 1000);
+    toast('again');
+    vi.advanceTimersByTime(2000);
+
+    dismissToast(first);
+
+    expect(shown()).toEqual(['two', 'again']);
   });
 });
