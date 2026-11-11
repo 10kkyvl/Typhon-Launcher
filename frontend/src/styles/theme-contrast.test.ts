@@ -282,6 +282,28 @@ describe('built-in themes', () => {
       expect(out).toEqual([]);
     });
 
+    // The scrollbar thumb shows where the page is (global.css: --text-3 mixed with what is under it).
+    it(`${id} shows the scrollbar thumb on every surface`, () => {
+      const preset = builtIns().find((p) => p.id === id);
+      expect(preset, id).toBeDefined();
+      const tokens = (preset as Preset).tokens;
+      const css = fs.readFileSync(new URL('./global.css', import.meta.url), 'utf8');
+      const share = /::-webkit-scrollbar-thumb \{[^}]*background: color-mix\(in srgb, var\(--text-3\) (\d+)%, transparent\);/.exec(css)?.[1];
+      expect(share, 'the scrollbar thumb is --text-3 mixed with transparent').toBeTypeOf('string');
+      const part = Number(share) / 100;
+
+      const out: string[] = [];
+      const bg = paint(tokens, '--bg', BLACK);
+      for (const surface of PAGE) {
+        const under = surface === '--bg' ? bg : paint(tokens, surface, bg);
+        const ink = paint(tokens, '--text-3', under);
+        const thumb = ink.map((channel, i) => channel * part + under[i] * (1 - part)) as RGB;
+        const seen = ratio(thumb, under);
+        if (seen < 3) out.push(`scrollbar thumb on ${surface}: ${seen.toFixed(2)} < 3`);
+      }
+      expect(out).toEqual([]);
+    });
+
     it(`${id} keeps text and markers readable on the sidebar island over any backdrop`, () => {
       const preset = builtIns().find((p) => p.id === id);
       expect(preset, id).toBeDefined();

@@ -118,15 +118,17 @@ h4 {
   height: 1rem;
 }
 
+/* The thumb is drawn from the theme's quietest text colour, so it shows on a light page as on a dark
+   one (theme-contrast.test.ts holds it at 3:1 on every surface). */
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.09);
-  border-radius: 0.8rem;
+  background: color-mix(in srgb, var(--text-3) 80%, transparent);
+  border-radius: var(--radius-sm);
   border: 0.3rem solid transparent;
   background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--text-3);
   border: 0.3rem solid transparent;
   background-clip: padding-box;
 }
