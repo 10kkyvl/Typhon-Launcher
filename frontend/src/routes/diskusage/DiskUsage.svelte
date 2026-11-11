@@ -293,9 +293,7 @@
                     <StatusBadge kind="neutral" label={msg('diskusage.external')} plain />
                   {/if}
                   {#if game.linked}
-                    <span title={msg('diskusage.linkedHint')}>
-                      <StatusBadge kind="neutral" label={msg('diskusage.linked')} plain />
-                    </span>
+                    <StatusBadge kind="neutral" label={msg('diskusage.linked')} hint={msg('diskusage.linkedHint')} plain />
                   {/if}
                   {#if game.missing}
                     <StatusBadge kind="warning" label={msg('diskusage.missing')} plain />
@@ -311,16 +309,12 @@
                 <span class="size">{size(game)}</span>
                 <div class="actions">
                   {#if !game.external}
-                    <span title={blocked ? msg(blocked) : undefined}>
-                      <Button size="sm" disabled={!manage} onclick={() => openMoveGame(game.id)}>
-                        {msg('diskusage.move')}
-                      </Button>
-                    </span>
-                    <span title={blocked ? msg(blocked) : undefined}>
-                      <Button size="sm" variant="danger" disabled={!manage} onclick={() => openRemove(game)}>
-                        {msg('diskusage.remove')}
-                      </Button>
-                    </span>
+                    <Button size="sm" disabled={!manage} reason={blocked ? msg(blocked) : undefined} onclick={() => openMoveGame(game.id)}>
+                      {msg('diskusage.move')}
+                    </Button>
+                    <Button size="sm" variant="danger" disabled={!manage} reason={blocked ? msg(blocked) : undefined} onclick={() => openRemove(game)}>
+                      {msg('diskusage.remove')}
+                    </Button>
                   {/if}
                 </div>
               </div>

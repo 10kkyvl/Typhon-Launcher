@@ -2,6 +2,7 @@
   import { Heart } from '@lucide/svelte';
   import Artwork from '../Artwork.svelte';
   import Card from '../Card.svelte';
+  import Tooltip from '../Tooltip.svelte';
   import { msg } from '../../i18n';
   import type { BlockGame } from '../../profile/layoutView';
   import { statusLabel } from '../../game/status';
@@ -16,11 +17,12 @@
   {:else}
     <div class="grid">
       {#each games as game (game.key)}
+        <Tooltip text={dated && game.status === 'mastered' ? statusLabel('mastered') : ''}>
         <button class="tile" type="button" onclick={game.open}>
           <span class="cover">
             <Artwork src={game.cover} alt="" label={game.title} ratio="3 / 4" radius="var(--radius-md)" />
             {#if dated && game.status === 'mastered'}
-              <span class="mastered" title={statusLabel('mastered')}>100%</span>
+              <span class="mastered">100%</span>
             {/if}
             {#if hearts}
               <span class="heart"><Heart size="1.4rem" strokeWidth={0} fill="currentColor" /></span>
@@ -31,6 +33,7 @@
             <span class="completed">{msg('social.completedOn', { date: shortDate(game.completedAt) })}</span>
           {/if}
         </button>
+        </Tooltip>
       {/each}
     </div>
   {/if}

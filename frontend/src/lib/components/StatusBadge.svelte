@@ -1,21 +1,35 @@
 <script lang="ts">
+  import Tooltip from './Tooltip.svelte';
+
   let {
     kind = 'neutral',
     label,
     dot = true,
     plain = false,
+    hint,
   }: {
     kind?: 'success' | 'warning' | 'danger' | 'accent' | 'neutral';
     label: string;
     dot?: boolean;
     plain?: boolean;
+    /** What the state means here, beyond its label: the badge joins the Tab order and shows it as a tooltip, its description. */
+    hint?: string;
   } = $props();
 </script>
 
-<span class="badge {kind}" class:plain>
-  {#if dot}<span class="dot"></span>{/if}
-  {label}
-</span>
+{#snippet badge(focusable: boolean)}
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex (A stop in the Tab order only with a hint, so the hint reaches keyboard users; pressing it does nothing.) -->
+  <span class="badge {kind}" class:plain tabindex={focusable ? 0 : undefined}>
+    {#if dot}<span class="dot"></span>{/if}
+    {label}
+  </span>
+{/snippet}
+
+{#if hint}
+  <Tooltip text={hint}>{@render badge(true)}</Tooltip>
+{:else}
+  {@render badge(false)}
+{/if}
 
 <style>
   .badge {

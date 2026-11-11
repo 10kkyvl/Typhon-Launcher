@@ -102,7 +102,7 @@
           {#each checks as check (check.kind)}
             {@const rowTone = statusTone(check.status)}
             <li class="check">
-              <span class="mark {rowTone}" title={msg(statusLabelKey(check.status))}>
+              <span class="mark {rowTone}" role="img" aria-label={msg(statusLabelKey(check.status))} title={msg(statusLabelKey(check.status))}>
                 {#if check.status === 'ok'}
                   <Check size="1.4rem" strokeWidth={2.2} />
                 {:else if check.status === 'below_minimum'}

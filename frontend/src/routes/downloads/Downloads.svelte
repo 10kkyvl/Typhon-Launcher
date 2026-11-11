@@ -358,9 +358,7 @@
               <Button size="sm" variant="primary" onclick={() => openInstall(item.id)}>{msg('transfers.downloadsContinueInstallAction')}</Button>
             {:else if install.status === 'completed'}
               {#if install.warning}
-                <span title={install.warning}>
-                  <StatusBadge kind="warning" label={msg('transfers.downloadsInstalledStatus')} plain />
-                </span>
+                <StatusBadge kind="warning" label={msg('transfers.downloadsInstalledStatus')} hint={install.warning} plain />
               {:else}
                 <StatusBadge kind="success" label={msg('transfers.downloadsInstalledStatus')} plain />
               {/if}

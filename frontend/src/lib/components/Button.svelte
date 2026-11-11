@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import type { HTMLButtonAttributes } from 'svelte/elements';
+  import Tooltip from './Tooltip.svelte';
 
   // Other attributes (id, aria-*, data-*, title, handlers, attachments) go to the <button>.
   let {
@@ -9,6 +10,7 @@
     type = 'button',
     disabled = false,
     pressed,
+    reason,
     onclick,
     children,
     ...rest
@@ -17,14 +19,28 @@
     size?: 'md' | 'sm' | 'lg';
     disabled?: boolean;
     pressed?: boolean;
+    /**
+     * Why the button is disabled. A disabled button cannot take focus, so its reason would reach no
+     * keyboard: with a reason it stays in the Tab order (aria-disabled), ignores presses and shows the
+     * reason as its description.
+     */
+    reason?: string;
     onclick?: (e: MouseEvent) => void;
     children?: Snippet;
   } = $props();
 </script>
 
-<button {...rest} {type} class="btn {variant} {size}" {disabled} aria-pressed={pressed} {onclick}>
-  {@render children?.()}
-</button>
+{#if disabled && reason}
+  <Tooltip text={reason}>
+    <button {...rest} {type} class="btn {variant} {size}" aria-disabled="true" aria-pressed={pressed}>
+      {@render children?.()}
+    </button>
+  </Tooltip>
+{:else}
+  <button {...rest} {type} class="btn {variant} {size}" {disabled} aria-pressed={pressed} {onclick}>
+    {@render children?.()}
+  </button>
+{/if}
 
 <style>
   .btn {
@@ -46,7 +62,8 @@
       transform var(--dur-fast) var(--ease);
   }
 
-  .btn:disabled {
+  .btn:disabled,
+  .btn[aria-disabled='true'] {
     opacity: 0.45;
     cursor: default;
   }
@@ -75,7 +92,7 @@
     border-radius: var(--radius-md);
   }
 
-  .primary:hover:not(:disabled) {
+  .primary:hover:not(:disabled, [aria-disabled='true']) {
     background: var(--accent-hover);
     box-shadow: 0 0.8rem 2rem -0.8rem var(--accent-ring);
     transform: translateY(-1px);
@@ -87,7 +104,7 @@
     color: var(--text);
   }
 
-  .secondary:hover:not(:disabled) {
+  .secondary:hover:not(:disabled, [aria-disabled='true']) {
     background: var(--surface-4);
     border-color: color-mix(in srgb, var(--text) 22%, transparent);
   }
@@ -97,7 +114,7 @@
     color: var(--text-2);
   }
 
-  .ghost:hover:not(:disabled) {
+  .ghost:hover:not(:disabled, [aria-disabled='true']) {
     background: var(--hover-strong);
     color: var(--text);
   }
@@ -108,12 +125,12 @@
     color: var(--danger);
   }
 
-  .danger:hover:not(:disabled) {
+  .danger:hover:not(:disabled, [aria-disabled='true']) {
     background: var(--danger-subtle);
     border-color: rgba(217, 105, 105, 0.5);
   }
 
-  .btn:active:not(:disabled) {
+  .btn:active:not(:disabled, [aria-disabled='true']) {
     transform: scale(0.97);
     box-shadow: none;
   }

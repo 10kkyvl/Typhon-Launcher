@@ -566,8 +566,8 @@
             <span class="status-label">{msg('games.lastPlayedLabel')}</span>
             <StatusBadge kind={statusKind(game, running, update?.kind)} label={statusLabel(game, running)} plain />
             {#if brokenNote(game)}
-              <span class="compat" title={brokenNote(game)}>
-                <StatusBadge kind="danger" label={msg('games.compatBrokenBadge')} plain />
+              <span class="compat">
+                <StatusBadge kind="danger" label={msg('games.compatBrokenBadge')} hint={brokenNote(game)} plain />
               </span>
             {/if}
           </div>

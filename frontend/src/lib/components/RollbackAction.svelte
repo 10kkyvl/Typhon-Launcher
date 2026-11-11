@@ -25,12 +25,10 @@
       {$rollbackBusy ? msg('settings.aboutRollbackBusy') : label}
     </Button>
   {:else}
-    <span title={rollbackReason(info)}>
-      <Button variant={compact ? 'ghost' : 'secondary'} size="sm" disabled>
-        <Undo2 size="1.5rem" strokeWidth={1.8} />
-        {msg('ui.rollbackButtonNone')}
-      </Button>
-    </span>
+    <Button variant={compact ? 'ghost' : 'secondary'} size="sm" disabled reason={rollbackReason(info)}>
+      <Undo2 size="1.5rem" strokeWidth={1.8} />
+      {msg('ui.rollbackButtonNone')}
+    </Button>
   {/if}
 {/if}
 

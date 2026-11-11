@@ -28,6 +28,13 @@
     chipPresence($currentUser ? 'user' : isGuest ? 'guest' : 'none', $shownPresence, $runningGames, $libraryGames),
   );
 
+  // What the chip's status line does not say: the status went away by itself, the profile is a cached copy.
+  const chipHint = $derived(
+    [$currentUser && $autoAway ? msg('ui.presenceAutoAwayHint') : '', $currentUser && $isOffline ? msg('ui.offlineProfileTooltip') : '']
+      .filter(Boolean)
+      .join(' '),
+  );
+
   async function onProfileSelect(id: string) {
     if (id === 'profile') {
       navigate('profile');
@@ -60,7 +67,7 @@
 
 <DropdownMenu items={profileMenu} placement="down" align="right" onselect={onProfileSelect}>
   {#snippet trigger({ props })}
-    <Tooltip text={$currentUser && $autoAway ? msg('ui.presenceAutoAwayHint') : ''} placement="bottom">
+    <Tooltip text={chipHint} placement="bottom">
     <button
       {...props}
       type="button"
@@ -80,7 +87,7 @@
       <span class="chip-text">
         {#if $currentUser}
           <span class="chip-name">{$currentUser.displayName}</span>
-          <span class="chip-status">{presence.line}{#if $isOffline}<span class="offline-mark" title={msg('ui.offlineProfileTooltip')}>{msg('ui.offlineSuffix')}</span>{/if}</span>
+          <span class="chip-status">{presence.line}{#if $isOffline}<span class="offline-mark">{msg('ui.offlineSuffix')}</span>{/if}</span>
         {:else if isGuest}
           <span class="chip-name">{msg('ui.guest')}</span>
           <span class="chip-status">{presence.line}</span>
