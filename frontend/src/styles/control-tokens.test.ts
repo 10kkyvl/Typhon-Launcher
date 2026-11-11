@@ -21,6 +21,26 @@ const COLOUR = /#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?|oklch|oklab|lab|lch)\(|\b(?:wh
 const RADIUS_OK = /^(?:0|50%|inherit|var\(--radius-[\w-]+\))$/;
 const TIME = /(?<![\w.-])\d*\.?\d+m?s\b/;
 
+// A box dimension, a gap or a stroke written as a length. Transforms and shadows are motion and
+// elevation, not sizes. The one exception is the in-game overlay: it keeps the controls it had before
+// 2.0 (data-controls="1x"), and those rules pin the old values on purpose.
+const SIZED = /^(?:(?:min-|max-)?(?:width|height)|margin(?:-[\w-]+)?|padding(?:-[\w-]+)?|(?:row-|column-)?gap|font-size|inset|top|right|bottom|left|flex-basis|border(?:-(?:top|right|bottom|left))?(?:-width)?|outline(?:-width|-offset)?)$/;
+const LENGTH = /(?<![\w.-])-?\d*\.?\d+(?:rem|px|em|vh|vw|ch)\b/;
+const OVERLAY = /^:global\(\[data-controls='1x'\]\)/;
+
+function sizes(source: string, css: string): string[] {
+  const icons = [...source.replace(/<style>[\s\S]*<\/style>/, '').matchAll(/\bsize="([^"]+)"/g)]
+    .filter((m) => LENGTH.test(m[1]))
+    .map((m) => `size="${m[1]}"`);
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ selector: m[1].trim(), body: m[2] }));
+  const boxes = rules
+    .filter((rule) => !OVERLAY.test(rule.selector))
+    .flatMap((rule) => declarations(`{${rule.body}`).map((d) => ({ ...d, selector: rule.selector })))
+    .filter((d) => SIZED.test(d.prop) && LENGTH.test(d.value))
+    .map((d) => `${d.selector} ${d.prop}: ${d.value}`);
+  return [...icons, ...boxes];
+}
+
 describe('base controls take their look from tokens', () => {
   for (const path of CONTROLS) {
     const css = style(path);
@@ -43,7 +63,29 @@ describe('base controls take their look from tokens', () => {
     it(`${path} sets no layer`, () => {
       expect(all.filter((d) => d.prop === 'z-index').map((d) => `${d.prop}: ${d.value}`)).toEqual([]);
     });
+
+    it(`${path} writes no size`, () => {
+      expect(sizes(read(path), css)).toEqual([]);
+    });
   }
+
+  it('sees a size in a box, a stroke or an icon, and lets the overlay keep the sizes it is pinned to', () => {
+    const source = `<X size="1.2rem" /><Y size="sm" /><style>
+      .a { width: 2.4rem; gap: var(--space-1); margin-left: 1px; }
+      .b { border: 2px solid var(--hover-strong); padding: 0 var(--space-3); font-size: 1.3rem; }
+      .c { transform: scale(0.9); border-radius: var(--radius-sm); }
+      :global([data-controls='1x']) .a { width: 3.6rem; padding: 0 1.5rem; }
+      @media (prefers-reduced-motion: reduce) { .d { height: 2rem; } }
+    </style>`;
+    expect(sizes(source, styleOf(source, 'sample'))).toEqual([
+      'size="1.2rem"',
+      '.a width: 2.4rem',
+      '.a margin-left: 1px',
+      '.b border: 2px solid var(--hover-strong)',
+      '.b font-size: 1.3rem',
+      '.d height: 2rem',
+    ]);
+  });
 
   // The launcher setting and the system request both turn motion off; a press or a hover then changes
   // colour only. Each rule comes after the one that moves the control, at the same specificity or more.

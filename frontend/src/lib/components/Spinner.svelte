@@ -29,8 +29,8 @@
   .spinner {
     display: inline-flex;
     flex: none;
-    width: 2rem;
-    height: 2rem;
+    width: var(--spinner-md);
+    height: var(--spinner-md);
     color: var(--accent-bright);
   }
 
@@ -39,19 +39,19 @@
   }
 
   .sm {
-    width: 1.4rem;
-    height: 1.4rem;
+    width: var(--spinner-sm);
+    height: var(--spinner-sm);
   }
 
   .lg {
-    width: 3.2rem;
-    height: 3.2rem;
+    width: var(--spinner-lg);
+    height: var(--spinner-lg);
   }
 
   .ring {
     width: 100%;
     height: 100%;
-    border: 2px solid var(--hover-strong);
+    border: var(--spinner-ring) solid var(--hover-strong);
     border-top-color: currentColor;
     border-radius: 50%;
     animation: spinner-turn var(--motion-spin) linear infinite;

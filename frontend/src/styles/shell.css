@@ -27,6 +27,16 @@
   --ease-out: var(--ease);
   --motion-spin: 800ms; /* one turn of a spinner */
 
+  /* The geometry of the base controls that the control sizes in tokens.css do not cover. */
+  --control-border-w: 1px; /* the stroke of a button or a chip, transparent where it shows no colour */
+  --control-seam: 1px; /* between the two halves of a split button */
+  --chip-remove-w: 2.4rem;
+  --chip-remove-icon: 1.2rem;
+  --spinner-sm: 1.4rem;
+  --spinner-md: 2rem;
+  --spinner-lg: 3.2rem;
+  --spinner-ring: 2px;
+
   /* The label on an --accent fill. A theme does not set it; a personal accent computes its own
      --accent-on (lib/theme/accent.ts), which the components read first. */
   --accent-on-default: #fff;

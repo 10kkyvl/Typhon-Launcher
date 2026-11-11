@@ -70,7 +70,7 @@
     flex-shrink: 0;
     width: var(--control-md);
     height: var(--control-md);
-    border: 1px solid transparent;
+    border: var(--control-border-w) solid transparent;
     border-radius: var(--radius-control);
     color: var(--text-2);
     transition:

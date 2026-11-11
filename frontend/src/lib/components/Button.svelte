@@ -117,7 +117,7 @@
     font-size: var(--font-md);
     font-weight: 550;
     border-radius: var(--radius-control);
-    border: 1px solid transparent;
+    border: var(--control-border-w) solid transparent;
     white-space: nowrap;
     transition:
       background var(--dur) var(--ease),
@@ -166,7 +166,7 @@
   }
 
   .join-start {
-    margin-left: 1px;
+    margin-left: var(--control-seam);
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
   }

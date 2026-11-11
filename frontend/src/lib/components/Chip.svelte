@@ -54,7 +54,7 @@
       <span class="text">{@render children?.()}</span>
       <Tooltip text={removeLabel} describe={false}>
         <button type="button" class="remove" aria-label={removeLabel} onclick={onremove}>
-          <X size="1.2rem" strokeWidth={2} aria-hidden="true" />
+          <X strokeWidth={2} aria-hidden="true" />
         </button>
       </Tooltip>
     </span>
@@ -80,7 +80,7 @@
     height: var(--control-sm);
     padding: 0 var(--space-3);
     border-radius: var(--radius-sm);
-    border: 1px solid transparent;
+    border: var(--control-border-w) solid transparent;
     font-size: var(--font-sm);
     font-weight: 500;
     white-space: nowrap;
@@ -160,13 +160,18 @@
     display: grid;
     place-items: center;
     align-self: stretch;
-    width: 2.4rem;
+    width: var(--chip-remove-w);
     border-radius: inherit;
     color: inherit;
     opacity: 0.8;
     transition:
       background var(--dur) var(--ease),
       opacity var(--dur) var(--ease);
+  }
+
+  .remove :global(svg) {
+    width: var(--chip-remove-icon);
+    height: var(--chip-remove-icon);
   }
 
   .remove:hover {
