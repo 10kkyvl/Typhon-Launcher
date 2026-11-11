@@ -1350,20 +1350,7 @@
   {/each}
 {/snippet}
 
-{#if missing}
-  <EmptyState title={msg('games.detailMissingTitle')} description={msg('games.detailMissingDescription')}>
-    {#snippet actions()}
-      <Button onclick={() => navigate('library')}>{msg('games.detailBackToLibrary')}</Button>
-    {/snippet}
-  </EmptyState>
-{:else if catalogFailed && !localGame && !catalogGame && !anyOwnDownload}
-  <EmptyState title={msg('games.detailCatalogLoadError')}>
-    {#snippet actions()}
-      <Button onclick={() => loadCatalogGame(id)}>{msg('common.retry')}</Button>
-      <Button onclick={() => navigate('library')}>{msg('games.detailBackToLibrary')}</Button>
-    {/snippet}
-  </EmptyState>
-{:else}
+{#snippet hero()}
   <section class="hero" class:plain={!showHero} data-part="game-hero">
     <div class="art">
       {#if showHero}
@@ -1565,6 +1552,23 @@
       </div>
     </div>
   </section>
+{/snippet}
+
+{#if missing}
+  <EmptyState title={msg('games.detailMissingTitle')} description={msg('games.detailMissingDescription')}>
+    {#snippet actions()}
+      <Button onclick={() => navigate('library')}>{msg('games.detailBackToLibrary')}</Button>
+    {/snippet}
+  </EmptyState>
+{:else if catalogFailed && !localGame && !catalogGame && !anyOwnDownload}
+  <EmptyState title={msg('games.detailCatalogLoadError')}>
+    {#snippet actions()}
+      <Button onclick={() => loadCatalogGame(id)}>{msg('common.retry')}</Button>
+      <Button onclick={() => navigate('library')}>{msg('games.detailBackToLibrary')}</Button>
+    {/snippet}
+  </EmptyState>
+{:else}
+  {@render hero()}
 
   {#if tabs.length > 1}
     <div class="tabs-wrap" data-part="game-tabs">
