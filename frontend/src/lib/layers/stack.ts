@@ -82,6 +82,11 @@ export class LayerStack<E, F> {
     return this.#entries.at(-1)?.element ?? null;
   }
 
+  /** The element of the topmost modal layer: the dialog that owns the keyboard. */
+  topModal(): E | null {
+    return this.#topModal()?.element ?? null;
+  }
+
   isTop(id: symbol): boolean {
     return this.#entries.at(-1)?.id === id;
   }

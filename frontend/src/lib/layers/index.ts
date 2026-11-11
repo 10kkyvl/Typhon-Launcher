@@ -176,9 +176,14 @@ export function dismissTopLayer(): boolean {
   return consumed;
 }
 
-/** The root element of the top layer, or null when none is open. */
+/** The root element of the top layer, modal or not (a tooltip counts), or null when none is open. */
 export function topLayer(): HTMLElement | null {
   return stack.top();
+}
+
+/** The root of the topmost modal layer (the dialog that owns the keyboard and the Tab trap), or null. */
+export function topModalLayer(): HTMLElement | null {
+  return stack.topModal();
 }
 
 // Tab order of a trap: the layer's controls, each owned layer's controls right after its trigger.
@@ -198,10 +203,9 @@ function moveFocus(root: HTMLElement, backwards: boolean): void {
   focusQuietly(next ?? root);
 }
 
-/** Moves focus to the next (previous) tabbable element of the top layer, wrapping at the ends. */
-export function cycleFocus(backwards: boolean): void {
-  const top = stack.top();
-  if (top) moveFocus(top, backwards);
+/** Moves focus to the next (previous) tabbable element of `root` and the layers it owns, wrapping at the ends. */
+export function cycleFocus(root: HTMLElement, backwards: boolean): void {
+  moveFocus(root, backwards);
 }
 
 /** Puts focus where the layer would on open (focus fell out of it, or never got in). */
@@ -225,7 +229,10 @@ export function openLayer(element: HTMLElement, options: LayerOptions): () => vo
     anchor: owner ?? null,
     outsidePress: !modal && options.outsidePress !== false,
   });
-  if (!element.hasAttribute('tabindex')) element.setAttribute('tabindex', '-1');
+  const focus = options.initialFocus?.();
+  const takesFocus = modal || Boolean(focus);
+  // Only a layer that takes focus can hold it itself (a click on its bare background keeps it inside).
+  if (takesFocus && !element.hasAttribute('tabindex')) element.setAttribute('tabindex', '-1');
 
   function onKeydown(event: KeyboardEvent) {
     if (!stack.has(id)) return;
@@ -245,8 +252,7 @@ export function openLayer(element: HTMLElement, options: LayerOptions): () => vo
 
   element.addEventListener('keydown', onKeydown);
   sync();
-  const focus = options.initialFocus?.();
-  if (modal || focus) focusQuietly(initialFocus(element, focus));
+  if (takesFocus) focusQuietly(initialFocus(element, focus));
 
   return () => {
     element.removeEventListener('keydown', onKeydown);

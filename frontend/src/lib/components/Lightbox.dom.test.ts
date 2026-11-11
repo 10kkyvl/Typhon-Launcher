@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
+import { openLayer } from '../layers';
 import { user } from '../testing/dom';
 import LightboxHarness from '../testing/LightboxHarness.svelte';
 import Lightbox from './Lightbox.svelte';
@@ -196,5 +197,23 @@ describe('Lightbox semantics', () => {
     expect(status.textContent?.trim()).toBe('3 / 3');
     await keys.keyboard('{Home}');
     expect(image()).toBe(three[0].url);
+  });
+});
+
+describe('Lightbox under a non-modal layer', () => {
+  it('a tooltip open above the viewer does not take its keys', async () => {
+    document.documentElement.classList.add('no-anim');
+    const { keys } = await openViewer();
+    const tip = document.createElement('div');
+    tip.setAttribute('role', 'tooltip');
+    tip.textContent = 'Zoom';
+    document.body.append(tip);
+    const close = openLayer(tip, { modal: false, dismiss: () => {} });
+
+    await keys.keyboard('{ArrowRight}');
+
+    expect(document.querySelector('img')?.getAttribute('src')).toBe(items[1].url);
+    close();
+    tip.remove();
   });
 });

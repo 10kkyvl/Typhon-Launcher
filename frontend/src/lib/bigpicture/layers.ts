@@ -1,32 +1,45 @@
-import { cycleFocus, dismissTopLayer, enterLayer, topLayer } from '../layers';
+import { cycleFocus, dismissTopLayer, enterLayer, topLayer, topModalLayer } from '../layers';
+import { focusableIn } from '../layers/focus';
 import type { BigPictureCommand } from './input';
+
+// The layer the commands act on: the top dialog (with the menus it owns), else a top layer with
+// something to focus. A tooltip alone has nothing to answer, so the shell keeps its commands.
+function commandRoot(): HTMLElement | null {
+  const dialog = topModalLayer();
+  if (dialog) return dialog;
+  const top = topLayer();
+  return top && focusableIn(top).length > 0 ? top : null;
+}
 
 /**
  * While a shared dialog (an emulator or BIOS prompt, a confirmation) is open over Big Picture, the
- * shell's commands act on it instead of on the inert shell behind: back closes it as Escape would,
- * confirm presses the focused control, the directions move between its controls; the shelf and menu
- * commands do nothing. False when no layer is open and the shell handles the command itself.
+ * shell's commands act on it instead of on the inert shell behind: back closes the top layer as Escape
+ * would, confirm presses the focused control, the directions move between the dialog's controls; the
+ * shelf and menu commands do nothing. False when no such layer is open and the shell handles the
+ * command itself.
  */
 export function layerCommand(command: BigPictureCommand): boolean {
-  const top = topLayer();
-  if (!top) return false;
+  const root = commandRoot();
+  if (!root) return false;
   switch (command) {
     case 'back':
       dismissTopLayer();
       break;
     case 'confirm': {
       const active = document.activeElement;
-      if (active instanceof HTMLElement && active !== top && top.contains(active)) active.click();
-      else enterLayer(top);
+      const top = topLayer();
+      const inside = active instanceof HTMLElement && active !== root && (root.contains(active) || (top?.contains(active) ?? false));
+      if (inside) active.click();
+      else enterLayer(root);
       break;
     }
     case 'up':
     case 'left':
-      cycleFocus(true);
+      cycleFocus(root, true);
       break;
     case 'down':
     case 'right':
-      cycleFocus(false);
+      cycleFocus(root, false);
       break;
   }
   return true;

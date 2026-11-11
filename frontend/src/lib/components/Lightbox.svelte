@@ -5,7 +5,7 @@
   import { stepIndex } from '../game/view';
   import { msg } from '../i18n';
   import IconButton from './IconButton.svelte';
-  import { layer, pressClosedLayer, topLayer } from '../layers';
+  import { layer, pressClosedLayer, topModalLayer } from '../layers';
   import { documentMotion, tokenMs } from '../motion/motion';
 
   export interface LightboxItem {
@@ -96,7 +96,7 @@
 
   function onKeydown(event: KeyboardEvent) {
     // A dialog opened over the viewer owns the keyboard until it closes.
-    if (!backdrop || topLayer() !== backdrop) return;
+    if (!backdrop || topModalLayer() !== backdrop) return;
     if (event.target instanceof HTMLInputElement) return;
     if (event.key === '+' || event.key === '=') { event.preventDefault(); setZoom(zoom + 0.25); }
     if (event.key === '-') { event.preventDefault(); setZoom(zoom - 0.25); }
