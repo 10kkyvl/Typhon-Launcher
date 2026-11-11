@@ -259,16 +259,20 @@
     compatError = '';
     compatKeepOffer = false;
     compatProgress = null;
-    // The dialog may have closed, or opened for another game, while this ran: report only where it is shown.
+    // The dialog may have closed, or opened for another game, while this ran: a failure shows inline
+    // where it is still shown, else as a toast, so the outcome is never lost.
     const shown = () => target?.gameId === id;
     try {
       if (on) await enableWrapper(id, compatWrapper, compatPreset);
       else if (keepChanged) await disableWrapperKeepChanged(id);
       else await disableWrapper(id);
     } catch (err) {
+      const text = errorText(err, msg(on ? 'modals.compatEnableFailed' : 'modals.compatDisableFailed'));
       if (shown()) {
         compatKeepOffer = !on && errorCode(err) === 'wrappers.tampered';
-        compatError = errorText(err, msg(on ? 'modals.compatEnableFailed' : 'modals.compatDisableFailed'));
+        compatError = text;
+      } else {
+        toast(text, 'danger');
       }
     } finally {
       compatBusyFor = compatBusyFor.filter((busy) => busy !== id);
