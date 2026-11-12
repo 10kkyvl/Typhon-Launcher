@@ -1,7 +1,11 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import Button from './Button.svelte';
+  import EmptyState from './EmptyState.svelte';
   import Modal from './Modal.svelte';
+  import Notice from './Notice.svelte';
+  import Spinner from './Spinner.svelte';
+  import TextLink from './TextLink.svelte';
   import { msg } from '../i18n';
   import { isUnsupported, kindLabel, redistErrorText, resultText } from '../redist/messages';
   import { missingVcArches } from '../redist/runtimes';
@@ -69,8 +73,11 @@
     outcomes = {};
   }
 
-  async function load(gameId: string) {
+  // A retry keeps the failed scan on screen, its Retry busy, until the answer replaces it.
+  async function load(gameId: string, retrying = false) {
+    const failed = retrying ? scanError : '';
     reset();
+    scanError = failed;
     const id = seq;
     scanning = true;
     systemLoading = true;
@@ -82,10 +89,13 @@
       const found = await scanRedist(gameId);
       if (id !== seq) return;
       packages = found;
+      scanError = '';
     } catch (err) {
       if (id !== seq) return;
-      if (isUnsupported(err)) unsupported = true;
-      else scanError = redistErrorText(err);
+      if (isUnsupported(err)) {
+        unsupported = true;
+        scanError = '';
+      } else scanError = redistErrorText(err);
     } finally {
       if (id === seq) scanning = false;
     }
@@ -141,7 +151,7 @@
   }
 
   function retry() {
-    if (target) void load(target.gameId);
+    if (target) void load(target.gameId, true);
   }
 
   function meta(pkg: RedistPackage): string {
@@ -157,19 +167,21 @@
   {#if target}
     <div class="redist">
       {#if unsupported}
-        <p class="hint">{msg('redist.unsupported')}</p>
+        <Notice compact announce={false}>{msg('redist.unsupported')}</Notice>
       {:else}
         <section class="block">
           <h4>{msg('redist.bundledHeading')}</h4>
-          {#if scanning}
-            <p class="hint">{msg('redist.scanning')}</p>
-          {:else if scanError}
-            <p class="failure">{scanError}</p>
-            <div class="actions">
-              <Button size="sm" onclick={retry}>{msg('redist.retry')}</Button>
-            </div>
+          {#if scanError}
+            <Notice tone="danger" compact>
+              {scanError}
+              {#snippet action()}
+                <Button size="sm" busy={scanning} onclick={retry}>{msg('redist.retry')}</Button>
+              {/snippet}
+            </Notice>
+          {:else if scanning}
+            <Spinner size="sm" label={msg('redist.scanning')} />
           {:else if packages.length === 0}
-            <p class="hint">{msg('redist.bundledEmpty')}</p>
+            <EmptyState size="inline" title={msg('redist.bundledEmpty')} />
           {:else}
             <ul class="rows">
               {#each packages as pkg (pkg.path)}
@@ -178,12 +190,22 @@
                     <span class="row-name">{pkg.name}</span>
                     <span class="row-meta">{meta(pkg)}</span>
                     {#if outcomes[pkg.path]}
-                      <span class:failure={outcomes[pkg.path].failed} class:ok={!outcomes[pkg.path].failed} class="row-result">
+                      <span
+                        class:failure={outcomes[pkg.path].failed}
+                        class:ok={!outcomes[pkg.path].failed}
+                        class="row-result"
+                        role={outcomes[pkg.path].failed ? 'alert' : 'status'}
+                      >
                         {outcomes[pkg.path].text}
                       </span>
                     {/if}
                   </div>
-                  <Button size="sm" disabled={installingPath !== ''} onclick={() => install(pkg)}>
+                  <Button
+                    size="sm"
+                    disabled={installingPath !== '' && installingPath !== pkg.path}
+                    busy={installingPath === pkg.path}
+                    onclick={() => install(pkg)}
+                  >
                     {installingPath === pkg.path ? msg('redist.installing') : msg('redist.install')}
                   </Button>
                 </li>
@@ -195,12 +217,12 @@
         <section class="block">
           <h4>{msg('redist.systemHeading')}</h4>
           {#if systemLoading}
-            <p class="hint">{msg('redist.systemLoading')}</p>
+            <Spinner size="sm" label={msg('redist.systemLoading')} />
           {:else if systemError}
-            <p class="failure">{systemError}</p>
+            <Notice tone="danger" compact>{systemError}</Notice>
           {:else}
             {#if vcRuntimes.length === 0}
-              <p class="hint">{msg('redist.systemEmpty')}</p>
+              <EmptyState size="inline" title={msg('redist.systemEmpty')} />
             {:else}
               <ul class="rows">
                 {#each vcRuntimes as runtime (runtime.name + runtime.arch + runtime.version)}
@@ -215,14 +237,19 @@
             {/if}
             {#each missing as arch (arch)}
               {@const link = linkFor(arch)}
-              <div class="missing">
-                <p class="warning">{msg('redist.missing', { arch })}</p>
-                {#if link}
-                  <a class="download" href={link.url} target="_blank" rel="noopener noreferrer">{msg('redist.download')}</a>
-                {:else}
-                  <p class="failure">{linksError || msg('redist.noLink')}</p>
-                {/if}
-              </div>
+              {#if link}
+                <Notice tone="warning" compact announce={false}>
+                  {msg('redist.missing', { arch })}
+                  {#snippet action()}
+                    <TextLink href={link.url} target="_blank" rel="noopener noreferrer">{msg('redist.download')}</TextLink>
+                  {/snippet}
+                </Notice>
+              {:else}
+                <Notice tone="warning" compact announce={false}>
+                  {msg('redist.missing', { arch })}
+                  <span class="no-link">{linksError || msg('redist.noLink')}</span>
+                </Notice>
+              {/if}
             {/each}
           {/if}
         </section>
@@ -255,33 +282,15 @@
     color: var(--text-3);
   }
 
-  .hint {
-    margin: 0;
-    font-size: var(--font-sm);
-    color: var(--text-2);
-  }
-
   .failure {
     margin: 0;
     font-size: var(--font-xs);
     color: var(--danger);
   }
 
-  .warning {
-    margin: 0;
-    font-size: var(--font-xs);
-    color: var(--warning);
-  }
-
   .ok {
     font-size: var(--font-xs);
     color: var(--success);
-  }
-
-  .actions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
   }
 
   .rows {
@@ -321,15 +330,7 @@
     color: var(--text-3);
   }
 
-  .missing {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--space-2);
-  }
-
-  .download {
-    font-size: var(--font-sm);
-    color: var(--accent-text);
+  .no-link {
+    display: block;
   }
 </style>
