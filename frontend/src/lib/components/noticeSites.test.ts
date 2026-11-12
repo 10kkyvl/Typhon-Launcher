@@ -46,6 +46,12 @@ const SITES: Record<string, Site[]> = {
   'lib/components/SystemRequirements.svelte': [['danger', true]],
   // Advice for the chosen platform, also inside InstallModal and AddDownloadModal.
   'lib/components/EmulatorHint.svelte': [['warning', false]],
+  // The game running or busy is a state of the game when the dialog opens; a failed removal just happened.
+  'lib/components/RemoveGameModal.svelte': [
+    ['warning', false],
+    ['warning', false],
+    ['danger', true],
+  ],
   // A block whose data failed to load; blocks of a newer launcher filling the layout, a standing fact.
   'lib/components/profile/BlockGrid.svelte': [['danger', true]],
   'lib/components/profile/BlockPicker.svelte': [['warning', false]],
