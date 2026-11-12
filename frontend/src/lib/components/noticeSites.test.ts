@@ -12,6 +12,12 @@ type Site = [tone: string, announces: boolean | 'dynamic'];
  * Notice.dom.test.ts proves the option.
  */
 const SITES: Record<string, Site[]> = {
+  'lib/components/ChatPanel.svelte': [
+    ['danger', true],
+    ['danger', true],
+    ['warning', true],
+    // The conversation cannot be written to: a fact of the conversation, shown whenever it is open.
+    ['info', false],
   // Names missing from the list and unread progress files are facts of the card; a failed load just happened.
   'lib/components/AchievementsCard.svelte': [
     ['warning', false],
@@ -20,6 +26,21 @@ const SITES: Record<string, Site[]> = {
   ],
   'lib/components/NetworkBanner.svelte': [['danger', true]],
   'lib/components/OfflineBanner.svelte': [['warning', true]],
+  // The stable version on offer to a beta: a fact of the settings page.
+  'lib/components/StableOffer.svelte': [['info', false]],
+  'lib/components/UpdateBanner.svelte': [
+    ['danger', true],
+    ['info', true],
+    ['success', true],
+    // A version found by a check that ran on its own: a fact of the settings page.
+    ['info', false],
+  ],
+  // The stored error of the last update and the running game that holds an update back, shown on
+  // every opening of the game.
+  'lib/components/UpdateCard.svelte': [
+    ['danger', false],
+    ['info', false],
+  ],
   'lib/components/SystemRequirements.svelte': [['danger', true]],
   'lib/components/UpdateBanner.svelte': [['danger', true]],
   // Advice for the chosen platform, also inside InstallModal and AddDownloadModal.
@@ -29,6 +50,8 @@ const SITES: Record<string, Site[]> = {
   'lib/components/profile/BlockPicker.svelte': [['warning', false]],
   'lib/components/profile/GamePicker.svelte': [['danger', true]],
   'routes/activity/Activity.svelte': [['danger', true]],
+  'routes/auth/AuthScreen.svelte': [['danger', true]],
+  'routes/catalog/Catalog.svelte': [['danger', true]],
   // The page fell back to a cached copy; a game just put away from the recommendations, with its undo;
   // the picks that fell back or went stale; the first page or a next page failed.
   'routes/catalog/Catalog.svelte': [
@@ -43,6 +66,8 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
     ['danger', true],
   ],
+  // Safety advice of the requests tab, read with it.
+  'routes/friends/Friends.svelte': [['info', false]],
   // Downloads held while a game runs: it starts and ends while the page is open.
   'routes/downloads/Downloads.svelte': [['info', true]],
   // The stored error of the last download, shown on every opening of the game.
