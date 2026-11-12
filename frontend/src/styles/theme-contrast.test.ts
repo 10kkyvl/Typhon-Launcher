@@ -266,6 +266,48 @@ describe('the muted text link is measured where it stands', () => {
   });
 });
 
+// A text field's edge is what shows where it is (WCAG 1.4.11): 3:1 against whatever surface the field
+// sits on, a dialog's or a card's panel included, at rest and hovered. The shared .input draws it
+// (global.css); fixed tokens it names come from shell.css.
+describe('a text field shows where it is', () => {
+  const global = fs.readFileSync(new URL('./global.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const shell = fs.readFileSync(new URL('./shell.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const fixed = Object.fromEntries([...shell.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
+  const rule = (selector: string) => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(?:^|\\})\\s*${escaped}\\s*\\{([^}]*)\\}`).exec(global)?.[1] ?? '';
+  };
+  const edgeOf = (body: string) => {
+    const color = /border-color:\s*([^;]+);/.exec(body)?.[1] ?? /border:\s*\S+\s+solid\s+([^;]+);/.exec(body)?.[1];
+    expect(color, body).toBeTypeOf('string');
+    return (color as string).trim();
+  };
+  // A fixed token named by the rule, resolved once so the measure sees the themable tokens under it.
+  const resolve = (value: string) => {
+    const name = /^var\((--[\w-]+)\)$/.exec(value)?.[1];
+    return name && name in fixed ? fixed[name] : value;
+  };
+
+  for (const id of ['dark', 'light', 'contrast', 'blush']) {
+    it(`${id}: at rest and hovered, on every surface`, () => {
+      const preset = builtIns().find((p) => p.id === id);
+      expect(preset, id).toBeDefined();
+      const tokens = (preset as Preset).tokens;
+      const bg = paint(tokens, '--bg', BLACK);
+      const out: string[] = [];
+      for (const [state, body] of [['at rest', rule('.input')], ['hovered', rule('.input:hover')]] as const) {
+        const edge = resolve(edgeOf(body));
+        for (const surface of PAGE) {
+          const under = surface === '--bg' ? bg : paint(tokens, surface, bg);
+          const r = ratio(over(cssColor(edge, tokens), under), under);
+          if (r < 3) out.push(`${state} on ${surface}: ${r.toFixed(2)} < 3`);
+        }
+      }
+      expect(out).toEqual([]);
+    });
+  }
+});
+
 describe('built-in themes', () => {
   it('are dark, light, contrast and blush, in that order', () => {
     expect(builtIns().map((p) => p.id)).toEqual(['dark', 'light', 'contrast', 'blush']);
