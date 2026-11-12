@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Gamepad2 } from '@lucide/svelte';
   import Card from '../../lib/components/Card.svelte';
+  import TextLink from '../../lib/components/TextLink.svelte';
   import type { ActivityDay } from '../../lib/services/profile';
   import { dayLabel } from '../../lib/profile/view';
   import { navigate } from '../../lib/stores/router';
@@ -34,7 +35,7 @@
         </li>
       {/each}
     </ul>
-    <button class="all" type="button" onclick={() => navigate('history')}>{msg('social.viewAllActivity')}</button>
+    <p class="all"><TextLink onclick={() => navigate('history')}>{msg('social.viewAllActivity')}</TextLink></p>
   </Card>
 {/if}
 
@@ -111,25 +112,8 @@
   }
 
   .all {
-    display: block;
-    width: 100%;
     margin-top: var(--space-4);
-    padding: 0.9rem;
-    background: none;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    color: var(--text-2);
     font-size: var(--font-sm);
-    font-weight: 500;
     text-align: center;
-    cursor: pointer;
-    transition:
-      background var(--dur) var(--ease),
-      color var(--dur) var(--ease);
-  }
-
-  .all:hover {
-    background: var(--hover);
-    color: var(--text);
   }
 </style>

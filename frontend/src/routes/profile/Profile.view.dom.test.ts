@@ -63,4 +63,18 @@ describe('the profile page', () => {
     expect(tabbable(badges[0])).toBe(true);
     expect(badges[0].classList.contains('badge')).toBe(true);
   });
+
+  it('"View all activity" is a text link under the activity; Enter on it opens the history', async () => {
+    signIn({ layout: { version: 1, blocks: [{ id: 'a', type: 'activity', width: 'half', config: {} }] } });
+    const played = { id: 'g1', title: 'Hades', cover: '', playtimeSeconds: 3600, status: '' };
+    vi.mocked(getProfileSnapshot).mockResolvedValue({ ...EMPTY_SNAPSHOT, activity: [{ date: '2026-11-10', entries: [{ game: played, seconds: 3600 }] }] });
+    const { user } = renderDom(Profile);
+    const all = await screen.findByRole('button', { name: 'View all activity' });
+    expect(all.classList.contains('text-link')).toBe(true);
+    all.focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(get(route).name).toBe('history');
+  });
 });
