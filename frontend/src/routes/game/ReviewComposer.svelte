@@ -2,6 +2,7 @@
   import Button from '../../lib/components/Button.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import Notice from '../../lib/components/Notice.svelte';
+  import Spinner from '../../lib/components/Spinner.svelte';
   import { AccountError } from '../../lib/services/account';
   import {
     limits as fetchLimits,
@@ -189,7 +190,7 @@
   {#if !authed}
     <p class="prompt">{msg('reviews.composerSignInPrompt')}</p>
   {:else if phase === 'loading'}
-    <p class="muted">{msg('reviews.loading')}</p>
+    <Spinner size="sm" label={msg('reviews.loading')} />
   {:else if phase === 'error'}
     <Notice tone="danger">
       {msg('reviews.loadError')}
@@ -305,8 +306,7 @@
 {/if}
 
 <style>
-  .prompt,
-  .muted {
+  .prompt {
     font-size: var(--font-sm);
     color: var(--text-3);
   }

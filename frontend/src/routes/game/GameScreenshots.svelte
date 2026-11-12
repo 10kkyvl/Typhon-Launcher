@@ -2,9 +2,11 @@
   import { FolderOpen, Trash2 } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
+  import EmptyState from '../../lib/components/EmptyState.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import Lightbox from '../../lib/components/Lightbox.svelte';
   import Notice from '../../lib/components/Notice.svelte';
+  import Spinner from '../../lib/components/Spinner.svelte';
   import { deleteScreenshotPrompt } from '../../lib/confirm/prompts';
   import {
     DEFAULT_SCREENSHOT_HOTKEY,
@@ -129,13 +131,16 @@
   </div>
 
   {#if loading}
-    <p class="note" role="status">{msg('screenshots.loading')}</p>
+    <Spinner label={msg('screenshots.loading')} />
   {:else if noLibrary}
     <Notice tone="warning" compact announce={false}>{msg('screenshots.noLibrary')}</Notice>
   {:else if loadFailed}
     <Notice tone="danger" compact>{msg('screenshots.loadError')}</Notice>
   {:else if shots.length === 0}
-    <p class="note">{!statusKnown ? msg('screenshots.emptyNoHotkey') : enabled ? msg('screenshots.empty', { hotkey }) : msg('screenshots.disabledNote')}</p>
+    <EmptyState
+      size="inline"
+      title={!statusKnown ? msg('screenshots.emptyNoHotkey') : enabled ? msg('screenshots.empty', { hotkey }) : msg('screenshots.disabledNote')}
+    />
   {:else}
     <div class="grid">
       {#each shots as shot, index (shot.name)}
@@ -189,11 +194,6 @@
   .hint {
     margin-top: 0.4rem;
     font-size: 1.2rem;
-    color: var(--text-3);
-  }
-
-  .note {
-    font-size: var(--font-sm);
     color: var(--text-3);
   }
 

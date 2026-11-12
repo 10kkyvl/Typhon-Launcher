@@ -1,6 +1,7 @@
 <script lang="ts">
   import Card from '../../lib/components/Card.svelte';
   import Notice from '../../lib/components/Notice.svelte';
+  import Spinner from '../../lib/components/Spinner.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { AccountError } from '../../lib/services/account';
   import { list as listReviews, type Summary } from '../../lib/services/reviews';
@@ -61,7 +62,7 @@
     {#if failed}
       <Notice tone="danger" compact>{msg('reviews.summaryError')}</Notice>
     {:else if loading && !summary}
-      <p class="muted">{msg('reviews.summaryLoading')}</p>
+      <Spinner size="sm" label={msg('reviews.summaryLoading')} />
     {:else if score}
       <button class="score" type="button" disabled={!onopen} onclick={() => onopen?.()}>
         <StatusBadge kind={reviewScoreBadgeKind(score.tone)} label={score.label} />
@@ -74,11 +75,6 @@
 {/if}
 
 <style>
-  .muted {
-    font-size: var(--font-sm);
-    color: var(--text-3);
-  }
-
   .score {
     display: flex;
     flex-direction: column;

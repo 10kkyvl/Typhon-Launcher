@@ -1255,7 +1255,7 @@
         {/if}
         {#if withReleases}
           {@render releasesFailedNotice()}
-          {#if !releasesLoading && !releasesFailed && releaseGroups.length === 0}<p class="muted">{msg('games.detailNoReleases')}</p>{/if}
+          {#if !releasesLoading && !releasesFailed && releaseGroups.length === 0}<EmptyState size="inline" title={msg('games.detailNoReleases')} />{/if}
           <ReleaseList
             groups={releaseGroups}
             loading={releasesLoading}
@@ -1276,7 +1276,7 @@
       <section class="section">
         <h2 class="heading" tabindex="-1">{msg('games.detailAvailableDownloadsHeading')}</h2>
         {@render releasesFailedNotice()}
-        {#if !releasesLoading && !releasesFailed && releaseGroups.length === 0}<p class="muted">{msg('games.detailNoReleases')}</p>{/if}
+        {#if !releasesLoading && !releasesFailed && releaseGroups.length === 0}<EmptyState size="inline" title={msg('games.detailNoReleases')} />{/if}
         <ReleaseList
           groups={releaseGroups}
           loading={releasesLoading}
