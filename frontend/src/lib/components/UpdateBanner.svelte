@@ -19,6 +19,7 @@
   import { msg } from '../i18n';
 
   let confirmOpen = $state(false);
+  let retrying = $state(false);
 
   const status = $derived($selfUpdateStatus);
   const view = $derived($selfUpdateView);
@@ -28,15 +29,27 @@
   const totalBytes = $derived(progress?.totalBytes ?? status.totalBytes ?? 0);
   const downloadedBytes = $derived(progress?.downloadedBytes ?? status.downloadedBytes ?? 0);
   const pct = $derived(totalBytes > 0 ? Math.min(100, Math.max(0, (downloadedBytes / totalBytes) * 100)) : 0);
+
+  // The failure stays on screen until the retry's answer changes the status: the notice and its
+  // focused Retry stay, the Retry busy.
+  async function retry() {
+    if (retrying) return;
+    retrying = true;
+    try {
+      await retryFailed();
+    } finally {
+      retrying = false;
+    }
+  }
 </script>
 
 {#if view === 'failed'}
-  <div class="failed">
+  <div class="message">
     <Notice tone="danger">
       {statusReason(status) || msg('ui.updateCheckFailed')}
       {#snippet action()}
-        <Button size="sm" onclick={retryFailed}>
-          <RefreshCw size="1.5rem" strokeWidth={1.8} />
+        <Button size="sm" busy={retrying} onclick={retry}>
+          {#if !retrying}<RefreshCw size="1.5rem" strokeWidth={1.8} />{/if}
           {msg('common.retry')}
         </Button>
       {/snippet}
@@ -61,37 +74,33 @@
     </div>
   </div>
 {:else if view === 'applying'}
-  <div class="banner">
-    <div class="banner-text">
-      <span>{msg('ui.installingUpdate', { version: status.availableVersion ?? '' })}</span>
-    </div>
-    <p class="muted">{msg('ui.launcherRestartShort')}</p>
+  <div class="message">
+    <Notice title={msg('ui.installingUpdate', { version: status.availableVersion ?? '' })}>
+      {msg('ui.launcherRestartShort')}
+    </Notice>
   </div>
 {:else if view === 'ready'}
-  <div class="banner">
-    <div class="banner-text">
-      <span>{msg('ui.updateReadyMessage', { version: status.availableVersion ?? '' })}</span>
-    </div>
-    <p class="muted">{msg('ui.launcherRestartNewVersion')}</p>
-    <div class="actions">
-      <Button variant="primary" size="sm" onclick={() => (confirmOpen = true)}>{msg('ui.restartAndUpdate')}</Button>
-      <Button size="sm" onclick={requestDismiss}>{msg('ui.notNow')}</Button>
-    </div>
+  <div class="message">
+    <Notice tone="success" title={msg('ui.updateReadyMessage', { version: status.availableVersion ?? '' })}>
+      {msg('ui.launcherRestartNewVersion')}
+      {#snippet action()}
+        <Button variant="primary" size="sm" onclick={() => (confirmOpen = true)}>{msg('ui.restartAndUpdate')}</Button>
+        <Button size="sm" onclick={requestDismiss}>{msg('ui.notNow')}</Button>
+      {/snippet}
+    </Notice>
   </div>
 {:else if view === 'available'}
-  <div class="banner">
-    <div class="banner-text">
-      <span>{msg('ui.versionAvailable', { version: status.availableVersion ?? '' })}</span>
-    </div>
-    {#if status.notes}
-      <p class="muted notes">{status.notes}</p>
-    {/if}
-    <div class="actions">
-      <Button variant="primary" size="sm" onclick={requestDownload}>
-        <Download size="1.5rem" strokeWidth={1.8} />
-        {msg('ui.download')}
-      </Button>
-    </div>
+  <!-- Found by a check that ran on its own: a standing fact of the settings page, read with it. -->
+  <div class="message">
+    <Notice announce={false} title={status.notes ? msg('ui.versionAvailable', { version: status.availableVersion ?? '' }) : undefined}>
+      {status.notes || msg('ui.versionAvailable', { version: status.availableVersion ?? '' })}
+      {#snippet action()}
+        <Button variant="primary" size="sm" onclick={requestDownload}>
+          <Download size="1.5rem" strokeWidth={1.8} />
+          {msg('ui.download')}
+        </Button>
+      {/snippet}
+    </Notice>
   </div>
 {/if}
 
@@ -108,7 +117,7 @@
     background: var(--surface-3);
   }
 
-  .failed {
+  .message {
     margin-top: var(--space-4);
   }
 
@@ -124,12 +133,6 @@
     display: flex;
     align-items: center;
     gap: var(--space-4);
-  }
-
-  .actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-3);
   }
 
   .muted {
