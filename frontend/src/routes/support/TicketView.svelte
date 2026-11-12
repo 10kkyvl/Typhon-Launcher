@@ -5,6 +5,7 @@
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import Notice from '../../lib/components/Notice.svelte';
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
+  import Spinner from '../../lib/components/Spinner.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import type { ConfirmPrompt } from '../../lib/confirm/prompts';
   import { msg } from '../../lib/i18n';
@@ -42,6 +43,8 @@
   let sending = $state(false);
   let upload = $state<LogUploadStatus | null>(null);
   let resolving = $state<ConfirmPrompt | null>(null);
+  let retrying = $state(false);
+  let limitsRetrying = $state(false);
   let confirm: LogsConfirm;
   let run = 0;
 
@@ -50,13 +53,15 @@
   const resolved = $derived(ticket?.status === 'resolved');
   const stage = $derived(logsStageText(upload));
 
-  async function load() {
+  // A retry keeps the failure on screen until its answer: the notice and its focused Retry stay.
+  async function load(retry = false) {
     const current = ++run;
-    failure = '';
+    if (!retry) failure = '';
     try {
       const next = await getTicket(number);
       if (current !== run) return;
       thread = next;
+      failure = '';
       void refreshUnread();
     } catch (err) {
       if (current !== run) return;
@@ -66,18 +71,34 @@
     }
   }
 
-  async function loadLimits() {
-    limitsFailure = '';
+  async function loadLimits(retry = false) {
+    if (!retry) limitsFailure = '';
     try {
       limits = await ticketLimits();
+      limitsFailure = '';
     } catch (err) {
       limitsFailure = supportErrorText(err, msg('tickets.limitsFailed'));
     }
   }
 
-  function retry() {
-    loading = thread === null;
-    void load();
+  async function retry() {
+    if (retrying) return;
+    retrying = true;
+    try {
+      await load(true);
+    } finally {
+      retrying = false;
+    }
+  }
+
+  async function retryLimits() {
+    if (limitsRetrying) return;
+    limitsRetrying = true;
+    try {
+      await loadLimits(true);
+    } finally {
+      limitsRetrying = false;
+    }
   }
 
   onMount(() => {
@@ -161,14 +182,14 @@
     <Notice tone="danger">
       {failure}
       {#snippet action()}
-        <Button size="sm" onclick={retry}>{msg('common.retry')}</Button>
+        <Button size="sm" busy={retrying} onclick={retry}>{msg('common.retry')}</Button>
       {/snippet}
     </Notice>
   </div>
 {/if}
 
 {#if loading}
-  <p class="muted">{msg('tickets.loading')}</p>
+  <Spinner label={msg('tickets.loading')} />
 {:else if ticket && thread}
   <header class="head">
     <div class="heading">
@@ -207,18 +228,19 @@
       <Notice tone="danger">
         {limitsFailure}
         {#snippet action()}
-          <Button size="sm" onclick={loadLimits}>{msg('common.retry')}</Button>
+          <Button size="sm" busy={limitsRetrying} onclick={retryLimits}>{msg('common.retry')}</Button>
         {/snippet}
       </Notice>
     {:else if limits}
-      <label class="field">
-        <span class="label">
+      <div class="field">
+        <label class="label" for="{uid}-reply">
           {msg('tickets.replyLabel')}
           <span class="counter" class:over={bodyLength(reply) > limits.maxBodyRunes}>
             {msg('tickets.counter', { count: bodyLength(reply), max: limits.maxBodyRunes })}
           </span>
-        </span>
+        </label>
         <textarea
+          id="{uid}-reply"
           class="input area"
           class:invalid={!!replyError}
           aria-invalid={replyError ? 'true' : undefined}
@@ -231,7 +253,7 @@
           oninput={() => (replyError = '')}
         ></textarea>
         {#if replyError}<span class="error" id="{uid}-reply-error" role="alert">{replyError}</span>{/if}
-      </label>
+      </div>
 
       <AttachLogs bind:checked={attachLogs} disabled={sending} />
 
@@ -248,7 +270,7 @@
       {/if}
 
       <div class="actions">
-        <Button variant="primary" disabled={sending} onclick={submitReply}>
+        <Button variant="primary" busy={sending} onclick={submitReply}>
           {sending ? msg('tickets.replySending') : msg('tickets.reply')}
         </Button>
       </div>
@@ -265,12 +287,6 @@
 <style>
   .top {
     margin: 0 0 var(--space-4) -0.8rem;
-  }
-
-  .muted {
-    margin: 0;
-    font-size: var(--font-sm);
-    color: var(--text-3);
   }
 
   .banner {

@@ -2,10 +2,12 @@
   import { onMount, untrack } from 'svelte';
   import { X } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
+  import IconButton from '../../lib/components/IconButton.svelte';
   import Notice from '../../lib/components/Notice.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import Select from '../../lib/components/Select.svelte';
+  import Spinner from '../../lib/components/Spinner.svelte';
   import GamePicker from '../../lib/components/profile/GamePicker.svelte';
   import { msg } from '../../lib/i18n';
   import { accountErrorField } from '../../lib/services/accountMessages';
@@ -43,18 +45,31 @@
   let errors = $state<DraftErrors>({});
   let formError = $state('');
   let sending = $state(false);
+  let limitsRetrying = $state(false);
   let upload = $state<LogUploadStatus | null>(null);
   let confirm: LogsConfirm;
 
   const topics = $derived(topicOptions());
   const stage = $derived(logsStageText(upload));
 
-  async function loadLimits() {
-    limitsFailure = '';
+  // A retry keeps the failure on screen until its answer: the notice and its focused Retry stay.
+  async function loadLimits(retry = false) {
+    if (!retry) limitsFailure = '';
     try {
       limits = await ticketLimits();
+      limitsFailure = '';
     } catch (err) {
       limitsFailure = supportErrorText(err, msg('tickets.limitsFailed'));
+    }
+  }
+
+  async function retryLimits() {
+    if (limitsRetrying) return;
+    limitsRetrying = true;
+    try {
+      await loadLimits(true);
+    } finally {
+      limitsRetrying = false;
     }
   }
 
@@ -121,11 +136,11 @@
   <Notice tone="danger">
     {limitsFailure}
     {#snippet action()}
-      <Button size="sm" onclick={loadLimits}>{msg('common.retry')}</Button>
+      <Button size="sm" busy={limitsRetrying} onclick={retryLimits}>{msg('common.retry')}</Button>
     {/snippet}
   </Notice>
 {:else if !limits}
-  <p class="muted">{msg('tickets.loading')}</p>
+  <Spinner label={msg('tickets.loading')} />
 {:else}
   <div class="form">
     <div class="field">
@@ -138,9 +153,9 @@
       {#if game}
         <div class="chosen">
           <span class="chosen-title" dir="auto">{game.title}</span>
-          <button type="button" class="clear" aria-label={msg('tickets.gameClear')} disabled={sending} onclick={() => (game = null)}>
+          <IconButton size="sm" label={msg('tickets.gameClear')} disabled={sending} onclick={() => (game = null)}>
             <X size="1.5rem" strokeWidth={1.8} />
-          </button>
+          </IconButton>
         </div>
       {:else}
         <p class="hint">{msg('tickets.gameNone')}</p>
@@ -155,14 +170,15 @@
       {/if}
     </div>
 
-    <label class="field">
-      <span class="label">
+    <div class="field">
+      <label class="label" for="{uid}-subject">
         {msg('tickets.subjectLabel')}
         <span class="counter" class:over={runeCount(subject.trim()) > limits.maxSubjectRunes}>
           {msg('tickets.counter', { count: runeCount(subject.trim()), max: limits.maxSubjectRunes })}
         </span>
-      </span>
+      </label>
       <input
+        id="{uid}-subject"
         class="input"
         class:invalid={!!errors.subject}
         aria-invalid={errors.subject ? 'true' : undefined}
@@ -175,16 +191,17 @@
         oninput={() => (errors = { ...errors, subject: undefined })}
       />
       {#if errors.subject}<span class="error" id="{uid}-subject-error" role="alert">{errors.subject}</span>{/if}
-    </label>
+    </div>
 
-    <label class="field">
-      <span class="label">
+    <div class="field">
+      <label class="label" for="{uid}-body">
         {msg('tickets.bodyLabel')}
         <span class="counter" class:over={bodyLength(body) > limits.maxBodyRunes}>
           {msg('tickets.counter', { count: bodyLength(body), max: limits.maxBodyRunes })}
         </span>
-      </span>
+      </label>
       <textarea
+        id="{uid}-body"
         class="input area"
         class:invalid={!!errors.body}
         aria-invalid={errors.body ? 'true' : undefined}
@@ -197,7 +214,7 @@
         oninput={() => (errors = { ...errors, body: undefined })}
       ></textarea>
       {#if errors.body}<span class="error" id="{uid}-body-error" role="alert">{errors.body}</span>{/if}
-    </label>
+    </div>
 
     <AttachLogs
       bind:checked={attachLogs}
@@ -223,7 +240,7 @@
 
     <div class="actions">
       <Button disabled={sending} onclick={goBack}>{msg('common.cancel')}</Button>
-      <Button variant="primary" disabled={sending} onclick={submit}>
+      <Button variant="primary" busy={sending} onclick={submit}>
         {sending ? msg('tickets.submitting') : msg('tickets.submit')}
       </Button>
     </div>
@@ -233,13 +250,6 @@
 <LogsConfirm bind:this={confirm} />
 
 <style>
-  .muted {
-    margin: 0;
-    font-size: var(--font-sm);
-    color: var(--text-3);
-  }
-
-
   .form {
     display: flex;
     flex-direction: column;
@@ -331,21 +341,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .clear {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.8rem;
-    height: 2.8rem;
-    border-radius: var(--radius-sm);
-    color: var(--text-3);
-  }
-
-  .clear:hover:not(:disabled) {
-    background: var(--hover-strong);
-    color: var(--text);
   }
 
   .picker-toggle {

@@ -5,6 +5,7 @@
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import Notice from '../../lib/components/Notice.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
+  import Spinner from '../../lib/components/Spinner.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { msg } from '../../lib/i18n';
   import { openStatusPage } from '../../lib/services/account';
@@ -22,17 +23,20 @@
   let loadingMore = $state(false);
   let failure = $state('');
   let loaded = $state(false);
+  let retrying = $state(false);
   let run = 0;
 
-  async function load() {
+  // A retry keeps the failure on screen until its answer: the notice and its focused Retry stay.
+  async function load(retry = false) {
     const current = ++run;
-    failure = '';
+    if (!retry) failure = '';
     try {
       const page = await listTickets('');
       if (current !== run) return;
       tickets = page.tickets;
       next = page.next;
       loaded = true;
+      failure = '';
     } catch (err) {
       if (current !== run) return;
       failure = supportErrorText(err, msg('tickets.loadFailed'));
@@ -60,9 +64,14 @@
     }
   }
 
-  function retry() {
-    loading = tickets.length === 0;
-    void load();
+  async function retry() {
+    if (retrying) return;
+    retrying = true;
+    try {
+      await load(true);
+    } finally {
+      retrying = false;
+    }
   }
 
   onMount(() => {
@@ -118,14 +127,14 @@
     <Notice tone="danger">
       {failure}
       {#snippet action()}
-        <Button size="sm" onclick={retry}>{msg('common.retry')}</Button>
+        <Button size="sm" busy={retrying} onclick={retry}>{msg('common.retry')}</Button>
       {/snippet}
     </Notice>
   </div>
 {/if}
 
 {#if loading}
-  <p class="muted">{msg('tickets.loading')}</p>
+  <Spinner label={msg('tickets.loading')} />
 {:else if tickets.length === 0 && !failure}
   <EmptyState level={2} title={msg('tickets.emptyTitle')} description={msg('tickets.emptyText')}>
     {#snippet icon()}
@@ -159,7 +168,7 @@
   </ul>
   {#if next}
     <div class="more">
-      <Button disabled={loadingMore} onclick={more}>
+      <Button busy={loadingMore} onclick={more}>
         {loadingMore ? msg('tickets.loadingMore') : msg('tickets.loadMore')}
       </Button>
     </div>
@@ -167,12 +176,6 @@
 {/if}
 
 <style>
-  .muted {
-    margin: 0;
-    font-size: var(--font-sm);
-    color: var(--text-3);
-  }
-
   .banner {
     margin-bottom: var(--space-4);
   }
