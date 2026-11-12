@@ -51,6 +51,20 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
     ['danger', true],
   ],
+  // Each section's failure, a wrapper problem and the offer to keep a changed game follow a load or a switch.
+  'lib/components/GamePropertiesModal.svelte': [
+    ['danger', true],
+    ['danger', true],
+    ['danger', true],
+    ['danger', true],
+    ['danger', true],
+    ['warning', true],
+    ['danger', true],
+    ['danger', true],
+    ['danger', true],
+    ['danger', true],
+    ['danger', true],
+  ],
   // The game running or busy is a state of the game when the dialog opens; a failed removal just happened.
   'lib/components/RemoveGameModal.svelte': [
     ['warning', false],
