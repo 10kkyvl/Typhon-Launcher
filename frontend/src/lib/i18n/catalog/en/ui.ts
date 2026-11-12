@@ -148,6 +148,7 @@ export const ui: Record<UiKey, Message> = {
   'ui.notAvailable': 'Unavailable',
   'ui.updateGameTitle': 'Update the game?',
   'ui.updateHistoryTitle': 'Update history',
+  'ui.updateHistoryFailed': 'Could not load the update history.',
   'ui.noUpdatesYet': 'No updates yet.',
 
   'ui.desktopOnly': 'Available only in the desktop build',

@@ -146,6 +146,7 @@ export const ui = {
   'ui.notAvailable': 'Недоступен',
   'ui.updateGameTitle': 'Обновить игру?',
   'ui.updateHistoryTitle': 'История обновлений',
+  'ui.updateHistoryFailed': 'Не удалось загрузить историю обновлений.',
   'ui.noUpdatesYet': 'Обновлений пока не было.',
 
   'ui.desktopOnly': 'Доступно только в desktop-сборке',
