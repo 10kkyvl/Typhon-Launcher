@@ -194,7 +194,6 @@ describe('Catalog: retrying', () => {
     const { user } = renderDom(Catalog);
     const notice = (await screen.findByText(msg('games.catalogOffline'))).closest('.notice') as HTMLElement;
     const region = notice.querySelector('[role="alert"], [role="status"]') as HTMLElement;
-    const before = region.firstElementChild;
     await retryHolds(notice, user);
     const retry = document.activeElement;
 
@@ -205,9 +204,11 @@ describe('Catalog: retrying', () => {
     expect(notice.textContent).toContain(msg('games.catalogUnavailableTitle'));
     expect(document.activeElement).toBe(retry);
     await vi.waitFor(() => expect(retry?.hasAttribute('aria-busy')).toBe(false));
-    // Said again: the failure's words come into the live region as a new node.
-    await vi.waitFor(() => expect(region.firstElementChild).not.toBe(before));
+    // New words are said by their change inside the live region itself; the same words would come back
+    // as a new node instead (the next test).
+    expect(region.isConnected).toBe(true);
     expect(region.textContent).toContain(msg('games.catalogUnavailableTitle'));
+    expect(region.textContent).not.toContain(msg('games.catalogOffline'));
   });
 
   it('a failed first page whose Retry fails again: the notice stays, says it again and keeps the focus', async () => {
