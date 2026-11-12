@@ -48,6 +48,11 @@ const SITES: Record<string, Site[]> = {
     ['warning', false],
   ],
   'routes/profile/ProfileHeader.svelte': [['danger', true]],
+  // The connection went while the dialog is open; a save was refused.
+  'routes/profile/ProfileSettingsModal.svelte': [
+    ['warning', true],
+    ['danger', true],
+  ],
   'routes/settings/AppearanceTab.svelte': [
     // The stored theme's CSS breaks a later rule: a fact of the theme, shown whenever it is edited.
     ['warning', false],
