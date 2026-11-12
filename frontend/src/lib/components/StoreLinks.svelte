@@ -2,6 +2,7 @@
   import { ExternalLink } from '@lucide/svelte';
   import { t, type MessageKey } from '../i18n';
   import { storeEntries, type StoreId } from '../services/metadata';
+  import Chip from './Chip.svelte';
 
   let {
     links,
@@ -20,21 +21,36 @@
   };
 
   const stores = $derived(storeEntries(links));
+
+  // A web page is a real link (what a link offers, its address on hover); the launcher still opens
+  // it, in the system browser, after its own checks. Any other address is never put in an href.
+  function webPage(store: StoreId): string | undefined {
+    const address = links?.[store] ?? '';
+    return /^https?:\/\//i.test(address) ? address : undefined;
+  }
+
+  function open(event: MouseEvent, store: StoreId) {
+    event.preventDefault();
+    onopen(store);
+  }
 </script>
+
+{#snippet mark()}
+  <ExternalLink />
+{/snippet}
 
 {#if stores.length > 0}
   <div class="store-links">
     <span class="store-title">{$t('games.storeLinksTitle')}</span>
     <div class="store-list">
       {#each stores as store (store)}
-        <button
-          class="store-link"
-          data-bp-focus={focusPrefix ? `${focusPrefix}${store}` : undefined}
-          onclick={() => onopen(store)}
-        >
-          {$t(LABELS[store])}
-          <ExternalLink size="1.4rem" strokeWidth={1.8} />
-        </button>
+        {@const href = webPage(store)}
+        {@const focus = focusPrefix ? `${focusPrefix}${store}` : undefined}
+        {#if href}
+          <Chip {href} data-bp-focus={focus} onclick={(event) => open(event, store)} end={mark}>{$t(LABELS[store])}</Chip>
+        {:else}
+          <Chip data-bp-focus={focus} onclick={(event) => open(event, store)} end={mark}>{$t(LABELS[store])}</Chip>
+        {/if}
       {/each}
     </div>
   </div>
@@ -57,27 +73,5 @@
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-2);
-  }
-
-  .store-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.6rem;
-    height: 2.8rem;
-    padding: 0 1.1rem;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--surface);
-    color: var(--text-2);
-    font-size: var(--font-xs);
-    font-weight: 500;
-    transition:
-      color var(--dur) var(--ease),
-      border-color var(--dur) var(--ease);
-  }
-
-  .store-link:hover {
-    color: var(--text);
-    border-color: var(--border-strong);
   }
 </style>

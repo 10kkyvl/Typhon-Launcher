@@ -4,6 +4,7 @@
   import { dlcView, hasRequirements, requirementColumns } from '../game/extras';
   import type { SteamInfo } from '../services/metadata';
   import Button from './Button.svelte';
+  import Chip from './Chip.svelte';
   import Tabs from './Tabs.svelte';
   import { tabPanel } from './tabs';
 
@@ -27,6 +28,11 @@
   const dlc = $derived(dlcView(steam?.dlc, dlcExpanded));
 </script>
 
+{#snippet mark()}
+  <ExternalLink />
+{/snippet}
+
+<!-- A DLC's store page has no address here: the launcher builds it and opens it, so it is a chip button. -->
 {#if hasRequirements(columns)}
   <section class="block">
     <h2 class="heading" id="{uid}-requirements">{$t('games.detailRequirementsHeading')}</h2>
@@ -56,10 +62,7 @@
     <ul class="dlc" id="{uid}-dlc">
       {#each dlc.items as item (item.appId)}
         <li>
-          <button class="dlc-link" onclick={() => onopendlc(item.appId)}>
-            <span class="dlc-name">{item.name}</span>
-            <ExternalLink size="1.4rem" strokeWidth={1.8} />
-          </button>
+          <Chip onclick={() => onopendlc(item.appId)} end={mark}><span class="dlc-name">{item.name}</span></Chip>
         </li>
       {/each}
     </ul>
@@ -126,33 +129,13 @@
     margin: 0;
   }
 
-  .dlc-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.6rem;
-    min-height: 2.8rem;
-    max-width: 100%;
-    padding: 0 1.1rem;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--surface);
-    color: var(--text-2);
-    font-size: var(--font-xs);
-    font-weight: 500;
-    transition:
-      color var(--dur) var(--ease),
-      border-color var(--dur) var(--ease);
-  }
 
-  .dlc-link:hover {
-    color: var(--text);
-    border-color: var(--border-strong);
-  }
 
+  /* A long name ends in an ellipsis, not past the column: the chip has no limit of its own. */
   .dlc-name {
+    max-width: 28rem;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .toggle {
