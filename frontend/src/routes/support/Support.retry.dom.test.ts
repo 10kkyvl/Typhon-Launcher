@@ -259,3 +259,30 @@ describe('Support: a Retry that fails again says so again', () => {
     await saidAgain(seen, msg('tickets.limitsFailed'));
   });
 });
+
+describe('TicketList: a reply while a Retry runs', () => {
+  it('starts no refresh of its own over the retry', async () => {
+    const again = held<TicketPage>();
+    vi.mocked(listTickets)
+      .mockResolvedValueOnce({ tickets: [ticket(1, 'First request')], next: '' })
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockReturnValueOnce(again.promise)
+      .mockResolvedValue({ tickets: [ticket(1, 'First request')], next: '' });
+    const { user } = renderDom(TicketList);
+    await screen.findByRole('button', { name: /First request/ });
+    unreadReplies.set(1);
+    const seen = await failed(msg('tickets.loadFailed'));
+    await user.click(seen.retry);
+    expect(listTickets).toHaveBeenCalledTimes(3);
+
+    unreadReplies.set(2);
+    await Promise.resolve();
+
+    expect(listTickets).toHaveBeenCalledTimes(3);
+    expect(seen.notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(seen.retry);
+    again.resolve({ tickets: [ticket(1, 'First request')], next: '' });
+    await vi.waitFor(() => expect(seen.notice.isConnected).toBe(false));
+  });
+});
+
