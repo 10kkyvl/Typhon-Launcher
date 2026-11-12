@@ -3,6 +3,7 @@
   import type { HTMLAnchorAttributes, HTMLButtonAttributes } from 'svelte/elements';
   import { X } from '@lucide/svelte';
   import { refuseWhile } from './refuse';
+  import Spinner from './Spinner.svelte';
   import Tooltip from './Tooltip.svelte';
 
   /**
@@ -82,8 +83,8 @@
     reason?: string;
     /**
      * Its own request is running (a vote, a reaction): focus stays on it, it says it is busy and
-     * unavailable, ignores presses, and draws no hover or press. No spinner: a chip is a word in a row,
-     * and its count or state changes when the answer comes.
+     * unavailable, ignores presses, and draws no hover or press. The spinner stands over the label,
+     * which keeps its place (the chip does not change width) and stays the chip's name.
      */
     busy?: boolean;
     onclick?: (e: MouseEvent) => void;
@@ -106,7 +107,9 @@
 </script>
 
 {#snippet content()}
-  {@render children?.()}{#if end}<span class="end" data-part="chip-end" aria-hidden="true">{@render end()}</span>{/if}
+  <span class="content" class:waiting={busy}
+    >{@render children?.()}{#if end}<span class="end" data-part="chip-end" aria-hidden="true">{@render end()}</span>{/if}</span
+  >{#if busy}<span class="busy-mark" data-busy-mark><Spinner size="sm" tone="current" /></span>{/if}
 {/snippet}
 
 {#snippet chip()}
@@ -127,7 +130,7 @@
           onclick={onremove}
           {@attach reason !== undefined || busy ? guard : undefined}
         >
-          <X strokeWidth={2} aria-hidden="true" />
+          {#if busy}<Spinner size="sm" tone="current" />{:else}<X strokeWidth={2} aria-hidden="true" />{/if}
         </button>
       </Tooltip>
     </span>
@@ -242,7 +245,27 @@
   }
 
   /* Busy is not unavailable: it keeps its colour while its own request runs. */
+  /* The label as one item of the chip's row, its own parts spaced as the chip spaces them. */
+  .content {
+    display: inline-flex;
+    align-items: center;
+    gap: inherit;
+  }
+
+  /* Laid out but unseen while busy: the chip keeps its width and its name. */
+  .content.waiting {
+    opacity: 0;
+  }
+
+  .busy-mark {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+  }
+
   button.chip[aria-busy='true'] {
+    position: relative;
     opacity: 1;
     cursor: progress;
   }

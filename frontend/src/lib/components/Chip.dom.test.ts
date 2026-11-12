@@ -215,3 +215,39 @@ describe('Chip removable while it cannot be removed now', () => {
     expect((screen.getByRole('button', { name: 'Remove the tag rpg' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
+
+// Busy must be seen, not only said: a keyboard or gamepad user pressed it and is looking at it. The
+// shared spinner stands over the label, which keeps its place (the chip does not change width) and
+// stays the chip's name.
+describe('Chip busy is seen', () => {
+  const label = createRawSnippet(() => ({ render: () => '<span>Helpful (3)</span>' }));
+
+  it('a pressable chip shows the spinner over its label, named as before', async () => {
+    const { rerender } = render(Chip, { target: app, props: { onclick: vi.fn(), children: label } });
+    const chip = screen.getByRole('button', { name: 'Helpful (3)' });
+    expect(chip.querySelector('.spinner')).toBeNull();
+
+    await rerender({ onclick: vi.fn(), children: label, busy: true });
+
+    expect(screen.getByRole('button', { name: 'Helpful (3)' })).toBe(chip);
+    const mark = chip.querySelector('[data-busy-mark]');
+    expect(mark?.querySelector('.spinner')?.getAttribute('aria-hidden')).toBe('true');
+    expect(chip.querySelector('.content')?.classList.contains('waiting')).toBe(true);
+  });
+
+  it('a removable chip shows the spinner in place of its remove mark', () => {
+    render(Chip, { target: app, props: { onremove: vi.fn(), removeLabel: 'Remove the tag rpg', children: label, busy: true } });
+    const remove = screen.getByRole('button', { name: 'Remove the tag rpg' });
+    expect(remove.querySelector('.spinner')).not.toBeNull();
+    expect(remove.querySelector('svg')).toBeNull();
+  });
+
+  // jsdom lays nothing out: what keeps the width is read from the style.
+  it('keeps its width: the label stays laid out, unseen, and the spinner stands over it', () => {
+    const css = styleOf(chipSource, 'Chip.svelte');
+    expect(ruleBody(css, '.content.waiting')).toEqual({ opacity: '0' });
+    expect(ruleBody(css, '.busy-mark')).toMatchObject({ position: 'absolute', inset: '0' });
+    expect(ruleBody(css, "button.chip[aria-busy='true']")).toMatchObject({ position: 'relative' });
+    expect(css).not.toMatch(/@keyframes/);
+  });
+});
