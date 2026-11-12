@@ -106,6 +106,12 @@ const SITES: Record<string, Site[]> = {
     ['warning', false],
     ['danger', true],
   ],
+  // The source's last stored error is shown on every opening; a failed load just happened.
+  'lib/components/SourceDetailsModal.svelte': [
+    ['danger', false],
+    ['danger', true],
+    ['danger', true],
+  ],
   'lib/components/SourcesNoticeModal.svelte': [['danger', true]],
   // A block whose data failed to load; blocks of a newer launcher filling the layout, a standing fact.
   'lib/components/profile/BlockGrid.svelte': [['danger', true]],
