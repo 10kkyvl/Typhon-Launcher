@@ -46,6 +46,11 @@ const SITES: Record<string, Site[]> = {
   'lib/components/SystemRequirements.svelte': [['danger', true]],
   // Advice for the chosen platform, also inside InstallModal and AddDownloadModal.
   'lib/components/EmulatorHint.svelte': [['warning', false]],
+  'lib/components/GameProfiles.svelte': [
+    ['danger', true],
+    ['danger', true],
+    ['danger', true],
+  ],
   // The game running or busy is a state of the game when the dialog opens; a failed removal just happened.
   'lib/components/RemoveGameModal.svelte': [
     ['warning', false],

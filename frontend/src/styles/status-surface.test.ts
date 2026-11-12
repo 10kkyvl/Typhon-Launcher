@@ -220,7 +220,6 @@ const ON_SURFACE: Record<string, [surface: string, ...rules: string[]]> = {
   'lib/components/ThemeContrast.svelte': ['Card of the theme editor', '.summary', '.summary.bad', '.icon', 'li.bad .icon'],
   'lib/components/IntegerInput.svelte': ['the cards of the settings page', '.error'],
   'lib/components/RateLimitInput.svelte': ['the cards of the settings page', '.error'],
-  'lib/components/GameProfiles.svelte': ['a dialog', '.failure'],
   'lib/components/ReleaseNotesList.svelte': ['a dialog; badges', '.kind-added', '.kind-fixed', '.kind-removed'],
   'lib/components/ActivityDock.svelte': ['the dock panel; an icon', '.row-icon.attention'],
   'lib/components/TopbarSearch.svelte': ['the results panel', '.results-note.error'],
