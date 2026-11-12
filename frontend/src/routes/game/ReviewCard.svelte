@@ -2,6 +2,7 @@
   import { Flag, ThumbsDown, ThumbsUp } from '@lucide/svelte';
   import Avatar from '../../lib/components/Avatar.svelte';
   import Button from '../../lib/components/Button.svelte';
+  import Chip from '../../lib/components/Chip.svelte';
   import { fieldsFrame } from '../../lib/profile/frameLook';
   import { AccountError } from '../../lib/services/account';
   import { vote as voteReview, type Review, type ReviewVote } from '../../lib/services/reviews';
@@ -112,24 +113,12 @@
     <div class="helpful">
       <span class="helpful-label">{msg('reviews.helpfulQuestion')}</span>
       {#if showActions}
-        <button
-          class="vote"
-          class:active={myVote === 'helpful'}
-          type="button"
-          disabled={voting}
-          onclick={() => castVote('helpful')}
-        >
+        <Chip selected={myVote === 'helpful'} disabled={voting} onclick={() => castVote('helpful')}>
           {msg('reviews.helpfulYes')} ({helpful})
-        </button>
-        <button
-          class="vote"
-          class:active={myVote === 'unhelpful'}
-          type="button"
-          disabled={voting}
-          onclick={() => castVote('unhelpful')}
-        >
+        </Chip>
+        <Chip selected={myVote === 'unhelpful'} disabled={voting} onclick={() => castVote('unhelpful')}>
           {msg('reviews.helpfulNo')} ({unhelpful})
-        </button>
+        </Chip>
       {:else}
         <span class="vote-readonly">{msg('reviews.helpfulYes')} ({helpful})</span>
         <span class="vote-readonly">{msg('reviews.helpfulNo')} ({unhelpful})</span>
@@ -249,7 +238,6 @@
     color: var(--text-3);
   }
 
-  .vote,
   .vote-readonly {
     display: inline-flex;
     align-items: center;
@@ -259,20 +247,5 @@
     border: 1px solid var(--border-strong);
     font-size: var(--font-xs);
     color: var(--text-2);
-  }
-
-  .vote:hover:not(:disabled) {
-    background: var(--hover-strong);
-  }
-
-  .vote.active {
-    background: var(--accent-subtle);
-    border-color: var(--accent-bright);
-    color: var(--accent-text);
-  }
-
-  .vote:disabled {
-    opacity: 0.6;
-    cursor: default;
   }
 </style>

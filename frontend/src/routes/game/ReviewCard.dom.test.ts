@@ -1,13 +1,17 @@
 import { screen } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
-import type { Review } from '../../lib/services/reviews';
+import { vote, type Review } from '../../lib/services/reviews';
 import { toasts } from '../../lib/stores/toasts';
 import { renderDom } from '../../lib/testing/dom';
 import ReviewCard from './ReviewCard.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
+vi.mock('../../lib/services/reviews', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/services/reviews')>()),
+  vote: vi.fn(),
+}));
 
 function review(body: string): Review {
   return {
@@ -32,6 +36,24 @@ beforeEach(() => {
 afterEach(() => {
   toasts.set([]);
   vi.restoreAllMocks();
+});
+
+describe('ReviewCard: voting', () => {
+  it('votes with a pressed chip that the keyboard toggles', async () => {
+    vi.mocked(vote).mockResolvedValue({ helpful: 3, unhelpful: 1, myVote: 'helpful' } as Awaited<ReturnType<typeof vote>>);
+    const { user } = renderDom(ReviewCard, { review: review('Fine.'), guest: false });
+    const yes = screen.getByRole('button', { name: `${msg('reviews.helpfulYes')} (2)` });
+    expect(yes.classList.contains('chip')).toBe(true);
+    expect(yes.getAttribute('aria-pressed')).toBe('false');
+    yes.focus();
+
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(yes.getAttribute('aria-pressed')).toBe('true'));
+    expect(vote).toHaveBeenCalledWith(7, 'helpful');
+    expect(yes.textContent?.trim()).toBe(`${msg('reviews.helpfulYes')} (3)`);
+    expect(screen.getByRole('button', { name: `${msg('reviews.helpfulNo')} (1)` }).getAttribute('aria-pressed')).toBe('false');
+  });
 });
 
 describe('ReviewCard: reporting', () => {
