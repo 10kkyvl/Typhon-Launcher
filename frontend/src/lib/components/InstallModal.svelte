@@ -42,12 +42,14 @@
   import ConsoleTag from './ConsoleTag.svelte';
   import EmulatorHint from './EmulatorHint.svelte';
   import Modal from './Modal.svelte';
+  import Notice from './Notice.svelte';
   import Spinner from './Spinner.svelte';
   import Select from './Select.svelte';
   import ProgressBar from './ProgressBar.svelte';
   import SegmentedControl from './SegmentedControl.svelte';
   import SystemRequirements from './SystemRequirements.svelte';
   import { msg } from '../i18n';
+  import { nextIndex } from '../utils/roving';
 
   let { open = $bindable(false), downloadId }: { open?: boolean; downloadId: string | null } = $props();
   const uid = $props.id();
@@ -62,6 +64,8 @@
   let info = $state<PlanInfo | null>(null);
   let loading = $state(false);
   let busy = $state(false);
+  // Which button set `busy`: that one stays focused and busy, the others wait.
+  let actor = $state('');
   let destination = $state('');
   let mode = $state('');
   let chosen = $state('');
@@ -175,6 +179,7 @@
     info = null;
     loading = false;
     busy = false;
+    actor = '';
     destination = '';
     mode = '';
     chosen = '';
@@ -310,14 +315,32 @@
     replan(true);
   }
 
-  async function run(action: () => Promise<void>) {
+  async function run(action: () => Promise<void>, by = '') {
     busy = true;
+    actor = by;
     try {
       await action();
     } catch (err) {
       toast(installErrorText(err), 'danger');
     }
     busy = false;
+    actor = '';
+  }
+
+  const own = (by: string) => busy && actor === by;
+  const other = (by: string) => busy && actor !== by;
+
+  let candidateGroup = $state<HTMLElement>();
+
+  // The found executables are a radio group: the arrows move the choice and the focus together.
+  function moveChoice(event: KeyboardEvent) {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const radios = [...(candidateGroup?.querySelectorAll<HTMLElement>('[role="radio"]') ?? [])];
+    const next = nextIndex(radios.indexOf(event.currentTarget as HTMLElement), candidatePaths.length, event.key, { orientation: 'vertical' });
+    if (next === null) return;
+    event.preventDefault();
+    chosen = candidatePaths[next];
+    radios[next]?.focus();
   }
 
   function start() {
@@ -332,7 +355,7 @@
       });
       upsertInstallation(item);
       installId = item.id;
-    });
+    }, 'start');
   }
 
   function startImage() {
@@ -346,7 +369,7 @@
       });
       upsertInstallation(item);
       installId = item.id;
-    });
+    }, 'image');
   }
 
   function playInstalled() {
@@ -355,7 +378,7 @@
     return run(async () => {
       await playGame(item.gameId);
       open = false;
-    });
+    }, 'play');
   }
 
   function openImageFolder() {
@@ -363,7 +386,7 @@
     if (!path) return;
     return run(async () => {
       await openGameFolder(path, '');
-    });
+    }, 'folder');
   }
 
   function openSource() {
@@ -411,25 +434,25 @@
   function confirmChoice() {
     const item = installation;
     if (!item || !chosen) return;
-    return run(() => confirmExecutable(item.id, chosen));
+    return run(() => confirmExecutable(item.id, chosen), 'confirm');
   }
 
   function cancelCurrent() {
     const item = installation;
     if (!item) return;
-    return run(() => cancelInstall(item.id));
+    return run(() => cancelInstall(item.id), 'cancel');
   }
 
   function retryCurrent() {
     const item = installation;
     if (!item) return;
-    return run(() => retryInstall(item.id));
+    return run(() => retryInstall(item.id), 'retry');
   }
 
   function retryManually() {
     const item = installation;
     if (!item) return;
-    return run(() => retryInstallInteractive(item.id));
+    return run(() => retryInstallInteractive(item.id), 'retry');
   }
 
   function dismissCurrent() {
@@ -439,7 +462,7 @@
       await dismissInstall(item.id);
       installId = null;
       if (downloadId) await load(downloadId);
-    });
+    }, 'dismiss');
   }
 
   function deleteData() {
@@ -449,7 +472,7 @@
       await deleteDownloadData(item.downloadId);
       cleanupResolved = true;
       toast(msg('modals.installDownloadDataDeleted'), 'success');
-    });
+    }, 'delete');
   }
 </script>
 
@@ -484,9 +507,9 @@
       </div>
 
       {#if spacePending}
-        <p class="note">{msg('modals.installRecalculating')}</p>
+        <Spinner size="sm" label={msg('modals.installRecalculating')} />
       {:else if notEnoughSpace}
-        <p class="note danger">{msg('modals.installNotEnoughSpace')}</p>
+        <Notice tone="danger" compact>{msg('modals.installNotEnoughSpace')}</Notice>
       {/if}
 
       {#if requirementsGameId}
@@ -502,13 +525,21 @@
 
       {#if controlled || silent}
         <div class="field">
-          <span class="field-label">{msg('modals.installDestinationFolder')}</span>
+          <span class="field-label" id="{uid}-destination-label">{msg('modals.installDestinationFolder')}</span>
           <div class="field-controls">
-            <input class="input sm" type="text" value={destination} oninput={onDestinationInput} />
+            <input
+              class="input sm"
+              type="text"
+              aria-labelledby="{uid}-destination-label"
+              aria-invalid={spaceError && !spacePending ? 'true' : undefined}
+              aria-describedby={spaceError && !spacePending ? `${uid}-destination-error` : undefined}
+              value={destination}
+              oninput={onDestinationInput}
+            />
             <Button size="sm" onclick={browseDestination}>{msg('modals.installBrowse')}</Button>
           </div>
           {#if spaceError && !spacePending}
-            <p class="note danger">{spaceError}</p>
+            <p class="note danger" id="{uid}-destination-error" role="alert">{spaceError}</p>
           {:else if hint && !spacePending}
             <div class="hint">
               <p class="note">
@@ -617,10 +648,18 @@
   {:else if phase === 'choose' && installation}
     <div class="block">
       <span class="lead">{msg('modals.installChooseGameExecutable')}</span>
-      <div class="cand-list" role="radiogroup" aria-label={msg('modals.installExecutablesAriaLabel')}>
-        {#each candidatePaths as path (path)}
-          <button class="cand" role="radio" aria-checked={chosen === path} onclick={() => (chosen = path)}>
-            <span class="radio" class:on={chosen === path}></span>
+      <div class="cand-list" role="radiogroup" aria-label={msg('modals.installExecutablesAriaLabel')} bind:this={candidateGroup}>
+        {#each candidatePaths as path, index (path)}
+          <button
+            type="button"
+            class="cand"
+            role="radio"
+            aria-checked={chosen === path}
+            tabindex={chosen === path || (!candidatePaths.includes(chosen) && index === 0) ? 0 : -1}
+            onclick={() => (chosen = path)}
+            onkeydown={moveChoice}
+          >
+            <span class="radio" class:on={chosen === path} aria-hidden="true"></span>
             <span class="cand-text">
               <span class="cand-name">{basename(path)}</span>
               <span class="cand-path" title={path}>{path}</span>
@@ -658,16 +697,18 @@
         <EmulatorHint platform={installation.platform} />
       {/if}
       {#if installation.warning}
-        <p class="note warning">{installation.warning}</p>
+        <Notice tone="warning" compact announce={false}>{installation.warning}</Notice>
       {/if}
       {#if askCleanup && !cleanupResolved}
         <div class="field">
           <span class="field-label">{msg('modals.installDownloadedFilesLabel')}</span>
           {#if seedingNow}
-            <p class="note danger">{msg('modals.installSeedingDeleteWarning')}</p>
+            <Notice tone="warning" compact announce={false}>{msg('modals.installSeedingDeleteWarning')}</Notice>
           {/if}
           <div class="cleanup-actions">
-            <Button size="sm" variant="danger" disabled={busy} onclick={deleteData}>{msg('modals.installDeleteDownloadedFiles')}</Button>
+            <Button size="sm" variant="danger" disabled={other('delete')} busy={own('delete')} onclick={deleteData}>
+              {msg('modals.installDeleteDownloadedFiles')}
+            </Button>
             <Button size="sm" onclick={() => (cleanupResolved = true)}>{msg('modals.installKeep')}</Button>
           </div>
         </div>
@@ -680,7 +721,7 @@
         {#if installation.platform}<ConsoleTag platform={installation.platform} />{/if}
         <span class="pkg-type">{installStatusLabels(installation.status)}</span>
       </div>
-      <p class="note danger">{installation.error ? installErrorText(installation.error) : msg('modals.installNotCompleted')}</p>
+      <Notice tone="danger" compact>{installation.error ? installErrorText(installation.error) : msg('modals.installNotCompleted')}</Notice>
     </div>
   {/if}
 
@@ -690,7 +731,8 @@
       {#if plan.type !== 'unknown'}
         <Button
           variant="primary"
-          disabled={busy || spaceBlocked || ((controlled || silent) && destination.trim() === '')}
+          disabled={other('start') || spaceBlocked || ((controlled || silent) && destination.trim() === '')}
+          busy={own('start')}
           onclick={start}
         >
           {primaryLabel}
@@ -698,30 +740,34 @@
       {/if}
     {:else if phase === 'image'}
       <Button disabled={busy} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
-      <Button variant="primary" disabled={busy} onclick={startImage}>{msg('emul.installAction')}</Button>
+      <Button variant="primary" disabled={other('image')} busy={own('image')} onclick={startImage}>{msg('emul.installAction')}</Button>
     {:else if phase === 'progress'}
       <Button onclick={() => (open = false)}>{msg('modals.installMinimize')}</Button>
-      <Button variant="danger" disabled={busy || externalWait} onclick={cancelCurrent}>{msg('modals.installCancelInstall')}</Button>
+      <Button variant="danger" disabled={other('cancel') || externalWait} busy={own('cancel')} onclick={cancelCurrent}>
+        {msg('modals.installCancelInstall')}
+      </Button>
     {:else if phase === 'choose'}
       <Button onclick={() => (open = false)}>{msg('common.close')}</Button>
-      <Button variant="danger" disabled={busy} onclick={cancelCurrent}>{msg('modals.installCancelInstall')}</Button>
-      <Button variant="primary" disabled={busy || !chosen} onclick={confirmChoice}>{msg('modals.installConfirm')}</Button>
+      <Button variant="danger" disabled={other('cancel')} busy={own('cancel')} onclick={cancelCurrent}>{msg('modals.installCancelInstall')}</Button>
+      <Button variant="primary" disabled={other('confirm') || !chosen} busy={own('confirm')} onclick={confirmChoice}>
+        {msg('modals.installConfirm')}
+      </Button>
     {:else if phase === 'done'}
       {#if installation?.platform && installation.gameId}
         <Button onclick={() => (open = false)}>{msg('common.done')}</Button>
-        <Button variant="primary" disabled={busy} onclick={playInstalled}>{msg('games.play')}</Button>
+        <Button variant="primary" disabled={other('play')} busy={own('play')} onclick={playInstalled}>{msg('games.play')}</Button>
       {:else}
         <Button variant="primary" onclick={() => (open = false)}>{msg('common.done')}</Button>
       {/if}
     {:else if phase === 'problem'}
-      <Button onclick={dismissCurrent} disabled={busy}>{msg('modals.installDismiss')}</Button>
+      <Button onclick={dismissCurrent} disabled={other('dismiss')} busy={own('dismiss')}>{msg('modals.installDismiss')}</Button>
       {#if installation?.platform}
-        <Button onclick={openImageFolder} disabled={busy}>{msg('emul.installFolder')}</Button>
+        <Button onclick={openImageFolder} disabled={other('folder')} busy={own('folder')}>{msg('emul.installFolder')}</Button>
       {/if}
       {#if installation && needsInteractiveInstall(installation.error)}
-        <Button variant="primary" onclick={retryManually} disabled={busy}>{msg('modals.installManually')}</Button>
+        <Button variant="primary" onclick={retryManually} disabled={other('retry')} busy={own('retry')}>{msg('modals.installManually')}</Button>
       {:else if !installation || canRetryInstall(installation.error)}
-        <Button variant="primary" onclick={retryCurrent} disabled={busy}>{msg('common.retry')}</Button>
+        <Button variant="primary" onclick={retryCurrent} disabled={other('retry')} busy={own('retry')}>{msg('common.retry')}</Button>
       {/if}
     {/if}
   {/snippet}
@@ -848,10 +894,6 @@
     color: var(--danger);
   }
 
-  .note.warning {
-    color: var(--warning);
-  }
-
   .choices {
     display: flex;
     flex-direction: column;
@@ -916,6 +958,11 @@
 
   .cand[aria-checked='true'] {
     background: var(--hover-strong);
+  }
+
+  /* Inside the scrolling list: the shared ring is drawn inward, where the list does not clip it. */
+  .cand:focus-visible {
+    outline-offset: -2px;
   }
 
   .radio {
