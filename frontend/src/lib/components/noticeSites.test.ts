@@ -29,11 +29,14 @@ const SITES: Record<string, Site[]> = {
   'lib/components/profile/BlockPicker.svelte': [['warning', false]],
   'lib/components/profile/GamePicker.svelte': [['danger', true]],
   'routes/activity/Activity.svelte': [['danger', true]],
-  // A game just put away from the recommendations, with its undo; the picks that fell back or went stale.
+  // The page fell back to a cached copy; a game just put away from the recommendations, with its undo;
+  // the picks that fell back or went stale; the first page or a next page failed.
   'routes/catalog/Catalog.svelte': [
+    ['warning', true],
     ['success', true],
     ['info', true],
     ['warning', true],
+    ['danger', true],
     ['danger', true],
   ],
   'routes/diskusage/DiskUsage.svelte': [
@@ -72,12 +75,17 @@ const SITES: Record<string, Site[]> = {
   'routes/game/ReviewSummary.svelte': [['danger', true]],
   // The history file could not be written: a state of the page, not an event of this visit.
   'routes/history/History.svelte': [['danger', false]],
+  'routes/installed/Installed.svelte': [['danger', true]],
   'routes/profile/Profile.svelte': [
     ['danger', true],
     ['danger', true],
   ],
   // Where sources are fetched: a standing fact of the page.
   'routes/sources/Sources.svelte': [['info', false]],
+  'routes/stats/Stats.svelte': [
+    ['danger', true],
+    ['danger', true],
+  ],
   // The art of the auto theme failed; the cover was refused; the worn frame was revoked before this visit.
   'routes/profile/ProfileAppearancePanel.svelte': [
     ['warning', true],
@@ -138,8 +146,13 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
     ['danger', true],
   ],
-  // A closed or a friends-only profile: a standing fact of the page.
+  'routes/user/UserCommonModal.svelte': [
+    ['danger', true],
+    ['danger', true],
+  ],
+  // The profile failed to load; a closed or a friends-only profile is a standing fact of the page.
   'routes/user/UserProfile.svelte': [
+    ['danger', true],
     ['info', false],
     ['info', false],
   ],
