@@ -191,4 +191,14 @@ describe('ChatPanel composer', () => {
     expect(description(attach)).toBe('Up to 4 images of 8 MB each, you can paste them from the clipboard');
     expect(await hintOnFocus(attach)).toBe('Up to 4 images of 8 MB each, you can paste them from the clipboard');
   });
+
+  it('the send button is named, unavailable with an empty draft and available once there is text', async () => {
+    const { keys } = setup();
+    const send = screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement;
+    expect(send.disabled).toBe(true);
+
+    await keys.type(screen.getByRole('textbox'), 'Hi');
+
+    expect(send.disabled).toBe(false);
+  });
 });

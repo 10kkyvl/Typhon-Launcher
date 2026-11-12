@@ -20,8 +20,12 @@
     /** The button's name; shown as its tooltip too. */
     label: string;
     size?: 'md' | 'sm' | 'lg';
-    /** `secondary` stands on a surface of its own with a border, next to full buttons. */
-    variant?: 'ghost' | 'secondary';
+    /**
+     * `secondary` stands on a surface of its own with a border, next to full buttons. `primary` is
+     * filled in the accent as the primary `Button` is: the one main action of its place (send, the
+     * chat's opener).
+     */
+    variant?: 'ghost' | 'secondary' | 'primary';
     /**
      * For a toggle whose name stays the same in both states: whether it is on (aria-pressed). Leave it
      * out for a plain action, and for a button that opens a menu or a panel, which says
@@ -125,6 +129,16 @@
   .icon-btn:is(.lit, [aria-pressed='true']) {
     background: var(--accent-subtle);
     color: var(--accent-text);
+  }
+
+  .icon-btn.primary {
+    background: var(--accent);
+    color: var(--accent-on, var(--accent-on-default));
+  }
+
+  .icon-btn.primary:hover:not(:disabled) {
+    background: var(--accent-hover);
+    color: var(--accent-on, var(--accent-on-default));
   }
 
   .icon-btn:disabled {

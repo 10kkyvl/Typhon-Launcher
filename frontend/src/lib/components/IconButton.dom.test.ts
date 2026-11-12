@@ -1,7 +1,9 @@
 import { render, screen } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ruleBody, styleOf } from '../testing/css';
 import { user } from '../testing/dom';
+import buttonSource from './Button.svelte?raw';
 import { HOVER_DELAY } from './hoverIntent';
 import IconButton from './IconButton.svelte';
 import source from './IconButton.svelte?raw';
@@ -114,6 +116,21 @@ describe('IconButton', () => {
     const button = screen.getByRole('button', { name: 'Favourite' });
     expect(button.classList.contains('lg')).toBe(true);
     expect(button.classList.contains('secondary')).toBe(true);
+  });
+
+  // The chat's send button and its floating opener: the one accent-filled action of their place.
+  it('comes filled in the accent as the primary button does, with its hover, and stays filled while hovered', () => {
+    render(IconButton, { target: app, props: { label: 'Send', variant: 'primary' } });
+    const button = screen.getByRole('button', { name: 'Send' });
+    expect(button.classList.contains('primary')).toBe(true);
+    const css = styleOf(source, 'IconButton.svelte');
+    const buttonCss = styleOf(buttonSource, 'Button.svelte');
+    expect(ruleBody(css, '.icon-btn.primary')).toEqual(ruleBody(buttonCss, '.primary'));
+    const hover = ruleBody(css, '.icon-btn.primary:hover:not(:disabled)');
+    expect(hover.background).toBe(ruleBody(buttonCss, ".primary:hover:not(:disabled, [aria-disabled='true'])").background);
+    expect(hover.color).toBe(ruleBody(buttonCss, '.primary').color);
+    // After the plain hover, at its specificity or more, so the fill is not swapped for the grey one.
+    expect(css.indexOf('.icon-btn.primary:hover:not(:disabled)')).toBeGreaterThan(css.indexOf('.icon-btn:hover:not(:disabled),'));
   });
 
   it('shows an open menu or panel on its trigger, and an "on" toggle, without a class from the caller', () => {

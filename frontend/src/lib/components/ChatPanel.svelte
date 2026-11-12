@@ -488,7 +488,7 @@
               onkeydown={onKeydown}
               onpaste={onPaste}
             ></textarea>
-            <button class="send" type="button" aria-label={msg('social.chatSend')} disabled={(!draft.trim() && draftList.length === 0) || sending} onclick={() => submit()}><Send size="1.7rem" /></button>
+            <IconButton variant="primary" label={msg('social.chatSend')} disabled={(!draft.trim() && draftList.length === 0) || sending} onclick={() => submit()}><Send size="1.7rem" /></IconButton>
           </div>
           <div class="composer-hint">{msg('social.chatHint')}</div>
         {/if}
@@ -565,8 +565,6 @@
   .disabled-copy { color: var(--text-3); }
   .composer { display: flex; align-items: flex-end; gap: 0.7rem; padding: 0.8rem 1rem 0; border-top: 1px solid var(--border); }
   .composer textarea { flex: 1; min-height: 4.2rem; }
-  .send { display: flex; align-items: center; justify-content: center; width: 3.8rem; height: 3.8rem; flex-shrink: 0; border: 0; border-radius: 50%; background: var(--accent); color: var(--accent-on, #fff); cursor: pointer; }
-  .send:disabled { opacity: 0.45; cursor: default; }
   .attach { display: flex; align-items: center; justify-content: center; width: 3.8rem; height: 3.8rem; flex-shrink: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-2); cursor: pointer; }
   .attach:hover:not(:disabled) { background: var(--hover); color: var(--text); }
   .attach:disabled { opacity: 0.45; cursor: default; }
