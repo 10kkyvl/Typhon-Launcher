@@ -1,4 +1,5 @@
-import { screen, within } from '@testing-library/svelte';
+import { fireEvent, screen, within } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import { getTicket, listTickets, ticketLimits, type Ticket, type TicketPage, type TicketThread } from '../../lib/services/support';
@@ -353,5 +354,36 @@ describe('TicketList: "Load more" that brings the last page', () => {
 
     await vi.waitFor(() => expect(screen.queryByRole('button', { name: msg('tickets.loadMore') })).toBeNull());
     expect(document.activeElement).toBe(row('Second request'));
+  });
+
+  // A pointer press where a click does not focus a button (the macOS WebKit view).
+  it('leaves focus alone after a press that held none', async () => {
+    vi.mocked(listTickets).mockImplementation(async (cursor = '') =>
+      cursor === '' ? { tickets: [ticket(1, 'First request')], next: 'c2' } : { tickets: [ticket(2, 'Second request')], next: '' },
+    );
+    renderDom(TicketList);
+    const more = await screen.findByRole('button', { name: msg('tickets.loadMore') });
+    expect(document.activeElement).toBe(document.body);
+
+    await fireEvent.click(more);
+
+    await vi.waitFor(() => expect(row('Second request')).toBeTruthy());
+    await tick();
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('keeps focus on "Load more" while pages remain', async () => {
+    vi.mocked(listTickets).mockImplementation(async (cursor = '') =>
+      cursor === '' ? { tickets: [ticket(1, 'First request')], next: 'c2' } : { tickets: [ticket(2, 'Second request')], next: 'c3' },
+    );
+    const { user } = renderDom(TicketList);
+    const more = await screen.findByRole('button', { name: msg('tickets.loadMore') });
+    more.focus();
+
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(row('Second request')).toBeTruthy());
+    await tick();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: msg('tickets.loadMore') }));
   });
 });

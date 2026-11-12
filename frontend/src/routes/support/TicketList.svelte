@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick, untrack } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { Activity, LifeBuoy, Plus } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
@@ -15,6 +15,7 @@
   import { navigate } from '../../lib/stores/router';
   import { unreadReplies } from '../../lib/stores/support';
   import { toast } from '../../lib/stores/toasts';
+  import { focusHandOff } from '../../lib/utils/focusHandOff';
   import { relativeDate } from '../../lib/utils/format';
 
   let tickets = $state<Ticket[]>([]);
@@ -109,14 +110,11 @@
     }
   }
 
-  // The last page takes "Load more" away: focus goes to the first request it brought.
+  // The last page takes "Load more" away: focus it held goes to the first request that page brought.
   async function showMore() {
     const from = tickets.length;
-    if (!(await more())) return;
-    await tick();
-    const active = document.activeElement;
-    if (active && active !== document.body && active.isConnected) return;
-    list?.querySelectorAll<HTMLElement>('button.row')[from]?.focus();
+    const hand = focusHandOff();
+    if (await more()) void hand(() => list?.querySelectorAll<HTMLElement>('button.row')[from]);
   }
 
   function retryFocus(): HTMLElement | undefined {
