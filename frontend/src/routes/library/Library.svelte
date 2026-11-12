@@ -1,5 +1,4 @@
 <script lang="ts">
-  import Tooltip from '../../lib/components/Tooltip.svelte';
   import Page from '../../lib/components/Page.svelte';
   import {
     ArrowDownUp,
@@ -19,7 +18,7 @@
     Square,
     X,
   } from '@lucide/svelte';
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { get } from 'svelte/store';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
@@ -52,6 +51,7 @@
   import { ambientHover } from '../../lib/utils/ambientHover';
   import { msg } from '../../lib/i18n';
   import { libraryErrorText } from '../../lib/library/errors';
+  import { focusableIn, focusQuietly } from '../../lib/layers/focus';
   import { metadataErrorText } from '../../lib/metadata/metadataErrors';
   import { nextLibraryFilter, type LibraryFilter } from '../../lib/library/filters';
   import { gameSource, sourceLabel, sourceOrder, type GameSource } from '../../lib/library/source';
@@ -378,6 +378,19 @@
     return `${playtime(entry.playtimeSeconds)} · ${relativeDate(entry.lastPlayed)}`;
   }
 
+  let heroSection = $state<HTMLElement>();
+
+  // The hide button goes with the block: focus moves on to what Tab would reach next.
+  async function hideHero() {
+    const all = focusableIn(document.body);
+    const mine = all.filter((el) => heroSection?.contains(el));
+    const next = all[all.indexOf(mine[mine.length - 1]) + 1] ?? null;
+    heroHidden = true;
+    await tick();
+    const active = document.activeElement;
+    if (next?.isConnected && (!active || active === document.body || !active.isConnected)) focusQuietly(next);
+  }
+
   async function toggleRun(id: string) {
     try {
       if ($runningGames.has(id)) await stopGame(id);
@@ -394,6 +407,7 @@
   {#if hero && !heroHidden}
     {#key hero.id}
       <section
+        bind:this={heroSection}
         class="hero"
         class:plain={!heroArtShown}
         aria-label={msg('games.libraryContinuePlayingTitle')}
@@ -435,15 +449,11 @@
             <Button size="lg" onclick={() => navigate('game', { id: hero.id })}>{msg('games.libraryMoreDetailsButton')}</Button>
           </div>
         </div>
-        <Tooltip text={msg('games.libraryHideLabel')} describe={false}>
-          <button
-            class="hero-close"
-            aria-label={msg('games.libraryHideLabel')}
-            onclick={() => (heroHidden = true)}
-          >
+        <span class="hero-close">
+          <IconButton variant="secondary" size="sm" label={msg('games.libraryHideLabel')} onclick={hideHero}>
             <X size="1.6rem" strokeWidth={1.8} />
-          </button>
-        </Tooltip>
+          </IconButton>
+        </span>
       </section>
     {/key}
   {/if}
@@ -774,27 +784,6 @@
     position: absolute;
     top: var(--space-3);
     right: var(--space-3);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 3.2rem;
-    height: 3.2rem;
-    border-radius: var(--radius-sm);
-    background: color-mix(in srgb, var(--surface-2) 70%, transparent);
-    color: var(--text);
-    opacity: 0.75;
-    transition:
-      opacity var(--dur) var(--ease),
-      transform var(--dur-fast) var(--ease);
-  }
-
-  .hero-close:hover,
-  .hero-close:focus-visible {
-    opacity: 1;
-  }
-
-  .hero-close:active {
-    transform: scale(0.9);
   }
 
   .section {

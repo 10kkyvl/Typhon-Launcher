@@ -283,18 +283,14 @@
                 {/if}
               {/if}
               {#if source.lastError}
-                <Tooltip text={truncateMiddle(sourceErrorText(source.lastError), 90)}>
-                  <button type="button" class="warn-icon" aria-label={msg('common.error')} onclick={() => openDetails(source.id)}>
-                    <CircleAlert size="1.5rem" strokeWidth={1.8} />
-                  </button>
-                </Tooltip>
+                <IconButton size="sm" label={msg('common.error')} hint={truncateMiddle(sourceErrorText(source.lastError), 90)} onclick={() => openDetails(source.id)}>
+                  <CircleAlert size="1.5rem" strokeWidth={1.8} color="var(--danger)" />
+                </IconButton>
               {:else if source.health !== 'healthy'}
                 {@const warnings = source.warnings?.length ? source.warnings.map(sourceWarningText).join('; ') : ''}
-                <Tooltip text={warnings ? `${health.label}: ${warnings}` : health.label} describe={Boolean(warnings)}>
-                  <button type="button" class="health" style:color={health.color} aria-label={health.label} onclick={() => openDetails(source.id)}>
-                    <health.icon size="1.5rem" strokeWidth={1.8} />
-                  </button>
-                </Tooltip>
+                <IconButton size="sm" label={health.label} hint={warnings ? `${health.label}: ${warnings}` : undefined} onclick={() => openDetails(source.id)}>
+                  <health.icon size="1.5rem" strokeWidth={1.8} color={health.color} />
+                </IconButton>
               {/if}
             </span>
             <span class="cell" title={exactTime(source.lastUpdatedAt)}>{relativeDate(source.lastUpdatedAt)}</span>
@@ -543,15 +539,6 @@
   .cell.nums {
     justify-content: flex-end;
     font-variant-numeric: tabular-nums;
-  }
-
-  .warn-icon {
-    display: inline-flex;
-    color: var(--danger);
-  }
-
-  .health {
-    display: inline-flex;
   }
 
   .count-wrap {

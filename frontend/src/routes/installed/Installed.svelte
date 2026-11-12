@@ -354,6 +354,8 @@
   }
 
   let librarySetupOpen = $state(false);
+
+  const uid = $props.id();
 </script>
 
 <Page>
@@ -635,17 +637,21 @@
               {/if}
             </button>
             {#if running}
-              <button class="card-play running" aria-label={msg('games.installedStopButton')} onclick={() => stop(game)}>
-                <Square size="1.2rem" strokeWidth={2} fill="currentColor" />
-              </button>
+              <span class="card-play running">
+                <IconButton variant="primary" size="sm" label={msg('games.installedStopButton')} aria-describedby="{uid}-{game.id}-title" onclick={() => stop(game)}>
+                  <Square size="1.2rem" strokeWidth={2} fill="currentColor" />
+                </IconButton>
+              </span>
             {:else if isLaunchable(game) && !$missingImages.has(game.id)}
-              <button class="card-play" aria-label={msg('games.play')} onclick={() => play(game)}>
-                <Play size="1.4rem" strokeWidth={2} fill="currentColor" />
-              </button>
+              <span class="card-play">
+                <IconButton variant="primary" size="sm" label={msg('games.play')} aria-describedby="{uid}-{game.id}-title" onclick={() => play(game)}>
+                  <Play size="1.4rem" strokeWidth={2} fill="currentColor" />
+                </IconButton>
+              </span>
             {/if}
           </div>
           <div class="card-info">
-            <span class="card-title">{game.title}</span>
+            <span class="card-title" id="{uid}-{game.id}-title">{game.title}</span>
             <span class="card-meta">
               {#if isEmulated(game)}<ConsoleTag platform={emulationPlatform(game)} />{/if}
               {sizeLabel(game)}
@@ -1079,34 +1085,18 @@
     left: 1rem;
     bottom: 1rem;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 3.2rem;
-    height: 3.2rem;
-    border-radius: var(--radius-md);
-    background: var(--accent);
-    color: var(--accent-on, #fff);
     opacity: 0;
     transform: translateY(0.4rem) scale(0.9);
     transition:
       opacity var(--dur) var(--ease),
-      transform var(--dur-panel) var(--ease-spring),
-      background var(--dur) var(--ease);
-  }
-
-  .card-play:hover {
-    background: var(--accent-hover);
+      transform var(--dur-panel) var(--ease-spring);
   }
 
   .card-media:hover .card-play,
-  .card-play:focus-visible,
+  .card-play:focus-within,
   .card-play.running {
     opacity: 1;
     transform: translateY(0) scale(1);
-  }
-
-  .card-play:active {
-    transform: scale(0.92);
   }
 
   .card-info {

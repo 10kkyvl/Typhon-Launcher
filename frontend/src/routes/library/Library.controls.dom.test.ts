@@ -51,6 +51,22 @@ describe('Library: a row of the list view', () => {
   });
 });
 
+describe('Library: hiding the "continue playing" block', () => {
+  it('is the base icon button: the keyboard presses it and focus moves on, not to the page', async () => {
+    const { user } = renderDom(Library);
+    const block = screen.getByRole('region', { name: msg('games.libraryContinuePlayingTitle') });
+    const hide = screen.getByRole('button', { name: msg('games.libraryHideLabel') });
+    expect(hide.classList.contains('icon-btn')).toBe(true);
+    hide.focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(block.isConnected).toBe(false);
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement?.isConnected).toBe(true);
+  });
+});
+
 describe('Library: "Show all" of the recent games', () => {
   it('is a text link the keyboard presses, and it lists the recent games', async () => {
     const played = { ...games[1], id: 'g-cells', title: 'Dead Cells', lastPlayed: '2026-10-01T10:00:00Z' } as LibraryGame;

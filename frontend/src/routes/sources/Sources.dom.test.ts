@@ -80,6 +80,24 @@ describe('Sources: row hints without a mouse', () => {
   });
 });
 
+describe('Sources: the error and health marks of a row', () => {
+  it('are base icon buttons that the keyboard presses to open the source', async () => {
+    sources.set([
+      source({ id: 's1', name: 'Main feed', status: 'error', lastError: 'feed answered 503' }),
+      source({ id: 's2', name: 'Old feed', health: 'warning', warnings: ['duplicate entries'] }),
+    ]);
+    render(Sources, { target: app, props: {} });
+    const error = screen.getByRole('button', { name: msg('common.error'), description: sourceErrorText('feed answered 503') });
+    const health = screen.getByRole('button', { name: msg('transfers.sourcesHealthWarning') });
+    expect([error, health].map((mark) => mark.classList.contains('icon-btn'))).toEqual([true, true]);
+    error.focus();
+
+    await user().keyboard('{Enter}');
+
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+  });
+});
+
 describe('Sources: the status filter', () => {
   it('is a named radio group with a count on every choice, and choosing one filters the list', async () => {
     sources.set([
