@@ -361,6 +361,9 @@ describe('GameDetails: a metadata retry that fails with a reason', () => {
     await user.keyboard('{Enter}');
 
     await vi.waitFor(() => expect(notice.textContent).toContain(msg('errMetadata.metadataNoMatch')));
+    // Said in the live region the press opened, and never hidden while it is said.
+    expect(notice.querySelector('.body')?.getAttribute('role')).toBe('status');
+    expect(notice.querySelectorAll('.unseen')).toHaveLength(0);
     expect(notice.textContent).not.toContain(msg('games.detailMetaFailedHint'));
     expect(within(notice).queryByRole('button', { name: msg('common.retry') })).toBeNull();
     await vi.waitFor(() => expect(document.activeElement).toBe(within(notice).getByRole('button', { name: msg('games.detailChooseManually') })));

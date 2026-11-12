@@ -1746,7 +1746,7 @@
             <div class="meta-note">
               <Notice
                 tone={metaState === 'failed' ? 'warning' : 'info'}
-                announce={metaSearchRan || !metaRetryable}
+                announce={metaSearchRan}
                 title={metaState === 'unmatched' ? msg('games.detailMetaUnmatchedTitle') : msg('games.detailMetaFailedTitle')}
                 bind:retrying={metaRetrying}
                 retry={metaState === 'failed' && metaRetryable
