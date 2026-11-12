@@ -304,11 +304,6 @@
     border-color: var(--accent-bright);
   }
 
-  .tile:focus-visible {
-    outline: 2px solid var(--accent-ring);
-    outline-offset: 1px;
-  }
-
   .detail {
     display: flex;
     flex-direction: column;
