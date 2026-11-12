@@ -68,3 +68,7 @@ Add a line when a mistake repeats; drop one a guard now enforces.
   (`aria-pressed`, `aria-expanded`), not only coloured.
 - New i18n strings (`lib/i18n/catalog/{ru,en}`) land in a commit before the one that uses them; fold
   fixes of unpublished commits into them.
+- A hand-added listener that changes state uses `on` from `svelte/events`, not `addEventListener`:
+  Chromium sends `focusout` synchronously while Svelte removes a focused node, and a raw handler
+  setting `$state` there throws `state_unsafe_mutation`. jsdom sends none: a test patches
+  `Element.prototype.remove` to dispatch `focusout` first.

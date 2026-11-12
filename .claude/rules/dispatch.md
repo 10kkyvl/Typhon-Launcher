@@ -30,4 +30,5 @@ re-run or re-read by the orchestrator before it reaches a commit or the user; a 
 triggers runs on the diff range only, a "full" keeper run is the user's request; a keeper's finding
 is re-read in the code before it is applied. After each stage the orchestrator stops hung agents and
 background shells and removes the worktrees of merged or abandoned agent branches; a process this
-session did not start is never killed, only listed for the owner.
+session did not start is never killed, only listed for the owner. A worktree gets its own `npm ci`;
+never symlink `node_modules` (`common:build:frontend` runs `npm ci` and deletes the link's target).
