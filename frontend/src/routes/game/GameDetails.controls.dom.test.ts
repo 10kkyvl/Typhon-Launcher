@@ -97,7 +97,10 @@ function sayingAgain(notice: Element): () => string {
   const region = notice.querySelector('.body') as Element;
   let said = '';
   const observer = new MutationObserver(() => {
-    if (region.getAttribute('role')) said = (region.textContent ?? '').replace(/\s+/g, ' ').trim();
+    const message = region.firstElementChild;
+    if (!region.getAttribute('role') || !message) return;
+    // Each part of the message (its title, its text) once, a space between them.
+    said = [...message.children].map((part) => (part.textContent ?? '').replace(/\s+/g, ' ').trim()).join(' ');
   });
   observer.observe(region, { subtree: true, childList: true, characterData: true });
   return () => said;
@@ -226,8 +229,7 @@ describe('GameDetails: retrying what failed to load', () => {
 
     await user.keyboard('{Enter}');
 
-    await vi.waitFor(() => expect(said()).toContain(msg('games.detailMetaFailedTitle')));
-    expect(said()).toContain(msg('games.detailMetaFailedHint'));
+    await vi.waitFor(() => expect(said()).toBe(`${msg('games.detailMetaFailedTitle')} ${msg('games.detailMetaFailedHint')}`));
     expect(get(toasts).map((item) => item.message)).not.toContain(msg('games.detailMetaRefreshError'));
     expect(document.activeElement).toBe(retry);
   });
@@ -398,8 +400,7 @@ describe('GameDetails: a metadata retry that fails with a reason', () => {
 
     await user.keyboard('{Enter}');
 
-    await vi.waitFor(() => expect(said()).toContain(msg('errMetadata.metadataRateLimited')));
-    expect(said()).toContain(msg('games.detailMetaFailedTitle'));
+    await vi.waitFor(() => expect(said()).toBe(`${msg('games.detailMetaFailedTitle')} ${msg('errMetadata.metadataRateLimited')}`));
     expect(document.activeElement).toBe(retry);
     expect(get(toasts).map((item) => item.message)).not.toContain(msg('errMetadata.metadataRateLimited'));
   });
