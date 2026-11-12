@@ -226,6 +226,81 @@ describe('Toasts: closing', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
+  describe('a toast that held focus goes while a dialog is open', () => {
+    async function under() {
+      const view = setup({ dialog: true });
+      const dialog = screen.getByRole('dialog', { name: 'Install' });
+      const folder = screen.getByRole('textbox', { name: 'Folder' }) as HTMLInputElement;
+      toast('Install failed', 'danger', { label: 'Retry', run: () => {} });
+      await tick();
+      return { ...view, dialog, folder };
+    }
+
+    it('reached with a press, so it does not know where focus came from: focus goes into the dialog', async () => {
+      const { keys, close, shown, dialog, folder } = await under();
+      (document.activeElement as HTMLElement).blur();
+      close('Install failed').focus();
+
+      await keys.keyboard('{Escape}');
+      await tick();
+
+      expect(shown()).toEqual([]);
+      expect(document.activeElement).toBe(folder);
+      expect(dialog.contains(document.activeElement)).toBe(true);
+    });
+
+    it('where focus came from is gone: focus goes into the dialog', async () => {
+      const { keys, close, dialog, folder } = await under();
+      folder.focus();
+      close('Install failed').focus();
+      folder.remove();
+
+      await keys.keyboard('{Escape}');
+      await tick();
+
+      // Where the dialog puts focus when it opens with no field: inside its layer, not on the page.
+      expect(document.activeElement).not.toBe(document.body);
+      expect((dialog.parentElement as HTMLElement).contains(document.activeElement)).toBe(true);
+    });
+
+    it('focus came from the page under the dialog: focus goes into the dialog, not under it', async () => {
+      const { keys, close, folder } = await under();
+      screen.getByRole('button', { name: 'Before', hidden: true }).focus();
+      close('Install failed').focus();
+
+      await keys.keyboard('{Escape}');
+      await tick();
+
+      expect(document.activeElement).toBe(folder);
+    });
+
+    it('removed by code, not closed: the same', async () => {
+      const { close, folder } = await under();
+      const id = get(toasts)[0].id;
+      (document.activeElement as HTMLElement).blur();
+      close('Install failed').focus();
+
+      dismissToast(id);
+      await tick();
+      await tick();
+
+      expect(document.activeElement).toBe(folder);
+    });
+
+    it('with no dialog open and nowhere known to go back to, focus is left alone', async () => {
+      const { keys, close, shown } = setup();
+      toast('Saved');
+      await tick();
+      close('Saved').focus();
+
+      await keys.keyboard('{Escape}');
+      await tick();
+
+      expect(shown()).toEqual([]);
+      expect(document.activeElement).toBe(document.body);
+    });
+  });
+
   it('keeps its Escape to itself: a theme being tried is not ended by closing a toast', async () => {
     const unmount = mountThemeGuard();
     activeTheme.set(theme('dark'));

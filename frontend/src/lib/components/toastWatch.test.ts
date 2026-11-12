@@ -48,9 +48,16 @@ describe('what the stack remembers about a toast', () => {
 
     const home = watch.listed([2], (id) => asked.push(id) > 0 && id === 1);
 
-    expect(home).toBe('search field');
+    expect(home).toEqual({ origin: 'search field' });
     expect(asked).toEqual([1]);
-    expect(watch.listed([], nobody)).toBeUndefined();
+    expect(watch.listed([], nobody)).toBeNull();
+  });
+
+  it('says that a toast left holding focus even when it does not know where focus came from', () => {
+    const watch = createToastWatch<string>();
+    watch.listed([1], nobody);
+
+    expect(watch.listed([], () => true)).toEqual({ origin: undefined });
   });
 
   it('remembers nothing about a toast that is not on the list: a late event from a card already gone', () => {

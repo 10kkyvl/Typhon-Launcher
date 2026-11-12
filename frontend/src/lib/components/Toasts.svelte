@@ -2,7 +2,7 @@
   import { tick } from 'svelte';
   import { CircleAlert, CircleCheck, Info, TriangleAlert, X } from '@lucide/svelte';
   import { msg } from '../i18n';
-  import { modalOpen } from '../layers';
+  import { enterLayer, modalOpen, topModalLayer, withinLayer } from '../layers';
   import { dismissToast, holdToasts, pauseToast, resumeToast, toasts, type Toast, type ToastKind } from '../stores/toasts';
   import Button from './Button.svelte';
   import IconButton from './IconButton.svelte';
@@ -34,17 +34,27 @@
     else resumeToast(id);
   }
 
+  // The toast that held focus is gone: focus goes back where it came from. Under a dialog that is
+  // done only if the place is in the dialog (or a layer it owns); when it is unknown (the toast was
+  // reached with a press), gone or under the dialog, focus goes into the dialog instead of dropping
+  // to the page behind it. With no dialog and nowhere known to go back to, focus is left alone.
+  function giveBack(origin: HTMLElement | undefined) {
+    const dialog = topModalLayer();
+    const known = origin?.isConnected ? origin : undefined;
+    if (known && (!dialog || withinLayer(dialog, known))) known.focus({ preventScroll: true });
+    else if (dialog) enterLayer(dialog);
+  }
+
   // The watch follows the list, before the page does: a toast can leave it without being closed from
-  // inside (its time is up, or code removes it: the "opening the link" toast). If focus was inside
-  // one that left, focus goes back where it came from instead of dropping to the page's top.
+  // inside (its time is up, or code removes it: the "opening the link" toast).
   $effect.pre(() => {
     const present = $toasts.map((item) => item.id);
     // Asked while the cards are still in the page: afterwards nothing says which one held focus.
-    const home = watch.listed(present, (id) => stack?.querySelector(`[data-toast="${id}"]`)?.contains(document.activeElement) ?? false);
-    if (!home) return;
+    const left = watch.listed(present, (id) => stack?.querySelector(`[data-toast="${id}"]`)?.contains(document.activeElement) ?? false);
+    if (!left) return;
     void tick().then(() => {
       const lost = !document.activeElement?.isConnected || document.activeElement === document.body;
-      if (lost && home.isConnected) home.focus({ preventScroll: true });
+      if (lost) giveBack(left.origin);
     });
   });
 
@@ -63,9 +73,10 @@
 
   // Closing a toast that holds focus would drop focus to the page's top.
   function close(item: Toast, card: HTMLElement | null) {
-    const back = card?.contains(document.activeElement) ? watch.origin(item.id) : undefined;
+    const held = card?.contains(document.activeElement) ?? false;
+    const origin = watch.origin(item.id);
     dismissToast(item.id);
-    if (back?.isConnected) back.focus({ preventScroll: true });
+    if (held) giveBack(origin);
   }
 
   function act(item: Toast, event: MouseEvent) {

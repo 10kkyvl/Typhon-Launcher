@@ -8,9 +8,10 @@
 export interface ToastWatch<E> {
   /**
    * The toasts on screen are now `present`. Everything kept about the others is dropped. If one of
-   * those that left `holdsFocus`, where its focus came from is returned, for focus to go back there.
+   * those that left `holdsFocus`, the answer says so and carries where its focus came from, when that
+   * is known, for focus to be given a place; otherwise the answer is null.
    */
-  listed(present: readonly number[], holdsFocus: (id: number) => boolean): E | undefined;
+  listed(present: readonly number[], holdsFocus: (id: number) => boolean): { origin: E | undefined } | null;
   /** Records the change and says whether the toast is being read now. */
   read(id: number, change: { hover?: boolean; focus?: boolean }): boolean;
   /** Focus came into the toast from `from`. */
@@ -27,13 +28,13 @@ export function createToastWatch<E>(): ToastWatch<E> {
     listed(present, holdsFocus) {
       const gone = [...on].filter((id) => !present.includes(id));
       const held = gone.find(holdsFocus);
-      const home = held === undefined ? undefined : origins.get(held);
+      const left = held === undefined ? null : { origin: origins.get(held) };
       for (const id of gone) {
         reading.delete(id);
         origins.delete(id);
       }
       on = new Set(present);
-      return home;
+      return left;
     },
     read(id, change) {
       if (!on.has(id)) return false;
