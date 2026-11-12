@@ -1,5 +1,6 @@
 <script lang="ts">
   import { ArrowLeft, ArrowRight, ChevronDown, ChevronUp, Eye, EyeOff, GripVertical, Plus, X } from '@lucide/svelte';
+  import { tick } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
@@ -37,6 +38,38 @@
     st = next;
     emitted = fromState(next);
     layout = emitted;
+  }
+
+  // A row's identity across moves: its id, and for a separator, which separator of the list it is (they
+  // share one id, and a move never changes their order among themselves).
+  function rowKey(list: string[], index: number): string {
+    const id = list[index];
+    return id === SEPARATOR ? `${SEPARATOR}#${list.slice(0, index).filter((x) => x === SEPARATOR).length}` : id;
+  }
+
+  let editor = $state<HTMLElement>();
+
+  // The moved row's node is moved or remade, and focus with it would fall to the page: it goes back to
+  // the same action of that row, or to the opposite move where the row reached the end of its list.
+  async function focusRow(key: ListKey, row: string, action: 'up' | 'down' | 'column') {
+    await tick();
+    const item = [...(editor?.querySelectorAll<HTMLElement>(`[data-list="${key}"] > [data-row]`) ?? [])].find((el) => el.dataset.row === row);
+    const button = (name: string) => item?.querySelector<HTMLButtonElement>(`[data-action="${name}"]`);
+    const wanted = button(action);
+    const target = wanted && !wanted.disabled ? wanted : button(action === 'up' ? 'down' : 'up');
+    target?.focus();
+  }
+
+  function stepRow(key: ListKey, index: number, delta: -1 | 1) {
+    const row = rowKey(st[key], index);
+    apply(step(st, key, index, delta));
+    void focusRow(key, row, delta < 0 ? 'up' : 'down');
+  }
+
+  function toColumn(key: 'main' | 'side', index: number, other: 'main' | 'side') {
+    const row = rowKey(st[key], index);
+    apply(moveToColumn(st, key, index, other));
+    void focusRow(other, row, 'column');
   }
 
   function resetLayout() {
@@ -119,15 +152,17 @@
     {/if}
     <ul
       class="list"
+      data-list={key}
       class:drop-end={over === `${key}:end`}
       aria-label={title || undefined}
       ondragover={(e) => onDragOver(e, key)}
       ondrop={(e) => onDrop(e, key)}
     >
-      {#each list as id, index (`${id}-${index}`)}
+      {#each list as id, index (rowKey(list, index))}
         {@const separator = id === SEPARATOR}
         {@const hidden = !separator && isHidden(st, scope, id)}
         <li
+          data-row={rowKey(list, index)}
           class="item"
           class:hidden
           class:separator
@@ -145,16 +180,18 @@
             <IconButton
               size="sm"
               label={msg('settings.layoutMoveUp')}
+              data-action="up"
               disabled={index === 0}
-              onclick={() => apply(step(st, key, index, -1))}
+              onclick={() => stepRow(key, index, -1)}
             >
               <ChevronUp size={14} />
             </IconButton>
             <IconButton
               size="sm"
               label={msg('settings.layoutMoveDown')}
+              data-action="down"
               disabled={index === list.length - 1}
-              onclick={() => apply(step(st, key, index, 1))}
+              onclick={() => stepRow(key, index, 1)}
             >
               <ChevronDown size={14} />
             </IconButton>
@@ -163,7 +200,8 @@
               <IconButton
                 size="sm"
                 label={key === 'main' ? msg('settings.layoutToSide') : msg('settings.layoutToMain')}
-                onclick={() => apply(moveToColumn(st, key, index, other))}
+                data-action="column"
+                onclick={() => toColumn(key, index, other)}
               >
                 {#if key === 'main'}<ArrowRight size={14} />{:else}<ArrowLeft size={14} />{/if}
               </IconButton>
@@ -188,7 +226,7 @@
   </div>
 {/snippet}
 
-<div class="layout-editor">
+<div class="layout-editor" bind:this={editor}>
   <div class="head">
     <span class="row-label">{msg('settings.layoutTitle')}</span>
     <Button size="sm" variant="secondary" disabled={layout === undefined} onclick={resetLayout}>
