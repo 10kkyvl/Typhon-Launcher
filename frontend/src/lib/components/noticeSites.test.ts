@@ -46,6 +46,17 @@ const SITES: Record<string, Site[]> = {
   'lib/components/SystemRequirements.svelte': [['danger', true]],
   // Advice for the chosen platform, also inside InstallModal and AddDownloadModal.
   'lib/components/EmulatorHint.svelte': [['warning', false]],
+  // The BIOS still missing after a check, and a failed read or open, just happened.
+  'lib/components/BiosNeededModal.svelte': [
+    ['danger', true],
+    ['danger', true],
+  ],
+  'lib/components/EmulatorBusyModal.svelte': [['danger', true]],
+  // Why the launch needs an emulator is read with the prompt; a failed pick or save just happened.
+  'lib/components/EmulatorNeededModal.svelte': [
+    ['danger', false],
+    ['danger', true],
+  ],
   'lib/components/GameProfiles.svelte': [
     ['danger', true],
     ['danger', true],
