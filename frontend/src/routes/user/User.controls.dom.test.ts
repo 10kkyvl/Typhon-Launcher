@@ -147,6 +147,25 @@ describe("a user's page: retrying a failed load", () => {
     await vi.waitFor(() => expect(document.activeElement?.closest('.profile')).not.toBeNull());
   });
 
+  it('a retry that fails again keeps the notice, says it again and keeps the focus', async () => {
+    authState.set('authenticated');
+    vi.mocked(fetchProfile).mockRejectedValue(new Error('offline'));
+    const { user } = renderDom(UserProfile, { username: 'ann' });
+    const region = await screen.findByRole('alert');
+    const notice = region.closest('.notice') as HTMLElement;
+    const before = region.firstElementChild;
+    const retry = within(notice).getByRole('button', { name: msg('common.retry') });
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(retry.hasAttribute('aria-busy')).toBe(false));
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
+    await vi.waitFor(() => expect(region.firstElementChild).not.toBe(before));
+    expect(region.textContent).toContain(msg('social.userLoadFailed'));
+  });
+
   it('a retry that finds no such user lands the focus on the "not found" state', async () => {
     authState.set('authenticated');
     vi.mocked(fetchProfile).mockRejectedValueOnce(new Error('offline')).mockRejectedValueOnce(new AccountError('user_not_found'));
@@ -245,6 +264,45 @@ describe("a user's page: all the games in common", () => {
     await screen.findByText(msg('social.userCommonEmpty'));
     await vi.waitFor(() => expect(document.activeElement).not.toBe(document.body));
     expect(screen.getByRole('dialog').contains(document.activeElement)).toBe(true);
+  });
+
+  it('a first page whose Retry fails again: the notice stays, says it again and keeps the focus', async () => {
+    vi.mocked(userCommon).mockRejectedValue(new Error('offline'));
+    const { user } = mount();
+    const region = await screen.findByRole('alert');
+    const notice = region.closest('.notice') as HTMLElement;
+    const before = region.firstElementChild;
+    const retry = within(notice).getByRole('button', { name: msg('common.retry') });
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(retry.hasAttribute('aria-busy')).toBe(false));
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
+    await vi.waitFor(() => expect(region.firstElementChild).not.toBe(before));
+    expect(region.textContent).toContain(msg('social.userCommonFailed'));
+  });
+
+  it('a later page whose Retry fails again: the games stay, the notice says it again and keeps the focus', async () => {
+    vi.mocked(userCommon).mockResolvedValueOnce({ games: [common(1, 'Hades')], next: 'p2' }).mockRejectedValue(new Error('offline'));
+    const { user } = mount();
+    (await screen.findByRole('button', { name: msg('social.userCommonMore') })).focus();
+    await user.keyboard('{Enter}');
+    const region = await screen.findByRole('alert');
+    const notice = region.closest('.notice') as HTMLElement;
+    const before = region.firstElementChild;
+    const retry = within(notice).getByRole('button', { name: msg('common.retry') });
+    await vi.waitFor(() => expect(document.activeElement).toBe(retry));
+
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(retry.hasAttribute('aria-busy')).toBe(false));
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
+    expect(rowOf('Hades')).toBeTruthy();
+    await vi.waitFor(() => expect(region.firstElementChild).not.toBe(before));
+    expect(region.textContent).toContain(msg('social.userCommonFailed'));
   });
 
   it('"Show more" is busy while its page loads, keeps its words and the focus', async () => {

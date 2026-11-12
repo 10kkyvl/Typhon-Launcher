@@ -111,7 +111,9 @@ describe('Stats: retrying a failed first load', () => {
   it('a retry that fails again keeps the notice and the focus on its Retry', async () => {
     vi.mocked(getStats).mockRejectedValueOnce(new Error('offline')).mockRejectedValueOnce(new Error('still offline'));
     const { findByRole, user } = renderDom(Stats);
-    const notice = (await findByRole('alert')).closest('.notice') as HTMLElement;
+    const region = await findByRole('alert');
+    const notice = region.closest('.notice') as HTMLElement;
+    const before = region.firstElementChild;
     const retry = within(notice).getByRole('button', { name: msg('stats.retry') });
     retry.focus();
 
@@ -120,6 +122,9 @@ describe('Stats: retrying a failed first load', () => {
     await vi.waitFor(() => expect(retry.hasAttribute('aria-busy')).toBe(false));
     expect(notice.isConnected).toBe(true);
     expect(document.activeElement).toBe(retry);
+    // Said again: the failure's words come into the live region as a new node.
+    await vi.waitFor(() => expect(region.firstElementChild).not.toBe(before));
+    expect(region.textContent).toContain(msg('stats.loadError'));
   });
 });
 

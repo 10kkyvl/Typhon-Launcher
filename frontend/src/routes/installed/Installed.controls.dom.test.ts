@@ -135,6 +135,34 @@ describe('Installed: retrying the disk usage', () => {
   });
 });
 
+describe('Installed: the disk usage failing again', () => {
+  afterEach(() => {
+    settings.set(null);
+    storageFailed.set(false);
+    vi.mocked(getStorageInfo).mockReset();
+  });
+
+  it('keeps the notice, says it again and keeps the focus on its Retry', async () => {
+    vi.mocked(getStorageInfo).mockRejectedValue(new Error('disk gone'));
+    settings.set({ libraryPath: 'C:\\Games' } as NonNullable<Parameters<typeof settings.set>[0]>);
+    storageFailed.set(true);
+    const { user } = renderDom(Installed);
+    const region = screen.getByRole('alert');
+    const notice = region.closest('.notice') as HTMLElement;
+    const before = region.firstElementChild;
+    const retry = within(notice).getByRole('button', { name: msg('common.retry') });
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(retry.hasAttribute('aria-busy')).toBe(false));
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
+    await vi.waitFor(() => expect(region.firstElementChild).not.toBe(before));
+    expect(region.textContent).toContain(msg('games.installedStorageLoadFailed'));
+  });
+});
+
 describe('Installed: no library folder yet', () => {
   it('the storage card says so with the base empty state and offers to choose one', () => {
     renderDom(Installed);

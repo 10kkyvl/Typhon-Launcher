@@ -193,6 +193,8 @@ describe('Catalog: retrying', () => {
       .mockReturnValueOnce(new Promise<Answer>((_resolve, reject) => (fail = reject)));
     const { user } = renderDom(Catalog);
     const notice = (await screen.findByText(msg('games.catalogOffline'))).closest('.notice') as HTMLElement;
+    const region = notice.querySelector('[role="alert"], [role="status"]') as HTMLElement;
+    const before = region.firstElementChild;
     await retryHolds(notice, user);
     const retry = document.activeElement;
 
@@ -203,6 +205,27 @@ describe('Catalog: retrying', () => {
     expect(notice.textContent).toContain(msg('games.catalogUnavailableTitle'));
     expect(document.activeElement).toBe(retry);
     await vi.waitFor(() => expect(retry?.hasAttribute('aria-busy')).toBe(false));
+    // Said again: the failure's words come into the live region as a new node.
+    await vi.waitFor(() => expect(region.firstElementChild).not.toBe(before));
+    expect(region.textContent).toContain(msg('games.catalogUnavailableTitle'));
+  });
+
+  it('a failed first page whose Retry fails again: the notice stays, says it again and keeps the focus', async () => {
+    vi.mocked(queryCatalogGames).mockRejectedValue(new Error('offline'));
+    const { user } = renderDom(Catalog);
+    const notice = (await screen.findByText(msg('games.catalogUnavailableTitle'))).closest('.notice') as HTMLElement;
+    const region = notice.querySelector('[role="alert"], [role="status"]') as HTMLElement;
+    const before = region.firstElementChild;
+    const retry = within(notice).getByRole('button', { name: msg('games.catalogRetry') });
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(retry.hasAttribute('aria-busy')).toBe(false));
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
+    await vi.waitFor(() => expect(region.firstElementChild).not.toBe(before));
+    expect(region.textContent).toContain(msg('games.catalogUnavailableTitle'));
   });
 });
 
@@ -277,6 +300,26 @@ describe('Catalog: the next page', () => {
     await vi.waitFor(() => expect(notice.isConnected).toBe(false));
     expect(vi.mocked(queryCatalogGames).mock.calls.at(-1)?.[0]).toMatchObject({ page: 2 });
     await vi.waitFor(() => expect(document.activeElement?.closest('.list-entry')?.textContent).toContain('Hades'));
+  });
+
+  it('its notice whose Retry fails again stays, says it again and keeps the focus', async () => {
+    secondPage();
+    const { user } = renderDom(Catalog);
+    (await screen.findByRole('button', { name: msg('games.catalogShowMore') })).focus();
+    await user.keyboard('{Enter}');
+    const notice = (await screen.findByText(msg('games.catalogMoreFailed'))).closest('.notice') as HTMLElement;
+    const region = notice.querySelector('[role="alert"], [role="status"]') as HTMLElement;
+    const before = region.firstElementChild;
+    const retry = within(notice).getByRole('button', { name: msg('games.catalogRetry') });
+    await vi.waitFor(() => expect(document.activeElement).toBe(retry));
+
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(retry.hasAttribute('aria-busy')).toBe(false));
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
+    await vi.waitFor(() => expect(region.firstElementChild).not.toBe(before));
+    expect(region.textContent).toContain(msg('games.catalogMoreFailed'));
   });
 
   it('refused because the server is too old: says why, and offers no Retry that cannot help', async () => {
