@@ -90,6 +90,13 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
     ['danger', true],
   ],
+  // An install's stored warning and what deleting seeded files does are read with the dialog; too little space and a stopped install just happened.
+  'lib/components/InstallModal.svelte': [
+    ['danger', true],
+    ['warning', false],
+    ['warning', false],
+    ['danger', true],
+  ],
   'lib/components/LegalDocumentModal.svelte': [['danger', true]],
   'lib/components/LibrarySetupModal.svelte': [['danger', true]],
   // That the move is safe is read with the dialog; a failed move or start just happened.
