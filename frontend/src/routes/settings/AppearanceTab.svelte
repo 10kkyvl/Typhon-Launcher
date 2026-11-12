@@ -10,6 +10,9 @@
   import AiSkillButton from '../../lib/components/AiSkillButton.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Tooltip from '../../lib/components/Tooltip.svelte';
+  import IconButton from '../../lib/components/IconButton.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
+  import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import Card from '../../lib/components/Card.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import ThemeTextImportModal from '../../lib/components/ThemeTextImportModal.svelte';
@@ -50,6 +53,7 @@
     tokenLabelKey,
     type TokenGroupId,
   } from '../../lib/theme/tokens';
+  import { nextIndex } from '../../lib/utils/roving';
 
   const list = $derived($themeList);
   const active = $derived($activeTheme);
@@ -85,6 +89,31 @@
   function pickTheme(theme: Theme) {
     selectTheme(theme.id);
     startEditing(theme);
+  }
+
+  const uid = $props.id();
+
+  // The system choice, then every theme: one choice, a radio group of tiles.
+  const presetChecked = $derived([
+    $themeMode === 'system',
+    ...list.map((theme) => $themeMode === 'theme' && active?.id === theme.id),
+  ]);
+  const presetStop = $derived(Math.max(0, presetChecked.indexOf(true)));
+  let presetGrid = $state<HTMLElement>();
+
+  function choosePreset(index: number) {
+    if (index === 0) selectTheme('system');
+    else pickTheme(list[index - 1]);
+  }
+
+  function presetKeydown(event: KeyboardEvent) {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const radios = [...(presetGrid?.querySelectorAll<HTMLElement>('[role="radio"]') ?? [])];
+    const next = nextIndex(radios.indexOf(event.currentTarget as HTMLElement), radios.length, event.key, { orientation: 'both' });
+    if (next === null) return;
+    event.preventDefault();
+    choosePreset(next);
+    radios[next]?.focus();
   }
 
   function setToken(name: string, value: string) {
@@ -285,18 +314,31 @@
   <div class="settings-column">
     <AccentPicker />
     <Card title={msg('settings.appearanceTab')}>
-      <div class="preset-grid">
-        <button type="button" class="preset" class:selected={$themeMode === 'system'} onclick={() => selectTheme('system')}>
+      <div class="preset-grid" role="radiogroup" aria-label={msg('settings.appearanceTab')} bind:this={presetGrid}>
+        <button
+          type="button"
+          role="radio"
+          class="preset"
+          class:selected={presetChecked[0]}
+          aria-checked={presetChecked[0]}
+          tabindex={presetStop === 0 ? 0 : -1}
+          onclick={() => choosePreset(0)}
+          onkeydown={presetKeydown}
+        >
           <span class="preset-swatch system" style={`background: linear-gradient(135deg, ${fallbackBackground.dark} 50%, ${fallbackBackground.light} 50%);`}></span>
           <span class="preset-name">{msg('settings.appearanceSystemPresetLabel')}</span>
         </button>
-        {#each list as theme (theme.id)}
+        {#each list as theme, i (theme.id)}
           <div class="preset-cell">
             <button
               type="button"
+              role="radio"
               class="preset"
-              class:selected={$themeMode === 'theme' && active?.id === theme.id}
-              onclick={() => pickTheme(theme)}
+              class:selected={presetChecked[i + 1]}
+              aria-checked={presetChecked[i + 1]}
+              tabindex={presetStop === i + 1 ? 0 : -1}
+              onclick={() => choosePreset(i + 1)}
+              onkeydown={presetKeydown}
             >
               <span
                 class="preset-swatch"
@@ -304,22 +346,20 @@
               ></span>
               <span class="preset-name">{themeDisplayName(theme)}</span>
               {#if !theme.builtIn}
-                <span class="preset-tag">{msg('settings.appearanceCustomThemeTag')}</span>
+                <span class="preset-tag"><StatusBadge kind="accent" dot={false} label={msg('settings.appearanceCustomThemeTag')} /></span>
               {/if}
             </button>
             {#if !theme.builtIn}
-              {@const deleteLabel = msg('settings.appearanceDeleteTile', { name: themeDisplayName(theme) })}
-              <Tooltip text={deleteLabel} describe={false}>
-                <button
-                  type="button"
-                  class="preset-delete"
-                  aria-label={deleteLabel}
+              <span class="preset-delete">
+                <IconButton
+                  size="sm"
+                  label={msg('settings.appearanceDeleteTile', { name: themeDisplayName(theme) })}
                   disabled={deleting}
                   onclick={() => askRemove(theme)}
                 >
                   <Trash2 size={14} />
-                </button>
-              </Tooltip>
+                </IconButton>
+              </span>
             {/if}
           </div>
         {/each}
@@ -373,7 +413,9 @@
           <p class="hint">{msg('settings.appearanceBuiltinHint')}</p>
         {/if}
         {#if stored?.cssBlocked}
-          <p class="hint warn">{msg('settings.themeCssBlocked')}</p>
+          <div class="blocked">
+            <Notice tone="warning" compact announce={false}>{msg('settings.themeCssBlocked')}</Notice>
+          </div>
         {/if}
         <div class="editor-layout">
           <div class="editor-preview">
@@ -440,22 +482,34 @@
 
             <LayoutEditor bind:layout={draft.layout} />
 
-            <button type="button" class="advanced-toggle" onclick={() => (advancedOpen = !advancedOpen)}>
-              {advancedOpen ? msg('settings.appearanceHideAdvanced') : msg('settings.appearanceShowAdvanced')}
-            </button>
-            {#if advancedOpen}
-              <label class="field">
-                <span class="row-label">{msg('settings.appearanceCustomCssLabel')}</span>
-                <textarea class="textarea" rows="8" bind:value={cssDraft}></textarea>
-              </label>
-            {/if}
+            <div class="advanced">
+              <Button
+                size="sm"
+                variant="ghost"
+                aria-expanded={advancedOpen}
+                aria-controls="{uid}-advanced"
+                onclick={() => (advancedOpen = !advancedOpen)}
+              >
+                {advancedOpen ? msg('settings.appearanceHideAdvanced') : msg('settings.appearanceShowAdvanced')}
+              </Button>
+            </div>
+            <div id="{uid}-advanced" class="advanced-body">
+              {#if advancedOpen}
+                <label class="field">
+                  <span class="row-label">{msg('settings.appearanceCustomCssLabel')}</span>
+                  <textarea class="textarea" rows="8" bind:value={cssDraft}></textarea>
+                </label>
+              {/if}
+            </div>
 
             {#if errors.length > 0}
-              <ul class="errors">
-                {#each errors as error}
-                  <li>{error}</li>
-                {/each}
-              </ul>
+              <Notice tone="danger" compact>
+                <ul class="errors">
+                  {#each errors as error}
+                    <li>{error}</li>
+                  {/each}
+                </ul>
+              </Notice>
             {/if}
 
             <div class="editor-actions">
@@ -494,8 +548,8 @@
 {/if}
 
 <style>
-  .hint.warn {
-    color: var(--warning);
+  .blocked {
+    margin-bottom: var(--space-3);
   }
   .hint {
     font-size: var(--font-xs);
@@ -521,38 +575,20 @@
     padding-right: 3.4rem;
   }
 
+  /* The delete button shows on the tile's hover and on keyboard focus. */
   .preset-delete {
     position: absolute;
     top: 50%;
     right: var(--space-2);
     transform: translateY(-50%);
     display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: var(--control-sm);
-    height: var(--control-sm);
-    border-radius: var(--radius-sm);
-    color: var(--text-2);
     opacity: 0;
-    transition:
-      opacity var(--dur) var(--ease),
-      background var(--dur) var(--ease),
-      color var(--dur) var(--ease);
+    transition: opacity var(--dur) var(--ease);
   }
 
   .preset-cell:hover .preset-delete,
-  .preset-delete:focus-visible {
+  .preset-delete:focus-within {
     opacity: 1;
-  }
-
-  .preset-delete:hover:not(:disabled) {
-    background: var(--danger-subtle);
-    color: var(--danger);
-  }
-
-  .preset-delete:focus-visible {
-    outline: 2px solid var(--accent-ring);
-    outline-offset: 1px;
   }
 
   @media (hover: none) {
@@ -602,9 +638,8 @@
   }
 
   .preset-tag {
+    display: inline-flex;
     margin-left: auto;
-    font-size: var(--font-xs);
-    color: var(--accent-text);
     flex-shrink: 0;
   }
 
@@ -678,11 +713,6 @@
     cursor: pointer;
   }
 
-  .token-group > summary:focus-visible {
-    outline: 2px solid var(--accent-ring);
-    outline-offset: 2px;
-  }
-
   .token-rows {
     display: flex;
     flex-direction: column;
@@ -744,16 +774,12 @@
   }
 
 
-  .advanced-toggle {
+  .advanced {
     align-self: flex-start;
-    font-size: var(--font-xs);
-    font-weight: 500;
-    color: var(--accent-text);
-    padding: 0.4rem 0;
   }
 
-  .advanced-toggle:hover {
-    color: var(--text);
+  .advanced-body:empty {
+    display: none;
   }
 
   .textarea {
@@ -775,11 +801,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-1);
-    padding: var(--space-3);
-    background: var(--danger-subtle);
-    border-radius: var(--radius-md);
-    color: var(--danger);
-    font-size: var(--font-xs);
+    padding: 0;
   }
 
   .export-hint {
