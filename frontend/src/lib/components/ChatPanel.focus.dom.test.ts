@@ -234,3 +234,34 @@ describe('ChatPanel: focus stays with the user', () => {
     expect(document.activeElement).toBe(screen.getByRole('heading', { name: msg('social.chatMessages') }));
   });
 });
+
+describe('ChatPanel: the new message toast', () => {
+  const toast = () => ({ id: 1, peer, message: message('m9', 'c9') });
+
+  // jsdom has no Web Animations: the toast's fade is given one that never ends, as a slow fade would.
+  beforeEach(() => {
+    Object.defineProperty(Element.prototype, 'animate', { value: () => ({ cancel: () => {}, onfinish: null }), configurable: true, writable: true });
+  });
+  afterEach(() => {
+    Reflect.deleteProperty(Element.prototype, 'animate');
+  });
+
+  it('is announced, and its own button hides it without opening the chat', async () => {
+    chat.chatOpen.set(false);
+    chat.activePeer.set(null);
+    const keys = setup();
+    const region = document.querySelector('.toast-announce') as HTMLElement;
+    expect(region.getAttribute('role')).toBe('status');
+    expect(region.textContent?.trim()).toBe('');
+
+    chat.chatToast.set(toast());
+    await vi.waitFor(() => expect(region.textContent).toContain(msg('social.chatToastAnnounce', { name: 'Friend', text: 'Hello' })));
+    const hide = screen.getByRole('button', { name: msg('social.chatToastDismiss') });
+    hide.focus();
+    await keys.keyboard('{Enter}');
+
+    expect(get(chat.chatToast)).toBeNull();
+    expect(screen.queryByRole('region', { name: msg('social.chatPanelLabel') })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: msg('social.chatOpen') }));
+  });
+});

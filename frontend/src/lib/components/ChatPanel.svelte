@@ -52,8 +52,10 @@
   let reconnecting = $state(false);
   // The history failure is about an older page the user asked for, not the newest messages.
   let olderFailed = false;
+  let root = $state<HTMLElement>();
   let panel = $state<HTMLElement>();
   let list = $state<HTMLElement>();
+  let toastPlate = $state<HTMLElement>();
   let composerPart = $state<{ field: () => HTMLElement | undefined }>();
   let now = $state(new Date());
   let lastRenderedLastMessage = '';
@@ -106,11 +108,25 @@
     });
   }
 
+  // The toast fades out with the pressed button still in it: focus is moved on now, not when it falls.
+  async function leaveToast(target: () => HTMLElement | null | undefined): Promise<void> {
+    await tick();
+    const active = document.activeElement;
+    if (active && active !== document.body && active.isConnected && !toastPlate?.contains(active)) return;
+    target()?.focus();
+  }
+
   function openToast(): void {
     const item = $chatToast;
     if (!item) return;
     chatToast.set(null);
     openChat(item.peer);
+    void leaveToast(conversationStart);
+  }
+
+  function dismissToast(): void {
+    chatToast.set(null);
+    void leaveToast(() => (root ? focusableIn(root).find((el) => !toastPlate?.contains(el)) : undefined));
   }
 
   function openConversation(target: ChatPeer): void {
@@ -207,16 +223,22 @@
   });
 </script>
 
-<div class="chat-root" class:sidebar-right={$themeLayout.side === 'right'}>
+<div class="chat-root" class:sidebar-right={$themeLayout.side === 'right'} bind:this={root}>
+  <!-- On the page from the start, so a message that comes in is announced as it is written into it. -->
+  <div class="sr-only toast-announce" role="status">
+    {#if $chatToast}{msg('social.chatToastAnnounce', { name: displayName($chatToast.peer), text: messagePreview($chatToast.message) })}{/if}
+  </div>
   {#if $chatToast}
-    <button class="chat-toast" type="button" onclick={openToast} out:fade={{ duration: 240 }}>
-      <Avatar size="sm" name={displayName($chatToast.peer)} src={$chatToast.peer.avatarUrl} {...fieldsFrame($chatToast.peer)} />
-      <span class="toast-copy">
-        <strong>{$chatToast.peer.displayName || $chatToast.peer.username}</strong>
-        <span>{messagePreview($chatToast.message)}</span>
-      </span>
-      <X size="1.5rem" strokeWidth={1.8} />
-    </button>
+    <div class="chat-toast" out:fade={{ duration: 240 }} bind:this={toastPlate}>
+      <button class="toast-open" type="button" onclick={openToast}>
+        <Avatar size="sm" name={displayName($chatToast.peer)} src={$chatToast.peer.avatarUrl} {...fieldsFrame($chatToast.peer)} />
+        <span class="toast-copy">
+          <strong>{$chatToast.peer.displayName || $chatToast.peer.username}</strong>
+          <span>{messagePreview($chatToast.message)}</span>
+        </span>
+      </button>
+      <IconButton size="sm" label={msg('social.chatToastDismiss')} onclick={dismissToast}><X size="1.5rem" strokeWidth={1.8} /></IconButton>
+    </div>
   {/if}
 
   {#if !$chatOpen}
@@ -342,7 +364,8 @@
   .typing { margin: 0.6rem 0; color: var(--text-3); font-size: var(--font-xs); font-style: italic; }
   .panel-notice { padding: 0.7rem 1rem 0; }
   .conversation-list { flex: 1; overflow-y: auto; padding: 0.8rem; }
-  .chat-toast { display: flex; align-items: center; gap: 0.8rem; width: 32rem; margin-bottom: 1rem; padding: 1rem; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-4); color: var(--text); box-shadow: var(--shadow-pop); cursor: pointer; text-align: left; }
+  .chat-toast { display: flex; align-items: center; gap: 0.4rem; width: 32rem; margin-bottom: 1rem; padding: 0.6rem; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-4); color: var(--text); box-shadow: var(--shadow-pop); }
+  .toast-open { display: flex; flex: 1; align-items: center; gap: 0.8rem; min-width: 0; padding: 0.4rem; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; cursor: pointer; text-align: left; }
   .toast-copy { flex: 1; }
   .toast-copy strong { font-size: var(--font-sm); }
   @media (max-width: 640px) { .chat-panel { width: calc(100vw - 2.4rem); height: calc(100vh - var(--titlebar-h) - 6rem); } .chat-toast { width: calc(100vw - 2.4rem); } }
