@@ -186,6 +186,21 @@ describe('Catalog: retrying', () => {
   });
 });
 
+describe('Catalog: a new search after a failed first page', () => {
+  it('shows the new request loading, not the old failure with an idle Retry', async () => {
+    vi.mocked(queryCatalogGames).mockRejectedValueOnce(new Error('offline')).mockReturnValue(new Promise(() => {}));
+    const { user } = renderDom(Catalog);
+    const failure = (await screen.findByText(msg('games.catalogUnavailableTitle'))).closest('.notice') as HTMLElement;
+
+    await user.type(screen.getByRole('textbox', { name: msg('games.catalogSearchPlaceholder') }), 'hades');
+
+    await vi.waitFor(() => expect(vi.mocked(queryCatalogGames).mock.calls.at(-1)?.[0]).toMatchObject({ search: 'hades' }), { timeout: 2000 });
+    expect(screen.getByText(msg('games.catalogLoadingLabel')).closest('.spinner[role="status"]')).not.toBeNull();
+    expect(failure.isConnected).toBe(false);
+    expect(screen.queryByText(msg('games.catalogUnavailableTitle'))).toBeNull();
+  });
+});
+
 describe('Catalog: the next page', () => {
   // The second page fails (its warm-up included) until `fails` turns false; then it waits for `answer`.
   function secondPage() {

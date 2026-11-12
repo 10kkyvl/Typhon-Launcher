@@ -369,8 +369,9 @@
 
   // The first page failed: nothing of the catalog is on screen. Said in the place of the offline
   // notice, by the same notice, so a retry that answers with the other state keeps its focused Retry.
-  const pageFailed = $derived(failed && items.length === 0);
+  // A new query (search, filter, sort) is not that retry: it shows loading, not the old failure.
   let pageRetrying = $state(false);
+  const pageFailed = $derived(failed && items.length === 0 && (!loading || pageRetrying));
   let results = $state<HTMLElement>();
 
   // The notice's retry: it worked when the catalog came back, online.
