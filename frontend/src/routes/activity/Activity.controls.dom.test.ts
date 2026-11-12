@@ -1,5 +1,6 @@
 import { screen } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { msg } from '../../lib/i18n';
 import { weekSummary } from '../../lib/profile/week';
 import type { PopularGame } from '../../lib/social/popular';
 import { renderDom } from '../../lib/testing/dom';
@@ -26,6 +27,17 @@ const times = (text: string, word: string) => text.split(word).length - 1;
 
 afterEach(() => {
   document.body.replaceChildren();
+});
+
+describe('Activity: a card with nothing in it', () => {
+  it('popular games and the week say so with the base empty state, as a line in the card', () => {
+    renderDom(PopularGames, { games: [] });
+    renderDom(WeekActivity, { week: weekSummary([], new Date(2026, 10, 11)) });
+
+    for (const key of ['transfers.activityPopularEmpty', 'transfers.activityWeekEmpty'] as const) {
+      expect(screen.getByText(msg(key)).closest('.empty.inline'), key).not.toBeNull();
+    }
+  });
 });
 
 describe('Activity: rows that open a game', () => {

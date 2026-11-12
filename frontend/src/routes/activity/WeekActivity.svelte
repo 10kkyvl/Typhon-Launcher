@@ -2,6 +2,7 @@
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
+  import EmptyState from '../../lib/components/EmptyState.svelte';
   import { coverOf } from '../../lib/profile/view';
   import type { WeekDay, WeekSummary } from '../../lib/profile/week';
   import { gameArt } from '../../lib/stores/metadata';
@@ -24,7 +25,7 @@
 
 <Card title={msg('transfers.activityWeekTitle')}>
   {#if week.totalSeconds === 0}
-    <p class="muted">{msg('transfers.activityWeekEmpty')}</p>
+    <EmptyState size="inline" title={msg('transfers.activityWeekEmpty')} />
   {:else}
     <div class="total">
       <span class="value">{playtime(week.totalSeconds)}</span>
@@ -187,11 +188,6 @@
     font-size: 1.2rem;
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
-  }
-
-  .muted {
-    font-size: var(--font-sm);
-    color: var(--text-3);
   }
 
   .all {

@@ -1,6 +1,7 @@
 <script lang="ts">
   import Artwork from '../../lib/components/Artwork.svelte';
   import Card from '../../lib/components/Card.svelte';
+  import EmptyState from '../../lib/components/EmptyState.svelte';
   import Tooltip from '../../lib/components/Tooltip.svelte';
   import { openGameByIGDB } from '../../lib/social/openGame';
   import type { PopularGame } from '../../lib/social/popular';
@@ -11,7 +12,7 @@
 
 <Card title={msg('transfers.activityPopularTitle')}>
   {#if games.length === 0}
-    <p class="muted">{msg('transfers.activityPopularEmpty')}</p>
+    <EmptyState size="inline" title={msg('transfers.activityPopularEmpty')} />
   {:else}
     <div class="list">
       {#each games as item (item.game.igdbId)}
@@ -89,10 +90,5 @@
 
   .now {
     color: var(--accent-text);
-  }
-
-  .muted {
-    font-size: var(--font-sm);
-    color: var(--text-3);
   }
 </style>

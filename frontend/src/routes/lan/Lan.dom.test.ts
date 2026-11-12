@@ -1,3 +1,4 @@
+import { screen } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
@@ -34,5 +35,15 @@ describe('Lan: games being prepared for sharing', () => {
     const { getByRole } = renderDom(Lan);
 
     expect(getByRole('progressbar', { name: msg('ui.game') }).getAttribute('aria-valuenow')).toBe('50');
+  });
+});
+
+describe('Lan: empty sections', () => {
+  it('with nothing shared and nothing coming in, each section says so with the base empty state', () => {
+    renderDom(Lan);
+
+    for (const key of ['transfers.lanNoShares', 'transfers.lanNoTransfers'] as const) {
+      expect(screen.getByText(msg(key)).closest('.empty.inline'), key).not.toBeNull();
+    }
   });
 });

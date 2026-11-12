@@ -212,7 +212,7 @@
   <section class="section">
     <h2>{msg('transfers.downloadsActiveHeading')} <span class="count">{$active.length}</span></h2>
     {#if $active.length === 0}
-      <p class="muted">{msg('transfers.downloadsEmptyActiveTitle')}</p>
+      <EmptyState size="inline" title={msg('transfers.downloadsEmptyActiveTitle')} />
     {:else}
       <div class="rows">
         {#each $active as download (download.id)}
@@ -496,11 +496,6 @@
     display: flex;
     flex-direction: column;
     gap: 0.8rem;
-  }
-
-  .muted {
-    font-size: var(--font-sm);
-    color: var(--text-3);
   }
 
   .row {

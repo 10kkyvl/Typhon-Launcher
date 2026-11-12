@@ -93,7 +93,7 @@
   <section class="section">
     <h2>{msg('transfers.lanSharingHeading')} <span class="count">{$shares.length}</span></h2>
     {#if $shares.length === 0 && preparing.length === 0}
-      <p class="muted">{msg('transfers.lanNoShares')}</p>
+      <EmptyState size="inline" title={msg('transfers.lanNoShares')} />
     {:else}
       <div class="rows">
         {#each preparing as progress (progress.gameId)}
@@ -124,7 +124,7 @@
   <section class="section">
     <h2>{msg('transfers.lanTransfersHeading')} <span class="count">{activeTransfers.length}</span></h2>
     {#if activeTransfers.length === 0}
-      <p class="muted">{msg('transfers.lanNoTransfers')}</p>
+      <EmptyState size="inline" title={msg('transfers.lanNoTransfers')} />
     {:else}
       <div class="rows">
         {#each activeTransfers as transfer (transfer.id)}

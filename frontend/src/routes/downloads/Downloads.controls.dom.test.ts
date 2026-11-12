@@ -62,6 +62,15 @@ describe('Downloads: the cover of a row', () => {
   });
 });
 
+describe('Downloads: no active download', () => {
+  it('says so with the base empty state, as a line under its heading', () => {
+    downloads.set([download({ id: 'c', name: 'Done One' })]);
+    renderDom(Downloads);
+
+    expect(screen.getByText(msg('transfers.downloadsEmptyActiveTitle')).closest('.empty.inline')).not.toBeNull();
+  });
+});
+
 describe('Downloads: links', () => {
   it('the name of a failed and of a finished download is a text link that opens its details', async () => {
     downloads.set([download({ id: 'f', name: 'Failed One', status: 'failed', error: 'x' }), download({ id: 'c', name: 'Done One' })]);

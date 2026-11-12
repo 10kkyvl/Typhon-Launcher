@@ -188,7 +188,7 @@
       <div class="right">
         <Card title={msg('transfers.activityPlayingTitle')}>
           {#if playingFriends.length === 0}
-            <p class="muted">{msg('transfers.activityNoOnePlaying')}</p>
+            <EmptyState size="inline" title={msg('transfers.activityNoOnePlaying')} />
           {:else}
             <div class="friends">
               {#each playingShown as friend (friend.id)}

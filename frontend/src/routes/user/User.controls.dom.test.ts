@@ -2,15 +2,20 @@ import { screen } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
-import type { GameCard, PlayedGame, UserCard } from '../../lib/services/social';
+import { userCommon, type GameCard, type PlayedGame, type UserCard } from '../../lib/services/social';
 import { resetHistory, route } from '../../lib/stores/router';
 import { renderDom } from '../../lib/testing/dom';
 import GameRow from './GameRow.svelte';
+import UserCommonModal from './UserCommonModal.svelte';
 import UserMutual from './UserMutual.svelte';
 import UserRecent from './UserRecent.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
+vi.mock('../../lib/services/social', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/services/social')>()),
+  userCommon: vi.fn(),
+}));
 
 // The accessible name of the one button whose name holds `title`.
 function nameOf(title: string): string {
@@ -63,5 +68,16 @@ describe("a user's page: mutual friends", () => {
     await user.keyboard('{Enter}');
 
     expect(get(route).name).toBe('friends');
+  });
+});
+
+describe("a user's page: all the games in common", () => {
+  afterEach(() => vi.mocked(userCommon).mockReset());
+
+  it('with none, the dialog says so with the base empty state', async () => {
+    vi.mocked(userCommon).mockResolvedValue({ games: [], next: '' });
+    renderDom(UserCommonModal, { open: true, username: 'ann', name: 'Ann' });
+
+    expect((await screen.findByText(msg('social.userCommonEmpty'))).closest('.empty.inline')).not.toBeNull();
   });
 });

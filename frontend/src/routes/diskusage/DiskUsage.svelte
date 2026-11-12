@@ -334,7 +334,7 @@
           <span class="section-total">{total(report.totals.downloadsBytes, downloads.some((d) => d.sizeUnknown))}</span>
         </div>
         {#if downloads.length === 0}
-          <p class="muted">{msg('diskusage.downloadsEmpty')}</p>
+          <EmptyState size="inline" title={msg('diskusage.downloadsEmpty')} />
         {:else}
           <div class="list">
             {#each downloads as download (download.id)}
@@ -381,7 +381,7 @@
           <span class="section-total">{total(report.totals.leftoversBytes, leftovers.some((l) => l.sizeUnknown))}</span>
         </div>
         {#if leftovers.length === 0}
-          <p class="muted">{msg('diskusage.leftoversEmpty')}</p>
+          <EmptyState size="inline" title={msg('diskusage.leftoversEmpty')} />
         {:else}
           <div class="list">
             {#each leftovers as leftover (leftover.path)}
@@ -414,7 +414,7 @@
           <span class="section-total">{total(report.totals.screenshotsBytes, screenshots.some((s) => s.sizeUnknown))}</span>
         </div>
         {#if screenshots.length === 0}
-          <p class="muted">{msg('diskusage.screenshotsEmpty')}</p>
+          <EmptyState size="inline" title={msg('diskusage.screenshotsEmpty')} />
         {:else}
           <div class="list">
             {#each screenshots as group (group.gameId)}
@@ -449,7 +449,7 @@
           <span class="section-total">{total(report.totals.snapshotsBytes, snapshots.some((s) => s.sizeUnknown))}</span>
         </div>
         {#if snapshots.length === 0}
-          <p class="muted">{msg('diskusage.snapshotsEmpty')}</p>
+          <EmptyState size="inline" title={msg('diskusage.snapshotsEmpty')} />
         {:else}
           <div class="list">
             {#each snapshots as group (group.gameId)}

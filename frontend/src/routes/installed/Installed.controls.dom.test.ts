@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/svelte';
+import { screen, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import { playGame, type LibraryGame } from '../../lib/services/library';
@@ -70,5 +70,15 @@ describe('Installed: the play button on a cover', () => {
     await user.keyboard('{Enter}');
 
     expect(playGame).toHaveBeenCalledWith('g-celeste');
+  });
+});
+
+describe('Installed: no library folder yet', () => {
+  it('the storage card says so with the base empty state and offers to choose one', () => {
+    renderDom(Installed);
+
+    const empty = screen.getByText(msg('games.installedLibraryNotSetTitle')).closest('.empty.inline');
+    expect(empty).not.toBeNull();
+    expect(within(empty as HTMLElement).getByRole('button', { name: msg('games.installedChooseFolderButton') })).toBeTruthy();
   });
 });

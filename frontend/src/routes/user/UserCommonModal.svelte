@@ -1,5 +1,6 @@
 <script lang="ts">
   import Button from '../../lib/components/Button.svelte';
+  import EmptyState from '../../lib/components/EmptyState.svelte';
   import Modal from '../../lib/components/Modal.svelte';
   import { msg } from '../../lib/i18n';
   import { accountErrorText } from '../../lib/services/accountMessages';
@@ -64,7 +65,7 @@
     <p class="note error" role="alert">{failure}</p>
     <Button variant="primary" onclick={() => load(true)}>{msg('common.retry')}</Button>
   {:else if loaded && games.length === 0}
-    <p class="note">{msg('social.userCommonEmpty')}</p>
+    <EmptyState size="inline" title={msg('social.userCommonEmpty')} />
   {:else}
     <div class="list">
       {#each games as game (game.igdbId)}

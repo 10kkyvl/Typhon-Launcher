@@ -414,19 +414,17 @@
   {#if !$settings?.libraryPath}
     <div class="storage-block">
       <Card>
-        <div class="storage-empty">
-          <div class="disk">
+        <EmptyState size="inline" lead title={msg('games.installedLibraryNotSetTitle')} description={msg('games.installedLibraryNotSetHint')}>
+          {#snippet icon()}
             <HardDrive size="1.8rem" strokeWidth={1.8} />
-            <div class="disk-text">
-              <span class="disk-name">{msg('games.installedLibraryNotSetTitle')}</span>
-              <span class="disk-meta">{msg('games.installedLibraryNotSetHint')}</span>
-            </div>
-          </div>
-          <Button size="sm" variant="primary" onclick={() => (librarySetupOpen = true)}>
-            <FolderOpen size="1.5rem" strokeWidth={1.8} />
-            {msg('games.installedChooseFolderButton')}
-          </Button>
-        </div>
+          {/snippet}
+          {#snippet actions()}
+            <Button size="sm" variant="primary" onclick={() => (librarySetupOpen = true)}>
+              <FolderOpen size="1.5rem" strokeWidth={1.8} />
+              {msg('games.installedChooseFolderButton')}
+            </Button>
+          {/snippet}
+        </EmptyState>
       </Card>
     </div>
   {:else if $storageInfo}
