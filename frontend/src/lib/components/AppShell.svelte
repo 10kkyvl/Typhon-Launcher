@@ -14,7 +14,7 @@
   import ShellBackdrop from './ShellBackdrop.svelte';
   import Sidebar from './Sidebar.svelte';
   import GameQuickMenu from './GameQuickMenu.svelte';
-  import { toastCorner, type ToastCorner } from './toastCorner';
+  import { toastSpot, type ToastEnd } from './toastSpot';
   import Toasts from './Toasts.svelte';
   import Topbar from './Topbar.svelte';
 
@@ -30,7 +30,7 @@
   // the three changes size, and when the panel has finished entering (it enters smaller and lower
   // than it rests); the corner follows.
   let toastRegion = $state<HTMLElement>();
-  let toastsAt = $state<ToastCorner>('bottom');
+  let toastsAt = $state<ToastEnd>('bottom');
 
   $effect(() => {
     const region = toastRegion;
@@ -41,7 +41,7 @@
       return;
     }
     const place = () => {
-      toastsAt = toastCorner(panel.getBoundingClientRect(), region.getBoundingClientRect(), stack.getBoundingClientRect());
+      toastsAt = toastSpot(panel.getBoundingClientRect(), region.getBoundingClientRect(), stack.getBoundingClientRect());
     };
     const observer = new ResizeObserver(place);
     for (const element of [region, stack, panel]) observer.observe(element);
@@ -91,7 +91,7 @@
      a toast raised from an open dialog is seen and its action can be pressed. The region is the whole
      column the stack can stand in, from under the title bar down to the corner, and lets presses
      through; the stack stands at its bottom, or at its top while a dialog's panel takes the bottom
-     (toastCorner.ts). -->
+     (toastSpot.ts). -->
 <div
   class="corner toast-region"
   class:at-top={toastsAt === 'top'}
