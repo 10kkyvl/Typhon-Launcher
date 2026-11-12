@@ -173,7 +173,7 @@
           {/if}
           <div class="meta">
             {#if playing}
-              <StatusBadge kind="accent" label={msg('social.playingIn', { name: playing.title })}>
+              <StatusBadge kind="accent" wrap label={msg('social.playingIn', { name: playing.title })}>
                 {#snippet icon()}<Gamepad2 strokeWidth={1.8} />{/snippet}
               </StatusBadge>
               {#if playingHidden}<HiddenBadge text={msg('social.hiddenStatusHint')} />{/if}

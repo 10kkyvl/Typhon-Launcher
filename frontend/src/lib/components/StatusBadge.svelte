@@ -3,9 +3,10 @@
   import Tooltip from './Tooltip.svelte';
 
   /**
-   * A state shown as a word on a small plate (or plain, a word with its dot). A label of any length (a
-   * game's title) wraps inside what holds the badge: all of it stays in sight, with no tooltip or
-   * focus stop of its own, which a badge with a `hint` already has for something else.
+   * A state shown as a word on a small plate (or plain, a word with its dot), on one line at its own
+   * width. `wrap` is for a label of any length (a game's title): it then wraps inside what holds the
+   * badge, between words, so all of it stays in sight with no tooltip or focus stop of its own, which
+   * a badge with a `hint` already has for something else.
    */
   let {
     kind = 'neutral',
@@ -14,6 +15,7 @@
     plain = false,
     hint,
     icon,
+    wrap = false,
   }: {
     kind?: 'success' | 'warning' | 'danger' | 'accent' | 'neutral';
     label: string;
@@ -23,12 +25,14 @@
     hint?: string;
     /** A picture in place of the dot (an eye for "Hidden"): a bare icon, sized and coloured here. */
     icon?: Snippet;
+    /** The label may be long (a title): it wraps inside the container instead of running out of it. */
+    wrap?: boolean;
   } = $props();
 </script>
 
 {#snippet badge(focusable: boolean)}
   <!-- svelte-ignore a11y_no_noninteractive_tabindex (A stop in the Tab order only with a hint, so the hint reaches keyboard users; pressing it does nothing.) -->
-  <span class="badge {kind}" class:plain tabindex={focusable ? 0 : undefined}>
+  <span class="badge {kind}" class:plain class:wrap tabindex={focusable ? 0 : undefined}>
     {#if icon}<span class="icon" data-part="status-badge-icon" aria-hidden="true">{@render icon()}</span>{:else if dot}<span class="dot"></span>{/if}
     {label}
   </span>
@@ -45,19 +49,29 @@
     display: inline-flex;
     align-items: center;
     gap: 0.6rem;
-    min-height: 2.4rem;
-    max-width: 100%;
-    padding: calc(0.3rem - 1px) calc(0.9rem - 1px);
+    height: 2.4rem;
+    padding: 0 calc(0.9rem - 1px);
     border: 1px solid transparent;
     border-radius: var(--radius-sm);
     font-size: var(--font-xs);
     font-weight: 500;
+    white-space: nowrap;
+  }
+
+  /* Breaks between words; inside a word only where that word alone is wider than the line, so a badge
+     in a row never narrows to a letter a line. */
+  .badge.wrap {
+    height: auto;
+    min-height: 2.4rem;
+    max-width: 100%;
+    padding: calc(0.3rem - 1px) calc(0.9rem - 1px);
     line-height: 1.3;
     white-space: normal;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
   }
 
   .badge.plain {
+    height: auto;
     min-height: 0;
     padding: 0;
     border: 0;
