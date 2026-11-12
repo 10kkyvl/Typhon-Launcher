@@ -201,8 +201,7 @@ const AREAS: [RegExp, string][] = [
 const ON_SURFACE: Record<string, [surface: string, ...rules: string[]]> = {
   'routes/diskusage/DiskUsage.svelte': ['Card', '.reason'],
   'routes/installed/Installed.svelte': [
-    'Card and the fill of a row; an icon on the dark scrim of a badge over a cover',
-    '.storage-error',
+    'the fill of a row; an icon on the dark scrim of a badge over a cover',
     '.row-update',
     '.card-badge :global(svg)',
   ],
