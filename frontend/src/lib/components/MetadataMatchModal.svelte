@@ -14,6 +14,7 @@
   import EmptyState from './EmptyState.svelte';
   import Modal from './Modal.svelte';
   import SearchInput from './SearchInput.svelte';
+  import Spinner from './Spinner.svelte';
   import { msg } from '../i18n';
 
   let {
@@ -140,7 +141,7 @@
       <section class="block">
         <h4>{msg('modals.metadataMatchCandidates')}</h4>
         {#if loadingCandidates}
-          <EmptyState level={5} title={msg('modals.metadataMatchSearchingCandidates')} description={msg('modals.metadataMatchSearchingCandidatesDesc', { gameTitle })} />
+          <Spinner size="sm" label={msg('modals.metadataMatchSearchingCandidates')} />
         {:else if candidates.length === 0}
           <EmptyState level={5}
             title={msg('modals.metadataMatchNoCandidatesTitle')}
@@ -149,9 +150,9 @@
         {:else}
           <div class="candidates">
             {#each candidates as candidate (candidate.providerId)}
-              <button class="candidate" disabled={applying} onclick={() => pick(candidate)}>
+              <button type="button" class="candidate" aria-disabled={applying || undefined} onclick={() => pick(candidate)}>
                 <span class="thumb">
-                  <Artwork src={candidate.thumb ?? ''} alt={candidate.title} radius="var(--radius-xs)" />
+                  <Artwork src={candidate.thumb ?? ''} alt="" label={candidate.title} radius="var(--radius-xs)" />
                 </span>
                 <span class="candidate-info">
                   <span class="candidate-title">
@@ -175,9 +176,9 @@
         {#if searchResults.length > 0}
           <div class="candidates">
             {#each searchResults as candidate (candidate.providerId)}
-              <button class="candidate" disabled={applying} onclick={() => pick(candidate)}>
+              <button type="button" class="candidate" aria-disabled={applying || undefined} onclick={() => pick(candidate)}>
                 <span class="thumb">
-                  <Artwork src={candidate.thumb ?? ''} alt={candidate.title} radius="var(--radius-xs)" />
+                  <Artwork src={candidate.thumb ?? ''} alt="" label={candidate.title} radius="var(--radius-xs)" />
                 </span>
                 <span class="candidate-info">
                   <span class="candidate-title">
@@ -200,7 +201,7 @@
   {#snippet footer()}
     {#if pending}
       <Button disabled={applying} onclick={() => (pending = null)}>{msg('common.cancel')}</Button>
-      <Button variant="primary" disabled={applying} onclick={() => pending && apply(pending)}>
+      <Button variant="primary" busy={applying} onclick={() => pending && apply(pending)}>
         {applying ? msg('modals.metadataMatchApplying') : msg('modals.metadataMatchReplace')}
       </Button>
     {:else}
@@ -246,12 +247,18 @@
     transition: background var(--dur-fast) var(--ease);
   }
 
-  .candidate:hover:not(:disabled) {
+  .candidate:hover:not([aria-disabled='true']) {
     background: var(--hover);
   }
 
-  .candidate:disabled {
+  .candidate[aria-disabled='true'] {
     opacity: 0.6;
+    cursor: default;
+  }
+
+  /* Inside the scrolling list: the shared ring is drawn inward, where the list does not clip it. */
+  .candidate:focus-visible {
+    outline-offset: -2px;
   }
 
   .thumb {
