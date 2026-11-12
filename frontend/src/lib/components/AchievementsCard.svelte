@@ -13,8 +13,8 @@
   import { toast } from '../stores/toasts';
   import { dateTime } from '../utils/format';
   import { errorMessage } from '../utils/errors';
+  import Button from './Button.svelte';
   import Card from './Card.svelte';
-  import Spinner from './Spinner.svelte';
   import ProgressBar from './ProgressBar.svelte';
 
   let { gameId }: { gameId: string } = $props();
@@ -121,10 +121,10 @@
   <Card title={$t('games.achievementsTitle')} surface="panel" padding="md-even">
     {#snippet action()}
       {#if view}
-        <button class="refresh" type="button" disabled={refreshing} onclick={refresh}>
-          {#if refreshing}<Spinner size="sm" tone="current" />{:else}<RefreshCw size="1.4rem" strokeWidth={1.8} />{/if}
+        <Button variant="ghost" size="sm" busy={refreshing} onclick={refresh}>
+          {#if !refreshing}<RefreshCw size="1.4rem" strokeWidth={1.8} />{/if}
           {$t('games.achievementsRefresh')}
-        </button>
+        </Button>
       {/if}
     {/snippet}
 

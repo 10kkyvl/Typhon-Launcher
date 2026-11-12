@@ -34,6 +34,19 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe('ReviewCard: reporting', () => {
+  it('opens the report dialog from a base button the keyboard presses', async () => {
+    const { user } = renderDom(ReviewCard, { review: review('Fine.'), guest: false });
+    const report = screen.getByRole('button', { name: msg('reviews.report') });
+    expect(report.classList.contains('btn')).toBe(true);
+    report.focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(screen.getByRole('dialog', { name: msg('reviews.reportTitle') })).toBeTruthy();
+  });
+});
+
 describe('ReviewCard: a long review', () => {
   it('opens and closes its text with a disclosure button that says it expands the text', async () => {
     const { user } = renderDom(ReviewCard, { review: review('word '.repeat(200)), guest: false });

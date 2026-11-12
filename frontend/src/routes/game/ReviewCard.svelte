@@ -136,10 +136,10 @@
       {/if}
     </div>
     {#if showActions}
-      <button class="report" type="button" onclick={() => (reportOpen = true)}>
+      <Button variant="ghost" size="sm" onclick={() => (reportOpen = true)}>
         <Flag size="1.4rem" strokeWidth={1.8} />
         {msg('reviews.report')}
-      </button>
+      </Button>
     {/if}
   </footer>
 </article>
@@ -274,17 +274,5 @@
   .vote:disabled {
     opacity: 0.6;
     cursor: default;
-  }
-
-  .report {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: var(--font-xs);
-    color: var(--text-3);
-  }
-
-  .report:hover {
-    color: var(--text);
   }
 </style>
