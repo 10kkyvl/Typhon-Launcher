@@ -13,8 +13,11 @@
   import { bytesSize, truncateMiddle } from '../utils/format';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
+  import Notice from './Notice.svelte';
   import ProgressBar from './ProgressBar.svelte';
   import { errorCode, msg } from '../i18n';
+
+  const uid = $props.id();
 
   const game = $derived(
     $moveTarget ? ($libraryGames.find((g) => g.id === $moveTarget?.gameId) ?? null) : null,
@@ -177,7 +180,7 @@
         </div>
       {:else}
         {#if jobFailed}
-          <p class="failure">{moveErrorText(jobFailed.error, msg('modals.moveGameFailed'))}</p>
+          <Notice tone="danger" compact>{moveErrorText(jobFailed.error, msg('modals.moveGameFailed'))}</Notice>
           {#if errorCode(jobFailed.error) === 'relocate.ambiguous_recovery'}
             <div class="support">
               <Button size="sm" onclick={contactSupport}>{msg('tickets.writeSupport')}</Button>
@@ -186,10 +189,17 @@
         {/if}
 
         <div class="field">
-          <span class="field-label">{msg('modals.moveGameNewFolder')}</span>
+          <span class="field-label" id="{uid}-folder-label">{msg('modals.moveGameNewFolder')}</span>
           <div class="pick-controls">
-            <input class="input sm" type="text" readonly placeholder={msg('modals.moveGameFolderPlaceholder')} value={picked} />
-            <Button size="sm" disabled={picking} onclick={pickFolder}>
+            <input
+              class="input sm"
+              type="text"
+              readonly
+              aria-labelledby="{uid}-folder-label"
+              placeholder={msg('modals.moveGameFolderPlaceholder')}
+              value={picked}
+            />
+            <Button size="sm" busy={picking} onclick={pickFolder}>
               <FolderOpen size="1.5rem" strokeWidth={1.8} />
               {msg('modals.moveGameBrowse')}
             </Button>
@@ -210,17 +220,15 @@
           </div>
         {/if}
 
-        <div class="safety">
-          <ShieldCheck size="1.7rem" strokeWidth={1.8} />
-          <p>
-            {msg('modals.moveGameSafetyText')}
-          </p>
-        </div>
+        <Notice compact announce={false}>
+          {#snippet icon()}<ShieldCheck size="1.6rem" strokeWidth={1.8} />{/snippet}
+          {msg('modals.moveGameSafetyText')}
+        </Notice>
 
         <p class="hint">{msg('modals.moveGameHint')}</p>
 
         {#if failure}
-          <p class="failure">{failure}</p>
+          <Notice tone="danger" compact>{failure}</Notice>
         {/if}
       {/if}
     </div>
@@ -228,7 +236,7 @@
 
   {#snippet footer()}
     {#if jobActive && job}
-      <Button variant="danger" disabled={cancelling} onclick={cancel}>
+      <Button variant="danger" busy={cancelling} onclick={cancel}>
         {cancelling ? msg('modals.moveGameCancelling') : msg('modals.moveGameCancelMove')}
       </Button>
     {:else}
@@ -236,7 +244,7 @@
       {#if jobFailed}
         <Button variant="primary" onclick={retry}>{msg('modals.moveGameRetry')}</Button>
       {:else}
-        <Button variant="primary" disabled={!picked || !finalPath || resolving || starting} onclick={start}>
+        <Button variant="primary" disabled={!picked || !finalPath || resolving} busy={starting} onclick={start}>
           {starting ? msg('modals.moveGameStarting') : msg('modals.moveGameStart')}
         </Button>
       {/if}
@@ -315,23 +323,6 @@
     color: var(--text-3);
   }
 
-  .safety {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--space-3);
-    padding: var(--space-3);
-    border-radius: var(--radius-md);
-    background: var(--surface-2);
-    color: var(--accent-text);
-  }
-
-  .safety p {
-    margin: 0;
-    font-size: var(--font-xs);
-    line-height: 1.5;
-    color: var(--text-2);
-  }
-
   .final {
     margin: 0;
     font-size: var(--font-sm);
@@ -357,12 +348,6 @@
     justify-content: space-between;
     font-size: var(--font-sm);
     color: var(--text-2);
-  }
-
-  .failure {
-    margin: 0;
-    font-size: var(--font-xs);
-    color: var(--danger);
   }
 
   .support {
