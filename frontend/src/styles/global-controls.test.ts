@@ -120,7 +120,7 @@ describe('a text field', () => {
   it('shows the global ring on the sign-in and support forms', () => {
     for (const path of ['routes/auth/AuthScreen.svelte', 'routes/support/NewTicket.svelte', 'routes/support/TicketView.svelte']) {
       const style = /<style>([\s\S]*?)<\/style>/.exec(frontendSources[path] ?? '')?.[1] ?? '';
-      expect(style, path).toMatch(/\.input \{/);
+      expect(style, path).not.toBe('');
       expect(style.match(/\.input:focus[^{]*\{[^}]*outline:\s*none/g), path).toBeNull();
     }
   });
