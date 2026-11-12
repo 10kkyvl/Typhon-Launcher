@@ -147,6 +147,25 @@ describe('AppearanceTab', () => {
     expect((screen.getByRole('textbox', { name: msg('settings.appearanceNameFieldLabel') }) as HTMLInputElement).value).toBe('Mine');
   });
 
+  // From the keyboard the dialog was opened from the tile left behind, which is where it would give
+  // focus back: the chosen tile has to take it.
+  it('puts focus on the tile an arrow chose once the edits are given up', async () => {
+    const { user } = renderDom(AppearanceTab, {});
+    await editName(user);
+    const radios = within(screen.getByRole('radiogroup', { name: msg('settings.appearanceTab') })).getAllByRole('radio');
+    radios[1].focus();
+
+    await user.keyboard('{ArrowRight}');
+    const dialog = await screen.findByRole('dialog', { name: msg('settings.themeDiscardTitle') });
+    within(dialog).getByRole('button', { name: msg('settings.themeCustomRevert') }).focus();
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(radios[2].getAttribute('aria-checked')).toBe('true'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(document.activeElement).toBe(radios[2]);
+  });
+
   // A kept trial checks the draft at every edit: its errors stay up to date on screen but are not
   // announced while the user types; pressing Try or Save is what announces them.
   it('keeps the errors of a kept trial quiet while typing and announces them on Try', async () => {
