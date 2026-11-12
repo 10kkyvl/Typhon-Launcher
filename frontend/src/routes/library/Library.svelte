@@ -33,6 +33,7 @@
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import SearchInput from '../../lib/components/SearchInput.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
+  import TextLink from '../../lib/components/TextLink.svelte';
   import { playGame, stopGame, type LibraryCollection, type LibraryGame } from '../../lib/services/library';
   import { getCatalogGames, type CatalogGame } from '../../lib/services/sources';
   import type { Download } from '../../lib/services/downloads';
@@ -451,10 +452,12 @@
     <section class="section">
       <div class="section-head">
         <h2>{msg('games.recentLabel')}</h2>
-        <button class="link" onclick={() => (filter = 'recent')}>
-          {msg('games.libraryShowAllButton')}
-          <ChevronRight size="1.4rem" strokeWidth={1.8} />
-        </button>
+        <span class="show-all">
+          <TextLink tone="muted" onclick={() => (filter = 'recent')}>
+            {msg('games.libraryShowAllButton')}
+            <ChevronRight size="1.4rem" strokeWidth={1.8} aria-hidden="true" />
+          </TextLink>
+        </span>
       </div>
       <div class="recent-row">
         {#each recentGames as entry (entry.id)}
@@ -809,25 +812,8 @@
     font-size: var(--font-xl);
   }
 
-  .link {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.2rem;
+  .show-all {
     font-size: var(--font-sm);
-    color: var(--text-3);
-    transition: color var(--dur) var(--ease);
-  }
-
-  .link :global(svg) {
-    transition: transform var(--dur) var(--ease);
-  }
-
-  .link:hover {
-    color: var(--text);
-  }
-
-  .link:hover :global(svg) {
-    transform: translateX(0.3rem);
   }
 
   .recent-row {

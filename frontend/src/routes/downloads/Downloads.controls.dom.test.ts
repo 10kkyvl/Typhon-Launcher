@@ -1,7 +1,10 @@
 import { screen } from '@testing-library/svelte';
+import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { msg } from '../../lib/i18n';
 import type { Download } from '../../lib/services/downloads';
 import { downloads } from '../../lib/stores/downloads';
+import { resetHistory, route } from '../../lib/stores/router';
 import { renderDom } from '../../lib/testing/dom';
 import Downloads from './Downloads.svelte';
 
@@ -39,6 +42,7 @@ function download(patch: Partial<Download> = {}): Download {
 
 afterEach(() => {
   downloads.set([]);
+  resetHistory();
   document.body.replaceChildren();
 });
 
@@ -55,5 +59,33 @@ describe('Downloads: the cover of a row', () => {
       expect(screen.queryByLabelText(name), name).toBeNull();
       expect(screen.queryByRole('img', { name }), name).toBeNull();
     }
+  });
+});
+
+describe('Downloads: links', () => {
+  it('the name of a failed and of a finished download is a text link that opens its details', async () => {
+    downloads.set([download({ id: 'f', name: 'Failed One', status: 'failed', error: 'x' }), download({ id: 'c', name: 'Done One' })]);
+    const { user } = renderDom(Downloads);
+
+    for (const name of ['Failed One', 'Done One']) {
+      const link = screen.getByRole('button', { name });
+      expect(link.classList.contains('text-link'), name).toBe(true);
+    }
+    screen.getByRole('button', { name: 'Failed One' }).focus();
+    await user.keyboard('{Enter}');
+
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+  });
+
+  it('"open download history" is a text link in its sentence that goes to the history', async () => {
+    const { user } = renderDom(Downloads);
+    const link = screen.getByRole('button', { name: msg('transfers.downloadsOpenHistoryLog') });
+    expect(link.classList.contains('text-link')).toBe(true);
+    expect(link.closest('p')?.textContent?.trim()).toMatch(new RegExp(`^${msg('transfers.downloadsFooterHintQuestion').replace('?', '\\?')}`));
+    link.focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(get(route).name).toBe('history');
   });
 });

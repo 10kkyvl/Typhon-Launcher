@@ -31,6 +31,7 @@
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
+  import TextLink from '../../lib/components/TextLink.svelte';
   import { gamePageId, type Download as DownloadRecord } from '../../lib/services/downloads';
   import { maxActiveDownloadOptions, openFolder } from '../../lib/services/settings';
   import {
@@ -232,9 +233,11 @@
             <Artwork src={coverOf(item)} alt="" label={item.name} ratio="3 / 4" radius="var(--radius-sm)" />
           </div>
           <div class="info">
-            <Tooltip text={item.name} describe={false}>
-              <button class="title link" onclick={() => openDetails(item.id)}>{item.name}</button>
-            </Tooltip>
+            <span class="title">
+              <Tooltip text={item.name} describe={false}>
+                <TextLink tone="muted" onclick={() => openDetails(item.id)}>{item.name}</TextLink>
+              </Tooltip>
+            </span>
             <span class="error-text">
               <CircleAlert size="1.4rem" strokeWidth={1.8} />
               <span>{installErrorText(item.error)}</span>
@@ -331,9 +334,11 @@
             <Artwork src={coverOf(item)} alt="" label={item.name} ratio="3 / 4" radius="var(--radius-sm)" />
           </div>
           <div class="info inline">
-            <Tooltip text={item.name} describe={false}>
-              <button class="title link" onclick={() => openDetails(item.id)}>{item.name}</button>
-            </Tooltip>
+            <span class="title">
+              <Tooltip text={item.name} describe={false}>
+                <TextLink tone="muted" onclick={() => openDetails(item.id)}>{item.name}</TextLink>
+              </Tooltip>
+            </span>
             {#if typeTag(item) || sourceTag(item)}
               <div class="tags">
                 {#if typeTag(item)}<StatusBadge kind="neutral" label={typeTag(item)} dot={false} />{/if}
@@ -391,7 +396,7 @@
 
   <p class="footer-hint">
   {msg('transfers.downloadsFooterHintQuestion')}
-  <button class="link" onclick={() => navigate('history')}>{msg('transfers.downloadsOpenHistoryLog')}</button>
+  <TextLink onclick={() => navigate('history')}>{msg('transfers.downloadsOpenHistoryLog')}</TextLink>
   </p>
 
   <AddDownloadModal bind:open={addOpen} />
@@ -574,15 +579,6 @@
     text-overflow: ellipsis;
   }
 
-  .title.link {
-    text-align: left;
-    transition: color var(--dur) var(--ease);
-  }
-
-  .title.link:hover {
-    color: var(--accent-text);
-  }
-
   .tags {
     display: flex;
     gap: 0.6rem;
@@ -641,14 +637,6 @@
     margin-top: var(--space-6);
     font-size: var(--font-sm);
     color: var(--text-3);
-  }
-
-  .footer-hint .link {
-    color: var(--accent-text);
-  }
-
-  .footer-hint .link:hover {
-    text-decoration: underline;
   }
 
 

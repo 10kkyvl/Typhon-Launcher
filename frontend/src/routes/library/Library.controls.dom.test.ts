@@ -1,5 +1,6 @@
 import { screen } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { msg } from '../../lib/i18n';
 import type { LibraryGame } from '../../lib/services/library';
 import { libraryGames } from '../../lib/stores/library';
 import { libraryView } from '../../lib/stores/ui';
@@ -47,5 +48,22 @@ describe('Library: a row of the list view', () => {
     const name = nameOf('Celeste');
     expect(name.startsWith('Celeste')).toBe(true);
     expect(times(name, 'Celeste')).toBe(1);
+  });
+});
+
+describe('Library: "Show all" of the recent games', () => {
+  it('is a text link the keyboard presses, and it lists the recent games', async () => {
+    const played = { ...games[1], id: 'g-cells', title: 'Dead Cells', lastPlayed: '2026-10-01T10:00:00Z' } as LibraryGame;
+    libraryGames.set([...games, played]);
+    const { user } = renderDom(Library);
+    const recent = msg('games.recentLabel');
+    expect(screen.getAllByRole('heading', { level: 2, name: recent })).toHaveLength(1);
+
+    const all = screen.getByRole('button', { name: msg('games.libraryShowAllButton') });
+    expect(all.classList.contains('text-link')).toBe(true);
+    all.focus();
+    await user.keyboard('{Enter}');
+
+    expect(screen.getAllByRole('heading', { level: 2, name: recent })).toHaveLength(2);
   });
 });

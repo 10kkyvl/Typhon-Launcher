@@ -3,6 +3,7 @@
   import Avatar from '../../lib/components/Avatar.svelte';
   import { cardFrame } from '../../lib/profile/frameLook';
   import Card from '../../lib/components/Card.svelte';
+  import TextLink from '../../lib/components/TextLink.svelte';
   import type { UserCard } from '../../lib/services/social';
   import { mutualMore } from '../../lib/social/view';
   import { navigate } from '../../lib/stores/router';
@@ -16,7 +17,7 @@
 
 <Card title={msg('social.userMutualTitle', { count })}>
   {#snippet action()}
-    <button class="all" type="button" onclick={() => navigate('friends')}>{msg('social.viewAllButton')}</button>
+    <span class="all"><TextLink onclick={() => navigate('friends')}>{msg('social.viewAllButton')}</TextLink></span>
   {/snippet}
   <div class="row">
     {#each shown as friend (friend.id)}
@@ -72,16 +73,7 @@
   }
 
   .all {
-    background: none;
-    border: 0;
-    padding: 0;
-    color: var(--accent-text);
     font-size: var(--font-sm);
     font-weight: 500;
-    cursor: pointer;
-  }
-
-  .all:hover {
-    text-decoration: underline;
   }
 </style>
