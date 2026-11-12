@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import type { Attachment } from 'svelte/attachments';
   import type { HTMLButtonAttributes } from 'svelte/elements';
+  import { refuseWhile } from './refuse';
   import Spinner from './Spinner.svelte';
   import Tooltip from './Tooltip.svelte';
 
@@ -65,29 +65,7 @@
   const refused = $derived(disabled && Boolean(reason));
   const blocked = $derived(refused || busy);
 
-  // Only the keys that press a button are held back. Focus stays on a busy button for as long as its
-  // action runs, so every other key (Tab, Escape, the arrows, the window's shortcuts) must pass.
-  const ACTIVATION_KEYS = new Set(['Enter', ' ']);
-  // A menu button also opens on these (WAI-ARIA menu button).
-  const POPUP_KEYS = new Set(['ArrowDown', 'ArrowUp']);
-  const ACTIVATIONS = ['click', 'pointerdown', 'pointerup', 'mousedown', 'mouseup', 'keydown', 'keyup'];
-
-  // Capture on the button itself runs before any handler on it or above it (Svelte's delegated ones
-  // included), so nothing spread onto it sees a blocked activation.
-  const guard: Attachment<HTMLButtonElement> = (node) => {
-    const stop = (event: Event) => {
-      if (!blocked) return;
-      if (event instanceof KeyboardEvent && !ACTIVATION_KEYS.has(event.key)) {
-        if (!POPUP_KEYS.has(event.key) || !node.hasAttribute('aria-haspopup')) return;
-      }
-      if (event.type !== 'pointerdown' && event.type !== 'mousedown') event.preventDefault();
-      event.stopImmediatePropagation();
-    };
-    for (const type of ACTIVATIONS) node.addEventListener(type, stop, true);
-    return () => {
-      for (const type of ACTIVATIONS) node.removeEventListener(type, stop, true);
-    };
-  };
+  const guard = refuseWhile(() => blocked);
 </script>
 
 {#snippet button(guarded: boolean)}
