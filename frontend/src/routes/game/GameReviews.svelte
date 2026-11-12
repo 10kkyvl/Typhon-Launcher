@@ -13,6 +13,7 @@
   import ReviewCard from './ReviewCard.svelte';
   import ReviewComposer from './ReviewComposer.svelte';
   import { authState } from '../../lib/stores/user';
+  import { focusAfterRetry } from './retryFocus';
 
   let { canonicalGameId }: { canonicalGameId: string } = $props();
 
@@ -44,10 +45,11 @@
 
   let requestToken = 0;
 
-  async function loadFirst(id: string, currentSort: string, currentFilter: string) {
+  // A retry keeps the failure on screen until its answer: the notice and its focused button stay.
+  async function loadFirst(id: string, currentSort: string, currentFilter: string, retry = false) {
     const token = ++requestToken;
     loading = true;
-    failed = false;
+    if (!retry) failed = false;
     moreFailed = false;
     try {
       const page = await listReviews(id, currentSort as ReviewSort, currentFilter as ReviewFilter, '');
@@ -55,17 +57,35 @@
       items = page.reviews;
       cursor = page.next;
       loaded = true;
+      failed = false;
       unsupported = false;
     } catch (err) {
       if (token !== requestToken) return;
       items = [];
       cursor = '';
       loaded = false;
-      if (err instanceof AccountError && err.code === 'unknown_game') unsupported = true;
-      else failed = true;
+      if (err instanceof AccountError && err.code === 'unknown_game') {
+        unsupported = true;
+        failed = false;
+      } else failed = true;
     } finally {
       if (token === requestToken) loading = false;
     }
+  }
+
+  let retrying = $state(false);
+  let heading = $state<HTMLElement>();
+
+  async function retry() {
+    if (retrying) return;
+    const button = document.activeElement;
+    retrying = true;
+    try {
+      await loadFirst(canonicalGameId, sort, filter, true);
+    } finally {
+      retrying = false;
+    }
+    await focusAfterRetry(button, () => heading);
   }
 
   async function loadMore() {
@@ -115,7 +135,7 @@
 {#if canonicalGameId && !unsupported}
   <section class="section" id="reviews">
     <div class="header">
-      <h2 class="heading">{msg('reviews.sectionTitle')}</h2>
+      <h2 class="heading" tabindex="-1" bind:this={heading}>{msg('reviews.sectionTitle')}</h2>
       <div class="controls">
         <SegmentedControl options={sortTabs} label={msg('reviews.sortLabel')} variant="pill" bind:value={sort} />
         <SegmentedControl options={filterTabs} label={msg('reviews.filterLabel')} variant="pill" bind:value={filter} />
@@ -127,19 +147,19 @@
     </div>
 
     <div class="results" bind:this={results} style:min-height={floor > 0 ? `${floor}px` : undefined}>
-    {#if loading && items.length === 0}
-      <div class="state" role="status">
-        <Spinner />
-        <p class="muted">{msg('reviews.loading')}</p>
-      </div>
-    {:else if failed && items.length === 0}
+    {#if failed && items.length === 0}
       <div class="state">
         <Notice tone="danger">
           {msg('reviews.loadError')}
           {#snippet action()}
-            <Button size="sm" onclick={() => loadFirst(canonicalGameId, sort, filter)}>{msg('common.retry')}</Button>
+            <Button size="sm" busy={retrying} onclick={retry}>{msg('common.retry')}</Button>
           {/snippet}
         </Notice>
+      </div>
+    {:else if loading && items.length === 0}
+      <div class="state" role="status">
+        <Spinner />
+        <p class="muted">{msg('reviews.loading')}</p>
       </div>
     {:else if loaded && items.length === 0}
       <EmptyState level={3} title={msg('reviews.emptyTitle')} description={msg('reviews.emptyDescription')} />

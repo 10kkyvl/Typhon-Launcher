@@ -3,8 +3,10 @@ import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import type { LibraryGame } from '../../lib/services/library';
-import { getMetadataView, type MetadataView } from '../../lib/services/metadata';
+import { getMetadataView, refreshMetadata, type MetadataView } from '../../lib/services/metadata';
+import { getCatalogGame, getReleasesForGame, type CatalogGame, type ReleaseGroup } from '../../lib/services/sources';
 import { libraryGames } from '../../lib/stores/library';
+import { metadataAvailable } from '../../lib/stores/metadata';
 import { resetHistory, route } from '../../lib/stores/router';
 import { toasts } from '../../lib/stores/toasts';
 import { renderDom } from '../../lib/testing/dom';
@@ -12,10 +14,26 @@ import GameDetails from './GameDetails.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
-vi.mock('../../lib/services/metadata', async (importOriginal) => {
-  const original = await importOriginal<typeof import('../../lib/services/metadata')>();
-  return { ...original, getMetadataView: vi.fn(original.getMetadataView) };
-});
+vi.mock('../../lib/services/metadata', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/services/metadata')>()),
+  getMetadataView: vi.fn(),
+  refreshMetadata: vi.fn(),
+}));
+vi.mock('../../lib/services/sources', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/services/sources')>()),
+  getCatalogGame: vi.fn(),
+  getReleasesForGame: vi.fn(),
+}));
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (err: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
 
 function view(patch: Partial<MetadataView>): MetadataView {
   return {
@@ -26,7 +44,7 @@ function view(patch: Partial<MetadataView>): MetadataView {
     resolved: true,
     stale: false,
     provider: 'igdb',
-    match: 'matched',
+    match: 'idle',
     ...patch,
   } as MetadataView;
 }
@@ -52,10 +70,18 @@ beforeEach(() => {
     disconnect() {}
   });
   vi.spyOn(console, 'error').mockImplementation(() => {});
+  vi.mocked(getMetadataView).mockImplementation(async (id) => view({ game: { id, title: '' } as CatalogGame, resolved: false, match: 'idle' }));
+  vi.mocked(getCatalogGame).mockResolvedValue(null);
+  vi.mocked(getReleasesForGame).mockResolvedValue([]);
   libraryGames.set([hades]);
 });
 
 afterEach(() => {
+  vi.mocked(getMetadataView).mockReset();
+  vi.mocked(refreshMetadata).mockReset();
+  vi.mocked(getCatalogGame).mockReset();
+  vi.mocked(getReleasesForGame).mockReset();
+  metadataAvailable.set(false);
   libraryGames.set([]);
   toasts.set([]);
   resetHistory();
@@ -95,5 +121,70 @@ describe('GameDetails: a long summary', () => {
 
     expect(more.getAttribute('aria-expanded')).toBe('true');
     expect(text?.textContent).toBe(summary);
+  });
+});
+
+describe('GameDetails: retrying what failed to load', () => {
+  it('keeps the downloads notice and the focus on its busy Retry, then focuses the section heading', async () => {
+    const again = deferred<ReleaseGroup[]>();
+    vi.mocked(getReleasesForGame).mockRejectedValueOnce(new Error('offline')).mockReturnValueOnce(again.promise);
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    const notice = (await screen.findByText(msg('games.detailReleasesFailed'))).closest('.notice') as HTMLElement;
+    expect(notice).toBeInstanceOf(HTMLElement);
+    const retry = within(notice).getByRole('button', { name: msg('games.catalogRetry') });
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(retry.getAttribute('aria-busy')).toBe('true');
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
+
+    again.resolve([]);
+    await vi.waitFor(() => expect(notice.isConnected).toBe(false));
+    const heading = screen.getByRole('heading', { name: msg('games.detailAvailableDownloadsHeading') });
+    await vi.waitFor(() => expect(document.activeElement).toBe(heading));
+  });
+
+  it('keeps the metadata notice and the focus on its busy Retry, then focuses the title', async () => {
+    metadataAvailable.set(true);
+    vi.mocked(getMetadataView).mockResolvedValue(view({ resolved: false, match: 'failed' }));
+    const again = deferred<MetadataView>();
+    vi.mocked(refreshMetadata).mockReturnValueOnce(again.promise);
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    const notice = (await screen.findByText(msg('games.detailMetaFailedTitle'))).closest('.notice') as HTMLElement;
+    expect(notice).toBeInstanceOf(HTMLElement);
+    const retry = within(notice).getByRole('button', { name: msg('common.retry') });
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(retry.getAttribute('aria-busy')).toBe('true');
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
+
+    again.resolve(view({}));
+    await vi.waitFor(() => expect(notice.isConnected).toBe(false));
+    await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1, name: 'Hades' })));
+  });
+
+  it('keeps the page error and the focus on its busy Retry, then focuses the game title', async () => {
+    libraryGames.set([]);
+    const again = deferred<CatalogGame | null>();
+    vi.mocked(getCatalogGame).mockRejectedValueOnce(new Error('offline')).mockReturnValueOnce(again.promise);
+    const { user } = renderDom(GameDetails, { id: 'c9' });
+    const failed = await screen.findByRole('heading', { level: 1, name: msg('games.detailCatalogLoadError') });
+    const retry = screen.getByRole('button', { name: msg('common.retry') });
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(retry.getAttribute('aria-busy')).toBe('true');
+    expect(failed.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
+
+    again.resolve({ id: 'c9', title: 'Celeste' } as CatalogGame);
+    await vi.waitFor(() => expect(failed.isConnected).toBe(false));
+    await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1, name: 'Celeste' })));
   });
 });

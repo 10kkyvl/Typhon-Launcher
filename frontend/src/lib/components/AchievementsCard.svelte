@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Lock, RefreshCw, Trophy } from '@lucide/svelte';
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { errorCode, hasMessage, msg, t } from '../i18n';
   import {
     CODE_NO_STEAM_ID,
@@ -13,8 +13,10 @@
   import { toast } from '../stores/toasts';
   import { dateTime } from '../utils/format';
   import { errorMessage } from '../utils/errors';
+  import { focusableIn, focusQuietly } from '../layers/focus';
   import Button from './Button.svelte';
   import Card from './Card.svelte';
+  import Notice from './Notice.svelte';
   import ProgressBar from './ProgressBar.svelte';
 
   let { gameId }: { gameId: string } = $props();
@@ -45,9 +47,10 @@
     return hasMessage(code) ? msg(code) : `${fallback}: ${errorMessage(err)}`;
   }
 
-  async function load(id: string) {
+  // A retry keeps the failure on screen until its answer: the notice and its focused button stay.
+  async function load(id: string, retry = false) {
     const mine = ++seq;
-    loadError = '';
+    if (!retry) loadError = '';
     noSteam = false;
     if (id !== loadedId) view = null;
     loadedId = id;
@@ -55,12 +58,35 @@
       const next = await fetchAchievements(id);
       if (mine !== seq) return;
       view = next;
+      loadError = '';
     } catch (err) {
       if (mine !== seq) return;
       view = null;
-      if (errorCode(err) === CODE_NO_STEAM_ID) noSteam = true;
-      else loadError = failureText(err, msg('games.achievementsLoadError'));
+      if (errorCode(err) === CODE_NO_STEAM_ID) {
+        noSteam = true;
+        loadError = '';
+      } else loadError = failureText(err, msg('games.achievementsLoadError'));
     }
+  }
+
+  let retrying = $state(false);
+  let refreshSlot = $state<HTMLElement>();
+
+  async function retry() {
+    if (retrying) return;
+    const button = document.activeElement;
+    retrying = true;
+    try {
+      await load(gameId, true);
+    } finally {
+      retrying = false;
+    }
+    // The notice went with the focused Retry: focus moves to the refresh of what loaded.
+    await tick();
+    const active = document.activeElement;
+    if (!button || button.isConnected || (active && active !== document.body && active.isConnected)) return;
+    const next = refreshSlot ? focusableIn(refreshSlot)[0] : undefined;
+    if (next) focusQuietly(next);
   }
 
   async function refresh() {
@@ -121,10 +147,12 @@
   <Card title={$t('games.achievementsTitle')} surface="panel" padding="md-even">
     {#snippet action()}
       {#if view}
-        <Button variant="ghost" size="sm" busy={refreshing} onclick={refresh}>
-          {#if !refreshing}<RefreshCw size="1.4rem" strokeWidth={1.8} />{/if}
-          {$t('games.achievementsRefresh')}
-        </Button>
+        <span class="refresh" bind:this={refreshSlot}>
+          <Button variant="ghost" size="sm" busy={refreshing} onclick={refresh}>
+            {#if !refreshing}<RefreshCw size="1.4rem" strokeWidth={1.8} />{/if}
+            {$t('games.achievementsRefresh')}
+          </Button>
+        </span>
       {/if}
     {/snippet}
 
@@ -199,33 +227,22 @@
 
       <p class="source">{$t('games.achievementsSource')}</p>
     {:else if loadError}
-      <p class="state error">{loadError}</p>
-      <button class="refresh" type="button" onclick={() => load(gameId)}>
-        <RefreshCw size="1.4rem" strokeWidth={1.8} />
-        {$t('common.retry')}
-      </button>
+      <Notice tone="danger" compact>
+        {loadError}
+        {#snippet action()}
+          <Button size="sm" busy={retrying} onclick={retry}>
+            {#if !retrying}<RefreshCw size="1.4rem" strokeWidth={1.8} />{/if}
+            {$t('common.retry')}
+          </Button>
+        {/snippet}
+      </Notice>
     {/if}
   </Card>
 {/if}
 
 <style>
   .refresh {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1);
-    padding: var(--space-1) var(--space-2);
-    border-radius: var(--radius-sm);
-    color: var(--accent-text);
-    font-size: var(--font-xs);
-  }
-
-  .refresh:hover:not(:disabled) {
-    background: var(--hover);
-  }
-
-  .refresh:disabled {
-    color: var(--text-3);
-    cursor: default;
+    display: contents;
   }
 
   .progress {
@@ -328,15 +345,5 @@
     color: var(--text-3);
     font-size: var(--font-xs);
     line-height: 1.4;
-  }
-
-  .state {
-    color: var(--text-3);
-    font-size: var(--font-sm);
-  }
-
-  .state.error {
-    margin-bottom: var(--space-2);
-    color: var(--danger);
   }
 </style>

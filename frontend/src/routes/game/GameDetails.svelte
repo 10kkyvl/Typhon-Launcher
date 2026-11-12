@@ -164,6 +164,7 @@
   import { installErrorText } from '../../lib/install/installErrors';
   import { metadataErrorText } from '../../lib/metadata/metadataErrors';
   import { sourceErrorText } from '../../lib/sources/sourceErrors';
+  import { focusAfterRetry } from './retryFocus';
 
   function libraryErrorText(err: unknown, fallback: string): string {
     const code = errorCode(err);
@@ -259,6 +260,7 @@
   let catalogGame = $state<CatalogGame | null>(null);
   let catalogLoading = $state(false);
   let catalogFailed = $state(false);
+  let catalogRetrying = $state(false);
   let catalogToken = 0;
 
   async function loadCatalogGame(gameId: string) {
@@ -372,10 +374,13 @@
     });
   });
 
+  // A retry from the failed state keeps that notice, with its busy Retry, until the answer arrives.
+  let metaRetrying = $state(false);
+
   const metaState = $derived(
     metaStatus({
       available: $metadataAvailable,
-      busy: metaReading || metaSearching || metaRefreshing || metaSkipping,
+      busy: metaReading || metaSearching || (metaRefreshing && !metaRetrying) || metaSkipping,
       match: metaView?.match,
       resolved: metaView?.resolved,
     }),
@@ -727,6 +732,39 @@
     }
   }
 
+  let titleHeading = $state<HTMLElement>();
+
+  // Where focus goes when a retry's answer takes away the notice with the focused Retry: the heading
+  // of the section it sat in, or the game's title when the section went too.
+  function retryTarget(button: Element | null): () => HTMLElement | undefined {
+    const heading = button?.closest('section')?.querySelector<HTMLElement>('h2[tabindex]') ?? undefined;
+    return () => (heading?.isConnected ? heading : titleHeading);
+  }
+
+  async function retryMeta() {
+    if (metaRetrying) return;
+    const button = document.activeElement;
+    metaRetrying = true;
+    try {
+      await refreshMeta();
+    } finally {
+      metaRetrying = false;
+    }
+    await focusAfterRetry(button, retryTarget(null));
+  }
+
+  async function retryCatalog() {
+    if (catalogRetrying) return;
+    const button = document.activeElement;
+    catalogRetrying = true;
+    try {
+      await loadCatalogGame(id);
+    } finally {
+      catalogRetrying = false;
+    }
+    await focusAfterRetry(button, retryTarget(null));
+  }
+
   async function skipMeta() {
     if (!canonicalId || metaSkipping) return;
     metaSkipping = true;
@@ -831,6 +869,35 @@
       loadReleases(canonicalGameId, gameTitle);
     });
   });
+
+  let releasesRetrying = $state(false);
+  let relatedRetrying = $state(false);
+
+  async function retryReleases() {
+    if (releasesRetrying) return;
+    const button = document.activeElement;
+    const target = retryTarget(button);
+    releasesRetrying = true;
+    try {
+      await loadReleases(canonicalId, releaseTitle);
+    } finally {
+      releasesRetrying = false;
+    }
+    await focusAfterRetry(button, target);
+  }
+
+  async function retryRelated() {
+    if (relatedRetrying) return;
+    const button = document.activeElement;
+    const target = retryTarget(button);
+    relatedRetrying = true;
+    try {
+      await loadRelated(canonicalId);
+    } finally {
+      relatedRetrying = false;
+    }
+    await focusAfterRetry(button, target);
+  }
 
   let downloadModalOpen = $state(false);
   let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
@@ -1015,7 +1082,7 @@
       hasOwnDownload: Boolean(anyOwnDownload),
     }),
   );
-  const loadFailed = $derived(catalogFailed && !localGame && !catalogGame && !anyOwnDownload);
+  const loadFailed = $derived((catalogFailed || catalogRetrying) && !localGame && !catalogGame && !anyOwnDownload);
   const gameShown = $derived(!missing && !loadFailed);
   const ambientId = $derived(pageAmbient(localGame?.id, canonicalId, gameShown));
   $effect(() => claimAmbient(ambientId));
@@ -1167,16 +1234,27 @@
   {/if}
 {/snippet}
 
+{#snippet releasesFailedNotice()}
+  {#if releasesFailed || releasesRetrying}
+    <Notice tone="danger">
+      {msg('games.detailReleasesFailed')}
+      {#snippet action()}
+        <Button size="sm" busy={releasesRetrying} onclick={retryReleases}>{msg('games.catalogRetry')}</Button>
+      {/snippet}
+    </Notice>
+  {/if}
+{/snippet}
+
 {#snippet sec_requirements(withReleases: boolean)}
   {#if (catalogGame || localGame) && managed}
     <div class="gsec" class:moved={moved('requirements')} {...part('requirements')}>
       <section class="section">
-        <h2 class="heading">{msg('games.detailAvailableDownloadsHeading')}</h2>
+        <h2 class="heading" tabindex="-1">{msg('games.detailAvailableDownloadsHeading')}</h2>
         {#if canonicalId}
           <SystemRequirements gameId={canonicalId} installPath={$settings?.gamesPath ?? ''} {installed} revision={sysreqRevision} />
         {/if}
         {#if withReleases}
-          {#if releasesFailed}<p class="muted">{msg('games.detailReleasesFailed')}</p><Button onclick={() => loadReleases(canonicalId,releaseTitle)}>{msg('games.catalogRetry')}</Button>{/if}
+          {@render releasesFailedNotice()}
           {#if !releasesLoading && !releasesFailed && releaseGroups.length === 0}<p class="muted">{msg('games.detailNoReleases')}</p>{/if}
           <ReleaseList
             groups={releaseGroups}
@@ -1196,8 +1274,8 @@
   {#if (catalogGame || localGame) && managed}
     <div class="gsec" class:moved={moved('releases')} {...part('releases')}>
       <section class="section">
-        <h2 class="heading">{msg('games.detailAvailableDownloadsHeading')}</h2>
-        {#if releasesFailed}<p class="muted">{msg('games.detailReleasesFailed')}</p><Button onclick={() => loadReleases(canonicalId,releaseTitle)}>{msg('games.catalogRetry')}</Button>{/if}
+        <h2 class="heading" tabindex="-1">{msg('games.detailAvailableDownloadsHeading')}</h2>
+        {@render releasesFailedNotice()}
         {#if !releasesLoading && !releasesFailed && releaseGroups.length === 0}<p class="muted">{msg('games.detailNoReleases')}</p>{/if}
         <ReleaseList
           groups={releaseGroups}
@@ -1230,14 +1308,18 @@
 {/snippet}
 
 {#snippet sec_otherVersions()}
-  {#if (catalogGame || localGame) && managed && (relatedShown.length > 0 || (relatedFailed && availableGroups.length === 0))}
+  {#if (catalogGame || localGame) && managed && (relatedShown.length > 0 || ((relatedFailed || relatedRetrying) && availableGroups.length === 0))}
     <div class="gsec" class:moved={moved('otherVersions')} {...part('otherVersions')}>
-      {#if relatedShown.length > 0 || (relatedFailed && availableGroups.length === 0)}
+      {#if relatedShown.length > 0 || ((relatedFailed || relatedRetrying) && availableGroups.length === 0)}
         <section class="section" bind:this={otherVersionsEl}>
-          <h2 class="heading">{msg('games.otherVersionsHeading')}</h2>
-          {#if relatedFailed}
-            <p class="muted">{msg('games.otherVersionsFailed')}</p>
-            <Button onclick={() => loadRelated(canonicalId)}>{msg('games.catalogRetry')}</Button>
+          <h2 class="heading" tabindex="-1">{msg('games.otherVersionsHeading')}</h2>
+          {#if relatedFailed || relatedRetrying}
+            <Notice tone="danger">
+              {msg('games.otherVersionsFailed')}
+              {#snippet action()}
+                <Button size="sm" busy={relatedRetrying} onclick={retryRelated}>{msg('games.catalogRetry')}</Button>
+              {/snippet}
+            </Notice>
           {:else}
             {#if availableGroups.length === 0 && !releasesLoading && !releasesFailed}
               <p class="muted">{msg('games.otherVersionsHint')}</p>
@@ -1442,7 +1524,7 @@
         </div>
 
         {#if title}
-          <h1 class="title" tabindex="-1">{title}</h1>
+          <h1 class="title" tabindex="-1" bind:this={titleHeading}>{title}</h1>
         {:else}
           <div class="skeleton title-skeleton"></div>
         {/if}
@@ -1591,7 +1673,7 @@
   {:else if loadFailed}
     <EmptyState level={1} title={msg('games.detailCatalogLoadError')}>
       {#snippet actions()}
-        <Button onclick={() => loadCatalogGame(id)}>{msg('common.retry')}</Button>
+        <Button busy={catalogRetrying} onclick={retryCatalog}>{msg('common.retry')}</Button>
         <Button onclick={() => navigate('library')}>{msg('games.detailBackToLibrary')}</Button>
       {/snippet}
     </EmptyState>
@@ -1624,38 +1706,34 @@
           {@render column(columns.main)}
         {:else}
           {#if metaState === 'searching'}
-            <div class="meta-note" role="status">
-              <Spinner />
-              <div class="meta-text">
-                <p class="meta-title">{msg('games.detailMetaSearchingTitle')}</p>
-                <p class="meta-hint">
-                  {msg('games.detailMetaSearchingHint', { title: title || msg('games.detailFallbackGameWord') })}
-                </p>
-              </div>
+            <div class="meta-note">
+              <Notice tone="info" title={msg('games.detailMetaSearchingTitle')}>
+                {#snippet icon()}
+                  <Spinner size="sm" />
+                {/snippet}
+                {msg('games.detailMetaSearchingHint', { title: title || msg('games.detailFallbackGameWord') })}
+              </Notice>
             </div>
           {:else if metaState === 'unmatched' || metaState === 'failed'}
             <div class="meta-note">
-              <div class="meta-text">
-                <p class="meta-title">
-                  {metaState === 'unmatched' ? msg('games.detailMetaUnmatchedTitle') : msg('games.detailMetaFailedTitle')}
-                </p>
-                <p class="meta-hint">
-                  {metaState === 'unmatched'
-                    ? msg('games.detailMetaUnmatchedHint')
-                    : msg('games.detailMetaFailedHint')}
-                </p>
-              </div>
-              <div class="meta-actions">
-                {#if metaState === 'failed'}
-                  <Button size="sm" variant="primary" disabled={metaRefreshing} onclick={refreshMeta}>
-                    {metaRefreshing ? msg('games.detailMetaRetrying') : msg('common.retry')}
-                  </Button>
-                  <Button size="sm" onclick={() => openMatch('find')}>{msg('games.detailChooseManually')}</Button>
-                {:else}
-                  <Button size="sm" variant="primary" onclick={() => openMatch('find')}>{msg('games.detailChooseManually')}</Button>
-                {/if}
-                <Button size="sm" variant="ghost" disabled={metaSkipping} onclick={skipMeta}>{msg('games.detailSkipSearch')}</Button>
-              </div>
+              <Notice
+                tone={metaState === 'failed' ? 'warning' : 'info'}
+                announce={false}
+                title={metaState === 'unmatched' ? msg('games.detailMetaUnmatchedTitle') : msg('games.detailMetaFailedTitle')}
+              >
+                {metaState === 'unmatched' ? msg('games.detailMetaUnmatchedHint') : msg('games.detailMetaFailedHint')}
+                {#snippet action()}
+                  {#if metaState === 'failed'}
+                    <Button size="sm" variant="primary" busy={metaRetrying} onclick={retryMeta}>
+                      {metaRefreshing ? msg('games.detailMetaRetrying') : msg('common.retry')}
+                    </Button>
+                    <Button size="sm" onclick={() => openMatch('find')}>{msg('games.detailChooseManually')}</Button>
+                  {:else}
+                    <Button size="sm" variant="primary" onclick={() => openMatch('find')}>{msg('games.detailChooseManually')}</Button>
+                  {/if}
+                  <Button size="sm" variant="ghost" disabled={metaSkipping} onclick={skipMeta}>{msg('games.detailSkipSearch')}</Button>
+                {/snippet}
+              </Notice>
             </div>
           {/if}
 
@@ -2011,41 +2089,8 @@
   }
 
   .meta-note {
-    display: flex;
-    align-items: center;
-    gap: var(--space-4);
-    flex-wrap: wrap;
     max-width: var(--prose-max);
     margin-bottom: var(--space-6);
-    padding: var(--space-4) var(--space-5);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface);
-  }
-
-  .meta-text {
-    flex: 1;
-    min-width: 22rem;
-  }
-
-  .meta-title {
-    font-size: var(--font-sm);
-    font-weight: 600;
-    color: var(--text);
-  }
-
-  .meta-hint {
-    margin-top: 0.4rem;
-    font-size: var(--font-xs);
-    line-height: 1.5;
-    color: var(--text-3);
-  }
-
-  .meta-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    flex-wrap: wrap;
   }
 
   .summary {
