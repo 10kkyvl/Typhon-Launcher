@@ -116,6 +116,26 @@ describe('Catalog: messages about the page', () => {
     await vi.waitFor(() => expect(document.activeElement).not.toBe(document.body));
     expect(document.activeElement?.isConnected).toBe(true);
   });
+
+  it('when Undo is saved the focus moves on at once, not after the catalog has reloaded', async () => {
+    catalogView.set('list');
+    vi.mocked(queryCatalogGames).mockResolvedValue(page([{ id: 'c-celeste', title: 'Celeste' }]));
+    vi.mocked(setNotInterested).mockResolvedValue(undefined);
+    const { user } = renderDom(Catalog);
+    await user.click(await screen.findByRole('button', { name: msg('games.recommendationNotInterested') }));
+    const notice = (await screen.findByText(msg('games.recommendationDismissed', { title: 'Celeste' }))).closest('.notice') as HTMLElement;
+    const undo = within(notice).getByRole('button', { name: msg('games.recommendationUndo') });
+    await vi.waitFor(() => expect(undo.hasAttribute('disabled')).toBe(false));
+    // The reload that follows the undo does not answer.
+    vi.mocked(queryCatalogGames).mockReturnValue(new Promise(() => {}));
+    undo.focus();
+
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(notice.isConnected).toBe(false));
+    await vi.waitFor(() => expect(document.activeElement).not.toBe(document.body));
+    expect(document.activeElement?.isConnected).toBe(true);
+  });
 });
 
 type Answer = Awaited<ReturnType<typeof queryCatalogGames>>;

@@ -450,13 +450,15 @@
     return [game.id, game.serverId, ...(game.aliasIds ?? [])].some((id) => id && preferences.notInterested.includes(id));
   }
 
-  function dismiss(game: CatalogGame, on = true) {
+  // `changed` runs once the choice is saved and shown, before the catalog reloads with it.
+  function dismiss(game: CatalogGame, on = true, changed?: () => void) {
     return preferenceWrites(async () => {
       preferenceBusy = true;
       try {
         await setNotInterested(game.id, on);
         preferences = await getRecommendationPreferences();
         lastDismissed = on ? { id: game.id, title: game.title } : null;
+        changed?.();
         await reload();
       } catch { toast(msg('games.recommendationError'), 'danger'); }
       finally { preferenceBusy = false; }
@@ -464,22 +466,29 @@
   }
 
   let undoing = $state(false);
-  // Where the put-away notice sits: what follows it in the page takes the focus when the notice goes.
+  // Where the put-away notice sat: the control after it takes the focus when the notice goes, else the
+  // one before it (the list after it may be reloading, with nothing to focus yet).
   let dismissalEnd = $state<HTMLElement>();
 
   async function undoDismissal() {
     if (!lastDismissed || undoing) return;
     undoing = true;
     try {
-      await dismiss({ id: lastDismissed.id, title: lastDismissed.title } as CatalogGame, false);
+      await dismiss({ id: lastDismissed.id, title: lastDismissed.title } as CatalogGame, false, () => void focusPastDismissal());
     } finally {
       undoing = false;
     }
+  }
+
+  async function focusPastDismissal() {
     await tick();
     const active = document.activeElement;
-    if (active && active !== document.body && active.isConnected) return;
     const end = dismissalEnd;
-    const next = end ? focusableIn(document.body).find((el) => end.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) : undefined;
+    if (!end || (active && active !== document.body && active.isConnected)) return;
+    const all = focusableIn(document.body);
+    const after = all.find((el) => end.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING);
+    const before = all.findLast((el) => end.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_PRECEDING);
+    const next = after ?? before;
     if (next) focusQuietly(next);
   }
 
