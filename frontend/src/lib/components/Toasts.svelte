@@ -34,18 +34,13 @@
     else resumeToast(id);
   }
 
-  // A toast can leave the list without being closed from inside: its time is up, or code removes it
-  // (the "opening the link" toast). If focus was inside it, focus goes back where it came from
-  // instead of dropping to the page's top; either way nothing is kept about a toast that is gone.
-  let listed: number[] = [];
+  // The watch follows the list, before the page does: a toast can leave it without being closed from
+  // inside (its time is up, or code removes it: the "opening the link" toast). If focus was inside
+  // one that left, focus goes back where it came from instead of dropping to the page's top.
   $effect.pre(() => {
     const present = $toasts.map((item) => item.id);
-    const gone = listed.filter((id) => !present.includes(id));
-    listed = present;
-    // Before the cards are taken out of the page: afterwards nothing says which one held focus.
-    const held = gone.find((id) => stack?.querySelector(`[data-toast="${id}"]`)?.contains(document.activeElement));
-    const home = held === undefined ? undefined : watch.origin(held);
-    watch.prune(present);
+    // Asked while the cards are still in the page: afterwards nothing says which one held focus.
+    const home = watch.listed(present, (id) => stack?.querySelector(`[data-toast="${id}"]`)?.contains(document.activeElement) ?? false);
     if (!home) return;
     void tick().then(() => {
       const lost = !document.activeElement?.isConnected || document.activeElement === document.body;
@@ -69,7 +64,6 @@
   // Closing a toast that holds focus would drop focus to the page's top.
   function close(item: Toast, card: HTMLElement | null) {
     const back = card?.contains(document.activeElement) ? watch.origin(item.id) : undefined;
-    watch.forget(item.id);
     dismissToast(item.id);
     if (back?.isConnected) back.focus({ preventScroll: true });
   }
