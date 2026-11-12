@@ -10,7 +10,10 @@
    * text around it, so a line holding it is as high as one without; it is underlined, so it is told
    * from the text by more than its colour, and it shows the focus ring every control has. `tone`:
    * `accent` in running text; `muted` where the link is part of the furniture and must not pull the
-   * eye (a breadcrumb, a path). Other attributes (target, rel, aria-*, data-*) go to the element.
+   * eye (a breadcrumb, a path, a note's "show"). Muted is `--text-2` and keeps the underline: it reads
+   * at 4.5:1 or more on every page surface and over the backdrop wash in every preset
+   * (theme-contrast.test.ts), where `--text-3` would hold that only by hundredths. Other attributes
+   * (target, rel, aria-*, data-*) go to the element.
    */
   type Shared = Omit<HTMLAttributes<HTMLElement>, 'class' | 'children' | 'title' | 'onclick'> & {
     children: Snippet;

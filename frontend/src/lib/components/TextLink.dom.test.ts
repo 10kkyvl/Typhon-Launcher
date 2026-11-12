@@ -87,6 +87,8 @@ describe('TextLink in a line of text', () => {
   it('has a muted tone for a link that is part of the furniture (a breadcrumb), which still turns to the text colour on hover', () => {
     expect(ruleBody(css, '.text-link').color).toBe('var(--accent-text)');
     expect(ruleBody(css, '.text-link.muted').color).toBe('var(--text-2)');
+    // Muted is a colour only: it keeps the underline, so even in a sentence it is told by more than colour.
+    expect(Object.keys(ruleBody(css, '.text-link.muted'))).toEqual(['color']);
     expect(css.indexOf('.text-link.muted')).toBeLessThan(css.indexOf('.text-link:hover:not(:disabled)'));
   });
 

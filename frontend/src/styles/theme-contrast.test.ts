@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import buttonSource from '../lib/components/Button.svelte?raw';
+import textLinkSource from '../lib/components/TextLink.svelte?raw';
 import { cssColor, ruleBody, styleOf } from '../lib/testing/css';
 import { goSources } from '../lib/testing/sources';
 import { luminance, rgb } from '../lib/theme/accent';
@@ -243,6 +244,27 @@ function rgba(value: string): RGBA {
   const a = Number(alpha);
   return a === 0 ? [0, 0, 0, 0] : [r / a, g / a, b / a, a];
 }
+
+// The muted text link (a breadcrumb, a path) stands on any page surface and on the backdrop wash, and
+// turns to --text on hover: both colours must be ones measured there at 4.5:1 in every preset. --text-3
+// is measured too, but holds the line by hundredths (4.51 on light surfaces, 4.57 on the dark wash);
+// --text-2 keeps 5.87 and 6.22 at its worst.
+describe('the muted text link is measured where it stands', () => {
+  const link = styleOf(textLinkSource, 'TextLink.svelte');
+  const token = (value: string) => /^var\((--[\w-]+)\)$/.exec(value)?.[1];
+  const onEveryPage = (fg: string | undefined) => PAIRS.some((pair) => pair.fg === fg && pair.min >= 4.5 && PAGE.every((s) => pair.on.includes(s)));
+  const onTheWash = (fg: string | undefined) => ON_WASH.some((pair) => pair.fg === fg && pair.min >= 4.5);
+
+  it('at rest and hovered', () => {
+    const rest = token(ruleBody(link, '.text-link.muted').color);
+    const hover = token(ruleBody(link, '.text-link:hover:not(:disabled)').color);
+    expect(rest).toBe('--text-2');
+    for (const fg of [rest, hover]) {
+      expect(onEveryPage(fg), `${fg} on every page surface`).toBe(true);
+      expect(onTheWash(fg), `${fg} on the wash`).toBe(true);
+    }
+  });
+});
 
 describe('built-in themes', () => {
   it('are dark, light, contrast and blush, in that order', () => {
