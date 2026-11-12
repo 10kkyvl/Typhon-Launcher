@@ -7,8 +7,10 @@ import { idlePlayThrottle } from '../../lib/services/playThrottle';
 import { downloads } from '../../lib/stores/downloads';
 import { playThrottle } from '../../lib/stores/playThrottle';
 import { resetHistory, route } from '../../lib/stores/router';
+import { ruleBody, styleOf } from '../../lib/testing/css';
 import { renderDom } from '../../lib/testing/dom';
 import Downloads from './Downloads.svelte';
+import page from './Downloads.svelte?raw';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
@@ -105,6 +107,23 @@ describe('Downloads: links', () => {
     await user.keyboard('{Enter}');
 
     expect(await screen.findByRole('dialog')).toBeTruthy();
+  });
+
+  // A text link given an action is a button, an atomic box: an ellipsis on the line around it would
+  // hide the whole link, so a long name wraps inside the row instead, shown in full.
+  it('a long download name wraps inside its row, shown in full, with no hint repeating it', () => {
+    downloads.set([download({ id: 'f', name: 'Failed One', status: 'failed', error: 'x' }), download({ id: 'c', name: 'Done One' })]);
+    renderDom(Downloads);
+    const wraps = ruleBody(styleOf(page, 'Downloads'), '.title.wraps');
+
+    for (const name of ['Failed One', 'Done One']) {
+      const link = screen.getByRole('button', { name });
+      expect(link.closest('.title')?.classList.contains('wraps'), name).toBe(true);
+      expect(link.closest('.tooltip-host'), name).toBeNull();
+    }
+    expect(wraps['white-space']).toBe('normal');
+    expect(wraps['overflow-wrap']).toBe('anywhere');
+    expect(wraps.overflow).toBe('visible');
   });
 
   it('"open download history" is a text link in its sentence that goes to the history', async () => {

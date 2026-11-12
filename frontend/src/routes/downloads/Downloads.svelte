@@ -1,5 +1,4 @@
 <script lang="ts">
-  import Tooltip from '../../lib/components/Tooltip.svelte';
   import Page from '../../lib/components/Page.svelte';
   import {
     ArrowDown,
@@ -240,10 +239,8 @@
             <Artwork src={coverOf(item)} alt="" label={item.name} ratio="3 / 4" radius="var(--radius-sm)" />
           </div>
           <div class="info">
-            <span class="title">
-              <Tooltip text={item.name} describe={false}>
-                <TextLink tone="muted" onclick={() => openDetails(item.id)}>{item.name}</TextLink>
-              </Tooltip>
+            <span class="title wraps">
+              <TextLink tone="muted" onclick={() => openDetails(item.id)}>{item.name}</TextLink>
             </span>
             <span class="error-text">
               <CircleAlert size="1.4rem" strokeWidth={1.8} />
@@ -341,10 +338,8 @@
             <Artwork src={coverOf(item)} alt="" label={item.name} ratio="3 / 4" radius="var(--radius-sm)" />
           </div>
           <div class="info inline">
-            <span class="title">
-              <Tooltip text={item.name} describe={false}>
-                <TextLink tone="muted" onclick={() => openDetails(item.id)}>{item.name}</TextLink>
-              </Tooltip>
+            <span class="title wraps">
+              <TextLink tone="muted" onclick={() => openDetails(item.id)}>{item.name}</TextLink>
             </span>
             {#if typeTag(item) || sourceTag(item)}
               <div class="tags">
@@ -565,6 +560,13 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  /* A text link given an action is a button, an atomic box: an ellipsis would hide all of it. */
+  .title.wraps {
+    white-space: normal;
+    overflow: visible;
+    overflow-wrap: anywhere;
   }
 
   .tags {
