@@ -118,7 +118,8 @@
   .hint { color: var(--text-2); font-size: var(--font-xs); margin-bottom: var(--space-3); }
   .choices, .editor { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
   .choices button { min-height: 3.6rem; padding: .5rem 1rem; border: 2px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-2); color: var(--text); }
-  .choices button.chosen { border-color: var(--accent-text); outline: 1px solid var(--accent-text); outline-offset: 2px; }
+  /* The chosen mark is a shadow ring outside the border, not an outline: the shared focus ring still shows over it. */
+  .choices button.chosen { border-color: var(--accent-text); box-shadow: 0 0 0 2px var(--surface-2), 0 0 0 3px var(--accent-text); }
   .choices button[aria-disabled='true'] { opacity: .5; cursor: default; }
   .choices .swatch { padding: .4rem; }
   .swatch span { display: block; width: 2.4rem; height: 2.4rem; border-radius: 50%; background: var(--swatch); }
