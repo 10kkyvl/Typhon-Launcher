@@ -44,6 +44,12 @@
             <span class="badge warning">{msg('settings.themePreviewWarning')}</span>
             <span class="badge danger">{msg('settings.themePreviewDanger')}</span>
           </div>
+          <!-- The tinted status fills, as the release notes and the dialogs use them on a surface. -->
+          <div class="badges">
+            <span class="tag added">{msg('ui.changeAdded')}</span>
+            <span class="tag fixed">{msg('ui.changeFixed')}</span>
+            <span class="tag removed">{msg('ui.changeRemoved')}</span>
+          </div>
         </div>
 
         <div class="card">
@@ -332,16 +338,38 @@
   }
 
   .badge.success {
-    background: var(--success-subtle);
+    background: color-mix(in srgb, var(--success) 8%, var(--surface-2));
     color: var(--success);
   }
 
   .badge.warning {
-    background: var(--warning-subtle);
+    background: color-mix(in srgb, var(--warning) 8%, var(--surface-2));
     color: var(--warning);
   }
 
   .badge.danger {
+    background: color-mix(in srgb, var(--danger) 8%, var(--surface-2));
+    color: var(--danger);
+  }
+
+  .tag {
+    padding: 0.1rem var(--space-2);
+    border-radius: var(--radius-xs);
+    font-size: var(--font-xs);
+    font-weight: 500;
+  }
+
+  .tag.added {
+    background: var(--success-subtle);
+    color: var(--success);
+  }
+
+  .tag.fixed {
+    background: var(--warning-subtle);
+    color: var(--warning);
+  }
+
+  .tag.removed {
     background: var(--danger-subtle);
     color: var(--danger);
   }

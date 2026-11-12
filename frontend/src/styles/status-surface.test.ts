@@ -180,9 +180,14 @@ const ON_SURFACE: Record<string, [surface: string, ...rules: string[]]> = {
   'lib/components/ReleaseNotesList.svelte': ['a dialog; badges', '.kind-added', '.kind-fixed', '.kind-removed'],
   'lib/components/ChatPanel.svelte': ['the chat panel', '.history-error', '.retry', '.chat-error, .disabled-copy'],
   'lib/components/ActivityDock.svelte': ['the dock panel; an icon', '.row-icon.attention'],
-  'lib/components/TopbarSearch.svelte': ['the results panel', '.results-error'],
+  'lib/components/TopbarSearch.svelte': ['the results panel', '.results-note.error'],
   'lib/components/MenuList.svelte': ['a menu', ".item.danger:not([aria-disabled='true'])"],
-  'lib/components/Toasts.svelte': ['a toast; icons', '.toast.success :global(svg)', '.toast.danger :global(svg)'],
+  'lib/components/Toasts.svelte': [
+    'a toast; icons',
+    '.toast.success > :global(svg)',
+    '.toast.warning > :global(svg)',
+    '.toast.danger > :global(svg)',
+  ],
   'lib/components/UpdateOverlay.svelte': ['the card of the update screen', '.card-danger', '.card-danger .meta'],
   'lib/components/LegalAcceptanceScreen.svelte': ['the card of the screen', '.error'],
   'lib/components/TelemetryConsentScreen.svelte': ['the card of the screen', '.error'],
@@ -197,7 +202,12 @@ const ON_SURFACE: Record<string, [surface: string, ...rules: string[]]> = {
     '.mark.warning, .have.warning',
     '.mark.danger, .have.danger',
   ],
-  'lib/components/Button.svelte': ['a control, not a message', '.danger'],
+  'lib/components/Button.svelte': [
+    'a control, not a message; in the overlay, its opaque panels',
+    '.danger',
+    ":global([data-controls='1x']) .danger",
+    ":global([data-controls='1x']) .danger:hover:not(:disabled, [aria-disabled='true'])",
+  ],
   'lib/components/Notice.svelte': ['the plate of the notice; its icon', '.icon'],
   'lib/components/DownloadItem.svelte': ['the fill of a download row', '.stalled'],
 };
@@ -346,7 +356,6 @@ describe('status-coloured text in the pages', () => {
 // contrast over any backdrop.
 const BADGES: Record<string, string[]> = {
   'lib/components/StatusBadge.svelte': ['.success', '.warning', '.danger', '.accent', '.neutral'],
-  'lib/components/SystemRequirements.svelte': ['.badge', '.badge.success', '.badge.warning', '.badge.danger'],
 };
 
 describe('the fill of a badge', () => {
