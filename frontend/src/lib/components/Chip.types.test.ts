@@ -16,6 +16,19 @@ describe('Chip props', () => {
     expect([named, unnamed, hinted, plain]).toHaveLength(4);
   });
 
+  // Its text is not a control: only the remove button acts, so what would make the text one is refused.
+  it('a removable chip takes no action, button type or end mark of its own', () => {
+    const busy: Props = { onremove: () => {}, removeLabel: 'Remove', busy: true, 'data-tag': 'rpg' };
+    const refused: Props = { onremove: () => {}, removeLabel: 'Remove', disabled: true, reason: 'Saving the tags' };
+    // @ts-expect-error: pressing the text does nothing
+    const pressed: Props = { onremove: () => {}, removeLabel: 'Remove', onclick: () => {} };
+    // @ts-expect-error: the text is not a submit button
+    const submit: Props = { onremove: () => {}, removeLabel: 'Remove', type: 'submit' };
+    // @ts-expect-error: the remove button is the end of a removable chip
+    const marked: Props = { onremove: () => {}, removeLabel: 'Remove', end: undefined as unknown as import('svelte').Snippet };
+    expect([busy, refused, pressed, submit, marked]).toHaveLength(5);
+  });
+
   it('a chip that goes to an address is a link: it is neither on nor off, removable or disabled', () => {
     const link: Props = { href: 'https://example.com', target: '_blank', rel: 'noopener noreferrer' };
     // @ts-expect-error: a link has no on state

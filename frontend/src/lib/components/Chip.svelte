@@ -10,7 +10,10 @@
    * shown as that button's hint. The remove button is the keyboard path: Tab reaches it, Enter or Space
    * presses it. Backspace and Delete on a chip do nothing: a chip is not a text field, and a key that
    * deletes what the user cannot see targeted would surprise. Where focus goes after a removal is the
-   * list's to decide (TagEditor), since only the list knows the neighbours.
+   * list's to decide (TagEditor), since only the list knows the neighbours. The remove button is the
+   * control of a removable chip: `busy`, `disabled` and `reason` act on it, as on a pressable chip (a
+   * removal in flight cannot be fired twice), and other attributes go to it. Its text does nothing, so
+   * an `onclick`, a button `type` or an `end` mark is refused by type.
    *
    * Given `href` a chip is a real link (`<a>`, its `target` and `rel` passed on) with the chip's look:
    * a store page, a wiki. It goes somewhere, so it is never on or off, removable or disabled. `end` is
@@ -36,6 +39,9 @@
         removeLabel: string;
         /** Not on a removable chip: the hint would land on its remove button. */
         hint?: undefined;
+        onclick?: undefined;
+        type?: undefined;
+        end?: undefined;
       };
 
   // Other attributes (id, aria-*, data-*, handlers, attachments) go to the <button>.
@@ -94,6 +100,7 @@
   // A caller that still says aria-disabled by hand keeps it, and now gets the look with it.
   const unavailable = $derived(blocked ? 'true' : rest['aria-disabled']);
   const tip = $derived(refused ? reason : hint);
+  const removable = $derived(onremove !== undefined && removeLabel !== undefined);
   // The attributes a link takes from what a button would: handlers and aria-* read the same.
   const linkRest = $derived(rest as HTMLAnchorAttributes);
 </script>
@@ -105,11 +112,21 @@
 {#snippet chip()}
   {#if href !== undefined}
     <a {...linkRest} class="chip {variant}" {href} {target} {rel} {onclick}>{@render content()}</a>
-  {:else if onremove !== undefined && removeLabel !== undefined}
+  {:else if removable}
     <span class="chip removable {variant}" class:selected>
       <span class="text">{@render children?.()}</span>
-      <Tooltip text={removeLabel} describe={false}>
-        <button type="button" class="remove" aria-label={removeLabel} onclick={onremove}>
+      <Tooltip text={refused ? (reason ?? '') : (removeLabel ?? '')} describe={refused}>
+        <button
+          {...rest}
+          type="button"
+          class="remove"
+          aria-label={removeLabel}
+          aria-disabled={unavailable}
+          aria-busy={busy || undefined}
+          disabled={disabled && !refused}
+          onclick={onremove}
+          {@attach reason !== undefined || busy ? guard : undefined}
+        >
           <X strokeWidth={2} aria-hidden="true" />
         </button>
       </Tooltip>
@@ -132,7 +149,7 @@
   {/if}
 {/snippet}
 
-{#if hint !== undefined || reason !== undefined}
+{#if (hint !== undefined || reason !== undefined) && !removable}
   <Tooltip text={tip ?? ''}>{@render chip()}</Tooltip>
 {:else}
   {@render chip()}
@@ -281,8 +298,17 @@
     height: var(--chip-remove-icon);
   }
 
-  .remove:hover {
+  .remove:hover:not(:disabled, [aria-disabled='true']) {
     background: var(--hover-strong);
     opacity: 1;
+  }
+
+  .remove:is(:disabled, [aria-disabled='true']) {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  .remove[aria-busy='true'] {
+    cursor: progress;
   }
 </style>

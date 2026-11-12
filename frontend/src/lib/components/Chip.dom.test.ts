@@ -170,3 +170,48 @@ describe('Chip given an address', () => {
     expect(ruleBody(css, '.end :global(svg)')).toEqual({ width: 'var(--chip-mark)', height: 'var(--chip-mark)' });
   });
 });
+
+// A removal in flight cannot be fired twice: busy and a refusal act on the remove button, the
+// control of a removable chip, and attributes go to it too.
+describe('Chip removable while it cannot be removed now', () => {
+  const tag = createRawSnippet(() => ({ render: () => '<span>rpg</span>' }));
+  const props = (extra: Record<string, unknown>) => ({ onremove: vi.fn(), removeLabel: 'Remove the tag rpg', children: tag, ...extra });
+
+  it('busy keeps focus on the remove button, says so and ignores a press, Enter and Space', async () => {
+    const extra = props({ busy: true, 'data-tag': 'rpg' });
+    render(Chip, { target: app, props: extra });
+    const remove = screen.getByRole('button', { name: 'Remove the tag rpg' });
+    remove.focus();
+    const keys = user();
+
+    await keys.click(remove);
+    await keys.keyboard('{Enter}');
+    await keys.keyboard(' ');
+
+    expect(document.activeElement).toBe(remove);
+    expect(remove.getAttribute('aria-busy')).toBe('true');
+    expect(remove.getAttribute('aria-disabled')).toBe('true');
+    expect(remove.getAttribute('data-tag')).toBe('rpg');
+    expect(extra.onremove).not.toHaveBeenCalled();
+  });
+
+  it('disabled with a reason keeps the remove button reachable, says why and removes nothing', async () => {
+    const extra = props({ disabled: true, reason: 'Saving the tags' });
+    render(Chip, { target: app, props: extra });
+    const remove = screen.getByRole('button', { name: 'Remove the tag rpg' });
+
+    await user().tab();
+    expect(document.activeElement).toBe(remove);
+    await user().keyboard('{Enter}');
+
+    expect(remove.hasAttribute('disabled')).toBe(false);
+    expect(remove.getAttribute('aria-disabled')).toBe('true');
+    expect(description(remove)).toBe('Saving the tags');
+    expect(extra.onremove).not.toHaveBeenCalled();
+  });
+
+  it('disabled alone puts the remove button out of reach', () => {
+    render(Chip, { target: app, props: props({ disabled: true }) });
+    expect((screen.getByRole('button', { name: 'Remove the tag rpg' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});
