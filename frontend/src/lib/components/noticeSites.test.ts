@@ -81,6 +81,8 @@ const SITES: Record<string, Site[]> = {
   'routes/settings/AppearanceTab.svelte': [
     // The stored theme's CSS breaks a later rule: a fact of the theme, shown whenever it is edited.
     ['warning', false],
+    // The errors a kept trial updates at every edit: on screen, not announced while the user types.
+    ['danger', false],
     ['danger', true],
   ],
   'routes/settings/DiscordCard.svelte': [
@@ -105,9 +107,14 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
   ],
   'routes/settings/Settings.svelte': [
+    // A failed overlay inside the row's status region, which says the change itself.
+    ['danger', false],
     ['danger', true],
     ['danger', true],
-    ['dynamic', true],
+    ['danger', true],
+    ['danger', true],
+    // This build has no legal documents to show: a fact read with the card.
+    ['info', false],
   ],
   'routes/stats/Stats.svelte': [['danger', true]],
   'routes/support/NewTicket.svelte': [
