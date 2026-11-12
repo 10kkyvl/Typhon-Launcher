@@ -80,6 +80,8 @@
   let argsSaved = $state('');
   let argsLoading = $state(false);
   let argsBusy = $state(false);
+  // A load that failed is said here; a save that failed is said by its toast and only kept here.
+  let argsLoadError = $state('');
   let argsError = $state('');
   let argsInput = $state<HTMLInputElement>();
 
@@ -171,6 +173,7 @@
       exeError = '';
       argsLine = '';
       argsSaved = '';
+      argsLoadError = '';
       argsError = '';
       adminError = '';
       gameModeError = '';
@@ -231,7 +234,7 @@
       argsLine = line.value;
       argsSaved = line.value;
     } else {
-      argsError = errorText(line.reason, msg('modals.propertiesArgsLoadFailed'));
+      argsLoadError = errorText(line.reason, msg('modals.propertiesArgsLoadFailed'));
     }
     adminShown = info.status === 'fulfilled' && elevationSupported(info.value);
     gameModeShown = info.status === 'fulfilled';
@@ -331,6 +334,7 @@
     try {
       await setLaunchArgsLine(game.id, argsLine);
       argsSaved = argsLine;
+      argsLoadError = '';
       toast(msg('modals.propertiesArgsSaved'), 'success');
     } catch (err) {
       argsError = errorText(err, msg('modals.propertiesArgsSaveFailed'));
@@ -489,7 +493,9 @@
             {msg('modals.propertiesArgsSave')}
           </Button>
         </div>
-        {#if argsError}
+        {#if argsLoadError}
+          <Notice tone="danger" compact>{argsLoadError}</Notice>
+        {:else if argsError}
           <Notice tone="danger" compact announce={false}>{argsError}</Notice>
         {/if}
         <p class="hint">{msg('modals.propertiesArgsHint')}</p>

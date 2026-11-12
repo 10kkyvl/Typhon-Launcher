@@ -133,6 +133,18 @@ describe('GamePropertiesModal: the launch arguments', () => {
   });
 });
 
+describe('GamePropertiesModal: the launch arguments failing to load', () => {
+  it('say so in a danger notice that announces, since no toast says it', async () => {
+    vi.mocked(getLaunchArgsLine).mockRejectedValue(new Error('disk'));
+    const dialog = await openDialog();
+
+    const text = await within(dialog).findByText(msg('modals.propertiesArgsLoadFailed'), { selector: '[data-tone] *' });
+    expect(text.closest('[data-tone="danger"]')).not.toBeNull();
+    expect(text.closest('[role="alert"]')).not.toBeNull();
+    expect(get(toasts).map((item) => item.message)).not.toContain(msg('modals.propertiesArgsLoadFailed'));
+  });
+});
+
 describe('GamePropertiesModal: saving the launch arguments', () => {
   it('moves the focus from Save, which has nothing left to save, back to the field', async () => {
     const saved = deferred<LibraryGame>();

@@ -88,11 +88,13 @@ const SITES: Record<string, Site[]> = {
     ['danger', false],
     ['danger', true],
   ],
-  // A failed load, a wrapper problem and the offer to keep a changed game announce; a failed change
-  // of a setting is said by its toast and only kept on screen by the setting.
+  // A failed load (the candidates, the launch arguments), a wrapper problem and the offer to keep a
+  // changed game announce; a failed change of a setting is said by its toast and only kept on screen
+  // by the setting.
   'lib/components/GamePropertiesModal.svelte': [
     ['danger', true],
     ['danger', false],
+    ['danger', true],
     ['danger', false],
     ['danger', false],
     ['danger', true],
