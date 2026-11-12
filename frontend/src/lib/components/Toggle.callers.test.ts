@@ -7,9 +7,9 @@ import { frontendSources } from '../testing/sources';
  * and Toggle never writes it (Toggle.svelte), so a `bind:checked` next to `onchange` would never be
  * written: such a caller sets its own state in `onchange`.
  *
- * Limit: the markup is read as tags and `{...}` expressions; markup built in script is not seen, and a
- * `labelledby` is checked only for an `id=` with the same expression inside the element the switch
- * sits in.
+ * Limit: the markup is read as tags and `{...}` expressions; markup built in script is not seen, and
+ * `labelledby` and `describedby` are checked only for an `id=` with the same expression inside the
+ * element the switch sits in.
  */
 
 interface Element {
@@ -99,13 +99,17 @@ function toggles(path: string, text: string): Use[] {
 const callers = Object.entries(frontendSources).filter(([path]) => path.endsWith('.svelte') && !path.startsWith('lib/testing/'));
 const uses = callers.flatMap(([path, text]) => toggles(path, text));
 
+// The attribute itself, not one whose name only ends the same way (`data-onchange=`).
+const binds = (tag: string) => /(?<![\w:-])bind:checked(?![\w-])/.test(tag);
+const reports = (tag: string) => /(?<![\w:-])onchange=|\{\s*onchange\s*\}/.test(tag);
+
 function bothWays(tag: string): boolean {
-  return /\bbind:checked\b/.test(tag) && /(\bonchange=|\{\s*onchange\s*\})/.test(tag);
+  return binds(tag) && reports(tag);
 }
 
 // A switch with neither does nothing when pressed: nothing reads what it would write.
 function wired(tag: string): boolean {
-  return /\bbind:checked\b/.test(tag) || /(\bonchange=|\{\s*onchange\s*\})/.test(tag);
+  return binds(tag) || reports(tag);
 }
 
 function spreads(tag: string): boolean {
@@ -121,6 +125,15 @@ function named({ path, tag, row }: Use, text = frontendSources[path] ?? ''): boo
   if (own) return !text.includes(`>{${own}}<`);
   const by = /\blabelledby=("[^"]*"|\{[^}]*\})/.exec(tag)?.[1];
   return by !== undefined && row.includes(`id=${by}`);
+}
+
+// The description, where there is one, is the row's own text too. A description shown only in some
+// rows is written `{cond ? `${a}-sub` : undefined}`: each template in it is the id `"{a}-sub"`.
+function describedInRow({ tag, row }: Use): boolean {
+  const by = /\bdescribedby=("[^"]*"|\{(?:[^{}]|\{[^{}]*\})*\})/.exec(tag)?.[1];
+  if (by === undefined) return true;
+  const templates = [...by.matchAll(/`([^`]*)`/g)].map((m) => `"${m[1].replace(/\$\{/g, '{')}"`);
+  return [by, ...templates].some((id) => row.includes(`id=${id}`));
 }
 
 const at = (row: string, tag: string): Use => ({ path: 'x.svelte', tag, row });
@@ -148,11 +161,24 @@ describe('Toggle call sites', () => {
     expect(uses.filter((use) => !named(use)).map(({ path, tag }) => `${path}: ${tag}`)).toEqual([]);
   });
 
+  it('describe a switch by the text of its own row', () => {
+    const row = '<div class="row"><span id="sub">Keeps it running</span><Toggle /></div>';
+    expect(describedInRow(at(row, '<Toggle labelledby="row" describedby="sub" />'))).toBe(true);
+    expect(describedInRow(at(row, '<Toggle labelledby="row" />'))).toBe(true);
+    expect(describedInRow(at(row, '<Toggle labelledby="row" describedby="elsewhere" />'))).toBe(false);
+    const some = '<div><span id="{uid}-sub">Only here</span><Toggle /></div>';
+    expect(describedInRow(at(some, '<Toggle describedby={shown ? `${uid}-sub` : undefined} />'))).toBe(true);
+    expect(describedInRow(at(some, '<Toggle describedby={shown ? `${uid}-other` : undefined} />'))).toBe(false);
+    expect(uses.filter((use) => !describedInRow(use)).map(({ path, tag }) => `${path}: ${tag}`)).toEqual([]);
+  });
+
   it('bind the state or report it with onchange: a switch with neither is dead', () => {
     expect(wired('<Toggle bind:checked={x} />')).toBe(true);
     expect(wired('<Toggle checked={x} onchange={save} />')).toBe(true);
     expect(wired('<Toggle checked={x} {onchange} />')).toBe(true);
     expect(wired('<Toggle checked={x} labelledby="a" />')).toBe(false);
+    expect(wired('<Toggle checked={x} data-onchange="a" />')).toBe(false);
+    expect(wired('<Toggle checked={x} data-bind:checked={y} />')).toBe(false);
     expect(uses.filter(({ tag }) => !wired(tag)).map(({ path, tag }) => `${path}: ${tag}`)).toEqual([]);
   });
 
