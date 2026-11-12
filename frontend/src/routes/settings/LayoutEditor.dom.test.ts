@@ -65,6 +65,19 @@ describe('LayoutEditor: the row buttons', () => {
     expect(document.activeElement).toBe(within(sidebarRows()[at - 2]).getByRole('button', { name: msg('settings.layoutMoveUp') }));
   });
 
+  // The sidebar starts with separators of its own; the first stands between rows on both sides.
+  it('keeps focus on a separator moved down past the next row', async () => {
+    const { user } = renderDom(LayoutEditor, {});
+    const at = names().indexOf(msg('settings.layoutSeparator'));
+    const next = names()[at + 1];
+    within(sidebarRows()[at]).getByRole('button', { name: msg('settings.layoutMoveDown') }).focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(names().slice(at, at + 2)).toEqual([next, msg('settings.layoutSeparator')]);
+    expect(document.activeElement).toBe(within(sidebarRows()[at + 1]).getByRole('button', { name: msg('settings.layoutMoveDown') }));
+  });
+
   it('puts focus on the row that takes a removed separator place', async () => {
     const { user } = renderDom(LayoutEditor, {});
     const at = names().indexOf(msg('settings.layoutSeparator'));
