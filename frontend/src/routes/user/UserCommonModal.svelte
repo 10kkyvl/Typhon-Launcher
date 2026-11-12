@@ -3,6 +3,7 @@
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import Modal from '../../lib/components/Modal.svelte';
   import Notice from '../../lib/components/Notice.svelte';
+  import Spinner from '../../lib/components/Spinner.svelte';
   import { msg } from '../../lib/i18n';
   import { accountErrorText } from '../../lib/services/accountMessages';
   import { userCommon, type CommonGame } from '../../lib/services/social';
@@ -69,7 +70,9 @@
       {failure}
       {#snippet action()}<Button size="sm" busy={loading} onclick={() => load(true, true)}>{msg('common.retry')}</Button>{/snippet}
     </Notice>
-  {:else if loaded && games.length === 0}
+  {:else if !loaded}
+    <Spinner label={msg('social.loadingEllipsis')} />
+  {:else if games.length === 0}
     <EmptyState size="inline" title={msg('social.userCommonEmpty')} />
   {:else}
     <div class="list">

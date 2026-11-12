@@ -8,7 +8,7 @@ describe('UserCommonModal load errors', () => {
   });
 
   it('shows the empty state only after a page loaded successfully', () => {
-    expect(source).toMatch(/\{:else if loaded && games\.length === 0\}/);
+    expect(source).toMatch(/\{:else if !loaded\}\s*<Spinner[^>]*\/>\s*\{:else if games\.length === 0\}\s*<EmptyState/);
     expect(source).toMatch(/loaded = true;\s*\} catch/);
   });
 

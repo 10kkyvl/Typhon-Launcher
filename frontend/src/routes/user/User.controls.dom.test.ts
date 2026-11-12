@@ -198,6 +198,13 @@ describe("a user's page: all the games in common", () => {
     expect((await screen.findByText(msg('social.userCommonEmpty'))).closest('.empty.inline')).not.toBeNull();
   });
 
+  it('shows the base spinner, named, while its first page loads', async () => {
+    vi.mocked(userCommon).mockReturnValue(new Promise(() => {}));
+    renderDom(UserCommonModal, { open: true, username: 'ann', name: 'Ann' });
+
+    expect((await screen.findByText(msg('social.loadingEllipsis'))).closest('.spinner[role="status"]')).not.toBeNull();
+  });
+
   it('a failed first page: the danger notice keeps its busy Retry and the focus until the answer', async () => {
     let answer!: (value: Awaited<ReturnType<typeof userCommon>>) => void;
     vi.mocked(userCommon)
