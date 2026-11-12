@@ -38,8 +38,9 @@
    * and its message, heading and links as they are, is put into the live region again, so it is said
    * again even in the same words. A notice that does not announce becomes a polite region from the
    * first press, before the answer, so a failure is heard there too. On success the caller takes the
-   * notice away as before, and focus that was on Retry moves on (see NoticeRetry); if the page has
-   * gone meanwhile, nothing is focused.
+   * notice away as before, and focus that was on Retry moves on (see NoticeRetry): with no target it
+   * stays where the notice lived, the dialog when it was in one, the page's heading otherwise, and
+   * never goes into something inert. If that place has gone meanwhile, nothing is focused.
    */
   let {
     tone = 'info',
@@ -92,9 +93,9 @@
     if (!retry || retrying) return;
     const { run, focus, within } = retry;
     const button = document.activeElement instanceof HTMLElement && plate?.contains(document.activeElement) ? document.activeElement : null;
-    // The page the notice is on: the shell's <main> (a banner sits above it, beside the page), else
-    // the document.
-    const page = plate?.closest('main') ?? document.querySelector('main') ?? document.body;
+    // Where the notice lives: the dialog it is in (a layer of its own, out of the page, which is inert
+    // under it), else the shell's <main> (a banner sits above it, beside the page), else the document.
+    const home = plate?.closest<HTMLElement>('[role="dialog"]') ?? plate?.closest('main') ?? document.querySelector('main') ?? document.body;
     retrying = true;
     pressed = true;
     let ok = false;
@@ -106,25 +107,30 @@
     // Told to the caller even when the notice went during the run: its own controls wait on it.
     retrying = false;
     await tick();
-    if (ok) return moveOn(button, page, focus, within);
+    if (ok) return moveOn(button, home, focus, within);
     if (!alive) return;
     attempt += 1;
   }
 
   // Focus that was on Retry would fall to the page with the notice: it goes where the caller says,
-  // else to the page's heading, unless the user has gone elsewhere or left the page.
+  // else stays where the notice lived (the dialog itself, or the page's heading), unless the user has
+  // gone elsewhere or that place is gone. Never into something inert: a browser would refuse it and
+  // leave focus on <body>.
   function moveOn(
     from: HTMLElement | null,
-    page: Element | null,
+    home: Element | null,
     focus: NoticeRetry['focus'],
     within: NoticeRetry['within'],
   ) {
-    if (!from || from.isConnected || !page?.isConnected) return;
+    if (!from || from.isConnected || !home?.isConnected) return;
     const active = document.activeElement;
     if (active && active !== document.body && active.isConnected) return;
     const region = within?.();
-    const target = focus?.() ?? (region ? focusableIn(region)[0] : undefined) ?? page.querySelector<HTMLElement>('h1') ?? focusableIn(page)[0];
-    if (target?.isConnected) focusQuietly(target);
+    // A dialog takes focus on its layer root, as it does when it opens with nothing to focus.
+    const fallback = home.matches('[role="dialog"]') ? home.closest<HTMLElement>('[tabindex]') : home.querySelector<HTMLElement>('h1');
+    const reachable = (el: HTMLElement | null | undefined) => (el?.isConnected && !el.closest('[inert]') ? el : undefined);
+    const target = reachable(focus?.()) ?? reachable(region ? focusableIn(region)[0] : undefined) ?? reachable(fallback) ?? reachable(focusableIn(home)[0]);
+    if (target) focusQuietly(target);
   }
 
   // The live region is the message alone. Some screen readers do not announce a polite region inserted

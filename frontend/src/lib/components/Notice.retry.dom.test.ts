@@ -1,8 +1,9 @@
-import { screen, waitFor } from '@testing-library/svelte';
+import { render, screen, waitFor } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { locale } from '../i18n';
-import { renderDom } from '../testing/dom';
+import { renderDom, user as keys } from '../testing/dom';
+import RetryDialogHarness from '../testing/RetryDialogHarness.svelte';
 import RetryHarness from '../testing/RetryHarness.svelte';
 
 const MESSAGE = 'The list could not be loaded';
@@ -298,5 +299,46 @@ describe('Notice with a retry: dropped by the page before the answer', () => {
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
     await waitFor(() => expect(detect.disabled).toBe(false));
     expect(document.activeElement).toBe(detect);
+  });
+});
+
+// A dialog is portalled out of the page, and the page under it is inert: focus that falls back to
+// the page heading there would be refused by a browser and end on <body>.
+describe('Notice with a retry: inside a dialog', () => {
+  function setup(run: () => Promise<boolean>) {
+    const app = document.createElement('div');
+    app.id = 'app';
+    document.body.append(app);
+    const view = render(RetryDialogHarness, { target: app, props: { run } });
+    return { ...view, user: keys() };
+  }
+
+  it('on success with no target keeps focus in the dialog, never on the page under it', async () => {
+    const { user } = setup(vi.fn(async () => true));
+    const dialog = screen.getByRole('dialog', { name: 'Pick a game' });
+    retryButton().focus();
+
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+    const active = document.activeElement as HTMLElement;
+    expect(active).not.toBe(document.body);
+    expect(active.closest('[inert]')).toBeNull();
+    expect(active.contains(dialog) || dialog.contains(active)).toBe(true);
+  });
+
+  it('focuses nothing when the dialog has closed by the time the answer comes', async () => {
+    const answer = deferred<boolean>();
+    const { user, rerender } = setup(() => answer.promise);
+    retryButton().focus();
+    await user.keyboard('{Enter}');
+
+    await rerender({ open: false });
+    const before = document.activeElement;
+    answer.resolve(true);
+    await frame();
+
+    expect(document.activeElement).toBe(before);
+    expect(document.activeElement).not.toBe(screen.getByRole('heading', { level: 1, name: 'Library' }));
   });
 });
