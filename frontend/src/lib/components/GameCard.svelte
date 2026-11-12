@@ -61,6 +61,8 @@
     ambient?: boolean;
   } = $props();
 
+  const uid = $props.id();
+
   let popped = $state('');
 
   const ratio = $derived(variant === 'capsule' ? '16 / 9' : '3 / 4');
@@ -82,7 +84,7 @@
 <div class="card" role="presentation" {@attach gameContextMenu(id)} use:ambientHover={ambient ? id : null}>
   <div class="cover-wrap">
     <button class="cover" onclick={() => navigate('game', { id })} aria-label={title}>
-      <Artwork src={cover} alt={title} {ratio} radius="var(--radius-md)" />
+      <Artwork src={cover} alt="" label={title} {ratio} radius="var(--radius-md)" />
       <span class="fade"></span>
     </button>
     {#if platform}
@@ -94,7 +96,13 @@
       <span class="compat" class:works={compatWorks} title={compatLabel}>{compatLabel}</span>
     {/if}
     {#if installed && onplay}
-      <button class="play" class:running aria-label={running ? msg('ui.stop') : msg('ui.play')} onclick={onplay}>
+      <button
+        class="play"
+        class:running
+        aria-label={running ? msg('ui.stop') : msg('ui.play')}
+        aria-describedby="{uid}-title"
+        onclick={onplay}
+      >
         {#if running}
           <Square size="1.2rem" strokeWidth={2} fill="currentColor" />
         {:else}
@@ -128,7 +136,7 @@
     {/if}
   </div>
   <button class="info" onclick={() => navigate('game', { id })}>
-    <span class="title">{title}</span>
+    <span class="title" id="{uid}-title">{title}</span>
     {#if meta}
       <span class="meta">{meta}</span>
     {/if}
