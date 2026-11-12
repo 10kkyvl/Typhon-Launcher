@@ -46,6 +46,17 @@ const SITES: Record<string, Site[]> = {
   'lib/components/SystemRequirements.svelte': [['danger', true]],
   // Advice for the chosen platform, also inside InstallModal and AddDownloadModal.
   'lib/components/EmulatorHint.svelte': [['warning', false]],
+  'lib/components/AddImageModal.svelte': [
+    ['danger', true],
+    ['danger', true],
+  ],
+  // What is wrong with a checked feed is read with its preview; a failed check just happened.
+  'lib/components/AddSourceModal.svelte': [
+    ['danger', true],
+    ['warning', false],
+    ['warning', false],
+    ['warning', false],
+  ],
   'lib/components/AvatarCropModal.svelte': [
     ['danger', true],
     ['danger', true],
@@ -128,6 +139,11 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
     ['danger', true],
     ['warning', false],
+    ['warning', false],
+  ],
+  // An entry cut short is a fact of the entry; a failed load just happened.
+  'lib/components/SentDataModal.svelte': [
+    ['danger', true],
     ['warning', false],
   ],
   // The source's last stored error is shown on every opening; a failed load just happened.
