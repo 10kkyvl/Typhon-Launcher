@@ -114,3 +114,34 @@ describe('feed reaction picker', () => {
     expect(onreact).toHaveBeenCalledExactlyOnceWith('fire');
   });
 });
+
+// The base control's own class is what draws it; a hand-made button of the same name would not have it.
+const drawnBy = (element: HTMLElement, base: 'chip' | 'icon-btn') => element.classList.contains(base);
+
+describe('the reaction controls are the base ones', () => {
+  it('a reaction on the event is a chip, pressed while it is the user\'s; Enter and Space toggle it', async () => {
+    const { keys, onreact } = setup();
+    const fire = screen.getByRole('button', { name: 'Fire, 2' });
+    expect(drawnBy(fire, 'chip')).toBe(true);
+    expect(fire.getAttribute('aria-pressed')).toBe('true');
+    expect(fire.dataset.reaction).toBe('fire');
+    fire.focus();
+
+    await keys.keyboard('{Enter}');
+    await keys.keyboard(' ');
+
+    expect(onreact.mock.calls).toEqual([['fire'], ['fire']]);
+  });
+
+  it('the "+" is a chip and each reaction in its picker an icon button that is not pressed', async () => {
+    const { keys, add, picker } = setup();
+    expect(drawnBy(add(), 'chip')).toBe(true);
+    expect(add().hasAttribute('aria-pressed')).toBe(false);
+
+    await keys.click(add());
+
+    const choices = within(picker() as HTMLElement).getAllByRole('button');
+    expect(choices.every((choice) => drawnBy(choice, 'icon-btn'))).toBe(true);
+    expect(choices.map((choice) => choice.getAttribute('aria-pressed'))).toEqual(Array(7).fill('false'));
+  });
+});

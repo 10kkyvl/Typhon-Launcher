@@ -1,16 +1,16 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import Popover, { type PopoverTriggerProps } from '../Popover.svelte';
-  import Tooltip from '../Tooltip.svelte';
+  import IconButton from '../IconButton.svelte';
   import { reactionLabel, type ReactionId } from '../../social/feed';
   import type { Placement } from '../../utils/position';
   import { reactionIcons } from './icons';
 
   /**
    * The reactions to choose from, in a popover next to the control that opens it (the chat's
-   * "Reaction", the feed's "+"). Each reaction is a button named for a screen reader and shown by a
-   * tooltip. A pick closes the picker and puts focus back on the control before `onpick` runs; what
-   * a pick does (toggle, add) is the caller's.
+   * "Reaction", the feed's "+"). Each reaction is an icon button, its name shown as its tooltip. A
+   * pick closes the picker and puts focus back on the control before `onpick` runs; what a pick does
+   * (toggle, add) is the caller's.
    */
   let {
     options,
@@ -44,17 +44,9 @@
     <div class="choices">
       {#each options as id (id)}
         {@const Icon = reactionIcons[id]}
-        <Tooltip text={reactionLabel(id)} describe={false}>
-          <button
-            type="button"
-            class="choice"
-            aria-label={reactionLabel(id)}
-            aria-pressed={chosen.includes(id)}
-            onclick={() => pick(id, close)}
-          >
-            <Icon />
-          </button>
-        </Tooltip>
+        <IconButton label={reactionLabel(id)} pressed={chosen.includes(id)} onclick={() => pick(id, close)}>
+          <span class="glyph"><Icon /></span>
+        </IconButton>
       {/each}
     </div>
   {/snippet}
@@ -67,36 +59,8 @@
     gap: 0.3rem;
   }
 
-  .choice {
+  .glyph {
     display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 3.2rem;
-    height: 3.2rem;
-    border: 1px solid transparent;
-    border-radius: var(--radius-sm);
-    font-size: 1.4rem;
-    transition:
-      background var(--dur-fast) var(--ease),
-      transform var(--dur-fast) var(--ease);
-  }
-
-  .choice :global(svg) {
-    width: 1.4em;
-    height: 1.4em;
-  }
-
-  .choice:hover,
-  .choice:focus-visible {
-    background: var(--hover-strong);
-  }
-
-  .choice:active {
-    transform: scale(0.94);
-  }
-
-  .choice[aria-pressed='true'] {
-    border-color: var(--accent-ring);
-    background: var(--accent-subtle);
+    font-size: 2rem;
   }
 </style>

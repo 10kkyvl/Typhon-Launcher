@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { Plus } from '@lucide/svelte';
+  import Chip from '../Chip.svelte';
   import Tooltip from '../Tooltip.svelte';
   import ReactionPicker from './ReactionPicker.svelte';
   import type { FeedEvent } from '../../services/social';
@@ -46,7 +47,7 @@
     void tick().then(() => {
       const now = document.activeElement;
       if (held.isConnected || (now !== null && now !== document.body)) return;
-      bar?.querySelector<HTMLElement>('.add')?.focus();
+      bar?.querySelector<HTMLElement>('[aria-haspopup]')?.focus();
     });
   });
 </script>
@@ -56,19 +57,16 @@
   {@const count = reactionCount(event, id)}
   {@const mine = hasReacted(event, id)}
   <Tooltip text={reactionLabel(id)} describe={false}>
-    <button
-      class="reaction"
-      class:mine
-      type="button"
+    <Chip
+      selected={mine}
       data-reaction={id}
       aria-disabled={disabled || undefined}
-      aria-pressed={mine}
       aria-label={msg('social.reactionWithCount', { reaction: reactionLabel(id), count })}
       onclick={() => toggle(id)}
     >
       <span class="glyph" class:pop={mine && popped === id}><Icon /></span>
       <span class="count">{count}</span>
-    </button>
+    </Chip>
   </Tooltip>
 {/snippet}
 
@@ -80,10 +78,8 @@
     <ReactionPicker options={idle} label={msg('social.reactionAdd')} onpick={toggle}>
       {#snippet trigger({ open, props })}
         <Tooltip text={msg('social.reactionAdd')} describe={false}>
-          <button
-            class="reaction add"
-            class:open
-            type="button"
+          <Chip
+            variant="quiet"
             aria-label={msg('social.reactionAdd')}
             {...props}
             aria-disabled={disabled || undefined}
@@ -94,8 +90,8 @@
               if (!disabled) props.onkeydown(key);
             }}
           >
-            <span class="plus"><Plus size="1.4rem" strokeWidth={2} /></span>
-          </button>
+            <span class="plus" class:open><Plus size="1.4rem" strokeWidth={2} /></span>
+          </Chip>
         </Tooltip>
       {/snippet}
     </ReactionPicker>
@@ -109,59 +105,13 @@
     gap: 0.4rem;
   }
 
-  .reaction {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    height: 2.6rem;
-    padding: 0 0.7rem;
-    border: 1px solid transparent;
-    border-radius: var(--radius-md);
-    background: var(--surface-3);
-    color: var(--text-2);
-    font-size: 1.4rem;
-    line-height: 1;
-    transition:
-      background var(--dur) var(--ease),
-      border-color var(--dur) var(--ease),
-      color var(--dur) var(--ease),
-      transform var(--dur-fast) var(--ease);
-  }
-
-  .reaction.add {
-    background: transparent;
-  }
-
-  .reaction.add {
-    color: var(--text-3);
-  }
-
   .plus {
     display: inline-flex;
     transition: transform var(--dur) var(--ease);
   }
 
-  .add.open .plus {
+  .plus.open {
     transform: rotate(45deg);
-  }
-
-  .reaction:hover:not([aria-disabled='true']) {
-    background: var(--hover-strong);
-    color: var(--text);
-  }
-
-  .reaction:active:not([aria-disabled='true']) {
-    transform: scale(0.94);
-  }
-
-  .reaction.mine {
-    background: var(--accent-subtle);
-    border-color: var(--accent-ring);
-    color: var(--accent-text);
-  }
-
-  .reaction[aria-disabled='true'] {
-    cursor: default;
   }
 
   .glyph {
