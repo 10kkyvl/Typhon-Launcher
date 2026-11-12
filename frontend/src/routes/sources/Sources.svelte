@@ -302,7 +302,14 @@
                   unmatched: formatCount(source.unmatched),
                 })}
               >
-                <button type="button" class="count-wrap" onclick={() => openDetails(source.id)}>
+                <button
+                  type="button"
+                  class="count-wrap"
+                  aria-label={source.review > 0
+                    ? msg('transfers.sourcesMatchReviewName', { matched: formatCount(source.matched), review: formatCount(source.review) })
+                    : msg('transfers.sourcesMatchName', { matched: formatCount(source.matched) })}
+                  onclick={() => openDetails(source.id)}
+                >
                   <span class="count">{formatCount(source.matched)}</span>
                   {#if source.review > 0}
                     <span class="count review">+{formatCount(source.review)}</span>
