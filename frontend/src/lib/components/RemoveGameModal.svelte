@@ -1,12 +1,15 @@
 <script lang="ts">
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
+  import Notice from './Notice.svelte';
+  import Spinner from './Spinner.svelte';
   import Toggle from './Toggle.svelte';
   import { inspectRemoval, removeGame, type RemovalInfo } from '../services/install';
   import { installErrorText } from '../install/installErrors';
   import { toast } from '../stores/toasts';
   import { bytesSize } from '../utils/format';
   import { msg } from '../i18n';
+  import { nextIndex } from '../utils/roving';
 
   type Mode = 'disk' | 'library';
 
@@ -40,6 +43,7 @@
   let deleteFiles = $state(false);
   let deleteDownload = $state(false);
   let loadedFor = $state('');
+  let modeGroup = $state<HTMLElement>();
 
   const blocked = $derived(!!info && (info.running || info.busy));
   const manualImage = $derived(emulated && !info?.owned);
@@ -125,6 +129,20 @@
     return msg('modals.removeGameMethodNotOwned');
   });
 
+  const MODES: Mode[] = ['disk', 'library'];
+  const modeOff = (index: number) => MODES[index] === 'disk' && !canUninstall;
+
+  // A radio group: the arrows move the choice and the focus together, skipping a tile that is off.
+  function moveMode(event: KeyboardEvent) {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const radios = [...(modeGroup?.querySelectorAll<HTMLElement>('[role="radio"]') ?? [])];
+    const next = nextIndex(radios.indexOf(event.currentTarget as HTMLElement), MODES.length, event.key, { orientation: 'both', isDisabled: modeOff });
+    if (next === null) return;
+    event.preventDefault();
+    mode = MODES[next];
+    radios[next]?.focus();
+  }
+
   const freedText = $derived.by(() => {
     if (!info) return '';
     if (info.sizeUnknown) return msg('modals.removeGameSizeUnknown');
@@ -135,14 +153,20 @@
 
 <Modal dismissible={!working} bind:open title={msg('modals.removeGameTitle')} {returnFocus}>
   {#if loading}
-    <p class="text">{msg('modals.removeGameLoading', { title })}</p>
+    <div class="loading"><Spinner size="sm" label={msg('modals.removeGameLoading', { title })} /></div>
   {:else if info}
-    <div class="modes">
+    <div class="modes" role="radiogroup" aria-label={msg('modals.removeGameTitle')} bind:this={modeGroup}>
       <button
+        type="button"
         class="mode"
-        class:selected={mode === 'disk'}
-        disabled={!canUninstall}
-        onclick={() => (mode = 'disk')}
+        role="radio"
+        aria-checked={mode === 'disk'}
+        aria-disabled={!canUninstall || undefined}
+        tabindex={mode === 'disk' && canUninstall ? 0 : -1}
+        onclick={() => {
+          if (canUninstall) mode = 'disk';
+        }}
+        onkeydown={moveMode}
       >
         <span class="mode-label">{msg('modals.removeGameModeDiskLabel')}</span>
         <span class="mode-sub">
@@ -155,7 +179,15 @@
           {/if}
         </span>
       </button>
-      <button class="mode" class:selected={mode === 'library'} onclick={() => (mode = 'library')}>
+      <button
+        type="button"
+        class="mode"
+        role="radio"
+        aria-checked={mode === 'library'}
+        tabindex={mode === 'library' || !canUninstall ? 0 : -1}
+        onclick={() => (mode = 'library')}
+        onkeydown={moveMode}
+      >
         <span class="mode-label">{msg('modals.removeGameModeLibraryLabel')}</span>
         <span class="mode-sub">{msg('modals.removeGameLibrarySub')}</span>
       </button>
@@ -175,9 +207,9 @@
     {/if}
 
     {#if info.running}
-      <p class="warn">{msg('modals.removeGameRunningWarning')}</p>
+      <div class="notice"><Notice tone="warning" compact announce={false}>{msg('modals.removeGameRunningWarning')}</Notice></div>
     {:else if info.busy}
-      <p class="warn">{msg('modals.removeGameBusyWarning')}</p>
+      <div class="notice"><Notice tone="warning" compact announce={false}>{msg('modals.removeGameBusyWarning')}</Notice></div>
     {/if}
 
     <div class="options">
@@ -233,12 +265,12 @@
   {/if}
 
   {#if failure}
-    <p class="error">{failure}</p>
+    <div class="notice"><Notice tone="danger" compact>{failure}</Notice></div>
   {/if}
 
   {#snippet footer()}
     <Button disabled={working} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
-    <Button variant="danger" onclick={confirm} disabled={!info || blocked || working}>
+    <Button variant="danger" onclick={confirm} disabled={!info || blocked} busy={working}>
       {#if working}
         {msg('modals.removeGameWorking')}
       {:else if mode === 'disk'}
@@ -264,14 +296,13 @@
     word-break: break-all;
   }
 
-  .warn {
-    margin: var(--space-4) 0 0;
-    color: var(--warning);
+  .loading {
+    display: flex;
+    margin: var(--space-5) 0 0;
   }
 
-  .error {
+  .notice {
     margin: var(--space-4) 0 0;
-    color: var(--danger);
   }
 
   .modes {
@@ -295,16 +326,17 @@
       border-color var(--dur) var(--ease);
   }
 
-  .mode:hover:not(:disabled) {
+  .mode:hover:not([aria-disabled='true']) {
     background: var(--surface-3);
   }
 
-  .mode.selected {
+  .mode[aria-checked='true'] {
     border-color: var(--accent-bright);
   }
 
-  .mode:disabled {
+  .mode[aria-disabled='true'] {
     opacity: 0.5;
+    cursor: default;
   }
 
   .mode-label {
