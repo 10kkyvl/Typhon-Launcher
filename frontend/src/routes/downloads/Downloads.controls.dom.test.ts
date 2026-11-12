@@ -1,9 +1,11 @@
-import { screen } from '@testing-library/svelte';
+import { screen, within } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import type { Download } from '../../lib/services/downloads';
+import { idlePlayThrottle } from '../../lib/services/playThrottle';
 import { downloads } from '../../lib/stores/downloads';
+import { playThrottle } from '../../lib/stores/playThrottle';
 import { resetHistory, route } from '../../lib/stores/router';
 import { renderDom } from '../../lib/testing/dom';
 import Downloads from './Downloads.svelte';
@@ -59,6 +61,25 @@ describe('Downloads: the cover of a row', () => {
       expect(screen.queryByLabelText(name), name).toBeNull();
       expect(screen.queryByRole('img', { name }), name).toBeNull();
     }
+  });
+});
+
+describe('Downloads: downloads held while a game runs', () => {
+  afterEach(() => playThrottle.set(idlePlayThrottle));
+
+  it('is said on the base notice, announced as a status, with its settings as the action', async () => {
+    playThrottle.set({ ...idlePlayThrottle, active: true, mode: 'pause' });
+    const { user } = renderDom(Downloads);
+
+    const status = await screen.findByRole('status');
+    expect(status.textContent).toContain(msg('transfers.playPausedBanner'));
+    const notice = status.closest('.notice') as HTMLElement;
+    expect(notice).not.toBeNull();
+    const configure = within(notice).getByRole('button', { name: msg('transfers.playBannerSettings') });
+    configure.focus();
+    await user.keyboard('{Enter}');
+
+    expect(get(route)).toMatchObject({ name: 'settings', params: { tab: 'downloads' } });
   });
 });
 

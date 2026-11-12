@@ -2,7 +2,14 @@ import { screen } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
-import { profile as fetchProfile, userCommon, type GameCard, type PlayedGame, type UserCard } from '../../lib/services/social';
+import {
+  profile as fetchProfile,
+  userCommon,
+  type GameCard,
+  type PlayedGame,
+  type PublicProfile,
+  type UserCard,
+} from '../../lib/services/social';
 import { resetHistory, route } from '../../lib/stores/router';
 import { authState } from '../../lib/stores/user';
 import { renderDom } from '../../lib/testing/dom';
@@ -19,6 +26,25 @@ vi.mock('../../lib/services/social', async (importOriginal) => ({
   userCommon: vi.fn(),
   profile: vi.fn(),
 }));
+
+const closedProfile = {
+  id: 'u1',
+  username: 'ann',
+  displayName: 'Ann',
+  avatarUrl: '',
+  bio: '',
+  relation: 'none',
+  visibility: 'private',
+  stats: null,
+  favorites: [],
+  showcase: [],
+  recentlyPlayed: [],
+  recentActivity: [],
+  common: null,
+  mutualFriends: [],
+  mutualCount: 0,
+  createdAt: '2026-01-01T00:00:00Z',
+} as unknown as PublicProfile;
 
 // The accessible name of the one button whose name holds `title`.
 function nameOf(title: string): string {
@@ -86,6 +112,23 @@ describe("a user's page: loading", () => {
     renderDom(UserProfile, { username: 'ann' });
 
     expect((await screen.findByText(msg('social.loadingEllipsis'))).closest('.spinner[role="status"]')).not.toBeNull();
+  });
+});
+
+describe("a user's page: a closed profile", () => {
+  afterEach(() => {
+    vi.mocked(fetchProfile).mockReset();
+    authState.set('bootstrapping');
+  });
+
+  it('says so on the base notice, a standing fact read in the flow of the page', async () => {
+    authState.set('authenticated');
+    vi.mocked(fetchProfile).mockResolvedValue(closedProfile);
+    renderDom(UserProfile, { username: 'ann' });
+
+    const notice = (await screen.findByText(msg('social.userProfileClosed'))).closest('.notice');
+    expect(notice?.getAttribute('data-tone')).toBe('info');
+    expect(notice?.querySelector('[role="status"], [role="alert"]')).toBeNull();
   });
 });
 

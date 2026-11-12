@@ -10,7 +10,6 @@
     EllipsisVertical,
     FileText,
     Globe,
-    Info,
     Plus,
     RefreshCw,
     ShieldAlert,
@@ -23,6 +22,7 @@
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import SourceDetailsModal from '../../lib/components/SourceDetailsModal.svelte';
@@ -197,9 +197,8 @@
     {/snippet}
   </PageHeader>
 
-  <div class="notice">
-    <span class="notice-icon"><Info size="1.8rem" strokeWidth={1.8} /></span>
-    <p class="notice-text">{msg('transfers.sourcesNotice')}</p>
+  <div class="fetched-here">
+    <Notice tone="info" announce={false}>{msg('transfers.sourcesNotice')}</Notice>
   </div>
 
   {#if $sources.length === 0}
@@ -339,24 +338,8 @@
 </Page>
 
 <style>
-  .notice {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--space-3);
+  .fetched-here {
     margin-bottom: var(--space-5);
-    color: var(--text-3);
-  }
-
-  .notice-icon {
-    display: flex;
-    flex-shrink: 0;
-    margin-top: 0.1rem;
-    color: var(--text-3);
-  }
-
-  .notice-text {
-    font-size: var(--font-xs);
-    line-height: 1.5;
   }
 
   .table {

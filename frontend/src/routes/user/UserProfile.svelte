@@ -7,6 +7,7 @@
   import Card from '../../lib/components/Card.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import Spinner from '../../lib/components/Spinner.svelte';
   import AboutBlock from '../../lib/components/profile/AboutBlock.svelte';
@@ -274,9 +275,15 @@
       <ProfileCover appearance={data.appearance} {autoArt} />
       <UserHeader profile={data} {busy} onaction={act} onmessage={() => data && openChat(chatPeerOf(data))} />
       {#if closed}
-        <p class="notice"><Lock size="1.8rem" strokeWidth={1.6} />{msg('social.userProfileClosed')}</p>
+        <Notice tone="info" announce={false}>
+          {#snippet icon()}<Lock size="1.6rem" strokeWidth={1.8} />{/snippet}
+          {msg('social.userProfileClosed')}
+        </Notice>
       {:else if restricted}
-        <p class="notice"><Lock size="1.8rem" strokeWidth={1.6} />{msg('social.userRestToFriends')}</p>
+        <Notice tone="info" announce={false}>
+          {#snippet icon()}<Lock size="1.6rem" strokeWidth={1.8} />{/snippet}
+          {msg('social.userRestToFriends')}
+        </Notice>
       {:else}
         <div class="columns">
           <div class="main">
@@ -305,23 +312,6 @@
 </Page>
 
 <style>
-  .notice {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    padding: var(--space-4) var(--space-5);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface-2);
-    font-size: var(--font-sm);
-    color: var(--text-2);
-  }
-
-  .notice :global(svg) {
-    flex-shrink: 0;
-    color: var(--text-3);
-  }
-
   .profile {
     display: flex;
     flex-direction: column;

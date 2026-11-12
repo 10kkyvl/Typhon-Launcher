@@ -123,6 +123,17 @@ describe('Sources: the status filter', () => {
   });
 });
 
+describe('Sources: where sources are fetched', () => {
+  it('is a standing fact of the page on the base notice, read in its flow and not announced', () => {
+    render(Sources, { target: app, props: {} });
+
+    const text = screen.getByText(msg('transfers.sourcesNotice'));
+    const notice = text.closest('.notice');
+    expect(notice?.getAttribute('data-tone')).toBe('info');
+    expect(notice?.querySelector('[role="status"], [role="alert"]')).toBeNull();
+  });
+});
+
 describe('Sources: an empty list', () => {
   it('says so in a heading right under the page title', () => {
     render(Sources, { target: app, props: {} });

@@ -820,11 +820,15 @@
   {#if failed || offline}<Button onclick={() => void reload()}>{msg('games.catalogRetry')}</Button>{/if}
 
   {#if lastDismissed}
-    <div class="dismissal" role="status"><span>{msg('games.recommendationDismissed', { title: lastDismissed.title })}</span>
-      <Button onclick={undoDismissal} disabled={preferenceBusy}>{msg('games.recommendationUndo')}</Button></div>
+    <div class="page-note">
+      <Notice tone="success">
+        {msg('games.recommendationDismissed', { title: lastDismissed.title })}
+        {#snippet action()}<Button size="sm" onclick={undoDismissal} disabled={preferenceBusy}>{msg('games.recommendationUndo')}</Button>{/snippet}
+      </Notice>
+    </div>
   {/if}
-  {#if personalizationFallback}<p class="muted" role="status">{msg('games.recommendationFallback')}</p>{/if}
-  {#if discoveryStale}<p class="muted" role="status">{msg('games.recommendationRefreshFailed')}</p>{/if}
+  {#if personalizationFallback}<div class="page-note"><Notice tone="info" compact>{msg('games.recommendationFallback')}</Notice></div>{/if}
+  {#if discoveryStale}<div class="page-note"><Notice tone="warning" compact>{msg('games.recommendationRefreshFailed')}</Notice></div>{/if}
   {#if profile.confidence < 1 && (sort === 'auto' || sort === 'for-you')}<p class="muted profile-hint">{msg('games.recommendationNoHistory')}</p>{/if}
   {#if discoveryVisible}
     <RecommendationShelf title={msg('games.discoveryTitle')} items={discovery} loading={discoveryLoading || preferenceBusy}
@@ -924,7 +928,7 @@
 </Page>
 
 <style>
-  .dismissal { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin: var(--space-4) 0; padding: var(--space-3); border-radius: var(--radius-md); background: var(--surface-2); font-size: var(--font-sm); }
+  .page-note { margin: var(--space-4) 0; }
   .profile-hint { margin-bottom: var(--space-5); }
   .list-entry { display: flex; align-items: center; }
   .list-entry .list-row { flex: 1; min-width: 0; }

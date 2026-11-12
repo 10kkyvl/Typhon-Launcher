@@ -28,6 +28,7 @@
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import InstallModal from '../../lib/components/InstallModal.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
@@ -172,16 +173,22 @@
   </PageHeader>
 
   {#if playBanner}
-  <div class="play-banner" role="status">
-    {#if playBanner.kind === 'schedule'}
-      <CalendarClock size="1.5rem" strokeWidth={1.8} />
-    {:else if playBanner.kind === 'pause'}
-      <Pause size="1.5rem" strokeWidth={1.8} />
-    {:else}
-      <Gauge size="1.5rem" strokeWidth={1.8} />
-    {/if}
-    <span class="play-text">{playBannerText}</span>
-    <Button size="sm" onclick={() => navigate('settings', { tab: 'downloads' })}>{msg('transfers.playBannerSettings')}</Button>
+  <div class="play-banner">
+    <Notice tone="info">
+      {#snippet icon()}
+        {#if playBanner.kind === 'schedule'}
+          <CalendarClock size="1.6rem" strokeWidth={1.8} />
+        {:else if playBanner.kind === 'pause'}
+          <Pause size="1.6rem" strokeWidth={1.8} />
+        {:else}
+          <Gauge size="1.6rem" strokeWidth={1.8} />
+        {/if}
+      {/snippet}
+      {playBannerText}
+      {#snippet action()}
+        <Button size="sm" onclick={() => navigate('settings', { tab: 'downloads' })}>{msg('transfers.playBannerSettings')}</Button>
+      {/snippet}
+    </Notice>
   </div>
   {/if}
 
@@ -408,22 +415,8 @@
 
 <style>
   .play-banner {
-    display: flex;
-    align-items: center;
-    gap: var(--space-4);
     max-width: 140rem;
     margin-bottom: var(--space-6);
-    padding: var(--space-3) var(--space-5);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface-2);
-    font-size: var(--font-sm);
-    color: var(--accent-text);
-  }
-
-  .play-text {
-    flex: 1;
-    color: var(--text);
   }
 
   .summary {
