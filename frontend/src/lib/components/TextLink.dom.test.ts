@@ -73,7 +73,7 @@ describe('TextLink with a mark beside its text', () => {
     renderDom(TextLinkHarness, { onforgot: vi.fn() });
     const wiki = screen.getByRole('link', { name: 'wiki' });
     const back = screen.getByRole('link', { name: 'Back to the library' });
-    const mark = (link: HTMLElement, side: string) => link.querySelector(`[data-part="text-link-${side}"]`);
+    const mark = (link: HTMLElement, side: string) => link.querySelector(`.mark.${side}`);
     expect(mark(wiki, 'end')?.querySelector('svg')).toBeInstanceOf(SVGElement);
     expect(mark(wiki, 'end')?.getAttribute('aria-hidden')).toBe('true');
     expect(wiki.lastElementChild).toBe(mark(wiki, 'end'));

@@ -74,7 +74,7 @@ describe('the profile page', () => {
     const badge = await screen.findByText(`Playing ${title}`);
     expect(badge.classList.contains('badge')).toBe(true);
     expect(badge.classList.contains('accent')).toBe(true);
-    expect(badge.querySelector('[data-part="status-badge-icon"] svg')).not.toBeNull();
+    expect(badge.querySelector('.icon svg')).not.toBeNull();
   });
 
   it('"View all activity" is a text link under the activity; Enter on it opens the history', async () => {

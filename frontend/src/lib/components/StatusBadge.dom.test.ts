@@ -12,7 +12,7 @@ describe('StatusBadge', () => {
   it('draws a dot by default and an icon in its place when given one, hidden from the name', () => {
     renderDom(HiddenBadge, {});
     const badge = screen.getByText(msg('social.hiddenLabel')).closest('.badge') as HTMLElement;
-    const mark = badge.querySelector('[data-part="status-badge-icon"]');
+    const mark = badge.querySelector('.icon');
     expect(mark?.getAttribute('aria-hidden')).toBe('true');
     expect(mark?.querySelector('svg')).toBeInstanceOf(SVGElement);
     expect(badge.querySelector('.dot')).toBeNull();
@@ -23,7 +23,7 @@ describe('StatusBadge', () => {
     renderDom(StatusBadge, { label: 'Installed', kind: 'success' });
     const badge = screen.getByText('Installed').closest('.badge') as HTMLElement;
     expect(badge.querySelector('.dot')).not.toBeNull();
-    expect(badge.querySelector('[data-part="status-badge-icon"]')).toBeNull();
+    expect(badge.querySelector('.icon')).toBeNull();
   });
 
   // A badge is one word on a plate in a row of them, over a cover or in a list: one line, at its

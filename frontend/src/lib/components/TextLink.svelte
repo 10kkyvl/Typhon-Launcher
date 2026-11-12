@@ -52,7 +52,7 @@
 </script>
 
 {#snippet content()}
-  {#if start}<span class="mark start" data-part="text-link-start" aria-hidden="true">{@render start()}</span>{/if}{@render children()}{#if end}<span class="mark end" data-part="text-link-end" aria-hidden="true">{@render end()}</span>{/if}
+  {#if start}<span class="mark start" aria-hidden="true">{@render start()}</span>{/if}{@render children()}{#if end}<span class="mark end" aria-hidden="true">{@render end()}</span>{/if}
 {/snippet}
 
 {#if href !== undefined}

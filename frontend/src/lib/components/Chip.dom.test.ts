@@ -159,7 +159,7 @@ describe('Chip given an address', () => {
     expect(link.classList.contains('chip')).toBe(true);
     expect(link.classList.contains('outline')).toBe(true);
     expect(link.hasAttribute('aria-pressed')).toBe(false);
-    const mark = link.querySelector('[data-part="chip-end"]');
+    const mark = link.querySelector('.end');
     expect(mark?.getAttribute('aria-hidden')).toBe('true');
     expect(mark?.querySelector('svg')).toBeInstanceOf(SVGElement);
   });
@@ -230,7 +230,7 @@ describe('Chip busy is seen', () => {
     await rerender({ onclick: vi.fn(), children: label, busy: true });
 
     expect(screen.getByRole('button', { name: 'Helpful (3)' })).toBe(chip);
-    const mark = chip.querySelector('[data-busy-mark]');
+    const mark = chip.querySelector('.busy-mark');
     expect(mark?.querySelector('.spinner')?.getAttribute('aria-hidden')).toBe('true');
     expect(chip.querySelector('.content')?.classList.contains('waiting')).toBe(true);
   });

@@ -33,7 +33,7 @@
 {#snippet badge(focusable: boolean)}
   <!-- svelte-ignore a11y_no_noninteractive_tabindex (A stop in the Tab order only with a hint, so the hint reaches keyboard users; pressing it does nothing.) -->
   <span class="badge {kind}" class:plain class:wrap tabindex={focusable ? 0 : undefined}>
-    {#if icon}<span class="icon" data-part="status-badge-icon" aria-hidden="true">{@render icon()}</span>{:else if dot}<span class="dot"></span>{/if}
+    {#if icon}<span class="icon" aria-hidden="true">{@render icon()}</span>{:else if dot}<span class="dot"></span>{/if}
     {label}
   </span>
 {/snippet}

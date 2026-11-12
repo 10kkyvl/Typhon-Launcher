@@ -108,8 +108,8 @@
 
 {#snippet content()}
   <span class="content" class:waiting={busy}
-    >{@render children?.()}{#if end}<span class="end" data-part="chip-end" aria-hidden="true">{@render end()}</span>{/if}</span
-  >{#if busy}<span class="busy-mark" data-busy-mark><Spinner size="sm" tone="current" /></span>{/if}
+    >{@render children?.()}{#if end}<span class="end" aria-hidden="true">{@render end()}</span>{/if}</span
+  >{#if busy}<span class="busy-mark"><Spinner size="sm" tone="current" /></span>{/if}
 {/snippet}
 
 {#snippet chip()}
