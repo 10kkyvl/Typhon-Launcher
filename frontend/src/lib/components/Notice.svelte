@@ -46,13 +46,17 @@
 
   let plate = $state<HTMLDivElement>();
 
-  // The live region is the message alone, and it is on the page before its words are: some screen
-  // readers do not announce a region inserted together with its content. Two frames let the browser
-  // lay the empty region out once before the words go in.
-  let worded = $state(false);
+  // The live region is the message alone. Some screen readers do not announce a polite region inserted
+  // together with its content, so its words are laid out from the first frame (the plate never changes
+  // size) but stay unseen, out of the accessibility tree, until the region has been on the page for a
+  // frame. An alert is announced on insertion and shows its words at once.
+  const polite = $derived(announce && tone !== 'danger');
+  let shown = $state(false);
+  const unseen = $derived(polite && !shown);
   $effect(() => {
+    if (!polite) return;
     let frame = requestAnimationFrame(() => {
-      frame = requestAnimationFrame(() => (worded = true));
+      frame = requestAnimationFrame(() => (shown = true));
     });
     return () => cancelAnimationFrame(frame);
   });
@@ -86,14 +90,12 @@
     {/if}
   </span>
   <div class="body" role={announce ? (tone === 'danger' ? 'alert' : 'status') : undefined}>
-    {#if worded || !announce}
-      {#if title && level}
-        <svelte:element this={`h${level}`} class="title">{title}</svelte:element>
-      {:else if title}
-        <span class="title">{title}</span>
-      {/if}
-      <div class="text">{@render children?.()}</div>
+    {#if title && level}
+      <svelte:element this={`h${level}`} class="title" class:unseen>{title}</svelte:element>
+    {:else if title}
+      <span class="title" class:unseen>{title}</span>
     {/if}
+    <div class="text" class:unseen>{@render children?.()}</div>
   </div>
   {#if action}
     <div class="action">{@render action()}</div>
@@ -160,6 +162,10 @@
 
   .title + .text {
     color: var(--text-2);
+  }
+
+  .unseen {
+    visibility: hidden;
   }
 
   .action {

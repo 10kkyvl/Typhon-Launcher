@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { locale } from '../i18n';
 import { user } from '../testing/dom';
 import NoticeHarness from '../testing/NoticeHarness.svelte';
+import noticeSource from './Notice.svelte?raw';
 
 let app: HTMLDivElement;
 
@@ -24,10 +25,21 @@ function setup(props: Record<string, unknown> = {}) {
 
 const TEXT = 'The catalog could not be loaded';
 
-// The words of a live region arrive after the region does, so wait for them.
+// The test run does not load component styles into jsdom, so "unseen" is the class that hides words
+// (`visibility: hidden`, checked against the source below), not a computed style.
+function seen(el: Element): boolean {
+  return el.isConnected && !el.closest('.unseen');
+}
+
+it('hides unseen words with visibility, which keeps their place in the layout', () => {
+  const style = /<style[^>]*>([\s\S]*?)<\/style>/.exec(noticeSource)?.[1] ?? '';
+  expect(/\.unseen\s*\{([^}]*)\}/.exec(style)?.[1].trim()).toBe('visibility: hidden;');
+});
+
+// The words of a polite region come into view after the region is on the page, so wait for them.
 async function said(role: 'alert' | 'status'): Promise<HTMLElement> {
   const region = screen.getByRole(role);
-  await waitFor(() => expect(region.textContent).toContain(TEXT));
+  await waitFor(() => expect(seen(within(region).getByText(TEXT))).toBe(true));
   return region;
 }
 
@@ -83,17 +95,55 @@ describe('Notice', () => {
     }
   });
 
-  // Some screen readers do not announce a polite region that is inserted together with its content.
-  // jsdom cannot hear the announcement: this proves the order in the DOM, a screen reader the rest.
-  it.each(['danger', 'warning'] as const)('a %s notice puts its region on the page first and its words into it after', async (tone) => {
+  // Some screen readers do not announce a polite region that is inserted together with its content. Its
+  // words are laid out from the first frame, so the plate never changes size, and stay unseen (out of the
+  // accessibility tree) until the region has been on the page. jsdom proves the DOM and the styles; that
+  // the words coming into view are announced like an insertion is for a screen reader to confirm.
+  it.each(['warning', 'success', 'info'] as const)('a %s notice lays its words out at once and shows them once its region is on the page', async (tone) => {
     setup({ tone, title: 'Requests' });
-    const role = tone === 'danger' ? 'alert' : 'status';
-    const region = screen.getByRole(role);
-    expect(region.textContent?.trim()).toBe('');
-    expect(screen.queryByText(TEXT)).toBeNull();
-    await waitFor(() => expect(region.textContent).toContain(TEXT));
-    expect(screen.getByRole(role)).toBe(region);
-    expect(region.textContent).toContain('Requests');
+    const region = screen.getByRole('status');
+    const title = region.querySelector('.title') as HTMLElement;
+    const text = region.querySelector('.text') as HTMLElement;
+    expect(text.textContent).toContain(TEXT);
+    expect(seen(title)).toBe(false);
+    expect(seen(text)).toBe(false);
+
+    await waitFor(() => expect(seen(text)).toBe(true));
+    expect(seen(title)).toBe(true);
+    expect(region.querySelector('.text')).toBe(text);
+    expect(screen.getByRole('status')).toBe(region);
+  });
+
+  // An alert is announced when it is inserted with its content: a failure shows its words at once.
+  it('a danger notice shows its words in the first frame', () => {
+    setup({ tone: 'danger', title: 'Requests' });
+    const region = screen.getByRole('alert');
+    expect(seen(within(region).getByText(TEXT))).toBe(true);
+    expect(seen(within(region).getByText('Requests'))).toBe(true);
+  });
+
+  it('removed before its words show, it leaves no frame behind that writes to it', async () => {
+    let gone = false;
+    const late: number[] = [];
+    const frame = window.requestAnimationFrame.bind(window);
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((step) =>
+      frame((time) => {
+        if (gone) late.push(time);
+        step(time);
+      }),
+    );
+    const errors = vi.spyOn(console, 'error');
+    const { unmount } = render(NoticeHarness, { target: app, props: { tone: 'warning' } });
+    expect(raf).toHaveBeenCalled();
+
+    unmount();
+    gone = true;
+    await new Promise((settled) => setTimeout(settled, 100));
+
+    expect(late).toEqual([]);
+    expect(errors).not.toHaveBeenCalled();
+    raf.mockRestore();
+    errors.mockRestore();
   });
 
   // A standing fact of the page is read in the flow of the page, not announced on every visit.
