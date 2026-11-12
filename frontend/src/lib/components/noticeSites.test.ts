@@ -51,6 +51,11 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
     ['danger', true],
   ],
+  // What each choice loses is read with the conflict; a failed resolve just happened.
+  'lib/components/CloudConflictModal.svelte': [
+    ['warning', false],
+    ['danger', true],
+  ],
   'lib/components/EmulatorBusyModal.svelte': [['danger', true]],
   // Why the launch needs an emulator is read with the prompt; a failed pick or save just happened.
   'lib/components/EmulatorNeededModal.svelte': [
