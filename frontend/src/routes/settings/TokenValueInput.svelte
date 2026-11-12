@@ -51,7 +51,7 @@
   {/if}
   </Tooltip>
   {#if problem}
-    <span class="token-problem" id={problemId}>{tokenRangeText(problem)}</span>
+    <span class="token-problem" id={problemId} role="alert">{tokenRangeText(problem)}</span>
   {/if}
 </span>
 

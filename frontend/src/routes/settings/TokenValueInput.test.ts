@@ -26,5 +26,6 @@ describe('the theme token value field', () => {
     expect(html).toMatch(/aria-invalid="true"/);
     expect(html).toContain(tokenRangeText({ name: '--ambient-dim', min: 0, max: 1 }));
     expect(html).toMatch(/aria-describedby="[^"]*f-range/);
+    expect(html).toMatch(/<span class="token-problem[^"]*" id="f-range" role="alert">/);
   });
 });
