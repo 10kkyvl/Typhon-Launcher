@@ -71,6 +71,16 @@
   let textImportOpen = $state(false);
   let exporting = $state(false);
   let errors = $state<string[]>([]);
+  // Errors that answer Try or Save are announced, each press anew; those a kept trial updates at every
+  // edit stay on screen without being announced while the user types.
+  let errorsAnswer = $state(0);
+  let errorsQuiet = $state(false);
+
+  function report(found: string[]) {
+    errors = found;
+    errorsQuiet = false;
+    errorsAnswer += 1;
+  }
   let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
 
   function startEditing(theme: Theme) {
@@ -235,7 +245,7 @@
   function tryDraft() {
     if (!trialDraft) return;
     const error = tryTheme(trialDraft);
-    errors = error ? [error] : [];
+    report(error ? [error] : []);
   }
 
   // A kept trial follows every edit, so the window shows the draft as it is
@@ -247,6 +257,7 @@
     untrack(() => {
       const error = tryTheme(next);
       errors = error ? [error] : [];
+      errorsQuiet = true;
     });
   });
 
@@ -258,7 +269,7 @@
     if (!draft) return;
     const previous = { id: draft.id, builtIn: draft.builtIn };
     const validation = validateDraft();
-    errors = validation;
+    report(validation);
     if (validation.length > 0) return;
     saving = true;
     try {
@@ -546,14 +557,19 @@
               {/if}
             </div>
 
-            {#if errors.length > 0}
-              <Notice tone="danger" compact>
-                <ul class="errors">
-                  {#each errors as error}
-                    <li>{error}</li>
-                  {/each}
-                </ul>
-              </Notice>
+            {#snippet errorList()}
+              <ul class="errors">
+                {#each errors as error}
+                  <li>{error}</li>
+                {/each}
+              </ul>
+            {/snippet}
+            {#if errors.length > 0 && errorsQuiet}
+              <Notice tone="danger" compact announce={false}>{@render errorList()}</Notice>
+            {:else if errors.length > 0}
+              {#key errorsAnswer}
+                <Notice tone="danger" compact>{@render errorList()}</Notice>
+              {/key}
             {/if}
 
             <div class="editor-actions">

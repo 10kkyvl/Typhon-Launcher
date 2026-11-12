@@ -29,7 +29,7 @@ import { msg } from '../../lib/i18n';
 import { saveSettingsPatch, type Settings as SettingsData } from '../../lib/services/settings';
 import { saveTheme, type Theme } from '../../lib/services/theme';
 import { settings } from '../../lib/stores/settings';
-import { activeTheme, selectTheme, themeList, themeMode } from '../../lib/stores/theme';
+import { activeTheme, selectTheme, themeList, themeMode, themeTrial } from '../../lib/stores/theme';
 import { accentPresets } from '../../lib/theme/accent';
 import { renderDom } from '../../lib/testing/dom';
 import AccentPicker from './AccentPicker.svelte';
@@ -59,6 +59,7 @@ afterEach(() => {
   settings.set(null);
   themeList.set([]);
   activeTheme.set(null);
+  themeTrial.set(null);
   vi.mocked(saveSettingsPatch).mockReset();
   vi.mocked(selectTheme).mockClear();
   vi.mocked(saveTheme).mockReset();
@@ -185,6 +186,30 @@ describe('AppearanceTab', () => {
     finish();
     await waitFor(() => expect(radios[2].hasAttribute('aria-disabled')).toBe(false));
     expect(radios.map((radio) => radio.getAttribute('aria-checked'))).toEqual(['false', 'false', 'true']);
+  });
+
+  // A kept trial checks the draft at every edit: its errors stay up to date on screen but are not
+  // announced while the user types; pressing Try or Save is what announces them.
+  it('keeps the errors of a kept trial quiet while typing and announces them on Try', async () => {
+    themeTrial.set({ name: 'Dark', endsAt: 0, kept: true });
+    const { user } = renderDom(AppearanceTab, {});
+    await user.click(screen.getByRole('button', { name: msg('settings.appearanceShowAdvanced') }));
+    await user.click(screen.getByRole('textbox', { name: msg('settings.appearanceCustomCssLabel') }));
+    await user.paste('.a {');
+
+    const quiet = await waitFor(() => {
+      const item = document.querySelector<HTMLElement>('.errors li');
+      expect(item?.textContent).toBeTruthy();
+      return item as HTMLElement;
+    });
+    expect(quiet.closest('[data-tone]')?.getAttribute('data-tone')).toBe('danger');
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: msg('settings.themeTry') }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain(quiet.textContent ?? '');
   });
 
   it('deletes a custom theme from a base icon button named for the theme', () => {
