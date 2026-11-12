@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { Download, RefreshCw, X } from '@lucide/svelte';
+  import { tick } from 'svelte';
+  import { get } from 'svelte/store';
+  import { Download, X } from '@lucide/svelte';
   import Button from './Button.svelte';
   import Notice from './Notice.svelte';
   import ProgressBar from './ProgressBar.svelte';
@@ -16,10 +18,12 @@
   } from '../stores/selfupdate';
   import { statusReason } from '../services/selfupdateMessages';
   import { bytesSize } from '../utils/format';
+  import { focusableIn, focusQuietly } from '../layers/focus';
   import { msg } from '../i18n';
 
   let confirmOpen = $state(false);
   let retrying = $state(false);
+  let root = $state<HTMLElement>();
 
   const status = $derived($selfUpdateStatus);
   const view = $derived($selfUpdateView);
@@ -30,29 +34,65 @@
   const downloadedBytes = $derived(progress?.downloadedBytes ?? status.downloadedBytes ?? 0);
   const pct = $derived(totalBytes > 0 ? Math.min(100, Math.max(0, (downloadedBytes / totalBytes) * 100)) : 0);
 
-  // The failure stays on screen until the retry's answer changes the status: the notice and its
-  // focused Retry stay, the Retry busy.
-  async function retry() {
-    if (retrying) return;
-    retrying = true;
-    try {
-      await retryFailed();
-    } finally {
-      retrying = false;
-    }
+  // What was on screen when the page opened is read with the page; what came after it (the answer to
+  // a check, a download that finished) is announced.
+  const openedWith = get(selfUpdateView);
+  let moved = $state(false);
+  $effect.pre(() => {
+    if (view !== openedWith) moved = true;
+  });
+
+  // The answer to a retry is the status leaving "failed" (a download that starts shows its progress at
+  // once), else the end of the request.
+  function retry(): Promise<boolean> {
+    return new Promise((resolve, reject) => {
+      let answered = false;
+      let off: (() => void) | undefined;
+      const answer = (ok: boolean) => {
+        if (answered) return;
+        answered = true;
+        off?.();
+        resolve(ok);
+      };
+      off = selfUpdateView.subscribe((next) => {
+        if (next !== 'failed') answer(true);
+      });
+      if (answered) off();
+      retryFailed().then(
+        () => answer(get(selfUpdateView) !== 'failed'),
+        (err: unknown) => {
+          off?.();
+          reject(err);
+        },
+      );
+    });
   }
+
+  // A pressed button the next state replaces (Download by the progress, "Not now" by nothing) would
+  // drop focus to the page: it goes to the first control of what came, else on past the banner.
+  $effect.pre(() => {
+    void view;
+    void downloading;
+    const box = root;
+    const active = document.activeElement;
+    if (!box || !(active instanceof HTMLElement) || !box.contains(active)) return;
+    const all = focusableIn(document.body);
+    const mine = all.filter((el) => box.contains(el));
+    const after = all[all.indexOf(mine[mine.length - 1]) + 1];
+    void tick().then(() => {
+      const now = document.activeElement;
+      if (now && now !== document.body && now.isConnected) return;
+      const target = focusableIn(box)[0] ?? after;
+      if (target?.isConnected) focusQuietly(target);
+    });
+  });
 </script>
 
-{#if view === 'failed'}
+<div bind:this={root}>
+{#if view === 'failed' || retrying}
   <div class="message">
-    <Notice tone="danger">
+    <Notice tone="danger" announce={moved} bind:retrying retry={{ label: msg('common.retry'), run: retry, within: () => root }}>
       {statusReason(status) || msg('ui.updateCheckFailed')}
-      {#snippet action()}
-        <Button size="sm" busy={retrying} onclick={retry}>
-          {#if !retrying}<RefreshCw size="1.5rem" strokeWidth={1.8} />{/if}
-          {msg('common.retry')}
-        </Button>
-      {/snippet}
     </Notice>
   </div>
 {:else if downloading || view === 'downloading'}
@@ -75,13 +115,13 @@
   </div>
 {:else if view === 'applying'}
   <div class="message">
-    <Notice title={msg('ui.installingUpdate', { version: status.availableVersion ?? '' })}>
+    <Notice announce={moved} title={msg('ui.installingUpdate', { version: status.availableVersion ?? '' })}>
       {msg('ui.launcherRestartShort')}
     </Notice>
   </div>
 {:else if view === 'ready'}
   <div class="message">
-    <Notice tone="success" title={msg('ui.updateReadyMessage', { version: status.availableVersion ?? '' })}>
+    <Notice tone="success" announce={moved} title={msg('ui.updateReadyMessage', { version: status.availableVersion ?? '' })}>
       {msg('ui.launcherRestartNewVersion')}
       {#snippet action()}
         <Button variant="primary" size="sm" onclick={() => (confirmOpen = true)}>{msg('ui.restartAndUpdate')}</Button>
@@ -90,9 +130,8 @@
     </Notice>
   </div>
 {:else if view === 'available'}
-  <!-- Found by a check that ran on its own: a standing fact of the settings page, read with it. -->
   <div class="message">
-    <Notice announce={false} title={status.notes ? msg('ui.versionAvailable', { version: status.availableVersion ?? '' }) : undefined}>
+    <Notice announce={moved} title={status.notes ? msg('ui.versionAvailable', { version: status.availableVersion ?? '' }) : undefined}>
       {status.notes || msg('ui.versionAvailable', { version: status.availableVersion ?? '' })}
       {#snippet action()}
         <Button variant="primary" size="sm" onclick={requestDownload}>
@@ -103,6 +142,7 @@
     </Notice>
   </div>
 {/if}
+</div>
 
 <UpdateRestartModal bind:open={confirmOpen} />
 
