@@ -153,6 +153,35 @@ describe('Notice with a retry: a failure', () => {
     expect(exposed(screen.getByRole('alert'))).toEqual(['Disk is full']);
   });
 
+  // The message is put into the live region again after a failure; what had focus in it keeps it.
+  it('keeps focus on a link in the message through a failed retry', async () => {
+    const answer = deferred<boolean>();
+    const { user } = renderDom(RetryHarness, { run: () => answer.promise, link: true });
+    await user.click(retryButton());
+    screen.getByRole('link', { name: 'settings' }).focus();
+
+    answer.resolve(false);
+    await frame();
+    await frame();
+
+    const link = screen.getByRole('link', { name: 'settings' });
+    expect(link.isConnected).toBe(true);
+    expect(document.activeElement).toBe(link);
+  });
+
+  it('keeps focus on a page-title heading in the notice through a failed retry', async () => {
+    const answer = deferred<boolean>();
+    const { user } = renderDom(RetryHarness, { run: () => answer.promise, title: 'Emulators unavailable', level: 1 });
+    await user.click(retryButton());
+    screen.getByRole('heading', { level: 1, name: 'Emulators unavailable' }).focus();
+
+    answer.resolve(false);
+    await frame();
+    await frame();
+
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1, name: 'Emulators unavailable' }));
+  });
+
   it('keeps a titled notice heading a heading after a failure', async () => {
     const { user } = renderDom(RetryHarness, { run: vi.fn(async () => false), title: 'Emulators unavailable', level: 2 });
     await user.click(retryButton());

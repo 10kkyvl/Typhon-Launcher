@@ -8,7 +8,8 @@
   // `present` takes the whole page away, as leaving it does. `holds` off: the page shows the error only
   // while its load has failed and drops it as soon as the load works, before the retry has answered
   // (as EmulatorsCard does); its Detect waits on the retry. `resets`: its load clears the failure when
-  // it starts, the mistake that drops the notice during its own retry. For Notice.retry.dom.test.ts.
+  // it starts, the mistake that drops the notice during its own retry. `link` puts a link into the
+  // message. For Notice.retry.dom.test.ts.
   let {
     run,
     message = 'The list could not be loaded',
@@ -20,6 +21,7 @@
     resets = false,
     title,
     level,
+    link = false,
   }: {
     run: () => Promise<boolean>;
     message?: string;
@@ -30,7 +32,8 @@
     holds?: boolean;
     resets?: boolean;
     title?: string;
-    level?: 2 | 3;
+    level?: 1 | 2 | 3;
+    link?: boolean;
   } = $props();
 
   let failed = $state(true);
@@ -66,7 +69,7 @@
           within: to === 'region' ? () => region : undefined,
         }}
       >
-        {message}
+        {message}{#if link}{' '}<a href="#s">settings</a>{/if}
       </Notice>
     {:else}
       <div class="rows" bind:this={region}>

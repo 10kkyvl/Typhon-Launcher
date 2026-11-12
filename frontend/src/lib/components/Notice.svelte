@@ -83,6 +83,7 @@
   } = $props();
 
   let plate = $state<HTMLDivElement>();
+  let message = $state<HTMLElement>();
 
   // Each failed retry puts the message into the live region again: the same nodes come in anew.
   let attempt = $state(0);
@@ -119,7 +120,22 @@
       }
       return;
     }
+    // The message is drawn anew; what had focus in it (a link, a page-title heading) gets it back on
+    // its new twin, found by the same place in the message.
+    const path = pathTo(message, document.activeElement);
     attempt += 1;
+    if (!path) return;
+    await tick();
+    const twin = path.reduce<Element | undefined>((at, index) => at?.children[index], message);
+    if (twin instanceof HTMLElement && twin.isConnected) focusQuietly(twin);
+  }
+
+  // The child indexes from `root` down to `node`, or null when it is not inside.
+  function pathTo(root: Element | undefined, node: Element | null): number[] | null {
+    if (!root || !node || node === root || !root.contains(node)) return null;
+    const path: number[] = [];
+    for (let at: Element = node; at !== root; at = at.parentElement as Element) path.unshift([...(at.parentElement as Element).children].indexOf(at));
+    return path;
   }
 
   // Focus that was on Retry would fall to the page with the notice: it goes where the caller says,
@@ -188,7 +204,7 @@
   </span>
   <div class="body" role={live}>
     {#key attempt}
-      <div class="message">
+      <div class="message" bind:this={message}>
         {#if title && level}
           <svelte:element this={`h${level}`} tabindex={level === 1 ? -1 : undefined} class="title" class:unseen>{title}</svelte:element>
         {:else if title}
