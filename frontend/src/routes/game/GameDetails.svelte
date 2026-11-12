@@ -50,6 +50,7 @@
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import SystemRequirements from '../../lib/components/SystemRequirements.svelte';
   import Tabs from '../../lib/components/Tabs.svelte';
+  import TextLink from '../../lib/components/TextLink.svelte';
   import { tabPanel } from '../../lib/components/tabs';
   import Toggle from '../../lib/components/Toggle.svelte';
   import UpdateCard from '../../lib/components/UpdateCard.svelte';
@@ -1244,7 +1245,7 @@
                   {/if}
                   <div class="related-ident">
                     {#if localId}
-                      <button class="related-title link" onclick={() => navigate('game', { id: localId })}>{item.game.title}</button>
+                      <span class="related-title"><TextLink onclick={() => navigate('game', { id: localId })}>{item.game.title}</TextLink></span>
                     {:else}
                       <span class="related-title">{item.game.title}</span>
                     {/if}
@@ -1375,9 +1376,9 @@
 
     <nav class="breadcrumb">
       {#if installed}
-        <button class="crumb" onclick={() => navigate('installed')}>{msg('games.installedStatusWord')}</button>
+        <span class="crumb"><TextLink tone="muted" onclick={() => navigate('installed')}>{msg('games.installedStatusWord')}</TextLink></span>
       {:else}
-        <button class="crumb" onclick={() => navigate('library')}>{msg('games.libraryWord')}</button>
+        <span class="crumb"><TextLink tone="muted" onclick={() => navigate('library')}>{msg('games.libraryWord')}</TextLink></span>
       {/if}
       <ChevronRight size="1.4rem" strokeWidth={1.8} />
       <span class="crumb current">{title || msg('games.detailFallbackTitle')}</span>
@@ -1800,12 +1801,6 @@
   .crumb {
     font-size: var(--font-xs);
     color: var(--text-3);
-    border-radius: var(--radius-sm);
-    transition: color var(--dur) var(--ease);
-  }
-
-  button.crumb:hover {
-    color: var(--text);
   }
 
   .crumb.current {
@@ -2120,10 +2115,6 @@
     font-size: var(--font-md);
     font-weight: 600;
     text-align: left;
-  }
-
-  .related-title.link:hover {
-    color: var(--accent-text);
   }
 
   .related-meta {

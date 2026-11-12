@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { ChevronRight } from '@lucide/svelte';
   import Avatar from '../../lib/components/Avatar.svelte';
   import { cardFrame, frameReserve } from '../../lib/profile/frameLook';
   import Card from '../../lib/components/Card.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
+  import TextLink from '../../lib/components/TextLink.svelte';
   import { AccountError } from '../../lib/services/account';
   import { gameFriendRows } from '../../lib/game/friends';
   import { friendStatusLabel, statusBadgeKind } from '../../lib/game/status';
@@ -93,10 +93,7 @@
       {/each}
     </ul>
 
-    <button class="show-all" type="button" onclick={() => navigate('friends')}>
-      {msg('games.friendsPanelSeeAll')}
-      <ChevronRight size="1.4rem" strokeWidth={1.8} />
-    </button>
+    <p class="show-all"><TextLink onclick={() => navigate('friends')}>{msg('games.friendsPanelSeeAll')}</TextLink></p>
   </Card>
 {/if}
 
@@ -155,16 +152,7 @@
   }
 
   .show-all {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
     margin-top: var(--space-4);
     font-size: var(--font-sm);
-    font-weight: 500;
-    color: var(--accent-text);
-  }
-
-  .show-all:hover {
-    text-decoration: underline;
   }
 </style>
