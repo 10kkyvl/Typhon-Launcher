@@ -9,6 +9,7 @@
   import type { MenuItem } from '../../lib/components/menu';
   import IconButton from '../../lib/components/IconButton.svelte';
   import MaskedEmail from '../../lib/components/MaskedEmail.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
   import StyledName from '../../lib/components/StyledName.svelte';
   import { appearanceOf } from '../../lib/profile/appearance';
   import type { ProfileAppearance } from '../../lib/services/account';
@@ -48,6 +49,7 @@
     statusText: string;
   } = $props();
 
+  const uid = $props.id();
   const look = $derived(appearanceOf(appearance));
 
   const BIO_LIMIT = 150;
@@ -221,33 +223,54 @@
 
     {#if editing && $currentUser}
       <div class="fields">
-        <label class="field">
-          <span class="field-label">{msg('social.displayNameLabel')}</span>
-          <input class="input" type="text" maxlength="32" disabled={$isOffline} bind:value={draft.displayName} />
-          {#if fieldErrors.displayName}<span class="error" role="alert">{fieldErrors.displayName}</span>{/if}
-        </label>
-        <label class="field">
-          <span class="field-label">{msg('social.usernameLabel')}</span>
+        <div class="field">
+          <label class="field-label" for="{uid}-display-name">{msg('social.displayNameLabel')}</label>
+          <input
+            id="{uid}-display-name"
+            class="input"
+            type="text"
+            maxlength="32"
+            disabled={$isOffline}
+            aria-invalid={fieldErrors.displayName ? 'true' : undefined}
+            aria-describedby={fieldErrors.displayName ? `${uid}-display-name-error` : undefined}
+            bind:value={draft.displayName}
+          />
+          {#if fieldErrors.displayName}<span class="error" id="{uid}-display-name-error" role="alert">{fieldErrors.displayName}</span>{/if}
+        </div>
+        <div class="field">
+          <label class="field-label" for="{uid}-username">{msg('social.usernameLabel')}</label>
           <div class="username-field">
-            <span class="username-prefix">@</span>
-            <input class="input" type="text" maxlength="24" disabled={$isOffline} bind:value={draft.username} />
+            <span class="username-prefix" aria-hidden="true">@</span>
+            <input
+              id="{uid}-username"
+              class="input"
+              type="text"
+              maxlength="24"
+              disabled={$isOffline}
+              aria-invalid={fieldErrors.username ? 'true' : undefined}
+              aria-describedby={fieldErrors.username ? `${uid}-username-error` : undefined}
+              bind:value={draft.username}
+            />
           </div>
-          {#if fieldErrors.username}<span class="error" role="alert">{fieldErrors.username}</span>{/if}
-        </label>
-        <label class="field">
-          <span class="field-label">
-            {msg('social.aboutTitle')}
+          {#if fieldErrors.username}<span class="error" id="{uid}-username-error" role="alert">{fieldErrors.username}</span>{/if}
+        </div>
+        <div class="field">
+          <div class="field-label">
+            <label for="{uid}-bio">{msg('social.aboutTitle')}</label>
             <span class="counter">{draft.bio.length}/{BIO_LIMIT}</span>
-          </span>
+          </div>
           <textarea
+            id="{uid}-bio"
             class="input area"
             rows="3"
             maxlength={BIO_LIMIT}
             disabled={$isOffline}
+            aria-invalid={fieldErrors.bio ? 'true' : undefined}
+            aria-describedby={fieldErrors.bio ? `${uid}-bio-error` : undefined}
             bind:value={draft.bio}
           ></textarea>
-          {#if fieldErrors.bio}<span class="error" role="alert">{fieldErrors.bio}</span>{/if}
-        </label>
+          {#if fieldErrors.bio}<span class="error" id="{uid}-bio-error" role="alert">{fieldErrors.bio}</span>{/if}
+        </div>
         <div class="field">
           <span class="field-label">{msg('common.email')}</span>
           <MaskedEmail email={$currentUser.email} />
@@ -259,7 +282,7 @@
         </div>
       </div>
       <div class="foot">
-        {#if fieldErrors.general}<span class="error">{fieldErrors.general}</span>{/if}
+        {#if fieldErrors.general}<div class="general"><Notice tone="danger" compact>{fieldErrors.general}</Notice></div>{/if}
         <Button variant="ghost" disabled={$savingProfile} onclick={cancelEditing}>{msg('common.cancel')}</Button>
         <Button variant="primary" disabled={!dirty || $savingProfile || $isOffline} onclick={save}>
           {$savingProfile ? msg('social.saving') : msg('common.save')}
@@ -409,29 +432,9 @@
     color: var(--text-3);
   }
 
-  .input {
-    height: var(--control-md);
-    padding: 0 1.2rem;
-    background: var(--surface-2);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-md);
-    color: var(--text);
-    font-size: var(--font-sm);
-    font-family: inherit;
-    width: 100%;
-    transition:
-      border-color var(--dur) var(--ease),
-      box-shadow var(--dur) var(--ease);
-  }
-
-  .input:focus {
-    outline: none;
-    border-color: var(--accent-ring);
-    box-shadow: 0 0 0 3px var(--accent-subtle);
-  }
-
   .area {
     height: auto;
+    font-family: inherit;
     padding: 0.9rem 1.2rem;
     resize: vertical;
     line-height: 1.5;
@@ -475,7 +478,9 @@
     border-top: 1px solid var(--border);
   }
 
-  .foot .error {
+  .general {
+    flex: 1;
+    min-width: 0;
     margin-right: auto;
   }
 
