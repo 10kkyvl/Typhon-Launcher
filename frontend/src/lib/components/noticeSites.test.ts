@@ -17,6 +17,9 @@ const SITES: Record<string, Site[]> = {
   'lib/components/UpdateBanner.svelte': [['danger', true]],
   // Advice for the chosen platform, also inside InstallModal and AddDownloadModal.
   'lib/components/EmulatorHint.svelte': [['warning', false]],
+  // A block whose data failed to load; blocks of a newer launcher filling the layout, a standing fact.
+  'lib/components/profile/BlockGrid.svelte': [['danger', true]],
+  'lib/components/profile/BlockPicker.svelte': [['warning', false]],
   'lib/components/profile/GamePicker.svelte': [['danger', true]],
   'routes/activity/Activity.svelte': [['danger', true]],
   'routes/catalog/Catalog.svelte': [['danger', true]],
