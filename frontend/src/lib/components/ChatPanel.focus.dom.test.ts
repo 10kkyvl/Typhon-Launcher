@@ -47,6 +47,7 @@ let app: HTMLDivElement;
 beforeEach(() => {
   locale.set('en');
   vi.mocked(fetchMessages).mockReset();
+  vi.mocked(uploadChatImage).mockReset();
   vi.mocked(chat.retryMessaging).mockReset();
   vi.mocked(chat.retryMessage).mockReset();
   vi.mocked(chat.editMessage).mockReset();
@@ -379,6 +380,43 @@ describe('ChatPanel: a send in flight', () => {
     sent.resolve();
     await vi.waitFor(() => expect(screen.queryByRole('button', { name: msg('social.chatAttachRemove') })).toBeNull());
     await vi.waitFor(() => expect((screen.getByPlaceholderText(msg('social.chatPlaceholder')) as HTMLTextAreaElement).value).toBe(''));
+  });
+
+  // After a send that failed: the field takes text again, Send is offered again, and what was to be
+  // sent is still there to send.
+  async function expectReadyAgain(keys: ReturnType<typeof user>) {
+    const field = screen.getByPlaceholderText(msg('social.chatPlaceholder')) as HTMLTextAreaElement;
+    await vi.waitFor(() => expect(field.readOnly).toBe(false));
+    expect(screen.getByRole('button', { name: msg('social.chatSend') }).hasAttribute('disabled')).toBe(false);
+    expect(screen.getByRole('button', { name: msg('social.chatAttachRemove') })).toBeTruthy();
+    expect(field.value).toBe('Look');
+    await keys.type(field, '!');
+    expect(field.value).toBe('Look!');
+  }
+
+  it('ends when the message is refused: the field, Send and the drafts are there again', async () => {
+    vi.mocked(chat.sendMessage).mockRejectedValue(new Error('offline'));
+    chat.attachmentDrafts.set({ peer: [{ key: 'k1', name: 'shot.png', bytes: 1024, encoded: '', previewUrl: 'blob:shot', uploaded }] });
+    const keys = setup();
+    await keys.type(screen.getByPlaceholderText(msg('social.chatPlaceholder')), 'Look');
+
+    await keys.click(screen.getByRole('button', { name: msg('social.chatSend') }));
+
+    expect(chat.sendMessage).toHaveBeenCalledTimes(1);
+    await expectReadyAgain(keys);
+  });
+
+  it('ends when an image fails to upload: the field, Send and the drafts are there again', async () => {
+    vi.mocked(uploadChatImage).mockRejectedValue(new Error('offline'));
+    chat.attachmentDrafts.set({ peer: [{ key: 'k1', name: 'shot.png', bytes: 1024, encoded: 'data', previewUrl: 'blob:shot' }] });
+    const keys = setup();
+    await keys.type(screen.getByPlaceholderText(msg('social.chatPlaceholder')), 'Look');
+
+    await keys.click(screen.getByRole('button', { name: msg('social.chatSend') }));
+
+    await vi.waitFor(() => expect(uploadChatImage).toHaveBeenCalledTimes(1));
+    await expectReadyAgain(keys);
+    expect(chat.sendMessage).not.toHaveBeenCalled();
   });
 
   it('refuses a second Send while the first runs', async () => {
