@@ -164,6 +164,22 @@ describe.each([
     }
   });
 
+  it('as a menu button, holds back the arrows that would open its menu, and lets the other keys pass', async () => {
+    const { keys, button, onkeydown } = setup({ ...props, popup: true });
+    const down = listen('keydown');
+    try {
+      button().focus();
+      await keys.keyboard('{ArrowDown}{ArrowUp}');
+      expect(onkeydown).not.toHaveBeenCalled();
+      expect(down.seen).toEqual([]);
+      await keys.keyboard('{PageDown}{Home}');
+      expect(down.seen.map((e) => e.key)).toEqual(['PageDown', 'Home']);
+      expect(onkeydown).toHaveBeenCalledTimes(2);
+    } finally {
+      down.stop();
+    }
+  });
+
   it('arrows and page keys pass untouched, so the page around it still scrolls and moves focus', async () => {
     const { keys, button } = setup(props);
     const down = listen('keydown');

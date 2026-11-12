@@ -8,6 +8,7 @@
     reason,
     busy = false,
     block = false,
+    popup = false,
     onclick,
     onsubmit,
     onkeydown,
@@ -17,6 +18,8 @@
     reason?: string;
     busy?: boolean;
     block?: boolean;
+    /** The button opens a menu, as a menu trigger's spread props say. */
+    popup?: boolean;
     onclick?: () => void;
     onsubmit?: () => void;
     onkeydown?: () => void;
@@ -31,5 +34,5 @@
   }}
 >
   <input aria-label="Name" />
-  <Button type="submit" {disabled} {reason} {busy} {block} {onclick} {onkeydown} {onpointerdown}>Save</Button>
+  <Button type="submit" {disabled} {reason} {busy} {block} aria-haspopup={popup ? 'menu' : undefined} {onclick} {onkeydown} {onpointerdown}>Save</Button>
 </form>

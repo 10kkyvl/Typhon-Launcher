@@ -28,10 +28,12 @@
     pressed?: boolean;
     /**
      * Why the button is disabled. A disabled button cannot take focus, so its reason would reach no
-     * keyboard: while disabled with a reason it stays in the Tab order (aria-disabled), ignores every
-     * activation (press, Enter, Space, a form submit), handlers spread onto it included, and is
-     * described by the reason. Every other key passes. A caller whose reason comes and goes passes '' while there is none, not undefined: the
-     * button then stays one element, and keeps focus, as the state flips.
+     * keyboard: while disabled with a reason it stays in the Tab order (aria-disabled), is described by
+     * the reason, and ignores every activation: a press, Enter, Space, a form submit, and on a menu
+     * button the arrows that open its menu. The click and key handlers spread onto it see none of
+     * those; a capture or touch handler a caller adds is not covered. Every other key passes. A caller
+     * whose reason comes and goes passes '' while there is none, not undefined: the button then stays
+     * one element, and keeps focus, as the state flips.
      */
     reason?: string;
     /**
@@ -60,6 +62,8 @@
   // Only the keys that press a button are held back. Focus stays on a busy button for as long as its
   // action runs, so every other key (Tab, Escape, the arrows, the window's shortcuts) must pass.
   const ACTIVATION_KEYS = new Set(['Enter', ' ']);
+  // A menu button also opens on these (WAI-ARIA menu button).
+  const POPUP_KEYS = new Set(['ArrowDown', 'ArrowUp']);
   const ACTIVATIONS = ['click', 'pointerdown', 'pointerup', 'mousedown', 'mouseup', 'keydown', 'keyup'];
 
   // Capture on the button itself runs before any handler on it or above it (Svelte's delegated ones
@@ -67,7 +71,9 @@
   const guard: Attachment<HTMLButtonElement> = (node) => {
     const stop = (event: Event) => {
       if (!blocked) return;
-      if (event instanceof KeyboardEvent && !ACTIVATION_KEYS.has(event.key)) return;
+      if (event instanceof KeyboardEvent && !ACTIVATION_KEYS.has(event.key)) {
+        if (!POPUP_KEYS.has(event.key) || !node.hasAttribute('aria-haspopup')) return;
+      }
       if (event.type !== 'pointerdown' && event.type !== 'mousedown') event.preventDefault();
       event.stopImmediatePropagation();
     };
