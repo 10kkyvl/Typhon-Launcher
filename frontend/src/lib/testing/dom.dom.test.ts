@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import { locale } from '../i18n';
 import Toggle from '../components/Toggle.svelte';
-import { renderDom } from './dom';
+import { renderDom, wailsRuntime } from './dom';
 
 describe('DOM test setup', () => {
   it('mounts a component into the document and clicks it', async () => {
@@ -31,5 +31,14 @@ describe('DOM test setup', () => {
     vi.advanceTimersByTime(1000);
 
     expect(getByRole('switch').getAttribute('aria-checked')).toBe('true');
+  });
+});
+
+describe('the runtime stub', () => {
+  // A failed request asks whether it was cancelled (services/sources isCancelledRequest).
+  it('has a CancelError that a cancelled request is an instance of', () => {
+    const { CancelError } = wailsRuntime();
+    expect(new CancelError('stopped')).toBeInstanceOf(Error);
+    expect(new Error('other')).not.toBeInstanceOf(CancelError);
   });
 });

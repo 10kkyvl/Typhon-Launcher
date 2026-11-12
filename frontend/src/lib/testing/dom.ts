@@ -43,5 +43,6 @@ export function wailsRuntime() {
       Close: vi.fn(async () => {}),
       IsMaximised: vi.fn(async () => false),
     },
+    CancelError: class CancelError extends Error {},
   };
 }
