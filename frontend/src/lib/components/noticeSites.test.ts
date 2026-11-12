@@ -72,14 +72,15 @@ const SITES: Record<string, Site[]> = {
   'routes/downloads/Downloads.svelte': [['info', true]],
   // In source order: the downloads and the other versions failed to load (just happened); the stored
   // error of the last download and the uninstalled game, shown on every opening; the metadata search
-  // running; the stored "not found" or "failed" of the metadata, its tone set by which.
+  // running; "not found" or "failed" of the metadata, its tone set by which, announced when a search
+  // ran while the page was open and read with the page when it opens on it.
   'routes/game/GameDetails.svelte': [
     ['danger', true],
     ['danger', true],
     ['danger', false],
     ['info', false],
     ['info', true],
-    ['dynamic', false],
+    ['dynamic', 'dynamic'],
   ],
   'routes/game/GameReviews.svelte': [
     ['danger', true],
@@ -95,7 +96,8 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
     ['warning', false],
   ],
-  'routes/game/ReviewSummary.svelte': [['danger', true]],
+  // The reviews list fails on the same request and announces it with its Retry.
+  'routes/game/ReviewSummary.svelte': [['danger', false]],
   // The history file could not be written: a state of the page, not an event of this visit.
   'routes/history/History.svelte': [['danger', false]],
   'routes/installed/Installed.svelte': [['danger', true]],
