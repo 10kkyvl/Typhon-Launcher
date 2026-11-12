@@ -18,6 +18,11 @@
    * (theme-contrast.test.ts), where `--text-3` would hold that only by hundredths. Other attributes
    * (target, rel, aria-*, data-*) go to the element.
    *
+   * `aria-current` (`"page"` on a breadcrumb's link to the page shown) is passed to the element and
+   * only tells assistive technology which item is the current one: it changes neither the look nor
+   * what a press does, and the link stays a link that goes nowhere new. Where the current item needs
+   * no action, draw it as text, not as a link.
+   *
    * `start` and `end`: a mark beside the text (a chevron back, the external-link sign), passed as a
    * bare icon: the link sizes it to its text (1em), spaces it from the text and sets it on the line.
    * It is a picture; the name is the text.
