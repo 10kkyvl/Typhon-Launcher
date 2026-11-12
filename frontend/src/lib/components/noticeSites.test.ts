@@ -30,12 +30,12 @@ const SITES: Record<string, Site[]> = {
   'lib/components/OfflineBanner.svelte': [['warning', true]],
   // The stable version on offer to a beta: a fact of the settings page.
   'lib/components/StableOffer.svelte': [['info', false]],
+  // A state shown when the settings page opened is read with it; one that comes after is announced.
   'lib/components/UpdateBanner.svelte': [
-    ['danger', true],
-    ['info', true],
-    ['success', true],
-    // A version found by a check that ran on its own: a fact of the settings page.
-    ['info', false],
+    ['danger', 'dynamic'],
+    ['info', 'dynamic'],
+    ['success', 'dynamic'],
+    ['info', 'dynamic'],
   ],
   // The stored error of the last update and the running game that holds an update back, shown on
   // every opening of the game.
