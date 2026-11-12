@@ -29,11 +29,21 @@ const SITES: Record<string, Site[]> = {
   'lib/components/profile/BlockPicker.svelte': [['warning', false]],
   'lib/components/profile/GamePicker.svelte': [['danger', true]],
   'routes/activity/Activity.svelte': [['danger', true]],
-  'routes/catalog/Catalog.svelte': [['danger', true]],
+  // A game just put away from the recommendations, with its undo; the picks that fell back or went stale.
+  'routes/catalog/Catalog.svelte': [
+    ['success', true],
+    ['info', true],
+    ['warning', true],
+    ['danger', true],
+  ],
   'routes/diskusage/DiskUsage.svelte': [
     ['danger', true],
     ['danger', true],
   ],
+  // Downloads held while a game runs: it starts and ends while the page is open.
+  'routes/downloads/Downloads.svelte': [['info', true]],
+  // The stored error of the last download, shown on every opening of the game.
+  'routes/game/GameDetails.svelte': [['danger', false]],
   // In source order: the downloads and the other versions failed to load (just happened); the stored
   // error of the last download and the uninstalled game, shown on every opening; the metadata search
   // running; the stored "not found" or "failed" of the metadata, its tone set by which.
@@ -66,6 +76,8 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
     ['danger', true],
   ],
+  // Where sources are fetched: a standing fact of the page.
+  'routes/sources/Sources.svelte': [['info', false]],
   // The art of the auto theme failed; the cover was refused; the worn frame was revoked before this visit.
   'routes/profile/ProfileAppearancePanel.svelte': [
     ['warning', true],
@@ -125,6 +137,11 @@ const SITES: Record<string, Site[]> = {
   'routes/support/TicketView.svelte': [
     ['danger', true],
     ['danger', true],
+  ],
+  // A closed or a friends-only profile: a standing fact of the page.
+  'routes/user/UserProfile.svelte': [
+    ['info', false],
+    ['info', false],
   ],
 };
 
