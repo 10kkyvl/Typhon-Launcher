@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ArrowLeft, ChevronUp, MessageCircle, X } from '@lucide/svelte';
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { fade } from 'svelte/transition';
   import Avatar from './Avatar.svelte';
   import { fieldsFrame } from '../profile/frameLook';
@@ -37,6 +37,7 @@
     nextByPeer,
   } from '../stores/messaging';
   import { messagePreview } from '../social/chatImage';
+  import { focusableIn } from '../layers/focus';
   import type { ChatPeer, Message } from '../services/messaging';
   import { msg } from '../i18n';
 
@@ -51,7 +52,9 @@
   let reconnecting = $state(false);
   // The history failure is about an older page the user asked for, not the newest messages.
   let olderFailed = false;
+  let panel = $state<HTMLElement>();
   let list = $state<HTMLElement>();
+  let composerPart = $state<{ field: () => HTMLElement | undefined }>();
   let now = $state(new Date());
   let lastRenderedLastMessage = '';
 
@@ -65,10 +68,27 @@
     return target.displayName || target.username;
   }
 
-  // A failed message that went through on retry: the composer may still hold its text.
-  function resent(peerId: string, text: string): void {
-    if ($activePeer?.id === peerId && draft.trim() === text.trim()) draft = '';
+  // A part of the panel swapped for another takes the pressed control with it: focus that fell to the
+  // page goes to what took its place.
+  async function land(target: () => HTMLElement | null | undefined): Promise<void> {
+    await tick();
+    const active = document.activeElement;
+    if (active && active !== document.body && active.isConnected) return;
+    target()?.focus();
   }
+
+  // A failed message that went through on retry: the composer may still hold its text, and the row
+  // that held Retry is the sent message's now.
+  function resent(peerId: string, text: string, clientId: string): void {
+    if ($activePeer?.id === peerId && draft.trim() === text.trim()) draft = '';
+    void land(() => {
+      const row = [...(scrollBox?.querySelectorAll<HTMLElement>('[data-client]') ?? [])].find((item) => item.dataset.client === clientId);
+      return (row ? focusableIn(row)[0] : undefined) ?? composerPart?.field();
+    });
+  }
+
+  // The conversation's way in: where a message is written, else its way back.
+  const conversationStart = () => composerPart?.field() ?? (panel ? focusableIn(panel)[0] : undefined);
 
   function openImages(messageId: string, urls: string[], position: number): void {
     lightboxItems = urls.map((url, index) => ({ id: `${messageId}:${index}`, url }));
@@ -98,12 +118,19 @@
     draft = getDraft(target.id);
     error = '';
     chatToast.set(null);
+    void land(conversationStart);
   }
 
   function showList(): void {
+    const from = peer?.id;
     closeChat();
     chatOpen.set(true);
     draft = '';
+    void land(
+      () =>
+        [...(panel?.querySelectorAll<HTMLElement>('[data-peer]') ?? [])].find((row) => row.dataset.peer === from) ??
+        panel?.querySelector<HTMLElement>('h2'),
+    );
   }
 
   async function earlier(target: string): Promise<void> {
@@ -206,7 +233,7 @@
       </IconButton>
     </span>
   {:else}
-    <section class="chat-panel" aria-label={msg('social.chatPanelLabel')}>
+    <section class="chat-panel" aria-label={msg('social.chatPanelLabel')} bind:this={panel}>
       <header class="chat-header">
         {#if peer}
           <IconButton size="sm" label={msg('social.chatBack')} onclick={showList}><ArrowLeft size="1.7rem" /></IconButton>
@@ -217,7 +244,7 @@
           </div>
         {:else}
           <MessageCircle size="1.8rem" />
-          <div class="header-copy"><strong>{msg('social.chatMessages')}</strong><span>{msg('social.chatFriends')}</span></div>
+          <div class="header-copy"><h2 class="list-title" tabindex="-1">{msg('social.chatMessages')}</h2><span>{msg('social.chatFriends')}</span></div>
         {/if}
         <IconButton label={msg('social.chatClose')} size="sm" onclick={closeChat}><X size="1.7rem" /></IconButton>
       </header>
@@ -275,7 +302,7 @@
         {#if !canSend}
           <div class="panel-notice"><Notice compact announce={false}>{msg('social.chatDisabled')}</Notice></div>
         {:else}
-          <ChatComposer {peer} bind:draft onerror={(text) => (error = text)} onsent={scrollToEnd} />
+          <ChatComposer bind:this={composerPart} {peer} bind:draft onerror={(text) => (error = text)} onsent={scrollToEnd} />
         {/if}
       {:else}
         <div class="conversation-list" bind:this={list}>
@@ -304,7 +331,8 @@
   .chat-header { display: flex; align-items: center; gap: 0.9rem; min-height: 5.6rem; padding: 0 1.2rem; border-bottom: 1px solid var(--border); background: var(--surface-3); }
   .header-copy, .toast-copy { min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; text-align: left; }
   .header-copy { flex: 1; }
-  .header-copy strong { font-size: var(--font-sm); }
+  .header-copy strong, .list-title { font-size: var(--font-sm); }
+  .list-title { letter-spacing: normal; }
   .header-copy span, .toast-copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-3); font-size: var(--font-xs); }
   .history-note { padding: 0.7rem 1rem 0; color: var(--text-3); font-size: 1rem; text-align: center; }
   .messages { flex: 1; overflow-y: auto; padding: 1rem; }

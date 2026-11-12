@@ -137,6 +137,11 @@
     }
   }
 
+  /** The text field, for the panel to put focus in when a conversation opens. */
+  export function field(): HTMLElement | undefined {
+    return composer;
+  }
+
   function onKeydown(event: KeyboardEvent): void {
     if (event.key !== 'Enter' || event.shiftKey) return;
     event.preventDefault();

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { Check, MoreHorizontal, Pencil, RefreshCw } from '@lucide/svelte';
   import Button from './Button.svelte';
   import Chip from './Chip.svelte';
@@ -39,12 +40,15 @@
     canReact: boolean | undefined;
     onerror: (text: string) => void;
     /** A failed message went through on retry: the composer may still hold its text. */
-    onresent: (peerId: string, text: string) => void;
+    onresent: (peerId: string, text: string, clientId: string) => void;
     onopenimages: (urls: string[], position: number) => void;
     onimageload: () => void;
   } = $props();
 
   let editDraft = $state('');
+  let row = $state<HTMLElement>();
+  let editor = $state<HTMLTextAreaElement>();
+  let resending = $state(false);
 
   const own = $derived(message.senderId === $currentUser?.id);
   const myReactions = $derived(
@@ -66,29 +70,52 @@
     return `${day}, ${clock}`;
   }
 
+  // The control that was pressed goes when the editor opens or closes: focus that fell to the page
+  // moves to what took its place.
+  async function refocus(target: () => HTMLElement | null | undefined): Promise<void> {
+    await tick();
+    const active = document.activeElement;
+    if (active && active !== document.body && active.isConnected) return;
+    target()?.focus();
+  }
+
+  const editButton = () => row?.querySelector<HTMLElement>('[data-edit]');
+
   function startEdit(): void {
     editingMessageId.set(message.id);
     editDraft = message.text;
+    void refocus(() => editor);
+  }
+
+  function cancelEdit(): void {
+    editingMessageId.set(null);
+    void refocus(editButton);
   }
 
   async function saveEdit(): Promise<void> {
     if (!editDraft.trim() && attachmentsOf(message).length === 0) return;
     try {
       await editMessage(peer.id, message.id, editDraft.trim());
+      await refocus(editButton);
     } catch (err) {
       onerror(chatErrorText(err, 'social.chatEditError'));
     }
   }
 
+  // The store takes the failed mark off at once; Retry stays, busy, until the answer.
   async function retry(): Promise<void> {
+    if (resending) return;
+    resending = true;
     onerror('');
     const targetPeerId = peer.id;
-    const text = message.text;
+    const { text, clientId } = message;
     try {
-      await retryMessage(targetPeerId, message.clientId);
-      onresent(targetPeerId, text);
+      await retryMessage(targetPeerId, clientId);
+      onresent(targetPeerId, text, clientId);
     } catch (err) {
       onerror(chatErrorText(err, 'social.chatSendError'));
+    } finally {
+      resending = false;
     }
   }
 
@@ -104,7 +131,7 @@
   }
 </script>
 
-<div class="message-row" class:own>
+<div class="message-row" class:own data-client={message.clientId} bind:this={row}>
   <article class="message" class:failed={$failedMessages.has(message.clientId)} aria-busy={$pendingMessages.has(message.clientId)}>
     <div class="message-meta">
       <span>{own ? msg('social.chatYou') : displayName(peer)}</span>
@@ -112,9 +139,9 @@
       {#if message.editedAt}<span class="edited">{msg('social.chatEdited')}</span>{/if}
     </div>
     {#if $editingMessageId === message.id}
-      <textarea class="input edit-input" bind:value={editDraft} maxlength="2000" rows="3"></textarea>
+      <textarea class="input edit-input" aria-label={msg('social.chatEditField')} bind:this={editor} bind:value={editDraft} maxlength="2000" rows="3"></textarea>
       <div class="message-actions">
-        <Button size="sm" onclick={() => editingMessageId.set(null)}>{msg('social.chatCancel')}</Button>
+        <Button size="sm" onclick={cancelEdit}>{msg('social.chatCancel')}</Button>
         <Button size="sm" variant="primary" onclick={saveEdit}><Check size="1.3rem" /> {msg('social.chatSave')}</Button>
       </div>
     {:else}
@@ -132,10 +159,10 @@
           <span class="sending-status"><Spinner size="sm" label={msg('social.chatSending')} /></span>
         {/if}
         {#if own && !message.id.startsWith('local:')}
-          <IconButton size="sm" label={msg('social.chatEdit')} onclick={startEdit}><Pencil size="1.4rem" /></IconButton>
+          <IconButton size="sm" label={msg('social.chatEdit')} data-edit onclick={startEdit}><Pencil size="1.4rem" /></IconButton>
         {/if}
-        {#if $failedMessages.has(message.clientId)}
-          <Button variant="ghost" size="sm" onclick={retry}><RefreshCw size="1.4rem" /> {msg('social.chatRetry')}</Button>
+        {#if $failedMessages.has(message.clientId) || resending}
+          <Button variant="ghost" size="sm" busy={resending} onclick={retry}>{#if !resending}<RefreshCw size="1.4rem" />{/if} {msg('social.chatRetry')}</Button>
         {/if}
         {#if !message.id.startsWith('local:')}
           <ReactionPicker options={REACTION_KEYS} label={msg('social.chatReaction')} chosen={myReactions} placement="bottom-end" onpick={(key) => void chooseReaction(key)}>

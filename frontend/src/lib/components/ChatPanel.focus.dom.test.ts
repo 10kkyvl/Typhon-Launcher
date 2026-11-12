@@ -155,3 +155,82 @@ describe('ChatPanel: Reconnect', () => {
     await vi.waitFor(() => expect(reconnect.hasAttribute('aria-busy')).toBe(false));
   });
 });
+
+describe('ChatPanel: focus stays with the user', () => {
+  it('Edit puts focus in a named editor; Cancel and Save bring it back to the message\'s Edit', async () => {
+    chat.messagesByPeer.set({ peer: [message('m-own', 'c-own', 'me')] });
+    vi.mocked(chat.editMessage).mockImplementation(async () => chat.editingMessageId.set(null));
+    const keys = setup();
+    screen.getByRole('button', { name: msg('social.chatEdit') }).focus();
+
+    await keys.keyboard('{Enter}');
+    const editor = screen.getByRole('textbox', { name: msg('social.chatEditField') });
+    expect(document.activeElement).toBe(editor);
+    await keys.tab();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: msg('social.chatCancel') }));
+    await keys.keyboard('{Enter}');
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: msg('social.chatEdit') }));
+
+    await keys.keyboard('{Enter}');
+    await keys.type(screen.getByRole('textbox', { name: msg('social.chatEditField') }), ' again');
+    await keys.tab();
+    await keys.tab();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: msg('social.chatSave') }));
+    await keys.keyboard('{Enter}');
+    expect(chat.editMessage).toHaveBeenCalledWith('peer', 'm-own', 'Hello again');
+    await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: msg('social.chatEdit') })));
+  });
+
+  it('Retry on a failed message stays busy with the focus, then hands it to the sent message', async () => {
+    const sent = held<Message>();
+    chat.messagesByPeer.set({ peer: [message('local:c-f', 'c-f', 'me')] });
+    chat.failedMessages.set(new Set(['c-f']));
+    vi.mocked(chat.retryMessage).mockImplementation(() => {
+      chat.failedMessages.set(new Set());
+      chat.pendingMessages.set(new Set(['c-f']));
+      return sent.promise;
+    });
+    const keys = setup();
+    const retry = screen.getByRole('button', { name: msg('social.chatRetry') });
+    retry.focus();
+
+    await keys.keyboard('{Enter}');
+
+    expect(retry.isConnected).toBe(true);
+    expect(retry.getAttribute('aria-busy')).toBe('true');
+    expect(document.activeElement).toBe(retry);
+    chat.pendingMessages.set(new Set());
+    chat.messagesByPeer.set({ peer: [message('m-sent', 'c-f', 'me')] });
+    sent.resolve(message('m-sent', 'c-f', 'me'));
+    await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: msg('social.chatEdit') })));
+  });
+
+  it('Back lands on the conversation it came from', async () => {
+    const keys = setup();
+    screen.getByRole('button', { name: msg('social.chatBack') }).focus();
+
+    await keys.keyboard('{Enter}');
+
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /Friend/ }));
+  });
+
+  it('a conversation opened from the list takes focus where its message is written', async () => {
+    chat.activePeer.set(null);
+    const keys = setup();
+    screen.getByRole('button', { name: /Friend/ }).focus();
+
+    await keys.keyboard('{Enter}');
+
+    expect(document.activeElement).toBe(screen.getByPlaceholderText(msg('social.chatPlaceholder')));
+  });
+
+  it('Back from a conversation that is not in the list lands on the list\'s heading', async () => {
+    chat.conversations.set([]);
+    const keys = setup();
+    screen.getByRole('button', { name: msg('social.chatBack') }).focus();
+
+    await keys.keyboard('{Enter}');
+
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: msg('social.chatMessages') }));
+  });
+});

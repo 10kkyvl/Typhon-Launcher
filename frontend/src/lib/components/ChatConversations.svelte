@@ -21,7 +21,7 @@
   <div class="state"><EmptyState size="inline" align="center" title={msg('social.chatNoConversations')} /></div>
 {:else}
   {#each $conversations as item (item.peer.id)}
-    <button class="conversation" type="button" onclick={() => onopen(item.peer)}>
+    <button class="conversation" type="button" data-peer={item.peer.id} onclick={() => onopen(item.peer)}>
       <Avatar size="md" name={displayName(item.peer)} src={item.peer.avatarUrl} reserve={conversationReserve} {...fieldsFrame(item.peer)} />
       <span class="conversation-copy">
         <strong>{displayName(item.peer)}</strong>
