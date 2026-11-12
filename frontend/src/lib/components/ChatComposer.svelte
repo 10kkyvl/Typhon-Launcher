@@ -143,7 +143,8 @@
   }
 
   function onKeydown(event: KeyboardEvent): void {
-    if (event.key !== 'Enter' || event.shiftKey) return;
+    // The Enter that ends an input method's composition picks the text; it does not send.
+    if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
     event.preventDefault();
     void submit();
   }

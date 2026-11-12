@@ -235,6 +235,20 @@ describe('ChatPanel: focus stays with the user', () => {
   });
 });
 
+describe('ChatPanel: the composer', () => {
+  it('does not send on the Enter that ends a composition', async () => {
+    setup();
+    const field = screen.getByPlaceholderText(msg('social.chatPlaceholder'));
+    await fireEvent.input(field, { target: { value: 'こんにちは' } });
+
+    await fireEvent.keyDown(field, { key: 'Enter', isComposing: true });
+    expect(chat.sendMessage).not.toHaveBeenCalled();
+
+    await fireEvent.keyDown(field, { key: 'Enter' });
+    expect(chat.sendMessage).toHaveBeenCalledOnce();
+  });
+});
+
 describe('ChatPanel: the new message toast', () => {
   const toast = () => ({ id: 1, peer, message: message('m9', 'c9') });
 
