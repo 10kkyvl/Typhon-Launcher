@@ -14,10 +14,16 @@
    * at 4.5:1 or more on every page surface and over the backdrop wash in every preset
    * (theme-contrast.test.ts), where `--text-3` would hold that only by hundredths. Other attributes
    * (target, rel, aria-*, data-*) go to the element.
+   *
+   * `start` and `end`: a mark beside the text (a chevron back, the external-link sign), passed as a
+   * bare icon: the link sizes it to its text (1em), spaces it from the text and sets it on the line.
+   * It is a picture; the name is the text.
    */
   type Shared = Omit<HTMLAttributes<HTMLElement>, 'class' | 'children' | 'title' | 'onclick'> & {
     children: Snippet;
     tone?: 'accent' | 'muted';
+    start?: Snippet;
+    end?: Snippet;
   };
   type AsLink = Shared & {
     href: string;
@@ -34,13 +40,17 @@
     disabled?: boolean;
   };
 
-  let { href, disabled = false, tone = 'accent', children, ...rest }: AsLink | AsButton = $props();
+  let { href, disabled = false, tone = 'accent', start, end, children, ...rest }: AsLink | AsButton = $props();
 </script>
 
+{#snippet content()}
+  {#if start}<span class="mark start" data-part="text-link-start" aria-hidden="true">{@render start()}</span>{/if}{@render children()}{#if end}<span class="mark end" data-part="text-link-end" aria-hidden="true">{@render end()}</span>{/if}
+{/snippet}
+
 {#if href !== undefined}
-  <a {...rest} class="text-link" class:muted={tone === 'muted'} {href}>{@render children()}</a>
+  <a {...rest} class="text-link" class:muted={tone === 'muted'} {href}>{@render content()}</a>
 {:else}
-  <button {...rest} class="text-link" class:muted={tone === 'muted'} type="button" {disabled}>{@render children()}</button>
+  <button {...rest} class="text-link" class:muted={tone === 'muted'} type="button" {disabled}>{@render content()}</button>
 {/if}
 
 <style>
@@ -72,6 +82,25 @@
   .text-link:hover:not(:disabled) {
     color: var(--text);
     text-decoration-color: currentColor;
+  }
+
+  .mark {
+    display: inline-block;
+    vertical-align: var(--link-icon-drop);
+  }
+
+  .mark :global(svg) {
+    display: block;
+    width: var(--link-icon);
+    height: var(--link-icon);
+  }
+
+  .mark.start {
+    margin-inline-end: var(--link-icon-gap);
+  }
+
+  .mark.end {
+    margin-inline-start: var(--link-icon-gap);
   }
 
   .text-link:disabled {

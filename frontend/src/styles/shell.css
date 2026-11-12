@@ -40,6 +40,10 @@
   /* A link in a line of text (TextLink): the stroke of its underline and its gap below the letters. */
   --link-underline: 1px;
   --link-underline-offset: 0.2em;
+  /* A mark beside a link's text: as high as the text, set down onto its baseline, and its gap. */
+  --link-icon: 1em;
+  --link-icon-drop: -0.125em;
+  --link-icon-gap: 0.3em;
 
   /* A count on a control (CountBadge): a pill at least as wide as it is high; smaller on a corner. */
   --count-h: 1.8rem;

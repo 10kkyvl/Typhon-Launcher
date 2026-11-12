@@ -68,6 +68,29 @@ describe('TextLink given an action', () => {
   });
 });
 
+describe('TextLink with a mark beside its text', () => {
+  it('draws the mark the caller passes on the side it names, hidden from the name', () => {
+    renderDom(TextLinkHarness, { onforgot: vi.fn() });
+    const wiki = screen.getByRole('link', { name: 'wiki' });
+    const back = screen.getByRole('link', { name: 'Back to the library' });
+    const mark = (link: HTMLElement, side: string) => link.querySelector(`[data-part="text-link-${side}"]`);
+    expect(mark(wiki, 'end')?.querySelector('svg')).toBeInstanceOf(SVGElement);
+    expect(mark(wiki, 'end')?.getAttribute('aria-hidden')).toBe('true');
+    expect(wiki.lastElementChild).toBe(mark(wiki, 'end'));
+    expect(mark(back, 'start')?.querySelector('svg')).toBeInstanceOf(SVGElement);
+    expect(back.firstElementChild).toBe(mark(back, 'start'));
+    expect(mark(wiki, 'start')).toBeNull();
+  });
+
+  it('sizes, spaces and aligns the mark itself, so a caller passes a bare icon', () => {
+    const css = styleOf(source, 'TextLink.svelte');
+    expect(ruleBody(css, '.mark :global(svg)')).toMatchObject({ width: 'var(--link-icon)', height: 'var(--link-icon)' });
+    expect(ruleBody(css, '.mark')).toMatchObject({ display: 'inline-block', 'vertical-align': 'var(--link-icon-drop)' });
+    expect(ruleBody(css, '.mark.start')).toEqual({ 'margin-inline-end': 'var(--link-icon-gap)' });
+    expect(ruleBody(css, '.mark.end')).toEqual({ 'margin-inline-start': 'var(--link-icon-gap)' });
+  });
+});
+
 // jsdom lays nothing out: what keeps the line as it is and the one focus ring are read from the style.
 describe('TextLink in a line of text', () => {
   const css = styleOf(source, 'TextLink.svelte');
