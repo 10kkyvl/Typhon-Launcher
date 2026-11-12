@@ -175,6 +175,14 @@ describe('ChatPanel: messages', () => {
     expect(text.closest('[role="status"], [role="alert"]')).toBeNull();
   });
 
+  it('marks a message being sent with the base spinner named "Sending"', () => {
+    chat.pendingMessages.set(new Set(['c1']));
+    setup();
+    const status = screen.getByRole('status');
+    expect(status.classList.contains('spinner')).toBe(true);
+    expect(status.textContent?.trim()).toBe(msg('social.chatSending'));
+  });
+
   it('shows the history loading as the base spinner and an empty history as the base empty state', () => {
     chat.messagesByPeer.set({ peer: [] });
     chat.chatLoading.set(true);

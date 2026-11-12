@@ -445,7 +445,7 @@
                     <ChatAttachments {attachments} onopen={(urls, position) => openImages(message.id, urls, position)} onload={() => imageLoaded(message)} />
                     <div class="message-footer">
                       {#if $pendingMessages.has(message.clientId)}
-                        <span class="sending-status" role="status">{msg('social.chatSending')}</span>
+                        <span class="sending-status"><Spinner size="sm" label={msg('social.chatSending')} /></span>
                       {/if}
                       {#if isOwn(message) && !message.id.startsWith('local:')}
                         <IconButton size="sm" label={msg('social.chatEdit')} onclick={() => startEdit(message)}><Pencil size="1.4rem" /></IconButton>
@@ -583,7 +583,7 @@
   .messages { flex: 1; overflow-y: auto; padding: 1rem; }
   .load-more { display: flex; justify-content: center; margin-bottom: 1rem; }
   .state { display: grid; place-items: center; min-height: 13rem; padding: 2rem; }
-  .sending-status { color: var(--text-3); font-size: 1rem; }
+  .sending-status { display: inline-flex; align-items: center; }
   .history-error { margin-bottom: 0.7rem; }
   .message-row { display: flex; justify-content: flex-start; margin: 0.8rem 0; }
   .message-row.own { justify-content: flex-end; }
