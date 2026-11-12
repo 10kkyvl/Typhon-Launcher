@@ -92,6 +92,14 @@ const SITES: Record<string, Site[]> = {
   ],
   'lib/components/LegalDocumentModal.svelte': [['danger', true]],
   'lib/components/LibrarySetupModal.svelte': [['danger', true]],
+  // No runtimes on this platform, and a missing runtime, are facts of the system; a failed scan or read just happened.
+  'lib/components/RedistModal.svelte': [
+    ['info', false],
+    ['danger', true],
+    ['danger', true],
+    ['warning', false],
+    ['warning', false],
+  ],
   // The game running or busy is a state of the game when the dialog opens; a failed removal just happened.
   'lib/components/RemoveGameModal.svelte': [
     ['warning', false],
