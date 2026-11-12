@@ -16,7 +16,10 @@ import { writable, type Readable } from 'svelte/store';
  * - while a dialog is open (`holdToasts(true)`, told by the host: this store knows nothing of layers)
  *   a toast with an action does not run out, since its action cannot be reached by Tab from inside
  *   the dialog. Its clock starts when the dialog closes. While held it takes none of the
- *   `MAX_VISIBLE` slots, so what the dialog itself raises is still shown at once.
+ *   `MAX_VISIBLE` slots, so what the dialog itself raises is still shown at once; but only `MAX_HELD`
+ *   held one is shown at a time and never more than `MAX_VISIBLE + MAX_HELD` toasts in all: ten
+ *   offers raised under a long-open dialog wait their turn (none is dropped or folded) and do not
+ *   hold up the plain ones and the errors raised after them.
  */
 
 export type ToastKind = 'info' | 'success' | 'warning' | 'danger';
@@ -40,6 +43,8 @@ export const URGENT_MS = 6000;
 export const ACTION_MS = 9000;
 export const RESUME_FLOOR_MS = 1500;
 export const MAX_VISIBLE = 2;
+/** How many toasts held by a dialog are shown past the `MAX_VISIBLE` slots. */
+export const MAX_HELD = 1;
 /** A plain toast that has waited this long for a slot is no longer news and is dropped at its turn. */
 export const QUEUE_STALE_MS = 12_000;
 
@@ -90,22 +95,30 @@ function run(item: Toast, clock: Clock): void {
   clock.handle = setTimeout(() => dismissToast(item.id), clock.remaining);
 }
 
-// A toast held by the dialog has no clock, so it takes no slot: two of them would otherwise keep an
-// error raised by the dialog's own action waiting until the dialog closed.
+// A toast held by the dialog has no clock, so it takes no slot: it would otherwise keep an error
+// raised by the dialog's own action waiting until the dialog closed. A held one that has to wait
+// does not hold up the ones behind it either.
 function promote(): void {
-  let room = MAX_VISIBLE - shown.filter((item) => !heldByDialog(item, dialogOpen)).length;
+  let held = shown.filter((item) => heldByDialog(item, dialogOpen)).length;
+  let timed = shown.length - held;
   const next: Toast[] = [];
-  while (queue.length > 0) {
-    const held = heldByDialog(queue[0], dialogOpen);
-    if (!held && room <= 0) break;
-    const item = queue.shift() as Toast;
+  const stay: Toast[] = [];
+  for (const item of queue) {
+    const holds = heldByDialog(item, dialogOpen);
+    const fits = held + timed < MAX_VISIBLE + MAX_HELD && (holds ? held < MAX_HELD : timed < MAX_VISIBLE);
+    if (!fits) {
+      stay.push(item);
+      continue;
+    }
     const waited = Date.now() - (queuedAt.get(item.id) ?? Date.now());
     queuedAt.delete(item.id);
     // Only a plain message goes stale: an error must be seen, and an offer is not made twice.
     if (!urgent(item) && !item.action && waited > QUEUE_STALE_MS) continue;
-    if (!held) room -= 1;
+    if (holds) held += 1;
+    else timed += 1;
     next.push(item);
   }
+  queue = stay;
   if (next.length === 0) return;
   for (const item of next) {
     const clock: Clock = { handle: undefined, remaining: toastDuration(item), startedAt: 0, paused: false };

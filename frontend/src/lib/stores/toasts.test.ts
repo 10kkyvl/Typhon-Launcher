@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import {
   ACTION_MS,
+  MAX_HELD,
   MAX_VISIBLE,
   PLAIN_MS,
   QUEUE_STALE_MS,
@@ -370,16 +371,74 @@ describe('a toast with an action while a dialog is open', () => {
 describe('a dialog open with held toasts on screen', () => {
   const offer = (label: string) => ({ label, run: () => {} });
 
-  it('held toasts take no slot: an error raised by the dialog shows at once and times out normally', () => {
+  it('a held toast takes no slot: an error raised by the dialog shows at once and times out normally', () => {
+    holdToasts(true);
+    toast('Mark Hades as 100%?', 'info', offer('Mark'));
+    toast('Saved');
+
+    toast('Install failed', 'danger');
+
+    expect(shown()).toEqual(['Mark Hades as 100%?', 'Saved', 'Install failed']);
+    vi.advanceTimersByTime(URGENT_MS);
+    expect(shown()).toEqual(['Mark Hades as 100%?']);
+  });
+
+  it('a held toast is shown past the two slots, and only one: the next offer waits', () => {
+    holdToasts(true);
+    toast('Saved');
+    toast('Copied');
+
+    toast('Mark Hades as 100%?', 'info', offer('Mark'));
+    toast('The emulator closed at once', 'info', offer('Settings'));
+
+    expect(shown()).toEqual(['Saved', 'Copied', 'Mark Hades as 100%?']);
+    expect(waiting()).toEqual(['The emulator closed at once']);
+    expect(MAX_HELD).toBe(1);
+  });
+
+  it('a waiting offer does not hold up what the dialog raises after it', () => {
     holdToasts(true);
     toast('Mark Hades as 100%?', 'info', offer('Mark'));
     toast('The emulator closed at once', 'info', offer('Settings'));
 
     toast('Install failed', 'danger');
+    toast('Saved');
+    toast('Copied');
 
-    expect(shown()).toEqual(['Mark Hades as 100%?', 'The emulator closed at once', 'Install failed']);
-    vi.advanceTimersByTime(URGENT_MS);
-    expect(shown()).toEqual(['Mark Hades as 100%?', 'The emulator closed at once']);
+    expect(shown()).toEqual(['Mark Hades as 100%?', 'Install failed', 'Saved']);
+    expect(waiting()).toEqual(['The emulator closed at once', 'Copied']);
+  });
+
+  it('ten offers under a long dialog: one is on screen, nine wait, and none is lost after it', () => {
+    holdToasts(true);
+    const offers = Array.from({ length: 10 }, (_, index) => `Game ${index + 1} closed at once`);
+    for (const message of offers) toast(message, 'info', offer('Settings'));
+
+    expect(shown()).toEqual(offers.slice(0, 1));
+    expect(waiting()).toEqual(offers.slice(1));
+
+    holdToasts(false);
+    const seen = new Set(shown());
+    for (let round = 0; round < offers.length; round += 1) {
+      expect(shown().length).toBeLessThanOrEqual(MAX_VISIBLE);
+      vi.advanceTimersByTime(ACTION_MS);
+      for (const message of shown()) seen.add(message);
+    }
+    expect([...seen]).toEqual(offers);
+    expect(shown()).toEqual([]);
+  });
+
+  it('two offers on screen when the dialog opens leave room for one more toast, not two', () => {
+    toast('Mark Hades as 100%?', 'info', offer('Mark'));
+    toast('The emulator closed at once', 'info', offer('Settings'));
+    holdToasts(true);
+
+    toast('Saved');
+    toast('Copied');
+    toast('Another game closed at once', 'info', offer('Settings'));
+
+    expect(shown()).toEqual(['Mark Hades as 100%?', 'The emulator closed at once', 'Saved']);
+    expect(waiting()).toEqual(['Copied', 'Another game closed at once']);
   });
 
   it('toasts already on screen free their slots when the dialog opens over them', () => {
