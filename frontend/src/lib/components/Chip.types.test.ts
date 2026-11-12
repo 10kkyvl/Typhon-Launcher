@@ -15,4 +15,15 @@ describe('Chip props', () => {
     const plain: Props = { onclick: () => {}, hint: 'Filters by tag' };
     expect([named, unnamed, hinted, plain]).toHaveLength(4);
   });
+
+  it('a chip that goes to an address is a link: it is neither on nor off, removable or disabled', () => {
+    const link: Props = { href: 'https://example.com', target: '_blank', rel: 'noopener noreferrer' };
+    // @ts-expect-error: a link has no on state
+    const pressed: Props = { href: 'https://example.com', selected: true };
+    // @ts-expect-error: a link is not a removable tag
+    const removable: Props = { href: 'https://example.com', onremove: () => {}, removeLabel: 'Remove' };
+    // @ts-expect-error: a link cannot be disabled
+    const disabled: Props = { href: 'https://example.com', disabled: true };
+    expect([link, pressed, removable, disabled]).toHaveLength(4);
+  });
 });

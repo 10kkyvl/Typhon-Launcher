@@ -32,6 +32,7 @@
   --control-seam: 1px; /* between the two halves of a split button */
   --chip-remove-w: 2.4rem;
   --chip-remove-icon: 1.2rem;
+  --chip-mark: 1.4rem; /* a mark after a chip's text (the external-link sign) */
   --spinner-sm: 1.4rem;
   --spinner-md: 2rem;
   --spinner-lg: 3.2rem;

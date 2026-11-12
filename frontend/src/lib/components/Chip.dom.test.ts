@@ -147,3 +147,26 @@ describe('Chip that cannot be pressed now', () => {
     expect(ruleBody(css, "button.chip[aria-busy='true']")).toMatchObject({ cursor: 'progress', opacity: '1' });
   });
 });
+
+describe('Chip given an address', () => {
+  it('is a real link out with the chip look, its attributes passed on, and its mark hidden from the name', () => {
+    render(ChipHarness, { target: app });
+    const link = screen.getByRole('link', { name: 'Steam' });
+    expect(link.tagName).toBe('A');
+    expect(link.getAttribute('href')).toBe('https://store.steampowered.com/app/504230');
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(link.classList.contains('chip')).toBe(true);
+    expect(link.classList.contains('outline')).toBe(true);
+    expect(link.hasAttribute('aria-pressed')).toBe(false);
+    const mark = link.querySelector('[data-part="chip-end"]');
+    expect(mark?.getAttribute('aria-hidden')).toBe('true');
+    expect(mark?.querySelector('svg')).toBeInstanceOf(SVGElement);
+  });
+
+  it('hovers as the button chip does and sizes its mark itself', () => {
+    const css = styleOf(chipSource, 'Chip.svelte');
+    expect(ruleBody(css, 'a.outline:hover')).toEqual(ruleBody(css, "button.outline:hover:not(:disabled, [aria-disabled='true'])"));
+    expect(ruleBody(css, '.end :global(svg)')).toEqual({ width: 'var(--chip-mark)', height: 'var(--chip-mark)' });
+  });
+});

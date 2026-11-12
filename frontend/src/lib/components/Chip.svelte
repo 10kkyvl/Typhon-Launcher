@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import type { HTMLButtonAttributes } from 'svelte/elements';
+  import type { HTMLAnchorAttributes, HTMLButtonAttributes } from 'svelte/elements';
   import { X } from '@lucide/svelte';
   import { refuseWhile } from './refuse';
   import Tooltip from './Tooltip.svelte';
@@ -11,7 +11,24 @@
    * presses it. Backspace and Delete on a chip do nothing: a chip is not a text field, and a key that
    * deletes what the user cannot see targeted would surprise. Where focus goes after a removal is the
    * list's to decide (TagEditor), since only the list knows the neighbours.
+   *
+   * Given `href` a chip is a real link (`<a>`, its `target` and `rel` passed on) with the chip's look:
+   * a store page, a wiki. It goes somewhere, so it is never on or off, removable or disabled. `end` is
+   * a mark after the text (the external-link sign), a bare icon sized here and hidden from the name.
    */
+  type Linked =
+    | { href?: undefined; target?: undefined; rel?: undefined }
+    | {
+        href: string;
+        target?: HTMLAnchorAttributes['target'];
+        rel?: HTMLAnchorAttributes['rel'];
+        selected?: undefined;
+        onremove?: undefined;
+        removeLabel?: undefined;
+        disabled?: undefined;
+        reason?: undefined;
+        busy?: undefined;
+      };
   type Removable =
     | { onremove?: undefined; removeLabel?: undefined }
     | {
@@ -27,6 +44,10 @@
     variant = 'outline',
     type = 'button',
     hint,
+    href,
+    target,
+    rel,
+    end,
     disabled = false,
     reason,
     busy = false,
@@ -60,8 +81,11 @@
      */
     busy?: boolean;
     onclick?: (e: MouseEvent) => void;
+    /** A mark after the text (the external-link sign): a bare icon. */
+    end?: Snippet;
     children?: Snippet;
-  } & Removable = $props();
+  } & Removable &
+    Linked = $props();
 
   const toggle = $derived(selected !== undefined && onclick !== undefined && !rest['aria-haspopup']);
   const refused = $derived(disabled && Boolean(reason));
@@ -70,10 +94,18 @@
   // A caller that still says aria-disabled by hand keeps it, and now gets the look with it.
   const unavailable = $derived(blocked ? 'true' : rest['aria-disabled']);
   const tip = $derived(refused ? reason : hint);
+  // The attributes a link takes from what a button would: handlers and aria-* read the same.
+  const linkRest = $derived(rest as HTMLAnchorAttributes);
 </script>
 
+{#snippet content()}
+  {@render children?.()}{#if end}<span class="end" data-part="chip-end" aria-hidden="true">{@render end()}</span>{/if}
+{/snippet}
+
 {#snippet chip()}
-  {#if onremove !== undefined && removeLabel !== undefined}
+  {#if href !== undefined}
+    <a {...linkRest} class="chip {variant}" {href} {target} {rel} {onclick}>{@render content()}</a>
+  {:else if onremove !== undefined && removeLabel !== undefined}
     <span class="chip removable {variant}" class:selected>
       <span class="text">{@render children?.()}</span>
       <Tooltip text={removeLabel} describe={false}>
@@ -95,7 +127,7 @@
       {onclick}
       {@attach reason !== undefined || busy ? guard : undefined}
     >
-      {@render children?.()}
+      {@render content()}
     </button>
   {/if}
 {/snippet}
@@ -196,6 +228,35 @@
   button.chip[aria-busy='true'] {
     opacity: 1;
     cursor: progress;
+  }
+
+  a.chip {
+    text-decoration: none;
+  }
+
+  a.outline:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
+
+  a.filled:hover {
+    background: var(--surface-4);
+    color: var(--text);
+  }
+
+  a.quiet:hover {
+    background: var(--hover-strong);
+    color: var(--text);
+  }
+
+  .end {
+    display: flex;
+    flex-shrink: 0;
+  }
+
+  .end :global(svg) {
+    width: var(--chip-mark);
+    height: var(--chip-mark);
   }
 
   .removable {
