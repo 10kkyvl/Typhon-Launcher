@@ -2,6 +2,7 @@
   import { Search } from '@lucide/svelte';
   import type { HTMLInputAttributes } from 'svelte/elements';
   import { msg } from '../i18n';
+  import Spinner from './Spinner.svelte';
 
   /**
    * A search field. Attributes it does not know (a role, `aria-*`, an id) go to its `<input>`, so a
@@ -45,7 +46,7 @@
     onkeydown={(event) => onkeydown?.(event)}
   />
   {#if loading}
-    <span class="spinner" aria-hidden="true"></span>
+    <span class="wait"><Spinner size="sm" tone="current" /></span>
   {:else if shortcut}
     <kbd>{shortcut}</kbd>
   {/if}
@@ -111,19 +112,9 @@
     display: none;
   }
 
-  .spinner {
-    width: 1.4rem;
-    height: 1.4rem;
-    flex-shrink: 0;
-    border: 2px solid var(--hover-strong);
-    border-top-color: var(--text-3);
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
+  .wait {
+    display: inline-flex;
+    flex: none;
+    color: var(--text-3);
   }
 </style>

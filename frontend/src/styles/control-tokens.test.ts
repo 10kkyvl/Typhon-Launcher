@@ -244,8 +244,8 @@ describe('one spinner', () => {
     .readdirSync(new URL('../', import.meta.url), { recursive: true })
     .map((path) => path.replaceAll('\\', '/'))
     .filter((path) => path.endsWith('.svelte') || path.endsWith('.css'));
-  // Big Picture and the overlay keep their own until their pass; the search field is rebuilt on its own branch.
-  const LATER = /^lib\/bigpicture\/|^lib\/components\/BigPictureShell\.svelte$|^overlay\/|^lib\/components\/SearchInput\.svelte$/;
+  // Big Picture and the overlay keep their own until their pass.
+  const LATER = /^lib\/bigpicture\/|^lib\/components\/BigPictureShell\.svelte$|^overlay\//;
   const turning = (text: string) => [...text.matchAll(/@keyframes\s+([\w-]+)\s*\{\s*(?:from\s*\{[^}]*\}\s*)?to\s*\{\s*transform:\s*rotate\(360deg\);?\s*\}\s*\}/g)].map((m) => m[1]);
 
   // A turn that is not a "working" mark: the animated frame around an avatar.
