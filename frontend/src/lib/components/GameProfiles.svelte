@@ -4,6 +4,9 @@
   import Tooltip from './Tooltip.svelte';
   import Button from './Button.svelte';
   import ConfirmModal from './ConfirmModal.svelte';
+  import IconButton from './IconButton.svelte';
+  import Notice from './Notice.svelte';
+  import StatusBadge from './StatusBadge.svelte';
   import Toggle from './Toggle.svelte';
   import { addToSteamPrompt, deleteProfilePrompt } from '../confirm/prompts';
   import { errorCode, hasMessage, msg } from '../i18n';
@@ -25,6 +28,7 @@
   import type { Candidate } from '../services/install';
   import { toast } from '../stores/toasts';
   import { truncateMiddle } from '../utils/format';
+  import { nextIndex } from '../utils/roving';
 
   let {
     game,
@@ -53,9 +57,12 @@
   let editor = $state<Editor | null>(null);
   let editorError = $state('');
   let busy = $state(false);
+  // Which of the buttons that set `busy` was pressed: that one stays focused and busy, the others wait.
+  let acting = $state('');
   let rowError = $state('');
   let deleting = $state<ProfileView | null>(null);
   let steamAdding = $state<string | null>(null);
+  let candidateGroup = $state<HTMLElement>();
   let seq = 0;
 
   const signature = $derived(
@@ -128,6 +135,7 @@
     if (!editor || busy) return;
     const current = editor;
     busy = true;
+    acting = 'save';
     editorError = '';
     const input = {
       name: current.name.trim(),
@@ -143,6 +151,7 @@
       editorError = errorText(err, msg('modals.profilesSaveFailed'));
     } finally {
       busy = false;
+      acting = '';
     }
   }
 
@@ -160,6 +169,7 @@
   async function shortcut(p: ProfileView) {
     if (busy) return;
     busy = true;
+    acting = `shortcut:${p.id}`;
     rowError = '';
     try {
       await createProfileShortcut(game.id, p.id);
@@ -169,12 +179,14 @@
       toast(rowError, 'danger');
     } finally {
       busy = false;
+      acting = '';
     }
   }
 
   async function steamToggle(p: ProfileView, added: boolean) {
     if (busy) return;
     busy = true;
+    acting = `steam:${p.id}`;
     rowError = '';
     try {
       if (added) {
@@ -190,10 +202,24 @@
       toast(rowError, 'danger');
     } finally {
       busy = false;
+      acting = '';
     }
   }
 
   const canSave = $derived(Boolean(editor && editor.name.trim() !== '' && editor.executable !== ''));
+
+  // The found files are a radio group: the arrows move the choice and the focus together.
+  function moveCandidate(event: KeyboardEvent) {
+    if (event.altKey || event.ctrlKey || event.metaKey || !editor) return;
+    const radios = [...(candidateGroup?.querySelectorAll<HTMLElement>('[role="radio"]') ?? [])];
+    const next = nextIndex(radios.indexOf(event.currentTarget as HTMLElement), candidates.length, event.key, { orientation: 'vertical' });
+    if (next === null) return;
+    event.preventDefault();
+    editor.executable = candidates[next].path;
+    radios[next]?.focus();
+  }
+
+  const chosenIndex = $derived(editor ? candidates.findIndex((candidate) => candidate.path === editor?.executable) : -1);
 </script>
 
 <section class="section">
@@ -207,10 +233,10 @@
   <p class="hint">{msg('modals.profilesHint')}</p>
 
   {#if loadError}
-    <p class="failure">{loadError}</p>
+    <Notice tone="danger" compact>{loadError}</Notice>
   {/if}
   {#if rowError}
-    <p class="failure">{rowError}</p>
+    <Notice tone="danger" compact>{rowError}</Notice>
   {/if}
 
   <ul class="list">
@@ -219,20 +245,16 @@
       <li class="item">
         <div class="head">
           <span class="name">{p.isDefault ? msg('games.profileDefault') : p.name}</span>
-          {#if p.isLast}<span class="tag">{msg('modals.profilesLast')}</span>{/if}
-          {#if p.runAsAdmin}<span class="tag">{msg('modals.propertiesAdminTitle')}</span>{/if}
+          {#if p.isLast}<StatusBadge kind="accent" dot={false} label={msg('modals.profilesLast')} />{/if}
+          {#if p.runAsAdmin}<StatusBadge kind="accent" dot={false} label={msg('modals.propertiesAdminTitle')} />{/if}
           {#if !p.isDefault}
             <span class="grow"></span>
-            <Tooltip text={msg('modals.profilesEdit')} describe={false}>
-              <button class="icon" aria-label={msg('modals.profilesEdit')} disabled={busy || editor !== null} onclick={() => startEdit(p)}>
-                <Pencil size="1.5rem" strokeWidth={1.8} />
-              </button>
-            </Tooltip>
-            <Tooltip text={msg('modals.profilesDelete')} describe={false}>
-              <button class="icon" aria-label={msg('modals.profilesDelete')} disabled={busy} onclick={() => (deleting = p)}>
-                <Trash2 size="1.5rem" strokeWidth={1.8} />
-              </button>
-            </Tooltip>
+            <IconButton size="sm" label={msg('modals.profilesEdit')} disabled={busy || editor !== null} onclick={() => startEdit(p)}>
+              <Pencil size="1.5rem" strokeWidth={1.8} />
+            </IconButton>
+            <IconButton size="sm" label={msg('modals.profilesDelete')} disabled={busy} onclick={() => (deleting = p)}>
+              <Trash2 size="1.5rem" strokeWidth={1.8} />
+            </IconButton>
           {/if}
         </div>
         <p class="path" title={p.executable}>{truncateMiddle(p.executable, 70)}</p>
@@ -242,7 +264,7 @@
           {#if p.shortcutPath}
             <span class="hint">{msg('modals.profilesShortcutDone')}</span>
           {:else}
-            <Button size="sm" variant="ghost" disabled={busy} onclick={() => shortcut(p)}>
+            <Button size="sm" variant="ghost" disabled={busy && acting !== `shortcut:${p.id}`} busy={acting === `shortcut:${p.id}`} onclick={() => shortcut(p)}>
               {msg('modals.profilesShortcut')}
             </Button>
           {/if}
@@ -250,7 +272,8 @@
             <Button
               size="sm"
               variant="ghost"
-              disabled={busy}
+              disabled={busy && acting !== `steam:${p.id}`}
+              busy={acting === `steam:${p.id}`}
               onclick={() => (status.added ? steamToggle(p, true) : (steamAdding = p.id))}
             >
               {status.added ? msg('modals.profilesSteamRemove') : msg('modals.profilesSteamAdd')}
@@ -277,16 +300,20 @@
       </label>
 
       <div class="field">
-        <span class="label">{msg('modals.profilesExe')}</span>
+        <span class="label" id="{uid}-exe-label">{msg('modals.profilesExe')}</span>
         <p class="path">{editor.executable || msg('modals.profilesExeNone')}</p>
         {#if candidates.length > 0}
-          <div class="candidates">
-            {#each candidates as candidate (candidate.path)}
+          <div class="candidates" role="radiogroup" aria-labelledby="{uid}-exe-label" bind:this={candidateGroup}>
+            {#each candidates as candidate, index (candidate.path)}
               <Tooltip text={candidate.path}>
                 <button
+                  type="button"
                   class="candidate"
-                  class:current={candidate.path === editor.executable}
+                  role="radio"
+                  aria-checked={candidate.path === editor.executable}
+                  tabindex={index === chosenIndex || (chosenIndex < 0 && index === 0) ? 0 : -1}
                   onclick={() => editor && (editor.executable = candidate.path)}
+                  onkeydown={moveCandidate}
                 >
                   {truncateMiddle(candidate.path, 70)}
                 </button>
@@ -322,11 +349,11 @@
       {/if}
 
       {#if editorError}
-        <p class="failure">{editorError}</p>
+        <Notice tone="danger" compact>{editorError}</Notice>
       {/if}
 
       <div class="row">
-        <Button size="sm" variant="primary" disabled={busy || !canSave} onclick={save}>
+        <Button size="sm" variant="primary" disabled={(busy && acting !== 'save') || !canSave} busy={acting === 'save'} onclick={save}>
           {msg('modals.profilesSave')}
         </Button>
         <Button size="sm" variant="ghost" disabled={busy} onclick={() => (editor = null)}>
@@ -383,12 +410,6 @@
     color: var(--text-3);
   }
 
-  .failure {
-    margin: 0;
-    font-size: var(--font-xs);
-    color: var(--danger);
-  }
-
   .row {
     display: flex;
     align-items: center;
@@ -429,34 +450,8 @@
     color: var(--text);
   }
 
-  .tag {
-    font-size: var(--font-xs);
-    color: var(--accent-text);
-  }
-
   .grow {
     flex: 1;
-  }
-
-  .icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--space-1);
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--text-3);
-    cursor: pointer;
-  }
-
-  .icon:hover:not(:disabled) {
-    color: var(--text);
-  }
-
-  .icon:disabled {
-    opacity: 0.5;
-    cursor: default;
   }
 
   .editor {
@@ -498,8 +493,13 @@
     color: var(--text);
   }
 
-  .candidate.current {
+  .candidate[aria-checked='true'] {
     border-color: var(--accent-bright);
     color: var(--text);
+  }
+
+  /* Inside the scrolling list: the shared ring is drawn inward, where the list does not clip it. */
+  .candidate:focus-visible {
+    outline-offset: -2px;
   }
 </style>
