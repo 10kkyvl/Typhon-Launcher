@@ -16,7 +16,6 @@
   import { libraryGames } from '../../lib/stores/library';
   import { gameArt, loadArt } from '../../lib/stores/metadata';
   import { navigate } from '../../lib/stores/router';
-  import { toast } from '../../lib/stores/toasts';
   import { playtime, shortDate, weekday } from '../../lib/utils/format';
   import { errorCode, hasMessage, locale, msg } from '../../lib/i18n';
 
@@ -30,6 +29,7 @@
   let data = $state<Stats | null>(null);
   let loading = $state(true);
   let failed = $state(false);
+  let failure = $state('');
   let requestId = 0;
 
   const summary = $derived(data ? summarize(data) : null);
@@ -57,7 +57,7 @@
     } catch (err) {
       if (id !== requestId) return;
       failed = true;
-      toast(failureText(err), 'danger');
+      failure = failureText(err);
     } finally {
       if (id === requestId) loading = false;
     }
@@ -123,13 +123,13 @@
 
   {#if (failed || retrying) && !data}
     <Notice tone="danger" bind:retrying retry={{ label: msg('stats.retry'), run: retry, within: () => topList }}>
-      {msg('stats.loadError')}
+      {failure || msg('stats.loadError')}
     </Notice>
   {:else if !data && loading}
     <Spinner label={msg('stats.loading')} />
   {:else if summary && data}
     {#if failed}
-      <div class="load-error"><Notice tone="danger">{msg('stats.loadError')}</Notice></div>
+      <div class="load-error"><Notice tone="danger">{failure || msg('stats.loadError')}</Notice></div>
     {/if}
     {#if summary.empty}
       <EmptyState level={2} title={msg('stats.title')} description={msg('stats.empty')}>

@@ -1,4 +1,5 @@
 import { within } from '@testing-library/svelte';
+import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
@@ -83,6 +84,14 @@ describe('Stats: retrying a failed first load', () => {
     answer({ period: 'week', from: '2026-11-05', to: '2026-11-11', totalSeconds: 0, sessions: 0, days: [], top: [], longest: null });
     await vi.waitFor(() => expect(notice.isConnected).toBe(false));
     expect(getByRole('heading', { level: 2, name: msg('stats.title') })).toBeTruthy();
+  });
+
+  it('says the failure once, in the notice, not again in a toast', async () => {
+    vi.mocked(getStats).mockRejectedValueOnce(new Error('offline'));
+    const { findByRole } = renderDom(Stats);
+
+    expect((await findByRole('alert')).textContent).toContain(msg('stats.loadError'));
+    expect(get(toasts)).toEqual([]);
   });
 
   it('on success hands the focus to the first most-played game', async () => {
