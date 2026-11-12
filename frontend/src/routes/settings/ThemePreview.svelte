@@ -331,7 +331,8 @@
   }
 
   .badge {
-    padding: var(--space-1) var(--space-2);
+    padding: calc(var(--space-1) - 1px) calc(var(--space-2) - 1px);
+    border: 1px solid transparent;
     border-radius: var(--radius-sm);
     font-size: var(--font-xs);
     font-weight: 500;
@@ -339,16 +340,19 @@
 
   .badge.success {
     background: color-mix(in srgb, var(--success) 8%, var(--surface-2));
+    border-color: color-mix(in srgb, var(--success) 40%, var(--surface-2));
     color: var(--success);
   }
 
   .badge.warning {
     background: color-mix(in srgb, var(--warning) 8%, var(--surface-2));
+    border-color: color-mix(in srgb, var(--warning) 40%, var(--surface-2));
     color: var(--warning);
   }
 
   .badge.danger {
     background: color-mix(in srgb, var(--danger) 8%, var(--surface-2));
+    border-color: color-mix(in srgb, var(--danger) 40%, var(--surface-2));
     color: var(--danger);
   }
 

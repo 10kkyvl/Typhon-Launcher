@@ -243,6 +243,8 @@ describe('the theme preview follows the components', () => {
     for (const tone of ['success', 'warning', 'danger']) {
       expect(value(rule(preview, `.badge.${tone}`), 'background'), tone).toBe(value(rule(badge, `.${tone}`), 'background'));
       expect(value(rule(preview, `.badge.${tone}`), 'color'), tone).toBe(value(rule(badge, `.${tone}`), 'color'));
+      expect(value(rule(badge, `.${tone}`), 'border-color'), tone).toBeDefined();
+      expect(value(rule(preview, `.badge.${tone}`), 'border-color'), tone).toBe(value(rule(badge, `.${tone}`), 'border-color'));
     }
   });
 });
