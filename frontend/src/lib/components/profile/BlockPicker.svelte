@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Plus } from '@lucide/svelte';
   import Button from '../Button.svelte';
+  import Notice from '../Notice.svelte';
   import { msg } from '../../i18n';
   import { ADD_PRESETS, canAdd, layoutErrorText, unknownBlockCount, type AddPreset } from '../../profile/layout';
   import { showcaseTitle } from '../../profile/layoutView';
@@ -36,7 +37,9 @@
     <Plus size="1.5rem" strokeWidth={1.8} />{msg('profile.addBlock')}
   </Button>
   {#if hiddenByVersion}
-    <p class="hint">{msg('profile.blocksFromNewer', { hidden: unknownBlockCount(layout), count: MAX_BLOCKS })}</p>
+    <Notice tone="warning" compact announce={false}>
+      {msg('profile.blocksFromNewer', { hidden: unknownBlockCount(layout), count: MAX_BLOCKS })}
+    </Notice>
   {/if}
   {#if open}
     <ul class="presets" id={listId}>
@@ -59,13 +62,6 @@
     flex-direction: column;
     align-items: flex-start;
     gap: var(--space-3);
-  }
-
-  .hint {
-    margin: 0;
-    font-size: var(--font-xs);
-    line-height: 1.5;
-    color: var(--warning);
   }
 
   .presets {

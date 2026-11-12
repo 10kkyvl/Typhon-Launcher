@@ -149,3 +149,32 @@ describe('the game picker of a block', () => {
     expect(screen.getByRole('button', { name: 'Hades' })).toBeTruthy();
   });
 });
+
+describe('the blocks of the profile', () => {
+  it('a block whose game could not be loaded says so in a danger notice inside its card', async () => {
+    signIn([pinned(42)]);
+    vi.mocked(getProfileSnapshot).mockResolvedValue({ ...EMPTY_SNAPSHOT, layoutGames: { '42': { error: 'unavailable' } } });
+    renderDom(Profile);
+
+    const text = await screen.findByText('Could not load');
+    expect(text.closest('[data-tone="danger"]')).not.toBeNull();
+  });
+
+  it('a block that still needs its game shows the empty state and an "Incomplete" badge in the editor', async () => {
+    signIn([pinned(0)]);
+    await editor();
+
+    const empty = screen.getByText('Pick a game in the block settings');
+    expect(empty.closest('.empty')).not.toBeNull();
+    expect(screen.getByText('Incomplete').classList.contains('badge')).toBe(true);
+  });
+
+  it('a full layout holding blocks of a newer launcher says so in a standing warning notice', async () => {
+    signIn([...Array.from({ length: 15 }, (_, index) => ({ id: `t${index}`, type: 'text', width: 'half' as const, config: { title: '', body: '' } })), { id: 'f', type: 'future', width: 'full', config: {} }]);
+    await editor();
+
+    const notice = screen.getByText(/^Some blocks were created by a newer version/).closest('[data-tone="warning"]') as HTMLElement;
+    expect(notice).not.toBeNull();
+    expect(notice.querySelector('[role="status"], [role="alert"]')).toBeNull();
+  });
+});

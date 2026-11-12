@@ -3,8 +3,11 @@
   import { ArrowDown, ArrowUp, GripVertical, Settings2, Trash2 } from '@lucide/svelte';
   import Tooltip from '../Tooltip.svelte';
   import Card from '../Card.svelte';
+  import EmptyState from '../EmptyState.svelte';
   import IconButton from '../IconButton.svelte';
+  import Notice from '../Notice.svelte';
   import SegmentedControl from '../SegmentedControl.svelte';
+  import StatusBadge from '../StatusBadge.svelte';
   import { msg } from '../../i18n';
   import type { BlockWidth } from '../../services/account';
   import type { GridBlock } from '../../profile/layoutView';
@@ -135,8 +138,7 @@
 
 {#snippet placeholder(block: GridBlock, hint: string)}
   <div class="placeholder">
-    <span class="ph-title">{blockLabel(block.type)}</span>
-    <span class="ph-hint">{hint}</span>
+    <EmptyState size="inline" lead title={blockLabel(block.type)} description={hint} />
   </div>
 {/snippet}
 
@@ -144,7 +146,7 @@
   {@const body = block.body}
   {#if body.kind === 'error'}
     <Card title={blockLabel(block.type)}>
-      <p class="failed">{msg('profile.blockLoadFailed')}</p>
+      <Notice tone="danger" compact>{msg('profile.blockLoadFailed')}</Notice>
     </Card>
   {:else if body.kind === 'pinned'}
     {#if body.game}
@@ -203,7 +205,7 @@
               </button>
             </Tooltip>
             <span class="name">{name}</span>
-            {#if block.issue}<span class="issue-tag">{msg('profile.blockIncomplete')}</span>{/if}
+            {#if block.issue}<StatusBadge kind="warning" label={msg('profile.blockIncomplete')} />{/if}
             {#if block.hidden && flag}{@render flag()}{/if}
             <span class="spacer"></span>
             <SegmentedControl
@@ -294,12 +296,6 @@
     right: var(--space-3);
   }
 
-  .failed {
-    margin: 0;
-    font-size: var(--font-sm);
-    color: var(--text-3);
-  }
-
   .placeholder {
     display: flex;
     flex-direction: column;
@@ -309,16 +305,6 @@
     padding: var(--space-5) var(--space-6);
     border: 1px dashed var(--border-strong);
     border-radius: var(--radius-lg);
-  }
-
-  .ph-title {
-    font-size: var(--font-md);
-    font-weight: 600;
-  }
-
-  .ph-hint {
-    font-size: var(--font-sm);
-    color: var(--text-3);
   }
 
   .frame {
@@ -384,11 +370,6 @@
     font-size: var(--font-xs);
     font-weight: 600;
     color: var(--text-2);
-  }
-
-  .issue-tag {
-    font-size: var(--font-xs);
-    color: var(--warning);
   }
 
   .spacer {
