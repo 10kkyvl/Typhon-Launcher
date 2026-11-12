@@ -403,6 +403,8 @@
   }
 
   .counter {
+    padding: 0 var(--space-1);
+    border-radius: var(--radius-xs);
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
   }
@@ -410,8 +412,6 @@
   /* A field message keeps its place next to the field, on a plate of its own: the page behind it is
      the window backdrop. */
   .counter.over {
-    padding: 0 var(--space-1);
-    border-radius: var(--radius-xs);
     background: var(--surface-2);
     color: var(--danger);
   }

@@ -379,7 +379,8 @@ describe('the fill of a badge', () => {
 });
 
 // A tripwire on the styles, not proof of layout: a field counter that turns red at its limit stays next to
-// its field on a plate.
+// its field on a plate, and its state changes only colour and fill, so it does not shift when the limit
+// is crossed (the box comes from the counter's own rule).
 describe('tripwire: a field counter at its limit', () => {
   const states = Object.entries(frontendSources).flatMap(([path, source]) => {
     if (!path.endsWith('.svelte')) return [];
@@ -392,6 +393,12 @@ describe('tripwire: a field counter at its limit', () => {
   it('sits on a plate', () => {
     expect(states.length).toBeGreaterThanOrEqual(5);
     expect(states.filter((s) => !plateOf(s.body)).map((s) => s.rule)).toEqual([]);
+  });
+
+  it('keeps the box of the counter in both states', () => {
+    const box = /^(?:padding|margin|border(?!-radius)|width|height|min-|max-|font-size|line-height|display)/;
+    const moved = states.flatMap((s) => [...declarations(s.body).keys()].filter((name) => box.test(name)).map((name) => `${s.rule}: ${name}`));
+    expect(moved).toEqual([]);
   });
 });
 

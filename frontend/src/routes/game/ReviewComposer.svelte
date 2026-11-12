@@ -332,16 +332,22 @@
     color: var(--text-3);
   }
 
-  .hint.danger,
-  .counter.danger {
+  .hint.danger {
     padding: 0 var(--space-1);
     border-radius: var(--radius-xs);
     background: var(--surface-2);
     color: var(--danger);
   }
 
+  .counter.danger {
+    background: var(--surface-2);
+    color: var(--danger);
+  }
+
   .counter {
     flex-shrink: 0;
+    padding: 0 var(--space-1);
+    border-radius: var(--radius-xs);
     font-size: var(--font-xs);
     color: var(--text-3);
     font-variant-numeric: tabular-nums;

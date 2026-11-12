@@ -405,7 +405,7 @@
   .emoji { font-size: 1.8rem; line-height: 1; }
   .text { flex: 1; min-width: 0; height: var(--control-md); padding: 0 1.2rem; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--radius-md); color: var(--text); font: inherit; font-size: var(--font-sm); }
   .text:focus { outline: none; border-color: var(--accent-ring); box-shadow: 0 0 0 3px var(--accent-subtle); }
-  .counter { flex-shrink: 0; font-size: var(--font-xs); color: var(--text-3); font-variant-numeric: tabular-nums; } .counter.full { padding: 0 var(--space-1); border-radius: var(--radius-xs); background: var(--surface-2); color: var(--danger); }
+  .counter { flex-shrink: 0; padding: 0 var(--space-1); border-radius: var(--radius-xs); font-size: var(--font-xs); color: var(--text-3); font-variant-numeric: tabular-nums; } .counter.full { background: var(--surface-2); color: var(--danger); }
   .emoji-grid { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: .3rem; margin: 1rem 0; padding: .6rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); }
   .emoji-cell { aspect-ratio: 1; background: transparent; border: 0; border-radius: var(--radius-sm); font-size: 1.8rem; line-height: 1; cursor: pointer; }
   .emoji-cell:hover { background: var(--hover); }

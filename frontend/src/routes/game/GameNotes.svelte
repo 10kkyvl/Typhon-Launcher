@@ -156,10 +156,19 @@
     color: var(--text-3);
   }
 
-  .status.error,
-  .counter.over {
+  .counter {
     padding: 0 var(--space-1);
     border-radius: var(--radius-xs);
+  }
+
+  .status.error {
+    padding: 0 var(--space-1);
+    border-radius: var(--radius-xs);
+    background: var(--surface-2);
+    color: var(--danger);
+  }
+
+  .counter.over {
     background: var(--surface-2);
     color: var(--danger);
   }
