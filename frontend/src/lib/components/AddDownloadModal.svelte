@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { get } from 'svelte/store';
-  import { Check, FileUp } from '@lucide/svelte';
+  import { FileUp } from '@lucide/svelte';
   import {
     cancelFetchMetadata,
     discardMetadata,
@@ -21,6 +21,7 @@
   import { msg } from '../i18n';
   import { platformBadge } from '../library/emulation';
   import Button from './Button.svelte';
+  import Checkbox from './Checkbox.svelte';
   import ConsoleTag from './ConsoleTag.svelte';
   import EmulatorHint from './EmulatorHint.svelte';
   import LibrarySetupModal from './LibrarySetupModal.svelte';
@@ -232,45 +233,23 @@
       </div>
       <div class="file-list">
         {#each info.files as file, i (i)}
-          <button
-            class="file-row"
-            role="checkbox"
-            aria-checked={selected[i]}
-            onclick={() => (selected[i] = !selected[i])}
-          >
-            <span class="box" class:on={selected[i]}>
-              {#if selected[i]}<Check size="1.3rem" strokeWidth={2.6} />{/if}
-            </span>
-            <span class="file-path">{file.path}</span>
-            <span class="file-size">{bytesSize(file.size)}</span>
-          </button>
+          <Checkbox bind:checked={selected[i]} label={file.path} aside={bytesSize(file.size)} />
         {/each}
       </div>
       <div class="options">
-        <button class="option" role="checkbox" aria-checked={autoInstall} onclick={() => (autoInstall = !autoInstall)}>
-          <span class="box" class:on={autoInstall}>
-            {#if autoInstall}<Check size="1.3rem" strokeWidth={2.6} />{/if}
-          </span>
-          <span class="option-text">
-            <span class="option-label">{msg('modals.addDownloadAutoInstallLabel')}</span>
-            <span class="option-sub">{msg('modals.addDownloadAutoInstallSub')}</span>
-          </span>
-        </button>
+        <Checkbox
+          bind:checked={autoInstall}
+          label={msg('modals.addDownloadAutoInstallLabel')}
+          description={msg('modals.addDownloadAutoInstallSub')}
+        />
         {#if canElevateAhead}
-          <button
-            class="option nested"
-            role="checkbox"
-            aria-checked={elevateAhead}
-            onclick={() => (elevateAhead = !elevateAhead)}
-          >
-            <span class="box" class:on={elevateAhead}>
-              {#if elevateAhead}<Check size="1.3rem" strokeWidth={2.6} />{/if}
-            </span>
-            <span class="option-text">
-              <span class="option-label">{msg('modals.addDownloadElevateAheadLabel')}</span>
-              <span class="option-sub">{msg('modals.addDownloadElevateAheadSub')}</span>
-            </span>
-          </button>
+          <div class="nested">
+            <Checkbox
+              bind:checked={elevateAhead}
+              label={msg('modals.addDownloadElevateAheadLabel')}
+              description={msg('modals.addDownloadElevateAheadSub')}
+            />
+          </div>
         {/if}
       </div>
     </div>
@@ -417,103 +396,14 @@
     border-radius: var(--radius-md);
   }
 
-  .file-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    width: 100%;
-    padding: 0.7rem 0.8rem;
-    border-radius: var(--radius-sm);
-    text-align: left;
-    transition: background var(--dur-fast) var(--ease);
-  }
-
-  .file-row:hover {
-    background: var(--hover);
-  }
-
-  .box {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.8rem;
-    height: 1.8rem;
-    flex-shrink: 0;
-    border-radius: var(--radius-xs);
-    border: 1px solid var(--border-strong);
-    background: var(--surface-2);
-    color: #fff;
-    transition:
-      background var(--dur-fast) var(--ease),
-      border-color var(--dur-fast) var(--ease);
-  }
-
-  .box.on {
-    color: var(--accent-on, #fff);
-    background: var(--accent);
-    border-color: var(--accent-bright);
-  }
-
-  .file-path {
-    flex: 1;
-    min-width: 0;
-    font-size: var(--font-sm);
-    color: var(--text-2);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .file-size {
-    font-size: var(--font-xs);
-    color: var(--text-3);
-    font-variant-numeric: tabular-nums;
-    flex-shrink: 0;
-  }
-
   .options {
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
   }
 
-  .option {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--space-3);
-    width: 100%;
-    padding: 0.8rem;
-    border-radius: var(--radius-sm);
-    text-align: left;
-    transition: background var(--dur-fast) var(--ease);
-  }
-
-  .option:hover {
-    background: var(--hover);
-  }
-
-  .option.nested {
+  .nested {
     margin-left: var(--space-5);
-  }
-
-  .option .box {
-    margin-top: 0.1rem;
-  }
-
-  .option-text {
-    display: flex;
-    flex-direction: column;
-    gap: 0.3rem;
-    min-width: 0;
-  }
-
-  .option-label {
-    font-size: var(--font-sm);
-  }
-
-  .option-sub {
-    font-size: var(--font-xs);
-    color: var(--text-3);
   }
 
   .summary {
