@@ -78,6 +78,8 @@ describe('Settings: the about tab', () => {
     await user().click(screen.getByRole('tab', { name: msg('settings.aboutTab') }));
     const card = (await screen.findByText(msg('settings.aboutLegalCardTitle'))).closest('.card') as HTMLElement;
     const text = await within(card).findByText(msg('settings.aboutLegalUnavailable'));
-    expect(text.closest('[data-tone]')).not.toBeNull();
+    expect(text.closest('[data-tone]')?.getAttribute('data-tone')).toBe('info');
+    // A fact of this build, read with the card: not announced on every opening of the tab.
+    expect(text.closest('[role="status"], [role="alert"]')).toBeNull();
   });
 });

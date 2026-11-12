@@ -112,7 +112,8 @@
   let wineStatus = $state<WineStatus | null>(null);
 
   let legalDocs = $state<LegalMeta[]>([]);
-  let legalError = $state('');
+  // The list failed to load in the app, or this build has no legal documents to show (a browser).
+  let legalState = $state<'' | 'failed' | 'unavailable'>('');
   let legalOpen = $state(false);
   let legalActiveId = $state<string | null>(null);
   let legalActiveTitle = $state('');
@@ -156,7 +157,7 @@
       try {
         legalDocs = await listLegalDocuments();
       } catch {
-        legalError = inWails ? msg('settings.aboutLegalLoadError') : msg('settings.aboutLegalUnavailable');
+        legalState = inWails ? 'failed' : 'unavailable';
       }
     })();
     return offLogs;
@@ -1625,8 +1626,10 @@
         </Card>
 
         <Card title={msg('settings.aboutLegalCardTitle')}>
-          {#if legalError}
-            <Notice tone={inWails ? 'danger' : 'info'} compact>{legalError}</Notice>
+          {#if legalState === 'failed'}
+            <Notice tone="danger" compact>{msg('settings.aboutLegalLoadError')}</Notice>
+          {:else if legalState === 'unavailable'}
+            <Notice tone="info" compact announce={false}>{msg('settings.aboutLegalUnavailable')}</Notice>
           {:else}
             <div class="rows">
               {#each legalDocs as meta (meta.id)}
