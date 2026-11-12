@@ -120,7 +120,7 @@ describe('where the section is reachable from', () => {
 
   it('offers a forgot-password link on the sign-in form only', () => {
     expect(auth).toContain('openForgotPassword');
-    expect(auth).toMatch(/\{#if !isRegister\}\s*<button class="link forgot"/);
+    expect(auth).toMatch(/\{#if !isRegister\}\s*<div class="forgot">\s*<TextLink disabled=\{busy\} onclick=\{onForgot\}>/);
   });
 
   it('offers the site support page to a guest and on the sign-in form, and tells the user when it cannot open', () => {

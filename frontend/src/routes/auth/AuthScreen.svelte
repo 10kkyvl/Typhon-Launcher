@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { CircleAlert } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
+  import TextLink from '../../lib/components/TextLink.svelte';
   import { accountErrorField, accountErrorText, accountMessage } from '../../lib/services/accountMessages';
   import { openForgotPassword, openSupportSite } from '../../lib/services/account';
   import { authReason, authState, authView, enterAsGuest, retryBootstrap, signIn, signUp } from '../../lib/stores/user';
@@ -129,9 +130,10 @@
 
       <form class="form" onsubmit={onSubmit}>
         {#if isRegister}
-          <label class="field">
-            <span class="label">{msg('common.email')}</span>
+          <div class="field">
+            <label class="label" for="{uid}-email">{msg('common.email')}</label>
             <input
+              id="{uid}-email"
               class="input"
               class:invalid={!!errors.email}
               aria-invalid={errors.email ? 'true' : undefined}
@@ -143,11 +145,12 @@
               disabled={busy}
             />
             {#if errors.email}<span class="error" id="{uid}-email-error" role="alert">{errors.email}</span>{/if}
-          </label>
+          </div>
 
-          <label class="field">
-            <span class="label">{msg('transfers.authUsernameLabel')}</span>
+          <div class="field">
+            <label class="label" for="{uid}-username">{msg('transfers.authUsernameLabel')}</label>
             <input
+              id="{uid}-username"
               class="input"
               class:invalid={!!errors.username}
               aria-invalid={errors.username ? 'true' : undefined}
@@ -160,11 +163,12 @@
               disabled={busy}
             />
             {#if errors.username}<span class="error" id="{uid}-username-error" role="alert">{errors.username}</span>{/if}
-          </label>
+          </div>
 
-          <label class="field">
-            <span class="label">{msg('transfers.authDisplayNameLabel')}</span>
+          <div class="field">
+            <label class="label" for="{uid}-displayName">{msg('transfers.authDisplayNameLabel')}</label>
             <input
+              id="{uid}-displayName"
               class="input"
               class:invalid={!!errors.displayName}
               aria-invalid={errors.displayName ? 'true' : undefined}
@@ -177,11 +181,12 @@
               disabled={busy}
             />
             {#if errors.displayName}<span class="error" id="{uid}-displayName-error" role="alert">{errors.displayName}</span>{/if}
-          </label>
+          </div>
         {:else}
-          <label class="field">
-            <span class="label">{msg('transfers.authIdentifierLabel')}</span>
+          <div class="field">
+            <label class="label" for="{uid}-identifier">{msg('transfers.authIdentifierLabel')}</label>
             <input
+              id="{uid}-identifier"
               class="input"
               class:invalid={!!errors.username}
               aria-invalid={errors.username ? 'true' : undefined}
@@ -193,12 +198,13 @@
               disabled={busy}
             />
             {#if errors.username}<span class="error" id="{uid}-username-error" role="alert">{errors.username}</span>{/if}
-          </label>
+          </div>
         {/if}
 
-        <label class="field">
-          <span class="label">{msg('transfers.authPasswordLabel')}</span>
+        <div class="field">
+          <label class="label" for="{uid}-password">{msg('transfers.authPasswordLabel')}</label>
           <input
+            id="{uid}-password"
             class="input"
             class:invalid={!!errors.password}
             aria-invalid={errors.password ? 'true' : undefined}
@@ -210,36 +216,37 @@
             disabled={busy}
           />
           {#if errors.password}<span class="error" id="{uid}-password-error" role="alert">{errors.password}</span>{/if}
-        </label>
+        </div>
 
         {#if !isRegister}
-          <button class="link forgot" type="button" disabled={busy} onclick={onForgot}>{msg('tickets.forgotPassword')}</button>
-          <button class="link forgot" type="button" disabled={busy} onclick={onCantSignIn}>{msg('tickets.cantSignIn')}</button>
+          <div class="forgot">
+            <TextLink disabled={busy} onclick={onForgot}>{msg('tickets.forgotPassword')}</TextLink>
+            <TextLink disabled={busy} onclick={onCantSignIn}>{msg('tickets.cantSignIn')}</TextLink>
+          </div>
         {/if}
 
         {#if errors.general}
-          <p class="error general" role="alert">
-            <CircleAlert size="1.6rem" strokeWidth={1.8} />
-            <span>{errors.general}</span>
-          </p>
+          <Notice tone="danger" compact>{errors.general}</Notice>
         {/if}
 
-        <button class="submit" type="submit" disabled={busy}>
-          {#if busy}
-            {isRegister ? msg('transfers.authRegistering') : msg('transfers.authSigningIn')}
-          {:else}
-            {isRegister ? msg('transfers.authCreateAccount') : msg('transfers.authSignInAction')}
-          {/if}
-        </button>
+        <div class="submit">
+          <Button variant="primary" size="lg" type="submit" block {busy}>
+            {#if busy}
+              {isRegister ? msg('transfers.authRegistering') : msg('transfers.authSigningIn')}
+            {:else}
+              {isRegister ? msg('transfers.authCreateAccount') : msg('transfers.authSignInAction')}
+            {/if}
+          </Button>
+        </div>
       </form>
 
       <p class="switch">
         {#if isRegister}
           {msg('transfers.authHaveAccount')}
-          <button class="link" type="button" disabled={busy} onclick={() => switchView('login')}>{msg('transfers.authSignInAction')}</button>
+          <TextLink disabled={busy} onclick={() => switchView('login')}>{msg('transfers.authSignInAction')}</TextLink>
         {:else}
           {msg('transfers.authNoAccount')}
-          <button class="link" type="button" disabled={busy} onclick={() => switchView('register')}>{msg('transfers.authCreateAccount')}</button>
+          <TextLink disabled={busy} onclick={() => switchView('register')}>{msg('transfers.authCreateAccount')}</TextLink>
         {/if}
       </p>
       </div>
@@ -247,7 +254,9 @@
 
       <div class="guest">
         <span class="guest-divider"><span>{msg('transfers.authOrDivider')}</span></span>
-        <button class="guest-btn" type="button" disabled={busy} onclick={onGuest}>{msg('transfers.authGuestAction')}</button>
+        <div class="guest-action">
+          <Button block disabled={busy} onclick={onGuest}>{msg('transfers.authGuestAction')}</Button>
+        </div>
         <p class="guest-hint">{msg('transfers.authGuestHint')}</p>
       </div>
     {/if}
@@ -376,55 +385,16 @@
     color: var(--danger);
   }
 
-  .error.general {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.8rem;
-    padding: 0.9rem 1.2rem;
-    border-radius: var(--radius-md);
-    background: var(--danger-subtle);
-    font-size: var(--font-sm);
-    line-height: 1.4;
-    animation: rise-in var(--dur-panel) var(--ease);
-  }
-
-  .error.general :global(svg) {
-    flex-shrink: 0;
-    margin-top: 0.1rem;
-  }
-
   .submit {
-    height: var(--control-lg);
     margin-top: var(--space-2);
-    background: var(--accent);
-    color: var(--accent-on, #fff);
-    font-size: var(--font-md);
-    font-weight: 600;
-    border-radius: var(--radius-md);
-    transition:
-      background var(--dur) var(--ease),
-      box-shadow var(--dur) var(--ease),
-      transform var(--dur-fast) var(--ease);
-  }
-
-  .submit:hover:not(:disabled) {
-    background: var(--accent-hover);
-    box-shadow: 0 0.8rem 2rem -0.8rem var(--accent-ring);
-    transform: translateY(-1px);
-  }
-
-  .submit:active:not(:disabled) {
-    transform: scale(0.98);
-    box-shadow: none;
-  }
-
-  .submit:disabled {
-    opacity: 0.55;
-    cursor: default;
   }
 
   .guest {
     margin-top: var(--space-5);
+  }
+
+  .guest-action {
+    margin-top: var(--space-3);
   }
 
   .guest-divider {
@@ -443,37 +413,21 @@
     background: var(--border-strong);
   }
 
-  .guest-btn {
-    width: 100%;
-    height: var(--control-md);
-    margin-top: var(--space-3);
-    background: transparent;
-    border: 1px solid var(--border-strong);
-    color: var(--text-2);
-    font-size: var(--font-sm);
-    font-weight: 500;
-    border-radius: var(--radius-md);
-    transition:
-      background var(--dur) var(--ease),
-      color var(--dur) var(--ease);
-  }
-
-  .guest-btn:hover:not(:disabled) {
-    background: var(--hover-strong);
-    color: var(--text);
-  }
-
-  .guest-btn:disabled {
-    opacity: 0.55;
-    cursor: default;
-  }
-
   .guest-hint {
     margin-top: 0.8rem;
     font-size: var(--font-xs);
     line-height: 1.45;
     color: var(--text-3);
     text-align: center;
+  }
+
+  .forgot {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+    margin-top: -0.4rem;
+    font-size: var(--font-sm);
   }
 
   .switch {
@@ -483,20 +437,4 @@
     text-align: center;
   }
 
-  .link {
-    color: var(--accent-text);
-    font-size: var(--font-sm);
-    font-weight: 500;
-    padding: 0.2rem 0.3rem;
-    border-radius: var(--radius-xs);
-  }
-
-  .link:hover {
-    color: var(--text);
-  }
-
-  .forgot {
-    align-self: flex-start;
-    margin-top: -0.4rem;
-  }
 </style>
