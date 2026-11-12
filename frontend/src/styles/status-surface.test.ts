@@ -6,6 +6,16 @@ import { luminance, rgb } from '../lib/theme/accent';
  * Status messages sit on a surface. The window backdrop is the game's art, and a status colour straight
  * on it does not keep its contrast, so an error, a warning or a success is shown on the opaque plate of
  * a Notice (or on a surface the page already has), never as coloured text on the bare page.
+ *
+ * The guard below reads source text: it is a tripwire, not proof. It sees the rules of every component
+ * and stylesheet, a status colour anywhere in a `color` value (mixed, with a fallback, or through a
+ * local custom property), the last of repeated declarations, and inline `style="color: …"` and
+ * `style:color`. It does not see, and these stay for review and the live check:
+ * - a rule nested inside another rule's block;
+ * - a custom property set inline on an element (`style:--x=…`) and then read as `color`;
+ * - a colour handed to a child component as a prop;
+ * - a plate cancelled by a later rule with a stronger selector or from another file;
+ * - text painted with `fill` or `-webkit-text-fill-color` instead of `color`.
  */
 
 type RGB = [number, number, number];
@@ -97,14 +107,55 @@ describe('the plate of a notice', () => {
 
 // A status colour anywhere in a value: on its own, with a fallback, or mixed into another colour.
 const STATUS = /var\(--(danger|warning|success)(?![\w-])/;
-// An opaque fill: a surface, or a tone mixed into one (the way a notice and a badge fill themselves).
+const STATUS_TOKEN = /^--(danger|warning|success)$/;
+// An opaque fill: a surface, or a tone mixed into one (the way a notice and a badge fill themselves), in
+// any interpolation space color-mix() takes.
 const SURFACE = String.raw`var\((--surface(?:-\d)?|--bg)\)`;
-const PLATE = new RegExp(String.raw`^(?:${SURFACE}|color-mix\(in srgb, var\((--[\w-]+)\) (\d+)%, ${SURFACE}\))$`);
+const SPACE = String.raw`[a-z][a-z0-9-]*(?: (?:shorter|longer|increasing|decreasing) hue)?`;
+const PLATE = new RegExp(String.raw`^(?:${SURFACE}|color-mix\(in (${SPACE}), var\((--[\w-]+)\) (\d+)%, ${SURFACE}\))$`);
 
 interface Plate {
   surface: string;
   tone?: string;
   share?: number;
+  space?: string;
+}
+
+// Colour mixing the way color-mix() does it, in the spaces the guard can measure.
+const toLinear = (v: number) => {
+  const s = v / 255;
+  return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+};
+const toByte = (v: number) => 255 * (v <= 0.0031308 ? v * 12.92 : 1.055 * Math.max(0, v) ** (1 / 2.4) - 0.055);
+
+function toOklab([r, g, b]: RGB): RGB {
+  const [lr, lg, lb] = [r, g, b].map(toLinear);
+  const l = Math.cbrt(0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb);
+  const m = Math.cbrt(0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb);
+  const s = Math.cbrt(0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb);
+  return [
+    0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+  ];
+}
+
+function fromOklab([L, a, b]: RGB): RGB {
+  const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+  const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+  const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
+  return [
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
+  ].map(toByte) as RGB;
+}
+
+function mixIn(space: string, a: RGB, b: RGB, share: number): RGB | null {
+  if (space === 'srgb') return mix(a, b, share);
+  if (space === 'srgb-linear') return mix(a.map(toLinear) as RGB, b.map(toLinear) as RGB, share).map(toByte) as RGB;
+  if (space === 'oklab') return fromOklab(mix(toOklab(a), toOklab(b), share));
+  return null;
 }
 
 // The declarations of a rule in order; a property declared twice is what the last one says.
@@ -124,13 +175,16 @@ function declarations(body: string): Map<string, string> {
 function plateOf(body: string): Plate | null {
   const m = PLATE.exec(declarations(body).get('background') ?? '');
   if (!m) return null;
-  return m[1] ? { surface: m[1] } : { surface: m[4], tone: m[2], share: Number(m[3]) / 100 };
+  return m[1] ? { surface: m[1] } : { surface: m[5], space: m[2], tone: m[3], share: Number(m[4]) / 100 };
 }
 
-// The colour a plate shows in a preset.
-function fill(t: Record<string, string>, plate: Plate): RGB {
+// The colour a plate shows in a preset, with its tone already resolved to a theme token; null when the
+// mix is in a space the guard does not measure.
+function fill(t: Record<string, string>, plate: Plate, tone = plate.tone): RGB | null {
   const surface = rgb(t[plate.surface], rgb(t['--bg'], BLACK));
-  return plate.tone ? mix(rgb(t[plate.tone], surface), surface, plate.share as number) : surface;
+  if (!tone) return surface;
+  expect(t[tone], `${tone} is a theme colour`).toBeTypeOf('string');
+  return mixIn(plate.space ?? 'srgb', rgb(t[tone], surface), surface, plate.share as number);
 }
 
 // Whole areas where every status text has an opaque surface under it.
@@ -232,65 +286,113 @@ const LOCAL_SURFACE: Record<string, string> = {
 interface StatusRule {
   path: string;
   selector: string;
-  status: string;
+  /** The status colours the rule's `color` can resolve to. */
+  statuses: string[];
+  /** The variable its `color` reads, when it reads one: a local one changes with the plate's tone. */
+  colourVar?: string;
   plate: Plate | null;
+  locals: Map<string, Set<string>>;
 }
 
-// Custom properties of a component that carry a status colour, directly or through another one.
-function carriers(css: string): Map<string, string> {
-  const out = new Map<string, string>();
-  const custom = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].flatMap((m) =>
-    [...declarations(m[2])].filter(([name]) => name.startsWith('--')),
-  );
-  for (let grew = true; grew; ) {
-    grew = false;
-    for (const [name, value] of custom) {
-      const status = statusIn(value, out);
-      if (status && !out.has(name)) {
-        out.set(name, status);
-        grew = true;
-      }
+// Custom properties a stylesheet declares, each with every value it can take, resolved through the
+// others: `--late-tone: var(--danger)` read as `var(--late-tone)` is --danger.
+function localsOf(css: string): Map<string, Set<string>> {
+  const raw = new Map<string, Set<string>>();
+  for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    for (const [name, value] of declarations(m[2])) {
+      if (!name.startsWith('--')) continue;
+      const token = /^var\((--[\w-]+)\s*(?:,[^)]*)?\)$/.exec(value)?.[1] ?? value;
+      (raw.get(name) ?? raw.set(name, new Set()).get(name))?.add(token);
     }
   }
-  return out;
+  const resolve = (value: string, seen: Set<string>): string[] =>
+    raw.has(value) && !seen.has(value) ? [...(raw.get(value) as Set<string>)].flatMap((v) => resolve(v, new Set([...seen, value]))) : [value];
+  return new Map([...raw.keys()].map((name) => [name, new Set(resolve(name, new Set()))]));
 }
 
-function statusIn(value: string, carried: Map<string, string>): string | undefined {
+const resolved = (name: string, locals: Map<string, Set<string>>) => [...(locals.get(name) ?? [name])];
+
+// The status colours a colour value can be: named in it, or carried by a local property it reads.
+function statusesIn(value: string, locals: Map<string, Set<string>>): string[] {
+  const out = new Set<string>();
   const direct = STATUS.exec(value)?.[1];
-  if (direct) return `--${direct}`;
-  for (const m of value.matchAll(/var\((--[\w-]+)/g)) if (carried.has(m[1])) return carried.get(m[1]);
-  return undefined;
+  if (direct) out.add(`--${direct}`);
+  for (const m of value.matchAll(/var\((--[\w-]+)/g)) {
+    for (const token of resolved(m[1], locals)) {
+      if (STATUS_TOKEN.test(token)) out.add(token);
+      const inner = STATUS.exec(token)?.[1];
+      if (inner) out.add(`--${inner}`);
+    }
+  }
+  return [...out];
 }
 
 const tidy = (text: string) => text.trim().replace(/\s+/g, ' ');
 
-// A source tripwire, not a CSS engine: every rule of every component whose `color` is a status colour,
-// with the plate the same rule gives it, and status colours set inline in the markup.
+// Plain stylesheets, scanned like the style blocks of components. The test run empties CSS imports, so
+// the glob only finds them and the text is read from disk.
+type Fs = { readFileSync(path: URL, encoding: 'utf8'): string };
+const fs = (globalThis as unknown as { process: { getBuiltinModule(id: 'node:fs'): Fs } }).process.getBuiltinModule('node:fs');
+const STYLESHEETS = Object.fromEntries(
+  Object.keys(import.meta.glob('../**/*.css')).map((path) => [
+    path.replace(/^\.\.\//, '').replace(/^\.\//, 'styles/'),
+    fs.readFileSync(new URL(path, import.meta.url), 'utf8'),
+  ]),
+);
+
+function cssRules(path: string, css: string, out: StatusRule[]) {
+  const locals = localsOf(css);
+  for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const colour = declarations(m[2]).get('color') ?? '';
+    const statuses = statusesIn(colour, locals);
+    if (statuses.length === 0) continue;
+    const colourVar = /^var\((--[\w-]+)/.exec(colour)?.[1];
+    out.push({ path, selector: tidy(m[1]), statuses, colourVar, plate: plateOf(m[2]), locals });
+  }
+  return locals;
+}
+
+// A source tripwire, not a CSS engine: every rule of every component and stylesheet whose `color` is a
+// status colour, with the plate the same rule gives it, and status colours set inline in the markup.
 function statusRules(): StatusRule[] {
   const out: StatusRule[] = [];
+  for (const [path, css] of Object.entries(STYLESHEETS)) cssRules(path, css.replace(/\/\*[\s\S]*?\*\//g, ''), out);
   for (const [path, source] of Object.entries(frontendSources)) {
     if (!path.endsWith('.svelte')) continue;
     const css = (/<style[^>]*>([\s\S]*?)<\/style>/.exec(source)?.[1] ?? '').replace(/\/\*[\s\S]*?\*\//g, '');
-    const carried = carriers(css);
-    for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-      const status = statusIn(declarations(m[2]).get('color') ?? '', carried);
-      if (status) out.push({ path, selector: tidy(m[1]), status, plate: plateOf(m[2]) });
-    }
+    const locals = cssRules(path, css, out);
     const script = [...source.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n');
     const markup = source.replace(/<script[^>]*>[\s\S]*?<\/script>|<style[^>]*>[\s\S]*?<\/style>/g, '');
     for (const m of markup.matchAll(/\bstyle="([^"]*)"/g)) {
-      const status = statusIn(declarations(m[1]).get('color') ?? '', carried);
-      if (status) out.push({ path, selector: tidy(m[0]), status, plate: null });
+      const statuses = statusesIn(declarations(m[1]).get('color') ?? '', locals);
+      if (statuses.length) out.push({ path, selector: tidy(m[0]), statuses, plate: null, locals });
     }
     // An expression is opaque to the tripwire: it counts when the component's script spells a status colour.
     const spelled = STATUS.exec(script)?.[1];
     for (const m of markup.matchAll(/\bstyle:color(?:\|important)?=(?:"([^"]*)"|\{([^}]*)\})/g)) {
-      const status = m[1] !== undefined ? statusIn(m[1], carried) : (statusIn(m[2], carried) ?? (spelled && `--${spelled}`));
-      if (status) out.push({ path, selector: tidy(m[0]), status, plate: null });
+      const statuses = statusesIn(m[1] ?? m[2], locals);
+      if (!statuses.length && m[2] !== undefined && spelled) statuses.push(`--${spelled}`);
+      if (statuses.length) out.push({ path, selector: tidy(m[0]), statuses, plate: null, locals });
     }
   }
   return out;
 }
+
+// The pairs to measure on a rule's own mixed plate: its colour and the tone of its fill, which move
+// together when both read the same local property.
+function measured(rule: StatusRule): [colour: string, tone: string][] {
+  const tone = rule.plate?.tone as string;
+  if (rule.colourVar && rule.colourVar === tone && rule.locals.has(tone)) {
+    return resolved(tone, rule.locals).filter((v) => STATUS_TOKEN.test(v)).map((v) => [v, v]);
+  }
+  return rule.statuses.flatMap((colour) => resolved(tone, rule.locals).map((t): [string, string] => [colour, t]));
+}
+
+const FIX =
+  'status-coloured text with no opaque surface under it: give the rule a plate of its own (background: ' +
+  'var(--surface-N) or color-mix(in srgb, var(--tone) N%, var(--surface-N))), or name the surface it sits on ' +
+  'in ON_SURFACE in styles/status-surface.test.ts (and the rule in LOCAL_SURFACE when that surface is a rule ' +
+  'of the same component)';
 
 describe('status-coloured text in the pages', () => {
   const rules = statusRules();
@@ -303,7 +405,7 @@ describe('status-coloured text in the pages', () => {
     const bare = loose
       .filter((rule) => !ON_SURFACE[rule.path]?.slice(1).includes(rule.selector))
       .map((rule) => `${rule.path}: ${rule.selector}`);
-    expect(bare).toEqual([]);
+    expect(bare, FIX).toEqual([]);
   });
 
   it('names no surface for a rule that is gone', () => {
@@ -311,7 +413,7 @@ describe('status-coloured text in the pages', () => {
     const stale = Object.entries(ON_SURFACE)
       .flatMap(([path, [, ...selectors]]) => selectors.map((selector) => `${path}: ${selector}`))
       .filter((entry) => !live.has(entry));
-    expect(stale).toEqual([]);
+    expect(stale, 'remove these from ON_SURFACE: the rule is gone or has a plate of its own now').toEqual([]);
   });
 
   it('keeps the surfaces it names inside a component opaque', () => {
@@ -322,7 +424,7 @@ describe('status-coloured text in the pages', () => {
       const rule = new RegExp(`(?:^|})\\s*${selector.replace('.', '\\.')}\\s*\\{([^}]*)\\}`).exec(css)?.[1];
       if (!plateOf(rule ?? '')) open.push(`${path}: ${selector}`);
     }
-    expect(open).toEqual([]);
+    expect(open, 'the surface named in LOCAL_SURFACE lost its opaque fill: give it one back, or name the real surface').toEqual([]);
   });
 
   for (const id of ['dark', 'light', 'contrast', 'blush']) {
@@ -333,7 +435,7 @@ describe('status-coloured text in the pages', () => {
       expect(surfaces.length).toBeGreaterThan(0);
       const failures: string[] = [];
       for (const surface of surfaces) {
-        const on = fill(t, { surface });
+        const on = fill(t, { surface }) as RGB;
         for (const name of ['--danger', '--warning', '--success']) {
           const r = ratio(rgb(t[name], on), on);
           if (r < 4.5) failures.push(`${name} on ${surface}: ${r.toFixed(2)}`);
@@ -342,11 +444,17 @@ describe('status-coloured text in the pages', () => {
       // A fill mixed from a tone is measured with the colour its own rule sets on it.
       for (const rule of paged) {
         if (!rule.plate?.tone) continue;
-        const on = fill(t, rule.plate);
-        const r = ratio(rgb(t[rule.status], on), on);
-        if (r < 4.5) failures.push(`${rule.path}: ${rule.selector}: ${r.toFixed(2)}`);
+        for (const [colour, tone] of measured(rule)) {
+          const on = fill(t, rule.plate, tone);
+          if (!on) {
+            failures.push(`${rule.path}: ${rule.selector}: cannot measure a mix in ${rule.plate.space}; mix in srgb, srgb-linear or oklab`);
+            continue;
+          }
+          const r = ratio(rgb(t[colour], on), on);
+          if (r < 4.5) failures.push(`${rule.path}: ${rule.selector}: ${colour} on ${tone} ${r.toFixed(2)}`);
+        }
       }
-      expect(failures).toEqual([]);
+      expect(failures, 'raise the contrast: a lower share of the tone in the fill, or a stronger status colour').toEqual([]);
     });
   }
 });
@@ -418,6 +526,10 @@ describe('the fill of a badge', () => {
       for (const { kind, plate, label } of kinds) {
         if (!plate || !label) continue;
         const on = fill(t, plate);
+        if (!on) {
+          failures.push(`${kind}: a fill the guard cannot measure`);
+          continue;
+        }
         const r = ratio(rgb(t[label], on), on);
         if (r < 4.5) failures.push(`${kind}: ${label} ${r.toFixed(2)}`);
       }
@@ -476,6 +588,10 @@ describe('the pressed toggles of the review composer', () => {
           continue;
         }
         const on = fill(t, plate);
+        if (!on) {
+          failures.push(`${name}: a fill the guard cannot measure`);
+          continue;
+        }
         const r = ratio(rgb(t[label], on), on);
         if (r < 4.5) failures.push(`${name}: ${label} ${r.toFixed(2)}`);
       }
