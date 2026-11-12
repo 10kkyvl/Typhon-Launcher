@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import buttonSource from '../lib/components/Button.svelte?raw';
+import noticeSource from '../lib/components/Notice.svelte?raw';
 import textLinkSource from '../lib/components/TextLink.svelte?raw';
 import { cssColor, ruleBody, styleOf } from '../lib/testing/css';
 import { goSources } from '../lib/testing/sources';
@@ -266,12 +267,13 @@ describe('the muted text link is measured where it stands', () => {
   });
 });
 
-// A text field's edge is what shows where it is (WCAG 1.4.11): 3:1 against whatever surface the field
-// sits on, a dialog's or a card's panel included, at rest and hovered. The shared .input draws it
-// (global.css); fixed tokens it names come from shell.css.
+// A text field's edge is what shows where it is (WCAG 1.4.11): 3:1 against whatever it sits on, every
+// page surface and the toned plate of a notice, at rest and hovered. The browser paints a border over
+// the field's own fill, so the edge is opaque: what is measured is what is drawn, whatever lies under.
 describe('a text field shows where it is', () => {
   const global = fs.readFileSync(new URL('./global.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
   const shell = fs.readFileSync(new URL('./shell.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const notice = styleOf(noticeSource, 'Notice.svelte');
   const fixed = Object.fromEntries([...shell.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
   const rule = (selector: string) => {
     const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -287,20 +289,40 @@ describe('a text field shows where it is', () => {
     const name = /^var\((--[\w-]+)\)$/.exec(value)?.[1];
     return name && name in fixed ? fixed[name] : value;
   };
+  // The notice's plate in each of its tones, as Notice.svelte writes them.
+  const plate = ruleBody(notice, '.notice').background;
+  const tones = [
+    ruleBody(notice, '.notice')['--notice-tone'],
+    ...['success', 'warning', 'danger'].map((tone) => ruleBody(notice, `.notice[data-tone='${tone}']`)['--notice-tone']),
+  ];
+  const STATES = [
+    ['at rest', '.input'],
+    ['hovered', '.input:hover'],
+  ] as const;
+
+  it('reads the plates and the edges it measures', () => {
+    expect(plate).toMatch(/var\(--notice-tone\)/);
+    expect(tones).toEqual(['var(--accent-bright)', 'var(--success)', 'var(--warning)', 'var(--danger)']);
+    for (const [, selector] of STATES) expect(edgeOf(rule(selector)), selector).toBeTypeOf('string');
+  });
 
   for (const id of ['dark', 'light', 'contrast', 'blush']) {
-    it(`${id}: at rest and hovered, on every surface`, () => {
+    it(`${id}: an opaque edge at 3:1 on every surface and notice plate, at rest and hovered`, () => {
       const preset = builtIns().find((p) => p.id === id);
       expect(preset, id).toBeDefined();
       const tokens = (preset as Preset).tokens;
       const bg = paint(tokens, '--bg', BLACK);
+      const grounds: [string, RGB][] = [
+        ...PAGE.map((surface): [string, RGB] => [surface, surface === '--bg' ? bg : paint(tokens, surface, bg)]),
+        ...tones.map((tone): [string, RGB] => [`notice ${tone}`, over(cssColor(plate.replace('var(--notice-tone)', tone), tokens), bg)]),
+      ];
       const out: string[] = [];
-      for (const [state, body] of [['at rest', rule('.input')], ['hovered', rule('.input:hover')]] as const) {
-        const edge = resolve(edgeOf(body));
-        for (const surface of PAGE) {
-          const under = surface === '--bg' ? bg : paint(tokens, surface, bg);
-          const r = ratio(over(cssColor(edge, tokens), under), under);
-          if (r < 3) out.push(`${state} on ${surface}: ${r.toFixed(2)} < 3`);
+      for (const [state, selector] of STATES) {
+        const drawn = cssColor(resolve(edgeOf(rule(selector))), tokens);
+        if (drawn[3] < 1) out.push(`${state}: translucent (${drawn[3]})`);
+        for (const [ground, under] of grounds) {
+          const r = ratio(over(drawn, under), under);
+          if (r < 3) out.push(`${state} on ${ground}: ${r.toFixed(2)} < 3`);
         }
       }
       expect(out).toEqual([]);
