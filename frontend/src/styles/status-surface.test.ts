@@ -246,8 +246,6 @@ const ON_SURFACE: Record<string, [surface: string, ...rules: string[]]> = {
   'lib/components/LegalAcceptanceScreen.svelte': ['the card of the screen', '.error'],
   'lib/components/TelemetryConsentScreen.svelte': ['the card of the screen', '.error'],
   'lib/components/AvatarEditor.svelte': ['the profile canvas', '.error'],
-  'lib/components/profile/BlockGrid.svelte': ['the profile canvas', '.issue-tag'],
-  'lib/components/profile/BlockPicker.svelte': ['the profile canvas', '.hint'],
   'lib/components/profile/BlockSettings.svelte': ['the settings panel of a block', '.error'],
   'lib/components/profile/CollectionBlock.svelte': ['the scrim over a cover; marks', '.heart', '.mastered'],
   'lib/components/SystemRequirements.svelte': [
