@@ -81,6 +81,41 @@ describe('MetadataMatchModal: the candidates', () => {
   });
 });
 
+describe('MetadataMatchModal: changing a match from the keyboard', () => {
+  it('moves the focus into the question a row opens, and back to the row on Cancel', async () => {
+    vi.mocked(findMetadataCandidates).mockResolvedValueOnce([hades]);
+    render(MetadataMatchModal, { target: app, props: { open: true, gameId: 'g1', gameTitle: 'Hades', mode: 'change' } });
+    const keys = user();
+    const dialog = screen.getByRole('dialog', { name: msg('modals.metadataMatchChangeTitle') });
+    const row = await within(dialog).findByRole('button', { name: /^Hades \(2020\)/ });
+    row.focus();
+
+    await keys.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(document.activeElement?.closest('.confirm')).not.toBeNull());
+    expect(document.activeElement?.textContent).toContain('Hades');
+
+    within(dialog).getByRole('button', { name: msg('common.cancel') }).focus();
+    await keys.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: /^Hades \(2020\)/ })));
+  });
+
+  it('gives the focus back to the row when the replacement is refused', async () => {
+    vi.mocked(findMetadataCandidates).mockResolvedValueOnce([hades]);
+    vi.mocked(applyMetadataMatch).mockRejectedValueOnce(new Error('refused'));
+    render(MetadataMatchModal, { target: app, props: { open: true, gameId: 'g1', gameTitle: 'Hades', mode: 'change' } });
+    const keys = user();
+    const dialog = screen.getByRole('dialog', { name: msg('modals.metadataMatchChangeTitle') });
+    await keys.click(await within(dialog).findByRole('button', { name: /^Hades \(2020\)/ }));
+    within(dialog).getByRole('button', { name: msg('modals.metadataMatchReplace') }).focus();
+
+    await keys.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: /^Hades \(2020\)/ })));
+  });
+});
+
 describe('MetadataMatchModal: opened for another game before the first answer', () => {
   it('shows the candidates of the game it is open for, not a late answer for the one before', async () => {
     const first = deferred<MetadataCandidate[]>();
