@@ -12,8 +12,15 @@ type Site = [tone: string, announces: boolean | 'dynamic'];
  * Notice.dom.test.ts proves the option.
  */
 const SITES: Record<string, Site[]> = {
+  // Names missing from the list and unread progress files are facts of the card; a failed load just happened.
+  'lib/components/AchievementsCard.svelte': [
+    ['warning', false],
+    ['warning', false],
+    ['danger', true],
+  ],
   'lib/components/NetworkBanner.svelte': [['danger', true]],
   'lib/components/OfflineBanner.svelte': [['warning', true]],
+  'lib/components/SystemRequirements.svelte': [['danger', true]],
   'lib/components/UpdateBanner.svelte': [['danger', true]],
   // Advice for the chosen platform, also inside InstallModal and AddDownloadModal.
   'lib/components/EmulatorHint.svelte': [['warning', false]],
@@ -27,14 +34,32 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
     ['danger', true],
   ],
-  // The stored error of the last download, shown on every opening of the game.
-  'routes/game/GameDetails.svelte': [['danger', false]],
+  // In source order: the downloads and the other versions failed to load (just happened); the stored
+  // error of the last download and the uninstalled game, shown on every opening; the metadata search
+  // running; the stored "not found" or "failed" of the metadata, its tone set by which.
+  'routes/game/GameDetails.svelte': [
+    ['danger', true],
+    ['danger', true],
+    ['danger', false],
+    ['info', false],
+    ['info', true],
+    ['dynamic', false],
+  ],
   'routes/game/GameReviews.svelte': [
     ['danger', true],
     ['danger', true],
   ],
-  'routes/game/GameScreenshots.svelte': [['danger', true]],
-  'routes/game/ReviewComposer.svelte': [['danger', true]],
+  // The library folder missing is a state of the settings, not of this visit.
+  'routes/game/GameScreenshots.svelte': [
+    ['warning', false],
+    ['danger', true],
+  ],
+  // A review hidden by moderation is a fact of the review.
+  'routes/game/ReviewComposer.svelte': [
+    ['danger', true],
+    ['warning', false],
+  ],
+  'routes/game/ReviewSummary.svelte': [['danger', true]],
   // The history file could not be written: a state of the page, not an event of this visit.
   'routes/history/History.svelte': [['danger', false]],
   'routes/profile/Profile.svelte': [
