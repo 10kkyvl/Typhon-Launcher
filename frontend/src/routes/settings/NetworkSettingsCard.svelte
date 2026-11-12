@@ -53,6 +53,9 @@
   let testing = $state(false);
   let failure = $state('');
   let portError = $state('');
+  // Each refusal puts the message up anew, so the same bad port applied again is said again.
+  let portRefusals = $state(0);
+  const portBad = $derived(port.trim() !== '' && !portPattern.test(port.trim()));
   let testResult = $state<{ ok: boolean; text: string } | null>(null);
 
   let interfaces = $state<NetInterface[]>([]);
@@ -95,6 +98,11 @@
       port = next.port;
       username = next.username;
     });
+  });
+
+  // The mark goes as soon as the port is a valid one again.
+  $effect(() => {
+    if (!portBad) untrack(() => (portError = ''));
   });
 
   $effect(() => {
@@ -167,6 +175,7 @@
     const rawPort = port.trim();
     if (mode === 'proxy' && rawPort !== '' && !portPattern.test(rawPort)) {
       portError = networkCodeText('settings.proxy_port_invalid');
+      portRefusals += 1;
       return;
     }
     applying = true;
@@ -303,7 +312,9 @@
         <div class="row-text">
           <span class="row-label">{msg('settings.networkProxyPortLabel')}</span>
           {#if portError}
-            <span class="field-error" id="{uid}-port-error" role="alert">{portError}</span>
+            {#key portRefusals}
+              <span class="field-error" id="{uid}-port-error" role="alert">{portError}</span>
+            {/key}
           {/if}
         </div>
         <input

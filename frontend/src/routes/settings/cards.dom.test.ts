@@ -217,6 +217,34 @@ describe('NetworkSettingsCard: the proxy', () => {
     expect(saveSettingsPatch).not.toHaveBeenCalled();
   });
 
+  it('clears the bad port mark once the port is valid, and says it again on the next refusal', async () => {
+    const { user } = renderDom(NetworkSettingsCard, {});
+    const port = screen.getByRole('textbox', { name: msg('settings.networkProxyPortLabel') });
+    const apply = screen.getByRole('button', { name: msg('settings.networkApply') });
+    await user.clear(port);
+    await user.type(port, 'abc');
+    await user.click(apply);
+    const first = screen.getByRole('alert');
+
+    await user.click(apply);
+    const again = screen.getByRole('alert');
+    expect(again).not.toBe(first);
+    expect(first.isConnected).toBe(false);
+
+    await user.clear(port);
+    await user.type(port, '8080');
+    expect(port.hasAttribute('aria-invalid')).toBe(false);
+    expect(port.hasAttribute('aria-describedby')).toBe(false);
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    await user.clear(port);
+    await user.type(port, 'x');
+    expect(port.hasAttribute('aria-invalid')).toBe(false);
+    await user.click(apply);
+    expect(port.getAttribute('aria-invalid')).toBe('true');
+    expect(screen.getByRole('alert').textContent).toBe(msg('settings.proxy_port_invalid'));
+  });
+
   it('shows the proxy warning on a warning notice', async () => {
     renderDom(NetworkSettingsCard, {});
     const plate = screen.getByText(msg('settings.networkProxyWarning')).closest('[data-tone]');
