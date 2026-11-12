@@ -9,8 +9,10 @@ import type { LibraryGame } from '../../lib/services/library';
 import type { Offer } from '../../lib/services/lan';
 import { hashing, offers } from '../../lib/stores/lan';
 import { libraryGames } from '../../lib/stores/library';
+import { styleOf, topLevel } from '../../lib/testing/css';
 import { renderDom } from '../../lib/testing/dom';
 import Lan from './Lan.svelte';
+import page from './Lan.svelte?raw';
 
 afterEach(() => {
   hashing.set(new Map());
@@ -62,5 +64,22 @@ describe('Lan: a game offered nearby', () => {
     expect(row.hasAttribute('title')).toBe(false);
     expect(row.textContent).toContain('1.0');
     expect(row.textContent).toContain(msg('transfers.lanFromHost', { host: 'PC-1' }));
+  });
+
+  // The version tells two offers of the same game apart. jsdom ignores media queries: the test reads
+  // every rule the page hides something with inside one and checks none of them reaches the version.
+  it('keeps its version visible at every window width', () => {
+    offers.set([
+      { peerId: 'p1', host: 'PC-1', addr: '', port: 0, gameId: 'g1', title: 'Portal 2', version: '1.0', exe: '', sizeBytes: 1024, infoHash: 'h1', lastSeen: '' } as Offer,
+    ]);
+    renderDom(Lan);
+    const version = screen.getByText('1.0');
+    const css = styleOf(page, 'Lan');
+    const hiding = [...css.matchAll(/@media[^{]*\{((?:[^{}]*\{[^{}]*\})*)\s*\}/g)].flatMap((block) =>
+      [...block[1].matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((rule) => /display:\s*none/.test(rule[2])).flatMap((rule) => topLevel(rule[1].trim())),
+    );
+
+    expect(hiding.length).toBeGreaterThan(0);
+    expect(hiding.filter((selector) => version.closest(selector))).toEqual([]);
   });
 });

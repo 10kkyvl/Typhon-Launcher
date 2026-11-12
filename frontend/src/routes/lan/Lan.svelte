@@ -76,7 +76,7 @@
                 {msg('transfers.lanFromHost', { host: offer.host })}
               </span>
             </div>
-            {#if offer.version}<span class="row-date">{offer.version}</span>{/if}
+            {#if offer.version}<span class="row-version">{offer.version}</span>{/if}
             <span class="row-size">{bytesSize(offer.sizeBytes)}</span>
             <div class="row-actions">
               <Button size="sm" onclick={() => receive(offer.infoHash, offer.peerId)}>
@@ -252,7 +252,8 @@
   }
 
   .row-size,
-  .row-date {
+  .row-date,
+  .row-version {
     font-size: var(--font-sm);
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
@@ -264,7 +265,10 @@
     min-width: 7rem;
   }
 
-  .row-date {
+  /* The version tells two offers of the same game apart: unlike a share's date, it stays at every
+     width. */
+  .row-date,
+  .row-version {
     min-width: 9rem;
   }
 
