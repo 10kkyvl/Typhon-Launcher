@@ -165,9 +165,8 @@ describe('selecting text', () => {
     const messages = Object.entries(frontendSources)
       .filter(([path]) => path.endsWith('.svelte'))
       .flatMap(([path, text]) => labelMessages(text).map((tag) => `${path}: ${tag}`));
-    // Some forms show their errors inside the label, so a scan that finds none has stopped reading them.
-    expect(messages).not.toEqual([]);
-    expect(messages.filter((tag) => !/\brole="(?:alert|status)"/.test(tag))).toEqual([]);
+    // A message about a field sits beside it, outside its label, where it would join the field's name.
+    expect(messages).toEqual([]);
   });
 
   it('is always possible in a text field, whatever it sits in', () => {
