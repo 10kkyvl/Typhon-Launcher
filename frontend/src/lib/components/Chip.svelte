@@ -244,7 +244,6 @@
     cursor: default;
   }
 
-  /* Busy is not unavailable: it keeps its colour while its own request runs. */
   /* The label as one item of the chip's row, its own parts spaced as the chip spaces them. */
   .content {
     display: inline-flex;
@@ -264,6 +263,7 @@
     place-items: center;
   }
 
+  /* Busy is not unavailable: it keeps its colour while its own request runs. */
   button.chip[aria-busy='true'] {
     position: relative;
     opacity: 1;
@@ -331,7 +331,9 @@
     cursor: default;
   }
 
+  /* A removal in flight: its spinner at full strength, not dimmed as unavailable. */
   .remove[aria-busy='true'] {
+    opacity: 1;
     cursor: progress;
   }
 </style>

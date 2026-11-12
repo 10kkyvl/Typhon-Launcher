@@ -251,3 +251,18 @@ describe('Chip busy is seen', () => {
     expect(css).not.toMatch(/@keyframes/);
   });
 });
+
+// Busy is not unavailable: a removal in flight shows its spinner at full strength; only a refused or
+// disabled remove button is dimmed. Each rule follows the one it overrides.
+describe('Chip busy remove button look', () => {
+  it('draws a busy remove button at full strength, after the dimmed rule it overrides', () => {
+    const css = styleOf(chipSource, 'Chip.svelte');
+    expect(ruleBody(css, ".remove[aria-busy='true']")).toEqual({ opacity: '1', cursor: 'progress' });
+    expect(css.indexOf(".remove[aria-busy='true']")).toBeGreaterThan(css.indexOf(".remove:is(:disabled, [aria-disabled='true'])"));
+  });
+
+  it('keeps each busy comment with the rule it describes', () => {
+    const raw = /<style>([\s\S]*)<\/style>/.exec(chipSource)?.[1] ?? '';
+    expect(raw).toMatch(/\/\* Busy is not unavailable[^*]*\*\/\s*button\.chip\[aria-busy='true'\] \{/);
+  });
+});
