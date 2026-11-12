@@ -3,6 +3,7 @@
   import { t } from '../i18n';
   import { dlcView, hasRequirements, requirementColumns } from '../game/extras';
   import type { SteamInfo } from '../services/metadata';
+  import Button from './Button.svelte';
   import Tabs from './Tabs.svelte';
   import { tabPanel } from './tabs';
 
@@ -52,7 +53,7 @@
 {#if dlc.total > 0}
   <section class="block">
     <h2 class="heading">{$t('games.detailDlcHeading', { count: dlc.total })}</h2>
-    <ul class="dlc">
+    <ul class="dlc" id="{uid}-dlc">
       {#each dlc.items as item (item.appId)}
         <li>
           <button class="dlc-link" onclick={() => onopendlc(item.appId)}>
@@ -63,9 +64,11 @@
       {/each}
     </ul>
     {#if dlc.collapsible}
-      <button class="toggle" onclick={() => (dlcExpanded = !dlcExpanded)}>
-        {dlcExpanded ? $t('games.detailDlcCollapse') : $t('games.detailDlcShowAll')}
-      </button>
+      <div class="toggle">
+        <Button variant="ghost" size="sm" aria-expanded={dlcExpanded} aria-controls="{uid}-dlc" onclick={() => (dlcExpanded = !dlcExpanded)}>
+          {dlcExpanded ? $t('games.detailDlcCollapse') : $t('games.detailDlcShowAll')}
+        </Button>
+      </div>
     {/if}
   </section>
 {/if}
@@ -154,8 +157,5 @@
 
   .toggle {
     margin-top: var(--space-3);
-    color: var(--accent-text);
-    font-size: var(--font-xs);
-    font-weight: 500;
   }
 </style>

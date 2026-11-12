@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Flag, ThumbsDown, ThumbsUp } from '@lucide/svelte';
   import Avatar from '../../lib/components/Avatar.svelte';
+  import Button from '../../lib/components/Button.svelte';
   import { fieldsFrame } from '../../lib/profile/frameLook';
   import { AccountError } from '../../lib/services/account';
   import { vote as voteReview, type Review, type ReviewVote } from '../../lib/services/reviews';
@@ -12,6 +13,8 @@
   import ReportReviewModal from './ReportReviewModal.svelte';
 
   let { review, guest }: { review: Review; guest: boolean } = $props();
+
+  const uid = $props.id();
 
   const BODY_COLLAPSE_LENGTH = 700;
 
@@ -96,11 +99,13 @@
 
   <p class="playtime">{msg('reviews.playtimeAtReview', { time: playtime(review.playtimeSeconds) })}</p>
 
-  <p class="body">{bodyText}</p>
+  <p class="body" id="{uid}-body">{bodyText}</p>
   {#if long}
-    <button class="more" type="button" onclick={() => (expanded = !expanded)}>
-      {expanded ? msg('reviews.readLess') : msg('reviews.readMore')}
-    </button>
+    <div class="more">
+      <Button variant="ghost" size="sm" aria-expanded={expanded} aria-controls="{uid}-body" onclick={() => (expanded = !expanded)}>
+        {expanded ? msg('reviews.readLess') : msg('reviews.readMore')}
+      </Button>
+    </div>
   {/if}
 
   <footer class="foot">
@@ -221,13 +226,6 @@
 
   .more {
     margin-top: 0.6rem;
-    font-size: var(--font-xs);
-    font-weight: 500;
-    color: var(--accent-text);
-  }
-
-  .more:hover {
-    text-decoration: underline;
   }
 
   .foot {

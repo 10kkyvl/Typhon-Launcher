@@ -1037,11 +1037,19 @@
   {#if summary.text || !title || metaState === 'searching'}
     <div class="gsec" class:moved={moved('summary')} {...part('summary')}>
       {#if summary.text}
-        <p class="summary">{summary.text}</p>
+        <p class="summary" id="{uid}-summary">{summary.text}</p>
         {#if summary.expandable}
-          <button class="more" onclick={() => (summaryExpanded = !summaryExpanded)}>
-            {summaryExpanded ? msg('games.detailCollapseSummary') : msg('games.detailExpandSummary')}
-          </button>
+          <div class="more">
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-expanded={summaryExpanded}
+              aria-controls="{uid}-summary"
+              onclick={() => (summaryExpanded = !summaryExpanded)}
+            >
+              {summaryExpanded ? msg('games.detailCollapseSummary') : msg('games.detailExpandSummary')}
+            </Button>
+          </div>
         {/if}
       {:else if !title || metaState === 'searching'}
         <div aria-hidden="true">
@@ -2050,14 +2058,6 @@
 
   .more {
     margin-top: 1rem;
-    font-size: var(--font-sm);
-    font-weight: 500;
-    color: var(--accent-text);
-    border-radius: var(--radius-sm);
-  }
-
-  .more:hover {
-    text-decoration: underline;
   }
 
   .tags {

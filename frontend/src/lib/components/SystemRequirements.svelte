@@ -31,6 +31,8 @@
     heading = true,
   }: { gameId: string; installPath: string; installed?: boolean; revision?: string; heading?: boolean } = $props();
 
+  const uid = $props.id();
+
   let report = $state<SysreqReport | null>(null);
   let failure = $state('');
   let loading = $state(false);
@@ -92,14 +94,14 @@
       <div class="line">
         <StatusBadge kind={tone} label={msg(verdictLabelKey(report))} dot={false} />
         {#if checks.length > 0}
-          <button class="toggle" aria-expanded={expanded} onclick={() => (expanded = !expanded)}>
+          <Button variant="ghost" size="sm" aria-expanded={expanded} aria-controls="{uid}-checks" onclick={() => (expanded = !expanded)}>
             {expanded ? msg('sysreq.hide') : msg('sysreq.show')}
             <span class="chevron" class:open={expanded}><ChevronDown size="1.4rem" strokeWidth={1.8} /></span>
-          </button>
+          </Button>
         {/if}
       </div>
       {#if expanded}
-        <ul class="checks">
+        <ul class="checks" id="{uid}-checks">
           {#each checks as check (check.kind)}
             {@const rowTone = statusTone(check.status)}
             <li class="check">
@@ -152,19 +154,6 @@
   .estimate {
     font-size: var(--font-sm);
     color: var(--text-3);
-  }
-
-  .toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1);
-    color: var(--text-2);
-    font-size: var(--font-sm);
-    cursor: pointer;
-  }
-
-  .toggle:hover {
-    color: var(--text);
   }
 
   .chevron {
