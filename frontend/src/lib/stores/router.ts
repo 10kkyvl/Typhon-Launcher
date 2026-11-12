@@ -17,7 +17,9 @@ export type RouteName =
   | 'user'
   | 'profile'
   | 'support'
-  | 'settings';
+  | 'settings'
+  // Development builds only (lib/navigation/showcase.ts).
+  | 'showcase';
 
 export interface Route {
   name: RouteName;

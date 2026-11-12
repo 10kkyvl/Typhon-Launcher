@@ -75,6 +75,7 @@
   import Sources from './routes/sources/Sources.svelte';
   import Support from './routes/support/Support.svelte';
   import UserProfile from './routes/user/UserProfile.svelte';
+  import { SHOWCASE, loadShowcase } from './lib/navigation/showcase';
 
   onDestroy(initNativeLanguage());
   onDestroy(initWindowState());
@@ -178,6 +179,10 @@
           <Support ticket={$route.params.ticket} view={$route.params.view} topic={$route.params.topic} subject={$route.params.subject} />
         {:else if $route.name === 'settings'}
           <Settings tab={$route.params.tab} />
+        {:else if SHOWCASE && $route.name === 'showcase'}
+          {#await loadShowcase() then Showcase}
+            {#if Showcase}<Showcase />{/if}
+          {/await}
         {/if}
       </AppShell>
       <ReleaseNotesModal />
