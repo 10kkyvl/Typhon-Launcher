@@ -68,6 +68,42 @@ describe('GameProfiles: a profile row', () => {
   });
 });
 
+describe('GameProfiles: opening and closing the editor from the keyboard', () => {
+  it('Edit puts the focus in the editor, and Cancel gives it back to Edit', async () => {
+    vi.mocked(getProfiles).mockResolvedValue([profile()]);
+    const { user } = renderDom(GameProfiles, { game, candidates: [], adminShown: false });
+    const edit = await screen.findByRole('button', { name: msg('modals.profilesEdit') });
+    edit.focus();
+
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole('textbox', { name: msg('modals.profilesName') })));
+
+    screen.getByRole('button', { name: msg('common.cancel') }).focus();
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: msg('modals.profilesEdit') })));
+  });
+
+  it('"Add profile" puts the focus in the editor, and a save gives it back to "Add profile"', async () => {
+    vi.mocked(getProfiles).mockResolvedValue([]);
+    vi.mocked(addProfile).mockResolvedValue(profile());
+    const { user } = renderDom(GameProfiles, { game, candidates: [], adminShown: false });
+    const add = await screen.findByRole('button', { name: msg('modals.profilesAdd') });
+    add.focus();
+
+    await user.keyboard('{Enter}');
+
+    const name = screen.getByRole('textbox', { name: msg('modals.profilesName') });
+    await vi.waitFor(() => expect(document.activeElement).toBe(name));
+    await user.type(name, 'Safe');
+    screen.getByRole('button', { name: msg('modals.profilesSave') }).focus();
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: msg('modals.profilesAdd') })));
+  });
+});
+
 describe('GameProfiles: messages', () => {
   it('says a failed load in a danger notice', async () => {
     vi.mocked(getProfiles).mockRejectedValue(new Error('disk'));

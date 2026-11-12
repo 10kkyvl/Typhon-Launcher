@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { FolderOpen, Pencil, Plus, Trash2 } from '@lucide/svelte';
   import Tooltip from './Tooltip.svelte';
   import Button from './Button.svelte';
@@ -106,14 +106,37 @@
     steam = next;
   }
 
-  function startAdd() {
+  let section = $state<HTMLElement>();
+  let nameInput = $state<HTMLInputElement>();
+  // The profile whose Edit opened the editor, '' for "Add profile": the focus goes back there on close.
+  let opener = '';
+
+  // Opening the editor disables the button that opened it: the focus goes into the editor's name.
+  async function openEditor(next: Editor) {
     editorError = '';
-    editor = { id: null, name: '', executable: game.executable, argsLine: '', admin: false };
+    editor = next;
+    opener = next.id ?? '';
+    await tick();
+    nameInput?.focus();
+  }
+
+  function startAdd() {
+    void openEditor({ id: null, name: '', executable: game.executable, argsLine: '', admin: false });
   }
 
   function startEdit(p: ProfileView) {
-    editorError = '';
-    editor = { id: p.id, name: p.name, executable: p.executable, argsLine: p.argsLine, admin: p.runAsAdmin };
+    void openEditor({ id: p.id, name: p.name, executable: p.executable, argsLine: p.argsLine, admin: p.runAsAdmin });
+  }
+
+  // The editor went with the focused Save or Cancel: the focus goes back to what opened it.
+  async function closeEditor() {
+    editor = null;
+    await tick();
+    const active = document.activeElement;
+    if (active && active !== document.body && active.isConnected && !(active instanceof HTMLButtonElement && active.disabled)) return;
+    const edits = [...(section?.querySelectorAll<HTMLElement>('[data-edit-profile]') ?? [])];
+    const back = opener ? edits.find((el) => el.dataset.editProfile === opener) : section?.querySelector<HTMLElement>('[data-add-profile]');
+    back?.focus();
   }
 
   async function browse() {
@@ -143,16 +166,18 @@
       argsLine: current.argsLine,
       runAsAdmin: current.admin,
     };
+    let saved = false;
     try {
       if (current.id === null) await addProfile(game.id, input);
       else await updateProfile(game.id, current.id, input);
-      editor = null;
+      saved = true;
     } catch (err) {
       editorError = errorText(err, msg('modals.profilesSaveFailed'));
     } finally {
       busy = false;
       acting = '';
     }
+    if (saved) await closeEditor();
   }
 
   async function confirmDelete() {
@@ -222,10 +247,10 @@
   const chosenIndex = $derived(editor ? candidates.findIndex((candidate) => candidate.path === editor?.executable) : -1);
 </script>
 
-<section class="section">
+<section class="section" bind:this={section}>
   <div class="row spread">
     <h4>{msg('modals.profilesTitle')}</h4>
-    <Button size="sm" disabled={loading || busy || editor !== null} onclick={startAdd}>
+    <Button size="sm" data-add-profile disabled={loading || busy || editor !== null} onclick={startAdd}>
       <Plus size="1.5rem" strokeWidth={1.8} />
       {msg('modals.profilesAdd')}
     </Button>
@@ -249,7 +274,7 @@
           {#if p.runAsAdmin}<StatusBadge kind="accent" dot={false} label={msg('modals.propertiesAdminTitle')} />{/if}
           {#if !p.isDefault}
             <span class="grow"></span>
-            <IconButton size="sm" label={msg('modals.profilesEdit')} disabled={busy || editor !== null} onclick={() => startEdit(p)}>
+            <IconButton size="sm" label={msg('modals.profilesEdit')} data-edit-profile={p.id} disabled={busy || editor !== null} onclick={() => startEdit(p)}>
               <Pencil size="1.5rem" strokeWidth={1.8} />
             </IconButton>
             <IconButton size="sm" label={msg('modals.profilesDelete')} disabled={busy} onclick={() => (deleting = p)}>
@@ -292,6 +317,7 @@
           class="input sm"
           type="text"
           maxlength="40"
+          bind:this={nameInput}
           spellcheck="false"
           autocomplete="off"
           placeholder={msg('modals.profilesNamePlaceholder')}
@@ -356,7 +382,7 @@
         <Button size="sm" variant="primary" disabled={(busy && acting !== 'save') || !canSave} busy={acting === 'save'} onclick={save}>
           {msg('modals.profilesSave')}
         </Button>
-        <Button size="sm" variant="ghost" disabled={busy} onclick={() => (editor = null)}>
+        <Button size="sm" variant="ghost" disabled={busy} onclick={closeEditor}>
           {msg('common.cancel')}
         </Button>
       </div>
