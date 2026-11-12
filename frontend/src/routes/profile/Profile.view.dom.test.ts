@@ -64,6 +64,19 @@ describe('the profile page', () => {
     expect(badges[0].classList.contains('badge')).toBe(true);
   });
 
+  it('the game being played is an accent status badge with its gamepad, holding the whole title', async () => {
+    signIn({ layout: { version: 1, blocks: [] } });
+    const title = 'The Legend of a Game Whose Title Runs Far Longer Than Any Header Line';
+    const running = { id: 'g1', title, cover: '', playtimeSeconds: 0, status: '' };
+    vi.mocked(getProfileSnapshot).mockResolvedValue({ ...EMPTY_SNAPSHOT, running: [running] });
+    renderDom(Profile);
+
+    const badge = await screen.findByText(`Playing ${title}`);
+    expect(badge.classList.contains('badge')).toBe(true);
+    expect(badge.classList.contains('accent')).toBe(true);
+    expect(badge.querySelector('[data-part="status-badge-icon"] svg')).not.toBeNull();
+  });
+
   it('"View all activity" is a text link under the activity; Enter on it opens the history', async () => {
     signIn({ layout: { version: 1, blocks: [{ id: 'a', type: 'activity', width: 'half', config: {} }] } });
     const played = { id: 'g1', title: 'Hades', cover: '', playtimeSeconds: 3600, status: '' };
