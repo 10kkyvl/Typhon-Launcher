@@ -16,7 +16,11 @@
  *   hinted control to the next), every hint set aside is let go, and the one whose control still has
  *   keyboard focus shows again. Which hint is shown is one value, not the order hints were
  *   made in. Menus are not hints: a hint neither closes a menu nor is closed by one (MenuList keeps
- *   menus to one at a time on its own). A hint with nothing to show is not fed at all (Tooltip).
+ *   menus to one at a time on its own);
+ * - `mute(true)`: the hint has nothing to show (an empty text): it never opens and takes part in
+ *   nothing, neither setting aside the hint shown nor holding the keyboard's hint back while the
+ *   pointer rests on its control. It keeps following the pointer and focus, so it shows at once if
+ *   it gets something to show while the user is there.
  */
 
 export const HOVER_DELAY = 350;
@@ -29,6 +33,7 @@ export interface HoverIntent {
   blur(): void;
   escape(): void;
   dismiss(): void;
+  mute(muted: boolean): void;
   destroy(): void;
   readonly open: boolean;
 }
@@ -66,6 +71,7 @@ export function createHoverIntent(onchange: (open: boolean) => void, options: Ho
   let dismissed = false;
   let open = false;
   let asideNow = false;
+  let muted = false;
 
   const cancel = () => {
     if (showTimer !== null) { clearTimeout(showTimer); showTimer = null; }
@@ -73,7 +79,7 @@ export function createHoverIntent(onchange: (open: boolean) => void, options: Ho
   };
   const self: Hint = {
     get resting() {
-      return showTimer !== null;
+      return showTimer !== null && !muted;
     },
     setAside() {
       asideNow = true;
@@ -88,7 +94,7 @@ export function createHoverIntent(onchange: (open: boolean) => void, options: Ho
     },
   };
   const update = () => {
-    const next = (hovered || focused) && !dismissed && !asideNow;
+    const next = (hovered || focused) && !dismissed && !asideNow && !muted;
     if (next === open) return;
     open = next;
     if (next) {
@@ -156,6 +162,12 @@ export function createHoverIntent(onchange: (open: boolean) => void, options: Ho
       dismissed = true;
       update();
       dismissed = false;
+      handBack();
+    },
+    mute(value) {
+      if (value === muted) return;
+      muted = value;
+      update();
       handBack();
     },
     destroy() {

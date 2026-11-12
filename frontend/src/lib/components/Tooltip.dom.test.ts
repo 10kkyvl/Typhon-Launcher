@@ -505,3 +505,39 @@ describe('Tooltip: one at a time', () => {
     expect(bubbles()).toEqual([]);
   });
 });
+
+describe('Tooltip: a hint with nothing to show', () => {
+  const bubbles = () => [...document.querySelectorAll('[data-part="tooltip"]')].map((bubble) => bubble.textContent?.trim());
+
+  it('takes part in nothing: the pointer resting on its control leaves the keyboard hint shown', async () => {
+    const { keys, control, wait } = setup({ text: '' });
+    screen.getByRole('textbox', { name: 'Search' }).focus();
+    await keys.tab();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'More' }));
+    expect(bubbles()).toEqual(['More actions']);
+
+    await keys.hover(control());
+    await wait(HOVER_DELAY);
+
+    expect(bubbles()).toEqual(['More actions']);
+
+    await keys.unhover(control());
+    await wait(LEAVE_GRACE);
+
+    expect(bubbles()).toEqual(['More actions']);
+  });
+
+  it('a text that empties while shown takes the hint away and gives the keyboard hint back', async () => {
+    const { keys, control, wait, rerender } = setup();
+    screen.getByRole('textbox', { name: 'Search' }).focus();
+    await keys.tab();
+    await keys.hover(control());
+    await wait(HOVER_DELAY);
+    expect(bubbles()).toEqual([TEXT]);
+
+    await rerender({ text: '' });
+    await wait(0);
+
+    expect(bubbles()).toEqual(['More actions']);
+  });
+});

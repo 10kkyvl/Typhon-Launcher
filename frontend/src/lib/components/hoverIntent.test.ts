@@ -339,4 +339,25 @@ describe('one hint at a time', () => {
     expect(back.changes).toEqual([true, false, true]);
     expect(other.changes).toEqual([true, false]);
   });
+
+  it('a muted hint neither opens nor holds the keyboard hint back while the pointer rests towards it', () => {
+    const keyboard = make();
+    const from = make();
+    const empty = make();
+    empty.intent.mute(true);
+    keyboard.intent.focus();
+    rest(from.intent);
+
+    from.intent.unhover();
+    empty.intent.hover();
+    vi.advanceTimersByTime(LEAVE_GRACE);
+
+    expect(keyboard.changes).toEqual([true, false, true]);
+    vi.advanceTimersByTime(HOVER_DELAY);
+    expect(empty.changes).toEqual([]);
+    expect(keyboard.changes).toEqual([true, false, true]);
+
+    empty.intent.mute(false);
+    expect(empty.changes).toEqual([true]);
+  });
 });

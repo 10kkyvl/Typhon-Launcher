@@ -50,6 +50,10 @@
   });
   onDestroy(() => intent.destroy());
 
+  // A hint with nothing to show (an empty text, as a button without a reason passes) takes part in
+  // nothing: it must not hide the hint of the focused control by opening empty.
+  $effect(() => intent.mute(!text));
+
   const describedIds = (element: Element) => (element.getAttribute('aria-describedby') ?? '').split(/\s+/).filter(Boolean);
 
   function undescribe(element: Element) {
