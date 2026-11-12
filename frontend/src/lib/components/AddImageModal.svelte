@@ -160,7 +160,7 @@
   }
 </script>
 
-<Modal bind:open title={msg('emul.addTitle')}>
+<Modal dismissible={!adding} bind:open title={msg('emul.addTitle')}>
   <div class="form">
     <div class="field">
       <label class="field-label" for="{uid}-image">{msg('emul.addImageLabel')}</label>
@@ -217,7 +217,7 @@
     {#if failure}<Notice tone="danger" compact>{failure}</Notice>{/if}
   </div>
   {#snippet footer()}
-    <Button onclick={() => (open = false)}>{msg('common.cancel')}</Button>
+    <Button disabled={adding} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
     <Button variant="primary" disabled={!ready} busy={adding} onclick={submit}>
       {adding ? msg('games.installedAddingLabel') : msg('common.add')}
     </Button>

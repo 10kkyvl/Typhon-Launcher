@@ -172,6 +172,29 @@ describe('AddImageModal', () => {
   });
 });
 
+describe('AddImageModal: while it adds', () => {
+  it('cannot be closed, so a refused add is seen in it', async () => {
+    const adding = deferred<LibraryGame>();
+    vi.mocked(addEmulatedGame).mockReturnValueOnce(adding.promise);
+    render(AddImageModal, { target: app, props: { open: true } });
+    const dialog = screen.getByRole('dialog', { name: msg('emul.addTitle') });
+    const keys = user();
+    await vi.waitFor(() => expect(vi.mocked(listPlatforms)).toHaveBeenCalled());
+    await keys.type(within(dialog).getByRole('textbox', { name: msg('emul.addImageLabel') }), 'C:/roms/game.iso');
+    await keys.type(within(dialog).getByRole('textbox', { name: msg('games.installedTitleFieldLabel') }), 'Game');
+    const add = within(dialog).getByRole('button', { name: msg('common.add') });
+    await vi.waitFor(() => expect(add).toHaveProperty('disabled', false));
+    await keys.click(add);
+
+    await keys.keyboard('{Escape}');
+    expect(dialog.isConnected).toBe(true);
+    expect(within(dialog).getByRole('button', { name: msg('common.cancel') })).toHaveProperty('disabled', true);
+
+    adding.reject(new Error('exists'));
+    expect((await within(dialog).findByRole('alert')).textContent?.trim()).toBe(msg('emul.addFailed'));
+  });
+});
+
 describe('SentDataModal', () => {
   it('says it is loading with a labelled spinner, a failed load in a danger notice, and a cut entry in a warning notice', async () => {
     const loaded = deferred<SentDataEntry[]>();
