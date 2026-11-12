@@ -340,3 +340,18 @@ describe('Support: a reply that came while a refresh was held back', () => {
   });
 });
 
+
+describe('TicketList: "Load more" that brings the last page', () => {
+  it('hands focus to the first request it brought', async () => {
+    vi.mocked(listTickets).mockImplementation(async (cursor = '') =>
+      cursor === '' ? { tickets: [ticket(1, 'First request')], next: 'c2' } : { tickets: [ticket(2, 'Second request')], next: '' },
+    );
+    const { user } = renderDom(TicketList);
+    (await screen.findByRole('button', { name: msg('tickets.loadMore') })).focus();
+
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(screen.queryByRole('button', { name: msg('tickets.loadMore') })).toBeNull());
+    expect(document.activeElement).toBe(row('Second request'));
+  });
+});

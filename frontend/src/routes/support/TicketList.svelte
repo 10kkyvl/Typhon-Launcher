@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, untrack } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import { Activity, LifeBuoy, Plus } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
@@ -109,6 +109,16 @@
     }
   }
 
+  // The last page takes "Load more" away: focus goes to the first request it brought.
+  async function showMore() {
+    const from = tickets.length;
+    if (!(await more())) return;
+    await tick();
+    const active = document.activeElement;
+    if (active && active !== document.body && active.isConnected) return;
+    list?.querySelectorAll<HTMLElement>('button.row')[from]?.focus();
+  }
+
   function retryFocus(): HTMLElement | undefined {
     return firstNew < 0 ? undefined : list?.querySelectorAll<HTMLElement>('button.row')[firstNew];
   }
@@ -208,7 +218,7 @@
   </ul>
   {#if next}
     <div class="more">
-      <Button busy={loadingMore} onclick={more}>
+      <Button busy={loadingMore} onclick={showMore}>
         {loadingMore ? msg('tickets.loadingMore') : msg('tickets.loadMore')}
       </Button>
     </div>
