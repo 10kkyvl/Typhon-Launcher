@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import EmulatorHint from '../lib/components/EmulatorHint.svelte';
 import { locale, msg } from '../lib/i18n';
+import { cachedUsage, scanUsage } from '../lib/services/diskusage';
 import { listPlatforms } from '../lib/services/emulators';
 import { getProfileSnapshot } from '../lib/services/profile';
 import { listTickets, ticketLimits } from '../lib/services/support';
@@ -10,6 +11,7 @@ import { profileFailed } from '../lib/stores/profile';
 import { authState } from '../lib/stores/user';
 import { user } from '../lib/testing/dom';
 import Activity from './activity/Activity.svelte';
+import DiskUsage from './diskusage/DiskUsage.svelte';
 import History from './history/History.svelte';
 import NewTicket from './support/NewTicket.svelte';
 import newTicketSource from './support/NewTicket.svelte?raw';
@@ -21,6 +23,11 @@ vi.mock('../lib/services/backend', () => ({ inWails: false }));
 vi.mock('../lib/services/profile', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../lib/services/profile')>()),
   getProfileSnapshot: vi.fn(),
+}));
+vi.mock('../lib/services/diskusage', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../lib/services/diskusage')>()),
+  cachedUsage: vi.fn(),
+  scanUsage: vi.fn(),
 }));
 vi.mock('../lib/services/emulators', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../lib/services/emulators')>()),
@@ -88,6 +95,26 @@ describe('a status message of a page', () => {
     expect(text.closest('.notice')?.getAttribute('data-tone')).toBe('warning');
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('titles the warnings section of the disk usage page with a heading under the page title', async () => {
+    const report = {
+      games: [],
+      downloads: [],
+      leftovers: [],
+      screenshots: [],
+      snapshots: [],
+      warnings: [{ area: 'downloads', message: 'permission denied' }],
+      totals: { gamesBytes: 0, downloadsBytes: 0, leftoversBytes: 0, screenshotsBytes: 0, snapshotsBytes: 0, totalBytes: 0, reclaimableBytes: 0, unknownSizes: false },
+      scannedAt: '2026-11-12T00:00:00Z',
+    };
+    vi.mocked(cachedUsage).mockResolvedValue(report);
+    vi.mocked(scanUsage).mockResolvedValue(report);
+    render(DiskUsage);
+
+    const heading = await screen.findByRole('heading', { level: 2, name: msg('diskusage.warningsTitle') });
+    expect(heading.closest('.notice')?.getAttribute('data-tone')).toBe('danger');
+    expect(heading.closest('[role="alert"]')).not.toBeNull();
   });
 
   it('turns the counter of a field red next to that field, on a plate of its own', async () => {

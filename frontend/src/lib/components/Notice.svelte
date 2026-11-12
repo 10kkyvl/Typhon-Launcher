@@ -18,6 +18,7 @@
     title,
     compact = false,
     announce = true,
+    level,
     icon,
     action,
     onclose,
@@ -33,6 +34,8 @@
      * of the page. A notice of something that has just happened announces by its tone.
      */
     announce?: boolean;
+    /** The title is a heading of this level when the notice titles a section; plain text otherwise. */
+    level?: 1 | 2 | 3 | 4 | 5 | 6;
     /** Replaces the tone's own icon. */
     icon?: Snippet;
     action?: Snippet;
@@ -84,7 +87,11 @@
   </span>
   <div class="body" role={announce ? (tone === 'danger' ? 'alert' : 'status') : undefined}>
     {#if worded || !announce}
-      {#if title}<span class="title">{title}</span>{/if}
+      {#if title && level}
+        <svelte:element this={`h${level}`} class="title">{title}</svelte:element>
+      {:else if title}
+        <span class="title">{title}</span>
+      {/if}
       <div class="text">{@render children?.()}</div>
     {/if}
   </div>
@@ -140,7 +147,11 @@
   }
 
   .title {
+    margin: 0;
+    font-size: inherit;
     font-weight: 600;
+    line-height: inherit;
+    letter-spacing: inherit;
   }
 
   .text {

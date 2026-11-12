@@ -10,6 +10,7 @@
     text = 'The catalog could not be loaded',
     compact = false,
     announce,
+    level,
     closable = false,
     withAction = false,
     onretry,
@@ -19,6 +20,7 @@
     text?: string;
     compact?: boolean;
     announce?: boolean;
+    level?: 1 | 2 | 3 | 4 | 5 | 6;
     closable?: boolean;
     withAction?: boolean;
     onretry?: () => void;
@@ -33,7 +35,7 @@
 
 <button type="button">Before</button>
 {#if shown}
-  <Notice {tone} {title} {compact} {announce} action={withAction ? retry : undefined} onclose={closable ? () => (shown = false) : undefined}>
+  <Notice {tone} {title} {compact} {announce} {level} action={withAction ? retry : undefined} onclose={closable ? () => (shown = false) : undefined}>
     {text}
   </Notice>
 {/if}

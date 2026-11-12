@@ -242,7 +242,7 @@
 
     {#if report.warnings.length > 0}
       <div class="warnings">
-        <Notice tone="danger" title={msg('diskusage.warningsTitle')}>
+        <Notice tone="danger" title={msg('diskusage.warningsTitle')} level={2}>
           <ul>
             {#each report.warnings as warning, index (index)}
               <li>{msg('diskusage.warningLine', { area: warning.area, message: warning.message })}</li>

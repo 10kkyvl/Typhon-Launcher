@@ -57,6 +57,18 @@ describe('Notice', () => {
     expect(region.closest('.notice')?.querySelector('.icon')?.getAttribute('aria-hidden')).toBe('true');
   });
 
+  it('renders its title as a heading of the level a section gives it, and as plain text otherwise', async () => {
+    setup({ tone: 'danger', title: 'Not everything could be measured', level: 2 });
+    const region = await said('alert');
+    const heading = within(region).getByRole('heading', { level: 2, name: 'Not everything could be measured' });
+    expect(heading.classList.contains('title')).toBe(true);
+    document.getElementById('app')?.replaceChildren();
+
+    setup({ tone: 'danger', title: 'Not everything could be measured' });
+    await said('alert');
+    expect(screen.queryByRole('heading')).toBeNull();
+  });
+
   // A live region reads out all of itself on every change inside it: the buttons stay out of it, so a
   // button whose label changes is not a new announcement, and the message is read without button names.
   it('announces its title and text only, with the action and the close button outside the region', async () => {
