@@ -123,7 +123,10 @@
     if (ok) return moveOn(button, home, focus, within);
     if (!alive) {
       // What held it still there and the user did not close it: the caller dropped it mid-retry.
-      if (import.meta.env.DEV && !closed && holder?.isConnected) {
+      // The mode, compared here and not through a function: `import.meta.env.DEV` is false in the
+      // Wails development build (`vite build --mode development`), and the production build folds
+      // this comparison to false and drops the branch (see lib/navigation/showcase.ts).
+      if (import.meta.env.MODE === 'development' && !closed && holder?.isConnected) {
         console.error('Notice: removed while its retry ran, so the failure that followed was not said again. Keep the notice on screen while `retrying` is true (bind:retrying).');
       }
       return;

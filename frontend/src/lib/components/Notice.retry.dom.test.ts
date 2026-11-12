@@ -341,19 +341,46 @@ describe('Notice with a retry: dropped by the page before the answer', () => {
 // A caller whose load clears its failure when it starts takes the notice away during the notice's own
 // retry: a failure then comes back as a new notice, which is drawn and not said again, with focus
 // lost. Nothing can repair that from inside; in development it is named.
+// The warning is for a development build: `vite`, and the Wails development build, which is
+// `vite build --mode development` with `import.meta.env.DEV` false. The notice reads the mode where it
+// warns, so each case sets the mode (vitest's own is `test`) before the retry answers.
 describe('Notice with a retry: dropped by its caller during the retry', () => {
-  it('names the broken contract when the retry then fails', async () => {
+  async function dropAndFail() {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     const answer = deferred<boolean>();
     const { user } = renderDom(RetryHarness, { run: () => answer.promise, holds: false, resets: true });
-
     await user.click(retryButton());
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
     answer.resolve(false);
     await screen.findByRole('alert');
+    await frame();
+    await frame();
+    return error;
+  }
 
-    await waitFor(() => expect(error).toHaveBeenCalledTimes(1));
+  beforeEach(() => {
+    vi.stubEnv('MODE', 'development');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('names the broken contract when the retry then fails, in the Wails development build too', async () => {
+    vi.stubEnv('DEV', false);
+
+    const error = await dropAndFail();
+
+    expect(error).toHaveBeenCalledTimes(1);
     expect(error.mock.calls[0][0]).toMatch(/^Notice: .*bind:retrying/);
+  });
+
+  it.each(['production', 'test'])('is silent in mode %j', async (mode) => {
+    vi.stubEnv('MODE', mode);
+
+    const error = await dropAndFail();
+
+    expect(error).not.toHaveBeenCalled();
   });
 
   it('says nothing when the user closed the notice while its retry ran', async () => {
