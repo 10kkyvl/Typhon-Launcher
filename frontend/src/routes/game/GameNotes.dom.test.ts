@@ -28,6 +28,24 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe('GameNotes: a save that fails', () => {
+  it('says why as an alert by the field, and the field is described by it', async () => {
+    vi.useFakeTimers();
+    vi.mocked(setNotes).mockRejectedValue(new Error('disk full'));
+    const { user } = renderDom(GameNotes, { gameId: 'g1', stored: '' });
+    await vi.advanceTimersByTimeAsync(0);
+    const field = screen.getByRole('textbox', { name: msg('games.notesHeading') });
+
+    await user.type(field, 'abc');
+    await vi.advanceTimersByTimeAsync(2000);
+
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent?.trim()).toBe(msg('games.notesSaveError'));
+    expect(description(field)).toContain(msg('games.notesSaveError'));
+    expect(field.getAttribute('aria-invalid')).not.toBe('true');
+  });
+});
+
 describe('GameNotes: a note over the limit', () => {
   it('is a shared-look field that says it is invalid and is described by its counter', async () => {
     const { user } = renderDom(GameNotes, { gameId: 'g1', stored: '' });
