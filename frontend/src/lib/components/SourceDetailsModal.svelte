@@ -1,6 +1,6 @@
 <script lang="ts">
   import { sourceErrorText } from '../sources/sourceErrors';
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { ChevronLeft, ChevronRight } from '@lucide/svelte';
   import {
     getRelease,
@@ -184,16 +184,29 @@
     }, 250);
   }
 
+  let pagerEl = $state<HTMLElement>();
+
   function prevPage() {
     if (page <= 1) return;
     page -= 1;
     if (sourceId) loadReleases(sourceId);
+    void leaveEnd(page <= 1, 1);
   }
 
   function nextPage() {
     if (page * pageSize >= total) return;
     page += 1;
     if (sourceId) loadReleases(sourceId);
+    void leaveEnd(page * pageSize >= total, 0);
+  }
+
+  // A pager button that reaches its end turns disabled under the focus: the focus goes to the other one.
+  async function leaveEnd(atEnd: boolean, other: 0 | 1) {
+    if (!atEnd) return;
+    await tick();
+    const active = document.activeElement;
+    if (active && active !== document.body && active.isConnected && !(active instanceof HTMLButtonElement && active.disabled)) return;
+    pagerEl?.querySelectorAll<HTMLButtonElement>('button')[other]?.focus();
   }
 
   async function doRefresh() {
@@ -329,7 +342,7 @@
             {#if !releasesError}
               <span class="range">{msg('modals.sourceDetailsRange', { from, to, total })}</span>
             {/if}
-            <div class="pager">
+            <div class="pager" bind:this={pagerEl}>
               <IconButton size="sm" variant="secondary" label={msg('ui.previous')} disabled={page <= 1} onclick={prevPage}>
                 <ChevronLeft size="1.5rem" strokeWidth={1.8} />
               </IconButton>

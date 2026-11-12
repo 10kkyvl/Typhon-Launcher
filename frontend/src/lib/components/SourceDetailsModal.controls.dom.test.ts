@@ -202,4 +202,25 @@ describe('SourceDetailsModal: the rest of the dialog', () => {
 
     expect(vi.mocked(queryReleases)).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2 }));
   });
+
+  it('hands the focus to the other pager button when the pressed one reaches an end', async () => {
+    vi.mocked(queryReleases).mockResolvedValue(page(120));
+    const dialog = await openDialog();
+    const keys = user();
+    const next = await within(dialog).findByRole('button', { name: msg('ui.next') });
+    const previous = within(dialog).getByRole('button', { name: msg('ui.previous') });
+    next.focus();
+
+    await keys.keyboard('{Enter}');
+    await keys.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(next).toHaveProperty('disabled', true));
+    await vi.waitFor(() => expect(document.activeElement).toBe(previous));
+
+    await keys.keyboard('{Enter}');
+    await keys.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(previous).toHaveProperty('disabled', true));
+    await vi.waitFor(() => expect(document.activeElement).toBe(next));
+  });
 });
