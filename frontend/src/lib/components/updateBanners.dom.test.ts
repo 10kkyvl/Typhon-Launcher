@@ -69,6 +69,28 @@ describe('UpdateBanner', () => {
   });
 });
 
+describe('UpdateBanner: a Retry that fails again', () => {
+  it('keeps the notice and its focused Retry, and says the failure again', async () => {
+    vi.mocked(retryFailed).mockResolvedValue(undefined);
+    selfUpdateStatus.set({ state: 'failed', currentVersion: '1.4.0', error: 'offline' });
+    const { user } = renderDom(UpdateBanner);
+    const notice = document.querySelector('.notice[data-tone="danger"]') as HTMLElement;
+    const region = notice.querySelector('.body') as HTMLElement;
+    const before = region.firstElementChild;
+    const words = before?.textContent?.trim() ?? '';
+    const retry = within(notice).getByRole('button', { name: msg('common.retry') });
+
+    await user.click(retry);
+
+    await vi.waitFor(() => expect(retry.hasAttribute('aria-busy')).toBe(false));
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
+    await vi.waitFor(() => expect(region.firstElementChild).not.toBe(before));
+    expect(region.firstElementChild?.textContent?.trim()).toBe(words);
+    expect(words).not.toBe('');
+  });
+});
+
 describe('UpdateBanner: what it announces', () => {
   it('reads a state that was there when the page opened with the page, without announcing it', () => {
     for (const state of [AVAILABLE, READY, { state: 'failed', currentVersion: '1.4.0', error: 'offline' } as const]) {
