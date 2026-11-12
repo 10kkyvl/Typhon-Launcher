@@ -116,6 +116,7 @@ const SITES: Record<string, Site[]> = {
     ['info', false],
     ['danger', true],
   ],
+  'lib/components/RandomGameModal.svelte': [['warning', true]],
   // No runtimes on this platform, and a missing runtime, are facts of the system; a failed scan or read just happened.
   'lib/components/RedistModal.svelte': [
     ['info', false],
@@ -173,6 +174,7 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
     ['danger', true],
   ],
+  'routes/friends/AddFriendModal.svelte': [['danger', true]],
   // Safety advice of the requests tab, read with it.
   'routes/friends/Friends.svelte': [['info', false]],
   // Downloads held while a game runs: it starts and ends while the page is open.
