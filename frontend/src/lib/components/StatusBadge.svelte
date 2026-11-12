@@ -1,12 +1,19 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import Tooltip from './Tooltip.svelte';
 
+  /**
+   * A state shown as a word on a small plate (or plain, a word with its dot). A label of any length (a
+   * game's title) wraps inside what holds the badge: all of it stays in sight, with no tooltip or
+   * focus stop of its own, which a badge with a `hint` already has for something else.
+   */
   let {
     kind = 'neutral',
     label,
     dot = true,
     plain = false,
     hint,
+    icon,
   }: {
     kind?: 'success' | 'warning' | 'danger' | 'accent' | 'neutral';
     label: string;
@@ -14,13 +21,15 @@
     plain?: boolean;
     /** What the state means here, beyond its label: the badge joins the Tab order and shows it as a tooltip, its description. */
     hint?: string;
+    /** A picture in place of the dot (an eye for "Hidden"): a bare icon, sized and coloured here. */
+    icon?: Snippet;
   } = $props();
 </script>
 
 {#snippet badge(focusable: boolean)}
   <!-- svelte-ignore a11y_no_noninteractive_tabindex (A stop in the Tab order only with a hint, so the hint reaches keyboard users; pressing it does nothing.) -->
   <span class="badge {kind}" class:plain tabindex={focusable ? 0 : undefined}>
-    {#if dot}<span class="dot"></span>{/if}
+    {#if icon}<span class="icon" data-part="status-badge-icon" aria-hidden="true">{@render icon()}</span>{:else if dot}<span class="dot"></span>{/if}
     {label}
   </span>
 {/snippet}
@@ -36,17 +45,20 @@
     display: inline-flex;
     align-items: center;
     gap: 0.6rem;
-    height: 2.4rem;
-    padding: 0 calc(0.9rem - 1px);
+    min-height: 2.4rem;
+    max-width: 100%;
+    padding: calc(0.3rem - 1px) calc(0.9rem - 1px);
     border: 1px solid transparent;
     border-radius: var(--radius-sm);
     font-size: var(--font-xs);
     font-weight: 500;
-    white-space: nowrap;
+    line-height: 1.3;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   .badge.plain {
-    height: auto;
+    min-height: 0;
     padding: 0;
     border: 0;
     gap: 0.7rem;
@@ -54,6 +66,16 @@
     font-size: var(--font-xs);
     font-weight: 400;
     color: var(--text-2);
+  }
+
+  .icon {
+    display: flex;
+    flex-shrink: 0;
+  }
+
+  .icon :global(svg) {
+    width: var(--badge-icon);
+    height: var(--badge-icon);
   }
 
   .dot {

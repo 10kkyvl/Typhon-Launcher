@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { EyeOff } from '@lucide/svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { msg } from '../../lib/i18n';
 
@@ -6,4 +7,6 @@
   let { text = msg('social.hiddenDefaultHint') }: { text?: string } = $props();
 </script>
 
-<StatusBadge kind="neutral" label={msg('social.hiddenLabel')} hint={text} />
+<StatusBadge kind="neutral" label={msg('social.hiddenLabel')} hint={text}>
+  {#snippet icon()}<EyeOff strokeWidth={1.8} />{/snippet}
+</StatusBadge>

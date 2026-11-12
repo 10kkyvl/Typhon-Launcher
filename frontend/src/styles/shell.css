@@ -53,6 +53,9 @@
   --count-font-corner: 1rem;
   --radius-count: 99rem;
 
+  /* A picture in place of a status badge's dot. */
+  --badge-icon: 1.3rem;
+
   /* The checkbox: its box, the mark inside it, and how far the box sits down to meet the first line
      of its label. */
   --checkbox-box: 1.8rem;
