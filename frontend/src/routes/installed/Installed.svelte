@@ -1,7 +1,6 @@
 <script lang="ts">
   import Page from '../../lib/components/Page.svelte';
   import {
-    ArrowUp,
     ChevronDown,
     EllipsisVertical,
     FolderOpen,
@@ -13,7 +12,6 @@
     Plus,
     RefreshCw,
     Search,
-    Sparkles,
     Square,
   } from '@lucide/svelte';
   import AddImageModal from '../../lib/components/AddImageModal.svelte';
@@ -561,13 +559,8 @@
                 <span class="size">
                   {sizeLabel(game)}
                   {#if updateText}
-                    <span class="row-update" class:release={update?.kind !== 'update'}>
-                      {#if update?.kind === 'update'}
-                        <ArrowUp size="1.2rem" strokeWidth={2.2} />
-                      {:else}
-                        <Sparkles size="1.2rem" strokeWidth={2} />
-                      {/if}
-                      {updateText}
+                    <span class="row-update">
+                      <StatusBadge kind={update?.kind === 'update' ? 'warning' : 'neutral'} label={updateText} plain />
                     </span>
                   {/if}
                 </span>
@@ -635,13 +628,8 @@
             >
               <Artwork src={coverFor(game)} alt="" label={game.title} ratio="3 / 4" radius="var(--radius-md)" />
               {#if updateText}
-                <span class="card-badge" class:release={update?.kind !== 'update'}>
-                  {#if update?.kind === 'update'}
-                    <ArrowUp size="1.3rem" strokeWidth={2.4} />
-                  {:else}
-                    <Sparkles size="1.3rem" strokeWidth={2} />
-                  {/if}
-                  <span class="card-badge-text">{updateText}</span>
+                <span class="card-badge">
+                  <StatusBadge kind={update?.kind === 'update' ? 'warning' : 'neutral'} label={updateText} />
                 </span>
               {/if}
             </button>
@@ -1032,35 +1020,10 @@
     top: 0.6rem;
     left: 0.6rem;
     display: flex;
-    align-items: center;
-    gap: 0.4rem;
     max-width: calc(100% - 1.2rem);
-    height: 2.2rem;
-    padding: 0 0.7rem 0 0.5rem;
-    border-radius: var(--radius-sm);
-    background: rgba(5, 8, 12, 0.78);
-    color: white;
-    font-size: 1.1rem;
-    font-weight: 500;
-    line-height: 1.2;
+    overflow: hidden;
     transform-origin: left top;
     animation: badge-pop var(--dur-slow) var(--ease-spring) backwards;
-  }
-
-  .card-badge :global(svg) {
-    flex-shrink: 0;
-    color: color-mix(in srgb, var(--warning) 75%, white);
-  }
-
-  .card-badge.release :global(svg) {
-    color: white;
-  }
-
-  .card-badge-text {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   @keyframes badge-pop {
@@ -1119,15 +1082,8 @@
 
   .row-update {
     display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
     margin-left: 0.8rem;
-    color: var(--warning);
     vertical-align: bottom;
-  }
-
-  .row-update.release {
-    color: var(--text-2);
   }
 
   .count {

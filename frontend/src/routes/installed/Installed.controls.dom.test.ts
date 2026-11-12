@@ -3,10 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import { playGame, type LibraryGame } from '../../lib/services/library';
 import { getStorageInfo } from '../../lib/services/system';
+import type { Update } from '../../lib/services/updates';
 import { libraryGames } from '../../lib/stores/library';
 import { settings } from '../../lib/stores/settings';
 import { storageFailed, storageInfo } from '../../lib/stores/storage';
 import { installedView } from '../../lib/stores/ui';
+import { updates } from '../../lib/stores/updates';
 import { renderDom } from '../../lib/testing/dom';
 import Installed from './Installed.svelte';
 
@@ -77,6 +79,24 @@ describe('Installed: the play button on a cover', () => {
     await user.keyboard('{Enter}');
 
     expect(playGame).toHaveBeenCalledWith('g-celeste');
+  });
+});
+
+describe('Installed: an update waiting for a game', () => {
+  afterEach(() => updates.set([]));
+
+  it('is said with the base status badge, in the row and on the cover', () => {
+    updates.set([{ gameId: 'g-celeste', availability: { available: true, kind: 'update' } } as unknown as Update]);
+    installedView.set('list');
+    const list = renderDom(Installed);
+    const inRow = screen.getByText(msg('games.updateKindUpdate'));
+    expect(inRow.closest('.badge.warning')).not.toBeNull();
+    list.unmount();
+
+    installedView.set('grid');
+    renderDom(Installed);
+    expect(screen.getByText(msg('games.updateKindUpdate')).closest('.badge.warning')).not.toBeNull();
+    expect(screen.getByRole('button', { name: `Celeste — ${msg('games.updateKindUpdate')}` })).toBeTruthy();
   });
 });
 

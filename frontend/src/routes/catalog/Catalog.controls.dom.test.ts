@@ -1,8 +1,10 @@
 import { screen, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
+import type { LibraryGame } from '../../lib/services/library';
 import { setNotInterested } from '../../lib/services/recommendations';
 import { queryCatalogGames, type CatalogGame } from '../../lib/services/sources';
+import { libraryGames } from '../../lib/stores/library';
 import { resetHistory } from '../../lib/stores/router';
 import { catalogView } from '../../lib/stores/ui';
 import { renderDom } from '../../lib/testing/dom';
@@ -162,6 +164,22 @@ describe('Catalog: retrying', () => {
     await vi.waitFor(() => expect(notice.isConnected).toBe(false));
     expect(vi.mocked(queryCatalogGames).mock.calls.at(-1)?.[0]).toMatchObject({ page: 2 });
     expect(await screen.findByText('Hades')).toBeTruthy();
+  });
+});
+
+describe('Catalog: a game already installed', () => {
+  afterEach(() => libraryGames.set([]));
+
+  it('says so with the base status badge in its row', async () => {
+    catalogView.set('list');
+    libraryGames.set([
+      { id: 'g-celeste', title: 'Celeste', canonicalGameId: 'c-celeste', installDir: 'C:\\Games\\c', executable: 'c.exe', sizeBytes: 0, uninstalled: false, tags: [] } as unknown as LibraryGame,
+    ]);
+    vi.mocked(queryCatalogGames).mockResolvedValue(page([{ id: 'c-celeste', title: 'Celeste' }]));
+    renderDom(Catalog);
+
+    const mark = await screen.findByText(msg('games.gameInstalledWord'));
+    expect(mark.closest('.badge.success')).not.toBeNull();
   });
 });
 

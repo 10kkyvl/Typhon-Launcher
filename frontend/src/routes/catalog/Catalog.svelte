@@ -29,6 +29,7 @@
   import Select from '../../lib/components/Select.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import Spinner from '../../lib/components/Spinner.svelte';
+  import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { playGame, setFavorite, stopGame } from '../../lib/services/library';
   import { canPlay } from '../../lib/library/launch';
   import {
@@ -759,7 +760,7 @@
 </script>
 
 {#snippet installedStatus()}
-  <span class="status"><span class="dot"></span>{msg('games.gameInstalledWord')}</span>
+  <StatusBadge kind="success" label={msg('games.gameInstalledWord')} plain />
 {/snippet}
 
 <Page>
@@ -1071,26 +1072,6 @@
   .grid.switched:not(.catalog-skeleton),
   .list.switched {
     animation: rise-in var(--dur-panel) var(--ease);
-  }
-
-  .status {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    min-width: 0;
-    font-size: var(--font-xs);
-    color: var(--text-2);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .dot {
-    width: 0.7rem;
-    height: 0.7rem;
-    flex-shrink: 0;
-    border-radius: 50%;
-    background: var(--success);
   }
 
   .list {
