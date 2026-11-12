@@ -37,7 +37,7 @@ afterEach(() => {
 });
 
 describe('MetadataMatchModal: the candidates', () => {
-  it('says it is looking for them with a labelled spinner', async () => {
+  it('says it is looking for them with a labelled spinner and what it matches against', async () => {
     const found = deferred<MetadataCandidate[]>();
     vi.mocked(findMetadataCandidates).mockReturnValueOnce(found.promise);
     render(MetadataMatchModal, { target: app, props: { open: true, gameId: 'g1', gameTitle: 'Hades' } });
@@ -45,6 +45,7 @@ describe('MetadataMatchModal: the candidates', () => {
 
     const statuses = within(dialog).getAllByRole('status').map((status) => status.textContent?.trim());
     expect(statuses).toContain(msg('modals.metadataMatchSearchingCandidates'));
+    expect(within(dialog).getByText(msg('modals.metadataMatchSearchingCandidatesDesc', { gameTitle: 'Hades' }))).toBeTruthy();
     found.resolve([]);
   });
 

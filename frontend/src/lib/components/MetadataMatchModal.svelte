@@ -141,7 +141,10 @@
       <section class="block">
         <h4>{msg('modals.metadataMatchCandidates')}</h4>
         {#if loadingCandidates}
-          <Spinner size="sm" label={msg('modals.metadataMatchSearchingCandidates')} />
+          <div class="looking">
+            <Spinner size="sm" label={msg('modals.metadataMatchSearchingCandidates')} />
+            <p class="looking-text">{msg('modals.metadataMatchSearchingCandidatesDesc', { gameTitle })}</p>
+          </div>
         {:else if candidates.length === 0}
           <EmptyState level={5}
             title={msg('modals.metadataMatchNoCandidatesTitle')}
@@ -310,6 +313,18 @@
   .candidate-confidence.high {
     color: var(--accent-text);
     font-weight: 600;
+  }
+
+  .looking {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  .looking-text {
+    margin: 0;
+    font-size: var(--font-sm);
+    color: var(--text-2);
   }
 
   .confirm-text {
