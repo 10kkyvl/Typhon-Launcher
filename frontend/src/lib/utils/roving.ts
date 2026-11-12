@@ -1,4 +1,12 @@
-/** Keyboard helpers for composite widgets (menus, listboxes, tabs, radio groups). */
+/**
+ * Keyboard helpers for composite widgets (menus, listboxes, tabs, radio groups).
+ *
+ * An option of a radio group that cannot be chosen is `aria-disabled`, never `disabled`. When the
+ * option shows why on itself (the remove dialog's tile says why the game cannot be uninstalled), the
+ * arrows skip it: pass `isDisabled`. When the reason is only its hint (the release match dialog's
+ * game that is not in the catalog), the arrows stop on it so the hint can be read, and a press or an
+ * arrow onto it does not choose it.
+ */
 
 export type Orientation = 'horizontal' | 'vertical' | 'both';
 
