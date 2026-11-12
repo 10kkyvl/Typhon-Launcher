@@ -139,6 +139,40 @@ describe('ChatPanel: the conversation list\'s Retry', () => {
   });
 });
 
+describe('ChatPanel: a Retry that fails again says so again', () => {
+  // The notice holding `text`, its live region as it is now, and its Retry; after a press that fails
+  // again, the words come into the region as a new node while the notice keeps its focused Retry.
+  async function pressAndFail(text: string, keys: ReturnType<typeof user>) {
+    const notice = screen.getByText(text).closest('.notice') as HTMLElement;
+    const region = notice.querySelector('.body') as HTMLElement;
+    const before = region.firstElementChild;
+    const retry = within(notice).getByRole('button', { name: msg('social.chatRetry') });
+    await keys.click(retry);
+    await vi.waitFor(() => expect(retry.hasAttribute('aria-busy')).toBe(false));
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
+    await vi.waitFor(() => expect(region.firstElementChild).not.toBe(before));
+    expect(region.firstElementChild?.textContent).toContain(text);
+  }
+
+  it('the history', async () => {
+    vi.mocked(fetchMessages).mockRejectedValue(new Error('offline'));
+    chat.chatHistoryError.set(msg('social.chatHistoryError'));
+    const keys = setup();
+
+    await pressAndFail(msg('social.chatHistoryError'), keys);
+  });
+
+  it('the chat list', async () => {
+    vi.mocked(chat.retryMessaging).mockResolvedValue(undefined);
+    chat.activePeer.set(null);
+    chat.chatConversationsError.set(msg('social.chatConversationsError'));
+    const keys = setup();
+
+    await pressAndFail(msg('social.chatConversationsError'), keys);
+  });
+});
+
 describe('ChatPanel: Reconnect', () => {
   it('stays busy with the focus while the connection is tried', async () => {
     const done = held<void>();
