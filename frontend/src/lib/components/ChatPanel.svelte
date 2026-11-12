@@ -6,11 +6,14 @@
   import { fieldsFrame, frameReserve } from '../profile/frameLook';
   import { themeLayout } from '../stores/layout';
   import Button from './Button.svelte';
+  import Chip from './Chip.svelte';
   import CountBadge from './CountBadge.svelte';
+  import EmptyState from './EmptyState.svelte';
   import IconButton from './IconButton.svelte';
   import ChatAttachments from './ChatAttachments.svelte';
   import Lightbox, { type LightboxItem } from './Lightbox.svelte';
-  import Tooltip from './Tooltip.svelte';
+  import Notice from './Notice.svelte';
+  import Spinner from './Spinner.svelte';
   import ReactionPicker from './reactions/ReactionPicker.svelte';
   import {
     activePeer,
@@ -66,6 +69,8 @@
   let lightboxIndex = $state(0);
   let lightboxItems = $state<LightboxItem[]>([]);
   let error = $state('');
+  let historyRetrying = $state(false);
+  let reconnecting = $state(false);
   let now = $state(new Date());
   let lastRenderedLastMessage = '';
 
@@ -287,10 +292,29 @@
     draft = '';
   }
 
-  function retryHistory(): void {
-    if (!peer) return;
-    if ($nextByPeer[peer.id]) void loadMore(peer.id).catch(() => undefined);
-    else void loadMessages(peer.id).catch(() => undefined);
+  // A retry keeps the failure on screen until its answer (the store clears it on success): the notice
+  // and its focused Retry stay, the Retry busy.
+  async function retryHistory(): Promise<void> {
+    if (!peer || historyRetrying) return;
+    historyRetrying = true;
+    try {
+      if ($nextByPeer[peer.id]) await loadMore(peer.id);
+      else await loadMessages(peer.id);
+    } catch {
+      // The store has logged the failure and shows it in the notice.
+    } finally {
+      historyRetrying = false;
+    }
+  }
+
+  async function reconnect(): Promise<void> {
+    if (reconnecting) return;
+    reconnecting = true;
+    try {
+      await retryMessaging();
+    } finally {
+      reconnecting = false;
+    }
   }
 
   $effect(() => {
@@ -356,7 +380,7 @@
     <section class="chat-panel" aria-label={msg('social.chatPanelLabel')}>
       <header class="chat-header">
         {#if peer}
-          <button class="back" type="button" aria-label={msg('social.chatBack')} onclick={showList}><ArrowLeft size="1.7rem" /></button>
+          <IconButton size="sm" label={msg('social.chatBack')} onclick={showList}><ArrowLeft size="1.7rem" /></IconButton>
           <Avatar size="sm" name={displayName(peer)} src={peer.avatarUrl} {...fieldsFrame(peer)} />
           <div class="header-copy">
             <strong>{displayName(peer)}</strong>
@@ -373,17 +397,27 @@
         <div class="history-note">{msg('social.chatSevenDayNote')}</div>
         <div class="messages" bind:this={scrollBox}>
           {#if $nextByPeer[peer.id]}
-            <button class="load-more" type="button" disabled={$chatLoadingMore} onclick={() => loadMore(peer.id).catch(() => undefined)}>
-              <ChevronUp size="1.4rem" /> { $chatLoadingMore ? msg('social.chatLoadingHistory') : msg('social.chatEarlier') }
-            </button>
+            <div class="load-more">
+              <Button variant="ghost" size="sm" busy={$chatLoadingMore} onclick={() => loadMore(peer.id).catch(() => undefined)}>
+                {#if !$chatLoadingMore}<ChevronUp size="1.4rem" />{/if}
+                {$chatLoadingMore ? msg('social.chatLoadingHistory') : msg('social.chatEarlier')}
+              </Button>
+            </div>
           {/if}
           {#if $chatHistoryError}
-            <div class="history-error">{$chatHistoryError}<button type="button" onclick={retryHistory}>{msg('social.chatRetry')}</button></div>
+            <div class="history-error">
+              <Notice tone="danger" compact>
+                {$chatHistoryError}
+                {#snippet action()}
+                  <Button size="sm" busy={historyRetrying} onclick={retryHistory}>{msg('social.chatRetry')}</Button>
+                {/snippet}
+              </Notice>
+            </div>
           {/if}
           {#if $chatLoading && activeMessages.length === 0 && !$chatHistoryError}
-            <div class="state">{msg('social.chatLoadingHistory')}</div>
+            <div class="state"><Spinner label={msg('social.chatLoadingHistory')} /></div>
           {:else if activeMessages.length === 0 && !$chatHistoryError}
-            <div class="state">{msg('social.chatNoHistory')}</div>
+            <div class="state"><EmptyState size="inline" align="center" title={msg('social.chatNoHistory')} /></div>
           {:else}
             {#each activeMessages as message (message.id)}
               <div class="message-row" class:own={isOwn(message)}>
@@ -394,7 +428,7 @@
                     {#if message.editedAt}<span class="edited">{msg('social.chatEdited')}</span>{/if}
                   </div>
                   {#if $editingMessageId === message.id}
-                    <textarea class="edit-input" bind:value={editDraft} maxlength="2000" rows="3"></textarea>
+                    <textarea class="input edit-input" bind:value={editDraft} maxlength="2000" rows="3"></textarea>
                     <div class="message-actions">
                       <Button size="sm" onclick={() => editingMessageId.set(null)}>{msg('social.chatCancel')}</Button>
                       <Button size="sm" variant="primary" onclick={() => saveEdit(message)}><Check size="1.3rem" /> {msg('social.chatSave')}</Button>
@@ -414,19 +448,15 @@
                         <span class="sending-status" role="status">{msg('social.chatSending')}</span>
                       {/if}
                       {#if isOwn(message) && !message.id.startsWith('local:')}
-                        <Tooltip text={msg('social.chatEdit')} describe={false}>
-                          <button class="tiny-action" type="button" aria-label={msg('social.chatEdit')} onclick={() => startEdit(message)}><Pencil size="1.25rem" /></button>
-                        </Tooltip>
+                        <IconButton size="sm" label={msg('social.chatEdit')} onclick={() => startEdit(message)}><Pencil size="1.4rem" /></IconButton>
                       {/if}
                       {#if $failedMessages.has(message.clientId)}
-                        <button class="retry" type="button" onclick={() => retry(message)}><RefreshCw size="1.25rem" /> {msg('social.chatRetry')}</button>
+                        <Button variant="ghost" size="sm" onclick={() => retry(message)}><RefreshCw size="1.4rem" /> {msg('social.chatRetry')}</Button>
                       {/if}
                       {#if !message.id.startsWith('local:')}
                         <ReactionPicker options={REACTION_KEYS} label={msg('social.chatReaction')} chosen={myReactions(message)} placement="bottom-end" onpick={(key) => void chooseReaction(message, key)}>
                           {#snippet trigger({ props })}
-                            <Tooltip text={msg('social.chatReaction')} describe={false}>
-                              <button class="tiny-action" type="button" aria-label={msg('social.chatReaction')} {...props}><MoreHorizontal size="1.3rem" /></button>
-                            </Tooltip>
+                            <IconButton size="sm" label={msg('social.chatReaction')} {...props}><MoreHorizontal size="1.4rem" /></IconButton>
                           {/snippet}
                         </ReactionPicker>
                       {/if}
@@ -436,15 +466,14 @@
                         {#each message.reactions as reaction (reaction.emoji)}
                           {@const ReactionIcon = Object.hasOwn(reactionIcons, reaction.emoji) ? reactionIcons[reaction.emoji as ReactionKey] : undefined}
                           {@const own = reaction.userIds.includes($currentUser?.id ?? '')}
-                          <button
-                            class:reacted={own}
-                            type="button"
-                            aria-pressed={own}
+                          <Chip
+                            selected={own}
                             aria-label={msg('social.reactionWithCount', { reaction: reactionLabel(reaction.emoji), count: reaction.userIds.length })}
                             onclick={() => chooseReaction(message, reaction.emoji as ReactionKey)}
                           >
-                            {#if ReactionIcon}<ReactionIcon />{:else}{reaction.emoji}{/if} {reaction.userIds.length}
-                          </button>
+                            <span class="glyph">{#if ReactionIcon}<ReactionIcon />{:else}{reaction.emoji}{/if}</span>
+                            <span class="count">{reaction.userIds.length}</span>
+                          </Chip>
                         {/each}
                       </div>
                     {/if}
@@ -456,12 +485,19 @@
           {#if $chatTyping[peer.id]}<div class="typing">{msg('social.chatTyping', { name: displayName(peer) })}</div>{/if}
         </div>
 
-        {#if error}<div class="chat-error">{error}</div>{/if}
+        {#if error}<div class="panel-notice"><Notice tone="danger" compact>{error}</Notice></div>{/if}
         {#if !$chatConnected}
-          <div class="disabled-copy" role="status">{msg('social.chatReconnecting')} <button class="connection-retry" type="button" onclick={() => retryMessaging()}>{msg('social.chatReconnect')}</button></div>
+          <div class="panel-notice">
+            <Notice tone="warning" compact>
+              {msg('social.chatReconnecting')}
+              {#snippet action()}
+                <Button size="sm" busy={reconnecting} onclick={reconnect}>{msg('social.chatReconnect')}</Button>
+              {/snippet}
+            </Notice>
+          </div>
         {/if}
         {#if !canSend}
-          <div class="disabled-copy">{msg('social.chatDisabled')}</div>
+          <div class="panel-notice"><Notice compact announce={false}>{msg('social.chatDisabled')}</Notice></div>
         {:else}
           {#if draftList.length > 0}
             <div class="draft-list">
@@ -472,9 +508,7 @@
                     <strong>{item.name}</strong>
                     <span>{bytesSize(item.bytes)}</span>
                   </span>
-                  <Tooltip text={msg('social.chatAttachRemove')} describe={false}>
-                    <button class="tiny-action" type="button" aria-label={msg('social.chatAttachRemove')} disabled={sending} onclick={() => removeAttachment(item.key)}><X size="1.4rem" /></button>
-                  </Tooltip>
+                  <IconButton size="sm" label={msg('social.chatAttachRemove')} disabled={sending} onclick={() => removeAttachment(item.key)}><X size="1.4rem" /></IconButton>
                 </div>
               {/each}
             </div>
@@ -485,6 +519,7 @@
           <div class="composer">
             <IconButton label={msg('social.chatAttach')} hint={msg('social.chatAttachHint')} disabled={sending} onclick={() => attach()}><Paperclip size="1.7rem" /></IconButton>
             <textarea
+              class="input"
               bind:this={composer}
               value={draft}
               maxlength="2000"
@@ -502,10 +537,17 @@
       {:else}
         <div class="conversation-list">
           {#if $chatConversationsError}
-            <div class="history-error">{$chatConversationsError}<button type="button" onclick={() => retryMessaging()}>{msg('social.chatRetry')}</button></div>
+            <div class="history-error">
+              <Notice tone="danger" compact>
+                {$chatConversationsError}
+                {#snippet action()}
+                  <Button size="sm" busy={reconnecting} onclick={reconnect}>{msg('social.chatRetry')}</Button>
+                {/snippet}
+              </Notice>
+            </div>
           {/if}
           {#if $conversations.length === 0 && !$chatConversationsError}
-            <div class="state">{msg('social.chatNoConversations')}</div>
+            <div class="state"><EmptyState size="inline" align="center" title={msg('social.chatNoConversations')} /></div>
           {:else}
             {#each $conversations as item (item.peer.id)}
               <button class="conversation" type="button" onclick={() => openConversation(item.peer)}>
@@ -533,19 +575,16 @@
   .chat-toggle { display: flex; border-radius: var(--radius-control); box-shadow: var(--shadow-pop); }
   .chat-panel { display: flex; flex-direction: column; width: 38rem; height: min(64rem, calc(100vh - var(--titlebar-h) - 8rem)); overflow: hidden; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-pop); }
   .chat-header { display: flex; align-items: center; gap: 0.9rem; min-height: 5.6rem; padding: 0 1.2rem; border-bottom: 1px solid var(--border); background: var(--surface-3); }
-  .back { display: inline-flex; border: 0; background: transparent; color: var(--text-2); padding: 0.5rem; cursor: pointer; }
   .header-copy, .conversation-copy, .toast-copy { min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; text-align: left; }
   .header-copy { flex: 1; }
   .header-copy strong { font-size: var(--font-sm); }
   .header-copy span, .conversation-copy span, .toast-copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-3); font-size: var(--font-xs); }
   .history-note { padding: 0.7rem 1rem 0; color: var(--text-3); font-size: 1rem; text-align: center; }
   .messages { flex: 1; overflow-y: auto; padding: 1rem; }
-  .load-more { display: flex; align-items: center; gap: 0.4rem; margin: 0 auto 1rem; border: 0; background: transparent; color: var(--accent-text); font-size: var(--font-xs); cursor: pointer; }
-  .state { display: grid; place-items: center; min-height: 13rem; padding: 2rem; color: var(--text-3); text-align: center; font-size: var(--font-sm); }
+  .load-more { display: flex; justify-content: center; margin-bottom: 1rem; }
+  .state { display: grid; place-items: center; min-height: 13rem; padding: 2rem; }
   .sending-status { color: var(--text-3); font-size: 1rem; }
-  .connection-retry { border: 0; background: transparent; color: var(--accent-text); cursor: pointer; font: inherit; text-decoration: underline; }
-  .history-error { display: flex; align-items: center; justify-content: center; gap: 0.7rem; margin-bottom: 0.7rem; color: var(--danger); font-size: var(--font-xs); text-align: center; }
-  .history-error button { border: 0; background: transparent; color: var(--accent-text); cursor: pointer; font: inherit; text-decoration: underline; }
+  .history-error { margin-bottom: 0.7rem; }
   .message-row { display: flex; justify-content: flex-start; margin: 0.8rem 0; }
   .message-row.own { justify-content: flex-end; }
   .message { position: relative; max-width: 86%; padding: 0.85rem 1rem; border: 1px solid var(--border); border-radius: 1.2rem 1.2rem 1.2rem 0.35rem; background: var(--surface-3); }
@@ -557,18 +596,13 @@
   .message-text { margin: 0; color: var(--text); font-size: var(--font-sm); line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
   .message-text a { color: var(--accent-text); text-decoration: underline; }
   .message-footer { display: flex; justify-content: flex-end; gap: 0.3rem; margin-top: 0.35rem; }
-  .tiny-action, .retry { display: inline-flex; align-items: center; gap: 0.3rem; border: 0; padding: 0.25rem; background: transparent; color: var(--text-3); font-size: 1rem; cursor: pointer; }
-  .retry { color: var(--danger); }
   .reactions { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.45rem; }
-  .reactions button { display: inline-flex; align-items: center; gap: 0.3rem; border: 1px solid var(--border); border-radius: 1rem; padding: 0.2rem 0.45rem; background: var(--surface-2); cursor: pointer; font-size: 1.2rem; }
-  .reactions button :global(svg) { width: 1.4em; height: 1.4em; }
-  .reactions button.reacted { border-color: var(--accent-bright); background: var(--accent-subtle); }
+  .glyph { display: inline-flex; }
+  .count { font-size: var(--font-xs); font-weight: 600; font-variant-numeric: tabular-nums; }
   .typing { margin: 0.6rem 0; color: var(--text-3); font-size: var(--font-xs); font-style: italic; }
-  .edit-input, .composer textarea { width: 100%; resize: none; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); padding: 0.7rem; font: inherit; font-size: var(--font-sm); outline: none; }
-  .edit-input:focus, .composer textarea:focus { border-color: var(--accent-ring); }
+  .edit-input, .composer textarea { height: auto; resize: none; padding: 0.7rem; font: inherit; font-size: var(--font-sm); }
   .message-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.6rem; }
-  .chat-error, .disabled-copy { padding: 0.7rem 1rem; color: var(--danger); font-size: var(--font-xs); }
-  .disabled-copy { color: var(--text-3); }
+  .panel-notice { padding: 0.7rem 1rem 0; }
   .composer { display: flex; align-items: flex-end; gap: 0.7rem; padding: 0.8rem 1rem 0; border-top: 1px solid var(--border); }
   .composer textarea { flex: 1; min-height: 4.2rem; }
   .draft-list { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin: 0.8rem 1rem 0; }
