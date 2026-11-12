@@ -185,3 +185,77 @@ describe('Support: where focus goes when the limits load on Retry', () => {
     expect(document.activeElement).toBe(form.querySelector('button, input, textarea, [tabindex]'));
   });
 });
+
+// The notice of `text`, its live region as it is now, and its Retry.
+async function failed(text: string) {
+  const notice = await failureNotice(text);
+  const region = notice.querySelector('.body') as HTMLElement;
+  return { notice, region, before: region.firstElementChild, retry: within(notice).getByRole('button', { name: msg('common.retry') }) };
+}
+
+// After a Retry that failed again: the notice stays with its focused Retry, and its words come into its
+// live region again as a new node, so they are said again.
+async function saidAgain(seen: Awaited<ReturnType<typeof failed>>, text: string) {
+  await vi.waitFor(() => expect(seen.retry.hasAttribute('aria-busy')).toBe(false));
+  expect(seen.notice.isConnected).toBe(true);
+  expect(document.activeElement).toBe(seen.retry);
+  await vi.waitFor(() => expect(seen.region.firstElementChild).not.toBe(seen.before));
+  expect(seen.region.firstElementChild?.textContent).toContain(text);
+}
+
+describe('Support: a Retry that fails again says so again', () => {
+  it('the request list\'s first page', async () => {
+    vi.mocked(listTickets).mockRejectedValue(new Error('offline'));
+    const { user } = renderDom(TicketList);
+    const seen = await failed(msg('tickets.loadFailed'));
+
+    await user.click(seen.retry);
+
+    await saidAgain(seen, msg('tickets.loadFailed'));
+  });
+
+  it('the request list\'s later page', async () => {
+    vi.mocked(listTickets).mockImplementation(async (cursor = '') => {
+      if (cursor === '') return { tickets: [ticket(1, 'First request')], next: 'c2' };
+      throw new Error('offline');
+    });
+    const { user } = renderDom(TicketList);
+    await user.click(await screen.findByRole('button', { name: msg('tickets.loadMore') }));
+    const seen = await failed(msg('tickets.loadFailed'));
+
+    await user.click(seen.retry);
+
+    await saidAgain(seen, msg('tickets.loadFailed'));
+    expect(row('First request')).toBeTruthy();
+  });
+
+  it('a request', async () => {
+    vi.mocked(getTicket).mockRejectedValue(new Error('offline'));
+    const { user } = renderDom(TicketView, { number: 7 });
+    const seen = await failed(msg('tickets.ticketLoadFailed'));
+
+    await user.click(seen.retry);
+
+    await saidAgain(seen, msg('tickets.ticketLoadFailed'));
+  });
+
+  it('the limits of a reply', async () => {
+    vi.mocked(ticketLimits).mockRejectedValue(new Error('offline'));
+    const { user } = renderDom(TicketView, { number: 7 });
+    const seen = await failed(msg('tickets.limitsFailed'));
+
+    await user.click(seen.retry);
+
+    await saidAgain(seen, msg('tickets.limitsFailed'));
+  });
+
+  it('the limits of a new request', async () => {
+    vi.mocked(ticketLimits).mockRejectedValue(new Error('offline'));
+    const { user } = renderDom(NewTicket, { initialTopic: 'launcher' });
+    const seen = await failed(msg('tickets.limitsFailed'));
+
+    await user.click(seen.retry);
+
+    await saidAgain(seen, msg('tickets.limitsFailed'));
+  });
+});
