@@ -20,6 +20,7 @@
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import SearchInput from '../../lib/components/SearchInput.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
@@ -512,11 +513,12 @@
       {/if}
 
       <div class="safety">
-        <ShieldCheck size="2rem" strokeWidth={1.6} />
-        <div class="safety-text">
-          <h4>{msg('social.friendsSafetyTitle')}</h4>
-          <p>{msg('social.friendsSafetyDesc')}</p>
-        </div>
+        <Notice announce={false} title={msg('social.friendsSafetyTitle')} level={4}>
+          {#snippet icon()}
+            <ShieldCheck size="1.6rem" strokeWidth={1.8} />
+          {/snippet}
+          {msg('social.friendsSafetyDesc')}
+        </Notice>
       </div>
     {:else if blocked.length === 0}
       <EmptyState level={2}
@@ -656,27 +658,6 @@
   }
 
   .safety {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--space-4);
     margin-top: var(--space-6);
-    padding: var(--space-4) var(--space-5);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface-2);
-    color: var(--text-3);
-  }
-
-  .safety-text h4 {
-    font-size: var(--font-sm);
-    font-weight: 600;
-    color: var(--text);
-  }
-
-  .safety-text p {
-    margin-top: 0.3rem;
-    font-size: var(--font-xs);
-    line-height: 1.5;
-    color: var(--text-3);
   }
 </style>

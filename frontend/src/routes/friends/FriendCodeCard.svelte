@@ -4,6 +4,7 @@
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import Modal from '../../lib/components/Modal.svelte';
+  import Spinner from '../../lib/components/Spinner.svelte';
   import Tooltip from '../../lib/components/Tooltip.svelte';
   import { accountErrorText } from '../../lib/services/accountMessages';
   import { friendCode, rotateFriendCode } from '../../lib/services/social';
@@ -62,8 +63,10 @@
   <div class="card">
     <div class="text">
       <span class="label">{msg('social.friendsYourCode')}</span>
-      {#if loading || !code}
-        <span class="code pending">{loading ? msg('social.loadingEllipsis') : '—'}</span>
+      {#if loading}
+        <span class="code pending"><Spinner size="sm" label={msg('social.loadingEllipsis')} /></span>
+      {:else if !code}
+        <span class="code pending">—</span>
       {:else}
         <Tooltip text={msg('social.friendsCopyCode')}>
           <button class="code copy" type="button" onclick={copy}>{code}</button>
@@ -93,7 +96,7 @@
   </p>
   {#snippet footer()}
     <Button disabled={rotating} onclick={() => (confirmOpen = false)}>{msg('common.cancel')}</Button>
-    <Button variant="danger" disabled={rotating} onclick={rotate}>
+    <Button variant="danger" busy={rotating} onclick={rotate}>
       {rotating ? msg('social.friendsRotating') : msg('social.friendsGenerateNew')}
     </Button>
   {/snippet}
