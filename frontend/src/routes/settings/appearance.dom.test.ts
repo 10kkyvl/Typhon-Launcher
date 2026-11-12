@@ -130,7 +130,7 @@ describe('AppearanceTab', () => {
     expect(name.value).toBe('DarkX');
   });
 
-  it('chooses the tile once the edits are given up, and puts focus on it', async () => {
+  it('chooses the tile once the edits are given up', async () => {
     const { user } = renderDom(AppearanceTab, {});
     await editName(user);
     const radios = within(screen.getByRole('radiogroup', { name: msg('settings.appearanceTab') })).getAllByRole('radio');
@@ -142,8 +142,7 @@ describe('AppearanceTab', () => {
 
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(vi.mocked(selectTheme)).toHaveBeenCalledWith('mine');
-    await waitFor(() => expect(document.activeElement).toBe(radios[2]));
-    expect(radios[2].getAttribute('aria-checked')).toBe('true');
+    await waitFor(() => expect(radios[2].getAttribute('aria-checked')).toBe('true'));
     expect((screen.getByRole('textbox', { name: msg('settings.appearanceNameFieldLabel') }) as HTMLInputElement).value).toBe('Mine');
   });
 

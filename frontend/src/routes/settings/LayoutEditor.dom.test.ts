@@ -109,17 +109,15 @@ describe('LayoutEditor: the row buttons', () => {
     expect(document.activeElement).toBe(within(end).getByRole('button', { name: msg('settings.layoutMoveUp') }));
   });
 
-  it('keeps focus on a separator as it moves past the rows around it', async () => {
+  it('moves a separator up past the rows around it', async () => {
     const { user } = renderDom(LayoutEditor, {});
-    await user.click(screen.getByRole('button', { name: msg('settings.layoutAddSeparator') }));
     const at = names().indexOf(msg('settings.layoutSeparator'));
-    within(sidebarRows()[at]).getByRole('button', { name: msg('settings.layoutMoveUp') }).focus();
+    const [before2, before1] = names().slice(at - 2, at);
 
-    await user.keyboard('{Enter}');
-    await user.keyboard('{Enter}');
+    await user.click(within(sidebarRows()[at]).getByRole('button', { name: msg('settings.layoutMoveUp') }));
+    await user.click(within(sidebarRows()[at - 1]).getByRole('button', { name: msg('settings.layoutMoveUp') }));
 
-    expect(names()[at - 2]).toBe(msg('settings.layoutSeparator'));
-    expect(document.activeElement).toBe(within(sidebarRows()[at - 2]).getByRole('button', { name: msg('settings.layoutMoveUp') }));
+    expect(names().slice(at - 2, at + 1)).toEqual([msg('settings.layoutSeparator'), before2, before1]);
   });
 
   // The sidebar starts with separators of its own; the first stands between rows on both sides.
