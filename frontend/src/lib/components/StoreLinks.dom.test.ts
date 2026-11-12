@@ -22,6 +22,18 @@ describe('StoreLinks: a store page', () => {
     expect(followed).toBe(false);
   });
 
+  it('opens through the launcher on a middle click too, never in a window of its own', () => {
+    const onopen = vi.fn();
+    renderDom(StoreLinks, { links: { steam: 'https://store.steampowered.com/app/1145360' }, onopen });
+    const link = screen.getByRole('link', { name: msg('games.storeSteam') });
+
+    const middle = new MouseEvent('auxclick', { button: 1, bubbles: true, cancelable: true });
+    link.dispatchEvent(middle);
+
+    expect(middle.defaultPrevented).toBe(true);
+    expect(onopen).toHaveBeenCalledWith('steam');
+  });
+
   it('is a chip button, not a link, when the address is not a web page', async () => {
     const onopen = vi.fn();
     const { user } = renderDom(StoreLinks, { links: { gog: 'javascript:alert(1)' }, onopen });

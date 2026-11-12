@@ -33,6 +33,13 @@
     event.preventDefault();
     onopen(store);
   }
+
+  // A middle click would open the page in a webview window of its own, past the launcher's checks:
+  // it opens through the launcher like any other press.
+  function openAux(event: MouseEvent, store: StoreId) {
+    if (event.button !== 1) return;
+    open(event, store);
+  }
 </script>
 
 {#snippet mark()}
@@ -47,7 +54,7 @@
         {@const href = webPage(store)}
         {@const focus = focusPrefix ? `${focusPrefix}${store}` : undefined}
         {#if href}
-          <Chip {href} data-bp-focus={focus} onclick={(event) => open(event, store)} end={mark}>{$t(LABELS[store])}</Chip>
+          <Chip {href} data-bp-focus={focus} onclick={(event) => open(event, store)} onauxclick={(event) => openAux(event, store)} end={mark}>{$t(LABELS[store])}</Chip>
         {:else}
           <Chip data-bp-focus={focus} onclick={(event) => open(event, store)} end={mark}>{$t(LABELS[store])}</Chip>
         {/if}
