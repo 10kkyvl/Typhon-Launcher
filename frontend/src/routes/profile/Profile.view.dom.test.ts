@@ -77,4 +77,24 @@ describe('the profile page', () => {
 
     expect(get(route).name).toBe('history');
   });
+
+  it('the privacy dialog says it needs the connection in a warning notice, and a refused save in a danger notice', async () => {
+    signIn();
+    const { user } = renderDom(Profile);
+    await user.click(screen.getByRole('button', { name: 'More' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Profile privacy' }));
+    const dialog = screen.getByRole('dialog', { name: 'Profile settings' });
+    expect(within(dialog).queryByText('Profile settings can only change while connected to the server.')).toBeNull();
+    vi.mocked(saveProfile).mockResolvedValue(false);
+
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    const alert = within(dialog).getByRole('alert');
+    expect(alert.textContent?.trim()).toBe('The previous save is still running. Try again in a moment.');
+    expect(alert.closest('[data-tone="danger"]')).not.toBeNull();
+
+    authState.set('offline');
+    const offline = await within(dialog).findByText('Profile settings can only change while connected to the server.');
+    expect(offline.closest('[data-tone="warning"]')).not.toBeNull();
+  });
 });

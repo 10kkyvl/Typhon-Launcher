@@ -2,6 +2,7 @@
   import Button from '../../lib/components/Button.svelte';
   import DeleteAccountModal from '../../lib/components/DeleteAccountModal.svelte';
   import Modal from '../../lib/components/Modal.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
   import { VISIBILITIES, type ProfileSettings, type Visibility } from '../../lib/services/account';
@@ -73,7 +74,7 @@
 
 <Modal bind:open title={msg('social.profileSettingsTitle')} width="52rem">
   {#if $isOffline}
-    <p class="hint">{msg('social.settingsRequireConnection')}</p>
+    <div class="offline"><Notice tone="warning" compact>{msg('social.settingsRequireConnection')}</Notice></div>
   {/if}
 
   <div class="group">
@@ -139,7 +140,7 @@
   </div>
 
   {#snippet footer()}
-    {#if error}<span class="error">{error}</span>{/if}
+    {#if error}<div class="failure"><Notice tone="danger" compact>{error}</Notice></div>{/if}
     <Button variant="ghost" disabled={$savingProfile} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
     <Button variant="primary" disabled={$savingProfile || $isOffline} onclick={save}>
       {$savingProfile ? msg('social.saving') : msg('common.save')}
@@ -211,9 +212,13 @@
     color: var(--text-3);
   }
 
-  .error {
-    font-size: var(--font-xs);
-    color: var(--danger);
+  .offline {
+    margin-bottom: var(--space-4);
+  }
+
+  .failure {
+    flex: 1;
+    min-width: 0;
     margin-right: auto;
   }
 </style>
