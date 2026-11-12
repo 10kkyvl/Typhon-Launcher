@@ -25,6 +25,12 @@
     variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
     size?: 'md' | 'sm' | 'lg';
     disabled?: boolean;
+    /**
+     * For a toggle whose name stays the same in both states: whether it is on (aria-pressed). A button
+     * that shows or hides something below it (a panel, a list, a code) is a disclosure, not a toggle:
+     * it passes `aria-expanded` and `aria-controls` (the id of what it shows) instead. A button that
+     * opens a menu or a popup says `aria-expanded` through its trigger props.
+     */
     pressed?: boolean;
     /**
      * Why the button is disabled. A disabled button cannot take focus, so its reason would reach no

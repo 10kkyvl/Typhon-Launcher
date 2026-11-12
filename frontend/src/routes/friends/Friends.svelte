@@ -61,6 +61,8 @@
   let tab = $state('all');
   let addOpen = $state(false);
   let codeOpen = $state(false);
+  const uid = $props.id();
+  const codeId = `${uid}-code`;
   let consentOpen = $state(false);
   let blocked = $state<UserCard[]>([]);
   let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
@@ -313,7 +315,9 @@
   <PageHeader title={msg('social.friendsTitle')} subtitle={msg('social.friendsSubtitle')}>
     {#snippet actions()}
       {#if !isGuest && !$needsSocialConsent}
-        <Button onclick={() => (codeOpen = !codeOpen)} pressed={codeOpen}>{msg('social.friendsMyCodeButton')}</Button>
+        <Button onclick={() => (codeOpen = !codeOpen)} aria-expanded={codeOpen} aria-controls={codeOpen ? codeId : undefined}>
+          {msg('social.friendsMyCodeButton')}
+        </Button>
         <Button variant="primary" onclick={() => (addOpen = true)}>
           <UserPlus size="1.5rem" strokeWidth={1.8} />
           {msg('social.friendsAddFriend')}
@@ -352,7 +356,7 @@
     </EmptyState>
   {:else}
     {#if codeOpen}
-      <div class="code">
+      <div class="code" id={codeId}>
         <FriendCodeCard bind:code={myCode} />
       </div>
     {/if}

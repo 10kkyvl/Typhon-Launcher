@@ -249,6 +249,38 @@ describe('a pressed button keeps its name', () => {
   });
 });
 
+// A button that shows or hides something below it is a disclosure: it says `aria-expanded` and what
+// it controls. `pressed` is for a toggle whose name stays the same; fed by an open flag it tells a
+// screen reader "pressed" where "expanded" is meant.
+describe('a disclosure is not a pressed toggle', () => {
+  const sources = fs
+    .readdirSync(new URL('../', import.meta.url), { recursive: true })
+    .map((path) => path.replaceAll('\\', '/'))
+    .filter((path) => path.endsWith('.svelte') && (path.startsWith('routes/') || path.startsWith('lib/components/')));
+
+  const OPEN = /^(?:open|expanded|shown)$|(?:Open|Expanded|Shown)$/;
+  function openFlags(text: string): { at: number; state: string }[] {
+    return [...text.matchAll(/(?<![\w-])(?:aria-)?pressed=\{\s*!?\s*\$?([\w$.]+)\s*\}/g)]
+      .map((m) => ({ at: m.index, state: m[1].split('.').at(-1) ?? '' }))
+      .filter(({ state }) => OPEN.test(state));
+  }
+
+  it('no button is pressed by a state named like an open flag', () => {
+    const found = sources.flatMap((path) => {
+      const text = read(path);
+      return openFlags(text).map(({ at, state }) => `${path}:${text.slice(0, at).split('\n').length} ${state}`);
+    });
+    expect(sources.length).toBeGreaterThan(150);
+    expect(found).toEqual([]);
+  });
+
+  it('sees one when there is one, and lets a toggle with its own state be', () => {
+    const text = `<Button pressed={open}>a</Button><Button pressed={codeOpen}>b</Button><button aria-pressed={$panelShown}>c</button>
+      <Button pressed={muted}>d</Button><Button aria-expanded={open}>e</Button><Chip pressed={reopened}>f</Chip>`;
+    expect(openFlags(text).map(({ state }) => state)).toEqual(['open', 'codeOpen', 'panelShown']);
+  });
+});
+
 describe('one spinner', () => {
   const sources = fs
     .readdirSync(new URL('../', import.meta.url), { recursive: true })

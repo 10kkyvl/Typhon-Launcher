@@ -13,6 +13,8 @@
     onadd,
   }: { layout: ProfileLayout; disabled?: boolean; onadd: (preset: AddPreset) => void } = $props();
 
+  const uid = $props.id();
+  const listId = `${uid}-presets`;
   let open = $state(false);
 
   const hiddenByVersion = $derived(layout.blocks.length >= MAX_BLOCKS && unknownBlockCount(layout) > 0);
@@ -30,14 +32,14 @@
 </script>
 
 <div class="picker">
-  <Button {disabled} pressed={open} onclick={() => (open = !open)}>
+  <Button {disabled} aria-expanded={open} aria-controls={open ? listId : undefined} onclick={() => (open = !open)}>
     <Plus size="1.5rem" strokeWidth={1.8} />{msg('profile.addBlock')}
   </Button>
   {#if hiddenByVersion}
     <p class="hint">{msg('profile.blocksFromNewer', { hidden: unknownBlockCount(layout), count: MAX_BLOCKS })}</p>
   {/if}
   {#if open}
-    <ul class="presets">
+    <ul class="presets" id={listId}>
       {#each ADD_PRESETS as preset (preset.id)}
         {@const blocked = canAdd(layout, preset)}
         <li>

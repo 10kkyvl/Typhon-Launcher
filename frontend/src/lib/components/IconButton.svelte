@@ -43,7 +43,8 @@
     /**
      * For a toggle whose name stays the same in both states: whether it is on (aria-pressed). Leave it
      * out for a plain action, and for a button that opens a menu or a panel, which says
-     * `aria-expanded` through its trigger props.
+     * `aria-expanded` through its trigger props. A button that shows or hides something below it is
+     * a disclosure: it passes `aria-expanded` and `aria-controls` (the id of what it shows).
      */
     pressed?: boolean;
     /**
