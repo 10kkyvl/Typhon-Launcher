@@ -16,6 +16,7 @@
   import Spinner from './Spinner.svelte';
   import {
     activePeer,
+    attachmentDrafts,
     chatConnected,
     chatLoading,
     chatLoadingMore,
@@ -33,12 +34,16 @@
     messagesByPeer,
     openChat,
     retryMessaging,
+    sendMessage,
+    setAttachmentDrafts,
     setPanelVisible,
     nextByPeer,
   } from '../stores/messaging';
-  import { messagePreview } from '../social/chatImage';
+  import { messagePreview, type ChatAttachmentDraft } from '../social/chatImage';
+  import { chatErrorText } from '../social/chatErrors';
+  import { toast } from '../stores/toasts';
   import { focusableIn } from '../layers/focus';
-  import type { ChatPeer, Message } from '../services/messaging';
+  import { uploadChatImage, type Attachment, type ChatPeer, type Message } from '../services/messaging';
   import { msg } from '../i18n';
 
   let draft = $state('');
@@ -59,12 +64,18 @@
   let composerPart = $state<{ field: () => HTMLElement | undefined }>();
   let now = $state(new Date());
   let lastRenderedLastMessage = '';
+  // A send in flight belongs to its conversation, not to the composer drawn for it: after Back and
+  // reopening the conversation, Send stays refused and the upload's progress shows. `total` counts the
+  // images still to upload when it started.
+  let sends = $state<Record<string, { current: number; total: number }>>({});
+  const idle = { current: 0, total: 0 };
 
   const peer = $derived($activePeer);
   const activeMessages = $derived(peer ? ($messagesByPeer[peer.id] ?? []) : []);
   const conversation = $derived(peer ? $conversations.find((item) => item.peer.id === peer.id) : undefined);
   const canSend = $derived(conversation?.canSend ?? $canSendByPeer[peer?.id ?? ''] ?? true);
   const unreadTotal = $derived($conversations.reduce((sum, item) => sum + item.unread, 0));
+  const sending = $derived(peer ? Object.hasOwn(sends, peer.id) : false);
 
   function displayName(target: ChatPeer): string {
     return target.displayName || target.username;
@@ -77,6 +88,56 @@
     const active = document.activeElement;
     if (active && active !== document.body && active.isConnected) return;
     target()?.focus();
+  }
+
+  async function uploadDrafts(targetPeerId: string, pending: ChatAttachmentDraft[]): Promise<Attachment[] | null> {
+    let list = pending;
+    const total = list.filter((item) => !item.uploaded).length;
+    let done = 0;
+    sends[targetPeerId] = { current: 0, total };
+    for (const item of pending) {
+      if (item.uploaded) continue;
+      sends[targetPeerId] = { current: done + 1, total };
+      try {
+        const uploaded = await uploadChatImage(item.encoded);
+        list = list.map((entry) => (entry.key === item.key ? { ...entry, uploaded } : entry));
+        setAttachmentDrafts(targetPeerId, list);
+        done += 1;
+      } catch (err) {
+        toast(chatErrorText(err, 'social.chatSendError'), 'danger');
+        return null;
+      }
+    }
+    return list.map((item) => ({ ...(item.uploaded as Attachment), url: item.previewUrl }));
+  }
+
+  async function submit(): Promise<void> {
+    if (!peer || !canSend || sending) return;
+    const targetPeerId = peer.id;
+    const pending = $attachmentDrafts[targetPeerId] ?? [];
+    const submitted = draft.trim();
+    if (!submitted && pending.length === 0) return;
+    sends[targetPeerId] = { ...idle };
+    error = '';
+    try {
+      let attachments: Attachment[] = [];
+      if (pending.length > 0) {
+        const uploaded = await uploadDrafts(targetPeerId, pending);
+        if (!uploaded) return;
+        attachments = uploaded;
+      }
+      await sendMessage(targetPeerId, submitted, undefined, attachments);
+      if (attachments.length > 0) setAttachmentDrafts(targetPeerId, []);
+      if ($activePeer?.id === targetPeerId && draft.trim() === submitted) draft = '';
+      if ($activePeer?.id === targetPeerId) {
+        composerPart?.field()?.focus();
+        scrollToEnd();
+      }
+    } catch (err) {
+      error = chatErrorText(err, 'social.chatSendError');
+    } finally {
+      delete sends[targetPeerId];
+    }
   }
 
   // A failed message that went through on retry: the composer may still hold its text, and the row
@@ -324,7 +385,7 @@
         {#if !canSend}
           <div class="panel-notice"><Notice compact announce={false}>{msg('social.chatDisabled')}</Notice></div>
         {:else}
-          <ChatComposer bind:this={composerPart} {peer} bind:draft onerror={(text) => (error = text)} onsent={scrollToEnd} />
+          <ChatComposer bind:this={composerPart} {peer} bind:draft {sending} progress={sends[peer.id] ?? idle} onsubmit={() => void submit()} />
         {/if}
       {:else}
         <div class="conversation-list" bind:this={list}>

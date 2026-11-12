@@ -1,34 +1,36 @@
 <script lang="ts">
   import { Paperclip, Send, X } from '@lucide/svelte';
   import IconButton from './IconButton.svelte';
-  import { activePeer, attachmentDrafts, sendMessage, setAttachmentDrafts, setDraft, setTyping } from '../stores/messaging';
+  import { attachmentDrafts, setAttachmentDrafts, setDraft, setTyping } from '../stores/messaging';
   import { toast } from '../stores/toasts';
   import { bytesSize } from '../utils/format';
   import { chatErrorText } from '../social/chatErrors';
   import { appendDrafts, checkChatImage, clipboardImages, draftFromFile, draftFromPicked, type ChatAttachmentDraft } from '../social/chatImage';
-  import { pickChatImages, uploadChatImage, type Attachment, type ChatPeer } from '../services/messaging';
+  import { pickChatImages, type ChatPeer } from '../services/messaging';
   import { msg } from '../i18n';
 
   /**
    * Where a message to `peer` is written: the text, the images attached to it, and Send. The panel
-   * holds the draft (it follows the open conversation) and shows a failed send (`onerror`, '' to clear
-   * it).
+   * holds the draft (it follows the open conversation) and the send itself (`onsubmit`): a send in
+   * flight belongs to the conversation, and this composer is drawn anew each time it opens.
    */
   let {
     peer,
     draft = $bindable(''),
-    onerror,
-    onsent,
+    sending,
+    progress,
+    onsubmit,
   }: {
     peer: ChatPeer;
     draft?: string;
-    onerror: (text: string) => void;
-    onsent: () => void;
+    /** A send to `peer` is in flight. */
+    sending: boolean;
+    /** Images uploaded so far for it, of how many. */
+    progress: { current: number; total: number };
+    onsubmit: () => void;
   } = $props();
 
   let composer = $state<HTMLTextAreaElement | undefined>(undefined);
-  let sending = $state(false);
-  let uploadProgress = $state({ current: 0, total: 0 });
 
   const draftList = $derived($attachmentDrafts[peer.id] ?? []);
 
@@ -87,56 +89,6 @@
     if (!sending) setAttachmentDrafts(peer.id, draftList.filter((item) => item.key !== key));
   }
 
-  async function uploadDrafts(targetPeerId: string, pending: ChatAttachmentDraft[]): Promise<Attachment[] | null> {
-    let list = pending;
-    const total = list.filter((item) => !item.uploaded).length;
-    let done = 0;
-    uploadProgress = { current: 0, total };
-    for (const item of pending) {
-      if (item.uploaded) continue;
-      uploadProgress = { current: done + 1, total };
-      try {
-        const uploaded = await uploadChatImage(item.encoded);
-        list = list.map((entry) => (entry.key === item.key ? { ...entry, uploaded } : entry));
-        setAttachmentDrafts(targetPeerId, list);
-        done += 1;
-      } catch (err) {
-        toast(chatErrorText(err, 'social.chatSendError'), 'danger');
-        return null;
-      }
-    }
-    return list.map((item) => ({ ...(item.uploaded as Attachment), url: item.previewUrl }));
-  }
-
-  async function submit(): Promise<void> {
-    const pending = draftList;
-    if ((!draft.trim() && pending.length === 0) || sending) return;
-    const targetPeerId = peer.id;
-    const submitted = draft.trim();
-    sending = true;
-    onerror('');
-    try {
-      let attachments: Attachment[] = [];
-      if (pending.length > 0) {
-        const uploaded = await uploadDrafts(targetPeerId, pending);
-        if (!uploaded) return;
-        attachments = uploaded;
-      }
-      await sendMessage(targetPeerId, submitted, undefined, attachments);
-      if (attachments.length > 0) setAttachmentDrafts(targetPeerId, []);
-      if ($activePeer?.id === targetPeerId && draft.trim() === submitted) draft = '';
-      if ($activePeer?.id === targetPeerId) {
-        composer?.focus();
-        onsent();
-      }
-    } catch (err) {
-      onerror(chatErrorText(err, 'social.chatSendError'));
-    } finally {
-      uploadProgress = { current: 0, total: 0 };
-      sending = false;
-    }
-  }
-
   /** The text field, for the panel to put focus in when a conversation opens. */
   export function field(): HTMLElement | undefined {
     return composer;
@@ -146,7 +98,7 @@
     // The Enter that ends an input method's composition picks the text; it does not send.
     if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
     event.preventDefault();
-    void submit();
+    onsubmit();
   }
 </script>
 
@@ -163,8 +115,8 @@
       </div>
     {/each}
   </div>
-  {#if uploadProgress.total > 0}
-    <div class="upload-status" role="status">{uploadProgress.total === 1 ? msg('social.chatUploading') : msg('social.chatUploadProgress', { current: uploadProgress.current, total: uploadProgress.total })}</div>
+  {#if progress.total > 0}
+    <div class="upload-status" role="status">{progress.total === 1 ? msg('social.chatUploading') : msg('social.chatUploadProgress', { current: progress.current, total: progress.total })}</div>
   {/if}
 {/if}
 <div class="composer">
@@ -181,7 +133,7 @@
     onkeydown={onKeydown}
     onpaste={onPaste}
   ></textarea>
-  <IconButton variant="primary" label={msg('social.chatSend')} disabled={(!draft.trim() && draftList.length === 0) || sending} onclick={() => submit()}><Send size="1.7rem" /></IconButton>
+  <IconButton variant="primary" label={msg('social.chatSend')} disabled={(!draft.trim() && draftList.length === 0) || sending} onclick={() => onsubmit()}><Send size="1.7rem" /></IconButton>
 </div>
 <div class="composer-hint">{msg('social.chatHint')}</div>
 

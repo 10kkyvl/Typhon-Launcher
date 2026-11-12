@@ -10,6 +10,7 @@ vi.mock('../stores/presence', () => ({ presenceStatus: writable('online') }));
 vi.mock('../services/messaging', async (actual) => ({
   ...(await actual<typeof import('../services/messaging')>()),
   messages: vi.fn(),
+  uploadChatImage: vi.fn(),
 }));
 // The calls that reach the backend; what the store does around them is its own tests'.
 vi.mock('../stores/messaging', async (actual) => ({
@@ -21,7 +22,7 @@ vi.mock('../stores/messaging', async (actual) => ({
 }));
 
 import { locale, msg } from '../i18n';
-import { messages as fetchMessages, type Message, type MessagePage } from '../services/messaging';
+import { messages as fetchMessages, uploadChatImage, type Attachment, type Message, type MessagePage } from '../services/messaging';
 import * as chat from '../stores/messaging';
 import { user } from '../testing/dom';
 import ChatPanel from './ChatPanel.svelte';
@@ -246,6 +247,46 @@ describe('ChatPanel: the composer', () => {
 
     await fireEvent.keyDown(field, { key: 'Enter' });
     expect(chat.sendMessage).toHaveBeenCalledOnce();
+  });
+});
+
+describe('ChatPanel: a send in flight', () => {
+  const uploaded = { id: 'a1', url: 'https://img/a1', width: 10, height: 10, bytes: 1024 };
+
+  it('belongs to its conversation: after Back and reopening it, Send is still refused and the images go once', async () => {
+    const sent = held<void>();
+    vi.mocked(chat.sendMessage).mockReturnValue(sent.promise as never);
+    chat.attachmentDrafts.set({ peer: [{ key: 'k1', name: 'shot.png', bytes: 1024, encoded: '', previewUrl: 'blob:shot', uploaded }] });
+    const keys = setup();
+
+    await keys.click(screen.getByRole('button', { name: msg('social.chatSend') }));
+    expect(chat.sendMessage).toHaveBeenCalledTimes(1);
+    await keys.click(screen.getByRole('button', { name: msg('social.chatBack') }));
+    await keys.click(screen.getByRole('button', { name: /Friend/ }));
+
+    const send = screen.getByRole('button', { name: msg('social.chatSend') });
+    expect(send.hasAttribute('disabled')).toBe(true);
+    await keys.click(send);
+    expect(chat.sendMessage).toHaveBeenCalledTimes(1);
+    sent.resolve();
+    await vi.waitFor(() => expect(screen.queryByRole('button', { name: msg('social.chatAttachRemove') })).toBeNull());
+  });
+
+  it('shows the upload\'s progress again when its conversation is reopened while the images go up', async () => {
+    const up = held<Attachment>();
+    vi.mocked(uploadChatImage).mockReturnValue(up.promise);
+    chat.attachmentDrafts.set({ peer: [{ key: 'k1', name: 'shot.png', bytes: 1024, encoded: 'data', previewUrl: 'blob:shot' }] });
+    const keys = setup();
+
+    await keys.click(screen.getByRole('button', { name: msg('social.chatSend') }));
+    expect(screen.getByText(msg('social.chatUploading'))).toBeTruthy();
+    await keys.click(screen.getByRole('button', { name: msg('social.chatBack') }));
+    await keys.click(screen.getByRole('button', { name: /Friend/ }));
+
+    expect(screen.getByText(msg('social.chatUploading'))).toBeTruthy();
+    expect(screen.getByRole('button', { name: msg('social.chatSend') }).hasAttribute('disabled')).toBe(true);
+    up.resolve(uploaded);
+    await vi.waitFor(() => expect(chat.sendMessage).toHaveBeenCalledTimes(1));
   });
 });
 
