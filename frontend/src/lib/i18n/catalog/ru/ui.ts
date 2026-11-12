@@ -157,7 +157,7 @@ export const ui = {
   'ui.allHistory': 'Вся история',
   'ui.toastsLabel': 'Всплывающие сообщения',
   'ui.toastDismiss': 'Закрыть сообщение',
-  'ui.toastRepeated': { one: 'повторилось {count} раз', few: 'повторилось {count} раза', many: 'повторилось {count} раз' },
+  'ui.toastRepeated': { one: 'произошло {count} раз', few: 'произошло {count} раза', many: 'произошло {count} раз' },
   'ui.minimize': 'Свернуть',
   'ui.maximize': 'Развернуть',
   'ui.restore': 'Восстановить',
