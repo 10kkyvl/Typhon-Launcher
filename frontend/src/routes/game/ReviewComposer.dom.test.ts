@@ -3,10 +3,11 @@ import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import { AccountError } from '../../lib/services/account';
-import { mine, remove } from '../../lib/services/reviews';
+import { mine, remove, save } from '../../lib/services/reviews';
 import { toasts } from '../../lib/stores/toasts';
 import { authState } from '../../lib/stores/user';
 import { user } from '../../lib/testing/dom';
+import { description } from '../../lib/testing/hints';
 import ReviewComposer from './ReviewComposer.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
@@ -87,6 +88,31 @@ describe('choosing whether I recommend the game', () => {
     expect(yes.getAttribute('aria-checked')).toBe('true');
     await keys.keyboard('{ArrowLeft}');
     expect(no.getAttribute('aria-checked')).toBe('true');
+  });
+});
+
+describe('a refused review text', () => {
+  it('shows the reason by the field as an alert, and the field says it is invalid and is described by it', async () => {
+    vi.mocked(mine).mockResolvedValueOnce({ review: null, eligibility: { canPost: true } } as unknown as Awaited<ReturnType<typeof mine>>);
+    vi.mocked(save).mockRejectedValueOnce(new AccountError('review_links', 'body'));
+    render(ReviewComposer, { target: app, props: { canonicalGameId: 'g1' } });
+    const keys = user();
+    await keys.click(await screen.findByRole('radio', { name: msg('reviews.composerRecommend') }));
+    const field = screen.getByRole('textbox');
+    expect(field.classList.contains('input')).toBe(true);
+    expect(description(field)).toContain(msg('reviews.composerHint', { min: 10, max: 2000 }));
+    await keys.type(field, 'See example dot com for more');
+
+    await keys.click(screen.getByRole('button', { name: msg('reviews.composerPublish') }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent?.trim()).toBe(msg('reviews.errorLinks'));
+    expect(field.getAttribute('aria-invalid')).toBe('true');
+    expect(description(field)).toContain(msg('reviews.errorLinks'));
+
+    await keys.type(field, '!');
+    expect(field.getAttribute('aria-invalid')).not.toBe('true');
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });
 

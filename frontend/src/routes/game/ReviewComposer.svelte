@@ -69,6 +69,7 @@
   const isEdit = $derived(!!mine?.review);
   const formVisible = $derived(!!mine && ((!mine.review && mine.eligibility.canPost) || editing));
   const runeCount = $derived([...body].length);
+  const tooLong = $derived(limits !== null && runeCount > limits.maxBodyRunes);
   const disabledPublish = $derived(
     recommended === null || saving || !limits || runeCount < limits.minBodyRunes || runeCount > limits.maxBodyRunes,
   );
@@ -228,19 +229,25 @@
         </div>
 
         <textarea
-          class="body"
+          class="input area"
           rows="5"
           placeholder={msg('reviews.composerPlaceholder')}
+          aria-invalid={fieldError || tooLong ? 'true' : undefined}
+          aria-describedby="{uid}-hint{limits ? ` ${uid}-counter` : ''}"
           bind:value={body}
           oninput={() => (fieldError = '')}
         ></textarea>
 
         <div class="form-foot">
-          <span class="hint" class:danger={fieldError}>
-            {fieldError || (limits ? msg('reviews.composerHint', { min: limits.minBodyRunes, max: limits.maxBodyRunes }) : '')}
-          </span>
+          {#if fieldError}
+            <span class="hint danger" id="{uid}-hint" role="alert">{fieldError}</span>
+          {:else}
+            <span class="hint" id="{uid}-hint">
+              {limits ? msg('reviews.composerHint', { min: limits.minBodyRunes, max: limits.maxBodyRunes }) : ''}
+            </span>
+          {/if}
           {#if limits}
-            <span class="counter" class:danger={runeCount > limits.maxBodyRunes}>
+            <span class="counter" class:danger={tooLong} id="{uid}-counter">
               {msg('reviews.composerCounter', { count: runeCount, max: limits.maxBodyRunes })}
             </span>
           {/if}
@@ -351,22 +358,12 @@
     color: var(--danger);
   }
 
-  .body {
-    width: 100%;
+  .area {
+    height: auto;
     padding: 1.2rem 1.4rem;
-    border-radius: var(--radius-md);
-    border: 1px solid var(--border-strong);
-    background: var(--surface-3);
-    color: var(--text);
-    font: inherit;
     font-size: var(--font-sm);
     line-height: 1.55;
     resize: vertical;
-  }
-
-  .body:focus {
-    outline: none;
-    border-color: var(--accent-ring);
   }
 
   .form-foot {

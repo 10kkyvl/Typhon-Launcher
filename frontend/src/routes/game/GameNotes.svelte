@@ -7,6 +7,8 @@
 
   let { gameId, stored }: { gameId: string; stored: string } = $props();
 
+  const uid = $props.id();
+
   type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
   let text = $state('');
@@ -90,27 +92,32 @@
 <section class="section">
   <h2 class="heading">{msg('games.notesHeading')}</h2>
   <textarea
+    class="input area"
     bind:this={area}
     bind:value={text}
     rows="4"
     placeholder={msg('games.notesPlaceholder')}
     aria-label={msg('games.notesHeading')}
+    aria-invalid={over ? 'true' : undefined}
+    aria-describedby={[phase === 'error' ? `${uid}-error` : '', limit > 0 ? `${uid}-counter` : ''].filter(Boolean).join(' ') || undefined}
     {oninput}
     {onfocus}
     {onblur}
   ></textarea>
   <div class="foot">
-    <span class="status" class:error={phase === 'error'} role="status">
-      {#if phase === 'error'}
-        {errorText}
-      {:else if phase === 'saving'}
-        {msg('games.notesSaving')}
-      {:else if phase === 'saved'}
-        {msg('games.notesSaved')}
-      {/if}
-    </span>
+    {#if phase === 'error'}
+      <span class="status error" id="{uid}-error" role="alert">{errorText}</span>
+    {:else}
+      <span class="status" role="status">
+        {#if phase === 'saving'}
+          {msg('games.notesSaving')}
+        {:else if phase === 'saved'}
+          {msg('games.notesSaved')}
+        {/if}
+      </span>
+    {/if}
     {#if limit > 0}
-      <span class="counter" class:over>{msg('games.notesCounter', { count: length, limit })}</span>
+      <span class="counter" class:over id="{uid}-counter">{msg('games.notesCounter', { count: length, limit })}</span>
     {/if}
   </div>
 </section>
@@ -127,24 +134,14 @@
     margin-bottom: var(--space-4);
   }
 
-  textarea {
-    width: 100%;
+  .area {
+    height: auto;
     min-height: 9rem;
     padding: var(--space-3);
-    background: var(--surface-3);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    color: var(--text);
-    font: inherit;
     font-size: var(--font-sm);
     line-height: 1.55;
     resize: none;
     overflow: hidden;
-  }
-
-  textarea:focus {
-    outline: none;
-    border-color: var(--accent-ring);
   }
 
   .foot {
