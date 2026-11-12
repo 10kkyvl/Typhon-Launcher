@@ -69,12 +69,14 @@ describe('ReviewCard: a vote in flight', () => {
 
     expect(yes.hasAttribute('disabled')).toBe(false);
     expect(yes.getAttribute('aria-disabled')).toBe('true');
+    expect(yes.getAttribute('aria-busy')).toBe('true');
     expect(document.activeElement).toBe(yes);
     await user.keyboard('{Enter}');
     expect(vote).toHaveBeenCalledTimes(1);
 
     answer({ helpful: 3, unhelpful: 1, myVote: 'helpful' } as Awaited<ReturnType<typeof vote>>);
-    await vi.waitFor(() => expect(yes.hasAttribute('aria-disabled')).toBe(false));
+    await vi.waitFor(() => expect(yes.hasAttribute('aria-busy')).toBe(false));
+    expect(yes.hasAttribute('aria-disabled')).toBe(false);
     expect(document.activeElement).toBe(yes);
   });
 });

@@ -113,12 +113,10 @@
     <div class="helpful">
       <span class="helpful-label">{msg('reviews.helpfulQuestion')}</span>
       {#if showActions}
-        <!-- While a vote is in flight the chips refuse presses (castVote returns) but keep the focus,
-             which a disabled chip would drop to the page. -->
-        <Chip selected={myVote === 'helpful'} aria-disabled={voting ? 'true' : undefined} onclick={() => castVote('helpful')}>
+        <Chip selected={myVote === 'helpful'} busy={voting} onclick={() => castVote('helpful')}>
           {msg('reviews.helpfulYes')} ({helpful})
         </Chip>
-        <Chip selected={myVote === 'unhelpful'} aria-disabled={voting ? 'true' : undefined} onclick={() => castVote('unhelpful')}>
+        <Chip selected={myVote === 'unhelpful'} busy={voting} onclick={() => castVote('unhelpful')}>
           {msg('reviews.helpfulNo')} ({unhelpful})
         </Chip>
       {:else}
