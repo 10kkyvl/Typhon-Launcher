@@ -113,6 +113,35 @@ describe('the tile and swatch pickers of the profile appearance are radio groups
     expect(launcher.getAttribute('aria-checked')).toBe('true');
   });
 
+  it('in every tile and swatch group the option an arrow, Home or End lands on is the one chosen and the one Tab stop', async () => {
+    const { user } = await editor();
+    const keys = ['{ArrowRight}', '{ArrowRight}', '{ArrowLeft}', '{End}', '{Home}', '{ArrowDown}'];
+    const roamed: string[] = [];
+    async function arrowsChoose(name: string) {
+      const group = () => screen.getByRole('radiogroup', { name });
+      stops(group())[0].focus();
+      for (const key of keys) {
+        await user.keyboard(key);
+        const active = document.activeElement as HTMLElement;
+        expect(radios(group()), `${name} ${key}`).toContain(active);
+        expect(checked(group()), `${name} ${key}`).toEqual([active]);
+        expect(stops(group()), `${name} ${key}`).toEqual([active]);
+      }
+      roamed.push(name);
+    }
+
+    await arrowsChoose('Profile theme');
+    await arrowsChoose('Own color');
+    await arrowsChoose('Avatar frame');
+    await arrowsChoose('Name style');
+    await user.click(screen.getByRole('button', { name: 'Pick an emoji' }));
+    await arrowsChoose('Pick an emoji');
+
+    expect(roamed).toHaveLength(5);
+    const chosen = checked(screen.getByRole('radiogroup', { name: 'Pick an emoji' }))[0].textContent;
+    expect(screen.getByRole('button', { name: 'Pick an emoji' }).textContent?.trim()).toBe(chosen);
+  });
+
   it('the source of the auto theme is a segmented choice of its own name', async () => {
     const { user } = await editor();
     await user.click(screen.getByRole('radio', { name: 'Auto from game' }));

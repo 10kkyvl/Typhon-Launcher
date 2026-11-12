@@ -138,16 +138,20 @@
     if (source === 'theme') useLauncherAccent();
     else patch({ accentSource: 'custom' });
   }
-  // The arrows, Home and End move along a radio group and choose (WAI-ARIA radio group). Choosing is
-  // a press of the option, unless its press does more (an emoji also closes its grid).
-  function roam(event: KeyboardEvent, choose = (radio: HTMLElement) => radio.click()) {
+  // The arrows, Home and End move along a radio group and choose the option they land on (WAI-ARIA
+  // radio group). Choosing is a press of that option, unless its press does more (an emoji also
+  // closes its grid): `choose` is then given the option landed on and its index.
+  function roam(
+    event: KeyboardEvent,
+    choose: (radio: HTMLElement, index: number) => void = (radio) => radio.click(),
+  ) {
     if (event.altKey || event.ctrlKey || event.metaKey) return;
     const radio = event.currentTarget as HTMLElement;
     const all = [...(radio.closest('[role="radiogroup"]')?.querySelectorAll<HTMLElement>('[role="radio"]') ?? [])];
     const next = nextIndex(all.indexOf(radio), all.length, event.key, { orientation: 'both' });
     if (next === null) return;
     event.preventDefault();
-    choose(all[next]);
+    choose(all[next], next);
     all[next].focus();
   }
   async function pickEmoji(emoji: string) {
@@ -406,7 +410,7 @@
       {#if emojiOpen}
         <div class="emoji-grid" id={emojiGridId} role="radiogroup" aria-label={msg('profileStyle.emojiPick')}>
           {#each STATUS_EMOJI as emoji}
-            <button type="button" role="radio" class="emoji-cell" class:selected={draft.statusEmoji === emoji} aria-checked={draft.statusEmoji === emoji} tabindex={emojiStop === emoji ? 0 : -1} onkeydown={(e) => roam(e, () => (draft.statusEmoji = emoji))} onclick={() => pickEmoji(emoji)}>{emoji}</button>
+            <button type="button" role="radio" class="emoji-cell" class:selected={draft.statusEmoji === emoji} aria-checked={draft.statusEmoji === emoji} tabindex={emojiStop === emoji ? 0 : -1} onkeydown={(e) => roam(e, (_, index) => (draft.statusEmoji = STATUS_EMOJI[index]))} onclick={() => pickEmoji(emoji)}>{emoji}</button>
           {/each}
         </div>
       {/if}
