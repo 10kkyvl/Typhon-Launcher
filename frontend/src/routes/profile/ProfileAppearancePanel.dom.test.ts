@@ -10,6 +10,7 @@ vi.mock('../../lib/stores/profileAccent', async (actual) => ({
 
 import { get } from 'svelte/store';
 import { locale } from '../../lib/i18n';
+import { artStatus } from '../../lib/profile/artPalette';
 import { DEFAULT_PROFILE, type CurrentUser } from '../../lib/services/account';
 import { renderDom } from '../../lib/testing/dom';
 import { launcherAccent } from '../../lib/stores/profileAccent';
@@ -169,5 +170,65 @@ describe('the disclosures of the profile appearance', () => {
     expect(document.getElementById(name.getAttribute('aria-controls') ?? '')).not.toBeNull();
     expect(custom.getAttribute('aria-expanded')).toBe('false');
     expect(custom.hasAttribute('aria-controls')).toBe(false);
+  });
+});
+
+const coverInput = () => document.querySelector<HTMLInputElement>('input[type="file"]') as HTMLInputElement;
+
+describe('the messages of the profile appearance', () => {
+  it('a status with a refused character marks its field, drawn as every field, invalid and tied to its alert', async () => {
+    const { user } = await editor();
+    const field = screen.getByRole('textbox', { name: 'Status' });
+    expect(field.classList.contains('input')).toBe(true);
+    expect(field.getAttribute('aria-invalid')).not.toBe('true');
+
+    await user.click(field);
+    await user.paste('gg‮');
+
+    expect(field.getAttribute('aria-invalid')).toBe('true');
+    const error = document.getElementById(field.getAttribute('aria-describedby') ?? '');
+    expect(error?.getAttribute('role')).toBe('alert');
+    expect(error?.textContent).toMatch(/^The text has characters that are not allowed/);
+  });
+
+  it('a cover that cannot be used is a danger notice of the cover section', async () => {
+    const { user } = await editor();
+
+    await user.upload(coverInput(), new File([], 'empty.png', { type: 'image/png' }));
+
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent?.trim()).toBe('Choose a JPG, PNG, WebP or GIF up to 8 MB.');
+    expect(alert.closest('[data-tone="danger"]')).not.toBeNull();
+  });
+
+  it('a cover being read is shown by the spinner, named by what it does', async () => {
+    const { user } = await editor();
+
+    await user.upload(coverInput(), new File(['x'], 'cover.png', { type: 'image/png' }));
+
+    await screen.findByText('Uploading cover…');
+    const status = screen.getAllByRole('status').filter((element) => element.textContent?.trim() === 'Uploading cover…');
+    expect(status).toHaveLength(1);
+    expect(status[0].classList.contains('spinner')).toBe(true);
+  });
+
+  it('an auto theme whose art could not be read says so in a warning notice', async () => {
+    const { user } = await editor();
+    await user.click(screen.getByRole('radio', { name: 'Auto from game' }));
+    artStatus.set('failed');
+
+    const text = await screen.findByText('Could not take colors from the art — using the accent.');
+    expect(text.closest('[data-tone="warning"]')).not.toBeNull();
+    artStatus.set('idle');
+  });
+
+  it('a worn frame that was revoked is a standing warning of the panel, not announced', async () => {
+    const appearance = { ...DEFAULT_PROFILE.appearance, avatarFrame: 'custom:3f2b8c1e-9a4d-4e57-b0aa-1c2d3e4f5a6b' };
+    currentUser.set({ ...me, frames: [], profile: { ...DEFAULT_PROFILE, appearance } as CurrentUser['profile'] });
+    await editor();
+
+    const notice = screen.getByText('Frame revoked').closest('[data-tone="warning"]') as HTMLElement;
+    expect(notice).not.toBeNull();
+    expect(notice.querySelector('[role="status"], [role="alert"]')).toBeNull();
   });
 });

@@ -13,7 +13,9 @@
   import Button from '../../lib/components/Button.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
+  import Spinner from '../../lib/components/Spinner.svelte';
   import { removeCoverPrompt, resetProfileAppearancePrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
   import Toggle from '../../lib/components/Toggle.svelte';
   import {
@@ -277,7 +279,7 @@
             disabled={locked}
             bind:value={() => a.autoSource, (source) => patch({ autoSource: source as ProfileAppearance['autoSource'] })}
           />
-          {#if $artStatus === 'failed'}<p class="hint danger" role="status">{msg('profileStyle.autoFailed')}</p>{/if}
+          {#if $artStatus === 'failed'}<Notice tone="warning" compact>{msg('profileStyle.autoFailed')}</Notice>{/if}
         </div>
       {/if}
     </section>
@@ -309,8 +311,8 @@
         <Button size="sm" variant="ghost" onclick={() => (pending = { prompt: removeCoverPrompt(), run: removeCover })}>{msg('profile.removeCover')}</Button>
       {/if}
       <label class="slider"><span>{msg('profile.dim')} <output>{a.coverDim}%</output></span><input class="zoom-slider" style:--zoom-progress={`${a.coverDim}%`} type="range" aria-label={msg('profile.dim')} min="0" max="100" value={a.coverDim} oninput={(e) => patch({ coverDim: Number(e.currentTarget.value) })} /></label>
-      {#if reading || uploading}<p class="hint" role="status">{msg('profile.uploading')}</p>{/if}
-      {#if error}<p class="hint danger" role="alert">{error}</p>{/if}
+      {#if reading || uploading}<div class="message"><Spinner size="sm" label={msg('profile.uploading')} /></div>{/if}
+      {#if error}<div class="message"><Notice tone="danger" compact>{error}</Notice></div>{/if}
     </section>
 
     <section>
@@ -338,7 +340,7 @@
           </div>
         {/if}
       </div>
-      {#if frameRevoked}<p class="hint danger" role="status">{msg('profileStyle.frameRevoked')}</p>{/if}
+      {#if frameRevoked}<div class="message"><Notice tone="warning" compact announce={false}>{msg('profileStyle.frameRevoked')}</Notice></div>{/if}
       {#if !activeFrame}
       <div class="pick">
         <span class="pick-label">{msg('profileStyle.frameColor')}</span>
@@ -395,11 +397,12 @@
         >
           {#if draft.statusEmoji}<span class="emoji">{draft.statusEmoji}</span>{:else}<Smile size="1.8rem" />{/if}
         </IconButton>
-        <input class="text" type="text" autocomplete="off" spellcheck="true" placeholder={msg('profileStyle.statusPlaceholder')}
-          aria-label={msg('profileStyle.status')} value={draft.statusText ?? ''} oninput={setStatusText} />
+        <input class="input text" type="text" autocomplete="off" spellcheck="true" placeholder={msg('profileStyle.statusPlaceholder')}
+          aria-label={msg('profileStyle.status')} aria-invalid={statusError ? 'true' : undefined}
+          aria-describedby={statusError ? `${uid}-status-error` : undefined} value={draft.statusText ?? ''} oninput={setStatusText} />
         <span class="counter" class:full={statusLength >= MAX_STATUS_TEXT}>{statusLength}/{MAX_STATUS_TEXT}</span>
       </div>
-      {#if statusError}<p class="status-error" role="alert">{layoutErrorText(statusError)}</p>{/if}
+      {#if statusError}<p class="status-error" id="{uid}-status-error" role="alert">{layoutErrorText(statusError)}</p>{/if}
       {#if emojiOpen}
         <div class="emoji-grid" id={emojiGridId} role="radiogroup" aria-label={msg('profileStyle.emojiPick')}>
           {#each STATUS_EMOJI as emoji}
@@ -444,6 +447,7 @@
   .file { display: none; } .accents, .swatches { display: flex; align-items: center; gap: .9rem; flex-wrap: wrap; }
   .color { width: 2.5rem; height: 2.5rem; border-radius: 50%; border: 1px solid var(--border-strong); cursor: pointer; padding: 0; }
   .hex { margin-top: 1.2rem; }
+  .message { margin-top: .8rem; }
   .slider { display: flex; flex-direction: column; gap: 1rem; margin-top: 1.6rem; font-size: var(--font-xs); }
   .slider > span { display: flex; justify-content: space-between; } input[type=range] { width: 100%; }
   .frames { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; }
@@ -461,8 +465,7 @@
   .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 1.6rem; } .toggle-row h3 { margin-bottom: 0; }
   .status-row { display: flex; align-items: center; gap: .8rem; }
   .emoji { font-size: 1.8rem; line-height: 1; }
-  .text { flex: 1; min-width: 0; height: var(--control-md); padding: 0 1.2rem; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--radius-md); color: var(--text); font: inherit; font-size: var(--font-sm); }
-  .text:focus { outline: none; border-color: var(--accent-ring); box-shadow: 0 0 0 3px var(--accent-subtle); }
+  .text { flex: 1; }
   .counter { flex-shrink: 0; padding: 0 var(--space-1); border-radius: var(--radius-xs); font-size: var(--font-xs); color: var(--text-3); font-variant-numeric: tabular-nums; } .counter.full { background: var(--surface-2); color: var(--danger); }
   .emoji-grid { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: .3rem; margin: 1rem 0; padding: .6rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); }
   .emoji-cell { aspect-ratio: 1; background: transparent; border: 0; border-radius: var(--radius-sm); font-size: 1.8rem; line-height: 1; cursor: pointer; }
