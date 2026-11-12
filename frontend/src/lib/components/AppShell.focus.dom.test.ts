@@ -98,6 +98,20 @@ describe('focus after a page change', () => {
     expect(document.activeElement).toBe(friends);
   });
 
+  // The language switch builds the whole shell again (App.svelte keys it on the locale): the control
+  // that switched it is gone with its page, and the page it is on takes focus as after any change.
+  it('the shell built again on a page reached by a pick puts focus on that page heading', async () => {
+    const { user, rerender } = renderDom(RouteHarness, {});
+    await user.click(screen.getByRole('button', { name: 'Open Celeste' }));
+    await tick();
+    screen.getByRole('button', { name: 'Back to the library' }).focus();
+
+    await rerender({ generation: 1 });
+    await tick();
+
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1, name: 'Celeste' }));
+  });
+
   it('opening the window moves no focus', async () => {
     renderDom(RouteHarness, {});
     await tick();

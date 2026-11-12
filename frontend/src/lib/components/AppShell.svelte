@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import type { Attachment } from 'svelte/attachments';
-  import { route } from '../stores/router';
+  import { get } from 'svelte/store';
+  import { canGoBack, route } from '../stores/router';
   import { authState, isOffline } from '../stores/user';
   import { needsSocialConsent } from '../stores/social';
   import { chatOpen } from '../stores/messaging';
@@ -25,11 +26,13 @@
   // the search field let go. Once the new page has its heading (a page that loads first draws it
   // later), focus goes there, so the keyboard and a screen reader start on the page they are on.
   // Focus that outlived the change (the sidebar, the top bar) or has moved since is left alone. The
-  // page keeps its scroll position (scrollmemory). The first page is where the window opens: no
-  // focus is moved there.
+  // page keeps its scroll position (scrollmemory). The page the window opens on, with no history
+  // behind it, takes no focus. A shell built again on a page reached by a pick (App.svelte builds it
+  // again when the language is switched, taking the control that switched it) takes it as after any
+  // change.
   let pages = 0;
   const focusPage: Attachment<HTMLElement> = (node) => {
-    if (pages++ === 0) return;
+    if (pages++ === 0 && !get(canGoBack)) return;
     const land = () => {
       const active = document.activeElement;
       if (active && active !== document.body) return watcher.disconnect();
