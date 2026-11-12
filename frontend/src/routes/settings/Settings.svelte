@@ -31,6 +31,9 @@
   import StableOffer from '../../lib/components/StableOffer.svelte';
   import UpdateBanner from '../../lib/components/UpdateBanner.svelte';
   import DiscordJoinButton from '../../lib/components/DiscordJoinButton.svelte';
+  import EmptyState from '../../lib/components/EmptyState.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
+  import TextLink from '../../lib/components/TextLink.svelte';
   import AppearanceTab from './AppearanceTab.svelte';
   import DiscordCard from './DiscordCard.svelte';
   import EmulatorsCard from './EmulatorsCard.svelte';
@@ -738,7 +741,7 @@
               <div class="row-text">
                 <span class="row-label">{msg('settings.overlayStatusLabel')}</span>
                 <span class="row-sub" class:row-error={overlayStatusFailed} role="status">{overlayStatusText}</span>
-                {#if overlayError}<span class="row-sub row-error" role="alert">{overlayError}</span>{/if}
+                {#if overlayError}<div class="message"><Notice tone="danger" compact>{overlayError}</Notice></div>{/if}
               </div>
             </div>
           </div>
@@ -782,9 +785,7 @@
                 </div>
               {/each}
             {:else}
-              <span class="row-sub">
-                {msg('settings.generalLibraryEmptyHint')}
-              </span>
+              <EmptyState size="inline" title={msg('settings.generalLibraryEmptyHint')} />
             {/if}
             {#if current?.libraryPath}
               <LibraryFoldersRow />
@@ -951,13 +952,11 @@
               <div class="row-text">
                 <span class="row-label">{msg('settings.generalPrivacySessionStateLabel')}</span>
                 <span class="row-sub">{msg('settings.generalPrivacySessionStateSub')}</span>
-                <button
-                  type="button"
-                  class="privacy-link"
-                  onclick={() => openLegalDoc({ id: 'privacy', title: msg('settings.generalPrivacyPolicyLinkLabel') })}
-                >
-                  {msg('settings.generalPrivacyPolicyLinkLabel')}
-                </button>
+                <span class="row-sub privacy-link">
+                  <TextLink onclick={() => openLegalDoc({ id: 'privacy', title: msg('settings.generalPrivacyPolicyLinkLabel') })}>
+                    {msg('settings.generalPrivacyPolicyLinkLabel')}
+                  </TextLink>
+                </span>
               </div>
             </div>
           </div>
@@ -1093,7 +1092,7 @@
               <div class="row-text">
                 <span class="row-label">{msg('settings.downloadsScheduleLabel')}</span>
                 <span class="row-sub">{msg('settings.downloadsScheduleSub')}</span>
-                {#if scheduleError}<span class="row-sub row-error" role="alert">{scheduleError}</span>{/if}
+                {#if scheduleError}<div class="message"><Notice tone="danger" compact>{scheduleError}</Notice></div>{/if}
               </div>
               <div class="schedule-body">
                 <ScheduleEditor windows={current?.downloadSchedule ?? []} onchange={setSchedule} />
@@ -1627,7 +1626,7 @@
 
         <Card title={msg('settings.aboutLegalCardTitle')}>
           {#if legalError}
-            <p class="row-sub">{legalError}</p>
+            <Notice tone={inWails ? 'danger' : 'info'} compact>{legalError}</Notice>
           {:else}
             <div class="rows">
               {#each legalDocs as meta (meta.id)}
@@ -1810,16 +1809,10 @@
   }
 
   .privacy-link {
-    align-self: flex-start;
-    color: var(--accent-text);
-    font-size: var(--font-xs);
-    font-weight: 500;
-    padding: 0.2rem 0.3rem;
-    margin-left: -0.3rem;
-    border-radius: var(--radius-xs);
+    margin-top: var(--space-1);
   }
 
-  .privacy-link:hover {
-    color: var(--text);
+  .message {
+    margin-top: var(--space-2);
   }
 </style>
