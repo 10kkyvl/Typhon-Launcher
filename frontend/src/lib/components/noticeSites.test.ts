@@ -109,7 +109,11 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
   ],
   'lib/components/LegalDocumentModal.svelte': [['danger', true]],
-  'lib/components/LibrarySetupModal.svelte': [['danger', true]],
+  // Why the library is being set up is read with the dialog; a refused folder just happened.
+  'lib/components/LibrarySetupModal.svelte': [
+    ['info', false],
+    ['danger', true],
+  ],
   // That the move is safe is read with the dialog; a failed move or start just happened.
   'lib/components/MoveGameModal.svelte': [
     ['danger', true],
