@@ -18,6 +18,12 @@ describe('TextLink given an address', () => {
 });
 
 describe('TextLink given an action', () => {
+  it('wears the muted tone only when asked', () => {
+    renderDom(TextLinkHarness, { onforgot: vi.fn() });
+    expect(screen.getByRole('link', { name: 'Library' }).classList.contains('muted')).toBe(true);
+    expect(screen.getByRole('link', { name: 'guide' }).classList.contains('muted')).toBe(false);
+  });
+
   it('is a button that submits no form, named by its text, and runs the action on a press', async () => {
     const onforgot = vi.fn();
     const { user } = renderDom(TextLinkHarness, { onforgot });
@@ -76,6 +82,12 @@ describe('TextLink in a line of text', () => {
     expect(ruleBody(css, '.text-link')['text-decoration-line']).toBe('underline');
     expect(css).not.toMatch(/\boutline\b/);
     expect(css).not.toMatch(/:focus/);
+  });
+
+  it('has a muted tone for a link that is part of the furniture (a breadcrumb), which still turns to the text colour on hover', () => {
+    expect(ruleBody(css, '.text-link').color).toBe('var(--accent-text)');
+    expect(ruleBody(css, '.text-link.muted').color).toBe('var(--text-2)');
+    expect(css.indexOf('.text-link.muted')).toBeLessThan(css.indexOf('.text-link:hover:not(:disabled)'));
   });
 
   it('has a hover and a disabled look, and a disabled one does not change on hover', () => {

@@ -8,10 +8,14 @@
    * browser offers what it offers for links. Given `onclick` instead it is a `<button>`: it does
    * something here, and only a button can be disabled. It keeps the font and the line height of the
    * text around it, so a line holding it is as high as one without; it is underlined, so it is told
-   * from the text by more than its colour, and it shows the focus ring every control has. Other
-   * attributes (target, rel, aria-*, data-*) go to the element.
+   * from the text by more than its colour, and it shows the focus ring every control has. `tone`:
+   * `accent` in running text; `muted` where the link is part of the furniture and must not pull the
+   * eye (a breadcrumb, a path). Other attributes (target, rel, aria-*, data-*) go to the element.
    */
-  type Shared = Omit<HTMLAttributes<HTMLElement>, 'class' | 'children' | 'title' | 'onclick'> & { children: Snippet };
+  type Shared = Omit<HTMLAttributes<HTMLElement>, 'class' | 'children' | 'title' | 'onclick'> & {
+    children: Snippet;
+    tone?: 'accent' | 'muted';
+  };
   type AsLink = Shared & {
     href: string;
     target?: HTMLAnchorAttributes['target'];
@@ -27,13 +31,13 @@
     disabled?: boolean;
   };
 
-  let { href, disabled = false, children, ...rest }: AsLink | AsButton = $props();
+  let { href, disabled = false, tone = 'accent', children, ...rest }: AsLink | AsButton = $props();
 </script>
 
 {#if href !== undefined}
-  <a {...rest} class="text-link" {href}>{@render children()}</a>
+  <a {...rest} class="text-link" class:muted={tone === 'muted'} {href}>{@render children()}</a>
 {:else}
-  <button {...rest} class="text-link" type="button" {disabled}>{@render children()}</button>
+  <button {...rest} class="text-link" class:muted={tone === 'muted'} type="button" {disabled}>{@render children()}</button>
 {/if}
 
 <style>
@@ -56,6 +60,10 @@
     transition:
       color var(--dur) var(--ease),
       text-decoration-color var(--dur) var(--ease);
+  }
+
+  .text-link.muted {
+    color: var(--text-2);
   }
 
   .text-link:hover:not(:disabled) {
