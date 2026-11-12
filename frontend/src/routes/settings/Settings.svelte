@@ -1571,14 +1571,17 @@
                     {msg('settings.aboutLogsSendingEllipsis')}
                   {:else if logsStage === 'waiting'}
                     {msg('settings.aboutLogsWaitingEllipsis')}
-                  {:else if logsSendFailure}
-                    {logsSendFailure}
                   {:else if logsSendResult}
                     {msg('settings.aboutLogsSentStatus')}
                   {:else}
                     {msg('settings.aboutLogsSendConfirmNote')}
                   {/if}
                 </span>
+                {#if logsSendFailure}
+                  <div class="message">
+                    <Notice tone="danger" compact title={logsSendFailure}>{msg('settings.aboutLogsSendFailedHint')}</Notice>
+                  </div>
+                {/if}
                 {#if logsSending}
                   <div class="logs-upload-progress">
                     <ProgressBar
@@ -1608,9 +1611,6 @@
               {#if logsSendResult.dropped.length > 0}
                 <p class="row-sub">{msg('settings.aboutLogsSendDroppedNote', { files: logsSendResult.dropped.join(', ') })}</p>
               {/if}
-            {/if}
-            {#if logsSendFailure}
-              <p class="row-sub">{msg('settings.aboutLogsSendFailedHint')}</p>
             {/if}
             <div class="row">
               <div class="row-text">
