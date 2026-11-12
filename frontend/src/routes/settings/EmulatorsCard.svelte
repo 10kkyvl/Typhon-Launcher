@@ -4,6 +4,8 @@
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import Modal from '../../lib/components/Modal.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
+  import Spinner from '../../lib/components/Spinner.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
   import { hasMessage, msg } from '../../lib/i18n';
@@ -19,6 +21,7 @@
     type PlatformStatus,
   } from '../../lib/services/emulators';
   import { toast } from '../../lib/stores/toasts';
+  import { focusAfterRetry } from './retryFocus';
 
   const uid = $props.id();
 
@@ -27,23 +30,45 @@
   let loadFailed = $state(false);
   let busy = $state('');
   let detecting = $state(false);
+  let retrying = $state(false);
+  let list = $state<HTMLElement>();
 
   let found = $state<DetectResult | null>(null);
   let foundOpen = $state(false);
   let picked = $state<Record<string, boolean>>({});
   let applying = $state(false);
 
+  async function fetchRows() {
+    try {
+      rows = await listPlatforms();
+      loadFailed = false;
+    } catch (err) {
+      console.error('list emulators', err);
+      loadFailed = true;
+    }
+  }
+
   async function load() {
     loading = true;
     loadFailed = false;
     try {
-      rows = await listPlatforms();
-    } catch (err) {
-      console.error('list emulators', err);
-      loadFailed = true;
+      await fetchRows();
     } finally {
       loading = false;
     }
+  }
+
+  // The error stays on screen with its Retry busy until the list answers.
+  async function retry() {
+    if (retrying) return;
+    const from = document.activeElement;
+    retrying = true;
+    try {
+      await fetchRows();
+    } finally {
+      retrying = false;
+    }
+    await focusAfterRetry(from, list);
   }
 
   onMount(() => {
@@ -182,24 +207,26 @@
 
 <Card title={msg('emul.cardTitle')}>
   {#snippet action()}
-    <Button size="sm" disabled={detecting || loading} onclick={detect}>
+    <Button size="sm" disabled={detecting || loading || retrying} onclick={detect}>
       <Search size="1.4rem" strokeWidth={1.8} />
       {detecting ? msg('emul.detecting') : msg('emul.detect')}
     </Button>
   {/snippet}
   <p class="hint">{msg('emul.cardHint')}</p>
   {#if loading}
-    <p class="hint">{msg('emul.loading')}</p>
+    <Spinner label={msg('emul.loading')} />
   {:else if loadFailed}
-    <div class="row">
-      <span class="failure">{msg('emul.loadFailed')}</span>
-      <Button size="sm" onclick={load}>
-        <RefreshCw size="1.4rem" strokeWidth={1.8} />
-        {msg('common.retry')}
-      </Button>
-    </div>
+    <Notice tone="danger" compact>
+      {msg('emul.loadFailed')}
+      {#snippet action()}
+        <Button size="sm" busy={retrying} onclick={retry}>
+          {#if !retrying}<RefreshCw size="1.4rem" strokeWidth={1.8} />{/if}
+          {msg('common.retry')}
+        </Button>
+      {/snippet}
+    </Notice>
   {:else}
-    <div class="rows">
+    <div class="rows" bind:this={list}>
       {#each rows as row (row.id)}
         {@const reason = reasonText(row)}
         <div class="row">
@@ -208,7 +235,9 @@
             <span class="row-sub path" title={row.path}>{row.path}</span>
             {#if reason}<span class="row-sub">{reason}</span>{/if}
             {#if row.warnings.includes('discord_exit_hang')}
-              <span class="row-sub warning">{msg('emul.discordExitHang')}</span>
+              <div class="row-warning">
+                <Notice tone="warning" compact announce={false}>{msg('emul.discordExitHang')}</Notice>
+              </div>
             {/if}
           </div>
           <div class="controls">
@@ -319,13 +348,8 @@
     gap: var(--space-2);
   }
 
-  .warning {
-    color: var(--warning);
-  }
-
-  .failure {
-    font-size: var(--font-sm);
-    color: var(--danger);
+  .row-warning {
+    margin-top: var(--space-1);
   }
 
   .found {

@@ -6,6 +6,8 @@
   import Card from '../../lib/components/Card.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import DiscordJoinButton from '../../lib/components/DiscordJoinButton.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
+  import Spinner from '../../lib/components/Spinner.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
   import type { ConfirmPrompt } from '../../lib/confirm/prompts';
   import { createDiscordFlow } from '../../lib/discord/flow';
@@ -17,6 +19,7 @@
   import { settings, updateSettingsReporting } from '../../lib/stores/settings';
   import { toast } from '../../lib/stores/toasts';
   import { handleSessionLost } from '../../lib/stores/user';
+  import { focusAfterRetry } from './retryFocus';
 
   let { api = discordApi }: { api?: DiscordApi } = $props();
 
@@ -78,26 +81,43 @@
     void updateSettingsReporting(patch, () => toast(msg('discord.settingFailed'), 'danger'));
   }
 
+  // The error stays on screen with its Retry busy until the link answers.
+  let retrying = $state(false);
+  let body = $state<HTMLElement>();
+  async function retry() {
+    if (retrying) return;
+    const from = document.activeElement;
+    retrying = true;
+    try {
+      await flow.load();
+    } finally {
+      retrying = false;
+    }
+    await focusAfterRetry(from, body);
+  }
+
   const steps = $derived([msg('discord.step1'), msg('discord.step2'), msg('discord.step3'), msg('discord.step4')]);
 </script>
 
 <Card title={msg('discord.cardTitle')}>
-  <div class="discord">
-    {#if $view.phase === 'loading'}
-      <p class="sub">{msg('discord.loading')}</p>
+  <div class="discord" bind:this={body}>
+    {#if $view.phase === 'loading' && !retrying}
+      <Spinner label={msg('discord.loading')} />
     {:else if $view.phase === 'unavailable'}
       <p class="sub">{msg('discord.unavailable')}</p>
-    {:else if $view.phase === 'error'}
-      <p class="sub error">{msg('discord.loadFailed')}</p>
-      <div class="actions">
-        <Button size="sm" onclick={() => void flow.load()}>{msg('discord.retry')}</Button>
-      </div>
+    {:else if $view.phase === 'error' || retrying}
+      <Notice tone="danger" compact>
+        {msg('discord.loadFailed')}
+        {#snippet action()}
+          <Button size="sm" busy={retrying} onclick={retry}>{msg('discord.retry')}</Button>
+        {/snippet}
+      </Notice>
     {:else if $view.phase === 'linked'}
       <div class="row">
         <div class="text">
           <span class="label">{msg('discord.linkedAs', { name: $view.link?.discordUsername ?? '' })}</span>
           <span class="sub">{msg('discord.linkedSub')}</span>
-          {#if $view.errorCode}<span class="sub error">{accountMessage($view.errorCode)}</span>{/if}
+          {#if $view.errorCode}<div class="message"><Notice tone="danger" compact>{accountMessage($view.errorCode)}</Notice></div>{/if}
         </div>
         <Button size="sm" variant="danger" disabled={$view.busy} onclick={askUnlink}>
           <Unlink size="1.5rem" strokeWidth={1.8} />
@@ -158,8 +178,8 @@
       <div class="row">
         <div class="text">
           <span class="sub">{msg('discord.intro')}</span>
-          {#if $view.expired}<span class="sub error">{msg('discord.expired')}</span>{/if}
-          {#if $view.errorCode}<span class="sub error">{accountMessage($view.errorCode)}</span>{/if}
+          {#if $view.expired}<div class="message"><Notice tone="warning" compact>{msg('discord.expired')}</Notice></div>{/if}
+          {#if $view.errorCode}<div class="message"><Notice tone="danger" compact>{accountMessage($view.errorCode)}</Notice></div>{/if}
         </div>
       </div>
       <div class="actions">
@@ -217,8 +237,8 @@
     line-height: 1.5;
   }
 
-  .error {
-    color: var(--danger);
+  .message {
+    margin-top: var(--space-2);
   }
 
   .actions {
