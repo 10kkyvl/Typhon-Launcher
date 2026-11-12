@@ -77,7 +77,7 @@
     oninput={input}
     {onkeydown}
   />
-  <IconButton size="sm" label={msg('settings.accentCopyHex')} disabled={disabled || !validAccent(value)} onclick={copy}><Copy size="1.5rem" /></IconButton>
+  <IconButton size="sm" label={msg('settings.copyHexOf', { name: label })} disabled={disabled || !validAccent(value)} onclick={copy}><Copy size="1.5rem" /></IconButton>
 </div>
 
 <style>

@@ -2,7 +2,6 @@ import type { Message } from '../../types';
 import type { SettingsKey } from '../ru/settings';
 
 export const settings: Record<SettingsKey, Message> = {
-  'settings.accentCopyHex': 'Copy HEX',
   'settings.copyHexOf': 'Copy the HEX of {name}',
   'settings.accentHue': 'Hue',
   'settings.accentShade': 'Saturation and brightness — use the pointer or arrow keys',

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
 
+import { msg } from '../i18n';
 import { renderDom } from '../testing/dom';
 import HexColorField from './HexColorField.svelte';
 import source from './HexColorField.svelte?raw';
@@ -13,6 +14,13 @@ describe('HexColorField', () => {
     renderDom(HexColorField, { label: 'Name color', value: '#445566' });
     expect(screen.getByRole('textbox', { name: 'Frame color HEX' })).toBeTruthy();
     expect(screen.getByRole('textbox', { name: 'Name color HEX' })).toBeTruthy();
+  });
+
+  it('names each copy button for the colour it copies', () => {
+    renderDom(HexColorField, { label: 'Frame color', value: '#112233' });
+    renderDom(HexColorField, { label: 'Name color', value: '#445566' });
+    expect(screen.getByRole('button', { name: msg('settings.copyHexOf', { name: 'Frame color' }) })).toBeTruthy();
+    expect(screen.getByRole('button', { name: msg('settings.copyHexOf', { name: 'Name color' }) })).toBeTruthy();
   });
 
   it('takes an id and the id of a message that describes it, so a page can tie its error to it', () => {
