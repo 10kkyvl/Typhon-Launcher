@@ -356,6 +356,38 @@ describe('Notice with a retry: dropped by its caller during the retry', () => {
     expect(error.mock.calls[0][0]).toMatch(/^Notice: .*bind:retrying/);
   });
 
+  it('says nothing when the user closed the notice while its retry ran', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const answer = deferred<boolean>();
+    const { user } = renderDom(RetryHarness, { run: () => answer.promise, closable: true });
+    await user.click(retryButton());
+
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('alert')).toBeNull();
+    answer.resolve(false);
+    await frame();
+    await frame();
+
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  // A settings tab switch takes the card away while the page stays: the notice went with what held
+  // it, not because its caller dropped it.
+  it('says nothing when what held the notice went with it, though the page stays', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const answer = deferred<boolean>();
+    const view = renderDom(RetryHarness, { run: () => answer.promise, tab: 'emulators' });
+    await view.user.click(retryButton());
+
+    await view.rerender({ tab: 'discord' });
+    expect(screen.getByRole('heading', { level: 1, name: 'Emulators' })).toBeTruthy();
+    answer.resolve(false);
+    await frame();
+    await frame();
+
+    expect(error).not.toHaveBeenCalled();
+  });
+
   it('says nothing when the whole page went, or when the retry worked', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     const { user } = renderDom(RetryHarness, { run: vi.fn(async () => true), holds: false, resets: true });

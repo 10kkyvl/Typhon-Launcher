@@ -9,7 +9,9 @@
   // while its load has failed and drops it as soon as the load works, before the retry has answered
   // (as EmulatorsCard does); its Detect waits on the retry. `resets`: its load clears the failure when
   // it starts, the mistake that drops the notice during its own retry. `link` puts a link into the
-  // message. For Notice.retry.dom.test.ts.
+  // message. `closable` lets the user close the notice. `tab` other than 'emulators' takes the
+  // section that holds the notice away while the page stays, as a settings tab switch does. For
+  // Notice.retry.dom.test.ts.
   let {
     run,
     message = 'The list could not be loaded',
@@ -22,6 +24,8 @@
     title,
     level,
     link = false,
+    closable = false,
+    tab = 'emulators',
   }: {
     run: () => Promise<boolean>;
     message?: string;
@@ -34,9 +38,12 @@
     title?: string;
     level?: 1 | 2 | 3;
     link?: boolean;
+    closable?: boolean;
+    tab?: 'emulators' | 'discord';
   } = $props();
 
   let failed = $state(true);
+  let dismissed = $state(false);
   let retrying = $state(false);
   let target = $state<HTMLElement>();
   let region = $state<HTMLElement>();
@@ -55,8 +62,11 @@
   <main>
     <h1 tabindex="-1">Emulators</h1>
     <button type="button">Before</button>
-    {#if failed || (holds && retrying)}
+    {#if tab === 'emulators'}
+    <section>
+    {#if (failed || (holds && retrying)) && !dismissed}
       <Notice
+        onclose={closable ? () => (dismissed = true) : undefined}
         {tone}
         {announce}
         {title}
@@ -76,6 +86,8 @@
         <p>PlayStation 2</p>
         <button type="button">Choose a program</button>
       </div>
+    {/if}
+    </section>
     {/if}
     <button type="button" bind:this={target} disabled={retrying}>Detect</button>
   </main>

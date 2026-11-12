@@ -10,7 +10,7 @@ import { frontendSources } from '../testing/sources';
  */
 const NEVER_DROPPED: Record<string, string> = {
   'lib/components/OfflineBanner.svelte':
-    'the shell shows it for as long as the session is offline, and the session stays offline until the check it retries has answered',
+    'the shell shows it for as long as the session is offline, and the session stays offline until the check it retries has answered; the only other way it goes is the user closing it, which the notice knows',
 };
 
 // Every opening <Notice …> tag of `text`, braces in attributes skipped.

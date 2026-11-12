@@ -36,8 +36,9 @@
    * Retry is busy, a second press does nothing, and `retrying` (bindable) is true: the caller keeps the
    * notice on screen while it is, whatever its own state says meanwhile (a load that clears its
    * failure when it starts would take the notice away mid-retry; a failure then comes back as a new
-   * notice, unsaid, and in development the console names it). Two notices that share one retry (the
-   * same failure shown in two places) bind the same variable, so each stays while either runs. On
+   * notice, unsaid, and in development the console names it, unless the user closed the notice or
+   * what held it went too, a tab switch). Two notices that share one retry (the same failure shown in
+   * two places) bind the same variable, so each stays while either runs. On
    * failure the notice stays and its message, heading and links as they are, is put into the live
    * region again, so it is said again even in the same words. A notice that does not announce becomes
    * a polite region from the first press, before the answer, so a failure is heard there too. On
@@ -90,6 +91,8 @@
   let pressed = $state(false);
   const live = $derived(announce ? (tone === 'danger' ? 'alert' : 'status') : pressed ? 'status' : undefined);
   let alive = true;
+  // The user closed it: going is not the caller dropping it.
+  let closed = false;
   onDestroy(() => {
     alive = false;
   });
@@ -101,6 +104,9 @@
     // Where the notice lives: the dialog it is in (a layer of its own, out of the page, which is inert
     // under it), else the shell's <main> (a banner sits above it, beside the page), else the document.
     const home = plate?.closest<HTMLElement>('[role="dialog"]') ?? plate?.closest('main') ?? document.querySelector('main') ?? document.body;
+    // What holds the notice: still there when the notice is gone means the caller's own condition took
+    // it away; gone with it means its section went (a tab switch, the page left).
+    const holder = plate?.parentElement ?? null;
     // The words at the press: a failure that comes back in other words is said by its own change.
     const said = words(message);
     retrying = true;
@@ -116,8 +122,8 @@
     await tick();
     if (ok) return moveOn(button, home, focus, within);
     if (!alive) {
-      // Its page still there, the notice went during its own retry: the caller dropped it.
-      if (import.meta.env.DEV && home?.isConnected) {
+      // What held it still there and the user did not close it: the caller dropped it mid-retry.
+      if (import.meta.env.DEV && !closed && holder?.isConnected) {
         console.error('Notice: removed while its retry ran, so the failure that followed was not said again. Keep the notice on screen while `retrying` is true (bind:retrying).');
       }
       return;
@@ -187,6 +193,7 @@
     const all = focusableIn(document.body);
     const mine = all.filter((el) => root?.contains(el));
     const next = all[all.indexOf(mine[mine.length - 1]) + 1] ?? all[all.indexOf(mine[0]) - 1] ?? null;
+    closed = true;
     onclose?.();
     await tick();
     const active = document.activeElement;
