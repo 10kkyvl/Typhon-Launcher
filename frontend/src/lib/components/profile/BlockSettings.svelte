@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ArrowDown, ArrowUp, Trash2, X } from '@lucide/svelte';
   import Button from '../Button.svelte';
+  import EmptyState from '../EmptyState.svelte';
   import IconButton from '../IconButton.svelte';
   import Select from '../Select.svelte';
   import { msg } from '../../i18n';
@@ -45,6 +46,8 @@
   const config = $derived(block.config);
   const name = $derived(blockLabel(block.type));
   const charError = (field: string) => (issue?.code === 'bad_chars' && issue.field === field ? layoutErrorText(issue) : '');
+  // A field says it is wrong and is described by its error while the error shows.
+  const invalid = (field: string) => (charError(field) ? { 'aria-invalid': 'true' as const, 'aria-describedby': `${uid}-${field}-error` } : {});
   const text = (key: string) => (typeof config[key] === 'string' ? (config[key] as string) : '');
   const igdbId = $derived(typeof config.igdbId === 'number' ? config.igdbId : 0);
   const source = $derived(text('source'));
@@ -98,47 +101,51 @@
           <p class="current">{igdbId > 0 ? titleOf(igdbId) : msg('profile.pinnedNone')}</p>
           <GamePicker chosen={igdbId > 0 ? [igdbId] : []} {disabled} onpick={pickPinned} />
         </div>
-        <label class="field">
-          <span class="field-label">
-            {msg('profile.pinnedCaption')}
+        <div class="field">
+          <div class="field-label">
+            <label for="{uid}-caption">{msg('profile.pinnedCaption')}</label>
             <span class="counter">{runeCount(text('caption'))}/{MAX_CAPTION}</span>
-          </span>
+          </div>
           <textarea
+            id="{uid}-caption"
             class="input area"
             rows="3"
             maxlength={MAX_CAPTION}
             value={text('caption')}
+            {...invalid('caption')}
             oninput={(event) => onconfig({ caption: event.currentTarget.value })}
           ></textarea>
-          {#if charError('caption')}<span class="error" role="alert">{charError('caption')}</span>{/if}
-        </label>
+          {#if charError('caption')}<span class="error" id="{uid}-caption-error" role="alert">{charError('caption')}</span>{/if}
+        </div>
       {:else if block.type === 'collection'}
         <div class="field">
           <span class="field-label" id="{uid}-source-label">{msg('profile.collectionSource')}</span>
           <Select options={sources} value={source} width="100%" labelledby="{uid}-source-label" onchange={changeSource} />
         </div>
         {#if source === 'manual'}
-          <label class="field">
-            <span class="field-label">
-              {msg('profile.collectionTitle')}
+          <div class="field">
+            <div class="field-label">
+              <label for="{uid}-title">{msg('profile.collectionTitle')}</label>
               <span class="counter">{runeCount(text('title'))}/{MAX_BLOCK_TITLE}</span>
-            </span>
+            </div>
             <input
+              id="{uid}-title"
               class="input"
               type="text"
               maxlength={MAX_BLOCK_TITLE}
               value={text('title')}
+              {...invalid('title')}
               oninput={(event) => onconfig({ title: event.currentTarget.value })}
             />
-            {#if charError('title')}<span class="error" role="alert">{charError('title')}</span>{/if}
-          </label>
+            {#if charError('title')}<span class="error" id="{uid}-title-error" role="alert">{charError('title')}</span>{/if}
+          </div>
           <div class="field">
             <span class="field-label">
               {msg('profile.collectionGames')}
               <span class="counter">{ids.length}/{MAX_COLLECTION_GAMES}</span>
             </span>
             {#if ids.length === 0}
-              <p class="hint">{msg('profile.collectionEmpty')}</p>
+              <EmptyState size="inline" title={msg('profile.collectionEmpty')} />
             {:else}
               <ul class="games">
                 {#each ids as id, index (id)}
@@ -170,34 +177,38 @@
           <p class="hint">{msg('profile.collectionAutoHint')}</p>
         {/if}
       {:else if block.type === 'text'}
-        <label class="field">
-          <span class="field-label">
-            {msg('profile.textTitle')}
+        <div class="field">
+          <div class="field-label">
+            <label for="{uid}-title">{msg('profile.textTitle')}</label>
             <span class="counter">{runeCount(text('title'))}/{MAX_BLOCK_TITLE}</span>
-          </span>
+          </div>
           <input
+            id="{uid}-title"
             class="input"
             type="text"
             maxlength={MAX_BLOCK_TITLE}
             value={text('title')}
+            {...invalid('title')}
             oninput={(event) => onconfig({ title: event.currentTarget.value })}
           />
-          {#if charError('title')}<span class="error" role="alert">{charError('title')}</span>{/if}
-        </label>
-        <label class="field">
-          <span class="field-label">
-            {msg('profile.textBody')}
+          {#if charError('title')}<span class="error" id="{uid}-title-error" role="alert">{charError('title')}</span>{/if}
+        </div>
+        <div class="field">
+          <div class="field-label">
+            <label for="{uid}-body">{msg('profile.textBody')}</label>
             <span class="counter">{runeCount(text('body'))}/{MAX_TEXT_BODY}</span>
-          </span>
+          </div>
           <textarea
+            id="{uid}-body"
             class="input area"
             rows="8"
             maxlength={MAX_TEXT_BODY}
             value={text('body')}
+            {...invalid('body')}
             oninput={(event) => onconfig({ body: event.currentTarget.value })}
           ></textarea>
-          {#if charError('body')}<span class="error" role="alert">{charError('body')}</span>{/if}
-        </label>
+          {#if charError('body')}<span class="error" id="{uid}-body-error" role="alert">{charError('body')}</span>{/if}
+        </div>
       {:else}
         <p class="hint">{msg('profile.blockNoSettings')}</p>
         {#if block.type === 'completed'}
@@ -281,29 +292,9 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .input {
-    width: 100%;
-    height: var(--control-md);
-    padding: 0 1.2rem;
-    background: var(--surface);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-md);
-    color: var(--text);
-    font-size: var(--font-sm);
-    font-family: inherit;
-    transition:
-      border-color var(--dur) var(--ease),
-      box-shadow var(--dur) var(--ease);
-  }
-
-  .input:focus {
-    outline: none;
-    border-color: var(--accent-ring);
-    box-shadow: 0 0 0 3px var(--accent-subtle);
-  }
-
   .area {
     height: auto;
+    font-family: inherit;
     padding: 0.9rem 1.2rem;
     resize: vertical;
     line-height: 1.5;
