@@ -91,6 +91,31 @@ describe('Catalog: messages about the page', () => {
 
     await vi.waitFor(() => expect(setNotInterested).toHaveBeenLastCalledWith('c-celeste', false));
   });
+
+  it('Undo is busy and keeps the focus while it runs; when the notice goes the focus moves on, not to the page', async () => {
+    catalogView.set('list');
+    vi.mocked(queryCatalogGames).mockResolvedValue(page([{ id: 'c-celeste', title: 'Celeste' }]));
+    vi.mocked(setNotInterested).mockResolvedValueOnce(undefined);
+    const { user } = renderDom(Catalog);
+    await user.click(await screen.findByRole('button', { name: msg('games.recommendationNotInterested') }));
+    const notice = (await screen.findByText(msg('games.recommendationDismissed', { title: 'Celeste' }))).closest('.notice') as HTMLElement;
+    const undo = within(notice).getByRole('button', { name: msg('games.recommendationUndo') });
+    await vi.waitFor(() => expect(undo.hasAttribute('disabled')).toBe(false));
+    let answer!: () => void;
+    vi.mocked(setNotInterested).mockReturnValueOnce(new Promise<void>((resolve) => (answer = resolve)));
+    undo.focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(undo.getAttribute('aria-busy')).toBe('true');
+    expect(undo.hasAttribute('disabled')).toBe(false);
+    expect(document.activeElement).toBe(undo);
+
+    answer();
+    await vi.waitFor(() => expect(notice.isConnected).toBe(false));
+    await vi.waitFor(() => expect(document.activeElement).not.toBe(document.body));
+    expect(document.activeElement?.isConnected).toBe(true);
+  });
 });
 
 type Answer = Awaited<ReturnType<typeof queryCatalogGames>>;

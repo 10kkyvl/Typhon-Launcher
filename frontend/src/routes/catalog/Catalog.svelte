@@ -462,9 +462,24 @@
     });
   }
 
+  let undoing = $state(false);
+  // Where the put-away notice sits: what follows it in the page takes the focus when the notice goes.
+  let dismissalEnd = $state<HTMLElement>();
+
   async function undoDismissal() {
-    if (!lastDismissed) return;
-    await dismiss({ id: lastDismissed.id, title: lastDismissed.title } as CatalogGame, false);
+    if (!lastDismissed || undoing) return;
+    undoing = true;
+    try {
+      await dismiss({ id: lastDismissed.id, title: lastDismissed.title } as CatalogGame, false);
+    } finally {
+      undoing = false;
+    }
+    await tick();
+    const active = document.activeElement;
+    if (active && active !== document.body && active.isConnected) return;
+    const end = dismissalEnd;
+    const next = end ? focusableIn(document.body).find((el) => end.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) : undefined;
+    if (next) focusQuietly(next);
   }
 
   async function refreshLoadedPrefix(validateSnapshot = false) {
@@ -883,10 +898,11 @@
     <div class="page-note">
       <Notice tone="success">
         {msg('games.recommendationDismissed', { title: lastDismissed.title })}
-        {#snippet action()}<Button size="sm" onclick={undoDismissal} disabled={preferenceBusy}>{msg('games.recommendationUndo')}</Button>{/snippet}
+        {#snippet action()}<Button size="sm" onclick={undoDismissal} busy={undoing} disabled={preferenceBusy && !undoing}>{msg('games.recommendationUndo')}</Button>{/snippet}
       </Notice>
     </div>
   {/if}
+  <span bind:this={dismissalEnd} hidden></span>
   {#if personalizationFallback}<div class="page-note"><Notice tone="info" compact>{msg('games.recommendationFallback')}</Notice></div>{/if}
   {#if discoveryStale}<div class="page-note"><Notice tone="warning" compact>{msg('games.recommendationRefreshFailed')}</Notice></div>{/if}
   {#if profile.confidence < 1 && (sort === 'auto' || sort === 'for-you')}<p class="muted profile-hint">{msg('games.recommendationNoHistory')}</p>{/if}
