@@ -434,6 +434,7 @@ export const games = {
   'games.notesSaving': 'Сохраняю…',
   'games.notesSaved': 'Сохранено',
   'games.notesSaveError': 'Не удалось сохранить заметку',
+  'games.notesTooLong': 'Слишком длинная: заметка не сохранена',
   'games.achievementsTitle': 'Достижения',
   'games.achievementsProgress': '{unlocked} из {total}',
   'games.achievementsRefresh': 'Обновить',

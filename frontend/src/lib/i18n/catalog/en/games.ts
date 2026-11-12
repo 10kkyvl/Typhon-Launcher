@@ -436,6 +436,7 @@ export const games: Record<GamesKey, Message> = {
   'games.notesSaving': 'Saving…',
   'games.notesSaved': 'Saved',
   'games.notesSaveError': 'Could not save the note',
+  'games.notesTooLong': 'Too long: the note is not saved',
   'games.achievementsTitle': 'Achievements',
   'games.achievementsProgress': '{unlocked} of {total}',
   'games.achievementsRefresh': 'Refresh',
