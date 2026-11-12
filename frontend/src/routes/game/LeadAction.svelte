@@ -3,20 +3,24 @@
   import Button from '../../lib/components/Button.svelte';
   import PlayProfileMenu from '../../lib/components/PlayProfileMenu.svelte';
   import { profileChoices } from '../../lib/game/profiles';
+  import type { PrimaryKind } from '../../lib/game/view';
   import { msg } from '../../lib/i18n';
   import type { LibraryGame } from '../../lib/services/library';
 
   /**
-   * The game page's main action. Given the game whose launch profiles it may offer, it attaches the
-   * profile chevron when there is a choice, and the two read as one control: a group named "Play".
+   * The game page's main action. Only Play offers the game's launch profiles: when there is a choice
+   * it attaches the profile chevron, and the two read as one control, a group named "Play". Any other
+   * action (stop, download) is a plain button whatever profiles the game has.
    */
   let {
+    kind,
     game,
     disabled = false,
     onclick,
     onpick,
     children,
   }: {
+    kind: PrimaryKind;
     game?: Pick<LibraryGame, 'profiles' | 'lastProfile' | 'emulation'>;
     disabled?: boolean;
     onclick: () => void;
@@ -24,15 +28,16 @@
     children: Snippet;
   } = $props();
 
-  const split = $derived(game ? profileChoices(game).length > 1 : false);
+  const launched = $derived(kind === 'play' ? game : undefined);
+  const split = $derived(launched ? profileChoices(launched).length > 1 : false);
 </script>
 
 <span class="lead" role={split ? 'group' : undefined} aria-label={split ? msg('games.play') : undefined}>
   <Button variant="primary" size="lg" minWidth="18rem" join={split ? 'end' : undefined} {disabled} {onclick}>
     {@render children()}
   </Button>
-  {#if game}
-    <PlayProfileMenu {game} {disabled} {onpick} />
+  {#if launched}
+    <PlayProfileMenu game={launched} {disabled} {onpick} />
   {/if}
 </span>
 

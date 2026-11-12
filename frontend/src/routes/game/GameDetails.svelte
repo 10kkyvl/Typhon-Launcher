@@ -1454,7 +1454,7 @@
               {#if !busy?.indeterminate}<span class="progress-pct">{busyPercent}%</span>{/if}
             </div>
           {:else if primary.kind === 'update'}
-            <LeadAction game={localGame} onclick={play} onpick={playProfile}>
+            <LeadAction kind="play" game={localGame} onclick={play} onpick={playProfile}>
               <Play size="1.8rem" strokeWidth={2} fill="currentColor" />
               {localGame ? playLabel(localGame) : msg('games.play')}
             </LeadAction>
@@ -1468,7 +1468,8 @@
             </Button>
           {:else}
             <LeadAction
-              game={primary.kind === 'play' ? localGame : undefined}
+              kind={primary.kind}
+              game={localGame}
               disabled={primary.disabled}
               onclick={runPrimary}
               onpick={playProfile}

@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/svelte';
 import { createRawSnippet } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { locale, msg } from '../../lib/i18n';
+import type { PrimaryKind } from '../../lib/game/view';
 import type { LibraryGame } from '../../lib/services/library';
 import { user } from '../../lib/testing/dom';
 import LeadAction from './LeadAction.svelte';
@@ -28,7 +29,7 @@ afterEach(() => {
   locale.set('ru');
 });
 
-function mount(game: Game | undefined) {
+function mount(game: Game | undefined, kind: PrimaryKind = 'play') {
   const before = document.createElement('button');
   before.textContent = 'Before';
   const target = document.createElement('div');
@@ -38,7 +39,7 @@ function mount(game: Game | undefined) {
   const onclick = vi.fn();
   const onpick = vi.fn();
   const children = createRawSnippet(() => ({ render: () => '<span>Play</span>' }));
-  render(LeadAction, { target, props: { game, onclick, onpick, children } });
+  render(LeadAction, { target, props: { kind, game, onclick, onpick, children } });
   const play = screen.getByRole('button', { name: 'Play' });
   return { before, after, play, onclick, onpick };
 }
@@ -85,7 +86,17 @@ describe("the game page's main action", () => {
     expect(play.classList.contains('join-end')).toBe(false);
   });
 
-  it('when it is not Play (download, stop) offers no profiles at all', () => {
+  it.each<PrimaryKind>(['stop', 'download', 'install-download', 'retry-download', 'other-versions'])(
+    'when the action is %s, offers no profiles even for a game that has them',
+    (kind) => {
+      const { play } = mount(ONE_PROFILE, kind);
+      expect(screen.queryByRole('group')).toBeNull();
+      expect(chooser()).toBeNull();
+      expect(play.classList.contains('join-end')).toBe(false);
+    },
+  );
+
+  it('with no game in the library offers no profiles', () => {
     const { play } = mount(undefined);
     expect(screen.queryByRole('group')).toBeNull();
     expect(chooser()).toBeNull();
