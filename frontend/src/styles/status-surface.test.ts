@@ -205,9 +205,11 @@ const ON_SURFACE: Record<string, [surface: string, ...rules: string[]]> = {
   'routes/profile/ProfileHeader.svelte': ['the profile canvas', '.error'],
   'routes/history/History.svelte': ['the table', '.row.failed .icon-cell', '.row.failed .detail'],
   'routes/sources/Sources.svelte': [
-    'the table',
+    'the table; the error and health marks are icons in a row of it',
     '.source-error',
     '.insecure',
+    '.mark.danger',
+    '.mark.warning',
     '.count.review',
   ],
   'routes/friends/FriendCodeCard.svelte': ['Card', '.mark'],
