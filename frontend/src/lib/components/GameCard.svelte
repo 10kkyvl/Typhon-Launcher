@@ -63,6 +63,7 @@
   } = $props();
 
   const uid = $props.id();
+  const playable = $derived(installed && Boolean(onplay));
 
   let popped = $state('');
 
@@ -83,7 +84,7 @@
 </script>
 
 <div class="card" role="presentation" {@attach gameContextMenu(id)} use:ambientHover={ambient ? id : null}>
-  <div class="cover-wrap">
+  <div class="cover-wrap" class:playable class:running={playable && running}>
     <!-- Out of the Tab order: the title below opens the same page, so a keyboard user has one stop. -->
     <button class="cover" tabindex="-1" onclick={() => navigate('game', { id })} aria-label={title}>
       <Artwork src={cover} alt="" label={title} {ratio} radius="var(--radius-md)" />
@@ -165,6 +166,14 @@
     max-width: calc(100% - 1.2rem);
     overflow: hidden;
     pointer-events: none;
+    transition: opacity var(--dur) var(--ease);
+  }
+
+  /* The play button shows over the same corner: the verdict steps aside meanwhile. */
+  .cover-wrap.playable:hover .compat,
+  .cover-wrap.playable:focus-within .compat,
+  .cover-wrap.running .compat {
+    opacity: 0;
   }
 
   .source {
