@@ -152,6 +152,7 @@ export const ui = {
   'ui.forward': 'Вперёд',
   'ui.notifications': 'Уведомления',
   'ui.notificationsUnread': { one: 'Уведомления, {count} новое', few: 'Уведомления, {count} новых', many: 'Уведомления, {count} новых' },
+  'ui.friendsIncoming': { one: 'Друзья, {count} заявка', few: 'Друзья, {count} заявки', many: 'Друзья, {count} заявок' },
   'ui.markAllRead': 'Прочитать все',
   'ui.nothingNewYet': 'Пока ничего нового',
   'ui.allHistory': 'Вся история',

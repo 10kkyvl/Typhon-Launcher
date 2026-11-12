@@ -17,6 +17,7 @@ export const tickets = {
   'tickets.guestSignIn': 'Sign in or create an account',
   'tickets.updated': 'Updated: {when}',
   'tickets.unreadMark': 'Support has replied',
+  'tickets.unreadCount': { one: '{count} new reply', other: '{count} new replies' },
 
   'tickets.statusOpen': 'Open',
   'tickets.statusWaitingUser': 'Waiting for you',

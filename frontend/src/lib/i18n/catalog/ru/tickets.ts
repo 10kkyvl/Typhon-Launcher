@@ -17,6 +17,7 @@ export const tickets = {
   'tickets.guestSignIn': 'Войти или создать аккаунт',
   'tickets.updated': 'Обновлено: {when}',
   'tickets.unreadMark': 'Есть ответ поддержки',
+  'tickets.unreadCount': { one: '{count} новый ответ', few: '{count} новых ответа', many: '{count} новых ответов' },
 
   'tickets.statusOpen': 'Открыто',
   'tickets.statusWaitingUser': 'Ждём вашего ответа',

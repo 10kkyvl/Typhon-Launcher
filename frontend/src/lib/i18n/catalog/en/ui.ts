@@ -154,6 +154,7 @@ export const ui: Record<UiKey, Message> = {
   'ui.forward': 'Forward',
   'ui.notifications': 'Notifications',
   'ui.notificationsUnread': { one: 'Notifications, {count} unread', other: 'Notifications, {count} unread' },
+  'ui.friendsIncoming': { one: 'Friends, {count} request', other: 'Friends, {count} requests' },
   'ui.markAllRead': 'Mark all read',
   'ui.nothingNewYet': 'Nothing new yet',
   'ui.allHistory': 'All history',
