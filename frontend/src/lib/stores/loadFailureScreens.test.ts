@@ -6,8 +6,8 @@ import bigPictureProfile from '../bigpicture/components/ProfilePage.svelte?raw';
 
 describe('screens show a failed load instead of an empty state', () => {
   it('the installed games page shows the disk usage failure with a retry', () => {
-    // A danger Notice is an alert by its tone; its Retry refreshes the disk usage.
-    expect(installed).toMatch(/\{:else if \$storageFailed\}[\s\S]*?<Notice tone="danger">[\s\S]*?games\.installedStorageLoadFailed[\s\S]*?onclick=\{retryStorage\}/);
+    // A danger Notice is an alert by its tone; its retry refreshes the disk usage.
+    expect(installed).toMatch(/\{:else if \$storageFailed \|\| storageRetrying\}[\s\S]*?<Notice tone="danger"[^>]*retry=\{\{[^}]*run: retryStorage[\s\S]*?games\.installedStorageLoadFailed/);
     expect(installed).toMatch(/async function retryStorage\(\)[\s\S]*?await refreshStorage\(\);/);
   });
 
