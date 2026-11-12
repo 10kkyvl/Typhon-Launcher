@@ -88,7 +88,8 @@ const SITES: Record<string, Site[]> = {
     ['danger', false],
     ['danger', true],
   ],
-  // A failed load, a wrapper problem and the offer to keep a changed game announce; a failed change of a setting is said by its toast and only kept on screen by the setting.
+  // A failed load, a wrapper problem and the offer to keep a changed game announce; a failed change
+  // of a setting is said by its toast and only kept on screen by the setting.
   'lib/components/GamePropertiesModal.svelte': [
     ['danger', true],
     ['danger', false],
@@ -102,7 +103,8 @@ const SITES: Record<string, Site[]> = {
     ['danger', false],
     ['danger', false],
   ],
-  // An install's stored warning and what deleting seeded files does are read with the dialog; too little space and a stopped install just happened.
+  // An install's stored warning and what deleting seeded files does are read with the dialog; too little
+  // space and a stopped install just happened.
   'lib/components/InstallModal.svelte': [
     ['danger', true],
     ['warning', false],
@@ -122,7 +124,8 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
   ],
   'lib/components/RandomGameModal.svelte': [['warning', true]],
-  // No runtimes on this platform, and a missing runtime, are facts of the system; a failed scan or read just happened.
+  // No runtimes on this platform, and a missing runtime, are facts of the system; a failed scan or read
+  // just happened.
   'lib/components/RedistModal.svelte': [
     ['info', false],
     ['danger', true],
@@ -137,7 +140,8 @@ const SITES: Record<string, Site[]> = {
     ['warning', false],
     ['danger', true],
   ],
-  // The cloud copy's reason, its tone set by its state, a running game and large backups are facts of the dialog; a failure just happened.
+  // The cloud copy's reason, its tone set by its state, a running game and large backups are facts of the
+  // dialog; a failure just happened.
   'lib/components/SaveBackupsModal.svelte': [
     ['danger', true],
     ['dynamic', false],
