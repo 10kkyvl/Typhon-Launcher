@@ -319,13 +319,18 @@
       display: none;
     }
 
-    /* Out of sight, still the item's name. */
+    /* Out of sight, still the item's name: hidden as the shared .sr-only hides text (a class cannot
+       be given by a media query), on one line so a multi-word label is read as one. */
     .nav-label {
       position: absolute;
       width: 1px;
       height: 1px;
+      margin: -1px;
+      padding: 0;
       overflow: hidden;
       clip-path: inset(50%);
+      white-space: nowrap;
+      border: 0;
     }
 
     nav {

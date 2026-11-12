@@ -78,8 +78,14 @@ describe('Sidebar layout', () => {
     const source = fs.readFileSync(new URL('./Sidebar.svelte', import.meta.url), 'utf8');
     const rail = source.slice(source.indexOf('@media (max-width: 1140px)'));
     const label = /\.nav-label \{([^}]*)\}/.exec(rail)?.[1] ?? '';
-    expect(label).toContain('clip-path: inset(50%)');
     expect(label).not.toMatch(/display:\s*none/);
+    // Hidden the way the shared .sr-only hides text, word for word: kept on one line, so a screen
+    // reader does not read a multi-word label one word at a time.
+    const decls = (body: string) => body.split(';').map((d) => d.trim()).filter(Boolean).sort();
+    const global = fs.readFileSync(new URL('../../styles/global.css', import.meta.url), 'utf8');
+    const srOnly = /\n\.sr-only \{([^}]*)\}/.exec(global)?.[1] ?? '';
+    expect(decls(srOnly)).toContain('white-space: nowrap');
+    expect(decls(label)).toEqual(decls(srOnly));
   });
 
   it('follows a theme order, hides items and drops support', () => {
