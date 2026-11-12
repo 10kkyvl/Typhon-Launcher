@@ -20,6 +20,7 @@ const CONTROLS = [
   'lib/components/Spinner.svelte',
   'lib/components/TextLink.svelte',
   'lib/components/CountBadge.svelte',
+  'lib/components/Checkbox.svelte',
 ];
 
 const style = (path: string) => styleOf(read(path), path);
@@ -123,7 +124,7 @@ describe('base controls take their look from tokens', () => {
 });
 
 describe('a base control is restyled by a prop, never from outside', () => {
-  const OWNERS: Record<string, string> = { btn: 'Button', 'icon-btn': 'IconButton', chip: 'Chip', 'text-link': 'TextLink', 'count-badge': 'CountBadge' };
+  const OWNERS: Record<string, string> = { btn: 'Button', 'icon-btn': 'IconButton', chip: 'Chip', 'text-link': 'TextLink', 'count-badge': 'CountBadge', checkbox: 'Checkbox' };
   const sources = fs
     .readdirSync(new URL('../', import.meta.url), { recursive: true })
     .map((path) => path.replaceAll('\\', '/'))
@@ -160,14 +161,14 @@ describe('a base control is restyled by a prop, never from outside', () => {
       for (const selector of topLevel(prelude)) {
         for (const compound of compounds(selector)) {
           if (scoped.test(compound)) continue;
-          for (const c of compound.matchAll(/\.(btn|icon-btn|chip|text-link|count-badge)(?![\w-])/g)) found.push(c[1]);
+          for (const c of compound.matchAll(/\.(btn|icon-btn|chip|text-link|count-badge|checkbox)(?![\w-])/g)) found.push(c[1]);
         }
       }
     }
     return found;
   }
 
-  it('no component reaches into Button, IconButton, Chip, TextLink or CountBadge through :global', () => {
+  it('no component reaches into a base control (Button, IconButton, Chip, TextLink, CountBadge, Checkbox) through :global', () => {
     const found: string[] = [];
     for (const path of sources) {
       const text = read(path);

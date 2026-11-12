@@ -49,6 +49,12 @@
   --count-font-corner: 1rem;
   --radius-count: 99rem;
 
+  /* The checkbox: its box, the mark inside it, and how far the box sits down to meet the first line
+     of its label. */
+  --checkbox-box: 1.8rem;
+  --checkbox-mark: 1.3rem;
+  --checkbox-nudge: 0.1rem;
+
   /* The label on an --accent fill. A theme does not set it; a personal accent computes its own
      --accent-on (lib/theme/accent.ts), which the components read first. */
   --accent-on-default: #fff;
