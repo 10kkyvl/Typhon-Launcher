@@ -4,6 +4,8 @@
   import { navigate, route } from '../stores/router';
   import { markAllRead, notifications, openHistory, type Notification } from '../stores/notifications';
   import { msg } from '../i18n';
+  import Button from './Button.svelte';
+  import EmptyState from './EmptyState.svelte';
   import IconButton from './IconButton.svelte';
   import Popover from './Popover.svelte';
 
@@ -43,11 +45,11 @@
     <div class="notifications-head-row">
       <div class="notifications-head" aria-hidden="true">{msg('ui.notifications')}</div>
       {#if $notifications.length > 0}
-        <button type="button" class="notifications-mark-read" onclick={markAllRead}>{msg('ui.markAllRead')}</button>
+        <Button variant="ghost" size="sm" onclick={markAllRead}>{msg('ui.markAllRead')}</Button>
       {/if}
     </div>
     {#if $notifications.length === 0}
-      <div class="notifications-empty">{msg('ui.nothingNewYet')}</div>
+      <div class="notifications-empty"><EmptyState size="inline" title={msg('ui.nothingNewYet')} /></div>
     {:else}
       <div role="list">
         {#each $notifications as n (n.id)}
@@ -60,14 +62,16 @@
         {/each}
       </div>
     {/if}
-    <button
-      type="button"
-      class="notifications-all"
-      onclick={() => {
-        close();
-        openHistory();
-      }}>{msg('ui.allHistory')}</button
-    >
+    <div class="notifications-all">
+      <Button
+        variant="ghost"
+        block
+        onclick={() => {
+          close();
+          openHistory();
+        }}>{msg('ui.allHistory')}</Button
+      >
+    </div>
   {/snippet}
 </Popover>
 
@@ -86,20 +90,6 @@
     align-items: center;
     justify-content: space-between;
     gap: 0.8rem;
-  }
-
-  .notifications-mark-read {
-    flex-shrink: 0;
-    padding: 0.3rem 0.8rem;
-    border-radius: var(--radius-xs);
-    font-size: var(--font-xs);
-    color: var(--text-3);
-    transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
-  }
-
-  .notifications-mark-read:hover {
-    background: var(--hover-strong);
-    color: var(--text-2);
   }
 
   .notification {
@@ -131,24 +121,12 @@
   }
 
   .notifications-all {
-    display: block;
-    width: 100%;
-    padding: 1rem 1.4rem;
+    margin-top: 0.4rem;
+    padding-top: 0.4rem;
     border-top: 1px solid var(--border);
-    text-align: center;
-    font-size: var(--font-sm);
-    color: var(--text-2);
-    transition: background var(--dur) var(--ease);
-  }
-
-  .notifications-all:hover {
-    background: var(--hover);
-    color: var(--text);
   }
 
   .notifications-empty {
     padding: 0.8rem 1rem 1.2rem;
-    font-size: var(--font-xs);
-    color: var(--text-3);
   }
 </style>

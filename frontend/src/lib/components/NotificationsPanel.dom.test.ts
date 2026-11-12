@@ -220,3 +220,26 @@ describe('Notifications panel', () => {
     expect(get(route).name).toBe('library');
   });
 });
+
+describe('Notifications panel controls', () => {
+  it('marks all read and opens the history with base buttons the keyboard presses', async () => {
+    const { keys, bell, panel } = setup();
+    await keys.click(bell());
+    const opened = panel() as HTMLElement;
+    const markRead = within(opened).getByRole('button', { name: msg('ui.markAllRead') });
+    const history = within(opened).getByRole('button', { name: msg('ui.allHistory') });
+    expect(markRead.classList.contains('btn')).toBe(true);
+    expect(history.classList.contains('btn')).toBe(true);
+    markRead.focus();
+
+    await keys.keyboard('{Enter}');
+
+    expect(markAllRead).toHaveBeenCalledOnce();
+  });
+
+  it('says there is nothing new with the base empty state', async () => {
+    const { keys, bell, panel } = setup([]);
+    await keys.click(bell());
+    expect(within(panel() as HTMLElement).getByText(msg('ui.nothingNewYet')).closest('.empty')).toBeTruthy();
+  });
+});
