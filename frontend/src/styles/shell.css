@@ -51,9 +51,11 @@
 
   /* Window layers, bottom to top (z-index.test.ts holds the order). Layers (dialogs, the image viewer)
      sit above Big Picture and the chat so a prompt opened there is seen and answered. Every layer root
-     on the layer stack uses --z-layer: roots are portalled to the end of <body> as they open, so the one
-     opened last paints on top, as the stack orders them. The title bar sits above their scrims so the
-     window can still be moved and closed; only the update screen covers it. */
+     on the layer stack that can be acted on uses --z-layer: roots are portalled to the end of <body> as
+     they open, so the one opened last paints on top, as the stack orders them. A hint (a tooltip, the
+     hover card of a friend row) uses --z-hint: it explains what is under the pointer, a toast's button
+     included, so it paints above the toasts and every layer. The title bar sits above the scrims and
+     the hints so the window can still be moved and closed; only the update screen covers it. */
   --z-backdrop: -1; /* the window backdrop behind the shell */
   --z-sticky: 10; /* sticky bars inside a page */
   --z-corner: 120; /* toasts, the activity dock, the self-update card */
@@ -62,6 +64,7 @@
   --z-gate: 150; /* consent and legal screens */
   --z-layer: 160;
   --z-toast: 165; /* the toast region, above layers so a toast raised from a dialog is seen */
+  --z-hint: 167; /* hints (passive layers): the topmost thing under the title bar */
   --z-titlebar: 170;
   --z-update: 200;
 

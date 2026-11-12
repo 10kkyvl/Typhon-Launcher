@@ -113,7 +113,7 @@
 
   .tooltip {
     position: fixed;
-    z-index: var(--z-layer);
+    z-index: var(--z-hint);
     max-width: 32rem;
     width: max-content;
     padding: 0.5rem 0.8rem;

@@ -52,8 +52,10 @@ const owners = new WeakMap<HTMLElement, () => HTMLElement | null>();
  * Options of a layer: the extension point for every kind of layer, built-in or from a plugin.
  *
  * - Paint order. Every layer root, modal or not, is portalled to the end of <body> when it opens and
- *   sits on `--z-layer` (z-index.test.ts holds this), so the layer opened last paints on top, as the
- *   stack orders them.
+ *   sits on `--z-layer`, so the layer opened last paints on top, as the stack orders them. The one
+ *   exception is a passive layer (a hint, see below): its root sits on `--z-hint`, above the toast
+ *   region and every other layer, because a hint explains what is under the pointer wherever that is,
+ *   a toast's button included. z-index.test.ts holds both.
  * - A dialog (Modal, Lightbox) is modal: it makes everything under it inert (the app content and every
  *   layer under it), takes focus on open (`initialFocus`), traps Tab and returns focus on close
  *   (`returnFocus` when its opener is gone). It owns the keyboard: `topModalLayer()` is the dialog that

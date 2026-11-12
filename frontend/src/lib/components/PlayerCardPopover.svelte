@@ -83,7 +83,7 @@
 <style>
   .popover {
     position: fixed;
-    z-index: var(--z-layer);
+    z-index: var(--z-hint);
     box-shadow: var(--shadow-pop);
     border-radius: var(--radius-lg);
     animation: popup-in var(--dur) var(--ease);

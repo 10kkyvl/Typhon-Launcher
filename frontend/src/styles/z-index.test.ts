@@ -42,6 +42,7 @@ const ORDER = [
   'gate',
   'layer',
   'toast',
+  'hint',
   'titlebar',
   'update',
 ];
@@ -148,12 +149,27 @@ describe('z-index scale', () => {
     expect(z('toast')).toBeGreaterThan(z('corner'));
   });
 
-  // Paint order follows the stack: the root of every layer, modal or not, sits on the one layer token,
-  // and portal() appends each at the end of <body> as it opens, so the one opened last paints on top.
-  it('stacks every layer root on --z-layer, so the layer opened last paints on top', () => {
+  it('keeps a hint the topmost thing under the title bar: above the toasts and every layer', () => {
+    const scale = tokens();
+    const z = (name: string) => scale.get(name) as number;
+    expect(z('hint')).toBeGreaterThan(z('toast'));
+    expect(z('hint')).toBeGreaterThan(z('layer'));
+    expect(z('hint')).toBeLessThan(z('titlebar'));
+  });
+
+  // Paint order follows the stack: the root of every layer that can be acted on, modal or not, sits on
+  // the one layer token, and portal() appends each at the end of <body> as it opens, so the one opened
+  // last paints on top. A hint (a passive layer: it takes no focus and no outside press) explains
+  // what is under the pointer, wherever that is: a toast's button too, and the toasts paint above the
+  // layers. So every hint root sits on the hint token, above both, and nothing else does.
+  it('stacks every layer root on --z-layer, so the layer opened last paints on top, and every hint on --z-hint', () => {
     const roots = files.filter((path) => path.endsWith('.svelte')).flatMap((path) => layerRoots(path, read(path)));
-    expect(roots.length).toBeGreaterThan(2);
-    expect(roots.filter((root) => root.z !== 'var(--z-layer)')).toEqual([]);
+    const hints = roots.filter((root) => root.passive);
+    expect(roots.length - hints.length).toBeGreaterThan(2);
+    expect(hints.map((root) => root.path).sort()).toEqual(['lib/components/PlayerCardPopover.svelte', 'lib/components/Tooltip.svelte']);
+    expect(roots.filter((root) => root.z !== (root.passive ? 'var(--z-hint)' : 'var(--z-layer)'))).toEqual([]);
+    const users = files.filter((path) => path !== SHELL && /var\(--z-hint\)/.test(read(path)));
+    expect(users.sort()).toEqual(hints.map((root) => root.path).sort());
   });
 
   it('takes every z-index from the scale or stacks locally inside an isolated component', () => {
@@ -174,14 +190,17 @@ describe('z-index scale', () => {
   });
 });
 
-// Every element that carries `{@attach layer(…)}`: its first static class and that class's z-index.
-function layerRoots(path: string, text: string): { path: string; root: string; z: string | undefined }[] {
+// Every element that carries `{@attach layer(…)}`: its first static class, that class's z-index, and
+// whether the layer is passive (a hint: neither `initialFocus` nor outside presses, see lib/layers).
+function layerRoots(path: string, text: string): { path: string; root: string; z: string | undefined; passive: boolean }[] {
   const css = [...styles(path, text).matchAll(RULE)];
   return [...text.matchAll(/\{@attach layer\(/g)].map((m) => {
     const tag = text.slice(text.lastIndexOf('<', m.index), m.index);
+    const options = text.slice(m.index, text.indexOf('\n', m.index));
     const root = /\bclass="([\w-]+)/.exec(tag)?.[1] ?? '(no class)';
     const rule = css.find((r) => selectsRoot(r[1].trim().split('\n').pop()?.trim() ?? '', root) && /z-index/.test(r[2]));
-    return { path, root, z: rule ? /z-index:\s*([^;}]+)/.exec(rule[2])?.[1].trim() : undefined };
+    const passive = /outsidePress:\s*false/.test(options) && !/initialFocus/.test(options);
+    return { path, root, z: rule ? /z-index:\s*([^;}]+)/.exec(rule[2])?.[1].trim() : undefined, passive };
   });
 }
 

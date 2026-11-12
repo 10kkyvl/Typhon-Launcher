@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { user } from '../testing/dom';
 import PlayerCardHarness from '../testing/PlayerCardHarness.svelte';
 import { HOVER_DELAY, LEAVE_GRACE } from './hoverIntent';
+import cardSource from './PlayerCardPopover.svelte?raw';
 
 let app: HTMLDivElement;
 
@@ -48,6 +49,14 @@ describe('PlayerCardPopover', () => {
     expect(anchor().getAttribute('aria-describedby')).toBe(shown.id);
     expect(app.contains(shown)).toBe(false);
     expect(shown.style.position).toBe('fixed');
+  });
+
+  it('is a hint: it paints on the hint token, above the toasts and every layer', async () => {
+    const { card, hover } = setup();
+    await hover();
+
+    expect((card() as HTMLElement).classList.contains('popover')).toBe(true);
+    expect(/\.popover \{([^}]*)\}/.exec(cardSource)?.[1]).toMatch(/z-index: var\(--z-hint\);/);
   });
 
   // The card opens under the name, never beside it: beside it, it covered the row's own presence link

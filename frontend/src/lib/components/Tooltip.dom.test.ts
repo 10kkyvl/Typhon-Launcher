@@ -5,6 +5,7 @@ import { user } from '../testing/dom';
 import { description } from '../testing/hints';
 import TooltipHarness from '../testing/TooltipHarness.svelte';
 import { HOVER_DELAY, LEAVE_GRACE } from './hoverIntent';
+import tooltipSource from './Tooltip.svelte?raw';
 
 const TEXT = 'Removes the cached covers';
 
@@ -316,6 +317,17 @@ describe('Tooltip: placement and the stack', () => {
     expect(tip.parentElement).toBe(document.body);
     expect(tip.style.position).toBe('fixed');
     expect(tip.dataset.placement).toBe('bottom');
+  });
+
+  // jsdom applies no stylesheet: the element is the shown hint's root, the rule is read from the source.
+  it('paints on the hint token: above the toasts and every layer, so the hint of a toast button is not under the next toast', async () => {
+    const { bubble, wait, focusByKeyboard } = setup();
+    await focusByKeyboard();
+    await wait(0);
+    const tip = bubble() as HTMLElement;
+
+    expect(tip.classList.contains('tooltip')).toBe(true);
+    expect(/\.tooltip \{([^}]*)\}/.exec(tooltipSource)?.[1]).toMatch(/z-index: var\(--z-hint\);/);
   });
 
   it('appearing over an open menu leaves the menu open', async () => {
