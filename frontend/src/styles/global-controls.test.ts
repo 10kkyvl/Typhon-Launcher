@@ -34,8 +34,44 @@ function rules(selector: string): string[] {
   return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((m) => selectors(m[1]).includes(selector)).map((m) => m[2]);
 }
 
+// Every stylesheet, and every component's <style> block, by path. Vitest serves a .css import empty,
+// so the glob only lists the files and they are read from disk.
+const stylesheets: Record<string, string> = {
+  ...Object.fromEntries(
+    Object.keys(import.meta.glob('../**/*.css')).map((path) => [
+      path.replace(/^\.\.\//, '').replace(/^\.\//, 'styles/'),
+      fs.readFileSync(new URL(path, import.meta.url), 'utf8'),
+    ]),
+  ),
+  ...Object.fromEntries(
+    Object.entries(frontendSources)
+      .filter(([path]) => path.endsWith('.svelte'))
+      .map(([path, text]) => [path, [...text.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join('\n')]),
+  ),
+};
+
+// The selector lists of every rule in a stylesheet.
+function selectorLists(text: string): string[][] {
+  return [...text.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{[^{}]*\}/g)].map((m) => selectors(m[1]));
+}
+
+describe('a selector an engine may not know', () => {
+  // A selector list is all or nothing: a WebView without :has() (WebKit before 15.4; macOS 12 is
+  // allowed) drops the whole rule, and every other selector in the list with it.
+  it('sits in a rule of its own: :has() never shares a list', () => {
+    expect(stylesheets['styles/global.css']).toContain('user-select');
+    expect(selectorLists('a,\nb:has(.x) {}\nc:has(.y) {}')).toEqual([['a', 'b:has(.x)'], ['c:has(.y)']]);
+    const shared = Object.entries(stylesheets).flatMap(([path, text]) =>
+      selectorLists(text)
+        .filter((list) => list.length > 1 && list.some((selector) => selector.includes(':has(')))
+        .map((list) => `${path}: ${list.join(', ')}`),
+    );
+    expect(shared).toEqual([]);
+  });
+});
+
 // The look Big Picture and the overlay window were drawn with (redesign-2.0's global.css).
-const PINNED_SCOPES = ['html:has(.big-picture)', 'html.overlay-window'];
+const PINNED_SCOPES = ['.big-picture', 'html:has(.big-picture)', 'html.overlay-window'];
 
 describe('the scrollbar', () => {
   it('is drawn from the theme in the main window', () => {
@@ -91,8 +127,9 @@ describe('selecting text', () => {
   // Shared dialogs over Big Picture are portalled to the end of <body>, outside `.big-picture`: the
   // document is in Big Picture while the shell is in it, so the rule is set on <body> from there.
   it('stays off everywhere in Big Picture, the dialogs it opens included, and in the overlay window, as before', () => {
-    expect(list).toContain('html:has(.big-picture) body');
+    expect(list).toContain('.big-picture');
     expect(list).toContain('html.overlay-window body');
+    expect(rules('html:has(.big-picture) body').join('')).toMatch(/user-select: none;/);
   });
 
   // An error inside a <label> (the label is furniture) must still be copied: a message says what it is
