@@ -99,7 +99,7 @@ describe('base controls take their look from tokens', () => {
   // colour only. Each rule comes after the one that moves the control, at the same specificity or more.
   it.each([
     ['lib/components/Button.svelte', ".btn:is(:hover, :active):not(:disabled, [aria-disabled='true'])", ".btn:active:not(:disabled, [aria-disabled='true'])"],
-    ['lib/components/IconButton.svelte', '.icon-btn:active:not(:disabled)', '.icon-btn:active:not(:disabled)'],
+    ['lib/components/IconButton.svelte', ".icon-btn:active:not(:disabled, [aria-disabled='true'])", ".icon-btn:active:not(:disabled, [aria-disabled='true'])"],
     ['lib/components/Chip.svelte', 'button.chip:active', 'button.chip:active'],
   ])('%s moves nothing when animations are off', (path, still, moving) => {
     const css = style(path);

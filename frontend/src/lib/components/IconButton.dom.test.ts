@@ -65,6 +65,26 @@ describe('IconButton', () => {
     expect(bubble()).toBeNull();
   });
 
+  it('disabled with a reason keeps focus, shows and is described by the reason, and ignores a press and Enter', async () => {
+    const onclick = vi.fn();
+    const { rerender } = render(IconButton, { target: app, props: { label: 'Back', reason: '', onclick } });
+    const button = screen.getByRole('button', { name: 'Back' });
+    button.focus();
+
+    await rerender({ label: 'Back', reason: 'Nothing to go back to', disabled: true, onclick });
+    const keys = user();
+    await keys.keyboard('{Enter}');
+    await keys.click(button);
+
+    expect(screen.getByRole('button', { name: 'Back' })).toBe(button);
+    expect(document.activeElement).toBe(button);
+    expect(button.hasAttribute('disabled')).toBe(false);
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    expect(button.hasAttribute('title')).toBe(false);
+    expect(description(button)).toBe('Nothing to go back to');
+    expect(onclick).not.toHaveBeenCalled();
+  });
+
   it('the native title comes and goes with the disabled state, on the same button', async () => {
     const { rerender } = render(IconButton, { target: app, props: { label: 'Back', disabled: true } });
     const button = screen.getByRole('button', { name: 'Back' });
@@ -127,11 +147,11 @@ describe('IconButton', () => {
     const css = styleOf(source, 'IconButton.svelte');
     const buttonCss = styleOf(buttonSource, 'Button.svelte');
     expect(ruleBody(css, '.icon-btn.primary')).toEqual(ruleBody(buttonCss, '.primary'));
-    const hover = ruleBody(css, '.icon-btn.primary:hover:not(:disabled)');
+    const hover = ruleBody(css, ".icon-btn.primary:hover:not(:disabled, [aria-disabled='true'])");
     expect(hover.background).toBe(ruleBody(buttonCss, ".primary:hover:not(:disabled, [aria-disabled='true'])").background);
     expect(hover.color).toBe(ruleBody(buttonCss, '.primary').color);
     // After the plain hover, at its specificity or more, so the fill is not swapped for the grey one.
-    expect(css.indexOf('.icon-btn.primary:hover:not(:disabled)')).toBeGreaterThan(css.indexOf('.icon-btn:hover:not(:disabled),'));
+    expect(css.indexOf(".icon-btn.primary:hover:not(:disabled, [aria-disabled='true'])")).toBeGreaterThan(css.indexOf(".icon-btn:hover:not(:disabled, [aria-disabled='true']),"));
   });
 
   it('with a hint shows the hint instead of its label, as its description; the name stays the label', async () => {

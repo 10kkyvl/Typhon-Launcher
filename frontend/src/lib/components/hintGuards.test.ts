@@ -7,8 +7,8 @@ import { describe, expect, it } from 'vitest';
  * - a native `title` on a control (`button`, `a`, `input`, `select`, `textarea`, `[role=button]`):
  *   shown late and unstyled, never on keyboard focus, read twice or not at all by screen readers.
  *   Big Picture and the overlay window are not on this path yet. Named exceptions: IconButton, whose
- *   native title is its label only with `tooltip={false}` (the overlay) or while it is disabled (no
- *   focus, no tooltip, nothing announced twice), and ActivityDock (replaced by the activity widget).
+ *   native title is its label only with `tooltip={false}` (the overlay) or while it is disabled with no
+ *   reason (no focus, no tooltip, nothing announced twice), and ActivityDock (replaced by the activity widget).
  *   A component that spreads the attributes it is given onto its control (Button, Chip, IconButton,
  *   TextLink: found, not listed by hand) counts as that control. A `title` on non-interactive text
  *   (the full form of a truncated value, an exact time) is not a control's and stays;
@@ -139,9 +139,9 @@ describe('hints', () => {
     for (const path of TITLE_EXCEPTIONS) expect(titledControls(path, read(path)), path).not.toEqual([]);
   });
 
-  it("gives IconButton's native title its label only without a tooltip or while disabled", () => {
+  it("gives IconButton's native title its label only without a tooltip or while disabled without a reason", () => {
     const source = read('lib/components/IconButton.svelte');
-    expect(source).toContain('const nativeTitle = $derived(!tooltip || disabled ? label : undefined);');
+    expect(source).toContain('const nativeTitle = $derived(!tooltip || (disabled && !refused) ? label : undefined);');
     expect(titledControls('lib/components/IconButton.svelte', source)).toHaveLength(1);
     expect(markup(source).match(/\btitle=\{[^}]*\}/g)).toEqual(['title={nativeTitle}']);
   });

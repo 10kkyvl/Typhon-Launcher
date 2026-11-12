@@ -3,6 +3,7 @@
   import type { HTMLButtonAttributes } from 'svelte/elements';
   import CountBadge from './CountBadge.svelte';
   import { countShown } from './countBadge';
+  import { refuseWhile } from './refuse';
   import Tooltip from './Tooltip.svelte';
 
   type Counted =
@@ -23,6 +24,7 @@
     pressed,
     lit = false,
     disabled = false,
+    reason,
     tooltip = true,
     hint,
     count,
@@ -56,6 +58,14 @@
     lit?: boolean;
     disabled?: boolean;
     /**
+     * Why it is disabled, as on Button: while disabled with a reason it stays in the Tab order
+     * (aria-disabled), shows the reason as its hint and is described by it, and ignores every
+     * activation. For a button that can turn disabled while it has focus (the history buttons): a
+     * disabled button cannot hold focus, which would fall to the page. Pass '' while there is none, so
+     * it stays one element as the state flips.
+     */
+    reason?: string;
+    /**
      * Off: no tooltip on the layer stack; the browser's own title shows the label instead. For the
      * overlay window, whose Escape hides the overlay and must not close a hint first.
      */
@@ -72,13 +82,29 @@
   const counted = $derived(count !== undefined && countShown(count) !== '');
   const name = $derived(counted && countLabel ? countLabel : label);
 
+  const refused = $derived(disabled && Boolean(reason));
+  const guard = refuseWhile(() => refused);
+
   // The browser's own title shows the label where the tooltip cannot: the overlay window, and a
   // disabled button, which takes no focus and shows no tooltip (it cannot be announced twice).
-  const nativeTitle = $derived(!tooltip || disabled ? label : undefined);
+  const nativeTitle = $derived(!tooltip || (disabled && !refused) ? label : undefined);
 </script>
 
 {#snippet button()}
-  <button {...rest} {type} class="icon-btn {size} {variant}" class:lit class:counted aria-label={name} aria-pressed={pressed} title={nativeTitle} {disabled} {onclick}>
+  <button
+    {...rest}
+    {type}
+    class="icon-btn {size} {variant}"
+    class:lit
+    class:counted
+    aria-label={name}
+    aria-pressed={pressed}
+    aria-disabled={refused ? 'true' : undefined}
+    title={nativeTitle}
+    disabled={disabled && !refused}
+    {onclick}
+    {@attach reason !== undefined ? guard : undefined}
+  >
     {@render children?.()}
     {#if count !== undefined && countLabel !== undefined}
       <CountBadge {count} label={countLabel} place="corner" on={variant === 'primary' ? 'accent' : 'surface'} />
@@ -87,7 +113,7 @@
 {/snippet}
 
 {#if tooltip}
-  <Tooltip text={hint ?? label} describe={hint !== undefined}>{@render button()}</Tooltip>
+  <Tooltip text={refused ? (reason ?? '') : (hint ?? label)} describe={refused || hint !== undefined}>{@render button()}</Tooltip>
 {:else}
   {@render button()}
 {/if}
@@ -110,18 +136,18 @@
       transform var(--dur-fast) var(--ease);
   }
 
-  .icon-btn:active:not(:disabled) {
+  .icon-btn:active:not(:disabled, [aria-disabled='true']) {
     transform: scale(0.9);
   }
 
   /* With animations off a press changes nothing but the colour. */
   @media (prefers-reduced-motion: reduce) {
-    .icon-btn:active:not(:disabled) {
+    .icon-btn:active:not(:disabled, [aria-disabled='true']) {
       transform: none;
     }
   }
 
-  :global(.no-anim) .icon-btn:active:not(:disabled) {
+  :global(.no-anim) .icon-btn:active:not(:disabled, [aria-disabled='true']) {
     transform: none;
   }
 
@@ -146,13 +172,13 @@
     color: var(--text);
   }
 
-  .icon-btn:hover:not(:disabled),
+  .icon-btn:hover:not(:disabled, [aria-disabled='true']),
   .icon-btn[aria-expanded='true'] {
     background: var(--hover-strong);
     color: var(--text);
   }
 
-  .secondary:hover:not(:disabled),
+  .secondary:hover:not(:disabled, [aria-disabled='true']),
   .secondary[aria-expanded='true'] {
     background: var(--surface-4);
   }
@@ -167,12 +193,13 @@
     color: var(--accent-on, var(--accent-on-default));
   }
 
-  .icon-btn.primary:hover:not(:disabled) {
+  .icon-btn.primary:hover:not(:disabled, [aria-disabled='true']) {
     background: var(--accent-hover);
     color: var(--accent-on, var(--accent-on-default));
   }
 
-  .icon-btn:disabled {
+  .icon-btn:disabled,
+  .icon-btn[aria-disabled='true'] {
     opacity: 0.35;
     cursor: default;
   }
