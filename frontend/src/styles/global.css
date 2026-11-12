@@ -131,8 +131,16 @@ h4 {
     background var(--dur) var(--ease);
 }
 
-.input:hover {
+.input:hover:not(:disabled) {
   border-color: var(--text-3);
+}
+
+/* Locked: no input taken, so neither the strong edge nor a hover that strengthens it. */
+.input:disabled {
+  border-color: var(--border);
+  background: var(--hover);
+  color: var(--text-3);
+  cursor: default;
 }
 
 /* One ring: the field's own border takes the focus colour, and the outline every other control gets

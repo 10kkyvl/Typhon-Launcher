@@ -102,6 +102,19 @@ describe('a text field', () => {
     expect(body(".input[aria-invalid='true']:focus-visible")).toMatch(/outline-color: var\(--danger\);/);
   });
 
+  // A locked field takes no input: it must not look like one that does, with the strong edge, a
+  // hover that strengthens it, or the text cursor. Its look comes from tokens.
+  it('looks locked while disabled, and does not answer the pointer', () => {
+    expect(body('.input:hover:not(:disabled)')).toMatch(/border-color: var\(--text-3\);/);
+    expect(body('.input:hover')).toBe('');
+    const locked = body('.input:disabled');
+    expect(locked).toMatch(/border-color: var\(--border\);/);
+    expect(locked).toMatch(/background: var\(--hover\);/);
+    expect(locked).toMatch(/color: var\(--text-3\);/);
+    expect(locked).toMatch(/cursor: default;/);
+    expect(locked).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(/i);
+  });
+
   // These forms mark a bad value with aria-invalid and leave focus to the global ring: an own
   // `outline: none` would hide it again, leaving only a halo too faint to see on an invalid field.
   it('shows the global ring on the sign-in and support forms', () => {

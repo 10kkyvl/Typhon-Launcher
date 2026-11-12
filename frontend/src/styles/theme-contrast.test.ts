@@ -297,7 +297,7 @@ describe('a text field shows where it is', () => {
   ];
   const STATES = [
     ['at rest', '.input'],
-    ['hovered', '.input:hover'],
+    ['hovered', '.input:hover:not(:disabled)'],
   ] as const;
 
   it('reads the plates and the edges it measures', () => {
