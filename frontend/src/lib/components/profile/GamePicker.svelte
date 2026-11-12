@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Button from '../Button.svelte';
+  import { untrack } from 'svelte';
   import EmptyState from '../EmptyState.svelte';
   import Notice from '../Notice.svelte';
   import SearchInput from '../SearchInput.svelte';
@@ -27,8 +27,11 @@
   let mapping = $state<Record<string, string>>({});
   let failure = $state('');
   let loading = $state(false);
-  let attempt = $state(0);
+  let retrying = $state(false);
+  let root = $state<HTMLElement>();
+  let list = $state<HTMLElement>();
   let run = 0;
+  let latest: Promise<boolean> = Promise.resolve(true);
 
   const candidates = $derived($libraryGames.filter((game) => Boolean(game.canonicalGameId) && !game.hidden));
   const needle = $derived(query.trim().toLowerCase());
@@ -38,25 +41,44 @@
 
   const idsKey = $derived(JSON.stringify(candidates.map((game) => game.canonicalGameId)));
 
-  // A failure stays on screen while it is retried, its Retry busy, until the answer replaces it.
-  $effect(() => {
-    attempt;
+  // Whether the load worked. A newer load (the library changed) replaces an older one's answer.
+  function load(): Promise<boolean> {
     const ids = JSON.parse(idsKey) as string[];
     const current = ++run;
     loading = true;
-    igdbIdsOf(ids)
+    latest = igdbIdsOf(ids)
       .then((found) => {
-        if (current !== run) return;
-        mapping = found;
-        failure = '';
+        if (current === run) {
+          mapping = found;
+          failure = '';
+        }
+        return true;
       })
       .catch((err) => {
         if (current === run) failure = accountErrorText(err, msg('profile.pickerFailed'));
+        return false;
       })
       .finally(() => {
         if (current === run) loading = false;
       });
+    return latest;
+  }
+
+  $effect(() => {
+    void idsKey;
+    void untrack(load);
   });
+
+  // The retry answers for the newest load, whichever started while it ran.
+  async function retry(): Promise<boolean> {
+    let pending = load();
+    let ok = await pending;
+    while (pending !== latest) {
+      pending = latest;
+      ok = await pending;
+    }
+    return ok;
+  }
 
   function igdbOf(canonicalGameId: string | undefined): number {
     const value = Number(canonicalGameId ? mapping[canonicalGameId] : 0);
@@ -64,14 +86,11 @@
   }
 </script>
 
-<div class="picker">
+<div class="picker" bind:this={root}>
   <SearchInput bind:value={query} label={msg('profile.pickerSearch')} placeholder={msg('profile.pickerSearch')} />
-  {#if failure}
-    <Notice tone="danger" compact>
+  {#if failure || retrying}
+    <Notice tone="danger" compact bind:retrying retry={{ label: msg('common.retry'), run: retry, within: () => list ?? root }}>
       {failure}
-      {#snippet action()}
-        <Button size="sm" busy={loading} onclick={() => attempt++}>{msg('common.retry')}</Button>
-      {/snippet}
     </Notice>
   {:else if loading}
     <Spinner size="sm" label={msg('social.loadingEllipsis')} />
@@ -80,7 +99,7 @@
   {:else if rows.length === 0}
     <EmptyState size="inline" title={msg('profile.pickerNoMatch')} />
   {:else}
-    <ul class="list">
+    <ul class="list" bind:this={list}>
       {#each rows as game (game.id)}
         {@const igdbId = igdbOf(game.canonicalGameId)}
         {@const taken = igdbId > 0 && chosen.includes(igdbId)}
