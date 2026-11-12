@@ -2,6 +2,7 @@ import { screen, within } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import { renderDom } from '../../lib/testing/dom';
+import { SEPARATOR } from '../../lib/theme/layout';
 import LayoutEditor from './LayoutEditor.svelte';
 
 afterEach(() => {
@@ -41,6 +42,33 @@ describe('LayoutEditor: what it shows after an edit', () => {
 
     expect(warn.mock.calls.flat().join(' ')).not.toMatch(/state_proxy_equality_mismatch|proxies and the values they proxy/);
     warn.mockRestore();
+  });
+});
+
+describe('LayoutEditor: focus when a moved separator is dropped', () => {
+  it('lands on the row now at the end when a separator is moved past the last row', async () => {
+    const { user } = renderDom(LayoutEditor, {});
+    await user.click(screen.getByRole('button', { name: msg('settings.layoutAddSeparator') }));
+    const at = names().lastIndexOf(msg('settings.layoutSeparator'));
+    within(sidebarRows()[at]).getByRole('button', { name: msg('settings.layoutMoveDown') }).focus();
+
+    await user.keyboard('{Enter}');
+
+    const last = sidebarRows().at(-1) as HTMLElement;
+    expect(document.activeElement).toBe(within(last).getByRole('button', { name: msg('settings.layoutMoveUp') }));
+  });
+
+  it('lands on the row now at that place when a separator is moved next to another', async () => {
+    const layout = { sidebar: { order: ['library', SEPARATOR, 'catalog', SEPARATOR, 'installed'] } };
+    const { user } = renderDom(LayoutEditor, { layout });
+    expect(names().slice(0, 5)).toEqual([names()[0], msg('settings.layoutSeparator'), names()[2], msg('settings.layoutSeparator'), names()[4]]);
+    const catalog = names()[2];
+    within(sidebarRows()[3]).getByRole('button', { name: msg('settings.layoutMoveUp') }).focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(names()[2]).toBe(catalog);
+    expect(document.activeElement).toBe(within(sidebarRows()[2]).getByRole('button', { name: msg('settings.layoutMoveUp') }));
   });
 });
 

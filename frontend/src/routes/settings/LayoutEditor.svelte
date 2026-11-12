@@ -57,10 +57,13 @@
   let editor = $state<HTMLElement>();
 
   // The moved row's node is moved or remade, and focus with it would fall to the page: it goes back to
-  // the same action of that row, or to the opposite move where the row reached the end of its list.
-  async function focusRow(key: ListKey, row: string, action: 'up' | 'down' | 'column') {
+  // the same action of that row, or to the opposite move where the row reached the end of its list. A
+  // separator the move dropped (it ended the list or followed another) leaves no row: focus goes to
+  // the row now at the place it was moved to, clamped to the list.
+  async function focusRow(key: ListKey, row: string, action: 'up' | 'down' | 'column', at?: number) {
     await tick();
-    const item = [...(editor?.querySelectorAll<HTMLElement>(`[data-list="${key}"] > [data-row]`) ?? [])].find((el) => el.dataset.row === row);
+    const rows = [...(editor?.querySelectorAll<HTMLElement>(`[data-list="${key}"] > [data-row]`) ?? [])];
+    const item = rows.find((el) => el.dataset.row === row) ?? (at === undefined ? undefined : rows[Math.min(at, rows.length - 1)]);
     const button = (name: string) => item?.querySelector<HTMLButtonElement>(`[data-action="${name}"]`);
     const wanted = button(action);
     const target = wanted && !wanted.disabled ? wanted : button(action === 'up' ? 'down' : 'up');
@@ -70,7 +73,7 @@
   function stepRow(key: ListKey, index: number, delta: -1 | 1) {
     const row = rowKey(st[key], index);
     apply(step(st, key, index, delta));
-    void focusRow(key, row, delta < 0 ? 'up' : 'down');
+    void focusRow(key, row, delta < 0 ? 'up' : 'down', index + delta);
   }
 
   function toColumn(key: 'main' | 'side', index: number, other: 'main' | 'side') {
