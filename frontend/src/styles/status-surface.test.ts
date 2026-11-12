@@ -96,7 +96,27 @@ describe('the plate of a notice', () => {
 });
 
 const STATUS_TEXT = /(?:^|[^-\w])color:\s*var\(--(danger|warning|success)\)/;
-const PLATE = /background(?:-color)?:\s*var\((--surface(?:-\d)?|--bg)\)\s*;/;
+// An opaque fill: a surface, or a tone mixed into one (the way a notice and a badge fill themselves).
+const SURFACE = String.raw`var\((--surface(?:-\d)?|--bg)\)`;
+const PLATE = new RegExp(String.raw`background(?:-color)?:\s*(?:${SURFACE}|color-mix\(in srgb, var\((--[\w-]+)\) (\d+)%, ${SURFACE}\))\s*;`);
+
+interface Plate {
+  surface: string;
+  tone?: string;
+  share?: number;
+}
+
+function plateOf(body: string): Plate | null {
+  const m = PLATE.exec(body);
+  if (!m) return null;
+  return m[1] ? { surface: m[1] } : { surface: m[4], tone: m[2], share: Number(m[3]) / 100 };
+}
+
+// The colour a plate shows in a preset.
+function fill(t: Record<string, string>, plate: Plate): RGB {
+  const surface = rgb(t[plate.surface], rgb(t['--bg'], BLACK));
+  return plate.tone ? mix(rgb(t[plate.tone], surface), surface, plate.share as number) : surface;
+}
 
 // Whole areas where every status text has an opaque surface under it.
 const AREAS: [RegExp, string][] = [
@@ -106,7 +126,7 @@ const AREAS: [RegExp, string][] = [
 ];
 
 // A status colour without a plate of its own: the surface it sits on, then the rules. Marks and icons
-// are not text (3:1); a badge carries the fill of its tone. A new entry needs its surface named.
+// are not text (3:1); a badge carries a fill of its own (see below). A new entry needs its surface named.
 const ON_SURFACE: Record<string, [surface: string, ...rules: string[]]> = {
   'routes/diskusage/DiskUsage.svelte': ['Card', '.reason'],
   'routes/installed/Installed.svelte': ['Card and the fill of a row', '.storage-error', '.row-update'],
@@ -143,15 +163,11 @@ const ON_SURFACE: Record<string, [surface: string, ...rules: string[]]> = {
   'lib/components/profile/BlockSettings.svelte': ['the settings panel of a block', '.error'],
   'lib/components/profile/CollectionBlock.svelte': ['the scrim over a cover; marks', '.heart', '.mastered'],
   'lib/components/SystemRequirements.svelte': [
-    'the plate of the checks; the verdict is a badge',
-    '.badge.success',
-    '.badge.warning',
-    '.badge.danger',
+    'the plate of the checks',
     '.mark.success, .have.success',
     '.mark.warning, .have.warning',
     '.mark.danger, .have.danger',
   ],
-  'lib/components/StatusBadge.svelte': ['a badge', '.success', '.warning', '.danger'],
   'lib/components/Button.svelte': ['a control, not a message', '.danger'],
 };
 
@@ -173,7 +189,8 @@ const LOCAL_SURFACE: Record<string, string> = {
 interface StatusRule {
   path: string;
   selector: string;
-  plate: string | null;
+  status: string;
+  plate: Plate | null;
 }
 
 function statusRules(): StatusRule[] {
@@ -182,8 +199,9 @@ function statusRules(): StatusRule[] {
     if (!path.endsWith('.svelte') || !(path.startsWith('routes/') || path.startsWith('lib/components/'))) continue;
     const css = (/<style[^>]*>([\s\S]*?)<\/style>/.exec(source)?.[1] ?? '').replace(/\/\*[\s\S]*?\*\//g, '');
     for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-      if (!STATUS_TEXT.test(m[2])) continue;
-      out.push({ path, selector: m[1].trim().replace(/\s+/g, ' '), plate: PLATE.exec(m[2])?.[1] ?? null });
+      const status = STATUS_TEXT.exec(m[2])?.[1];
+      if (!status) continue;
+      out.push({ path, selector: m[1].trim().replace(/\s+/g, ' '), status: `--${status}`, plate: plateOf(m[2]) });
     }
   }
   return out;
@@ -215,7 +233,7 @@ describe('status-coloured text in the pages', () => {
       expect(ON_SURFACE[path], path).toBeDefined();
       const css = styleOf(path).replace(/\/\*[\s\S]*?\*\//g, '');
       const rule = new RegExp(`(?:^|})\\s*${selector.replace('.', '\\.')}\\s*\\{([^}]*)\\}`).exec(css)?.[1];
-      if (!PLATE.test(rule ?? '')) open.push(`${path}: ${selector}`);
+      if (!plateOf(rule ?? '')) open.push(`${path}: ${selector}`);
     }
     expect(open).toEqual([]);
   });
@@ -224,15 +242,59 @@ describe('status-coloured text in the pages', () => {
     it(`${id} keeps a status colour at 4.5:1 on every plate the pages give it`, () => {
       const t = presets().get(id) as Record<string, string>;
       expect(t, id).toBeDefined();
-      const plates = [...new Set(rules.flatMap((rule) => (rule.plate ? [rule.plate] : [])))];
-      expect(plates.length).toBeGreaterThan(0);
+      const surfaces = [...new Set(rules.flatMap((rule) => (rule.plate && !rule.plate.tone ? [rule.plate.surface] : [])))];
+      expect(surfaces.length).toBeGreaterThan(0);
       const failures: string[] = [];
-      for (const plate of plates) {
-        const surface = rgb(t[plate], BLACK);
+      for (const surface of surfaces) {
+        const on = fill(t, { surface });
         for (const name of ['--danger', '--warning', '--success']) {
-          const r = ratio(rgb(t[name], surface), surface);
-          if (r < 4.5) failures.push(`${name} on ${plate}: ${r.toFixed(2)}`);
+          const r = ratio(rgb(t[name], on), on);
+          if (r < 4.5) failures.push(`${name} on ${surface}: ${r.toFixed(2)}`);
         }
+      }
+      // A fill mixed from a tone is measured with the colour its own rule sets on it.
+      for (const rule of rules) {
+        if (!rule.plate?.tone) continue;
+        const on = fill(t, rule.plate);
+        const r = ratio(rgb(t[rule.status], on), on);
+        if (r < 4.5) failures.push(`${rule.path}: ${rule.selector}: ${r.toFixed(2)}`);
+      }
+      expect(failures).toEqual([]);
+    });
+  }
+});
+
+// A badge sits wherever its row does, the bare page included (a ticket's status in the head of a
+// ticket page): its label is text on its own fill, and that fill is opaque, so the label keeps its
+// contrast over any backdrop.
+const BADGES: Record<string, string[]> = {
+  'lib/components/StatusBadge.svelte': ['.success', '.warning', '.danger', '.accent', '.neutral'],
+  'lib/components/SystemRequirements.svelte': ['.badge', '.badge.success', '.badge.warning', '.badge.danger'],
+};
+
+describe('the fill of a badge', () => {
+  const kinds = Object.entries(BADGES).flatMap(([path, selectors]) => {
+    const css = styleOf(path).replace(/\/\*[\s\S]*?\*\//g, '');
+    return selectors.map((selector) => {
+      const body = new RegExp(`(?:^|})\\s*${selector.replace(/\./g, '\\.')}\\s*\\{([^}]*)\\}`).exec(css)?.[1] ?? '';
+      return { kind: `${path}: ${selector}`, plate: plateOf(body), label: /(?:^|[^-\w])color:\s*var\((--[\w-]+)\)/.exec(body)?.[1] };
+    });
+  });
+
+  it('is opaque: a surface, or the tone mixed into one, never a translucent tint', () => {
+    expect(kinds.filter((k) => !k.plate || !k.label).map((k) => k.kind)).toEqual([]);
+  });
+
+  for (const id of ['dark', 'light', 'contrast', 'blush']) {
+    it(`${id} keeps a badge's label at 4.5:1 on its fill`, () => {
+      const t = presets().get(id) as Record<string, string>;
+      expect(t, id).toBeDefined();
+      const failures: string[] = [];
+      for (const { kind, plate, label } of kinds) {
+        if (!plate || !label) continue;
+        const on = fill(t, plate);
+        const r = ratio(rgb(t[label], on), on);
+        if (r < 4.5) failures.push(`${kind}: ${label} ${r.toFixed(2)}`);
       }
       expect(failures).toEqual([]);
     });

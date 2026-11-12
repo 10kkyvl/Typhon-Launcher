@@ -68,27 +68,27 @@
   }
 
   .success {
-    background: var(--success-subtle);
+    background: color-mix(in srgb, var(--success) 8%, var(--surface-2));
     color: var(--success);
   }
 
   .warning {
-    background: var(--warning-subtle);
+    background: color-mix(in srgb, var(--warning) 8%, var(--surface-2));
     color: var(--warning);
   }
 
   .danger {
-    background: var(--danger-subtle);
+    background: color-mix(in srgb, var(--danger) 8%, var(--surface-2));
     color: var(--danger);
   }
 
   .accent {
-    background: var(--accent-subtle);
+    background: color-mix(in srgb, var(--accent-bright) 8%, var(--surface-2));
     color: var(--accent-text);
   }
 
   .neutral {
-    background: var(--hover-strong);
+    background: color-mix(in srgb, var(--text) 8%, var(--surface-2));
     color: var(--text-2);
   }
 
