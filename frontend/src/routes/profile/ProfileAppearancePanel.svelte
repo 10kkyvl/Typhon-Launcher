@@ -9,9 +9,11 @@
   import Avatar from '../../lib/components/Avatar.svelte';
   import StyledName from '../../lib/components/StyledName.svelte';
   import { Upload, RotateCcw, Smile, X } from '@lucide/svelte';
-  import { onDestroy } from 'svelte';
+  import { onDestroy, tick } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
+  import IconButton from '../../lib/components/IconButton.svelte';
+  import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import { removeCoverPrompt, resetProfileAppearancePrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
   import Toggle from '../../lib/components/Toggle.svelte';
   import {
@@ -32,6 +34,7 @@
   import { currentUser } from '../../lib/stores/user';
   import { frameLook, isCustomFrame, ownedFrame } from '../../lib/profile/frameLook';
   import { msg } from '../../lib/i18n';
+  import { nextIndex } from '../../lib/utils/roving';
 
   let { draft = $bindable(), disabled, autoArt }: { draft: ProfileSettings; disabled: boolean; autoArt?: string } = $props();
 
@@ -51,6 +54,30 @@
   const frameRevoked = $derived(isCustomFrame(a.avatarFrame) && !activeFrame);
   const statusLength = $derived([...(draft.statusText ?? '')].length);
   const statusError = $derived(statusIssue(draft.statusText));
+
+  const THEME_IDS = [...PROFILE_THEMES.map((theme) => theme.id), CUSTOM_THEME, AUTO_THEME];
+  const accentSources = [
+    { id: 'custom', label: msg('profileStyle.accentOwn') },
+    { id: 'theme', label: msg('profileStyle.accentTheme') },
+  ];
+  const autoSources = AUTO_SOURCES.map((source) => ({ id: source, label: msg(`profileStyle.autoSource.${source}`) }));
+  const paletteId = (kind: string) => `${uid}-palette-${kind}`;
+  const emojiId = `${uid}-emoji`;
+  const emojiGridId = `${uid}-emoji-grid`;
+
+  // A radio group is one Tab stop: its chosen option, or the first while none is chosen.
+  const stop = (value: string, all: readonly string[]) => (all.includes(value) ? value : all[0]);
+  const ownAccent = $derived(a.accentSource === 'custom' ? a.accent.toLowerCase() : '');
+  const themeStop = $derived(stop(a.theme, THEME_IDS));
+  const accentStop = $derived(stop(ownAccent, PROFILE_ACCENTS));
+  const frameStop = $derived(
+    stop(activeFrame ? `custom:${activeFrame.id}` : frameRevoked ? 'none' : a.avatarFrame, [
+      ...AVATAR_FRAMES,
+      ...ownedFrames.map((owned) => `custom:${owned.id}`),
+    ]),
+  );
+  const nameStop = $derived(stop(a.nameStyle, NAME_STYLES));
+  const emojiStop = $derived(stop(draft.statusEmoji ?? '', STATUS_EMOJI));
 
   let accentText = $state('');
   let fromText = $state('');
@@ -104,6 +131,28 @@
   }
   function togglePalette(kind: 'accent' | 'from' | 'to' | 'name' | 'frame') {
     palette = palette === kind ? null : kind;
+  }
+  function chooseAccentSource(source: string) {
+    if (source === 'theme') useLauncherAccent();
+    else patch({ accentSource: 'custom' });
+  }
+  // The arrows, Home and End move along a radio group and choose (WAI-ARIA radio group). Choosing is
+  // a press of the option, unless its press does more (an emoji also closes its grid).
+  function roam(event: KeyboardEvent, choose = (radio: HTMLElement) => radio.click()) {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const radio = event.currentTarget as HTMLElement;
+    const all = [...(radio.closest('[role="radiogroup"]')?.querySelectorAll<HTMLElement>('[role="radio"]') ?? [])];
+    const next = nextIndex(all.indexOf(radio), all.length, event.key, { orientation: 'both' });
+    if (next === null) return;
+    event.preventDefault();
+    choose(all[next]);
+    all[next].focus();
+  }
+  async function pickEmoji(emoji: string) {
+    draft.statusEmoji = emoji;
+    emojiOpen = false;
+    await tick();
+    document.getElementById(emojiId)?.focus();
   }
   function setStatusText(event: Event) {
     const field = event.currentTarget as HTMLInputElement;
@@ -166,17 +215,17 @@
 <div class="panel" style={accentStyle}>
   <fieldset disabled={locked}>
     <section>
-      <h3>{msg('profile.theme')}</h3>
-      <div class="themes">
+      <h3 id="{uid}-theme-label">{msg('profile.theme')}</h3>
+      <div class="themes" role="radiogroup" aria-labelledby="{uid}-theme-label">
         {#each PROFILE_THEMES as theme}
-          <button type="button" class="theme" class:selected={a.theme === theme.id} aria-pressed={a.theme === theme.id} onclick={() => patch({ theme: theme.id })}>
+          <button type="button" role="radio" class="theme" class:selected={a.theme === theme.id} aria-checked={a.theme === theme.id} tabindex={themeStop === theme.id ? 0 : -1} onkeydown={(e) => roam(e)} onclick={() => patch({ theme: theme.id })}>
             <span class="theme-swatch" style:background={theme.banner}></span><span>{msg(`profile.${theme.id}`)}</span>
           </button>
         {/each}
-        <button type="button" class="theme" class:selected={a.theme === CUSTOM_THEME} aria-pressed={a.theme === CUSTOM_THEME} onclick={() => patch({ theme: CUSTOM_THEME })}>
+        <button type="button" role="radio" class="theme" class:selected={a.theme === CUSTOM_THEME} aria-checked={a.theme === CUSTOM_THEME} tabindex={themeStop === CUSTOM_THEME ? 0 : -1} onkeydown={(e) => roam(e)} onclick={() => patch({ theme: CUSTOM_THEME })}>
           <span class="theme-swatch" style:background={customBanner(a)}></span><span>{msg('profileStyle.themeCustom')}</span>
         </button>
-        <button type="button" class="theme" class:selected={a.theme === AUTO_THEME} aria-pressed={a.theme === AUTO_THEME} onclick={() => patch({ theme: AUTO_THEME })}>
+        <button type="button" role="radio" class="theme" class:selected={a.theme === AUTO_THEME} aria-checked={a.theme === AUTO_THEME} tabindex={themeStop === AUTO_THEME ? 0 : -1} onkeydown={(e) => roam(e)} onclick={() => patch({ theme: AUTO_THEME })}>
           <span class="theme-swatch auto"></span><span>{msg('profileStyle.themeAuto')}</span>
         </button>
       </div>
@@ -193,19 +242,19 @@
       <div class="custom">
         <div class="pick">
           <span class="pick-label">{fromLabel}</span>
-          <button type="button" class="color" style:background={a.customFrom} aria-label={fromLabel} aria-expanded={palette === 'from'} onclick={() => togglePalette('from')}></button>
+          <button type="button" class="color" style:background={a.customFrom} aria-label={fromLabel} aria-expanded={palette === 'from'} aria-controls={palette === 'from' ? paletteId('from') : undefined} onclick={() => togglePalette('from')}></button>
           <HexColorField value={fromText} onchange={(v) => setColor('customFrom', v)} disabled={locked} />
         </div>
-        {#if palette === 'from'}<ColorPalette value={a.customFrom} onchange={(v) => setColor('customFrom', v)} disabled={locked} />{/if}
+        {#if palette === 'from'}<div id={paletteId('from')}><ColorPalette value={a.customFrom} onchange={(v) => setColor('customFrom', v)} disabled={locked} /></div>{/if}
         {#if !validAccent(fromText)}<p class="hint danger">{msg('settings.accentInvalid')}</p>{/if}
         {#if a.theme === CUSTOM_THEME}
           <div class="pick">
             <span class="pick-label">{msg('profileStyle.colorTo')}</span>
-            <button type="button" class="color" style:background={a.customTo} aria-label={msg('profileStyle.colorTo')} aria-expanded={palette === 'to'} onclick={() => togglePalette('to')}></button>
+            <button type="button" class="color" style:background={a.customTo} aria-label={msg('profileStyle.colorTo')} aria-expanded={palette === 'to'} aria-controls={palette === 'to' ? paletteId('to') : undefined} onclick={() => togglePalette('to')}></button>
             <HexColorField value={toText} onchange={(v) => setColor('customTo', v)} disabled={locked} />
             {#if a.customTo !== a.customFrom}<Button size="sm" variant="ghost" onclick={() => patch({ customTo: a.customFrom })}>{msg('profileStyle.singleColor')}</Button>{/if}
           </div>
-          {#if palette === 'to'}<ColorPalette value={a.customTo} onchange={(v) => setColor('customTo', v)} disabled={locked} />{/if}
+          {#if palette === 'to'}<div id={paletteId('to')}><ColorPalette value={a.customTo} onchange={(v) => setColor('customTo', v)} disabled={locked} /></div>{/if}
           {#if !validAccent(toText)}<p class="hint danger">{msg('settings.accentInvalid')}</p>{/if}
           <label class="slider"><span>{msg('profileStyle.angle')} <output>{a.customAngle}°</output></span>
             <input class="zoom-slider" style:--zoom-progress={`${a.customAngle / 3.6}%`} type="range" aria-label={msg('profileStyle.angle')} min="0" max="360" value={a.customAngle} oninput={(e) => patch({ customAngle: Number(e.currentTarget.value) })} />
@@ -222,30 +271,30 @@
       {#if a.theme === AUTO_THEME}
         <div class="custom">
           <p class="hint">{msg('profileStyle.autoHint')}</p>
-          <div class="options" role="group" aria-label={msg('profileStyle.autoSource')}>
-            {#each AUTO_SOURCES as source}
-              <button type="button" class="option" class:selected={a.autoSource === source} aria-pressed={a.autoSource === source} onclick={() => patch({ autoSource: source })}>{msg(`profileStyle.autoSource.${source}`)}</button>
-            {/each}
-          </div>
+          <SegmentedControl
+            options={autoSources}
+            label={msg('profileStyle.autoSource')}
+            disabled={locked}
+            bind:value={() => a.autoSource, (source) => patch({ autoSource: source as ProfileAppearance['autoSource'] })}
+          />
           {#if $artStatus === 'failed'}<p class="hint danger" role="status">{msg('profileStyle.autoFailed')}</p>{/if}
         </div>
       {/if}
     </section>
 
     <section>
-      <h3>{msg('profile.accent')}</h3>
-      <div class="options" role="group" aria-label={msg('profile.accent')}>
-        <button type="button" class="option" class:selected={a.accentSource === 'custom'} aria-pressed={a.accentSource === 'custom'} onclick={() => patch({ accentSource: 'custom' })}>{msg('profileStyle.accentOwn')}</button>
-        <button type="button" class="option" class:selected={a.accentSource === 'theme'} aria-pressed={a.accentSource === 'theme'} onclick={useLauncherAccent}>{msg('profileStyle.accentTheme')}</button>
-      </div>
+      <h3 id="{uid}-accent-label">{msg('profile.accent')}</h3>
+      <SegmentedControl options={accentSources} labelledby="{uid}-accent-label" disabled={locked} bind:value={() => a.accentSource, chooseAccentSource} />
       {#if a.accentSource === 'theme'}<p class="hint">{msg('profileStyle.accentThemeHint')}</p>{/if}
       <div class="accents">
-        {#each PROFILE_ACCENTS as color}
-          <button type="button" class="color" style:background={color} class:selected={a.accentSource === 'custom' && a.accent.toLowerCase() === color} aria-label={`${msg('profile.accent')} ${color}`} aria-pressed={a.accentSource === 'custom' && a.accent.toLowerCase() === color} onclick={() => setColor('accent', color)}></button>
-        {/each}
-        <Button size="sm" onclick={() => togglePalette('accent')}>{msg('settings.accentCustom')}</Button>
+        <div class="swatches" role="radiogroup" aria-label={msg('profileStyle.accentOwn')}>
+          {#each PROFILE_ACCENTS as color}
+            <button type="button" role="radio" class="color" style:background={color} class:selected={ownAccent === color} aria-label={`${msg('profile.accent')} ${color}`} aria-checked={ownAccent === color} tabindex={accentStop === color ? 0 : -1} onkeydown={(e) => roam(e)} onclick={() => setColor('accent', color)}></button>
+          {/each}
+        </div>
+        <Button size="sm" aria-expanded={palette === 'accent'} aria-controls={palette === 'accent' ? paletteId('accent') : undefined} onclick={() => togglePalette('accent')}>{msg('settings.accentCustom')}</Button>
       </div>
-      {#if palette === 'accent'}<ColorPalette value={a.accent} onchange={(v) => setColor('accent', v)} disabled={locked} />{/if}
+      {#if palette === 'accent'}<div id={paletteId('accent')}><ColorPalette value={a.accent} onchange={(v) => setColor('accent', v)} disabled={locked} /></div>{/if}
       <div class="hex"><HexColorField value={accentText} onchange={(v) => setColor('accent', v)} disabled={locked} /></div>
       {#if !validAccent(accentText)}<p class="hint danger">{msg('settings.accentInvalid')}</p>{/if}
     </section>
@@ -265,58 +314,60 @@
     </section>
 
     <section>
-      <h3>{msg('profileStyle.frame')}</h3>
-      <div class="frames">
-        {#each AVATAR_FRAMES as frame}
-          {@const picked = frame === 'none' ? a.avatarFrame === 'none' || frameRevoked : a.avatarFrame === frame}
-          <button type="button" class="pick-card" class:selected={picked} aria-pressed={picked} onclick={() => patch({ avatarFrame: frame })}>
-            <Avatar size="sm" name={previewName} src={$currentUser?.avatarUrl} {frame} frameColor={a.frameColor} />
-            <span>{msg(`profileStyle.frame.${frame}`)}</span>
-          </button>
-        {/each}
-      </div>
-      {#if frameRevoked}<p class="hint danger" role="status">{msg('profileStyle.frameRevoked')}</p>{/if}
-      {#if ownedFrames.length > 0}
-        <h4 class="sub">{msg('profileStyle.frameOwned')}</h4>
-        <div class="frames owned">
-          {#each ownedFrames as owned (owned.id)}
-            {@const picked = activeFrame?.id === owned.id}
-            <button type="button" class="pick-card" class:selected={picked} aria-pressed={picked} onclick={() => patch({ avatarFrame: `custom:${owned.id}` })}>
-              <span class="checker"><img src={owned.url} alt="" draggable="false" loading="lazy" decoding="async" /></span>
-              <span class="owned-name">{owned.name}</span>
+      <h3 id="{uid}-frame-label">{msg('profileStyle.frame')}</h3>
+      <div class="frame-choices" role="radiogroup" aria-labelledby="{uid}-frame-label">
+        <div class="frames">
+          {#each AVATAR_FRAMES as frame}
+            {@const picked = frame === 'none' ? a.avatarFrame === 'none' || frameRevoked : a.avatarFrame === frame}
+            <button type="button" role="radio" class="pick-card" class:selected={picked} aria-checked={picked} tabindex={frameStop === frame ? 0 : -1} onkeydown={(e) => roam(e)} onclick={() => patch({ avatarFrame: frame })}>
+              <span class="sample" aria-hidden="true"><Avatar size="sm" name={previewName} src={$currentUser?.avatarUrl} {frame} frameColor={a.frameColor} /></span>
+              <span>{msg(`profileStyle.frame.${frame}`)}</span>
             </button>
           {/each}
         </div>
-      {/if}
+        {#if ownedFrames.length > 0}
+          <h4 class="sub">{msg('profileStyle.frameOwned')}</h4>
+          <div class="frames owned">
+            {#each ownedFrames as owned (owned.id)}
+              {@const picked = activeFrame?.id === owned.id}
+              <button type="button" role="radio" class="pick-card" class:selected={picked} aria-checked={picked} tabindex={frameStop === `custom:${owned.id}` ? 0 : -1} onkeydown={(e) => roam(e)} onclick={() => patch({ avatarFrame: `custom:${owned.id}` })}>
+                <span class="checker"><img src={owned.url} alt="" draggable="false" loading="lazy" decoding="async" /></span>
+                <span class="owned-name">{owned.name}</span>
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+      {#if frameRevoked}<p class="hint danger" role="status">{msg('profileStyle.frameRevoked')}</p>{/if}
       {#if !activeFrame}
       <div class="pick">
         <span class="pick-label">{msg('profileStyle.frameColor')}</span>
-        <button type="button" class="color" style:background={a.frameColor || a.accent} aria-label={msg('profileStyle.frameColor')} aria-expanded={palette === 'frame'} onclick={() => togglePalette('frame')}></button>
+        <button type="button" class="color" style:background={a.frameColor || a.accent} aria-label={msg('profileStyle.frameColor')} aria-expanded={palette === 'frame'} aria-controls={palette === 'frame' ? paletteId('frame') : undefined} onclick={() => togglePalette('frame')}></button>
         <HexColorField value={frameText} onchange={(v) => setOptionalColor('frameColor', v)} disabled={locked} />
         {#if a.frameColor}<Button size="sm" variant="ghost" onclick={() => setOptionalColor('frameColor', '')}>{msg('profileStyle.colorAsAccent')}</Button>{/if}
       </div>
-      {#if palette === 'frame'}<ColorPalette value={a.frameColor || a.accent} onchange={(v) => setOptionalColor('frameColor', v)} disabled={locked} />{/if}
+      {#if palette === 'frame'}<div id={paletteId('frame')}><ColorPalette value={a.frameColor || a.accent} onchange={(v) => setOptionalColor('frameColor', v)} disabled={locked} /></div>{/if}
       {#if frameText !== '' && !validAccent(frameText)}<p class="hint danger">{msg('settings.accentInvalid')}</p>{/if}
       {/if}
     </section>
 
     <section>
-      <h3>{msg('profileStyle.nameStyle')}</h3>
-      <div class="names">
+      <h3 id="{uid}-name-label">{msg('profileStyle.nameStyle')}</h3>
+      <div class="names" role="radiogroup" aria-labelledby="{uid}-name-label">
         {#each NAME_STYLES as style}
-          <button type="button" class="pick-card name-card" class:selected={a.nameStyle === style} aria-pressed={a.nameStyle === style} onclick={() => patch({ nameStyle: style })}>
-            <StyledName name={previewName} styleName={style} nameColor={a.nameColor} />
+          <button type="button" role="radio" class="pick-card name-card" class:selected={a.nameStyle === style} aria-checked={a.nameStyle === style} tabindex={nameStop === style ? 0 : -1} onkeydown={(e) => roam(e)} onclick={() => patch({ nameStyle: style })}>
+            <span class="sample" aria-hidden="true"><StyledName name={previewName} styleName={style} nameColor={a.nameColor} /></span>
             <small>{msg(`profileStyle.nameStyle.${style}`)}</small>
           </button>
         {/each}
       </div>
       <div class="pick">
         <span class="pick-label">{msg('profileStyle.nameColor')}</span>
-        <button type="button" class="color" style:background={a.nameColor || a.accent} aria-label={msg('profileStyle.nameColor')} aria-expanded={palette === 'name'} onclick={() => togglePalette('name')}></button>
+        <button type="button" class="color" style:background={a.nameColor || a.accent} aria-label={msg('profileStyle.nameColor')} aria-expanded={palette === 'name'} aria-controls={palette === 'name' ? paletteId('name') : undefined} onclick={() => togglePalette('name')}></button>
         <HexColorField value={nameText} onchange={(v) => setOptionalColor('nameColor', v)} disabled={locked} />
         {#if a.nameColor}<Button size="sm" variant="ghost" onclick={() => setOptionalColor('nameColor', '')}>{msg('profileStyle.colorAsAccent')}</Button>{/if}
       </div>
-      {#if palette === 'name'}<ColorPalette value={a.nameColor || a.accent} onchange={(v) => setOptionalColor('nameColor', v)} disabled={locked} />{/if}
+      {#if palette === 'name'}<div id={paletteId('name')}><ColorPalette value={a.nameColor || a.accent} onchange={(v) => setOptionalColor('nameColor', v)} disabled={locked} /></div>{/if}
       {#if nameText !== '' && !validAccent(nameText)}<p class="hint danger">{msg('settings.accentInvalid')}</p>{/if}
     </section>
 
@@ -333,18 +384,26 @@
     <section>
       <h3>{msg('profileStyle.status')}</h3>
       <div class="status-row">
-        <button type="button" class="emoji-button" aria-expanded={emojiOpen} aria-label={msg('profileStyle.emojiPick')} onclick={() => (emojiOpen = !emojiOpen)}>
+        <IconButton
+          id={emojiId}
+          variant="secondary"
+          label={msg('profileStyle.emojiPick')}
+          disabled={locked}
+          aria-expanded={emojiOpen}
+          aria-controls={emojiOpen ? emojiGridId : undefined}
+          onclick={() => (emojiOpen = !emojiOpen)}
+        >
           {#if draft.statusEmoji}<span class="emoji">{draft.statusEmoji}</span>{:else}<Smile size="1.8rem" />{/if}
-        </button>
+        </IconButton>
         <input class="text" type="text" autocomplete="off" spellcheck="true" placeholder={msg('profileStyle.statusPlaceholder')}
           aria-label={msg('profileStyle.status')} value={draft.statusText ?? ''} oninput={setStatusText} />
         <span class="counter" class:full={statusLength >= MAX_STATUS_TEXT}>{statusLength}/{MAX_STATUS_TEXT}</span>
       </div>
       {#if statusError}<p class="status-error" role="alert">{layoutErrorText(statusError)}</p>{/if}
       {#if emojiOpen}
-        <div class="emoji-grid" role="group" aria-label={msg('profileStyle.emojiPick')}>
+        <div class="emoji-grid" id={emojiGridId} role="radiogroup" aria-label={msg('profileStyle.emojiPick')}>
           {#each STATUS_EMOJI as emoji}
-            <button type="button" class="emoji-cell" class:selected={draft.statusEmoji === emoji} aria-pressed={draft.statusEmoji === emoji} onclick={() => { draft.statusEmoji = emoji; emojiOpen = false; }}>{emoji}</button>
+            <button type="button" role="radio" class="emoji-cell" class:selected={draft.statusEmoji === emoji} aria-checked={draft.statusEmoji === emoji} tabindex={emojiStop === emoji ? 0 : -1} onkeydown={(e) => roam(e, () => (draft.statusEmoji = emoji))} onclick={() => pickEmoji(emoji)}>{emoji}</button>
           {/each}
         </div>
       {/if}
@@ -381,10 +440,8 @@
   .preview-card { display: block; margin-top: 4rem; padding: 1.4rem 2rem; border-radius: var(--radius-md); font-size: var(--font-md); }
   .pick { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
   .pick-label { font-size: var(--font-xs); color: var(--text-2); min-width: 6rem; }
-  .frames + .pick, .names + .pick { margin-top: 1.2rem; }
-  .options { display: flex; flex-wrap: wrap; gap: .8rem; }
-  .option { background: transparent; border: 1px solid var(--border); border-radius: var(--radius-md); padding: .7rem 1.2rem; color: var(--text-2); font: inherit; font-size: var(--font-xs); cursor: pointer; }
-  .file { display: none; } .accents { display: flex; align-items: center; gap: .9rem; flex-wrap: wrap; }
+  .frame-choices + .pick, .names + .pick { margin-top: 1.2rem; }
+  .file { display: none; } .accents, .swatches { display: flex; align-items: center; gap: .9rem; flex-wrap: wrap; }
   .color { width: 2.5rem; height: 2.5rem; border-radius: 50%; border: 1px solid var(--border-strong); cursor: pointer; padding: 0; }
   .hex { margin-top: 1.2rem; }
   .slider { display: flex; flex-direction: column; gap: 1rem; margin-top: 1.6rem; font-size: var(--font-xs); }
@@ -399,9 +456,10 @@
   .pick-card { display: flex; flex-direction: column; align-items: center; gap: .9rem; padding: 1.2rem .6rem; background: transparent; border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text-2); font: inherit; font-size: var(--font-xs); cursor: pointer; min-width: 0; }
   .name-card { align-items: flex-start; padding: 1rem 1.2rem; font-size: var(--font-md); font-weight: 600; color: var(--text); }
   .name-card small { font-size: var(--font-xs); font-weight: 400; color: var(--text-3); }
+  /* Hides the sample from the option's name and takes no box of its own. */
+  .sample { display: contents; }
   .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 1.6rem; } .toggle-row h3 { margin-bottom: 0; }
   .status-row { display: flex; align-items: center; gap: .8rem; }
-  .emoji-button { display: inline-flex; align-items: center; justify-content: center; width: var(--control-md); height: var(--control-md); flex-shrink: 0; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--radius-md); color: var(--text-2); cursor: pointer; }
   .emoji { font-size: 1.8rem; line-height: 1; }
   .text { flex: 1; min-width: 0; height: var(--control-md); padding: 0 1.2rem; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--radius-md); color: var(--text); font: inherit; font-size: var(--font-sm); }
   .text:focus { outline: none; border-color: var(--accent-ring); box-shadow: 0 0 0 3px var(--accent-subtle); }
