@@ -5,6 +5,7 @@ const files = import.meta.glob(
     '../bigpicture/components/ProfilePage.svelte',
     '../bigpicture/components/SocialPage.svelte',
     '../components/AccountMenu.svelte',
+    '../components/ChatConversations.svelte',
     '../components/ChatPanel.svelte',
     '../components/FeedRow.svelte',
     '../components/PlayerCard.svelte',
@@ -27,7 +28,7 @@ function avatars(source: string): string[] {
 
 describe('avatar render sites', () => {
   it('finds every site', () => {
-    expect(Object.keys(files)).toHaveLength(15);
+    expect(Object.keys(files)).toHaveLength(16);
   });
   it.each(Object.entries(files))('%s passes the frame to every Avatar', (path, source) => {
     const list = avatars(source);

@@ -4,7 +4,7 @@ import friendRow from '../../routes/friends/FriendRow.svelte?raw';
 import activity from '../../routes/activity/Activity.svelte?raw';
 import overlayFriends from '../../overlay/OverlayFriends.svelte?raw';
 import overlayChat from '../../overlay/OverlayChat.svelte?raw';
-import chatPanel from '../components/ChatPanel.svelte?raw';
+import chatConversations from '../components/ChatConversations.svelte?raw';
 import gameFriends from '../../routes/game/GameFriendsPanel.svelte?raw';
 
 function tags(source: string, name: string): string[] {
@@ -41,7 +41,7 @@ describe('lists that stack avatars give every row the same frame reserve', () =>
   });
 
   it.each([
-    ['ChatPanel', chatPanel],
+    ['ChatConversations', chatConversations],
     ['OverlayChat', overlayChat],
   ])('%s reserves the conversation list by its widest frame', (_name, source) => {
     expect(source).toContain('const conversationReserve = $derived(frameReserve($conversations.map((item) => fieldsFrame(item.peer))));');
