@@ -1,4 +1,5 @@
-import { screen, within } from '@testing-library/svelte';
+import { fireEvent, screen, within } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { requestDismiss, requestDownload, retryFailed, selfUpdateDownloading, selfUpdateStatus } from '../stores/selfupdate';
@@ -130,6 +131,23 @@ describe('UpdateBanner: focus when a pressed button gives way', () => {
     await user.keyboard('{Enter}');
 
     expect(document.activeElement).toBe(screen.getByRole('button', { name: msg('ui.cancelVerb') }));
+  });
+
+  // A pointer press where a click does not focus a button (the macOS WebKit view).
+  it('Download pressed without holding focus leaves focus alone', async () => {
+    vi.mocked(requestDownload).mockImplementation(() => {
+      selfUpdateDownloading.set(true);
+      return new Promise<void>(() => {});
+    });
+    selfUpdateStatus.set(AVAILABLE);
+    renderDom(UpdateBanner);
+    expect(document.activeElement).toBe(document.body);
+
+    await fireEvent.click(screen.getByRole('button', { name: msg('ui.download') }));
+
+    expect(await screen.findByRole('button', { name: msg('ui.cancelVerb') })).toBeTruthy();
+    await tick();
+    expect(document.activeElement).toBe(document.body);
   });
 
   it('"Not now" moves focus on to what follows the banner once it goes', async () => {
