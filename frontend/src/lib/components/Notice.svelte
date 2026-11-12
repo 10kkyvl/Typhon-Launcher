@@ -35,11 +35,11 @@
    * `retry` (NoticeRetry) adds a Retry after the actions, outside the live region. While it runs the
    * Retry is busy, a second press does nothing, and `retrying` (bindable) is true: the caller keeps the
    * notice on screen while it is, whatever its own state says meanwhile. On failure the notice stays
-   * and its words are said again, even the same words: they come into an assistive-only copy inside
-   * the live region (a region of its own on a notice that does not announce), which then stands for
-   * the visible words so the page reads them once. On success the caller takes the notice away as
-   * before, and focus that was on Retry moves on (see NoticeRetry); if the page has gone meanwhile,
-   * nothing is focused.
+   * and its message, heading and links as they are, is put into the live region again, so it is said
+   * again even in the same words. A notice that does not announce becomes a polite region from the
+   * first press, before the answer, so a failure is heard there too. On success the caller takes the
+   * notice away as before, and focus that was on Retry moves on (see NoticeRetry); if the page has
+   * gone meanwhile, nothing is focused.
    */
   let {
     tone = 'info',
@@ -78,17 +78,14 @@
   } = $props();
 
   let plate = $state<HTMLDivElement>();
-  let message = $state<HTMLElement>();
 
-  // The words said again after a failed retry, and whether they now stand for the visible ones.
-  let again = $state('');
-  let echoed = $state(false);
+  // Each failed retry puts the message into the live region again: the same nodes come in anew.
+  let attempt = $state(0);
+  let pressed = $state(false);
+  const live = $derived(announce ? (tone === 'danger' ? 'alert' : 'status') : pressed ? 'status' : undefined);
   let alive = true;
-  let frame = 0;
-  // onDestroy runs in a server render too, where no frame was ever asked for.
   onDestroy(() => {
     alive = false;
-    if (frame) cancelAnimationFrame(frame);
   });
 
   async function runRetry() {
@@ -99,8 +96,7 @@
     // the document.
     const page = plate?.closest('main') ?? document.querySelector('main') ?? document.body;
     retrying = true;
-    // Emptied now, filled after the answer: the words come in again, so they are said again.
-    again = '';
+    pressed = true;
     let ok = false;
     try {
       ok = await run();
@@ -112,14 +108,7 @@
     await tick();
     if (ok) return moveOn(button, page, focus, within);
     if (!alive) return;
-    if (frame) cancelAnimationFrame(frame);
-    frame = requestAnimationFrame(() => {
-      frame = 0;
-      if (!alive) return;
-      const parts = message ? [...message.children].map((part) => part.textContent?.replace(/\s+/g, ' ').trim() ?? '') : [];
-      again = parts.filter(Boolean).join(' ');
-      echoed = true;
-    });
+    attempt += 1;
   }
 
   // Focus that was on Retry would fall to the page with the notice: it goes where the caller says,
@@ -181,18 +170,17 @@
       <Info size="1.6rem" strokeWidth={1.8} />
     {/if}
   </span>
-  <div class="body" role={announce ? (tone === 'danger' ? 'alert' : 'status') : undefined}>
-    <div class="message" bind:this={message} aria-hidden={echoed ? 'true' : undefined}>
-      {#if title && level}
-        <svelte:element this={`h${level}`} tabindex={level === 1 ? -1 : undefined} class="title" class:unseen>{title}</svelte:element>
-      {:else if title}
-        <span class="title" class:unseen>{title}</span>
-      {/if}
-      <div class="text" class:unseen>{@render children?.()}</div>
-    </div>
-    {#if retry}
-      <span class="sr-only" data-part="notice-again" role={announce ? undefined : tone === 'danger' ? 'alert' : 'status'}>{again}</span>
-    {/if}
+  <div class="body" role={live}>
+    {#key attempt}
+      <div class="message">
+        {#if title && level}
+          <svelte:element this={`h${level}`} tabindex={level === 1 ? -1 : undefined} class="title" class:unseen>{title}</svelte:element>
+        {:else if title}
+          <span class="title" class:unseen>{title}</span>
+        {/if}
+        <div class="text" class:unseen>{@render children?.()}</div>
+      </div>
+    {/key}
   </div>
   {#if action || retry}
     <div class="action">

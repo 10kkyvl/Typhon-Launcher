@@ -126,6 +126,40 @@ describe('Notice with a retry: a failure', () => {
     expect(exposed).toEqual([MESSAGE]);
   });
 
+  // What a screen reader can reach: the text outside anything aria-hidden.
+  const exposed = (root: Element) =>
+    [...root.querySelectorAll('*')]
+      .filter((el) => !el.closest('[aria-hidden="true"]') && el.children.length === 0)
+      .map((el) => el.textContent?.trim())
+      .filter((words) => words);
+
+  it('holds the words on screen in the tree at every moment: after a failure, while it runs, when they change', async () => {
+    const view = renderDom(RetryHarness, { run: vi.fn(async () => false), message: MESSAGE });
+    await view.user.click(retryButton());
+    await frame();
+    await frame();
+
+    await view.rerender({ message: 'Disk is full' });
+    expect(exposed(screen.getByRole('alert'))).toEqual(['Disk is full']);
+
+    const answer = deferred<boolean>();
+    await view.rerender({ run: vi.fn(() => answer.promise) });
+    await view.user.click(retryButton());
+    expect(exposed(screen.getByRole('alert'))).toEqual(['Disk is full']);
+    answer.resolve(false);
+    await frame();
+    await frame();
+    expect(exposed(screen.getByRole('alert'))).toEqual(['Disk is full']);
+  });
+
+  it('keeps a titled notice heading a heading after a failure', async () => {
+    const { user } = renderDom(RetryHarness, { run: vi.fn(async () => false), title: 'Emulators unavailable', level: 2 });
+    await user.click(retryButton());
+    await frame();
+    await frame();
+    expect(screen.getByRole('heading', { level: 2, name: 'Emulators unavailable' })).toBeTruthy();
+  });
+
   it('a thrown error is a failure: the notice stays and says so again, and the error is logged', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     const { user } = renderDom(RetryHarness, { run: vi.fn(async () => Promise.reject(new Error('down'))) });
@@ -140,18 +174,22 @@ describe('Notice with a retry: a failure', () => {
     expect(error).toHaveBeenCalledWith('notice retry', expect.any(Error));
   });
 
+  // It is read in the flow of the page until the user retries: from the press on its message is a
+  // polite region, there before the answer, so the failure's words come into a region that exists.
   it('on a notice that does not announce itself, a failed retry is still announced', async () => {
-    const { user } = renderDom(RetryHarness, { run: vi.fn(async () => false), announce: false, tone: 'warning' });
-    // The page reads the standing message in its flow: the region of its own is there, and empty.
-    expect(screen.getByRole('status').textContent).toBe('');
+    const answer = deferred<boolean>();
+    const { user } = renderDom(RetryHarness, { run: () => answer.promise, announce: false });
     expect(screen.getByText(MESSAGE).closest('[role]')).toBeNull();
 
     await user.click(retryButton());
-    await frame();
-    await frame();
-
     const region = screen.getByRole('status');
-    expect(region.textContent?.trim()).toBe(MESSAGE);
+    const { heard, stop } = listen(region);
+    answer.resolve(false);
+    await frame();
+    await frame();
+    stop();
+
+    expect(heard.filter((words) => words.includes(MESSAGE))).toHaveLength(1);
   });
 });
 

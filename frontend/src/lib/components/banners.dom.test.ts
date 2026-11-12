@@ -63,11 +63,13 @@ describe('the lost connection banner', () => {
     offline.set(true);
     render(OfflineBanner);
     const region = screen.getByRole('status');
+    const before = region.firstElementChild;
 
     await user().click(screen.getByRole('button', { name: 'Retry' }));
 
-    const again = region.querySelector('[data-part="notice-again"]');
-    await waitFor(() => expect(again?.textContent).toBe(msg('ui.offlineBannerText')));
+    // The message comes into the live region again: new nodes, the same words.
+    await waitFor(() => expect(region.firstElementChild).not.toBe(before));
+    expect(region.textContent?.trim()).toBe(msg('ui.offlineBannerText'));
     offline.set(false);
   });
 });

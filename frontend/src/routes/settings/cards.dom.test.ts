@@ -122,16 +122,17 @@ describe('EmulatorsCard', () => {
   it('shows a new error in place when the retry fails again', async () => {
     vi.mocked(listPlatforms).mockRejectedValue(new Error('down'));
     const { user } = renderDom(EmulatorsCard, {});
-    await screen.findByRole('alert');
+    const alert = await screen.findByRole('alert');
+    const before = alert.firstElementChild;
     const retry = screen.getByRole('button', { name: msg('common.retry') });
     retry.focus();
     await user.keyboard('{Enter}');
     await waitFor(() => expect(retry.hasAttribute('aria-busy')).toBe(false));
     expect(retry.isConnected).toBe(true);
     expect(document.activeElement).toBe(retry);
-    // Said again though the words are the same: they come again into the alert.
-    const again = screen.getByRole('alert').querySelector('[data-part="notice-again"]');
-    await waitFor(() => expect(again?.textContent).toBe(msg('emul.loadFailed')));
+    // Said again though the words are the same: they come again into the alert, as new nodes.
+    await waitFor(() => expect(alert.firstElementChild).not.toBe(before));
+    expect(alert.textContent).toContain(msg('emul.loadFailed'));
   });
 });
 

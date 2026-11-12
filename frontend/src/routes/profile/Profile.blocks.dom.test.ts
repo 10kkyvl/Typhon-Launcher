@@ -154,6 +154,7 @@ describe('the game picker of a block', () => {
     vi.mocked(igdbIdsOf).mockRejectedValue(new Error('offline'));
     const { user } = await pinnedSettings();
     const alert = await screen.findByRole('alert');
+    const before = alert.firstElementChild;
     const notice = alert.closest('[data-tone="danger"]') as HTMLElement;
     const retry = within(notice).getByRole('button', { name: 'Retry' });
     retry.focus();
@@ -164,8 +165,9 @@ describe('the game picker of a block', () => {
     expect(igdbIdsOf).toHaveBeenCalledTimes(2);
     expect(notice.isConnected).toBe(true);
     expect(document.activeElement).toBe(retry);
-    // Said again: the words come into the notice's live copy once the retry has failed.
-    await waitFor(() => expect(notice.querySelector('[data-part="notice-again"]')?.textContent).toBe('Could not load the list of games'));
+    // Said again: the message comes into the alert again, as new nodes, once the retry has failed.
+    await waitFor(() => expect(alert.firstElementChild).not.toBe(before));
+    expect(alert.textContent).toContain('Could not load the list of games');
   });
 });
 

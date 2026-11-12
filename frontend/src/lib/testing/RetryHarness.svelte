@@ -16,6 +16,8 @@
     to = 'none',
     present = true,
     holds = true,
+    title,
+    level,
   }: {
     run: () => Promise<boolean>;
     message?: string;
@@ -24,6 +26,8 @@
     to?: 'target' | 'region' | 'none';
     present?: boolean;
     holds?: boolean;
+    title?: string;
+    level?: 2 | 3;
   } = $props();
 
   let failed = $state(true);
@@ -48,6 +52,8 @@
       <Notice
         {tone}
         {announce}
+        {title}
+        {level}
         bind:retrying
         retry={{
           label: 'Retry',
