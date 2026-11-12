@@ -84,6 +84,34 @@ describe('Stats: retrying a failed first load', () => {
     await vi.waitFor(() => expect(notice.isConnected).toBe(false));
     expect(getByRole('heading', { level: 2, name: msg('stats.title') })).toBeTruthy();
   });
+
+  it('on success hands the focus to the first most-played game', async () => {
+    libraryGames.set([{ id: 'g1', title: 'Hades' } as LibraryGame]);
+    vi.mocked(getStats).mockRejectedValueOnce(new Error('offline'));
+    const { findByRole, user } = renderDom(Stats);
+    const notice = (await findByRole('alert')).closest('.notice') as HTMLElement;
+    within(notice).getByRole('button', { name: msg('stats.retry') }).focus();
+
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(notice.isConnected).toBe(false));
+    await vi.waitFor(() => expect(document.activeElement?.textContent).toContain('Hades'));
+    expect(document.activeElement?.tagName).toBe('BUTTON');
+  });
+
+  it('a retry that fails again keeps the notice and the focus on its Retry', async () => {
+    vi.mocked(getStats).mockRejectedValueOnce(new Error('offline')).mockRejectedValueOnce(new Error('still offline'));
+    const { findByRole, user } = renderDom(Stats);
+    const notice = (await findByRole('alert')).closest('.notice') as HTMLElement;
+    const retry = within(notice).getByRole('button', { name: msg('stats.retry') });
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(retry.hasAttribute('aria-busy')).toBe(false));
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
+  });
 });
 
 describe('Stats: the first load', () => {

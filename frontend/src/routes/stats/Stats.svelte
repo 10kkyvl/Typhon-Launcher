@@ -3,7 +3,6 @@
   import { onMount } from 'svelte';
   import { ChartColumn } from '@lucide/svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
-  import Button from '../../lib/components/Button.svelte';
   import Chip from '../../lib/components/Chip.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import Notice from '../../lib/components/Notice.svelte';
@@ -64,6 +63,16 @@
     }
   }
 
+  let retrying = $state(false);
+  let topList = $state<HTMLElement>();
+
+  // The notice's retry: it worked when the statistics came. On success the focus goes to the first
+  // most-played game, else to the page's heading.
+  async function retry(): Promise<boolean> {
+    await load(period);
+    return !failed;
+  }
+
   function pick(next: StatsPeriod) {
     if (next === period) return;
     period = next;
@@ -112,13 +121,9 @@
     {/snippet}
   </PageHeader>
 
-  {#if failed && !data}
-    <!-- A retry keeps the failure until its answer: `failed` holds until `load` settles. -->
-    <Notice tone="danger">
+  {#if (failed || retrying) && !data}
+    <Notice tone="danger" bind:retrying retry={{ label: msg('stats.retry'), run: retry, within: () => topList }}>
       {msg('stats.loadError')}
-      {#snippet action()}
-        <Button size="sm" busy={loading} onclick={() => load(period)}>{msg('stats.retry')}</Button>
-      {/snippet}
     </Notice>
   {:else if !data && loading}
     <Spinner label={msg('stats.loading')} />
@@ -173,7 +178,7 @@
         {#if summary.top.length > 0}
           <section class="section">
             <h2>{msg('stats.topTitle')}</h2>
-            <div class="top">
+            <div class="top" bind:this={topList}>
               {#each summary.top as item (item.gameId)}
                 {@const game = libraryById.get(item.gameId)}
                 <button class="row" type="button" disabled={!game} onclick={() => navigate('game', { id: item.gameId })}>
