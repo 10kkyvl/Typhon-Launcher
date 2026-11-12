@@ -4,8 +4,11 @@
   import EmptyState from './EmptyState.svelte';
   import ConfirmModal from './ConfirmModal.svelte';
   import Modal from './Modal.svelte';
+  import Notice from './Notice.svelte';
   import SavesCandidatesModal from './SavesCandidatesModal.svelte';
+  import Spinner from './Spinner.svelte';
   import StatusBadge from './StatusBadge.svelte';
+  import TextLink from './TextLink.svelte';
   import { deleteCloudSavesPrompt, pullCloudSavesPrompt, deleteSaveBackupPrompt, restoreSavesPrompt } from '../confirm/prompts';
   import { chooseSavesDir } from '../game/actions/saves';
   import { cloudCodeText, cloudErrorText, cloudStateKind, cloudStateLabel } from '../cloudsaves/messages';
@@ -61,6 +64,8 @@
   let savesLoading = $state(false);
   let savesError = $state('');
   let busy = $state(false);
+  // Which folder button set `busy`: that one stays focused and busy, the others wait.
+  let acting = $state<'' | 'open' | 'folder'>('');
   let creating = $state(false);
   let failure = $state('');
   let pending = $state<Pending | null>(null);
@@ -142,9 +147,10 @@
     }
   }
 
-  async function perform(action: () => Promise<void>, fallback: (err: unknown) => string) {
+  async function perform(action: () => Promise<void>, fallback: (err: unknown) => string, by: '' | 'open' | 'folder' = '') {
     if (busy) return;
     busy = true;
+    acting = by;
     failure = '';
     try {
       await action();
@@ -152,6 +158,7 @@
       failure = saveBackupErrorText(err, fallback(err));
     } finally {
       busy = false;
+      acting = '';
       creating = false;
     }
   }
@@ -287,7 +294,7 @@
   function openSaves() {
     const path = saves?.path;
     if (!path) return;
-    return perform(() => openFolder(path), errorMessage);
+    return perform(() => openFolder(path), errorMessage, 'open');
   }
 
   function changeFolder() {
@@ -296,7 +303,7 @@
     return perform(async () => {
       const dir = await chooseSavesDir(gameId, title);
       if (dir) await loadSaves(gameId);
-    }, errorMessage);
+    }, errorMessage, 'folder');
   }
 
   function useCandidate(dir: string) {
@@ -319,7 +326,7 @@
   {#if attribution}
     <p class="source">
       {msg('saves.hintPrefix')}
-      <button class="source-link" disabled={busy} onclick={openSource}>{attribution.source}</button>
+      <TextLink disabled={busy} onclick={openSource}>{attribution.source}</TextLink>
       {attribution.via
         ? msg('saves.hintSuffix', { via: attribution.via, license: attribution.license })
         : msg('saves.hintSuffixNoVia', { license: attribution.license })}
@@ -339,18 +346,18 @@
       <div class="field">
         <span class="field-label">{msg('saves.folderLabel')}</span>
         {#if savesLoading && !saves && !savesError}
-          <p class="hint">{msg('saves.folderLoading')}</p>
+          <Spinner size="sm" label={msg('saves.folderLoading')} />
         {:else if saves?.path}
           <p class="path">{saves.path}</p>
           {@render source()}
           <div class="actions">
-            <Button size="sm" disabled={busy} onclick={openSaves}>{msg('saves.open')}</Button>
-            <Button size="sm" disabled={busy} onclick={changeFolder}>{msg('saves.change')}</Button>
+            <Button size="sm" disabled={busy && acting !== 'open'} busy={acting === 'open'} onclick={openSaves}>{msg('saves.open')}</Button>
+            <Button size="sm" disabled={busy && acting !== 'folder'} busy={acting === 'folder'} onclick={changeFolder}>{msg('saves.change')}</Button>
           </div>
         {:else if savesError}
-          <p class="failure">{savesError}</p>
+          <Notice tone="danger" compact>{savesError}</Notice>
           <div class="actions">
-            <Button size="sm" disabled={busy} onclick={changeFolder}>{msg('saves.pickFolder')}</Button>
+            <Button size="sm" disabled={busy && acting !== 'folder'} busy={acting === 'folder'} onclick={changeFolder}>{msg('saves.pickFolder')}</Button>
           </div>
         {:else if saves?.candidates && saves.candidates.length > 0}
           <p class="hint">{msg('ui.savesMultipleCandidates', { title: target.title })}</p>
@@ -366,7 +373,7 @@
             <p class="hint">{msg('saves.hintsFailed')}</p>
           {/if}
           <div class="actions">
-            <Button size="sm" disabled={busy} onclick={changeFolder}>{msg('saves.pickFolder')}</Button>
+            <Button size="sm" disabled={busy && acting !== 'folder'} busy={acting === 'folder'} onclick={changeFolder}>{msg('saves.pickFolder')}</Button>
           </div>
         {/if}
       </div>
@@ -387,20 +394,20 @@
             {#if cloudGame}
               <StatusBadge kind={cloudStateKind(cloudGame.state)} label={cloudStateLabel(cloudGame.state)} />
             {:else}
-              <span class="hint">{msg('cloudsaves.stateNone')}</span>
+              <StatusBadge kind="neutral" label={msg('cloudsaves.stateNone')} />
             {/if}
             {#if cloudSyncedAt}
               <span class="snapshot-meta">{msg('cloudsaves.syncedAt', { date: cloudSyncedAt })}</span>
             {/if}
           </div>
           {#if cloudReason}
-            <p class={cloudGame?.state === 'failed' ? 'failure' : 'hint'}>{cloudReason}</p>
+            <Notice tone={cloudGame?.state === 'failed' ? 'danger' : 'info'} compact announce={false}>{cloudReason}</Notice>
           {/if}
           {#if cloudFailure}
-            <p class="failure">{cloudFailure}</p>
+            <Notice tone="danger" compact>{cloudFailure}</Notice>
           {/if}
           <div class="actions">
-            <Button size="sm" disabled={cloudBusy} onclick={cloudSync}>
+            <Button size="sm" busy={cloudBusy} onclick={cloudSync}>
               {cloudBusy
                 ? msg('cloudsaves.syncing')
                 : cloudGame?.code === 'cloud.excluded'
@@ -427,22 +434,22 @@
       <div class="list">
         <div class="list-head">
           <span class="field-label">{msg('saves.listTitle')}</span>
-          <Button variant="primary" size="sm" disabled={busy || !saves?.path} onclick={create}>
+          <Button variant="primary" size="sm" disabled={(busy && !creating) || !saves?.path} busy={creating} onclick={create}>
             {creating ? msg('saves.creating') : msg('saves.createBackup')}
           </Button>
         </div>
 
         {#if failure}
-          <p class="failure">{failure}</p>
+          <Notice tone="danger" compact>{failure}</Notice>
         {/if}
         {#if listError}
-          <p class="failure">{listError}</p>
+          <Notice tone="danger" compact>{listError}</Notice>
         {/if}
         {#if gameRunning}
-          <p class="warning">{msg('saves.gameRunning')}</p>
+          <Notice tone="warning" compact announce={false}>{msg('saves.gameRunning')}</Notice>
         {/if}
         {#if snapshots.some((s) => s.large)}
-          <p class="warning">{msg('saves.largeWarning')}</p>
+          <Notice tone="warning" compact announce={false}>{msg('saves.largeWarning')}</Notice>
         {/if}
 
         {#if snapshots.length > 0}
@@ -481,7 +488,7 @@
             {/each}
           </ul>
         {:else if listLoading}
-          <p class="hint">{msg('common.loading')}</p>
+          <Spinner size="sm" label={msg('common.loading')} />
         {:else if !listError}
           <div class="no-saves">
             <EmptyState size="inline" align="center" lead title={msg('saves.empty')} description={msg('saves.emptyHint')} />
@@ -543,13 +550,6 @@
     color: var(--text-3);
   }
 
-  .source-link {
-    padding: 0;
-    color: var(--accent-text);
-    text-decoration: underline;
-    font-size: inherit;
-  }
-
   .field-label {
     font-size: var(--font-xs);
     color: var(--text-3);
@@ -568,19 +568,8 @@
     color: var(--text-2);
   }
 
-  .failure {
-    margin: 0;
-    font-size: var(--font-xs);
-    color: var(--danger);
-  }
-
-  .warning {
-    margin: 0;
-    font-size: var(--font-xs);
-    color: var(--warning);
-  }
-
   .cloud-state {
+
     display: flex;
     align-items: center;
     flex-wrap: wrap;
