@@ -63,8 +63,12 @@
 <div class="picker">
   <SearchInput bind:value={query} placeholder={msg('profile.pickerSearch')} />
   {#if failure}
-    <Notice tone="danger" compact>{failure}</Notice>
-    <div><Button size="sm" onclick={() => attempt++}>{msg('common.retry')}</Button></div>
+    <Notice tone="danger" compact>
+      {failure}
+      {#snippet action()}
+        <Button size="sm" onclick={() => attempt++}>{msg('common.retry')}</Button>
+      {/snippet}
+    </Notice>
   {:else if loading}
     <p class="hint">{msg('social.loadingEllipsis')}</p>
   {:else if candidates.length === 0}
