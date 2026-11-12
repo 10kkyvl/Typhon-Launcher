@@ -370,6 +370,24 @@ describe('GameDetails: a metadata retry that fails with a reason', () => {
     expect(get(toasts).map((item) => item.message)).not.toContain(msg('errMetadata.metadataNoMatch'));
   });
 
+  it('forgets that reason once another search runs: a new failure has the generic cause and Retry again', async () => {
+    vi.mocked(refreshMetadata).mockRejectedValueOnce(new Error('typhon:metadata.no_match'));
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    const first = (await screen.findByText(msg('games.detailMetaFailedTitle'))).closest('.notice') as HTMLElement;
+    within(first).getByRole('button', { name: msg('common.retry') }).focus();
+    await user.keyboard('{Enter}');
+    await vi.waitFor(() => expect(within(first).queryByRole('button', { name: msg('common.retry') })).toBeNull());
+
+    pushMetadata(view({ resolved: false, match: 'searching' }));
+    await screen.findByText(msg('games.detailMetaSearchingTitle'));
+    pushMetadata(view({ resolved: false, match: 'failed' }));
+
+    const again = (await screen.findByText(msg('games.detailMetaFailedTitle'))).closest('.notice') as HTMLElement;
+    expect(again.textContent).toContain(msg('games.detailMetaFailedHint'));
+    expect(again.textContent).not.toContain(msg('errMetadata.metadataNoMatch'));
+    expect(within(again).getByRole('button', { name: msg('common.retry') })).toBeTruthy();
+  });
+
   it('keeps Retry when retrying can help, and says the reason again through the notice', async () => {
     vi.mocked(refreshMetadata).mockRejectedValueOnce(new Error('typhon:metadata.rate_limited'));
     const { user } = renderDom(GameDetails, { id: 'g1' });
