@@ -5,7 +5,7 @@
   import { needsSocialConsent } from '../stores/social';
   import { chatOpen } from '../stores/messaging';
   import { themeLayout } from '../stores/layout';
-  import { modalOpen } from '../layers';
+  import { topModal } from '../layers';
   import { scrollmemory } from '../utils/scrollmemory';
   import ActivityDock from './ActivityDock.svelte';
   import ChatPanel from './ChatPanel.svelte';
@@ -14,6 +14,7 @@
   import ShellBackdrop from './ShellBackdrop.svelte';
   import Sidebar from './Sidebar.svelte';
   import GameQuickMenu from './GameQuickMenu.svelte';
+  import { toastCorner, type ToastCorner } from './toastCorner';
   import Toasts from './Toasts.svelte';
   import Topbar from './Topbar.svelte';
 
@@ -23,6 +24,36 @@
 
   // Toasts stand on top of the activity dock, as one column in the corner.
   let dockHeight = $state(0);
+
+  // Under a dialog the stack keeps its corner unless the dialog's panel is really there: the panel,
+  // the column and the stack are measured when the dialog on top changes, when the window or any of
+  // the three changes size, and when the panel has finished entering (it enters smaller and lower
+  // than it rests); the corner follows.
+  let toastRegion = $state<HTMLElement>();
+  let toastsAt = $state<ToastCorner>('bottom');
+
+  $effect(() => {
+    const region = toastRegion;
+    const panel = $topModal?.querySelector('[data-part="dialog"]');
+    const stack = region?.firstElementChild;
+    if (!region || !stack || !panel) {
+      toastsAt = 'bottom';
+      return;
+    }
+    const place = () => {
+      toastsAt = toastCorner(panel.getBoundingClientRect(), region.getBoundingClientRect(), stack.getBoundingClientRect());
+    };
+    const observer = new ResizeObserver(place);
+    for (const element of [region, stack, panel]) observer.observe(element);
+    window.addEventListener('resize', place);
+    panel.addEventListener('animationend', place);
+    place();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', place);
+      panel.removeEventListener('animationend', place);
+    };
+  });
 </script>
 
 <div class="shell" class:right={$themeLayout.side === 'right'} data-part="app-shell">
@@ -57,17 +88,19 @@
 </div>
 
 <!-- Its own region above dialogs, left live while they make the app inert (data-layer-keep):
-     a toast raised from an open dialog is seen and its action can be pressed. While a dialog is open
-     it stands at the top right, where a dialog has no controls: in the corner it would lie over the
-     buttons of a tall dialog's footer. -->
+     a toast raised from an open dialog is seen and its action can be pressed. The region is the whole
+     column the stack can stand in, from under the title bar down to the corner, and lets presses
+     through; the stack stands at its bottom, or at its top while a dialog's panel takes the bottom
+     (toastCorner.ts). -->
 <div
   class="corner toast-region"
-  class:over-dialog={$modalOpen}
+  class:at-top={toastsAt === 'top'}
   class:above-chat={chatShown && !$chatOpen}
   class:beside-chat={chatShown && $chatOpen}
   class:sidebar-right={$themeLayout.side === 'right'}
   style:--dock-offset={dockHeight > 0 ? `calc(${dockHeight}px + 0.8rem)` : '0px'}
   data-layer-keep
+  bind:this={toastRegion}
 >
   <Toasts />
 </div>
@@ -97,12 +130,13 @@
 
   .toast-region {
     z-index: var(--z-toast);
+    top: calc(var(--titlebar-h) + var(--space-2));
     bottom: calc(var(--corner-bottom) + var(--dock-offset, 0px));
+    justify-content: flex-end;
   }
 
-  .toast-region.over-dialog {
-    top: calc(var(--titlebar-h) + var(--space-2));
-    bottom: auto;
+  .toast-region.at-top {
+    justify-content: flex-start;
   }
 
   .corner.beside-chat {

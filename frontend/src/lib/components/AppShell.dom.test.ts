@@ -17,12 +17,37 @@ const z = (name: string) => Number(new RegExp(`--z-${name}:\\s*(-?\\d+);`).exec(
 
 let app: HTMLDivElement;
 
+interface Observer {
+  changed(): void;
+  watches(element: Element): boolean;
+}
+const observers = new Set<Observer>();
+
+/** What a browser does when `element` changes size: every observer watching it is called. */
+function resized(element: Element): void {
+  for (const observer of observers) if (observer.watches(element)) observer.changed();
+}
+
 beforeEach(() => {
-  // jsdom has no ResizeObserver; the corner measures the activity dock with one.
+  // jsdom has no ResizeObserver; the corner measures the activity dock and the toast stack with one.
+  observers.clear();
   vi.stubGlobal('ResizeObserver', class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
+    #watched = new Set<Element>();
+    constructor(readonly changed: () => void) {
+      observers.add(this);
+    }
+    observe(element: Element) {
+      this.#watched.add(element);
+    }
+    unobserve(element: Element) {
+      this.#watched.delete(element);
+    }
+    disconnect() {
+      this.#watched.clear();
+    }
+    watches(element: Element) {
+      return this.#watched.has(element);
+    }
   });
   app = document.createElement('div');
   app.id = 'app';
@@ -58,22 +83,104 @@ describe('toasts raised from an open dialog', () => {
     expect(screen.getByRole('dialog', { name: 'Install' })).toBeTruthy();
   });
 
-  it('stand at the top right under the title bar while the dialog is open, and back in the corner after', async () => {
-    render(ToastHarness, { target: app, props: { onretry: vi.fn() } });
-    const keys = user();
+  describe('where they stand', () => {
+    // jsdom lays nothing out: the three boxes the shell measures are given here. A 1280 × 800 window,
+    // the column down its right edge, one toast in the stack.
+    const boxes = {
+      lane: { left: 876, top: 48, width: 380, height: 728 },
+      stack: { left: 876, top: 716, width: 380, height: 60 },
+      panel: { left: 420, top: 250, width: 440, height: 300 },
+    };
+    const tall = { left: 340, top: 150, width: 600, height: 640 };
     const region = () => app.querySelector<HTMLElement>('.toast-region') as HTMLElement;
-    await tick();
 
-    expect(region().classList.contains('over-dialog')).toBe(true);
-    expect(region().hasAttribute('data-layer-keep')).toBe(true);
-    const rule = /\.toast-region\.over-dialog \{([^}]*)\}/.exec(appShellSource)?.[1] ?? '';
-    expect(rule).toMatch(/top: calc\(var\(--titlebar-h\) \+/);
-    expect(rule).toMatch(/bottom: auto/);
+    beforeEach(() => {
+      boxes.stack = { left: 876, top: 716, width: 380, height: 60 };
+      boxes.panel = { left: 420, top: 250, width: 440, height: 300 };
+      vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+        const box = this.matches('.toast-region')
+          ? boxes.lane
+          : this.matches('.toasts')
+            ? boxes.stack
+            : this.matches('[data-part="dialog"]')
+              ? boxes.panel
+              : { left: 0, top: 0, width: 0, height: 0 };
+        return new DOMRect(box.left, box.top, box.width, box.height);
+      });
+    });
 
-    await keys.keyboard('{Escape}');
-    await tick();
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
 
-    expect(screen.queryByRole('dialog')).toBeNull();
-    expect(region().classList.contains('over-dialog')).toBe(false);
+    it('in the bottom right under a small dialog, kept live', async () => {
+      render(ToastHarness, { target: app, props: { onretry: vi.fn() } });
+      await tick();
+
+      expect(screen.getByRole('dialog', { name: 'Install' })).toBeTruthy();
+      expect(region().classList.contains('at-top')).toBe(false);
+      expect(region().hasAttribute('data-layer-keep')).toBe(true);
+    });
+
+    it('at the top right while a tall dialog reaches into their corner, and back when it closes', async () => {
+      boxes.panel = tall;
+      render(ToastHarness, { target: app, props: { onretry: vi.fn() } });
+      const keys = user();
+      await tick();
+
+      expect(region().classList.contains('at-top')).toBe(true);
+
+      await keys.keyboard('{Escape}');
+      await tick();
+
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(region().classList.contains('at-top')).toBe(false);
+    });
+
+    it('are moved when the window is resized so that the dialog reaches their corner', async () => {
+      render(ToastHarness, { target: app, props: { onretry: vi.fn() } });
+      await tick();
+      expect(region().classList.contains('at-top')).toBe(false);
+
+      boxes.panel = tall;
+      window.dispatchEvent(new Event('resize'));
+      await tick();
+
+      expect(region().classList.contains('at-top')).toBe(true);
+    });
+
+    it('are placed by the dialog at rest, not by the smaller, lower box it enters in', async () => {
+      render(ToastHarness, { target: app, props: { onretry: vi.fn() } });
+      await tick();
+      expect(region().classList.contains('at-top')).toBe(false);
+
+      boxes.panel = tall;
+      screen.getByRole('dialog', { name: 'Install' }).dispatchEvent(new Event('animationend', { bubbles: true }));
+      await tick();
+
+      expect(region().classList.contains('at-top')).toBe(true);
+    });
+
+    it('are moved when the stack grows into a dialog that one toast cleared', async () => {
+      boxes.panel = { left: 340, top: 200, width: 600, height: 450 };
+      render(ToastHarness, { target: app, props: { onretry: vi.fn() } });
+      await tick();
+      expect(region().classList.contains('at-top')).toBe(false);
+
+      boxes.stack = { left: 876, top: 640, width: 380, height: 136 };
+      resized(app.querySelector('.toasts') as Element);
+      await tick();
+
+      expect(region().classList.contains('at-top')).toBe(true);
+    });
+
+    it('stand by rules of the region alone: a column from under the title bar down to the corner, open to presses', () => {
+      expect(/\.corner \{([^}]*)\}/.exec(appShellSource)?.[1]).toMatch(/pointer-events: none/);
+      const rule = /\.toast-region \{([^}]*)\}/.exec(appShellSource)?.[1] ?? '';
+      expect(rule).toMatch(/top: calc\(var\(--titlebar-h\) \+/);
+      expect(rule).toMatch(/bottom: calc\(var\(--corner-bottom\) \+ var\(--dock-offset, 0px\)\)/);
+      expect(rule).toMatch(/justify-content: flex-end/);
+      expect(/\.toast-region\.at-top \{([^}]*)\}/.exec(appShellSource)?.[1]).toMatch(/justify-content: flex-start/);
+    });
   });
 });
