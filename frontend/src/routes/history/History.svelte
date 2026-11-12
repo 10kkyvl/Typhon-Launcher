@@ -148,7 +148,7 @@
     <div class="toolbar">
       <SegmentedControl options={tabs} label={msg('transfers.historySegmentLabel')} variant="pill" bind:value={segment} />
       <div class="search-slot">
-        <SearchInput bind:value={query} placeholder={msg('transfers.historySearchPlaceholder')} />
+        <SearchInput bind:value={query} label={msg('transfers.historySearchPlaceholder')} placeholder={msg('transfers.historySearchPlaceholder')} />
       </div>
     </div>
 

@@ -7,8 +7,16 @@
   /**
    * A search field. Attributes it does not know (a role, `aria-*`, an id) go to its `<input>`, so a
    * caller that builds a combobox on it wires the input without reaching into the component.
+   *
+   * It always has a name: `labelledby`, the id of a visible label elsewhere on the page (the heading
+   * of the block it searches), or a `label` of its own. The placeholder is an example of what to type
+   * and goes away with the first letter: it names nothing.
    */
+  type Named = { label: string; labelledby?: undefined } | { labelledby: string; label?: undefined };
+
   let {
+    label,
+    labelledby,
     value = $bindable(''),
     placeholder = msg('ui.search'),
     shortcut,
@@ -30,7 +38,8 @@
     onfocus?: () => void;
     onkeydown?: (event: KeyboardEvent) => void;
     input?: HTMLInputElement;
-  } & Omit<HTMLInputAttributes, 'value' | 'type' | 'placeholder' | 'class' | 'oninput' | 'onfocus' | 'onkeydown'> = $props();
+  } & Named &
+    Omit<HTMLInputAttributes, 'value' | 'type' | 'placeholder' | 'class' | 'oninput' | 'onfocus' | 'onkeydown' | 'aria-label' | 'aria-labelledby'> = $props();
 </script>
 
 <div class="search" class:island={variant === 'island'}>
@@ -38,6 +47,8 @@
   <input
     {...rest}
     type="text"
+    aria-label={label}
+    aria-labelledby={labelledby}
     {placeholder}
     bind:value
     bind:this={input}

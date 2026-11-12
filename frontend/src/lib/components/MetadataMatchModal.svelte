@@ -30,6 +30,9 @@
     onapplied?: (view: MetadataView) => void;
   } = $props();
 
+  const uid = $props.id();
+  const manualSearchId = `${uid}-manual-search`;
+
   let candidates = $state<MetadataCandidate[]>([]);
   let loadingCandidates = $state(false);
   let query = $state('');
@@ -167,8 +170,8 @@
       </section>
 
       <section class="block">
-        <h4>{msg('modals.metadataMatchManualSearch')}</h4>
-        <SearchInput bind:value={query} placeholder={msg('modals.metadataMatchNamePlaceholder')} loading={searching} oninput={onQueryInput} />
+        <h4 id={manualSearchId}>{msg('modals.metadataMatchManualSearch')}</h4>
+        <SearchInput bind:value={query} labelledby={manualSearchId} placeholder={msg('modals.metadataMatchNamePlaceholder')} loading={searching} oninput={onQueryInput} />
         {#if searchResults.length > 0}
           <div class="candidates">
             {#each searchResults as candidate (candidate.providerId)}

@@ -253,7 +253,7 @@
 
       <section class="filters">
         <Select options={statusOptions} value={filterStatus} width="18rem" label={msg('modals.sourceDetailsColStatus')} onchange={onFilterChange} />
-        <SearchInput bind:value={search} placeholder={msg('modals.sourceDetailsSearchPlaceholder')} oninput={onSearchInput} />
+        <SearchInput bind:value={search} label={msg('modals.sourceDetailsSearchPlaceholder')} placeholder={msg('modals.sourceDetailsSearchPlaceholder')} oninput={onSearchInput} />
       </section>
 
       <section class="table">

@@ -106,6 +106,7 @@
   <div class="body">
     <SearchInput
       bind:value={query}
+      label={msg('social.friendsSearchLabel')}
       placeholder={msg('social.friendsSearchPlaceholder')}
       loading={searching}
       oninput={schedule}

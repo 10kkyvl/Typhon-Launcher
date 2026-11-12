@@ -237,7 +237,7 @@
     variant="island"
     loading={results.loading}
     role="combobox"
-    aria-label={msg('search.placeholder')}
+    label={msg('search.placeholder')}
     aria-haspopup="grid"
     aria-autocomplete="list"
     aria-expanded={expanded}

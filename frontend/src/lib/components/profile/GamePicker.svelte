@@ -61,7 +61,7 @@
 </script>
 
 <div class="picker">
-  <SearchInput bind:value={query} placeholder={msg('profile.pickerSearch')} />
+  <SearchInput bind:value={query} label={msg('profile.pickerSearch')} placeholder={msg('profile.pickerSearch')} />
   {#if failure}
     <Notice tone="danger" compact>
       {failure}

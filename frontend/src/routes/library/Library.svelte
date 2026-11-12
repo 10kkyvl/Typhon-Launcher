@@ -491,7 +491,7 @@
 
     <div class="toolbar">
       <div class="search-wrap">
-        <SearchInput bind:value={search} placeholder={msg('games.librarySearchPlaceholder')} />
+        <SearchInput bind:value={search} label={msg('games.librarySearchPlaceholder')} placeholder={msg('games.librarySearchPlaceholder')} />
       </div>
       <div class="toolbar-right">
         <Chip onclick={() => (randomOpen = true)}>

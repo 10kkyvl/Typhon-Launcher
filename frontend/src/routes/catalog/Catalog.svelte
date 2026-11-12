@@ -751,7 +751,7 @@
   <div class="toolbar-dock" use:watchStuck>
     <div class="toolbar-row" class:stuck>
       <div class="search-wrap">
-        <SearchInput bind:value={search} placeholder={msg('games.catalogSearchPlaceholder')} loading={loading && !appending} oninput={onSearch} />
+        <SearchInput bind:value={search} label={msg('games.catalogSearchPlaceholder')} placeholder={msg('games.catalogSearchPlaceholder')} loading={loading && !appending} oninput={onSearch} />
       </div>
       <fieldset class="controls" disabled={!ready}>
         <Select value={platform} width="20rem" label={msg('games.catalogPlatform')} onchange={(id) => { platform = id; void preferencesChanged(); }}

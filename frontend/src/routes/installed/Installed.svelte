@@ -365,7 +365,7 @@
   >
     {#snippet actions()}
       <div class="search-wrap">
-        <SearchInput bind:value={search} placeholder={msg('games.installedSearchPlaceholder')} />
+        <SearchInput bind:value={search} label={msg('games.installedSearchPlaceholder')} placeholder={msg('games.installedSearchPlaceholder')} />
       </div>
       <DropdownMenu
         items={(['recent', 'alpha', 'size'] as const).map((id) => ({ id, label: sortLabels[id], checked: sort === id }))}

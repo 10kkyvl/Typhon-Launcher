@@ -374,7 +374,7 @@
       {#if page.friends.length > 0}
         <div class="toolbar">
           <div class="search-wrap">
-            <SearchInput bind:value={search} placeholder={msg('social.friendsSearchFriendsPlaceholder')} />
+            <SearchInput bind:value={search} label={msg('social.friendsSearchFriendsPlaceholder')} placeholder={msg('social.friendsSearchFriendsPlaceholder')} />
           </div>
           <div class="toolbar-right">
             <DropdownMenu
