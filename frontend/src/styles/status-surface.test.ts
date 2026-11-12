@@ -378,6 +378,23 @@ describe('the fill of a badge', () => {
   }
 });
 
+// A tripwire on the styles, not proof of layout: a field counter that turns red at its limit stays next to
+// its field on a plate.
+describe('tripwire: a field counter at its limit', () => {
+  const states = Object.entries(frontendSources).flatMap(([path, source]) => {
+    if (!path.endsWith('.svelte')) return [];
+    const css = (/<style[^>]*>([\s\S]*?)<\/style>/.exec(source)?.[1] ?? '').replace(/\/\*[\s\S]*?\*\//g, '');
+    return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .filter((m) => /\.counter\.[\w-]+/.test(m[1]) && STATUS.test(declarations(m[2]).get('color') ?? ''))
+      .map((m) => ({ rule: `${path}: ${tidy(m[1])}`, body: m[2] }));
+  });
+
+  it('sits on a plate', () => {
+    expect(states.length).toBeGreaterThanOrEqual(5);
+    expect(states.filter((s) => !plateOf(s.body)).map((s) => s.rule)).toEqual([]);
+  });
+});
+
 // The review composer's two pressed toggles are one pair: the same opaque fill, each in its own tone.
 describe('the pressed toggles of the review composer', () => {
   const css = styleOf('routes/game/ReviewComposer.svelte').replace(/\/\*[\s\S]*?\*\//g, '');
