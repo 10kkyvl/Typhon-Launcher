@@ -92,6 +92,12 @@ const SITES: Record<string, Site[]> = {
   ],
   'lib/components/LegalDocumentModal.svelte': [['danger', true]],
   'lib/components/LibrarySetupModal.svelte': [['danger', true]],
+  // That the move is safe is read with the dialog; a failed move or start just happened.
+  'lib/components/MoveGameModal.svelte': [
+    ['danger', true],
+    ['info', false],
+    ['danger', true],
+  ],
   // No runtimes on this platform, and a missing runtime, are facts of the system; a failed scan or read just happened.
   'lib/components/RedistModal.svelte': [
     ['info', false],
