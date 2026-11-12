@@ -86,7 +86,7 @@
       </div>
     {:else if next}
       <div class="more">
-        <Button disabled={loading} onclick={() => load(false)}>{msg('social.userCommonMore')}</Button>
+        <Button busy={loading} onclick={() => load(false)}>{msg('social.userCommonMore')}</Button>
       </div>
     {/if}
   {/if}
