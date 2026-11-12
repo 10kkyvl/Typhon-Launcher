@@ -220,6 +220,31 @@ describe('the messages of the profile appearance', () => {
     expect(error?.textContent).toMatch(/^The text has characters that are not allowed/);
   });
 
+  it('an incomplete colour is an alert tied to its colour field; an optional colour left empty says nothing', async () => {
+    const { user } = await editor();
+    const invalid = 'Enter a complete color in #RRGGBB format.';
+    const accent = screen.getByRole('textbox', { name: 'Accent HEX' });
+    const name = screen.getByRole('textbox', { name: 'Name color HEX' });
+
+    await user.clear(name);
+    expect(name.hasAttribute('aria-invalid')).toBe(false);
+    expect(name.hasAttribute('aria-describedby')).toBe(false);
+    expect(screen.queryByText(invalid)).toBeNull();
+
+    await user.type(name, '#12');
+    const nameError = document.getElementById(name.getAttribute('aria-describedby') ?? '');
+    expect(name.getAttribute('aria-invalid')).toBe('true');
+    expect(nameError?.textContent).toBe(invalid);
+    expect(nameError?.getAttribute('role')).toBe('alert');
+
+    await user.clear(accent);
+    const accentError = document.getElementById(accent.getAttribute('aria-describedby') ?? '');
+    expect(accent.getAttribute('aria-invalid')).toBe('true');
+    expect(accentError?.textContent).toBe(invalid);
+    expect(accentError?.getAttribute('role')).toBe('alert');
+    expect(accentError).not.toBe(nameError);
+  });
+
   it('a refused character in the status is announced once, by its field; the editing bar shows it quietly', async () => {
     const { user } = await editor();
     const field = screen.getByRole('textbox', { name: 'Status' });
