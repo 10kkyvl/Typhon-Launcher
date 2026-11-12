@@ -112,8 +112,9 @@ async function retryHolds(notice: HTMLElement, keys: ReturnType<typeof renderDom
 }
 
 describe('Catalog: retrying', () => {
-  it('a failed first page: the danger notice keeps its busy Retry and the focus until the answer', async () => {
+  it('a failed first page: the danger notice keeps its busy Retry and the focus, then focus goes to the first game', async () => {
     const again = deferred();
+    catalogView.set('list');
     vi.mocked(queryCatalogGames).mockRejectedValueOnce(new Error('offline')).mockReturnValueOnce(again.promise);
     const { user } = renderDom(Catalog);
     const notice = (await screen.findByText(msg('games.catalogUnavailableTitle'))).closest('.notice') as HTMLElement;
@@ -124,6 +125,7 @@ describe('Catalog: retrying', () => {
 
     again.resolve(page([{ id: 'c-celeste', title: 'Celeste' }]));
     await vi.waitFor(() => expect(notice.isConnected).toBe(false));
+    await vi.waitFor(() => expect(document.activeElement?.closest('.list-entry')?.textContent).toContain('Celeste'));
   });
 
   it('an offline page: the warning notice keeps its busy Retry and the focus until the answer', async () => {
@@ -139,27 +141,23 @@ describe('Catalog: retrying', () => {
     await vi.waitFor(() => expect(notice.isConnected).toBe(false));
   });
 
-  it('a failed next page: its notice retries that page, busy and focused until the answer', async () => {
-    const again = deferred();
-    // The second page fails (its warm-up included) until the Retry asks for it again.
-    let secondFails = true;
-    vi.mocked(queryCatalogGames).mockImplementation(async (query) => {
-      if ((query.page ?? 1) === 1) return page([{ id: 'c-celeste', title: 'Celeste' }], 2);
-      if (secondFails) throw new Error('offline');
-      return again.promise;
-    });
+  it('an offline page whose Retry fails: the same notice says the catalog is unavailable and keeps the focus', async () => {
+    let fail!: (err: unknown) => void;
+    vi.mocked(queryCatalogGames)
+      .mockResolvedValueOnce({ ...page([{ id: 'c-celeste', title: 'Celeste' }]), offline: true })
+      .mockReturnValueOnce(new Promise<Answer>((_resolve, reject) => (fail = reject)));
     const { user } = renderDom(Catalog);
-    await user.click(await screen.findByRole('button', { name: msg('games.catalogShowMore') }));
-    const notice = (await screen.findByText(msg('games.catalogMoreFailed'))).closest('.notice') as HTMLElement;
-    expect(screen.queryByRole('button', { name: msg('games.catalogShowMore') })).toBeNull();
-    secondFails = false;
-
+    const notice = (await screen.findByText(msg('games.catalogOffline'))).closest('.notice') as HTMLElement;
     await retryHolds(notice, user);
+    const retry = document.activeElement;
 
-    again.resolve({ ...page([{ id: 'c-hades', title: 'Hades' }], 2), page: 2 });
-    await vi.waitFor(() => expect(notice.isConnected).toBe(false));
-    expect(vi.mocked(queryCatalogGames).mock.calls.at(-1)?.[0]).toMatchObject({ page: 2 });
-    expect(await screen.findByText('Hades')).toBeTruthy();
+    fail(new Error('offline'));
+
+    await vi.waitFor(() => expect(notice.getAttribute('data-tone')).toBe('danger'));
+    expect(notice.isConnected).toBe(true);
+    expect(notice.textContent).toContain(msg('games.catalogUnavailableTitle'));
+    expect(document.activeElement).toBe(retry);
+    await vi.waitFor(() => expect(retry?.hasAttribute('aria-busy')).toBe(false));
   });
 });
 

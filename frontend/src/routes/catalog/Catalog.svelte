@@ -366,18 +366,16 @@
     }
   }
 
-  // A Retry keeps its failure on screen until the answer: `failed` and `offline` change only when it
-  // arrives, and the first page's failure stays in place of the skeleton while `retrying`.
-  let retrying = $state(false);
+  // The first page failed: nothing of the catalog is on screen. Said in the place of the offline
+  // notice, by the same notice, so a retry that answers with the other state keeps its focused Retry.
+  const pageFailed = $derived(failed && items.length === 0);
+  let pageRetrying = $state(false);
+  let results = $state<HTMLElement>();
 
-  async function retry() {
-    if (retrying) return;
-    retrying = true;
-    try {
-      await reload();
-    } finally {
-      retrying = false;
-    }
+  // The notice's retry: it worked when the catalog came back, online.
+  async function retryFirstPage(): Promise<boolean> {
+    await reload();
+    return !failed && !offline;
   }
 
   function morePage() {
@@ -835,11 +833,22 @@
     {/if}
   </fieldset>
 
-  {#if offline}
+  {#if offline || pageFailed || pageRetrying}
     <div class="page-note">
-      <Notice tone="warning">
-        {msg('games.catalogOffline')}
-        {#snippet action()}<Button size="sm" busy={retrying} onclick={retry}>{msg('games.catalogRetry')}</Button>{/snippet}
+      <Notice
+        tone={pageFailed ? 'danger' : 'warning'}
+        title={pageFailed ? msg('games.catalogUnavailableTitle') : undefined}
+        level={pageFailed ? 2 : undefined}
+        bind:retrying={pageRetrying}
+        retry={{ label: msg('games.catalogRetry'), run: retryFirstPage, within: () => results }}
+      >
+        {#if !pageFailed}
+          {msg('games.catalogOffline')}
+        {:else if backendOutdated}
+          {msg('games.catalogBackendOutdated')}
+        {:else}
+          {msg('games.catalogUnavailableDescription')}
+        {/if}
       </Notice>
     </div>
   {:else if incomplete}<details class="muted"><summary>{msg('games.catalogCoverage')}</summary><p>{msg('games.catalogIncomplete')}</p></details>{/if}
@@ -860,13 +869,10 @@
       emptyText={msg('games.recommendationEmpty')} onrefresh={refreshPicks} ondismiss={(item) => void dismiss(item.game)} />
   {/if}
 
-  {#if displayedItems.length === 0}
-    {#if failed && (!loading || retrying)}
-      <Notice tone="danger" title={msg('games.catalogUnavailableTitle')} level={2}>
-        {msg(backendOutdated ? 'games.catalogBackendOutdated' : 'games.catalogUnavailableDescription')}
-        {#snippet action()}<Button size="sm" busy={retrying} onclick={retry}>{msg('games.catalogRetry')}</Button>{/snippet}
-      </Notice>
-    {:else if loading}
+  {#if pageFailed}
+    <!-- Said by the notice above the list. -->
+  {:else if displayedItems.length === 0}
+    {#if loading}
       <Spinner label={msg('games.catalogLoadingLabel')} />
       <div class="catalog-skeleton" class:grid={$catalogView === 'grid'} class:loading-list={$catalogView !== 'grid'} aria-hidden="true">
         {#each Array(12) as _}
@@ -890,7 +896,7 @@
       />
     {/if}
   {:else if $catalogView === 'grid'}
-    <div class="grid" class:switched={viewSwitched} onanimationend={endViewSwitch}>
+    <div class="grid" class:switched={viewSwitched} onanimationend={endViewSwitch} bind:this={results}>
       {#each displayedItems as game (game.id)}
         {@const shown = mergeCatalogDisplay(game, $gameInfo[game.id])}
         {@const libId = libraryByGame.get(game.id)}
@@ -913,7 +919,7 @@
       {/each}
     </div>
   {:else}
-    <div class="list" class:switched={viewSwitched} onanimationend={endViewSwitch}>
+    <div class="list" class:switched={viewSwitched} onanimationend={endViewSwitch} bind:this={results}>
       {#each displayedItems as game (game.id)}
         {@const shown = mergeCatalogDisplay(game, $gameInfo[game.id])}
         <div class="list-entry">
