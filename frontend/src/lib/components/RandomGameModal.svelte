@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onDestroy, tick } from 'svelte';
   import { Dices, Play } from '@lucide/svelte';
   import Artwork from './Artwork.svelte';
   import Button from './Button.svelte';
@@ -83,19 +83,27 @@
     return (game.canonicalGameId ? $gameArt[game.canonicalGameId]?.cover : '') || game.cover;
   }
 
+  // The footer the spin was asked from stays while it spins, its button busy, so the focus on it stays.
+  let spunFrom = $state<'setup' | 'result'>('setup');
+  let spinSlot = $state<HTMLElement>();
+  let againSlot = $state<HTMLElement>();
+
   function spin() {
     cancelSpin?.();
+    spunFrom = phase === 'result' ? 'result' : 'setup';
     const candidates = pickCandidates($libraryGames, filters, $libraryGenres, $collections, Date.now());
     const final = pickRandom(candidates, previousId);
     if (!final) {
       shown = null;
       phase = 'empty';
+      void keepFocus();
       return;
     }
     previousId = final.id;
     if (reducedMotion()) {
       shown = final;
       phase = 'result';
+      void keepFocus();
       return;
     }
     phase = 'spinning';
@@ -105,8 +113,18 @@
       (game) => {
         shown = game;
         phase = 'result';
+        void keepFocus();
       },
     );
+  }
+
+  // When the footer changed under the focused spin button, the focus goes to the spin button of the
+  // new footer: "Again" after a result, so a second Enter spins again rather than starting a game.
+  async function keepFocus() {
+    await tick();
+    const active = document.activeElement;
+    if (active && active !== document.body && active.isConnected) return;
+    (phase === 'result' ? againSlot : spinSlot)?.querySelector<HTMLElement>('button')?.focus();
   }
 
   async function play(game: LibraryGame) {
@@ -130,6 +148,7 @@
   onDestroy(() => cancelSpin?.());
 </script>
 
+<!-- dismissible while spinning: the spin is only an animation; closing ends it and loses nothing. -->
 <Modal dismissible={!launching} open title={msg('games.randomTitle')} width="52rem" {onclose}>
   {#if phase === 'setup' || phase === 'empty'}
     <div class="filters">
@@ -186,21 +205,23 @@
   {/if}
 
   {#snippet footer()}
-    {#if phase === 'setup' || phase === 'empty'}
+    {#if phase === 'setup' || phase === 'empty' || (phase === 'spinning' && spunFrom === 'setup')}
       <Button onclick={onclose}>{msg('common.close')}</Button>
-      <Button variant="primary" onclick={spin}>
-        <Dices size="1.6rem" strokeWidth={1.8} />
-        {msg('games.randomSpin')}
-      </Button>
-    {:else if phase === 'spinning'}
-      <Button disabled>{msg('games.randomSpinning')}</Button>
+      <span class="slot" bind:this={spinSlot}>
+        <Button variant="primary" busy={phase === 'spinning'} onclick={spin}>
+          <Dices size="1.6rem" strokeWidth={1.8} />
+          {phase === 'spinning' ? msg('games.randomSpinning') : msg('games.randomSpin')}
+        </Button>
+      </span>
     {:else if shown}
-      <Button onclick={() => (phase = 'setup')}>{msg('games.randomFilters')}</Button>
-      <Button onclick={spin}>
-        <Dices size="1.6rem" strokeWidth={1.8} />
-        {msg('games.randomAgain')}
-      </Button>
-      <Button variant="primary" busy={launching} onclick={() => play(shown!)}>
+      <Button disabled={phase === 'spinning'} onclick={() => (phase = 'setup')}>{msg('games.randomFilters')}</Button>
+      <span class="slot" bind:this={againSlot}>
+        <Button busy={phase === 'spinning'} onclick={spin}>
+          <Dices size="1.6rem" strokeWidth={1.8} />
+          {phase === 'spinning' ? msg('games.randomSpinning') : msg('games.randomAgain')}
+        </Button>
+      </span>
+      <Button variant="primary" disabled={phase === 'spinning'} busy={launching} onclick={() => play(shown!)}>
         {#if canPlay(shown)}
           <Play size="1.6rem" strokeWidth={1.8} />
           {msg('games.randomPlay')}
@@ -234,6 +255,11 @@
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-3);
+  }
+
+  /* Holds a footer button for the focus to find, without a box of its own. */
+  .slot {
+    display: contents;
   }
 
   .card {
