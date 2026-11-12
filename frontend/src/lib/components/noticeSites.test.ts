@@ -46,6 +46,14 @@ const SITES: Record<string, Site[]> = {
   'lib/components/SystemRequirements.svelte': [['danger', true]],
   // Advice for the chosen platform, also inside InstallModal and AddDownloadModal.
   'lib/components/EmulatorHint.svelte': [['warning', false]],
+  'lib/components/AvatarCropModal.svelte': [
+    ['danger', true],
+    ['danger', true],
+  ],
+  'lib/components/BannerCropModal.svelte': [
+    ['danger', true],
+    ['danger', true],
+  ],
   // The BIOS still missing after a check, and a failed read or open, just happened.
   'lib/components/BiosNeededModal.svelte': [
     ['danger', true],
@@ -56,6 +64,7 @@ const SITES: Record<string, Site[]> = {
     ['warning', false],
     ['danger', true],
   ],
+  'lib/components/DeleteAccountModal.svelte': [['danger', true]],
   'lib/components/EmulatorBusyModal.svelte': [['danger', true]],
   // Why the launch needs an emulator is read with the prompt; a failed pick or save just happened.
   'lib/components/EmulatorNeededModal.svelte': [
@@ -81,12 +90,15 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
     ['danger', true],
   ],
+  'lib/components/LegalDocumentModal.svelte': [['danger', true]],
+  'lib/components/LibrarySetupModal.svelte': [['danger', true]],
   // The game running or busy is a state of the game when the dialog opens; a failed removal just happened.
   'lib/components/RemoveGameModal.svelte': [
     ['warning', false],
     ['warning', false],
     ['danger', true],
   ],
+  'lib/components/SourcesNoticeModal.svelte': [['danger', true]],
   // A block whose data failed to load; blocks of a newer launcher filling the layout, a standing fact.
   'lib/components/profile/BlockGrid.svelte': [['danger', true]],
   'lib/components/profile/BlockPicker.svelte': [['warning', false]],
