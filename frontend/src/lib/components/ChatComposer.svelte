@@ -128,7 +128,7 @@
     maxlength="2000"
     rows="2"
     placeholder={msg('social.chatPlaceholder')}
-    disabled={sending}
+    readonly={sending}
     oninput={(event) => setComposer((event.currentTarget as HTMLTextAreaElement).value)}
     onkeydown={onKeydown}
     onpaste={onPaste}

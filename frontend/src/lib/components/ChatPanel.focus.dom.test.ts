@@ -250,6 +250,56 @@ describe('ChatPanel: the composer', () => {
   });
 });
 
+describe('ChatPanel: keyboard paths that replace the pressed control', () => {
+  it('the opener puts focus into the panel it opens', async () => {
+    chat.chatOpen.set(false);
+    chat.activePeer.set(null);
+    const keys = setup();
+    screen.getByRole('button', { name: msg('social.chatOpen') }).focus();
+
+    await keys.keyboard('{Enter}');
+
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /Friend/ }));
+  });
+
+  it('the panel\'s Close brings focus back to the opener', async () => {
+    chat.activePeer.set(null);
+    const keys = setup();
+    screen.getByRole('button', { name: msg('social.chatClose') }).focus();
+    await keys.keyboard('{Enter}');
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: msg('social.chatOpen') }));
+  });
+
+  it('"Earlier" that loads the last older page hands focus to the first message', async () => {
+    const older = { ...message('m0', 'c0'), createdAt: new Date(Date.now() - 3_600_000).toISOString() };
+    vi.mocked(fetchMessages).mockResolvedValue({ messages: [older], next: '' } as unknown as MessagePage);
+    chat.nextByPeer.set({ peer: 'cursor' });
+    const keys = setup();
+    screen.getByRole('button', { name: msg('social.chatEarlier') }).focus();
+
+    await keys.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(screen.queryByRole('button', { name: msg('social.chatEarlier') })).toBeNull());
+    const first = document.querySelector('[data-client="c0"]') as HTMLElement;
+    expect(first.contains(document.activeElement)).toBe(true);
+  });
+
+  it('the message field keeps focus while its message is sent: it refuses edits without turning disabled', async () => {
+    vi.mocked(chat.sendMessage).mockReturnValue(new Promise(() => {}) as never);
+    const keys = setup();
+    const field = screen.getByPlaceholderText(msg('social.chatPlaceholder')) as HTMLTextAreaElement;
+
+    await keys.type(field, 'Hi{Enter}');
+
+    expect(chat.sendMessage).toHaveBeenCalledOnce();
+    expect(field.disabled).toBe(false);
+    expect(field.readOnly).toBe(true);
+    expect(document.activeElement).toBe(field);
+    await keys.type(field, '!');
+    expect(field.value).toBe('Hi');
+  });
+});
+
 describe('ChatPanel: a send in flight', () => {
   const uploaded = { id: 'a1', url: 'https://img/a1', width: 10, height: 10, bytes: 1024 };
 

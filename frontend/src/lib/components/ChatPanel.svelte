@@ -210,10 +210,26 @@
     );
   }
 
+  // Opening the panel takes the opener away, closing it the panel: focus goes with the user.
+  function openPanel(): void {
+    chatOpen.set(true);
+    void land(() => (peer ? conversationStart() : (list ? focusableIn(list)[0] : undefined)) ?? panel?.querySelector<HTMLElement>('h2'));
+  }
+
+  function closePanel(): void {
+    closeChat();
+    void land(() => root?.querySelector<HTMLElement>('.chat-toggle button'));
+  }
+
   async function earlier(target: string): Promise<void> {
     try {
       await loadMore(target);
       olderFailed = false;
+      // The last older page takes "Earlier" away: focus goes to the first message it brought.
+      void land(() => {
+        const first = scrollBox?.querySelector<HTMLElement>('[data-client]');
+        return first ? focusableIn(first)[0] : undefined;
+      });
     } catch {
       // The store shows this failure in the history's notice; its Retry asks for this page again.
       olderFailed = true;
@@ -310,7 +326,7 @@
         label={msg('social.chatOpen')}
         count={unreadTotal}
         countLabel={msg('social.chatOpenUnread', { count: unreadTotal })}
-        onclick={() => chatOpen.set(true)}
+        onclick={openPanel}
       >
         <MessageCircle size="2rem" strokeWidth={1.8} />
       </IconButton>
@@ -329,7 +345,7 @@
           <MessageCircle size="1.8rem" />
           <div class="header-copy"><h2 class="list-title" tabindex="-1">{msg('social.chatMessages')}</h2><span>{msg('social.chatFriends')}</span></div>
         {/if}
-        <IconButton label={msg('social.chatClose')} size="sm" onclick={closeChat}><X size="1.7rem" /></IconButton>
+        <IconButton label={msg('social.chatClose')} size="sm" onclick={closePanel}><X size="1.7rem" /></IconButton>
       </header>
 
       {#if peer}
