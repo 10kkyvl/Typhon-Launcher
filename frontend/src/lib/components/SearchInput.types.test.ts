@@ -12,13 +12,16 @@ describe('SearchInput props', () => {
   it('a search field is named by a visible label elsewhere on the page or a label of its own', () => {
     const own: Props = { label: 'Search the library' };
     const visible: Props = { labelledby: 'manual-search-heading' };
+    // Each case below is refused for one reason only: the others in it are valid.
     // @ts-expect-error: named by its placeholder only
     const unnamed: Props = { placeholder: 'Search the library' };
-    // @ts-expect-error: the name passed around the component
-    const around: Props = { 'aria-label': 'Search the library' };
+    // @ts-expect-error: a name passed around the component, beside its own
+    const around: Props = { label: 'Search the library', 'aria-label': 'Search' };
+    // @ts-expect-error: a label element's id passed around the component, beside its own
+    const aroundLabelledby: Props = { labelledby: 'manual-search-heading', 'aria-labelledby': 'other' };
     // @ts-expect-error: two names
     const both: Props = { label: 'Search', labelledby: 'heading' };
-    expect([own, visible, unnamed, around, both]).toHaveLength(5);
+    expect([own, visible, unnamed, around, aroundLabelledby, both]).toHaveLength(6);
   });
 
   it('every search field on the pages has a name', () => {
