@@ -1,7 +1,18 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import type { HTMLButtonAttributes } from 'svelte/elements';
+  import CountBadge from './CountBadge.svelte';
+  import { countShown } from './countBadge';
   import Tooltip from './Tooltip.svelte';
+
+  type Counted =
+    | { count?: undefined; countLabel?: undefined }
+    | {
+        /** A count on the button's corner (CountBadge): unread messages, requests. */
+        count: number;
+        /** The button's name while the count shows: its label with the count said ("Friends, 3 requests"). */
+        countLabel: string;
+      };
 
   // Other attributes (id, aria-*, data-*, handlers, attachments) go to the <button>.
   let {
@@ -14,6 +25,8 @@
     disabled = false,
     tooltip = true,
     hint,
+    count,
+    countLabel,
     onclick,
     children,
     ...rest
@@ -53,7 +66,10 @@
     hint?: string;
     onclick?: (e: MouseEvent) => void;
     children?: Snippet;
-  } = $props();
+  } & Counted = $props();
+
+  const counted = $derived(count !== undefined && countShown(count) !== '');
+  const name = $derived(counted && countLabel ? countLabel : label);
 
   // The browser's own title shows the label where the tooltip cannot: the overlay window, and a
   // disabled button, which takes no focus and shows no tooltip (it cannot be announced twice).
@@ -61,8 +77,11 @@
 </script>
 
 {#snippet button()}
-  <button {...rest} {type} class="icon-btn {size} {variant}" class:lit aria-label={label} aria-pressed={pressed} title={nativeTitle} {disabled} {onclick}>
+  <button {...rest} {type} class="icon-btn {size} {variant}" class:lit class:counted aria-label={name} aria-pressed={pressed} title={nativeTitle} {disabled} {onclick}>
     {@render children?.()}
+    {#if count !== undefined && countLabel !== undefined}
+      <CountBadge {count} label={countLabel} place="corner" on={variant === 'primary' ? 'accent' : 'surface'} />
+    {/if}
   </button>
 {/snippet}
 
@@ -103,6 +122,11 @@
 
   :global(.no-anim) .icon-btn:active:not(:disabled) {
     transform: none;
+  }
+
+  /* The corner a count stands on. */
+  .counted {
+    position: relative;
   }
 
   .sm {

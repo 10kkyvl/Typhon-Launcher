@@ -41,6 +41,14 @@
   --link-underline: 1px;
   --link-underline-offset: 0.2em;
 
+  /* A count on a control (CountBadge): a pill at least as wide as it is high; smaller on a corner. */
+  --count-h: 1.8rem;
+  --count-pad: 0.5rem;
+  --count-h-corner: 1.6rem;
+  --count-pad-corner: 0.4rem;
+  --count-font-corner: 1rem;
+  --radius-count: 99rem;
+
   /* The label on an --accent fill. A theme does not set it; a personal accent computes its own
      --accent-on (lib/theme/accent.ts), which the components read first. */
   --accent-on-default: #fff;
