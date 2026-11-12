@@ -94,15 +94,11 @@
   }
 
   let retrying = $state(false);
+  let content = $state<HTMLElement>();
 
-  async function retry() {
-    if (retrying) return;
-    retrying = true;
-    try {
-      await load(canonicalGameId, true);
-    } finally {
-      retrying = false;
-    }
+  async function retry(): Promise<boolean> {
+    await load(canonicalGameId, true);
+    return phase !== 'error';
   }
 
   $effect(() => {
@@ -181,115 +177,114 @@
   }
 </script>
 
-{#if !authed}
-  <p class="prompt">{msg('reviews.composerSignInPrompt')}</p>
-{:else if phase === 'loading'}
-  <Spinner size="sm" label={msg('reviews.loading')} />
-{:else if phase === 'error'}
-  <Notice tone="danger">
-    {msg('reviews.loadError')}
-    {#snippet action()}
-      <Button size="sm" busy={retrying} onclick={retry}>{msg('common.retry')}</Button>
-    {/snippet}
-  </Notice>
-{:else if mine}
-  {#if formVisible}
-    <div class="form">
-      <div
-        class="toggles"
-        role="radiogroup"
-        aria-label={msg('reviews.composerMineTitle')}
-        aria-describedby={recommended === null && !fieldError ? `${uid}-choose` : undefined}
-        bind:this={verdictGroup}
-      >
-        {#each VERDICTS as verdict, index (verdict.value)}
-          <button
-            type="button"
-            class="toggle"
-            class:positive={verdict.value}
-            class:negative={!verdict.value}
-            class:active={recommended === verdict.value}
-            role="radio"
-            aria-checked={recommended === verdict.value}
-            tabindex={recommended === verdict.value || (recommended === null && index === 0) ? 0 : -1}
-            onclick={() => (recommended = verdict.value)}
-            onkeydown={moveVerdict}
-          >
-            <span aria-hidden="true">{verdict.mark}</span>
-            {msg(verdict.label)}
-          </button>
-        {/each}
-      </div>
+<div bind:this={content}>
+  {#if !authed}
+    <p class="prompt">{msg('reviews.composerSignInPrompt')}</p>
+  {:else if phase === 'error' || retrying}
+    <Notice tone="danger" bind:retrying retry={{ label: msg('common.retry'), run: retry, within: () => content }}>
+      {msg('reviews.loadError')}
+    </Notice>
+  {:else if phase === 'loading'}
+    <Spinner size="sm" label={msg('reviews.loading')} />
+  {:else if mine}
+    {#if formVisible}
+      <div class="form">
+        <div
+          class="toggles"
+          role="radiogroup"
+          aria-label={msg('reviews.composerMineTitle')}
+          aria-describedby={recommended === null && !fieldError ? `${uid}-choose` : undefined}
+          bind:this={verdictGroup}
+        >
+          {#each VERDICTS as verdict, index (verdict.value)}
+            <button
+              type="button"
+              class="toggle"
+              class:positive={verdict.value}
+              class:negative={!verdict.value}
+              class:active={recommended === verdict.value}
+              role="radio"
+              aria-checked={recommended === verdict.value}
+              tabindex={recommended === verdict.value || (recommended === null && index === 0) ? 0 : -1}
+              onclick={() => (recommended = verdict.value)}
+              onkeydown={moveVerdict}
+            >
+              <span aria-hidden="true">{verdict.mark}</span>
+              {msg(verdict.label)}
+            </button>
+          {/each}
+        </div>
 
-      <textarea
-        class="input area"
-        rows="5"
-        placeholder={msg('reviews.composerPlaceholder')}
-        aria-invalid={fieldError || tooLong ? 'true' : undefined}
-        aria-describedby="{uid}-hint{limits ? ` ${uid}-counter` : ''}"
-        bind:value={body}
-        oninput={() => (fieldError = '')}
-      ></textarea>
+        <textarea
+          class="input area"
+          rows="5"
+          placeholder={msg('reviews.composerPlaceholder')}
+          aria-invalid={fieldError || tooLong ? 'true' : undefined}
+          aria-describedby="{uid}-hint{limits ? ` ${uid}-counter` : ''}"
+          bind:value={body}
+          oninput={() => (fieldError = '')}
+        ></textarea>
 
-      <div class="form-foot">
-        {#if fieldError}
-          <span class="hint danger" id="{uid}-hint" role="alert">{fieldError}</span>
-        {:else}
-          <span class="hint" id="{uid}-hint">
-            {limits ? msg('reviews.composerHint', { min: limits.minBodyRunes, max: limits.maxBodyRunes }) : ''}
-          </span>
-        {/if}
-        {#if limits}
-          <span class="counter" class:danger={tooLong} id="{uid}-counter">
-            {msg('reviews.composerCounter', { count: runeCount, max: limits.maxBodyRunes })}
-          </span>
-        {/if}
-      </div>
-
-      <div class="actions">
-        {#if isEdit}
-          <Button variant="ghost" disabled={saving} onclick={cancelEdit}>{msg('reviews.composerCancel')}</Button>
-        {/if}
-        <Button variant="primary" disabled={disabledPublish} onclick={submit}>
-          {#if isEdit}
-            {saving ? msg('reviews.composerSaving') : msg('reviews.composerSave')}
+        <div class="form-foot">
+          {#if fieldError}
+            <span class="hint danger" id="{uid}-hint" role="alert">{fieldError}</span>
           {:else}
-            {saving ? msg('reviews.composerPublishing') : msg('reviews.composerPublish')}
+            <span class="hint" id="{uid}-hint">
+              {limits ? msg('reviews.composerHint', { min: limits.minBodyRunes, max: limits.maxBodyRunes }) : ''}
+            </span>
           {/if}
-        </Button>
-      </div>
-      {#if recommended === null && !fieldError}
-        <p class="choose-hint" id="{uid}-choose">{msg('reviews.composerChooseFirst')}</p>
-      {/if}
-    </div>
-  {:else if mine.review}
-    <div class="mine">
-      <div class="mine-head">
-        <span class="recommend" class:positive={mine.review.recommended} class:negative={!mine.review.recommended}>
-          {mine.review.recommended ? msg('reviews.recommends') : msg('reviews.notRecommends')}
-        </span>
-        <h4 class="mine-title">{msg('reviews.composerMineTitle')}</h4>
-      </div>
-      <p class="mine-body">{mine.review.body}</p>
-      {#if mine.review.hidden}
-        <div class="hidden-note"><Notice tone="warning" compact announce={false}>{msg('reviews.composerHiddenNote')}</Notice></div>
-      {/if}
-      <div class="mine-actions">
-        {#if mine.eligibility.canPost}
-          <Button size="sm" onclick={startEdit}>{msg('reviews.composerEdit')}</Button>
+          {#if limits}
+            <span class="counter" class:danger={tooLong} id="{uid}-counter">
+              {msg('reviews.composerCounter', { count: runeCount, max: limits.maxBodyRunes })}
+            </span>
+          {/if}
+        </div>
+
+        <div class="actions">
+          {#if isEdit}
+            <Button variant="ghost" disabled={saving} onclick={cancelEdit}>{msg('reviews.composerCancel')}</Button>
+          {/if}
+          <Button variant="primary" disabled={disabledPublish} onclick={submit}>
+            {#if isEdit}
+              {saving ? msg('reviews.composerSaving') : msg('reviews.composerSave')}
+            {:else}
+              {saving ? msg('reviews.composerPublishing') : msg('reviews.composerPublish')}
+            {/if}
+          </Button>
+        </div>
+        {#if recommended === null && !fieldError}
+          <p class="choose-hint" id="{uid}-choose">{msg('reviews.composerChooseFirst')}</p>
         {/if}
-        <Button size="sm" variant="danger" onclick={() => (confirmDeleteOpen = true)}>
-          {msg('reviews.composerDelete')}
-        </Button>
       </div>
-      {#if !mine.eligibility.canPost}
-        <p class="eligibility-note">{describeEligibility(mine.eligibility)}</p>
-      {/if}
-    </div>
-  {:else}
-    <p class="eligibility-note">{describeEligibility(mine.eligibility)}</p>
+    {:else if mine.review}
+      <div class="mine">
+        <div class="mine-head">
+          <span class="recommend" class:positive={mine.review.recommended} class:negative={!mine.review.recommended}>
+            {mine.review.recommended ? msg('reviews.recommends') : msg('reviews.notRecommends')}
+          </span>
+          <h4 class="mine-title">{msg('reviews.composerMineTitle')}</h4>
+        </div>
+        <p class="mine-body">{mine.review.body}</p>
+        {#if mine.review.hidden}
+          <div class="hidden-note"><Notice tone="warning" compact announce={false}>{msg('reviews.composerHiddenNote')}</Notice></div>
+        {/if}
+        <div class="mine-actions">
+          {#if mine.eligibility.canPost}
+            <Button size="sm" onclick={startEdit}>{msg('reviews.composerEdit')}</Button>
+          {/if}
+          <Button size="sm" variant="danger" onclick={() => (confirmDeleteOpen = true)}>
+            {msg('reviews.composerDelete')}
+          </Button>
+        </div>
+        {#if !mine.eligibility.canPost}
+          <p class="eligibility-note">{describeEligibility(mine.eligibility)}</p>
+        {/if}
+      </div>
+    {:else}
+      <p class="eligibility-note">{describeEligibility(mine.eligibility)}</p>
+    {/if}
   {/if}
-{/if}
+</div>
 
 {#if confirmDeleteOpen}
   <ConfirmModal

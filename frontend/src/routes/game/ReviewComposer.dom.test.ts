@@ -41,7 +41,7 @@ afterEach(() => {
 });
 
 describe('retrying a failed load', () => {
-  it('keeps the notice and the focus on its busy Retry until the answer, then gives way to my review', async () => {
+  it('keeps the notice and the focus on its busy Retry until the answer, then focuses my review', async () => {
     let answer!: (value: Awaited<ReturnType<typeof mine>>) => void;
     vi.mocked(mine)
       .mockRejectedValueOnce(new Error('offline'))
@@ -59,8 +59,24 @@ describe('retrying a failed load', () => {
     expect(document.activeElement).toBe(retry);
 
     answer({ review: { recommended: true, body: 'Great game', hidden: false }, eligibility: { canPost: true } } as unknown as Awaited<ReturnType<typeof mine>>);
-    await screen.findByRole('button', { name: msg('reviews.composerEdit') });
+    const edit = await screen.findByRole('button', { name: msg('reviews.composerEdit') });
     expect(notice.isConnected).toBe(false);
+    await vi.waitFor(() => expect(document.activeElement).toBe(edit));
+  });
+
+  it('keeps the notice when the retry fails again, and says it again', async () => {
+    vi.mocked(mine).mockRejectedValueOnce(new Error('offline')).mockRejectedValueOnce(new Error('still offline'));
+    render(ReviewComposer, { target: app, props: { canonicalGameId: 'g1' } });
+    const keys = user();
+    const notice = (await screen.findByText(msg('reviews.loadError'))).closest('.notice') as HTMLElement;
+    const retry = within(notice).getByRole('button', { name: msg('common.retry') });
+    retry.focus();
+
+    await keys.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(notice.querySelector('[data-part="notice-again"]')?.textContent).toBe(msg('reviews.loadError')));
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
   });
 });
 
