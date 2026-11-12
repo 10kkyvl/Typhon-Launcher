@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/svelte';
+import { screen } from '@testing-library/svelte';
 import { Heart } from '@lucide/svelte';
 import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -15,11 +15,16 @@ vi.mock('../services/backend', () => ({ inWails: false }));
 afterEach(() => resetHistory());
 
 describe('GameCard: a card that opens its game', () => {
-  it('says the game once on its cover: the picture inside the named button adds no second name', () => {
-    renderDom(GameCard, { id: 'g1', title: 'Hades', cover: 'cover.png' });
-    const cover = screen.getAllByRole('button', { name: 'Hades' })[0];
-    expect(within(cover).queryByRole('img')).toBeNull();
+  it('says the game once: the cover, a pointer target, is out of the accessibility tree, its picture unnamed', async () => {
+    const { user } = renderDom(GameCard, { id: 'g1', title: 'Hades', cover: 'cover.png' });
+    const cover = document.querySelector('button.cover') as HTMLElement;
+    expect(cover.getAttribute('aria-hidden')).toBe('true');
     expect(screen.queryByAltText('Hades')).toBeNull();
+    expect(screen.getAllByRole('button').map((button) => button.textContent?.trim())).toEqual(['Hades']);
+
+    await user.click(cover);
+
+    expect(get(route)).toMatchObject({ name: 'game', params: { id: 'g1' } });
   });
 
   it('opens the game from its title with the keyboard', async () => {
@@ -67,7 +72,7 @@ describe('GameCard: a card that opens its game', () => {
       ['Hades 12 h', compat],
     ]);
     expect(document.activeElement).toBe(document.body);
-    expect(screen.getAllByRole('button', { name: 'Hades' })[0].tabIndex).toBe(-1);
+    expect((document.querySelector('button.cover') as HTMLElement).tabIndex).toBe(-1);
   });
 
   it('says which game its play button starts', () => {

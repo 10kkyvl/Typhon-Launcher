@@ -85,8 +85,9 @@
 
 <div class="card" role="presentation" {@attach gameContextMenu(id)} use:ambientHover={ambient ? id : null}>
   <div class="cover-wrap" class:playable class:running={playable && running}>
-    <!-- Out of the Tab order: the title below opens the same page, so a keyboard user has one stop. -->
-    <button class="cover" tabindex="-1" onclick={() => navigate('game', { id })} aria-label={title}>
+    <!-- A pointer target only: the title below opens the same page and carries the game's name, so the
+         cover is out of the Tab order and of the accessibility tree. -->
+    <button class="cover" tabindex="-1" aria-hidden="true" onclick={() => navigate('game', { id })} aria-label={title}>
       <Artwork src={cover} alt="" label={title} {ratio} radius="var(--radius-md)" />
       <span class="fade"></span>
     </button>
