@@ -144,6 +144,42 @@ describe('Toasts: a message raised again', () => {
   });
 });
 
+describe('Toasts: the parts of a toast', () => {
+  it('the message and the action are one group that can wrap; the close button stands outside it, last', async () => {
+    const { card, close } = setup();
+    toast('Install failed', 'danger', { label: 'Retry', run: () => {} });
+    await tick();
+    const content = card('Install failed').querySelector('.content') as HTMLElement;
+    const retry = within(card('Install failed')).getByRole('button', { name: 'Retry' });
+
+    expect([...content.children].map((child) => child.tagName)).toEqual(['P', 'BUTTON']);
+    expect(content.contains(retry)).toBe(true);
+    expect(content.contains(close('Install failed'))).toBe(false);
+    expect(close('Install failed').closest('.close')?.parentElement).toBe(card('Install failed'));
+    expect(card('Install failed').lastElementChild?.contains(close('Install failed'))).toBe(true);
+  });
+
+  it('a plain toast has the message alone in that group', async () => {
+    const { card } = setup();
+    toast('Saved');
+    await tick();
+
+    expect([...(card('Saved').querySelector('.content') as HTMLElement).children].map((child) => child.tagName)).toEqual(['P']);
+  });
+
+  it('Tab goes to the action, then to the close button', async () => {
+    const { keys, card, close } = setup();
+    toast('Install failed', 'danger', { label: 'Retry', run: () => {} });
+    await tick();
+    screen.getByRole('button', { name: 'Before' }).focus();
+
+    await keys.tab();
+    expect(document.activeElement).toBe(within(card('Install failed')).getByRole('button', { name: 'Retry' }));
+    await keys.tab();
+    expect(document.activeElement).toBe(close('Install failed'));
+  });
+});
+
 describe('Toasts: closing', () => {
   it('every toast has a named close button that closes it', async () => {
     const { keys, close, shown } = setup();

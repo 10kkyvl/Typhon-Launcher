@@ -112,23 +112,30 @@
     <Icon size="1.6rem" strokeWidth={1.8} aria-hidden="true" />
     <!-- One atomic piece inside the lane: when the count changes, the message is said again with it,
          and the buttons beside it are not. -->
-    <p class="message" aria-atomic="true">
-      {item.message}
-      {#if item.count}
-        <span class="times" aria-hidden="true">×{item.count}</span>
-        <span class="sr-only">{msg('ui.toastRepeated', { count: item.count })}</span>
+    <!-- The message and the action wrap as one group: an action that would leave the message less
+         than a readable measure goes to a row of its own under it. The close button stays outside,
+         at the top right. -->
+    <div class="content">
+      <p class="message" aria-atomic="true">
+        {item.message}
+        {#if item.count}
+          <span class="times" aria-hidden="true">×{item.count}</span>
+          <span class="sr-only">{msg('ui.toastRepeated', { count: item.count })}</span>
+        {/if}
+      </p>
+      {#if item.action}
+        <Button size="sm" onclick={(event) => act(item, event)}>{item.action.label}</Button>
       {/if}
-    </p>
-    {#if item.action}
-      <Button size="sm" onclick={(event) => act(item, event)}>{item.action.label}</Button>
-    {/if}
-    <IconButton
-      size="sm"
-      label={msg('ui.toastDismiss')}
-      onclick={(event) => close(item, (event.currentTarget as HTMLElement).closest<HTMLElement>('.toast'))}
-    >
-      <X size="1.4rem" strokeWidth={1.8} />
-    </IconButton>
+    </div>
+    <span class="close">
+      <IconButton
+        size="sm"
+        label={msg('ui.toastDismiss')}
+        onclick={(event) => close(item, (event.currentTarget as HTMLElement).closest<HTMLElement>('.toast'))}
+      >
+        <X size="1.4rem" strokeWidth={1.8} />
+      </IconButton>
+    </span>
   </div>
 {/snippet}
 
@@ -164,6 +171,9 @@
   }
 
   .toast {
+    /* The least width a message is read in: about 24 characters at --font-sm, three or four words a
+       line. toastSpot.ts narrows the stack by the same number (TOAST_MEASURE_REM). */
+    --toast-measure: 16rem;
     display: flex;
     align-items: center;
     gap: var(--space-2);
@@ -178,6 +188,16 @@
     animation: toast-in var(--dur-panel) var(--ease);
   }
 
+  .content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    column-gap: var(--space-2);
+  }
+
   .message {
     flex: 1;
     min-width: 0;
@@ -185,6 +205,21 @@
     padding: var(--space-2) 0;
     line-height: 1.4;
     overflow-wrap: anywhere;
+  }
+
+  /* Beside an action the message asks for the measure: when the two do not fit in one row, the
+     action wraps under it and the message takes the whole row. */
+  .message:not(:only-child) {
+    min-width: var(--toast-measure);
+  }
+
+  /* As tall as the first line of the message, so the button is level with it however many lines
+     and rows the toast has. */
+  .close {
+    align-self: flex-start;
+    display: flex;
+    align-items: center;
+    min-height: calc(1.4em + 2 * var(--space-2));
   }
 
   .times {

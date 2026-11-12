@@ -23,12 +23,22 @@ export interface ToastSpace {
 }
 
 /**
- * The least a toast is narrowed to. Its fixed parts take 7.6rem (the paddings, the icon, the close
- * button and the gaps between them), a short action with its gap about 9rem more; 24rem leaves the
- * message 7 to 8rem beside an action and 16rem without one, two or three short words a line at
- * `--font-sm`. Narrower than that the message starts breaking inside words (`overflow-wrap: anywhere`).
+ * The least width a toast's message is read in: about 24 characters at `--font-sm`, three or four
+ * words a line. The toast's own styles use the same number (`--toast-measure` in Toasts.svelte):
+ * an action that would leave the message less than this moves to a row of its own under it.
  */
-export const TOAST_MIN_WIDTH_REM = 24;
+export const TOAST_MEASURE_REM = 16;
+/**
+ * What a toast takes besides its message: the paddings (1.2 and 0.4), the icon (1.6), the close
+ * button (3.2), the two gaps between the three (0.8 each) and the border (0.1 a side).
+ */
+export const TOAST_FIXED_REM = 8.2;
+/**
+ * The least a toast is narrowed to: its fixed parts and one measure of message. At that width a
+ * plain toast has exactly the measure, and one with an action has it too, with the action on its
+ * own row (toast-tokens.test.ts holds the sum against the styles).
+ */
+export const TOAST_MIN_WIDTH_REM = TOAST_FIXED_REM + TOAST_MEASURE_REM;
 /** `--space-2`, the gap between two toasts. */
 export const TOAST_GAP_REM = 0.8;
 

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { TOAST_FIXED_REM, TOAST_MEASURE_REM, TOAST_MIN_WIDTH_REM } from '../lib/components/toastSpot';
 
 /**
  * Tripwires for the toast: its styles take every colour, radius and duration from a token, its
@@ -70,6 +71,63 @@ describe('Toasts.svelte', () => {
 
   it('keeps no z-index and no placement: where the stack stands is its host', () => {
     expect(style(toasts)).not.toMatch(/z-index|position\s*:/);
+  });
+});
+
+// A toast lays itself out for the width it has, in CSS alone: jsdom lays nothing out, so these hold
+// the rules; what they give at a width is seen in the running app.
+describe('a toast in a narrow place', () => {
+  const css = style(toasts).replace(/\/\*[\s\S]*?\*\//g, '');
+  const tokensCss = read('styles/tokens.css');
+  const rem = (value: string): number => {
+    const token = /^var\((--[\w-]+)\)$/.exec(value.trim());
+    if (token) return rem(new RegExp(`${token[1]}:\\s*([^;]+);`).exec(tokensCss)?.[1] ?? '');
+    const number = /^([\d.]+)(rem|px)$/.exec(value.trim());
+    if (!number) throw new Error(`not a length: ${value}`);
+    return number[2] === 'px' ? Number(number[1]) / 10 : Number(number[1]);
+  };
+
+  it('names the least width a message is read in, and the script that narrows the stack uses the same', () => {
+    expect(rule(css, '.toast')['--toast-measure']).toBe(`${TOAST_MEASURE_REM}rem`);
+  });
+
+  it('the action wraps under the message when the message would get less than that, and stands at the right', () => {
+    const content = rule(css, '.content');
+    expect(content.display).toBe('flex');
+    expect(content['flex-wrap']).toBe('wrap');
+    expect(content['justify-content']).toBe('flex-end');
+    expect(content.flex).toBe('1');
+    expect(content['min-width']).toBe('0');
+    // Beside an action the message asks for the measure; alone it takes what there is.
+    expect(rule(css, '.message:not(:only-child)')['min-width']).toBe('var(--toast-measure)');
+    expect(rule(css, '.message').flex).toBe('1');
+    expect(rule(css, '.message')['min-width']).toBe('0');
+  });
+
+  it('the close button stays at the top right, level with the first line of the message', () => {
+    const close = rule(css, '.close');
+    expect(close['align-self']).toBe('flex-start');
+    expect(close['min-height']).toBe('calc(1.4em + 2 * var(--space-2))');
+    expect(rule(css, '.message')['line-height']).toBe('1.4');
+    expect(rule(css, '.message').padding).toBe('var(--space-2) 0');
+  });
+
+  it('is laid out by its styles, not measured in script', () => {
+    expect(toasts).not.toMatch(/getBoundingClientRect|ResizeObserver|clientWidth|offsetWidth|matchMedia/);
+  });
+
+  it('the least width of the stack is what a toast takes besides its message, plus the measure', () => {
+    const toast = rule(css, '.toast');
+    const [top, right, , left] = toast.padding.split(/\s+/);
+    expect(top).toBe('var(--space-1)');
+    const border = /^([\d.]+px)/.exec(toast.border)?.[1] ?? '';
+    const icon = /<Icon size="([\d.]+rem)"/.exec(toasts)?.[1] ?? '';
+    const close = rule(style(read('lib/components/IconButton.svelte')), '.sm').width;
+    expect(markup(toasts)).toMatch(/<IconButton\s+size="sm"/);
+    const fixed = rem(left) + rem(icon) + rem(toast.gap) + rem(toast.gap) + rem(close) + rem(right) + 2 * rem(border);
+
+    expect(fixed).toBeCloseTo(TOAST_FIXED_REM, 5);
+    expect(TOAST_MIN_WIDTH_REM).toBeCloseTo(TOAST_FIXED_REM + TOAST_MEASURE_REM, 5);
   });
 });
 
