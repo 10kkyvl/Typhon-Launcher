@@ -64,6 +64,11 @@
     transform: scale(1.03);
   }
 
+  /* The block clips its corners: the shared ring is drawn inward, where it is not cut off. */
+  .hero:focus-visible {
+    outline-offset: -2px;
+  }
+
   .shade {
     position: absolute;
     inset: 0;
