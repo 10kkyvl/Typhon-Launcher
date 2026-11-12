@@ -90,23 +90,42 @@
       searchError = '';
       return;
     }
-    searchTimer = setTimeout(async () => {
-      searching = true;
-      try {
-        const result = await searchGames(value);
-        if (token === searchToken) {
-          searchResults = result;
-          searchError = '';
-        }
-      } catch (err) {
-        if (token === searchToken) {
-          searchResults = [];
-          searchError = errorMessage(err);
-        }
-      } finally {
-        if (token === searchToken) searching = false;
+    searchTimer = setTimeout(() => void runSearch(value, token), 250);
+  }
+
+  async function runSearch(value: string, token: number) {
+    searching = true;
+    try {
+      const result = await searchGames(value);
+      if (token === searchToken) {
+        searchResults = result;
+        searchError = '';
       }
-    }, 250);
+    } catch (err) {
+      if (token === searchToken) {
+        searchResults = [];
+        searchError = errorMessage(err);
+      }
+    } finally {
+      if (token === searchToken) searching = false;
+    }
+  }
+
+  let searchRetrying = $state(false);
+  let searchResultsEl = $state<HTMLElement>();
+  let searchBlock = $state<HTMLElement>();
+
+  // The notice's retry asks again at once, not after the typing pause; the failure stays on screen
+  // until the answer. On success the focus goes to the results' Tab stop, else to the search field.
+  async function retrySearch(): Promise<boolean> {
+    clearTimeout(searchTimer);
+    const value = query.trim();
+    if (!value) {
+      searchError = '';
+      return true;
+    }
+    await runSearch(value, ++searchToken);
+    return searchError === '';
   }
 
   async function confirm() {
@@ -241,24 +260,31 @@
         {/if}
       </section>
 
-      <section class="block">
+      <section class="block" bind:this={searchBlock}>
         <h4 id="{uid}-search">{msg('modals.releaseMatchManualSearch')}</h4>
         <div class="search-field">
           <SearchInput bind:value={query} labelledby="{uid}-search" placeholder={msg('modals.releaseMatchNamePlaceholder')} oninput={onQueryInput} />
         </div>
-        {#if searchError}
+        {#if searchError || searchRetrying}
           <div>
-            <Notice tone="danger" compact>
+            <Notice
+              tone="danger"
+              compact
+              bind:retrying={searchRetrying}
+              retry={{
+                label: msg('common.retry'),
+                run: retrySearch,
+                focus: () => searchResultsEl?.querySelector<HTMLElement>('[role="radio"][tabindex="0"]'),
+                within: () => searchBlock,
+              }}
+            >
               {searchError}
-              {#snippet action()}
-                <Button size="sm" busy={searching} onclick={onQueryInput}>{msg('common.retry')}</Button>
-              {/snippet}
             </Notice>
           </div>
         {:else if searching}
           <Spinner size="sm" label={msg('modals.releaseMatchSearching')} />
         {:else if searchResults.length > 0}
-          <div class="candidates" role="radiogroup" aria-labelledby="{uid}-search">
+          <div class="candidates" role="radiogroup" aria-labelledby="{uid}-search" bind:this={searchResultsEl}>
             {#each searchResults as game, index (game.id)}
               <button
                 type="button"

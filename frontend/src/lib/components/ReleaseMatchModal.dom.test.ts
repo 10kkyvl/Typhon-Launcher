@@ -127,6 +127,43 @@ describe('ReleaseMatchModal: the manual search', () => {
     expect(within(group).getByRole('radio', { name: /Hades/ })).toBeTruthy();
     expect(notice.isConnected).toBe(false);
   });
+
+  async function failedSearch() {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.mocked(getMatchCandidates).mockResolvedValue([]);
+    const dialog = openDialog();
+    const keys = user();
+    await keys.type(within(dialog).getByRole('textbox', { name: msg('modals.releaseMatchManualSearch') }), 'hades');
+    await vi.advanceTimersByTimeAsync(300);
+    const region = await within(dialog).findByRole('alert');
+    const retry = within(region.closest('.notice') as HTMLElement).getByRole('button', { name: msg('common.retry') });
+    retry.focus();
+    return { dialog, keys, region, retry };
+  }
+
+  it('asks again at once, not after the typing pause, and moves the focus to the result it found', async () => {
+    vi.mocked(searchGames).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce([game('g1', 'Hades')]);
+    const { dialog, keys } = await failedSearch();
+
+    await keys.keyboard('{Enter}');
+
+    expect(vi.mocked(searchGames)).toHaveBeenCalledTimes(2);
+    const result = await within(dialog).findByRole('radio', { name: /Hades/ });
+    await vi.waitFor(() => expect(document.activeElement).not.toBe(document.body));
+    expect(document.activeElement).toBe(result);
+  });
+
+  it('says a search that fails again in the same words again, and keeps the focus on its Retry', async () => {
+    vi.mocked(searchGames).mockRejectedValue(new Error('offline'));
+    const { keys, region, retry } = await failedSearch();
+    const before = region.firstElementChild;
+
+    await keys.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(region.firstElementChild).not.toBe(before));
+    expect(region.textContent?.trim()).toBe(before?.textContent?.trim());
+    expect(document.activeElement).toBe(retry);
+  });
 });
 
 describe('ReleaseMatchModal: confirming', () => {
