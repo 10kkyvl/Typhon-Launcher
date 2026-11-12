@@ -377,3 +377,37 @@ describe('the fill of a badge', () => {
     });
   }
 });
+
+// The review composer's two pressed toggles are one pair: the same opaque fill, each in its own tone.
+describe('the pressed toggles of the review composer', () => {
+  const css = styleOf('routes/game/ReviewComposer.svelte').replace(/\/\*[\s\S]*?\*\//g, '');
+  const body = (selector: string) => new RegExp(`(?:^|})\\s*${selector.replace(/\./g, '\\.')}\\s*\\{([^}]*)\\}`).exec(css)?.[1] ?? '';
+  const [yes, no] = ['.toggle.positive.active', '.toggle.negative.active'].map((s) => ({ plate: plateOf(body(s)), rule: declarations(body(s)) }));
+
+  it('fill alike: each its tone mixed into the same surface at the same share', () => {
+    expect(yes.plate?.tone, 'recommend').toBeTypeOf('string');
+    expect(no.plate?.tone, 'not recommended').toBeTypeOf('string');
+    expect({ ...yes.plate, tone: undefined }).toEqual({ ...no.plate, tone: undefined });
+    expect(yes.rule.get('border-color')).toBe(`var(${yes.plate?.tone})`);
+    expect(no.rule.get('border-color')).toBe(`var(${no.plate?.tone})`);
+  });
+
+  for (const id of ['dark', 'light', 'contrast', 'blush']) {
+    it(`${id} keeps the label of each pressed toggle at 4.5:1 on its fill`, () => {
+      const t = presets().get(id) as Record<string, string>;
+      expect(t, id).toBeDefined();
+      const failures: string[] = [];
+      for (const [name, { plate, rule }] of [['recommend', yes], ['not recommended', no]] as const) {
+        const label = /var\((--[\w-]+)\)/.exec(rule.get('color') ?? '')?.[1];
+        if (!plate || !label) {
+          failures.push(`${name}: no fill or label`);
+          continue;
+        }
+        const on = fill(t, plate);
+        const r = ratio(rgb(t[label], on), on);
+        if (r < 4.5) failures.push(`${name}: ${label} ${r.toFixed(2)}`);
+      }
+      expect(failures).toEqual([]);
+    });
+  }
+});

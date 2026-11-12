@@ -291,13 +291,13 @@
   }
 
   .toggle.positive.active {
-    background: var(--accent-subtle);
+    background: color-mix(in srgb, var(--accent-bright) 8%, var(--surface-2));
     border-color: var(--accent-bright);
     color: var(--accent-text);
   }
 
   .toggle.negative.active {
-    background: var(--surface-2);
+    background: color-mix(in srgb, var(--danger) 8%, var(--surface-2));
     border-color: var(--danger);
     color: var(--danger);
   }
