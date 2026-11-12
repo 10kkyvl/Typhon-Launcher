@@ -100,6 +100,7 @@ const SITES: Record<string, Site[]> = {
     ['warning', false],
     ['warning', false],
   ],
+  'lib/components/ReleaseMatchModal.svelte': [['danger', true]],
   // The game running or busy is a state of the game when the dialog opens; a failed removal just happened.
   'lib/components/RemoveGameModal.svelte': [
     ['warning', false],
