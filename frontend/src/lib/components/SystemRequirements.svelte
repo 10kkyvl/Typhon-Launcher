@@ -5,7 +5,7 @@
 </script>
 
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { Check, ChevronDown, CircleQuestionMark, TriangleAlert, X } from '@lucide/svelte';
   import { msg } from '../i18n';
   import { metadataErrorText } from '../metadata/metadataErrors';
@@ -20,7 +20,10 @@
     verdictLabelKey,
     verdictTone,
   } from '../game/sysreq';
+  import { focusableIn, focusQuietly } from '../layers/focus';
   import Button from './Button.svelte';
+  import Notice from './Notice.svelte';
+  import Spinner from './Spinner.svelte';
   import StatusBadge from './StatusBadge.svelte';
 
   let {
@@ -45,23 +48,46 @@
     return reports.fetch(cacheKey(id, onDisk ? '' : path, rev), () => checkSystemRequirements(id, path, onDisk), fresh);
   }
 
-  async function load(id: string, path: string, rev: string, fresh: boolean) {
+  // A retry keeps the failure on screen until its answer: the notice and its focused button stay.
+  async function load(id: string, path: string, rev: string, fresh: boolean, retry = false) {
     const current = ++token;
     report = null;
-    failure = '';
+    if (!retry) failure = '';
     if (!id) {
       loading = false;
+      failure = '';
       return;
     }
-    loading = true;
+    loading = !retry;
     try {
       const result = await fetchReport(id, path, rev, fresh);
-      if (current === token) report = result;
+      if (current !== token) return;
+      report = result;
+      failure = '';
     } catch (err) {
       if (current === token) failure = metadataErrorText(err, msg('sysreq.failed'));
     } finally {
       if (current === token) loading = false;
     }
+  }
+
+  let retrying = $state(false);
+  let root = $state<HTMLElement>();
+
+  async function retry() {
+    if (retrying) return;
+    const button = document.activeElement;
+    retrying = true;
+    try {
+      await load(gameId, installPath, revision, true, true);
+    } finally {
+      retrying = false;
+    }
+    // The notice went with the focused Retry: focus moves into what loaded instead of the page.
+    await tick();
+    const active = document.activeElement;
+    if (!button || button.isConnected || (active && active !== document.body && active.isConnected)) return;
+    if (root?.isConnected) focusQuietly(focusableIn(root)[0] ?? root);
   }
 
   $effect(() => {
@@ -81,15 +107,18 @@
 </script>
 
 {#if gameId}
-  <div class="sysreq">
+  <!-- Focusable by script only: focus lands here when a retry brings a verdict without a control. -->
+  <div class="sysreq" tabindex="-1" bind:this={root}>
     {#if heading}<h3 class="title">{msg('sysreq.heading')}</h3>{/if}
     {#if loading}
-      <p class="muted">{msg('sysreq.loading')}</p>
+      <Spinner size="sm" label={msg('sysreq.loading')} />
     {:else if failure}
-      <div class="line">
-        <span class="muted">{failure}</span>
-        <Button size="sm" variant="ghost" onclick={() => load(gameId, installPath, revision, true)}>{msg('sysreq.retry')}</Button>
-      </div>
+      <Notice tone="danger" compact>
+        {failure}
+        {#snippet action()}
+          <Button size="sm" variant="ghost" busy={retrying} onclick={retry}>{msg('sysreq.retry')}</Button>
+        {/snippet}
+      </Notice>
     {:else if report}
       <div class="line">
         <StatusBadge kind={tone} label={msg(verdictLabelKey(report))} dot={false} />
@@ -150,7 +179,6 @@
     gap: var(--space-3);
   }
 
-  .muted,
   .estimate {
     font-size: var(--font-sm);
     color: var(--text-3);

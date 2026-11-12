@@ -42,6 +42,37 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('GameReviews: loading more', () => {
+  it('keeps the focus on its busy button while the next page loads', async () => {
+    const review = {
+      id: 1,
+      author: { username: 'mira', displayName: 'Mira', avatarUrl: '' },
+      recommended: true,
+      body: 'Fine.',
+      playtimeSeconds: 0,
+      helpful: 0,
+      unhelpful: 0,
+      myVote: '',
+      mine: false,
+      createdAt: '2026-11-01T10:00:00Z',
+      updatedAt: '2026-11-01T10:00:00Z',
+    } as unknown as Page['reviews'][number];
+    const next = deferred<Page>();
+    vi.mocked(list).mockResolvedValueOnce({ ...empty, reviews: [review], next: 'p2' }).mockReturnValueOnce(next.promise);
+    const { user } = renderDom(GameReviews, { canonicalGameId: 'c1' });
+    const more = await screen.findByRole('button', { name: msg('reviews.loadMore') });
+    more.focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(more.getAttribute('aria-busy')).toBe('true');
+    expect(document.activeElement).toBe(more);
+    next.resolve({ ...empty, reviews: [{ ...review, id: 2 }], next: 'p3' });
+    await vi.waitFor(() => expect(more.hasAttribute('aria-busy')).toBe(false));
+    expect(document.activeElement).toBe(more);
+  });
+});
+
 describe('GameReviews: retrying a failed load', () => {
   it('keeps the notice and the focus on its busy Retry until the answer, then focuses the section', async () => {
     const again = deferred<Page>();

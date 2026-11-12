@@ -21,7 +21,45 @@ const report: SysreqReport = {
   ],
 };
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.mocked(checkSystemRequirements).mockReset();
+  vi.restoreAllMocks();
+});
+
+describe('SystemRequirements: loading and retrying', () => {
+  it('shows the base spinner while it checks', async () => {
+    vi.mocked(checkSystemRequirements).mockReturnValue(new Promise(() => {}));
+    renderDom(SystemRequirements, { gameId: 'sysreq-loading', installPath: '/games' });
+
+    const status = screen.getByRole('status');
+
+    expect(status.classList.contains('spinner')).toBe(true);
+    expect(status.textContent?.trim()).toBe(msg('sysreq.loading'));
+  });
+
+  it('keeps the failure notice and the focus on its busy Retry until the answer', async () => {
+    let answer!: (value: SysreqReport) => void;
+    vi.mocked(checkSystemRequirements)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockReturnValueOnce(new Promise((resolve) => (answer = resolve)));
+    const { user } = renderDom(SystemRequirements, { gameId: 'sysreq-retry', installPath: '/games' });
+    const retry = await screen.findByRole('button', { name: msg('sysreq.retry') });
+    const notice = retry.closest('.notice') as HTMLElement;
+    expect(notice).toBeInstanceOf(HTMLElement);
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(retry.getAttribute('aria-busy')).toBe('true');
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
+
+    answer(report);
+    const toggle = await screen.findByRole('button', { name: msg('sysreq.show') });
+    expect(notice.isConnected).toBe(false);
+    await vi.waitFor(() => expect(document.activeElement).toBe(toggle));
+  });
+});
 
 describe('SystemRequirements: the list of checks', () => {
   it('opens under a disclosure button tied to the list', async () => {

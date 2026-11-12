@@ -174,7 +174,7 @@
       {/if}
       {#if cursor}
         <div class="more">
-          <Button disabled={loadingMore} onclick={loadMore}>
+          <Button busy={loadingMore} onclick={loadMore}>
             {loadingMore ? msg('reviews.loadingMore') : msg('reviews.loadMore')}
           </Button>
         </div>
