@@ -361,10 +361,14 @@ function notices(source: string): Site[] {
   return out;
 }
 
+// The component showcase (dev-only page, never shipped) draws a notice of every tone and announce as
+// samples: none of them reports anything that happened.
+const SAMPLES = 'routes/showcase/';
+
 function sites(): Record<string, Site[]> {
   const out: Record<string, Site[]> = {};
   for (const [path, source] of Object.entries(frontendSources)) {
-    if (!path.endsWith('.svelte')) continue;
+    if (!path.endsWith('.svelte') || path.startsWith(SAMPLES)) continue;
     for (const site of notices(source)) (out[path] ??= []).push(site);
   }
   return out;
