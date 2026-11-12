@@ -90,16 +90,17 @@ beforeEach(() => {
 });
 
 
-// Said again after a failed retry: the notice's message comes into its live region again, as new nodes.
-// Read before the press; the getter answers the words of a message that came in since, '' until then.
+// Said again after a failed retry: the same words come into the notice's live region again as new
+// nodes, and new words (a reason the page gives) change there in place; either is heard. Read before
+// the press; the getter answers what the region holds after its last such change, '' until then.
 function sayingAgain(notice: Element): () => string {
-  const region = notice.querySelector('.body');
-  const before = region?.firstElementChild;
-  return () => {
-    const now = region?.firstElementChild;
-    if (!region?.getAttribute('role') || !now || now === before) return '';
-    return (now.textContent ?? '').replace(/\s+/g, ' ').trim();
-  };
+  const region = notice.querySelector('.body') as Element;
+  let said = '';
+  const observer = new MutationObserver(() => {
+    if (region.getAttribute('role')) said = (region.textContent ?? '').replace(/\s+/g, ' ').trim();
+  });
+  observer.observe(region, { subtree: true, childList: true, characterData: true });
+  return () => said;
 }
 
 afterEach(() => {

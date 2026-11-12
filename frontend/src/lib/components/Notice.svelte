@@ -101,6 +101,8 @@
     // Where the notice lives: the dialog it is in (a layer of its own, out of the page, which is inert
     // under it), else the shell's <main> (a banner sits above it, beside the page), else the document.
     const home = plate?.closest<HTMLElement>('[role="dialog"]') ?? plate?.closest('main') ?? document.querySelector('main') ?? document.body;
+    // The words at the press: a failure that comes back in other words is said by its own change.
+    const said = words(message);
     retrying = true;
     pressed = true;
     let ok = false;
@@ -120,8 +122,10 @@
       }
       return;
     }
-    // The message is drawn anew; what had focus in it (a link, a page-title heading) gets it back on
-    // its new twin, found by the same place in the message.
+    // The caller changed the words: they came into the live region in place and were heard once.
+    if (words(message) !== said) return;
+    // The same words: the message is drawn anew so they are said again. What had focus in it (a link,
+    // a page-title heading) gets it back on its new twin, found by the same place in the message.
     const path = pathTo(message, document.activeElement);
     attempt += 1;
     if (!path) return;
@@ -129,6 +133,8 @@
     const twin = path.reduce<Element | undefined>((at, index) => at?.children[index], message);
     if (twin instanceof HTMLElement && twin.isConnected) focusQuietly(twin);
   }
+
+  const words = (root: Element | undefined) => root?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
 
   // The child indexes from `root` down to `node`, or null when it is not inside.
   function pathTo(root: Element | undefined, node: Element | null): number[] | null {

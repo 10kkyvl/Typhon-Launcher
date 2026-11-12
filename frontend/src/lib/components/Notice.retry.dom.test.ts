@@ -94,10 +94,14 @@ describe('Notice with a retry: a failure', () => {
     expect(retryButton().hasAttribute('aria-busy')).toBe(false);
   });
 
-  it('announces the words the caller changed them to', async () => {
+  // A caller that words each failure (GamePicker sets the text from the error inside `run`): the
+  // new words come into the live region in place, and each failure is heard exactly once.
+  it('announces the words the caller changed them to, once per failure', async () => {
     const view = renderDom(RetryHarness, { run: vi.fn(async () => false), message: MESSAGE });
+    let failures = 0;
     const run = vi.fn(async () => {
-      await view.rerender({ message: 'The service did not answer', run });
+      failures += 1;
+      await view.rerender({ message: `Changed ${failures}`, run });
       return false;
     });
     await view.rerender({ run });
@@ -106,9 +110,12 @@ describe('Notice with a retry: a failure', () => {
     await view.user.click(retryButton());
     await frame();
     await frame();
+    await view.user.click(retryButton());
+    await frame();
+    await frame();
     stop();
 
-    expect(heard.at(-1)).toBe('The service did not answer');
+    expect(heard).toEqual(['Changed 1', 'Changed 2']);
   });
 
   it('reads the message once in the page, not once per failure', async () => {
