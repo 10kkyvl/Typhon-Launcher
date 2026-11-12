@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { FolderOpen } from '@lucide/svelte';
   import Tooltip from './Tooltip.svelte';
   import Button from './Button.svelte';
@@ -81,6 +81,7 @@
   let argsLoading = $state(false);
   let argsBusy = $state(false);
   let argsError = $state('');
+  let argsInput = $state<HTMLInputElement>();
 
   let admin = $state(false);
   let adminBusy = $state(false);
@@ -337,6 +338,11 @@
     } finally {
       argsBusy = false;
     }
+    // Saved, Save has nothing left to do and turns disabled under a focus it held: the focus goes back
+    // to the field, what the user would change next.
+    await tick();
+    const active = document.activeElement;
+    if (!active || active === document.body || (active instanceof HTMLButtonElement && active.disabled)) argsInput?.focus();
   }
 
   async function changeAdmin(on: boolean) {
@@ -471,6 +477,7 @@
             class="input sm"
             type="text"
             aria-labelledby="{uid}-args-label"
+            bind:this={argsInput}
             spellcheck="false"
             autocomplete="off"
             placeholder={msg('modals.propertiesArgsPlaceholder')}

@@ -133,6 +133,26 @@ describe('GamePropertiesModal: the launch arguments', () => {
   });
 });
 
+describe('GamePropertiesModal: saving the launch arguments', () => {
+  it('moves the focus from Save, which has nothing left to save, back to the field', async () => {
+    const saved = deferred<LibraryGame>();
+    vi.mocked(setLaunchArgsLine).mockReturnValueOnce(saved.promise);
+    const dialog = await openDialog();
+    const keys = user();
+    const field = await within(dialog).findByRole('textbox', { name: msg('modals.propertiesArgsTitle') });
+    await vi.waitFor(() => expect(field).toHaveProperty('disabled', false));
+    await keys.type(field, '-windowed');
+    const save = within(dialog).getByRole('button', { name: msg('modals.propertiesArgsSave') });
+    save.focus();
+
+    await keys.keyboard('{Enter}');
+    saved.resolve({} as LibraryGame);
+
+    await vi.waitFor(() => expect(save).toHaveProperty('disabled', true));
+    await vi.waitFor(() => expect(document.activeElement).toBe(field));
+  });
+});
+
 describe('GamePropertiesModal: compatibility mode', () => {
   it('says it is reading the game with a labelled spinner', async () => {
     const read = deferred<WrapperInfo>();
