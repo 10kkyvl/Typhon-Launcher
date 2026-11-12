@@ -95,10 +95,11 @@ describe('the plate of a notice', () => {
   });
 });
 
-const STATUS_TEXT = /(?:^|[^-\w])color:\s*var\(--(danger|warning|success)\)/;
+// A status colour anywhere in a value: on its own, with a fallback, or mixed into another colour.
+const STATUS = /var\(--(danger|warning|success)(?![\w-])/;
 // An opaque fill: a surface, or a tone mixed into one (the way a notice and a badge fill themselves).
 const SURFACE = String.raw`var\((--surface(?:-\d)?|--bg)\)`;
-const PLATE = new RegExp(String.raw`background(?:-color)?:\s*(?:${SURFACE}|color-mix\(in srgb, var\((--[\w-]+)\) (\d+)%, ${SURFACE}\))\s*;`);
+const PLATE = new RegExp(String.raw`^(?:${SURFACE}|color-mix\(in srgb, var\((--[\w-]+)\) (\d+)%, ${SURFACE}\))$`);
 
 interface Plate {
   surface: string;
@@ -106,8 +107,22 @@ interface Plate {
   share?: number;
 }
 
+// The declarations of a rule in order; a property declared twice is what the last one says.
+function declarations(body: string): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const part of body.split(';')) {
+    const at = part.indexOf(':');
+    if (at <= 0) continue;
+    const name = part.slice(0, at).trim().toLowerCase();
+    if (name === 'background' || name === 'background-color') out.delete('background');
+    out.delete(name);
+    out.set(name === 'background-color' ? 'background' : name, part.slice(at + 1).trim());
+  }
+  return out;
+}
+
 function plateOf(body: string): Plate | null {
-  const m = PLATE.exec(body);
+  const m = PLATE.exec(declarations(body).get('background') ?? '');
   if (!m) return null;
   return m[1] ? { surface: m[1] } : { surface: m[4], tone: m[2], share: Number(m[3]) / 100 };
 }
@@ -123,19 +138,33 @@ const AREAS: [RegExp, string][] = [
   [/Modal\.svelte$/, 'a dialog'],
   [/^routes\/settings\//, 'the cards of the settings page'],
   [/^routes\/auth\//, 'the sign-in screen, which paints its own page'],
+  [/^lib\/bigpicture\//, 'Big Picture, which draws no backdrop: its screens are its own opaque page'],
+  [/^overlay\//, 'the in-game overlay, which draws no backdrop: its panels are opaque'],
 ];
 
 // A status colour without a plate of its own: the surface it sits on, then the rules. Marks and icons
 // are not text (3:1); a badge carries a fill of its own (see below). A new entry needs its surface named.
 const ON_SURFACE: Record<string, [surface: string, ...rules: string[]]> = {
   'routes/diskusage/DiskUsage.svelte': ['Card', '.reason'],
-  'routes/installed/Installed.svelte': ['Card and the fill of a row', '.storage-error', '.row-update'],
+  'routes/installed/Installed.svelte': [
+    'Card and the fill of a row; an icon on the dark scrim of a badge over a cover',
+    '.storage-error',
+    '.row-update',
+    '.card-badge :global(svg)',
+  ],
   'routes/game/ReviewComposer.svelte': ["the plate of one's own review", '.recommend.negative', '.hidden-note'],
   'routes/game/ReviewSummary.svelte': ['Card', '.error'],
   'routes/profile/Profile.svelte': ['the editing bar', '.topbar-sub.error'],
   'routes/profile/ProfileHeader.svelte': ['the profile canvas', '.error'],
   'routes/history/History.svelte': ['the table', '.row.failed .icon-cell', '.row.failed .detail'],
-  'routes/sources/Sources.svelte': ['the table', '.source-error', '.insecure', '.warn-icon', '.count.review'],
+  'routes/sources/Sources.svelte': [
+    'the table; the health icon of a row',
+    '.source-error',
+    '.insecure',
+    '.warn-icon',
+    '.count.review',
+    'style:color={health.color}',
+  ],
   'routes/friends/FriendCodeCard.svelte': ['Card', '.mark'],
   'routes/downloads/Downloads.svelte': ['the fill of a row', '.error-text'],
   'lib/components/AccountMenu.svelte': ['the header island, checked over the wash in theme-contrast.test.ts', '.offline-mark'],
@@ -169,6 +198,8 @@ const ON_SURFACE: Record<string, [surface: string, ...rules: string[]]> = {
     '.mark.danger, .have.danger',
   ],
   'lib/components/Button.svelte': ['a control, not a message', '.danger'],
+  'lib/components/Notice.svelte': ['the plate of the notice; its icon', '.icon'],
+  'lib/components/DownloadItem.svelte': ['the fill of a download row', '.stalled'],
 };
 
 // Where the surface named above is a rule of the same component, that rule has to stay opaque.
@@ -184,6 +215,8 @@ const LOCAL_SURFACE: Record<string, string> = {
   'lib/components/TopbarSearch.svelte': '.results',
   'lib/components/profile/BlockSettings.svelte': '.settings',
   'lib/components/SystemRequirements.svelte': '.checks',
+  'lib/components/Notice.svelte': '.notice',
+  'lib/components/DownloadItem.svelte': '.item',
 };
 
 interface StatusRule {
@@ -193,15 +226,57 @@ interface StatusRule {
   plate: Plate | null;
 }
 
+// Custom properties of a component that carry a status colour, directly or through another one.
+function carriers(css: string): Map<string, string> {
+  const out = new Map<string, string>();
+  const custom = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].flatMap((m) =>
+    [...declarations(m[2])].filter(([name]) => name.startsWith('--')),
+  );
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const [name, value] of custom) {
+      const status = statusIn(value, out);
+      if (status && !out.has(name)) {
+        out.set(name, status);
+        grew = true;
+      }
+    }
+  }
+  return out;
+}
+
+function statusIn(value: string, carried: Map<string, string>): string | undefined {
+  const direct = STATUS.exec(value)?.[1];
+  if (direct) return `--${direct}`;
+  for (const m of value.matchAll(/var\((--[\w-]+)/g)) if (carried.has(m[1])) return carried.get(m[1]);
+  return undefined;
+}
+
+const tidy = (text: string) => text.trim().replace(/\s+/g, ' ');
+
+// A source tripwire, not a CSS engine: every rule of every component whose `color` is a status colour,
+// with the plate the same rule gives it, and status colours set inline in the markup.
 function statusRules(): StatusRule[] {
   const out: StatusRule[] = [];
   for (const [path, source] of Object.entries(frontendSources)) {
-    if (!path.endsWith('.svelte') || !(path.startsWith('routes/') || path.startsWith('lib/components/'))) continue;
+    if (!path.endsWith('.svelte')) continue;
     const css = (/<style[^>]*>([\s\S]*?)<\/style>/.exec(source)?.[1] ?? '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const carried = carriers(css);
     for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-      const status = STATUS_TEXT.exec(m[2])?.[1];
-      if (!status) continue;
-      out.push({ path, selector: m[1].trim().replace(/\s+/g, ' '), status: `--${status}`, plate: plateOf(m[2]) });
+      const status = statusIn(declarations(m[2]).get('color') ?? '', carried);
+      if (status) out.push({ path, selector: tidy(m[1]), status, plate: plateOf(m[2]) });
+    }
+    const script = [...source.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n');
+    const markup = source.replace(/<script[^>]*>[\s\S]*?<\/script>|<style[^>]*>[\s\S]*?<\/style>/g, '');
+    for (const m of markup.matchAll(/\bstyle="([^"]*)"/g)) {
+      const status = statusIn(declarations(m[1]).get('color') ?? '', carried);
+      if (status) out.push({ path, selector: tidy(m[0]), status, plate: null });
+    }
+    // An expression is opaque to the tripwire: it counts when the component's script spells a status colour.
+    const spelled = STATUS.exec(script)?.[1];
+    for (const m of markup.matchAll(/\bstyle:color(?:\|important)?=(?:"([^"]*)"|\{([^}]*)\})/g)) {
+      const status = m[1] !== undefined ? statusIn(m[1], carried) : (statusIn(m[2], carried) ?? (spelled && `--${spelled}`));
+      if (status) out.push({ path, selector: tidy(m[0]), status, plate: null });
     }
   }
   return out;
@@ -209,7 +284,9 @@ function statusRules(): StatusRule[] {
 
 describe('status-coloured text in the pages', () => {
   const rules = statusRules();
-  const loose = rules.filter((rule) => !rule.plate && !AREAS.some(([area]) => area.test(rule.path)));
+  // The areas above draw no backdrop or are surfaces as a whole; the rest is what sits over the art.
+  const paged = rules.filter((rule) => !AREAS.some(([area]) => area.test(rule.path)));
+  const loose = paged.filter((rule) => !rule.plate);
 
   it('sits on a plate of its own or on a named surface, never on the bare page', () => {
     expect(rules.length).toBeGreaterThan(40);
@@ -242,7 +319,7 @@ describe('status-coloured text in the pages', () => {
     it(`${id} keeps a status colour at 4.5:1 on every plate the pages give it`, () => {
       const t = presets().get(id) as Record<string, string>;
       expect(t, id).toBeDefined();
-      const surfaces = [...new Set(rules.flatMap((rule) => (rule.plate && !rule.plate.tone ? [rule.plate.surface] : [])))];
+      const surfaces = [...new Set(paged.flatMap((rule) => (rule.plate && !rule.plate.tone ? [rule.plate.surface] : [])))];
       expect(surfaces.length).toBeGreaterThan(0);
       const failures: string[] = [];
       for (const surface of surfaces) {
@@ -253,7 +330,7 @@ describe('status-coloured text in the pages', () => {
         }
       }
       // A fill mixed from a tone is measured with the colour its own rule sets on it.
-      for (const rule of rules) {
+      for (const rule of paged) {
         if (!rule.plate?.tone) continue;
         const on = fill(t, rule.plate);
         const r = ratio(rgb(t[rule.status], on), on);
