@@ -40,6 +40,7 @@ beforeEach(() => {
   chat.chatLoading.set(false);
   chat.chatLoadingMore.set(false);
   chat.chatHistoryError.set('');
+  chat.chatErrors.set({});
   chat.chatConversationsError.set('');
   chat.nextByPeer.set({});
   chat.failedMessages.set(new Set());

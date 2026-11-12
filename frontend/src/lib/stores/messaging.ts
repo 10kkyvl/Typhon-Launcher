@@ -65,6 +65,19 @@ export const chatSent = writable<{ id: number; peerId: string; text: string } | 
 let sendTokens = new Map<string, number>();
 let sendSerial = 0;
 
+// What went wrong in a conversation (a send, an edit, a reaction), by conversation: it shows while
+// that conversation is open and again when it is reopened, never in another one.
+export const chatErrors = writable<Record<string, string>>({});
+
+/** Sets what went wrong in the conversation with `peerId`; '' clears it. */
+export function setChatError(peerId: string, text: string): void {
+  chatErrors.update((all) => {
+    if ((all[peerId] ?? '') === text) return all;
+    const { [peerId]: _cleared, ...rest } = all;
+    return text ? { ...rest, [peerId]: text } : rest;
+  });
+}
+
 /** Marks a send to `peerId` as in flight and answers its token; null when one already is. */
 export function beginSend(peerId: string): number | null {
   if (sendTokens.has(peerId)) return null;
@@ -736,6 +749,7 @@ async function runSession(nextKey: string, serial: number): Promise<void> {
   sendTokens = new Map();
   chatSends.set({});
   chatSent.set(null);
+  chatErrors.set({});
   closeChat();
   if (!nextKey) {
     chatConnected.set(false);

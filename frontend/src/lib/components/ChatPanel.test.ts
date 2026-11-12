@@ -19,6 +19,7 @@ beforeEach(() => {
   chat.activePeer.set(peer);
   chat.chatConnected.set(true);
   chat.chatHistoryError.set('');
+  chat.chatErrors.set({});
   chat.chatConversationsError.set('');
   chat.conversations.set([{ peer, unread: 0, canSend: true }]);
   chat.messagesByPeer.set({});

@@ -7,7 +7,7 @@
   import ChatAttachments from './ChatAttachments.svelte';
   import Spinner from './Spinner.svelte';
   import ReactionPicker from './reactions/ReactionPicker.svelte';
-  import { activePeer, editMessage, editingMessageId, failedMessages, pendingMessages, retryMessage, toggleReaction } from '../stores/messaging';
+  import { editMessage, editingMessageId, failedMessages, pendingMessages, retryMessage, toggleReaction } from '../stores/messaging';
   import { currentUser } from '../stores/user';
   import { clockTime, shortDate } from '../utils/format';
   import { chatTextParts } from '../social/chatText';
@@ -21,7 +21,7 @@
   /**
    * One message of the open conversation: its text and images, its state (being sent, failed), and what
    * can be done with it (edit, retry, react). A failure of one of those is the panel's to show
-   * (`onerror`, '' to clear it).
+   * (`onerror`, for the conversation it happened in; '' clears it).
    */
   let {
     message,
@@ -38,7 +38,7 @@
     now: Date;
     /** Whether the conversation takes messages: a reaction to the other side's message needs it. */
     canReact: boolean | undefined;
-    onerror: (text: string) => void;
+    onerror: (peerId: string, text: string) => void;
     /** A failed message went through on retry: the composer may still hold its text. */
     onresent: (peerId: string, text: string, clientId: string) => void;
     onopenimages: (urls: string[], position: number) => void;
@@ -94,11 +94,12 @@
 
   async function saveEdit(): Promise<void> {
     if (!editDraft.trim() && attachmentsOf(message).length === 0) return;
+    const targetPeerId = peer.id;
     try {
-      await editMessage(peer.id, message.id, editDraft.trim());
+      await editMessage(targetPeerId, message.id, editDraft.trim());
       await refocus(editButton);
     } catch (err) {
-      onerror(chatErrorText(err, 'social.chatEditError'));
+      onerror(targetPeerId, chatErrorText(err, 'social.chatEditError'));
     }
   }
 
@@ -106,14 +107,14 @@
   async function retry(): Promise<void> {
     if (resending) return;
     resending = true;
-    onerror('');
     const targetPeerId = peer.id;
+    onerror(targetPeerId, '');
     const { text, clientId } = message;
     try {
       await retryMessage(targetPeerId, clientId);
       onresent(targetPeerId, text, clientId);
     } catch (err) {
-      onerror(chatErrorText(err, 'social.chatSendError'));
+      onerror(targetPeerId, chatErrorText(err, 'social.chatSendError'));
     } finally {
       resending = false;
     }
@@ -122,11 +123,11 @@
   async function chooseReaction(key: ReactionKey): Promise<void> {
     if (!own && !canReact) return;
     const targetPeerId = peer.id;
-    onerror('');
+    onerror(targetPeerId, '');
     try {
       await toggleReaction(targetPeerId, message, key);
     } catch {
-      if ($activePeer?.id === targetPeerId) onerror(msg('social.chatReactionError'));
+      onerror(targetPeerId, msg('social.chatReactionError'));
     }
   }
 </script>

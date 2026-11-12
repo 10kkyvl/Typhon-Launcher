@@ -544,6 +544,22 @@ describe('a send in flight', () => {
   });
 });
 
+describe('what went wrong in a conversation', () => {
+  it('is kept per conversation, cleared by an empty text, and goes with the session', async () => {
+    const { user, messaging } = await load();
+    messaging.setChatError(peer.id, 'Could not send.');
+    messaging.setChatError('peer-2', 'Could not edit.');
+    expect(get(messaging.chatErrors)).toEqual({ [peer.id]: 'Could not send.', 'peer-2': 'Could not edit.' });
+
+    messaging.setChatError(peer.id, '');
+    expect(get(messaging.chatErrors)).toEqual({ 'peer-2': 'Could not edit.' });
+
+    user.currentUser.set(null);
+    user.authState.set('unauthenticated');
+    await vi.waitFor(() => expect(get(messaging.chatErrors)).toEqual({}));
+  });
+});
+
 describe('chat recovery regressions', () => {
   it('keeps saved conversations and separates background and history errors', async () => {
     vi.useFakeTimers();

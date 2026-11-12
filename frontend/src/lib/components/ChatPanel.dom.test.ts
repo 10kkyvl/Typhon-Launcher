@@ -41,6 +41,7 @@ beforeEach(() => {
   vi.mocked(unreact).mockReset();
   vi.mocked(unreact).mockResolvedValue(undefined);
   locale.set('en');
+  chat.chatErrors.set({});
   chat.chatOpen.set(true);
   chat.activePeer.set(peer);
   chat.chatConnected.set(true);

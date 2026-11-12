@@ -19,6 +19,7 @@
     attachmentDrafts,
     beginSend,
     chatConnected,
+    chatErrors,
     chatLoading,
     chatLoadingMore,
     chatHistoryError,
@@ -41,6 +42,7 @@
     sendMessage,
     sendProgress,
     setAttachmentDrafts,
+    setChatError,
     setPanelVisible,
     nextByPeer,
   } from '../stores/messaging';
@@ -56,7 +58,6 @@
   let lightboxOpen = $state(false);
   let lightboxIndex = $state(0);
   let lightboxItems = $state<LightboxItem[]>([]);
-  let error = $state('');
   let historyRetrying = $state(false);
   let conversationsRetrying = $state(false);
   let reconnecting = $state(false);
@@ -78,6 +79,9 @@
   const unreadTotal = $derived($conversations.reduce((sum, item) => sum + item.unread, 0));
   // A send in flight is the store's: it outlives this panel and the composer drawn for its conversation.
   const sending = $derived(peer ? peer.id in $chatSends : false);
+  // What went wrong belongs to its conversation: a send that fails after the user has moved on to
+  // another one says so there, not here.
+  const error = $derived(peer ? ($chatErrors[peer.id] ?? '') : '');
 
   function displayName(target: ChatPeer): string {
     return target.displayName || target.username;
@@ -122,7 +126,7 @@
     const token = beginSend(targetPeerId);
     if (token === null) return;
     let went = false;
-    error = '';
+    setChatError(targetPeerId, '');
     try {
       let attachments: Attachment[] = [];
       if (pending.length > 0) {
@@ -138,7 +142,7 @@
         scrollToEnd();
       }
     } catch (err) {
-      error = chatErrorText(err, 'social.chatSendError');
+      setChatError(targetPeerId, chatErrorText(err, 'social.chatSendError'));
     } finally {
       endSend(targetPeerId, token, went ? submitted : undefined);
     }
@@ -197,7 +201,6 @@
   function openConversation(target: ChatPeer): void {
     openChat(target);
     draft = getDraft(target.id);
-    error = '';
     chatToast.set(null);
     void land(conversationStart);
   }
@@ -272,7 +275,6 @@
   $effect(() => {
     const target = peer;
     draft = target ? getDraft(target.id) : '';
-    error = '';
     olderFailed = false;
   });
 
@@ -393,7 +395,7 @@
                 {peer}
                 {now}
                 canReact={conversation?.canSend}
-                onerror={(text) => (error = text)}
+                onerror={setChatError}
                 onresent={resent}
                 onopenimages={(urls, position) => openImages(message.id, urls, position)}
                 onimageload={() => imageLoaded(message)}

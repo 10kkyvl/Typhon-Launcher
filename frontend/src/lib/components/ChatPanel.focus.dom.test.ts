@@ -58,6 +58,7 @@ beforeEach(() => {
   chat.chatLoading.set(false);
   chat.chatLoadingMore.set(false);
   chat.chatHistoryError.set('');
+  chat.chatErrors.set({});
   chat.chatConversationsError.set('');
   chat.chatToast.set(null);
   chat.nextByPeer.set({});
@@ -469,6 +470,31 @@ describe('ChatPanel: a send in flight', () => {
     expect(screen.getByRole('button', { name: msg('social.chatSend') }).hasAttribute('disabled')).toBe(true);
     up.resolve(uploaded);
     await vi.waitFor(() => expect(chat.sendMessage).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe('ChatPanel: what went wrong in a conversation', () => {
+  const other = { id: 'other', username: 'rival', displayName: 'Rival', avatarUrl: '' };
+
+  it('shows in that conversation, and again when it is reopened, never in another one', async () => {
+    let refuse: (err: unknown) => void = () => {};
+    vi.mocked(chat.sendMessage).mockReturnValue(new Promise((_ok, fail) => (refuse = fail)) as never);
+    chat.conversations.set([{ peer, unread: 0, canSend: true }, { peer: other, unread: 0, canSend: true }]);
+    chat.messagesByPeer.set({ peer: [message('m1', 'c1')], other: [message('m2', 'c2')] });
+    vi.mocked(fetchMessages).mockResolvedValue({ messages: [], next: '' } as unknown as MessagePage);
+    const keys = setup();
+    await keys.type(screen.getByPlaceholderText(msg('social.chatPlaceholder')), 'Hi');
+    await keys.click(screen.getByRole('button', { name: msg('social.chatSend') }));
+    await keys.click(screen.getByRole('button', { name: msg('social.chatBack') }));
+    await keys.click(screen.getByRole('button', { name: /Rival/ }));
+
+    refuse(new Error('offline'));
+    await vi.waitFor(() => expect(get(chat.chatSends)).toEqual({}));
+
+    expect(screen.queryByText(msg('social.chatSendError'))).toBeNull();
+    await keys.click(screen.getByRole('button', { name: msg('social.chatBack') }));
+    await keys.click(screen.getByRole('button', { name: /Friend/ }));
+    expect(screen.getByText(msg('social.chatSendError')).closest('.notice')?.getAttribute('data-tone')).toBe('danger');
   });
 });
 
