@@ -49,6 +49,7 @@
   import { listLegalDocuments, type LegalMeta } from '../../lib/services/legal';
   import { logsReason } from '../../lib/services/logsMessages';
   import { onLogUploadStatus, sendLogs, type LogUploadStatus, type SendLogsResult } from '../../lib/services/logsUpload';
+  import { uploadPercent } from '../../lib/support/progress';
   import { logsUploadErrorText } from '../../lib/services/logsUploadErrors';
   import { SCREENSHOT_HOTKEYS } from '../../lib/services/screenshots';
   import { OVERLAY_HOTKEYS, onOverlayStatus, overlayStatus, type OverlayStatus } from '../../lib/services/overlay';
@@ -119,10 +120,8 @@
   let logsSaving = $state(false);
   let logsSending = $state(false);
   let logsStage = $state<LogUploadStatus['state'] | 'idle'>('idle');
-  let logsProgress = $state<{ sentBytes: number; totalBytes: number } | null>(null);
-  const logsProgressPercent = $derived(
-    logsProgress ? Math.min(100, Math.round((logsProgress.sentBytes / logsProgress.totalBytes) * 100)) : 0,
-  );
+  let logsProgress = $state<LogUploadStatus | null>(null);
+  const logsProgressPercent = $derived(logsProgress ? uploadPercent(logsProgress) : 0);
   let logsSendResult = $state<SendLogsResult | null>(null);
   let logsSendFailure = $state('');
 
@@ -138,7 +137,7 @@
     const offLogs = onLogUploadStatus((status) => {
       logsStage = status.state;
       if (status.state === 'sending' && (status.totalBytes ?? 0) > 0) {
-        logsProgress = { sentBytes: status.sentBytes ?? 0, totalBytes: status.totalBytes ?? 0 };
+        logsProgress = status;
       } else if (status.state !== 'sending') {
         logsProgress = null;
       }
