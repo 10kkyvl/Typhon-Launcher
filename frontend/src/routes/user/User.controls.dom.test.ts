@@ -160,6 +160,15 @@ describe("a user's page: retrying a failed load", () => {
     await vi.waitFor(() => expect(document.activeElement).toBe(heading.closest('[tabindex="-1"]')));
     expect(document.activeElement).not.toBe(document.body);
   });
+
+  it('a failure without a reason of its own is said once, not as a title and again as the text', async () => {
+    authState.set('authenticated');
+    vi.mocked(fetchProfile).mockRejectedValueOnce(new Error('offline'));
+    renderDom(UserProfile, { username: 'ann' });
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent?.split(msg('social.userLoadFailed')).length).toBe(2);
+  });
 });
 
 describe("a user's page: a closed profile", () => {

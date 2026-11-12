@@ -277,10 +277,11 @@
       </EmptyState>
     </div>
   {:else if failure || retrying}
+    <!-- A failure without a reason of its own is the one sentence, not a title and the same text. -->
     <Notice
       tone="danger"
-      title={loadFailedTitle}
-      level={2}
+      title={failure !== loadFailedTitle ? loadFailedTitle : undefined}
+      level={failure !== loadFailedTitle ? 2 : undefined}
       bind:retrying
       retry={{ label: msg('common.retry'), run: retryLoad, focus: () => missingState, within: () => profileBox }}
     >
