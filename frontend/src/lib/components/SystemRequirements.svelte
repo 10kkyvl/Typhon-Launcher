@@ -71,15 +71,11 @@
   }
 
   let retrying = $state(false);
+  let root = $state<HTMLElement>();
 
-  async function retry() {
-    if (retrying) return;
-    retrying = true;
-    try {
-      await load(gameId, installPath, revision, true, true);
-    } finally {
-      retrying = false;
-    }
+  async function retry(): Promise<boolean> {
+    await load(gameId, installPath, revision, true, true);
+    return failure === '';
   }
 
   $effect(() => {
@@ -99,17 +95,14 @@
 </script>
 
 {#if gameId}
-  <div class="sysreq">
+  <div class="sysreq" bind:this={root}>
     {#if heading}<h3 class="title">{msg('sysreq.heading')}</h3>{/if}
-    {#if loading}
-      <Spinner size="sm" label={msg('sysreq.loading')} />
-    {:else if failure}
-      <Notice tone="danger" compact>
+    {#if failure || retrying}
+      <Notice tone="danger" compact bind:retrying retry={{ label: msg('sysreq.retry'), run: retry, within: () => root }}>
         {failure}
-        {#snippet action()}
-          <Button size="sm" variant="ghost" busy={retrying} onclick={retry}>{msg('sysreq.retry')}</Button>
-        {/snippet}
       </Notice>
+    {:else if loading}
+      <Spinner size="sm" label={msg('sysreq.loading')} />
     {:else if report}
       <div class="line">
         <StatusBadge kind={tone} label={msg(verdictLabelKey(report))} dot={false} />

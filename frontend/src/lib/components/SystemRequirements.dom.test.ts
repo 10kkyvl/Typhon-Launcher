@@ -37,7 +37,7 @@ describe('SystemRequirements: loading and retrying', () => {
     expect(status.textContent?.trim()).toBe(msg('sysreq.loading'));
   });
 
-  it('keeps the failure notice and the focus on its busy Retry until the answer', async () => {
+  it('keeps the failure notice and the focus on its busy Retry until the answer, then focuses the checks toggle', async () => {
     let answer!: (value: SysreqReport) => void;
     vi.mocked(checkSystemRequirements)
       .mockRejectedValueOnce(new Error('offline'))
@@ -55,8 +55,23 @@ describe('SystemRequirements: loading and retrying', () => {
     expect(document.activeElement).toBe(retry);
 
     answer(report);
-    await screen.findByRole('button', { name: msg('sysreq.show') });
+    const toggle = await screen.findByRole('button', { name: msg('sysreq.show') });
     expect(notice.isConnected).toBe(false);
+    await vi.waitFor(() => expect(document.activeElement).toBe(toggle));
+  });
+
+  it('keeps the failure notice when the retry fails again, and says it again', async () => {
+    vi.mocked(checkSystemRequirements).mockRejectedValue(new Error('offline'));
+    const { user } = renderDom(SystemRequirements, { gameId: 'sysreq-retry-again', installPath: '/games' });
+    const retry = await screen.findByRole('button', { name: msg('sysreq.retry') });
+    const notice = retry.closest('.notice') as HTMLElement;
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(notice.querySelector('[data-part="notice-again"]')?.textContent).toBe(msg('sysreq.failed')));
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
   });
 });
 
