@@ -120,8 +120,9 @@
           </Button>
         {/if}
       </div>
-      {#if expanded}
-        <ul class="checks" id="{uid}-checks">
+      <!-- Rendered while collapsed too, so the toggle's aria-controls always names a list. -->
+      {#if checks.length > 0}
+        <ul class="checks" id="{uid}-checks" hidden={!expanded}>
           {#each checks as check (check.kind)}
             {@const rowTone = statusTone(check.status)}
             <li class="check">
@@ -193,6 +194,10 @@
     padding: var(--space-3) var(--space-4);
     border-radius: var(--radius-md);
     background: var(--surface-2);
+  }
+
+  .checks[hidden] {
+    display: none;
   }
 
   .check {

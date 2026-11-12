@@ -67,13 +67,19 @@ describe('SystemRequirements: the list of checks', () => {
     const toggle = await screen.findByRole('button', { name: msg('sysreq.show') });
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     expect(toggle.hasAttribute('aria-pressed')).toBe(false);
+    const list = document.getElementById(toggle.getAttribute('aria-controls') ?? '');
+    expect(list?.tagName).toBe('UL');
+    expect(list?.hidden).toBe(true);
     toggle.focus();
 
     await user.keyboard('{Enter}');
 
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
-    const list = document.getElementById(toggle.getAttribute('aria-controls') ?? '');
-    expect(list?.tagName).toBe('UL');
+    expect(list?.isConnected).toBe(true);
+    expect(list?.hidden).toBe(false);
     expect(list?.textContent).toContain(msg('sysreq.required'));
+
+    await user.keyboard('{Enter}');
+    expect(list?.hidden).toBe(true);
   });
 });
