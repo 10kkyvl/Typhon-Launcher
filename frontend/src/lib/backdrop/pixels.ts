@@ -46,7 +46,7 @@ export const WASH_TEXT: readonly { name: string; min: number }[] = [
   { name: '--warning', min: 3 },
   { name: '--danger', min: 3 },
 ];
-const WASH_MARGIN = 0.1;
+export const WASH_MARGIN = 0.1;
 /** Fewer grey levels than this between the art's mid tones is a flat tint, not art: no wash is drawn. */
 export const MIN_SPREAD = 8;
 

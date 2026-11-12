@@ -4,6 +4,7 @@ import type { RGBA } from '../theme/contrastReport';
 import {
   BACKDROP_LOOK_COLORS,
   MIN_SPREAD,
+  WASH_MARGIN,
   WASH_TEXT,
   backdropLook,
   drawArt,
@@ -175,18 +176,18 @@ describe('the look of the backdrop', () => {
   ] as const)('%s: the faint text sets the strength of the wash, not the status colours', (_id, colors, side) => {
     const bound = (names: readonly { name: string; min: number }[]) =>
       washLimit(
-        names.map((t) => ({ color: rgbOf(colors[t.name]), ratio: t.min + 0.1 })),
+        names.map((t) => ({ color: rgbOf(colors[t.name]), ratio: t.min + WASH_MARGIN })),
         side === 'max',
       )?.[side];
     const faint = luminance(rgbOf(colors['--text-3'])) + 0.05;
-    expect(bound(WASH_TEXT)).toBeCloseTo(side === 'max' ? faint / 4.6 - 0.05 : faint * 4.6 - 0.05, 6);
+    const at = (WASH_TEXT.find((t) => t.name === '--text-3')?.min ?? NaN) + WASH_MARGIN;
+    expect(bound(WASH_TEXT)).toBeCloseTo(side === 'max' ? faint / at - 0.05 : faint * at - 0.05, 6);
     expect(bound(WASH_TEXT)).toBe(bound(WASH_TEXT.filter((t) => !/success|warning|danger/.test(t.name))));
   });
 
   it('draws the art in blush and leaves it more than MIN_SPREAD grey levels between its mid tones', () => {
     const look = backdropLook(BLUSH, 0.75, 0.74) as BackdropLook;
     expect(look).not.toBeNull();
-    expect(look.limit.min).toBeCloseTo(0.5312, 3);
     expect(washSpread(look)).toBeGreaterThan(2 * MIN_SPREAD);
   });
 

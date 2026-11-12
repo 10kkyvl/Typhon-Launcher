@@ -4,7 +4,16 @@ import { cssColor, ruleBody, styleOf } from '../lib/testing/css';
 import { goSources } from '../lib/testing/sources';
 import { luminance, rgb } from '../lib/theme/accent';
 import { CONTRAST_CHECKS, CONTRAST_FALLBACKS, CONTRAST_TOKENS, DERIVED_COLORS, contrastReport, type RGBA } from '../lib/theme/contrastReport';
-import { BACKDROP_LOOK_COLORS, WASH_TEXT, backdropLook, lookPixels, type BackdropLook } from '../lib/backdrop/pixels';
+import {
+  BACKDROP_LOOK_COLORS,
+  WASH_MARGIN,
+  WASH_TEXT,
+  backdropLook,
+  lookPixels,
+  washLimit,
+  type BackdropLook,
+  type WashLimit,
+} from '../lib/backdrop/pixels';
 
 /**
  * WCAG 2.2 AA for every built-in theme, measured on the preset values in internal/theme/presets.go:
@@ -184,12 +193,15 @@ const NO_WASH: Record<string, string> = {
   contrast: 'its dim share is 1, nothing of the art would show',
 };
 
-// The luminance the wash is held to in the presets that draw one: under it on a dark page, over it on a
-// light one. It follows from --text-3 at 4.5:1 and moves only when that colour or the page does.
-const WASH_LIMIT: Record<string, { side: 'max' | 'min'; at: number }> = {
-  dark: { side: 'max', at: 0.0278 },
-  blush: { side: 'min', at: 0.5312 },
-};
+// The luminance the wash is held to where one is drawn: the band --text-3 alone allows at its own target,
+// under it on a dark page and over it on a light one. No other colour on the page narrows it.
+function faintBand(tokens: Record<string, string>) {
+  const bg = paint(tokens, '--bg', BLACK);
+  const faint = paint(tokens, '--text-3', bg);
+  const target = WASH_TEXT.find((t) => t.name === '--text-3');
+  expect(target, '--text-3 in WASH_TEXT').toBeDefined();
+  return washLimit([{ color: faint, ratio: (target as { min: number }).min + WASH_MARGIN }], luminance(faint) > luminance(bg));
+}
 
 function washLook(tokens: Record<string, string>) {
   const colors = Object.fromEntries(BACKDROP_LOOK_COLORS.map((name) => [name, rgba(tokens[name] ?? name)]));
@@ -344,9 +356,14 @@ describe('built-in themes', () => {
       it(`${id} holds the wash to the luminance its faint text allows`, () => {
         const preset = builtIns().find((p) => p.id === id);
         expect(preset, id).toBeDefined();
-        const expected = WASH_LIMIT[id];
-        expect(expected, id).toBeDefined();
-        expect(washLook((preset as Preset).tokens)?.limit[expected.side]).toBeCloseTo(expected.at, 3);
+        const tokens = (preset as Preset).tokens;
+        const band = faintBand(tokens);
+        expect(band, id).not.toBeNull();
+        const limit = washLook(tokens)?.limit;
+        expect(Object.keys(limit ?? {})).toEqual(Object.keys(band as WashLimit));
+        for (const side of ['max', 'min'] as const) {
+          if (band?.[side] !== undefined) expect(limit?.[side], side).toBeCloseTo(band[side] as number, 6);
+        }
       });
     }
 
