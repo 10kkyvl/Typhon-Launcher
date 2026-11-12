@@ -65,7 +65,7 @@ describe('AchievementsCard: what the list lacks', () => {
 });
 
 describe('AchievementsCard: retrying a failed load', () => {
-  it('keeps the notice and the focus on its busy Retry until the answer, then gives way to the list', async () => {
+  it('keeps the notice and the focus on its busy Retry until the answer, then focuses the refresh', async () => {
     const again = deferred<AchievementsView>();
     vi.mocked(fetchAchievements).mockRejectedValueOnce(new Error('disk offline')).mockReturnValueOnce(again.promise);
     const { user } = renderDom(AchievementsCard, { gameId: 'g1' });
@@ -81,8 +81,25 @@ describe('AchievementsCard: retrying a failed load', () => {
     expect(document.activeElement).toBe(retry);
 
     again.resolve(view());
-    await screen.findByRole('button', { name: msg('games.achievementsRefresh') });
+    const refresh = await screen.findByRole('button', { name: msg('games.achievementsRefresh') });
     expect(notice.isConnected).toBe(false);
+    await vi.waitFor(() => expect(document.activeElement).toBe(refresh));
+  });
+
+  it('keeps the notice when the retry fails again, and says it again', async () => {
+    vi.mocked(fetchAchievements).mockRejectedValue(new Error('disk offline'));
+    const { user } = renderDom(AchievementsCard, { gameId: 'g1' });
+    const retry = await screen.findByRole('button', { name: msg('common.retry') });
+    const notice = retry.closest('.notice') as HTMLElement;
+    const words = notice.querySelector('.text')?.textContent?.trim() ?? '';
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(notice.querySelector('[data-part="notice-again"]')?.textContent).toBe(words));
+    expect(words).not.toBe('');
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
   });
 });
 

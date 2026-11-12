@@ -29,8 +29,9 @@
   let loadedId = '';
 
   const stamp = $derived($achievementsStamp[gameId] ?? 0);
+  let retrying = $state(false);
   const shown = $derived(
-    !noSteam && (loadError !== '' || (view !== null && view.source === 'local' && view.total > 0)),
+    !noSteam && (retrying || loadError !== '' || (view !== null && view.source === 'local' && view.total > 0)),
   );
   const namesMissing = $derived(view !== null && view.schemaError !== '');
   const schemaNote = $derived(
@@ -68,16 +69,11 @@
     }
   }
 
-  let retrying = $state(false);
+  let refreshSlot = $state<HTMLElement>();
 
-  async function retry() {
-    if (retrying) return;
-    retrying = true;
-    try {
-      await load(gameId, true);
-    } finally {
-      retrying = false;
-    }
+  async function retry(): Promise<boolean> {
+    await load(gameId, true);
+    return loadError === '';
   }
 
   async function refresh() {
@@ -138,10 +134,12 @@
   <Card title={$t('games.achievementsTitle')} surface="panel" padding="md-even">
     {#snippet action()}
       {#if view}
-        <Button variant="ghost" size="sm" busy={refreshing} onclick={refresh}>
-          {#if !refreshing}<RefreshCw size="1.4rem" strokeWidth={1.8} />{/if}
-          {$t('games.achievementsRefresh')}
-        </Button>
+        <span class="refresh" bind:this={refreshSlot}>
+          <Button variant="ghost" size="sm" busy={refreshing} onclick={refresh}>
+            {#if !refreshing}<RefreshCw size="1.4rem" strokeWidth={1.8} />{/if}
+            {$t('games.achievementsRefresh')}
+          </Button>
+        </span>
       {/if}
     {/snippet}
 
@@ -215,21 +213,19 @@
       </div>
 
       <p class="source">{$t('games.achievementsSource')}</p>
-    {:else if loadError}
-      <Notice tone="danger" compact>
+    {:else if loadError || retrying}
+      <Notice tone="danger" compact bind:retrying retry={{ label: $t('common.retry'), run: retry, within: () => refreshSlot }}>
         {loadError}
-        {#snippet action()}
-          <Button size="sm" busy={retrying} onclick={retry}>
-            {#if !retrying}<RefreshCw size="1.4rem" strokeWidth={1.8} />{/if}
-            {$t('common.retry')}
-          </Button>
-        {/snippet}
       </Notice>
     {/if}
   </Card>
 {/if}
 
 <style>
+  .refresh {
+    display: contents;
+  }
+
   .progress {
     display: flex;
     flex-direction: column;
