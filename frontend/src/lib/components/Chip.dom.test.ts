@@ -1,9 +1,12 @@
 import { render, screen } from '@testing-library/svelte';
 import { createRawSnippet } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ruleBody, styleOf } from '../testing/css';
 import { user } from '../testing/dom';
+import { description } from '../testing/hints';
 import ChipHarness from '../testing/ChipHarness.svelte';
 import Chip from './Chip.svelte';
+import chipSource from './Chip.svelte?raw';
 
 let app: HTMLDivElement;
 
@@ -85,5 +88,62 @@ describe('Chip', () => {
     expect(onremove).not.toHaveBeenCalled();
     await keys.keyboard(' ');
     expect(onremove).toHaveBeenCalledTimes(1);
+  });
+});
+
+// A chip that cannot be pressed now, as Button: refused with a reason it keeps focus and says why;
+// busy (its own request running) it keeps focus and says so; disabled alone it is out of reach.
+describe('Chip that cannot be pressed now', () => {
+  const props = (extra: Record<string, unknown>) => ({ 'aria-label': 'Helpful', onclick: vi.fn(), ...extra });
+
+  async function pressAll(chip: HTMLElement) {
+    const keys = user();
+    await keys.click(chip);
+    chip.focus();
+    await keys.keyboard('{Enter}');
+    await keys.keyboard(' ');
+  }
+
+  it('disabled with a reason stays in the Tab order, says why and ignores a press, Enter and Space', async () => {
+    const extra = props({ disabled: true, reason: 'Sign in to vote' });
+    render(Chip, { target: app, props: extra });
+    const chip = screen.getByRole('button', { name: 'Helpful' });
+
+    await user().tab();
+    expect(document.activeElement).toBe(chip);
+    await pressAll(chip);
+
+    expect(chip.hasAttribute('disabled')).toBe(false);
+    expect(chip.getAttribute('aria-disabled')).toBe('true');
+    expect(description(chip)).toBe('Sign in to vote');
+    expect(extra.onclick).not.toHaveBeenCalled();
+  });
+
+  it('busy keeps focus, says it is busy and ignores a press, Enter and Space', async () => {
+    const extra = props({ busy: true });
+    render(Chip, { target: app, props: extra });
+    const chip = screen.getByRole('button', { name: 'Helpful' });
+    chip.focus();
+
+    await pressAll(chip);
+
+    expect(document.activeElement).toBe(chip);
+    expect(chip.getAttribute('aria-busy')).toBe('true');
+    expect(chip.getAttribute('aria-disabled')).toBe('true');
+    expect(extra.onclick).not.toHaveBeenCalled();
+  });
+
+  it('disabled alone is out of reach', () => {
+    render(Chip, { target: app, props: props({ disabled: true }) });
+    expect((screen.getByRole('button', { name: 'Helpful' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('draws no hover, no press and no pointer while it cannot be pressed', () => {
+    const css = styleOf(chipSource, 'Chip.svelte');
+    const NOT = ":not(:disabled, [aria-disabled='true'])";
+    for (const selector of [`button.chip:active${NOT}`, `button.outline:hover${NOT}`, `button.filled:hover${NOT}`]) expect(() => ruleBody(css, selector), selector).not.toThrow();
+    expect(css).not.toMatch(/button\.(?:chip:active|outline:hover|filled:hover|quiet:hover)\s*[,{]/);
+    expect(ruleBody(css, "button.chip:is(:disabled, [aria-disabled='true'])")).toMatchObject({ cursor: 'default' });
+    expect(ruleBody(css, "button.chip[aria-busy='true']")).toMatchObject({ cursor: 'progress', opacity: '1' });
   });
 });

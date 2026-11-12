@@ -2,6 +2,7 @@
   import type { Snippet } from 'svelte';
   import type { HTMLButtonAttributes } from 'svelte/elements';
   import { X } from '@lucide/svelte';
+  import { refuseWhile } from './refuse';
   import Tooltip from './Tooltip.svelte';
 
   /**
@@ -26,12 +27,15 @@
     variant = 'outline',
     type = 'button',
     hint,
+    disabled = false,
+    reason,
+    busy = false,
     onclick,
     onremove,
     removeLabel,
     children,
     ...rest
-  }: Omit<HTMLButtonAttributes, 'class' | 'onclick' | 'children' | 'title'> & {
+  }: Omit<HTMLButtonAttributes, 'class' | 'onclick' | 'children' | 'title' | 'disabled'> & {
     /**
      * Drawn in the accent. On a chip that is pressed to turn something on and off it is also its
      * state (aria-pressed); on the trigger of a menu it only shows that a choice is applied, and the
@@ -41,11 +45,31 @@
     variant?: 'filled' | 'outline' | 'quiet';
     /** What pressing the chip does, when its text does not say it: shown as a tooltip, its description. */
     hint?: string;
+    /** Out of reach (native disabled); with `reason` it stays reachable and says why, as Button does. */
+    disabled?: boolean;
+    /**
+     * Why the chip cannot be pressed now: while disabled with a reason it stays in the Tab order
+     * (aria-disabled), shows the reason as its hint and is described by it, and ignores a press,
+     * Enter and Space. Pass '' while there is none, so it stays one element as the state flips.
+     */
+    reason?: string;
+    /**
+     * Its own request is running (a vote, a reaction): focus stays on it, it says it is busy and
+     * unavailable, ignores presses, and draws no hover or press. No spinner: a chip is a word in a row,
+     * and its count or state changes when the answer comes.
+     */
+    busy?: boolean;
     onclick?: (e: MouseEvent) => void;
     children?: Snippet;
   } & Removable = $props();
 
   const toggle = $derived(selected !== undefined && onclick !== undefined && !rest['aria-haspopup']);
+  const refused = $derived(disabled && Boolean(reason));
+  const blocked = $derived(refused || busy);
+  const guard = refuseWhile(() => blocked);
+  // A caller that still says aria-disabled by hand keeps it, and now gets the look with it.
+  const unavailable = $derived(blocked ? 'true' : rest['aria-disabled']);
+  const tip = $derived(refused ? reason : hint);
 </script>
 
 {#snippet chip()}
@@ -59,14 +83,25 @@
       </Tooltip>
     </span>
   {:else}
-    <button {...rest} {type} class="chip {variant}" class:selected aria-pressed={toggle ? selected : undefined} {onclick}>
+    <button
+      {...rest}
+      {type}
+      class="chip {variant}"
+      class:selected
+      aria-pressed={toggle ? selected : undefined}
+      aria-disabled={unavailable}
+      aria-busy={busy || undefined}
+      disabled={disabled && !refused}
+      {onclick}
+      {@attach reason !== undefined || busy ? guard : undefined}
+    >
       {@render children?.()}
     </button>
   {/if}
 {/snippet}
 
-{#if hint}
-  <Tooltip text={hint}>{@render chip()}</Tooltip>
+{#if hint !== undefined || reason !== undefined}
+  <Tooltip text={tip ?? ''}>{@render chip()}</Tooltip>
 {:else}
   {@render chip()}
 {/if}
@@ -91,18 +126,18 @@
       transform var(--dur-fast) var(--ease);
   }
 
-  button.chip:active {
+  button.chip:active:not(:disabled, [aria-disabled='true']) {
     transform: scale(0.96);
   }
 
   /* With animations off a press changes nothing but the colour. */
   @media (prefers-reduced-motion: reduce) {
-    button.chip:active {
+    button.chip:active:not(:disabled, [aria-disabled='true']) {
       transform: none;
     }
   }
 
-  :global(.no-anim) button.chip:active {
+  :global(.no-anim) button.chip:active:not(:disabled, [aria-disabled='true']) {
     transform: none;
   }
 
@@ -112,7 +147,7 @@
     color: var(--text-2);
   }
 
-  button.outline:hover {
+  button.outline:hover:not(:disabled, [aria-disabled='true']) {
     background: var(--hover);
     color: var(--text);
   }
@@ -129,7 +164,7 @@
     color: var(--text-2);
   }
 
-  button.filled:hover {
+  button.filled:hover:not(:disabled, [aria-disabled='true']) {
     background: var(--surface-4);
     color: var(--text);
   }
@@ -145,11 +180,22 @@
     color: var(--text-2);
   }
 
-  button.quiet:hover,
+  button.quiet:hover:not(:disabled, [aria-disabled='true']),
   .quiet.selected,
   .quiet[aria-expanded='true'] {
     background: var(--hover-strong);
     color: var(--text);
+  }
+
+  button.chip:is(:disabled, [aria-disabled='true']) {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  /* Busy is not unavailable: it keeps its colour while its own request runs. */
+  button.chip[aria-busy='true'] {
+    opacity: 1;
+    cursor: progress;
   }
 
   .removable {

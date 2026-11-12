@@ -100,7 +100,7 @@ describe('base controls take their look from tokens', () => {
   it.each([
     ['lib/components/Button.svelte', ".btn:is(:hover, :active):not(:disabled, [aria-disabled='true'])", ".btn:active:not(:disabled, [aria-disabled='true'])"],
     ['lib/components/IconButton.svelte', ".icon-btn:active:not(:disabled, [aria-disabled='true'])", ".icon-btn:active:not(:disabled, [aria-disabled='true'])"],
-    ['lib/components/Chip.svelte', 'button.chip:active', 'button.chip:active'],
+    ['lib/components/Chip.svelte', "button.chip:active:not(:disabled, [aria-disabled='true'])", "button.chip:active:not(:disabled, [aria-disabled='true'])"],
   ])('%s moves nothing when animations are off', (path, still, moving) => {
     const css = style(path);
     const escaped = still.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
