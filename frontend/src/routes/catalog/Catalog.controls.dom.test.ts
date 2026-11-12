@@ -161,6 +161,66 @@ describe('Catalog: retrying', () => {
   });
 });
 
+describe('Catalog: the next page', () => {
+  // The second page fails (its warm-up included) until `fails` turns false; then it waits for `answer`.
+  function secondPage() {
+    const state = { fails: true as boolean | Error, answer: deferred() };
+    vi.mocked(queryCatalogGames).mockImplementation(async (query) => {
+      if ((query.page ?? 1) === 1) return page([{ id: 'c-celeste', title: 'Celeste' }], 2);
+      if (state.fails) throw state.fails instanceof Error ? state.fails : new Error('offline');
+      return state.answer.promise;
+    });
+    return state;
+  }
+
+  it('"Show more" is busy while it loads, keeps its words and the focus', async () => {
+    const state = secondPage();
+    state.fails = false;
+    const { user } = renderDom(Catalog);
+    const more = await screen.findByRole('button', { name: msg('games.catalogShowMore') });
+    more.focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(more.getAttribute('aria-busy')).toBe('true');
+    expect(more.hasAttribute('disabled')).toBe(false);
+    expect(more.textContent?.trim()).toBe(msg('games.catalogShowMore'));
+    expect(document.activeElement).toBe(more);
+  });
+
+  it('pressed from the keyboard and failed: focus goes to the Retry of the notice that took its place', async () => {
+    secondPage();
+    const { user } = renderDom(Catalog);
+    const more = await screen.findByRole('button', { name: msg('games.catalogShowMore') });
+    more.focus();
+
+    await user.keyboard('{Enter}');
+
+    const notice = (await screen.findByText(msg('games.catalogMoreFailed'))).closest('.notice') as HTMLElement;
+    expect(more.isConnected).toBe(false);
+    await vi.waitFor(() => expect(document.activeElement).toBe(within(notice).getByRole('button', { name: msg('games.catalogRetry') })));
+  });
+
+  it('its notice retries that page, busy and focused, then focus goes to the first game it brought', async () => {
+    catalogView.set('list');
+    const state = secondPage();
+    const { user } = renderDom(Catalog);
+    const more = await screen.findByRole('button', { name: msg('games.catalogShowMore') });
+    more.focus();
+    await user.keyboard('{Enter}');
+    const notice = (await screen.findByText(msg('games.catalogMoreFailed'))).closest('.notice') as HTMLElement;
+    state.fails = false;
+
+    await retryHolds(notice, user);
+
+    state.answer.resolve({ ...page([{ id: 'c-hades', title: 'Hades' }], 2), page: 2 });
+    await vi.waitFor(() => expect(notice.isConnected).toBe(false));
+    expect(vi.mocked(queryCatalogGames).mock.calls.at(-1)?.[0]).toMatchObject({ page: 2 });
+    await vi.waitFor(() => expect(document.activeElement?.closest('.list-entry')?.textContent).toContain('Hades'));
+  });
+
+});
+
 describe('Catalog: a game already installed', () => {
   afterEach(() => libraryGames.set([]));
 

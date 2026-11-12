@@ -10,7 +10,7 @@
   import { applyFreshPage, canWarmNextPage, createFreshPageBuffer, staleKeyOf, type FreshPageEvent } from '../../lib/catalog/stale';
   import { maxAutoPages, observerAvailable, shouldLoadMore, watchSentinel } from '../../lib/catalog/infinite';
   import { identityEvidenceChanged, identityFingerprint, matchesCatalogIdentity } from '../../lib/catalog/identity';
-  import { onDestroy, onMount } from 'svelte';
+  import { onDestroy, onMount, tick } from 'svelte';
   import { get } from 'svelte/store';
   import Notice from '../../lib/components/Notice.svelte';
   import RecommendationShelf from '../../lib/components/RecommendationShelf.svelte';
@@ -53,6 +53,7 @@
   import { sources } from '../../lib/stores/sources';
   import { catalogView } from '../../lib/stores/ui';
   import { errorCode, hasMessage, msg } from '../../lib/i18n';
+  import { focusableIn, focusQuietly } from '../../lib/layers/focus';
 
   function libraryErrorText(err: unknown, fallback: string): string {
     const code = errorCode(err);
@@ -378,9 +379,34 @@
     return !failed && !offline;
   }
 
-  function morePage() {
+  let moreSlot = $state<HTMLElement>();
+  let moreRetrying = $state(false);
+  let freshFrom = 0;
+
+  // "Show more" goes when its page fails and the failure takes its place: focus that was on it moves
+  // to that notice's Retry instead of falling to the page.
+  async function showMore() {
+    const pressed = Boolean(moreSlot?.contains(document.activeElement));
     autoPages = 0;
-    void fetchPage(page + 1);
+    await fetchPage(page + 1);
+    if (!pressed || !failed) return;
+    await tick();
+    const active = document.activeElement;
+    if (active && active !== document.body && active.isConnected) return;
+    const retry = moreSlot ? focusableIn(moreSlot)[0] : undefined;
+    if (retry) focusQuietly(retry);
+  }
+
+  // The notice's retry of the page that failed: on success focus goes to the first game it brought.
+  async function retryNextPage(): Promise<boolean> {
+    freshFrom = displayedItems.length;
+    await fetchPage(page + 1);
+    return !failed;
+  }
+
+  function firstFresh(): HTMLElement | undefined {
+    const node = results?.children[freshFrom];
+    return node instanceof HTMLElement ? focusableIn(node)[0] : undefined;
   }
 
   function refreshPicks() {
@@ -948,15 +974,15 @@
 
   {#if items.length > 0}
     {#if autoLoad}<div class="sentinel" bind:this={sentinel} aria-hidden="true"></div>{/if}
-    <div class="more">
-      {#if showMoreButton && !failed}<Button onclick={morePage} disabled={loading}>
-        {appending ? msg('games.catalogLoadingMore') : msg('games.catalogShowMore')}
-      </Button>{:else if hasMore && appending && !failed}<Spinner label={msg('games.catalogLoadingMore')} />{/if}
-      {#if failed}
-        <Notice tone="danger" compact>
+    <div class="more" bind:this={moreSlot}>
+      {#if failed || moreRetrying}
+        <Notice tone="danger" compact bind:retrying={moreRetrying} retry={{ label: msg('games.catalogRetry'), run: retryNextPage, focus: firstFresh }}>
           {msg('games.catalogMoreFailed')}
-          {#snippet action()}<Button size="sm" busy={appending} onclick={morePage}>{msg('games.catalogRetry')}</Button>{/snippet}
         </Notice>
+      {:else if showMoreButton}
+        <Button onclick={showMore} busy={loading}>{msg('games.catalogShowMore')}</Button>
+      {:else if hasMore && appending}
+        <Spinner label={msg('games.catalogLoadingMore')} />
       {/if}
       <span class="muted">{msg('games.catalogShownOf', { shown: items.length, total })}</span>
     </div>
