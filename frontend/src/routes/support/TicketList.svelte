@@ -22,56 +22,72 @@
   let loading = $state(true);
   let loadingMore = $state(false);
   let failure = $state('');
+  // Which request the failure is about, so Retry asks for that one again.
+  let failedPage: 'first' | 'more' | null = null;
   let loaded = $state(false);
   let retrying = $state(false);
+  let list = $state<HTMLElement>();
+  let firstNew = -1;
   let run = 0;
 
-  // A retry keeps the failure on screen until its answer: the notice and its focused Retry stay.
-  async function load(retry = false) {
+  // A failure stays on screen until an answer replaces it: a refresh that starts does not clear it.
+  async function load(): Promise<boolean> {
     const current = ++run;
-    if (!retry) failure = '';
     try {
       const page = await listTickets('');
-      if (current !== run) return;
+      if (current !== run) return false;
       tickets = page.tickets;
       next = page.next;
       loaded = true;
       failure = '';
+      failedPage = null;
+      return true;
     } catch (err) {
-      if (current !== run) return;
+      if (current !== run) return false;
       failure = supportErrorText(err, msg('tickets.loadFailed'));
+      failedPage = 'first';
+      return false;
     } finally {
       if (current === run) loading = false;
     }
   }
 
-  async function more() {
-    if (loadingMore || !next) return;
+  async function more(): Promise<boolean> {
+    if (loadingMore || !next) return false;
     const current = ++run;
     loadingMore = true;
-    failure = '';
     try {
       const page = await listTickets(next);
-      if (current !== run) return;
+      if (current !== run) return false;
       const known = new Set(tickets.map((item) => item.number));
       tickets = [...tickets, ...page.tickets.filter((item) => !known.has(item.number))];
       next = page.next;
+      failure = '';
+      failedPage = null;
+      return true;
     } catch (err) {
-      if (current !== run) return;
+      if (current !== run) return false;
       failure = supportErrorText(err, msg('tickets.loadFailed'));
+      failedPage = 'more';
+      return false;
     } finally {
       loadingMore = false;
     }
   }
 
-  async function retry() {
-    if (retrying) return;
-    retrying = true;
-    try {
-      await load(true);
-    } finally {
-      retrying = false;
+  // Retry repeats the request that failed: a later page is asked for again and the pages on screen
+  // stay; on success focus goes to the first request it brought.
+  function retry(): Promise<boolean> {
+    if (failedPage !== 'more') {
+      firstNew = -1;
+      return load();
     }
+    firstNew = tickets.length;
+    return more();
+  }
+
+  function retryFocus(): HTMLElement | undefined {
+    return firstNew < 0 ? undefined : list?.querySelectorAll<HTMLElement>('button.row')[firstNew];
   }
 
   onMount(() => {
@@ -87,7 +103,8 @@
     untrack(() => {
       const changed = lastUnread !== null && lastUnread !== count;
       lastUnread = count;
-      if (changed && loaded && !loadingMore) void load();
+      // A retry that runs is not overtaken: its notice stays and its answer is kept.
+      if (changed && loaded && !loadingMore && !retrying) void load();
     });
   });
 
@@ -122,13 +139,10 @@
   {/snippet}
 </PageHeader>
 
-{#if failure}
+{#if failure || retrying}
   <div class="banner">
-    <Notice tone="danger">
+    <Notice tone="danger" bind:retrying retry={{ label: msg('common.retry'), run: retry, focus: retryFocus, within: () => list }}>
       {failure}
-      {#snippet action()}
-        <Button size="sm" busy={retrying} onclick={retry}>{msg('common.retry')}</Button>
-      {/snippet}
     </Notice>
   </div>
 {/if}
@@ -145,7 +159,7 @@
     {/snippet}
   </EmptyState>
 {:else}
-  <ul class="list">
+  <ul class="list" bind:this={list}>
     {#each tickets as item (item.number)}
       {@const status = statusView(item.status)}
       <li>

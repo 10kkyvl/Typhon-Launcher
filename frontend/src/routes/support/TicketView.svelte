@@ -53,51 +53,36 @@
   const resolved = $derived(ticket?.status === 'resolved');
   const stage = $derived(logsStageText(upload));
 
-  // A retry keeps the failure on screen until its answer: the notice and its focused Retry stay.
-  async function load(retry = false) {
+  let head = $state<HTMLElement>();
+  let replyBox = $state<HTMLElement>();
+
+  // A failure stays on screen until an answer replaces it: a refresh that starts does not clear it.
+  async function load(): Promise<boolean> {
     const current = ++run;
-    if (!retry) failure = '';
     try {
       const next = await getTicket(number);
-      if (current !== run) return;
+      if (current !== run) return false;
       thread = next;
       failure = '';
       void refreshUnread();
+      return true;
     } catch (err) {
-      if (current !== run) return;
+      if (current !== run) return false;
       failure = supportErrorText(err, msg('tickets.ticketLoadFailed'));
+      return false;
     } finally {
       if (current === run) loading = false;
     }
   }
 
-  async function loadLimits(retry = false) {
-    if (!retry) limitsFailure = '';
+  async function loadLimits(): Promise<boolean> {
     try {
       limits = await ticketLimits();
       limitsFailure = '';
+      return true;
     } catch (err) {
       limitsFailure = supportErrorText(err, msg('tickets.limitsFailed'));
-    }
-  }
-
-  async function retry() {
-    if (retrying) return;
-    retrying = true;
-    try {
-      await load(true);
-    } finally {
-      retrying = false;
-    }
-  }
-
-  async function retryLimits() {
-    if (limitsRetrying) return;
-    limitsRetrying = true;
-    try {
-      await loadLimits(true);
-    } finally {
-      limitsRetrying = false;
+      return false;
     }
   }
 
@@ -119,7 +104,8 @@
     untrack(() => {
       const grew = unreadGrew(lastUnread, count);
       lastUnread = count;
-      if (grew && thread && !sending) void load();
+      // A retry that runs is not overtaken: its notice stays and its answer is kept.
+      if (grew && thread && !sending && !retrying) void load();
     });
   });
 
@@ -177,13 +163,10 @@
   </Button>
 </div>
 
-{#if failure}
+{#if failure || retrying}
   <div class="banner">
-    <Notice tone="danger">
+    <Notice tone="danger" bind:retrying retry={{ label: msg('common.retry'), run: load, focus: () => head?.querySelector('h1') }}>
       {failure}
-      {#snippet action()}
-        <Button size="sm" busy={retrying} onclick={retry}>{msg('common.retry')}</Button>
-      {/snippet}
     </Notice>
   </div>
 {/if}
@@ -191,7 +174,7 @@
 {#if loading}
   <Spinner label={msg('tickets.loading')} />
 {:else if ticket && thread}
-  <header class="head">
+  <header class="head" bind:this={head}>
     <div class="heading">
       <h1 dir="auto" tabindex="-1">{ticket.subject}</h1>
       <div class="meta">
@@ -220,16 +203,13 @@
     {/each}
   </ul>
 
-  <div class="reply">
+  <div class="reply" bind:this={replyBox}>
     {#if resolved}
       <p class="hint">{msg('tickets.reopenNote')}</p>
     {/if}
-    {#if limitsFailure}
-      <Notice tone="danger">
+    {#if limitsFailure || limitsRetrying}
+      <Notice tone="danger" bind:retrying={limitsRetrying} retry={{ label: msg('common.retry'), run: loadLimits, within: () => replyBox }}>
         {limitsFailure}
-        {#snippet action()}
-          <Button size="sm" busy={limitsRetrying} onclick={retryLimits}>{msg('common.retry')}</Button>
-        {/snippet}
       </Notice>
     {:else if limits}
       <div class="field">

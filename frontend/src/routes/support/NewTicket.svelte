@@ -52,24 +52,17 @@
   const topics = $derived(topicOptions());
   const stage = $derived(logsStageText(upload));
 
-  // A retry keeps the failure on screen until its answer: the notice and its focused Retry stay.
-  async function loadLimits(retry = false) {
-    if (!retry) limitsFailure = '';
+  let form = $state<HTMLElement>();
+
+  // A failure stays on screen until an answer replaces it.
+  async function loadLimits(): Promise<boolean> {
     try {
       limits = await ticketLimits();
       limitsFailure = '';
+      return true;
     } catch (err) {
       limitsFailure = supportErrorText(err, msg('tickets.limitsFailed'));
-    }
-  }
-
-  async function retryLimits() {
-    if (limitsRetrying) return;
-    limitsRetrying = true;
-    try {
-      await loadLimits(true);
-    } finally {
-      limitsRetrying = false;
+      return false;
     }
   }
 
@@ -132,17 +125,14 @@
 
 <PageHeader title={msg('tickets.formTitle')} subtitle={msg('tickets.subtitle')} />
 
-{#if limitsFailure}
-  <Notice tone="danger">
+{#if limitsFailure || limitsRetrying}
+  <Notice tone="danger" bind:retrying={limitsRetrying} retry={{ label: msg('common.retry'), run: loadLimits, within: () => form }}>
     {limitsFailure}
-    {#snippet action()}
-      <Button size="sm" busy={limitsRetrying} onclick={retryLimits}>{msg('common.retry')}</Button>
-    {/snippet}
   </Notice>
 {:else if !limits}
   <Spinner label={msg('tickets.loading')} />
 {:else}
-  <div class="form">
+  <div class="form" bind:this={form}>
     <div class="field">
       <span class="label" id="{uid}-topic-label">{msg('tickets.topicLabel')}</span>
       <Select options={topics} value={topic} width="100%" labelledby="{uid}-topic-label" onchange={changeTopic} />
