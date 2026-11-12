@@ -87,6 +87,8 @@ export const transfers = {
   'transfers.sourcesColEntries': 'Записей',
   'transfers.sourcesColMatched': 'Сопоставлено',
   'transfers.sourcesMatchTooltip': 'Сопоставлено {matched} · на проверку {review} · без совпадения {unmatched}',
+  'transfers.sourcesMatchName': 'Сопоставлено: {matched}',
+  'transfers.sourcesMatchReviewName': 'Сопоставлено: {matched}, на проверку: {review}',
   'transfers.sourcesMenuFor': 'Действия с источником «{name}»',
 
   'transfers.lanTitle': 'Локальная сеть',

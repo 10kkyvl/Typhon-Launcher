@@ -90,6 +90,8 @@ export const transfers: Record<TransfersKey, Message> = {
   'transfers.sourcesColEntries': 'Entries',
   'transfers.sourcesColMatched': 'Matched',
   'transfers.sourcesMatchTooltip': 'Matched {matched} · to review {review} · unmatched {unmatched}',
+  'transfers.sourcesMatchName': 'Matched: {matched}',
+  'transfers.sourcesMatchReviewName': 'Matched: {matched}, to review: {review}',
   'transfers.sourcesMenuFor': 'Actions for the source {name}',
 
   'transfers.lanTitle': 'Local network',
