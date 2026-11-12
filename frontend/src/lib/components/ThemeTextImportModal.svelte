@@ -9,6 +9,7 @@
     open = $bindable(false),
     onimported,
   }: { open?: boolean; onimported: (theme: Theme) => void | Promise<void> } = $props();
+  const uid = $props.id();
 
   let text = $state('');
   let name = $state('');
@@ -39,18 +40,21 @@
 
 <Modal dismissible={!busy} bind:open title={msg('settings.appearanceImportTextTitle')} width="56rem">
   <div class="form">
-    <label class="field">
-      <span class="field-label">{msg('settings.appearanceImportTextLabel')}</span>
+    <div class="field">
+      <label class="field-label" for="{uid}-text">{msg('settings.appearanceImportTextLabel')}</label>
       <textarea
+        id="{uid}-text"
         class="input area"
         rows="12"
         spellcheck="false"
         placeholder={msg('settings.appearanceImportTextPlaceholder')}
         disabled={busy}
+        aria-invalid={error ? 'true' : undefined}
+        aria-describedby={error ? `${uid}-error` : undefined}
         bind:value={text}
       ></textarea>
-      {#if error}<span class="error" role="alert">{error}</span>{/if}
-    </label>
+      {#if error}<span class="error" id="{uid}-error" role="alert">{error}</span>{/if}
+    </div>
     <label class="field">
       <span class="field-label">{msg('settings.appearanceImportTextNameLabel')}</span>
       <input class="input" type="text" maxlength="64" disabled={busy} bind:value={name} />
@@ -60,7 +64,7 @@
 
   {#snippet footer()}
     <Button disabled={busy} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
-    <Button variant="primary" disabled={busy || !text.trim()} onclick={save}>{msg('common.save')}</Button>
+    <Button variant="primary" disabled={!busy && !text.trim()} {busy} onclick={save}>{msg('common.save')}</Button>
   {/snippet}
 </Modal>
 

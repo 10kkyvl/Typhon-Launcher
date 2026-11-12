@@ -1,6 +1,7 @@
 <script lang="ts">
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
+  import Notice from './Notice.svelte';
   import { AccountError } from '../services/account';
   import { accountErrorText } from '../services/accountMessages';
   import { authState, deleteAccount } from '../stores/user';
@@ -8,13 +9,18 @@
   import { msg } from '../i18n';
 
   let { onclose }: { onclose: () => void } = $props();
+  const uid = $props.id();
 
   let password = $state('');
   let running = $state(false);
   let error = $state('');
+  // The refusal was the password itself: it is said by the field, which is marked wrong.
+  let wrongPassword = $state(false);
+
+  const isWrongPassword = (err: unknown) => err instanceof AccountError && err.code === 'invalid_credentials';
 
   function failureText(err: unknown): string {
-    if (err instanceof AccountError && err.code === 'invalid_credentials') return msg('profile.deleteAccountWrongPassword');
+    if (isWrongPassword(err)) return msg('profile.deleteAccountWrongPassword');
     return accountErrorText(err, msg('profile.deleteAccountFailed'));
   }
 
@@ -22,6 +28,7 @@
     if (running || !password) return;
     running = true;
     error = '';
+    wrongPassword = false;
     try {
       await deleteAccount(password);
       toast(msg('profile.deleteAccountDone'), 'success');
@@ -30,6 +37,7 @@
       const text = failureText(err);
       if ($authState === 'authenticated' || $authState === 'offline') {
         error = text;
+        wrongPassword = isWrongPassword(err);
       } else {
         toast(text, 'danger');
         onclose();
@@ -49,15 +57,25 @@
     }}
   >
     <p class="text">{msg('profile.deleteAccountConfirmText')}</p>
-    <label class="field">
-      <span class="field-label">{msg('profile.deleteAccountPassword')}</span>
-      <input class="input" type="password" autocomplete="off" disabled={running} bind:value={password} />
-    </label>
-    {#if error}<p class="error" role="alert">{error}</p>{/if}
+    <div class="field">
+      <label class="field-label" for="{uid}-password">{msg('profile.deleteAccountPassword')}</label>
+      <input
+        id="{uid}-password"
+        class="input"
+        type="password"
+        autocomplete="off"
+        readonly={running}
+        aria-invalid={wrongPassword ? 'true' : undefined}
+        aria-describedby={error && wrongPassword ? `${uid}-error` : undefined}
+        bind:value={password}
+      />
+      {#if error && wrongPassword}<p class="error" id="{uid}-error" role="alert">{error}</p>{/if}
+    </div>
+    {#if error && !wrongPassword}<Notice tone="danger" compact>{error}</Notice>{/if}
   </form>
   {#snippet footer()}
     <Button disabled={running} onclick={onclose}>{msg('common.cancel')}</Button>
-    <Button variant="danger" disabled={running || !password} onclick={confirm}>
+    <Button variant="danger" disabled={!running && !password} busy={running} onclick={confirm}>
       {running ? msg('profile.deleteAccountBusy') : msg('profile.deleteAccountConfirmButton')}
     </Button>
   {/snippet}

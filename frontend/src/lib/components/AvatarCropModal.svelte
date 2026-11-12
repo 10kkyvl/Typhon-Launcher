@@ -4,6 +4,7 @@
   import Button from './Button.svelte';
   import IconButton from './IconButton.svelte';
   import Modal from './Modal.svelte';
+  import Notice from './Notice.svelte';
   import { msg } from '../i18n';
   import {
     centerOffset,
@@ -176,16 +177,16 @@
     </div>
 
     {#if failed}
-      <span class="error">{msg('modals.avatarCropLoadFailed')}</span>
+      <div class="failed"><Notice tone="danger" compact>{msg('modals.avatarCropLoadFailed')}</Notice></div>
     {:else}
       <span class="hint">{msg('modals.avatarCropHint')}</span>
     {/if}
   </div>
 
   {#snippet footer()}
-    {#if error}<span class="error foot-error">{error}</span>{/if}
+    {#if error}<div class="foot-error"><Notice tone="danger" compact>{error}</Notice></div>{/if}
     <Button variant="ghost" disabled={saving} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
-    <Button variant="primary" disabled={!ready || saving} onclick={save}>
+    <Button variant="primary" disabled={!ready && !saving} busy={saving} onclick={save}>
       {saving ? msg('modals.avatarCropSaving') : msg('common.save')}
     </Button>
   {/snippet}
@@ -260,12 +261,13 @@
     text-align: center;
   }
 
-  .error {
-    font-size: var(--font-xs);
-    color: var(--danger);
+  .failed {
+    align-self: stretch;
   }
 
   .foot-error {
+    flex: 1;
+    min-width: 0;
     margin-right: auto;
   }
 </style>

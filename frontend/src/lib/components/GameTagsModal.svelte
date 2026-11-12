@@ -61,7 +61,7 @@
   {/if}
   {#snippet footer()}
     <Button disabled={saving} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
-    <Button variant="primary" disabled={saving} onclick={save}>{msg('common.save')}</Button>
+    <Button variant="primary" busy={saving} onclick={save}>{msg('common.save')}</Button>
   {/snippet}
 </Modal>
 

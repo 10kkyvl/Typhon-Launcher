@@ -2,6 +2,7 @@
   import { acceptSourcesNotice } from '../stores/sourcesNotice';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
+  import Notice from './Notice.svelte';
   import { codeText, msg } from '../i18n';
 
   let {
@@ -51,15 +52,13 @@
   <p class="notice-text">
     {msg('modals.sourcesNoticeBody')}
   </p>
-  <div role="alert">
-    {#if failure}<p class="failure">{failure}</p>{/if}
-  </div>
+  {#if failure}<div class="failure"><Notice tone="danger" compact>{failure}</Notice></div>{/if}
   {#snippet footer()}
     {#if mode === 'review'}
       <Button disabled={saving} onclick={cancel}>{msg('common.close')}</Button>
     {:else}
       <Button disabled={saving} onclick={cancel}>{msg('common.cancel')}</Button>
-      <Button variant="primary" disabled={saving} onclick={confirm}>
+      <Button variant="primary" busy={saving} onclick={confirm}>
         {saving ? msg('modals.sourcesNoticeSaving') : msg('modals.sourcesNoticeContinue')}
       </Button>
     {/if}
@@ -69,13 +68,6 @@
 <style>
   .failure {
     margin: var(--space-4) 0 0;
-    padding: var(--space-2) var(--space-3);
-    border-left: 2px solid var(--danger);
-    border-radius: var(--radius-sm);
-    background: var(--danger-subtle);
-    color: var(--text);
-    font-size: var(--font-sm);
-    line-height: 1.5;
   }
 
   .notice-text {

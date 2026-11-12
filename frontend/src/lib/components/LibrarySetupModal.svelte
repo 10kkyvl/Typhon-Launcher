@@ -8,6 +8,7 @@
   import { bytesLabel } from '../utils/format';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
+  import Notice from './Notice.svelte';
   import { errorCode, hasMessage, msg } from '../i18n';
 
   let {
@@ -16,6 +17,7 @@
     note = '',
     onready = undefined,
   }: { open?: boolean; title?: string; note?: string; onready?: (next: Settings) => void } = $props();
+  const uid = $props.id();
 
   let parent = $state('');
   let proposed = $state('');
@@ -95,9 +97,16 @@
     {/if}
 
     <div class="pick">
-      <span class="field-label">{msg('modals.librarySetupFolderLabel')}</span>
+      <span class="field-label" id="{uid}-folder-label">{msg('modals.librarySetupFolderLabel')}</span>
       <div class="pick-controls">
-        <input class="input sm" type="text" readonly placeholder={msg('modals.librarySetupFolderPlaceholder')} value={proposed} />
+        <input
+          class="input sm"
+          type="text"
+          readonly
+          aria-labelledby="{uid}-folder-label"
+          placeholder={msg('modals.librarySetupFolderPlaceholder')}
+          value={proposed}
+        />
         <Button size="sm" onclick={pickFolder}>{msg('modals.librarySetupBrowse')}</Button>
       </div>
     </div>
@@ -115,13 +124,13 @@
     {/if}
 
     {#if failure}
-      <span class="failure">{failure}</span>
+      <Notice tone="danger" compact>{failure}</Notice>
     {/if}
   </div>
 
   {#snippet footer()}
     <Button disabled={busy} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
-    <Button variant="primary" disabled={!proposed || busy} onclick={confirm}>
+    <Button variant="primary" disabled={!proposed} {busy} onclick={confirm}>
       <FolderPlus size="1.5rem" strokeWidth={1.8} />
       {msg('modals.librarySetupCreate')}
     </Button>
@@ -196,10 +205,5 @@
   .disk-meta {
     font-size: var(--font-xs);
     color: var(--text-3);
-  }
-
-  .failure {
-    font-size: var(--font-xs);
-    color: var(--danger);
   }
 </style>

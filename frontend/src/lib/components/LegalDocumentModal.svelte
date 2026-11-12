@@ -3,6 +3,8 @@
   import { inWails } from '../services/backend';
   import { getLegalDocument, type LegalDocument } from '../services/legal';
   import Modal from './Modal.svelte';
+  import Notice from './Notice.svelte';
+  import Spinner from './Spinner.svelte';
   import { msg } from '../i18n';
 
   type Inline = { kind: 'text' | 'bold' | 'code'; value: string };
@@ -174,9 +176,9 @@
 
 <Modal bind:open {title} width="64rem">
   {#if status === 'loading' || status === 'idle'}
-    <p class="state-text">{msg('modals.legalLoading')}</p>
+    <Spinner label={msg('modals.legalLoading')} />
   {:else if status === 'error'}
-    <p class="state-text error">{errorText}</p>
+    <Notice tone="danger" compact>{errorText}</Notice>
   {:else}
     <div class="doc">
       {#each blocks as block}
@@ -215,14 +217,6 @@
 </Modal>
 
 <style>
-  .state-text {
-    font-size: var(--font-md);
-    color: var(--text-2);
-  }
-
-  .state-text.error {
-    color: var(--danger);
-  }
 
   .doc {
     display: flex;

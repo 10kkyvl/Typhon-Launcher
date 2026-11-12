@@ -5,6 +5,7 @@
   import Button from './Button.svelte';
   import IconButton from './IconButton.svelte';
   import Modal from './Modal.svelte';
+  import Notice from './Notice.svelte';
   import { msg } from '../i18n';
   import { minZoom, maxZoom } from '../utils/crop';
   import { bannerScale, clampBanner, zoomBanner, bannerCrop, type BannerView } from '../utils/bannerCrop';
@@ -83,12 +84,16 @@
       <IconButton size="sm" label={msg('modals.avatarCropZoomIn')} disabled={!ready || saving || zoom >= maxZoom} onclick={() => changeZoom(zoom + .25)}><Plus size="1.6rem" /></IconButton>
       <span>{Math.round(zoom * 100)}%</span>
     </div>
-    <p class:error={failed}>{failed ? msg('profile.coverDecode') : msg('profile.cropHint')}</p>
+    {#if failed}
+      <Notice tone="danger" compact>{msg('profile.coverDecode')}</Notice>
+    {:else}
+      <p>{msg('profile.cropHint')}</p>
+    {/if}
   </div>
   {#snippet footer()}
-    {#if error}<p class="error" role="alert">{error}</p>{/if}
+    {#if error}<div class="foot-error"><Notice tone="danger" compact>{error}</Notice></div>{/if}
     <Button variant="ghost" disabled={saving} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
-    <Button variant="primary" disabled={!ready || saving} onclick={save}>{saving ? msg('social.saving') : msg('profile.applyCrop')}</Button>
+    <Button variant="primary" disabled={!ready && !saving} busy={saving} onclick={save}>{saving ? msg('social.saving') : msg('profile.applyCrop')}</Button>
   {/snippet}
 </Modal>
 <style>
@@ -100,5 +105,6 @@
   .frame { position: absolute; inset: 0; border: 1px solid rgba(255,255,255,.6); border-radius: inherit; pointer-events: none; }
   .zoom { display: flex; align-items: center; gap: var(--space-3); padding: .4rem .8rem; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-2); }
   .zoom-slider { flex: 1; min-width: 0; } .zoom > span { min-width: 4.2rem; font-variant-numeric: tabular-nums; text-align: center; }
-  p, .zoom > span { font-size: var(--font-xs); color: var(--text-2); } .error { color: var(--danger); }
+  p, .zoom > span { font-size: var(--font-xs); color: var(--text-2); }
+  .foot-error { flex: 1; min-width: 0; margin-right: auto; }
 </style>

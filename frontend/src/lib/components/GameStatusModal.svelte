@@ -30,6 +30,8 @@
   let picked = $state<GameStatus | null>(null);
   let day = $state('');
   let saving = $state(false);
+  // What the pressed button sends: a status, or the date's save. That button stays focused and busy.
+  let sent = $state<GameStatus | 'save' | null>(null);
 
   const chosen = $derived(picked ?? (current as GameStatus));
   const dated = $derived(isFinished(chosen));
@@ -42,8 +44,9 @@
     }
   });
 
-  async function apply(status: GameStatus) {
+  async function apply(status: GameStatus, from: GameStatus | 'save' = status) {
     saving = true;
+    sent = from;
     try {
       if (status !== current) await setStatus(game.id, status);
       if (isFinished(status)) {
@@ -55,6 +58,7 @@
       toast(libraryErrorText(err, msg('modals.gameStatusUpdateFailed')), 'danger');
     } finally {
       saving = false;
+      sent = null;
     }
   }
 
@@ -73,7 +77,8 @@
       <Button
         variant={option.value === chosen ? 'primary' : 'secondary'}
         pressed={option.value === chosen}
-        disabled={saving}
+        disabled={saving && sent !== option.value}
+        busy={saving && sent === option.value}
         onclick={() => pick(option.value)}
       >
         {option.label}
@@ -86,7 +91,9 @@
       <input type="date" bind:value={day} min={COMPLETED_MIN} max={dayValue(new Date())} required aria-invalid={invalid} />
     </label>
     <div class="actions">
-      <Button variant="primary" disabled={saving || invalid} onclick={() => apply(chosen)}>{msg('common.save')}</Button>
+      <Button variant="primary" disabled={(saving && sent !== 'save') || invalid} busy={sent === 'save'} onclick={() => apply(chosen, 'save')}>
+        {msg('common.save')}
+      </Button>
     </div>
   {/if}
 </Modal>
