@@ -259,6 +259,49 @@ describe('one hint at a time', () => {
     expect(first.changes).toEqual([true, false]);
   });
 
+  // The pointer crossing from one hinted control to the next leaves the first after the leave grace
+  // and shows the next after the hover delay: in between the keyboard hint must not flash back.
+  it('the pointer crossing to another hinted control does not bring the keyboard hint back on the way', () => {
+    const keyboard = make();
+    const from = make();
+    const to = make();
+    keyboard.intent.focus();
+    rest(from.intent);
+
+    from.intent.unhover();
+    to.intent.hover();
+    vi.advanceTimersByTime(LEAVE_GRACE);
+
+    expect(from.changes).toEqual([true, false]);
+    expect(keyboard.changes).toEqual([true, false]);
+
+    vi.advanceTimersByTime(HOVER_DELAY - LEAVE_GRACE);
+
+    expect(to.changes).toEqual([true]);
+    expect(keyboard.changes).toEqual([true, false]);
+
+    to.intent.unhover();
+    vi.advanceTimersByTime(LEAVE_GRACE);
+
+    expect(keyboard.changes).toEqual([true, false, true]);
+  });
+
+  it('the pointer leaving the next control before its delay gives the keyboard hint back at once', () => {
+    const keyboard = make();
+    const from = make();
+    const to = make();
+    keyboard.intent.focus();
+    rest(from.intent);
+    from.intent.unhover();
+    to.intent.hover();
+    vi.advanceTimersByTime(LEAVE_GRACE);
+
+    to.intent.unhover();
+
+    expect(to.changes).toEqual([]);
+    expect(keyboard.changes).toEqual([true, false, true]);
+  });
+
   it('a keyboard hint closed with Escape stays closed when the pointer hint goes', () => {
     const keyboard = make();
     const pointer = make();
