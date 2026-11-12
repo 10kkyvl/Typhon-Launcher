@@ -3,7 +3,9 @@ import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import type { LibraryGame } from '../../lib/services/library';
-import { getMetadataView, refreshMetadata, type MetadataView } from '../../lib/services/metadata';
+import { Events } from '@wailsio/runtime';
+import { tick } from 'svelte';
+import { ensureMetadataFresh, getMetadataView, refreshMetadata, type MetadataView } from '../../lib/services/metadata';
 import { getCatalogGame, getReleasesForGame, type CatalogGame, type ReleaseGroup } from '../../lib/services/sources';
 import { libraryGames } from '../../lib/stores/library';
 import { metadataAvailable } from '../../lib/stores/metadata';
@@ -18,6 +20,7 @@ vi.mock('../../lib/services/metadata', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/metadata')>()),
   getMetadataView: vi.fn(),
   refreshMetadata: vi.fn(),
+  ensureMetadataFresh: vi.fn(),
 }));
 vi.mock('../../lib/services/sources', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/sources')>()),
@@ -82,6 +85,7 @@ const saidAgain = (notice: Element) => notice.querySelector('[data-part="notice-
 afterEach(() => {
   vi.mocked(getMetadataView).mockReset();
   vi.mocked(refreshMetadata).mockReset();
+  vi.mocked(ensureMetadataFresh).mockReset();
   vi.mocked(getCatalogGame).mockReset();
   vi.mocked(getReleasesForGame).mockReset();
   metadataAvailable.set(false);
@@ -243,5 +247,37 @@ describe('GameDetails: an uninstalled game', () => {
 
     expect(note?.getAttribute('data-tone')).toBe('info');
     expect(note?.querySelector('[role="status"], [role="alert"]')).toBeNull();
+  });
+});
+
+// The page's own listener for metadata pushed by the backend while it is open.
+function pushMetadata(next: MetadataView) {
+  const call = vi.mocked(Events.On).mock.calls.findLast(([name]) => name === 'metadata:updated');
+  if (!call) throw new Error('the page does not listen for metadata');
+  (call[1] as (event: { data: MetadataView }) => void)({ data: next });
+}
+
+describe('GameDetails: the outcome of a metadata search', () => {
+  beforeEach(() => metadataAvailable.set(true));
+
+  it('is read with the page when the page opens on it', async () => {
+    vi.mocked(getMetadataView).mockResolvedValue(view({ resolved: false, match: 'unmatched' }));
+    renderDom(GameDetails, { id: 'g1' });
+
+    const notice = (await screen.findByText(msg('games.detailMetaUnmatchedTitle'))).closest('.notice') as HTMLElement;
+
+    expect(notice.querySelector('[role="status"], [role="alert"]')).toBeNull();
+  });
+
+  it('is announced when the search ran while the page was open', async () => {
+    vi.mocked(getMetadataView).mockResolvedValue(view({ resolved: false, match: 'searching' }));
+    renderDom(GameDetails, { id: 'g1' });
+    await screen.findByText(msg('games.detailMetaSearchingTitle'));
+
+    pushMetadata(view({ resolved: false, match: 'unmatched' }));
+    await tick();
+
+    const notice = (await screen.findByText(msg('games.detailMetaUnmatchedTitle'))).closest('.notice') as HTMLElement;
+    expect(notice.querySelector('[role="status"]')?.textContent).toContain(msg('games.detailMetaUnmatchedTitle'));
   });
 });

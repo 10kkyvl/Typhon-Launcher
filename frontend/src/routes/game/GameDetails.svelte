@@ -313,6 +313,8 @@
   let metaRefreshing = $state(false);
   let metaSearching = $state(false);
   let metaSkipping = $state(false);
+  // A search ran while the page was open: its outcome is news, not a standing fact of the page.
+  let metaSearchRan = $state(false);
   let matchOpen = $state(false);
   let matchMode = $state<'find' | 'change'>('find');
   let summaryExpanded = $state(false);
@@ -344,6 +346,7 @@
     $locale;
     untrack(() => {
       metaSearching = false;
+      metaSearchRan = false;
       metaView = null;
       if (!metaGameId) {
         metaToken++;
@@ -385,6 +388,10 @@
       resolved: metaView?.resolved,
     }),
   );
+
+  $effect(() => {
+    if (metaSearching || metaView?.match === 'searching') metaSearchRan = true;
+  });
 
   const info = $derived(metaView?.game ?? catalogGame ?? null);
   const title = $derived(
@@ -1701,7 +1708,7 @@
             <div class="meta-note">
               <Notice
                 tone={metaState === 'failed' ? 'warning' : 'info'}
-                announce={false}
+                announce={metaSearchRan}
                 title={metaState === 'unmatched' ? msg('games.detailMetaUnmatchedTitle') : msg('games.detailMetaFailedTitle')}
                 bind:retrying={metaRetrying}
                 retry={metaState === 'failed'
