@@ -37,7 +37,8 @@
     align-items: center;
     gap: 0.6rem;
     height: 2.4rem;
-    padding: 0 0.9rem;
+    padding: 0 calc(0.9rem - 1px);
+    border: 1px solid transparent;
     border-radius: var(--radius-sm);
     font-size: var(--font-xs);
     font-weight: 500;
@@ -47,6 +48,7 @@
   .badge.plain {
     height: auto;
     padding: 0;
+    border: 0;
     gap: 0.7rem;
     background: none;
     font-size: var(--font-xs);
@@ -69,26 +71,31 @@
 
   .success {
     background: color-mix(in srgb, var(--success) 8%, var(--surface-2));
+    border-color: color-mix(in srgb, var(--success) 40%, var(--surface-2));
     color: var(--success);
   }
 
   .warning {
     background: color-mix(in srgb, var(--warning) 8%, var(--surface-2));
+    border-color: color-mix(in srgb, var(--warning) 40%, var(--surface-2));
     color: var(--warning);
   }
 
   .danger {
     background: color-mix(in srgb, var(--danger) 8%, var(--surface-2));
+    border-color: color-mix(in srgb, var(--danger) 40%, var(--surface-2));
     color: var(--danger);
   }
 
   .accent {
     background: color-mix(in srgb, var(--accent-bright) 8%, var(--surface-2));
+    border-color: color-mix(in srgb, var(--accent-bright) 40%, var(--surface-2));
     color: var(--accent-text);
   }
 
   .neutral {
     background: color-mix(in srgb, var(--text) 8%, var(--surface-2));
+    border-color: color-mix(in srgb, var(--text) 40%, var(--surface-2));
     color: var(--text-2);
   }
 

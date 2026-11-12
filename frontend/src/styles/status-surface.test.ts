@@ -358,17 +358,56 @@ const BADGES: Record<string, string[]> = {
   'lib/components/StatusBadge.svelte': ['.success', '.warning', '.danger', '.accent', '.neutral'],
 };
 
+// The border colour a badge kind ends up with: its own rule's, else the base `.badge` rule's.
+function borderOf(css: string, selector: string): Plate | null {
+  const edge = (sel: string) => {
+    const body = new RegExp(`(?:^|})\\s*${sel.replace(/\./g, '\\.')}\\s*\\{([^}]*)\\}`).exec(css)?.[1] ?? '';
+    const rule = declarations(body);
+    return rule.get('border-color') ?? rule.get('border');
+  };
+  const value = edge(selector) ?? edge('.badge') ?? '';
+  const m = /color-mix\(in srgb, var\((--[\w-]+)\) (\d+)%, var\((--surface(?:-\d)?)\)\)/.exec(value);
+  return m ? { tone: m[1], share: Number(m[2]) / 100, surface: m[3] } : null;
+}
+
 describe('the fill of a badge', () => {
   const kinds = Object.entries(BADGES).flatMap(([path, selectors]) => {
     const css = styleOf(path).replace(/\/\*[\s\S]*?\*\//g, '');
     return selectors.map((selector) => {
       const body = new RegExp(`(?:^|})\\s*${selector.replace(/\./g, '\\.')}\\s*\\{([^}]*)\\}`).exec(css)?.[1] ?? '';
-      return { kind: `${path}: ${selector}`, plate: plateOf(body), label: /(?:^|[^-\w])color:\s*var\((--[\w-]+)\)/.exec(body)?.[1] };
+      return {
+        kind: `${path}: ${selector}`,
+        plate: plateOf(body),
+        label: /(?:^|[^-\w])color:\s*var\((--[\w-]+)\)/.exec(body)?.[1],
+        edge: borderOf(css, selector),
+      };
     });
   });
 
   it('is opaque: a surface, or the tone mixed into one, never a translucent tint', () => {
     expect(kinds.filter((k) => !k.plate || !k.label).map((k) => k.kind)).toEqual([]);
+  });
+
+  // In the light preset the fill a label allows is a shade off the page; a 1px border in the badge's
+  // tone, mixed into --surface-2 the way a notice draws its own, carries the shape.
+  it('is outlined in its own tone, the way a notice is', () => {
+    const notice = /border:\s*1px solid color-mix\(in srgb, var\(--notice-tone\) (\d+)%, var\(--surface-2\)\)/.exec(styleOf(NOTICE));
+    expect(notice).not.toBeNull();
+    const wrong = kinds
+      .filter((k) => k.edge?.tone !== (k.plate?.tone ?? '--text') || k.edge?.share !== Number((notice as RegExpExecArray)[1]) / 100)
+      .map((k) => `${k.kind}: ${k.edge ? `${k.edge.tone} ${k.edge.share}` : 'no border'}`);
+    expect(wrong).toEqual([]);
+  });
+
+  // The border sits inside the badge: its 1px comes off the padding of the rule that draws it.
+  it.each(Object.keys(BADGES))('%s keeps its outer size with the border', (path) => {
+    const css = styleOf(path).replace(/\/\*[\s\S]*?\*\//g, '');
+    const base = declarations(/(?:^|})\s*\.badge\s*\{([^}]*)\}/.exec(css)?.[1] ?? '');
+    expect(base.get('border') ?? '').toMatch(/^1px solid\b/);
+    const padding = base.get('padding') ?? '';
+    const sides = padding.match(/calc\([^()]*(?:\([^()]*\))?[^()]*\)|[^\s]+/g) ?? [];
+    expect(sides.length, padding).toBeGreaterThan(0);
+    expect(sides.filter((side) => side !== '0' && !/^calc\(.* - 1px\)$/.test(side)), padding).toEqual([]);
   });
 
   for (const id of ['dark', 'light', 'contrast', 'blush']) {
