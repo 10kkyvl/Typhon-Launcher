@@ -17,7 +17,8 @@
 <header class="page-header">
   <div class="text">
     <div class="heading">
-      <!-- Focusable by script only: focus lands here when the item it was on is gone (a removed game). -->
+      <!-- Focusable by script only: focus lands here when the item it was on is gone (a removed game, the
+           page left by a pick: AppShell). -->
       <h1 tabindex="-1">{title}</h1>
       {#if count}
         <span class="count">{count}</span>

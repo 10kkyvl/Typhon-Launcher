@@ -172,7 +172,7 @@
 {:else if ticket && thread}
   <header class="head">
     <div class="heading">
-      <h1 dir="auto">{ticket.subject}</h1>
+      <h1 dir="auto" tabindex="-1">{ticket.subject}</h1>
       <div class="meta">
         <span class="ref">{ticket.ref}</span>
         <span>{topicLabel(ticket.topic)}</span>

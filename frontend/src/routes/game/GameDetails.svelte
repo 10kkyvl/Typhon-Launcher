@@ -1433,7 +1433,7 @@
         </div>
 
         {#if title}
-          <h1 class="title">{title}</h1>
+          <h1 class="title" tabindex="-1">{title}</h1>
         {:else}
           <div class="skeleton title-skeleton"></div>
         {/if}

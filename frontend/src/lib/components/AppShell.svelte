@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import type { Attachment } from 'svelte/attachments';
   import { route } from '../stores/router';
   import { authState, isOffline } from '../stores/user';
   import { needsSocialConsent } from '../stores/social';
@@ -19,6 +20,29 @@
   import Topbar from './Topbar.svelte';
 
   let { children }: { children?: Snippet } = $props();
+
+  // A pick that changes the page can leave focus on <body>: the control pressed went with its page, or
+  // the search field let go. Once the new page has its heading (a page that loads first draws it
+  // later), focus goes there, so the keyboard and a screen reader start on the page they are on.
+  // Focus that outlived the change (the sidebar, the top bar) or has moved since is left alone. The
+  // page keeps its scroll position (scrollmemory). The first page is where the window opens: no
+  // focus is moved there.
+  let pages = 0;
+  const focusPage: Attachment<HTMLElement> = (node) => {
+    if (pages++ === 0) return;
+    const land = () => {
+      const active = document.activeElement;
+      if (active && active !== document.body) return watcher.disconnect();
+      const heading = node.querySelector<HTMLElement>('h1');
+      if (!heading) return;
+      watcher.disconnect();
+      heading.focus({ preventScroll: true });
+    };
+    const watcher = new MutationObserver(land);
+    watcher.observe(node, { childList: true, subtree: true });
+    land();
+    return () => watcher.disconnect();
+  };
 
   const chatShown = $derived($authState === 'authenticated' && !$needsSocialConsent);
 
@@ -111,7 +135,7 @@
     {/if}
     <NetworkBanner />
     {#key $route}
-      <main class="content" use:scrollmemory>
+      <main class="content" use:scrollmemory {@attach focusPage}>
         <div class="page" data-part="page">
           {@render children?.()}
         </div>
