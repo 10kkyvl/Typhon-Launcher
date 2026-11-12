@@ -440,7 +440,6 @@
   .theme { background: transparent; border: 1px solid var(--border); border-radius: var(--radius-md); padding: .5rem; color: var(--text-2); font: inherit; font-size: 1.05rem; cursor: pointer; min-width: 0; }
   .theme-swatch { display: block; height: 4rem; border-radius: .4rem; margin-bottom: .5rem; }
   .theme-swatch.auto { background: linear-gradient(125deg, var(--accent-subtle), var(--accent)); }
-  .selected { outline: 2px solid var(--accent-bright); outline-offset: 1px; }
   .custom { display: flex; flex-direction: column; gap: 1rem; margin-top: 1.4rem; }
   .preview { height: 9rem; margin-top: 1.4rem; overflow: hidden; border-radius: var(--radius-md); border: 1px solid var(--border); }
   .preview-scale { width: 250%; transform: scale(.4); transform-origin: 0 0; pointer-events: none; }
@@ -474,5 +473,10 @@
   .emoji-grid { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: .3rem; margin: 1rem 0; padding: .6rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); }
   .emoji-cell { aspect-ratio: 1; background: transparent; border: 0; border-radius: var(--radius-sm); font-size: 1.8rem; line-height: 1; cursor: pointer; }
   .emoji-cell:hover { background: var(--hover); }
-  button:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 3px; }
+  /* The chosen option's mark is its edge in the accent, not an outline: the shared focus ring, drawn a
+     step further out, shows apart from it. A chosen colour swatch is often the accent itself, so its
+     accent edge is parted from its colour by a ring of the window's ground. Last: it wins over each
+     option's own border. */
+  .selected { border-color: var(--accent-bright); box-shadow: 0 0 0 1px var(--accent-bright); }
+  .color.selected { border-width: 2px; box-shadow: inset 0 0 0 2px var(--bg); }
 </style>
