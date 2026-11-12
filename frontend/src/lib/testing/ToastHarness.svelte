@@ -5,7 +5,8 @@
 
   // The main window's shell with a dialog that reports a failure as a toast and stays open, as
   // InstallModal does. For AppShell.dom.test.ts.
-  let { onretry }: { onretry: () => void } = $props();
+  // `confirm` opens a second, small dialog over the first.
+  let { onretry, confirm = false }: { onretry: () => void; confirm?: boolean } = $props();
 
   let open = $state(true);
 </script>
@@ -16,4 +17,8 @@
 
 <Modal bind:open title="Install">
   <button type="button" onclick={() => toast('Install failed', 'danger', { label: 'Retry', run: onretry })}>Install</button>
+</Modal>
+
+<Modal open={confirm} title="Confirm">
+  <p>Sure?</p>
 </Modal>

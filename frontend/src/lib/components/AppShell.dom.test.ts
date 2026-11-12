@@ -84,46 +84,63 @@ describe('toasts raised from an open dialog', () => {
   });
 
   describe('where they stand', () => {
-    // jsdom lays nothing out: the three boxes the shell measures are given here. A 1280 × 800 window,
-    // the column down its right edge, one toast in the stack.
-    const boxes = {
-      lane: { left: 876, top: 48, width: 380, height: 728 },
-      stack: { left: 876, top: 716, width: 380, height: 60 },
-      panel: { left: 420, top: 250, width: 440, height: 300 },
-    };
-    const tall = { left: 340, top: 150, width: 600, height: 640 };
+    // jsdom lays nothing out: the boxes the shell measures are given here. A 1280 × 800 window with a
+    // 10px rem, the column down its right edge (it ends 24 from the right and the bottom), one toast
+    // in the stack. A dialog's layer root covers the window.
+    const WINDOW = { left: 0, top: 0, width: 1280, height: 800 };
+    const SMALL = { left: 420, top: 250, width: 440, height: 300 };
+    const TALL = { left: 340, top: 150, width: 600, height: 640 };
+    // Both corners taken; 248 are left beside it, enough for a toast.
+    const TALL_FROM_TOP = { left: 300, top: 56, width: 700, height: 734 };
+    // Both corners taken and nothing beside it.
+    const WIDE = { left: 40, top: 56, width: 1200, height: 734 };
+    const ONE_TOAST = { left: 876, top: 716, width: 380, height: 60 };
+    const boxes = { lane: { left: 876, top: 48, width: 380, height: 728 }, stack: ONE_TOAST, panel: SMALL, confirm: SMALL };
     const region = () => app.querySelector<HTMLElement>('.toast-region') as HTMLElement;
+    const stack = () => app.querySelector('.toasts') as Element;
+    const root = (name: string) => screen.getByRole('dialog', { name }).parentElement as HTMLElement;
+    const roomOf = (name: string) => root(name).style.getPropertyValue('--toast-room');
+    // What follows a change of size is done in the next frame.
+    const frame = async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      await tick();
+    };
 
     beforeEach(() => {
-      boxes.stack = { left: 876, top: 716, width: 380, height: 60 };
-      boxes.panel = { left: 420, top: 250, width: 440, height: 300 };
+      Object.assign(boxes, { stack: ONE_TOAST, panel: SMALL, confirm: SMALL });
+      document.documentElement.style.fontSize = '10px';
       vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+        const panel = () => (this.querySelector('h3')?.textContent === 'Confirm' ? boxes.confirm : boxes.panel);
         const box = this.matches('.toast-region')
           ? boxes.lane
           : this.matches('.toasts')
             ? boxes.stack
             : this.matches('[data-part="dialog"]')
-              ? boxes.panel
-              : { left: 0, top: 0, width: 0, height: 0 };
+              ? panel()
+              : this.matches('.overlay')
+                ? WINDOW
+                : { left: 0, top: 0, width: 0, height: 0 };
         return new DOMRect(box.left, box.top, box.width, box.height);
       });
     });
 
     afterEach(() => {
       vi.restoreAllMocks();
+      document.documentElement.style.fontSize = '';
     });
 
-    it('in the bottom right under a small dialog, kept live', async () => {
+    it('in the bottom right under a small dialog, kept live, as wide as they like and with nothing asked', async () => {
       render(ToastHarness, { target: app, props: { onretry: vi.fn() } });
       await tick();
 
-      expect(screen.getByRole('dialog', { name: 'Install' })).toBeTruthy();
       expect(region().classList.contains('at-top')).toBe(false);
       expect(region().hasAttribute('data-layer-keep')).toBe(true);
+      expect(region().style.maxWidth).toBe('');
+      expect(roomOf('Install')).toBe('');
     });
 
     it('at the top right while a tall dialog reaches into their corner, and back when it closes', async () => {
-      boxes.panel = tall;
+      boxes.panel = TALL;
       render(ToastHarness, { target: app, props: { onretry: vi.fn() } });
       const keys = user();
       await tick();
@@ -137,16 +154,81 @@ describe('toasts raised from an open dialog', () => {
       expect(region().classList.contains('at-top')).toBe(false);
     });
 
-    it('are moved when the window is resized so that the dialog reaches their corner', async () => {
+    it('beside a dialog that takes both corners, narrowed to the gutter; as wide as they like again when it closes', async () => {
+      boxes.panel = TALL_FROM_TOP;
+      render(ToastHarness, { target: app, props: { onretry: vi.fn() } });
+      const keys = user();
+      await tick();
+
+      expect(region().style.maxWidth).toBe('248px');
+      expect(region().classList.contains('at-top')).toBe(false);
+      expect(roomOf('Install')).toBe('');
+
+      await keys.keyboard('{Escape}');
+      await tick();
+
+      expect(region().style.maxWidth).toBe('');
+    });
+
+    it('under a dialog with no clear spot and no gutter: the dialog on top is asked for the room the stack needs', async () => {
+      boxes.panel = WIDE;
       render(ToastHarness, { target: app, props: { onretry: vi.fn() } });
       await tick();
+
+      // From the window's bottom up to the stack's top (800 - 716) and a gap of 8.
+      expect(roomOf('Install')).toBe('92px');
+      expect(root('Install').classList.contains('overlay')).toBe(true);
+      expect(region().style.maxWidth).toBe('');
       expect(region().classList.contains('at-top')).toBe(false);
+    });
 
-      boxes.panel = tall;
-      window.dispatchEvent(new Event('resize'));
+    it('the room follows the stack, is not given up because the dialog now ends above it, and goes with the last toast', async () => {
+      boxes.panel = WIDE;
+      render(ToastHarness, { target: app, props: { onretry: vi.fn() } });
       await tick();
+      expect(roomOf('Install')).toBe('92px');
 
-      expect(region().classList.contains('at-top')).toBe(true);
+      // The dialog made room: measured now, it is clear of the stack.
+      boxes.panel = { ...WIDE, height: 652 };
+      boxes.stack = { left: 876, top: 640, width: 380, height: 136 };
+      resized(stack());
+      await frame();
+      expect(roomOf('Install')).toBe('168px');
+
+      boxes.stack = { left: 1256, top: 776, width: 0, height: 0 };
+      resized(stack());
+      await frame();
+      expect(roomOf('Install')).toBe('');
+    });
+
+    it('no room is asked before there is a toast', async () => {
+      boxes.panel = WIDE;
+      boxes.stack = { left: 1256, top: 776, width: 0, height: 0 };
+      render(ToastHarness, { target: app, props: { onretry: vi.fn() } });
+      await tick();
+      expect(roomOf('Install')).toBe('');
+
+      boxes.stack = ONE_TOAST;
+      resized(stack());
+      await frame();
+
+      expect(roomOf('Install')).toBe('92px');
+    });
+
+    it('are placed again when the window changes size, from the dialog at rest, and without a listener on the window', async () => {
+      const listened = vi.spyOn(window, 'addEventListener');
+      boxes.panel = WIDE;
+      render(ToastHarness, { target: app, props: { onretry: vi.fn() } });
+      await tick();
+      expect(roomOf('Install')).toBe('92px');
+
+      // A larger window: the same dialog now leaves the bottom right clear.
+      boxes.panel = SMALL;
+      resized(document.documentElement);
+      await frame();
+
+      expect(roomOf('Install')).toBe('');
+      expect(listened.mock.calls.map(([type]) => type)).not.toContain('resize');
     });
 
     it('are placed by the dialog at rest, not by the smaller, lower box it enters in', async () => {
@@ -154,11 +236,28 @@ describe('toasts raised from an open dialog', () => {
       await tick();
       expect(region().classList.contains('at-top')).toBe(false);
 
-      boxes.panel = tall;
+      boxes.panel = TALL;
       screen.getByRole('dialog', { name: 'Install' }).dispatchEvent(new Event('animationend', { bubbles: true }));
       await tick();
 
       expect(region().classList.contains('at-top')).toBe(true);
+    });
+
+    it('room asked of a dialog while it entered is taken back if it rests clear; an animation inside it changes nothing', async () => {
+      boxes.panel = WIDE;
+      render(ToastHarness, { target: app, props: { onretry: vi.fn() } });
+      await tick();
+      const dialog = screen.getByRole('dialog', { name: 'Install' });
+      expect(roomOf('Install')).toBe('92px');
+
+      boxes.panel = SMALL;
+      (dialog.querySelector('h3') as HTMLElement).dispatchEvent(new Event('animationend', { bubbles: true }));
+      await tick();
+      expect(roomOf('Install')).toBe('92px');
+
+      dialog.dispatchEvent(new Event('animationend', { bubbles: true }));
+      await tick();
+      expect(roomOf('Install')).toBe('');
     });
 
     it('are moved when the stack grows into a dialog that one toast cleared', async () => {
@@ -168,10 +267,30 @@ describe('toasts raised from an open dialog', () => {
       expect(region().classList.contains('at-top')).toBe(false);
 
       boxes.stack = { left: 876, top: 640, width: 380, height: 136 };
-      resized(app.querySelector('.toasts') as Element);
-      await tick();
+      resized(stack());
+      await frame();
 
       expect(region().classList.contains('at-top')).toBe(true);
+    });
+
+    it('only the dialog on top counts: a small one opened over a wide one takes the room back from it', async () => {
+      boxes.panel = WIDE;
+      const view = render(ToastHarness, { target: app, props: { onretry: vi.fn() } });
+      await tick();
+      expect(roomOf('Install')).toBe('92px');
+
+      await view.rerender({ onretry: vi.fn(), confirm: true });
+      await tick();
+
+      expect(roomOf('Install')).toBe('');
+      expect(roomOf('Confirm')).toBe('');
+
+      boxes.confirm = WIDE;
+      screen.getByRole('dialog', { name: 'Confirm' }).dispatchEvent(new Event('animationend', { bubbles: true }));
+      await tick();
+
+      expect(roomOf('Confirm')).toBe('92px');
+      expect(roomOf('Install')).toBe('');
     });
 
     it('stand by rules of the region alone: a column from under the title bar down to the corner, open to presses', () => {

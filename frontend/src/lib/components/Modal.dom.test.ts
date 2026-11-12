@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { user } from '../testing/dom';
 import ModalHarness from '../testing/ModalHarness.svelte';
+import modalSource from './Modal.svelte?raw';
 
 let app: HTMLDivElement;
 
@@ -135,5 +136,22 @@ describe('Modal in a DOM', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(opener.closest('[inert]')).toBeNull();
     expect(document.activeElement).toBe(opener);
+  });
+
+  // jsdom lays nothing out, so this holds the rules and the element they read the room from; that
+  // the footer really ends above a toast is checked in the running app.
+  it('leaves the room a toast stack asks for: its layer root reads --toast-room and the panel ends that far above the bottom', async () => {
+    const { openDialog } = page();
+    const dialog = await openDialog();
+    const root = dialog.parentElement as HTMLElement;
+    const overlay = /\.overlay \{([^}]*)\}/.exec(modalSource)?.[1] ?? '';
+    const panel = /\.modal \{([^}]*)\}/.exec(modalSource)?.[1] ?? '';
+
+    expect(root.classList.contains('overlay')).toBe(true);
+    // Nothing asked: the panel keeps its usual distance from the bottom and the scrim no padding.
+    expect(overlay).toMatch(/--toast-room: 0px;/);
+    expect(overlay).toMatch(/--dialog-clear: max\(var\(--dialog-edge\), var\(--toast-room\)\);/);
+    expect(overlay).toMatch(/padding-bottom: calc\(var\(--dialog-clear\) - var\(--dialog-edge\)\);/);
+    expect(panel).toMatch(/max-height: calc\(100vh - var\(--titlebar-h\) - var\(--dialog-edge\) - var\(--dialog-clear\)\);/);
   });
 });

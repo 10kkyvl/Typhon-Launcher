@@ -94,10 +94,18 @@
 
 <style>
   .overlay {
+    /* How far above the window's bottom the panel must end: its usual distance, or more while the
+       toast stack has no clear place and asks the dialog on top for room (the shell sets
+       --toast-room on this element: AppShell.svelte, toastSpot.ts). The body scrolls and the footer
+       stays above the stack. */
+    --toast-room: 0px;
+    --dialog-edge: 4rem;
+    --dialog-clear: max(var(--dialog-edge), var(--toast-room));
     position: fixed;
     inset: 0;
     z-index: var(--z-layer);
     padding-top: var(--titlebar-h);
+    padding-bottom: calc(var(--dialog-clear) - var(--dialog-edge));
     display: flex;
     align-items: center;
     justify-content: center;
@@ -107,7 +115,7 @@
 
   .modal {
     max-width: calc(100vw - 4.8rem);
-    max-height: calc(100vh - var(--titlebar-h) - 8rem);
+    max-height: calc(100vh - var(--titlebar-h) - var(--dialog-edge) - var(--dialog-clear));
     display: flex;
     flex-direction: column;
     background: var(--surface-2);

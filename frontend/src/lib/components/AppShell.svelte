@@ -14,7 +14,7 @@
   import ShellBackdrop from './ShellBackdrop.svelte';
   import Sidebar from './Sidebar.svelte';
   import GameQuickMenu from './GameQuickMenu.svelte';
-  import { toastSpot, type ToastEnd } from './toastSpot';
+  import { TOAST_GAP_REM, TOAST_MIN_WIDTH_REM, toastSpot, type ToastEnd } from './toastSpot';
   import Toasts from './Toasts.svelte';
   import Topbar from './Topbar.svelte';
 
@@ -25,33 +25,78 @@
   // Toasts stand on top of the activity dock, as one column in the corner.
   let dockHeight = $state(0);
 
-  // Under a dialog the stack keeps its corner unless the dialog's panel is really there: the panel,
-  // the column and the stack are measured when the dialog on top changes, when the window or any of
-  // the three changes size, and when the panel has finished entering (it enters smaller and lower
-  // than it rests); the corner follows.
+  // Under a dialog the stack never lies over the dialog's panel: it keeps its corner, moves to the
+  // top, narrows into the gutter beside the panel, or asks the dialog on top to end above it
+  // (toastSpot.ts). What is asked of the dialog is `--toast-room` on its layer root, which Modal
+  // reads; a layer without a panel (the lightbox) is asked nothing.
   let toastRegion = $state<HTMLElement>();
   let toastsAt = $state<ToastEnd>('bottom');
+  const ROOM = '--toast-room';
 
   $effect(() => {
     const region = toastRegion;
-    const panel = $topModal?.querySelector('[data-part="dialog"]');
+    const root = $topModal;
+    const panel = root?.querySelector('[data-part="dialog"]');
     const stack = region?.firstElementChild;
-    if (!region || !stack || !panel) {
+    if (!region || !stack || !root || !panel) {
       toastsAt = 'bottom';
       return;
     }
-    const place = () => {
-      toastsAt = toastSpot(panel.getBoundingClientRect(), region.getBoundingClientRect(), stack.getBoundingClientRect());
+
+    // `fresh`: the panel is measured as it rests, so room it is making is taken back first. That lets
+    // a scrolled dialog body jump, so it is done only when the dialog on top or the window changed;
+    // otherwise a dialog that makes room keeps making it until the last toast is gone.
+    const place = (fresh: boolean) => {
+      // The stack is measured as wide as it likes to be.
+      region.style.maxWidth = '';
+      if (fresh) root.style.removeProperty(ROOM);
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      const spot = toastSpot(panel.getBoundingClientRect(), region.getBoundingClientRect(), stack.getBoundingClientRect(), {
+        minWidth: TOAST_MIN_WIDTH_REM * rem,
+        gap: TOAST_GAP_REM * rem,
+        floor: root.getBoundingClientRect().bottom,
+        reserved: root.style.getPropertyValue(ROOM) !== '',
+      });
+      toastsAt = spot.at;
+      if (spot.width !== null) region.style.maxWidth = `${spot.width}px`;
+      if (spot.room > 0) root.style.setProperty(ROOM, `${spot.room}px`);
+      else root.style.removeProperty(ROOM);
     };
-    const observer = new ResizeObserver(place);
-    for (const element of [region, stack, panel]) observer.observe(element);
-    window.addEventListener('resize', place);
-    panel.addEventListener('animationend', place);
-    place();
+
+    // Placing changes sizes that are observed (the stack narrows, the panel shortens). Done inside the
+    // observer's own callback that would be a resize loop, so a change of size is answered in the
+    // next frame, once for all that changed.
+    let frame: number | undefined;
+    let wholly = false;
+    const later = (fresh: boolean) => {
+      wholly ||= fresh;
+      frame ??= requestAnimationFrame(() => {
+        frame = undefined;
+        const all = wholly;
+        wholly = false;
+        place(all);
+      });
+    };
+    // The document element stands for the window: no listener on `window` is needed.
+    const viewport = new ResizeObserver(() => later(true));
+    viewport.observe(document.documentElement);
+    const sizes = new ResizeObserver(() => later(false));
+    for (const element of [region, stack, panel]) sizes.observe(element);
+    // The panel enters smaller and lower than it rests: once its own animation is over (not one of
+    // something inside it) it is measured afresh.
+    const settled = (event: Event) => {
+      if (event.target === panel) place(true);
+    };
+    panel.addEventListener('animationend', settled);
+    place(true);
+
     return () => {
-      observer.disconnect();
-      window.removeEventListener('resize', place);
-      panel.removeEventListener('animationend', place);
+      if (frame !== undefined) cancelAnimationFrame(frame);
+      viewport.disconnect();
+      sizes.disconnect();
+      panel.removeEventListener('animationend', settled);
+      region.style.maxWidth = '';
+      root.style.removeProperty(ROOM);
     };
   });
 </script>
@@ -90,8 +135,8 @@
 <!-- Its own region above dialogs, left live while they make the app inert (data-layer-keep):
      a toast raised from an open dialog is seen and its action can be pressed. The region is the whole
      column the stack can stand in, from under the title bar down to the corner, and lets presses
-     through; the stack stands at its bottom, or at its top while a dialog's panel takes the bottom
-     (toastSpot.ts). -->
+     through; the stack stands at its bottom, or at its top while a dialog's panel takes the bottom,
+     and is narrowed while it stands beside the panel (toastSpot.ts). -->
 <div
   class="corner toast-region"
   class:at-top={toastsAt === 'top'}
