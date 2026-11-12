@@ -297,6 +297,44 @@ describe('GameDetails: the outcome of a metadata search', () => {
   });
 });
 
+describe('GameDetails: a metadata retry that fails with a reason', () => {
+  beforeEach(() => {
+    metadataAvailable.set(true);
+    vi.mocked(getMetadataView).mockResolvedValue(view({ resolved: false, match: 'failed' }));
+  });
+
+  it('says the reason in the notice and, where retrying cannot help, drops Retry for "Choose manually"', async () => {
+    vi.mocked(refreshMetadata).mockRejectedValueOnce(new Error('typhon:metadata.no_match'));
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    const notice = (await screen.findByText(msg('games.detailMetaFailedTitle'))).closest('.notice') as HTMLElement;
+    within(notice).getByRole('button', { name: msg('common.retry') }).focus();
+
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(notice.textContent).toContain(msg('errMetadata.metadataNoMatch')));
+    expect(notice.textContent).not.toContain(msg('games.detailMetaFailedHint'));
+    expect(within(notice).queryByRole('button', { name: msg('common.retry') })).toBeNull();
+    await vi.waitFor(() => expect(document.activeElement).toBe(within(notice).getByRole('button', { name: msg('games.detailChooseManually') })));
+    expect(get(toasts).map((item) => item.message)).not.toContain(msg('errMetadata.metadataNoMatch'));
+  });
+
+  it('keeps Retry when retrying can help, and says the reason again through the notice', async () => {
+    vi.mocked(refreshMetadata).mockRejectedValueOnce(new Error('typhon:metadata.rate_limited'));
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    const notice = (await screen.findByText(msg('games.detailMetaFailedTitle'))).closest('.notice') as HTMLElement;
+    const retry = within(notice).getByRole('button', { name: msg('common.retry') });
+    const said = sayingAgain(notice);
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(said()).toContain(msg('errMetadata.metadataRateLimited')));
+    expect(said()).toContain(msg('games.detailMetaFailedTitle'));
+    expect(document.activeElement).toBe(retry);
+    expect(get(toasts).map((item) => item.message)).not.toContain(msg('errMetadata.metadataRateLimited'));
+  });
+});
+
 describe('GameDetails: skipping the metadata search', () => {
   it('shows no search while it skips, keeps the focus on the busy Skip, then focuses the title', async () => {
     metadataAvailable.set(true);

@@ -164,7 +164,7 @@
   import { installErrorText } from '../../lib/install/installErrors';
   import { metadataErrorText } from '../../lib/metadata/metadataErrors';
   import { sourceErrorText } from '../../lib/sources/sourceErrors';
-  import { focusQuietly } from '../../lib/layers/focus';
+  import { focusableIn, focusQuietly } from '../../lib/layers/focus';
 
   function libraryErrorText(err: unknown, fallback: string): string {
     const code = errorCode(err);
@@ -737,6 +737,10 @@
       return view.match !== 'failed';
     } catch (err) {
       if (!fromNotice) toast(metadataErrorText(err, msg('games.detailMetaRefreshError')), 'danger');
+      else {
+        metaFailure = metadataErrorText(err, msg('games.detailMetaFailedHint'));
+        metaRetryable = !FINAL_META_FAILURES.has(errorCode(err));
+      }
       return false;
     } finally {
       metaRefreshing = false;
@@ -744,6 +748,33 @@
   }
 
   let titleHeading = $state<HTMLElement>();
+
+  // Why the last retry from the failed notice failed, said in the notice in place of the generic
+  // cause; and whether retrying can still help. Where it cannot, Retry goes and the focus that was on
+  // it moves to "Choose manually", the way left.
+  const FINAL_META_FAILURES = new Set(['metadata.no_match', 'metadata.ambiguous_match', 'metadata.not_configured']);
+  let metaFailure = $state('');
+  let metaRetryable = $state(true);
+  let chooseSlot = $state<HTMLElement>();
+
+  $effect(() => {
+    if (metaState === 'failed') return;
+    metaFailure = '';
+    metaRetryable = true;
+  });
+
+  async function retryMeta(): Promise<boolean> {
+    const ok = await refreshMeta(true);
+    if (!ok && !metaRetryable) {
+      await tick();
+      const active = document.activeElement;
+      if (!active || active === document.body || !active.isConnected) {
+        const choose = chooseSlot ? focusableIn(chooseSlot)[0] : undefined;
+        if (choose) focusQuietly(choose);
+      }
+    }
+    return ok;
+  }
 
   // The page's error is an empty state, not a notice: when the game arrives it takes the focused
   // Retry away with it, and the focus goes to the game's title instead of falling to the page.
@@ -1715,21 +1746,23 @@
             <div class="meta-note">
               <Notice
                 tone={metaState === 'failed' ? 'warning' : 'info'}
-                announce={metaSearchRan}
+                announce={metaSearchRan || !metaRetryable}
                 title={metaState === 'unmatched' ? msg('games.detailMetaUnmatchedTitle') : msg('games.detailMetaFailedTitle')}
                 bind:retrying={metaRetrying}
-                retry={metaState === 'failed'
+                retry={metaState === 'failed' && metaRetryable
                   ? {
                       label: msg('common.retry'),
                       pending: msg('games.detailMetaRetrying'),
-                      run: () => refreshMeta(true),
+                      run: retryMeta,
                       focus: () => titleHeading,
                     }
                   : undefined}
               >
-                {metaState === 'unmatched' ? msg('games.detailMetaUnmatchedHint') : msg('games.detailMetaFailedHint')}
+                {metaState === 'unmatched' ? msg('games.detailMetaUnmatchedHint') : metaFailure || msg('games.detailMetaFailedHint')}
                 {#snippet action()}
-                  <Button size="sm" variant="primary" onclick={() => openMatch('find')}>{msg('games.detailChooseManually')}</Button>
+                  <span class="choose" bind:this={chooseSlot}>
+                    <Button size="sm" variant="primary" onclick={() => openMatch('find')}>{msg('games.detailChooseManually')}</Button>
+                  </span>
                   <Button size="sm" variant="ghost" busy={metaSkipping} onclick={skipMeta}>{msg('games.detailSkipSearch')}</Button>
                 {/snippet}
               </Notice>
@@ -2083,6 +2116,10 @@
   .meta-note {
     max-width: var(--prose-max);
     margin-bottom: var(--space-6);
+  }
+
+  .choose {
+    display: contents;
   }
 
   .summary {
