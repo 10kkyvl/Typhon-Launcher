@@ -82,24 +82,25 @@ const SITES: Record<string, Site[]> = {
     ['danger', false],
     ['danger', true],
   ],
+  // A failed shortcut or Steam change is said by its toast; the notice in the list only keeps it on screen.
   'lib/components/GameProfiles.svelte': [
     ['danger', true],
-    ['danger', true],
+    ['danger', false],
     ['danger', true],
   ],
-  // Each section's failure, a wrapper problem and the offer to keep a changed game follow a load or a switch.
+  // A failed load, a wrapper problem and the offer to keep a changed game announce; a failed change of a setting is said by its toast and only kept on screen by the setting.
   'lib/components/GamePropertiesModal.svelte': [
     ['danger', true],
-    ['danger', true],
-    ['danger', true],
-    ['danger', true],
+    ['danger', false],
+    ['danger', false],
+    ['danger', false],
     ['danger', true],
     ['warning', true],
     ['danger', true],
     ['danger', true],
-    ['danger', true],
-    ['danger', true],
-    ['danger', true],
+    ['danger', false],
+    ['danger', false],
+    ['danger', false],
   ],
   // An install's stored warning and what deleting seeded files does are read with the dialog; too little space and a stopped install just happened.
   'lib/components/InstallModal.svelte': [
