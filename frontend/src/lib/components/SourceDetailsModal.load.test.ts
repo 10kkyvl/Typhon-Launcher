@@ -37,7 +37,7 @@ function harness(deps: Deps) {
     const sourceErrorText = (err, fallback) => fallback;
     const msg = (key) => key;
     let open = true, sourceId = null, focusReleaseId = null;
-    let details = null, releases = [], total = 0, loadingReleases = false, detailsError = '', releasesError = '';
+    let details = null, releases = [], total = 0, loadingReleases = false, loadingDetails = false, detailsError = '', releasesError = '';
     let filterStatus = 'all', search = '', page = 1, searchTimer;
     const pageSize = 50;
     ${js}
@@ -238,13 +238,13 @@ describe('focusing a release from a notification', () => {
 });
 
 describe('source details template', () => {
-  it('shows each load failure as an alert with a retry, ahead of the empty state', () => {
-    expect(/\{#if detailsError\}\s*<section class="load-error" role="alert">[\s\S]*?loadDetails\(sourceId\)/.test(source)).toBe(true);
-    expect(/\{:else if releasesError\}\s*<div class="list-note load-error" role="alert">[\s\S]*?loadReleases\(sourceId\)[\s\S]*?\{:else if releases\.length === 0\}/.test(source)).toBe(true);
+  it('shows each load failure as a danger notice with a retry, ahead of the loader and the empty state', () => {
+    expect(/\{#if detailsError\}\s*<Notice tone="danger" compact>[\s\S]*?loadDetails\(sourceId\)/.test(source)).toBe(true);
+    expect(/\{#if releasesError\}\s*<div class="list-note">\s*<Notice tone="danger" compact>[\s\S]*?loadReleases\(sourceId\)[\s\S]*?\{:else if loadingReleases\}[\s\S]*?\{:else if releases\.length === 0\}/.test(source)).toBe(true);
   });
 
   it('keeps the pager on a later page in error, with the range text hidden', () => {
     expect(/\{#if !releasesError \|\| page > 1\}\s*<div class="tfoot">\s*\{#if !releasesError\}\s*<span class="range">/.test(source)).toBe(true);
-    expect(/<Button size="sm" disabled=\{page <= 1\} onclick=\{prevPage\}>/.test(source)).toBe(true);
+    expect(/<IconButton size="sm" variant="secondary" label=\{msg\('ui\.previous'\)\} disabled=\{page <= 1\} onclick=\{prevPage\}>/.test(source)).toBe(true);
   });
 });

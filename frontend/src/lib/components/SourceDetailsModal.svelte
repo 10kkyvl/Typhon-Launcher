@@ -18,7 +18,10 @@
   import Button from './Button.svelte';
   import EmptyState from './EmptyState.svelte';
   import ConfirmModal from './ConfirmModal.svelte';
+  import IconButton from './IconButton.svelte';
   import Modal from './Modal.svelte';
+  import Notice from './Notice.svelte';
+  import Spinner from './Spinner.svelte';
   import ReleaseMatchModal from './ReleaseMatchModal.svelte';
   import SearchInput from './SearchInput.svelte';
   import Select from './Select.svelte';
@@ -69,6 +72,7 @@
   let releases = $state<ReleaseView[]>([]);
   let total = $state(0);
   let loadingReleases = $state(false);
+  let loadingDetails = $state(false);
   let refreshing = $state(false);
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -111,23 +115,25 @@
     loadReleases(id);
   }
 
+  // A failure stays on screen, its Retry busy, until the answer replaces it.
   async function loadDetails(id: string) {
     const ticket = detailsRequests.begin();
-    detailsError = '';
+    loadingDetails = true;
     const result = await detailsRequests.settle(ticket, getSourceDetails(id));
     if (result.kind === 'stale') return;
+    loadingDetails = false;
     if (result.kind === 'error') {
       details = null;
       detailsError = sourceErrorText(result.error, msg('modals.sourceDetailsLoadFailed'));
     } else {
       details = result.value;
+      detailsError = '';
     }
   }
 
   async function loadReleases(id: string) {
     const ticket = releaseRequests.begin();
     loadingReleases = true;
-    releasesError = '';
     const result = await releaseRequests.settle(ticket, queryReleases({ sourceId: id, search, status: filterStatus, page, pageSize }));
     if (result.kind === 'stale') return;
     if (result.kind === 'error') {
@@ -137,6 +143,7 @@
     } else {
       releases = result.value.items;
       total = result.value.total;
+      releasesError = '';
     }
     loadingReleases = false;
   }
@@ -224,11 +231,11 @@
             <span class="updated">{msg('modals.sourceDetailsUpdatedAt', { date: relativeDate(source.lastUpdatedAt) })}</span>
           </div>
           {#if source.lastError}
-            <p class="error">{sourceErrorText(source.lastError)}</p>
+            <Notice tone="danger" compact announce={false}>{sourceErrorText(source.lastError)}</Notice>
           {/if}
         </div>
         <div class="head-actions">
-          <Button size="sm" disabled={refreshing || source.status === 'updating'} onclick={doRefresh}>
+          <Button size="sm" busy={refreshing || source.status === 'updating'} onclick={doRefresh}>
             {source.status === 'updating' ? msg('modals.sourceDetailsRefreshing') : msg('common.refresh')}
           </Button>
           <Button size="sm" onclick={doToggle}>{source.enabled ? msg('modals.sourceDetailsDisable') : msg('modals.sourceDetailsEnable')}</Button>
@@ -237,10 +244,12 @@
       </section>
 
       {#if detailsError}
-        <section class="load-error" role="alert">
-          <span>{detailsError}</span>
-          <Button size="sm" onclick={() => sourceId && loadDetails(sourceId)}>{msg('common.retry')}</Button>
-        </section>
+        <Notice tone="danger" compact>
+          {detailsError}
+          {#snippet action()}
+            <Button size="sm" busy={loadingDetails} onclick={() => sourceId && loadDetails(sourceId)}>{msg('common.retry')}</Button>
+          {/snippet}
+        </Notice>
       {:else if details}
         <section class="counters">
           <div class="counter"><span class="counter-label">{msg('modals.sourceDetailsCounterTotal')}</span><span class="counter-value">{details.total}</span></div>
@@ -265,13 +274,17 @@
           <span class="th">{msg('modals.sourceDetailsColUploaded')}</span>
           <span class="th">{msg('modals.sourceDetailsColStatus')}</span>
         </div>
-        {#if loadingReleases}
-          <p class="list-note">{msg('modals.sourceDetailsLoading')}</p>
-        {:else if releasesError}
-          <div class="list-note load-error" role="alert">
-            <span>{releasesError}</span>
-            <Button size="sm" onclick={() => sourceId && loadReleases(sourceId)}>{msg('common.retry')}</Button>
+        {#if releasesError}
+          <div class="list-note">
+            <Notice tone="danger" compact>
+              {releasesError}
+              {#snippet action()}
+                <Button size="sm" busy={loadingReleases} onclick={() => sourceId && loadReleases(sourceId)}>{msg('common.retry')}</Button>
+              {/snippet}
+            </Notice>
           </div>
+        {:else if loadingReleases}
+          <div class="list-note loading"><Spinner size="sm" label={msg('modals.sourceDetailsLoading')} /></div>
         {:else if releases.length === 0}
           <div class="list-note">
             <EmptyState size="inline" align="center" title={msg('modals.sourceDetailsNoReleases')} />
@@ -279,7 +292,7 @@
         {:else}
           {#each releases as view (view.release.id)}
             {@const badge = matchLabel(view)}
-            <button class="row clickable" onclick={() => openMatch(view)}>
+            <button type="button" class="row clickable" onclick={() => openMatch(view)}>
               <span class="cell title" title={view.release.rawTitle}>{view.release.rawTitle}</span>
               <span class="cell">{view.gameTitle || '—'}</span>
               <span class="cell">{view.release.edition || view.release.version || '—'}</span>
@@ -307,12 +320,12 @@
               <span class="range">{msg('modals.sourceDetailsRange', { from, to, total })}</span>
             {/if}
             <div class="pager">
-              <Button size="sm" disabled={page <= 1} onclick={prevPage}>
+              <IconButton size="sm" variant="secondary" label={msg('ui.previous')} disabled={page <= 1} onclick={prevPage}>
                 <ChevronLeft size="1.5rem" strokeWidth={1.8} />
-              </Button>
-              <Button size="sm" disabled={page * pageSize >= total} onclick={nextPage}>
+              </IconButton>
+              <IconButton size="sm" variant="secondary" label={msg('ui.next')} disabled={page * pageSize >= total} onclick={nextPage}>
                 <ChevronRight size="1.5rem" strokeWidth={1.8} />
-              </Button>
+              </IconButton>
             </div>
           </div>
         {/if}
@@ -364,20 +377,6 @@
   .updated {
     font-size: var(--font-xs);
     color: var(--text-3);
-  }
-
-  .error {
-    font-size: var(--font-xs);
-    color: var(--danger);
-  }
-
-  .load-error {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-3);
-    font-size: var(--font-sm);
-    color: var(--danger);
   }
 
   .head-actions {
@@ -466,6 +465,11 @@
     background: var(--hover);
   }
 
+  /* Inside the table: the shared ring is drawn inward, where the table does not clip it. */
+  .row:focus-visible {
+    outline-offset: -2px;
+  }
+
   .row:disabled {
     cursor: default;
   }
@@ -504,6 +508,11 @@
     text-align: center;
     font-size: var(--font-sm);
     color: var(--text-3);
+  }
+
+  .list-note.loading {
+    display: flex;
+    justify-content: center;
   }
 
   .tfoot {
