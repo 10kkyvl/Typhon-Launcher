@@ -56,7 +56,7 @@
     padding: 0 0.6rem;
     border-radius: var(--radius-sm);
     background: var(--accent);
-    color: var(--accent-on, #fff);
+    color: var(--accent-on, var(--accent-on-default));
     font-size: 1rem;
     font-weight: 700;
     letter-spacing: 0.05em;

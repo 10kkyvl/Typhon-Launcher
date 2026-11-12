@@ -3,7 +3,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { toasts } from '../stores/toasts';
 import { renderDom } from '../testing/dom';
+import { ruleBody, styleOf } from '../testing/css';
 import BetaBadge from './BetaBadge.svelte';
+import badgeSource from './BetaBadge.svelte?raw';
+import buttonSource from './Button.svelte?raw';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
@@ -36,5 +39,15 @@ describe('BetaBadge in a DOM', () => {
     expect(view.queryByRole('menu')).toBeNull();
     expect(document.activeElement).toBe(badge);
     expect(get(toasts).map((t) => t.message)).toEqual([msg('settings.aboutLogsDesktopOnly')]);
+  });
+});
+
+describe('BetaBadge look', () => {
+  // The badge is filled in the accent as the primary button is: its text takes the same colour, the
+  // theme's or the shell's default, not a literal of its own.
+  it('writes on the accent in the colour the primary button uses', () => {
+    const primary = ruleBody(styleOf(buttonSource, 'Button.svelte'), '.primary').color;
+    expect(primary).toMatch(/^var\(/);
+    expect(ruleBody(styleOf(badgeSource, 'BetaBadge.svelte'), '.badge').color).toBe(primary);
   });
 });
