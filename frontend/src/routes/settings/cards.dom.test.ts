@@ -14,6 +14,8 @@ vi.mock('../../lib/services/settings', async (importOriginal) => ({
 vi.mock('../../lib/services/emulators', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/emulators')>()),
   listPlatforms: vi.fn(),
+  detectEmulators: vi.fn(),
+  setEmulatorPath: vi.fn(),
 }));
 vi.mock('../../lib/services/network', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/network')>()),
@@ -27,13 +29,14 @@ vi.mock('../../lib/services/relocate', async (importOriginal) => ({
 }));
 
 import { msg } from '../../lib/i18n';
-import { listPlatforms, type PlatformStatus } from '../../lib/services/emulators';
+import { detectEmulators, listPlatforms, setEmulatorPath, type PlatformStatus } from '../../lib/services/emulators';
 import type { DiscordApi } from '../../lib/services/discord';
 import { testProxy } from '../../lib/services/network';
 import { moveLibrary } from '../../lib/services/relocate';
 import { libraryFolders, saveSettingsPatch, type Settings as SettingsData } from '../../lib/services/settings';
 import { settings } from '../../lib/stores/settings';
 import { renderDom } from '../../lib/testing/dom';
+import { description } from '../../lib/testing/hints';
 import DiscordCard from './DiscordCard.svelte';
 import EmulatorsCard from './EmulatorsCard.svelte';
 import LibraryFoldersRow from './LibraryFoldersRow.svelte';
@@ -129,6 +132,31 @@ describe('EmulatorsCard', () => {
     // Said again though the words are the same: they come again into the alert.
     const again = screen.getByRole('alert').querySelector('[data-part="notice-again"]');
     await waitFor(() => expect(again?.textContent).toBe(msg('emul.loadFailed')));
+  });
+});
+
+describe('EmulatorsCard: the found emulators', () => {
+  it('ticks each found emulator for a later Apply, as a checkbox described by its path', async () => {
+    vi.mocked(listPlatforms).mockResolvedValue([PLATFORM]);
+    vi.mocked(detectEmulators).mockResolvedValueOnce({ found: [{ platform: 'ps2', path: '/apps/pcsx2' }], unreadable: 0 });
+    vi.mocked(setEmulatorPath).mockResolvedValue({ ...PLATFORM, path: '/apps/pcsx2', status: 'ready' });
+    const { user } = renderDom(EmulatorsCard, {});
+    await screen.findByText(`${PLATFORM.name} · ${PLATFORM.emulator}`);
+    await user.click(screen.getByRole('button', { name: msg('emul.detect') }));
+
+    const dialog = await screen.findByRole('dialog', { name: msg('emul.detectTitle') });
+    const box = within(dialog).getByRole('checkbox', { name: 'PCSX2' });
+    expect(box.getAttribute('aria-checked')).toBe('true');
+    expect(description(box)).toBe('/apps/pcsx2');
+    const apply = within(dialog).getByRole('button', { name: msg('emul.detectApply') }) as HTMLButtonElement;
+
+    box.focus();
+    await user.keyboard(' ');
+    expect(box.getAttribute('aria-checked')).toBe('false');
+    expect(apply.disabled).toBe(true);
+    await user.keyboard(' ');
+    await user.click(apply);
+    expect(setEmulatorPath).toHaveBeenCalledWith('ps2', '/apps/pcsx2');
   });
 });
 

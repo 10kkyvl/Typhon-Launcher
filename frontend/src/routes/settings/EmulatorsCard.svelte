@@ -3,11 +3,11 @@
   import { ExternalLink, FolderOpen, Search } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
+  import Checkbox from '../../lib/components/Checkbox.svelte';
   import Modal from '../../lib/components/Modal.svelte';
   import Notice from '../../lib/components/Notice.svelte';
   import Spinner from '../../lib/components/Spinner.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
-  import Toggle from '../../lib/components/Toggle.svelte';
   import { hasMessage, msg } from '../../lib/i18n';
   import { libraryErrorText } from '../../lib/library/errors';
   import { inWails } from '../../lib/services/backend';
@@ -22,7 +22,6 @@
   } from '../../lib/services/emulators';
   import { toast } from '../../lib/stores/toasts';
 
-  const uid = $props.id();
 
   let rows = $state<PlatformStatus[]>([]);
   let loading = $state(true);
@@ -253,11 +252,7 @@
     <div class="found">
       {#each found.found as item (item.platform)}
         <div class="found-row">
-          <div class="row-text">
-            <span class="row-label" id="{uid}-found-{item.platform}-label">{nameOf(item.platform)}</span>
-            <span class="row-sub path" id="{uid}-found-{item.platform}-sub" title={item.path}>{item.path}</span>
-          </div>
-          <Toggle bind:checked={picked[item.platform]} labelledby="{uid}-found-{item.platform}-label" describedby="{uid}-found-{item.platform}-sub" />
+          <Checkbox bind:checked={picked[item.platform]} label={nameOf(item.platform)} description={item.path} />
         </div>
       {/each}
     </div>
@@ -343,10 +338,6 @@
   }
 
   .found-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-6);
     padding: 1.1rem 0;
   }
 
