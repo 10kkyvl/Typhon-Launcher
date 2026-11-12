@@ -4,7 +4,9 @@
   import Artwork from './Artwork.svelte';
   import Button from './Button.svelte';
   import Chip from './Chip.svelte';
+  import EmptyState from './EmptyState.svelte';
   import Modal from './Modal.svelte';
+  import Notice from './Notice.svelte';
   import Select from './Select.svelte';
   import { msg } from '../i18n';
   import { libraryErrorText } from '../library/errors';
@@ -142,7 +144,7 @@
           {#if collectionOptions.length > 0}
             <Select options={collectionOptions} bind:value={filters.collectionId} width="100%" label={msg('games.randomSourceCollection')} />
           {:else}
-            <p class="hint">{msg('games.randomNoCollections')}</p>
+            <EmptyState size="inline" title={msg('games.randomNoCollections')} />
           {/if}
         {/if}
       </div>
@@ -158,7 +160,7 @@
         </div>
       {/if}
       {#if phase === 'empty'}
-        <p class="no-match" role="alert">{msg('games.randomEmpty')}</p>
+        <Notice tone="warning" compact>{msg('games.randomEmpty')}</Notice>
       {/if}
     </div>
   {:else if shown}
@@ -198,7 +200,7 @@
         <Dices size="1.6rem" strokeWidth={1.8} />
         {msg('games.randomAgain')}
       </Button>
-      <Button variant="primary" disabled={launching} onclick={() => play(shown!)}>
+      <Button variant="primary" busy={launching} onclick={() => play(shown!)}>
         {#if canPlay(shown)}
           <Play size="1.6rem" strokeWidth={1.8} />
           {msg('games.randomPlay')}
@@ -232,17 +234,6 @@
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-3);
-  }
-
-  .hint,
-  .no-match {
-    margin: 0;
-    color: var(--text-2);
-    line-height: 1.55;
-  }
-
-  .no-match {
-    color: var(--warning);
   }
 
   .card {
