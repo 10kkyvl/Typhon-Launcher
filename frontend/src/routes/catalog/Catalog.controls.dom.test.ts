@@ -10,11 +10,7 @@ import { catalogView } from '../../lib/stores/ui';
 import { renderDom } from '../../lib/testing/dom';
 import Catalog from './Catalog.svelte';
 
-// A failed page asks whether it was cancelled (CancelError), which the shared runtime stub lacks.
-vi.mock('@wailsio/runtime', async () => ({
-  ...(await import('../../lib/testing/dom')).wailsRuntime(),
-  CancelError: class CancelError extends Error {},
-}));
+vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
 vi.mock('../../lib/services/recommendations', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/recommendations')>()),
