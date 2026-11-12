@@ -17,4 +17,14 @@ describe('every page heading can take focus', () => {
     ]);
     expect(headings.filter(({ tag }) => !/\btabindex="-1"/.test(tag)).map(({ path }) => path)).toEqual([]);
   });
+
+  // A component that draws its title at a level it is given (EmptyState, Notice) is a page's h1
+  // when a page passes 1: at that level its heading must be focusable by script too.
+  it('a heading drawn at a given level is focusable by script when it is the page title', () => {
+    const tags = Object.entries(frontendSources)
+      .filter(([path]) => path.endsWith('.svelte') && !path.startsWith('lib/bigpicture/') && !path.startsWith('overlay/'))
+      .flatMap(([path, text]) => [...text.matchAll(/<svelte:element\s+this=\{`h\$\{[^}]+\}`\}[^>]*>/g)].map((m) => ({ path, tag: m[0] })));
+    expect(tags.map(({ path }) => path).sort()).toEqual(['lib/components/EmptyState.svelte', 'lib/components/Notice.svelte']);
+    expect(tags.filter(({ tag }) => !/\btabindex=\{level === 1 \? -1 : undefined\}/.test(tag)).map(({ path }) => path)).toEqual([]);
+  });
 });

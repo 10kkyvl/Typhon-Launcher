@@ -54,6 +54,15 @@ describe('focus after a page change', () => {
     expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1, name: 'Celeste' }));
   });
 
+  it('a pick that opens a missing game lands on the page that says so', async () => {
+    const { user } = renderDom(RouteHarness, { missing: true });
+
+    await user.click(screen.getByRole('button', { name: 'Open Celeste' }));
+    await tick();
+
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1, name: 'Game not found' }));
+  });
+
   it('a heading that comes once the page has loaded takes focus then', async () => {
     const { user, rerender } = renderDom(RouteHarness, { loaded: false });
     await user.click(screen.getByRole('button', { name: 'Open Celeste' }));

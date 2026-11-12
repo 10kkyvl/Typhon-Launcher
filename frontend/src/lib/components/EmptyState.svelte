@@ -41,7 +41,9 @@
   {#if size === 'inline'}
     <p class="title">{title}</p>
   {:else}
-    <svelte:element this={`h${level}`} class="title heading">{title}</svelte:element>
+    <!-- At level 1 it is the page's title: focusable by script, as the shell moves focus to it after a
+         page change (AppShell) and a removed item's menu does (GameQuickMenu). -->
+    <svelte:element this={`h${level}`} tabindex={level === 1 ? -1 : undefined} class="title heading">{title}</svelte:element>
   {/if}
   {#if description}
     <p class="description">{description}</p>

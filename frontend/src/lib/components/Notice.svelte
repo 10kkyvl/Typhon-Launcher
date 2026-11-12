@@ -91,7 +91,7 @@
   </span>
   <div class="body" role={announce ? (tone === 'danger' ? 'alert' : 'status') : undefined}>
     {#if title && level}
-      <svelte:element this={`h${level}`} class="title" class:unseen>{title}</svelte:element>
+      <svelte:element this={`h${level}`} tabindex={level === 1 ? -1 : undefined} class="title" class:unseen>{title}</svelte:element>
     {:else if title}
       <span class="title" class:unseen>{title}</span>
     {/if}

@@ -1,12 +1,14 @@
 <script lang="ts">
   import AppShell from '../components/AppShell.svelte';
+  import EmptyState from '../components/EmptyState.svelte';
   import PageHeader from '../components/PageHeader.svelte';
   import { goBack, navigate, route } from '../stores/router';
 
   // The main window's shell with three pages, as App.svelte routes them: the library with a game to
-  // open, the game page whose heading comes once its details have loaded (`loaded`), and the friends
-  // page. For AppShell.focus.dom.test.ts.
-  let { loaded = true }: { loaded?: boolean } = $props();
+  // open, the game page whose heading comes once its details have loaded (`loaded`) or that says the
+  // game is not there (`missing`, as GameDetails does), and the friends page. For
+  // AppShell.focus.dom.test.ts.
+  let { loaded = true, missing = false }: { loaded?: boolean; missing?: boolean } = $props();
 </script>
 
 <AppShell>
@@ -14,7 +16,9 @@
     <PageHeader title="Library" />
     <button type="button" onclick={() => navigate('game', { id: 'celeste' })}>Open Celeste</button>
   {:else if $route.name === 'game'}
-    {#if loaded}
+    {#if missing}
+      <EmptyState level={1} title="Game not found" />
+    {:else if loaded}
       <h1 tabindex="-1">Celeste</h1>
     {:else}
       <p>Loading</p>
