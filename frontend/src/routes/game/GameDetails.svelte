@@ -383,7 +383,7 @@
   const metaState = $derived(
     metaStatus({
       available: $metadataAvailable,
-      busy: metaReading || metaSearching || (metaRefreshing && !metaRetrying) || metaSkipping,
+      busy: metaReading || metaSearching || (metaRefreshing && !metaRetrying),
       match: metaView?.match,
       resolved: metaView?.resolved,
     }),
@@ -762,8 +762,11 @@
     if (titleHeading?.isConnected) focusQuietly(titleHeading);
   }
 
+  // Skipping keeps its notice, with Skip busy, until the answer; the notice then goes with the focused
+  // Skip, and the focus goes to the game's title instead of the page.
   async function skipMeta() {
     if (!canonicalId || metaSkipping) return;
+    const button = document.activeElement;
     metaSkipping = true;
     const gameId = canonicalId;
     const current = metaToken;
@@ -776,6 +779,10 @@
     } finally {
       metaSkipping = false;
     }
+    await tick();
+    const active = document.activeElement;
+    if (!button || button.isConnected || (active && active !== document.body && active.isConnected)) return;
+    if (titleHeading?.isConnected) focusQuietly(titleHeading);
   }
 
   async function openStore(store: StoreId) {
@@ -1723,7 +1730,7 @@
                 {metaState === 'unmatched' ? msg('games.detailMetaUnmatchedHint') : msg('games.detailMetaFailedHint')}
                 {#snippet action()}
                   <Button size="sm" variant="primary" onclick={() => openMatch('find')}>{msg('games.detailChooseManually')}</Button>
-                  <Button size="sm" variant="ghost" disabled={metaSkipping} onclick={skipMeta}>{msg('games.detailSkipSearch')}</Button>
+                  <Button size="sm" variant="ghost" busy={metaSkipping} onclick={skipMeta}>{msg('games.detailSkipSearch')}</Button>
                 {/snippet}
               </Notice>
             </div>

@@ -5,7 +5,7 @@ import { msg } from '../../lib/i18n';
 import type { LibraryGame } from '../../lib/services/library';
 import { Events } from '@wailsio/runtime';
 import { tick } from 'svelte';
-import { ensureMetadataFresh, getMetadataView, refreshMetadata, type MetadataView } from '../../lib/services/metadata';
+import { dismissMetadataMatch, ensureMetadataFresh, getMetadataView, refreshMetadata, type MetadataView } from '../../lib/services/metadata';
 import { getCatalogGame, getReleasesForGame, type CatalogGame, type ReleaseGroup } from '../../lib/services/sources';
 import { libraryGames } from '../../lib/stores/library';
 import { metadataAvailable } from '../../lib/stores/metadata';
@@ -20,6 +20,7 @@ vi.mock('../../lib/services/metadata', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/metadata')>()),
   getMetadataView: vi.fn(),
   refreshMetadata: vi.fn(),
+  dismissMetadataMatch: vi.fn(),
   ensureMetadataFresh: vi.fn(),
 }));
 vi.mock('../../lib/services/sources', async (importOriginal) => ({
@@ -85,6 +86,7 @@ const saidAgain = (notice: Element) => notice.querySelector('[data-part="notice-
 afterEach(() => {
   vi.mocked(getMetadataView).mockReset();
   vi.mocked(refreshMetadata).mockReset();
+  vi.mocked(dismissMetadataMatch).mockReset();
   vi.mocked(ensureMetadataFresh).mockReset();
   vi.mocked(getCatalogGame).mockReset();
   vi.mocked(getReleasesForGame).mockReset();
@@ -279,5 +281,29 @@ describe('GameDetails: the outcome of a metadata search', () => {
 
     const notice = (await screen.findByText(msg('games.detailMetaUnmatchedTitle'))).closest('.notice') as HTMLElement;
     expect(notice.querySelector('[role="status"]')?.textContent).toContain(msg('games.detailMetaUnmatchedTitle'));
+  });
+});
+
+describe('GameDetails: skipping the metadata search', () => {
+  it('shows no search while it skips, keeps the focus on the busy Skip, then focuses the title', async () => {
+    metadataAvailable.set(true);
+    vi.mocked(getMetadataView).mockResolvedValue(view({ resolved: false, match: 'unmatched' }));
+    const answer = deferred<MetadataView>();
+    vi.mocked(dismissMetadataMatch).mockReturnValueOnce(answer.promise);
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    const notice = (await screen.findByText(msg('games.detailMetaUnmatchedTitle'))).closest('.notice') as HTMLElement;
+    const skip = within(notice).getByRole('button', { name: msg('games.detailSkipSearch') });
+    skip.focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(skip.getAttribute('aria-busy')).toBe('true');
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(skip);
+    expect(screen.queryByText(msg('games.detailMetaSearchingTitle'))).toBeNull();
+
+    answer.resolve(view({ resolved: false, match: 'skipped' }));
+    await vi.waitFor(() => expect(notice.isConnected).toBe(false));
+    await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1, name: 'Hades' })));
   });
 });
