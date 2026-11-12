@@ -36,16 +36,19 @@
   .pinned {
     display: flex;
     flex-direction: column;
-    overflow: hidden;
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     background: var(--surface-2);
   }
 
+  /* The button, not the block, clips the artwork to the block's corners: the shared focus ring drawn
+     outside the button then lies beyond every layer of the artwork, and nothing cuts it off. */
   .hero {
     position: relative;
     display: block;
+    overflow: hidden;
     width: 100%;
+    border-radius: calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px) 0 0;
     padding: 0;
     border: 0;
     background: none;
@@ -64,9 +67,8 @@
     transform: scale(1.03);
   }
 
-  /* The block clips its corners: the shared ring is drawn inward, where it is not cut off. */
-  .hero:focus-visible {
-    outline-offset: -2px;
+  .hero:last-child {
+    border-radius: calc(var(--radius-lg) - 1px);
   }
 
   .shade {
