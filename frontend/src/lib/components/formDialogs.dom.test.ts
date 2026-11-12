@@ -97,6 +97,17 @@ describe('ThemeTextImportModal', () => {
   });
 });
 
+describe('ThemeTextImportModal: the name field', () => {
+  it('is named by its label alone, its hint being its description', () => {
+    render(ThemeTextImportModal, { target: app, props: { open: true, onimported: vi.fn() } });
+    const dialog = screen.getByRole('dialog', { name: msg('settings.appearanceImportTextTitle') });
+
+    const field = within(dialog).getByRole('textbox', { name: msg('settings.appearanceImportTextNameLabel') });
+    const hint = document.getElementById(field.getAttribute('aria-describedby') ?? '');
+    expect(hint?.textContent?.trim()).toBe(msg('settings.appearanceImportTextNameHint'));
+  });
+});
+
 describe('DeleteAccountModal', () => {
   it('says a wrong password by its field and marks it wrong; the delete button stays focused and busy while it runs', async () => {
     authState.set('authenticated');
@@ -164,6 +175,17 @@ describe('LibrarySetupModal', () => {
     expect(create.getAttribute('aria-busy')).toBe('true');
     expect(document.activeElement).toBe(create);
     created.resolve({} as Settings);
+  });
+});
+
+describe('LibrarySetupModal: the note it opens with', () => {
+  it('is an info notice read with the dialog', () => {
+    render(LibrarySetupModal, { target: app, props: { open: true, note: 'Games stay where they are.' } });
+    const dialog = screen.getByRole('dialog', { name: msg('modals.librarySetupDefaultTitle') });
+
+    const notice = within(dialog).getByText('Games stay where they are.').closest('[data-tone="info"]') as HTMLElement;
+    expect(notice).not.toBeNull();
+    expect(notice.querySelector('[role="status"], [role="alert"]')).toBeNull();
   });
 });
 

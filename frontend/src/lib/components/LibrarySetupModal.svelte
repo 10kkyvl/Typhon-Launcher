@@ -93,7 +93,7 @@
     </p>
 
     {#if note}
-      <p class="note">{note}</p>
+      <Notice compact announce={false}>{note}</Notice>
     {/if}
 
     <div class="pick">
@@ -147,16 +147,6 @@
   .intro {
     margin: 0;
     font-size: var(--font-sm);
-    line-height: 1.5;
-    color: var(--text-2);
-  }
-
-  .note {
-    margin: 0;
-    padding: var(--space-3);
-    border-radius: var(--radius-md);
-    background: var(--surface-2);
-    font-size: var(--font-xs);
     line-height: 1.5;
     color: var(--text-2);
   }

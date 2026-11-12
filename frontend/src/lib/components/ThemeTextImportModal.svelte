@@ -55,11 +55,11 @@
       ></textarea>
       {#if error}<span class="error" id="{uid}-error" role="alert">{error}</span>{/if}
     </div>
-    <label class="field">
-      <span class="field-label">{msg('settings.appearanceImportTextNameLabel')}</span>
-      <input class="input" type="text" maxlength="64" disabled={busy} bind:value={name} />
-      <span class="hint">{msg('settings.appearanceImportTextNameHint')}</span>
-    </label>
+    <div class="field">
+      <label class="field-label" for="{uid}-name">{msg('settings.appearanceImportTextNameLabel')}</label>
+      <input id="{uid}-name" class="input" type="text" maxlength="64" disabled={busy} aria-describedby="{uid}-name-hint" bind:value={name} />
+      <span class="hint" id="{uid}-name-hint">{msg('settings.appearanceImportTextNameHint')}</span>
+    </div>
   </div>
 
   {#snippet footer()}
