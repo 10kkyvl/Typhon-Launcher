@@ -51,11 +51,15 @@
         </div>
       {/each}
     </div>
-  {:else if loading}
-    <Spinner label={msg('games.recommendationLoading')} />
   {:else}
+    <!-- One region from the search to its answer: a region inserted together with its words may not
+         be read. The ring is the region's picture; its words are the loading line. -->
     <div role="status">
-      <EmptyState size="inline" title={emptyText} />
+      {#if loading}
+        <span class="loading"><Spinner size="sm" />{msg('games.recommendationLoading')}</span>
+      {:else}
+        <EmptyState size="inline" title={emptyText} />
+      {/if}
     </div>
   {/if}
 </section>
@@ -67,6 +71,7 @@
   .picks { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-5); }
   .pick { min-width: 0; }
   .genre { font-size: var(--font-sm); color: var(--text-3); }
+  .loading { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--font-sm); color: var(--text-3); }
   .genre { white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
   @media (max-width: 900px) { .picks { grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); } }
 </style>

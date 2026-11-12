@@ -18,9 +18,22 @@ describe('RecommendationShelf while it looks for games', () => {
     await rerender({ title: 'Picks', items: [], emptyText: 'None', ondismiss: () => {}, onrefresh, loading: true });
 
     const status = screen.getByRole('status');
-    expect(status.classList.contains('spinner')).toBe(true);
+    expect(status.querySelector('.spinner')).toBeTruthy();
     expect(status.textContent?.trim()).toBe(msg('games.recommendationLoading'));
     expect(refresh.getAttribute('aria-busy')).toBe('true');
     expect(document.activeElement).toBe(refresh);
+  });
+
+  // A live region inserted together with its words may not be read: the one that says the search
+  // found nothing is the one that said it was looking.
+  it('says it found nothing in the region that said it was looking', async () => {
+    const props = { title: 'Picks', items: [], emptyText: 'Nothing to suggest', ondismiss: () => {}, loading: true };
+    const { rerender } = renderDom(RecommendationShelf, props);
+    const region = screen.getByRole('status');
+
+    await rerender({ ...props, loading: false });
+
+    expect(screen.getByRole('status')).toBe(region);
+    expect(region.textContent?.trim()).toBe('Nothing to suggest');
   });
 });
