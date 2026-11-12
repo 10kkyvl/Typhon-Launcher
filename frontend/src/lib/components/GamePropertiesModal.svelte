@@ -3,10 +3,13 @@
   import { FolderOpen } from '@lucide/svelte';
   import Tooltip from './Tooltip.svelte';
   import Button from './Button.svelte';
+  import EmptyState from './EmptyState.svelte';
   import ProgressBar from './ProgressBar.svelte';
   import Modal from './Modal.svelte';
   import GameProfiles from './GameProfiles.svelte';
+  import Notice from './Notice.svelte';
   import Select from './Select.svelte';
+  import Spinner from './Spinner.svelte';
   import Toggle from './Toggle.svelte';
   import { chooseSavesDir } from '../game/actions/saves';
   import { emulationPlatform, isEmulated } from '../library/emulation';
@@ -69,7 +72,8 @@
   let candidates = $state<Candidate[]>([]);
   let candidatesLoading = $state(false);
   let candidatesError = $state('');
-  let exeBusy = $state(false);
+  // What sets the executable: a found file pressed, or the file dialog.
+  let exeBusy = $state<'' | 'pick' | 'browse'>('');
   let exeError = $state('');
 
   let argsLine = $state('');
@@ -124,6 +128,8 @@
   let compatPreset = $state('default');
   let compatProgress = $state<WrapperProgress | null>(null);
   let compatKeepOffer = $state(false);
+  // Which problem action was pressed: that button stays focused and busy while the switch runs.
+  let compatAction = $state<'' | 'revert' | 'keep'>('');
 
   const running = $derived(Boolean(game && $runningGames.has(game.id)));
   const compatBusy = $derived(game ? compatBusyFor.includes(game.id) : false);
@@ -135,7 +141,7 @@
   const compatActions = $derived(compat?.problem ? problemActions(compat.problem.code) : null);
   const compatFiles = $derived((compat?.active?.files ?? []).join(', '));
 
-  let savesBusy = $state(false);
+  let savesBusy = $state<'' | 'browse' | 'reset'>('');
   let savesError = $state('');
 
   let loadedFor = '';
@@ -254,10 +260,11 @@
     if (!presetsFor(compatWrapper).includes(compatPreset)) compatPreset = 'default';
   }
 
-  async function changeCompat(on: boolean, keepChanged = false) {
+  async function changeCompat(on: boolean, keepChanged = false, action: '' | 'revert' | 'keep' = '') {
     if (!game || compatBusy) return;
     const id = game.id;
     compatBusyFor = [...compatBusyFor, id];
+    compatAction = action;
     compatError = '';
     compatKeepOffer = false;
     compatProgress = null;
@@ -278,6 +285,7 @@
       }
     } finally {
       compatBusyFor = compatBusyFor.filter((busy) => busy !== id);
+      compatAction = '';
       if (shown()) compatProgress = null;
     }
     if (shown()) await loadCompat(id);
@@ -285,7 +293,7 @@
 
   async function pickCandidate(path: string) {
     if (!game || exeBusy) return;
-    exeBusy = true;
+    exeBusy = 'pick';
     exeError = '';
     try {
       await setExecutable(game.id, path);
@@ -293,13 +301,13 @@
       exeError = errorText(err, msg('modals.propertiesExeSaveFailed'));
       toast(exeError, 'danger');
     } finally {
-      exeBusy = false;
+      exeBusy = '';
     }
   }
 
   async function browseExecutable() {
     if (!game || exeBusy) return;
-    exeBusy = true;
+    exeBusy = 'browse';
     exeError = '';
     try {
       const title = msg('modals.propertiesExeDialog', { title: game.title });
@@ -311,7 +319,7 @@
       exeError = errorText(err, msg('modals.propertiesExeSaveFailed'));
       toast(exeError, 'danger');
     } finally {
-      exeBusy = false;
+      exeBusy = '';
     }
   }
 
@@ -377,7 +385,7 @@
 
   async function browseSaves() {
     if (!game || savesBusy) return;
-    savesBusy = true;
+    savesBusy = 'browse';
     savesError = '';
     try {
       await chooseSavesDir(game.id, game.title);
@@ -385,13 +393,13 @@
       savesError = errorText(err, msg('modals.propertiesSavesFailed'));
       toast(savesError, 'danger');
     } finally {
-      savesBusy = false;
+      savesBusy = '';
     }
   }
 
   async function resetSaves() {
     if (!game || savesBusy) return;
-    savesBusy = true;
+    savesBusy = 'reset';
     savesError = '';
     try {
       await clearSavesDir(game.id);
@@ -399,7 +407,7 @@
       savesError = errorText(err, msg('modals.propertiesSavesFailed'));
       toast(savesError, 'danger');
     } finally {
-      savesBusy = false;
+      savesBusy = '';
     }
   }
 </script>
@@ -421,20 +429,21 @@
         {#if emulated}
           <p class="hint">{msg('emul.imageHint')}</p>
         {:else if candidatesLoading}
-          <p class="hint">{msg('modals.propertiesExeLoading')}</p>
+          <Spinner size="sm" label={msg('modals.propertiesExeLoading')} />
         {:else if candidatesError}
-          <p class="failure">{candidatesError}</p>
+          <Notice tone="danger" compact>{candidatesError}</Notice>
         {:else if candidates.length === 0}
-          <p class="hint">{msg('modals.propertiesExeNoCandidates')}</p>
+          <EmptyState size="inline" title={msg('modals.propertiesExeNoCandidates')} />
         {:else}
           <span class="label">{msg('modals.propertiesExeCandidates')}</span>
           <div class="candidates">
             {#each candidates as candidate (candidate.path)}
               <Tooltip text={candidate.path}>
                 <button
+                  type="button"
                   class="candidate"
-                  class:current={candidate.path === game.executable}
-                  disabled={exeBusy}
+                  aria-current={candidate.path === game.executable || undefined}
+                  aria-disabled={exeBusy !== '' || undefined}
                   onclick={() => pickCandidate(candidate.path)}
                 >
                   {truncateMiddle(candidate.path, 70)}
@@ -444,10 +453,10 @@
           </div>
         {/if}
         {#if exeError}
-          <p class="failure">{exeError}</p>
+          <Notice tone="danger" compact>{exeError}</Notice>
         {/if}
         <div>
-          <Button size="sm" disabled={exeBusy} onclick={browseExecutable}>
+          <Button size="sm" disabled={exeBusy === 'pick'} busy={exeBusy === 'browse'} onclick={browseExecutable}>
             <FolderOpen size="1.5rem" strokeWidth={1.8} />
             {msg('modals.propertiesExeBrowse')}
           </Button>
@@ -456,11 +465,12 @@
 
       {#if !emulated}
       <section class="section">
-        <h4>{msg('modals.propertiesArgsTitle')}</h4>
+        <h4 id="{uid}-args-label">{msg('modals.propertiesArgsTitle')}</h4>
         <div class="row">
           <input
             class="input sm"
             type="text"
+            aria-labelledby="{uid}-args-label"
             spellcheck="false"
             autocomplete="off"
             placeholder={msg('modals.propertiesArgsPlaceholder')}
@@ -468,12 +478,12 @@
             bind:value={argsLine}
             onkeydown={(e) => e.key === 'Enter' && argsDirty && saveArgs()}
           />
-          <Button size="sm" variant="primary" disabled={argsLoading || argsBusy || !argsDirty} onclick={saveArgs}>
+          <Button size="sm" variant="primary" disabled={argsLoading || (!argsDirty && !argsBusy)} busy={argsBusy} onclick={saveArgs}>
             {msg('modals.propertiesArgsSave')}
           </Button>
         </div>
         {#if argsError}
-          <p class="failure">{argsError}</p>
+          <Notice tone="danger" compact>{argsError}</Notice>
         {/if}
         <p class="hint">{msg('modals.propertiesArgsHint')}</p>
       </section>
@@ -495,7 +505,7 @@
           </div>
           <p class="hint">{msg('modals.propertiesAdminHint')}</p>
           {#if adminError}
-            <p class="failure">{adminError}</p>
+            <Notice tone="danger" compact>{adminError}</Notice>
           {/if}
         </section>
       {/if}
@@ -503,7 +513,7 @@
       {#if !emulated && compatLoading && !compat}
         <section class="section">
           <h4>{msg('modals.compatTitle')}</h4>
-          <p class="hint">{msg('modals.compatLoading')}</p>
+          <Spinner size="sm" label={msg('modals.compatLoading')} />
         </section>
       {:else if !emulated && compatVisible && compat}
         <section class="section">
@@ -537,11 +547,18 @@
             </p>
             {#if compatSuggested === ''}
               <div>
-                <Button size="sm" variant="ghost" onclick={() => (compatForce = !compatForce)}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  aria-expanded={compatForce}
+                  aria-controls="{uid}-compat-choice"
+                  onclick={() => (compatForce = !compatForce)}
+                >
                   {compatForce ? msg('modals.compatForceHide') : msg('modals.compatForce')}
                 </Button>
               </div>
             {/if}
+            <div class="choice" id="{uid}-compat-choice">
             {#if !compatLocked}
               <div class="row spread">
                 <span class="label" id="{uid}-wrapper-label">{msg('modals.compatWrapper')}</span>
@@ -567,6 +584,7 @@
                 </div>
               {/if}
             {/if}
+            </div>
           {/if}
           {#if compatView}
             <p class="hint">{compatView.text}</p>
@@ -578,42 +596,59 @@
           {#if compat.problem && compatActions?.dirMissing}
             <p class="hint">{problemText(compat.problem.code)}</p>
           {:else if compat.problem && compatActions}
-            <div class="warning" role="alert">
-              <strong>{msg('modals.compatProblemTitle')}</strong>
-              <span>{problemText(compat.problem.code, compat.problem.file)}</span>
-              <div class="row">
-                <Button size="sm" disabled={compatBusy || running} onclick={() => changeCompat(false)}>
-                  {msg('modals.compatRevert')}
-                </Button>
-                {#if compatActions.keepChanged}
-                  <Button size="sm" disabled={compatBusy || running} onclick={() => changeCompat(false, true)}>
-                    {msg('modals.compatKeepChanged')}
-                  </Button>
-                {/if}
-              </div>
-              {#if compatActions.keepChanged}
-                <span class="hint">{msg('modals.compatKeepChangedHint')}</span>
+            {@const actions = compatActions}
+            <Notice tone="danger" compact title={msg('modals.compatProblemTitle')}>
+              {problemText(compat.problem.code, compat.problem.file)}
+              {#if actions.keepChanged}
+                <span class="note">{msg('modals.compatKeepChangedHint')}</span>
               {/if}
-            </div>
+              {#snippet action()}
+                <div class="row">
+                  <Button
+                    size="sm"
+                    disabled={(compatBusy && compatAction !== 'revert') || running}
+                    busy={compatAction === 'revert'}
+                    onclick={() => changeCompat(false, false, 'revert')}
+                  >
+                    {msg('modals.compatRevert')}
+                  </Button>
+                  {#if actions.keepChanged}
+                    <Button
+                      size="sm"
+                      disabled={(compatBusy && compatAction !== 'keep') || running}
+                      busy={compatAction === 'keep'}
+                      onclick={() => changeCompat(false, true, 'keep')}
+                    >
+                      {msg('modals.compatKeepChanged')}
+                    </Button>
+                  {/if}
+                </div>
+              {/snippet}
+            </Notice>
           {:else if compatKeepOffer}
-            <div class="warning" role="alert">
-              <div class="row">
-                <Button size="sm" disabled={compatBusy || running} onclick={() => changeCompat(false, true)}>
+            <Notice tone="warning" compact>
+              {msg('modals.compatKeepChangedHint')}
+              {#snippet action()}
+                <Button
+                  size="sm"
+                  disabled={(compatBusy && compatAction !== 'keep') || running}
+                  busy={compatAction === 'keep'}
+                  onclick={() => changeCompat(false, true, 'keep')}
+                >
                   {msg('modals.compatKeepChanged')}
                 </Button>
-              </div>
-              <span class="hint">{msg('modals.compatKeepChangedHint')}</span>
-            </div>
+              {/snippet}
+            </Notice>
           {/if}
           {#if compatError}
-            <p class="failure">{compatError}</p>
+            <Notice tone="danger" compact>{compatError}</Notice>
           {/if}
           <p class="hint">{msg('modals.compatHint')}</p>
         </section>
       {:else if !emulated && compatError}
         <section class="section">
           <h4>{msg('modals.compatTitle')}</h4>
-          <p class="failure">{compatError}</p>
+          <Notice tone="danger" compact>{compatError}</Notice>
         </section>
       {/if}
 
@@ -637,7 +672,7 @@
           {/each}
           <p class="hint">{msg('modals.propertiesGameModeHint')}</p>
           {#if gameModeError}
-            <p class="failure">{gameModeError}</p>
+            <Notice tone="danger" compact>{gameModeError}</Notice>
           {/if}
         </section>
       {/if}
@@ -657,7 +692,7 @@
         </div>
         <p class="hint">{msg('modals.propertiesPresenceHint')}</p>
         {#if presenceError}
-          <p class="failure">{presenceError}</p>
+          <Notice tone="danger" compact>{presenceError}</Notice>
         {/if}
       </section>
 
@@ -666,15 +701,15 @@
           <h4>{msg('modals.propertiesSavesTitle')}</h4>
           <p class="path">{game.savesDir || msg('modals.propertiesSavesAuto')}</p>
           {#if savesError}
-            <p class="failure">{savesError}</p>
+            <Notice tone="danger" compact>{savesError}</Notice>
           {/if}
           <div class="row">
-            <Button size="sm" disabled={savesBusy} onclick={browseSaves}>
+            <Button size="sm" disabled={savesBusy === 'reset'} busy={savesBusy === 'browse'} onclick={browseSaves}>
               <FolderOpen size="1.5rem" strokeWidth={1.8} />
               {msg('modals.propertiesSavesBrowse')}
             </Button>
             {#if game.savesDir}
-              <Button size="sm" variant="ghost" disabled={savesBusy} onclick={resetSaves}>
+              <Button size="sm" variant="ghost" disabled={savesBusy === 'browse'} busy={savesBusy === 'reset'} onclick={resetSaves}>
                 {msg('modals.propertiesSavesReset')}
               </Button>
             {/if}
@@ -722,21 +757,14 @@
     color: var(--text-3);
   }
 
-  .failure {
-    margin: 0;
-    font-size: var(--font-xs);
-    color: var(--danger);
+  .note {
+    display: block;
+    margin-top: var(--space-1);
   }
 
-  .warning {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-    padding: var(--space-3);
-    border: 1px solid var(--danger);
-    border-radius: var(--radius-md);
-    font-size: var(--font-sm);
-    color: var(--danger);
+  /* Holds the wrapper choice the "force" disclosure shows, as a part of the section's own column. */
+  .choice {
+    display: contents;
   }
 
   .row {
@@ -772,18 +800,23 @@
     cursor: pointer;
   }
 
-  .candidate:hover:not(:disabled) {
+  .candidate:hover:not([aria-disabled='true']) {
     border-color: var(--border-strong);
     color: var(--text);
   }
 
-  .candidate.current {
+  .candidate[aria-current='true'] {
     border-color: var(--accent-bright);
     color: var(--text);
   }
 
-  .candidate:disabled {
+  .candidate[aria-disabled='true'] {
     opacity: 0.6;
     cursor: default;
+  }
+
+  /* Inside the scrolling list: the shared ring is drawn inward, where the list does not clip it. */
+  .candidate:focus-visible {
+    outline-offset: -2px;
   }
 </style>
