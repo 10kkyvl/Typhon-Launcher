@@ -107,6 +107,16 @@ const SITES: Record<string, Site[]> = {
     ['warning', false],
     ['danger', true],
   ],
+  // The cloud copy's reason, its tone set by its state, a running game and large backups are facts of the dialog; a failure just happened.
+  'lib/components/SaveBackupsModal.svelte': [
+    ['danger', true],
+    ['dynamic', false],
+    ['danger', true],
+    ['danger', true],
+    ['danger', true],
+    ['warning', false],
+    ['warning', false],
+  ],
   // The source's last stored error is shown on every opening; a failed load just happened.
   'lib/components/SourceDetailsModal.svelte': [
     ['danger', false],
