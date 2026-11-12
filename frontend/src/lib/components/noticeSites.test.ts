@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { frontendSources } from '../testing/sources';
 
+type Site = [tone: string, announces: boolean | 'dynamic'];
+
 /**
  * Which notices announce. A notice that reports something that has just happened (a load or a request
  * that failed, the connection going away) announces by its tone; one that states a standing fact of the
  * page it is rendered with does not (`announce={false}`): it is read in the flow of the page. A new
- * notice is added here with that decision. A source tripwire: Notice.dom.test.ts proves the option.
+ * notice is added here with that decision; a tone or an announce set by an expression (or a spread) is
+ * listed as 'dynamic', so the table says so instead of assuming the default. A source tripwire:
+ * Notice.dom.test.ts proves the option.
  */
-const SITES: Record<string, [tone: string, announces: boolean][]> = {
+const SITES: Record<string, Site[]> = {
   'lib/components/NetworkBanner.svelte': [['danger', true]],
   'lib/components/OfflineBanner.svelte': [['warning', true]],
   'lib/components/UpdateBanner.svelte': [['danger', true]],
@@ -46,15 +50,74 @@ const SITES: Record<string, [tone: string, announces: boolean][]> = {
   ],
 };
 
-function sites(): Record<string, [string, boolean][]> {
-  const out: Record<string, [string, boolean][]> = {};
+// The attributes of a tag up to its closing `>`, skipping what sits inside quotes and braces, so an
+// arrow function or a comparison in an expression does not end the tag. A spread is `{...}` by name.
+function attributes(source: string, from: number): Map<string, string> {
+  const out = new Map<string, string>();
+  let i = from;
+  while (i < source.length && source[i] !== '>' && !(source[i] === '/' && source[i + 1] === '>')) {
+    if (/\s/.test(source[i])) {
+      i++;
+      continue;
+    }
+    const start = i;
+    let name = '';
+    if (source[i] === '{') {
+      name = '{...}';
+    } else {
+      while (i < source.length && !/[\s=>/{]/.test(source[i])) i++;
+      name = source.slice(start, i);
+      if (source[i] !== '=') {
+        out.set(name, 'true');
+        continue;
+      }
+      i++;
+    }
+    const valueStart = i;
+    if (source[i] === '"' || source[i] === "'") {
+      const quote = source[i];
+      i = source.indexOf(quote, i + 1) + 1;
+    } else if (source[i] === '{') {
+      let depth = 0;
+      let quote = '';
+      for (; i < source.length; i++) {
+        const c = source[i];
+        if (quote) {
+          if (c === '\\') i++;
+          else if (c === quote) quote = '';
+        } else if (c === '"' || c === "'" || c === '`') quote = c;
+        else if (c === '{') depth++;
+        else if (c === '}' && --depth === 0) break;
+      }
+      i++;
+    } else {
+      while (i < source.length && !/[\s>]/.test(source[i])) i++;
+    }
+    out.set(name, source.slice(valueStart, i));
+  }
+  return out;
+}
+
+function notices(source: string): Site[] {
+  const out: Site[] = [];
+  for (const m of source.matchAll(/<Notice\b/g)) {
+    const attrs = attributes(source, (m.index as number) + m[0].length);
+    const spread = attrs.has('{...}');
+    const tone = attrs.get('tone');
+    const announce = attrs.get('announce');
+    out.push([
+      spread || (tone !== undefined && !/^"\w+"$/.test(tone)) ? 'dynamic' : (tone?.slice(1, -1) ?? 'info'),
+      spread || (announce !== undefined && !/^\{(true|false)\}$/.test(announce)) ? 'dynamic' : announce !== '{false}',
+    ]);
+  }
+  return out;
+}
+
+function sites(): Record<string, Site[]> {
+  const out: Record<string, Site[]> = {};
   for (const [path, source] of Object.entries(frontendSources)) {
     if (!path.endsWith('.svelte')) continue;
-    for (const m of source.matchAll(/<Notice\b([^>]*)>/g)) {
-      const tone = /\btone="(\w+)"/.exec(m[1])?.[1] ?? 'info';
-      const announces = !/\bannounce=\{false\}/.test(m[1]);
-      (out[path] ??= []).push([tone, announces]);
-    }
+    for (const site of notices(source)) (out[path] ??= []).push(site);
   }
   return out;
 }
@@ -62,5 +125,14 @@ function sites(): Record<string, [string, boolean][]> {
 describe('notices', () => {
   it('announce what has just happened and leave standing facts to the flow of the page', () => {
     expect(sites()).toEqual(SITES);
+  });
+
+  it('are read whole, past the `>` of an arrow function in an attribute', () => {
+    expect(notices('<Notice tone="warning" onclose={() => (shown = false)} announce={false}>text</Notice>')).toEqual([['warning', false]]);
+  });
+
+  it('name a tone or an announce set by an expression as dynamic, not as a default', () => {
+    expect(notices('<Notice tone={kind} announce={quiet}>text</Notice>')).toEqual([['dynamic', 'dynamic']]);
+    expect(notices('<Notice\n  tone="danger"\n  {...rest}\n>text</Notice>')).toEqual([['dynamic', 'dynamic']]);
   });
 });
