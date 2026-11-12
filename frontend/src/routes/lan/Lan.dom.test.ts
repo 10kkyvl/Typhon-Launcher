@@ -6,13 +6,15 @@ vi.mock('../../lib/services/backend', () => ({ inWails: false }));
 
 import { msg } from '../../lib/i18n';
 import type { LibraryGame } from '../../lib/services/library';
-import { hashing } from '../../lib/stores/lan';
+import type { Offer } from '../../lib/services/lan';
+import { hashing, offers } from '../../lib/stores/lan';
 import { libraryGames } from '../../lib/stores/library';
 import { renderDom } from '../../lib/testing/dom';
 import Lan from './Lan.svelte';
 
 afterEach(() => {
   hashing.set(new Map());
+  offers.set([]);
   libraryGames.set([]);
 });
 
@@ -45,5 +47,20 @@ describe('Lan: empty sections', () => {
     for (const key of ['transfers.lanNoShares', 'transfers.lanNoTransfers'] as const) {
       expect(screen.getByText(msg(key)).closest('.empty.inline'), key).not.toBeNull();
     }
+  });
+});
+
+describe('Lan: a game offered nearby', () => {
+  // A row takes no focus: a hint on it reaches only a mouse. What it said is the row's own text.
+  it('says its version, size and host in the row, with no hover-only hint', () => {
+    offers.set([
+      { peerId: 'p1', host: 'PC-1', addr: '', port: 0, gameId: 'g1', title: 'Portal 2', version: '1.0', exe: '', sizeBytes: 1024, infoHash: 'h1', lastSeen: '' } as Offer,
+    ]);
+    renderDom(Lan);
+
+    const row = screen.getByText('Portal 2').closest('.row') as HTMLElement;
+    expect(row.hasAttribute('title')).toBe(false);
+    expect(row.textContent).toContain('1.0');
+    expect(row.textContent).toContain(msg('transfers.lanFromHost', { host: 'PC-1' }));
   });
 });

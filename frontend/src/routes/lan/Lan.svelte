@@ -7,7 +7,7 @@
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import StatTile from '../../lib/components/StatTile.svelte';
-  import { offerLabel, rejectedSummary, sharedGameTitle, transferLabel } from '../../lib/lan/lanText';
+  import { rejectedSummary, sharedGameTitle, transferLabel } from '../../lib/lan/lanText';
   import { libraryGames } from '../../lib/stores/library';
   import { cancel, hashing, lanStats, offers, receive, shares, transfers, unshare } from '../../lib/stores/lan';
   import { bytesSize, formatCount, relativeDate } from '../../lib/utils/format';
@@ -68,7 +68,7 @@
     {:else}
       <div class="rows">
         {#each $offers as offer (offer.peerId + offer.infoHash)}
-          <div class="row" title={offerLabel(offer)}>
+          <div class="row">
             <div class="row-text">
               <span class="row-title">{offer.title}</span>
               <span class="row-sub">
