@@ -60,7 +60,7 @@
 {#if canonicalGameId && !unsupported}
   <Card title={msg('reviews.summaryTitle')}>
     {#if failed}
-      <Notice tone="danger" compact>{msg('reviews.summaryError')}</Notice>
+      <Notice tone="danger" compact announce={false}>{msg('reviews.summaryError')}</Notice>
     {:else if loading && !summary}
       <Spinner size="sm" label={msg('reviews.summaryLoading')} />
     {:else if score}
