@@ -253,6 +253,19 @@ describe('ChatPanel: the composer', () => {
 describe('ChatPanel: a send in flight', () => {
   const uploaded = { id: 'a1', url: 'https://img/a1', width: 10, height: 10, bytes: 1024 };
 
+  it('refuses a second Send while the first runs', async () => {
+    vi.mocked(chat.sendMessage).mockReturnValue(new Promise(() => {}) as never);
+    chat.attachmentDrafts.set({ peer: [{ key: 'k1', name: 'shot.png', bytes: 1024, encoded: '', previewUrl: 'blob:shot', uploaded }] });
+    const keys = setup();
+    const send = screen.getByRole('button', { name: msg('social.chatSend') });
+
+    await keys.click(send);
+
+    expect(send.hasAttribute('disabled')).toBe(true);
+    await keys.click(send);
+    expect(chat.sendMessage).toHaveBeenCalledTimes(1);
+  });
+
   it('belongs to its conversation: after Back and reopening it, Send is still refused and the images go once', async () => {
     const sent = held<void>();
     vi.mocked(chat.sendMessage).mockReturnValue(sent.promise as never);

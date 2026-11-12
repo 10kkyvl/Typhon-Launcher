@@ -75,7 +75,7 @@
   const conversation = $derived(peer ? $conversations.find((item) => item.peer.id === peer.id) : undefined);
   const canSend = $derived(conversation?.canSend ?? $canSendByPeer[peer?.id ?? ''] ?? true);
   const unreadTotal = $derived($conversations.reduce((sum, item) => sum + item.unread, 0));
-  const sending = $derived(peer ? Object.hasOwn(sends, peer.id) : false);
+  const sending = $derived(peer ? peer.id in sends : false);
 
   function displayName(target: ChatPeer): string {
     return target.displayName || target.username;
