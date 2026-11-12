@@ -78,7 +78,6 @@ export function createHoverIntent(onchange: (open: boolean) => void, options: Ho
     },
     give(other) {
       gaveWay = other;
-      if (showTimer !== null) { clearTimeout(showTimer); showTimer = null; }
       if (leaveTimer !== null) { clearTimeout(leaveTimer); leaveTimer = null; }
       hovered = false;
       update();

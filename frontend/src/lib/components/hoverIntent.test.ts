@@ -270,4 +270,20 @@ describe('one hint at a time', () => {
 
     expect(keyboard.changes).toEqual([true, false, true]);
   });
+
+  it('a hint the pointer came back to keeps its delay running while another takes over, and shows after it', () => {
+    const back = make();
+    const keyboard = make();
+    const other = make();
+    rest(back.intent);
+    keyboard.intent.focus();
+    back.intent.unhover();
+    back.intent.hover();
+
+    other.intent.focus();
+    vi.advanceTimersByTime(HOVER_DELAY);
+
+    expect(back.changes).toEqual([true, false, true]);
+    expect(other.changes).toEqual([true, false]);
+  });
 });
