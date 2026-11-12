@@ -7,6 +7,7 @@ import { inspectWrapper, type WrapperInfo } from '../services/wrappers';
 import { closeGameProperties, openGameProperties } from '../stores/gameProperties';
 import { libraryGames } from '../stores/library';
 import { toasts } from '../stores/toasts';
+import { get } from 'svelte/store';
 import { user } from '../testing/dom';
 import GamePropertiesModal from './GamePropertiesModal.svelte';
 
@@ -126,6 +127,9 @@ describe('GamePropertiesModal: the launch arguments', () => {
     saved.reject(new Error('disk'));
     const text = await within(dialog).findByText(msg('modals.propertiesArgsSaveFailed'), { selector: '[data-tone] *' });
     expect(text.closest('[data-tone="danger"]')).not.toBeNull();
+    // The toast says it once; the notice by the field stays on screen without saying it again.
+    expect(text.closest('[role="alert"]')).toBeNull();
+    expect(get(toasts).map((item) => item.message)).toContain(msg('modals.propertiesArgsSaveFailed'));
   });
 });
 

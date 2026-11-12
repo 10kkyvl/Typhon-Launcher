@@ -236,7 +236,7 @@
     <Notice tone="danger" compact>{loadError}</Notice>
   {/if}
   {#if rowError}
-    <Notice tone="danger" compact>{rowError}</Notice>
+    <Notice tone="danger" compact announce={false}>{rowError}</Notice>
   {/if}
 
   <ul class="list">

@@ -453,7 +453,7 @@
           </div>
         {/if}
         {#if exeError}
-          <Notice tone="danger" compact>{exeError}</Notice>
+          <Notice tone="danger" compact announce={false}>{exeError}</Notice>
         {/if}
         <div>
           <Button size="sm" disabled={exeBusy === 'pick'} busy={exeBusy === 'browse'} onclick={browseExecutable}>
@@ -483,7 +483,7 @@
           </Button>
         </div>
         {#if argsError}
-          <Notice tone="danger" compact>{argsError}</Notice>
+          <Notice tone="danger" compact announce={false}>{argsError}</Notice>
         {/if}
         <p class="hint">{msg('modals.propertiesArgsHint')}</p>
       </section>
@@ -505,7 +505,7 @@
           </div>
           <p class="hint">{msg('modals.propertiesAdminHint')}</p>
           {#if adminError}
-            <Notice tone="danger" compact>{adminError}</Notice>
+            <Notice tone="danger" compact announce={false}>{adminError}</Notice>
           {/if}
         </section>
       {/if}
@@ -672,7 +672,7 @@
           {/each}
           <p class="hint">{msg('modals.propertiesGameModeHint')}</p>
           {#if gameModeError}
-            <Notice tone="danger" compact>{gameModeError}</Notice>
+            <Notice tone="danger" compact announce={false}>{gameModeError}</Notice>
           {/if}
         </section>
       {/if}
@@ -692,7 +692,7 @@
         </div>
         <p class="hint">{msg('modals.propertiesPresenceHint')}</p>
         {#if presenceError}
-          <Notice tone="danger" compact>{presenceError}</Notice>
+          <Notice tone="danger" compact announce={false}>{presenceError}</Notice>
         {/if}
       </section>
 
@@ -701,7 +701,7 @@
           <h4>{msg('modals.propertiesSavesTitle')}</h4>
           <p class="path">{game.savesDir || msg('modals.propertiesSavesAuto')}</p>
           {#if savesError}
-            <Notice tone="danger" compact>{savesError}</Notice>
+            <Notice tone="danger" compact announce={false}>{savesError}</Notice>
           {/if}
           <div class="row">
             <Button size="sm" disabled={savesBusy === 'reset'} busy={savesBusy === 'browse'} onclick={browseSaves}>

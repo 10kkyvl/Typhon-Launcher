@@ -4,6 +4,7 @@ import { msg } from '../i18n';
 import type { Candidate } from '../services/install';
 import { addProfile, createProfileShortcut, getProfiles, type LibraryGame, type ProfileView } from '../services/library';
 import { toasts } from '../stores/toasts';
+import { get } from 'svelte/store';
 import { renderDom } from '../testing/dom';
 import GameProfiles from './GameProfiles.svelte';
 
@@ -106,6 +107,18 @@ describe('GameProfiles: messages', () => {
     expect(document.activeElement).toBe(shortcut);
     made.resolve();
     await vi.waitFor(() => expect(shortcut.getAttribute('aria-busy')).toBeNull());
+  });
+
+  it('says a failed shortcut once, in the toast; the notice in the list stays without saying it again', async () => {
+    vi.mocked(getProfiles).mockResolvedValue([profile()]);
+    vi.mocked(createProfileShortcut).mockRejectedValueOnce(new Error('disk'));
+    const { user } = renderDom(GameProfiles, { game, candidates: [], adminShown: false });
+
+    await user.click(await screen.findByRole('button', { name: msg('modals.profilesShortcut') }));
+
+    const text = await screen.findByText(msg('modals.profilesShortcutFailed'), { selector: '[data-tone="danger"] *' });
+    expect(text.closest('[role="alert"]')).toBeNull();
+    expect(get(toasts).map((item) => item.message)).toContain(msg('modals.profilesShortcutFailed'));
   });
 });
 
