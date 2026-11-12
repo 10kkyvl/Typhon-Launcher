@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { tick } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
   import Notice from '../../lib/components/Notice.svelte';
   import TextLink from '../../lib/components/TextLink.svelte';
@@ -7,6 +6,7 @@
   import { openForgotPassword, openSupportSite } from '../../lib/services/account';
   import { authReason, authState, authView, enterAsGuest, retryBootstrap, signIn, signUp } from '../../lib/stores/user';
   import { toast } from '../../lib/stores/toasts';
+  import { focusHandOff } from '../../lib/utils/focusHandOff';
   import { msg } from '../../lib/i18n';
 
   const uid = $props.id();
@@ -27,14 +27,15 @@
   const isRegister = $derived($authView === 'register');
   const offline = $derived($authState === 'unavailable');
 
-  // The pressed link goes with the form it was under: focus moves to the first field of the new one.
-  async function switchView(view: 'login' | 'register') {
+  // The pressed link goes with the form it was under: focus it held moves to the first field of the
+  // new one.
+  function switchView(view: 'login' | 'register') {
     if (busy) return;
+    const hand = focusHandOff();
     errors = {};
     password = '';
     authView.set(view);
-    await tick();
-    document.getElementById(view === 'register' ? `${uid}-email` : `${uid}-identifier`)?.focus();
+    void hand(() => document.getElementById(view === 'register' ? `${uid}-email` : `${uid}-identifier`));
   }
 
   function applyError(err: unknown) {

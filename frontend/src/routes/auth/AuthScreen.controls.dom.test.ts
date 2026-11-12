@@ -1,4 +1,5 @@
-import { screen } from '@testing-library/svelte';
+import { fireEvent, screen } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import { AccountError, continueAsGuest, login, openForgotPassword } from '../../lib/services/account';
@@ -145,5 +146,17 @@ describe('AuthScreen: while a request runs and between the two forms', () => {
     expect(password.value).toBe('secret');
     settle(new AccountError('invalid_password'));
     await vi.waitFor(() => expect(password.readOnly).toBe(false));
+  });
+
+  // A pointer press where a click does not focus a link (the macOS WebKit view).
+  it('leaves focus alone when the switch was pressed without holding focus', async () => {
+    signInScreen();
+    expect(document.activeElement).toBe(document.body);
+
+    await fireEvent.click(screen.getByRole('button', { name: msg('transfers.authCreateAccount') }));
+
+    expect(await screen.findByLabelText(msg('common.email'))).toBeTruthy();
+    await tick();
+    expect(document.activeElement).toBe(document.body);
   });
 });
