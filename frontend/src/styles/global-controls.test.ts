@@ -117,11 +117,29 @@ describe('a text field', () => {
 
   // These forms mark a bad value with aria-invalid and leave focus to the global ring: an own
   // `outline: none` would hide it again, leaving only a halo too faint to see on an invalid field.
+  // A field is named by its tag or by any class its tag carries (`.input`, `.area`, a `class:` state),
+  // so a rule on any of them that turns the outline off counts, not only one on `.input:focus`.
   it('shows the global ring on the sign-in and support forms', () => {
     for (const path of ['routes/auth/AuthScreen.svelte', 'routes/support/NewTicket.svelte', 'routes/support/TicketView.svelte']) {
-      const style = /<style>([\s\S]*?)<\/style>/.exec(frontendSources[path] ?? '')?.[1] ?? '';
+      const source = frontendSources[path] ?? '';
+      const style = /<style>([\s\S]*?)<\/style>/.exec(source)?.[1] ?? '';
       expect(style, path).not.toBe('');
-      expect(style.match(/\.input:focus[^{]*\{[^}]*outline:\s*none/g), path).toBeNull();
+      const markup = source.replace(/<(script|style)\b[\s\S]*?<\/\1>/g, '');
+      const fields = new Set(['input', 'textarea', 'select']);
+      for (const tag of markup.matchAll(/<(?:input|textarea|select)\b[^>]*>/g)) {
+        for (const name of /\bclass="([^"]*)"/.exec(tag[0])?.[1].split(/\s+/) ?? []) if (name) fields.add(`.${name}`);
+        for (const state of tag[0].matchAll(/\bclass:([\w-]+)/g)) fields.add(`.${state[1]}`);
+      }
+      const ringless = [...style.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+        .filter((rule) => /(^|;)\s*outline(-style|-width)?\s*:\s*(none|0)\b/.test(rule[2]))
+        .map((rule) => rule[1].trim())
+        .filter((list) =>
+          selectors(list).some((selector) => {
+            const subject = selector.split(/[\s>+~]+/).pop() ?? '';
+            return [/^[a-z]+/.exec(subject)?.[0] ?? '', ...[...subject.matchAll(/\.[\w-]+/g)].map((m) => m[0])].some((name) => fields.has(name));
+          }),
+        );
+      expect(ringless, path).toEqual([]);
     }
   });
 });
