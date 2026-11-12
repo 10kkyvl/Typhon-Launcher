@@ -2,6 +2,7 @@
   import { NOTE_LIMIT, noteLength, notePreview, trimNote } from '../social/note';
   import { msg } from '../i18n';
   import Button from './Button.svelte';
+  import TextLink from './TextLink.svelte';
 
   let {
     note,
@@ -14,6 +15,8 @@
     saving?: boolean;
     onsave?: (note: string) => void;
   } = $props();
+
+  const uid = $props.id();
 
   let editing = $state(false);
   let expanded = $state(false);
@@ -48,6 +51,7 @@
 {#if editing}
   <div class="editor">
     <textarea
+      class="input"
       bind:value={draft}
       maxlength={NOTE_LIMIT}
       rows="3"
@@ -65,21 +69,21 @@
   </div>
 {:else if note}
   <div class="note">
-    <p class="text">{shown}{#if preview.truncated && !expanded}…{/if}</p>
+    <p class="text" id="{uid}-text">{shown}{#if preview.truncated && !expanded}…{/if}</p>
     <div class="actions">
       {#if preview.truncated}
-        <button class="link" type="button" onclick={() => (expanded = !expanded)}>
+        <TextLink tone="muted" aria-expanded={expanded} aria-controls="{uid}-text" onclick={() => (expanded = !expanded)}>
           {expanded ? msg('social.noteLess') : msg('social.noteMore')}
-        </button>
+        </TextLink>
       {/if}
       {#if own}
-        <button class="link" type="button" onclick={edit}>{msg('social.noteEdit')}</button>
+        <TextLink tone="muted" onclick={edit}>{msg('social.noteEdit')}</TextLink>
       {/if}
     </div>
   </div>
 {:else if own}
   <div class="actions">
-    <button class="link" type="button" onclick={edit}>{msg('social.noteAdd')}</button>
+    <TextLink tone="muted" onclick={edit}>{msg('social.noteAdd')}</TextLink>
   </div>
 {/if}
 
@@ -102,17 +106,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-3);
-  }
-
-  .link {
     font-size: var(--font-xs);
-    font-weight: 500;
-    color: var(--text-3);
-    transition: color var(--dur) var(--ease);
-  }
-
-  .link:hover {
-    color: var(--accent-text);
   }
 
   .editor {
@@ -126,21 +120,12 @@
   }
 
   textarea {
-    width: 100%;
+    height: auto;
     padding: var(--space-3);
-    background: var(--surface-3);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    color: var(--text);
     font: inherit;
     font-size: var(--font-sm);
     line-height: 1.55;
     resize: vertical;
-  }
-
-  textarea:focus {
-    outline: none;
-    border-color: var(--accent-ring);
   }
 
   .left {

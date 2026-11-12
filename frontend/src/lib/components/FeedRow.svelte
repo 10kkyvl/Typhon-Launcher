@@ -85,13 +85,13 @@
 
     <button class="game" type="button" onclick={openGame}>
       {#if compact}
-        <span class="thumb">
-          <Artwork src={event.game.coverUrl} alt={event.game.title} ratio="3 / 4" />
+        <span class="thumb" aria-hidden="true">
+          <Artwork src={event.game.coverUrl} alt="" label={event.game.title} ratio="3 / 4" />
         </span>
         <span class="line">{line}</span>
       {:else}
-        <span class="cover">
-          <Artwork src={wideArt(event.game)} alt={event.game.title} ratio="16 / 9" radius="var(--radius-md)" />
+        <span class="cover" aria-hidden="true">
+          <Artwork src={wideArt(event.game)} alt="" label={event.game.title} ratio="16 / 9" radius="var(--radius-md)" />
           <span class="fade"></span>
         </span>
         <span class="caption">{event.game.title}</span>
