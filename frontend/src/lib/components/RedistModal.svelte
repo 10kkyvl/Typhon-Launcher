@@ -150,8 +150,15 @@
     }
   }
 
-  function retry() {
-    if (target) void load(target.gameId, true);
+  let scanRetrying = $state(false);
+  let bundled = $state<HTMLElement>();
+
+  // The notice's retry scans again; the failure stays on screen until the answer. On success the
+  // focus goes to the first package it found, else to the dialog.
+  async function retryScan(): Promise<boolean> {
+    if (!target) return false;
+    await load(target.gameId, true);
+    return scanError === '';
   }
 
   function meta(pkg: RedistPackage): string {
@@ -169,14 +176,11 @@
       {#if unsupported}
         <Notice compact announce={false}>{msg('redist.unsupported')}</Notice>
       {:else}
-        <section class="block">
+        <section class="block" bind:this={bundled}>
           <h4>{msg('redist.bundledHeading')}</h4>
-          {#if scanError}
-            <Notice tone="danger" compact>
+          {#if scanError || scanRetrying}
+            <Notice tone="danger" compact bind:retrying={scanRetrying} retry={{ label: msg('redist.retry'), run: retryScan, within: () => bundled }}>
               {scanError}
-              {#snippet action()}
-                <Button size="sm" busy={scanning} onclick={retry}>{msg('redist.retry')}</Button>
-              {/snippet}
             </Notice>
           {:else if scanning}
             <Spinner size="sm" label={msg('redist.scanning')} />

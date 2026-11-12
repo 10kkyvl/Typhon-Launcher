@@ -92,6 +92,35 @@ describe('RedistModal: the game folder scan', () => {
     expect(notice.isConnected).toBe(false);
   });
 
+  it('moves the focus from a Retry that worked to the first package it found', async () => {
+    vi.mocked(scanRedist).mockRejectedValueOnce(new Error('disk')).mockResolvedValueOnce([vc]);
+    const dialog = await openDialog();
+    const keys = user();
+    (await within(dialog).findByRole('button', { name: msg('redist.retry') })).focus();
+
+    await keys.keyboard('{Enter}');
+
+    const install = await within(dialog).findByRole('button', { name: msg('redist.install') });
+    await vi.waitFor(() => expect(document.activeElement).not.toBe(document.body));
+    expect(document.activeElement).toBe(install);
+  });
+
+  it('says a scan that fails again in the same words again, and keeps the focus on its Retry', async () => {
+    vi.mocked(scanRedist).mockRejectedValue(new Error('disk'));
+    const dialog = await openDialog();
+    const keys = user();
+    const region = await within(dialog).findByRole('alert');
+    const before = region.firstElementChild;
+    const retry = within(region.closest('.notice') as HTMLElement).getByRole('button', { name: msg('redist.retry') });
+    retry.focus();
+
+    await keys.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(region.firstElementChild).not.toBe(before));
+    expect(region.textContent?.trim()).toBe(before?.textContent?.trim());
+    expect(document.activeElement).toBe(retry);
+  });
+
   it('keeps the focus on the pressed install button, busy, while the package installs', async () => {
     const installing = deferred<RedistResult>();
     vi.mocked(scanRedist).mockResolvedValueOnce([vc]);
