@@ -5,7 +5,7 @@
 </script>
 
 <script lang="ts">
-  import { tick, untrack } from 'svelte';
+  import { untrack } from 'svelte';
   import { Check, ChevronDown, CircleQuestionMark, TriangleAlert, X } from '@lucide/svelte';
   import { msg } from '../i18n';
   import { metadataErrorText } from '../metadata/metadataErrors';
@@ -20,7 +20,6 @@
     verdictLabelKey,
     verdictTone,
   } from '../game/sysreq';
-  import { focusableIn, focusQuietly } from '../layers/focus';
   import Button from './Button.svelte';
   import Notice from './Notice.svelte';
   import Spinner from './Spinner.svelte';
@@ -72,22 +71,15 @@
   }
 
   let retrying = $state(false);
-  let root = $state<HTMLElement>();
 
   async function retry() {
     if (retrying) return;
-    const button = document.activeElement;
     retrying = true;
     try {
       await load(gameId, installPath, revision, true, true);
     } finally {
       retrying = false;
     }
-    // The notice went with the focused Retry: focus moves into what loaded instead of the page.
-    await tick();
-    const active = document.activeElement;
-    if (!button || button.isConnected || (active && active !== document.body && active.isConnected)) return;
-    if (root?.isConnected) focusQuietly(focusableIn(root)[0] ?? root);
   }
 
   $effect(() => {
@@ -107,8 +99,7 @@
 </script>
 
 {#if gameId}
-  <!-- Focusable by script only: focus lands here when a retry brings a verdict without a control. -->
-  <div class="sysreq" tabindex="-1" bind:this={root}>
+  <div class="sysreq">
     {#if heading}<h3 class="title">{msg('sysreq.heading')}</h3>{/if}
     {#if loading}
       <Spinner size="sm" label={msg('sysreq.loading')} />

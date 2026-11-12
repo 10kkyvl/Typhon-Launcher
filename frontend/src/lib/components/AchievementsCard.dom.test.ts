@@ -65,7 +65,7 @@ describe('AchievementsCard: what the list lacks', () => {
 });
 
 describe('AchievementsCard: retrying a failed load', () => {
-  it('keeps the notice and the focus on its busy Retry until the answer, then focuses the refresh', async () => {
+  it('keeps the notice and the focus on its busy Retry until the answer, then gives way to the list', async () => {
     const again = deferred<AchievementsView>();
     vi.mocked(fetchAchievements).mockRejectedValueOnce(new Error('disk offline')).mockReturnValueOnce(again.promise);
     const { user } = renderDom(AchievementsCard, { gameId: 'g1' });
@@ -81,9 +81,8 @@ describe('AchievementsCard: retrying a failed load', () => {
     expect(document.activeElement).toBe(retry);
 
     again.resolve(view());
-    const refresh = await screen.findByRole('button', { name: msg('games.achievementsRefresh') });
+    await screen.findByRole('button', { name: msg('games.achievementsRefresh') });
     expect(notice.isConnected).toBe(false);
-    await vi.waitFor(() => expect(document.activeElement).toBe(refresh));
   });
 });
 

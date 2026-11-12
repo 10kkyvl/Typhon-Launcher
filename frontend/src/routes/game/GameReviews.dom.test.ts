@@ -74,7 +74,7 @@ describe('GameReviews: loading more', () => {
 });
 
 describe('GameReviews: retrying a failed load', () => {
-  it('keeps the notice and the focus on its busy Retry until the answer, then focuses the section', async () => {
+  it('keeps the notice and the focus on its busy Retry until the answer, then gives way to the list', async () => {
     const again = deferred<Page>();
     vi.mocked(list).mockRejectedValueOnce(new Error('offline')).mockReturnValueOnce(again.promise);
     const { user } = renderDom(GameReviews, { canonicalGameId: 'c1' });
@@ -91,7 +91,6 @@ describe('GameReviews: retrying a failed load', () => {
 
     again.resolve(empty);
     await vi.waitFor(() => expect(notice.isConnected).toBe(false));
-    await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { name: msg('reviews.sectionTitle') })));
   });
 
   it('keeps the notice when the retry fails again', async () => {

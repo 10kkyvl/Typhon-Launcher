@@ -13,7 +13,6 @@
   import ReviewCard from './ReviewCard.svelte';
   import ReviewComposer from './ReviewComposer.svelte';
   import { authState } from '../../lib/stores/user';
-  import { focusAfterRetry } from './retryFocus';
 
   let { canonicalGameId }: { canonicalGameId: string } = $props();
 
@@ -74,18 +73,15 @@
   }
 
   let retrying = $state(false);
-  let heading = $state<HTMLElement>();
 
   async function retry() {
     if (retrying) return;
-    const button = document.activeElement;
     retrying = true;
     try {
       await loadFirst(canonicalGameId, sort, filter, true);
     } finally {
       retrying = false;
     }
-    await focusAfterRetry(button, () => heading);
   }
 
   async function loadMore() {
@@ -135,7 +131,7 @@
 {#if canonicalGameId && !unsupported}
   <section class="section" id="reviews">
     <div class="header">
-      <h2 class="heading" tabindex="-1" bind:this={heading}>{msg('reviews.sectionTitle')}</h2>
+      <h2 class="heading">{msg('reviews.sectionTitle')}</h2>
       <div class="controls">
         <SegmentedControl options={sortTabs} label={msg('reviews.sortLabel')} variant="pill" bind:value={sort} />
         <SegmentedControl options={filterTabs} label={msg('reviews.filterLabel')} variant="pill" bind:value={filter} />

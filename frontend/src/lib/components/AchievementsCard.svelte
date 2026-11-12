@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Lock, RefreshCw, Trophy } from '@lucide/svelte';
-  import { tick, untrack } from 'svelte';
+  import { untrack } from 'svelte';
   import { errorCode, hasMessage, msg, t } from '../i18n';
   import {
     CODE_NO_STEAM_ID,
@@ -13,7 +13,6 @@
   import { toast } from '../stores/toasts';
   import { dateTime } from '../utils/format';
   import { errorMessage } from '../utils/errors';
-  import { focusableIn, focusQuietly } from '../layers/focus';
   import Button from './Button.svelte';
   import Card from './Card.svelte';
   import Notice from './Notice.svelte';
@@ -70,23 +69,15 @@
   }
 
   let retrying = $state(false);
-  let refreshSlot = $state<HTMLElement>();
 
   async function retry() {
     if (retrying) return;
-    const button = document.activeElement;
     retrying = true;
     try {
       await load(gameId, true);
     } finally {
       retrying = false;
     }
-    // The notice went with the focused Retry: focus moves to the refresh of what loaded.
-    await tick();
-    const active = document.activeElement;
-    if (!button || button.isConnected || (active && active !== document.body && active.isConnected)) return;
-    const next = refreshSlot ? focusableIn(refreshSlot)[0] : undefined;
-    if (next) focusQuietly(next);
   }
 
   async function refresh() {
@@ -147,12 +138,10 @@
   <Card title={$t('games.achievementsTitle')} surface="panel" padding="md-even">
     {#snippet action()}
       {#if view}
-        <span class="refresh" bind:this={refreshSlot}>
-          <Button variant="ghost" size="sm" busy={refreshing} onclick={refresh}>
-            {#if !refreshing}<RefreshCw size="1.4rem" strokeWidth={1.8} />{/if}
-            {$t('games.achievementsRefresh')}
-          </Button>
-        </span>
+        <Button variant="ghost" size="sm" busy={refreshing} onclick={refresh}>
+          {#if !refreshing}<RefreshCw size="1.4rem" strokeWidth={1.8} />{/if}
+          {$t('games.achievementsRefresh')}
+        </Button>
       {/if}
     {/snippet}
 
@@ -241,10 +230,6 @@
 {/if}
 
 <style>
-  .refresh {
-    display: contents;
-  }
-
   .progress {
     display: flex;
     flex-direction: column;

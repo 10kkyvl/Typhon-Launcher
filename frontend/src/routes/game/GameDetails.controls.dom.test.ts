@@ -125,7 +125,7 @@ describe('GameDetails: a long summary', () => {
 });
 
 describe('GameDetails: retrying what failed to load', () => {
-  it('keeps the downloads notice and the focus on its busy Retry, then focuses the section heading', async () => {
+  it('keeps the downloads notice and the focus on its busy Retry, then gives way to the list', async () => {
     const again = deferred<ReleaseGroup[]>();
     vi.mocked(getReleasesForGame).mockRejectedValueOnce(new Error('offline')).mockReturnValueOnce(again.promise);
     const { user } = renderDom(GameDetails, { id: 'g1' });
@@ -142,11 +142,9 @@ describe('GameDetails: retrying what failed to load', () => {
 
     again.resolve([]);
     await vi.waitFor(() => expect(notice.isConnected).toBe(false));
-    const heading = screen.getByRole('heading', { name: msg('games.detailAvailableDownloadsHeading') });
-    await vi.waitFor(() => expect(document.activeElement).toBe(heading));
   });
 
-  it('keeps the metadata notice and the focus on its busy Retry, then focuses the title', async () => {
+  it('keeps the metadata notice and the focus on its busy Retry, then gives way to the page', async () => {
     metadataAvailable.set(true);
     vi.mocked(getMetadataView).mockResolvedValue(view({ resolved: false, match: 'failed' }));
     const again = deferred<MetadataView>();
@@ -165,7 +163,6 @@ describe('GameDetails: retrying what failed to load', () => {
 
     again.resolve(view({}));
     await vi.waitFor(() => expect(notice.isConnected).toBe(false));
-    await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1, name: 'Hades' })));
   });
 
   it('keeps the page error and the focus on its busy Retry, then focuses the game title', async () => {

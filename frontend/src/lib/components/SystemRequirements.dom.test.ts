@@ -55,9 +55,8 @@ describe('SystemRequirements: loading and retrying', () => {
     expect(document.activeElement).toBe(retry);
 
     answer(report);
-    const toggle = await screen.findByRole('button', { name: msg('sysreq.show') });
+    await screen.findByRole('button', { name: msg('sysreq.show') });
     expect(notice.isConnected).toBe(false);
-    await vi.waitFor(() => expect(document.activeElement).toBe(toggle));
   });
 });
 

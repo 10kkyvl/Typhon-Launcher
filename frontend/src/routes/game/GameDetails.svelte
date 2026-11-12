@@ -20,7 +20,7 @@
     Square,
     Tag,
   } from '@lucide/svelte';
-  import { onMount, untrack } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import { Events } from '@wailsio/runtime';
   import AchievementsCard from '../../lib/components/AchievementsCard.svelte';
   import AddDownloadModal from '../../lib/components/AddDownloadModal.svelte';
@@ -164,7 +164,7 @@
   import { installErrorText } from '../../lib/install/installErrors';
   import { metadataErrorText } from '../../lib/metadata/metadataErrors';
   import { sourceErrorText } from '../../lib/sources/sourceErrors';
-  import { focusAfterRetry } from './retryFocus';
+  import { focusQuietly } from '../../lib/layers/focus';
 
   function libraryErrorText(err: unknown, fallback: string): string {
     const code = errorCode(err);
@@ -734,25 +734,18 @@
 
   let titleHeading = $state<HTMLElement>();
 
-  // Where focus goes when a retry's answer takes away the notice with the focused Retry: the heading
-  // of the section it sat in, or the game's title when the section went too.
-  function retryTarget(button: Element | null): () => HTMLElement | undefined {
-    const heading = button?.closest('section')?.querySelector<HTMLElement>('h2[tabindex]') ?? undefined;
-    return () => (heading?.isConnected ? heading : titleHeading);
-  }
-
   async function retryMeta() {
     if (metaRetrying) return;
-    const button = document.activeElement;
     metaRetrying = true;
     try {
       await refreshMeta();
     } finally {
       metaRetrying = false;
     }
-    await focusAfterRetry(button, retryTarget(null));
   }
 
+  // The page's error is an empty state, not a notice: when the game arrives it takes the focused
+  // Retry away with it, and the focus goes to the game's title instead of falling to the page.
   async function retryCatalog() {
     if (catalogRetrying) return;
     const button = document.activeElement;
@@ -762,7 +755,10 @@
     } finally {
       catalogRetrying = false;
     }
-    await focusAfterRetry(button, retryTarget(null));
+    await tick();
+    const active = document.activeElement;
+    if (!button || button.isConnected || (active && active !== document.body && active.isConnected)) return;
+    if (titleHeading?.isConnected) focusQuietly(titleHeading);
   }
 
   async function skipMeta() {
@@ -875,28 +871,22 @@
 
   async function retryReleases() {
     if (releasesRetrying) return;
-    const button = document.activeElement;
-    const target = retryTarget(button);
     releasesRetrying = true;
     try {
       await loadReleases(canonicalId, releaseTitle);
     } finally {
       releasesRetrying = false;
     }
-    await focusAfterRetry(button, target);
   }
 
   async function retryRelated() {
     if (relatedRetrying) return;
-    const button = document.activeElement;
-    const target = retryTarget(button);
     relatedRetrying = true;
     try {
       await loadRelated(canonicalId);
     } finally {
       relatedRetrying = false;
     }
-    await focusAfterRetry(button, target);
   }
 
   let downloadModalOpen = $state(false);
@@ -1249,7 +1239,7 @@
   {#if (catalogGame || localGame) && managed}
     <div class="gsec" class:moved={moved('requirements')} {...part('requirements')}>
       <section class="section">
-        <h2 class="heading" tabindex="-1">{msg('games.detailAvailableDownloadsHeading')}</h2>
+        <h2 class="heading">{msg('games.detailAvailableDownloadsHeading')}</h2>
         {#if canonicalId}
           <SystemRequirements gameId={canonicalId} installPath={$settings?.gamesPath ?? ''} {installed} revision={sysreqRevision} />
         {/if}
@@ -1274,7 +1264,7 @@
   {#if (catalogGame || localGame) && managed}
     <div class="gsec" class:moved={moved('releases')} {...part('releases')}>
       <section class="section">
-        <h2 class="heading" tabindex="-1">{msg('games.detailAvailableDownloadsHeading')}</h2>
+        <h2 class="heading">{msg('games.detailAvailableDownloadsHeading')}</h2>
         {@render releasesFailedNotice()}
         {#if !releasesLoading && !releasesFailed && releaseGroups.length === 0}<EmptyState size="inline" title={msg('games.detailNoReleases')} />{/if}
         <ReleaseList
@@ -1312,7 +1302,7 @@
     <div class="gsec" class:moved={moved('otherVersions')} {...part('otherVersions')}>
       {#if relatedShown.length > 0 || ((relatedFailed || relatedRetrying) && availableGroups.length === 0)}
         <section class="section" bind:this={otherVersionsEl}>
-          <h2 class="heading" tabindex="-1">{msg('games.otherVersionsHeading')}</h2>
+          <h2 class="heading">{msg('games.otherVersionsHeading')}</h2>
           {#if relatedFailed || relatedRetrying}
             <Notice tone="danger">
               {msg('games.otherVersionsFailed')}
