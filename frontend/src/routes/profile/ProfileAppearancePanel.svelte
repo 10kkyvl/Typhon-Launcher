@@ -245,7 +245,7 @@
         <div class="pick">
           <span class="pick-label">{fromLabel}</span>
           <button type="button" class="color" style:background={a.customFrom} aria-label={fromLabel} aria-expanded={palette === 'from'} aria-controls={palette === 'from' ? paletteId('from') : undefined} onclick={() => togglePalette('from')}></button>
-          <HexColorField value={fromText} onchange={(v) => setColor('customFrom', v)} disabled={locked} />
+          <HexColorField label={fromLabel} value={fromText} onchange={(v) => setColor('customFrom', v)} disabled={locked} />
         </div>
         {#if palette === 'from'}<div id={paletteId('from')}><ColorPalette value={a.customFrom} onchange={(v) => setColor('customFrom', v)} disabled={locked} /></div>{/if}
         {#if !validAccent(fromText)}<p class="hint danger">{msg('settings.accentInvalid')}</p>{/if}
@@ -253,7 +253,7 @@
           <div class="pick">
             <span class="pick-label">{msg('profileStyle.colorTo')}</span>
             <button type="button" class="color" style:background={a.customTo} aria-label={msg('profileStyle.colorTo')} aria-expanded={palette === 'to'} aria-controls={palette === 'to' ? paletteId('to') : undefined} onclick={() => togglePalette('to')}></button>
-            <HexColorField value={toText} onchange={(v) => setColor('customTo', v)} disabled={locked} />
+            <HexColorField label={msg('profileStyle.colorTo')} value={toText} onchange={(v) => setColor('customTo', v)} disabled={locked} />
             {#if a.customTo !== a.customFrom}<Button size="sm" variant="ghost" onclick={() => patch({ customTo: a.customFrom })}>{msg('profileStyle.singleColor')}</Button>{/if}
           </div>
           {#if palette === 'to'}<div id={paletteId('to')}><ColorPalette value={a.customTo} onchange={(v) => setColor('customTo', v)} disabled={locked} /></div>{/if}
@@ -297,7 +297,7 @@
         <Button size="sm" aria-expanded={palette === 'accent'} aria-controls={palette === 'accent' ? paletteId('accent') : undefined} onclick={() => togglePalette('accent')}>{msg('settings.accentCustom')}</Button>
       </div>
       {#if palette === 'accent'}<div id={paletteId('accent')}><ColorPalette value={a.accent} onchange={(v) => setColor('accent', v)} disabled={locked} /></div>{/if}
-      <div class="hex"><HexColorField value={accentText} onchange={(v) => setColor('accent', v)} disabled={locked} /></div>
+      <div class="hex"><HexColorField label={msg('profile.accent')} value={accentText} onchange={(v) => setColor('accent', v)} disabled={locked} /></div>
       {#if !validAccent(accentText)}<p class="hint danger">{msg('settings.accentInvalid')}</p>{/if}
     </section>
 
@@ -345,7 +345,7 @@
       <div class="pick">
         <span class="pick-label">{msg('profileStyle.frameColor')}</span>
         <button type="button" class="color" style:background={a.frameColor || a.accent} aria-label={msg('profileStyle.frameColor')} aria-expanded={palette === 'frame'} aria-controls={palette === 'frame' ? paletteId('frame') : undefined} onclick={() => togglePalette('frame')}></button>
-        <HexColorField value={frameText} onchange={(v) => setOptionalColor('frameColor', v)} disabled={locked} />
+        <HexColorField label={msg('profileStyle.frameColor')} optional value={frameText} onchange={(v) => setOptionalColor('frameColor', v)} disabled={locked} />
         {#if a.frameColor}<Button size="sm" variant="ghost" onclick={() => setOptionalColor('frameColor', '')}>{msg('profileStyle.colorAsAccent')}</Button>{/if}
       </div>
       {#if palette === 'frame'}<div id={paletteId('frame')}><ColorPalette value={a.frameColor || a.accent} onchange={(v) => setOptionalColor('frameColor', v)} disabled={locked} /></div>{/if}
@@ -366,7 +366,7 @@
       <div class="pick">
         <span class="pick-label">{msg('profileStyle.nameColor')}</span>
         <button type="button" class="color" style:background={a.nameColor || a.accent} aria-label={msg('profileStyle.nameColor')} aria-expanded={palette === 'name'} aria-controls={palette === 'name' ? paletteId('name') : undefined} onclick={() => togglePalette('name')}></button>
-        <HexColorField value={nameText} onchange={(v) => setOptionalColor('nameColor', v)} disabled={locked} />
+        <HexColorField label={msg('profileStyle.nameColor')} optional value={nameText} onchange={(v) => setOptionalColor('nameColor', v)} disabled={locked} />
         {#if a.nameColor}<Button size="sm" variant="ghost" onclick={() => setOptionalColor('nameColor', '')}>{msg('profileStyle.colorAsAccent')}</Button>{/if}
       </div>
       {#if palette === 'name'}<div id={paletteId('name')}><ColorPalette value={a.nameColor || a.accent} onchange={(v) => setOptionalColor('nameColor', v)} disabled={locked} /></div>{/if}

@@ -103,13 +103,13 @@
   {#if editing}
     <ColorPalette value={lastValid} onchange={preview} disabled={busy} />
     <div class="editor">
-      <HexColorField value={draft} onchange={preview} disabled={busy} onkeydown={e => { if (e.key === 'Escape') cancel(); if (e.key === 'Enter' && validAccent(draft)) void save(draft); }} />
+      <HexColorField label={msg('settings.accentTitle')} value={draft} onchange={preview} disabled={busy} onkeydown={e => { if (e.key === 'Escape') cancel(); if (e.key === 'Enter' && validAccent(draft)) void save(draft); }} />
       <Button size="sm" variant="primary" disabled={!validAccent(draft) || busy} onclick={() => save(draft)}>{msg('settings.accentDone')}</Button>
       <Button size="sm" variant="secondary" onclick={cancel}>{msg('common.cancel')}</Button>
     </div>
     {#if !validAccent(draft)}<p class="hint">{msg('settings.accentInvalid')}</p>{/if}
   {:else}
-    <div class="editor"><HexColorField value={selected || $displayedAccent} readonly /></div>
+    <div class="editor"><HexColorField label={msg('settings.accentTitle')} value={selected || $displayedAccent} readonly /></div>
   {/if}
   <div class="tint"><span id="{uid}-tint-label">{msg('settings.accentTintLogo')}</span><Toggle checked={$settings?.tintLogo ?? false} disabled={busy || editing} labelledby="{uid}-tint-label" onchange={tint} /></div>
 </Card>
