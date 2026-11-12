@@ -169,14 +169,14 @@ const SITES: Record<string, Site[]> = {
   'lib/components/profile/GamePicker.svelte': [['danger', true]],
   'routes/activity/Activity.svelte': [['danger', true]],
   'routes/auth/AuthScreen.svelte': [['danger', true]],
-  // The page fell back to a cached copy; a game just put away from the recommendations, with its undo;
-  // the picks that fell back or went stale; the first page or a next page failed.
+  // The page fell back to a cached copy or its first page failed (one notice, warning or danger); a
+  // game just put away from the recommendations, with its undo; the picks that fell back or went
+  // stale; a next page failed.
   'routes/catalog/Catalog.svelte': [
-    ['warning', true],
+    ['dynamic', true],
     ['success', true],
     ['info', true],
     ['warning', true],
-    ['danger', true],
     ['danger', true],
   ],
   'routes/diskusage/DiskUsage.svelte': [
@@ -288,10 +288,8 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
     ['danger', true],
   ],
-  'routes/user/UserCommonModal.svelte': [
-    ['danger', true],
-    ['danger', true],
-  ],
+  // A page of the list failed, the first or a later one.
+  'routes/user/UserCommonModal.svelte': [['danger', true]],
   // The profile failed to load; a closed or a friends-only profile is a standing fact of the page.
   'routes/user/UserProfile.svelte': [
     ['danger', true],
