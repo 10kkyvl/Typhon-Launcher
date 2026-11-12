@@ -25,8 +25,9 @@
   const used = $derived(REACTIONS.filter((id) => reactionCount(event, id) > 0));
   const idle = $derived(REACTIONS.filter((id) => reactionCount(event, id) === 0));
 
-  // While a reaction is being sent the bar takes no other (`disabled`), but its controls keep focus:
-  // a disabled button would drop it, and a keyboard user would lose their place in the feed.
+  // While a reaction is being sent the bar takes no other (`disabled`): its chips are busy, so they
+  // keep focus (a disabled button would drop it, and a keyboard user would lose their place in the
+  // feed) and ignore presses.
   async function toggle(id: ReactionId) {
     if (disabled) return;
     const adding = !hasReacted(event, id);
@@ -60,7 +61,7 @@
     <Chip
       selected={mine}
       data-reaction={id}
-      aria-disabled={disabled || undefined}
+      busy={disabled}
       aria-label={msg('social.reactionWithCount', { reaction: reactionLabel(id), count })}
       onclick={() => toggle(id)}
     >
@@ -82,13 +83,7 @@
             variant="quiet"
             aria-label={msg('social.reactionAdd')}
             {...props}
-            aria-disabled={disabled || undefined}
-            onclick={(press) => {
-              if (!disabled) props.onclick(press);
-            }}
-            onkeydown={(key) => {
-              if (!disabled) props.onkeydown(key);
-            }}
+            busy={disabled}
           >
             <span class="plus" class:open><Plus size="1.4rem" strokeWidth={2} /></span>
           </Chip>

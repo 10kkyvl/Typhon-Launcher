@@ -113,9 +113,12 @@ describe('feed reactions keep the keyboard user in place', () => {
     expect(react).toHaveBeenCalledExactlyOnceWith('7', 'heart');
     expect(focusedControl()).toBe(chip('Heart, 1'));
     expect(add()?.getAttribute('aria-disabled')).toBe('true');
+    // The chips' own busy state: it is what holds back presses and drops the hover and press look.
+    expect([chip('Fire, 2'), chip('Heart, 1'), add()].map((control) => control?.getAttribute('aria-busy'))).toEqual(['true', 'true', 'true']);
 
     await settle();
     expect(focusedControl()).toBe(chip('Heart, 1'));
+    expect([chip('Fire, 2'), chip('Heart, 1'), add()].some((control) => control?.hasAttribute('aria-busy'))).toBe(false);
   });
 
   it('while the request runs, the bar takes no second reaction and the "+" opens nothing', async () => {
