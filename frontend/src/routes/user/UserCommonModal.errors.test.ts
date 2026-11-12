@@ -8,13 +8,14 @@ describe('UserCommonModal load errors', () => {
   });
 
   it('shows the empty state only after a page loaded successfully', () => {
-    expect(source).toMatch(/\{:else if !loaded\}\s*<Spinner[^>]*\/>\s*\{:else if games\.length === 0\}\s*<EmptyState/);
+    expect(source).toMatch(/\{:else if loaded && games\.length === 0 && !failure && !retrying\}\s*<EmptyState/);
     expect(source).toMatch(/loaded = true;\s*\} catch/);
   });
 
   it('keeps already loaded games when a later page fails and offers a retry', () => {
-    expect(source).toContain('{#if failure && games.length === 0}');
-    expect(source).toContain('onclick={() => load(false, true)}');
+    expect(source).toMatch(/\{#if games\.length > 0\}\s*<div class="list"/);
+    expect(source).toMatch(/\{#if failure \|\| retrying\}\s*<Notice[^>]*run: retry/);
+    expect(source).toContain('await load(!loaded, true);');
   });
 
   it('ignores answers of a superseded load', () => {

@@ -191,26 +191,34 @@ describe("a user's page: a closed profile", () => {
 describe("a user's page: all the games in common", () => {
   afterEach(() => vi.mocked(userCommon).mockReset());
 
+  type CommonPage = Awaited<ReturnType<typeof userCommon>>;
+  const common = (igdbId: number, title: string) => ({ igdbId, title, coverUrl: '', viewerOwned: true, targetOwned: true }) as unknown as CommonGame;
+  const pending = () => {
+    let resolve!: (value: CommonPage) => void;
+    const promise = new Promise<CommonPage>((res) => (resolve = res));
+    return { promise, resolve };
+  };
+  const mount = () => renderDom(UserCommonModal, { open: true, username: 'ann', name: 'Ann' });
+  const rowOf = (title: string) => screen.getByRole('button', { name: (name) => name.startsWith(title) });
+
   it('with none, the dialog says so with the base empty state', async () => {
     vi.mocked(userCommon).mockResolvedValue({ games: [], next: '' });
-    renderDom(UserCommonModal, { open: true, username: 'ann', name: 'Ann' });
+    mount();
 
     expect((await screen.findByText(msg('social.userCommonEmpty'))).closest('.empty.inline')).not.toBeNull();
   });
 
   it('shows the base spinner, named, while its first page loads', async () => {
     vi.mocked(userCommon).mockReturnValue(new Promise(() => {}));
-    renderDom(UserCommonModal, { open: true, username: 'ann', name: 'Ann' });
+    mount();
 
     expect((await screen.findByText(msg('social.loadingEllipsis'))).closest('.spinner[role="status"]')).not.toBeNull();
   });
 
-  it('a failed first page: the danger notice keeps its busy Retry and the focus until the answer', async () => {
-    let answer!: (value: Awaited<ReturnType<typeof userCommon>>) => void;
-    vi.mocked(userCommon)
-      .mockRejectedValueOnce(new Error('offline'))
-      .mockReturnValueOnce(new Promise((resolve) => (answer = resolve)));
-    const { user } = renderDom(UserCommonModal, { open: true, username: 'ann', name: 'Ann' });
+  it('a failed first page: the notice keeps its busy Retry and the focus, then focus goes to the first game', async () => {
+    const again = pending();
+    vi.mocked(userCommon).mockRejectedValueOnce(new Error('offline')).mockReturnValueOnce(again.promise);
+    const { user } = mount();
     const notice = (await screen.findByRole('alert')).closest('.notice') as HTMLElement;
     const retry = within(notice).getByRole('button', { name: msg('common.retry') });
     retry.focus();
@@ -221,24 +229,64 @@ describe("a user's page: all the games in common", () => {
     expect(notice.isConnected).toBe(true);
     expect(document.activeElement).toBe(retry);
 
-    answer({ games: [], next: '' });
+    again.resolve({ games: [common(1, 'Hades')], next: '' });
     await vi.waitFor(() => expect(notice.isConnected).toBe(false));
-    expect(screen.getByText(msg('social.userCommonEmpty'))).toBeTruthy();
+    await vi.waitFor(() => expect(document.activeElement).toBe(rowOf('Hades')));
   });
 
-  it('a failed later page keeps the games and retries that page from its notice', async () => {
-    let answer!: (value: Awaited<ReturnType<typeof userCommon>>) => void;
-    const hades = { igdbId: 1, title: 'Hades', coverUrl: '', viewerOwned: true, targetOwned: true } as unknown as CommonGame;
-    vi.mocked(userCommon)
-      .mockResolvedValueOnce({ games: [hades], next: 'p2' })
-      .mockRejectedValueOnce(new Error('offline'))
-      .mockReturnValueOnce(new Promise((resolve) => (answer = resolve)));
-    const { user } = renderDom(UserCommonModal, { open: true, username: 'ann', name: 'Ann' });
-    await user.click(await screen.findByRole('button', { name: msg('social.userCommonMore') }));
+  it('a retry that finds no games keeps the focus inside the dialog', async () => {
+    vi.mocked(userCommon).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ games: [], next: '' });
+    const { user } = mount();
     const notice = (await screen.findByRole('alert')).closest('.notice') as HTMLElement;
-    expect(screen.queryByRole('button', { name: msg('social.userCommonMore') })).toBeNull();
+    within(notice).getByRole('button', { name: msg('common.retry') }).focus();
+
+    await user.keyboard('{Enter}');
+
+    await screen.findByText(msg('social.userCommonEmpty'));
+    await vi.waitFor(() => expect(document.activeElement).not.toBe(document.body));
+    expect(screen.getByRole('dialog').contains(document.activeElement)).toBe(true);
+  });
+
+  it('"Show more" is busy while its page loads, keeps its words and the focus', async () => {
+    vi.mocked(userCommon).mockResolvedValueOnce({ games: [common(1, 'Hades')], next: 'p2' }).mockReturnValueOnce(new Promise(() => {}));
+    const { user } = mount();
+    const more = await screen.findByRole('button', { name: msg('social.userCommonMore') });
+    more.focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(more.getAttribute('aria-busy')).toBe('true');
+    expect(more.hasAttribute('disabled')).toBe(false);
+    expect(more.textContent?.trim()).toBe(msg('social.userCommonMore'));
+    expect(document.activeElement).toBe(more);
+  });
+
+  it('"Show more" pressed from the keyboard and failed: focus goes to the Retry of the notice in its place', async () => {
+    vi.mocked(userCommon).mockResolvedValueOnce({ games: [common(1, 'Hades')], next: 'p2' }).mockRejectedValueOnce(new Error('offline'));
+    const { user } = mount();
+    const more = await screen.findByRole('button', { name: msg('social.userCommonMore') });
+    more.focus();
+
+    await user.keyboard('{Enter}');
+
+    const notice = (await screen.findByRole('alert')).closest('.notice') as HTMLElement;
+    expect(more.isConnected).toBe(false);
+    expect(rowOf('Hades')).toBeTruthy();
+    await vi.waitFor(() => expect(document.activeElement).toBe(within(notice).getByRole('button', { name: msg('common.retry') })));
+  });
+
+  it('a failed later page is retried from its notice, then focus goes to the first game it brought', async () => {
+    const again = pending();
+    vi.mocked(userCommon)
+      .mockResolvedValueOnce({ games: [common(1, 'Hades')], next: 'p2' })
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockReturnValueOnce(again.promise);
+    const { user } = mount();
+    (await screen.findByRole('button', { name: msg('social.userCommonMore') })).focus();
+    await user.keyboard('{Enter}');
+    const notice = (await screen.findByRole('alert')).closest('.notice') as HTMLElement;
     const retry = within(notice).getByRole('button', { name: msg('common.retry') });
-    retry.focus();
+    await vi.waitFor(() => expect(document.activeElement).toBe(retry));
 
     await user.keyboard('{Enter}');
 
@@ -246,9 +294,9 @@ describe("a user's page: all the games in common", () => {
     expect(notice.isConnected).toBe(true);
     expect(document.activeElement).toBe(retry);
     expect(vi.mocked(userCommon).mock.calls.at(-1)).toEqual(['ann', 'p2']);
-    expect(screen.getByText('Hades')).toBeTruthy();
 
-    answer({ games: [], next: '' });
+    again.resolve({ games: [common(2, 'Celeste')], next: '' });
     await vi.waitFor(() => expect(notice.isConnected).toBe(false));
+    await vi.waitFor(() => expect(document.activeElement).toBe(rowOf('Celeste')));
   });
 });
