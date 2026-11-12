@@ -126,6 +126,16 @@ describe('Downloads: links', () => {
     expect(wraps.overflow).toBe('visible');
   });
 
+  // The row takes no focus: a hint on its name reaches a mouse only. The name is shown whole instead.
+  it('a queued download’s name wraps inside its row too, with no hover-only hint', () => {
+    downloads.set([download({ id: 'q', name: 'Queued One', status: 'queued', progress: 0 })]);
+    renderDom(Downloads);
+
+    const name = screen.getByText('Queued One');
+    expect(name.hasAttribute('title')).toBe(false);
+    expect(name.closest('.title')?.classList.contains('wraps')).toBe(true);
+  });
+
   it('"open download history" is a text link in its sentence that goes to the history', async () => {
     const { user } = renderDom(Downloads);
     const link = screen.getByRole('button', { name: msg('transfers.downloadsOpenHistoryLog') });

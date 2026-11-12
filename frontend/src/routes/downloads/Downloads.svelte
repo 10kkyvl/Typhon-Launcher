@@ -277,7 +277,7 @@
             <Artwork src={coverOf(q)} alt="" label={q.name} ratio="3 / 4" radius="var(--radius-sm)" />
           </div>
           <div class="info inline">
-            <span class="title" title={q.name}>{q.name}</span>
+            <span class="title wraps">{q.name}</span>
             {#if typeTag(q) || sourceTag(q) || q.ignoreSchedule}
               <div class="tags">
                 {#if typeTag(q)}<StatusBadge kind="neutral" label={typeTag(q)} dot={false} />{/if}
@@ -562,7 +562,8 @@
     text-overflow: ellipsis;
   }
 
-  /* A text link given an action is a button, an atomic box: an ellipsis would hide all of it. */
+  /* A name is shown whole, wrapping in its row: an ellipsis would hide all of a text link (a button,
+     an atomic box), and a hint on the rest would reach a mouse only. */
   .title.wraps {
     white-space: normal;
     overflow: visible;
