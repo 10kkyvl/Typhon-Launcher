@@ -408,26 +408,40 @@ describe('Notice with a retry: dropped by its caller during the retry', () => {
 // A dialog is portalled out of the page, and the page under it is inert: focus that falls back to
 // the page heading there would be refused by a browser and end on <body>.
 describe('Notice with a retry: inside a dialog', () => {
-  function setup(run: () => Promise<boolean>) {
+  function setup(run: () => Promise<boolean>, aim: 'none' | 'page' = 'none') {
     const app = document.createElement('div');
     app.id = 'app';
     document.body.append(app);
-    const view = render(RetryDialogHarness, { target: app, props: { run } });
+    const view = render(RetryDialogHarness, { target: app, props: { run, aim } });
     return { ...view, user: keys() };
   }
 
-  it('on success with no target keeps focus in the dialog, never on the page under it', async () => {
+  // The dialog's layer root, which takes focus when the dialog opens with nothing to focus: not its
+  // first control (the Close button), which a keyboard user would then press by accident.
+  const layerRoot = () => screen.getByRole('dialog', { name: 'Pick a game' }).parentElement as HTMLElement;
+
+  it('on success with no target puts focus on the dialog itself, never on the page under it', async () => {
     const { user } = setup(vi.fn(async () => true));
-    const dialog = screen.getByRole('dialog', { name: 'Pick a game' });
+    expect(layerRoot().getAttribute('tabindex')).toBe('-1');
     retryButton().focus();
 
     await user.keyboard('{Enter}');
 
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
-    const active = document.activeElement as HTMLElement;
-    expect(active).not.toBe(document.body);
-    expect(active.closest('[inert]')).toBeNull();
-    expect(active.contains(dialog) || dialog.contains(active)).toBe(true);
+    expect(document.activeElement).toBe(layerRoot());
+  });
+
+  it('passes over a target on the inert page under the dialog', async () => {
+    const { user } = setup(vi.fn(async () => true), 'page');
+    const page = screen.getByRole('button', { name: 'On the page', hidden: true });
+    expect(page.closest('[inert]')).not.toBeNull();
+    retryButton().focus();
+
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+    expect(document.activeElement).not.toBe(page);
+    expect(document.activeElement).toBe(layerRoot());
   });
 
   it('focuses nothing when the dialog has closed by the time the answer comes', async () => {
