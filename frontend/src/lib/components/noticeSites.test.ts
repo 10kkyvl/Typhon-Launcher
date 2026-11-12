@@ -18,6 +18,8 @@ const SITES: Record<string, Site[]> = {
     ['warning', true],
     // The conversation cannot be written to: a fact of the conversation, shown whenever it is open.
     ['info', false],
+    ['danger', true],
+  ],
   // Names missing from the list and unread progress files are facts of the card; a failed load just happened.
   'lib/components/AchievementsCard.svelte': [
     ['warning', false],
@@ -42,7 +44,6 @@ const SITES: Record<string, Site[]> = {
     ['info', false],
   ],
   'lib/components/SystemRequirements.svelte': [['danger', true]],
-  'lib/components/UpdateBanner.svelte': [['danger', true]],
   // Advice for the chosen platform, also inside InstallModal and AddDownloadModal.
   'lib/components/EmulatorHint.svelte': [['warning', false]],
   // A block whose data failed to load; blocks of a newer launcher filling the layout, a standing fact.
@@ -51,7 +52,6 @@ const SITES: Record<string, Site[]> = {
   'lib/components/profile/GamePicker.svelte': [['danger', true]],
   'routes/activity/Activity.svelte': [['danger', true]],
   'routes/auth/AuthScreen.svelte': [['danger', true]],
-  'routes/catalog/Catalog.svelte': [['danger', true]],
   // The page fell back to a cached copy; a game just put away from the recommendations, with its undo;
   // the picks that fell back or went stale; the first page or a next page failed.
   'routes/catalog/Catalog.svelte': [
@@ -70,8 +70,6 @@ const SITES: Record<string, Site[]> = {
   'routes/friends/Friends.svelte': [['info', false]],
   // Downloads held while a game runs: it starts and ends while the page is open.
   'routes/downloads/Downloads.svelte': [['info', true]],
-  // The stored error of the last download, shown on every opening of the game.
-  'routes/game/GameDetails.svelte': [['danger', false]],
   // In source order: the downloads and the other versions failed to load (just happened); the stored
   // error of the last download and the uninstalled game, shown on every opening; the metadata search
   // running; the stored "not found" or "failed" of the metadata, its tone set by which.
