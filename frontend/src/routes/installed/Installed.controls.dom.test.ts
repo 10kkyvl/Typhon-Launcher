@@ -128,6 +128,7 @@ describe('Installed: retrying the disk usage', () => {
     answer({ usedBytes: 50, totalBytes: 100, freeBytes: 50 } as Awaited<ReturnType<typeof getStorageInfo>>);
     await vi.waitFor(() => expect(notice.isConnected).toBe(false));
     expect(screen.getByText(msg('games.installedStorageTitle'))).toBeTruthy();
+    await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: msg('games.installedManageStorage') })));
   });
 });
 

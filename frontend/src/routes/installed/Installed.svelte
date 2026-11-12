@@ -354,17 +354,14 @@
 
   let librarySetupOpen = $state(false);
 
-  // The failure stays on screen with its Retry busy until the answer: `storageFailed` changes only then.
   let storageRetrying = $state(false);
+  let storageCard = $state<HTMLElement>();
 
-  async function retryStorage() {
-    if (storageRetrying) return;
-    storageRetrying = true;
-    try {
-      await refreshStorage();
-    } finally {
-      storageRetrying = false;
-    }
+  // The notice's retry: it worked when the disk usage came. On success the focus goes to the storage
+  // card's "Manage storage".
+  async function retryStorage(): Promise<boolean> {
+    await refreshStorage();
+    return !$storageFailed;
   }
 
   const uid = $props.id();
@@ -442,7 +439,7 @@
   {:else if $storageInfo}
     <div class="storage-block">
       <Card>
-        <div class="storage">
+        <div class="storage" bind:this={storageCard}>
           <div class="storage-head">
             <span class="disk-icon">
               <HardDrive size="1.8rem" strokeWidth={1.8} />
@@ -495,16 +492,10 @@
         </div>
       </Card>
     </div>
-  {:else if $storageFailed}
+  {:else if $storageFailed || storageRetrying}
     <div class="storage-block">
-      <Notice tone="danger">
+      <Notice tone="danger" bind:retrying={storageRetrying} retry={{ label: msg('common.retry'), run: retryStorage, within: () => storageCard }}>
         {msg('games.installedStorageLoadFailed')}
-        {#snippet action()}
-          <Button size="sm" busy={storageRetrying} onclick={retryStorage}>
-            {#if !storageRetrying}<RefreshCw size="1.5rem" strokeWidth={1.8} />{/if}
-            {msg('common.retry')}
-          </Button>
-        {/snippet}
       </Notice>
     </div>
   {/if}
