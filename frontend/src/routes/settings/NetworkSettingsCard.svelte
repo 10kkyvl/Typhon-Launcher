@@ -1,8 +1,9 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
-  import { RefreshCw, AlertTriangle } from '@lucide/svelte';
+  import { RefreshCw } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import Select from '../../lib/components/Select.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
@@ -51,6 +52,7 @@
   let applying = $state(false);
   let testing = $state(false);
   let failure = $state('');
+  let portError = $state('');
   let testResult = $state<{ ok: boolean; text: string } | null>(null);
 
   let interfaces = $state<NetInterface[]>([]);
@@ -147,10 +149,11 @@
   async function apply() {
     if (applying || !dirty) return;
     failure = '';
+    portError = '';
     testResult = null;
     const rawPort = port.trim();
     if (mode === 'proxy' && rawPort !== '' && !portPattern.test(rawPort)) {
-      failure = networkCodeText('settings.proxy_port_invalid');
+      portError = networkCodeText('settings.proxy_port_invalid');
       return;
     }
     applying = true;
@@ -190,6 +193,7 @@
     if (passwordBusy) return;
     passwordBusy = true;
     failure = '';
+    portError = '';
     try {
       await setProxyPassword(saved.username, '');
       hasPassword = false;
@@ -239,9 +243,9 @@
           <span class="row-label" id="{uid}-interface-label">{msg('settings.networkInterfaceLabel')}</span>
           <span class="row-sub">{msg('settings.networkInterfaceSub')}</span>
           {#if interfacesError}
-            <span class="failure">{interfacesError}</span>
+            <div class="message"><Notice tone="danger" compact>{interfacesError}</Notice></div>
           {:else if interfacesLoaded && interfaces.length === 0}
-            <span class="failure">{msg('settings.networkInterfaceEmpty')}</span>
+            <div class="message"><Notice tone="warning" compact>{msg('settings.networkInterfaceEmpty')}</Notice></div>
           {/if}
         </div>
         <div class="control">
@@ -285,6 +289,9 @@
       <div class="row">
         <div class="row-text">
           <span class="row-label">{msg('settings.networkProxyPortLabel')}</span>
+          {#if portError}
+            <span class="field-error" id="{uid}-port-error" role="alert">{portError}</span>
+          {/if}
         </div>
         <input
           class="input field port"
@@ -292,6 +299,8 @@
           inputmode="numeric"
           autocomplete="off"
           aria-label={msg('settings.networkProxyPortLabel')}
+          aria-invalid={portError ? 'true' : undefined}
+          aria-describedby={portError ? `${uid}-port-error` : undefined}
           placeholder="1080"
           bind:value={port}
         />
@@ -334,9 +343,8 @@
         </div>
       </div>
       <div class="row">
-        <div class="note">
-          <AlertTriangle size="1.6rem" strokeWidth={1.8} />
-          <span>{msg('settings.networkProxyWarning')}</span>
+        <div class="wide">
+          <Notice tone="warning" compact announce={false}>{msg('settings.networkProxyWarning')}</Notice>
         </div>
       </div>
       <div class="row">
@@ -344,7 +352,7 @@
           {#if dirty}
             <span class="row-sub">{msg('settings.networkProxyTestNeedsApply')}</span>
           {:else if testResult}
-            <span class={testResult.ok ? 'success' : 'failure'}>{testResult.text}</span>
+            <Notice tone={testResult.ok ? 'success' : 'danger'} compact>{testResult.text}</Notice>
           {/if}
         </div>
         <Button size="sm" disabled={dirty || testing} onclick={checkProxy}>
@@ -355,7 +363,9 @@
 
     {#if failure}
       <div class="row">
-        <span class="failure">{failure}</span>
+        <div class="wide">
+          <Notice tone="danger" compact>{failure}</Notice>
+        </div>
       </div>
     {/if}
 
@@ -446,31 +456,21 @@
     justify-content: flex-end;
   }
 
-  .note {
+  .wide {
     flex: 1;
-    display: flex;
-    align-items: flex-start;
-    gap: var(--space-2);
-    padding: var(--space-3);
-    background: var(--warning-subtle);
-    border-radius: var(--radius-md);
-    font-size: var(--font-xs);
-    color: var(--text-2);
-    line-height: 1.5;
+    min-width: 0;
   }
 
-  .note :global(svg) {
-    flex-shrink: 0;
-    color: var(--warning);
+  .message {
+    margin-top: var(--space-2);
   }
 
-  .failure {
+  .field-error {
     font-size: var(--font-xs);
     color: var(--danger);
   }
 
-  .success {
-    font-size: var(--font-xs);
-    color: var(--success);
+  .port[aria-invalid='true'] {
+    border-color: var(--danger);
   }
 </style>

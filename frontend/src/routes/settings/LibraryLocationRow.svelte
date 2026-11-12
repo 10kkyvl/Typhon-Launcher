@@ -2,6 +2,7 @@
   import { FolderInput } from '@lucide/svelte';
   import { msg } from '../../lib/i18n';
   import Button from '../../lib/components/Button.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import { moveErrorText } from '../../lib/relocate/moveMessages';
   import { movePercent, moveSummary, stageLabel } from '../../lib/relocate/moveText';
@@ -93,7 +94,9 @@
 {/if}
 
 {#if failure}
-  <p class="failure">{failure}</p>
+  <div class="failure">
+    <Notice tone="danger" compact>{failure}</Notice>
+  </div>
 {/if}
 
 <style>
@@ -136,8 +139,6 @@
   }
 
   .failure {
-    margin: var(--space-2) 0 0;
-    font-size: var(--font-xs);
-    color: var(--danger);
+    margin-top: var(--space-2);
   }
 </style>

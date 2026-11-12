@@ -3,6 +3,8 @@
   import { untrack } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
+  import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { removeLibraryFolderPrompt } from '../../lib/confirm/prompts';
   import { errorCode, hasMessage, msg } from '../../lib/i18n';
   import { gamesInFolder } from '../../lib/library/folders';
@@ -100,7 +102,9 @@
   </div>
 
   {#if loadFailed && folders.length === 0}
-    <p class="failure" role="alert">{msg('settings.libraryFoldersLoadFailed')}</p>
+    <div class="failure">
+      <Notice tone="danger" compact>{msg('settings.libraryFoldersLoadFailed')}</Notice>
+    </div>
   {/if}
 
   {#each folders as folder (folder.path)}
@@ -108,11 +112,11 @@
       <div class="row-text">
         <span class="path" title={folder.path}>{folder.path}</span>
         <span class="row-sub">
-          {#if folder.primary}<span class="tag">{msg('settings.libraryFolderPrimary')}</span>{/if}
+          {#if folder.primary}<span class="tag"><StatusBadge kind="accent" dot={false} label={msg('settings.libraryFolderPrimary')} /></span>{/if}
           {#if folder.available}
             {msg('settings.libraryFolderSpace', { free: bytesSize(folder.freeBytes), total: bytesSize(folder.totalBytes) })}
           {:else}
-            <span class="warn">{msg('settings.libraryFolderUnavailable')}</span>
+            <StatusBadge kind="danger" label={msg('settings.libraryFolderUnavailable')} />
           {/if}
           · {msg('settings.libraryFolderGames', { count: gamesInFolder(folder.path, $installedGames) })}
         </span>
@@ -173,17 +177,9 @@
 
   .tag {
     margin-right: var(--space-2);
-    color: var(--accent-text);
-    font-weight: 500;
-  }
-
-  .warn {
-    color: var(--danger);
   }
 
   .failure {
-    margin: var(--space-2) 0 0;
-    font-size: var(--font-xs);
-    color: var(--danger);
+    margin-top: var(--space-2);
   }
 </style>
