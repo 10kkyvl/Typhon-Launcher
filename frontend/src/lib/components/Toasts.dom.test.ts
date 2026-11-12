@@ -183,16 +183,47 @@ describe('Toasts: closing', () => {
     expect(document.activeElement).toBe(before);
   });
 
-  it('shows no hint of its own on the close button: nothing stands between Escape and the toast', async () => {
-    const { keys, close, pass } = setup();
+  it('the close button has a hint like every icon button, and one Escape closes the toast with its hint', async () => {
+    const { keys, close, shown, pass } = setup();
+    const before = screen.getByRole('button', { name: 'Before' });
     toast('Saved');
     await tick();
-    screen.getByRole('button', { name: 'Before' }).focus();
+    before.focus();
     await keys.tab();
     await pass(1000);
 
+    expect(document.querySelector('[data-part="tooltip"]')?.textContent?.trim()).toBe(msg('ui.toastDismiss'));
+    expect(close('Saved').hasAttribute('title')).toBe(false);
+
+    await keys.keyboard('{Escape}');
+    await pass(1000);
+
+    expect(shown()).toEqual([]);
     expect(document.querySelector('[data-part="tooltip"]')).toBeNull();
-    expect(close('Saved').getAttribute('aria-label')).toBe(msg('ui.toastDismiss'));
+    expect(document.activeElement).toBe(before);
+  });
+
+  it('under an open dialog, Escape on a focused toast closes the toast only; the next one is the dialog\'s', async () => {
+    const { keys, close, shown } = setup({ dialog: true });
+    const folder = screen.getByRole('textbox', { name: 'Folder' }) as HTMLInputElement;
+    await keys.click(folder);
+    await keys.keyboard('D:/Games');
+    toast('Install failed', 'danger', { label: 'Retry', run: () => {} });
+    await tick();
+    close('Install failed').focus();
+
+    await keys.keyboard('{Escape}');
+    await tick();
+
+    expect(shown()).toEqual([]);
+    expect(screen.getByRole('dialog', { name: 'Install' })).toBeTruthy();
+    expect(folder.value).toBe('D:/Games');
+    expect(document.activeElement).toBe(folder);
+
+    await keys.keyboard('{Escape}');
+    await tick();
+
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('keeps its Escape to itself: a theme being tried is not ended by closing a toast', async () => {

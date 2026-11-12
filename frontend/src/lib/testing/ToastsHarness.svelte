@@ -15,5 +15,5 @@
 </div>
 
 <Modal open={dialog} title="Install">
-  <p>Installing</p>
+  <input aria-label="Folder" />
 </Modal>

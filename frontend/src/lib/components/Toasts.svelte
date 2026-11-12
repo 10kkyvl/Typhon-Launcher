@@ -75,8 +75,9 @@
 
   function onkeydown(item: Toast, event: KeyboardEvent) {
     if (event.key !== 'Escape' || event.defaultPrevented) return;
-    // The key is the toast's: listeners on the window (a theme being tried, Big Picture's "back") must
-    // not act on it as well.
+    // The key is the toast's. The layer stack leaves it alone (`data-layer-own-escape`: a dialog under
+    // the toast stays open, the hint on the X goes with its button), and listeners on the window (a
+    // theme being tried, Big Picture's "back") must not act on it as well.
     event.preventDefault();
     event.stopPropagation();
     close(item, event.currentTarget as HTMLElement);
@@ -90,6 +91,7 @@
     class="toast {item.kind}"
     data-part="toast"
     data-toast={item.id}
+    data-layer-own-escape
     onpointerenter={() => read(item.id, { hover: true })}
     onpointerleave={() => read(item.id, { hover: false })}
     onfocusin={(event) => onfocusin(item, event)}
@@ -109,10 +111,8 @@
     {#if item.action}
       <Button size="sm" onclick={(event) => act(item, event)}>{item.action.label}</Button>
     {/if}
-    <!-- No hint on the X: a hint is a layer, and it would take the first Escape meant for the toast. -->
     <IconButton
       size="sm"
-      tooltip={false}
       label={msg('ui.toastDismiss')}
       onclick={(event) => close(item, (event.currentTarget as HTMLElement).closest<HTMLElement>('.toast'))}
     >
