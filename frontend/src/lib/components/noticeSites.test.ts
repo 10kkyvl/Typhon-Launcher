@@ -136,7 +136,6 @@ const SITES: Record<string, Site[]> = {
     // This build has no legal documents to show: a fact read with the card.
     ['info', false],
   ],
-  'routes/stats/Stats.svelte': [['danger', true]],
   'routes/support/NewTicket.svelte': [
     ['danger', true],
     ['danger', true],
