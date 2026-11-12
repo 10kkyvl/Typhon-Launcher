@@ -34,6 +34,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.mocked(vote).mockReset();
   toasts.set([]);
   vi.restoreAllMocks();
 });
@@ -53,6 +54,28 @@ describe('ReviewCard: voting', () => {
     expect(vote).toHaveBeenCalledWith(7, 'helpful');
     expect(yes.textContent?.trim()).toBe(`${msg('reviews.helpfulYes')} (3)`);
     expect(screen.getByRole('button', { name: `${msg('reviews.helpfulNo')} (1)` }).getAttribute('aria-pressed')).toBe('false');
+  });
+});
+
+describe('ReviewCard: a vote in flight', () => {
+  it('keeps the focus on the pressed chip and refuses a second press until the answer', async () => {
+    let answer!: (value: Awaited<ReturnType<typeof vote>>) => void;
+    vi.mocked(vote).mockReturnValueOnce(new Promise((resolve) => (answer = resolve)));
+    const { user } = renderDom(ReviewCard, { review: review('Fine.'), guest: false });
+    const yes = screen.getByRole('button', { name: `${msg('reviews.helpfulYes')} (2)` });
+    yes.focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(yes.hasAttribute('disabled')).toBe(false);
+    expect(yes.getAttribute('aria-disabled')).toBe('true');
+    expect(document.activeElement).toBe(yes);
+    await user.keyboard('{Enter}');
+    expect(vote).toHaveBeenCalledTimes(1);
+
+    answer({ helpful: 3, unhelpful: 1, myVote: 'helpful' } as Awaited<ReturnType<typeof vote>>);
+    await vi.waitFor(() => expect(yes.hasAttribute('aria-disabled')).toBe(false));
+    expect(document.activeElement).toBe(yes);
   });
 });
 
