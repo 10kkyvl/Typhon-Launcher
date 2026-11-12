@@ -84,7 +84,8 @@
 
 <div class="card" role="presentation" {@attach gameContextMenu(id)} use:ambientHover={ambient ? id : null}>
   <div class="cover-wrap">
-    <button class="cover" onclick={() => navigate('game', { id })} aria-label={title}>
+    <!-- Out of the Tab order: the title below opens the same page, so a keyboard user has one stop. -->
+    <button class="cover" tabindex="-1" onclick={() => navigate('game', { id })} aria-label={title}>
       <Artwork src={cover} alt="" label={title} {ratio} radius="var(--radius-md)" />
       <span class="fade"></span>
     </button>
@@ -94,7 +95,7 @@
       <span class="source"><SourceBadge {source} /></span>
     {/if}
     {#if compatLabel}
-      <span class="compat"><StatusBadge kind={compatWorks ? 'success' : 'danger'} label={compatLabel} dot={false} /></span>
+      <span class="compat" id="{uid}-compat"><StatusBadge kind={compatWorks ? 'success' : 'danger'} label={compatLabel} dot={false} /></span>
     {/if}
     {#if installed && onplay}
       <button
@@ -123,6 +124,7 @@
               class:quiet={action.pinned && action.quiet}
               class:pop={action.active && popped === action.id}
               aria-label={action.label}
+              aria-describedby="{uid}-title"
               disabled={action.disabled}
               onclick={(event) => {
                 popped = action.active ? '' : action.id;
@@ -136,7 +138,7 @@
       </div>
     {/if}
   </div>
-  <button class="info" onclick={() => navigate('game', { id })}>
+  <button class="info" aria-describedby={compatLabel ? `${uid}-compat` : undefined} onclick={() => navigate('game', { id })}>
     <span class="title" id="{uid}-title">{title}</span>
     {#if meta}
       <span class="meta">{meta}</span>
