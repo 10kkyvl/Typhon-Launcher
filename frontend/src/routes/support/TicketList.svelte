@@ -23,21 +23,31 @@
   let loadingMore = $state(false);
   let failure = $state('');
   // Which request the failure is about, so Retry asks for that one again.
-  let failedPage: 'first' | 'more' | null = null;
+  let failedPage: 'first' | 'refresh' | 'more' | null = null;
   let loaded = $state(false);
   let retrying = $state(false);
   let list = $state<HTMLElement>();
   let firstNew = -1;
+  // Pages on screen, and a refresh a reply asked for while a Retry or a later page was on its way.
+  let pages = 0;
+  let refreshPending = false;
   let run = 0;
 
-  // A failure stays on screen until an answer replaces it: a refresh that starts does not clear it.
-  async function load(): Promise<boolean> {
+  // A failure stays on screen until an answer replaces it: a refresh that starts does not clear it. A
+  // refresh (`keepLater`) puts page one in again and keeps the pages loaded after it.
+  async function load(keepLater = false): Promise<boolean> {
     const current = ++run;
     try {
       const page = await listTickets('');
       if (current !== run) return false;
-      tickets = page.tickets;
-      next = page.next;
+      if (keepLater && pages > 1) {
+        const fresh = new Set(page.tickets.map((item) => item.number));
+        tickets = [...page.tickets, ...tickets.filter((item) => !fresh.has(item.number))];
+      } else {
+        tickets = page.tickets;
+        next = page.next;
+        pages = 1;
+      }
       loaded = true;
       failure = '';
       failedPage = null;
@@ -45,7 +55,7 @@
     } catch (err) {
       if (current !== run) return false;
       failure = supportErrorText(err, msg('tickets.loadFailed'));
-      failedPage = 'first';
+      failedPage = keepLater ? 'refresh' : 'first';
       return false;
     } finally {
       if (current === run) loading = false;
@@ -62,6 +72,7 @@
       const known = new Set(tickets.map((item) => item.number));
       tickets = [...tickets, ...page.tickets.filter((item) => !known.has(item.number))];
       next = page.next;
+      pages += 1;
       failure = '';
       failedPage = null;
       return true;
@@ -72,18 +83,30 @@
       return false;
     } finally {
       loadingMore = false;
+      settle();
     }
+  }
+
+  // The refresh a reply asked for while it had to wait runs once the request it waited for answers.
+  function settle() {
+    if (!refreshPending || loadingMore) return;
+    refreshPending = false;
+    void load(true);
   }
 
   // Retry repeats the request that failed: a later page is asked for again and the pages on screen
   // stay; on success focus goes to the first request it brought.
-  function retry(): Promise<boolean> {
-    if (failedPage !== 'more') {
+  async function retry(): Promise<boolean> {
+    try {
+      if (failedPage === 'more') {
+        firstNew = tickets.length;
+        return await more();
+      }
       firstNew = -1;
-      return load();
+      return await load(failedPage === 'refresh');
+    } finally {
+      settle();
     }
-    firstNew = tickets.length;
-    return more();
   }
 
   function retryFocus(): HTMLElement | undefined {
@@ -103,8 +126,11 @@
     untrack(() => {
       const changed = lastUnread !== null && lastUnread !== count;
       lastUnread = count;
-      // A retry that runs is not overtaken: its notice stays and its answer is kept.
-      if (changed && loaded && !loadingMore && !retrying) void load();
+      if (!changed || !loaded) return;
+      // A retry or a later page on its way is not overtaken: its notice stays and its answer is kept;
+      // the refresh runs once it has answered.
+      if (loadingMore || retrying) refreshPending = true;
+      else void load(true);
     });
   });
 

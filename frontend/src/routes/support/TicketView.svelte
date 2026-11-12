@@ -98,14 +98,37 @@
     };
   });
 
+  // A reload a reply asked for while a Retry or a sent reply was on its way: it runs once that answers.
+  let refreshPending = false;
+
+  function settle() {
+    if (!refreshPending || sending || retrying) return;
+    refreshPending = false;
+    void load();
+  }
+
+  // The retry's own request may have left before the reply came: a reload held back meanwhile follows.
+  async function retryThread(): Promise<boolean> {
+    try {
+      return await load();
+    } finally {
+      if (refreshPending) {
+        refreshPending = false;
+        void load();
+      }
+    }
+  }
+
   let lastUnread: number | null = null;
   $effect(() => {
     const count = $unreadReplies;
     untrack(() => {
       const grew = unreadGrew(lastUnread, count);
       lastUnread = count;
-      // A retry that runs is not overtaken: its notice stays and its answer is kept.
-      if (grew && thread && !sending && !retrying) void load();
+      if (!grew || !thread) return;
+      // A retry or a sent reply on its way is not overtaken: its notice stays and its answer is kept.
+      if (sending || retrying) refreshPending = true;
+      else void load();
     });
   });
 
@@ -126,12 +149,14 @@
       reply = '';
       attachLogs = false;
       toast(msg('tickets.replySent'), 'success');
+      refreshPending = false;
       await load();
     } catch (err) {
       replyError = supportErrorText(err, msg('tickets.replyFailed'));
     } finally {
       sending = false;
       upload = null;
+      settle();
     }
   }
 
@@ -165,7 +190,7 @@
 
 {#if failure || retrying}
   <div class="banner">
-    <Notice tone="danger" bind:retrying retry={{ label: msg('common.retry'), run: load, focus: () => head?.querySelector('h1') }}>
+    <Notice tone="danger" bind:retrying retry={{ label: msg('common.retry'), run: retryThread, focus: () => head?.querySelector('h1') }}>
       {failure}
     </Notice>
   </div>

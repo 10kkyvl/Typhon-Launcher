@@ -135,11 +135,12 @@ describe('TicketList: Retry after the first page failed', () => {
 describe('TicketView: Retry while a reply arrives', () => {
   it('keeps the notice and its focused Retry, takes the retry\'s answer and moves focus to the request\'s title', async () => {
     const again = held<TicketThread>();
+    const answered = { ...THREAD, ticket: { ...THREAD.ticket, subject: 'Crash on start, answered' } };
     vi.mocked(getTicket)
       .mockResolvedValueOnce(THREAD)
       .mockRejectedValueOnce(new Error('offline'))
       .mockReturnValueOnce(again.promise)
-      .mockResolvedValue(THREAD);
+      .mockResolvedValue(answered);
     const { user } = renderDom(TicketView, { number: 7 });
     await screen.findByRole('heading', { level: 1, name: 'Crash on start' });
     unreadReplies.set(1);
@@ -152,7 +153,7 @@ describe('TicketView: Retry while a reply arrives', () => {
 
     expect(notice.isConnected).toBe(true);
     expect(document.activeElement).toBe(retry);
-    again.resolve({ ...THREAD, ticket: { ...THREAD.ticket, subject: 'Crash on start, answered' } });
+    again.resolve(answered);
     await vi.waitFor(() => expect(notice.isConnected).toBe(false));
     const title = screen.getByRole('heading', { level: 1 });
     expect(title.textContent).toBe('Crash on start, answered');
@@ -283,6 +284,59 @@ describe('TicketList: a reply while a Retry runs', () => {
     expect(document.activeElement).toBe(seen.retry);
     again.resolve({ tickets: [ticket(1, 'First request')], next: '' });
     await vi.waitFor(() => expect(seen.notice.isConnected).toBe(false));
+  });
+});
+
+describe('Support: a reply that came while a refresh was held back', () => {
+  it('reloads the request list\'s first page once the Retry answers, keeping the later page', async () => {
+    const second = held<TicketPage>();
+    let firstPages = 0;
+    let more = 0;
+    vi.mocked(listTickets).mockImplementation(async (cursor = '') => {
+      if (cursor === '') {
+        firstPages += 1;
+        return { tickets: [{ ...ticket(1, 'First request'), unread: firstPages > 1 }], next: 'c2' };
+      }
+      more += 1;
+      if (more === 1) throw new Error('offline');
+      return second.promise;
+    });
+    const { user } = renderDom(TicketList);
+    await user.click(await screen.findByRole('button', { name: msg('tickets.loadMore') }));
+    const seen = await failed(msg('tickets.loadFailed'));
+    await user.click(seen.retry);
+
+    unreadReplies.set(1);
+    await Promise.resolve();
+    expect(firstPages).toBe(1);
+    second.resolve({ tickets: [ticket(2, 'Second request')], next: '' });
+
+    await vi.waitFor(() => expect(firstPages).toBe(2));
+    await vi.waitFor(() => expect(within(row('First request')).getByRole('img', { name: msg('tickets.unreadMark') })).toBeTruthy());
+    expect(row('Second request')).toBeTruthy();
+  });
+
+  it('reloads a request once its Retry answers', async () => {
+    const again = held<TicketThread>();
+    const answered = { ...THREAD, messages: [{ id: 'r1', author: 'staff', body: 'We are on it.', createdAt: '2026-11-02T10:00:00Z', logBundleId: null }] } as unknown as TicketThread;
+    vi.mocked(getTicket)
+      .mockResolvedValueOnce(THREAD)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockReturnValueOnce(again.promise)
+      .mockResolvedValue(answered);
+    const { user } = renderDom(TicketView, { number: 7 });
+    await screen.findByRole('heading', { level: 1, name: 'Crash on start' });
+    unreadReplies.set(1);
+    const seen = await failed(msg('tickets.ticketLoadFailed'));
+    await user.click(seen.retry);
+
+    unreadReplies.set(2);
+    await Promise.resolve();
+    expect(getTicket).toHaveBeenCalledTimes(3);
+    again.resolve(THREAD);
+
+    await vi.waitFor(() => expect(getTicket).toHaveBeenCalledTimes(4));
+    expect(await screen.findByText('We are on it.')).toBeTruthy();
   });
 });
 
