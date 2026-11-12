@@ -1,12 +1,23 @@
 import { screen } from '@testing-library/svelte';
-import { describe, expect, it, vi } from 'vitest';
+import { get } from 'svelte/store';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
-import type { Update } from '../services/updates';
+import { getUpdateHistory, type Update } from '../services/updates';
+import { toasts } from '../stores/toasts';
 import { renderDom } from '../testing/dom';
 import UpdateCard from './UpdateCard.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
+vi.mock('../services/updates', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/updates')>()),
+  getUpdateHistory: vi.fn(async () => []),
+}));
+
+afterEach(() => {
+  toasts.set([]);
+  vi.mocked(getUpdateHistory).mockReset();
+});
 
 function update(patch: Partial<Update> = {}): Update {
   return {
@@ -51,5 +62,15 @@ describe('UpdateCard', () => {
     expect(screen.getByText(msg('ui.gameRunningBeforeUpdate')).closest('.notice')).toBeTruthy();
     expect(document.querySelector('.notice[data-tone="danger"]')).toBeTruthy();
     expect(document.querySelector('p.error')).toBeNull();
+  });
+
+  it('says the history could not be loaded when it fails, and opens no empty dialog', async () => {
+    vi.mocked(getUpdateHistory).mockRejectedValue(new Error('backend down'));
+    const { user } = renderDom(UpdateCard, { update: update(), running: false });
+
+    await user.click(screen.getByRole('button', { name: msg('ui.history') }));
+
+    await vi.waitFor(() => expect(get(toasts).map((item) => [item.message, item.kind])).toEqual([[msg('ui.updateHistoryFailed'), 'danger']]));
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 });

@@ -21,6 +21,7 @@
   } from '../stores/updates';
   import { bytesSize, progressPercent, relativeDate } from '../utils/format';
   import { updateReasonKey } from './updateReason';
+  import { toast } from '../stores/toasts';
   import { msg } from '../i18n';
 
   let { update, running }: { update: Update; running: boolean } = $props();
@@ -74,8 +75,12 @@
   const strategyLabel = $derived(strategyLabels(plan?.strategy ?? availability.strategy));
 
   async function openHistory() {
-    history = await getUpdateHistory(update.gameId);
-    historyOpen = true;
+    try {
+      history = await getUpdateHistory(update.gameId);
+      historyOpen = true;
+    } catch (err) {
+      toast(updateErrorText(err, msg('ui.updateHistoryFailed')), 'danger');
+    }
   }
 
   function confirm() {
