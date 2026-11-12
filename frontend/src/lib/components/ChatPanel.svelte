@@ -530,7 +530,7 @@
   .chat-root.sidebar-right { right: calc(2.4rem + var(--sidebar-now)); }
   .chat-root > * { pointer-events: auto; }
   /* The opener floats over the page: its shadow lifts it off whatever is under it. */
-  .chat-toggle { display: flex; border-radius: var(--radius-round); box-shadow: var(--shadow-pop); }
+  .chat-toggle { display: flex; border-radius: var(--radius-control); box-shadow: var(--shadow-pop); }
   .chat-panel { display: flex; flex-direction: column; width: 38rem; height: min(64rem, calc(100vh - var(--titlebar-h) - 8rem)); overflow: hidden; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-pop); }
   .chat-header { display: flex; align-items: center; gap: 0.9rem; min-height: 5.6rem; padding: 0 1.2rem; border-bottom: 1px solid var(--border); background: var(--surface-3); }
   .back { display: inline-flex; border: 0; background: transparent; color: var(--text-2); padding: 0.5rem; cursor: pointer; }

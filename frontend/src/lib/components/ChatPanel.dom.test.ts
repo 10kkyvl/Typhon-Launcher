@@ -18,7 +18,10 @@ import { react, unreact } from '../services/messaging';
 import * as chat from '../stores/messaging';
 import { user } from '../testing/dom';
 import { description, hintOnFocus } from '../testing/hints';
+import { ruleBody, styleOf } from '../testing/css';
 import ChatPanel from './ChatPanel.svelte';
+import chatSource from './ChatPanel.svelte?raw';
+import iconButtonSource from './IconButton.svelte?raw';
 
 const peer = { id: 'peer', username: 'friend', displayName: 'Friend', avatarUrl: '' };
 const REACTIONS = ['Fire', 'Salute', 'Heart', 'Applause', 'Skull', 'Party', 'Eyes', 'Laugh'];
@@ -235,5 +238,16 @@ describe('ChatPanel counts', () => {
     setup();
     const row = screen.getByRole('button', { name: /Friend .* 4 unread$/ });
     expect(badgeIn(row)).toBe('4');
+  });
+});
+
+describe('ChatPanel opener look', () => {
+  // The shadow lifts the button off the page: drawn on its wrapper, it must follow the button's own
+  // corners, which a theme sets, or a round shadow lies under a squarer button.
+  it('draws its shadow with the corners of the button it lifts', () => {
+    const wrapper = ruleBody(styleOf(chatSource, 'ChatPanel.svelte'), '.chat-toggle');
+    const button = ruleBody(styleOf(iconButtonSource, 'IconButton.svelte'), '.icon-btn');
+    expect(wrapper['box-shadow']).toBe('var(--shadow-pop)');
+    expect(wrapper['border-radius']).toBe(button['border-radius']);
   });
 });
