@@ -74,14 +74,9 @@
 
   let retrying = $state(false);
 
-  async function retry() {
-    if (retrying) return;
-    retrying = true;
-    try {
-      await loadFirst(canonicalGameId, sort, filter, true);
-    } finally {
-      retrying = false;
-    }
+  async function retry(): Promise<boolean> {
+    await loadFirst(canonicalGameId, sort, filter, true);
+    return !failed;
   }
 
   async function loadMore() {
@@ -143,13 +138,10 @@
     </div>
 
     <div class="results" bind:this={results} style:min-height={floor > 0 ? `${floor}px` : undefined}>
-    {#if failed && items.length === 0}
+    {#if (failed || retrying) && items.length === 0}
       <div class="state">
-        <Notice tone="danger">
+        <Notice tone="danger" bind:retrying retry={{ label: msg('common.retry'), run: retry, within: () => results }}>
           {msg('reviews.loadError')}
-          {#snippet action()}
-            <Button size="sm" busy={retrying} onclick={retry}>{msg('common.retry')}</Button>
-          {/snippet}
         </Notice>
       </div>
     {:else if loading && items.length === 0}

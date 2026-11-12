@@ -25,6 +25,23 @@ function deferred<T>() {
 
 const empty: Page = { summary: { total: 0, positive: 0 } as Page['summary'], reviews: [], next: '' };
 
+const review = {
+  id: 1,
+  author: { username: 'mira', displayName: 'Mira', avatarUrl: '' },
+  recommended: true,
+  body: 'Fine.',
+  playtimeSeconds: 0,
+  helpful: 0,
+  unhelpful: 0,
+  myVote: '',
+  mine: false,
+  createdAt: '2026-11-01T10:00:00Z',
+  updatedAt: '2026-11-01T10:00:00Z',
+} as unknown as Page['reviews'][number];
+
+// The words a notice says again after its retry fails (Notice's assistive-only copy).
+const saidAgain = (notice: Element) => notice.querySelector('[data-part="notice-again"]')?.textContent ?? '';
+
 beforeEach(() => {
   // jsdom has no ResizeObserver; the sort and filter strips measure their plate with one.
   vi.stubGlobal('ResizeObserver', class {
@@ -44,19 +61,6 @@ afterEach(() => {
 
 describe('GameReviews: loading more', () => {
   it('keeps the focus on its busy button while the next page loads', async () => {
-    const review = {
-      id: 1,
-      author: { username: 'mira', displayName: 'Mira', avatarUrl: '' },
-      recommended: true,
-      body: 'Fine.',
-      playtimeSeconds: 0,
-      helpful: 0,
-      unhelpful: 0,
-      myVote: '',
-      mine: false,
-      createdAt: '2026-11-01T10:00:00Z',
-      updatedAt: '2026-11-01T10:00:00Z',
-    } as unknown as Page['reviews'][number];
     const next = deferred<Page>();
     vi.mocked(list).mockResolvedValueOnce({ ...empty, reviews: [review], next: 'p2' }).mockReturnValueOnce(next.promise);
     const { user } = renderDom(GameReviews, { canonicalGameId: 'c1' });
@@ -74,7 +78,7 @@ describe('GameReviews: loading more', () => {
 });
 
 describe('GameReviews: retrying a failed load', () => {
-  it('keeps the notice and the focus on its busy Retry until the answer, then gives way to the list', async () => {
+  it('keeps the notice and the focus on its busy Retry until the answer, then focuses the first review', async () => {
     const again = deferred<Page>();
     vi.mocked(list).mockRejectedValueOnce(new Error('offline')).mockReturnValueOnce(again.promise);
     const { user } = renderDom(GameReviews, { canonicalGameId: 'c1' });
@@ -89,11 +93,12 @@ describe('GameReviews: retrying a failed load', () => {
     expect(document.activeElement).toBe(retry);
     expect(screen.queryByRole('status', { name: msg('reviews.loading') })).toBeNull();
 
-    again.resolve(empty);
+    again.resolve({ ...empty, reviews: [review] });
     await vi.waitFor(() => expect(notice.isConnected).toBe(false));
+    await vi.waitFor(() => expect(document.activeElement).toBe(document.querySelector('.review .who')));
   });
 
-  it('keeps the notice when the retry fails again', async () => {
+  it('keeps the notice when the retry fails again, and says it again', async () => {
     const again = deferred<Page>();
     vi.mocked(list).mockRejectedValueOnce(new Error('offline')).mockReturnValueOnce(again.promise);
     const { user } = renderDom(GameReviews, { canonicalGameId: 'c1' });
@@ -107,5 +112,6 @@ describe('GameReviews: retrying a failed load', () => {
     await vi.waitFor(() => expect(retry.hasAttribute('aria-busy')).toBe(false));
     expect(notice.isConnected).toBe(true);
     expect(document.activeElement).toBe(retry);
+    await vi.waitFor(() => expect(saidAgain(notice)).toBe(msg('reviews.loadError')));
   });
 });
