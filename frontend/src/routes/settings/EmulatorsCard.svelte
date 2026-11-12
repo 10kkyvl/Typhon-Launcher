@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { ExternalLink, FolderOpen, RefreshCw, Search } from '@lucide/svelte';
+  import { ExternalLink, FolderOpen, Search } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import Modal from '../../lib/components/Modal.svelte';
@@ -21,7 +21,6 @@
     type PlatformStatus,
   } from '../../lib/services/emulators';
   import { toast } from '../../lib/stores/toasts';
-  import { focusAfterRetry } from './retryFocus';
 
   const uid = $props.id();
 
@@ -58,17 +57,9 @@
     }
   }
 
-  // The error stays on screen with its Retry busy until the list answers.
-  async function retry() {
-    if (retrying) return;
-    const from = document.activeElement;
-    retrying = true;
-    try {
-      await fetchRows();
-    } finally {
-      retrying = false;
-    }
-    await focusAfterRetry(from, list);
+  async function retry(): Promise<boolean> {
+    await fetchRows();
+    return !loadFailed;
   }
 
   onMount(() => {
@@ -216,14 +207,8 @@
   {#if loading}
     <Spinner label={msg('emul.loading')} />
   {:else if loadFailed}
-    <Notice tone="danger" compact>
+    <Notice tone="danger" compact bind:retrying retry={{ label: msg('common.retry'), run: retry, within: () => list }}>
       {msg('emul.loadFailed')}
-      {#snippet action()}
-        <Button size="sm" busy={retrying} onclick={retry}>
-          {#if !retrying}<RefreshCw size="1.4rem" strokeWidth={1.8} />{/if}
-          {msg('common.retry')}
-        </Button>
-      {/snippet}
     </Notice>
   {:else}
     <div class="rows" bind:this={list}>

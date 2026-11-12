@@ -1,7 +1,26 @@
+<script lang="ts" module>
+  /**
+   * A retry for what the notice reports (a load that failed). `run` answers whether it worked; a
+   * rejection counts as a failure and is logged (the caller words its message, the notice cannot).
+   * On success focus that was on Retry goes to `focus()`, else to the first control of `within()`,
+   * else to the page's main heading; the getters are read after the caller has drawn what replaced
+   * the notice.
+   */
+  export interface NoticeRetry {
+    label: string;
+    run: () => Promise<boolean>;
+    /** The label while it runs ("Checking connection…"); the label itself when absent. */
+    pending?: string;
+    focus?: () => HTMLElement | null | undefined;
+    within?: () => HTMLElement | null | undefined;
+  }
+</script>
+
 <script lang="ts">
-  import { tick, type Snippet } from 'svelte';
+  import { onDestroy, tick, type Snippet } from 'svelte';
   import type { HTMLAttributes } from 'svelte/elements';
-  import { CircleAlert, CircleCheck, Info, TriangleAlert, X } from '@lucide/svelte';
+  import { CircleAlert, CircleCheck, Info, RefreshCw, TriangleAlert, X } from '@lucide/svelte';
+  import Button from './Button.svelte';
   import IconButton from './IconButton.svelte';
   import { msg } from '../i18n';
   import { focusableIn, focusQuietly } from '../layers/focus';
@@ -12,6 +31,15 @@
    * tint), so the message reads over the window backdrop in every theme; status-coloured text never
    * sits on the bare page. A failure is an alert, the rest a status: the title and the text are the
    * live region, the action and the close button stay outside it. Other attributes go to the plate.
+   *
+   * `retry` (NoticeRetry) adds a Retry after the actions, outside the live region. While it runs the
+   * Retry is busy, a second press does nothing, and `retrying` (bindable) is true: the caller keeps the
+   * notice on screen while it is, whatever its own state says meanwhile. On failure the notice stays
+   * and its words are said again, even the same words: they come into an assistive-only copy inside
+   * the live region (a region of its own on a notice that does not announce), which then stands for
+   * the visible words so the page reads them once. On success the caller takes the notice away as
+   * before, and focus that was on Retry moves on (see NoticeRetry); if the page has gone meanwhile,
+   * nothing is focused.
    */
   let {
     tone = 'info',
@@ -22,6 +50,8 @@
     icon,
     action,
     onclose,
+    retry,
+    retrying = $bindable(false),
     children,
     ...rest
   }: Omit<HTMLAttributes<HTMLDivElement>, 'class' | 'title' | 'children'> & {
@@ -41,10 +71,72 @@
     action?: Snippet;
     /** Shows a close button. The page removes the notice; focus moves on to the next control. */
     onclose?: () => void;
+    retry?: NoticeRetry;
+    /** True while `retry` runs: the caller keeps the notice on screen meanwhile. */
+    retrying?: boolean;
     children?: Snippet;
   } = $props();
 
   let plate = $state<HTMLDivElement>();
+  let message = $state<HTMLElement>();
+
+  // The words said again after a failed retry, and whether they now stand for the visible ones.
+  let again = $state('');
+  let echoed = $state(false);
+  let alive = true;
+  let frame = 0;
+  // onDestroy runs in a server render too, where no frame was ever asked for.
+  onDestroy(() => {
+    alive = false;
+    if (frame) cancelAnimationFrame(frame);
+  });
+
+  async function runRetry() {
+    if (!retry || retrying) return;
+    const { run, focus, within } = retry;
+    const button = document.activeElement instanceof HTMLElement && plate?.contains(document.activeElement) ? document.activeElement : null;
+    // The page the notice is on: the shell's <main> (a banner sits above it, beside the page), else
+    // the document.
+    const page = plate?.closest('main') ?? document.querySelector('main') ?? document.body;
+    retrying = true;
+    // Emptied now, filled after the answer: the words come in again, so they are said again.
+    again = '';
+    let ok = false;
+    try {
+      ok = await run();
+    } catch (err) {
+      console.error('notice retry', err);
+    }
+    // Told to the caller even when the notice went during the run: its own controls wait on it.
+    retrying = false;
+    await tick();
+    if (ok) return moveOn(button, page, focus, within);
+    if (!alive) return;
+    if (frame) cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      if (!alive) return;
+      const parts = message ? [...message.children].map((part) => part.textContent?.replace(/\s+/g, ' ').trim() ?? '') : [];
+      again = parts.filter(Boolean).join(' ');
+      echoed = true;
+    });
+  }
+
+  // Focus that was on Retry would fall to the page with the notice: it goes where the caller says,
+  // else to the page's heading, unless the user has gone elsewhere or left the page.
+  function moveOn(
+    from: HTMLElement | null,
+    page: Element | null,
+    focus: NoticeRetry['focus'],
+    within: NoticeRetry['within'],
+  ) {
+    if (!from || from.isConnected || !page?.isConnected) return;
+    const active = document.activeElement;
+    if (active && active !== document.body && active.isConnected) return;
+    const region = within?.();
+    const target = focus?.() ?? (region ? focusableIn(region)[0] : undefined) ?? page.querySelector<HTMLElement>('h1') ?? focusableIn(page)[0];
+    if (target?.isConnected) focusQuietly(target);
+  }
 
   // The live region is the message alone. Some screen readers do not announce a polite region inserted
   // together with its content, so its words are laid out from the first frame (the plate never changes
@@ -90,15 +182,28 @@
     {/if}
   </span>
   <div class="body" role={announce ? (tone === 'danger' ? 'alert' : 'status') : undefined}>
-    {#if title && level}
-      <svelte:element this={`h${level}`} tabindex={level === 1 ? -1 : undefined} class="title" class:unseen>{title}</svelte:element>
-    {:else if title}
-      <span class="title" class:unseen>{title}</span>
+    <div class="message" bind:this={message} aria-hidden={echoed ? 'true' : undefined}>
+      {#if title && level}
+        <svelte:element this={`h${level}`} tabindex={level === 1 ? -1 : undefined} class="title" class:unseen>{title}</svelte:element>
+      {:else if title}
+        <span class="title" class:unseen>{title}</span>
+      {/if}
+      <div class="text" class:unseen>{@render children?.()}</div>
+    </div>
+    {#if retry}
+      <span class="sr-only" data-part="notice-again" role={announce ? undefined : tone === 'danger' ? 'alert' : 'status'}>{again}</span>
     {/if}
-    <div class="text" class:unseen>{@render children?.()}</div>
   </div>
-  {#if action}
-    <div class="action">{@render action()}</div>
+  {#if action || retry}
+    <div class="action">
+      {@render action?.()}
+      {#if retry}
+        <Button size="sm" busy={retrying} onclick={runRetry}>
+          {#if !retrying}<RefreshCw size="1.4rem" strokeWidth={1.8} />{/if}
+          {retrying && retry.pending ? retry.pending : retry.label}
+        </Button>
+      {/if}
+    </div>
   {/if}
   {#if onclose}
     <IconButton size="sm" label={msg('common.close')} onclick={close}>
@@ -143,6 +248,9 @@
   .body {
     flex: 1;
     min-width: 0;
+  }
+
+  .message {
     display: flex;
     flex-direction: column;
     gap: var(--space-1);

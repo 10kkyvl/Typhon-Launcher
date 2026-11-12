@@ -1,23 +1,19 @@
 <script lang="ts">
-  import { Activity, RefreshCw, WifiOff } from '@lucide/svelte';
+  import { get } from 'svelte/store';
+  import { Activity, WifiOff } from '@lucide/svelte';
   import Button from './Button.svelte';
   import Notice from './Notice.svelte';
-  import { retryBootstrap } from '../stores/user';
+  import { isOffline, retryBootstrap } from '../stores/user';
   import { openStatusPage } from '../services/account';
   import { toast } from '../stores/toasts';
   import { msg } from '../i18n';
 
-  let retrying = $state(false);
   let dismissed = $state(false);
 
-  async function retry() {
-    if (retrying) return;
-    retrying = true;
-    try {
-      await retryBootstrap();
-    } finally {
-      retrying = false;
-    }
+  // The shell takes the banner away once the connection is back.
+  async function retry(): Promise<boolean> {
+    await retryBootstrap();
+    return !get(isOffline);
   }
 
   async function openStatus() {
@@ -32,7 +28,11 @@
 
 {#if !dismissed}
   <div class="offline-banner">
-    <Notice tone="warning" onclose={() => (dismissed = true)}>
+    <Notice
+      tone="warning"
+      onclose={() => (dismissed = true)}
+      retry={{ label: msg('common.retry'), pending: msg('ui.checkingConnection'), run: retry }}
+    >
       {#snippet icon()}
         <WifiOff size="1.6rem" strokeWidth={1.8} />
       {/snippet}
@@ -41,10 +41,6 @@
         <Button size="sm" variant="ghost" onclick={openStatus}>
           <Activity size="1.4rem" strokeWidth={1.8} />
           {msg('ui.offlineBannerStatus')}
-        </Button>
-        <Button size="sm" busy={retrying} onclick={retry}>
-          {#if !retrying}<RefreshCw size="1.4rem" strokeWidth={1.8} />{/if}
-          {retrying ? msg('ui.checkingConnection') : msg('common.retry')}
         </Button>
       {/snippet}
     </Notice>

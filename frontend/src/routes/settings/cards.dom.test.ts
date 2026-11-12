@@ -109,8 +109,10 @@ describe('EmulatorsCard', () => {
     list.resolve([PLATFORM]);
     await screen.findByText(`${PLATFORM.name} · ${PLATFORM.emulator}`);
     expect(screen.queryByRole('alert')).toBeNull();
-    expect(document.activeElement).not.toBe(document.body);
-    expect(document.activeElement?.isConnected).toBe(true);
+    // Focus moves once the rows that replaced the notice are drawn, to their first control.
+    await waitFor(() => expect(document.activeElement).toBe(document.querySelector('.rows')?.querySelector('button')));
+    // The notice went before its retry answered: the card still learns the retry is over.
+    expect((screen.getByRole('button', { name: msg('emul.detect') }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('shows a new error in place when the retry fails again', async () => {
@@ -123,6 +125,9 @@ describe('EmulatorsCard', () => {
     await waitFor(() => expect(retry.hasAttribute('aria-busy')).toBe(false));
     expect(retry.isConnected).toBe(true);
     expect(document.activeElement).toBe(retry);
+    // Said again though the words are the same: they come again into the alert.
+    const again = screen.getByRole('alert').querySelector('[data-part="notice-again"]');
+    await waitFor(() => expect(again?.textContent).toBe(msg('emul.loadFailed')));
   });
 });
 

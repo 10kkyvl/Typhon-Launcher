@@ -2,6 +2,7 @@
   import { Clipboard } from '@wailsio/runtime';
   import { Copy, Link2, Unlink } from '@lucide/svelte';
   import { onDestroy, onMount } from 'svelte';
+  import { get } from 'svelte/store';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
@@ -19,7 +20,6 @@
   import { settings, updateSettingsReporting } from '../../lib/stores/settings';
   import { toast } from '../../lib/stores/toasts';
   import { handleSessionLost } from '../../lib/stores/user';
-  import { focusAfterRetry } from './retryFocus';
 
   let { api = discordApi }: { api?: DiscordApi } = $props();
 
@@ -81,19 +81,12 @@
     void updateSettingsReporting(patch, () => toast(msg('discord.settingFailed'), 'danger'));
   }
 
-  // The error stays on screen with its Retry busy until the link answers.
+  // While the link is asked again the store says it is loading: the error stays on screen until it answers.
   let retrying = $state(false);
   let body = $state<HTMLElement>();
-  async function retry() {
-    if (retrying) return;
-    const from = document.activeElement;
-    retrying = true;
-    try {
-      await flow.load();
-    } finally {
-      retrying = false;
-    }
-    await focusAfterRetry(from, body);
+  async function retry(): Promise<boolean> {
+    await flow.load();
+    return get(view).phase !== 'error';
   }
 
   const steps = $derived([msg('discord.step1'), msg('discord.step2'), msg('discord.step3'), msg('discord.step4')]);
@@ -106,11 +99,8 @@
     {:else if $view.phase === 'unavailable'}
       <p class="sub">{msg('discord.unavailable')}</p>
     {:else if $view.phase === 'error' || retrying}
-      <Notice tone="danger" compact>
+      <Notice tone="danger" compact bind:retrying retry={{ label: msg('discord.retry'), run: retry, within: () => body }}>
         {msg('discord.loadFailed')}
-        {#snippet action()}
-          <Button size="sm" busy={retrying} onclick={retry}>{msg('discord.retry')}</Button>
-        {/snippet}
       </Notice>
     {:else if $view.phase === 'linked'}
       <div class="row">

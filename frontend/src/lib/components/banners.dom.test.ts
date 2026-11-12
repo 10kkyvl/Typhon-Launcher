@@ -1,16 +1,23 @@
 import { render, screen, waitFor, within } from '@testing-library/svelte';
+import type { Writable } from 'svelte/store';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { locale, msg } from '../i18n';
-import { retryBootstrap } from '../stores/user';
+import { isOffline, retryBootstrap } from '../stores/user';
 import { user } from '../testing/dom';
 import OfflineBanner from './OfflineBanner.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
-vi.mock('../stores/user', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../stores/user')>()),
-  retryBootstrap: vi.fn(async () => {}),
-}));
+vi.mock('../stores/user', async (importOriginal) => {
+  const { writable } = await import('svelte/store');
+  return {
+    ...(await importOriginal<typeof import('../stores/user')>()),
+    isOffline: writable(false),
+    retryBootstrap: vi.fn(async () => {}),
+  };
+});
+
+const offline = isOffline as unknown as Writable<boolean>;
 
 describe('the lost connection banner', () => {
   beforeEach(() => {
@@ -48,5 +55,19 @@ describe('the lost connection banner', () => {
     finish();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Retry' })).not.toBeNull());
     expect(region.textContent).toBe(message);
+  });
+
+  // Still offline after the check: the banner says so again, though its words are the same.
+  it('says it is still offline when the check finds no connection', async () => {
+    vi.mocked(retryBootstrap).mockImplementation(async () => offline.set(true));
+    offline.set(true);
+    render(OfflineBanner);
+    const region = screen.getByRole('status');
+
+    await user().click(screen.getByRole('button', { name: 'Retry' }));
+
+    const again = region.querySelector('[data-part="notice-again"]');
+    await waitFor(() => expect(again?.textContent).toBe(msg('ui.offlineBannerText')));
+    offline.set(false);
   });
 });
