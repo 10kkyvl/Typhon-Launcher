@@ -11,6 +11,7 @@
   import { compatBadge } from '../game/compat';
   import type { GameSource } from '../library/source';
   import SourceBadge from './SourceBadge.svelte';
+  import StatusBadge from './StatusBadge.svelte';
   import ConsoleTag from './ConsoleTag.svelte';
   import { ambientHover } from '../utils/ambientHover';
 
@@ -93,7 +94,7 @@
       <span class="source"><SourceBadge {source} /></span>
     {/if}
     {#if compatLabel}
-      <span class="compat" class:works={compatWorks} title={compatLabel}>{compatLabel}</span>
+      <span class="compat"><StatusBadge kind={compatWorks ? 'success' : 'danger'} label={compatLabel} dot={false} /></span>
     {/if}
     {#if installed && onplay}
       <button
@@ -158,16 +159,9 @@
     position: absolute;
     left: 0.6rem;
     bottom: 0.6rem;
+    display: flex;
     max-width: calc(100% - 1.2rem);
-    padding: 0.25rem 0.55rem;
-    border-radius: var(--radius-sm);
-    background: color-mix(in srgb, var(--danger) 88%, black);
-    color: white;
-    font-size: 1.1rem;
-    line-height: 1.2;
-    white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
     pointer-events: none;
   }
 
@@ -179,10 +173,6 @@
     max-width: calc(100% - 1.2rem);
     overflow: hidden;
     pointer-events: none;
-  }
-
-  .compat.works {
-    background: color-mix(in srgb, var(--success) 88%, black);
   }
 
   .cover-wrap {

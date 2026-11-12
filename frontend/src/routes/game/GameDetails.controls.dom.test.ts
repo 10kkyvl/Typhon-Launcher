@@ -189,6 +189,18 @@ describe('GameDetails: retrying what failed to load', () => {
   });
 });
 
+describe('GameDetails: genres and themes', () => {
+  it('are neutral status badges', async () => {
+    vi.mocked(getMetadataView).mockResolvedValue(view({ game: { id: 'c1', title: 'Hades', genres: ['Roguelike'] } as MetadataView['game'] }));
+    renderDom(GameDetails, { id: 'g1' });
+
+    const tag = await screen.findByText('Roguelike', { selector: '[data-part="game-section"] *' });
+
+    expect(tag.classList.contains('badge')).toBe(true);
+    expect(tag.classList.contains('neutral')).toBe(true);
+  });
+});
+
 describe('GameDetails: an uninstalled game', () => {
   it('states that it was uninstalled in an info notice read with the page', async () => {
     libraryGames.set([{ ...hades, uninstalled: true }]);

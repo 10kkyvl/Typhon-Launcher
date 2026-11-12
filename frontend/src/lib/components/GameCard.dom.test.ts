@@ -2,6 +2,7 @@ import { screen, within } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
+import type { CompatInfo } from '../services/sources';
 import { resetHistory, route } from '../stores/router';
 import { renderDom } from '../testing/dom';
 import { description } from '../testing/hints';
@@ -28,6 +29,15 @@ describe('GameCard: a card that opens its game', () => {
     await user.keyboard('{Enter}');
 
     expect(get(route)).toMatchObject({ name: 'game', params: { id: 'g1' } });
+  });
+
+  it('shows how the game starts for others in a status badge of its tone', () => {
+    renderDom(GameCard, { id: 'g1', title: 'Hades', compat: { works: 1, total: 4 } satisfies CompatInfo });
+    const label = msg('games.compatBadgeBroken', { works: '1', total: '4' });
+    const badge = screen.getByText(label);
+    expect(badge.classList.contains('badge')).toBe(true);
+    expect(badge.classList.contains('danger')).toBe(true);
+    expect(badge.closest('[title]')).toBeNull();
   });
 
   it('says which game its play button starts', () => {

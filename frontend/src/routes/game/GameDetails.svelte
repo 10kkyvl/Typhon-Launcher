@@ -1135,7 +1135,7 @@
       {#if tags.length > 0}
         <div class="tags">
           {#each tags as tag (tag)}
-            <span class="tag">{tag}</span>
+            <StatusBadge kind="neutral" label={tag} dot={false} />
           {/each}
         </div>
       {/if}
@@ -2105,18 +2105,6 @@
     flex-wrap: wrap;
     gap: 0.6rem;
     margin-top: var(--space-5);
-  }
-
-  .tag {
-    display: inline-flex;
-    align-items: center;
-    height: 2.4rem;
-    padding: 0 0.9rem;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border);
-    color: var(--text-2);
-    font-size: var(--font-xs);
-    white-space: nowrap;
   }
 
   .stores {
