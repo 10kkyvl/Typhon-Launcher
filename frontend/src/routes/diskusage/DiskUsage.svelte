@@ -11,6 +11,7 @@
   import Notice from '../../lib/components/Notice.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import RemoveGameModal from '../../lib/components/RemoveGameModal.svelte';
+  import Spinner from '../../lib/components/Spinner.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import type { ConfirmPrompt } from '../../lib/confirm/prompts';
   import {
@@ -220,7 +221,7 @@
 
   {#if !report}
     {#if scanning}
-      <p class="muted">{msg('diskusage.scanning')}</p>
+      <Spinner label={msg('diskusage.scanning')} />
     {/if}
   {:else}
     <Card>

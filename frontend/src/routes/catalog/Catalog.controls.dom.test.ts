@@ -1,5 +1,6 @@
 import { screen } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { msg } from '../../lib/i18n';
 import { queryCatalogGames, type CatalogGame } from '../../lib/services/sources';
 import { catalogView } from '../../lib/stores/ui';
 import { renderDom } from '../../lib/testing/dom';
@@ -42,6 +43,15 @@ afterEach(() => {
   catalogView.set('grid');
   document.body.replaceChildren();
   vi.restoreAllMocks();
+});
+
+describe('Catalog: loading', () => {
+  it('the first page shows the base spinner named by what is loading, over the skeleton', async () => {
+    vi.mocked(queryCatalogGames).mockReturnValue(new Promise(() => {}));
+    renderDom(Catalog);
+
+    expect((await screen.findByText(msg('games.catalogLoadingLabel'))).closest('.spinner[role="status"]')).not.toBeNull();
+  });
 });
 
 describe('Catalog: a row of the list view', () => {

@@ -28,6 +28,7 @@
   import SearchInput from '../../lib/components/SearchInput.svelte';
   import Select from '../../lib/components/Select.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
+  import Spinner from '../../lib/components/Spinner.svelte';
   import { playGame, setFavorite, stopGame } from '../../lib/services/library';
   import { canPlay } from '../../lib/library/launch';
   import {
@@ -832,7 +833,7 @@
 
   {#if displayedItems.length === 0}
     {#if loading}
-      <p class="muted" role="status">{msg('games.catalogLoadingLabel')}</p>
+      <Spinner label={msg('games.catalogLoadingLabel')} />
       <div class="catalog-skeleton" class:grid={$catalogView === 'grid'} class:loading-list={$catalogView !== 'grid'} aria-hidden="true">
         {#each Array(12) as _}
           <div class="loading-item">
@@ -915,7 +916,7 @@
     <div class="more">
       {#if showMoreButton}<Button onclick={() => { autoPages = 0; void fetchPage(page + 1); }} disabled={loading}>
         {appending ? msg('games.catalogLoadingMore') : msg('games.catalogShowMore')}
-      </Button>{:else if hasMore && appending}<span class="muted" role="status">{msg('games.catalogLoadingMore')}</span>{/if}
+      </Button>{:else if hasMore && appending}<Spinner label={msg('games.catalogLoadingMore')} />{/if}
       {#if failed}<Notice tone="danger" compact>{msg('games.catalogMoreFailed')}</Notice>{/if}
       <span class="muted">{msg('games.catalogShownOf', { shown: items.length, total })}</span>
     </div>

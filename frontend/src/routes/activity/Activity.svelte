@@ -11,6 +11,7 @@
   import Notice from '../../lib/components/Notice.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import SocialConsentScreen from '../../lib/components/SocialConsentScreen.svelte';
+  import Spinner from '../../lib/components/Spinner.svelte';
   import StatTile from '../../lib/components/StatTile.svelte';
   import { AccountError } from '../../lib/services/account';
   import { accountErrorText } from '../../lib/services/accountMessages';
@@ -146,7 +147,7 @@
       <div class="center">
         {#if $feedEvents.length === 0}
           {#if $feedLoading}
-            <p class="muted">{msg('transfers.activityLoading')}</p>
+            <Spinner label={msg('transfers.activityLoading')} />
           {:else}
             <EmptyState level={2}
               title={msg('transfers.activityFeedEmptyTitle')}
@@ -290,11 +291,6 @@
     display: flex;
     flex-direction: column;
     min-width: 0;
-  }
-
-  .muted {
-    font-size: var(--font-sm);
-    color: var(--text-3);
   }
 
   .more {

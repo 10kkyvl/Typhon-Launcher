@@ -8,6 +8,7 @@
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
+  import Spinner from '../../lib/components/Spinner.svelte';
   import AboutBlock from '../../lib/components/profile/AboutBlock.svelte';
   import BlockGrid from '../../lib/components/profile/BlockGrid.svelte';
   import { AccountError } from '../../lib/services/account';
@@ -251,7 +252,7 @@
       {/snippet}
     </EmptyState>
   {:else if loading}
-    <p class="muted">{msg('social.loadingEllipsis')}</p>
+    <Spinner label={msg('social.loadingEllipsis')} />
   {:else if missing}
     <EmptyState level={2} title={msg('social.userNotFoundTitle')} description={msg('social.userNotFoundDesc')}>
       {#snippet icon()}
@@ -304,11 +305,6 @@
 </Page>
 
 <style>
-  .muted {
-    font-size: var(--font-sm);
-    color: var(--text-3);
-  }
-
   .notice {
     display: flex;
     align-items: center;

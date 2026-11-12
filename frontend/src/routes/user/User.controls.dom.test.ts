@@ -2,12 +2,14 @@ import { screen } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
-import { userCommon, type GameCard, type PlayedGame, type UserCard } from '../../lib/services/social';
+import { profile as fetchProfile, userCommon, type GameCard, type PlayedGame, type UserCard } from '../../lib/services/social';
 import { resetHistory, route } from '../../lib/stores/router';
+import { authState } from '../../lib/stores/user';
 import { renderDom } from '../../lib/testing/dom';
 import GameRow from './GameRow.svelte';
 import UserCommonModal from './UserCommonModal.svelte';
 import UserMutual from './UserMutual.svelte';
+import UserProfile from './UserProfile.svelte';
 import UserRecent from './UserRecent.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
@@ -15,6 +17,7 @@ vi.mock('../../lib/services/backend', () => ({ inWails: false }));
 vi.mock('../../lib/services/social', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/social')>()),
   userCommon: vi.fn(),
+  profile: vi.fn(),
 }));
 
 // The accessible name of the one button whose name holds `title`.
@@ -68,6 +71,21 @@ describe("a user's page: mutual friends", () => {
     await user.keyboard('{Enter}');
 
     expect(get(route).name).toBe('friends');
+  });
+});
+
+describe("a user's page: loading", () => {
+  afterEach(() => {
+    vi.mocked(fetchProfile).mockReset();
+    authState.set('bootstrapping');
+  });
+
+  it('shows the base spinner named by what is loading', async () => {
+    authState.set('authenticated');
+    vi.mocked(fetchProfile).mockReturnValue(new Promise(() => {}));
+    renderDom(UserProfile, { username: 'ann' });
+
+    expect((await screen.findByText(msg('social.loadingEllipsis'))).closest('.spinner[role="status"]')).not.toBeNull();
   });
 });
 

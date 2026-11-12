@@ -19,7 +19,9 @@ vi.mock('../../lib/services/playlog', async (importOriginal) => ({
   })),
 }));
 
+import { msg } from '../../lib/i18n';
 import type { LibraryGame } from '../../lib/services/library';
+import { getStats } from '../../lib/services/playlog';
 import { libraryGames } from '../../lib/stores/library';
 import { renderDom } from '../../lib/testing/dom';
 import Stats from './Stats.svelte';
@@ -53,5 +55,14 @@ describe('Stats: most played', () => {
     const { findByRole } = renderDom(Stats);
 
     expect(await findByRole('button', { name: (name) => name.startsWith('Hades ') })).toBeTruthy();
+  });
+});
+
+describe('Stats: the first load', () => {
+  it('shows the base spinner named by what is loading', async () => {
+    vi.mocked(getStats).mockReturnValueOnce(new Promise(() => {}));
+    const { findByText } = renderDom(Stats);
+
+    expect((await findByText(msg('stats.loading'))).closest('.spinner[role="status"]')).not.toBeNull();
   });
 });

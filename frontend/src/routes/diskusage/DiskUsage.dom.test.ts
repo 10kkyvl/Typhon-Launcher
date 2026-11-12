@@ -33,6 +33,19 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
+describe('DiskUsage: the first scan', () => {
+  it('shows the base spinner named by what is running while there is no report yet', async () => {
+    vi.mocked(cachedUsage).mockResolvedValue(null);
+    vi.mocked(scanUsage).mockReturnValue(new Promise(() => {}));
+    renderDom(DiskUsage);
+
+    await vi.waitFor(() => {
+      const shown = screen.getAllByText(msg('diskusage.scanning'));
+      expect(shown.some((el) => el.closest('.spinner[role="status"]'))).toBe(true);
+    });
+  });
+});
+
 describe('DiskUsage: a section with nothing in it', () => {
   it('says so with the base empty state, as a line under its heading', async () => {
     vi.mocked(cachedUsage).mockResolvedValue(report);

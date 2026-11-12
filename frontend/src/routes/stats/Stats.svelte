@@ -8,6 +8,7 @@
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import Notice from '../../lib/components/Notice.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
+  import Spinner from '../../lib/components/Spinner.svelte';
   import StatTile from '../../lib/components/StatTile.svelte';
   import { coverOf } from '../../lib/profile/view';
   import { getStats, onPlaylogRecorded, STATS_PERIODS, type Stats, type StatsPeriod } from '../../lib/services/playlog';
@@ -118,7 +119,7 @@
       {/snippet}
     </EmptyState>
   {:else if !data && loading}
-    <p class="muted" role="status">{msg('stats.loading')}</p>
+    <Spinner label={msg('stats.loading')} />
   {:else if summary && data}
     {#if failed}
       <div class="load-error"><Notice tone="danger">{msg('stats.loadError')}</Notice></div>
@@ -361,11 +362,6 @@
     display: block;
     height: 100%;
     background: var(--accent-bright);
-  }
-
-  .muted {
-    font-size: var(--font-sm);
-    color: var(--text-3);
   }
 
   .load-error {
