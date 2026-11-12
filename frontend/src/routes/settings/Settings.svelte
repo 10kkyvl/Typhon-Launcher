@@ -741,7 +741,15 @@
             <div class="row">
               <div class="row-text">
                 <span class="row-label">{msg('settings.overlayStatusLabel')}</span>
-                <span class="row-sub" class:row-error={overlayStatusFailed} role="status">{overlayStatusText}</span>
+                <!-- The overlay's state, refreshed by events: a change is said politely; a failure sits on a
+                     danger plate, which says nothing of its own on opening the page. -->
+                <div role="status">
+                  {#if overlayStatusFailed}
+                    <div class="message"><Notice tone="danger" compact announce={false}>{overlayStatusText}</Notice></div>
+                  {:else}
+                    <span class="row-sub">{overlayStatusText}</span>
+                  {/if}
+                </div>
                 {#if overlayError}<div class="message"><Notice tone="danger" compact>{overlayError}</Notice></div>{/if}
               </div>
             </div>
@@ -1768,10 +1776,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-1);
-  }
-
-  .row-error {
-    color: var(--danger);
   }
 
   .schedule-body {

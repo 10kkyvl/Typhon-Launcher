@@ -34,6 +34,7 @@ vi.mock('../../lib/stores/cloudsaves', async (importOriginal) => ({
 import { msg } from '../../lib/i18n';
 import { listLegalDocuments } from '../../lib/services/legal';
 import { sendLogs } from '../../lib/services/logsUpload';
+import { overlayStatus } from '../../lib/services/overlay';
 import { user } from '../../lib/testing/dom';
 import Settings from './Settings.svelte';
 
@@ -59,6 +60,29 @@ afterEach(() => {
   vi.mocked(listLegalDocuments).mockReset();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+});
+
+describe('Settings: the overlay status in the app', () => {
+  // A failed overlay is a state of the row, refreshed by events: it sits on a danger plate inside the
+  // row's status region, which says a change politely and says nothing on opening the page.
+  it('shows a failed overlay on a danger notice inside the status line, not as red text', async () => {
+    vi.mocked(overlayStatus).mockResolvedValueOnce({ supported: true, enabled: true, hotkey: 'Alt+`', error: 'hook failed' });
+    render(Settings, { target: app });
+    const text = await screen.findByText('hook failed');
+    expect(text.closest('[data-tone]')?.getAttribute('data-tone')).toBe('danger');
+    const region = text.closest('[role="status"]') as HTMLElement;
+    expect(region).not.toBeNull();
+    expect(region.closest('[data-tone]')).toBeNull();
+    expect(text.closest('[role="alert"]')).toBeNull();
+  });
+
+  it('keeps a working overlay as a plain status line', async () => {
+    vi.mocked(overlayStatus).mockResolvedValueOnce({ supported: true, enabled: true, hotkey: 'Alt+`', error: '' });
+    render(Settings, { target: app });
+    const text = await screen.findByText(msg('settings.overlayStatusOn', { hotkey: 'Alt+`' }));
+    expect(text.closest('[data-tone]')).toBeNull();
+    expect(text.closest('[role="status"]')).not.toBeNull();
+  });
 });
 
 describe('Settings: the about tab in the app', () => {
