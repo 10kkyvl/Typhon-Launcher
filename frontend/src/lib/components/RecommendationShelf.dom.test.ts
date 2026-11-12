@@ -10,7 +10,7 @@ vi.mock('../services/backend', () => ({ inWails: false }));
 describe('RecommendationShelf while it looks for games', () => {
   it('shows the base spinner named by the search, and keeps its focused refresh busy', async () => {
     const onrefresh = vi.fn();
-    const { user, rerender } = renderDom(RecommendationShelf, { title: 'Picks', items: [], emptyText: 'None', ondismiss: () => {}, onrefresh });
+    const { user, rerender } = renderDom(RecommendationShelf, { title: 'Picks', items: [], emptyText: 'None', ondismiss: () => {}, onrefresh, loading: false });
     const refresh = screen.getByRole('button', { name: msg('games.recommendationRefresh') });
     await user.click(refresh);
     expect(onrefresh).toHaveBeenCalledOnce();
