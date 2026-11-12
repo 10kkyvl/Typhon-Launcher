@@ -1,6 +1,6 @@
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { modalOpen, openLayer } from './index';
+import { modalOpen, openLayer, topModal } from './index';
 
 let app: HTMLDivElement;
 
@@ -39,5 +39,36 @@ describe('modalOpen', () => {
 
     expect(get(modalOpen)).toBe(false);
     menu();
+  });
+});
+
+describe('topModal', () => {
+  it('is the dialog on top: the second while it is open, the first again after, none at the end', () => {
+    const [one, two] = [box(), box()];
+    expect(get(topModal)).toBeNull();
+
+    const first = openLayer(one, { dismiss: () => {} });
+    expect(get(topModal)).toBe(one);
+    const second = openLayer(two, { dismiss: () => {} });
+    expect(get(topModal)).toBe(two);
+
+    second();
+    expect(get(topModal)).toBe(one);
+    first();
+    expect(get(topModal)).toBeNull();
+  });
+
+  it('is told once per change: a menu or a hint opened over the dialog is not news', () => {
+    const seen: (HTMLElement | null)[] = [];
+    const stop = topModal.subscribe((element) => seen.push(element));
+    const dialog = box();
+
+    const close = openLayer(dialog, { dismiss: () => {} });
+    const menu = openLayer(box(), { modal: false, dismiss: () => {} });
+    menu();
+    close();
+    stop();
+
+    expect(seen).toEqual([null, dialog, null]);
   });
 });

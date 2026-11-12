@@ -34,6 +34,8 @@ const stack = new LayerStack<HTMLElement, Element>({
 });
 const inerted = new Set<HTMLElement>();
 const modal = writable(false);
+const dialogOnTop = writable<HTMLElement | null>(null);
+let onTop: HTMLElement | null = null;
 let appObserver: MutationObserver | null = null;
 let listening = false;
 // Presses that closed a layer: the scrim under it must not take the same press as its own.
@@ -127,10 +129,18 @@ function sync(): void {
   watchApp(want.app);
   listen(stack.size > 0);
   modal.set(want.app);
+  // A store of elements tells its subscribers on every set: say it only when the dialog on top changed.
+  const top = stack.topModal();
+  if (top === onTop) return;
+  onTop = top;
+  dialogOnTop.set(top);
 }
 
 /** True while a dialog is open, for what lives outside the layers and must know (the toast stack). */
 export const modalOpen: Readable<boolean> = { subscribe: modal.subscribe };
+
+/** The root of the dialog on top, or null: for what must look at that dialog whenever it changes. */
+export const topModal: Readable<HTMLElement | null> = { subscribe: dialogOnTop.subscribe };
 
 function watchApp(on: boolean): void {
   if (!on) {
