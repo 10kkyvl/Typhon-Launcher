@@ -97,6 +97,28 @@ describe('ReleaseMatchModal: the candidates', () => {
   });
 });
 
+describe('ReleaseMatchModal: opened for another release before the first answer', () => {
+  it('shows and saves the candidates of the release it is open for, not a late answer for the one before', async () => {
+    const first = deferred<MatchCandidate[]>();
+    const other = { ...release, release: { ...release.release, id: 'r2', rawTitle: 'Celeste v2' } } as ReleaseView;
+    vi.mocked(getMatchCandidates).mockImplementation((id: string) => (id === 'r1' ? first.promise : Promise.resolve([candidate('celeste', 'Celeste')])));
+    vi.mocked(confirmMatch).mockResolvedValue(undefined);
+    const { rerender } = render(ReleaseMatchModal, { target: app, props: { open: true, release } });
+    await rerender({ open: true, release: other });
+    const dialog = screen.getByRole('dialog', { name: msg('modals.releaseMatchTitle') });
+    await within(dialog).findByRole('radio', { name: /Celeste/ });
+
+    first.resolve([candidate('hades', 'Hades')]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(within(dialog).queryByRole('radio', { name: /Hades/ })).toBeNull();
+    const keys = user();
+    await keys.click(within(dialog).getByRole('radio', { name: /Celeste/ }));
+    await keys.click(within(dialog).getByRole('button', { name: msg('modals.releaseMatchConfirm') }));
+    expect(vi.mocked(confirmMatch)).toHaveBeenCalledWith('r2', 'celeste');
+  });
+});
+
 describe('ReleaseMatchModal: the manual search', () => {
   it('is a search field named by its heading whose failure stays, its Retry busy and focused, until the answer', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });

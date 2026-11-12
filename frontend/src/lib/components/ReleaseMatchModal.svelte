@@ -50,6 +50,7 @@
   // The footer action running: its button stays focused and busy, the other waits.
   let submitting = $state<'' | 'confirm' | 'ignore'>('');
   let searchToken = 0;
+  let candidatesToken = 0;
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
   $effect(() => {
@@ -58,6 +59,8 @@
     untrack(() => {
       clearTimeout(searchTimer);
       searchToken += 1;
+      candidatesToken += 1;
+      loadingCandidates = false;
       searching = false;
       searchError = '';
       selectedGameId = null;
@@ -68,14 +71,18 @@
     });
   });
 
+  // Only the answer for the release the dialog is open for lands: a late one for the release before
+  // would offer, and save, another release's games.
   async function loadCandidates(releaseId: string) {
+    const token = ++candidatesToken;
     loadingCandidates = true;
     try {
-      candidates = await getMatchCandidates(releaseId);
+      const found = await getMatchCandidates(releaseId);
+      if (token === candidatesToken) candidates = found;
     } catch (err) {
-      toast(errorMessage(err), 'danger');
+      if (token === candidatesToken) toast(errorMessage(err), 'danger');
     } finally {
-      loadingCandidates = false;
+      if (token === candidatesToken) loadingCandidates = false;
     }
   }
 
