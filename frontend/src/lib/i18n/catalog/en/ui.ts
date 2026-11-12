@@ -152,6 +152,8 @@ export const ui: Record<UiKey, Message> = {
 
   'ui.desktopOnly': 'Available only in the desktop build',
   'ui.forward': 'Forward',
+  'ui.backNowhere': 'Nothing to go back to: this is the first page opened',
+  'ui.forwardNowhere': 'Nothing to go forward to: this is the last page opened',
   'ui.notifications': 'Notifications',
   'ui.notificationsUnread': { one: 'Notifications, {count} unread', other: 'Notifications, {count} unread' },
   'ui.friendsIncoming': { one: 'Friends, {count} request', other: 'Friends, {count} requests' },

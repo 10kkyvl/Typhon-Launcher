@@ -150,6 +150,8 @@ export const ui = {
 
   'ui.desktopOnly': 'Доступно только в desktop-сборке',
   'ui.forward': 'Вперёд',
+  'ui.backNowhere': 'Возвращаться некуда: это первая открытая страница',
+  'ui.forwardNowhere': 'Вперёд некуда: это последняя открытая страница',
   'ui.notifications': 'Уведомления',
   'ui.notificationsUnread': { one: 'Уведомления, {count} новое', few: 'Уведомления, {count} новых', many: 'Уведомления, {count} новых' },
   'ui.friendsIncoming': { one: 'Друзья, {count} заявка', few: 'Друзья, {count} заявки', many: 'Друзья, {count} заявок' },
