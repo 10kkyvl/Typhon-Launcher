@@ -2,6 +2,7 @@
   import { ExternalLink, FolderOpen } from '@lucide/svelte';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
+  import Notice from './Notice.svelte';
   import { hasMessage, msg } from '../i18n';
   import { libraryErrorText } from '../library/errors';
   import {
@@ -83,9 +84,9 @@
         ? msg('emul.neededText', { console: info.name, emulator: info.emulator })
         : msg('emul.neededTextUnknown')}
     </p>
-    {#if reason}<p class="reason">{reason}</p>{/if}
+    {#if reason}<div class="reason"><Notice tone="danger" compact announce={false}>{reason}</Notice></div>{/if}
     <p class="hint">{msg('emul.neededHint')}</p>
-    {#if failure}<p class="failure" role="alert">{failure}</p>{/if}
+    {#if failure}<div class="failure"><Notice tone="danger" compact>{failure}</Notice></div>{/if}
   {/if}
   {#snippet footer()}
     <Button disabled={busy} onclick={() => prompt?.settle(false)}>{msg('common.cancel')}</Button>
@@ -93,7 +94,7 @@
       <ExternalLink size="1.4rem" strokeWidth={1.8} />
       {msg('emul.neededOpenSite')}
     </Button>
-    <Button variant="primary" disabled={busy} onclick={choose}>
+    <Button variant="primary" {busy} onclick={choose}>
       <FolderOpen size="1.4rem" strokeWidth={1.8} />
       {msg('emul.neededChoose')}
     </Button>
@@ -109,8 +110,6 @@
 
   .reason {
     margin: 0 0 var(--space-3);
-    font-size: var(--font-sm);
-    color: var(--danger);
   }
 
   .hint {
@@ -122,7 +121,5 @@
 
   .failure {
     margin: var(--space-3) 0 0;
-    font-size: var(--font-sm);
-    color: var(--danger);
   }
 </style>

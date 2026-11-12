@@ -118,7 +118,7 @@ describe('a dialog busy with its operation', () => {
 
     const failure = new Error('typhon:emulators.not_found: gone');
     choosing.fail(failure);
-    expect((await within(dialog).findByRole('alert')).textContent).toBe(libraryErrorText(failure, msg('emul.saveFailed')));
+    expect((await within(dialog).findByRole('alert')).textContent?.trim()).toBe(libraryErrorText(failure, msg('emul.saveFailed')));
     expect(dialog.isConnected).toBe(true);
   });
 });

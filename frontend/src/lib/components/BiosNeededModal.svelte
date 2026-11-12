@@ -2,6 +2,7 @@
   import { FolderOpen, RefreshCw } from '@lucide/svelte';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
+  import Notice from './Notice.svelte';
   import { msg } from '../i18n';
   import { libraryErrorText } from '../library/errors';
   import { biosFolder, listPlatforms, openBiosFolder, type PlatformStatus } from '../services/emulators';
@@ -61,9 +62,9 @@
       {msg('emul.biosText', { emulator: info?.emulator ?? prompt.platform, console: info?.name ?? prompt.platform })}
     </p>
     {#if folder}<p class="folder">{folder}</p>{/if}
-    {#if prompt.stillMissing}<p class="reason" role="alert">{msg('emul.biosStillMissing')}</p>{/if}
+    {#if prompt.stillMissing}<div class="reason"><Notice tone="danger" compact>{msg('emul.biosStillMissing')}</Notice></div>{/if}
     <p class="hint">{msg('emul.biosHint')}</p>
-    {#if failure}<p class="failure" role="alert">{failure}</p>{/if}
+    {#if failure}<div class="failure"><Notice tone="danger" compact>{failure}</Notice></div>{/if}
   {/if}
   {#snippet footer()}
     <Button onclick={() => prompt?.settle(false)}>{msg('common.cancel')}</Button>
@@ -96,8 +97,6 @@
 
   .reason {
     margin: 0 0 var(--space-3);
-    font-size: var(--font-sm);
-    color: var(--danger);
   }
 
   .hint {
@@ -109,7 +108,5 @@
 
   .failure {
     margin: var(--space-3) 0 0;
-    font-size: var(--font-sm);
-    color: var(--danger);
   }
 </style>

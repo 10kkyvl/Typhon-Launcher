@@ -1,6 +1,7 @@
 <script lang="ts">
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
+  import Notice from './Notice.svelte';
   import { msg } from '../i18n';
   import { libraryErrorText } from '../library/errors';
   import { closeEmulator, listPlatforms, type PlatformStatus } from '../services/emulators';
@@ -52,11 +53,11 @@
   {#if prompt}
     <p class="text">{msg('emul.busyText', { emulator })}</p>
     <p class="hint">{msg('emul.busyHint')}</p>
-    {#if failure}<p class="failure" role="alert">{failure}</p>{/if}
+    {#if failure}<div class="failure"><Notice tone="danger" compact>{failure}</Notice></div>{/if}
   {/if}
   {#snippet footer()}
     <Button disabled={closing} onclick={() => prompt?.settle(false)}>{msg('common.cancel')}</Button>
-    <Button variant="primary" disabled={closing} onclick={closeAndPlay}>
+    <Button variant="primary" busy={closing} onclick={closeAndPlay}>
       {closing ? msg('emul.busyClosing', { emulator }) : msg('emul.busyConfirm', { emulator })}
     </Button>
   {/snippet}
@@ -78,7 +79,5 @@
 
   .failure {
     margin: var(--space-3) 0 0;
-    font-size: var(--font-sm);
-    color: var(--danger);
   }
 </style>
