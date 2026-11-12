@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { executableCandidates } from '../services/install';
 import { getLaunchArgsLine, setExecutable, setLaunchArgsLine, type LibraryGame } from '../services/library';
-import { inspectWrapper, type WrapperInfo } from '../services/wrappers';
+import { disableWrapper, disableWrapperKeepChanged, inspectWrapper, type WrapperInfo } from '../services/wrappers';
 import { closeGameProperties, openGameProperties } from '../stores/gameProperties';
 import { libraryGames } from '../stores/library';
 import { toasts } from '../stores/toasts';
@@ -27,6 +27,8 @@ vi.mock('../services/library', async (importOriginal) => ({
 vi.mock('../services/wrappers', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/wrappers')>()),
   inspectWrapper: vi.fn(),
+  disableWrapper: vi.fn(),
+  disableWrapperKeepChanged: vi.fn(),
 }));
 
 function wrapper(patch: Partial<WrapperInfo> = {}): WrapperInfo {
@@ -203,5 +205,26 @@ describe('GamePropertiesModal: compatibility mode', () => {
     expect(notice).not.toBeNull();
     expect(within(notice).getByRole('button', { name: msg('modals.compatRevert') })).toBeTruthy();
     expect(within(notice).getByRole('button', { name: msg('modals.compatKeepChanged') })).toBeTruthy();
+  });
+
+  const tampered = () =>
+    wrapper({ active: { wrapper: 'dgvoodoo', version: '2.8', preset: 'default', files: ['d3d9.dll'] }, problem: { code: 'wrappers.tampered', file: 'd3d9.dll' } } as Partial<WrapperInfo>);
+
+  it.each([
+    ['compatRevert', () => vi.mocked(disableWrapper)],
+    ['compatKeepChanged', () => vi.mocked(disableWrapperKeepChanged)],
+  ] as const)('moves the focus from %s, gone with the problem it solved, to the compatibility switch', async (label, call) => {
+    vi.mocked(inspectWrapper).mockResolvedValueOnce(tampered()).mockResolvedValue(wrapper());
+    call().mockResolvedValueOnce(undefined);
+    const dialog = await openDialog();
+    const keys = user();
+    const button = await within(dialog).findByRole('button', { name: msg(`modals.${label}`) });
+    button.focus();
+
+    await keys.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(button.isConnected).toBe(false));
+    await vi.waitFor(() => expect(document.activeElement).not.toBe(document.body));
+    expect(document.activeElement).toBe(within(dialog).getByRole('switch', { name: msg('modals.compatToggle') }));
   });
 });

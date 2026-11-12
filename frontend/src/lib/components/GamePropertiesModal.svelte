@@ -61,6 +61,7 @@
     type OverrideState,
   } from '../gamemode/gamemode';
   import { toast } from '../stores/toasts';
+  import { focusableIn } from '../layers/focus';
   import { bytesSize, truncateMiddle } from '../utils/format';
 
   const uid = $props.id();
@@ -275,6 +276,8 @@
     // The dialog may have closed, or opened for another game, while this ran: a failure shows inline
     // where it is still shown, else as a toast, so the outcome is never lost.
     const shown = () => target?.gameId === id;
+    // A problem's action goes with its notice once it worked: what should take the focus then.
+    const after = action ? controlAfterNotice() : null;
     try {
       if (on) await enableWrapper(id, compatWrapper, compatPreset);
       else if (keepChanged) await disableWrapperKeepChanged(id);
@@ -293,6 +296,28 @@
       if (shown()) compatProgress = null;
     }
     if (shown()) await loadCompat(id);
+    if (action) await keepCompatFocus(after);
+  }
+
+  let propsEl = $state<HTMLElement>();
+  let compatSection = $state<HTMLElement>();
+
+  function controlAfterNotice(): HTMLElement | null {
+    const notice = document.activeElement?.closest('.notice');
+    if (!notice || !propsEl) return null;
+    const all = focusableIn(propsEl);
+    const mine = all.filter((el) => notice.contains(el));
+    return all[all.indexOf(mine[mine.length - 1]) + 1] ?? null;
+  }
+
+  // The focused Revert or Keep went with the problem it solved: the focus goes to the compatibility
+  // switch, which now says the outcome, else to the control that followed the notice.
+  async function keepCompatFocus(after: HTMLElement | null) {
+    await tick();
+    const active = document.activeElement;
+    if (active && active !== document.body && active.isConnected) return;
+    const toggle = compatSection?.querySelector<HTMLElement>('[role="switch"]');
+    (toggle ?? (after?.isConnected ? after : null))?.focus();
   }
 
   async function pickCandidate(path: string) {
@@ -430,7 +455,7 @@
   onclose={closeGameProperties}
 >
   {#if game}
-    <div class="props">
+    <div class="props" bind:this={propsEl}>
       <section class="section">
         <h4>{msg('modals.propertiesExeTitle')}</h4>
         <p class="path">
@@ -529,7 +554,7 @@
           <Spinner size="sm" label={msg('modals.compatLoading')} />
         </section>
       {:else if !emulated && compatVisible && compat}
-        <section class="section">
+        <section class="section" bind:this={compatSection}>
           <div class="row spread">
             <h4>{msg('modals.compatTitle')}</h4>
             <Toggle
