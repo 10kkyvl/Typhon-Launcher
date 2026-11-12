@@ -1,7 +1,7 @@
 import { msg } from '../i18n';
 import { sourceErrorText } from '../sources/sourceErrors';
-import { bytesSize, progressPercent } from '../utils/format';
-import type { Offer, Stats, Transfer } from '../services/lan';
+import { progressPercent } from '../utils/format';
+import type { Stats, Transfer } from '../services/lan';
 import type { LibraryGame } from '../services/library';
 import type { MessageKey } from '../i18n';
 
@@ -54,14 +54,6 @@ export function transferLabel(transfer: Transfer): string {
     default:
       return '';
   }
-}
-
-export function offerLabel(offer: Offer): string {
-  const parts = [offer.title];
-  if (offer.version) parts.push(offer.version);
-  parts.push(bytesSize(offer.sizeBytes));
-  parts.push(msg('transfers.lanFromHost', { host: offer.host }));
-  return parts.join(' · ');
 }
 
 export function rejectedSummary(stats: Stats): string {

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { applyLanguage, msg } from '../i18n';
-import type { Offer, Stats, Transfer } from '../services/lan';
-import { offerLabel, rejectedSummary, sharedGameTitle, transferLabel } from './lanText';
+import type { Stats, Transfer } from '../services/lan';
+import { rejectedSummary, sharedGameTitle, transferLabel } from './lanText';
 
 afterEach(() => applyLanguage('ru'));
 
@@ -17,23 +17,6 @@ function transfer(patch: Partial<Transfer> = {}): Transfer {
     status: 'receiving',
     startedAt: '',
     updatedAt: '',
-    ...patch,
-  };
-}
-
-function offer(patch: Partial<Offer> = {}): Offer {
-  return {
-    peerId: 'p1',
-    host: 'DESKTOP-ABC',
-    addr: '192.168.1.5',
-    port: 41234,
-    gameId: 'g1',
-    title: 'Игра',
-    version: '',
-    exe: 'game.exe',
-    sizeBytes: 0,
-    infoHash: 'hash',
-    lastSeen: '',
     ...patch,
   };
 }
@@ -79,20 +62,6 @@ describe('transferLabel', () => {
 
   it('сообщает об отмене', () => {
     expect(transferLabel(transfer({ status: 'cancelled' }))).toBe('Отменено');
-  });
-});
-
-describe('offerLabel', () => {
-  it('включает версию, когда она известна', () => {
-    expect(offerLabel(offer({ title: 'Portal 2', version: '1.0', sizeBytes: 1024 * 1024 * 1024, host: 'PC-1' }))).toBe(
-      'Portal 2 · 1.0 · 1,0 ГБ · с ПК PC-1',
-    );
-  });
-
-  it('пропускает сегмент версии, когда она пустая', () => {
-    expect(offerLabel(offer({ title: 'Portal 2', version: '', sizeBytes: 1024 * 1024 * 1024, host: 'PC-1' }))).toBe(
-      'Portal 2 · 1,0 ГБ · с ПК PC-1',
-    );
   });
 });
 
