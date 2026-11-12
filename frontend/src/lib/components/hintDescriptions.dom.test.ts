@@ -103,11 +103,11 @@ describe('hints that describe a control', () => {
   it('a release candidate missing from the catalog: why it cannot be picked, and it is not picked', async () => {
     const release = { release: { id: 'r1', rawTitle: 'Hades', normalizedTitle: 'hades', size: 1, uploadedAt: '' }, sourceName: 'Feed', gameTitle: '' } as unknown as ReleaseView;
     render(ReleaseMatchModal, { target: app, props: { open: true, release } });
-    const missing = await waitFor(() => screen.getByRole('button', { name: /^Hades\b(?! II)/ }));
+    const missing = await waitFor(() => screen.getByRole('radio', { name: /^Hades\b(?! II)/ }));
     await expectDescribed(missing, msg('modals.releaseMatchNotInCatalog'));
     expect(missing.getAttribute('aria-disabled')).toBe('true');
     missing.click();
-    expect(missing.classList.contains('selected')).toBe(false);
+    expect(missing.getAttribute('aria-checked')).toBe('false');
   });
 
   it('a tag chip: the tag is its text, and its remove button is named for the tag', () => {

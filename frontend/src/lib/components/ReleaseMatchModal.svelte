@@ -16,9 +16,14 @@
   import { candidateGroups } from '../game/similar';
   import { bytesSize, relativeDate } from '../utils/format';
   import Button from './Button.svelte';
+  import EmptyState from './EmptyState.svelte';
   import Modal from './Modal.svelte';
+  import Notice from './Notice.svelte';
+  import SearchInput from './SearchInput.svelte';
+  import Spinner from './Spinner.svelte';
   import Tooltip from './Tooltip.svelte';
   import { msg } from '../i18n';
+  import { nextIndex } from '../utils/roving';
 
   let {
     open = $bindable(false),
@@ -29,6 +34,7 @@
     release: ReleaseView | null;
     onchanged?: () => void;
   } = $props();
+  const uid = $props.id();
 
   let candidates = $state<MatchCandidate[]>([]);
   const ordered = $derived.by(() => {
@@ -41,7 +47,8 @@
   let searchResults = $state<CatalogGame[]>([]);
   let searching = $state(false);
   let searchError = $state('');
-  let submitting = $state(false);
+  // The footer action running: its button stays focused and busy, the other waits.
+  let submitting = $state<'' | 'confirm' | 'ignore'>('');
   let searchToken = 0;
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -72,21 +79,25 @@
     }
   }
 
+  // A failed search stays on screen, its Retry busy, until the next answer replaces it.
   function onQueryInput() {
     clearTimeout(searchTimer);
     const token = ++searchToken;
     searching = false;
-    searchError = '';
     const value = query.trim();
     if (!value) {
       searchResults = [];
+      searchError = '';
       return;
     }
     searchTimer = setTimeout(async () => {
       searching = true;
       try {
         const result = await searchGames(value);
-        if (token === searchToken) searchResults = result;
+        if (token === searchToken) {
+          searchResults = result;
+          searchError = '';
+        }
       } catch (err) {
         if (token === searchToken) {
           searchResults = [];
@@ -100,7 +111,7 @@
 
   async function confirm() {
     if (!release || !selectedGameId) return;
-    submitting = true;
+    submitting = 'confirm';
     try {
       await confirmMatch(release.release.id, selectedGameId);
       toast(msg('modals.releaseMatchSaved'), 'success');
@@ -109,13 +120,13 @@
     } catch (err) {
       toast(metadataErrorText(err, errorMessage(err)), 'danger');
     } finally {
-      submitting = false;
+      submitting = '';
     }
   }
 
   async function ignore() {
     if (!release) return;
-    submitting = true;
+    submitting = 'ignore';
     try {
       await ignoreRelease(release.release.id, true);
       toast(msg('modals.releaseMatchIgnored'));
@@ -124,9 +135,33 @@
     } catch (err) {
       toast(errorMessage(err), 'danger');
     } finally {
-      submitting = false;
+      submitting = '';
     }
   }
+
+  // Each list of games is a radio group: the arrows move the focus and the choice together. A game that
+  // is not in the catalog takes the focus, so its hint says why, but is not chosen.
+  function moveChoice(event: KeyboardEvent, ids: string[], off: (index: number) => boolean) {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const group = (event.currentTarget as HTMLElement).closest('[role="radiogroup"]');
+    const radios = [...(group?.querySelectorAll<HTMLElement>('[role="radio"]') ?? [])];
+    const next = nextIndex(radios.indexOf(event.currentTarget as HTMLElement), ids.length, event.key, { orientation: 'vertical' });
+    if (next === null) return;
+    event.preventDefault();
+    if (!off(next)) selectedGameId = ids[next];
+    radios[next]?.focus();
+  }
+
+  // The one Tab stop of a list: its chosen game, else its first.
+  function stopOf(ids: string[]): number {
+    return Math.max(0, ids.findIndex((id) => id === selectedGameId));
+  }
+
+  const orderedIds = $derived(ordered.map((candidate) => candidate.gameId));
+  const orderedOff = (index: number) => ordered[index]?.inCatalog === false;
+  const orderedStop = $derived(stopOf(orderedIds));
+  const resultIds = $derived(searchResults.map((game) => game.id));
+  const resultStop = $derived(stopOf(resultIds));
 </script>
 
 <Modal dismissible={!submitting} bind:open title={msg('modals.releaseMatchTitle')} width="56rem">
@@ -158,26 +193,30 @@
       </section>
 
       <section class="block">
-        <h4>{msg('modals.releaseMatchCandidates')}</h4>
+        <h4 id="{uid}-candidates">{msg('modals.releaseMatchCandidates')}</h4>
         {#if loadingCandidates}
-          <p class="muted">{msg('modals.releaseMatchSearchingCandidates')}</p>
+          <Spinner size="sm" label={msg('modals.releaseMatchSearchingCandidates')} />
         {:else if candidates.length === 0}
-          <p class="muted">{msg('modals.releaseMatchNoCandidates')}</p>
+          <EmptyState size="inline" title={msg('modals.releaseMatchNoCandidates')} />
         {:else}
-          <div class="candidates">
-            {#each ordered as candidate (candidate.gameId)}
+          <div class="candidates" role="radiogroup" aria-labelledby="{uid}-candidates">
+            {#each ordered as candidate, index (candidate.gameId)}
               {@const missing = candidate.inCatalog === false}
               <!-- Not disabled: a disabled button cannot take focus, and the reason would reach no keyboard. -->
               <Tooltip text={missing ? msg('modals.releaseMatchNotInCatalog') : ''}>
               <button
+                type="button"
                 class="candidate"
-                class:selected={selectedGameId === candidate.gameId}
+                role="radio"
+                aria-checked={selectedGameId === candidate.gameId}
                 aria-disabled={missing || undefined}
+                tabindex={index === orderedStop ? 0 : -1}
                 onclick={() => {
                   if (!missing) selectedGameId = candidate.gameId;
                 }}
+                onkeydown={(event) => moveChoice(event, orderedIds, orderedOff)}
               >
-                <span class="radio" class:on={selectedGameId === candidate.gameId}>
+                <span class="radio" class:on={selectedGameId === candidate.gameId} aria-hidden="true">
                   {#if selectedGameId === candidate.gameId}<Check size="1.2rem" strokeWidth={2.6} />{/if}
                 </span>
                 <span class="candidate-main">
@@ -203,22 +242,34 @@
       </section>
 
       <section class="block">
-        <h4>{msg('modals.releaseMatchManualSearch')}</h4>
-        <input class="input" type="text" placeholder={msg('modals.releaseMatchNamePlaceholder')} bind:value={query} oninput={onQueryInput} />
-        {#if searching}
-          <p class="muted">{msg('modals.releaseMatchSearching')}</p>
-        {:else if searchError}
-          <p class="muted" role="alert">{searchError}</p>
-          <Button size="sm" onclick={onQueryInput}>{msg('common.retry')}</Button>
+        <h4 id="{uid}-search">{msg('modals.releaseMatchManualSearch')}</h4>
+        <div class="search-field">
+          <SearchInput bind:value={query} labelledby="{uid}-search" placeholder={msg('modals.releaseMatchNamePlaceholder')} oninput={onQueryInput} />
+        </div>
+        {#if searchError}
+          <div>
+            <Notice tone="danger" compact>
+              {searchError}
+              {#snippet action()}
+                <Button size="sm" busy={searching} onclick={onQueryInput}>{msg('common.retry')}</Button>
+              {/snippet}
+            </Notice>
+          </div>
+        {:else if searching}
+          <Spinner size="sm" label={msg('modals.releaseMatchSearching')} />
         {:else if searchResults.length > 0}
-          <div class="candidates">
-            {#each searchResults as game (game.id)}
+          <div class="candidates" role="radiogroup" aria-labelledby="{uid}-search">
+            {#each searchResults as game, index (game.id)}
               <button
+                type="button"
                 class="candidate"
-                class:selected={selectedGameId === game.id}
+                role="radio"
+                aria-checked={selectedGameId === game.id}
+                tabindex={index === resultStop ? 0 : -1}
                 onclick={() => (selectedGameId = game.id)}
+                onkeydown={(event) => moveChoice(event, resultIds, () => false)}
               >
-                <span class="radio" class:on={selectedGameId === game.id}>
+                <span class="radio" class:on={selectedGameId === game.id} aria-hidden="true">
                   {#if selectedGameId === game.id}<Check size="1.2rem" strokeWidth={2.6} />{/if}
                 </span>
                 <span class="candidate-title" title={game.title}>{game.title}</span>
@@ -232,9 +283,16 @@
   {/if}
 
   {#snippet footer()}
-    <Button variant="danger" disabled={submitting} onclick={ignore}>{msg('modals.releaseMatchIgnore')}</Button>
-    <Button disabled={submitting} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
-    <Button variant="primary" disabled={!selectedGameId || submitting} onclick={confirm}>{msg('modals.releaseMatchConfirm')}</Button>
+    <Button variant="danger" disabled={submitting === 'confirm'} busy={submitting === 'ignore'} onclick={ignore}>{msg('modals.releaseMatchIgnore')}</Button>
+    <Button disabled={submitting !== ''} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
+    <Button
+      variant="primary"
+      disabled={!selectedGameId || submitting === 'ignore'}
+      busy={submitting === 'confirm'}
+      onclick={confirm}
+    >
+      {msg('modals.releaseMatchConfirm')}
+    </Button>
   {/snippet}
 </Modal>
 
@@ -286,11 +344,6 @@
     white-space: nowrap;
   }
 
-  .muted {
-    font-size: var(--font-sm);
-    color: var(--text-3);
-  }
-
   .candidates {
     display: flex;
     flex-direction: column;
@@ -320,8 +373,13 @@
     cursor: not-allowed;
   }
 
-  .candidate.selected {
+  .candidate[aria-checked='true'] {
     background: var(--hover-strong);
+  }
+
+  /* Inside the scrolling list: the shared ring is drawn inward, where the list does not clip it. */
+  .candidate:focus-visible {
+    outline-offset: -2px;
   }
 
   .radio {
@@ -397,7 +455,7 @@
     text-align: right;
   }
 
-  .block .input {
+  .search-field {
     margin-bottom: 0.8rem;
   }
 </style>
