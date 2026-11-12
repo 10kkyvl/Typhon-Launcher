@@ -21,7 +21,22 @@ function routeRoots(): string[] {
   const app = frontendSources['App.svelte'];
   const shell = app.slice(app.indexOf('<AppShell>'), app.indexOf('</AppShell>'));
   const used = new Set([...shell.matchAll(/<([A-Z]\w*)\b/g)].map((m) => m[1]));
-  return [...app.matchAll(/import (\w+) from '\.\/(routes\/[^']+\.svelte)'/g)].filter((m) => used.has(m[1])).map((m) => m[2]);
+  const eager = [...app.matchAll(/import (\w+) from '\.\/(routes\/[^']+\.svelte)'/g)].filter((m) => used.has(m[1])).map((m) => m[2]);
+  return [...eager, ...lazyRoots()];
+}
+
+// A route loaded on demand (the dev-only showcase: lib/navigation/showcase.ts) is a root too.
+function lazyRoots(): string[] {
+  return Object.entries(frontendSources).flatMap(([path, text]) =>
+    [...text.matchAll(/\bimport\(\s*'((?:\.\.?\/)+routes\/[^']+\.svelte)'\s*\)/g)].map((m) => {
+      const parts = path.split('/').slice(0, -1);
+      for (const part of m[1].split('/')) {
+        if (part === '..') parts.pop();
+        else if (part !== '.') parts.push(part);
+      }
+      return parts.join('/');
+    }),
+  );
 }
 
 function topLevel(source: string): Node[] {
@@ -43,7 +58,8 @@ const routeFiles = () => Object.keys(frontendSources).filter((path) => path.star
 
 describe('the page container', () => {
   it('finds every route the shell renders', () => {
-    expect(routeRoots()).toHaveLength(16);
+    expect(routeRoots()).toHaveLength(17);
+    expect(routeRoots()).toContain('routes/showcase/Showcase.svelte');
   });
 
   it('roots every route the shell renders, and nothing else of the route sits outside it', () => {
