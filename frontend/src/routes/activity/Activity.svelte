@@ -180,7 +180,7 @@
           {/each}
           {#if $feedCursor > 0}
             <div class="more">
-              <Button disabled={$feedLoading} onclick={() => moreFeed()}>{msg('transfers.activityShowMore')}</Button>
+              <Button busy={$feedLoading} onclick={() => moreFeed()}>{msg('transfers.activityShowMore')}</Button>
             </div>
           {/if}
         {/if}
