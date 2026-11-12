@@ -5,6 +5,7 @@
   import { publicFrame } from '../../lib/profile/frameSources';
   import Button from '../../lib/components/Button.svelte';
   import Modal from '../../lib/components/Modal.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
   import SearchInput from '../../lib/components/SearchInput.svelte';
   import { accountErrorText } from '../../lib/services/accountMessages';
   import { profile, profileByCode, sendRequest, type PublicProfile } from '../../lib/services/social';
@@ -132,7 +133,7 @@
         <p class="hint">{hint}</p>
       {/if}
     {:else if error}
-      <p class="hint danger">{error}</p>
+      <Notice tone="danger" compact>{error}</Notice>
     {:else if !query.trim()}
       <p class="hint">{msg('social.friendsSearchHint')}</p>
     {/if}
@@ -152,7 +153,7 @@
       <Button disabled={sending} onclick={openProfile}>{msg('social.friendsOpenProfile')}</Button>
     {/if}
     {#if canSend}
-      <Button variant="primary" disabled={sending} onclick={send}>{msg('social.friendsSendRequest')}</Button>
+      <Button variant="primary" busy={sending} onclick={send}>{msg('social.friendsSendRequest')}</Button>
     {/if}
   {/snippet}
 </Modal>
@@ -227,9 +228,5 @@
     font-size: var(--font-sm);
     line-height: 1.5;
     color: var(--text-3);
-  }
-
-  .hint.danger {
-    color: var(--danger);
   }
 </style>
