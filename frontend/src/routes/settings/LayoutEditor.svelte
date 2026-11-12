@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ArrowLeft, ArrowRight, ChevronDown, ChevronUp, Eye, EyeOff, GripVertical, Plus, X } from '@lucide/svelte';
-  import Tooltip from '../../lib/components/Tooltip.svelte';
   import Button from '../../lib/components/Button.svelte';
+  import IconButton from '../../lib/components/IconButton.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import { msg } from '../../lib/i18n';
   import { SEPARATOR, type ThemeLayout } from '../../lib/theme/layout';
@@ -142,66 +142,44 @@
           <span class="grip" aria-hidden="true"><GripVertical size={14} /></span>
           <span class="item-name">{label(key, id)}</span>
           <div class="item-actions">
-            <Tooltip text={msg('settings.layoutMoveUp')} describe={false}>
-              <button
-                type="button"
-                class="mini"
-                aria-label={msg('settings.layoutMoveUp')}
-                disabled={index === 0}
-                onclick={() => apply(step(st, key, index, -1))}
-              >
-                <ChevronUp size={14} />
-              </button>
-            </Tooltip>
-            <Tooltip text={msg('settings.layoutMoveDown')} describe={false}>
-              <button
-                type="button"
-                class="mini"
-                aria-label={msg('settings.layoutMoveDown')}
-                disabled={index === list.length - 1}
-                onclick={() => apply(step(st, key, index, 1))}
-              >
-                <ChevronDown size={14} />
-              </button>
-            </Tooltip>
+            <IconButton
+              size="sm"
+              label={msg('settings.layoutMoveUp')}
+              disabled={index === 0}
+              onclick={() => apply(step(st, key, index, -1))}
+            >
+              <ChevronUp size={14} />
+            </IconButton>
+            <IconButton
+              size="sm"
+              label={msg('settings.layoutMoveDown')}
+              disabled={index === list.length - 1}
+              onclick={() => apply(step(st, key, index, 1))}
+            >
+              <ChevronDown size={14} />
+            </IconButton>
             {#if key === 'main' || key === 'side'}
               {@const other = key === 'main' ? 'side' : 'main'}
-              {@const moveLabel = key === 'main' ? msg('settings.layoutToSide') : msg('settings.layoutToMain')}
-              <Tooltip text={moveLabel} describe={false}>
-                <button
-                  type="button"
-                  class="mini"
-                  aria-label={moveLabel}
-                  onclick={() => apply(moveToColumn(st, key, index, other))}
-                >
-                  {#if key === 'main'}<ArrowRight size={14} />{:else}<ArrowLeft size={14} />{/if}
-                </button>
-              </Tooltip>
+              <IconButton
+                size="sm"
+                label={key === 'main' ? msg('settings.layoutToSide') : msg('settings.layoutToMain')}
+                onclick={() => apply(moveToColumn(st, key, index, other))}
+              >
+                {#if key === 'main'}<ArrowRight size={14} />{:else}<ArrowLeft size={14} />{/if}
+              </IconButton>
             {/if}
             {#if separator}
-              <Tooltip text={msg('settings.layoutRemoveSeparator')} describe={false}>
-                <button
-                  type="button"
-                  class="mini"
-                  aria-label={msg('settings.layoutRemoveSeparator')}
-                  onclick={() => apply(removeSeparator(st, index))}
-                >
-                  <X size={14} />
-                </button>
-              </Tooltip>
+              <IconButton size="sm" label={msg('settings.layoutRemoveSeparator')} onclick={() => apply(removeSeparator(st, index))}>
+                <X size={14} />
+              </IconButton>
             {:else}
-              {@const eyeLabel = hidden ? msg('settings.layoutShow') : msg('settings.layoutHide')}
-              <Tooltip text={eyeLabel} describe={false}>
-                <button
-                  type="button"
-                  class="mini"
-                  aria-label={eyeLabel}
-                  aria-pressed={hidden}
-                  onclick={() => apply(toggleHidden(st, scope, id))}
-                >
-                  {#if hidden}<EyeOff size={14} />{:else}<Eye size={14} />{/if}
-                </button>
-              </Tooltip>
+              <IconButton
+                size="sm"
+                label={hidden ? msg('settings.layoutShow') : msg('settings.layoutHide')}
+                onclick={() => apply(toggleHidden(st, scope, id))}
+              >
+                {#if hidden}<EyeOff size={14} />{:else}<Eye size={14} />{/if}
+              </IconButton>
             {/if}
           </div>
         </li>
@@ -235,17 +213,13 @@
       </div>
       <div class="support-row">
         <span class="item-name">{msg('tickets.nav')}</span>
-        <Tooltip text={isHidden(st, 'sidebar', 'support') ? msg('settings.layoutShow') : msg('settings.layoutHide')} describe={false}>
-          <button
-            type="button"
-            class="mini"
-            aria-label={isHidden(st, 'sidebar', 'support') ? msg('settings.layoutShow') : msg('settings.layoutHide')}
-            aria-pressed={isHidden(st, 'sidebar', 'support')}
-            onclick={() => apply(toggleHidden(st, 'sidebar', 'support'))}
-          >
-            {#if isHidden(st, 'sidebar', 'support')}<EyeOff size={14} />{:else}<Eye size={14} />{/if}
-          </button>
-        </Tooltip>
+        <IconButton
+          size="sm"
+          label={isHidden(st, 'sidebar', 'support') ? msg('settings.layoutShow') : msg('settings.layoutHide')}
+          onclick={() => apply(toggleHidden(st, 'sidebar', 'support'))}
+        >
+          {#if isHidden(st, 'sidebar', 'support')}<EyeOff size={14} />{:else}<Eye size={14} />{/if}
+        </IconButton>
       </div>
     </div>
   </details>
@@ -306,11 +280,6 @@
     font-size: var(--font-sm);
     font-weight: 600;
     cursor: pointer;
-  }
-
-  .group > summary:focus-visible {
-    outline: 2px solid var(--accent-ring);
-    outline-offset: 2px;
   }
 
   .group-body {
@@ -402,29 +371,5 @@
     display: flex;
     gap: 2px;
     flex-shrink: 0;
-  }
-
-  .mini {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: var(--control-sm);
-    height: var(--control-sm);
-    border-radius: var(--radius-sm);
-    color: var(--text-2);
-  }
-
-  .mini:hover:not(:disabled) {
-    background: var(--surface-3);
-    color: var(--text);
-  }
-
-  .mini:disabled {
-    opacity: 0.35;
-  }
-
-  .mini:focus-visible {
-    outline: 2px solid var(--accent-ring);
-    outline-offset: 1px;
   }
 </style>
