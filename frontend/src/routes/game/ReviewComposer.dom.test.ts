@@ -24,6 +24,18 @@ vi.mock('../../lib/services/reviews', () => ({
 
 let app: HTMLDivElement;
 
+// Said again after a failed retry: the notice's message comes into its live region again, as new nodes.
+// Read before the press; the getter answers the words of a message that came in since, '' until then.
+function sayingAgain(notice: Element): () => string {
+  const region = notice.querySelector('.body');
+  const before = region?.firstElementChild;
+  return () => {
+    const now = region?.firstElementChild;
+    if (!region?.getAttribute('role') || !now || now === before) return '';
+    return (now.textContent ?? '').replace(/\s+/g, ' ').trim();
+  };
+}
+
 beforeEach(() => {
   app = document.createElement('div');
   app.id = 'app';
@@ -70,11 +82,12 @@ describe('retrying a failed load', () => {
     const keys = user();
     const notice = (await screen.findByText(msg('reviews.loadError'))).closest('.notice') as HTMLElement;
     const retry = within(notice).getByRole('button', { name: msg('common.retry') });
+    const said = sayingAgain(notice);
     retry.focus();
 
     await keys.keyboard('{Enter}');
 
-    await vi.waitFor(() => expect(notice.querySelector('[data-part="notice-again"]')?.textContent).toBe(msg('reviews.loadError')));
+    await vi.waitFor(() => expect(said()).toBe(msg('reviews.loadError')));
     expect(notice.isConnected).toBe(true);
     expect(document.activeElement).toBe(retry);
   });

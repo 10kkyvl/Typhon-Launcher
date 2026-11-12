@@ -39,6 +39,18 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
+// Said again after a failed retry: the notice's message comes into its live region again, as new nodes.
+// Read before the press; the getter answers the words of a message that came in since, '' until then.
+function sayingAgain(notice: Element): () => string {
+  const region = notice.querySelector('.body');
+  const before = region?.firstElementChild;
+  return () => {
+    const now = region?.firstElementChild;
+    if (!region?.getAttribute('role') || !now || now === before) return '';
+    return (now.textContent ?? '').replace(/\s+/g, ' ').trim();
+  };
+}
+
 beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => {});
 });
@@ -92,11 +104,12 @@ describe('AchievementsCard: retrying a failed load', () => {
     const retry = await screen.findByRole('button', { name: msg('common.retry') });
     const notice = retry.closest('.notice') as HTMLElement;
     const words = notice.querySelector('.text')?.textContent?.trim() ?? '';
+    const said = sayingAgain(notice);
     retry.focus();
 
     await user.keyboard('{Enter}');
 
-    await vi.waitFor(() => expect(notice.querySelector('[data-part="notice-again"]')?.textContent).toBe(words));
+    await vi.waitFor(() => expect(said()).toBe(words));
     expect(words).not.toBe('');
     expect(notice.isConnected).toBe(true);
     expect(document.activeElement).toBe(retry);

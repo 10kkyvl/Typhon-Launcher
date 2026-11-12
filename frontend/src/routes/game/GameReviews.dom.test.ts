@@ -39,8 +39,18 @@ const review = {
   updatedAt: '2026-11-01T10:00:00Z',
 } as unknown as Page['reviews'][number];
 
-// The words a notice says again after its retry fails (Notice's assistive-only copy).
-const saidAgain = (notice: Element) => notice.querySelector('[data-part="notice-again"]')?.textContent ?? '';
+
+// Said again after a failed retry: the notice's message comes into its live region again, as new nodes.
+// Read before the press; the getter answers the words of a message that came in since, '' until then.
+function sayingAgain(notice: Element): () => string {
+  const region = notice.querySelector('.body');
+  const before = region?.firstElementChild;
+  return () => {
+    const now = region?.firstElementChild;
+    if (!region?.getAttribute('role') || !now || now === before) return '';
+    return (now.textContent ?? '').replace(/\s+/g, ' ').trim();
+  };
+}
 
 beforeEach(() => {
   // jsdom has no ResizeObserver; the sort and filter strips measure their plate with one.
@@ -104,6 +114,7 @@ describe('GameReviews: retrying a failed load', () => {
     const { user } = renderDom(GameReviews, { canonicalGameId: 'c1' });
     const notice = (await screen.findByText(msg('reviews.loadError'))).closest('.notice') as HTMLElement;
     const retry = within(notice).getByRole('button', { name: msg('common.retry') });
+    const said = sayingAgain(notice);
     retry.focus();
     await user.keyboard('{Enter}');
 
@@ -112,6 +123,6 @@ describe('GameReviews: retrying a failed load', () => {
     await vi.waitFor(() => expect(retry.hasAttribute('aria-busy')).toBe(false));
     expect(notice.isConnected).toBe(true);
     expect(document.activeElement).toBe(retry);
-    await vi.waitFor(() => expect(saidAgain(notice)).toBe(msg('reviews.loadError')));
+    await vi.waitFor(() => expect(said()).toBe(msg('reviews.loadError')));
   });
 });

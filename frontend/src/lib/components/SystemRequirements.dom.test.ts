@@ -21,6 +21,18 @@ const report: SysreqReport = {
   ],
 };
 
+// Said again after a failed retry: the notice's message comes into its live region again, as new nodes.
+// Read before the press; the getter answers the words of a message that came in since, '' until then.
+function sayingAgain(notice: Element): () => string {
+  const region = notice.querySelector('.body');
+  const before = region?.firstElementChild;
+  return () => {
+    const now = region?.firstElementChild;
+    if (!region?.getAttribute('role') || !now || now === before) return '';
+    return (now.textContent ?? '').replace(/\s+/g, ' ').trim();
+  };
+}
+
 afterEach(() => {
   vi.mocked(checkSystemRequirements).mockReset();
   vi.restoreAllMocks();
@@ -65,11 +77,12 @@ describe('SystemRequirements: loading and retrying', () => {
     const { user } = renderDom(SystemRequirements, { gameId: 'sysreq-retry-again', installPath: '/games' });
     const retry = await screen.findByRole('button', { name: msg('sysreq.retry') });
     const notice = retry.closest('.notice') as HTMLElement;
+    const said = sayingAgain(notice);
     retry.focus();
 
     await user.keyboard('{Enter}');
 
-    await vi.waitFor(() => expect(notice.querySelector('[data-part="notice-again"]')?.textContent).toBe(msg('sysreq.failed')));
+    await vi.waitFor(() => expect(said()).toBe(msg('sysreq.failed')));
     expect(notice.isConnected).toBe(true);
     expect(document.activeElement).toBe(retry);
   });

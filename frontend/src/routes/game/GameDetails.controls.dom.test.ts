@@ -80,8 +80,18 @@ beforeEach(() => {
   libraryGames.set([hades]);
 });
 
-// The words a notice says again after its retry fails (Notice's assistive-only copy).
-const saidAgain = (notice: Element) => notice.querySelector('[data-part="notice-again"]')?.textContent ?? '';
+
+// Said again after a failed retry: the notice's message comes into its live region again, as new nodes.
+// Read before the press; the getter answers the words of a message that came in since, '' until then.
+function sayingAgain(notice: Element): () => string {
+  const region = notice.querySelector('.body');
+  const before = region?.firstElementChild;
+  return () => {
+    const now = region?.firstElementChild;
+    if (!region?.getAttribute('role') || !now || now === before) return '';
+    return (now.textContent ?? '').replace(/\s+/g, ' ').trim();
+  };
+}
 
 afterEach(() => {
   vi.mocked(getMetadataView).mockReset();
@@ -160,11 +170,12 @@ describe('GameDetails: retrying what failed to load', () => {
     const { user } = renderDom(GameDetails, { id: 'g1' });
     const notice = (await screen.findByText(msg('games.detailReleasesFailed'))).closest('.notice') as HTMLElement;
     const retry = within(notice).getByRole('button', { name: msg('games.catalogRetry') });
+    const said = sayingAgain(notice);
     retry.focus();
 
     await user.keyboard('{Enter}');
 
-    await vi.waitFor(() => expect(saidAgain(notice)).toBe(msg('games.detailReleasesFailed')));
+    await vi.waitFor(() => expect(said()).toBe(msg('games.detailReleasesFailed')));
     expect(notice.isConnected).toBe(true);
     expect(document.activeElement).toBe(retry);
   });
@@ -198,11 +209,13 @@ describe('GameDetails: retrying what failed to load', () => {
     const { user } = renderDom(GameDetails, { id: 'g1' });
     const notice = (await screen.findByText(msg('games.detailMetaFailedTitle'))).closest('.notice') as HTMLElement;
     const retry = within(notice).getByRole('button', { name: msg('common.retry') });
+    const said = sayingAgain(notice);
     retry.focus();
 
     await user.keyboard('{Enter}');
 
-    await vi.waitFor(() => expect(saidAgain(notice)).toBe(`${msg('games.detailMetaFailedTitle')} ${msg('games.detailMetaFailedHint')}`));
+    await vi.waitFor(() => expect(said()).toContain(msg('games.detailMetaFailedTitle')));
+    expect(said()).toContain(msg('games.detailMetaFailedHint'));
     expect(get(toasts).map((item) => item.message)).not.toContain(msg('games.detailMetaRefreshError'));
     expect(document.activeElement).toBe(retry);
   });
