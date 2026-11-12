@@ -385,7 +385,8 @@
   let freshFrom = 0;
 
   // "Show more" goes when its page fails and the failure takes its place: focus that was on it moves
-  // to that notice's Retry instead of falling to the page.
+  // to that notice's Retry instead of falling to the page. A refusal has no Retry: the notice itself
+  // takes the focus there, so the reason is read where the pressed button was and Tab goes on from it.
   async function showMore() {
     const pressed = Boolean(moreSlot?.contains(document.activeElement));
     autoPages = 0;
@@ -394,8 +395,8 @@
     await tick();
     const active = document.activeElement;
     if (active && active !== document.body && active.isConnected) return;
-    const retry = moreSlot ? focusableIn(moreSlot)[0] : undefined;
-    if (retry) focusQuietly(retry);
+    const target = moreSlot ? (focusableIn(moreSlot)[0] ?? moreSlot.querySelector<HTMLElement>('[data-more-refused]')) : undefined;
+    if (target) focusQuietly(target);
   }
 
   // The notice's retry of the page that failed: on success focus goes to the first game it brought.
@@ -1006,6 +1007,8 @@
         <Notice
           tone="danger"
           compact
+          tabindex={backendOutdated ? -1 : undefined}
+          data-more-refused={backendOutdated || undefined}
           bind:retrying={moreRetrying}
           retry={backendOutdated ? undefined : { label: msg('games.catalogRetry'), run: retryNextPage, focus: firstFresh }}
         >

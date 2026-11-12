@@ -291,6 +291,20 @@ describe('Catalog: the next page', () => {
     expect(within(notice).queryByRole('button')).toBeNull();
     expect(screen.queryByText(msg('games.catalogMoreFailed'))).toBeNull();
   });
+
+  it('refused when pressed from the keyboard: focus lands on the notice that says why, not on the page', async () => {
+    const state = secondPage();
+    state.fails = new Error('typhon:catalog.backend_outdated: sort not supported');
+    const { user } = renderDom(Catalog);
+    const more = await screen.findByRole('button', { name: msg('games.catalogShowMore') });
+    more.focus();
+
+    await user.keyboard('{Enter}');
+
+    const notice = (await screen.findByText(msg('games.catalogBackendOutdated'))).closest('.notice') as HTMLElement;
+    await vi.waitFor(() => expect(document.activeElement).toBe(notice));
+    expect(notice.getAttribute('tabindex')).toBe('-1');
+  });
 });
 
 describe('Catalog: a game already installed', () => {
