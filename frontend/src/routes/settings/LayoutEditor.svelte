@@ -72,6 +72,17 @@
     void focusRow(other, row, 'column');
   }
 
+  // The removed row took its focused button with it: focus goes to the row now in its place, else the
+  // row before it, else the button that adds a separator.
+  async function removeRow(index: number) {
+    apply(removeSeparator(st, index));
+    await tick();
+    const rows = [...(editor?.querySelectorAll<HTMLElement>('[data-list="sidebar"] > [data-row]') ?? [])];
+    const row = rows[index] ?? rows[index - 1];
+    const action = row ? [...row.querySelectorAll<HTMLButtonElement>('button')].find((button) => !button.disabled) : undefined;
+    (action ?? editor?.querySelector<HTMLButtonElement>('[data-action="add-separator"]'))?.focus();
+  }
+
   function resetLayout() {
     apply(toState(undefined));
   }
@@ -207,7 +218,7 @@
               </IconButton>
             {/if}
             {#if separator}
-              <IconButton size="sm" label={msg('settings.layoutRemoveSeparator')} onclick={() => apply(removeSeparator(st, index))}>
+              <IconButton size="sm" label={msg('settings.layoutRemoveSeparator')} onclick={() => removeRow(index)}>
                 <X size={14} />
               </IconButton>
             {:else}
@@ -245,7 +256,7 @@
       />
       {@render rows('sidebar', '')}
       <div>
-        <Button size="sm" variant="secondary" disabled={!canAddSeparator(st)} onclick={() => apply(addSeparator(st))}>
+        <Button size="sm" variant="secondary" data-action="add-separator" disabled={!canAddSeparator(st)} onclick={() => apply(addSeparator(st))}>
           <Plus size={14} />{msg('settings.layoutAddSeparator')}
         </Button>
       </div>

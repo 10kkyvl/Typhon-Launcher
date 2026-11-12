@@ -65,6 +65,20 @@ describe('LayoutEditor: the row buttons', () => {
     expect(document.activeElement).toBe(within(sidebarRows()[at - 2]).getByRole('button', { name: msg('settings.layoutMoveUp') }));
   });
 
+  it('puts focus on the row that takes a removed separator place', async () => {
+    const { user } = renderDom(LayoutEditor, {});
+    const at = names().indexOf(msg('settings.layoutSeparator'));
+    const count = names().length;
+    const after = names()[at + 1];
+    within(sidebarRows()[at]).getByRole('button', { name: msg('settings.layoutRemoveSeparator') }).focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(names()).toHaveLength(count - 1);
+    expect(names()[at]).toBe(after);
+    expect(document.activeElement).toBe(within(sidebarRows()[at]).getByRole('button', { name: msg('settings.layoutMoveUp') }));
+  });
+
   it('keeps focus on a row moved to the other column of the game page', async () => {
     const { user } = renderDom(LayoutEditor, {});
     const main = screen.getByRole('list', { name: msg('settings.layoutMainColumn') });
