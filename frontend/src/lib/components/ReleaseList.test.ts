@@ -31,7 +31,7 @@ describe('console images', () => {
     const html = render(ReleaseList, { props: { groups: [image('img', 'ps2'), group('pc', 'Game')], ondownload: () => {} } }).body;
     expect(html.indexOf('Game</span>')).toBeLessThan(html.indexOf('Game (ps2)'));
     expect(html).toContain('Образы для консолей');
-    expect(html).toContain('console-tag');
+    expect(html).toMatch(/class="badge neutral[^"]*"/);
     expect(html).toContain('PS2');
   });
 
@@ -46,14 +46,14 @@ describe('console images', () => {
     const html = render(ReleaseList, {
       props: { groups: [image('a', 'ps3'), image('b', 'vita'), image('c', 'ps4')], ondownload: () => {} },
     }).body;
-    expect(html).toContain('>PS3<');
-    expect(html).toContain('>PS Vita<');
-    expect(html).toContain('>PS4<');
+    expect(html).toMatch(/>\s*PS3\s*</);
+    expect(html).toMatch(/>\s*PS Vita\s*</);
+    expect(html).toMatch(/>\s*PS4\s*</);
     expect(html).not.toContain('VITA');
   });
 
   it('shows no console tag on a PC release', () => {
     const html = render(ReleaseList, { props: { groups: [group('pc', 'Game')], ondownload: () => {} } }).body;
-    expect(html).not.toContain('console-tag');
+    expect(html).not.toMatch(/class="badge neutral/);
   });
 });
