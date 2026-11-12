@@ -74,6 +74,15 @@ describe('ReviewCard: a vote in flight', () => {
     await user.keyboard('{Enter}');
     expect(vote).toHaveBeenCalledTimes(1);
 
+    // The other chip is not what runs: it refuses presses and keeps its count in sight.
+    const no = screen.getByRole('button', { name: `${msg('reviews.helpfulNo')} (1)` });
+    expect(no.hasAttribute('aria-busy')).toBe(false);
+    expect(no.getAttribute('aria-disabled')).toBe('true');
+    expect(no.querySelector('.content')?.classList.contains('waiting')).toBe(false);
+    await user.click(no);
+    expect(vote).toHaveBeenCalledTimes(1);
+    yes.focus();
+
     answer({ helpful: 3, unhelpful: 1, myVote: 'helpful' } as Awaited<ReturnType<typeof vote>>);
     await vi.waitFor(() => expect(yes.hasAttribute('aria-busy')).toBe(false));
     expect(yes.hasAttribute('aria-disabled')).toBe(false);

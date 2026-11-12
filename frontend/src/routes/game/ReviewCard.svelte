@@ -26,7 +26,8 @@
   }
 
   let optimistic = $state<VoteState | null>(null);
-  let voting = $state(false);
+  // The chip whose vote is being sent: it is busy; the other refuses presses but keeps its count shown.
+  let voting = $state<ReviewVote>('');
   let expanded = $state(false);
   let reportOpen = $state(false);
 
@@ -60,7 +61,7 @@
     if (next === 'unhelpful') unhelpfulDelta += 1;
 
     optimistic = { helpful: prevHelpful + helpfulDelta, unhelpful: prevUnhelpful + unhelpfulDelta, myVote: next };
-    voting = true;
+    voting = value;
     try {
       const result = await voteReview(review.id, next);
       optimistic = { helpful: result.helpful, unhelpful: result.unhelpful, myVote: (result.myVote as ReviewVote) || '' };
@@ -69,7 +70,7 @@
       const code = err instanceof AccountError ? err.code : '';
       toast(reviewToastMessage(code, msg('reviews.voteFailed')), 'danger');
     } finally {
-      voting = false;
+      voting = '';
     }
   }
 </script>
@@ -113,10 +114,20 @@
     <div class="helpful">
       <span class="helpful-label">{msg('reviews.helpfulQuestion')}</span>
       {#if showActions}
-        <Chip selected={myVote === 'helpful'} busy={voting} onclick={() => castVote('helpful')}>
+        <Chip
+          selected={myVote === 'helpful'}
+          busy={voting === 'helpful'}
+          aria-disabled={voting === 'unhelpful' ? 'true' : undefined}
+          onclick={() => castVote('helpful')}
+        >
           {msg('reviews.helpfulYes')} ({helpful})
         </Chip>
-        <Chip selected={myVote === 'unhelpful'} busy={voting} onclick={() => castVote('unhelpful')}>
+        <Chip
+          selected={myVote === 'unhelpful'}
+          busy={voting === 'unhelpful'}
+          aria-disabled={voting === 'helpful' ? 'true' : undefined}
+          onclick={() => castVote('unhelpful')}
+        >
           {msg('reviews.helpfulNo')} ({unhelpful})
         </Chip>
       {:else}
