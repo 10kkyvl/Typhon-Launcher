@@ -72,7 +72,6 @@
   let releases = $state<ReleaseView[]>([]);
   let total = $state(0);
   let loadingReleases = $state(false);
-  let loadingDetails = $state(false);
   let refreshing = $state(false);
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -118,10 +117,8 @@
   // A failure stays on screen, its Retry busy, until the answer replaces it.
   async function loadDetails(id: string) {
     const ticket = detailsRequests.begin();
-    loadingDetails = true;
     const result = await detailsRequests.settle(ticket, getSourceDetails(id));
     if (result.kind === 'stale') return;
-    loadingDetails = false;
     if (result.kind === 'error') {
       details = null;
       detailsError = sourceErrorText(result.error, msg('modals.sourceDetailsLoadFailed'));
@@ -152,6 +149,25 @@
     if (!sourceId) return;
     loadDetails(sourceId);
     loadReleases(sourceId);
+  }
+
+  let detailsRetrying = $state(false);
+  let releasesRetrying = $state(false);
+  let filtersEl = $state<HTMLElement>();
+  let tableEl = $state<HTMLElement>();
+
+  // The notices' retries load again; a failure stays on screen until the answer. On success the
+  // focus goes to the status filter after the details, or to the first release the list brought.
+  async function retryDetails(): Promise<boolean> {
+    if (!sourceId) return false;
+    await loadDetails(sourceId);
+    return detailsError === '';
+  }
+
+  async function retryReleases(): Promise<boolean> {
+    if (!sourceId) return false;
+    await loadReleases(sourceId);
+    return releasesError === '';
   }
 
   function onFilterChange(status: string) {
@@ -243,12 +259,9 @@
         </div>
       </section>
 
-      {#if detailsError}
-        <Notice tone="danger" compact>
+      {#if detailsError || detailsRetrying}
+        <Notice tone="danger" compact bind:retrying={detailsRetrying} retry={{ label: msg('common.retry'), run: retryDetails, within: () => filtersEl }}>
           {detailsError}
-          {#snippet action()}
-            <Button size="sm" busy={loadingDetails} onclick={() => sourceId && loadDetails(sourceId)}>{msg('common.retry')}</Button>
-          {/snippet}
         </Notice>
       {:else if details}
         <section class="counters">
@@ -260,12 +273,12 @@
         </section>
       {/if}
 
-      <section class="filters">
+      <section class="filters" bind:this={filtersEl}>
         <Select options={statusOptions} value={filterStatus} width="18rem" label={msg('modals.sourceDetailsColStatus')} onchange={onFilterChange} />
         <SearchInput bind:value={search} label={msg('modals.sourceDetailsSearchPlaceholder')} placeholder={msg('modals.sourceDetailsSearchPlaceholder')} oninput={onSearchInput} />
       </section>
 
-      <section class="table">
+      <section class="table" bind:this={tableEl}>
         <div class="thead">
           <span class="th">{msg('modals.sourceDetailsColRawTitle')}</span>
           <span class="th">{msg('modals.sourceDetailsColGame')}</span>
@@ -274,13 +287,10 @@
           <span class="th">{msg('modals.sourceDetailsColUploaded')}</span>
           <span class="th">{msg('modals.sourceDetailsColStatus')}</span>
         </div>
-        {#if releasesError}
+        {#if releasesError || releasesRetrying}
           <div class="list-note">
-            <Notice tone="danger" compact>
+            <Notice tone="danger" compact bind:retrying={releasesRetrying} retry={{ label: msg('common.retry'), run: retryReleases, within: () => tableEl }}>
               {releasesError}
-              {#snippet action()}
-                <Button size="sm" busy={loadingReleases} onclick={() => sourceId && loadReleases(sourceId)}>{msg('common.retry')}</Button>
-              {/snippet}
             </Notice>
           </div>
         {:else if loadingReleases}

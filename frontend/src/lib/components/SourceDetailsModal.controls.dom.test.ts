@@ -113,6 +113,63 @@ describe('SourceDetailsModal: retrying what failed to load', () => {
   });
 });
 
+describe('SourceDetailsModal: where a Retry that worked leaves the focus, and a failure said again', () => {
+  const release = { release: { id: 'r1', rawTitle: 'Hades v1.0', size: 1, uploadedAt: '', matchStatus: 'matched', matchConfidence: 1, availability: 'available' }, sourceName: 'FitGirl', gameTitle: 'Hades' } as unknown as ReleasePage['items'][number];
+
+  async function pressRetry(dialog: HTMLElement, words: string) {
+    const keys = user();
+    const notice = (await within(dialog).findByText(words)).closest('.notice') as HTMLElement;
+    const region = notice.querySelector('[role="alert"]') as HTMLElement;
+    const before = region.firstElementChild;
+    const retry = within(notice).getByRole('button', { name: msg('common.retry') });
+    retry.focus();
+    await keys.keyboard('{Enter}');
+    return { region, before, retry };
+  }
+
+  it('the details: to the status filter that follows them', async () => {
+    vi.mocked(getSourceDetails).mockRejectedValueOnce(new Error('ipc')).mockResolvedValueOnce(details);
+    const dialog = await openDialog();
+
+    await pressRetry(dialog, msg('modals.sourceDetailsLoadFailed'));
+
+    await vi.waitFor(() => expect(document.activeElement).not.toBe(document.body));
+    expect(document.activeElement).toBe(within(dialog).getByRole('combobox', { name: msg('modals.sourceDetailsColStatus') }));
+  });
+
+  it('the releases: to the first release it brought', async () => {
+    vi.mocked(queryReleases).mockRejectedValueOnce(new Error('ipc')).mockResolvedValueOnce({ ...page(1), items: [release] });
+    const dialog = await openDialog();
+
+    await pressRetry(dialog, msg('modals.sourceDetailsReleasesFailed'));
+
+    await vi.waitFor(() => expect(document.activeElement).not.toBe(document.body));
+    expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: /Hades v1\.0/ }));
+  });
+
+  it('the details failing again in the same words are said again, the focus kept on Retry', async () => {
+    vi.mocked(getSourceDetails).mockRejectedValue(new Error('ipc'));
+    const dialog = await openDialog();
+
+    const { region, before, retry } = await pressRetry(dialog, msg('modals.sourceDetailsLoadFailed'));
+
+    await vi.waitFor(() => expect(region.firstElementChild).not.toBe(before));
+    expect(region.textContent?.trim()).toBe(msg('modals.sourceDetailsLoadFailed'));
+    expect(document.activeElement).toBe(retry);
+  });
+
+  it('the releases failing again in the same words are said again, the focus kept on Retry', async () => {
+    vi.mocked(queryReleases).mockRejectedValue(new Error('ipc'));
+    const dialog = await openDialog();
+
+    const { region, before, retry } = await pressRetry(dialog, msg('modals.sourceDetailsReleasesFailed'));
+
+    await vi.waitFor(() => expect(region.firstElementChild).not.toBe(before));
+    expect(region.textContent?.trim()).toBe(msg('modals.sourceDetailsReleasesFailed'));
+    expect(document.activeElement).toBe(retry);
+  });
+});
+
 describe('SourceDetailsModal: the rest of the dialog', () => {
   it('says the list is loading with a labelled spinner', async () => {
     const pending = deferred<Page>();

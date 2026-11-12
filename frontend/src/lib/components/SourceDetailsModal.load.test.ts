@@ -239,8 +239,8 @@ describe('focusing a release from a notification', () => {
 
 describe('source details template', () => {
   it('shows each load failure as a danger notice with a retry, ahead of the loader and the empty state', () => {
-    expect(/\{#if detailsError\}\s*<Notice tone="danger" compact>[\s\S]*?loadDetails\(sourceId\)/.test(source)).toBe(true);
-    expect(/\{#if releasesError\}\s*<div class="list-note">\s*<Notice tone="danger" compact>[\s\S]*?loadReleases\(sourceId\)[\s\S]*?\{:else if loadingReleases\}[\s\S]*?\{:else if releases\.length === 0\}/.test(source)).toBe(true);
+    expect(/\{#if detailsError \|\| detailsRetrying\}\s*<Notice tone="danger" compact bind:retrying=\{detailsRetrying\} retry=\{\{[^}]*run: retryDetails/.test(source)).toBe(true);
+    expect(/\{#if releasesError \|\| releasesRetrying\}\s*<div class="list-note">\s*<Notice tone="danger" compact bind:retrying=\{releasesRetrying\} retry=\{\{[^}]*run: retryReleases[\s\S]*?\{:else if loadingReleases\}[\s\S]*?\{:else if releases\.length === 0\}/.test(source)).toBe(true);
   });
 
   it('keeps the pager on a later page in error, with the range text hidden', () => {
