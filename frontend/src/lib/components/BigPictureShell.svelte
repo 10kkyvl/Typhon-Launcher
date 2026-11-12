@@ -43,7 +43,7 @@
   let overlayFocus = '';
   let textFocus = '';
   let resolveText: ((value: string | null) => void) | undefined;
-  let lastFocused: HTMLButtonElement | undefined;
+  let lastFocused: HTMLElement | undefined;
   let lastFocusKey = '';
   const handles: Record<number, unknown> = {};
   const launchPlaces = new Map<string, { key: number; focus: string }>();
@@ -65,8 +65,9 @@
     ];
   });
 
-  function controls(root: HTMLElement | undefined): HTMLButtonElement[] {
-    return root ? [...root.querySelectorAll<HTMLButtonElement>('button[data-bp-focus]:not(:disabled)')]
+  // Buttons, and links with an address (a store page) that A opens through the same click.
+  function controls(root: HTMLElement | undefined): HTMLElement[] {
+    return root ? [...root.querySelectorAll<HTMLElement>('button[data-bp-focus]:not(:disabled), a[href][data-bp-focus]')]
       .filter((node) => node.getClientRects().length > 0 && !node.closest('[inert], [hidden], [aria-hidden="true"]')) : [];
   }
   function scope(): HTMLElement | undefined {
@@ -186,7 +187,7 @@
     }
     if (command === 'confirm') {
       const element = document.activeElement;
-      if (element instanceof HTMLButtonElement && controls(root).includes(element)) element.click();
+      if (element instanceof HTMLElement && controls(root).includes(element)) element.click();
       else void focusPage();
       return;
     }
@@ -205,14 +206,14 @@
     const nodes = controls(scope());
     if (!nodes.length) return;
     event.preventDefault();
-    const index = nodes.indexOf(document.activeElement as HTMLButtonElement);
+    const index = nodes.indexOf(document.activeElement as HTMLElement);
     focusControl(nodes[(index + (event.shiftKey ? -1 : 1) + nodes.length) % nodes.length]);
   }
   onMount(() => {
     const unsubscribe = runningGames.subscribe((ids) => session.observe(ids));
     const stopInput = startBigPictureInput({ onCommand: command, isEnabled: () => !applyingUpdate && !exiting, onDevice: (next) => device = next });
     const rememberFocus = (event: FocusEvent) => {
-      if (event.target instanceof HTMLButtonElement && event.target.dataset.bpFocus) {
+      if (event.target instanceof HTMLElement && event.target.dataset.bpFocus) {
         lastFocused = event.target; lastFocusKey = event.target.dataset.bpFocus;
       }
     };
@@ -223,10 +224,10 @@
     const observer = new MutationObserver(() => {
       if (disposed || applyingUpdate || !document.hasFocus() || textRequest || layerTakesInput()) return;
       const buttons = controls(scope());
-      if (buttons.includes(document.activeElement as HTMLButtonElement)) return;
+      if (buttons.includes(document.activeElement as HTMLElement)) return;
       // Pending controls are often disabled for one RPC. Wait for that same
       // control to return instead of moving the user back to the page header.
-      if (lastFocused?.isConnected && lastFocused.disabled && !lastFocused.closest('[hidden], [inert]')) return;
+      if (lastFocused instanceof HTMLButtonElement && lastFocused.isConnected && lastFocused.disabled && !lastFocused.closest('[hidden], [inert]')) return;
       if (!focusKey(lastFocusKey)) void focusPage();
     });
     observer.observe(shell, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled', 'hidden', 'inert'] });

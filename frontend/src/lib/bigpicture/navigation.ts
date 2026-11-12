@@ -108,9 +108,10 @@ function isDisabled(element: FocusableElement): boolean {
   return element.disabled === true || isTrueAttribute(element, 'disabled') || isTrueAttribute(element, 'aria-disabled');
 }
 
+// Buttons, and a link with an address marked for Big Picture (a store page): no other link.
 function isFocusable(element: FocusableElement): boolean {
-  const tagName = element.tagName;
-  if (typeof tagName === 'string' && tagName.toLowerCase() !== 'button') return false;
+  const tagName = typeof element.tagName === 'string' ? element.tagName.toLowerCase() : undefined;
+  if (tagName !== undefined && tagName !== 'button' && !(tagName === 'a' && getAttribute(element, 'href') !== null)) return false;
   return !isDisabled(element) && !isHidden(element) && typeof element.focus === 'function';
 }
 
