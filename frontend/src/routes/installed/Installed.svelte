@@ -674,13 +674,14 @@
 
   <Modal dismissible={!adding} bind:open={addOpen} title={msg('games.installedAddGameModalTitle')}>
     <div class="form">
-      <label class="field">
-        <span class="field-label">{msg('games.executableLabel')}</span>
+      <!-- Browse stands beside the field, outside its label: the field is named by the label alone. -->
+      <div class="field">
+        <label class="field-label" for="{uid}-executable">{msg('games.executableLabel')}</label>
         <div class="field-row">
-          <input class="input" type="text" placeholder="C:\Games\Game\game.exe" bind:value={newExecutable} />
+          <input id="{uid}-executable" class="input" type="text" placeholder="C:\Games\Game\game.exe" bind:value={newExecutable} />
           <Button onclick={browseExecutable}>{msg('games.installedBrowseButton')}</Button>
         </div>
-      </label>
+      </div>
       <label class="field">
         <span class="field-label">{msg('games.installedTitleFieldLabel')}</span>
         <input class="input" type="text" placeholder={msg('games.installedTitlePlaceholder')} bind:value={newTitle} />

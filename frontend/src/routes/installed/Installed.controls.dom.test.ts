@@ -13,10 +13,13 @@ import { renderDom } from '../../lib/testing/dom';
 import Installed from './Installed.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
-vi.mock('../../lib/services/backend', () => ({ inWails: false }));
+// Only the add-game dialog needs the desktop app: its test turns this on before pressing "Add game".
+const backend = vi.hoisted(() => ({ inWails: false }));
+vi.mock('../../lib/services/backend', () => backend);
 vi.mock('../../lib/services/library', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/library')>()),
   playGame: vi.fn(async () => {}),
+  addGame: vi.fn(),
 }));
 vi.mock('../../lib/services/system', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/system')>()),
@@ -140,4 +143,27 @@ describe('Installed: no library folder yet', () => {
     expect(empty).not.toBeNull();
     expect(within(empty as HTMLElement).getByRole('button', { name: msg('games.installedChooseFolderButton') })).toBeTruthy();
   });
+});
+
+describe('Installed: adding a game by hand', () => {
+  afterEach(() => {
+    backend.inWails = false;
+  });
+
+  async function openDialog() {
+    const view = renderDom(Installed);
+    backend.inWails = true;
+    await view.user.click(screen.getByRole('button', { name: msg('games.installedAddGameButton') }));
+    return { view, dialog: await screen.findByRole('dialog') };
+  }
+
+  it('names the executable field by its label alone, Browse is a button beside it', async () => {
+    const { dialog } = await openDialog();
+
+    const field = within(dialog).getByRole('textbox', { name: msg('games.executableLabel') });
+    const browse = within(dialog).getByRole('button', { name: msg('games.installedBrowseButton') });
+    expect(browse.closest('label')).toBeNull();
+    expect(field.closest('label')).toBeNull();
+  });
+
 });
