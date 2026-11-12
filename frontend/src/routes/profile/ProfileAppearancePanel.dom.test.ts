@@ -220,6 +220,18 @@ describe('the messages of the profile appearance', () => {
     expect(error?.textContent).toMatch(/^The text has characters that are not allowed/);
   });
 
+  it('a refused character in the status is announced once, by its field; the editing bar shows it quietly', async () => {
+    const { user } = await editor();
+    const field = screen.getByRole('textbox', { name: 'Status' });
+
+    await user.click(field);
+    await user.paste('gg‮');
+
+    const said = screen.getAllByRole('alert').filter((alert) => alert.textContent?.includes('characters that are not allowed'));
+    expect(said).toEqual([document.getElementById(field.getAttribute('aria-describedby') ?? '')]);
+    expect(screen.getAllByText(/^The text has characters that are not allowed/)).toHaveLength(2);
+  });
+
   it('a cover that cannot be used is a danger notice of the cover section', async () => {
     const { user } = await editor();
 

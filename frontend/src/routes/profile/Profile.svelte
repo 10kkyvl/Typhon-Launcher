@@ -402,7 +402,7 @@
               {#if saveError || layoutError}
                 <span class="topbar-sub error" role="alert">{saveError || layoutError}</span>
               {:else if statusProblem}
-                <span class="topbar-sub error" role="alert">{layoutErrorText(statusProblem)}</span>
+                <span class="topbar-sub error">{layoutErrorText(statusProblem)}</span>
               {:else if issues.length > 0}
                 <span class="topbar-sub">{msg('profile.fillBlocks')}</span>
               {:else}
