@@ -38,6 +38,37 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
     ['danger', true],
   ],
+  'routes/settings/AppearanceTab.svelte': [
+    // The stored theme's CSS breaks a later rule: a fact of the theme, shown whenever it is edited.
+    ['warning', false],
+    ['danger', true],
+  ],
+  'routes/settings/DiscordCard.svelte': [
+    ['danger', true],
+    ['danger', true],
+    ['warning', true],
+    ['danger', true],
+  ],
+  'routes/settings/EmulatorsCard.svelte': [
+    ['danger', true],
+    // A known hang of one emulator on this platform, shown with its row.
+    ['warning', false],
+  ],
+  'routes/settings/LibraryFoldersRow.svelte': [['danger', true]],
+  'routes/settings/LibraryLocationRow.svelte': [['danger', true]],
+  'routes/settings/NetworkSettingsCard.svelte': [
+    ['danger', true],
+    ['warning', true],
+    // What the proxy mode turns off, shown with the proxy fields.
+    ['warning', false],
+    ['dynamic', true],
+    ['danger', true],
+  ],
+  'routes/settings/Settings.svelte': [
+    ['danger', true],
+    ['danger', true],
+    ['dynamic', true],
+  ],
   'routes/stats/Stats.svelte': [['danger', true]],
   'routes/support/NewTicket.svelte': [
     ['danger', true],
