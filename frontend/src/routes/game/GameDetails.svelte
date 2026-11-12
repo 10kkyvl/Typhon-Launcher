@@ -1652,11 +1652,13 @@
         {#if primary.kind === 'retry-download' && terminalDownload?.error}
           <div class="note-plate"><Notice tone="danger" announce={false}>{installErrorText(terminalDownload.error)}</Notice></div>
         {:else if localGame && !installed && wasInstalled}
-          <p class="note">
-            {primary.kind === 'install-download'
-              ? msg('games.detailUninstalledDownloadedNote')
-              : msg('games.detailUninstalledNote')}
-          </p>
+          <div class="note-plate">
+            <Notice tone="info" announce={false}>
+              {primary.kind === 'install-download'
+                ? msg('games.detailUninstalledDownloadedNote')
+                : msg('games.detailUninstalledNote')}
+            </Notice>
+          </div>
         {/if}
       </div>
     </div>
@@ -2028,13 +2030,6 @@
     font-size: var(--font-xs);
     color: var(--text-2);
     font-variant-numeric: tabular-nums;
-  }
-
-  .note {
-    margin-top: var(--space-4);
-    max-width: 56rem;
-    font-size: var(--font-sm);
-    color: var(--text-2);
   }
 
   .note-plate {

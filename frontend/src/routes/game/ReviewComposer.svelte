@@ -271,7 +271,7 @@
         </div>
         <p class="mine-body">{mine.review.body}</p>
         {#if mine.review.hidden}
-          <p class="hidden-note">{msg('reviews.composerHiddenNote')}</p>
+          <div class="hidden-note"><Notice tone="warning" compact announce={false}>{msg('reviews.composerHiddenNote')}</Notice></div>
         {/if}
         <div class="mine-actions">
           {#if mine.eligibility.canPost}
@@ -454,8 +454,6 @@
 
   .hidden-note {
     margin-top: var(--space-2);
-    font-size: var(--font-xs);
-    color: var(--warning);
   }
 
   .mine-actions {

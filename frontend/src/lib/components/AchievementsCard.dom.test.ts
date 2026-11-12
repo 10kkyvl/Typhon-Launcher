@@ -50,6 +50,20 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe('AchievementsCard: what the list lacks', () => {
+  it('states missing names and unread files as warning notices read with the card', async () => {
+    vi.mocked(fetchAchievements).mockResolvedValue(view({ schemaError: 'unavailable', partial: true }));
+    renderDom(AchievementsCard, { gameId: 'g1' });
+
+    const names = (await screen.findByText(msg('games.achievementsSchemaUnavailable'))).closest('.notice');
+    const partial = screen.getByText(msg('games.achievementsPartial')).closest('.notice');
+
+    expect([names?.getAttribute('data-tone'), partial?.getAttribute('data-tone')]).toEqual(['warning', 'warning']);
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
 describe('AchievementsCard: retrying a failed load', () => {
   it('keeps the notice and the focus on its busy Retry until the answer, then focuses the refresh', async () => {
     const again = deferred<AchievementsView>();

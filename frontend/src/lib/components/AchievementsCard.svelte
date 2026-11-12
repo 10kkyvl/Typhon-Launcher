@@ -169,10 +169,10 @@
       </div>
 
       {#if namesMissing}
-        <p class="note warn">{schemaNote}</p>
+        <div class="note"><Notice tone="warning" compact announce={false}>{schemaNote}</Notice></div>
       {/if}
       {#if view.partial}
-        <p class="note warn">{$t('games.achievementsPartial')}</p>
+        <div class="note"><Notice tone="warning" compact announce={false}>{$t('games.achievementsPartial')}</Notice></div>
       {/if}
 
       <ul class="grid" aria-label={$t('games.achievementsListLabel')}>
@@ -259,12 +259,6 @@
 
   .note {
     margin-bottom: var(--space-3);
-    font-size: var(--font-xs);
-    line-height: 1.4;
-  }
-
-  .note.warn {
-    color: var(--warning);
   }
 
   .grid {

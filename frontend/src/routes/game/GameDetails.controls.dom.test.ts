@@ -188,3 +188,15 @@ describe('GameDetails: retrying what failed to load', () => {
     await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1, name: 'Celeste' })));
   });
 });
+
+describe('GameDetails: an uninstalled game', () => {
+  it('states that it was uninstalled in an info notice read with the page', async () => {
+    libraryGames.set([{ ...hades, uninstalled: true }]);
+    renderDom(GameDetails, { id: 'g1' });
+
+    const note = (await screen.findByText(msg('games.detailUninstalledNote'))).closest('.notice');
+
+    expect(note?.getAttribute('data-tone')).toBe('info');
+    expect(note?.querySelector('[role="status"], [role="alert"]')).toBeNull();
+  });
+});

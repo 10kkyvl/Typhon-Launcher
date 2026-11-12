@@ -131,7 +131,7 @@
   {#if loading}
     <p class="note" role="status">{msg('screenshots.loading')}</p>
   {:else if noLibrary}
-    <p class="note">{msg('screenshots.noLibrary')}</p>
+    <Notice tone="warning" compact announce={false}>{msg('screenshots.noLibrary')}</Notice>
   {:else if loadFailed}
     <Notice tone="danger" compact>{msg('screenshots.loadError')}</Notice>
   {:else if shots.length === 0}
