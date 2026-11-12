@@ -7,6 +7,8 @@
   import EmptyState from './EmptyState.svelte';
   import IconButton from './IconButton.svelte';
   import Modal from './Modal.svelte';
+  import Notice from './Notice.svelte';
+  import Spinner from './Spinner.svelte';
   import StatusBadge from './StatusBadge.svelte';
   import { msg } from '../i18n';
 
@@ -66,9 +68,9 @@
 
 <Modal bind:open title={msg('modals.sentDataTitle')} width="76rem">
   {#if loading}
-    <p class="status">{msg('modals.sentDataLoading')}</p>
+    <div class="status"><Spinner label={msg('modals.sentDataLoading')} /></div>
   {:else if failed}
-    <p class="status error">{msg('modals.sentDataLoadFailed')}</p>
+    <Notice tone="danger" compact>{msg('modals.sentDataLoadFailed')}</Notice>
   {:else if entries.length === 0}
     <EmptyState level={4}
       title={msg('modals.sentDataEmptyTitle')}
@@ -89,7 +91,7 @@
             </IconButton>
           </div>
           {#if !entry.formatted}
-            <p class="warn">{msg('modals.sentDataTruncatedWarning')}</p>
+            <Notice tone="warning" compact announce={false}>{msg('modals.sentDataTruncatedWarning')}</Notice>
           {/if}
           <pre class="payload">{entry.payload}</pre>
         </div>
@@ -100,13 +102,8 @@
 
 <style>
   .status {
+    display: flex;
     padding: var(--space-6) 0;
-    font-size: var(--font-sm);
-    color: var(--text-3);
-  }
-
-  .status.error {
-    color: var(--danger);
   }
 
   .list {
@@ -152,14 +149,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .warn {
-    font-size: var(--font-xs);
-    color: var(--warning);
-    background: var(--warning-subtle);
-    padding: 0.6rem var(--space-3);
-    border-radius: var(--radius-sm);
   }
 
   .payload {

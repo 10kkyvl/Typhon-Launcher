@@ -2,6 +2,7 @@
   import { untrack } from 'svelte';
   import Button from './Button.svelte';
   import Chip from './Chip.svelte';
+  import EmptyState from './EmptyState.svelte';
   import Modal from './Modal.svelte';
   import Select from './Select.svelte';
   import TagEditor from './TagEditor.svelte';
@@ -25,6 +26,8 @@
   let status = $state(untrack(() => collection?.status ?? ''));
   let suggestions = $state<string[]>([]);
   let busy = $state(false);
+  // Which footer button set `busy`: that one stays focused and busy, the others wait.
+  let pressed = $state<'' | 'save' | 'remove'>('');
   let editor: TagEditor;
 
   const fold = (value: string) => value.normalize('NFKC').toLocaleLowerCase();
@@ -60,6 +63,7 @@
   async function save() {
     editor.commit();
     busy = true;
+    pressed = 'save';
     try {
       await saveCollection({
         id: collection?.id ?? '',
@@ -75,12 +79,14 @@
       toast(libraryErrorText(err, msg('modals.collectionSaveFailed')), 'danger');
     } finally {
       busy = false;
+      pressed = '';
     }
   }
 
   async function remove() {
     if (!collection) return;
     busy = true;
+    pressed = 'remove';
     try {
       await deleteCollection(collection.id);
       open = false;
@@ -88,6 +94,7 @@
       toast(libraryErrorText(err, msg('modals.collectionDeleteFailed')), 'danger');
     } finally {
       busy = false;
+      pressed = '';
     }
   }
 </script>
@@ -112,11 +119,11 @@
     </div>
 
     <div class="field">
-      <span class="field-label">{msg('modals.collectionGenresLabel')}</span>
+      <span class="field-label" id="{uid}-genres-label">{msg('modals.collectionGenresLabel')}</span>
       {#if shownGenres.length === 0}
-        <p class="hint">{msg('modals.collectionGenresEmpty')}</p>
+        <EmptyState size="inline" title={msg('modals.collectionGenresEmpty')} />
       {:else}
-        <div class="chips">
+        <div class="chips" role="group" aria-labelledby="{uid}-genres-label">
           {#each shownGenres as genre (genre)}
             <Chip selected={picked.some((own) => fold(own) === fold(genre))} onclick={() => toggleGenre(genre)}>
               {genreLabel(genre)}
@@ -135,11 +142,11 @@
   {#snippet footer()}
     {#if collection}
       <span class="remove">
-        <Button variant="danger" disabled={busy} onclick={remove}>{msg('common.delete')}</Button>
+        <Button variant="danger" disabled={busy && pressed !== 'remove'} busy={pressed === 'remove'} onclick={remove}>{msg('common.delete')}</Button>
       </span>
     {/if}
     <Button disabled={busy} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
-    <Button variant="primary" disabled={busy || !name.trim()} onclick={save}>{msg('common.save')}</Button>
+    <Button variant="primary" disabled={(busy && pressed !== 'save') || !name.trim()} busy={pressed === 'save'} onclick={save}>{msg('common.save')}</Button>
   {/snippet}
 </Modal>
 
@@ -168,11 +175,6 @@
     gap: 0.6rem;
     max-height: 18rem;
     overflow-y: auto;
-  }
-
-  .hint {
-    font-size: var(--font-sm);
-    color: var(--text-3);
   }
 
   .remove {

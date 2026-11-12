@@ -2,6 +2,7 @@
   import { untrack } from 'svelte';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
+  import Notice from './Notice.svelte';
   import Select from './Select.svelte';
   import Toggle from './Toggle.svelte';
   import { msg } from '../i18n';
@@ -49,11 +50,14 @@
   const ext = $derived(imageExtension(image));
   const hasGameFiles = $derived(imageNames(platforms).length > 0);
   const noConsole = $derived(Boolean(image) && platforms.length > 0 && matching.length === 0);
+  // No console takes the file: said by the image field, which is marked wrong.
+  const unmatched = $derived(noConsole && !loadFailed);
   const options = $derived([
     { id: '', label: msg('emul.addConsoleChoose') },
     ...matching.map((item) => ({ id: item.id, label: item.name })),
   ]);
-  const canAdd = $derived(Boolean(image) && Boolean(platform) && Boolean(title.trim()) && !adding);
+  const ready = $derived(Boolean(image) && Boolean(platform) && Boolean(title.trim()));
+  const canAdd = $derived(ready && !adding);
 
   $effect(() => {
     if (!open) return;
@@ -158,27 +162,31 @@
 
 <Modal bind:open title={msg('emul.addTitle')}>
   <div class="form">
-    <label class="field">
-      <span class="field-label">{msg('emul.addImageLabel')}</span>
+    <div class="field">
+      <label class="field-label" for="{uid}-image">{msg('emul.addImageLabel')}</label>
       <div class="field-row">
         <input
+          id="{uid}-image"
           class="input"
           type="text"
           placeholder={msg('emul.addImagePlaceholder')}
+          aria-invalid={unmatched ? 'true' : undefined}
+          aria-describedby={[unmatched ? `${uid}-image-error` : '', hasGameFiles ? `${uid}-image-hint` : ''].filter(Boolean).join(' ') || undefined}
           value={image}
           oninput={(e) => pick(e.currentTarget.value)}
         />
         <Button onclick={browse}>{msg('games.installedBrowseButton')}</Button>
       </div>
-      {#if hasGameFiles}<span class="form-hint">{msg('emul.addGameFileHint')}</span>{/if}
-    </label>
+      {#if hasGameFiles}<span class="form-hint" id="{uid}-image-hint">{msg('emul.addGameFileHint')}</span>{/if}
+      {#if unmatched}
+        <p class="failure" id="{uid}-image-error" role="alert">
+          {msg('emul.addNoConsole', { ext, list: [...imageExtensions(platforms), ...imageNames(platforms)].join(' ') })}
+        </p>
+      {/if}
+    </div>
     {#if loadFailed}
-      <p class="failure" role="alert">{msg('emul.addConsolesFailed')}</p>
-    {:else if noConsole}
-      <p class="failure" role="alert">
-        {msg('emul.addNoConsole', { ext, list: [...imageExtensions(platforms), ...imageNames(platforms)].join(' ') })}
-      </p>
-    {:else if image}
+      <Notice tone="danger" compact>{msg('emul.addConsolesFailed')}</Notice>
+    {:else if !noConsole && image}
       <div class="field">
         <span class="field-label" id="{uid}-console-label">{msg('emul.addConsoleLabel')}</span>
         <Select bind:value={platform} {options} width="100%" labelledby="{uid}-console-label" />
@@ -187,16 +195,18 @@
         {/if}
       </div>
     {/if}
-    <label class="field">
-      <span class="field-label">{msg('games.installedTitleFieldLabel')}</span>
+    <div class="field">
+      <label class="field-label" for="{uid}-title">{msg('games.installedTitleFieldLabel')}</label>
       <input
+        id="{uid}-title"
         class="input"
         type="text"
         placeholder={msg('games.installedTitlePlaceholder')}
+        aria-describedby="{uid}-title-hint"
         bind:value={title}
       />
-      <span class="form-hint">{msg('emul.addTitleHint')}</span>
-    </label>
+      <span class="form-hint" id="{uid}-title-hint">{msg('emul.addTitleHint')}</span>
+    </div>
     <div class="toggle-row">
       <div class="field">
         <span class="field-label" id="{uid}-add-find-cover-label">{msg('emul.addFindCover')}</span>
@@ -204,11 +214,11 @@
       </div>
       <Toggle bind:checked={findCover} labelledby="{uid}-add-find-cover-label" describedby="{uid}-add-find-cover-sub" />
     </div>
-    {#if failure}<p class="failure" role="alert">{failure}</p>{/if}
+    {#if failure}<Notice tone="danger" compact>{failure}</Notice>{/if}
   </div>
   {#snippet footer()}
     <Button onclick={() => (open = false)}>{msg('common.cancel')}</Button>
-    <Button variant="primary" disabled={!canAdd} onclick={submit}>
+    <Button variant="primary" disabled={!ready} busy={adding} onclick={submit}>
       {adding ? msg('games.installedAddingLabel') : msg('common.add')}
     </Button>
   {/snippet}

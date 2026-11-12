@@ -1,12 +1,13 @@
 <script lang="ts">
   import { sourceWarningText } from '../sources/sourceWarnings';
   import { untrack } from 'svelte';
-  import { FileUp, TriangleAlert } from '@lucide/svelte';
+  import { FileUp } from '@lucide/svelte';
   import { add as addSource, addFile as addSourceFile, errorMark, sourceErrorText, toastUnannounced } from '../stores/sources';
   import { selectFeedFile, testSource, testSourceFile, type SourcePreview } from '../services/sources';
   import { toast } from '../stores/toasts';
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
+  import Notice from './Notice.svelte';
   import Spinner from './Spinner.svelte';
   import { msg } from '../i18n';
 
@@ -126,10 +127,7 @@
         <span class="picked" title={path}>{path}</span>
       {/if}
       {#if error}
-        <p class="error">
-          <TriangleAlert size="1.5rem" strokeWidth={1.8} />
-          {error}
-        </p>
+        <Notice tone="danger" compact>{error}</Notice>
       {/if}
     </div>
   {:else if step === 'checking'}
@@ -174,25 +172,16 @@
         <span class="key">{msg('modals.addSourceUnknown')}</span>
         <span class="value">{preview.unknown}</span>
       </div>
-      {#if preview.insecure}
-        <p class="warn">
-          <TriangleAlert size="1.5rem" strokeWidth={1.8} />
-          {msg('modals.addSourceInsecure')}
-        </p>
-      {/if}
-      {#if preview.duplicate}
-        <p class="warn">
-          <TriangleAlert size="1.5rem" strokeWidth={1.8} />
-          {msg('modals.addSourceDuplicate')}
-        </p>
-      {/if}
-      {#if preview.warnings?.length}
+      {#if preview.insecure || preview.duplicate || preview.warnings?.length}
         <div class="warnings">
-          {#each preview.warnings as warning (warning)}
-            <p class="warn">
-              <TriangleAlert size="1.5rem" strokeWidth={1.8} />
-              {sourceWarningText(warning)}
-            </p>
+          {#if preview.insecure}
+            <Notice tone="warning" compact announce={false}>{msg('modals.addSourceInsecure')}</Notice>
+          {/if}
+          {#if preview.duplicate}
+            <Notice tone="warning" compact announce={false}>{msg('modals.addSourceDuplicate')}</Notice>
+          {/if}
+          {#each preview.warnings ?? [] as warning (warning)}
+            <Notice tone="warning" compact announce={false}>{sourceWarningText(warning)}</Notice>
           {/each}
         </div>
       {/if}
@@ -212,7 +201,7 @@
       {:else}
         <Button onclick={back}>{msg('common.back')}</Button>
       {/if}
-      <Button variant="primary" disabled={adding} onclick={submit}>{adding ? msg('modals.addSourceAdding') : msg('common.add')}</Button>
+      <Button variant="primary" busy={adding} onclick={submit}>{adding ? msg('modals.addSourceAdding') : msg('common.add')}</Button>
     {/if}
   {/snippet}
 </Modal>
@@ -266,14 +255,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .error {
-    display: flex;
-    align-items: center;
-    gap: 0.7rem;
-    font-size: var(--font-sm);
-    color: var(--danger);
   }
 
   .loading {
@@ -335,17 +316,6 @@
     display: flex;
     flex-direction: column;
     gap: 0.6rem;
-    margin-top: 0.6rem;
-  }
-
-  .warn {
-    display: flex;
-    align-items: center;
-    gap: 0.7rem;
-    font-size: var(--font-xs);
-    color: var(--warning);
-    background: var(--warning-subtle);
-    border-radius: var(--radius-md);
-    padding: 0.8rem 1rem;
+    margin: 0.6rem 0;
   }
 </style>
