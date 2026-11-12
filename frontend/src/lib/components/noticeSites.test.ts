@@ -38,6 +38,12 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
     ['danger', true],
   ],
+  // The art of the auto theme failed; the cover was refused; the worn frame was revoked before this visit.
+  'routes/profile/ProfileAppearancePanel.svelte': [
+    ['warning', true],
+    ['danger', true],
+    ['warning', false],
+  ],
   'routes/settings/AppearanceTab.svelte': [
     // The stored theme's CSS breaks a later rule: a fact of the theme, shown whenever it is edited.
     ['warning', false],
