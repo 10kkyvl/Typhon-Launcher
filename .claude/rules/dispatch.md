@@ -32,3 +32,5 @@ is re-read in the code before it is applied. After each stage the orchestrator s
 background shells and removes the worktrees of merged or abandoned agent branches; a process this
 session did not start is never killed, only listed for the owner. A worktree gets its own `npm ci`;
 never symlink `node_modules` (`common:build:frontend` runs `npm ci` and deletes the link's target).
+A read-only agent's scratch copy goes in a folder it names itself, and its cleanup removes that
+folder only; the orchestrator's own scripts live outside the shared scratchpad.

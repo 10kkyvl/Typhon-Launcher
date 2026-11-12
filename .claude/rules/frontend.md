@@ -72,3 +72,12 @@ Add a line when a mistake repeats; drop one a guard now enforces.
   Chromium sends `focusout` synchronously while Svelte removes a focused node, and a raw handler
   setting `$state` there throws `state_unsafe_mutation`. jsdom sends none: a test patches
   `Element.prototype.remove` to dispatch `focusout` first.
+- A pressed control never turns `disabled` or vanishes while it holds focus: Chromium drops focus to
+  `<body>`, jsdom does not. `busy` keeps it; when it has to go, hand focus on, and only if it held
+  focus at the press (WebKit does not focus a clicked button). Assert the focus target in the test.
+- A Retry in a load-error notice goes through `Notice`'s `retry` (`bind:retrying` is guarded); its
+  "fails again" test must go red when `run` answers `true`.
+- The Wails dev build is `vite build --mode development`, so `import.meta.env.DEV` is false there:
+  gate dev-only code on `import.meta.env.MODE === 'development'`, inline (see
+  `lib/navigation/showcase.ts`).
+- A `$state` object does not track `Object.hasOwn(obj, key)`; ask with `key in obj`.
