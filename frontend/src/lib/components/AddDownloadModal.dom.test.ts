@@ -90,4 +90,20 @@ describe('AddDownloadModal files', () => {
     await user.click(rights);
     expect(rights.getAttribute('aria-checked')).toBe('true');
   });
+
+  it('names the folder field by its label, and keeps the focus on "start", busy, while the download starts', async () => {
+    let started!: () => void;
+    vi.mocked(startDownloadFrom).mockReturnValueOnce(new Promise((resolve) => (started = () => resolve({} as never))));
+    const { user } = await files();
+    expect(screen.getByRole('textbox', { name: 'Destination folder' })).toHaveProperty('value', '/downloads');
+    const start = screen.getByRole('button', { name: 'Start download' });
+    start.focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(start.getAttribute('aria-busy')).toBe('true');
+    expect(start).toHaveProperty('disabled', false);
+    expect(document.activeElement).toBe(start);
+    started();
+  });
 });

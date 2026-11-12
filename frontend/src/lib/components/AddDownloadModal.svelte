@@ -33,6 +33,7 @@
     initialSource = '',
     origin = undefined,
   }: { open?: boolean; initialSource?: string; origin?: DownloadOrigin } = $props();
+  const uid = $props.id();
 
   let step = $state<'source' | 'loading' | 'files'>('source');
   let source = $state('');
@@ -225,9 +226,9 @@
         <span class="torrent-size">{bytesSize(info.totalBytes)}</span>
       </div>
       <div class="dest">
-        <span class="field-label">{msg('modals.addDownloadDestinationLabel')}</span>
+        <span class="field-label" id="{uid}-destination-label">{msg('modals.addDownloadDestinationLabel')}</span>
         <div class="dest-controls">
-          <input class="input sm" type="text" readonly value={destination} />
+          <input class="input sm" type="text" readonly aria-labelledby="{uid}-destination-label" value={destination} />
           <Button size="sm" onclick={browseDestination}>{msg('modals.addDownloadBrowse')}</Button>
         </div>
       </div>
@@ -264,7 +265,7 @@
         {msg('downloads.selected', { count: selectedCount, size: bytesSize(selectedSize) })}
       </span>
       <Button onclick={() => (open = false)}>{msg('common.cancel')}</Button>
-      <Button variant="primary" disabled={selectedCount === 0 || starting} onclick={start}>{msg('modals.addDownloadStart')}</Button>
+      <Button variant="primary" disabled={selectedCount === 0} busy={starting} onclick={start}>{msg('modals.addDownloadStart')}</Button>
     {/if}
   {/snippet}
 </Modal>
