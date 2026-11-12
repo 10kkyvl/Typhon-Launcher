@@ -99,13 +99,16 @@
     placeholder={msg('games.notesPlaceholder')}
     aria-label={msg('games.notesHeading')}
     aria-invalid={over ? 'true' : undefined}
-    aria-describedby={[phase === 'error' ? `${uid}-error` : '', limit > 0 ? `${uid}-counter` : ''].filter(Boolean).join(' ') || undefined}
+    aria-describedby={[over ? `${uid}-over` : phase === 'error' ? `${uid}-error` : '', limit > 0 ? `${uid}-counter` : ''].filter(Boolean).join(' ') || undefined}
     {oninput}
     {onfocus}
     {onblur}
   ></textarea>
   <div class="foot">
-    {#if phase === 'error'}
+    <!-- Past the limit nothing is saved, whatever an earlier autosave reports: crossing it is said once. -->
+    {#if over}
+      <span class="status error" id="{uid}-over" role="alert">{msg('games.notesTooLong')}</span>
+    {:else if phase === 'error'}
       <span class="status error" id="{uid}-error" role="alert">{errorText}</span>
     {:else}
       <span class="status" role="status">

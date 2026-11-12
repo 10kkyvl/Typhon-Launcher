@@ -39,6 +39,27 @@ describe('GameNotes: a note over the limit', () => {
     await user.type(field, 'abcdef');
 
     expect(field.getAttribute('aria-invalid')).toBe('true');
-    expect(description(field)).toBe(msg('games.notesCounter', { count: 6, limit: 5 }));
+    expect(description(field)).toContain(msg('games.notesCounter', { count: 6, limit: 5 }));
+  });
+
+  it('never says "Saved" while over the limit, and says once that it is too long and not saved', async () => {
+    vi.useFakeTimers();
+    const { user } = renderDom(GameNotes, { gameId: 'g1', stored: '' });
+    await vi.advanceTimersByTimeAsync(0);
+    const field = screen.getByRole('textbox', { name: msg('games.notesHeading') });
+
+    // Typed faster than the autosave delay: "abcde" is queued before the sixth letter crosses the limit.
+    await user.type(field, 'abcdef');
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(document.body.textContent).not.toContain(msg('games.notesSaved'));
+    const alerts = screen.getAllByRole('alert');
+    expect(alerts.map((alert) => alert.textContent?.trim())).toEqual([msg('games.notesTooLong')]);
+    expect(description(field)).toContain(msg('games.notesTooLong'));
+
+    await user.type(field, 'g');
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(screen.getAllByRole('alert')).toEqual(alerts);
+    expect(document.body.textContent).not.toContain(msg('games.notesSaved'));
   });
 });
