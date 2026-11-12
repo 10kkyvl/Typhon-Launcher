@@ -47,7 +47,11 @@
   let lightboxItems = $state<LightboxItem[]>([]);
   let error = $state('');
   let historyRetrying = $state(false);
+  let conversationsRetrying = $state(false);
   let reconnecting = $state(false);
+  // The history failure is about an older page the user asked for, not the newest messages.
+  let olderFailed = false;
+  let list = $state<HTMLElement>();
   let now = $state(new Date());
   let lastRenderedLastMessage = '';
 
@@ -102,19 +106,33 @@
     draft = '';
   }
 
-  // A retry keeps the failure on screen until its answer (the store clears it on success): the notice
-  // and its focused Retry stay, the Retry busy.
-  async function retryHistory(): Promise<void> {
-    if (!peer || historyRetrying) return;
-    historyRetrying = true;
+  async function earlier(target: string): Promise<void> {
     try {
-      if ($nextByPeer[peer.id]) await loadMore(peer.id);
+      await loadMore(target);
+      olderFailed = false;
+    } catch {
+      // The store shows this failure in the history's notice; its Retry asks for this page again.
+      olderFailed = true;
+    }
+  }
+
+  // Retry asks again for what failed: an older page the user asked for, else the newest messages.
+  async function retryHistory(): Promise<boolean> {
+    if (!peer) return false;
+    try {
+      if (olderFailed) await loadMore(peer.id);
       else await loadMessages(peer.id);
     } catch {
-      // The store has logged the failure and shows it in the notice.
-    } finally {
-      historyRetrying = false;
+      // The store has logged the failure and keeps it in the notice.
     }
+    const ok = $chatHistoryError === '';
+    if (ok) olderFailed = false;
+    return ok;
+  }
+
+  async function retryConversations(): Promise<boolean> {
+    await retryMessaging();
+    return $chatConversationsError === '';
   }
 
   async function reconnect(): Promise<void> {
@@ -131,6 +149,7 @@
     const target = peer;
     draft = target ? getDraft(target.id) : '';
     error = '';
+    olderFailed = false;
   });
 
   $effect(() => {
@@ -208,19 +227,16 @@
         <div class="messages" bind:this={scrollBox}>
           {#if $nextByPeer[peer.id]}
             <div class="load-more">
-              <Button variant="ghost" size="sm" busy={$chatLoadingMore} onclick={() => loadMore(peer.id).catch(() => undefined)}>
+              <Button variant="ghost" size="sm" busy={$chatLoadingMore} onclick={() => earlier(peer.id)}>
                 {#if !$chatLoadingMore}<ChevronUp size="1.4rem" />{/if}
                 {$chatLoadingMore ? msg('social.chatLoadingHistory') : msg('social.chatEarlier')}
               </Button>
             </div>
           {/if}
-          {#if $chatHistoryError}
+          {#if $chatHistoryError || historyRetrying}
             <div class="history-error">
-              <Notice tone="danger" compact>
+              <Notice tone="danger" compact bind:retrying={historyRetrying} retry={{ label: msg('social.chatRetry'), run: retryHistory, within: () => scrollBox }}>
                 {$chatHistoryError}
-                {#snippet action()}
-                  <Button size="sm" busy={historyRetrying} onclick={retryHistory}>{msg('social.chatRetry')}</Button>
-                {/snippet}
               </Notice>
             </div>
           {/if}
@@ -262,14 +278,11 @@
           <ChatComposer {peer} bind:draft onerror={(text) => (error = text)} onsent={scrollToEnd} />
         {/if}
       {:else}
-        <div class="conversation-list">
-          {#if $chatConversationsError}
+        <div class="conversation-list" bind:this={list}>
+          {#if $chatConversationsError || conversationsRetrying}
             <div class="history-error">
-              <Notice tone="danger" compact>
+              <Notice tone="danger" compact bind:retrying={conversationsRetrying} retry={{ label: msg('social.chatRetry'), run: retryConversations, within: () => list }}>
                 {$chatConversationsError}
-                {#snippet action()}
-                  <Button size="sm" busy={reconnecting} onclick={reconnect}>{msg('social.chatRetry')}</Button>
-                {/snippet}
               </Notice>
             </div>
           {/if}
