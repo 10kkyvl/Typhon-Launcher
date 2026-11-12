@@ -3,7 +3,10 @@
   import { ArrowUp, ChevronDown, History, RotateCcw, Sparkles, X } from '@lucide/svelte';
   import Button from './Button.svelte';
   import Card from './Card.svelte';
+  import EmptyState from './EmptyState.svelte';
+  import Notice from './Notice.svelte';
   import ProgressBar from './ProgressBar.svelte';
+  import Spinner from './Spinner.svelte';
   import StatusBadge from './StatusBadge.svelte';
   import Modal from './Modal.svelte';
   import type { StrategyType, Update } from '../services/updates';
@@ -21,6 +24,7 @@
   import { msg } from '../i18n';
 
   let { update, running }: { update: Update; running: boolean } = $props();
+  const uid = $props.id();
 
   let detailsOpen = $state(false);
   let confirmOpen = $state(false);
@@ -160,7 +164,7 @@
   </div>
 
   {#if update.planning}
-    <p class="muted reason">{msg('ui.calculatingDownloadSize')}</p>
+    <div class="reason"><Spinner size="sm" label={msg('ui.calculatingDownloadSize')} /></div>
   {:else if busy}
     <div class="progress">
       <ProgressBar
@@ -173,11 +177,13 @@
     </div>
   {/if}
 
+  <!-- The stored error of the last update, shown on every opening of the game, and the running game
+       that holds the update back: facts of the card, read with it. -->
   {#if update.error}
-    <p class="error">{updateErrorText(update.error)}</p>
+    <div class="reason"><Notice tone="danger" compact announce={false}>{updateErrorText(update.error)}</Notice></div>
   {/if}
   {#if running}
-    <p class="muted reason">{msg('ui.gameRunningBeforeUpdate')}</p>
+    <div class="reason"><Notice compact announce={false}>{msg('ui.gameRunningBeforeUpdate')}</Notice></div>
   {/if}
 
   <div class="actions">
@@ -188,7 +194,7 @@
       </Button>
     {:else if plan}
       <Button variant="primary" disabled={running} onclick={() => (confirmOpen = true)}>{msg('ui.updateAction')}</Button>
-      <Button onclick={() => (detailsOpen = !detailsOpen)}>
+      <Button aria-expanded={detailsOpen} aria-controls={detailsOpen ? `${uid}-details` : undefined} onclick={() => (detailsOpen = !detailsOpen)}>
         {msg('ui.details')}
         <span class="chevron" class:open={detailsOpen}>
           <ChevronDown size="1.5rem" strokeWidth={1.8} />
@@ -212,7 +218,7 @@
   </div>
 
   {#if detailsOpen && plan}
-    <div class="details">
+    <div class="details" id="{uid}-details">
       <dl class="summary">
         <div>
           <dt>{msg('ui.current')}</dt>
@@ -289,7 +295,7 @@
 
 <Modal bind:open={historyOpen} title={msg('ui.updateHistoryTitle')}>
   {#if history.length === 0}
-    <p class="muted">{msg('ui.noUpdatesYet')}</p>
+    <EmptyState size="inline" title={msg('ui.noUpdatesYet')} />
   {:else}
     <ul class="history">
       {#each history as entry (entry.id)}
@@ -525,11 +531,5 @@
 
   .reason {
     margin-bottom: var(--space-4);
-  }
-
-  .error {
-    color: var(--danger);
-    font-size: var(--font-xs);
-    margin: 0 0 var(--space-4);
   }
 </style>
