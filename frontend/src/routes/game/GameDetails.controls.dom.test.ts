@@ -6,7 +6,14 @@ import type { LibraryGame } from '../../lib/services/library';
 import { Events } from '@wailsio/runtime';
 import { tick } from 'svelte';
 import { dismissMetadataMatch, ensureMetadataFresh, getMetadataView, refreshMetadata, type MetadataView } from '../../lib/services/metadata';
-import { getCatalogGame, getReleasesForGame, type CatalogGame, type ReleaseGroup } from '../../lib/services/sources';
+import {
+  getCatalogGame,
+  getRelatedReleases,
+  getReleasesForGame,
+  type CatalogGame,
+  type RelatedReleases,
+  type ReleaseGroup,
+} from '../../lib/services/sources';
 import { libraryGames } from '../../lib/stores/library';
 import { metadataAvailable } from '../../lib/stores/metadata';
 import { resetHistory, route } from '../../lib/stores/router';
@@ -27,6 +34,7 @@ vi.mock('../../lib/services/sources', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/sources')>()),
   getCatalogGame: vi.fn(),
   getReleasesForGame: vi.fn(),
+  getRelatedReleases: vi.fn(),
 }));
 
 function deferred<T>() {
@@ -77,6 +85,7 @@ beforeEach(() => {
   vi.mocked(getMetadataView).mockImplementation(async (id) => view({ game: { id, title: '' } as CatalogGame, resolved: false, match: 'idle' }));
   vi.mocked(getCatalogGame).mockResolvedValue(null);
   vi.mocked(getReleasesForGame).mockResolvedValue([]);
+  vi.mocked(getRelatedReleases).mockResolvedValue([]);
   libraryGames.set([hades]);
 });
 
@@ -99,7 +108,9 @@ afterEach(() => {
   vi.mocked(dismissMetadataMatch).mockReset();
   vi.mocked(ensureMetadataFresh).mockReset();
   vi.mocked(getCatalogGame).mockReset();
-  vi.mocked(getReleasesForGame).mockReset();
+  // A page left from a test can still ask after it: answer with nothing, not undefined.
+  vi.mocked(getReleasesForGame).mockReset().mockResolvedValue([]);
+  vi.mocked(getRelatedReleases).mockReset().mockResolvedValue([]);
   metadataAvailable.set(false);
   libraryGames.set([]);
   toasts.set([]);
@@ -294,6 +305,43 @@ describe('GameDetails: the outcome of a metadata search', () => {
 
     const notice = (await screen.findByText(msg('games.detailMetaUnmatchedTitle'))).closest('.notice') as HTMLElement;
     expect(notice.querySelector('[role="status"]')?.textContent).toContain(msg('games.detailMetaUnmatchedTitle'));
+  });
+});
+
+describe('GameDetails: retrying the other versions', () => {
+  const sequel: RelatedReleases = {
+    game: { id: 'c2', title: 'Hades II', relation: 'sequel' as RelatedReleases['game']['relation'] },
+    gameId: 'g2',
+    onPc: true,
+    groups: [
+      {
+        sourceName: 'Fixture source',
+        release: {
+          id: 'r2', sourceId: 'fixture', rawTitle: 'Hades II', title: 'Hades II', normalizedTitle: 'hades ii', canonicalGameId: 'c2',
+          version: '', size: 1024, uploadedAt: null, uris: [], matchStatus: 'matched', matchConfidence: 1, matchMethod: 'override',
+          availability: 'available', firstSeenAt: '', lastSeenAt: '', createdAt: '',
+        },
+      } as ReleaseGroup,
+    ],
+  };
+
+  it('keeps the section and its notice while the busy Retry runs, then focuses the first other version', async () => {
+    const again = deferred<RelatedReleases[]>();
+    vi.mocked(getRelatedReleases).mockRejectedValueOnce(new Error('offline')).mockReturnValueOnce(again.promise);
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    const notice = (await screen.findByText(msg('games.otherVersionsFailed'))).closest('.notice') as HTMLElement;
+    const retry = within(notice).getByRole('button', { name: msg('games.catalogRetry') });
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(retry.getAttribute('aria-busy')).toBe('true');
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
+
+    again.resolve([sequel]);
+    await vi.waitFor(() => expect(notice.isConnected).toBe(false));
+    await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Hades II' })));
   });
 });
 
