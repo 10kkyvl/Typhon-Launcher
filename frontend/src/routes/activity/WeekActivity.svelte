@@ -48,8 +48,8 @@
       <div class="games">
         {#each week.games as item (item.game.id)}
           <button class="row" type="button" disabled={item.game.archived} onclick={() => navigate('game', { id: item.game.id })}>
-            <span class="cover">
-              <Artwork src={coverOf(item.game, $gameArt)} alt={item.game.title} ratio="3 / 4" radius="var(--radius-sm)" />
+            <span class="cover" aria-hidden="true">
+              <Artwork src={coverOf(item.game, $gameArt)} alt="" label={item.game.title} ratio="3 / 4" radius="var(--radius-sm)" />
             </span>
             <span class="text">
               <span class="title">{item.game.title}</span>

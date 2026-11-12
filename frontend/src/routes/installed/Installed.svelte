@@ -537,8 +537,8 @@
         {@const updateText = updateLabel(update)}
         <div class="row" role="presentation" {@attach gameContextMenu(game.id)}>
           <button class="game" onclick={() => navigate('game', { id: game.id })}>
-            <div class="thumb">
-              <Artwork src={heroFor(game)} alt={game.title} radius="var(--radius-sm)" />
+            <div class="thumb" aria-hidden="true">
+              <Artwork src={heroFor(game)} alt="" label={game.title} radius="var(--radius-sm)" />
             </div>
             <div class="titles">
               <span class="title-line">
@@ -622,7 +622,7 @@
               onclick={() => navigate('game', { id: game.id })}
               aria-label={updateText ? `${game.title} — ${updateText}` : game.title}
             >
-              <Artwork src={coverFor(game)} alt={game.title} ratio="3 / 4" radius="var(--radius-md)" />
+              <Artwork src={coverFor(game)} alt="" label={game.title} ratio="3 / 4" radius="var(--radius-md)" />
               {#if updateText}
                 <span class="card-badge" class:release={update?.kind !== 'update'}>
                   {#if update?.kind === 'update'}

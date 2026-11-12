@@ -174,9 +174,9 @@
               {#each summary.top as item (item.gameId)}
                 {@const game = libraryById.get(item.gameId)}
                 <button class="row" type="button" disabled={!game} onclick={() => navigate('game', { id: item.gameId })}>
-                  <span class="cover">
+                  <span class="cover" aria-hidden="true">
                     {#if game}
-                      <Artwork src={coverOf({ ...game, status: game.status ?? '' }, $gameArt)} alt="" ratio="3 / 4" radius="var(--radius-sm)" />
+                      <Artwork src={coverOf({ ...game, status: game.status ?? '' }, $gameArt)} alt="" label={game.title} ratio="3 / 4" radius="var(--radius-sm)" />
                     {/if}
                   </span>
                   <span class="text">

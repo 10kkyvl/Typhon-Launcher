@@ -891,8 +891,8 @@
           class="list-row"
           onclick={() => navigate('game', { id: game.id })}
         >
-          <div class="list-thumb">
-            <Artwork src={game.coverUrl || $gameArt[game.id]?.cover || ''} alt={shown.title} radius="var(--radius-xs)" />
+          <div class="list-thumb" aria-hidden="true">
+            <Artwork src={game.coverUrl || $gameArt[game.id]?.cover || ''} alt="" label={shown.title} radius="var(--radius-xs)" />
           </div>
           <span class="list-title">{shown.title}</span>
           <span class="list-meta">{listMeta(shown)}</span>

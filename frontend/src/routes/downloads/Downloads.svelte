@@ -228,8 +228,8 @@
     <div class="rows">
       {#each $failed as item (item.id)}
         <div class="row failed">
-          <div class="thumb">
-            <Artwork src={coverOf(item)} alt={item.name} ratio="3 / 4" radius="var(--radius-sm)" />
+          <div class="thumb" aria-hidden="true">
+            <Artwork src={coverOf(item)} alt="" label={item.name} ratio="3 / 4" radius="var(--radius-sm)" />
           </div>
           <div class="info">
             <Tooltip text={item.name} describe={false}>
@@ -266,8 +266,8 @@
     <div class="rows">
       {#each $queue as q, i (q.id)}
         <div class="row">
-          <div class="thumb">
-            <Artwork src={coverOf(q)} alt={q.name} ratio="3 / 4" radius="var(--radius-sm)" />
+          <div class="thumb" aria-hidden="true">
+            <Artwork src={coverOf(q)} alt="" label={q.name} ratio="3 / 4" radius="var(--radius-sm)" />
           </div>
           <div class="info inline">
             <span class="title" title={q.name}>{q.name}</span>
@@ -327,8 +327,8 @@
       {#each $completed as item (item.id)}
         {@const install = $installationsByDownload.get(item.id)}
         <div class="row">
-          <div class="thumb">
-            <Artwork src={coverOf(item)} alt={item.name} ratio="3 / 4" radius="var(--radius-sm)" />
+          <div class="thumb" aria-hidden="true">
+            <Artwork src={coverOf(item)} alt="" label={item.name} ratio="3 / 4" radius="var(--radius-sm)" />
           </div>
           <div class="info inline">
             <Tooltip text={item.name} describe={false}>

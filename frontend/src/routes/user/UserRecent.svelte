@@ -20,8 +20,8 @@
   <div class="row">
     {#each games as game (game.igdbId)}
       <button class="capsule" type="button" onclick={() => openGameByIGDB(game.igdbId, game.title)}>
-        <span class="cover">
-          <Artwork src={wideArt(game)} alt={game.title} ratio="16 / 9" radius="var(--radius-md)" />
+        <span class="cover" aria-hidden="true">
+          <Artwork src={wideArt(game)} alt="" label={game.title} ratio="16 / 9" radius="var(--radius-md)" />
         </span>
         <span class="title">{game.title}</span>
         <span class="meta">

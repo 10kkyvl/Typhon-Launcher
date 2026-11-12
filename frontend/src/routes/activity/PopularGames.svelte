@@ -17,8 +17,8 @@
       {#each games as item (item.game.igdbId)}
         <Tooltip text={item.names.join(', ')}>
         <button class="row" type="button" onclick={() => openGameByIGDB(item.game.igdbId, item.game.title)}>
-          <span class="cover">
-            <Artwork src={item.game.coverUrl} alt={item.game.title} ratio="3 / 4" radius="var(--radius-sm)" />
+          <span class="cover" aria-hidden="true">
+            <Artwork src={item.game.coverUrl} alt="" label={item.game.title} ratio="3 / 4" radius="var(--radius-sm)" />
           </span>
           <span class="text">
             <span class="title">{item.game.title}</span>

@@ -630,8 +630,8 @@
             onclick={() => navigate('game', { id: entry.id })}
             {@attach gameContextMenu(entry.id)}
           >
-            <div class="list-thumb">
-              <Artwork src={entry.cover} alt={entry.title} radius="var(--radius-xs)" />
+            <div class="list-thumb" aria-hidden="true">
+              <Artwork src={entry.cover} alt="" label={entry.title} radius="var(--radius-xs)" />
             </div>
             <span class="list-title">{entry.title}</span>
             {#if entry.platform}

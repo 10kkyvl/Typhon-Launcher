@@ -7,8 +7,8 @@
 </script>
 
 <button class="row" type="button" onclick={() => openGameByIGDB(game.igdbId, game.title)}>
-  <span class="thumb">
-    <Artwork src={game.coverUrl} alt={game.title} ratio="3 / 4" />
+  <span class="thumb" aria-hidden="true">
+    <Artwork src={game.coverUrl} alt="" label={game.title} ratio="3 / 4" />
   </span>
   <span class="text">
     <span class="title">{game.title}</span>

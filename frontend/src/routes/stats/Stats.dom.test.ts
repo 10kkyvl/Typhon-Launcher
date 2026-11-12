@@ -46,4 +46,12 @@ describe('Stats: most played', () => {
     expect(await named('Celeste')).toMatch(/ · 25%$/);
     for (const share of container.querySelectorAll('.share')) expect(share.getAttribute('aria-hidden')).toBe('true');
   });
+
+  // A game without art shows initials in its place: they are a picture, not part of the row's name.
+  it('names each row by the game first, the cover says nothing', async () => {
+    libraryGames.set([{ id: 'g1', title: 'Hades' } as LibraryGame, { id: 'g2', title: 'Celeste' } as LibraryGame]);
+    const { findByRole } = renderDom(Stats);
+
+    expect(await findByRole('button', { name: (name) => name.startsWith('Hades ') })).toBeTruthy();
+  });
 });
