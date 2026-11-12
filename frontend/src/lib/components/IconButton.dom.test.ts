@@ -3,6 +3,7 @@ import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ruleBody, styleOf } from '../testing/css';
 import { user } from '../testing/dom';
+import { description } from '../testing/hints';
 import buttonSource from './Button.svelte?raw';
 import { HOVER_DELAY } from './hoverIntent';
 import IconButton from './IconButton.svelte';
@@ -131,6 +132,15 @@ describe('IconButton', () => {
     expect(hover.color).toBe(ruleBody(buttonCss, '.primary').color);
     // After the plain hover, at its specificity or more, so the fill is not swapped for the grey one.
     expect(css.indexOf('.icon-btn.primary:hover:not(:disabled)')).toBeGreaterThan(css.indexOf('.icon-btn:hover:not(:disabled),'));
+  });
+
+  it('with a hint shows the hint instead of its label, as its description; the name stays the label', async () => {
+    render(IconButton, { target: app, props: { label: 'Attach an image', hint: 'Up to 4 images' } });
+    const button = screen.getByRole('button', { name: 'Attach an image' });
+    expect(description(button)).toBe('Up to 4 images');
+    await rest(button);
+    expect(bubble()?.textContent?.trim()).toBe('Up to 4 images');
+    expect(document.querySelectorAll('[data-part="tooltip"]')).toHaveLength(1);
   });
 
   it('shows an open menu or panel on its trigger, and an "on" toggle, without a class from the caller', () => {

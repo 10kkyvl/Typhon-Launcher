@@ -474,9 +474,7 @@
             {/if}
           {/if}
           <div class="composer">
-            <Tooltip text={msg('social.chatAttachHint')}>
-              <button class="attach" type="button" aria-label={msg('social.chatAttach')} disabled={sending} onclick={() => attach()}><Paperclip size="1.7rem" /></button>
-            </Tooltip>
+            <IconButton label={msg('social.chatAttach')} hint={msg('social.chatAttachHint')} disabled={sending} onclick={() => attach()}><Paperclip size="1.7rem" /></IconButton>
             <textarea
               bind:this={composer}
               value={draft}
@@ -565,9 +563,6 @@
   .disabled-copy { color: var(--text-3); }
   .composer { display: flex; align-items: flex-end; gap: 0.7rem; padding: 0.8rem 1rem 0; border-top: 1px solid var(--border); }
   .composer textarea { flex: 1; min-height: 4.2rem; }
-  .attach { display: flex; align-items: center; justify-content: center; width: 3.8rem; height: 3.8rem; flex-shrink: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-2); cursor: pointer; }
-  .attach:hover:not(:disabled) { background: var(--hover); color: var(--text); }
-  .attach:disabled { opacity: 0.45; cursor: default; }
   .draft-list { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin: 0.8rem 1rem 0; }
   .draft-chip { display: flex; align-items: center; gap: 0.6rem; min-width: 0; padding: 0.4rem 0.5rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-3); }
   .draft-chip img { width: 3.2rem; height: 3.2rem; flex-shrink: 0; border-radius: var(--radius-sm); object-fit: cover; }

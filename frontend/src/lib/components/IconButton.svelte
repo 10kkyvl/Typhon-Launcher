@@ -13,6 +13,7 @@
     lit = false,
     disabled = false,
     tooltip = true,
+    hint,
     onclick,
     children,
     ...rest
@@ -45,6 +46,11 @@
      * overlay window, whose Escape hides the overlay and must not close a hint first.
      */
     tooltip?: boolean;
+    /**
+     * What pressing it does beyond its name (the limits of an attachment): shown as its tooltip in
+     * place of the label, and its description. The name stays `label`.
+     */
+    hint?: string;
     onclick?: (e: MouseEvent) => void;
     children?: Snippet;
   } = $props();
@@ -61,7 +67,7 @@
 {/snippet}
 
 {#if tooltip}
-  <Tooltip text={label} describe={false}>{@render button()}</Tooltip>
+  <Tooltip text={hint ?? label} describe={hint !== undefined}>{@render button()}</Tooltip>
 {:else}
   {@render button()}
 {/if}
