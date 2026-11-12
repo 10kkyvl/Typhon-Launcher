@@ -11,10 +11,11 @@
  *   has shown counts too (focus then leaving for what the press opened does not bring it up);
  * - `dismiss()` (scroll, the window losing focus, the control gone or disabled) hides it and forgets
  *   hover and focus: the next hover or focus starts afresh;
- * - one hint is shown at a time in the window: a hint opening hides the one shown, which forgets the
- *   pointer; when the last one opened goes, the hint of the control that still has keyboard focus
- *   comes back. Menus are not hints: a hint neither closes a menu nor is closed by one (MenuList keeps
- *   menus to one at a time on its own).
+ * - one hint is shown at a time in the window: a hint opening sets aside the one shown, which forgets
+ *   the pointer. Once no hint is shown, every hint set aside is let go, and the one whose control
+ *   still has keyboard focus shows again. Which hint is shown is one value, not the order hints were
+ *   made in. Menus are not hints: a hint neither closes a menu nor is closed by one (MenuList keeps
+ *   menus to one at a time on its own). A hint with nothing to show is not fed at all (Tooltip).
  */
 
 export const HOVER_DELAY = 350;
@@ -37,16 +38,20 @@ export interface HoverIntentOptions {
 }
 
 interface Hint {
-  /** Shown, or hidden only because another opened: either way it gives way to a newer one. */
-  readonly holding: boolean;
-  /** Hidden because `other` opened: forget the pointer, wait for `other` to go. */
-  give(other: Hint): void;
-  /** `other`, which took over from this one or from the one this gave way to, went. */
-  release(other: Hint): void;
+  /** Hidden because another hint opened over it: forget the pointer, wait to be let go. */
+  setAside(): void;
+  /** No hint is shown any more: show again if keyboard focus is still on the control. */
+  letGo(): void;
 }
 
-// Every hint alive in the window, for the one-at-a-time rule.
+// Every hint alive in the window, and the one shown.
 const hints = new Set<Hint>();
+let shown: Hint | null = null;
+
+function handBack() {
+  if (shown !== null) return;
+  for (const hint of [...hints]) hint.letGo();
+}
 
 export function createHoverIntent(onchange: (open: boolean) => void, options: HoverIntentOptions = {}): HoverIntent {
   const { delay = HOVER_DELAY, grace = LEAVE_GRACE } = options;
@@ -56,47 +61,39 @@ export function createHoverIntent(onchange: (open: boolean) => void, options: Ho
   let focused = false;
   let dismissed = false;
   let open = false;
-  // The hint this one gave way to, while it waits for it to go.
-  let gaveWay: Hint | null = null;
+  let asideNow = false;
 
   const cancel = () => {
     if (showTimer !== null) { clearTimeout(showTimer); showTimer = null; }
     if (leaveTimer !== null) { clearTimeout(leaveTimer); leaveTimer = null; }
   };
-  const update = () => {
-    const next = (hovered || focused) && !dismissed && gaveWay === null;
-    if (next === open) return;
-    open = next;
-    onchange(next);
-    // onchange may have closed it again (a control found unusable): only a hint still shown takes over.
-    if (next && open) takeOver();
-    if (!next && !open) giveBack();
-  };
   const self: Hint = {
-    get holding() {
-      return open || gaveWay !== null;
-    },
-    give(other) {
-      gaveWay = other;
+    setAside() {
+      asideNow = true;
       if (leaveTimer !== null) { clearTimeout(leaveTimer); leaveTimer = null; }
       hovered = false;
       update();
     },
-    release(other) {
-      if (gaveWay !== other) return;
-      gaveWay = null;
+    letGo() {
+      if (!asideNow) return;
+      asideNow = false;
       update();
     },
   };
-  // A hint waiting on another now waits on this one, so that only the last to go gives focus its hint
-  // back. One still waiting out its delay is left to it: it takes over in turn when it shows.
-  const takeOver = () => {
-    for (const other of [...hints]) if (other !== self && other.holding) other.give(self);
+  const update = () => {
+    const next = (hovered || focused) && !dismissed && !asideNow;
+    if (next === open) return;
+    open = next;
+    if (next) {
+      const before = shown;
+      shown = self;
+      if (before !== null && before !== self) before.setAside();
+    } else if (shown === self) {
+      shown = null;
+    }
+    onchange(next);
+    if (!next) handBack();
   };
-  const giveBack = () => {
-    for (const other of [...hints]) if (other !== self) other.release(self);
-  };
-  hints.add(self);
   // The dismissal lasts while the user is still there: hovering, focused, or resting towards a show.
   const settle = () => {
     if (!hovered && !focused && showTimer === null) dismissed = false;
@@ -107,12 +104,18 @@ export function createHoverIntent(onchange: (open: boolean) => void, options: Ho
     hovered = false;
     settle();
   };
+  hints.add(self);
 
   return {
     hover() {
       if (leaveTimer !== null) { clearTimeout(leaveTimer); leaveTimer = null; return; }
       if (hovered || showTimer !== null) return;
-      showTimer = setTimeout(() => { showTimer = null; hovered = true; gaveWay = null; update(); }, delay);
+      showTimer = setTimeout(() => {
+        showTimer = null;
+        hovered = true;
+        asideNow = false;
+        update();
+      }, delay);
     },
     unhover() {
       if (showTimer !== null) { clearTimeout(showTimer); showTimer = null; }
@@ -123,7 +126,7 @@ export function createHoverIntent(onchange: (open: boolean) => void, options: Ho
     },
     focus() {
       focused = true;
-      gaveWay = null;
+      asideNow = false;
       update();
     },
     blur() {
@@ -145,10 +148,11 @@ export function createHoverIntent(onchange: (open: boolean) => void, options: Ho
     destroy() {
       cancel();
       hints.delete(self);
-      gaveWay = null;
+      asideNow = false;
       if (open) {
         open = false;
-        giveBack();
+        if (shown === self) shown = null;
+        handBack();
       }
     },
     get open() {

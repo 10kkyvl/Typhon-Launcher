@@ -230,10 +230,17 @@ describe('one hint at a time', () => {
     expect(pointer.changes).toEqual([true, false, true]);
   });
 
-  it('a third hint takes over from the second; the keyboard hint comes back only when the last one goes', () => {
-    const keyboard = make();
-    const first = make();
-    const second = make();
+  // Hints are made in whatever order their controls mount: the hand-over must not depend on it.
+  const ORDERS = [
+    ['keyboard', 'first', 'second'],
+    ['first', 'keyboard', 'second'],
+    ['first', 'second', 'keyboard'],
+    ['second', 'first', 'keyboard'],
+  ] as const;
+
+  it.each(ORDERS)('a third hint takes over from the second; the keyboard hint comes back only when the last one goes (made %s, %s, %s)', (...order) => {
+    const by = Object.fromEntries(order.map((name) => [name, make()])) as Record<(typeof order)[number], ReturnType<typeof make>>;
+    const { keyboard, first, second } = by;
     keyboard.intent.focus();
     rest(first.intent);
     // The second takes over while the first is still shown.
@@ -242,9 +249,12 @@ describe('one hint at a time', () => {
     expect(first.changes).toEqual([true, false]);
     expect(keyboard.changes).toEqual([true, false]);
     expect(second.changes).toEqual([true]);
+    expect(second.intent.open).toBe(true);
 
-    second.intent.dismiss();
+    second.intent.unhover();
+    vi.advanceTimersByTime(LEAVE_GRACE);
 
+    expect(second.changes).toEqual([true, false]);
     expect(keyboard.changes).toEqual([true, false, true]);
     expect(first.changes).toEqual([true, false]);
   });
