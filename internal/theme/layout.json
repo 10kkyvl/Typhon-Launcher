@@ -42,7 +42,8 @@
     "listbox",
     "tooltip",
     "popover",
-    "toast"
+    "toast",
+    "count-badge"
   ],
   "partsWithId": ["sidebar-item", "topbar-action", "game-section", "popover"]
 }

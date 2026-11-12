@@ -87,6 +87,10 @@ the account menu: write `[data-part="menu"]`. The notifications panel is no long
 `[data-part="topbar-action"][data-id="notifications"]`: write
 `[data-part="popover"][data-id="notifications"]`.
 
+A count on a control (unread messages, friend requests: in the sidebar, the top bar and the chat) is
+the part `count-badge`; on a button's corner it has the class `corner`, on an accent fill the class
+`on-accent`.
+
 ### Limits
 
 - **Sizes in custom CSS are not converted.** `rem` sizes inside the `css` field come out about

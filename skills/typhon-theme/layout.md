@@ -125,6 +125,7 @@ name `sidebar-account` matches nothing there. Typhon renames it by itself only i
 | `tooltip` | no |
 | `popover` | yes |
 | `toast` | no |
+| `count-badge` | no |
 
 Dialogs, menus, the lists of select fields, tooltips and popovers (the notifications panel, the
 reaction pickers) are drawn above the window, outside the part that opened them: select their panel
@@ -133,7 +134,9 @@ or `[data-part="popover"]` (`[data-part="popover"][data-id="notifications"]` for
 panel), not as a descendant of the page or the control they came from. A menu, a list, a tooltip or
 a popover marks the side it opened on in `data-placement` (`bottom-start`, `top-end` and so on).
 A toast (a short message in the corner of the window) is `[data-part="toast"]`; its class is its
-kind (`info`, `success`, `warning`, `danger`).
+kind (`info`, `success`, `warning`, `danger`). A count on a control (unread messages, friend
+requests, in the sidebar, the top bar and the chat) is `[data-part="count-badge"]`; on a corner it
+has the class `corner`, on an accent fill the class `on-accent`.
 
 Use `layout` to reorder or hide; use CSS only for looks. Hiding a part with CSS that `layout`
 cannot hide (window controls, settings) leaves the user without a way back.

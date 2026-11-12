@@ -78,6 +78,7 @@ export const LAYOUT_PARTS = [
   'tooltip',
   'popover',
   'toast',
+  'count-badge',
 ] as const;
 export const PARTS_WITH_ID = ['sidebar-item', 'topbar-action', 'game-section', 'popover'] as const;
 
