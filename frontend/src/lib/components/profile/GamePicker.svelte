@@ -111,10 +111,11 @@
     gap: var(--space-2);
   }
 
+  /* Room inside the scrolling list for the shared focus ring around a row, which it would clip. */
   .list {
     list-style: none;
     margin: 0;
-    padding: 0;
+    padding: var(--space-1);
     max-height: 24rem;
     overflow-y: auto;
     overscroll-behavior-y: contain;
@@ -139,11 +140,6 @@
 
   .row:hover:not(:disabled) {
     background: var(--hover-strong);
-  }
-
-  /* Inside the scrolling list: the shared ring is drawn inward, where the list does not clip it. */
-  .row:focus-visible {
-    outline-offset: -2px;
   }
 
   .row:disabled {
