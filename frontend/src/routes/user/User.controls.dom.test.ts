@@ -11,6 +11,7 @@ import {
   type PublicProfile,
   type UserCard,
 } from '../../lib/services/social';
+import { AccountError } from '../../lib/services/account';
 import { resetHistory, route } from '../../lib/stores/router';
 import { authState } from '../../lib/stores/user';
 import { renderDom } from '../../lib/testing/dom';
@@ -143,6 +144,21 @@ describe("a user's page: retrying a failed load", () => {
     answer(closedProfile);
     await vi.waitFor(() => expect(notice.isConnected).toBe(false));
     expect(screen.getByText(msg('social.userProfileClosed'))).toBeTruthy();
+    await vi.waitFor(() => expect(document.activeElement?.closest('.profile')).not.toBeNull());
+  });
+
+  it('a retry that finds no such user lands the focus on the "not found" state', async () => {
+    authState.set('authenticated');
+    vi.mocked(fetchProfile).mockRejectedValueOnce(new Error('offline')).mockRejectedValueOnce(new AccountError('user_not_found'));
+    const { user } = renderDom(UserProfile, { username: 'ann' });
+    const notice = (await screen.findByRole('alert')).closest('.notice') as HTMLElement;
+    within(notice).getByRole('button', { name: msg('common.retry') }).focus();
+
+    await user.keyboard('{Enter}');
+
+    const heading = await screen.findByRole('heading', { level: 2, name: msg('social.userNotFoundTitle') });
+    await vi.waitFor(() => expect(document.activeElement).toBe(heading.closest('[tabindex="-1"]')));
+    expect(document.activeElement).not.toBe(document.body);
   });
 });
 

@@ -130,6 +130,18 @@
     }
   }
 
+  let retrying = $state(false);
+  let missingState = $state<HTMLElement>();
+  let profileBox = $state<HTMLElement>();
+  const loadFailedTitle = msg('social.userLoadFailed');
+
+  // The notice's retry: it worked when the failure is gone, whether a profile came or the answer is
+  // that there is no such user. Focus then goes into the profile, or to the "not found" state.
+  async function retryLoad(): Promise<boolean> {
+    await load(username ?? '', false, true);
+    return missing || !failure;
+  }
+
   function act(id: string) {
     const current = data;
     if (!current || busy) return;
@@ -256,20 +268,26 @@
   {:else if loading && !failure}
     <Spinner label={msg('social.loadingEllipsis')} />
   {:else if missing}
-    <EmptyState level={2} title={msg('social.userNotFoundTitle')} description={msg('social.userNotFoundDesc')}>
-      {#snippet icon()}
-        <UserRound size="2.2rem" strokeWidth={1.6} />
-      {/snippet}
-    </EmptyState>
-  {:else if failure}
-    <Notice tone="danger" title={msg('social.userLoadFailed')} level={2}>
+    <!-- Takes the focus when a retry ends here: the heading of an empty state cannot. -->
+    <div class="missing" tabindex="-1" bind:this={missingState}>
+      <EmptyState level={2} title={msg('social.userNotFoundTitle')} description={msg('social.userNotFoundDesc')}>
+        {#snippet icon()}
+          <UserRound size="2.2rem" strokeWidth={1.6} />
+        {/snippet}
+      </EmptyState>
+    </div>
+  {:else if failure || retrying}
+    <Notice
+      tone="danger"
+      title={loadFailedTitle}
+      level={2}
+      bind:retrying
+      retry={{ label: msg('common.retry'), run: retryLoad, focus: () => missingState, within: () => profileBox }}
+    >
       {failure}
-      {#snippet action()}
-        <Button size="sm" busy={loading} onclick={() => load(username ?? '', false, true)}>{msg('common.retry')}</Button>
-      {/snippet}
     </Notice>
   {:else if data}
-    <div class="profile" class:refreshing>
+    <div class="profile" class:refreshing bind:this={profileBox}>
       <ProfileCanvas appearance={data.appearance} {autoArt}>
       <ProfileCover appearance={data.appearance} {autoArt} />
       <UserHeader profile={data} {busy} onaction={act} onmessage={() => data && openChat(chatPeerOf(data))} />
