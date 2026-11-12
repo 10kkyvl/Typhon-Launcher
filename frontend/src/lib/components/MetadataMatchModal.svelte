@@ -42,6 +42,7 @@
   let applying = $state(false);
   let pending = $state<MetadataCandidate | null>(null);
   let searchToken = 0;
+  let candidatesToken = 0;
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
   $effect(() => {
@@ -53,19 +54,26 @@
       candidates = [];
       pending = null;
       applying = false;
+      candidatesToken += 1;
+      loadingCandidates = false;
       if (isOpen && id) loadCandidates(id);
     });
   });
 
+  // Only the answer for the game the dialog is open for lands: a late one for the game before would
+  // offer, and apply, another game's matches.
   async function loadCandidates(id: string) {
+    const token = ++candidatesToken;
     loadingCandidates = true;
     try {
-      candidates = await findMetadataCandidates(id);
+      const found = await findMetadataCandidates(id);
+      if (token === candidatesToken) candidates = found;
     } catch (err) {
+      if (token !== candidatesToken) return;
       toast(metadataErrorText(err), 'danger');
       candidates = [];
     } finally {
-      loadingCandidates = false;
+      if (token === candidatesToken) loadingCandidates = false;
     }
   }
 

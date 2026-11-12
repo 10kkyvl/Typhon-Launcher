@@ -81,6 +81,24 @@ describe('MetadataMatchModal: the candidates', () => {
   });
 });
 
+describe('MetadataMatchModal: opened for another game before the first answer', () => {
+  it('shows the candidates of the game it is open for, not a late answer for the one before', async () => {
+    const first = deferred<MetadataCandidate[]>();
+    const celeste: MetadataCandidate = { providerId: 'igdb:2', title: 'Celeste', releaseYear: 2018, thumb: 'https://img.test/celeste.jpg', confidence: 0.9 };
+    vi.mocked(findMetadataCandidates).mockImplementation((id: string) => (id === 'g1' ? first.promise : Promise.resolve([celeste])));
+    const { rerender } = render(MetadataMatchModal, { target: app, props: { open: true, gameId: 'g1', gameTitle: 'Hades' } });
+    await rerender({ open: true, gameId: 'g2', gameTitle: 'Celeste' });
+    const dialog = screen.getByRole('dialog', { name: msg('modals.metadataMatchFindTitle') });
+    await within(dialog).findByRole('button', { name: /^Celeste \(2018\)/ });
+
+    first.resolve([hades]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(within(dialog).queryByRole('button', { name: /^Hades \(2020\)/ })).toBeNull();
+    expect(within(dialog).getByRole('button', { name: /^Celeste \(2018\)/ })).toBeTruthy();
+  });
+});
+
 describe('MetadataMatchModal: replacing a match', () => {
   it('keeps the focus on "replace", busy, while the new match is applied', async () => {
     const applied = deferred<MetadataView>();
