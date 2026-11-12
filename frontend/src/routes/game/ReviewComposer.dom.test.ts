@@ -3,7 +3,7 @@ import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import { AccountError } from '../../lib/services/account';
-import { remove } from '../../lib/services/reviews';
+import { mine, remove } from '../../lib/services/reviews';
 import { toasts } from '../../lib/stores/toasts';
 import { authState } from '../../lib/stores/user';
 import { user } from '../../lib/testing/dom';
@@ -36,6 +36,32 @@ afterEach(() => {
   authState.set('bootstrapping');
   toasts.set([]);
   vi.restoreAllMocks();
+});
+
+describe('choosing whether I recommend the game', () => {
+  it('is a named radio group the arrows move through, one Tab stop, nothing chosen at first', async () => {
+    vi.mocked(mine).mockResolvedValueOnce({ review: null, eligibility: { canPost: true } } as unknown as Awaited<ReturnType<typeof mine>>);
+    render(ReviewComposer, { target: app, props: { canonicalGameId: 'g1' } });
+    const keys = user();
+    const group = await screen.findByRole('radiogroup', { name: msg('reviews.composerMineTitle') });
+    const yes = within(group).getByRole('radio', { name: msg('reviews.composerRecommend') });
+    const no = within(group).getByRole('radio', { name: msg('reviews.composerNotRecommend') });
+    expect([yes.getAttribute('aria-checked'), no.getAttribute('aria-checked')]).toEqual(['false', 'false']);
+    expect([yes.tabIndex, no.tabIndex]).toEqual([0, -1]);
+
+    await keys.tab();
+    expect(document.activeElement).toBe(yes);
+    await keys.keyboard('{ArrowRight}');
+
+    expect(document.activeElement).toBe(no);
+    expect([yes.getAttribute('aria-checked'), no.getAttribute('aria-checked')]).toEqual(['false', 'true']);
+    expect([yes.tabIndex, no.tabIndex]).toEqual([-1, 0]);
+
+    await keys.keyboard('{ArrowLeft}');
+    expect(yes.getAttribute('aria-checked')).toBe('true');
+    await keys.keyboard('{ArrowLeft}');
+    expect(no.getAttribute('aria-checked')).toBe('true');
+  });
 });
 
 describe('deleting my review', () => {

@@ -17,9 +17,30 @@
   import { notifyReviewsChanged } from '../../lib/game/reviewsRefresh';
   import { toast } from '../../lib/stores/toasts';
   import { authState } from '../../lib/stores/user';
-  import { msg } from '../../lib/i18n';
+  import { msg, type MessageKey } from '../../lib/i18n';
+  import { nextIndex } from '../../lib/utils/roving';
 
   let { canonicalGameId }: { canonicalGameId: string } = $props();
+
+  const uid = $props.id();
+
+  const VERDICTS: { value: boolean; mark: string; label: MessageKey }[] = [
+    { value: true, mark: '👍', label: 'reviews.composerRecommend' },
+    { value: false, mark: '👎', label: 'reviews.composerNotRecommend' },
+  ];
+
+  let verdictGroup = $state<HTMLElement>();
+
+  // A radio group: the arrows move the choice and the focus together, wrapping at the ends.
+  function moveVerdict(event: KeyboardEvent) {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const radios = [...(verdictGroup?.querySelectorAll<HTMLElement>('[role="radio"]') ?? [])];
+    const next = nextIndex(radios.indexOf(event.currentTarget as HTMLElement), VERDICTS.length, event.key, { orientation: 'both' });
+    if (next === null) return;
+    event.preventDefault();
+    recommended = VERDICTS[next].value;
+    radios[next]?.focus();
+  }
 
   const RETRY_CODES = new Set([
     'account_muted',
@@ -159,23 +180,30 @@
 {:else if mine}
   {#if formVisible}
     <div class="form">
-      <div class="toggles">
-        <button
-          type="button"
-          class="toggle positive"
-          class:active={recommended === true}
-          onclick={() => (recommended = true)}
-        >
-          👍 {msg('reviews.composerRecommend')}
-        </button>
-        <button
-          type="button"
-          class="toggle negative"
-          class:active={recommended === false}
-          onclick={() => (recommended = false)}
-        >
-          👎 {msg('reviews.composerNotRecommend')}
-        </button>
+      <div
+        class="toggles"
+        role="radiogroup"
+        aria-label={msg('reviews.composerMineTitle')}
+        aria-describedby={recommended === null && !fieldError ? `${uid}-choose` : undefined}
+        bind:this={verdictGroup}
+      >
+        {#each VERDICTS as verdict, index (verdict.value)}
+          <button
+            type="button"
+            class="toggle"
+            class:positive={verdict.value}
+            class:negative={!verdict.value}
+            class:active={recommended === verdict.value}
+            role="radio"
+            aria-checked={recommended === verdict.value}
+            tabindex={recommended === verdict.value || (recommended === null && index === 0) ? 0 : -1}
+            onclick={() => (recommended = verdict.value)}
+            onkeydown={moveVerdict}
+          >
+            <span aria-hidden="true">{verdict.mark}</span>
+            {msg(verdict.label)}
+          </button>
+        {/each}
       </div>
 
       <textarea
@@ -210,7 +238,7 @@
         </Button>
       </div>
       {#if recommended === null && !fieldError}
-        <p class="choose-hint">{msg('reviews.composerChooseFirst')}</p>
+        <p class="choose-hint" id="{uid}-choose">{msg('reviews.composerChooseFirst')}</p>
       {/if}
     </div>
   {:else if mine.review}
