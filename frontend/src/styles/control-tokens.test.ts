@@ -13,7 +13,13 @@ type Fs = { readFileSync(path: URL, encoding: 'utf8'): string; readdirSync(path:
 const fs = (globalThis as unknown as { process: { getBuiltinModule(id: 'node:fs'): Fs } }).process.getBuiltinModule('node:fs');
 const read = (path: string) => fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 
-const CONTROLS = ['lib/components/Button.svelte', 'lib/components/IconButton.svelte', 'lib/components/Chip.svelte', 'lib/components/Spinner.svelte'];
+const CONTROLS = [
+  'lib/components/Button.svelte',
+  'lib/components/IconButton.svelte',
+  'lib/components/Chip.svelte',
+  'lib/components/Spinner.svelte',
+  'lib/components/TextLink.svelte',
+];
 
 const style = (path: string) => styleOf(read(path), path);
 
@@ -116,7 +122,7 @@ describe('base controls take their look from tokens', () => {
 });
 
 describe('a base control is restyled by a prop, never from outside', () => {
-  const OWNERS: Record<string, string> = { btn: 'Button', 'icon-btn': 'IconButton', chip: 'Chip' };
+  const OWNERS: Record<string, string> = { btn: 'Button', 'icon-btn': 'IconButton', chip: 'Chip', 'text-link': 'TextLink' };
   const sources = fs
     .readdirSync(new URL('../', import.meta.url), { recursive: true })
     .map((path) => path.replaceAll('\\', '/'))
@@ -153,14 +159,14 @@ describe('a base control is restyled by a prop, never from outside', () => {
       for (const selector of topLevel(prelude)) {
         for (const compound of compounds(selector)) {
           if (scoped.test(compound)) continue;
-          for (const c of compound.matchAll(/\.(btn|icon-btn|chip)(?![\w-])/g)) found.push(c[1]);
+          for (const c of compound.matchAll(/\.(btn|icon-btn|chip|text-link)(?![\w-])/g)) found.push(c[1]);
         }
       }
     }
     return found;
   }
 
-  it('no component reaches into Button, IconButton or Chip through :global', () => {
+  it('no component reaches into Button, IconButton, Chip or TextLink through :global', () => {
     const found: string[] = [];
     for (const path of sources) {
       const text = read(path);
@@ -181,6 +187,7 @@ describe('a base control is restyled by a prop, never from outside', () => {
     ['a :global block nested in a rule', '.lead { :global { .btn, .icon-btn:hover { padding: 0; } } }', ['btn', 'icon-btn']],
     ['a bare :global before the class', '.lead :global .btn { padding: 0; }', ['btn']],
     ['a :global block in a media query', '@media (width > 1px) { :global { .chip { padding: 0; } } }', ['chip']],
+    ['a link inside a sentence', '.lead :global(.text-link) { color: var(--text); }', ['text-link']],
     ['none: its own class of the same name', '.btn { padding: 0; }', []],
   ])('sees %s', (_, css, names) => {
     const markup = '<div class="lead cta"><span class="btn"></span></div>';

@@ -9,9 +9,9 @@ import { describe, expect, it } from 'vitest';
  *   Big Picture and the overlay window are not on this path yet. Named exceptions: IconButton, whose
  *   native title is its label only with `tooltip={false}` (the overlay) or while it is disabled (no
  *   focus, no tooltip, nothing announced twice), and ActivityDock (replaced by the activity widget).
- *   A component that spreads the attributes it is given onto its control (Button, Chip, IconButton:
- *   found, not listed by hand) counts as that control. A `title` on non-interactive text (the full
- *   form of a truncated value, an exact time) is not a control's and stays;
+ *   A component that spreads the attributes it is given onto its control (Button, Chip, IconButton,
+ *   TextLink: found, not listed by hand) counts as that control. A `title` on non-interactive text
+ *   (the full form of a truncated value, an exact time) is not a control's and stays;
  * - a component of its own that waits on hover with a timer: the delays, the grace and the sticky
  *   dismissal live in hoverIntent.ts only.
  */
@@ -118,7 +118,7 @@ describe('hints', () => {
   });
 
   it('knows the components that forward attributes to a control', () => {
-    expect(forwardersIn(svelteSources())).toEqual(['Button', 'Chip', 'IconButton', 'SearchInput', 'Toggle']);
+    expect(forwardersIn(svelteSources())).toEqual(['Button', 'Chip', 'IconButton', 'SearchInput', 'TextLink', 'Toggle']);
   });
 
   it('sees a hover timer in a Svelte event attribute as well as in addEventListener', () => {

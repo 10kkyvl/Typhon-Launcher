@@ -37,6 +37,10 @@
   --spinner-lg: 3.2rem;
   --spinner-ring: 2px;
 
+  /* A link in a line of text (TextLink): the stroke of its underline and its gap below the letters. */
+  --link-underline: 1px;
+  --link-underline-offset: 0.2em;
+
   /* The label on an --accent fill. A theme does not set it; a personal accent computes its own
      --accent-on (lib/theme/accent.ts), which the components read first. */
   --accent-on-default: #fff;
