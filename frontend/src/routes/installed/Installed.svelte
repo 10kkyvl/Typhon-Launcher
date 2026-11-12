@@ -690,9 +690,7 @@
     </div>
     {#snippet footer()}
       <Button disabled={adding} onclick={() => (addOpen = false)}>{msg('common.cancel')}</Button>
-      <Button variant="primary" disabled={!newExecutable.trim() || adding} onclick={submitAdd}>
-        {adding ? msg('games.installedAddingLabel') : msg('common.add')}
-      </Button>
+      <Button variant="primary" busy={adding} disabled={!newExecutable.trim() && !adding} onclick={submitAdd}>{msg('common.add')}</Button>
     {/snippet}
   </Modal>
 </Page>

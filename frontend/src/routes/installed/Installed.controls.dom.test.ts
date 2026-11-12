@@ -1,7 +1,7 @@
 import { screen, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
-import { playGame, type LibraryGame } from '../../lib/services/library';
+import { addGame, playGame, type LibraryGame } from '../../lib/services/library';
 import { getStorageInfo } from '../../lib/services/system';
 import type { Update } from '../../lib/services/updates';
 import { libraryGames } from '../../lib/stores/library';
@@ -148,6 +148,7 @@ describe('Installed: no library folder yet', () => {
 describe('Installed: adding a game by hand', () => {
   afterEach(() => {
     backend.inWails = false;
+    vi.mocked(addGame).mockReset();
   });
 
   async function openDialog() {
@@ -164,6 +165,22 @@ describe('Installed: adding a game by hand', () => {
     const browse = within(dialog).getByRole('button', { name: msg('games.installedBrowseButton') });
     expect(browse.closest('label')).toBeNull();
     expect(field.closest('label')).toBeNull();
+  });
+
+  it('Add is busy while the game is added: it keeps its word and the focus', async () => {
+    vi.mocked(addGame).mockReturnValue(new Promise(() => {}));
+    const { view, dialog } = await openDialog();
+    await view.user.type(within(dialog).getByRole('textbox', { name: msg('games.executableLabel') }), 'C:\\Games\\Hades\\Hades.exe');
+    const add = within(dialog).getByRole('button', { name: msg('common.add') });
+    add.focus();
+
+    await view.user.keyboard('{Enter}');
+
+    expect(addGame).toHaveBeenCalledTimes(1);
+    expect(add.getAttribute('aria-busy')).toBe('true');
+    expect(add.hasAttribute('disabled')).toBe(false);
+    expect(add.textContent?.trim()).toBe(msg('common.add'));
+    expect(document.activeElement).toBe(add);
   });
 
 });
