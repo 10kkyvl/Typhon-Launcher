@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ArrowLeft, ChevronUp, MessageCircle, X } from '@lucide/svelte';
-  import { onMount, tick, untrack } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { fade } from 'svelte/transition';
   import Avatar from './Avatar.svelte';
   import { fieldsFrame } from '../profile/frameLook';
@@ -50,6 +50,7 @@
   import { chatErrorText } from '../social/chatErrors';
   import { toast } from '../stores/toasts';
   import { focusableIn } from '../layers/focus';
+  import { focusHandOff } from '../utils/focusHandOff';
   import { uploadChatImage, type Attachment, type ChatPeer, type Message } from '../services/messaging';
   import { msg } from '../i18n';
 
@@ -85,15 +86,6 @@
 
   function displayName(target: ChatPeer): string {
     return target.displayName || target.username;
-  }
-
-  // A part of the panel swapped for another takes the pressed control with it: focus that fell to the
-  // page goes to what took its place.
-  async function land(target: () => HTMLElement | null | undefined): Promise<void> {
-    await tick();
-    const active = document.activeElement;
-    if (active && active !== document.body && active.isConnected) return;
-    target()?.focus();
   }
 
   async function uploadDrafts(targetPeerId: string, token: number, pending: ChatAttachmentDraft[]): Promise<Attachment[] | null> {
@@ -150,9 +142,9 @@
 
   // A failed message that went through on retry: the composer may still hold its text, and the row
   // that held Retry is the sent message's now.
-  function resent(peerId: string, text: string, clientId: string): void {
+  function resent(peerId: string, text: string, clientId: string, hand: ReturnType<typeof focusHandOff>): void {
     if ($activePeer?.id === peerId && draft.trim() === text.trim()) draft = '';
-    void land(() => {
+    void hand(() => {
       const row = [...(scrollBox?.querySelectorAll<HTMLElement>('[data-client]') ?? [])].find((item) => item.dataset.client === clientId);
       return (row ? focusableIn(row)[0] : undefined) ?? composerPart?.field();
     });
@@ -177,40 +169,38 @@
     });
   }
 
-  // The toast fades out with the pressed button still in it: focus is moved on now, not when it falls.
-  async function leaveToast(target: () => HTMLElement | null | undefined): Promise<void> {
-    await tick();
-    const active = document.activeElement;
-    if (active && active !== document.body && active.isConnected && !toastPlate?.contains(active)) return;
-    target()?.focus();
-  }
-
+  // Each of these takes the pressed control away: focus it held is handed on (focusHandOff). The toast
+  // fades out with its pressed button still in it, so focus in the toast counts as gone at once.
   function openToast(): void {
     const item = $chatToast;
     if (!item) return;
+    const hand = focusHandOff(() => toastPlate);
     chatToast.set(null);
     openChat(item.peer);
-    void leaveToast(conversationStart);
+    void hand(conversationStart);
   }
 
   function dismissToast(): void {
+    const hand = focusHandOff(() => toastPlate);
     chatToast.set(null);
-    void leaveToast(() => (root ? focusableIn(root).find((el) => !toastPlate?.contains(el)) : undefined));
+    void hand(() => (root ? focusableIn(root).find((el) => !toastPlate?.contains(el)) : undefined));
   }
 
   function openConversation(target: ChatPeer): void {
+    const hand = focusHandOff();
     openChat(target);
     draft = getDraft(target.id);
     chatToast.set(null);
-    void land(conversationStart);
+    void hand(conversationStart);
   }
 
   function showList(): void {
     const from = peer?.id;
+    const hand = focusHandOff();
     closeChat();
     chatOpen.set(true);
     draft = '';
-    void land(
+    void hand(
       () =>
         [...(panel?.querySelectorAll<HTMLElement>('[data-peer]') ?? [])].find((row) => row.dataset.peer === from) ??
         panel?.querySelector<HTMLElement>('h2'),
@@ -219,21 +209,24 @@
 
   // Opening the panel takes the opener away, closing it the panel: focus goes with the user.
   function openPanel(): void {
+    const hand = focusHandOff();
     chatOpen.set(true);
-    void land(() => (peer ? conversationStart() : (list ? focusableIn(list)[0] : undefined)) ?? panel?.querySelector<HTMLElement>('h2'));
+    void hand(() => (peer ? conversationStart() : (list ? focusableIn(list)[0] : undefined)) ?? panel?.querySelector<HTMLElement>('h2'));
   }
 
   function closePanel(): void {
+    const hand = focusHandOff();
     closeChat();
-    void land(() => root?.querySelector<HTMLElement>('.chat-toggle button'));
+    void hand(() => root?.querySelector<HTMLElement>('.chat-toggle button'));
   }
 
   async function earlier(target: string): Promise<void> {
+    const hand = focusHandOff();
     try {
       await loadMore(target);
       olderFailed = false;
-      // The last older page takes "Earlier" away: focus goes to the first message it brought.
-      void land(() => {
+      // The last older page takes "Earlier" away: focus it held goes to the first message it brought.
+      void hand(() => {
         const first = scrollBox?.querySelector<HTMLElement>('[data-client]');
         return first ? focusableIn(first)[0] : undefined;
       });

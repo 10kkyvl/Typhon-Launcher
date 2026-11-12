@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { tick } from 'svelte';
   import { Check, MoreHorizontal, Pencil, RefreshCw } from '@lucide/svelte';
   import Button from './Button.svelte';
   import Chip from './Chip.svelte';
@@ -16,6 +15,7 @@
   import { REACTION_KEYS, type ChatPeer, type Message, type ReactionKey } from '../services/messaging';
   import { reactionIcons } from './reactions/icons';
   import { reactionLabel } from '../social/feed';
+  import { focusHandOff } from '../utils/focusHandOff';
   import { msg, t } from '../i18n';
 
   /**
@@ -40,7 +40,7 @@
     canReact: boolean | undefined;
     onerror: (peerId: string, text: string) => void;
     /** A failed message went through on retry: the composer may still hold its text. */
-    onresent: (peerId: string, text: string, clientId: string) => void;
+    onresent: (peerId: string, text: string, clientId: string, hand: ReturnType<typeof focusHandOff>) => void;
     onopenimages: (urls: string[], position: number) => void;
     onimageload: () => void;
   } = $props();
@@ -70,34 +70,30 @@
     return `${day}, ${clock}`;
   }
 
-  // The control that was pressed goes when the editor opens or closes: focus that fell to the page
-  // moves to what took its place.
-  async function refocus(target: () => HTMLElement | null | undefined): Promise<void> {
-    await tick();
-    const active = document.activeElement;
-    if (active && active !== document.body && active.isConnected) return;
-    target()?.focus();
-  }
-
   const editButton = () => row?.querySelector<HTMLElement>('[data-edit]');
 
+  // The control that was pressed goes when the editor opens or closes: focus it held moves to what
+  // took its place (focusHandOff).
   function startEdit(): void {
+    const hand = focusHandOff();
     editingMessageId.set(message.id);
     editDraft = message.text;
-    void refocus(() => editor);
+    void hand(() => editor);
   }
 
   function cancelEdit(): void {
+    const hand = focusHandOff();
     editingMessageId.set(null);
-    void refocus(editButton);
+    void hand(editButton);
   }
 
   async function saveEdit(): Promise<void> {
     if (!editDraft.trim() && attachmentsOf(message).length === 0) return;
     const targetPeerId = peer.id;
+    const hand = focusHandOff();
     try {
       await editMessage(targetPeerId, message.id, editDraft.trim());
-      await refocus(editButton);
+      await hand(editButton);
     } catch (err) {
       onerror(targetPeerId, chatErrorText(err, 'social.chatEditError'));
     }
@@ -108,11 +104,12 @@
     if (resending) return;
     resending = true;
     const targetPeerId = peer.id;
+    const hand = focusHandOff();
     onerror(targetPeerId, '');
     const { text, clientId } = message;
     try {
       await retryMessage(targetPeerId, clientId);
-      onresent(targetPeerId, text, clientId);
+      onresent(targetPeerId, text, clientId, hand);
     } catch (err) {
       onerror(targetPeerId, chatErrorText(err, 'social.chatSendError'));
     } finally {

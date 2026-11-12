@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { get, writable } from 'svelte/store';
+import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
@@ -347,6 +348,90 @@ describe('ChatPanel: keyboard paths that replace the pressed control', () => {
     expect(field.value).toBe('Hi');
     sent.resolve();
     await vi.waitFor(() => expect(field.readOnly).toBe(false));
+  });
+});
+
+// A pointer press where a click does not focus a button (the macOS WebKit view): nothing held focus,
+// so nothing is handed on; focus stays where it was, on the page.
+describe('ChatPanel: a press that did not hold focus leaves focus alone', () => {
+  const press = async (name: string | RegExp) => {
+    expect(document.activeElement).toBe(document.body);
+    await fireEvent.click(screen.getByRole('button', { name }));
+    await tick();
+    await tick();
+  };
+
+  it('the opener and Close', async () => {
+    chat.chatOpen.set(false);
+    chat.activePeer.set(null);
+    setup();
+
+    await press(msg('social.chatOpen'));
+    expect(screen.getByRole('button', { name: /Friend/ })).toBeTruthy();
+    expect(document.activeElement).toBe(document.body);
+
+    await press(msg('social.chatClose'));
+    expect(screen.getByRole('button', { name: msg('social.chatOpen') })).toBeTruthy();
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('a conversation opened from the list, and Back', async () => {
+    chat.activePeer.set(null);
+    setup();
+
+    await press(/Friend/);
+    expect(screen.getByPlaceholderText(msg('social.chatPlaceholder'))).toBeTruthy();
+    expect(document.activeElement).toBe(document.body);
+
+    await press(msg('social.chatBack'));
+    expect(screen.getByRole('button', { name: /Friend/ })).toBeTruthy();
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('Edit, Cancel and Save', async () => {
+    chat.messagesByPeer.set({ peer: [message('m-own', 'c-own', 'me')] });
+    vi.mocked(chat.editMessage).mockImplementation(async () => chat.editingMessageId.set(null));
+    setup();
+
+    await press(msg('social.chatEdit'));
+    expect(screen.getByRole('textbox', { name: msg('social.chatEditField') })).toBeTruthy();
+    expect(document.activeElement).toBe(document.body);
+    await press(msg('social.chatCancel'));
+    expect(document.activeElement).toBe(document.body);
+
+    await press(msg('social.chatEdit'));
+    await press(msg('social.chatSave'));
+    await vi.waitFor(() => expect(screen.getByRole('button', { name: msg('social.chatEdit') })).toBeTruthy());
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('"Earlier", on the last older page as on any other', async () => {
+    const older = { ...message('m0', 'c0'), createdAt: new Date(Date.now() - 3_600_000).toISOString() };
+    vi.mocked(fetchMessages).mockResolvedValue({ messages: [older], next: '' } as unknown as MessagePage);
+    chat.nextByPeer.set({ peer: 'cursor' });
+    setup();
+
+    await press(msg('social.chatEarlier'));
+
+    await vi.waitFor(() => expect(screen.queryByRole('button', { name: msg('social.chatEarlier') })).toBeNull());
+    await tick();
+    expect(document.activeElement).toBe(document.body);
+  });
+});
+
+describe('ChatPanel: "Earlier" with older pages still to come', () => {
+  it('keeps the focus it was pressed with', async () => {
+    const older = { ...message('m0', 'c0'), createdAt: new Date(Date.now() - 3_600_000).toISOString() };
+    vi.mocked(fetchMessages).mockResolvedValue({ messages: [older], next: 'older' } as unknown as MessagePage);
+    chat.nextByPeer.set({ peer: 'cursor' });
+    const keys = setup();
+    const earlier = screen.getByRole('button', { name: msg('social.chatEarlier') });
+    earlier.focus();
+
+    await keys.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(document.querySelector('[data-client="c0"]')).toBeTruthy());
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: msg('social.chatEarlier') }));
   });
 });
 
