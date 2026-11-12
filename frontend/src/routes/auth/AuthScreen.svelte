@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
   import Notice from '../../lib/components/Notice.svelte';
   import TextLink from '../../lib/components/TextLink.svelte';
@@ -18,16 +19,22 @@
   let password = $state('');
   let identifier = $state('');
   let errors = $state<FieldErrors>({});
-  let busy = $state(false);
+  // Each request shows on its own button; either one holds the whole form.
+  let submitting = $state(false);
+  let guesting = $state(false);
+  const busy = $derived(submitting || guesting);
 
   const isRegister = $derived($authView === 'register');
   const offline = $derived($authState === 'unavailable');
 
-  function switchView(view: 'login' | 'register') {
+  // The pressed link goes with the form it was under: focus moves to the first field of the new one.
+  async function switchView(view: 'login' | 'register') {
     if (busy) return;
     errors = {};
     password = '';
     authView.set(view);
+    await tick();
+    document.getElementById(view === 'register' ? `${uid}-email` : `${uid}-identifier`)?.focus();
   }
 
   function applyError(err: unknown) {
@@ -48,39 +55,39 @@
   async function submitRegister() {
     if (busy) return;
     errors = {};
-    busy = true;
+    submitting = true;
     try {
       await signUp({ email, username, displayName, password });
     } catch (err) {
       applyError(err);
     } finally {
-      busy = false;
+      submitting = false;
     }
   }
 
   async function submitLogin() {
     if (busy) return;
     errors = {};
-    busy = true;
+    submitting = true;
     try {
       await signIn({ emailOrUsername: identifier, password });
     } catch (err) {
       applyError(err);
     } finally {
-      busy = false;
+      submitting = false;
     }
   }
 
   async function onGuest() {
     if (busy) return;
     errors = {};
-    busy = true;
+    guesting = true;
     try {
       await enterAsGuest();
     } catch (err) {
       errors = { general: accountErrorText(err, msg('transfers.authGuestError')) };
     } finally {
-      busy = false;
+      guesting = false;
     }
   }
 
@@ -128,7 +135,9 @@
       <div class="view">
       <h1 class="title">{isRegister ? msg('transfers.authRegisterTitle') : msg('transfers.authLoginTitle')}</h1>
 
-      <form class="form" onsubmit={onSubmit}>
+      <!-- While a request runs the fields refuse edits by being read-only, not disabled: a field that
+           turns disabled loses the focus Enter was pressed in. -->
+      <form class="form" onsubmit={onSubmit} aria-busy={busy || undefined}>
         {#if isRegister}
           <div class="field">
             <label class="label" for="{uid}-email">{msg('common.email')}</label>
@@ -142,7 +151,7 @@
               autocomplete="email"
               required
               bind:value={email}
-              disabled={busy}
+              readonly={busy}
             />
             {#if errors.email}<span class="error" id="{uid}-email-error" role="alert">{errors.email}</span>{/if}
           </div>
@@ -160,7 +169,7 @@
               autocomplete="username"
               required
               bind:value={username}
-              disabled={busy}
+              readonly={busy}
             />
             {#if errors.username}<span class="error" id="{uid}-username-error" role="alert">{errors.username}</span>{/if}
           </div>
@@ -178,7 +187,7 @@
               autocomplete="nickname"
               required
               bind:value={displayName}
-              disabled={busy}
+              readonly={busy}
             />
             {#if errors.displayName}<span class="error" id="{uid}-displayName-error" role="alert">{errors.displayName}</span>{/if}
           </div>
@@ -195,7 +204,7 @@
               autocomplete="username"
               required
               bind:value={identifier}
-              disabled={busy}
+              readonly={busy}
             />
             {#if errors.username}<span class="error" id="{uid}-username-error" role="alert">{errors.username}</span>{/if}
           </div>
@@ -213,7 +222,7 @@
             autocomplete={isRegister ? 'new-password' : 'current-password'}
             required
             bind:value={password}
-            disabled={busy}
+            readonly={busy}
           />
           {#if errors.password}<span class="error" id="{uid}-password-error" role="alert">{errors.password}</span>{/if}
         </div>
@@ -230,8 +239,8 @@
         {/if}
 
         <div class="submit">
-          <Button variant="primary" size="lg" type="submit" block {busy}>
-            {#if busy}
+          <Button variant="primary" size="lg" type="submit" block busy={submitting} disabled={guesting}>
+            {#if submitting}
               {isRegister ? msg('transfers.authRegistering') : msg('transfers.authSigningIn')}
             {:else}
               {isRegister ? msg('transfers.authCreateAccount') : msg('transfers.authSignInAction')}
@@ -255,7 +264,7 @@
       <div class="guest">
         <span class="guest-divider"><span>{msg('transfers.authOrDivider')}</span></span>
         <div class="guest-action">
-          <Button block disabled={busy} onclick={onGuest}>{msg('transfers.authGuestAction')}</Button>
+          <Button block busy={guesting} disabled={submitting} onclick={onGuest}>{msg('transfers.authGuestAction')}</Button>
         </div>
         <p class="guest-hint">{msg('transfers.authGuestHint')}</p>
       </div>

@@ -1,7 +1,7 @@
 import { screen } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
-import { AccountError, login, openForgotPassword } from '../../lib/services/account';
+import { AccountError, continueAsGuest, login, openForgotPassword } from '../../lib/services/account';
 import { authState, authView } from '../../lib/stores/user';
 import { renderDom } from '../../lib/testing/dom';
 import AuthScreen from './AuthScreen.svelte';
@@ -10,11 +10,13 @@ vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).
 vi.mock('../../lib/services/account', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/account')>()),
   login: vi.fn(),
+  continueAsGuest: vi.fn(),
   openForgotPassword: vi.fn(async () => {}),
 }));
 
 afterEach(() => {
   vi.mocked(login).mockReset();
+  vi.mocked(continueAsGuest).mockReset();
   vi.mocked(openForgotPassword).mockClear();
   authState.set('bootstrapping');
   authView.set('login');
@@ -94,5 +96,54 @@ describe('AuthScreen: messages', () => {
     expect(alert.closest('label')).toBeNull();
     expect(password.getAttribute('aria-describedby')).toBe(alert.id);
     expect(screen.getByLabelText(msg('transfers.authPasswordLabel'))).toBe(password);
+  });
+});
+
+describe('AuthScreen: while a request runs and between the two forms', () => {
+  it('shows the guest entry busy on its own button, not the sign-in as signing in', async () => {
+    let settle: (err: unknown) => void = () => {};
+    vi.mocked(continueAsGuest).mockImplementation(() => new Promise((_resolve, reject) => (settle = reject)));
+    const { user } = signInScreen();
+    const guest = screen.getByRole('button', { name: msg('transfers.authGuestAction') });
+    const submit = screen.getByRole('button', { name: msg('transfers.authSignInAction') });
+
+    await user.click(guest);
+
+    expect(guest.getAttribute('aria-busy')).toBe('true');
+    expect(document.activeElement).toBe(guest);
+    expect(submit.hasAttribute('aria-busy')).toBe(false);
+    expect(submit.textContent).not.toContain(msg('transfers.authSigningIn'));
+    settle(new AccountError('server_error'));
+    await vi.waitFor(() => expect(guest.hasAttribute('aria-busy')).toBe(false));
+  });
+
+  it('puts focus in the first field of the form a switch brings up', async () => {
+    const { user } = signInScreen();
+    screen.getByRole('button', { name: msg('transfers.authCreateAccount') }).focus();
+
+    await user.keyboard('{Enter}');
+    expect(document.activeElement).toBe(screen.getByLabelText(msg('common.email')));
+
+    screen.getByRole('button', { name: msg('transfers.authSignInAction') }).focus();
+    await user.keyboard('{Enter}');
+    expect(document.activeElement).toBe(screen.getByLabelText(msg('transfers.authIdentifierLabel')));
+  });
+
+  it('keeps focus in the field Enter was pressed in: the fields refuse edits without turning disabled', async () => {
+    let settle: (err: unknown) => void = () => {};
+    vi.mocked(login).mockImplementation(() => new Promise((_resolve, reject) => (settle = reject)));
+    const { user } = signInScreen();
+    await user.type(screen.getByLabelText(msg('transfers.authIdentifierLabel')), 'player');
+    const password = screen.getByLabelText(msg('transfers.authPasswordLabel')) as HTMLInputElement;
+
+    await user.type(password, 'secret{Enter}');
+
+    expect(password.disabled).toBe(false);
+    expect(password.readOnly).toBe(true);
+    expect(document.activeElement).toBe(password);
+    await user.type(password, 'x');
+    expect(password.value).toBe('secret');
+    settle(new AccountError('invalid_password'));
+    await vi.waitFor(() => expect(password.readOnly).toBe(false));
   });
 });
