@@ -3,6 +3,7 @@
   import Button from './Button.svelte';
   import EmptyState from './EmptyState.svelte';
   import GameCard from './GameCard.svelte';
+  import Spinner from './Spinner.svelte';
   import { msg } from '../i18n';
   import { genreLabel, recommendationReason, type Recommendation } from '../recommendations/display';
   import { gameArt } from '../stores/metadata';
@@ -23,7 +24,7 @@
   <div class="heading">
     <h2>{title}</h2>
     {#if onrefresh}
-      <Button onclick={onrefresh} disabled={loading}><RefreshCw size="1.4rem" />{msg('games.recommendationRefresh')}</Button>
+      <Button onclick={onrefresh} busy={loading}>{#if !loading}<RefreshCw size="1.4rem" />{/if}{msg('games.recommendationRefresh')}</Button>
     {/if}
   </div>
   {#if items.length > 0}
@@ -50,13 +51,11 @@
         </div>
       {/each}
     </div>
+  {:else if loading}
+    <Spinner label={msg('games.recommendationLoading')} />
   {:else}
     <div role="status">
-      {#if loading}
-        <p class="loading">{msg('games.recommendationLoading')}</p>
-      {:else}
-        <EmptyState size="inline" title={emptyText} />
-      {/if}
+      <EmptyState size="inline" title={emptyText} />
     </div>
   {/if}
 </section>
@@ -67,7 +66,7 @@
   h2 { font-size: var(--font-xl); }
   .picks { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-5); }
   .pick { min-width: 0; }
-  .genre, .loading { font-size: var(--font-sm); color: var(--text-3); }
+  .genre { font-size: var(--font-sm); color: var(--text-3); }
   .genre { white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
   @media (max-width: 900px) { .picks { grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); } }
 </style>
