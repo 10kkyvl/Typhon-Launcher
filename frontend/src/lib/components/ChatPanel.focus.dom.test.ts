@@ -72,6 +72,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   chat.messagesByPeer.set({});
   chat.activePeer.set(null);
   chat.chatOpen.set(false);
@@ -329,7 +330,8 @@ describe('ChatPanel: keyboard paths that replace the pressed control', () => {
   });
 
   it('the message field keeps focus while its message is sent: it refuses edits without turning disabled', async () => {
-    vi.mocked(chat.sendMessage).mockReturnValue(new Promise(() => {}) as never);
+    const sent = held<void>();
+    vi.mocked(chat.sendMessage).mockReturnValue(sent.promise as never);
     const keys = setup();
     const field = screen.getByPlaceholderText(msg('social.chatPlaceholder')) as HTMLTextAreaElement;
 
@@ -341,14 +343,47 @@ describe('ChatPanel: keyboard paths that replace the pressed control', () => {
     expect(document.activeElement).toBe(field);
     await keys.type(field, '!');
     expect(field.value).toBe('Hi');
+    sent.resolve();
+    await vi.waitFor(() => expect(field.readOnly).toBe(false));
   });
 });
 
 describe('ChatPanel: a send in flight', () => {
   const uploaded = { id: 'a1', url: 'https://img/a1', width: 10, height: 10, bytes: 1024 };
 
+  it('outlives the panel: drawn again (a language change, Big Picture and back), Send is still refused and the images go once', async () => {
+    // The draft of a conversation is kept in the browser's storage, which jsdom lacks here.
+    const kept = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => kept.get(key) ?? null,
+      setItem: (key: string, value: string) => void kept.set(key, value),
+      removeItem: (key: string) => void kept.delete(key),
+    });
+    const sent = held<void>();
+    vi.mocked(chat.sendMessage).mockReturnValue(sent.promise as never);
+    chat.setDraft('peer', 'Look at this');
+    chat.attachmentDrafts.set({ peer: [{ key: 'k1', name: 'shot.png', bytes: 1024, encoded: '', previewUrl: 'blob:shot', uploaded }] });
+    const first = render(ChatPanel, { target: app });
+    const keys = user();
+    await keys.click(screen.getByRole('button', { name: msg('social.chatSend') }));
+    expect(chat.sendMessage).toHaveBeenCalledTimes(1);
+
+    first.unmount();
+    render(ChatPanel, { target: app });
+
+    const send = screen.getByRole('button', { name: msg('social.chatSend') });
+    expect(send.hasAttribute('disabled')).toBe(true);
+    await keys.click(send);
+    expect(chat.sendMessage).toHaveBeenCalledTimes(1);
+    expect((screen.getByPlaceholderText(msg('social.chatPlaceholder')) as HTMLTextAreaElement).value).toBe('Look at this');
+    sent.resolve();
+    await vi.waitFor(() => expect(screen.queryByRole('button', { name: msg('social.chatAttachRemove') })).toBeNull());
+    await vi.waitFor(() => expect((screen.getByPlaceholderText(msg('social.chatPlaceholder')) as HTMLTextAreaElement).value).toBe(''));
+  });
+
   it('refuses a second Send while the first runs', async () => {
-    vi.mocked(chat.sendMessage).mockReturnValue(new Promise(() => {}) as never);
+    const sent = held<void>();
+    vi.mocked(chat.sendMessage).mockReturnValue(sent.promise as never);
     chat.attachmentDrafts.set({ peer: [{ key: 'k1', name: 'shot.png', bytes: 1024, encoded: '', previewUrl: 'blob:shot', uploaded }] });
     const keys = setup();
     const send = screen.getByRole('button', { name: msg('social.chatSend') });
@@ -358,6 +393,8 @@ describe('ChatPanel: a send in flight', () => {
     expect(send.hasAttribute('disabled')).toBe(true);
     await keys.click(send);
     expect(chat.sendMessage).toHaveBeenCalledTimes(1);
+    sent.resolve();
+    await vi.waitFor(() => expect(screen.queryByRole('button', { name: msg('social.chatAttachRemove') })).toBeNull());
   });
 
   it('belongs to its conversation: after Back and reopening it, Send is still refused and the images go once', async () => {

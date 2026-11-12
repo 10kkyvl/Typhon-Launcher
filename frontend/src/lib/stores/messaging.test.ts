@@ -510,6 +510,40 @@ describe('messaging store session and event races', () => {
 });
 
 
+describe('a send in flight', () => {
+  it('is one per conversation, with its progress, until the token that began it ends it', async () => {
+    const { messaging } = await load();
+    const token = messaging.beginSend(peer.id) as number;
+
+    expect(messaging.beginSend(peer.id)).toBeNull();
+    messaging.sendProgress(peer.id, token, 1, 2);
+    expect(get(messaging.chatSends)).toEqual({ [peer.id]: { current: 1, total: 2 } });
+    messaging.endSend(peer.id, token + 1);
+    expect(get(messaging.chatSends)).toEqual({ [peer.id]: { current: 1, total: 2 } });
+
+    messaging.endSend(peer.id, token, 'hello');
+
+    expect(get(messaging.chatSends)).toEqual({});
+    expect(get(messaging.chatSent)).toEqual({ id: token, peerId: peer.id, text: 'hello' });
+    expect(messaging.beginSend(peer.id)).not.toBeNull();
+  });
+
+  it('ends with the session: the next account starts with none, and the old send ends nothing of its own', async () => {
+    const { user, messaging } = await load();
+    const old = messaging.beginSend(peer.id) as number;
+
+    user.currentUser.set(null);
+    user.authState.set('unauthenticated');
+
+    await vi.waitFor(() => expect(get(messaging.chatSends)).toEqual({}));
+    const next = messaging.beginSend(peer.id);
+    expect(next).not.toBeNull();
+    messaging.endSend(peer.id, old, 'late');
+    expect(get(messaging.chatSends)).toEqual({ [peer.id]: { current: 0, total: 0 } });
+    expect(get(messaging.chatSent)).toBeNull();
+  });
+});
+
 describe('chat recovery regressions', () => {
   it('keeps saved conversations and separates background and history errors', async () => {
     vi.useFakeTimers();

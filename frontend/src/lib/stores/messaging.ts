@@ -49,6 +49,50 @@ export const failedMessages = writable<Set<string>>(new Set());
 export const editingMessageId = writable<string | null>(null);
 export const attachmentDrafts = writable<Record<string, ChatAttachmentDraft[]>>({});
 
+export interface ChatSend {
+  /** Images uploaded so far for the message, of how many (none: 0 of 0). */
+  current: number;
+  total: number;
+}
+
+// Sends in flight, by conversation. They belong to the session, not to the panel that started them:
+// the panel is drawn again on a language change and around Big Picture, and must still refuse a second
+// Send of the same images.
+export const chatSends = writable<Record<string, ChatSend>>({});
+// The last send that went through, for the panel showing its conversation to empty the field of what
+// was sent: the panel that started it may be gone by then.
+export const chatSent = writable<{ id: number; peerId: string; text: string } | null>(null);
+let sendTokens = new Map<string, number>();
+let sendSerial = 0;
+
+/** Marks a send to `peerId` as in flight and answers its token; null when one already is. */
+export function beginSend(peerId: string): number | null {
+  if (sendTokens.has(peerId)) return null;
+  const token = ++sendSerial;
+  sendTokens.set(peerId, token);
+  chatSends.update((all) => ({ ...all, [peerId]: { current: 0, total: 0 } }));
+  return token;
+}
+
+export function sendProgress(peerId: string, token: number, current: number, total: number): void {
+  if (sendTokens.get(peerId) !== token) return;
+  chatSends.update((all) => ({ ...all, [peerId]: { current, total } }));
+}
+
+/**
+ * Ends the send `token` began; `sent` is the text that went through, when it did. A send of a session
+ * that has gone ends nothing of the next one.
+ */
+export function endSend(peerId: string, token: number, sent?: string): void {
+  if (sendTokens.get(peerId) !== token) return;
+  sendTokens.delete(peerId);
+  if (sent !== undefined) chatSent.set({ id: token, peerId, text: sent });
+  chatSends.update((all) => {
+    const { [peerId]: _ended, ...rest } = all;
+    return rest;
+  });
+}
+
 export const unreadCount = derived(conversations, ($conversations) =>
   $conversations.reduce((sum, item) => sum + Math.max(0, item.unread), 0),
 );
@@ -689,6 +733,9 @@ async function runSession(nextKey: string, serial: number): Promise<void> {
   chatTyping.set({});
   editingMessageId.set(null);
   attachmentDrafts.set({});
+  sendTokens = new Map();
+  chatSends.set({});
+  chatSent.set(null);
   closeChat();
   if (!nextKey) {
     chatConnected.set(false);

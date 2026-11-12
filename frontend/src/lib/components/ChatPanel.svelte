@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ArrowLeft, ChevronUp, MessageCircle, X } from '@lucide/svelte';
-  import { onMount, tick } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import { fade } from 'svelte/transition';
   import Avatar from './Avatar.svelte';
   import { fieldsFrame } from '../profile/frameLook';
@@ -17,6 +17,7 @@
   import {
     activePeer,
     attachmentDrafts,
+    beginSend,
     chatConnected,
     chatLoading,
     chatLoadingMore,
@@ -24,10 +25,13 @@
     chatConversationsError,
     canSendByPeer,
     chatOpen,
+    chatSends,
+    chatSent,
     chatToast,
     chatTyping,
     closeChat,
     conversations,
+    endSend,
     getDraft,
     loadMessages,
     loadMore,
@@ -35,6 +39,7 @@
     openChat,
     retryMessaging,
     sendMessage,
+    sendProgress,
     setAttachmentDrafts,
     setPanelVisible,
     nextByPeer,
@@ -64,10 +69,6 @@
   let composerPart = $state<{ field: () => HTMLElement | undefined }>();
   let now = $state(new Date());
   let lastRenderedLastMessage = '';
-  // A send in flight belongs to its conversation, not to the composer drawn for it: after Back and
-  // reopening the conversation, Send stays refused and the upload's progress shows. `total` counts the
-  // images still to upload when it started.
-  let sends = $state<Record<string, { current: number; total: number }>>({});
   const idle = { current: 0, total: 0 };
 
   const peer = $derived($activePeer);
@@ -75,7 +76,8 @@
   const conversation = $derived(peer ? $conversations.find((item) => item.peer.id === peer.id) : undefined);
   const canSend = $derived(conversation?.canSend ?? $canSendByPeer[peer?.id ?? ''] ?? true);
   const unreadTotal = $derived($conversations.reduce((sum, item) => sum + item.unread, 0));
-  const sending = $derived(peer ? peer.id in sends : false);
+  // A send in flight is the store's: it outlives this panel and the composer drawn for its conversation.
+  const sending = $derived(peer ? peer.id in $chatSends : false);
 
   function displayName(target: ChatPeer): string {
     return target.displayName || target.username;
@@ -90,14 +92,14 @@
     target()?.focus();
   }
 
-  async function uploadDrafts(targetPeerId: string, pending: ChatAttachmentDraft[]): Promise<Attachment[] | null> {
+  async function uploadDrafts(targetPeerId: string, token: number, pending: ChatAttachmentDraft[]): Promise<Attachment[] | null> {
     let list = pending;
     const total = list.filter((item) => !item.uploaded).length;
     let done = 0;
-    sends[targetPeerId] = { current: 0, total };
+    sendProgress(targetPeerId, token, 0, total);
     for (const item of pending) {
       if (item.uploaded) continue;
-      sends[targetPeerId] = { current: done + 1, total };
+      sendProgress(targetPeerId, token, done + 1, total);
       try {
         const uploaded = await uploadChatImage(item.encoded);
         list = list.map((entry) => (entry.key === item.key ? { ...entry, uploaded } : entry));
@@ -117,18 +119,20 @@
     const pending = $attachmentDrafts[targetPeerId] ?? [];
     const submitted = draft.trim();
     if (!submitted && pending.length === 0) return;
-    sends[targetPeerId] = { ...idle };
+    const token = beginSend(targetPeerId);
+    if (token === null) return;
+    let went = false;
     error = '';
     try {
       let attachments: Attachment[] = [];
       if (pending.length > 0) {
-        const uploaded = await uploadDrafts(targetPeerId, pending);
+        const uploaded = await uploadDrafts(targetPeerId, token, pending);
         if (!uploaded) return;
         attachments = uploaded;
       }
       await sendMessage(targetPeerId, submitted, undefined, attachments);
       if (attachments.length > 0) setAttachmentDrafts(targetPeerId, []);
-      if ($activePeer?.id === targetPeerId && draft.trim() === submitted) draft = '';
+      went = true;
       if ($activePeer?.id === targetPeerId) {
         composerPart?.field()?.focus();
         scrollToEnd();
@@ -136,7 +140,7 @@
     } catch (err) {
       error = chatErrorText(err, 'social.chatSendError');
     } finally {
-      delete sends[targetPeerId];
+      endSend(targetPeerId, token, went ? submitted : undefined);
     }
   }
 
@@ -272,6 +276,18 @@
     olderFailed = false;
   });
 
+  // A send may go through under a panel that did not start it (this one, drawn again meanwhile): the
+  // field of its conversation is emptied of what was sent, here as there.
+  let seenSent = untrack(() => $chatSent?.id ?? 0);
+  $effect(() => {
+    const done = $chatSent;
+    untrack(() => {
+      if (!done || done.id <= seenSent) return;
+      seenSent = done.id;
+      if (peer?.id === done.peerId && draft.trim() === done.text) draft = '';
+    });
+  });
+
   $effect(() => {
     const last = activeMessages[activeMessages.length - 1]?.id ?? '';
     if (last && last !== lastRenderedLastMessage && !$chatLoadingMore) scrollToEnd();
@@ -401,7 +417,7 @@
         {#if !canSend}
           <div class="panel-notice"><Notice compact announce={false}>{msg('social.chatDisabled')}</Notice></div>
         {:else}
-          <ChatComposer bind:this={composerPart} {peer} bind:draft {sending} progress={sends[peer.id] ?? idle} onsubmit={() => void submit()} />
+          <ChatComposer bind:this={composerPart} {peer} bind:draft {sending} progress={$chatSends[peer.id] ?? idle} onsubmit={() => void submit()} />
         {/if}
       {:else}
         <div class="conversation-list" bind:this={list}>
