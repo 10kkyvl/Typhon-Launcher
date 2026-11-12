@@ -44,6 +44,7 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
     ['warning', false],
   ],
+  'routes/profile/ProfileHeader.svelte': [['danger', true]],
   'routes/settings/AppearanceTab.svelte': [
     // The stored theme's CSS breaks a later rule: a fact of the theme, shown whenever it is edited.
     ['warning', false],
