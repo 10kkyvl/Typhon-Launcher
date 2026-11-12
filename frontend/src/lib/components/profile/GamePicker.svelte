@@ -1,7 +1,9 @@
 <script lang="ts">
   import Button from '../Button.svelte';
+  import EmptyState from '../EmptyState.svelte';
   import Notice from '../Notice.svelte';
   import SearchInput from '../SearchInput.svelte';
+  import Spinner from '../Spinner.svelte';
   import { msg } from '../../i18n';
   import { refOfLibrary } from '../../profile/layoutView';
   import { igdbIdsOf } from '../../services/profile';
@@ -36,15 +38,17 @@
 
   const idsKey = $derived(JSON.stringify(candidates.map((game) => game.canonicalGameId)));
 
+  // A failure stays on screen while it is retried, its Retry busy, until the answer replaces it.
   $effect(() => {
     attempt;
     const ids = JSON.parse(idsKey) as string[];
     const current = ++run;
     loading = true;
-    failure = '';
     igdbIdsOf(ids)
       .then((found) => {
-        if (current === run) mapping = found;
+        if (current !== run) return;
+        mapping = found;
+        failure = '';
       })
       .catch((err) => {
         if (current === run) failure = accountErrorText(err, msg('profile.pickerFailed'));
@@ -66,15 +70,15 @@
     <Notice tone="danger" compact>
       {failure}
       {#snippet action()}
-        <Button size="sm" onclick={() => attempt++}>{msg('common.retry')}</Button>
+        <Button size="sm" busy={loading} onclick={() => attempt++}>{msg('common.retry')}</Button>
       {/snippet}
     </Notice>
   {:else if loading}
-    <p class="hint">{msg('social.loadingEllipsis')}</p>
+    <Spinner size="sm" label={msg('social.loadingEllipsis')} />
   {:else if candidates.length === 0}
-    <p class="hint">{msg('profile.pickerEmpty')}</p>
+    <EmptyState size="inline" title={msg('profile.pickerEmpty')} />
   {:else if rows.length === 0}
-    <p class="hint">{msg('profile.pickerNoMatch')}</p>
+    <EmptyState size="inline" title={msg('profile.pickerNoMatch')} />
   {:else}
     <ul class="list">
       {#each rows as game (game.id)}
@@ -137,6 +141,11 @@
     background: var(--hover-strong);
   }
 
+  /* Inside the scrolling list: the shared ring is drawn inward, where the list does not clip it. */
+  .row:focus-visible {
+    outline-offset: -2px;
+  }
+
   .row:disabled {
     cursor: default;
     color: var(--text-3);
@@ -153,12 +162,5 @@
     flex-shrink: 0;
     font-size: var(--font-xs);
     color: var(--text-3);
-  }
-
-  .hint {
-    margin: 0;
-    font-size: var(--font-xs);
-    color: var(--text-3);
-    line-height: 1.5;
   }
 </style>

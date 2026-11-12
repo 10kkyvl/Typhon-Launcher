@@ -99,3 +99,53 @@ describe('the settings of a block', () => {
     expect(within(settings).getByText('Add at least one game').closest('.empty')).not.toBeNull();
   });
 });
+
+describe('the game picker of a block', () => {
+  it('a list being loaded is the spinner, named "Loading…"', async () => {
+    libraryGames.set([game('g1', 'Hades')]);
+    vi.mocked(igdbIdsOf).mockReturnValue(new Promise(() => {}));
+    await pinnedSettings();
+
+    const status = screen.getAllByRole('status').filter((element) => element.textContent?.trim() === 'Loading…');
+    expect(status).toHaveLength(1);
+    expect(status[0].classList.contains('spinner')).toBe(true);
+  });
+
+  it('no game to pick and no match are empty states', async () => {
+    const { user } = await pinnedSettings();
+    expect((await screen.findByText(/^No game in your library was found/)).closest('.empty')).not.toBeNull();
+
+    libraryGames.set([game('g1', 'Hades')]);
+    vi.mocked(igdbIdsOf).mockResolvedValue({ 'c-g1': '7' });
+    await screen.findByRole('button', { name: 'Hades' });
+    await user.type(screen.getByRole('textbox', { name: 'Find a game in your library' }), 'zzz');
+
+    expect(screen.getByText('Nothing found').closest('.empty')).not.toBeNull();
+  });
+
+  it('Retry keeps the failed notice on screen, busy and focused, until the list answers', async () => {
+    libraryGames.set([game('g1', 'Hades')]);
+    let answer: (found: Record<string, string>) => void = () => {};
+    vi.mocked(igdbIdsOf)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockReturnValueOnce(new Promise((resolve) => (answer = resolve)));
+    const { user } = await pinnedSettings();
+    const alert = await screen.findByRole('alert');
+    const notice = alert.closest('[data-tone="danger"]') as HTMLElement;
+    const retry = within(notice).getByRole('button', { name: 'Retry' });
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(igdbIdsOf).toHaveBeenCalledTimes(2);
+    expect(notice.isConnected).toBe(true);
+    expect(within(notice).getByRole('button', { name: 'Retry' })).toBe(retry);
+    expect(retry.getAttribute('aria-busy')).toBe('true');
+    expect(document.activeElement).toBe(retry);
+
+    answer({ 'c-g1': '7' });
+
+    await waitFor(() => expect(notice.isConnected).toBe(false));
+    expect(screen.getByRole('button', { name: 'Hades' })).toBeTruthy();
+  });
+});
