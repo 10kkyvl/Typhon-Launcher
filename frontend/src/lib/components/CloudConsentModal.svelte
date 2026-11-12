@@ -1,6 +1,7 @@
 <script lang="ts">
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
+  import TextLink from './TextLink.svelte';
   import { msg } from '../i18n';
 
   let {
@@ -27,12 +28,12 @@
   <p class="text">{msg('cloudsaves.consentRetention')}</p>
   <p class="text">
     {msg('cloudsaves.consentPolicy')}
-    <button type="button" class="link" onclick={onpolicy}>{msg('cloudsaves.consentPolicyLink')}</button>
+    <TextLink onclick={onpolicy}>{msg('cloudsaves.consentPolicyLink')}</TextLink>
   </p>
 
   {#snippet footer()}
     <Button disabled={busy} onclick={() => (open = false)}>{msg('common.cancel')}</Button>
-    <Button variant="primary" disabled={busy} onclick={onenable}>{msg('cloudsaves.consentEnable')}</Button>
+    <Button variant="primary" {busy} onclick={onenable}>{msg('cloudsaves.consentEnable')}</Button>
   {/snippet}
 </Modal>
 
@@ -50,13 +51,4 @@
     color: var(--text);
   }
 
-  .link {
-    padding: 0;
-    border: 0;
-    background: none;
-    font: inherit;
-    color: var(--accent-text);
-    cursor: pointer;
-    text-decoration: underline;
-  }
 </style>

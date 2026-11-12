@@ -1,6 +1,8 @@
 <script lang="ts">
   import Button from './Button.svelte';
   import Modal from './Modal.svelte';
+  import Notice from './Notice.svelte';
+  import Spinner from './Spinner.svelte';
   import { cloudErrorText } from '../cloudsaves/messages';
   import { msg } from '../i18n';
   import { cloudResolveConflict } from '../services/cloudsaves';
@@ -12,6 +14,8 @@
   const conflict = $derived(target ? $cloudStatus?.games.find((g) => g.gameId === target.gameId)?.conflict : undefined);
 
   let busy = $state(false);
+  // The choice being applied: its button stays focused and busy, the other waits.
+  let kept = $state<'mine' | 'remote' | ''>('');
   let failure = $state('');
 
   $effect(() => {
@@ -29,6 +33,7 @@
     if (!target || busy) return;
     const { gameId } = target;
     busy = true;
+    kept = keepLocal ? 'mine' : 'remote';
     failure = '';
     try {
       await cloudResolveConflict(gameId, keepLocal);
@@ -38,6 +43,7 @@
       failure = cloudErrorText(err);
     } finally {
       busy = false;
+      kept = '';
       await refreshCloudStatus();
     }
   }
@@ -68,28 +74,33 @@
           {/if}
         </div>
       </div>
-      <p class="warning">{msg('cloudsaves.conflictKeepMineWarning')}</p>
-      <p class="warning">{msg('cloudsaves.conflictTakeRemoteWarning')}</p>
+      <div class="notice">
+        <Notice tone="warning" compact announce={false}>
+          <p>{msg('cloudsaves.conflictKeepMineWarning')}</p>
+          <p>{msg('cloudsaves.conflictTakeRemoteWarning')}</p>
+        </Notice>
+      </div>
     {:else}
-      <p class="hint">{msg('cloudsaves.conflictLoading')}</p>
+      <Spinner size="sm" label={msg('cloudsaves.conflictLoading')} />
     {/if}
     {#if failure}
-      <p class="failure">{failure}</p>
+      <div class="notice"><Notice tone="danger" compact>{failure}</Notice></div>
     {/if}
   {/if}
 
   {#snippet footer()}
     <Button disabled={busy} onclick={closeCloudConflict}>{msg('cloudsaves.conflictLater')}</Button>
-    <Button disabled={busy || !conflict} onclick={() => resolve(true)}>{msg('cloudsaves.conflictKeepMine')}</Button>
-    <Button variant="primary" disabled={busy || !conflict} onclick={() => resolve(false)}>
+    <Button disabled={(busy && kept !== 'mine') || !conflict} busy={kept === 'mine'} onclick={() => resolve(true)}>
+      {msg('cloudsaves.conflictKeepMine')}
+    </Button>
+    <Button variant="primary" disabled={(busy && kept !== 'remote') || !conflict} busy={kept === 'remote'} onclick={() => resolve(false)}>
       {msg('cloudsaves.conflictTakeRemote')}
     </Button>
   {/snippet}
 </Modal>
 
 <style>
-  .intro,
-  .hint {
+  .intro {
     margin: 0 0 var(--space-4);
     font-size: var(--font-sm);
     color: var(--text-2);
@@ -121,15 +132,15 @@
     word-break: break-word;
   }
 
-  .warning {
+  .notice {
     margin: var(--space-4) 0 0;
-    font-size: var(--font-xs);
-    color: var(--warning);
   }
 
-  .failure {
-    margin: var(--space-3) 0 0;
-    font-size: var(--font-xs);
-    color: var(--danger);
+  .notice p {
+    margin: 0;
+  }
+
+  .notice p + p {
+    margin-top: var(--space-2);
   }
 </style>
