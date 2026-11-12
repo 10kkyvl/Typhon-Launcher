@@ -282,6 +282,16 @@ describe('ChatPanel: the composer', () => {
     await fireEvent.keyDown(field, { key: 'Enter' });
     expect(chat.sendMessage).toHaveBeenCalledOnce();
   });
+
+  it('does not send on the Enter a WebKit view reports as part of a composition (key code 229)', async () => {
+    setup();
+    const field = screen.getByPlaceholderText(msg('social.chatPlaceholder'));
+    await fireEvent.input(field, { target: { value: 'こんにちは' } });
+
+    await fireEvent.keyDown(field, { key: 'Enter', keyCode: 229 });
+
+    expect(chat.sendMessage).not.toHaveBeenCalled();
+  });
 });
 
 describe('ChatPanel: keyboard paths that replace the pressed control', () => {

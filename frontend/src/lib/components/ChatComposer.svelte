@@ -95,8 +95,9 @@
   }
 
   function onKeydown(event: KeyboardEvent): void {
-    // The Enter that ends an input method's composition picks the text; it does not send.
-    if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+    // The Enter that ends an input method's composition picks the text; it does not send. A WebKit
+    // view (WKWebView, the macOS window) can report that Enter with `isComposing` off and key code 229.
+    if (event.key !== 'Enter' || event.shiftKey || event.isComposing || event.keyCode === 229) return;
     event.preventDefault();
     onsubmit();
   }
