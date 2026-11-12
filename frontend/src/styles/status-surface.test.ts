@@ -200,11 +200,6 @@ const AREAS: [RegExp, string][] = [
 // are not text (3:1); a badge carries a fill of its own (see below). A new entry needs its surface named.
 const ON_SURFACE: Record<string, [surface: string, ...rules: string[]]> = {
   'routes/diskusage/DiskUsage.svelte': ['Card', '.reason'],
-  'routes/installed/Installed.svelte': [
-    'the fill of a row; an icon on the dark scrim of a badge over a cover',
-    '.row-update',
-    '.card-badge :global(svg)',
-  ],
   'routes/game/ReviewComposer.svelte': ["the plate of one's own review", '.recommend.negative'],
   'routes/profile/Profile.svelte': ['the editing bar', '.topbar-sub.error'],
   'routes/profile/ProfileHeader.svelte': ['the profile canvas', '.error'],
@@ -261,7 +256,6 @@ const ON_SURFACE: Record<string, [surface: string, ...rules: string[]]> = {
 
 // Where the surface named above is a rule of the same component, that rule has to stay opaque.
 const LOCAL_SURFACE: Record<string, string> = {
-  'routes/installed/Installed.svelte': '.row',
   'routes/game/ReviewComposer.svelte': '.mine',
   'routes/profile/Profile.svelte': '.topbar',
   'routes/history/History.svelte': '.table',
