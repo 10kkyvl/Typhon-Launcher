@@ -1,5 +1,5 @@
 import { screen, within } from '@testing-library/svelte';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import { renderDom } from '../../lib/testing/dom';
 import LayoutEditor from './LayoutEditor.svelte';
@@ -14,6 +14,35 @@ function sidebarRows(): HTMLElement[] {
 }
 
 const names = () => sidebarRows().map((row) => row.querySelector('.item-name')?.textContent);
+
+describe('LayoutEditor: what it shows after an edit', () => {
+  // The sidebar drops a separator that ends the list or follows another; the editor shows what the
+  // sidebar will draw, so it drops it too.
+  it('shows the sidebar as it will be drawn: a separator moved to the end is gone', async () => {
+    const { user } = renderDom(LayoutEditor, {});
+    await user.click(screen.getByRole('button', { name: msg('settings.layoutAddSeparator') }));
+    const count = names().length;
+    const at = names().lastIndexOf(msg('settings.layoutSeparator'));
+    expect(at).toBe(count - 2);
+
+    await user.click(within(sidebarRows()[at]).getByRole('button', { name: msg('settings.layoutMoveDown') }));
+
+    expect(names()).toHaveLength(count - 1);
+    expect(names().at(-1)).not.toBe(msg('settings.layoutSeparator'));
+  });
+
+  // The value the editor hands back is compared by value with what it last handed back: comparing it by
+  // identity never matches the bound value, which Svelte wraps in a proxy, and Svelte warns.
+  it('recognises its own value when it comes back through the binding', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { user } = renderDom(LayoutEditor, {});
+
+    await user.click(within(sidebarRows()[0]).getByRole('button', { name: msg('settings.layoutHide') }));
+
+    expect(warn.mock.calls.flat().join(' ')).not.toMatch(/state_proxy_equality_mismatch|proxies and the values they proxy/);
+    warn.mockRestore();
+  });
+});
 
 describe('LayoutEditor: the row buttons', () => {
   it('are the base icon buttons, named by what they do, and move an item from the keyboard', async () => {

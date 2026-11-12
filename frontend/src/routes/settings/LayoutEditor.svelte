@@ -24,20 +24,27 @@
   let { layout = $bindable() }: { layout?: ThemeLayout } = $props();
 
   let st = $state<EditState>(toState(layout));
-  let emitted: ThemeLayout | undefined = layout;
+  // The layout last handed out, by value: the bound value comes back wrapped in a proxy, so identity
+  // never matches it. A layout from outside (another theme) replaces the editor's state.
+  const valueOf = (value: ThemeLayout | undefined) => JSON.stringify(value ?? null);
+  let emitted = valueOf(layout);
   let dragging = $state<{ key: ListKey; index: number } | null>(null);
   let over = $state<string | null>(null);
 
   $effect(() => {
-    if (layout === emitted) return;
-    emitted = layout;
+    const value = valueOf(layout);
+    if (value === emitted) return;
+    emitted = value;
     st = toState(layout);
   });
 
+  // An edit is shown as the sidebar will draw it: the state goes through the layout and back, which
+  // drops a separator that ends the list or follows another.
   function apply(next: EditState) {
-    st = next;
-    emitted = fromState(next);
-    layout = emitted;
+    const out = fromState(next);
+    st = toState(out);
+    emitted = valueOf(out);
+    layout = out;
   }
 
   // A row's identity across moves: its id, and for a separator, which separator of the list it is (they
