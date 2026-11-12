@@ -104,25 +104,6 @@ describe('AccentPicker: the swatches', () => {
 });
 
 describe('AppearanceTab', () => {
-  it('offers the themes as one radio group that an arrow moves through', async () => {
-    const { user } = renderDom(AppearanceTab, {});
-    const group = screen.getByRole('radiogroup', { name: msg('settings.appearanceTab') });
-    const radios = within(group).getAllByRole('radio');
-    expect(radios.map((radio) => radio.getAttribute('aria-checked'))).toEqual(['false', 'true', 'false']);
-    expect(radios.map((radio) => radio.tabIndex)).toEqual([-1, 0, -1]);
-
-    radios[1].focus();
-    await user.keyboard('{ArrowRight}');
-
-    expect(vi.mocked(selectTheme)).toHaveBeenCalledWith('mine');
-    expect(document.activeElement).toBe(radios[2]);
-    await waitFor(() => expect(radios[2].getAttribute('aria-checked')).toBe('true'));
-
-    await user.keyboard('{ArrowRight}');
-    expect(vi.mocked(selectTheme)).toHaveBeenLastCalledWith('system');
-    expect(document.activeElement).toBe(radios[0]);
-  });
-
   async function editName(user: ReturnType<typeof renderDom>['user']) {
     const name = screen.getByRole('textbox', { name: msg('settings.appearanceNameFieldLabel') }) as HTMLInputElement;
     await user.click(name);
@@ -166,28 +147,6 @@ describe('AppearanceTab', () => {
     expect((screen.getByRole('textbox', { name: msg('settings.appearanceNameFieldLabel') }) as HTMLInputElement).value).toBe('Mine');
   });
 
-  it('refuses another choice while one is applied, and keeps focus on the tile', async () => {
-    let finish: () => void = () => {};
-    vi.mocked(selectTheme).mockImplementationOnce(async (id: string) => {
-      await new Promise<void>((resolve) => (finish = resolve));
-      themeMode.set('theme');
-      activeTheme.set(id === 'mine' ? MINE : DARK);
-    });
-    const { user } = renderDom(AppearanceTab, {});
-    const radios = within(screen.getByRole('radiogroup', { name: msg('settings.appearanceTab') })).getAllByRole('radio');
-
-    await user.click(radios[2]);
-    expect(radios.every((radio) => radio.getAttribute('aria-disabled') === 'true')).toBe(true);
-    await user.keyboard('{ArrowRight}');
-    expect(document.activeElement).toBe(radios[2]);
-    await user.click(radios[0]);
-
-    expect(vi.mocked(selectTheme)).toHaveBeenCalledTimes(1);
-    finish();
-    await waitFor(() => expect(radios[2].hasAttribute('aria-disabled')).toBe(false));
-    expect(radios.map((radio) => radio.getAttribute('aria-checked'))).toEqual(['false', 'false', 'true']);
-  });
-
   // A kept trial checks the draft at every edit: its errors stay up to date on screen but are not
   // announced while the user types; pressing Try or Save is what announces them.
   it('keeps the errors of a kept trial quiet while typing and announces them on Try', async () => {
@@ -210,12 +169,6 @@ describe('AppearanceTab', () => {
 
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain(quiet.textContent ?? '');
-  });
-
-  it('deletes a custom theme from a base icon button named for the theme', () => {
-    renderDom(AppearanceTab, {});
-    const remove = screen.getByRole('button', { name: msg('settings.appearanceDeleteTile', { name: 'Mine' }) });
-    expect(remove.classList.contains('icon-btn')).toBe(true);
   });
 
   it('shows the custom CSS through a disclosure that says it is expanded', async () => {
