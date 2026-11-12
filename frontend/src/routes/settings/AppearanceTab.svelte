@@ -17,7 +17,7 @@
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import ThemeTextImportModal from '../../lib/components/ThemeTextImportModal.svelte';
   import ThemeContrast from '../../lib/components/ThemeContrast.svelte';
-  import { onDestroy, untrack } from 'svelte';
+  import { onDestroy, tick, untrack } from 'svelte';
   import { get } from 'svelte/store';
   import {
     deleteTheme,
@@ -86,9 +86,9 @@
     startEditing(active);
   });
 
-  function pickTheme(theme: Theme) {
-    selectTheme(theme.id);
+  async function pickTheme(theme: Theme) {
     startEditing(theme);
+    await selectTheme(theme.id);
   }
 
   const uid = $props.id();
@@ -101,19 +101,61 @@
   const presetStop = $derived(Math.max(0, presetChecked.indexOf(true)));
   let presetGrid = $state<HTMLElement>();
 
-  function choosePreset(index: number) {
-    if (index === 0) selectTheme('system');
-    else pickTheme(list[index - 1]);
+  // While a choice is applied the tiles refuse presses (aria-disabled keeps focus on them).
+  let choosing = $state(false);
+  // The tile a confirmed choice goes to: focus follows it once the question closes.
+  let chosenAfterAsking: number | null = null;
+  const presetRadios = () => [...(presetGrid?.querySelectorAll<HTMLElement>('[role="radio"]') ?? [])];
+
+  async function applyPreset(index: number) {
+    choosing = true;
+    try {
+      if (index === 0) await selectTheme('system');
+      else await pickTheme(list[index - 1]);
+    } finally {
+      choosing = false;
+    }
+  }
+
+  // Choosing a theme replaces the draft: with unsaved edits it asks first. The system choice keeps
+  // the draft. Returns whether the choice was made at once.
+  function choosePreset(index: number): boolean {
+    if (choosing || presetChecked[index]) return false;
+    if (index > 0 && dirty && draft) {
+      pending = {
+        prompt: {
+          title: msg('settings.themeDiscardTitle'),
+          text: msg('settings.themeDiscardText', { name: draftName }),
+          confirm: msg('settings.themeCustomRevert'),
+          cancel: msg('settings.themeDiscardStay'),
+        },
+        run: async () => {
+          await applyPreset(index);
+          chosenAfterAsking = index;
+        },
+      };
+      return false;
+    }
+    void applyPreset(index);
+    return true;
+  }
+
+  async function closePending() {
+    const target = chosenAfterAsking;
+    chosenAfterAsking = null;
+    pending = null;
+    if (target === null) return;
+    await tick();
+    presetRadios()[target]?.focus();
   }
 
   function presetKeydown(event: KeyboardEvent) {
     if (event.altKey || event.ctrlKey || event.metaKey) return;
-    const radios = [...(presetGrid?.querySelectorAll<HTMLElement>('[role="radio"]') ?? [])];
+    const radios = presetRadios();
     const next = nextIndex(radios.indexOf(event.currentTarget as HTMLElement), radios.length, event.key, { orientation: 'both' });
     if (next === null) return;
     event.preventDefault();
-    choosePreset(next);
-    radios[next]?.focus();
+    if (choosePreset(next)) radios[next]?.focus();
   }
 
   function setToken(name: string, value: string) {
@@ -321,6 +363,7 @@
           class="preset"
           class:selected={presetChecked[0]}
           aria-checked={presetChecked[0]}
+          aria-disabled={choosing || undefined}
           tabindex={presetStop === 0 ? 0 : -1}
           onclick={() => choosePreset(0)}
           onkeydown={presetKeydown}
@@ -336,6 +379,7 @@
               class="preset"
               class:selected={presetChecked[i + 1]}
               aria-checked={presetChecked[i + 1]}
+              aria-disabled={choosing || undefined}
               tabindex={presetStop === i + 1 ? 0 : -1}
               onclick={() => choosePreset(i + 1)}
               onkeydown={presetKeydown}
@@ -544,7 +588,7 @@
 <ThemeTextImportModal bind:open={textImportOpen} onimported={onTextImported} />
 
 {#if pending}
-  <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} errorText={(err) => themeErrorText(err)} />
+  <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={closePending} errorText={(err) => themeErrorText(err)} />
 {/if}
 
 <style>
@@ -613,6 +657,10 @@
 
   .preset:hover {
     background: var(--surface-3);
+  }
+
+  .preset[aria-disabled='true'] {
+    cursor: progress;
   }
 
   .preset.selected {

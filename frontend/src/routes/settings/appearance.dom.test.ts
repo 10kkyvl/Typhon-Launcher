@@ -122,6 +122,71 @@ describe('AppearanceTab', () => {
     expect(document.activeElement).toBe(radios[0]);
   });
 
+  async function editName(user: ReturnType<typeof renderDom>['user']) {
+    const name = screen.getByRole('textbox', { name: msg('settings.appearanceNameFieldLabel') }) as HTMLInputElement;
+    await user.click(name);
+    await user.keyboard('X');
+    return name;
+  }
+
+  it('asks before an arrow drops unsaved edits, and Stay keeps the edits, the choice and focus', async () => {
+    const { user } = renderDom(AppearanceTab, {});
+    const name = await editName(user);
+    const radios = within(screen.getByRole('radiogroup', { name: msg('settings.appearanceTab') })).getAllByRole('radio');
+    radios[1].focus();
+
+    await user.keyboard('{ArrowRight}');
+
+    const dialog = await screen.findByRole('dialog', { name: msg('settings.themeDiscardTitle') });
+    expect(vi.mocked(selectTheme)).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole('button', { name: msg('settings.themeDiscardStay') }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(vi.mocked(selectTheme)).not.toHaveBeenCalled();
+    expect(radios[1].getAttribute('aria-checked')).toBe('true');
+    expect(document.activeElement).toBe(radios[1]);
+    expect(name.value).toBe('DarkX');
+  });
+
+  it('chooses the tile once the edits are given up, and puts focus on it', async () => {
+    const { user } = renderDom(AppearanceTab, {});
+    await editName(user);
+    const radios = within(screen.getByRole('radiogroup', { name: msg('settings.appearanceTab') })).getAllByRole('radio');
+
+    await user.click(radios[2]);
+    const dialog = await screen.findByRole('dialog', { name: msg('settings.themeDiscardTitle') });
+    expect(dialog.textContent).toContain(msg('settings.themeDiscardText', { name: 'DarkX' }));
+    await user.click(within(dialog).getByRole('button', { name: msg('settings.themeCustomRevert') }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(vi.mocked(selectTheme)).toHaveBeenCalledWith('mine');
+    await waitFor(() => expect(document.activeElement).toBe(radios[2]));
+    expect(radios[2].getAttribute('aria-checked')).toBe('true');
+    expect((screen.getByRole('textbox', { name: msg('settings.appearanceNameFieldLabel') }) as HTMLInputElement).value).toBe('Mine');
+  });
+
+  it('refuses another choice while one is applied, and keeps focus on the tile', async () => {
+    let finish: () => void = () => {};
+    vi.mocked(selectTheme).mockImplementationOnce(async (id: string) => {
+      await new Promise<void>((resolve) => (finish = resolve));
+      themeMode.set('theme');
+      activeTheme.set(id === 'mine' ? MINE : DARK);
+    });
+    const { user } = renderDom(AppearanceTab, {});
+    const radios = within(screen.getByRole('radiogroup', { name: msg('settings.appearanceTab') })).getAllByRole('radio');
+
+    await user.click(radios[2]);
+    expect(radios.every((radio) => radio.getAttribute('aria-disabled') === 'true')).toBe(true);
+    await user.keyboard('{ArrowRight}');
+    expect(document.activeElement).toBe(radios[2]);
+    await user.click(radios[0]);
+
+    expect(vi.mocked(selectTheme)).toHaveBeenCalledTimes(1);
+    finish();
+    await waitFor(() => expect(radios[2].hasAttribute('aria-disabled')).toBe(false));
+    expect(radios.map((radio) => radio.getAttribute('aria-checked'))).toEqual(['false', 'false', 'true']);
+  });
+
   it('deletes a custom theme from a base icon button named for the theme', () => {
     renderDom(AppearanceTab, {});
     const remove = screen.getByRole('button', { name: msg('settings.appearanceDeleteTile', { name: 'Mine' }) });
