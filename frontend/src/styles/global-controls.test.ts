@@ -113,6 +113,13 @@ describe('a text field', () => {
   });
 });
 
+// The opening tags of the error and failure messages inside every <label> of a component.
+function labelMessages(text: string): string[] {
+  return [...text.matchAll(/<label\b[\s\S]*?<\/label>/g)].flatMap((label) =>
+    [...label[0].matchAll(/<\w+\b[^<>]*\bclass="(?:error|failure)\b[^"]*"[^<>]*>/g)].map((tag) => tag[0]),
+  );
+}
+
 describe('selecting text', () => {
   const list = /\n((?:[^\n{}]+,\n)+[^\n{}]+) \{\s*user-select: none;\s*\}/.exec(css)?.[1].split(',').map((selector) => selector.trim()) ?? [];
 
@@ -140,14 +147,13 @@ describe('selecting text', () => {
   });
 
   it('finds every error message inside a label saying what it is', () => {
+    const fixture = '<label><input /><span class="error" role="alert">Bad</span></label><span class="error">Out</span><label><p class="failure x">No</p></label>';
+    expect(labelMessages(fixture)).toEqual(['<span class="error" role="alert">', '<p class="failure x">']);
     const messages = Object.entries(frontendSources)
       .filter(([path]) => path.endsWith('.svelte'))
-      .flatMap(([path, text]) =>
-        [...text.matchAll(/<label\b[\s\S]*?<\/label>/g)].flatMap((label) =>
-          [...label[0].matchAll(/<\w+\b[^<>]*\bclass="(?:error|failure)\b[^"]*"[^<>]*>/g)].map((tag) => `${path}: ${tag[0]}`),
-        ),
-      );
-    expect(messages.length).toBeGreaterThanOrEqual(15);
+      .flatMap(([path, text]) => labelMessages(text).map((tag) => `${path}: ${tag}`));
+    // Some forms show their errors inside the label, so a scan that finds none has stopped reading them.
+    expect(messages).not.toEqual([]);
     expect(messages.filter((tag) => !/\brole="(?:alert|status)"/.test(tag))).toEqual([]);
   });
 
@@ -155,7 +161,8 @@ describe('selecting text', () => {
     expect(css).toMatch(/\ninput,\ntextarea \{\s*user-select: text;\s*\}/);
   });
 
-  // Text that must stay selectable inside a control says so itself; nothing else needs to.
+  // Text that must stay selectable inside a control says so itself; nothing else needs to. In the
+  // stylesheets only global.css switches it on: for text fields and for messages.
   it('is switched back on only inside controls, and in the overlay chat', () => {
     const KEPT = ['lib/components/InstallModal.svelte', 'overlay/OverlayChat.svelte', 'routes/friends/FriendCodeCard.svelte'];
     const found = Object.entries(frontendSources)
@@ -163,5 +170,15 @@ describe('selecting text', () => {
       .map(([path]) => path)
       .sort();
     expect(found).toEqual(KEPT);
+
+    const GLOBAL = ['styles/global.css: input, textarea', "styles/global.css: html:not(.overlay-window):not(:has(.big-picture)) :is([role='alert'], [role='status'])"];
+    const sheets = Object.entries(stylesheets)
+      .filter(([path]) => path.endsWith('.css'))
+      .flatMap(([path, text]) =>
+        [...text.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+          .filter((m) => /user-select:\s*text/.test(m[2]))
+          .map((m) => `${path}: ${selectors(m[1]).join(', ')}`),
+      );
+    expect(sheets).toEqual(GLOBAL);
   });
 });
