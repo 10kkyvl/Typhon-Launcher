@@ -229,6 +229,52 @@ describe('NetworkSettingsCard: the proxy', () => {
     expect(host.value).toBe('other.lan');
   });
 
+  // The settings store shows a change at once and takes it back when the save fails: the card must
+  // not refill its fields from either of those, or the user's typing is lost.
+  it('keeps the typed host and the mode when Apply fails', async () => {
+    vi.mocked(saveSettingsPatch).mockRejectedValueOnce(new Error('refused'));
+    const { user } = renderDom(NetworkSettingsCard, {});
+    const host = screen.getByRole('textbox', { name: msg('settings.networkProxyHostLabel') }) as HTMLInputElement;
+    await user.clear(host);
+    await user.type(host, 'typed.lan');
+
+    await user.click(screen.getByRole('button', { name: msg('settings.networkApply') }));
+
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    expect(host.isConnected).toBe(true);
+    expect(host.value).toBe('typed.lan');
+    expect(screen.getByRole('radio', { name: msg('settings.networkModeProxy') }).getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('keeps a proxy chosen on a direct card when Apply fails', async () => {
+    settings.set({ networkMode: 'direct', proxyType: 'socks5', proxyHost: '', proxyPort: 0, proxyUsername: '' } as unknown as SettingsData);
+    vi.mocked(saveSettingsPatch).mockRejectedValueOnce(new Error('refused'));
+    const { user } = renderDom(NetworkSettingsCard, {});
+    await user.click(screen.getByRole('radio', { name: msg('settings.networkModeProxy') }));
+    await user.type(screen.getByRole('textbox', { name: msg('settings.networkProxyHostLabel') }), 'typed.lan');
+    await user.type(screen.getByRole('textbox', { name: msg('settings.networkProxyPortLabel') }), '99999');
+
+    await user.click(screen.getByRole('button', { name: msg('settings.networkApply') }));
+
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    expect(screen.getByRole('radio', { name: msg('settings.networkModeProxy') }).getAttribute('aria-checked')).toBe('true');
+    expect((screen.getByRole('textbox', { name: msg('settings.networkProxyHostLabel') }) as HTMLInputElement).value).toBe('typed.lan');
+    expect((screen.getByRole('textbox', { name: msg('settings.networkProxyPortLabel') }) as HTMLInputElement).value).toBe('99999');
+  });
+
+  it('is untouched again after a good Apply, and follows the next save made elsewhere', async () => {
+    const { user } = renderDom(NetworkSettingsCard, {});
+    const host = screen.getByRole('textbox', { name: msg('settings.networkProxyHostLabel') }) as HTMLInputElement;
+    await user.clear(host);
+    await user.type(host, 'typed.lan');
+    const apply = screen.getByRole('button', { name: msg('settings.networkApply') }) as HTMLButtonElement;
+    await user.click(apply);
+    await waitFor(() => expect(apply.disabled).toBe(true));
+
+    settings.set({ ...PROXY, proxyHost: 'later.lan' } as unknown as SettingsData);
+    await waitFor(() => expect(host.value).toBe('later.lan'));
+  });
+
   it('marks a bad port on its field and says why there', async () => {
     const { user } = renderDom(NetworkSettingsCard, {});
     const port = screen.getByRole('textbox', { name: msg('settings.networkProxyPortLabel') });

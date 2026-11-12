@@ -75,8 +75,11 @@
   );
 
   type Saved = typeof saved;
-  // What the fields were last filled from. A field the user has not changed since then follows a save
-  // made elsewhere; an edit is kept. A password is never filled in, so it does not count as an edit.
+  // What the fields were last filled from. While none of them has been changed since, all of them
+  // follow a save made elsewhere; once the user has changed any one, none is refilled, so an edit in
+  // progress is kept whole. A password is never filled in, so it does not count as an edit. While Apply
+  // runs the store shows the patch at once and takes it back if the save fails: neither is followed,
+  // so a failed Apply leaves the typed fields as they were, and a good one makes the card untouched.
   let shown: Saved | null = null;
   const editedFrom = (from: Saved) =>
     mode !== from.mode ||
@@ -88,6 +91,7 @@
 
   $effect(() => {
     const next = saved;
+    if (applying) return;
     untrack(() => {
       if (shown && editedFrom(shown) && editedFrom(next)) return;
       shown = next;
