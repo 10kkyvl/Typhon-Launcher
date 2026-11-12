@@ -39,10 +39,12 @@
   ondblclick={onTitlebarDoubleClick}
 >
   <div class="no-drag island history" data-part="topbar-history">
-    <IconButton label={msg('common.back')} disabled={!$canGoBack} onclick={goBack}>
+    <!-- They stay focusable with nowhere to go: pressed on the way to the first or the last page, the
+         button turns unavailable while it has focus, and a disabled one would drop it to the page. -->
+    <IconButton label={msg('common.back')} disabled={!$canGoBack} reason={$canGoBack ? '' : msg('ui.backNowhere')} onclick={goBack}>
       <ChevronLeft size="1.8rem" strokeWidth={1.8} />
     </IconButton>
-    <IconButton label={msg('ui.forward')} disabled={!$canGoForward} onclick={goForward}>
+    <IconButton label={msg('ui.forward')} disabled={!$canGoForward} reason={$canGoForward ? '' : msg('ui.forwardNowhere')} onclick={goForward}>
       <ChevronRight size="1.8rem" strokeWidth={1.8} />
     </IconButton>
   </div>
