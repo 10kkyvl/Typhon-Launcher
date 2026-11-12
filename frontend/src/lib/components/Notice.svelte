@@ -17,6 +17,7 @@
     tone = 'info',
     title,
     compact = false,
+    announce = true,
     icon,
     action,
     onclose,
@@ -27,6 +28,11 @@
     title?: string;
     /** Inside a card or a dialog: tighter, smaller text. */
     compact?: boolean;
+    /**
+     * False for a standing fact of the page it is rendered with: no live region, it is read in the flow
+     * of the page. A notice of something that has just happened announces by its tone.
+     */
+    announce?: boolean;
     /** Replaces the tone's own icon. */
     icon?: Snippet;
     action?: Snippet;
@@ -76,8 +82,8 @@
       <Info size="1.6rem" strokeWidth={1.8} />
     {/if}
   </span>
-  <div class="body" role={tone === 'danger' ? 'alert' : 'status'}>
-    {#if worded}
+  <div class="body" role={announce ? (tone === 'danger' ? 'alert' : 'status') : undefined}>
+    {#if worded || !announce}
       {#if title}<span class="title">{title}</span>{/if}
       <div class="text">{@render children?.()}</div>
     {/if}

@@ -1,12 +1,16 @@
 import { render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { locale } from '../lib/i18n';
+import EmulatorHint from '../lib/components/EmulatorHint.svelte';
+import { locale, msg } from '../lib/i18n';
+import { listPlatforms } from '../lib/services/emulators';
 import { getProfileSnapshot } from '../lib/services/profile';
 import { listTickets, ticketLimits } from '../lib/services/support';
+import { historyStatus } from '../lib/stores/history';
 import { profileFailed } from '../lib/stores/profile';
 import { authState } from '../lib/stores/user';
 import { user } from '../lib/testing/dom';
 import Activity from './activity/Activity.svelte';
+import History from './history/History.svelte';
 import NewTicket from './support/NewTicket.svelte';
 import newTicketSource from './support/NewTicket.svelte?raw';
 import TicketList from './support/TicketList.svelte';
@@ -17,6 +21,10 @@ vi.mock('../lib/services/backend', () => ({ inWails: false }));
 vi.mock('../lib/services/profile', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../lib/services/profile')>()),
   getProfileSnapshot: vi.fn(),
+}));
+vi.mock('../lib/services/emulators', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../lib/services/emulators')>()),
+  listPlatforms: vi.fn(),
 }));
 vi.mock('../lib/services/support', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../lib/services/support')>()),
@@ -56,6 +64,30 @@ describe('a status message of a page', () => {
     await user().click(within(notice).getByRole('button', { name: 'Retry' }));
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
     expect(listTickets).toHaveBeenCalledTimes(2);
+  });
+
+  // A standing fact of the page it is rendered with is read in the flow of that page, not announced.
+  it('shows degraded history as a danger notice that is not announced', async () => {
+    historyStatus.set({ degraded: true, message: 'disk is full' });
+    render(History);
+
+    const text = await screen.findByText(/disk is full/);
+    expect(text.closest('.notice')?.getAttribute('data-tone')).toBe('danger');
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
+    historyStatus.set({ degraded: false, message: '' });
+  });
+
+  it('gives the emulator advice as a warning notice that is not announced when it loads', async () => {
+    vi.mocked(listPlatforms).mockResolvedValue([
+      { id: 'ps2', name: 'PS2', emulator: 'PCSX2', homepage: '', extensions: [], imageNames: [], path: '/e', status: 'ready', reason: '', warnings: ['discord_exit_hang'] },
+    ]);
+    render(EmulatorHint, { props: { platform: 'ps2' } });
+
+    const text = await screen.findByText(msg('emul.discordExitHang'));
+    expect(text.closest('.notice')?.getAttribute('data-tone')).toBe('warning');
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
   });
 
   it('turns the counter of a field red next to that field, on a plate of its own', async () => {

@@ -51,7 +51,7 @@
   <p class="hint">{msg('emul.vitaFirstLaunch')}</p>
 {/if}
 {#if row?.warnings.includes('discord_exit_hang')}
-  <Notice tone="warning" compact>{msg('emul.discordExitHang')}</Notice>
+  <Notice tone="warning" compact announce={false}>{msg('emul.discordExitHang')}</Notice>
 {/if}
 
 <style>

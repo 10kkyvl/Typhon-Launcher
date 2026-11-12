@@ -84,6 +84,16 @@ describe('Notice', () => {
     expect(region.textContent).toContain('Requests');
   });
 
+  // A standing fact of the page is read in the flow of the page, not announced on every visit.
+  it('without announce it is no live region and shows its words at once', () => {
+    setup({ tone: 'danger', title: 'History', announce: false, withAction: true });
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
+    const text = screen.getByText(TEXT);
+    expect(text.closest('.notice')?.getAttribute('data-tone')).toBe('danger');
+    expect(screen.getByText('History')).not.toBeNull();
+  });
+
   it('carries an action the page gives it, and pressing it does not close the notice', async () => {
     const onretry = vi.fn();
     const { keys } = setup({ tone: 'danger', withAction: true, onretry });

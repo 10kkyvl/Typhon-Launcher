@@ -9,6 +9,7 @@
     title,
     text = 'The catalog could not be loaded',
     compact = false,
+    announce,
     closable = false,
     withAction = false,
     onretry,
@@ -17,6 +18,7 @@
     title?: string;
     text?: string;
     compact?: boolean;
+    announce?: boolean;
     closable?: boolean;
     withAction?: boolean;
     onretry?: () => void;
@@ -31,7 +33,7 @@
 
 <button type="button">Before</button>
 {#if shown}
-  <Notice {tone} {title} {compact} action={withAction ? retry : undefined} onclose={closable ? () => (shown = false) : undefined}>
+  <Notice {tone} {title} {compact} {announce} action={withAction ? retry : undefined} onclose={closable ? () => (shown = false) : undefined}>
     {text}
   </Notice>
 {/if}

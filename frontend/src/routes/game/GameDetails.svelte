@@ -1553,7 +1553,7 @@
         </div>
 
         {#if primary.kind === 'retry-download' && terminalDownload?.error}
-          <div class="note-plate"><Notice tone="danger">{installErrorText(terminalDownload.error)}</Notice></div>
+          <div class="note-plate"><Notice tone="danger" announce={false}>{installErrorText(terminalDownload.error)}</Notice></div>
         {:else if localGame && !installed && wasInstalled}
           <p class="note">
             {primary.kind === 'install-download'

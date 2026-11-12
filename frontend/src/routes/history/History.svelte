@@ -134,7 +134,7 @@
 
   {#if $historyStatus.degraded}
     <div class="banner">
-      <Notice tone="danger">{msg('transfers.historyDegradedBanner', { message: $historyStatus.message })}</Notice>
+      <Notice tone="danger" announce={false}>{msg('transfers.historyDegradedBanner', { message: $historyStatus.message })}</Notice>
     </div>
   {/if}
 
