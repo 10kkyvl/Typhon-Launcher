@@ -165,6 +165,8 @@
       <input
         class="input"
         class:invalid={!!errors.subject}
+        aria-invalid={errors.subject ? 'true' : undefined}
+        aria-describedby={errors.subject ? `${uid}-subject-error` : undefined}
         type="text"
         dir="auto"
         autocomplete="off"
@@ -172,7 +174,7 @@
         disabled={sending}
         oninput={() => (errors = { ...errors, subject: undefined })}
       />
-      {#if errors.subject}<span class="error" role="alert">{errors.subject}</span>{/if}
+      {#if errors.subject}<span class="error" id="{uid}-subject-error" role="alert">{errors.subject}</span>{/if}
     </label>
 
     <label class="field">
@@ -185,6 +187,8 @@
       <textarea
         class="input area"
         class:invalid={!!errors.body}
+        aria-invalid={errors.body ? 'true' : undefined}
+        aria-describedby={errors.body ? `${uid}-body-error` : undefined}
         rows="8"
         dir="auto"
         placeholder={msg('tickets.bodyPlaceholder')}
@@ -192,7 +196,7 @@
         disabled={sending}
         oninput={() => (errors = { ...errors, body: undefined })}
       ></textarea>
-      {#if errors.body}<span class="error" role="alert">{errors.body}</span>{/if}
+      {#if errors.body}<span class="error" id="{uid}-body-error" role="alert">{errors.body}</span>{/if}
     </label>
 
     <AttachLogs
@@ -286,12 +290,6 @@
     transition:
       border-color var(--dur) var(--ease),
       box-shadow var(--dur) var(--ease);
-  }
-
-  .input:focus {
-    outline: none;
-    border-color: var(--accent-ring);
-    box-shadow: 0 0 0 3px var(--accent-subtle);
   }
 
   .input.invalid {

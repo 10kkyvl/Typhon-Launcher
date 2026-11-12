@@ -65,6 +65,16 @@ describe('a text field', () => {
   it('keeps saying it holds a bad value while focused: the ring takes the danger colour', () => {
     expect(body(".input[aria-invalid='true']:focus-visible")).toMatch(/outline-color: var\(--danger\);/);
   });
+
+  // These forms mark a bad value with aria-invalid and leave focus to the global ring: an own
+  // `outline: none` would hide it again, leaving only a halo too faint to see on an invalid field.
+  it('shows the global ring on the sign-in and support forms', () => {
+    for (const path of ['routes/auth/AuthScreen.svelte', 'routes/support/NewTicket.svelte', 'routes/support/TicketView.svelte']) {
+      const style = /<style>([\s\S]*?)<\/style>/.exec(frontendSources[path] ?? '')?.[1] ?? '';
+      expect(style, path).toMatch(/\.input \{/);
+      expect(style.match(/\.input:focus[^{]*\{[^}]*outline:\s*none/g), path).toBeNull();
+    }
+  });
 });
 
 describe('selecting text', () => {

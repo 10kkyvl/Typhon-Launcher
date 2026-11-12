@@ -29,6 +29,7 @@
   import LogsConfirm from './LogsConfirm.svelte';
 
   let { number }: { number: number } = $props();
+  const uid = $props.id();
 
   let thread = $state<TicketThread | null>(null);
   let loading = $state(true);
@@ -220,6 +221,8 @@
         <textarea
           class="input area"
           class:invalid={!!replyError}
+          aria-invalid={replyError ? 'true' : undefined}
+          aria-describedby={replyError ? `${uid}-reply-error` : undefined}
           rows="5"
           dir="auto"
           placeholder={msg('tickets.replyPlaceholder')}
@@ -227,7 +230,7 @@
           disabled={sending}
           oninput={() => (replyError = '')}
         ></textarea>
-        {#if replyError}<span class="error" role="alert">{replyError}</span>{/if}
+        {#if replyError}<span class="error" id="{uid}-reply-error" role="alert">{replyError}</span>{/if}
       </label>
 
       <AttachLogs bind:checked={attachLogs} disabled={sending} />
@@ -430,12 +433,6 @@
     transition:
       border-color var(--dur) var(--ease),
       box-shadow var(--dur) var(--ease);
-  }
-
-  .input:focus {
-    outline: none;
-    border-color: var(--accent-ring);
-    box-shadow: 0 0 0 3px var(--accent-subtle);
   }
 
   .input.invalid {

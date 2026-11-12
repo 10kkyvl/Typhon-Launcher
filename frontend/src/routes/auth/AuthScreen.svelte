@@ -7,6 +7,8 @@
   import { toast } from '../../lib/stores/toasts';
   import { msg } from '../../lib/i18n';
 
+  const uid = $props.id();
+
   type FieldErrors = Partial<Record<'email' | 'username' | 'displayName' | 'password' | 'general', string>>;
 
   let email = $state('');
@@ -132,13 +134,15 @@
             <input
               class="input"
               class:invalid={!!errors.email}
+              aria-invalid={errors.email ? 'true' : undefined}
+              aria-describedby={errors.email ? `${uid}-email-error` : undefined}
               type="email"
               autocomplete="email"
               required
               bind:value={email}
               disabled={busy}
             />
-            {#if errors.email}<span class="error" role="alert">{errors.email}</span>{/if}
+            {#if errors.email}<span class="error" id="{uid}-email-error" role="alert">{errors.email}</span>{/if}
           </label>
 
           <label class="field">
@@ -146,6 +150,8 @@
             <input
               class="input"
               class:invalid={!!errors.username}
+              aria-invalid={errors.username ? 'true' : undefined}
+              aria-describedby={errors.username ? `${uid}-username-error` : undefined}
               type="text"
               maxlength="24"
               autocomplete="username"
@@ -153,7 +159,7 @@
               bind:value={username}
               disabled={busy}
             />
-            {#if errors.username}<span class="error" role="alert">{errors.username}</span>{/if}
+            {#if errors.username}<span class="error" id="{uid}-username-error" role="alert">{errors.username}</span>{/if}
           </label>
 
           <label class="field">
@@ -161,6 +167,8 @@
             <input
               class="input"
               class:invalid={!!errors.displayName}
+              aria-invalid={errors.displayName ? 'true' : undefined}
+              aria-describedby={errors.displayName ? `${uid}-displayName-error` : undefined}
               type="text"
               maxlength="32"
               autocomplete="nickname"
@@ -168,7 +176,7 @@
               bind:value={displayName}
               disabled={busy}
             />
-            {#if errors.displayName}<span class="error" role="alert">{errors.displayName}</span>{/if}
+            {#if errors.displayName}<span class="error" id="{uid}-displayName-error" role="alert">{errors.displayName}</span>{/if}
           </label>
         {:else}
           <label class="field">
@@ -176,13 +184,15 @@
             <input
               class="input"
               class:invalid={!!errors.username}
+              aria-invalid={errors.username ? 'true' : undefined}
+              aria-describedby={errors.username ? `${uid}-username-error` : undefined}
               type="text"
               autocomplete="username"
               required
               bind:value={identifier}
               disabled={busy}
             />
-            {#if errors.username}<span class="error" role="alert">{errors.username}</span>{/if}
+            {#if errors.username}<span class="error" id="{uid}-username-error" role="alert">{errors.username}</span>{/if}
           </label>
         {/if}
 
@@ -191,13 +201,15 @@
           <input
             class="input"
             class:invalid={!!errors.password}
+            aria-invalid={errors.password ? 'true' : undefined}
+            aria-describedby={errors.password ? `${uid}-password-error` : undefined}
             type="password"
             autocomplete={isRegister ? 'new-password' : 'current-password'}
             required
             bind:value={password}
             disabled={busy}
           />
-          {#if errors.password}<span class="error" role="alert">{errors.password}</span>{/if}
+          {#if errors.password}<span class="error" id="{uid}-password-error" role="alert">{errors.password}</span>{/if}
         </label>
 
         {#if !isRegister}
@@ -349,12 +361,6 @@
     transition:
       border-color var(--dur) var(--ease),
       box-shadow var(--dur) var(--ease);
-  }
-
-  .input:focus {
-    outline: none;
-    border-color: var(--accent-ring);
-    box-shadow: 0 0 0 3px var(--accent-subtle);
   }
 
   .input.invalid {
