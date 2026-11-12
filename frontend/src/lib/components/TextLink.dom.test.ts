@@ -115,6 +115,13 @@ describe('TextLink in a line of text', () => {
     expect(css.indexOf('.text-link.muted')).toBeLessThan(css.indexOf('.text-link:hover:not(:disabled)'));
   });
 
+  // A browser lays a <button> out as one box, whatever its display: the action form cannot break
+  // across lines as the link form does. A long label wraps inside its own box instead of running
+  // out of the line.
+  it('as an action, keeps a long label inside the line it sits in', () => {
+    expect(ruleBody(css, 'button.text-link')).toEqual({ 'max-width': '100%', 'overflow-wrap': 'anywhere', 'white-space': 'normal' });
+  });
+
   it('has a hover and a disabled look, and a disabled one does not change on hover', () => {
     expect(ruleBody(css, '.text-link:hover:not(:disabled)').color).toBe('var(--text)');
     expect(ruleBody(css, '.text-link:disabled')).toMatchObject({ cursor: 'default' });

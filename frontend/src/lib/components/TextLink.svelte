@@ -5,8 +5,11 @@
   /**
    * An action that reads as a link inside a sentence or a list ("Forgot your password?", "Show all", a
    * breadcrumb, "Open folder"). Given `href` it is a real link (`<a href>`): it goes somewhere, and the
-   * browser offers what it offers for links. Given `onclick` instead it is a `<button>`: it does
-   * something here, and only a button can be disabled. It keeps the font and the line height of the
+   * browser offers what it offers for links, and its text breaks across lines as the sentence's does.
+   * Given `onclick` instead it is a `<button>`: it does something here, and only a button can be
+   * disabled. A browser lays a button out as one box whatever its display, so the action form does not
+   * break across lines: it is for short labels ("Reset it", "Show all", "Open folder"); a long one
+   * wraps inside its own box rather than running out of the line. It keeps the font and the line height of the
    * text around it, so a line holding it is as high as one without; it is underlined, so it is told
    * from the text by more than its colour, and it shows the focus ring every control has. `tone`:
    * `accent` in running text; `muted` where the link is part of the furniture and must not pull the
@@ -73,6 +76,12 @@
     transition:
       color var(--dur) var(--ease),
       text-decoration-color var(--dur) var(--ease);
+  }
+
+  button.text-link {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    white-space: normal;
   }
 
   .text-link.muted {
