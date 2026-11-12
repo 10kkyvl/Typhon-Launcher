@@ -469,3 +469,39 @@ describe('Tooltip: going away', () => {
     expect(shown()).toBe(false);
   });
 });
+
+describe('Tooltip: one at a time', () => {
+  const bubbles = () => [...document.querySelectorAll('[data-part="tooltip"]')].map((bubble) => bubble.textContent?.trim());
+
+  it('the pointer resting on another control replaces the keyboard hint, which comes back when the pointer leaves', async () => {
+    const { keys, control, wait, focusByKeyboard } = setup();
+    await focusByKeyboard();
+    expect(bubbles()).toEqual([TEXT]);
+    const more = screen.getByRole('button', { name: 'More' });
+
+    await keys.hover(more);
+    await wait(HOVER_DELAY);
+
+    expect(bubbles()).toEqual(['More actions']);
+
+    await keys.unhover(more);
+    await wait(LEAVE_GRACE);
+
+    expect(bubbles()).toEqual([TEXT]);
+    expect(document.activeElement).toBe(control());
+  });
+
+  it('the keyboard hint does not come back once focus has moved off its control', async () => {
+    const { keys, wait, focusByKeyboard } = setup();
+    await focusByKeyboard();
+    const more = screen.getByRole('button', { name: 'More' });
+    await keys.hover(more);
+    await wait(HOVER_DELAY);
+    screen.getByRole('button', { name: 'After' }).focus();
+
+    await keys.unhover(more);
+    await wait(LEAVE_GRACE);
+
+    expect(bubbles()).toEqual([]);
+  });
+});

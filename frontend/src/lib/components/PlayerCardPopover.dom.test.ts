@@ -171,3 +171,38 @@ describe('PlayerCardPopover', () => {
     expect(card()).toBeNull();
   });
 });
+
+describe('PlayerCardPopover: one hint at a time', () => {
+  const tooltips = () => [...document.querySelectorAll('[data-part="tooltip"]')].map((bubble) => bubble.textContent?.trim());
+
+  it('the card replaces the hint of the focused control, which comes back when the pointer leaves the name', async () => {
+    const { keys, anchor, card, wait, hover } = setup();
+    const message = screen.getByRole('button', { name: 'Message' });
+    screen.getByRole('button', { name: 'After' }).focus();
+    await keys.tab();
+    expect(document.activeElement).toBe(message);
+    expect(tooltips()).toEqual(['Write to Ann']);
+
+    await hover();
+
+    expect(tooltips()).toEqual([]);
+
+    await keys.unhover(anchor());
+    await wait(LEAVE_GRACE);
+
+    expect(card()).toBeNull();
+    expect(tooltips()).toEqual(['Write to Ann']);
+    expect(document.activeElement).toBe(message);
+  });
+
+  it('keyboard focus reaching a control with a hint closes the card', async () => {
+    const { keys, card, hover } = setup();
+    await hover();
+    screen.getByRole('button', { name: 'After' }).focus();
+
+    await keys.tab();
+
+    expect(tooltips()).toEqual(['Write to Ann']);
+    expect(card()).toBeNull();
+  });
+});

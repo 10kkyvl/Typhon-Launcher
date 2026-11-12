@@ -1,14 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createHoverIntent, HOVER_DELAY, LEAVE_GRACE } from './hoverIntent';
+import { createHoverIntent, HOVER_DELAY, LEAVE_GRACE, type HoverIntent } from './hoverIntent';
+
+// Every hint of the window shares one rule (one shown at a time): each test lets go of the ones it made.
+const made: HoverIntent[] = [];
+
+function make() {
+  const changes: boolean[] = [];
+  const intent = createHoverIntent((open) => changes.push(open));
+  made.push(intent);
+  return { changes, intent };
+}
+
+afterEach(() => {
+  for (const intent of made.splice(0)) intent.destroy();
+});
 
 describe('hover intent', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
-
-  function make() {
-    const changes: boolean[] = [];
-    return { changes, intent: createHoverIntent((open) => changes.push(open)) };
-  }
 
   it('opens only after the hover delay', () => {
     const { intent, changes } = make();
@@ -164,5 +173,101 @@ describe('hover intent', () => {
     intent.destroy();
     vi.advanceTimersByTime(1000);
     expect(changes).toEqual([]);
+  });
+});
+
+describe('one hint at a time', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const rest = (intent: HoverIntent) => {
+    intent.hover();
+    vi.advanceTimersByTime(HOVER_DELAY);
+  };
+
+  it('the pointer resting on another control hides the keyboard hint, which comes back when the pointer leaves', () => {
+    const keyboard = make();
+    const pointer = make();
+    keyboard.intent.focus();
+
+    rest(pointer.intent);
+
+    expect(pointer.changes).toEqual([true]);
+    expect(keyboard.changes).toEqual([true, false]);
+
+    pointer.intent.unhover();
+    vi.advanceTimersByTime(LEAVE_GRACE);
+
+    expect(pointer.changes).toEqual([true, false]);
+    expect(keyboard.changes).toEqual([true, false, true]);
+  });
+
+  it('the keyboard hint does not come back once focus has left its control', () => {
+    const keyboard = make();
+    const pointer = make();
+    keyboard.intent.focus();
+    rest(pointer.intent);
+    keyboard.intent.blur();
+
+    pointer.intent.unhover();
+    vi.advanceTimersByTime(LEAVE_GRACE);
+
+    expect(keyboard.changes).toEqual([true, false]);
+  });
+
+  it('keyboard focus moving on closes the pointer hint, which does not come back by itself', () => {
+    const pointer = make();
+    const keyboard = make();
+    rest(pointer.intent);
+
+    keyboard.intent.focus();
+    expect(pointer.changes).toEqual([true, false]);
+    keyboard.intent.blur();
+
+    expect(keyboard.changes).toEqual([true, false]);
+    expect(pointer.changes).toEqual([true, false]);
+    rest(pointer.intent);
+    expect(pointer.changes).toEqual([true, false, true]);
+  });
+
+  it('a third hint takes over from the second; the keyboard hint comes back only when the last one goes', () => {
+    const keyboard = make();
+    const first = make();
+    const second = make();
+    keyboard.intent.focus();
+    rest(first.intent);
+    // The second takes over while the first is still shown.
+    rest(second.intent);
+
+    expect(first.changes).toEqual([true, false]);
+    expect(keyboard.changes).toEqual([true, false]);
+    expect(second.changes).toEqual([true]);
+
+    second.intent.dismiss();
+
+    expect(keyboard.changes).toEqual([true, false, true]);
+    expect(first.changes).toEqual([true, false]);
+  });
+
+  it('a keyboard hint closed with Escape stays closed when the pointer hint goes', () => {
+    const keyboard = make();
+    const pointer = make();
+    keyboard.intent.focus();
+    keyboard.intent.escape();
+    rest(pointer.intent);
+    pointer.intent.dismiss();
+
+    expect(keyboard.changes).toEqual([true, false]);
+  });
+
+  it('a shown hint destroyed with its control gives the keyboard hint back', () => {
+    const keyboard = make();
+    const pointer = make();
+    keyboard.intent.focus();
+    rest(pointer.intent);
+
+    pointer.intent.destroy();
+
+    expect(keyboard.changes).toEqual([true, false, true]);
   });
 });
