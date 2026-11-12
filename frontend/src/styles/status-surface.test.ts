@@ -46,6 +46,14 @@ describe('the plate of a notice', () => {
     [...css.matchAll(/\.notice\[data-tone='(\w+)'\]\s*\{\s*--notice-tone:\s*var\((--[\w-]+)\)/g)].map((m) => [m[1], m[2]]),
   );
   const base = /--notice-tone:\s*var\((--[\w-]+)\)/.exec(plate)?.[1];
+  // Every colour the notice paints its words in, read from its rules: the icon is in the tone (3:1).
+  const words = [
+    ...new Set(
+      [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].flatMap((m) =>
+        [...m[2].matchAll(/(?:^|[^-\w])color:\s*var\((--[\w-]+)\)/g)].map((c) => c[1]).filter((name) => name !== '--notice-tone'),
+      ),
+    ),
+  ];
 
   it('is the tone mixed into an opaque surface, never a translucent tint', () => {
     expect(fill, plate).not.toBeNull();
@@ -53,6 +61,7 @@ describe('the plate of a notice', () => {
     expect(plate).not.toMatch(/-subtle|rgba\(|transparent|opacity/);
     expect(base).toBe('--accent-bright');
     expect(tones).toEqual({ success: '--success', warning: '--warning', danger: '--danger' });
+    expect(words).toContain('--text');
   });
 
   for (const id of ['dark', 'light', 'contrast', 'blush']) {
@@ -66,9 +75,9 @@ describe('the plate of a notice', () => {
       for (const [tone, token] of Object.entries({ info: base as string, ...tones })) {
         const colour = rgb(t[token], surface);
         const on = mix(colour, surface, share);
-        for (const [name, min] of [['--text', 4.5], ['--text-2', 4.5]] as const) {
+        for (const name of words) {
           const r = ratio(rgb(t[name], on), on);
-          if (r < min) failures.push(`${tone}: ${name} ${r.toFixed(2)} < ${min}`);
+          if (r < 4.5) failures.push(`${tone}: ${name} ${r.toFixed(2)} < 4.5`);
         }
         const icon = ratio(colour, on);
         if (icon < 3) failures.push(`${tone}: icon ${icon.toFixed(2)} < 3`);
