@@ -18,7 +18,11 @@
 
   // A ranged number token gets a numeric field with its range; every other kind stays free text.
   const range = $derived(TOKEN_RANGES[name]);
-  const problem = $derived(tokenRangeProblem(name, value));
+  // Chromium hands a number field's half-typed value ("0.", "-", "1e") over as an empty one. While the
+  // field has focus an empty value is an edit in progress, not a value out of range: it is judged when
+  // the user leaves the field. A number outside the range is said at once.
+  let typing = $state(false);
+  const problem = $derived(typing && value.trim() === '' ? null : tokenRangeProblem(name, value));
   const problemId = $derived(`${id}-range`);
   const described = $derived([describedBy, problem ? problemId : ''].filter(Boolean).join(' ') || undefined);
 </script>
@@ -38,6 +42,8 @@
       aria-describedby={described}
       {value}
       oninput={(e) => onchange((e.currentTarget as HTMLInputElement).value)}
+      onfocus={() => (typing = true)}
+      onblur={() => (typing = false)}
     />
   {:else}
     <input
