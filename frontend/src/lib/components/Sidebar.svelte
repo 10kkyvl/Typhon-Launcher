@@ -5,7 +5,7 @@
   const logoChannels = $derived(rgb($displayedAccent).map(v => v / 255));
   // Replace the blue chroma (B-R), retaining neutral shadows and highlights.
   const logoMatrix = $derived(logoChannels.map(k => `${1-k} 0 ${k} 0 0`).join(' ') + ' 0 0 0 1 0');
-  import { Activity, ChartColumn, Database, Download, HardDrive, Gamepad2, History, LayoutGrid, LifeBuoy, MonitorDown, Settings, Users, Wifi } from '@lucide/svelte';
+  import { Activity, ChartColumn, Database, Download, HardDrive, Gamepad2, History, LayoutGrid, LifeBuoy, MonitorDown, Settings, SwatchBook, Users, Wifi } from '@lucide/svelte';
   import { navigate, route, type RouteName } from '../stores/router';
   import { incomingCount } from '../stores/social';
   import { unreadReplies } from '../stores/support';
@@ -13,6 +13,7 @@
   import { navBlocks, themeLayout } from '../stores/layout';
   import type { SidebarItem } from '../theme/layout';
   import { msg } from '../i18n';
+  import { SHOWCASE, SHOWCASE_LABEL } from '../navigation/showcase';
   import { Plate, partsThatMove, scrollToShow } from '../motion/plate';
   import BetaBadge from './BetaBadge.svelte';
   import CountBadge from './CountBadge.svelte';
@@ -44,6 +45,8 @@
   const supportItem: NavItem = { name: 'support', label: msg('tickets.nav'), icon: LifeBuoy };
 
   const settingsItem: NavItem = { name: 'settings', label: msg('ui.settingsNav'), icon: Settings };
+
+  const showcaseItem: NavItem = { name: 'showcase', label: SHOWCASE_LABEL, icon: SwatchBook };
 
   const isActive = (name: RouteName) =>
     $route.name === name ||
@@ -129,6 +132,9 @@
   </nav>
 
   <div class="bottom" data-part="sidebar-bottom">
+    {#if SHOWCASE}
+      {@render navButton(showcaseItem)}
+    {/if}
     {#if !$themeLayout.supportHidden}
       {@render navButton(supportItem)}
     {/if}
