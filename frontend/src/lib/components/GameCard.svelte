@@ -95,9 +95,6 @@
     {:else if source}
       <span class="source"><SourceBadge {source} /></span>
     {/if}
-    {#if compatLabel}
-      <span class="compat" id="{uid}-compat"><StatusBadge kind={compatWorks ? 'success' : 'danger'} label={compatLabel} dot={false} /></span>
-    {/if}
     {#if installed && onplay}
       <button
         class="play"
@@ -112,6 +109,10 @@
           <Play size="1.4rem" strokeWidth={2} fill="currentColor" />
         {/if}
       </button>
+    {/if}
+    <!-- After Play, so a rule can follow Play's keyboard focus to it. -->
+    {#if compatLabel}
+      <span class="compat" id="{uid}-compat"><StatusBadge kind={compatWorks ? 'success' : 'danger'} label={compatLabel} dot={false} /></span>
     {/if}
     {#if actions && actions.length > 0}
       <div class="quick">
@@ -169,10 +170,13 @@
     transition: opacity var(--dur) var(--ease);
   }
 
-  /* The play button shows over the same corner: the verdict steps aside meanwhile. */
+  /* The play button shows over the same corner: the verdict steps aside meanwhile, and only then. */
   .cover-wrap.playable:hover .compat,
-  .cover-wrap.playable:focus-within .compat,
   .cover-wrap.running .compat {
+    opacity: 0;
+  }
+
+  .play:focus-visible ~ .compat {
     opacity: 0;
   }
 
