@@ -302,6 +302,41 @@ describe('Notice with a retry: dropped by the page before the answer', () => {
   });
 });
 
+// A caller whose load clears its failure when it starts takes the notice away during the notice's own
+// retry: a failure then comes back as a new notice, which is drawn and not said again, with focus
+// lost. Nothing can repair that from inside; in development it is named.
+describe('Notice with a retry: dropped by its caller during the retry', () => {
+  it('names the broken contract when the retry then fails', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const answer = deferred<boolean>();
+    const { user } = renderDom(RetryHarness, { run: () => answer.promise, holds: false, resets: true });
+
+    await user.click(retryButton());
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+    answer.resolve(false);
+    await screen.findByRole('alert');
+
+    await waitFor(() => expect(error).toHaveBeenCalledTimes(1));
+    expect(error.mock.calls[0][0]).toMatch(/^Notice: .*bind:retrying/);
+  });
+
+  it('says nothing when the whole page went, or when the retry worked', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { user } = renderDom(RetryHarness, { run: vi.fn(async () => true), holds: false, resets: true });
+    await user.click(retryButton());
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+
+    const answer = deferred<boolean>();
+    const left = renderDom(RetryHarness, { run: () => answer.promise });
+    await left.user.click(screen.getAllByRole('button', { name: 'Retry' })[0]);
+    left.unmount();
+    answer.resolve(false);
+    await frame();
+
+    expect(error).not.toHaveBeenCalled();
+  });
+});
+
 // A dialog is portalled out of the page, and the page under it is inert: focus that falls back to
 // the page heading there would be refused by a browser and end on <body>.
 describe('Notice with a retry: inside a dialog', () => {

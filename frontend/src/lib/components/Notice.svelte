@@ -34,13 +34,17 @@
    *
    * `retry` (NoticeRetry) adds a Retry after the actions, outside the live region. While it runs the
    * Retry is busy, a second press does nothing, and `retrying` (bindable) is true: the caller keeps the
-   * notice on screen while it is, whatever its own state says meanwhile. On failure the notice stays
-   * and its message, heading and links as they are, is put into the live region again, so it is said
-   * again even in the same words. A notice that does not announce becomes a polite region from the
-   * first press, before the answer, so a failure is heard there too. On success the caller takes the
-   * notice away as before, and focus that was on Retry moves on (see NoticeRetry): with no target it
-   * stays where the notice lived, the dialog when it was in one, the page's heading otherwise, and
-   * never goes into something inert. If that place has gone meanwhile, nothing is focused.
+   * notice on screen while it is, whatever its own state says meanwhile (a load that clears its
+   * failure when it starts would take the notice away mid-retry; a failure then comes back as a new
+   * notice, unsaid, and in development the console names it). Two notices that share one retry (the
+   * same failure shown in two places) bind the same variable, so each stays while either runs. On
+   * failure the notice stays and its message, heading and links as they are, is put into the live
+   * region again, so it is said again even in the same words. A notice that does not announce becomes
+   * a polite region from the first press, before the answer, so a failure is heard there too. On
+   * success the caller takes the notice away as before, and focus that was on Retry moves on (see
+   * NoticeRetry): with no target it stays where the notice lived, the dialog when it was in one, the
+   * page's heading otherwise, and never goes into something inert. If that place has gone meanwhile,
+   * nothing is focused.
    */
   let {
     tone = 'info',
@@ -108,7 +112,13 @@
     retrying = false;
     await tick();
     if (ok) return moveOn(button, home, focus, within);
-    if (!alive) return;
+    if (!alive) {
+      // Its page still there, the notice went during its own retry: the caller dropped it.
+      if (import.meta.env.DEV && home?.isConnected) {
+        console.error('Notice: removed while its retry ran, so the failure that followed was not said again. Keep the notice on screen while `retrying` is true (bind:retrying).');
+      }
+      return;
+    }
     attempt += 1;
   }
 

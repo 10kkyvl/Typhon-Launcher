@@ -7,7 +7,8 @@
   // success: a control (`target`), the loaded part (`region`), or nothing (the page heading).
   // `present` takes the whole page away, as leaving it does. `holds` off: the page shows the error only
   // while its load has failed and drops it as soon as the load works, before the retry has answered
-  // (as EmulatorsCard does); its Detect waits on the retry. For Notice.retry.dom.test.ts.
+  // (as EmulatorsCard does); its Detect waits on the retry. `resets`: its load clears the failure when
+  // it starts, the mistake that drops the notice during its own retry. For Notice.retry.dom.test.ts.
   let {
     run,
     message = 'The list could not be loaded',
@@ -16,6 +17,7 @@
     to = 'none',
     present = true,
     holds = true,
+    resets = false,
     title,
     level,
   }: {
@@ -26,6 +28,7 @@
     to?: 'target' | 'region' | 'none';
     present?: boolean;
     holds?: boolean;
+    resets?: boolean;
     title?: string;
     level?: 2 | 3;
   } = $props();
@@ -36,6 +39,7 @@
   let region = $state<HTMLElement>();
 
   async function attempt(): Promise<boolean> {
+    if (resets) failed = false;
     const ok = await run();
     failed = !ok;
     // The page redraws before the answer reaches the notice.
