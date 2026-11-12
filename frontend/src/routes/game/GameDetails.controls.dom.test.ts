@@ -76,6 +76,9 @@ beforeEach(() => {
   libraryGames.set([hades]);
 });
 
+// The words a notice says again after its retry fails (Notice's assistive-only copy).
+const saidAgain = (notice: Element) => notice.querySelector('[data-part="notice-again"]')?.textContent ?? '';
+
 afterEach(() => {
   vi.mocked(getMetadataView).mockReset();
   vi.mocked(refreshMetadata).mockReset();
@@ -125,7 +128,7 @@ describe('GameDetails: a long summary', () => {
 });
 
 describe('GameDetails: retrying what failed to load', () => {
-  it('keeps the downloads notice and the focus on its busy Retry, then gives way to the list', async () => {
+  it('keeps the downloads notice and the focus on its busy Retry, then moves the focus on, not to the page', async () => {
     const again = deferred<ReleaseGroup[]>();
     vi.mocked(getReleasesForGame).mockRejectedValueOnce(new Error('offline')).mockReturnValueOnce(again.promise);
     const { user } = renderDom(GameDetails, { id: 'g1' });
@@ -142,9 +145,25 @@ describe('GameDetails: retrying what failed to load', () => {
 
     again.resolve([]);
     await vi.waitFor(() => expect(notice.isConnected).toBe(false));
+    // No download to focus in an empty list: the notice's fallback, the game's title.
+    await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1, name: 'Hades' })));
   });
 
-  it('keeps the metadata notice and the focus on its busy Retry, then gives way to the page', async () => {
+  it('says the downloads failure again when the retry fails again', async () => {
+    vi.mocked(getReleasesForGame).mockRejectedValue(new Error('offline'));
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    const notice = (await screen.findByText(msg('games.detailReleasesFailed'))).closest('.notice') as HTMLElement;
+    const retry = within(notice).getByRole('button', { name: msg('games.catalogRetry') });
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(saidAgain(notice)).toBe(msg('games.detailReleasesFailed')));
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
+  });
+
+  it('keeps the metadata notice and the focus on its busy Retry, then focuses the game title', async () => {
     metadataAvailable.set(true);
     vi.mocked(getMetadataView).mockResolvedValue(view({ resolved: false, match: 'failed' }));
     const again = deferred<MetadataView>();
@@ -163,6 +182,23 @@ describe('GameDetails: retrying what failed to load', () => {
 
     again.resolve(view({}));
     await vi.waitFor(() => expect(notice.isConnected).toBe(false));
+    await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1, name: 'Hades' })));
+  });
+
+  it('says the metadata failure again, once, when the retry fails again', async () => {
+    metadataAvailable.set(true);
+    vi.mocked(getMetadataView).mockResolvedValue(view({ resolved: false, match: 'failed' }));
+    vi.mocked(refreshMetadata).mockRejectedValueOnce(new Error('offline'));
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    const notice = (await screen.findByText(msg('games.detailMetaFailedTitle'))).closest('.notice') as HTMLElement;
+    const retry = within(notice).getByRole('button', { name: msg('common.retry') });
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(saidAgain(notice)).toBe(`${msg('games.detailMetaFailedTitle')} ${msg('games.detailMetaFailedHint')}`));
+    expect(get(toasts).map((item) => item.message)).not.toContain(msg('games.detailMetaRefreshError'));
+    expect(document.activeElement).toBe(retry);
   });
 
   it('keeps the page error and the focus on its busy Retry, then focuses the game title', async () => {

@@ -715,34 +715,28 @@
     }
   }
 
-  async function refreshMeta() {
-    if (!canonicalId || metaRefreshing) return;
+  // Answers whether the metadata came back. From the failed notice its retry says a failure again
+  // itself, so no toast doubles it.
+  async function refreshMeta(fromNotice = false): Promise<boolean> {
+    if (!canonicalId || metaRefreshing) return false;
     metaRefreshing = true;
     const gameId = canonicalId;
     const current = metaToken;
     try {
       const view = await refreshMetadata(gameId);
-      if (gameId !== canonicalId || current !== metaToken) return;
+      if (gameId !== canonicalId || current !== metaToken) return false;
       metaView = view;
       toast(msg('games.detailMetaRefreshedToast'), 'success');
+      return view.match !== 'failed';
     } catch (err) {
-      toast(metadataErrorText(err, msg('games.detailMetaRefreshError')), 'danger');
+      if (!fromNotice) toast(metadataErrorText(err, msg('games.detailMetaRefreshError')), 'danger');
+      return false;
     } finally {
       metaRefreshing = false;
     }
   }
 
   let titleHeading = $state<HTMLElement>();
-
-  async function retryMeta() {
-    if (metaRetrying) return;
-    metaRetrying = true;
-    try {
-      await refreshMeta();
-    } finally {
-      metaRetrying = false;
-    }
-  }
 
   // The page's error is an empty state, not a notice: when the game arrives it takes the focused
   // Retry away with it, and the focus goes to the game's title instead of falling to the page.
@@ -868,25 +862,16 @@
 
   let releasesRetrying = $state(false);
   let relatedRetrying = $state(false);
+  let releasesBox = $state<HTMLElement>();
 
-  async function retryReleases() {
-    if (releasesRetrying) return;
-    releasesRetrying = true;
-    try {
-      await loadReleases(canonicalId, releaseTitle);
-    } finally {
-      releasesRetrying = false;
-    }
+  async function retryReleases(): Promise<boolean> {
+    await loadReleases(canonicalId, releaseTitle);
+    return !releasesFailed;
   }
 
-  async function retryRelated() {
-    if (relatedRetrying) return;
-    relatedRetrying = true;
-    try {
-      await loadRelated(canonicalId);
-    } finally {
-      relatedRetrying = false;
-    }
+  async function retryRelated(): Promise<boolean> {
+    await loadRelated(canonicalId);
+    return !relatedFailed;
   }
 
   let downloadModalOpen = $state(false);
@@ -1226,11 +1211,12 @@
 
 {#snippet releasesFailedNotice()}
   {#if releasesFailed || releasesRetrying}
-    <Notice tone="danger">
+    <Notice
+      tone="danger"
+      bind:retrying={releasesRetrying}
+      retry={{ label: msg('games.catalogRetry'), run: retryReleases, within: () => releasesBox }}
+    >
       {msg('games.detailReleasesFailed')}
-      {#snippet action()}
-        <Button size="sm" busy={releasesRetrying} onclick={retryReleases}>{msg('games.catalogRetry')}</Button>
-      {/snippet}
     </Notice>
   {/if}
 {/snippet}
@@ -1246,14 +1232,16 @@
         {#if withReleases}
           {@render releasesFailedNotice()}
           {#if !releasesLoading && !releasesFailed && releaseGroups.length === 0}<EmptyState size="inline" title={msg('games.detailNoReleases')} />{/if}
-          <ReleaseList
-            groups={releaseGroups}
-            loading={releasesLoading}
-            currentReleaseId={localGame?.releaseId ?? ''}
-            targetReleaseId={updateAvailable ? (update?.availability.targetReleaseId ?? '') : ''}
-            updateKind={updateAvailable ? (update?.availability.kind ?? 'none') : 'none'}
-            ondownload={downloadRelease}
-          />
+          <div bind:this={releasesBox}>
+            <ReleaseList
+              groups={releaseGroups}
+              loading={releasesLoading}
+              currentReleaseId={localGame?.releaseId ?? ''}
+              targetReleaseId={updateAvailable ? (update?.availability.targetReleaseId ?? '') : ''}
+              updateKind={updateAvailable ? (update?.availability.kind ?? 'none') : 'none'}
+              ondownload={downloadRelease}
+            />
+          </div>
         {/if}
       </section>
     </div>
@@ -1267,14 +1255,16 @@
         <h2 class="heading">{msg('games.detailAvailableDownloadsHeading')}</h2>
         {@render releasesFailedNotice()}
         {#if !releasesLoading && !releasesFailed && releaseGroups.length === 0}<EmptyState size="inline" title={msg('games.detailNoReleases')} />{/if}
-        <ReleaseList
-          groups={releaseGroups}
-          loading={releasesLoading}
-          currentReleaseId={localGame?.releaseId ?? ''}
-          targetReleaseId={updateAvailable ? (update?.availability.targetReleaseId ?? '') : ''}
-          updateKind={updateAvailable ? (update?.availability.kind ?? 'none') : 'none'}
-          ondownload={downloadRelease}
-        />
+        <div bind:this={releasesBox}>
+          <ReleaseList
+            groups={releaseGroups}
+            loading={releasesLoading}
+            currentReleaseId={localGame?.releaseId ?? ''}
+            targetReleaseId={updateAvailable ? (update?.availability.targetReleaseId ?? '') : ''}
+            updateKind={updateAvailable ? (update?.availability.kind ?? 'none') : 'none'}
+            ondownload={downloadRelease}
+          />
+        </div>
       </section>
     </div>
   {/if}
@@ -1304,11 +1294,12 @@
         <section class="section" bind:this={otherVersionsEl}>
           <h2 class="heading">{msg('games.otherVersionsHeading')}</h2>
           {#if relatedFailed || relatedRetrying}
-            <Notice tone="danger">
+            <Notice
+              tone="danger"
+              bind:retrying={relatedRetrying}
+              retry={{ label: msg('games.catalogRetry'), run: retryRelated, within: () => otherVersionsEl }}
+            >
               {msg('games.otherVersionsFailed')}
-              {#snippet action()}
-                <Button size="sm" busy={relatedRetrying} onclick={retryRelated}>{msg('games.catalogRetry')}</Button>
-              {/snippet}
             </Notice>
           {:else}
             {#if availableGroups.length === 0 && !releasesLoading && !releasesFailed}
@@ -1712,17 +1703,19 @@
                 tone={metaState === 'failed' ? 'warning' : 'info'}
                 announce={false}
                 title={metaState === 'unmatched' ? msg('games.detailMetaUnmatchedTitle') : msg('games.detailMetaFailedTitle')}
+                bind:retrying={metaRetrying}
+                retry={metaState === 'failed'
+                  ? {
+                      label: msg('common.retry'),
+                      pending: msg('games.detailMetaRetrying'),
+                      run: () => refreshMeta(true),
+                      focus: () => titleHeading,
+                    }
+                  : undefined}
               >
                 {metaState === 'unmatched' ? msg('games.detailMetaUnmatchedHint') : msg('games.detailMetaFailedHint')}
                 {#snippet action()}
-                  {#if metaState === 'failed'}
-                    <Button size="sm" variant="primary" busy={metaRetrying} onclick={retryMeta}>
-                      {metaRefreshing ? msg('games.detailMetaRetrying') : msg('common.retry')}
-                    </Button>
-                    <Button size="sm" onclick={() => openMatch('find')}>{msg('games.detailChooseManually')}</Button>
-                  {:else}
-                    <Button size="sm" variant="primary" onclick={() => openMatch('find')}>{msg('games.detailChooseManually')}</Button>
-                  {/if}
+                  <Button size="sm" variant="primary" onclick={() => openMatch('find')}>{msg('games.detailChooseManually')}</Button>
                   <Button size="sm" variant="ghost" disabled={metaSkipping} onclick={skipMeta}>{msg('games.detailSkipSearch')}</Button>
                 {/snippet}
               </Notice>
