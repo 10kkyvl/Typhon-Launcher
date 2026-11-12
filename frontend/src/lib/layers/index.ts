@@ -15,7 +15,9 @@ import { LayerStack, type Closed } from './stack';
  *   and every layer under the topmost modal one. It clears only the `inert` it set itself;
  * - answers Escape for the top layer only: a key pressed inside any layer, or anywhere outside them,
  *   closes the top one (if it may close) and goes no further, so pages and Big Picture never see it;
- *   an element inside a layer can claim Escape first with `preventDefault` or `stopPropagation`;
+ *   an element inside a layer can claim Escape first with `preventDefault` or `stopPropagation`.
+ *   A part outside the layers that closes on Escape itself (a toast, in a `data-layer-keep` region)
+ *   is marked `data-layer-own-escape`: an Escape pressed inside it is left to its own handler;
  * - moves focus into a modal layer when it opens, keeps Tab inside the topmost modal layer, and
  *   returns focus when a layer closes (see LayerStack.close).
  *
@@ -25,6 +27,7 @@ import { LayerStack, type Closed } from './stack';
 
 const APP_ROOT_ID = 'app';
 const KEEP = 'data-layer-keep';
+const OWN_ESCAPE = 'data-layer-own-escape';
 
 // Focus targets and press targets are any Element: a press often lands on an icon's <svg> or <path>.
 const stack = new LayerStack<HTMLElement, Element>({
@@ -81,7 +84,12 @@ const owners = new WeakMap<HTMLElement, () => HTMLElement | null>();
  *   press that opened a layer never closes it.
  * - Escape (and Big Picture's back) closes only the top layer, if `dismissible()` allows; an element
  *   inside a layer can claim Escape first with `preventDefault` or `stopPropagation`; a held Escape
- *   (auto-repeat) closes nothing more.
+ *   (auto-repeat) closes nothing more. Outside the layers nothing can claim it that way: the stack
+ *   takes the key at the window before any element sees it. An element there that must close on
+ *   Escape itself, while a layer is open, says so with the attribute `data-layer-own-escape` (next to
+ *   `data-layer-keep`, which keeps its region live under a dialog): an Escape whose target is inside
+ *   it is not the stack's, no layer closes, and the element's own handler decides. The toast is the
+ *   one such element: Escape on a focused toast closes the toast, the next one the dialog.
  * - Passive layers. A non-modal layer with neither `initialFocus` nor outside presses
  *   (`outsidePress: false`) is passive: a hint (Tooltip, the hover card of a friend row). It never
  *   stands in the way of the layers under it. A press passes over it to them (a press outside a menu
@@ -174,6 +182,7 @@ function isEscape(event: KeyboardEvent): boolean {
 function onWindowKeydown(event: KeyboardEvent): void {
   if (!isEscape(event)) return;
   if (event.target instanceof Element && stack.holding(event.target)) return;
+  if (event.target instanceof Element && event.target.closest(`[${OWN_ESCAPE}]`)) return;
   event.preventDefault();
   event.stopPropagation();
   if (!event.repeat) dismissTopLayer();

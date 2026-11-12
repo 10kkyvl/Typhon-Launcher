@@ -260,6 +260,61 @@ describe('layer stack keyboard', () => {
     expect(dismiss).not.toHaveBeenCalled();
   });
 
+  describe('an element outside the layers that handles Escape itself (data-layer-own-escape)', () => {
+    // As a toast: in a part the dialog leaves live, with a button of its own.
+    function own(onEscape: (event: KeyboardEvent) => void): HTMLElement {
+      const header = app.querySelector('header') as HTMLElement;
+      header.insertAdjacentHTML('beforeend', '<div data-layer-own-escape><button id="own">close</button></div>');
+      byId('own').addEventListener('keydown', (event) => event.key === 'Escape' && onEscape(event));
+      return byId('own');
+    }
+
+    it('gets an Escape pressed inside it, untouched, and no layer closes', async () => {
+      const dismiss = vi.fn();
+      const seen: boolean[] = [];
+      const button = own((event) => seen.push(event.defaultPrevented));
+      openLayer(dialog('<button>a</button>'), { dismiss });
+      button.focus();
+
+      await user().keyboard('{Escape}');
+
+      expect(seen).toEqual([false]);
+      expect(dismiss).not.toHaveBeenCalled();
+    });
+
+    it('an Escape pressed outside it closes the top layer as before', async () => {
+      const dismiss = vi.fn();
+      const mine = vi.fn();
+      own(mine);
+      openLayer(dialog('<button>a</button>'), { dismiss });
+      byId('close-window').focus();
+
+      await user().keyboard('{Escape}');
+
+      expect(dismiss).toHaveBeenCalledTimes(1);
+      expect(mine).not.toHaveBeenCalled();
+    });
+
+    it('a held Escape that it answered by giving focus to the dialog closes nothing more', async () => {
+      const dismiss = vi.fn();
+      const node = dialog('<button id="inside">a</button>');
+      const button = own(() => byId('inside').focus());
+      openLayer(node, { dismiss });
+      button.focus();
+      const keys = user();
+
+      await keys.keyboard('{Escape>4}');
+      await keys.keyboard('{/Escape}');
+
+      expect(document.activeElement).toBe(byId('inside'));
+      expect(dismiss).not.toHaveBeenCalled();
+
+      await keys.keyboard('{Escape}');
+
+      expect(dismiss).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('moves focus in, keeps Tab inside, and returns focus to the opener on close', async () => {
     byId('opener').focus();
     const node = dialog('<button id="a" data-skip-autofocus>close</button><button id="b">b</button><button id="c">c</button>');
