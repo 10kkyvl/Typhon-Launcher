@@ -37,4 +37,22 @@ describe('GameCard: the compat verdict on the cover', () => {
     expect(opacity(), 'on the title').toBe('1');
   });
 
+  it('steps aside for a running game, whose Play stays shown', () => {
+    renderDom(GameCard, { id: 'g1', title: 'Hades', installed: true, running: true, onplay: vi.fn(), compat: { works: 3, total: 4 } satisfies CompatInfo });
+    const verdict = document.querySelector('.compat') as HTMLElement;
+    applyStyles(verdict, source);
+
+    expect(getComputedStyle(verdict).opacity).toBe('0');
+  });
+
+  it('stays inside the card, whatever the length of its label', () => {
+    renderDom(GameCard, { id: 'g1', title: 'Hades', compat: { works: 12, total: 40 } satisfies CompatInfo });
+    const verdict = document.querySelector('.compat') as HTMLElement;
+    applyStyles(verdict, source);
+    const style = getComputedStyle(verdict);
+
+    // jsdom resolves the rem; the bound is the card's width less the badge's inset.
+    expect(style.maxWidth).toMatch(/^calc\(100% - [\d.]+(px|rem)\)$/);
+    expect(style.overflow).toBe('hidden');
+  });
 });
