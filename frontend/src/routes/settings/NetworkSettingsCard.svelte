@@ -71,10 +71,23 @@
           password !== '')),
   );
 
+  type Saved = typeof saved;
+  // What the fields were last filled from. A field the user has not changed since then follows a save
+  // made elsewhere; an edit is kept. A password is never filled in, so it does not count as an edit.
+  let shown: Saved | null = null;
+  const editedFrom = (from: Saved) =>
+    mode !== from.mode ||
+    iface.trim() !== from.iface ||
+    proxyType !== from.proxyType ||
+    host.trim() !== from.host ||
+    port.trim() !== from.port ||
+    username.trim() !== from.username;
+
   $effect(() => {
     const next = saved;
     untrack(() => {
-      if (dirty) return;
+      if (shown && editedFrom(shown) && editedFrom(next)) return;
+      shown = next;
       mode = next.mode;
       iface = next.iface;
       proxyType = next.proxyType;

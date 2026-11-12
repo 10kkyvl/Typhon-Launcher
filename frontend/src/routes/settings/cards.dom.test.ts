@@ -1,4 +1,5 @@
 import { screen, waitFor, within } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -168,19 +169,40 @@ describe('DiscordCard', () => {
 });
 
 describe('NetworkSettingsCard: the proxy', () => {
-  // A saved proxy with nothing filled in: choosing the proxy mode on the card matches what is saved.
+  const PROXY = { networkMode: 'proxy', proxyType: 'http', proxyHost: 'proxy.lan', proxyPort: 3128, proxyUsername: 'me' };
   beforeEach(() => {
-    settings.set({ networkMode: 'proxy', proxyType: 'socks5', proxyHost: '', proxyPort: 0, proxyUsername: '' } as unknown as SettingsData);
+    settings.set({ ...PROXY } as unknown as SettingsData);
   });
 
-  async function proxyMode() {
-    const view = renderDom(NetworkSettingsCard, {});
-    await view.user.click(screen.getByRole('radio', { name: msg('settings.networkModeProxy') }));
-    return view;
-  }
+  it('opens on the saved proxy, its fields filled and nothing to apply', async () => {
+    const { user } = renderDom(NetworkSettingsCard, {});
+    expect(screen.getByRole('radio', { name: msg('settings.networkModeProxy') }).getAttribute('aria-checked')).toBe('true');
+    expect((screen.getByRole('textbox', { name: msg('settings.networkProxyHostLabel') }) as HTMLInputElement).value).toBe('proxy.lan');
+    expect((screen.getByRole('textbox', { name: msg('settings.networkProxyPortLabel') }) as HTMLInputElement).value).toBe('3128');
+    expect((screen.getByRole('textbox', { name: msg('settings.networkProxyUsernameLabel') }) as HTMLInputElement).value).toBe('me');
+    const apply = screen.getByRole('button', { name: msg('settings.networkApply') }) as HTMLButtonElement;
+    expect(apply.disabled).toBe(true);
+    await user.click(apply);
+    expect(saveSettingsPatch).not.toHaveBeenCalled();
+  });
+
+  it('follows a save made elsewhere while the card is untouched, and keeps an edit', async () => {
+    const { user } = renderDom(NetworkSettingsCard, {});
+    const host = screen.getByRole('textbox', { name: msg('settings.networkProxyHostLabel') }) as HTMLInputElement;
+    settings.set({ ...PROXY, proxyHost: 'other.lan' } as unknown as SettingsData);
+    await waitFor(() => expect(host.value).toBe('other.lan'));
+
+    const port = screen.getByRole('textbox', { name: msg('settings.networkProxyPortLabel') }) as HTMLInputElement;
+    await user.clear(port);
+    await user.type(port, '8080');
+    settings.set({ ...PROXY, proxyHost: 'third.lan' } as unknown as SettingsData);
+    await tick();
+    expect(port.value).toBe('8080');
+    expect(host.value).toBe('other.lan');
+  });
 
   it('marks a bad port on its field and says why there', async () => {
-    const { user } = await proxyMode();
+    const { user } = renderDom(NetworkSettingsCard, {});
     const port = screen.getByRole('textbox', { name: msg('settings.networkProxyPortLabel') });
     expect(port.hasAttribute('aria-invalid')).toBe(false);
     await user.clear(port);
@@ -196,14 +218,14 @@ describe('NetworkSettingsCard: the proxy', () => {
   });
 
   it('shows the proxy warning on a warning notice', async () => {
-    await proxyMode();
+    renderDom(NetworkSettingsCard, {});
     const plate = screen.getByText(msg('settings.networkProxyWarning')).closest('[data-tone]');
     expect(plate?.getAttribute('data-tone')).toBe('warning');
   });
 
   it('announces the result of a proxy check', async () => {
     vi.mocked(testProxy).mockResolvedValueOnce();
-    const { user } = await proxyMode();
+    const { user } = renderDom(NetworkSettingsCard, {});
     const check = screen.getByRole('button', { name: msg('settings.networkProxyTest') });
     check.focus();
     await user.keyboard('{Enter}');
