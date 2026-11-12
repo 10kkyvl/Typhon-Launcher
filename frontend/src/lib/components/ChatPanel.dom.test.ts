@@ -202,3 +202,38 @@ describe('ChatPanel composer', () => {
     expect(send.disabled).toBe(false);
   });
 });
+
+describe('ChatPanel counts', () => {
+  const badgeIn = (element: HTMLElement) => element.querySelector('[data-part="count-badge"] [aria-hidden="true"]')?.textContent;
+
+  it('the closed chat opener is filled in the accent and says how many messages are unread in its name', async () => {
+    chat.chatOpen.set(false);
+    chat.conversations.set([
+      { peer, unread: 2, canSend: true },
+      { peer: { ...peer, id: 'other', username: 'other' }, unread: 1, canSend: true },
+    ]);
+    const { keys } = setup();
+    const opener = screen.getByRole('button', { name: 'Open chats, 3 unread' });
+    expect(badgeIn(opener)).toBe('3');
+    expect(opener.classList.contains('primary')).toBe(true);
+
+    await keys.click(opener);
+
+    expect(screen.getByRole('region', { name: 'Chats' })).toBeTruthy();
+  });
+
+  it('with nothing unread the opener is named plainly and shows no count', () => {
+    chat.chatOpen.set(false);
+    setup();
+    const opener = screen.getByRole('button', { name: 'Open chats' });
+    expect(opener.querySelector('[data-part="count-badge"]')).toBeNull();
+  });
+
+  it('a conversation with unread messages says how many as part of its name', () => {
+    chat.activePeer.set(null);
+    chat.conversations.set([{ peer, unread: 4, canSend: true }]);
+    setup();
+    const row = screen.getByRole('button', { name: /Friend .* 4 unread$/ });
+    expect(badgeIn(row)).toBe('4');
+  });
+});

@@ -2,6 +2,7 @@ import { tick } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { resetHistory } from '../stores/router';
+import { unreadReplies } from '../stores/support';
 import { renderDom } from '../testing/dom';
 import Sidebar from './Sidebar.svelte';
 
@@ -31,6 +32,7 @@ function sidebar() {
 
 afterEach(() => {
   resetHistory();
+  unreadReplies.set(0);
 });
 
 describe('Sidebar plate in a DOM', () => {
@@ -65,5 +67,20 @@ describe('Sidebar plate in a DOM', () => {
     await tick();
 
     expect(nav.scrollTop).toBe(100);
+  });
+});
+
+describe('Sidebar counts', () => {
+  it('an item with something new says how much as part of its name, and drops it once there is nothing', async () => {
+    unreadReplies.set(2);
+    const view = renderDom(Sidebar);
+    const support = view.getByRole('button', { name: `${msg('tickets.nav')} ${msg('tickets.unreadCount', { count: 2 })}` });
+    expect(support.querySelector('[data-part="count-badge"]')?.textContent).toContain('2');
+
+    unreadReplies.set(0);
+    await tick();
+
+    expect(view.getByRole('button', { name: msg('tickets.nav') })).toBe(support);
+    expect(support.querySelector('[data-part="count-badge"]')).toBeNull();
   });
 });

@@ -66,10 +66,20 @@ describe('Sidebar layout', () => {
     expect(body).not.toContain('data-part="topbar-account"');
   });
 
+  // By its text, so a count on the item is said with it (CountBadge); the rail hides the text from
+  // sight only.
   it('names every nav item for assistive tech, also when the rail hides its label', () => {
-    const items = html().match(/<button[^>]*data-part="sidebar-item"[^>]*>/g) ?? [];
+    const items = html().match(/<button[^>]*data-part="sidebar-item"[\s\S]*?<\/button>/g) ?? [];
     expect(items.length).toBeGreaterThan(10);
-    for (const tag of items) expect(tag).toMatch(/aria-label="[^"]+"/);
+    for (const item of items) {
+      expect(item).toMatch(/<span class="nav-label[^"]*">[^<]+<\/span>/);
+      expect(item).not.toMatch(/^<button[^>]*aria-label=/);
+    }
+    const source = fs.readFileSync(new URL('./Sidebar.svelte', import.meta.url), 'utf8');
+    const rail = source.slice(source.indexOf('@media (max-width: 1140px)'));
+    const label = /\.nav-label \{([^}]*)\}/.exec(rail)?.[1] ?? '';
+    expect(label).toContain('clip-path: inset(50%)');
+    expect(label).not.toMatch(/display:\s*none/);
   });
 
   it('follows a theme order, hides items and drops support', () => {

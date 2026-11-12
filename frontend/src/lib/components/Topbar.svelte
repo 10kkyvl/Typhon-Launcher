@@ -1,7 +1,6 @@
 <script lang="ts">
   import { ChevronLeft, ChevronRight, Gamepad2, Users } from '@lucide/svelte';
   import { canGoBack, canGoForward, goBack, goForward, navigate } from '../stores/router';
-  import { notifications } from '../stores/notifications';
   import { incomingCount } from '../stores/social';
   import { toast } from '../stores/toasts';
   import { runWindowAction } from '../stores/window';
@@ -62,18 +61,17 @@
         {:else if id === 'notifications'}
           <div class="icon-slot" data-part="topbar-action" data-id="notifications">
             <NotificationsPanel />
-            {#if $notifications.length > 0}
-              <span class="badge" aria-hidden="true">{$notifications.length}</span>
-            {/if}
           </div>
         {:else if id === 'friends'}
           <div class="icon-slot" data-part="topbar-action" data-id="friends">
-            <IconButton label={msg('ui.friends')} onclick={() => navigate('friends')}>
+            <IconButton
+              label={msg('ui.friends')}
+              count={$incomingCount}
+              countLabel={msg('ui.friendsIncoming', { count: $incomingCount })}
+              onclick={() => navigate('friends')}
+            >
               <Users size="1.8rem" strokeWidth={1.8} />
             </IconButton>
-            {#if $incomingCount > 0}
-              <span class="badge">{$incomingCount}</span>
-            {/if}
           </div>
         {/if}
       {/each}
@@ -133,23 +131,6 @@
     display: flex;
     align-items: center;
     gap: var(--space-1);
-  }
-
-  .badge {
-    position: absolute;
-    top: 0;
-    right: 0;
-    pointer-events: none;
-    min-width: 1.6rem;
-    height: 1.6rem;
-    padding: 0 0.4rem;
-    border-radius: 0.8rem;
-    background: var(--accent);
-    color: var(--accent-on, #fff);
-    font-size: 1rem;
-    font-weight: 600;
-    line-height: 1.6rem;
-    text-align: center;
   }
 
   .right {

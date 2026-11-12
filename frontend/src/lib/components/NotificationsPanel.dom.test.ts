@@ -64,14 +64,15 @@ function setup(list: Notification[] = UNREAD) {
 
 describe('Notifications bell', () => {
   // The badge is a picture of the count: the bell's name is what a screen reader hears.
-  const badge = (slot: HTMLElement) => slot.querySelector('.badge');
+  const badge = (slot: HTMLElement) => slot.querySelector('[data-part="count-badge"]');
+  const digits = (slot: HTMLElement) => badge(slot)?.querySelector('[aria-hidden="true"]');
 
   it('carries the unread count in its name, the badge hidden from assistive tech', () => {
     locale.set('en');
     const { slot, bell } = setup();
     expect(bell().getAttribute('aria-label')).toBe('Notifications, 2 unread');
-    expect(badge(slot)?.textContent?.trim()).toBe('2');
-    expect(badge(slot)?.getAttribute('aria-hidden')).toBe('true');
+    expect(digits(slot)?.textContent?.trim()).toBe('2');
+    expect(bell().contains(badge(slot))).toBe(true);
   });
 
   it('names the count with the Russian plural forms', async () => {

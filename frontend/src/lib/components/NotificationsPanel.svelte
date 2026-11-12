@@ -13,10 +13,6 @@
    */
   let open = $state(false);
 
-  // The badge beside the bell is a picture; the count reaches a screen reader through the bell's name.
-  const bellName = $derived(
-    $notifications.length > 0 ? msg('ui.notificationsUnread', { count: $notifications.length }) : msg('ui.notifications'),
-  );
 
   // The panel belongs to the page it was opened on: a route change, whatever made it, closes it.
   const routeKey = $derived($route.key);
@@ -34,7 +30,12 @@
 
 <Popover bind:open label={msg('ui.notifications')} placement="bottom-end" width="32rem" partId="notifications">
   {#snippet trigger({ props })}
-    <IconButton label={bellName} {...props}>
+    <IconButton
+      label={msg('ui.notifications')}
+      count={$notifications.length}
+      countLabel={msg('ui.notificationsUnread', { count: $notifications.length })}
+      {...props}
+    >
       <Bell size="1.8rem" strokeWidth={1.8} />
     </IconButton>
   {/snippet}

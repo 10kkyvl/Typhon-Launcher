@@ -15,6 +15,7 @@
   import { msg } from '../i18n';
   import { Plate, partsThatMove, scrollToShow } from '../motion/plate';
   import BetaBadge from './BetaBadge.svelte';
+  import CountBadge from './CountBadge.svelte';
   import SidebarStatus from './SidebarStatus.svelte';
 
   let sidebar = $state<HTMLElement>();
@@ -91,16 +92,15 @@
     data-part="sidebar-item"
     data-id={item.name}
     class:active={isActive(item.name)}
-    aria-label={item.label}
     aria-current={isActive(item.name) ? 'page' : undefined}
     onclick={() => navigate(item.name)}
   >
     <item.icon size="2rem" strokeWidth={1.8} />
     <span class="nav-label">{item.label}</span>
     {#if item.name === 'friends' && $incomingCount > 0}
-      <span class="count">{$incomingCount}</span>
+      <span class="count"><CountBadge count={$incomingCount} label={msg('social.requestsCount', { count: $incomingCount })} /></span>
     {:else if item.name === 'support' && $unreadReplies > 0}
-      <span class="count">{$unreadReplies}</span>
+      <span class="count"><CountBadge count={$unreadReplies} label={msg('tickets.unreadCount', { count: $unreadReplies })} /></span>
     {/if}
   </button>
 {/snippet}
@@ -289,16 +289,8 @@
   }
 
   .count {
+    display: flex;
     margin-left: auto;
-    min-width: 1.8rem;
-    padding: 0 0.5rem;
-    border-radius: 0.9rem;
-    background: var(--accent);
-    color: var(--accent-on, #fff);
-    font-size: var(--font-xs);
-    font-weight: 600;
-    line-height: 1.8rem;
-    text-align: center;
   }
 
   .bottom {
@@ -323,9 +315,17 @@
       margin-bottom: var(--space-6);
     }
 
-    .wordmark,
-    .nav-label {
+    .wordmark {
       display: none;
+    }
+
+    /* Out of sight, still the item's name. */
+    .nav-label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
     }
 
     nav {
@@ -344,14 +344,9 @@
 
     .count {
       position: absolute;
-      top: 0.4rem;
-      right: 0.4rem;
+      top: 0.2rem;
+      right: 0.2rem;
       margin-left: 0;
-      min-width: 1.6rem;
-      padding: 0 0.4rem;
-      border-radius: 0.8rem;
-      font-size: 1rem;
-      line-height: 1.6rem;
     }
   }
 </style>

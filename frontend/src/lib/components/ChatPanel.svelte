@@ -6,6 +6,7 @@
   import { fieldsFrame, frameReserve } from '../profile/frameLook';
   import { themeLayout } from '../stores/layout';
   import Button from './Button.svelte';
+  import CountBadge from './CountBadge.svelte';
   import IconButton from './IconButton.svelte';
   import ChatAttachments from './ChatAttachments.svelte';
   import Lightbox, { type LightboxItem } from './Lightbox.svelte';
@@ -74,7 +75,7 @@
   const conversationReserve = $derived(frameReserve($conversations.map((item) => fieldsFrame(item.peer))));
   const canSend = $derived(conversation?.canSend ?? $canSendByPeer[peer?.id ?? ''] ?? true);
   const draftList = $derived(peer ? ($attachmentDrafts[peer.id] ?? []) : []);
-  const hasUnread = $derived($conversations.some((item) => item.unread > 0));
+  const unreadTotal = $derived($conversations.reduce((sum, item) => sum + item.unread, 0));
 
   function displayName(target: ChatPeer): string {
     return target.displayName || target.username;
@@ -339,10 +340,18 @@
   {/if}
 
   {#if !$chatOpen}
-    <button class="chat-toggle" type="button" aria-label={msg('social.chatOpen')} onclick={() => (chatOpen.set(true))}>
-      <MessageCircle size="2rem" strokeWidth={1.8} />
-      {#if hasUnread}<span class="unread-dot">{$conversations.reduce((sum, item) => sum + item.unread, 0)}</span>{/if}
-    </button>
+    <span class="chat-toggle">
+      <IconButton
+        variant="primary"
+        size="lg"
+        label={msg('social.chatOpen')}
+        count={unreadTotal}
+        countLabel={msg('social.chatOpenUnread', { count: unreadTotal })}
+        onclick={() => chatOpen.set(true)}
+      >
+        <MessageCircle size="2rem" strokeWidth={1.8} />
+      </IconButton>
+    </span>
   {:else}
     <section class="chat-panel" aria-label={msg('social.chatPanelLabel')}>
       <header class="chat-header">
@@ -505,7 +514,7 @@
                   <strong>{displayName(item.peer)}</strong>
                   <span>{item.lastMessage ? messagePreview(item.lastMessage) : msg('social.chatNewConversation')}</span>
                 </span>
-                {#if item.unread > 0}<span class="conversation-unread">{item.unread}</span>{/if}
+                <CountBadge count={item.unread} label={msg('social.chatUnreadCount', { count: item.unread })} />
               </button>
             {/each}
           {/if}
@@ -520,9 +529,8 @@
   .chat-root { position: fixed; z-index: var(--z-chat); right: 2.4rem; bottom: 2.4rem; display: flex; flex-direction: column; align-items: flex-end; pointer-events: none; }
   .chat-root.sidebar-right { right: calc(2.4rem + var(--sidebar-now)); }
   .chat-root > * { pointer-events: auto; }
-  .chat-toggle { position: relative; display: flex; align-items: center; justify-content: center; width: 4.8rem; height: 4.8rem; border: 1px solid var(--border-strong); border-radius: 50%; background: var(--accent); color: var(--accent-on, #fff); box-shadow: var(--shadow-pop); cursor: pointer; }
-  .chat-toggle:hover { background: var(--accent-hover); }
-  .unread-dot { position: absolute; top: -0.5rem; right: -0.5rem; min-width: 2rem; height: 2rem; padding: 0 0.45rem; border-radius: 2rem; background: var(--danger); color: #fff; font-size: var(--font-xs); display: flex; align-items: center; justify-content: center; }
+  /* The opener floats over the page: its shadow lifts it off whatever is under it. */
+  .chat-toggle { display: flex; border-radius: var(--radius-round); box-shadow: var(--shadow-pop); }
   .chat-panel { display: flex; flex-direction: column; width: 38rem; height: min(64rem, calc(100vh - var(--titlebar-h) - 8rem)); overflow: hidden; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-pop); }
   .chat-header { display: flex; align-items: center; gap: 0.9rem; min-height: 5.6rem; padding: 0 1.2rem; border-bottom: 1px solid var(--border); background: var(--surface-3); }
   .back { display: inline-flex; border: 0; background: transparent; color: var(--text-2); padding: 0.5rem; cursor: pointer; }
@@ -576,7 +584,6 @@
   .conversation:hover { background: var(--hover); }
   .conversation-copy { flex: 1; }
   .conversation-copy strong { font-size: var(--font-sm); }
-  .conversation-unread { display: grid; place-items: center; min-width: 2rem; height: 2rem; padding: 0 0.4rem; border-radius: 2rem; background: var(--accent); color: var(--accent-on, #fff); font-size: var(--font-xs); }
   .chat-toast { display: flex; align-items: center; gap: 0.8rem; width: 32rem; margin-bottom: 1rem; padding: 1rem; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-4); color: var(--text); box-shadow: var(--shadow-pop); cursor: pointer; text-align: left; }
   .toast-copy { flex: 1; }
   .toast-copy strong { font-size: var(--font-sm); }

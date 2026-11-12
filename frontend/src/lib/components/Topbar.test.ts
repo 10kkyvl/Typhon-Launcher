@@ -180,7 +180,8 @@ describe('Topbar islands', () => {
       const next = body.indexOf('data-part="topbar-action"', start + 1);
       return body.slice(start, next < 0 ? undefined : next);
     };
-    expect(slot('friends')).toMatch(/<span class="badge[^"]*">3<\/span>/);
+    expect(slot('friends')).toMatch(/data-part="count-badge"[^>]*><span aria-hidden="true">3<\/span>/);
+    expect(slot('friends')).toContain(`aria-label="${escape(msg('ui.friendsIncoming', { count: 3 }))}"`);
   });
 });
 
