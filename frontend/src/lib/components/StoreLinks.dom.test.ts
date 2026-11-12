@@ -34,6 +34,18 @@ describe('StoreLinks: a store page', () => {
     expect(onopen).toHaveBeenCalledWith('steam');
   });
 
+  it('leaves any other auxiliary button alone: no open, nothing prevented', () => {
+    const onopen = vi.fn();
+    renderDom(StoreLinks, { links: { steam: 'https://store.steampowered.com/app/1145360' }, onopen });
+    const link = screen.getByRole('link', { name: msg('games.storeSteam') });
+
+    const secondary = new MouseEvent('auxclick', { button: 2, bubbles: true, cancelable: true });
+    link.dispatchEvent(secondary);
+
+    expect(secondary.defaultPrevented).toBe(false);
+    expect(onopen).not.toHaveBeenCalled();
+  });
+
   it('is a chip button, not a link, when the address is not a web page', async () => {
     const onopen = vi.fn();
     const { user } = renderDom(StoreLinks, { links: { gog: 'javascript:alert(1)' }, onopen });
