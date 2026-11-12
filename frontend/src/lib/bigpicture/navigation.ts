@@ -111,7 +111,8 @@ function isDisabled(element: FocusableElement): boolean {
 // Buttons, and a link with an address marked for Big Picture (a store page): no other link.
 function isFocusable(element: FocusableElement): boolean {
   const tagName = typeof element.tagName === 'string' ? element.tagName.toLowerCase() : undefined;
-  if (tagName !== undefined && tagName !== 'button' && !(tagName === 'a' && getAttribute(element, 'href') !== null)) return false;
+  const markedLink = tagName === 'a' && getAttribute(element, 'href') !== null && getAttribute(element, 'data-bp-focus') !== null;
+  if (tagName !== undefined && tagName !== 'button' && !markedLink) return false;
   return !isDisabled(element) && !isHidden(element) && typeof element.focus === 'function';
 }
 

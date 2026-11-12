@@ -97,6 +97,23 @@ describe('moveFocus', () => {
     expect(moveFocus(rootFor(document, [child, dialog]), 'left')).toBe(false);
     expect(document.activeElement).toBe(dialog);
   });
+  it('takes a link only when it has an address and is marked for Big Picture', () => {
+    const document: FakeDocument = { activeElement: null, defaultView: null };
+    const store = Object.assign(element(document, 0, 0, 'game:store:steam'), { tagName: 'A' });
+    store.attrs.set('href', 'https://store.steampowered.com/app/1');
+    const unmarked = Object.assign(element(document, 100, 0, 'plain'), { tagName: 'A' });
+    unmarked.attrs.set('href', 'https://example.com');
+    unmarked.attrs.delete('data-bp-focus');
+    const bare = Object.assign(element(document, 200, 0, 'bare'), { tagName: 'A' });
+
+    focusControl(unmarked as unknown as HTMLElement);
+    expect(document.activeElement).toBeNull();
+    focusControl(bare as unknown as HTMLElement);
+    expect(document.activeElement).toBeNull();
+    focusControl(store as unknown as HTMLElement);
+    expect(document.activeElement).toBe(store);
+  });
+
   it('chooses the nearest button in the aligned row or column and scrolls it into view', () => {
     const document: FakeDocument = { activeElement: null, defaultView: null };
     const left = element(document, 0, 0, 'left');
