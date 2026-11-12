@@ -219,6 +219,18 @@ describe('Catalog: the next page', () => {
     await vi.waitFor(() => expect(document.activeElement?.closest('.list-entry')?.textContent).toContain('Hades'));
   });
 
+  it('refused because the server is too old: says why, and offers no Retry that cannot help', async () => {
+    const state = secondPage();
+    state.fails = new Error('typhon:catalog.backend_outdated: sort not supported');
+    const { user } = renderDom(Catalog);
+    await user.click(await screen.findByRole('button', { name: msg('games.catalogShowMore') }));
+
+    const text = await screen.findByText(msg('games.catalogBackendOutdated'));
+    const notice = text.closest('.notice') as HTMLElement;
+    expect(notice.getAttribute('data-tone')).toBe('danger');
+    expect(within(notice).queryByRole('button')).toBeNull();
+    expect(screen.queryByText(msg('games.catalogMoreFailed'))).toBeNull();
+  });
 });
 
 describe('Catalog: a game already installed', () => {

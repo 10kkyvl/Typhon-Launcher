@@ -976,8 +976,14 @@
     {#if autoLoad}<div class="sentinel" bind:this={sentinel} aria-hidden="true"></div>{/if}
     <div class="more" bind:this={moreSlot}>
       {#if failed || moreRetrying}
-        <Notice tone="danger" compact bind:retrying={moreRetrying} retry={{ label: msg('games.catalogRetry'), run: retryNextPage, focus: firstFresh }}>
-          {msg('games.catalogMoreFailed')}
+        <!-- A server too old for this sorting refuses every page the same way: no Retry for it. -->
+        <Notice
+          tone="danger"
+          compact
+          bind:retrying={moreRetrying}
+          retry={backendOutdated ? undefined : { label: msg('games.catalogRetry'), run: retryNextPage, focus: firstFresh }}
+        >
+          {backendOutdated ? msg('games.catalogBackendOutdated') : msg('games.catalogMoreFailed')}
         </Notice>
       {:else if showMoreButton}
         <Button onclick={showMore} busy={loading}>{msg('games.catalogShowMore')}</Button>
