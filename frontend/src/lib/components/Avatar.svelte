@@ -65,7 +65,8 @@
     <span class="frame frame-{preset}" aria-hidden="true"></span>
   {/if}
   {#if !src || failed}
-    <span class="fallback">{initial}</span>
+    <!-- Decoration, as the picture is (alt=""): the name stands beside the avatar or on its control. -->
+    <span class="fallback" aria-hidden="true">{initial}</span>
   {:else}
     <img {src} alt="" draggable="false" onerror={() => (failed = true)} />
   {/if}

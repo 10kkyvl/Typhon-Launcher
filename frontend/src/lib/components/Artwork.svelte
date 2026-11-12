@@ -1,5 +1,13 @@
 <script lang="ts">
   import { revealImage } from '../utils/revealImage';
+
+  /**
+   * A cover or a wide picture. `alt` is its text alternative, for a picture that alone names what
+   * holds it; next to the visible title it is '' and `label` gives the title only to draw its first
+   * letters when there is no picture. Those letters are decoration, hidden from assistive
+   * technology: without a picture the artwork is still an image named `alt`, or nothing when `alt`
+   * is empty.
+   */
   let {
     src,
     alt = '',
@@ -33,8 +41,8 @@
 
 <div class="artwork" style:aspect-ratio={ratio} style:border-radius={radius}>
   {#if failed || !src}
-    <div class="fallback" aria-label={alt || undefined}>
-      <span>{initials || '?'}</span>
+    <div class="fallback" role={alt ? 'img' : undefined} aria-label={alt || undefined}>
+      <span aria-hidden="true">{initials || '?'}</span>
     </div>
   {:else}
     {#key src}
