@@ -94,12 +94,13 @@
   );
   const autoArt = $derived(wideArt(data?.autoGame) || undefined);
 
-  async function load(target: string, quiet = false) {
+  // A retry keeps the failure on screen, its Retry busy, until the answer replaces it.
+  async function load(target: string, quiet = false, retry = false) {
     if (quiet) {
       refreshing = true;
     } else {
       loading = true;
-      failure = '';
+      if (!retry) failure = '';
       missing = false;
     }
     try {
@@ -252,7 +253,7 @@
         <Button onclick={() => signIn('register')}>{msg('social.createAccountButton')}</Button>
       {/snippet}
     </EmptyState>
-  {:else if loading}
+  {:else if loading && !failure}
     <Spinner label={msg('social.loadingEllipsis')} />
   {:else if missing}
     <EmptyState level={2} title={msg('social.userNotFoundTitle')} description={msg('social.userNotFoundDesc')}>
@@ -261,14 +262,12 @@
       {/snippet}
     </EmptyState>
   {:else if failure}
-    <EmptyState level={2} title={msg('social.userLoadFailed')} description={failure}>
-      {#snippet icon()}
-        <UserRound size="2.2rem" strokeWidth={1.6} />
+    <Notice tone="danger" title={msg('social.userLoadFailed')} level={2}>
+      {failure}
+      {#snippet action()}
+        <Button size="sm" busy={loading} onclick={() => load(username ?? '', false, true)}>{msg('common.retry')}</Button>
       {/snippet}
-      {#snippet actions()}
-        <Button variant="primary" onclick={() => load(username ?? '')}>{msg('common.retry')}</Button>
-      {/snippet}
-    </EmptyState>
+    </Notice>
   {:else if data}
     <div class="profile" class:refreshing>
       <ProfileCanvas appearance={data.appearance} {autoArt}>

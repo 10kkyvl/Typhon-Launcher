@@ -26,6 +26,7 @@
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import Modal from '../../lib/components/Modal.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
   import RemoveGameModal from '../../lib/components/RemoveGameModal.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import SearchInput from '../../lib/components/SearchInput.svelte';
@@ -355,6 +356,19 @@
 
   let librarySetupOpen = $state(false);
 
+  // The failure stays on screen with its Retry busy until the answer: `storageFailed` changes only then.
+  let storageRetrying = $state(false);
+
+  async function retryStorage() {
+    if (storageRetrying) return;
+    storageRetrying = true;
+    try {
+      await refreshStorage();
+    } finally {
+      storageRetrying = false;
+    }
+  }
+
   const uid = $props.id();
 </script>
 
@@ -485,18 +499,15 @@
     </div>
   {:else if $storageFailed}
     <div class="storage-block">
-      <Card>
-        <div class="storage-empty" role="alert">
-          <div class="disk">
-            <HardDrive size="1.8rem" strokeWidth={1.8} />
-            <span class="storage-error">{msg('games.installedStorageLoadFailed')}</span>
-          </div>
-          <Button size="sm" onclick={refreshStorage}>
-            <RefreshCw size="1.5rem" strokeWidth={1.8} />
+      <Notice tone="danger">
+        {msg('games.installedStorageLoadFailed')}
+        {#snippet action()}
+          <Button size="sm" busy={storageRetrying} onclick={retryStorage}>
+            {#if !storageRetrying}<RefreshCw size="1.5rem" strokeWidth={1.8} />{/if}
             {msg('common.retry')}
           </Button>
-        </div>
-      </Card>
+        {/snippet}
+      </Notice>
     </div>
   {/if}
 
@@ -716,18 +727,6 @@
     margin-bottom: var(--space-6);
   }
 
-  .storage-error {
-    font-size: var(--font-sm);
-    color: var(--danger);
-  }
-
-  .storage-empty {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-4);
-  }
-
   .storage {
     --seg-games: var(--accent-bright);
     --seg-other: var(--text-3);
@@ -745,13 +744,6 @@
 
   .storage-head .disk-text {
     flex: 1;
-  }
-
-  .disk {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    color: var(--text-2);
   }
 
   .disk-icon {

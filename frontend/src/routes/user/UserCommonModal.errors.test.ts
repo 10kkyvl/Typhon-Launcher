@@ -14,7 +14,7 @@ describe('UserCommonModal load errors', () => {
 
   it('keeps already loaded games when a later page fails and offers a retry', () => {
     expect(source).toContain('{#if failure && games.length === 0}');
-    expect(source).toContain("{failure ? msg('common.retry') : msg('social.userCommonMore')}");
+    expect(source).toContain('onclick={() => load(false, true)}');
   });
 
   it('ignores answers of a superseded load', () => {

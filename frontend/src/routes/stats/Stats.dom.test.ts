@@ -1,3 +1,4 @@
+import { within } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
@@ -23,6 +24,7 @@ import { msg } from '../../lib/i18n';
 import type { LibraryGame } from '../../lib/services/library';
 import { getStats } from '../../lib/services/playlog';
 import { libraryGames } from '../../lib/stores/library';
+import { toasts } from '../../lib/stores/toasts';
 import { renderDom } from '../../lib/testing/dom';
 import Stats from './Stats.svelte';
 
@@ -55,6 +57,32 @@ describe('Stats: most played', () => {
     const { findByRole } = renderDom(Stats);
 
     expect(await findByRole('button', { name: (name) => name.startsWith('Hades ') })).toBeTruthy();
+  });
+});
+
+describe('Stats: retrying a failed first load', () => {
+  afterEach(() => toasts.set([]));
+
+  it('keeps the danger notice and the focus on its busy Retry until the answer', async () => {
+    let answer!: (value: Awaited<ReturnType<typeof getStats>>) => void;
+    vi.mocked(getStats)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockReturnValueOnce(new Promise((resolve) => (answer = resolve)));
+    const { findByRole, getByRole, user } = renderDom(Stats);
+    const notice = (await findByRole('alert')).closest('.notice') as HTMLElement;
+    expect(notice.textContent).toContain(msg('stats.loadError'));
+    const retry = within(notice).getByRole('button', { name: msg('stats.retry') });
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(retry.getAttribute('aria-busy')).toBe('true');
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
+
+    answer({ period: 'week', from: '2026-11-05', to: '2026-11-11', totalSeconds: 0, sessions: 0, days: [], top: [], longest: null });
+    await vi.waitFor(() => expect(notice.isConnected).toBe(false));
+    expect(getByRole('heading', { level: 2, name: msg('stats.title') })).toBeTruthy();
   });
 });
 

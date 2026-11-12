@@ -2,6 +2,7 @@
   import Button from '../../lib/components/Button.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import Modal from '../../lib/components/Modal.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
   import { msg } from '../../lib/i18n';
   import { accountErrorText } from '../../lib/services/accountMessages';
   import { userCommon, type CommonGame } from '../../lib/services/social';
@@ -26,16 +27,18 @@
   let failure = $state('');
   let serial = 0;
 
-  async function load(reset: boolean): Promise<void> {
+  // A retry keeps the failure on screen, its Retry busy, until the answer replaces it.
+  async function load(reset: boolean, retry = false): Promise<void> {
     const run = ++serial;
     const cursor = reset ? '' : next;
     loading = true;
-    failure = '';
+    if (!retry) failure = '';
     try {
       const page = await userCommon(username, cursor);
       if (run !== serial) return;
       games = reset ? page.games : [...games, ...page.games];
       next = page.next;
+      failure = '';
       loaded = true;
     } catch (err) {
       if (run !== serial) return;
@@ -62,8 +65,10 @@
 <!-- dismissible while loading: loading more of the list is a read; closing drops it. -->
 <Modal bind:open title={msg('social.userCommonAllTitle')} width="64rem">
   {#if failure && games.length === 0}
-    <p class="note error" role="alert">{failure}</p>
-    <Button variant="primary" onclick={() => load(true)}>{msg('common.retry')}</Button>
+    <Notice tone="danger" compact>
+      {failure}
+      {#snippet action()}<Button size="sm" busy={loading} onclick={() => load(true, true)}>{msg('common.retry')}</Button>{/snippet}
+    </Notice>
   {:else if loaded && games.length === 0}
     <EmptyState size="inline" title={msg('social.userCommonEmpty')} />
   {:else}
@@ -73,13 +78,15 @@
       {/each}
     </div>
     {#if failure}
-      <p class="note error" role="alert">{failure}</p>
-    {/if}
-    {#if next || failure}
       <div class="more">
-        <Button disabled={loading} onclick={() => load(false)}>
-          {failure ? msg('common.retry') : msg('social.userCommonMore')}
-        </Button>
+        <Notice tone="danger" compact>
+          {failure}
+          {#snippet action()}<Button size="sm" busy={loading} onclick={() => load(false, true)}>{msg('common.retry')}</Button>{/snippet}
+        </Notice>
+      </div>
+    {:else if next}
+      <div class="more">
+        <Button disabled={loading} onclick={() => load(false)}>{msg('social.userCommonMore')}</Button>
       </div>
     {/if}
   {/if}
@@ -93,16 +100,6 @@
 
   .list :global(.item + .item) {
     border-top: 1px solid var(--border);
-  }
-
-  .note {
-    font-size: var(--font-sm);
-    color: var(--text-2);
-    margin-bottom: var(--space-3);
-  }
-
-  .error {
-    color: var(--danger);
   }
 
   .more {

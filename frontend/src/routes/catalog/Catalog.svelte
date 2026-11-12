@@ -365,6 +365,25 @@
     }
   }
 
+  // A Retry keeps its failure on screen until the answer: `failed` and `offline` change only when it
+  // arrives, and the first page's failure stays in place of the skeleton while `retrying`.
+  let retrying = $state(false);
+
+  async function retry() {
+    if (retrying) return;
+    retrying = true;
+    try {
+      await reload();
+    } finally {
+      retrying = false;
+    }
+  }
+
+  function morePage() {
+    autoPages = 0;
+    void fetchPage(page + 1);
+  }
+
   function refreshPicks() {
     if (!ready || discoveryLoading) return;
     void refreshDiscovery(++reloadToken, { rotate: true });
@@ -815,9 +834,14 @@
     {/if}
   </fieldset>
 
-  {#if offline}<p class="muted" role="status">{msg('games.catalogOffline')}</p>
+  {#if offline}
+    <div class="page-note">
+      <Notice tone="warning">
+        {msg('games.catalogOffline')}
+        {#snippet action()}<Button size="sm" busy={retrying} onclick={retry}>{msg('games.catalogRetry')}</Button>{/snippet}
+      </Notice>
+    </div>
   {:else if incomplete}<details class="muted"><summary>{msg('games.catalogCoverage')}</summary><p>{msg('games.catalogIncomplete')}</p></details>{/if}
-  {#if failed || offline}<Button onclick={() => void reload()}>{msg('games.catalogRetry')}</Button>{/if}
 
   {#if lastDismissed}
     <div class="page-note">
@@ -836,7 +860,12 @@
   {/if}
 
   {#if displayedItems.length === 0}
-    {#if loading}
+    {#if failed && (!loading || retrying)}
+      <Notice tone="danger" title={msg('games.catalogUnavailableTitle')} level={2}>
+        {msg(backendOutdated ? 'games.catalogBackendOutdated' : 'games.catalogUnavailableDescription')}
+        {#snippet action()}<Button size="sm" busy={retrying} onclick={retry}>{msg('games.catalogRetry')}</Button>{/snippet}
+      </Notice>
+    {:else if loading}
       <Spinner label={msg('games.catalogLoadingLabel')} />
       <div class="catalog-skeleton" class:grid={$catalogView === 'grid'} class:loading-list={$catalogView !== 'grid'} aria-hidden="true">
         {#each Array(12) as _}
@@ -849,11 +878,6 @@
           </div>
         {/each}
       </div>
-    {:else if failed}
-      <EmptyState level={2}
-        title={msg('games.catalogUnavailableTitle')}
-        description={msg(backendOutdated ? 'games.catalogBackendOutdated' : 'games.catalogUnavailableDescription')}
-      />
     {:else if discoveryVisible && discovery.length > 0}
       <p class="muted" role="status">{msg('games.catalogAllInDiscovery')}</p>
     {:else if search.trim() || genre || platform || kind || compatOnly}
@@ -918,10 +942,15 @@
   {#if items.length > 0}
     {#if autoLoad}<div class="sentinel" bind:this={sentinel} aria-hidden="true"></div>{/if}
     <div class="more">
-      {#if showMoreButton}<Button onclick={() => { autoPages = 0; void fetchPage(page + 1); }} disabled={loading}>
+      {#if showMoreButton && !failed}<Button onclick={morePage} disabled={loading}>
         {appending ? msg('games.catalogLoadingMore') : msg('games.catalogShowMore')}
-      </Button>{:else if hasMore && appending}<Spinner label={msg('games.catalogLoadingMore')} />{/if}
-      {#if failed}<Notice tone="danger" compact>{msg('games.catalogMoreFailed')}</Notice>{/if}
+      </Button>{:else if hasMore && appending && !failed}<Spinner label={msg('games.catalogLoadingMore')} />{/if}
+      {#if failed}
+        <Notice tone="danger" compact>
+          {msg('games.catalogMoreFailed')}
+          {#snippet action()}<Button size="sm" busy={appending} onclick={morePage}>{msg('games.catalogRetry')}</Button>{/snippet}
+        </Notice>
+      {/if}
       <span class="muted">{msg('games.catalogShownOf', { shown: items.length, total })}</span>
     </div>
   {/if}

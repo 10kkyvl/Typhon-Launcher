@@ -2,7 +2,10 @@ import { screen, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import { playGame, type LibraryGame } from '../../lib/services/library';
+import { getStorageInfo } from '../../lib/services/system';
 import { libraryGames } from '../../lib/stores/library';
+import { settings } from '../../lib/stores/settings';
+import { storageFailed, storageInfo } from '../../lib/stores/storage';
 import { installedView } from '../../lib/stores/ui';
 import { renderDom } from '../../lib/testing/dom';
 import Installed from './Installed.svelte';
@@ -12,6 +15,10 @@ vi.mock('../../lib/services/backend', () => ({ inWails: false }));
 vi.mock('../../lib/services/library', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/library')>()),
   playGame: vi.fn(async () => {}),
+}));
+vi.mock('../../lib/services/system', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/services/system')>()),
+  getStorageInfo: vi.fn(),
 }));
 
 const games = [
@@ -70,6 +77,37 @@ describe('Installed: the play button on a cover', () => {
     await user.keyboard('{Enter}');
 
     expect(playGame).toHaveBeenCalledWith('g-celeste');
+  });
+});
+
+describe('Installed: retrying the disk usage', () => {
+  afterEach(() => {
+    settings.set(null);
+    storageFailed.set(false);
+    storageInfo.set(null);
+    vi.mocked(getStorageInfo).mockReset();
+  });
+
+  it('keeps the danger notice and the focus on its busy Retry until the answer', async () => {
+    let answer!: (info: Awaited<ReturnType<typeof getStorageInfo>>) => void;
+    vi.mocked(getStorageInfo).mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    settings.set({ libraryPath: 'C:\\Games' } as NonNullable<Parameters<typeof settings.set>[0]>);
+    storageFailed.set(true);
+    const { user } = renderDom(Installed);
+    const notice = screen.getByRole('alert').closest('.notice') as HTMLElement;
+    expect(notice.textContent).toContain(msg('games.installedStorageLoadFailed'));
+    const retry = within(notice).getByRole('button', { name: msg('common.retry') });
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(retry.getAttribute('aria-busy')).toBe('true');
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
+
+    answer({ usedBytes: 50, totalBytes: 100, freeBytes: 50 } as Awaited<ReturnType<typeof getStorageInfo>>);
+    await vi.waitFor(() => expect(notice.isConnected).toBe(false));
+    expect(screen.getByText(msg('games.installedStorageTitle'))).toBeTruthy();
   });
 });
 

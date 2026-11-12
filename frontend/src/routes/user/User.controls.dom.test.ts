@@ -1,10 +1,11 @@
-import { screen } from '@testing-library/svelte';
+import { screen, within } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import {
   profile as fetchProfile,
   userCommon,
+  type CommonGame,
   type GameCard,
   type PlayedGame,
   type PublicProfile,
@@ -115,6 +116,36 @@ describe("a user's page: loading", () => {
   });
 });
 
+describe("a user's page: retrying a failed load", () => {
+  afterEach(() => {
+    vi.mocked(fetchProfile).mockReset();
+    authState.set('bootstrapping');
+  });
+
+  it('keeps the danger notice and the focus on its busy Retry until the answer', async () => {
+    let answer!: (value: PublicProfile) => void;
+    authState.set('authenticated');
+    vi.mocked(fetchProfile)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockReturnValueOnce(new Promise((resolve) => (answer = resolve)));
+    const { user } = renderDom(UserProfile, { username: 'ann' });
+    const notice = (await screen.findByRole('alert')).closest('.notice') as HTMLElement;
+    expect(notice.textContent).toContain(msg('social.userLoadFailed'));
+    const retry = within(notice).getByRole('button', { name: msg('common.retry') });
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(retry.getAttribute('aria-busy')).toBe('true');
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
+
+    answer(closedProfile);
+    await vi.waitFor(() => expect(notice.isConnected).toBe(false));
+    expect(screen.getByText(msg('social.userProfileClosed'))).toBeTruthy();
+  });
+});
+
 describe("a user's page: a closed profile", () => {
   afterEach(() => {
     vi.mocked(fetchProfile).mockReset();
@@ -140,5 +171,52 @@ describe("a user's page: all the games in common", () => {
     renderDom(UserCommonModal, { open: true, username: 'ann', name: 'Ann' });
 
     expect((await screen.findByText(msg('social.userCommonEmpty'))).closest('.empty.inline')).not.toBeNull();
+  });
+
+  it('a failed first page: the danger notice keeps its busy Retry and the focus until the answer', async () => {
+    let answer!: (value: Awaited<ReturnType<typeof userCommon>>) => void;
+    vi.mocked(userCommon)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockReturnValueOnce(new Promise((resolve) => (answer = resolve)));
+    const { user } = renderDom(UserCommonModal, { open: true, username: 'ann', name: 'Ann' });
+    const notice = (await screen.findByRole('alert')).closest('.notice') as HTMLElement;
+    const retry = within(notice).getByRole('button', { name: msg('common.retry') });
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(retry.getAttribute('aria-busy')).toBe('true');
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
+
+    answer({ games: [], next: '' });
+    await vi.waitFor(() => expect(notice.isConnected).toBe(false));
+    expect(screen.getByText(msg('social.userCommonEmpty'))).toBeTruthy();
+  });
+
+  it('a failed later page keeps the games and retries that page from its notice', async () => {
+    let answer!: (value: Awaited<ReturnType<typeof userCommon>>) => void;
+    const hades = { igdbId: 1, title: 'Hades', coverUrl: '', viewerOwned: true, targetOwned: true } as unknown as CommonGame;
+    vi.mocked(userCommon)
+      .mockResolvedValueOnce({ games: [hades], next: 'p2' })
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockReturnValueOnce(new Promise((resolve) => (answer = resolve)));
+    const { user } = renderDom(UserCommonModal, { open: true, username: 'ann', name: 'Ann' });
+    await user.click(await screen.findByRole('button', { name: msg('social.userCommonMore') }));
+    const notice = (await screen.findByRole('alert')).closest('.notice') as HTMLElement;
+    expect(screen.queryByRole('button', { name: msg('social.userCommonMore') })).toBeNull();
+    const retry = within(notice).getByRole('button', { name: msg('common.retry') });
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(retry.getAttribute('aria-busy')).toBe('true');
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
+    expect(vi.mocked(userCommon).mock.calls.at(-1)).toEqual(['ann', 'p2']);
+    expect(screen.getByText('Hades')).toBeTruthy();
+
+    answer({ games: [], next: '' });
+    await vi.waitFor(() => expect(notice.isConnected).toBe(false));
   });
 });

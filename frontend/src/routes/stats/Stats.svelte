@@ -113,11 +113,13 @@
   </PageHeader>
 
   {#if failed && !data}
-    <EmptyState level={2} title={msg('stats.loadError')}>
-      {#snippet actions()}
-        <Button onclick={() => load(period)}>{msg('stats.retry')}</Button>
+    <!-- A retry keeps the failure until its answer: `failed` holds until `load` settles. -->
+    <Notice tone="danger">
+      {msg('stats.loadError')}
+      {#snippet action()}
+        <Button size="sm" busy={loading} onclick={() => load(period)}>{msg('stats.retry')}</Button>
       {/snippet}
-    </EmptyState>
+    </Notice>
   {:else if !data && loading}
     <Spinner label={msg('stats.loading')} />
   {:else if summary && data}
