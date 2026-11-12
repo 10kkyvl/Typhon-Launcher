@@ -367,26 +367,8 @@
     color: var(--text-2);
   }
 
-  .input {
-    height: var(--control-md);
-    padding: 0 1.2rem;
-    background: var(--surface-2);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-md);
-    color: var(--text);
-    font-size: var(--font-sm);
-    font-family: inherit;
-    transition:
-      border-color var(--dur) var(--ease),
-      box-shadow var(--dur) var(--ease);
-  }
-
   .input.invalid {
     border-color: var(--danger);
-  }
-
-  .input:disabled {
-    opacity: 0.6;
   }
 
   .error {
