@@ -113,14 +113,14 @@
 
   const statusOrder: SourceStatus[] = ['active', 'disabled', 'error', 'updating'];
 
-  function healthMetaFor(health: SourceHealth): { icon: typeof CircleCheck; color: string; label: string } {
+  function healthMetaFor(health: SourceHealth): { icon: typeof CircleCheck; kind: 'success' | 'warning' | 'danger'; label: string } {
     switch (health) {
       case 'healthy':
-        return { icon: CircleCheck, color: 'var(--success)', label: msg('transfers.sourcesHealthOk') };
+        return { icon: CircleCheck, kind: 'success', label: msg('transfers.sourcesHealthOk') };
       case 'warning':
-        return { icon: TriangleAlert, color: 'var(--warning)', label: msg('transfers.sourcesHealthWarning') };
+        return { icon: TriangleAlert, kind: 'warning', label: msg('transfers.sourcesHealthWarning') };
       case 'error':
-        return { icon: CircleAlert, color: 'var(--danger)', label: msg('transfers.sourcesHealthError') };
+        return { icon: CircleAlert, kind: 'danger', label: msg('transfers.sourcesHealthError') };
     }
   }
 
@@ -283,12 +283,12 @@
               {/if}
               {#if source.lastError}
                 <IconButton size="sm" label={msg('common.error')} hint={truncateMiddle(sourceErrorText(source.lastError), 90)} onclick={() => openDetails(source.id)}>
-                  <CircleAlert size="1.5rem" strokeWidth={1.8} color="var(--danger)" />
+                  <span class="mark danger"><CircleAlert size="1.5rem" strokeWidth={1.8} /></span>
                 </IconButton>
               {:else if source.health !== 'healthy'}
                 {@const warnings = source.warnings?.length ? source.warnings.map(sourceWarningText).join('; ') : ''}
                 <IconButton size="sm" label={health.label} hint={warnings ? `${health.label}: ${warnings}` : undefined} onclick={() => openDetails(source.id)}>
-                  <health.icon size="1.5rem" strokeWidth={1.8} color={health.color} />
+                  <span class="mark {health.kind}"><health.icon size="1.5rem" strokeWidth={1.8} /></span>
                 </IconButton>
               {/if}
             </span>
@@ -522,6 +522,18 @@
   .cell.nums {
     justify-content: flex-end;
     font-variant-numeric: tabular-nums;
+  }
+
+  .mark {
+    display: inline-flex;
+  }
+
+  .mark.danger {
+    color: var(--danger);
+  }
+
+  .mark.warning {
+    color: var(--warning);
   }
 
   .count-wrap {

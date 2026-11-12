@@ -5,9 +5,11 @@ import type { Source } from '../../lib/services/sources';
 import { sourceErrorText } from '../../lib/sources/sourceErrors';
 import { sourceProgress } from '../../lib/stores/sourceProgress';
 import { refreshingAll, sources } from '../../lib/stores/sources';
+import { ruleBody, styleOf } from '../../lib/testing/css';
 import { user } from '../../lib/testing/dom';
 import { describedControls, hintOnFocus } from '../../lib/testing/hints';
 import Sources from './Sources.svelte';
+import page from './Sources.svelte?raw';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
@@ -95,6 +97,29 @@ describe('Sources: the error and health marks of a row', () => {
     await user().keyboard('{Enter}');
 
     expect(await screen.findByRole('dialog')).toBeTruthy();
+  });
+
+  // A status colour painted by the page's own stylesheet is one the status-surface guard can see.
+  it('take their status colour from the page’s stylesheet, not from a prop on the icon', () => {
+    sources.set([
+      source({ id: 's1', name: 'Main feed', status: 'error', lastError: 'feed answered 503' }),
+      source({ id: 's2', name: 'Old feed', health: 'warning', warnings: ['duplicate entries'] }),
+      source({ id: 's3', name: 'Broken feed', health: 'error' }),
+    ]);
+    render(Sources, { target: app, props: {} });
+    const marks = [
+      [screen.getByRole('button', { name: msg('common.error') }), 'danger'],
+      [screen.getByRole('button', { name: msg('transfers.sourcesHealthWarning') }), 'warning'],
+      [screen.getByRole('button', { name: msg('transfers.sourcesHealthError') }), 'danger'],
+    ] as const;
+    const css = styleOf(page, 'Sources');
+
+    for (const [button, kind] of marks) {
+      const icon = button.querySelector(`.mark.${kind} svg`);
+      expect(icon, kind).not.toBeNull();
+      expect(icon?.getAttribute('stroke')).toBe('currentColor');
+      expect(ruleBody(css, `.mark.${kind}`).color).toBe(`var(--${kind})`);
+    }
   });
 });
 
