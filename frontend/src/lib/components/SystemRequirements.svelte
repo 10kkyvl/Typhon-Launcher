@@ -74,7 +74,7 @@
   let root = $state<HTMLElement>();
 
   async function retry(): Promise<boolean> {
-    await load(gameId, installPath, revision, true, true);
+    await load(gameId, installPath, `${revision}|${installed}`, true, true);
     return failure === '';
   }
 

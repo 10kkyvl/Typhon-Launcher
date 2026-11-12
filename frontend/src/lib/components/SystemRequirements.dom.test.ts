@@ -88,6 +88,21 @@ describe('SystemRequirements: loading and retrying', () => {
   });
 });
 
+describe('SystemRequirements: the report a retry fetched', () => {
+  it('is the one the page finds next time, not a second request', async () => {
+    vi.mocked(checkSystemRequirements).mockRejectedValueOnce(new Error('offline')).mockResolvedValue(report);
+    const first = renderDom(SystemRequirements, { gameId: 'sysreq-retry-cache', installPath: '/games', revision: 'r1' });
+    await first.user.click(await screen.findByRole('button', { name: msg('sysreq.retry') }));
+    await screen.findByRole('button', { name: msg('sysreq.show') });
+    first.unmount();
+
+    renderDom(SystemRequirements, { gameId: 'sysreq-retry-cache', installPath: '/games', revision: 'r1' });
+    await screen.findByRole('button', { name: msg('sysreq.show') });
+
+    expect(checkSystemRequirements).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('SystemRequirements: the list of checks', () => {
   it('opens under a disclosure button tied to the list', async () => {
     vi.mocked(checkSystemRequirements).mockResolvedValue(report);
