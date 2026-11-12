@@ -1451,7 +1451,13 @@
           {#if primary.kind === 'progress'}
             <div class="progress">
               <span class="progress-label">{primary.label}</span>
-              <ProgressBar value={busyPercent} indeterminate={busy?.indeterminate} stretch label={primary.label} />
+              <ProgressBar
+                value={busyPercent}
+                indeterminate={busy?.indeterminate}
+                stretch
+                label={title}
+                valueText={`${primary.label}, ${busyPercent}%`}
+              />
               {#if !busy?.indeterminate}<span class="progress-pct">{busyPercent}%</span>{/if}
             </div>
           {:else if primary.kind === 'update'}

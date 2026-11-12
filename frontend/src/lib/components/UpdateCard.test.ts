@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('../services/backend', () => ({ inWails: false }));
 import UpdateCard from './UpdateCard.svelte';
 import { locale } from '../i18n';
+import { stepLabels } from '../stores/updates';
 import type { Update } from '../services/updates';
 function update(reason: string): Update {
   return { gameId: 'g', title: 'Game', state: 'update_available', planning: false, progress: 0, canRollback: false, checkedAt: '', availability: { available: true, kind: 'new_release', gameId: 'g', installedReleaseId: 'r1', targetReleaseId: 'r2', installedVersion: '1', targetVersion: '2', confidence: .6, strategy: 'full_release', estimatedDownloadBytes: 10, requiresFullInstall: true, patchCount: 0, targetSize: 10, reason } };
@@ -42,5 +43,22 @@ describe('card with no newer release', () => {
     expect(html).toContain(headline);
     expect(html).not.toContain('New release available');
     expect(html).not.toContain('Calculate update');
+  });
+});
+
+describe('a running update', () => {
+  // The bar is named after the update it measures; the step it is on is part of its value.
+  it('names its bar after the update and its version, and reads the step with the percent', () => {
+    locale.set('en');
+    const running = { ...update('different_edition'), state: 'updating', step: 'extract', progress: 0.42 } as Update;
+    const html = render(UpdateCard, { props: { update: running, running: false } }).body;
+    expect(html).toMatch(/role="progressbar" aria-label="Update 2"/);
+    expect(html).toContain(`aria-valuetext="${stepLabels('extract')}, 42%"`);
+  });
+
+  it('without a target version, names it the update alone', () => {
+    locale.set('en');
+    const html = render(UpdateCard, { props: { update: upToDate({ state: 'updating', step: 'download', progress: 0.1 }), running: false } }).body;
+    expect(html).toMatch(/role="progressbar" aria-label="Update"/);
   });
 });

@@ -163,7 +163,12 @@
     <p class="muted reason">{msg('ui.calculatingDownloadSize')}</p>
   {:else if busy}
     <div class="progress">
-      <ProgressBar value={update.progress * 100} stretch label={headline} />
+      <ProgressBar
+        value={update.progress * 100}
+        stretch
+        label={toVersion ? `${msg('ui.update')} ${toVersion}` : msg('ui.update')}
+        valueText={`${stepLabels(update.step ?? 'download')}, ${progressPercent(update.progress)}%`}
+      />
       <span class="muted">{progressPercent(update.progress)}%</span>
     </div>
   {/if}

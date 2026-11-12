@@ -151,11 +151,19 @@ describe('every progress bar', () => {
     expect(offenders).toEqual([]);
   });
 
-  // A tripwire for the usual ways a name picks up the amount: a percent, a progress or summary line, a stage.
-  it('is named for what it measures, the amount left to its value', () => {
-    const offenders = uses
-      .filter(({ tag }) => /\blabel=\{[^}]*(?:[Pp]ercent|Progress|Summary|\.text\b|\bstage)/.test(tag))
-      .map(({ file, tag }) => `${file}: ${tag.slice(0, 80)}`);
+  // A tripwire for the usual ways a name picks up the amount or the moment: a percent, a progress or
+  // summary line, a stage, status or step, a card's headline, another control's label.
+  const MOMENTARY = /\blabel=\{[^}]*(?:[Pp]ercent|Progress|Summary|\.text\b|[Ss]tage|[Ss]tatusLabel|[Ss]tepLabel|[Hh]eadline|\.label\b)/;
+
+  it('reads a name built from the moment as one', () => {
+    for (const tag of ['label={primary.label}', 'label={headline}', 'label={statusLabels(item.status)}', 'label={stepLabels(step)}', 'label={stageLabel(job.stage)}']) {
+      expect(MOMENTARY.test(tag), tag).toBe(true);
+    }
+    for (const tag of ['label={game.title}', 'label={item.name}', "label={msg('settings.aboutLogsLabel')}"]) expect(MOMENTARY.test(tag), tag).toBe(false);
+  });
+
+  it('is named for what it measures, the amount and the stage left to its value', () => {
+    const offenders = uses.filter(({ tag }) => MOMENTARY.test(tag)).map(({ file, tag }) => `${file}: ${tag.slice(0, 80)}`);
     expect(offenders).toEqual([]);
   });
 
