@@ -93,6 +93,9 @@
       detailsError = '';
       releasesError = '';
       loadingReleases = false;
+      // A retry still running when the dialog closes belongs to that opening: the next starts clean.
+      detailsRetrying = false;
+      releasesRetrying = false;
       if (isOpen && id) {
         filterStatus = 'all';
         search = '';

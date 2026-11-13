@@ -170,6 +170,26 @@ describe('SourceDetailsModal: where a Retry that worked leaves the focus, and a 
   });
 });
 
+describe('SourceDetailsModal: closed and opened again while a Retry runs', () => {
+  it.each([
+    ['details', () => vi.mocked(getSourceDetails), 'modals.sourceDetailsLoadFailed'],
+    ['releases', () => vi.mocked(queryReleases), 'modals.sourceDetailsReleasesFailed'],
+  ] as const)('opens without the old %s failure: no empty notice with a busy Retry', async (_name, call, words) => {
+    const never = new Promise<never>(() => {});
+    (call() as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('ipc')).mockReturnValue(never);
+    const { rerender } = render(SourceDetailsModal, { target: app, props: { open: true, sourceId: 's1' } });
+    const first = await screen.findByRole('dialog', { name: 'FitGirl' });
+    const keys = user();
+    await keys.click(within((await within(first).findByText(msg(words))).closest('.notice') as HTMLElement).getByRole('button', { name: msg('common.retry') }));
+
+    await rerender({ open: false, sourceId: 's1' });
+    await rerender({ open: true, sourceId: 's1' });
+
+    const dialog = await screen.findByRole('dialog', { name: 'FitGirl' });
+    expect(dialog.querySelectorAll('.notice').length).toBe(0);
+  });
+});
+
 describe('SourceDetailsModal: the rest of the dialog', () => {
   it('says the list is loading with a labelled spinner', async () => {
     const pending = deferred<Page>();
