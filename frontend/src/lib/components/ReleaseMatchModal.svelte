@@ -50,6 +50,8 @@
   // The footer action running: its button stays focused and busy, the other waits.
   let submitting = $state<'' | 'confirm' | 'ignore'>('');
   let searchToken = 0;
+  // One per opening of the dialog: a retry that answers after its opening has passed says so.
+  let opening = 0;
   let candidatesToken = 0;
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -64,6 +66,7 @@
       searching = false;
       searchError = '';
       // A retry still running when the dialog closes belongs to that opening: the next starts clean.
+      opening += 1;
       searchRetrying = false;
       selectedGameId = null;
       query = '';
@@ -126,15 +129,16 @@
 
   // The notice's retry asks again at once, not after the typing pause; the failure stays on screen
   // until the answer. On success the focus goes to the results' Tab stop, else to the search field.
-  async function retrySearch(): Promise<boolean> {
+  async function retrySearch(): Promise<boolean | undefined> {
     clearTimeout(searchTimer);
     const value = query.trim();
     if (!value) {
       searchError = '';
       return true;
     }
+    const mine = opening;
     await runSearch(value, ++searchToken);
-    return searchError === '';
+    return mine === opening ? searchError === '' : undefined;
   }
 
   async function confirm() {

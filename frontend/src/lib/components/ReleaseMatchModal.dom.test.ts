@@ -209,6 +209,37 @@ describe('ReleaseMatchModal: closed and opened again while a search Retry runs',
   });
 });
 
+describe('ReleaseMatchModal: an old search Retry answering after the dialog was opened again', () => {
+  it('leaves the new Retry busy, and a second press sends nothing', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const old = deferred<CatalogGame[]>();
+    const never = new Promise<never>(() => {});
+    vi.mocked(getMatchCandidates).mockResolvedValue([]);
+    vi.mocked(searchGames).mockRejectedValueOnce(new Error('offline')).mockReturnValueOnce(old.promise).mockRejectedValueOnce(new Error('offline')).mockReturnValue(never);
+    const { rerender } = render(ReleaseMatchModal, { target: app, props: { open: true, release } });
+    const keys = user();
+    const failedRetry = async () => {
+      await keys.type(within(screen.getByRole('dialog')).getByRole('textbox', { name: msg('modals.releaseMatchManualSearch') }), 'hades');
+      await vi.advanceTimersByTimeAsync(300);
+      return within((await screen.findByRole('alert')).closest('.notice') as HTMLElement).getByRole('button', { name: msg('common.retry') });
+    };
+    await keys.click(await failedRetry());
+    await rerender({ open: false, release });
+    await rerender({ open: true, release });
+    const retry = await failedRetry();
+    await keys.click(retry);
+    expect(retry.getAttribute('aria-busy')).toBe('true');
+    const sent = vi.mocked(searchGames).mock.calls.length;
+
+    old.resolve([]);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(retry.getAttribute('aria-busy')).toBe('true');
+    await keys.click(retry);
+    expect(vi.mocked(searchGames).mock.calls.length).toBe(sent);
+  });
+});
+
 describe('ReleaseMatchModal: confirming', () => {
   it('keeps the focus on "confirm", busy, while the match is saved', async () => {
     const saved = deferred<void>();
