@@ -9,6 +9,7 @@ import { emulationPlatform, emulatorAlreadyOpen, installingPackage, needsBios, n
 import { libraryErrorText } from '../library/errors';
 import { toast } from '../stores/toasts';
 import { askForBios } from '../stores/biosPrompt';
+import { askToResolveConflict } from '../stores/cloudsaves';
 import { askToCloseEmulator } from '../stores/emulatorBusyPrompt';
 import { askForEmulator } from '../stores/emulatorPrompt';
 
@@ -204,7 +205,7 @@ export async function launchGame(id: string): Promise<boolean> {
 
 // A question the player already answered for this launch; asking it again
 // would loop, so its error is shown instead.
-type Answered = ReadonlySet<'emulator' | 'closing'>;
+type Answered = ReadonlySet<'emulator' | 'closing' | 'conflict'>;
 
 async function relaunch(id: string, answered: Answered): Promise<boolean> {
   try { await LibraryService.PlayGame(id); } catch (err) {
@@ -218,6 +219,7 @@ async function relaunch(id: string, answered: Answered): Promise<boolean> {
 // after one question still gets the next one or the installer notice.
 async function recoverLaunch(id: string, err: unknown, answered: Answered): Promise<boolean> {
   if (errorCode(err) === 'library.launch_cancelled') return false;
+  if (savesHeldBack(err)) return await launchAfterSaves(id, err, answered, (next) => relaunch(id, next));
   if (installingPackage(err)) {
     // Not a failure: the emulator's installer is open and waits for the player.
     toast(libraryErrorText(err, ''), 'info');
@@ -262,11 +264,40 @@ async function launchAfterBios(id: string, first: unknown, answered: Answered): 
   }
 }
 
+const savesHeldBack = (err: unknown) => ['cloud.syncing', 'cloud.conflict_unresolved'].includes(errorCode(err));
+
+// The cloud saves held the game back. Saves still on their way are a wait,
+// not a failure. A conflict is put to the player once per launch, and the
+// same launch is made again after their choice.
+async function launchAfterSaves(
+  id: string,
+  first: unknown,
+  answered: Answered,
+  again: (answered: Answered) => Promise<boolean>,
+): Promise<boolean> {
+  if (errorCode(first) === 'cloud.syncing') {
+    toast(libraryErrorText(first, ''), 'info');
+    return false;
+  }
+  if (answered.has('conflict')) throw first;
+  const resolved = askToResolveConflict(id);
+  if (!resolved) throw first;
+  if (!(await resolved)) return false;
+  return await again(new Set([...answered, 'conflict']));
+}
+
 export async function playGameProfile(id: string, profileID: string): Promise<boolean> {
   if (!inWails) throw unavailable();
+  return await relaunchProfile(id, profileID, new Set());
+}
+
+// A profile launch recovers only from the saves' hold; the emulator
+// questions stay with the game's own launch.
+async function relaunchProfile(id: string, profileID: string, answered: Answered): Promise<boolean> {
   try { await LibraryService.PlayGameProfile(id, profileID); } catch (err) {
-    if (errorCode(err) !== 'library.launch_cancelled') throw err;
-    return false;
+    if (errorCode(err) === 'library.launch_cancelled') return false;
+    if (savesHeldBack(err)) return await launchAfterSaves(id, err, answered, (next) => relaunchProfile(id, profileID, next));
+    throw err;
   }
   return true;
 }
