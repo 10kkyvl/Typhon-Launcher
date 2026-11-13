@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"typhon/internal/uierr"
@@ -193,6 +194,39 @@ func TestBlockedLaunchStartsNothingAndIsNotJournaledAsAFailure(t *testing.T) {
 	case g := <-started:
 		t.Fatalf("session watchers were told %s started", g)
 	default:
+	}
+}
+
+// A blocked launch waits on the player (saves syncing, a conflict, a pending
+// recovery): an expected hold, not a failure of the launcher.
+func TestBlockedLaunchIsLoggedAsAWarning(t *testing.T) {
+	logs := captureSessionLogs(t)
+	s, id, _ := hookedGame(t)
+	cause := uierr.New("cloud.conflict_unresolved", "conflict")
+	s.AddLaunchHook(hookFunc(func(context.Context, Game) error { return &LaunchBlockedError{Err: cause} }))
+
+	if err := s.PlayGame(id); !errors.Is(err, cause) {
+		t.Fatalf("PlayGame = %v, want the hook's cause", err)
+	}
+
+	logged := logs.String()
+	if strings.Count(logged, "level=WARN") != 1 || !strings.Contains(logged, "pre-launch hook stopped the launch") ||
+		!strings.Contains(logged, "cloud.conflict_unresolved") || strings.Contains(logged, "level=ERROR") {
+		t.Fatalf("log = %q, want one WARN line with the code and no ERROR", logged)
+	}
+}
+
+func TestFailedHookIsLoggedAndTheLaunchGoesOn(t *testing.T) {
+	logs := captureSessionLogs(t)
+	s, id, _ := hookedGame(t)
+	s.AddLaunchHook(hookFunc(func(context.Context, Game) error { return errors.New("disk full") }))
+
+	if err := s.PlayGame(id); err == nil {
+		t.Fatal("expected the injected start failure")
+	}
+
+	if logged := logs.String(); !strings.Contains(logged, `level=WARN msg="pre-launch hook failed, launching anyway"`) || !strings.Contains(logged, "disk full") {
+		t.Fatalf("log = %q, want the WARN line of the failed hook", logged)
 	}
 }
 

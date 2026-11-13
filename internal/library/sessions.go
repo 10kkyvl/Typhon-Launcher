@@ -339,7 +339,7 @@ func (s *Service) play(id, profileID string, explicit bool) error {
 		}
 		var blocked *LaunchBlockedError
 		if errors.As(hookErr, &blocked) {
-			slog.Error("pre-launch hook stopped the launch", "id", id, "error", redact.Error(hookErr))
+			slog.Warn("pre-launch hook stopped the launch", "id", id, "error", redact.Error(hookErr))
 			s.mu.Lock()
 			return blocked.Err
 		}
