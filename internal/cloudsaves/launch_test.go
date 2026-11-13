@@ -1,12 +1,5 @@
 package cloudsaves
 
-// Assumes the implementer's names; each one appears on exactly one line below,
-// adapt that line:
-//   - codeConflictUnresolved: new code in model.go, "the conflict is unresolved" (wantConflictCode)
-//   - codeSyncing: new code in model.go, "the saves are still syncing" (wantSyncingCode)
-//   - Service.launchTimeout time.Duration: the hook's time limit (limitLaunch)
-//   - (*Service).SessionStarting(context.Context, library.Game) error (the LaunchHook assertion)
-
 import (
 	"bytes"
 	"context"
@@ -354,13 +347,13 @@ func TestLaunchConflictThatCannotBePersistedBlocksAndLeavesNoMemoryOnlyConflict(
 	limitLaunch(h, time.Minute)
 	before := h.stateBytes()
 	realWrite := h.svc.store.write
-	h.svc.store.write = func(string, int, any) error { return errors.New("disk full") }
+	// The write error carries a code of its own: the launch must still say
+	// which block it is.
+	h.svc.store.write = func(string, int, any) error { return uierr.New("storage.test_disk_full", "disk full") }
 
 	err := h.starting(gameLocal)
 
-	if code := blockedCode(t, err); !strings.HasPrefix(code, "cloud.") {
-		t.Fatalf("blocked with code %q, want a cloud.* code the UI can show", code)
-	}
+	wantBlock(t, err, wantConflictCode)
 	if c := h.recorded(gameCloud).Conflict; c != nil {
 		t.Fatalf("memory holds a conflict the disk never confirmed: %+v", c)
 	}
@@ -793,7 +786,7 @@ func TestLaunchThatGaveUpLeavesTheSavesOfTheRunningGameAlone(t *testing.T) {
 	wantStarts(t, h.starting(gameLocal))
 	h.lib.setRunning(gameLocal, true)
 	releaseList()
-	waitFor(t, "the launch check to end", func() bool { return h.launchChecks() == 0 })
+	waitFor(t, "the launch check to end", func() bool { return !h.svc.launchCheckRuns(gameLocal) })
 
 	if _, d := h.client.transfers(); d != 0 || h.backups.restoreCount() != 0 {
 		t.Fatalf("%d downloads and %d restores over the saves of a running game", d, h.backups.restoreCount())
@@ -865,5 +858,193 @@ func TestTheLaunchCheckRestoresThroughTheLaunchPath(t *testing.T) {
 	}
 	if paths := h.backups.restorePaths(); !slices.Equal(paths, []string{"before launch"}) {
 		t.Fatalf("restores %v, want one through RestoreBeforeLaunch", paths)
+	}
+}
+
+// behindAnotherTransfer leaves gameLocal unchanged here with a newer copy in
+// the cloud, and a pass of another game holding opMu in the middle of its
+// upload. release lets that upload finish and waits for the pass.
+func (h *harness) behindAnotherTransfer() (remote string, release func()) {
+	h.t.Helper()
+	other := h.addGame("local-2", "cloud-2")
+	writeTree(h.t, other, baseFiles)
+	remote = h.newerInCloud()
+	h.open()
+	writeTree(h.t, other, changedBase)
+	hold := h.client.hold("cloud-2")
+	passDone := make(chan struct{})
+	go func() {
+		defer close(passDone)
+		h.svc.pass(context.Background(), map[string]struct{}{"local-2": {}})
+	}()
+	h.client.waitHeld(h.t, "cloud-2")
+	var once sync.Once
+	release = func() {
+		once.Do(func() {
+			hold()
+			awaitClosed(h.t, passDone, "the pass of the other game")
+		})
+	}
+	h.t.Cleanup(release)
+	return remote, release
+}
+
+func (h *harness) wantDownloaded(remote string) {
+	h.t.Helper()
+	waitFor(h.t, "the check's download to be recorded", func() bool {
+		st := h.recorded(gameCloud)
+		return st.LocalDigest == remote && st.RemoteDigest == remote
+	})
+	if err := h.starting(gameLocal); err != nil {
+		h.t.Fatalf("launch after the download = %v, want nil", err)
+	}
+	if got := readTree(h.t, h.saves()); !mapsEqual(got, otherDevice) {
+		h.t.Fatalf("saves = %v, want the cloud copy", got)
+	}
+}
+
+// A launch that proved a download is needed but waits behind another game's
+// transfer is told the saves are syncing, not let through.
+func TestLaunchNeedingADownloadBehindAnotherTransferIsSyncing(t *testing.T) {
+	h := newHarness(t)
+	remote, release := h.behindAnotherTransfer()
+	limitLaunch(h, shortLimit)
+	downloads := h.client.requestsFor(gameCloud)
+
+	wantBlock(t, h.starting(gameLocal), wantSyncingCode)
+	if got := readTree(t, h.saves()); !mapsEqual(got, baseFiles) {
+		t.Fatalf("saves = %v while the check waits", got)
+	}
+
+	release()
+	h.wantDownloaded(remote)
+	if n := h.client.requestsFor(gameCloud) - downloads; n != 1 {
+		t.Fatalf("%d downloads, want the one the first launch proved", n)
+	}
+}
+
+// A second launch while the first one's check still runs waits on that check
+// instead of starting another.
+func TestSecondLaunchJoinsTheCheckTheFirstLeftRunning(t *testing.T) {
+	h := newHarness(t)
+	remote, release := h.behindAnotherTransfer()
+	limitLaunch(h, shortLimit)
+	lists, downloads := h.client.requestsFor(listKey), h.client.requestsFor(gameCloud)
+	wantBlock(t, h.starting(gameLocal), wantSyncingCode)
+
+	limitLaunch(h, time.Minute)
+	second := h.startingAsync(context.Background(), gameLocal)
+	waitFor(t, "the second launch to wait on a check", func() bool {
+		n, _ := h.svc.launchWaiters(gameLocal)
+		return n == 1
+	})
+	release()
+
+	if err := await(t, second, "the second SessionStarting"); err != nil {
+		t.Fatalf("second launch = %v, want nil once the saves are in place", err)
+	}
+	if got := readTree(t, h.saves()); !mapsEqual(got, otherDevice) {
+		t.Fatalf("saves when the second launch went ahead = %v", got)
+	}
+	if n := h.client.requestsFor(listKey) - lists; n != 1 {
+		t.Fatalf("%d listings for two launches, want the first one's only", n)
+	}
+	if n := h.client.requestsFor(gameCloud) - downloads; n != 1 {
+		t.Fatalf("%d downloads, want 1", n)
+	}
+	if st := h.recorded(gameCloud); st.RemoteDigest != remote {
+		t.Fatalf("recorded %+v", st)
+	}
+}
+
+// While a check of the game may still replace its saves, a launch waits on it
+// even when the gates would now let the game through untouched: here the game
+// lost its catalog id after the first launch proved the download.
+func TestLaunchWaitsOnARunningCheckWhateverTheGatesSayNow(t *testing.T) {
+	h := newHarness(t)
+	remote, release := h.behindAnotherTransfer()
+	limitLaunch(h, shortLimit)
+	wantBlock(t, h.starting(gameLocal), wantSyncingCode)
+	h.lib.mu.Lock()
+	for i := range h.lib.games {
+		if h.lib.games[i].ID == gameLocal {
+			h.lib.games[i].CanonicalGameID = ""
+		}
+	}
+	h.lib.mu.Unlock()
+
+	limitLaunch(h, time.Minute)
+	second := h.startingAsync(context.Background(), gameLocal)
+	waitFor(t, "the second launch to wait on a check", func() bool {
+		n, _ := h.svc.launchWaiters(gameLocal)
+		return n == 1
+	})
+	release()
+
+	if err := await(t, second, "the second SessionStarting"); err != nil {
+		t.Fatalf("second launch = %v, want nil once the saves are in place", err)
+	}
+	if got := readTree(t, h.saves()); !mapsEqual(got, otherDevice) {
+		t.Fatalf("saves when the second launch went ahead = %v, want the cloud copy already in place", got)
+	}
+	if st := h.recorded(gameCloud); st.RemoteDigest != remote {
+		t.Fatalf("recorded %+v", st)
+	}
+}
+
+// The first launch was told the transfer goes on; cancelling a second launch
+// that joined it must not stop it.
+func TestCancelledSecondLaunchLeavesThePromisedDownloadRunning(t *testing.T) {
+	h := newHarness(t)
+	remote, release := h.behindAnotherTransfer()
+	limitLaunch(h, shortLimit)
+	downloads := h.client.requestsFor(gameCloud)
+	wantBlock(t, h.starting(gameLocal), wantSyncingCode)
+
+	limitLaunch(h, time.Minute)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	second := h.startingAsync(ctx, gameLocal)
+	waitFor(t, "the second launch to wait on a check", func() bool {
+		n, _ := h.svc.launchWaiters(gameLocal)
+		return n == 1
+	})
+	cancel()
+	if err := await(t, second, "the cancelled SessionStarting"); err != nil && !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled launch = %v, want nil or context.Canceled", err)
+	}
+
+	release()
+	h.wantDownloaded(remote)
+	if n := h.client.requestsFor(gameCloud) - downloads; n != 1 {
+		t.Fatalf("%d downloads, want 1", n)
+	}
+}
+
+// An unreadable state file at Play: nothing about a conflict can be known, so
+// the game starts and the cause reaches the library's log; the file is left
+// as it is for the player, and the cloud is not asked.
+func TestUnreadableStateAtLaunchStartsTheGameWithTheCause(t *testing.T) {
+	h := newHarness(t)
+	writeTree(t, h.saves(), baseFiles)
+	h.seedRemote(otherDevice, "other-device")
+	corrupt := []byte("{not json")
+	if err := os.WriteFile(h.svc.store.path(ownerID), corrupt, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h.open()
+	limitLaunch(h, time.Minute)
+
+	err := h.starting(gameLocal)
+
+	wantStarts(t, err)
+	if !errors.Is(err, errStateBroken) || uierr.Code(err) != codeStateBroken {
+		t.Fatalf("SessionStarting = %v, want a plain error carrying %s", err, codeStateBroken)
+	}
+	if n := h.client.calls(); n != 0 {
+		t.Fatalf("%d cloud requests, want none", n)
+	}
+	if got := h.stateBytes(); !bytes.Equal(got, corrupt) {
+		t.Fatalf("state file rewritten to %q", got)
 	}
 }

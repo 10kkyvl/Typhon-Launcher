@@ -362,9 +362,7 @@ func removeTemp(path string) {
 // download replaces the local saves with the cloud copy. check is the launch
 // check that runs it, nil for every other caller.
 func (s *Service) download(ctx context.Context, r *run, gameID, key string, remote account.Save, check *launchCheck) outcome {
-	if !s.claimFetch(key, check) {
-		return fail(context.Canceled)
-	}
+	s.claimFetch(key)
 	defer s.releaseFetch(key)
 	limit, err := downloadLimit(r.list.MaxBytes, remote.SizeBytes)
 	if err != nil {

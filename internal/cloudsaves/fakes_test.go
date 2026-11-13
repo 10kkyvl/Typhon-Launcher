@@ -775,9 +775,20 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 	}
 }
 
-// launchChecks counts the launch checks whose goroutine has not ended.
-func (h *harness) launchChecks() int {
-	h.svc.mu.Lock()
-	defer h.svc.mu.Unlock()
-	return len(h.svc.launches)
+// launchCheckRuns reports whether a launch check of gameID has not ended.
+func (s *Service) launchCheckRuns(gameID string) bool {
+	_, runs := s.launchWaiters(gameID)
+	return runs
+}
+
+// launchWaiters reports how many launches of gameID wait on its check.
+func (s *Service) launchWaiters(gameID string) (waiters int, runs bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, c := range s.launches {
+		if c.gameID == gameID {
+			return c.waiters, true
+		}
+	}
+	return 0, false
 }

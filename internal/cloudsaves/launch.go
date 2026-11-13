@@ -15,6 +15,7 @@ import (
 // the game waiting at the same time shares, so a second Play never starts a
 // second transfer. err is written once, before done is closed.
 type launchCheck struct {
+	gameID string
 	key    string
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -24,10 +25,11 @@ type launchCheck struct {
 	waiters int
 	// known is the block the check has already proved while it waits for opMu
 	// to act on it: ErrSyncing for a newer cloud copy, ErrConflictUnresolved
-	// for a change on both sides.
+	// for a change on both sides. From then on the check goes on in the
+	// background whatever its launches do.
 	known error
-	// abandoned is set once a launch went ahead without the answer: from then
-	// on the check must not replace the saves of a game that may be running.
+	// abandoned is set, together with the cancel, when the last launch stops
+	// waiting while the check has proved nothing yet.
 	abandoned bool
 }
 
@@ -47,8 +49,19 @@ func checkError(err error) error {
 // known, the game starts and the returned plain error carries the cause into
 // the library's log.
 //
+// While a check of the game may still replace its saves, every launch of the
+// game waits on it, is blocked with cloud.syncing or is cancelled: that is
+// what lets the check restore a game the library reports as starting
+// (savebackup.RestoreBeforeLaunch). So a running check is joined before any
+// gate is looked at, and a launch stops waiting without a block only while
+// its check has proved nothing and is cancelled with it.
+//
 //wails:ignore
 func (s *Service) SessionStarting(ctx context.Context, game library.Game) error {
+	limit := s.launchTimeout
+	if c := s.joinRunning(game.ID); c != nil {
+		return s.awaitCheck(ctx, c, limit)
+	}
 	key := game.CanonicalGameID
 	if key == "" || !account.ValidSaveGameID(key) {
 		return nil
@@ -78,7 +91,11 @@ func (s *Service) SessionStarting(ctx context.Context, game library.Game) error 
 	if err != nil {
 		return err
 	}
-	timer := time.NewTimer(s.launchTimeout)
+	return s.awaitCheck(ctx, c, limit)
+}
+
+func (s *Service) awaitCheck(ctx context.Context, c *launchCheck, limit time.Duration) error {
+	timer := time.NewTimer(limit)
 	defer timer.Stop()
 	select {
 	case <-c.done:
@@ -88,7 +105,7 @@ func (s *Service) SessionStarting(ctx context.Context, game library.Game) error 
 		s.leaveCheck(c, true)
 		return ctx.Err()
 	case <-timer.C:
-		return s.checkTimedOut(c, game.ID)
+		return s.checkTimedOut(c, limit)
 	}
 }
 
@@ -109,6 +126,23 @@ func (s *Service) recordedState(owner, key string) (gameState, error) {
 	return st.Games[key], nil
 }
 
+// joinRunning adds a launch to the running check of its game, if there is
+// one that was not abandoned.
+func (s *Service) joinRunning(gameID string) *launchCheck {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.joinLocked(gameID)
+}
+
+func (s *Service) joinLocked(gameID string) *launchCheck {
+	c := s.launches[gameID]
+	if c == nil || c.abandoned {
+		return nil
+	}
+	c.waiters++
+	return c
+}
+
 // joinCheck returns the running check of the game or starts one in a
 // goroutine owned by the service, which outlives the launch's wait when a
 // download has to finish.
@@ -116,27 +150,26 @@ func (s *Service) joinCheck(game library.Game, st gameState) (*launchCheck, erro
 	key := game.CanonicalGameID
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if c := s.joinLocked(game.ID); c != nil {
+		return c, nil
+	}
 	if s.fetching[key] {
 		return nil, blocked(ErrSyncing)
-	}
-	if c := s.launches[key]; c != nil && !c.abandoned {
-		c.waiters++
-		return c, nil
 	}
 	if s.ctx == nil || s.closing {
 		return nil, checkError(errNotStarted)
 	}
 	ctx, cancel := context.WithCancel(s.ctx)
-	c := &launchCheck{key: key, cancel: cancel, done: make(chan struct{}), waiters: 1}
-	s.launches[key] = c
+	c := &launchCheck{gameID: game.ID, key: key, cancel: cancel, done: make(chan struct{}), waiters: 1}
+	s.launches[game.ID] = c
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
 		defer cancel()
 		err := s.runCheck(ctx, c, game, st)
 		s.mu.Lock()
-		if s.launches[key] == c {
-			delete(s.launches, key)
+		if s.launches[game.ID] == c {
+			delete(s.launches, game.ID)
 		}
 		unheard := c.waiters == 0
 		s.mu.Unlock()
@@ -150,13 +183,14 @@ func (s *Service) joinCheck(game library.Game, st gameState) (*launchCheck, erro
 	return c, nil
 }
 
-// leaveCheck drops one waiter; a launch the player cancelled takes the check
-// down with it once nobody else waits, transfer included.
+// leaveCheck drops one waiter. A launch the player cancelled takes the check
+// down with it only while the check has proved nothing and nobody else
+// waits: a download once proved necessary was promised to go on.
 func (s *Service) leaveCheck(c *launchCheck, cancelled bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	c.waiters--
-	if cancelled && c.waiters == 0 {
+	if cancelled && c.waiters == 0 && c.known == nil {
 		c.abandoned = true
 		c.cancel()
 	}
@@ -166,7 +200,7 @@ func (s *Service) leaveCheck(c *launchCheck, cancelled bool) {
 // of the game, running or proved necessary, blocks and goes on in the
 // background; so does a proved conflict on its way to the state file. A
 // check that knows nothing yet is abandoned and the game starts.
-func (s *Service) checkTimedOut(c *launchCheck, gameID string) error {
+func (s *Service) checkTimedOut(c *launchCheck, limit time.Duration) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	c.waiters--
@@ -183,21 +217,17 @@ func (s *Service) checkTimedOut(c *launchCheck, gameID string) error {
 	}
 	c.abandoned = true
 	c.cancel()
-	return checkError(fmt.Errorf("no answer for %s within %v: %w", gameID, s.launchTimeout, context.DeadlineExceeded))
+	return checkError(fmt.Errorf("no answer for %s within %v: %w", c.gameID, limit, context.DeadlineExceeded))
 }
 
-// claimFetch marks a download of key as running. A launch check passes
-// itself: once its launch went ahead without the answer it must not replace
-// the saves of a game that may be starting, and the check under mu makes the
-// abandon and the claim exclusive.
-func (s *Service) claimFetch(key string, c *launchCheck) bool {
+// claimFetch marks a download of key as running. An abandoned launch check
+// never gets here: it is abandoned only while known is unset and is
+// cancelled in the same step under mu, and runCheck sets known under mu
+// before it takes opMu and checks ctx after taking it, before any download.
+func (s *Service) claimFetch(key string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if c != nil && c.abandoned {
-		return false
-	}
 	s.fetching[key] = true
-	return true
 }
 
 func (s *Service) releaseFetch(key string) {
