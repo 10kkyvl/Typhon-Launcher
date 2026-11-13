@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, tick } from 'svelte';
+  import { onDestroy } from 'svelte';
   import { Dices, Play } from '@lucide/svelte';
   import Artwork from './Artwork.svelte';
   import Button from './Button.svelte';
@@ -29,6 +29,7 @@
   import { gameArt } from '../stores/metadata';
   import { navigate } from '../stores/router';
   import { toast } from '../stores/toasts';
+  import { focusHandOff } from '../utils/focusHandOff';
   import { relativeDate } from '../utils/format';
 
   let { onclose }: { onclose: () => void } = $props();
@@ -88,9 +89,11 @@
   let spinSlot = $state<HTMLElement>();
   let againSlot = $state<HTMLElement>();
 
-  function spin(event: MouseEvent) {
-    // Whether the pressed spin button held the focus: only then is there a focus to hand on.
-    const held = event.currentTarget instanceof HTMLElement && document.activeElement === event.currentTarget;
+  function spin() {
+    // When the footer changes under the spin button, focus it held goes to the spin button of the new
+    // footer: "Again" after a result, so a second Enter spins again rather than starting a game.
+    const hand = focusHandOff();
+    const keepFocus = () => void hand(() => (phase === 'result' ? againSlot : spinSlot)?.querySelector<HTMLElement>('button'));
     cancelSpin?.();
     spunFrom = phase === 'result' ? 'result' : 'setup';
     const candidates = pickCandidates($libraryGames, filters, $libraryGenres, $collections, Date.now());
@@ -98,14 +101,14 @@
     if (!final) {
       shown = null;
       phase = 'empty';
-      if (held) void keepFocus();
+      keepFocus();
       return;
     }
     previousId = final.id;
     if (reducedMotion()) {
       shown = final;
       phase = 'result';
-      if (held) void keepFocus();
+      keepFocus();
       return;
     }
     phase = 'spinning';
@@ -115,18 +118,9 @@
       (game) => {
         shown = game;
         phase = 'result';
-        if (held) void keepFocus();
+        keepFocus();
       },
     );
-  }
-
-  // When the footer changed under the spin button that held the focus, that focus goes to the spin
-  // button of the new footer: "Again" after a result, so a second Enter spins again rather than starting a game.
-  async function keepFocus() {
-    await tick();
-    const active = document.activeElement;
-    if (active && active !== document.body && active.isConnected) return;
-    (phase === 'result' ? againSlot : spinSlot)?.querySelector<HTMLElement>('button')?.focus();
   }
 
   async function play(game: LibraryGame) {
