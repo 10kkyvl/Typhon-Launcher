@@ -343,35 +343,17 @@ func TestLaunchHeldBackForAGameTheLibraryDoesNotKnow(t *testing.T) {
 	}
 }
 
-// The page resumes a held-back launch through the bound library, not through
-// the outside player: held back again, it is answered in the window and does
-// not come back into the slot.
-func TestLaunchThroughTheBoundLibraryLeavesNothingPending(t *testing.T) {
-	lib := fakeLauncher{err: heldBySaves(cloudsaves.ErrConflictUnresolved)}
-	prompts, events := promptsFor(fakeGames{game: nativeGame})
-	outside := promptingPlayer{player: lib, prompts: prompts}
-
-	playFromShortcut(outside, playRequest{id: "g1", profile: "ab12cd34"}, func() {})
-	taken := prompts.TakePending()
-	if taken.GameID != "g1" || len(*events) != 1 {
-		t.Fatalf("outside launch left %+v and %d events, want g1 pending and one event", taken, len(*events))
-	}
-
-	for _, err := range []error{lib.PlayGameProfile(taken.GameID, taken.ProfileID), lib.PlayGame(taken.GameID)} {
-		if uierr.Code(err) != uierr.Code(cloudsaves.ErrConflictUnresolved) {
-			t.Fatalf("resumed launch = %v, want it held back again", err)
-		}
-	}
-	if got := prompts.TakePending(); got != (EmulatorNeeded{}) || len(*events) != 1 {
-		t.Fatalf("after the resume: pending %+v, %d events, want nothing new", got, len(*events))
-	}
-
+// Tripwire, not proof: the page resumes a held-back launch through the bound
+// library, so a resume held back again is answered in the window and does not
+// come back into the slot. The behaviour is proved on the frontend, where the
+// resume calls the library binding's PlayGame or PlayGameProfile.
+func TestTripwireMainBindsTheLibraryNotTheOutsidePlayer(t *testing.T) {
 	body, err := os.ReadFile("main.go")
 	if err != nil {
 		t.Fatal(err)
 	}
 	src := string(body)
 	if !strings.Contains(src, "application.NewService(libraryService),") || strings.Contains(src, "application.NewService(outsidePlayer") {
-		t.Fatal("main.go binds the outside player for the page instead of the library itself")
+		t.Fatal("tripwire: main.go binds the outside player for the page instead of the library itself")
 	}
 }
