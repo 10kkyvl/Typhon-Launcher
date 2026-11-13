@@ -52,7 +52,9 @@ function setup(props: { dialog?: boolean } = {}) {
   const pill = () => island()?.querySelector<HTMLButtonElement>('.head') as HTMLButtonElement;
   const stack = () => screen.getByRole('region', { name: msg('ui.toastsLabel') });
   const inStack = () => [...app.querySelectorAll('[data-part="toast"]')].map((el) => el.textContent?.trim() ?? '');
-  const onIsland = () => (island()?.dataset.phase === 'hidden' ? '' : (pill()?.textContent?.trim() ?? ''));
+  // The pill's line and its repeats; what waits behind it is counted apart.
+  const onIsland = () =>
+    island()?.dataset.phase === 'hidden' ? '' : [...pill().querySelectorAll('.text, .times')].map((el) => el.textContent?.trim()).join(' ');
   return { keys: user(), island, pill, stack, inStack, onIsland };
 }
 
@@ -254,6 +256,41 @@ describe('a burst', () => {
     vi.advanceTimersByTime(URGENT_MS);
     await tick();
     expect(get(toasts)).toEqual([]);
+  });
+});
+
+describe('what waits behind the message on screen', () => {
+  it('is counted on the pill, said with its name, and "Dismiss all" empties the island and gives focus back', async () => {
+    const { keys, pill, island } = setup();
+    for (let i = 1; i <= 10; i++) toast(`Error ${i}`, 'danger');
+    await tick();
+    expect(pill().querySelector('[data-part="count-badge"]')?.textContent).toContain('9');
+    expect(screen.getByRole('button', { name: `Error 1 ${msg('ui.liveIslandWaiting', { count: 9 })}` })).toBe(pill());
+
+    const page = screen.getByRole('button', { name: 'Page' });
+    page.focus();
+    await keys.tab();
+    expect(document.activeElement).toBe(pill());
+    await keys.keyboard('{Enter}');
+    await tick();
+    await keys.click(within(island() as HTMLElement).getByRole('button', { name: msg('ui.liveIslandDismissAll') }));
+    await tick();
+    await tick();
+
+    expect(get(toasts)).toEqual([]);
+    expect(get(liveIslandCurrent)).toBeUndefined();
+    expect(island()?.dataset.phase).toBe('hidden');
+    expect(document.activeElement).toBe(page);
+  });
+
+  it('has no count and no "Dismiss all" when nothing waits', async () => {
+    const { keys, pill, island } = setup();
+    toast('Saved');
+    await tick();
+    expect(pill().querySelector('[data-part="count-badge"]')).toBeNull();
+    await keys.click(pill());
+    await tick();
+    expect(within(island() as HTMLElement).queryByRole('button', { name: msg('ui.liveIslandDismissAll') })).toBeNull();
   });
 });
 

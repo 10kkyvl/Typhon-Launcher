@@ -18,6 +18,7 @@
   import { initLiveIslandFeed } from '../stores/liveIslandFeed';
   import Avatar from './Avatar.svelte';
   import Button from './Button.svelte';
+  import CountBadge from './CountBadge.svelte';
   import { giveFocusBack } from './focusBack';
   import { createHoverIntent } from './hoverIntent';
 
@@ -60,6 +61,8 @@
   const shown = $derived(live !== undefined);
   const expanded = $derived(shown && (pinned || hoverOpen));
   const phase = $derived(!shown ? 'hidden' : expanded ? 'expanded' : 'compact');
+  // What waits behind the message on screen.
+  const waiting = $derived(shown ? $liveIslandMessages.length - 1 : 0);
   const tone = $derived(primary?.tone ?? 'accent');
   const urgent = $derived($liveIslandMessages.filter((m) => liveIslandRank(m) === 0));
   const polite = $derived($liveIslandMessages.filter((m) => liveIslandRank(m) !== 0));
@@ -171,6 +174,10 @@
     else liveIsland.hide(m.id);
   }
 
+  function closeAll() {
+    for (const m of get(liveIslandMessages)) close(m);
+  }
+
   const ran = new WeakSet<LiveIslandAction>();
   function act(m: LiveIslandMessage, action: LiveIslandAction) {
     if (ran.has(action)) return;
@@ -276,6 +283,7 @@
             <span class="times" aria-hidden="true">×{primary.count}</span>
             <span class="sr-only">{msg('ui.toastRepeated', { count: primary.count })}</span>
           {/if}
+          <CountBadge count={waiting} label={msg('ui.liveIslandWaiting', { count: waiting })} />
         {/if}
       </button>
       <div bind:this={card} class="card" {@attach inert(!expanded)}>
@@ -300,6 +308,9 @@
               <Button size="sm" variant={i === 0 ? 'primary' : 'secondary'} onclick={() => act(m, action)}>{action.label}</Button>
             {/each}
             <Button size="sm" variant="ghost" onclick={() => close(m)}>{msg('ui.toastDismiss')}</Button>
+            {#if waiting > 0}
+              <Button size="sm" variant="ghost" onclick={closeAll}>{msg('ui.liveIslandDismissAll')}</Button>
+            {/if}
           </div>
         {/if}
       </div>
