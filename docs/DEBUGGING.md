@@ -82,6 +82,11 @@ Live-window verification on macOS (screenshots, clicks, single instance): [typho
 
 The build/run examples above are separate commands. Before running the app, set an isolated absolute `TYPHON_TEST_DATA_DIR` for devmock and configure fixture library paths and the intended `TYPHON_API_URL`. Do not copy the whole command block as a workflow.
 
+The Wails development build (`common:build:frontend DEV=true`, also `build:devmock`) runs
+`vite build --mode development`, so `import.meta.env.DEV` is false there; dev-only code is gated on
+`import.meta.env.MODE === 'development'` (`lib/navigation/showcase.ts`, guard `devGate.test.ts`). The
+"Component showcase" sidebar entry exists only in such builds; a release build folds it out.
+
 ## 4. Reproducing the main flows (devmock on macOS unless stated)
 
 | Flow | How | Watch |
