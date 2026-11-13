@@ -101,6 +101,25 @@ describe('MetadataMatchModal: changing a match from the keyboard', () => {
     await vi.waitFor(() => expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: /^Hades \(2020\)/ })));
   });
 
+  it('leaves the focus alone for presses that did not hold it', async () => {
+    vi.mocked(findMetadataCandidates).mockResolvedValueOnce([hades]);
+    render(MetadataMatchModal, { target: app, props: { open: true, gameId: 'g1', gameTitle: 'Hades', mode: 'change' } });
+    const dialog = screen.getByRole('dialog', { name: msg('modals.metadataMatchChangeTitle') });
+    const row = await within(dialog).findByRole('button', { name: /^Hades \(2020\)/ });
+    (document.activeElement as HTMLElement | null)?.blur();
+    expect(document.activeElement).toBe(document.body);
+
+    row.click();
+    await vi.waitFor(() => expect(dialog.querySelector('.confirm')).not.toBeNull());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(document.activeElement).toBe(document.body);
+
+    within(dialog).getByRole('button', { name: msg('common.cancel') }).click();
+    await within(dialog).findByRole('button', { name: /^Hades \(2020\)/ });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(document.activeElement).toBe(document.body);
+  });
+
   it('gives the focus back to the row when the replacement is refused', async () => {
     vi.mocked(findMetadataCandidates).mockResolvedValueOnce([hades]);
     vi.mocked(applyMetadataMatch).mockRejectedValueOnce(new Error('refused'));
