@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Theme } from '../../../bindings/typhon/internal/theme';
+// Read once, here: every test resets the modules, and loading the source glob again inside a test
+// counts against its time limit.
+import { goSources } from '../testing/sources';
 
 function baseTheme(overrides: Partial<Theme> = {}): Theme {
   return {
@@ -106,7 +109,6 @@ describe('themeDisplayName', () => {
   });
 
   it('has a catalog label for every preset presets.go builds in', async () => {
-    const { goSources } = await import('../testing/sources');
     const ids = [...(goSources['internal/theme/presets.go'] ?? '').matchAll(/^\tID:\s*"([^"]+)"/gm)].map((m) => m[1]);
     expect(ids.length).toBeGreaterThanOrEqual(4);
     const { themeDisplayName } = await import('./apply');
@@ -222,7 +224,6 @@ describe('personal accent without a loaded theme', () => {
 });
 
 async function presetToken(preset: string, name: string): Promise<string | undefined> {
-  const { goSources } = await import('../testing/sources');
   const source = goSources['internal/theme/presets.go'] ?? '';
   const block = source.slice(source.indexOf(`var ${preset} =`));
   return new RegExp(`"${name}":\\s*"([^"]*)"`).exec(block.slice(0, block.search(/^}/m)))?.[1];
