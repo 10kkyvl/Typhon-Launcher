@@ -52,7 +52,6 @@
 
   let profiles = $state<ProfileView[]>([]);
   let steam = $state<Record<string, SteamStatus>>({});
-  let loading = $state(false);
   let loadError = $state('');
   let editor = $state<Editor | null>(null);
   let editorError = $state('');
@@ -82,20 +81,17 @@
 
   async function load(gameId: string) {
     const mine = ++seq;
-    loading = true;
     loadError = '';
     let list: ProfileView[];
     try {
       list = await getProfiles(gameId);
     } catch (err) {
       if (mine !== seq) return;
-      loading = false;
       loadError = errorText(err, msg('modals.profilesLoadFailed'));
       return;
     }
     if (mine !== seq) return;
     profiles = list;
-    loading = false;
     const states = await Promise.allSettled(list.map((p) => profileSteamStatus(gameId, p.id)));
     if (mine !== seq) return;
     const next: Record<string, SteamStatus> = {};
@@ -250,7 +246,7 @@
 <section class="section" bind:this={section}>
   <div class="row spread">
     <h4>{msg('modals.profilesTitle')}</h4>
-    <Button size="sm" data-add-profile disabled={loading || busy || editor !== null} onclick={startAdd}>
+    <Button size="sm" data-add-profile disabled={busy || editor !== null} onclick={startAdd}>
       <Plus size="1.5rem" strokeWidth={1.8} />
       {msg('modals.profilesAdd')}
     </Button>

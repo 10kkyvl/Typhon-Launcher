@@ -104,6 +104,48 @@ describe('GameProfiles: opening and closing the editor from the keyboard', () =>
   });
 });
 
+describe('GameProfiles: "Add profile" while the list reloads after a save', () => {
+  const changed = { ...game, profiles: [{ id: 'p9', name: 'Safe' }] } as unknown as LibraryGame;
+
+  async function fillNewProfile() {
+    vi.mocked(getProfiles).mockResolvedValueOnce([]).mockReturnValue(new Promise(() => {}));
+    const view = renderDom(GameProfiles, { game, candidates: [], adminShown: false });
+    const add = await screen.findByRole('button', { name: msg('modals.profilesAdd') });
+    add.focus();
+    await view.user.keyboard('{Enter}');
+    await view.user.type(screen.getByRole('textbox', { name: msg('modals.profilesName') }), 'Safe');
+    screen.getByRole('button', { name: msg('modals.profilesSave') }).focus();
+    return view;
+  }
+
+  it('takes the focus back though the library\'s update came before the save\'s answer', async () => {
+    const saving = deferred<ProfileView>();
+    vi.mocked(addProfile).mockReturnValueOnce(saving.promise);
+    const { user, rerender } = await fillNewProfile();
+    await user.keyboard('{Enter}');
+
+    await rerender({ game: changed, candidates: [], adminShown: false });
+    saving.resolve(profile({ id: 'p9', name: 'Safe' }));
+
+    const add = screen.getByRole('button', { name: msg('modals.profilesAdd') });
+    await vi.waitFor(() => expect(document.activeElement).toBe(add));
+    expect(add).toHaveProperty('disabled', false);
+  });
+
+  it('keeps the focus though the library\'s update comes after the save\'s answer', async () => {
+    vi.mocked(addProfile).mockResolvedValueOnce(profile({ id: 'p9', name: 'Safe' }));
+    const { user, rerender } = await fillNewProfile();
+    await user.keyboard('{Enter}');
+    const add = screen.getByRole('button', { name: msg('modals.profilesAdd') });
+    await vi.waitFor(() => expect(document.activeElement).toBe(add));
+
+    await rerender({ game: changed, candidates: [], adminShown: false });
+
+    expect(add).toHaveProperty('disabled', false);
+    expect(document.activeElement).toBe(add);
+  });
+});
+
 describe('GameProfiles: messages', () => {
   it('says a failed load in a danger notice', async () => {
     vi.mocked(getProfiles).mockRejectedValue(new Error('disk'));
