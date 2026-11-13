@@ -147,6 +147,38 @@ describe('live island queue', () => {
   });
 });
 
+// The stack's rule: a toast held by a dialog takes no slot, so what the dialog raises is still shown.
+describe('under a dialog, a message that waits it out', () => {
+  it('lets a plain note raised after it go first', () => {
+    liveIsland.dialog(true);
+    liveIsland.show({ id: 'offer', text: 'Removed', actions: [{ label: 'Undo', run }] });
+    liveIsland.show({ id: 'plain', text: 'Saved', ttl: 1000 });
+    expect(current()).toBe('plain');
+    vi.advanceTimersByTime(1000);
+    expect(current()).toBe('offer');
+    liveIsland.dialog(false);
+  });
+
+  it('lets an error raised after it go first, though it is an error itself', () => {
+    liveIsland.dialog(true);
+    liveIsland.show({ id: 'failed', text: 'Download failed', kind: 'error', ttl: 9000, actions: [{ label: 'Retry', run }] });
+    liveIsland.show({ id: 'space', text: 'Not enough space', tone: 'danger' });
+    expect(current()).toBe('space');
+    liveIsland.hide('space');
+    expect(current()).toBe('failed');
+    liveIsland.dialog(false);
+  });
+
+  it('takes its place by rank again when the dialog closes', () => {
+    liveIsland.dialog(true);
+    liveIsland.show({ id: 'offer', text: 'Removed', kind: 'error', actions: [{ label: 'Undo', run }] });
+    liveIsland.show({ id: 'plain', text: 'Saved' });
+    expect(current()).toBe('plain');
+    liveIsland.dialog(false);
+    expect(current()).toBe('offer');
+  });
+});
+
 describe('who shows the messages', () => {
   it('the island is on while one has claimed it, and off when it lets go', () => {
     expect(get(liveIslandOn)).toBe(false);

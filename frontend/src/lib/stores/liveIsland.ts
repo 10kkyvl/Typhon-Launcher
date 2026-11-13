@@ -16,7 +16,8 @@ import { RESUME_FLOOR_MS } from './toasts';
  *   keeps its clock);
  * - while a dialog is open (`dialog`, told by the island) a message with an action does not run out,
  *   since the dialog's Tab trap keeps the keyboard from it; it gets its full time when the dialog
- *   closes (the toast store's rule for a toast with an action).
+ *   closes (the toast store's rule for a toast with an action). Meanwhile it waits behind every
+ *   message whose clock can run, so what the dialog raises is still shown;
  *
  * `show` with an id already there replaces that message; `update` patches it in place.
  */
@@ -62,6 +63,7 @@ export function liveIslandRank(m: Pick<LiveIslandMessage, 'kind' | 'tone'>): num
 
 const items = writable<LiveIslandMessage[]>([]);
 const heldFlag = writable(false);
+const dialogFlag = writable(false);
 const claims = writable(0);
 
 interface Life {
@@ -74,24 +76,28 @@ const lives = new Map<string, Life>();
 let held = false;
 let dialogOpen = false;
 
-/** Most important first; of one rank, the first that came. */
-function order(list: readonly LiveIslandMessage[]): LiveIslandMessage[] {
+const waits = (m: LiveIslandMessage | undefined, dialog: boolean) => dialog && (m?.actions?.length ?? 0) > 0;
+
+/**
+ * Most important first; of one rank, the first that came. Under a dialog a message that waits it out
+ * goes after every one whose clock can run, as a held toast takes no slot in the stack: otherwise it
+ * would keep what the dialog itself raises off the screen until the dialog closed.
+ */
+function order(list: readonly LiveIslandMessage[], dialog: boolean): LiveIslandMessage[] {
   return list
-    .map((m, i) => ({ m, i }))
-    .sort((a, b) => liveIslandRank(a.m) - liveIslandRank(b.m) || a.i - b.i)
+    .map((m, i) => ({ m, i, w: waits(m, dialog) ? 1 : 0 }))
+    .sort((a, b) => a.w - b.w || liveIslandRank(a.m) - liveIslandRank(b.m) || a.i - b.i)
     .map((x) => x.m);
 }
 
 // `get`, not a subscription: a message posted from inside another store's subscriber would see a stale list.
 const snapshot = () => get(items);
 
-const waitsOutDialog = (m: LiveIslandMessage | undefined) => dialogOpen && (m?.actions?.length ?? 0) > 0;
-
 /** Runs the clock of the message on screen, unless it is being read or waits out a dialog; stops the rest. */
 function sync(): void {
-  const top = order(snapshot())[0];
+  const top = order(snapshot(), dialogOpen)[0];
   for (const [id, life] of lives) {
-    const running = id === top?.id && !held && !waitsOutDialog(top);
+    const running = id === top?.id && !held && !waits(top, dialogOpen);
     if (running && life.handle === undefined) {
       life.startedAt = Date.now();
       life.handle = setTimeout(() => hide(id), life.remaining);
@@ -149,6 +155,7 @@ function hold(on: boolean): void {
 function dialog(open: boolean): void {
   if (dialogOpen === open) return;
   dialogOpen = open;
+  dialogFlag.set(open);
   if (!open) {
     for (const message of snapshot()) {
       const life = lives.get(message.id);
@@ -162,6 +169,7 @@ function clear(): void {
   for (const id of [...lives.keys()]) forget(id);
   held = false;
   dialogOpen = false;
+  dialogFlag.set(false);
   heldFlag.set(false);
   items.set([]);
 }
@@ -171,7 +179,7 @@ export const liveIsland = { show, update, hide, has, hold, dialog, clear };
 /** Every message the island holds, in the order they came. */
 export const liveIslandMessages: Readable<LiveIslandMessage[]> = { subscribe: items.subscribe };
 /** The message on screen. */
-export const liveIslandCurrent: Readable<LiveIslandMessage | undefined> = derived(items, (list) => order(list)[0]);
+export const liveIslandCurrent: Readable<LiveIslandMessage | undefined> = derived([items, dialogFlag], ([list, dialog]) => order(list, dialog)[0]);
 /** The reader holds the island: open, hovered or holding focus. */
 export const liveIslandHeld: Readable<boolean> = { subscribe: heldFlag.subscribe };
 

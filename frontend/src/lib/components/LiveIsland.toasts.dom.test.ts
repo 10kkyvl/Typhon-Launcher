@@ -239,6 +239,15 @@ describe('with a dialog open', () => {
     expect(screen.getByRole('dialog', { name: 'Install' })).toBeTruthy();
   });
 
+  it('a toast with an action waits the dialog out and does not hold up what the dialog raises after it', async () => {
+    const { onIsland } = setup({ dialog: true });
+    await tick();
+    toast('Removed', 'info', { label: 'Undo', run: () => {} });
+    toast('Saved');
+    await tick();
+    expect(onIsland()).toContain('Saved');
+  });
+
   it('asks the dialog for no room: no toast stack stands in its corner', async () => {
     // A dialog that takes both corners and leaves no gutter, the boxes AppShell.dom.test.ts gives: with
     // the stack in use it would be asked for room.
