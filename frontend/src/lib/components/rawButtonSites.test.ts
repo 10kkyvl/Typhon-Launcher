@@ -26,7 +26,6 @@ type Kind =
   | 'drag handle' // grabbed to move a block
   | 'copies itself' // a value that copies its own text when pressed
   | 'badge trigger' // a badge that opens a menu; Chip has no size small enough for the sidebar rail
-  | 'one-line link' // a link cut to one line with "…"; TextLink's action form wraps instead
   | 'awaiting rebuild'; // replaced with its screen (the activity widget)
 
 /** The base components that own a raw <button>: the only place a button's look is written. */
@@ -70,7 +69,7 @@ const ALLOWED: Record<string, Record<string, Kind>> = {
   'routes/catalog/Catalog.svelte': { 'list-row': 'row' },
   'routes/friends/AddFriendModal.svelte': { preview: 'row' },
   'routes/friends/FriendCodeCard.svelte': { code: 'copies itself' },
-  'routes/friends/FriendRow.svelte': { who: 'row', 'game-link': 'one-line link' },
+  'routes/friends/FriendRow.svelte': { who: 'row' },
   'routes/game/GameDetails.svelte': { shot: 'thumbnail' },
   'routes/game/GameFriendsPanel.svelte': { who: 'row' },
   'routes/game/GameScreenshots.svelte': { thumb: 'thumbnail' },

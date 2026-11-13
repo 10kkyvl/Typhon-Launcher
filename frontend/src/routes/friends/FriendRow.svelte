@@ -5,6 +5,7 @@
   import type { FrameReserve } from '../../lib/profile/frameLook';
   import Card from '../../lib/components/Card.svelte';
   import PlayerCardPopover from '../../lib/components/PlayerCardPopover.svelte';
+  import TextLink from '../../lib/components/TextLink.svelte';
   import { playerCardOf, playerFrame } from '../../lib/profile/appearanceCard';
   import type { FriendView, UserCard } from '../../lib/services/social';
   import { openGameByIGDB } from '../../lib/social/openGame';
@@ -69,7 +70,7 @@
 
 {#snippet metaLine()}
   {#if game}
-    <span class="playing"><span class="playing-label">{msg('social.playingLabel')}</span> <Tooltip text={game.title} describe={false}><button type="button" class="game-link" onclick={openGame}>{game.title}</button></Tooltip></span>
+    <span class="playing"><span class="playing-label">{msg('social.playingLabel')}</span> <span class="game"><Tooltip text={game.title} describe={false}><TextLink truncate onclick={openGame}>{game.title}</TextLink></Tooltip></span></span>
   {:else}
     <span class="meta">{meta || '—'}</span>
   {/if}
@@ -144,14 +145,6 @@
     flex-shrink: 0;
   }
 
-  .compact .game-link {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    text-align: left;
-  }
-
   .row {
     display: grid;
     grid-template-columns: minmax(0, 30rem) minmax(0, 1fr) auto;
@@ -210,14 +203,6 @@
     display: flex;
     align-items: baseline;
     gap: 0.35rem;
-  }
-
-  .presence .game-link {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    text-align: left;
   }
 
   .offline .presence .meta {
@@ -329,17 +314,9 @@
   }
 
 
-  .game-link {
-    padding: 0;
-    border: 0;
-    background: none;
-    font: inherit;
-    color: var(--accent-text);
-    cursor: pointer;
-  }
-
-  .game-link:hover {
-    text-decoration: underline;
+  /* The room the title's link may take beside "Playing": the link cuts itself to it. */
+  .game {
+    min-width: 0;
   }
 
   .stats {
