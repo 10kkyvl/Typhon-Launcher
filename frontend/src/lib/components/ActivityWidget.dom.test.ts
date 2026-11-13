@@ -543,27 +543,74 @@ describe('ActivityWidget: rows the page already shows', () => {
   });
 });
 
+// One event, one announcement. Toasts (or the live island) say a download added, finished or failed
+// and an install or a move finished or failed; the widget says what only it knows: an install, a
+// verification, a move or a game that starts, and an install that needs the user.
 describe('ActivityWidget: the live region', () => {
-  it('says what appears, finishes, fails or needs the user, once each, and never progress', () => {
+  const fresh = () => new Date(Date.now() + 1000).toISOString();
+
+  it('says what starts or needs the user, once each, and never progress', () => {
     downloads.set([download()]);
     const { live } = mount();
     expect(live()).toBe('');
 
-    set(() => downloads.set([download({ progress: 0.5 })]));
-    expect(live()).toBe('');
-
-    set(() => downloads.set([download({ progress: 0.5 }), download({ id: 'd2', name: 'Stardew' })]));
-    expect(live()).toBe(msg('ui.activityLiveDownload', { name: 'Stardew' }));
-    set(() => downloads.set([download({ progress: 0.6 }), download({ id: 'd2', name: 'Stardew', progress: 0.9 })]));
-    expect(live()).toBe(msg('ui.activityLiveDownload', { name: 'Stardew' }));
-
-    set(() => downloads.set([download({ status: 'completed' }), download({ id: 'd2', name: 'Stardew', status: 'failed' })]));
-    expect(live()).toBe(`${msg('ui.activityLiveDone', { name: 'Hades' })}. ${msg('ui.activityLiveFailed', { name: 'Stardew' })}`);
-
-    set(() => installations.set([install({ status: 'installing' })]));
+    set(() => installations.set([install({ status: 'installing', startedAt: fresh() })]));
     expect(live()).toBe(msg('ui.activityLiveInstall', { name: 'Celeste' }));
-    set(() => installations.set([install()]));
+    set(() => installations.set([install({ status: 'installing', startedAt: fresh(), progress: 0.5 })]));
+    expect(live()).toBe(msg('ui.activityLiveInstall', { name: 'Celeste' }));
+    set(() => installations.set([install({ startedAt: fresh() })]));
     expect(live()).toBe(msg('ui.activityLiveAttention', { name: 'Celeste' }));
+
+    set(() => verifications.set({ g2: verify }));
+    expect(live()).toBe(msg('ui.activityLiveVerify', { name: 'Celeste' }));
+    set(() => moves.set([{ ...move, startedAt: fresh() }]));
+    expect(live()).toBe(msg('ui.activityLiveMove', { name: 'Hollow Knight' }));
+    set(() => {
+      sessionStarts.set(new Map([['g1', Date.now()]]));
+      runningGames.set(new Set(['g1']));
+    });
+    expect(live()).toBe(msg('ui.activityLiveGame', { name: 'Elden Ring' }));
+  });
+
+  it('leaves a download added, finished or failed and every ending to the toasts', () => {
+    downloads.set([download()]);
+    const { live } = mount();
+    set(() => downloads.set([download(), download({ id: 'd2', name: 'Stardew' })]));
+    expect(live()).toBe('');
+    set(() => downloads.set([download({ status: 'completed' }), download({ id: 'd2', name: 'Stardew', status: 'failed' })]));
+    expect(live()).toBe('');
+    set(() => installations.set([install({ status: 'installing', startedAt: fresh() })]));
+    const said = live();
+    set(() => installations.set([install({ status: 'completed' })]));
+    set(() => moves.set([{ ...move, startedAt: fresh() }]));
+    const movement = live();
+    set(() => moves.set([{ ...move, stage: 'failed' }]));
+    expect(said).toBe(msg('ui.activityLiveInstall', { name: 'Celeste' }));
+    expect(live()).toBe(movement);
+  });
+
+  // The widget can mount before the stores have loaded (App.svelte starts them without waiting): what
+  // the first loaded lists hold was going on already.
+  it('says nothing of what the lists hold when they load after the widget came', () => {
+    const { live } = mount();
+    set(() => downloads.set([download({ status: 'paused' })]));
+    set(() => installations.set([install({ status: 'installing' })]));
+    set(() => moves.set([move]));
+    set(() => runningGames.set(new Set(['g1'])));
+    expect(live()).toBe('');
+  });
+
+  it('says the same words again when the same thing starts again', () => {
+    const { live } = mount();
+    const node = () => app.querySelector('[role="status"] > *');
+    set(() => verifications.set({ g2: verify }));
+    const first = node();
+    expect(live()).toBe(msg('ui.activityLiveVerify', { name: 'Celeste' }));
+    set(() => verifications.set({ g2: { ...verify, running: false } }));
+    set(() => verifications.set({ g2: verify }));
+    expect(live()).toBe(msg('ui.activityLiveVerify', { name: 'Celeste' }));
+    expect(node()).not.toBeNull();
+    expect(node()).not.toBe(first);
   });
 
   it('a page that hides rows makes nothing appear or end', () => {
@@ -572,8 +619,8 @@ describe('ActivityWidget: the live region', () => {
     set(() => navigate('downloads'));
     set(() => navigate('library'));
     expect(live()).toBe('');
-    set(() => downloads.set([download(), download({ id: 'd2', name: 'Stardew' })]));
-    expect(live()).toBe(msg('ui.activityLiveDownload', { name: 'Stardew' }));
+    set(() => installations.set([install({ status: 'installing', startedAt: fresh() })]));
+    expect(live()).toBe(msg('ui.activityLiveInstall', { name: 'Celeste' }));
   });
 });
 

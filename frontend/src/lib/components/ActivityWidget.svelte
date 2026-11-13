@@ -4,7 +4,7 @@
   import { installErrorText } from '../install/installErrors';
   import { cancelInstall } from '../services/install';
   import { activity } from '../stores/activity';
-  import { downloads, pause, resume } from '../stores/downloads';
+  import { pause, resume } from '../stores/downloads';
   import { installations } from '../stores/install';
   import { themeLayout } from '../stores/layout';
   import { libraryGames, runningGames, sessionStarts } from '../stores/library';
@@ -19,15 +19,15 @@
   import Popover from './Popover.svelte';
   import ProgressBar from './ProgressBar.svelte';
   import TextLink from './TextLink.svelte';
-  import { detailOf, leadOf, liveMessages, reading, shownItems, valueText, widgetItems, type Outcome, type WidgetItem } from './activityWidget';
+  import { detailOf, leadOf, liveMessages, reading, shownItems, valueText, widgetItems, type WidgetItem } from './activityWidget';
 
   /**
    * What goes on for a while, in the sidebar's activity zone: downloads, installs, verifications, a
    * move, running games. The zone keeps its height whether it shows anything or not, so nothing in
    * the sidebar moves. One line names the leading item with its percent and "+N" for the rest; a press
    * opens a panel over the content with a row and the actions for each (a layer: the stack answers
-   * Escape, presses outside and Tab). A live region says when an item appears, ends or needs the
-   * user, never its progress.
+   * Escape, presses outside and Tab). A live region says when an install, a verification, a move or
+   * a game starts or an item needs the user; a toast says the rest, and progress is said by nobody.
    */
 
   let {
@@ -60,33 +60,26 @@
     return () => clearInterval(timer);
   });
 
-  function outcome(item: WidgetItem): Outcome {
-    const ended = (done: boolean, failed: boolean): Outcome => (done ? 'done' : failed ? 'failed' : null);
-    if (item.kind === 'download') {
-      const status = $downloads.find((d) => d.id === item.id)?.status;
-      return ended(status === 'completed', status === 'failed');
-    }
-    if (item.kind === 'install') {
-      const status = $installations.find((i) => `install:${i.id}` === item.key)?.status;
-      return ended(status === 'completed', status === 'failed');
-    }
-    if (item.kind === 'move') {
-      const stage = $moves.find((job) => job.id === item.id)?.stage;
-      return ended(stage === 'done', stage === 'failed');
-    }
-    return null;
+  // Said from the whole list, whatever the page hides: a page change starts nothing. What is going on
+  // when the widget comes up, or in the lists as they load afterwards, is not news (liveMessages).
+  // Each announcement is a node of its own, so the same words said again are heard again.
+  const since = Date.now();
+  function startedAt(item: WidgetItem): number | undefined {
+    if (item.kind === 'game') return item.startedAt;
+    if (item.kind === 'install') return Date.parse($installations.find((i) => `install:${i.id}` === item.key)?.startedAt ?? '');
+    if (item.kind === 'move') return Date.parse($moves.find((job) => job.id === item.id)?.startedAt ?? '');
+    return undefined;
   }
 
-  // Said from the whole list, whatever the page hides: a page change appears and ends nothing. What is
-  // going on when the widget comes up is not news.
   let said: Map<string, WidgetItem> | null = null;
-  let liveText = $state('');
+  let spoken = $state<{ id: number; text: string }[]>([]);
+  let nextLine = 0;
   $effect(() => {
     const after = all;
     untrack(() => {
       if (said) {
-        const lines = liveMessages(said, after, outcome);
-        if (lines.length > 0) liveText = lines.join('. ');
+        const lines = liveMessages(said, after, since, startedAt);
+        if (lines.length > 0) spoken = [{ id: ++nextLine, text: lines.join('. ') }];
       }
       said = new Map(after.map((item) => [item.key, item]));
     });
@@ -169,7 +162,9 @@
   </span>
 {/snippet}
 
-<div class="sr-only" role="status">{liveText}</div>
+<div class="sr-only" role="status">
+  {#each spoken as line (line.id)}<span>{line.text}</span>{/each}
+</div>
 
 {#if lead}
   <div class="widget" role="group" aria-label={msg('ui.activityNow')}>

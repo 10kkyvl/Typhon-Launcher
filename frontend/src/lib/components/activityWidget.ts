@@ -33,8 +33,6 @@ export interface WidgetItem {
   startedAt?: number;
 }
 
-export type Outcome = 'done' | 'failed' | null;
-
 function fromActivity(item: ActivityItem): WidgetItem {
   return {
     key: item.key,
@@ -135,8 +133,7 @@ export function valueText(item: WidgetItem): string | undefined {
   return msg('ui.activityPausedValue', { status: item.status, percent: progressPercent(item.progress) });
 }
 
-const APPEARED: Record<WidgetKind, MessageKey> = {
-  download: 'ui.activityLiveDownload',
+const STARTED: Partial<Record<WidgetKind, MessageKey>> = {
   install: 'ui.activityLiveInstall',
   verify: 'ui.activityLiveVerify',
   move: 'ui.activityLiveMove',
@@ -144,22 +141,29 @@ const APPEARED: Record<WidgetKind, MessageKey> = {
 };
 
 /**
- * What the live region says between two states of the list: an item that appeared, one that came to
- * need the user, one that ended done or failed (`outcome` tells which, from the stores). Progress and a
- * changed status say nothing.
+ * What the live region says between two states of the list: an install, a verification, a move or a
+ * game that starts, and one that comes to need the user. A download added and anything that ends are
+ * said by a toast (or the live island), and progress by nobody. An item new to the list is news only
+ * if it started at `since` or later (`startedAt`, ms; undefined when not known): what the lists hold
+ * as they load after the widget came was going on already. A verification is known only from its
+ * events, so a new one is always news.
  */
-export function liveMessages(before: ReadonlyMap<string, WidgetItem>, after: readonly WidgetItem[], outcome: (item: WidgetItem) => Outcome): string[] {
+export function liveMessages(
+  before: ReadonlyMap<string, WidgetItem>,
+  after: readonly WidgetItem[],
+  since: number,
+  startedAt: (item: WidgetItem) => number | undefined,
+): string[] {
   const out: string[] = [];
-  const now = new Set(after.map((item) => item.key));
-  for (const [key, item] of before) {
-    if (now.has(key)) continue;
-    const ended = outcome(item);
-    if (ended) out.push(msg(ended === 'done' ? 'ui.activityLiveDone' : 'ui.activityLiveFailed', { name: item.name }));
-  }
   for (const item of after) {
     const was = before.get(item.key);
-    if (item.attention && !was?.attention) out.push(msg('ui.activityLiveAttention', { name: item.name }));
-    else if (!was) out.push(msg(APPEARED[item.kind], { name: item.name }));
+    if (was) {
+      if (item.attention && !was.attention) out.push(msg('ui.activityLiveAttention', { name: item.name }));
+      continue;
+    }
+    const key = STARTED[item.kind];
+    if (!key || (item.kind !== 'verify' && !((startedAt(item) ?? -Infinity) >= since))) continue;
+    out.push(msg(item.attention ? 'ui.activityLiveAttention' : key, { name: item.name }));
   }
   return out;
 }
