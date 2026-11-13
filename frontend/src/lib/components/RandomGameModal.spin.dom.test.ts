@@ -74,4 +74,18 @@ describe('RandomGameModal: spinning from the keyboard', () => {
     await vi.waitFor(() => expect(again.getAttribute('aria-busy')).toBeNull());
     expect(document.activeElement).toBe(again);
   });
+
+  it('leaves the focus alone when the pressed Spin did not hold it', async () => {
+    render(RandomGameModal, { target: app, props: { onclose: vi.fn() } });
+    const dialog = screen.getByRole('dialog', { name: msg('games.randomTitle') });
+    (document.activeElement as HTMLElement | null)?.blur();
+    expect(document.activeElement).toBe(document.body);
+
+    within(dialog).getByRole('button', { name: msg('games.randomSpin') }).click();
+    finish?.();
+
+    await within(dialog).findByRole('button', { name: msg('games.randomAgain') });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(document.activeElement).toBe(document.body);
+  });
 });

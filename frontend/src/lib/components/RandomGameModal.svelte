@@ -88,7 +88,9 @@
   let spinSlot = $state<HTMLElement>();
   let againSlot = $state<HTMLElement>();
 
-  function spin() {
+  function spin(event: MouseEvent) {
+    // Whether the pressed spin button held the focus: only then is there a focus to hand on.
+    const held = event.currentTarget instanceof HTMLElement && document.activeElement === event.currentTarget;
     cancelSpin?.();
     spunFrom = phase === 'result' ? 'result' : 'setup';
     const candidates = pickCandidates($libraryGames, filters, $libraryGenres, $collections, Date.now());
@@ -96,14 +98,14 @@
     if (!final) {
       shown = null;
       phase = 'empty';
-      void keepFocus();
+      if (held) void keepFocus();
       return;
     }
     previousId = final.id;
     if (reducedMotion()) {
       shown = final;
       phase = 'result';
-      void keepFocus();
+      if (held) void keepFocus();
       return;
     }
     phase = 'spinning';
@@ -113,13 +115,13 @@
       (game) => {
         shown = game;
         phase = 'result';
-        void keepFocus();
+        if (held) void keepFocus();
       },
     );
   }
 
-  // When the footer changed under the focused spin button, the focus goes to the spin button of the
-  // new footer: "Again" after a result, so a second Enter spins again rather than starting a game.
+  // When the footer changed under the spin button that held the focus, that focus goes to the spin
+  // button of the new footer: "Again" after a result, so a second Enter spins again rather than starting a game.
   async function keepFocus() {
     await tick();
     const active = document.activeElement;
