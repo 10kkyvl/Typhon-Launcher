@@ -25,7 +25,7 @@ import { ACTION_MS, dismissToast, pauseToast, resumeToast, toast, toasts, toasts
  *   and says nothing; an empty list (signed out) starts that over; a friend new to the list says
  *   nothing either;
  * - a save conflict (the cloud saves status lists a game in conflict that its dialog does not show):
- *   one message per game with "choose a version", which opens the dialog, and "later". It is said
+ *   one message per game with "choose a version", which opens the dialog. It is said
  *   once a session, and goes once the conflict is resolved or its dialog opens. Where no island is on
  *   screen the shell says it as a toast (`initConflictToasts`).
  */
@@ -168,19 +168,16 @@ function sayConflictAsToast(gameId: string, title: string): void {
 
 function sayConflictInIsland(gameId: string, title: string): void {
   unsayConflict(gameId);
-  const id = conflictMessageId(gameId);
   liveIsland.show({
-    id,
+    id: conflictMessageId(gameId),
     kind: 'conflict',
     tone: 'warning',
     icon: 'warning',
     text: msg('ui.liveIslandSaveConflict'),
     detail: title,
     ttl: CONFLICT_MS,
-    actions: [
-      { label: msg('ui.liveIslandChooseVersion'), run: () => void openCloudConflict(gameId) },
-      { label: msg('cloudsaves.conflictLater'), run: () => liveIsland.hide(id) },
-    ],
+    // Putting it away is the island's own "dismiss", drawn for every message.
+    actions: [{ label: msg('ui.liveIslandChooseVersion'), run: () => void openCloudConflict(gameId) }],
     fallback: () => sayConflictAsToast(gameId, title),
   });
 }

@@ -27,7 +27,6 @@ vi.mock('../../../bindings/typhon/internal/cloudsaves', () => ({ Service: { Stat
 
 const SAY = () => msg('ui.liveIslandSaveConflict');
 const CHOOSE = () => msg('ui.liveIslandChooseVersion');
-const LATER = () => msg('cloudsaves.conflictLater');
 
 // What the island says is session memory: every test gets copies of its own, so that a conflict said
 // in one test is news in the next.
@@ -100,14 +99,16 @@ async function motion(on: boolean) {
 }
 
 describe('a save conflict in the island', () => {
-  it('is one message: "save conflict", the game as its detail, a warning, "choose a version" and "later", 12 s', async () => {
+  it('is one message: "save conflict", the game as its detail, a warning, one action "choose a version", 12 s', async () => {
     const { island } = setup();
     cloudStatus.set(cloud(conflict('g1')));
     await tick();
 
     const shown = get(liveIslandCurrent) as LiveIslandMessage;
     expect(shown).toMatchObject({ kind: 'conflict', tone: 'warning', icon: 'warning', text: SAY(), detail: 'Hades', ttl: 12_000 });
-    expect(shown.actions?.map((a) => a.label)).toEqual([CHOOSE(), LATER()]);
+    expect(shown.actions?.map((a) => a.label)).toEqual([CHOOSE()]);
+    // Putting it away is the island's own "dismiss", drawn for every message.
+    expect(within(island() as HTMLElement).queryByRole('button', { name: msg('cloudsaves.conflictLater') })).toBeNull();
     expect(island()?.dataset.kind).toBe('conflict');
     expect(island()?.classList.contains('warning')).toBe(true);
     expect(within(screen.getByTestId('live-island-alert')).getByText(`${SAY()}. Hades`)).toBeTruthy();
@@ -203,7 +204,7 @@ describe('a save conflict in the island', () => {
     await vi.waitFor(() => expect(document.activeElement).toBe(page));
   });
 
-  it('"later" puts it away and nothing else happens; it is not said again', async () => {
+  it('the island\'s "dismiss" puts it away and nothing else happens; it is not said again', async () => {
     const { keys, island, pill } = setup();
     const listed = cloud(conflict('g1'));
     cloudStatus.set(listed);
@@ -211,7 +212,7 @@ describe('a save conflict in the island', () => {
     await keys.click(pill());
     await tick();
 
-    await keys.click(within(island() as HTMLElement).getByRole('button', { name: LATER() }));
+    await keys.click(within(island() as HTMLElement).getByRole('button', { name: msg('ui.toastDismiss') }));
     await tick();
 
     expect(get(liveIslandMessages)).toEqual([]);
