@@ -120,6 +120,23 @@ describe('MetadataMatchModal: changing a match from the keyboard', () => {
     expect(document.activeElement).toBe(document.body);
   });
 
+  // The rule is the hand-off helper's: anything that held the focus at the press and went away, not
+  // only the pressed control. A pointer press does not focus the row (the macOS WebKit view).
+  it('moves the focus the search field held to the question when a row is pressed by pointer', async () => {
+    vi.mocked(findMetadataCandidates).mockResolvedValueOnce([hades]);
+    render(MetadataMatchModal, { target: app, props: { open: true, gameId: 'g1', gameTitle: 'Hades', mode: 'change' } });
+    const dialog = screen.getByRole('dialog', { name: msg('modals.metadataMatchChangeTitle') });
+    const row = await within(dialog).findByRole('button', { name: /^Hades \(2020\)/ });
+    const search = within(dialog).getByRole('textbox', { name: msg('modals.metadataMatchManualSearch') });
+    search.focus();
+
+    row.click();
+
+    await vi.waitFor(() => expect(search.isConnected).toBe(false));
+    await vi.waitFor(() => expect(document.activeElement?.closest('.confirm')).not.toBeNull());
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
   it('gives the focus back to the row when the replacement is refused', async () => {
     vi.mocked(findMetadataCandidates).mockResolvedValueOnce([hades]);
     vi.mocked(applyMetadataMatch).mockRejectedValueOnce(new Error('refused'));
