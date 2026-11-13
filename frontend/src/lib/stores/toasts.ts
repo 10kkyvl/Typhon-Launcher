@@ -230,9 +230,36 @@ export function holdToasts(open: boolean): void {
   promote();
 }
 
-/** The live island takes the toasts over (true) or gives them back to the stack (false). */
+/**
+ * The live island takes the toasts over (true) or gives them back to the stack (false). Given back,
+ * those that fit the stack's slots stay on screen, errors and warnings first, and the rest go back to
+ * the front of the queue, as if they had been waiting there from now.
+ */
 export function toastsInIsland(on: boolean): void {
   slots = on ? Infinity : MAX_VISIBLE;
+  if (!on) {
+    let held = 0;
+    let timed = 0;
+    const keep = new Set<number>();
+    for (const item of [...shown.filter(urgent), ...shown.filter((other) => !urgent(other))]) {
+      const holds = heldByDialog(item, dialogOpen);
+      if (holds ? held >= MAX_HELD : timed >= MAX_VISIBLE) continue;
+      if (holds) held += 1;
+      else timed += 1;
+      keep.add(item.id);
+    }
+    const back = shown.filter((item) => !keep.has(item.id));
+    if (back.length > 0) {
+      for (const item of back) {
+        clearTimeout(clocks.get(item.id)?.handle);
+        clocks.delete(item.id);
+        queuedAt.set(item.id, Date.now());
+      }
+      const all = [...back, ...queue];
+      queue = [...all.filter(urgent), ...all.filter((other) => !urgent(other))];
+      publish(shown.filter((item) => keep.has(item.id)));
+    }
+  }
   promote();
 }
 

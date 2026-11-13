@@ -599,6 +599,20 @@ describe('toasts shown by the live island', () => {
     expect(waiting()).toEqual([]);
   });
 
+  it('when the island lets go, keeps what fits the slots on screen, errors first, and puts the rest back in the queue', () => {
+    toastsInIsland(true);
+    toast('one');
+    toast('two');
+    toast('three');
+    toast('broken', 'danger');
+    toast('four');
+    toastsInIsland(false);
+    expect(shown()).toEqual(['one', 'broken']);
+    expect(waiting()).toEqual(['two', 'three', 'four']);
+    vi.advanceTimersByTime(PLAIN_MS);
+    expect(shown()).toEqual(['broken', 'two']);
+  });
+
   it('gives the stack its slots back when the island lets go', () => {
     toastsInIsland(true);
     toastsInIsland(false);

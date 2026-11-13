@@ -182,6 +182,17 @@ describe('what a toast has survives in the island', () => {
   });
 });
 
+describe('motion turned off while the island holds messages', () => {
+  it('hands the toasts back to the stack within its slots, the rest waiting', async () => {
+    const { inStack } = setup();
+    for (let i = 1; i <= 5; i++) toast(`Note ${i}`);
+    await tick();
+    document.documentElement.classList.add('no-anim');
+    await settle();
+    expect(inStack()).toHaveLength(2);
+  });
+});
+
 describe('two and three messages', () => {
   it('an error goes before a plain note that came first, and the note comes back with its full time', async () => {
     vi.useFakeTimers();
