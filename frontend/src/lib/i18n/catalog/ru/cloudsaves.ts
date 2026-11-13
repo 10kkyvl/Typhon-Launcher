@@ -84,6 +84,9 @@ export const cloudsaves = {
   'cloudsaves.conflictKeepMine': 'Оставить мои',
   'cloudsaves.conflictTakeRemote': 'Взять из облака',
   'cloudsaves.conflictLater': 'Позже',
+  'cloudsaves.conflictOffline': '{reason}. Выбрать копию можно только с подключением: пока его нет, сохранения не тронет ни одна сторона.',
+  'cloudsaves.conflictPlayHere': 'Играть с сохранениями на этом компьютере',
+  'cloudsaves.conflictPlayHereNote': 'Конфликт останется: лаунчер спросит снова при следующем запуске.',
   'cloudsaves.conflictTakeRemoteWarning':
     'Локальные сохранения будут заменены копией из облака. Перед заменой текущие сохранения попадут в резервные копии.',
   'cloudsaves.conflictKeptMine': 'Облако обновлено вашими сохранениями',

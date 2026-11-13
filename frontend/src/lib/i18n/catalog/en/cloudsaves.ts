@@ -87,6 +87,9 @@ export const cloudsaves: Record<CloudsavesKey, Message> = {
   'cloudsaves.conflictKeepMine': 'Keep mine',
   'cloudsaves.conflictTakeRemote': 'Take from cloud',
   'cloudsaves.conflictLater': 'Later',
+  'cloudsaves.conflictOffline': '{reason}. A copy can be chosen only with a connection: until then neither side’s saves are touched.',
+  'cloudsaves.conflictPlayHere': 'Play with the saves on this computer',
+  'cloudsaves.conflictPlayHereNote': 'The conflict stays: the launcher will ask again at the next launch.',
   'cloudsaves.conflictTakeRemoteWarning':
     'Local saves will be replaced with the cloud copy. The current saves are put into save backups first.',
   'cloudsaves.conflictKeptMine': 'The cloud now holds your saves',
