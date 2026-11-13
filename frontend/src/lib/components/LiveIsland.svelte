@@ -28,9 +28,9 @@
    *
    * It is hidden, compact (the message's mark and line) or open (a card with the whole message, up to
    * two actions and dismissal), one shape whose width and height follow a spring. It opens on a press,
-   * on Enter or Space (focus then goes into the card), or when the pointer rests on it; Escape, a
-   * press outside or the pointer leaving (when it opened by resting) close it, Escape with focus
-   * inside returning focus to the pill. While a dialog is open, Escape is the dialog's. While it is
+   * on Enter or Space (focus then goes into the card), or when the pointer rests on it; Escape with
+   * focus inside (focus then returns to the pill), a press outside or the pointer leaving (when it
+   * opened by resting) close it. While a dialog is open, Escape is the dialog's. While it is
    * open, hovered or holds focus, the messages' clocks stand still.
    *
    * It sits after the page in the Tab order, where the toast stack is: a message appearing never puts
@@ -234,20 +234,16 @@
     intent.unhover();
   }
 
-  // A press outside closes the open card; Escape closes it wherever focus is (a pointer opens it and
-  // leaves focus on the page), unless a dialog is open.
+  // A press outside closes the open card. Not through lib/layers: a layer opened over a dialog becomes
+  // the top layer and takes the dialog's Escape (the stack closes the top layer, or swallows Escape when
+  // it may not close), and the stack has no layer that leaves Escape to the one under it. So one
+  // listener, only while the card is open. Escape is the island's own only with focus inside it
+  // (onkeydown); a card the pointer opened closes when the pointer leaves.
   $effect(() => {
-    const offPress = on(window, 'pointerdown', (event) => {
-      if (expanded && event.target instanceof Node && !shell?.contains(event.target)) collapse(false);
+    if (!expanded) return;
+    return on(window, 'pointerdown', (event) => {
+      if (event.target instanceof Node && !shell?.contains(event.target)) collapse(false);
     });
-    const offKey = on(window, 'keydown', (event) => {
-      if (event.key !== 'Escape' || !expanded || event.defaultPrevented || get(topModal)) return;
-      collapse(shell?.contains(document.activeElement) ?? false);
-    });
-    return () => {
-      offPress();
-      offKey();
-    };
   });
 </script>
 

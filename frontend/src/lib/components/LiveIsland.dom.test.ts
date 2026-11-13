@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { liveIsland, liveIslandCurrent, liveIslandOn } from '../stores/liveIsland';
 import { user } from '../testing/dom';
+import { HOVER_DELAY } from './hoverIntent';
 import LiveIslandHarness from '../testing/LiveIslandHarness.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
@@ -24,7 +25,7 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-function setup(props: { dialog?: boolean } = {}) {
+function setup(props: { dialog?: boolean; onescape?: () => void } = {}) {
   const view = render(LiveIslandHarness, { target: app, props });
   const keys = user();
   const island = () => app.querySelector<HTMLElement>('[data-part="live-island"]') as HTMLElement;
@@ -188,6 +189,39 @@ describe('LiveIsland: keyboard and focus', () => {
     await tick();
     vi.advanceTimersByTime(1000);
     expect(get(liveIslandCurrent)).toBeUndefined();
+  });
+
+  it('Escape in a page field that answers it itself acts once: a card opened by the pointer stays', async () => {
+    vi.useFakeTimers();
+    const onescape = vi.fn();
+    const { keys, island } = setup({ onescape });
+    liveIsland.show({ id: 'a', text: 'Saved' });
+    await tick();
+    island().dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
+    vi.advanceTimersByTime(HOVER_DELAY);
+    await tick();
+    expect(island().dataset.phase).toBe('expanded');
+
+    screen.getByRole('textbox', { name: 'Search' }).focus();
+    await keys.keyboard('{Escape}');
+    await tick();
+    expect(onescape).toHaveBeenCalledTimes(1);
+    expect(island().dataset.phase).toBe('expanded');
+  });
+
+  it('a press outside closes the open card; one on the page with the card closed changes nothing', async () => {
+    const { keys, island, pill } = setup();
+    liveIsland.show({ id: 'a', text: 'Saved' });
+    await tick();
+    await keys.click(pill());
+    await tick();
+    expect(island().dataset.phase).toBe('expanded');
+    await keys.click(screen.getByRole('button', { name: 'Before' }));
+    await tick();
+    expect(island().dataset.phase).toBe('compact');
+    await keys.click(screen.getByRole('button', { name: 'Before' }));
+    await tick();
+    expect(island().dataset.phase).toBe('compact');
   });
 
   it('with a dialog open, Escape closes the dialog and the island keeps showing', async () => {

@@ -4,10 +4,12 @@
 
   // The live island as the shell mounts it: after the page, with a dialog a test can open over the
   // page. For LiveIsland.dom.test.ts.
-  let { dialog = $bindable(false) }: { dialog?: boolean } = $props();
+  // `onescape`: a page field that answers Escape itself (a search clearing its text).
+  let { dialog = $bindable(false), onescape }: { dialog?: boolean; onescape?: () => void } = $props();
 </script>
 
 <main>
+  <input aria-label="Search" onkeydown={(event) => event.key === 'Escape' && onescape?.()} />
   <button type="button">Before</button>
 </main>
 
