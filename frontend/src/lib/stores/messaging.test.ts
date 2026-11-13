@@ -544,6 +544,28 @@ describe('a send in flight', () => {
   });
 });
 
+describe('work that outlives its session', () => {
+  it('a send is live until it ends or its session does, and a watch answers for the session it was set in', async () => {
+    const { user, messaging } = await load();
+    const token = messaging.beginSend(peer.id) as number;
+    const live = messaging.sessionWatch();
+    expect(messaging.sendLive(peer.id, token)).toBe(true);
+    expect(messaging.sendLive(peer.id, token + 1)).toBe(false);
+    expect(live()).toBe(true);
+
+    user.currentUser.set(null);
+    user.authState.set('unauthenticated');
+    await vi.waitFor(() => expect(live()).toBe(false));
+
+    expect(messaging.sendLive(peer.id, token)).toBe(false);
+    const next = messaging.beginSend(peer.id) as number;
+    expect(messaging.sendLive(peer.id, token)).toBe(false);
+    expect(messaging.sendLive(peer.id, next)).toBe(true);
+    messaging.endSend(peer.id, next);
+    expect(messaging.sendLive(peer.id, next)).toBe(false);
+  });
+});
+
 describe('what went wrong in a conversation', () => {
   it('is kept per conversation, cleared by an empty text, and goes with the session', async () => {
     const { user, messaging } = await load();

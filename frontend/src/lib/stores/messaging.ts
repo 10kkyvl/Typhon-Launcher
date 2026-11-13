@@ -87,6 +87,24 @@ export function beginSend(peerId: string): number | null {
   return token;
 }
 
+/**
+ * Whether the send `token` began is still the one in flight to `peerId`. It is not once its session
+ * has ended: what it awaited then answers into another account's session, where it must send nothing
+ * and write nothing.
+ */
+export function sendLive(peerId: string, token: number): boolean {
+  return sendTokens.get(peerId) === token;
+}
+
+/**
+ * For work that awaits and then writes into the session (an edit, a retry, a reaction): call it
+ * before, ask it after. It answers whether the session it was called in is still the one running.
+ */
+export function sessionWatch(): () => boolean {
+  const at = generation;
+  return () => at === generation;
+}
+
 export function sendProgress(peerId: string, token: number, current: number, total: number): void {
   if (sendTokens.get(peerId) !== token) return;
   chatSends.update((all) => ({ ...all, [peerId]: { current, total } }));

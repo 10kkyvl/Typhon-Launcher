@@ -6,7 +6,7 @@
   import ChatAttachments from './ChatAttachments.svelte';
   import Spinner from './Spinner.svelte';
   import ReactionPicker from './reactions/ReactionPicker.svelte';
-  import { editMessage, editingMessageId, failedMessages, pendingMessages, retryMessage, toggleReaction } from '../stores/messaging';
+  import { editMessage, editingMessageId, failedMessages, pendingMessages, retryMessage, sessionWatch, toggleReaction } from '../stores/messaging';
   import { currentUser } from '../stores/user';
   import { clockTime, shortDate } from '../utils/format';
   import { chatTextParts } from '../social/chatText';
@@ -87,15 +87,18 @@
     void hand(editButton);
   }
 
+  // What an edit, a retry or a reaction awaits may answer after the session has ended, into another
+  // account's: each reports back only while its own session is still the one running (sessionWatch).
   async function saveEdit(): Promise<void> {
     if (!editDraft.trim() && attachmentsOf(message).length === 0) return;
     const targetPeerId = peer.id;
     const hand = focusHandOff();
+    const live = sessionWatch();
     try {
       await editMessage(targetPeerId, message.id, editDraft.trim());
-      await hand(editButton);
+      if (live()) await hand(editButton);
     } catch (err) {
-      onerror(targetPeerId, chatErrorText(err, 'social.chatEditError'));
+      if (live()) onerror(targetPeerId, chatErrorText(err, 'social.chatEditError'));
     }
   }
 
@@ -105,13 +108,14 @@
     resending = true;
     const targetPeerId = peer.id;
     const hand = focusHandOff();
+    const live = sessionWatch();
     onerror(targetPeerId, '');
     const { text, clientId } = message;
     try {
       await retryMessage(targetPeerId, clientId);
-      onresent(targetPeerId, text, clientId, hand);
+      if (live()) onresent(targetPeerId, text, clientId, hand);
     } catch (err) {
-      onerror(targetPeerId, chatErrorText(err, 'social.chatSendError'));
+      if (live()) onerror(targetPeerId, chatErrorText(err, 'social.chatSendError'));
     } finally {
       resending = false;
     }
@@ -120,11 +124,12 @@
   async function chooseReaction(key: ReactionKey): Promise<void> {
     if (!own && !canReact) return;
     const targetPeerId = peer.id;
+    const live = sessionWatch();
     onerror(targetPeerId, '');
     try {
       await toggleReaction(targetPeerId, message, key);
     } catch {
-      onerror(targetPeerId, msg('social.chatReactionError'));
+      if (live()) onerror(targetPeerId, msg('social.chatReactionError'));
     }
   }
 </script>

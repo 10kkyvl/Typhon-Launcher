@@ -39,6 +39,7 @@
     messagesByPeer,
     openChat,
     retryMessaging,
+    sendLive,
     sendMessage,
     sendProgress,
     setAttachmentDrafts,
@@ -98,17 +99,20 @@
       sendProgress(targetPeerId, token, done + 1, total);
       try {
         const uploaded = await uploadChatImage(item.encoded);
+        if (!sendLive(targetPeerId, token)) return null;
         list = list.map((entry) => (entry.key === item.key ? { ...entry, uploaded } : entry));
         setAttachmentDrafts(targetPeerId, list);
         done += 1;
       } catch (err) {
-        toast(chatErrorText(err, 'social.chatSendError'), 'danger');
+        if (sendLive(targetPeerId, token)) toast(chatErrorText(err, 'social.chatSendError'), 'danger');
         return null;
       }
     }
     return list.map((item) => ({ ...(item.uploaded as Attachment), url: item.previewUrl }));
   }
 
+  // What a send awaits may answer after its session has ended, into another account's: after every
+  // await it goes on only while it is still the send in flight (sendLive).
   async function submit(): Promise<void> {
     if (!peer || !canSend || sending) return;
     const targetPeerId = peer.id;
@@ -127,6 +131,7 @@
         attachments = uploaded;
       }
       await sendMessage(targetPeerId, submitted, undefined, attachments);
+      if (!sendLive(targetPeerId, token)) return;
       if (attachments.length > 0) setAttachmentDrafts(targetPeerId, []);
       went = true;
       if ($activePeer?.id === targetPeerId) {
@@ -134,7 +139,7 @@
         scrollToEnd();
       }
     } catch (err) {
-      setChatError(targetPeerId, chatErrorText(err, 'social.chatSendError'));
+      if (sendLive(targetPeerId, token)) setChatError(targetPeerId, chatErrorText(err, 'social.chatSendError'));
     } finally {
       endSend(targetPeerId, token, went ? submitted : undefined);
     }
