@@ -555,6 +555,32 @@ describe('CloudConflictModal without the cloud', () => {
     expect(within(dialog).getByText(offlineText())).toBeTruthy();
   });
 
+  it('ignores a choice of the game it showed before: its late failure without the cloud leaves the new game online', async () => {
+    const choosing = deferred<void>();
+    libraryGames.set([{ id: 'g1', title: 'Hades' } as LibraryGame, { id: 'g2', title: 'Celeste' } as LibraryGame]);
+    cloudStatus.set(
+      statusWith([
+        { gameId: 'g1', state: 'conflict', code: '', message: '', at: '', syncedAt: '', conflict },
+        { gameId: 'g2', state: 'conflict', code: '', message: '', at: '', syncedAt: '', conflict },
+      ]),
+    );
+    vi.mocked(cloudResolveConflict).mockReturnValueOnce(choosing.promise);
+    askToResolveConflict('g1');
+    render(CloudConflictModal, { target: app });
+    const dialog = screen.getByRole('dialog', { name: msg('cloudsaves.conflictTitle') });
+    await user().click(buttonsOf(dialog).mine() as HTMLElement);
+
+    openCloudConflict('g2');
+    await vi.waitFor(() => expect(within(dialog).getByText(msg('cloudsaves.conflictIntro', { title: 'Celeste' }))).toBeTruthy());
+    choosing.reject(offline());
+    await choosing.promise.catch(() => undefined);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(within(dialog).queryByText(offlineText())).toBeNull();
+    await vi.waitFor(() => expect(buttonsOf(dialog).mine()).toHaveProperty('disabled', false));
+    expect(buttonsOf(dialog).play()).toBeNull();
+  });
+
   it('starts every opening from the choice: an earlier offline state is not carried over', async () => {
     cloudStatus.set(listed());
     vi.mocked(cloudResolveConflict).mockRejectedValueOnce(offline());
