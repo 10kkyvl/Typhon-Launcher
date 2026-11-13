@@ -207,3 +207,22 @@ describe('Sources: refreshing all', () => {
     expect(screen.getAllByRole('progressbar').map((bar) => bar.getAttribute('aria-label'))).toEqual(['Main feed']);
   });
 });
+
+// A text link is told from the text around it by its underline, and an underline does not draw on a
+// box that is not inline (inline-flex, inline-block, flex, grid, block): whatever a link holds has to
+// stay inline. Read from the source: jsdom applies no stylesheet.
+describe('Sources: what its text links hold', () => {
+  it('is inline, so the link\'s underline draws on it', () => {
+    const style = /<style>([\s\S]*?)<\/style>/.exec(page)?.[1] ?? '';
+    const boxed = new Set(
+      [...style.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+        .filter((rule) => /(^|;)\s*display\s*:\s*(?!inline\s*;|contents)/.test(rule[2]))
+        .flatMap((rule) => [...rule[1].matchAll(/\.([\w-]+)/g)].map((m) => m[1])),
+    );
+    const links = [...page.matchAll(/<TextLink\b[\s\S]*?<\/TextLink>/g)].map((m) => m[0]);
+    expect(links.length).toBeGreaterThan(0);
+    const held = links.flatMap((link) => [...link.matchAll(/\bclass="([^"]*)"/g)].flatMap((m) => m[1].split(/\s+/)));
+    expect(held.filter((name) => boxed.has(name))).toEqual([]);
+  });
+});
+

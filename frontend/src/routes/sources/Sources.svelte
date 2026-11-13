@@ -309,12 +309,8 @@
                     : msg('transfers.sourcesMatchName', { matched: formatCount(source.matched) })}
                   onclick={() => openDetails(source.id)}
                 >
-                  <span class="count-wrap">
-                    <span class="count">{formatCount(source.matched)}</span>
-                    {#if source.review > 0}
-                      <span class="count review">+{formatCount(source.review)}</span>
-                    {/if}
-                  </span>
+                  <!-- Inline, with a no-break space between: the link's underline draws on inline boxes only. -->
+                  <span class="count">{formatCount(source.matched)}</span>{#if source.review > 0}&nbsp;<span class="count review">+{formatCount(source.review)}</span>{/if}
                 </TextLink>
               </Tooltip>
             </span>
@@ -544,15 +540,9 @@
     color: var(--warning);
   }
 
-  .count-wrap {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 0.5rem;
-    white-space: nowrap;
-  }
-
   .count {
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
 
   .count.review {
