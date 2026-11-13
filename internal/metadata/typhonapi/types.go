@@ -38,6 +38,7 @@ type gameResponse struct {
 	StoreLinks  map[string]string `json:"storeLinks"`
 	Cover       *imagePayload     `json:"cover"`
 	Screenshots []imagePayload    `json:"screenshots"`
+	Artworks    []imagePayload    `json:"artworks"`
 	Steam       *steamPayload     `json:"steam"`
 	// DetailsPending: the server answered from its bulk import and is
 	// fetching the per-game details (developer, publisher) behind it.

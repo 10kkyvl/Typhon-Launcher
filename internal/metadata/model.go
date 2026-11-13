@@ -7,6 +7,7 @@ type AssetType string
 const (
 	AssetCover      AssetType = "cover"
 	AssetScreenshot AssetType = "screenshot"
+	AssetArtwork    AssetType = "artwork"
 )
 
 type MediaAsset struct {
@@ -55,6 +56,7 @@ type GameMetadata struct {
 	StoreLinks  map[string]string `json:"storeLinks,omitempty"`
 	Cover       *ImageRef         `json:"cover,omitempty"`
 	Screenshots []ImageRef        `json:"screenshots,omitempty"`
+	Artworks    []ImageRef        `json:"artworks,omitempty"`
 	Steam       *SteamInfo        `json:"steam,omitempty"`
 	// DetailsPending marks an answer the server will complete shortly; it is
 	// stored as partial so that the next open of the game asks again instead

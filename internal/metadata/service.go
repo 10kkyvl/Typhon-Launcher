@@ -28,6 +28,9 @@ import (
 const (
 	defaultTTL     = 7 * 24 * time.Hour
 	maxScreenshots = 8
+	// Artworks only feed the hero choice, which needs one picture; the second
+	// stands in when the first fails to download or does not fit the band.
+	maxArtworks    = 2
 	minHeroRatio   = 1.5
 	candidateLimit = 10
 	searchTimeout  = 30 * time.Second
@@ -1056,6 +1059,11 @@ func (s *Service) buildAssets(ctx context.Context, game catalog.Game, meta GameM
 				kinds, urls = append(kinds, AssetScreenshot), append(urls, shot.URL)
 			}
 		}
+		for _, art := range meta.Artworks[:min(len(meta.Artworks), maxArtworks)] {
+			if art.URL != "" {
+				kinds, urls = append(kinds, AssetArtwork), append(urls, art.URL)
+			}
+		}
 	}
 	results := s.storeImages(ctx, game.ID, kinds, urls)
 	if ctx.Err() != nil {
@@ -1069,9 +1077,10 @@ func (s *Service) buildAssets(ctx context.Context, game catalog.Game, meta GameM
 		return assetBatch{}, ctx.Err()
 	}
 
+	first := 0
 	if hasCover {
 		cover := results[0]
-		results = results[1:]
+		first = 1
 		if cover.err == nil {
 			batch.assets = append(batch.assets, cover.asset)
 			batch.created = append(batch.created, cover.asset)
@@ -1090,24 +1099,31 @@ func (s *Service) buildAssets(ctx context.Context, game catalog.Game, meta GameM
 	if mode == modeArt {
 		shots := carryAssets(previous, AssetScreenshot)
 		batch.assets = append(batch.assets, shots...)
+		batch.assets = append(batch.assets, carryAssets(previous, AssetArtwork)...)
 		batch.hero = heroOf(shots)
 		batch.partial = len(shots) == 0
 		return batch, nil
 	}
 
-	var shots []MediaAsset
-	for i, r := range results {
-		if r.err != nil {
-			slog.Warn("download screenshot", "game", game.ID, "url", urls[len(urls)-len(results)+i], "error", r.err)
+	fetched := map[AssetType][]MediaAsset{}
+	for i := first; i < len(results); i++ {
+		if results[i].err != nil {
+			slog.Warn("download image", "kind", kinds[i], "game", game.ID, "url", urls[i], "error", results[i].err)
 			continue
 		}
-		shots = append(shots, r.asset)
-		batch.created = append(batch.created, r.asset)
+		fetched[kinds[i]] = append(fetched[kinds[i]], results[i].asset)
+		batch.created = append(batch.created, results[i].asset)
 	}
+	shots := fetched[AssetScreenshot]
 	if len(shots) == 0 {
 		shots = carryAssets(previous, AssetScreenshot)
 	}
+	arts := fetched[AssetArtwork]
+	if len(arts) == 0 {
+		arts = carryAssets(previous, AssetArtwork)
+	}
 	batch.assets = append(batch.assets, shots...)
+	batch.assets = append(batch.assets, arts...)
 	batch.hero = heroOf(shots)
 	return batch, nil
 }

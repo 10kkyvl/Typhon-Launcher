@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -285,6 +286,50 @@ func TestGetMapsGame(t *testing.T) {
 	}
 	if len(meta.Screenshots) != 1 {
 		t.Fatalf("screenshots = %d, want the one with a url", len(meta.Screenshots))
+	}
+}
+
+func TestGetMapsArtworksLikeScreenshots(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		want []metadata.ImageRef
+	}{
+		{
+			name: "with artworks",
+			body: `{"providerId":"2657","title":"Prey",
+				"artworks":[
+					{"url":"https://typhon.example/api/v1/metadata/images/t_screenshot_huge/ar1.jpg","width":1280,"height":720},
+					{"url":"","width":1920,"height":1080},
+					{"url":"https://typhon.example/api/v1/metadata/images/t_screenshot_huge/ar2.jpg","width":600,"height":900}
+				]}`,
+			want: []metadata.ImageRef{
+				{URL: "https://typhon.example/api/v1/metadata/images/t_screenshot_huge/ar1.jpg", Width: 1280, Height: 720},
+				{URL: "https://typhon.example/api/v1/metadata/images/t_screenshot_huge/ar2.jpg", Width: 600, Height: 900},
+			},
+		},
+		{
+			name: "without artworks",
+			body: `{"providerId":"2657","title":"Prey","screenshots":[{"url":"https://images.igdb.com/1.jpg","width":1280,"height":720}]}`,
+		},
+		{
+			name: "artworks of the wrong shape",
+			body: `{"providerId":"2657","title":"Prey","artworks":[{"width":1280,"height":720}]}`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				writeJSON(t, w, http.StatusOK, tc.body)
+			}), nil)
+			meta, err := client.Get(context.Background(), "2657")
+			if err != nil {
+				t.Fatalf("get: %v", err)
+			}
+			if !slices.Equal(meta.Artworks, tc.want) {
+				t.Fatalf("artworks = %+v, want %+v", meta.Artworks, tc.want)
+			}
+		})
 	}
 }
 

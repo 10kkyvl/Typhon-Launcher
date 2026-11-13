@@ -232,13 +232,20 @@ func gameMetadata(payload gameResponse) (metadata.GameMetadata, error) {
 	if payload.Cover != nil && payload.Cover.URL != "" {
 		meta.Cover = &metadata.ImageRef{URL: payload.Cover.URL, Width: payload.Cover.Width, Height: payload.Cover.Height}
 	}
-	for _, shot := range payload.Screenshots {
-		if shot.URL == "" {
+	meta.Screenshots = imageRefs(payload.Screenshots)
+	meta.Artworks = imageRefs(payload.Artworks)
+	return meta, nil
+}
+
+func imageRefs(images []imagePayload) []metadata.ImageRef {
+	var out []metadata.ImageRef
+	for _, img := range images {
+		if img.URL == "" {
 			continue
 		}
-		meta.Screenshots = append(meta.Screenshots, metadata.ImageRef{URL: shot.URL, Width: shot.Width, Height: shot.Height})
+		out = append(out, metadata.ImageRef{URL: img.URL, Width: img.Width, Height: img.Height})
 	}
-	return meta, nil
+	return out
 }
 
 func steamInfo(p *steamPayload) *metadata.SteamInfo {
