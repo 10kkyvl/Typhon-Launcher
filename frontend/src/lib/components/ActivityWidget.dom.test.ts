@@ -457,6 +457,35 @@ describe('ActivityWidget: moves and running games', () => {
   });
 });
 
+describe('ActivityWidget: the session clock', () => {
+  it('reads the wall clock on each tick, not a count of ticks', () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+    vi.setSystemTime(new Date('2026-11-13T10:00:00Z'));
+    runningGames.set(new Set(['g1']));
+    sessionStarts.set(new Map([['g1', Date.now()]]));
+    const { head } = mount();
+
+    // The window slept: the wall clock moved ten minutes, no tick ran meanwhile.
+    vi.setSystemTime(new Date('2026-11-13T10:10:00Z'));
+    vi.advanceTimersByTime(1000);
+    flushSync();
+
+    expect(screen.getByRole('button', { name: 'Elden Ring 10:01' })).toBe(head());
+  });
+
+  it('leaves no timer running once it is gone', () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+    runningGames.set(new Set(['g1']));
+    sessionStarts.set(new Map([['g1', Date.now()]]));
+    const { unmount } = mount();
+    expect(vi.getTimerCount()).toBe(1);
+
+    unmount();
+
+    expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
 describe('ActivityWidget: rows the page already shows', () => {
   it('hides downloads and installs on the Downloads page and is empty when nothing else goes on', () => {
     downloads.set([download()]);
