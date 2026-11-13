@@ -2,7 +2,7 @@ import { screen, within } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import type { Candidate } from '../services/install';
-import { addProfile, createProfileShortcut, getProfiles, type LibraryGame, type ProfileView } from '../services/library';
+import { addProfile, createProfileShortcut, getProfiles, removeProfile, type LibraryGame, type ProfileView } from '../services/library';
 import { toasts } from '../stores/toasts';
 import { get } from 'svelte/store';
 import { renderDom } from '../testing/dom';
@@ -15,6 +15,7 @@ vi.mock('../services/library', async (importOriginal) => ({
   profileSteamStatus: vi.fn(async () => ({ supported: false, installed: false, added: false })),
   addProfile: vi.fn(),
   createProfileShortcut: vi.fn(),
+  removeProfile: vi.fn(),
 }));
 
 const game = { id: 'g1', title: 'Hades', installDir: '/games/hades', executable: '/games/hades/Hades.exe', profiles: [] } as unknown as LibraryGame;
@@ -180,6 +181,27 @@ describe('GameProfiles: "Add profile" while the list reloads after a save', () =
 
     expect(add).toHaveProperty('disabled', false);
     expect(document.activeElement).toBe(add);
+  });
+});
+
+describe('GameProfiles: deleting a profile from the keyboard', () => {
+  it('gives the focus to "Add profile" when the deleted row goes with the Delete that held it', async () => {
+    vi.mocked(getProfiles).mockResolvedValueOnce([profile()]).mockResolvedValue([]);
+    vi.mocked(removeProfile).mockResolvedValueOnce(undefined);
+    const { user, rerender } = renderDom(GameProfiles, { game, candidates: [], adminShown: false });
+    const remove = await screen.findByRole('button', { name: msg('modals.profilesDelete') });
+    remove.focus();
+    await user.keyboard('{Enter}');
+    const confirm = await screen.findByRole('dialog', { name: msg('modals.profilesDelete') });
+    within(confirm).getByRole('button', { name: msg('modals.profilesDelete') }).focus();
+    await user.keyboard('{Enter}');
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await vi.waitFor(() => expect(document.activeElement).toBe(remove));
+
+    await rerender({ game: { ...game, lastProfile: 'gone' } as unknown as LibraryGame, candidates: [], adminShown: false });
+
+    await vi.waitFor(() => expect(remove.isConnected).toBe(false));
+    await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: msg('modals.profilesAdd') })));
   });
 });
 

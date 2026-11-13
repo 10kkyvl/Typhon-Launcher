@@ -92,7 +92,11 @@
       return;
     }
     if (mine !== seq) return;
+    // A row the reload removes takes focus on it away (the Delete of a profile just deleted): that
+    // focus goes to "Add profile".
+    const hand = focusHandOff();
     profiles = list;
+    void hand(() => section?.querySelector<HTMLElement>('[data-add-profile]'));
     const states = await Promise.allSettled(list.map((p) => profileSteamStatus(gameId, p.id)));
     if (mine !== seq) return;
     const next: Record<string, SteamStatus> = {};
