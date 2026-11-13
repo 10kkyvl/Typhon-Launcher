@@ -120,18 +120,25 @@ describe('a text field', () => {
   // A selector can name a field in more ways than can be listed (`#reply`, `[class~="area"]`,
   // `:where(textarea)`, `.form > *`), so nothing in these files touches an outline at all: no rule sets
   // `outline*` or `all`, and no element carries one inline.
+  // The custom properties the shared ring reads: every `var(--…)` of a `:focus-visible` rule above.
+  const RING_TOKENS = new Set(
+    [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((rule) => /:focus-visible/.test(rule[1])).flatMap((rule) => [...rule[2].matchAll(/var\((--[\w-]+)/g)].map((m) => m[1])),
+  );
+  const ring = (prop: string) => /^outline(-[\w-]+)?$|^all$/.test(prop.toLowerCase()) || RING_TOKENS.has(prop);
+
+  // Every declaration of the stylesheet, whatever rule holds it and however deep it is nested: braces
+  // end a declaration as a semicolon does, so one that sits beside a nested rule is read too (a
+  // selector then reads as a "property" that is none of the ring's). Limits: CSS escapes are not read.
   function ringOverrides(source: string): string[] {
-    const style = /<style>([\s\S]*?)<\/style>/.exec(source)?.[1] ?? '';
-    const ring = /^outline(-[\w-]+)?$|^all$/;
-    const props = (body: string) => body.split(';').map((part) => part.split(':')[0].trim().toLowerCase());
-    const inRules = [...style.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)]
-      .filter((rule) => props(rule[2]).some((prop) => ring.test(prop)))
-      .map((rule) => rule[1].trim());
+    const style = (/<style>([\s\S]*?)<\/style>/.exec(source)?.[1] ?? '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const declared = (text: string) =>
+      text
+        .split(/[;{}]/)
+        .map((part) => part.trim())
+        .filter((part) => ring(part.split(':')[0].trim()));
     const markup = source.replace(/<(script|style)\b[\s\S]*?<\/\1>/g, '');
-    const inline = [...markup.matchAll(/\sstyle(?::([\w-]+)=|="([^"]*)")/g)]
-      .filter((m) => (m[1] ? [m[1]] : props(m[2] ?? '')).some((prop) => ring.test(prop.toLowerCase())))
-      .map((m) => m[0].trim());
-    return [...inRules, ...inline];
+    const inline = [...markup.matchAll(/\sstyle(?::([\w-]+)=|="([^"]*)")/g)].filter((m) => (m[1] ? ring(m[1]) : declared(m[2] ?? '').length > 0)).map((m) => m[0].trim());
+    return [...declared(style), ...inline];
   }
 
   it('shows the global ring on the sign-in and support forms', () => {
@@ -151,6 +158,11 @@ describe('a text field', () => {
     ['<style>.area { all: unset; }</style>'],
     ['<textarea style="outline: none"></textarea><style></style>'],
     ['<textarea style:outline="none"></textarea><style></style>'],
+    ['<style>.input { outline: none; border-color: transparent; &:hover { color: inherit; } }</style>'],
+    ['<style>.form { & > .label { color: red; } outline: 0; }</style>'],
+    ['<style>@media (min-width: 10px) { .form { textarea { outline: none; } } }</style>'],
+    ['<style>.form { --accent-ring: transparent; }</style>'],
+    ['<div style="--accent-ring: transparent"></div><style></style>'],
   ])('sees the ring turned off by %s', (source) => {
     expect(ringOverrides(source)).not.toEqual([]);
   });
