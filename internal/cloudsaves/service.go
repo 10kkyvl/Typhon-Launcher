@@ -60,8 +60,9 @@ type Service struct {
 	token     func() (string, error)
 	accountID func(token string) (string, error)
 	// storedAccount names the account of the stored credential without the
-	// backend, "" when there is none; only the launch check reads it, to find
-	// a recorded conflict before the session is confirmed.
+	// backend, "" when there is none; only the launch check and the status
+	// read it, to find a recorded conflict before the session is confirmed.
+	// Nothing that goes to the network uses it.
 	storedAccount func(token string) string
 	client        saveClient
 	lib           libraryPort
@@ -321,6 +322,10 @@ func (s *Service) SessionStopped(gameID string) {
 	s.Nudge(gameID)
 }
 
+// Status lists what this session has seen of each game and, for a game it
+// has not seen yet, the conflict recorded for the stored credential's
+// account: the launch hook blocks on that record from the first Play, so the
+// player sees it from the start too, without a pass and without the network.
 func (s *Service) Status() Status {
 	cfg := s.config()
 	st := Status{Enabled: cfg.CloudSaves, Games: []GameStatus{}}
@@ -330,6 +335,10 @@ func (s *Service) Status() Status {
 		st.Error = codeToken
 	case token != "":
 		st.SignedIn = true
+	}
+	var recorded map[string]GameStatus
+	if cfg.CloudSaves && st.SignedIn {
+		recorded = s.recordedConflicts(token)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -344,6 +353,11 @@ func (s *Service) Status() Status {
 	for _, g := range s.statuses {
 		st.Games = append(st.Games, g)
 	}
+	for id, g := range recorded {
+		if _, seen := s.statuses[id]; !seen {
+			st.Games = append(st.Games, g)
+		}
+	}
 	slices.SortFunc(st.Games, func(a, b GameStatus) int {
 		switch {
 		case a.GameID < b.GameID:
@@ -354,6 +368,45 @@ func (s *Service) Status() Status {
 		return 0
 	})
 	return st
+}
+
+// recordedConflicts reads the conflicts recorded for the stored credential's
+// account, by library id, without installing a state: a state is installed
+// only under opMu, which a pass holds for its whole length. An unreadable
+// state lists nothing here; the pass reports it.
+func (s *Service) recordedConflicts(token string) map[string]GameStatus {
+	owner := s.storedAccount(token)
+	if owner == "" {
+		return nil
+	}
+	var games map[string]gameState
+	s.mu.Lock()
+	if s.loaded && s.owner == owner && s.loadErr == nil {
+		games = make(map[string]gameState, len(s.state.Games))
+		for key, g := range s.state.Games {
+			if g.Conflict != nil {
+				games[key] = g
+			}
+		}
+	}
+	s.mu.Unlock()
+	if games == nil {
+		state, err := s.store.load(owner)
+		if err != nil {
+			return nil
+		}
+		games = state.Games
+	}
+	out := map[string]GameStatus{}
+	for _, g := range s.lib.GetGames() {
+		gs, ok := games[g.CanonicalGameID]
+		if g.CanonicalGameID == "" || !ok || gs.Conflict == nil {
+			continue
+		}
+		c := *gs.Conflict
+		out[g.ID] = GameStatus{GameID: g.ID, State: StateConflict, At: s.now(), SyncedAt: gs.SyncedAt, Conflict: &c}
+	}
+	return out
 }
 
 type run struct {
