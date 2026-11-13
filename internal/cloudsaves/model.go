@@ -107,6 +107,11 @@ const (
 	codeBackup        = "cloud.backup_failed"
 	codeBusy          = "cloud.busy"
 	codeConflictRetry = "cloud.conflict_retry"
+	// The two launch blocks: a conflict waits for the player's choice, a
+	// transfer of the game's saves waits for its end. cloud.conflict is the
+	// server's 409 and cloud.busy the server's lock, neither says either.
+	codeConflictUnresolved = "cloud.conflict_unresolved"
+	codeSyncing            = "cloud.syncing"
 )
 
 var (
@@ -137,4 +142,10 @@ var (
 	errRemoteMissing = uierr.New(codeRemoteMissing, "в облаке нет сохранений этой игры")
 	errConflictRetry = uierr.New(codeConflictRetry, "сервер отклонил загрузку сохранений дважды, попробуйте позже")
 	errUnknownLimit  = uierr.New(codeUnknownLimit, "сервер не сообщил лимит размера сохранений")
+)
+
+// The errors a launch is held back with, inside a library.LaunchBlockedError.
+var (
+	ErrConflictUnresolved = uierr.New(codeConflictUnresolved, "saves changed on this device and in the cloud, the conflict is unresolved")
+	ErrSyncing            = uierr.New(codeSyncing, "the game's saves are still syncing with the cloud")
 )
