@@ -7,7 +7,11 @@ import { frontendSources } from '../lib/testing/sources';
  * selector can name a field in more ways than a guard can list (`#reply`, `[class~="area"]`,
  * `:where(textarea)`, `.form > *`), so the check is turned around: in these files no rule at all sets
  * a border, a background, an outline, a shadow or `all`, and no element carries them inline, except
- * the rules listed here, each on a class no field carries.
+ * the rules listed here, each on a class no field carries. Nor does a rule set a custom property the
+ * shared field look reads, and a field's class list holds no expression.
+ *
+ * Limits: the source is read as written. A selector or a property spelled with CSS escapes, and a
+ * field drawn through `<svelte:element>` or by a child component, are not seen.
  */
 const LOOK = /^(border|background|outline)(-[\w-]+)?$|^box-shadow$|^all$/;
 
@@ -39,17 +43,63 @@ const FORMS: Record<string, Allowed> = {
 
 const squeeze = (text: string) => text.replace(/\s+/g, ' ').trim();
 
-// A component's own style rules: each selector list with its declarations, at-rule wrappers left out.
+type Fs = { readFileSync(path: URL, encoding: 'utf8'): string };
+const fs = (globalThis as unknown as { process: { getBuiltinModule(id: 'node:fs'): Fs } }).process.getBuiltinModule('node:fs');
+
+// The custom properties the shared field look reads: every `var(--…)` of a rule on `.input` in
+// global.css. A form that set one of them would repaint its fields without naming them.
+const FIELD_TOKENS = new Set(
+  [...fs.readFileSync(new URL('../styles/global.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .filter((rule) => /\.input\b/.test(rule[1]))
+    .flatMap((rule) => [...rule[2].matchAll(/var\((--[\w-]+)/g)].map((m) => m[1])),
+);
+
+// A component's own style rules, nested ones too: each with the declarations that are its own. A rule
+// nested in another is named by both (`.form .area`, `.input &:hover`); an at-rule (@media) adds
+// nothing to the name, and declarations put straight into it belong to the rule around it. Read by
+// brace depth: a regex over innermost blocks would miss the declarations beside a nested rule.
 function rules(source: string): [selector: string, body: string][] {
-  const style = /<style>([\s\S]*?)<\/style>/.exec(source)?.[1] ?? '';
-  return [...style.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => [squeeze(m[1]), squeeze(m[2])]);
+  const css = (/<style>([\s\S]*?)<\/style>/.exec(source)?.[1] ?? '').replace(/\/\*[\s\S]*?\*\//g, '');
+  const out: [string, string][] = [];
+  // Reads one block from `from` (just past its `{`) and answers where it ends.
+  const block = (from: number, name: string): number => {
+    let own = '';
+    let chunk = '';
+    let quote = '';
+    let i = from;
+    for (; i < css.length; i++) {
+      const c = css[i];
+      if (quote) {
+        chunk += c;
+        if (c === quote) quote = '';
+      } else if (c === '"' || c === "'") {
+        quote = c;
+        chunk += c;
+      } else if (c === ';') {
+        own += `${chunk};`;
+        chunk = '';
+      } else if (c === '{') {
+        const prelude = squeeze(chunk);
+        chunk = '';
+        i = block(i + 1, prelude.startsWith('@') ? name : squeeze(`${name} ${prelude}`));
+      } else if (c === '}') break;
+      else chunk += c;
+    }
+    own += chunk;
+    if (name && squeeze(own)) out.push([name, squeeze(own)]);
+    return i;
+  };
+  block(0, '');
+  return out;
 }
+
+const isLook = (prop: string) => LOOK.test(prop.toLowerCase()) || FIELD_TOKENS.has(prop);
 
 const looks = (body: string) =>
   body
     .split(';')
-    .map((part) => part.split(':')[0].trim().toLowerCase())
-    .filter((prop) => LOOK.test(prop));
+    .map((part) => part.split(':')[0].trim())
+    .filter(isLook);
 
 const markupOf = (source: string) => source.replace(/<(script|style)\b[\s\S]*?<\/\1>/g, '');
 
@@ -83,14 +133,14 @@ function fieldLookOffences(source: string, allowed: Allowed): string[] {
   const tags = fieldTags(source);
   const fieldClasses = new Set<string>();
   for (const tag of tags) {
-    if (/\bclass=\{/.test(tag)) out.push(`a field's classes are computed, so no rule can be ruled out for it: ${squeeze(tag)}`);
+    if (/\bclass=(\{|"[^"]*\{)/.test(tag)) out.push(`a field's classes are computed, so no rule can be ruled out for it: ${squeeze(tag)}`);
     for (const name of /\bclass="([^"]*)"/.exec(tag)?.[1].split(/\s+/) ?? []) if (name) fieldClasses.add(name);
     for (const state of tag.matchAll(/\bclass:([\w-]+)/g)) fieldClasses.add(state[1]);
     if (/\sstyle(:[\w-]+)?=/.test(tag)) out.push(`a field carries an inline style: ${squeeze(tag)}`);
   }
   for (const inline of markupOf(source).matchAll(/\sstyle(?::([\w-]+)=(?:"[^"]*"|\{[^}]*\})|="([^"]*)")/g)) {
     const props = inline[1] ? [inline[1]] : (inline[2] ?? '').split(';').map((part) => part.split(':')[0].trim());
-    if (props.some((prop) => LOOK.test(prop.toLowerCase()))) out.push(`an inline style sets a look: ${squeeze(inline[0])}`);
+    if (props.some(isLook)) out.push(`an inline style sets a look: ${squeeze(inline[0])}`);
   }
   for (const [selector, body] of rules(source)) {
     if (looks(body).length === 0) continue;
@@ -144,6 +194,34 @@ describe('the field look guard', () => {
     ['.input.invalid { border-color: var(--danger); background: red; }'],
   ])('refuses %s', (style) => {
     expect(fieldLookOffences(form(style), allowed)).not.toEqual([]);
+  });
+
+  it.each([
+    ['.input { outline: none; border-color: transparent; &:hover { color: inherit; } }'],
+    ['.form { color: inherit; .area { border: 0; } }'],
+    ['.form { & > * { background: red; } }'],
+    ['@media (min-width: 10px) { .form { textarea { outline: none; } } }'],
+    ['.form { & > .label { color: red; } outline: none; }'],
+  ])('refuses a look beside or inside a nested rule: %s', (style) => {
+    expect(fieldLookOffences(form(style), allowed)).not.toEqual([]);
+  });
+
+  it('reads a nested rule that sets no look as no offence', () => {
+    expect(fieldLookOffences(form('.form { display: flex; .area { height: auto; } @media (min-width: 10px) { gap: 1rem; } }'), allowed)).toEqual([]);
+  });
+
+  it.each([['--field-edge'], ['--accent-ring'], ['--surface-2'], ['--danger']])('refuses %s, which the shared field look reads, set by a rule or inline', (token) => {
+    expect(fieldLookOffences(form(`.form { ${token}: transparent; }`), allowed)).not.toEqual([]);
+    expect(fieldLookOffences(form('', `<div style="${token}: transparent"><input class="input" /></div>`), allowed)).not.toEqual([]);
+    expect(fieldLookOffences(form('', `<div style:${token}="transparent"><input class="input" /></div>`), allowed)).not.toEqual([]);
+  });
+
+  it('lets a form set a custom property the field look does not read', () => {
+    expect(fieldLookOffences(form('.form { --wails-draggable: drag; }'), allowed)).toEqual([]);
+  });
+
+  it('refuses a field whose class list holds an expression', () => {
+    expect(fieldLookOffences(form('', '<textarea class="input {kind}"></textarea>'), allowed)).not.toEqual([]);
   });
 
   it('refuses a look set inline, on a field or around it', () => {
