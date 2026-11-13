@@ -182,3 +182,13 @@ Required state semantics and documented cache/background exceptions: INVARIANTS 
 - **Shutdown**: `spawnTrackedLocked`-style guards refuse new goroutines once `closing`; teardowns that would leave half-deleted trees are skipped while closing (download `startTeardownLocked`, install `cleanupPartial`/`discardSilent`).
 - **Error surfacing**: every user-visible failure is a `uierr` code; wrapped with `%w` so `uierr.Code` finds the innermost code; the frontend maps codes via per-domain tables. Persist failures are wrapped with a stable prefix (`install.errPersistPrefix`) and reach the UI.
 - **Degraded mode**: persist failure ⇒ `*:degraded{degraded:true,message}`; recovery ⇒ `{degraded:false}`; the UI toasts once per subsystem (`frontend/src/lib/stores/degraded.ts`).
+
+## 16. Metadata art: cover, screenshots, artworks and the hero
+
+Entry: game page `EnsureFresh` (stale by TTL 7 d or language, partial, or Steam block missing) → full refresh; library `EnsureArt` (no cover, or stale) → art refresh; `ApplyMatch`/`Refresh` → full refresh.
+
+1. `typhonapi/client.go::gameMetadata` maps `cover`, `screenshots` and `artworks` (same `imageRefs`: entries without a URL are dropped).
+2. `metadata/service.go::buildAssets`: full refresh downloads the cover, up to `maxScreenshots` (8) screenshots and up to `maxArtworks` (2) artworks together (`storeImages` → `fetchImage`: `validateImageURL`, redirect check, 12 MiB cap, jpeg/png only); a kind with no successful download carries the stored ones over. Art refresh downloads only the cover and carries screenshots and artworks.
+3. Hero at apply: full refresh persists `wideHero` (first screenshot ≥ 1280 px wide with ratio 1.5–2.6, else the first artwork under the same rule; `""` when none) as `catalog.Game.HeroAssetID`; art refresh keeps the stored `HeroAssetID` while it names a carried picture.
+4. `store.replace` writes `media_assets.json` (rollback on later failure, see `apply`), then `catalog.ApplyMetadata`.
+5. Readers: `view` (`GetView`, `metadata:updated`), `GetArt` and `ArtFiles` all call `Service.hero`: stored `HeroAssetID` if it names a stored screenshot/artwork (so a choice made by the pre-artwork rule stays until the next full refresh), else `wideHero` over stored assets, else the cover with `heroIsPoster: true`, else none. No network on read. `ArtFiles` (Steam grid export via `main.go` → `steamlink.readArt`) returns no hero file for a poster or for a picture missing on disk.
