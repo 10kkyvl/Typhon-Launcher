@@ -243,4 +243,18 @@ describe('SourceDetailsModal: the rest of the dialog', () => {
     await vi.waitFor(() => expect(previous).toHaveProperty('disabled', true));
     await vi.waitFor(() => expect(document.activeElement).toBe(next));
   });
+
+  it('leaves the focus alone when the pager button pressed to its end did not hold it', async () => {
+    vi.mocked(queryReleases).mockResolvedValue(page(60));
+    const dialog = await openDialog();
+    const next = await within(dialog).findByRole('button', { name: msg('ui.next') });
+    (document.activeElement as HTMLElement | null)?.blur();
+    expect(document.activeElement).toBe(document.body);
+
+    next.click();
+
+    await vi.waitFor(() => expect(next).toHaveProperty('disabled', true));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(document.activeElement).toBe(document.body);
+  });
 });

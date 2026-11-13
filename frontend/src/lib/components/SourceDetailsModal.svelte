@@ -189,27 +189,32 @@
 
   let pagerEl = $state<HTMLElement>();
 
-  function prevPage() {
+  // Whether the pressed pager button held the focus: only then is there a focus to hand on.
+  const heldBy = (event: MouseEvent) => event.currentTarget instanceof HTMLElement && document.activeElement === event.currentTarget;
+
+  function prevPage(event: MouseEvent) {
     if (page <= 1) return;
+    const held = heldBy(event);
     page -= 1;
     if (sourceId) loadReleases(sourceId);
-    void leaveEnd(page <= 1, 1);
+    if (held) void keepPagerFocus();
   }
 
-  function nextPage() {
+  function nextPage(event: MouseEvent) {
     if (page * pageSize >= total) return;
+    const held = heldBy(event);
     page += 1;
     if (sourceId) loadReleases(sourceId);
-    void leaveEnd(page * pageSize >= total, 0);
+    if (held) void keepPagerFocus();
   }
 
-  // A pager button that reaches its end turns disabled under the focus: the focus goes to the other one.
-  async function leaveEnd(atEnd: boolean, other: 0 | 1) {
-    if (!atEnd) return;
+  // A pager button that reaches its end turns disabled under the focus it held: that focus goes to
+  // the other one.
+  async function keepPagerFocus() {
     await tick();
     const active = document.activeElement;
     if (active && active !== document.body && active.isConnected && !(active instanceof HTMLButtonElement && active.disabled)) return;
-    pagerEl?.querySelectorAll<HTMLButtonElement>('button')[other]?.focus();
+    [...(pagerEl?.querySelectorAll<HTMLButtonElement>('button') ?? [])].find((button) => !button.disabled)?.focus();
   }
 
   async function doRefresh() {
