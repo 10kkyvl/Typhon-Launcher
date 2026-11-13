@@ -4,7 +4,7 @@ import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { liveIsland, liveIslandCurrent } from '../stores/liveIsland';
-import { ACTION_MS, PLAIN_MS, URGENT_MS, holdToasts, toast, toasts } from '../stores/toasts';
+import { ACTION_MS, PLAIN_MS, QUEUE_STALE_MS, URGENT_MS, holdToasts, toast, toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
 import IslandShellHarness from '../testing/IslandShellHarness.svelte';
 
@@ -220,6 +220,40 @@ describe('two and three messages', () => {
     }
     expect(seen).toEqual(['One', 'Two', 'Three']);
     expect(onIsland()).toBe('');
+  });
+});
+
+describe('a burst', () => {
+  it('of twenty plain notes: those whose turn comes within the stack\'s limit are shown, the rest dropped', async () => {
+    vi.useFakeTimers();
+    const { onIsland } = setup();
+    for (let i = 1; i <= 20; i++) toast(`Note ${i}`);
+    await tick();
+    const shown: [number, string][] = [];
+    for (let at = 0; at <= 30_000; at += 1000) {
+      const now = onIsland();
+      if (now && shown.at(-1)?.[1] !== now) shown.push([at, now]);
+      vi.advanceTimersByTime(1000);
+      await tick();
+    }
+    // Each gets its 4 s; the fourth starts at 12 s, which is the limit; at 16 s every one left has waited longer.
+    expect(shown).toEqual([[0, 'Note 1'], [4000, 'Note 2'], [8000, 'Note 3'], [12_000, 'Note 4']]);
+    expect(PLAIN_MS * 3).toBeLessThanOrEqual(QUEUE_STALE_MS);
+    expect(get(toasts)).toEqual([]);
+    expect(get(liveIslandCurrent)).toBeUndefined();
+  });
+
+  it('of ten errors: none is dropped, each gets its time', async () => {
+    vi.useFakeTimers();
+    const { onIsland } = setup();
+    for (let i = 1; i <= 10; i++) toast(`Error ${i}`, 'danger');
+    await tick();
+    vi.advanceTimersByTime(URGENT_MS * 9);
+    await tick();
+    expect(onIsland()).toContain('Error 10');
+    vi.advanceTimersByTime(URGENT_MS);
+    await tick();
+    expect(get(toasts)).toEqual([]);
   });
 });
 

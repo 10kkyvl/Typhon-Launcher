@@ -1,6 +1,6 @@
 import type { LucideIcon } from '@lucide/svelte';
 import { derived, get, writable, type Readable } from 'svelte/store';
-import { RESUME_FLOOR_MS } from './toasts';
+import { QUEUE_STALE_MS, RESUME_FLOOR_MS } from './toasts';
 
 /**
  * The live island: one pill at the top centre of the window that says what just happened (a toast's
@@ -18,6 +18,9 @@ import { RESUME_FLOOR_MS } from './toasts';
  *   since the dialog's Tab trap keeps the keyboard from it; it gets its full time when the dialog
  *   closes (the toast store's rule for a toast with an action). Meanwhile it waits behind every
  *   message whose clock can run, so what the dialog raises is still shown;
+ * - a plain note (no error, no action) that has waited `QUEUE_STALE_MS` for its turn since it was
+ *   raised (or raised again) is dropped at its turn, as the stack drops a stale toast: a burst of
+ *   twenty would otherwise show old news for over a minute. One that has been on screen once is kept.
  *
  * `show` with an id already there replaces that message; `update` patches it in place.
  */
@@ -73,6 +76,10 @@ interface Life {
   handle?: ReturnType<typeof setTimeout>;
 }
 const lives = new Map<string, Life>();
+/** When each message was raised, or raised again. */
+const raisedAt = new Map<string, number>();
+/** The messages that have been on screen. */
+const seen = new Set<string>();
 let held = false;
 let dialogOpen = false;
 
@@ -93,8 +100,26 @@ function order(list: readonly LiveIslandMessage[], dialog: boolean): LiveIslandM
 // `get`, not a subscription: a message posted from inside another store's subscriber would see a stale list.
 const snapshot = () => get(items);
 
+const goesStale = (m: LiveIslandMessage) => liveIslandRank(m) === RANK.info && !m.actions?.length;
+
+/** Drops the stale plain notes whose turn it is, and marks the one that comes on screen as seen. */
+function dropStale(): void {
+  for (;;) {
+    const top = order(snapshot(), dialogOpen)[0];
+    if (!top || seen.has(top.id)) return;
+    if (!goesStale(top) || Date.now() - (raisedAt.get(top.id) ?? Date.now()) <= QUEUE_STALE_MS) {
+      seen.add(top.id);
+      return;
+    }
+    // Its own close lets its source know (a toast leaves the toast store); hidden here in any case.
+    top.close?.();
+    hide(top.id);
+  }
+}
+
 /** Runs the clock of the message on screen, unless it is being read or waits out a dialog; stops the rest. */
 function sync(): void {
+  dropStale();
   const top = order(snapshot(), dialogOpen)[0];
   for (const [id, life] of lives) {
     const running = id === top?.id && !held && !waits(top, dialogOpen);
@@ -110,18 +135,24 @@ function sync(): void {
 }
 
 function forget(id: string): void {
+  raisedAt.delete(id);
+  seen.delete(id);
   const life = lives.get(id);
   if (life?.handle !== undefined) clearTimeout(life.handle);
   lives.delete(id);
 }
 
 function arm(id: string, ttl: number | undefined): void {
-  forget(id);
+  const life = lives.get(id);
+  if (life?.handle !== undefined) clearTimeout(life.handle);
+  lives.delete(id);
   if (ttl && ttl > 0) lives.set(id, { ttl, remaining: ttl, startedAt: 0 });
 }
 
 function show(message: LiveIslandMessage): void {
   items.update((list) => [...list.filter((m) => m.id !== message.id), message]);
+  forget(message.id);
+  raisedAt.set(message.id, Date.now());
   arm(message.id, message.ttl);
   sync();
 }
@@ -131,6 +162,7 @@ function update(id: string, patch: Partial<Omit<LiveIslandMessage, 'id'>>): void
   if (!has(id)) return;
   items.update((list) => list.map((m) => (m.id === id ? { ...m, ...patch } : m)));
   if ('ttl' in patch) arm(id, patch.ttl);
+  if ('count' in patch) raisedAt.set(id, Date.now());
   sync();
 }
 
@@ -167,6 +199,8 @@ function dialog(open: boolean): void {
 
 function clear(): void {
   for (const id of [...lives.keys()]) forget(id);
+  raisedAt.clear();
+  seen.clear();
   held = false;
   dialogOpen = false;
   dialogFlag.set(false);

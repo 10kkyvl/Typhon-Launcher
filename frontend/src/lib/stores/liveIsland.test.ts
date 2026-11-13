@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import { claimLiveIsland, liveIsland, liveIslandCurrent, liveIslandHeld, liveIslandMessages, liveIslandOn } from './liveIsland';
-import { RESUME_FLOOR_MS } from './toasts';
+import { QUEUE_STALE_MS, RESUME_FLOOR_MS } from './toasts';
 
 const run = () => {};
 
@@ -144,6 +144,56 @@ describe('live island queue', () => {
     vi.advanceTimersByTime(1000);
     expect(get(liveIslandCurrent)).toBeUndefined();
     liveIsland.dialog(false);
+  });
+});
+
+// The stack's rule: a plain message that has waited too long for its turn is no longer news.
+describe('a plain message that waited too long', () => {
+  it('is dropped at its turn, through its own close when it has one', () => {
+    const close = vi.fn(() => liveIsland.hide('old'));
+    liveIsland.show({ id: 'first', text: 'first' });
+    liveIsland.show({ id: 'old', text: 'old', close });
+    vi.advanceTimersByTime(QUEUE_STALE_MS + 1);
+    liveIsland.hide('first');
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(get(liveIslandCurrent)).toBeUndefined();
+  });
+
+  it('is shown if its turn comes within the limit', () => {
+    liveIsland.show({ id: 'first', text: 'first' });
+    liveIsland.show({ id: 'next', text: 'next' });
+    vi.advanceTimersByTime(QUEUE_STALE_MS);
+    liveIsland.hide('first');
+    expect(current()).toBe('next');
+  });
+
+  it('keeps an error and a message with an action however long they waited', () => {
+    liveIsland.show({ id: 'first', text: 'first', kind: 'error' });
+    liveIsland.show({ id: 'error', text: 'error', tone: 'danger' });
+    liveIsland.show({ id: 'offer', text: 'offer', actions: [{ label: 'Undo', run }] });
+    vi.advanceTimersByTime(QUEUE_STALE_MS * 5);
+    liveIsland.hide('first');
+    expect(current()).toBe('error');
+    liveIsland.hide('error');
+    expect(current()).toBe('offer');
+  });
+
+  it('is not dropped once it has been on screen, when it comes back after a higher one', () => {
+    liveIsland.show({ id: 'note', text: 'note' });
+    liveIsland.show({ id: 'error', text: 'error', kind: 'error' });
+    vi.advanceTimersByTime(QUEUE_STALE_MS * 2);
+    liveIsland.hide('error');
+    expect(current()).toBe('note');
+  });
+
+  it('counts its wait from when it was raised again', () => {
+    liveIsland.show({ id: 'first', text: 'first' });
+    liveIsland.show({ id: 'again', text: 'again' });
+    vi.advanceTimersByTime(QUEUE_STALE_MS);
+    liveIsland.update('again', { count: 2 });
+    vi.advanceTimersByTime(QUEUE_STALE_MS);
+    liveIsland.hide('first');
+    expect(current()).toBe('again');
   });
 });
 
