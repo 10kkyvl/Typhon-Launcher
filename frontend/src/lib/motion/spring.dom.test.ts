@@ -110,4 +110,19 @@ describe('SpringValue', () => {
     for (const cb of late) cb(now + 16);
     expect(seen.length).toBe(count);
   });
+
+  it('refuses a target that is not a finite number: no frame, the value stays', () => {
+    const seen: number[] = [];
+    const s = new SpringValue(10, (v) => seen.push(v), 'smooth');
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) s.set(bad);
+    expect(queue.size).toBe(0);
+    expect(s.value).toBe(10);
+    expect(seen).toEqual([]);
+  });
+
+  it('refuses a preset that would never settle', () => {
+    for (const preset of [{ response: 0, damping: 1 }, { response: -1, damping: 1 }, { response: Number.NaN, damping: 1 }, { response: 0.3, damping: -1 }]) {
+      expect(() => new SpringValue(0, () => {}, preset), JSON.stringify(preset)).toThrow(RangeError);
+    }
+  });
 });

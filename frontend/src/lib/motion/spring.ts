@@ -28,6 +28,10 @@ const REST = 0.001;
 const MAX_STEP_S = 0.064;
 
 function coefficients(p: SpringPreset) {
+  // A spring without a positive swing or with negative damping never settles: it would ask for frames for ever.
+  if (!(p.response > 0) || !Number.isFinite(p.response) || !(p.damping >= 0) || !Number.isFinite(p.damping)) {
+    throw new RangeError(`spring preset never settles: response ${p.response}, damping ${p.damping}`);
+  }
   return { k: ((2 * Math.PI) / p.response) ** 2, c: (4 * Math.PI * p.damping) / p.response };
 }
 
@@ -69,7 +73,9 @@ export class SpringValue {
     return this.v;
   }
 
+  /** A target that is not a finite number is refused: the value stays where it is. */
   set(target: number, opts: { instant?: boolean } = {}): void {
+    if (!Number.isFinite(target)) return;
     this.target = target;
     if (opts.instant || !documentMotion() || typeof requestAnimationFrame !== 'function') {
       this.stop();
