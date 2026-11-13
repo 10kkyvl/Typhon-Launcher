@@ -104,6 +104,26 @@ describe('GameProfiles: opening and closing the editor from the keyboard', () =>
   });
 });
 
+describe('GameProfiles: presses that did not hold the focus', () => {
+  it('open and close the editor without moving the focus', async () => {
+    vi.mocked(getProfiles).mockResolvedValue([profile()]);
+    renderDom(GameProfiles, { game, candidates: [], adminShown: false });
+    const edit = await screen.findByRole('button', { name: msg('modals.profilesEdit') });
+    expect(document.activeElement).toBe(document.body);
+
+    edit.click();
+    const name = await screen.findByRole('textbox', { name: msg('modals.profilesName') });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(document.activeElement).toBe(document.body);
+    expect(name.isConnected).toBe(true);
+
+    screen.getByRole('button', { name: msg('common.cancel') }).click();
+    await vi.waitFor(() => expect(name.isConnected).toBe(false));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(document.activeElement).toBe(document.body);
+  });
+});
+
 describe('GameProfiles: the edited profile deleted under its editor', () => {
   it('Cancel gives the focus to "Add profile" when the Edit that opened the editor is gone', async () => {
     vi.mocked(getProfiles).mockResolvedValueOnce([profile()]).mockResolvedValue([]);
