@@ -87,6 +87,8 @@ linters:
           msg: 'завершение процесса только из main'
         - pattern: '^panic$'
           msg: 'panic только при нарушении инварианта программы, не на ввод/файл/сеть'
+        - pattern: '\.RestoreBeforeLaunch$'
+          msg: 'восстанавливает сохранения игры, которую библиотека считает запускающейся: только для облачной проверки при запуске (internal/cloudsaves/sync.go)'
 
   exclusions:
     generated: lax
@@ -103,3 +105,6 @@ linters:
       - path: '^main\.go$'
         linters: [forbidigo]
         text: 'context\.(Background|TODO)|os\.Exit'
+      - path: '^internal/cloudsaves/sync\.go$|_test\.go$'
+        linters: [forbidigo]
+        text: 'RestoreBeforeLaunch'
