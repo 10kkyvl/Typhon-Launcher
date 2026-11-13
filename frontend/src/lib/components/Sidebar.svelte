@@ -141,6 +141,8 @@
     {@render navButton(settingsItem)}
   </div>
 
+  <div class="activity-zone" data-part="sidebar-activity"></div>
+
   <SidebarStatus />
 </aside>
 
@@ -307,6 +309,16 @@
     gap: var(--space-3);
   }
 
+  /* Always there at its own height (shell.css), empty or not: Settings above and the status line below
+     stay put whatever goes on. */
+  .activity-zone {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    justify-content: flex-end;
+    height: var(--activity-zone-h);
+  }
+
   @media (max-width: 1140px) {
     .sidebar {
       width: var(--sidebar-rail-w);
@@ -343,7 +355,8 @@
       align-self: stretch;
     }
 
-    .bottom {
+    .bottom,
+    .activity-zone {
       width: 100%;
     }
 

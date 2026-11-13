@@ -83,7 +83,8 @@ layout with nothing in it is dropped, so a theme without layout wishes has no `l
 
 Elements of the window carry `data-part="<name>"`. The parts marked *data-id* also carry
 `data-id="<id>"` with the ids from the tables above (sidebar item, top bar button, game
-section; a popover carries the id of the top bar button it opens from, `notifications`). Select
+section; a popover carries the id of what it opens from: `notifications` for the top bar button,
+`activity` for the sidebar's activity zone). Select
 them with attribute selectors in `theme.css`:
 
 ```css
@@ -104,6 +105,7 @@ name `sidebar-account` matches nothing there. Typhon renames it by itself only i
 | `sidebar-item` | yes |
 | `sidebar-separator` | no |
 | `sidebar-bottom` | no |
+| `sidebar-activity` | no |
 | `topbar` | no |
 | `topbar-history` | no |
 | `topbar-search` | no |
@@ -136,7 +138,11 @@ a popover marks the side it opened on in `data-placement` (`bottom-start`, `top-
 A toast (a short message in the corner of the window) is `[data-part="toast"]`; its class is its
 kind (`info`, `success`, `warning`, `danger`). A count on a control (unread messages, friend
 requests, in the sidebar, the top bar and the chat) is `[data-part="count-badge"]`; on a corner it
-has the class `corner`, on an accent fill the class `on-accent`.
+has the class `corner`, on an accent fill the class `on-accent`. The activity zone at the foot of
+the sidebar, between Settings and the status line (what is downloading, installing, being moved or
+played), is `[data-part="sidebar-activity"]`: it keeps its height when nothing goes on and is not a
+sidebar item, so `layout` neither moves nor hides it; the panel it opens is
+`[data-part="popover"][data-id="activity"]`.
 
 Use `layout` to reorder or hide; use CSS only for looks. Hiding a part with CSS that `layout`
 cannot hide (window controls, settings) leaves the user without a way back.

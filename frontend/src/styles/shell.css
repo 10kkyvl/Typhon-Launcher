@@ -9,6 +9,9 @@
   --traffic-lights-w: 7.6rem;
 
   --sidebar-rail-w: 6.4rem;
+  /* The sidebar's activity zone, between Settings and the status line: reserved at this height whether
+     anything goes on or not, so neither moves. */
+  --activity-zone-h: 6rem;
   --font-wordmark: Unbounded, Onest Variable, sans-serif;
 
   --topbar-search-min: 18rem;

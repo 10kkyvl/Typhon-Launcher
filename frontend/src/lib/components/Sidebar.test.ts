@@ -105,6 +105,28 @@ describe('Sidebar layout', () => {
   });
 });
 
+describe('Sidebar activity zone', () => {
+  // Settings sits above the zone and the status line below it: the zone is reserved at one fixed
+  // height whatever goes on, so neither moves when something starts or ends.
+  it('stands between the bottom block and the status line, at a fixed height of its own, with nothing to press when idle', () => {
+    const body = html();
+    const bottom = body.indexOf('data-part="sidebar-bottom"');
+    const zone = body.indexOf('data-part="sidebar-activity"');
+    const status = body.indexOf('role="group"');
+    expect(bottom).toBeGreaterThan(-1);
+    expect(zone).toBeGreaterThan(bottom);
+    expect(status).toBeGreaterThan(zone);
+    expect(body.slice(zone, status)).not.toMatch(/<(button|a)\b|tabindex=/);
+
+    const sidebar = fs.readFileSync(new URL('./Sidebar.svelte', import.meta.url), 'utf8');
+    const rule = /\n {2}\.activity-zone \{([^}]*)\}/.exec(sidebar)?.[1] ?? '';
+    expect(rule).toMatch(/height: var\(--activity-zone-h\);/);
+    expect(rule).not.toMatch(/(min|max)-height/);
+    const shell = fs.readFileSync(new URL('../../styles/shell.css', import.meta.url), 'utf8');
+    expect(/--activity-zone-h:\s*([\d.]+rem);/.exec(shell)?.[1]).toBeTypeOf('string');
+  });
+});
+
 describe('Sidebar island', () => {
   it('sets the brand name as the wordmark next to the logo', () => {
     const body = html();
@@ -139,7 +161,7 @@ describe('Sidebar island', () => {
     expect(nav).toMatch(/min-height: 0/);
     expect(nav).toMatch(/overflow-y: scroll/);
     expect(nav).toMatch(/position: relative/);
-    for (const [source, selector] of [[sidebar, '.logo'], [sidebar, '.bottom'], [status, '.status']] as const) {
+    for (const [source, selector] of [[sidebar, '.logo'], [sidebar, '.bottom'], [sidebar, '.activity-zone'], [status, '.status']] as const) {
       expect(body(source, selector), selector).toMatch(/flex: none/);
     }
     expect(body(sidebar, '.plate')).toMatch(/position: absolute/);

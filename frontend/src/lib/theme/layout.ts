@@ -57,6 +57,7 @@ export const LAYOUT_PARTS = [
   'sidebar-item',
   'sidebar-separator',
   'sidebar-bottom',
+  'sidebar-activity',
   'topbar',
   'topbar-history',
   'topbar-search',

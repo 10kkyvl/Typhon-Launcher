@@ -91,6 +91,12 @@ Besides these six, 2.0 adds `count-badge`, a count on a control (unread messages
 the sidebar, the top bar and the chat); on a button's corner it has the class `corner`, on an accent fill the class
 `on-accent`.
 
+The floating activity dock in the corner of the window is replaced by the activity zone at the foot
+of the sidebar, between Settings and the status line: `sidebar-activity` (what is downloading,
+installing, being moved or played). The zone keeps its height when nothing goes on and is not a
+sidebar item: `layout` neither moves nor hides it. The panel it opens is
+`[data-part="popover"][data-id="activity"]`.
+
 ### Limits
 
 - **Sizes in custom CSS are not converted.** `rem` sizes inside the `css` field come out about
