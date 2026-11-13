@@ -3,9 +3,12 @@ package library
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"typhon/internal/uierr"
 )
 
 type hookFunc func(ctx context.Context, game Game) error
@@ -127,5 +130,88 @@ func TestLaunchHookBlockedErrorStopsTheLaunch(t *testing.T) {
 	}
 	if err := s.PlayGame(id); !errors.Is(err, cause) {
 		t.Fatalf("second PlayGame = %v, want the library lock to be released", err)
+	}
+}
+
+type startWatcher chan string
+
+func (w startWatcher) SessionStarted(g Game) { w <- g.ID }
+func (w startWatcher) SessionStopped(string) {}
+
+func TestBlockedLaunchStartsNothingAndIsNotJournaledAsAFailure(t *testing.T) {
+	control, controlID, _ := hookedGame(t)
+	controlFailures := make(chan string, 4)
+	control.SetLaunchFailureRecorder(func(_, code, _ string) { controlFailures <- code })
+	control.AddLaunchHook(hookFunc(func(context.Context, Game) error { return nil }))
+	if err := control.PlayGame(controlID); err == nil {
+		t.Fatal("control: expected the injected start failure")
+	}
+	if err := control.ServiceShutdown(); err != nil {
+		t.Fatalf("control shutdown: %v", err)
+	}
+	select {
+	case code := <-controlFailures:
+		if code != "library.launch_failed" {
+			t.Fatalf("control: journaled %q, want library.launch_failed", code)
+		}
+	default:
+		t.Fatal("control: a failed start was not journaled, so the check below would prove nothing")
+	}
+
+	s, id, order := hookedGame(t)
+	failures := make(chan string, 4)
+	s.SetLaunchFailureRecorder(func(_, code, _ string) { failures <- code })
+	started := make(startWatcher, 4)
+	s.AddSessionWatcher(started)
+	cause := uierr.New("cloud.test_blocked", "saves unsafe")
+	s.AddLaunchHook(hookFunc(func(context.Context, Game) error {
+		return &LaunchBlockedError{Err: fmt.Errorf("launch check: %w", cause)}
+	}))
+
+	err := s.PlayGame(id)
+
+	if code := uierr.Code(err); code != "cloud.test_blocked" || !errors.Is(err, cause) {
+		t.Fatalf("PlayGame = %v (code %q), want the hook's cause and code to reach the caller", err, code)
+	}
+	for _, step := range *order {
+		if step == "start" {
+			t.Fatalf("order = %v, process started despite a blocking hook", *order)
+		}
+	}
+	if s.IsRunning(id) || len(s.GetRunningGames()) != 0 {
+		t.Fatalf("running or starting %v after a blocked launch", s.GetRunningGames())
+	}
+	if err := s.ServiceShutdown(); err != nil {
+		t.Fatalf("shutdown: %v", err)
+	}
+	select {
+	case code := <-failures:
+		t.Fatalf("blocked launch journaled as a launch failure %q", code)
+	default:
+	}
+	select {
+	case g := <-started:
+		t.Fatalf("session watchers were told %s started", g)
+	default:
+	}
+}
+
+func TestBlockingHookKeepsLaterHooksFromRunning(t *testing.T) {
+	s, id, order := hookedGame(t)
+	cause := errors.New("saves unsafe")
+	s.AddLaunchHook(hookFunc(func(context.Context, Game) error {
+		*order = append(*order, "first")
+		return &LaunchBlockedError{Err: cause}
+	}))
+	s.AddLaunchHook(hookFunc(func(context.Context, Game) error {
+		*order = append(*order, "second")
+		return nil
+	}))
+
+	if err := s.PlayGame(id); !errors.Is(err, cause) {
+		t.Fatalf("PlayGame = %v, want the first hook's cause", err)
+	}
+	if got := *order; len(got) != 2 || got[0] != "prepare" || got[1] != "first" {
+		t.Fatalf("order = %v, want prepare, first: a blocked launch must not run the hooks after the block", got)
 	}
 }
