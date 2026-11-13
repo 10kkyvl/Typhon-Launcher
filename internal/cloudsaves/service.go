@@ -384,7 +384,8 @@ func (s *Service) Status() Status {
 // recordedConflicts lists, by library id, the recorded conflicts the launch
 // gate holds games on, with the gate's rules: the stored credential's
 // account first, then the confirmed one when it differs; an exclusion of the
-// first ends the look; a game without a valid catalog id is never held. An unreadable state lists nothing
+// first ends the look; a game without a valid catalog id or sharing it with
+// another library entry is never held. An unreadable state lists nothing
 // here; the pass reports it.
 func (s *Service) recordedConflicts(token string) map[string]GameStatus {
 	stored := s.storedAccount(token)
@@ -400,10 +401,11 @@ func (s *Service) recordedConflicts(token string) map[string]GameStatus {
 		records = append(records, s.recordsOf(owner))
 	}
 	games := s.lib.GetGames()
+	dups := duplicateKeys(games)
 	out := map[string]GameStatus{}
 	for _, g := range games {
 		key := g.CanonicalGameID
-		if key == "" || !account.ValidSaveGameID(key) {
+		if key == "" || !account.ValidSaveGameID(key) || dups[key] {
 			continue
 		}
 		for _, record := range records {

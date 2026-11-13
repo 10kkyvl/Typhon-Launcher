@@ -233,3 +233,27 @@ func TestPassOutcomesOfAConflictedGameStayAsRecorded(t *testing.T) {
 		t.Fatalf("SyncNow = %v, want %s as the pass records it", err, codeSavesUnread)
 	}
 }
+
+// The gate lets every entry of a duplicated catalog id start, so the
+// listing does not show their recorded conflict; a pass reports them as
+// duplicates, as before.
+func TestStatusDoesNotListAConflictOfADuplicatedGame(t *testing.T) {
+	h := newHarness(t)
+	h.recordConflict()
+	writeTree(t, h.addGame("local-2", gameCloud), baseFiles)
+	h.restart()
+
+	for _, id := range []string{gameLocal, "local-2"} {
+		if got := gamesFor(h.svc.Status(), id); len(got) != 0 {
+			t.Fatalf("status games for %s = %+v, want none: the gate lets a duplicated game start", id, got)
+		}
+		wantStarts(t, h.starting(id))
+	}
+
+	h.pass()
+	for _, id := range []string{gameLocal, "local-2"} {
+		if g := h.status(id); g.State != StateSkipped || g.Code != codeDuplicate || g.Conflict != nil {
+			t.Fatalf("status of %s after a pass = %+v, want skipped %s", id, g, codeDuplicate)
+		}
+	}
+}
