@@ -324,6 +324,62 @@ describe('Notice with a retry: taken away while it runs', () => {
   });
 });
 
+// A caller whose retry outlived what it was for (a dialog closed and opened again meanwhile) answers
+// nothing: the notice that ran it is gone or stands for something else, and must not touch the new one.
+describe('Notice with a retry: a run that answers nothing', () => {
+  it('does not tell the caller the retry is over, and says nothing again', async () => {
+    const answer = deferred<boolean | undefined>();
+    const { user } = renderDom(RetryHarness, { run: () => answer.promise });
+    const region = screen.getByRole('alert');
+    const before = region.firstElementChild;
+    const retry = retryButton();
+    retry.focus();
+    await user.keyboard('{Enter}');
+    const { heard, stop } = listen(region);
+
+    answer.resolve(undefined);
+    await frame();
+    await frame();
+    stop();
+
+    expect(retry.getAttribute('aria-busy')).toBe('true');
+    expect((screen.getByRole('button', { name: 'Detect' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(heard).toEqual([]);
+    expect(region.firstElementChild).toBe(before);
+  });
+
+  it('moves no focus', async () => {
+    const answer = deferred<boolean | undefined>();
+    const view = renderDom(RetryHarness, { run: () => answer.promise, tab: 'emulators' });
+    retryButton().focus();
+    await view.user.keyboard('{Enter}');
+    await view.rerender({ tab: 'discord' });
+    expect(document.activeElement).toBe(document.body);
+
+    answer.resolve(undefined);
+    await frame();
+    await frame();
+
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('names no broken contract in a development build', async () => {
+    vi.stubEnv('MODE', 'development');
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const answer = deferred<boolean | undefined>();
+    const { user } = renderDom(RetryHarness, { run: () => answer.promise, holds: false, resets: true });
+    await user.click(retryButton());
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+
+    answer.resolve(undefined);
+    await frame();
+    await frame();
+    vi.unstubAllEnvs();
+
+    expect(error).not.toHaveBeenCalled();
+  });
+});
+
 describe('Notice with a retry: dropped by the page before the answer', () => {
   it('still tells the page the retry is over, so what waits on it is free again', async () => {
     const { user } = renderDom(RetryHarness, { run: vi.fn(async () => true), holds: false, to: 'target' });

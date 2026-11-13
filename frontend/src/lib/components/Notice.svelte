@@ -2,13 +2,16 @@
   /**
    * A retry for what the notice reports (a load that failed). `run` answers whether it worked; a
    * rejection counts as a failure and is logged (the caller words its message, the notice cannot).
+   * `run` may answer nothing (`undefined`) when the retry no longer matters, because what it was for
+   * has gone (a dialog closed and opened again meanwhile): the notice then does nothing at all, and
+   * leaves `retrying` as it is for whoever owns it now.
    * On success focus that was on Retry goes to `focus()`, else to the first control of `within()`,
    * else to the page's main heading; the getters are read after the caller has drawn what replaced
    * the notice.
    */
   export interface NoticeRetry {
     label: string;
-    run: () => Promise<boolean>;
+    run: () => Promise<boolean | undefined>;
     /** The label while it runs ("Checking connection…"); the label itself when absent. */
     pending?: string;
     focus?: () => HTMLElement | null | undefined;
@@ -111,12 +114,14 @@
     const said = words(message);
     retrying = true;
     pressed = true;
-    let ok = false;
+    let ok: boolean | undefined = false;
     try {
       ok = await run();
     } catch (err) {
       console.error('notice retry', err);
     }
+    // The retry no longer matters to its caller: `retrying`, the words and the focus are not ours now.
+    if (ok === undefined) return;
     // Told to the caller even when the notice went during the run: its own controls wait on it.
     retrying = false;
     await tick();

@@ -27,7 +27,7 @@
     closable = false,
     tab = 'emulators',
   }: {
-    run: () => Promise<boolean>;
+    run: () => Promise<boolean | undefined>;
     message?: string;
     tone?: 'danger' | 'warning';
     announce?: boolean;
@@ -48,9 +48,11 @@
   let target = $state<HTMLElement>();
   let region = $state<HTMLElement>();
 
-  async function attempt(): Promise<boolean> {
+  async function attempt(): Promise<boolean | undefined> {
     if (resets) failed = false;
     const ok = await run();
+    // No answer: the retry no longer matters, and the page leaves its state as it is.
+    if (ok === undefined) return undefined;
     failed = !ok;
     // The page redraws before the answer reaches the notice.
     await Promise.resolve();
