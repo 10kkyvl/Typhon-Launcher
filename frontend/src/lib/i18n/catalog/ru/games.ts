@@ -377,6 +377,20 @@ export const games = {
   'games.libraryEmptyDescription':
     'Игры появятся тут после установки или загрузки. Каталог Steam и IGDB — в разделе «Все игры».',
 
+  'library.loadingTitle': 'Загружаем библиотеку…',
+  'library.loadFailedTitle': 'Не удалось загрузить библиотеку',
+  'library.loadFailedText': 'Список игр не получен. Попробуйте ещё раз.',
+  'library.allHiddenTitle': 'Все игры скрыты',
+  'library.allHiddenDescription': 'Скрытые игры показывает фильтр «Скрытые».',
+  'library.noMatchDescription': 'Список сужают: {what}.',
+  'library.narrowSearch': 'поиск',
+  'library.narrowFilter': 'фильтр',
+  'library.narrowSource': 'источник',
+  'library.narrowStatus': 'статус',
+  'library.narrowCollection': 'коллекция',
+  'library.clearFilters': 'Сбросить фильтры',
+  'library.filterFavorites': 'Любимые',
+
   'games.catalogSortYear': 'По году выхода',
   'games.catalogSortAdded': 'По дате добавления',
   'games.catalogSearchPlaceholder': 'Поиск по каталогу',

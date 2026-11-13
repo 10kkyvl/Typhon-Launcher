@@ -379,6 +379,20 @@ export const games: Record<GamesKey, Message> = {
   'games.libraryEmptyDescription':
     'Games will appear here once installed or downloaded. Browse sources under "All games".',
 
+  'library.loadingTitle': 'Loading the library…',
+  'library.loadFailedTitle': 'Could not load the library',
+  'library.loadFailedText': 'The list of games did not arrive. Try again.',
+  'library.allHiddenTitle': 'All games are hidden',
+  'library.allHiddenDescription': 'The Hidden filter shows hidden games.',
+  'library.noMatchDescription': 'Narrowed by: {what}.',
+  'library.narrowSearch': 'search',
+  'library.narrowFilter': 'filter',
+  'library.narrowSource': 'source',
+  'library.narrowStatus': 'status',
+  'library.narrowCollection': 'collection',
+  'library.clearFilters': 'Clear filters',
+  'library.filterFavorites': 'Favorites',
+
   'games.catalogSortYear': 'By release year',
   'games.catalogSortAdded': 'By date added',
   'games.catalogSearchPlaceholder': 'Search the catalog',
