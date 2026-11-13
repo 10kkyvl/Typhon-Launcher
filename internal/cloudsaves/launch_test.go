@@ -83,7 +83,13 @@ func (h *harness) startingAsync(ctx context.Context, id string) <-chan error {
 	h.t.Helper()
 	svc, g := h.svc, h.game(id)
 	done := make(chan error, 1)
-	go func() { done <- svc.SessionStarting(ctx, g) }()
+	// The library holds the game as starting while its launch hooks run.
+	h.lib.launching(id, 1)
+	go func() {
+		err := svc.SessionStarting(ctx, g)
+		h.lib.launching(id, -1)
+		done <- err
+	}()
 	return done
 }
 
@@ -800,5 +806,64 @@ func TestLaunchThatGaveUpLeavesTheSavesOfTheRunningGameAlone(t *testing.T) {
 	}
 	if got := h.stateBytes(); !bytes.Equal(got, before) {
 		t.Fatalf("state file changed:\n%s", got)
+	}
+}
+
+// Only the launch check's own download may replace the saves of a game the
+// library is starting. A pass, PullRemote and ResolveConflict whose game
+// begins to start during the download still have the restore refused.
+func TestOnlyTheLaunchCheckRestoresAGameThatIsStarting(t *testing.T) {
+	cases := []struct {
+		name   string
+		local  map[string]string
+		arm    func(h *harness)
+		run    func(h *harness) error
+		wantIs error
+	}{
+		{"pass", baseFiles, func(h *harness) { h.newerInCloud() }, func(h *harness) error { h.pass(); return nil }, nil},
+		{"pull", baseFiles, func(h *harness) { h.newerInCloud() }, func(h *harness) error { return h.svc.PullRemote(gameLocal) }, errGameRunning},
+		{"resolve keeping the cloud copy", changedBase, func(h *harness) { h.recordConflict() }, func(h *harness) error { return h.svc.ResolveConflict(gameLocal, false) }, errGameRunning},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t)
+			tc.arm(h)
+			h.open()
+			h.client.mu.Lock()
+			h.client.tamper = func(data []byte) []byte {
+				h.lib.launching(gameLocal, 1)
+				return data
+			}
+			h.client.mu.Unlock()
+
+			err := tc.run(h)
+
+			if tc.wantIs != nil && !errors.Is(err, tc.wantIs) {
+				t.Fatalf("err = %v, want %v", err, tc.wantIs)
+			}
+			if _, d := h.client.transfers(); d != 1 {
+				t.Fatalf("%d downloads, want the one that met the starting game", d)
+			}
+			if paths := h.backups.restorePaths(); len(paths) != 0 {
+				t.Fatalf("restores %v of a game that is starting", paths)
+			}
+			if got := readTree(t, h.saves()); !mapsEqual(got, tc.local) {
+				t.Fatalf("saves changed to %v", got)
+			}
+		})
+	}
+}
+
+func TestTheLaunchCheckRestoresThroughTheLaunchPath(t *testing.T) {
+	h := newHarness(t)
+	h.newerInCloud()
+	h.open()
+	limitLaunch(h, time.Minute)
+
+	if err := h.starting(gameLocal); err != nil {
+		t.Fatalf("SessionStarting = %v", err)
+	}
+	if paths := h.backups.restorePaths(); !slices.Equal(paths, []string{"before launch"}) {
+		t.Fatalf("restores %v, want one through RestoreBeforeLaunch", paths)
 	}
 }

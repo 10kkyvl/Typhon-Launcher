@@ -405,7 +405,13 @@ func (s *Service) download(ctx context.Context, r *run, gameID, key string, remo
 			return fail(backupErr(err))
 		}
 	}
-	if err := s.backups.Restore(ctx, gameID, snap.ID); err != nil {
+	restore := s.backups.Restore
+	if check != nil {
+		// The launch the check holds has the game starting; it cannot get
+		// past the hook until this download ends (RestoreBeforeLaunch).
+		restore = s.backups.RestoreBeforeLaunch
+	}
+	if err := restore(ctx, gameID, snap.ID); err != nil {
 		if uierr.Code(err) == codeBackupRunning {
 			return fail(errGameRunning)
 		}

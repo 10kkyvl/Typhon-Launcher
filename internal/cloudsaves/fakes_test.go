@@ -21,6 +21,7 @@ import (
 	"typhon/internal/library"
 	"typhon/internal/savebackup"
 	"typhon/internal/settings"
+	"typhon/internal/uierr"
 )
 
 type remoteSave struct {
@@ -211,10 +212,18 @@ type fakeLib struct {
 	saves   map[string]string
 	results map[string]library.SavesResult
 	running map[string]bool
+	// starting counts the launches of a game the library is holding in its
+	// launch hooks: like the library, GetRunningGames reports such a game.
+	starting map[string]int
 }
 
 func newFakeLib() *fakeLib {
-	return &fakeLib{saves: map[string]string{}, results: map[string]library.SavesResult{}, running: map[string]bool{}}
+	return &fakeLib{
+		saves:    map[string]string{},
+		results:  map[string]library.SavesResult{},
+		running:  map[string]bool{},
+		starting: map[string]int{},
+	}
 }
 
 func (l *fakeLib) GetGames() []library.Game {
@@ -241,6 +250,11 @@ func (l *fakeLib) GetRunningGames() []string {
 			ids = append(ids, id)
 		}
 	}
+	for id, n := range l.starting {
+		if n > 0 && !l.running[id] {
+			ids = append(ids, id)
+		}
+	}
 	return ids
 }
 
@@ -248,6 +262,18 @@ func (l *fakeLib) setRunning(id string, on bool) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.running[id] = on
+}
+
+func (l *fakeLib) processRunning(id string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.running[id]
+}
+
+func (l *fakeLib) launching(id string, delta int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.starting[id] += delta
 }
 
 type snapshotCall struct {
@@ -258,11 +284,14 @@ type snapshotCall struct {
 }
 
 type fakeBackups struct {
-	mu          sync.Mutex
-	root        string
-	lib         *fakeLib
-	snapshots   []snapshotCall
-	restores    []string
+	mu        sync.Mutex
+	root      string
+	lib       *fakeLib
+	snapshots []snapshotCall
+	restores  []string
+	// paths names the method of every restore that went through:
+	// "restore" or "before launch".
+	paths       []string
 	snapshotErr error
 	afterErr    error
 	restoreErr  error
@@ -293,7 +322,28 @@ func (b *fakeBackups) SnapshotPath(_ context.Context, gameID, src string, kind s
 	return savebackup.Snapshot{ID: id, GameID: gameID, Kind: kind, Path: copyDir}, b.afterErr
 }
 
+// errFakeRunning is what savebackup answers for a game it must not restore.
+var errFakeRunning = uierr.New(codeBackupRunning, "the game is running")
+
+// Restore refuses a game the library reports as running or starting, as
+// savebackup.Restore does.
 func (b *fakeBackups) Restore(_ context.Context, gameID, snapshotID string) error {
+	if slices.Contains(b.lib.GetRunningGames(), gameID) {
+		return errFakeRunning
+	}
+	return b.restore(gameID, snapshotID, "restore")
+}
+
+// RestoreBeforeLaunch refuses only a game whose process runs, as
+// savebackup.RestoreBeforeLaunch does.
+func (b *fakeBackups) RestoreBeforeLaunch(_ context.Context, gameID, snapshotID string) error {
+	if b.lib.processRunning(gameID) {
+		return errFakeRunning
+	}
+	return b.restore(gameID, snapshotID, "before launch")
+}
+
+func (b *fakeBackups) restore(gameID, snapshotID, path string) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.restoreErr != nil {
@@ -315,7 +365,14 @@ func (b *fakeBackups) Restore(_ context.Context, gameID, snapshotID string) erro
 		return err
 	}
 	b.restores = append(b.restores, snapshotID)
+	b.paths = append(b.paths, path)
 	return nil
+}
+
+func (b *fakeBackups) restorePaths() []string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return slices.Clone(b.paths)
 }
 
 func readTreeErr(root string) (map[string]string, error) {

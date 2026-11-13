@@ -51,6 +51,7 @@ type libraryPort interface {
 type backupPort interface {
 	SnapshotPath(ctx context.Context, gameID, sourcePath string, kind savebackup.Kind) (savebackup.Snapshot, error)
 	Restore(ctx context.Context, gameID, snapshotID string) error
+	RestoreBeforeLaunch(ctx context.Context, gameID, snapshotID string) error
 }
 
 type Service struct {

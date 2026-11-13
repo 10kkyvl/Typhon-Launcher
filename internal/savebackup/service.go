@@ -88,7 +88,15 @@ func NewService(settingsService *settings.Service, lib *library.Service) (*Servi
 	if err != nil {
 		return nil, fmt.Errorf("resolve config dir: %w", err)
 	}
-	s, err := newServiceAt(dir, settingsService.GetSettings, lib)
+	return NewServiceAt(dir, settingsService.GetSettings, lib)
+}
+
+// NewServiceAt keeps the backups under dir instead of the config directory.
+func NewServiceAt(dir string, config func() settings.Settings, lib *library.Service) (*Service, error) {
+	if lib == nil {
+		return nil, errors.New("savebackup: library service is required")
+	}
+	s, err := newServiceAt(dir, config, lib)
 	if err != nil {
 		return nil, err
 	}
