@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick, untrack } from 'svelte';
+  import { untrack } from 'svelte';
   import { FolderOpen } from '@lucide/svelte';
   import Tooltip from './Tooltip.svelte';
   import Button from './Button.svelte';
@@ -62,6 +62,7 @@
   } from '../gamemode/gamemode';
   import { toast } from '../stores/toasts';
   import { focusableIn } from '../layers/focus';
+  import { focusHandOff } from '../utils/focusHandOff';
   import { bytesSize, truncateMiddle } from '../utils/format';
 
   const uid = $props.id();
@@ -265,7 +266,7 @@
     if (!presetsFor(compatWrapper).includes(compatPreset)) compatPreset = 'default';
   }
 
-  async function changeCompat(on: boolean, keepChanged = false, action: '' | 'revert' | 'keep' = '', event?: MouseEvent) {
+  async function changeCompat(on: boolean, keepChanged = false, action: '' | 'revert' | 'keep' = '') {
     if (!game || compatBusy) return;
     const id = game.id;
     compatBusyFor = [...compatBusyFor, id];
@@ -276,10 +277,10 @@
     // The dialog may have closed, or opened for another game, while this ran: a failure shows inline
     // where it is still shown, else as a toast, so the outcome is never lost.
     const shown = () => target?.gameId === id;
-    // A problem's action goes with its notice once it worked. Whether the pressed button held the focus
-    // (only then is there a focus to hand on), and what followed its notice.
-    const pressed = event?.currentTarget instanceof HTMLElement && document.activeElement === event.currentTarget ? event.currentTarget : null;
-    const after = pressed ? controlAfterNotice() : null;
+    // A problem's action goes with its notice once it worked: focus it held goes to the compatibility
+    // switch, which then says the outcome, else to the control that followed the notice.
+    const hand = action ? focusHandOff() : null;
+    const after = action ? controlAfterNotice() : null;
     try {
       if (on) await enableWrapper(id, compatWrapper, compatPreset);
       else if (keepChanged) await disableWrapperKeepChanged(id);
@@ -298,7 +299,7 @@
       if (shown()) compatProgress = null;
     }
     if (shown()) await loadCompat(id);
-    if (pressed) await keepCompatFocus(pressed, after);
+    await hand?.(() => compatSection?.querySelector<HTMLElement>('[role="switch"]') ?? (after?.isConnected ? after : null));
   }
 
   let propsEl = $state<HTMLElement>();
@@ -310,16 +311,6 @@
     const all = focusableIn(propsEl);
     const mine = all.filter((el) => notice.contains(el));
     return all[all.indexOf(mine[mine.length - 1]) + 1] ?? null;
-  }
-
-  // The focused Revert or Keep went with the problem it solved: the focus goes to the compatibility
-  // switch, which now says the outcome, else to the control that followed the notice.
-  async function keepCompatFocus(pressed: HTMLElement, after: HTMLElement | null) {
-    await tick();
-    const active = document.activeElement;
-    if (pressed.isConnected || (active && active !== document.body && active.isConnected)) return;
-    const toggle = compatSection?.querySelector<HTMLElement>('[role="switch"]');
-    (toggle ?? (after?.isConnected ? after : null))?.focus();
   }
 
   async function pickCandidate(path: string) {
@@ -356,8 +347,10 @@
 
   async function saveArgs(event?: MouseEvent) {
     if (!game || argsBusy) return;
-    // Whether the pressed Save held the focus: only then is there a focus to hand on.
-    const save = event?.currentTarget instanceof HTMLButtonElement && document.activeElement === event.currentTarget ? event.currentTarget : null;
+    // Saved, Save has nothing left to do and stays but turns disabled: focus still on it then counts
+    // as fallen, and goes back to the field, what the user would change next.
+    const save = event?.currentTarget instanceof HTMLButtonElement ? event.currentTarget : null;
+    const hand = focusHandOff(() => (save?.disabled ? save : null));
     argsBusy = true;
     argsError = '';
     try {
@@ -371,12 +364,7 @@
     } finally {
       argsBusy = false;
     }
-    // Saved, Save has nothing left to do and turns disabled under the focus it held: that focus goes
-    // back to the field, what the user would change next.
-    if (!save) return;
-    await tick();
-    const active = document.activeElement;
-    if (save.disabled && (active === save || !active || active === document.body)) argsInput?.focus();
+    await hand(() => argsInput);
   }
 
   async function changeAdmin(on: boolean) {
@@ -651,7 +639,7 @@
                     size="sm"
                     disabled={(compatBusy && compatAction !== 'revert') || running}
                     busy={compatAction === 'revert'}
-                    onclick={(event) => changeCompat(false, false, 'revert', event)}
+                    onclick={() => changeCompat(false, false, 'revert')}
                   >
                     {msg('modals.compatRevert')}
                   </Button>
@@ -660,7 +648,7 @@
                       size="sm"
                       disabled={(compatBusy && compatAction !== 'keep') || running}
                       busy={compatAction === 'keep'}
-                      onclick={(event) => changeCompat(false, true, 'keep', event)}
+                      onclick={() => changeCompat(false, true, 'keep')}
                     >
                       {msg('modals.compatKeepChanged')}
                     </Button>
@@ -676,7 +664,7 @@
                   size="sm"
                   disabled={(compatBusy && compatAction !== 'keep') || running}
                   busy={compatAction === 'keep'}
-                  onclick={(event) => changeCompat(false, true, 'keep', event)}
+                  onclick={() => changeCompat(false, true, 'keep')}
                 >
                   {msg('modals.compatKeepChanged')}
                 </Button>
