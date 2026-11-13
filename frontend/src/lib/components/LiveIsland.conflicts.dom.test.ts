@@ -320,6 +320,41 @@ describe('a save conflict in the island', () => {
   });
 });
 
+describe('the status line while the island says a conflict', () => {
+  it('leaves out the game the island says, and carries it once the message is gone', async () => {
+    const { row } = setup();
+    cloudStatus.set(cloud(conflict('g1')));
+    await tick();
+    expect(conflictMessages()).toHaveLength(1);
+    expect(row()?.dataset.cloud).not.toBe('conflict');
+
+    liveIsland.hide(conflictMessages()[0].id);
+    await tick();
+
+    expect(row()?.dataset.cloud).toBe('conflict');
+    expect(row()?.textContent).toContain(msg('ui.statusCloudConflict', { title: 'Hades' }));
+  });
+
+  it('with two games, one in the island: the line names the other; both once the island lets go', async () => {
+    const { keys, row } = setup();
+    openCloudConflict('g2');
+    cloudStatus.set(cloud(conflict('g1'), conflict('g2')));
+    await tick();
+    closeCloudConflict();
+    await tick();
+    expect(conflictMessages().map((m) => m.detail)).toEqual(['Hades']);
+    expect(row()?.textContent).toContain(msg('ui.statusCloudConflict', { title: 'Celeste' }));
+
+    await keys.click(row() as HTMLElement);
+    expect(get(cloudConflictTarget)).toEqual({ gameId: 'g2', title: 'Celeste' });
+    closeCloudConflict();
+
+    liveIsland.hide(conflictMessages()[0].id);
+    await tick();
+    expect(row()?.textContent).toContain(msg('ui.statusCloudConflicts', { count: 2 }));
+  });
+});
+
 describe('a save conflict with no island on screen', () => {
   it('motion off: said once as a warning toast whose action opens the dialog', async () => {
     await motion(false);

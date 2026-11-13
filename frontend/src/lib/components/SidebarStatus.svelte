@@ -2,6 +2,7 @@
   import { ArrowDownToLine, CloudAlert, CloudCheck, CloudOff, CloudUpload, RotateCcw, TriangleAlert } from '@lucide/svelte';
   import { cloudStatus } from '../stores/cloudsaves';
   import { libraryGames } from '../stores/library';
+  import { conflictsInIsland } from '../stores/liveIslandFeed';
   import { selfUpdateDownloading, selfUpdateProgress, selfUpdateStatus, selfUpdateView } from '../stores/selfupdate';
   import { authState, isOffline } from '../stores/user';
   import { statusReason } from '../services/selfupdateMessages';
@@ -17,7 +18,8 @@
 
   let restartOpen = $state(false);
 
-  const cloud = $derived(cloudRow($cloudStatus, { offline: $isOffline, guest: $authState === 'guest' }, $libraryGames));
+  // A conflict the live island says at the moment is said there alone; the row carries it afterwards.
+  const cloud = $derived(cloudRow($cloudStatus, { offline: $isOffline, guest: $authState === 'guest' }, $libraryGames, $conflictsInIsland));
   const update = $derived(updateRow($selfUpdateStatus, $selfUpdateView, $selfUpdateDownloading, $selfUpdateProgress));
 
   const cloudName = $derived.by(() => {

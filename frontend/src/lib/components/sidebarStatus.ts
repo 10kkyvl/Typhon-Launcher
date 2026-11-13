@@ -21,10 +21,13 @@ export type UpdateRow =
 
 // Priority when games differ: conflict, then a failed game, then a failed pass, then (online) pending,
 // then synced. Only games the library still has are counted: the row could not open the others.
+// `aside`: games whose conflict the live island says at the moment; the row leaves them to it, and
+// says neither "synced" nor "syncing" while one is in conflict.
 export function cloudRow(
   status: CloudStatus | null,
   who: { offline: boolean; guest: boolean },
   games: readonly { id: string; title: string }[],
+  aside: ReadonlySet<string> = new Set(),
 ): CloudRow {
   if (!status) return { kind: 'none' };
   if (!status.enabled) return { kind: 'off' };
@@ -32,7 +35,7 @@ export function cloudRow(
   if (!status.signedIn) return who.guest ? { kind: 'signIn' } : { kind: 'account', code: status.error };
   const titles = new Map(games.map((g) => [g.id, g.title]));
   const known = status.games.filter((g) => titles.has(g.gameId));
-  const conflicts = known.filter((g) => g.state === 'conflict');
+  const conflicts = known.filter((g) => g.state === 'conflict' && !aside.has(g.gameId));
   if (conflicts.length > 0) {
     const gameId = conflicts[0].gameId;
     return { kind: 'conflict', gameId, title: titles.get(gameId) ?? '', count: conflicts.length };
@@ -40,6 +43,7 @@ export function cloudRow(
   const failed = known.find((g) => g.state === 'failed');
   if (failed) return { kind: 'failed', gameId: failed.gameId, title: titles.get(failed.gameId) ?? '' };
   if (status.error) return { kind: 'error', code: status.error };
+  if (known.some((g) => g.state === 'conflict')) return { kind: 'none' };
   // Without the server nothing syncs: neither "synced" nor "syncing" is true.
   if (who.offline) return { kind: 'offline' };
   if (status.pending || status.games.some((g) => g.state === 'pending')) return { kind: 'pending' };

@@ -116,6 +116,42 @@ describe('cloudRow', () => {
   ])('$name', ({ status, who, want }) => {
     expect(cloudRow(status, who, games)).toEqual(want);
   });
+
+  // The live island says these games' conflicts at the moment; the row says each conflict in one place.
+  it.each([
+    {
+      name: 'the one conflict the island says: the row does not say it, nor that the saves are synced',
+      status: cloud({ games: [game('g1', 'conflict'), game('g2', 'synced')] }),
+      aside: ['g1'],
+      want: { kind: 'none' },
+    },
+    {
+      name: 'two conflicts, one in the island: the row names the other and counts it alone',
+      status: cloud({ games: [game('g1', 'conflict'), game('g3', 'conflict')] }),
+      aside: ['g1'],
+      want: { kind: 'conflict', gameId: 'g3', title: 'Tunic', count: 1 },
+    },
+    {
+      name: 'a failure still shows while the island says the conflict',
+      status: cloud({ games: [game('g1', 'conflict'), game('g2', 'failed')] }),
+      aside: ['g1'],
+      want: { kind: 'failed', gameId: 'g2', title: 'Celeste' },
+    },
+    {
+      name: 'a failed pass still shows while the island says the conflict',
+      status: cloud({ error: 'cloud.server', games: [game('g1', 'conflict')] }),
+      aside: ['g1'],
+      want: { kind: 'error', code: 'cloud.server' },
+    },
+    {
+      name: 'the island saying nothing leaves the row as it was',
+      status: cloud({ games: [game('g1', 'conflict'), game('g3', 'conflict')] }),
+      aside: [],
+      want: { kind: 'conflict', gameId: 'g1', title: 'Hollow', count: 2 },
+    },
+  ])('$name', ({ status, aside, want }) => {
+    expect(cloudRow(status, online, games, new Set(aside))).toEqual(want);
+  });
 });
 
 describe('updateRow', () => {
