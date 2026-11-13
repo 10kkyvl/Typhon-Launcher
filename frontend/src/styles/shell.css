@@ -151,4 +151,7 @@
   --art-control: rgba(5, 8, 12, 0.72); /* a control or a mark on a cover */
   --art-control-hover: rgba(5, 8, 12, 0.92);
   --art-control-quiet: rgba(5, 8, 12, 0.45); /* a pinned control while the cover is at rest */
+
+  /* A game in a list (GameListRow): the width of its cover thumbnail. */
+  --row-thumb-w: 3.6rem;
 }

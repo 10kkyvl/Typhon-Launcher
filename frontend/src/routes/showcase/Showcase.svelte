@@ -7,6 +7,7 @@
   import { navigate } from '../../lib/stores/router';
   import ShowcaseActions from './ShowcaseActions.svelte';
   import ShowcaseFields from './ShowcaseFields.svelte';
+  import ShowcaseGames from './ShowcaseGames.svelte';
   import ShowcaseLayers from './ShowcaseLayers.svelte';
   import ShowcaseNotices from './ShowcaseNotices.svelte';
   import ShowcaseStatus from './ShowcaseStatus.svelte';
@@ -31,6 +32,7 @@
     <ShowcaseStatus />
     <ShowcaseNotices />
     <ShowcaseLayers />
+    <ShowcaseGames />
   </div>
 </Page>
 

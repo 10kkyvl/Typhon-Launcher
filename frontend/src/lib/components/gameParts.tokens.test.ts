@@ -9,7 +9,7 @@ import { frontendSources } from '../testing/sources';
  * measures over black and white.
  */
 
-const PARTS = ['lib/components/GameCard.svelte', 'lib/components/Artwork.svelte', 'lib/art/GeneratedArt.svelte'];
+const PARTS = ['lib/components/GameCard.svelte', 'lib/components/Artwork.svelte', 'lib/art/GeneratedArt.svelte', 'lib/components/GameListRow.svelte'];
 const COLOUR = /#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?|oklch|oklab|lab|lch)\(|\b(?:white|black)\b/i;
 
 describe('the game parts take their colours and layers from tokens', () => {
