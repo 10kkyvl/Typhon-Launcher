@@ -18,9 +18,13 @@ vi.mock('./toasts', () => ({ toast: vi.fn() }));
 
 let games: LibraryGame[] = [];
 let running: string[] = [];
+let gamesError: Error | null = null;
 
 vi.mock('../services/library', () => ({
-  getGames: vi.fn(async () => games),
+  getGames: vi.fn(async () => {
+    if (gamesError) throw gamesError;
+    return games;
+  }),
   getRunningGames: vi.fn(async () => running),
 }));
 
@@ -41,6 +45,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   games = [];
   running = [];
+  gamesError = null;
 });
 
 describe('library store', () => {
@@ -68,6 +73,30 @@ describe('library store', () => {
     handlers['library:updated']({ data: [game({ id: 'x' }), game({ id: 'y' })] });
 
     expect(get(store.libraryGames).map((item) => item.id)).toEqual(['x', 'y']);
+  });
+
+  it('counts as loaded once the first list arrives, an empty one too', async () => {
+    vi.resetModules();
+    const fresh = await import('./library');
+    expect(get(fresh.libraryLoaded)).toBe(false);
+
+    const { store } = await load();
+
+    expect(get(store.libraryGames)).toEqual([]);
+    expect(get(store.libraryLoaded)).toBe(true);
+  });
+
+  it('counts as loaded from library:updated when the first request failed', async () => {
+    gamesError = new Error('boom');
+    vi.resetModules();
+    for (const key of Object.keys(handlers)) delete handlers[key];
+    const store = await import('./library');
+    await expect(store.initLibrary()).rejects.toThrow('boom');
+    expect(get(store.libraryLoaded)).toBe(false);
+
+    handlers['library:updated']({ data: [game({ id: 'a' })] });
+
+    expect(get(store.libraryLoaded)).toBe(true);
   });
 
   it('shows an empty library when library:updated carries nothing', async () => {

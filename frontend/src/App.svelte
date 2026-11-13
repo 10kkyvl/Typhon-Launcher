@@ -21,7 +21,7 @@
   import { initDegradedNotices } from './lib/stores/degraded';
   import { initGameModeNotices } from './lib/stores/gamemode';
   import { initMissingImages } from './lib/stores/missingImages';
-  import { initEmulatorNeeded } from './lib/stores/emulatorNeeded';
+  import { initEmulatorNeeded, setResumeReady } from './lib/stores/emulatorNeeded';
   import { initDiscovery } from './lib/stores/discovery';
   import { initDownloads } from './lib/stores/downloads';
   import { initPlayThrottle } from './lib/stores/playThrottle';
@@ -120,6 +120,8 @@
       ($authState === 'authenticated' || $authState === 'guest' || $authState === 'offline'),
   );
   $effect(() => setLinksReady(linksReady));
+  // CloudConflictModal below is mounted under the same gate.
+  $effect(() => setResumeReady(linksReady));
 
   let lastGamesPath: string | undefined;
   settings.subscribe((value) => {

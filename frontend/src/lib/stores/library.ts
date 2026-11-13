@@ -8,6 +8,8 @@ import { navigate } from './router';
 import { toast } from './toasts';
 
 export const libraryGames = writable<LibraryGame[]>([]);
+// Until the first list arrives, an empty libraryGames is not an empty library.
+export const libraryLoaded = writable(false);
 export const installedGames = derived(libraryGames, (games) => games.filter((game) => !game.uninstalled));
 export const runningGames = writable<Set<string>>(new Set());
 // When this launcher saw each running game start (ms since the epoch). A game that was already running
@@ -18,12 +20,14 @@ export async function initLibrary() {
   const { on, load } = listenFirst();
   if (!inWails) {
     libraryGames.set(await getGames());
+    libraryLoaded.set(true);
     runningGames.set(new Set(await getRunningGames()));
     return;
   }
 
   on('library:updated', (event) => {
     libraryGames.set((event.data as LibraryGame[]) ?? []);
+    libraryLoaded.set(true);
   });
   on('library:profile-fallback', (event) => {
     const { profileName } = event.data as ProfileFallback;
@@ -68,5 +72,6 @@ export async function initLibrary() {
     }
   });
   libraryGames.set(await load(getGames));
+  libraryLoaded.set(true);
   runningGames.set(new Set(await load(getRunningGames)));
 }
