@@ -41,6 +41,7 @@ const ALLOWED: Record<string, Record<string, Kind>> = {
   'lib/components/AccountMenu.svelte': { chip: 'account chip' },
   'lib/components/AchievementsCard.svelte': { tile: 'tile' },
   'lib/components/ActivityDock.svelte': { 'panel-link': 'awaiting rebuild', pill: 'awaiting rebuild' },
+  'lib/components/ActivityWidget.svelte': { head: 'row', row: 'row' },
   'lib/components/BetaBadge.svelte': { badge: 'badge trigger' },
   'lib/components/ChatAttachments.svelte': { tile: 'thumbnail' },
   'lib/components/ChatConversations.svelte': { conversation: 'row' },

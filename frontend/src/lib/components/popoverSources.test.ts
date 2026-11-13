@@ -7,6 +7,7 @@ const POPOVER = 'lib/components/Popover.svelte';
 const BUILT_ON_IT = [
   POPOVER,
   'lib/components/NotificationsPanel.svelte',
+  'lib/components/ActivityWidget.svelte',
   'lib/components/reactions/ReactionPicker.svelte',
   'lib/components/reactions/ReactionBar.svelte',
 ];

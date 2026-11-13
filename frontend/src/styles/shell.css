@@ -10,8 +10,11 @@
 
   --sidebar-rail-w: 6.4rem;
   /* The sidebar's activity zone, between Settings and the status line: reserved at this height whether
-     anything goes on or not, so neither moves. */
+     anything goes on or not, so neither moves. Its line is a nav item's height plus room for the bar
+     under it; the panel it opens is wider than the island, over the content. */
   --activity-zone-h: 6rem;
+  --activity-head-h: 4.4rem;
+  --activity-panel-w: 30rem;
   --font-wordmark: Unbounded, Onest Variable, sans-serif;
 
   --topbar-search-min: 18rem;

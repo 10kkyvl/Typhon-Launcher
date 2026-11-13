@@ -15,6 +15,7 @@
   import { msg } from '../i18n';
   import { SHOWCASE, SHOWCASE_LABEL } from '../navigation/showcase';
   import { Plate, partsThatMove, scrollToShow } from '../motion/plate';
+  import ActivityWidget from './ActivityWidget.svelte';
   import BetaBadge from './BetaBadge.svelte';
   import CountBadge from './CountBadge.svelte';
   import SidebarStatus from './SidebarStatus.svelte';
@@ -141,7 +142,9 @@
     {@render navButton(settingsItem)}
   </div>
 
-  <div class="activity-zone" data-part="sidebar-activity"></div>
+  <div class="activity-zone" data-part="sidebar-activity">
+    <ActivityWidget />
+  </div>
 
   <SidebarStatus />
 </aside>
