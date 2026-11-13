@@ -165,6 +165,30 @@ describe('GamePropertiesModal: saving the launch arguments', () => {
     await vi.waitFor(() => expect(save).toHaveProperty('disabled', true));
     await vi.waitFor(() => expect(document.activeElement).toBe(field));
   });
+
+  it.each([
+    ['saved', (saved: ReturnType<typeof deferred<LibraryGame>>) => saved.resolve({} as LibraryGame)],
+    ['refused', (saved: ReturnType<typeof deferred<LibraryGame>>) => saved.reject(new Error('disk'))],
+  ] as const)('leaves the focus alone when the pressed Save did not hold it (%s)', async (_how, answer) => {
+    const saved = deferred<LibraryGame>();
+    vi.mocked(setLaunchArgsLine).mockReturnValueOnce(saved.promise);
+    const dialog = await openDialog();
+    const keys = user();
+    const field = await within(dialog).findByRole('textbox', { name: msg('modals.propertiesArgsTitle') });
+    await vi.waitFor(() => expect(field).toHaveProperty('disabled', false));
+    await keys.type(field, '-windowed');
+    const save = within(dialog).getByRole('button', { name: msg('modals.propertiesArgsSave') });
+    field.blur();
+    expect(document.activeElement).toBe(document.body);
+
+    save.click();
+    await vi.waitFor(() => expect(save.getAttribute('aria-busy')).toBe('true'));
+    answer(saved);
+
+    await vi.waitFor(() => expect(save.getAttribute('aria-busy')).toBeNull());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(document.activeElement).toBe(document.body);
+  });
 });
 
 describe('GamePropertiesModal: compatibility mode', () => {

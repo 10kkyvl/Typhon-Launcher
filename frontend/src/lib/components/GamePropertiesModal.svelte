@@ -352,8 +352,10 @@
     }
   }
 
-  async function saveArgs() {
+  async function saveArgs(event?: MouseEvent) {
     if (!game || argsBusy) return;
+    // Whether the pressed Save held the focus: only then is there a focus to hand on.
+    const save = event?.currentTarget instanceof HTMLButtonElement && document.activeElement === event.currentTarget ? event.currentTarget : null;
     argsBusy = true;
     argsError = '';
     try {
@@ -367,11 +369,12 @@
     } finally {
       argsBusy = false;
     }
-    // Saved, Save has nothing left to do and turns disabled under a focus it held: the focus goes back
-    // to the field, what the user would change next.
+    // Saved, Save has nothing left to do and turns disabled under the focus it held: that focus goes
+    // back to the field, what the user would change next.
+    if (!save) return;
     await tick();
     const active = document.activeElement;
-    if (!active || active === document.body || (active instanceof HTMLButtonElement && active.disabled)) argsInput?.focus();
+    if (save.disabled && (active === save || !active || active === document.body)) argsInput?.focus();
   }
 
   async function changeAdmin(on: boolean) {
