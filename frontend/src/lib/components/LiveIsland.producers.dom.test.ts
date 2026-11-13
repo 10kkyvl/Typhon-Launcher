@@ -261,6 +261,14 @@ describe('a friend who starts playing, in the island', () => {
     expect(get(liveIslandCurrent)).toBeUndefined();
   });
 
+  it('a friend new to the list who is already in a game says nothing', async () => {
+    setup();
+    friendsPage.set(page(friend(online)));
+    friendsPage.set(page(friend(online), friend(playing, 'carol')));
+    await tick();
+    expect(get(liveIslandCurrent)).toBeUndefined();
+  });
+
   it('a friend who moves on to another game says so again', async () => {
     setup();
     friendsPage.set(page(friend(playing)));

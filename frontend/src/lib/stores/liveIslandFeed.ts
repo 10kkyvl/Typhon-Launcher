@@ -20,7 +20,8 @@ import { ACTION_MS, dismissToast, pauseToast, resumeToast, toasts, toastsInIslan
  *   removed);
  * - a friend who starts playing (presence in the friends list): one message with the friend's
  *   picture and "Open the game". The first list that has friends in it is what was going on already
- *   and says nothing; an empty list (signed out) starts that over.
+ *   and says nothing; an empty list (signed out) starts that over; a friend new to the list says
+ *   nothing either.
  */
 
 const TOAST_ICON = { info: Info, success: CircleCheck, warning: TriangleAlert, danger: CircleAlert } as const;
@@ -90,19 +91,21 @@ function trackFailedDownloads(): () => void {
 }
 
 function trackFriends(): () => void {
-  let before: Map<string, number> | null = null;
+  // Every friend on the list, with the game they are in or null: a friend new to the list who is
+  // already in a game is someone added, not someone who just started playing.
+  let before: Map<string, number | null> | null = null;
   return friendsPage.subscribe((page) => {
-    const now = new Map<string, number>();
+    const now = new Map<string, number | null>();
     for (const f of page.friends) {
       const game = f.presence?.gameId;
-      if (isPlaying(f.presence) && game != null) now.set(f.id, game);
+      now.set(f.id, isPlaying(f.presence) && game != null ? game : null);
     }
     const known = before;
     before = page.friends.length > 0 ? now : null;
     if (known === null) return;
     for (const f of page.friends) {
       const game = now.get(f.id);
-      if (game === undefined || known.get(f.id) === game) continue;
+      if (game == null || !known.has(f.id) || known.get(f.id) === game) continue;
       const name = f.displayName || f.username;
       const title = f.presence?.gameTitle ?? '';
       liveIsland.show({
