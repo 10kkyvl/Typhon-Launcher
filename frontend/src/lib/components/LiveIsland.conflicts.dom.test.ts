@@ -51,6 +51,15 @@ function cloud(...games: CloudGameStatus[]): CloudStatus {
 
 const conflictMessages = () => get(liveIslandMessages).filter((m) => m.kind === 'conflict');
 
+// A conflict carried over a rebuilt island: back as the island's own message (not a mirrored toast),
+// with no toast left beside it.
+function expectCarriedBack(titles: string[]) {
+  expect(get(liveIslandMessages).map((m) => [m.kind, m.text, m.detail, m.actions?.map((a) => a.label)])).toEqual(
+    titles.map((title) => ['conflict', SAY(), title, [CHOOSE()]]),
+  );
+  expect(get(toasts)).toEqual([]);
+}
+
 let app: HTMLDivElement;
 
 beforeEach(() => {
@@ -471,8 +480,8 @@ describe('a save conflict with no island on screen', () => {
     expect(get(toasts)).toEqual([]);
   });
 
-  it('the island going with the messages still there: one toast each with the action, and nothing again when it comes back', async () => {
-    setup();
+  it('the island going with the messages still there: one toast each with the action; back on, the island takes them back in their own shape', async () => {
+    const { row } = setup();
     cloudStatus.set(cloud(conflict('g1'), conflict('g2')));
     await tick();
     expect(conflictMessages()).toHaveLength(2);
@@ -487,8 +496,48 @@ describe('a save conflict with no island on screen', () => {
 
     await motion(true);
 
-    expect(conflictMessages()).toEqual([]);
-    expect(get(toasts)).toHaveLength(2);
+    expectCarriedBack(['Hades', 'Celeste']);
+    expect(row()?.dataset.cloud).not.toBe('conflict');
+  });
+
+  it('motion off, then on with the toast up: the island takes it back as its conflict message, and the line leaves the game out', async () => {
+    await motion(false);
+    const { row } = setup();
+    cloudStatus.set(cloud(conflict('g1')));
+    await tick();
+    expect(get(toasts)).toHaveLength(1);
+
+    await motion(true);
+
+    expectCarriedBack(['Hades']);
+    expect(row()?.dataset.cloud).not.toBe('conflict');
+  });
+
+  it('the shell rebuilt (a language switch) with the message on screen: it comes back in its own shape, the line leaves the game out', async () => {
+    const { view } = setup();
+    cloudStatus.set(cloud(conflict('g1')));
+    await tick();
+    view.unmount();
+    expect(get(toasts)).toHaveLength(1);
+
+    const { row } = setup();
+    await tick();
+
+    expectCarriedBack(['Hades']);
+    expect(row()?.dataset.cloud).not.toBe('conflict');
+  });
+
+  it('the shell rebuilt with one message on screen and one waiting: both come back, in their order', async () => {
+    const { view } = setup();
+    cloudStatus.set(cloud(conflict('g1'), conflict('g2')));
+    await tick();
+    view.unmount();
+
+    setup();
+    await tick();
+
+    expectCarriedBack(['Hades', 'Celeste']);
+    expect(get(liveIslandCurrent)?.detail).toBe('Hades');
   });
 
   it('motion off at startup: said once as a toast, and turning motion on says nothing more', async () => {

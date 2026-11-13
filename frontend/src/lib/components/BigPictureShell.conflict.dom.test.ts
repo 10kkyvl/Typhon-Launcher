@@ -1,4 +1,5 @@
 import { render, screen, within } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
@@ -6,9 +7,11 @@ import type { CloudStatus } from '../services/cloudsaves';
 import type { LibraryGame } from '../services/library';
 import { closeCloudConflict, cloudStatus } from '../stores/cloudsaves';
 import { libraryGames } from '../stores/library';
+import { liveIsland, liveIslandMessages } from '../stores/liveIsland';
 import { toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
 import BigPictureHarness from '../testing/BigPictureHarness.svelte';
+import IslandShellHarness from '../testing/IslandShellHarness.svelte';
 
 const { play, status, resolve, allow } = vi.hoisted(() => ({ play: vi.fn(), status: vi.fn(), resolve: vi.fn(), allow: vi.fn() }));
 
@@ -64,12 +67,14 @@ afterEach(() => {
   cloudStatus.set(null);
   libraryGames.set([]);
   toasts.set([]);
+  liveIsland.clear();
   app.remove();
   play.mockReset();
   status.mockReset();
   resolve.mockReset();
   allow.mockReset();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   Reflect.deleteProperty(navigator, 'getGamepads');
 });
 
@@ -189,6 +194,38 @@ describe('a launch held back by a save conflict in Big Picture', () => {
     expect(dialog.textContent).toContain('Celeste');
     expect(get(toasts)).toEqual([]);
     expect(play).not.toHaveBeenCalled();
+  });
+
+  it('a conflict carried into Big Picture and back: a toast in its corner, then the island\'s own message again', async () => {
+    vi.stubGlobal('ResizeObserver', class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    libraryGames.set([{ id: 'game-3', title: 'Tunic' } as LibraryGame]);
+    const listed = conflicted();
+    cloudStatus.set({ ...listed, games: [{ ...listed.games[0], gameId: 'game-3', conflict: { ...listed.games[0].conflict!, localDigest: 'carried' } }] });
+    const desktop = render(IslandShellHarness, { target: app });
+    await tick();
+    expect(get(liveIslandMessages).map((m) => [m.kind, m.detail])).toEqual([['conflict', 'Tunic']]);
+
+    desktop.unmount();
+    const bigPicture = render(BigPictureHarness, { target: app });
+    const corner = document.querySelector('.toast-corner') as HTMLElement;
+    expect(await within(corner).findByRole('button', { name: msg('ui.liveIslandChooseVersion') })).toBeTruthy();
+    // The shell's other parts may raise toasts of their own here (no backend); only offers count.
+    const offers = () => get(toasts).filter((item) => item.action);
+    expect(offers().map((item) => item.message)).toEqual([msg('ui.statusCloudConflict', { title: 'Tunic' })]);
+
+    bigPicture.unmount();
+    render(IslandShellHarness, { target: app });
+    await tick();
+
+    expect(get(liveIslandMessages).filter((m) => m.actions).map((m) => [m.kind, m.detail, m.actions?.map((a) => a.label)])).toEqual([
+      ['conflict', 'Tunic', [msg('ui.liveIslandChooseVersion')]],
+    ]);
+    expect(offers()).toEqual([]);
+    expect(document.querySelector('[data-cloud="conflict"]')).toBeNull();
   });
 
   it('says that the saves are still syncing as a notice, with no dialog', async () => {

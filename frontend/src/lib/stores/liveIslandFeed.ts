@@ -8,7 +8,7 @@ import { downloads, failedMessageId } from './downloads';
 import { libraryGames } from './library';
 import { liveIsland, liveIslandCurrent, liveIslandHeld, liveIslandMessages, type LiveIslandMessage, type LiveIslandTone } from './liveIsland';
 import { friendsPage } from './social';
-import { ACTION_MS, dismissToast, pauseToast, resumeToast, toast, toasts, toastsInIsland, type Toast, type ToastKind } from './toasts';
+import { ACTION_MS, dismissToast, pauseToast, queuedToasts, resumeToast, toast, toasts, toastsInIsland, type Toast, type ToastKind } from './toasts';
 
 /**
  * What the live island is told, wired once by LiveIsland.svelte while it is mounted (motion on):
@@ -157,6 +157,16 @@ function unsayConflict(gameId: string): void {
   dismissToast(shown);
 }
 
+// The toast still says it (shown or waiting): the island it was carried out of went (a rebuilt shell,
+// motion off, Big Picture), and an island that comes takes it back.
+function conflictToastUp(gameId: string): boolean {
+  const id = conflictToasts.get(gameId);
+  if (id === undefined) return false;
+  if (get(toasts).some((t) => t.id === id) || queuedToasts().some((t) => t.id === id)) return true;
+  conflictToasts.delete(gameId);
+  return false;
+}
+
 function sayConflictAsToast(gameId: string, title: string): void {
   unsayConflict(gameId);
   const id = toast(msg('ui.statusCloudConflict', { title }), 'warning', {
@@ -185,9 +195,10 @@ function sayConflictInIsland(gameId: string, title: string): void {
 /**
  * Says each save conflict once, in the way `say` gives: a conflict the dialog shows is taken as seen,
  * a game the library does not have waits until it does, and what was said goes once the conflict is
- * resolved or its dialog opens.
+ * resolved or its dialog opens. `takeBack` (the island): a conflict whose toast is still up is said
+ * again in this way in place of that toast, as the same conflict, not a new one.
  */
-function trackConflicts(say: (gameId: string, title: string) => void): () => void {
+function trackConflicts(say: (gameId: string, title: string) => void, takeBack = false): () => void {
   const sync = () => {
     const open = get(cloudConflictTarget)?.gameId;
     const titles = new Map(get(libraryGames).map((g) => [g.id, g.title]));
@@ -208,6 +219,8 @@ function trackConflicts(say: (gameId: string, title: string) => void): () => voi
       }
       if (before !== undefined && !newer) {
         if (copies !== '') saidConflicts.set(gameId, copies);
+        const title = titles.get(gameId);
+        if (takeBack && title && conflictToastUp(gameId)) say(gameId, title);
         continue;
       }
       const title = titles.get(gameId);
@@ -236,7 +249,9 @@ export function initConflictToasts(): () => void {
  * besides the toasts is said by its fallback (a failed download, a save conflict: its toast) or let go.
  */
 export function initLiveIslandFeed(): () => void {
-  const offs = [trackToasts(), trackFailedDownloads(), trackFriends(), trackConflicts(sayConflictInIsland)];
+  // Conflicts first: a conflict's toast left by the island before this one is taken back as its own
+  // message, before the toasts are mirrored and it would come in as a plain toast.
+  const offs = [trackConflicts(sayConflictInIsland, true), trackToasts(), trackFailedDownloads(), trackFriends()];
   return () => {
     for (const off of offs) off();
     for (const m of get(liveIslandMessages)) {
