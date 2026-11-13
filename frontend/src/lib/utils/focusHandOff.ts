@@ -9,8 +9,13 @@ import { focusQuietly } from '../layers/focus';
  * WebKit view, where a click does not focus a button), and so does a control that is still there and a
  * user who has moved on meanwhile.
  *
+ * The target is read one `tick` after the call and has to be on the page by then: one that is not
+ * mounted yet is skipped, and focus stays where it fell.
+ *
  * `leaving`: what is on its way out with the pressed control still inside it (a toast fading away);
- * focus in there counts as fallen.
+ * focus in there counts as fallen. It may also name the pressed control itself when that stays on
+ * screen but turns disabled (`() => (pressed.disabled ? pressed : null)`): focus left on it counts as
+ * fallen too.
  */
 export function focusHandOff(
   leaving?: () => Element | null | undefined,
