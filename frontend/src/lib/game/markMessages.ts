@@ -1,7 +1,7 @@
-import { msg } from '../i18n';
+import { errorCode, hasMessage, msg } from '../i18n';
 
 export function markError(err: unknown, fallback: string): string {
-  const raw = err instanceof Error ? err.message : String(err ?? '');
-  if (raw.includes('favorites limit reached')) return msg('games.markFavoritesLimit');
-  return fallback;
+  const code = errorCode(err);
+  if (code === 'library.too_many_favorites') return msg('games.markFavoritesLimit');
+  return hasMessage(code) ? msg(code) : fallback;
 }

@@ -8,6 +8,7 @@ import {
   playGame,
   playGameProfile,
   removeShortcut,
+  setFavorite,
   setHidden,
   stopGame,
   type LibraryGame,
@@ -141,6 +142,12 @@ const CASES: Case[] = [
     fallback: 'library.menuSavesFailed',
   },
   { action: 'hide', item: () => msg('games.actionHide'), fail: (err) => vi.mocked(setHidden).mockRejectedValueOnce(err), fallback: 'games.hideFailed' },
+  {
+    action: 'add to favourites',
+    item: () => msg('games.actionFavoriteAdd'),
+    fail: (err) => vi.mocked(setFavorite).mockRejectedValueOnce(err),
+    fallback: 'ui.favoriteChangeFailed',
+  },
 ];
 
 describe('a failed action of the game menu', () => {
@@ -171,6 +178,19 @@ describe('a failed action of the game menu', () => {
     expect(kind).toBe('danger');
     expect(text).not.toContain(err.message.replace(/^typhon:[\w.]+: /, ''));
     expect(text).not.toContain('typhon:');
+  });
+
+  // Go refuses a seventh favourite with a code; the menu still offers the item and says the limit.
+  it.each([
+    'typhon:library.too_many_favorites: favorites limit reached',
+    'typhon:library.too_many_favorites: достигнут лимит избранного',
+  ])('add to favourites at the limit (%s): says the limit, not a generic failure', async (message) => {
+    libraryGames.set([hades]);
+    vi.mocked(setFavorite).mockRejectedValueOnce(new Error(message));
+
+    await pick(msg('games.actionFavoriteAdd'));
+
+    await vi.waitFor(() => expect(shown()).toEqual([[msg('games.markFavoritesLimit'), 'danger']]));
   });
 
   it('a failed launch reads the same from the menu as from a card', async () => {
