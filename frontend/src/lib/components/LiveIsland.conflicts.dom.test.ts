@@ -1,11 +1,12 @@
 import { render, screen, within } from '@testing-library/svelte';
+import { Events } from '@wailsio/runtime';
 import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import type { CloudGameStatus, CloudStatus } from '../services/cloudsaves';
 import type { LibraryGame } from '../services/library';
-import { askToResolveConflict, closeCloudConflict, cloudConflictTarget, cloudStatus, openCloudConflict } from '../stores/cloudsaves';
+import { askToResolveConflict, closeCloudConflict, cloudConflictTarget, cloudStatus, initCloudSaves, openCloudConflict } from '../stores/cloudsaves';
 import { libraryGames } from '../stores/library';
 import { liveIsland, liveIslandCurrent, liveIslandMessages, type LiveIslandMessage } from '../stores/liveIsland';
 import { resetHistory } from '../stores/router';
@@ -112,6 +113,30 @@ describe('a save conflict in the island', () => {
     expect(within(screen.getByTestId('live-island-alert')).getByText(`${SAY()}. Hades`)).toBeTruthy();
     expect(get(toasts)).toEqual([]);
     expect(get(cloudConflictTarget)).toBeNull();
+  });
+
+  it('a conflict that a background pass reports is said in the island and opens no dialog', async () => {
+    // A game with no conflict said before in this session: the event carries no copies to tell it by.
+    const gameId = `fresh-${++copiesMade}`;
+    libraryGames.set([{ id: gameId, title: 'Hades' } as LibraryGame]);
+    status.mockResolvedValue(cloud(synced(gameId)));
+    vi.mocked(Events.On).mockClear();
+    backend.wails = true;
+    const stop = initCloudSaves();
+    backend.wails = false;
+    await vi.waitFor(() => expect(get(cloudStatus)).not.toBeNull());
+    const handler = vi.mocked(Events.On).mock.calls.find(([name]) => name === 'saves:cloud')?.[1];
+    setup();
+    await tick();
+    expect(conflictMessages()).toEqual([]);
+
+    handler?.({ data: { gameId, status: 'conflict', code: 'cloud.conflict', message: '', usedBytes: 0, quotaBytes: 0 } } as never);
+    await tick();
+
+    expect(get(liveIslandCurrent)).toMatchObject({ kind: 'conflict', detail: 'Hades' });
+    expect(get(cloudConflictTarget)).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    stop();
   });
 
   it('leaves by itself after 12 s on screen', async () => {

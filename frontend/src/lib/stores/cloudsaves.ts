@@ -144,14 +144,14 @@ function applyEvent(event: CloudEvent) {
   });
 }
 
+// A conflict found in the background opens no dialog over the page: the live island or a toast says it
+// (liveIslandFeed.ts). The status is loaded again for the conflict's details, which the event lacks.
 export function initCloudSaves() {
   if (!inWails) return () => {};
   void refreshCloudStatus();
   return onCloudEvent((event) => {
-    const wasConflict = get(cloudStatus)?.games.some((g) => g.gameId === event.gameId && g.state === 'conflict');
     applyEvent(event);
     if (event.status !== 'conflict' || !event.gameId) return;
     void refreshCloudStatus();
-    if (!wasConflict) openCloudConflict(event.gameId);
   });
 }

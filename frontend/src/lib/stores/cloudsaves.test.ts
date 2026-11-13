@@ -84,18 +84,16 @@ describe('cloud saves store', () => {
     expect(current?.games.find((g) => g.gameId === 'g1')).toMatchObject({ state: 'failed', code: 'cloud.quota' });
   });
 
-  it('opens the conflict dialog when a game enters conflict', async () => {
+  // The live island or a toast says it (liveIslandFeed.ts); the dialog opens from there, the status
+  // line, the save backups or a held-back launch, never over the page by itself.
+  it('does not open the dialog when a game enters conflict, and loads the status again for its details', async () => {
     const { store } = await init();
-    expect(get(store.cloudConflictTarget)).toBeNull();
+    const { loadCloudStatus } = await import('../services/cloudsaves');
+    const loads = vi.mocked(loadCloudStatus).mock.calls.length;
     emit(event({ status: 'conflict', code: 'cloud.conflict' }));
-    expect(get(store.cloudConflictTarget)).toEqual({ gameId: 'g1', title: 'Hades' });
-  });
-
-  it('does not reopen the dialog for a game that is already in conflict', async () => {
-    load = async () => status({ games: [{ gameId: 'g1', state: 'conflict', code: '', message: '', at: '', syncedAt: '' }] });
-    const { store } = await init();
-    emit(event({ status: 'conflict' }));
     expect(get(store.cloudConflictTarget)).toBeNull();
+    expect(get(store.cloudStatus)?.games.find((g) => g.gameId === 'g1')?.state).toBe('conflict');
+    expect(vi.mocked(loadCloudStatus).mock.calls.length).toBe(loads + 1);
   });
 
   it('keeps the usage when an event carries no quota', async () => {
@@ -193,9 +191,9 @@ describe('a launch waiting on the conflict dialog', () => {
     expect(await answer(question)).toBe(true);
   });
 
-  it('joins the dialog an earlier event opened for the same game: one dialog, and the launch goes on after the choice', async () => {
+  it('joins the dialog the status line opened for the same game: one dialog, and the launch goes on after the choice', async () => {
     const { store } = await init();
-    emit(event({ status: 'conflict' }));
+    store.openCloudConflict('g1');
     const opened = get(store.cloudConflictTarget);
     expect(opened).toEqual({ gameId: 'g1', title: 'Hades' });
 
@@ -219,13 +217,25 @@ describe('a launch waiting on the conflict dialog', () => {
     expect(await answer(question)).toBe(true);
   });
 
-  it('is given up when an event replaces the dialog with another game, and a late choice for it changes nothing', async () => {
+  it('keeps its dialog when an event reports another game in conflict', async () => {
+    const { store, library } = await init();
+    library.libraryGames.set([{ id: 'g1', title: 'Hades' } as LibraryGame, { id: 'g2', title: 'Celeste' } as LibraryGame]);
+    const question = store.askToResolveConflict('g1');
+    const asked = get(store.cloudConflictTarget);
+
+    emit(event({ gameId: 'g2', status: 'conflict' }));
+
+    expect(await answer(question)).toBe('waiting');
+    expect(get(store.cloudConflictTarget)).toBe(asked);
+  });
+
+  it('is given up when the dialog is opened for another game, and a late choice for it changes nothing', async () => {
     const { store, library } = await init();
     library.libraryGames.set([{ id: 'g1', title: 'Hades' } as LibraryGame, { id: 'g2', title: 'Celeste' } as LibraryGame]);
     const question = store.askToResolveConflict('g1');
     const first = get(store.cloudConflictTarget)!;
 
-    emit(event({ gameId: 'g2', status: 'conflict' }));
+    store.openCloudConflict('g2');
 
     expect(await answer(question)).toBe(false);
     expect(get(store.cloudConflictTarget)).toEqual({ gameId: 'g2', title: 'Celeste' });
@@ -270,7 +280,7 @@ describe('a launch waiting on the conflict dialog', () => {
 describe('playing on this computer past the conflict', () => {
   it('tells the dialog whether a launch waits on it', async () => {
     const { store } = await init();
-    emit(event({ status: 'conflict' }));
+    store.openCloudConflict('g1');
     expect(get(store.cloudConflictTarget)?.gameId).toBe('g1');
     expect(get(store.cloudConflictLaunch)).toBe(false);
 
