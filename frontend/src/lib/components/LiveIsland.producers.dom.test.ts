@@ -160,6 +160,26 @@ describe('a failed download in the island', () => {
     expect(get(route).name).toBe('downloads');
   });
 
+  it('"Open downloads" pressed from the keyboard opens the downloads page as well', async () => {
+    const emit = await startDownloads();
+    const { keys, pill } = setup();
+    emit('download:added', download());
+    emit('download:failed', download({ status: 'failed' }));
+    await tick();
+    screen.getByRole('button', { name: 'Page' }).focus();
+    pill().focus();
+    await keys.keyboard('{Enter}');
+    await tick();
+    await keys.tab();
+    await keys.tab();
+    expect(document.activeElement?.textContent?.trim()).toBe(msg('ui.liveIslandOpenDownloads'));
+
+    await keys.keyboard('{Enter}');
+
+    expect(get(route).name).toBe('downloads');
+    expect(liveIsland.has('download-failed:dl1')).toBe(false);
+  });
+
   it('a download that had failed before the island came says nothing', async () => {
     downloads.set([download({ status: 'failed' })]);
     setup();

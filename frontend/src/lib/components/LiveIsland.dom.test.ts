@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/svelte';
+import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -287,6 +287,48 @@ describe('LiveIsland: actions, dismissal and the clock', () => {
     undo.click();
     await tick();
     expect(run).toHaveBeenCalledTimes(1);
+    expect(get(liveIslandCurrent)).toBeUndefined();
+  });
+
+  // What the action opens (a dialog) takes the focused element as the place to give focus back to:
+  // that must be where the player was, not the island's button, which goes with the message.
+  it('an action pressed from the keyboard runs with focus back where it was before the island', async () => {
+    const { keys, pill } = setup();
+    let focusedAtRun: Element | null = null;
+    liveIsland.show({ id: 'a', text: 'Removed', actions: [{ label: 'Undo', run: () => (focusedAtRun = document.activeElement) }] });
+    await tick();
+    const before = screen.getByRole('button', { name: 'Before' });
+    before.focus();
+    await keys.tab();
+    expect(document.activeElement).toBe(pill());
+    await keys.keyboard('{Enter}');
+    await tick();
+    await keys.tab();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Undo' }));
+
+    await keys.keyboard('{Enter}');
+
+    expect(focusedAtRun).toBe(before);
+    await tick();
+    expect(document.activeElement).toBe(before);
+  });
+
+  // A press that gave the button no focus (a click in the macOS WebKit view) moves nothing.
+  it('an action pressed without focus in the island leaves focus where it is', async () => {
+    const { pill } = setup();
+    let focusedAtRun: Element | null = null;
+    liveIsland.show({ id: 'a', text: 'Removed', actions: [{ label: 'Undo', run: () => (focusedAtRun = document.activeElement) }] });
+    await tick();
+    const search = screen.getByRole('textbox', { name: 'Search' });
+    search.focus();
+    fireEvent.click(pill());
+    await tick();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+
+    expect(focusedAtRun).toBe(search);
+    await tick();
+    expect(document.activeElement).toBe(search);
     expect(get(liveIslandCurrent)).toBeUndefined();
   });
 

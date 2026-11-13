@@ -204,10 +204,18 @@
     for (const m of get(liveIslandMessages)) close(m);
   }
 
+  // Focus held by the pressed button goes back where it came from before the action runs: a dialog the
+  // action opens takes the focused element as the place to return to, and the button goes with the
+  // message. A press that gave the button no focus (WebKit) moves nothing.
   const ran = new WeakSet<LiveIslandAction>();
   function act(m: LiveIslandMessage, action: LiveIslandAction) {
     if (ran.has(action)) return;
     ran.add(action);
+    if (focusedInside()) {
+      const from = origin;
+      origin = undefined;
+      giveFocusBack(from);
+    }
     close(m);
     action.run();
   }

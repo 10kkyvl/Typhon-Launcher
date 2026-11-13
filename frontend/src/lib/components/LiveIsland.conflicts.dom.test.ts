@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/svelte';
+import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { Events } from '@wailsio/runtime';
 import { tick } from 'svelte';
 import { get } from 'svelte/store';
@@ -163,6 +163,44 @@ describe('a save conflict in the island', () => {
     expect(conflictMessages()).toEqual([]);
     const dialog = await screen.findByRole('dialog', { name: msg('cloudsaves.conflictTitle') });
     await vi.waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+  });
+
+  it('keyboard: "choose a version" opens the dialog, and Escape gives focus back to the page control the player came from', async () => {
+    const { keys, pill } = setup();
+    cloudStatus.set(cloud(conflict('g1')));
+    await tick();
+    const page = screen.getByRole('button', { name: 'Page' });
+    page.focus();
+    pill().focus();
+    await keys.keyboard('{Enter}');
+    await tick();
+    await keys.tab();
+    expect(document.activeElement?.textContent?.trim()).toBe(CHOOSE());
+
+    await keys.keyboard('{Enter}');
+    const dialog = await screen.findByRole('dialog', { name: msg('cloudsaves.conflictTitle') });
+    await vi.waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+    await keys.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog', { name: msg('cloudsaves.conflictTitle') })).toBeNull();
+    await vi.waitFor(() => expect(document.activeElement).toBe(page));
+  });
+
+  it('pointer without focus (WebKit): after "choose a version" Escape gives focus back to where it was', async () => {
+    const { island, pill } = setup();
+    cloudStatus.set(cloud(conflict('g1')));
+    await tick();
+    const page = screen.getByRole('button', { name: 'Page' });
+    page.focus();
+    fireEvent.click(pill());
+    await tick();
+
+    fireEvent.click(within(island() as HTMLElement).getByRole('button', { name: CHOOSE() }));
+    const dialog = await screen.findByRole('dialog', { name: msg('cloudsaves.conflictTitle') });
+    await vi.waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+    await user().keyboard('{Escape}');
+
+    await vi.waitFor(() => expect(document.activeElement).toBe(page));
   });
 
   it('"later" puts it away and nothing else happens; it is not said again', async () => {
