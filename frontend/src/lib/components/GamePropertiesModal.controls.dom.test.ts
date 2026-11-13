@@ -251,4 +251,19 @@ describe('GamePropertiesModal: compatibility mode', () => {
     await vi.waitFor(() => expect(document.activeElement).not.toBe(document.body));
     expect(document.activeElement).toBe(within(dialog).getByRole('switch', { name: msg('modals.compatToggle') }));
   });
+
+  it('leaves the focus alone when the pressed Revert did not hold it', async () => {
+    vi.mocked(inspectWrapper).mockResolvedValueOnce(tampered()).mockResolvedValue(wrapper());
+    vi.mocked(disableWrapper).mockResolvedValueOnce(undefined);
+    const dialog = await openDialog();
+    const button = await within(dialog).findByRole('button', { name: msg('modals.compatRevert') });
+    (document.activeElement as HTMLElement | null)?.blur();
+    expect(document.activeElement).toBe(document.body);
+
+    button.click();
+
+    await vi.waitFor(() => expect(button.isConnected).toBe(false));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(document.activeElement).toBe(document.body);
+  });
 });

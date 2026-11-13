@@ -265,7 +265,7 @@
     if (!presetsFor(compatWrapper).includes(compatPreset)) compatPreset = 'default';
   }
 
-  async function changeCompat(on: boolean, keepChanged = false, action: '' | 'revert' | 'keep' = '') {
+  async function changeCompat(on: boolean, keepChanged = false, action: '' | 'revert' | 'keep' = '', event?: MouseEvent) {
     if (!game || compatBusy) return;
     const id = game.id;
     compatBusyFor = [...compatBusyFor, id];
@@ -276,8 +276,10 @@
     // The dialog may have closed, or opened for another game, while this ran: a failure shows inline
     // where it is still shown, else as a toast, so the outcome is never lost.
     const shown = () => target?.gameId === id;
-    // A problem's action goes with its notice once it worked: what should take the focus then.
-    const after = action ? controlAfterNotice() : null;
+    // A problem's action goes with its notice once it worked. Whether the pressed button held the focus
+    // (only then is there a focus to hand on), and what followed its notice.
+    const pressed = event?.currentTarget instanceof HTMLElement && document.activeElement === event.currentTarget ? event.currentTarget : null;
+    const after = pressed ? controlAfterNotice() : null;
     try {
       if (on) await enableWrapper(id, compatWrapper, compatPreset);
       else if (keepChanged) await disableWrapperKeepChanged(id);
@@ -296,7 +298,7 @@
       if (shown()) compatProgress = null;
     }
     if (shown()) await loadCompat(id);
-    if (action) await keepCompatFocus(after);
+    if (pressed) await keepCompatFocus(pressed, after);
   }
 
   let propsEl = $state<HTMLElement>();
@@ -312,10 +314,10 @@
 
   // The focused Revert or Keep went with the problem it solved: the focus goes to the compatibility
   // switch, which now says the outcome, else to the control that followed the notice.
-  async function keepCompatFocus(after: HTMLElement | null) {
+  async function keepCompatFocus(pressed: HTMLElement, after: HTMLElement | null) {
     await tick();
     const active = document.activeElement;
-    if (active && active !== document.body && active.isConnected) return;
+    if (pressed.isConnected || (active && active !== document.body && active.isConnected)) return;
     const toggle = compatSection?.querySelector<HTMLElement>('[role="switch"]');
     (toggle ?? (after?.isConnected ? after : null))?.focus();
   }
@@ -649,7 +651,7 @@
                     size="sm"
                     disabled={(compatBusy && compatAction !== 'revert') || running}
                     busy={compatAction === 'revert'}
-                    onclick={() => changeCompat(false, false, 'revert')}
+                    onclick={(event) => changeCompat(false, false, 'revert', event)}
                   >
                     {msg('modals.compatRevert')}
                   </Button>
@@ -658,7 +660,7 @@
                       size="sm"
                       disabled={(compatBusy && compatAction !== 'keep') || running}
                       busy={compatAction === 'keep'}
-                      onclick={() => changeCompat(false, true, 'keep')}
+                      onclick={(event) => changeCompat(false, true, 'keep', event)}
                     >
                       {msg('modals.compatKeepChanged')}
                     </Button>
@@ -674,7 +676,7 @@
                   size="sm"
                   disabled={(compatBusy && compatAction !== 'keep') || running}
                   busy={compatAction === 'keep'}
-                  onclick={() => changeCompat(false, true, 'keep')}
+                  onclick={(event) => changeCompat(false, true, 'keep', event)}
                 >
                   {msg('modals.compatKeepChanged')}
                 </Button>
