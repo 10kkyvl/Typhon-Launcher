@@ -31,7 +31,6 @@ const (
 	// Artworks only feed the hero choice, which needs one picture; the second
 	// stands in when the first fails to download or does not fit the band.
 	maxArtworks    = 2
-	minHeroRatio   = 1.5
 	candidateLimit = 10
 	searchTimeout  = 30 * time.Second
 
@@ -74,21 +73,23 @@ const (
 )
 
 type View struct {
-	Game        catalog.Game      `json:"game"`
-	Cover       string            `json:"cover"`
-	Hero        string            `json:"hero"`
-	Screenshots []MediaAsset      `json:"screenshots"`
-	Resolved    bool              `json:"resolved"`
-	Stale       bool              `json:"stale"`
-	Provider    string            `json:"provider"`
-	Match       MatchState        `json:"match"`
-	StoreLinks  map[string]string `json:"storeLinks,omitempty"`
-	Steam       *SteamInfo        `json:"steam,omitempty"`
+	Game         catalog.Game      `json:"game"`
+	Cover        string            `json:"cover"`
+	Hero         string            `json:"hero"`
+	HeroIsPoster bool              `json:"heroIsPoster"`
+	Screenshots  []MediaAsset      `json:"screenshots"`
+	Resolved     bool              `json:"resolved"`
+	Stale        bool              `json:"stale"`
+	Provider     string            `json:"provider"`
+	Match        MatchState        `json:"match"`
+	StoreLinks   map[string]string `json:"storeLinks,omitempty"`
+	Steam        *SteamInfo        `json:"steam,omitempty"`
 }
 
 type Art struct {
-	Cover string `json:"cover"`
-	Hero  string `json:"hero"`
+	Cover        string `json:"cover"`
+	Hero         string `json:"hero"`
+	HeroIsPoster bool   `json:"heroIsPoster"`
 }
 
 type Service struct {
@@ -251,7 +252,8 @@ func (s *Service) GetArt(gameIDs []string) (map[string]Art, error) {
 			}
 			return nil, err
 		}
-		art := Art{Cover: s.coverURL(game), Hero: heroURL(game, s.screenshots(game.ID))}
+		hero := s.hero(game)
+		art := Art{Cover: s.coverURL(game), Hero: hero.asset.URL, HeroIsPoster: hero.poster}
 		if art.Cover == "" && art.Hero == "" {
 			continue
 		}
@@ -289,8 +291,10 @@ func (s *Service) ArtFiles(gameID string) (LocalArt, error) {
 			return LocalArt{}, err
 		}
 	}
-	if asset, ok := heroAsset(game, s.screenshots(game.ID)); ok {
-		if art.Hero, err = s.assetFile(asset); err != nil {
+	// The Steam grid's hero slot is wide; a poster there would be stretched,
+	// and the grid already shows the cover in its portrait slot.
+	if hero := s.hero(game); hero.ok && !hero.poster {
+		if art.Hero, err = s.assetFile(hero.asset); err != nil {
 			return LocalArt{}, err
 		}
 	}
@@ -1100,7 +1104,13 @@ func (s *Service) buildAssets(ctx context.Context, game catalog.Game, meta GameM
 		shots := carryAssets(previous, AssetScreenshot)
 		batch.assets = append(batch.assets, shots...)
 		batch.assets = append(batch.assets, carryAssets(previous, AssetArtwork)...)
-		batch.hero = heroOf(shots)
+		// No picture was downloaded, so the stored choice stands, including
+		// one made by an earlier rule.
+		if kept, ok := keptHero(game.HeroAssetID, batch.assets); ok {
+			batch.hero = kept.ID
+		} else if wide, ok := wideHero(batch.assets); ok {
+			batch.hero = wide.ID
+		}
 		batch.partial = len(shots) == 0
 		return batch, nil
 	}
@@ -1124,7 +1134,9 @@ func (s *Service) buildAssets(ctx context.Context, game catalog.Game, meta GameM
 	}
 	batch.assets = append(batch.assets, shots...)
 	batch.assets = append(batch.assets, arts...)
-	batch.hero = heroOf(shots)
+	if wide, ok := wideHero(batch.assets); ok {
+		batch.hero = wide.ID
+	}
 	return batch, nil
 }
 
@@ -1210,7 +1222,8 @@ func (s *Service) view(game catalog.Game) View {
 	if s.provider != nil {
 		view.Provider = s.provider.Name()
 	}
-	view.Hero = heroURL(game, view.Screenshots)
+	hero := s.hero(game)
+	view.Hero, view.HeroIsPoster = hero.asset.URL, hero.poster
 	view.Match = s.matchState(game)
 	view.StoreLinks = validStoreLinks(game.StoreLinks)
 	view.Steam = s.steam.info(game.ID)
@@ -1329,39 +1342,71 @@ func year(game catalog.Game) int {
 	return *game.ReleaseYear
 }
 
-func landscape(a MediaAsset) bool {
-	return a.Height > 0 && float64(a.Width)/float64(a.Height) >= minHeroRatio
+// The redesign's hero block is a full-width band: a picture narrower than
+// minHeroWidth blurs across it, and one wider than maxHeroRatio is a panorama
+// strip whose subject the band crops away.
+const (
+	minHeroWidth = 1280
+	minHeroRatio = 1.5
+	maxHeroRatio = 2.6
+)
+
+func fitsHero(a MediaAsset) bool {
+	if a.Width < minHeroWidth || a.Height <= 0 {
+		return false
+	}
+	ratio := float64(a.Width) / float64(a.Height)
+	return ratio >= minHeroRatio && ratio <= maxHeroRatio
 }
 
-func heroAsset(game catalog.Game, shots []MediaAsset) (MediaAsset, bool) {
-	for _, a := range shots {
-		if a.ID == game.HeroAssetID {
-			return a, true
+// wideHero is the hero rule: the first screenshot that fits the band, else the
+// first artwork that does, each in the order the provider listed them.
+func wideHero(assets []MediaAsset) (MediaAsset, bool) {
+	for _, kind := range []AssetType{AssetScreenshot, AssetArtwork} {
+		for _, a := range assets {
+			if a.Type == kind && fitsHero(a) {
+				return a, true
+			}
 		}
 	}
-	for _, a := range shots {
-		if landscape(a) {
+	return MediaAsset{}, false
+}
+
+func keptHero(id string, assets []MediaAsset) (MediaAsset, bool) {
+	if id == "" {
+		return MediaAsset{}, false
+	}
+	for _, a := range assets {
+		if a.ID == id && (a.Type == AssetScreenshot || a.Type == AssetArtwork) {
 			return a, true
 		}
 	}
 	return MediaAsset{}, false
 }
 
-func heroURL(game catalog.Game, shots []MediaAsset) string {
-	asset, ok := heroAsset(game, shots)
-	if !ok {
-		return ""
-	}
-	return asset.URL
+type heroPick struct {
+	asset  MediaAsset
+	poster bool
+	ok     bool
 }
 
-func heroOf(shots []MediaAsset) string {
-	for _, a := range shots {
-		if landscape(a) {
-			return a.ID
-		}
+// hero is the one answer to which picture heads a game, for the view, GetArt
+// and ArtFiles. A full refresh persists wideHero's pick as HeroAssetID, so the
+// stored ID is followed while it names a stored picture: a choice made by an
+// earlier rule keeps showing until the next full refresh. Without a wide
+// picture the cover stands in as a poster.
+func (s *Service) hero(game catalog.Game) heroPick {
+	assets := s.store.list(game.ID)
+	if a, ok := keptHero(game.HeroAssetID, assets); ok {
+		return heroPick{asset: a, ok: true}
 	}
-	return ""
+	if a, ok := wideHero(assets); ok {
+		return heroPick{asset: a, ok: true}
+	}
+	if cover, ok := s.coverAsset(game); ok {
+		return heroPick{asset: cover, poster: true, ok: true}
+	}
+	return heroPick{}
 }
 
 func carryCover(previous []MediaAsset, coverID string) (MediaAsset, bool) {

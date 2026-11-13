@@ -3,6 +3,7 @@ package metadata
 import (
 	"errors"
 	"os"
+	"path"
 	"path/filepath"
 	"testing"
 
@@ -55,6 +56,46 @@ func TestArtFilesPointsAtTheSameImagesAsGetArt(t *testing.T) {
 		if err != nil || !filepath.IsLocal(rel) {
 			t.Fatalf("%s file %q is outside the media root (%v)", name, file, err)
 		}
+	}
+
+	for _, tc := range heroCases {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, _, game, _ := applyHeroCase(t, tc)
+			view, err := svc.GetView(game.ID)
+			if err != nil {
+				t.Fatalf("view: %v", err)
+			}
+			art, err := svc.GetArt([]string{game.ID})
+			if err != nil {
+				t.Fatalf("art: %v", err)
+			}
+			if got, want := art[game.ID], (Art{Cover: view.Cover, Hero: view.Hero, HeroIsPoster: view.HeroIsPoster}); got != want {
+				t.Fatalf("GetArt = %+v, view says %+v", got, want)
+			}
+			files, err := svc.ArtFiles(game.ID)
+			if err != nil {
+				t.Fatalf("ArtFiles: %v", err)
+			}
+			if filepath.Base(files.Cover) != path.Base(view.Cover) {
+				t.Fatalf("cover file %q, view cover %q", files.Cover, view.Cover)
+			}
+			switch {
+			case tc.want == heroPoster:
+				// The Steam grid keeps the cover in its portrait slot; a tall
+				// picture is not a hero there.
+				if !view.HeroIsPoster || view.Hero != view.Cover || files.Hero != "" {
+					t.Fatalf("view hero %q poster=%v, hero file %q; want the cover as a poster and no hero file", view.Hero, view.HeroIsPoster, files.Hero)
+				}
+			case view.Hero == "":
+				if files.Hero != "" {
+					t.Fatalf("hero file = %q, want none", files.Hero)
+				}
+			default:
+				if files.Hero == "" || filepath.Base(files.Hero) != path.Base(view.Hero) {
+					t.Fatalf("hero file %q, view hero %q", files.Hero, view.Hero)
+				}
+			}
+		})
 	}
 }
 
