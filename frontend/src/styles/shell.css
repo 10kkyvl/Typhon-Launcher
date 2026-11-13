@@ -141,4 +141,9 @@
   --source-steam-text: #66c0f4;
   --source-epic-fill: #2a2a2a;
   --source-gog-fill: #6b2c91;
+
+  /* What is drawn over a game's picture (a card's cover, the hero carousel, the generated art): the
+     same in every theme, because the picture and not the theme is under it. theme-contrast.test.ts
+     measures it over black and over white. */
+  --art-text: #fff;
 }
