@@ -30,7 +30,13 @@ log excerpts for the key events; file state (`ls`, size, `jq` on keys). The repo
 expectation → observation → match/mismatch, plus what stayed unverified (Windows-only, a real game,
 CrossOver).
 
+A browser run that replaces Go's answers (a state devmock cannot reach) proves the frontend only. For
+each replaced call name the Go test that proves the real answer in that state, or list the pair as
+unverified. Example: a dialog passed such a run while the real `Status()` did not list the conflict
+the launch gate had blocked on.
+
 ## Do not
 
 Re-download or re-install for one screenshot when the state already exists; mix the user's release
-state with test state; treat an SSR snapshot or a green vitest as a substitute for this run.
+state with test state; treat an SSR snapshot or a green vitest as a substitute for this run; count a
+browser run with replaced Go answers as proof of the real Go behaviour.
