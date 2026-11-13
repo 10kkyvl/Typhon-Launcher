@@ -127,3 +127,30 @@ describe('TextLink in a line of text', () => {
     expect(ruleBody(css, '.text-link:disabled')).toMatchObject({ cursor: 'default' });
   });
 });
+
+describe('TextLink kept to one line', () => {
+  const css = styleOf(source, 'TextLink.svelte');
+
+  it('is still named by its whole text, as a link and as an action, and runs the action', async () => {
+    const onforgot = vi.fn();
+    const { user } = renderDom(TextLinkHarness, { onforgot });
+    const link = screen.getByRole('link', { name: 'The Legend of Heroes: Trails in the Sky the 3rd' });
+    const action = screen.getByRole('button', { name: 'A player with a very long display name' });
+    expect(link.classList.contains('truncate')).toBe(true);
+    expect(action.classList.contains('truncate')).toBe(true);
+    expect(screen.getByRole('link', { name: 'guide' }).classList.contains('truncate')).toBe(false);
+
+    action.focus();
+    await user.keyboard('{Enter}');
+    expect(onforgot).toHaveBeenCalledOnce();
+  });
+
+  // The rule wins over the action form's own wrapping (`button.text-link`): two classes against a tag
+  // and a class.
+  it('cuts its text with an ellipsis inside its own box, in either form, and leaves the focus ring alone', () => {
+    const rule = ruleBody(css, '.text-link.truncate');
+    expect(rule).toMatchObject({ display: 'inline-block', 'max-width': '100%', overflow: 'hidden', 'text-overflow': 'ellipsis', 'white-space': 'nowrap' });
+    expect(Object.keys(rule).filter((prop) => prop.startsWith('outline'))).toEqual([]);
+  });
+});
+

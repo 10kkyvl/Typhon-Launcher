@@ -134,6 +134,15 @@
       </TextLink>
     </p>
   </ShowcaseRow>
+
+  <ShowcaseRow caption="Text links kept to one line" stack>
+    <p class="prose narrow">
+      <TextLink href="#showcase-top" truncate>The Legend of Heroes: Trails in the Sky the 3rd, a title too long for its row</TextLink>
+    </p>
+    <p class="prose narrow">
+      <TextLink onclick={pressed('One-line action')} truncate>An action whose label is cut where its row ends</TextLink>
+    </p>
+  </ShowcaseRow>
 </ShowcaseSection>
 
 <style>
@@ -150,5 +159,9 @@
     max-width: var(--prose-max);
     font-size: var(--font-md);
     color: var(--text-2);
+  }
+
+  .narrow {
+    max-width: 24rem;
   }
 </style>

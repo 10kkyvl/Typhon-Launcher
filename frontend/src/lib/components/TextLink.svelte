@@ -26,10 +26,18 @@
    * `start` and `end`: a mark beside the text (a chevron back, the external-link sign), passed as a
    * bare icon: the link sizes it to its text (1em), spaces it from the text and sets it on the line.
    * It is a picture; the name is the text.
+   *
+   * `truncate`: the link stays on one line and is cut with an ellipsis inside its own box, in either
+   * form: for a name or a title in a row that has no room for a second line (a feed entry's author,
+   * the game a friend is playing). The box takes no more than the width its place leaves it, so the
+   * place decides where the cut falls; the whole text is still the link's name. Say the cut text some
+   * other way where a sighted user needs it whole (a Tooltip around the link).
    */
   type Shared = Omit<HTMLAttributes<HTMLElement>, 'class' | 'children' | 'title' | 'onclick'> & {
     children: Snippet;
     tone?: 'accent' | 'muted';
+    /** One line, cut with an ellipsis inside the link's own box. */
+    truncate?: boolean;
     start?: Snippet;
     end?: Snippet;
   };
@@ -48,7 +56,7 @@
     disabled?: boolean;
   };
 
-  let { href, disabled = false, tone = 'accent', start, end, children, ...rest }: AsLink | AsButton = $props();
+  let { href, disabled = false, tone = 'accent', truncate = false, start, end, children, ...rest }: AsLink | AsButton = $props();
 </script>
 
 {#snippet content()}
@@ -56,9 +64,9 @@
 {/snippet}
 
 {#if href !== undefined}
-  <a {...rest} class="text-link" class:muted={tone === 'muted'} {href}>{@render content()}</a>
+  <a {...rest} class="text-link" class:muted={tone === 'muted'} class:truncate {href}>{@render content()}</a>
 {:else}
-  <button {...rest} class="text-link" class:muted={tone === 'muted'} type="button" {disabled}>{@render content()}</button>
+  <button {...rest} class="text-link" class:muted={tone === 'muted'} class:truncate type="button" {disabled}>{@render content()}</button>
 {/if}
 
 <style>
@@ -87,6 +95,18 @@
     max-width: 100%;
     overflow-wrap: anywhere;
     white-space: normal;
+  }
+
+  /* One box on one line, as wide as its place lets it be; the text is cut inside it. The box is set
+     on the line by its bottom edge: clipping takes its baseline away. The focus ring is an outline,
+     which a box's own clipping does not cut. */
+  .text-link.truncate {
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
   }
 
   .text-link.muted {

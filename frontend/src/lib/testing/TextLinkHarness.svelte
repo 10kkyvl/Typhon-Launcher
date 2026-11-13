@@ -4,7 +4,8 @@
 
   // A link to an address and an action that reads as a link, each in a sentence, as the pages write
   // them, a muted link in a path, and links with a mark beside their text (an external link, a way
-  // back). For TextLink.dom.test.ts.
+  // back), and a link and an action kept to one line in a row too narrow for them. For
+  // TextLink.dom.test.ts.
   let { onforgot, disabled = false }: { onforgot: () => void; disabled?: boolean } = $props();
 </script>
 
@@ -25,3 +26,7 @@
     Back to the library
   </TextLink>
 </p>
+<div class="row">
+  <TextLink href="#game" truncate>The Legend of Heroes: Trails in the Sky the 3rd</TextLink>
+  <TextLink onclick={onforgot} truncate data-kind="author">A player with a very long display name</TextLink>
+</div>
