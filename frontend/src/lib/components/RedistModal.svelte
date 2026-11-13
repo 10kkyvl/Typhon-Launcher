@@ -42,6 +42,8 @@
   let outcomes = $state<Record<string, Outcome>>({});
 
   let seq = 0;
+  // One per opening of the dialog: a retry that answers after its opening has passed says so.
+  let opening = 0;
 
   const vcRuntimes = $derived(runtimes.filter((runtime) => runtime.name.includes('Visual C++')));
   const missing = $derived(systemLoading || systemError ? [] : missingVcArches(vcRuntimes));
@@ -54,6 +56,7 @@
     const current = $redistTarget;
     untrack(() => {
       // A retry still running when the dialog closes belongs to that opening: the next starts clean.
+      opening += 1;
       scanRetrying = false;
       if (current) void load(current.gameId);
       else reset();
@@ -157,10 +160,11 @@
 
   // The notice's retry scans again; the failure stays on screen until the answer. On success the
   // focus goes to the first package it found, else to the dialog.
-  async function retryScan(): Promise<boolean> {
+  async function retryScan(): Promise<boolean | undefined> {
     if (!target) return false;
+    const mine = opening;
     await load(target.gameId, true);
-    return scanError === '';
+    return mine === opening ? scanError === '' : undefined;
   }
 
   function meta(pkg: RedistPackage): string {

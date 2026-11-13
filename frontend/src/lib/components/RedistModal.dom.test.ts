@@ -159,6 +159,32 @@ describe('RedistModal: closed and opened again while the scan Retry runs', () =>
   });
 });
 
+describe('RedistModal: an old scan Retry answering after the dialog was opened again', () => {
+  it('leaves the new Retry busy, and a second press sends nothing', async () => {
+    const old = deferred<RedistPackage[]>();
+    const never = new Promise<never>(() => {});
+    vi.mocked(scanRedist).mockRejectedValueOnce(new Error('disk')).mockReturnValueOnce(old.promise).mockRejectedValueOnce(new Error('disk')).mockReturnValue(never);
+    const first = await openDialog();
+    const keys = user();
+    await keys.click(await within(first).findByRole('button', { name: msg('redist.retry') }));
+    closeRedist();
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    openRedist('g1');
+    const dialog = await screen.findByRole('dialog', { name: msg('redist.title', { title: 'Hades' }) });
+    const retry = await within(dialog).findByRole('button', { name: msg('redist.retry') });
+    await keys.click(retry);
+    expect(retry.getAttribute('aria-busy')).toBe('true');
+    const sent = vi.mocked(scanRedist).mock.calls.length;
+
+    old.resolve([]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(retry.getAttribute('aria-busy')).toBe('true');
+    await keys.click(retry);
+    expect(vi.mocked(scanRedist).mock.calls.length).toBe(sent);
+  });
+});
+
 describe('RedistModal: the runtimes of the system', () => {
   it('states a missing runtime in a warning notice that holds its download link', async () => {
     vi.mocked(scanRedist).mockResolvedValueOnce([]);
