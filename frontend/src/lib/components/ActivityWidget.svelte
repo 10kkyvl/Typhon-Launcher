@@ -113,8 +113,7 @@
     void handOff(() => (next ? rowOf(next)?.querySelector<HTMLElement>('.row') : keys.length > 0 ? head : away?.()));
   });
 
-  // IconButton has no busy look of its own: a running call is said with aria-busy, and a second press
-  // is refused here, never by turning the button disabled under focus.
+  // The rows whose call is running: their button is busy (a spinner, presses refused, focus kept).
   let busy = $state<string[]>([]);
 
   async function act(item: WidgetItem, run: () => Promise<void>) {
@@ -212,7 +211,7 @@
                   <IconButton
                     size="sm"
                     label={item.pausable ? msg('ui.pause') : msg('common.continue')}
-                    aria-busy={busy.includes(item.key) ? 'true' : undefined}
+                    busy={busy.includes(item.key)}
                     onclick={() => void toggle(item)}
                   >
                     {#if item.pausable}<Pause size="1.6rem" strokeWidth={1.8} />{:else}<Play size="1.6rem" strokeWidth={1.8} />{/if}
@@ -221,7 +220,7 @@
                   <IconButton
                     size="sm"
                     label={msg('modals.installCancelInstall')}
-                    aria-busy={busy.includes(item.key) ? 'true' : undefined}
+                    busy={busy.includes(item.key)}
                     onclick={() => void cancelWaiting(item)}
                   >
                     <X size="1.6rem" strokeWidth={1.8} />

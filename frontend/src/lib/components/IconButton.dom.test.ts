@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/svelte';
-import { tick } from 'svelte';
+import { createRawSnippet, tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ruleBody, styleOf } from '../testing/css';
 import { user } from '../testing/dom';
@@ -182,5 +182,98 @@ describe('IconButton', () => {
   // corners of the hover fill.
   it('in the overlay draws no border', () => {
     expect(source).toMatch(/:global\(\[data-controls='1x'\]\) \.icon-btn \{[^}]*border: 0;/);
+  });
+});
+
+// The icon's place, so the spinner can be seen to stand in it.
+const glyph = createRawSnippet(() => ({ render: () => '<svg class="glyph"></svg>' }));
+
+describe('IconButton busy with its own action', () => {
+  it('says it is busy, keeps its name and focus, shows the spinner in place of its icon, and ignores every activation', async () => {
+    const onclick = vi.fn();
+    const onkeydown = vi.fn();
+    const onpointerdown = vi.fn();
+    render(IconButton, { target: app, props: { label: 'Pause', busy: true, onclick, onkeydown, onpointerdown, children: glyph } });
+    const button = screen.getByRole('button', { name: 'Pause' });
+    expect(button.getAttribute('aria-busy')).toBe('true');
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    expect(button.hasAttribute('disabled')).toBe(false);
+    expect(button.querySelector('.spinner')?.getAttribute('aria-hidden')).toBe('true');
+    expect(button.querySelector('.glyph')).toBeNull();
+
+    const keys = user();
+    await keys.click(button);
+    button.focus();
+    await keys.keyboard('{Enter}');
+    await keys.keyboard(' ');
+
+    expect(onclick).not.toHaveBeenCalled();
+    expect(onkeydown).not.toHaveBeenCalled();
+    expect(onpointerdown).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(button);
+  });
+
+  it('stays the same element with focus on it as its action starts and ends, and works again after', async () => {
+    const onclick = vi.fn();
+    const { rerender } = render(IconButton, { target: app, props: { label: 'Pause', onclick, children: glyph } });
+    const button = screen.getByRole('button', { name: 'Pause' });
+    button.focus();
+
+    await rerender({ label: 'Pause', busy: true, onclick, children: glyph });
+    expect(screen.getByRole('button', { name: 'Pause' })).toBe(button);
+    expect(document.activeElement).toBe(button);
+
+    await rerender({ label: 'Pause', busy: false, onclick, children: glyph });
+    expect(screen.getByRole('button', { name: 'Pause' })).toBe(button);
+    expect(button.hasAttribute('aria-busy')).toBe(false);
+    expect(button.hasAttribute('aria-disabled')).toBe(false);
+    expect(button.querySelector('.spinner')).toBeNull();
+    expect(button.querySelector('.glyph')).not.toBeNull();
+    await user().click(button);
+    expect(onclick).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets Tab through while busy', async () => {
+    render(IconButton, { target: app, props: { label: 'First' } });
+    render(IconButton, { target: app, props: { label: 'Pause', busy: true } });
+    screen.getByRole('button', { name: 'Pause' }).focus();
+    await user().tab({ shift: true });
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'First' }));
+  });
+
+  it('keeps its label as the hint while busy, with no description and no native title: nothing flickers', async () => {
+    const { rerender } = render(IconButton, { target: app, props: { label: 'Pause' } });
+    const button = screen.getByRole('button', { name: 'Pause' });
+    await rest(button);
+    expect(bubble()?.textContent?.trim()).toBe('Pause');
+
+    await rerender({ label: 'Pause', busy: true });
+    expect(bubble()?.textContent?.trim()).toBe('Pause');
+    expect(button.hasAttribute('aria-describedby')).toBe(false);
+    expect(button.hasAttribute('title')).toBe(false);
+  });
+
+  it('busy and disabled with a reason: the reason is the hint and the description, both states are said, a press does nothing', async () => {
+    const onclick = vi.fn();
+    render(IconButton, { target: app, props: { label: 'Pause', busy: true, disabled: true, reason: 'The game is running', onclick } });
+    const button = screen.getByRole('button', { name: 'Pause' });
+    expect(button.hasAttribute('disabled')).toBe(false);
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    expect(button.getAttribute('aria-busy')).toBe('true');
+    expect(description(button)).toBe('The game is running');
+    await user().click(button);
+    expect(onclick).not.toHaveBeenCalled();
+  });
+
+  // The spinner stands in the icon's place: the box is the size's, busy or not, and busy keeps the
+  // full colour (it is not unavailable), as Button does.
+  it('keeps its box and its colour while busy', () => {
+    const css = styleOf(source, 'IconButton.svelte');
+    const busy = ruleBody(css, ".icon-btn[aria-busy='true']");
+    expect(busy).toEqual(ruleBody(styleOf(buttonSource, 'Button.svelte'), ".btn[aria-busy='true']"));
+    expect(Object.keys(busy).filter((name) => /width|height|padding|margin|font-size/.test(name))).toEqual([]);
+    expect(css).not.toMatch(/aria-busy[^{]*\{[^}]*(width|height|padding)/);
+    expect(source).toMatch(/\{#if busy\}<Spinner size="sm" tone="current" \/>\{:else\}\{@render children\?\.\(\)\}\{\/if\}/);
+    expect(css.indexOf(".icon-btn[aria-busy='true']")).toBeGreaterThan(css.indexOf(".icon-btn[aria-disabled='true']"));
   });
 });

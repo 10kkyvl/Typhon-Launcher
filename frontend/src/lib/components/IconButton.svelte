@@ -4,6 +4,7 @@
   import CountBadge from './CountBadge.svelte';
   import { countShown } from './countBadge';
   import { refuseWhile } from './refuse';
+  import Spinner from './Spinner.svelte';
   import Tooltip from './Tooltip.svelte';
 
   type Counted =
@@ -25,6 +26,7 @@
     lit = false,
     disabled = false,
     reason,
+    busy = false,
     tooltip = true,
     hint,
     count,
@@ -66,6 +68,12 @@
      */
     reason?: string;
     /**
+     * The button's own action is running, as on Button: a spinner stands in the icon's place (the box
+     * keeps its size), activations are ignored and it says it is busy. It is not disabled: focus and
+     * the name stay on it, and its hint stays the label.
+     */
+    busy?: boolean;
+    /**
      * Off: no tooltip on the layer stack; the browser's own title shows the label instead. For the
      * overlay window, whose Escape hides the overlay and must not close a hint first.
      */
@@ -83,7 +91,7 @@
   const name = $derived(counted && countLabel ? countLabel : label);
 
   const refused = $derived(disabled && Boolean(reason));
-  const guard = refuseWhile(() => refused);
+  const guard = refuseWhile(() => refused || busy);
 
   // The browser's own title shows the label where the tooltip cannot: the overlay window, and a
   // disabled button, which takes no focus and shows no tooltip (it cannot be announced twice).
@@ -99,13 +107,14 @@
     class:counted
     aria-label={name}
     aria-pressed={pressed}
-    aria-disabled={refused ? 'true' : undefined}
+    aria-disabled={refused || busy ? 'true' : undefined}
+    aria-busy={busy || undefined}
     title={nativeTitle}
     disabled={disabled && !refused}
     {onclick}
-    {@attach reason !== undefined ? guard : undefined}
+    {@attach reason !== undefined || busy ? guard : undefined}
   >
-    {@render children?.()}
+    {#if busy}<Spinner size="sm" tone="current" />{:else}{@render children?.()}{/if}
     {#if count !== undefined && countLabel !== undefined}
       <CountBadge {count} label={countLabel} place="corner" on={variant === 'primary' ? 'accent' : 'surface'} />
     {/if}
@@ -202,6 +211,12 @@
   .icon-btn[aria-disabled='true'] {
     opacity: 0.35;
     cursor: default;
+  }
+
+  /* Busy is not unavailable: it keeps its full colour while its own action runs. */
+  .icon-btn[aria-busy='true'] {
+    opacity: 1;
+    cursor: progress;
   }
 
   /* The in-game overlay keeps the icon button it was drawn with (see Button.svelte): squarer, at the

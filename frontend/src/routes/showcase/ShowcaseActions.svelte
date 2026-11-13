@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowLeft, Bell, ChevronDown, ExternalLink, Heart, Play, Plus, Settings, Users } from '@lucide/svelte';
+  import { ArrowLeft, Bell, ChevronDown, ExternalLink, Heart, Pause, Play, Plus, Settings, Users } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import Chip from '../../lib/components/Chip.svelte';
   import CountBadge from '../../lib/components/CountBadge.svelte';
@@ -83,6 +83,7 @@
     <IconButton label="Mute" pressed={muted} onclick={() => (muted = !muted)}><Bell size="1.8rem" /></IconButton>
     <IconButton label="Remove from favourites" lit onclick={pressed('Favourite')}><Heart size="1.8rem" /></IconButton>
     <IconButton label="Back" disabled reason="Nothing to go back to"><ArrowLeft size="1.8rem" /></IconButton>
+    <IconButton label="Pause" busy><Pause size="1.8rem" /></IconButton>
     <IconButton label="Attach" hint="Images up to 10 MB" onclick={pressed('Attach')}><Plus size="1.8rem" /></IconButton>
     <IconButton label="Friends" count={1} countLabel="Friends, 1 request" onclick={pressed('One')}><Users size="1.8rem" /></IconButton>
     <IconButton label="Friends" count={120} countLabel="Friends, 120 requests" variant="primary" onclick={pressed('Many')}><Users size="1.8rem" /></IconButton>
