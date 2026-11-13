@@ -131,7 +131,8 @@
     const active = document.activeElement;
     if (active && active !== document.body && active.isConnected && !(active instanceof HTMLButtonElement && active.disabled)) return;
     const edits = [...(section?.querySelectorAll<HTMLElement>('[data-edit-profile]') ?? [])];
-    const back = opener ? edits.find((el) => el.dataset.editProfile === opener) : section?.querySelector<HTMLElement>('[data-add-profile]');
+    // The profile may have been deleted under its editor: its Edit is gone, "Add profile" stands in.
+    const back = edits.find((el) => opener !== '' && el.dataset.editProfile === opener) ?? section?.querySelector<HTMLElement>('[data-add-profile]');
     back?.focus();
   }
 

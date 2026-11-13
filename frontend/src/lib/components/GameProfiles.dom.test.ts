@@ -104,6 +104,23 @@ describe('GameProfiles: opening and closing the editor from the keyboard', () =>
   });
 });
 
+describe('GameProfiles: the edited profile deleted under its editor', () => {
+  it('Cancel gives the focus to "Add profile" when the Edit that opened the editor is gone', async () => {
+    vi.mocked(getProfiles).mockResolvedValueOnce([profile()]).mockResolvedValue([]);
+    const { user, rerender } = renderDom(GameProfiles, { game, candidates: [], adminShown: false });
+    const edit = await screen.findByRole('button', { name: msg('modals.profilesEdit') });
+    edit.focus();
+    await user.keyboard('{Enter}');
+    await rerender({ game: { ...game, lastProfile: 'gone' } as unknown as LibraryGame, candidates: [], adminShown: false });
+    await vi.waitFor(() => expect(screen.queryByRole('button', { name: msg('modals.profilesEdit') })).toBeNull());
+
+    screen.getByRole('button', { name: msg('common.cancel') }).focus();
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: msg('modals.profilesAdd') })));
+  });
+});
+
 describe('GameProfiles: "Add profile" while the list reloads after a save', () => {
   const changed = { ...game, profiles: [{ id: 'p9', name: 'Safe' }] } as unknown as LibraryGame;
 
