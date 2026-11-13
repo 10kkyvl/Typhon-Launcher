@@ -177,6 +177,48 @@ describe('generated bindings', () => {
   });
 });
 
+describe('the pending launch the page takes from Go', () => {
+  const TAKER = 'lib/stores/emulatorNeeded.ts';
+  const STRUCT = 'EmulatorNeeded';
+
+  // json name → omitempty, as the taker relies on them: an emulator prompt
+  // carries no profile, so the profile fields are optional.
+  const EXPECTED: Record<string, boolean> = {
+    gameId: false,
+    platform: false,
+    code: false,
+    profileId: true,
+    profileLaunch: true,
+  };
+
+  function goFields(): Record<string, boolean> {
+    const body = Object.entries(goSources)
+      .filter(([path]) => !path.includes('/'))
+      .map(([, text]) => new RegExp(String.raw`type ${STRUCT} struct \{([\s\S]*?)\n\}`).exec(text)?.[1])
+      .find((found) => found !== undefined);
+    expect(body, `type ${STRUCT} struct in the root Go package`).toBeDefined();
+    const fields: Record<string, boolean> = {};
+    for (const match of (body ?? '').matchAll(/json:"([^",]+)(,omitempty)?"/g)) fields[match[1]] = match[2] !== undefined;
+    return fields;
+  }
+
+  it('has every field the taker reads, with the optionality it expects', () => {
+    const read = new Set([...frontendSources[TAKER].matchAll(/\b(?:pending|held)\.(\w+)/g)].map((match) => match[1]));
+    expect(read.size).toBeGreaterThan(3);
+    expect([...read].filter((name) => !(name in EXPECTED))).toEqual([]);
+    const go = goFields();
+    expect(Object.fromEntries(Object.keys(EXPECTED).map((name) => [name, go[name]]))).toEqual(EXPECTED);
+  });
+
+  it('answers with cloud and library codes that Go raises', () => {
+    const files = [TAKER, 'lib/services/library.ts', 'lib/cloudsaves/hold.ts'];
+    const codes = new Set(files.flatMap((file) => [...frontendSources[file].matchAll(/'((?:cloud|library)\.[a-z_]+)'/g)].map((match) => match[1])));
+    expect(codes.size).toBeGreaterThan(3);
+    const unknown = [...codes].filter((code) => !Object.values(goSources).some((text) => text.includes(`"${code}"`)));
+    expect(unknown).toEqual([]);
+  });
+});
+
 describe('runtime events', () => {
   function subscribedEvents(): Array<{ file: string; name: string }> {
     const found: Array<{ file: string; name: string }> = [];

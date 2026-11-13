@@ -220,6 +220,26 @@ func TestPromptCodesMatchTheFrontend(t *testing.T) {
 	}
 }
 
+func TestSavesHoldCodesMatchTheFrontend(t *testing.T) {
+	body, err := os.ReadFile(filepath.Join("frontend", "src", "lib", "cloudsaves", "hold.ts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	list := regexp.MustCompile(`(?s)SAVES_HOLD_CODES[^=]*=\s*\[(.*?)\]`).FindSubmatch(body)
+	if list == nil {
+		t.Fatal("SAVES_HOLD_CODES not found")
+	}
+	var frontend []string
+	for _, match := range regexp.MustCompile(`'([^']+)'`).FindAllSubmatch(list[1], -1) {
+		frontend = append(frontend, string(match[1]))
+	}
+	want := slices.Sorted(slices.Values(savesHoldCodes))
+	slices.Sort(frontend)
+	if !slices.Equal(frontend, want) {
+		t.Fatalf("frontend %v, go %v", frontend, want)
+	}
+}
+
 var nativeGame = library.Game{ID: "g1"}
 
 // What the library hands back for a launch the cloud check stopped:
