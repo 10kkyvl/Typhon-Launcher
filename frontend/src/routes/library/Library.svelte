@@ -119,7 +119,9 @@
   const sectionTitles: Record<LibraryFilter, string> = {
     all: msg('games.allGamesTitle'),
     installed: msg('games.filterInstalled'),
+    uninstalled: msg('games.notInstalledStatusWord'),
     recent: msg('games.recentLabel'),
+    favorites: msg('library.filterFavorites'),
     hidden: msg('games.filterHidden'),
     watched: msg('games.filterWatched'),
   };
