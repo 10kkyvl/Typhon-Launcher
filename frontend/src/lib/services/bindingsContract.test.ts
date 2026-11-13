@@ -210,10 +210,25 @@ describe('the pending launch the page takes from Go', () => {
     expect(Object.fromEntries(Object.keys(EXPECTED).map((name) => [name, go[name]]))).toEqual(EXPECTED);
   });
 
-  it('answers with cloud and library codes that Go raises', () => {
-    const files = [TAKER, 'lib/services/library.ts', 'lib/cloudsaves/hold.ts'];
-    const codes = new Set(files.flatMap((file) => [...frontendSources[file].matchAll(/'((?:cloud|library)\.[a-z_]+)'/g)].map((match) => match[1])));
-    expect(codes.size).toBeGreaterThan(3);
+  // The cloud codes it answers with are checked for the whole interface below.
+  it('answers with library codes that Go raises', () => {
+    const files = [TAKER, 'lib/services/library.ts'];
+    const codes = new Set(files.flatMap((file) => [...frontendSources[file].matchAll(/'(library\.[a-z_]+)'/g)].map((match) => match[1])));
+    expect(codes.size).toBeGreaterThan(1);
+    const unknown = [...codes].filter((code) => !Object.values(goSources).some((text) => text.includes(`"${code}"`)));
+    expect(unknown).toEqual([]);
+  });
+});
+
+describe('cloud saves codes', () => {
+  // A code the interface compares against or keys a decision on (a launch hold, an unreachable cloud)
+  // and Go never raises is a branch that never runs, silently. Every quoted `cloud.*` code in an
+  // interface source has to be a string in the Go sources; the catalogs are checked by uicodes_test.go.
+  it('the interface names are all raised by Go', () => {
+    const codes = new Set(
+      Object.values(frontendSources).flatMap((text) => [...text.matchAll(/['"`](cloud\.[a-z_]+)['"`]/g)].map((match) => match[1])),
+    );
+    expect(codes.size).toBeGreaterThan(7);
     const unknown = [...codes].filter((code) => !Object.values(goSources).some((text) => text.includes(`"${code}"`)));
     expect(unknown).toEqual([]);
   });
