@@ -12,7 +12,7 @@
     liveIsland,
     liveIslandCurrent,
     liveIslandMessages,
-    liveIslandRank,
+    liveIslandUrgent,
     type LiveIslandAction,
     type LiveIslandIcon,
     type LiveIslandMessage,
@@ -38,7 +38,8 @@
    * It sits after the page in the Tab order, where the toast stack is: a message appearing never puts
    * itself ahead of the window's controls and never takes focus. A message that goes while focus is in
    * the island gives focus back where it was before it came in (focusBack.ts, the toast stack's rule).
-   * Its own two live regions say each message once, when it comes: errors at once, the rest politely.
+   * Its own two live regions say each message once, when it comes: conflicts and errors at once, the
+   * rest politely.
    */
 
   const ICONS: Record<LiveIslandIcon, LucideIcon> = {
@@ -74,8 +75,8 @@
   // What waits behind the message on screen.
   const waiting = $derived(shown ? $liveIslandMessages.length - 1 : 0);
   const tone = $derived(primary?.tone ?? 'accent');
-  const urgent = $derived($liveIslandMessages.filter((m) => liveIslandRank(m) === 0));
-  const polite = $derived($liveIslandMessages.filter((m) => liveIslandRank(m) !== 0));
+  const urgent = $derived($liveIslandMessages.filter((m) => liveIslandUrgent(m)));
+  const polite = $derived($liveIslandMessages.filter((m) => !liveIslandUrgent(m)));
   // Escape inside the open island is its own, unless a dialog is open: then it is the dialog's.
   const ownEscape = $derived(expanded && !$topModal);
 

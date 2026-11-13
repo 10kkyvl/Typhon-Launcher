@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
-import { claimLiveIsland, liveIsland, liveIslandCurrent, liveIslandHeld, liveIslandMessages, liveIslandOn } from './liveIsland';
+import { claimLiveIsland, liveIsland, liveIslandCurrent, liveIslandHeld, liveIslandMessages, liveIslandOn, liveIslandUrgent } from './liveIsland';
 import { QUEUE_STALE_MS, RESUME_FLOOR_MS } from './toasts';
 
 const run = () => {};
@@ -84,6 +84,36 @@ describe('live island queue', () => {
     liveIsland.show({ id: 'warn', text: 'careful', tone: 'warning' });
     liveIsland.hide('toast');
     expect(current()).toBe('warn');
+  });
+
+  it('puts a save conflict ahead of the errors and friends already waiting, and takes the screen from an error', () => {
+    liveIsland.show({ id: 'error', text: 'error', kind: 'error' });
+    liveIsland.show({ id: 'friend', text: 'friend', kind: 'friend' });
+    liveIsland.show({ id: 'failed', text: 'failed', tone: 'danger' });
+    liveIsland.show({ id: 'conflict', text: 'conflict', kind: 'conflict', tone: 'warning' });
+    const seen: string[] = [];
+    while (current()) {
+      seen.push(current() as string);
+      liveIsland.hide(current() as string);
+    }
+    expect(seen).toEqual(['conflict', 'error', 'failed', 'friend']);
+  });
+
+  it('keeps a save conflict on screen when an error comes; of two conflicts the first stays', () => {
+    liveIsland.show({ id: 'conflict', text: 'conflict', kind: 'conflict' });
+    liveIsland.show({ id: 'error', text: 'error', kind: 'error' });
+    liveIsland.show({ id: 'second', text: 'second', kind: 'conflict' });
+    expect(current()).toBe('conflict');
+    liveIsland.hide('conflict');
+    expect(current()).toBe('second');
+  });
+
+  it('says a save conflict as urgently as an error', () => {
+    expect(liveIslandUrgent({ kind: 'conflict' })).toBe(true);
+    expect(liveIslandUrgent({ kind: 'error' })).toBe(true);
+    expect(liveIslandUrgent({ tone: 'warning' })).toBe(true);
+    expect(liveIslandUrgent({ kind: 'friend' })).toBe(false);
+    expect(liveIslandUrgent({})).toBe(false);
   });
 
   it('a message that waited gets its full time, counted only while it is on screen', () => {

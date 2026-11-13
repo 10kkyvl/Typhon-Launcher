@@ -6,9 +6,9 @@ import { QUEUE_STALE_MS, RESUME_FLOOR_MS } from './toasts';
  * message, a failed download, a friend who started playing) while motion is on. This store holds its
  * messages; LiveIsland.svelte draws the current one and liveIslandFeed.ts posts them.
  *
- * - One message is shown at a time, the rest wait: by rank (an error, then a friend, then a plain
- *   note), and of one rank in the order they came, so a message on screen gives way only to a more
- *   important one, and comes back after it;
+ * - One message is shown at a time, the rest wait: by rank (a save conflict, then an error, then a
+ *   friend, then a plain note), and of one rank in the order they came, so a message on screen gives
+ *   way only to a more important one, and comes back after it;
  * - `ttl` (ms) hides a message by itself, counted only while it is on screen and not being read
  *   (`hold`: the pill open, hovered or holding focus); after a hold it gets at least
  *   `RESUME_FLOOR_MS`, as a toast does. Without `ttl` it stays until `hide` (a toast: the toast store
@@ -24,7 +24,7 @@ import { QUEUE_STALE_MS, RESUME_FLOOR_MS } from './toasts';
  * `show` with an id already there replaces that message; `update` patches it in place.
  */
 
-export type LiveIslandKind = 'error' | 'friend' | 'info';
+export type LiveIslandKind = 'conflict' | 'error' | 'friend' | 'info';
 export type LiveIslandTone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger';
 /** The mark a message wears, by name: LiveIsland.svelte draws it, so no store loads an icon component. */
 export type LiveIslandIcon = 'info' | 'success' | 'warning' | 'danger' | 'game';
@@ -60,12 +60,18 @@ export interface LiveIslandMessage {
   ttl?: number;
 }
 
-const RANK: Record<LiveIslandKind, number> = { error: 0, friend: 1, info: 2 };
+// A save conflict waits for nobody: it holds the player's progress, and nothing else here does.
+const RANK: Record<LiveIslandKind, number> = { conflict: 0, error: 1, friend: 2, info: 3 };
 
 export function liveIslandRank(m: Pick<LiveIslandMessage, 'kind' | 'tone'>): number {
   const kind = m.kind ?? 'info';
   if (kind === 'info' && (m.tone === 'danger' || m.tone === 'warning')) return RANK.error;
   return RANK[kind];
+}
+
+/** Said at once (an alert), not when the reader is free: a save conflict and an error. */
+export function liveIslandUrgent(m: Pick<LiveIslandMessage, 'kind' | 'tone'>): boolean {
+  return liveIslandRank(m) <= RANK.error;
 }
 
 const items = writable<LiveIslandMessage[]>([]);

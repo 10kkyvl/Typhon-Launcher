@@ -90,6 +90,14 @@ describe('LiveIsland: what a screen reader is told', () => {
     expect(alert().textContent?.trim()).toBe('');
   });
 
+  it('says a save conflict in the alert region, as an error', async () => {
+    const { status, alert } = setup();
+    liveIsland.show({ id: 'c', text: 'Save conflict', detail: 'Hades', kind: 'conflict', tone: 'neutral' });
+    await tick();
+    expect(alert().textContent).toContain('Save conflict. Hades');
+    expect(status().textContent?.trim()).toBe('');
+  });
+
   it('says the title and the detail with the line', async () => {
     const { alert } = setup();
     liveIsland.show({ id: 'd', text: 'Download failed', title: 'Elden Ring', detail: 'No peers', kind: 'error' });
