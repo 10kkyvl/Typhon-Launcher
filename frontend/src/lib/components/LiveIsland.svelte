@@ -55,7 +55,7 @@
   let height = $state(0);
 
   const uid = $props.id();
-  const aboutId = `${uid}-about`;
+  const collapseId = `${uid}-collapse`;
 
   const live = $derived($liveIslandCurrent);
   const shown = $derived(live !== undefined);
@@ -301,7 +301,9 @@
       <div bind:this={card} class="card" {@attach inert(!expanded)}>
         {#if primary}
           {@const m = primary}
-          <button bind:this={top} type="button" class="top" aria-expanded="true" aria-label={msg('ui.liveIslandCollapse')} aria-describedby={aboutId} onclick={() => collapse(true)}>
+          <!-- Named by what it says, as the pill is; that it collapses the card is its description. -->
+          <span class="sr-only" id={collapseId}>{msg('ui.liveIslandCollapse')}</span>
+          <button bind:this={top} type="button" class="top" aria-expanded="true" aria-describedby={collapseId} onclick={() => collapse(true)}>
             <span class="lead">
               {#if m.avatar !== undefined}
                 <Avatar src={m.avatar} name={m.title ?? m.text} size="md" />
@@ -309,7 +311,7 @@
                 {@render mark(m, '2.2rem')}
               {/if}
             </span>
-            <span class="about" id={aboutId}>
+            <span class="about">
               <span class="title">{m.title ?? m.text}</span>
               {#if m.title}<span class="sub">{m.text}</span>{/if}
               {#if m.detail}<span class="sub">{m.detail}</span>{/if}

@@ -118,6 +118,16 @@ describe('LiveIsland: keyboard and focus', () => {
     expect(pill().getAttribute('aria-expanded')).toBe('false');
   });
 
+  it('the open card\'s head is named by what it says, with collapsing as its description', async () => {
+    const { keys, pill, card } = setup();
+    liveIsland.show({ id: 'd', text: 'Download failed', title: 'Elden Ring', detail: 'No peers', kind: 'error' });
+    await tick();
+    await keys.click(pill());
+    await tick();
+    const head = within(card()).getByRole('button', { name: 'Elden Ring Download failed No peers', description: msg('ui.liveIslandCollapse') });
+    expect(head.getAttribute('aria-expanded')).toBe('true');
+  });
+
   it('Space opens it as well', async () => {
     const { keys, island, pill } = setup();
     liveIsland.show({ id: 'a', text: 'Saved' });
@@ -279,8 +289,8 @@ describe('LiveIsland: actions, dismissal and the clock', () => {
     await tick();
     await keys.click(pill());
     await tick();
-    const buttons = within(card()).getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent?.trim());
-    expect(buttons).toEqual([msg('ui.liveIslandCollapse'), 'One', 'Two', msg('ui.toastDismiss')]);
+    const buttons = within(card()).getAllByRole('button').map((b) => b.textContent?.trim());
+    expect(buttons).toEqual(['A', 'One', 'Two', msg('ui.toastDismiss')]);
     expect(within(card()).getByRole('button', { name: 'One' }).classList.contains('primary')).toBe(true);
   });
 
