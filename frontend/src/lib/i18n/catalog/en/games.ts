@@ -479,4 +479,12 @@ export const games: Record<GamesKey, Message> = {
   'library.collectionNoCriteria': 'Choose a tag, a genre or a status: without one the collection holds every game',
   'library.collectionDeleteTitle': 'Delete collection',
   'library.collectionDeleteText': 'The collection "{name}" will be deleted. The games stay in the library.',
+  'library.carousel.label': 'Continue playing',
+  'library.carousel.kind': 'carousel',
+  'library.carousel.slide': 'slide',
+  'library.carousel.position': '{index} of {total}',
+  'library.carousel.picker': 'Choose a slide',
+  'library.carousel.pick': 'Slide {index} of {total}: {title}',
+  'library.row.more': 'More actions',
+  'library.row.favorite': 'Favorite',
 };

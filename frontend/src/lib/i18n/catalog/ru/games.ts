@@ -477,6 +477,14 @@ export const games = {
   'library.collectionNoCriteria': 'Выберите тег, жанр или статус: без них в коллекцию попадут все игры',
   'library.collectionDeleteTitle': 'Удалить коллекцию',
   'library.collectionDeleteText': 'Коллекция «{name}» будет удалена. Игры останутся в библиотеке.',
+  'library.carousel.label': 'Продолжить игру',
+  'library.carousel.kind': 'карусель',
+  'library.carousel.slide': 'слайд',
+  'library.carousel.position': '{index} из {total}',
+  'library.carousel.picker': 'Выбор слайда',
+  'library.carousel.pick': 'Слайд {index} из {total}: {title}',
+  'library.row.more': 'Ещё действия',
+  'library.row.favorite': 'В избранном',
 } as const;
 
 export type GamesKey = keyof typeof games;
