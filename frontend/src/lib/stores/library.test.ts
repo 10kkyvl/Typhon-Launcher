@@ -150,4 +150,28 @@ describe('running sessions', () => {
       expect(toast.mock.calls[0][1]).toBe('info');
     }
   });
+
+  // The sidebar's activity widget counts a session from the moment this launcher saw it start; a game
+  // already running when the launcher came up has no such moment.
+  it('notes when this launcher saw a game start, none for one already running, and forgets it when it stops', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-11-13T10:00:00Z'));
+      running = ['old'];
+      const { store } = await load();
+      expect([...get(store.sessionStarts)]).toEqual([]);
+
+      handlers['game:started']({ data: { gameId: 'a', sessionSeconds: 0, playtimeSeconds: 0 } });
+      vi.setSystemTime(new Date('2026-11-13T10:00:30Z'));
+      handlers['game:started']({ data: { gameId: 'a', sessionSeconds: 0, playtimeSeconds: 0 } });
+
+      expect(get(store.sessionStarts).get('a')).toBe(Date.parse('2026-11-13T10:00:00Z'));
+      expect(get(store.sessionStarts).has('old')).toBe(false);
+
+      handlers['game:stopped']({ data: { gameId: 'a', sessionSeconds: 30, playtimeSeconds: 30 } });
+      expect(get(store.sessionStarts).has('a')).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

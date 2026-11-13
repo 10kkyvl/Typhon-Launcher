@@ -10,6 +10,9 @@ import { toast } from './toasts';
 export const libraryGames = writable<LibraryGame[]>([]);
 export const installedGames = derived(libraryGames, (games) => games.filter((game) => !game.uninstalled));
 export const runningGames = writable<Set<string>>(new Set());
+// When this launcher saw each running game start (ms since the epoch). A game that was already running
+// when the launcher came up has no entry: how long it has been running is not known here.
+export const sessionStarts = writable<Map<string, number>>(new Map());
 
 export async function initLibrary() {
   const { on, load } = listenFirst();
@@ -29,6 +32,7 @@ export async function initLibrary() {
   on('game:started', (event) => {
     const { gameId } = event.data as SessionEvent;
     runningGames.update((set) => new Set(set).add(gameId));
+    sessionStarts.update((starts) => (starts.has(gameId) ? starts : new Map(starts).set(gameId, Date.now())));
   });
   on('game:crash', (event) => {
     recordCrashDetail(event.data as CrashEvent);
@@ -38,6 +42,12 @@ export async function initLibrary() {
     const { gameId, sessionSeconds } = session;
     runningGames.update((set) => {
       const next = new Set(set);
+      next.delete(gameId);
+      return next;
+    });
+    sessionStarts.update((starts) => {
+      if (!starts.has(gameId)) return starts;
+      const next = new Map(starts);
       next.delete(gameId);
       return next;
     });
