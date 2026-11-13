@@ -1,38 +1,16 @@
 <script lang="ts">
   import Page from '../../lib/components/Page.svelte';
-  import {
-    ArrowDownUp,
-    BellOff,
-    Bell,
-    ChevronDown,
-    ChevronRight,
-    Clock,
-    Dices,
-    EyeOff,
-    LayoutGrid,
-    List,
-    MonitorDown,
-    Pencil,
-    Play,
-    Plus,
-    Square,
-    X,
-  } from '@lucide/svelte';
-  import { tick, untrack } from 'svelte';
+  import { BellOff, Pencil, Plus } from '@lucide/svelte';
+  import { untrack } from 'svelte';
   import { get } from 'svelte/store';
   import Artwork from '../../lib/components/Artwork.svelte';
-  import Button from '../../lib/components/Button.svelte';
   import Chip from '../../lib/components/Chip.svelte';
   import CollectionModal from '../../lib/components/CollectionModal.svelte';
-  import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import GameCard, { type GameCardAction } from '../../lib/components/GameCard.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import RandomGameModal from '../../lib/components/RandomGameModal.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
-  import SearchInput from '../../lib/components/SearchInput.svelte';
-  import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
-  import TextLink from '../../lib/components/TextLink.svelte';
   import { playGame, stopGame, type LibraryCollection, type LibraryGame } from '../../lib/services/library';
   import { getCatalogGames, type CatalogGame } from '../../lib/services/sources';
   import type { Download } from '../../lib/services/downloads';
@@ -46,46 +24,23 @@
   import { toast } from '../../lib/stores/toasts';
   import { toggleWatch, watchlist } from '../../lib/stores/watchlist';
   import { libraryView } from '../../lib/stores/ui';
-  import { bytesSize, playtime, relativeDate } from '../../lib/utils/format';
-  import { revealImage } from '../../lib/utils/revealImage';
+  import { bytesSize } from '../../lib/utils/format';
   import { ambientHover } from '../../lib/utils/ambientHover';
   import { msg } from '../../lib/i18n';
   import { libraryErrorText } from '../../lib/library/errors';
-  import { focusableIn, focusQuietly } from '../../lib/layers/focus';
   import { metadataErrorText } from '../../lib/metadata/metadataErrors';
-  import { nextLibraryFilter, type LibraryFilter } from '../../lib/library/filters';
-  import { gameSource, sourceLabel, sourceOrder, type GameSource } from '../../lib/library/source';
+  import type { LibraryFilter } from '../../lib/library/filters';
+  import { gameSource, sourceOrder, type GameSource } from '../../lib/library/source';
   import SourceBadge from '../../lib/components/SourceBadge.svelte';
   import { canPlay } from '../../lib/library/launch';
   import { emulationPlatform } from '../../lib/library/emulation';
   import ConsoleTag from '../../lib/components/ConsoleTag.svelte';
   import { matchesCollection } from '../../lib/library/collections';
-  import { STATUS_FILTERS, compareByCompleted, compareByStatus, matchesStatus, type StatusFilter } from '../../lib/library/statuses';
-  import { statusLabel } from '../../lib/game/status';
-
-  type Sort = 'alpha' | 'recent' | 'playtime' | 'size' | 'status' | 'completed';
-
-  interface Entry {
-    id: string;
-    title: string;
-    cover: string;
-    hero: string;
-    installed: boolean;
-    playable: boolean;
-    playtimeSeconds: number;
-    sizeBytes: number;
-    lastPlayed: string | null;
-    subtitle: string;
-    hidden: boolean;
-    inLibrary: boolean;
-    tags?: string[];
-    status?: string;
-    completedAt?: string | null;
-    canonicalGameId?: string;
-    watched?: boolean;
-    source?: GameSource | null;
-    platform?: string;
-  }
+  import { compareByCompleted, compareByStatus, matchesStatus, type StatusFilter } from '../../lib/library/statuses';
+  import LibraryHero from './LibraryHero.svelte';
+  import RecentRow from './RecentRow.svelte';
+  import LibraryToolbar from './LibraryToolbar.svelte';
+  import type { Entry, Sort } from './entry';
 
   let filter = $state<LibraryFilter>('all');
   let sort = $state<Sort>('alpha');
@@ -159,29 +114,6 @@
   function openCollection(target: LibraryCollection | null) {
     collectionTarget = target;
     collectionOpen = true;
-  }
-
-  const filters = $derived<{ id: LibraryFilter; label: string; icon?: typeof Clock }[]>([
-    { id: 'all', label: msg('games.filterAll') },
-    { id: 'installed', label: msg('games.filterInstalled'), icon: MonitorDown },
-    { id: 'recent', label: msg('games.recentLabel'), icon: Clock },
-    { id: 'hidden', label: msg('games.filterHidden'), icon: EyeOff },
-    ...($watchlist.length > 0 ? [{ id: 'watched' as const, label: msg('games.filterWatched'), icon: Bell }] : []),
-  ]);
-
-  const sortLabels: Record<Sort, string> = {
-    alpha: msg('games.sortAlpha'),
-    recent: msg('games.librarySortRecent'),
-    playtime: msg('games.librarySortPlaytime'),
-    size: msg('games.sortSize'),
-    status: msg('games.sortStatus'),
-    completed: msg('games.sortCompleted'),
-  };
-
-  function statusFilterLabel(id: StatusFilter): string {
-    if (id === 'all') return msg('games.filterStatusAll');
-    if (id === 'none') return msg('games.filterStatusNone');
-    return statusLabel(id);
   }
 
   const sectionTitles: Record<LibraryFilter, string> = {
@@ -348,10 +280,6 @@
 
   const hero = $derived(playedGames.find((entry) => entry.lastPlayed !== null && entry.playable));
 
-  let heroArtFailed = $state('');
-  const heroArt = $derived(hero?.hero ?? '');
-  const heroArtShown = $derived(heroArt !== '' && heroArtFailed !== heroArt);
-
   let lastView = get(libraryView);
   let viewSwitched = $state(false);
 
@@ -374,23 +302,6 @@
     return entry.installed ? '' : msg('games.gameNotInstalledWord');
   }
 
-  function recentMeta(entry: Entry) {
-    return `${playtime(entry.playtimeSeconds)} · ${relativeDate(entry.lastPlayed)}`;
-  }
-
-  let heroSection = $state<HTMLElement>();
-
-  // The hide button goes with the block: focus moves on to what Tab would reach next.
-  async function hideHero() {
-    const all = focusableIn(document.body);
-    const mine = all.filter((el) => heroSection?.contains(el));
-    const next = all[all.indexOf(mine[mine.length - 1]) + 1] ?? null;
-    heroHidden = true;
-    await tick();
-    const active = document.activeElement;
-    if (next?.isConnected && (!active || active === document.body || !active.isConnected)) focusQuietly(next);
-  }
-
   async function toggleRun(id: string) {
     try {
       if ($runningGames.has(id)) await stopGame(id);
@@ -405,96 +316,16 @@
   <PageHeader title={msg('games.libraryWord')} />
 
   {#if hero && !heroHidden}
-    {#key hero.id}
-      <section
-        bind:this={heroSection}
-        class="hero"
-        class:plain={!heroArtShown}
-        aria-label={msg('games.libraryContinuePlayingTitle')}
-        {@attach gameContextMenu(hero.id)}
-      >
-        {#if heroArtShown}
-          <div class="hero-art">
-            {#key heroArt}
-              <img
-                src={heroArt}
-                alt=""
-                class="media-reveal"
-                use:revealImage
-                decoding="async"
-                draggable="false"
-                onerror={() => (heroArtFailed = heroArt)}
-              />
-            {/key}
-          </div>
-          <div class="hero-scrim"></div>
-        {/if}
-        <div class="hero-body">
-          <span class="hero-eyebrow">{msg('games.libraryContinuePlayingTitle')}</span>
-          <h2 class="hero-title">{hero.title}</h2>
-          <p class="hero-meta">
-            <span>{msg('games.libraryLastSessionLabel', { date: relativeDate(hero.lastPlayed) })}</span>
-            <span>{msg('games.libraryPlaytimeLabel', { time: playtime(hero.playtimeSeconds) })}</span>
-          </p>
-          <div class="hero-actions">
-            <Button variant="primary" size="lg" onclick={() => toggleRun(hero.id)}>
-              {#if $runningGames.has(hero.id)}
-                <Square size="1.4rem" strokeWidth={2} fill="currentColor" />
-                {msg('games.stop')}
-              {:else}
-                <Play size="1.5rem" strokeWidth={2} fill="currentColor" />
-                {msg('common.continue')}
-              {/if}
-            </Button>
-            <Button size="lg" onclick={() => navigate('game', { id: hero.id })}>{msg('games.libraryMoreDetailsButton')}</Button>
-          </div>
-        </div>
-        <span class="hero-close">
-          <IconButton variant="secondary" size="sm" label={msg('games.libraryHideLabel')} onclick={hideHero}>
-            <X size="1.6rem" strokeWidth={1.8} />
-          </IconButton>
-        </span>
-      </section>
-    {/key}
+    <LibraryHero
+      {hero}
+      running={$runningGames.has(hero.id)}
+      onplay={() => toggleRun(hero.id)}
+      onhide={() => (heroHidden = true)}
+    />
   {/if}
 
   {#if recentGames.length > 0}
-    <section class="section">
-      <div class="section-head">
-        <h2>{msg('games.recentLabel')}</h2>
-        <span class="show-all">
-          <TextLink tone="muted" onclick={() => (filter = 'recent')}>
-            {msg('games.libraryShowAllButton')}
-            <ChevronRight size="1.4rem" strokeWidth={1.8} aria-hidden="true" />
-          </TextLink>
-        </span>
-      </div>
-      <div class="recent-row">
-        {#each recentGames as entry (entry.id)}
-          <div class="recent-item">
-            <GameCard
-              id={entry.id}
-              title={entry.title}
-              cover={entry.hero || entry.cover}
-              variant="capsule"
-              ambient
-              installed={entry.installed}
-              running={$runningGames.has(entry.id)}
-              source={entry.source}
-              platform={entry.platform}
-              onplay={entry.playable ? () => toggleRun(entry.id) : undefined}
-            >
-              {#snippet footer()}
-                <span class="recent-meta">
-                  <span class="dot"></span>
-                  {recentMeta(entry)}
-                </span>
-              {/snippet}
-            </GameCard>
-          </div>
-        {/each}
-      </div>
-    </section>
+    <RecentRow entries={recentGames} running={$runningGames} onshowall={() => (filter = 'recent')} onplay={toggleRun} />
   {/if}
 
   <section class="section">
@@ -502,90 +333,16 @@
       <h2>{activeCollection ? activeCollection.name : sectionTitles[filter]}</h2>
     </div>
 
-    <div class="toolbar">
-      <div class="search-wrap">
-        <SearchInput bind:value={search} label={msg('games.librarySearchPlaceholder')} placeholder={msg('games.librarySearchPlaceholder')} />
-      </div>
-      <div class="toolbar-right">
-        <Chip onclick={() => (randomOpen = true)}>
-          <Dices size="1.4rem" strokeWidth={1.8} />
-          {msg('games.randomButton')}
-        </Chip>
-        {#each filters as f (f.id)}
-          <Chip selected={filter === f.id} onclick={() => (filter = nextLibraryFilter(filter, f.id))}>
-            {#if f.icon}
-              <f.icon size="1.4rem" strokeWidth={1.8} />
-            {/if}
-            {f.label}
-          </Chip>
-        {/each}
-        {#if librarySources.length >= 2 && filter !== 'watched'}
-          <DropdownMenu
-            items={[
-              { id: 'all', label: msg('games.filterSourceAll'), checked: sourceFilter === 'all' },
-              ...librarySources.map((source) => ({
-                id: source,
-                label: sourceLabel(source),
-                checked: sourceFilter === source,
-              })),
-            ]}
-            onselect={(id) => (sourceFilter = id as GameSource | 'all')}
-          >
-            {#snippet trigger({ props })}
-              <Chip {...props} selected={sourceFilter !== 'all'}>
-                {sourceFilter === 'all' ? msg('games.filterSourceAll') : sourceLabel(sourceFilter)}
-                <ChevronDown size="1.4rem" strokeWidth={1.8} />
-              </Chip>
-            {/snippet}
-          </DropdownMenu>
-        {/if}
-        {#if filter !== 'watched'}
-          <DropdownMenu
-            items={STATUS_FILTERS.map((id) => ({ id, label: statusFilterLabel(id), checked: statusFilter === id }))}
-            onselect={(id) => (statusFilter = id as StatusFilter)}
-          >
-            {#snippet trigger({ props })}
-              <Chip {...props} selected={statusFilter !== 'all'}>
-                {statusFilterLabel(statusFilter)}
-                <ChevronDown size="1.4rem" strokeWidth={1.8} />
-              </Chip>
-            {/snippet}
-          </DropdownMenu>
-        {/if}
-        <DropdownMenu
-          items={(['alpha', 'recent', 'playtime', 'size', 'status', 'completed'] as const).map((id) => ({
-            id,
-            label: sortLabels[id],
-            checked: sort === id,
-          }))}
-          onselect={(id) => (sort = id as Sort)}
-        >
-          {#snippet trigger({ props })}
-            <Chip {...props}>
-              <ArrowDownUp size="1.4rem" strokeWidth={1.8} />
-              {sortLabels[sort]}
-              <ChevronDown size="1.4rem" strokeWidth={1.8} />
-            </Chip>
-          {/snippet}
-        </DropdownMenu>
-        <SegmentedControl
-          label={msg('games.viewLabel')}
-          bind:value={$libraryView}
-          options={[
-            { id: 'grid', label: msg('games.viewGrid') },
-            { id: 'list', label: msg('games.viewList') },
-          ]}
-        >
-          {#snippet item(option)}
-            {#if option.id === 'grid'}
-              <LayoutGrid size="1.6rem" strokeWidth={1.8} />
-            {:else}
-              <List size="1.6rem" strokeWidth={1.8} />
-            {/if}
-          {/snippet}
-        </SegmentedControl>
-      </div>
-    </div>
+    <LibraryToolbar
+      bind:search
+      bind:filter
+      bind:sort
+      bind:sourceFilter
+      bind:statusFilter
+      sources={librarySources}
+      watched={$watchlist.length > 0}
+      onrandom={() => (randomOpen = true)}
+    />
 
     <div class="collections" role="group" aria-label={msg('games.collectionsLabel')}>
       {#each $collections as collection (collection.id)}
@@ -670,122 +427,6 @@
 </Page>
 
 <style>
-  .hero {
-    position: relative;
-    display: flex;
-    align-items: flex-end;
-    min-height: clamp(20rem, 17vw, 28rem);
-    margin-bottom: var(--space-8);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    background: var(--surface-2);
-    overflow: hidden;
-    isolation: isolate;
-  }
-
-  .hero.plain {
-    background:
-      linear-gradient(115deg, var(--accent-subtle), transparent 62%),
-      var(--surface-2);
-  }
-
-  .hero-art,
-  .hero-scrim {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-  }
-
-  .hero-art img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: center 28%;
-    transition: transform var(--dur-slow) var(--ease);
-  }
-
-  .hero-art img:global([data-ready]) {
-    animation: media-in var(--dur-slow) var(--ease);
-  }
-
-  .hero:hover .hero-art img {
-    transform: scale(1.03);
-  }
-
-  .hero-scrim {
-    background:
-      linear-gradient(
-        90deg,
-        color-mix(in srgb, var(--surface-2) 96%, transparent) 0%,
-        color-mix(in srgb, var(--surface-2) 86%, transparent) 40%,
-        color-mix(in srgb, var(--surface-2) 30%, transparent) 72%,
-        color-mix(in srgb, var(--surface-2) 6%, transparent) 100%
-      ),
-      linear-gradient(0deg, color-mix(in srgb, var(--surface-2) 55%, transparent) 0%, transparent 62%);
-  }
-
-  .hero-body {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--space-2);
-    min-width: 0;
-    max-width: min(64rem, 100%);
-    padding: var(--space-6) var(--space-8);
-    color: var(--text);
-  }
-
-  .hero-body > * {
-    animation: rise-in var(--dur-panel) var(--ease) backwards;
-  }
-
-  .hero-body > .hero-title {
-    animation-duration: var(--dur-slow);
-  }
-
-  .hero-body > .hero-meta {
-    animation-duration: var(--dur-slow);
-    animation-delay: calc(var(--dur-fast) / 2);
-  }
-
-  .hero-eyebrow {
-    font-size: var(--font-sm);
-    font-weight: 500;
-    color: var(--text-2);
-  }
-
-  .hero-title {
-    max-width: 100%;
-    font-size: var(--font-title);
-    font-weight: 600;
-    line-height: 1.1;
-    letter-spacing: var(--tracking-title);
-    overflow-wrap: anywhere;
-  }
-
-  .hero-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.2rem var(--space-5);
-    font-size: var(--font-sm);
-    color: var(--text-2);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .hero-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    margin-top: var(--space-3);
-  }
-
-  .hero-close {
-    position: absolute;
-    top: var(--space-3);
-    right: var(--space-3);
-  }
-
   .section {
     margin-bottom: var(--space-8);
   }
@@ -799,62 +440,6 @@
 
   .section-head h2 {
     font-size: var(--font-xl);
-  }
-
-  .show-all {
-    font-size: var(--font-sm);
-  }
-
-  .recent-row {
-    display: flex;
-    gap: var(--space-4);
-    overflow-x: auto;
-    margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-2)) 0;
-    padding: var(--space-2) var(--space-2) var(--space-3);
-  }
-
-  .recent-item {
-    flex: 0 0 auto;
-    width: 27rem;
-  }
-
-  .recent-meta {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.6rem;
-    font-size: var(--font-xs);
-    color: var(--text-3);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .recent-meta .dot {
-    width: 0.7rem;
-    height: 0.7rem;
-    border-radius: 50%;
-    background: var(--success);
-    flex-shrink: 0;
-  }
-
-  .toolbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3) var(--space-4);
-    margin-bottom: var(--space-5);
-    flex-wrap: wrap;
-  }
-
-  .search-wrap {
-    flex: 1;
-    min-width: 22rem;
-    max-width: 38rem;
-  }
-
-  .toolbar-right {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    flex-wrap: wrap;
   }
 
   .collections {
