@@ -38,7 +38,7 @@ function harness(deps: Deps) {
     const msg = (key) => key;
     let open = true, sourceId = null, focusReleaseId = null;
     let details = null, releases = [], total = 0, loadingReleases = false, detailsRetrying = false, releasesRetrying = false, detailsError = '', releasesError = '';
-    let filterStatus = 'all', search = '', page = 1, searchTimer;
+    let filterStatus = 'all', search = '', page = 1, searchTimer, opening = 0;
     const pageSize = 50;
     ${js}
     return {

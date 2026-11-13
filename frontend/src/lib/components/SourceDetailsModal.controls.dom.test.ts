@@ -190,6 +190,34 @@ describe('SourceDetailsModal: closed and opened again while a Retry runs', () =>
   });
 });
 
+describe('SourceDetailsModal: an old Retry answering after the dialog was opened again', () => {
+  it.each([
+    ['details', () => vi.mocked(getSourceDetails) as unknown as ReturnType<typeof vi.fn>, 'modals.sourceDetailsLoadFailed', () => details as unknown],
+    ['releases', () => vi.mocked(queryReleases) as unknown as ReturnType<typeof vi.fn>, 'modals.sourceDetailsReleasesFailed', () => page() as unknown],
+  ] as const)('leaves the new %s Retry busy, and a second press sends nothing', async (_name, call, words, value) => {
+    const old = deferred<unknown>();
+    const never = new Promise<never>(() => {});
+    call().mockRejectedValueOnce(new Error('ipc')).mockReturnValueOnce(old.promise).mockRejectedValueOnce(new Error('ipc')).mockReturnValue(never);
+    const { rerender } = render(SourceDetailsModal, { target: app, props: { open: true, sourceId: 's1' } });
+    const keys = user();
+    const retryOf = async () => within((await within(await screen.findByRole('dialog', { name: 'FitGirl' })).findByText(msg(words))).closest('.notice') as HTMLElement).getByRole('button', { name: msg('common.retry') });
+    await keys.click(await retryOf());
+    await rerender({ open: false, sourceId: 's1' });
+    await rerender({ open: true, sourceId: 's1' });
+    const retry = await retryOf();
+    await keys.click(retry);
+    expect(retry.getAttribute('aria-busy')).toBe('true');
+    const sent = call().mock.calls.length;
+
+    old.resolve(value());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(retry.getAttribute('aria-busy')).toBe('true');
+    await keys.click(retry);
+    expect(call().mock.calls.length).toBe(sent);
+  });
+});
+
 describe('SourceDetailsModal: the rest of the dialog', () => {
   it('says the list is loading with a labelled spinner', async () => {
     const pending = deferred<Page>();
