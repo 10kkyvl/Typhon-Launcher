@@ -5,9 +5,12 @@ import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { resumeDownload, type Download } from '../services/downloads';
+import { emptyFriendsPage, type FriendView, type PresenceView } from '../services/social';
+import { openByIGDB } from '../services/sources';
 import { downloads, initDownloads } from '../stores/downloads';
 import { liveIsland, liveIslandCurrent } from '../stores/liveIsland';
 import { resetHistory, route } from '../stores/router';
+import { friendsPage } from '../stores/social';
 import { holdToasts, toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
 import IslandShellHarness from '../testing/IslandShellHarness.svelte';
@@ -19,6 +22,10 @@ vi.mock('../services/backend', () => ({
   get inWails() {
     return backend.wails;
   },
+}));
+vi.mock('../services/sources', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/sources')>()),
+  openByIGDB: vi.fn(async () => ({ id: 'lib-elden' })),
 }));
 vi.mock('../services/downloads', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/downloads')>()),
@@ -77,6 +84,7 @@ beforeEach(() => {
   holdToasts(false);
   liveIsland.clear();
   downloads.set([]);
+  friendsPage.set(emptyFriendsPage());
   resetHistory();
   app = document.createElement('div');
   app.id = 'app';
@@ -89,6 +97,7 @@ afterEach(() => {
   toasts.set([]);
   liveIsland.clear();
   downloads.set([]);
+  friendsPage.set(emptyFriendsPage());
   resetHistory();
   vi.unstubAllGlobals();
 });
@@ -181,5 +190,76 @@ describe('a failed download in the island', () => {
     expect(island()).toBeNull();
     expect(get(toasts).map((t) => t.kind)).toEqual(['danger']);
     expect(get(toasts)[0].message).toContain('Elden Ring');
+  });
+});
+
+function friend(presence: PresenceView | null, id = 'bob'): FriendView {
+  return { id, username: id, displayName: 'Bob', avatarUrl: '', since: '2026-01-01T00:00:00Z', presence };
+}
+const online: PresenceView = { status: 'online' };
+const playing: PresenceView = { status: 'online', gameId: 1234, gameTitle: 'Elden Ring' };
+const page = (...friends: FriendView[]) => ({ ...emptyFriendsPage(), friends });
+
+describe('a friend who starts playing, in the island', () => {
+  it('is one message with the friend and the game, said politely', async () => {
+    const { island } = setup();
+    friendsPage.set(page(friend(online)));
+    friendsPage.set(page(friend(playing)));
+    await tick();
+
+    expect(island()?.dataset.kind).toBe('friend');
+    expect(get(liveIslandCurrent)).toMatchObject({ text: msg('ui.liveIslandFriendPlaying', { name: 'Bob' }), detail: 'Elden Ring' });
+    expect(within(screen.getByTestId('live-island-status')).getAllByText(/Bob/)).toHaveLength(1);
+    expect(island()?.querySelector('.card .avatar')).not.toBeNull();
+    expect(get(toasts)).toEqual([]);
+  });
+
+  it('"Open the game" opens its page', async () => {
+    const { keys, island, pill } = setup();
+    friendsPage.set(page(friend(online)));
+    friendsPage.set(page(friend(playing)));
+    await tick();
+    await keys.click(pill());
+    await tick();
+    await keys.click(within(island() as HTMLElement).getByRole('button', { name: msg('ui.liveIslandOpenGame') }));
+
+    expect(vi.mocked(openByIGDB)).toHaveBeenCalledWith(1234, 'Elden Ring');
+    await vi.waitFor(() => expect(get(route)).toMatchObject({ name: 'game', params: { id: 'lib-elden' } }));
+  });
+
+  it('a friend already playing when the friends first load says nothing, then or when the list comes again', async () => {
+    setup();
+    await tick();
+    friendsPage.set(page(friend(playing)));
+    friendsPage.set(page(friend(playing)));
+    await tick();
+    expect(get(liveIslandCurrent)).toBeUndefined();
+  });
+
+  it('after signing out and in again, friends already playing say nothing', async () => {
+    setup();
+    friendsPage.set(page(friend(online)));
+    friendsPage.set(emptyFriendsPage());
+    friendsPage.set(page(friend(playing)));
+    await tick();
+    expect(get(liveIslandCurrent)).toBeUndefined();
+  });
+
+  it('a friend who moves on to another game says so again', async () => {
+    setup();
+    friendsPage.set(page(friend(playing)));
+    friendsPage.set(page(friend({ status: 'online', gameId: 99, gameTitle: 'Hades' })));
+    await tick();
+    expect(get(liveIslandCurrent)?.detail).toBe('Hades');
+  });
+
+  it('with motion off says nothing, as before', async () => {
+    document.documentElement.classList.add('no-anim');
+    setup();
+    friendsPage.set(page(friend(online)));
+    friendsPage.set(page(friend(playing)));
+    await tick();
+    expect(get(liveIslandCurrent)).toBeUndefined();
+    expect(get(toasts)).toEqual([]);
   });
 });

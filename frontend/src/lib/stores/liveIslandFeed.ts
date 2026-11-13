@@ -1,8 +1,12 @@
-import { CircleAlert, CircleCheck, Info, TriangleAlert } from '@lucide/svelte';
+import { CircleAlert, CircleCheck, Gamepad2, Info, TriangleAlert } from '@lucide/svelte';
 import { get } from 'svelte/store';
+import { msg } from '../i18n';
+import { openGameByIGDB } from '../social/openGame';
+import { isPlaying } from '../social/presence';
 import { downloads, failedMessageId } from './downloads';
 import { liveIsland, liveIslandCurrent, liveIslandHeld, liveIslandMessages, type LiveIslandMessage, type LiveIslandTone } from './liveIsland';
-import { dismissToast, pauseToast, resumeToast, toasts, toastsInIsland, type Toast, type ToastKind } from './toasts';
+import { friendsPage } from './social';
+import { ACTION_MS, dismissToast, pauseToast, resumeToast, toasts, toastsInIsland, type Toast, type ToastKind } from './toasts';
 
 /**
  * What the live island is told, wired once by LiveIsland.svelte while it is mounted (motion on):
@@ -13,7 +17,10 @@ import { dismissToast, pauseToast, resumeToast, toasts, toastsInIsland, type Toa
  *   (motion off) the toasts it held go back to the stack with their clocks running;
  * - a download that fails: one message with Retry and "Open downloads", posted by the downloads store
  *   in place of its toast; here it goes once the download is no longer failed (retried elsewhere,
- *   removed).
+ *   removed);
+ * - a friend who starts playing (presence in the friends list): one message with the friend's
+ *   picture and "Open the game". The first list that has friends in it is what was going on already
+ *   and says nothing; an empty list (signed out) starts that over.
  */
 
 const TOAST_ICON = { info: Info, success: CircleCheck, warning: TriangleAlert, danger: CircleAlert } as const;
@@ -82,9 +89,39 @@ function trackFailedDownloads(): () => void {
   });
 }
 
+function trackFriends(): () => void {
+  let before: Map<string, number> | null = null;
+  return friendsPage.subscribe((page) => {
+    const now = new Map<string, number>();
+    for (const f of page.friends) {
+      const game = f.presence?.gameId;
+      if (isPlaying(f.presence) && game != null) now.set(f.id, game);
+    }
+    const known = before;
+    before = page.friends.length > 0 ? now : null;
+    if (known === null) return;
+    for (const f of page.friends) {
+      const game = now.get(f.id);
+      if (game === undefined || known.get(f.id) === game) continue;
+      const name = f.displayName || f.username;
+      const title = f.presence?.gameTitle ?? '';
+      liveIsland.show({
+        id: `friend:${f.id}`,
+        kind: 'friend',
+        icon: Gamepad2,
+        avatar: f.avatarUrl,
+        text: msg('ui.liveIslandFriendPlaying', { name }),
+        detail: title || undefined,
+        ttl: ACTION_MS,
+        actions: [{ label: msg('ui.liveIslandOpenGame'), run: () => void openGameByIGDB(game, title) }],
+      });
+    }
+  });
+}
+
 /** Starts every producer; returns the disposer. */
 export function initLiveIslandFeed(): () => void {
-  const offs = [trackToasts(), trackFailedDownloads()];
+  const offs = [trackToasts(), trackFailedDownloads(), trackFriends()];
   return () => {
     for (const off of offs) off();
   };
