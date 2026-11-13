@@ -27,6 +27,9 @@ func TestOperationsAnswerAnUnreachableCloudWithTheNetworkCode(t *testing.T) {
 		{"PullRemote", func(h *harness) { h.client.listErr = unreachable() }, func(h *harness) error { return h.svc.PullRemote(gameLocal) }},
 		{"DeleteRemote", func(h *harness) { h.client.deleteErr[gameCloud] = unreachable() }, func(h *harness) error { return h.svc.DeleteRemote(gameLocal) }},
 		{"Forget", func(h *harness) { h.client.listErr = unreachable() }, func(h *harness) error { return h.svc.Forget() }},
+		{"ResolveConflict keeping mine, failing in the upload", func(h *harness) { h.client.uploadErr = unreachable() }, func(h *harness) error { return h.svc.ResolveConflict(gameLocal, true) }},
+		{"ResolveConflict taking the cloud copy, failing in the download", func(h *harness) { h.client.downloadErr = unreachable() }, func(h *harness) error { return h.svc.ResolveConflict(gameLocal, false) }},
+		{"PullRemote failing in the download", func(h *harness) { h.client.downloadErr = unreachable() }, func(h *harness) error { return h.svc.PullRemote(gameLocal) }},
 		{"SyncNow failing in the upload", func(h *harness) {
 			if err := h.svc.ResolveConflict(gameLocal, true); err != nil {
 				h.t.Fatalf("setup: resolve the conflict: %v", err)

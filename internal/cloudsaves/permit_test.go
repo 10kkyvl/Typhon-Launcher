@@ -208,44 +208,52 @@ func TestLaunchPermissionIsDroppedWithItsConflict(t *testing.T) {
 }
 
 // Two launches racing with one permission: the check and the take are one
-// step, so one starts and the other is held.
+// step, so one starts and the other is held. One round lands the two in the
+// window between a separate check and take only now and then, so the race
+// runs for many rounds, each with a fresh permission.
 func TestOnePermissionOpensOneOfTwoConcurrentLaunches(t *testing.T) {
+	const rounds = 1000
 	h := newHarness(t)
 	h.offlineWithConflict()
-	h.allow(gameLocal)
+	// A pass that fails at the listing still loads the state: the launches
+	// then read it from memory and reach the permission close together.
+	h.pass()
 	game := h.game(gameLocal)
 	svc := h.svc
 
-	entered, release := h.lib.holdGames()
-	t.Cleanup(release)
-	results := make(chan error, 2)
-	for range 2 {
-		go func() { results <- svc.SessionStarting(context.Background(), game) }()
-	}
-	for range 2 {
-		select {
-		case <-entered:
-		case <-time.After(watchdog):
-			t.Fatal("the launches did not reach the gates")
+	for round := range rounds {
+		h.allow(gameLocal)
+		entered, release := h.lib.holdGames()
+		results := make(chan error, 2)
+		for range 2 {
+			go func() { results <- svc.SessionStarting(context.Background(), game) }()
 		}
-	}
-	release()
+		for range 2 {
+			select {
+			case <-entered:
+			case <-time.After(watchdog):
+				release()
+				t.Fatalf("round %d: the launches did not reach the gates", round)
+			}
+		}
+		release()
 
-	var started, held int
-	for range 2 {
-		err := await(t, results, "SessionStarting")
-		var block *library.LaunchBlockedError
-		switch {
-		case err == nil:
-			started++
-		case errors.As(err, &block) && uierr.Code(block.Err) == wantConflictCode:
-			held++
-		default:
-			t.Fatalf("SessionStarting = %v, want nil or the conflict block", err)
+		var started, held int
+		for range 2 {
+			err := await(t, results, "SessionStarting")
+			var block *library.LaunchBlockedError
+			switch {
+			case err == nil:
+				started++
+			case errors.As(err, &block) && uierr.Code(block.Err) == wantConflictCode:
+				held++
+			default:
+				t.Fatalf("round %d: SessionStarting = %v, want nil or the conflict block", round, err)
+			}
 		}
-	}
-	if started != 1 || held != 1 {
-		t.Fatalf("%d launches started and %d held, want one of each", started, held)
+		if started != 1 || held != 1 {
+			t.Fatalf("round %d: %d launches started and %d held, want one of each", round, started, held)
+		}
 	}
 }
 
