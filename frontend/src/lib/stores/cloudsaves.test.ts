@@ -142,6 +142,17 @@ describe('cloud saves store', () => {
     emit(event({ gameId: 'g1', status: 'synced' }));
     expect(get(store.cloudStatus)?.error).toBe('');
   });
+
+  // The backend clears a pending account with no event of its own; a game syncing proves the session
+  // is confirmed. A pending status left behind would open every conflict dialog offline.
+  it('clears a pending account once a game syncs again, and only then', async () => {
+    load = async () => status({ pending: true });
+    const { store } = await init();
+    emit(event({ gameId: 'g1', status: 'failed', code: 'cloud.quota' }));
+    expect(get(store.cloudStatus)?.pending).toBe(true);
+    emit(event({ gameId: 'g1', status: 'synced' }));
+    expect(get(store.cloudStatus)?.pending).toBe(false);
+  });
 });
 
 // What a launch waiting on the dialog has been told so far: still waiting, or its answer.

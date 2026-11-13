@@ -3,7 +3,7 @@
   import Modal from './Modal.svelte';
   import Notice from './Notice.svelte';
   import Spinner from './Spinner.svelte';
-  import { cloudCodeText, cloudErrorText, cloudUnreachable } from '../cloudsaves/messages';
+  import { cloudErrorText, cloudUnreachable } from '../cloudsaves/messages';
   import { errorCode, msg } from '../i18n';
   import { untrack } from 'svelte';
   import { cloudResolveConflict } from '../services/cloudsaves';
@@ -41,15 +41,16 @@
   let retrying = $state(false);
 
   // Without the cloud no copy can be chosen. The dialog is offline from a fact of this opening: a choice
-  // or a details load that could not reach it (`unreachable`, with the choice to try again), or the
-  // status's own failed pass until the player tries again (`statusPassed`).
-  let unreachable = $state('');
+  // or a details load that could not reach it (`unreachable`, with the choice to try again), or, until
+  // the player tries again (`statusPassed`), a status whose last pass could not reach the cloud
+  // (`error`) or could not confirm the session (`pending`: a pass that cannot tell whose account is
+  // signed in, as in a launcher started without a connection; the server answers no listing "busy").
+  let unreachable = $state(false);
   let lastChoice = $state<boolean | null>(null);
   let statusPassed = $state(false);
   let offlineRetrying = $state(false);
-  const statusCode = $derived($cloudStatus?.error ?? '');
-  const offlineCode = $derived(unreachable || (!statusPassed && cloudUnreachable(statusCode) ? statusCode : ''));
-  const offline = $derived(offlineCode !== '' || offlineRetrying);
+  const statusOffline = $derived(cloudUnreachable($cloudStatus?.error ?? '') || $cloudStatus?.pending === true);
+  const offline = $derived(unreachable || (!statusPassed && statusOffline) || offlineRetrying);
 
   // A conflict recorded before this session comes with no event, and a launch it held back opens the
   // dialog by itself: the details are loaded here whenever the status does not list them yet. Every
@@ -59,7 +60,7 @@
     failure = '';
     detailsFailure = '';
     retrying = false;
-    unreachable = '';
+    unreachable = false;
     lastChoice = null;
     statusPassed = false;
     offlineRetrying = false;
@@ -79,7 +80,7 @@
       reason = cloudErrorText(err, msg('cloudsaves.statusFailed'));
     }
     if (target !== opening) return undefined;
-    if (cloudUnreachable(code)) unreachable = code;
+    if (cloudUnreachable(code)) unreachable = true;
     if (conflict) {
       detailsFailure = '';
       return true;
@@ -108,9 +109,8 @@
       return 'done';
     } catch (err) {
       if (target !== current) return undefined;
-      const code = errorCode(err);
-      if (cloudUnreachable(code)) {
-        unreachable = code;
+      if (cloudUnreachable(errorCode(err))) {
+        unreachable = true;
         lastChoice = keepLocal;
         return 'offline';
       }
@@ -138,13 +138,13 @@
     statusPassed = true;
     const choice = lastChoice;
     if (choice === null) {
-      unreachable = '';
+      unreachable = false;
       return true;
     }
     const result = await apply(choice);
     if (result === undefined) return target === opening ? false : undefined;
     if (result === 'offline') return false;
-    unreachable = '';
+    unreachable = false;
     lastChoice = null;
     return true;
   }
@@ -199,7 +199,7 @@
             bind:retrying={offlineRetrying}
             retry={{ label: msg('common.retry'), run: () => tryAgain(target), focus: () => document.getElementById(mineId) }}
           >
-            {msg('cloudsaves.conflictOffline', { reason: cloudCodeText(offlineCode, msg('cloud.network')) })}
+            {msg('cloudsaves.conflictOffline', { reason: msg('cloud.network') })}
           </Notice>
         </div>
       {:else}

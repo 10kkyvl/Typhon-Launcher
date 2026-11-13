@@ -325,9 +325,16 @@ describe('CloudConflictModal opened by a launch', () => {
   });
 });
 
-const offlineText = (code = 'cloud.network') => msg('cloudsaves.conflictOffline', { reason: msg(code as 'cloud.network') });
+// Both unreachable codes give the player one reason: the Typhon server cannot be reached.
+const offlineText = () => msg('cloudsaves.conflictOffline', { reason: msg('cloud.network') });
 const offline = () => new Error('typhon:cloud.network: network_error');
 const listedOffline = (): CloudStatus => ({ ...listed(), error: 'cloud.network' });
+// The status a launcher started without a connection has: its pass could not confirm the session.
+const listedUnconfirmed = (): CloudStatus => ({ ...listed(), pending: true });
+const offlineStatuses = [
+  { name: 'the last pass failed without the cloud', status: listedOffline },
+  { name: 'the session is not confirmed yet', status: listedUnconfirmed },
+];
 
 function buttonsOf(dialog: HTMLElement) {
   return {
@@ -343,8 +350,8 @@ function buttonsOf(dialog: HTMLElement) {
 // copies in view, and offers to try again, to leave, and, when a launch waits on it, to play on this
 // computer's saves for that one launch.
 describe('CloudConflictModal without the cloud', () => {
-  it('is offline at once when the status lists the conflict while the cloud cannot be reached', async () => {
-    cloudStatus.set(listedOffline());
+  it.each(offlineStatuses)('is offline at once when the status lists the conflict and says $name', async ({ status }) => {
+    cloudStatus.set(status());
     const { question, dialog } = askFromLaunch();
     const buttons = buttonsOf(dialog);
 
@@ -394,14 +401,15 @@ describe('CloudConflictModal without the cloud', () => {
     expect(await answer(question)).toBe('waiting');
   });
 
-  it('goes offline when the account cannot be confirmed without the server, with that reason', async () => {
+  it('goes offline when the account cannot be confirmed without the server, saying the server cannot be reached', async () => {
     cloudStatus.set(listed());
     vi.mocked(cloudResolveConflict).mockRejectedValueOnce(new Error('typhon:cloud.account_unknown: not bound'));
     const { dialog } = askFromLaunch();
 
     await user().click(buttonsOf(dialog).remote() as HTMLElement);
 
-    expect(await within(dialog).findByText(offlineText('cloud.account_unknown'))).toBeTruthy();
+    expect(await within(dialog).findByText(offlineText())).toBeTruthy();
+    expect(within(dialog).queryByText(msg('cloud.account_unknown'), { exact: false })).toBeNull();
     expect(buttonsOf(dialog).play()).not.toBeNull();
   });
 
@@ -424,8 +432,8 @@ describe('CloudConflictModal without the cloud', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('leaves the offline state the status put it in on try again, and the choice works with the cloud back', async () => {
-    cloudStatus.set(listedOffline());
+  it.each(offlineStatuses)('leaves the offline state the status put it in ($name) on try again, and the choice works with the cloud back', async ({ status }) => {
+    cloudStatus.set(status());
     vi.mocked(cloudResolveConflict).mockResolvedValueOnce(undefined);
     const { question, dialog } = askFromLaunch();
     const keys = user();

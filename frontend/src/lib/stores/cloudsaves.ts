@@ -122,8 +122,12 @@ function applyEvent(event: CloudEvent) {
       if (event.status === 'failed') next.error = event.code;
       return next;
     }
-    // The backend clears a failed pass without an event of its own; a game syncing again proves it is over.
-    if (event.status === 'synced') next.error = '';
+    // The backend clears a failed pass and a pending account without an event of its own; a game
+    // syncing again proves both are over.
+    if (event.status === 'synced') {
+      next.error = '';
+      next.pending = false;
+    }
     const games = status.games.filter((g) => g.gameId !== event.gameId);
     const previous = status.games.find((g) => g.gameId === event.gameId);
     games.push({
