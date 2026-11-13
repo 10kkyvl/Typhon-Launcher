@@ -1,6 +1,7 @@
 import { CircleAlert, CircleCheck, Info, TriangleAlert } from '@lucide/svelte';
 import { get } from 'svelte/store';
-import { liveIsland, liveIslandCurrent, liveIslandHeld, type LiveIslandMessage, type LiveIslandTone } from './liveIsland';
+import { downloads, failedMessageId } from './downloads';
+import { liveIsland, liveIslandCurrent, liveIslandHeld, liveIslandMessages, type LiveIslandMessage, type LiveIslandTone } from './liveIsland';
 import { dismissToast, pauseToast, resumeToast, toasts, toastsInIsland, type Toast, type ToastKind } from './toasts';
 
 /**
@@ -9,7 +10,10 @@ import { dismissToast, pauseToast, resumeToast, toasts, toastsInIsland, type Toa
  * - toasts: the toast store stays their source and keeps their clocks, the queue and the repeats; the
  *   island is the second way to show what it holds, and the stack shows none of them meanwhile. A
  *   toast's clock runs only while the island shows it and nobody reads it. When the island goes
- *   (motion off) the toasts it held go back to the stack with their clocks running.
+ *   (motion off) the toasts it held go back to the stack with their clocks running;
+ * - a download that fails: one message with Retry and "Open downloads", posted by the downloads store
+ *   in place of its toast; here it goes once the download is no longer failed (retried elsewhere,
+ *   removed).
  */
 
 const TOAST_ICON = { info: Info, success: CircleCheck, warning: TriangleAlert, danger: CircleAlert } as const;
@@ -67,9 +71,20 @@ function trackToasts(): () => void {
   };
 }
 
+// The message itself comes from the downloads store's `download:failed` handler: an event, so a
+// download that had failed before (in the list as it loads) is never taken for news.
+function trackFailedDownloads(): () => void {
+  return downloads.subscribe((list) => {
+    const failed = new Set(list.filter((d) => d.status === 'failed').map((d) => failedMessageId(d.id)));
+    for (const m of get(liveIslandMessages)) {
+      if (m.id.startsWith(failedMessageId('')) && !failed.has(m.id)) liveIsland.hide(m.id);
+    }
+  });
+}
+
 /** Starts every producer; returns the disposer. */
 export function initLiveIslandFeed(): () => void {
-  const offs = [trackToasts()];
+  const offs = [trackToasts(), trackFailedDownloads()];
   return () => {
     for (const off of offs) off();
   };

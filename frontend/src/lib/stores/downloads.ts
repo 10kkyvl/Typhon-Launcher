@@ -1,4 +1,5 @@
-import { derived, writable } from 'svelte/store';
+import { CircleAlert } from '@lucide/svelte';
+import { derived, get, writable } from 'svelte/store';
 import { listenFirst } from './listenFirst';
 import { inWails } from '../services/backend';
 import {
@@ -17,7 +18,9 @@ import {
 import { installErrorText } from '../install/installErrors';
 import { withFiles } from '../utils/downloadFiles';
 import { msg } from '../i18n';
-import { toast } from './toasts';
+import { liveIsland, liveIslandOn, type LiveIslandMessage } from './liveIsland';
+import { navigate } from './router';
+import { ACTION_MS, toast } from './toasts';
 
 export const downloads = writable<Download[]>([]);
 
@@ -151,7 +154,8 @@ export async function initDownloads() {
   on('download:failed', (event) => {
     const item = withFiles(event.data as Download);
     upsert(item);
-    toast(msg('state.downloadsFailedToast', { name: item.name, error: installErrorText(item.error) }), 'danger');
+    if (get(liveIslandOn)) liveIsland.show(failedMessage(item));
+    else toast(msg('state.downloadsFailedToast', { name: item.name, error: installErrorText(item.error) }), 'danger');
   });
   on('download:removed', (event) => {
     const { id } = event.data as { id: string };
@@ -160,6 +164,27 @@ export async function initDownloads() {
 
   downloads.set(await load(listDownloads));
 }
+/** The id of the live island's message for a failed download. */
+export const failedMessageId = (id: string) => `download-failed:${id}`;
+
+/** With the live island showing messages, a failure is one message with Retry and "Open downloads". */
+function failedMessage(item: Download): LiveIslandMessage {
+  return {
+    id: failedMessageId(item.id),
+    kind: 'error',
+    tone: 'danger',
+    icon: CircleAlert,
+    text: msg('ui.liveIslandDownloadFailed'),
+    title: item.name,
+    detail: item.error ? installErrorText(item.error) : undefined,
+    ttl: ACTION_MS,
+    actions: [
+      { label: msg('common.retry'), run: () => void resume(item.id) },
+      { label: msg('ui.liveIslandOpenDownloads'), run: () => navigate('downloads') },
+    ],
+  };
+}
+
 async function run(action: () => Promise<void>) {
   try {
     await action();
