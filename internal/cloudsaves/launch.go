@@ -85,7 +85,7 @@ func (s *Service) SessionStarting(ctx context.Context, game library.Game) error 
 	if stored == "" {
 		return nil
 	}
-	st, stop, err := s.launchGate(stored, key)
+	st, stop, err := s.launchGate(game.ID, stored, key)
 	if stop {
 		return err
 	}
@@ -94,7 +94,7 @@ func (s *Service) SessionStarting(ctx context.Context, game library.Game) error 
 		return checkError(err)
 	}
 	if owner != stored {
-		if st, stop, err = s.launchGate(owner, key); stop {
+		if st, stop, err = s.launchGate(game.ID, owner, key); stop {
 			return err
 		}
 	}
@@ -108,13 +108,16 @@ func (s *Service) SessionStarting(ctx context.Context, game library.Game) error 
 
 // launchGate reads the game's record for owner and says whether the launch
 // is decided by it alone: an exclusion lets the game start, a recorded
-// conflict blocks it, an unreadable state starts it with the cause.
-func (s *Service) launchGate(owner, key string) (st gameState, stop bool, err error) {
+// conflict blocks it unless the player let this launch past it, an
+// unreadable state starts it with the cause.
+func (s *Service) launchGate(gameID, owner, key string) (st gameState, stop bool, err error) {
 	st, err = s.recordedState(owner, key)
 	switch {
 	case err != nil:
 		return st, true, checkError(err)
 	case st.Excluded:
+		return st, true, nil
+	case st.Conflict != nil && s.usePermit(gameID, owner, key, st.Conflict):
 		return st, true, nil
 	case st.Conflict != nil:
 		return st, true, blocked(ErrConflictUnresolved)
@@ -386,4 +389,100 @@ func checkFailed(ctx context.Context, err error) error {
 		return nil
 	}
 	return checkError(err)
+}
+
+// launchPermitTTL bounds a permission that no launch has used. The launch it
+// was given for is repeated as soon as it is granted, and the runtime it
+// needs was already prepared once by the launch the conflict held back, so
+// the repeat reaches the hook within seconds; a Play after that is asked
+// again.
+const launchPermitTTL = 30 * time.Second
+
+// launchPermit lets one launch of a game start on the saves on this PC past
+// the conflict it was given for, without the cloud.
+type launchPermit struct {
+	owner, key    string
+	local, remote string
+	until         time.Time
+}
+
+// AllowLaunchOnce lets the next launch of the game start on the saves on
+// this PC although a conflict is recorded for it: the player chose so while
+// the cloud could not settle the conflict. The conflict stays recorded and
+// is asked again at the launch after. The permission lives in memory only;
+// the first launch of the game that reaches the conflict uses it up, whether
+// or not the game then starts, and it is void after launchPermitTTL or once
+// the conflict is resolved or replaced.
+func (s *Service) AllowLaunchOnce(gameID string) error {
+	token, err := s.credential(true)
+	if err != nil {
+		return err
+	}
+	g, err := s.findGame(gameID)
+	if err != nil {
+		return err
+	}
+	key := g.CanonicalGameID
+	switch {
+	case key == "":
+		return errNoCanonicalID
+	case !account.ValidSaveGameID(key):
+		return errInvalidID
+	case duplicateKeys(s.lib.GetGames())[key]:
+		return errDuplicate
+	}
+	owner := s.storedAccount(token)
+	if owner == "" {
+		return errNotSignedIn
+	}
+	st, err := s.recordedState(owner, key)
+	if err != nil {
+		return err
+	}
+	if st.Conflict == nil {
+		// The launch gate also holds a game on the confirmed account's
+		// record when the stored credential names another one.
+		if confirmed, cerr := s.confirmedOwner(token); cerr == nil && confirmed != owner {
+			owner = confirmed
+			if st, err = s.recordedState(owner, key); err != nil {
+				return err
+			}
+		}
+	}
+	if st.Excluded || st.Conflict == nil {
+		return errNoConflict
+	}
+	p := launchPermit{owner: owner, key: key, local: st.Conflict.LocalDigest, remote: st.Conflict.RemoteDigest, until: s.now().Add(launchPermitTTL)}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.permits[gameID] = p
+	return nil
+}
+
+// usePermit takes the game's permission and says whether it opens this
+// launch: given for this very conflict of this account, not expired, and no
+// download of the game's cloud copy running. The check and the take are one
+// lock hold, so two launches never share one permission.
+func (s *Service) usePermit(gameID, owner, key string, c *Conflict) bool {
+	now := s.now()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.permits[gameID]
+	if !ok {
+		return false
+	}
+	delete(s.permits, gameID)
+	return p.owner == owner && p.key == key &&
+		p.local == c.LocalDigest && p.remote == c.RemoteDigest &&
+		now.Before(p.until) && !s.fetching[key]
+}
+
+// dropPermitsLocked voids the permissions given for the recorded conflict of
+// key once that record changes. Called under mu.
+func (s *Service) dropPermitsLocked(key string) {
+	for id, p := range s.permits {
+		if p.key == key && p.owner == s.owner {
+			delete(s.permits, id)
+		}
+	}
 }

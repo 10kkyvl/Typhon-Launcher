@@ -109,6 +109,9 @@ type Service struct {
 	// check of each game.
 	fetching map[string]bool
 	launches map[string]*launchCheck
+	// permits holds, by library id, the launch the player let start past its
+	// recorded conflict (AllowLaunchOnce). Memory only.
+	permits map[string]launchPermit
 }
 
 type refusal struct {
@@ -174,6 +177,7 @@ func NewService(
 		wake:          make(chan struct{}, 1),
 		fetching:      map[string]bool{},
 		launches:      map[string]*launchCheck{},
+		permits:       map[string]launchPermit{},
 	}, nil
 }
 
@@ -545,7 +549,17 @@ func (s *Service) commit(key string, change func(*gameState)) error {
 		}
 		return fmt.Errorf("save cloud saves state: %w", err)
 	}
+	if !sameConflict(prev.Conflict, next.Conflict) {
+		s.dropPermitsLocked(key)
+	}
 	return nil
+}
+
+func sameConflict(a, b *Conflict) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.LocalDigest == b.LocalDigest && a.RemoteDigest == b.RemoteDigest
 }
 
 func (s *Service) drop(keys []string) error {
@@ -569,6 +583,9 @@ func (s *Service) drop(keys []string) error {
 			s.state.Games[k] = g
 		}
 		return fmt.Errorf("save cloud saves state: %w", err)
+	}
+	for k := range prev {
+		s.dropPermitsLocked(k)
 	}
 	return nil
 }

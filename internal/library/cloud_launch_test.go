@@ -36,12 +36,17 @@ type cloud struct {
 	copies    map[string]cloudCopy
 	lists     int
 	downloads int
+	// listErr, while set, is what every listing answers.
+	listErr error
 }
 
 func (c *cloud) ListSaves(context.Context) (account.SaveList, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.lists++
+	if c.listErr != nil {
+		return account.SaveList{}, c.listErr
+	}
 	list := account.SaveList{QuotaBytes: 1 << 30, MaxBytes: 100 << 20}
 	for _, cp := range c.copies {
 		list.Games = append(list.Games, cp.save)

@@ -843,3 +843,18 @@ func (s *Service) launchWaiters(gameID string) (waiters int, runs bool) {
 	}
 	return 0, false
 }
+
+// advance moves the service's clock forward by d.
+func (h *harness) advance(d time.Duration) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.clock = h.clock.Add(d)
+}
+
+// permitHeld reports whether a launch permission of gameID is held.
+func (s *Service) permitHeld(gameID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok := s.permits[gameID]
+	return ok
+}
