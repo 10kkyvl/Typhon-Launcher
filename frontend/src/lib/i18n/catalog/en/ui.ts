@@ -180,6 +180,8 @@ export const ui: Record<UiKey, Message> = {
   'ui.liveIslandOpenDownloads': 'Open downloads',
   'ui.liveIslandFriendPlaying': '{name} is playing',
   'ui.liveIslandOpenGame': 'Open the game',
+  'ui.liveIslandWaiting': { one: 'and {count} more message', other: 'and {count} more messages' },
+  'ui.liveIslandDismissAll': 'Dismiss all',
   'ui.minimize': 'Minimize',
   'ui.maximize': 'Maximize',
   'ui.restore': 'Restore',
