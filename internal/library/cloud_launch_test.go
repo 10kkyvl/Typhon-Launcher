@@ -217,7 +217,8 @@ func TestPlayStartsTheGameOnTheNewerCloudCopy(t *testing.T) {
 	})
 	fake := &cloud{copies: map[string]cloudCopy{}}
 	owner := func(string) (string, error) { return "account-1", nil }
-	cloudSaves, err := cloudsaves.NewService(t.TempDir(), config, func() (string, error) { return "token", nil }, owner, fake, lib, backups)
+	stored := func(string) string { return "account-1" }
+	cloudSaves, err := cloudsaves.NewService(t.TempDir(), config, func() (string, error) { return "token", nil }, owner, stored, fake, lib, backups)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -59,13 +59,17 @@ type Service struct {
 	config    func() settings.Settings
 	token     func() (string, error)
 	accountID func(token string) (string, error)
-	client    saveClient
-	lib       libraryPort
-	backups   backupPort
-	emit      func(Event)
-	now       func() time.Time
-	interval  time.Duration
-	debounce  time.Duration
+	// storedAccount names the account of the stored credential without the
+	// backend, "" when there is none; only the launch check reads it, to find
+	// a recorded conflict before the session is confirmed.
+	storedAccount func(token string) string
+	client        saveClient
+	lib           libraryPort
+	backups       backupPort
+	emit          func(Event)
+	now           func() time.Time
+	interval      time.Duration
+	debounce      time.Duration
 	// retryDelay is the wait before a pass that could not tell whose account
 	// it is runs again.
 	retryDelay time.Duration
@@ -122,6 +126,7 @@ func NewService(
 	config func() settings.Settings,
 	token func() (string, error),
 	accountID func(token string) (string, error),
+	storedAccount func(token string) string,
 	client saveClient,
 	lib libraryPort,
 	backups backupPort,
@@ -135,6 +140,8 @@ func NewService(
 		return nil, errors.New("cloudsaves: token source is required")
 	case accountID == nil:
 		return nil, errors.New("cloudsaves: account id source is required")
+	case storedAccount == nil:
+		return nil, errors.New("cloudsaves: stored account source is required")
 	case client == nil:
 		return nil, errors.New("cloudsaves: cloud client is required")
 	case lib == nil:
@@ -147,6 +154,7 @@ func NewService(
 		config:        config,
 		token:         token,
 		accountID:     accountID,
+		storedAccount: storedAccount,
 		client:        client,
 		lib:           lib,
 		backups:       backups,
@@ -371,24 +379,30 @@ func (s *Service) identify(needEnabled bool) (*run, error) {
 
 // signedIn checks the gates and names the signed-in account.
 func (s *Service) signedIn(needEnabled bool) (token, owner string, err error) {
-	if needEnabled && !s.config().CloudSaves {
-		return "", "", errDisabled
-	}
-	token, err = s.token()
+	token, err = s.credential(needEnabled)
 	if err != nil {
-		return "", "", uierr.Wrap(codeToken, fmt.Errorf("доступ к сохранённому входу: %w", err))
+		return "", "", err
 	}
-	if token == "" {
-		return "", "", errNotSignedIn
-	}
-	owner, err = s.accountID(token)
+	owner, err = s.confirmedOwner(token)
 	if err != nil {
-		return "", "", fmt.Errorf("%w: %w", errAccountUnk, err)
-	}
-	if owner == "" {
-		return "", "", errAccountUnk
+		return "", "", err
 	}
 	return token, owner, nil
+}
+
+// credential checks the setting and returns the stored sign-in token.
+func (s *Service) credential(needEnabled bool) (string, error) {
+	if needEnabled && !s.config().CloudSaves {
+		return "", errDisabled
+	}
+	token, err := s.token()
+	if err != nil {
+		return "", uierr.Wrap(codeToken, fmt.Errorf("доступ к сохранённому входу: %w", err))
+	}
+	if token == "" {
+		return "", errNotSignedIn
+	}
+	return token, nil
 }
 
 func (s *Service) prepare(ctx context.Context, needEnabled bool) (*run, error) {

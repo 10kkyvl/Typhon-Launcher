@@ -448,7 +448,7 @@ func TestEmptyTokenMakesNoCalls(t *testing.T) {
 func TestTokenErrorIsNotTreatedAsSignedOut(t *testing.T) {
 	h := newHarness(t)
 	svc, err := NewService(h.dir, h.config, func() (string, error) { return "", errors.New("keychain locked") },
-		func(string) (string, error) { return ownerID, nil }, h.client, h.lib, h.backups)
+		func(string) (string, error) { return ownerID, nil }, h.storedFn, h.client, h.lib, h.backups)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1018,34 +1018,38 @@ func TestNewServiceRejectsMissingPieces(t *testing.T) {
 	h := newHarness(t)
 	ok := func(string) (string, error) { return ownerID, nil }
 	tok := func() (string, error) { return "t", nil }
+	stored := func(string) string { return ownerID }
 	cases := []struct {
 		name string
 		dir  string
 		call func(dir string) (*Service, error)
 	}{
 		{"empty dir", "", func(d string) (*Service, error) {
-			return NewService(d, h.config, tok, ok, h.client, h.lib, h.backups)
+			return NewService(d, h.config, tok, ok, stored, h.client, h.lib, h.backups)
 		}},
 		{"relative dir", "relative", func(d string) (*Service, error) {
-			return NewService(d, h.config, tok, ok, h.client, h.lib, h.backups)
+			return NewService(d, h.config, tok, ok, stored, h.client, h.lib, h.backups)
 		}},
 		{"no settings", h.dir, func(d string) (*Service, error) {
-			return NewService(d, nil, tok, ok, h.client, h.lib, h.backups)
+			return NewService(d, nil, tok, ok, stored, h.client, h.lib, h.backups)
 		}},
 		{"no token", h.dir, func(d string) (*Service, error) {
-			return NewService(d, h.config, nil, ok, h.client, h.lib, h.backups)
+			return NewService(d, h.config, nil, ok, stored, h.client, h.lib, h.backups)
 		}},
 		{"no account", h.dir, func(d string) (*Service, error) {
-			return NewService(d, h.config, tok, nil, h.client, h.lib, h.backups)
+			return NewService(d, h.config, tok, nil, stored, h.client, h.lib, h.backups)
+		}},
+		{"no stored account", h.dir, func(d string) (*Service, error) {
+			return NewService(d, h.config, tok, ok, nil, h.client, h.lib, h.backups)
 		}},
 		{"no client", h.dir, func(d string) (*Service, error) {
-			return NewService(d, h.config, tok, ok, nil, h.lib, h.backups)
+			return NewService(d, h.config, tok, ok, stored, nil, h.lib, h.backups)
 		}},
 		{"no library", h.dir, func(d string) (*Service, error) {
-			return NewService(d, h.config, tok, ok, h.client, nil, h.backups)
+			return NewService(d, h.config, tok, ok, stored, h.client, nil, h.backups)
 		}},
 		{"no backups", h.dir, func(d string) (*Service, error) {
-			return NewService(d, h.config, tok, ok, h.client, h.lib, nil)
+			return NewService(d, h.config, tok, ok, stored, h.client, h.lib, nil)
 		}},
 	}
 	for _, tc := range cases {

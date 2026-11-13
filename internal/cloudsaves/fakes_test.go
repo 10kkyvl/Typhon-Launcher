@@ -512,6 +512,10 @@ type harness struct {
 	token   string
 	clock   time.Time
 	acctErr error
+	// stored is the account of the stored credential; storedCalls counts
+	// who asked for it.
+	stored      string
+	storedCalls int
 }
 
 const (
@@ -530,11 +534,12 @@ func newHarness(t *testing.T) *harness {
 		events: make(chan Event, 256),
 		cfg:    settings.Defaults(),
 		token:  "token",
+		stored: ownerID,
 		clock:  time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC),
 	}
 	h.cfg.CloudSaves = true
 	h.backups = newFakeBackups(filepath.Join(t.TempDir(), "backups"), h.lib)
-	svc, err := NewService(h.dir, h.config, h.tokenFn, h.accountFn, h.client, h.lib, h.backups)
+	svc, err := NewService(h.dir, h.config, h.tokenFn, h.accountFn, h.storedFn, h.client, h.lib, h.backups)
 	if err != nil {
 		t.Fatalf("new service: %v", err)
 	}
@@ -564,6 +569,25 @@ func (h *harness) accountFn(string) (string, error) {
 		return "", h.acctErr
 	}
 	return ownerID, nil
+}
+
+func (h *harness) storedFn(string) string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.storedCalls++
+	return h.stored
+}
+
+func (h *harness) setStored(owner string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.stored = owner
+}
+
+func (h *harness) storedAsked() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.storedCalls
 }
 
 func (h *harness) setAccountErr(err error) {
@@ -744,7 +768,7 @@ func (h *harness) restart() {
 	if err := h.svc.ServiceShutdown(); err != nil {
 		h.t.Fatalf("shutdown before restart: %v", err)
 	}
-	svc, err := NewService(h.dir, h.config, h.tokenFn, h.accountFn, h.client, h.lib, h.backups)
+	svc, err := NewService(h.dir, h.config, h.tokenFn, h.accountFn, h.storedFn, h.client, h.lib, h.backups)
 	if err != nil {
 		h.t.Fatalf("new service on the same directory: %v", err)
 	}

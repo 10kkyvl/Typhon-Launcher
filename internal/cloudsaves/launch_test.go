@@ -1021,6 +1021,97 @@ func TestCancelledSecondLaunchLeavesThePromisedDownloadRunning(t *testing.T) {
 	}
 }
 
+// unconfirmedSession is the launcher started offline: the stored credential
+// still names its account, the backend has not confirmed the session.
+func (h *harness) unconfirmedSession() {
+	h.t.Helper()
+	h.restart()
+	h.setAccountErr(errors.New("account id is not bound to the session yet"))
+	limitLaunch(h, time.Minute)
+}
+
+// Case 1 before the session is confirmed: the conflict is known from the
+// stored account's state file, without the network.
+func TestRecordedConflictBlocksBeforeTheSessionIsConfirmed(t *testing.T) {
+	h := newHarness(t)
+	h.recordConflict()
+	h.unconfirmedSession()
+	calls := h.client.calls()
+
+	wantBlock(t, h.starting(gameLocal), wantConflictCode)
+
+	if n := h.client.calls() - calls; n != 0 {
+		t.Fatalf("%d cloud requests, want none", n)
+	}
+}
+
+// Without a recorded conflict the network part needs the confirmed account:
+// the game starts and the library logs why the cloud was not asked.
+func TestUnconfirmedSessionWithoutAConflictStartsTheGame(t *testing.T) {
+	h := newHarness(t)
+	h.newerInCloud()
+	h.unconfirmedSession()
+	calls := h.client.calls()
+	before := h.stateBytes()
+
+	err := h.starting(gameLocal)
+
+	wantStarts(t, err)
+	if !errors.Is(err, errAccountUnk) {
+		t.Fatalf("SessionStarting = %v, want a plain error carrying %v", err, errAccountUnk)
+	}
+	if n := h.client.calls() - calls; n != 0 {
+		t.Fatalf("%d cloud requests, want none", n)
+	}
+	if got := h.stateBytes(); !bytes.Equal(got, before) {
+		t.Fatalf("state file changed:\n%s", got)
+	}
+	if got := readTree(t, h.saves()); !mapsEqual(got, baseFiles) {
+		t.Fatalf("saves changed to %v", got)
+	}
+}
+
+// A credential the account no longer answers for is a signed-out player to
+// the check, recorded conflict or not.
+func TestRejectedCredentialLeavesTheLaunchAlone(t *testing.T) {
+	h := newHarness(t)
+	h.recordConflict()
+	h.unconfirmedSession()
+	h.setStored("")
+	calls := h.client.calls()
+
+	if err := h.starting(gameLocal); err != nil {
+		t.Fatalf("SessionStarting = %v, want nil as for a signed-out player", err)
+	}
+	if n := h.client.calls() - calls; n != 0 {
+		t.Fatalf("%d cloud requests, want none", n)
+	}
+}
+
+// Passes and the player's own requests keep to the confirmed account: the
+// stored one must not send them to the network early.
+func TestOnlyTheLaunchCheckReadsTheStoredAccount(t *testing.T) {
+	h := newHarness(t)
+	writeTree(t, h.saves(), baseFiles)
+	h.open()
+	h.setAccountErr(errors.New("account id is not bound to the session yet"))
+
+	h.pass()
+	if err := h.svc.SyncNow(gameLocal); !errors.Is(err, errAccountUnk) {
+		t.Fatalf("SyncNow = %v, want %v", err, errAccountUnk)
+	}
+	if err := h.svc.PullRemote(gameLocal); !errors.Is(err, errAccountUnk) {
+		t.Fatalf("PullRemote = %v, want %v", err, errAccountUnk)
+	}
+
+	if n := h.client.calls(); n != 0 {
+		t.Fatalf("%d cloud requests, want none", n)
+	}
+	if n := h.storedAsked(); n != 0 {
+		t.Fatalf("the stored account was asked %d times outside the launch check", n)
+	}
+}
+
 // An unreadable state file at Play: nothing about a conflict can be known, so
 // the game starts and the cause reaches the library's log; the file is left
 // as it is for the player, and the cloud is not asked.

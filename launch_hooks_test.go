@@ -48,6 +48,30 @@ func TestMainAddsLaunchHooksOnlyThroughAddLaunchHooks(t *testing.T) {
 	}
 }
 
+// The cloud saves launch check finds a recorded conflict offline only through
+// the stored credential's account; passes keep the confirmed one.
+func TestMainGivesCloudSavesTheConfirmedAndTheStoredAccount(t *testing.T) {
+	body, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(body)
+	start := strings.Index(src, "cloudsaves.NewService(")
+	if start < 0 {
+		t.Fatal("main.go does not build the cloud saves service")
+	}
+	end := strings.Index(src[start:], "\n\t)\n")
+	if end < 0 {
+		t.Fatal("end of the cloudsaves.NewService call not found")
+	}
+	call := src[start : start+end]
+	confirmed := strings.Index(call, "accountService.SyncAccountID(token)")
+	stored := strings.Index(call, "\n\t\taccountService.DurableAccountID,\n")
+	if confirmed < 0 || stored < confirmed {
+		t.Fatalf("cloudsaves.NewService call = %s\nwant the confirmed account (SyncAccountID), then the stored one (DurableAccountID)", call)
+	}
+}
+
 // What the library hands back for a launch the cloud check stopped:
 // LaunchBlockedError's cause, wrapped as the hook wrapped it.
 func TestOutsideLaunchStoppedByCloudSavesOpensTheWindowAndLogsOnce(t *testing.T) {

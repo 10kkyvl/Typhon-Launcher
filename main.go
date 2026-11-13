@@ -545,6 +545,7 @@ func main() {
 			}
 			return id, nil
 		},
+		accountService.DurableAccountID,
 		cloudClient,
 		libraryService,
 		saveBackupService,

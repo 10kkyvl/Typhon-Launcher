@@ -66,7 +66,7 @@ func (s *Service) SessionStarting(ctx context.Context, game library.Game) error 
 	if key == "" || !account.ValidSaveGameID(key) {
 		return nil
 	}
-	_, owner, err := s.signedIn(true)
+	token, err := s.credential(true)
 	switch {
 	case errors.Is(err, errDisabled), errors.Is(err, errNotSignedIn):
 		return nil
@@ -76,15 +76,27 @@ func (s *Service) SessionStarting(ctx context.Context, game library.Game) error 
 	if duplicateKeys(s.lib.GetGames())[key] {
 		return nil
 	}
-	st, err := s.recordedState(owner, key)
+	// A recorded conflict is known without the network, so it is read for the
+	// stored credential's account even before the backend confirms the
+	// session; the network part below needs the confirmed one. No stored
+	// account means the credential was rejected or dropped: a signed-out
+	// player to the check.
+	stored := s.storedAccount(token)
+	if stored == "" {
+		return nil
+	}
+	st, stop, err := s.launchGate(stored, key)
+	if stop {
+		return err
+	}
+	owner, err := s.confirmedOwner(token)
 	if err != nil {
 		return checkError(err)
 	}
-	switch {
-	case st.Excluded:
-		return nil
-	case st.Conflict != nil:
-		return blocked(ErrConflictUnresolved)
+	if owner != stored {
+		if st, stop, err = s.launchGate(owner, key); stop {
+			return err
+		}
 	}
 	//nolint:contextcheck // the check belongs to the service and outlives this launch's wait, so it runs under s.ctx; ctx only ends the wait
 	c, err := s.joinCheck(game, st)
@@ -92,6 +104,33 @@ func (s *Service) SessionStarting(ctx context.Context, game library.Game) error 
 		return err
 	}
 	return s.awaitCheck(ctx, c, limit)
+}
+
+// launchGate reads the game's record for owner and says whether the launch
+// is decided by it alone: an exclusion lets the game start, a recorded
+// conflict blocks it, an unreadable state starts it with the cause.
+func (s *Service) launchGate(owner, key string) (st gameState, stop bool, err error) {
+	st, err = s.recordedState(owner, key)
+	switch {
+	case err != nil:
+		return st, true, checkError(err)
+	case st.Excluded:
+		return st, true, nil
+	case st.Conflict != nil:
+		return st, true, blocked(ErrConflictUnresolved)
+	}
+	return st, false, nil
+}
+
+func (s *Service) confirmedOwner(token string) (string, error) {
+	owner, err := s.accountID(token)
+	if err != nil {
+		return "", fmt.Errorf("%w: %w", errAccountUnk, err)
+	}
+	if owner == "" {
+		return "", errAccountUnk
+	}
+	return owner, nil
 }
 
 func (s *Service) awaitCheck(ctx context.Context, c *launchCheck, limit time.Duration) error {
