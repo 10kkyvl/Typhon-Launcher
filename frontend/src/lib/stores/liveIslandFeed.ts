@@ -1,6 +1,7 @@
 import { derived, get, type Readable } from 'svelte/store';
 import { msg } from '../i18n';
 import type { CloudGameStatus } from '../services/cloudsaves';
+import { launchesInFlight } from '../services/library';
 import { openGameByIGDB } from '../social/openGame';
 import { isPlaying } from '../social/presence';
 import { cloudConflictTarget, cloudStatus, openCloudConflict } from './cloudsaves';
@@ -195,12 +196,14 @@ function sayConflictInIsland(gameId: string, title: string): void {
 /**
  * Says each save conflict once, in the way `say` gives: a conflict the dialog shows is taken as seen,
  * a game the library does not have waits until it does, and what was said goes once the conflict is
- * resolved or its dialog opens. `takeBack` (the island): a conflict whose toast is still up is said
+ * resolved or its dialog opens. A game whose launch waits on Go is left to that launch, which puts a
+ * conflict it finds to the player in the dialog. `takeBack` (the island): a conflict whose toast is still up is said
  * again in this way in place of that toast, as the same conflict, not a new one.
  */
 function trackConflicts(say: (gameId: string, title: string) => void, takeBack = false): () => void {
   const sync = () => {
     const open = get(cloudConflictTarget)?.gameId;
+    const launching = get(launchesInFlight);
     const titles = new Map(get(libraryGames).map((g) => [g.id, g.title]));
     const conflicts = new Map((get(cloudStatus)?.games ?? []).filter((g) => g.state === 'conflict').map((g) => [g.gameId, copiesOf(g)]));
     for (const [gameId, copies] of [...saidConflicts]) {
@@ -217,6 +220,7 @@ function trackConflicts(say: (gameId: string, title: string) => void, takeBack =
         saidConflicts.set(gameId, copies || before || '');
         continue;
       }
+      if (launching.has(gameId)) continue;
       if (before !== undefined && !newer) {
         if (copies !== '') saidConflicts.set(gameId, copies);
         const title = titles.get(gameId);
@@ -229,7 +233,7 @@ function trackConflicts(say: (gameId: string, title: string) => void, takeBack =
       say(gameId, title);
     }
   };
-  const offs = [cloudStatus.subscribe(sync), cloudConflictTarget.subscribe(sync), libraryGames.subscribe(sync)];
+  const offs = [cloudStatus.subscribe(sync), cloudConflictTarget.subscribe(sync), libraryGames.subscribe(sync), launchesInFlight.subscribe(sync)];
   return () => {
     for (const off of offs) off();
   };

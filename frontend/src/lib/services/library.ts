@@ -1,4 +1,4 @@
-import { get } from 'svelte/store';
+import { derived, get, writable, type Readable } from 'svelte/store';
 import { locale } from '../i18n/locale';
 import { Service as LibraryService } from '../../../bindings/typhon/internal/library';
 import { Service as AppService } from '../../../bindings/typhon/internal/app';
@@ -197,6 +197,46 @@ export async function playGame(id: string): Promise<void> {
   await launchGame(id);
 }
 
+const launchCalls = writable<ReadonlyMap<string, number>>(new Map());
+
+/**
+ * The games a launch from the window waits on Go for: between a launch call and its answer, every
+ * repeat included. A save conflict the call itself finds is reported by Go before it answers; the
+ * launch puts it to the player then (liveIslandFeed.ts says nothing of it meanwhile).
+ */
+export const launchesInFlight: Readable<ReadonlySet<string>> = derived(launchCalls, (calls) => new Set(calls.keys()));
+
+function launchCall(id: string): () => void {
+  launchCalls.update((calls) => new Map(calls).set(id, (calls.get(id) ?? 0) + 1));
+  let answered = false;
+  return () => {
+    if (answered) return;
+    answered = true;
+    launchCalls.update((calls) => {
+      const next = new Map(calls);
+      const left = (next.get(id) ?? 1) - 1;
+      if (left > 0) next.set(id, left);
+      else next.delete(id);
+      return next;
+    });
+  };
+}
+
+// The recovery starts before the call counts as answered: it opens the conflict dialog before its
+// first wait, so the conflict is seen in the dialog, never said as news first.
+async function call(id: string, play: () => Promise<void>, recover: (err: unknown) => Promise<boolean>): Promise<boolean> {
+  const answered = launchCall(id);
+  try {
+    await play();
+  } catch (err) {
+    const recovering = recover(err);
+    answered();
+    return await recovering;
+  }
+  answered();
+  return true;
+}
+
 // Keep cancellation distinguishable for surfaces that own the return from a game.
 // Existing callers of playGame still treat a dismissed native prompt as a no-op.
 export async function launchGame(id: string): Promise<boolean> {
@@ -209,10 +249,7 @@ export async function launchGame(id: string): Promise<boolean> {
 type Answered = ReadonlySet<'emulator' | 'closing' | 'conflict'>;
 
 async function relaunch(id: string, answered: Answered): Promise<boolean> {
-  try { await LibraryService.PlayGame(id); } catch (err) {
-    return await recoverLaunch(id, err, answered);
-  }
-  return true;
+  return await call(id, () => LibraryService.PlayGame(id), (err) => recoverLaunch(id, err, answered));
 }
 
 // recoverLaunch turns a launch the player can fix into a question; any other
@@ -257,11 +294,13 @@ async function launchAfterBios(id: string, first: unknown, answered: Answered): 
   if (!platform) throw first;
   for (let stillMissing = false; ; stillMissing = true) {
     if (!(await askForBios(platform, stillMissing))) return false;
-    try { await LibraryService.PlayGame(id); } catch (err) {
-      if (needsBios(err)) continue;
-      return await recoverLaunch(id, err, answered);
-    }
-    return true;
+    let missing = false;
+    const started = await call(id, () => LibraryService.PlayGame(id), async (err) => {
+      if (!needsBios(err)) return await recoverLaunch(id, err, answered);
+      missing = true;
+      return false;
+    });
+    if (!missing) return started;
   }
 }
 
@@ -293,12 +332,11 @@ export async function playGameProfile(id: string, profileID: string): Promise<bo
 // A profile launch recovers only from the saves' hold; the emulator
 // questions stay with the game's own launch.
 async function relaunchProfile(id: string, profileID: string, answered: Answered): Promise<boolean> {
-  try { await LibraryService.PlayGameProfile(id, profileID); } catch (err) {
+  return await call(id, () => LibraryService.PlayGameProfile(id, profileID), async (err) => {
     if (errorCode(err) === 'library.launch_cancelled') return false;
     if (savesHeldBack(err)) return await launchAfterSaves(id, err, answered, (next) => relaunchProfile(id, profileID, next));
     throw err;
-  }
-  return true;
+  });
 }
 
 export async function getProfiles(id: string): Promise<ProfileView[]> {

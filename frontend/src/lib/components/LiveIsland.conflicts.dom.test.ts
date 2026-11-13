@@ -5,7 +5,7 @@ import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import type { CloudGameStatus, CloudStatus } from '../services/cloudsaves';
-import type { LibraryGame } from '../services/library';
+import { launchGame, playGameProfile, type LibraryGame } from '../services/library';
 import { askToResolveConflict, closeCloudConflict, cloudConflictTarget, cloudStatus, initCloudSaves, openCloudConflict } from '../stores/cloudsaves';
 import { libraryGames } from '../stores/library';
 import { liveIsland, liveIslandCurrent, liveIslandMessages, type LiveIslandMessage } from '../stores/liveIsland';
@@ -24,6 +24,8 @@ vi.mock('../services/backend', () => ({
 }));
 const status = vi.hoisted(() => vi.fn());
 vi.mock('../../../bindings/typhon/internal/cloudsaves', () => ({ Service: { Status: status } }));
+const launch = vi.hoisted(() => ({ PlayGame: vi.fn(), PlayGameProfile: vi.fn(), GetGames: vi.fn(async () => []) }));
+vi.mock('../../../bindings/typhon/internal/library', () => ({ Service: launch }));
 
 const SAY = () => msg('ui.liveIslandSaveConflict');
 const CHOOSE = () => msg('ui.liveIslandChooseVersion');
@@ -90,6 +92,9 @@ afterEach(() => {
   liveIsland.clear();
   resetHistory();
   status.mockReset();
+  launch.PlayGame.mockReset();
+  launch.PlayGameProfile.mockReset();
+  backend.wails = false;
   vi.unstubAllGlobals();
 });
 
@@ -552,5 +557,103 @@ describe('a save conflict with no island on screen', () => {
 
     expect(conflictMessages()).toEqual([]);
     expect(get(toasts)).toEqual([]);
+  });
+});
+
+// Play itself finds the conflict: Go reports it (the event) before the launch call answers, and the
+// launch then opens the dialog. The island says nothing in between.
+describe('a conflict found by a launch in flight', () => {
+  function answerLater() {
+    let answer: (err?: Error) => void = () => {};
+    const call = new Promise<void>((resolve, reject) => {
+      answer = (err) => (err ? reject(err) : resolve());
+    });
+    return { call, answer };
+  }
+
+  function start(play: () => Promise<boolean>): Promise<boolean> {
+    backend.wails = true;
+    const started = play();
+    backend.wails = false;
+    return started;
+  }
+
+  // Every conflict message the island held at any moment of the test, so that a flash counts too.
+  function everySaid(): { ids: string[]; stop: () => void } {
+    const ids: string[] = [];
+    const stop = liveIslandMessages.subscribe((list) => {
+      for (const m of list) if (m.kind === 'conflict' && !ids.includes(m.id)) ids.push(m.id);
+    });
+    return { ids, stop };
+  }
+
+  it('is not said while the launch waits, nor when the launch opens the dialog', async () => {
+    setup();
+    const said = everySaid();
+    const { call, answer } = answerLater();
+    launch.PlayGame.mockReturnValueOnce(call);
+    const launched = start(() => launchGame('g1'));
+
+    cloudStatus.set(cloud(conflict('g1')));
+    await tick();
+    expect(get(liveIslandMessages)).toEqual([]);
+    answer(new Error('typhon:cloud.conflict_unresolved: diverged'));
+    await vi.waitFor(() => expect(get(cloudConflictTarget)?.gameId).toBe('g1'));
+    closeCloudConflict();
+
+    expect(await launched).toBe(false);
+    await tick();
+    said.stop();
+    expect(said.ids).toEqual([]);
+    expect(get(toasts)).toEqual([]);
+  });
+
+  it('a profile launch: not said while it waits, nor when it opens the dialog', async () => {
+    setup();
+    const said = everySaid();
+    const { call, answer } = answerLater();
+    launch.PlayGameProfile.mockReturnValueOnce(call);
+    const launched = start(() => playGameProfile('g1', 'p1'));
+
+    cloudStatus.set(cloud(conflict('g1')));
+    await tick();
+    answer(new Error('typhon:cloud.conflict_unresolved: diverged'));
+    await vi.waitFor(() => expect(get(cloudConflictTarget)?.gameId).toBe('g1'));
+    closeCloudConflict();
+
+    expect(await launched).toBe(false);
+    said.stop();
+    expect(said.ids).toEqual([]);
+  });
+
+  it('is said once the launch has answered without a dialog', async () => {
+    setup();
+    const { call, answer } = answerLater();
+    launch.PlayGame.mockReturnValueOnce(call);
+    const launched = start(() => launchGame('g1'));
+    cloudStatus.set(cloud(conflict('g1')));
+    await tick();
+    expect(get(liveIslandMessages)).toEqual([]);
+
+    answer(new Error('typhon:library.launch_cancelled: no'));
+    expect(await launched).toBe(false);
+    await tick();
+
+    expect(conflictMessages().map((m) => m.detail)).toEqual(['Hades']);
+    expect(get(cloudConflictTarget)).toBeNull();
+  });
+
+  it('a launch of another game holds nothing back', async () => {
+    setup();
+    const { call, answer } = answerLater();
+    launch.PlayGame.mockReturnValueOnce(call);
+    const launched = start(() => launchGame('g2'));
+
+    cloudStatus.set(cloud(conflict('g1')));
+    await tick();
+
+    expect(conflictMessages().map((m) => m.detail)).toEqual(['Hades']);
+    answer();
+    expect(await launched).toBe(true);
   });
 });
