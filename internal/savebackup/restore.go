@@ -73,6 +73,24 @@ func (s *Service) journalPath(gameID string) string {
 }
 
 func (s *Service) Restore(ctx context.Context, gameID, snapshotID string) error {
+	return s.restore(ctx, gameID, snapshotID, s.isRunning)
+}
+
+// RestoreBeforeLaunch is Restore for the cloud saves check that holds a launch
+// of the game, while the library already reports that game as starting and
+// Restore would refuse it. It is admitted because from the moment the check
+// may replace the saves until they are in place no launch of the game gets
+// past the cloud hook: the launch waits for the check, is blocked with
+// cloud.syncing, or is cancelled, so the process cannot start under the
+// restore. A process that runs already, one started outside the launcher, is
+// refused as by Restore; journal, recovery and hash checks are the same.
+//
+//wails:ignore
+func (s *Service) RestoreBeforeLaunch(ctx context.Context, gameID, snapshotID string) error {
+	return s.restore(ctx, gameID, snapshotID, s.games.ProcessRunning)
+}
+
+func (s *Service) restore(ctx context.Context, gameID, snapshotID string, running func(gameID string) bool) error {
 	if !s.enabled {
 		return errDisabled
 	}
@@ -89,7 +107,7 @@ func (s *Service) Restore(ctx context.Context, gameID, snapshotID string) error 
 	if err := s.recoverGame(ctx, gameID); err != nil {
 		return err
 	}
-	if s.isRunning(gameID) {
+	if running(gameID) {
 		return errGameRunning
 	}
 
@@ -162,7 +180,7 @@ func (s *Service) Restore(ctx context.Context, gameID, snapshotID string) error 
 	if err := ctx.Err(); err != nil {
 		return errors.Join(err, s.resolve(gameID, j))
 	}
-	if s.isRunning(gameID) {
+	if running(gameID) {
 		return errors.Join(errGameRunning, s.resolve(gameID, j))
 	}
 	if exists {

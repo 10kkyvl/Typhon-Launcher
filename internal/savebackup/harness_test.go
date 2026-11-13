@@ -22,7 +22,10 @@ type fakeGames struct {
 	results map[string]library.SavesResult
 	err     error
 	running map[string]bool
-	gate    chan struct{}
+	// starting holds games the library is launching: reported by
+	// GetRunningGames like a running game, but without a process yet.
+	starting map[string]bool
+	gate     chan struct{}
 }
 
 func (f *fakeGames) Find(id string) (library.Game, error) {
@@ -61,7 +64,24 @@ func (f *fakeGames) GetRunningGames() []string {
 			ids = append(ids, id)
 		}
 	}
+	for id, on := range f.starting {
+		if on && !f.running[id] {
+			ids = append(ids, id)
+		}
+	}
 	return ids
+}
+
+func (f *fakeGames) ProcessRunning(id string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.running[id]
+}
+
+func (f *fakeGames) setStarting(id string, on bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.starting[id] = on
 }
 
 func (f *fakeGames) setRunning(id string, on bool) {
@@ -117,9 +137,10 @@ func newHarness(t *testing.T) *harness {
 	writeFile(t, filepath.Join(h.saves, "slot1.sav"), "one")
 	writeFile(t, filepath.Join(h.saves, "profile", "slot2.sav"), "two")
 	h.games = &fakeGames{
-		games:   map[string]library.Game{gameID: {ID: gameID, Title: "Game"}, "g2": {ID: "g2", Title: "Other"}},
-		results: map[string]library.SavesResult{gameID: {Path: h.saves}},
-		running: map[string]bool{},
+		games:    map[string]library.Game{gameID: {ID: gameID, Title: "Game"}, "g2": {ID: "g2", Title: "Other"}},
+		results:  map[string]library.SavesResult{gameID: {Path: h.saves}},
+		running:  map[string]bool{},
+		starting: map[string]bool{},
 	}
 	h.start()
 	return h

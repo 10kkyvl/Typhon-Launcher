@@ -51,6 +51,7 @@ type games interface {
 	Find(id string) (library.Game, error)
 	LocateSaves(ctx context.Context, id string) (library.SavesResult, error)
 	GetRunningGames() []string
+	ProcessRunning(id string) bool
 }
 
 type Service struct {

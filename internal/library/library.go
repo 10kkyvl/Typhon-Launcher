@@ -1195,6 +1195,17 @@ func (s *Service) Find(id string) (Game, error) {
 	return Game{}, errNotFound
 }
 
+// ProcessRunning reports a game whose process runs, leaving out a launch that
+// is still starting, which IsRunning and GetRunningGames include.
+//
+//wails:ignore
+func (s *Service) ProcessRunning(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok := s.running[id]
+	return ok
+}
+
 //wails:ignore
 func (s *Service) IsRunning(id string) bool {
 	s.mu.Lock()
