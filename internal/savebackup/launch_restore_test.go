@@ -72,3 +72,42 @@ func TestRestoreRefusesAGameThatIsStarting(t *testing.T) {
 
 	wantRefused(t, h, h.svc.Restore(context.Background(), gameID, snap.ID))
 }
+
+// The game turns starting or running after the restore's first check, while
+// the copy is staged: the second check, right before the rename, refuses it
+// and leaves the saves and no journal behind.
+func TestRestoreRefusesAGameThatStartsDuringTheCopy(t *testing.T) {
+	cases := []struct {
+		name    string
+		restore func(s *Service, ctx context.Context, gameID, snapshotID string) error
+		turn    func(f *fakeGames)
+		refused bool
+	}{
+		{"restore, game starting", (*Service).Restore, func(f *fakeGames) { f.setStarting(gameID, true) }, true},
+		{"restore, process running", (*Service).Restore, func(f *fakeGames) { f.setRunning(gameID, true) }, true},
+		{"before launch, process running", (*Service).RestoreBeforeLaunch, func(f *fakeGames) { f.setRunning(gameID, true) }, true},
+		{"before launch, game starting", (*Service).RestoreBeforeLaunch, func(f *fakeGames) { f.setStarting(gameID, true) }, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t)
+			snap := cloudSnapshot(t, h)
+			h.games.setOnLocate(func() { tc.turn(h.games) })
+
+			err := tc.restore(h.svc, context.Background(), gameID, snap.ID)
+
+			if !tc.refused {
+				if err != nil {
+					t.Fatalf("restore = %v, want it to go through for a starting game", err)
+				}
+				sameTree(t, tree(t, h.saves), map[string]string{"slot1.sav": "from the cloud", "profile/slot2.sav": "two"})
+				return
+			}
+			wantRefused(t, h, err)
+			if exists(t, h.saves+previousSuffix) {
+				t.Fatal("a refused restore left the previous folder behind")
+			}
+			sameTree(t, tree(t, h.saves), map[string]string{"slot1.sav": "one", "profile/slot2.sav": "two"})
+		})
+	}
+}

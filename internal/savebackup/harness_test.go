@@ -26,6 +26,9 @@ type fakeGames struct {
 	// GetRunningGames like a running game, but without a process yet.
 	starting map[string]bool
 	gate     chan struct{}
+	// onLocate runs inside LocateSaves: a restore asks for the saves folder
+	// after its first "is it running" check and before its second one.
+	onLocate func()
 }
 
 func (f *fakeGames) Find(id string) (library.Game, error) {
@@ -40,8 +43,11 @@ func (f *fakeGames) Find(id string) (library.Game, error) {
 
 func (f *fakeGames) LocateSaves(ctx context.Context, id string) (library.SavesResult, error) {
 	f.mu.Lock()
-	gate, err, res := f.gate, f.err, f.results[id]
+	gate, err, res, onLocate := f.gate, f.err, f.results[id], f.onLocate
 	f.mu.Unlock()
+	if onLocate != nil {
+		onLocate()
+	}
 	if gate != nil {
 		select {
 		case <-gate:
@@ -76,6 +82,12 @@ func (f *fakeGames) ProcessRunning(id string) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.running[id]
+}
+
+func (f *fakeGames) setOnLocate(fn func()) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.onLocate = fn
 }
 
 func (f *fakeGames) setStarting(id string, on bool) {
