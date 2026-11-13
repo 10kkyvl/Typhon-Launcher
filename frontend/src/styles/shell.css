@@ -15,9 +15,6 @@
   --activity-zone-h: 6rem;
   --activity-head-h: 4.4rem;
   --activity-panel-w: 30rem;
-  /* A row's action: as wide as its longest label with the busy spinner beside it, so swapping Pause and
-     Continue moves nothing in the row. */
-  --activity-action-w: 12.4rem;
   --font-wordmark: Unbounded, Onest Variable, sans-serif;
 
   --topbar-search-min: 18rem;

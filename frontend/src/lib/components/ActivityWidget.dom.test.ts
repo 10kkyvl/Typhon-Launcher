@@ -312,32 +312,44 @@ describe('ActivityWidget: actions from the keyboard', () => {
     expect(pause.getAttribute('aria-busy')).toBe('true');
     expect(pause.hasAttribute('disabled')).toBe(false);
     expect(document.activeElement).toBe(pause);
+    // A second press while the first runs asks for nothing more.
+    await keys.keyboard('{Enter}');
+    expect(pauseDownload).toHaveBeenCalledTimes(1);
 
     call.resolve();
     set(() => downloads.set([download({ status: 'paused' })]));
     await tick();
     expect(pause.isConnected).toBe(true);
-    expect(pause.textContent).toContain(msg('common.continue'));
+    expect(pause.getAttribute('aria-label')).toBe(msg('common.continue'));
     await vi.waitFor(() => expect(pause.getAttribute('aria-busy')).not.toBe('true'));
     expect(document.activeElement).toBe(pause);
   });
 
-  // Pause and Continue differ in length: a width of its own keeps the swap from moving the row's name.
-  it('keeps one width for the action whichever label it shows', async () => {
+  // A text action takes a third of the 30rem panel in Russian ("Отменить установку") and cuts the row's
+  // name: the actions are icon buttons of the base's fixed size, named by their label, and the row
+  // takes the rest of the line.
+  it('draws each action as a small icon button named by its label, one box for both labels, beside a row that takes the rest', async () => {
     downloads.set([download()]);
+    installations.set([install()]);
     const { keys, head, panel } = mount();
     await keys.click(head() as HTMLElement);
     const action = within(panel() as HTMLElement).getByRole('button', { name: msg('ui.pause') });
-    expect(action.style.minWidth).toBe('var(--activity-action-w)');
+    const cancel = within(panel() as HTMLElement).getByRole('button', { name: msg('modals.installCancelInstall') });
+    for (const control of [action, cancel]) {
+      expect([...control.classList]).toEqual(expect.arrayContaining(['icon-btn', 'sm']));
+      expect(control.style.minWidth).toBe('');
+      expect(control.textContent?.trim()).toBe('');
+      expect(control.querySelector('svg')).not.toBeNull();
+    }
 
     set(() => downloads.set([download({ status: 'paused' })]));
-    expect(action.textContent).toContain(msg('common.continue'));
-    expect(action.style.minWidth).toBe('var(--activity-action-w)');
+    expect(action.isConnected).toBe(true);
+    expect(action.getAttribute('aria-label')).toBe(msg('common.continue'));
 
-    type Fs = { readFileSync(path: string, encoding: 'utf8'): string };
-    const node = (globalThis as unknown as { process: { cwd(): string; getBuiltinModule(id: 'node:fs'): Fs } }).process;
-    const shell = node.getBuiltinModule('node:fs').readFileSync(`${node.cwd()}/src/styles/shell.css`, 'utf8');
-    expect(/--activity-action-w:\s*[\d.]+rem;/.test(shell)).toBe(true);
+    const source = (await import('./ActivityWidget.svelte?raw')).default;
+    const css = source.slice(source.indexOf('<style>'));
+    expect(/\n {2}\.row \{([^}]*)\}/.exec(css)?.[1]).toMatch(/flex: 1;[\s\S]*min-width: 0;/);
+    expect(source).not.toMatch(/minWidth|--activity-action-w/);
   });
 
   it('Resume is called on a paused download', async () => {

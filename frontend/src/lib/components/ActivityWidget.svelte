@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { Download, FileCheck, FolderInput, TriangleAlert, Wrench } from '@lucide/svelte';
+  import { Download, FileCheck, FolderInput, Pause, Play, TriangleAlert, Wrench, X } from '@lucide/svelte';
   import { installErrorText } from '../install/installErrors';
   import { cancelInstall } from '../services/install';
   import { activity } from '../stores/activity';
@@ -15,7 +15,7 @@
   import { progressPercent } from '../utils/format';
   import { msg } from '../i18n';
   import Artwork from './Artwork.svelte';
-  import Button from './Button.svelte';
+  import IconButton from './IconButton.svelte';
   import Popover from './Popover.svelte';
   import ProgressBar from './ProgressBar.svelte';
   import TextLink from './TextLink.svelte';
@@ -113,6 +113,8 @@
     void handOff(() => (next ? rowOf(next)?.querySelector<HTMLElement>('.row') : keys.length > 0 ? head : away?.()));
   });
 
+  // IconButton has no busy look of its own: a running call is said with aria-busy, and a second press
+  // is refused here, never by turning the button disabled under focus.
   let busy = $state<string[]>([]);
 
   async function act(item: WidgetItem, run: () => Promise<void>) {
@@ -206,13 +208,24 @@
                   </span>
                 </button>
                 {#if item.pausable || item.resumable}
-                  <Button size="sm" variant="secondary" minWidth="var(--activity-action-w)" busy={busy.includes(item.key)} onclick={() => void toggle(item)}>
-                    {item.pausable ? msg('ui.pause') : msg('common.continue')}
-                  </Button>
+                  <!-- One button for both: the name and the icon switch, focus stays on it. -->
+                  <IconButton
+                    size="sm"
+                    label={item.pausable ? msg('ui.pause') : msg('common.continue')}
+                    aria-busy={busy.includes(item.key) ? 'true' : undefined}
+                    onclick={() => void toggle(item)}
+                  >
+                    {#if item.pausable}<Pause size="1.6rem" strokeWidth={1.8} />{:else}<Play size="1.6rem" strokeWidth={1.8} />{/if}
+                  </IconButton>
                 {:else if item.kind === 'install' && item.attention}
-                  <Button size="sm" variant="secondary" minWidth="var(--activity-action-w)" busy={busy.includes(item.key)} onclick={() => void cancelWaiting(item)}>
-                    {msg('modals.installCancelInstall')}
-                  </Button>
+                  <IconButton
+                    size="sm"
+                    label={msg('modals.installCancelInstall')}
+                    aria-busy={busy.includes(item.key) ? 'true' : undefined}
+                    onclick={() => void cancelWaiting(item)}
+                  >
+                    <X size="1.6rem" strokeWidth={1.8} />
+                  </IconButton>
                 {/if}
               </li>
             {/each}
