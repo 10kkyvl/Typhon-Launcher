@@ -13,6 +13,7 @@
   import Avatar from './Avatar.svelte';
   import { cardFrame } from '../profile/frameLook';
   import FeedNote from './FeedNote.svelte';
+  import TextLink from './TextLink.svelte';
   import ReactionBar from './reactions/ReactionBar.svelte';
 
   let {
@@ -56,7 +57,7 @@
   <div class="body">
     {#if !compact}
       <div class="head">
-        <button class="name" type="button" onclick={openUser}>{name}</button>
+        <span class="author"><TextLink onclick={openUser}>{name}</TextLink></span>
         <span class="when">{when}</span>
       </div>
       <span class="kind">
@@ -163,9 +164,14 @@
     transition: color var(--dur) var(--ease);
   }
 
-  .who:hover .name,
-  .name:hover {
+  .who:hover .name {
     color: var(--accent-text);
+  }
+
+  .author {
+    min-width: 0;
+    font-size: var(--font-sm);
+    font-weight: 600;
   }
 
   .when {

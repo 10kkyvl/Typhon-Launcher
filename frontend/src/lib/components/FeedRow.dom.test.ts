@@ -1,5 +1,7 @@
 import { screen } from '@testing-library/svelte';
-import { describe, expect, it, vi } from 'vitest';
+import { get } from 'svelte/store';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { resetHistory, route } from '../stores/router';
 import type { FeedEvent } from '../services/social';
 import { renderDom } from '../testing/dom';
 import FeedRow from './FeedRow.svelte';
@@ -40,3 +42,21 @@ describe('FeedRow: the game it opens', () => {
     expect(gameButtonName().split('Hades').length - 1).toBe(1);
   });
 });
+
+describe('FeedRow: the name of who it is about', () => {
+  afterEach(() => {
+    resetHistory();
+  });
+
+  it('opens the profile through a text link the keyboard presses', async () => {
+    const { user } = renderDom(FeedRow, { event });
+    const name = screen.getAllByRole('button', { name: 'Neo' }).find((button) => button.textContent?.trim() === 'Neo') as HTMLElement;
+    expect(name.classList.contains('text-link')).toBe(true);
+    name.focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(get(route)).toMatchObject({ name: 'user', params: { username: 'neo' } });
+  });
+});
+
