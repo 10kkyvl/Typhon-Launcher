@@ -1,6 +1,6 @@
 <script lang="ts">
   import { sourceErrorText } from '../sources/sourceErrors';
-  import { tick, untrack } from 'svelte';
+  import { untrack } from 'svelte';
   import { ChevronLeft, ChevronRight } from '@lucide/svelte';
   import {
     getRelease,
@@ -15,6 +15,7 @@
   import { toast } from '../stores/toasts';
   import { refresh as refreshSource, remove as removeSource, sources, toggle as toggleSource } from '../stores/sources';
   import { relativeDate, bytesSize } from '../utils/format';
+  import { focusHandOff } from '../utils/focusHandOff';
   import Button from './Button.svelte';
   import EmptyState from './EmptyState.svelte';
   import ConfirmModal from './ConfirmModal.svelte';
@@ -189,41 +190,37 @@
 
   let pagerEl = $state<HTMLElement>();
 
-  // Whether the pressed pager button held the focus: only then is there a focus to hand on.
-  const heldBy = (event: MouseEvent) => event.currentTarget instanceof HTMLElement && document.activeElement === event.currentTarget;
-
   function prevPage(event: MouseEvent) {
     if (page <= 1) return;
-    const held = heldBy(event);
+    const hand = pagerHandOff(event);
     page -= 1;
-    void turnPage(held);
+    void turnPage(hand);
   }
 
   function nextPage(event: MouseEvent) {
     if (page * pageSize >= total) return;
-    const held = heldBy(event);
+    const hand = pagerHandOff(event);
     page += 1;
-    void turnPage(held);
+    void turnPage(hand);
   }
 
-  // The focus the pressed pager button held is handed on twice: at once, when the button reached its
-  // end and turned disabled, and after the page's answer, which can disable it or take the pager away.
-  async function turnPage(held: boolean) {
+  // A pager button at its end stays but turns disabled: focus still on it then counts as fallen.
+  function pagerHandOff(event: MouseEvent) {
+    const pressed = event.currentTarget instanceof HTMLButtonElement ? event.currentTarget : null;
+    return focusHandOff(() => (pressed?.disabled ? pressed : null));
+  }
+
+  // Focus the pressed pager button held is handed on twice: at once, when the button reached its end,
+  // and after the page's answer, which can disable it or take the pager away. It goes to the other
+  // pager button while there is one; when a failed page took the pager away, to the failure's Retry.
+  async function turnPage(hand: ReturnType<typeof focusHandOff>) {
     const loaded = sourceId ? loadReleases(sourceId) : undefined;
-    if (!held) return;
-    await keepPagerFocus();
+    const next = () =>
+      [...(pagerEl?.querySelectorAll<HTMLButtonElement>('button') ?? [])].find((button) => !button.disabled) ??
+      tableEl?.querySelector<HTMLElement>('.notice button');
+    await hand(next);
     await loaded;
-    await keepPagerFocus();
-  }
-
-  // To the other pager button while there is one; when a failed page took the pager away, to the
-  // failure's Retry.
-  async function keepPagerFocus() {
-    await tick();
-    const active = document.activeElement;
-    if (active && active !== document.body && active.isConnected && !(active instanceof HTMLButtonElement && active.disabled)) return;
-    const other = [...(pagerEl?.querySelectorAll<HTMLButtonElement>('button') ?? [])].find((button) => !button.disabled);
-    (other ?? tableEl?.querySelector<HTMLElement>('.notice button'))?.focus();
+    await hand(next);
   }
 
   async function doRefresh() {
