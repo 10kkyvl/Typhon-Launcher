@@ -21,6 +21,7 @@ import { verifications } from '../stores/updates';
 import { user } from '../testing/dom';
 import { stageLabel } from '../relocate/moveText';
 import ActivityWidget from './ActivityWidget.svelte';
+import Sidebar from './Sidebar.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
@@ -126,14 +127,14 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
-function mount() {
-  render(ActivityWidget, { target: app });
+function mount(host: 'widget' | 'sidebar' = 'widget') {
+  const view = host === 'sidebar' ? render(Sidebar, { target: app }) : render(ActivityWidget, { target: app });
   const keys = user();
   const head = () => screen.queryByRole('button', { name: (_name, el) => el.classList.contains('head') });
   const panel = () => screen.queryByRole('dialog', { name: msg('ui.activityNow') });
   const live = () => app.querySelector('[role="status"]')?.textContent ?? '';
   const rows = () => [...(panel()?.querySelectorAll<HTMLElement>('li') ?? [])];
-  return { keys, head, panel, live, rows };
+  return { keys, head, panel, live, rows, unmount: view.unmount };
 }
 
 function set(fn: () => void) {
@@ -390,6 +391,36 @@ describe('ActivityWidget: a row that goes', () => {
 
     const rowButtons = [...(panel()?.querySelectorAll('.row') ?? [])];
     expect([head(), ...rowButtons]).not.toContain(document.activeElement);
+  });
+});
+
+describe('ActivityWidget: the last row goes', () => {
+  // The head and the panel go with the last row: focus would fall to <body>. Settings, right above the
+  // zone, stays.
+  it('hands focus from the last row to the sidebar\'s Settings, which stays', async () => {
+    downloads.set([download()]);
+    const { keys, head, panel } = mount('sidebar');
+    await keys.click(head() as HTMLElement);
+    within(panel() as HTMLElement).getByRole('button', { name: msg('ui.pause') }).focus();
+
+    set(() => downloads.set([download({ status: 'completed' })]));
+
+    expect(head()).toBeNull();
+    await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: msg('ui.settingsNav') })));
+  });
+
+  it('moves nothing when the last row goes with focus on <body>', async () => {
+    downloads.set([download()]);
+    const { keys, head, panel } = mount('sidebar');
+    await keys.click(head() as HTMLElement);
+    expect(panel()).not.toBeNull();
+    (document.activeElement as HTMLElement).blur();
+
+    set(() => downloads.set([download({ status: 'completed' })]));
+    await tick();
+    await tick();
+
+    expect(document.activeElement).toBe(document.body);
   });
 });
 

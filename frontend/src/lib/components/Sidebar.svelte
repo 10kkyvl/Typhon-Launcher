@@ -143,7 +143,7 @@
   </div>
 
   <div class="activity-zone" data-part="sidebar-activity">
-    <ActivityWidget />
+    <ActivityWidget away={() => sidebar?.querySelector<HTMLElement>('.bottom .nav-item[data-id="settings"]')} />
   </div>
 
   <SidebarStatus />

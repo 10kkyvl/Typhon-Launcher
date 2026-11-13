@@ -30,6 +30,13 @@
    * user, never its progress.
    */
 
+  let {
+    away,
+  }: {
+    /** Where focus goes when the last row goes from under it and the widget empties: a control that stays. */
+    away?: () => HTMLElement | null | undefined;
+  } = $props();
+
   const all = $derived(widgetItems($activity, $runningGames, $sessionStarts, $libraryGames));
   const items = $derived(shownItems(all, $route));
   const lead = $derived(leadOf(items));
@@ -86,7 +93,8 @@
   });
 
   // A row that goes while focus is in it (a finished download under its focused Pause) hands focus to
-  // the next row that stays, else the one before, else the head; focus elsewhere is left alone.
+  // the next row that stays, else the one before, else the head. The last row takes the head and the
+  // panel with it: focus goes `away`. Focus elsewhere is left alone.
   let shownKeys: string[] = [];
   $effect.pre(() => {
     const keys = items.map((item) => item.key);
@@ -102,7 +110,7 @@
     const panel = () => body?.parentElement;
     const handOff = focusHandOff(() => (document.activeElement === panel() ? panel() : null));
     const rowOf = (k: string) => [...(body?.querySelectorAll<HTMLElement>('[data-key]') ?? [])].find((li) => li.dataset.key === k);
-    void handOff(() => (next ? rowOf(next)?.querySelector<HTMLElement>('.row') : head));
+    void handOff(() => (next ? rowOf(next)?.querySelector<HTMLElement>('.row') : keys.length > 0 ? head : away?.()));
   });
 
   let busy = $state<string[]>([]);
