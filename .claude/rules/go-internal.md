@@ -23,6 +23,7 @@ it. "Proof" = a named test (existing, or new and failing without the change) or 
 | Go → UI event | — | Constant in the owning package, `RegisterEvent` in `main.go` from it, TS subscription with a payload type |
 | Exported service method | — | `wails3 task common:generate:bindings`; `bindingsContract.test.ts` |
 | Build-tagged file | I-16 | Canonical tag form (copy a neighbour); `GOOS=windows go vet`, `-tags devmock` |
+| Call into another service that can refuse (game running or starting, busy, disabled) | I-11 | The test fake refuses under the same conditions as the real service; one test runs the path on the real services together (`library/cloud_launch_test.go`) |
 | Import of another domain package | ARCHITECTURE §2 | Coupling via a callback in `main.go`; `download` does not import `install` (and the `library` import stays confined to `playthrottle.go`) |
 | New package under `internal/`, new feature or new user-facing screen | — | Not without explicit approval from the user in the current task. Propose first, build after. |
 
