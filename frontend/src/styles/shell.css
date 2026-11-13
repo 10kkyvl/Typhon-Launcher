@@ -146,4 +146,5 @@
      same in every theme, because the picture and not the theme is under it. theme-contrast.test.ts
      measures it over black and over white. */
   --art-text: #fff;
+  --art-text-shadow: 0 1px 0.6rem rgba(0, 0, 0, 0.55);
 }

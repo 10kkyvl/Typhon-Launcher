@@ -1,4 +1,6 @@
 <script lang="ts">
+  import GeneratedArt from '../art/GeneratedArt.svelte';
+  import type { ArtShape } from '../art/scene';
   import { revealImage } from '../utils/revealImage';
 
   /**
@@ -7,26 +9,42 @@
    * letters when there is no picture. Those letters are decoration, hidden from assistive
    * technology: without a picture the artwork is still an image named `alt`, or nothing when `alt`
    * is empty.
+   *
+   * What shows, the first that exists and loads: `src`, then `fallback` (the game's own cover under a
+   * metadata cover that may fail), then the game's generated art (lib/art), seeded by `seed` (the
+   * game's id) or else by its name, with the letters on top.
    */
   let {
     src,
+    fallback = '',
     alt = '',
     label = '',
+    seed,
     ratio,
     radius = '0',
   }: {
     src: string;
+    fallback?: string;
     alt?: string;
     label?: string;
+    seed?: string;
     ratio?: string;
     radius?: string;
   } = $props();
 
-  let failed = $state(false);
+  let failed = $state<Record<string, true>>({});
 
   $effect(() => {
-    src;
-    failed = false;
+    void src;
+    void fallback;
+    failed = {};
+  });
+
+  const shown = $derived([src, fallback].find((url) => url && !(url in failed)) ?? '');
+
+  const shape = $derived.by((): ArtShape => {
+    const [w, h] = (ratio ?? '').split('/').map((part) => Number(part.trim()));
+    return w > 0 && h > 0 && w > h ? 'wide' : 'cover';
   });
 
   const initials = $derived(
@@ -40,14 +58,24 @@
 </script>
 
 <div class="artwork" style:aspect-ratio={ratio} style:border-radius={radius}>
-  {#if failed || !src}
-    <div class="fallback" role={alt ? 'img' : undefined} aria-label={alt || undefined}>
-      <span aria-hidden="true">{initials || '?'}</span>
-    </div>
-  {:else}
-    {#key src}
-      <img {src} {alt} class="media-reveal" use:revealImage loading="lazy" decoding="async" draggable="false" onerror={() => (failed = true)} />
+  {#if shown}
+    {#key shown}
+      <img
+        src={shown}
+        {alt}
+        class="media-reveal"
+        use:revealImage
+        loading="lazy"
+        decoding="async"
+        draggable="false"
+        onerror={() => (failed = { ...failed, [shown]: true })}
+      />
     {/key}
+  {:else}
+    <div class="fallback" role={alt ? 'img' : undefined} aria-label={alt || undefined}>
+      <span class="art"><GeneratedArt seed={seed ?? (label || alt)} {shape} /></span>
+      {#if initials}<span class="letters" aria-hidden="true">{initials}</span>{/if}
+    </div>
   {/if}
 </div>
 
@@ -76,22 +104,23 @@
   }
 
   .fallback {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    position: relative;
+    display: grid;
     width: 100%;
     height: 100%;
-    background:
-      linear-gradient(160deg, rgba(255, 255, 255, 0.05), transparent 55%),
-      var(--surface-3);
-    color: var(--text-3);
-    font-size: 2rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
     container-type: inline-size;
   }
 
-  .fallback span {
+  .fallback > span {
+    grid-area: 1 / 1;
+  }
+
+  .letters {
+    place-self: center;
+    color: var(--art-text);
     font-size: clamp(1.2rem, 22cqw, 3.2rem);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-shadow: var(--art-text-shadow);
   }
 </style>
