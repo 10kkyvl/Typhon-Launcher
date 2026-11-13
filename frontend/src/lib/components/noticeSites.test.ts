@@ -70,9 +70,10 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
     ['danger', true],
   ],
-  // What each choice loses is read with the conflict; details that failed to load and a failed resolve
-  // just happened.
+  // What each choice loses is read with the conflict; the cloud out of reach, details that failed to
+  // load and a failed resolve or permission just happened.
   'lib/components/CloudConflictModal.svelte': [
+    ['warning', true],
     ['warning', false],
     ['danger', true],
     ['danger', true],

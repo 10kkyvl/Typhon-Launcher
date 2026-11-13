@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { play, playProfile, games } = vi.hoisted(() => ({ play: vi.fn(), playProfile: vi.fn(), games: vi.fn() }));
+const { play, playProfile, games, allow } = vi.hoisted(() => ({ play: vi.fn(), playProfile: vi.fn(), games: vi.fn(), allow: vi.fn() }));
 vi.mock('../../../bindings/typhon/internal/library', () => ({ Service: { PlayGame: play, PlayGameProfile: playProfile, GetGames: games } }));
+vi.mock('../../../bindings/typhon/internal/cloudsaves', () => ({ Service: { AllowLaunchOnce: allow } }));
 vi.mock('./backend', () => ({ inWails: true }));
 
 import { get } from 'svelte/store';
 import { msg } from '../i18n';
 import { launchGame, playGameProfile, type LibraryGame } from './library';
-import { closeCloudConflict, cloudConflictTarget, finishCloudConflict, openCloudConflict } from '../stores/cloudsaves';
+import { allowConflictLaunch, closeCloudConflict, cloudConflictTarget, finishCloudConflict, openCloudConflict } from '../stores/cloudsaves';
 import { emulatorPrompt } from '../stores/emulatorPrompt';
 import { libraryGames } from '../stores/library';
 import { toasts } from '../stores/toasts';
@@ -36,6 +37,7 @@ const toastKinds = () => get(toasts).map((item) => item.kind);
 beforeEach(() => {
   play.mockReset();
   playProfile.mockReset();
+  allow.mockReset();
   games.mockReset();
   closeCloudConflict();
   emulatorPrompt.set(null);
@@ -118,6 +120,58 @@ describe.each(entries)('$name: a launch held back by a save conflict', ({ bindin
     expect(await outcome(launched)).toBe(false);
     expect(get(cloudConflictTarget)?.gameId).toBe('g2');
     expect(binding).toHaveBeenCalledTimes(1);
+  });
+
+  it('launches the same way once more after the player chose to play on this computer, with nothing said', async () => {
+    binding.mockRejectedValueOnce(fails('cloud.conflict_unresolved')).mockResolvedValueOnce(undefined);
+    allow.mockResolvedValueOnce(undefined);
+    const launched = launch();
+
+    await allowConflictLaunch(await dialogFor('g1'));
+
+    expect(allow).toHaveBeenCalledWith('g1');
+    expect(await outcome(launched)).toBe(true);
+    expect(binding).toHaveBeenCalledTimes(2);
+    expect(binding).toHaveBeenLastCalledWith(...args);
+    expect(toastKinds()).toEqual([]);
+  });
+
+  it('shows the conflict of a repeat that is held back again after the permission as an error, without asking again', async () => {
+    const second = fails('cloud.conflict_unresolved');
+    binding.mockRejectedValueOnce(fails('cloud.conflict_unresolved')).mockRejectedValueOnce(second);
+    allow.mockResolvedValueOnce(undefined);
+    const launched = launch();
+
+    await allowConflictLaunch(await dialogFor('g1'));
+
+    expect(await outcome(launched)).toEqual({ thrown: second });
+    expect(get(cloudConflictTarget)).toBeNull();
+    expect(binding).toHaveBeenCalledTimes(2);
+  });
+
+  it('says a repeat held back by saves still syncing after the permission as a notice, as today', async () => {
+    binding.mockRejectedValueOnce(fails('cloud.conflict_unresolved')).mockRejectedValueOnce(fails('cloud.syncing'));
+    allow.mockResolvedValueOnce(undefined);
+    const launched = launch();
+
+    await allowConflictLaunch(await dialogFor('g1'));
+
+    expect(await outcome(launched)).toBe(false);
+    expect(get(toasts).map(({ kind, message }) => [kind, message])).toEqual([['info', msg('cloud.syncing')]]);
+    expect(binding).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps waiting when the permission is refused: nothing is launched again', async () => {
+    binding.mockRejectedValueOnce(fails('cloud.conflict_unresolved'));
+    allow.mockRejectedValueOnce(fails('cloud.no_conflict'));
+    const launched = launch();
+
+    await expect(allowConflictLaunch(await dialogFor('g1'))).rejects.toThrow('cloud.no_conflict');
+
+    expect(await outcome(launched)).toBe('waiting');
+    expect(binding).toHaveBeenCalledTimes(1);
+    closeCloudConflict();
+    expect(await outcome(launched)).toBe(false);
   });
 
   it('says the saves are still syncing as a notice, not a failure, and gives the launch up', async () => {

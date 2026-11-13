@@ -10,12 +10,12 @@ import { toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
 import BigPictureHarness from '../testing/BigPictureHarness.svelte';
 
-const { play, status, resolve } = vi.hoisted(() => ({ play: vi.fn(), status: vi.fn(), resolve: vi.fn() }));
+const { play, status, resolve, allow } = vi.hoisted(() => ({ play: vi.fn(), status: vi.fn(), resolve: vi.fn(), allow: vi.fn() }));
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
 vi.mock('../services/backend', () => ({ inWails: true }));
 vi.mock('../../../bindings/typhon/internal/library', () => ({ Service: { PlayGame: play, GetGames: vi.fn(async () => []) } }));
-vi.mock('../../../bindings/typhon/internal/cloudsaves', () => ({ Service: { Status: status, ResolveConflict: resolve } }));
+vi.mock('../../../bindings/typhon/internal/cloudsaves', () => ({ Service: { Status: status, ResolveConflict: resolve, AllowLaunchOnce: allow } }));
 vi.mock('../bigpicture/components/HomePage.svelte', async () => ({ default: (await import('../testing/BigPicturePageStub.svelte')).default }));
 vi.mock('../bigpicture/components/LibraryPage.svelte', async () => ({ default: (await import('../testing/BigPicturePageStub.svelte')).default }));
 vi.mock('../bigpicture/components/CatalogPage.svelte', async () => ({ default: (await import('../testing/BigPicturePageStub.svelte')).default }));
@@ -68,6 +68,7 @@ afterEach(() => {
   play.mockReset();
   status.mockReset();
   resolve.mockReset();
+  allow.mockReset();
   vi.restoreAllMocks();
   Reflect.deleteProperty(navigator, 'getGamepads');
 });
@@ -147,6 +148,27 @@ describe('a launch held back by a save conflict in Big Picture', () => {
     await vi.waitFor(() => expect(answer()).toBe('true'));
     expect(resolve).toHaveBeenCalledWith('game-1', true);
     expect(play).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('gamepad: without the cloud the D-pad reaches "play with the saves on this computer" and A starts the game once', async () => {
+    status.mockResolvedValue({ ...conflicted(), error: 'cloud.network' });
+    play.mockRejectedValueOnce(new Error('typhon:cloud.conflict_unresolved: diverged')).mockResolvedValueOnce(undefined);
+    allow.mockResolvedValueOnce(undefined);
+    const { dialog, answer } = await launchToConflict('gamepad');
+    await vi.waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+    const playHere = await within(dialog).findByRole('button', { name: msg('cloudsaves.conflictPlayHere') });
+    expect(within(dialog).queryByRole('button', { name: msg('cloudsaves.conflictKeepMine') })).toBeNull();
+
+    for (let step = 0; step < 6 && document.activeElement !== playHere; step += 1) await press(15);
+    expect(document.activeElement).toBe(playHere);
+    await press(0);
+
+    await vi.waitFor(() => expect(answer()).toBe('true'));
+    expect(allow).toHaveBeenCalledWith('game-1');
+    expect(resolve).not.toHaveBeenCalled();
+    expect(play).toHaveBeenCalledTimes(2);
+    expect(get(toasts)).toEqual([]);
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 

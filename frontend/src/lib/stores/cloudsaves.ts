@@ -1,8 +1,8 @@
-import { get, writable } from 'svelte/store';
+import { get, writable, type Readable } from 'svelte/store';
 import { cloudErrorText } from '../cloudsaves/messages';
 import { msg } from '../i18n';
 import { inWails } from '../services/backend';
-import { loadCloudStatus, onCloudEvent, type CloudEvent, type CloudStatus } from '../services/cloudsaves';
+import { cloudAllowLaunchOnce, loadCloudStatus, onCloudEvent, type CloudEvent, type CloudStatus } from '../services/cloudsaves';
 import { libraryGames } from './library';
 import { toast } from './toasts';
 
@@ -22,6 +22,10 @@ interface WaitingLaunch {
 }
 
 let waiting: WaitingLaunch | null = null;
+const launchWaiting = writable(false);
+
+/** Whether a launch waits on the open dialog: only such a launch can be let through on this computer's saves. */
+export const cloudConflictLaunch: Readable<boolean> = { subscribe: launchWaiting.subscribe };
 
 function waitFor(target: CloudConflictTarget, resolve: (resolved: boolean) => void): WaitingLaunch {
   let done = false;
@@ -38,6 +42,7 @@ function waitFor(target: CloudConflictTarget, resolve: (resolved: boolean) => vo
 function show(next: CloudConflictTarget | null, resolved = false) {
   const left = waiting;
   waiting = null;
+  launchWaiting.set(false);
   cloudConflictTarget.set(next);
   left?.answer(resolved);
 }
@@ -62,6 +67,7 @@ export function askToResolveConflict(gameId: string): Promise<boolean> | null {
   const older = waiting;
   return new Promise((resolve) => {
     waiting = waitFor(target, resolve);
+    launchWaiting.set(true);
     older?.answer(false);
   });
 }
@@ -74,6 +80,16 @@ export function closeCloudConflict() {
 export function finishCloudConflict(target: CloudConflictTarget) {
   if (get(cloudConflictTarget) !== target) return;
   show(null, true);
+}
+
+/**
+ * Lets the launch waiting on the dialog for `target` start once on this computer's saves, the conflict
+ * left recorded, and answers it "resolved" so that it is made again. Rejects with the refusal, and the
+ * launch then still waits.
+ */
+export async function allowConflictLaunch(target: CloudConflictTarget): Promise<void> {
+  await cloudAllowLaunchOnce(target.gameId);
+  finishCloudConflict(target);
 }
 
 /** Loads the status for a caller that reports a failure itself; rejects when it cannot be loaded. */

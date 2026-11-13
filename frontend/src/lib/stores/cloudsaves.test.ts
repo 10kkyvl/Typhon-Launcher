@@ -10,7 +10,10 @@ vi.mock('@wailsio/runtime', () => ({ Events: { On: vi.fn(() => vi.fn()) } }));
 let load: () => Promise<CloudStatus> = async () => status();
 let emit: (event: CloudEvent) => void = () => {};
 
+let allow: (gameId: string) => Promise<void> = async () => {};
+
 vi.mock('../services/cloudsaves', () => ({
+  cloudAllowLaunchOnce: vi.fn((gameId: string) => allow(gameId)),
   loadCloudStatus: vi.fn(() => load()),
   onCloudEvent: vi.fn((handler: (event: CloudEvent) => void) => {
     emit = handler;
@@ -55,6 +58,7 @@ async function init() {
 beforeEach(() => {
   vi.clearAllMocks();
   load = async () => status();
+  allow = async () => {};
 });
 
 describe('cloud saves store', () => {
@@ -249,5 +253,56 @@ describe('a launch waiting on the conflict dialog', () => {
     const { store } = await init();
     expect(store.askToResolveConflict('missing')).toBeNull();
     expect(get(store.cloudConflictTarget)).toBeNull();
+  });
+});
+
+describe('playing on this computer past the conflict', () => {
+  it('tells the dialog whether a launch waits on it', async () => {
+    const { store } = await init();
+    emit(event({ status: 'conflict' }));
+    expect(get(store.cloudConflictTarget)?.gameId).toBe('g1');
+    expect(get(store.cloudConflictLaunch)).toBe(false);
+
+    const question = store.askToResolveConflict('g1');
+    expect(get(store.cloudConflictLaunch)).toBe(true);
+
+    store.closeCloudConflict();
+    expect(await answer(question)).toBe(false);
+    expect(get(store.cloudConflictLaunch)).toBe(false);
+  });
+
+  it('grants the one launch for the game, then answers the waiting launch "resolved"', async () => {
+    const { store } = await init();
+    const granted: string[] = [];
+    let answeredFirst = false;
+    const question = store.askToResolveConflict('g1');
+    void question?.then(() => (answeredFirst = granted.length === 0));
+    allow = async (gameId) => {
+      granted.push(gameId);
+    };
+
+    await store.allowConflictLaunch(get(store.cloudConflictTarget)!);
+
+    expect(granted).toEqual(['g1']);
+    expect(await answer(question)).toBe(true);
+    expect(answeredFirst).toBe(false);
+    expect(get(store.cloudConflictTarget)).toBeNull();
+    expect(get(store.cloudConflictLaunch)).toBe(false);
+  });
+
+  it('leaves the launch waiting and the dialog open when the permission is refused', async () => {
+    const { store } = await init();
+    const question = store.askToResolveConflict('g1');
+    const target = get(store.cloudConflictTarget)!;
+    const refused = new Error('typhon:cloud.no_conflict: none');
+    allow = async () => {
+      throw refused;
+    };
+
+    await expect(store.allowConflictLaunch(target)).rejects.toBe(refused);
+
+    expect(await answer(question)).toBe('waiting');
+    expect(get(store.cloudConflictTarget)).toBe(target);
+    expect(get(store.cloudConflictLaunch)).toBe(true);
   });
 });

@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // A launch started outside the window and left pending in Go, taken by the page
 // and resumed through the in-window launch path with its real recovery.
-const { play, playProfile, games, takePending, handlers } = vi.hoisted(() => ({
+const { play, playProfile, games, takePending, handlers, allow } = vi.hoisted(() => ({
+  allow: vi.fn(),
   play: vi.fn(),
   playProfile: vi.fn(),
   games: vi.fn(),
@@ -21,12 +22,13 @@ vi.mock('@wailsio/runtime', async (importOriginal) => ({
 }));
 vi.mock('../../../bindings/typhon/internal/library', () => ({ Service: { PlayGame: play, PlayGameProfile: playProfile, GetGames: games } }));
 vi.mock('../../../bindings/typhon/pendinglaunchservice', () => ({ TakePending: takePending }));
+vi.mock('../../../bindings/typhon/internal/cloudsaves', () => ({ Service: { AllowLaunchOnce: allow } }));
 vi.mock('../services/backend', () => ({ inWails: true }));
 
 import { get } from 'svelte/store';
 import { msg } from '../i18n';
 import type { LibraryGame } from '../services/library';
-import { closeCloudConflict, cloudConflictTarget, finishCloudConflict } from './cloudsaves';
+import { allowConflictLaunch, closeCloudConflict, cloudConflictLaunch, cloudConflictTarget, finishCloudConflict } from './cloudsaves';
 import { initPendingLaunch, setWindowReady } from './pendingLaunch';
 import { emulatorPrompt } from './emulatorPrompt';
 import { libraryGames, libraryLoaded } from './library';
@@ -58,6 +60,7 @@ beforeEach(() => {
   handlers.length = 0;
   play.mockReset();
   playProfile.mockReset();
+  allow.mockReset();
   games.mockReset().mockResolvedValue([{ id: 'g1', emulation: { platform: 'ps2' } }]);
   takePending.mockReset().mockResolvedValue(nothing);
   closeCloudConflict();
@@ -104,6 +107,26 @@ describe.each(entries)('$name: a launch the save conflict held back outside the 
     finishCloudConflict(target);
     await vi.waitFor(() => expect(binding).toHaveBeenCalledTimes(2));
     expect(binding).toHaveBeenLastCalledWith(...args);
+    await flush();
+    expect(toastList()).toEqual([]);
+  });
+
+  it('offers the dialog to play on this computer, and launches the same way once more after the permission', async () => {
+    takePending.mockResolvedValueOnce(heldBack('cloud.conflict_unresolved', held));
+    binding.mockRejectedValueOnce(fails('cloud.conflict_unresolved')).mockResolvedValueOnce(undefined);
+    allow.mockResolvedValueOnce(undefined);
+    loadLibrary();
+
+    dispose = initPendingLaunch();
+    passSignIn();
+    const target = await dialogFor('g1');
+    expect(get(cloudConflictLaunch)).toBe(true);
+
+    await allowConflictLaunch(target);
+
+    await vi.waitFor(() => expect(binding).toHaveBeenCalledTimes(2));
+    expect(binding).toHaveBeenLastCalledWith(...args);
+    expect(allow).toHaveBeenCalledWith('g1');
     await flush();
     expect(toastList()).toEqual([]);
   });

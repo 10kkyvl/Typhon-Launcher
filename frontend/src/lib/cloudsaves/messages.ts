@@ -9,6 +9,14 @@ const STATE_KEYS: Record<CloudState, MessageKey> = {
   skipped: 'cloudsaves.stateSkipped',
 };
 
+// The codes that say the cloud cannot settle anything now: the server is out of reach, or the session it
+// has to confirm is not confirmed yet, which is what a launcher started without a connection answers.
+const UNREACHABLE: ReadonlySet<string> = new Set(['cloud.network', 'cloud.account_unknown']);
+
+export function cloudUnreachable(code: string): boolean {
+  return UNREACHABLE.has(code);
+}
+
 export function cloudCodeText(code: string, fallback: string): string {
   return code.startsWith('cloud.') && hasMessage(code) ? msg(code) : fallback;
 }

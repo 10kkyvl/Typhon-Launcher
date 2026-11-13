@@ -1,8 +1,9 @@
 import { render, screen, within } from '@testing-library/svelte';
+import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cloudErrorText } from '../cloudsaves/messages';
 import { msg } from '../i18n';
-import { cloudResolveConflict, loadCloudStatus, type CloudConflict, type CloudStatus } from '../services/cloudsaves';
+import { cloudAllowLaunchOnce, cloudResolveConflict, loadCloudStatus, type CloudConflict, type CloudStatus } from '../services/cloudsaves';
 import type { LibraryGame } from '../services/library';
 import { askToResolveConflict, closeCloudConflict, cloudConflictTarget, cloudStatus, openCloudConflict } from '../stores/cloudsaves';
 import { libraryGames } from '../stores/library';
@@ -16,6 +17,7 @@ vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRu
 vi.mock('../services/backend', () => ({ inWails: false }));
 vi.mock('../services/cloudsaves', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/cloudsaves')>()),
+  cloudAllowLaunchOnce: vi.fn(),
   cloudResolveConflict: vi.fn(),
   loadCloudStatus: vi.fn(),
 }));
@@ -46,6 +48,7 @@ afterEach(() => {
   cloudStatus.set(null);
   libraryGames.set([]);
   toasts.set([]);
+  vi.mocked(cloudAllowLaunchOnce).mockReset();
   vi.mocked(cloudResolveConflict).mockReset();
   vi.mocked(loadCloudStatus).mockReset();
   document.body.replaceChildren();
@@ -319,6 +322,248 @@ describe('CloudConflictModal opened by a launch', () => {
 
     await keys.click(within(dialog).getByRole('button', { name: msg('cloudsaves.conflictKeepMine') }));
     expect(await answer(question)).toBe(true);
+  });
+});
+
+const offlineText = (code = 'cloud.network') => msg('cloudsaves.conflictOffline', { reason: msg(code as 'cloud.network') });
+const offline = () => new Error('typhon:cloud.network: network_error');
+const listedOffline = (): CloudStatus => ({ ...listed(), error: 'cloud.network' });
+
+function buttonsOf(dialog: HTMLElement) {
+  return {
+    mine: () => within(dialog).queryByRole('button', { name: msg('cloudsaves.conflictKeepMine') }),
+    remote: () => within(dialog).queryByRole('button', { name: msg('cloudsaves.conflictTakeRemote') }),
+    play: () => within(dialog).queryByRole('button', { name: msg('cloudsaves.conflictPlayHere') }),
+    retry: () => within(dialog).queryByRole('button', { name: msg('common.retry') }),
+    later: () => within(dialog).getByRole('button', { name: msg('cloudsaves.conflictLater') }),
+  };
+}
+
+// The cloud cannot be reached: the dialog says a copy can be chosen only with a connection, keeps the
+// copies in view, and offers to try again, to leave, and, when a launch waits on it, to play on this
+// computer's saves for that one launch.
+describe('CloudConflictModal without the cloud', () => {
+  it('is offline at once when the status lists the conflict while the cloud cannot be reached', async () => {
+    cloudStatus.set(listedOffline());
+    const { question, dialog } = askFromLaunch();
+    const buttons = buttonsOf(dialog);
+
+    expect(within(dialog).getByText(offlineText())).toBeTruthy();
+    expect(within(dialog).getByText(deviceLine)).toBeTruthy();
+    expect(buttons.mine()).toBeNull();
+    expect(buttons.remote()).toBeNull();
+    expect(buttons.retry()).not.toBeNull();
+    const play = buttons.play() as HTMLElement;
+    expect(play).not.toBeNull();
+    const note = document.getElementById(play.getAttribute('aria-describedby') ?? '');
+    expect(note?.textContent?.trim()).toBe(msg('cloudsaves.conflictPlayHereNote'));
+    expect(vi.mocked(loadCloudStatus)).not.toHaveBeenCalled();
+    expect(await answer(question)).toBe('waiting');
+  });
+
+  it('offers no play when no launch waits on it: the explanation, try again and later', () => {
+    libraryGames.set([{ id: 'g1', title: 'Hades' } as LibraryGame]);
+    cloudStatus.set(listedOffline());
+    openCloudConflict('g1');
+    render(CloudConflictModal, { target: app });
+    const dialog = screen.getByRole('dialog', { name: msg('cloudsaves.conflictTitle') });
+    const buttons = buttonsOf(dialog);
+
+    expect(within(dialog).getByText(offlineText())).toBeTruthy();
+    expect(buttons.play()).toBeNull();
+    expect(within(dialog).queryByText(msg('cloudsaves.conflictPlayHereNote'))).toBeNull();
+    expect(buttons.retry()).not.toBeNull();
+    expect(buttons.later()).toBeTruthy();
+  });
+
+  it('goes offline when a choice fails without the cloud, keeps the copies, and hands the focus to try again', async () => {
+    cloudStatus.set(listed());
+    vi.mocked(cloudResolveConflict).mockRejectedValueOnce(offline());
+    const { question, dialog } = askFromLaunch();
+    const buttons = buttonsOf(dialog);
+    const keys = user();
+    (buttons.mine() as HTMLElement).focus();
+
+    await keys.keyboard('{Enter}');
+
+    expect(await within(dialog).findByText(offlineText())).toBeTruthy();
+    expect(within(dialog).getByText(deviceLine)).toBeTruthy();
+    expect(buttons.mine()).toBeNull();
+    expect(within(dialog).queryByRole('alert')).toBeNull();
+    await vi.waitFor(() => expect(document.activeElement).toBe(buttons.retry()));
+    expect(await answer(question)).toBe('waiting');
+  });
+
+  it('goes offline when the account cannot be confirmed without the server, with that reason', async () => {
+    cloudStatus.set(listed());
+    vi.mocked(cloudResolveConflict).mockRejectedValueOnce(new Error('typhon:cloud.account_unknown: not bound'));
+    const { dialog } = askFromLaunch();
+
+    await user().click(buttonsOf(dialog).remote() as HTMLElement);
+
+    expect(await within(dialog).findByText(offlineText('cloud.account_unknown'))).toBeTruthy();
+    expect(buttonsOf(dialog).play()).not.toBeNull();
+  });
+
+  it('tries the failed choice again: with the cloud back it is applied and the launch answered "resolved"', async () => {
+    cloudStatus.set(listed());
+    vi.mocked(cloudResolveConflict).mockRejectedValueOnce(offline()).mockResolvedValueOnce(undefined);
+    const { question, dialog } = askFromLaunch();
+    const keys = user();
+    await keys.click(buttonsOf(dialog).mine() as HTMLElement);
+    await within(dialog).findByText(offlineText());
+
+    await keys.click(buttonsOf(dialog).retry() as HTMLElement);
+
+    expect(await answer(question)).toBe(true);
+    expect(vi.mocked(cloudResolveConflict).mock.calls).toEqual([
+      ['g1', true],
+      ['g1', true],
+    ]);
+    expect(get(toasts).map((item) => item.message)).toEqual([msg('cloudsaves.conflictKeptMine')]);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('leaves the offline state the status put it in on try again, and the choice works with the cloud back', async () => {
+    cloudStatus.set(listedOffline());
+    vi.mocked(cloudResolveConflict).mockResolvedValueOnce(undefined);
+    const { question, dialog } = askFromLaunch();
+    const keys = user();
+    const retry = buttonsOf(dialog).retry() as HTMLElement;
+    retry.focus();
+
+    await keys.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(within(dialog).queryByText(offlineText())).toBeNull());
+    const remote = buttonsOf(dialog).remote() as HTMLElement;
+    expect(remote).not.toBeNull();
+    expect(document.activeElement).toBe(buttonsOf(dialog).mine());
+    expect(vi.mocked(cloudResolveConflict)).not.toHaveBeenCalled();
+
+    await keys.click(remote);
+    expect(await answer(question)).toBe(true);
+    expect(vi.mocked(cloudResolveConflict)).toHaveBeenCalledWith('g1', false);
+  });
+
+  it('keeps the offline state and the focus on try again when the cloud is still out of reach, and says it again', async () => {
+    cloudStatus.set(listed());
+    vi.mocked(cloudResolveConflict).mockRejectedValue(offline());
+    const { question, dialog } = askFromLaunch();
+    const keys = user();
+    await keys.click(buttonsOf(dialog).mine() as HTMLElement);
+    await within(dialog).findByText(offlineText());
+    const retry = buttonsOf(dialog).retry() as HTMLElement;
+    const notice = retry.closest('.notice') as HTMLElement;
+    const said = sayingAgain(notice);
+    retry.focus();
+
+    await keys.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(said()).toBe(offlineText()));
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
+    expect(vi.mocked(cloudResolveConflict)).toHaveBeenCalledTimes(2);
+    expect(await answer(question)).toBe('waiting');
+  });
+
+  it('plays on this computer: grants the one launch, answers it "resolved", and says nothing about a resolved conflict', async () => {
+    cloudStatus.set(listedOffline());
+    vi.mocked(cloudAllowLaunchOnce).mockResolvedValueOnce(undefined);
+    const { question, dialog } = askFromLaunch();
+
+    await user().click(buttonsOf(dialog).play() as HTMLElement);
+
+    expect(await answer(question)).toBe(true);
+    expect(vi.mocked(cloudAllowLaunchOnce)).toHaveBeenCalledWith('g1');
+    expect(vi.mocked(cloudResolveConflict)).not.toHaveBeenCalled();
+    expect(get(toasts)).toEqual([]);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('keeps the focus on play, busy, while the permission is asked for; leaving waits for it', async () => {
+    const asking = deferred<void>();
+    cloudStatus.set(listedOffline());
+    vi.mocked(cloudAllowLaunchOnce).mockReturnValueOnce(asking.promise);
+    const { question, dialog } = askFromLaunch();
+    const keys = user();
+    const play = buttonsOf(dialog).play() as HTMLElement;
+    play.focus();
+
+    await keys.keyboard('{Enter}');
+
+    expect(play.getAttribute('aria-busy')).toBe('true');
+    expect(document.activeElement).toBe(play);
+    expect(buttonsOf(dialog).later()).toHaveProperty('disabled', true);
+    await keys.keyboard('{Escape}');
+    expect(dialog.isConnected).toBe(true);
+    await keys.keyboard('{Enter}');
+    expect(vi.mocked(cloudAllowLaunchOnce)).toHaveBeenCalledTimes(1);
+
+    asking.resolve();
+    expect(await answer(question)).toBe(true);
+  });
+
+  it('says a refused permission in the dialog and leaves the launch waiting', async () => {
+    const refused = new Error('typhon:cloud.no_conflict: none');
+    cloudStatus.set(listedOffline());
+    vi.mocked(cloudAllowLaunchOnce).mockRejectedValueOnce(refused);
+    const { question, dialog } = askFromLaunch();
+    const keys = user();
+    const play = buttonsOf(dialog).play() as HTMLElement;
+    play.focus();
+
+    await keys.keyboard('{Enter}');
+
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert.textContent?.trim()).toBe(cloudErrorText(refused));
+    expect(alert.closest('[data-tone="danger"]')).not.toBeNull();
+    expect(await answer(question)).toBe('waiting');
+    expect(play.getAttribute('aria-busy')).toBeNull();
+    expect(document.activeElement).toBe(play);
+  });
+
+  it('gives the launch up on "Later"', async () => {
+    cloudStatus.set(listedOffline());
+    const { question, dialog } = askFromLaunch();
+
+    await user().click(buttonsOf(dialog).later());
+
+    expect(await answer(question)).toBe(false);
+    expect(vi.mocked(cloudAllowLaunchOnce)).not.toHaveBeenCalled();
+  });
+
+  it('goes offline when the details cannot be loaded without the cloud, and still offers play to the launch', async () => {
+    vi.mocked(loadCloudStatus).mockRejectedValueOnce(offline()).mockResolvedValueOnce(listed());
+    const { dialog } = askFromLaunch();
+    const keys = user();
+
+    const retry = await within(dialog).findByRole('button', { name: msg('common.retry') });
+    expect(buttonsOf(dialog).play()).not.toBeNull();
+    expect(buttonsOf(dialog).mine()).toBeNull();
+
+    await keys.click(retry);
+
+    expect(await within(dialog).findByText(deviceLine)).toBeTruthy();
+    expect(within(dialog).getByText(offlineText())).toBeTruthy();
+  });
+
+  it('starts every opening from the choice: an earlier offline state is not carried over', async () => {
+    cloudStatus.set(listed());
+    vi.mocked(cloudResolveConflict).mockRejectedValueOnce(offline());
+    const first = askFromLaunch();
+    const keys = user();
+    await keys.click(buttonsOf(first.dialog).mine() as HTMLElement);
+    await within(first.dialog).findByText(offlineText());
+    await keys.click(buttonsOf(first.dialog).later());
+    expect(await answer(first.question)).toBe(false);
+
+    const second = askToResolveConflict('g1');
+    const dialog = await screen.findByRole('dialog', { name: msg('cloudsaves.conflictTitle') });
+
+    expect(within(dialog).queryByText(offlineText())).toBeNull();
+    expect(buttonsOf(dialog).mine()).not.toBeNull();
+    expect(buttonsOf(dialog).play()).toBeNull();
+    expect(await answer(second)).toBe('waiting');
   });
 });
 

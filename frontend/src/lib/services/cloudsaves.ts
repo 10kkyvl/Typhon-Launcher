@@ -62,6 +62,11 @@ export async function cloudResolveConflict(gameId: string, keepLocal: boolean): 
   await CloudsavesService.ResolveConflict(gameId, keepLocal);
 }
 
+export async function cloudAllowLaunchOnce(gameId: string): Promise<void> {
+  if (!inWails) throw unavailable();
+  await CloudsavesService.AllowLaunchOnce(gameId);
+}
+
 export async function cloudPullRemote(gameId: string): Promise<void> {
   if (!inWails) throw unavailable();
   await CloudsavesService.PullRemote(gameId);
