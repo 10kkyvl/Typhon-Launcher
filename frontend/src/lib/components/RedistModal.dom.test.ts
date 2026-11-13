@@ -140,6 +140,25 @@ describe('RedistModal: the game folder scan', () => {
   });
 });
 
+describe('RedistModal: closed and opened again while the scan Retry runs', () => {
+  it('opens scanning, without the old failure: no empty notice with a busy Retry', async () => {
+    const never = new Promise<never>(() => {});
+    vi.mocked(scanRedist).mockRejectedValueOnce(new Error('disk')).mockReturnValue(never);
+    const first = await openDialog();
+    const keys = user();
+    await keys.click(await within(first).findByRole('button', { name: msg('redist.retry') }));
+
+    closeRedist();
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    openRedist('g1');
+
+    const dialog = await screen.findByRole('dialog', { name: msg('redist.title', { title: 'Hades' }) });
+    expect(dialog.querySelectorAll('.notice[data-tone="danger"]').length).toBe(0);
+    const statuses = within(dialog).getAllByRole('status').map((status) => status.textContent?.trim());
+    expect(statuses).toContain(msg('redist.scanning'));
+  });
+});
+
 describe('RedistModal: the runtimes of the system', () => {
   it('states a missing runtime in a warning notice that holds its download link', async () => {
     vi.mocked(scanRedist).mockResolvedValueOnce([]);

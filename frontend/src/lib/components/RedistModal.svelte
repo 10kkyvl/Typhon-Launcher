@@ -53,6 +53,8 @@
   $effect(() => {
     const current = $redistTarget;
     untrack(() => {
+      // A retry still running when the dialog closes belongs to that opening: the next starts clean.
+      scanRetrying = false;
       if (current) void load(current.gameId);
       else reset();
     });
