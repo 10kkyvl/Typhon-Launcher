@@ -5,18 +5,31 @@
   import Spinner from './Spinner.svelte';
   import { cloudErrorText } from '../cloudsaves/messages';
   import { msg } from '../i18n';
+  import { untrack } from 'svelte';
   import { cloudResolveConflict } from '../services/cloudsaves';
-  import { closeCloudConflict, cloudConflictTarget, cloudStatus, refreshCloudStatus } from '../stores/cloudsaves';
+  import {
+    closeCloudConflict,
+    cloudConflictTarget,
+    cloudStatus,
+    fetchCloudStatus,
+    finishCloudConflict,
+    refreshCloudStatus,
+    type CloudConflictTarget,
+  } from '../stores/cloudsaves';
   import { toast } from '../stores/toasts';
   import { bytesSize, dateTime } from '../utils/format';
 
   const target = $derived($cloudConflictTarget);
-  const conflict = $derived(target ? $cloudStatus?.games.find((g) => g.gameId === target.gameId)?.conflict : undefined);
+  const gameId = $derived(target?.gameId ?? '');
+  const conflict = $derived(gameId ? $cloudStatus?.games.find((g) => g.gameId === gameId)?.conflict : undefined);
 
   let busy = $state(false);
   // The choice being applied: its button stays focused and busy, the other waits.
   let kept = $state<'mine' | 'remote' | ''>('');
   let failure = $state('');
+  // Why the details are not shown; empty while they load.
+  let detailsFailure = $state('');
+  let retrying = $state(false);
 
   $effect(() => {
     if (!target) {
@@ -24,21 +37,50 @@
     }
   });
 
+  // A conflict recorded before this session comes with no event, and a launch it held back opens the
+  // dialog by itself: the details are loaded here whenever the status does not list them yet. Every
+  // opening starts from the loading state, whatever a load or a Retry of the one before left behind.
+  $effect(() => {
+    const opening = target;
+    detailsFailure = '';
+    retrying = false;
+    if (opening && !untrack(() => conflict)) void loadDetails(opening);
+  });
+
+  // True when the details are there; undefined when the dialog has closed or moved on meanwhile.
+  async function loadDetails(opening: CloudConflictTarget | null): Promise<boolean | undefined> {
+    if (!opening) return undefined;
+    let reason = '';
+    try {
+      await fetchCloudStatus();
+    } catch (err) {
+      console.error('cloud conflict details', err);
+      reason = cloudErrorText(err, msg('cloudsaves.statusFailed'));
+    }
+    if (target !== opening) return undefined;
+    if (conflict) {
+      detailsFailure = '';
+      return true;
+    }
+    detailsFailure = reason || msg('cloudsaves.statusFailed');
+    return false;
+  }
+
   function when(iso: string): string {
     const value = new Date(iso);
     return Number.isNaN(value.getTime()) ? iso : dateTime(value);
   }
 
   async function resolve(keepLocal: boolean) {
-    if (!target || busy) return;
-    const { gameId } = target;
+    const current = target;
+    if (!current || busy) return;
     busy = true;
     kept = keepLocal ? 'mine' : 'remote';
     failure = '';
     try {
-      await cloudResolveConflict(gameId, keepLocal);
+      await cloudResolveConflict(current.gameId, keepLocal);
       toast(msg(keepLocal ? 'cloudsaves.conflictKeptMine' : 'cloudsaves.conflictTookRemote'), 'success');
-      closeCloudConflict();
+      finishCloudConflict(current);
     } catch (err) {
       failure = cloudErrorText(err);
     } finally {
@@ -80,6 +122,15 @@
           <p>{msg('cloudsaves.conflictTakeRemoteWarning')}</p>
         </Notice>
       </div>
+    {:else if detailsFailure || retrying}
+      <Notice
+        tone="danger"
+        compact
+        bind:retrying
+        retry={{ label: msg('common.retry'), run: () => loadDetails(target) }}
+      >
+        {detailsFailure}
+      </Notice>
     {:else}
       <Spinner size="sm" label={msg('cloudsaves.conflictLoading')} />
     {/if}
