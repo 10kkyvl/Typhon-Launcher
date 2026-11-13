@@ -33,4 +33,6 @@ background shells and removes the worktrees of merged or abandoned agent branche
 session did not start is never killed, only listed for the owner. A worktree gets its own `npm ci`;
 never symlink `node_modules` (`common:build:frontend` runs `npm ci` and deletes the link's target).
 A read-only agent's scratch copy goes in a folder it names itself, and its cleanup removes that
-folder only; the orchestrator's own scripts live outside the shared scratchpad.
+folder only; the orchestrator's own scripts live outside the shared scratchpad. A review finding
+that repeats in a second package becomes a base helper or a guard before the next brief goes out,
+not a per-package fix (focus hand-off was fixed package by package until `utils/focusHandOff.ts`).
