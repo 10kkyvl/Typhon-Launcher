@@ -158,6 +158,43 @@ func TestLaunchSurfaces(t *testing.T) {
 	}
 }
 
+// A shortcut that names a profile of an emulated game without an emulator asks
+// the same question as the Play button: the answer resumes the game's own
+// launch, so the prompt carries no profile.
+func TestProfileLaunchThatNeedsAnEmulatorAsksAsThePlayButton(t *testing.T) {
+	surfaces := []struct {
+		name string
+		play func(player promptingPlayer, reveal func())
+	}{
+		{"shortcut", func(p promptingPlayer, reveal func()) {
+			playFromShortcut(p, playRequest{id: "g1", profile: "ab12cd34"}, reveal)
+		}},
+		{"second launch", func(p promptingPlayer, reveal func()) {
+			handleSecondLaunch([]string{"typhon.exe", "--play", "g1", "--profile", "ab12cd34"}, p, openerFunc(reveal), &NavigationService{}, func(string) {})
+		}},
+	}
+	for _, surface := range surfaces {
+		t.Run(surface.name, func(t *testing.T) {
+			log := captureLog(t)
+			prompts, events := promptsFor(fakeGames{game: ps2Game})
+			revealed := 0
+			surface.play(promptingPlayer{player: fakeLauncher{err: emulators.ErrNotConfigured}, prompts: prompts}, func() { revealed++ })
+
+			want := EmulatorNeeded{GameID: "g1", Platform: emulators.PS2, Code: uierr.Code(emulators.ErrNotConfigured)}
+			if !slices.Equal(*events, []EmulatorNeeded{want}) || revealed != 1 {
+				t.Fatalf("events = %+v, revealed %d times, want one %+v and once", *events, revealed, want)
+			}
+			if got := prompts.TakePending(); got != want {
+				t.Fatalf("pending = %+v, want %+v", got, want)
+			}
+			logged := log.String()
+			if strings.Count(logged, "level=WARN") != 1 || strings.Contains(logged, "level=ERROR") {
+				t.Fatalf("log = %q, want one WARN line and no ERROR", logged)
+			}
+		})
+	}
+}
+
 type openerFunc func()
 
 func (f openerFunc) Open() { f() }
