@@ -114,6 +114,8 @@ Registered in `main.go::init` (typed) — families and their frontend consumers 
 | updates | `update:{available,started,updated,completed,failed,rollback,degraded}`, `verify:*`, `repair:*` | `updates.ts` |
 | relocate | `move:{started,progress,completed,failed,cancelled,degraded}` | `relocate.ts` |
 | lan | `lan:{peers,shares,hashing,transfer,stats}` | `lan.ts` |
+| cloud saves | `saves:cloud` (`cloudsaves.Event{gameId,status,...}`) | `cloudsaves.ts` (updates the status; a `conflict` opens no dialog: `liveIslandFeed.ts` says it, FLOWS §8 2c) |
+| pending launch | `launch:pending` (`PendingLaunch{gameId,platform,code,profileId,profileLaunch}`; also read once at mount through `TakePending`) | `pendingLaunch.ts` |
 | history/playlog | `history:{recorded,updated,degraded}`, `playlog:{recorded,degraded}` | `history.ts`, `degraded.ts` |
 | theme | `theme:{updated,list,reverted}` | `theme.ts` |
 | selfupdate | `launcher:update_status`, `launcher:update_progress`, `launcher:release_notes` | `selfupdate.ts` |
