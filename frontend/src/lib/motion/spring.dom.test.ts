@@ -11,8 +11,8 @@ describe('SpringValue', () => {
     queue = new Map();
     for (const cb of run) cb(now);
   };
-  const on = () => true;
-  const off = () => false;
+  // Motion is the document's: the animations setting puts `no-anim` on it (motion.ts).
+  const motionOff = (off: boolean) => document.documentElement.classList.toggle('no-anim', off);
 
   beforeEach(() => {
     now = 0;
@@ -28,13 +28,14 @@ describe('SpringValue', () => {
   });
 
   afterEach(() => {
+    motionOff(false);
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
   it('settles on the target and asks for no more frames', () => {
     const seen: number[] = [];
-    const s = new SpringValue(0, (v) => seen.push(v), 'smooth', on);
+    const s = new SpringValue(0, (v) => seen.push(v), 'smooth');
     s.set(100);
     for (let i = 0; i < 120 && queue.size; i++) frame();
     expect(s.value).toBe(100);
@@ -45,7 +46,7 @@ describe('SpringValue', () => {
   it('overshoots a little with bouncy and never with smooth', () => {
     const peak = (preset: keyof typeof SPRINGS) => {
       let top = 0;
-      const s = new SpringValue(0, (v) => (top = Math.max(top, v)), preset, on);
+      const s = new SpringValue(0, (v) => (top = Math.max(top, v)), preset);
       s.set(100);
       for (let i = 0; i < 200 && queue.size; i++) frame();
       return top;
@@ -56,7 +57,7 @@ describe('SpringValue', () => {
   });
 
   it('keeps its velocity when retargeted mid-flight (no jerk)', () => {
-    const s = new SpringValue(0, () => {}, 'smooth', on);
+    const s = new SpringValue(0, () => {}, 'smooth');
     s.set(100);
     for (let i = 0; i < 6; i++) frame();
     expect(s.velocity).toBeGreaterThan(0);
@@ -71,7 +72,8 @@ describe('SpringValue', () => {
 
   it('with motion off jumps to the target at once and asks for no frame', () => {
     const seen: number[] = [];
-    const s = new SpringValue(0, (v) => seen.push(v), 'bouncy', off);
+    motionOff(true);
+    const s = new SpringValue(0, (v) => seen.push(v), 'bouncy');
     s.set(240);
     expect(seen).toEqual([240]);
     expect(s.value).toBe(240);
@@ -79,18 +81,17 @@ describe('SpringValue', () => {
   });
 
   it('follows the motion setting at each set, without being made again', () => {
-    let motion = true;
-    const s = new SpringValue(0, () => {}, 'smooth', () => motion);
+    const s = new SpringValue(0, () => {}, 'smooth');
     s.set(100);
     expect(queue.size).toBe(1);
-    motion = false;
+    motionOff(true);
     s.set(50);
     expect(s.value).toBe(50);
     expect(queue.size).toBe(0);
   });
 
   it('jumps when told to, whatever the motion setting', () => {
-    const s = new SpringValue(0, () => {}, 'smooth', on);
+    const s = new SpringValue(0, () => {}, 'smooth');
     s.set(80, { instant: true });
     expect(s.value).toBe(80);
     expect(queue.size).toBe(0);
@@ -98,7 +99,7 @@ describe('SpringValue', () => {
 
   it('stops when its owner goes: no frame is left and none reports a value', () => {
     const seen: number[] = [];
-    const s = new SpringValue(0, (v) => seen.push(v), 'smooth', on);
+    const s = new SpringValue(0, (v) => seen.push(v), 'smooth');
     s.set(100);
     frame();
     const count = seen.length;

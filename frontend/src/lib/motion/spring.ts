@@ -55,7 +55,6 @@ export class SpringValue {
     initial: number,
     private readonly onUpdate: (value: number) => void,
     preset: SpringName | SpringPreset = 'smooth',
-    private readonly motion: () => boolean = documentMotion,
   ) {
     ({ k: this.k, c: this.c } = coefficients(typeof preset === 'string' ? SPRINGS[preset] : preset));
     this.x = initial;
@@ -72,7 +71,7 @@ export class SpringValue {
 
   set(target: number, opts: { instant?: boolean } = {}): void {
     this.target = target;
-    if (opts.instant || !this.motion() || typeof requestAnimationFrame !== 'function') {
+    if (opts.instant || !documentMotion() || typeof requestAnimationFrame !== 'function') {
       this.stop();
       this.x = target;
       this.v = 0;
