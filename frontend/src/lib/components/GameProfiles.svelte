@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick, untrack } from 'svelte';
+  import { untrack } from 'svelte';
   import { FolderOpen, Pencil, Plus, Trash2 } from '@lucide/svelte';
   import Tooltip from './Tooltip.svelte';
   import Button from './Button.svelte';
@@ -28,6 +28,7 @@
   import type { Candidate } from '../services/install';
   import { toast } from '../stores/toasts';
   import { truncateMiddle } from '../utils/format';
+  import { focusHandOff } from '../utils/focusHandOff';
   import { nextIndex } from '../utils/roving';
 
   let {
@@ -107,39 +108,33 @@
   // The profile whose Edit opened the editor, '' for "Add profile": the focus goes back there on close.
   let opener = '';
 
-  // Whether the pressed button held the focus: only then is there a focus to hand on when it goes or
-  // turns disabled. A click that did not take the focus leaves the focus where the user had it.
-  const heldBy = (event: MouseEvent) => event.currentTarget instanceof HTMLElement && document.activeElement === event.currentTarget;
-
-  // Opening the editor disables the button that opened it: its focus goes into the editor's name.
-  async function openEditor(next: Editor, held: boolean) {
+  // The button that opens the editor stays but turns disabled: focus still on it then counts as
+  // fallen, and goes into the editor's name.
+  function openEditor(next: Editor, event: MouseEvent) {
+    const pressed = event.currentTarget instanceof HTMLButtonElement ? event.currentTarget : null;
+    const hand = focusHandOff(() => (pressed?.disabled ? pressed : null));
     editorError = '';
     editor = next;
     opener = next.id ?? '';
-    if (!held) return;
-    await tick();
-    nameInput?.focus();
+    void hand(() => nameInput);
   }
 
   function startAdd(event: MouseEvent) {
-    void openEditor({ id: null, name: '', executable: game.executable, argsLine: '', admin: false }, heldBy(event));
+    openEditor({ id: null, name: '', executable: game.executable, argsLine: '', admin: false }, event);
   }
 
   function startEdit(p: ProfileView, event: MouseEvent) {
-    void openEditor({ id: p.id, name: p.name, executable: p.executable, argsLine: p.argsLine, admin: p.runAsAdmin }, heldBy(event));
+    openEditor({ id: p.id, name: p.name, executable: p.executable, argsLine: p.argsLine, admin: p.runAsAdmin }, event);
   }
 
-  // The editor went with the focused Save or Cancel: the focus goes back to what opened it.
-  async function closeEditor(held: boolean) {
+  // The editor goes with its Save or Cancel: focus one of them held goes back to what opened it. The
+  // profile may have been deleted under its editor: its Edit is gone, "Add profile" stands in.
+  async function closeEditor(hand = focusHandOff()) {
     editor = null;
-    if (!held) return;
-    await tick();
-    const active = document.activeElement;
-    if (active && active !== document.body && active.isConnected && !(active instanceof HTMLButtonElement && active.disabled)) return;
-    const edits = [...(section?.querySelectorAll<HTMLElement>('[data-edit-profile]') ?? [])];
-    // The profile may have been deleted under its editor: its Edit is gone, "Add profile" stands in.
-    const back = edits.find((el) => opener !== '' && el.dataset.editProfile === opener) ?? section?.querySelector<HTMLElement>('[data-add-profile]');
-    back?.focus();
+    await hand(() => {
+      const edits = [...(section?.querySelectorAll<HTMLElement>('[data-edit-profile]') ?? [])];
+      return edits.find((el) => opener !== '' && el.dataset.editProfile === opener) ?? section?.querySelector<HTMLElement>('[data-add-profile]');
+    });
   }
 
   async function browse() {
@@ -157,9 +152,9 @@
     }
   }
 
-  async function save(event: MouseEvent) {
+  async function save() {
     if (!editor || busy) return;
-    const held = heldBy(event);
+    const hand = focusHandOff();
     const current = editor;
     busy = true;
     acting = 'save';
@@ -181,7 +176,7 @@
       busy = false;
       acting = '';
     }
-    if (saved) await closeEditor(held);
+    if (saved) await closeEditor(hand);
   }
 
   async function confirmDelete() {
@@ -386,7 +381,7 @@
         <Button size="sm" variant="primary" disabled={(busy && acting !== 'save') || !canSave} busy={acting === 'save'} onclick={save}>
           {msg('modals.profilesSave')}
         </Button>
-        <Button size="sm" variant="ghost" disabled={busy} onclick={(event) => closeEditor(heldBy(event))}>
+        <Button size="sm" variant="ghost" disabled={busy} onclick={() => closeEditor()}>
           {msg('common.cancel')}
         </Button>
       </div>
