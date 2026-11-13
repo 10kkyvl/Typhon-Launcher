@@ -147,4 +147,8 @@
      measures it over black and over white. */
   --art-text: #fff;
   --art-text-shadow: 0 1px 0.6rem rgba(0, 0, 0, 0.55);
+  --art-scrim: rgba(5, 8, 12, 0.6); /* the fade at the foot of a hovered cover */
+  --art-control: rgba(5, 8, 12, 0.72); /* a control or a mark on a cover */
+  --art-control-hover: rgba(5, 8, 12, 0.92);
+  --art-control-quiet: rgba(5, 8, 12, 0.45); /* a pinned control while the cover is at rest */
 }

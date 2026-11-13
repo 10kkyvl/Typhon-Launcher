@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { Play, Square, type LucideIcon } from '@lucide/svelte';
+  import type { Attachment } from 'svelte/attachments';
+  import { on } from 'svelte/events';
+  import { Heart, Play, Square, type LucideIcon } from '@lucide/svelte';
   import { gameContextMenu } from '../stores/gameMenu';
   import type { MenuTriggerProps } from './menu';
   import { navigate } from '../stores/router';
@@ -13,6 +15,8 @@
   import SourceBadge from './SourceBadge.svelte';
   import StatusBadge from './StatusBadge.svelte';
   import ConsoleTag from './ConsoleTag.svelte';
+  import Spinner from './Spinner.svelte';
+  import { refuseWhile } from './refuse';
   import { ambientHover } from '../utils/ambientHover';
 
   export interface GameCardAction {
@@ -23,6 +27,7 @@
     filled?: boolean;
     pinned?: boolean;
     quiet?: boolean;
+    /** It cannot act now: it says so (aria-disabled) and ignores a press, but keeps focus and its place. */
     disabled?: boolean;
     onclick?: (event: MouseEvent) => void;
     /** The action opens a menu: its button is that menu's button (`gameMenuButton`), instead of `onclick`. */
@@ -33,8 +38,11 @@
     id,
     title,
     cover = '',
+    coverFallback = '',
     installed = false,
     running = false,
+    launching = false,
+    favorite = false,
     meta,
     compat,
     source = null,
@@ -48,8 +56,14 @@
     id: string;
     title: string;
     cover?: string;
+    /** The game's own cover, tried when `cover` (from metadata) fails to load. */
+    coverFallback?: string;
     installed?: boolean;
     running?: boolean;
+    /** A launch of this game waits on Go: Play shows busy and a second press sends nothing. */
+    launching?: boolean;
+    /** Shows the favourite mark. */
+    favorite?: boolean;
     meta?: string;
     compat?: CompatInfo;
     source?: GameSource | null;
@@ -81,14 +95,26 @@
         })
       : '',
   );
+
+  const describedBy = $derived([compatLabel && `${uid}-compat`, favorite && `${uid}-fav`].filter(Boolean).join(' ') || undefined);
+
+  // Ctrl+Enter (Cmd+Enter on a Mac) on any control of the card launches the game, as Play does; Enter
+  // stays each control's own. Arrows across the grid are the page's.
+  const launchKey: Attachment<HTMLElement> = (node) =>
+    on(node, 'keydown', (event) => {
+      if (event.key !== 'Enter' || !(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey || !playable) return;
+      event.preventDefault();
+      if (event.repeat || running || launching) return;
+      onplay?.();
+    });
 </script>
 
-<div class="card" role="presentation" {@attach gameContextMenu(id)} use:ambientHover={ambient ? id : null}>
+<div class="card" role="presentation" {@attach gameContextMenu(id)} {@attach launchKey} use:ambientHover={ambient ? id : null}>
   <div class="cover-wrap" class:playable class:running={playable && running}>
     <!-- A pointer target only: the title below opens the same page and carries the game's name, so the
          cover is out of the Tab order and of the accessibility tree. -->
     <button class="cover" tabindex="-1" aria-hidden="true" onclick={() => navigate('game', { id })} aria-label={title}>
-      <Artwork src={cover} alt="" label={title} {ratio} radius="var(--radius-md)" />
+      <Artwork src={cover} fallback={coverFallback} alt="" label={title} seed={id} {ratio} radius="var(--radius-md)" />
       <span class="fade"></span>
     </button>
     {#if platform}
@@ -102,9 +128,13 @@
         class:running
         aria-label={running ? msg('ui.stop') : msg('ui.play')}
         aria-describedby="{uid}-title"
+        aria-busy={launching || undefined}
         onclick={onplay}
+        {@attach refuseWhile(() => launching)}
       >
-        {#if running}
+        {#if launching}
+          <Spinner size="sm" tone="current" />
+        {:else if running}
           <Square size="1.2rem" strokeWidth={2} fill="currentColor" />
         {:else}
           <Play size="1.4rem" strokeWidth={2} fill="currentColor" />
@@ -114,6 +144,9 @@
     <!-- After Play, so a rule can follow Play's keyboard focus to it. -->
     {#if compatLabel}
       <span class="compat" id="{uid}-compat"><StatusBadge kind={compatWorks ? 'success' : 'danger'} label={compatLabel} dot={false} /></span>
+    {/if}
+    {#if favorite}
+      <span class="fav" id="{uid}-fav" role="img" aria-label={msg('library.row.favorite')}><Heart size="1.4rem" strokeWidth={2} fill="currentColor" /></span>
     {/if}
     {#if actions && actions.length > 0}
       <div class="quick">
@@ -128,7 +161,8 @@
               class:pop={action.active && popped === action.id}
               aria-label={action.label}
               aria-describedby="{uid}-title"
-              disabled={action.disabled}
+              aria-disabled={action.disabled ? 'true' : undefined}
+              {@attach refuseWhile(() => action.disabled === true)}
               onclick={(event) => {
                 popped = action.active ? '' : action.id;
                 (action.menu?.onclick ?? action.onclick)?.(event);
@@ -141,7 +175,7 @@
       </div>
     {/if}
   </div>
-  <button class="info" aria-describedby={compatLabel ? `${uid}-compat` : undefined} onclick={() => navigate('game', { id })}>
+  <button class="info" aria-describedby={describedBy} onclick={() => navigate('game', { id })}>
     <span class="title" id="{uid}-title">{title}</span>
     {#if meta}
       <span class="meta">{meta}</span>
@@ -235,7 +269,7 @@
   .fade {
     position: absolute;
     inset: 0;
-    background: linear-gradient(180deg, transparent 55%, rgba(5, 8, 12, 0.6));
+    background: linear-gradient(180deg, transparent 55%, var(--art-scrim));
     opacity: 0;
     transition: opacity var(--dur) var(--ease);
     pointer-events: none;
@@ -256,7 +290,7 @@
     height: 3.2rem;
     border-radius: var(--radius-md);
     background: var(--accent);
-    color: var(--accent-on, #fff);
+    color: var(--accent-on, var(--accent-on-default));
     opacity: 0;
     transform: translateY(0.4rem) scale(0.9);
     transition:
@@ -271,13 +305,18 @@
 
   .cover-wrap:hover .play,
   .play:focus-visible,
-  .play.running {
+  .play.running,
+  .play[aria-busy='true'] {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
 
-  .play:active {
+  .play:active:not([aria-busy='true']) {
     transform: scale(0.92);
+  }
+
+  .play[aria-busy='true'] {
+    cursor: progress;
   }
 
   .quick {
@@ -295,8 +334,8 @@
     width: 3rem;
     height: 3rem;
     border-radius: var(--radius-sm);
-    background: rgba(5, 8, 12, 0.72);
-    color: #fff;
+    background: var(--art-control);
+    color: var(--art-text);
     opacity: 0;
     transform: scale(0.8);
     transform-origin: top right;
@@ -316,39 +355,54 @@
     pointer-events: auto;
   }
 
-  .quick-btn:hover:not(:disabled) {
-    background: rgba(5, 8, 12, 0.92);
+  .quick-btn:hover:not([aria-disabled='true']) {
+    background: var(--art-control-hover);
   }
 
   .quick-btn.active {
     background: var(--accent);
-    color: var(--accent-on, #fff);
+    color: var(--accent-on, var(--accent-on-default));
   }
 
-  .quick-btn.active:hover:not(:disabled) {
+  .quick-btn.active:hover:not([aria-disabled='true']) {
     background: var(--accent-hover);
   }
 
   .cover-wrap:not(:hover):not(:focus-within) .quick-btn.quiet {
-    background: rgba(5, 8, 12, 0.45);
-    color: #fff;
+    background: var(--art-control-quiet);
+    color: var(--art-text);
     transform: scale(0.8);
   }
 
-  .cover-wrap .quick-btn:active:not(:disabled) {
+  .cover-wrap .quick-btn:active:not([aria-disabled='true']) {
     transform: scale(0.9);
   }
 
-  .quick-btn:disabled {
+  .quick-btn[aria-disabled='true'] {
     cursor: default;
   }
 
-  .quick-btn:disabled :global(svg) {
+  .quick-btn[aria-disabled='true'] :global(svg) {
     opacity: 0.45;
   }
 
   .quick-btn.pop :global(svg) {
     animation: pop-in var(--dur-slow) var(--ease-spring);
+  }
+
+  .fav {
+    position: absolute;
+    right: 0.6rem;
+    bottom: 0.6rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.4rem;
+    height: 2.4rem;
+    border-radius: var(--radius-round);
+    background: var(--art-control);
+    color: var(--art-text);
+    pointer-events: none;
   }
 
   .info {
