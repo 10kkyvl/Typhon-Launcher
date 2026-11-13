@@ -111,7 +111,17 @@
     return !expanded && (card?.contains(active) ?? false);
   }
 
-  // Another message, or none: a new one comes up compact, and focus that was inside goes back.
+  // Focus on a control of the island that can be used now: not in a part made inert (a hidden island,
+  // a closed card).
+  function focusedInside(): boolean {
+    const active = document.activeElement;
+    return Boolean(active && shell?.contains(active) && !active.closest('[inert]'));
+  }
+
+  // Another message, or none: a new one comes up compact, and focus that was inside goes back. Where
+  // focus came from belongs to the message that goes. Whether focus is still inside is asked of the
+  // document, not learnt from a focusout: a webview may send none when a part turns inert or hidden,
+  // and a focus taken for inside would hold every later message's clock.
   $effect.pre(() => {
     const next = live;
     untrack(() => {
@@ -120,10 +130,15 @@
       if (before === next?.id) return;
       const held = shell?.contains(document.activeElement) ?? false;
       const from = origin;
+      origin = undefined;
       pinned = false;
       intent.dismiss();
       if (!next) measured = false;
-      if (held) void tick().then(() => fallen() && giveFocusBack(from));
+      if (!held) return;
+      void tick().then(() => {
+        if (fallen()) giveFocusBack(from);
+        focusInside = focusedInside();
+      });
     });
   });
 
@@ -202,8 +217,9 @@
     const to = event.relatedTarget;
     if (to instanceof Node && shell?.contains(to)) return;
     focusInside = false;
-    // Focus moved on to a place of its own: nothing to give back later.
-    if (to instanceof HTMLElement) origin = undefined;
+    // Focus has left the island, for a place of its own or for none (a press on a blank spot): there
+    // is nothing to give back later.
+    origin = undefined;
   }
 
   function onpointerenter(event: PointerEvent) {

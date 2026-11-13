@@ -152,6 +152,44 @@ describe('LiveIsland: keyboard and focus', () => {
     expect(document.activeElement).toBe(before);
   });
 
+  it('where focus came from belongs to one message: a later message does not send focus back there', async () => {
+    const { keys, pill } = setup();
+    liveIsland.show({ id: 'a', text: 'Saved' });
+    await tick();
+    const before = screen.getByRole('button', { name: 'Before' });
+    before.focus();
+    await keys.tab();
+    expect(document.activeElement).toBe(pill());
+    // A press on a blank spot: focus leaves for <body>, with no element to name.
+    await keys.click(document.body);
+    liveIsland.hide('a');
+    await tick();
+    liveIsland.show({ id: 'b', text: 'Copied' });
+    await tick();
+    await keys.click(pill());
+    liveIsland.hide('b');
+    await tick();
+    await tick();
+    expect(document.activeElement).not.toBe(before);
+  });
+
+  it('a message that goes with focus left inside does not hold the next one\'s clock, focusout or not', async () => {
+    vi.useFakeTimers();
+    const { pill } = setup();
+    liveIsland.show({ id: 'a', text: 'Saved' });
+    await tick();
+    // Focus with nowhere known to go back to, and no focusout when the island hides (a webview may send none).
+    pill().focus();
+    await tick();
+    liveIsland.hide('a');
+    await tick();
+    await tick();
+    liveIsland.show({ id: 'b', text: 'Copied', ttl: 1000 });
+    await tick();
+    vi.advanceTimersByTime(1000);
+    expect(get(liveIslandCurrent)).toBeUndefined();
+  });
+
   it('with a dialog open, Escape closes the dialog and the island keeps showing', async () => {
     const { keys, island } = setup({ dialog: true });
     await tick();
