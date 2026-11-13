@@ -281,7 +281,7 @@ describe('activity', () => {
 });
 
 
-it('retranslates a subscribed activity dock without a new download event', async () => {
+it('retranslates a subscribed activity list without a new download event', async () => {
   const { downloadsStore, activityStore } = await load();
   const { applyLanguage } = await import('../i18n');
   downloadsStore.downloads.set([makeDownload()]);

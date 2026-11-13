@@ -25,8 +25,7 @@ type Kind =
   | 'account chip' // the top bar's account: avatar, name and status as one trigger
   | 'drag handle' // grabbed to move a block
   | 'copies itself' // a value that copies its own text when pressed
-  | 'badge trigger' // a badge that opens a menu; Chip has no size small enough for the sidebar rail
-  | 'awaiting rebuild'; // replaced with its screen (the activity widget)
+  | 'badge trigger'; // a badge that opens a menu; Chip has no size small enough for the sidebar rail
 
 /** The base components that own a raw <button>: the only place a button's look is written. */
 const BASE = ['Button', 'Checkbox', 'Chip', 'IconButton', 'MenuList', 'SegmentedControl', 'Select', 'Tabs', 'TextLink', 'Toggle'].map(
@@ -40,7 +39,6 @@ const NOT_YET = (path: string) =>
 const ALLOWED: Record<string, Record<string, Kind>> = {
   'lib/components/AccountMenu.svelte': { chip: 'account chip' },
   'lib/components/AchievementsCard.svelte': { tile: 'tile' },
-  'lib/components/ActivityDock.svelte': { 'panel-link': 'awaiting rebuild', pill: 'awaiting rebuild' },
   'lib/components/ActivityWidget.svelte': { head: 'row', row: 'row' },
   'lib/components/BetaBadge.svelte': { badge: 'badge trigger' },
   'lib/components/ChatAttachments.svelte': { tile: 'thumbnail' },

@@ -29,7 +29,7 @@ function resized(element: Element): void {
 }
 
 beforeEach(() => {
-  // jsdom has no ResizeObserver; the corner measures the activity dock and the toast stack with one.
+  // jsdom has no ResizeObserver; the toast region measures the stack and the dialog's panel with one.
   observers.clear();
   vi.stubGlobal('ResizeObserver', class {
     #watched = new Set<Element>();
@@ -297,7 +297,10 @@ describe('toasts raised from an open dialog', () => {
       expect(/\.corner \{([^}]*)\}/.exec(appShellSource)?.[1]).toMatch(/pointer-events: none/);
       const rule = /\.toast-region \{([^}]*)\}/.exec(appShellSource)?.[1] ?? '';
       expect(rule).toMatch(/top: calc\(var\(--titlebar-h\) \+/);
-      expect(rule).toMatch(/bottom: calc\(var\(--corner-bottom\) \+ var\(--dock-offset, 0px\)\)/);
+      // Its foot is the corner's own: nothing else stands in the corner to make room for.
+      expect(/\.corner \{([^}]*)\}/.exec(appShellSource)?.[1]).toMatch(/bottom: var\(--corner-bottom\)/);
+      expect(rule).not.toMatch(/bottom:/);
+      expect(appShellSource).not.toMatch(/--dock-offset/);
       expect(rule).toMatch(/justify-content: flex-end/);
       expect(/\.toast-region\.at-top \{([^}]*)\}/.exec(appShellSource)?.[1]).toMatch(/justify-content: flex-start/);
     });

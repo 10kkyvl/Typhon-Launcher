@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
  *   shown late and unstyled, never on keyboard focus, read twice or not at all by screen readers.
  *   Big Picture and the overlay window are not on this path yet. Named exceptions: IconButton, whose
  *   native title is its label only with `tooltip={false}` (the overlay) or while it is disabled with no
- *   reason (no focus, no tooltip, nothing announced twice), and ActivityDock (replaced by the activity widget).
+ *   reason (no focus, no tooltip, nothing announced twice).
  *   A component that spreads the attributes it is given onto its control (Button, Chip, IconButton,
  *   TextLink: found, not listed by hand) counts as that control. A `title` on non-interactive text
  *   (the full form of a truncated value, an exact time) is not a control's and stays;
@@ -30,7 +30,7 @@ const files = fs
   .filter((path) => /\.(svelte|ts)$/.test(path) && !/\.test\.ts$/.test(path));
 
 const NOT_YET = [/^lib\/bigpicture\//, /^overlay\//];
-const TITLE_EXCEPTIONS = ['lib/components/IconButton.svelte', 'lib/components/ActivityDock.svelte'];
+const TITLE_EXCEPTIONS = ['lib/components/IconButton.svelte'];
 
 // Markup only: script and style blocks blanked, so line numbers stay.
 function markup(text: string): string {

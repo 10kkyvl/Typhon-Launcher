@@ -96,7 +96,7 @@
      the hints so the window can still be moved and closed; only the update screen covers it. */
   --z-backdrop: -1; /* the window backdrop behind the shell */
   --z-sticky: 10; /* sticky bars inside a page */
-  --z-corner: 120; /* toasts, the activity dock, the self-update card */
+  --z-corner: 120; /* toasts, the self-update card */
   --z-bigpicture: 130;
   --z-chat: 140;
   --z-gate: 150; /* consent and legal screens */

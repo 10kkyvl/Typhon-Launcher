@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 /**
- * Floating parts that sit beside the sidebar (the toast/activity corner, the chat, the update card)
+ * Floating parts that sit beside the sidebar (the toast corner, the chat, the update card)
  * keep 2.4rem from the island's inner edge on either side, expanded or collapsed to icons: they
  * offset by --sidebar-now, which counts the island's width and the gap outside it.
  */

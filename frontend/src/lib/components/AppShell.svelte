@@ -9,7 +9,6 @@
   import { themeLayout } from '../stores/layout';
   import { topModal } from '../layers';
   import { scrollmemory } from '../utils/scrollmemory';
-  import ActivityDock from './ActivityDock.svelte';
   import ChatPanel from './ChatPanel.svelte';
   import NetworkBanner from './NetworkBanner.svelte';
   import OfflineBanner from './OfflineBanner.svelte';
@@ -48,9 +47,6 @@
   };
 
   const chatShown = $derived($authState === 'authenticated' && !$needsSocialConsent);
-
-  // Toasts stand on top of the activity dock, as one column in the corner.
-  let dockHeight = $state(0);
 
   // Under a dialog the stack never lies over the dialog's panel: it keeps its corner, moves to the
   // top, narrows into the gutter beside the panel, or asks the dialog on top to end above it
@@ -147,18 +143,6 @@
   </div>
 </div>
 
-<div
-  class="corner"
-  class:above-chat={chatShown && !$chatOpen}
-  class:beside-chat={chatShown && $chatOpen}
-  class:sidebar-right={$themeLayout.side === 'right'}
-  bind:clientHeight={dockHeight}
->
-  {#if $route.name !== 'downloads'}
-    <ActivityDock />
-  {/if}
-</div>
-
 <!-- Its own region above dialogs, left live while they make the app inert (data-layer-keep):
      a toast raised from an open dialog is seen and its action can be pressed. The region is the whole
      column the stack can stand in, from under the title bar down to the corner, and lets presses
@@ -170,7 +154,6 @@
   class:above-chat={chatShown && !$chatOpen}
   class:beside-chat={chatShown && $chatOpen}
   class:sidebar-right={$themeLayout.side === 'right'}
-  style:--dock-offset={dockHeight > 0 ? `calc(${dockHeight}px + 0.8rem)` : '0px'}
   data-layer-keep
   bind:this={toastRegion}
 >
@@ -203,7 +186,6 @@
   .toast-region {
     z-index: var(--z-toast);
     top: calc(var(--titlebar-h) + var(--space-2));
-    bottom: calc(var(--corner-bottom) + var(--dock-offset, 0px));
     justify-content: flex-end;
   }
 
