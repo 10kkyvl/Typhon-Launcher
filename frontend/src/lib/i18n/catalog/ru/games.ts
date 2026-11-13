@@ -471,6 +471,12 @@ export const games = {
   'games.randomNotInstalled': 'Не установлена',
   'games.randomNeverPlayed': 'Ещё не запускалась',
   'games.randomFilters': 'Фильтры',
+
+  'library.menuFolderFailed': 'Не удалось открыть папку игры',
+  'library.menuSavesFailed': 'Не удалось открыть папку сохранений',
+  'library.collectionNoCriteria': 'Выберите тег, жанр или статус: без них в коллекцию попадут все игры',
+  'library.collectionDeleteTitle': 'Удалить коллекцию',
+  'library.collectionDeleteText': 'Коллекция «{name}» будет удалена. Игры останутся в библиотеке.',
 } as const;
 
 export type GamesKey = keyof typeof games;

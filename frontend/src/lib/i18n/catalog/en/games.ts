@@ -473,4 +473,10 @@ export const games: Record<GamesKey, Message> = {
   'games.randomNotInstalled': 'Not installed',
   'games.randomNeverPlayed': 'Never played',
   'games.randomFilters': 'Filters',
+
+  'library.menuFolderFailed': 'Could not open the game folder',
+  'library.menuSavesFailed': 'Could not open the save folder',
+  'library.collectionNoCriteria': 'Choose a tag, a genre or a status: without one the collection holds every game',
+  'library.collectionDeleteTitle': 'Delete collection',
+  'library.collectionDeleteText': 'The collection "{name}" will be deleted. The games stay in the library.',
 };
