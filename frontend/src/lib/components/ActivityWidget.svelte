@@ -113,11 +113,10 @@
     void handOff(() => (next ? rowOf(next)?.querySelector<HTMLElement>('.row') : keys.length > 0 ? head : away?.()));
   });
 
-  // The rows whose call is running: their button is busy (a spinner, presses refused, focus kept).
+  // The rows whose call is running: their button is busy, and the base refuses a second press.
   let busy = $state<string[]>([]);
 
   async function act(item: WidgetItem, run: () => Promise<void>) {
-    if (busy.includes(item.key)) return;
     busy = [...busy, item.key];
     try {
       await run();
