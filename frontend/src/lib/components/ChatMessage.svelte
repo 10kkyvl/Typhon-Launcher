@@ -96,7 +96,9 @@
     const live = sessionWatch();
     try {
       await editMessage(targetPeerId, message.id, editDraft.trim());
-      if (live()) await hand(editButton);
+      if (!live()) return;
+      onerror(targetPeerId, '');
+      await hand(editButton);
     } catch (err) {
       if (live()) onerror(targetPeerId, chatErrorText(err, 'social.chatEditError'));
     }

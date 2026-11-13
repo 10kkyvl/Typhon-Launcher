@@ -583,6 +583,24 @@ describe('ChatPanel: what went wrong in a conversation', () => {
   });
 });
 
+describe('ChatPanel: an edit that goes through after one that failed', () => {
+  it('takes the failure\'s message away', async () => {
+    chat.messagesByPeer.set({ peer: [message('m-own', 'c-own', 'me')] });
+    vi.mocked(chat.editMessage)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockImplementation(async () => chat.editingMessageId.set(null));
+    const keys = setup();
+    await keys.click(screen.getByRole('button', { name: msg('social.chatEdit') }));
+    await keys.click(screen.getByRole('button', { name: msg('social.chatSave') }));
+    expect(await screen.findByText(msg('social.chatEditError'))).toBeTruthy();
+
+    await keys.click(screen.getByRole('button', { name: msg('social.chatSave') }));
+
+    await vi.waitFor(() => expect(screen.getByRole('button', { name: msg('social.chatEdit') })).toBeTruthy());
+    expect(screen.queryByText(msg('social.chatEditError'))).toBeNull();
+  });
+});
+
 describe('ChatPanel: the new message toast', () => {
   const toast = () => ({ id: 1, peer, message: message('m9', 'c9') });
 
