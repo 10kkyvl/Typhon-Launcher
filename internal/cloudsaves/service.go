@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -326,10 +327,13 @@ func (s *Service) SessionStopped(gameID string) {
 	s.Nudge(gameID)
 }
 
-// Status lists what this session has seen of each game and, for a game it
-// has not seen yet, the conflict recorded for the stored credential's
-// account: the launch hook blocks on that record from the first Play, so the
-// player sees it from the start too, without a pass and without the network.
+// Status lists what this session has seen of each game, and the conflict
+// recorded for a game wherever the launch gate would hold the game on it:
+// the gate blocks on that record from the first Play, without a pass and
+// without the network, so the player sees the same. A session entry that is
+// a conflict stays (a pass records it after writing it to the state, so the
+// details agree); any other session entry of such a game (failed, skipped,
+// synced before the record changed) yields to the record the gate reads.
 func (s *Service) Status() Status {
 	cfg := s.config()
 	st := Status{Enabled: cfg.CloudSaves, Games: []GameStatus{}}
@@ -355,6 +359,9 @@ func (s *Service) Status() Status {
 		st.Error = s.global
 	}
 	for _, g := range s.statuses {
+		if rec, ok := recorded[g.GameID]; ok && g.State != StateConflict {
+			g = rec
+		}
 		st.Games = append(st.Games, g)
 	}
 	for id, g := range recorded {
@@ -374,43 +381,62 @@ func (s *Service) Status() Status {
 	return st
 }
 
-// recordedConflicts reads the conflicts recorded for the stored credential's
-// account, by library id, without installing a state: a state is installed
-// only under opMu, which a pass holds for its whole length. An unreadable
-// state lists nothing here; the pass reports it.
+// recordedConflicts lists, by library id, the recorded conflicts the launch
+// gate holds games on, with the gate's rules: the stored credential's
+// account first, then the confirmed one when it differs; an exclusion of the
+// first ends the look; a game without a valid catalog id is never held. An unreadable state lists nothing
+// here; the pass reports it.
 func (s *Service) recordedConflicts(token string) map[string]GameStatus {
-	owner := s.storedAccount(token)
-	if owner == "" {
+	stored := s.storedAccount(token)
+	if stored == "" {
 		return nil
 	}
-	var games map[string]gameState
-	s.mu.Lock()
-	if s.loaded && s.owner == owner && s.loadErr == nil {
-		games = make(map[string]gameState, len(s.state.Games))
-		for key, g := range s.state.Games {
-			if g.Conflict != nil {
-				games[key] = g
+	owners := []string{stored}
+	if confirmed, err := s.confirmedOwner(token); err == nil && confirmed != stored {
+		owners = append(owners, confirmed)
+	}
+	records := make([]map[string]gameState, 0, len(owners))
+	for _, owner := range owners {
+		records = append(records, s.recordsOf(owner))
+	}
+	games := s.lib.GetGames()
+	out := map[string]GameStatus{}
+	for _, g := range games {
+		key := g.CanonicalGameID
+		if key == "" || !account.ValidSaveGameID(key) {
+			continue
+		}
+		for _, record := range records {
+			gs := record[key]
+			if gs.Excluded {
+				break
+			}
+			if gs.Conflict != nil {
+				c := *gs.Conflict
+				out[g.ID] = GameStatus{GameID: g.ID, State: StateConflict, At: s.now(), SyncedAt: gs.SyncedAt, Conflict: &c}
+				break
 			}
 		}
 	}
-	s.mu.Unlock()
-	if games == nil {
-		state, err := s.store.load(owner)
-		if err != nil {
-			return nil
-		}
-		games = state.Games
-	}
-	out := map[string]GameStatus{}
-	for _, g := range s.lib.GetGames() {
-		gs, ok := games[g.CanonicalGameID]
-		if g.CanonicalGameID == "" || !ok || gs.Conflict == nil {
-			continue
-		}
-		c := *gs.Conflict
-		out[g.ID] = GameStatus{GameID: g.ID, State: StateConflict, At: s.now(), SyncedAt: gs.SyncedAt, Conflict: &c}
-	}
 	return out
+}
+
+// recordsOf reads owner's records without installing a state: a state is
+// installed only under opMu, which a pass holds for its whole length. Nil
+// when the state cannot be read.
+func (s *Service) recordsOf(owner string) map[string]gameState {
+	s.mu.Lock()
+	if s.loaded && s.owner == owner && s.loadErr == nil {
+		games := maps.Clone(s.state.Games)
+		s.mu.Unlock()
+		return games
+	}
+	s.mu.Unlock()
+	state, err := s.store.load(owner)
+	if err != nil {
+		return nil
+	}
+	return state.Games
 }
 
 type run struct {

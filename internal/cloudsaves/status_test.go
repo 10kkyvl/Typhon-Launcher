@@ -1,9 +1,14 @@
 package cloudsaves
 
 import (
+	"errors"
+	"fmt"
 	"testing"
+	"time"
 
 	"typhon/internal/account"
+	"typhon/internal/library"
+	"typhon/internal/uierr"
 )
 
 func gamesFor(st Status, gameID string) []GameStatus {
@@ -86,16 +91,29 @@ func TestStatusDoesNotListAnotherAccountsConflict(t *testing.T) {
 			t.Fatalf("status games = %+v, want none: the conflict belongs to another account", got)
 		}
 	})
-	t.Run("stored credential names another account", func(t *testing.T) {
-		h := newHarness(t)
-		h.recordConflict()
-		h.restart()
-		h.setStored(otherAccount)
+	// The state of the account the session ran with stays in memory when the
+	// stored credential changes without a restart: the status must not read
+	// it for the new account. The gate does not hold the game either.
+	for _, inMemory := range []bool{false, true} {
+		t.Run(fmt.Sprintf("stored credential names another account, session unconfirmed, state in memory %v", inMemory), func(t *testing.T) {
+			h := newHarness(t)
+			h.recordConflict()
+			h.restart()
+			if inMemory {
+				// A pass that loads the state and fails at the listing leaves
+				// no status of the game: only the state holds the conflict.
+				h.client.listErr = &account.Error{Code: account.CodeNetwork}
+				h.pass()
+			}
+			h.setStored(otherAccount)
+			h.setAccountErr(errors.New("account id is not bound to the session yet"))
 
-		if got := gamesFor(h.svc.Status(), gameLocal); len(got) != 0 {
-			t.Fatalf("status games = %+v, want none: the conflict belongs to %s", got, ownerID)
-		}
-	})
+			if got := gamesFor(h.svc.Status(), gameLocal); len(got) != 0 {
+				t.Fatalf("status games = %+v, want none: the conflict belongs to %s", got, ownerID)
+			}
+			wantStarts(t, h.starting(gameLocal))
+		})
+	}
 	for _, tc := range []struct {
 		name string
 		arm  func(h *harness)
@@ -133,4 +151,85 @@ func TestPassAfterAListedConflictKeepsOneEntry(t *testing.T) {
 		t.Fatalf("persisted conflict = %+v, want it kept", refreshed)
 	}
 	wantListedConflict(t, h.svc.Status(), refreshed)
+}
+
+// The invariant behind the dialog: whenever the launch gate holds a game on
+// its recorded conflict, the status lists that game as a conflict with the
+// recorded details, whatever this session has seen of the game meanwhile.
+func TestStatusListsEveryConflictTheLaunchGateBlocksOn(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		arm  func(h *harness)
+	}{
+		{"restarted, no pass", func(h *harness) { h.restart() }},
+		{"restarted, the pass could not reach the cloud", func(h *harness) {
+			h.restart()
+			h.client.listErr = &account.Error{Code: account.CodeNetwork}
+			h.pass()
+		}},
+		{"the pass failed for the game: saves folder unreadable", func(h *harness) {
+			h.lib.mu.Lock()
+			h.lib.results[gameLocal] = library.SavesResult{Unreadable: 1}
+			h.lib.mu.Unlock()
+			h.pass()
+		}},
+		{"the pass failed for the game: network lost during its download", func(h *harness) {
+			writeTree(h.t, h.saves(), baseFiles)
+			h.client.downloadErr = &account.Error{Code: account.CodeNetwork}
+			h.pass()
+		}},
+		{"the pass skipped the game: saves folder not found", func(h *harness) {
+			h.lib.mu.Lock()
+			h.lib.results[gameLocal] = library.SavesResult{}
+			h.lib.mu.Unlock()
+			h.pass()
+		}},
+		{"the pass skipped the game: it was running", func(h *harness) {
+			h.lib.setRunning(gameLocal, true)
+			h.pass()
+			h.lib.setRunning(gameLocal, false)
+		}},
+		{"stored credential names another account, the confirmed one holds the conflict", func(h *harness) {
+			h.restart()
+			h.setStored(otherAccount)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t)
+			h.recordConflict()
+			h.open()
+			limitLaunch(h, time.Minute)
+			tc.arm(h)
+			recorded := h.persisted(gameCloud).Conflict
+			if recorded == nil {
+				t.Fatal("setup: the conflict is no longer recorded")
+			}
+
+			st := h.svc.Status()
+			wantBlock(t, h.starting(gameLocal), wantConflictCode)
+
+			wantListedConflict(t, st, recorded)
+		})
+	}
+}
+
+// A pass records what it found for a game; the listing only adds the
+// recorded conflict over what does not show it.
+func TestPassOutcomesOfAConflictedGameStayAsRecorded(t *testing.T) {
+	h := newHarness(t)
+	h.recordConflict()
+	h.open()
+	h.lib.mu.Lock()
+	h.lib.results[gameLocal] = library.SavesResult{Unreadable: 1}
+	h.lib.mu.Unlock()
+
+	h.pass()
+
+	evs := eventsFor(h.drain(), gameLocal)
+	if len(evs) != 1 || evs[0].Status != StateFailed || evs[0].Code != codeSavesUnread {
+		t.Fatalf("events = %+v, want the pass's one failed %s", evs, codeSavesUnread)
+	}
+	if err := h.svc.SyncNow(gameLocal); uierr.Code(err) != codeSavesUnread {
+		t.Fatalf("SyncNow = %v, want %s as the pass records it", err, codeSavesUnread)
+	}
 }
