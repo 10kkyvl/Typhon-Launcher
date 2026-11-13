@@ -26,7 +26,8 @@ type Kind =
   | 'drag handle' // grabbed to move a block
   | 'copies itself' // a value that copies its own text when pressed
   | 'badge trigger' // a badge that opens a menu; Chip has no size small enough for the sidebar rail
-  | 'panel trigger'; // a summary line that opens a popover panel about what it shows (the activity widget's head)
+  | 'panel trigger' // a summary line that opens a popover panel about what it shows (the activity widget's head)
+  | 'disclosure'; // the live island's message: the pill that opens into its card, the card's head that closes it
 
 /** The base components that own a raw <button>: the only place a button's look is written. */
 const BASE = ['Button', 'Checkbox', 'Chip', 'IconButton', 'MenuList', 'SegmentedControl', 'Select', 'Tabs', 'TextLink', 'Toggle'].map(
@@ -50,6 +51,7 @@ const ALLOWED: Record<string, Record<string, Kind>> = {
   'lib/components/GameProfiles.svelte': { candidate: 'radio tile' },
   'lib/components/GamePropertiesModal.svelte': { candidate: 'list option' },
   'lib/components/InstallModal.svelte': { cand: 'radio tile' },
+  'lib/components/LiveIsland.svelte': { head: 'disclosure', top: 'disclosure' },
   'lib/components/MetadataMatchModal.svelte': { candidate: 'list option' },
   'lib/components/NotificationsPanel.svelte': { notification: 'row' },
   'lib/components/ReleaseMatchModal.svelte': { candidate: 'radio tile' },

@@ -47,6 +47,8 @@ export interface LiveIslandMessage {
   actions?: LiveIslandAction[];
   /** How many times a toast was raised, once it is more than one. */
   count?: number;
+  /** What dismissing it does (a toast: the toast store lets it go); default `hide`. */
+  close?: () => void;
   ttl?: number;
 }
 

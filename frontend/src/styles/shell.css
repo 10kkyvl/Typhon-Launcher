@@ -17,6 +17,14 @@
   --activity-panel-w: 30rem;
   --font-wordmark: Unbounded, Onest Variable, sans-serif;
 
+  /* The live island (LiveIsland.svelte): a pill in the title bar's band at the top centre, which opens
+     into a card over the content. It keeps clear of the window buttons on either side. */
+  --live-island-top: 0.4rem;
+  --live-island-h: 3.2rem;
+  --live-island-w: 38rem;
+  --live-island-lead: 4.8rem;
+  --live-island-clear: calc(3 * var(--titlebar-btn-w) + var(--space-4));
+
   --topbar-search-min: 18rem;
   --topbar-search-max: 44rem;
   --topbar-chip-max: 20rem;
@@ -93,7 +101,8 @@
      they open, so the one opened last paints on top, as the stack orders them. A hint (a tooltip, the
      hover card of a friend row) uses --z-hint: it explains what is under the pointer, a toast's button
      included, so it paints above the toasts and every layer. The title bar sits above the scrims and
-     the hints so the window can still be moved and closed; only the update screen covers it. */
+     the hints so the window can still be moved and closed; only the live island, which sits in its
+     band clear of the window buttons, and the update screen cover it. */
   --z-backdrop: -1; /* the window backdrop behind the shell */
   --z-sticky: 10; /* sticky bars inside a page */
   --z-corner: 120; /* toasts, the self-update card */
@@ -104,6 +113,7 @@
   --z-toast: 165; /* the toast region, above layers so a toast raised from a dialog is seen */
   --z-hint: 167; /* hints (passive layers): the topmost thing under the title bar */
   --z-titlebar: 170;
+  --z-live-island: 180; /* the live island: in the title bar's band, so above it; under the update screen */
   --z-update: 200;
 
   /* Inside Big Picture's own stacking context (.big-picture). */

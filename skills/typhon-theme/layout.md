@@ -128,6 +128,7 @@ name `sidebar-account` matches nothing there. Typhon renames it by itself only i
 | `popover` | yes |
 | `toast` | no |
 | `count-badge` | no |
+| `live-island` | no |
 
 Dialogs, menus, the lists of select fields, tooltips and popovers (the notifications panel, the
 reaction pickers) are drawn above the window, outside the part that opened them: select their panel
@@ -142,7 +143,11 @@ has the class `corner`, on an accent fill the class `on-accent`. The activity zo
 the sidebar, between Settings and the status line (what is downloading, installing, being moved or
 played), is `[data-part="sidebar-activity"]`: it keeps its height when nothing goes on and is not a
 sidebar item, so `layout` neither moves nor hides it; the panel it opens is
-`[data-part="popover"][data-id="activity"]`.
+`[data-part="popover"][data-id="activity"]`. While animations are on, what a toast used to say
+appears in the live island, a pill at the top centre of the window that opens into a card:
+`[data-part="live-island"]`, with the class of its tone (`accent`, `neutral`, `success`,
+`warning`, `danger`), `data-phase` (`hidden`, `compact`, `expanded`) and `data-kind` (`error`,
+`friend`, `info`). With animations off, toasts stay in the corner as `[data-part="toast"]`.
 
 Use `layout` to reorder or hide; use CSS only for looks. Hiding a part with CSS that `layout`
 cannot hide (window controls, settings) leaves the user without a way back.

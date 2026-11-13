@@ -251,6 +251,7 @@ const ON_SURFACE: Record<string, [surface: string, ...rules: string[]]> = {
     ":global([data-controls='1x']) .danger:hover:not(:disabled, [aria-disabled='true'])",
   ],
   'lib/components/Notice.svelte': ['the plate of the notice; its icon', '.icon'],
+  'lib/components/LiveIsland.svelte': ["the island's own plate; icons", '.mark', '.lead'],
   'lib/components/DownloadItem.svelte': ['the fill of a download row', '.stalled'],
 };
 
@@ -265,6 +266,7 @@ const LOCAL_SURFACE: Record<string, string> = {
   'lib/components/profile/BlockSettings.svelte': '.settings',
   'lib/components/SystemRequirements.svelte': '.checks',
   'lib/components/Notice.svelte': '.notice',
+  'lib/components/LiveIsland.svelte': '.live-island',
   'lib/components/DownloadItem.svelte': '.item',
 };
 

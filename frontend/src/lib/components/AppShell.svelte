@@ -8,6 +8,7 @@
   import { chatOpen } from '../stores/messaging';
   import { themeLayout } from '../stores/layout';
   import { topModal } from '../layers';
+  import { motionOn } from '../motion/motion';
   import { scrollmemory } from '../utils/scrollmemory';
   import ChatPanel from './ChatPanel.svelte';
   import NetworkBanner from './NetworkBanner.svelte';
@@ -15,6 +16,7 @@
   import ShellBackdrop from './ShellBackdrop.svelte';
   import Sidebar from './Sidebar.svelte';
   import GameQuickMenu from './GameQuickMenu.svelte';
+  import LiveIsland from './LiveIsland.svelte';
   import { TOAST_GAP_REM, TOAST_MIN_WIDTH_REM, toastSpot, type ToastEnd } from './toastSpot';
   import Toasts from './Toasts.svelte';
   import Topbar from './Topbar.svelte';
@@ -159,6 +161,12 @@
 >
   <Toasts />
 </div>
+
+<!-- With motion on, what just happened is said at the top centre (LiveIsland); with it off, in the
+     toast stack. After the page and the toasts in the Tab order, so it never goes ahead of a control. -->
+{#if $motionOn}
+  <LiveIsland />
+{/if}
 
 <GameQuickMenu />
 {#if chatShown}

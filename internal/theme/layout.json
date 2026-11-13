@@ -44,7 +44,8 @@
     "tooltip",
     "popover",
     "toast",
-    "count-badge"
+    "count-badge",
+    "live-island"
   ],
   "partsWithId": ["sidebar-item", "topbar-action", "game-section", "popover"]
 }

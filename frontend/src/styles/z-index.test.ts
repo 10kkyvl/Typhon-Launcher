@@ -44,6 +44,7 @@ const ORDER = [
   'toast',
   'hint',
   'titlebar',
+  'live-island',
   'update',
 ];
 const BIG_PICTURE_ORDER = ['bp-menu', 'bp-keyboard', 'bp-dialog'];
@@ -155,6 +156,18 @@ describe('z-index scale', () => {
     expect(z('hint')).toBeGreaterThan(z('toast'));
     expect(z('hint')).toBeGreaterThan(z('layer'));
     expect(z('hint')).toBeLessThan(z('titlebar'));
+  });
+
+  // The live island sits in the title bar's band, clear of the window buttons: above the title bar, so
+  // its pill can be pressed there, and above every dialog's scrim; only the update screen covers it.
+  it('keeps the live island above the title bar and the dialogs, under the update screen, and on its own level alone', () => {
+    const scale = tokens();
+    const z = (name: string) => scale.get(name) as number;
+    expect(z('live-island')).toBeGreaterThan(z('titlebar'));
+    expect(z('live-island')).toBeGreaterThan(z('layer'));
+    expect(z('live-island')).toBeLessThan(z('update'));
+    const users = files.filter((path) => path !== SHELL && /var\(--z-live-island\)/.test(read(path)));
+    expect(users).toEqual(['lib/components/LiveIsland.svelte']);
   });
 
   // Paint order follows the stack: the root of every layer that can be acted on, modal or not, sits on

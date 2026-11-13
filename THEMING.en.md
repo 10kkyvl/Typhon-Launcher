@@ -97,6 +97,12 @@ installing, being moved or played). The zone keeps its height when nothing goes 
 sidebar item: `layout` neither moves nor hides it. The panel it opens is
 `[data-part="popover"][data-id="activity"]`.
 
+While animations are on, what a toast in the corner used to say appears in the live island, a pill
+at the top centre of the window that opens into a card: `live-island`. Its class is the message's
+tone (`accent`, `neutral`, `success`, `warning`, `danger`), `data-phase` is `hidden`, `compact` or
+`expanded`, `data-kind` is `error`, `friend` or `info`. With animations off, messages stay in the
+corner as `toast`.
+
 ### Limits
 
 - **Sizes in custom CSS are not converted.** `rem` sizes inside the `css` field come out about
