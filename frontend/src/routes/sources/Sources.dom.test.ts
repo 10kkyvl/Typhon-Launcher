@@ -81,12 +81,13 @@ describe('Sources: row hints without a mouse', () => {
     await expectReachable(msg('transfers.sourcesMatchTooltip', { matched: '7', review: '2', unmatched: '1' }));
   });
 
-  it('the counts are a button named in words, not by their digits', async () => {
+  it('the counts are a text link named in words, not by their digits', async () => {
     sources.set([source({}), source({ id: 's2', name: 'Old feed', matched: 3, review: 0 })]);
     render(Sources, { target: app, props: {} });
 
     const withReview = screen.getByRole('button', { name: msg('transfers.sourcesMatchReviewName', { matched: '7', review: '2' }) });
     expect(withReview.textContent).toContain('+2');
+    expect(withReview.classList.contains('text-link')).toBe(true);
     screen.getByRole('button', { name: msg('transfers.sourcesMatchName', { matched: '3' }) }).focus();
 
     await user().keyboard('{Enter}');

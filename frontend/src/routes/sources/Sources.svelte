@@ -29,6 +29,7 @@
   import SourcesNoticeModal from '../../lib/components/SourcesNoticeModal.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
+  import TextLink from '../../lib/components/TextLink.svelte';
   import Tooltip from '../../lib/components/Tooltip.svelte';
   import { route } from '../../lib/stores/router';
   import { removeSourcePrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
@@ -302,19 +303,19 @@
                   unmatched: formatCount(source.unmatched),
                 })}
               >
-                <button
-                  type="button"
-                  class="count-wrap"
+                <TextLink
                   aria-label={source.review > 0
                     ? msg('transfers.sourcesMatchReviewName', { matched: formatCount(source.matched), review: formatCount(source.review) })
                     : msg('transfers.sourcesMatchName', { matched: formatCount(source.matched) })}
                   onclick={() => openDetails(source.id)}
                 >
-                  <span class="count">{formatCount(source.matched)}</span>
-                  {#if source.review > 0}
-                    <span class="count review">+{formatCount(source.review)}</span>
-                  {/if}
-                </button>
+                  <span class="count-wrap">
+                    <span class="count">{formatCount(source.matched)}</span>
+                    {#if source.review > 0}
+                      <span class="count review">+{formatCount(source.review)}</span>
+                    {/if}
+                  </span>
+                </TextLink>
               </Tooltip>
             </span>
             <span class="cell menu-cell">

@@ -98,7 +98,6 @@ const ALLOWED: Record<string, Record<string, Kind>> = {
 const PENDING: Record<string, Record<string, string>> = {
   'lib/components/BetaBadge.svelte': { badge: 'Chip (filled, the trigger of the channel menu)' },
   'routes/friends/FriendRow.svelte': { 'game-link': 'TextLink (the title of the game being played)' },
-  'routes/sources/Sources.svelte': { 'count-wrap': 'TextLink (the match count that opens the source details)' },
 };
 
 interface Raw {
