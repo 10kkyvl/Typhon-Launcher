@@ -155,7 +155,7 @@ export async function initDownloads() {
     const item = withFiles(event.data as Download);
     upsert(item);
     if (get(liveIslandOn)) liveIsland.show(failedMessage(item));
-    else toast(msg('state.downloadsFailedToast', { name: item.name, error: installErrorText(item.error) }), 'danger');
+    else failedToast(item);
   });
   on('download:removed', (event) => {
     const { id } = event.data as { id: string };
@@ -164,6 +164,10 @@ export async function initDownloads() {
 
   downloads.set(await load(listDownloads));
 }
+function failedToast(item: Download): void {
+  toast(msg('state.downloadsFailedToast', { name: item.name, error: installErrorText(item.error) }), 'danger');
+}
+
 /** The id of the live island's message for a failed download. */
 export const failedMessageId = (id: string) => `download-failed:${id}`;
 
@@ -182,6 +186,7 @@ function failedMessage(item: Download): LiveIslandMessage {
       { label: msg('common.retry'), run: () => void resume(item.id) },
       { label: msg('ui.liveIslandOpenDownloads'), run: () => navigate('downloads') },
     ],
+    fallback: () => failedToast(item),
   };
 }
 

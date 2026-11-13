@@ -53,6 +53,8 @@ export interface LiveIslandMessage {
   count?: number;
   /** What dismissing it does (a toast: the toast store lets it go); default `hide`. */
   close?: () => void;
+  /** What says it instead when the island goes before it has (motion turned off): its plain toast. */
+  fallback?: () => void;
   ttl?: number;
 }
 

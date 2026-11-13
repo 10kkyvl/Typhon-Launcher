@@ -119,10 +119,17 @@ function trackFriends(): () => void {
   });
 }
 
-/** Starts every producer; returns the disposer. */
+/**
+ * Starts every producer; returns the disposer. When the island goes (motion off), what it still holds
+ * besides the toasts is said by its fallback (a failed download: its plain toast) or let go.
+ */
 export function initLiveIslandFeed(): () => void {
   const offs = [trackToasts(), trackFailedDownloads(), trackFriends()];
   return () => {
     for (const off of offs) off();
+    for (const m of get(liveIslandMessages)) {
+      liveIsland.hide(m.id);
+      m.fallback?.();
+    }
   };
 }

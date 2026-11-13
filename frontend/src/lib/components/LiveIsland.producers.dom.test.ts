@@ -8,7 +8,7 @@ import { resumeDownload, type Download } from '../services/downloads';
 import { emptyFriendsPage, type FriendView, type PresenceView } from '../services/social';
 import { openByIGDB } from '../services/sources';
 import { downloads, initDownloads } from '../stores/downloads';
-import { liveIsland, liveIslandCurrent } from '../stores/liveIsland';
+import { liveIsland, liveIslandCurrent, liveIslandMessages } from '../stores/liveIsland';
 import { resetHistory, route } from '../stores/router';
 import { friendsPage } from '../stores/social';
 import { holdToasts, toasts } from '../stores/toasts';
@@ -178,6 +178,22 @@ describe('a failed download in the island', () => {
     expect(liveIsland.has('download-failed:dl1')).toBe(false);
   });
 
+  it('turning motion off while it shows makes it the toast it would have been', async () => {
+    const emit = await startDownloads();
+    const { island } = setup();
+    emit('download:added', download());
+    toasts.set([]);
+    emit('download:failed', download({ status: 'failed', error: 'download.peers_lost' }));
+    await tick();
+    document.documentElement.classList.add('no-anim');
+    await Promise.resolve();
+    await tick();
+
+    expect(island()).toBeNull();
+    expect(get(liveIslandMessages)).toEqual([]);
+    expect(get(toasts).map((t) => [t.kind, t.message.includes('Elden Ring')])).toEqual([['danger', true]]);
+  });
+
   it('with motion off it is the toast it always was, and there is no island', async () => {
     document.documentElement.classList.add('no-anim');
     const emit = await startDownloads();
@@ -251,6 +267,18 @@ describe('a friend who starts playing, in the island', () => {
     friendsPage.set(page(friend({ status: 'online', gameId: 99, gameTitle: 'Hades' })));
     await tick();
     expect(get(liveIslandCurrent)?.detail).toBe('Hades');
+  });
+
+  it('turning motion off while it shows lets it go, with no toast', async () => {
+    setup();
+    friendsPage.set(page(friend(online)));
+    friendsPage.set(page(friend(playing)));
+    await tick();
+    document.documentElement.classList.add('no-anim');
+    await Promise.resolve();
+    await tick();
+    expect(get(liveIslandMessages)).toEqual([]);
+    expect(get(toasts)).toEqual([]);
   });
 
   it('with motion off says nothing, as before', async () => {
