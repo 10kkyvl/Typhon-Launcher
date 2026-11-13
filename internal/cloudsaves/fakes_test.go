@@ -215,6 +215,9 @@ type fakeLib struct {
 	// starting counts the launches of a game the library is holding in its
 	// launch hooks: like the library, GetRunningGames reports such a game.
 	starting map[string]int
+	// gamesGate, while set, holds GetGames (holdGames).
+	gamesGate    chan struct{}
+	gamesEntered chan struct{}
 }
 
 func newFakeLib() *fakeLib {
@@ -228,8 +231,32 @@ func newFakeLib() *fakeLib {
 
 func (l *fakeLib) GetGames() []library.Game {
 	l.mu.Lock()
-	defer l.mu.Unlock()
-	return slices.Clone(l.games)
+	gate, entered := l.gamesGate, l.gamesEntered
+	games := slices.Clone(l.games)
+	l.mu.Unlock()
+	if gate != nil {
+		entered <- struct{}{}
+		<-gate
+	}
+	return games
+}
+
+// holdGames keeps every GetGames call open until release, announcing each
+// one on the returned channel.
+func (l *fakeLib) holdGames() (entered <-chan struct{}, release func()) {
+	gate, in := make(chan struct{}), make(chan struct{}, 16)
+	l.mu.Lock()
+	l.gamesGate, l.gamesEntered = gate, in
+	l.mu.Unlock()
+	var once sync.Once
+	return in, func() {
+		once.Do(func() {
+			l.mu.Lock()
+			l.gamesGate, l.gamesEntered = nil, nil
+			l.mu.Unlock()
+			close(gate)
+		})
+	}
 }
 
 func (l *fakeLib) LocateSaves(_ context.Context, id string) (library.SavesResult, error) {
