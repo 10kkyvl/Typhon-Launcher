@@ -27,6 +27,12 @@ const (
 	defaultInterval = 5 * time.Minute
 	defaultDebounce = 3 * time.Second
 	defaultRetry    = 30 * time.Second
+	// defaultLaunchTimeout bounds how long Play waits for the cloud. A
+	// listing answers in well under a second on a working line and a typical
+	// save archive of a few megabytes downloads within it; past it a slow
+	// line would make Play look broken, and the pre-launch backup still runs
+	// after this check.
+	defaultLaunchTimeout = 10 * time.Second
 )
 
 type saveClient interface {
@@ -62,6 +68,8 @@ type Service struct {
 	// retryDelay is the wait before a pass that could not tell whose account
 	// it is runs again.
 	retryDelay time.Duration
+	// launchTimeout is how long SessionStarting waits for its check.
+	launchTimeout time.Duration
 
 	// opMu serializes everything that reads or changes the cloud and the
 	// recorded state: a pass, a manual sync, a conflict resolution, a delete.
@@ -90,6 +98,11 @@ type Service struct {
 	pending  string
 	enabled  bool
 	wake     chan struct{}
+	// fetching holds the catalog ids whose cloud copy is being downloaded
+	// over the local saves right now; launches holds the running launch
+	// check of each game.
+	fetching map[string]bool
+	launches map[string]*launchCheck
 }
 
 type refusal struct {
@@ -129,25 +142,28 @@ func NewService(
 		return nil, errors.New("cloudsaves: save backups are required")
 	}
 	return &Service{
-		store:      store{dir: configDir, write: storage.Save},
-		config:     config,
-		token:      token,
-		accountID:  accountID,
-		client:     client,
-		lib:        lib,
-		backups:    backups,
-		emit:       emitEvent,
-		now:        time.Now,
-		interval:   defaultInterval,
-		debounce:   defaultDebounce,
-		retryDelay: defaultRetry,
-		enabled:    config().CloudSaves,
-		cache:      map[string]cachedTree{},
-		refused:    map[string]refusal{},
-		build:      buildArchive,
-		statuses:   map[string]GameStatus{},
-		dirty:      map[string]struct{}{},
-		wake:       make(chan struct{}, 1),
+		store:         store{dir: configDir, write: storage.Save},
+		config:        config,
+		token:         token,
+		accountID:     accountID,
+		client:        client,
+		lib:           lib,
+		backups:       backups,
+		emit:          emitEvent,
+		now:           time.Now,
+		interval:      defaultInterval,
+		debounce:      defaultDebounce,
+		retryDelay:    defaultRetry,
+		launchTimeout: defaultLaunchTimeout,
+		enabled:       config().CloudSaves,
+		cache:         map[string]cachedTree{},
+		refused:       map[string]refusal{},
+		build:         buildArchive,
+		statuses:      map[string]GameStatus{},
+		dirty:         map[string]struct{}{},
+		wake:          make(chan struct{}, 1),
+		fetching:      map[string]bool{},
+		launches:      map[string]*launchCheck{},
 	}, nil
 }
 

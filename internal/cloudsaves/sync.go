@@ -221,7 +221,7 @@ func (s *Service) syncGame(ctx context.Context, r *run, g library.Game, m mode) 
 	case actUpload:
 		return s.upload(ctx, r, key, t, act)
 	case actDownload:
-		return s.download(ctx, r, gameID, key, remote)
+		return s.download(ctx, r, gameID, key, remote, nil)
 	}
 	return s.conflict(key, t, st, remote)
 }
@@ -359,7 +359,13 @@ func removeTemp(path string) {
 	}
 }
 
-func (s *Service) download(ctx context.Context, r *run, gameID, key string, remote account.Save) outcome {
+// download replaces the local saves with the cloud copy. check is the launch
+// check that runs it, nil for every other caller.
+func (s *Service) download(ctx context.Context, r *run, gameID, key string, remote account.Save, check *launchCheck) outcome {
+	if !s.claimFetch(key, check) {
+		return fail(context.Canceled)
+	}
+	defer s.releaseFetch(key)
 	limit, err := downloadLimit(r.list.MaxBytes, remote.SizeBytes)
 	if err != nil {
 		return fail(err)
@@ -405,6 +411,10 @@ func (s *Service) download(ctx context.Context, r *run, gameID, key string, remo
 		}
 		return fail(backupErr(err))
 	}
+	// The saves are in place: a launch from here on hashes them and finds
+	// them equal to the cloud copy, whether or not the record below is
+	// written yet.
+	s.releaseFetch(key)
 	now := s.now()
 	if err := s.commit(key, func(g *gameState) {
 		g.LocalDigest, g.RemoteDigest, g.SyncedAt, g.Conflict = remote.Digest, remote.Digest, now, nil

@@ -53,6 +53,12 @@ type fakeClient struct {
 	alwaysClash bool
 	deadlines   []time.Duration
 	tamper      func([]byte) []byte
+	// requests counts every listing (under listKey) and transfer (under the
+	// cloud key) at the moment it reaches the client, held or not.
+	requests map[string]int
+	holds    map[string]chan struct{}
+	entered  chan string
+	inFlight int
 }
 
 func deadlineOf(ctx context.Context) time.Duration {
@@ -63,7 +69,14 @@ func deadlineOf(ctx context.Context) time.Duration {
 }
 
 func newFakeClient() *fakeClient {
-	return &fakeClient{remote: map[string]remoteSave{}, maxBytes: 100 << 20, deleteErr: map[string]error{}}
+	return &fakeClient{
+		remote:    map[string]remoteSave{},
+		maxBytes:  100 << 20,
+		deleteErr: map[string]error{},
+		requests:  map[string]int{},
+		holds:     map[string]chan struct{}{},
+		entered:   make(chan string, 64),
+	}
 }
 
 func (c *fakeClient) seed(key, device string, zipBytes []byte, digest string, at time.Time) {
@@ -88,7 +101,12 @@ func (c *fakeClient) remoteOf(key string) (remoteSave, bool) {
 	return r, ok
 }
 
-func (c *fakeClient) ListSaves(context.Context) (account.SaveList, error) {
+func (c *fakeClient) ListSaves(ctx context.Context) (account.SaveList, error) {
+	leave, err := c.enter(ctx, listKey)
+	defer leave()
+	if err != nil {
+		return account.SaveList{}, err
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.listCalls++
@@ -105,6 +123,11 @@ func (c *fakeClient) ListSaves(context.Context) (account.SaveList, error) {
 }
 
 func (c *fakeClient) UploadSave(ctx context.Context, key string, body io.ReadSeeker, size int64, up account.SaveUpload) (account.Save, error) {
+	leave, err := c.enter(ctx, key)
+	defer leave()
+	if err != nil {
+		return account.Save{}, err
+	}
 	if c.beforeSend != nil {
 		c.beforeSend()
 	}
@@ -138,6 +161,11 @@ func (c *fakeClient) UploadSave(ctx context.Context, key string, body io.ReadSee
 }
 
 func (c *fakeClient) DownloadSave(ctx context.Context, key string, dst io.Writer, maxBytes int64) (account.SaveDownload, error) {
+	leave, err := c.enter(ctx, key)
+	defer leave()
+	if err != nil {
+		return account.SaveDownload{}, err
+	}
 	c.mu.Lock()
 	c.downloads++
 	c.deadlines = append(c.deadlines, deadlineOf(ctx))
@@ -564,4 +592,135 @@ func (h *harness) status(local string) GameStatus {
 
 func (h *harness) recorded(key string) gameState {
 	return h.svc.gameState(key)
+}
+
+// listKey is the key under which the listing request is counted and held.
+const listKey = "<list>"
+
+// enter counts a request and, while its key is held, keeps it open until the
+// hold is released or ctx ends, as a slow transfer on a live network would.
+func (c *fakeClient) enter(ctx context.Context, key string) (leave func(), err error) {
+	c.mu.Lock()
+	c.requests[key]++
+	c.inFlight++
+	gate := c.holds[key]
+	c.mu.Unlock()
+	leave = func() {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		c.inFlight--
+	}
+	if gate == nil {
+		return leave, nil
+	}
+	c.entered <- key
+	select {
+	case <-gate:
+		return leave, nil
+	case <-ctx.Done():
+		return leave, ctx.Err()
+	}
+}
+
+// hold keeps every later request for key open until release is called.
+func (c *fakeClient) hold(key string) (release func()) {
+	gate := make(chan struct{})
+	c.mu.Lock()
+	c.holds[key] = gate
+	c.mu.Unlock()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			c.mu.Lock()
+			delete(c.holds, key)
+			c.mu.Unlock()
+			close(gate)
+		})
+	}
+}
+
+// waitHeld returns once a request for key is waiting on its hold.
+func (c *fakeClient) waitHeld(t *testing.T, key string) {
+	t.Helper()
+	timeout := time.NewTimer(10 * time.Second)
+	defer timeout.Stop()
+	for {
+		select {
+		case got := <-c.entered:
+			if got == key {
+				return
+			}
+		case <-timeout.C:
+			t.Fatalf("no request for %s reached the cloud within 10s", key)
+		}
+	}
+}
+
+func (c *fakeClient) requestsFor(key string) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.requests[key]
+}
+
+func (c *fakeClient) inFlightNow() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.inFlight
+}
+
+func (c *fakeClient) transfers() (uploads, downloads int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.uploads), c.downloads
+}
+
+func (b *fakeBackups) restoreCount() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.restores)
+}
+
+// restart replaces the service with a new one on the same directory and the
+// same fakes, as a relaunch of the app would.
+func (h *harness) restart() {
+	h.t.Helper()
+	if err := h.svc.ServiceShutdown(); err != nil {
+		h.t.Fatalf("shutdown before restart: %v", err)
+	}
+	svc, err := NewService(h.dir, h.config, h.tokenFn, h.accountFn, h.client, h.lib, h.backups)
+	if err != nil {
+		h.t.Fatalf("new service on the same directory: %v", err)
+	}
+	svc.now = h.tick
+	svc.emit = func(ev Event) { h.events <- ev }
+	h.svc = svc
+	h.open()
+}
+
+func waitFor(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	if cond() {
+		return
+	}
+	ticker := time.NewTicker(2 * time.Millisecond)
+	defer ticker.Stop()
+	timeout := time.NewTimer(10 * time.Second)
+	defer timeout.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			if cond() {
+				return
+			}
+		case <-timeout.C:
+			t.Fatalf("timed out waiting for %s", what)
+		}
+	}
+}
+
+// launchChecks counts the launch checks whose goroutine has not ended.
+func (h *harness) launchChecks() int {
+	h.svc.mu.Lock()
+	defer h.svc.mu.Unlock()
+	return len(h.svc.launches)
 }
