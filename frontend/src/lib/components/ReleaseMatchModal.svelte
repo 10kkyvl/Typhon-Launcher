@@ -63,6 +63,8 @@
       loadingCandidates = false;
       searching = false;
       searchError = '';
+      // A retry still running when the dialog closes belongs to that opening: the next starts clean.
+      searchRetrying = false;
       selectedGameId = null;
       query = '';
       searchResults = [];

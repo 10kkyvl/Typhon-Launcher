@@ -188,6 +188,27 @@ describe('ReleaseMatchModal: the manual search', () => {
   });
 });
 
+describe('ReleaseMatchModal: closed and opened again while a search Retry runs', () => {
+  it('opens without the old failure: no empty notice with a busy Retry', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const again = deferred<CatalogGame[]>();
+    vi.mocked(getMatchCandidates).mockResolvedValue([]);
+    vi.mocked(searchGames).mockRejectedValueOnce(new Error('offline')).mockReturnValueOnce(again.promise);
+    const { rerender } = render(ReleaseMatchModal, { target: app, props: { open: true, release } });
+    const keys = user();
+    await keys.type(within(screen.getByRole('dialog')).getByRole('textbox', { name: msg('modals.releaseMatchManualSearch') }), 'hades');
+    await vi.advanceTimersByTimeAsync(300);
+    await keys.click(within((await screen.findByRole('alert')).closest('.notice') as HTMLElement).getByRole('button', { name: msg('common.retry') }));
+
+    await rerender({ open: false, release });
+    await rerender({ open: true, release });
+
+    const dialog = await screen.findByRole('dialog', { name: msg('modals.releaseMatchTitle') });
+    expect(dialog.querySelectorAll('.notice').length).toBe(0);
+    again.resolve([]);
+  });
+});
+
 describe('ReleaseMatchModal: confirming', () => {
   it('keeps the focus on "confirm", busy, while the match is saved', async () => {
     const saved = deferred<void>();
