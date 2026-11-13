@@ -43,7 +43,9 @@
   import { isEmulated } from '../library/emulation';
   import { externalLabel, isExternal, isLaunchable } from '../library/external';
   import { msg } from '../i18n';
-  import { canTakeFocus, initialFocus } from '../layers/focus';
+  import { canTakeFocus, focusQuietly, initialFocus } from '../layers/focus';
+  import { topModalLayer } from '../layers';
+  import { onDestroy, tick } from 'svelte';
 
   const game = $derived($gameMenu ? ($libraryGames.find((g) => g.id === $gameMenu?.gameId) ?? null) : null);
 
@@ -91,10 +93,46 @@
     if ($gameMenu && !game) closeGameMenu();
   });
 
+  // A pick that changes the game (a mark, its status or tags, hiding, removal) can take it out of the
+  // list it was shown in once the library update lands, before or after the call answers. Until focus
+  // moves on, a control that leaves with the game hands focus to the homes of that pick instead of
+  // dropping it to <body>; one that stays keeps it. Nothing focused at the pick: nothing to follow.
+  let unfollow: (() => void) | null = null;
+
+  function followHome() {
+    unfollow?.();
+    const held = document.activeElement;
+    if (!(held instanceof HTMLElement) || held === document.body) return;
+    let following = true;
+    const stop = () => {
+      following = false;
+      unsubscribe();
+      if (unfollow === stop) unfollow = null;
+    };
+    const check = () => {
+      if (!following) return;
+      const active = document.activeElement;
+      if (held.isConnected) {
+        // A dialog of the pick holds focus meanwhile and gives it back here when it closes.
+        if (active !== held && !topModalLayer()) stop();
+        return;
+      }
+      stop();
+      if (active && active !== document.body && active.isConnected) return;
+      const home = returnHome();
+      if (home) focusQuietly(home);
+    };
+    const unsubscribe = libraryGames.subscribe(() => void tick().then(check));
+    unfollow = stop;
+  }
+
+  onDestroy(() => unfollow?.());
+
   $effect(() => {
     const menu = $gameMenu;
     steam = null;
     if (!menu) return;
+    unfollow?.();
     const id = menu.gameId;
     const current = get(libraryGames).find((g) => g.id === id);
     if (
@@ -158,8 +196,11 @@
   let tagsID = $state<string | null>(null);
   const tagsGame = $derived(tagsID ? ($libraryGames.find((g) => g.id === tagsID) ?? null) : null);
 
+  const CHANGES_GAME: ReadonlySet<QuickAction> = new Set(['favorite-add', 'favorite-remove', 'status', 'tags', 'hide', 'unhide', 'uninstall', 'remove']);
+
   function run(current: LibraryGame, action: QuickAction, source: HTMLElement | null) {
     homes = homesOf(source);
+    if (CHANGES_GAME.has(action)) followHome();
     switch (action) {
       case 'play':
         return guard(() => playGame(current.id), msg('games.errorPlayFailed'));
