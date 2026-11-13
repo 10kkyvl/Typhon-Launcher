@@ -275,6 +275,26 @@ describe('a save conflict in the island', () => {
     expect(conflictMessages()).toEqual([]);
   });
 
+  it('a conflict resolved before its copies were listed does not hide the next conflict of the game', async () => {
+    const gameId = `fresh-${++copiesMade}`;
+    libraryGames.set([{ id: gameId, title: 'Hades' } as LibraryGame]);
+    setup();
+    cloudStatus.set(cloud({ ...conflict(gameId), conflict: undefined }));
+    await tick();
+    liveIsland.hide(conflictMessages()[0].id);
+    cloudStatus.set(cloud(synced(gameId)));
+    await tick();
+
+    // The next conflict, reported by its event before the status lists its copies, then with them.
+    cloudStatus.set(cloud({ ...conflict(gameId), conflict: undefined }));
+    await tick();
+    expect(conflictMessages().map((m) => m.detail)).toEqual(['Hades']);
+    liveIsland.hide(conflictMessages()[0].id);
+    cloudStatus.set(cloud(conflict(gameId)));
+    await tick();
+    expect(conflictMessages()).toEqual([]);
+  });
+
   it('a game the library does not have is not said; it is once the library lists it', async () => {
     libraryGames.set([]);
     setup();
