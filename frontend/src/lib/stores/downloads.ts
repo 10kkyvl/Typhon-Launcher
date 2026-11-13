@@ -1,4 +1,3 @@
-import { CircleAlert } from '@lucide/svelte';
 import { derived, get, writable } from 'svelte/store';
 import { listenFirst } from './listenFirst';
 import { inWails } from '../services/backend';
@@ -177,7 +176,7 @@ function failedMessage(item: Download): LiveIslandMessage {
     id: failedMessageId(item.id),
     kind: 'error',
     tone: 'danger',
-    icon: CircleAlert,
+    icon: 'danger',
     text: msg('ui.liveIslandDownloadFailed'),
     title: item.name,
     detail: item.error ? installErrorText(item.error) : undefined,

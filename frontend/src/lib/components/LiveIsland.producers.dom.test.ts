@@ -124,6 +124,15 @@ describe('a failed download in the island', () => {
     expect(within(screen.getByTestId('live-island-alert')).getAllByText(/Elden Ring/)).toHaveLength(1);
   });
 
+  it('wears the alert icon', async () => {
+    const emit = await startDownloads();
+    const { island } = setup();
+    emit('download:added', download());
+    emit('download:failed', download({ status: 'failed' }));
+    await tick();
+    expect(island()?.querySelector('.head svg.lucide-circle-alert')).not.toBeNull();
+  });
+
   it('Retry retries the download and the message goes', async () => {
     const emit = await startDownloads();
     const { keys, island, pill } = setup();
@@ -228,6 +237,15 @@ describe('a friend who starts playing, in the island', () => {
     expect(within(screen.getByTestId('live-island-status')).getAllByText(/Bob/)).toHaveLength(1);
     expect(island()?.querySelector('.card .avatar')).not.toBeNull();
     expect(get(toasts)).toEqual([]);
+  });
+
+  it('wears the game icon on the pill and the friend\'s picture in the card', async () => {
+    const { island } = setup();
+    friendsPage.set(page(friend(online)));
+    friendsPage.set(page(friend(playing)));
+    await tick();
+    expect(island()?.querySelector('.head svg.lucide-gamepad-2')).not.toBeNull();
+    expect(island()?.querySelector('.card .avatar')).not.toBeNull();
   });
 
   it('"Open the game" opens its page', async () => {

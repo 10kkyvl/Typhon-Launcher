@@ -1,4 +1,3 @@
-import type { LucideIcon } from '@lucide/svelte';
 import { derived, get, writable, type Readable } from 'svelte/store';
 import { QUEUE_STALE_MS, RESUME_FLOOR_MS } from './toasts';
 
@@ -27,6 +26,8 @@ import { QUEUE_STALE_MS, RESUME_FLOOR_MS } from './toasts';
 
 export type LiveIslandKind = 'error' | 'friend' | 'info';
 export type LiveIslandTone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger';
+/** The mark a message wears, by name: LiveIsland.svelte draws it, so no store loads an icon component. */
+export type LiveIslandIcon = 'info' | 'success' | 'warning' | 'danger' | 'game';
 
 export interface LiveIslandAction {
   label: string;
@@ -40,7 +41,8 @@ export interface LiveIslandMessage {
   /** Rank, see the header. Default `info`. */
   kind?: LiveIslandKind;
   tone?: LiveIslandTone;
-  icon?: LucideIcon;
+  /** A tone-coloured dot when absent. */
+  icon?: LiveIslandIcon;
   /** A person's picture in place of the icon. */
   avatar?: string;
   /** The open card's title (a game's or a person's name); the pill's line when absent. */

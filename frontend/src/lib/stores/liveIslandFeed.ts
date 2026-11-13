@@ -1,4 +1,3 @@
-import { CircleAlert, CircleCheck, Gamepad2, Info, TriangleAlert } from '@lucide/svelte';
 import { get } from 'svelte/store';
 import { msg } from '../i18n';
 import { openGameByIGDB } from '../social/openGame';
@@ -24,7 +23,6 @@ import { ACTION_MS, dismissToast, pauseToast, resumeToast, toasts, toastsInIslan
  *   nothing either.
  */
 
-const TOAST_ICON = { info: Info, success: CircleCheck, warning: TriangleAlert, danger: CircleAlert } as const;
 const TOAST_TONE: Record<ToastKind, LiveIslandTone> = { info: 'accent', success: 'success', warning: 'warning', danger: 'danger' };
 
 const toastId = (n: number) => `toast:${n}`;
@@ -34,7 +32,7 @@ function fromToast(t: Toast): LiveIslandMessage {
     id: toastId(t.id),
     text: t.message,
     tone: TOAST_TONE[t.kind],
-    icon: TOAST_ICON[t.kind],
+    icon: t.kind,
     count: t.count,
     actions: t.action ? [{ label: t.action.label, run: t.action.run }] : undefined,
     close: () => dismissToast(t.id),
@@ -111,7 +109,7 @@ function trackFriends(): () => void {
       liveIsland.show({
         id: `friend:${f.id}`,
         kind: 'friend',
-        icon: Gamepad2,
+        icon: 'game',
         avatar: f.avatarUrl,
         text: msg('ui.liveIslandFriendPlaying', { name }),
         detail: title || undefined,

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { CircleAlert, CircleCheck, Gamepad2, Info, TriangleAlert, type LucideIcon } from '@lucide/svelte';
   import { tick, untrack } from 'svelte';
   import type { Attachment } from 'svelte/attachments';
   import { on } from 'svelte/events';
@@ -13,6 +14,7 @@
     liveIslandMessages,
     liveIslandRank,
     type LiveIslandAction,
+    type LiveIslandIcon,
     type LiveIslandMessage,
   } from '../stores/liveIsland';
   import { initLiveIslandFeed } from '../stores/liveIslandFeed';
@@ -38,6 +40,14 @@
    * the island gives focus back where it was before it came in (focusBack.ts, the toast stack's rule).
    * Its own two live regions say each message once, when it comes: errors at once, the rest politely.
    */
+
+  const ICONS: Record<LiveIslandIcon, LucideIcon> = {
+    info: Info,
+    success: CircleCheck,
+    warning: TriangleAlert,
+    danger: CircleAlert,
+    game: Gamepad2,
+  };
 
   let shell = $state<HTMLElement>();
   let head = $state<HTMLButtonElement>();
@@ -249,7 +259,8 @@
 
 {#snippet mark(m: LiveIslandMessage, size: string)}
   {#if m.icon}
-    <m.icon {size} strokeWidth={1.8} aria-hidden="true" />
+    {@const Icon = ICONS[m.icon]}
+    <Icon {size} strokeWidth={1.8} aria-hidden="true" />
   {:else}
     <span class="dot"></span>
   {/if}

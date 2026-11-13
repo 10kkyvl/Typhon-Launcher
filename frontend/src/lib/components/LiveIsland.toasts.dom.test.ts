@@ -109,6 +109,18 @@ describe('what a toast has survives in the island', () => {
     expect(screen.getByTestId('live-island-status').textContent?.trim()).toBe('');
   });
 
+  it.each([
+    ['info', 'lucide-info'],
+    ['success', 'lucide-circle-check'],
+    ['warning', 'lucide-triangle-alert'],
+    ['danger', 'lucide-circle-alert'],
+  ] as const)('its icon: a %s toast wears %s', async (kind, icon) => {
+    const { island } = setup();
+    toast('Message', kind);
+    await tick();
+    expect(island()?.querySelector(`.head svg.${icon}`)).not.toBeNull();
+  });
+
   it('its action: runs once, and the message goes', async () => {
     const { keys, pill, island } = setup();
     const run = vi.fn();
