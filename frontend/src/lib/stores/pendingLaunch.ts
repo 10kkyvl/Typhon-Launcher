@@ -1,7 +1,7 @@
 import { Events } from '@wailsio/runtime';
 import { derived, writable } from 'svelte/store';
-import { TakePending } from '../../../bindings/typhon/emulatorpromptservice';
-import type { EmulatorNeeded } from '../../../bindings/typhon/models';
+import { TakePending } from '../../../bindings/typhon/pendinglaunchservice';
+import type { PendingLaunch } from '../../../bindings/typhon/models';
 import { isSavesHoldCode } from '../cloudsaves/hold';
 import { errorCode, msg } from '../i18n';
 import { EMULATOR_PROMPT_CODES } from '../library/emulation';
@@ -48,7 +48,7 @@ function showLaunchError(err: unknown) {
 
 // The same launch the tray or the shortcut made, through the in-window path:
 // its answer is the current state, handled as for Play pressed in the window.
-async function resumeHeldLaunch(held: EmulatorNeeded): Promise<void> {
+async function resumeHeldLaunch(held: PendingLaunch): Promise<void> {
   if (!(await waitForWindow())) return;
   try {
     // An empty profile from a shortcut is the game's own executable, not the last profile used.
@@ -61,7 +61,7 @@ async function resumeHeldLaunch(held: EmulatorNeeded): Promise<void> {
   }
 }
 
-export async function takeEmulatorNeeded(): Promise<void> {
+export async function takePendingLaunch(): Promise<void> {
   try {
     const pending = await TakePending();
     if (!pending?.gameId) return;
@@ -83,16 +83,16 @@ export async function takeEmulatorNeeded(): Promise<void> {
   }
 }
 
-export function setResumeReady(next: boolean) {
+export function setWindowReady(next: boolean) {
   signedIn.set(next);
 }
 
 // An emulator prompt is asked at once, before the window is ready, as it
 // always was; a launch held back by the cloud saves waits for the window.
-export function initEmulatorNeeded() {
+export function initPendingLaunch() {
   if (!inWails) return () => {};
-  void takeEmulatorNeeded();
-  const off = Events.On('emulators:needed', () => void takeEmulatorNeeded());
+  void takePendingLaunch();
+  const off = Events.On('launch:pending', () => void takePendingLaunch());
   return () => {
     off();
     dropWaiting?.();

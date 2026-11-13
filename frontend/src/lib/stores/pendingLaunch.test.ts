@@ -14,20 +14,20 @@ vi.mock('../services/backend', () => ({ inWails: true }));
 vi.mock('./toasts', () => ({ toast: vi.fn() }));
 vi.mock('./emulatorPrompt', () => ({ askForEmulator: vi.fn() }));
 vi.mock('../services/library', () => ({ launchGame: vi.fn() }));
-vi.mock('../../../bindings/typhon/emulatorpromptservice', () => ({ TakePending: vi.fn() }));
+vi.mock('../../../bindings/typhon/pendinglaunchservice', () => ({ TakePending: vi.fn() }));
 
 const { toast } = await import('./toasts');
 const { askForEmulator } = await import('./emulatorPrompt');
 const { launchGame } = await import('../services/library');
-const { TakePending } = await import('../../../bindings/typhon/emulatorpromptservice');
-const { takeEmulatorNeeded, initEmulatorNeeded } = await import('./emulatorNeeded');
+const { TakePending } = await import('../../../bindings/typhon/pendinglaunchservice');
+const { takePendingLaunch, initPendingLaunch } = await import('./pendingLaunch');
 const { ru } = await import('../i18n/catalog/ru');
 
 const pending = { gameId: 'g1', platform: 'ps2', code: 'emulators.not_configured' };
 const nothing = { gameId: '', platform: '', code: '' };
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-describe('takeEmulatorNeeded', () => {
+describe('takePendingLaunch', () => {
   beforeEach(() => {
     handlers.length = 0;
     vi.mocked(toast).mockReset();
@@ -41,7 +41,7 @@ describe('takeEmulatorNeeded', () => {
     vi.mocked(TakePending).mockResolvedValue(pending);
     vi.mocked(askForEmulator).mockResolvedValue(true);
     vi.mocked(launchGame).mockResolvedValue(true);
-    await takeEmulatorNeeded();
+    await takePendingLaunch();
     expect(askForEmulator).toHaveBeenCalledWith('ps2', 'emulators.not_configured');
     expect(launchGame).toHaveBeenCalledWith('g1');
     expect(toast).not.toHaveBeenCalled();
@@ -49,7 +49,7 @@ describe('takeEmulatorNeeded', () => {
 
   it('does nothing when nothing is waiting', async () => {
     vi.mocked(TakePending).mockResolvedValue(nothing);
-    await takeEmulatorNeeded();
+    await takePendingLaunch();
     expect(askForEmulator).not.toHaveBeenCalled();
     expect(launchGame).not.toHaveBeenCalled();
   });
@@ -57,7 +57,7 @@ describe('takeEmulatorNeeded', () => {
   it('does not launch when the prompt is dismissed', async () => {
     vi.mocked(TakePending).mockResolvedValue(pending);
     vi.mocked(askForEmulator).mockResolvedValue(false);
-    await takeEmulatorNeeded();
+    await takePendingLaunch();
     expect(launchGame).not.toHaveBeenCalled();
     expect(toast).not.toHaveBeenCalled();
   });
@@ -66,19 +66,19 @@ describe('takeEmulatorNeeded', () => {
     vi.mocked(TakePending).mockResolvedValue(pending);
     vi.mocked(askForEmulator).mockResolvedValue(true);
     vi.mocked(launchGame).mockRejectedValue(new Error('boom'));
-    await takeEmulatorNeeded();
+    await takePendingLaunch();
     expect(toast).toHaveBeenCalledWith(expect.any(String), 'danger');
   });
 
   it('shows a toast when the pending prompt cannot be read', async () => {
     vi.mocked(TakePending).mockRejectedValue(new Error('boom'));
-    await takeEmulatorNeeded();
+    await takePendingLaunch();
     expect(askForEmulator).not.toHaveBeenCalled();
     expect(toast).toHaveBeenCalledWith(ru['games.errorPlayFailed'], 'danger');
   });
 });
 
-describe('initEmulatorNeeded', () => {
+describe('initPendingLaunch', () => {
   beforeEach(() => {
     handlers.length = 0;
     vi.mocked(toast).mockReset();
@@ -91,7 +91,7 @@ describe('initEmulatorNeeded', () => {
     vi.mocked(TakePending).mockResolvedValueOnce(pending).mockResolvedValue(nothing);
     vi.mocked(askForEmulator).mockResolvedValue(true);
     vi.mocked(launchGame).mockResolvedValue(true);
-    initEmulatorNeeded();
+    initPendingLaunch();
     await flush();
     expect(askForEmulator).toHaveBeenCalledTimes(1);
     expect(launchGame).toHaveBeenCalledWith('g1');
@@ -101,7 +101,7 @@ describe('initEmulatorNeeded', () => {
     vi.mocked(TakePending).mockResolvedValue(nothing);
     vi.mocked(askForEmulator).mockResolvedValue(true);
     vi.mocked(launchGame).mockResolvedValue(true);
-    initEmulatorNeeded();
+    initPendingLaunch();
     await flush();
     expect(handlers).toHaveLength(1);
     vi.mocked(TakePending).mockResolvedValueOnce(pending).mockResolvedValue(nothing);

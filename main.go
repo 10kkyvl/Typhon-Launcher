@@ -106,7 +106,7 @@ func init() {
 	application.RegisterEvent[[]library.Game]("library:updated")
 	application.RegisterEvent[[]library.Collection](library.EventCollections)
 	application.RegisterEvent[navigateEvent](eventNavigate)
-	application.RegisterEvent[EmulatorNeeded](eventEmulatorsNeeded)
+	application.RegisterEvent[PendingLaunch](eventLaunchPending)
 	application.RegisterEvent[library.SessionEvent]("game:started")
 	application.RegisterEvent[library.SessionEvent]("game:stopped")
 	application.RegisterEvent[library.CrashEvent]("game:crash")
@@ -400,10 +400,10 @@ func main() {
 		fatal("start emulators service", err)
 	}
 	libraryService.SetEmulatorResolver(emulatorService.Resolve)
-	emulatorPrompts := newEmulatorPromptService(libraryService, func(needed EmulatorNeeded) {
-		emitEmulatorNeeded(application.Get(), needed)
+	pendingLaunches := newPendingLaunchService(libraryService, func(needed PendingLaunch) {
+		emitLaunchPending(application.Get(), needed)
 	})
-	outsidePlayer := promptingPlayer{player: libraryService, prompts: emulatorPrompts}
+	outsidePlayer := promptingPlayer{player: libraryService, prompts: pendingLaunches}
 	playlogService, err := playlog.NewService()
 	if err != nil {
 		fatal("start playlog service", err)
@@ -887,7 +887,7 @@ func main() {
 		application.NewService(settingsService),
 		application.NewService(libraryService),
 		application.NewService(emulatorService),
-		application.NewService(emulatorPrompts),
+		application.NewService(pendingLaunches),
 		application.NewService(profileService),
 		application.NewService(playlogService),
 		application.NewService(downloadManager),
@@ -1187,7 +1187,7 @@ type playRequest struct {
 
 func playFromShortcut(player gamePlayer, req playRequest, reveal func()) {
 	if err := player.PlayGameProfile(req.id, req.profile); err != nil {
-		if !noteEmulatorNeeded(req.id, err) {
+		if !noteLaunchHeld(req.id, err) {
 			slog.Error("play from shortcut", "id", req.id, "profile", req.profile, "error", err)
 		}
 		reveal()

@@ -32,9 +32,9 @@ type fakeLauncher struct{ err error }
 func (f fakeLauncher) PlayGame(string) error                { return f.err }
 func (f fakeLauncher) PlayGameProfile(string, string) error { return f.err }
 
-func promptsFor(games gameFinder) (*EmulatorPromptService, *[]EmulatorNeeded) {
-	var events []EmulatorNeeded
-	return newEmulatorPromptService(games, func(needed EmulatorNeeded) { events = append(events, needed) }), &events
+func promptsFor(games gameFinder) (*PendingLaunchService, *[]PendingLaunch) {
+	var events []PendingLaunch
+	return newPendingLaunchService(games, func(needed PendingLaunch) { events = append(events, needed) }), &events
 }
 
 func captureLog(t *testing.T) *bytes.Buffer {
@@ -56,14 +56,14 @@ func TestEveryPromptCodeAsksForAnEmulator(t *testing.T) {
 		t.Run(code, func(t *testing.T) {
 			prompts, events := promptsFor(fakeGames{game: ps2Game})
 			prompts.offer("g1", fmt.Errorf("launch: %w", sentinel))
-			want := EmulatorNeeded{GameID: "g1", Platform: emulators.PS2, Code: code}
-			if !slices.Equal(*events, []EmulatorNeeded{want}) {
+			want := PendingLaunch{GameID: "g1", Platform: emulators.PS2, Code: code}
+			if !slices.Equal(*events, []PendingLaunch{want}) {
 				t.Fatalf("events = %+v, want one %+v", *events, want)
 			}
 			if got := prompts.TakePending(); got != want {
 				t.Fatalf("pending = %+v, want %+v", got, want)
 			}
-			if got := prompts.TakePending(); got != (EmulatorNeeded{}) {
+			if got := prompts.TakePending(); got != (PendingLaunch{}) {
 				t.Fatalf("second take = %+v, want nothing", got)
 			}
 		})
@@ -100,7 +100,7 @@ func TestOtherOutcomesDoNotAsk(t *testing.T) {
 			if len(*events) != 0 {
 				t.Fatalf("events = %+v", *events)
 			}
-			if got := prompts.TakePending(); got != (EmulatorNeeded{}) {
+			if got := prompts.TakePending(); got != (PendingLaunch{}) {
 				t.Fatalf("pending = %+v", got)
 			}
 		})
@@ -108,10 +108,10 @@ func TestOtherOutcomesDoNotAsk(t *testing.T) {
 }
 
 func TestPromptWaitsForAPageThatIsNotReady(t *testing.T) {
-	prompts := newEmulatorPromptService(fakeGames{game: ps2Game}, func(EmulatorNeeded) {})
+	prompts := newPendingLaunchService(fakeGames{game: ps2Game}, func(PendingLaunch) {})
 	prompts.offer("g1", emulators.ErrFileMissing)
 	prompts.offer("g1", emulators.ErrNotConfigured)
-	want := EmulatorNeeded{GameID: "g1", Platform: emulators.PS2, Code: uierr.Code(emulators.ErrNotConfigured)}
+	want := PendingLaunch{GameID: "g1", Platform: emulators.PS2, Code: uierr.Code(emulators.ErrNotConfigured)}
 	if got := prompts.TakePending(); got != want {
 		t.Fatalf("pending = %+v, want the newer %+v", got, want)
 	}
@@ -181,8 +181,8 @@ func TestProfileLaunchThatNeedsAnEmulatorAsksAsThePlayButton(t *testing.T) {
 			revealed := 0
 			surface.play(promptingPlayer{player: fakeLauncher{err: emulators.ErrNotConfigured}, prompts: prompts}, func() { revealed++ })
 
-			want := EmulatorNeeded{GameID: "g1", Platform: emulators.PS2, Code: uierr.Code(emulators.ErrNotConfigured)}
-			if !slices.Equal(*events, []EmulatorNeeded{want}) || revealed != 1 {
+			want := PendingLaunch{GameID: "g1", Platform: emulators.PS2, Code: uierr.Code(emulators.ErrNotConfigured)}
+			if !slices.Equal(*events, []PendingLaunch{want}) || revealed != 1 {
 				t.Fatalf("events = %+v, revealed %d times, want one %+v and once", *events, revealed, want)
 			}
 			if got := prompts.TakePending(); got != want {
@@ -250,21 +250,21 @@ func TestLaunchSurfacesHeldBackByCloudSaves(t *testing.T) {
 	surfaces := []struct {
 		name string
 		play func(player promptingPlayer, reveal func())
-		want EmulatorNeeded
+		want PendingLaunch
 	}{
 		{"tray", func(p promptingPlayer, reveal func()) { playFromTray(p, "g1", reveal) },
-			EmulatorNeeded{GameID: "g1"}},
+			PendingLaunch{GameID: "g1"}},
 		{"shortcut", func(p promptingPlayer, reveal func()) { playFromShortcut(p, playRequest{id: "g1"}, reveal) },
-			EmulatorNeeded{GameID: "g1", ProfileLaunch: true}},
+			PendingLaunch{GameID: "g1", ProfileLaunch: true}},
 		{"shortcut with a profile", func(p promptingPlayer, reveal func()) {
 			playFromShortcut(p, playRequest{id: "g1", profile: "ab12cd34"}, reveal)
-		}, EmulatorNeeded{GameID: "g1", ProfileID: "ab12cd34", ProfileLaunch: true}},
+		}, PendingLaunch{GameID: "g1", ProfileID: "ab12cd34", ProfileLaunch: true}},
 		{"second launch", func(p promptingPlayer, reveal func()) {
 			handleSecondLaunch([]string{"typhon.exe", "--play", "g1"}, p, openerFunc(reveal), &NavigationService{}, func(string) {})
-		}, EmulatorNeeded{GameID: "g1", ProfileLaunch: true}},
+		}, PendingLaunch{GameID: "g1", ProfileLaunch: true}},
 		{"second launch with a profile", func(p promptingPlayer, reveal func()) {
 			handleSecondLaunch([]string{"typhon.exe", "--play", "g1", "--profile", "ab12cd34"}, p, openerFunc(reveal), &NavigationService{}, func(string) {})
-		}, EmulatorNeeded{GameID: "g1", ProfileID: "ab12cd34", ProfileLaunch: true}},
+		}, PendingLaunch{GameID: "g1", ProfileID: "ab12cd34", ProfileLaunch: true}},
 	}
 	for _, cause := range []error{cloudsaves.ErrConflictUnresolved, cloudsaves.ErrSyncing} {
 		code := uierr.Code(cause)
@@ -277,13 +277,13 @@ func TestLaunchSurfacesHeldBackByCloudSaves(t *testing.T) {
 
 				want := surface.want
 				want.Code = code
-				if !slices.Equal(*events, []EmulatorNeeded{want}) || revealed != 1 {
+				if !slices.Equal(*events, []PendingLaunch{want}) || revealed != 1 {
 					t.Fatalf("events = %+v, revealed %d times, want one %+v and once", *events, revealed, want)
 				}
 				if got := prompts.TakePending(); got != want {
 					t.Fatalf("pending = %+v, want %+v", got, want)
 				}
-				if got := prompts.TakePending(); got != (EmulatorNeeded{}) {
+				if got := prompts.TakePending(); got != (PendingLaunch{}) {
 					t.Fatalf("second take = %+v, want nothing", got)
 				}
 				logged := log.String()
@@ -299,22 +299,22 @@ func TestANewerHeldBackLaunchReplacesTheOlder(t *testing.T) {
 	type held struct {
 		launch func(promptingPlayer)
 		err    error
-		want   EmulatorNeeded
+		want   PendingLaunch
 	}
 	emulator := held{
 		func(p promptingPlayer) { playFromTray(p, "g1", func() {}) },
 		emulators.ErrNotConfigured,
-		EmulatorNeeded{GameID: "g1", Platform: emulators.PS2, Code: uierr.Code(emulators.ErrNotConfigured)},
+		PendingLaunch{GameID: "g1", Platform: emulators.PS2, Code: uierr.Code(emulators.ErrNotConfigured)},
 	}
 	conflict := held{
 		func(p promptingPlayer) { playFromTray(p, "g1", func() {}) },
 		heldBySaves(cloudsaves.ErrConflictUnresolved),
-		EmulatorNeeded{GameID: "g1", Code: uierr.Code(cloudsaves.ErrConflictUnresolved)},
+		PendingLaunch{GameID: "g1", Code: uierr.Code(cloudsaves.ErrConflictUnresolved)},
 	}
 	syncing := held{
 		func(p promptingPlayer) { playFromShortcut(p, playRequest{id: "g1", profile: "ab12cd34"}, func() {}) },
 		heldBySaves(cloudsaves.ErrSyncing),
-		EmulatorNeeded{GameID: "g1", ProfileID: "ab12cd34", ProfileLaunch: true, Code: uierr.Code(cloudsaves.ErrSyncing)},
+		PendingLaunch{GameID: "g1", ProfileID: "ab12cd34", ProfileLaunch: true, Code: uierr.Code(cloudsaves.ErrSyncing)},
 	}
 	cases := []struct {
 		name         string
@@ -330,13 +330,13 @@ func TestANewerHeldBackLaunchReplacesTheOlder(t *testing.T) {
 			for _, h := range []held{c.older, c.newer} {
 				h.launch(promptingPlayer{player: fakeLauncher{err: h.err}, prompts: prompts})
 			}
-			if !slices.Equal(*events, []EmulatorNeeded{c.older.want, c.newer.want}) {
+			if !slices.Equal(*events, []PendingLaunch{c.older.want, c.newer.want}) {
 				t.Fatalf("events = %+v, want %+v then %+v", *events, c.older.want, c.newer.want)
 			}
 			if got := prompts.TakePending(); got != c.newer.want {
 				t.Fatalf("pending = %+v, want the newer %+v", got, c.newer.want)
 			}
-			if got := prompts.TakePending(); got != (EmulatorNeeded{}) {
+			if got := prompts.TakePending(); got != (PendingLaunch{}) {
 				t.Fatalf("second take = %+v, want nothing", got)
 			}
 		})
@@ -353,7 +353,7 @@ func TestLaunchHeldBackForAGameTheLibraryDoesNotKnow(t *testing.T) {
 			if len(*events) != 0 {
 				t.Fatalf("events = %+v, want none", *events)
 			}
-			if got := prompts.TakePending(); got != (EmulatorNeeded{}) {
+			if got := prompts.TakePending(); got != (PendingLaunch{}) {
 				t.Fatalf("pending = %+v, want nothing", got)
 			}
 			if logged := log.String(); !strings.Contains(logged, "game not in the library") || !strings.Contains(logged, "id=g1") {

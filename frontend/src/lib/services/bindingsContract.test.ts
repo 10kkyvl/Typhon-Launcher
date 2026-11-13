@@ -178,8 +178,8 @@ describe('generated bindings', () => {
 });
 
 describe('the pending launch the page takes from Go', () => {
-  const TAKER = 'lib/stores/emulatorNeeded.ts';
-  const STRUCT = 'EmulatorNeeded';
+  const TAKER = 'lib/stores/pendingLaunch.ts';
+  const STRUCT = 'PendingLaunch';
 
   // json name → omitempty, as the taker relies on them: an emulator prompt
   // carries no profile, so the profile fields are optional.

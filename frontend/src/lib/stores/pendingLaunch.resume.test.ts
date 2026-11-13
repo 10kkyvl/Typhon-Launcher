@@ -20,14 +20,14 @@ vi.mock('@wailsio/runtime', async (importOriginal) => ({
   },
 }));
 vi.mock('../../../bindings/typhon/internal/library', () => ({ Service: { PlayGame: play, PlayGameProfile: playProfile, GetGames: games } }));
-vi.mock('../../../bindings/typhon/emulatorpromptservice', () => ({ TakePending: takePending }));
+vi.mock('../../../bindings/typhon/pendinglaunchservice', () => ({ TakePending: takePending }));
 vi.mock('../services/backend', () => ({ inWails: true }));
 
 import { get } from 'svelte/store';
 import { msg } from '../i18n';
 import type { LibraryGame } from '../services/library';
 import { closeCloudConflict, cloudConflictTarget, finishCloudConflict } from './cloudsaves';
-import { initEmulatorNeeded, setResumeReady } from './emulatorNeeded';
+import { initPendingLaunch, setWindowReady } from './pendingLaunch';
 import { emulatorPrompt } from './emulatorPrompt';
 import { libraryGames, libraryLoaded } from './library';
 import { toasts } from './toasts';
@@ -42,7 +42,7 @@ let dispose: () => void = () => {};
 // The two gates of the window: past the sign-in, legal and consent screens,
 // and the library list loaded.
 function passSignIn() {
-  setResumeReady(true);
+  setWindowReady(true);
 }
 function loadLibrary() {
   libraryGames.set([{ id: 'g1', title: 'Hades' } as LibraryGame, { id: 'g2', title: 'Celeste' } as LibraryGame]);
@@ -63,7 +63,7 @@ beforeEach(() => {
   closeCloudConflict();
   emulatorPrompt.set(null);
   toasts.set([]);
-  setResumeReady(false);
+  setWindowReady(false);
   libraryGames.set([]);
   libraryLoaded.set(false);
   vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -88,7 +88,7 @@ describe.each(entries)('$name: a launch the save conflict held back outside the 
     takePending.mockResolvedValueOnce(heldBack('cloud.conflict_unresolved', held));
     binding.mockRejectedValueOnce(fails('cloud.conflict_unresolved')).mockResolvedValueOnce(undefined);
 
-    dispose = initEmulatorNeeded();
+    dispose = initPendingLaunch();
     await flush();
     passSignIn();
     await flush();
@@ -113,7 +113,7 @@ describe.each(entries)('$name: a launch the save conflict held back outside the 
     binding.mockRejectedValueOnce(fails('cloud.conflict_unresolved'));
     loadLibrary();
 
-    dispose = initEmulatorNeeded();
+    dispose = initPendingLaunch();
     passSignIn();
     await dialogFor('g1');
     closeCloudConflict();
@@ -127,7 +127,7 @@ describe.each(entries)('$name: a launch the save conflict held back outside the 
     takePending.mockResolvedValueOnce(heldBack('cloud.syncing', held));
     binding.mockRejectedValueOnce(fails('cloud.syncing'));
 
-    dispose = initEmulatorNeeded();
+    dispose = initPendingLaunch();
     passSignIn();
     loadLibrary();
 
@@ -140,7 +140,7 @@ describe.each(entries)('$name: a launch the save conflict held back outside the 
     takePending.mockResolvedValueOnce(heldBack('cloud.syncing', held));
     binding.mockResolvedValueOnce(undefined);
 
-    dispose = initEmulatorNeeded();
+    dispose = initPendingLaunch();
     passSignIn();
     loadLibrary();
 
@@ -155,7 +155,7 @@ describe.each(entries)('$name: a launch the save conflict held back outside the 
     takePending.mockResolvedValueOnce(heldBack('cloud.conflict_unresolved', held));
     binding.mockRejectedValueOnce(fails('library.already_running'));
 
-    dispose = initEmulatorNeeded();
+    dispose = initPendingLaunch();
     passSignIn();
     loadLibrary();
 
@@ -169,7 +169,7 @@ describe.each(entries)('$name: a launch the save conflict held back outside the 
     takePending.mockResolvedValueOnce(heldBack('cloud.conflict_unresolved', held));
     binding.mockRejectedValueOnce(fails('library.game_not_found'));
 
-    dispose = initEmulatorNeeded();
+    dispose = initPendingLaunch();
     passSignIn();
     loadLibrary();
 
@@ -184,7 +184,7 @@ describe('the gates a held-back launch waits for', () => {
     play.mockResolvedValue(undefined);
     loadLibrary();
 
-    dispose = initEmulatorNeeded();
+    dispose = initPendingLaunch();
     await flush();
     expect(play).not.toHaveBeenCalled();
 
@@ -196,7 +196,7 @@ describe('the gates a held-back launch waits for', () => {
     takePending.mockResolvedValueOnce(heldBack('cloud.conflict_unresolved', entries[0].held));
     play.mockResolvedValue(undefined);
 
-    dispose = initEmulatorNeeded();
+    dispose = initPendingLaunch();
     handlers[0]();
     await flush();
     passSignIn();
@@ -214,7 +214,7 @@ describe('the gates a held-back launch waits for', () => {
     takePending.mockResolvedValueOnce(heldBack('cloud.conflict_unresolved', entries[0].held));
     playProfile.mockResolvedValue(undefined);
 
-    dispose = initEmulatorNeeded();
+    dispose = initPendingLaunch();
     await flush();
     takePending.mockResolvedValueOnce(heldBack('cloud.syncing', entries[2].held, 'g2'));
     handlers[0]();
@@ -231,7 +231,7 @@ describe('the gates a held-back launch waits for', () => {
   it('drops a held-back launch still waiting when a newer emulator prompt arrives', async () => {
     takePending.mockResolvedValueOnce(heldBack('cloud.conflict_unresolved', entries[2].held, 'g2'));
 
-    dispose = initEmulatorNeeded();
+    dispose = initPendingLaunch();
     await flush();
     takePending.mockResolvedValueOnce({ gameId: 'g1', platform: 'ps2', code: 'emulators.not_configured', profileId: '', profileLaunch: false });
     handlers[0]();
@@ -248,7 +248,7 @@ describe('the gates a held-back launch waits for', () => {
     takePending.mockResolvedValueOnce(heldBack('cloud.conflict_unresolved', entries[0].held));
     play.mockResolvedValue(undefined);
 
-    dispose = initEmulatorNeeded();
+    dispose = initPendingLaunch();
     await flush();
     dispose();
     passSignIn();
@@ -264,7 +264,7 @@ describe('an emulator prompt left by a launch outside the window', () => {
     takePending.mockResolvedValueOnce({ gameId: 'g1', platform: 'ps2', code: 'emulators.not_configured', profileId: 'ab12cd34', profileLaunch: true });
     play.mockResolvedValue(undefined);
 
-    dispose = initEmulatorNeeded();
+    dispose = initPendingLaunch();
     await vi.waitFor(() => expect(get(emulatorPrompt)?.platform).toBe('ps2'));
     get(emulatorPrompt)!.settle(true);
 
@@ -285,7 +285,7 @@ describe('the kind of a pending launch, told by its code', () => {
     play.mockResolvedValue(undefined);
     playProfile.mockResolvedValue(undefined);
 
-    dispose = initEmulatorNeeded();
+    dispose = initPendingLaunch();
     await flush();
     passSignIn();
     loadLibrary();
@@ -304,7 +304,7 @@ describe('the kind of a pending launch, told by its code', () => {
     passSignIn();
     loadLibrary();
 
-    dispose = initEmulatorNeeded();
+    dispose = initPendingLaunch();
 
     await vi.waitFor(() => expect(get(emulatorPrompt)?.code).toBe('emulators.file_missing'));
     expect(play).not.toHaveBeenCalled();
@@ -316,7 +316,7 @@ describe('the kind of a pending launch, told by its code', () => {
     passSignIn();
     loadLibrary();
 
-    dispose = initEmulatorNeeded();
+    dispose = initPendingLaunch();
 
     await vi.waitFor(() => expect(play).toHaveBeenCalledWith('g1'));
     expect(get(emulatorPrompt)).toBeNull();

@@ -13,15 +13,15 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-const eventEmulatorsNeeded = "emulators:needed"
+const eventLaunchPending = "launch:pending"
 
-// EmulatorNeeded is a launch the page did not start that waits for the
+// PendingLaunch is a launch the page did not start that waits for the
 // player: an emulator to pick (Platform is set) or cloud saves to settle.
 // Code is the full code of the launch error, such as emulators.not_configured
 // or cloud.conflict_unresolved. ProfileLaunch is a launch through
 // PlayGameProfile, where an empty ProfileID is the game's own executable and
 // not the profile the game used last. An empty GameID means nothing is waiting.
-type EmulatorNeeded struct {
+type PendingLaunch struct {
 	GameID   string `json:"gameId"`
 	Platform string `json:"platform"`
 	Code     string `json:"code"`
@@ -55,10 +55,10 @@ func savesHoldCode(err error) (string, bool) {
 	return code, slices.Contains(savesHoldCodes, code)
 }
 
-// noteEmulatorNeeded reports a launch held back for the player, by a missing
+// noteLaunchHeld reports a launch held back for the player, by a missing
 // emulator or by the cloud saves: an expected state, not a failure of the
 // launcher. False leaves err to the caller.
-func noteEmulatorNeeded(id string, err error) bool {
+func noteLaunchHeld(id string, err error) bool {
 	if code, ok := emulatorPromptCode(err); ok {
 		slog.Warn("play needs an emulator", "id", id, "code", code)
 		return true
@@ -74,42 +74,42 @@ type gameFinder interface {
 	Find(id string) (library.Game, error)
 }
 
-// EmulatorPromptService carries launches the page did not start and the
+// PendingLaunchService carries launches the page did not start and the
 // player has to finish in the window: an emulator prompt or a launch the
 // cloud saves held back. An event emitted while the page is still loading
 // finds no listener, so the launch also waits here until the page takes it, as
 // NavigationService does for routes. A newer launch replaces an older one.
-type EmulatorPromptService struct {
+type PendingLaunchService struct {
 	games gameFinder
-	emit  func(EmulatorNeeded)
+	emit  func(PendingLaunch)
 
 	mu      sync.Mutex
-	pending EmulatorNeeded
+	pending PendingLaunch
 }
 
-func newEmulatorPromptService(games gameFinder, emit func(EmulatorNeeded)) *EmulatorPromptService {
-	return &EmulatorPromptService{games: games, emit: emit}
+func newPendingLaunchService(games gameFinder, emit func(PendingLaunch)) *PendingLaunchService {
+	return &PendingLaunchService{games: games, emit: emit}
 }
 
-func (p *EmulatorPromptService) TakePending() EmulatorNeeded {
+func (p *PendingLaunchService) TakePending() PendingLaunch {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	needed := p.pending
-	p.pending = EmulatorNeeded{}
+	p.pending = PendingLaunch{}
 	return needed
 }
 
 // offer and offerProfile leave the launch error to their caller either way: a
 // game that cannot be asked about still reveals the window.
-func (p *EmulatorPromptService) offer(id string, err error) {
-	p.hold(EmulatorNeeded{GameID: id}, err)
+func (p *PendingLaunchService) offer(id string, err error) {
+	p.hold(PendingLaunch{GameID: id}, err)
 }
 
-func (p *EmulatorPromptService) offerProfile(id, profileID string, err error) {
-	p.hold(EmulatorNeeded{GameID: id, ProfileID: profileID, ProfileLaunch: true}, err)
+func (p *PendingLaunchService) offerProfile(id, profileID string, err error) {
+	p.hold(PendingLaunch{GameID: id, ProfileID: profileID, ProfileLaunch: true}, err)
 }
 
-func (p *EmulatorPromptService) hold(launch EmulatorNeeded, err error) {
+func (p *PendingLaunchService) hold(launch PendingLaunch, err error) {
 	emulatorCode, emulator := emulatorPromptCode(err)
 	savesCode, saves := savesHoldCode(err)
 	if !emulator && !saves {
@@ -127,7 +127,7 @@ func (p *EmulatorPromptService) hold(launch EmulatorNeeded, err error) {
 		}
 		// The page resumes an emulator prompt with the game's own launch, as
 		// the Play button does, so the profile is not carried.
-		launch = EmulatorNeeded{GameID: launch.GameID, Platform: game.Emulation.Platform, Code: emulatorCode}
+		launch = PendingLaunch{GameID: launch.GameID, Platform: game.Emulation.Platform, Code: emulatorCode}
 	} else {
 		launch.Code = savesCode
 	}
@@ -137,11 +137,11 @@ func (p *EmulatorPromptService) hold(launch EmulatorNeeded, err error) {
 	p.emit(launch)
 }
 
-func emitEmulatorNeeded(wails *application.App, needed EmulatorNeeded) {
+func emitLaunchPending(wails *application.App, needed PendingLaunch) {
 	if wails == nil {
 		return
 	}
-	wails.Event.Emit(eventEmulatorsNeeded, needed)
+	wails.Event.Emit(eventLaunchPending, needed)
 }
 
 type launcherPlayer interface {
@@ -155,7 +155,7 @@ type launcherPlayer interface {
 // again is answered in the window and does not come back here.
 type promptingPlayer struct {
 	player  launcherPlayer
-	prompts *EmulatorPromptService
+	prompts *PendingLaunchService
 }
 
 func (p promptingPlayer) PlayGame(id string) error {

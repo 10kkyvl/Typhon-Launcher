@@ -55,10 +55,10 @@ describe('the save conflict dialog is mounted for both modes', () => {
     }
   });
 
-  // A launch held back outside the window opens the dialog through this gate (stores/emulatorNeeded.ts).
+  // A launch held back outside the window opens the dialog through this gate (stores/pendingLaunch.ts).
   it('lets a held-back launch resume under the same `linksReady` gate', () => {
     const script = frontendSources['App.svelte'].match(/<script[\s\S]*?<\/script>/)?.[0] ?? '';
-    expect(script).toMatch(/\$effect\(\(\) => setResumeReady\(linksReady\)\);/);
+    expect(script).toMatch(/\$effect\(\(\) => setWindowReady\(linksReady\)\);/);
   });
 
   it('is mounted nowhere else in the frontend', () => {
