@@ -25,7 +25,8 @@ type Kind =
   | 'account chip' // the top bar's account: avatar, name and status as one trigger
   | 'drag handle' // grabbed to move a block
   | 'copies itself' // a value that copies its own text when pressed
-  | 'badge trigger'; // a badge that opens a menu; Chip has no size small enough for the sidebar rail
+  | 'badge trigger' // a badge that opens a menu; Chip has no size small enough for the sidebar rail
+  | 'panel trigger'; // a summary line that opens a popover panel about what it shows (the activity widget's head)
 
 /** The base components that own a raw <button>: the only place a button's look is written. */
 const BASE = ['Button', 'Checkbox', 'Chip', 'IconButton', 'MenuList', 'SegmentedControl', 'Select', 'Tabs', 'TextLink', 'Toggle'].map(
@@ -39,7 +40,7 @@ const NOT_YET = (path: string) =>
 const ALLOWED: Record<string, Record<string, Kind>> = {
   'lib/components/AccountMenu.svelte': { chip: 'account chip' },
   'lib/components/AchievementsCard.svelte': { tile: 'tile' },
-  'lib/components/ActivityWidget.svelte': { head: 'row', row: 'row' },
+  'lib/components/ActivityWidget.svelte': { head: 'panel trigger', row: 'row' },
   'lib/components/BetaBadge.svelte': { badge: 'badge trigger' },
   'lib/components/ChatAttachments.svelte': { tile: 'thumbnail' },
   'lib/components/ChatConversations.svelte': { conversation: 'row' },
@@ -158,6 +159,18 @@ describe('no hand-made button look outside the base', () => {
     expect(stale).toEqual([]);
     expect(BASE.filter((path) => rawButtons(path, frontendSources[path] ?? '').length === 0)).toEqual([]);
     expect(entries(ALLOWED).filter((entry) => listed(PENDING, { ...entry, line: 0, radio: false })).map(({ path, key }) => `${path} .${key}`)).toEqual([]);
+  });
+
+  // The control a Popover renders in its trigger snippet opens a panel: it is not a row, whatever it shows.
+  it('a raw button that opens a popover is listed as a panel trigger', () => {
+    const triggers = scanned.flatMap(([path, text]) => {
+      const html = markup(text);
+      return [...html.matchAll(/<Popover\b[\s\S]*?\{#snippet trigger\b[\s\S]*?\{\/snippet\}/g)].flatMap((m) =>
+        rawButtons(path, html.slice(0, m.index).replace(/[^\n]/g, ' ') + m[0]),
+      );
+    });
+    expect(triggers.length).toBeGreaterThan(0);
+    expect(triggers.filter((button) => ALLOWED[button.path]?.[button.key] !== 'panel trigger').map(({ path, line, key }) => `${path}:${line} .${key}`)).toEqual([]);
   });
 
   it('a radio tile says it is a radio', () => {
