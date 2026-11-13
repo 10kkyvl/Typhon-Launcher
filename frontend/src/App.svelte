@@ -191,7 +191,6 @@
       <GamePropertiesModal />
       <GameCrashModal />
       <RedistModal />
-      <CloudConflictModal />
       {#if $leaveRequest}
         <ConfirmModal prompt={$leaveRequest.prompt()} onconfirm={confirmLeave} onclose={stayHere} errorText={(err) => codeText(err)} />
       {/if}
@@ -205,6 +204,8 @@
 <EmulatorNeededModal />
 <BiosNeededModal />
 <EmulatorBusyModal />
+<!-- A launch in either mode may wait on it; shown once the player is past the sign-in screens. -->
+{#if linksReady}<CloudConflictModal />{/if}
 
 <style>
   .boot {
