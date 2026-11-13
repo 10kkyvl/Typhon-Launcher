@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick, untrack } from 'svelte';
+  import { untrack } from 'svelte';
   import {
     applyMetadataMatch,
     findMetadataCandidates,
@@ -16,6 +16,7 @@
   import SearchInput from './SearchInput.svelte';
   import Spinner from './Spinner.svelte';
   import { msg } from '../i18n';
+  import { focusHandOff } from '../utils/focusHandOff';
 
   let {
     open = $bindable(false),
@@ -107,42 +108,34 @@
   // The row that asked the question: the focus goes back to it when the list comes back.
   let pickedFrom: { list: 'found' | 'search'; id: string } | null = null;
 
-  // Whether the pressed control held the focus: only then is there a focus to hand on when it goes.
-  const heldBy = (event: MouseEvent) => event.currentTarget instanceof HTMLElement && document.activeElement === event.currentTarget;
-
-  // In change mode a row swaps the list for a question: the focus the row held goes into the question.
-  async function pick(candidate: MetadataCandidate, list: 'found' | 'search', event: MouseEvent) {
+  // In change mode a row swaps the list for a question: focus the row held goes into the question.
+  function pick(candidate: MetadataCandidate, list: 'found' | 'search') {
     if (applying) return;
     if (mode === 'change') {
-      const held = heldBy(event);
+      const hand = focusHandOff();
       pending = candidate;
       pickedFrom = { list, id: candidate.providerId };
-      if (!held) return;
-      await tick();
-      confirmText?.focus();
+      void hand(() => confirmText);
       return;
     }
-    apply(candidate, false);
+    apply(candidate);
   }
 
-  function cancelPending(event: MouseEvent) {
-    const held = heldBy(event);
+  function cancelPending() {
+    const hand = focusHandOff();
     pending = null;
-    if (held) void backToRow();
+    void hand(pickedRow);
   }
 
-  async function backToRow() {
-    await tick();
-    const active = document.activeElement;
-    if (active && active !== document.body && active.isConnected && !(active instanceof HTMLButtonElement && active.disabled)) return;
+  function pickedRow(): HTMLElement | undefined {
     const from = pickedFrom;
-    if (!from) return;
+    if (!from) return undefined;
     const rows = [...(sectionsEl?.querySelectorAll<HTMLElement>(`[data-list="${from.list}"] [data-provider]`) ?? [])];
-    rows.find((row) => row.dataset.provider === from.id)?.focus();
+    return rows.find((row) => row.dataset.provider === from.id);
   }
 
-  // `held`: the pressed Replace held the focus; a refusal brings the list back and takes it away.
-  async function apply(candidate: MetadataCandidate, held: boolean) {
+  // `hand`: taken at the press of Replace; a refusal brings the list back and takes Replace away.
+  async function apply(candidate: MetadataCandidate, hand?: ReturnType<typeof focusHandOff>) {
     applying = true;
     try {
       const view = await applyMetadataMatch(gameId, candidate.providerId);
@@ -155,7 +148,7 @@
       applying = false;
       pending = null;
     }
-    if (open && held) await backToRow();
+    if (open) await hand?.(pickedRow);
   }
 
   function confidenceLabel(confidence: number) {
@@ -193,7 +186,7 @@
         {:else}
           <div class="candidates" data-list="found">
             {#each candidates as candidate (candidate.providerId)}
-              <button type="button" class="candidate" data-provider={candidate.providerId} aria-disabled={applying || undefined} onclick={(event) => pick(candidate, 'found', event)}>
+              <button type="button" class="candidate" data-provider={candidate.providerId} aria-disabled={applying || undefined} onclick={() => pick(candidate, 'found')}>
                 <span class="thumb">
                   <Artwork src={candidate.thumb ?? ''} alt="" label={candidate.title} radius="var(--radius-xs)" />
                 </span>
@@ -219,7 +212,7 @@
         {#if searchResults.length > 0}
           <div class="candidates" data-list="search">
             {#each searchResults as candidate (candidate.providerId)}
-              <button type="button" class="candidate" data-provider={candidate.providerId} aria-disabled={applying || undefined} onclick={(event) => pick(candidate, 'search', event)}>
+              <button type="button" class="candidate" data-provider={candidate.providerId} aria-disabled={applying || undefined} onclick={() => pick(candidate, 'search')}>
                 <span class="thumb">
                   <Artwork src={candidate.thumb ?? ''} alt="" label={candidate.title} radius="var(--radius-xs)" />
                 </span>
@@ -244,7 +237,7 @@
   {#snippet footer()}
     {#if pending}
       <Button disabled={applying} onclick={cancelPending}>{msg('common.cancel')}</Button>
-      <Button variant="primary" busy={applying} onclick={(event) => pending && apply(pending, heldBy(event))}>
+      <Button variant="primary" busy={applying} onclick={() => pending && apply(pending, focusHandOff())}>
         {applying ? msg('modals.metadataMatchApplying') : msg('modals.metadataMatchReplace')}
       </Button>
     {:else}
