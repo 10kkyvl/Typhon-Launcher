@@ -1,15 +1,12 @@
 <script lang="ts">
   import { ChevronUp, Download, FileCheck, Pause, Play, Wrench, X } from '@lucide/svelte';
   import { installErrorText } from '../install/installErrors';
-  import { stageLabel, movePercent } from '../relocate/moveText';
   import { cancelInstall } from '../services/install';
-  import type { MoveJob } from '../services/relocate';
   import { activity, type ActivityItem } from '../stores/activity';
   import { pause, resume } from '../stores/downloads';
-  import { activeMove } from '../stores/relocate';
   import { navigate } from '../stores/router';
   import { toast } from '../stores/toasts';
-  import { bytesSize, progressPercent, truncateMiddle } from '../utils/format';
+  import { progressPercent } from '../utils/format';
   import { clickOutside } from '../utils/clickOutside';
   import { msg } from '../i18n';
   import IconButton from './IconButton.svelte';
@@ -23,33 +20,7 @@
   let dismissed = $state(false);
   let root = $state<HTMLElement | undefined>(undefined);
 
-  function moveDetail(job: MoveJob) {
-    if (job.currentFile) return truncateMiddle(job.currentFile, 44);
-    if (job.totalBytes > 0) return `${bytesSize(job.copiedBytes)} / ${bytesSize(job.totalBytes)}`;
-    return '';
-  }
-
-  function fromMove(job: MoveJob): ActivityItem {
-    return {
-      key: `move:${job.id}`,
-      kind: 'install',
-      downloadId: job.id,
-      name: job.title || msg('ui.library'),
-      status: stageLabel(job.stage),
-      detail: moveDetail(job),
-      progress: movePercent(job) / 100,
-      tone: 'accent',
-      attention: false,
-      pausable: false,
-      resumable: false,
-    };
-  }
-
-  const items = $derived(
-    [...$activity, ...($activeMove ? [fromMove($activeMove)] : [])].sort(
-      (a, b) => Number(b.attention) - Number(a.attention),
-    ),
-  );
+  const items = $derived($activity);
   const summary = $derived({
     primary: items[0] ?? null,
     progress: items.length === 0 ? 0 : items.reduce((sum, i) => sum + i.progress, 0) / items.length,
@@ -88,7 +59,7 @@
     // Переносы не показываются на странице загрузок: их прогресс живёт в
     // настройках библиотеки, и отправлять туда клик — единственный переход,
     // который не заканчивается пустой страницей.
-    navigate(item.key.startsWith('move:') ? 'settings' : 'downloads');
+    navigate(item.kind === 'move' ? 'settings' : 'downloads');
   }
 
   let cancelling = $state<string[]>([]);
@@ -159,7 +130,7 @@
               }}
             >
               <span class="row-icon" class:attention={item.attention}>
-                {#if item.kind === 'install'}
+                {#if item.kind === 'install' || item.kind === 'move'}
                   <Wrench size="1.6rem" strokeWidth={1.8} />
                 {:else if item.kind === 'verify'}
                   <FileCheck size="1.6rem" strokeWidth={1.8} />

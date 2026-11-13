@@ -1,6 +1,7 @@
 import { derived } from 'svelte/store';
 import type { Download, DownloadStatus } from '../services/downloads';
 import type { Installation } from '../services/install';
+import type { MoveJob } from '../services/relocate';
 import type { VerifyState } from '../services/updates';
 import { bytesSize, etaLabel, speedBytes, truncateMiddle } from '../utils/format';
 import { locale, msg } from '../i18n';
@@ -8,9 +9,11 @@ import { downloads, statusLabels } from './downloads';
 import { installActive, installStatusLabels, installations } from './install';
 import { installIndeterminate, installTotalUnknown } from '../install/progress';
 import { libraryGames } from './library';
+import { activeMove } from './relocate';
 import { verifications } from './updates';
+import { movePercent, stageLabel } from '../relocate/moveText';
 
-export type ActivityKind = 'download' | 'install' | 'verify';
+export type ActivityKind = 'download' | 'install' | 'verify' | 'move';
 export type ActivityTone = 'accent' | 'muted' | 'warning' | 'danger';
 
 export interface ActivityItem {
@@ -106,9 +109,31 @@ function fromVerify(item: VerifyState, title: string): ActivityItem {
   };
 }
 
+function moveDetail(job: MoveJob) {
+  if (job.currentFile) return truncateMiddle(job.currentFile, 44);
+  if (job.totalBytes > 0) return `${bytesSize(job.copiedBytes)} / ${bytesSize(job.totalBytes)}`;
+  return '';
+}
+
+function fromMove(job: MoveJob): ActivityItem {
+  return {
+    key: `move:${job.id}`,
+    kind: 'move',
+    downloadId: job.id,
+    name: job.title || msg('ui.library'),
+    status: stageLabel(job.stage),
+    detail: moveDetail(job),
+    progress: movePercent(job) / 100,
+    tone: 'accent',
+    attention: false,
+    pausable: false,
+    resumable: false,
+  };
+}
+
 export const activity = derived(
-  [downloads, installations, verifications, libraryGames, locale],
-  ([$downloads, $installations, $verifications, $libraryGames]) => {
+  [downloads, installations, verifications, activeMove, libraryGames, locale],
+  ([$downloads, $installations, $verifications, $activeMove, $libraryGames]) => {
     const installItems = $installations
       .filter((i) => installActive(i.status) || i.status === 'waiting_for_user')
       .map(fromInstall);
@@ -121,7 +146,8 @@ export const activity = derived(
       .map((v) =>
         fromVerify(v, $libraryGames.find((g) => g.id === v.gameId)?.title || msg('ui.game')),
       );
-    return [...installItems, ...verifyItems, ...downloadItems].sort(
+    const moveItems = $activeMove ? [fromMove($activeMove)] : [];
+    return [...installItems, ...verifyItems, ...downloadItems, ...moveItems].sort(
       (a, b) => Number(b.attention) - Number(a.attention),
     );
   },

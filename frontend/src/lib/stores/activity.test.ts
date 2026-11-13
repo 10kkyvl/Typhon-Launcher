@@ -3,7 +3,11 @@ import { get } from 'svelte/store';
 import type { Download, DownloadStatus } from '../services/downloads';
 import type { Installation, InstallStatus } from '../services/install';
 import type { LibraryGame } from '../services/library';
+import type { MoveJob } from '../services/relocate';
 import type { VerifyState } from '../services/updates';
+import { msg } from '../i18n';
+import { stageLabel } from '../relocate/moveText';
+import { bytesSize } from '../utils/format';
 
 vi.mock('../services/backend', () => ({ inWails: false }));
 vi.mock('../services/downloads', () => ({
@@ -115,14 +119,36 @@ function makeGame(overrides: Partial<LibraryGame> = {}): LibraryGame {
   };
 }
 
+function makeMove(overrides: Partial<MoveJob> = {}): MoveJob {
+  return {
+    id: 'm1',
+    scope: 'game',
+    stage: 'copy',
+    gameId: 'g1',
+    title: 'Hades',
+    source: '/a',
+    target: '/b',
+    staging: '/b/.staging',
+    renamed: false,
+    totalBytes: 100,
+    copiedBytes: 42,
+    phase: '',
+    currentFile: '',
+    startedAt: '',
+    updatedAt: '',
+    ...overrides,
+  };
+}
+
 async function load() {
   vi.resetModules();
   const downloadsStore = await import('./downloads');
   const installStore = await import('./install');
   const updatesStore = await import('./updates');
   const libraryStore = await import('./library');
+  const relocateStore = await import('./relocate');
   const activityStore = await import('./activity');
-  return { downloadsStore, installStore, updatesStore, libraryStore, activityStore };
+  return { downloadsStore, installStore, updatesStore, libraryStore, relocateStore, activityStore };
 }
 
 beforeEach(() => {
@@ -213,6 +239,34 @@ describe('activity', () => {
       g2: makeVerify({ gameId: 'g2', running: false, repairing: true }),
     });
     expect(get(activityStore.activity)).toEqual([]);
+  });
+
+  it('shows the running move of a game as an item of its own, after the rest, and drops it once it ends', async () => {
+    const { downloadsStore, relocateStore, activityStore } = await load();
+    downloadsStore.downloads.set([makeDownload({ id: 'd1' })]);
+    relocateStore.moves.set([makeMove({ id: 'm0', stage: 'done' }), makeMove()]);
+
+    const items = get(activityStore.activity);
+    expect(items.map((i) => i.key)).toEqual(['download:d1', 'move:m1']);
+    const move = items[1];
+    expect(move.kind).toBe('move');
+    expect(move.name).toBe('Hades');
+    expect(move.status).toBe(stageLabel('copy'));
+    expect(move.detail).toBe(`${bytesSize(42)} / ${bytesSize(100)}`);
+    expect(move.progress).toBeCloseTo(0.42);
+    expect(move.attention).toBe(false);
+    expect(move.pausable || move.resumable).toBe(false);
+
+    relocateStore.moves.set([makeMove({ stage: 'failed' })]);
+    expect(get(activityStore.activity).map((i) => i.key)).toEqual(['download:d1']);
+  });
+
+  it('names a library move by the library and shows the file it copies', async () => {
+    const { relocateStore, activityStore } = await load();
+    relocateStore.moves.set([makeMove({ scope: 'library', title: '', gameId: undefined, currentFile: 'Hades/Content/a.pak' })]);
+    const [move] = get(activityStore.activity);
+    expect(move.name).toBe(msg('ui.library'));
+    expect(move.detail).toBe('Hades/Content/a.pak');
   });
 
   it('ignores installations that already finished', async () => {
