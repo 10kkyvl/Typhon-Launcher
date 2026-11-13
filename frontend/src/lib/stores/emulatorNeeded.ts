@@ -2,7 +2,9 @@ import { Events } from '@wailsio/runtime';
 import { derived, writable } from 'svelte/store';
 import { TakePending } from '../../../bindings/typhon/emulatorpromptservice';
 import type { EmulatorNeeded } from '../../../bindings/typhon/models';
+import { isSavesHoldCode } from '../cloudsaves/hold';
 import { errorCode, msg } from '../i18n';
+import { EMULATOR_PROMPT_CODES } from '../library/emulation';
 import { libraryErrorText } from '../library/errors';
 import { inWails } from '../services/backend';
 import { launchGame, playGameProfile } from '../services/library';
@@ -64,10 +66,15 @@ export async function takeEmulatorNeeded(): Promise<void> {
     const pending = await TakePending();
     if (!pending?.gameId) return;
     dropWaiting?.();
-    if (!pending.platform) {
+    if (isSavesHoldCode(pending.code)) {
       await resumeHeldLaunch(pending);
       return;
     }
+    if (!EMULATOR_PROMPT_CODES.includes(pending.code)) {
+      console.error('pending launch with an unknown code', pending.code);
+      return;
+    }
+    if (!pending.platform) return;
     if (!(await askForEmulator(pending.platform, pending.code))) return;
     await launchGame(pending.gameId);
   } catch (err) {

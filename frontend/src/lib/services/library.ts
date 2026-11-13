@@ -5,6 +5,7 @@ import { Service as AppService } from '../../../bindings/typhon/internal/app';
 import { inWails } from './backend';
 import { errorCode } from '../i18n/errors';
 import { markError } from '../game/markMessages';
+import { savesHeldBack } from '../cloudsaves/hold';
 import { emulationPlatform, emulatorAlreadyOpen, installingPackage, needsBios, needsEmulator } from '../library/emulation';
 import { libraryErrorText } from '../library/errors';
 import { toast } from '../stores/toasts';
@@ -263,8 +264,6 @@ async function launchAfterBios(id: string, first: unknown, answered: Answered): 
     return true;
   }
 }
-
-const savesHeldBack = (err: unknown) => ['cloud.syncing', 'cloud.conflict_unresolved'].includes(errorCode(err));
 
 // The cloud saves held the game back. Saves still on their way are a wait,
 // not a failure. A conflict is put to the player once per launch, and the

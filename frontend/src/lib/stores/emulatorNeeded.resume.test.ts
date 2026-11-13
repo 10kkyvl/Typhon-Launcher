@@ -273,3 +273,52 @@ describe('an emulator prompt left by a launch outside the window', () => {
     expect(get(toasts)).toEqual([]);
   });
 });
+
+describe('the kind of a pending launch, told by its code', () => {
+  const others = [
+    { name: 'a code that is neither, with no platform', pending: { gameId: 'g1', platform: '', code: 'library.game_not_found', profileId: '', profileLaunch: false } },
+    { name: 'a code that is neither, with a platform', pending: { gameId: 'g1', platform: 'ps2', code: 'library.game_not_found', profileId: '', profileLaunch: false } },
+  ];
+
+  it.each(others)('$name: logged and dropped, nothing asked or launched', async ({ pending }) => {
+    takePending.mockResolvedValueOnce(pending);
+    play.mockResolvedValue(undefined);
+    playProfile.mockResolvedValue(undefined);
+
+    dispose = initEmulatorNeeded();
+    await flush();
+    passSignIn();
+    loadLibrary();
+    await flush();
+
+    expect(get(emulatorPrompt)).toBeNull();
+    expect(play).not.toHaveBeenCalled();
+    expect(playProfile).not.toHaveBeenCalled();
+    expect(get(cloudConflictTarget)).toBeNull();
+    expect(toastList()).toEqual([]);
+    expect(console.error).toHaveBeenCalledWith(expect.any(String), 'library.game_not_found');
+  });
+
+  it('an emulator code asks for the emulator even with the window ready', async () => {
+    takePending.mockResolvedValueOnce({ gameId: 'g1', platform: 'ps2', code: 'emulators.file_missing', profileId: '', profileLaunch: false });
+    passSignIn();
+    loadLibrary();
+
+    dispose = initEmulatorNeeded();
+
+    await vi.waitFor(() => expect(get(emulatorPrompt)?.code).toBe('emulators.file_missing'));
+    expect(play).not.toHaveBeenCalled();
+  });
+
+  it('a cloud saves code resumes the launch', async () => {
+    takePending.mockResolvedValueOnce(heldBack('cloud.syncing', entries[0].held));
+    play.mockResolvedValue(undefined);
+    passSignIn();
+    loadLibrary();
+
+    dispose = initEmulatorNeeded();
+
+    await vi.waitFor(() => expect(play).toHaveBeenCalledWith('g1'));
+    expect(get(emulatorPrompt)).toBeNull();
+  });
+});
