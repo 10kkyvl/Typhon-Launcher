@@ -6,7 +6,24 @@ import (
 
 	"typhon/internal/account"
 	"typhon/internal/library"
+	"typhon/internal/uierr"
 )
+
+// coded gives an error of the account client the code a recorded outcome
+// carries for it, so the player who asked reads the launcher's text instead
+// of a fallback; the client's error stays the cause. What is recorded and
+// emitted is left as it is.
+func coded(err error) error {
+	if err == nil || uierr.Code(err) != "" {
+		return err
+	}
+	var api *account.Error
+	var clash *account.ErrSaveConflict
+	if !errors.As(err, &api) && !errors.As(err, &clash) {
+		return err
+	}
+	return uierr.Wrap(classify(err), err)
+}
 
 // gameForOp finds the game a player asked about and refuses one the cloud
 // cannot address, loudly: such a request must not look like a quiet success.
@@ -61,7 +78,7 @@ func (s *Service) SyncNow(gameID string) error {
 	}
 	r, err := s.prepare(ctx, true)
 	if err != nil {
-		return err
+		return coded(err)
 	}
 	s.seedConflicts()
 	if s.gameState(g.CanonicalGameID).Excluded {
@@ -71,7 +88,7 @@ func (s *Service) SyncNow(gameID string) error {
 	}
 	out := s.syncGame(ctx, r, g, modeAuto)
 	s.record(g.ID, out)
-	return out.err
+	return coded(out.err)
 }
 
 // ResolveConflict settles a recorded conflict: keepLocal overwrites the
@@ -92,7 +109,7 @@ func (s *Service) ResolveConflict(gameID string, keepLocal bool) error {
 	}
 	r, err := s.prepare(ctx, true)
 	if err != nil {
-		return err
+		return coded(err)
 	}
 	if s.gameState(g.CanonicalGameID).Conflict == nil {
 		return errNoConflict
@@ -103,7 +120,7 @@ func (s *Service) ResolveConflict(gameID string, keepLocal bool) error {
 	}
 	out := s.syncGame(ctx, r, g, m)
 	s.record(g.ID, out)
-	return out.err
+	return coded(out.err)
 }
 
 // PullRemote takes the cloud copy without a recorded conflict: it is
@@ -124,14 +141,14 @@ func (s *Service) PullRemote(gameID string) error {
 	}
 	r, err := s.prepare(ctx, true)
 	if err != nil {
-		return err
+		return coded(err)
 	}
 	if _, ok := r.remote[g.CanonicalGameID]; !ok {
 		return errNoRemote
 	}
 	out := s.syncGame(ctx, r, g, modeKeepRemote)
 	s.record(g.ID, out)
-	return out.err
+	return coded(out.err)
 }
 
 // DeleteRemote removes the game's archive from the cloud and excludes the game
@@ -158,7 +175,7 @@ func (s *Service) DeleteRemote(gameID string) error {
 		return r.stateErr
 	}
 	if err := s.client.DeleteSave(ctx, g.CanonicalGameID); err != nil && !isNotFound(err) {
-		return err
+		return coded(err)
 	}
 	if err := s.commit(g.CanonicalGameID, func(st *gameState) { *st = gameState{Excluded: true} }); err != nil {
 		return err
@@ -185,7 +202,7 @@ func (s *Service) Forget() error {
 	}
 	list, err := s.client.ListSaves(ctx)
 	if err != nil {
-		return err
+		return coded(err)
 	}
 	var errs []error
 	failed := map[string]bool{}
@@ -200,7 +217,7 @@ func (s *Service) Forget() error {
 	}
 	if r.stateErr != nil {
 		errs = append(errs, r.stateErr)
-		return errors.Join(errs...)
+		return coded(errors.Join(errs...))
 	}
 	s.mu.Lock()
 	keys := make([]string, 0, len(s.state.Games))
@@ -214,7 +231,7 @@ func (s *Service) Forget() error {
 		errs = append(errs, err)
 	}
 	if len(errs) > 0 {
-		return errors.Join(errs...)
+		return coded(errors.Join(errs...))
 	}
 	s.mu.Lock()
 	s.statuses = map[string]GameStatus{}
