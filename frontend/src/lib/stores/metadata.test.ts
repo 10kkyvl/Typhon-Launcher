@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { locale } from '../i18n';
 import { get } from 'svelte/store';
+import { Events } from '@wailsio/runtime';
 import { gameArt, initMetadata, loadArt, metadataAvailable, requestArt } from './metadata';
 
 vi.mock('@wailsio/runtime', () => ({
@@ -126,5 +127,25 @@ describe('metadata availability and art loading errors', () => {
 
     await loadArt(['art-repeat-d']);
     expect(toast).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('metadata:updated into the art store', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    isMetadataAvailable.mockResolvedValue(true);
+  });
+
+  it('keeps the poster flag of the hero next to its picture', async () => {
+    await initMetadata();
+    const call = vi.mocked(Events.On).mock.calls.find(([name]) => name === 'metadata:updated');
+    expect(call).toBeDefined();
+    const handler = call![1] as (event: { data: unknown }) => void;
+
+    handler({ data: { game: { id: 'poster-game' }, cover: '/c.png', hero: '/c.png', heroIsPoster: true } });
+    handler({ data: { game: { id: 'wide-game' }, cover: '/c2.png', hero: '/w.png', heroIsPoster: false } });
+
+    expect(get(gameArt)['poster-game']).toEqual({ cover: '/c.png', hero: '/c.png', heroIsPoster: true });
+    expect(get(gameArt)['wide-game']).toEqual({ cover: '/c2.png', hero: '/w.png', heroIsPoster: false });
   });
 });

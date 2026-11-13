@@ -30,6 +30,7 @@ function view(patch: Partial<MetadataView> = {}): MetadataView {
     game: { id: "g1", title: "", sortTitle: "", createdAt: "" },
     cover: "",
     hero: "",
+    heroIsPoster: false,
     screenshots: [],
     resolved: false,
     stale: false,

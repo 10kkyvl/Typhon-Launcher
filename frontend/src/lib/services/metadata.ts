@@ -29,6 +29,8 @@ export interface MetadataCandidate {
 export interface GameArt {
   cover: string;
   hero: string;
+  /** The hero is the tall cover standing in for a missing wide picture. */
+  heroIsPoster: boolean;
 }
 
 export type MetadataMatch = 'idle' | 'searching' | 'unmatched' | 'failed' | 'skipped';
@@ -68,6 +70,7 @@ export interface MetadataView {
   game: CatalogGame;
   cover: string;
   hero: string;
+  heroIsPoster: boolean;
   screenshots: MediaAsset[];
   resolved: boolean;
   stale: boolean;
@@ -101,6 +104,7 @@ const emptyView = (gameId: string): MetadataView => ({
   game: { id: gameId, title: '', sortTitle: '', createdAt: '' },
   cover: '',
   hero: '',
+  heroIsPoster: false,
   screenshots: [],
   resolved: false,
   stale: false,

@@ -19,7 +19,7 @@ function game(id: string, extra: Partial<LibraryGame> = {}): LibraryGame {
   };
 }
 
-const art = (cover: string, hero: string): GameArt => ({ cover, hero });
+const art = (cover: string, hero: string): GameArt => ({ cover, hero, heroIsPoster: false });
 
 describe('the art behind a game', () => {
   it('tries the hero, then the cover of the canonical game, then the library cover', () => {

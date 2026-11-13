@@ -94,7 +94,7 @@ describe('coverOf', () => {
   const game = { id: 'local', title: '007 First Light', canonicalGameId: 'bcc', cover: '/media/games/bcc/stale.jpg', playtimeSeconds: 0, status: '' };
 
   it('prefers the catalog art over the snapshot stored in the library', () => {
-    expect(coverOf(game, { bcc: { cover: '/media/games/bcc/fresh.jpg', hero: '' } })).toBe('/media/games/bcc/fresh.jpg');
+    expect(coverOf(game, { bcc: { cover: '/media/games/bcc/fresh.jpg', hero: '', heroIsPoster: false } })).toBe('/media/games/bcc/fresh.jpg');
   });
 
   it('falls back to the stored cover when the catalog has no art', () => {

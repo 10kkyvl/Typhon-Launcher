@@ -28,6 +28,7 @@ beforeEach(() => {
     game: { id: 'c1', title: 'Hades' } as CatalogGame,
     cover: '',
     hero: '',
+    heroIsPoster: false,
     screenshots: [],
     resolved: true,
     stale: false,

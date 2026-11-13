@@ -72,7 +72,7 @@ describe('resolveOwn', () => {
     const open = vi.fn();
     const saved = game('1', { playtimeSeconds: 7200, status: 'completed', statusAt: '2026-09-01T10:00:00Z', canonicalGameId: 'canon-1' });
     const ctx = ownContext(
-      { open, art: { 'canon-1': { cover: 'art-cover', hero: 'art-hero' } } },
+      { open, art: { 'canon-1': { cover: 'art-cover', hero: 'art-hero', heroIsPoster: false } } },
       { layoutGames: { '42': { game: saved } } },
     );
 
@@ -191,7 +191,7 @@ describe('resolveOwn', () => {
 
 describe('ownAutoArt', () => {
   const running = [game('run', { canonicalGameId: 'run' })];
-  const art = { run: { cover: 'run-cover', hero: 'run-hero' }, top: { cover: 'top-cover', hero: '' } };
+  const art = { run: { cover: 'run-cover', hero: 'run-hero', heroIsPoster: false }, top: { cover: 'top-cover', hero: '', heroIsPoster: false } };
 
   it('uses the running game for playing, preferring its wide art', () => {
     expect(ownAutoArt('playing', { running, mostPlayed: undefined, blocks: [], art })).toBe('run-hero');

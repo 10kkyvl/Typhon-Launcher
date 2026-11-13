@@ -49,7 +49,7 @@ export async function initMetadata() {
         delete next[id];
         return next;
       }
-      return { ...map, [id]: { cover: view.cover, hero: view.hero } };
+      return { ...map, [id]: { cover: view.cover, hero: view.hero, heroIsPoster: view.heroIsPoster } };
     });
     if (pending.size > 0) pump();
   });
