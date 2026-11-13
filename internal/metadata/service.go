@@ -1088,7 +1088,7 @@ func (s *Service) buildAssets(ctx context.Context, game catalog.Game, meta GameM
 	}
 
 	if mode == modeArt {
-		shots := carryScreenshots(previous)
+		shots := carryAssets(previous, AssetScreenshot)
 		batch.assets = append(batch.assets, shots...)
 		batch.hero = heroOf(shots)
 		batch.partial = len(shots) == 0
@@ -1105,7 +1105,7 @@ func (s *Service) buildAssets(ctx context.Context, game catalog.Game, meta GameM
 		batch.created = append(batch.created, r.asset)
 	}
 	if len(shots) == 0 {
-		shots = carryScreenshots(previous)
+		shots = carryAssets(previous, AssetScreenshot)
 	}
 	batch.assets = append(batch.assets, shots...)
 	batch.hero = heroOf(shots)
@@ -1362,10 +1362,10 @@ func carryCover(previous []MediaAsset, coverID string) (MediaAsset, bool) {
 	return MediaAsset{}, false
 }
 
-func carryScreenshots(previous []MediaAsset) []MediaAsset {
+func carryAssets(previous []MediaAsset, kind AssetType) []MediaAsset {
 	var out []MediaAsset
 	for _, a := range previous {
-		if a.Type == AssetScreenshot {
+		if a.Type == kind {
 			out = append(out, a)
 		}
 	}
