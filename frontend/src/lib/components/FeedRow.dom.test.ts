@@ -52,6 +52,8 @@ describe('FeedRow: the name of who it is about', () => {
     const { user } = renderDom(FeedRow, { event });
     const name = screen.getAllByRole('button', { name: 'Neo' }).find((button) => button.textContent?.trim() === 'Neo') as HTMLElement;
     expect(name.classList.contains('text-link')).toBe(true);
+    // A long name stays on the entry's first line, cut with an ellipsis, as it was before the link.
+    expect(name.classList.contains('truncate')).toBe(true);
     name.focus();
 
     await user.keyboard('{Enter}');

@@ -57,7 +57,7 @@
   <div class="body">
     {#if !compact}
       <div class="head">
-        <span class="author"><TextLink onclick={openUser}>{name}</TextLink></span>
+        <span class="author"><TextLink truncate onclick={openUser}>{name}</TextLink></span>
         <span class="when">{when}</span>
       </div>
       <span class="kind">
