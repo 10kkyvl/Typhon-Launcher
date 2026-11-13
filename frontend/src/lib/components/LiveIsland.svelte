@@ -15,6 +15,7 @@
     type LiveIslandAction,
     type LiveIslandMessage,
   } from '../stores/liveIsland';
+  import { initLiveIslandFeed } from '../stores/liveIslandFeed';
   import Avatar from './Avatar.svelte';
   import Button from './Button.svelte';
   import { giveFocusBack } from './focusBack';
@@ -79,7 +80,9 @@
 
   $effect(() => {
     const release = claimLiveIsland();
+    const stopFeed = initLiveIslandFeed();
     return () => {
+      stopFeed();
       release();
       intent.destroy();
       w.stop();

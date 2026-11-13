@@ -19,7 +19,10 @@ import { writable, type Readable } from 'svelte/store';
  *   `MAX_VISIBLE` slots, so what the dialog itself raises is still shown at once; but only `MAX_HELD`
  *   held one is shown at a time and never more than `MAX_VISIBLE + MAX_HELD` toasts in all: ten
  *   offers raised under a long-open dialog wait their turn (none is dropped or folded) and do not
- *   hold up the plain ones and the errors raised after them.
+ *   hold up the plain ones and the errors raised after them;
+ * - while the live island shows the toasts (`toastsInIsland(true)`, motion on in the main window) it
+ *   shows one at a time and ranks them itself, so every toast is on the list at once: none waits
+ *   for a slot and none goes stale. The island keeps the clocks of the ones it does not show paused.
  */
 
 export type ToastKind = 'info' | 'success' | 'warning' | 'danger';
@@ -73,6 +76,7 @@ let shown: Toast[] = [];
 let queue: Toast[] = [];
 let nextId = 1;
 let dialogOpen = false;
+let slots = MAX_VISIBLE;
 const clocks = new Map<number, Clock>();
 /** When each waiting toast joined the queue, or was last raised again. */
 const queuedAt = new Map<number, number>();
@@ -105,7 +109,7 @@ function promote(): void {
   const stay: Toast[] = [];
   for (const item of queue) {
     const holds = heldByDialog(item, dialogOpen);
-    const fits = held + timed < MAX_VISIBLE + MAX_HELD && (holds ? held < MAX_HELD : timed < MAX_VISIBLE);
+    const fits = held + timed < slots + MAX_HELD && (holds ? held < MAX_HELD : timed < slots);
     if (!fits) {
       stay.push(item);
       continue;
@@ -223,6 +227,12 @@ export function holdToasts(open: boolean): void {
       run(item, clock);
     }
   }
+  promote();
+}
+
+/** The live island takes the toasts over (true) or gives them back to the stack (false). */
+export function toastsInIsland(on: boolean): void {
+  slots = on ? Infinity : MAX_VISIBLE;
   promote();
 }
 

@@ -22,8 +22,13 @@
   const icons = { info: Info, success: CircleCheck, warning: TriangleAlert, danger: CircleAlert };
   const URGENT: readonly ToastKind[] = ['danger', 'warning'];
 
-  const urgent = $derived($toasts.filter((item) => URGENT.includes(item.kind)));
-  const polite = $derived($toasts.filter((item) => !URGENT.includes(item.kind)));
+  // `elsewhere`: the toasts are shown by the live island (the main window with motion on); the stack
+  // draws none of them and still tells the store whether a dialog is open.
+  let { elsewhere = false }: { elsewhere?: boolean } = $props();
+
+  const list = $derived(elsewhere ? [] : $toasts);
+  const urgent = $derived(list.filter((item) => URGENT.includes(item.kind)));
+  const polite = $derived(list.filter((item) => !URGENT.includes(item.kind)));
 
   $effect(() => holdToasts($modalOpen));
 
@@ -38,7 +43,7 @@
   // The watch follows the list, before the page does: a toast can leave it without being closed from
   // inside (its time is up, or code removes it: the "opening the link" toast).
   $effect.pre(() => {
-    const present = $toasts.map((item) => item.id);
+    const present = list.map((item) => item.id);
     // Asked while the cards are still in the page: afterwards nothing says which one held focus.
     const left = watch.listed(present, (id) => stack?.querySelector(`[data-toast="${id}"]`)?.contains(document.activeElement) ?? false);
     if (!left) return;

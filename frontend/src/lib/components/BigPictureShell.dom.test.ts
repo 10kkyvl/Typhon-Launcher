@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { selectEmulatorFile, setEmulatorPath } from '../services/emulators';
 import { emulatorPrompt } from '../stores/emulatorPrompt';
+import { liveIslandOn } from '../stores/liveIsland';
 import { toast, toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
 import BigPictureHarness from '../testing/BigPictureHarness.svelte';
@@ -162,5 +163,22 @@ describe('a shared dialog over Big Picture', () => {
     expect(z('toast')).toBeGreaterThan(z('layer'));
     await keys.click(screen.getByRole('button', { name: 'Open' }));
     expect(run).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Big Picture keeps its own toast stack: the live island belongs to the main window (AppShell) and
+// never shows here, motion on or not.
+describe('toasts in Big Picture', () => {
+  it('shows a toast in its own stack, with motion on, and no live island', async () => {
+    render(BigPictureHarness, { target: app });
+    await screen.findByRole('button', { name: 'Play' });
+
+    toast('Saved');
+    const message = await screen.findByText('Saved');
+
+    expect(message.closest('[data-part="toast"]')).not.toBeNull();
+    expect(message.closest('.toast-corner')).not.toBeNull();
+    expect(document.querySelector('[data-part="live-island"]')).toBeNull();
+    expect(get(liveIslandOn)).toBe(false);
   });
 });

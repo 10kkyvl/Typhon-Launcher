@@ -17,6 +17,7 @@ import {
   toast,
   toastDuration,
   toasts,
+  toastsInIsland,
 } from './toasts';
 
 beforeEach(() => {
@@ -26,6 +27,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  toastsInIsland(false);
   toasts.set([]);
   holdToasts(false);
   vi.useRealTimers();
@@ -571,5 +573,39 @@ describe('a repeated plain toast', () => {
     expect(get(toasts)).not.toBe(before);
     expect(get(toasts)[0]).not.toBe(before[0]);
     expect(get(toasts)[0].id).toBe(before[0].id);
+  });
+});
+
+// The live island shows one toast at a time and ranks them itself (stores/liveIsland.ts): it has to
+// hold all of them, or an error would wait for a slot behind two plain notes.
+describe('toasts shown by the live island', () => {
+  it('puts every toast on the list at once, an error raised behind two plain ones among them', () => {
+    toastsInIsland(true);
+    toast('one');
+    toast('two');
+    toast('three');
+    toast('broken', 'danger');
+    expect(shown()).toEqual(['one', 'two', 'three', 'broken']);
+    expect(waiting()).toEqual([]);
+  });
+
+  it('lets in at once what waited for a slot when the island came', () => {
+    toast('one');
+    toast('two');
+    toast('three');
+    vi.advanceTimersByTime(1000);
+    toastsInIsland(true);
+    expect(shown()).toEqual(['one', 'two', 'three']);
+    expect(waiting()).toEqual([]);
+  });
+
+  it('gives the stack its slots back when the island lets go', () => {
+    toastsInIsland(true);
+    toastsInIsland(false);
+    toast('one');
+    toast('two');
+    toast('three');
+    expect(shown()).toHaveLength(MAX_VISIBLE);
+    expect(waiting()).toEqual(['three']);
   });
 });

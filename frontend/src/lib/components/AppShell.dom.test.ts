@@ -49,12 +49,16 @@ beforeEach(() => {
       return this.#watched.has(element);
     }
   });
+  // The toast stack is where toasts show with motion off; with it on the live island shows them
+  // (LiveIsland.toasts.dom.test.ts).
+  document.documentElement.classList.add('no-anim');
   app = document.createElement('div');
   app.id = 'app';
   document.body.append(app);
 });
 
 afterEach(() => {
+  document.documentElement.classList.remove('no-anim');
   app.remove();
   toasts.set([]);
   vi.unstubAllGlobals();

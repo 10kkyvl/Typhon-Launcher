@@ -9,6 +9,7 @@
   import { themeLayout } from '../stores/layout';
   import { topModal } from '../layers';
   import { motionOn } from '../motion/motion';
+  import { liveIslandOn } from '../stores/liveIsland';
   import { scrollmemory } from '../utils/scrollmemory';
   import ChatPanel from './ChatPanel.svelte';
   import NetworkBanner from './NetworkBanner.svelte';
@@ -63,7 +64,8 @@
     const root = $topModal;
     const panel = root?.querySelector('[data-part="dialog"]');
     const stack = region?.firstElementChild;
-    if (!region || !stack || !root || !panel) {
+    // With the live island showing the toasts, the stack is empty and asks nothing of a dialog.
+    if (!region || !stack || !root || !panel || $liveIslandOn) {
       toastsAt = 'bottom';
       return;
     }
@@ -159,7 +161,7 @@
   data-layer-keep
   bind:this={toastRegion}
 >
-  <Toasts />
+  <Toasts elsewhere={$liveIslandOn} />
 </div>
 
 <!-- With motion on, what just happened is said at the top centre (LiveIsland); with it off, in the

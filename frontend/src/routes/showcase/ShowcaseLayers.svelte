@@ -143,6 +143,7 @@
       <Button onclick={() => toast(`A ${kind} toast`, kind)}>{kind}</Button>
     {/each}
     <Button onclick={() => toast('A toast with an action', 'info', { label: 'Undo', run: () => toast('Undone', 'success') })}>With an action</Button>
+    <p class="text">With animations on they appear in the live island at the top centre of the window; with them off, in the stack in the corner.</p>
   </ShowcaseRow>
 </ShowcaseSection>
 
