@@ -178,6 +178,8 @@ export const ui = {
   'ui.liveIslandOpenDownloads': 'Открыть загрузки',
   'ui.liveIslandFriendPlaying': '{name} играет',
   'ui.liveIslandOpenGame': 'Открыть игру',
+  'ui.liveIslandSaveConflict': 'Конфликт сохранений',
+  'ui.liveIslandChooseVersion': 'Выбрать версию',
   'ui.liveIslandWaiting': { one: 'и ещё {count} сообщение', few: 'и ещё {count} сообщения', many: 'и ещё {count} сообщений' },
   'ui.liveIslandDismissAll': 'Закрыть все',
   'ui.minimize': 'Свернуть',
