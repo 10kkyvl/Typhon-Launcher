@@ -5,6 +5,7 @@ import (
 	"slices"
 	"sync"
 
+	"typhon/internal/cloudsaves"
 	"typhon/internal/emulators"
 	"typhon/internal/library"
 	"typhon/internal/uierr"
@@ -14,13 +15,19 @@ import (
 
 const eventEmulatorsNeeded = "emulators:needed"
 
-// EmulatorNeeded asks the page to let the user pick an emulator. Code is the
-// full code of the launch error, such as emulators.not_configured. An empty
-// GameID means nothing is waiting.
+// EmulatorNeeded is a launch the page did not start that waits for the
+// player: an emulator to pick (Platform is set) or cloud saves to settle.
+// Code is the full code of the launch error, such as emulators.not_configured
+// or cloud.conflict_unresolved. ProfileLaunch is a launch through
+// PlayGameProfile, where an empty ProfileID is the game's own executable and
+// not the profile the game used last. An empty GameID means nothing is waiting.
 type EmulatorNeeded struct {
 	GameID   string `json:"gameId"`
 	Platform string `json:"platform"`
 	Code     string `json:"code"`
+
+	ProfileID     string `json:"profileId,omitempty"`
+	ProfileLaunch bool   `json:"profileLaunch,omitempty"`
 }
 
 var emulatorPromptCodes = []string{
@@ -33,29 +40,45 @@ var emulatorPromptCodes = []string{
 	uierr.Code(emulators.ErrPathRelative),
 }
 
+var savesHoldCodes = []string{
+	uierr.Code(cloudsaves.ErrConflictUnresolved),
+	uierr.Code(cloudsaves.ErrSyncing),
+}
+
 func emulatorPromptCode(err error) (string, bool) {
 	code := uierr.Code(err)
 	return code, slices.Contains(emulatorPromptCodes, code)
 }
 
-// noteEmulatorNeeded reports a launch that only lacks a working emulator: an
-// expected state, not a failure of the launcher. False leaves err to the caller.
+func savesHoldCode(err error) (string, bool) {
+	code := uierr.Code(err)
+	return code, slices.Contains(savesHoldCodes, code)
+}
+
+// noteEmulatorNeeded reports a launch held back for the player, by a missing
+// emulator or by the cloud saves: an expected state, not a failure of the
+// launcher. False leaves err to the caller.
 func noteEmulatorNeeded(id string, err error) bool {
-	code, ok := emulatorPromptCode(err)
-	if ok {
+	if code, ok := emulatorPromptCode(err); ok {
 		slog.Warn("play needs an emulator", "id", id, "code", code)
+		return true
 	}
-	return ok
+	if code, ok := savesHoldCode(err); ok {
+		slog.Warn("play held back by cloud saves", "id", id, "code", code)
+		return true
+	}
+	return false
 }
 
 type gameFinder interface {
 	Find(id string) (library.Game, error)
 }
 
-// EmulatorPromptService carries the prompt from launches the page did not start.
-// An event emitted while the page is still loading finds no listener, so the
-// prompt also waits here until the page takes it, as NavigationService does for
-// routes. A newer prompt replaces an older one.
+// EmulatorPromptService carries launches the page did not start and the
+// player has to finish in the window: an emulator prompt or a launch the
+// cloud saves held back. An event emitted while the page is still loading
+// finds no listener, so the launch also waits here until the page takes it, as
+// NavigationService does for routes. A newer launch replaces an older one.
 type EmulatorPromptService struct {
 	games gameFinder
 	emit  func(EmulatorNeeded)
@@ -76,27 +99,42 @@ func (p *EmulatorPromptService) TakePending() EmulatorNeeded {
 	return needed
 }
 
-// offer leaves the launch error to its caller either way: a game that cannot be
-// asked about still reveals the window.
+// offer and offerProfile leave the launch error to their caller either way: a
+// game that cannot be asked about still reveals the window.
 func (p *EmulatorPromptService) offer(id string, err error) {
-	code, ok := emulatorPromptCode(err)
-	if !ok {
+	p.hold(EmulatorNeeded{GameID: id}, err)
+}
+
+func (p *EmulatorPromptService) offerProfile(id, profileID string, err error) {
+	p.hold(EmulatorNeeded{GameID: id, ProfileID: profileID, ProfileLaunch: true}, err)
+}
+
+func (p *EmulatorPromptService) hold(launch EmulatorNeeded, err error) {
+	emulatorCode, emulator := emulatorPromptCode(err)
+	savesCode, saves := savesHoldCode(err)
+	if !emulator && !saves {
 		return
 	}
-	game, findErr := p.games.Find(id)
+	game, findErr := p.games.Find(launch.GameID)
 	if findErr != nil {
-		slog.Warn("find the game that needs an emulator", "id", id, "error", findErr)
+		slog.Warn("find the game of a held-back launch", "id", launch.GameID, "error", findErr)
 		return
 	}
-	if game.Emulation == nil {
-		slog.Warn("emulator error for a game without emulation", "id", id, "code", code)
-		return
+	if emulator {
+		if game.Emulation == nil {
+			slog.Warn("emulator error for a game without emulation", "id", launch.GameID, "code", emulatorCode)
+			return
+		}
+		// The page resumes an emulator prompt with the game's own launch, as
+		// the Play button does, so the profile is not carried.
+		launch = EmulatorNeeded{GameID: launch.GameID, Platform: game.Emulation.Platform, Code: emulatorCode}
+	} else {
+		launch.Code = savesCode
 	}
-	needed := EmulatorNeeded{GameID: id, Platform: game.Emulation.Platform, Code: code}
 	p.mu.Lock()
-	p.pending = needed
+	p.pending = launch
 	p.mu.Unlock()
-	p.emit(needed)
+	p.emit(launch)
 }
 
 func emitEmulatorNeeded(wails *application.App, needed EmulatorNeeded) {
@@ -112,7 +150,9 @@ type launcherPlayer interface {
 }
 
 // promptingPlayer stands in for the library wherever a game starts outside the
-// page: the tray, shortcuts, Steam entries and the jump list.
+// page: the tray, shortcuts, Steam entries and the jump list. The page resumes
+// a held-back launch through the bound library itself, so a resume held back
+// again is answered in the window and does not come back here.
 type promptingPlayer struct {
 	player  launcherPlayer
 	prompts *EmulatorPromptService
@@ -126,6 +166,6 @@ func (p promptingPlayer) PlayGame(id string) error {
 
 func (p promptingPlayer) PlayGameProfile(id, profileID string) error {
 	err := p.player.PlayGameProfile(id, profileID)
-	p.prompts.offer(id, err)
+	p.prompts.offerProfile(id, profileID, err)
 	return err
 }

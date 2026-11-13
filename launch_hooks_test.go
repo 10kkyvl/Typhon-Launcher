@@ -2,14 +2,11 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"strings"
 	"testing"
 
-	"typhon/internal/cloudsaves"
 	"typhon/internal/library"
-	"typhon/internal/uierr"
 )
 
 type namedHook string
@@ -69,47 +66,5 @@ func TestMainGivesCloudSavesTheConfirmedAndTheStoredAccount(t *testing.T) {
 	stored := strings.Index(call, "\n\t\taccountService.DurableAccountID,\n")
 	if confirmed < 0 || stored < confirmed {
 		t.Fatalf("cloudsaves.NewService call = %s\nwant the confirmed account (SyncAccountID), then the stored one (DurableAccountID)", call)
-	}
-}
-
-// What the library hands back for a launch the cloud check stopped:
-// LaunchBlockedError's cause, wrapped as the hook wrapped it.
-func TestOutsideLaunchStoppedByCloudSavesOpensTheWindowAndLogsOnce(t *testing.T) {
-	surfaces := []struct {
-		name string
-		play func(player promptingPlayer, reveal func())
-	}{
-		{"tray", func(p promptingPlayer, reveal func()) { playFromTray(p, "g1", reveal) }},
-		{"shortcut at cold start", func(p promptingPlayer, reveal func()) { playFromShortcut(p, playRequest{id: "g1"}, reveal) }},
-		{"second instance", func(p promptingPlayer, reveal func()) {
-			handleSecondLaunch([]string{"typhon.exe", "--play", "g1"}, p, openerFunc(reveal), &NavigationService{}, func(string) {})
-		}},
-	}
-	for _, blockedBy := range []error{cloudsaves.ErrConflictUnresolved, cloudsaves.ErrSyncing} {
-		code := uierr.Code(blockedBy)
-		for _, surface := range surfaces {
-			t.Run(surface.name+"/"+code, func(t *testing.T) {
-				log := captureLog(t)
-				prompts, events := promptsFor(fakeGames{game: library.Game{ID: "g1"}})
-				revealed := 0
-				err := fmt.Errorf("launch check: %w", blockedBy)
-
-				surface.play(promptingPlayer{player: fakeLauncher{err: err}, prompts: prompts}, func() { revealed++ })
-
-				if revealed != 1 {
-					t.Fatalf("window opened %d times, want once", revealed)
-				}
-				if len(*events) != 0 {
-					t.Fatalf("emulator prompts %+v for a launch the cloud check stopped", *events)
-				}
-				logged := log.String()
-				if n := strings.Count(logged, "level=ERROR"); n != 1 || !strings.Contains(logged, code) {
-					t.Fatalf("log = %q, want one error line with %s", logged, code)
-				}
-				if strings.Contains(logged, "level=WARN") {
-					t.Fatalf("log = %q, want the failure logged once, as an error", logged)
-				}
-			})
-		}
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"typhon/internal/cloudsaves"
 	"typhon/internal/emulators"
 	"typhon/internal/library"
 	"typhon/internal/uierr"
@@ -216,5 +217,161 @@ func TestPromptCodesMatchTheFrontend(t *testing.T) {
 	slices.Sort(frontend)
 	if !slices.Equal(frontend, want) {
 		t.Fatalf("frontend %v, go %v", frontend, want)
+	}
+}
+
+var nativeGame = library.Game{ID: "g1"}
+
+// What the library hands back for a launch the cloud check stopped:
+// LaunchBlockedError's cause, wrapped as the hook wrapped it.
+func heldBySaves(cause error) error { return fmt.Errorf("launch check: %w", cause) }
+
+func TestLaunchSurfacesHeldBackByCloudSaves(t *testing.T) {
+	surfaces := []struct {
+		name string
+		play func(player promptingPlayer, reveal func())
+		want EmulatorNeeded
+	}{
+		{"tray", func(p promptingPlayer, reveal func()) { playFromTray(p, "g1", reveal) },
+			EmulatorNeeded{GameID: "g1"}},
+		{"shortcut", func(p promptingPlayer, reveal func()) { playFromShortcut(p, playRequest{id: "g1"}, reveal) },
+			EmulatorNeeded{GameID: "g1", ProfileLaunch: true}},
+		{"shortcut with a profile", func(p promptingPlayer, reveal func()) {
+			playFromShortcut(p, playRequest{id: "g1", profile: "ab12cd34"}, reveal)
+		}, EmulatorNeeded{GameID: "g1", ProfileID: "ab12cd34", ProfileLaunch: true}},
+		{"second launch", func(p promptingPlayer, reveal func()) {
+			handleSecondLaunch([]string{"typhon.exe", "--play", "g1"}, p, openerFunc(reveal), &NavigationService{}, func(string) {})
+		}, EmulatorNeeded{GameID: "g1", ProfileLaunch: true}},
+		{"second launch with a profile", func(p promptingPlayer, reveal func()) {
+			handleSecondLaunch([]string{"typhon.exe", "--play", "g1", "--profile", "ab12cd34"}, p, openerFunc(reveal), &NavigationService{}, func(string) {})
+		}, EmulatorNeeded{GameID: "g1", ProfileID: "ab12cd34", ProfileLaunch: true}},
+	}
+	for _, cause := range []error{cloudsaves.ErrConflictUnresolved, cloudsaves.ErrSyncing} {
+		code := uierr.Code(cause)
+		for _, surface := range surfaces {
+			t.Run(surface.name+"/"+code, func(t *testing.T) {
+				log := captureLog(t)
+				prompts, events := promptsFor(fakeGames{game: nativeGame})
+				revealed := 0
+				surface.play(promptingPlayer{player: fakeLauncher{err: heldBySaves(cause)}, prompts: prompts}, func() { revealed++ })
+
+				want := surface.want
+				want.Code = code
+				if !slices.Equal(*events, []EmulatorNeeded{want}) || revealed != 1 {
+					t.Fatalf("events = %+v, revealed %d times, want one %+v and once", *events, revealed, want)
+				}
+				if got := prompts.TakePending(); got != want {
+					t.Fatalf("pending = %+v, want %+v", got, want)
+				}
+				if got := prompts.TakePending(); got != (EmulatorNeeded{}) {
+					t.Fatalf("second take = %+v, want nothing", got)
+				}
+				logged := log.String()
+				if strings.Count(logged, "level=WARN") != 1 || !strings.Contains(logged, "code="+code) || strings.Contains(logged, "level=ERROR") {
+					t.Fatalf("log = %q, want one WARN line with %s and no ERROR", logged, code)
+				}
+			})
+		}
+	}
+}
+
+func TestANewerHeldBackLaunchReplacesTheOlder(t *testing.T) {
+	type held struct {
+		launch func(promptingPlayer)
+		err    error
+		want   EmulatorNeeded
+	}
+	emulator := held{
+		func(p promptingPlayer) { playFromTray(p, "g1", func() {}) },
+		emulators.ErrNotConfigured,
+		EmulatorNeeded{GameID: "g1", Platform: emulators.PS2, Code: uierr.Code(emulators.ErrNotConfigured)},
+	}
+	conflict := held{
+		func(p promptingPlayer) { playFromTray(p, "g1", func() {}) },
+		heldBySaves(cloudsaves.ErrConflictUnresolved),
+		EmulatorNeeded{GameID: "g1", Code: uierr.Code(cloudsaves.ErrConflictUnresolved)},
+	}
+	syncing := held{
+		func(p promptingPlayer) { playFromShortcut(p, playRequest{id: "g1", profile: "ab12cd34"}, func() {}) },
+		heldBySaves(cloudsaves.ErrSyncing),
+		EmulatorNeeded{GameID: "g1", ProfileID: "ab12cd34", ProfileLaunch: true, Code: uierr.Code(cloudsaves.ErrSyncing)},
+	}
+	cases := []struct {
+		name         string
+		older, newer held
+	}{
+		{"emulator then cloud", emulator, conflict},
+		{"cloud then emulator", conflict, emulator},
+		{"cloud then cloud", conflict, syncing},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			prompts, events := promptsFor(fakeGames{game: ps2Game})
+			for _, h := range []held{c.older, c.newer} {
+				h.launch(promptingPlayer{player: fakeLauncher{err: h.err}, prompts: prompts})
+			}
+			if !slices.Equal(*events, []EmulatorNeeded{c.older.want, c.newer.want}) {
+				t.Fatalf("events = %+v, want %+v then %+v", *events, c.older.want, c.newer.want)
+			}
+			if got := prompts.TakePending(); got != c.newer.want {
+				t.Fatalf("pending = %+v, want the newer %+v", got, c.newer.want)
+			}
+			if got := prompts.TakePending(); got != (EmulatorNeeded{}) {
+				t.Fatalf("second take = %+v, want nothing", got)
+			}
+		})
+	}
+}
+
+func TestLaunchHeldBackForAGameTheLibraryDoesNotKnow(t *testing.T) {
+	for _, cause := range []error{cloudsaves.ErrConflictUnresolved, cloudsaves.ErrSyncing} {
+		t.Run(uierr.Code(cause), func(t *testing.T) {
+			log := captureLog(t)
+			prompts, events := promptsFor(fakeGames{err: errors.New("game not in the library")})
+			playFromTray(promptingPlayer{player: fakeLauncher{err: heldBySaves(cause)}, prompts: prompts}, "g1", func() {})
+
+			if len(*events) != 0 {
+				t.Fatalf("events = %+v, want none", *events)
+			}
+			if got := prompts.TakePending(); got != (EmulatorNeeded{}) {
+				t.Fatalf("pending = %+v, want nothing", got)
+			}
+			if logged := log.String(); !strings.Contains(logged, "game not in the library") || !strings.Contains(logged, "id=g1") {
+				t.Fatalf("log = %q, want the failed lookup of g1", logged)
+			}
+		})
+	}
+}
+
+// The page resumes a held-back launch through the bound library, not through
+// the outside player: held back again, it is answered in the window and does
+// not come back into the slot.
+func TestLaunchThroughTheBoundLibraryLeavesNothingPending(t *testing.T) {
+	lib := fakeLauncher{err: heldBySaves(cloudsaves.ErrConflictUnresolved)}
+	prompts, events := promptsFor(fakeGames{game: nativeGame})
+	outside := promptingPlayer{player: lib, prompts: prompts}
+
+	playFromShortcut(outside, playRequest{id: "g1", profile: "ab12cd34"}, func() {})
+	taken := prompts.TakePending()
+	if taken.GameID != "g1" || len(*events) != 1 {
+		t.Fatalf("outside launch left %+v and %d events, want g1 pending and one event", taken, len(*events))
+	}
+
+	for _, err := range []error{lib.PlayGameProfile(taken.GameID, taken.ProfileID), lib.PlayGame(taken.GameID)} {
+		if uierr.Code(err) != uierr.Code(cloudsaves.ErrConflictUnresolved) {
+			t.Fatalf("resumed launch = %v, want it held back again", err)
+		}
+	}
+	if got := prompts.TakePending(); got != (EmulatorNeeded{}) || len(*events) != 1 {
+		t.Fatalf("after the resume: pending %+v, %d events, want nothing new", got, len(*events))
+	}
+
+	body, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(body)
+	if !strings.Contains(src, "application.NewService(libraryService),") || strings.Contains(src, "application.NewService(outsidePlayer") {
+		t.Fatal("main.go binds the outside player for the page instead of the library itself")
 	}
 }
