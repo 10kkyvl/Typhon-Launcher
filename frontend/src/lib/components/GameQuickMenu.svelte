@@ -42,7 +42,6 @@
   import { libraryErrorText } from '../library/errors';
   import { isEmulated } from '../library/emulation';
   import { externalLabel, isExternal, isLaunchable } from '../library/external';
-  import { errorMessage } from '../utils/errors';
   import { msg } from '../i18n';
   import { canTakeFocus, initialFocus } from '../layers/focus';
 
@@ -163,9 +162,9 @@
     homes = homesOf(source);
     switch (action) {
       case 'play':
-        return guard(() => playGame(current.id));
+        return guard(() => playGame(current.id), msg('games.errorPlayFailed'));
       case 'stop':
-        return guard(() => stopGame(current.id));
+        return guard(() => stopGame(current.id), msg('games.errorStopFailed'));
       case 'favorite-add':
       case 'favorite-remove':
         return mark(() => setFavorite(current.id, action === 'favorite-add'), msg('ui.favoriteChangeFailed'));
@@ -181,7 +180,7 @@
       case 'unhide':
         return toggleHidden(current.id, action === 'hide');
       case 'folder':
-        return guard(() => openGameFolder(current.installDir, current.executable));
+        return guard(() => openGameFolder(current.installDir, current.executable), msg('library.menuFolderFailed'));
       case 'saves':
         return openSaves(current);
       case 'saves-backups':
@@ -203,11 +202,12 @@
         shareLan(current.id);
         return;
       case 'lan-unshare':
-        return guard(() => unshareLan(current.id));
+        // The LAN store reports its own failures.
+        return unshareLan(current.id);
       case 'shortcut-create':
-        return guard(() => createShortcut(current.id));
+        return guard(() => createShortcut(current.id), msg('games.detailShortcutCreateError'));
       case 'shortcut-remove':
-        return guard(() => removeShortcut(current.id));
+        return guard(() => removeShortcut(current.id), msg('games.detailShortcutRemoveError'));
       case 'steam-add':
         steamConfirmID = current.id;
         return;
@@ -222,11 +222,11 @@
     }
   }
 
-  async function guard(action: () => Promise<unknown>) {
+  async function guard(action: () => Promise<unknown>, fallback: string) {
     try {
       await action();
     } catch (err) {
-      toast(libraryErrorText(err, errorMessage(err)), 'danger');
+      toast(libraryErrorText(err, fallback), 'danger');
     }
   }
 
@@ -266,12 +266,12 @@
     try {
       found = await locateSaves(current.id);
     } catch (err) {
-      toast(errorMessage(err), 'danger');
+      toast(libraryErrorText(err, msg('library.menuSavesFailed')), 'danger');
       return;
     }
     const { path, candidates, unreadable } = found;
     if (path) {
-      await guard(() => openFolder(path));
+      await guard(() => openFolder(path), msg('library.menuSavesFailed'));
       return;
     }
     if (candidates && candidates.length > 0) {
@@ -292,7 +292,7 @@
     await guard(async () => {
       const dir = await chooseSavesDir(current.id, current.title);
       if (dir) await openFolder(dir);
-    });
+    }, msg('library.menuSavesFailed'));
   }
 
   async function useCandidate(dir: string) {
@@ -302,7 +302,7 @@
     await guard(async () => {
       await setSavesDir(current.id, dir);
       await openFolder(dir);
-    });
+    }, msg('library.menuSavesFailed'));
   }
 
   // Bound to the game and the opening while the menu is shown: the menu closes, and the store with it,
@@ -311,7 +311,7 @@
     return (id: string) => {
       const profileID = profileIdFromItem(id);
       if (profileID !== null) {
-        void guard(() => playGameProfile(current.id, profileID));
+        void guard(() => playGameProfile(current.id, profileID), msg('games.errorPlayFailed'));
         return;
       }
       void run(current, id as QuickAction, menu.source);
