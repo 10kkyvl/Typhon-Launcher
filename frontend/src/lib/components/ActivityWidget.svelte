@@ -206,11 +206,11 @@
                   </span>
                 </button>
                 {#if item.pausable || item.resumable}
-                  <Button size="sm" variant="secondary" busy={busy.includes(item.key)} onclick={() => void toggle(item)}>
+                  <Button size="sm" variant="secondary" minWidth="var(--activity-action-w)" busy={busy.includes(item.key)} onclick={() => void toggle(item)}>
                     {item.pausable ? msg('ui.pause') : msg('common.continue')}
                   </Button>
                 {:else if item.kind === 'install' && item.attention}
-                  <Button size="sm" variant="secondary" busy={busy.includes(item.key)} onclick={() => void cancelWaiting(item)}>
+                  <Button size="sm" variant="secondary" minWidth="var(--activity-action-w)" busy={busy.includes(item.key)} onclick={() => void cancelWaiting(item)}>
                     {msg('modals.installCancelInstall')}
                   </Button>
                 {/if}

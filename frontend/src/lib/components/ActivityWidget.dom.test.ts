@@ -322,6 +322,24 @@ describe('ActivityWidget: actions from the keyboard', () => {
     expect(document.activeElement).toBe(pause);
   });
 
+  // Pause and Continue differ in length: a width of its own keeps the swap from moving the row's name.
+  it('keeps one width for the action whichever label it shows', async () => {
+    downloads.set([download()]);
+    const { keys, head, panel } = mount();
+    await keys.click(head() as HTMLElement);
+    const action = within(panel() as HTMLElement).getByRole('button', { name: msg('ui.pause') });
+    expect(action.style.minWidth).toBe('var(--activity-action-w)');
+
+    set(() => downloads.set([download({ status: 'paused' })]));
+    expect(action.textContent).toContain(msg('common.continue'));
+    expect(action.style.minWidth).toBe('var(--activity-action-w)');
+
+    type Fs = { readFileSync(path: string, encoding: 'utf8'): string };
+    const node = (globalThis as unknown as { process: { cwd(): string; getBuiltinModule(id: 'node:fs'): Fs } }).process;
+    const shell = node.getBuiltinModule('node:fs').readFileSync(`${node.cwd()}/src/styles/shell.css`, 'utf8');
+    expect(/--activity-action-w:\s*[\d.]+rem;/.test(shell)).toBe(true);
+  });
+
   it('Resume is called on a paused download', async () => {
     vi.mocked(resumeDownload).mockResolvedValue();
     downloads.set([download({ status: 'paused' })]);
