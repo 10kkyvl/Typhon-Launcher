@@ -172,6 +172,25 @@ describe('a launch held back by a save conflict in Big Picture', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
+  it('a conflict found with no launch waiting is said once in the toast corner; its action opens the dialog', async () => {
+    libraryGames.set([{ id: 'game-1', title: 'Hades' } as LibraryGame, { id: 'game-2', title: 'Celeste' } as LibraryGame]);
+    const listed = conflicted();
+    cloudStatus.set({ ...listed, games: [{ ...listed.games[0], gameId: 'game-2', conflict: { ...listed.games[0].conflict!, localDigest: 'bp-local' } }] });
+    render(BigPictureHarness, { target: app });
+
+    const corner = document.querySelector('.toast-corner') as HTMLElement;
+    const choose = await within(corner).findByRole('button', { name: msg('ui.liveIslandChooseVersion') });
+    expect(get(toasts).map((item) => [item.kind, item.message])).toEqual([['warning', msg('ui.statusCloudConflict', { title: 'Celeste' })]]);
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    await user().click(choose);
+
+    const dialog = await screen.findByRole('dialog', { name: msg('cloudsaves.conflictTitle') });
+    expect(dialog.textContent).toContain('Celeste');
+    expect(get(toasts)).toEqual([]);
+    expect(play).not.toHaveBeenCalled();
+  });
+
   it('says that the saves are still syncing as a notice, with no dialog', async () => {
     play.mockRejectedValueOnce(new Error('typhon:cloud.syncing: downloading'));
     render(BigPictureHarness, { target: app });

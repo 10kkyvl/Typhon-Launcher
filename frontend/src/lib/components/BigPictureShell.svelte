@@ -29,6 +29,7 @@
   import { displayedAccent } from '../theme/apply';
   import { activeTheme } from '../stores/theme';
   import { settings } from '../stores/settings';
+  import { initConflictToasts } from '../stores/liveIslandFeed';
   import '../bigpicture/styles.css';
 
   let shell: HTMLElement;
@@ -209,6 +210,8 @@
     const index = nodes.indexOf(document.activeElement as HTMLElement);
     focusControl(nodes[(index + (event.shiftKey ? -1 : 1) + nodes.length) % nodes.length]);
   }
+  // Big Picture has no live island: a save conflict is said in its toast corner.
+  $effect(() => initConflictToasts());
   onMount(() => {
     const unsubscribe = runningGames.subscribe((ids) => session.observe(ids));
     const stopInput = startBigPictureInput({ onCommand: command, isEnabled: () => !applyingUpdate && !exiting, onDevice: (next) => device = next });

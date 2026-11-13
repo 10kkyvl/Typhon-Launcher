@@ -10,6 +10,7 @@
   import { topModal } from '../layers';
   import { motionOn } from '../motion/motion';
   import { liveIslandOn } from '../stores/liveIsland';
+  import { initConflictToasts } from '../stores/liveIslandFeed';
   import { scrollmemory } from '../utils/scrollmemory';
   import ChatPanel from './ChatPanel.svelte';
   import NetworkBanner from './NetworkBanner.svelte';
@@ -48,6 +49,11 @@
     land();
     return () => watcher.disconnect();
   };
+
+  // The live island says a save conflict while it is mounted (motion on); without it the toast does.
+  $effect(() => {
+    if (!$motionOn) return initConflictToasts();
+  });
 
   const chatShown = $derived($authState === 'authenticated' && !$needsSocialConsent);
 
