@@ -244,6 +244,22 @@ describe('SourceDetailsModal: the rest of the dialog', () => {
     await vi.waitFor(() => expect(document.activeElement).toBe(next));
   });
 
+  it('hands the focus to the failure\'s Retry when the first page fails to load and the pager goes with it', async () => {
+    vi.mocked(queryReleases).mockResolvedValueOnce(page(120)).mockResolvedValueOnce(page(120)).mockRejectedValueOnce(new Error('ipc'));
+    const dialog = await openDialog();
+    const keys = user();
+    await keys.click(await within(dialog).findByRole('button', { name: msg('ui.next') }));
+    const previous = within(dialog).getByRole('button', { name: msg('ui.previous') });
+    await vi.waitFor(() => expect(previous).toHaveProperty('disabled', false));
+    previous.focus();
+
+    await keys.keyboard('{Enter}');
+
+    const notice = (await within(dialog).findByText(msg('modals.sourceDetailsReleasesFailed'))).closest('.notice') as HTMLElement;
+    await vi.waitFor(() => expect(previous.isConnected).toBe(false));
+    await vi.waitFor(() => expect(document.activeElement).toBe(within(notice).getByRole('button', { name: msg('common.retry') })));
+  });
+
   it('leaves the focus alone when the pager button pressed to its end did not hold it', async () => {
     vi.mocked(queryReleases).mockResolvedValue(page(60));
     const dialog = await openDialog();

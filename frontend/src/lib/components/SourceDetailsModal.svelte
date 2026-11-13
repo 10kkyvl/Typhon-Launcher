@@ -196,25 +196,34 @@
     if (page <= 1) return;
     const held = heldBy(event);
     page -= 1;
-    if (sourceId) loadReleases(sourceId);
-    if (held) void keepPagerFocus();
+    void turnPage(held);
   }
 
   function nextPage(event: MouseEvent) {
     if (page * pageSize >= total) return;
     const held = heldBy(event);
     page += 1;
-    if (sourceId) loadReleases(sourceId);
-    if (held) void keepPagerFocus();
+    void turnPage(held);
   }
 
-  // A pager button that reaches its end turns disabled under the focus it held: that focus goes to
-  // the other one.
+  // The focus the pressed pager button held is handed on twice: at once, when the button reached its
+  // end and turned disabled, and after the page's answer, which can disable it or take the pager away.
+  async function turnPage(held: boolean) {
+    const loaded = sourceId ? loadReleases(sourceId) : undefined;
+    if (!held) return;
+    await keepPagerFocus();
+    await loaded;
+    await keepPagerFocus();
+  }
+
+  // To the other pager button while there is one; when a failed page took the pager away, to the
+  // failure's Retry.
   async function keepPagerFocus() {
     await tick();
     const active = document.activeElement;
     if (active && active !== document.body && active.isConnected && !(active instanceof HTMLButtonElement && active.disabled)) return;
-    [...(pagerEl?.querySelectorAll<HTMLButtonElement>('button') ?? [])].find((button) => !button.disabled)?.focus();
+    const other = [...(pagerEl?.querySelectorAll<HTMLButtonElement>('button') ?? [])].find((button) => !button.disabled);
+    (other ?? tableEl?.querySelector<HTMLElement>('.notice button'))?.focus();
   }
 
   async function doRefresh() {
