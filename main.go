@@ -709,7 +709,7 @@ func main() {
 	}
 	libraryService.AddSessionWatcher(presenceWatcher)
 	libraryService.AddSessionWatcher(saveBackupService)
-	libraryService.AddLaunchHook(saveBackupService)
+	addLaunchHooks(libraryService, cloudSavesService, saveBackupService)
 	saveBackupService.SetPlaytime(savebackup.PlaytimeFrom(playlogService, time.Now))
 	libraryService.AddSessionWatcher(cloudSavesService)
 	libraryService.AddSessionWatcher(achievementsService)
@@ -1159,6 +1159,18 @@ func main() {
 	if err := wails.Run(); err != nil {
 		fatal("run application", err)
 	}
+}
+
+type launchHookAdder interface {
+	AddLaunchHook(h library.LaunchHook)
+}
+
+// addLaunchHooks adds the pre-launch hooks in the order the library runs
+// them. The cloud check goes first: the library stops at the first block, so
+// a launch the cloud holds back costs no pre-launch backup.
+func addLaunchHooks(lib launchHookAdder, cloudSaves, saveBackup library.LaunchHook) {
+	lib.AddLaunchHook(cloudSaves)
+	lib.AddLaunchHook(saveBackup)
 }
 
 type gamePlayer interface {
