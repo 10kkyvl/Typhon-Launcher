@@ -387,3 +387,29 @@ describe('TicketList: "Load more" that brings the last page', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: msg('tickets.loadMore') }));
   });
 });
+
+describe('TicketList: a later page asked for while a reply\'s refresh is on its way', () => {
+  it('asks for page one again once the later page answers, and shows the reply\'s unread mark', async () => {
+    const refresh = held<TicketPage>();
+    let firstPages = 0;
+    vi.mocked(listTickets).mockImplementation(async (cursor = '') => {
+      if (cursor !== '') return { tickets: [ticket(2, 'Second request')], next: '' };
+      firstPages += 1;
+      if (firstPages === 1) return { tickets: [ticket(1, 'First request')], next: 'c2' };
+      if (firstPages === 2) return refresh.promise;
+      return { tickets: [{ ...ticket(1, 'First request'), unread: true }], next: 'c2' };
+    });
+    const { user } = renderDom(TicketList);
+    const more = await screen.findByRole('button', { name: msg('tickets.loadMore') });
+    unreadReplies.set(1);
+    await vi.waitFor(() => expect(firstPages).toBe(2));
+
+    await user.click(more);
+    await vi.waitFor(() => expect(row('Second request')).toBeTruthy());
+    refresh.resolve({ tickets: [{ ...ticket(1, 'First request'), unread: true }], next: 'c2' });
+
+    await vi.waitFor(() => expect(firstPages).toBe(3));
+    await vi.waitFor(() => expect(within(row('First request')).getByRole('img', { name: msg('tickets.unreadMark') })).toBeTruthy());
+    expect(row('Second request')).toBeTruthy();
+  });
+});

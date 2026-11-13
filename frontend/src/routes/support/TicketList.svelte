@@ -32,12 +32,15 @@
   // Pages on screen, and a refresh a reply asked for while a Retry or a later page was on its way.
   let pages = 0;
   let refreshPending = false;
+  // The refresh on its way, by its place in `run`; 0 when none is.
+  let refreshRun = 0;
   let run = 0;
 
   // A failure stays on screen until an answer replaces it: a refresh that starts does not clear it. A
   // refresh (`keepLater`) puts page one in again and keeps the pages loaded after it.
   async function load(keepLater = false): Promise<boolean> {
     const current = ++run;
+    refreshRun = keepLater ? current : 0;
     try {
       const page = await listTickets('');
       if (current !== run) return false;
@@ -60,11 +63,18 @@
       return false;
     } finally {
       if (current === run) loading = false;
+      if (refreshRun === current) refreshRun = 0;
     }
   }
 
   async function more(): Promise<boolean> {
     if (loadingMore || !next) return false;
+    // A refresh on its way is overtaken here and its answer dropped: it is owed again once this page
+    // has answered.
+    if (refreshRun) {
+      refreshRun = 0;
+      refreshPending = true;
+    }
     const current = ++run;
     loadingMore = true;
     try {
