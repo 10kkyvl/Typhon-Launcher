@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
-import { playGame, type LibraryGame } from '../services/library';
+import { launchGame, type LibraryGame } from '../services/library';
 import { collections } from '../stores/collections';
 import { libraryGames } from '../stores/library';
 import { toasts } from '../stores/toasts';
@@ -12,7 +12,7 @@ vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRu
 vi.mock('../services/backend', () => ({ inWails: false }));
 vi.mock('../services/library', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/library')>()),
-  playGame: vi.fn(),
+  launchGame: vi.fn(),
 }));
 vi.mock('../game/randomPick', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../game/randomPick')>()),
@@ -63,7 +63,7 @@ describe('RandomGameModal', () => {
 
   it('keeps the focus on "play", busy, while the game starts', async () => {
     let started!: () => void;
-    vi.mocked(playGame).mockReturnValueOnce(new Promise<void>((resolve) => (started = resolve)));
+    vi.mocked(launchGame).mockReturnValueOnce(new Promise<boolean>((resolve) => (started = () => resolve(true))));
     libraryGames.set([{ id: 'g1', title: 'Hades', uninstalled: false, installDir: '/games/hades', executable: 'Hades.exe' } as LibraryGame]);
     const dialog = openDialog();
     const keys = user();

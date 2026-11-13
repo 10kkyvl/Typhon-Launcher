@@ -2,7 +2,8 @@
   import { untrack } from 'svelte';
   import { get } from 'svelte/store';
   import { FileSearch, FolderOpen, Gamepad2 } from '@lucide/svelte';
-  import { addGame, playGame, selectExecutable } from '../services/library';
+  import { addGame, launchGame, selectExecutable } from '../services/library';
+  import { libraryErrorText } from '../library/errors';
   import {
     cancelInstall,
     confirmExecutable,
@@ -315,13 +316,13 @@
     replan(true);
   }
 
-  async function run(action: () => Promise<void>, by = '') {
+  async function run(action: () => Promise<void>, by = '', errorText: (err: unknown) => string = installErrorText) {
     busy = true;
     actor = by;
     try {
       await action();
     } catch (err) {
-      toast(installErrorText(err), 'danger');
+      toast(errorText(err), 'danger');
     }
     busy = false;
     actor = '';
@@ -375,10 +376,14 @@
   function playInstalled() {
     const item = installation;
     if (!item?.gameId) return;
-    return run(async () => {
-      await playGame(item.gameId);
-      open = false;
-    }, 'play');
+    // A launch the player gave up (a question left unanswered) keeps the dialog where it was.
+    return run(
+      async () => {
+        if (await launchGame(item.gameId)) open = false;
+      },
+      'play',
+      (err) => libraryErrorText(err, msg('games.errorPlayFailed')),
+    );
   }
 
   function openImageFolder() {

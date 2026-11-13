@@ -22,7 +22,7 @@
     type PickFilters,
     type PickSource,
   } from '../game/randomPick';
-  import { playGame, type LibraryGame } from '../services/library';
+  import { launchGame, type LibraryGame } from '../services/library';
   import { collections } from '../stores/collections';
   import { libraryGenres } from '../stores/genres';
   import { libraryGames } from '../stores/library';
@@ -132,8 +132,8 @@
     }
     launching = true;
     try {
-      await playGame(game.id);
-      onclose();
+      // A launch the player gave up (a question left unanswered) keeps the pick on screen.
+      if (await launchGame(game.id)) onclose();
     } catch (err) {
       toast(libraryErrorText(err, msg('games.errorPlayFailed')), 'danger');
     } finally {
