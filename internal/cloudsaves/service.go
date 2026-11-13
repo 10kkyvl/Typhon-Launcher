@@ -65,7 +65,9 @@ type Service struct {
 
 	// opMu serializes everything that reads or changes the cloud and the
 	// recorded state: a pass, a manual sync, a conflict resolution, a delete.
-	opMu  sync.Mutex
+	opMu sync.Mutex
+	// cache maps a saves folder to its last digest; it is read and written
+	// under mu, the hashing itself runs outside any lock.
 	cache map[string]cachedTree
 	// refused holds, per game, the scan that already proved too large for the
 	// cloud; it is read and written under opMu.
@@ -341,26 +343,35 @@ type run struct {
 // An unreadable state does not fail it: callers that only delete from the
 // cloud may go on, those that need the digests look at stateErr.
 func (s *Service) identify(needEnabled bool) (*run, error) {
-	if needEnabled && !s.config().CloudSaves {
-		return nil, errDisabled
-	}
-	token, err := s.token()
+	token, owner, err := s.signedIn(needEnabled)
 	if err != nil {
-		return nil, uierr.Wrap(codeToken, fmt.Errorf("доступ к сохранённому входу: %w", err))
-	}
-	if token == "" {
-		return nil, errNotSignedIn
-	}
-	owner, err := s.accountID(token)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", errAccountUnk, err)
-	}
-	if owner == "" {
-		return nil, errAccountUnk
+		return nil, err
 	}
 	r := &run{token: token, owner: owner}
 	r.stateErr = s.loadState(owner)
 	return r, nil
+}
+
+// signedIn checks the gates and names the signed-in account.
+func (s *Service) signedIn(needEnabled bool) (token, owner string, err error) {
+	if needEnabled && !s.config().CloudSaves {
+		return "", "", errDisabled
+	}
+	token, err = s.token()
+	if err != nil {
+		return "", "", uierr.Wrap(codeToken, fmt.Errorf("доступ к сохранённому входу: %w", err))
+	}
+	if token == "" {
+		return "", "", errNotSignedIn
+	}
+	owner, err = s.accountID(token)
+	if err != nil {
+		return "", "", fmt.Errorf("%w: %w", errAccountUnk, err)
+	}
+	if owner == "" {
+		return "", "", errAccountUnk
+	}
+	return token, owner, nil
 }
 
 func (s *Service) prepare(ctx context.Context, needEnabled bool) (*run, error) {
@@ -386,17 +397,23 @@ func (s *Service) prepare(ctx context.Context, needEnabled bool) (*run, error) {
 	return r, nil
 }
 
+// loadState runs under opMu, the only lock under which a state is installed,
+// so the file is read outside mu and nobody installs another state between
+// the check and the install.
 func (s *Service) loadState(owner string) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.loaded && s.owner == owner && s.loadErr == nil {
+	current := s.loaded && s.owner == owner && s.loadErr == nil
+	s.mu.Unlock()
+	if current {
 		return nil
 	}
+	st, err := s.store.load(owner)
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.owner != owner {
 		s.statuses = map[string]GameStatus{}
 		s.usage = account.SaveList{}
 	}
-	st, err := s.store.load(owner)
 	s.owner, s.loaded = owner, true
 	if err != nil {
 		s.loadErr = fmt.Errorf("%w: %w", errStateBroken, err)

@@ -164,7 +164,10 @@ func (s *Service) treeOf(ctx context.Context, root string) (tree, error) {
 		return tree{}, err
 	}
 	sig := signature(files)
-	if c, ok := s.cache[root]; ok && c.sig == sig {
+	s.mu.Lock()
+	c, ok := s.cache[root]
+	s.mu.Unlock()
+	if ok && c.sig == sig {
 		t := summarize(files)
 		t.digest, t.sig = c.digest, sig
 		return t, nil
@@ -174,7 +177,9 @@ func (s *Service) treeOf(ctx context.Context, root string) (tree, error) {
 		return tree{}, err
 	}
 	t.sig = sig
+	s.mu.Lock()
 	s.cache[root] = cachedTree{sig: sig, digest: t.digest}
+	s.mu.Unlock()
 	return t, nil
 }
 
