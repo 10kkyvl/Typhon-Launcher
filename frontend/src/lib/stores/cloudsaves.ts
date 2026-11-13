@@ -14,20 +14,77 @@ export interface CloudConflictTarget {
 export const cloudStatus = writable<CloudStatus | null>(null);
 export const cloudConflictTarget = writable<CloudConflictTarget | null>(null);
 
-export function openCloudConflict(gameId: string) {
+// A launch the saves held back, waiting on the open dialog. Its answer is given once: "resolved"
+// after the choice was applied, "given up" when the dialog closes or goes to another game.
+interface WaitingLaunch {
+  target: CloudConflictTarget;
+  answer: (resolved: boolean) => void;
+}
+
+let waiting: WaitingLaunch | null = null;
+
+function waitFor(target: CloudConflictTarget, resolve: (resolved: boolean) => void): WaitingLaunch {
+  let done = false;
+  return {
+    target,
+    answer(resolved) {
+      if (done) return;
+      done = true;
+      resolve(resolved);
+    },
+  };
+}
+
+function show(next: CloudConflictTarget | null, resolved = false) {
+  const left = waiting;
+  waiting = null;
+  cloudConflictTarget.set(next);
+  left?.answer(resolved);
+}
+
+// The dialog already open for this game stays as it is: the event and a launch error may both
+// report the same conflict, in either order, and the player sees one question.
+export function openCloudConflict(gameId: string): boolean {
+  if (get(cloudConflictTarget)?.gameId === gameId) return true;
   const game = get(libraryGames).find((g) => g.id === gameId);
-  if (!game) return;
-  cloudConflictTarget.set({ gameId, title: game.title });
+  if (!game) return false;
+  show({ gameId, title: game.title });
+  return true;
+}
+
+/**
+ * Opens the dialog for a launch the conflict held back and answers whether the conflict was resolved.
+ * Null when the game is not in the library: there is no dialog to show, the caller shows the error.
+ */
+export function askToResolveConflict(gameId: string): Promise<boolean> | null {
+  if (!openCloudConflict(gameId)) return null;
+  const target = get(cloudConflictTarget) as CloudConflictTarget;
+  const older = waiting;
+  return new Promise((resolve) => {
+    waiting = waitFor(target, resolve);
+    older?.answer(false);
+  });
 }
 
 export function closeCloudConflict() {
-  cloudConflictTarget.set(null);
+  show(null);
+}
+
+/** The choice for `target` was applied. Nothing happens when the dialog has moved on to another game. */
+export function finishCloudConflict(target: CloudConflictTarget) {
+  if (get(cloudConflictTarget) !== target) return;
+  show(null, true);
+}
+
+/** Loads the status for a caller that reports a failure itself; rejects when it cannot be loaded. */
+export async function fetchCloudStatus(): Promise<void> {
+  cloudStatus.set(await loadCloudStatus());
 }
 
 export async function refreshCloudStatus(): Promise<boolean> {
   if (!inWails) return false;
   try {
-    cloudStatus.set(await loadCloudStatus());
+    await fetchCloudStatus();
     return true;
   } catch (err) {
     toast(cloudErrorText(err, msg('cloudsaves.statusFailed')), 'danger');

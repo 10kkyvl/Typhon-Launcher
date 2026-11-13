@@ -49,7 +49,7 @@ async function init() {
   store.initCloudSaves();
   await Promise.resolve();
   await Promise.resolve();
-  return { store, toast: vi.mocked(toasts.toast) };
+  return { store, library, toast: vi.mocked(toasts.toast) };
 }
 
 beforeEach(() => {
@@ -117,6 +117,18 @@ describe('cloud saves store', () => {
     expect(current?.games).toEqual(status().games);
   });
 
+  it('loads the status for a caller that reports a failure itself, without a toast', async () => {
+    const { store, toast } = await init();
+    load = async () => {
+      throw new Error('typhon:cloud.network: нет связи');
+    };
+    await expect(store.fetchCloudStatus()).rejects.toThrow('cloud.network');
+    expect(toast).not.toHaveBeenCalled();
+    load = async () => status({ usedBytes: 300 });
+    await store.fetchCloudStatus();
+    expect(get(store.cloudStatus)?.usedBytes).toBe(300);
+  });
+
   it('clears the global error once a game syncs again, and only then', async () => {
     load = async () => status({ error: 'cloud.network' });
     const { store } = await init();
@@ -125,5 +137,117 @@ describe('cloud saves store', () => {
     expect(get(store.cloudStatus)?.error).toBe('cloud.network');
     emit(event({ gameId: 'g1', status: 'synced' }));
     expect(get(store.cloudStatus)?.error).toBe('');
+  });
+});
+
+// What a launch waiting on the dialog has been told so far: still waiting, or its answer.
+async function answer(question: Promise<boolean> | null): Promise<boolean | 'waiting'> {
+  expect(question).not.toBeNull();
+  return await Promise.race([question as Promise<boolean>, new Promise<'waiting'>((resolve) => setTimeout(() => resolve('waiting'), 0))]);
+}
+
+describe('a launch waiting on the conflict dialog', () => {
+  it('opens the dialog for the game and is answered "resolved" once the choice is applied', async () => {
+    const { store } = await init();
+    const question = store.askToResolveConflict('g1');
+    const target = get(store.cloudConflictTarget);
+    expect(target).toEqual({ gameId: 'g1', title: 'Hades' });
+    expect(await answer(question)).toBe('waiting');
+
+    store.finishCloudConflict(target!);
+
+    expect(await answer(question)).toBe(true);
+    expect(get(store.cloudConflictTarget)).toBeNull();
+  });
+
+  it('is answered "given up" when the dialog is closed without a choice', async () => {
+    const { store } = await init();
+    const question = store.askToResolveConflict('g1');
+    store.closeCloudConflict();
+    expect(await answer(question)).toBe(false);
+    expect(get(store.cloudConflictTarget)).toBeNull();
+  });
+
+  it('is answered once: a late close or a second choice changes nothing', async () => {
+    const { store } = await init();
+    const question = store.askToResolveConflict('g1');
+    const target = get(store.cloudConflictTarget)!;
+    store.finishCloudConflict(target);
+    store.closeCloudConflict();
+    store.finishCloudConflict(target);
+    expect(await answer(question)).toBe(true);
+  });
+
+  it('joins the dialog an earlier event opened for the same game: one dialog, and the launch goes on after the choice', async () => {
+    const { store } = await init();
+    emit(event({ status: 'conflict' }));
+    const opened = get(store.cloudConflictTarget);
+    expect(opened).toEqual({ gameId: 'g1', title: 'Hades' });
+
+    const question = store.askToResolveConflict('g1');
+
+    expect(get(store.cloudConflictTarget)).toBe(opened);
+    store.finishCloudConflict(opened!);
+    expect(await answer(question)).toBe(true);
+  });
+
+  it('keeps its dialog when the event for the same game arrives after the launch error', async () => {
+    const { store } = await init();
+    const question = store.askToResolveConflict('g1');
+    const asked = get(store.cloudConflictTarget);
+
+    emit(event({ status: 'conflict' }));
+
+    expect(await answer(question)).toBe('waiting');
+    expect(get(store.cloudConflictTarget)).toBe(asked);
+    store.finishCloudConflict(asked!);
+    expect(await answer(question)).toBe(true);
+  });
+
+  it('is given up when an event replaces the dialog with another game, and a late choice for it changes nothing', async () => {
+    const { store, library } = await init();
+    library.libraryGames.set([{ id: 'g1', title: 'Hades' } as LibraryGame, { id: 'g2', title: 'Celeste' } as LibraryGame]);
+    const question = store.askToResolveConflict('g1');
+    const first = get(store.cloudConflictTarget)!;
+
+    emit(event({ gameId: 'g2', status: 'conflict' }));
+
+    expect(await answer(question)).toBe(false);
+    expect(get(store.cloudConflictTarget)).toEqual({ gameId: 'g2', title: 'Celeste' });
+    store.finishCloudConflict(first);
+    expect(get(store.cloudConflictTarget)).toEqual({ gameId: 'g2', title: 'Celeste' });
+  });
+
+  it('is given up when a newer launch asks about another game', async () => {
+    const { store, library } = await init();
+    library.libraryGames.set([{ id: 'g1', title: 'Hades' } as LibraryGame, { id: 'g2', title: 'Celeste' } as LibraryGame]);
+    const older = store.askToResolveConflict('g1');
+    const newer = store.askToResolveConflict('g2');
+
+    expect(await answer(older)).toBe(false);
+    expect(await answer(newer)).toBe('waiting');
+    store.finishCloudConflict(get(store.cloudConflictTarget)!);
+    expect(await answer(newer)).toBe(true);
+  });
+
+  it('gives up the older launch when a newer one asks about the same game; the choice answers the newer one', async () => {
+    const { store } = await init();
+    const older = store.askToResolveConflict('g1');
+    const opened = get(store.cloudConflictTarget);
+    const newer = store.askToResolveConflict('g1');
+
+    expect(await answer(older)).toBe(false);
+    expect(await answer(newer)).toBe('waiting');
+    expect(get(store.cloudConflictTarget)).toBe(opened);
+
+    store.finishCloudConflict(opened!);
+    expect(await answer(newer)).toBe(true);
+    expect(await answer(older)).toBe(false);
+  });
+
+  it('opens nothing for a game the library does not hold, and says so to the launch', async () => {
+    const { store } = await init();
+    expect(store.askToResolveConflict('missing')).toBeNull();
+    expect(get(store.cloudConflictTarget)).toBeNull();
   });
 });
