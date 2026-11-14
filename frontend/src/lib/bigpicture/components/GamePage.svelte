@@ -15,7 +15,7 @@
   import { downloads } from '../../stores/downloads';
   import { libraryGames, runningGames } from '../../stores/library';
   import { settings } from '../../stores/settings';
-  import { addCatalogGame, setFavorite, setStatus, stopGame, type LibraryGame } from '../../services/library';
+  import { addCatalogGame, launchesInFlight, setFavorite, setStatus, stopGame, type LibraryGame } from '../../services/library';
   import { cancelDownload, pauseDownload, resumeDownload, type Download as DownloadItem, type DownloadOrigin, type TorrentInfo } from '../../services/downloads';
   import { getCatalogGame, getReleasesForGame, getReleasesForTitle, type CatalogGame, type ReleaseGroup } from '../../services/sources';
   import { getMetadataView, ensureMetadataFresh, openStoreLink, type MetadataView, type StoreId } from '../../services/metadata';
@@ -110,6 +110,8 @@
   const emulated = $derived(isEmulated(localGame));
   const sideloaded = $derived(emulated && !viaCatalog);
   const running = $derived(Boolean(localGame && $runningGames.has(localGame.id)));
+  // A launch from this page or from another screen: Play stays focused and busy, and ignores presses.
+  const launchBusy = $derived(launching || Boolean(localGame && $launchesInFlight.has(localGame.id)));
   const cover = $derived(metadata?.cover || catalogGame?.coverUrl || localGame?.cover || '');
   const shots = $derived(metadata?.screenshots ?? []);
   const hero = $derived(pickHero(metadata) || cover);
@@ -367,7 +369,7 @@
   }
 
   async function launch() {
-    if (!localGame || !installed || running || launching) return;
+    if (!localGame || !installed || running || launchBusy) return;
     launching = true;
     pageError = '';
     try {
@@ -597,7 +599,7 @@
               {#if running}
                 <button class="large-button danger" data-bp-focus="game:play-toggle" data-bp-default onclick={() => { pageError = ''; showDialog('stop'); }}><Square size="1.98rem" fill="currentColor" />{bp('bp.game.stop')}</button>
               {:else}
-                <button class="large-button primary" data-bp-focus="game:play-toggle" data-bp-default disabled={launching} onclick={() => void launch()}><Play size="2.09rem" fill="currentColor" />{bp('bp.game.launch')}</button>
+                <button class="large-button primary" data-bp-focus="game:play-toggle" data-bp-default aria-busy={launchBusy || undefined} aria-disabled={launchBusy || undefined} onclick={() => void launch()}><Play size="2.09rem" fill="currentColor" />{bp('bp.game.launch')}</button>
               {/if}
             {:else if currentInstall && installActive(currentInstall.status)}
               <button class="large-button primary" data-bp-focus="game:hero:continue-install" data-bp-default onclick={ondownloads}><Download size="2.09rem" />{bp('bp.game.installContinue')}</button>
@@ -856,6 +858,7 @@
   .large-button.secondary { border-color: var(--border); background: color-mix(in srgb, var(--surface-2) 86%, transparent); }
   .large-button.danger { background: color-mix(in srgb, var(--danger) 84%, black); color: white; }
   .large-button:disabled { opacity: .5; cursor: default; }
+  .large-button[aria-busy='true'] { cursor: progress; }
   :global([data-bp-focus]:focus-visible) { outline: 3px solid var(--accent-ring); outline-offset: 4px; }
   .back-button { min-height: 5.28rem; padding: 0 1.54rem; font-size: 1.485rem; }
   .tab { min-height: 5.28rem; display: inline-flex; align-items: center; gap: .88rem; padding: 0 1.65rem; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text-2); font-size: 1.595rem; font-weight: 700; cursor: pointer; }

@@ -1,15 +1,25 @@
+// First: services/library reaches this store back through stores/cloudsaves (see Library.state.dom.test.ts).
+import { libraryGames } from '../stores/library';
 import { render, screen } from '@testing-library/svelte';
+import type { Writable } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
-import type { LibraryGame } from '../services/library';
+import { launchesInFlight, type LibraryGame } from '../services/library';
 import { getMetadataView, type MetadataView } from '../services/metadata';
 import { getCatalogGame, type CatalogGame } from '../services/sources';
-import { libraryGames } from '../stores/library';
 import { user } from '../testing/dom';
 import GamePage from './components/GamePage.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
+vi.mock('../services/library', async (importOriginal) => {
+  const { writable } = await import('svelte/store');
+  return {
+    ...(await importOriginal<typeof import('../services/library')>()),
+    // A launch another screen started: the service's own set, written by the test.
+    launchesInFlight: writable<ReadonlySet<string>>(new Set()),
+  };
+});
 vi.mock('../services/metadata', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/metadata')>()),
   getMetadataView: vi.fn(),
@@ -31,9 +41,12 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
+const inFlight = launchesInFlight as unknown as Writable<ReadonlySet<string>>;
+
 let app: HTMLDivElement;
 
 beforeEach(() => {
+  inFlight.set(new Set());
   app = document.createElement('div');
   document.body.append(app);
   libraryGames.set([{ id: 'g1', title: 'Hades', canonicalGameId: 'c1', uninstalled: false, installDir: '/games/hades', executable: 'Hades.exe' } as LibraryGame]);
@@ -82,6 +95,40 @@ describe('Big Picture game page: a launch that waits on a question', () => {
 
     await keys.click(play);
     expect(onlaunch).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps Play focused and busy, not disabled, while the launch runs; a second press sends nothing', async () => {
+    const launch = deferred<boolean>();
+    const onlaunch = vi.fn().mockReturnValueOnce(launch.promise);
+    renderPage(onlaunch);
+    const keys = user();
+    const play = await screen.findByRole('button', { name: msg('bp.game.launch') });
+    play.focus();
+
+    await keys.keyboard('{Enter}');
+    await keys.click(play);
+
+    expect(onlaunch).toHaveBeenCalledTimes(1);
+    expect(play.hasAttribute('disabled')).toBe(false);
+    expect(play.getAttribute('aria-busy')).toBe('true');
+    expect(document.activeElement).toBe(play);
+
+    launch.resolve(false);
+    await vi.waitFor(() => expect(play.getAttribute('aria-busy')).toBeNull());
+    expect(document.activeElement).toBe(play);
+  });
+
+  it('is busy while a launch another screen started is in flight, and a press sends nothing', async () => {
+    const onlaunch = vi.fn(async () => true);
+    renderPage(onlaunch);
+    const keys = user();
+    const play = await screen.findByRole('button', { name: msg('bp.game.launch') });
+
+    inFlight.set(new Set(['g1']));
+    await vi.waitFor(() => expect(play.getAttribute('aria-busy')).toBe('true'));
+    await keys.click(play);
+
+    expect(onlaunch).not.toHaveBeenCalled();
   });
 
   it('shows a conflict that held the launch back again in its own words', async () => {
