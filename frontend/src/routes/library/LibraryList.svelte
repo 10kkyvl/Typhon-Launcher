@@ -1,6 +1,6 @@
 <script lang="ts">
   import ConsoleTag from '../../lib/components/ConsoleTag.svelte';
-  import GameListRow from '../../lib/components/GameListRow.svelte';
+  import GameListRow, { type GameListRowAction } from '../../lib/components/GameListRow.svelte';
   import SourceBadge from '../../lib/components/SourceBadge.svelte';
   import type { GameArt } from '../../lib/services/metadata';
   import { openGameMenu } from '../../lib/stores/gameMenu';
@@ -16,6 +16,7 @@
     art,
     running,
     busy,
+    actions,
     onplay,
     labelledby,
     current = $bindable(),
@@ -27,6 +28,8 @@
     running: ReadonlySet<string>;
     /** A launch or a stop of the game waits on Go. */
     busy: (id: string) => boolean;
+    /** The page's own actions on a row (Unwatch on a watched game). */
+    actions: (entry: LibraryEntry) => GameListRowAction[] | undefined;
     /** Plays the game, or stops it while it runs. */
     onplay: (id: string) => void;
     /** Id of the heading that names the list. */
@@ -90,6 +93,9 @@
       running={running.has(entry.id)}
       launching={busy(entry.id)}
       favorite={entry.favorite}
+      actions={actions(entry)}
+      titleTone="plain"
+      ambient
       onopen={open}
       onplay={entry.playable ? onplay : undefined}
       onstop={entry.playable ? onplay : undefined}

@@ -507,6 +507,7 @@
         art={$gameArt}
         running={$runningGames}
         {busy}
+        actions={watchedActions}
         onplay={toggleRun}
         labelledby="{uid}-heading"
         bind:current={currentGame}

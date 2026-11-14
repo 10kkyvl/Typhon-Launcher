@@ -13,6 +13,8 @@ import { DEFAULT_CHOICES, libraryChoices } from '../../lib/stores/libraryPrefs';
 import { toast } from '../../lib/stores/toasts';
 import { libraryView } from '../../lib/stores/ui';
 import { watchlist } from '../../lib/stores/watchlist';
+import { ambientState, HOVER_REST_MS } from '../../lib/stores/ambient';
+import { unwatchGame } from '../../lib/services/watchlist';
 import { bytesSize } from '../../lib/utils/format';
 import { renderDom } from '../../lib/testing/dom';
 import Library from './Library.svelte';
@@ -27,6 +29,10 @@ vi.mock('../../lib/services/library', async (importOriginal) => ({
   playGame: vi.fn(async () => {}),
   stopGame: vi.fn(async () => {}),
   steamStatus: vi.fn(async () => ({ supported: false, installed: false, added: false })),
+}));
+vi.mock('../../lib/services/watchlist', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/services/watchlist')>()),
+  unwatchGame: vi.fn(async () => {}),
 }));
 vi.mock('../../lib/stores/toasts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/stores/toasts')>()),
@@ -144,6 +150,46 @@ describe('Library: the list view', () => {
 
     expect(await fireEvent.contextMenu(row('Watched Game'), { button: 2, clientX: 40, clientY: 40 })).toBe(false);
     expect(screen.queryByRole('menu')).toBeNull();
+  });
+});
+
+describe('Library: a row of the list view', () => {
+  it('has its title in the plain tone', () => {
+    renderDom(Library);
+
+    const title = within(row('Hades')).getByRole('button', { name: 'Hades' });
+    expect(title.classList.contains('plain')).toBe(true);
+  });
+
+  it('lets the window backdrop follow its game under the pointer', async () => {
+    vi.useFakeTimers();
+    try {
+      renderDom(Library);
+      await fireEvent.pointerEnter(row('Inside'), { pointerType: 'mouse' });
+      vi.advanceTimersByTime(HOVER_REST_MS);
+      expect(get(ambientState).hover).toBe('g-inside');
+      await fireEvent.pointerLeave(row('Inside'));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('of a watched game offers Unwatch, busy while it runs: a second press sends nothing', async () => {
+    let release = () => {};
+    vi.mocked(unwatchGame).mockReturnValueOnce(new Promise<void>((resolve) => (release = resolve)));
+    watchlist.set([{ gameId: 'c-watch', title: 'Watched Game' } as WatchEntry]);
+    libraryChoices.set({ ...DEFAULT_CHOICES, filter: 'watched' });
+    const { user } = renderDom(Library);
+    const unwatch = within(row('Watched Game')).getByRole('button', { name: msg('games.unwatchAction') });
+    unwatch.focus();
+
+    await user.keyboard('{Enter}');
+    await user.keyboard('{Enter}');
+
+    expect(unwatchGame).toHaveBeenCalledTimes(1);
+    expect(unwatch.getAttribute('aria-busy')).toBe('true');
+    expect(document.activeElement).toBe(unwatch);
+    release();
   });
 });
 
