@@ -1,6 +1,8 @@
 import { screen, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { get } from 'svelte/store';
 import { msg } from '../../lib/i18n';
+import { AccountError } from '../../lib/services/account';
 import { report as sendReport, vote, type Review } from '../../lib/services/reviews';
 import { toasts } from '../../lib/stores/toasts';
 import { renderDom } from '../../lib/testing/dom';
@@ -89,6 +91,26 @@ describe('ReviewCard: a vote in flight', () => {
     await vi.waitFor(() => expect(yes.hasAttribute('aria-busy')).toBe(false));
     expect(yes.hasAttribute('aria-disabled')).toBe(false);
     expect(document.activeElement).toBe(yes);
+  });
+
+  it('shows the vote at once and takes it back, both counts and my vote, when it is refused', async () => {
+    let refuse!: (err: unknown) => void;
+    vi.mocked(vote).mockReturnValueOnce(new Promise((_, reject) => (refuse = reject)));
+    const { user } = renderDom(ReviewCard, { review: { ...review('Fine.'), myVote: 'unhelpful' }, guest: false });
+    const [yes, no] = screen.getAllByRole('button').filter((button) => button.classList.contains('chip'));
+    expect([yes.textContent?.trim(), no.getAttribute('aria-pressed')]).toEqual([`${msg('reviews.helpfulYes')} (2)`, 'true']);
+
+    await user.click(yes);
+
+    expect([yes.textContent?.trim(), no.textContent?.trim()]).toEqual([`${msg('reviews.helpfulYes')} (3)`, `${msg('reviews.helpfulNo')} (0)`]);
+    expect([yes.getAttribute('aria-pressed'), no.getAttribute('aria-pressed')]).toEqual(['true', 'false']);
+
+    refuse(new AccountError('rate_limited'));
+
+    await vi.waitFor(() => expect(yes.textContent?.trim()).toBe(`${msg('reviews.helpfulYes')} (2)`));
+    expect(no.textContent?.trim()).toBe(`${msg('reviews.helpfulNo')} (1)`);
+    expect([yes.getAttribute('aria-pressed'), no.getAttribute('aria-pressed')]).toEqual(['false', 'true']);
+    expect(get(toasts).map((t) => [t.message, t.kind])).toEqual([[msg('reviews.errorRateLimited'), 'danger']]);
   });
 });
 
