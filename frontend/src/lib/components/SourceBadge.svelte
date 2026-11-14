@@ -1,18 +1,23 @@
 <script lang="ts">
   import { HardDrive } from '@lucide/svelte';
+  import Tooltip from './Tooltip.svelte';
   import { sourceLabel, sourceTitle, type GameSource } from '../library/source';
 
   let { source }: { source: GameSource } = $props();
 </script>
 
-<!-- The short label is shown; the full sentence is what a screen reader reads, and the mouse hint. -->
-<span class="badge" data-source={source} title={sourceTitle(source)}>
-  {#if source === 'disk'}
-    <HardDrive size="1.2rem" strokeWidth={2} aria-hidden="true" />
-  {/if}
-  <span aria-hidden="true">{sourceLabel(source)}</span>
-  <span class="sr-only">{sourceTitle(source)}</span>
-</span>
+<!-- The short label is shown; the full sentence is what a screen reader reads, and the hint on hover
+     and keyboard focus. The hint repeats what is read, so it is not a description too. -->
+<Tooltip text={sourceTitle(source)} describe={false}>
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex (A stop in the Tab order so the hint reaches keyboard users; pressing it does nothing.) -->
+  <span class="badge" data-source={source} tabindex="0">
+    {#if source === 'disk'}
+      <HardDrive size="1.2rem" strokeWidth={2} aria-hidden="true" />
+    {/if}
+    <span aria-hidden="true">{sourceLabel(source)}</span>
+    <span class="sr-only">{sourceTitle(source)}</span>
+  </span>
+</Tooltip>
 
 <style>
   .badge {
