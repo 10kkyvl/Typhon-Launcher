@@ -13,6 +13,7 @@ import {
   type LibraryGame,
 } from '../../lib/services/library';
 import { resumeDownload, type Download } from '../../lib/services/downloads';
+import type { Installation } from '../../lib/services/install';
 import { getMetadataView, type MetadataView } from '../../lib/services/metadata';
 import type { MoveJob } from '../../lib/services/relocate';
 import {
@@ -25,6 +26,7 @@ import {
 } from '../../lib/services/sources';
 import { prepareUpdatePlan, type Update, type VerifyState } from '../../lib/services/updates';
 import { downloads } from '../../lib/stores/downloads';
+import { installations } from '../../lib/stores/install';
 import { gamePropertiesTarget } from '../../lib/stores/gameProperties';
 import { moves } from '../../lib/stores/relocate';
 import { toasts } from '../../lib/stores/toasts';
@@ -221,6 +223,7 @@ afterEach(() => {
   libraryGames.set([]);
   runningGames.set(new Set());
   downloads.set([]);
+  installations.set([]);
   updates.set([]);
   verifications.set({});
   moves.set([]);
@@ -477,6 +480,23 @@ describe("GameDetails main action: work on an installed game's files", () => {
     await user.click(lead);
 
     expect(playGame).not.toHaveBeenCalled();
+  });
+});
+
+describe('GameDetails main action: an install in progress', () => {
+  it('wins over a running download of the game, and without a known size claims no percentage', async () => {
+    libraryGames.set([]);
+    vi.mocked(getCatalogGame).mockResolvedValue({ id: 'c1', title: 'Hades' } as CatalogGame);
+    downloads.set([download({ status: 'downloading', progress: 0.5 })]);
+    installations.set([
+      { id: 'i1', downloadId: 'd1', gameId: '', name: 'Hades', status: 'installing', bytesTotal: 0, bytesDone: 0, progress: 0.3, silent: false, startedAt: '2026-02-02T00:00:00Z' } as Installation,
+    ]);
+    renderDom(GameDetails, { id: 'c1' });
+
+    const lead = await mainAction(msg('state.installStatusInstalling'));
+    expect(lead.getAttribute('aria-busy')).toBe('true');
+    expect(lead.textContent).not.toContain('%');
+    expect(lead.textContent).not.toContain(msg('state.downloadsStatusDownloading'));
   });
 });
 
