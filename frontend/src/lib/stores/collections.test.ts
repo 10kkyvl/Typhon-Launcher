@@ -26,6 +26,7 @@ const collection = (id: string): LibraryCollection => ({ id, name: id, createdAt
 
 async function fresh() {
   vi.resetModules();
+  vi.mocked((await import('./toasts')).toast).mockClear();
   for (const key of Object.keys(handlers)) delete handlers[key];
   offs.length = 0;
   return import('./collections');
@@ -61,6 +62,21 @@ describe('collections store', () => {
     expect(await store.loadCollections()).toBe(true);
     expect(get(store.collectionsState)).toBe('ready');
     expect(get(store.collections).map((item) => item.id)).toEqual(['b']);
+  });
+
+  it('tells the player once when the first load fails; a failed Retry is left to the notice', async () => {
+    const err = new Error('typhon:library.game_not_found: raw');
+    service.getCollections.mockRejectedValue(err);
+    const store = await fresh();
+    const { toast } = await import('./toasts');
+    const { libraryErrorText } = await import('../library/errors');
+    const { msg } = await import('../i18n');
+
+    await store.initCollections();
+    await store.loadCollections();
+
+    expect(vi.mocked(toast).mock.calls).toEqual([[libraryErrorText(err, msg('games.collectionsLoadFailed')), 'danger']]);
+    expect(vi.mocked(toast).mock.calls[0][0]).not.toContain('raw');
   });
 
   it('lets an event that arrives during the load win over the older answer', async () => {

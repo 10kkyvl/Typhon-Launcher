@@ -1,6 +1,9 @@
-import { writable } from 'svelte/store';
+import { get, writable } from 'svelte/store';
+import { msg } from '../i18n';
+import { libraryErrorText } from '../library/errors';
 import { inWails } from '../services/backend';
 import { getCollections, onCollectionsChanged, type LibraryCollection } from '../services/library';
+import { toast } from './toasts';
 
 /** 'failed': the list could not be read; it is not the same as having no collections. */
 export type CollectionsState = 'loading' | 'ready' | 'failed';
@@ -42,6 +45,10 @@ export async function initCollections(): Promise<() => void> {
     collectionsState.set('ready');
     collectionsLoadError.set(null);
   });
-  await loadCollections();
+  // Said once to the player wherever they are (Big Picture and the random pickers read collections
+  // too); the desktop library row keeps the failure on screen with its Retry.
+  if (!(await loadCollections())) {
+    toast(libraryErrorText(get(collectionsLoadError), msg('games.collectionsLoadFailed')), 'danger');
+  }
   return off;
 }
