@@ -120,6 +120,8 @@ export const games: Record<GamesKey, Message> = {
   'games.blocks.releaseDownload': 'Download {release}, {source}',
   'games.blocks.releaseDlc': '+{count} DLC',
   'games.blocks.screenshotOpen': 'Open screenshot {index} of {count}, {name}',
+  'games.blocks.releaseDownloadNoSource': 'Download {release}',
+  'games.blocks.screenshotDelete': 'Delete screenshot {index} of {count}, {name}',
   'games.detailNoReleases': 'No downloads for this game are available in your connected sources yet.',
   'games.catalogPlatform': 'Platform',
   'games.catalogAllPlatforms': 'All platforms',

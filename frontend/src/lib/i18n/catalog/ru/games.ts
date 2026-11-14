@@ -117,6 +117,8 @@ export const games = {
   'games.blocks.releaseDownload': 'Скачать {release}, {source}',
   'games.blocks.releaseDlc': '+{count} DLC',
   'games.blocks.screenshotOpen': 'Открыть снимок {index} из {count}, {name}',
+  'games.blocks.releaseDownloadNoSource': 'Скачать {release}',
+  'games.blocks.screenshotDelete': 'Удалить снимок {index} из {count}, {name}',
   'games.detailNoReleases': 'Для этой игры пока нет раздач в подключённых источниках.',
   'games.catalogPlatform': 'Платформа',
   'games.catalogAllPlatforms': 'Все платформы',
