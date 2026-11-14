@@ -434,6 +434,38 @@ describe('GameDetails main action: an installed game with another download of it
   );
 });
 
+describe("GameDetails main action: work on an installed game's files", () => {
+  it('shows a repair of its files as progress and offers no Play; a press does nothing', async () => {
+    verifications.set({ g1: { gameId: 'g1', running: false, repairing: true, progress: 0.4 } as VerifyState });
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+
+    const lead = await mainAction(new RegExp(msg('games.mainActionRepairing')));
+    expect(within(actions()).queryByRole('button', { name: playName })).toBeNull();
+    await user.click(lead);
+
+    expect(playGame).not.toHaveBeenCalled();
+  });
+
+  it('keeps Stop for a game that already runs while its files are checked', async () => {
+    runningGames.set(new Set(['g1']));
+    verifications.set({ g1: { gameId: 'g1', running: true, repairing: false, progress: 0.4 } as VerifyState });
+    renderDom(GameDetails, { id: 'g1' });
+
+    expect(await mainAction(msg('games.stop'))).toBeTruthy();
+  });
+
+  it('shows a move of its files as progress and offers no Play; a press does nothing', async () => {
+    moves.set([{ id: 'm1', scope: 'game', stage: 'copy', gameId: 'g1', title: 'Hades', copiedBytes: 50, totalBytes: 100 } as MoveJob]);
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+
+    const lead = await mainAction(new RegExp(msg('games.mainActionMoving')));
+    expect(within(actions()).queryByRole('button', { name: playName })).toBeNull();
+    await user.click(lead);
+
+    expect(playGame).not.toHaveBeenCalled();
+  });
+});
+
 describe('GameDetails main action: a finished download of a game not installed', () => {
   it('installs the newest one, not the first in the list', async () => {
     libraryGames.set([]);

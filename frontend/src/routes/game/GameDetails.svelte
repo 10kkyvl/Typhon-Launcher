@@ -40,6 +40,7 @@
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
   import { openSaveBackups } from '../../lib/stores/savebackup';
+  import { activeMove } from '../../lib/stores/relocate';
   import { sources } from '../../lib/stores/sources';
   import { stepLabels, updatesByGame, verifications } from '../../lib/stores/updates';
   import { msg } from '../../lib/i18n';
@@ -194,13 +195,22 @@
   const terminalDownload = $derived(installed ? undefined : newestTerminalDownload(ownDownloads));
   const ownInstall = $derived(activeInstall(gameInstalls($installations, ownDownloads, localGame?.id)));
 
+  const ownMove = $derived(localGame && $activeMove?.gameId === localGame.id ? $activeMove : null);
+
   // An installed game keeps its main action while another release of it downloads: the download
-  // writes to the downloads folder, not to the game's.
+  // writes to the downloads folder, not to the game's. A check, a repair or a move of the game's own
+  // files holds it instead, unless the game already runs.
   const busy = $derived(
     busyState([
       ownInstall ? { active: true, label: installStatusLabels(ownInstall.status), progress: ownInstall.progress, indeterminate: installIndeterminate(ownInstall) } : null,
       update && (update.state === 'updating' || update.state === 'update_downloading')
         ? { active: true, label: stepLabels(update.step ?? 'download'), progress: update.progress }
+        : null,
+      verifyState && !running && (verifyState.repairing || verifyState.running)
+        ? { active: true, label: msg(verifyState.repairing ? 'games.mainActionRepairing' : 'games.mainActionVerifying'), progress: verifyState.progress }
+        : null,
+      ownMove && !running
+        ? { active: true, label: msg('games.mainActionMoving'), progress: ownMove.totalBytes > 0 ? ownMove.copiedBytes / ownMove.totalBytes : 0 }
         : null,
       ownDownload && !installed ? { active: true, label: statusLabels(ownDownload.status), progress: ownDownload.progress } : null,
     ]),
