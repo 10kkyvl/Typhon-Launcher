@@ -159,6 +159,8 @@ const SITES: Record<string, Site[]> = {
     ['warning', false],
     ['warning', false],
   ],
+  // A save conflict of the game page's game: it comes once, with its details, and is said when it does.
+  'lib/components/CloudConflictBanner.svelte': [['warning', true]],
   // An entry cut short is a fact of the entry; a failed load just happened.
   'lib/components/SentDataModal.svelte': [
     ['danger', true],
