@@ -1,5 +1,9 @@
+import { get } from 'svelte/store';
+import { locale } from '../i18n/locale';
 import type { LibraryCollection, LibraryGame } from '../services/library';
 import { collectionShelfId, matchesCollection } from '../library/collections';
+import { gameEntry, type LibraryEntry } from '../library/entries';
+import { queryLibrary, type LibrarySort as ModelSort } from '../library/query';
 
 export type ShelfID = 'recent' | 'favorites' | 'installed' | `collection:${string}`;
 
@@ -45,20 +49,28 @@ export function resolveSelection(shelves: Shelf[], id: string): LibraryGame | un
 }
 
 export type LibraryFilter = 'all' | 'installed' | 'favorites' | 'uninstalled' | 'hidden' | `collection:${string}`;
-export type LibrarySort = 'title' | 'recent' | 'playtime' | 'added';
+export type LibrarySort = Extract<ModelSort, 'title' | 'recent' | 'playtime' | 'added'>;
+
+const entries = new WeakMap<LibraryGame, LibraryEntry>();
+
+function entryOf(game: LibraryGame): LibraryEntry {
+  let entry = entries.get(game);
+  if (!entry) {
+    entry = gameEntry(game);
+    entries.set(game, entry);
+  }
+  return entry;
+}
+
+/** The desktop library's query over the library games, with Big Picture's filter names. */
 export function filterLibrary(games: LibraryGame[], query: string, filter: LibraryFilter, sort: LibrarySort,
-  context: CollectionContext = noCollections): LibraryGame[] {
-  const collection = filter.startsWith('collection:') ? context.collections.find((c) => collectionShelfId(c.id) === filter) : undefined;
-  const needle = query.trim().normalize('NFKC').toLocaleLowerCase();
-  const filtered = games.filter((game) => (!needle || game.title.normalize('NFKC').toLocaleLowerCase().includes(needle)) &&
-    (filter === 'hidden' ? Boolean(game.hidden) : !game.hidden &&
-      (filter === 'all' || (filter === 'installed' && !game.uninstalled) ||
-      (filter === 'uninstalled' && game.uninstalled) || (filter === 'favorites' && game.favorite) ||
-      (collection !== undefined && inCollection(game, collection, context.genres)))));
-  return filtered.toSorted((a, b) => {
-    const difference = sort === 'recent' ? timestamp(b.lastPlayed) - timestamp(a.lastPlayed)
-      : sort === 'playtime' ? b.playtimeSeconds - a.playtimeSeconds
-      : sort === 'added' ? timestamp(b.installedAt) - timestamp(a.installedAt) : 0;
-    return difference || a.title.localeCompare(b.title) || a.id.localeCompare(b.id);
-  });
+  context: CollectionContext = noCollections, language: string = get(locale)): LibraryGame[] {
+  const shelf = filter.startsWith('collection:');
+  const collection = shelf ? context.collections.find((c) => collectionShelfId(c.id) === filter) : undefined;
+  if (shelf && !collection) return [];
+  const listed = queryLibrary(games.map(entryOf), [], {
+    filter: shelf ? 'all' : (filter as Exclude<LibraryFilter, `collection:${string}`>),
+    source: 'all', status: 'all', collection, search: query, sort,
+  }, { genres: context.genres, locale: language });
+  return listed.map((entry) => entry.game).filter((game): game is LibraryGame => game !== undefined);
 }

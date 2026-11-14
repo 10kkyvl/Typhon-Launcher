@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { LibraryGame } from '../services/library';
-import { buildShelves, filterLibrary, resolveSelection } from './library';
+import { createEntryCache } from '../library/entries';
+import type { LibraryFilter as DesktopFilter } from '../library/filters';
+import { queryLibrary, type LibraryQuery } from '../library/query';
+import { buildShelves, filterLibrary, resolveSelection, type LibraryFilter, type LibrarySort } from './library';
 
 function game(id: string, overrides: Partial<LibraryGame> = {}): LibraryGame {
   return { id, title: id, executable: `${id}.exe`, installDir: id, cover: '', version: '', sizeBytes: 0,
@@ -83,5 +86,50 @@ describe('Big Picture library', () => {
     expect(resolveSelection(buildShelves([second, first]), 'second')).toBe(second);
     expect(resolveSelection(buildShelves([first]), 'second')).toBe(first);
     expect(resolveSelection([], 'second')).toBeUndefined();
+  });
+});
+
+describe('Big Picture library and the desktop library', () => {
+  // Installed and removed, hidden, favourites, a collection by tag, Latin and Cyrillic titles, equal titles.
+  const games = [
+    game('hades', { title: 'Hades', lastPlayed: '2026-11-10T10:00:00Z', playtimeSeconds: 900, tags: ['rogue'], favorite: true, installedAt: '2026-01-01T00:00:00Z' }),
+    game('witcher', { title: 'Ведьмак 3', lastPlayed: '2026-10-01T10:00:00Z', playtimeSeconds: 5000, installedAt: '2026-02-01T00:00:00Z' }),
+    game('arma', { title: 'Arma', uninstalled: true, lastPlayed: '2026-11-13T10:00:00Z', tags: ['rogue'], favorite: true }),
+    game('secret', { title: 'Secret Hades', hidden: true, tags: ['rogue'] }),
+    game('twin-b', { title: 'Twin' }),
+    game('twin-a', { title: 'Twin' }),
+    game('yabloko', { title: 'Яблоко', canonicalGameId: 'c-y' }),
+  ];
+  const context = { collections: [{ id: 'k', name: 'Rogue', tags: ['rogue'], createdAt: '', updatedAt: '' }], genres: {} };
+  const entries = createEntryCache().library(games, [], {});
+  const cases: Array<[LibraryFilter, DesktopFilter, LibraryQuery['collection']]> = [
+    ['all', 'all', undefined],
+    ['installed', 'installed', undefined],
+    ['uninstalled', 'uninstalled', undefined],
+    ['favorites', 'favorites', undefined],
+    ['hidden', 'hidden', undefined],
+    ['collection:k', 'all', context.collections[0]],
+  ];
+  const sorts: LibrarySort[] = ['title', 'recent', 'playtime', 'added'];
+  const table = ['en', 'ru'].flatMap((locale) =>
+    cases.flatMap(([bp, desktop, collection]) =>
+      sorts.flatMap((sort) => ['', 'HA', 'ве', 'ＴＷＩＮ'].map((search) => ({ locale, bp, desktop, collection, sort, search }))),
+    ),
+  );
+
+  it.each(table)('give the same games in the same order: $locale $bp $sort "$search"', ({ locale, bp, desktop, collection, sort, search }) => {
+    const desktopIds = queryLibrary(entries, [], { filter: desktop, source: 'all', status: 'all', collection, search, sort }, { genres: {}, locale }).map((entry) => entry.id);
+    expect(filterLibrary(games, search, bp, sort, context, locale).map((item) => item.id)).toEqual(desktopIds);
+  });
+
+  it.each([
+    ['en', ['arma', 'hades', 'twin-a', 'twin-b', 'witcher', 'yabloko']],
+    ['ru', ['witcher', 'yabloko', 'arma', 'hades', 'twin-a', 'twin-b']],
+  ])('order titles in the interface language with an id tie-break: %s', (locale, expected) => {
+    expect(filterLibrary(games, '', 'all', 'title', context, locale).map((item) => item.id)).toEqual(expected);
+  });
+
+  it('answer the library games themselves', () => {
+    expect(filterLibrary(games, '', 'all', 'title', context, 'en').every((item) => games.includes(item))).toBe(true);
   });
 });
