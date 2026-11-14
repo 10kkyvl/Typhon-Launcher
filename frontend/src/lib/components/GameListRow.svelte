@@ -8,6 +8,11 @@
   import IconButton from './IconButton.svelte';
   import StatusBadge from './StatusBadge.svelte';
   import TextLink from './TextLink.svelte';
+  import type { GameCardAction } from './GameCard.svelte';
+  import { ambientHover } from '../utils/ambientHover';
+
+  /** One of the page's own actions on a row (Unwatch): busy while its request runs, as on a card. */
+  export type GameListRowAction = Pick<GameCardAction, 'id' | 'label' | 'icon' | 'busy' | 'onclick'>;
 
   /**
    * One game in a list: an `<li>`, so the page puts it in a `<ul>` or `<ol>`. Its main action is the
@@ -15,7 +20,9 @@
    * opens it too. Play or Stop (when the page gives `onplay` / `onstop`), busy while the launch is in
    * flight: focused and not disabled, a second press sends nothing. "More" asks the page for the
    * game's menu (`onmore`); the row owns no menu. The page passes its own secondary texts, the size
-   * (shown once) and its marks (status, source).
+   * (shown once) and its marks (status, source). `actions`: the page's own controls, after Play.
+   * `titleTone`: the title link's tone (TextLink); `ambient`: the window backdrop follows the game
+   * while the pointer rests on the row (the library).
    */
   let {
     id,
@@ -29,6 +36,9 @@
     launching = false,
     favorite = false,
     marks,
+    actions,
+    titleTone = 'muted',
+    ambient = false,
     onopen,
     onplay,
     onstop,
@@ -51,6 +61,9 @@
     favorite?: boolean;
     /** Status and source marks, drawn before the size. */
     marks?: Snippet;
+    actions?: GameListRowAction[];
+    titleTone?: 'muted' | 'plain';
+    ambient?: boolean;
     onopen: (id: string) => void;
     onplay?: (id: string) => void;
     onstop?: (id: string) => void;
@@ -69,10 +82,10 @@
     });
 </script>
 
-<li class="row" class:running {@attach pressOpens}>
+<li class="row" class:running {@attach pressOpens} use:ambientHover={ambient ? id : null}>
   <span class="thumb"><Artwork src={cover} fallback={coverFallback} alt="" label={title} seed={artSeed ?? id} ratio="3 / 4" radius="var(--radius-xs)" /></span>
   <div class="main">
-    <span class="title" id="{uid}-title"><TextLink tone="muted" truncate onclick={() => onopen(id)}>{title}</TextLink></span>
+    <span class="title" id="{uid}-title"><TextLink tone={titleTone} truncate onclick={() => onopen(id)}>{title}</TextLink></span>
     {#if details.length > 0}
       <span class="details">
         {#each details as detail, index (index)}<span>{detail}</span>{/each}
@@ -99,6 +112,11 @@
         {#if running}<Square size="1.4rem" strokeWidth={2} fill="currentColor" />{:else}<Play size="1.6rem" strokeWidth={2} fill="currentColor" />{/if}
       </IconButton>
     {/if}
+    {#each actions ?? [] as action (action.id)}
+      <IconButton label={action.label} busy={action.busy} aria-describedby="{uid}-title" onclick={(event) => action.onclick?.(event)}>
+        <action.icon size="1.6rem" strokeWidth={1.8} />
+      </IconButton>
+    {/each}
     {#if onmore}
       <IconButton label={msg('library.row.more')} aria-describedby="{uid}-title" onclick={(event) => onmore(id, event.currentTarget as HTMLElement)}>
         <Ellipsis size="1.8rem" />

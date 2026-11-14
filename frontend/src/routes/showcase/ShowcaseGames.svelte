@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { BellOff } from '@lucide/svelte';
   import GameListRow from '../../lib/components/GameListRow.svelte';
   import HeroCarousel, { type HeroSlide } from '../../lib/components/HeroCarousel.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
@@ -13,6 +14,14 @@
   let launching = $state(false);
 
   const said = (what: string) => (id: string) => toast(`${what}: ${id}`, 'info');
+
+  // A row's own action that runs for two seconds, as Unwatch waits on Go.
+  let unwatching = $state(false);
+  function unwatch() {
+    if (unwatching) return;
+    unwatching = true;
+    setTimeout(() => (unwatching = false), LAUNCH_MS);
+  }
 
   function launch() {
     launching = true;
@@ -49,6 +58,21 @@
       <GameListRow id="sample-outer-wilds" title="Outer Wilds" details={['Playing now']} running onopen={said('Open')} onplay={said('Play')} onstop={said('Stop')} onmore={said('More')} />
       <GameListRow id="sample-tunic" title="Tunic" details={['Starting…']} size="2.8 GB" launching onopen={said('Open')} onplay={said('Play')} onstop={said('Stop')} onmore={said('More')} />
       <GameListRow id="sample-disco" title="Disco Elysium – The Final Cut, a title long enough to be cut" details={['Never played']} size="21 GB" favorite onopen={said('Open')} onmore={said('More')} />
+    </ul>
+  </ShowcaseRow>
+
+  <ShowcaseRow caption="List rows as the library draws them: plain titles, the backdrop follows the row, a watched game with Unwatch (busy for two seconds when pressed)" stack>
+    <ul class="list">
+      <GameListRow id="sample-hades" title="Hades" details={['Played yesterday', '42 h']} size="14.2 GB" titleTone="plain" ambient onopen={said('Open')} onplay={said('Play')} onstop={said('Stop')} onmore={said('More')} />
+      <GameListRow
+        id="sample-silksong"
+        title="Hollow Knight: Silksong"
+        details={['Watched']}
+        titleTone="plain"
+        ambient
+        actions={[{ id: 'unwatch', label: 'Unwatch', icon: BellOff, busy: unwatching, onclick: unwatch }]}
+        onopen={said('Open')}
+      />
     </ul>
   </ShowcaseRow>
 </ShowcaseSection>
