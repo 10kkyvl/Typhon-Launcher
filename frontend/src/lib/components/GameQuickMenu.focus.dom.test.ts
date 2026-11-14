@@ -8,6 +8,8 @@ import { libraryGames } from '../stores/library';
 import { toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
 import GameMenuHarness from '../testing/GameMenuHarness.svelte';
+import GameCard from './GameCard.svelte';
+import GameQuickMenu from './GameQuickMenu.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
@@ -166,5 +168,55 @@ describe('a menu its caller opened without naming the game element (no source)',
 
     expect(link.isConnected).toBe(false);
     expect(document.activeElement).toBe(document.body);
+  });
+});
+
+// Library cards as the page draws them: a source badge on the cover before the card's controls.
+function cards() {
+  const main = document.createElement('main');
+  const heading = document.createElement('h1');
+  heading.textContent = 'Library';
+  heading.tabIndex = -1;
+  const grid = document.createElement('div');
+  main.append(heading, grid);
+  app.append(main);
+  const unmount: Record<string, () => void> = {};
+  for (const game of [hades, celeste]) {
+    const view = render(GameCard, { target: grid, props: { id: game.id, title: game.title, source: 'steam', installed: true, onplay: vi.fn() } });
+    unmount[game.id] = view.unmount;
+  }
+  render(GameQuickMenu, { target: app });
+  const card = (title: string) => screen.getByRole('button', { name: title }).closest('.card') as HTMLElement;
+  const play = (title: string) => card(title).querySelector<HTMLElement>('button.play') as HTMLElement;
+  return { card, play, unmount };
+}
+
+describe('library cards that carry a source badge before their controls', () => {
+  it('Escape on a menu opened by pointer puts focus on the card\'s Play, not on its badge', async () => {
+    libraryGames.set([hades, celeste]);
+    const { card, play } = cards();
+
+    await fireEvent.contextMenu(card('Hades'), RIGHT_CLICK);
+    expect(await screen.findByRole('menu')).toBeTruthy();
+    await user().keyboard('{Escape}');
+
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(document.activeElement).toBe(play('Hades'));
+  });
+
+  it('Hide puts focus on the next card\'s Play, not on its badge', async () => {
+    libraryGames.set([hades, celeste]);
+    const { card, play, unmount } = cards();
+    vi.mocked(setHidden).mockImplementationOnce(async () => {
+      leave();
+      unmount.g1();
+      return hades;
+    });
+
+    await fireEvent.contextMenu(card('Hades'), RIGHT_CLICK);
+    await user().click(await screen.findByRole('menuitem', { name: msg('games.actionHide') }));
+    await settled();
+
+    expect(document.activeElement).toBe(play('Celeste'));
   });
 });
