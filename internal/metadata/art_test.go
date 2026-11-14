@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -11,7 +12,7 @@ import (
 	"typhon/internal/catalog"
 )
 
-func TestEnsureArtStoresCoverWithoutScreenshots(t *testing.T) {
+func TestEnsureArtStoresCoverAndOnlyTheHeroPicture(t *testing.T) {
 	srv := imageServer(t)
 	provider := &fakeProvider{meta: map[string]GameMetadata{"2657": fullMetadata(srv.URL)}}
 	svc, cat, _ := newTestService(t, provider)
@@ -27,8 +28,8 @@ func TestEnsureArtStoresCoverWithoutScreenshots(t *testing.T) {
 	svc.wg.Wait()
 
 	assets := svc.store.list(game.ID)
-	if len(assets) != 1 || assets[0].Type != AssetCover {
-		t.Fatalf("stored assets = %+v, want a single cover", assets)
+	if len(assets) != 2 || assets[0].Type != AssetCover || assets[1].Type != AssetScreenshot || !strings.HasSuffix(assets[1].SourceURL, "/shot-0.png") {
+		t.Fatalf("stored assets = %+v, want the cover and the first fitting screenshot only", assets)
 	}
 
 	updated, err := cat.GetGame(game.ID)
@@ -41,8 +42,8 @@ func TestEnsureArtStoresCoverWithoutScreenshots(t *testing.T) {
 	if updated.CoverAssetID == "" || updated.Developer != "Arkane Studios" || updated.Summary == "" {
 		t.Fatalf("text metadata not applied: %+v", updated)
 	}
-	if updated.HeroAssetID != "" {
-		t.Fatalf("hero = %q, want empty without screenshots", updated.HeroAssetID)
+	if updated.HeroAssetID != assets[1].ID {
+		t.Fatalf("hero = %q, want the downloaded screenshot %q", updated.HeroAssetID, assets[1].ID)
 	}
 }
 
@@ -446,8 +447,8 @@ func TestEnsureArtResolvesTheWholeBatchInOneCall(t *testing.T) {
 		if !stored.MetadataPartial {
 			t.Fatalf("%s is not marked as partially resolved", game.Title)
 		}
-		if shots := len(svc.screenshots(game.ID)); shots != 0 {
-			t.Fatalf("%s stored %d screenshots, want none in art mode", game.Title, shots)
+		if shots := len(svc.screenshots(game.ID)); shots != 1 {
+			t.Fatalf("%s stored %d screenshots, want only the hero one in art mode", game.Title, shots)
 		}
 	}
 }

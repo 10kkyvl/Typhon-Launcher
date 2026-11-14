@@ -5,6 +5,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -104,7 +105,7 @@ func TestHeroFollowsTheChainInResponseOrder(t *testing.T) {
 }
 
 func TestStoredHeroFromTheOldRuleSurvivesUntilAFullRefresh(t *testing.T) {
-	srv, _ := sizedImageServer(t)
+	srv, hits := sizedImageServer(t)
 	dir := t.TempDir()
 	cat, err := catalog.NewServiceAt(dir)
 	if err != nil {
@@ -188,7 +189,9 @@ func TestStoredHeroFromTheOldRuleSurvivesUntilAFullRefresh(t *testing.T) {
 		t.Fatalf("reading the old state rewrote %v", changed)
 	}
 
-	// The library's art refresh downloads no pictures, so it keeps the choice.
+	// The library's art refresh keeps a stored choice and downloads only the
+	// cover, even though the answer lists a fitting artwork.
+	images := hits.Load()
 	svc.SetLanguage("ru")
 	if _, err := svc.EnsureArt([]string{game.ID}); err != nil {
 		t.Fatalf("ensure art: %v", err)
@@ -198,6 +201,9 @@ func TestStoredHeroFromTheOldRuleSurvivesUntilAFullRefresh(t *testing.T) {
 		t.Fatalf("art refresh did not run: %+v, %v", updated, err)
 	}
 	assertOldHero("after the art refresh")
+	if got := hits.Load() - images; got != 1 {
+		t.Fatalf("art refresh made %d image requests, want only the cover", got)
+	}
 
 	view, err := svc.Refresh(game.ID)
 	if err != nil {
@@ -320,4 +326,139 @@ func heroCaseNamed(t *testing.T, name string) heroCase {
 	}
 	t.Fatalf("no hero case %q", name)
 	return heroCase{}
+}
+
+// artRefresh runs the library's art refresh for a game the catalog knows by
+// IGDB id and returns how many image requests it made beyond the cover.
+func artRefresh(t *testing.T, svc *Service, cat *catalog.Service, gameID string, hits *atomic.Int64) (catalog.Game, int64) {
+	t.Helper()
+	images := hits.Load()
+	accepted, err := svc.EnsureArt([]string{gameID})
+	if err != nil || len(accepted) != 1 {
+		t.Fatalf("ensure art = %v, %v", accepted, err)
+	}
+	svc.wg.Wait()
+	updated, err := cat.GetGame(gameID)
+	if err != nil {
+		t.Fatalf("reload game: %v", err)
+	}
+	if updated.MetadataUpdatedAt == nil || updated.CoverAssetID == "" {
+		t.Fatalf("art refresh did not apply: %+v", updated)
+	}
+	return updated, hits.Load() - images - 1
+}
+
+func TestArtRefreshFetchesOneHeroPictureWhenNoStoredOneFits(t *testing.T) {
+	cases := []struct {
+		name     string
+		shots    []string
+		artworks []string
+		gone     bool
+		extra    int64
+		want     string
+	}{
+		{name: "a fitting artwork is listed", shots: []string{"/600x900-s0.png"}, artworks: []string{"/1920x1080-a0.png"}, extra: 1, want: "/1920x1080-a0.png"},
+		{name: "nothing listed fits", shots: []string{"/1000x600-s0.png"}, artworks: []string{"/600x900-a0.png"}, extra: 0, want: heroPoster},
+		{name: "several candidates: one download, screenshots first", shots: []string{"/1000x600-s0.png", "/1920x1080-s1.png", "/1280x720-s2.png"}, artworks: []string{"/1920x1080-a0.png", "/1280x720-a1.png"}, extra: 1, want: "/1920x1080-s1.png"},
+		{name: "the download fails", gone: true, extra: 1, want: heroPoster},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv, hits := sizedImageServer(t)
+			meta := fullMetadata(srv.URL)
+			meta.Cover = &ImageRef{URL: srv.URL + "/264x374-cover.png"}
+			meta.Screenshots = refs(srv.URL, tc.shots...)
+			meta.Artworks = refs(srv.URL, tc.artworks...)
+			if tc.gone {
+				meta.Artworks = []ImageRef{{URL: srv.URL + "/gone.png", Width: 1920, Height: 1080}}
+			}
+			provider := &fakeProvider{meta: map[string]GameMetadata{"2657": meta}}
+			svc, cat, _ := newTestService(t, provider)
+			game := addGame(t, cat, catalog.Game{Title: "Prey", ExternalIDs: catalog.ExternalIDs{IGDB: "2657"}})
+
+			updated, extra := artRefresh(t, svc, cat, game.ID, hits)
+			if extra != tc.extra {
+				t.Fatalf("extra image requests = %d, want %d", extra, tc.extra)
+			}
+			if !updated.MetadataPartial {
+				t.Fatal("art refresh cleared the partial flag; the page would skip the full refresh")
+			}
+			view, err := svc.GetView(game.ID)
+			if err != nil {
+				t.Fatalf("view: %v", err)
+			}
+			if tc.want == heroPoster {
+				if !view.HeroIsPoster || view.Hero != view.Cover {
+					t.Fatalf("hero = %q poster=%v, want the poster", view.Hero, view.HeroIsPoster)
+				}
+				return
+			}
+			if view.HeroIsPoster || sourceOf(t, svc, game.ID, view.Hero) != srv.URL+tc.want {
+				t.Fatalf("hero = %q poster=%v, want %s", view.Hero, view.HeroIsPoster, tc.want)
+			}
+			if hero, ok := svc.store.find(updated.HeroAssetID); !ok || hero.URL != view.Hero {
+				t.Fatalf("persisted hero %q does not match the view %q", updated.HeroAssetID, view.Hero)
+			}
+		})
+	}
+}
+
+func TestArtRefreshFetchesNothingExtraWhenAStoredPictureFits(t *testing.T) {
+	srv, hits := sizedImageServer(t)
+	meta := fullMetadata(srv.URL)
+	meta.Cover = &ImageRef{URL: srv.URL + "/264x374-cover.png"}
+	meta.Screenshots = refs(srv.URL, "/1280x720-s0.png")
+	provider := &fakeProvider{meta: map[string]GameMetadata{"2657": meta}}
+	svc, cat, _ := newTestService(t, provider)
+	game := addGame(t, cat, catalog.Game{Title: "Prey"})
+	before, err := svc.ApplyMatch(game.ID, "2657")
+	if err != nil {
+		t.Fatalf("apply match: %v", err)
+	}
+
+	next := meta
+	next.Screenshots = refs(srv.URL, "/1920x1080-s9.png")
+	next.Artworks = refs(srv.URL, "/1920x1080-a9.png")
+	provider.setMeta("2657", next)
+	svc.SetLanguage("ru")
+	if _, extra := artRefresh(t, svc, cat, game.ID, hits); extra != 0 {
+		t.Fatalf("extra image requests = %d, want none while a stored picture fits", extra)
+	}
+	view, err := svc.GetView(game.ID)
+	if err != nil {
+		t.Fatalf("view: %v", err)
+	}
+	if view.Hero != before.Hero || view.HeroIsPoster {
+		t.Fatalf("hero = %q poster=%v, want the stored %q", view.Hero, view.HeroIsPoster, before.Hero)
+	}
+}
+
+func TestArtRefreshHeroScreenshotLeavesTheGalleryToTheFullRefresh(t *testing.T) {
+	srv, hits := sizedImageServer(t)
+	meta := fullMetadata(srv.URL)
+	meta.Cover = &ImageRef{URL: srv.URL + "/264x374-cover.png"}
+	meta.Screenshots = refs(srv.URL, "/1920x1080-s0.png", "/1920x1080-s1.png")
+	provider := &fakeProvider{meta: map[string]GameMetadata{"2657": meta}}
+	svc, cat, _ := newTestService(t, provider)
+	game := addGame(t, cat, catalog.Game{Title: "Prey", ExternalIDs: catalog.ExternalIDs{IGDB: "2657"}})
+
+	if _, extra := artRefresh(t, svc, cat, game.ID, hits); extra != 1 {
+		t.Fatalf("first art refresh: extra image requests = %d, want 1", extra)
+	}
+	svc.SetLanguage("ru")
+	updated, extra := artRefresh(t, svc, cat, game.ID, hits)
+	if extra != 0 {
+		t.Fatalf("second art refresh: extra image requests = %d, want none", extra)
+	}
+	if !updated.MetadataPartial {
+		t.Fatal("the hero screenshot made the game look complete; its page would never fetch the gallery")
+	}
+	started, err := svc.EnsureFresh(game.ID)
+	if err != nil || !started {
+		t.Fatalf("ensure fresh = %v, %v; want the full refresh to start", started, err)
+	}
+	svc.wg.Wait()
+	if got := len(svc.screenshots(game.ID)); got != 2 {
+		t.Fatalf("gallery after the full refresh = %d screenshots, want 2", got)
+	}
 }

@@ -1073,16 +1073,26 @@ func (s *Service) buildAssets(ctx context.Context, game catalog.Game, meta GameM
 	if hasCover {
 		kinds, urls = append(kinds, AssetCover), append(urls, meta.Cover.URL)
 	}
+	shotRefs := meta.Screenshots[:min(len(meta.Screenshots), maxScreenshots)]
+	artRefs := meta.Artworks[:min(len(meta.Artworks), maxArtworks)]
+	carried := append(carryAssets(previous, AssetScreenshot), carryAssets(previous, AssetArtwork)...)
 	if mode != modeArt {
-		for _, shot := range meta.Screenshots[:min(len(meta.Screenshots), maxScreenshots)] {
+		for _, shot := range shotRefs {
 			if shot.URL != "" {
 				kinds, urls = append(kinds, AssetScreenshot), append(urls, shot.URL)
 			}
 		}
-		for _, art := range meta.Artworks[:min(len(meta.Artworks), maxArtworks)] {
+		for _, art := range artRefs {
 			if art.URL != "" {
 				kinds, urls = append(kinds, AssetArtwork), append(urls, art.URL)
 			}
+		}
+	} else if !hasHero(game, carried) {
+		// The art refresh is what keeps library games current, so it also
+		// fetches the one picture the hero needs; the gallery is left to the
+		// full refresh.
+		if kind, ref, ok := heroRef(shotRefs, artRefs); ok {
+			kinds, urls = append(kinds, kind), append(urls, ref.URL)
 		}
 	}
 	results := s.storeImages(ctx, game.ID, kinds, urls)
@@ -1117,17 +1127,25 @@ func (s *Service) buildAssets(ctx context.Context, game catalog.Game, meta GameM
 	}
 
 	if mode == modeArt {
-		shots := carryAssets(previous, AssetScreenshot)
-		batch.assets = append(batch.assets, shots...)
-		batch.assets = append(batch.assets, carryAssets(previous, AssetArtwork)...)
-		// No picture was downloaded, so the stored choice stands, including
-		// one made by an earlier rule.
+		batch.assets = append(batch.assets, carried...)
+		for i := first; i < len(results); i++ {
+			if results[i].err != nil {
+				slog.Warn("download hero image", "kind", kinds[i], "game", game.ID, "url", urls[i], "error", results[i].err)
+				continue
+			}
+			batch.assets = append(batch.assets, results[i].asset)
+			batch.created = append(batch.created, results[i].asset)
+		}
+		// A stored choice stands, including one made by an earlier rule.
 		if kept, ok := keptHero(game.HeroAssetID, batch.assets); ok {
 			batch.hero = kept.ID
 		} else if wide, ok := wideHero(batch.assets); ok {
 			batch.hero = wide.ID
 		}
-		batch.partial = len(shots) == 0
+		// The gallery is still the full refresh's job: a game that has not had
+		// one, or has no stored screenshots, stays partial, so opening its
+		// page completes it. A hero screenshot alone is not a gallery.
+		batch.partial = game.MetadataPartial || len(carryAssets(previous, AssetScreenshot)) == 0
 		return batch, nil
 	}
 
@@ -1373,11 +1391,11 @@ const (
 	maxHeroRatio = 2.6
 )
 
-func fitsHero(a MediaAsset) bool {
-	if a.Width < minHeroWidth || a.Height <= 0 {
+func fitsHero(width, height int) bool {
+	if width < minHeroWidth || height <= 0 {
 		return false
 	}
-	ratio := float64(a.Width) / float64(a.Height)
+	ratio := float64(width) / float64(height)
 	return ratio >= minHeroRatio && ratio <= maxHeroRatio
 }
 
@@ -1386,12 +1404,38 @@ func fitsHero(a MediaAsset) bool {
 func wideHero(assets []MediaAsset) (MediaAsset, bool) {
 	for _, kind := range []AssetType{AssetScreenshot, AssetArtwork} {
 		for _, a := range assets {
-			if a.Type == kind && fitsHero(a) {
+			if a.Type == kind && fitsHero(a.Width, a.Height) {
 				return a, true
 			}
 		}
 	}
 	return MediaAsset{}, false
+}
+
+// heroRef applies the hero rule to an answer's references, by the dimensions
+// the provider reports, for a refresh that downloads only the hero.
+func heroRef(shots, arts []ImageRef) (AssetType, ImageRef, bool) {
+	for _, group := range []struct {
+		kind AssetType
+		refs []ImageRef
+	}{{AssetScreenshot, shots}, {AssetArtwork, arts}} {
+		for _, ref := range group.refs {
+			if ref.URL != "" && fitsHero(ref.Width, ref.Height) {
+				return group.kind, ref, true
+			}
+		}
+	}
+	return "", ImageRef{}, false
+}
+
+// hasHero reports whether the stored pictures already give the game a wide
+// hero, either its stored choice or one that fits the rule.
+func hasHero(game catalog.Game, assets []MediaAsset) bool {
+	if _, ok := keptHero(game.HeroAssetID, assets); ok {
+		return true
+	}
+	_, ok := wideHero(assets)
+	return ok
 }
 
 func keptHero(id string, assets []MediaAsset) (MediaAsset, bool) {
