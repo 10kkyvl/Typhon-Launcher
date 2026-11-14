@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick, untrack } from 'svelte';
   import { ArrowLeft, Dices, Search, Star, SlidersHorizontal } from '@lucide/svelte';
-  import { t } from '../../i18n';
+  import { locale, t } from '../../i18n';
   import { collections } from '../../stores/collections';
   import { libraryGenres, requestLibraryGenres } from '../../stores/genres';
   import { libraryGames, runningGames } from '../../stores/library';
@@ -20,7 +20,7 @@
   let root: HTMLElement;
   const filters = $derived<LibraryFilter[]>(['all', 'installed', 'favorites', 'uninstalled', 'hidden', ...$collections.map((collection): LibraryFilter => `collection:${collection.id}`)]);
   const sorts: LibrarySort[] = ['title', 'recent', 'playtime', 'added'];
-  const games = $derived(filterLibrary($libraryGames, query, filter, sort, { collections: $collections, genres: $libraryGenres }));
+  const games = $derived(filterLibrary($libraryGames, query, filter, sort, { collections: $collections, genres: $libraryGenres }, $locale));
   const filterLabels = $derived<Record<string, string>>({ all: $t('bp.allGames'), installed: $t('bp.installed'), favorites: $t('bp.favorites'), uninstalled: $t('bp.notInstalled'), hidden: $t('bp.hidden'), ...Object.fromEntries($collections.map((collection) => [`collection:${collection.id}`, collection.name])) });
   const sortLabels = $derived({ title: $t('bp.sortTitle'), recent: $t('bp.lastPlayed'), playtime: $t('bp.playtime'), added: $t('bp.sortAdded') });
   async function search() {

@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { locale } from '../i18n/locale';
 import type { LibraryGame } from '../services/library';
 import { createEntryCache } from '../library/entries';
 import type { LibraryFilter as DesktopFilter } from '../library/filters';
@@ -131,5 +132,17 @@ describe('Big Picture library and the desktop library', () => {
 
   it('answer the library games themselves', () => {
     expect(filterLibrary(games, '', 'all', 'title', context, 'en').every((item) => games.includes(item))).toBe(true);
+  });
+});
+
+describe('Big Picture library without a language passed', () => {
+  afterEach(() => locale.set('ru'));
+
+  it('orders titles in the interface language of the moment', () => {
+    const games = [game('w', { title: 'Witcher' }), game('v', { title: 'Ведьмак' })];
+    locale.set('ru');
+    expect(filterLibrary(games, '', 'all', 'title').map((item) => item.id)).toEqual(['v', 'w']);
+    locale.set('en');
+    expect(filterLibrary(games, '', 'all', 'title').map((item) => item.id)).toEqual(['w', 'v']);
   });
 });

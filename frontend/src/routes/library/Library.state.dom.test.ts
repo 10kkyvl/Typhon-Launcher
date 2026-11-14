@@ -4,7 +4,7 @@ import { libraryGames, libraryLoaded, libraryLoadError, runningGames } from '../
 import { screen, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { msg } from '../../lib/i18n';
+import { locale, msg } from '../../lib/i18n';
 import { sortEntries } from '../../lib/library/query';
 import type { Download } from '../../lib/services/downloads';
 import { getCollections, getGames, playGame, type LibraryCollection, type LibraryGame } from '../../lib/services/library';
@@ -443,5 +443,19 @@ describe('Library: errors of Play', () => {
     expect(kind).toBe('danger');
     expect(text).toBe(expected);
     expect(text).not.toContain('сырой');
+  });
+});
+
+describe('Library: the order of titles', () => {
+  it('follows the interface language, also when it changes while the page is open', async () => {
+    libraryGames.set([game('g-witcher', 'Witcher'), game('g-vedmak', 'Ведьмак')]);
+    locale.set('ru');
+    renderDom(Library);
+    expect(listTitles()).toEqual(['Ведьмак', 'Witcher']);
+
+    locale.set('en');
+    await tick();
+
+    expect(listTitles()).toEqual(['Witcher', 'Ведьмак']);
   });
 });
