@@ -131,8 +131,10 @@ export function entryCover(entry: LibraryEntry, art: Readonly<Record<string, Gam
   return own?.cover || entry.game?.cover || '';
 }
 
+// The wide picture only: a hero that is the poster is the cover again, and a wide band would crop it.
 export function entryHeroArt(entry: LibraryEntry, art: Readonly<Record<string, GameArt>>): string {
-  return (entry.catalogId ? art[entry.catalogId]?.hero : undefined) ?? '';
+  const pictures = entry.catalogId ? art[entry.catalogId] : undefined;
+  return pictures && !pictures.heroIsPoster ? (pictures.hero ?? '') : '';
 }
 
 function sameList<T>(next: T[], previous: T[]): T[] {

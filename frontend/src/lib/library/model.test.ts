@@ -85,8 +85,9 @@ describe('library entries', () => {
   it('looks art up by catalog id and falls back to the game cover', () => {
     const entry = gameEntry(game('g', { canonicalGameId: 'c-g', cover: 'own.png' }));
     expect(entryCover(entry, {})).toBe('own.png');
-    expect(entryCover(entry, { 'c-g': { cover: 'meta.png', hero: 'hero.png' } })).toBe('meta.png');
-    expect(entryHeroArt(entry, { 'c-g': { cover: '', hero: 'hero.png' } })).toBe('hero.png');
+    expect(entryCover(entry, { 'c-g': { cover: 'meta.png', hero: 'hero.png', heroIsPoster: false } })).toBe('meta.png');
+    expect(entryHeroArt(entry, { 'c-g': { cover: '', hero: 'hero.png', heroIsPoster: false } })).toBe('hero.png');
+    expect(entryHeroArt(entry, { 'c-g': { cover: 'cover.png', hero: 'cover.png', heroIsPoster: true } })).toBe('');
     expect(entryHeroArt(entry, {})).toBe('');
   });
 });

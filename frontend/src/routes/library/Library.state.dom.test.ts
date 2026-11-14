@@ -419,7 +419,7 @@ describe('Library: cheap updates', () => {
     const sorted = vi.mocked(sortEntries).mock.calls.length;
     expect(sorted).toBeGreaterThan(0);
 
-    gameArt.set({ 'c-hades': { cover: 'hades.png', hero: '' } });
+    gameArt.set({ 'c-hades': { cover: 'hades.png', hero: '', heroIsPoster: false } });
     downloads.set([download('c-quiet', 50)]);
     await tick();
 
