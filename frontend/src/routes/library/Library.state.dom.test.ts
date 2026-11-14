@@ -327,6 +327,8 @@ describe('Library: the recent games', () => {
     expect(play.isConnected).toBe(false);
     expect(document.activeElement).not.toBe(document.body);
     expect(recentRow().contains(document.activeElement)).toBe(true);
+    // The capsule now in its place: Alpha left the carousel for the running game.
+    expect(document.activeElement?.closest('.recent-item')?.textContent).toContain('Alpha');
   });
 });
 

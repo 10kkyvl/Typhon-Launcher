@@ -15,6 +15,7 @@
     busy,
     onshowall,
     onplay,
+    fallback,
   }: {
     entries: LibraryEntry[];
     cover: (entry: LibraryEntry) => string;
@@ -23,17 +24,27 @@
     busy: (id: string) => boolean;
     onshowall: () => void;
     onplay: (id: string) => void;
+    /** Where focus goes when the row leaves with its last capsule. */
+    fallback?: () => HTMLElement | undefined;
   } = $props();
 
   let section = $state<HTMLElement>();
 
-  // A game started or stopped from its capsule can leave the row (it becomes the hero): focus that was
-  // on the capsule moves to the row's first control instead of falling to the page.
+  // A game started from its capsule can leave the row for the carousel: focus that was on the capsule
+  // moves to the capsule now in its place (the one before it at the end), else to the row's first
+  // control, else, when the row goes with its last capsule, to `fallback`.
   $effect.pre(() => {
     void entries;
     const row = section;
     if (!row?.contains(document.activeElement)) return;
-    void focusHandOff()(() => focusableIn(row)[0]);
+    const capsules = () => [...row.querySelectorAll<HTMLElement>('.recent-item')];
+    const index = capsules().findIndex((item) => item.contains(document.activeElement));
+    void focusHandOff()(() => {
+      if (!row.isConnected) return fallback?.();
+      const now = capsules();
+      const capsule = index >= 0 ? now[Math.min(index, now.length - 1)] : undefined;
+      return (capsule ? focusableIn(capsule)[0] : undefined) ?? focusableIn(row)[0];
+    });
   });
 
   function recentMeta(entry: LibraryEntry) {

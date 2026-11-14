@@ -33,7 +33,7 @@
   import { toggleWatch, watchAlertsLoaded, watchlist } from '../../lib/stores/watchlist';
   import { libraryView } from '../../lib/stores/ui';
   import { focusHandOff } from '../../lib/utils/focusHandOff';
-  import { focusableIn } from '../../lib/layers/focus';
+  import { focusableIn, focusQuietly } from '../../lib/layers/focus';
   import { locale, msg } from '../../lib/i18n';
   import { libraryErrorText } from '../../lib/library/errors';
   import { emptyReason } from '../../lib/library/empty';
@@ -47,6 +47,8 @@
   import LibraryGrid from './LibraryGrid.svelte';
   import LibraryList from './LibraryList.svelte';
   import { narrowingText } from './entryText';
+  import { itemOf } from './itemMenu';
+  import { primaryOf } from './roving';
 
   const uid = $props.id();
   const saved = get(libraryChoices);
@@ -64,6 +66,7 @@
   let collectionsRetrying = $state(false);
   let results = $state<HTMLElement>();
   let listSection = $state<HTMLElement>();
+  let collectionsRow = $state<HTMLElement>();
 
   $effect(() => {
     libraryChoices.set({ filter, source: sourceFilter, status: statusFilter, collection: activeCollectionId, search, heroHidden });
@@ -141,6 +144,19 @@
     });
   });
 
+  const unwatching = new SvelteSet<string>();
+
+  // toggleWatch says its own failure; the press waits for it so a second one sends nothing.
+  async function unwatch(id: string) {
+    if (unwatching.has(id)) return;
+    unwatching.add(id);
+    try {
+      await toggleWatch(id);
+    } finally {
+      unwatching.delete(id);
+    }
+  }
+
   function watchedActions(entry: LibraryEntry): GameCardAction[] | undefined {
     if (entry.kind !== 'watched') return undefined;
     return [
@@ -148,9 +164,10 @@
         id: 'unwatch',
         label: msg('games.unwatchAction'),
         icon: BellOff,
+        busy: unwatching.has(entry.id),
         onclick: (event) => {
           event.stopPropagation();
-          void toggleWatch(entry.id);
+          void unwatch(entry.id);
         },
       },
     ];
@@ -218,6 +235,48 @@
   // The game the list's Tab stop is on, kept across the grid and the list.
   let currentGame = $state<string>();
 
+  // A game that leaves the list (hidden, unwatched, filtered out) does not take focus or the Tab stop
+  // with it: both move to the game now in its place, the one before it at the end, and focus to the
+  // section's first control when the list empties. Read before the list changes on screen, acted on
+  // right after, before anything else picks a place for focus.
+  let shownIds: string[] = [];
+  let leaving: { focus: number; current: number } | null = null;
+
+  const resultsList = () => listSection?.querySelector<HTMLElement>('[data-results]') ?? null;
+
+  $effect.pre(() => {
+    void visibleGames;
+    untrack(() => {
+      const list = resultsList();
+      const active = document.activeElement;
+      const item = list && active && list.contains(active) ? itemOf(list, active) : null;
+      leaving = {
+        focus: list && item ? [...list.children].indexOf(item) : -1,
+        current: currentGame === undefined ? -1 : shownIds.indexOf(currentGame),
+      };
+    });
+  });
+
+  $effect(() => {
+    const ids = visibleGames.map((entry) => entry.id);
+    untrack(() => {
+      const was = leaving;
+      leaving = null;
+      shownIds = ids;
+      if (!was) return;
+      if (currentGame !== undefined && !ids.includes(currentGame) && was.current >= 0) {
+        currentGame = ids[Math.min(was.current, ids.length - 1)];
+      }
+      if (was.focus < 0) return;
+      const active = document.activeElement;
+      if (active && active !== document.body && active.isConnected) return;
+      const list = resultsList();
+      const item = list?.children[Math.min(was.focus, list.children.length - 1)];
+      const target = item instanceof HTMLElement ? primaryOf(item) : listSection ? focusableIn(listSection)[0] : undefined;
+      if (target) focusQuietly(target);
+    });
+  });
+
   let lastView = get(libraryView);
   let viewSwitched = $state(false);
 
@@ -280,6 +339,7 @@
       running={$runningGames}
       {busy}
       onshowall={() => (filter = 'recent')}
+      fallback={() => (listSection ? focusableIn(listSection)[0] : undefined)}
       onplay={toggleRun}
     />
   {/if}
@@ -313,7 +373,7 @@
       </div>
     {/if}
 
-    <div class="collections" role="group" aria-label={msg('games.collectionsLabel')}>
+    <div class="collections" role="group" aria-label={msg('games.collectionsLabel')} bind:this={collectionsRow}>
       {#each $collections as collection (collection.id)}
         <Chip
           selected={activeCollectionId === collection.id}
@@ -393,7 +453,12 @@
   {/if}
 
   {#if collectionOpen}
-    <CollectionModal bind:open={collectionOpen} collection={collectionTarget} genres={knownGenres} />
+    <CollectionModal
+      bind:open={collectionOpen}
+      collection={collectionTarget}
+      genres={knownGenres}
+      returnFocus={() => (collectionsRow ? focusableIn(collectionsRow)[0] : undefined)}
+    />
   {/if}
 </Page>
 
