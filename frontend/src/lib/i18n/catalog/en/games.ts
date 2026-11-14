@@ -259,6 +259,7 @@ export const games: Record<GamesKey, Message> = {
   'games.detailFactPlatforms': 'Platforms',
   'games.detailTabOverview': 'Overview',
   'games.detailTabScreenshots': 'Screenshots',
+  'games.detailTabSaves': 'Saves',
   'games.detailFactVersion': 'Version',
   'games.detailFactSize': 'Size',
   'games.detailFactPlaytime': 'Playtime',

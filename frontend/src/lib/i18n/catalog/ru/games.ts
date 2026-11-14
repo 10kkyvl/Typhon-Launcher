@@ -257,6 +257,7 @@ export const games = {
   'games.detailFactPlatforms': 'Платформы',
   'games.detailTabOverview': 'Обзор',
   'games.detailTabScreenshots': 'Скриншоты',
+  'games.detailTabSaves': 'Сохранения',
   'games.detailFactVersion': 'Версия',
   'games.detailFactSize': 'Размер',
   'games.detailFactPlaytime': 'Наиграно',
