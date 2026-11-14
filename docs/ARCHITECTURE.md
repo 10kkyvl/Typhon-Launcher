@@ -55,7 +55,7 @@ Dependency direction (enforced by import graph, no cycles): `storage`/`uierr`/`v
 | `sources` | feed sources (URL/file), scheduled refresh, release diff/merge, matching to catalog, ignore/confirm | catalog, settings, storage, titles, version | `Source`, `Release`, `ReleaseBatch`, `SourceError`, `DownloadRequest` | `sources.json`, `releases/<sourceID>.json` |
 | `sources/feed` | feed JSON parser + limits, SSRF-guarded fetch (`guard.go`), file feeds | — | `Feed`, `Entry`, `Result` | — |
 | `catalog` | local game catalog, title index, matching (`resolve`), overrides, browse via remote (`RemoteCatalog`), compat badges | storage, titles | `Game`, `Match`, `Query`, `GameQuery`, `RemoteCatalog` | `catalog.json`, `match_overrides.json`, `catalog-redirects.json`, `catalog-pages/<sha256>.json` |
-| `metadata` | covers/screenshots/text via backend provider, request budget/backoff, asset cache, media HTTP middleware, language | catalog, storage, account (typhonapi) | `Provider`, `BatchProvider`, `View`, `Art`, `MediaAsset` | `media_assets.json`, `metadata_attempts.json`, `media/` |
+| `metadata` | covers/screenshots/artworks/text via backend provider (one hero choice `Service.hero` for `View`, `Art`, `ArtFiles`), request budget/backoff, asset cache, media HTTP middleware, language | catalog, storage, account (typhonapi) | `Provider`, `BatchProvider`, `View`, `Art`, `MediaAsset` | `media_assets.json`, `metadata_attempts.json`, `media/` |
 | `metadata/typhonapi` | HTTP client for `/v1/metadata/*` (also implements `catalog.RemoteCatalog`) | account, app | `Client` | — |
 | `search` | unified search over library, catalog, releases | library, catalog, sources, titles | `Result`, `GameHit`, `ReleaseHit` | — |
 | `titles`, `titlesdict` | title normalization/parsing dictionary (embedded `titles-dict.json`, remote refresh 24 h) | storage, account | `Dict`, `Parsed` | `titles-dict.json`, `titles-dict-remote.json` |
@@ -105,11 +105,11 @@ Registered in `main.go::init` (typed) — families and their frontend consumers 
 | Family | Events | Consumer |
 |---|---|---|
 | settings | `settings:updated` | `settings.ts` |
-| library | `library:updated`, `game:started`, `game:stopped` | `library.ts` |
+| library | `library:updated`, `library:collections`, `game:started`, `game:stopped`, `game:crash`, `library:profile-fallback` | `library.ts`, `collections.ts` (the two lists through `services/library.ts::onLibraryUpdated`/`onCollectionsChanged`) |
 | download | `download:{added,updated,progress,completed,failed,removed,degraded}` (`progress` is a slim `ProgressUpdate` every 250 ms) | `downloads.ts`, `degraded.ts` |
 | install | `install:{started,updated,completed,failed,cancelled,removed}` | `install.ts` |
 | sources | `source:{updated,error,degraded}`, `release:{added,removed,matched,needs-review}` | `sources.ts` |
-| metadata | `metadata:updated` | `metadata.ts`, `routes/game/GameDetails.svelte` |
+| metadata | `metadata:updated` | `metadata.ts`, `routes/game/GameDetails.svelte`, `routes/catalog/Catalog.svelte`, `lib/bigpicture/components/GamePage.svelte` |
 | discovery | `discovery:{started,progress,completed}` | `discovery.ts` |
 | updates | `update:{available,started,updated,completed,failed,rollback,degraded}`, `verify:*`, `repair:*` | `updates.ts` |
 | relocate | `move:{started,progress,completed,failed,cancelled,degraded}` | `relocate.ts` |
