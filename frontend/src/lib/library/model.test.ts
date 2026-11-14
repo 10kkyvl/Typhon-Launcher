@@ -194,34 +194,49 @@ describe('hero slides and the recent row', () => {
 
   it('takes up to three last played, installed, launchable, not hidden games, newest first', () => {
     const extra = library([...fixture, game('old', { lastPlayed: '2025-01-01T00:00:00Z' }), game('noexe', { executable: '', lastPlayed: '2026-11-13T00:00:00Z' })]);
-    expect(ids(buildSlides(extra, none, 'en'))).toEqual(['celeste', 'hades', 'witcher']);
+    expect(ids(buildSlides(extra, { running: none, locale: 'en' }))).toEqual(['celeste', 'hades', 'witcher']);
   });
 
   it('puts a running game first, played or not', () => {
-    expect(ids(buildSlides(entries, new Set(['zeta']), 'en'))).toEqual(['zeta', 'celeste', 'hades']);
-    expect(ids(buildSlides(entries, new Set(['witcher']), 'en'))).toEqual(['witcher', 'celeste', 'hades']);
-    expect(ids(buildSlides(entries, new Set(['secret']), 'en'))).toEqual(['celeste', 'hades', 'witcher']);
+    expect(ids(buildSlides(entries, { running: new Set(['zeta']), locale: 'en' }))).toEqual(['zeta', 'celeste', 'hades']);
+    expect(ids(buildSlides(entries, { running: new Set(['witcher']), locale: 'en' }))).toEqual(['witcher', 'celeste', 'hades']);
+    expect(ids(buildSlides(entries, { running: new Set(['secret']), locale: 'en' }))).toEqual(['celeste', 'hades', 'witcher']);
   });
 
   it('does not depend on the sort or the filters of the list', () => {
-    expect(buildSlides(entries, none, 'en')).toEqual(buildSlides(entries.toReversed(), none, 'en'));
+    expect(buildSlides(entries, { running: none, locale: 'en' })).toEqual(buildSlides(entries.toReversed(), { running: none, locale: 'en' }));
   });
 
   it('the row leaves out only the game the hero shows, and keeps it when the hero is hidden', () => {
-    const [hero] = buildSlides(entries, none, 'en');
-    expect(ids(recentEntries(entries, hero.id, 'en'))).toEqual(['hades', 'witcher']);
-    expect(ids(recentEntries(entries, undefined, 'en'))).toEqual(['celeste', 'hades', 'witcher']);
+    const [hero] = buildSlides(entries, { running: none, locale: 'en' });
+    expect(ids(recentEntries(entries, { shown: hero.id, locale: 'en' }))).toEqual(['hades', 'witcher']);
+    expect(ids(recentEntries(entries, { locale: 'en' }))).toEqual(['celeste', 'hades', 'witcher']);
   });
 
   it('the row holds the games of the "Recent" filter in the same order', () => {
-    expect(ids(recentEntries(entries, undefined, 'en'))).toEqual(
+    expect(ids(recentEntries(entries, { locale: 'en' }))).toEqual(
       ids(queryLibrary(entries, [], query({ filter: 'recent', sort: 'title' }), { genres, locale: 'en' })),
     );
   });
 
+  it('keeps a game that just stopped first, in the hero and the row, until the list records its session', () => {
+    const stopped = new Map([['witcher', 1]]);
+    expect(ids(buildSlides(entries, { running: none, stopped, locale: 'en' }))).toEqual(['witcher', 'celeste', 'hades']);
+    expect(ids(recentEntries(entries, { shown: 'witcher', stopped, locale: 'en' }))).toEqual(['celeste', 'hades']);
+    const twice = new Map([['witcher', 1], ['hades', 2]]);
+    expect(ids(buildSlides(entries, { running: none, stopped: twice, locale: 'en' }))).toEqual(['hades', 'witcher', 'celeste']);
+    expect(ids(queryLibrary(entries, [], query({ filter: 'recent' }), { genres, locale: 'en', stopped: twice }))).toEqual(['hades', 'witcher', 'celeste']);
+  });
+
+  it('counts a game that stopped after its first session as recent before the list records it', () => {
+    const stopped = new Map([['zeta', 1]]);
+    expect(ids(buildSlides(entries, { running: none, stopped, locale: 'en' }))).toEqual(['zeta', 'celeste', 'hades']);
+    expect(ids(recentEntries(entries, { stopped, locale: 'en' }))[0]).toBe('zeta');
+  });
+
   it(`caps the row at ${RECENT_LIMIT}`, () => {
     const many = library(Array.from({ length: 20 }, (_, i) => game(`g${String(i).padStart(2, '0')}`, { lastPlayed: `2026-10-${String(i + 1).padStart(2, '0')}T00:00:00Z` })));
-    const row = recentEntries(many, undefined, 'en');
+    const row = recentEntries(many, { locale: 'en' });
     expect(row).toHaveLength(12);
     expect(row[0].id).toBe('g19');
   });

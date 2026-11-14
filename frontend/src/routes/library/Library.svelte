@@ -27,6 +27,7 @@
     loadLibrary,
     requestDownloadTitles,
     runningGames,
+    stoppedSinceList,
   } from '../../lib/stores/library';
   import { libraryChoices, librarySort } from '../../lib/stores/libraryPrefs';
   import { gameArt, requestArt } from '../../lib/stores/metadata';
@@ -167,8 +168,10 @@
     collection: activeCollection,
     search,
   });
-  const filtered = $derived(filterEntries(entries, watched, query, $libraryGenres));
-  const visibleGames = $derived(sortEntries(filtered, effectiveSort(filter, sort), $locale));
+  // Only the play order reads which games just stopped: another sort is not re-run when one stops.
+  const stopped = $derived(filter === 'recent' || sort === 'recent' ? $stoppedSinceList : undefined);
+  const filtered = $derived(filterEntries(entries, watched, query, $libraryGenres, stopped));
+  const visibleGames = $derived(sortEntries(filtered, effectiveSort(filter, sort), $locale, stopped));
 
   const loadFailed = $derived($libraryLoadError != null && !$libraryLoaded);
   const reason = $derived(
@@ -192,8 +195,10 @@
     void handOff(() => (results ? focusableIn(results)[0] : undefined));
   }
 
-  const hero = $derived(buildSlides(entries, $runningGames, $locale)[0]);
-  const recentGames = $derived(recentEntries(entries, hero && !heroHidden ? hero.id : undefined, $locale));
+  const hero = $derived(buildSlides(entries, { running: $runningGames, stopped: $stoppedSinceList, locale: $locale })[0]);
+  const recentGames = $derived(
+    recentEntries(entries, { shown: hero && !heroHidden ? hero.id : undefined, stopped: $stoppedSinceList, locale: $locale }),
+  );
 
   let lastView = get(libraryView);
   let viewSwitched = $state(false);

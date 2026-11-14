@@ -199,6 +199,23 @@ describe('running sessions', () => {
     expect(before.size).toBe(0);
   });
 
+  it('notes a stopped game until the next list, in stopping order, whichever comes first', async () => {
+    running = ['a', 'b'];
+    const { store } = await load();
+
+    handlers['game:stopped']({ data: { gameId: 'a', sessionSeconds: 5, playtimeSeconds: 5 } });
+    handlers['game:stopped']({ data: { gameId: 'b', sessionSeconds: 5, playtimeSeconds: 5 } });
+    const order = [...get(store.stoppedSinceList)].sort((x, y) => y[1] - x[1]).map(([id]) => id);
+    expect(order).toEqual(['b', 'a']);
+
+    handlers['library:updated']({ data: [game({ id: 'a' }), game({ id: 'b' })] });
+    expect(get(store.stoppedSinceList).size).toBe(0);
+
+    handlers['library:updated']({ data: [game({ id: 'a' })] });
+    handlers['game:stopped']({ data: { gameId: 'a', sessionSeconds: 5, playtimeSeconds: 5 } });
+    expect([...get(store.stoppedSinceList).keys()]).toEqual(['a']);
+  });
+
   it('unmarks only the game that stopped', async () => {
     running = ['a', 'b'];
     const { store } = await load();

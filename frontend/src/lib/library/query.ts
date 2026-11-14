@@ -20,6 +20,14 @@ export interface LibraryQuery {
 
 export type Genres = Readonly<Record<string, string[] | undefined>>;
 
+/**
+ * Library games that stopped after the list was read, by stopping order (later is larger). Their
+ * `lastPlayed` in the list predates the session that just ended, so they count as the last played.
+ */
+export type JustStopped = ReadonlyMap<string, number>;
+
+const NONE: JustStopped = new Map();
+
 export function playedAt(entry: Pick<LibraryEntry, 'lastPlayed'>): number {
   return timestamp(entry.lastPlayed);
 }
@@ -35,18 +43,29 @@ export function searchKey(text: string): string {
 }
 
 /** A played library game that is on disk and not hidden: what "Recent" holds, as a row or as a filter. */
-export function isRecent(entry: LibraryEntry): boolean {
-  return entry.kind === 'game' && entry.installed && !entry.hidden && playedAt(entry) > 0;
+export function isRecent(entry: LibraryEntry, stopped: JustStopped = NONE): boolean {
+  return entry.kind === 'game' && entry.installed && !entry.hidden && (playedAt(entry) > 0 || stopped.has(entry.id));
 }
 
-function passesFilter(entry: LibraryEntry, filter: LibraryFilter): boolean {
+/** Last played first: games that just stopped, the latest stop first, then by `lastPlayed`. */
+export function byPlayOrder(stopped: JustStopped = NONE): (a: LibraryEntry, b: LibraryEntry) => number {
+  return (a, b) => {
+    const left = stopped.get(a.id);
+    const right = stopped.get(b.id);
+    if (left !== undefined && right !== undefined) return right - left;
+    if (left !== undefined || right !== undefined) return left !== undefined ? -1 : 1;
+    return playedAt(b) - playedAt(a);
+  };
+}
+
+function passesFilter(entry: LibraryEntry, filter: LibraryFilter, stopped: JustStopped): boolean {
   switch (filter) {
     case 'installed':
       return entry.installed;
     case 'uninstalled':
       return entry.kind === 'game' && !entry.installed;
     case 'recent':
-      return isRecent(entry);
+      return isRecent(entry, stopped);
     case 'favorites':
       return entry.favorite;
     default:
@@ -64,6 +83,7 @@ export function filterEntries(
   watched: readonly LibraryEntry[],
   query: LibraryQuery,
   genres: Genres,
+  stopped: JustStopped = NONE,
 ): LibraryEntry[] {
   const listed = query.filter === 'watched';
   const needle = searchKey(query.search);
@@ -76,7 +96,7 @@ export function filterEntries(
       const own = entry.catalogId ? genres[entry.catalogId] : undefined;
       if (entry.kind !== 'game' || !matchesCollection(entry, own, query.collection)) return false;
     }
-    return passesFilter(entry, query.filter);
+    return passesFilter(entry, query.filter, stopped);
   });
 }
 
@@ -103,11 +123,13 @@ function completedTime(entry: LibraryEntry): number {
   return entry.completedAt ? timestamp(entry.completedAt) : 0;
 }
 
-export function entryComparator(sort: LibrarySort, locale: string): Compare {
+export function entryComparator(sort: LibrarySort, locale: string, stopped: JustStopped = NONE): Compare {
   const title = byTitle(locale);
   switch (sort) {
-    case 'recent':
-      return (a, b) => playedAt(b) - playedAt(a) || title(a, b);
+    case 'recent': {
+      const played = byPlayOrder(stopped);
+      return (a, b) => played(a, b) || title(a, b);
+    }
     case 'playtime':
       return (a, b) => b.playtimeSeconds - a.playtimeSeconds || title(a, b);
     case 'size':
@@ -134,17 +156,23 @@ export function effectiveSort(filter: LibraryFilter, sort: LibrarySort): Library
   return filter === 'recent' ? 'recent' : sort;
 }
 
-export function sortEntries(entries: readonly LibraryEntry[], sort: LibrarySort, locale: string): LibraryEntry[] {
-  return entries.toSorted(entryComparator(sort, locale));
+export function sortEntries(
+  entries: readonly LibraryEntry[],
+  sort: LibrarySort,
+  locale: string,
+  stopped: JustStopped = NONE,
+): LibraryEntry[] {
+  return entries.toSorted(entryComparator(sort, locale, stopped));
 }
 
 export function queryLibrary(
   entries: readonly LibraryEntry[],
   watched: readonly LibraryEntry[],
   query: LibraryQuery & { sort: LibrarySort },
-  context: { genres: Genres; locale: string },
+  context: { genres: Genres; locale: string; stopped?: JustStopped },
 ): LibraryEntry[] {
-  return sortEntries(filterEntries(entries, watched, query, context.genres), effectiveSort(query.filter, query.sort), context.locale);
+  const kept = filterEntries(entries, watched, query, context.genres, context.stopped);
+  return sortEntries(kept, effectiveSort(query.filter, query.sort), context.locale, context.stopped);
 }
 
 /** The sources a source menu offers: those of games that are listed somewhere other than "Hidden". */

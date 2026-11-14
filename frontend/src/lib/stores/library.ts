@@ -28,8 +28,16 @@ export const runningGames = writable<Set<string>>(new Set());
 // When this launcher saw each running game start (ms since the epoch). A game that was already running
 // when the launcher came up has no entry: how long it has been running is not known here.
 export const sessionStarts = writable<Map<string, number>>(new Map());
+/**
+ * Games that stopped since the list was last read, in stopping order. Go records the session's
+ * `lastPlayed` at the stop and sends game:stopped before the new list, so until the list arrives these
+ * are the last played games whatever their `lastPlayed` says.
+ */
+export const stoppedSinceList = writable<ReadonlyMap<string, number>>(new Map());
+let stops = 0;
 
 function received(games: LibraryGame[]) {
+  stoppedSinceList.update((stopped) => (stopped.size === 0 ? stopped : new Map()));
   libraryGames.set(games);
   libraryLoaded.set(true);
   libraryLoadError.set(null);
@@ -64,6 +72,8 @@ export async function loadLibrary(load: Loader = direct): Promise<boolean> {
 
 function onSessionStopped(session: SessionEvent) {
   const { gameId, sessionSeconds } = session;
+  stops += 1;
+  stoppedSinceList.update((stopped) => new Map(stopped).set(gameId, stops));
   runningGames.update((set) => {
     const next = new Set(set);
     next.delete(gameId);
