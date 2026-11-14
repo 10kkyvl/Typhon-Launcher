@@ -149,3 +149,21 @@ describe('metadata:updated into the art store', () => {
     expect(get(gameArt)['wide-game']).toEqual({ cover: '/c2.png', hero: '/w.png', heroIsPoster: false });
   });
 });
+
+describe('GetArt into the art store', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('keeps the poster flag of each answer next to its picture', async () => {
+    getGameArt.mockResolvedValueOnce({
+      'art-poster': { cover: '/c.png', hero: '/c.png', heroIsPoster: true },
+      'art-wide': { cover: '/c2.png', hero: '/w.png', heroIsPoster: false },
+    });
+
+    await loadArt(['art-poster', 'art-wide']);
+
+    expect(get(gameArt)['art-poster']).toEqual({ cover: '/c.png', hero: '/c.png', heroIsPoster: true });
+    expect(get(gameArt)['art-wide']).toEqual({ cover: '/c2.png', hero: '/w.png', heroIsPoster: false });
+  });
+});
