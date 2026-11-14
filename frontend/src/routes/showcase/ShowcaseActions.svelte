@@ -144,9 +144,19 @@
       <TextLink onclick={pressed('One-line action')} truncate>An action whose label is cut where its row ends</TextLink>
     </p>
   </ShowcaseRow>
+
+  <ShowcaseRow caption="A title that is itself the link: the text's colour, underlined under the pointer" stack>
+    <h4 class="plain-title"><TextLink tone="plain" onclick={pressed('Title')}>Outer Wilds</TextLink></h4>
+  </ShowcaseRow>
 </ShowcaseSection>
 
 <style>
+  .plain-title {
+    font-size: var(--font-xl);
+    font-weight: 700;
+    color: var(--text);
+  }
+
   .joined {
     display: inline-flex;
   }

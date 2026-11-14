@@ -1,8 +1,10 @@
 import { screen } from '@testing-library/svelte';
+import { createRawSnippet } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
 import { ruleBody, styleOf } from '../testing/css';
 import { renderDom } from '../testing/dom';
 import TextLinkHarness from '../testing/TextLinkHarness.svelte';
+import TextLink from './TextLink.svelte';
 import source from './TextLink.svelte?raw';
 
 describe('TextLink given an address', () => {
@@ -154,3 +156,26 @@ describe('TextLink kept to one line', () => {
   });
 });
 
+describe('TextLink as a title that is itself the link', () => {
+  const css = styleOf(source, 'TextLink.svelte');
+  const title = createRawSnippet(() => ({ render: () => '<span>Hades</span>' }));
+
+  it('wears the plain tone only when asked, and stays a button named by its text that runs the action', async () => {
+    const onclick = vi.fn();
+    const { user } = renderDom(TextLink, { onclick, tone: 'plain', children: title });
+    const link = screen.getByRole('button', { name: 'Hades' });
+    expect(link.classList.contains('plain')).toBe(true);
+    expect(link.classList.contains('muted')).toBe(false);
+
+    await user.click(link);
+    expect(onclick).toHaveBeenCalledOnce();
+  });
+
+  // A heading over a picture takes the colour of the text it stands in, on hover too; it is not in a
+  // sentence, so the underline shows under the pointer only.
+  it('takes the colour of the text around it, at rest and hovered, and shows its underline on hover only', () => {
+    expect(ruleBody(css, '.text-link.plain')).toEqual({ color: 'inherit', 'text-decoration-line': 'none' });
+    expect(ruleBody(css, '.text-link.plain:hover:not(:disabled)')).toEqual({ color: 'inherit', 'text-decoration-line': 'underline' });
+    expect(css.indexOf('.text-link.plain:hover:not(:disabled)')).toBeGreaterThan(css.indexOf('.text-link:hover:not(:disabled)'));
+  });
+});

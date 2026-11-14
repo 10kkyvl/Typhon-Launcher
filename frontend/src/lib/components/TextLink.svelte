@@ -15,8 +15,11 @@
    * `accent` in running text; `muted` where the link is part of the furniture and must not pull the
    * eye (a breadcrumb, a path, a note's "show"). Muted is `--text-2` and keeps the underline: it reads
    * at 4.5:1 or more on every page surface and over the backdrop wash in every preset
-   * (theme-contrast.test.ts), where `--text-3` would hold that only by hundredths. Other attributes
-   * (target, rel, aria-*, data-*) go to the element.
+   * (theme-contrast.test.ts), where `--text-3` would hold that only by hundredths. `plain`: a title
+   * that is itself the link (a slide's heading that opens its game): it takes the colour of the text
+   * it stands in, hovered too, and shows its underline under the pointer only, which a heading on
+   * its own may do and a link inside a sentence may not. Other attributes (target, rel, aria-*,
+   * data-*) go to the element.
    *
    * `aria-current` (`"page"` on a breadcrumb's link to the page shown) is passed to the element and
    * only tells assistive technology which item is the current one: it changes neither the look nor
@@ -35,7 +38,7 @@
    */
   type Shared = Omit<HTMLAttributes<HTMLElement>, 'class' | 'children' | 'title' | 'onclick'> & {
     children: Snippet;
-    tone?: 'accent' | 'muted';
+    tone?: 'accent' | 'muted' | 'plain';
     /** One line, cut with an ellipsis inside the link's own box. */
     truncate?: boolean;
     start?: Snippet;
@@ -64,9 +67,9 @@
 {/snippet}
 
 {#if href !== undefined}
-  <a {...rest} class="text-link" class:muted={tone === 'muted'} class:truncate {href}>{@render content()}</a>
+  <a {...rest} class="text-link" class:muted={tone === 'muted'} class:plain={tone === 'plain'} class:truncate {href}>{@render content()}</a>
 {:else}
-  <button {...rest} class="text-link" class:muted={tone === 'muted'} class:truncate type="button" {disabled}>{@render content()}</button>
+  <button {...rest} class="text-link" class:muted={tone === 'muted'} class:plain={tone === 'plain'} class:truncate type="button" {disabled}>{@render content()}</button>
 {/if}
 
 <style>
@@ -116,6 +119,16 @@
   .text-link:hover:not(:disabled) {
     color: var(--text);
     text-decoration-color: currentColor;
+  }
+
+  .text-link.plain {
+    color: inherit;
+    text-decoration-line: none;
+  }
+
+  .text-link.plain:hover:not(:disabled) {
+    color: inherit;
+    text-decoration-line: underline;
   }
 
   .mark {

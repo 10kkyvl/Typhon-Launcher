@@ -44,6 +44,7 @@
   import { claimAmbient } from '../stores/ambient';
   import { nextIndex } from '../utils/roving';
   import Button from './Button.svelte';
+  import TextLink from './TextLink.svelte';
   import { runSlide } from './slideTimer';
 
   /**
@@ -219,7 +220,7 @@
             {/if}
           </div>
           <div class="copy">
-            {#snippet titleLink()}<button type="button" class="title-link" onclick={() => onopen(slide.id)}>{slide.title}</button>{/snippet}
+            {#snippet titleLink()}<TextLink tone="plain" onclick={() => onopen(slide.id)}>{slide.title}</TextLink>{/snippet}
             {#if level === 4}
               <h4 class="title">{@render titleLink()}</h4>
             {:else if level === 3}
@@ -331,19 +332,6 @@
     text-shadow: var(--art-text-shadow);
     text-wrap: balance;
     overflow-wrap: anywhere;
-  }
-
-  .title-link {
-    padding: 0;
-    border: 0;
-    background: none;
-    color: inherit;
-    font: inherit;
-    letter-spacing: inherit;
-    text-align: left;
-    text-shadow: inherit;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
   }
 
   .line {
