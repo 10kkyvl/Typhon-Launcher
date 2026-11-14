@@ -1,4 +1,5 @@
 import { screen, within } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
@@ -159,9 +160,11 @@ describe('AchievementsCard: another game in the same card', () => {
     expect(rescanAchievements).toHaveBeenLastCalledWith('g2');
     expect(refresh.getAttribute('aria-busy')).toBe('true');
 
+    // A's refresh ends with its `finally`, after its answer settles: wait for the answer, then for
+    // what the card does with it, before asking whether B's refresh is still running.
     late.resolve(view({ appId: 'g1', unlocked: 0 }));
-    await Promise.resolve();
-    await Promise.resolve();
+    await vi.waitFor(() => expect(vi.mocked(rescanAchievements).mock.settledResults[0]?.type).toBe('fulfilled'));
+    await tick();
     expect(refresh.getAttribute('aria-busy')).toBe('true');
     expect(screen.getByText(msg('games.achievementsProgress', { unlocked: 1, total: 2 }))).toBeTruthy();
 
