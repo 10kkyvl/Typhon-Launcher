@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { resetHistory, route } from '../stores/router';
 import { renderDom } from '../testing/dom';
+import { description } from '../testing/hints';
 import GameCard, { type GameCardAction } from './GameCard.svelte';
 
 type Props = ComponentProps<typeof GameCard>;
@@ -55,7 +56,7 @@ describe('GameCard: a launch in flight', () => {
 });
 
 describe('GameCard: a quick action that cannot act', () => {
-  it('stays focusable and focused, says it is unavailable and ignores a press', async () => {
+  it('stays focusable and focused, says it is unavailable and why, and ignores a press', async () => {
     const onclick = vi.fn();
     const action: GameCardAction = { id: 'fav', label: 'Add to favourites', icon: Heart, onclick };
     const props: Props = { id: 'g1', title: 'Hades', actions: [action] };
@@ -63,14 +64,40 @@ describe('GameCard: a quick action that cannot act', () => {
     const button = screen.getByRole('button', { name: 'Add to favourites' });
     button.focus();
 
-    await rerender({ id: 'g1', title: 'Hades', actions: [{ ...action, disabled: true }] });
+    await rerender({ id: 'g1', title: 'Hades', actions: [{ ...action, disabled: true, reason: 'The favourites are full' }] });
     expect(document.activeElement).toBe(button);
     expect(button.hasAttribute('disabled')).toBe(false);
     expect(button.getAttribute('aria-disabled')).toBe('true');
+    expect(description(button)).toContain('The favourites are full');
 
     await user.keyboard('{Enter}');
     await user.click(button);
     expect(onclick).not.toHaveBeenCalled();
+  });
+});
+
+describe('GameCard: a quick action whose request runs', () => {
+  it('says it is busy, not unavailable, keeps focus and ignores a press until the request answers', async () => {
+    const onclick = vi.fn();
+    const action: GameCardAction = { id: 'dismiss', label: 'Not interested', icon: Heart, onclick };
+    const props: Props = { id: 'g1', title: 'Hades', actions: [action] };
+    const { user, rerender } = renderDom(GameCard, props);
+    const button = screen.getByRole('button', { name: 'Not interested' });
+    button.focus();
+
+    await rerender({ id: 'g1', title: 'Hades', actions: [{ ...action, busy: true }] });
+    expect(document.activeElement).toBe(button);
+    expect(button.getAttribute('aria-busy')).toBe('true');
+    expect(button.hasAttribute('aria-disabled')).toBe(false);
+    expect(button.hasAttribute('disabled')).toBe(false);
+    await user.keyboard('{Enter}');
+    await user.click(button);
+    expect(onclick).not.toHaveBeenCalled();
+
+    await rerender({ id: 'g1', title: 'Hades', actions: [action] });
+    expect(button.hasAttribute('aria-busy')).toBe(false);
+    await user.click(button);
+    expect(onclick).toHaveBeenCalledOnce();
   });
 });
 

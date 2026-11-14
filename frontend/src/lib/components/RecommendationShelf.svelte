@@ -40,7 +40,7 @@
               id: 'dismiss',
               label: msg('games.recommendationNotInterested'),
               icon: ThumbsDown,
-              disabled: loading,
+              busy: loading,
               onclick: () => ondismiss(item),
             }]}
             onplay={item.libraryId && onplay ? () => onplay?.(item.libraryId!) : undefined}>

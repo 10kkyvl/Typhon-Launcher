@@ -696,7 +696,7 @@
       icon: dismissed ? Undo2 : ThumbsDown,
       active: dismissed,
       pinned: dismissed,
-      disabled: preferenceBusy,
+      busy: preferenceBusy,
       onclick: () => void dismiss(game, !dismissed),
     };
     if (!libId) return [dismissAction];

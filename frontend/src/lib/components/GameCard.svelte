@@ -19,7 +19,7 @@
   import { refuseWhile } from './refuse';
   import { ambientHover } from '../utils/ambientHover';
 
-  export interface GameCardAction {
+  interface GameCardActionBase {
     id: string;
     label: string;
     icon: LucideIcon;
@@ -27,12 +27,19 @@
     filled?: boolean;
     pinned?: boolean;
     quiet?: boolean;
-    /** It cannot act now: it says so (aria-disabled) and ignores a press, but keeps focus and its place. */
-    disabled?: boolean;
+    /** Its own request runs: it says it is busy (aria-busy), ignores a press and keeps focus. */
+    busy?: boolean;
     onclick?: (event: MouseEvent) => void;
     /** The action opens a menu: its button is that menu's button (`gameMenuButton`), instead of `onclick`. */
     menu?: MenuTriggerProps;
   }
+
+  /**
+   * `disabled`: it cannot act now. It says so (aria-disabled) and why (`reason`, its hint and
+   * description), ignores a press and keeps focus and its place; a caller cannot pass the flag
+   * without the reason. A request that runs is `busy`, not disabled.
+   */
+  export type GameCardAction = GameCardActionBase & ({ disabled?: false; reason?: undefined } | { disabled?: boolean; reason: string });
 
   let {
     id,
@@ -154,7 +161,8 @@
     {#if actions && actions.length > 0}
       <div class="quick">
         {#each actions as action (action.id)}
-          <Tooltip text={action.label} describe={false}>
+          {@const unavailable = action.disabled === true}
+          <Tooltip text={unavailable ? (action.reason ?? '') : action.label} describe={unavailable}>
             <button
               {...action.menu}
               class="quick-btn"
@@ -164,14 +172,19 @@
               class:pop={action.active && popped === action.id}
               aria-label={action.label}
               aria-describedby="{uid}-title"
-              aria-disabled={action.disabled ? 'true' : undefined}
-              {@attach refuseWhile(() => action.disabled === true)}
+              aria-disabled={unavailable ? 'true' : undefined}
+              aria-busy={action.busy || undefined}
+              {@attach refuseWhile(() => action.disabled === true || action.busy === true)}
               onclick={(event) => {
                 popped = action.active ? '' : action.id;
                 (action.menu?.onclick ?? action.onclick)?.(event);
               }}
             >
-              <action.icon size="1.5rem" strokeWidth={1.8} fill={action.filled ? 'currentColor' : 'none'} />
+              {#if action.busy}
+                <Spinner size="sm" tone="current" />
+              {:else}
+                <action.icon size="1.5rem" strokeWidth={1.8} fill={action.filled ? 'currentColor' : 'none'} />
+              {/if}
             </button>
           </Tooltip>
         {/each}
@@ -384,6 +397,10 @@
 
   .quick-btn[aria-disabled='true'] {
     cursor: default;
+  }
+
+  .quick-btn[aria-busy='true'] {
+    cursor: progress;
   }
 
   .quick-btn[aria-disabled='true'] :global(svg) {

@@ -2,6 +2,7 @@ import { screen } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { renderDom } from '../testing/dom';
+import type { Recommendation } from '../recommendations/display';
 import RecommendationShelf from './RecommendationShelf.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
@@ -35,5 +36,19 @@ describe('RecommendationShelf while it looks for games', () => {
 
     expect(screen.getByRole('status')).toBe(region);
     expect(region.textContent?.trim()).toBe('Nothing to suggest');
+  });
+
+  // Its "Not interested" waits on the same search: a request runs, nothing is unavailable.
+  it("keeps each pick's Not interested busy while it looks, not disabled", async () => {
+    const item: Recommendation = { game: { id: 'c1', title: 'Hades', sortTitle: 'hades', createdAt: '2026-01-01T00:00:00Z' }, reason: 'popular' };
+    const ondismiss = vi.fn();
+    const props = { title: 'Picks', items: [item], emptyText: 'None', ondismiss, loading: true };
+    const { user } = renderDom(RecommendationShelf, props);
+    const dismiss = screen.getByRole('button', { name: msg('games.recommendationNotInterested') });
+
+    expect(dismiss.getAttribute('aria-busy')).toBe('true');
+    expect(dismiss.hasAttribute('aria-disabled')).toBe(false);
+    await user.click(dismiss);
+    expect(ondismiss).not.toHaveBeenCalled();
   });
 });
