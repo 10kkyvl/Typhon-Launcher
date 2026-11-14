@@ -183,6 +183,16 @@ describe('options leave hidden games out', () => {
     expect(sourceOptions(onlyHiddenDisk)).toEqual(['typhon', 'steam']);
   });
 
+  it('offers inside "Hidden" the sources of the hidden games only', () => {
+    expect(sourceOptions(entries, { hidden: true })).toEqual(['disk']);
+  });
+
+  it('keeps the selected source among the options when no listed game has it', () => {
+    expect(sourceOptions(entries, { selected: 'gog' })).toEqual(['typhon', 'steam', 'gog', 'disk']);
+    expect(sourceOptions(entries, { hidden: true, selected: 'steam' })).toEqual(['steam', 'disk']);
+    expect(sourceOptions(entries, { selected: 'all' })).toEqual(['typhon', 'steam', 'disk']);
+  });
+
   it('offers the genres of games that are not hidden', () => {
     expect(genreOptions(entries, genres)).toEqual(['Action', 'Roguelike', 'Platformer', 'RPG', 'Puzzle']);
   });

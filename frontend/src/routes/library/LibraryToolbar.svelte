@@ -77,7 +77,7 @@
         {f.label}
       </Chip>
     {/each}
-    {#if librarySources.length >= 2 && filter !== 'watched'}
+    {#if (librarySources.length >= 2 || sourceFilter !== 'all') && filter !== 'watched'}
       <DropdownMenu
         items={[
           { id: 'all', label: msg('games.filterSourceAll'), checked: sourceFilter === 'all' },

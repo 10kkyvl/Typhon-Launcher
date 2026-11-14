@@ -357,6 +357,48 @@ describe('Library: the source menu', () => {
     const items = screen.getAllByRole('menuitemradio').map((item) => item.textContent?.trim());
     expect(items).toEqual([msg('games.filterSourceAll'), msg('games.sourceTyphon'), msg('games.sourceSteam')]);
   });
+
+  const witcher = game('g-witcher', 'Witcher', { external: { provider: 'steam', appId: '1', launchUri: 'steam://run/1' } });
+  const menuItems = () => screen.getAllByRole('menuitemradio').map((item) => item.textContent?.trim());
+
+  it('stays on screen while a stored source narrows the list, even one no game has now', async () => {
+    libraryChoices.set({ ...DEFAULT_CHOICES, source: 'disk' });
+    const { user } = renderDom(Library);
+
+    expect(listTitles()).toEqual([]);
+    const trigger = screen.getByRole('button', { name: msg('games.sourceDisk') });
+    await user.click(trigger);
+
+    expect(menuItems()).toEqual([msg('games.filterSourceAll'), msg('games.sourceTyphon'), msg('games.sourceDisk')]);
+  });
+
+  it('stays on screen when hiding the last game of the other source leaves one source', async () => {
+    libraryGames.set([hades, witcher]);
+    const { user } = renderDom(Library);
+    await user.click(screen.getByRole('button', { name: msg('games.filterSourceAll') }));
+    await user.click(screen.getByRole('menuitemradio', { name: msg('games.sourceSteam') }));
+    expect(listTitles()).toEqual(['Witcher']);
+
+    libraryGames.set([{ ...hades, hidden: true }, witcher]);
+    await tick();
+
+    expect(screen.getByRole('button', { name: msg('games.sourceSteam') })).toBeTruthy();
+    expect(listTitles()).toEqual(['Witcher']);
+  });
+
+  it('offers inside "Hidden" the sources of the hidden games', async () => {
+    libraryGames.set([
+      hades,
+      { ...witcher, hidden: true },
+      game('g-secret', 'Secret', { source: 'discovered', hidden: true }),
+    ]);
+    const { user } = renderDom(Library);
+    await user.click(screen.getByRole('button', { name: msg('games.filterHidden') }));
+
+    await user.click(screen.getByRole('button', { name: msg('games.filterSourceAll') }));
+
+    expect(menuItems()).toEqual([msg('games.filterSourceAll'), msg('games.sourceSteam'), msg('games.sourceDisk')]);
+  });
 });
 
 describe('Library: cheap updates', () => {

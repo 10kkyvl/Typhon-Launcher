@@ -175,9 +175,17 @@ export function queryLibrary(
   return sortEntries(kept, effectiveSort(query.filter, query.sort), context.locale, context.stopped);
 }
 
-/** The sources a source menu offers: those of games that are listed somewhere other than "Hidden". */
-export function sourceOptions(entries: readonly LibraryEntry[]): GameSource[] {
-  const present = new Set(entries.filter((entry) => !entry.hidden).map((entry) => entry.source));
+/**
+ * The sources a source menu offers: those of the games the list can show, hidden games inside
+ * "Hidden" and the others elsewhere, plus the selected source, so a choice that narrows the list is
+ * always one the menu shows and can take back.
+ */
+export function sourceOptions(
+  entries: readonly LibraryEntry[],
+  { hidden = false, selected = 'all' }: { hidden?: boolean; selected?: GameSource | 'all' } = {},
+): GameSource[] {
+  const present = new Set<GameSource | 'all' | null>(entries.filter((entry) => entry.hidden === hidden).map((entry) => entry.source));
+  present.add(selected);
   return sourceOrder.filter((source) => present.has(source));
 }
 

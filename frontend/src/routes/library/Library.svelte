@@ -158,11 +158,9 @@
     ];
   }
 
-  const librarySources = $derived(sourceOptions(entries));
-
-  $effect(() => {
-    if (sourceFilter !== 'all' && $libraryLoaded && !librarySources.includes(sourceFilter)) sourceFilter = 'all';
-  });
+  // A selected source keeps its menu on screen (it stays among the options), so it is never a narrowing
+  // the player cannot see or take back.
+  const librarySources = $derived(sourceOptions(entries, { hidden: filter === 'hidden', selected: sourceFilter }));
 
   const query = $derived<LibraryQuery>({
     filter,
