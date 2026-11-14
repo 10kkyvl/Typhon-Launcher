@@ -4,10 +4,12 @@ import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import { libraryGames } from '../../lib/stores/library';
-import type { LibraryGame } from '../../lib/services/library';
+import { findEmulatedCover, setExecutable, type LibraryGame } from '../../lib/services/library';
+import { missingImages as fetchMissingImages, selectImageFile } from '../../lib/services/emulators';
 import { fetchMetadata, startDownloadFrom, type DownloadOrigin } from '../../lib/services/downloads';
 import { getMetadataView, refreshMetadata, type MetadataView } from '../../lib/services/metadata';
 import { metadataAvailable } from '../../lib/stores/metadata';
+import { missingImages as missingImagesStore } from '../../lib/stores/missingImages';
 import { get } from 'svelte/store';
 import {
   getCatalogGame,
@@ -51,6 +53,16 @@ vi.mock('../../lib/services/downloads', async (importOriginal) => ({
   fetchMetadata: vi.fn(),
   startDownloadFrom: vi.fn(),
   discardMetadata: vi.fn(async () => {}),
+}));
+vi.mock('../../lib/services/emulators', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/services/emulators')>()),
+  missingImages: vi.fn(async () => []),
+  selectImageFile: vi.fn(),
+}));
+vi.mock('../../lib/services/library', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/services/library')>()),
+  setExecutable: vi.fn(),
+  findEmulatedCover: vi.fn(),
 }));
 vi.mock('../../lib/services/install', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/install')>()),
@@ -140,6 +152,11 @@ afterEach(() => {
   vi.mocked(prepareReleaseDownload).mockReset();
   vi.mocked(fetchMetadata).mockReset();
   vi.mocked(startDownloadFrom).mockReset();
+  vi.mocked(selectImageFile).mockReset();
+  vi.mocked(setExecutable).mockReset();
+  vi.mocked(findEmulatedCover).mockReset();
+  vi.mocked(fetchMissingImages).mockReset().mockResolvedValue([]);
+  missingImagesStore.set(new Set());
   vi.mocked(inspectRemoval).mockReset();
   vi.mocked(removeGame).mockReset();
   libraryGames.set([]);
@@ -464,5 +481,81 @@ describe('GameDetails: a new hero while the screenshot viewer is open', () => {
     expect(shown()).toBe('https://img/s4.jpg');
     await user.keyboard('{ArrowRight}');
     expect(shown()).toBe('https://img/s5.jpg');
+  });
+});
+
+describe('GameDetails: the image of an emulated game', () => {
+  const image = { ...hades, emulation: { platform: 'ps2' }, owned: true, installType: 'console_image', executable: '' } as unknown as LibraryGame;
+  let missing: string[];
+
+  beforeEach(() => {
+    libraryGames.set([image]);
+    missing = ['g1'];
+    vi.mocked(fetchMissingImages).mockImplementation(async () => missing);
+  });
+
+  it('keeps Pick image focused and busy, not disabled, while the file dialog is open', async () => {
+    const picked = deferred<string>();
+    vi.mocked(selectImageFile).mockReturnValueOnce(picked.promise);
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    const pick = await screen.findByRole('button', { name: msg('emul.pickImage') });
+    pick.focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(pick.getAttribute('aria-busy')).toBe('true');
+    expect(pick.hasAttribute('disabled')).toBe(false);
+    expect(document.activeElement).toBe(pick);
+    picked.resolve('');
+    await vi.waitFor(() => expect(pick.getAttribute('aria-busy')).toBeNull());
+    expect(document.activeElement).toBe(pick);
+  });
+
+  it('hands the focus on to Find cover when a picked image takes Pick image away', async () => {
+    vi.mocked(selectImageFile).mockResolvedValueOnce('/images/game.iso');
+    vi.mocked(setExecutable).mockImplementationOnce(async () => {
+      missing = [];
+      return image;
+    });
+    // jsdom sends no focusout while a focused node is removed; Chromium drops the focus to the page.
+    const remove = Element.prototype.remove;
+    vi.spyOn(Element.prototype, 'remove').mockImplementation(function (this: Element) {
+      if (this.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
+      remove.call(this);
+    });
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    const pick = await screen.findByRole('button', { name: msg('emul.pickImage') });
+    pick.focus();
+
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(pick.isConnected).toBe(false));
+    await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: msg('emul.coverFind') })));
+  });
+
+  it('keeps Find cover focused and busy while it searches', async () => {
+    const search = deferred<LibraryGame>();
+    vi.mocked(findEmulatedCover).mockReturnValueOnce(search.promise);
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    const find = await screen.findByRole('button', { name: msg('emul.coverFind') });
+    find.focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(find.getAttribute('aria-busy')).toBe('true');
+    expect(find.hasAttribute('disabled')).toBe(false);
+    expect(document.activeElement).toBe(find);
+    search.resolve(image);
+    await vi.waitFor(() => expect(find.getAttribute('aria-busy')).toBeNull());
+    expect(document.activeElement).toBe(find);
+  });
+
+  it('says a failed cover search as a danger toast', async () => {
+    vi.mocked(findEmulatedCover).mockRejectedValueOnce(new Error('typhon:library.something_new: сохранить'));
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+
+    await user.click(await screen.findByRole('button', { name: msg('emul.coverFind') }));
+
+    await vi.waitFor(() => expect(toastsOf('danger')).toEqual([msg('emul.coverFailed')]));
   });
 });

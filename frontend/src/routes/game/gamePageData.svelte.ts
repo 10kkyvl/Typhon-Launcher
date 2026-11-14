@@ -458,7 +458,7 @@ export function createGamePageData(page: GamePageInputs) {
       await findEmulatedCover(page.localGame.id);
       toast(msg('emul.coverFound'), 'success');
     } catch (err) {
-      toast(libraryErrorText(err, msg('emul.coverFailed')));
+      toast(libraryErrorText(err, msg('emul.coverFailed')), 'danger');
     } finally {
       imageBusy = false;
     }

@@ -15,6 +15,8 @@
   import { openRedist } from '../../lib/stores/redist';
   import { toast } from '../../lib/stores/toasts';
   import { bytesSize, playtime, relativeDate, truncateMiddle } from '../../lib/utils/format';
+  import { focusHandOff } from '../../lib/utils/focusHandOff';
+  import { focusableIn } from '../../lib/layers/focus';
 
   /** The install block of an installed game: verification, where it lives, its facts and its settings. */
   let {
@@ -58,6 +60,26 @@
     ]);
   });
 
+  // The pressed one of the two image actions is busy and keeps the focus; the other waits, disabled.
+  // A picked image takes Pick image away: the focus it held goes on to Find cover.
+  let pressed = $state<'pick' | 'cover' | null>(null);
+  const imageAction = $derived(data.imageBusy ? pressed : null);
+  let coverSlot = $state<HTMLElement>();
+
+  async function pickImage() {
+    if (data.imageBusy) return;
+    pressed = 'pick';
+    const handOn = focusHandOff();
+    await data.chooseImage();
+    await handOn(() => (coverSlot ? focusableIn(coverSlot)[0] : undefined));
+  }
+
+  async function findCover() {
+    if (data.imageBusy) return;
+    pressed = 'cover';
+    await data.findCover();
+  }
+
   async function reveal() {
     if (!localGame) return;
     try {
@@ -99,9 +121,11 @@
   {#if emulated}
     <div class="redist-row">
       {#if imageMissing}
-        <Button size="sm" disabled={data.imageBusy} onclick={data.chooseImage}>{msg('emul.pickImage')}</Button>
+        <Button size="sm" busy={imageAction === 'pick'} disabled={imageAction === 'cover'} onclick={pickImage}>{msg('emul.pickImage')}</Button>
       {/if}
-      <Button size="sm" disabled={data.imageBusy} onclick={data.findCover}>{msg('emul.coverFind')}</Button>
+      <span class="cover" bind:this={coverSlot}>
+        <Button size="sm" busy={imageAction === 'cover'} disabled={imageAction === 'pick'} onclick={findCover}>{msg('emul.coverFind')}</Button>
+      </span>
     </div>
   {:else}
     <div class="redist-row">
@@ -175,6 +199,10 @@
     display: flex;
     padding-top: var(--space-3);
     border-top: 1px solid var(--border);
+  }
+
+  .cover {
+    display: contents;
   }
 
   .steam-row {
