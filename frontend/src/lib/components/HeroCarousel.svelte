@@ -43,7 +43,7 @@
   import { msg } from '../i18n';
   import { modalOpen } from '../layers';
   import { motionOn } from '../motion/motion';
-  import { claimAmbient } from '../stores/ambient';
+  import { restAmbient } from '../stores/ambient';
   import { nextIndex } from '../utils/roving';
   import Button from './Button.svelte';
   import TextLink from './TextLink.svelte';
@@ -57,8 +57,9 @@
    * While the pointer or focus holds it, the slides keep their order on screen, each still showing
    * its newest state. A slide the player picks is announced; one the timer moves to is not.
    *
-   * `ambient`: the window backdrop shows the game on screen (claimAmbient), for the page that wants
-   * it. The prototype's logo and blurred underlay have no source in the launcher and are not drawn.
+   * `ambient`: the game on screen is the page's resting picture for the window backdrop
+   * (restAmbient): it tints the window unless a screen claims a game or a card is rested on. The
+   * prototype's logo and blurred underlay have no source in the launcher and are not drawn.
    */
   let {
     slides: incoming,
@@ -73,6 +74,7 @@
     onopen: (id: string) => void;
     onplay: (id: string) => void;
     onstop: (id: string) => void;
+    /** The game on screen is the page's resting picture for the window backdrop. Default: off. */
     ambient?: boolean;
     /** The heading level of a slide's title, under the page's own heading. */
     level?: 2 | 3 | 4;
@@ -157,7 +159,7 @@
   // The claim follows the id of the game on screen, not the slide object: an update of the page that
   // keeps the game (a new line, a launch in flight) claims nothing again.
   const claimed = $derived(ambient ? (current?.id ?? null) : null);
-  $effect(() => claimAmbient(claimed));
+  $effect(() => restAmbient(claimed));
 
   // Focus holds the carousel while the focused element is inside it. On focusout that is read once the
   // event is over: a window that loses focus sends focusout with no relatedTarget though focus stays

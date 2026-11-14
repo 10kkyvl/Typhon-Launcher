@@ -297,12 +297,13 @@ describe('HeroCarousel: the game on a slide', () => {
   it('feeds the window backdrop with the slide on screen when the page asks, and lets it go', async () => {
     vi.useFakeTimers();
     const { unmount } = setup({ ambient: true });
-    expect(get(ambientState).claim).toBe('a');
+    expect(get(ambientState).resting).toBe('a');
 
     await vi.advanceTimersByTimeAsync(ADVANCE_MS);
-    expect(get(ambientState).claim).toBe('b');
+    expect(get(ambientState).resting).toBe('b');
 
     unmount();
-    expect(get(ambientState).claim).toBeNull();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(get(ambientState).resting).toBeNull();
   });
 });
