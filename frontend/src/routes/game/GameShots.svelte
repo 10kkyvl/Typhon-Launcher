@@ -18,7 +18,7 @@
   style:--cols={shotCols}
 >
   {#each shots as shot, index (shot.id)}
-    <button class="shot" onclick={() => onopen(index)} aria-label={msg('games.detailOpenScreenshotLabel')}>
+    <button class="shot" onclick={() => onopen(index)} aria-label={msg('games.detailOpenScreenshotAt', { index: index + 1, count: shots.length })}>
       <Artwork src={shot.url ?? ''} alt="" ratio="16 / 9" radius="var(--radius-sm)" />
     </button>
   {/each}

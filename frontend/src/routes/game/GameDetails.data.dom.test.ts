@@ -484,8 +484,8 @@ describe('GameDetails: a new hero while the screenshot viewer is open', () => {
 
   async function openFourth(user: ReturnType<typeof renderDom>['user']) {
     await user.click(await screen.findByRole('tab', { name: msg('games.detailTabScreenshots') }));
-    const thumbs = await screen.findAllByRole('button', { name: msg('games.detailOpenScreenshotLabel') });
-    await user.click(thumbs[3]);
+    await vi.waitFor(() => expect(document.querySelectorAll('.shots .shot').length).toBeGreaterThan(3));
+    await user.click(document.querySelectorAll<HTMLElement>('.shots .shot')[3]);
     expect(shown()).toBe('https://img/s4.jpg');
   }
 
