@@ -179,6 +179,16 @@ describe('Big Picture game page: a launch that waits on a question', () => {
     launch.resolve(false);
   });
 
+  it('offers no Launch for an installed game without an executable, and says where to choose one', async () => {
+    libraryGames.set([{ id: 'g1', title: 'Hades', canonicalGameId: 'c1', uninstalled: false, installDir: '/games/hades', executable: '' } as LibraryGame]);
+    const onlaunch = vi.fn(async () => true);
+    renderPage(onlaunch);
+
+    expect(await screen.findByText(msg('bp.game.noExecutable'))).toBeTruthy();
+    expect(screen.queryByRole('button', { name: msg('bp.game.launch') })).toBeNull();
+    expect(onlaunch).not.toHaveBeenCalled();
+  });
+
   it('shows a conflict that held the launch back again in its own words', async () => {
     renderPage(vi.fn(async () => {
       throw new Error('typhon:cloud.conflict_unresolved: diverged');

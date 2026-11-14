@@ -23,6 +23,7 @@
   import { offerElevateAhead } from '../../services/install';
   import { selectFolder } from '../../services/settings';
   import { isEmulated, pageGame, platformBadge } from '../../library/emulation';
+  import { canPlay } from '../../library/launch';
   import { LatestRequestGate } from '../latestRequest';
   import { GameDownloadFlow } from '../gameDownload';
   import type { BigPictureCommand } from '../input';
@@ -111,6 +112,8 @@
   const sideloaded = $derived(emulated && !viaCatalog);
   const running = $derived(Boolean(localGame && $runningGames.has(localGame.id)));
   // A launch from this page or from another screen: Play stays focused and busy, and ignores presses.
+  // The desktop page's and the library's rule: an installed game with nothing to start offers no Launch.
+  const launchable = $derived(Boolean(localGame && canPlay(localGame)));
   const launchBusy = $derived(launching || Boolean(localGame && $launchesInFlight.has(localGame.id)));
   const cover = $derived(metadata?.cover || catalogGame?.coverUrl || localGame?.cover || '');
   const shots = $derived(metadata?.screenshots ?? []);
@@ -369,7 +372,7 @@
   }
 
   async function launch() {
-    if (!localGame || !installed || running || launchBusy) return;
+    if (!localGame || !installed || !launchable || running || launchBusy) return;
     launching = true;
     pageError = '';
     try {
@@ -598,7 +601,7 @@
             {#if installed && localGame}
               {#if running}
                 <button class="large-button danger" data-bp-focus="game:play-toggle" data-bp-default onclick={() => { pageError = ''; showDialog('stop'); }}><Square size="1.98rem" fill="currentColor" />{bp('bp.game.stop')}</button>
-              {:else}
+              {:else if launchable}
                 <button class="large-button primary" data-bp-focus="game:play-toggle" data-bp-default aria-busy={launchBusy || undefined} onclick={() => void launch()}>{#if launchBusy}<span class="spinner in-button" aria-hidden="true"></span>{$t('bp.starting')}{:else}<Play size="2.09rem" fill="currentColor" />{bp('bp.game.launch')}{/if}</button>
               {/if}
             {:else if currentInstall && installActive(currentInstall.status)}
@@ -618,6 +621,7 @@
               <button class="large-button secondary" data-bp-focus="game:status" onclick={() => { dialogError = ''; showDialog('status'); }}>{bp('bp.game.status')}: {statusLabel(localGame.status)}</button>
             {/if}
           </div>
+          {#if installed && localGame && !running && !launchable}<p class="launch-note">{bp('bp.game.noExecutable')}</p>{/if}
         </div>
       </section>
 
@@ -870,6 +874,7 @@
   .eyebrow, .section-kicker { color: var(--accent-text); font-size: 1.375rem; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
   h1 { max-width: 96.8rem; margin: 0; font-size: clamp(3.74rem, 5vw, 7.7rem); line-height: 1.02; letter-spacing: -.04em; text-wrap: balance; }
   .meta-line { margin: 0; color: var(--text-2); font-size: 1.815rem; }
+  .launch-note { margin: 1.1rem 0 0; color: var(--text-2); font-size: 1.65rem; }
   .genre-list, .badges { display: flex; flex-wrap: wrap; gap: .88rem; }
   .genre-list span, .badge { min-height: 3.52rem; display: inline-flex; align-items: center; gap: .77rem; padding: 0 1.1rem; border: 1px solid var(--border); border-radius: 999px; background: color-mix(in srgb, var(--surface) 75%, transparent); color: var(--text-2); font-size: 1.375rem; font-weight: 650; }
   .badge.installed { border-color: color-mix(in srgb, var(--success) 45%, var(--border)); color: var(--success); }
