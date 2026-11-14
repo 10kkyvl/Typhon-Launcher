@@ -7,7 +7,7 @@
   import { libraryErrorText } from '../library/errors';
   import { setCompletedAt, setStatus, type LibraryGame } from '../services/library';
   import { toast } from '../stores/toasts';
-  import { msg } from '../i18n';
+  import { errorCode, hasMessage, msg } from '../i18n';
 
   let {
     open = $bindable(false),
@@ -20,7 +20,10 @@
     returnFocus?: () => HTMLElement | null | undefined;
   } = $props();
 
-  const current = $derived(game.status ?? '');
+  // The status this opening has saved, until the game's own copy follows: a failed date after it
+  // leaves the dialog open on the saved status, and Save again sends only the date.
+  let saved = $state<GameStatus | null>(null);
+  const current = $derived(saved ?? game.status ?? '');
 
   const options = $derived<{ value: GameStatus; label: string }[]>([
     { value: '', label: msg('modals.gameStatusNone') },
@@ -40,6 +43,7 @@
   $effect(() => {
     if (open) {
       picked = null;
+      saved = null;
       day = untrack(() => dateInputValue(game.completedAt, new Date()));
     }
   });
@@ -47,19 +51,29 @@
   async function apply(status: GameStatus, from: GameStatus | 'save' = status) {
     saving = true;
     sent = from;
+    let statusDone = false;
     try {
-      if (status !== current) await setStatus(game.id, status);
+      if (status !== current) {
+        await setStatus(game.id, status);
+        saved = status;
+      }
+      statusDone = true;
       if (isFinished(status)) {
         const date = dateFromInput(day);
         if (date) await setCompletedAt(game.id, date);
       }
       open = false;
     } catch (err) {
-      toast(libraryErrorText(err, msg('modals.gameStatusUpdateFailed')), 'danger');
+      toast(statusDone ? dateFailure(err) : libraryErrorText(err, msg('modals.gameStatusUpdateFailed')), 'danger');
     } finally {
       saving = false;
       sent = null;
     }
+  }
+
+  function dateFailure(err: unknown): string {
+    const code = errorCode(err);
+    return hasMessage(code) ? msg('games.blocks.statusDateFailedReason', { reason: msg(code) }) : msg('games.blocks.statusDateFailed');
   }
 
   function pick(status: GameStatus) {
