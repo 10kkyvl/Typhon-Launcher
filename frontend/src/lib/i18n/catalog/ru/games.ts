@@ -297,6 +297,7 @@ export const games = {
   'games.detailUninstalledNote': 'Игра удалена с компьютера — скачайте её снова из доступных загрузок.',
   'games.detailUninstalledDownloadedNote': 'Игра удалена с компьютера — установите её из уже скачанной загрузки.',
   'games.detailOpenScreenshotLabel': 'Открыть скриншот',
+  'games.detailOpenScreenshotAt': 'Открыть скриншот {index} из {count}',
   'games.detailMetaSearchingTitle': 'Загружаем сведения об игре…',
   'games.detailFallbackGameWord': 'игру',
   'games.detailMetaSearchingHint': 'Описание и изображения появятся автоматически. Можно продолжать пользоваться лаунчером.',

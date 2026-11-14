@@ -299,6 +299,7 @@ export const games: Record<GamesKey, Message> = {
   'games.detailUninstalledNote': 'The game has been uninstalled — download it again from the available downloads.',
   'games.detailUninstalledDownloadedNote': 'The game has been uninstalled — install it from the download you already have.',
   'games.detailOpenScreenshotLabel': 'Open screenshot',
+  'games.detailOpenScreenshotAt': 'Open screenshot {index} of {count}',
   'games.detailMetaSearchingTitle': 'Loading game details…',
   'games.detailFallbackGameWord': 'the game',
   'games.detailMetaSearchingHint': 'Description and images will appear automatically. You can keep using the launcher.',
