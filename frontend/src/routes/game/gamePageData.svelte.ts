@@ -144,14 +144,26 @@ export function createGamePageData(page: GamePageInputs) {
   // A search ran while the page was open: its outcome is news, not a standing fact of the page.
   let metaSearchRan = $state(false);
   let wineStatus = $state<WineStatus | null>(null);
+  // The view itself could not be read: the failed notice says so, with a Retry that reads it again,
+  // instead of a page that looks as if the game had no metadata.
+  let metaReadFailed = $state(false);
 
   async function loadMetaView(gameId: string) {
     const current = ++metaToken;
     const eventVersion = metaEventVersion;
     metaReading = true;
     try {
-      const view = await getMetadataView(gameId);
+      let view: MetadataView;
+      try {
+        view = await getMetadataView(gameId);
+      } catch (err) {
+        if (current !== metaToken) return;
+        metaReadFailed = true;
+        metaFailure = metadataErrorText(err, msg('games.detailMetaLoadError'));
+        return;
+      }
       if (current !== metaToken) return;
+      metaReadFailed = false;
       if (eventVersion === metaEventVersion) metaView = preferView(metaView, view);
       const started = await ensureMetadataFresh(gameId);
       if (current !== metaToken || eventVersion !== metaEventVersion) return;
@@ -169,6 +181,7 @@ export function createGamePageData(page: GamePageInputs) {
     untrack(() => {
       metaSearching = false;
       metaSearchRan = false;
+      metaReadFailed = false;
       metaView = null;
       if (!metaGameId) {
         metaToken++;
@@ -194,6 +207,7 @@ export function createGamePageData(page: GamePageInputs) {
       if (view.game?.id && view.game.id === page.canonicalId) {
         metaEventVersion++;
         metaSearching = view.match === 'searching';
+        metaReadFailed = false;
         metaView = preferView(metaView, view);
       }
     });
@@ -203,12 +217,14 @@ export function createGamePageData(page: GamePageInputs) {
   let metaRetrying = $state(false);
 
   const metaState = $derived(
-    metaStatus({
-      available: page.metadataAvailable,
-      busy: metaReading || metaSearching || (metaRefreshing && !metaRetrying),
-      match: metaView?.match,
-      resolved: metaView?.resolved,
-    }),
+    metaReadFailed
+      ? 'failed'
+      : metaStatus({
+          available: page.metadataAvailable,
+          busy: metaReading || metaSearching || (metaRefreshing && !metaRetrying),
+          match: metaView?.match,
+          resolved: metaView?.resolved,
+        }),
   );
 
   $effect(() => {
@@ -247,8 +263,14 @@ export function createGamePageData(page: GamePageInputs) {
       const view = await refreshMetadata(gameId);
       if (gameId !== page.canonicalId || current !== metaToken) return false;
       metaView = view;
+      metaReadFailed = false;
+      // An answer can be a search that failed: from the notice its Retry says that again itself.
+      if (view.match === 'failed') {
+        if (!fromNotice) toast(msg('games.detailMetaRefreshError'), 'danger');
+        return false;
+      }
       toast(msg('games.detailMetaRefreshedToast'), 'success');
-      return view.match !== 'failed';
+      return true;
     } catch (err) {
       if (!fromNotice) toast(metadataErrorText(err, msg('games.detailMetaRefreshError')), 'danger');
       else {
@@ -259,6 +281,13 @@ export function createGamePageData(page: GamePageInputs) {
     } finally {
       metaRefreshing = false;
     }
+  }
+
+  async function retryMetaRead(): Promise<boolean> {
+    const gameId = page.canonicalId;
+    if (!gameId) return false;
+    await loadMetaView(gameId);
+    return !metaReadFailed;
   }
 
   // Why the last retry from the failed notice failed, said in the notice in place of the generic
@@ -519,7 +548,11 @@ export function createGamePageData(page: GamePageInputs) {
     get catalogFailed() { return catalogFailed; },
     get catalogRetrying() { return catalogRetrying; },
     get metaView() { return metaView; },
-    set metaView(view: MetadataView | null) { metaView = view; },
+    set metaView(view: MetadataView | null) {
+      metaView = view;
+      if (view) metaReadFailed = false;
+    },
+    get metaReadFailed() { return metaReadFailed; },
     get metaRefreshing() { return metaRefreshing; },
     get metaSkipping() { return metaSkipping; },
     get metaSearchRan() { return metaSearchRan; },
@@ -536,6 +569,7 @@ export function createGamePageData(page: GamePageInputs) {
     retryReleases,
     retryRelated,
     retryCatalog,
+    retryMetaRead,
     refreshMeta,
     skipMeta,
     chooseImage,

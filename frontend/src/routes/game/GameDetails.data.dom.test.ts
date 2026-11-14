@@ -5,7 +5,9 @@ import { msg } from '../../lib/i18n';
 import { libraryGames } from '../../lib/stores/library';
 import type { LibraryGame } from '../../lib/services/library';
 import { fetchMetadata, startDownloadFrom, type DownloadOrigin } from '../../lib/services/downloads';
-import { getMetadataView, type MetadataView } from '../../lib/services/metadata';
+import { getMetadataView, refreshMetadata, type MetadataView } from '../../lib/services/metadata';
+import { metadataAvailable } from '../../lib/stores/metadata';
+import { get } from 'svelte/store';
 import {
   getCatalogGame,
   getRelatedReleases,
@@ -118,6 +120,8 @@ afterEach(() => {
   // The page goes first: one left mounted would ask again when the stores below are emptied.
   cleanup();
   vi.mocked(getMetadataView).mockReset();
+  vi.mocked(refreshMetadata).mockReset();
+  metadataAvailable.set(false);
   vi.mocked(getCatalogGame).mockReset();
   vi.mocked(getReleasesForGame).mockReset().mockResolvedValue([]);
   vi.mocked(getRelatedReleases).mockReset().mockResolvedValue([]);
@@ -233,5 +237,91 @@ describe('GameDetails: the sources changing while the page is open', () => {
     answer.resolve([group({ id: 'r1', rawTitle: 'Hades v1' }), group({ id: 'r2', rawTitle: 'Hades v2' })]);
     expect(await screen.findByText('Hades v2')).toBeTruthy();
     expect(document.activeElement).toBe(download);
+  });
+});
+
+const toastsOf = (kind: string) => get(toasts).filter((item) => item.kind === kind).map((item) => item.message);
+const metaNotice = async () => (await screen.findByText(msg('games.detailMetaFailedTitle'))).closest('.notice') as HTMLElement;
+
+describe('GameDetails: a metadata refresh that answers "failed"', () => {
+  beforeEach(() => metadataAvailable.set(true));
+
+  it('from the menu says the failure, not "updated"', async () => {
+    vi.mocked(getMetadataView).mockResolvedValue(view({ resolved: true, match: 'idle' }));
+    vi.mocked(refreshMetadata).mockResolvedValueOnce(view({ resolved: true, match: 'failed' }));
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    await user.click(await screen.findByRole('button', { name: msg('games.moreLabel') }));
+
+    await user.click(await screen.findByRole('menuitem', { name: msg('games.detailMetaRefreshLabel') }));
+
+    await vi.waitFor(() => expect(toastsOf('danger')).toContain(msg('games.detailMetaRefreshError')));
+    expect(toastsOf('success')).not.toContain(msg('games.detailMetaRefreshedToast'));
+  });
+
+  it("from the failed notice's Retry keeps the notice and its Retry, and says no success", async () => {
+    vi.mocked(getMetadataView).mockResolvedValue(view({ resolved: false, match: 'failed' }));
+    const answer = deferred<MetadataView>();
+    vi.mocked(refreshMetadata).mockReturnValueOnce(answer.promise);
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    const notice = await metaNotice();
+    const retry = within(notice).getByRole('button', { name: msg('common.retry') });
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+    answer.resolve(view({ resolved: false, match: 'failed' }));
+
+    await vi.waitFor(() => expect(retry.getAttribute('aria-busy')).not.toBe('true'));
+    expect(toastsOf('success')).toEqual([]);
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
+  });
+});
+
+describe('GameDetails: the metadata view that could not be read', () => {
+  beforeEach(() => metadataAvailable.set(true));
+
+  it('says so in a notice with Retry, not a toast over a page that looks as if the game had none', async () => {
+    vi.mocked(getMetadataView).mockRejectedValueOnce(new Error('typhon:metadata.read_failed: disk'));
+    renderDom(GameDetails, { id: 'g1' });
+
+    const notice = await metaNotice();
+
+    expect(notice.textContent).toContain(msg('games.detailMetaLoadError'));
+    expect(within(notice).getByRole('button', { name: msg('common.retry') })).toBeTruthy();
+    expect(notice.textContent).not.toContain('typhon:');
+    expect(toastsOf('danger')).toEqual([]);
+  });
+
+  it('reads it again on Retry and shows it, focus on the title', async () => {
+    const summary = 'A rogue-like dungeon crawler.';
+    vi.mocked(getMetadataView)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(view({ game: { id: 'c1', title: 'Hades', summary } as MetadataView['game'] }));
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    const notice = await metaNotice();
+    within(notice).getByRole('button', { name: msg('common.retry') }).focus();
+
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(notice.isConnected).toBe(false));
+    expect(await screen.findByText(summary)).toBeTruthy();
+    await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1, name: 'Hades' })));
+    expect(getMetadataView).toHaveBeenCalledTimes(2);
+  });
+
+  it('says the failure again when the read fails again, with the focus kept on the busy-then-free Retry', async () => {
+    vi.mocked(getMetadataView).mockRejectedValue(new Error('offline'));
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    const notice = await metaNotice();
+    const retry = within(notice).getByRole('button', { name: msg('common.retry') });
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(getMetadataView).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(notice.querySelector('.body')?.getAttribute('role')).toBe('status'));
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
+    expect(toastsOf('danger')).toEqual([]);
   });
 });

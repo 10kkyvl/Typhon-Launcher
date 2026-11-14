@@ -73,14 +73,19 @@ function metaHarness(deps: { getMetadataView: () => Promise<unknown>; ensureMeta
     const msg = (key) => key;
     const preferView = (current, next) => next;
     let metaToken = 0, metaEventVersion = 0, metaReading = false, metaView = null, metaSearching = false;
+    let metaReadFailed = false, metaFailure = '';
     ${js}
-    return { loadMetaView, state: () => ({ metaReading, metaView, metaSearching }) };
-  `)(deps, toast) as { loadMetaView: (id: string) => Promise<void>; state: () => { metaReading: boolean; metaView: unknown; metaSearching: boolean } };
+    return { loadMetaView, state: () => ({ metaReading, metaView, metaSearching, metaReadFailed, metaFailure }) };
+  `)(deps, toast) as {
+    loadMetaView: (id: string) => Promise<void>;
+    state: () => { metaReading: boolean; metaView: unknown; metaSearching: boolean; metaReadFailed: boolean; metaFailure: string };
+  };
   return { ...run, toast };
 }
 
 describe('game metadata loading', () => {
-  it('tells the user when the metadata view could not be read, and stops the spinner', async () => {
+  // Said once, in the page's failed notice with its Retry, not in a toast as well.
+  it('keeps the failure to read the metadata view for the notice, and stops the spinner', async () => {
     const h = metaHarness({
       getMetadataView: () => Promise.reject(new Error('disk offline')),
       ensureMetadataFresh: () => Promise.resolve(false),
@@ -88,8 +93,8 @@ describe('game metadata loading', () => {
 
     await expect(h.loadMetaView('g1')).resolves.toBeUndefined();
 
-    expect(h.toast).toHaveBeenCalledWith('games.detailMetaLoadError', 'danger');
-    expect(h.state()).toMatchObject({ metaReading: false, metaView: null });
+    expect(h.toast).not.toHaveBeenCalled();
+    expect(h.state()).toMatchObject({ metaReading: false, metaView: null, metaReadFailed: true, metaFailure: 'games.detailMetaLoadError' });
   });
 
   it('tells the user when the freshness check could not start', async () => {

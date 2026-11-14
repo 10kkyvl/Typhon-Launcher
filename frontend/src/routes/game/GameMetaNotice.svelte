@@ -23,7 +23,7 @@
   let chooseSlot = $state<HTMLElement>();
 
   async function retryMeta(): Promise<boolean> {
-    const ok = await data.refreshMeta(true);
+    const ok = data.metaReadFailed ? await data.retryMetaRead() : await data.refreshMeta(true);
     if (!ok && !data.metaRetryable) {
       await tick();
       const active = document.activeElement;
@@ -63,10 +63,13 @@
     >
       {data.metaState === 'unmatched' ? msg('games.detailMetaUnmatchedHint') : data.metaFailure || msg('games.detailMetaFailedHint')}
       {#snippet action()}
-        <span class="choose" bind:this={chooseSlot}>
-          <Button size="sm" variant="primary" onclick={() => openMatch('find')}>{msg('games.detailChooseManually')}</Button>
-        </span>
-        <Button size="sm" variant="ghost" busy={data.metaSkipping} onclick={data.skipMeta}>{msg('games.detailSkipSearch')}</Button>
+        <!-- A view that could not be read is not a search to choose for or skip. -->
+        {#if !data.metaReadFailed}
+          <span class="choose" bind:this={chooseSlot}>
+            <Button size="sm" variant="primary" onclick={() => openMatch('find')}>{msg('games.detailChooseManually')}</Button>
+          </span>
+          <Button size="sm" variant="ghost" busy={data.metaSkipping} onclick={data.skipMeta}>{msg('games.detailSkipSearch')}</Button>
+        {/if}
       {/snippet}
     </Notice>
   </div>
