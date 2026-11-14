@@ -144,6 +144,78 @@ describe('a refused review text', () => {
   });
 });
 
+type MineAnswer = Awaited<ReturnType<typeof mine>>;
+const mineOf = (value: unknown) => value as MineAnswer;
+const inAnHour = () => new Date(Date.now() + 3_600_000).toISOString();
+
+describe('a publish the server refuses', () => {
+  it('keeps the typed text, the verdict and the form, and says when posting opens again', async () => {
+    vi.mocked(mine)
+      .mockResolvedValueOnce(mineOf({ review: null, eligibility: { canPost: true } }))
+      .mockResolvedValueOnce(mineOf({ review: null, eligibility: { canPost: false, reason: 'review_daily_limit', retryAt: inAnHour() } }));
+    vi.mocked(save).mockRejectedValueOnce(new AccountError('review_daily_limit'));
+    render(ReviewComposer, { target: app, props: { canonicalGameId: 'g1' } });
+    const keys = user();
+    const yes = await screen.findByRole('radio', { name: msg('reviews.composerRecommend') });
+    await keys.click(yes);
+    const draft = 'A long evening with this game, and every minute of it was worth it.';
+    await keys.type(screen.getByRole('textbox'), draft);
+
+    await keys.click(screen.getByRole('button', { name: msg('reviews.composerPublish') }));
+
+    await vi.waitFor(() => expect(vi.mocked(mine)).toHaveBeenCalledTimes(2));
+    const note = msg('reviews.eligibilityDailyLimit', { time: msg('reviews.retryHours', { count: 1 }) });
+    await screen.findByText(note);
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(draft);
+    expect(screen.getByRole('radio', { name: msg('reviews.composerRecommend') }).getAttribute('aria-checked')).toBe('true');
+    expect(get(toasts).map((t) => t.message)).toContain(msg('reviews.errorGeneric'));
+  });
+
+  it('keeps an edit of my review open with its changes when the edit is refused', async () => {
+    const original = { recommended: true, body: 'Great game, I liked it a lot.', hidden: false };
+    vi.mocked(mine)
+      .mockResolvedValueOnce(mineOf({ review: original, eligibility: { canPost: true } }))
+      .mockResolvedValueOnce(mineOf({ review: original, eligibility: { canPost: false, reason: 'review_edit_cooldown', retryAt: inAnHour() } }));
+    vi.mocked(save).mockRejectedValueOnce(new AccountError('review_edit_cooldown'));
+    render(ReviewComposer, { target: app, props: { canonicalGameId: 'g1' } });
+    const keys = user();
+    await keys.click(await screen.findByRole('button', { name: msg('reviews.composerEdit') }));
+    await keys.click(screen.getByRole('radio', { name: msg('reviews.composerNotRecommend') }));
+    await keys.type(screen.getByRole('textbox'), ' Until the last chapter.');
+
+    await keys.click(screen.getByRole('button', { name: msg('reviews.composerSave') }));
+
+    await vi.waitFor(() => expect(vi.mocked(mine)).toHaveBeenCalledTimes(2));
+    await screen.findByText(msg('reviews.eligibilityEditCooldown', { time: msg('reviews.retryHours', { count: 1 }) }));
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(`${original.body} Until the last chapter.`);
+    expect(screen.getByRole('radio', { name: msg('reviews.composerNotRecommend') }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('button', { name: msg('reviews.composerCancel') })).toBeTruthy();
+  });
+
+  it('keeps the draft through the automatic reload when posting opens again', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const soon = () => new Date(Date.now() + 500).toISOString();
+    vi.mocked(mine)
+      .mockResolvedValueOnce(mineOf({ review: null, eligibility: { canPost: true } }))
+      .mockResolvedValueOnce(mineOf({ review: null, eligibility: { canPost: false, reason: 'review_post_cooldown', retryAt: soon() } }))
+      .mockResolvedValueOnce(mineOf({ review: null, eligibility: { canPost: true } }));
+    vi.mocked(save).mockRejectedValueOnce(new AccountError('review_post_cooldown'));
+    render(ReviewComposer, { target: app, props: { canonicalGameId: 'g1' } });
+    const keys = user();
+    await keys.click(await screen.findByRole('radio', { name: msg('reviews.composerNotRecommend') }));
+    const draft = 'It crashed twice in the first hour and never recovered.';
+    await keys.type(screen.getByRole('textbox'), draft);
+    await keys.click(screen.getByRole('button', { name: msg('reviews.composerPublish') }));
+    await vi.waitFor(() => expect(vi.mocked(mine)).toHaveBeenCalledTimes(2));
+
+    await vi.advanceTimersByTimeAsync(2000);
+
+    await vi.waitFor(() => expect(vi.mocked(mine)).toHaveBeenCalledTimes(3));
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(draft);
+    expect(screen.getByRole('radio', { name: msg('reviews.composerNotRecommend') }).getAttribute('aria-checked')).toBe('true');
+  });
+});
+
 describe('deleting my review', () => {
   it('a refused delete keeps the confirmation open with the review error, not a toast under it', async () => {
     vi.mocked(remove).mockRejectedValueOnce(new AccountError('rate_limited'));

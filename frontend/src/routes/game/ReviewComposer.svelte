@@ -75,21 +75,25 @@
   let loadToken = 0;
 
   // A retry keeps the failure on screen until its answer: the notice and its focused button stay.
-  async function load(id: string, retry = false) {
+  // `keepDraft` refreshes what the server allows around an open form: the typed text, the verdict and
+  // the form stay, and a failed refresh leaves them as they are.
+  async function load(id: string, { retry = false, keepDraft = false } = {}) {
     const token = ++loadToken;
-    if (!retry) phase = 'loading';
+    if (!retry && !keepDraft) phase = 'loading';
     try {
       const [mineResult, limitsResult] = await Promise.all([fetchMine(id), fetchLimits()]);
       if (token !== loadToken) return;
       mine = mineResult;
       limits = limitsResult;
-      editing = false;
-      recommended = null;
-      body = '';
-      fieldError = '';
+      if (!keepDraft) {
+        editing = false;
+        recommended = null;
+        body = '';
+        fieldError = '';
+      }
       phase = 'ready';
     } catch {
-      if (token === loadToken) phase = 'error';
+      if (token === loadToken && !keepDraft) phase = 'error';
     }
   }
 
@@ -97,7 +101,7 @@
   let content = $state<HTMLElement>();
 
   async function retry(): Promise<boolean> {
-    await load(canonicalGameId, true);
+    await load(canonicalGameId, { retry: true });
     return phase !== 'error';
   }
 
@@ -117,7 +121,7 @@
     const retryAt = mine?.eligibility.canPost === false ? Date.parse(mine.eligibility.retryAt) : NaN;
     if (!authed || !id || Number.isNaN(retryAt)) return;
     const delay = Math.min(Math.max(retryAt - Date.now() + 1000, 1000), 2_147_000_000);
-    const timer = setTimeout(() => void load(id), delay);
+    const timer = setTimeout(() => void load(id, { keepDraft: editing }), delay);
     return () => clearTimeout(timer);
   });
 
@@ -144,19 +148,25 @@
 
   async function submit() {
     if (disabledPublish || recommended === null) return;
+    const id = canonicalGameId;
     saving = true;
     fieldError = '';
     try {
-      await saveReview(canonicalGameId, recommended, body);
+      await saveReview(id, recommended, body);
       notifyReviewsChanged();
-      void load(canonicalGameId);
+      if (id === canonicalGameId) void load(id);
     } catch (err) {
       const code = err instanceof AccountError ? err.code : '';
       const field = err instanceof AccountError ? err.field : '';
       if (field === 'body') {
         fieldError = limits ? reviewFieldMessage(code, limits) : msg('reviews.errorGeneric');
       } else if (RETRY_CODES.has(code)) {
-        void load(canonicalGameId);
+        // The refusal says the eligibility shown was stale: it is read again, and the draft stays
+        // open on screen even when posting has closed meanwhile.
+        if (id === canonicalGameId) {
+          editing = true;
+          void load(id, { keepDraft: true });
+        }
         toast(reviewToastMessage(code, msg('reviews.errorGeneric')), 'danger');
       } else {
         toast(reviewToastMessage(code, msg('reviews.errorGeneric')), 'danger');
@@ -254,6 +264,9 @@
         </div>
         {#if recommended === null && !fieldError}
           <p class="choose-hint" id="{uid}-choose">{msg('reviews.composerChooseFirst')}</p>
+        {/if}
+        {#if !mine.eligibility.canPost}
+          <p class="eligibility-note">{describeEligibility(mine.eligibility)}</p>
         {/if}
       </div>
     {:else if mine.review}
