@@ -13,6 +13,8 @@
   import GameDialogs from './GameDialogs.svelte';
   import GamePageHero from './GamePageHero.svelte';
   import GameMetaNotice from './GameMetaNotice.svelte';
+  import CloudConflictBanner from '../../lib/components/CloudConflictBanner.svelte';
+  import GameSaves from '../../lib/components/GameSaves.svelte';
   import GameScreenshots from './GameScreenshots.svelte';
   import GameSections from './GameSections.svelte';
   import { createGamePageData } from './gamePageData.svelte';
@@ -42,7 +44,7 @@
   import { pageAmbient } from '../../lib/backdrop/source';
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
-  import { openSaveBackups } from '../../lib/stores/savebackup';
+  import { openSaveBackups, savesTab } from '../../lib/stores/savebackup';
   import { activeMove } from '../../lib/stores/relocate';
   import { sources } from '../../lib/stores/sources';
   import { stepLabels, updatesByGame, verifications } from '../../lib/stores/updates';
@@ -199,13 +201,16 @@
   const ownShots = $derived(Boolean(localGame) && installed);
   const hasShotsTab = $derived(shots.length > 0 || ownShots);
 
+  const hasSavesTab = $derived($savesTab(localGame));
+
   const tabs = $derived([
     { id: 'overview', label: msg('games.detailTabOverview') },
     ...(hasShotsTab ? [{ id: 'screenshots', label: msg('games.detailTabScreenshots') }] : []),
+    ...(hasSavesTab ? [{ id: 'saves', label: msg('games.detailTabSaves') }] : []),
   ]);
 
   $effect(() => {
-    if (activeTab === 'screenshots' && !hasShotsTab) activeTab = 'overview';
+    if ((activeTab === 'screenshots' && !hasShotsTab) || (activeTab === 'saves' && !hasSavesTab)) activeTab = 'overview';
   });
 
   const owner = $derived({ gameIds: [canonicalId], libraryId: localGame?.id });
@@ -282,7 +287,9 @@
 
   function onMenu(actionId: string) {
     if (actionId === 'saves-backups') {
-      if (localGame) openSaveBackups(localGame.id);
+      // The page's own tab holds the same view as the dialog.
+      if (hasSavesTab) activeTab = 'saves';
+      else if (localGame) openSaveBackups(localGame.id);
     } else if (actionId === 'remove') {
       removeMode = 'library';
       removeOpen = true;
@@ -467,6 +474,8 @@
     </EmptyState>
   {:else}
 
+    <CloudConflictBanner gameId={localGame?.id} fallbackFocus={() => titleHeading} />
+
     {#if tabs.length > 1}
       <div class="tabs-wrap" data-part="game-tabs">
         <Tabs {tabs} idPrefix="{uid}-game" label={title} bind:value={activeTab} />
@@ -492,6 +501,8 @@
             {/each}
           </div>
           {@render column(columns.main)}
+        {:else if activeTab === 'saves' && localGame}
+          <GameSaves gameId={localGame.id} />
         {:else}
           <GameMetaNotice {data} {title} {titleHeading} {openMatch} />
 
