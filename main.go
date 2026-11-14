@@ -110,6 +110,7 @@ func init() {
 	application.RegisterEvent[library.SessionEvent]("game:started")
 	application.RegisterEvent[library.SessionEvent]("game:stopped")
 	application.RegisterEvent[library.CrashEvent]("game:crash")
+	application.RegisterEvent[library.ProfileFallback](library.EventProfileFallback)
 	application.RegisterEvent[download.Download]("download:added")
 	application.RegisterEvent[download.Download]("download:updated")
 	application.RegisterEvent[download.Download]("download:completed")
