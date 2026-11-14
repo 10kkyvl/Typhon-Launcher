@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import buttonSource from '../lib/components/Button.svelte?raw';
+import heroSource from '../lib/components/HeroCarousel.svelte?raw';
 import noticeSource from '../lib/components/Notice.svelte?raw';
 import textLinkSource from '../lib/components/TextLink.svelte?raw';
 import { cssColor, ruleBody, styleOf } from '../lib/testing/css';
@@ -501,5 +502,60 @@ describe('built-in themes', () => {
     const dark = builtIns().find((p) => p.id === 'dark');
     expect(dark).toBeDefined();
     expect(rootBlock()).toEqual((dark as Preset).tokens);
+  });
+});
+
+// What stands over a game's picture is drawn in the fixed --art-* colours of shell.css, whatever the
+// theme, because the picture is under it: it is measured over the two extremes a picture brings, black
+// and white, and over each preset's page and the carousel's own ground, where no picture has loaded yet.
+describe('what stands over a game picture', () => {
+  const shell = fs.readFileSync(new URL('./shell.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const fixed = Object.fromEntries([...shell.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
+  const hero = styleOf(heroSource, 'HeroCarousel.svelte');
+  const token = (value: string) => /^var\((--[\w-]+)\)$/.exec(value)?.[1] ?? value;
+
+  function grounds(): [string, RGB][] {
+    const out: [string, RGB][] = [
+      ['black', BLACK],
+      ['white', WHITE],
+    ];
+    for (const preset of builtIns()) {
+      const bg = paint(preset.tokens, '--bg', BLACK);
+      out.push([`${preset.id} --bg`, bg], [`${preset.id} --surface-2`, paint(preset.tokens, '--surface-2', bg)]);
+    }
+    return out;
+  }
+
+  function failuresOn(plate: string, pairs: { fg: string; min: number }[]): string[] {
+    const out: string[] = [];
+    for (const [name, ground] of grounds()) {
+      const under = paint(fixed, plate, ground);
+      for (const pair of pairs) {
+        const r = ratio(paint(fixed, pair.fg, under), under);
+        if (r < pair.min) out.push(`${pair.fg} on ${plate} over ${name}: ${r.toFixed(2)} < ${pair.min}`);
+      }
+    }
+    return out;
+  }
+
+  it("reads the colours the hero carousel's text is drawn in", () => {
+    expect(token(ruleBody(hero, '.title').color)).toBe('--art-text');
+    expect(token(ruleBody(hero, '.line').color)).toBe('--art-text-2');
+    // The text stands where the scrim is at full strength: the gradient fades only in the padding above it.
+    expect(ruleBody(hero, '.copy').background).toMatch(/^linear-gradient\(to top, var\(--hero-scrim\) calc\(100% - var\(--space-12\)\), transparent\)$/);
+    expect(ruleBody(hero, '.copy').padding).toMatch(/^var\(--space-12\) /);
+  });
+
+  it("keeps the hero carousel's title and line readable on its scrim over any picture (4.5:1)", () => {
+    expect(failuresOn('--hero-scrim', [
+      { fg: '--art-text', min: 4.5 },
+      { fg: '--art-text-2', min: 4.5 },
+    ])).toEqual([]);
+  });
+
+  it("shows a card's cover controls and marks on their plates over any picture (3:1)", () => {
+    for (const plate of ['--art-control', '--art-control-hover', '--art-control-quiet']) {
+      expect(failuresOn(plate, [{ fg: '--art-text', min: 3 }]), plate).toEqual([]);
+    }
   });
 });

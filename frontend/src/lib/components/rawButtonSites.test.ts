@@ -50,6 +50,7 @@ const ALLOWED: Record<string, Record<string, Kind>> = {
   'lib/components/GameCard.svelte': { cover: 'row', info: 'row', play: 'cover control', 'quick-btn': 'cover control' },
   'lib/components/GameProfiles.svelte': { candidate: 'radio tile' },
   'lib/components/GamePropertiesModal.svelte': { candidate: 'list option' },
+  'lib/components/HeroCarousel.svelte': { 'title-link': 'row', pick: 'tile' },
   'lib/components/InstallModal.svelte': { cand: 'radio tile' },
   'lib/components/LiveIsland.svelte': { head: 'disclosure', top: 'disclosure' },
   'lib/components/MetadataMatchModal.svelte': { candidate: 'list option' },

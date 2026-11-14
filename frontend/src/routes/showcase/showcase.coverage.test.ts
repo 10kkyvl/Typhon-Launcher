@@ -44,6 +44,7 @@ const BASE = [
   'Toasts',
   // The parts a game is shown with, in their states (ShowcaseGames.svelte).
   'GameListRow',
+  'HeroCarousel',
 ];
 
 /** Shown by what the page does rather than by a tag: the shell mounts the toast stack, the page raises toasts. */

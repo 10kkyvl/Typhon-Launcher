@@ -146,11 +146,19 @@
      same in every theme, because the picture and not the theme is under it. theme-contrast.test.ts
      measures it over black and over white. */
   --art-text: #fff;
+  --art-text-2: rgba(255, 255, 255, 0.82); /* a second line over a picture */
   --art-text-shadow: 0 1px 0.6rem rgba(0, 0, 0, 0.55);
   --art-scrim: rgba(5, 8, 12, 0.6); /* the fade at the foot of a hovered cover */
   --art-control: rgba(5, 8, 12, 0.72); /* a control or a mark on a cover */
   --art-control-hover: rgba(5, 8, 12, 0.92);
   --art-control-quiet: rgba(5, 8, 12, 0.45); /* a pinned control while the cover is at rest */
+
+  /* The hero carousel (HeroCarousel): its height, the scrim its text stands on at full strength, and
+     a slide control with the bar its progress runs along. */
+  --hero-h: clamp(28rem, 46vh, 52rem);
+  --hero-scrim: rgba(5, 8, 12, 0.74);
+  --hero-pick-w: 3.2rem;
+  --hero-pick-track: 0.4rem;
 
   /* A game in a list (GameListRow): the width of its cover thumbnail. */
   --row-thumb-w: 3.6rem;
