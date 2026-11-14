@@ -232,6 +232,7 @@
     else if (lead.kind === 'other-versions') otherVersionsEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     else if (lead.kind === 'retry-download') retryTerminalDownload();
     else if (lead.kind === 'install-download') installFromTerminalDownload();
+    else if (lead.kind === 'choose-executable' && localGame) openGameProperties(localGame.id);
   }
 
   function startUpdate() {
@@ -259,6 +260,8 @@
         <Download size="1.6rem" strokeWidth={1.8} />
       {:else if lead.kind === 'install-download'}
         <HardDriveDownload size="1.6rem" strokeWidth={1.8} />
+      {:else if lead.kind === 'choose-executable'}
+        <SlidersHorizontal size="1.6rem" strokeWidth={1.8} />
       {/if}
     {/if}
     {lead.label}

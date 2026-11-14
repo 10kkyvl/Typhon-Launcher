@@ -434,6 +434,20 @@ describe('GameDetails main action: an installed game with another download of it
   );
 });
 
+describe('GameDetails main action: an installed game without an executable', () => {
+  it('offers no Play without an executable, and points to choosing one in the properties', async () => {
+    libraryGames.set([{ ...hades, executable: '' }]);
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+
+    const choose = await mainAction(msg('games.mainActionChooseExecutable'));
+    expect(within(actions()).queryByRole('button', { name: playName })).toBeNull();
+    await user.click(choose);
+
+    expect(playGame).not.toHaveBeenCalled();
+    expect(get(gamePropertiesTarget)).toEqual({ gameId: 'g1' });
+  });
+});
+
 describe("GameDetails main action: work on an installed game's files", () => {
   it('shows a repair of its files as progress and offers no Play; a press does nothing', async () => {
     verifications.set({ g1: { gameId: 'g1', running: false, repairing: true, progress: 0.4 } as VerifyState });

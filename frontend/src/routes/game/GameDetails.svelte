@@ -34,6 +34,7 @@
   import { libraryGames, runningGames } from '../../lib/stores/library';
   import { emulationPlatform, isEmulated, pageGame } from '../../lib/library/emulation';
   import { externalLabel, isExternal } from '../../lib/library/external';
+  import { canPlay } from '../../lib/library/launch';
   import { metadataAvailable } from '../../lib/stores/metadata';
   import { claimAmbient } from '../../lib/stores/ambient';
   import { pageAmbient } from '../../lib/backdrop/source';
@@ -239,6 +240,7 @@
     hubAction({
       installed,
       running,
+      launchable: localGame ? canPlay(localGame) : true,
       updateAvailable,
       releaseCount: pcGroups.length,
       consoleCount: consoleGroups.length,

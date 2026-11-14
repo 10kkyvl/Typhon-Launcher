@@ -171,7 +171,8 @@ export type PrimaryKind =
   | 'other-versions'
   | 'not-on-pc'
   | 'retry-download'
-  | 'install-download';
+  | 'install-download'
+  | 'choose-executable';
 
 export interface PrimaryAction {
   kind: PrimaryKind;
@@ -197,6 +198,8 @@ export interface GameStatus {
   relatedWithReleases?: boolean;
   notOnPc?: boolean;
   busy?: BusyState | null;
+  /** Whether an installed game has something to start (`lib/library/launch.ts::canPlay`); unset means yes. */
+  launchable?: boolean;
 }
 
 export function primaryAction(status: GameStatus): PrimaryAction {
@@ -205,6 +208,9 @@ export function primaryAction(status: GameStatus): PrimaryAction {
   }
   if (status.running) return { kind: 'stop', label: msg('games.stop'), disabled: false };
   if (status.installed) {
+    if (status.launchable === false) {
+      return { kind: 'choose-executable', label: msg('games.mainActionChooseExecutable'), disabled: false };
+    }
     if (status.updateAvailable) return { kind: 'update', label: msg('games.mainActionUpdate'), disabled: false };
     return { kind: 'play', label: msg('games.play'), disabled: false };
   }

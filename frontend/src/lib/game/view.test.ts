@@ -304,6 +304,13 @@ describe("primaryAction", () => {
     });
   });
 
+  it("offers no Play for an installed game that has nothing to launch, but the choice of an executable", () => {
+    const action = primaryAction(status({ installed: true, launchable: false }));
+    expect(action).toEqual({ kind: "choose-executable", label: "Выбрать исполняемый файл", disabled: false });
+    expect(primaryAction(status({ installed: true, launchable: false, updateAvailable: true })).kind).toBe("choose-executable");
+    expect(primaryAction(status({ installed: true, launchable: false, running: true })).kind).toBe("stop");
+  });
+
   it("offers Stop for a running game", () => {
     expect(primaryAction(status({ installed: true, running: true })).kind).toBe(
       "stop",
