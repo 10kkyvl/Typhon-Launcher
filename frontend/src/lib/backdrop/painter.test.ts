@@ -174,6 +174,37 @@ describe('the backdrop painter', () => {
     expect(h.screen[0]).toBe(100);
   });
 
+  it('a slide change, a rested card and the way back within one fade end on the slide', async () => {
+    const h = harness({ a: () => Promise.resolve(solid(0)), slide: () => Promise.resolve(solid(200)), card: () => Promise.resolve(solid(100)) });
+    await h.painter.show(['a'], LOOK, KEY, 0);
+    await h.painter.show(['slide'], LOOK, KEY, 600);
+    h.tick(200);
+    await h.painter.show(['card'], LOOK, KEY, 600);
+    h.tick(200);
+    await h.painter.show(['slide'], LOOK, KEY, 600);
+    expect(h.frames.size).toBe(1);
+    h.tick(0);
+    h.tick(600);
+    expect([...h.screen]).toEqual([...solid(200)]);
+    expect(h.frames.size).toBe(0);
+  });
+
+  it('a rested card whose picture is still loading when the pointer leaves never reaches the screen', async () => {
+    const slow = deferred<Uint8ClampedArray | null>();
+    const h = harness({ a: () => Promise.resolve(solid(0)), slide: () => Promise.resolve(solid(200)), card: () => slow.promise });
+    await h.painter.show(['a'], LOOK, KEY, 0);
+    await h.painter.show(['slide'], LOOK, KEY, 600);
+    h.tick(200);
+    const toCard = h.painter.show(['card'], LOOK, KEY, 600);
+    await h.painter.show(['slide'], LOOK, KEY, 600);
+    slow.resolve(solid(100));
+    await toCard;
+    expect(h.frames.size).toBe(1);
+    h.tick(600);
+    expect([...h.screen]).toEqual([...solid(200)]);
+    expect(h.frames.size).toBe(0);
+  });
+
   it('draws nothing more after it is disposed', async () => {
     const slow = deferred<Uint8ClampedArray | null>();
     const h = harness({ a: () => slow.promise });
