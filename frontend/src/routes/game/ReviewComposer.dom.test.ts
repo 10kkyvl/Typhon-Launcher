@@ -280,6 +280,30 @@ describe('the game changes under the composer', () => {
     await vi.waitFor(() => expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(''));
     expect(screen.getByRole('radio', { name: msg('reviews.composerRecommend') }).getAttribute('aria-checked')).toBe('false');
   });
+
+  it("leaves the next game alone when the previous game's publish is refused after the switch", async () => {
+    let refuse!: (err: unknown) => void;
+    vi.mocked(mine)
+      .mockResolvedValueOnce(mineOf({ review: null, eligibility: { canPost: true } }))
+      .mockResolvedValueOnce(mineOf({ review: null, eligibility: { canPost: false, reason: 'account_muted' } }));
+    vi.mocked(save).mockReturnValueOnce(new Promise((_, reject) => (refuse = reject)));
+    const view = render(ReviewComposer, { target: app, props: { canonicalGameId: 'g1' } });
+    const keys = user();
+    await keys.click(await screen.findByRole('radio', { name: msg('reviews.composerRecommend') }));
+    await keys.type(screen.getByRole('textbox'), 'Written for the first game only.');
+    await keys.click(screen.getByRole('button', { name: msg('reviews.composerPublish') }));
+    expect(vi.mocked(save)).toHaveBeenCalledWith('g1', true, 'Written for the first game only.');
+
+    await view.rerender({ canonicalGameId: 'g2' });
+    await screen.findByText(msg('reviews.eligibilityMuted'));
+    const before = vi.mocked(mine).mock.calls.length;
+    refuse(new AccountError('review_post_cooldown'));
+    await vi.waitFor(() => expect(get(toasts).map((t) => t.message)).toContain(msg('reviews.errorGeneric')));
+
+    expect(vi.mocked(mine).mock.calls.slice(before)).toEqual([]);
+    expect(screen.getByText(msg('reviews.eligibilityMuted'))).toBeTruthy();
+    expect(screen.queryByRole('textbox')).toBeNull();
+  });
 });
 
 describe('deleting my review', () => {
