@@ -1078,7 +1078,11 @@ func (s *Service) buildAssets(ctx context.Context, game catalog.Game, meta GameM
 	}
 	shotRefs := meta.Screenshots[:min(len(meta.Screenshots), maxScreenshots)]
 	artRefs := meta.Artworks[:min(len(meta.Artworks), maxArtworks)]
-	carried := append(carryAssets(previous, AssetScreenshot), carryAssets(previous, AssetArtwork)...)
+	// What the art refresh keeps of the stored gallery and artworks.
+	var carried []MediaAsset
+	if same {
+		carried = append(carryAssets(previous, AssetScreenshot), carryAssets(previous, AssetArtwork)...)
+	}
 	if mode != modeArt {
 		for _, shot := range shotRefs {
 			if shot.URL != "" {
@@ -1139,8 +1143,9 @@ func (s *Service) buildAssets(ctx context.Context, game catalog.Game, meta GameM
 			batch.assets = append(batch.assets, results[i].asset)
 			batch.created = append(batch.created, results[i].asset)
 		}
-		// A stored choice stands, including one made by an earlier rule.
-		if kept, ok := keptHero(game.HeroAssetID, batch.assets); ok {
+		// A stored choice stands, including one made by an earlier rule; it
+		// goes with the pictures of a previous match.
+		if kept, ok := keptHero(game.HeroAssetID, carried); ok {
 			batch.hero = kept.ID
 		} else if wide, ok := wideHero(batch.assets); ok {
 			batch.hero = wide.ID
@@ -1148,7 +1153,7 @@ func (s *Service) buildAssets(ctx context.Context, game catalog.Game, meta GameM
 		// The gallery is still the full refresh's job: a game that has not had
 		// one, or has no stored screenshots, stays partial, so opening its
 		// page completes it. A hero screenshot alone is not a gallery.
-		batch.partial = game.MetadataPartial || len(carryAssets(previous, AssetScreenshot)) == 0
+		batch.partial = game.MetadataPartial || len(carryAssets(carried, AssetScreenshot)) == 0
 		return batch, nil
 	}
 

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -460,5 +461,60 @@ func TestArtRefreshHeroScreenshotLeavesTheGalleryToTheFullRefresh(t *testing.T) 
 	svc.wg.Wait()
 	if got := len(svc.screenshots(game.ID)); got != 2 {
 		t.Fatalf("gallery after the full refresh = %d screenshots, want 2", got)
+	}
+}
+
+func TestArtRefreshDropsThePicturesOfAPreviousMatch(t *testing.T) {
+	srv, _ := sizedImageServer(t)
+	old := fullMetadata(srv.URL)
+	old.Cover = &ImageRef{URL: srv.URL + "/264x374-oldcover.png"}
+	old.Screenshots = refs(srv.URL, "/1280x720-olds0.png")
+	old.Artworks = refs(srv.URL, "/1920x1080-olda0.png")
+	other := fullMetadata(srv.URL)
+	other.ProviderID = "7"
+	other.Cover = &ImageRef{URL: srv.URL + "/264x374-newcover.png"}
+	other.Screenshots = refs(srv.URL, "/1920x1080-news0.png", "/1920x1080-news1.png")
+	other.Artworks = nil
+	provider := &batchProvider{
+		fakeProvider: &fakeProvider{meta: map[string]GameMetadata{"2657": old}},
+		resolve:      map[string]GameMetadata{"Prey": other},
+	}
+	svc, cat, _ := newTestService(t, provider)
+	game := addGame(t, cat, catalog.Game{Title: "Prey"})
+	if _, err := svc.ApplyMatch(game.ID, "2657"); err != nil {
+		t.Fatalf("first match: %v", err)
+	}
+
+	// The batch answers the same title with another game; the art refresh
+	// takes it (sameGame accepts it by title).
+	svc.SetLanguage("ru")
+	if _, err := svc.EnsureArt([]string{game.ID}); err != nil {
+		t.Fatalf("ensure art: %v", err)
+	}
+	svc.wg.Wait()
+	updated, err := cat.GetGame(game.ID)
+	if err != nil {
+		t.Fatalf("reload game: %v", err)
+	}
+	if updated.ExternalIDs.IGDB != "7" {
+		t.Fatalf("igdb id = %q, the batch answer was not applied", updated.ExternalIDs.IGDB)
+	}
+	for _, a := range svc.store.list(game.ID) {
+		if strings.Contains(a.SourceURL, "-old") {
+			t.Fatalf("stored %s %s from the previous match", a.Type, a.SourceURL)
+		}
+	}
+	view, err := svc.GetView(game.ID)
+	if err != nil {
+		t.Fatalf("view: %v", err)
+	}
+	if view.HeroIsPoster || sourceOf(t, svc, game.ID, view.Hero) != srv.URL+"/1920x1080-news0.png" {
+		t.Fatalf("hero = %q poster=%v, want the new game's first fitting screenshot", view.Hero, view.HeroIsPoster)
+	}
+	if hero, ok := svc.store.find(updated.HeroAssetID); !ok || hero.URL != view.Hero {
+		t.Fatalf("persisted hero %q does not match the view %q", updated.HeroAssetID, view.Hero)
+	}
+	if !updated.MetadataPartial {
+		t.Fatal("the game is not partial; its page would not fetch the new gallery")
 	}
 }
