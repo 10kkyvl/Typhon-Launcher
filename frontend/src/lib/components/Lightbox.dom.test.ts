@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { openLayer } from '../layers';
 import { user } from '../testing/dom';
+import { description } from '../testing/hints';
 import LightboxHarness from '../testing/LightboxHarness.svelte';
 import Lightbox from './Lightbox.svelte';
 import lightboxSource from './Lightbox.svelte?raw';
@@ -227,6 +228,7 @@ describe('Lightbox zoom at its limits', () => {
     expect(zoomValue()).toBe('100%');
     expect((zoomOut as HTMLButtonElement).disabled).toBe(false);
     expect(zoomOut.getAttribute('aria-disabled')).toBe('true');
+    expect(description(zoomOut)).toBe(msg('games.blocks.zoomOutLimit'));
     expect(document.activeElement).toBe(zoomOut);
 
     await keys.keyboard('{Enter}');
@@ -244,6 +246,7 @@ describe('Lightbox zoom at its limits', () => {
     expect(zoomValue()).toBe('400%');
     expect((zoomIn as HTMLButtonElement).disabled).toBe(false);
     expect(zoomIn.getAttribute('aria-disabled')).toBe('true');
+    expect(description(zoomIn)).toBe(msg('games.blocks.zoomInLimit'));
     expect(document.activeElement).toBe(zoomIn);
 
     await keys.keyboard('-');
