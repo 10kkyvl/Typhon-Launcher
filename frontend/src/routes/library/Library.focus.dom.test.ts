@@ -283,16 +283,24 @@ describe.each(['grid', 'list'] as const)('Library (%s): a game that moves when t
 });
 
 describe('Library: a game that merely updates', () => {
-  it('leaves focus on the control the player is on', async () => {
-    libraryView.set('grid');
-    renderDom(Library);
-    const play = within((results() as HTMLElement).children[1] as HTMLElement).getByRole('button', { name: msg('ui.play') });
-    play.focus();
+  // The player may have scrolled away from the focused game meanwhile: nothing scrolls it back.
+  it.each(['grid', 'list'] as const)('leaves focus on the control the player is on and scrolls nothing (%s)', async (view) => {
+    const into = vi.fn();
+    HTMLElement.prototype.scrollIntoView = into;
+    try {
+      libraryView.set(view);
+      renderDom(Library);
+      const play = within((results() as HTMLElement).children[1] as HTMLElement).getByRole('button', { name: msg('ui.play') });
+      play.focus();
 
-    libraryGames.update((list) => list.map((one) => (one.id === 'g-charlie' ? { ...one, playtimeSeconds: 60 } : one)));
-    await settle();
+      libraryGames.update((list) => list.map((one) => (one.id === 'g-charlie' ? { ...one, playtimeSeconds: 60 } : one)));
+      await settle();
 
-    expect(document.activeElement).toBe(play);
+      expect(document.activeElement).toBe(play);
+      expect(into).not.toHaveBeenCalled();
+    } finally {
+      delete (HTMLElement.prototype as Partial<HTMLElement>).scrollIntoView;
+    }
   });
 
   it('leaves focus on "More" when its own row gains Play before it', async () => {
