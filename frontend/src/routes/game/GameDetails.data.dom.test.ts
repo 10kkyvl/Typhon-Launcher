@@ -1,4 +1,5 @@
 import { cleanup, screen, within } from '@testing-library/svelte';
+import { Events } from '@wailsio/runtime';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
@@ -424,5 +425,44 @@ describe('GameDetails: removing the card from the library', () => {
     await removeFromLibrary(user, goneFirst);
 
     await vi.waitFor(() => expect(get(route).name).toBe('installed'));
+  });
+});
+
+// The page's own listener for metadata pushed by the backend while it is open.
+function pushMetadata(next: MetadataView) {
+  const call = vi.mocked(Events.On).mock.calls.findLast(([name]) => name === 'metadata:updated');
+  if (!call) throw new Error('the page does not listen for metadata');
+  (call[1] as (event: { data: MetadataView }) => void)({ data: next });
+}
+
+describe('GameDetails: a new hero while the screenshot viewer is open', () => {
+  const shots = [1, 2, 3, 4, 5].map((n) => ({ id: `s${n}`, url: `https://img/s${n}.jpg` })) as MetadataView['screenshots'];
+  // Without motion the viewer holds the one picture it shows (no fade keeps the previous one).
+  const shown = () => [...screen.getByRole('dialog').querySelectorAll('img')].map((img) => img.getAttribute('src')).join(' ');
+
+  beforeEach(() => document.documentElement.classList.add('no-anim'));
+  afterEach(() => document.documentElement.classList.remove('no-anim'));
+
+  async function openFourth(user: ReturnType<typeof renderDom>['user']) {
+    await user.click(await screen.findByRole('tab', { name: msg('games.detailTabScreenshots') }));
+    const thumbs = await screen.findAllByRole('button', { name: msg('games.detailOpenScreenshotLabel') });
+    await user.click(thumbs[3]);
+    expect(shown()).toBe('https://img/s4.jpg');
+  }
+
+  it.each([
+    ['a picture outside the gallery', 'https://img/hero.jpg'],
+    ['one of the screenshots before it, which leaves the gallery', 'https://img/s1.jpg'],
+  ])('keeps the viewer on the same screenshot when the hero becomes %s', async (_, hero) => {
+    vi.mocked(getMetadataView).mockResolvedValue(view({ hero: '', screenshots: shots }));
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    await openFourth(user);
+
+    pushMetadata(view({ hero, screenshots: shots }));
+    await tick();
+
+    expect(shown()).toBe('https://img/s4.jpg');
+    await user.keyboard('{ArrowRight}');
+    expect(shown()).toBe('https://img/s5.jpg');
   });
 });

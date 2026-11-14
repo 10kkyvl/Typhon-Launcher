@@ -23,6 +23,7 @@
   import { activeDownload, activeInstall, gameDownloads, gameInstalls, ownsDownload as ownsGameDownload, terminalDownload as newestTerminalDownload } from '../../lib/game/transfers';
   import { cancelDownload, deleteDownloadData, removeDownload, resumeDownload } from '../../lib/services/downloads';
   import type { Download as DownloadItem, DownloadOrigin } from '../../lib/services/downloads';
+  import type { MediaAsset } from '../../lib/services/metadata';
   import { missingImages, refreshMissingImages } from '../../lib/stores/missingImages';
   import { prepareReleaseDownload, type ReleaseGroup } from '../../lib/services/sources';
   import { getVerifyState, type VerifyState } from '../../lib/services/updates';
@@ -171,7 +172,21 @@
     heroSrc;
     untrack(() => {
       heroFailed = false;
-      lightboxIndex = 0;
+    });
+  });
+
+  // A new hero leaves the gallery or comes back into it while the viewer is open: the viewer stays on
+  // the picture it shows, found again by id, not on the position it had.
+  let viewedShots: MediaAsset[] = [];
+
+  $effect(() => {
+    const next = shots;
+    untrack(() => {
+      const shownId = viewedShots[lightboxIndex]?.id;
+      viewedShots = next;
+      if (!lightboxOpen) return;
+      const at = next.findIndex((shot) => shot.id === shownId);
+      lightboxIndex = at >= 0 ? at : Math.min(lightboxIndex, Math.max(0, next.length - 1));
     });
   });
 
