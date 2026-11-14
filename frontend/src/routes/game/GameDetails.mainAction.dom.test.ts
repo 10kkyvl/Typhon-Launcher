@@ -220,6 +220,18 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('GameDetails main action: an installed game with another download of it', () => {
+  it.each(['paused', 'queued', 'downloading'] as const)(
+    'keeps Play while that download is %s',
+    async (status) => {
+      downloads.set([download({ status })]);
+      renderDom(GameDetails, { id: 'g1' });
+
+      expect(await mainAction(playName)).toBeTruthy();
+    },
+  );
+});
+
 describe('GameDetails main action: a finished download of a game not installed', () => {
   it('installs the newest one, not the first in the list', async () => {
     libraryGames.set([]);

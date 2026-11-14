@@ -194,13 +194,15 @@
   const terminalDownload = $derived(installed ? undefined : newestTerminalDownload(ownDownloads));
   const ownInstall = $derived(activeInstall(gameInstalls($installations, ownDownloads, localGame?.id)));
 
+  // An installed game keeps its main action while another release of it downloads: the download
+  // writes to the downloads folder, not to the game's.
   const busy = $derived(
     busyState([
       ownInstall ? { active: true, label: installStatusLabels(ownInstall.status), progress: ownInstall.progress, indeterminate: installIndeterminate(ownInstall) } : null,
       update && (update.state === 'updating' || update.state === 'update_downloading')
         ? { active: true, label: stepLabels(update.step ?? 'download'), progress: update.progress }
         : null,
-      ownDownload ? { active: true, label: statusLabels(ownDownload.status), progress: ownDownload.progress } : null,
+      ownDownload && !installed ? { active: true, label: statusLabels(ownDownload.status), progress: ownDownload.progress } : null,
     ]),
   );
 
