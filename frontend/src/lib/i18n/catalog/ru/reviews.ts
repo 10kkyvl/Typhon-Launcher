@@ -29,6 +29,7 @@ export const reviews = {
   'reviews.composerRecommend': 'Рекомендую',
   'reviews.composerNotRecommend': 'Не рекомендую',
   'reviews.composerPlaceholder': 'Расскажите, что понравилось или не понравилось в игре',
+  'reviews.composerBodyLabel': 'Текст отзыва',
   'reviews.composerHint': 'Ссылки запрещены, от {min} до {max} символов',
   'reviews.composerCounter': '{count} / {max}',
   'reviews.composerPublish': 'Опубликовать',

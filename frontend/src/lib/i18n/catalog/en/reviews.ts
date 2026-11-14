@@ -32,6 +32,7 @@ export const reviews: Record<ReviewsKey, Message> = {
   'reviews.composerRecommend': 'Recommended',
   'reviews.composerNotRecommend': 'Not Recommended',
   'reviews.composerPlaceholder': 'Tell others what you liked or disliked about the game',
+  'reviews.composerBodyLabel': 'Review text',
   'reviews.composerHint': 'No links, {min} to {max} characters',
   'reviews.composerCounter': '{count} / {max}',
   'reviews.composerPublish': 'Publish',
