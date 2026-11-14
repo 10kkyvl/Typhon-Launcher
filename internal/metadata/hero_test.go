@@ -611,3 +611,96 @@ func TestArtRefreshHeroDownloadOfUnsizedAndMisreportedPictures(t *testing.T) {
 		})
 	}
 }
+
+func TestSteamOnlyGameKeepsItsGalleryWhenEveryDownloadFails(t *testing.T) {
+	srv, _ := sizedImageServer(t)
+	meta := fullMetadata(srv.URL)
+	meta.ProviderID = "steam:620"
+	meta.Cover = &ImageRef{URL: srv.URL + "/264x374-cover.png"}
+	meta.Screenshots = []ImageRef{{URL: srv.URL + "/1920x1080-st0.png"}, {URL: srv.URL + "/1920x1080-st1.png"}}
+	meta.Artworks = nil
+	provider := &fakeProvider{meta: map[string]GameMetadata{"steam:620": meta}}
+	svc, cat, _ := newTestService(t, provider)
+	game := addGame(t, cat, catalog.Game{Title: "Portal 2"})
+	first, err := svc.ApplyMatch(game.ID, "steam:620")
+	if err != nil {
+		t.Fatalf("first match: %v", err)
+	}
+	if first.Game.ExternalIDs.Steam != "620" || first.Game.ExternalIDs.IGDB != "" || len(first.Screenshots) != 2 {
+		t.Fatalf("first match: ids %+v, %d screenshots", first.Game.ExternalIDs, len(first.Screenshots))
+	}
+
+	failing := meta
+	failing.Cover = &ImageRef{URL: srv.URL + "/gone-cover.png"}
+	failing.Screenshots = []ImageRef{{URL: srv.URL + "/gone-st0.png"}}
+	provider.setMeta("steam:620", failing)
+	view, err := svc.Refresh(game.ID)
+	if err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	if len(view.Screenshots) != 2 || view.Screenshots[0].ID != first.Screenshots[0].ID {
+		t.Fatalf("gallery = %d screenshots, want the stored two carried", len(view.Screenshots))
+	}
+	if view.Cover != first.Cover || view.Hero != first.Hero || view.HeroIsPoster {
+		t.Fatalf("cover %q hero %q poster=%v, want the stored ones", view.Cover, view.Hero, view.HeroIsPoster)
+	}
+}
+
+func TestArtRefreshFetchesNothingWhenAStoredScreenshotFitsWithoutAStoredChoice(t *testing.T) {
+	srv, hits := sizedImageServer(t)
+	dir := t.TempDir()
+	cat, err := catalog.NewServiceAt(dir)
+	if err != nil {
+		t.Fatalf("catalog service: %v", err)
+	}
+	game := addGame(t, cat, catalog.Game{Title: "Prey"})
+	root := filepath.Join(dir, mediaDirName)
+	stored := func(id string, kind AssetType, w, h int) MediaAsset {
+		rel, err := writeAsset(root, game.ID, id, fetchedImage{Data: pngBytes(t, w, h), Format: "png", Width: w, Height: h})
+		if err != nil {
+			t.Fatalf("write asset: %v", err)
+		}
+		return MediaAsset{ID: id, GameID: game.ID, Type: kind, SourceURL: srv.URL + "/stored-" + id + ".png", Path: rel, Width: w, Height: h, CreatedAt: time.Now()}
+	}
+	cover := stored("cover", AssetCover, 264, 374)
+	shot := stored("shot", AssetScreenshot, 1280, 720)
+	if err := storage.Save(filepath.Join(dir, assetsFileName), assetsVersion, []MediaAsset{cover, shot}); err != nil {
+		t.Fatalf("save assets: %v", err)
+	}
+	if _, err := cat.ApplyMetadata(game.ID, catalog.MetadataPatch{
+		Language: "en", IGDBID: "2657", Title: "Prey", CoverAssetID: cover.ID, UpdatedAt: time.Now(),
+	}); err != nil {
+		t.Fatalf("apply metadata: %v", err)
+	}
+
+	meta := fullMetadata(srv.URL)
+	meta.Cover = &ImageRef{URL: srv.URL + "/264x374-cover.png"}
+	meta.Screenshots = refs(srv.URL, "/1920x1080-s9.png")
+	meta.Artworks = refs(srv.URL, "/1920x1080-a9.png")
+	provider := &fakeProvider{meta: map[string]GameMetadata{"2657": meta}}
+	svc, err := NewServiceAt(dir, cat, provider)
+	if err != nil {
+		t.Fatalf("metadata service: %v", err)
+	}
+	unthrottle(svc)
+	if err := svc.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
+		t.Fatalf("startup: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := svc.ServiceShutdown(); err != nil {
+			t.Errorf("shutdown: %v", err)
+		}
+	})
+
+	svc.SetLanguage("ru")
+	if _, extra := artRefresh(t, svc, cat, game.ID, hits); extra != 0 {
+		t.Fatalf("extra image requests = %d, want none while a stored screenshot fits", extra)
+	}
+	view, err := svc.GetView(game.ID)
+	if err != nil {
+		t.Fatalf("view: %v", err)
+	}
+	if view.HeroIsPoster || view.Hero != "/"+path.Join(mediaDirName, shot.Path) {
+		t.Fatalf("hero = %q poster=%v, want the stored screenshot", view.Hero, view.HeroIsPoster)
+	}
+}
