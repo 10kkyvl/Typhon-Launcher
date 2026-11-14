@@ -28,6 +28,7 @@
   let unsupported = $state(false);
   let moreFailed = $state(false);
   let results = $state<HTMLElement>();
+  let heading = $state<HTMLElement>();
   let floor = $state(0);
   let heldFor = '';
   // The list `cursor` continues: a page further is asked only for the game, order and filter it came from.
@@ -153,7 +154,7 @@
 {#if canonicalGameId && !unsupported}
   <section class="section" id="reviews">
     <div class="header">
-      <h2 class="heading">{msg('reviews.sectionTitle')}</h2>
+      <h2 class="heading" tabindex="-1" bind:this={heading}>{msg('reviews.sectionTitle')}</h2>
       <div class="controls">
         <SegmentedControl options={sortTabs} label={msg('reviews.sortLabel')} variant="pill" bind:value={sort} />
         <SegmentedControl options={filterTabs} label={msg('reviews.filterLabel')} variant="pill" bind:value={filter} />
@@ -161,7 +162,7 @@
     </div>
 
     <div class="composer">
-      <ReviewComposer {canonicalGameId} />
+      <ReviewComposer {canonicalGameId} home={() => heading} />
     </div>
 
     <div class="results" bind:this={results} style:min-height={floor > 0 ? `${floor}px` : undefined}>

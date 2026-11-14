@@ -2,8 +2,9 @@ import { screen, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import { AccountError } from '../../lib/services/account';
-import { list, type Page } from '../../lib/services/reviews';
+import { limits, list, mine, remove, type Page } from '../../lib/services/reviews';
 import { toasts } from '../../lib/stores/toasts';
+import { authState } from '../../lib/stores/user';
 import { renderDom } from '../../lib/testing/dom';
 import GameReviews from './GameReviews.svelte';
 
@@ -12,6 +13,9 @@ vi.mock('../../lib/services/backend', () => ({ inWails: false }));
 vi.mock('../../lib/services/reviews', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/reviews')>()),
   list: vi.fn(),
+  mine: vi.fn(),
+  limits: vi.fn(),
+  remove: vi.fn(),
 }));
 
 function deferred<T>() {
@@ -65,6 +69,10 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.mocked(list).mockReset();
+  vi.mocked(mine).mockReset();
+  vi.mocked(limits).mockReset();
+  vi.mocked(remove).mockReset();
+  authState.set('bootstrapping');
   toasts.set([]);
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -221,5 +229,41 @@ describe('GameReviews: retrying a failed load', () => {
     expect(notice.isConnected).toBe(true);
     expect(document.activeElement).toBe(retry);
     await vi.waitFor(() => expect(said()).toBe(msg('reviews.loadError')));
+  });
+});
+
+describe('GameReviews: deleting my review', () => {
+  type MineAnswer = Awaited<ReturnType<typeof mine>>;
+  const mineOf = (value: unknown) => value as MineAnswer;
+  const myReview = { recommended: true, body: 'Mine.', hidden: false };
+
+  async function deleteMine(after: MineAnswer) {
+    authState.set('authenticated');
+    vi.mocked(list).mockResolvedValue(empty);
+    vi.mocked(limits).mockResolvedValue({ minBodyRunes: 10, maxBodyRunes: 2000 } as Awaited<ReturnType<typeof limits>>);
+    vi.mocked(mine).mockResolvedValueOnce(mineOf({ review: myReview, eligibility: { canPost: true } })).mockResolvedValueOnce(after);
+    vi.mocked(remove).mockResolvedValueOnce(undefined);
+    const { user } = renderDom(GameReviews, { canonicalGameId: 'c1' });
+    const del = await screen.findByRole('button', { name: msg('reviews.composerDelete') });
+    del.focus();
+    await user.keyboard('{Enter}');
+    const dialog = screen.getByRole('dialog', { name: msg('reviews.composerDeleteConfirmTitle') });
+    within(dialog).getByRole('button', { name: msg('reviews.composerDeleteConfirmButton') }).focus();
+    await user.keyboard('{Enter}');
+    await vi.waitFor(() => expect(dialog.isConnected).toBe(false));
+  }
+
+  it('lands focus on the reviews heading when nothing of the composer is left to press', async () => {
+    await deleteMine(mineOf({ review: null, eligibility: { canPost: false, reason: 'review_repost_cooldown', retryAt: new Date(Date.now() + 3_600_000).toISOString() } }));
+
+    const heading = screen.getByRole('heading', { name: msg('reviews.sectionTitle') });
+    await vi.waitFor(() => expect(document.activeElement).toBe(heading));
+  });
+
+  it('lands focus on the verdict of a new review when one can be written at once', async () => {
+    await deleteMine(mineOf({ review: null, eligibility: { canPost: true } }));
+
+    const first = screen.getByRole('radio', { name: msg('reviews.composerRecommend') });
+    await vi.waitFor(() => expect(document.activeElement).toBe(first));
   });
 });

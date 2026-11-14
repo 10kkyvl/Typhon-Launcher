@@ -1,7 +1,7 @@
-import { screen } from '@testing-library/svelte';
+import { screen, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
-import { vote, type Review } from '../../lib/services/reviews';
+import { report as sendReport, vote, type Review } from '../../lib/services/reviews';
 import { toasts } from '../../lib/stores/toasts';
 import { renderDom } from '../../lib/testing/dom';
 import ReviewCard from './ReviewCard.svelte';
@@ -11,6 +11,7 @@ vi.mock('../../lib/services/backend', () => ({ inWails: false }));
 vi.mock('../../lib/services/reviews', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/reviews')>()),
   vote: vi.fn(),
+  report: vi.fn(),
 }));
 
 function review(body: string): Review {
@@ -35,6 +36,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.mocked(vote).mockReset();
+  vi.mocked(sendReport).mockReset();
   toasts.set([]);
   vi.restoreAllMocks();
 });
@@ -100,6 +102,34 @@ describe('ReviewCard: reporting', () => {
     await user.keyboard('{Enter}');
 
     expect(screen.getByRole('dialog', { name: msg('reviews.reportTitle') })).toBeTruthy();
+  });
+});
+
+describe('ReviewCard: sending a report', () => {
+  it('keeps focus on the pressed reason, busy, while it sends, then returns it to Report', async () => {
+    let sent!: () => void;
+    vi.mocked(sendReport).mockReturnValueOnce(new Promise<void>((resolve) => (sent = resolve)));
+    const { user } = renderDom(ReviewCard, { review: review('Fine.'), guest: false });
+    const report = screen.getByRole('button', { name: msg('reviews.report') });
+    report.focus();
+    await user.keyboard('{Enter}');
+    const dialog = screen.getByRole('dialog', { name: msg('reviews.reportTitle') });
+    const spam = within(dialog).getByRole('button', { name: msg('reviews.reportReasonSpam') });
+    const other = within(dialog).getByRole('button', { name: msg('reviews.reportReasonOther') });
+    spam.focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(spam.hasAttribute('disabled')).toBe(false);
+    expect(spam.getAttribute('aria-busy')).toBe('true');
+    expect(other.getAttribute('aria-disabled')).toBe('true');
+    expect(document.activeElement).toBe(spam);
+    await user.click(other);
+    expect(vi.mocked(sendReport)).toHaveBeenCalledTimes(1);
+
+    sent();
+    await vi.waitFor(() => expect(dialog.isConnected).toBe(false));
+    await vi.waitFor(() => expect(document.activeElement).toBe(report));
   });
 });
 

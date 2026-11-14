@@ -46,6 +46,8 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.mocked(mine).mockReset();
+  vi.mocked(save).mockReset();
+  vi.mocked(remove).mockReset();
   app.remove();
   authState.set('bootstrapping');
   toasts.set([]);
@@ -213,6 +215,46 @@ describe('a publish the server refuses', () => {
     await vi.waitFor(() => expect(vi.mocked(mine)).toHaveBeenCalledTimes(3));
     expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(draft);
     expect(screen.getByRole('radio', { name: msg('reviews.composerNotRecommend') }).getAttribute('aria-checked')).toBe('true');
+  });
+});
+
+describe('publishing a review', () => {
+  it('keeps focus on a busy Publish while it sends, then moves it to my review', async () => {
+    let published!: () => void;
+    vi.mocked(mine)
+      .mockResolvedValueOnce(mineOf({ review: null, eligibility: { canPost: true } }))
+      .mockResolvedValueOnce(mineOf({
+        review: { recommended: true, body: 'A fine evening with a fine game.', hidden: false },
+        eligibility: { canPost: false, reason: 'review_edit_cooldown', retryAt: inAnHour() },
+      }));
+    vi.mocked(save).mockReturnValueOnce(new Promise((resolve) => (published = () => resolve(undefined as never))));
+    render(ReviewComposer, { target: app, props: { canonicalGameId: 'g1' } });
+    const keys = user();
+    await keys.click(await screen.findByRole('radio', { name: msg('reviews.composerRecommend') }));
+    await keys.type(screen.getByRole('textbox'), 'A fine evening with a fine game.');
+    const publish = screen.getByRole('button', { name: msg('reviews.composerPublish') });
+    publish.focus();
+
+    await keys.keyboard('{Enter}');
+
+    expect(publish.hasAttribute('disabled')).toBe(false);
+    expect(publish.getAttribute('aria-busy')).toBe('true');
+    expect(document.activeElement).toBe(publish);
+
+    published();
+    const heading = await screen.findByRole('heading', { name: msg('reviews.composerMineTitle') });
+    await vi.waitFor(() => expect(document.activeElement).toBe(heading));
+  });
+});
+
+describe('the review text field', () => {
+  it('has a label of its own, not only a placeholder', async () => {
+    vi.mocked(mine).mockResolvedValueOnce(mineOf({ review: null, eligibility: { canPost: true } }));
+    render(ReviewComposer, { target: app, props: { canonicalGameId: 'g1' } });
+
+    const field = await screen.findByRole('textbox', { name: msg('reviews.composerBodyLabel') });
+
+    expect((field as HTMLTextAreaElement).labels[0]?.textContent?.trim()).toBe(msg('reviews.composerBodyLabel'));
   });
 });
 

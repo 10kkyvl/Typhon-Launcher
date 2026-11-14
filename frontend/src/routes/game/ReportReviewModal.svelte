@@ -8,7 +8,8 @@
 
   let { reviewId, onclose }: { reviewId: number; onclose: () => void } = $props();
 
-  let sending = $state(false);
+  // The reason being sent: its button is busy and keeps focus, the others refuse presses meanwhile.
+  let sending = $state<ReportReason | ''>('');
 
   const REASONS: { value: ReportReason; label: () => string }[] = [
     { value: 'spam', label: () => msg('reviews.reportReasonSpam') },
@@ -20,7 +21,7 @@
 
   async function submit(reason: ReportReason) {
     if (sending) return;
-    sending = true;
+    sending = reason;
     try {
       await reportReview(reviewId, reason);
       toast(msg('reviews.reportSent'), 'success');
@@ -29,7 +30,7 @@
       const code = err instanceof AccountError ? err.code : '';
       toast(reviewToastMessage(code, msg('reviews.reportFailed')), 'danger');
     } finally {
-      sending = false;
+      sending = '';
     }
   }
 </script>
@@ -37,7 +38,13 @@
 <Modal dismissible={!sending} open title={msg('reviews.reportTitle')} width="38rem" {onclose}>
   <div class="reasons">
     {#each REASONS as reason (reason.value)}
-      <button class="reason" type="button" disabled={sending} onclick={() => submit(reason.value)}>
+      <button
+        class="reason"
+        type="button"
+        aria-busy={sending === reason.value || undefined}
+        aria-disabled={sending && sending !== reason.value ? 'true' : undefined}
+        onclick={() => submit(reason.value)}
+      >
         {reason.label()}
       </button>
     {/each}
@@ -60,13 +67,17 @@
     transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
   }
 
-  .reason:hover:not(:disabled) {
+  .reason:hover:not([aria-disabled='true'], [aria-busy='true']) {
     background: var(--hover);
     border-color: var(--border-strong);
   }
 
-  .reason:disabled {
+  .reason[aria-disabled='true'] {
     opacity: 0.5;
     cursor: default;
+  }
+
+  .reason[aria-busy='true'] {
+    cursor: progress;
   }
 </style>

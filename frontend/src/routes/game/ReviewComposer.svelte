@@ -19,9 +19,18 @@
   import { toast } from '../../lib/stores/toasts';
   import { authState } from '../../lib/stores/user';
   import { msg, type MessageKey } from '../../lib/i18n';
+  import { focusableIn } from '../../lib/layers/focus';
+  import { focusHandOff } from '../../lib/utils/focusHandOff';
   import { nextIndex } from '../../lib/utils/roving';
 
-  let { canonicalGameId }: { canonicalGameId: string } = $props();
+  let {
+    canonicalGameId,
+    home,
+  }: {
+    canonicalGameId: string;
+    /** Where focus lands when what it was on has gone and nothing of the composer is left to press. */
+    home?: () => HTMLElement | null | undefined;
+  } = $props();
 
   const uid = $props.id();
 
@@ -62,6 +71,7 @@
   let saving = $state(false);
   let confirmDeleteOpen = $state(false);
   let fieldError = $state('');
+  let mineTitle = $state<HTMLElement>();
 
   const authed = $derived($authState === 'authenticated');
   const isEdit = $derived(!!mine?.review);
@@ -69,17 +79,17 @@
   const runeCount = $derived([...body].length);
   const tooLong = $derived(limits !== null && runeCount > limits.maxBodyRunes);
   const disabledPublish = $derived(
-    recommended === null || saving || !limits || runeCount < limits.minBodyRunes || runeCount > limits.maxBodyRunes,
+    recommended === null || !limits || runeCount < limits.minBodyRunes || runeCount > limits.maxBodyRunes,
   );
 
   let loadToken = 0;
 
-  // A retry keeps the failure on screen until its answer: the notice and its focused button stay.
-  // `keepDraft` refreshes what the server allows around an open form: the typed text, the verdict and
-  // the form stay, and a failed refresh leaves them as they are.
-  async function load(id: string, { retry = false, keepDraft = false } = {}) {
+  // `inPlace` keeps what is on screen until the answer instead of a spinner: a retry keeps its notice
+  // and focused button, a publish its busy button. `keepDraft` refreshes what the server allows around
+  // an open form: the typed text, the verdict and the form stay, and a failed refresh leaves them.
+  async function load(id: string, { inPlace = false, keepDraft = false } = {}) {
     const token = ++loadToken;
-    if (!retry && !keepDraft) phase = 'loading';
+    if (!inPlace && !keepDraft) phase = 'loading';
     try {
       const [mineResult, limitsResult] = await Promise.all([fetchMine(id), fetchLimits()]);
       if (token !== loadToken) return;
@@ -101,7 +111,7 @@
   let content = $state<HTMLElement>();
 
   async function retry(): Promise<boolean> {
-    await load(canonicalGameId, { retry: true });
+    await load(canonicalGameId, { inPlace: true });
     return phase !== 'error';
   }
 
@@ -146,15 +156,26 @@
     fieldError = '';
   }
 
+  // What focus can land on in the composer, else outside it: the published review's heading, the
+  // first control left (a Retry, the verdict of a new review), else the caller's place.
+  function landing(): HTMLElement | null | undefined {
+    return mineTitle ?? (content ? focusableIn(content)[0] : undefined) ?? home?.();
+  }
+
   async function submit() {
-    if (disabledPublish || recommended === null) return;
+    if (disabledPublish || saving || recommended === null) return;
     const id = canonicalGameId;
+    const handOff = focusHandOff();
     saving = true;
     fieldError = '';
     try {
       await saveReview(id, recommended, body);
       notifyReviewsChanged();
-      if (id === canonicalGameId) void load(id);
+      if (id === canonicalGameId) {
+        // Publish stays busy until the review it made is shown in place of the form.
+        await load(id, { inPlace: true });
+        await handOff(landing);
+      }
     } catch (err) {
       const code = err instanceof AccountError ? err.code : '';
       const field = err instanceof AccountError ? err.field : '';
@@ -176,10 +197,13 @@
     }
   }
 
+  // The dialog stays busy until what replaces the review is shown, so on closing it finds that, not
+  // the Delete button that went with the review.
   async function confirmDelete() {
-    await removeReview(canonicalGameId);
+    const id = canonicalGameId;
+    await removeReview(id);
     notifyReviewsChanged();
-    void load(canonicalGameId);
+    if (id === canonicalGameId) await load(id, { inPlace: true });
   }
 
   function deleteErrorText(err: unknown): string {
@@ -225,7 +249,9 @@
           {/each}
         </div>
 
+        <label class="sr-only" for="{uid}-body">{msg('reviews.composerBodyLabel')}</label>
         <textarea
+          id="{uid}-body"
           class="input area"
           rows="5"
           placeholder={msg('reviews.composerPlaceholder')}
@@ -254,7 +280,7 @@
           {#if isEdit}
             <Button variant="ghost" disabled={saving} onclick={cancelEdit}>{msg('reviews.composerCancel')}</Button>
           {/if}
-          <Button variant="primary" disabled={disabledPublish} onclick={submit}>
+          <Button variant="primary" disabled={disabledPublish} busy={saving} onclick={submit}>
             {#if isEdit}
               {saving ? msg('reviews.composerSaving') : msg('reviews.composerSave')}
             {:else}
@@ -275,7 +301,7 @@
           <span class="recommend" class:positive={mine.review.recommended} class:negative={!mine.review.recommended}>
             {mine.review.recommended ? msg('reviews.recommends') : msg('reviews.notRecommends')}
           </span>
-          <h4 class="mine-title">{msg('reviews.composerMineTitle')}</h4>
+          <h4 class="mine-title" tabindex="-1" bind:this={mineTitle}>{msg('reviews.composerMineTitle')}</h4>
         </div>
         <p class="mine-body">{mine.review.body}</p>
         {#if mine.review.hidden}
@@ -309,6 +335,7 @@
     onconfirm={confirmDelete}
     onclose={() => (confirmDeleteOpen = false)}
     errorText={deleteErrorText}
+    returnFocus={landing}
   />
 {/if}
 
