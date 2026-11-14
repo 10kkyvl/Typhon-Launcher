@@ -29,6 +29,16 @@
   let results = $state<HTMLElement>();
   let floor = $state(0);
   let heldFor = '';
+  // The list `cursor` continues: a page further is asked only for the game, order and filter it came from.
+  let cursorKey = '';
+
+  const listKey = (id: string, currentSort: string, currentFilter: string) => `${id}\n${currentSort}\n${currentFilter}`;
+
+  // A page further may repeat a review the list holds already (one posted meanwhile shifts the pages).
+  function appendNew(held: Review[], page: Review[]): Review[] {
+    const seen = new Set(held.map((item) => item.id));
+    return [...held, ...page.filter((item) => !seen.has(item.id) && seen.add(item.id))];
+  }
 
   const guest = $derived($authState !== 'authenticated');
 
@@ -48,13 +58,15 @@
   async function loadFirst(id: string, currentSort: string, currentFilter: string, retry = false) {
     const token = ++requestToken;
     loading = true;
+    loadingMore = false;
     if (!retry) failed = false;
     moreFailed = false;
     try {
       const page = await listReviews(id, currentSort as ReviewSort, currentFilter as ReviewFilter, '');
       if (token !== requestToken) return;
-      items = page.reviews;
+      items = appendNew([], page.reviews);
       cursor = page.next;
+      cursorKey = listKey(id, currentSort, currentFilter);
       loaded = true;
       failed = false;
       unsupported = false;
@@ -62,6 +74,7 @@
       if (token !== requestToken) return;
       items = [];
       cursor = '';
+      cursorKey = '';
       loaded = false;
       if (err instanceof AccountError && err.code === 'unknown_game') {
         unsupported = true;
@@ -80,15 +93,16 @@
   }
 
   async function loadMore() {
-    if (!cursor || loadingMore) return;
+    if (!cursor || loadingMore || loading) return;
     const id = canonicalGameId;
+    if (cursorKey !== listKey(id, sort, filter)) return;
     const token = requestToken;
     loadingMore = true;
     moreFailed = false;
     try {
       const page = await listReviews(id, sort as ReviewSort, filter as ReviewFilter, cursor);
       if (token !== requestToken) return;
-      items = [...items, ...page.reviews];
+      items = appendNew(items, page.reviews);
       cursor = page.next;
     } catch {
       if (token !== requestToken) return;
@@ -107,6 +121,7 @@
       requestToken += 1;
       items = [];
       cursor = '';
+      cursorKey = '';
       loaded = false;
       loading = false;
       failed = false;
@@ -115,6 +130,14 @@
       floor = 0;
       heldFor = '';
       return;
+    }
+    // Another game: its reviews are not this one's, so the list goes and its load shows instead.
+    if (heldFor !== id) {
+      items = [];
+      cursor = '';
+      cursorKey = '';
+      loaded = false;
+      moreFailed = false;
     }
     const node = untrack(() => results);
     floor = heldFor === id && node ? measureScrollFloor(node) : 0;
@@ -162,7 +185,7 @@
       {/if}
       {#if cursor}
         <div class="more">
-          <Button busy={loadingMore} onclick={loadMore}>
+          <Button busy={loadingMore || loading} onclick={loadMore}>
             {loadingMore ? msg('reviews.loadingMore') : msg('reviews.loadMore')}
           </Button>
         </div>

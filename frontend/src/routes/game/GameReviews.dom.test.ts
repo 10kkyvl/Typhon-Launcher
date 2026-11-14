@@ -87,6 +87,88 @@ describe('GameReviews: loading more', () => {
   });
 });
 
+const reviewsShown = () => [...document.querySelectorAll('.review .body')].map((node) => node.textContent);
+
+describe('GameReviews: the game changes under the block', () => {
+  it("takes the previous game's reviews away while the next game's load, and shows that it loads", async () => {
+    const next = deferred<Page>();
+    vi.mocked(list).mockResolvedValueOnce({ ...empty, reviews: [review], next: 'p2' }).mockReturnValueOnce(next.promise);
+    const { rerender } = renderDom(GameReviews, { canonicalGameId: 'c1' });
+    await screen.findByText('Fine.');
+    const section = document.getElementById('reviews');
+
+    await rerender({ canonicalGameId: 'c2' });
+
+    expect(document.getElementById('reviews')).toBe(section);
+    expect(reviewsShown()).toEqual([]);
+    expect(screen.queryByRole('button', { name: msg('reviews.loadMore') })).toBeNull();
+    expect(screen.getByRole('status').textContent).toContain(msg('reviews.loading'));
+    next.resolve({ ...empty, reviews: [{ ...review, id: 7, body: 'Other game.' }] });
+    await vi.waitFor(() => expect(reviewsShown()).toEqual(['Other game.']));
+  });
+
+  it('holds the list of the same game through a change of order until the new order answers', async () => {
+    const recent = deferred<Page>();
+    vi.mocked(list).mockResolvedValueOnce({ ...empty, reviews: [review], next: 'p2' }).mockReturnValueOnce(recent.promise);
+    const { user } = renderDom(GameReviews, { canonicalGameId: 'c1' });
+    await screen.findByText('Fine.');
+
+    await user.click(screen.getByRole('radio', { name: msg('reviews.sortRecent') }));
+
+    expect(reviewsShown()).toEqual(['Fine.']);
+    expect(vi.mocked(list)).toHaveBeenLastCalledWith('c1', 'recent', 'all', '');
+    recent.resolve({ ...empty, reviews: [{ ...review, id: 3, body: 'Newest.' }] });
+    await vi.waitFor(() => expect(reviewsShown()).toEqual(['Newest.']));
+  });
+});
+
+describe("GameReviews: Load more and its key's cursor", () => {
+  it('does not send the cursor of the previous order with the new one', async () => {
+    const recent = deferred<Page>();
+    vi.mocked(list).mockResolvedValueOnce({ ...empty, reviews: [review], next: 'p2' }).mockReturnValueOnce(recent.promise);
+    const { user } = renderDom(GameReviews, { canonicalGameId: 'c1' });
+    const more = await screen.findByRole('button', { name: msg('reviews.loadMore') });
+
+    await user.click(screen.getByRole('radio', { name: msg('reviews.sortRecent') }));
+    await user.click(more);
+
+    const calls = vi.mocked(list).mock.calls;
+    expect(calls.filter(([, sort, , cursor]) => cursor === 'p2' && sort !== 'helpful')).toEqual([]);
+    recent.resolve({ ...empty, reviews: [{ ...review, id: 3, body: 'Newest.' }], next: 'r2' });
+    await vi.waitFor(() => expect(reviewsShown()).toEqual(['Newest.']));
+  });
+
+  it('drops a page of the previous order that answers late, and is not left busy', async () => {
+    const page2 = deferred<Page>();
+    const recent = deferred<Page>();
+    vi.mocked(list)
+      .mockResolvedValueOnce({ ...empty, reviews: [review], next: 'p2' })
+      .mockReturnValueOnce(page2.promise)
+      .mockReturnValueOnce(recent.promise);
+    const { user } = renderDom(GameReviews, { canonicalGameId: 'c1' });
+    await user.click(await screen.findByRole('button', { name: msg('reviews.loadMore') }));
+    await user.click(screen.getByRole('radio', { name: msg('reviews.sortRecent') }));
+
+    recent.resolve({ ...empty, reviews: [{ ...review, id: 3, body: 'Newest.' }], next: 'r2' });
+    await vi.waitFor(() => expect(reviewsShown()).toEqual(['Newest.']));
+    page2.resolve({ ...empty, reviews: [{ ...review, id: 2, body: 'Older page.' }], next: 'p3' });
+
+    await vi.waitFor(() => expect(screen.getByRole('button', { name: msg('reviews.loadMore') }).hasAttribute('aria-busy')).toBe(false));
+    expect(reviewsShown()).toEqual(['Newest.']);
+  });
+
+  it('shows a review the next page repeats once', async () => {
+    vi.mocked(list)
+      .mockResolvedValueOnce({ ...empty, reviews: [review], next: 'p2' })
+      .mockResolvedValueOnce({ ...empty, reviews: [review, { ...review, id: 2, body: 'Second.' }], next: '' });
+    const { user } = renderDom(GameReviews, { canonicalGameId: 'c1' });
+
+    await user.click(await screen.findByRole('button', { name: msg('reviews.loadMore') }));
+
+    await vi.waitFor(() => expect(reviewsShown()).toEqual(['Fine.', 'Second.']));
+  });
+});
+
 describe('GameReviews: retrying a failed load', () => {
   it('keeps the notice and the focus on its busy Retry until the answer, then focuses the first review', async () => {
     const again = deferred<Page>();
