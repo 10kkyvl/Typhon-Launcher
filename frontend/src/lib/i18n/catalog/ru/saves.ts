@@ -48,6 +48,7 @@ export const saves = {
   'saves.folderFailed': 'Не удалось найти папку сохранений',
   'saves.openFailed': 'Не удалось открыть папку сохранений',
   'saves.folderNotSet': 'Не удалось сменить папку сохранений',
+  'saves.failedFor': 'Сохранения «{title}»: {reason}',
 } as const;
 
 export type SavesKey = keyof typeof saves;

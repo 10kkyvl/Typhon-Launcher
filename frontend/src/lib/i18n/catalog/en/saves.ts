@@ -50,4 +50,5 @@ export const saves: Record<SavesKey, Message> = {
   'saves.folderFailed': 'Could not find the save folder',
   'saves.openFailed': 'Could not open the save folder',
   'saves.folderNotSet': 'Could not change the save folder',
+  'saves.failedFor': 'Saves of “{title}”: {reason}',
 };

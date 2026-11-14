@@ -119,4 +119,6 @@ export const cloudsaves: Record<CloudsavesKey, Message> = {
   // The conflict banner of the game page.
   'cloudsaves.bannerWhen': 'The saves changed here ({local}) and in the cloud ({remote})',
   'cloudsaves.bannerWhenDevice': 'The saves changed here ({local}) and in the cloud ({remote}, {device})',
+  // A cloud action that failed after the saves view that started it went.
+  'cloudsaves.failedFor': 'Cloud saves of “{title}”: {reason}',
 };

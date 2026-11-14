@@ -116,6 +116,8 @@ export const cloudsaves = {
   // The conflict banner of the game page.
   'cloudsaves.bannerWhen': 'Сохранения изменились здесь ({local}) и в облаке ({remote})',
   'cloudsaves.bannerWhenDevice': 'Сохранения изменились здесь ({local}) и в облаке ({remote}, {device})',
+  // A cloud action that failed after the saves view that started it went.
+  'cloudsaves.failedFor': 'Облачные сохранения «{title}»: {reason}',
 } as const;
 
 export type CloudsavesKey = keyof typeof cloudsaves;
