@@ -108,6 +108,18 @@ describe('GameCard: keys on a focused card', () => {
     expect(onplay).not.toHaveBeenCalled();
     expect(get(route).name).not.toBe('game');
   });
+
+  // The catalogue passes `onplay` to every card it knows in the library, installed or not.
+  it('Ctrl+Enter and Cmd+Enter launch nothing for a game that is not installed, though the page gave onplay', async () => {
+    const onplay = vi.fn();
+    const { user } = renderDom(GameCard, { id: 'g1', title: 'Hades', installed: false, onplay });
+    title().focus();
+
+    await user.keyboard('{Control>}{Enter}{/Control}');
+    await user.keyboard('{Meta>}{Enter}{/Meta}');
+
+    expect(onplay).not.toHaveBeenCalled();
+  });
 });
 
 describe('GameCard: marks and pictures the page passes in', () => {
