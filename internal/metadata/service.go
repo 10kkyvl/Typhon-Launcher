@@ -937,12 +937,7 @@ func (s *Service) apply(ctx context.Context, game catalog.Game, meta GameMetadat
 		return View{}, context.Canceled
 	}
 
-	igdbID := meta.ProviderID
-	steamID := meta.SteamAppID
-	if strings.HasPrefix(igdbID, "steam:") {
-		steamID = strings.TrimPrefix(igdbID, "steam:")
-		igdbID = ""
-	}
+	igdbID, steamID := matchIDs(meta)
 	applyMetadata := s.applyMetadata
 	if applyMetadata == nil {
 		applyMetadata = s.catalog.ApplyMetadata
@@ -1016,6 +1011,17 @@ func (s *Service) apply(ctx context.Context, game catalog.Game, meta GameMetadat
 		return View{}, context.Canceled
 	}
 	return s.view(updated), nil
+}
+
+// matchIDs splits the provider's answer into the catalog's IGDB and Steam ids;
+// a Steam-only answer carries its app id in ProviderID as "steam:<id>".
+func matchIDs(meta GameMetadata) (igdbID, steamID string) {
+	igdbID, steamID = meta.ProviderID, meta.SteamAppID
+	if strings.HasPrefix(igdbID, "steam:") {
+		steamID = strings.TrimPrefix(igdbID, "steam:")
+		igdbID = ""
+	}
+	return igdbID, steamID
 }
 
 type assetBatch struct {
