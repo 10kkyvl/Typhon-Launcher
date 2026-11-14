@@ -44,6 +44,7 @@ const SITES: Record<string, Site[]> = {
     ['info', false],
   ],
   'lib/components/SystemRequirements.svelte': [['danger', true]],
+  'lib/components/SimilarReleases.svelte': [['danger', true]],
   // Advice for the chosen platform, also inside InstallModal and AddDownloadModal.
   'lib/components/EmulatorHint.svelte': [['warning', false]],
   'lib/components/AddImageModal.svelte': [
