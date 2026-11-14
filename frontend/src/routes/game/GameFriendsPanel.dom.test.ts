@@ -39,3 +39,22 @@ describe('GameFriendsPanel', () => {
     expect(get(route).name).toBe('friends');
   });
 });
+
+describe('GameFriendsPanel: the game changes under the panel', () => {
+  it("does not show the previous game's friends while the next game's load", async () => {
+    authState.set('authenticated');
+    friendsPage.set({ ...emptyFriendsPage(), friends: [ann as unknown as FriendView] });
+    let answer!: (value: GameFriends) => void;
+    vi.mocked(gameFriends)
+      .mockResolvedValueOnce({ played: [{ ...ann, playtimeSeconds: 0, status: '' }], playingNow: [] } as unknown as GameFriends)
+      .mockReturnValueOnce(new Promise((resolve) => (answer = resolve)));
+    const { rerender } = renderDom(GameFriendsPanel, { canonicalGameId: 'c1' });
+    await screen.findByText('Ann');
+
+    await rerender({ canonicalGameId: 'c2' });
+
+    expect(screen.queryByText('Ann')).toBeNull();
+    answer({ played: [{ ...ann, id: 'u2', displayName: 'Bo', playtimeSeconds: 0, status: '' }], playingNow: [] } as unknown as GameFriends);
+    await screen.findByText('Bo');
+  });
+});

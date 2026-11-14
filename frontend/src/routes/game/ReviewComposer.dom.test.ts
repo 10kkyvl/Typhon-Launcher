@@ -216,6 +216,30 @@ describe('a publish the server refuses', () => {
   });
 });
 
+describe('the game changes under the composer', () => {
+  it("does not carry a draft refused on one game over to the next, even when the refusal's refresh answers late", async () => {
+    let late!: (value: MineAnswer) => void;
+    vi.mocked(mine)
+      .mockResolvedValueOnce(mineOf({ review: null, eligibility: { canPost: true } }))
+      .mockReturnValueOnce(new Promise((resolve) => (late = resolve)))
+      .mockResolvedValueOnce(mineOf({ review: null, eligibility: { canPost: true } }));
+    vi.mocked(save).mockRejectedValueOnce(new AccountError('review_post_cooldown'));
+    const view = render(ReviewComposer, { target: app, props: { canonicalGameId: 'g1' } });
+    const keys = user();
+    await keys.click(await screen.findByRole('radio', { name: msg('reviews.composerRecommend') }));
+    await keys.type(screen.getByRole('textbox'), 'Written for the first game only.');
+    await keys.click(screen.getByRole('button', { name: msg('reviews.composerPublish') }));
+    await vi.waitFor(() => expect(vi.mocked(mine)).toHaveBeenCalledTimes(2));
+
+    await view.rerender({ canonicalGameId: 'g2' });
+    await vi.waitFor(() => expect(vi.mocked(mine)).toHaveBeenLastCalledWith('g2'));
+    late(mineOf({ review: null, eligibility: { canPost: false, reason: 'review_post_cooldown', retryAt: inAnHour() } }));
+
+    await vi.waitFor(() => expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(''));
+    expect(screen.getByRole('radio', { name: msg('reviews.composerRecommend') }).getAttribute('aria-checked')).toBe('false');
+  });
+});
+
 describe('deleting my review', () => {
   it('a refused delete keeps the confirmation open with the review error, not a toast under it', async () => {
     vi.mocked(remove).mockRejectedValueOnce(new AccountError('rate_limited'));

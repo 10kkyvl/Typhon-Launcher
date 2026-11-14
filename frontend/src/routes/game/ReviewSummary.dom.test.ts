@@ -3,6 +3,7 @@ import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { notifyReviewsChanged } from '../../lib/game/reviewsRefresh';
 import { msg } from '../../lib/i18n';
+import { AccountError } from '../../lib/services/account';
 import { list, type Page } from '../../lib/services/reviews';
 import { renderDom } from '../../lib/testing/dom';
 import GameReviews from './GameReviews.svelte';
@@ -104,5 +105,31 @@ describe('ReviewSummary: retrying a failed summary', () => {
 
     await screen.findByText(scoreLine(4, 25));
     expect(notice.isConnected).toBe(false);
+  });
+});
+
+describe('ReviewSummary: the game changes under the card', () => {
+  it("does not stay hidden for the next game because the previous one was unknown", async () => {
+    vi.mocked(list).mockRejectedValueOnce(new AccountError('unknown_game')).mockRejectedValueOnce(new Error('offline'));
+    const { rerender } = renderDom(ReviewSummary, { canonicalGameId: 'c1' });
+    await vi.waitFor(() => expect(vi.mocked(list)).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(screen.queryByText(msg('reviews.summaryTitle'))).toBeNull());
+
+    await rerender({ canonicalGameId: 'c2' });
+
+    expect(await screen.findByText(msg('reviews.summaryError'))).toBeTruthy();
+  });
+
+  it("does not show the previous game's score while the next one's loads", async () => {
+    const next = deferred<Page>();
+    vi.mocked(list).mockResolvedValueOnce(answer(10, 9)).mockReturnValueOnce(next.promise);
+    const { rerender } = renderDom(ReviewSummary, { canonicalGameId: 'c1' });
+    await screen.findByText(scoreLine(10, 90));
+
+    await rerender({ canonicalGameId: 'c2' });
+
+    expect(screen.queryByText(scoreLine(10, 90))).toBeNull();
+    next.resolve(answer(4, 1));
+    await screen.findByText(scoreLine(4, 25));
   });
 });

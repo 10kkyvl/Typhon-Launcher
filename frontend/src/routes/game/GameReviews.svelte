@@ -132,12 +132,15 @@
       heldFor = '';
       return;
     }
-    // Another game: its reviews are not this one's, so the list goes and its load shows instead.
+    // Another game: its reviews and what was said of the previous one are not this one's, so the
+    // list goes and its load shows instead.
     if (heldFor !== id) {
       items = [];
       cursor = '';
       cursorKey = '';
       loaded = false;
+      failed = false;
+      unsupported = false;
       moreFailed = false;
     }
     const node = untrack(() => results);

@@ -1,6 +1,7 @@
 import { screen, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
+import { AccountError } from '../../lib/services/account';
 import { list, type Page } from '../../lib/services/reviews';
 import { toasts } from '../../lib/stores/toasts';
 import { renderDom } from '../../lib/testing/dom';
@@ -119,6 +120,20 @@ describe('GameReviews: the game changes under the block', () => {
     expect(vi.mocked(list)).toHaveBeenLastCalledWith('c1', 'recent', 'all', '');
     recent.resolve({ ...empty, reviews: [{ ...review, id: 3, body: 'Newest.' }] });
     await vi.waitFor(() => expect(reviewsShown()).toEqual(['Newest.']));
+  });
+});
+
+describe('GameReviews: a game the reviews service does not know, then another', () => {
+  it("does not hide the next game's reviews, nor its failure", async () => {
+    vi.mocked(list).mockRejectedValueOnce(new AccountError('unknown_game')).mockRejectedValueOnce(new Error('offline'));
+    const { rerender } = renderDom(GameReviews, { canonicalGameId: 'c1' });
+    await vi.waitFor(() => expect(vi.mocked(list)).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(document.getElementById('reviews')).toBeNull());
+
+    await rerender({ canonicalGameId: 'c2' });
+
+    expect(await screen.findByText(msg('reviews.loadError'))).toBeTruthy();
+    expect(document.getElementById('reviews')).not.toBeNull();
   });
 });
 

@@ -19,6 +19,7 @@
   let retrying = $state(false);
   let scoreButton = $state<HTMLButtonElement>();
   let loadToken = 0;
+  let shownFor = '';
 
   // A retry keeps the failure on screen until its answer: the notice and its focused button stay.
   async function load(id: string, retry = false) {
@@ -57,8 +58,15 @@
       failed = false;
       unsupported = false;
       loading = false;
+      shownFor = '';
       return;
     }
+    // Another game: the previous one's score, or its being unknown to the service, is not this one's.
+    if (shownFor !== id) {
+      summary = null;
+      unsupported = false;
+    }
+    shownFor = id;
     void load(id);
     return () => {
       loadToken += 1;

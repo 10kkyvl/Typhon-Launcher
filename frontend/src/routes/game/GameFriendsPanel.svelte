@@ -17,6 +17,7 @@
   let { canonicalGameId }: { canonicalGameId: string } = $props();
 
   let page = $state<GameFriends | null>(null);
+  let pageFor = '';
   let warned = false;
 
   const enabled = $derived(
@@ -27,8 +28,12 @@
     const id = canonicalGameId;
     if (!enabled) {
       page = null;
+      pageFor = '';
       return;
     }
+    // Another game: the previous one's friends go while this one's load.
+    if (pageFor !== id) page = null;
+    pageFor = id;
     let cancelled = false;
     gameFriends(id)
       .then((result) => {
