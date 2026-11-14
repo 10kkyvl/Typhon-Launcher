@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { openLayer } from '../layers';
@@ -88,13 +88,16 @@ describe('Lightbox as a layer', () => {
 
     expect(viewer.contains(document.activeElement)).toBe(true);
     expect(thumbnail.closest('[inert]')).not.toBeNull();
-    for (let step = 0; step < 12; step += 1) {
+    // Eight stops (the image, previous, next, zoom out, the slider, zoom in, reset, close): more than
+    // one round, ending on reset.
+    for (let step = 0; step < 14; step += 1) {
       await keys.tab();
       expect(viewer.contains(document.activeElement)).toBe(true);
     }
 
     // Tab ended on one of the viewer's icon buttons, whose label shows as a hint: the first Escape
     // hides the hint, the next one closes the viewer.
+    expect(document.activeElement?.getAttribute('aria-label')).toBe(msg('ui.imageZoomReset'));
     expect(document.querySelector('[data-part="tooltip"]')).not.toBeNull();
     await keys.keyboard('{Escape}');
     expect(document.querySelector('[data-part="tooltip"]')).toBeNull();
@@ -203,6 +206,53 @@ describe('Lightbox semantics', () => {
     expect(status.textContent?.trim()).toBe('3 / 3');
     await keys.keyboard('{Home}');
     expect(image()).toBe(three[0].url);
+  });
+});
+
+// A disabled button cannot hold focus: Chromium drops it to <body>, out of the dialog. At a limit
+// the zoom buttons stay focusable, say they are unavailable and ignore the press.
+describe('Lightbox zoom at its limits', () => {
+  const zoomValue = () => document.querySelector('.zoom-value')?.textContent?.trim();
+
+  it('Zoom out pressed down to 100% keeps focus, says it is unavailable and ignores further presses', async () => {
+    const { keys, dialog } = await openViewer();
+    const zoomIn = within(dialog).getByRole('button', { name: msg('ui.imageZoomIn') });
+    const zoomOut = within(dialog).getByRole('button', { name: msg('ui.imageZoomOut') });
+    zoomIn.focus();
+    await keys.keyboard('{Enter}');
+    expect(zoomValue()).toBe('125%');
+    zoomOut.focus();
+
+    await keys.keyboard('{Enter}');
+    expect(zoomValue()).toBe('100%');
+    expect((zoomOut as HTMLButtonElement).disabled).toBe(false);
+    expect(zoomOut.getAttribute('aria-disabled')).toBe('true');
+    expect(document.activeElement).toBe(zoomOut);
+
+    await keys.keyboard('{Enter}');
+    expect(zoomValue()).toBe('100%');
+    expect(document.activeElement).toBe(zoomOut);
+  });
+
+  it('Zoom in pressed up to 400% keeps focus and ignores further presses; keys still zoom', async () => {
+    const { keys, dialog } = await openViewer();
+    const zoomIn = within(dialog).getByRole('button', { name: msg('ui.imageZoomIn') });
+    zoomIn.focus();
+
+    for (let press = 0; press < 12; press += 1) await keys.keyboard('{Enter}');
+
+    expect(zoomValue()).toBe('400%');
+    expect((zoomIn as HTMLButtonElement).disabled).toBe(false);
+    expect(zoomIn.getAttribute('aria-disabled')).toBe('true');
+    expect(document.activeElement).toBe(zoomIn);
+
+    await keys.keyboard('-');
+    expect(zoomValue()).toBe('375%');
+    expect(zoomIn.hasAttribute('aria-disabled')).toBe(false);
+    await keys.keyboard('0');
+    expect(zoomValue()).toBe('100%');
+    await keys.keyboard('+');
+    expect(zoomValue()).toBe('125%');
   });
 });
 

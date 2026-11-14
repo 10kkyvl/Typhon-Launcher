@@ -171,11 +171,12 @@
     {/if}
 
     {#if !broken}
+      <!-- At a limit a zoom button stays focusable with its reason: a disabled one would drop focus out of the dialog. -->
       <div class="zoom-controls">
-        <IconButton label={msg('ui.imageZoomOut')} onclick={() => setZoom(zoom - 0.25)} disabled={zoom <= 1}><Minus size="1.8rem" /></IconButton>
+        <IconButton label={msg('ui.imageZoomOut')} onclick={() => setZoom(zoom - 0.25)} disabled={zoom <= 1} reason={zoom <= 1 ? msg('games.blocks.zoomOutLimit') : ''}><Minus size="1.8rem" /></IconButton>
         <input class="zoom-slider" style:--zoom-progress={`${((zoom - 1) / 3) * 100}%`} aria-valuetext={`${Math.round(zoom * 100)}%`} type="range" min="100" max="400" step="5" value={zoom * 100} aria-label={msg('ui.imageZoom')}
           oninput={(event) => setZoom(Number(event.currentTarget.value) / 100)} />
-        <IconButton label={msg('ui.imageZoomIn')} onclick={() => setZoom(zoom + 0.25)} disabled={zoom >= 4}><Plus size="1.8rem" /></IconButton>
+        <IconButton label={msg('ui.imageZoomIn')} onclick={() => setZoom(zoom + 0.25)} disabled={zoom >= 4} reason={zoom >= 4 ? msg('games.blocks.zoomInLimit') : ''}><Plus size="1.8rem" /></IconButton>
         <span class="zoom-value">{Math.round(zoom * 100)}%</span>
         <IconButton label={msg('ui.imageZoomReset')} onclick={reset}><RotateCcw size="1.7rem" /></IconButton>
       </div>
