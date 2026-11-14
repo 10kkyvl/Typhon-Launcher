@@ -1066,6 +1066,9 @@ func (s *Service) storeImages(ctx context.Context, gameID string, kinds []AssetT
 func (s *Service) buildAssets(ctx context.Context, game catalog.Game, meta GameMetadata, mode refreshMode) (assetBatch, error) {
 	previous := s.store.list(game.ID)
 	batch := assetBatch{}
+	// Pictures stored for a previously matched game never stand in for the
+	// one this answer is about.
+	same := sameMatch(game, meta)
 
 	var kinds []AssetType
 	var urls []string
@@ -1119,7 +1122,7 @@ func (s *Service) buildAssets(ctx context.Context, game catalog.Game, meta GameM
 			slog.Warn("download cover", "game", game.ID, "url", meta.Cover.URL, "error", cover.err)
 		}
 	}
-	if batch.cover == "" {
+	if batch.cover == "" && same {
 		if kept, ok := carryCover(previous, game.CoverAssetID); ok {
 			batch.assets = append(batch.assets, kept)
 			batch.cover = kept.ID
@@ -1161,9 +1164,7 @@ func (s *Service) buildAssets(ctx context.Context, game catalog.Game, meta GameM
 		batch.created = append(batch.created, results[i].asset)
 	}
 	// Stored pictures stand in only for this answer's own pictures that all
-	// failed to download: an answer that lists none has none, and pictures
-	// of a previously matched game never stand in for the new one.
-	same := sameMatch(game, meta)
+	// failed to download: an answer that lists none has none.
 	kept := func(kind AssetType) []MediaAsset {
 		if len(fetched[kind]) > 0 || !listed[kind] || !same {
 			return fetched[kind]

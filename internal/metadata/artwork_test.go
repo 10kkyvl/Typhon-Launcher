@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -278,4 +279,42 @@ func TestFullRefreshCarriesPicturesOnlyWhenTheirDownloadsFailed(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCoverIsCarriedOnlyForTheSameGame(t *testing.T) {
+	brokenCover := func(base string) GameMetadata {
+		meta := fullMetadata(base)
+		meta.Cover = &ImageRef{URL: base + "/gone-cover.png"}
+		meta.Screenshots, meta.Artworks = nil, nil
+		return meta
+	}
+	noCover := func(base string) GameMetadata {
+		meta := fullMetadata(base)
+		meta.Cover = nil
+		meta.Screenshots, meta.Artworks = nil, nil
+		return meta
+	}
+
+	for name, next := range map[string]func(string) GameMetadata{"its cover fails": brokenCover, "its answer has no cover": noCover} {
+		t.Run("another game, "+name+": the old cover goes", func(t *testing.T) {
+			svc, game, _, _, view := carryCase(t, "7", next)
+			if covers := storedOfKind(svc, game.ID, AssetCover); len(covers) != 0 {
+				t.Fatalf("covers = %v, want none of the old game", sources(covers))
+			}
+			if view.Cover != "" || view.Hero != "" || view.HeroIsPoster {
+				t.Fatalf("cover %q hero %q poster=%v, want no cover and no poster hero", view.Cover, view.Hero, view.HeroIsPoster)
+			}
+		})
+	}
+
+	t.Run("same game, its cover fails: the stored cover stays", func(t *testing.T) {
+		svc, game, _, _, view := carryCase(t, "2657", brokenCover)
+		covers := storedOfKind(svc, game.ID, AssetCover)
+		if len(covers) != 1 || !strings.HasSuffix(covers[0].SourceURL, "/264x374-cover.png") || view.Cover != covers[0].URL {
+			t.Fatalf("covers = %v, view cover %q; want the stored cover carried", sources(covers), view.Cover)
+		}
+		if !view.HeroIsPoster || view.Hero != view.Cover {
+			t.Fatalf("hero %q poster=%v, want the carried cover as the poster", view.Hero, view.HeroIsPoster)
+		}
+	})
 }
