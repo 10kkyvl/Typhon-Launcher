@@ -220,3 +220,25 @@ describe('library cards that carry a source badge before their controls', () => 
     expect(document.activeElement).toBe(play('Celeste'));
   });
 });
+
+describe('a player who moved on before the game left the list', () => {
+  it('keeps focus where the player put it', async () => {
+    libraryGames.set([hades, celeste]);
+    let answer!: () => void;
+    vi.mocked(setHidden).mockImplementationOnce(() => new Promise<LibraryGame>((resolve) => (answer = () => resolve(hades))));
+    render(GameMenuHarness, { target: app });
+
+    const link = await pick(msg('games.actionHide'), 'pointer');
+    await settled();
+    expect(document.activeElement).toBe(link);
+
+    const elsewhere = screen.getByRole('button', { name: 'Outside' });
+    elsewhere.focus();
+    leave();
+    answer();
+    await settled();
+
+    expect(link.isConnected).toBe(false);
+    expect(document.activeElement).toBe(elsewhere);
+  });
+});
