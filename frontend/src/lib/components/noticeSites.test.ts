@@ -195,13 +195,10 @@ const SITES: Record<string, Site[]> = {
   'routes/friends/Friends.svelte': [['info', false]],
   // Downloads held while a game runs: it starts and ends while the page is open.
   'routes/downloads/Downloads.svelte': [['info', true]],
-  // In source order: the downloads and the other versions failed to load (just happened).
-  'routes/game/GameDetails.svelte': [
-    ['danger', true],
-    ['danger', true],
-  ],
-  // The game page's action row: the stored error of the last download and the uninstalled game, shown
-  // on every opening.
+  // The game page, in its parts. The downloads and the other versions failed to load (just happened).
+  'routes/game/GameSections.svelte': [['danger', true]],
+  'routes/game/GameOtherVersions.svelte': [['danger', true]],
+  // The stored error of the last download and the uninstalled game, shown on every opening.
   'routes/game/GameActions.svelte': [
     ['danger', false],
     ['info', false],

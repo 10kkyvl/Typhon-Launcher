@@ -2,98 +2,56 @@
   import Page from '../../lib/components/Page.svelte';
   import { locale } from '../../lib/i18n/locale';
   import { untrack } from 'svelte';
-  import { genreLabel, themeLabel } from '../../lib/metadata/labels';
-  import { FolderOpen } from '@lucide/svelte';
-  import AchievementsCard from '../../lib/components/AchievementsCard.svelte';
   import AddDownloadModal from '../../lib/components/AddDownloadModal.svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
-  import Card from '../../lib/components/Card.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import GameStatusModal from '../../lib/components/GameStatusModal.svelte';
   import GameTagsModal from '../../lib/components/GameTagsModal.svelte';
-  import EmulatorHint from '../../lib/components/EmulatorHint.svelte';
-  import IconButton from '../../lib/components/IconButton.svelte';
   import InstallModal from '../../lib/components/InstallModal.svelte';
   import Lightbox from '../../lib/components/Lightbox.svelte';
   import MetadataMatchModal from '../../lib/components/MetadataMatchModal.svelte';
   import Modal from '../../lib/components/Modal.svelte';
-  import Notice from '../../lib/components/Notice.svelte';
   import ReleaseList from '../../lib/components/ReleaseList.svelte';
-  import SimilarReleases from '../../lib/components/SimilarReleases.svelte';
   import RemoveGameModal from '../../lib/components/RemoveGameModal.svelte';
-  import ReferenceLinks from '../../lib/components/ReferenceLinks.svelte';
-  import SteamExtras from '../../lib/components/SteamExtras.svelte';
-  import StoreLinks from '../../lib/components/StoreLinks.svelte';
-  import StatusBadge from '../../lib/components/StatusBadge.svelte';
-  import SystemRequirements from '../../lib/components/SystemRequirements.svelte';
   import Tabs from '../../lib/components/Tabs.svelte';
-  import TextLink from '../../lib/components/TextLink.svelte';
   import { tabPanel } from '../../lib/components/tabs';
-  import Toggle from '../../lib/components/Toggle.svelte';
-  import UpdateCard from '../../lib/components/UpdateCard.svelte';
-  import VerifyCard from '../../lib/components/VerifyCard.svelte';
+  import type UpdateCard from '../../lib/components/UpdateCard.svelte';
   import GameActions from './GameActions.svelte';
-  import GameFriendsPanel from './GameFriendsPanel.svelte';
   import GamePageHero from './GamePageHero.svelte';
   import GameMetaNotice from './GameMetaNotice.svelte';
-  import GameNotes from './GameNotes.svelte';
-  import GameReviews from './GameReviews.svelte';
   import GameScreenshots from './GameScreenshots.svelte';
-  import ReviewSummary from './ReviewSummary.svelte';
+  import GameSections from './GameSections.svelte';
   import { createGamePageData } from './gamePageData.svelte';
   import { discardDownloadPrompt, removeDownloadPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
-  import { consoleOrigin, firstWebUrl, relationKey, releaseOrigin, sharedPlatform, splitReleases } from '../../lib/game/releases';
+  import { consoleOrigin, firstWebUrl, releaseOrigin, sharedPlatform, splitReleases } from '../../lib/game/releases';
   import { catalogLoadKey, pageTitle, releaseLoadKey, sameGameIds } from '../../lib/game/pageLoad';
-  import { familyIds, showSimilar } from '../../lib/game/similar';
-  import {
-    busyState,
-    clean,
-    facts,
-    galleryShots,
-    cancelFreesDisk,
-    hubAction,
-    onPC,
-    notOnPcBadge,
-    isGameMissing,
-    joinLimited,
-    orderPlatforms,
-    pickHero,
-    summaryView,
-    tagList,
-    type TerminalDownloadStatus,
-  } from '../../lib/game/view';
+  import { busyState, cancelFreesDisk, clean, galleryShots, hubAction, isGameMissing, notOnPcBadge, onPC, pickHero } from '../../lib/game/view';
+  import type { TerminalDownloadStatus } from '../../lib/game/view';
   import { cancelDownload, deleteDownloadData, removeDownload, resumeDownload } from '../../lib/services/downloads';
   import type { Download as DownloadItem, DownloadOrigin, DownloadStatus } from '../../lib/services/downloads';
   import { missingImages, refreshMissingImages } from '../../lib/stores/missingImages';
-  import { openReferenceLink, openStoreLink, type ReferenceKind, type StoreId } from '../../lib/services/metadata';
-  import { referenceKinds, steamFacts } from '../../lib/game/extras';
-  import { openGameFolder } from '../../lib/services/settings';
   import { prepareReleaseDownload, type ReleaseGroup } from '../../lib/services/sources';
   import { getVerifyState } from '../../lib/services/updates';
   import { downloads, statusLabels } from '../../lib/stores/downloads';
-  import { GAME_MAIN_SECTIONS, gameSections, type GameSection } from '../../lib/theme/layout';
+  import { gameSections, type GameSection } from '../../lib/theme/layout';
   import { activeTheme } from '../../lib/stores/theme';
   import { installActive, installStatusLabels, installations } from '../../lib/stores/install';
   import { installIndeterminate } from '../../lib/install/progress';
   import { libraryGames, runningGames } from '../../lib/stores/library';
-  import { emulationPlatform, isEmulated, isInstalledImage, pageGame, platformBadge } from '../../lib/library/emulation';
+  import { emulationPlatform, isEmulated, pageGame } from '../../lib/library/emulation';
   import { externalLabel, isExternal } from '../../lib/library/external';
   import { metadataAvailable } from '../../lib/stores/metadata';
   import { claimAmbient } from '../../lib/stores/ambient';
   import { pageAmbient } from '../../lib/backdrop/source';
   import { navigate } from '../../lib/stores/router';
-  import { openRedist } from '../../lib/stores/redist';
   import { toast } from '../../lib/stores/toasts';
-  import { settings } from '../../lib/stores/settings';
   import { openSaveBackups } from '../../lib/stores/savebackup';
   import { sources } from '../../lib/stores/sources';
   import { stepLabels, updatesByGame, verifications } from '../../lib/stores/updates';
-  import { bytesSize, formatCount, numericDate, playtime, relativeDate, truncateMiddle } from '../../lib/utils/format';
   import { msg } from '../../lib/i18n';
   import { installErrorText } from '../../lib/install/installErrors';
-  import { metadataErrorText } from '../../lib/metadata/metadataErrors';
   import { sourceErrorText } from '../../lib/sources/sourceErrors';
 
   let { id }: { id: string } = $props();
@@ -136,17 +94,6 @@
     updateBadgePopped = true;
     node.classList.add('fresh');
   }
-  const showUpdateCard = $derived(
-    Boolean(
-      update &&
-        (update.availability.available ||
-          update.canRollback ||
-          update.state === 'updating' ||
-          update.state === 'update_downloading' ||
-          update.state === 'update_failed'),
-    ),
-  );
-
 
   let updateCard = $state<UpdateCard | undefined>(undefined);
 
@@ -227,37 +174,6 @@
     });
   });
 
-  const releaseDateLabel = $derived.by(() => {
-    if (!info) return '';
-    if (info.releaseDate) {
-      const date = new Date(info.releaseDate);
-      if (!Number.isNaN(date.getTime())) return numericDate(date);
-    }
-    return info.releaseYear ? String(info.releaseYear) : '';
-  });
-
-  const platforms = $derived(orderPlatforms(info?.platforms));
-
-  const tags = $derived(tagList([info?.genres?.map(genreLabel), info?.themes?.map(themeLabel)]));
-  const summary = $derived(summaryView(info?.summary ?? '', summaryExpanded));
-
-  const gameFacts = $derived(
-    facts([
-      { label: msg('games.detailFactReleaseDate'), value: releaseDateLabel },
-      { label: msg('games.detailFactDeveloper'), value: info?.developer },
-      { label: msg('games.detailFactPublisher'), value: info?.publisher },
-      { label: msg('games.detailFactPlatforms'), value: joinLimited(platforms, 4), full: platforms.join(', ') },
-      ...steamFacts(metaView?.steam, msg, formatCount),
-    ]),
-  );
-
-  const sysreqRevision = $derived(
-    metaView?.steam
-      ? `${metaView.steam.appId}:${metaView.steam.requirements?.minimum?.length ?? 0}:${metaView.steam.requirements?.recommended?.length ?? 0}`
-      : '',
-  );
-  const references = $derived(referenceKinds(data.savePaths, Boolean(canonicalId && title)));
-
   const shotCols = $derived(
     shots.length >= 5 ? 4 : shots.length === 4 ? 2 : Math.max(1, shots.length),
   );
@@ -274,19 +190,6 @@
 
   $effect(() => {
     if (activeTab === 'screenshots' && !hasShotsTab) activeTab = 'overview';
-  });
-
-  const installFacts = $derived.by(() => {
-    if (!localGame || !installed) return [];
-    const exe = localGame.executable.split(/[\\/]/).pop() ?? '';
-    return facts([
-      { label: msg('games.detailFactVersion'), value: localGame.version },
-      { label: msg('games.detailFactSize'), value: localGame.sizeBytes > 0 ? bytesSize(localGame.sizeBytes) : '' },
-      { label: emulated ? msg('emul.factImage') : msg('games.executableLabel'), value: exe, full: localGame.executable, mono: true },
-      { label: msg('games.detailFactPlaytime'), value: playtime(localGame.playtimeSeconds) },
-      { label: msg('games.lastPlayedLabel'), value: relativeDate(localGame.lastPlayed) },
-      { label: msg('games.detailFactAdded'), value: relativeDate(localGame.installedAt) },
-    ]);
   });
 
   const activeDownloadStatuses: DownloadStatus[] = ['queued', 'metadata', 'downloading', 'paused', 'verifying'];
@@ -339,16 +242,6 @@
       .map((item) => ({ ...item, groups: item.groups.filter((group) => group.release.availability !== 'removed') }))
       .filter((item) => item.groups.length > 0),
   );
-  const similarShown = $derived(
-    showSimilar({
-      releasesLoading: data.releasesLoading,
-      releasesFailed: data.releasesFailed,
-      releaseCount: pcGroups.length,
-      relatedSettled: !data.relatedLoading && (data.relatedLoaded || data.relatedFailed),
-      hasGameId: Boolean(canonicalId),
-    }),
-  );
-  const similarFamily = $derived(data.relatedFailed ? [] : familyIds(data.related, canonicalId ?? ''));
   const ownOnPc = $derived(onPC(info?.platforms));
   const relatedOk = $derived(data.relatedLoaded && !data.relatedLoading && !data.relatedFailed);
   const hasPcRelative = $derived(data.related.some((item) => item.onPc));
@@ -404,24 +297,6 @@
       data.createDesktopShortcut();
     } else if (actionId === 'shortcut-remove') {
       data.removeDesktopShortcut();
-    }
-  }
-
-  async function openStore(store: StoreId) {
-    if (!canonicalId) return;
-    try {
-      await openStoreLink(canonicalId, store);
-    } catch (err) {
-      toast(metadataErrorText(err, msg('errMetadata.fallback')), 'danger');
-    }
-  }
-
-  async function openReference(kind: ReferenceKind, appId = 0) {
-    if (!canonicalId) return;
-    try {
-      await openReferenceLink(canonicalId, kind, appId);
-    } catch (err) {
-      toast(metadataErrorText(err, msg('games.detailDlcOpenError')), 'danger');
     }
   }
 
@@ -513,19 +388,6 @@
     if (emulated) void refreshMissingImages();
   });
 
-  async function reveal() {
-    if (!localGame) return;
-    try {
-      await openGameFolder(localGame.installDir, localGame.executable);
-    } catch {
-      toast(msg('games.errorFolderUnavailable'), 'danger');
-    }
-  }
-
-  function scrollToReviews() {
-    document.getElementById('reviews')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-
   const missing = $derived(
     !data.catalogFailed &&
     isGameMissing({
@@ -546,370 +408,15 @@
     primary.kind === 'update' ? ['update'] : primary.kind === 'other-versions' ? ['otherVersions'] : [],
   );
   const columns = $derived(gameSections($activeTheme?.layout, keepSections));
-  const reviewsShown = $derived(columns.main.includes('reviews') || columns.side.includes('reviews'));
-
-  const isMainSection = (id: GameSection) => (GAME_MAIN_SECTIONS as readonly string[]).includes(id);
-  const moved = (id: GameSection) => columns.main.includes(id) !== isMainSection(id);
-  const part = (id: GameSection) => ({ 'data-part': 'game-section', 'data-id': id });
 </script>
 
-{#snippet sec_summary()}
-  {#if summary.text || !title || data.metaState === 'searching'}
-    <div class="gsec" class:moved={moved('summary')} {...part('summary')}>
-      {#if summary.text}
-        <p class="summary" id="{uid}-summary">{summary.text}</p>
-        {#if summary.expandable}
-          <div class="more">
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-expanded={summaryExpanded}
-              aria-controls="{uid}-summary"
-              onclick={() => (summaryExpanded = !summaryExpanded)}
-            >
-              {summaryExpanded ? msg('games.detailCollapseSummary') : msg('games.detailExpandSummary')}
-            </Button>
-          </div>
-        {/if}
-      {:else if !title || data.metaState === 'searching'}
-        <div aria-hidden="true">
-          <div class="skeleton line"></div>
-          <div class="skeleton line"></div>
-          <div class="skeleton line short"></div>
-        </div>
-      {/if}
-    </div>
-  {/if}
-{/snippet}
-
-{#snippet sec_tags()}
-  {#if tags.length > 0}
-    <div class="gsec" class:moved={moved('tags')} {...part('tags')}>
-      {#if tags.length > 0}
-        <div class="tags">
-          {#each tags as tag (tag)}
-            <StatusBadge kind="neutral" label={tag} dot={false} />
-          {/each}
-        </div>
-      {/if}
-    </div>
-  {/if}
-{/snippet}
-
-{#snippet sec_links()}
-  {#if true}
-    <div class="gsec" class:moved={moved('links')} {...part('links')}>
-      <div class="stores">
-        <StoreLinks links={metaView?.storeLinks} onopen={openStore} />
-        <ReferenceLinks kinds={references} onopen={(kind) => openReference(kind)} />
-      </div>
-    </div>
-  {/if}
-{/snippet}
-
-{#snippet sec_update()}
-  {#if showUpdateCard && update}
-    <div class="gsec" class:moved={moved('update')} {...part('update')}>
-      {#if showUpdateCard && update}
-        <section class="section">
-          <UpdateCard bind:this={updateCard} {update} {running} />
-        </section>
-      {/if}
-    </div>
-  {/if}
-{/snippet}
-
-{#snippet sec_install()}
-  {#if installed && localGame}
-    <div class="gsec" class:moved={moved('install')} {...part('install')}>
-      {#if installed && localGame}
-        {#if managed}
-          <section class="section">
-            <VerifyCard gameId={localGame.id} state={verifyState} {running} />
-          </section>
-        {/if}
-
-        <section class="section">
-          <h2 class="heading">{msg('games.detailInstallHeading')}</h2>
-          {#if external}
-            <p class="muted">{msg('games.externalNote', { provider: externalName })}</p>
-          {:else if emulated}
-            <p class="muted">{msg(isInstalledImage(localGame) ? 'emul.gameNoteOwned' : 'emul.gameNote', { console: platformBadge(emulatedPlatform) })}</p>
-            <EmulatorHint platform={emulatedPlatform} game={localGame} />
-          {/if}
-          <div class="path">
-            <span class="path-value" title={localGame.installDir}>{truncateMiddle(localGame.installDir, 34)}</span>
-            <IconButton label={msg('games.openFolder')} size="sm" onclick={reveal}>
-              <FolderOpen size="1.6rem" strokeWidth={1.8} />
-            </IconButton>
-          </div>
-          <dl class="facts">
-            {#each installFacts as fact (fact.label)}
-              <div class="fact">
-                <dt>{fact.label}</dt>
-                <dd class:mono={fact.mono} title={fact.full ?? undefined}>{fact.value}</dd>
-              </div>
-            {/each}
-          </dl>
-          {#if emulated}
-            <div class="redist-row">
-              {#if imageMissing}
-                <Button size="sm" disabled={data.imageBusy} onclick={data.chooseImage}>{msg('emul.pickImage')}</Button>
-              {/if}
-              <Button size="sm" disabled={data.imageBusy} onclick={data.findCover}>{msg('emul.coverFind')}</Button>
-            </div>
-          {:else}
-            <div class="redist-row">
-              <Button size="sm" onclick={() => openRedist(localGame.id)}>{msg('redist.action')}</Button>
-            </div>
-          {/if}
-          {#if data.wineStatus?.required && !emulated}
-            <div class="steam-row">
-              <div class="steam-row-text">
-                <span class="steam-row-label" id="{uid}-detail-steam-bottle-label">{msg('games.detailSteamBottleLabel')}</span>
-                <span class="steam-row-hint" id="{uid}-detail-steam-bottle-sub">{msg('games.detailSteamBottleHint')}</span>
-              </div>
-              <Toggle
-                checked={data.requiresSteam}
-                labelledby="{uid}-detail-steam-bottle-label"
-                describedby="{uid}-detail-steam-bottle-sub"
-                disabled={data.requiresSteamSaving}
-                onchange={(on) => {
-                  data.requiresSteam = on;
-                  void data.toggleRequiresSteam(on);
-                }}
-              />
-            </div>
-          {/if}
-        </section>
-      {/if}
-    </div>
-  {/if}
-{/snippet}
-
-{#snippet releasesFailedNotice()}
-  {#if data.releasesFailed || releasesRetrying}
-    <Notice
-      tone="danger"
-      bind:retrying={releasesRetrying}
-      retry={{ label: msg('games.catalogRetry'), run: data.retryReleases, within: () => releasesBox }}
-    >
-      {msg('games.detailReleasesFailed')}
-    </Notice>
-  {/if}
-{/snippet}
-
-{#snippet sec_requirements(withReleases: boolean)}
-  {#if (catalogGame || localGame) && managed}
-    <div class="gsec" class:moved={moved('requirements')} {...part('requirements')}>
-      <section class="section">
-        <h2 class="heading">{msg('games.detailAvailableDownloadsHeading')}</h2>
-        {#if canonicalId}
-          <SystemRequirements gameId={canonicalId} installPath={$settings?.gamesPath ?? ''} {installed} revision={sysreqRevision} />
-        {/if}
-        {#if withReleases}
-          {@render releasesFailedNotice()}
-          {#if !data.releasesLoading && !data.releasesFailed && data.releaseGroups.length === 0}<EmptyState size="inline" title={msg('games.detailNoReleases')} />{/if}
-          <div bind:this={releasesBox}>
-            <ReleaseList
-              groups={data.releaseGroups}
-              loading={data.releasesLoading}
-              currentReleaseId={localGame?.releaseId ?? ''}
-              targetReleaseId={updateAvailable ? (update?.availability.targetReleaseId ?? '') : ''}
-              updateKind={updateAvailable ? (update?.availability.kind ?? 'none') : 'none'}
-              ondownload={downloadRelease}
-            />
-          </div>
-        {/if}
-      </section>
-    </div>
-  {/if}
-{/snippet}
-
-{#snippet sec_releases()}
-  {#if (catalogGame || localGame) && managed}
-    <div class="gsec" class:moved={moved('releases')} {...part('releases')}>
-      <section class="section">
-        <h2 class="heading">{msg('games.detailAvailableDownloadsHeading')}</h2>
-        {@render releasesFailedNotice()}
-        {#if !data.releasesLoading && !data.releasesFailed && data.releaseGroups.length === 0}<EmptyState size="inline" title={msg('games.detailNoReleases')} />{/if}
-        <div bind:this={releasesBox}>
-          <ReleaseList
-            groups={data.releaseGroups}
-            loading={data.releasesLoading}
-            currentReleaseId={localGame?.releaseId ?? ''}
-            targetReleaseId={updateAvailable ? (update?.availability.targetReleaseId ?? '') : ''}
-            updateKind={updateAvailable ? (update?.availability.kind ?? 'none') : 'none'}
-            ondownload={downloadRelease}
-          />
-        </div>
-      </section>
-    </div>
-  {/if}
-{/snippet}
-
-{#snippet sec_similar()}
-  {#if (catalogGame || localGame) && managed && similarShown && canonicalId}
-    <div class="gsec" class:moved={moved('similar')} {...part('similar')}>
-      {#if similarShown && canonicalId}
-        <SimilarReleases
-          gameId={canonicalId}
-          familyIds={similarFamily}
-          onlinked={() => {
-            data.loadReleases(canonicalId, releaseTitle);
-            data.loadRelated(canonicalId);
-          }}
-        />
-      {/if}
-    </div>
-  {/if}
-{/snippet}
-
-{#snippet sec_otherVersions()}
-  {#if (catalogGame || localGame) && managed && (relatedShown.length > 0 || ((data.relatedFailed || relatedRetrying) && availableGroups.length === 0))}
-    <div class="gsec" class:moved={moved('otherVersions')} {...part('otherVersions')}>
-      {#if relatedShown.length > 0 || ((data.relatedFailed || relatedRetrying) && availableGroups.length === 0)}
-        <section class="section" bind:this={otherVersionsEl}>
-          <h2 class="heading">{msg('games.otherVersionsHeading')}</h2>
-          {#if data.relatedFailed || relatedRetrying}
-            <Notice
-              tone="danger"
-              bind:retrying={relatedRetrying}
-              retry={{ label: msg('games.catalogRetry'), run: data.retryRelated, within: () => otherVersionsEl }}
-            >
-              {msg('games.otherVersionsFailed')}
-            </Notice>
-          {:else}
-            {#if availableGroups.length === 0 && !data.releasesLoading && !data.releasesFailed}
-              <p class="muted">{msg('games.otherVersionsHint')}</p>
-            {/if}
-            {#each relatedShown as item (item.game.id)}
-              {@const localId = item.gameId}
-              <div class="related">
-                <div class="related-head">
-                  {#if item.game.coverUrl}
-                    <span class="related-cover">
-                      <Artwork src={item.game.coverUrl} alt={item.game.title} ratio="3 / 4" radius="var(--radius-sm)" />
-                    </span>
-                  {/if}
-                  <div class="related-ident">
-                    {#if localId}
-                      <span class="related-title"><TextLink onclick={() => navigate('game', { id: localId })}>{item.game.title}</TextLink></span>
-                    {:else}
-                      <span class="related-title">{item.game.title}</span>
-                    {/if}
-                    <div class="related-meta">
-                      <StatusBadge kind="neutral" label={msg(relationKey(item.game.relation))} dot={false} />
-                      {#if item.game.releaseYear}<span class="related-year">{item.game.releaseYear}</span>{/if}
-                      {#if !item.onPc}<StatusBadge kind="neutral" label={msg('games.otherVersionsNotPc')} dot={false} />{/if}
-                    </div>
-                  </div>
-                </div>
-                <ReleaseList groups={item.groups} ondownload={downloadRelease} />
-              </div>
-            {/each}
-          {/if}
-        </section>
-      {/if}
-    </div>
-  {/if}
-{/snippet}
-
-{#snippet sec_notes()}
-  {#if localGame}
-    <div class="gsec" class:moved={moved('notes')} {...part('notes')}>
-      {#if localGame}
-        {#key localGame.id}
-          <GameNotes gameId={localGame.id} stored={localGame.notes ?? ''} />
-        {/key}
-      {/if}
-    </div>
-  {/if}
-{/snippet}
-
-{#snippet sec_steamExtras()}
-  {#if true}
-    <div class="gsec" class:moved={moved('steamExtras')} {...part('steamExtras')}>
-      <SteamExtras steam={metaView?.steam} onopendlc={(appId) => openReference('steamdlc', appId)} />
-    </div>
-  {/if}
-{/snippet}
-
-{#snippet sec_reviews()}
-  {#if !emulated}
-    <div class="gsec" class:moved={moved('reviews')} {...part('reviews')}>
-      <GameReviews canonicalGameId={canonicalId ?? ''} />
-    </div>
-  {/if}
-{/snippet}
-
-{#snippet sec_about()}
-  {#if gameFacts.length > 0}
-    <div class="gsec" class:moved={moved('about')} {...part('about')}>
-      {#if gameFacts.length > 0}
-        <Card title={msg('games.detailAboutTitle')} surface="panel" padding="md-even">
-          <dl class="facts about">
-            {#each gameFacts as fact (fact.label)}
-              <div class="fact">
-                <dt>{fact.label}</dt>
-                <dd class:mono={fact.mono} title={fact.full ?? undefined}>{fact.value}</dd>
-              </div>
-            {/each}
-          </dl>
-        </Card>
-      {/if}
-    </div>
-  {/if}
-{/snippet}
-
-{#snippet sec_achievements()}
-  {#if localGame}
-    <div class="gsec" class:moved={moved('achievements')} {...part('achievements')}>
-      {#if localGame}
-        <AchievementsCard gameId={localGame.id} />
-      {/if}
-    </div>
-  {/if}
-{/snippet}
-
-{#snippet sec_reviewSummary()}
-  {#if !emulated}
-    <div class="gsec" class:moved={moved('reviewSummary')} {...part('reviewSummary')}>
-      <ReviewSummary canonicalGameId={canonicalId ?? ''} onopen={reviewsShown ? scrollToReviews : undefined} />
-    </div>
-  {/if}
-{/snippet}
-
-{#snippet sec_friends()}
-  {#if !emulated}
-    <div class="gsec" class:moved={moved('friends')} {...part('friends')}>
-      <GameFriendsPanel canonicalGameId={canonicalId ?? ''} />
-    </div>
-  {/if}
-{/snippet}
-
 {#snippet column(ids: GameSection[])}
-  {#each ids as id, i (id)}
-    {#if !(id === 'releases' && ids[i - 1] === 'requirements') && (activeTab !== 'screenshots' || !isMainSection(id))}
-      {#if id === 'summary'}{@render sec_summary()}
-      {:else if id === 'tags'}{@render sec_tags()}
-      {:else if id === 'links'}{@render sec_links()}
-      {:else if id === 'update'}{@render sec_update()}
-      {:else if id === 'install'}{@render sec_install()}
-      {:else if id === 'requirements'}{@render sec_requirements(ids[i + 1] === 'releases')}
-      {:else if id === 'releases'}{@render sec_releases()}
-      {:else if id === 'similar'}{@render sec_similar()}
-      {:else if id === 'otherVersions'}{@render sec_otherVersions()}
-      {:else if id === 'notes'}{@render sec_notes()}
-      {:else if id === 'steamExtras'}{@render sec_steamExtras()}
-      {:else if id === 'reviews'}{@render sec_reviews()}
-      {:else if id === 'about'}{@render sec_about()}
-      {:else if id === 'achievements'}{@render sec_achievements()}
-      {:else if id === 'reviewSummary'}{@render sec_reviewSummary()}
-      {:else if id === 'friends'}{@render sec_friends()}
-      {/if}
-    {/if}
-  {/each}
+  <GameSections
+    {ids} {data} {uid} {activeTab} {columns} {info} {title} {canonicalId} {releaseTitle} {localGame} {installed} {running}
+    {managed} {external} {externalName} {emulated} {emulatedPlatform} {imageMissing} {verifyState} {update} {updateAvailable}
+    {pcGroups} {availableGroups} {relatedShown} {downloadRelease}
+    bind:summaryExpanded bind:updateCard bind:releasesRetrying bind:releasesBox bind:relatedRetrying bind:otherVersionsEl
+  />
 {/snippet}
 
 {#snippet hero()}
@@ -1051,111 +558,8 @@
     min-width: 0;
   }
 
-  .main > :first-child,
-  .main > .gsec:first-child > :global(:first-child) {
+  .main > :first-child {
     margin-top: 0;
-  }
-
-  .gsec:empty {
-    display: none;
-  }
-
-  .main > .gsec.moved:not(:first-child) {
-    max-width: 60rem;
-    margin-top: var(--space-8);
-  }
-
-  .main > .gsec.moved {
-    max-width: 60rem;
-  }
-
-  .side > .gsec {
-    min-width: 0;
-  }
-
-  .side > .gsec.moved > :global(:first-child) {
-    margin-top: 0;
-  }
-
-  .side > .gsec.moved {
-    overflow-x: auto;
-    overflow-wrap: anywhere;
-  }
-
-  .summary {
-    max-width: var(--prose-max);
-    font-size: var(--font-md);
-    line-height: 1.65;
-    color: var(--text-2);
-    white-space: pre-line;
-  }
-
-  .more {
-    margin-top: 1rem;
-  }
-
-  .tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.6rem;
-    margin-top: var(--space-5);
-  }
-
-  .stores {
-    margin-top: var(--space-5);
-  }
-
-  .section {
-    margin-top: var(--space-10);
-  }
-
-  .related {
-    margin-bottom: var(--space-8);
-  }
-
-  .related-head {
-    display: flex;
-    align-items: center;
-    gap: var(--space-4);
-    margin-bottom: var(--space-4);
-  }
-
-  .related-cover {
-    display: block;
-    width: 6rem;
-    flex-shrink: 0;
-  }
-
-  .related-ident {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-    min-width: 0;
-  }
-
-  .related-title {
-    font-size: var(--font-md);
-    font-weight: 600;
-    text-align: left;
-  }
-
-  .related-meta {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  .related-year {
-    font-size: var(--font-sm);
-    color: var(--text-muted);
-  }
-
-  .heading {
-    font-size: var(--font-xl);
-    font-weight: 600;
-    letter-spacing: var(--tracking-heading);
-    margin-bottom: var(--space-4);
   }
 
   .shots {
@@ -1194,110 +598,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-8);
-  }
-
-  .path {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    margin-bottom: var(--space-2);
-  }
-
-  .path-value {
-    flex: 1;
-    min-width: 0;
-    font-size: var(--font-xs);
-    color: var(--text-2);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .facts {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .fact {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: var(--space-4);
-    padding: 0.9rem 0;
-    border-top: 1px solid var(--border);
-  }
-
-  .about .fact:last-child {
-    padding-bottom: 0;
-  }
-
-  .redist-row {
-    display: flex;
-    padding-top: var(--space-3);
-    border-top: 1px solid var(--border);
-  }
-
-  .steam-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-4);
-    padding: 0.9rem 0;
-    border-top: 1px solid var(--border);
-  }
-
-  .steam-row-text {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-  }
-
-  .steam-row-label {
-    font-size: var(--font-sm);
-    color: var(--text);
-  }
-
-  .steam-row-hint {
-    font-size: var(--font-xs);
-    color: var(--text-3);
-  }
-
-  dt {
-    font-size: var(--font-xs);
-    color: var(--text-3);
-    white-space: nowrap;
-  }
-
-  dd {
-    font-size: var(--font-sm);
-    color: var(--text);
-    min-width: 0;
-    text-align: right;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-variant-numeric: tabular-nums;
-  }
-
-  dd.mono {
-    font-size: var(--font-xs);
-    color: var(--text-2);
-  }
-
-  .skeleton {
-    background: var(--surface-3);
-    animation: loading-breathe 1.6s ease-in-out 3;
-    border-radius: var(--radius-sm);
-  }
-
-  .line {
-    height: 1.6rem;
-    margin-bottom: 1rem;
-    max-width: var(--prose-max);
-  }
-
-  .line.short {
-    width: 40%;
   }
 
   @media (max-width: 1400px) {
