@@ -73,7 +73,7 @@ const ALLOWED: Record<string, Record<string, Kind>> = {
   'routes/friends/AddFriendModal.svelte': { preview: 'row' },
   'routes/friends/FriendCodeCard.svelte': { code: 'copies itself' },
   'routes/friends/FriendRow.svelte': { who: 'row' },
-  'routes/game/GameDetails.svelte': { shot: 'thumbnail' },
+  'routes/game/GameShots.svelte': { shot: 'thumbnail' },
   'routes/game/GameFriendsPanel.svelte': { who: 'row' },
   'routes/game/GameScreenshots.svelte': { thumb: 'thumbnail' },
   'routes/game/ReportReviewModal.svelte': { reason: 'list option' },

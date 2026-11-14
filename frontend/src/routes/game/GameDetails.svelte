@@ -2,7 +2,6 @@
   import Page from '../../lib/components/Page.svelte';
   import { locale } from '../../lib/i18n/locale';
   import { tick, untrack } from 'svelte';
-  import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
@@ -13,6 +12,7 @@
   import GameDialogs from './GameDialogs.svelte';
   import GamePageHero from './GamePageHero.svelte';
   import GameMetaNotice from './GameMetaNotice.svelte';
+  import GameShots from './GameShots.svelte';
   import CloudConflictBanner from '../../lib/components/CloudConflictBanner.svelte';
   import GameSaves from '../../lib/components/GameSaves.svelte';
   import GameScreenshots from './GameScreenshots.svelte';
@@ -191,10 +191,6 @@
       lightboxIndex = at >= 0 ? at : Math.min(lightboxIndex, Math.max(0, next.length - 1));
     });
   });
-
-  const shotCols = $derived(
-    shots.length >= 5 ? 4 : shots.length === 4 ? 2 : Math.max(1, shots.length),
-  );
 
   let activeTab = $state('overview');
 
@@ -488,18 +484,7 @@
           {#if localGame && ownShots}
             <GameScreenshots gameId={localGame.id} {title} />
           {/if}
-          <div
-            class="shots"
-            class:featured={shots.length >= 5}
-            class:one={shots.length === 1}
-            style:--cols={shotCols}
-          >
-            {#each shots as shot, index (shot.id)}
-              <button class="shot" onclick={() => openShot(index)} aria-label={msg('games.detailOpenScreenshotLabel')}>
-                <Artwork src={shot.url ?? ''} alt="" ratio="16 / 9" radius="var(--radius-sm)" />
-              </button>
-            {/each}
-          </div>
+          <GameShots {shots} onopen={openShot} />
           {@render column(columns.main)}
         {:else if activeTab === 'saves' && localGame}
           <GameSaves gameId={localGame.id} />
@@ -543,41 +528,6 @@
     min-width: 0;
   }
 
-  .main > :first-child {
-    margin-top: 0;
-  }
-
-  .shots {
-    display: grid;
-    grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
-    gap: var(--space-3);
-  }
-
-  .shots.one {
-    max-width: 72rem;
-  }
-
-  .shot {
-    display: block;
-    width: 100%;
-    aspect-ratio: 16 / 9;
-    border-radius: var(--radius-sm);
-    overflow: hidden;
-    transition:
-      transform var(--dur) var(--ease),
-      opacity var(--dur) var(--ease);
-  }
-
-  .shot:hover {
-    transform: translateY(-2px);
-    opacity: 0.92;
-  }
-
-  .shots.featured .shot:first-child {
-    grid-column: span 2;
-    grid-row: span 2;
-  }
-
   .side {
     min-width: 0;
     display: flex;
@@ -600,25 +550,6 @@
 
     .side > :global(*) {
       flex: 1 1 32rem;
-    }
-
-    .shots {
-      grid-template-columns: repeat(auto-fill, minmax(28rem, 1fr));
-    }
-
-    .shots.featured {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-  }
-
-  @media (max-width: 1200px) {
-    .shots,
-    .shots.featured {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .shots.featured .shot:first-child {
-      grid-row: span 1;
     }
   }
 </style>
