@@ -78,7 +78,7 @@
       {#if initials}<span class="letters" aria-hidden="true">{initials}</span>{/if}
     </div>
   {:else}
-    <div class="tile" role={alt ? 'img' : undefined} aria-label={alt || undefined}>
+    <div class="plain" role={alt ? 'img' : undefined} aria-label={alt || undefined}>
       <span aria-hidden="true">{initials || '?'}</span>
     </div>
   {/if}
@@ -134,7 +134,7 @@
     text-shadow: var(--art-text-shadow);
   }
 
-  .tile {
+  .plain {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -150,7 +150,7 @@
     container-type: inline-size;
   }
 
-  .tile span {
+  .plain span {
     font-size: clamp(1.2rem, 22cqw, 3.2rem);
   }
 </style>
