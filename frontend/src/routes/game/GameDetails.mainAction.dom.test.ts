@@ -215,6 +215,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  locale.set('ru');
   vi.mocked(getMetadataView).mockReset();
   vi.mocked(getCatalogGame).mockReset();
   // A page left from a test can still ask after it: answer with nothing, not undefined.
