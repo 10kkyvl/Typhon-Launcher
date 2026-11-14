@@ -347,4 +347,37 @@ describe('GameSaves: another game in the same view', () => {
     expect(screen.queryAllByRole('listitem')).toHaveLength(0);
     expect(screen.queryByRole('alert')).toBeNull();
   });
+
+  it('drops the folder a choice of the previous game finds after the switch', async () => {
+    const chosen = deferred<string>();
+    vi.mocked(selectFolder).mockReturnValue(chosen.promise);
+    vi.mocked(locateSaves).mockImplementation(async (id) => found(`C:/Saves/${id}`));
+    const { user, rerender } = renderDom(GameSaves, { gameId: 'g1' });
+    await user.click(await screen.findByRole('button', { name: msg('saves.change') }));
+
+    await rerender({ gameId: 'g2' });
+    expect(await screen.findByText('C:/Saves/g2')).toBeTruthy();
+    chosen.resolve('D:/Saves/Hades');
+    await settle();
+
+    expect(screen.getByText('C:/Saves/g2')).toBeTruthy();
+    expect(screen.queryByText('C:/Saves/g1')).toBeNull();
+    expect(vi.mocked(locateSaves).mock.calls.map(([id]) => id)).toEqual(['g1', 'g2']);
+  });
+
+  it('drops the failure of a cloud action of the previous game after the switch', async () => {
+    cloudOn();
+    cloudStatus.set(statusWith(cloudGame({ state: 'synced' }), cloudGame({ gameId: 'g2', state: 'synced' })));
+    const syncing = deferred<void>();
+    vi.mocked(cloudSyncNow).mockReturnValue(syncing.promise);
+    const { user, rerender } = renderDom(GameSaves, { gameId: 'g1' });
+    await user.click(within(cloudSection()).getByRole('button', { name: msg('cloudsaves.syncNow') }));
+
+    await rerender({ gameId: 'g2' });
+    syncing.reject(new Error('typhon:cloud.quota'));
+    await settle();
+
+    expect(within(cloudSection()).queryByRole('alert')).toBeNull();
+    expect(within(cloudSection()).getByRole('button', { name: msg('cloudsaves.syncNow') }).hasAttribute('aria-busy')).toBe(false);
+  });
 });
