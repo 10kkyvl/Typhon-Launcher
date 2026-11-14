@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -36,7 +37,17 @@ func metadataCodesIn(t *testing.T, pattern *regexp.Regexp, paths ...string) []st
 // Коды ошибок — контракт между Go и интерфейсом: переименование с одной
 // стороны не ломает сборку, а тихо возвращает пользователю запасной текст.
 func TestErrorCodesMatchTheFrontendTable(t *testing.T) {
-	goCodes := metadataCodesIn(t, metadataGoCodePattern, "service.go", "provider.go", "store.go", "attempts.go", "storelinks.go", "savepaths.go", "reflinks.go")
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatalf("список файлов пакета: %v", err)
+	}
+	var sources []string
+	for _, file := range files {
+		if !strings.HasSuffix(file, "_test.go") {
+			sources = append(sources, file)
+		}
+	}
+	goCodes := metadataCodesIn(t, metadataGoCodePattern, sources...)
 	if len(goCodes) < 10 {
 		t.Fatalf("в пакете найдено %d кодов, ожидалось не меньше 10", len(goCodes))
 	}
