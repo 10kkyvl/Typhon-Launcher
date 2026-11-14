@@ -1,6 +1,6 @@
 import type { MessageKey } from '../i18n';
 import type { DownloadOrigin } from '../services/downloads';
-import type { Release, ReleaseDownloadRequest, RelatedRelation } from '../services/sources';
+import type { RelatedReleases, Release, ReleaseDownloadRequest, RelatedRelation } from '../services/sources';
 import type { AvailabilityKind } from '../services/updates';
 
 export function releaseOrigin(request: ReleaseDownloadRequest): DownloadOrigin {
@@ -194,4 +194,27 @@ export function consoleOrigin(
     ...(art ? { cover: art } : {}),
     ...(pageGameId ? { gameId: pageGameId } : {}),
   };
+}
+
+/** The game a release row belongs to: a download from the row is recorded under it. */
+export interface ReleaseOwner {
+  gameId: string;
+  title: string;
+  cover: string;
+}
+
+/**
+ * A row of "Other versions" belongs to that version, not to the page that lists it. Without a local
+ * catalog id the release's own game, the one Go answers in the download request, is kept.
+ */
+export function relatedOwner(item: Pick<RelatedReleases, 'game' | 'gameId'>): ReleaseOwner {
+  return { gameId: item.gameId ?? '', title: item.game.title, cover: item.game.coverUrl ?? '' };
+}
+
+export function releaseDownloadOrigin(
+  request: ReleaseDownloadRequest,
+  release: Pick<Release, 'platform' | 'title'>,
+  owner: ReleaseOwner,
+): DownloadOrigin {
+  return { ...releaseOrigin(request), ...consoleOrigin(release, owner.title, owner.cover, owner.gameId) };
 }

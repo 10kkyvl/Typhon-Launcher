@@ -17,7 +17,7 @@
   import GameSections from './GameSections.svelte';
   import { createGamePageData } from './gamePageData.svelte';
   import { discardDownloadPrompt, removeDownloadPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
-  import { consoleOrigin, firstWebUrl, releaseOrigin, sharedPlatform, splitReleases } from '../../lib/game/releases';
+  import { firstWebUrl, releaseDownloadOrigin, sharedPlatform, splitReleases, type ReleaseOwner } from '../../lib/game/releases';
   import { catalogLoadKey, pageTitle, releaseLoadKey, sameGameIds } from '../../lib/game/pageLoad';
   import { busyState, cancelFreesDisk, clean, galleryShots, hubAction, isGameMissing, notOnPcBadge, onPC, pickHero } from '../../lib/game/view';
   import { activeDownload, activeInstall, gameDownloads, gameInstalls, ownsDownload as ownsGameDownload, terminalDownload as newestTerminalDownload } from '../../lib/game/transfers';
@@ -356,11 +356,11 @@
     }
   }
 
-  async function downloadRelease(group: ReleaseGroup) {
+  async function downloadRelease(group: ReleaseGroup, owner: ReleaseOwner = { gameId: canonicalId ?? '', title, cover: catalogCover }) {
     try {
       const request = await prepareReleaseDownload(group.release.id);
       downloadSource = request.uri;
-      downloadOrigin = { ...releaseOrigin(request), ...consoleOrigin(group.release, title, catalogCover, canonicalId ?? '') };
+      downloadOrigin = releaseDownloadOrigin(request, group.release, owner);
       downloadModalOpen = true;
     } catch (err) {
       toast(sourceErrorText(err, msg('games.detailPrepareDownloadError')), 'danger');

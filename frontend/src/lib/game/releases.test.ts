@@ -7,6 +7,8 @@ import {
   orderReleases,
   relationKey,
   releaseBadge,
+  relatedOwner,
+  releaseDownloadOrigin,
   releaseOrigin,
   repackNote,
   sharedPlatform,
@@ -212,6 +214,51 @@ describe('console releases', () => {
 
   it('adds nothing to the origin of a PC release', () => {
     expect(consoleOrigin({ title: 'Raw' }, 'Game', 'https://img/c.jpg')).toEqual({});
+  });
+});
+
+describe('the origin of a download from a release row', () => {
+  const request = { uri: 'magnet:?xt=urn:btih:abc', name: 'Raw', releaseId: 'r1', sourceId: 's1', gameId: 'B-alias' };
+  const ps2 = { platform: 'ps2' as const, title: 'Raw' };
+  const original = {
+    game: { id: 'server-b', title: 'Game B', relation: 'original' as const, coverUrl: 'https://img/b.jpg' },
+    gameId: 'B',
+  };
+
+  it("records the page's own console row under the page's game", () => {
+    expect(releaseDownloadOrigin(request, ps2, { gameId: 'A', title: 'Game A', cover: 'https://img/a.jpg' })).toEqual({
+      releaseId: 'r1',
+      sourceId: 's1',
+      gameId: 'A',
+      platform: 'ps2',
+      title: 'Game A',
+      cover: 'https://img/a.jpg',
+    });
+  });
+
+  it('records a console row of another version under that version, its title and cover', () => {
+    expect(releaseDownloadOrigin(request, ps2, relatedOwner(original))).toEqual({
+      releaseId: 'r1',
+      sourceId: 's1',
+      gameId: 'B',
+      platform: 'ps2',
+      title: 'Game B',
+      cover: 'https://img/b.jpg',
+    });
+  });
+
+  it("keeps the release's own game for another version the local catalog does not know", () => {
+    const origin = releaseDownloadOrigin(request, ps2, relatedOwner({ game: original.game }));
+    expect(origin.gameId).toBe('B-alias');
+    expect(origin.title).toBe('Game B');
+  });
+
+  it('records a PC row of another version under the game Go answers for the release', () => {
+    expect(releaseDownloadOrigin(request, { title: 'Raw' }, relatedOwner(original))).toEqual({
+      releaseId: 'r1',
+      sourceId: 's1',
+      gameId: 'B-alias',
+    });
   });
 });
 

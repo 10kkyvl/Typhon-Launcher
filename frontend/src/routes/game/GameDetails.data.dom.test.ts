@@ -11,6 +11,7 @@ import {
   getReleasesForGame,
   prepareReleaseDownload,
   type CatalogGame,
+  type RelatedReleases,
   type Release,
   type ReleaseGroup,
 } from '../../lib/services/sources';
@@ -145,5 +146,22 @@ describe('GameDetails: whose game a console download from the page is', () => {
     const origin = await downloadFrom(list, user);
 
     expect(origin).toMatchObject({ gameId: 'c1', title: 'Hades', cover: 'https://img/hades.jpg', platform: 'ps2', releaseId: 'own' });
+  });
+
+  it('records a console release of another version under that version, its title and cover', async () => {
+    const original: RelatedReleases = {
+      game: { id: 'server-2', title: 'Hades PS2', relation: 'original', coverUrl: 'https://img/ps2.jpg' },
+      gameId: 'c2',
+      onPc: false,
+      groups: [group({ id: 'other', platform: 'ps2', canonicalGameId: 'c2' })],
+    };
+    vi.mocked(getRelatedReleases).mockResolvedValue([original]);
+    vi.mocked(prepareReleaseDownload).mockResolvedValue({ uri: 'magnet:?xt=urn:btih:other', name: 'Raw', releaseId: 'other', sourceId: 'fixture', gameId: 'c2' });
+    const { user } = renderDom(GameDetails, { id: 'c1' });
+    const section = (await screen.findByRole('heading', { level: 2, name: msg('games.otherVersionsHeading') })).closest('section') as HTMLElement;
+
+    const origin = await downloadFrom(section, user);
+
+    expect(origin).toMatchObject({ gameId: 'c2', title: 'Hades PS2', cover: 'https://img/ps2.jpg', platform: 'ps2', releaseId: 'other' });
   });
 });

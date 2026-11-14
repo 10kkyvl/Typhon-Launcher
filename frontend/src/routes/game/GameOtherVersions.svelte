@@ -5,7 +5,7 @@
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import TextLink from '../../lib/components/TextLink.svelte';
   import type { GamePageData } from './gamePageData.svelte';
-  import { relationKey } from '../../lib/game/releases';
+  import { relatedOwner, relationKey, type ReleaseOwner } from '../../lib/game/releases';
   import { msg } from '../../lib/i18n';
   import type { RelatedReleases, ReleaseGroup } from '../../lib/services/sources';
   import { navigate } from '../../lib/stores/router';
@@ -22,7 +22,7 @@
     data: GamePageData;
     relatedShown: RelatedReleases[];
     availableGroups: ReleaseGroup[];
-    downloadRelease: (group: ReleaseGroup) => void;
+    downloadRelease: (group: ReleaseGroup, owner?: ReleaseOwner) => void;
     relatedRetrying: boolean;
     otherVersionsEl: HTMLElement | null;
   } = $props();
@@ -64,7 +64,7 @@
             </div>
           </div>
         </div>
-        <ReleaseList groups={item.groups} ondownload={downloadRelease} />
+        <ReleaseList groups={item.groups} ondownload={(group) => downloadRelease(group, relatedOwner(item))} />
       </div>
     {/each}
   {/if}
