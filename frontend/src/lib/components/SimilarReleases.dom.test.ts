@@ -4,7 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { confirmMatch, similarReleases, type Release, type SimilarRelease } from '../services/sources';
 import { toasts } from '../stores/toasts';
+import { focusableIn } from '../layers/focus';
 import { user } from '../testing/dom';
+import { description } from '../testing/hints';
 import SimilarReleases from './SimilarReleases.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
@@ -208,5 +210,28 @@ describe('SimilarReleases: retrying a failed load', () => {
 
     await keys.keyboard('{Enter}');
     await vi.waitFor(() => expect(similarReleases).toHaveBeenCalledTimes(3));
+  });
+});
+
+describe("SimilarReleases: a release's full name", () => {
+  it('is the hint of its Link, not a native title, and adds no Tab stop', async () => {
+    vi.mocked(similarReleases).mockResolvedValue([similar('r1', 'Hades')]);
+    renderBlock();
+    const link = await screen.findByRole('button', linkName);
+
+    expect(page.querySelector('[title]')).toBeNull();
+    expect(description(link)).toBe('Hades [repack]');
+    expect(focusableIn(page)).toEqual([link]);
+  });
+
+  it('is no hint when the row already shows it', async () => {
+    const plain = similar('r1', 'Hades');
+    plain.release.title = '';
+    vi.mocked(similarReleases).mockResolvedValue([plain]);
+    renderBlock();
+    const link = await screen.findByRole('button', linkName);
+
+    expect(screen.getByText('Hades [repack]')).toBeTruthy();
+    expect(description(link)).toBe('');
   });
 });

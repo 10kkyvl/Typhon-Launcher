@@ -14,6 +14,7 @@
   import ConsoleTag from './ConsoleTag.svelte';
   import Notice from './Notice.svelte';
   import StatusBadge from './StatusBadge.svelte';
+  import Tooltip from './Tooltip.svelte';
 
   let {
     gameId,
@@ -108,9 +109,10 @@
       <div class="list" bind:this={list}>
         {#each items as item (item.release.id)}
           {@const note = relativeCandidate(item, gameId)}
+          {@const shown = item.release.title || item.release.rawTitle}
           <div class="row" bind:this={rows[item.release.id]}>
             <div class="main">
-              <span class="title" title={item.release.rawTitle}>{item.release.title || item.release.rawTitle}</span>
+              <span class="title">{shown}</span>
               {#if item.release.platform}
                 <span class="note"><ConsoleTag platform={item.release.platform} /> {msg('games.similarPlatform', { platform: platformBadge(item.release.platform) })}</span>
               {/if}
@@ -124,10 +126,13 @@
             {#if item.release.matchStatus === 'review'}
               <StatusBadge kind="warning" label={msg('modals.sourceDetailsStatusReview')} plain />
             {/if}
-            <Button size="sm" busy={linking === item.release.id} disabled={linking !== null && linking !== item.release.id} onclick={() => link(item)}>
-              <Link2 size="1.4rem" strokeWidth={1.8} />
-              {msg('games.similarLink')}
-            </Button>
+            <!-- The row's title is plain text: the full release name, when the row shows a shorter one, is the hint of its one control. -->
+            <Tooltip text={item.release.rawTitle !== shown ? item.release.rawTitle : ''}>
+              <Button size="sm" busy={linking === item.release.id} disabled={linking !== null && linking !== item.release.id} onclick={() => link(item)}>
+                <Link2 size="1.4rem" strokeWidth={1.8} />
+                {msg('games.similarLink')}
+              </Button>
+            </Tooltip>
           </div>
         {/each}
       </div>
