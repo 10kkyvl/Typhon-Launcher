@@ -41,6 +41,9 @@ import { renderDom } from '../../lib/testing/dom';
 import GameRouteHarness from '../../lib/testing/GameRouteHarness.svelte';
 import GameDetails from './GameDetails.svelte';
 
+// A release row's Download is named with its release and source.
+const downloadName = new RegExp(`^${msg('ui.download')}`);
+
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
 vi.mock('../../lib/services/metadata', async (importOriginal) => ({
@@ -190,7 +193,7 @@ async function downloadFrom(row: HTMLElement, user: ReturnType<typeof renderDom>
   settings.set({ language: 'ru', libraryPath: '/library', downloadsPath: '/downloads' } as Settings);
   vi.mocked(fetchMetadata).mockResolvedValue({ infoHash: 'hash', name: 'image', totalBytes: 1, files: [{ path: 'game.iso', size: 1 }] } as never);
   vi.mocked(startDownloadFrom).mockResolvedValue(undefined as never);
-  await user.click(within(row).getByRole('button', { name: msg('ui.download') }));
+  await user.click(within(row).getByRole('button', { name: downloadName }));
   const dialog = await screen.findByRole('dialog');
   await user.click(await within(dialog).findByRole('button', { name: msg('modals.addDownloadStart') }));
   await vi.waitFor(() => expect(startDownloadFrom).toHaveBeenCalledTimes(1));
@@ -207,7 +210,7 @@ describe('GameDetails: whose game a console download from the page is', () => {
     vi.mocked(getReleasesForGame).mockResolvedValue([group({ id: 'own', platform: 'ps2', canonicalGameId: 'c1-alias' })]);
     vi.mocked(prepareReleaseDownload).mockResolvedValue({ uri: 'magnet:?xt=urn:btih:own', name: 'Raw', releaseId: 'own', sourceId: 'fixture', gameId: 'c1-alias' });
     const { user } = renderDom(GameDetails, { id: 'c1' });
-    const list = (await screen.findAllByRole('button', { name: msg('ui.download') }))[0].closest('section') as HTMLElement;
+    const list = (await screen.findAllByRole('button', { name: downloadName }))[0].closest('section') as HTMLElement;
 
     const origin = await downloadFrom(list, user);
 
@@ -274,14 +277,14 @@ describe('GameDetails: the sources changing while the page is open', () => {
     await tick();
 
     expect(getReleasesForGame).toHaveBeenCalledTimes(2);
-    expect(screen.getByText('Hades v1')).toBeTruthy();
+    expect(screen.getAllByText('Hades v1')[0]).toBeTruthy();
     expect(download.isConnected).toBe(true);
     expect(download.hasAttribute('disabled')).toBe(false);
     expect(screen.queryByText(msg('games.primaryResolving'))).toBeNull();
     expect(document.activeElement).toBe(download);
 
     answer.resolve([group({ id: 'r1', rawTitle: 'Hades v1' }), group({ id: 'r2', rawTitle: 'Hades v2' })]);
-    expect(await screen.findByText('Hades v2')).toBeTruthy();
+    expect((await screen.findAllByText('Hades v2'))[0]).toBeTruthy();
     expect(document.activeElement).toBe(download);
   });
 });
@@ -641,7 +644,7 @@ describe('GameDetails: late answers for the game the page showed before', () => 
 
     await page.rerender({ id: 'cB' });
     expect(await screen.findByRole('heading', { level: 1, name: 'Bastion' })).toBeTruthy();
-    expect(await screen.findByText('Bastion v1')).toBeTruthy();
+    expect((await screen.findAllByText('Bastion v1'))[0]).toBeTruthy();
 
     a.catalog.resolve({ id: 'cA', title: 'Transistor' } as CatalogGame);
     a.meta.resolve(view({ game: { id: 'cA', title: 'Transistor' } as MetadataView['game'] }));
@@ -653,7 +656,7 @@ describe('GameDetails: late answers for the game the page showed before', () => 
     await tick();
 
     expect(screen.getByRole('heading', { level: 1, name: 'Bastion' })).toBeTruthy();
-    expect(screen.getByText('Bastion v1')).toBeTruthy();
+    expect(screen.getAllByText('Bastion v1')[0]).toBeTruthy();
     expect(screen.queryByText('Transistor v1')).toBeNull();
     expect(screen.queryByText('Transistor PS4')).toBeNull();
     expect(screen.queryByText('Transistor')).toBeNull();
@@ -674,8 +677,8 @@ describe('GameDetails: the releases notice', () => {
     again.resolve([group({ id: 'r1', rawTitle: 'Hades v1' })]);
 
     await vi.waitFor(() => expect(notice.isConnected).toBe(false));
-    const row = (await screen.findByText('Hades v1')).closest('.release-row') as HTMLElement;
-    await vi.waitFor(() => expect(document.activeElement).toBe(within(row).getByRole('button', { name: msg('ui.download') })));
+    const row = ((await screen.findAllByText('Hades v1'))[0]).closest('.release-row') as HTMLElement;
+    await vi.waitFor(() => expect(document.activeElement).toBe(within(row).getByRole('button', { name: downloadName })));
   });
 });
 
