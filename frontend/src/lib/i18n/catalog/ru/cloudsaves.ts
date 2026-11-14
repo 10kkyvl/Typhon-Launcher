@@ -113,6 +113,9 @@ export const cloudsaves = {
   'cloudsaves.disableDeleting': 'Удаление…',
   'cloudsaves.disableKeepHint': 'Если оставить, копии в облаке не изменятся, а синхронизация остановится.',
   'cloudsaves.forgetFailed': 'Не удалось удалить сохранения из облака',
+  // The conflict banner of the game page.
+  'cloudsaves.bannerWhen': 'Сохранения изменились здесь ({local}) и в облаке ({remote})',
+  'cloudsaves.bannerWhenDevice': 'Сохранения изменились здесь ({local}) и в облаке ({remote}, {device})',
 } as const;
 
 export type CloudsavesKey = keyof typeof cloudsaves;

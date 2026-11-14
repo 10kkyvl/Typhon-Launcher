@@ -44,6 +44,10 @@ export const saves = {
   'saves.playedAfterNone': 'После этого не играл',
   'saves.largeWarning': 'Большие сохранения: каждый снимок занимает много места и времени при запуске игры.',
   'saves.launchFailed': 'Игра «{title}» запущена без копии сохранений. {reason}',
+  // The saves view of the game page and the "Saves…" dialog.
+  'saves.folderFailed': 'Не удалось найти папку сохранений',
+  'saves.openFailed': 'Не удалось открыть папку сохранений',
+  'saves.folderNotSet': 'Не удалось сменить папку сохранений',
 } as const;
 
 export type SavesKey = keyof typeof saves;

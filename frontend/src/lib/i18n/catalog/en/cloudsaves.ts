@@ -116,4 +116,7 @@ export const cloudsaves: Record<CloudsavesKey, Message> = {
   'cloudsaves.disableDeleting': 'Deleting…',
   'cloudsaves.disableKeepHint': 'If you keep them, the cloud copies stay as they are and sync stops.',
   'cloudsaves.forgetFailed': 'Could not delete the saves from the cloud',
+  // The conflict banner of the game page.
+  'cloudsaves.bannerWhen': 'The saves changed here ({local}) and in the cloud ({remote})',
+  'cloudsaves.bannerWhenDevice': 'The saves changed here ({local}) and in the cloud ({remote}, {device})',
 };

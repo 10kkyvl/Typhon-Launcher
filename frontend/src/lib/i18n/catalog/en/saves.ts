@@ -46,4 +46,8 @@ export const saves: Record<SavesKey, Message> = {
   'saves.playedAfterNone': 'Not played since',
   'saves.largeWarning': 'Large saves: every snapshot takes a lot of disk space and time before the game starts.',
   'saves.launchFailed': '“{title}” was launched without a saves backup. {reason}',
+  // The saves view of the game page and the "Saves…" dialog.
+  'saves.folderFailed': 'Could not find the save folder',
+  'saves.openFailed': 'Could not open the save folder',
+  'saves.folderNotSet': 'Could not change the save folder',
 };
