@@ -1,10 +1,14 @@
 <script lang="ts">
   import { BellOff } from '@lucide/svelte';
   import GameListRow from '../../lib/components/GameListRow.svelte';
+  import GameSavesBackups from '../../lib/components/GameSavesBackups.svelte';
   import GameSavesCloud from '../../lib/components/GameSavesCloud.svelte';
+  import GameSavesFolder from '../../lib/components/GameSavesFolder.svelte';
   import HeroCarousel, { type HeroSlide } from '../../lib/components/HeroCarousel.svelte';
   import SaveConflictNotice from '../../lib/components/SaveConflictNotice.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
+  import type { SavesResult } from '../../lib/services/library';
+  import type { Snapshot } from '../../lib/services/savebackup';
   import { toast } from '../../lib/stores/toasts';
   import ShowcaseRow from './ShowcaseRow.svelte';
   import ShowcaseSection from './ShowcaseSection.svelte';
@@ -50,6 +54,41 @@
     ondelete: pressed('Delete remote'),
   };
   const syncedAt = '2026-11-01T10:00:00Z';
+
+  // The saves view's folder and backups. "Back up now" in the first list runs for two seconds.
+  const folderActions = { onopen: pressed('Open'), onchange: pressed('Change'), onpick: pressed('Choose folder'), onsource: pressed('PCGamingWiki') };
+  const folder: SavesResult = {
+    path: 'C:/Users/me/Saved Games/Hades',
+    candidates: null,
+    unreadable: 0,
+    hint: { source: 'PCGamingWiki', license: 'CC BY-NC-SA 3.0', via: 'Ludusavi', pageUrl: '' },
+  };
+  const candidates: SavesResult = { path: '', candidates: ['C:/Users/me/Documents/Hades', 'D:/Games/Hades/Saves'], unreadable: 0, hint: null };
+  const notFound: SavesResult = { path: '', candidates: null, unreadable: 1, hintsError: 'unreachable', hint: null };
+  const backup = (id: string, patch: Partial<Snapshot> = {}): Snapshot => ({
+    id,
+    gameId: 'sample-hades',
+    kind: 'manual',
+    createdAt: '2026-11-01T10:00:00Z',
+    sourcePath: '',
+    sizeBytes: 2_400_000,
+    files: 12,
+    digest: '',
+    ...patch,
+  });
+  const backups: Snapshot[] = [
+    backup('manual'),
+    backup('session', { kind: 'session', createdAt: '2026-10-28T21:15:00Z', playedAfterKnown: true, playedAfterSeconds: 5400 }),
+    backup('large', { kind: 'update', createdAt: '2026-10-20T09:00:00Z', sizeBytes: 3_200_000_000, files: 840, large: true }),
+    backup('broken', { createdAt: '2026-10-01T12:00:00Z', broken: true, problem: 'The archive ends early' }),
+  ];
+  let creating = $state(false);
+  function create() {
+    if (creating) return;
+    creating = true;
+    setTimeout(() => (creating = false), LAUNCH_MS);
+  }
+  const backupActions = { onrestore: (s: Snapshot) => toast(`Restore pressed: ${s.id}`, 'info'), ondelete: (s: Snapshot) => toast(`Delete pressed: ${s.id}`, 'info') };
   const conflict = { localUpdatedAt: '2026-11-01T10:00:00Z', remoteUpdatedAt: '2026-11-02T18:30:00Z', remoteDevice: 'Steam Deck' };
 
   // No art, a poster (the app's own picture), and a hero and a cover that both fail to load.
@@ -60,7 +99,7 @@
   ]);
 </script>
 
-<ShowcaseSection title="Games" note="The parts a game is shown with: the hero carousel, the list row, the cloud copy of its saves and its save conflict banner. Data and callbacks come from the page.">
+<ShowcaseSection title="Games" note="The parts a game is shown with: the hero carousel, the list row, its saves (folder, backups, cloud copy) and its save conflict banner. Data and callbacks come from the page.">
   <ShowcaseRow caption="Hero carousel: three slides (no art, a poster, pictures that fail); moves every 7 s unless held" stack>
     <HeroCarousel level={4} {slides} onopen={said('Open')} onplay={launch} onstop={() => (running = false)} />
   </ShowcaseRow>
@@ -110,6 +149,20 @@
     <div class="part"><GameSavesCloud availability="on" game={{ state: 'conflict', code: '', syncedAt }} {...cloudActions} /></div>
     <div class="part"><GameSavesCloud availability="on" game={{ state: 'failed', code: 'cloud.network', syncedAt }} {...cloudActions} /></div>
     <div class="part"><GameSavesCloud availability="on" game={{ state: 'skipped', code: 'cloud.excluded', syncedAt: '' }} {...cloudActions} /></div>
+  </ShowcaseRow>
+
+  <ShowcaseRow caption="Saves view, the folder: looking for it, found with where the hint came from, several candidates, not found (part unreadable, hints failed)" stack>
+    <div class="part"><GameSavesFolder saves={null} loading title="Hades" {...folderActions} /></div>
+    <div class="part"><GameSavesFolder saves={folder} title="Hades" {...folderActions} /></div>
+    <div class="part"><GameSavesFolder saves={candidates} title="Hades" {...folderActions} /></div>
+    <div class="part"><GameSavesFolder saves={notFound} title="Hades" {...folderActions} /></div>
+  </ShowcaseRow>
+
+  <ShowcaseRow caption="Saves view, the backups: a list with a session, a large and a damaged backup (Back up now runs for two seconds); the game running; no backups yet; loading" stack>
+    <div class="part"><GameSavesBackups snapshots={backups} busy={creating} {creating} canCreate oncreate={create} {...backupActions} /></div>
+    <div class="part"><GameSavesBackups snapshots={backups.slice(0, 1)} running canCreate oncreate={pressed('Back up now')} {...backupActions} /></div>
+    <div class="part"><GameSavesBackups snapshots={[]} canCreate oncreate={pressed('Back up now')} {...backupActions} /></div>
+    <div class="part"><GameSavesBackups snapshots={[]} loading oncreate={pressed('Back up now')} {...backupActions} /></div>
   </ShowcaseRow>
 
   <ShowcaseRow caption="Save conflict banner of the game page: both dates and the cloud copy's device, without a device, before the details load" stack>

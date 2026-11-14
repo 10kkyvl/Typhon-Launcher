@@ -120,4 +120,21 @@ describe('the component showcase', () => {
     expect(sync.getAttribute('aria-busy')).toBe('true');
     expect(document.activeElement).toBe(sync);
   });
+
+  it('shows the saves view\'s folder and backups in their states; Back up now stays focused and busy', async () => {
+    const { user } = renderDom(Showcase);
+    const games = screen.getByRole('region', { name: 'Games' });
+
+    for (const text of [msg('saves.folderLoading'), 'C:/Users/me/Saved Games/Hades', msg('ui.savesMultipleCandidates', { title: 'Hades' }), msg('ui.savesPartialUnreadable'), msg('saves.hintsFailed'), msg('saves.broken'), 'The archive ends early', msg('saves.largeWarning'), msg('saves.gameRunning'), msg('saves.empty')]) {
+      expect(within(games).getAllByText(text).length, text).toBeGreaterThan(0);
+    }
+
+    const create = within(games).getAllByRole('button', { name: msg('saves.createBackup') })[0];
+    create.focus();
+    await user.keyboard('{Enter}');
+
+    expect(create.getAttribute('aria-busy')).toBe('true');
+    expect(create.textContent).toContain(msg('saves.creating'));
+    expect(document.activeElement).toBe(create);
+  });
 });
