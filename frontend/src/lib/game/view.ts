@@ -34,7 +34,7 @@ function hasContent(view: MetadataView): boolean {
       clean(view.game.summary) ||
       clean(view.cover) ||
       clean(view.hero) ||
-      view.screenshots.length > 0,
+      (view.screenshots?.length ?? 0) > 0,
   );
 }
 

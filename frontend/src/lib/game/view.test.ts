@@ -527,7 +527,16 @@ describe("preferView", () => {
     expect(preferView(null, fresh)).toBe(fresh);
     expect(preferView(view(), fresh)).toBe(fresh);
   });
+
+  // Go sends null for a game without screenshots (the binding says `MediaAsset[] | null`).
+  it("reads a view whose screenshots are null as one without screenshots", () => {
+    const cached = view({ cover: "c.png" });
+    const bare = view({ screenshots: null as unknown as MediaAsset[] });
+    expect(preferView(cached, bare)).toBe(cached);
+    expect(preferView(bare, view({ cover: "new.png" })).cover).toBe("new.png");
+  });
 });
+
 
 describe("languageLabel", () => {
   it("shortens codes and counts the rest", () => {
