@@ -93,11 +93,11 @@
   let failed = $state<Record<string, true>>({});
   let progress = $state(0);
 
-  // Held by the pointer or focus, the order on screen stays as it was; each slide still shows its
-  // newest state (a launch in flight), and one that left the list keeps its last.
+  // Held by the pointer or focus, or out of view, the order on screen stays as it was; each slide
+  // still shows its newest state (a launch in flight), and one that left the list keeps its last.
   let frozen = $state<HeroSlide[] | null>(null);
   $effect(() => {
-    const hold = hovering || focused;
+    const hold = hovering || focused || !inView;
     const latest = incoming;
     untrack(() => {
       if (hold && !frozen) frozen = latest;
@@ -168,6 +168,8 @@
   // put, and a control removed while focused leaves focus on <body>.
   const holds: Attachment<HTMLElement> = (node) => {
     let alive = true;
+    // A new watcher starts from "in view" and reports only changes.
+    inView = true;
     const unwatch = watchInView(node, (next) => (inView = next));
     const recheck = () =>
       queueMicrotask(() => {

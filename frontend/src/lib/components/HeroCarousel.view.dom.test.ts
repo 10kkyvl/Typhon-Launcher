@@ -58,7 +58,8 @@ afterEach(() => {
 
 function setup() {
   vi.useFakeTimers();
-  return renderDom(HeroCarousel, { slides: [slide('a'), slide('b'), slide('c')], onopen: vi.fn(), onplay: vi.fn(), onstop: vi.fn(), ambient: true });
+  const props = { slides: [slide('a'), slide('b'), slide('c')], onopen: vi.fn(), onplay: vi.fn(), onstop: vi.fn(), ambient: true };
+  return { props, ...renderDom(HeroCarousel, props) };
 }
 
 describe('HeroCarousel: out of view', () => {
@@ -85,6 +86,33 @@ describe('HeroCarousel: out of view', () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(shown()).toBe('Game b');
     expect(get(ambientState).resting).toBe('b');
+  });
+
+  it('keeps the slide last seen when the list changes while it is out of view', async () => {
+    const { props, rerender } = setup();
+    await inView(0.1);
+
+    await rerender({ ...props, slides: [slide('d'), slide('b'), slide('c')] });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(shown()).toBe('Game a');
+    expect(get(ambientState).resting).toBe('a');
+
+    await inView(1);
+    expect(shown()).toBe('Game d');
+  });
+
+  it('runs again when its slides come back after it emptied out of view', async () => {
+    const { props, rerender } = setup();
+    await inView(0.1);
+    await rerender({ ...props, slides: [] });
+    await vi.advanceTimersByTimeAsync(0);
+
+    await rerender(props);
+    await inView(1);
+    await vi.advanceTimersByTimeAsync(ADVANCE_MS);
+
+    expect(shown()).toBe('Game b');
   });
 
   it('does not flip between the thresholds: running stays running, held stays held', async () => {

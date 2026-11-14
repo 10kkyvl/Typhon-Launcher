@@ -185,6 +185,16 @@ describe('the page\'s resting picture', () => {
     expect(get(ambient.ambientState).history).toEqual(['page']);
   });
 
+  it('a release among three gives the window to the newest one left', async () => {
+    const { restAmbient } = ambient;
+    restAmbient('a');
+    restAmbient('b');
+    const newest = restAmbient('elden');
+    newest();
+    await Promise.resolve();
+    expect(get(ambient.ambientState).resting).toBe('b');
+  });
+
   it('the newest live resting game wins; releases in any order leave none behind', async () => {
     const { restAmbient } = ambient;
     const first = restAmbient('a');
