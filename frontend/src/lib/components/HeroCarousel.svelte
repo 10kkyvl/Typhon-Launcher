@@ -47,13 +47,14 @@
   import { nextIndex } from '../utils/roving';
   import Button from './Button.svelte';
   import TextLink from './TextLink.svelte';
-  import { runSlide } from './slideTimer';
+  import { runSlide, watchInView } from './slideTimer';
 
   /**
    * The games the page puts forward, one slide at a time: a picture, the title (which opens the game),
    * the page's line under it and Play or Stop (WAI-ARIA carousel with a slide picker). With two
    * slides or more it moves on every ADVANCE_MS; the timer holds while the pointer is over it, focus
-   * is inside it, the window is hidden or a dialog is open, and it does not run with motion off.
+   * is inside it, it is scrolled out of view, the window is hidden or a dialog is open, and it does
+   * not run with motion off.
    * While the pointer or focus holds it, the slides keep their order on screen, each still showing
    * its newest state. A slide the player picks is announced; one the timer moves to is not.
    *
@@ -87,6 +88,7 @@
   let hovering = $state(false);
   let focused = $state(false);
   let pageHidden = $state(typeof document !== 'undefined' && document.hidden);
+  let inView = $state(true);
   let activeId = $state<string | null>(null);
   let failed = $state<Record<string, true>>({});
   let progress = $state(0);
@@ -124,7 +126,7 @@
   });
 
   const auto = $derived($motionOn && count > 1);
-  const running = $derived(auto && !hovering && !focused && !pageHidden && !$modalOpen);
+  const running = $derived(auto && inView && !hovering && !focused && !pageHidden && !$modalOpen);
 
   function go(index: number) {
     if (count === 0) return;
@@ -166,6 +168,7 @@
   // put, and a control removed while focused leaves focus on <body>.
   const holds: Attachment<HTMLElement> = (node) => {
     let alive = true;
+    const unwatch = watchInView(node, (next) => (inView = next));
     const recheck = () =>
       queueMicrotask(() => {
         if (alive) focused = node.contains(document.activeElement);
@@ -178,6 +181,7 @@
     ];
     return () => {
       alive = false;
+      unwatch();
       offs.forEach((off) => off());
     };
   };
