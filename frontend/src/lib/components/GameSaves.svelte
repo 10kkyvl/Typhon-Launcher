@@ -34,11 +34,14 @@
   import { closeSaveBackups } from '../stores/savebackup';
   import { toast } from '../stores/toasts';
   import { authState } from '../stores/user';
+  import { focusHandOff } from '../utils/focusHandOff';
   import { bytesSize, dateTime } from '../utils/format';
 
   interface Pending {
     kind: 'restore' | 'delete';
     snapshot: Snapshot;
+    /** The backup whose Delete takes focus when this one leaves the list. */
+    next?: string;
   }
 
   /**
@@ -47,6 +50,11 @@
    * folder or backup action runs, so that it is not dismissed meanwhile.
    */
   let { gameId, busy = $bindable(false) }: { gameId: string; busy?: boolean } = $props();
+
+  const uid = $props.id();
+  const changeId = `${uid}-change`;
+  const createId = `${uid}-create`;
+  let list = $state<HTMLElement>();
 
   const game = $derived($libraryGames.find((g) => g.id === gameId));
   // What an action was started for: the game as it was at the press.
@@ -309,21 +317,40 @@
     return perform(() => openFolder(path), () => msg('saves.openFailed'), 'open');
   }
 
-  function changeFolder() {
+  // A chosen folder replaces "Choose folder" with the folder and its Change: focus moves on to it.
+  async function changeFolder() {
     const { gameId, title } = target;
-    return perform(async () => {
+    const handOff = focusHandOff();
+    await perform(async () => {
       const dir = await chooseSavesDir(gameId, title);
       if (dir) await loadSaves(gameId);
     }, folderNotSet, 'folder');
+    await handOff(() => document.getElementById(changeId));
   }
 
-  function useCandidate(dir: string) {
+  async function useCandidate(dir: string) {
     const { gameId } = target;
+    const handOff = focusHandOff();
     candidatesOpen = false;
-    return perform(async () => {
+    await perform(async () => {
       await setSavesDir(gameId, dir);
       await loadSaves(gameId);
     }, folderNotSet);
+    await handOff(() => document.getElementById(changeId));
+  }
+
+  function askToDelete(snapshot: Snapshot) {
+    const at = snapshots.findIndex((s) => s.id === snapshot.id);
+    const next = snapshots[at + 1] ?? snapshots[at - 1];
+    pending = { kind: 'delete', snapshot, next: next?.id };
+  }
+
+  // A deleted backup's row goes with its Delete: focus moves to the next backup's, else to "Back up now".
+  function afterDelete(): HTMLElement | null | undefined {
+    const next = pending?.next;
+    const row = next ? [...(list?.children ?? [])].find((el) => el instanceof HTMLElement && el.dataset.snapshot === next) : undefined;
+    const del = row ? [...row.querySelectorAll<HTMLElement>('button')].at(-1) : undefined;
+    return del ?? document.getElementById(createId);
   }
 
   function browseFromCandidates() {
@@ -354,7 +381,7 @@
       {@render source()}
       <div class="actions">
         <Button size="sm" disabled={busy && acting !== 'open'} busy={acting === 'open'} onclick={openSaves}>{msg('saves.open')}</Button>
-        <Button size="sm" disabled={busy && acting !== 'folder'} busy={acting === 'folder'} onclick={changeFolder}>{msg('saves.change')}</Button>
+        <Button id={changeId} size="sm" disabled={busy && acting !== 'folder'} busy={acting === 'folder'} onclick={changeFolder}>{msg('saves.change')}</Button>
       </div>
     {:else if savesError}
       <Notice tone="danger" compact>{savesError}</Notice>
@@ -436,7 +463,7 @@
   <div class="list">
     <div class="list-head">
       <span class="field-label">{msg('saves.listTitle')}</span>
-      <Button variant="primary" size="sm" disabled={(busy && !creating) || !saves?.path} busy={creating} onclick={create}>
+      <Button id={createId} variant="primary" size="sm" disabled={(busy && !creating) || !saves?.path} busy={creating} onclick={create}>
         {creating ? msg('saves.creating') : msg('saves.createBackup')}
       </Button>
     </div>
@@ -455,9 +482,9 @@
     {/if}
 
     {#if snapshots.length > 0}
-      <ul class="snapshots">
+      <ul class="snapshots" bind:this={list}>
         {#each snapshots as snapshot (snapshot.id)}
-          <li class="snapshot">
+          <li class="snapshot" data-snapshot={snapshot.id}>
             <div class="snapshot-main">
               <span class="snapshot-when">{snapshotWhen(snapshot)}</span>
               {#if snapshot.broken}
@@ -482,7 +509,7 @@
                   {msg('saves.restore')}
                 </Button>
               {/if}
-              <Button size="sm" variant="danger" disabled={busy} onclick={() => (pending = { kind: 'delete', snapshot })}>
+              <Button size="sm" variant="danger" disabled={busy} onclick={() => askToDelete(snapshot)}>
                 {msg('saves.delete')}
               </Button>
             </div>
@@ -524,6 +551,7 @@
     onconfirm={runPending}
     onclose={() => (pending = null)}
     errorText={(err) => saveBackupErrorText(err)}
+    returnFocus={afterDelete}
   />
 {/if}
 

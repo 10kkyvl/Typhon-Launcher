@@ -44,6 +44,7 @@ const found = (path = 'C:/Users/me/Saved Games/Hades'): SavesResult => ({
   unreadable: 0,
   hint: null,
 }) as unknown as SavesResult;
+const notFound = { path: '', candidates: null, unreadable: 0, hint: null } as unknown as SavesResult;
 
 const snapshot = (patch: Partial<Snapshot> = {}): Snapshot =>
   ({ id: 's1', gameId: 'g1', kind: 'manual', createdAt: '2026-11-01T10:00:00Z', sourcePath: '', sizeBytes: 10, files: 1, digest: '', ...patch }) as Snapshot;
@@ -222,6 +223,67 @@ describe('GameSaves: the backups', () => {
 
     const alert = await screen.findByRole('alert');
     expect(alert.textContent?.trim()).toBe(msg('saves.folderNotSet'));
+  });
+
+  it('moves focus from "Choose folder" to "Change" once the chosen folder replaces it', async () => {
+    vi.mocked(locateSaves).mockResolvedValueOnce(notFound).mockResolvedValue(found('D:/Saves/Hades'));
+    vi.mocked(selectFolder).mockResolvedValue('D:/Saves/Hades');
+    const { user } = renderDom(GameSaves, { gameId: 'g1' });
+    const choose = await screen.findByRole('button', { name: msg('saves.pickFolder') });
+    choose.focus();
+
+    await user.keyboard('{Enter}');
+
+    const change = await screen.findByRole('button', { name: msg('saves.change') });
+    await waitFor(() => expect(document.activeElement).toBe(change));
+  });
+
+  it('moves focus to the next backup once a deleted one leaves the list', async () => {
+    const list = [snapshot({ id: 's1' }), snapshot({ id: 's2', createdAt: '2026-10-01T10:00:00Z' })];
+    vi.mocked(listBackups).mockResolvedValueOnce(list).mockResolvedValue([list[1]]);
+    vi.mocked(deleteBackup).mockResolvedValue();
+    const { user } = renderDom(GameSaves, { gameId: 'g1' });
+    await screen.findAllByRole('button', { name: msg('saves.delete') });
+    const first = screen.getAllByRole('button', { name: msg('saves.delete') })[0];
+    first.focus();
+
+    await user.keyboard('{Enter}');
+    const confirm = await screen.findByRole('dialog');
+    await user.click(within(confirm).getByRole('button', { name: msg('saves.delete') }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    const left = screen.getAllByRole('button', { name: msg('saves.delete') });
+    expect(left).toHaveLength(1);
+    await waitFor(() => expect(document.activeElement).toBe(left[0]));
+  });
+
+  it('moves focus to "Back up now" once the last backup is deleted', async () => {
+    vi.mocked(listBackups).mockResolvedValueOnce([snapshot()]).mockResolvedValue([]);
+    vi.mocked(deleteBackup).mockResolvedValue();
+    const { user } = renderDom(GameSaves, { gameId: 'g1' });
+    const del = await screen.findByRole('button', { name: msg('saves.delete') });
+    del.focus();
+
+    await user.keyboard('{Enter}');
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: msg('saves.delete') }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(await screen.findByText(msg('saves.empty'))).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: msg('saves.createBackup') })));
+  });
+
+  it('gives focus back to Delete when the deletion fails and the backup stays', async () => {
+    vi.mocked(listBackups).mockResolvedValue([snapshot()]);
+    vi.mocked(deleteBackup).mockRejectedValue(new Error('typhon:savebackup.busy'));
+    const { user } = renderDom(GameSaves, { gameId: 'g1' });
+    const del = await screen.findByRole('button', { name: msg('saves.delete') });
+    del.focus();
+
+    await user.keyboard('{Enter}');
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: msg('saves.delete') }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(del));
   });
 });
 
