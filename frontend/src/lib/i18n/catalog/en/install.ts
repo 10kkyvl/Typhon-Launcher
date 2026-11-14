@@ -46,4 +46,5 @@ export const install: Record<InstallKey, Message> = {
   'verify.verifyFiles': 'Verify files',
   'verify.repair': 'Repair',
   'verify.gameRunningVerify': 'The game is running. Close it before verifying files.',
+  'verify.stateReadFailed': 'Could not read the result of the last file check',
 };

@@ -43,6 +43,7 @@ export const install = {
   'verify.verifyFiles': 'Проверить файлы',
   'verify.repair': 'Восстановить',
   'verify.gameRunningVerify': 'Игра запущена. Закройте её перед проверкой файлов.',
+  'verify.stateReadFailed': 'Не удалось узнать, чем закончилась последняя проверка файлов',
 } as const;
 
 export type InstallKey = keyof typeof install;
