@@ -48,6 +48,7 @@
   import LibraryList from './LibraryList.svelte';
   import { narrowingText } from './entryText';
 
+  const uid = $props.id();
   const saved = get(libraryChoices);
   let filter = $state(saved.filter);
   let sort = $state(get(librarySort));
@@ -282,7 +283,7 @@
 
   <section class="section" bind:this={listSection}>
     <div class="section-head">
-      <h2>{activeCollection ? activeCollection.name : sectionTitles[filter]}</h2>
+      <h2 id="{uid}-heading">{activeCollection ? activeCollection.name : sectionTitles[filter]}</h2>
     </div>
 
     <LibraryToolbar
@@ -364,11 +365,21 @@
         {busy}
         actions={watchedActions}
         onplay={toggleRun}
+        labelledby="{uid}-heading"
         bind:switched={viewSwitched}
         bind:element={results}
       />
     {:else}
-      <LibraryList entries={visibleGames} art={$gameArt} bind:switched={viewSwitched} bind:element={results} />
+      <LibraryList
+        entries={visibleGames}
+        art={$gameArt}
+        running={$runningGames}
+        {busy}
+        onplay={toggleRun}
+        labelledby="{uid}-heading"
+        bind:switched={viewSwitched}
+        bind:element={results}
+      />
     {/if}
   </section>
 

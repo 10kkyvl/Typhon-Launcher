@@ -139,9 +139,10 @@ describe('the game menu from the Library page', () => {
   it('a list row: right-click and Shift+F10 open the menu of that row’s game', async () => {
     libraryView.set('list');
     const keys = mount(Library);
-    const row = screen.getAllByRole('button').find((button) => button.classList.contains('list-row') && button.textContent?.includes('Celeste')) as HTMLElement;
+    const list = screen.getByRole('list', { name: msg('games.allGamesTitle') });
+    const title = within(list).getByRole('button', { name: 'Celeste' });
 
-    await opensByPointerAndKeyboard(keys, row, 'Celeste');
+    await opensByPointerAndKeyboard(keys, title, 'Celeste');
   });
 });
 

@@ -19,6 +19,7 @@ import type { Entry as WatchEntry } from '../../lib/services/watchlist';
 import { libraryView } from '../../lib/stores/ui';
 import { renderDom } from '../../lib/testing/dom';
 import Library from './Library.svelte';
+import { shownTitles } from './libraryTesting';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
@@ -66,7 +67,7 @@ function download(gameId: string, downloaded: number): Download {
   return { id: `d-${gameId}`, name: `${gameId}.torrent`, status: 'downloading', total: 100, downloaded, addedAt: '2026-11-01T00:00:00Z', origin: { gameId } } as Download;
 }
 
-const listTitles = () => [...document.querySelectorAll('.list-row .list-title')].map((el) => el.textContent?.trim());
+const listTitles = shownTitles;
 const heading = (name: string) => screen.queryByRole('heading', { name });
 const recentRow = () => screen.getAllByRole('heading', { level: 2, name: msg('games.recentLabel') })[0].closest('section') as HTMLElement;
 

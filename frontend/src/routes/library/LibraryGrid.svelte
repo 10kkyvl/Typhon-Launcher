@@ -3,6 +3,7 @@
   import type { GameArt } from '../../lib/services/metadata';
   import { entryCover, type LibraryEntry } from '../../lib/library/entries';
   import { entryMeta, entrySubtitle } from './entryText';
+  import { noBrowserMenu } from './itemMenu';
 
   let {
     entries,
@@ -11,6 +12,7 @@
     busy,
     actions,
     onplay,
+    labelledby,
     switched = $bindable(false),
     element = $bindable(),
   }: {
@@ -21,6 +23,8 @@
     busy: (id: string) => boolean;
     actions: (entry: LibraryEntry) => GameCardAction[] | undefined;
     onplay: (id: string) => void;
+    /** Id of the heading that names the list. */
+    labelledby: string;
     /** The view has just changed to this one: it rises in once. */
     switched?: boolean;
     element?: HTMLElement;
@@ -31,30 +35,47 @@
   }
 </script>
 
-<div class="grid" data-results class:switched onanimationend={endViewSwitch} bind:this={element}>
+<ul
+  class="grid"
+  data-results
+  aria-labelledby={labelledby}
+  class:switched
+  onanimationend={endViewSwitch}
+  bind:this={element}
+  {@attach noBrowserMenu}
+>
   {#each entries as entry (entry.id)}
-    <GameCard
-      id={entry.id}
-      title={entry.title}
-      cover={entryCover(entry, art)}
-      ambient
-      installed={entry.installed}
-      running={running.has(entry.id)}
-      launching={busy(entry.id)}
-      source={entry.source}
-      platform={entry.platform}
-      meta={entry.kind === 'watched' ? entrySubtitle(entry) : entryMeta(entry)}
-      actions={actions(entry)}
-      onplay={entry.playable ? () => onplay(entry.id) : undefined}
-    />
+    <li class="cell">
+      <GameCard
+        id={entry.id}
+        title={entry.title}
+        cover={entryCover(entry, art)}
+        ambient
+        installed={entry.installed}
+        running={running.has(entry.id)}
+        launching={busy(entry.id)}
+        source={entry.source}
+        platform={entry.platform}
+        meta={entry.kind === 'watched' ? entrySubtitle(entry) : entryMeta(entry)}
+        actions={actions(entry)}
+        onplay={entry.playable ? () => onplay(entry.id) : undefined}
+      />
+    </li>
   {/each}
-</div>
+</ul>
 
 <style>
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
     gap: var(--space-6) var(--space-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .cell {
+    min-width: 0;
   }
 
   .grid.switched {
