@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { locale } from "../i18n";
 import type { MediaAsset, MetadataView } from "../services/metadata";
 import {
   busyState,
@@ -537,6 +538,14 @@ describe("preferView", () => {
   });
 });
 
+describe("the main action's words in English", () => {
+  afterEach(() => locale.set("ru"));
+
+  it("says Update for an update, not Refresh", () => {
+    locale.set("en");
+    expect(primaryAction(status({ installed: true, updateAvailable: true })).label).toBe("Update");
+  });
+});
 
 describe("languageLabel", () => {
   it("shortens codes and counts the rest", () => {

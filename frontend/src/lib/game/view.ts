@@ -205,7 +205,7 @@ export function primaryAction(status: GameStatus): PrimaryAction {
   }
   if (status.running) return { kind: 'stop', label: msg('games.stop'), disabled: false };
   if (status.installed) {
-    if (status.updateAvailable) return { kind: 'update', label: msg('common.refresh'), disabled: false };
+    if (status.updateAvailable) return { kind: 'update', label: msg('games.mainActionUpdate'), disabled: false };
     return { kind: 'play', label: msg('games.play'), disabled: false };
   }
   if (status.releaseCount > 0) return { kind: 'download', label: msg('games.primaryDownload'), disabled: false };
