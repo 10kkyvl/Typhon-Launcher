@@ -25,6 +25,8 @@
   let noSteam = $state(false);
   let active = $state<AchievementItem | null>(null);
   let seq = 0;
+  // A refresh belongs to the game it was pressed for: another game starts with its own refresh free.
+  let refreshSeq = 0;
   let loadedId = '';
 
   const stamp = $derived($achievementsStamp[gameId] ?? 0);
@@ -78,6 +80,7 @@
   async function refresh() {
     if (refreshing) return;
     const mine = ++seq;
+    const run = ++refreshSeq;
     refreshing = true;
     try {
       const next = await rescanAchievements(gameId);
@@ -88,7 +91,7 @@
       if (mine !== seq) return;
       toast(failureText(err, msg('games.achievementsRefreshError')), 'danger');
     } finally {
-      refreshing = false;
+      if (run === refreshSeq) refreshing = false;
     }
   }
 
@@ -97,6 +100,10 @@
     const id = gameId;
     untrack(() => {
       active = null;
+      if (id !== loadedId) {
+        refreshSeq += 1;
+        refreshing = false;
+      }
       void load(id);
     });
   });

@@ -139,6 +139,38 @@ describe('AchievementsCard: refreshing', () => {
   });
 });
 
+// The page passes another game to the same card when it moves on without a remount.
+describe('AchievementsCard: another game in the same card', () => {
+  it('a refresh still running for the last game leaves the new game free to refresh, and its answer is dropped', async () => {
+    const name = { name: msg('games.achievementsRefresh') };
+    vi.mocked(fetchAchievements).mockImplementation(async (id) => view({ appId: id }));
+    const late = deferred<AchievementsView>();
+    const own = deferred<AchievementsView>();
+    vi.mocked(rescanAchievements).mockReturnValueOnce(late.promise).mockReturnValueOnce(own.promise);
+    const { user, rerender } = renderDom(AchievementsCard, { gameId: 'g1' });
+    await user.click(await screen.findByRole('button', name));
+
+    await rerender({ gameId: 'g2' });
+    await vi.waitFor(() => expect(fetchAchievements).toHaveBeenLastCalledWith('g2'));
+    const refresh = await screen.findByRole('button', name);
+    await vi.waitFor(() => expect(refresh.hasAttribute('aria-busy')).toBe(false));
+
+    await user.click(refresh);
+    expect(rescanAchievements).toHaveBeenLastCalledWith('g2');
+    expect(refresh.getAttribute('aria-busy')).toBe('true');
+
+    late.resolve(view({ appId: 'g1', unlocked: 0 }));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(refresh.getAttribute('aria-busy')).toBe('true');
+    expect(screen.getByText(msg('games.achievementsProgress', { unlocked: 1, total: 2 }))).toBeTruthy();
+
+    own.resolve(view({ appId: 'g2', unlocked: 2 }));
+    await vi.waitFor(() => expect(refresh.hasAttribute('aria-busy')).toBe(false));
+    expect(screen.getByText(msg('games.achievementsProgress', { unlocked: 2, total: 2 }))).toBeTruthy();
+  });
+});
+
 describe('AchievementsCard: what a failure says', () => {
   const noticeText = (button: HTMLElement) => button.closest('.notice')?.querySelector('.text')?.textContent?.trim();
 

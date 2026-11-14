@@ -12,8 +12,17 @@
 
   const uid = $props.id();
 
-  let requirementsTab = $state('minimum');
-  let dlcExpanded = $state(false);
+  // What the player opened belongs to one game: another game's data starts from the defaults, a
+  // refresh of the same game's data keeps it.
+  const appId = $derived(steam?.appId);
+  let requirementsTab = $derived.by(() => {
+    void appId;
+    return 'minimum';
+  });
+  let dlcExpanded = $derived.by(() => {
+    void appId;
+    return false;
+  });
 
   const columns = $derived(requirementColumns(steam));
   const bothColumns = $derived(columns.minimum.length > 0 && columns.recommended.length > 0);
