@@ -1,21 +1,16 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import Button from './Button.svelte';
-  import EmptyState from './EmptyState.svelte';
+  import GameSavesBackups from './GameSavesBackups.svelte';
   import GameSavesCloud, { type CloudAvailability } from './GameSavesCloud.svelte';
+  import GameSavesFolder from './GameSavesFolder.svelte';
   import ConfirmModal from './ConfirmModal.svelte';
-  import Notice from './Notice.svelte';
   import SavesCandidatesModal from './SavesCandidatesModal.svelte';
-  import Spinner from './Spinner.svelte';
-  import StatusBadge from './StatusBadge.svelte';
-  import TextLink from './TextLink.svelte';
   import { deleteCloudSavesPrompt, pullCloudSavesPrompt, deleteSaveBackupPrompt, restoreSavesPrompt } from '../confirm/prompts';
   import { chooseSavesDir } from '../game/actions/saves';
   import { cloudErrorText } from '../cloudsaves/messages';
   import { errorCode, msg } from '../i18n';
-  import { saveBackupErrorText, snapshotKindLabel, snapshotPlayedAfter, snapshotWhen } from '../savebackup/messages';
+  import { saveBackupErrorText, snapshotWhen } from '../savebackup/messages';
   import { cloudDeleteRemote, cloudPullRemote, cloudSyncNow } from '../services/cloudsaves';
-  import { saveAttribution } from '../game/extras';
   import { metadataErrorText } from '../metadata/metadataErrors';
   import { openReferenceLink } from '../services/metadata';
   import { locateSaves, setSavesDir, type SavesResult } from '../services/library';
@@ -36,7 +31,6 @@
   import { toast } from '../stores/toasts';
   import { authState } from '../stores/user';
   import { focusHandOff } from '../utils/focusHandOff';
-  import { bytesSize } from '../utils/format';
 
   interface Pending {
     kind: 'restore' | 'delete';
@@ -316,8 +310,6 @@
     navigate('settings', { tab: 'downloads' });
   }
 
-  const attribution = $derived(saveAttribution(saves?.hint));
-
   async function openSource() {
     const id = canonicalId;
     if (!id) return;
@@ -377,54 +369,21 @@
   }
 </script>
 
-{#snippet source()}
-  {#if attribution}
-    <p class="source">
-      {msg('saves.hintPrefix')}
-      <TextLink disabled={busy} onclick={openSource}>{attribution.source}</TextLink>
-      {attribution.via
-        ? msg('saves.hintSuffix', { via: attribution.via, license: attribution.license })
-        : msg('saves.hintSuffixNoVia', { license: attribution.license })}
-    </p>
-  {/if}
-{/snippet}
-
 <div class="saves">
   {#if withBackups}
-    <div class="field">
-      <span class="field-label">{msg('saves.folderLabel')}</span>
-      {#if savesLoading && !saves && !savesError}
-        <Spinner size="sm" label={msg('saves.folderLoading')} />
-      {:else if saves?.path}
-        <p class="path">{saves.path}</p>
-        {@render source()}
-        <div class="actions">
-          <Button size="sm" disabled={busy && acting !== 'open'} busy={acting === 'open'} onclick={openSaves}>{msg('saves.open')}</Button>
-          <Button id={changeId} size="sm" disabled={busy && acting !== 'folder'} busy={acting === 'folder'} onclick={changeFolder}>{msg('saves.change')}</Button>
-        </div>
-      {:else if savesError}
-        <Notice tone="danger" compact>{savesError}</Notice>
-        <div class="actions">
-          <Button size="sm" disabled={busy && acting !== 'folder'} busy={acting === 'folder'} onclick={changeFolder}>{msg('saves.pickFolder')}</Button>
-        </div>
-      {:else if saves?.candidates && saves.candidates.length > 0}
-        <p class="hint">{msg('ui.savesMultipleCandidates', { title: target.title })}</p>
-        {@render source()}
-        <div class="actions">
-          <Button size="sm" disabled={busy} onclick={() => (candidatesOpen = true)}>
-            {msg('saves.pickFolder')}
-          </Button>
-        </div>
-      {:else}
-        <p class="hint">{saves && saves.unreadable > 0 ? msg('ui.savesPartialUnreadable') : msg('ui.savesNotFound')}</p>
-        {#if saves?.hintsError}
-          <p class="hint">{msg('saves.hintsFailed')}</p>
-        {/if}
-        <div class="actions">
-          <Button size="sm" disabled={busy && acting !== 'folder'} busy={acting === 'folder'} onclick={changeFolder}>{msg('saves.pickFolder')}</Button>
-        </div>
-      {/if}
-    </div>
+    <GameSavesFolder
+      {saves}
+      loading={savesLoading}
+      error={savesError}
+      title={target.title}
+      {busy}
+      {acting}
+      {changeId}
+      onopen={openSaves}
+      onchange={changeFolder}
+      onpick={() => (candidatesOpen = true)}
+      onsource={openSource}
+    />
   {/if}
 
   <div class="field">
@@ -444,70 +403,21 @@
   </div>
 
   {#if withBackups}
-    <div class="list">
-      <div class="list-head">
-        <span class="field-label">{msg('saves.listTitle')}</span>
-        <Button id={createId} variant="primary" size="sm" disabled={(busy && !creating) || !saves?.path} busy={creating} onclick={create}>
-          {creating ? msg('saves.creating') : msg('saves.createBackup')}
-        </Button>
-      </div>
-
-      {#if failure}
-        <Notice tone="danger" compact>{failure}</Notice>
-      {/if}
-      {#if listError}
-        <Notice tone="danger" compact>{listError}</Notice>
-      {/if}
-      {#if gameRunning}
-        <Notice tone="warning" compact announce={false}>{msg('saves.gameRunning')}</Notice>
-      {/if}
-      {#if snapshots.some((s) => s.large)}
-        <Notice tone="warning" compact announce={false}>{msg('saves.largeWarning')}</Notice>
-      {/if}
-
-      {#if snapshots.length > 0}
-        <ul class="snapshots" bind:this={list}>
-          {#each snapshots as snapshot (snapshot.id)}
-            <li class="snapshot" data-snapshot={snapshot.id}>
-              <div class="snapshot-main">
-                <span class="snapshot-when">{snapshotWhen(snapshot)}</span>
-                {#if snapshot.broken}
-                  <div class="snapshot-broken">
-                    <StatusBadge kind="danger" label={msg('saves.broken')} />
-                    {#if snapshot.problem}
-                      <span class="snapshot-problem">{snapshot.problem}</span>
-                    {/if}
-                  </div>
-                {:else}
-                  <span class="snapshot-meta">
-                    {snapshotKindLabel(snapshot.kind)} · {bytesSize(snapshot.sizeBytes)} · {msg('saves.filesCount', { count: snapshot.files })}
-                  </span>
-                  {#if snapshotPlayedAfter(snapshot)}
-                    <span class="snapshot-meta">{snapshotPlayedAfter(snapshot)}</span>
-                  {/if}
-                {/if}
-              </div>
-              <div class="actions">
-                {#if !snapshot.broken}
-                  <Button size="sm" disabled={busy || gameRunning} onclick={() => (pending = { kind: 'restore', snapshot })}>
-                    {msg('saves.restore')}
-                  </Button>
-                {/if}
-                <Button size="sm" variant="danger" disabled={busy} onclick={() => askToDelete(snapshot)}>
-                  {msg('saves.delete')}
-                </Button>
-              </div>
-            </li>
-          {/each}
-        </ul>
-      {:else if listLoading}
-        <Spinner size="sm" label={msg('common.loading')} />
-      {:else if !listError}
-        <div class="no-saves">
-          <EmptyState size="inline" align="center" lead title={msg('saves.empty')} description={msg('saves.emptyHint')} />
-        </div>
-      {/if}
-    </div>
+    <GameSavesBackups
+      {snapshots}
+      loading={listLoading}
+      error={listError}
+      {failure}
+      running={gameRunning}
+      {busy}
+      {creating}
+      canCreate={Boolean(saves?.path)}
+      {createId}
+      bind:list
+      oncreate={create}
+      onrestore={(snapshot) => (pending = { kind: 'restore', snapshot })}
+      ondelete={askToDelete}
+    />
   {/if}
 </div>
 
@@ -547,103 +457,14 @@
     gap: var(--space-5);
   }
 
-  .field,
-  .list {
+  .field {
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
-  }
-
-  .source {
-    margin: 0;
-    font-size: var(--font-xs);
-    color: var(--text-3);
   }
 
   .field-label {
     font-size: var(--font-xs);
     color: var(--text-3);
-  }
-
-  .path {
-    margin: 0;
-    font-size: var(--font-sm);
-    color: var(--text-2);
-    word-break: break-all;
-  }
-
-  .hint {
-    margin: 0;
-    font-size: var(--font-sm);
-    color: var(--text-2);
-  }
-
-  .actions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    flex-shrink: 0;
-  }
-
-  .list-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3);
-  }
-
-  .snapshots {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .snapshot {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-4);
-    padding: var(--space-3);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    /* The dialog's own surface, so that on the game page a damaged backup's reason reads over the art. */
-    background: var(--surface-2);
-  }
-
-  .snapshot-main {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-    min-width: 0;
-  }
-
-  .snapshot-when {
-    font-size: var(--font-sm);
-    color: var(--text);
-  }
-
-  .snapshot-meta {
-    font-size: var(--font-xs);
-    color: var(--text-3);
-  }
-
-  .snapshot-broken {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--space-2);
-  }
-
-  .snapshot-problem {
-    font-size: var(--font-xs);
-    color: var(--danger);
-    word-break: break-word;
-  }
-
-  .no-saves {
-    padding: var(--space-5) 0;
   }
 </style>

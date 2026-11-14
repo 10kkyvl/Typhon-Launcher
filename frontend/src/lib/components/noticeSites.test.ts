@@ -148,10 +148,10 @@ const SITES: Record<string, Site[]> = {
     ['warning', false],
     ['danger', true],
   ],
-  // The saves view of the "Saves…" dialog and the game page. A running game and large backups are facts
-  // of the view; a failure just happened.
-  'lib/components/GameSaves.svelte': [
-    ['danger', true],
+  // The saves view of the "Saves…" dialog and the game page, in its parts. A failure just happened; a
+  // running game and large backups are facts of the list.
+  'lib/components/GameSavesFolder.svelte': [['danger', true]],
+  'lib/components/GameSavesBackups.svelte': [
     ['danger', true],
     ['danger', true],
     ['warning', false],
