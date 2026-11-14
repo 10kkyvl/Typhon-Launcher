@@ -1,6 +1,6 @@
 // First: services/library reaches this store back through stores/cloudsaves (see Library.state.dom.test.ts).
 import { libraryGames, libraryLoaded, runningGames } from '../../lib/stores/library';
-import { render, screen, within } from '@testing-library/svelte';
+import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import GameQuickMenu from '../../lib/components/GameQuickMenu.svelte';
@@ -16,7 +16,9 @@ import { renderDom } from '../../lib/testing/dom';
 import { libraryGenres } from '../../lib/stores/genres';
 import { genreLabel } from '../../lib/metadata/labels';
 import Library from './Library.svelte';
-import { carousel, played, recentTitles, shownTitles, slideTitles } from './libraryTesting';
+import { backdropSources, rememberedGame } from '../../lib/backdrop/source';
+import { ambientState, HOVER_LEAVE_MS, HOVER_REST_MS, pickAmbient } from '../../lib/stores/ambient';
+import { carousel, played, recentTitles, results, shownTitles, slideTitles } from './libraryTesting';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
@@ -134,6 +136,50 @@ describe('Library: the carousel on the page', () => {
 
     expect(carousel()).toBeNull();
     expect(screen.getByRole('button', { name: msg('library.carousel.show') })).toBeTruthy();
+  });
+});
+
+describe('Library: the carousel and the window backdrop', () => {
+  // What ShellBackdrop draws, from the real stores.
+  const picked = () =>
+    pickAmbient(get(ambientState), rememberedGame(get(libraryGames), get(gameArt)), (id) => backdropSources(id, get(libraryGames), get(gameArt)).length > 0);
+  const card = (title: string) =>
+    [...(results()?.querySelectorAll<HTMLElement>('.card') ?? [])].find((el) => el.textContent?.includes(title)) as HTMLElement;
+  // A release is published after the task that made it.
+  const settle = () => vi.advanceTimersByTimeAsync(0);
+
+  it('tints the window with the slide on screen; a rested card overrides it and gives the window back after the leave', async () => {
+    vi.useFakeTimers();
+    const { user } = renderDom(Library);
+    // The second slide: the first one is also the game the window falls back to.
+    await user.click(within(carousel() as HTMLElement).getByRole('button', { name: msg('library.carousel.pick', { index: '2', total: '3', title: 'Poster One' }) }));
+    await settle();
+    expect(picked()).toBe('g-poster');
+
+    await fireEvent.pointerEnter(card('Fourth One'), { pointerType: 'mouse' });
+    await vi.advanceTimersByTimeAsync(HOVER_REST_MS);
+    expect(picked()).toBe('g-fourth');
+
+    await fireEvent.pointerLeave(card('Fourth One'));
+    await vi.advanceTimersByTimeAsync(HOVER_LEAVE_MS);
+    expect(picked()).toBe('g-poster');
+  });
+
+  it('claims nothing once put away, nor after the page is left', async () => {
+    vi.useFakeTimers();
+    const first = renderDom(Library);
+    expect(get(ambientState).resting).toBe('g-wide');
+    first.unmount();
+    await settle();
+    expect(get(ambientState).resting).toBeNull();
+
+    const { user } = renderDom(Library);
+    await user.click(screen.getByRole('button', { name: msg('library.carousel.hide') }));
+    await settle();
+    expect(get(ambientState).resting).toBeNull();
+    await user.click(screen.getByRole('button', { name: msg('library.carousel.show') }));
+    await settle();
+    expect(get(ambientState).resting).toBe('g-wide');
   });
 });
 

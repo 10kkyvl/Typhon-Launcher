@@ -12,8 +12,8 @@
 
   /**
    * The library's carousel: the model's slides with their pictures and the line the old hero showed
-   * (last session, play time), and the control that puts it away for the session. The backdrop claim
-   * (`ambient`) stays off: it would outrank the cards' own hover backdrop.
+   * (last session, play time), and the control that puts it away for the session. The slide on screen
+   * is the page's resting picture for the window backdrop (`ambient`); a rested card overrides it.
    */
   let {
     entries,
@@ -81,7 +81,7 @@
 </script>
 
 <div class="carousel" {@attach slideMenus}>
-  <HeroCarousel {slides} bind:shown onopen={(id) => navigate('game', { id })} {onplay} {onstop} />
+  <HeroCarousel {slides} bind:shown ambient onopen={(id) => navigate('game', { id })} {onplay} {onstop} />
   <span class="hide" bind:this={hideSpot}>
     <IconButton variant="secondary" size="sm" label={msg('library.carousel.hide')} onclick={onhide}>
       <X size="1.6rem" strokeWidth={1.8} />
