@@ -51,13 +51,23 @@
     { id: 'collection', label: () => msg('games.randomSourceCollection') },
   ];
 
+  // Hidden games are never picked, so their genres are not offered either.
+  const shownGames = $derived($libraryGames.filter((game) => !game.hidden));
+
   const knownGenres = $derived(
     [
       ...new Set(
-        $libraryGames.flatMap((game) => (game.canonicalGameId ? ($libraryGenres[game.canonicalGameId] ?? []) : [])),
+        shownGames.flatMap((game) => (game.canonicalGameId ? ($libraryGenres[game.canonicalGameId] ?? []) : [])),
       ),
     ].toSorted((a, b) => a.localeCompare(b)),
   );
+
+  // The genres of every game have arrived (none is still loading or failed): only then does a saved
+  // genre that none of them has no longer exist. Until then it is kept, and left out of the pick.
+  const genresLoaded = $derived(
+    shownGames.length > 0 && shownGames.every((game) => !game.canonicalGameId || game.canonicalGameId in $libraryGenres),
+  );
+  const pickGenre = $derived(knownGenres.includes(filters.genre) ? filters.genre : '');
 
   const genreOptions = $derived([
     { id: '', label: msg('games.randomGenreAny') },
@@ -67,13 +77,15 @@
   const collectionOptions = $derived($collections.map((item) => ({ id: item.id, label: item.name })));
 
   $effect(() => {
-    if (filters.genre && !knownGenres.includes(filters.genre)) filters.genre = '';
+    if (filters.genre && genresLoaded && !knownGenres.includes(filters.genre)) filters.genre = '';
   });
 
+  // An empty list may be one that has not loaded or failed to: the saved collection waits for a list
+  // that lacks it.
   $effect(() => {
-    if (filters.source !== 'collection') return;
+    if (filters.source !== 'collection' || $collections.length === 0) return;
     if ($collections.some((item) => item.id === filters.collectionId)) return;
-    filters.collectionId = $collections[0]?.id ?? '';
+    filters.collectionId = $collections[0].id;
   });
 
   $effect(() => {
@@ -83,6 +95,8 @@
   function art(game: LibraryGame): string {
     return (game.canonicalGameId ? $gameArt[game.canonicalGameId]?.cover : '') || game.cover;
   }
+
+  const spinningReason = $derived(phase === 'spinning' ? msg('games.randomSpinning') : '');
 
   // The footer the spin was asked from stays while it spins, its button busy, so the focus on it stays.
   let spunFrom = $state<'setup' | 'result'>('setup');
@@ -96,7 +110,7 @@
     const keepFocus = () => void hand(() => (phase === 'result' ? againSlot : spinSlot)?.querySelector<HTMLElement>('button'));
     cancelSpin?.();
     spunFrom = phase === 'result' ? 'result' : 'setup';
-    const candidates = pickCandidates($libraryGames, filters, $libraryGenres, $collections, Date.now());
+    const candidates = pickCandidates($libraryGames, { ...filters, genre: pickGenre }, $libraryGenres, $collections, Date.now());
     const final = pickRandom(candidates, previousId);
     if (!final) {
       shown = null;
@@ -171,7 +185,7 @@
       {#if knownGenres.length > 0}
         <div class="group">
           <span class="label" id="{uid}-genre-label">{msg('games.randomGenreLabel')}</span>
-          <Select options={genreOptions} bind:value={filters.genre} width="100%" labelledby="{uid}-genre-label" />
+          <Select options={genreOptions} value={pickGenre} onchange={(genre) => (filters.genre = genre)} width="100%" labelledby="{uid}-genre-label" />
         </div>
       {/if}
       {#if phase === 'empty'}
@@ -210,14 +224,15 @@
         </Button>
       </span>
     {:else if shown}
-      <Button disabled={phase === 'spinning'} onclick={() => (phase = 'setup')}>{msg('games.randomFilters')}</Button>
+      <!-- Inert while it spins, not disabled: a focused control that turned disabled would drop focus. -->
+      <Button disabled={phase === 'spinning'} reason={spinningReason} onclick={() => (phase = 'setup')}>{msg('games.randomFilters')}</Button>
       <span class="slot" bind:this={againSlot}>
         <Button busy={phase === 'spinning'} onclick={spin}>
           <Dices size="1.6rem" strokeWidth={1.8} />
           {phase === 'spinning' ? msg('games.randomSpinning') : msg('games.randomAgain')}
         </Button>
       </span>
-      <Button variant="primary" disabled={phase === 'spinning'} busy={launching} onclick={() => play(shown!)}>
+      <Button variant="primary" disabled={phase === 'spinning'} reason={spinningReason} busy={launching} onclick={() => play(shown!)}>
         {#if canPlay(shown)}
           <Play size="1.6rem" strokeWidth={1.8} />
           {msg('games.randomPlay')}
