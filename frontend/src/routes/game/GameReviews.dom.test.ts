@@ -266,4 +266,30 @@ describe('GameReviews: deleting my review', () => {
     const first = screen.getByRole('radio', { name: msg('reviews.composerRecommend') });
     await vi.waitFor(() => expect(document.activeElement).toBe(first));
   });
+
+  it('keeps the dialog open until the refresh after the delete answers, then lands focus on the heading', async () => {
+    let refreshed!: (value: MineAnswer) => void;
+    authState.set('authenticated');
+    vi.mocked(list).mockResolvedValue(empty);
+    vi.mocked(limits).mockResolvedValue({ minBodyRunes: 10, maxBodyRunes: 2000 } as Awaited<ReturnType<typeof limits>>);
+    vi.mocked(mine)
+      .mockResolvedValueOnce(mineOf({ review: myReview, eligibility: { canPost: true } }))
+      .mockReturnValueOnce(new Promise((resolve) => (refreshed = resolve)));
+    vi.mocked(remove).mockResolvedValueOnce(undefined);
+    const { user } = renderDom(GameReviews, { canonicalGameId: 'c1' });
+    const del = await screen.findByRole('button', { name: msg('reviews.composerDelete') });
+    del.focus();
+    await user.keyboard('{Enter}');
+    const dialog = screen.getByRole('dialog', { name: msg('reviews.composerDeleteConfirmTitle') });
+    within(dialog).getByRole('button', { name: msg('reviews.composerDeleteConfirmButton') }).focus();
+
+    await user.keyboard('{Enter}');
+    await vi.waitFor(() => expect(vi.mocked(mine)).toHaveBeenCalledTimes(2));
+
+    expect(dialog.isConnected).toBe(true);
+    refreshed(mineOf({ review: null, eligibility: { canPost: false, reason: 'review_repost_cooldown', retryAt: new Date(Date.now() + 3_600_000).toISOString() } }));
+    await vi.waitFor(() => expect(dialog.isConnected).toBe(false));
+    const heading = screen.getByRole('heading', { name: msg('reviews.sectionTitle') });
+    await vi.waitFor(() => expect(document.activeElement).toBe(heading));
+  });
 });
