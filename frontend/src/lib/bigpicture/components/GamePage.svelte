@@ -111,7 +111,7 @@
   const running = $derived(Boolean(localGame && $runningGames.has(localGame.id)));
   const cover = $derived(metadata?.cover || catalogGame?.coverUrl || localGame?.cover || '');
   const shots = $derived(metadata?.screenshots ?? []);
-  const hero = $derived(pickHero(metadata?.hero || '', shots) || cover);
+  const hero = $derived(pickHero(metadata) || cover);
   const displayShots = $derived(galleryShots(shots, hero));
   const requirements = $derived(requirementColumns(metadata?.steam));
   const dlc = $derived(dlcView(metadata?.steam?.dlc, dlcExpanded));

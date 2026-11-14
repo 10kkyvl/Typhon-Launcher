@@ -398,7 +398,7 @@
     clean(info?.title) || clean(catalogGame?.title) || clean(localGame?.title) || clean(anyOwnDownload?.name),
   );
   const screenshots = $derived(metaView?.screenshots ?? []);
-  const heroSrc = $derived(pickHero(metaView?.hero ?? '', screenshots));
+  const heroSrc = $derived(pickHero(metaView));
   const shots = $derived(galleryShots(screenshots, heroSrc));
   const coverSrc = $derived(clean(metaView?.cover) || clean(catalogGame?.coverUrl) || clean(localGame?.cover));
   const showHero = $derived(Boolean(heroSrc) && !heroFailed);

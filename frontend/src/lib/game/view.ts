@@ -11,18 +11,13 @@ export function clean(value: unknown): string {
   return blanks.has(text.toLowerCase()) ? '' : text;
 }
 
-export function landscape(asset: Pick<MediaAsset, 'width' | 'height'>): boolean {
-  return asset.width > 0 && asset.height > 0 && asset.width > asset.height;
-}
-
-export function pickHero(hero: string, screenshots: MediaAsset[]): string {
-  const direct = clean(hero);
-  if (direct) return direct;
-  for (const shot of screenshots) {
-    const url = clean(shot.url);
-    if (url && landscape(shot)) return url;
-  }
-  return '';
+/**
+ * The wide picture for a game page's hero band: Go's choice, or nothing. A poster (the tall cover
+ * standing in for a missing wide picture) is not a wide hero; the page draws its own fallback.
+ */
+export function pickHero(view: Pick<MetadataView, 'hero' | 'heroIsPoster'> | null | undefined): string {
+  if (!view || view.heroIsPoster) return '';
+  return clean(view.hero);
 }
 
 export function galleryShots(screenshots: MediaAsset[], heroSrc: string): MediaAsset[] {

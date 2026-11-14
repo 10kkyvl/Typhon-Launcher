@@ -85,31 +85,28 @@ describe("clean", () => {
 });
 
 describe("pickHero", () => {
-  it("prefers the stored hero", () => {
-    expect(pickHero("http://local/hero.png", [shot()])).toBe(
-      "http://local/hero.png",
-    );
-  });
-
-  it("falls back to a landscape screenshot", () => {
+  it("passes the wide hero Go chose through", () => {
     expect(
-      pickHero("", [
-        shot({ id: "p", width: 600, height: 900 }),
-        shot({ id: "l" }),
-      ]),
-    ).toBe("http://local/s1.png");
+      pickHero(view({ hero: "http://local/hero.png", screenshots: [shot({ url: "http://local/other.png" })] })),
+    ).toBe("http://local/hero.png");
   });
 
-  it("refuses portrait-only artwork", () => {
-    expect(pickHero("", [shot({ width: 600, height: 900 })])).toBe("");
+  it("answers no wide hero when the hero is the poster", () => {
+    expect(
+      pickHero(view({ cover: "http://local/cover.png", hero: "http://local/cover.png", heroIsPoster: true })),
+    ).toBe("");
   });
 
-  it("refuses screenshots without a url", () => {
-    expect(pickHero("", [shot({ url: "" })])).toBe("");
+  it("has no landscape fallback of its own over the screenshots", () => {
+    expect(
+      pickHero(view({ hero: "", screenshots: [shot({ id: "p", width: 600, height: 900 }), shot({ id: "l" })] })),
+    ).toBe("");
   });
 
-  it("has no hero without artwork at all", () => {
-    expect(pickHero("", [])).toBe("");
+  it("has no hero without a view or a blank hero", () => {
+    expect(pickHero(null)).toBe("");
+    expect(pickHero(undefined)).toBe("");
+    expect(pickHero(view({ hero: "  " }))).toBe("");
   });
 });
 
