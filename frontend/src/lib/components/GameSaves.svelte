@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import GameSavesBackups from './GameSavesBackups.svelte';
   import GameSavesCloud, { type CloudAvailability } from './GameSavesCloud.svelte';
   import GameSavesFolder from './GameSavesFolder.svelte';
@@ -27,7 +27,7 @@
   import { libraryGames, runningGames } from '../stores/library';
   import { navigate } from '../stores/router';
   import { settings } from '../stores/settings';
-  import { closeSaveBackups, saveBackupsEnabled } from '../stores/savebackup';
+  import { closeSaveBackups, runSavesWork, saveBackupsEnabled, savesInFlight, type SavesInFlight, type SavesWork } from '../stores/savebackup';
   import { toast } from '../stores/toasts';
   import { authState } from '../stores/user';
   import { focusHandOff } from '../utils/focusHandOff';
@@ -44,7 +44,9 @@
    * backups with create, restore and delete. Mounted by the "Saves…" dialog and the game page's Saves
    * tab. Without backups (`backups`, else whether they are on) it is the cloud part alone and asks
    * nothing about the folder or the backups. `busy` is true while a folder or backup action runs: the
-   * dialog is not dismissed meanwhile.
+   * dialog is not dismissed meanwhile. A backup or cloud action runs in the store (`savesInFlight`), so
+   * a view mounted while it runs (the dialog opened again, the tab entered again) shows it busy, starts
+   * no second one and loads the list again once it ends.
    */
   let {
     gameId,
@@ -75,14 +77,30 @@
   let saves = $state<SavesResult | null>(null);
   let savesLoading = $state(false);
   let savesError = $state('');
-  // Which folder button set `busy`: that one stays focused and busy, the others wait.
+  // A folder action of this view runs; `acting` is its button, which stays focused and busy.
+  let folderBusy = $state(false);
   let acting = $state<'' | 'open' | 'folder'>('');
-  let creating = $state(false);
   let failure = $state('');
   let pending = $state<Pending | null>(null);
   let candidatesOpen = $state(false);
-  let cloudBusy = $state(false);
   let cloudFailure = $state('');
+
+  // This view, as who started an action: one started elsewhere loads the list again when it ends.
+  const me = Symbol('saves view');
+  const flight = $derived($savesInFlight.get(gameId));
+  const backupWork = $derived(flight?.backup);
+  const creating = $derived(backupWork?.kind === 'create');
+  const cloudBusy = $derived(Boolean(flight?.cloud));
+  const working = $derived(Boolean(backupWork) || folderBusy);
+
+  $effect(() => {
+    busy = working;
+  });
+
+  let alive = true;
+  onDestroy(() => {
+    alive = false;
+  });
   let cloudDeleteAsked = $state(false);
   let cloudPullAsked = $state(false);
 
@@ -100,10 +118,8 @@
       if (loadedFor === id) return;
       loadedFor = id;
       turn++;
-      busy = false;
+      folderBusy = false;
       acting = '';
-      creating = false;
-      cloudBusy = false;
       snapshots = [];
       listError = '';
       saves = null;
@@ -131,6 +147,23 @@
     });
   });
 
+  // An action started by another view (one closed meanwhile) changed the backups: load them again.
+  let seen: SavesInFlight | undefined;
+  let seenFor = '';
+  $effect(() => {
+    const now = flight;
+    const id = gameId;
+    const loads = withBackups;
+    untrack(() => {
+      const before = seenFor === id ? seen : undefined;
+      seen = now;
+      seenFor = id;
+      const ended = (work: SavesWork | undefined, after: SavesWork | undefined) => Boolean(work) && work?.by !== me && after !== work;
+      const changed = ended(before?.backup, now?.backup) || (before?.cloud?.kind === 'pull' && ended(before.cloud, now?.cloud));
+      if (loads && changed) void loadList(id);
+    });
+  });
+
   $effect(() => {
     const id = gameId;
     if (!withBackups) return;
@@ -140,7 +173,7 @@
   });
 
   async function loadList(gameId: string) {
-    if (gameId !== loadedFor) return;
+    if (!alive || gameId !== loadedFor) return;
     const seq = ++listSeq;
     listLoading = true;
     try {
@@ -157,7 +190,7 @@
   }
 
   async function loadSaves(gameId: string) {
-    if (gameId !== loadedFor) return;
+    if (!alive || gameId !== loadedFor) return;
     const seq = ++savesSeq;
     savesLoading = true;
     try {
@@ -175,9 +208,9 @@
   }
 
   async function perform(action: () => Promise<void>, fallback: (err: unknown) => string, by: '' | 'open' | 'folder' = '') {
-    if (busy) return;
+    if (working) return;
     const mine = turn;
-    busy = true;
+    folderBusy = true;
     acting = by;
     failure = '';
     try {
@@ -186,10 +219,37 @@
       if (mine === turn) failure = saveBackupErrorText(err, fallback(err));
     } finally {
       if (mine === turn) {
-        busy = false;
+        folderBusy = false;
         acting = '';
-        creating = false;
       }
+    }
+  }
+
+  // A backup action, in the game's backup lane: refused while one runs there, from this view or another.
+  async function backupAction(gameId: string, work: Omit<SavesWork, 'by'>, action: () => Promise<void>) {
+    if (working) return;
+    const mine = turn;
+    failure = '';
+    try {
+      await runSavesWork(gameId, 'backup', { ...work, by: me }, action);
+    } catch (err) {
+      if (mine === turn) failure = saveBackupErrorText(err, backupFailure());
+    }
+  }
+
+  // A cloud action, in the game's cloud lane; the status is loaded again whatever the outcome.
+  async function cloudAction(work: SavesWork['kind'], action: (gameId: string) => Promise<void>, done: () => Promise<void> = async () => {}) {
+    if (cloudBusy) return;
+    const { gameId } = target;
+    const mine = turn;
+    cloudFailure = '';
+    try {
+      await runSavesWork(gameId, 'cloud', { kind: work, by: me }, () => action(gameId));
+    } catch (err) {
+      if (mine === turn) cloudFailure = cloudErrorText(err);
+    } finally {
+      await refreshCloudStatus();
+      await done();
     }
   }
 
@@ -197,10 +257,8 @@
   const folderNotSet = () => msg('saves.folderNotSet');
 
   function create() {
-    if (busy) return;
     const { gameId } = target;
-    creating = true;
-    return perform(async () => {
+    return backupAction(gameId, { kind: 'create' }, async () => {
       try {
         await createBackup(gameId);
         toast(msg('saves.created'), 'success');
@@ -210,12 +268,12 @@
       } finally {
         await loadList(gameId);
       }
-    }, backupFailure);
+    });
   }
 
   async function restore(snapshot: Snapshot) {
     const { gameId } = target;
-    await perform(async () => {
+    await backupAction(gameId, { kind: 'restore', snapshot: snapshot.id }, async () => {
       try {
         await restoreBackup(gameId, snapshot.id);
         toast(msg('saves.restored'), 'success');
@@ -231,19 +289,19 @@
       } finally {
         await loadList(gameId);
       }
-    }, backupFailure);
+    });
   }
 
   async function remove(snapshot: Snapshot) {
     const { gameId } = target;
-    await perform(async () => {
+    await backupAction(gameId, { kind: 'delete', snapshot: snapshot.id }, async () => {
       try {
         await deleteBackup(gameId, snapshot.id);
         toast(msg('saves.deleted'), 'success');
       } finally {
         await loadList(gameId);
       }
-    }, backupFailure);
+    });
   }
 
   async function runPending() {
@@ -253,57 +311,29 @@
     else await remove(current.snapshot);
   }
 
-  async function cloudSync() {
-    if (cloudBusy) return;
-    const { gameId } = target;
-    const mine = turn;
-    cloudBusy = true;
-    cloudFailure = '';
-    try {
+  const cloudSync = () =>
+    cloudAction('sync', async (gameId) => {
       await cloudSyncNow(gameId);
       toast(msg('cloudsaves.syncDone'), 'success');
-    } catch (err) {
-      if (mine === turn) cloudFailure = cloudErrorText(err);
-    } finally {
-      if (mine === turn) cloudBusy = false;
-      await refreshCloudStatus();
-    }
-  }
+    });
 
-  async function cloudPull() {
-    if (cloudBusy) return;
+  const cloudPull = () => {
     const { gameId } = target;
-    const mine = turn;
-    cloudBusy = true;
-    cloudFailure = '';
-    try {
-      await cloudPullRemote(gameId);
-      toast(msg('cloudsaves.pulled'), 'success');
-    } catch (err) {
-      if (mine === turn) cloudFailure = cloudErrorText(err);
-    } finally {
-      if (mine === turn) cloudBusy = false;
-      await refreshCloudStatus();
-      await loadList(gameId);
-    }
-  }
+    return cloudAction(
+      'pull',
+      async () => {
+        await cloudPullRemote(gameId);
+        toast(msg('cloudsaves.pulled'), 'success');
+      },
+      () => loadList(gameId),
+    );
+  };
 
-  async function cloudDelete() {
-    if (cloudBusy) return;
-    const { gameId } = target;
-    const mine = turn;
-    cloudBusy = true;
-    cloudFailure = '';
-    try {
+  const cloudDelete = () =>
+    cloudAction('delete-remote', async (gameId) => {
       await cloudDeleteRemote(gameId);
       toast(msg('cloudsaves.deleted'), 'success');
-    } catch (err) {
-      if (mine === turn) cloudFailure = cloudErrorText(err);
-    } finally {
-      if (mine === turn) cloudBusy = false;
-      await refreshCloudStatus();
-    }
-  }
+    });
 
   function openCloudSettings() {
     closeSaveBackups();
@@ -411,6 +441,7 @@
       running={gameRunning}
       {busy}
       {creating}
+      working={backupWork}
       canCreate={Boolean(saves?.path)}
       {createId}
       bind:list
@@ -433,11 +464,11 @@
 {/if}
 
 {#if cloudPullAsked}
-  <ConfirmModal prompt={pullCloudSavesPrompt()} onconfirm={cloudPull} onclose={() => (cloudPullAsked = false)} />
+  <ConfirmModal prompt={pullCloudSavesPrompt()} onconfirm={cloudPull} onclose={() => (cloudPullAsked = false)} errorText={(err) => cloudErrorText(err)} />
 {/if}
 
 {#if cloudDeleteAsked}
-  <ConfirmModal prompt={deleteCloudSavesPrompt()} onconfirm={cloudDelete} onclose={() => (cloudDeleteAsked = false)} />
+  <ConfirmModal prompt={deleteCloudSavesPrompt()} onconfirm={cloudDelete} onclose={() => (cloudDeleteAsked = false)} errorText={(err) => cloudErrorText(err)} />
 {/if}
 
 {#if pending}

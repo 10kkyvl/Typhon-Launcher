@@ -23,6 +23,7 @@
     running = false,
     busy = false,
     creating = false,
+    working,
     canCreate = false,
     createId,
     list = $bindable(),
@@ -40,6 +41,8 @@
     running?: boolean;
     busy?: boolean;
     creating?: boolean;
+    /** The backup action that runs: a restore or a deletion shows busy on its backup's button. */
+    working?: { kind: string; snapshot?: string };
     /** The saves folder is known: a backup can be made. */
     canCreate?: boolean;
     createId?: string;
@@ -75,6 +78,8 @@
   {#if snapshots.length > 0}
     <ul class="snapshots" bind:this={list}>
       {#each snapshots as snapshot (snapshot.id)}
+        {@const restoring = working?.kind === 'restore' && working.snapshot === snapshot.id}
+        {@const deleting = working?.kind === 'delete' && working.snapshot === snapshot.id}
         <li class="snapshot" data-snapshot={snapshot.id}>
           <div class="snapshot-main">
             <span class="snapshot-when">{snapshotWhen(snapshot)}</span>
@@ -96,11 +101,11 @@
           </div>
           <div class="actions">
             {#if !snapshot.broken}
-              <Button size="sm" disabled={busy || running} onclick={() => onrestore(snapshot)}>
+              <Button size="sm" disabled={!restoring && (busy || running)} busy={restoring} onclick={() => onrestore(snapshot)}>
                 {msg('saves.restore')}
               </Button>
             {/if}
-            <Button size="sm" variant="danger" disabled={busy} onclick={() => ondelete(snapshot)}>
+            <Button size="sm" variant="danger" disabled={!deleting && busy} busy={deleting} onclick={() => ondelete(snapshot)}>
               {msg('saves.delete')}
             </Button>
           </div>
