@@ -1,6 +1,6 @@
 // First: services/library reaches this store back through stores/cloudsaves (see Library.state.dom.test.ts).
 import { libraryGames, libraryLoaded, runningGames } from '../../lib/stores/library';
-import { screen } from '@testing-library/svelte';
+import { fireEvent, screen } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
@@ -179,6 +179,21 @@ describe('Library: the list by keyboard', () => {
     expect(playGame).toHaveBeenCalledWith('g-bravo');
     expect(focusedTitle()).toBe('Bravo');
     release();
+  });
+
+  it('takes Ctrl+Enter from the focused control, and a held key launches nothing', async () => {
+    const { user } = renderDom(Library);
+    beforeList().focus();
+    await user.tab();
+    const title = document.activeElement as HTMLElement;
+
+    // A held key repeats: only the first press launches, as on a card.
+    expect(await fireEvent.keyDown(title, { key: 'Enter', ctrlKey: true, repeat: true })).toBe(false);
+    expect(playGame).not.toHaveBeenCalled();
+
+    // Not prevented, Enter would also press the title (open the game) or Play (a second launch).
+    expect(await fireEvent.keyDown(title, { key: 'Enter', metaKey: true })).toBe(false);
+    expect(playGame).toHaveBeenCalledTimes(1);
   });
 
   it('does not launch a running game again with Ctrl+Enter', async () => {
