@@ -2,23 +2,15 @@
   import Page from '../../lib/components/Page.svelte';
   import { locale } from '../../lib/i18n/locale';
   import { untrack } from 'svelte';
-  import AddDownloadModal from '../../lib/components/AddDownloadModal.svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
-  import GameStatusModal from '../../lib/components/GameStatusModal.svelte';
-  import GameTagsModal from '../../lib/components/GameTagsModal.svelte';
-  import InstallModal from '../../lib/components/InstallModal.svelte';
-  import Lightbox from '../../lib/components/Lightbox.svelte';
-  import MetadataMatchModal from '../../lib/components/MetadataMatchModal.svelte';
-  import Modal from '../../lib/components/Modal.svelte';
-  import ReleaseList from '../../lib/components/ReleaseList.svelte';
-  import RemoveGameModal from '../../lib/components/RemoveGameModal.svelte';
   import Tabs from '../../lib/components/Tabs.svelte';
   import { tabPanel } from '../../lib/components/tabs';
   import type UpdateCard from '../../lib/components/UpdateCard.svelte';
   import GameActions from './GameActions.svelte';
+  import GameDialogs from './GameDialogs.svelte';
   import GamePageHero from './GamePageHero.svelte';
   import GameMetaNotice from './GameMetaNotice.svelte';
   import GameScreenshots from './GameScreenshots.svelte';
@@ -487,54 +479,11 @@
       </aside>
     </div>
 
-    {#if localGame}
-      <GameStatusModal bind:open={statusOpen} game={localGame} />
-
-      {#if tagsOpen}
-        <GameTagsModal bind:open={tagsOpen} game={localGame} />
-      {/if}
-
-      <RemoveGameModal
-        bind:open={removeOpen}
-        bind:mode={removeMode}
-        gameId={localGame.id}
-        title={localGame.title}
-        external={externalLabel(localGame)}
-        emulated={emulated}
-        onremoved={(removed) => {
-          if (removed === 'library') navigate('installed');
-        }}
-      />
-    {/if}
-
-    <Modal bind:open={pickerOpen} title={msg('games.detailChooseDownloadTitle')} width="86rem">
-      <ReleaseList
-        groups={downloadPool}
-        currentReleaseId={localGame?.releaseId ?? ''}
-        ondownload={(group) => {
-          pickerOpen = false;
-          downloadRelease(group);
-        }}
-      />
-    </Modal>
-
-    <Lightbox
-      bind:open={lightboxOpen}
-      bind:index={lightboxIndex}
-      items={shots.map((shot) => ({ id: shot.id, url: shot.url ?? '' }))}
-      label={title}
+    <GameDialogs
+      {data} {localGame} {emulated} {title} {canonicalId} {shots} {downloadPool} {downloadRelease} {matchMode} {downloadSource}
+      {downloadOrigin} {installModalDownloadId} bind:statusOpen bind:tagsOpen bind:removeOpen bind:removeMode bind:pickerOpen
+      bind:lightboxOpen bind:lightboxIndex bind:matchOpen bind:downloadModalOpen bind:installModalOpen
     />
-
-    <MetadataMatchModal
-      bind:open={matchOpen}
-      gameId={canonicalId ?? ''}
-      gameTitle={title}
-      mode={matchMode}
-      onapplied={(view) => (data.metaView = view)}
-    />
-
-    <AddDownloadModal bind:open={downloadModalOpen} initialSource={downloadSource} origin={downloadOrigin} />
-    <InstallModal bind:open={installModalOpen} downloadId={installModalDownloadId} />
   {/if}
 
   {#if pending}
