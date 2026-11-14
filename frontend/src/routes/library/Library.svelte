@@ -3,18 +3,15 @@
   import { BellOff, Pencil, Plus } from '@lucide/svelte';
   import { untrack } from 'svelte';
   import { get } from 'svelte/store';
-  import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Chip from '../../lib/components/Chip.svelte';
   import CollectionModal from '../../lib/components/CollectionModal.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
-  import GameCard, { type GameCardAction } from '../../lib/components/GameCard.svelte';
+  import type { GameCardAction } from '../../lib/components/GameCard.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import Notice from '../../lib/components/Notice.svelte';
   import RandomGameModal from '../../lib/components/RandomGameModal.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
-  import SourceBadge from '../../lib/components/SourceBadge.svelte';
-  import ConsoleTag from '../../lib/components/ConsoleTag.svelte';
   import { playGame, stopGame, type LibraryCollection } from '../../lib/services/library';
   import { downloads } from '../../lib/stores/downloads';
   import { collections, collectionsLoadError, collectionsState, loadCollections } from '../../lib/stores/collections';
@@ -31,12 +28,9 @@
   } from '../../lib/stores/library';
   import { libraryChoices, librarySort } from '../../lib/stores/libraryPrefs';
   import { gameArt, requestArt } from '../../lib/stores/metadata';
-  import { gameContextMenu } from '../../lib/stores/gameMenu';
-  import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
   import { toggleWatch, watchAlertsLoaded, watchlist } from '../../lib/stores/watchlist';
   import { libraryView } from '../../lib/stores/ui';
-  import { ambientHover } from '../../lib/utils/ambientHover';
   import { focusHandOff } from '../../lib/utils/focusHandOff';
   import { focusableIn } from '../../lib/layers/focus';
   import { locale, msg } from '../../lib/i18n';
@@ -49,7 +43,9 @@
   import LibraryHero from './LibraryHero.svelte';
   import RecentRow from './RecentRow.svelte';
   import LibraryToolbar from './LibraryToolbar.svelte';
-  import { entryMeta, entrySubtitle, narrowingText } from './entryText';
+  import LibraryGrid from './LibraryGrid.svelte';
+  import LibraryList from './LibraryList.svelte';
+  import { narrowingText } from './entryText';
 
   const saved = get(libraryChoices);
   let filter = $state(saved.filter);
@@ -211,10 +207,6 @@
     viewSwitched = true;
   });
 
-  function endViewSwitch(event: AnimationEvent) {
-    if (event.target === event.currentTarget) viewSwitched = false;
-  }
-
   async function toggleRun(id: string) {
     try {
       if ($runningGames.has(id)) await stopGame(id);
@@ -325,46 +317,17 @@
         </EmptyState>
       {/if}
     {:else if $libraryView === 'grid'}
-      <div class="grid" class:switched={viewSwitched} onanimationend={endViewSwitch} bind:this={results}>
-        {#each visibleGames as entry (entry.id)}
-          <GameCard
-            id={entry.id}
-            title={entry.title}
-            cover={entryCover(entry, $gameArt)}
-            ambient
-            installed={entry.installed}
-            running={$runningGames.has(entry.id)}
-            source={entry.source}
-            platform={entry.platform}
-            meta={entry.kind === 'watched' ? entrySubtitle(entry) : entryMeta(entry)}
-            actions={watchedActions(entry)}
-            onplay={entry.playable ? () => toggleRun(entry.id) : undefined}
-          />
-        {/each}
-      </div>
+      <LibraryGrid
+        entries={visibleGames}
+        art={$gameArt}
+        running={$runningGames}
+        actions={watchedActions}
+        onplay={toggleRun}
+        bind:switched={viewSwitched}
+        bind:element={results}
+      />
     {:else}
-      <div class="list" class:switched={viewSwitched} onanimationend={endViewSwitch} bind:this={results}>
-        {#each visibleGames as entry (entry.id)}
-          <button
-            class="list-row"
-            use:ambientHover={entry.id}
-            onclick={() => navigate('game', { id: entry.id })}
-            {@attach gameContextMenu(entry.id)}
-          >
-            <div class="list-thumb" aria-hidden="true">
-              <Artwork src={entryCover(entry, $gameArt)} alt="" label={entry.title} radius="var(--radius-xs)" />
-            </div>
-            <span class="list-title">{entry.title}</span>
-            {#if entry.platform}
-              <ConsoleTag platform={entry.platform} />
-            {:else if entry.source}
-              <SourceBadge source={entry.source} />
-            {/if}
-            <span class="list-meta">{entrySubtitle(entry)}</span>
-            <span class="list-meta right">{entry.kind === 'watched' ? '' : entryMeta(entry)}</span>
-          </button>
-        {/each}
-      </div>
+      <LibraryList entries={visibleGames} art={$gameArt} bind:switched={viewSwitched} bind:element={results} />
     {/if}
   </section>
 
@@ -404,81 +367,5 @@
     flex-wrap: wrap;
     gap: 0.6rem;
     margin-bottom: var(--space-5);
-  }
-
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
-    gap: var(--space-6) var(--space-5);
-  }
-
-  .list {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .grid.switched,
-  .list.switched {
-    animation: rise-in var(--dur-panel) var(--ease);
-  }
-
-  .list-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-4);
-    padding: 0.8rem 0.8rem;
-    border-radius: var(--radius-md);
-    text-align: left;
-    transition: background var(--dur) var(--ease);
-  }
-
-  .list-row + .list-row {
-    border-top: 1px solid var(--border);
-  }
-
-  .list-row:hover {
-    background: var(--hover);
-  }
-
-  .list-thumb {
-    width: 3.2rem;
-    height: 4.2rem;
-    flex-shrink: 0;
-    border-radius: var(--radius-xs);
-    overflow: hidden;
-  }
-
-  .list-title {
-    flex: 1;
-    min-width: 0;
-    font-size: var(--font-md);
-    font-weight: 500;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .list-meta {
-    font-size: var(--font-sm);
-    color: var(--text-3);
-    white-space: nowrap;
-  }
-
-  .list-meta.right {
-    min-width: 6rem;
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-  }
-
-  @media (min-width: 2200px) {
-    .grid {
-      grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
-    }
-  }
-
-  @media (max-width: 1400px) {
-    .grid {
-      grid-template-columns: repeat(auto-fill, minmax(14.5rem, 1fr));
-    }
   }
 </style>
