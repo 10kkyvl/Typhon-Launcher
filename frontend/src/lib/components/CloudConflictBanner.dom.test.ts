@@ -198,4 +198,19 @@ describe('CloudConflictBanner: its action and the dialog', () => {
     expect(banner()).toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(heading));
   });
+
+  it('leaves focus where the player put it when the conflict is settled by an event meanwhile', async () => {
+    cloudStatus.set(statusWith(game()));
+    renderBanner();
+    const field = document.createElement('input');
+    app.append(field);
+    field.focus();
+
+    cloudStatus.set(statusWith(game({ state: 'synced', conflict: undefined })));
+    await tick();
+    await tick();
+
+    expect(banner()).toBeNull();
+    expect(document.activeElement).toBe(field);
+  });
 });
