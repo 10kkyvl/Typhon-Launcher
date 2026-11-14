@@ -214,7 +214,8 @@
     opacity: 0;
   }
 
-  .play:focus-visible ~ .compat {
+  .play:focus-visible ~ .compat,
+  .play[aria-busy='true'] ~ .compat {
     opacity: 0;
   }
 

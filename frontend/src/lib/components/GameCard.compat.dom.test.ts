@@ -45,6 +45,14 @@ describe('GameCard: the compat verdict on the cover', () => {
     expect(getComputedStyle(verdict).opacity).toBe('0');
   });
 
+  it('steps aside while a launch is in flight, whose busy Play stays shown over the same corner', () => {
+    renderDom(GameCard, { id: 'g1', title: 'Hades', installed: true, launching: true, onplay: vi.fn(), compat: { works: 3, total: 4 } satisfies CompatInfo });
+    const verdict = document.querySelector('.compat') as HTMLElement;
+    applyStyles(verdict, source);
+
+    expect(getComputedStyle(verdict).opacity).toBe('0');
+  });
+
   it('stays inside the card, whatever the length of its label', () => {
     renderDom(GameCard, { id: 'g1', title: 'Hades', compat: { works: 12, total: 40 } satisfies CompatInfo });
     const verdict = document.querySelector('.compat') as HTMLElement;
