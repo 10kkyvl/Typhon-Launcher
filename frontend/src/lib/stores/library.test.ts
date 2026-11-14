@@ -20,12 +20,15 @@ let games: LibraryGame[] = [];
 let running: string[] = [];
 let gamesError: Error | null = null;
 
-vi.mock('../services/library', () => ({
-  getGames: vi.fn(async () => {
-    if (gamesError) throw gamesError;
-    return games;
-  }),
-  getRunningGames: vi.fn(async () => running),
+// The real service over a fake binding: the payload check of its subscriptions runs as in the app.
+vi.mock('../../../bindings/typhon/internal/library', () => ({
+  Service: {
+    GetGames: vi.fn(async () => {
+      if (gamesError) throw gamesError;
+      return games;
+    }),
+    GetRunningGames: vi.fn(async () => running),
+  },
 }));
 
 const catalog = vi.hoisted(() => ({ answer: vi.fn<(ids: string[]) => Promise<unknown[]>>() }));
@@ -123,6 +126,24 @@ describe('library store', () => {
     expect(get(store.libraryLoadError)).toBeNull();
     expect(get(store.libraryLoaded)).toBe(true);
     expect(get(store.libraryGames).map((item) => item.id)).toEqual(['a']);
+  });
+
+  it('lets a list from library:updated that arrives during the load win over the older answer', async () => {
+    let answer: (value: LibraryGame[]) => void = () => {};
+    vi.resetModules();
+    for (const key of Object.keys(handlers)) delete handlers[key];
+    const binding = await import('../../../bindings/typhon/internal/library');
+    vi.mocked(binding.Service.GetGames).mockReturnValueOnce(
+      new Promise((resolve) => (answer = resolve)) as unknown as ReturnType<typeof binding.Service.GetGames>,
+    );
+    const store = await import('./library');
+    const started = store.initLibrary();
+
+    handlers['library:updated']({ data: [game({ id: 'new' })] });
+    answer([game({ id: 'old' })]);
+    await started;
+
+    expect(get(store.libraryGames).map((item) => item.id)).toEqual(['new']);
   });
 
   it('takes only a list from library:updated', async () => {

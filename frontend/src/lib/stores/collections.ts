@@ -1,9 +1,6 @@
 import { writable } from 'svelte/store';
-import { Events } from '@wailsio/runtime';
 import { inWails } from '../services/backend';
-import { getCollections, type LibraryCollection } from '../services/library';
-
-export const EVENT_COLLECTIONS = 'library:collections';
+import { getCollections, onCollectionsChanged, type LibraryCollection } from '../services/library';
 
 /** 'failed': the list could not be read; it is not the same as having no collections. */
 export type CollectionsState = 'loading' | 'ready' | 'failed';
@@ -11,10 +8,6 @@ export type CollectionsState = 'loading' | 'ready' | 'failed';
 export const collections = writable<LibraryCollection[]>([]);
 export const collectionsState = writable<CollectionsState>('loading');
 export const collectionsLoadError = writable<unknown>(null);
-
-function collectionList(data: unknown): LibraryCollection[] {
-  return Array.isArray(data) ? (data as LibraryCollection[]) : [];
-}
 
 // An event carries the newest list; an answer that started before it must not replace it.
 let generation = 0;
@@ -43,12 +36,12 @@ export async function initCollections(): Promise<() => void> {
     collectionsState.set('ready');
     return () => {};
   }
-  const off = Events.On(EVENT_COLLECTIONS, (event) => {
+  const off = onCollectionsChanged((list) => {
     generation += 1;
-    collections.set(collectionList(event.data));
+    collections.set(list);
     collectionsState.set('ready');
     collectionsLoadError.set(null);
   });
   await loadCollections();
-  return () => off();
+  return off;
 }

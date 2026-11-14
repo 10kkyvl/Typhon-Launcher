@@ -1,7 +1,15 @@
 import { derived, get, writable } from 'svelte/store';
 import { listenFirst } from './listenFirst';
 import { inWails } from '../services/backend';
-import { getGames, getRunningGames, type CrashEvent, type LibraryGame, type ProfileFallback, type SessionEvent } from '../services/library';
+import {
+  getGames,
+  getRunningGames,
+  onLibraryUpdated,
+  type CrashEvent,
+  type LibraryGame,
+  type ProfileFallback,
+  type SessionEvent,
+} from '../services/library';
 import { getCatalogGames } from '../services/sources';
 import { msg } from '../i18n';
 import type { CatalogTitle } from '../library/entries';
@@ -9,8 +17,6 @@ import { metadataErrorText } from '../metadata/metadataErrors';
 import { clearCrashes, recordCrash, recordCrashDetail } from './crash';
 import { navigate } from './router';
 import { toast } from './toasts';
-
-export const EVENT_LIBRARY_UPDATED = 'library:updated';
 
 export const libraryGames = writable<LibraryGame[]>([]);
 // Until the first list arrives, an empty libraryGames is not an empty library.
@@ -23,10 +29,6 @@ export const runningGames = writable<Set<string>>(new Set());
 // when the launcher came up has no entry: how long it has been running is not known here.
 export const sessionStarts = writable<Map<string, number>>(new Map());
 
-function gameList(data: unknown): LibraryGame[] {
-  return Array.isArray(data) ? (data as LibraryGame[]) : [];
-}
-
 function received(games: LibraryGame[]) {
   libraryGames.set(games);
   libraryLoaded.set(true);
@@ -37,11 +39,17 @@ type Loader = <T>(request: () => Promise<T>) => Promise<T>;
 
 const direct: Loader = (request) => request();
 
-/** Reads the list once; answers whether it arrived. A failure before any list is kept as state. */
+// A list from library:updated is the newest; an answer requested before it must not replace it.
+let listGeneration = 0;
+
+/** Reads the list once; answers whether a list is there. A failure before any list is kept as state. */
 export async function loadLibrary(load: Loader = direct): Promise<boolean> {
+  const started = listGeneration;
   try {
-    received(await load(getGames));
+    const games = await load(getGames);
+    if (started === listGeneration) received(games);
   } catch (err) {
+    if (started !== listGeneration) return true;
     if (!get(libraryLoaded)) libraryLoadError.set(err);
     return false;
   }
@@ -92,7 +100,10 @@ export async function initLibrary(): Promise<() => void> {
   }
   const { on, load } = listenFirst();
   const offs = [
-    on(EVENT_LIBRARY_UPDATED, (event) => received(gameList(event.data))),
+    onLibraryUpdated((games) => {
+      listGeneration += 1;
+      received(games);
+    }),
     on('library:profile-fallback', (event) => {
       const { profileName } = event.data as ProfileFallback;
       toast(msg('games.profileFallback', { name: profileName }), 'danger');

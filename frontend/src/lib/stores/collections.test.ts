@@ -19,7 +19,8 @@ vi.mock('../services/backend', () => ({ inWails: true }));
 vi.mock('./toasts', () => ({ toast: vi.fn() }));
 
 const service = vi.hoisted(() => ({ getCollections: vi.fn<() => Promise<LibraryCollection[]>>() }));
-vi.mock('../services/library', () => service);
+// The real service over a fake binding: the payload check of its subscription runs as in the app.
+vi.mock('../../../bindings/typhon/internal/library', () => ({ Service: { GetCollections: service.getCollections } }));
 
 const collection = (id: string): LibraryCollection => ({ id, name: id, createdAt: '', updatedAt: '' });
 

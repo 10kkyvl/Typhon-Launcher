@@ -1,4 +1,5 @@
 import { derived, get, writable, type Readable } from 'svelte/store';
+import { Events } from '@wailsio/runtime';
 import { locale } from '../i18n/locale';
 import { Service as LibraryService } from '../../../bindings/typhon/internal/library';
 import { Service as AppService } from '../../../bindings/typhon/internal/app';
@@ -157,6 +158,20 @@ export interface CrashEvent {
 }
 
 const unavailable = () => new Error('unavailable in browser');
+
+/** The whole list after every change; a payload that is not a list counts as an empty library. */
+export function onLibraryUpdated(handler: (games: LibraryGame[]) => void): () => void {
+  if (!inWails) return () => {};
+  return Events.On('library:updated', (event) => handler(Array.isArray(event.data) ? (event.data as LibraryGame[]) : []));
+}
+
+/** The whole list of collections after every change; a payload that is not a list counts as none. */
+export function onCollectionsChanged(handler: (collections: LibraryCollection[]) => void): () => void {
+  if (!inWails) return () => {};
+  return Events.On('library:collections', (event) =>
+    handler(Array.isArray(event.data) ? (event.data as LibraryCollection[]) : []),
+  );
+}
 
 export async function getGames(): Promise<LibraryGame[]> {
   if (!inWails) return [];
