@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
+import type { AmbientState } from './ambient';
 
 type Ambient = typeof import('./ambient');
 let ambient: Ambient;
@@ -120,6 +121,127 @@ describe('overlapping claims', () => {
     expect(target()).toBe('a');
     none();
     expect(target()).toBe('a');
+    release();
+  });
+});
+
+describe('the page\'s resting picture', () => {
+  it('ranks screen claim > rested card > resting game > remembered game > suggestion', () => {
+    // Each source names its own game; the expected winner is the first source present in this order.
+    const order = ['claim', 'hover', 'resting', 'history'] as const;
+    const games = { claim: 'page', hover: 'card', resting: 'a', history: 'elden' } as const;
+    const subsets = Array.from({ length: 1 << order.length }, (_, mask) => order.filter((_, bit) => mask & (1 << bit)));
+    // Alone, in pairs, and all four, plus none.
+    const cases = subsets.filter((set) => set.length !== 3);
+    expect(cases).toHaveLength(1 + 4 + 6 + 1);
+    for (const present of cases) {
+      const state: AmbientState = {
+        claim: present.includes('claim') ? games.claim : null,
+        hover: present.includes('hover') ? games.hover : null,
+        resting: present.includes('resting') ? games.resting : null,
+        history: present.includes('history') ? [games.history] : [],
+      };
+      const expected = present.length > 0 ? games[present[0]] : 'last-played';
+      expect(ambient.pickAmbient(state, 'last-played', (id) => withArt.has(id)), present.join('+') || 'none').toBe(expected);
+    }
+  });
+
+  it('the slide on screen tints the window, a rested card overrides it and gives it back after the leave', () => {
+    const { HOVER_LEAVE_MS, HOVER_REST_MS, hoverAmbient, restAmbient } = ambient;
+    suggestion = 'last-played';
+    ambient.claimAmbient('elden')();
+    const release = restAmbient('a');
+    expect(target()).toBe('a');
+    const leave = hoverAmbient('card');
+    vi.advanceTimersByTime(HOVER_REST_MS);
+    expect(target()).toBe('card');
+    leave();
+    vi.advanceTimersByTime(HOVER_LEAVE_MS);
+    expect(target()).toBe('a');
+    release();
+  });
+
+  it('a screen claim still wins over the resting game', () => {
+    const rest = ambient.restAmbient('a');
+    const release = ambient.claimAmbient('page');
+    expect(target()).toBe('page');
+    release();
+    expect(target()).toBe('a');
+    rest();
+  });
+
+  it('is never remembered: a slide that passed by does not become the game of screens that claim nothing', async () => {
+    suggestion = 'last-played';
+    ambient.claimAmbient('elden')();
+    ambient.restAmbient('a')();
+    await Promise.resolve();
+    expect(get(ambient.ambientState).history).toEqual(['elden']);
+    expect(target()).toBe('elden');
+  });
+
+  it('a screen claim is still remembered', () => {
+    ambient.restAmbient('a');
+    ambient.claimAmbient('page')();
+    expect(get(ambient.ambientState).history).toEqual(['page']);
+  });
+
+  it('the newest live resting game wins; releases in any order leave none behind', async () => {
+    const { restAmbient } = ambient;
+    const first = restAmbient('a');
+    const second = restAmbient('b');
+    expect(target()).toBe('b');
+    second();
+    await Promise.resolve();
+    expect(target()).toBe('a');
+    const third = restAmbient('elden');
+    first();
+    await Promise.resolve();
+    expect(get(ambient.ambientState).resting).toBe('elden');
+    third();
+    await Promise.resolve();
+    expect(get(ambient.ambientState).resting).toBeNull();
+  });
+
+  it('a release runs once: calling it again does not remove another resting claim of the same game', async () => {
+    const first = ambient.restAmbient('a');
+    const second = ambient.restAmbient('a');
+    first();
+    first();
+    await Promise.resolve();
+    expect(get(ambient.ambientState).resting).toBe('a');
+    second();
+    await Promise.resolve();
+    expect(get(ambient.ambientState).resting).toBeNull();
+  });
+
+  it('a resting claim of no game claims nothing and leaves the others alone', async () => {
+    const release = ambient.restAmbient('a');
+    const none = ambient.restAmbient(null);
+    none();
+    await Promise.resolve();
+    expect(get(ambient.ambientState).resting).toBe('a');
+    release();
+  });
+
+  it('a slide change (a release and a new claim in one tick) publishes no empty resting game in between', async () => {
+    const seen: (string | null)[] = [];
+    const release = ambient.restAmbient('a');
+    const stop = ambient.ambientState.subscribe((state) => seen.push(state.resting));
+    release();
+    ambient.restAmbient('b');
+    await Promise.resolve();
+    stop();
+    expect(seen).not.toContain(null);
+    expect(seen.at(-1)).toBe('b');
+  });
+
+  it('a resting game without art gives way to the next source', () => {
+    suggestion = 'last-played';
+    ambient.claimAmbient('elden')();
+    const release = ambient.restAmbient('no-art');
+    expect(target()).toBe('elden');
+    withArt.add('no-art');
+    expect(target()).toBe('no-art');
     release();
   });
 });

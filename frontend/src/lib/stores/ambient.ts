@@ -12,6 +12,8 @@ export interface AmbientState {
   claim: string | null;
   /** The library card the pointer has rested on. */
   hover: string | null;
+  /** The newest live game of a page's resting picture (the library's carousel): below a rested card. */
+  resting: string | null;
   /** Games claimed this session, newest first. */
   history: readonly string[];
 }
@@ -22,7 +24,8 @@ interface Claim {
 }
 
 let claims: Claim[] = [];
-const state = writable<AmbientState>({ claim: null, hover: null, history: [] });
+let rests: Claim[] = [];
+const state = writable<AmbientState>({ claim: null, hover: null, resting: null, history: [] });
 
 /** What screens and cards ask of the backdrop; `pickAmbient` turns it into the game to show. */
 export const ambientState: Readable<AmbientState> = { subscribe: state.subscribe };
@@ -52,12 +55,36 @@ export function claimAmbient(gameId: string | null): () => void {
 }
 
 /**
- * The game the backdrop shows: the newest live claim, else the rested card, else the last claimed game
- * whose art resolves (one without art, or one no longer in the library, is skipped), else the
- * suggestion: the last played library game with art.
+ * A page's resting picture (the slide a carousel shows): the backdrop shows `gameId` while no screen
+ * claims a game and no card is rested on, the newest live one winning. Unlike `claimAmbient` it is not
+ * remembered: a slide that passed by on its own does not become the game of the screens that claim
+ * none. The returned release removes only its own claim, at most once; it is published after the
+ * current task, so a release followed by the next slide's claim never shows the window without one.
+ */
+export function restAmbient(gameId: string | null): () => void {
+  if (!gameId) return () => {};
+  const token = Symbol(gameId);
+  rests = [...rests, { token, id: gameId }];
+  publish({ resting: gameId });
+  return () => {
+    const before = rests.length;
+    rests = rests.filter((rest) => rest.token !== token);
+    if (rests.length === before) return;
+    queueMicrotask(() => {
+      const resting = rests.at(-1)?.id ?? null;
+      if (get(state).resting !== resting) publish({ resting });
+    });
+  };
+}
+
+/**
+ * The game the backdrop shows: the newest live claim, else the rested card, else the page's resting
+ * game while its art resolves, else the last claimed game whose art resolves (one without art, or one
+ * no longer in the library, is skipped), else the suggestion: the last played library game with art.
  */
 export function pickAmbient(current: AmbientState, suggestion: string | null, hasArt: (id: string) => boolean): string | null {
-  return current.claim ?? current.hover ?? current.history.find(hasArt) ?? suggestion;
+  const resting = current.resting !== null && hasArt(current.resting) ? current.resting : null;
+  return current.claim ?? current.hover ?? resting ?? current.history.find(hasArt) ?? suggestion;
 }
 
 let enterTimer: ReturnType<typeof setTimeout> | undefined;
