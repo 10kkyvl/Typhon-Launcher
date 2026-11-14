@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowDownUp, Bell, ChevronDown, Clock, Dices, EyeOff, LayoutGrid, List, MonitorDown } from '@lucide/svelte';
+  import { ArrowDownUp, Bell, ChevronDown, Clock, Dices, EyeOff, LayoutGrid, List, MonitorDown, Star } from '@lucide/svelte';
   import Chip from '../../lib/components/Chip.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import SearchInput from '../../lib/components/SearchInput.svelte';
@@ -10,7 +10,7 @@
   import { sourceLabel, type GameSource } from '../../lib/library/source';
   import { STATUS_FILTERS, type StatusFilter } from '../../lib/library/statuses';
   import { libraryView } from '../../lib/stores/ui';
-  import type { Sort } from './entry';
+  import type { LibrarySort } from '../../lib/library/query';
 
   let {
     search = $bindable(),
@@ -24,7 +24,7 @@
   }: {
     search: string;
     filter: LibraryFilter;
-    sort: Sort;
+    sort: LibrarySort;
     sourceFilter: GameSource | 'all';
     statusFilter: StatusFilter;
     sources: readonly GameSource[];
@@ -36,17 +36,21 @@
     { id: 'all', label: msg('games.filterAll') },
     { id: 'installed', label: msg('games.filterInstalled'), icon: MonitorDown },
     { id: 'recent', label: msg('games.recentLabel'), icon: Clock },
+    { id: 'favorites', label: msg('library.filterFavorites'), icon: Star },
     { id: 'hidden', label: msg('games.filterHidden'), icon: EyeOff },
     ...(watched ? [{ id: 'watched' as const, label: msg('games.filterWatched'), icon: Bell }] : []),
   ]);
 
-  const sortLabels: Record<Sort, string> = {
-    alpha: msg('games.sortAlpha'),
+  const sorts: readonly LibrarySort[] = ['title', 'recent', 'playtime', 'size', 'status', 'completed'];
+
+  const sortLabels: Record<LibrarySort, string> = {
+    title: msg('games.sortAlpha'),
     recent: msg('games.librarySortRecent'),
     playtime: msg('games.librarySortPlaytime'),
     size: msg('games.sortSize'),
     status: msg('games.sortStatus'),
     completed: msg('games.sortCompleted'),
+    added: msg('games.catalogSortAdded'),
   };
 
   function statusFilterLabel(id: StatusFilter): string {
@@ -107,12 +111,12 @@
       </DropdownMenu>
     {/if}
     <DropdownMenu
-      items={(['alpha', 'recent', 'playtime', 'size', 'status', 'completed'] as const).map((id) => ({
+      items={sorts.map((id) => ({
         id,
         label: sortLabels[id],
         checked: sort === id,
       }))}
-      onselect={(id) => (sort = id as Sort)}
+      onselect={(id) => (sort = id as LibrarySort)}
     >
       {#snippet trigger({ props })}
         <Chip {...props}>

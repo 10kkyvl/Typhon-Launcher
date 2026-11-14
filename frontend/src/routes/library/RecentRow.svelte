@@ -4,26 +4,41 @@
   import TextLink from '../../lib/components/TextLink.svelte';
   import { msg } from '../../lib/i18n';
   import { playtime, relativeDate } from '../../lib/utils/format';
-  import type { Entry } from './entry';
+  import { focusableIn } from '../../lib/layers/focus';
+  import { focusHandOff } from '../../lib/utils/focusHandOff';
+  import type { LibraryEntry } from '../../lib/library/entries';
 
   let {
     entries,
+    cover,
     running,
     onshowall,
     onplay,
   }: {
-    entries: Entry[];
+    entries: LibraryEntry[];
+    cover: (entry: LibraryEntry) => string;
     running: ReadonlySet<string>;
     onshowall: () => void;
     onplay: (id: string) => void;
   } = $props();
 
-  function recentMeta(entry: Entry) {
+  let section = $state<HTMLElement>();
+
+  // A game started or stopped from its capsule can leave the row (it becomes the hero): focus that was
+  // on the capsule moves to the row's first control instead of falling to the page.
+  $effect.pre(() => {
+    void entries;
+    const row = section;
+    if (!row?.contains(document.activeElement)) return;
+    void focusHandOff()(() => focusableIn(row)[0]);
+  });
+
+  function recentMeta(entry: LibraryEntry) {
     return `${playtime(entry.playtimeSeconds)} · ${relativeDate(entry.lastPlayed)}`;
   }
 </script>
 
-<section class="section">
+<section class="section" bind:this={section}>
   <div class="section-head">
     <h2>{msg('games.recentLabel')}</h2>
     <span class="show-all">
@@ -39,7 +54,7 @@
         <GameCard
           id={entry.id}
           title={entry.title}
-          cover={entry.hero || entry.cover}
+          cover={cover(entry)}
           variant="capsule"
           ambient
           installed={entry.installed}

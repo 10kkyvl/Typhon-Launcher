@@ -4,112 +4,114 @@
   import { untrack } from 'svelte';
   import { get } from 'svelte/store';
   import Artwork from '../../lib/components/Artwork.svelte';
+  import Button from '../../lib/components/Button.svelte';
   import Chip from '../../lib/components/Chip.svelte';
   import CollectionModal from '../../lib/components/CollectionModal.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import GameCard, { type GameCardAction } from '../../lib/components/GameCard.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
   import RandomGameModal from '../../lib/components/RandomGameModal.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
-  import { playGame, stopGame, type LibraryCollection, type LibraryGame } from '../../lib/services/library';
-  import { getCatalogGames, type CatalogGame } from '../../lib/services/sources';
-  import type { Download } from '../../lib/services/downloads';
-  import { downloads, statusLabels } from '../../lib/stores/downloads';
-  import { collections } from '../../lib/stores/collections';
+  import SourceBadge from '../../lib/components/SourceBadge.svelte';
+  import ConsoleTag from '../../lib/components/ConsoleTag.svelte';
+  import { playGame, stopGame, type LibraryCollection } from '../../lib/services/library';
+  import { downloads } from '../../lib/stores/downloads';
+  import { collections, collectionsLoadError, collectionsState, loadCollections } from '../../lib/stores/collections';
   import { libraryGenres, requestLibraryGenres } from '../../lib/stores/genres';
-  import { installedGames, libraryGames, runningGames } from '../../lib/stores/library';
+  import {
+    downloadTitles,
+    libraryGames,
+    libraryLoaded,
+    libraryLoadError,
+    loadLibrary,
+    requestDownloadTitles,
+    runningGames,
+  } from '../../lib/stores/library';
+  import { libraryChoices, librarySort } from '../../lib/stores/libraryPrefs';
   import { gameArt, requestArt } from '../../lib/stores/metadata';
   import { gameContextMenu } from '../../lib/stores/gameMenu';
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
   import { toggleWatch, watchlist } from '../../lib/stores/watchlist';
   import { libraryView } from '../../lib/stores/ui';
-  import { bytesSize } from '../../lib/utils/format';
   import { ambientHover } from '../../lib/utils/ambientHover';
-  import { msg } from '../../lib/i18n';
+  import { focusHandOff } from '../../lib/utils/focusHandOff';
+  import { focusableIn } from '../../lib/layers/focus';
+  import { locale, msg } from '../../lib/i18n';
   import { libraryErrorText } from '../../lib/library/errors';
-  import { metadataErrorText } from '../../lib/metadata/metadataErrors';
+  import { emptyReason } from '../../lib/library/empty';
+  import { createEntryCache, entryCover, entryHeroArt, type LibraryEntry } from '../../lib/library/entries';
   import type { LibraryFilter } from '../../lib/library/filters';
-  import { gameSource, sourceOrder, type GameSource } from '../../lib/library/source';
-  import SourceBadge from '../../lib/components/SourceBadge.svelte';
-  import { canPlay } from '../../lib/library/launch';
-  import { emulationPlatform } from '../../lib/library/emulation';
-  import ConsoleTag from '../../lib/components/ConsoleTag.svelte';
-  import { matchesCollection } from '../../lib/library/collections';
-  import { compareByCompleted, compareByStatus, matchesStatus, type StatusFilter } from '../../lib/library/statuses';
+  import { effectiveSort, filterEntries, genreOptions, sortEntries, sourceOptions, type LibraryQuery } from '../../lib/library/query';
+  import { buildSlides, recentEntries } from '../../lib/library/spotlight';
   import LibraryHero from './LibraryHero.svelte';
   import RecentRow from './RecentRow.svelte';
   import LibraryToolbar from './LibraryToolbar.svelte';
-  import type { Entry, Sort } from './entry';
+  import { entryMeta, entrySubtitle, narrowingText } from './entryText';
 
-  let filter = $state<LibraryFilter>('all');
-  let sort = $state<Sort>('alpha');
-  let sourceFilter = $state<GameSource | 'all'>('all');
-  let statusFilter = $state<StatusFilter>('all');
-  let search = $state('');
-  let heroHidden = $state(false);
-  let activeCollectionId = $state('');
+  const saved = get(libraryChoices);
+  let filter = $state(saved.filter);
+  let sort = $state(get(librarySort));
+  let sourceFilter = $state(saved.source);
+  let statusFilter = $state(saved.status);
+  let search = $state(saved.search);
+  let heroHidden = $state(saved.heroHidden);
+  let activeCollectionId = $state(saved.collection);
   let collectionOpen = $state(false);
   let randomOpen = $state(false);
   let collectionTarget = $state<LibraryCollection | null>(null);
-  let catalogGames = $state<Record<string, CatalogGame>>({});
-  const installedByGame = $derived.by(() => {
-    const ids = new Set<string>();
-    for (const game of $libraryGames) {
-      if (game.canonicalGameId) ids.add(game.canonicalGameId);
-    }
-    return ids;
+  let libraryRetrying = $state(false);
+  let collectionsRetrying = $state(false);
+  let results = $state<HTMLElement>();
+
+  $effect(() => {
+    libraryChoices.set({ filter, source: sourceFilter, status: statusFilter, collection: activeCollectionId, search, heroHidden });
   });
 
-  const downloaded = $derived.by(() => {
-    const map = new Map<string, Download>();
-    for (const item of $downloads) {
-      const gameId = item.origin?.gameId;
-      if (!gameId || installedByGame.has(gameId)) continue;
-      const current = map.get(gameId);
-      if (!current || Date.parse(item.addedAt) >= Date.parse(current.addedAt)) map.set(gameId, item);
-    }
-    return map;
+  $effect(() => {
+    librarySort.set(sort);
   });
 
-  async function loadCatalogGames(ids: string[]) {
-    try {
-      const games = await getCatalogGames(ids);
-      if (games.length === 0) return;
-      catalogGames = { ...catalogGames, ...Object.fromEntries(games.map((game) => [game.id, game])) };
-    } catch (err) {
-      toast(metadataErrorText(err, msg('games.libraryLoadGamesError')), 'danger');
-    }
+  const cache = createEntryCache();
+  const entries = $derived(cache.library($libraryGames, $downloads, $downloadTitles));
+  const watched = $derived(cache.watched($watchlist));
+
+  // Id lists as strings: a progress tick that changes no id re-runs none of the requests below.
+  const downloadIds = $derived(idList(entries.filter((entry) => entry.kind === 'download')));
+  const artIds = $derived(idList([...entries, ...watched]));
+  const genreIds = $derived(idList(entries.filter((entry) => entry.kind === 'game')));
+
+  function idList(list: readonly LibraryEntry[]): string {
+    return list.flatMap((entry) => (entry.catalogId ? [entry.catalogId] : [])).join('\n');
+  }
+
+  function ids(list: string): string[] {
+    return list ? list.split('\n') : [];
   }
 
   $effect(() => {
-    const ids = [...downloaded.keys()];
-    untrack(() => {
-      const missing = ids.filter((id) => !(id in catalogGames));
-      if (missing.length > 0) loadCatalogGames(missing);
-    });
+    const wanted = ids(downloadIds);
+    untrack(() => void requestDownloadTitles(wanted));
   });
 
   $effect(() => {
-    requestArt([
-      ...downloaded.keys(),
-      ...$watchlist.map((item) => item.gameId),
-      ...$libraryGames.map((game) => game.canonicalGameId).filter((cid): cid is string => Boolean(cid)),
-    ]);
+    const wanted = ids(artIds);
+    untrack(() => requestArt(wanted));
   });
 
   $effect(() => {
-    const ids = $libraryGames.map((game) => game.canonicalGameId).filter((cid): cid is string => Boolean(cid));
-    untrack(() => void requestLibraryGenres(ids));
+    const wanted = ids(genreIds);
+    untrack(() => void requestLibraryGenres(wanted));
   });
 
   const activeCollection = $derived($collections.find((c) => c.id === activeCollectionId));
 
-  const knownGenres = $derived([
-    ...new Set(
-      $libraryGames.flatMap((game) => (game.canonicalGameId ? ($libraryGenres[game.canonicalGameId] ?? []) : [])),
-    ),
-  ]);
+  $effect(() => {
+    if (activeCollectionId && $collectionsState === 'ready' && !activeCollection) activeCollectionId = '';
+  });
+
+  const knownGenres = $derived(genreOptions(entries, $libraryGenres));
 
   function openCollection(target: LibraryCollection | null) {
     collectionTarget = target;
@@ -126,84 +128,19 @@
     watched: msg('games.filterWatched'),
   };
 
-  function installedEntry(game: LibraryGame): Entry {
-    const bits: string[] = [];
-    if (game.uninstalled) {
-      bits.push(msg('games.gameNotInstalledWord'));
-    } else {
-      if (game.version) bits.push(game.version);
-      if (game.sizeBytes > 0) bits.push(bytesSize(game.sizeBytes));
-    }
-    const art = game.canonicalGameId ? $gameArt[game.canonicalGameId] : undefined;
-    return {
-      id: game.id,
-      title: game.title,
-      cover: art?.cover || game.cover,
-      hero: art?.hero ?? '',
-      installed: !game.uninstalled,
-      playable: canPlay(game),
-      playtimeSeconds: game.playtimeSeconds,
-      sizeBytes: game.sizeBytes,
-      lastPlayed: game.lastPlayed,
-      subtitle: bits.join(' · '),
-      hidden: Boolean(game.hidden),
-      inLibrary: true,
-      tags: game.tags,
-      status: game.status,
-      completedAt: game.completedAt,
-      canonicalGameId: game.canonicalGameId,
-      source: gameSource(game),
-      platform: emulationPlatform(game),
-    };
-  }
-
-  function downloadedEntry(gameId: string, item: Download): Entry {
-    const game = catalogGames[gameId];
-    const bits: string[] = [];
-    if (game?.releaseYear) bits.push(String(game.releaseYear));
-    if (game?.developer) bits.push(game.developer);
-    bits.push(statusLabels(item.status));
-    return {
-      id: gameId,
-      title: game?.title || item.name,
-      cover: $gameArt[gameId]?.cover ?? '',
-      hero: $gameArt[gameId]?.hero ?? '',
-      installed: false,
-      playable: false,
-      playtimeSeconds: 0,
-      sizeBytes: item.total,
-      lastPlayed: null,
-      subtitle: bits.join(' · '),
-      hidden: false,
-      inLibrary: false,
-      source: 'typhon',
-    };
-  }
-
-  const watchedEntries = $derived(
-    $watchlist.map((item): Entry => ({
-      id: item.gameId,
-      title: item.title,
-      cover: $gameArt[item.gameId]?.cover ?? '',
-      hero: $gameArt[item.gameId]?.hero ?? '',
-      installed: false,
-      playable: false,
-      playtimeSeconds: 0,
-      sizeBytes: 0,
-      lastPlayed: null,
-      subtitle: msg('games.watchedMeta'),
-      hidden: false,
-      inLibrary: false,
-      watched: true,
-    })),
-  );
-
+  // Unwatching the last watched game while "Watched" is shown returns to "All"; a "Watched" restored
+  // before the watchlist has loaded stays.
+  let hadWatched = false;
   $effect(() => {
-    if (filter === 'watched' && $watchlist.length === 0) filter = 'all';
+    const count = $watchlist.length;
+    untrack(() => {
+      if (filter === 'watched' && count === 0 && hadWatched) filter = 'all';
+      hadWatched = count > 0;
+    });
   });
 
-  function watchedActions(entry: Entry): GameCardAction[] | undefined {
-    if (!entry.watched) return undefined;
+  function watchedActions(entry: LibraryEntry): GameCardAction[] | undefined {
+    if (entry.kind !== 'watched') return undefined;
     return [
       {
         id: 'unwatch',
@@ -217,70 +154,46 @@
     ];
   }
 
-  const entries = $derived.by(() => {
-    const installed = $libraryGames.map(installedEntry);
-    const rest = [...downloaded].map(([gameId, item]) => downloadedEntry(gameId, item));
-    return [...installed, ...rest];
-  });
-
-  const librarySources = $derived(
-    sourceOrder.filter((source) => entries.some((entry) => entry.source === source)),
-  );
+  const librarySources = $derived(sourceOptions(entries));
 
   $effect(() => {
-    if (sourceFilter !== 'all' && !librarySources.includes(sourceFilter)) sourceFilter = 'all';
+    if (sourceFilter !== 'all' && $libraryLoaded && !librarySources.includes(sourceFilter)) sourceFilter = 'all';
   });
 
-  const visibleGames = $derived.by(() => {
-    const query = search.trim().toLowerCase();
-    const filtered = (filter === 'watched' ? watchedEntries : entries).filter((entry) => {
-      if (query && !entry.title.toLowerCase().includes(query)) return false;
-      if (entry.hidden !== (filter === 'hidden')) return false;
-      if (filter !== 'watched' && sourceFilter !== 'all' && entry.source !== sourceFilter) return false;
-      if (filter !== 'watched' && statusFilter !== 'all' && !(entry.inLibrary && matchesStatus(entry.status, statusFilter))) return false;
-      if (activeCollection) {
-        const genres = entry.canonicalGameId ? $libraryGenres[entry.canonicalGameId] : undefined;
-        if (!entry.inLibrary || !matchesCollection(entry, genres, activeCollection)) return false;
-      }
-      switch (filter) {
-        case 'installed':
-          return entry.installed;
-        case 'recent':
-          return entry.lastPlayed !== null;
-        default:
-          return true;
-      }
-    });
-
-    return filtered.toSorted((a, b) => {
-      switch (sort) {
-        case 'recent':
-          return time(b.lastPlayed) - time(a.lastPlayed) || a.title.localeCompare(b.title, 'ru');
-        case 'playtime':
-          return b.playtimeSeconds - a.playtimeSeconds || a.title.localeCompare(b.title, 'ru');
-        case 'size':
-          return b.sizeBytes - a.sizeBytes || a.title.localeCompare(b.title, 'ru');
-        case 'status':
-          return compareByStatus(a, b);
-        case 'completed':
-          return compareByCompleted(a, b);
-        default:
-          return a.title.localeCompare(b.title, 'ru');
-      }
-    });
+  const query = $derived<LibraryQuery>({
+    filter,
+    source: sourceFilter,
+    status: statusFilter,
+    collection: activeCollection,
+    search,
   });
+  const filtered = $derived(filterEntries(entries, watched, query, $libraryGenres));
+  const visibleGames = $derived(sortEntries(filtered, effectiveSort(filter, sort), $locale));
 
-  function time(value: string | null) {
-    if (!value) return 0;
-    const parsed = Date.parse(value);
-    return Number.isNaN(parsed) ? 0 : parsed;
-  }
-
-  const playedGames = $derived(
-    $installedGames.filter((game) => !game.hidden).map(installedEntry).toSorted((a, b) => time(b.lastPlayed) - time(a.lastPlayed)),
+  const loadFailed = $derived($libraryLoadError != null && !$libraryLoaded);
+  const reason = $derived(
+    emptyReason({
+      loaded: $libraryLoaded,
+      failed: loadFailed,
+      entries: entries.length,
+      watched: watched.length,
+      shown: visibleGames.length,
+      query,
+    }),
   );
 
-  const hero = $derived(playedGames.find((entry) => entry.lastPlayed !== null && entry.playable));
+  function clearNarrowing() {
+    const handOff = focusHandOff();
+    search = '';
+    filter = 'all';
+    sourceFilter = 'all';
+    statusFilter = 'all';
+    activeCollectionId = '';
+    void handOff(() => (results ? focusableIn(results)[0] : undefined));
+  }
+
+  const hero = $derived(buildSlides(entries, $runningGames, $locale)[0]);
+  const recentGames = $derived(recentEntries(entries, hero && !heroHidden ? hero.id : undefined, $locale));
 
   let lastView = get(libraryView);
   let viewSwitched = $state(false);
@@ -293,15 +206,6 @@
 
   function endViewSwitch(event: AnimationEvent) {
     if (event.target === event.currentTarget) viewSwitched = false;
-  }
-
-  const recentGames = $derived(
-    playedGames.filter((entry) => entry.lastPlayed !== null && entry.id !== hero?.id),
-  );
-
-  function entryMeta(entry: Entry) {
-    if (entry.sizeBytes > 0) return bytesSize(entry.sizeBytes);
-    return entry.installed ? '' : msg('games.gameNotInstalledWord');
   }
 
   async function toggleRun(id: string) {
@@ -320,6 +224,7 @@
   {#if hero && !heroHidden}
     <LibraryHero
       {hero}
+      art={entryHeroArt(hero, $gameArt)}
       running={$runningGames.has(hero.id)}
       onplay={() => toggleRun(hero.id)}
       onhide={() => (heroHidden = true)}
@@ -327,7 +232,13 @@
   {/if}
 
   {#if recentGames.length > 0}
-    <RecentRow entries={recentGames} running={$runningGames} onshowall={() => (filter = 'recent')} onplay={toggleRun} />
+    <RecentRow
+      entries={recentGames}
+      cover={(entry) => entryHeroArt(entry, $gameArt) || entryCover(entry, $gameArt)}
+      running={$runningGames}
+      onshowall={() => (filter = 'recent')}
+      onplay={toggleRun}
+    />
   {/if}
 
   <section class="section">
@@ -342,9 +253,22 @@
       bind:sourceFilter
       bind:statusFilter
       sources={librarySources}
-      watched={$watchlist.length > 0}
+      watched={$watchlist.length > 0 || filter === 'watched'}
       onrandom={() => (randomOpen = true)}
     />
+
+    {#if $collectionsState === 'failed' || collectionsRetrying}
+      <div class="collections-failed">
+        <Notice
+          tone="danger"
+          compact
+          retry={{ label: msg('common.retry'), run: () => loadCollections() }}
+          bind:retrying={collectionsRetrying}
+        >
+          {libraryErrorText($collectionsLoadError, msg('games.collectionsLoadFailed'))}
+        </Notice>
+      </div>
+    {/if}
 
     <div class="collections" role="group" aria-label={msg('games.collectionsLabel')}>
       {#each $collections as collection (collection.id)}
@@ -366,35 +290,53 @@
       </Chip>
     </div>
 
+    {#if loadFailed || libraryRetrying}
+      <div class="load-failed">
+        <Notice
+          tone="danger"
+          title={msg('library.loadFailedTitle')}
+          retry={{ label: msg('common.retry'), run: () => loadLibrary() }}
+          bind:retrying={libraryRetrying}
+        >
+          {libraryErrorText($libraryLoadError, msg('library.loadFailedText'))}
+        </Notice>
+      </div>
+    {/if}
+
     {#if visibleGames.length === 0}
-      {#if search.trim()}
-        <EmptyState level={3} title={msg('games.nothingFoundTitle')} description={msg('games.libraryNothingFoundDescription')} />
-      {:else}
-        <EmptyState level={3}
-          title={msg('games.libraryEmptyTitle')}
-          description={msg('games.libraryEmptyDescription')}
-        />
+      {#if reason?.kind === 'loading'}
+        <EmptyState level={3} title={msg('library.loadingTitle')} />
+      {:else if reason?.kind === 'empty'}
+        <EmptyState level={3} title={msg('games.libraryEmptyTitle')} description={msg('games.libraryEmptyDescription')} />
+      {:else if reason?.kind === 'all-hidden'}
+        <EmptyState level={3} title={msg('library.allHiddenTitle')} description={msg('library.allHiddenDescription')} />
+      {:else if reason?.kind === 'no-match'}
+        <EmptyState level={3} title={msg('games.nothingFoundTitle')} description={narrowingText(reason.narrowing)}>
+          {#snippet actions()}
+            <Button onclick={clearNarrowing}>{msg('library.clearFilters')}</Button>
+          {/snippet}
+        </EmptyState>
       {/if}
     {:else if $libraryView === 'grid'}
-      <div class="grid" class:switched={viewSwitched} onanimationend={endViewSwitch}>
+      <div class="grid" class:switched={viewSwitched} onanimationend={endViewSwitch} bind:this={results}>
         {#each visibleGames as entry (entry.id)}
           <GameCard
             id={entry.id}
             title={entry.title}
-            cover={entry.cover}
+            cover={entryCover(entry, $gameArt)}
             ambient
             installed={entry.installed}
             running={$runningGames.has(entry.id)}
             source={entry.source}
             platform={entry.platform}
-            meta={entry.watched ? entry.subtitle : entryMeta(entry)}
+            meta={entry.kind === 'watched' ? entrySubtitle(entry) : entryMeta(entry)}
             actions={watchedActions(entry)}
             onplay={entry.playable ? () => toggleRun(entry.id) : undefined}
           />
         {/each}
       </div>
     {:else}
-      <div class="list" class:switched={viewSwitched} onanimationend={endViewSwitch}>
+      <div class="list" class:switched={viewSwitched} onanimationend={endViewSwitch} bind:this={results}>
         {#each visibleGames as entry (entry.id)}
           <button
             class="list-row"
@@ -403,7 +345,7 @@
             {@attach gameContextMenu(entry.id)}
           >
             <div class="list-thumb" aria-hidden="true">
-              <Artwork src={entry.cover} alt="" label={entry.title} radius="var(--radius-xs)" />
+              <Artwork src={entryCover(entry, $gameArt)} alt="" label={entry.title} radius="var(--radius-xs)" />
             </div>
             <span class="list-title">{entry.title}</span>
             {#if entry.platform}
@@ -411,8 +353,8 @@
             {:else if entry.source}
               <SourceBadge source={entry.source} />
             {/if}
-            <span class="list-meta">{entry.subtitle}</span>
-            <span class="list-meta right">{entry.watched ? '' : entryMeta(entry)}</span>
+            <span class="list-meta">{entrySubtitle(entry)}</span>
+            <span class="list-meta right">{entry.kind === 'watched' ? '' : entryMeta(entry)}</span>
           </button>
         {/each}
       </div>
@@ -442,6 +384,11 @@
 
   .section-head h2 {
     font-size: var(--font-xl);
+  }
+
+  .collections-failed,
+  .load-failed {
+    margin-bottom: var(--space-5);
   }
 
   .collections {

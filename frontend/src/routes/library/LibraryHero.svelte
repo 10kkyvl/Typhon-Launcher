@@ -9,17 +9,18 @@
   import { navigate } from '../../lib/stores/router';
   import { playtime, relativeDate } from '../../lib/utils/format';
   import { revealImage } from '../../lib/utils/revealImage';
-  import type { Entry } from './entry';
+  import type { LibraryEntry } from '../../lib/library/entries';
 
   let {
     hero,
+    art,
     running,
     onplay,
     onhide,
-  }: { hero: Entry; running: boolean; onplay: () => void; onhide: () => void } = $props();
+  }: { hero: LibraryEntry; art: string; running: boolean; onplay: () => void; onhide: () => void } = $props();
 
   let heroArtFailed = $state('');
-  const heroArt = $derived(hero.hero ?? '');
+  const heroArt = $derived(art);
   const heroArtShown = $derived(heroArt !== '' && heroArtFailed !== heroArt);
 
   let heroSection = $state<HTMLElement>();
