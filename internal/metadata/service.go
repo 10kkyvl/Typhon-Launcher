@@ -1098,7 +1098,7 @@ func (s *Service) buildAssets(ctx context.Context, game catalog.Game, meta GameM
 		// The art refresh is what keeps library games current, so it also
 		// fetches the one picture the hero needs; the gallery is left to the
 		// full refresh.
-		if kind, ref, ok := heroRef(shotRefs, artRefs); ok {
+		if kind, ref, ok := heroRef(shotRefs, artRefs, carried); ok {
 			kinds, urls = append(kinds, kind), append(urls, ref.URL)
 		}
 	}
@@ -1418,17 +1418,31 @@ func wideHero(assets []MediaAsset) (MediaAsset, bool) {
 	return MediaAsset{}, false
 }
 
-// heroRef applies the hero rule to an answer's references, by the dimensions
-// the provider reports, for a refresh that downloads only the hero.
-func heroRef(shots, arts []ImageRef) (AssetType, ImageRef, bool) {
+// heroRef picks the one picture a refresh that downloads only the hero fetches:
+// the first reference that fits the hero rule by the size the provider
+// reports (screenshots, then artworks), else the first screenshot reported
+// without a size (Steam sends none), whose stored file then decides. A URL
+// already stored for the game is never fetched again: its stored file has
+// answered already, whatever size the reference claims.
+func heroRef(shots, arts []ImageRef, stored []MediaAsset) (AssetType, ImageRef, bool) {
+	have := make(map[string]bool, len(stored))
+	for _, a := range stored {
+		have[a.SourceURL] = true
+	}
+	fresh := func(ref ImageRef) bool { return ref.URL != "" && !have[ref.URL] }
 	for _, group := range []struct {
 		kind AssetType
 		refs []ImageRef
 	}{{AssetScreenshot, shots}, {AssetArtwork, arts}} {
 		for _, ref := range group.refs {
-			if ref.URL != "" && fitsHero(ref.Width, ref.Height) {
+			if fresh(ref) && fitsHero(ref.Width, ref.Height) {
 				return group.kind, ref, true
 			}
+		}
+	}
+	for _, ref := range shots {
+		if fresh(ref) && (ref.Width <= 0 || ref.Height <= 0) {
+			return AssetScreenshot, ref, true
 		}
 	}
 	return "", ImageRef{}, false

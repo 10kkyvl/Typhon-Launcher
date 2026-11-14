@@ -518,3 +518,96 @@ func TestArtRefreshDropsThePicturesOfAPreviousMatch(t *testing.T) {
 		t.Fatal("the game is not partial; its page would not fetch the new gallery")
 	}
 }
+
+func copiesOf(svc *Service, gameID, url string) int {
+	n := 0
+	for _, a := range svc.store.list(gameID) {
+		if a.SourceURL == url {
+			n++
+		}
+	}
+	return n
+}
+
+// TestArtRefreshHeroDownloadOfUnsizedAndMisreportedPictures covers answers
+// whose references carry no size (Steam screenshots) or a size the served file
+// does not have.
+func TestArtRefreshHeroDownloadOfUnsizedAndMisreportedPictures(t *testing.T) {
+	type refresh struct {
+		extra  int64
+		poster bool
+	}
+	cases := []struct {
+		name  string
+		shots func(base string) []ImageRef
+		runs  []refresh
+		hero  string // source path of the hero when it is not the poster
+		once  string // a source path stored exactly once at the end
+	}{
+		{
+			name:  "an unsized screenshot that fits becomes the hero",
+			shots: func(base string) []ImageRef { return []ImageRef{{URL: base + "/1920x1080-st0.png"}} },
+			runs:  []refresh{{extra: 1}},
+			hero:  "/1920x1080-st0.png",
+		},
+		{
+			name:  "an unsized screenshot that does not fit is fetched once and kept",
+			shots: func(base string) []ImageRef { return []ImageRef{{URL: base + "/1000x600-st0.png"}} },
+			runs:  []refresh{{extra: 1, poster: true}, {extra: 0, poster: true}},
+			once:  "/1000x600-st0.png",
+		},
+		{
+			name: "a reported size the served file does not have is fetched once",
+			shots: func(base string) []ImageRef {
+				return []ImageRef{{URL: base + "/1000x600-st0.png", Width: 1920, Height: 1080}}
+			},
+			runs: []refresh{{extra: 1, poster: true}, {extra: 0, poster: true}, {extra: 0, poster: true}},
+			once: "/1000x600-st0.png",
+		},
+		{
+			name: "a sized fitting screenshot wins over an unsized one",
+			shots: func(base string) []ImageRef {
+				return []ImageRef{{URL: base + "/1920x1080-u0.png"}, {URL: base + "/1280x720-s1.png", Width: 1280, Height: 720}}
+			},
+			runs: []refresh{{extra: 1}},
+			hero: "/1280x720-s1.png",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv, hits := sizedImageServer(t)
+			meta := fullMetadata(srv.URL)
+			meta.Cover = &ImageRef{URL: srv.URL + "/264x374-cover.png"}
+			meta.Screenshots = tc.shots(srv.URL)
+			meta.Artworks = nil
+			provider := &fakeProvider{meta: map[string]GameMetadata{"2657": meta}}
+			svc, cat, _ := newTestService(t, provider)
+			game := addGame(t, cat, catalog.Game{Title: "Prey", ExternalIDs: catalog.ExternalIDs{IGDB: "2657"}})
+
+			var view View
+			for i, run := range tc.runs {
+				if i > 0 {
+					svc.SetLanguage([]string{"en", "ru"}[i%2])
+				}
+				if _, extra := artRefresh(t, svc, cat, game.ID, hits); extra != run.extra {
+					t.Fatalf("refresh %d: extra image requests = %d, want %d", i+1, extra, run.extra)
+				}
+				var err error
+				if view, err = svc.GetView(game.ID); err != nil {
+					t.Fatalf("view: %v", err)
+				}
+				if view.HeroIsPoster != run.poster {
+					t.Fatalf("refresh %d: hero %q poster=%v, want poster=%v", i+1, view.Hero, view.HeroIsPoster, run.poster)
+				}
+			}
+			if tc.hero != "" && sourceOf(t, svc, game.ID, view.Hero) != srv.URL+tc.hero {
+				t.Fatalf("hero = %q, want %s", view.Hero, tc.hero)
+			}
+			if tc.once != "" {
+				if n := copiesOf(svc, game.ID, srv.URL+tc.once); n != 1 {
+					t.Fatalf("stored copies of %s = %d, want 1", tc.once, n)
+				}
+			}
+		})
+	}
+}
