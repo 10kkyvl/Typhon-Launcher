@@ -20,16 +20,16 @@
   import { consoleOrigin, firstWebUrl, releaseOrigin, sharedPlatform, splitReleases } from '../../lib/game/releases';
   import { catalogLoadKey, pageTitle, releaseLoadKey, sameGameIds } from '../../lib/game/pageLoad';
   import { busyState, cancelFreesDisk, clean, galleryShots, hubAction, isGameMissing, notOnPcBadge, onPC, pickHero } from '../../lib/game/view';
-  import type { TerminalDownloadStatus } from '../../lib/game/view';
+  import { activeDownload, activeInstall, gameDownloads, gameInstalls, ownsDownload as ownsGameDownload, terminalDownload as newestTerminalDownload } from '../../lib/game/transfers';
   import { cancelDownload, deleteDownloadData, removeDownload, resumeDownload } from '../../lib/services/downloads';
-  import type { Download as DownloadItem, DownloadOrigin, DownloadStatus } from '../../lib/services/downloads';
+  import type { Download as DownloadItem, DownloadOrigin } from '../../lib/services/downloads';
   import { missingImages, refreshMissingImages } from '../../lib/stores/missingImages';
   import { prepareReleaseDownload, type ReleaseGroup } from '../../lib/services/sources';
   import { getVerifyState } from '../../lib/services/updates';
   import { downloads, statusLabels } from '../../lib/stores/downloads';
   import { gameSections, type GameSection } from '../../lib/theme/layout';
   import { activeTheme } from '../../lib/stores/theme';
-  import { installActive, installStatusLabels, installations } from '../../lib/stores/install';
+  import { installStatusLabels, installations } from '../../lib/stores/install';
   import { installIndeterminate } from '../../lib/install/progress';
   import { libraryGames, runningGames } from '../../lib/stores/library';
   import { emulationPlatform, isEmulated, pageGame } from '../../lib/library/emulation';
@@ -184,33 +184,15 @@
     if (activeTab === 'screenshots' && !hasShotsTab) activeTab = 'overview';
   });
 
-  const activeDownloadStatuses: DownloadStatus[] = ['queued', 'metadata', 'downloading', 'paused', 'verifying'];
-
+  const owner = $derived({ gameIds: [canonicalId], libraryId: localGame?.id });
   function ownsDownload(item: DownloadItem) {
-    const origin = item.origin ?? {};
-    if (canonicalId && origin.gameId === canonicalId) return true;
-    return Boolean(localGame && origin.libraryId === localGame.id);
+    return ownsGameDownload(item, owner);
   }
 
-  const ownDownload = $derived(
-    $downloads.find((item) => ownsDownload(item) && activeDownloadStatuses.includes(item.status)),
-  );
-
-  const terminalDownload = $derived.by(() => {
-    if (installed) return undefined;
-    return $downloads.find(
-      (item): item is DownloadItem & { status: TerminalDownloadStatus } =>
-        ownsDownload(item) && (item.status === 'completed' || item.status === 'failed'),
-    );
-  });
-
-  const ownInstall = $derived.by(() => {
-    const ids = new Set($downloads.filter(ownsDownload).map((item) => item.id));
-    return $installations.find(
-      (item) =>
-        installActive(item.status) && (ids.has(item.downloadId) || (localGame && item.gameId === localGame.id)),
-    );
-  });
+  const ownDownloads = $derived(gameDownloads($downloads, owner));
+  const ownDownload = $derived(activeDownload(ownDownloads));
+  const terminalDownload = $derived(installed ? undefined : newestTerminalDownload(ownDownloads));
+  const ownInstall = $derived(activeInstall(gameInstalls($installations, ownDownloads, localGame?.id)));
 
   const busy = $derived(
     busyState([
