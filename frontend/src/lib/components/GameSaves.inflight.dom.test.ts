@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/svelte';
+import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { cloudSyncNow, type CloudStatus } from '../services/cloudsaves';
@@ -9,7 +10,7 @@ import { cloudStatus } from '../stores/cloudsaves';
 import { libraryGames } from '../stores/library';
 import { closeSaveBackups, openSaveBackups, saveBackupsEnabled } from '../stores/savebackup';
 import { settings } from '../stores/settings';
-import { toasts } from '../stores/toasts';
+import { queuedToasts, toasts } from '../stores/toasts';
 import { authState } from '../stores/user';
 import { user } from '../testing/dom';
 import GameSaves from './GameSaves.svelte';
@@ -139,5 +140,39 @@ describe('a saves action outlives the view that started it', () => {
     syncing.resolve();
     await waitFor(() => expect(screen.getAllByRole('button', { name: msg('saves.restore') })[0].hasAttribute('aria-busy')).toBe(false));
     expect(screen.getByRole('button', { name: msg('cloudsaves.syncNow') }).hasAttribute('aria-busy')).toBe(false);
+  });
+
+  it('says in a toast, with the game, a backup action that fails after the view that started it went', async () => {
+    let fail!: (err: unknown) => void;
+    vi.mocked(createBackup).mockReturnValue(new Promise((_, reject) => (fail = reject)));
+    const keys = user();
+    const first = render(GameSaves, { target: app, props: { gameId: 'g1' } });
+    const create = await screen.findByRole('button', { name: msg('saves.createBackup') });
+    await waitFor(() => expect(create).toHaveProperty('disabled', false));
+    await keys.click(create);
+
+    first.unmount();
+    render(GameSaves, { target: app, props: { gameId: 'g1' } });
+    fail(new Error('typhon:savebackup.disabled'));
+
+    const said = () => [...get(toasts), ...queuedToasts()].map((t) => [t.kind, t.message]);
+    await waitFor(() => expect(said()).toContainEqual(['danger', msg('saves.failedFor', { title: 'Hades', reason: msg('savebackup.disabled') })]));
+    await waitFor(() => expect(createButton().hasAttribute('aria-busy')).toBe(false));
+  });
+
+  it('says in a toast, with the game, a cloud action that fails after the view moved to another game', async () => {
+    libraryGames.set([{ id: 'g1', title: 'Hades', canonicalGameId: 'igdb:1' } as LibraryGame, { id: 'g2', title: 'Celeste', canonicalGameId: 'igdb:2' } as LibraryGame]);
+    let fail!: (err: unknown) => void;
+    vi.mocked(cloudSyncNow).mockReturnValue(new Promise((_, reject) => (fail = reject)));
+    const keys = user();
+    const view = render(GameSaves, { target: app, props: { gameId: 'g1' } });
+    await keys.click(screen.getByRole('button', { name: msg('cloudsaves.syncNow') }));
+
+    await view.rerender({ gameId: 'g2' });
+    fail(new Error('typhon:cloud.quota'));
+
+    const said = () => [...get(toasts), ...queuedToasts()].map((t) => [t.kind, t.message]);
+    await waitFor(() => expect(said()).toContainEqual(['danger', msg('cloudsaves.failedFor', { title: 'Hades', reason: msg('cloud.quota') })]));
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });

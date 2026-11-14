@@ -241,27 +241,33 @@
   }
 
   // A backup action, in the game's backup lane: refused while one runs there, from this view or another.
+  // A failure this view no longer shows (it went, or moved to another game) is said in a toast.
   async function backupAction(gameId: string, work: Omit<SavesWork, 'by'>, action: () => Promise<void>) {
     if (working) return;
     const mine = turn;
+    const { title } = target;
     failure = '';
     try {
       await runSavesWork(gameId, 'backup', { ...work, by: me }, action);
     } catch (err) {
-      if (mine === turn) failure = saveBackupErrorText(err, backupFailure());
+      const text = saveBackupErrorText(err, backupFailure());
+      if (alive && mine === turn) failure = text;
+      else toast(msg('saves.failedFor', { title, reason: text }), 'danger');
     }
   }
 
   // A cloud action, in the game's cloud lane; the status is loaded again whatever the outcome.
   async function cloudAction(work: SavesWork['kind'], action: (gameId: string) => Promise<void>, done: () => Promise<void> = async () => {}) {
     if (cloudBusy) return;
-    const { gameId } = target;
+    const { gameId, title } = target;
     const mine = turn;
     cloudFailure = '';
     try {
       await runSavesWork(gameId, 'cloud', { kind: work, by: me }, () => action(gameId));
     } catch (err) {
-      if (mine === turn) cloudFailure = cloudErrorText(err);
+      const text = cloudErrorText(err);
+      if (alive && mine === turn) cloudFailure = text;
+      else toast(msg('cloudsaves.failedFor', { title, reason: text }), 'danger');
     } finally {
       await refreshCloudStatus();
       await done();
