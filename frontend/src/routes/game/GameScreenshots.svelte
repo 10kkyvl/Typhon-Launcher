@@ -145,7 +145,7 @@
     <div class="grid">
       {#each shots as shot, index (shot.name)}
         <div class="tile">
-          <button type="button" class="thumb" onclick={() => open(index)} aria-label={msg('screenshots.open', { name: caption(shot) })}>
+          <button type="button" class="thumb" onclick={() => open(index)} aria-label={msg('games.blocks.screenshotOpen', { index: index + 1, count: shots.length, name: caption(shot) })}>
             <img src={shot.url} alt="" loading="lazy" draggable="false" />
           </button>
           <span class="when">{caption(shot)}</span>

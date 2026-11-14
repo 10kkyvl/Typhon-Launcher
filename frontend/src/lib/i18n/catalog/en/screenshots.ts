@@ -16,7 +16,6 @@ export const screenshots: Record<ScreenshotsKey, Message> = {
   'screenshots.delete': 'Delete screenshot',
   'screenshots.deleteConfirm': 'The screenshot "{name}" will be deleted from disk and cannot be restored.',
   'screenshots.deleted': 'Screenshot deleted',
-  'screenshots.open': 'Open screenshot {name}',
   'screenshots.hotkeyHint': 'Take a screenshot with {hotkey}',
   'screenshots.emptyNoHotkey': 'No screenshots yet',
   'screenshots.empty': 'No screenshots yet. Press {hotkey} in the game.',

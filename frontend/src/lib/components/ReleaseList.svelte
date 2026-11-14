@@ -30,6 +30,21 @@
   const ordered = $derived(orderReleases(groups));
   const consoleStart = $derived(consoleGroupStart(groups));
   const showLanguages = $derived(groups.some((group) => languageLabel(group.release.languages) !== ''));
+
+  // Each Download says which release it takes: its version and source, or its full name when it has
+  // no version or another row has the same version from the same source.
+  const downloadNames = $derived.by(() => {
+    const short = (group: ReleaseGroup) => JSON.stringify([group.release.version, group.sourceName]);
+    const seen = new Map<string, number>();
+    for (const group of groups) if (group.release.version) seen.set(short(group), (seen.get(short(group)) ?? 0) + 1);
+    const names = new Map<string, string>();
+    for (const group of groups) {
+      const { version, rawTitle, id } = group.release;
+      const release = version && seen.get(short(group)) === 1 ? version : rawTitle || version;
+      names.set(id, msg('games.blocks.releaseDownload', { release, source: group.sourceName }));
+    }
+    return names;
+  });
 </script>
 
 <div class="release-list">
@@ -58,13 +73,13 @@
             {#if release.platform}<ConsoleTag platform={release.platform} />{/if}
             {release.version || '—'}
           </span>
-          <span class="release-title" title={release.rawTitle}>{release.rawTitle}</span>
+          <span class="release-title">{release.rawTitle}</span>
           {#if release.edition}
             <span class="release-edition">{release.edition}</span>
           {/if}
         </div>
         <span class="release-size"
-          >{bytesSize(release.size)}{#if release.dlcCount} +{release.dlcCount} DLC{/if}</span
+          >{bytesSize(release.size)}{#if release.dlcCount} {msg('games.blocks.releaseDlc', { count: release.dlcCount })}{/if}</span
         >
         {#if showLanguages}
           <span class="release-lang">{languageLabel(release.languages)}</span>
@@ -102,10 +117,12 @@
             <StatusBadge kind="danger" label={msg('release.unavailable')} plain />
           {/if}
         </div>
-        <Button size="sm" disabled={removed} onclick={() => ondownload(group)}>
-          <Download size="1.4rem" strokeWidth={1.8} />
-          {msg('ui.download')}
-        </Button>
+        <Tooltip text={release.rawTitle}>
+          <Button size="sm" disabled={removed} aria-label={downloadNames.get(release.id)} onclick={() => ondownload(group)}>
+            <Download size="1.4rem" strokeWidth={1.8} />
+            {msg('ui.download')}
+          </Button>
+        </Tooltip>
       </div>
     {/each}
   {/if}

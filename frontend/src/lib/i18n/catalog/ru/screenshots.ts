@@ -13,7 +13,6 @@ export const screenshots = {
   'screenshots.delete': 'Удалить снимок',
   'screenshots.deleteConfirm': 'Снимок «{name}» будет удалён с диска без возможности восстановления.',
   'screenshots.deleted': 'Снимок удалён',
-  'screenshots.open': 'Открыть снимок {name}',
   'screenshots.hotkeyHint': 'Снимок делается клавишей {hotkey}',
   'screenshots.emptyNoHotkey': 'Снимков пока нет',
   'screenshots.empty': 'Снимков пока нет. Нажмите {hotkey} в игре.',
