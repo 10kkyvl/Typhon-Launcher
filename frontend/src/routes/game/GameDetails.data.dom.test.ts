@@ -325,3 +325,34 @@ describe('GameDetails: the metadata view that could not be read', () => {
     expect(toastsOf('danger')).toEqual([]);
   });
 });
+
+describe('GameDetails: a catalog game that failed to load', () => {
+  beforeEach(() => libraryGames.set([]));
+
+  it('is said once, by the page, with the reason its code gives', async () => {
+    vi.mocked(getCatalogGame).mockRejectedValue(new Error('typhon:catalog.save_failed: disk'));
+    renderDom(GameDetails, { id: 'c9' });
+
+    const failed = await screen.findByRole('heading', { level: 1, name: msg('games.detailCatalogLoadError') });
+
+    expect(failed.closest('.empty')?.textContent).toContain(msg('errMetadata.catalogSaveFailed'));
+    expect(toastsOf('danger')).toEqual([]);
+  });
+
+  it('does not stack a toast for each Retry that fails again', async () => {
+    vi.mocked(getCatalogGame).mockRejectedValue(new Error('offline'));
+    const { user } = renderDom(GameDetails, { id: 'c9' });
+    await screen.findByRole('heading', { level: 1, name: msg('games.detailCatalogLoadError') });
+    const retry = screen.getByRole('button', { name: msg('common.retry') });
+
+    await user.click(retry);
+    await vi.waitFor(() => expect(getCatalogGame).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(retry.getAttribute('aria-busy')).not.toBe('true'));
+    await user.click(retry);
+    await vi.waitFor(() => expect(getCatalogGame).toHaveBeenCalledTimes(3));
+    await vi.waitFor(() => expect(retry.getAttribute('aria-busy')).not.toBe('true'));
+
+    expect(get(toasts)).toEqual([]);
+    expect(screen.getByRole('heading', { level: 1, name: msg('games.detailCatalogLoadError') })).toBeTruthy();
+  });
+});

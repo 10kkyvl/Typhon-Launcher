@@ -102,6 +102,10 @@ export function createGamePageData(page: GamePageInputs) {
   let catalogRetrying = $state(false);
   let catalogToken = 0;
 
+  // The page says a failure itself, in its empty state, with the reason the code gives ('' without one):
+  // no toast beside it, and none more for each Retry that fails again.
+  let catalogFailure = $state('');
+
   async function loadCatalogGame(gameId: string) {
     const current = ++catalogToken;
     catalogLoading = true;
@@ -114,7 +118,7 @@ export function createGamePageData(page: GamePageInputs) {
     } catch (err) {
       if (current !== catalogToken) return;
       catalogFailed = true;
-      toast(metadataErrorText(err, msg('games.detailCatalogLoadError')), 'danger');
+      catalogFailure = metadataErrorText(err, '');
     } finally {
       if (current === catalogToken) catalogLoading = false;
     }
@@ -547,6 +551,7 @@ export function createGamePageData(page: GamePageInputs) {
     get catalogLoading() { return catalogLoading; },
     get catalogFailed() { return catalogFailed; },
     get catalogRetrying() { return catalogRetrying; },
+    get catalogFailure() { return catalogFailure; },
     get metaView() { return metaView; },
     set metaView(view: MetadataView | null) {
       metaView = view;

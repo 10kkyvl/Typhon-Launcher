@@ -437,7 +437,7 @@
       {/snippet}
     </EmptyState>
   {:else if loadFailed}
-    <EmptyState level={1} title={msg('games.detailCatalogLoadError')}>
+    <EmptyState level={1} title={msg('games.detailCatalogLoadError')} description={data.catalogFailure || undefined}>
       {#snippet actions()}
         <Button busy={data.catalogRetrying} onclick={data.retryCatalog}>{msg('common.retry')}</Button>
         <Button onclick={() => navigate('library')}>{msg('games.detailBackToLibrary')}</Button>
