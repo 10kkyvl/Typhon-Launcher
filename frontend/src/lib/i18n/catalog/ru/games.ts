@@ -372,7 +372,6 @@ export const games = {
   'games.libraryMoreDetailsButton': 'Подробнее',
   'games.libraryShowAllButton': 'Показать все',
   'games.librarySearchPlaceholder': 'Поиск в библиотеке',
-  'games.libraryNothingFoundDescription': 'Попробуйте изменить запрос поиска.',
   'games.libraryEmptyTitle': 'Здесь пока пусто',
   'games.libraryEmptyDescription':
     'Игры появятся тут после установки или загрузки. Каталог Steam и IGDB — в разделе «Все игры».',

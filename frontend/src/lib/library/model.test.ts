@@ -4,7 +4,7 @@ import type { LibraryCollection, LibraryGame } from '../services/library';
 import { emptyReason, type EmptyInput } from './empty';
 import { createEntryCache, entryCover, entryHeroArt, gameEntry } from './entries';
 import type { LibraryFilter } from './filters';
-import { genreOptions, queryLibrary, sourceOptions, type LibraryQuery, type LibrarySort } from './query';
+import { entryComparator, genreOptions, queryLibrary, sourceOptions, type LibraryQuery, type LibrarySort } from './query';
 import { buildSlides, recentEntries, RECENT_LIMIT } from './spotlight';
 import type { StatusFilter } from './statuses';
 
@@ -175,6 +175,44 @@ describe('filters, source, status, collection, search', () => {
     const before = [...entries];
     queryLibrary(entries, watched, query({ sort: 'playtime' }), { genres, locale: 'en' });
     expect(entries).toEqual(before);
+  });
+});
+
+describe('the status and completion sorts', () => {
+  const titled = (rows: Array<Partial<LibraryGame>>) => rows.map((row, i) => gameEntry(game(`g${i}`, row)));
+  const order = (rows: Array<Partial<LibraryGame>>, sort: LibrarySort, field: 'title' | 'status' = 'title') =>
+    titled(rows).toSorted(entryComparator(sort, 'ru')).map((entry) => entry[field] ?? '');
+
+  it('orders playing, backlog, paused, completed, mastered, dropped, not started', () => {
+    const rows = ['', 'dropped', 'mastered', 'completed', 'paused', 'backlog', 'playing'].map((status, i) => ({ title: String(i), status }));
+    expect(order(rows, 'status', 'status')).toEqual(['playing', 'backlog', 'paused', 'completed', 'mastered', 'dropped', '']);
+  });
+
+  it('sorts by title inside one status, in the interface language', () => {
+    expect(order([{ title: 'Яблоко', status: 'playing' }, { title: 'Арбуз', status: 'playing' }, { title: 'Банан', status: 'playing' }], 'status')).toEqual(['Арбуз', 'Банан', 'Яблоко']);
+  });
+
+  it('puts a missing status together with not started', () => {
+    expect(order([{ title: 'b' }, { title: 'a', status: '' }, { title: 'c', status: 'dropped' }], 'status')).toEqual(['c', 'a', 'b']);
+  });
+
+  it('puts the newest completion first and undated games last', () => {
+    const rows = [
+      { title: 'none' },
+      { title: 'old', completedAt: '2024-01-05T10:00:00Z' },
+      { title: 'new', completedAt: '2026-10-19T21:30:00Z' },
+      { title: 'null', completedAt: null },
+      { title: 'mid', completedAt: '2025-06-01T10:00:00Z' },
+    ];
+    expect(order(rows, 'completed')).toEqual(['new', 'mid', 'old', 'none', 'null']);
+  });
+
+  it('sorts equal completion dates by title', () => {
+    expect(order([{ title: 'b', completedAt: '2026-01-01T00:00:00Z' }, { title: 'a', completedAt: '2026-01-01T00:00:00Z' }], 'completed')).toEqual(['a', 'b']);
+  });
+
+  it('treats an unparsable completion date as missing', () => {
+    expect(order([{ title: 'bad', completedAt: 'not a date' }, { title: 'good', completedAt: '2026-01-01T00:00:00Z' }], 'completed')).toEqual(['good', 'bad']);
   });
 });
 

@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import type { LibraryGame } from '../services/library';
+import { msg } from '../i18n';
+import { metadataErrorText } from '../metadata/metadataErrors';
 
 const handlers: Record<string, (event: { data: unknown }) => void> = {};
 
@@ -333,7 +335,7 @@ describe('catalog titles of downloads', () => {
     await store.requestDownloadTitles(['c-b']);
 
     expect(catalog.answer).toHaveBeenCalledTimes(2);
-    expect(toast).toHaveBeenCalledTimes(1);
-    expect(toast.mock.calls[0][1]).toBe('danger');
+    expect(toast.mock.calls).toEqual([[metadataErrorText(new Error('typhon:metadata.offline: down'), msg('games.libraryLoadGamesError')), 'danger']]);
+    expect(toast.mock.calls[0][0]).not.toContain('down');
   });
 });

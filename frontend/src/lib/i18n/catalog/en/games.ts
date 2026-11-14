@@ -374,7 +374,6 @@ export const games: Record<GamesKey, Message> = {
   'games.libraryMoreDetailsButton': 'Details',
   'games.libraryShowAllButton': 'Show all',
   'games.librarySearchPlaceholder': 'Search library',
-  'games.libraryNothingFoundDescription': 'Try changing your search query.',
   'games.libraryEmptyTitle': 'Nothing here yet',
   'games.libraryEmptyDescription':
     'Games will appear here once installed or downloaded. Browse sources under "All games".',
