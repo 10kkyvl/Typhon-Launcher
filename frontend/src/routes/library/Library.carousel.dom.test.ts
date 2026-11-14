@@ -1,7 +1,10 @@
 // First: services/library reaches this store back through stores/cloudsaves (see Library.state.dom.test.ts).
 import { libraryGames, libraryLoaded, runningGames } from '../../lib/stores/library';
-import { screen, within } from '@testing-library/svelte';
+import { render, screen, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
+import { get } from 'svelte/store';
+import GameQuickMenu from '../../lib/components/GameQuickMenu.svelte';
+import { closeGameMenu, gameMenu } from '../../lib/stores/gameMenu';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import { playGame, stopGame } from '../../lib/services/library';
@@ -26,6 +29,7 @@ vi.mock('../../lib/services/library', async (importOriginal) => ({
   getGames: vi.fn(async () => []),
   getCollections: vi.fn(async () => []),
   allTags: vi.fn(async () => []),
+  steamStatus: vi.fn(async () => ({ supported: false, installed: false, added: false })),
   playGame: vi.fn(async () => {}),
   stopGame: vi.fn(async () => {}),
 }));
@@ -157,5 +161,28 @@ describe('Library: a hidden game', () => {
 
     await user.click(screen.getByRole('radio', { name: msg('games.filterHidden') }));
     expect(shownTitles()).toEqual(['Secret One']);
+  });
+});
+
+describe('Library: the carousel\'s game menu', () => {
+  afterEach(() => closeGameMenu());
+
+  it('names the game of the slide on screen by its id, also when two games share a title', async () => {
+    const one = played('g-one', 'Twin', 9);
+    const two = played('g-two', 'Twin', 8);
+    const other = played('g-other', 'Other', 7);
+    libraryGames.set([one, two, other]);
+    const { user } = renderDom(Library);
+    render(GameQuickMenu);
+    const shown = carousel() as HTMLElement;
+    await user.click(within(shown).getByRole('button', { name: msg('library.carousel.pick', { index: '2', total: '3', title: 'Twin' }) }));
+
+    // Another game starts: the page's order changes while focus holds the carousel's order.
+    runningGames.set(new Set(['g-other']));
+    await tick();
+    await user.keyboard('{Shift>}{F10}{/Shift}');
+
+    expect(await screen.findByRole('menu')).toBeTruthy();
+    expect(get(gameMenu)?.gameId).toBe('g-two');
   });
 });

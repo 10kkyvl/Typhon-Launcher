@@ -51,20 +51,12 @@
     ].join(' · ');
   }
 
-  // The game of the slide on screen. The carousel keeps its order while the pointer or focus holds it,
-  // so the slide is matched by its place when that place still holds its title, else by the title.
-  function shownGame(root: HTMLElement): string | undefined {
-    const all = [...root.querySelectorAll('[data-picture]')];
-    const slide = all.find((one) => !one.hasAttribute('inert'));
-    if (!slide) return undefined;
-    const title = slide.querySelector('.title')?.textContent?.trim();
-    const there = entries[all.indexOf(slide)];
-    return there?.title === title ? there.id : entries.find((entry) => entry.title === title)?.id;
-  }
+  // The game of the slide on screen, as the carousel names it.
+  let shown = $state<string>();
 
   // A right click or Shift+F10 on the carousel opens the menu of the game it shows, as on a card.
   const slideMenus = contextMenuTrigger(({ at, focus }, source) => {
-    const id = shownGame(source);
+    const id = shown;
     return Boolean(id && openGameMenu(id, { at, focus, trigger: null, source }));
   });
 
@@ -89,7 +81,7 @@
 </script>
 
 <div class="carousel" {@attach slideMenus}>
-  <HeroCarousel {slides} onopen={(id) => navigate('game', { id })} {onplay} {onstop} />
+  <HeroCarousel {slides} bind:shown onopen={(id) => navigate('game', { id })} {onplay} {onstop} />
   <span class="hide" bind:this={hideSpot}>
     <IconButton variant="secondary" size="sm" label={msg('library.carousel.hide')} onclick={onhide}>
       <X size="1.6rem" strokeWidth={1.8} />

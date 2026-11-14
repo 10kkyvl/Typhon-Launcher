@@ -67,6 +67,7 @@
     onstop,
     ambient = false,
     level = 2,
+    shown = $bindable(),
   }: {
     slides: HeroSlide[];
     onopen: (id: string) => void;
@@ -75,6 +76,8 @@
     ambient?: boolean;
     /** The heading level of a slide's title, under the page's own heading. */
     level?: 2 | 3 | 4;
+    /** Read only: the id of the slide on screen, for what the page does with that game (its menu). */
+    shown?: string;
   } = $props();
 
   const uid = $props.id();
@@ -114,6 +117,7 @@
     const id = current?.id ?? null;
     untrack(() => {
       if (activeId !== id) activeId = id;
+      if (shown !== (id ?? undefined)) shown = id ?? undefined;
     });
   });
 
