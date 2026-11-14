@@ -51,11 +51,11 @@ describe('Library: a row of the list view', () => {
   });
 });
 
-describe('Library: hiding the "continue playing" block', () => {
+describe('Library: putting the carousel away', () => {
   it('is the base icon button: the keyboard presses it and focus moves on, not to the page', async () => {
     const { user } = renderDom(Library);
-    const block = screen.getByRole('region', { name: msg('games.libraryContinuePlayingTitle') });
-    const hide = screen.getByRole('button', { name: msg('games.libraryHideLabel') });
+    const block = screen.getByRole('region', { name: msg('library.carousel.label') });
+    const hide = screen.getByRole('button', { name: msg('library.carousel.hide') });
     expect(hide.classList.contains('icon-btn')).toBe(true);
     hide.focus();
 
@@ -69,8 +69,11 @@ describe('Library: hiding the "continue playing" block', () => {
 
 describe('Library: "Show all" of the recent games', () => {
   it('is a text link the keyboard presses, and it lists the recent games', async () => {
-    const played = { ...games[1], id: 'g-cells', title: 'Dead Cells', lastPlayed: '2026-10-01T10:00:00Z' } as LibraryGame;
-    libraryGames.set([...games, played]);
+    // Three more played games than the carousel's three: the row holds the rest.
+    const played = ['Dead Cells', 'Limbo', 'Inside', 'Tunic'].map(
+      (title, i) => ({ ...games[1], id: `g-${i}`, title, lastPlayed: `2026-10-0${i + 1}T10:00:00Z` }) as LibraryGame,
+    );
+    libraryGames.set([...games, ...played]);
     const { user } = renderDom(Library);
     const recent = msg('games.recentLabel');
     expect(screen.getAllByRole('heading', { level: 2, name: recent })).toHaveLength(1);

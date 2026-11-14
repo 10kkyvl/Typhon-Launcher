@@ -49,22 +49,25 @@ const emit = async (name: string, data: unknown) => {
   bridge.handlers.get(name)?.({ data });
   await tick();
 };
-const heroRegion = () => screen.getByRole('region', { name: msg('games.libraryContinuePlayingTitle') });
+const heroRegion = () => screen.getByRole('region', { name: msg('library.carousel.label') });
+const slideTitles = () => [...heroRegion().querySelectorAll('[data-picture] .title')].map((el) => el.textContent?.trim());
 const recentTitles = () =>
-  [...(screen.getAllByRole('heading', { level: 2, name: msg('games.recentLabel') })[0].closest('section')?.querySelectorAll('.recent-item') ?? [])].map(
-    (item) => (['Hades', 'Celeste', 'Inside'].find((title) => item.textContent?.includes(title)) ?? '?'),
+  [...(screen.getAllByRole('heading', { level: 2, name: msg('games.recentLabel') })[0].closest('section')?.querySelectorAll('.recent-item .title') ?? [])].map(
+    (el) => el.textContent?.trim(),
   );
 
 const hades = game('g-hades', 'Hades', '2026-10-01T10:00:00Z');
 const celeste = game('g-celeste', 'Celeste', '2026-11-01T10:00:00Z');
 const inside = game('g-inside', 'Inside', '2026-09-01T10:00:00Z');
+// Played before the carousel's three: the "Recent" row holds it.
+const limbo = game('g-limbo', 'Limbo', '2026-08-01T10:00:00Z');
 const hadesPlayed = { ...hades, lastPlayed: '2026-11-14T10:00:00Z', playtimeSeconds: 600 };
 const stopped = { gameId: 'g-hades', sessionSeconds: 30, playtimeSeconds: 600, crashed: false, emulatorQuickExit: false };
 
 beforeEach(async () => {
   libraryChoices.set({ ...DEFAULT_CHOICES });
   libraryView.set('list');
-  bridge.games = [hades, celeste, inside];
+  bridge.games = [hades, celeste, inside, limbo];
   await initLibrary();
 });
 
@@ -74,26 +77,41 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-describe('Library: the hero of a running game that stops', () => {
-  it.each([
-    ['in the order Go sends them: stopped, then the list', [['game:stopped', stopped], ['library:updated', [hadesPlayed, celeste, inside]]]],
-    ['in the reverse order: the list, then stopped', [['library:updated', [hadesPlayed, celeste, inside]], ['game:stopped', stopped]]],
-  ] as const)('stays that game, %s, and Stop turns into Play with focus on it', async (_name, events) => {
+const orders = [
+  ['in the order Go sends them: stopped, then the list', [['game:stopped', stopped], ['library:updated', [hadesPlayed, celeste, inside, limbo]]]],
+  ['in the reverse order: the list, then stopped', [['library:updated', [hadesPlayed, celeste, inside, limbo]], ['game:stopped', stopped]]],
+] as const;
+
+describe('Library: the carousel slide of a running game that stops', () => {
+  // Nothing holds the carousel here (no pointer, no focus inside), so its order is the page's.
+  it.each(orders)('stays the first slide, %s', async (_name, events) => {
     renderDom(Library);
     await emit('game:started', { gameId: 'g-hades', sessionSeconds: 0, playtimeSeconds: 0 });
+    expect(slideTitles()).toEqual(['Hades', 'Celeste', 'Inside']);
+    expect(recentTitles()).toEqual(['Limbo']);
+
+    for (const [name, data] of events) {
+      await emit(name, data);
+      expect(slideTitles()).toEqual(['Hades', 'Celeste', 'Inside']);
+      expect(recentTitles()).toEqual(['Limbo']);
+    }
+  });
+
+  it.each(orders)('turns Stop into Play with focus on it, %s', async (_name, events) => {
+    const { user } = renderDom(Library);
+    await emit('game:started', { gameId: 'g-hades', sessionSeconds: 0, playtimeSeconds: 0 });
+    await user.click(within(heroRegion()).getByRole('button', { name: msg('library.carousel.pick', { index: '1', total: '3', title: 'Hades' }) }));
     expect(within(heroRegion()).getByRole('heading', { level: 2 }).textContent).toBe('Hades');
-    const control = within(heroRegion()).getByRole('button', { name: msg('games.stop') });
+    const control = within(heroRegion()).getByRole('button', { name: msg('ui.stop') });
     control.focus();
-    expect(recentTitles()).toEqual(['Celeste', 'Inside']);
 
     for (const [name, data] of events) {
       await emit(name, data);
       expect(within(heroRegion()).getByRole('heading', { level: 2 }).textContent).toBe('Hades');
       expect(document.activeElement).toBe(control);
-      expect(recentTitles()).toEqual(['Celeste', 'Inside']);
     }
 
     expect(control.isConnected).toBe(true);
-    expect(control.textContent).toContain(msg('common.continue'));
+    expect(control.textContent).toContain(msg('ui.play'));
   });
 });

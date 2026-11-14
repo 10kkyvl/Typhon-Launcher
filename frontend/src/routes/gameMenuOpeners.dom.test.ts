@@ -129,11 +129,11 @@ describe('the game menu from the Library page', () => {
     await opensByPointerAndKeyboard(keys, cover, 'Celeste');
   });
 
-  it('the hero: right-click and Shift+F10 open the menu of the game it shows', async () => {
+  it('the carousel: right-click and Shift+F10 open the menu of the game it shows', async () => {
     const keys = mount(Library);
-    const hero = screen.getByRole('region', { name: msg('games.libraryContinuePlayingTitle') });
+    const carousel = screen.getByRole('region', { name: msg('library.carousel.label') });
 
-    await opensByPointerAndKeyboard(keys, within(hero).getByRole('button', { name: msg('games.libraryMoreDetailsButton') }), 'Hades');
+    await opensByPointerAndKeyboard(keys, within(carousel).getByRole('button', { name: 'Hades' }), 'Hades');
   });
 
   it('a list row: right-click and Shift+F10 open the menu of that row’s game', async () => {

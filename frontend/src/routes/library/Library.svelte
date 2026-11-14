@@ -39,8 +39,8 @@
   import { createEntryCache, entryCover, entryHeroArt, type LibraryEntry } from '../../lib/library/entries';
   import type { LibraryFilter } from '../../lib/library/filters';
   import { effectiveSort, filterEntries, genreOptions, sortEntries, sourceOptions, type LibraryQuery } from '../../lib/library/query';
-  import { buildSlides, recentEntries } from '../../lib/library/spotlight';
-  import LibraryHero from './LibraryHero.svelte';
+  import { buildSlides, RECENT_LIMIT, recentEntries } from '../../lib/library/spotlight';
+  import LibraryCarousel from './LibraryCarousel.svelte';
   import RecentRow from './RecentRow.svelte';
   import LibraryToolbar from './LibraryToolbar.svelte';
   import LibraryGrid from './LibraryGrid.svelte';
@@ -193,10 +193,25 @@
     void handOff(() => (results ? focusableIn(results)[0] : undefined) ?? (listSection ? focusableIn(listSection)[0] : undefined));
   }
 
-  const hero = $derived(buildSlides(entries, { running: $runningGames, stopped: $stoppedSinceList, locale: $locale })[0]);
-  const recentGames = $derived(
-    recentEntries(entries, { shown: hero && !heroHidden ? hero.id : undefined, stopped: $stoppedSinceList, locale: $locale }),
-  );
+  const slides = $derived(buildSlides(entries, { running: $runningGames, stopped: $stoppedSinceList, locale: $locale }));
+  const carouselShown = $derived(!heroHidden && slides.length > 0);
+  // The row leaves out what the carousel shows, so nothing is drawn twice at the top.
+  const recentGames = $derived.by(() => {
+    const onScreen = new Set(carouselShown ? slides.map((entry) => entry.id) : []);
+    return recentEntries(entries, { stopped: $stoppedSinceList, locale: $locale, limit: RECENT_LIMIT + onScreen.size })
+      .filter((entry) => !onScreen.has(entry.id))
+      .slice(0, RECENT_LIMIT);
+  });
+
+  let carouselBlock = $state<ReturnType<typeof LibraryCarousel>>();
+  let showCarouselSpot = $state<HTMLElement>();
+
+  // The control pressed goes with its block; focus moves to the one that takes it back.
+  function setCarouselHidden(hidden: boolean) {
+    const handOff = focusHandOff();
+    heroHidden = hidden;
+    void handOff(() => (hidden ? (showCarouselSpot ? focusableIn(showCarouselSpot)[0] : undefined) : carouselBlock?.hideControl()));
+  }
 
   let lastView = get(libraryView);
   let viewSwitched = $state(false);
@@ -218,17 +233,29 @@
 </script>
 
 <Page>
-  <PageHeader title={msg('games.libraryWord')} />
+  {#snippet bleed()}
+    {#if carouselShown}
+      <LibraryCarousel
+        bind:this={carouselBlock}
+        entries={slides}
+        art={$gameArt}
+        running={$runningGames}
+        onplay={toggleRun}
+        onstop={toggleRun}
+        onhide={() => setCarouselHidden(true)}
+      />
+    {/if}
+  {/snippet}
 
-  {#if hero && !heroHidden}
-    <LibraryHero
-      {hero}
-      art={entryHeroArt(hero, $gameArt)}
-      running={$runningGames.has(hero.id)}
-      onplay={() => toggleRun(hero.id)}
-      onhide={() => (heroHidden = true)}
-    />
-  {/if}
+  <PageHeader title={msg('games.libraryWord')}>
+    {#snippet actions()}
+      {#if heroHidden && slides.length > 0}
+        <span bind:this={showCarouselSpot}>
+          <Button variant="ghost" size="sm" onclick={() => setCarouselHidden(false)}>{msg('library.carousel.show')}</Button>
+        </span>
+      {/if}
+    {/snippet}
+  </PageHeader>
 
   {#if recentGames.length > 0}
     <RecentRow

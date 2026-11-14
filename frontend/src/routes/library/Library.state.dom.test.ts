@@ -282,22 +282,25 @@ describe('Library: the recent games', () => {
   const gamma = game('g-gamma', 'Gamma', { lastPlayed: '2026-10-15T10:00:00Z' });
   const delta = game('g-delta', 'Delta');
   const echo = game('g-echo', 'Echo', { uninstalled: true, lastPlayed: '2026-11-05T10:00:00Z' });
+  // Played before the carousel's three (Beta, Gamma, Alpha): the row holds these.
+  const foxtrot = game('g-foxtrot', 'Foxtrot', { lastPlayed: '2026-09-15T10:00:00Z' });
+  const golf = game('g-golf', 'Golf', { lastPlayed: '2026-09-01T10:00:00Z' });
 
-  beforeEach(() => libraryGames.set([alpha, beta, gamma, delta, echo]));
+  beforeEach(() => libraryGames.set([alpha, beta, gamma, delta, echo, foxtrot, golf]));
 
   it('"Show all" lists the games of the row in play order, whatever the sort', async () => {
     const { user } = renderDom(Library);
 
     await user.click(screen.getByRole('button', { name: msg('games.libraryShowAllButton') }));
 
-    expect(listTitles()).toEqual(['Beta', 'Gamma', 'Alpha']);
+    expect(listTitles()).toEqual(['Beta', 'Gamma', 'Alpha', 'Foxtrot', 'Golf']);
   });
 
-  it('keeps the hero game in the row once the hero is hidden', async () => {
+  it('keeps the carousel\'s games in the row once the carousel is put away', async () => {
     const { user } = renderDom(Library);
     expect(within(recentRow()).queryAllByText('Beta')).toHaveLength(0);
 
-    await user.click(screen.getByRole('button', { name: msg('games.libraryHideLabel') }));
+    await user.click(screen.getByRole('button', { name: msg('library.carousel.hide') }));
 
     expect(within(recentRow()).queryAllByText('Beta').length).toBeGreaterThan(0);
   });
@@ -309,17 +312,17 @@ describe('Library: the recent games', () => {
     expect(within(recentRow()).getAllByRole('button', { name: msg('ui.play') })).toHaveLength(12);
   });
 
-  it('moves focus on when a game started from its capsule leaves the row for the hero', async () => {
+  it('moves focus on when a game started from its capsule leaves the row for the carousel', async () => {
     const { user } = renderDom(Library);
-    const play = within(recentRow()).getAllByRole('button', { name: msg('ui.play') })[1];
+    const play = within(recentRow()).getAllByRole('button', { name: msg('ui.play') })[0];
     play.focus();
 
     await user.keyboard('{Enter}');
-    runningGames.set(new Set(['g-alpha']));
+    runningGames.set(new Set(['g-foxtrot']));
     await tick();
     await tick();
 
-    expect(screen.getByRole('region', { name: msg('games.libraryContinuePlayingTitle') }).textContent).toContain('Alpha');
+    expect(screen.getByRole('region', { name: msg('library.carousel.label') }).textContent).toContain('Foxtrot');
     expect(play.isConnected).toBe(false);
     expect(document.activeElement).not.toBe(document.body);
     expect(recentRow().contains(document.activeElement)).toBe(true);
@@ -331,14 +334,14 @@ describe('Library: the player\'s choices', () => {
     const first = renderDom(Library);
     await first.user.click(screen.getByRole('button', { name: msg('games.filterInstalled') }));
     await first.user.type(screen.getByLabelText(msg('games.librarySearchPlaceholder')), 'ha');
-    await first.user.click(screen.getByRole('button', { name: msg('games.libraryHideLabel') }));
+    await first.user.click(screen.getByRole('button', { name: msg('library.carousel.hide') }));
     first.unmount();
 
     renderDom(Library);
 
     expect(screen.getByRole('button', { name: msg('games.filterInstalled') }).getAttribute('aria-pressed')).toBe('true');
     expect((screen.getByLabelText(msg('games.librarySearchPlaceholder')) as HTMLInputElement).value).toBe('ha');
-    expect(screen.queryByRole('region', { name: msg('games.libraryContinuePlayingTitle') })).toBeNull();
+    expect(screen.queryByRole('region', { name: msg('library.carousel.label') })).toBeNull();
     expect(listTitles()).toEqual(['Hades']);
   });
 });
@@ -436,7 +439,7 @@ describe('Library: errors of Play', () => {
     vi.mocked(playGame).mockRejectedValueOnce(err);
     const { user } = renderDom(Library);
 
-    await user.click(screen.getByRole('button', { name: msg('common.continue') }));
+    await user.click(within(screen.getByRole('region', { name: msg('library.carousel.label') })).getByRole('button', { name: msg('ui.play') }));
 
     await vi.waitFor(() => expect(toast).toHaveBeenCalled());
     const [text, kind] = vi.mocked(toast).mock.calls[0];
