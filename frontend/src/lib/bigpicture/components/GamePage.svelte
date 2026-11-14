@@ -599,7 +599,7 @@
               {#if running}
                 <button class="large-button danger" data-bp-focus="game:play-toggle" data-bp-default onclick={() => { pageError = ''; showDialog('stop'); }}><Square size="1.98rem" fill="currentColor" />{bp('bp.game.stop')}</button>
               {:else}
-                <button class="large-button primary" data-bp-focus="game:play-toggle" data-bp-default aria-busy={launchBusy || undefined} aria-disabled={launchBusy || undefined} onclick={() => void launch()}><Play size="2.09rem" fill="currentColor" />{bp('bp.game.launch')}</button>
+                <button class="large-button primary" data-bp-focus="game:play-toggle" data-bp-default aria-busy={launchBusy || undefined} onclick={() => void launch()}>{#if launchBusy}<span class="spinner in-button" aria-hidden="true"></span>{$t('bp.starting')}{:else}<Play size="2.09rem" fill="currentColor" />{bp('bp.game.launch')}{/if}</button>
               {/if}
             {:else if currentInstall && installActive(currentInstall.status)}
               <button class="large-button primary" data-bp-focus="game:hero:continue-install" data-bp-default onclick={ondownloads}><Download size="2.09rem" />{bp('bp.game.installContinue')}</button>
@@ -945,6 +945,8 @@
   .loading-state { display: flex; min-height: 30.8rem; flex-direction: column; align-items: center; justify-content: center; gap: 1.65rem; color: var(--text-2); font-size: 1.76rem; }
   .loading-state.compact { min-height: 15.4rem; flex-direction: row; justify-content: flex-start; }
   .spinner { width: 3.3rem; height: 3.3rem; flex: 0 0 auto; border: 3px solid color-mix(in srgb, var(--accent) 22%, transparent); border-top-color: var(--accent-bright); border-radius: 50%; animation: spin 850ms linear infinite; }
+  /* The same ring in the colour of the button it turns in: a busy Launch keeps its full colour. */
+  .spinner.in-button { width: 2.09rem; height: 2.09rem; border-color: color-mix(in srgb, currentColor 28%, transparent); border-top-color: currentColor; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .dialog-backdrop { position: fixed; z-index: var(--z-bp-dialog); inset: 0; display: grid; place-items: center; padding: 2.2rem; background: rgba(0,0,0,.76); }
   .bp-dialog { display: flex; width: min(96.8rem, 100%); max-height: min(90vh, 110rem); flex-direction: column; gap: 1.65rem; overflow: auto; padding: 2.64rem; border: 1px solid var(--border); border-radius: 1.98rem; background: var(--surface-2); box-shadow: 0 3.3rem 8.8rem rgba(0,0,0,.5); }

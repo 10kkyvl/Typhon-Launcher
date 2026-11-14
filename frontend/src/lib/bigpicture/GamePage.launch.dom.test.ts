@@ -8,6 +8,7 @@ import { launchesInFlight, type LibraryGame } from '../services/library';
 import { getMetadataView, type MetadataView } from '../services/metadata';
 import { getCatalogGame, type CatalogGame } from '../services/sources';
 import { user } from '../testing/dom';
+import { moveFocus } from './navigation';
 import GamePage from './components/GamePage.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
@@ -65,12 +66,36 @@ beforeEach(() => {
   } as MetadataView);
 });
 
+const scrollIntoView = Element.prototype.scrollIntoView;
+
 afterEach(() => {
   app.remove();
   libraryGames.set([]);
   vi.mocked(getCatalogGame).mockReset();
   vi.mocked(getMetadataView).mockReset();
+  vi.restoreAllMocks();
+  Element.prototype.scrollIntoView = scrollIntoView;
 });
+
+// jsdom has no layout: the hero's action row stands in one line, everything else far below it, so
+// the navigator sees Launch and its neighbours where the real page puts them.
+function layOutHeroActions() {
+  const rect = (element: Element) => {
+    const row = element.closest('.hero-actions');
+    const index = row ? [...row.children].indexOf(element) : 0;
+    const left = row ? index * 300 : 0;
+    const top = row ? 500 : 3000 + [...document.querySelectorAll('[data-bp-focus]')].indexOf(element) * 100;
+    return { left, top, right: left + 250, bottom: top + 60, width: 250, height: 60, x: left, y: top, toJSON: () => ({}) } as DOMRect;
+  };
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+    return rect(this);
+  });
+  vi.spyOn(Element.prototype, 'getClientRects').mockImplementation(function (this: Element) {
+    return [rect(this)] as unknown as DOMRectList;
+  });
+  // The navigator scrolls the control it focuses into view; jsdom has nothing to scroll.
+  Element.prototype.scrollIntoView = () => {};
+}
 
 function renderPage(onlaunch: (id: string) => Promise<boolean>) {
   render(GamePage, { target: app, props: { id: 'g1', onback: vi.fn(), ondownloads: vi.fn(), onlaunch, requestText: vi.fn(async () => null) } });
@@ -111,10 +136,15 @@ describe('Big Picture game page: a launch that waits on a question', () => {
     expect(onlaunch).toHaveBeenCalledTimes(1);
     expect(play.hasAttribute('disabled')).toBe(false);
     expect(play.getAttribute('aria-busy')).toBe('true');
+    // Busy is not unavailable: it says it starts the game, and the navigator still counts it.
+    expect(play.hasAttribute('aria-disabled')).toBe(false);
+    expect(play.textContent?.trim()).toBe(msg('bp.starting'));
+    expect(play.querySelector('.spinner')).not.toBeNull();
     expect(document.activeElement).toBe(play);
 
     launch.resolve(false);
     await vi.waitFor(() => expect(play.getAttribute('aria-busy')).toBeNull());
+    expect(play.textContent?.trim()).toBe(msg('bp.game.launch'));
     expect(document.activeElement).toBe(play);
   });
 
@@ -129,6 +159,24 @@ describe('Big Picture game page: a launch that waits on a question', () => {
     await keys.click(play);
 
     expect(onlaunch).not.toHaveBeenCalled();
+  });
+
+  it('keeps a busy Launch as the D-pad anchor: right reaches its neighbour, left comes back to Launch', async () => {
+    layOutHeroActions();
+    const launch = deferred<boolean>();
+    renderPage(vi.fn().mockReturnValueOnce(launch.promise));
+    const keys = user();
+    const play = await screen.findByRole('button', { name: msg('bp.game.launch') });
+    const favorite = screen.getByRole('button', { name: msg('bp.game.favoriteAdd') });
+    play.focus();
+    await keys.keyboard('{Enter}');
+    expect(play.getAttribute('aria-busy')).toBe('true');
+
+    expect(moveFocus(app, 'right')).toBe(true);
+    expect(document.activeElement).toBe(favorite);
+    expect(moveFocus(app, 'left')).toBe(true);
+    expect(document.activeElement).toBe(play);
+    launch.resolve(false);
   });
 
   it('shows a conflict that held the launch back again in its own words', async () => {
