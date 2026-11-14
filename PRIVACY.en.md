@@ -1,6 +1,6 @@
 # Typhon Privacy Policy
 
-Revision of 2 November 2026.
+Revision of 14 November 2026.
 
 This document describes what data Typhon keeps on the user's device and what it sends outside. It describes the actual behavior of the current version of the app, not intentions.
 
@@ -231,7 +231,7 @@ When they are on, for each game that has an identifier in the Typhon catalog and
 - **a device identifier** — a random UUIDv4 created the first time cloud saves are turned on on each device. It is not the same as the installation identifier from `installation.json` (section 1) and is not linked to it;
 - **the archive size, the checksum of its contents and the time of the last upload**.
 
-The app contacts the service after a play session ends, at startup and then roughly every five minutes while it is running: it asks for the list of stored archives, and sends or downloads an archive only if the saves changed on one of the two sides. If both sides changed, the app overwrites nothing and asks the user which copy to keep. Before the saves on the device are replaced with a downloaded copy, the current files are copied into a backup that stays on this device only.
+The app contacts the service when a game is launched from the library, after a play session ends, at app startup and then roughly every five minutes while it is running: it asks for the list of stored archives, and sends or downloads an archive only if the saves changed on one of the two sides. When a game is launched, the app asks for the same list (the list request carries no game identifier) and, if the cloud holds a newer copy and the saves on the device have not changed, downloads it before the game starts; it waits for an answer no longer than ten seconds; if the service has not answered by then, or has answered with an error, the game starts on the device's saves. If a download of the copy is already in progress or does not finish within those ten seconds, the game does not start until the download ends: the app says the saves are still syncing, and the game has to be started again. If both sides changed, the app overwrites nothing, does not start the game and asks the user which copy to keep. If the service is unreachable at that point, the user can start the game once on the device's saves; the conflict stays recorded and is asked about again at the next launch. Before the saves on the device are replaced with a downloaded copy, the current files are copied into a backup that stays on this device only.
 
 A game for which the app has not determined a catalog identifier is not synced. A saves folder that contains symbolic links or special-type files is not sent.
 
