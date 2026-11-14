@@ -12,12 +12,15 @@
     entries,
     cover,
     running,
+    busy,
     onshowall,
     onplay,
   }: {
     entries: LibraryEntry[];
     cover: (entry: LibraryEntry) => string;
     running: ReadonlySet<string>;
+    /** A launch or a stop of the game waits on Go. */
+    busy: (id: string) => boolean;
     onshowall: () => void;
     onplay: (id: string) => void;
   } = $props();
@@ -59,6 +62,7 @@
           ambient
           installed={entry.installed}
           running={running.has(entry.id)}
+          launching={busy(entry.id)}
           source={entry.source}
           platform={entry.platform}
           onplay={entry.playable ? () => onplay(entry.id) : undefined}

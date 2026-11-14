@@ -2,6 +2,7 @@
   import Page from '../../lib/components/Page.svelte';
   import { BellOff, Pencil, Plus } from '@lucide/svelte';
   import { untrack } from 'svelte';
+  import { SvelteSet } from 'svelte/reactivity';
   import { get } from 'svelte/store';
   import Button from '../../lib/components/Button.svelte';
   import Chip from '../../lib/components/Chip.svelte';
@@ -12,7 +13,7 @@
   import Notice from '../../lib/components/Notice.svelte';
   import RandomGameModal from '../../lib/components/RandomGameModal.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
-  import { playGame, stopGame, type LibraryCollection } from '../../lib/services/library';
+  import { launchesInFlight, playGame, stopGame, type LibraryCollection } from '../../lib/services/library';
   import { downloads } from '../../lib/stores/downloads';
   import { collections, collectionsLoadError, collectionsState, loadCollections } from '../../lib/stores/collections';
   import { libraryGenres, requestLibraryGenres } from '../../lib/stores/genres';
@@ -222,12 +223,22 @@
     viewSwitched = true;
   });
 
+  // A launch or a stop waits on Go: its control is busy and a second press sends nothing. A launch
+  // another screen started counts too (the service's set).
+  const pressed = new SvelteSet<string>();
+  const busy = (id: string) => pressed.has(id) || $launchesInFlight.has(id);
+
   async function toggleRun(id: string) {
+    if (busy(id)) return;
+    const stopping = $runningGames.has(id);
+    pressed.add(id);
     try {
-      if ($runningGames.has(id)) await stopGame(id);
+      if (stopping) await stopGame(id);
       else await playGame(id);
     } catch (err) {
-      toast(libraryErrorText(err, msg('games.errorPlayFailed')), 'danger');
+      toast(libraryErrorText(err, msg(stopping ? 'games.errorStopFailed' : 'games.errorPlayFailed')), 'danger');
+    } finally {
+      pressed.delete(id);
     }
   }
 </script>
@@ -240,6 +251,7 @@
         entries={slides}
         art={$gameArt}
         running={$runningGames}
+        {busy}
         onplay={toggleRun}
         onstop={toggleRun}
         onhide={() => setCarouselHidden(true)}
@@ -262,6 +274,7 @@
       entries={recentGames}
       cover={(entry) => entryHeroArt(entry, $gameArt) || entryCover(entry, $gameArt)}
       running={$runningGames}
+      {busy}
       onshowall={() => (filter = 'recent')}
       onplay={toggleRun}
     />
@@ -348,6 +361,7 @@
         entries={visibleGames}
         art={$gameArt}
         running={$runningGames}
+        {busy}
         actions={watchedActions}
         onplay={toggleRun}
         bind:switched={viewSwitched}

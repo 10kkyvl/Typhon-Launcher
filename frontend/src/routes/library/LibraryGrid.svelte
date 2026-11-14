@@ -8,6 +8,7 @@
     entries,
     art,
     running,
+    busy,
     actions,
     onplay,
     switched = $bindable(false),
@@ -16,6 +17,8 @@
     entries: readonly LibraryEntry[];
     art: Readonly<Record<string, GameArt>>;
     running: ReadonlySet<string>;
+    /** A launch or a stop of the game waits on Go. */
+    busy: (id: string) => boolean;
     actions: (entry: LibraryEntry) => GameCardAction[] | undefined;
     onplay: (id: string) => void;
     /** The view has just changed to this one: it rises in once. */
@@ -28,7 +31,7 @@
   }
 </script>
 
-<div class="grid" class:switched onanimationend={endViewSwitch} bind:this={element}>
+<div class="grid" data-results class:switched onanimationend={endViewSwitch} bind:this={element}>
   {#each entries as entry (entry.id)}
     <GameCard
       id={entry.id}
@@ -37,6 +40,7 @@
       ambient
       installed={entry.installed}
       running={running.has(entry.id)}
+      launching={busy(entry.id)}
       source={entry.source}
       platform={entry.platform}
       meta={entry.kind === 'watched' ? entrySubtitle(entry) : entryMeta(entry)}

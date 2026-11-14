@@ -19,6 +19,7 @@
     entries,
     art,
     running,
+    busy,
     onplay,
     onstop,
     onhide,
@@ -26,6 +27,8 @@
     entries: readonly LibraryEntry[];
     art: Readonly<Record<string, GameArt>>;
     running: ReadonlySet<string>;
+    /** A launch or a stop of the game waits on Go. */
+    busy: (id: string) => boolean;
     onplay: (id: string) => void;
     onstop: (id: string) => void;
     onhide: () => void;
@@ -80,6 +83,7 @@
       artSeed: entry.catalogId ?? entry.id,
       line: slideLine(entry),
       running: running.has(entry.id),
+      launching: busy(entry.id),
     })),
   );
 </script>

@@ -27,7 +27,7 @@
   }
 </script>
 
-<div class="list" class:switched onanimationend={endViewSwitch} bind:this={element}>
+<div class="list" data-results class:switched onanimationend={endViewSwitch} bind:this={element}>
   {#each entries as entry (entry.id)}
     <button
       class="list-row"
