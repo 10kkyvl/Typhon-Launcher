@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 
+import { msg } from '../../lib/i18n';
 import { dismissToast, queuedToasts, toasts } from '../../lib/stores/toasts';
 import { renderDom } from '../../lib/testing/dom';
 import Showcase from './Showcase.svelte';
@@ -101,5 +102,22 @@ describe('the component showcase', () => {
     await user.click(within(confirm).getByRole('button', { name: 'Remove' }));
     await waitFor(() => expect(within(confirm).getByRole('alert').textContent).toContain('The action failed'), ANSWER);
     expect(screen.getByRole('dialog', { name: 'Remove the game?' })).toBe(confirm);
+  });
+
+  it('shows the saves view\'s cloud copy in its states and the save conflict banner\'s words; Sync now stays focused and busy', async () => {
+    const { user } = renderDom(Showcase);
+    const games = screen.getByRole('region', { name: 'Games' });
+
+    for (const text of [msg('cloudsaves.disabledHint'), msg('cloudsaves.needsAccount'), msg('cloud.no_canonical_id'), msg('cloudsaves.stateNone'), msg('cloud.network'), msg('cloudsaves.conflictTitle')]) {
+      expect(within(games).getAllByText(text).length).toBeGreaterThan(0);
+    }
+    expect(within(games).getAllByText(/Steam Deck/)).toHaveLength(1);
+
+    const sync = within(games).getAllByRole('button', { name: msg('cloudsaves.syncNow') })[1];
+    sync.focus();
+    await user.keyboard('{Enter}');
+
+    expect(sync.getAttribute('aria-busy')).toBe('true');
+    expect(document.activeElement).toBe(sync);
   });
 });

@@ -1,7 +1,9 @@
 <script lang="ts">
   import { BellOff } from '@lucide/svelte';
   import GameListRow from '../../lib/components/GameListRow.svelte';
+  import GameSavesCloud from '../../lib/components/GameSavesCloud.svelte';
   import HeroCarousel, { type HeroSlide } from '../../lib/components/HeroCarousel.svelte';
+  import SaveConflictNotice from '../../lib/components/SaveConflictNotice.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { toast } from '../../lib/stores/toasts';
   import ShowcaseRow from './ShowcaseRow.svelte';
@@ -31,6 +33,25 @@
     }, LAUNCH_MS);
   }
 
+  // The saves view's cloud copy whose Sync now runs for two seconds.
+  let syncing = $state(false);
+  function sync() {
+    if (syncing) return;
+    syncing = true;
+    setTimeout(() => (syncing = false), LAUNCH_MS);
+  }
+
+  const pressed = (what: string) => () => toast(`${what} pressed`, 'info');
+  const cloudActions = {
+    onsettings: pressed('Open settings'),
+    onsync: pressed('Sync now'),
+    onresolve: pressed('Resolve'),
+    onpull: pressed('Pull'),
+    ondelete: pressed('Delete remote'),
+  };
+  const syncedAt = '2026-11-01T10:00:00Z';
+  const conflict = { localUpdatedAt: '2026-11-01T10:00:00Z', remoteUpdatedAt: '2026-11-02T18:30:00Z', remoteDevice: 'Steam Deck' };
+
   // No art, a poster (the app's own picture), and a hero and a cover that both fail to load.
   const slides = $derived<HeroSlide[]>([
     { id: 'sample-celeste', title: 'Celeste', art: {}, line: 'No picture: its generated art. Press Play: it launches for two seconds, then runs', running, launching },
@@ -39,7 +60,7 @@
   ]);
 </script>
 
-<ShowcaseSection title="Games" note="The parts a game is shown with: the hero carousel and the list row. Data and callbacks come from the page.">
+<ShowcaseSection title="Games" note="The parts a game is shown with: the hero carousel, the list row, the cloud copy of its saves and its save conflict banner. Data and callbacks come from the page.">
   <ShowcaseRow caption="Hero carousel: three slides (no art, a poster, pictures that fail); moves every 7 s unless held" stack>
     <HeroCarousel level={4} {slides} onopen={said('Open')} onplay={launch} onstop={() => (running = false)} />
   </ShowcaseRow>
@@ -75,9 +96,37 @@
       />
     </ul>
   </ShowcaseRow>
+
+  <ShowcaseRow caption="Saves view, the cloud copy: off, signed out, unknown to the catalog, no copy yet, synced (Sync now runs for two seconds), held back while the game runs" stack>
+    <div class="part"><GameSavesCloud availability="off" {...cloudActions} /></div>
+    <div class="part"><GameSavesCloud availability="signed-out" {...cloudActions} /></div>
+    <div class="part"><GameSavesCloud availability="no-catalog" {...cloudActions} /></div>
+    <div class="part"><GameSavesCloud availability="on" {...cloudActions} /></div>
+    <div class="part"><GameSavesCloud availability="on" game={{ state: 'synced', code: '', syncedAt }} busy={syncing} {...cloudActions} onsync={sync} /></div>
+    <div class="part"><GameSavesCloud availability="on" game={{ state: 'synced', code: '', syncedAt }} running {...cloudActions} /></div>
+  </ShowcaseRow>
+
+  <ShowcaseRow caption="Saves view, the cloud copy: in conflict, failed with its code's text, left out by the player" stack>
+    <div class="part"><GameSavesCloud availability="on" game={{ state: 'conflict', code: '', syncedAt }} {...cloudActions} /></div>
+    <div class="part"><GameSavesCloud availability="on" game={{ state: 'failed', code: 'cloud.network', syncedAt }} {...cloudActions} /></div>
+    <div class="part"><GameSavesCloud availability="on" game={{ state: 'skipped', code: 'cloud.excluded', syncedAt: '' }} {...cloudActions} /></div>
+  </ShowcaseRow>
+
+  <ShowcaseRow caption="Save conflict banner of the game page: both dates and the cloud copy's device, without a device, before the details load" stack>
+    <SaveConflictNotice {conflict} onresolve={pressed('Resolve conflict')} />
+    <SaveConflictNotice conflict={{ ...conflict, remoteDevice: '' }} onresolve={pressed('Resolve conflict')} />
+    <SaveConflictNotice onresolve={pressed('Resolve conflict')} />
+  </ShowcaseRow>
 </ShowcaseSection>
 
 <style>
+  .part {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    max-width: 64rem;
+  }
+
   .list {
     display: flex;
     flex-direction: column;
