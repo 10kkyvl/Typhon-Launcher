@@ -78,7 +78,7 @@ export function statusLabels(status: DownloadStatus): string {
   const labels: Record<DownloadStatus, string> = {
     queued: msg('state.downloadsStatusQueued'),
     metadata: msg('state.downloadsStatusMetadata'),
-    downloading: msg('common.loading'),
+    downloading: msg('state.downloadsStatusDownloading'),
     paused: msg('state.downloadsStatusPaused'),
     verifying: msg('state.downloadsStatusVerifying'),
     completed: msg('state.downloadsStatusCompleted'),

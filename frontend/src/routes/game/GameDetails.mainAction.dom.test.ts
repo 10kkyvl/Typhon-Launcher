@@ -480,3 +480,16 @@ describe('GameDetails main action: a finished download of a game not installed',
     expect(within(actions()).queryByRole('button', { name: msg('games.hubRetryDownload') })).toBeNull();
   });
 });
+
+describe('GameDetails main action in English', () => {
+  it('says Downloading, not Loading, for a running download', async () => {
+    locale.set('en');
+    libraryGames.set([]);
+    vi.mocked(getCatalogGame).mockResolvedValue({ id: 'c1', title: 'Hades' } as CatalogGame);
+    downloads.set([download({ status: 'downloading' })]);
+    renderDom(GameDetails, { id: 'c1' });
+
+    await vi.waitFor(() => expect(actions().textContent).toContain('Downloading'));
+    expect(actions().textContent).not.toContain('Loading');
+  });
+});
