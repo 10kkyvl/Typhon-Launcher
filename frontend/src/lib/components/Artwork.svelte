@@ -120,8 +120,13 @@
     grid-area: 1 / 1;
   }
 
+  /* On a plate: the art under them may be a pale sky (letters.contrast.test.ts). */
   .letters {
     place-self: center;
+    padding: 0.1em 0.35em;
+    border-radius: var(--radius-sm);
+    background: var(--art-control);
+    line-height: 1.2;
     color: var(--art-text);
     font-size: clamp(1.2rem, 22cqw, 3.2rem);
     font-weight: 600;
