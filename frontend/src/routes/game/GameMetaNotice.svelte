@@ -74,7 +74,7 @@
 
 <style>
   /* The page's `.main > :first-child` rule, for a notice that opens the overview. */
-  :global(.main[data-part='game-main']) > :first-child {
+  :global(.main) > :first-child {
     margin-top: 0;
   }
 

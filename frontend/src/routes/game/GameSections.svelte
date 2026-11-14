@@ -457,8 +457,8 @@
 
 <style>
   /* The page's column rules, for the blocks this component draws inside its `.main` and `.side`. */
-  :global(.main[data-part='game-main']) > :first-child,
-  :global(.main[data-part='game-main']) > .gsec:first-child > :global(:first-child) {
+  :global(.main) > :first-child,
+  :global(.main) > .gsec:first-child > :global(:first-child) {
     margin-top: 0;
   }
 
@@ -466,24 +466,24 @@
     display: none;
   }
 
-  :global(.main[data-part='game-main']) > .gsec.moved:not(:first-child) {
+  :global(.main) > .gsec.moved:not(:first-child) {
     max-width: 60rem;
     margin-top: var(--space-8);
   }
 
-  :global(.main[data-part='game-main']) > .gsec.moved {
+  :global(.main) > .gsec.moved {
     max-width: 60rem;
   }
 
-  :global(.side[data-part='game-side']) > .gsec {
+  :global(.side) > .gsec {
     min-width: 0;
   }
 
-  :global(.side[data-part='game-side']) > .gsec.moved > :global(:first-child) {
+  :global(.side) > .gsec.moved > :global(:first-child) {
     margin-top: 0;
   }
 
-  :global(.side[data-part='game-side']) > .gsec.moved {
+  :global(.side) > .gsec.moved {
     overflow-x: auto;
     overflow-wrap: anywhere;
   }
