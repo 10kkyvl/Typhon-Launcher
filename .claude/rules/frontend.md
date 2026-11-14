@@ -82,6 +82,9 @@ Add a line when a mistake repeats; drop one a guard now enforces.
   gate dev-only code on `import.meta.env.MODE === 'development'`, inline (see
   `lib/navigation/showcase.ts`).
 - A `$state` object does not track `Object.hasOwn(obj, key)`; ask with `key in obj`.
+- Focus moved by script (`focusQuietly`, `focusHandOff`) does not scroll: on a scrolling page bring the
+  target into view (`routes/library/roving.ts::revealFocus`). A Tab stop and a hand-off target are kept
+  by item id, not index: a re-sort or a leaving item shifts the index.
 - A component that stays mounted between openings (a dialog that reads its target from a store) starts
   every opening from scratch: reset per-opening state, bound flags such as `retrying` included, in an
   effect keyed on the target object, and ignore an answer that arrives from the previous opening.
