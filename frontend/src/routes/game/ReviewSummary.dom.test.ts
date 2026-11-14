@@ -1,11 +1,11 @@
-import { screen, within } from '@testing-library/svelte';
+import { render, screen, within } from '@testing-library/svelte';
 import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { notifyReviewsChanged } from '../../lib/game/reviewsRefresh';
 import { msg } from '../../lib/i18n';
 import { AccountError } from '../../lib/services/account';
 import { list, type Page } from '../../lib/services/reviews';
-import { renderDom } from '../../lib/testing/dom';
+import { renderDom, user } from '../../lib/testing/dom';
 import GameReviews from './GameReviews.svelte';
 import ReviewSummary from './ReviewSummary.svelte';
 
@@ -105,6 +105,31 @@ describe('ReviewSummary: retrying a failed summary', () => {
 
     await screen.findByText(scoreLine(4, 25));
     expect(notice.isConnected).toBe(false);
+  });
+
+  // On a page with a heading, the notice would hand focus to that heading: the score that came in its
+  // place is closer to where the player was.
+  it('lands focus on the score that came in its place when the score can be pressed', async () => {
+    const page = document.createElement('main');
+    const title = document.createElement('h1');
+    title.tabIndex = -1;
+    title.textContent = 'Game';
+    page.append(title);
+    document.body.append(page);
+    try {
+      vi.mocked(list).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(answer(4, 1));
+      render(ReviewSummary, { target: page, props: { canonicalGameId: 'c1', onopen: () => {} } });
+      const keys = user();
+      const notice = (await screen.findByText(msg('reviews.summaryError'))).closest('.notice') as HTMLElement;
+      within(notice).getByRole('button', { name: msg('common.retry') }).focus();
+
+      await keys.keyboard('{Enter}');
+
+      const score = (await screen.findByText(scoreLine(4, 25))).closest('button');
+      await vi.waitFor(() => expect(document.activeElement).toBe(score));
+    } finally {
+      page.remove();
+    }
   });
 });
 
