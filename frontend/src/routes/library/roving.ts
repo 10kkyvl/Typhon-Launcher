@@ -43,6 +43,23 @@ export function revealFocus(target: HTMLElement, item: Element | null = null): v
   if (typeof box.scrollIntoView === 'function') box.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 
+/**
+ * Finishes a `focusHandOff` (lib/utils/focusHandOff.ts) and, when focus landed on the target it
+ * picked, brings that target into view by the least movement: the item that holds it (`around`, a
+ * game of the list by default), else the target itself.
+ */
+export async function handOffInView(
+  handOff: (target: () => HTMLElement | null | undefined) => Promise<void>,
+  pick: () => HTMLElement | null | undefined,
+  around: (target: HTMLElement) => Element | null = (target) => target.closest('[data-results] > *'),
+): Promise<void> {
+  let picked: HTMLElement | null | undefined;
+  await handOff(() => (picked = pick()));
+  if (!picked || document.activeElement !== picked) return;
+  const box = around(picked) ?? picked;
+  if (typeof box.scrollIntoView === 'function') box.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+
 /** The control an item is entered on: its first control (the title). */
 export function primaryOf(item: HTMLElement): HTMLElement | undefined {
   return controlsOf(item)[0];

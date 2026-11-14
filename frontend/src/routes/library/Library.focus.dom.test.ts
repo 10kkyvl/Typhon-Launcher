@@ -346,3 +346,64 @@ describe('Library: the "Recent" row leaving with its last capsule', () => {
     expect(document.activeElement).toBe(add);
   });
 });
+
+describe('Library: hand-offs that bring their target into view', () => {
+  const into = vi.fn();
+  beforeEach(() => {
+    into.mockClear();
+    HTMLElement.prototype.scrollIntoView = into;
+  });
+  afterEach(() => {
+    delete (HTMLElement.prototype as Partial<HTMLElement>).scrollIntoView;
+  });
+
+  const scrolledTo = (target: Element) => into.mock.contexts.some((box) => (box as Element).contains(target));
+
+  it('putting the carousel away and bringing it back', async () => {
+    libraryView.set('grid');
+    libraryGames.set([played('g-a', 'Alpha', 9), played('g-b', 'Bravo', 8)]);
+    const { user } = renderDom(Library);
+    screen.getByRole('button', { name: msg('library.carousel.hide') }).focus();
+
+    await user.keyboard('{Enter}');
+    await settle();
+    const show = screen.getByRole('button', { name: msg('library.carousel.show') });
+    expect(document.activeElement).toBe(show);
+    expect(scrolledTo(show)).toBe(true);
+
+    into.mockClear();
+    await user.keyboard('{Enter}');
+    await settle();
+    const hide = screen.getByRole('button', { name: msg('library.carousel.hide') });
+    expect(document.activeElement).toBe(hide);
+    expect(scrolledTo(hide)).toBe(true);
+    for (const [options] of into.mock.calls) expect(options).toEqual({ block: 'nearest', inline: 'nearest' });
+  });
+
+  it('"Clear filters" landing on the first game', async () => {
+    libraryView.set('grid');
+    const { user } = renderDom(Library);
+    await user.type(screen.getByLabelText(msg('games.librarySearchPlaceholder')), 'zzz');
+    screen.getByRole('button', { name: msg('library.clearFilters') }).focus();
+
+    await user.keyboard('{Enter}');
+    await settle();
+
+    expect(focusedTitle()).toBe('Alpha');
+    expect(scrolledTo(document.activeElement as Element)).toBe(true);
+  });
+
+  it('a capsule whose game moved to the carousel hands focus to the capsule now in its place', async () => {
+    libraryView.set('grid');
+    libraryGames.set([played('g-a', 'Alpha', 9), played('g-b', 'Bravo', 8), played('g-c', 'Charlie', 7), played('g-d', 'Delta', 6), played('g-e', 'Echo', 5)]);
+    renderDom(Library);
+    within(recentSection() as HTMLElement).getAllByRole('button', { name: msg('ui.play') })[0].focus();
+
+    runningGames.set(new Set(['g-d']));
+    await settle();
+
+    const capsule = document.activeElement?.closest('.recent-item');
+    expect(capsule?.textContent).toContain('Charlie');
+    expect(scrolledTo(document.activeElement as Element)).toBe(true);
+  });
+});

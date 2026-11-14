@@ -6,6 +6,7 @@
   import { playtime, relativeDate } from '../../lib/utils/format';
   import { focusableIn } from '../../lib/layers/focus';
   import { focusHandOff } from '../../lib/utils/focusHandOff';
+  import { handOffInView } from './roving';
   import type { LibraryEntry } from '../../lib/library/entries';
 
   let {
@@ -36,11 +37,15 @@
     if (!row?.contains(document.activeElement)) return;
     const capsules = () => [...row.querySelectorAll<HTMLElement>('.recent-item')];
     const index = capsules().findIndex((item) => item.contains(document.activeElement));
-    void focusHandOff()(() => {
-      const now = capsules();
-      const capsule = index >= 0 ? now[Math.min(index, now.length - 1)] : undefined;
-      return (capsule ? focusableIn(capsule)[0] : undefined) ?? focusableIn(row)[0];
-    });
+    void handOffInView(
+      focusHandOff(),
+      () => {
+        const now = capsules();
+        const capsule = index >= 0 ? now[Math.min(index, now.length - 1)] : undefined;
+        return (capsule ? focusableIn(capsule)[0] : undefined) ?? focusableIn(row)[0];
+      },
+      (target) => target.closest('.recent-item'),
+    );
   });
 
   function recentMeta(entry: LibraryEntry) {

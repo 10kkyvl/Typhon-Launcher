@@ -53,7 +53,7 @@
   import LibraryList from './LibraryList.svelte';
   import { narrowingText } from './entryText';
   import { itemOf } from './itemMenu';
-  import { controlsOf, primaryOf, revealFocus } from './roving';
+  import { controlsOf, handOffInView, primaryOf, revealFocus } from './roving';
 
   const uid = $props.id();
   const saved = get(libraryChoices);
@@ -254,7 +254,7 @@
     statusFilter = 'all';
     activeCollectionId = '';
     // The list's first game when it fills; the search field when it stays empty (all games hidden).
-    void handOff(() => (results ? focusableIn(results)[0] : undefined) ?? (listSection ? focusableIn(listSection)[0] : undefined));
+    void handOffInView(handOff, () => (results ? focusableIn(results)[0] : undefined) ?? (listSection ? focusableIn(listSection)[0] : undefined));
   }
 
   const slides = $derived(buildSlides(entries, { running: $runningGames, stopped: $stoppedSinceList, locale: $locale }));
@@ -274,7 +274,7 @@
   function setCarouselHidden(hidden: boolean) {
     const handOff = focusHandOff();
     heroHidden = hidden;
-    void handOff(() => (hidden ? (showCarouselSpot ? focusableIn(showCarouselSpot)[0] : undefined) : carouselBlock?.hideControl()));
+    void handOffInView(handOff, () => (hidden ? (showCarouselSpot ? focusableIn(showCarouselSpot)[0] : undefined) : carouselBlock?.hideControl()));
   }
 
   // The game the list's Tab stop is on, kept across the grid and the list.
