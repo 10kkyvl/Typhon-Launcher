@@ -53,8 +53,11 @@
     },
   });
 
+  // The Tab order changes with the list's games and the current one, not with an update of a game
+  // (a tick, new art); controls a game gains or loses are caught by the roving list itself.
+  const ids = $derived(entries.map((entry) => entry.id).join('\n'));
   $effect(() => {
-    void entries;
+    void ids;
     void current;
     roving.refresh();
   });

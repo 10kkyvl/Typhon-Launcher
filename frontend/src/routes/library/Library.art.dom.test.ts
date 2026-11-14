@@ -149,4 +149,25 @@ describe('Library: a big library stays cheap', () => {
     expect(vi.mocked(requestArt).mock.calls.length).toBe(artCalls);
     expect(vi.mocked(getCatalogGames).mock.calls.length).toBe(catalogCalls);
   });
+
+  it.each(['grid', 'list'] as const)('a download tick or an update of one game re-reads no item of the %s', async (view) => {
+    libraryView.set(view);
+    downloads.set([download('c-ticking', 1)]);
+    renderDom(Library);
+    await tick();
+    const list = results() as HTMLElement;
+    const query = vi.spyOn(Element.prototype, 'querySelectorAll');
+    try {
+      for (let i = 2; i < 8; i += 1) {
+        downloads.set([download('c-ticking', i)]);
+        await tick();
+      }
+      libraryGames.update((list) => list.map((one) => (one.id === 'g-bravo' ? { ...one, playtimeSeconds: 60 } : one)));
+      await tick();
+      const reads = query.mock.contexts.filter((element) => (element as Element).parentElement === list);
+      expect(reads).toHaveLength(0);
+    } finally {
+      query.mockRestore();
+    }
+  });
 });
