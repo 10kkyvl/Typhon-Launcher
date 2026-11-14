@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import SaveConflictNotice from './SaveConflictNotice.svelte';
-  import { cloudStatusLoading, openCloudConflict, showConflictOnPage, unsettledConflicts } from '../stores/cloudsaves';
+  import { cloudStatusLoading, holdConflictOnPage, openCloudConflict, showConflictOnPage, unsettledConflicts } from '../stores/cloudsaves';
   import { focusHandOff } from '../utils/focusHandOff';
 
   /**
@@ -43,6 +43,12 @@
   });
 
   const shown = $derived(shownFor !== '' && shownFor === gameId);
+
+  // Held from the start: a conflict that comes by event is listed before its details load, and the
+  // island would say it in that moment.
+  $effect(() => {
+    if (gameId) return holdConflictOnPage(gameId);
+  });
 
   $effect(() => {
     if (shown && gameId) return showConflictOnPage(gameId);

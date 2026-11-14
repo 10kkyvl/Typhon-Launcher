@@ -68,30 +68,49 @@ export const unsettledConflicts: Readable<ReadonlyMap<string, CloudConflict | un
   },
 );
 
-// How many parts of the game page show a game's conflict.
-const onPage = writable<ReadonlyMap<string, number>>(new Map());
+// Counted registrations by game: parts of the game page that hold a game, or show its conflict.
+function registry() {
+  const counts = writable<ReadonlyMap<string, number>>(new Map());
+  const games: Readable<ReadonlySet<string>> = derived(counts, (map) => new Set(map.keys()));
+  function add(gameId: string): () => void {
+    const change = (by: number) =>
+      counts.update((map) => {
+        const next = new Map(map);
+        const n = (next.get(gameId) ?? 0) + by;
+        if (n > 0) next.set(gameId, n);
+        else next.delete(gameId);
+        return next;
+      });
+    change(1);
+    let held = true;
+    return () => {
+      if (!held) return;
+      held = false;
+      change(-1);
+    };
+  }
+  return { games, add };
+}
 
-/** The games whose conflict the game page shows: the island and the sidebar's status line leave them to it. */
-export const conflictsOnPage: Readable<ReadonlySet<string>> = derived(onPage, (counts) => new Set(counts.keys()));
+const held = registry();
+const shownOnPage = registry();
+
+/**
+ * The games whose page is open with a place for their conflict (the banner, mounted): the island and
+ * the sidebar's status line say nothing of their conflict meanwhile, even before the banner shows it
+ * (it waits for the details an event lacks). A conflict the banner never showed is said once the page
+ * lets the game go.
+ */
+export const conflictsHeldByPage: Readable<ReadonlySet<string>> = held.games;
+
+/** The page holds `gameId` until the returned function is called. */
+export const holdConflictOnPage: (gameId: string) => () => void = held.add;
+
+/** The games whose conflict the game page shows: taken as seen, as one its dialog shows. */
+export const conflictsOnPage: Readable<ReadonlySet<string>> = shownOnPage.games;
 
 /** The page shows `gameId`'s conflict until the returned function is called. */
-export function showConflictOnPage(gameId: string): () => void {
-  const change = (by: number) =>
-    onPage.update((counts) => {
-      const next = new Map(counts);
-      const n = (next.get(gameId) ?? 0) + by;
-      if (n > 0) next.set(gameId, n);
-      else next.delete(gameId);
-      return next;
-    });
-  change(1);
-  let shown = true;
-  return () => {
-    if (!shown) return;
-    shown = false;
-    change(-1);
-  };
-}
+export const showConflictOnPage: (gameId: string) => () => void = shownOnPage.add;
 
 // A launch the saves held back, waiting on the open dialog. Its answer is given once: "resolved"
 // after the choice was applied, "given up" when the dialog closes or goes to another game.

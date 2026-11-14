@@ -4,7 +4,7 @@ import type { CloudGameStatus } from '../services/cloudsaves';
 import { launchesInFlight } from '../services/library';
 import { openGameByIGDB } from '../social/openGame';
 import { isPlaying } from '../social/presence';
-import { cloudConflictTarget, cloudStatus, conflictsOnPage, openCloudConflict } from './cloudsaves';
+import { cloudConflictTarget, cloudStatus, conflictsHeldByPage, conflictsOnPage, openCloudConflict } from './cloudsaves';
 import { downloads, failedMessageId } from './downloads';
 import { libraryGames } from './library';
 import { liveIsland, liveIslandCurrent, liveIslandHeld, liveIslandMessages, type LiveIslandMessage, type LiveIslandTone } from './liveIsland';
@@ -28,7 +28,9 @@ import { ACTION_MS, dismissToast, pauseToast, queuedToasts, resumeToast, toast, 
  * - a save conflict (the cloud saves status lists a game in conflict that neither its dialog nor the
  *   game page's banner shows): one message per game with "choose a version", which opens the dialog.
  *   It is said once a session, and goes once the conflict is resolved, its dialog opens or the page
- *   shows it. Where no island is on screen the shell says it as a toast (`initConflictToasts`).
+ *   shows it. While the game's page is open with its banner it waits (the banner may be waiting for
+ *   the details); one the banner never showed is said when the page lets the game go. Where no island
+ *   is on screen the shell says it as a toast (`initConflictToasts`).
  */
 
 const TOAST_TONE: Record<ToastKind, LiveIslandTone> = { info: 'accent', success: 'success', warning: 'warning', danger: 'danger' };
@@ -134,12 +136,13 @@ const CONFLICT_PREFIX = 'save-conflict:';
 const conflictMessageId = (gameId: string) => `${CONFLICT_PREFIX}${gameId}`;
 
 /**
- * The games whose save conflict the island shows or holds, or the game page shows: the sidebar's status
- * line leaves them to it.
+ * The games whose save conflict the island shows or holds, or whose page is open with its banner: the
+ * sidebar's status line leaves them to it.
  */
 export const conflictsInIsland: Readable<ReadonlySet<string>> = derived(
-  [liveIslandMessages, conflictsOnPage],
-  ([list, page]) => new Set([...list.filter((m) => m.id.startsWith(CONFLICT_PREFIX)).map((m) => m.id.slice(CONFLICT_PREFIX.length)), ...page]),
+  [liveIslandMessages, conflictsHeldByPage, conflictsOnPage],
+  ([list, held, shown]) =>
+    new Set([...list.filter((m) => m.id.startsWith(CONFLICT_PREFIX)).map((m) => m.id.slice(CONFLICT_PREFIX.length)), ...held, ...shown]),
 );
 
 // For the session, by game: the conflict that was said or seen in the dialog, as the recorded copies
@@ -207,6 +210,7 @@ function trackConflicts(say: (gameId: string, title: string) => void, takeBack =
   const sync = () => {
     const open = get(cloudConflictTarget)?.gameId;
     const page = get(conflictsOnPage);
+    const held = get(conflictsHeldByPage);
     const launching = get(launchesInFlight);
     const titles = new Map(get(libraryGames).map((g) => [g.id, g.title]));
     const conflicts = new Map((get(cloudStatus)?.games ?? []).filter((g) => g.state === 'conflict').map((g) => [g.gameId, copiesOf(g)]));
@@ -222,6 +226,11 @@ function trackConflicts(say: (gameId: string, title: string) => void, takeBack =
       if (gameId === open || page.has(gameId)) {
         unsayConflict(gameId);
         saidConflicts.set(gameId, copies || before || '');
+        continue;
+      }
+      // The page's banner says it, or will once the details load: not here, and not taken as seen.
+      if (held.has(gameId)) {
+        unsayConflict(gameId);
         continue;
       }
       if (launching.has(gameId)) continue;
@@ -241,6 +250,7 @@ function trackConflicts(say: (gameId: string, title: string) => void, takeBack =
     cloudStatus.subscribe(sync),
     cloudConflictTarget.subscribe(sync),
     conflictsOnPage.subscribe(sync),
+    conflictsHeldByPage.subscribe(sync),
     libraryGames.subscribe(sync),
     launchesInFlight.subscribe(sync),
   ];
