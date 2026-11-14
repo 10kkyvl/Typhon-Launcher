@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import AddDownloadModal from '../../lib/components/AddDownloadModal.svelte';
   import GameStatusModal from '../../lib/components/GameStatusModal.svelte';
   import GameTagsModal from '../../lib/components/GameTagsModal.svelte';
@@ -21,6 +22,7 @@
   let {
     data,
     localGame,
+    installed,
     emulated,
     title,
     canonicalId,
@@ -44,6 +46,7 @@
   }: {
     data: GamePageData;
     localGame: LibraryGame | undefined;
+    installed: boolean;
     emulated: boolean;
     title: string;
     canonicalId: string | undefined;
@@ -65,6 +68,18 @@
     downloadModalOpen: boolean;
     installModalOpen: boolean;
   } = $props();
+
+  // Go says the card is gone (library:updated) before the removal answers, so the dialog keeps the
+  // card it was opened for, and where the page leaves to: Installed for an installed game, the library
+  // for a card that holds no install.
+  let removing = $state<{ game: LibraryGame; emulated: boolean; leaveTo: 'installed' | 'library' } | null>(null);
+
+  $effect(() => {
+    if (!removeOpen) return;
+    untrack(() => {
+      if (localGame) removing = { game: localGame, emulated, leaveTo: installed ? 'installed' : 'library' };
+    });
+  });
 </script>
 
 {#if localGame}
@@ -73,16 +88,18 @@
   {#if tagsOpen}
     <GameTagsModal bind:open={tagsOpen} game={localGame} />
   {/if}
+{/if}
 
+{#if removing}
   <RemoveGameModal
     bind:open={removeOpen}
     bind:mode={removeMode}
-    gameId={localGame.id}
-    title={localGame.title}
-    external={externalLabel(localGame)}
-    emulated={emulated}
+    gameId={removing.game.id}
+    title={removing.game.title}
+    external={externalLabel(removing.game)}
+    emulated={removing.emulated}
     onremoved={(removed) => {
-      if (removed === 'library') navigate('installed');
+      if (removed === 'library') navigate(removing?.leaveTo ?? 'library');
     }}
   />
 {/if}

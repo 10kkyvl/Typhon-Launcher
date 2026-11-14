@@ -490,7 +490,7 @@
     </div>
 
     <GameDialogs
-      {data} {localGame} {emulated} {title} {canonicalId} {shots} {downloadPool} {downloadRelease} {matchMode} {downloadSource}
+      {data} {localGame} {installed} {emulated} {title} {canonicalId} {shots} {downloadPool} {downloadRelease} {matchMode} {downloadSource}
       {downloadOrigin} {installModalDownloadId} bind:statusOpen bind:tagsOpen bind:removeOpen bind:removeMode bind:pickerOpen
       bind:lightboxOpen bind:lightboxIndex bind:matchOpen bind:downloadModalOpen bind:installModalOpen
     />

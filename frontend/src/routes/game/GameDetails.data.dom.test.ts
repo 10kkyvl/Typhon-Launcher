@@ -21,7 +21,8 @@ import {
 } from '../../lib/services/sources';
 import type { Settings } from '../../lib/services/settings';
 import { getVerifyState } from '../../lib/services/updates';
-import { resetHistory } from '../../lib/stores/router';
+import { inspectRemoval, removeGame, type RemovalInfo } from '../../lib/services/install';
+import { navigate, resetHistory, route } from '../../lib/stores/router';
 import { settings } from '../../lib/stores/settings';
 import { sources } from '../../lib/stores/sources';
 import { toasts } from '../../lib/stores/toasts';
@@ -49,6 +50,11 @@ vi.mock('../../lib/services/downloads', async (importOriginal) => ({
   fetchMetadata: vi.fn(),
   startDownloadFrom: vi.fn(),
   discardMetadata: vi.fn(async () => {}),
+}));
+vi.mock('../../lib/services/install', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/services/install')>()),
+  inspectRemoval: vi.fn(),
+  removeGame: vi.fn(),
 }));
 vi.mock('../../lib/services/updates', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/updates')>()),
@@ -133,6 +139,8 @@ afterEach(() => {
   vi.mocked(prepareReleaseDownload).mockReset();
   vi.mocked(fetchMetadata).mockReset();
   vi.mocked(startDownloadFrom).mockReset();
+  vi.mocked(inspectRemoval).mockReset();
+  vi.mocked(removeGame).mockReset();
   libraryGames.set([]);
   sources.set([]);
   settings.set(null);
@@ -375,5 +383,46 @@ describe('GameDetails: the state of the last file check that could not be read',
     renderDom(GameDetails, { id: 'g1' });
 
     await vi.waitFor(() => expect(toastsOf('danger')).toEqual([msg('verify.stateReadFailed')]));
+  });
+});
+
+describe('GameDetails: removing the card from the library', () => {
+  const removable = { gameId: 'g1', title: 'Hades', installDir: '', installType: '', method: 'record', owned: false, uninstallUnknown: false, sizeBytes: 0, sizeUnknown: false, dirMissing: true, quietUninstall: false, running: false, busy: false, downloadId: '', downloadPresent: false, downloadSeeding: false, downloadBytes: 0, downloadPath: '' } as RemovalInfo;
+
+  // The page is opened from the library's game route, so where it leaves to is a navigation of its own.
+  beforeEach(() => navigate('game', { id: 'g1' }));
+
+  // `goneFirst`: Go announces the card gone (library:updated, which carries the list) before RemoveGame
+  // answers; otherwise the list arrives after the answer.
+  async function removeFromLibrary(user: ReturnType<typeof renderDom>['user'], goneFirst: boolean) {
+    vi.mocked(inspectRemoval).mockResolvedValue(removable);
+    vi.mocked(removeGame).mockImplementation(async () => {
+      if (goneFirst) libraryGames.set([]);
+      else setTimeout(() => libraryGames.set([]));
+    });
+    await user.click(await screen.findByRole('button', { name: msg('games.moreLabel') }));
+    await user.click(await screen.findByRole('menuitem', { name: msg('games.actionRemoveLibrary') }));
+    const dialog = await screen.findByRole('dialog');
+    const confirm = await within(dialog).findByRole('button', { name: msg('modals.removeGameModeLibraryLabel') });
+    await vi.waitFor(() => expect(confirm.hasAttribute('disabled')).toBe(false));
+    await user.click(confirm);
+    await vi.waitFor(() => expect(removeGame).toHaveBeenCalledTimes(1));
+  }
+
+  it.each([true, false])('leaves to the library for a card that was never installed (card gone first: %s)', async (goneFirst) => {
+    libraryGames.set([{ ...hades, uninstalled: true, installedAt: null } as unknown as LibraryGame]);
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+
+    await removeFromLibrary(user, goneFirst);
+
+    await vi.waitFor(() => expect(get(route).name).toBe('library'));
+  });
+
+  it.each([true, false])('leaves to Installed for an installed game (card gone first: %s)', async (goneFirst) => {
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+
+    await removeFromLibrary(user, goneFirst);
+
+    await vi.waitFor(() => expect(get(route).name).toBe('installed'));
   });
 });
