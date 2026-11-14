@@ -1,5 +1,7 @@
 <script lang="ts">
   import { FolderOpen, Trash2 } from '@lucide/svelte';
+  import { untrack } from 'svelte';
+  import { get } from 'svelte/store';
   import Button from '../../lib/components/Button.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
@@ -33,9 +35,14 @@
   let lightboxOpen = $state(false);
   let lightboxIndex = $state(0);
   let pending = $state<{ shot: Shot; run: () => Promise<void> } | null>(null);
+  let retrying = $state(false);
+  let grid = $state<HTMLElement>();
   let requestId = 0;
+  // A status read that keeps failing is reported once, not again on every reload; a success ends it.
+  let statusReported = false;
 
-  async function load() {
+  // A retry leaves the failure on screen until its answer, and the notice says a second failure.
+  async function load(retry = false) {
     const id = ++requestId;
     const target = gameId;
     try {
@@ -45,9 +52,11 @@
         enabled = status.value.enabled;
         hotkey = status.value.hotkey || DEFAULT_SCREENSHOT_HOTKEY;
         statusKnown = true;
+        statusReported = false;
       } else {
         statusKnown = false;
-        toast(screenshotErrorText(status.reason, msg('screenshots.loadError')), 'danger');
+        if (!statusReported) toast(screenshotErrorText(status.reason, msg('screenshots.loadError')), 'danger');
+        statusReported = true;
       }
       if (list.status === 'rejected') throw list.reason;
       shots = list.value;
@@ -62,11 +71,18 @@
       } else {
         noLibrary = false;
         loadFailed = true;
-        toast(screenshotErrorText(err, msg('screenshots.loadError')), 'danger');
+        if (!retry) toast(screenshotErrorText(err, msg('screenshots.loadError')), 'danger');
       }
     } finally {
       if (id === requestId) loading = false;
     }
+  }
+
+  async function retryLoad(): Promise<boolean | undefined> {
+    const target = gameId;
+    await load(true);
+    if (target !== gameId) return undefined;
+    return !loadFailed;
   }
 
   $effect(() => {
@@ -75,9 +91,14 @@
     void load();
   });
 
+  // Only a screenshot saved while the block is open reloads it: the one saved before is in the list
+  // the first load brings.
+  let seenShot = get(lastSavedShot);
   $effect(() => {
     const saved = $lastSavedShot;
-    if (saved && saved.gameId === gameId) void load();
+    if (!saved || saved === seenShot) return;
+    seenShot = saved;
+    if (saved.gameId === untrack(() => gameId)) void load();
   });
 
   async function openFolder() {
@@ -134,15 +155,17 @@
     <Spinner label={msg('screenshots.loading')} />
   {:else if noLibrary}
     <Notice tone="warning" compact announce={false}>{msg('screenshots.noLibrary')}</Notice>
-  {:else if loadFailed}
-    <Notice tone="danger" compact>{msg('screenshots.loadError')}</Notice>
+  {:else if loadFailed || retrying}
+    <Notice tone="danger" compact bind:retrying retry={{ label: msg('common.retry'), run: retryLoad, within: () => grid }}>
+      {msg('screenshots.loadError')}
+    </Notice>
   {:else if shots.length === 0}
     <EmptyState
       size="inline"
       title={!statusKnown ? msg('screenshots.emptyNoHotkey') : enabled ? msg('screenshots.empty', { hotkey }) : msg('screenshots.disabledNote')}
     />
   {:else}
-    <div class="grid">
+    <div class="grid" bind:this={grid}>
       {#each shots as shot, index (shot.name)}
         <div class="tile">
           <button type="button" class="thumb" onclick={() => open(index)} aria-label={msg('games.blocks.screenshotOpen', { index: index + 1, count: shots.length, name: caption(shot) })}>
