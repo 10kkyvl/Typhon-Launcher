@@ -1,8 +1,11 @@
-import { screen } from '@testing-library/svelte';
+import { screen, within } from '@testing-library/svelte';
+import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { notifyReviewsChanged } from '../../lib/game/reviewsRefresh';
 import { msg } from '../../lib/i18n';
-import { list } from '../../lib/services/reviews';
+import { list, type Page } from '../../lib/services/reviews';
 import { renderDom } from '../../lib/testing/dom';
+import GameReviews from './GameReviews.svelte';
 import ReviewSummary from './ReviewSummary.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
@@ -13,13 +16,46 @@ vi.mock('../../lib/services/reviews', async (importOriginal) => ({
 }));
 
 beforeEach(() => {
+  // jsdom has no ResizeObserver; the reviews block's sort and filter strips measure their plate with one.
+  vi.stubGlobal('ResizeObserver', class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  });
   vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 
 afterEach(() => {
   vi.mocked(list).mockReset();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
+const review = {
+  id: 1,
+  author: { username: 'mira', displayName: 'Mira', avatarUrl: '' },
+  recommended: true,
+  body: 'Fine.',
+  playtimeSeconds: 0,
+  helpful: 0,
+  unhelpful: 0,
+  myVote: '',
+  mine: false,
+  createdAt: '2026-11-01T10:00:00Z',
+  updatedAt: '2026-11-01T10:00:00Z',
+} as unknown as Page['reviews'][number];
+
+const answer = (total: number, positive: number): Page => ({ summary: { total, positive } as Page['summary'], reviews: [review], next: '' });
+const scoreLine = (total: number, percent: number) =>
+  msg('reviews.summaryLine', { percent, reviews: msg('reviews.reviewsCount', { count: total }) });
 
 describe('ReviewSummary: the summary failed to load', () => {
   // The reviews list below fails on the same request and announces it with its Retry: the summary
@@ -33,5 +69,40 @@ describe('ReviewSummary: the summary failed to load', () => {
     expect(notice?.getAttribute('data-tone')).toBe('danger');
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.queryByRole('status')).toBeNull();
+  });
+});
+
+describe('ReviewSummary and the reviews list on one page', () => {
+  it('make one request to the reviews service per page open and per change of reviews', async () => {
+    const first = deferred<Page>();
+    const again = deferred<Page>();
+    vi.mocked(list).mockReturnValueOnce(first.promise).mockReturnValueOnce(again.promise);
+    renderDom(ReviewSummary, { canonicalGameId: 'c1' });
+    renderDom(GameReviews, { canonicalGameId: 'c1' });
+
+    expect(vi.mocked(list).mock.calls).toEqual([['c1', 'helpful', 'all', '']]);
+    first.resolve(answer(10, 9));
+    await screen.findByText(scoreLine(10, 90));
+    await screen.findByText('Fine.');
+
+    notifyReviewsChanged();
+    flushSync();
+
+    expect(vi.mocked(list).mock.calls).toEqual([['c1', 'helpful', 'all', ''], ['c1', 'helpful', 'all', '']]);
+    again.resolve(answer(11, 10));
+    await screen.findByText(scoreLine(11, 91));
+  });
+});
+
+describe('ReviewSummary: retrying a failed summary', () => {
+  it('offers a Retry that loads it again and shows the score', async () => {
+    vi.mocked(list).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(answer(4, 1));
+    const { user } = renderDom(ReviewSummary, { canonicalGameId: 'c1' });
+    const notice = (await screen.findByText(msg('reviews.summaryError'))).closest('.notice') as HTMLElement;
+
+    await user.click(within(notice).getByRole('button', { name: msg('common.retry') }));
+
+    await screen.findByText(scoreLine(4, 25));
+    expect(notice.isConnected).toBe(false);
   });
 });

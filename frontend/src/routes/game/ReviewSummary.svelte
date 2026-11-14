@@ -4,8 +4,9 @@
   import Spinner from '../../lib/components/Spinner.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { AccountError } from '../../lib/services/account';
-  import { list as listReviews, type Summary } from '../../lib/services/reviews';
+  import type { Summary } from '../../lib/services/reviews';
   import { reviewScore, reviewScoreBadgeKind } from '../../lib/game/reviewScore';
+  import { firstReviewsPage } from '../../lib/game/reviewsFeed';
   import { reviewsChanged } from '../../lib/game/reviewsRefresh';
   import { msg } from '../../lib/i18n';
 
@@ -15,37 +16,52 @@
   let loading = $state(false);
   let failed = $state(false);
   let unsupported = $state(false);
+  let retrying = $state(false);
+  let scoreButton = $state<HTMLButtonElement>();
+  let loadToken = 0;
+
+  // A retry keeps the failure on screen until its answer: the notice and its focused button stay.
+  async function load(id: string, retry = false) {
+    const token = ++loadToken;
+    loading = true;
+    if (!retry) failed = false;
+    try {
+      const page = await firstReviewsPage(id, 'helpful', 'all');
+      if (token !== loadToken) return;
+      summary = page.summary;
+      unsupported = false;
+      failed = false;
+    } catch (err) {
+      if (token !== loadToken) return;
+      summary = null;
+      if (err instanceof AccountError && err.code === 'unknown_game') {
+        unsupported = true;
+        failed = false;
+      } else failed = true;
+    } finally {
+      if (token === loadToken) loading = false;
+    }
+  }
+
+  async function retry(): Promise<boolean> {
+    await load(canonicalGameId, true);
+    return !failed;
+  }
 
   $effect(() => {
     const id = canonicalGameId;
     void $reviewsChanged;
     if (!id) {
+      loadToken += 1;
       summary = null;
       failed = false;
       unsupported = false;
       loading = false;
       return;
     }
-    let cancelled = false;
-    loading = true;
-    failed = false;
-    listReviews(id, 'helpful', 'all', '')
-      .then((page) => {
-        if (cancelled) return;
-        summary = page.summary;
-        unsupported = false;
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        summary = null;
-        if (err instanceof AccountError && err.code === 'unknown_game') unsupported = true;
-        else failed = true;
-      })
-      .finally(() => {
-        if (!cancelled) loading = false;
-      });
+    void load(id);
     return () => {
-      cancelled = true;
+      loadToken += 1;
     };
   });
 
@@ -59,12 +75,20 @@
 
 {#if canonicalGameId && !unsupported}
   <Card title={msg('reviews.summaryTitle')}>
-    {#if failed}
-      <Notice tone="danger" compact announce={false}>{msg('reviews.summaryError')}</Notice>
+    {#if failed || retrying}
+      <Notice
+        tone="danger"
+        compact
+        announce={false}
+        bind:retrying
+        retry={{ label: msg('common.retry'), run: retry, focus: () => (onopen ? scoreButton : undefined) }}
+      >
+        {msg('reviews.summaryError')}
+      </Notice>
     {:else if loading && !summary}
       <Spinner size="sm" label={msg('reviews.summaryLoading')} />
     {:else if score}
-      <button class="score" type="button" disabled={!onopen} onclick={() => onopen?.()}>
+      <button class="score" type="button" disabled={!onopen} onclick={() => onopen?.()} bind:this={scoreButton}>
         <StatusBadge kind={reviewScoreBadgeKind(score.tone)} label={score.label} />
         {#if summary && summary.total > 0}
           <span class="line">{line}</span>

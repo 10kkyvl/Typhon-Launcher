@@ -7,6 +7,7 @@
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import { AccountError } from '../../lib/services/account';
   import { list as listReviews, type Review, type ReviewFilter, type ReviewSort } from '../../lib/services/reviews';
+  import { firstReviewsPage } from '../../lib/game/reviewsFeed';
   import { reviewsChanged } from '../../lib/game/reviewsRefresh';
   import { msg } from '../../lib/i18n';
   import { measureScrollFloor } from '../../lib/utils/scrollFloor';
@@ -62,7 +63,7 @@
     if (!retry) failed = false;
     moreFailed = false;
     try {
-      const page = await listReviews(id, currentSort as ReviewSort, currentFilter as ReviewFilter, '');
+      const page = await firstReviewsPage(id, currentSort as ReviewSort, currentFilter as ReviewFilter);
       if (token !== requestToken) return;
       items = appendNew([], page.reviews);
       cursor = page.next;
