@@ -498,6 +498,10 @@ export const games = {
   'library.carousel.pick': 'Слайд {index} из {total}: {title}',
   'library.row.more': 'Ещё действия',
   'library.row.favorite': 'В избранном',
+  'library.carousel.hide': 'Убрать «Продолжить игру»',
+  'library.carousel.show': 'Вернуть «Продолжить игру»',
+  'library.filterLabel': 'Какие игры показать',
+  'library.shownCount': { one: 'Показана {count} игра', few: 'Показаны {count} игры', many: 'Показано {count} игр', other: 'Показано {count} игры' },
 } as const;
 
 export type GamesKey = keyof typeof games;

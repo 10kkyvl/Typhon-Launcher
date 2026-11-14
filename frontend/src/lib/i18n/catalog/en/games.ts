@@ -500,4 +500,8 @@ export const games: Record<GamesKey, Message> = {
   'library.carousel.pick': 'Slide {index} of {total}: {title}',
   'library.row.more': 'More actions',
   'library.row.favorite': 'Favorite',
+  'library.carousel.hide': 'Put away "Continue playing"',
+  'library.carousel.show': 'Bring back "Continue playing"',
+  'library.filterLabel': 'Which games to show',
+  'library.shownCount': { one: '{count} game shown', other: '{count} games shown' },
 };
