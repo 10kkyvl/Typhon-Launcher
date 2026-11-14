@@ -102,14 +102,16 @@
   }
 
   /* A card far off screen is not laid out or painted (content-visibility); it keeps the height of a
-     cover and two lines meanwhile. Containment clips its paint to the cell, so the cell reaches half
-     the gap around the card: the hover lift and the focus ring stay inside it. */
+     cover and two lines meanwhile. Containment clips a cell's paint at its padding box, so the cell
+     reaches as far as the card draws on hover and focus: --shadow-lift (offset 1.2rem down, blur
+     2.8rem, spread -0.8rem) reaches 2rem sideways, 3.2rem below and 0.8rem above, and the lift adds
+     0.4rem above. The margins give that room back to the grid. */
   .cell {
     min-width: 0;
-    padding: var(--space-3) var(--space-2);
-    margin: calc(-1 * var(--space-3)) calc(-1 * var(--space-2));
+    padding: var(--space-3) var(--space-5) var(--space-8);
+    margin: calc(-1 * var(--space-3)) calc(-1 * var(--space-5)) calc(-1 * var(--space-8));
     content-visibility: auto;
-    contain-intrinsic-size: auto calc(var(--card-min) * 4 / 3 + 2 * var(--control-sm) + 2 * var(--space-3));
+    contain-intrinsic-size: auto calc(var(--card-min) * 4 / 3 + 2 * var(--control-sm));
   }
 
   .grid.switched {

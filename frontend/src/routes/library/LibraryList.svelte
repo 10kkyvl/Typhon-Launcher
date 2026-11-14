@@ -99,6 +99,7 @@
       actions={actions(entry)}
       titleTone="plain"
       ambient
+      lazy
       onopen={open}
       onplay={entry.playable ? onplay : undefined}
       onstop={entry.playable ? onplay : undefined}
