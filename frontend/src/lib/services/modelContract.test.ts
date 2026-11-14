@@ -86,6 +86,12 @@ interface Pair {
   model: Map<string, Field>;
 }
 
+// Interface types whose Go struct carries another name.
+const GO_NAMES: Record<string, string> = {
+  'metadata.MetadataView': 'metadata.View',
+  'metadata.GameArt': 'metadata.Art',
+};
+
 function pairs(): Pair[] {
   const models = generatedModels();
   const all = declaredInterfaces();
@@ -94,7 +100,8 @@ function pairs(): Pair[] {
     const fields = ownAndInherited(declared, all);
     if (!fields) continue;
     for (const pkg of new Set(importedPackages(declared.file))) {
-      const model = models.get(`${pkg}.${declared.name}`);
+      const key = `${pkg}.${declared.name}`;
+      const model = models.get(GO_NAMES[key] ?? key);
       if (model) out.push({ where: `${declared.file}: ${declared.name} (${pkg})`, declared: fields, model });
     }
   }
@@ -106,6 +113,13 @@ describe('hand-written backend types', () => {
 
   it('are matched against a good share of the generated models', () => {
     expect(compared.length).toBeGreaterThan(60);
+  });
+
+  it('pairs the metadata view and art with their Go models', () => {
+    const art = compared.find((entry) => entry.where.includes('GameArt (metadata)'));
+    const view = compared.find((entry) => entry.where.includes('MetadataView (metadata)'));
+    expect(art?.model.get('heroIsPoster')).toMatchObject({ type: 'boolean', optional: false });
+    expect(view?.model.get('heroIsPoster')).toMatchObject({ type: 'boolean', optional: false });
   });
 
   it('declare no field the Go struct does not send', () => {

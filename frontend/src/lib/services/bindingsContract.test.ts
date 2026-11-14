@@ -210,27 +210,25 @@ describe('the pending launch the page takes from Go', () => {
     expect(Object.fromEntries(Object.keys(EXPECTED).map((name) => [name, go[name]]))).toEqual(EXPECTED);
   });
 
-  // The cloud codes it answers with are checked for the whole interface below.
-  it('answers with library codes that Go raises', () => {
-    const files = [TAKER, 'lib/services/library.ts'];
-    const codes = new Set(files.flatMap((file) => [...frontendSources[file].matchAll(/'(library\.[a-z_]+)'/g)].map((match) => match[1])));
-    expect(codes.size).toBeGreaterThan(1);
-    const unknown = [...codes].filter((code) => !Object.values(goSources).some((text) => text.includes(`"${code}"`)));
-    expect(unknown).toEqual([]);
-  });
+  // The codes it answers with are checked for the whole interface below.
 });
 
-describe('cloud saves codes', () => {
-  // A code the interface compares against or keys a decision on (a launch hold, an unreachable cloud)
-  // and Go never raises is a branch that never runs, silently. Every quoted `cloud.*` code in an
-  // interface source has to be a string in the Go sources; the catalogs are checked by uicodes_test.go.
-  it('the interface names are all raised by Go', () => {
-    const codes = new Set(
-      Object.values(frontendSources).flatMap((text) => [...text.matchAll(/['"`](cloud\.[a-z_]+)['"`]/g)].map((match) => match[1])),
+describe('error codes the interface names', () => {
+  // A code the interface compares against or keys a decision on (a launch hold, an unreachable cloud,
+  // the favourites limit) and Go never raises is a branch that never runs, silently. Every quoted code
+  // of these domains in an interface source has to be a string in the Go sources; the catalogs are
+  // checked by the packages' uicodes tests. Catalog keys are camelCase, so they never match.
+  it.each([
+    ['cloud', 7],
+    ['library', 5],
+    ['metadata', 0],
+  ])('every quoted %s.* code is raised by Go', (domain, atLeast) => {
+    const found = Object.entries(frontendSources).flatMap(([file, text]) =>
+      [...text.matchAll(new RegExp(`['"\`](${domain}\\.[a-z_]+)['"\`]`, 'g'))].map((match) => ({ file, code: match[1] })),
     );
-    expect(codes.size).toBeGreaterThan(7);
-    const unknown = [...codes].filter((code) => !Object.values(goSources).some((text) => text.includes(`"${code}"`)));
-    expect(unknown).toEqual([]);
+    expect(new Set(found.map(({ code }) => code)).size).toBeGreaterThan(atLeast);
+    const unknown = found.filter(({ code }) => !Object.values(goSources).some((text) => text.includes(`"${code}"`)));
+    expect(unknown.map(({ file, code }) => `${file}: ${code}`)).toEqual([]);
   });
 });
 
@@ -249,6 +247,33 @@ describe('runtime events', () => {
     }
     return found;
   }
+
+  const registered = new Set(
+    Object.values(
+      import.meta.glob<string>('../../../bindings/events/index.ts', { query: '?raw', import: 'default', eager: true }),
+    ).flatMap((text) => [...text.matchAll(/export const \w+ = "([^"]+)"/g)].map((match) => match[1])),
+  );
+  // Subscribed here, never passed to RegisterEvent in main.go: no payload type and no generated
+  // constant, so nothing compares what Go sends with what the handler reads. Shrink, never grow.
+  const UNREGISTERED = new Set([
+    'diagnostics:logs_status',
+    'download:progress',
+    'downloads:play-throttle',
+    'gamemode:error',
+    'launcher:release_notes',
+    'presence:status',
+    'source:degraded',
+    'sources:progress',
+    'wrappers:progress',
+  ]);
+
+  it('are registered in main.go, apart from the known gaps', () => {
+    expect(registered.size).toBeGreaterThan(70);
+    const names = new Set(subscribedEvents().map(({ name }) => name));
+    expect([...UNREGISTERED].filter((name) => !names.has(name) || registered.has(name))).toEqual([]);
+    const loose = subscribedEvents().filter(({ name }) => !registered.has(name) && !UNREGISTERED.has(name));
+    expect(loose.map(({ file, name }) => `${file}: ${name}`)).toEqual([]);
+  });
 
   it('are all raised somewhere in the Go sources', () => {
     const events = subscribedEvents();
