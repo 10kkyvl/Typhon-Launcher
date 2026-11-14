@@ -34,7 +34,7 @@
   import { gameContextMenu } from '../../lib/stores/gameMenu';
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
-  import { toggleWatch, watchlist } from '../../lib/stores/watchlist';
+  import { toggleWatch, watchAlertsLoaded, watchlist } from '../../lib/stores/watchlist';
   import { libraryView } from '../../lib/stores/ui';
   import { ambientHover } from '../../lib/utils/ambientHover';
   import { focusHandOff } from '../../lib/utils/focusHandOff';
@@ -65,6 +65,7 @@
   let libraryRetrying = $state(false);
   let collectionsRetrying = $state(false);
   let results = $state<HTMLElement>();
+  let listSection = $state<HTMLElement>();
 
   $effect(() => {
     libraryChoices.set({ filter, source: sourceFilter, status: statusFilter, collection: activeCollectionId, search, heroHidden });
@@ -129,13 +130,15 @@
     watched: msg('games.filterWatched'),
   };
 
-  // Unwatching the last watched game while "Watched" is shown returns to "All"; a "Watched" restored
-  // before the watchlist has loaded stays.
+  // "Watched" with no watched game returns to "All": when the last one is unwatched here, or when the
+  // watchlist is known to be empty (watchAlertsLoaded is set with the first full read of it). A
+  // "Watched" restored before that read stays, with its chip on screen.
   let hadWatched = false;
   $effect(() => {
     const count = $watchlist.length;
+    const known = $watchAlertsLoaded;
     untrack(() => {
-      if (filter === 'watched' && count === 0 && hadWatched) filter = 'all';
+      if (filter === 'watched' && count === 0 && (hadWatched || known)) filter = 'all';
       hadWatched = count > 0;
     });
   });
@@ -192,7 +195,8 @@
     sourceFilter = 'all';
     statusFilter = 'all';
     activeCollectionId = '';
-    void handOff(() => (results ? focusableIn(results)[0] : undefined));
+    // The list's first game when it fills; the search field when it stays empty (all games hidden).
+    void handOff(() => (results ? focusableIn(results)[0] : undefined) ?? (listSection ? focusableIn(listSection)[0] : undefined));
   }
 
   const hero = $derived(buildSlides(entries, { running: $runningGames, stopped: $stoppedSinceList, locale: $locale })[0]);
@@ -246,7 +250,7 @@
     />
   {/if}
 
-  <section class="section">
+  <section class="section" bind:this={listSection}>
     <div class="section-head">
       <h2>{activeCollection ? activeCollection.name : sectionTitles[filter]}</h2>
     </div>

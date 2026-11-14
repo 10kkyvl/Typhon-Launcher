@@ -14,6 +14,8 @@ import { downloads } from '../../lib/stores/downloads';
 import { DEFAULT_CHOICES, libraryChoices, librarySort } from '../../lib/stores/libraryPrefs';
 import { gameArt } from '../../lib/stores/metadata';
 import { toast } from '../../lib/stores/toasts';
+import { watchAlertsLoaded, watchlist } from '../../lib/stores/watchlist';
+import type { Entry as WatchEntry } from '../../lib/services/watchlist';
 import { libraryView } from '../../lib/stores/ui';
 import { renderDom } from '../../lib/testing/dom';
 import Library from './Library.svelte';
@@ -140,8 +142,22 @@ describe('Library: why the list is empty', () => {
     expect(listTitles()).toEqual(['Celeste', 'Hades']);
     expect((screen.getByLabelText(msg('games.librarySearchPlaceholder')) as HTMLInputElement).value).toBe('');
     expect(screen.getByRole('button', { name: msg('games.filterHidden') }).getAttribute('aria-pressed')).toBe('false');
-    expect(document.activeElement).not.toBe(document.body);
-    expect(document.activeElement?.isConnected).toBe(true);
+    expect(document.activeElement?.closest('.list')).not.toBeNull();
+  });
+
+  it('hands focus to the search field when the list stays empty after clearing', async () => {
+    libraryGames.set([{ ...hades, hidden: true }]);
+    const { user } = renderDom(Library);
+    const search = screen.getByLabelText(msg('games.librarySearchPlaceholder'));
+    await user.type(search, 'zzz');
+    const clear = screen.getByRole('button', { name: msg('library.clearFilters') });
+    clear.focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(heading(msg('library.allHiddenTitle'))).not.toBeNull();
+    expect(clear.isConnected).toBe(false);
+    expect(document.activeElement).toBe(search);
   });
 });
 
@@ -195,6 +211,68 @@ describe('Library: collections that failed to load', () => {
 
     await vi.waitFor(() => expect(notice.isConnected).toBe(false));
     expect(screen.getByRole('button', { name: 'Cozy' })).toBeTruthy();
+  });
+
+  it('keep the notice when the retry fails again, and say it again', async () => {
+    collectionsState.set('failed');
+    collectionsLoadError.set(new Error('boom'));
+    vi.mocked(getCollections).mockRejectedValueOnce(new Error('boom again'));
+    const { user } = renderDom(Library);
+    const notice = screen.getByText(msg('games.collectionsLoadFailed')).closest('.notice') as HTMLElement;
+    const retry = within(notice).getByRole('button', { name: msg('common.retry') });
+    const words = (notice.querySelector('.body')?.firstElementChild?.textContent ?? '').replace(/\s+/g, ' ').trim();
+    const said = sayingAgain(notice);
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(said()).toBe(words));
+    expect(words).not.toBe('');
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
+  });
+});
+
+describe('Library: the Watched filter', () => {
+  const entry = { gameId: 'c-watch', title: 'Watched Game' } as WatchEntry;
+
+  afterEach(() => {
+    watchlist.set([]);
+    watchAlertsLoaded.set(false);
+  });
+
+  const chip = (name: string) => screen.queryByRole('button', { name });
+
+  it('returns to All when the watchlist empties while the page is open', async () => {
+    watchlist.set([entry]);
+    watchAlertsLoaded.set(true);
+    const { user } = renderDom(Library);
+    await user.click(screen.getByRole('button', { name: msg('games.filterWatched') }));
+    expect(listTitles()).toEqual(['Watched Game']);
+
+    watchlist.set([]);
+    await tick();
+
+    expect(chip(msg('games.filterAll'))?.getAttribute('aria-pressed')).toBe('true');
+    expect(chip(msg('games.filterWatched'))).toBeNull();
+    expect(listTitles()).toEqual(['Celeste', 'Hades']);
+  });
+
+  it('shows All when Watched was stored and the watchlist is known to be empty', () => {
+    libraryChoices.set({ ...DEFAULT_CHOICES, filter: 'watched' });
+    watchAlertsLoaded.set(true);
+    renderDom(Library);
+
+    expect(chip(msg('games.filterAll'))?.getAttribute('aria-pressed')).toBe('true');
+    expect(chip(msg('games.filterWatched'))).toBeNull();
+    expect(listTitles()).toEqual(['Celeste', 'Hades']);
+  });
+
+  it('keeps a stored Watched while the watchlist has not loaded yet, with its chip on screen', () => {
+    libraryChoices.set({ ...DEFAULT_CHOICES, filter: 'watched' });
+    renderDom(Library);
+
+    expect(chip(msg('games.filterWatched'))?.getAttribute('aria-pressed')).toBe('true');
   });
 });
 
