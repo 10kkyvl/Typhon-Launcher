@@ -34,7 +34,6 @@
   import { closeSaveBackups } from '../stores/savebackup';
   import { toast } from '../stores/toasts';
   import { authState } from '../stores/user';
-  import { errorMessage } from '../utils/errors';
   import { bytesSize, dateTime } from '../utils/format';
 
   interface Pending {
@@ -139,7 +138,7 @@
     } catch (err) {
       if (seq !== savesSeq) return;
       saves = null;
-      savesError = saveBackupErrorText(err, errorMessage(err));
+      savesError = saveBackupErrorText(err, msg('saves.folderFailed'));
     } finally {
       if (seq === savesSeq) savesLoading = false;
     }
@@ -162,6 +161,7 @@
   }
 
   const backupFailure = () => msg('savebackup.fallback');
+  const folderNotSet = () => msg('saves.folderNotSet');
 
   function create() {
     if (busy) return;
@@ -290,7 +290,7 @@
   function openSaves() {
     const path = saves?.path;
     if (!path) return;
-    return perform(() => openFolder(path), errorMessage, 'open');
+    return perform(() => openFolder(path), () => msg('saves.openFailed'), 'open');
   }
 
   function changeFolder() {
@@ -298,7 +298,7 @@
     return perform(async () => {
       const dir = await chooseSavesDir(gameId, title);
       if (dir) await loadSaves(gameId);
-    }, errorMessage, 'folder');
+    }, folderNotSet, 'folder');
   }
 
   function useCandidate(dir: string) {
@@ -307,7 +307,7 @@
     return perform(async () => {
       await setSavesDir(gameId, dir);
       await loadSaves(gameId);
-    }, errorMessage);
+    }, folderNotSet);
   }
 
   function browseFromCandidates() {
