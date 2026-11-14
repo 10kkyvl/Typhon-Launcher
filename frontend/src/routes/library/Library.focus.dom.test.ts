@@ -14,7 +14,7 @@ import { libraryView } from '../../lib/stores/ui';
 import { watchAlertsLoaded, watchlist } from '../../lib/stores/watchlist';
 import { renderDom, user as keys } from '../../lib/testing/dom';
 import Library from './Library.svelte';
-import { game, played, results, shownTitles } from './libraryTesting';
+import { game, played, recentSection, results, shownTitles } from './libraryTesting';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
@@ -307,5 +307,34 @@ describe('Library: a game that merely updates', () => {
 
     expect(within((results() as HTMLElement).children[1] as HTMLElement).getByRole('button', { name: msg('ui.play') })).toBeTruthy();
     expect(document.activeElement).toBe(more);
+  });
+});
+
+describe('Library: the "Recent" row leaving with its last capsule', () => {
+  it('hands focus to the first control of the list section when focus was on that capsule', async () => {
+    libraryView.set('grid');
+    libraryGames.set([played('g-a', 'Alpha', 9), played('g-b', 'Bravo', 8), played('g-c', 'Charlie', 7), played('g-d', 'Delta', 6)]);
+    renderDom(Library);
+    const row = recentSection() as HTMLElement;
+    within(row).getByRole('button', { name: msg('ui.play') }).focus();
+
+    libraryGames.update((list) => list.filter((one) => one.id !== 'g-d'));
+    await settle();
+
+    expect(recentSection()).toBeNull();
+    expect(document.activeElement).toBe(screen.getByLabelText(msg('games.librarySearchPlaceholder')));
+  });
+
+  it('leaves focus alone when it was elsewhere', async () => {
+    libraryView.set('grid');
+    libraryGames.set([played('g-a', 'Alpha', 9), played('g-b', 'Bravo', 8), played('g-c', 'Charlie', 7), played('g-d', 'Delta', 6)]);
+    renderDom(Library);
+    const add = screen.getByRole('button', { name: msg('games.collectionAdd') });
+    add.focus();
+
+    libraryGames.update((list) => list.filter((one) => one.id !== 'g-d'));
+    await settle();
+
+    expect(document.activeElement).toBe(add);
   });
 });

@@ -342,6 +342,32 @@
     });
   });
 
+  // The "Recent" row goes with its last capsule (it moved to the carousel, or left the library): the
+  // row is gone before it could hand focus on, so the page does, when focus was in it.
+  let recentBox = $state<HTMLElement>();
+  let recentHeld = false;
+
+  $effect.pre(() => {
+    void recentGames;
+    untrack(() => {
+      const active = document.activeElement;
+      recentHeld = Boolean(recentBox && active && recentBox.contains(active));
+    });
+  });
+
+  $effect(() => {
+    const left = recentGames.length === 0;
+    untrack(() => {
+      const held = recentHeld;
+      recentHeld = false;
+      if (!held || !left) return;
+      const active = document.activeElement;
+      if (active && active !== document.body && active.isConnected) return;
+      const target = listSection ? focusableIn(listSection)[0] : undefined;
+      if (target) revealFocus(target);
+    });
+  });
+
   let lastView = get(libraryView);
   let viewSwitched = $state(false);
 
@@ -397,17 +423,18 @@
     {/snippet}
   </PageHeader>
 
-  {#if recentGames.length > 0}
-    <RecentRow
-      entries={recentGames}
-      cover={(entry) => entryHeroArt(entry, $gameArt) || entryCover(entry, $gameArt)}
-      running={$runningGames}
-      {busy}
-      onshowall={() => (filter = 'recent')}
-      fallback={() => (listSection ? focusableIn(listSection)[0] : undefined)}
-      onplay={toggleRun}
-    />
-  {/if}
+  <div bind:this={recentBox}>
+    {#if recentGames.length > 0}
+      <RecentRow
+        entries={recentGames}
+        cover={(entry) => entryHeroArt(entry, $gameArt) || entryCover(entry, $gameArt)}
+        running={$runningGames}
+        {busy}
+        onshowall={() => (filter = 'recent')}
+        onplay={toggleRun}
+      />
+    {/if}
+  </div>
 
   <section class="section" bind:this={listSection}>
     <div class="sr-only" data-library-status role="status">
