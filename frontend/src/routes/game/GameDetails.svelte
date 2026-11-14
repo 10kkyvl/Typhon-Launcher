@@ -25,7 +25,8 @@
   import type { Download as DownloadItem, DownloadOrigin } from '../../lib/services/downloads';
   import { missingImages, refreshMissingImages } from '../../lib/stores/missingImages';
   import { prepareReleaseDownload, type ReleaseGroup } from '../../lib/services/sources';
-  import { getVerifyState } from '../../lib/services/updates';
+  import { getVerifyState, type VerifyState } from '../../lib/services/updates';
+  import { updateErrorText } from '../../lib/updates/updateErrors';
   import { downloads, statusLabels } from '../../lib/stores/downloads';
   import { gameSections, type GameSection } from '../../lib/theme/layout';
   import { activeTheme } from '../../lib/stores/theme';
@@ -92,7 +93,13 @@
   let updateCard = $state<UpdateCard | undefined>(undefined);
 
   async function loadVerifyState(gameId: string) {
-    const state = await getVerifyState(gameId);
+    let state: VerifyState | null;
+    try {
+      state = await getVerifyState(gameId);
+    } catch (err) {
+      toast(updateErrorText(err, msg('verify.stateReadFailed')), 'danger');
+      return;
+    }
     if (!state) return;
     verifications.update((map) => (map[gameId] ? map : { ...map, [gameId]: state }));
   }

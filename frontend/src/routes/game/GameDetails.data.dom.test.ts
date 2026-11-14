@@ -20,6 +20,7 @@ import {
   type Source,
 } from '../../lib/services/sources';
 import type { Settings } from '../../lib/services/settings';
+import { getVerifyState } from '../../lib/services/updates';
 import { resetHistory } from '../../lib/stores/router';
 import { settings } from '../../lib/stores/settings';
 import { sources } from '../../lib/stores/sources';
@@ -48,6 +49,10 @@ vi.mock('../../lib/services/downloads', async (importOriginal) => ({
   fetchMetadata: vi.fn(),
   startDownloadFrom: vi.fn(),
   discardMetadata: vi.fn(async () => {}),
+}));
+vi.mock('../../lib/services/updates', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/services/updates')>()),
+  getVerifyState: vi.fn(async () => null),
 }));
 vi.mock('../../lib/services/system', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/system')>()),
@@ -354,5 +359,21 @@ describe('GameDetails: a catalog game that failed to load', () => {
 
     expect(get(toasts)).toEqual([]);
     expect(screen.getByRole('heading', { level: 1, name: msg('games.detailCatalogLoadError') })).toBeTruthy();
+  });
+});
+
+describe('GameDetails: the state of the last file check that could not be read', () => {
+  it('is said in a danger toast, with no rejection left unhandled', async () => {
+    vi.mocked(getVerifyState).mockRejectedValueOnce(new Error('typhon:updates.not_tracked'));
+    renderDom(GameDetails, { id: 'g1' });
+
+    await vi.waitFor(() => expect(toastsOf('danger')).toEqual([msg('errUpdates.updatesNotTracked')]));
+  });
+
+  it('falls back to its own words when the code has no text', async () => {
+    vi.mocked(getVerifyState).mockRejectedValueOnce(new Error('typhon:updates.something_new: диск'));
+    renderDom(GameDetails, { id: 'g1' });
+
+    await vi.waitFor(() => expect(toastsOf('danger')).toEqual([msg('verify.stateReadFailed')]));
   });
 });
