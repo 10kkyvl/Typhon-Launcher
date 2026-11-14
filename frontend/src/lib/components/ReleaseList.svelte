@@ -41,7 +41,8 @@
     for (const group of groups) {
       const { version, rawTitle, id } = group.release;
       const release = version && seen.get(short(group)) === 1 ? version : rawTitle || version;
-      names.set(id, msg('games.blocks.releaseDownload', { release, source: group.sourceName }));
+      const source = group.sourceName.trim();
+      names.set(id, source ? msg('games.blocks.releaseDownload', { release, source }) : msg('games.blocks.releaseDownloadNoSource', { release }));
     }
     return names;
   });

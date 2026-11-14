@@ -79,6 +79,12 @@ describe('ReleaseList: each Download names its release', () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
+  it('by the release alone when its source has no name', () => {
+    render(ReleaseList, { target: app, props: { groups: [group('a', { version: '1.2', source: '' })], ondownload: () => {} } });
+
+    expect(downloads()[0].getAttribute('aria-label')).toBe(msg('games.blocks.releaseDownloadNoSource', { release: '1.2' }));
+  });
+
   it('downloads the release it names', async () => {
     const ondownload = vi.fn();
     const groups = [group('a', { version: '1.2' }), group('b', { version: '1.3' })];
