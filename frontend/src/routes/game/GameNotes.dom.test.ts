@@ -82,6 +82,27 @@ describe('GameNotes: a note over the limit', () => {
     expect(screen.getAllByRole('alert')).toEqual(alerts);
     expect(document.body.textContent).not.toContain(msg('games.notesSaved'));
   });
+
+  it('sends nothing past the limit, and saves on the next input once back under it', async () => {
+    vi.useFakeTimers();
+    const { user } = renderDom(GameNotes, { gameId: 'g1', stored: '' });
+    await vi.advanceTimersByTimeAsync(0);
+    const field = screen.getByRole('textbox', { name: msg('games.notesHeading') });
+    await user.type(field, 'abc');
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(vi.mocked(setNotes).mock.calls).toEqual([['g1', 'abc']]);
+
+    await user.type(field, 'def');
+    await vi.advanceTimersByTimeAsync(2000);
+    field.blur();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(vi.mocked(setNotes).mock.calls.every(([, text]) => [...text].length <= 5)).toBe(true);
+
+    field.focus();
+    await user.keyboard('{Backspace}{Backspace}');
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(vi.mocked(setNotes).mock.lastCall).toEqual(['g1', 'abcd']);
+  });
 });
 
 // The page creates the block again for each game (`{#key}`) and keeps itself mounted: a save that
