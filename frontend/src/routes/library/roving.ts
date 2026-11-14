@@ -22,7 +22,8 @@ function items(list: HTMLElement): HTMLElement[] {
   return [...list.children] as HTMLElement[];
 }
 
-function controlsOf(item: HTMLElement): HTMLElement[] {
+/** An item's own controls in DOM order, those this list took out of the Tab order included. */
+export function controlsOf(item: HTMLElement): HTMLElement[] {
   return [...item.querySelectorAll<HTMLElement>(CONTROLS)].filter((el) => el.hasAttribute(OFF) || el.tabIndex >= 0);
 }
 

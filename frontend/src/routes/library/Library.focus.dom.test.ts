@@ -1,5 +1,5 @@
 // First: services/library reaches this store back through stores/cloudsaves (see Library.state.dom.test.ts).
-import { libraryGames, libraryLoaded, runningGames } from '../../lib/stores/library';
+import { libraryGames, libraryLoaded, runningGames, stoppedSinceList } from '../../lib/stores/library';
 import { render, screen, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,7 +14,7 @@ import { libraryView } from '../../lib/stores/ui';
 import { watchAlertsLoaded, watchlist } from '../../lib/stores/watchlist';
 import { renderDom, user as keys } from '../../lib/testing/dom';
 import Library from './Library.svelte';
-import { game, results, shownTitles } from './libraryTesting';
+import { game, played, results, shownTitles } from './libraryTesting';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
@@ -26,6 +26,7 @@ vi.mock('../../lib/services/library', async (importOriginal) => ({
   steamStatus: vi.fn(async () => ({ supported: false, installed: false, added: false })),
   setHidden: vi.fn(),
   deleteCollection: vi.fn(),
+  stopGame: vi.fn(async () => {}),
 }));
 vi.mock('../../lib/services/watchlist', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/watchlist')>()),
@@ -83,6 +84,7 @@ afterEach(() => {
   closeGameMenu();
   libraryGames.set([]);
   runningGames.set(new Set());
+  stoppedSinceList.set(new Map());
   watchlist.set([]);
   watchAlertsLoaded.set(false);
   document.body.replaceChildren();
@@ -226,5 +228,75 @@ describe('Library: deleting the active collection', () => {
     expect(document.activeElement).not.toBe(document.body);
     expect(document.activeElement?.isConnected).toBe(true);
     expect(row.contains(document.activeElement)).toBe(true);
+  });
+});
+
+// Chromium drops focus to <body> when a node that holds it is moved; jsdom keeps it. This does what
+// Chromium does for the list's own moves.
+function dropFocusOnMove(): () => void {
+  const insert = Node.prototype.insertBefore;
+  Node.prototype.insertBefore = function <T extends Node>(this: Node, node: T, child: Node | null): T {
+    if (node instanceof Element && node.isConnected && node.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
+    return insert.call(this, node, child) as T;
+  };
+  return () => {
+    Node.prototype.insertBefore = insert;
+  };
+}
+
+describe.each(['grid', 'list'] as const)('Library (%s): a game that moves when the list re-sorts', (view) => {
+  let restore = () => {};
+  beforeEach(() => {
+    libraryView.set(view);
+    restore = dropFocusOnMove();
+  });
+  afterEach(() => restore());
+
+  it('keeps focus on the control the player pressed', async () => {
+    libraryChoices.set({ ...DEFAULT_CHOICES, filter: 'recent', heroHidden: true });
+    libraryGames.set([played('g-a', 'Alpha', 9), played('g-b', 'Bravo', 8), played('g-c', 'Charlie', 7), played('g-d', 'Delta', 6)]);
+    runningGames.set(new Set(['g-c']));
+    const { user } = renderDom(Library);
+    expect(shownTitles()).toEqual(['Alpha', 'Bravo', 'Charlie', 'Delta']);
+    const stop = within((results() as HTMLElement).children[2] as HTMLElement).getByRole('button', { name: msg('ui.stop') });
+    stop.focus();
+
+    await user.keyboard('{Enter}');
+    runningGames.set(new Set());
+    stoppedSinceList.set(new Map([['g-c', 1]]));
+    await settle();
+
+    expect(shownTitles()).toEqual(['Charlie', 'Alpha', 'Bravo', 'Delta']);
+    expect(focusedTitle()).toBe('Charlie');
+    expect(document.activeElement).toBe(stop);
+    expect(stop.getAttribute('aria-label')).toBe(msg('ui.play'));
+  });
+});
+
+describe('Library: a game that merely updates', () => {
+  it('leaves focus on the control the player is on', async () => {
+    libraryView.set('grid');
+    renderDom(Library);
+    const play = within((results() as HTMLElement).children[1] as HTMLElement).getByRole('button', { name: msg('ui.play') });
+    play.focus();
+
+    libraryGames.update((list) => list.map((one) => (one.id === 'g-charlie' ? { ...one, playtimeSeconds: 60 } : one)));
+    await settle();
+
+    expect(document.activeElement).toBe(play);
+  });
+
+  it('leaves focus on "More" when its own row gains Play before it', async () => {
+    libraryView.set('list');
+    libraryGames.set([alpha, { ...bravo, executable: '' }, charlie]);
+    renderDom(Library);
+    const more = within((results() as HTMLElement).children[1] as HTMLElement).getByRole('button', { name: msg('library.row.more') });
+    more.focus();
+
+    libraryGames.set([alpha, bravo, charlie]);
+    await settle();
+
+    expect(within((results() as HTMLElement).children[1] as HTMLElement).getByRole('button', { name: msg('ui.play') })).toBeTruthy();
+    expect(document.activeElement).toBe(more);
   });
 });

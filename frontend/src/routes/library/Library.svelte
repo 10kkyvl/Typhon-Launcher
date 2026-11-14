@@ -53,7 +53,7 @@
   import LibraryList from './LibraryList.svelte';
   import { narrowingText } from './entryText';
   import { itemOf } from './itemMenu';
-  import { primaryOf } from './roving';
+  import { controlsOf, primaryOf } from './roving';
 
   const uid = $props.id();
   const saved = get(libraryChoices);
@@ -280,12 +280,19 @@
   // The game the list's Tab stop is on, kept across the grid and the list.
   let currentGame = $state<string>();
 
-  // A game that leaves the list (hidden, unwatched, filtered out) does not take focus or the Tab stop
-  // with it: both move to the game now in its place, the one before it at the end, and focus to the
-  // section's first control when the list empties. Read before the list changes on screen, acted on
-  // right after, before anything else picks a place for focus.
+  // Focus and the Tab stop follow their game. A game that moves when the list re-sorts keeps focus on
+  // the control the player was on (moving its node drops focus in Chromium). A game that leaves the
+  // list (hidden, unwatched, filtered out) hands both to the game now in its place, the one before it
+  // at the end, and focus to the section's first control when the list empties. Read before the list
+  // changes on screen, acted on right after, before anything else picks a place for focus.
+  interface Held {
+    index: number;
+    id: string | undefined;
+    control: HTMLElement;
+    controlIndex: number;
+  }
   let shownIds: string[] = [];
-  let leaving: { focus: number; current: number } | null = null;
+  let leaving: { held: Held | null; current: number } | null = null;
 
   const resultsList = () => listSection?.querySelector<HTMLElement>('[data-results]') ?? null;
 
@@ -294,13 +301,27 @@
     untrack(() => {
       const list = resultsList();
       const active = document.activeElement;
-      const item = list && active && list.contains(active) ? itemOf(list, active) : null;
+      const item = list && active instanceof HTMLElement && list.contains(active) ? itemOf(list, active) : null;
+      const index = list && item ? [...list.children].indexOf(item) : -1;
       leaving = {
-        focus: list && item ? [...list.children].indexOf(item) : -1,
+        held: item && active instanceof HTMLElement ? { index, id: shownIds[index], control: active, controlIndex: controlsOf(item).indexOf(active) } : null,
         current: currentGame === undefined ? -1 : shownIds.indexOf(currentGame),
       };
     });
   });
+
+  function heldTarget(held: Held, ids: readonly string[]): HTMLElement | undefined {
+    const list = resultsList();
+    const still = held.id === undefined ? -1 : ids.indexOf(held.id);
+    if (list && still >= 0) {
+      const item = list.children[still];
+      if (!(item instanceof HTMLElement)) return undefined;
+      if (held.control.isConnected && item.contains(held.control)) return held.control;
+      return controlsOf(item)[held.controlIndex] ?? primaryOf(item);
+    }
+    const item = list?.children[Math.min(held.index, list.children.length - 1)];
+    return item instanceof HTMLElement ? primaryOf(item) : listSection ? focusableIn(listSection)[0] : undefined;
+  }
 
   $effect(() => {
     const ids = visibleGames.map((entry) => entry.id);
@@ -312,12 +333,10 @@
       if (currentGame !== undefined && !ids.includes(currentGame) && was.current >= 0) {
         currentGame = ids[Math.min(was.current, ids.length - 1)];
       }
-      if (was.focus < 0) return;
+      if (!was.held) return;
       const active = document.activeElement;
       if (active && active !== document.body && active.isConnected) return;
-      const list = resultsList();
-      const item = list?.children[Math.min(was.focus, list.children.length - 1)];
-      const target = item instanceof HTMLElement ? primaryOf(item) : listSection ? focusableIn(listSection)[0] : undefined;
+      const target = heldTarget(was.held, ids);
       if (target) focusQuietly(target);
     });
   });
