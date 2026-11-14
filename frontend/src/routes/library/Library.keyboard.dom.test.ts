@@ -1,11 +1,11 @@
 // First: services/library reaches this store back through stores/cloudsaves (see Library.state.dom.test.ts).
-import { libraryGames, libraryLoaded } from '../../lib/stores/library';
+import { libraryGames, libraryLoaded, runningGames } from '../../lib/stores/library';
 import { screen } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import { focusableIn } from '../../lib/layers/focus';
-import { playGame } from '../../lib/services/library';
+import { playGame, stopGame } from '../../lib/services/library';
 import { DEFAULT_CHOICES, libraryChoices } from '../../lib/stores/libraryPrefs';
 import { libraryView } from '../../lib/stores/ui';
 import { renderDom } from '../../lib/testing/dom';
@@ -19,6 +19,7 @@ vi.mock('../../lib/services/library', async (importOriginal) => ({
   getGames: vi.fn(async () => []),
   getCollections: vi.fn(async () => []),
   playGame: vi.fn(async () => {}),
+  stopGame: vi.fn(async () => {}),
 }));
 
 // Never played: no carousel and no "Recent" row, so the toolbar leads straight into the list.
@@ -52,6 +53,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  runningGames.set(new Set());
+  vi.mocked(stopGame).mockClear();
   libraryGames.set([]);
   document.body.replaceChildren();
 });
@@ -159,6 +162,35 @@ describe('Library: the list by keyboard', () => {
     expect(document.activeElement?.getAttribute('aria-label')).toBe(msg('library.row.more'));
     await user.tab();
     expect((results() as HTMLElement).contains(document.activeElement)).toBe(false);
+  });
+
+  it('plays the focused game with Ctrl+Enter, once, and not again while its launch is in flight', async () => {
+    let release = () => {};
+    vi.mocked(playGame).mockReturnValueOnce(new Promise<void>((resolve) => (release = resolve)));
+    const { user } = renderDom(Library);
+    beforeList().focus();
+    await user.tab();
+    await user.keyboard('{ArrowDown}');
+
+    await user.keyboard('{Control>}{Enter}{/Control}');
+    await user.keyboard('{Meta>}{Enter}{/Meta}');
+
+    expect(playGame).toHaveBeenCalledTimes(1);
+    expect(playGame).toHaveBeenCalledWith('g-bravo');
+    expect(focusedTitle()).toBe('Bravo');
+    release();
+  });
+
+  it('does not launch a running game again with Ctrl+Enter', async () => {
+    runningGames.set(new Set(['g-alpha']));
+    const { user } = renderDom(Library);
+    beforeList().focus();
+    await user.tab();
+
+    await user.keyboard('{Control>}{Enter}{/Control}');
+
+    expect(playGame).not.toHaveBeenCalled();
+    expect(stopGame).not.toHaveBeenCalled();
   });
 
   it('keeps the remembered game when the view changes', async () => {

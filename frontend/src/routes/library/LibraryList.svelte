@@ -43,6 +43,11 @@
     idAt: (index) => entries[index]?.id,
     current: () => current,
     onmove: (id) => (current = id),
+    // As the card's own key: not while a launch or a stop waits, and a running game is not launched again.
+    onlaunch: (id) => {
+      const entry = entries.find((one) => one.id === id);
+      if (entry?.playable && !running.has(id) && !busy(id)) onplay(id);
+    },
   });
 
   $effect(() => {

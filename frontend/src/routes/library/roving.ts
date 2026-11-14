@@ -16,6 +16,11 @@ export interface RovingOptions {
   current: () => string | undefined;
   /** The player moved to a game (arrows, focus, a press). */
   onmove: (id: string) => void;
+  /**
+   * Ctrl+Enter (Cmd+Enter on a Mac) on any control of an item: launch its game, as Play does. For
+   * items that have no such key of their own (a card has).
+   */
+  onlaunch?: (id: string) => void;
 }
 
 function items(list: HTMLElement): HTMLElement[] {
@@ -120,11 +125,18 @@ export function createRoving(options: RovingOptions): { attach: Attachment<HTMLE
   }
 
   function onkeydown(event: KeyboardEvent) {
-    if (!list || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    if (!list || event.defaultPrevented) return;
     const item = itemOf(list, event.target);
     if (!item) return;
     const all = items(list);
     const from = all.indexOf(item);
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && options.onlaunch) {
+      event.preventDefault();
+      const id = options.idAt(from);
+      if (!event.repeat && id !== undefined) options.onlaunch(id);
+      return;
+    }
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
     const last = all.length - 1;
     let to: number | null = null;
     switch (event.key) {
