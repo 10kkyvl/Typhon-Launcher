@@ -215,6 +215,9 @@
     void handOff(() => (hidden ? (showCarouselSpot ? focusableIn(showCarouselSpot)[0] : undefined) : carouselBlock?.hideControl()));
   }
 
+  // The game the list's Tab stop is on, kept across the grid and the list.
+  let currentGame = $state<string>();
+
   let lastView = get(libraryView);
   let viewSwitched = $state(false);
 
@@ -366,6 +369,7 @@
         actions={watchedActions}
         onplay={toggleRun}
         labelledby="{uid}-heading"
+        bind:current={currentGame}
         bind:switched={viewSwitched}
         bind:element={results}
       />
@@ -377,6 +381,7 @@
         {busy}
         onplay={toggleRun}
         labelledby="{uid}-heading"
+        bind:current={currentGame}
         bind:switched={viewSwitched}
         bind:element={results}
       />

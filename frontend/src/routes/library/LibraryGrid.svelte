@@ -3,6 +3,7 @@
   import type { GameArt } from '../../lib/services/metadata';
   import { entryCover, type LibraryEntry } from '../../lib/library/entries';
   import { entryMeta, entrySubtitle } from './entryText';
+  import { createRoving } from './roving';
   import { noBrowserMenu } from './itemMenu';
 
   let {
@@ -13,6 +14,7 @@
     actions,
     onplay,
     labelledby,
+    current = $bindable(),
     switched = $bindable(false),
     element = $bindable(),
   }: {
@@ -25,10 +27,25 @@
     onplay: (id: string) => void;
     /** Id of the heading that names the list. */
     labelledby: string;
+    /** The game that holds the list's Tab stop: the one the player was on last. */
+    current?: string;
     /** The view has just changed to this one: it rises in once. */
     switched?: boolean;
     element?: HTMLElement;
   } = $props();
+
+  const roving = createRoving({
+    layout: 'grid',
+    idAt: (index) => entries[index]?.id,
+    current: () => current,
+    onmove: (id) => (current = id),
+  });
+
+  $effect(() => {
+    void entries;
+    void current;
+    roving.refresh();
+  });
 
   function endViewSwitch(event: AnimationEvent) {
     if (event.target === event.currentTarget) switched = false;
@@ -42,6 +59,7 @@
   class:switched
   onanimationend={endViewSwitch}
   bind:this={element}
+  {@attach roving.attach}
   {@attach noBrowserMenu}
 >
   {#each entries as entry (entry.id)}
@@ -51,6 +69,7 @@
         title={entry.title}
         cover={entryCover(entry, art)}
         ambient
+        titleFirst
         installed={entry.installed}
         running={running.has(entry.id)}
         launching={busy(entry.id)}

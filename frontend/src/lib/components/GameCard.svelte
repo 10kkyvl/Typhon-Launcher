@@ -60,6 +60,7 @@
     actions,
     onplay,
     ambient = false,
+    titleFirst = false,
   }: {
     id: string;
     title: string;
@@ -84,6 +85,11 @@
     onplay?: () => void;
     /** The window backdrop follows this card's game while the pointer rests on it (library only). */
     ambient?: boolean;
+    /**
+     * The title's control comes first in the Tab order, before Play and the quick actions, where it
+     * still stands on screen: for a grid that enters a card on its title (the library's arrow keys).
+     */
+    titleFirst?: boolean;
   } = $props();
 
   const uid = $props.id();
@@ -119,7 +125,17 @@
     });
 </script>
 
-<div class="card" role="presentation" {@attach gameContextMenu(id)} {@attach launchKey} use:ambientHover={ambient ? id : null}>
+{#snippet info()}
+  <button class="info" aria-describedby={describedBy} onclick={() => navigate('game', { id })}>
+    <span class="title" id="{uid}-title">{title}</span>
+    {#if meta}
+      <span class="meta">{meta}</span>
+    {/if}
+  </button>
+{/snippet}
+
+<div class="card" class:title-first={titleFirst} role="presentation" {@attach gameContextMenu(id)} {@attach launchKey} use:ambientHover={ambient ? id : null}>
+  {#if titleFirst}{@render info()}{/if}
   <div class="cover-wrap" class:playable class:running={playable && running}>
     <!-- A pointer target only: the title below opens the same page and carries the game's name, so the
          cover is out of the Tab order and of the accessibility tree. -->
@@ -191,12 +207,7 @@
       </div>
     {/if}
   </div>
-  <button class="info" aria-describedby={describedBy} onclick={() => navigate('game', { id })}>
-    <span class="title" id="{uid}-title">{title}</span>
-    {#if meta}
-      <span class="meta">{meta}</span>
-    {/if}
-  </button>
+  {#if !titleFirst}{@render info()}{/if}
   {#if footer}
     <div class="footer">{@render footer()}</div>
   {/if}
@@ -453,6 +464,14 @@
     font-size: var(--font-xs);
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
+  }
+
+  .title-first .info {
+    order: 1;
+  }
+
+  .title-first .footer {
+    order: 2;
   }
 
   .footer {

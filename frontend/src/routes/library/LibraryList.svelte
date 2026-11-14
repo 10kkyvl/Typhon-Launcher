@@ -8,6 +8,7 @@
   import { bytesSize } from '../../lib/utils/format';
   import { entryCover, type LibraryEntry } from '../../lib/library/entries';
   import { rowDetails } from './entryText';
+  import { createRoving } from './roving';
   import { noBrowserMenu, rowMenus } from './itemMenu';
 
   let {
@@ -17,6 +18,7 @@
     busy,
     onplay,
     labelledby,
+    current = $bindable(),
     switched = $bindable(false),
     element = $bindable(),
   }: {
@@ -29,10 +31,25 @@
     onplay: (id: string) => void;
     /** Id of the heading that names the list. */
     labelledby: string;
+    /** The game that holds the list's Tab stop: the one the player was on last. */
+    current?: string;
     /** The view has just changed to this one: it rises in once. */
     switched?: boolean;
     element?: HTMLElement;
   } = $props();
+
+  const roving = createRoving({
+    layout: 'list',
+    idAt: (index) => entries[index]?.id,
+    current: () => current,
+    onmove: (id) => (current = id),
+  });
+
+  $effect(() => {
+    void entries;
+    void current;
+    roving.refresh();
+  });
 
   function endViewSwitch(event: AnimationEvent) {
     if (event.target === event.currentTarget) switched = false;
@@ -52,6 +69,7 @@
   class:switched
   onanimationend={endViewSwitch}
   bind:this={element}
+  {@attach roving.attach}
   {@attach rowMenus((index) => entries[index]?.id)}
   {@attach noBrowserMenu}
 >
