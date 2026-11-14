@@ -4,7 +4,7 @@ import type { CloudGameStatus } from '../services/cloudsaves';
 import { launchesInFlight } from '../services/library';
 import { openGameByIGDB } from '../social/openGame';
 import { isPlaying } from '../social/presence';
-import { cloudConflictTarget, cloudStatus, openCloudConflict } from './cloudsaves';
+import { cloudConflictTarget, cloudStatus, conflictsOnPage, openCloudConflict } from './cloudsaves';
 import { downloads, failedMessageId } from './downloads';
 import { libraryGames } from './library';
 import { liveIsland, liveIslandCurrent, liveIslandHeld, liveIslandMessages, type LiveIslandMessage, type LiveIslandTone } from './liveIsland';
@@ -25,10 +25,10 @@ import { ACTION_MS, dismissToast, pauseToast, queuedToasts, resumeToast, toast, 
  *   picture and "Open the game". The first list that has friends in it is what was going on already
  *   and says nothing; an empty list (signed out) starts that over; a friend new to the list says
  *   nothing either;
- * - a save conflict (the cloud saves status lists a game in conflict that its dialog does not show):
- *   one message per game with "choose a version", which opens the dialog. It is said
- *   once a session, and goes once the conflict is resolved or its dialog opens. Where no island is on
- *   screen the shell says it as a toast (`initConflictToasts`).
+ * - a save conflict (the cloud saves status lists a game in conflict that neither its dialog nor the
+ *   game page's banner shows): one message per game with "choose a version", which opens the dialog.
+ *   It is said once a session, and goes once the conflict is resolved, its dialog opens or the page
+ *   shows it. Where no island is on screen the shell says it as a toast (`initConflictToasts`).
  */
 
 const TOAST_TONE: Record<ToastKind, LiveIslandTone> = { info: 'accent', success: 'success', warning: 'warning', danger: 'danger' };
@@ -133,10 +133,13 @@ const CONFLICT_PREFIX = 'save-conflict:';
 
 const conflictMessageId = (gameId: string) => `${CONFLICT_PREFIX}${gameId}`;
 
-/** The games whose save conflict the island shows or holds: the sidebar's status line leaves them to it. */
+/**
+ * The games whose save conflict the island shows or holds, or the game page shows: the sidebar's status
+ * line leaves them to it.
+ */
 export const conflictsInIsland: Readable<ReadonlySet<string>> = derived(
-  liveIslandMessages,
-  (list) => new Set(list.filter((m) => m.id.startsWith(CONFLICT_PREFIX)).map((m) => m.id.slice(CONFLICT_PREFIX.length))),
+  [liveIslandMessages, conflictsOnPage],
+  ([list, page]) => new Set([...list.filter((m) => m.id.startsWith(CONFLICT_PREFIX)).map((m) => m.id.slice(CONFLICT_PREFIX.length)), ...page]),
 );
 
 // For the session, by game: the conflict that was said or seen in the dialog, as the recorded copies
@@ -194,7 +197,7 @@ function sayConflictInIsland(gameId: string, title: string): void {
 }
 
 /**
- * Says each save conflict once, in the way `say` gives: a conflict the dialog shows is taken as seen,
+ * Says each save conflict once, in the way `say` gives: a conflict the dialog or the game page shows is taken as seen,
  * a game the library does not have waits until it does, and what was said goes once the conflict is
  * resolved or its dialog opens. A game whose launch waits on Go is left to that launch, which puts a
  * conflict it finds to the player in the dialog. `takeBack` (the island): a conflict whose toast is still up is said
@@ -203,6 +206,7 @@ function sayConflictInIsland(gameId: string, title: string): void {
 function trackConflicts(say: (gameId: string, title: string) => void, takeBack = false): () => void {
   const sync = () => {
     const open = get(cloudConflictTarget)?.gameId;
+    const page = get(conflictsOnPage);
     const launching = get(launchesInFlight);
     const titles = new Map(get(libraryGames).map((g) => [g.id, g.title]));
     const conflicts = new Map((get(cloudStatus)?.games ?? []).filter((g) => g.state === 'conflict').map((g) => [g.gameId, copiesOf(g)]));
@@ -215,7 +219,7 @@ function trackConflicts(say: (gameId: string, title: string) => void, takeBack =
     for (const [gameId, copies] of conflicts) {
       const before = saidConflicts.get(gameId);
       const newer = before !== undefined && before !== '' && copies !== '' && before !== copies;
-      if (gameId === open) {
+      if (gameId === open || page.has(gameId)) {
         unsayConflict(gameId);
         saidConflicts.set(gameId, copies || before || '');
         continue;
@@ -233,7 +237,13 @@ function trackConflicts(say: (gameId: string, title: string) => void, takeBack =
       say(gameId, title);
     }
   };
-  const offs = [cloudStatus.subscribe(sync), cloudConflictTarget.subscribe(sync), libraryGames.subscribe(sync), launchesInFlight.subscribe(sync)];
+  const offs = [
+    cloudStatus.subscribe(sync),
+    cloudConflictTarget.subscribe(sync),
+    conflictsOnPage.subscribe(sync),
+    libraryGames.subscribe(sync),
+    launchesInFlight.subscribe(sync),
+  ];
   return () => {
     for (const off of offs) off();
   };
