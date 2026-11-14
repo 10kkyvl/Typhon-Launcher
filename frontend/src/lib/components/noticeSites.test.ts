@@ -148,16 +148,19 @@ const SITES: Record<string, Site[]> = {
     ['warning', false],
     ['danger', true],
   ],
-  // The saves view of the "Saves…" dialog. The cloud copy's reason, its tone set by its state, a running
-  // game and large backups are facts of the view; a failure just happened.
+  // The saves view of the "Saves…" dialog and the game page. A running game and large backups are facts
+  // of the view; a failure just happened.
   'lib/components/GameSaves.svelte': [
     ['danger', true],
+    ['danger', true],
+    ['danger', true],
+    ['warning', false],
+    ['warning', false],
+  ],
+  // The cloud copy's reason, its tone set by its state, is a fact of the copy; a failure just happened.
+  'lib/components/GameSavesCloud.svelte': [
     ['dynamic', false],
     ['danger', true],
-    ['danger', true],
-    ['danger', true],
-    ['warning', false],
-    ['warning', false],
   ],
   // A save conflict of the game page's game: it comes once, with its details, and is said when it does.
   'lib/components/CloudConflictBanner.svelte': [['warning', true]],

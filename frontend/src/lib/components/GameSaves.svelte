@@ -2,6 +2,7 @@
   import { untrack } from 'svelte';
   import Button from './Button.svelte';
   import EmptyState from './EmptyState.svelte';
+  import GameSavesCloud, { type CloudAvailability } from './GameSavesCloud.svelte';
   import ConfirmModal from './ConfirmModal.svelte';
   import Notice from './Notice.svelte';
   import SavesCandidatesModal from './SavesCandidatesModal.svelte';
@@ -10,7 +11,7 @@
   import TextLink from './TextLink.svelte';
   import { deleteCloudSavesPrompt, pullCloudSavesPrompt, deleteSaveBackupPrompt, restoreSavesPrompt } from '../confirm/prompts';
   import { chooseSavesDir } from '../game/actions/saves';
-  import { cloudCodeText, cloudErrorText, cloudStateKind, cloudStateLabel } from '../cloudsaves/messages';
+  import { cloudErrorText } from '../cloudsaves/messages';
   import { errorCode, msg } from '../i18n';
   import { saveBackupErrorText, snapshotKindLabel, snapshotPlayedAfter, snapshotWhen } from '../savebackup/messages';
   import { cloudDeleteRemote, cloudPullRemote, cloudSyncNow } from '../services/cloudsaves';
@@ -35,7 +36,7 @@
   import { toast } from '../stores/toasts';
   import { authState } from '../stores/user';
   import { focusHandOff } from '../utils/focusHandOff';
-  import { bytesSize, dateTime } from '../utils/format';
+  import { bytesSize } from '../utils/format';
 
   interface Pending {
     kind: 'restore' | 'delete';
@@ -72,11 +73,7 @@
   const cloudEnabled = $derived($settings?.cloudSaves ?? false);
   const cloudSignedIn = $derived($authState === 'authenticated');
   const cloudGame = $derived($cloudStatus?.games.find((g) => g.gameId === gameId));
-  const cloudReason = $derived(cloudGame?.code ? cloudCodeText(cloudGame.code, '') : '');
-  const cloudSyncedAt = $derived.by(() => {
-    const value = cloudGame?.syncedAt ? new Date(cloudGame.syncedAt) : null;
-    return value && !Number.isNaN(value.getTime()) && value.getFullYear() > 1 ? dateTime(value) : '';
-  });
+  const availability = $derived<CloudAvailability>(!cloudEnabled ? 'off' : !cloudSignedIn ? 'signed-out' : !canonicalId ? 'no-catalog' : 'on');
 
   let snapshots = $state<Snapshot[]>([]);
   let listLoading = $state(false);
@@ -432,55 +429,18 @@
 
   <div class="field">
     <span class="field-label">{msg('cloudsaves.sectionTitle')}</span>
-    {#if !cloudEnabled}
-      <p class="hint">{msg('cloudsaves.disabledHint')}</p>
-      <div class="actions">
-        <Button size="sm" onclick={openCloudSettings}>{msg('cloudsaves.openSettings')}</Button>
-      </div>
-    {:else if !cloudSignedIn}
-      <p class="hint">{msg('cloudsaves.needsAccount')}</p>
-    {:else if !canonicalId}
-      <p class="hint">{cloudCodeText('cloud.no_canonical_id', msg('cloudsaves.fallback'))}</p>
-    {:else}
-      <div class="cloud-state">
-        {#if cloudGame}
-          <StatusBadge kind={cloudStateKind(cloudGame.state)} label={cloudStateLabel(cloudGame.state)} />
-        {:else}
-          <StatusBadge kind="neutral" label={msg('cloudsaves.stateNone')} />
-        {/if}
-        {#if cloudSyncedAt}
-          <span class="snapshot-meta">{msg('cloudsaves.syncedAt', { date: cloudSyncedAt })}</span>
-        {/if}
-      </div>
-      {#if cloudReason}
-        <Notice tone={cloudGame?.state === 'failed' ? 'danger' : 'info'} compact announce={false}>{cloudReason}</Notice>
-      {/if}
-      {#if cloudFailure}
-        <Notice tone="danger" compact>{cloudFailure}</Notice>
-      {/if}
-      <div class="actions">
-        <Button size="sm" busy={cloudBusy} onclick={cloudSync}>
-          {cloudBusy
-            ? msg('cloudsaves.syncing')
-            : cloudGame?.code === 'cloud.excluded'
-              ? msg('cloudsaves.enableAgain')
-              : msg('cloudsaves.syncNow')}
-        </Button>
-        {#if cloudGame?.state === 'conflict'}
-          <Button size="sm" variant="primary" disabled={cloudBusy} onclick={() => openCloudConflict(gameId)}>
-            {msg('cloudsaves.resolve')}
-          </Button>
-        {/if}
-        {#if cloudGame && cloudGame.state !== 'conflict' && cloudGame.code !== 'cloud.excluded'}
-          <Button size="sm" disabled={cloudBusy || gameRunning} onclick={() => (cloudPullAsked = true)}>
-            {msg('cloudsaves.pull')}
-          </Button>
-        {/if}
-        <Button size="sm" variant="danger" disabled={cloudBusy} onclick={() => (cloudDeleteAsked = true)}>
-          {msg('cloudsaves.deleteRemote')}
-        </Button>
-      </div>
-    {/if}
+    <GameSavesCloud
+      {availability}
+      game={cloudGame}
+      failure={cloudFailure}
+      busy={cloudBusy}
+      running={gameRunning}
+      onsettings={openCloudSettings}
+      onsync={cloudSync}
+      onresolve={() => openCloudConflict(gameId)}
+      onpull={() => (cloudPullAsked = true)}
+      ondelete={() => (cloudDeleteAsked = true)}
+    />
   </div>
 
   {#if withBackups}
@@ -616,14 +576,6 @@
     margin: 0;
     font-size: var(--font-sm);
     color: var(--text-2);
-  }
-
-  .cloud-state {
-
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--space-3);
   }
 
   .actions {
