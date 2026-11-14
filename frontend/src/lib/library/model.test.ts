@@ -113,6 +113,27 @@ describe('cheap updates', () => {
   });
 });
 
+describe('cheap updates keep nothing stale', () => {
+  it('a download whose catalog title arrives later gets a new entry with it, the others stay', () => {
+    const cache = createEntryCache();
+    const first = cache.library(fixture, [download('c-new'), download('c-other')], {});
+    const second = cache.library(fixture, [download('c-new'), download('c-other')], { 'c-new': { title: 'New Game' } });
+
+    const changed = second.filter((entry, i) => entry !== first[i]);
+    expect(changed.map((entry) => [entry.id, entry.title])).toEqual([['c-new', 'New Game']]);
+  });
+
+  it('a watched game whose title changes gets a new entry with it, the others stay', () => {
+    const cache = createEntryCache();
+    const first = cache.watched([{ gameId: 'w1', title: 'Old' }, { gameId: 'w2', title: 'Same' }]);
+    const second = cache.watched([{ gameId: 'w1', title: 'New' }, { gameId: 'w2', title: 'Same' }]);
+
+    expect(second[0]).not.toBe(first[0]);
+    expect(second[0].title).toBe('New');
+    expect(second[1]).toBe(first[1]);
+  });
+});
+
 describe('filters, source, status, collection, search', () => {
   const entries = library();
   const cozy: Pick<LibraryCollection, 'tags' | 'genres' | 'status'> = { tags: ['Rogue'], genres: [] };
