@@ -1,6 +1,6 @@
 import type { MessageKey } from '../i18n';
 import type { DownloadOrigin } from '../services/downloads';
-import type { RelatedReleases, Release, ReleaseDownloadRequest, RelatedRelation } from '../services/sources';
+import type { RelatedReleases, Release, ReleaseDownloadRequest, RelatedRelation, Source } from '../services/sources';
 import type { AvailabilityKind } from '../services/updates';
 
 export function releaseOrigin(request: ReleaseDownloadRequest): DownloadOrigin {
@@ -194,6 +194,18 @@ export function consoleOrigin(
     ...(art ? { cover: art } : {}),
     ...(pageGameId ? { gameId: pageGameId } : {}),
   };
+}
+
+/**
+ * What of the sources the releases of a game depend on: which sources are on, what their feeds hold
+ * and how their entries matched. A refresh sends each source twice (updating, then settled) and
+ * changes its status and time either way; neither changes this key.
+ */
+export function releaseSourcesKey(list: readonly Source[]): string {
+  return list
+    .map((s) => [s.id, s.enabled, s.fingerprint, s.feedVersion, s.entries, s.matched, s.review, s.unmatched].join('\u001f'))
+    .sort()
+    .join('\u001e');
 }
 
 /** The game a release row belongs to: a download from the row is recorded under it. */

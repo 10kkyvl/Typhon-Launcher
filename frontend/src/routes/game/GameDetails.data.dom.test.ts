@@ -1,4 +1,5 @@
-import { screen, within } from '@testing-library/svelte';
+import { cleanup, screen, within } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import { libraryGames } from '../../lib/stores/library';
@@ -14,10 +15,12 @@ import {
   type RelatedReleases,
   type Release,
   type ReleaseGroup,
+  type Source,
 } from '../../lib/services/sources';
 import type { Settings } from '../../lib/services/settings';
 import { resetHistory } from '../../lib/stores/router';
 import { settings } from '../../lib/stores/settings';
+import { sources } from '../../lib/stores/sources';
 import { toasts } from '../../lib/stores/toasts';
 import { renderDom } from '../../lib/testing/dom';
 import GameDetails from './GameDetails.svelte';
@@ -48,6 +51,16 @@ vi.mock('../../lib/services/system', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/system')>()),
   appInfo: vi.fn(async () => ({ platform: 'darwin', devMock: false })),
 }));
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (err: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
 
 function view(patch: Partial<MetadataView>): MetadataView {
   return {
@@ -102,6 +115,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // The page goes first: one left mounted would ask again when the stores below are emptied.
+  cleanup();
   vi.mocked(getMetadataView).mockReset();
   vi.mocked(getCatalogGame).mockReset();
   vi.mocked(getReleasesForGame).mockReset().mockResolvedValue([]);
@@ -110,6 +125,7 @@ afterEach(() => {
   vi.mocked(fetchMetadata).mockReset();
   vi.mocked(startDownloadFrom).mockReset();
   libraryGames.set([]);
+  sources.set([]);
   settings.set(null);
   toasts.set([]);
   resetHistory();
@@ -163,5 +179,59 @@ describe('GameDetails: whose game a console download from the page is', () => {
     const origin = await downloadFrom(section, user);
 
     expect(origin).toMatchObject({ gameId: 'c2', title: 'Hades PS2', cover: 'https://img/ps2.jpg', platform: 'ps2', releaseId: 'other' });
+  });
+});
+
+describe('GameDetails: the sources changing while the page is open', () => {
+  const feed = {
+    id: 'feed', name: 'Feed', type: 'url', url: 'https://feed', enabled: true, status: 'idle', health: 'healthy',
+    lastUpdatedAt: null, lastError: '', fingerprint: 'v1', feedVersion: 1, entries: 1, invalid: 0, matched: 1,
+    review: 0, unmatched: 0, createdAt: '',
+  } as unknown as Source;
+  const lead = () => within(document.querySelector('[data-part="game-actions"]') as HTMLElement).getByRole('button', { name: msg('games.primaryDownload') });
+
+  // A card that is not installed: its title is known at once, so the releases are asked once.
+  beforeEach(() => {
+    libraryGames.set([{ ...hades, uninstalled: true }]);
+    sources.set([feed]);
+    vi.mocked(getReleasesForGame).mockResolvedValue([group({ id: 'r1', rawTitle: 'Hades v1' })]);
+  });
+
+  it('reloads nothing when a refresh sends the same set of sources again', async () => {
+    renderDom(GameDetails, { id: 'g1' });
+    await vi.waitFor(() => expect(lead()).toBeTruthy());
+    expect(getReleasesForGame).toHaveBeenCalledTimes(1);
+    expect(getRelatedReleases).toHaveBeenCalledTimes(1);
+
+    sources.set([{ ...feed, status: 'updating' } as Source]);
+    await tick();
+    sources.set([{ ...feed, lastUpdatedAt: '2026-11-14T10:00:00Z' } as Source]);
+    await tick();
+
+    expect(getReleasesForGame).toHaveBeenCalledTimes(1);
+    expect(getRelatedReleases).toHaveBeenCalledTimes(1);
+  });
+
+  it('reloads on a real change and keeps the list, Download and its focus until the answer', async () => {
+    renderDom(GameDetails, { id: 'g1' });
+    await vi.waitFor(() => expect(lead()).toBeTruthy());
+    const download = lead();
+    download.focus();
+    const answer = deferred<ReleaseGroup[]>();
+    vi.mocked(getReleasesForGame).mockReturnValueOnce(answer.promise);
+
+    sources.set([{ ...feed, fingerprint: 'v2', entries: 2 } as Source]);
+    await tick();
+
+    expect(getReleasesForGame).toHaveBeenCalledTimes(2);
+    expect(screen.getByText('Hades v1')).toBeTruthy();
+    expect(download.isConnected).toBe(true);
+    expect(download.hasAttribute('disabled')).toBe(false);
+    expect(screen.queryByText(msg('games.primaryResolving'))).toBeNull();
+    expect(document.activeElement).toBe(download);
+
+    answer.resolve([group({ id: 'r1', rawTitle: 'Hades v1' }), group({ id: 'r2', rawTitle: 'Hades v2' })]);
+    expect(await screen.findByText('Hades v2')).toBeTruthy();
+    expect(document.activeElement).toBe(download);
   });
 });

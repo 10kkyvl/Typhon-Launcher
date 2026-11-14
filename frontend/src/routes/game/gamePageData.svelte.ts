@@ -31,7 +31,9 @@ import {
   type RelatedReleases,
   type CatalogGame,
   type ReleaseGroup,
+  type Source,
 } from '../../lib/services/sources';
+import { releaseSourcesKey } from '../../lib/game/releases';
 import { getWineStatus, type WineStatus } from '../../lib/services/system';
 import { toast } from '../../lib/stores/toasts';
 import { errorCode, hasMessage, msg } from '../../lib/i18n';
@@ -51,7 +53,7 @@ export interface GamePageInputs {
   readonly catalogKey: string;
   readonly canonicalId: string | undefined;
   readonly locale: string;
-  readonly sources: unknown;
+  readonly sources: readonly Source[];
   readonly metadataAvailable: boolean;
   readonly releaseKey: string;
   readonly releaseTitle: string | undefined;
@@ -88,6 +90,11 @@ export function createGamePageData(page: GamePageInputs) {
   let relatedFailed = $state(false);
   let relatedLoaded = $state(false);
   let relatedToken = 0;
+
+  // A feed can finish importing while this game is already open; a refresh that changed nothing the
+  // releases depend on sends the sources again and must not ask again.
+  const sourcesKey = $derived(releaseSourcesKey(page.sources));
+  let loadedReleaseKey: string | null = null;
 
   let catalogGame = $state<CatalogGame | null>(null);
   let catalogLoading = $state(false);
@@ -307,11 +314,16 @@ export function createGamePageData(page: GamePageInputs) {
     if (page.titleHeading?.isConnected) focusQuietly(page.titleHeading);
   }
 
-  async function loadReleases(canonicalGameId: string | undefined, gameTitle: string | undefined) {
+  // `refresh`: the same game asked again because its sources changed. What is shown stays until the
+  // answer, so the lists and the main action that reads them never pass through loading; a failed
+  // refresh keeps the last answer.
+  async function loadReleases(canonicalGameId: string | undefined, gameTitle: string | undefined, refresh = false) {
     const current = ++releaseToken;
-    releasesLoading = true;
-    releasesFailed = false;
-    releaseGroups = [];
+    if (!refresh) {
+      releasesLoading = true;
+      releasesFailed = false;
+      releaseGroups = [];
+    }
     try {
       const groups = canonicalGameId
         ? await getReleasesForGame(canonicalGameId)
@@ -322,30 +334,33 @@ export function createGamePageData(page: GamePageInputs) {
       releaseGroups = groups;
       releasesFailed = false;
     } catch {
-      if (current !== releaseToken) return;
+      if (current !== releaseToken || refresh) return;
       releasesFailed = true;
     } finally {
       if (current === releaseToken) releasesLoading = false;
     }
   }
 
-  async function loadRelated(canonicalGameId: string | undefined) {
+  async function loadRelated(canonicalGameId: string | undefined, refresh = false) {
     const current = ++relatedToken;
-    related = [];
-    relatedFailed = false;
-    relatedLoaded = false;
+    if (!refresh) {
+      related = [];
+      relatedFailed = false;
+      relatedLoaded = false;
+    }
     if (!canonicalGameId) {
       relatedLoading = false;
       return;
     }
-    relatedLoading = true;
+    if (!refresh) relatedLoading = true;
     try {
       const list = await getRelatedReleases(canonicalGameId);
       if (current !== relatedToken) return;
       related = list;
+      relatedFailed = false;
       relatedLoaded = true;
     } catch {
-      if (current !== relatedToken) return;
+      if (current !== relatedToken || refresh) return;
       relatedFailed = true;
     } finally {
       if (current === relatedToken) relatedLoading = false;
@@ -353,9 +368,11 @@ export function createGamePageData(page: GamePageInputs) {
   }
 
   $effect(() => {
-    void page.releaseKey;
-    void page.sources; // A feed can finish importing while this game is already open.
+    const key = page.releaseKey;
+    void sourcesKey;
     untrack(() => {
+      const refresh = key === loadedReleaseKey;
+      loadedReleaseKey = key;
       const canonicalGameId = page.canonicalId;
       const gameTitle = page.releaseTitle;
       const isExternalGame = page.external;
@@ -368,8 +385,8 @@ export function createGamePageData(page: GamePageInputs) {
         relatedLoading = false;
         return;
       }
-      loadRelated(isExternalGame ? undefined : canonicalGameId);
-      loadReleases(canonicalGameId, gameTitle);
+      loadRelated(isExternalGame ? undefined : canonicalGameId, refresh);
+      loadReleases(canonicalGameId, gameTitle, refresh);
     });
   });
 

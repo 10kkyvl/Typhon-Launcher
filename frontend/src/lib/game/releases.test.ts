@@ -10,10 +10,12 @@ import {
   relatedOwner,
   releaseDownloadOrigin,
   releaseOrigin,
+  releaseSourcesKey,
   repackNote,
   sharedPlatform,
   splitReleases,
 } from './releases';
+import type { Source } from '../services/sources';
 
 describe('releaseOrigin', () => {
   it('carries the release version so the install records it', () => {
@@ -214,6 +216,32 @@ describe('console releases', () => {
 
   it('adds nothing to the origin of a PC release', () => {
     expect(consoleOrigin({ title: 'Raw' }, 'Game', 'https://img/c.jpg')).toEqual({});
+  });
+});
+
+describe('releaseSourcesKey', () => {
+  const feed = {
+    id: 'a', enabled: true, fingerprint: 'f1', feedVersion: 1, entries: 3, matched: 2, review: 1, unmatched: 0,
+    status: 'idle', lastUpdatedAt: null, health: 'healthy', lastError: '',
+  } as unknown as Source;
+
+  it('does not change with what a refresh changes either way: status, time, health, error', () => {
+    const settled = { ...feed, status: 'updating', lastUpdatedAt: '2026-11-14T10:00:00Z', health: 'warning', lastError: 'x' } as unknown as Source;
+    expect(releaseSourcesKey([settled])).toBe(releaseSourcesKey([feed]));
+  });
+
+  it('does not depend on the order of the sources', () => {
+    const other = { ...feed, id: 'b' };
+    expect(releaseSourcesKey([feed, other])).toBe(releaseSourcesKey([other, feed]));
+  });
+
+  it('changes with a source added, removed or switched off, a new feed, or a changed match', () => {
+    const base = releaseSourcesKey([feed]);
+    expect(releaseSourcesKey([feed, { ...feed, id: 'b' }])).not.toBe(base);
+    expect(releaseSourcesKey([])).not.toBe(base);
+    expect(releaseSourcesKey([{ ...feed, enabled: false }])).not.toBe(base);
+    expect(releaseSourcesKey([{ ...feed, fingerprint: 'f2' }])).not.toBe(base);
+    expect(releaseSourcesKey([{ ...feed, matched: 3, review: 0 }])).not.toBe(base);
   });
 });
 

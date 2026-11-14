@@ -12,8 +12,28 @@ function releasesHarness(load: (id: string) => Promise<unknown[]>) {
     let releaseToken = 0, releasesLoading = false, releasesFailed = false, releaseGroups = [];
     ${js}
     return { loadReleases, state: () => ({ releasesLoading, releasesFailed, releaseGroups }) };
-  `)(load, load) as { loadReleases: (id: string) => Promise<void>; state: () => { releasesLoading: boolean; releasesFailed: boolean; releaseGroups: unknown[] } };
+  `)(load, load) as { loadReleases: (id: string, title?: string, refresh?: boolean) => Promise<void>; state: () => { releasesLoading: boolean; releasesFailed: boolean; releaseGroups: unknown[] } };
 }
+
+describe('game releases asked again because the sources changed', () => {
+  it('keep the shown list, never loading, until the answer replaces it', async () => {
+    let resolveAgain!: (value: unknown[]) => void;
+    const h = releasesHarness(vi.fn().mockResolvedValueOnce(['A1']).mockImplementationOnce(() => new Promise((resolve) => { resolveAgain = resolve; })));
+    await h.loadReleases('A');
+    const pending = h.loadReleases('A', undefined, true);
+    expect(h.state()).toEqual({ releaseGroups: ['A1'], releasesLoading: false, releasesFailed: false });
+    resolveAgain(['A1', 'A2']);
+    await pending;
+    expect(h.state()).toEqual({ releaseGroups: ['A1', 'A2'], releasesLoading: false, releasesFailed: false });
+  });
+
+  it('keep the last answer when the refresh fails', async () => {
+    const h = releasesHarness(vi.fn().mockResolvedValueOnce(['A1']).mockRejectedValueOnce(new Error('offline')));
+    await h.loadReleases('A');
+    await h.loadReleases('A', undefined, true);
+    expect(h.state()).toEqual({ releaseGroups: ['A1'], releasesLoading: false, releasesFailed: false });
+  });
+});
 
 describe('game releases navigation', () => {
   it('removes A downloads immediately and keeps them absent when B fails, then permits retry', async () => {
