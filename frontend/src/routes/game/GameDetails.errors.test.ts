@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import source from './GameDetails.svelte?raw';
+import { gamePageSource as source } from '../../lib/testing/gamePageParts';
 
 describe('GameDetails error toasts', () => {
   it('never shows the raw backend error message to the user', () => {

@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import ts from 'typescript';
-import source from './GameDetails.svelte?raw';
+import source from './gamePageData.svelte.ts?raw';
 
-// Execute the component's real asynchronous loader with deferred service calls.
+// Execute the page's real asynchronous loader with deferred service calls.
 // This catches stale data while a second request is pending as well as on failure.
 function releasesHarness(load: (id: string) => Promise<unknown[]>) {
   const start = source.indexOf('  async function loadReleases(');

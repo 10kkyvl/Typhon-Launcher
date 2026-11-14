@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { pageGame } from '../library/emulation';
-import detailsSource from '../../routes/game/GameDetails.svelte?raw';
+import { gamePageSource as detailsSource } from '../testing/gamePageParts';
 import { catalogLoadKey, pageTitle, releaseLoadKey, sameGameIds } from './pageLoad';
 import { consoleOrigin, firstWebUrl } from './releases';
 

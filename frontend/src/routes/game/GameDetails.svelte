@@ -1,8 +1,9 @@
 <script lang="ts">
   import Page from '../../lib/components/Page.svelte';
+  import { locale } from '../../lib/i18n/locale';
+  import { untrack } from 'svelte';
   import { genreLabel, themeLabel } from '../../lib/metadata/labels';
   import { revealImage } from '../../lib/utils/revealImage';
-  import { locale } from '../../lib/i18n/locale';
   import {
     ArrowUp,
     BookmarkPlus,
@@ -20,8 +21,7 @@
     Square,
     Tag,
   } from '@lucide/svelte';
-  import { onMount, tick, untrack } from 'svelte';
-  import { Events } from '@wailsio/runtime';
+  import { tick } from 'svelte';
   import AchievementsCard from '../../lib/components/AchievementsCard.svelte';
   import AddDownloadModal from '../../lib/components/AddDownloadModal.svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
@@ -60,6 +60,7 @@
   import GameReviews from './GameReviews.svelte';
   import GameScreenshots from './GameScreenshots.svelte';
   import ReviewSummary from './ReviewSummary.svelte';
+  import { createGamePageData, libraryErrorText } from './gamePageData.svelte';
   import { discardDownloadPrompt, removeDownloadPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
   import { playLabel } from '../../lib/game/profiles';
   import LeadAction from './LeadAction.svelte';
@@ -79,72 +80,28 @@
     isGameMissing,
     joinLimited,
     metaLine,
-    metaStatus,
     orderPlatforms,
     pickHero,
-    preferView,
     summaryView,
     tagList,
     type TerminalDownloadStatus,
   } from '../../lib/game/view';
-  import {
-    cancelDownload,
-    deleteDownloadData,
-    removeDownload,
-    resumeDownload,
-    type Download as DownloadItem,
-    type DownloadOrigin,
-    type DownloadStatus,
-  } from '../../lib/services/downloads';
-  import {
-    addCatalogGame,
-    createShortcut,
-    findEmulatedCover,
-    markError,
-    playGame,
-    playGameProfile,
-    removeShortcut,
-    setExecutable,
-    setFavorite,
-    setRequiresSteam,
-    stopGame,
-  } from '../../lib/services/library';
-  import { selectImageFile } from '../../lib/services/emulators';
+  import { cancelDownload, deleteDownloadData, removeDownload, resumeDownload } from '../../lib/services/downloads';
+  import type { Download as DownloadItem, DownloadOrigin, DownloadStatus } from '../../lib/services/downloads';
   import { missingImages, refreshMissingImages } from '../../lib/stores/missingImages';
-  import {
-    dismissMetadataMatch,
-    ensureMetadataFresh,
-    getMetadataView,
-    getSavePaths,
-    openReferenceLink,
-    openStoreLink,
-    refreshMetadata,
-    type MetadataView,
-    type ReferenceKind,
-    type SavePaths,
-    type StoreId,
-  } from '../../lib/services/metadata';
+  import { playGame, playGameProfile, stopGame } from '../../lib/services/library';
+  import { openReferenceLink, openStoreLink, type ReferenceKind, type StoreId } from '../../lib/services/metadata';
   import { referenceKinds, steamFacts } from '../../lib/game/extras';
-  import { openGameFolder, openFolder } from '../../lib/services/settings';
-  import {
-    getCatalogGame,
-    getRelatedReleases,
-    getReleasesForGame,
-    getReleasesForTitle,
-    type RelatedReleases,
-    prepareReleaseDownload,
-    type CatalogGame,
-    type ReleaseGroup,
-  } from '../../lib/services/sources';
-  import { getWineStatus, type WineStatus } from '../../lib/services/system';
+  import { openGameFolder } from '../../lib/services/settings';
+  import { prepareReleaseDownload, type ReleaseGroup } from '../../lib/services/sources';
   import { getVerifyState } from '../../lib/services/updates';
   import { downloads, statusLabels } from '../../lib/stores/downloads';
   import { GAME_MAIN_SECTIONS, gameSections, type GameSection } from '../../lib/theme/layout';
   import { activeTheme } from '../../lib/stores/theme';
   import { installActive, installStatusLabels, installations } from '../../lib/stores/install';
   import { installIndeterminate } from '../../lib/install/progress';
-  import { openGameProperties } from '../../lib/stores/gameProperties';
   import { libraryGames, runningGames } from '../../lib/stores/library';
+  import { openGameProperties } from '../../lib/stores/gameProperties';
   import { emulationPlatform, isEmulated, isInstalledImage, pageGame, platformBadge } from '../../lib/library/emulation';
   import { externalLabel, isExternal } from '../../lib/library/external';
   import ConsoleTag from '../../lib/components/ConsoleTag.svelte';
@@ -160,16 +117,11 @@
   import { sources } from '../../lib/stores/sources';
   import { stepLabels, updatesByGame, verifications } from '../../lib/stores/updates';
   import { bytesSize, formatCount, numericDate, playtime, progressPercent, relativeDate, truncateMiddle } from '../../lib/utils/format';
-  import { errorCode, hasMessage, msg } from '../../lib/i18n';
+  import { msg } from '../../lib/i18n';
   import { installErrorText } from '../../lib/install/installErrors';
   import { metadataErrorText } from '../../lib/metadata/metadataErrors';
   import { sourceErrorText } from '../../lib/sources/sourceErrors';
   import { focusableIn, focusQuietly } from '../../lib/layers/focus';
-
-  function libraryErrorText(err: unknown, fallback: string): string {
-    const code = errorCode(err);
-    return hasMessage(code) ? msg(code) : fallback;
-  }
 
   let { id }: { id: string } = $props();
 
@@ -178,7 +130,7 @@
   const pageOwn = $derived(
     $libraryGames.find((g) => g.id === id) ?? $libraryGames.find((g) => g.canonicalGameId === id || catalogGame?.aliasIds?.includes(g.canonicalGameId ?? '')),
   );
-  const found = $derived.by(() => pageGame(pageOwn, $libraryGames, [id, ...(catalogGame?.aliasIds ?? []), ...(relatedFailed ? [] : sameGameIds(related))]));
+  const found = $derived.by(() => pageGame(pageOwn, $libraryGames, [id, ...(catalogGame?.aliasIds ?? []), ...(data.relatedFailed ? [] : sameGameIds(data.related))]));
   const localGame = $derived(found.game);
   const viaCatalog = $derived(found.viaCatalog);
   const wasInstalled = $derived(Boolean(localGame?.installedAt && Date.parse(localGame.installedAt) > 0));
@@ -189,13 +141,6 @@
   let removeMode = $state<'disk' | 'library'>('library');
   let statusOpen = $state(false);
   let tagsOpen = $state(false);
-  let wineStatus = $state<WineStatus | null>(null);
-  let requiresSteam = $state(true);
-  let requiresSteamSaving = $state(false);
-
-  $effect(() => {
-    if (!requiresSteamSaving) requiresSteam = localGame?.requiresSteam !== false;
-  });
 
   const external = $derived(isExternal(localGame));
   const externalName = $derived(externalLabel(localGame));
@@ -229,6 +174,7 @@
     ),
   );
 
+
   let updateCard = $state<UpdateCard | undefined>(undefined);
 
   async function loadVerifyState(gameId: string) {
@@ -245,57 +191,33 @@
     });
   });
 
-  let releaseGroups = $state<ReleaseGroup[]>([]);
-  let releasesLoading = $state(false);
-  let releasesFailed = $state(false);
-  let releaseToken = 0;
-
-  let related = $state<RelatedReleases[]>([]);
-  let relatedLoading = $state(false);
-  let relatedFailed = $state(false);
-  let relatedLoaded = $state(false);
-  let relatedToken = 0;
+  let titleHeading = $state<HTMLElement>();
   let otherVersionsEl = $state<HTMLElement | null>(null);
 
-  let catalogGame = $state<CatalogGame | null>(null);
-  let catalogLoading = $state(false);
-  let catalogFailed = $state(false);
-  let catalogRetrying = $state(false);
-  let catalogToken = 0;
-
-  async function loadCatalogGame(gameId: string) {
-    const current = ++catalogToken;
-    catalogLoading = true;
-    catalogFailed = false;
-    catalogGame = null;
-    try {
-      const found = await getCatalogGame(gameId);
-      if (current !== catalogToken) return;
-      catalogGame = found;
-    } catch (err) {
-      if (current !== catalogToken) return;
-      catalogFailed = true;
-      toast(metadataErrorText(err, msg('games.detailCatalogLoadError')), 'danger');
-    } finally {
-      if (current === catalogToken) catalogLoading = false;
-    }
-  }
+  // Created after the verify-state effect and before the effects below, so that the service calls of
+  // the page keep their order.
+  const data = createGamePageData({
+    get id() { return id; },
+    get catalogKey() { return catalogKey; },
+    get canonicalId() { return canonicalId; },
+    get locale() { return $locale; },
+    get sources() { return $sources; },
+    get metadataAvailable() { return $metadataAvailable; },
+    get releaseKey() { return releaseKey; },
+    get releaseTitle() { return releaseTitle; },
+    get title() { return title; },
+    get coverSrc() { return coverSrc; },
+    get external() { return external; },
+    get sideloaded() { return sideloaded; },
+    get localGame() { return localGame; },
+    get emulatedPlatform() { return emulatedPlatform; },
+    get titleHeading() { return titleHeading; },
+  });
+  // Read here under their own names; they are written only through `data`.
+  const catalogGame = $derived(data.catalogGame);
+  const metaView = $derived(data.metaView);
 
   const catalogKey = $derived(catalogLoadKey(id, $libraryGames));
-
-  $effect(() => {
-    const gameId = catalogKey;
-    untrack(() => {
-      if (!gameId) {
-        catalogToken++;
-        catalogLoading = false;
-        catalogFailed = false;
-        catalogGame = null;
-        return;
-      }
-      loadCatalogGame(gameId);
-    });
-  });
 
   const canonicalId = $derived(localGame && !viaCatalog ? localGame.canonicalGameId : catalogGame?.id || id);
   const releaseTitle = $derived(pageTitle(localGame, viaCatalog, catalogGame?.title));
@@ -306,15 +228,6 @@
 
   const anyOwnDownload = $derived($downloads.find((item) => ownsDownload(item)));
 
-  let metaView = $state<MetadataView | null>(null);
-  let metaToken = 0;
-  let metaEventVersion = 0;
-  let metaReading = $state(false);
-  let metaRefreshing = $state(false);
-  let metaSearching = $state(false);
-  let metaSkipping = $state(false);
-  // A search ran while the page was open: its outcome is news, not a standing fact of the page.
-  let metaSearchRan = $state(false);
   let matchOpen = $state(false);
   let matchMode = $state<'find' | 'change'>('find');
   let summaryExpanded = $state(false);
@@ -322,76 +235,6 @@
   let lightboxIndex = $state(0);
   let pickerOpen = $state(false);
   let heroFailed = $state(false);
-
-  async function loadMetaView(gameId: string) {
-    const current = ++metaToken;
-    const eventVersion = metaEventVersion;
-    metaReading = true;
-    try {
-      const view = await getMetadataView(gameId);
-      if (current !== metaToken) return;
-      if (eventVersion === metaEventVersion) metaView = preferView(metaView, view);
-      const started = await ensureMetadataFresh(gameId);
-      if (current !== metaToken || eventVersion !== metaEventVersion) return;
-      metaSearching = started || view.match === 'searching';
-    } catch (err) {
-      if (current === metaToken) toast(metadataErrorText(err, msg('games.detailMetaLoadError')), 'danger');
-    } finally {
-      if (current === metaToken) metaReading = false;
-    }
-  }
-
-  $effect(() => {
-    const metaGameId = canonicalId;
-    $locale;
-    untrack(() => {
-      metaSearching = false;
-      metaSearchRan = false;
-      metaView = null;
-      if (!metaGameId) {
-        metaToken++;
-        metaReading = false;
-        metaView = null;
-        return;
-      }
-      loadMetaView(metaGameId);
-    });
-  });
-
-  onMount(async () => {
-    try {
-      wineStatus = await getWineStatus();
-    } catch (err) {
-      toast(markError(err, msg('games.errorWineStatusFailed')), 'danger');
-    }
-  });
-
-  onMount(() => {
-    return Events.On('metadata:updated', (event) => {
-      const view = event.data as MetadataView;
-      if (view.game?.id && view.game.id === canonicalId) {
-        metaEventVersion++;
-        metaSearching = view.match === 'searching';
-        metaView = preferView(metaView, view);
-      }
-    });
-  });
-
-  // A retry from the failed state keeps that notice, with its busy Retry, until the answer arrives.
-  let metaRetrying = $state(false);
-
-  const metaState = $derived(
-    metaStatus({
-      available: $metadataAvailable,
-      busy: metaReading || metaSearching || (metaRefreshing && !metaRetrying),
-      match: metaView?.match,
-      resolved: metaView?.resolved,
-    }),
-  );
-
-  $effect(() => {
-    if (metaSearching || metaView?.match === 'searching') metaSearchRan = true;
-  });
 
   const info = $derived(metaView?.game ?? catalogGame ?? null);
   const title = $derived(
@@ -455,33 +298,12 @@
     ]),
   );
 
-  let savePaths = $state<SavePaths | null>(null);
-  let savePathsToken = 0;
-
-  $effect(() => {
-    const gameId = canonicalId;
-    untrack(() => {
-      const current = ++savePathsToken;
-      savePaths = null;
-      if (!gameId) return;
-      getSavePaths(gameId).then(
-        (paths) => {
-          if (current === savePathsToken) savePaths = paths;
-        },
-        () => {
-          // a failed lookup only hides the optional PCGamingWiki link; the user sees no toast for it by design
-          if (current === savePathsToken) savePaths = null;
-        },
-      );
-    });
-  });
-
   const sysreqRevision = $derived(
     metaView?.steam
       ? `${metaView.steam.appId}:${metaView.steam.requirements?.minimum?.length ?? 0}:${metaView.steam.requirements?.recommended?.length ?? 0}`
       : '',
   );
-  const references = $derived(referenceKinds(savePaths, Boolean(canonicalId && title)));
+  const references = $derived(referenceKinds(data.savePaths, Boolean(canonicalId && title)));
 
   const shotCols = $derived(
     shots.length >= 5 ? 4 : shots.length === 4 ? 2 : Math.max(1, shots.length),
@@ -552,7 +374,7 @@
     ]),
   );
 
-  const availableGroups = $derived(releaseGroups.filter((group) => group.release.availability !== 'removed'));
+  const availableGroups = $derived(data.releaseGroups.filter((group) => group.release.availability !== 'removed'));
   const split = $derived(splitReleases(availableGroups));
   const pcGroups = $derived(split.pc);
   const consoleGroups = $derived(split.console);
@@ -560,23 +382,23 @@
   const catalogCover = $derived(firstWebUrl(catalogGame?.coverUrl, metaView?.cover, localGame?.cover));
 
   const relatedShown = $derived(
-    related
+    data.related
       .map((item) => ({ ...item, groups: item.groups.filter((group) => group.release.availability !== 'removed') }))
       .filter((item) => item.groups.length > 0),
   );
   const similarShown = $derived(
     showSimilar({
-      releasesLoading,
-      releasesFailed,
+      releasesLoading: data.releasesLoading,
+      releasesFailed: data.releasesFailed,
       releaseCount: pcGroups.length,
-      relatedSettled: !relatedLoading && (relatedLoaded || relatedFailed),
+      relatedSettled: !data.relatedLoading && (data.relatedLoaded || data.relatedFailed),
       hasGameId: Boolean(canonicalId),
     }),
   );
-  const similarFamily = $derived(relatedFailed ? [] : familyIds(related, canonicalId ?? ''));
+  const similarFamily = $derived(data.relatedFailed ? [] : familyIds(data.related, canonicalId ?? ''));
   const ownOnPc = $derived(onPC(info?.platforms));
-  const relatedOk = $derived(relatedLoaded && !relatedLoading && !relatedFailed);
-  const hasPcRelative = $derived(related.some((item) => item.onPc));
+  const relatedOk = $derived(data.relatedLoaded && !data.relatedLoading && !data.relatedFailed);
+  const hasPcRelative = $derived(data.related.some((item) => item.onPc));
   const notOnPcKind = $derived(
     notOnPcBadge({ ownOnPc, relatedOk, hasPcRelative, installed, releaseCount: availableGroups.length }),
   );
@@ -589,7 +411,7 @@
       releaseCount: pcGroups.length,
       consoleCount: consoleGroups.length,
       consolePlatform: sharedPlatform(consoleGroups),
-      releasesLoading,
+      releasesLoading: data.releasesLoading,
       relatedWithReleases: relatedShown.length > 0,
       notOnPc: !ownOnPc && relatedOk && !hasPcRelative,
       busy,
@@ -599,14 +421,13 @@
 
   const busyPercent = $derived(progressPercent(busy?.progress ?? 0));
 
-  const menuItems = $derived([
-    ...($saveBackupsEnabled && localGame && !emulated ? [{ id: 'saves-backups', label: msg('games.detailSavesRollback') }] : []),
+  const menuItems = $derived([    ...($saveBackupsEnabled && localGame && !emulated ? [{ id: 'saves-backups', label: msg('games.detailSavesRollback') }] : []),
     ...($metadataAvailable && canonicalId
       ? metaView?.resolved
         ? [
             {
               id: 'meta-refresh',
-              label: metaRefreshing ? msg('games.detailMetaRefreshingLabel') : msg('games.detailMetaRefreshLabel'),
+              label: data.metaRefreshing ? msg('games.detailMetaRefreshingLabel') : msg('games.detailMetaRefreshLabel'),
             },
             { id: 'meta-change', label: msg('games.detailMetaChangeLabel') },
           ]
@@ -652,7 +473,7 @@
     } else if (actionId === 'meta-change') {
       openMatch('change');
     } else if (actionId === 'meta-refresh') {
-      refreshMeta();
+      data.refreshMeta();
     } else if (actionId === 'remove-download') {
       if (terminalDownload) {
         pending = { prompt: removeDownloadPrompt(terminalDownload.name), run: removeTerminalDownload };
@@ -662,110 +483,17 @@
         pending = { prompt: discardDownloadPrompt(terminalDownload.name), run: discardTerminalDownload };
       }
     } else if (actionId === 'shortcut-create') {
-      createDesktopShortcut();
+      data.createDesktopShortcut();
     } else if (actionId === 'shortcut-remove') {
-      removeDesktopShortcut();
+      data.removeDesktopShortcut();
     }
   }
 
-  async function mark(fn: () => Promise<unknown>, fallback: string) {
-    try {
-      await fn();
-    } catch (err) {
-      toast(markError(err, fallback), 'danger');
-    }
-  }
-
-  let favoritePulse = $state(false);
-
-  function toggleFavorite() {
-    const current = localGame;
-    if (!current) return;
-    const next = !current.favorite;
-    void mark(async () => {
-      await setFavorite(current.id, next);
-      favoritePulse = next;
-    }, msg('games.errorFavoriteFailed'));
-  }
-
-  async function toggleRequiresSteam(on: boolean) {
-    const current = localGame;
-    if (!current || requiresSteamSaving) return;
-    const previous = current.requiresSteam !== false;
-    requiresSteamSaving = true;
-    try {
-      const updated = await setRequiresSteam(current.id, on);
-      if (localGame?.id === current.id) requiresSteam = updated.requiresSteam !== false;
-    } catch (err) {
-      if (localGame?.id === current.id) requiresSteam = previous;
-      toast(markError(err, msg('games.errorRequiresSteamFailed')), 'danger');
-    } finally {
-      if (localGame?.id === current.id) requiresSteamSaving = false;
-    }
-  }
-
-  async function createDesktopShortcut() {
-    if (!localGame) return;
-    try {
-      await createShortcut(localGame.id);
-    } catch (err) {
-      toast(libraryErrorText(err, msg('games.detailShortcutCreateError')), 'danger');
-    }
-  }
-
-  async function removeDesktopShortcut() {
-    if (!localGame) return;
-    try {
-      await removeShortcut(localGame.id);
-    } catch (err) {
-      toast(libraryErrorText(err, msg('games.detailShortcutRemoveError')), 'danger');
-    }
-  }
-
-  // Answers whether the metadata came back. From the failed notice its retry says a failure again
-  // itself, so no toast doubles it.
-  async function refreshMeta(fromNotice = false): Promise<boolean> {
-    if (!canonicalId || metaRefreshing) return false;
-    metaRefreshing = true;
-    const gameId = canonicalId;
-    const current = metaToken;
-    try {
-      const view = await refreshMetadata(gameId);
-      if (gameId !== canonicalId || current !== metaToken) return false;
-      metaView = view;
-      toast(msg('games.detailMetaRefreshedToast'), 'success');
-      return view.match !== 'failed';
-    } catch (err) {
-      if (!fromNotice) toast(metadataErrorText(err, msg('games.detailMetaRefreshError')), 'danger');
-      else {
-        metaFailure = metadataErrorText(err, msg('games.detailMetaFailedHint'));
-        metaRetryable = !FINAL_META_FAILURES.has(errorCode(err));
-      }
-      return false;
-    } finally {
-      metaRefreshing = false;
-    }
-  }
-
-  let titleHeading = $state<HTMLElement>();
-
-  // Why the last retry from the failed notice failed, said in the notice in place of the generic
-  // cause; and whether retrying can still help. Where it cannot, Retry goes and the focus that was on
-  // it moves to "Choose manually", the way left.
-  const FINAL_META_FAILURES = new Set(['metadata.no_match', 'metadata.ambiguous_match', 'metadata.not_configured']);
-  let metaFailure = $state('');
-  let metaRetryable = $state(true);
   let chooseSlot = $state<HTMLElement>();
 
-  $effect(() => {
-    if (metaState === 'failed') return;
-    metaFailure = '';
-    metaRetryable = true;
-  });
-
   async function retryMeta(): Promise<boolean> {
-    const ok = await refreshMeta(true);
-    if (!ok && !metaRetryable) {
+    const ok = await data.refreshMeta(true);
+    if (!ok && !data.metaRetryable) {
       await tick();
       const active = document.activeElement;
       if (!active || active === document.body || !active.isConnected) {
@@ -774,46 +502,6 @@
       }
     }
     return ok;
-  }
-
-  // The page's error is an empty state, not a notice: when the game arrives it takes the focused
-  // Retry away with it, and the focus goes to the game's title instead of falling to the page.
-  async function retryCatalog() {
-    if (catalogRetrying) return;
-    const button = document.activeElement;
-    catalogRetrying = true;
-    try {
-      await loadCatalogGame(id);
-    } finally {
-      catalogRetrying = false;
-    }
-    await tick();
-    const active = document.activeElement;
-    if (!button || button.isConnected || (active && active !== document.body && active.isConnected)) return;
-    if (titleHeading?.isConnected) focusQuietly(titleHeading);
-  }
-
-  // Skipping keeps its notice, with Skip busy, until the answer; the notice then goes with the focused
-  // Skip, and the focus goes to the game's title instead of the page.
-  async function skipMeta() {
-    if (!canonicalId || metaSkipping) return;
-    const button = document.activeElement;
-    metaSkipping = true;
-    const gameId = canonicalId;
-    const current = metaToken;
-    try {
-      const view = await dismissMetadataMatch(gameId);
-      if (gameId !== canonicalId || current !== metaToken) return;
-      metaView = view;
-    } catch (err) {
-      toast(metadataErrorText(err, msg('games.detailMetaSkipError')), 'danger');
-    } finally {
-      metaSkipping = false;
-    }
-    await tick();
-    const active = document.activeElement;
-    if (!button || button.isConnected || (active && active !== document.body && active.isConnected)) return;
-    if (titleHeading?.isConnected) focusQuietly(titleHeading);
   }
 
   async function openStore(store: StoreId) {
@@ -839,85 +527,9 @@
     lightboxOpen = true;
   }
 
-  async function loadReleases(canonicalGameId: string | undefined, gameTitle: string | undefined) {
-    const current = ++releaseToken;
-    releasesLoading = true;
-    releasesFailed = false;
-    releaseGroups = [];
-    try {
-      const groups = canonicalGameId
-        ? await getReleasesForGame(canonicalGameId)
-        : gameTitle
-          ? await getReleasesForTitle(gameTitle)
-          : [];
-      if (current !== releaseToken) return;
-      releaseGroups = groups;
-      releasesFailed = false;
-    } catch {
-      if (current !== releaseToken) return;
-      releasesFailed = true;
-    } finally {
-      if (current === releaseToken) releasesLoading = false;
-    }
-  }
-
-  async function loadRelated(canonicalGameId: string | undefined) {
-    const current = ++relatedToken;
-    related = [];
-    relatedFailed = false;
-    relatedLoaded = false;
-    if (!canonicalGameId) {
-      relatedLoading = false;
-      return;
-    }
-    relatedLoading = true;
-    try {
-      const list = await getRelatedReleases(canonicalGameId);
-      if (current !== relatedToken) return;
-      related = list;
-      relatedLoaded = true;
-    } catch {
-      if (current !== relatedToken) return;
-      relatedFailed = true;
-    } finally {
-      if (current === relatedToken) relatedLoading = false;
-    }
-  }
-
-  $effect(() => {
-    releaseKey;
-    $sources; // A feed can finish importing while this game is already open.
-    untrack(() => {
-      const canonicalGameId = canonicalId;
-      const gameTitle = releaseTitle;
-      const isExternalGame = external;
-      if (sideloaded) {
-        releaseToken++;
-        relatedToken++;
-        releaseGroups = [];
-        releasesLoading = false;
-        releasesFailed = false;
-        relatedLoading = false;
-        return;
-      }
-      loadRelated(isExternalGame ? undefined : canonicalGameId);
-      loadReleases(canonicalGameId, gameTitle);
-    });
-  });
-
   let releasesRetrying = $state(false);
   let relatedRetrying = $state(false);
   let releasesBox = $state<HTMLElement>();
-
-  async function retryReleases(): Promise<boolean> {
-    await loadReleases(canonicalId, releaseTitle);
-    return !releasesFailed;
-  }
-
-  async function retryRelated(): Promise<boolean> {
-    await loadRelated(canonicalId);
-    return !relatedFailed;
-  }
 
   let downloadModalOpen = $state(false);
   let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
@@ -992,41 +604,11 @@
     pickerOpen = true;
   }
 
-  let imageBusy = $state(false);
   const imageMissing = $derived(Boolean(localGame && $missingImages.has(localGame.id)));
 
   $effect(() => {
     if (emulated) void refreshMissingImages();
   });
-
-  async function chooseImage() {
-    if (!localGame || imageBusy) return;
-    imageBusy = true;
-    try {
-      const path = await selectImageFile(msg('emul.addImageDialog'), [emulatedPlatform]);
-      if (!path) return;
-      await setExecutable(localGame.id, path);
-      await refreshMissingImages();
-      toast(msg('emul.imageSaved'), 'success');
-    } catch (err) {
-      toast(libraryErrorText(err, msg('emul.imageSaveFailed')), 'danger');
-    } finally {
-      imageBusy = false;
-    }
-  }
-
-  async function findCover() {
-    if (!localGame || imageBusy) return;
-    imageBusy = true;
-    try {
-      await findEmulatedCover(localGame.id);
-      toast(msg('emul.coverFound'), 'success');
-    } catch (err) {
-      toast(libraryErrorText(err, msg('emul.coverFailed')));
-    } finally {
-      imageBusy = false;
-    }
-  }
 
   async function play() {
     if (!localGame) return;
@@ -1068,21 +650,6 @@
     document.getElementById('reviews')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  let addingToLibrary = $state(false);
-
-  async function addToLibrary() {
-    if (!canonicalId || addingToLibrary) return;
-    addingToLibrary = true;
-    try {
-      await addCatalogGame(canonicalId, title, coverSrc);
-      toast(msg('games.detailAddedToLibraryToast'), 'success');
-    } catch (err) {
-      toast(libraryErrorText(err, msg('games.detailAddToLibraryError')), 'danger');
-    } finally {
-      addingToLibrary = false;
-    }
-  }
-
   function runPrimary() {
     if (primary.kind === 'play') play();
     else if (primary.kind === 'stop') stop();
@@ -1094,15 +661,15 @@
   }
 
   const missing = $derived(
-    !catalogFailed &&
+    !data.catalogFailed &&
     isGameMissing({
       hasLocalGame: Boolean(localGame),
       hasCatalogGame: Boolean(catalogGame),
-      catalogLoading,
+      catalogLoading: data.catalogLoading,
       hasOwnDownload: Boolean(anyOwnDownload),
     }),
   );
-  const loadFailed = $derived((catalogFailed || catalogRetrying) && !localGame && !catalogGame && !anyOwnDownload);
+  const loadFailed = $derived((data.catalogFailed || data.catalogRetrying) && !localGame && !catalogGame && !anyOwnDownload);
   const gameShown = $derived(!missing && !loadFailed);
   const ambientId = $derived(pageAmbient(localGame?.id, canonicalId, gameShown));
   $effect(() => claimAmbient(ambientId));
@@ -1121,7 +688,7 @@
 </script>
 
 {#snippet sec_summary()}
-  {#if summary.text || !title || metaState === 'searching'}
+  {#if summary.text || !title || data.metaState === 'searching'}
     <div class="gsec" class:moved={moved('summary')} {...part('summary')}>
       {#if summary.text}
         <p class="summary" id="{uid}-summary">{summary.text}</p>
@@ -1138,7 +705,7 @@
             </Button>
           </div>
         {/if}
-      {:else if !title || metaState === 'searching'}
+      {:else if !title || data.metaState === 'searching'}
         <div aria-hidden="true">
           <div class="skeleton line"></div>
           <div class="skeleton line"></div>
@@ -1221,29 +788,29 @@
           {#if emulated}
             <div class="redist-row">
               {#if imageMissing}
-                <Button size="sm" disabled={imageBusy} onclick={chooseImage}>{msg('emul.pickImage')}</Button>
+                <Button size="sm" disabled={data.imageBusy} onclick={data.chooseImage}>{msg('emul.pickImage')}</Button>
               {/if}
-              <Button size="sm" disabled={imageBusy} onclick={findCover}>{msg('emul.coverFind')}</Button>
+              <Button size="sm" disabled={data.imageBusy} onclick={data.findCover}>{msg('emul.coverFind')}</Button>
             </div>
           {:else}
             <div class="redist-row">
               <Button size="sm" onclick={() => openRedist(localGame.id)}>{msg('redist.action')}</Button>
             </div>
           {/if}
-          {#if wineStatus?.required && !emulated}
+          {#if data.wineStatus?.required && !emulated}
             <div class="steam-row">
               <div class="steam-row-text">
                 <span class="steam-row-label" id="{uid}-detail-steam-bottle-label">{msg('games.detailSteamBottleLabel')}</span>
                 <span class="steam-row-hint" id="{uid}-detail-steam-bottle-sub">{msg('games.detailSteamBottleHint')}</span>
               </div>
               <Toggle
-                checked={requiresSteam}
+                checked={data.requiresSteam}
                 labelledby="{uid}-detail-steam-bottle-label"
                 describedby="{uid}-detail-steam-bottle-sub"
-                disabled={requiresSteamSaving}
+                disabled={data.requiresSteamSaving}
                 onchange={(on) => {
-                  requiresSteam = on;
-                  void toggleRequiresSteam(on);
+                  data.requiresSteam = on;
+                  void data.toggleRequiresSteam(on);
                 }}
               />
             </div>
@@ -1255,11 +822,11 @@
 {/snippet}
 
 {#snippet releasesFailedNotice()}
-  {#if releasesFailed || releasesRetrying}
+  {#if data.releasesFailed || releasesRetrying}
     <Notice
       tone="danger"
       bind:retrying={releasesRetrying}
-      retry={{ label: msg('games.catalogRetry'), run: retryReleases, within: () => releasesBox }}
+      retry={{ label: msg('games.catalogRetry'), run: data.retryReleases, within: () => releasesBox }}
     >
       {msg('games.detailReleasesFailed')}
     </Notice>
@@ -1276,11 +843,11 @@
         {/if}
         {#if withReleases}
           {@render releasesFailedNotice()}
-          {#if !releasesLoading && !releasesFailed && releaseGroups.length === 0}<EmptyState size="inline" title={msg('games.detailNoReleases')} />{/if}
+          {#if !data.releasesLoading && !data.releasesFailed && data.releaseGroups.length === 0}<EmptyState size="inline" title={msg('games.detailNoReleases')} />{/if}
           <div bind:this={releasesBox}>
             <ReleaseList
-              groups={releaseGroups}
-              loading={releasesLoading}
+              groups={data.releaseGroups}
+              loading={data.releasesLoading}
               currentReleaseId={localGame?.releaseId ?? ''}
               targetReleaseId={updateAvailable ? (update?.availability.targetReleaseId ?? '') : ''}
               updateKind={updateAvailable ? (update?.availability.kind ?? 'none') : 'none'}
@@ -1299,11 +866,11 @@
       <section class="section">
         <h2 class="heading">{msg('games.detailAvailableDownloadsHeading')}</h2>
         {@render releasesFailedNotice()}
-        {#if !releasesLoading && !releasesFailed && releaseGroups.length === 0}<EmptyState size="inline" title={msg('games.detailNoReleases')} />{/if}
+        {#if !data.releasesLoading && !data.releasesFailed && data.releaseGroups.length === 0}<EmptyState size="inline" title={msg('games.detailNoReleases')} />{/if}
         <div bind:this={releasesBox}>
           <ReleaseList
-            groups={releaseGroups}
-            loading={releasesLoading}
+            groups={data.releaseGroups}
+            loading={data.releasesLoading}
             currentReleaseId={localGame?.releaseId ?? ''}
             targetReleaseId={updateAvailable ? (update?.availability.targetReleaseId ?? '') : ''}
             updateKind={updateAvailable ? (update?.availability.kind ?? 'none') : 'none'}
@@ -1323,8 +890,8 @@
           gameId={canonicalId}
           familyIds={similarFamily}
           onlinked={() => {
-            loadReleases(canonicalId, releaseTitle);
-            loadRelated(canonicalId);
+            data.loadReleases(canonicalId, releaseTitle);
+            data.loadRelated(canonicalId);
           }}
         />
       {/if}
@@ -1333,21 +900,21 @@
 {/snippet}
 
 {#snippet sec_otherVersions()}
-  {#if (catalogGame || localGame) && managed && (relatedShown.length > 0 || ((relatedFailed || relatedRetrying) && availableGroups.length === 0))}
+  {#if (catalogGame || localGame) && managed && (relatedShown.length > 0 || ((data.relatedFailed || relatedRetrying) && availableGroups.length === 0))}
     <div class="gsec" class:moved={moved('otherVersions')} {...part('otherVersions')}>
-      {#if relatedShown.length > 0 || ((relatedFailed || relatedRetrying) && availableGroups.length === 0)}
+      {#if relatedShown.length > 0 || ((data.relatedFailed || relatedRetrying) && availableGroups.length === 0)}
         <section class="section" bind:this={otherVersionsEl}>
           <h2 class="heading">{msg('games.otherVersionsHeading')}</h2>
-          {#if relatedFailed || relatedRetrying}
+          {#if data.relatedFailed || relatedRetrying}
             <Notice
               tone="danger"
               bind:retrying={relatedRetrying}
-              retry={{ label: msg('games.catalogRetry'), run: retryRelated, within: () => otherVersionsEl }}
+              retry={{ label: msg('games.catalogRetry'), run: data.retryRelated, within: () => otherVersionsEl }}
             >
               {msg('games.otherVersionsFailed')}
             </Notice>
           {:else}
-            {#if availableGroups.length === 0 && !releasesLoading && !releasesFailed}
+            {#if availableGroups.length === 0 && !data.releasesLoading && !data.releasesFailed}
               <p class="muted">{msg('games.otherVersionsHint')}</p>
             {/if}
             {#each relatedShown as item (item.game.id)}
@@ -1612,7 +1179,7 @@
           {/if}
 
           {#if !localGame && canonicalId}
-            <Button size="lg" disabled={addingToLibrary} onclick={addToLibrary}>
+            <Button size="lg" disabled={data.addingToLibrary} onclick={data.addToLibrary}>
               <BookmarkPlus size="1.5rem" strokeWidth={1.8} />
               {msg('games.detailAddToLibraryButton')}
             </Button>
@@ -1637,9 +1204,9 @@
               variant="secondary"
               label={localGame.favorite ? msg('games.actionFavoriteRemove') : msg('games.actionFavoriteAdd')}
               lit={Boolean(localGame.favorite)}
-              onclick={toggleFavorite}
+              onclick={data.toggleFavorite}
             >
-              <span class="heart" class:pulse={favoritePulse} onanimationend={() => (favoritePulse = false)}>
+              <span class="heart" class:pulse={data.favoritePulse} onanimationend={() => (data.favoritePulse = false)}>
                 <Heart size="1.8rem" strokeWidth={1.8} fill={localGame.favorite ? 'currentColor' : 'none'} />
               </span>
             </IconButton>
@@ -1701,7 +1268,7 @@
   {:else if loadFailed}
     <EmptyState level={1} title={msg('games.detailCatalogLoadError')}>
       {#snippet actions()}
-        <Button busy={catalogRetrying} onclick={retryCatalog}>{msg('common.retry')}</Button>
+        <Button busy={data.catalogRetrying} onclick={data.retryCatalog}>{msg('common.retry')}</Button>
         <Button onclick={() => navigate('library')}>{msg('games.detailBackToLibrary')}</Button>
       {/snippet}
     </EmptyState>
@@ -1733,7 +1300,7 @@
           </div>
           {@render column(columns.main)}
         {:else}
-          {#if metaState === 'searching'}
+          {#if data.metaState === 'searching'}
             <div class="meta-note">
               <Notice tone="info" title={msg('games.detailMetaSearchingTitle')}>
                 {#snippet icon()}
@@ -1742,14 +1309,14 @@
                 {msg('games.detailMetaSearchingHint', { title: title || msg('games.detailFallbackGameWord') })}
               </Notice>
             </div>
-          {:else if metaState === 'unmatched' || metaState === 'failed'}
+          {:else if data.metaState === 'unmatched' || data.metaState === 'failed'}
             <div class="meta-note">
               <Notice
-                tone={metaState === 'failed' ? 'warning' : 'info'}
-                announce={metaSearchRan}
-                title={metaState === 'unmatched' ? msg('games.detailMetaUnmatchedTitle') : msg('games.detailMetaFailedTitle')}
-                bind:retrying={metaRetrying}
-                retry={metaState === 'failed' && metaRetryable
+                tone={data.metaState === 'failed' ? 'warning' : 'info'}
+                announce={data.metaSearchRan}
+                title={data.metaState === 'unmatched' ? msg('games.detailMetaUnmatchedTitle') : msg('games.detailMetaFailedTitle')}
+                bind:retrying={data.metaRetrying}
+                retry={data.metaState === 'failed' && data.metaRetryable
                   ? {
                       label: msg('common.retry'),
                       pending: msg('games.detailMetaRetrying'),
@@ -1758,12 +1325,12 @@
                     }
                   : undefined}
               >
-                {metaState === 'unmatched' ? msg('games.detailMetaUnmatchedHint') : metaFailure || msg('games.detailMetaFailedHint')}
+                {data.metaState === 'unmatched' ? msg('games.detailMetaUnmatchedHint') : data.metaFailure || msg('games.detailMetaFailedHint')}
                 {#snippet action()}
                   <span class="choose" bind:this={chooseSlot}>
                     <Button size="sm" variant="primary" onclick={() => openMatch('find')}>{msg('games.detailChooseManually')}</Button>
                   </span>
-                  <Button size="sm" variant="ghost" busy={metaSkipping} onclick={skipMeta}>{msg('games.detailSkipSearch')}</Button>
+                  <Button size="sm" variant="ghost" busy={data.metaSkipping} onclick={data.skipMeta}>{msg('games.detailSkipSearch')}</Button>
                 {/snippet}
               </Notice>
             </div>
@@ -1821,7 +1388,7 @@
       gameId={canonicalId ?? ''}
       gameTitle={title}
       mode={matchMode}
-      onapplied={(view) => (metaView = view)}
+      onapplied={(view) => (data.metaView = view)}
     />
 
     <AddDownloadModal bind:open={downloadModalOpen} initialSource={downloadSource} origin={downloadOrigin} />
