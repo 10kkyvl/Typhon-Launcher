@@ -12,7 +12,7 @@ describe('every page heading can take focus', () => {
       .flatMap(([path, text]) => [...text.matchAll(/<h1\b[^>]*>/g)].map((m) => ({ path, tag: m[0] })));
     expect(headings.map(({ path }) => path).sort()).toEqual([
       'lib/components/PageHeader.svelte',
-      'routes/game/GameDetails.svelte',
+      'routes/game/GamePageHero.svelte',
       'routes/support/TicketView.svelte',
     ]);
     expect(headings.filter(({ tag }) => !/\btabindex="-1"/.test(tag)).map(({ path }) => path)).toEqual([]);

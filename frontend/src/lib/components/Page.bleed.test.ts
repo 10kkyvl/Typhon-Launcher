@@ -45,7 +45,7 @@ describe('the page bleed', () => {
   });
 
   it('lines the game hero up with the page content at 1100, 1440 and 2560 px', () => {
-    const hero = rule(frontendSources['routes/game/GameDetails.svelte'], '  .hero');
+    const hero = rule(frontendSources['routes/game/GamePageHero.svelte'], '  .hero');
     expect(decl(hero, 'padding')).toMatch(/var\(--page-inset\)/);
     expect(decl(hero, 'margin-inline')).toBeUndefined();
     const maxWidth = decl(content, 'max-width') as string;
