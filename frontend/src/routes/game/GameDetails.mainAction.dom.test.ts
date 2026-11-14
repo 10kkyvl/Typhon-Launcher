@@ -507,3 +507,87 @@ describe('GameDetails main action in English', () => {
     expect(actions().textContent).not.toContain('Loading');
   });
 });
+
+describe('GameDetails main action: Update', () => {
+  it('without a plan is busy while the plan is prepared, then opens the confirm; a second press does nothing', async () => {
+    updates.set([update()]);
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    const button = await mainAction(msg('games.mainActionUpdate'));
+
+    await user.click(button);
+    await user.click(button);
+
+    expect(prepareUpdatePlan).toHaveBeenCalledTimes(1);
+    expect(button.getAttribute('aria-busy')).toBe('true');
+    updates.set([update({ planning: true })]);
+    updates.set([update({ planning: false, plan })]);
+
+    expect(await screen.findByRole('dialog', { name: msg('ui.updateGameTitle') })).toBeTruthy();
+    expect(button.getAttribute('aria-busy')).toBeNull();
+  });
+
+  it('is pressable again when the plan request fails or the preparation ends without a plan', async () => {
+    updates.set([update()]);
+    vi.mocked(prepareUpdatePlan).mockRejectedValueOnce(new Error('offline'));
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    const button = await mainAction(msg('games.mainActionUpdate'));
+
+    await user.click(button);
+
+    await vi.waitFor(() => expect(get(toasts).map((item) => item.message)).toContain(msg('errUpdates.fallback')));
+    expect(button.getAttribute('aria-busy')).toBeNull();
+
+    await user.click(button);
+    expect(button.getAttribute('aria-busy')).toBe('true');
+    updates.set([update({ planning: true })]);
+    updates.set([update({ planning: false, error: 'typhon:updates.no_target' })]);
+
+    await vi.waitFor(() => expect(button.getAttribute('aria-busy')).toBeNull());
+    expect(screen.queryByRole('dialog', { name: msg('ui.updateGameTitle') })).toBeNull();
+    expect(prepareUpdatePlan).toHaveBeenCalledTimes(2);
+  });
+
+  it('pressed on the Screenshots tab goes to the overview and opens the confirm', async () => {
+    updates.set([update({ plan })]);
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    const button = await mainAction(msg('games.mainActionUpdate'));
+    await user.click(screen.getByRole('tab', { name: msg('games.detailTabScreenshots') }));
+
+    await user.click(button);
+
+    expect(await screen.findByRole('dialog', { name: msg('ui.updateGameTitle') })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: msg('games.detailTabOverview') }).getAttribute('aria-selected')).toBe('true');
+  });
+});
+
+describe('GameDetails main action: Other versions', () => {
+  const sequel: RelatedReleases = {
+    game: { id: 'c2', title: 'Hades II', relation: 'sequel' as RelatedReleases['game']['relation'] },
+    gameId: 'g2',
+    onPc: true,
+    groups: [release('r2', 'c2', 'Hades II')],
+  };
+
+  it('pressed on the Screenshots tab goes to the overview and brings the block into view', async () => {
+    const scrolled: Element[] = [];
+    const original = Element.prototype.scrollIntoView;
+    // jsdom does not scroll: the element asked to come into view is what the test reads.
+    Element.prototype.scrollIntoView = vi.fn(function (this: Element) {
+      scrolled.push(this);
+    });
+    onTestFinished(() => {
+      Element.prototype.scrollIntoView = original;
+    });
+    libraryGames.set([]);
+    vi.mocked(getCatalogGame).mockResolvedValue({ id: 'c1', title: 'Hades' } as CatalogGame);
+    vi.mocked(getMetadataView).mockResolvedValue(view({ screenshots: [{ id: 's1', url: 'https://example.test/s1.jpg' }] as MetadataView['screenshots'] }));
+    vi.mocked(getRelatedReleases).mockResolvedValue([sequel]);
+    const { user } = renderDom(GameDetails, { id: 'c1' });
+    const button = await mainAction(msg('games.primaryOtherVersions'));
+    await user.click(await screen.findByRole('tab', { name: msg('games.detailTabScreenshots') }));
+
+    await user.click(button);
+
+    await vi.waitFor(() => expect(scrolled.some((node) => node.textContent?.includes('Hades II'))).toBe(true));
+  });
+});

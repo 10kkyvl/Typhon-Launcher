@@ -29,6 +29,8 @@
   import { installErrorText } from '../../lib/install/installErrors';
   import { isInstalledImage } from '../../lib/library/emulation';
   import type { Download as DownloadItem } from '../../lib/services/downloads';
+  import { prepareUpdatePlan, type Update } from '../../lib/services/updates';
+  import { updateErrorText } from '../../lib/updates/updateErrors';
   import { launchesInFlight, playGame, playGameProfile, stopGame, type LibraryGame } from '../../lib/services/library';
   import { openGameProperties } from '../../lib/stores/gameProperties';
   import { metadataAvailable } from '../../lib/stores/metadata';
@@ -55,8 +57,10 @@
     emulated,
     updateIsRelease,
     terminalDownload,
+    update,
     updateCard,
     otherVersionsEl,
+    toOverview,
     statusOpen = $bindable(),
     tagsOpen = $bindable(),
     onMenu,
@@ -76,8 +80,11 @@
     emulated: boolean;
     updateIsRelease: boolean;
     terminalDownload: (DownloadItem & { status: TerminalDownloadStatus }) | undefined;
+    update: Update | undefined;
     updateCard: UpdateCard | undefined;
     otherVersionsEl: HTMLElement | null;
+    /** Shows the overview tab, where the blocks the main action drives (update, other versions) live. */
+    toOverview: () => Promise<void>;
     statusOpen: boolean;
     tagsOpen: boolean;
     onMenu: (actionId: string) => void;
@@ -229,14 +236,58 @@
     if (lead.kind === 'play') play();
     else if (lead.kind === 'stop') stop();
     else if (lead.kind === 'download') startDownload();
-    else if (lead.kind === 'other-versions') otherVersionsEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    else if (lead.kind === 'other-versions') void showOtherVersions();
     else if (lead.kind === 'retry-download') retryTerminalDownload();
     else if (lead.kind === 'install-download') installFromTerminalDownload();
     else if (lead.kind === 'choose-executable' && localGame) openGameProperties(localGame.id);
   }
 
-  function startUpdate() {
-    updateCard?.start();
+  async function showOtherVersions() {
+    await toOverview();
+    otherVersionsEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // Update without a plan asks Go to prepare one; the plan arrives later through the store. Until it
+  // does (or the preparation ends without one) Update is busy, and the confirm opens on its arrival.
+  // `before` is the update as the press saw it: any later state of it comes after the request.
+  let planWait = $state.raw<{ before: Update | undefined } | null>(null);
+  const updateBusy = $derived(Boolean(planWait) || Boolean(update?.planning && !update.plan));
+
+  $effect(() => {
+    const wait = planWait;
+    const current = update;
+    if (!wait) return;
+    untrack(() => {
+      if (current?.plan) {
+        planWait = null;
+        updateCard?.start();
+      } else if (!current || (current !== wait.before && !current.planning)) {
+        planWait = null;
+      }
+    });
+  });
+
+  let switching = false;
+
+  async function startUpdate() {
+    if (planWait || switching || !update) return;
+    switching = true;
+    await toOverview();
+    switching = false;
+    if (!update) return;
+    if (update.plan) {
+      updateCard?.start();
+      return;
+    }
+    const before = update;
+    planWait = { before };
+    if (before.planning) return;
+    try {
+      await prepareUpdatePlan(before.gameId);
+    } catch (err) {
+      planWait = null;
+      toast(updateErrorText(err), 'danger');
+    }
   }
 </script>
 
@@ -269,7 +320,7 @@
   <span class="sr-only" role="status">{announcement}</span>
 
   {#if showUpdate}
-    <Button size="lg" onclick={startUpdate}>
+    <Button size="lg" busy={updateBusy} onclick={startUpdate}>
       {#if updateIsRelease}
         <Sparkles size="1.5rem" strokeWidth={1.8} />
       {:else}

@@ -1,7 +1,7 @@
 <script lang="ts">
   import Page from '../../lib/components/Page.svelte';
   import { locale } from '../../lib/i18n/locale';
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
@@ -288,6 +288,13 @@
     }
   }
 
+  // The main action drives blocks of the overview; pressed on another tab it shows the overview first.
+  async function toOverview() {
+    if (activeTab === 'overview') return;
+    activeTab = 'overview';
+    await tick();
+  }
+
   function openShot(index: number) {
     lightboxIndex = index;
     lightboxOpen = true;
@@ -415,7 +422,7 @@
     {#snippet actions()}
       <GameActions
         {data} {primary} {busy} {localGame} {canonicalId} {installed} {wasInstalled} {external} {managed} {emulated}
-        {updateIsRelease} {terminalDownload} {updateCard} {otherVersionsEl} bind:statusOpen bind:tagsOpen {onMenu} {startDownload}
+        {updateIsRelease} {terminalDownload} {update} {updateCard} {otherVersionsEl} {toOverview} bind:statusOpen bind:tagsOpen {onMenu} {startDownload}
         {retryTerminalDownload} {installFromTerminalDownload}
       />
     {/snippet}
