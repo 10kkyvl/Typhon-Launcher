@@ -28,6 +28,9 @@ vi.mock('../services/library', () => ({
   getRunningGames: vi.fn(async () => running),
 }));
 
+const catalog = vi.hoisted(() => ({ answer: vi.fn<(ids: string[]) => Promise<unknown[]>>() }));
+vi.mock('../services/sources', () => ({ getCatalogGames: catalog.answer }));
+
 function game(patch: Partial<LibraryGame> = {}): LibraryGame {
   return { id: 'g1', title: 'Game One', uninstalled: false, ...patch } as LibraryGame;
 }
@@ -91,12 +94,59 @@ describe('library store', () => {
     vi.resetModules();
     for (const key of Object.keys(handlers)) delete handlers[key];
     const store = await import('./library');
-    await expect(store.initLibrary()).rejects.toThrow('boom');
+    await store.initLibrary();
     expect(get(store.libraryLoaded)).toBe(false);
 
     handlers['library:updated']({ data: [game({ id: 'a' })] });
 
     expect(get(store.libraryLoaded)).toBe(true);
+    expect(get(store.libraryLoadError)).toBeNull();
+  });
+
+  it('keeps a failed first load as state, never as a rejection, and a retry loads', async () => {
+    gamesError = new Error('typhon:library.game_not_found: boom');
+    vi.resetModules();
+    for (const key of Object.keys(handlers)) delete handlers[key];
+    const store = await import('./library');
+
+    await expect(store.initLibrary()).resolves.toBeTypeOf('function');
+
+    expect(get(store.libraryLoadError)).toBe(gamesError);
+    expect(get(store.libraryLoaded)).toBe(false);
+
+    expect(await store.loadLibrary()).toBe(false);
+    expect(get(store.libraryLoadError)).toBe(gamesError);
+
+    gamesError = null;
+    games = [game({ id: 'a' })];
+    expect(await store.loadLibrary()).toBe(true);
+    expect(get(store.libraryLoadError)).toBeNull();
+    expect(get(store.libraryLoaded)).toBe(true);
+    expect(get(store.libraryGames).map((item) => item.id)).toEqual(['a']);
+  });
+
+  it('takes only a list from library:updated', async () => {
+    games = [game({ id: 'a' })];
+    const { store } = await load();
+
+    handlers['library:updated']({ data: { not: 'a list' } });
+
+    expect(get(store.libraryGames)).toEqual([]);
+    expect(get(store.libraryLoaded)).toBe(true);
+  });
+
+  it('answers a disposer that takes every listener away', async () => {
+    vi.resetModules();
+    for (const key of Object.keys(handlers)) delete handlers[key];
+    const runtime = await import('@wailsio/runtime');
+    const store = await import('./library');
+
+    const dispose = await store.initLibrary();
+    const offs = vi.mocked(runtime.Events.On).mock.results.map((result) => result.value as ReturnType<typeof vi.fn>);
+    dispose();
+
+    expect(offs.length).toBeGreaterThan(0);
+    for (const off of offs) expect(off).toHaveBeenCalledTimes(1);
   });
 
   it('shows an empty library when library:updated carries nothing', async () => {
@@ -202,5 +252,50 @@ describe('running sessions', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('catalog titles of downloads', () => {
+  async function fresh() {
+    vi.resetModules();
+    const store = await import('./library');
+    const toasts = await import('./toasts');
+    return { store, toast: vi.mocked(toasts.toast) };
+  }
+
+  beforeEach(() => {
+    catalog.answer.mockReset();
+  });
+
+  it('asks once per id, however often it is asked, and remembers an id the catalog does not know', async () => {
+    catalog.answer.mockResolvedValue([]);
+    const { store } = await fresh();
+
+    await Promise.all(Array.from({ length: 12 }, () => store.requestDownloadTitles(['c-unknown'])));
+    await store.requestDownloadTitles(['c-unknown']);
+
+    expect(catalog.answer).toHaveBeenCalledTimes(1);
+    expect(get(store.downloadTitles)).toEqual({ 'c-unknown': null });
+  });
+
+  it('files a game the catalog answers under an alias by the id it was asked for', async () => {
+    catalog.answer.mockResolvedValue([{ id: 'c-main', title: 'Main', aliasIds: ['c-alias'], releaseYear: 2020, developer: 'Dev' }]);
+    const { store } = await fresh();
+
+    await store.requestDownloadTitles(['c-alias', 'c-gone']);
+
+    expect(get(store.downloadTitles)).toEqual({ 'c-alias': { title: 'Main', releaseYear: 2020, developer: 'Dev' }, 'c-gone': null });
+  });
+
+  it('shows a failure once and does not ask again at once', async () => {
+    catalog.answer.mockRejectedValue(new Error('typhon:metadata.offline: down'));
+    const { store, toast } = await fresh();
+
+    for (let i = 0; i < 5; i += 1) await store.requestDownloadTitles(['c-a']);
+    await store.requestDownloadTitles(['c-b']);
+
+    expect(catalog.answer).toHaveBeenCalledTimes(2);
+    expect(toast).toHaveBeenCalledTimes(1);
+    expect(toast.mock.calls[0][1]).toBe('danger');
   });
 });
