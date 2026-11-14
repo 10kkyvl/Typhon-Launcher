@@ -657,6 +657,8 @@
     padding: var(--space-3);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
+    /* The dialog's own surface, so that on the game page a damaged backup's reason reads over the art. */
+    background: var(--surface-2);
   }
 
   .snapshot-main {

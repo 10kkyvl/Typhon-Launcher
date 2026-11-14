@@ -253,6 +253,7 @@ const ON_SURFACE: Record<string, [surface: string, ...rules: string[]]> = {
   'lib/components/Notice.svelte': ['the plate of the notice; its icon', '.icon'],
   'lib/components/LiveIsland.svelte': ["the island's own plate; icons", '.mark', '.lead'],
   'lib/components/DownloadItem.svelte': ['the fill of a download row', '.stalled'],
+  'lib/components/GameSaves.svelte': ['the plate of a backup row', '.snapshot-problem'],
 };
 
 // Where the surface named above is a rule of the same component, that rule has to stay opaque.
@@ -268,6 +269,7 @@ const LOCAL_SURFACE: Record<string, string> = {
   'lib/components/Notice.svelte': '.notice',
   'lib/components/LiveIsland.svelte': '.live-island',
   'lib/components/DownloadItem.svelte': '.item',
+  'lib/components/GameSaves.svelte': '.snapshot',
 };
 
 interface StatusRule {
