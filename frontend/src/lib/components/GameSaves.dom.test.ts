@@ -224,3 +224,42 @@ describe('GameSaves: the backups', () => {
     expect(alert.textContent?.trim()).toBe(msg('saves.folderNotSet'));
   });
 });
+
+describe('GameSaves: another game in the same view', () => {
+  it('shows the new game once its id changes, without a remount', async () => {
+    vi.mocked(listBackups).mockImplementation(async (id) => [snapshot({ id: `${id}-s`, gameId: id, createdAt: id === 'g1' ? '2026-11-01T10:00:00Z' : '2026-09-01T10:00:00Z' })]);
+    vi.mocked(locateSaves).mockImplementation(async (id) => found(`C:/Saves/${id}`));
+    const { rerender } = renderDom(GameSaves, { gameId: 'g1' });
+    expect(await screen.findByText('C:/Saves/g1')).toBeTruthy();
+
+    await rerender({ gameId: 'g2' });
+
+    expect(await screen.findByText('C:/Saves/g2')).toBeTruthy();
+    expect(screen.queryByText('C:/Saves/g1')).toBeNull();
+    expect(vi.mocked(listBackups)).toHaveBeenLastCalledWith('g2');
+    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+  });
+
+  it('drops what an action of the previous game answers after the switch', async () => {
+    const made = deferred<Snapshot>();
+    vi.mocked(createBackup).mockReturnValue(made.promise);
+    vi.mocked(listBackups).mockImplementation(async (id) => (id === 'g1' ? [snapshot({ id: 'old', gameId: 'g1' })] : []));
+    const { user, rerender } = renderDom(GameSaves, { gameId: 'g1' });
+    const create = await screen.findByRole('button', { name: msg('saves.createBackup') });
+    await waitFor(() => expect(create).toHaveProperty('disabled', false));
+    await user.click(create);
+    expect(screen.getByRole('button', { name: msg('saves.creating') })).toBe(create);
+
+    await rerender({ gameId: 'g2' });
+    expect(await screen.findByText(msg('saves.empty'))).toBeTruthy();
+    expect(create.textContent).toContain(msg('saves.createBackup'));
+    expect(create.hasAttribute('aria-busy')).toBe(false);
+
+    made.reject(new Error('typhon:savebackup.no_saves'));
+    await settle();
+
+    expect(screen.getByText(msg('saves.empty'))).toBeTruthy();
+    expect(screen.queryAllByRole('listitem')).toHaveLength(0);
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+});

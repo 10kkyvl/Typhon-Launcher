@@ -79,7 +79,10 @@
   let cloudDeleteAsked = $state(false);
   let cloudPullAsked = $state(false);
 
+  // The game shown, and its turn: an answer to an action or a load of an earlier game is dropped, so a
+  // view whose id changes without a remount starts the new game from scratch.
   let loadedFor = '';
+  let turn = 0;
   let listSeq = 0;
   let savesSeq = 0;
 
@@ -88,6 +91,11 @@
     untrack(() => {
       if (loadedFor === id) return;
       loadedFor = id;
+      turn++;
+      busy = false;
+      acting = '';
+      creating = false;
+      cloudBusy = false;
       snapshots = [];
       listError = '';
       saves = null;
@@ -112,6 +120,7 @@
   });
 
   async function loadList(gameId: string) {
+    if (gameId !== loadedFor) return;
     const seq = ++listSeq;
     listLoading = true;
     try {
@@ -128,6 +137,7 @@
   }
 
   async function loadSaves(gameId: string) {
+    if (gameId !== loadedFor) return;
     const seq = ++savesSeq;
     savesLoading = true;
     try {
@@ -146,17 +156,20 @@
 
   async function perform(action: () => Promise<void>, fallback: (err: unknown) => string, by: '' | 'open' | 'folder' = '') {
     if (busy) return;
+    const mine = turn;
     busy = true;
     acting = by;
     failure = '';
     try {
       await action();
     } catch (err) {
-      failure = saveBackupErrorText(err, fallback(err));
+      if (mine === turn) failure = saveBackupErrorText(err, fallback(err));
     } finally {
-      busy = false;
-      acting = '';
-      creating = false;
+      if (mine === turn) {
+        busy = false;
+        acting = '';
+        creating = false;
+      }
     }
   }
 
@@ -223,15 +236,16 @@
   async function cloudSync() {
     if (cloudBusy) return;
     const { gameId } = target;
+    const mine = turn;
     cloudBusy = true;
     cloudFailure = '';
     try {
       await cloudSyncNow(gameId);
       toast(msg('cloudsaves.syncDone'), 'success');
     } catch (err) {
-      cloudFailure = cloudErrorText(err);
+      if (mine === turn) cloudFailure = cloudErrorText(err);
     } finally {
-      cloudBusy = false;
+      if (mine === turn) cloudBusy = false;
       await refreshCloudStatus();
     }
   }
@@ -239,15 +253,16 @@
   async function cloudPull() {
     if (cloudBusy) return;
     const { gameId } = target;
+    const mine = turn;
     cloudBusy = true;
     cloudFailure = '';
     try {
       await cloudPullRemote(gameId);
       toast(msg('cloudsaves.pulled'), 'success');
     } catch (err) {
-      cloudFailure = cloudErrorText(err);
+      if (mine === turn) cloudFailure = cloudErrorText(err);
     } finally {
-      cloudBusy = false;
+      if (mine === turn) cloudBusy = false;
       await refreshCloudStatus();
       await loadList(gameId);
     }
@@ -256,15 +271,16 @@
   async function cloudDelete() {
     if (cloudBusy) return;
     const { gameId } = target;
+    const mine = turn;
     cloudBusy = true;
     cloudFailure = '';
     try {
       await cloudDeleteRemote(gameId);
       toast(msg('cloudsaves.deleted'), 'success');
     } catch (err) {
-      cloudFailure = cloudErrorText(err);
+      if (mine === turn) cloudFailure = cloudErrorText(err);
     } finally {
-      cloudBusy = false;
+      if (mine === turn) cloudBusy = false;
       await refreshCloudStatus();
     }
   }
