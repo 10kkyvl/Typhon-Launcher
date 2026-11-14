@@ -235,6 +235,12 @@ export const themeTokens = {
   'settings.themeTokenHint.ambient-dim': 'Доля цвета страницы поверх арта игры за интерфейсом, от 0 до 1: чем больше, тем спокойнее арт; 1 убирает арт. Яркость арта лаунчер всё равно ограничивает, чтобы текст оставался читаемым',
   'settings.themeToken.motion-backdrop': 'Длительность анимации: фон игры',
   'settings.themeTokenHint.motion-backdrop': 'За сколько арт за интерфейсом перетекает от одной игры к другой',
+  'settings.themeToken.scrim-copy': 'Подложка текста на арте',
+  'settings.themeTokenHint.scrim-copy': 'Полупрозрачная подложка под блоком текста, который стоит на арте игры вверху окна; спадает вправо и вниз. Текст на ней — цвет основного текста, он должен читаться и на чёрном, и на белом арте. По умолчанию это цвет страницы на 66 %',
+  'settings.themeToken.copy-fade-x': 'Подложка текста: спад вправо',
+  'settings.themeTokenHint.copy-fade-x': 'На каком расстоянии справа от текста подложка сходит на нет',
+  'settings.themeToken.copy-fade-y': 'Подложка текста: спад вниз',
+  'settings.themeTokenHint.copy-fade-y': 'На каком расстоянии над текстом и под ним подложка сходит на нет',
 } as const;
 
 export type ThemeTokensKey = keyof typeof themeTokens;

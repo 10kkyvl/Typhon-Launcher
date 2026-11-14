@@ -3,7 +3,7 @@ import buttonSource from '../lib/components/Button.svelte?raw';
 import heroSource from '../lib/components/HeroCarousel.svelte?raw';
 import noticeSource from '../lib/components/Notice.svelte?raw';
 import textLinkSource from '../lib/components/TextLink.svelte?raw';
-import { cssColor, ruleBody, styleOf } from '../lib/testing/css';
+import { cssColor, ruleBody, styleOf, topLevel } from '../lib/testing/css';
 import { goSources } from '../lib/testing/sources';
 import { luminance, rgb } from '../lib/theme/accent';
 import { CONTRAST_CHECKS, CONTRAST_FALLBACKS, CONTRAST_TOKENS, DERIVED_COLORS, contrastReport, type RGBA } from '../lib/theme/contrastReport';
@@ -558,4 +558,34 @@ describe('what stands over a game picture', () => {
       expect(failuresOn(plate, [{ fg: '--art-text', min: 3 }]), plate).toEqual([]);
     }
   });
+});
+
+// The stage (ShellBackdrop) is a game's own picture across the top of the window, under the title bar and
+// the top bar, whose glyphs are the theme's text colour. Its one shade, over the top bar's row, is fixed
+// (shell.css) and a theme cannot change it, so it takes the page colour: on a light theme it lightens the
+// picture under dark glyphs instead of darkening it. Measured over the two extremes a picture brings.
+describe("the stage's top bar scrim", () => {
+  const shell = fs.readFileSync(new URL('./shell.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const scrim = /--stage-scrim:\s*([^;]+);/.exec(shell)?.[1]?.trim() ?? '';
+  const inner = /^linear-gradient\(([\s\S]*)\)$/.exec(scrim)?.[1] ?? '';
+  // The strongest stop is the first: the gradient only fades from there.
+  const strongest = /^([\s\S]*?)\s+\S+$/.exec(topLevel(inner)[1] ?? '')?.[1] ?? '';
+
+  it('is a gradient from the top whose strongest stop is drawn in the page colour', () => {
+    expect(topLevel(inner)[0]).toBe('180deg');
+    expect(strongest).toMatch(/var\(--bg\)/);
+  });
+
+  for (const id of ['dark', 'light', 'contrast', 'blush']) {
+    it(`${id}: the text colour stands out more on the scrim than on the bare picture at its worst`, () => {
+      const preset = builtIns().find((p) => p.id === id);
+      expect(preset, id).toBeDefined();
+      const tokens = (preset as Preset).tokens;
+      const shade = cssColor(strongest, tokens);
+      const text = paint(tokens, '--text', BLACK);
+      const bare = Math.min(...[BLACK, WHITE].map((art) => ratio(text, art)));
+      const shaded = Math.min(...[BLACK, WHITE].map((art) => ratio(text, over(shade, art))));
+      expect(shaded, `${shaded.toFixed(2)} vs ${bare.toFixed(2)} on the bare picture`).toBeGreaterThan(bare + 1);
+    });
+  }
 });

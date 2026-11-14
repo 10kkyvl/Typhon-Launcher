@@ -23,6 +23,10 @@ const notPreviewed = new Set([
   // The backdrop wash is baked from a game's art in a script; the static preview has neither.
   '--ambient-dim',
   '--motion-backdrop',
+  // The text plate stands on a game's wide art, which the static preview does not draw.
+  '--scrim-copy',
+  '--copy-fade-x',
+  '--copy-fade-y',
   '--shadow-lift',
   '--font-hero',
   '--font-mono',

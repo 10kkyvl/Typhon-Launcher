@@ -81,6 +81,9 @@
   --dur-slow: 450ms;
   --motion-backdrop: 600ms;
   --ambient-dim: 0.6;
+  --scrim-copy: color-mix(in srgb, var(--bg) 66%, transparent);
+  --copy-fade-x: 24rem;
+  --copy-fade-y: 8rem;
   --ease-spring: cubic-bezier(0.34, 1.36, 0.64, 1);
 
   --shadow-pop: 0 0.8rem 2.4rem rgba(0, 0, 0, 0.5), 0 1px 0 rgba(255, 255, 255, 0.04) inset;

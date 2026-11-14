@@ -37,6 +37,22 @@
   --ambient-saturate: 0.75;
   --ambient-opacity: 1;
 
+  /* The stage (ShellBackdrop): the focused game's wide art, sharp, across the top of the window. The foot
+     is where a screen's header ends: the art is whole above it and gone just below, whatever the window's
+     height. The tail is how far below the foot its last trace reaches. */
+  --stage-foot: 64vh;
+  --stage-tail: 6vh;
+  /* Where the picture is held when it is cropped. */
+  --stage-focus-x: 62%;
+  --stage-focus-y: 26%;
+  /* Only the top bar's row is shaded on the picture itself; words bring their own plate (.stage-copy).
+     In the page colour, so a light theme's dark glyphs get a light ground (theme-contrast.test.ts). */
+  --stage-scrim: linear-gradient(180deg, color-mix(in srgb, var(--bg) 46%, transparent) 0, color-mix(in srgb, var(--bg) 16%, transparent) 8rem, transparent 14rem);
+  /* Stops of a mask gradient (only the alpha counts): two steps on the way out, so an edge eases. */
+  --mask-solid: #000;
+  --mask-most: rgba(0, 0, 0, 0.7);
+  --mask-some: rgba(0, 0, 0, 0.28);
+
   --motion-fast: var(--dur);
   --ease-out: var(--ease);
   --motion-spin: 800ms; /* one turn of a spinner */
