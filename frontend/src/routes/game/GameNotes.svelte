@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, onMount } from 'svelte';
+  import { onDestroy, onMount, untrack } from 'svelte';
   import { createAutosave, noteLength } from '../../lib/game/notes';
   import { errorCode, hasMessage, msg } from '../../lib/i18n';
   import { notesLimit, setNotes } from '../../lib/services/library';
@@ -8,6 +8,11 @@
   let { gameId, stored }: { gameId: string; stored: string } = $props();
 
   const uid = $props.id();
+
+  // The game the text is typed for, fixed when the block is created: a save that runs after the
+  // block went (its flush on destroy, a retry of a failed save) still writes to this game, whatever
+  // the page shows by then.
+  const target = untrack(() => gameId);
 
   type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -25,7 +30,7 @@
   const autosave = createAutosave(async (value) => {
     phase = 'saving';
     try {
-      await setNotes(gameId, value);
+      await setNotes(target, value);
       errorText = '';
       phase = 'saved';
     } catch (err) {
