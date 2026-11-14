@@ -19,6 +19,7 @@ func TestRelatedStatusesAndPayload(t *testing.T) {
 		body     string
 		wantErr  error
 		anyErr   bool
+		cut      bool
 		wantIDs  []string
 		wantYear bool
 	}{
@@ -26,7 +27,7 @@ func TestRelatedStatusesAndPayload(t *testing.T) {
 		{name: "not found", status: 404, body: `{"error":{"code":"not_found"}}`, wantErr: catalog.ErrRelatedNotFound},
 		{name: "server error", status: 500, body: `{}`, wantErr: ErrUpstream},
 		{name: "broken json", status: 200, body: `{"items":[`, wantErr: ErrUpstream},
-		{name: "oversized body", status: 200, body: huge, wantErr: ErrUpstream},
+		{name: "oversized body", status: 200, body: huge, wantErr: ErrUpstream, cut: true},
 		{name: "unknown relation dropped", status: 200, body: `{"items":[{"id":"r1","title":"A","relation":"sequel"},{"id":"r2","title":"B","relation":"port"}]}`, wantIDs: []string{"r2"}},
 		{name: "empty id and title dropped", status: 200, body: `{"items":[{"id":"","title":"A","relation":"port"},{"id":"r3","title":" \u0000 ","relation":"port"}]}`, wantIDs: nil},
 		{name: "self and duplicate dropped", status: 200, body: `{"items":[{"id":"self","title":"A","relation":"port"},{"id":"r4","title":"B","relation":"port"},{"id":"r4","title":"B","relation":"port"}]}`, wantIDs: []string{"r4"}},
@@ -36,6 +37,15 @@ func TestRelatedStatusesAndPayload(t *testing.T) {
 			var gotPath string
 			client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				gotPath = r.URL.Path
+				if tc.cut {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(tc.status)
+					// The client stops reading past its limit and hangs up, so this write may fail by design.
+					if _, err := w.Write([]byte(tc.body)); err != nil {
+						t.Logf("write body, cut by the client: %v", err)
+					}
+					return
+				}
 				writeJSON(t, w, tc.status, tc.body)
 			}), nil)
 			got, err := client.Related(context.Background(), "self")
