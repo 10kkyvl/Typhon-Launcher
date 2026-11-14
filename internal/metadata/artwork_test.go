@@ -51,7 +51,12 @@ func refs(base string, names ...string) []ImageRef {
 			out = append(out, ImageRef{URL: name})
 			continue
 		}
-		out = append(out, ImageRef{URL: base + name})
+		ref := ImageRef{URL: base + name}
+		var tag string
+		if _, err := fmt.Sscanf(name, "/%dx%d-%s", &ref.Width, &ref.Height, &tag); err != nil {
+			ref.Width, ref.Height = 0, 0
+		}
+		out = append(out, ref)
 	}
 	return out
 }
@@ -177,5 +182,100 @@ func TestArtRefreshKeepsStoredArtworks(t *testing.T) {
 	after := storedOfKind(svc, game.ID, AssetArtwork)
 	if len(after) != 1 || after[0].ID != before[0].ID {
 		t.Fatalf("artworks after the art refresh = %+v, want %+v kept", after, before)
+	}
+}
+
+func (p *fakeProvider) setMeta(providerID string, meta GameMetadata) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.meta[providerID] = meta
+}
+
+// carryCase stores a screenshot and an artwork for match 2657, then applies the
+// answer next builds under providerID.
+func carryCase(t *testing.T, providerID string, next func(base string) GameMetadata) (*Service, catalog.Game, MediaAsset, MediaAsset, View) {
+	t.Helper()
+	srv, _ := sizedImageServer(t)
+	meta := fullMetadata(srv.URL)
+	meta.Cover = &ImageRef{URL: srv.URL + "/264x374-cover.png"}
+	meta.Screenshots = refs(srv.URL, "/1000x600-s0.png")
+	meta.Artworks = refs(srv.URL, "/1280x720-a0.png")
+	provider := &fakeProvider{meta: map[string]GameMetadata{"2657": meta}}
+	svc, cat, _ := newTestService(t, provider)
+	game := addGame(t, cat, catalog.Game{Title: "Prey"})
+	if _, err := svc.ApplyMatch(game.ID, "2657"); err != nil {
+		t.Fatalf("first match: %v", err)
+	}
+	shots, arts := storedOfKind(svc, game.ID, AssetScreenshot), storedOfKind(svc, game.ID, AssetArtwork)
+	if len(shots) != 1 || len(arts) != 1 {
+		t.Fatalf("first match stored %d screenshots and %d artworks, want 1 and 1", len(shots), len(arts))
+	}
+	following := next(srv.URL)
+	following.ProviderID = providerID
+	provider.setMeta(providerID, following)
+	view, err := svc.ApplyMatch(game.ID, providerID)
+	if err != nil {
+		t.Fatalf("second refresh: %v", err)
+	}
+	return svc, game, shots[0], arts[0], view
+}
+
+func TestFullRefreshCarriesPicturesOnlyWhenTheirDownloadsFailed(t *testing.T) {
+	failing := func(base string) GameMetadata {
+		meta := fullMetadata(base)
+		meta.Cover = &ImageRef{URL: base + "/264x374-cover.png"}
+		meta.Screenshots = []ImageRef{{URL: base + "/gone-s.png", Width: 1920, Height: 1080}}
+		meta.Artworks = []ImageRef{{URL: base + "/gone-a.png", Width: 1920, Height: 1080}}
+		return meta
+	}
+	none := func(base string) GameMetadata {
+		meta := fullMetadata(base)
+		meta.Cover = &ImageRef{URL: base + "/264x374-cover.png"}
+		meta.Screenshots, meta.Artworks = nil, nil
+		return meta
+	}
+
+	t.Run("same game, every download failed: the stored ones stay", func(t *testing.T) {
+		svc, game, shot, art, view := carryCase(t, "2657", failing)
+		if got := storedOfKind(svc, game.ID, AssetArtwork); len(got) != 1 || got[0].ID != art.ID {
+			t.Fatalf("artworks = %v, want the stored one carried", sources(got))
+		}
+		if got := storedOfKind(svc, game.ID, AssetScreenshot); len(got) != 1 || got[0].ID != shot.ID {
+			t.Fatalf("screenshots = %v, want the stored one carried", sources(got))
+		}
+		if view.HeroIsPoster || view.Hero != art.URL {
+			t.Fatalf("hero = %q poster=%v, want the carried artwork", view.Hero, view.HeroIsPoster)
+		}
+	})
+
+	t.Run("same game, the response lists none: nothing stays", func(t *testing.T) {
+		svc, game, _, _, view := carryCase(t, "2657", none)
+		if got := storedOfKind(svc, game.ID, AssetArtwork); len(got) != 0 {
+			t.Fatalf("artworks = %v, want none", sources(got))
+		}
+		if got := storedOfKind(svc, game.ID, AssetScreenshot); len(got) != 0 {
+			t.Fatalf("screenshots = %v, want none", sources(got))
+		}
+		if !view.HeroIsPoster {
+			t.Fatalf("hero = %q, want the poster", view.Hero)
+		}
+	})
+
+	for name, next := range map[string]func(string) GameMetadata{"downloads failed": failing, "response lists none": none} {
+		t.Run("another game, "+name+": nothing of the old game stays", func(t *testing.T) {
+			svc, game, _, _, view := carryCase(t, "7", next)
+			if view.Game.ExternalIDs.IGDB != "7" {
+				t.Fatalf("igdb id = %q, want the new match", view.Game.ExternalIDs.IGDB)
+			}
+			if got := storedOfKind(svc, game.ID, AssetArtwork); len(got) != 0 {
+				t.Fatalf("artworks = %v, want none of the old game", sources(got))
+			}
+			if got := storedOfKind(svc, game.ID, AssetScreenshot); len(got) != 0 || len(view.Screenshots) != 0 {
+				t.Fatalf("screenshots = %v (view %d), want none of the old game", sources(got), len(view.Screenshots))
+			}
+			if !view.HeroIsPoster {
+				t.Fatalf("hero = %q, want the new game's poster", view.Hero)
+			}
+		})
 	}
 }

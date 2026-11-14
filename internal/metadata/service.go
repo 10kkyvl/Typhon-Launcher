@@ -1024,6 +1024,16 @@ func matchIDs(meta GameMetadata) (igdbID, steamID string) {
 	return igdbID, steamID
 }
 
+// sameMatch reports whether meta answers for the game the stored pictures
+// were downloaded for.
+func sameMatch(game catalog.Game, meta GameMetadata) bool {
+	igdbID, steamID := matchIDs(meta)
+	if igdbID != "" && game.ExternalIDs.IGDB != "" {
+		return igdbID == game.ExternalIDs.IGDB
+	}
+	return steamID != "" && steamID == game.ExternalIDs.Steam
+}
+
 type assetBatch struct {
 	assets  []MediaAsset
 	created []MediaAsset
@@ -1122,7 +1132,9 @@ func (s *Service) buildAssets(ctx context.Context, game catalog.Game, meta GameM
 	}
 
 	fetched := map[AssetType][]MediaAsset{}
+	listed := map[AssetType]bool{}
 	for i := first; i < len(results); i++ {
+		listed[kinds[i]] = true
 		if results[i].err != nil {
 			slog.Warn("download image", "kind", kinds[i], "game", game.ID, "url", urls[i], "error", results[i].err)
 			continue
@@ -1130,14 +1142,18 @@ func (s *Service) buildAssets(ctx context.Context, game catalog.Game, meta GameM
 		fetched[kinds[i]] = append(fetched[kinds[i]], results[i].asset)
 		batch.created = append(batch.created, results[i].asset)
 	}
-	shots := fetched[AssetScreenshot]
-	if len(shots) == 0 {
-		shots = carryAssets(previous, AssetScreenshot)
+	// Stored pictures stand in only for this answer's own pictures that all
+	// failed to download: an answer that lists none has none, and pictures
+	// of a previously matched game never stand in for the new one.
+	same := sameMatch(game, meta)
+	kept := func(kind AssetType) []MediaAsset {
+		if len(fetched[kind]) > 0 || !listed[kind] || !same {
+			return fetched[kind]
+		}
+		return carryAssets(previous, kind)
 	}
-	arts := fetched[AssetArtwork]
-	if len(arts) == 0 {
-		arts = carryAssets(previous, AssetArtwork)
-	}
+	shots := kept(AssetScreenshot)
+	arts := kept(AssetArtwork)
 	batch.assets = append(batch.assets, shots...)
 	batch.assets = append(batch.assets, arts...)
 	if wide, ok := wideHero(batch.assets); ok {
