@@ -363,12 +363,16 @@ describe('GameDetails: the metadata view that could not be read', () => {
     const { user } = renderDom(GameDetails, { id: 'g1' });
     const notice = await metaNotice();
     const retry = within(notice).getByRole('button', { name: msg('common.retry') });
+    const said = notice.querySelector('.message') as HTMLElement;
     retry.focus();
 
     await user.keyboard('{Enter}');
 
     await vi.waitFor(() => expect(getMetadataView).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(notice.querySelector('.body')?.getAttribute('role')).toBe('status'));
+    // A failure that repeats is said afresh: the notice draws its message anew.
+    await vi.waitFor(() => expect(said.isConnected).toBe(false));
+    expect(notice.querySelector('.message')).not.toBeNull();
     expect(notice.isConnected).toBe(true);
     expect(document.activeElement).toBe(retry);
     expect(toastsOf('danger')).toEqual([]);
