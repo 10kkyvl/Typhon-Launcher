@@ -19,6 +19,7 @@ vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRu
 vi.mock('../services/backend', () => ({ inWails: true }));
 vi.mock('../../../bindings/typhon/internal/library', () => ({ Service: { PlayGame: play, GetGames: vi.fn(async () => []) } }));
 vi.mock('../../../bindings/typhon/internal/cloudsaves', () => ({ Service: { Status: status, ResolveConflict: resolve, AllowLaunchOnce: allow } }));
+vi.mock('../../../bindings/typhon/internal/metadata', () => ({ Service: { SetLanguage: vi.fn(async () => {}) } }));
 vi.mock('../bigpicture/components/HomePage.svelte', async () => ({ default: (await import('../testing/BigPicturePageStub.svelte')).default }));
 vi.mock('../bigpicture/components/LibraryPage.svelte', async () => ({ default: (await import('../testing/BigPicturePageStub.svelte')).default }));
 vi.mock('../bigpicture/components/CatalogPage.svelte', async () => ({ default: (await import('../testing/BigPicturePageStub.svelte')).default }));
