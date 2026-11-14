@@ -6,7 +6,15 @@ import { msg } from '../../lib/i18n';
 import { libraryGames } from '../../lib/stores/library';
 import { findEmulatedCover, setExecutable, type LibraryGame } from '../../lib/services/library';
 import { missingImages as fetchMissingImages, selectImageFile } from '../../lib/services/emulators';
-import { fetchMetadata, startDownloadFrom, type DownloadOrigin } from '../../lib/services/downloads';
+import {
+  cancelDownload,
+  deleteDownloadData,
+  fetchMetadata,
+  startDownloadFrom,
+  type Download as DownloadItem,
+  type DownloadOrigin,
+} from '../../lib/services/downloads';
+import { downloads } from '../../lib/stores/downloads';
 import { getMetadataView, refreshMetadata, type MetadataView } from '../../lib/services/metadata';
 import { metadataAvailable } from '../../lib/stores/metadata';
 import { missingImages as missingImagesStore } from '../../lib/stores/missingImages';
@@ -24,12 +32,13 @@ import {
 } from '../../lib/services/sources';
 import type { Settings } from '../../lib/services/settings';
 import { getVerifyState } from '../../lib/services/updates';
-import { inspectRemoval, removeGame, type RemovalInfo } from '../../lib/services/install';
+import { inspectDownload, inspectRemoval, removeGame, type RemovalInfo } from '../../lib/services/install';
 import { navigate, resetHistory, route } from '../../lib/stores/router';
 import { settings } from '../../lib/stores/settings';
 import { sources } from '../../lib/stores/sources';
 import { toasts } from '../../lib/stores/toasts';
 import { renderDom } from '../../lib/testing/dom';
+import GameRouteHarness from '../../lib/testing/GameRouteHarness.svelte';
 import GameDetails from './GameDetails.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
@@ -52,6 +61,8 @@ vi.mock('../../lib/services/downloads', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/downloads')>()),
   fetchMetadata: vi.fn(),
   startDownloadFrom: vi.fn(),
+  cancelDownload: vi.fn(),
+  deleteDownloadData: vi.fn(),
   discardMetadata: vi.fn(async () => {}),
 }));
 vi.mock('../../lib/services/emulators', async (importOriginal) => ({
@@ -68,6 +79,7 @@ vi.mock('../../lib/services/install', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/install')>()),
   inspectRemoval: vi.fn(),
   removeGame: vi.fn(),
+  inspectDownload: vi.fn(),
 }));
 vi.mock('../../lib/services/updates', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/updates')>()),
@@ -157,6 +169,9 @@ afterEach(() => {
   vi.mocked(findEmulatedCover).mockReset();
   vi.mocked(fetchMissingImages).mockReset().mockResolvedValue([]);
   missingImagesStore.set(new Set());
+  vi.mocked(cancelDownload).mockReset();
+  vi.mocked(deleteDownloadData).mockReset();
+  vi.mocked(inspectDownload).mockReset();
   vi.mocked(inspectRemoval).mockReset();
   vi.mocked(removeGame).mockReset();
   libraryGames.set([]);
@@ -557,5 +572,148 @@ describe('GameDetails: the image of an emulated game', () => {
     await user.click(await screen.findByRole('button', { name: msg('emul.coverFind') }));
 
     await vi.waitFor(() => expect(toastsOf('danger')).toEqual([msg('emul.coverFailed')]));
+  });
+});
+
+// G-24 was read as "the page is not keyed on its id": App.svelte renders it without a key. The shell
+// is: AppShell renders every page inside `{#key $route}`, and each navigation is a new route entry,
+// so going from one game to another builds the page again. This pins that, through the shell.
+describe('GameDetails: going from one game to another in the shell', () => {
+  const zagreus = { ...hades, id: 'g2', title: 'Zagreus', canonicalGameId: 'c2', installDir: '/games/zagreus' } as LibraryGame;
+  const long = (word: string) => `${word} crawls a dungeon. `.repeat(30).trim();
+
+  beforeEach(() => {
+    metadataAvailable.set(true);
+    libraryGames.set([hades, zagreus]);
+    vi.mocked(getMetadataView).mockImplementation(async (id) =>
+      view({ game: { id, title: id === 'c1' ? 'Hades' : 'Zagreus', summary: long(id) } as MetadataView['game'] }),
+    );
+    navigate('game', { id: 'g1' });
+  });
+
+  it('starts the next game from scratch: summary, tab, a refresh still running for the first', async () => {
+    const pending = deferred<MetadataView>();
+    vi.mocked(refreshMetadata).mockReturnValueOnce(pending.promise).mockResolvedValue(view({ game: { id: 'c2', title: 'Zagreus' } as MetadataView['game'] }));
+    const { user } = renderDom(GameRouteHarness, {});
+    const first = await screen.findByRole('heading', { level: 1, name: 'Hades' });
+    await user.click(await screen.findByRole('button', { name: msg('games.detailExpandSummary') }));
+    await user.click(screen.getByRole('tab', { name: msg('games.detailTabScreenshots') }));
+    await user.click(screen.getByRole('button', { name: msg('games.moreLabel') }));
+    await user.click(await screen.findByRole('menuitem', { name: msg('games.detailMetaRefreshLabel') }));
+    expect(refreshMetadata).toHaveBeenCalledWith('c1');
+
+    navigate('game', { id: 'g2' });
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Zagreus' })).toBeTruthy();
+    expect(first.isConnected).toBe(false);
+    expect(screen.getByRole('tab', { name: msg('games.detailTabOverview') }).getAttribute('aria-selected')).toBe('true');
+    expect((await screen.findByRole('button', { name: msg('games.detailExpandSummary') })).getAttribute('aria-expanded')).toBe('false');
+    await user.click(screen.getByRole('button', { name: msg('games.moreLabel') }));
+    await user.click(await screen.findByRole('menuitem', { name: msg('games.detailMetaRefreshLabel') }));
+    await vi.waitFor(() => expect(refreshMetadata).toHaveBeenLastCalledWith('c2'));
+
+    pending.resolve(view({ game: { id: 'c1', title: 'Hades' } as MetadataView['game'] }));
+    await tick();
+    expect(screen.getByRole('heading', { level: 1, name: 'Zagreus' })).toBeTruthy();
+  });
+});
+
+describe('GameDetails: late answers for the game the page showed before', () => {
+  it('do not write into the next game when its id changes in place', async () => {
+    libraryGames.set([]);
+    const a = {
+      catalog: deferred<CatalogGame | null>(),
+      meta: deferred<MetadataView>(),
+      releases: deferred<ReleaseGroup[]>(),
+      related: deferred<RelatedReleases[]>(),
+    };
+    vi.mocked(getCatalogGame).mockImplementation((id) =>
+      id === 'cA' ? a.catalog.promise : Promise.resolve({ id: 'cB', title: 'Bastion' } as CatalogGame),
+    );
+    vi.mocked(getMetadataView).mockImplementation((id) =>
+      id === 'cA' ? a.meta.promise : Promise.resolve(view({ game: { id: 'cB', title: 'Bastion' } as MetadataView['game'] })),
+    );
+    vi.mocked(getReleasesForGame).mockImplementation((id) =>
+      id === 'cA' ? a.releases.promise : Promise.resolve([group({ id: 'rB', rawTitle: 'Bastion v1', canonicalGameId: 'cB' })]),
+    );
+    vi.mocked(getRelatedReleases).mockImplementation((id) => (id === 'cA' ? a.related.promise : Promise.resolve([])));
+    const page = renderDom(GameDetails, { id: 'cA' });
+
+    await page.rerender({ id: 'cB' });
+    expect(await screen.findByRole('heading', { level: 1, name: 'Bastion' })).toBeTruthy();
+    expect(await screen.findByText('Bastion v1')).toBeTruthy();
+
+    a.catalog.resolve({ id: 'cA', title: 'Transistor' } as CatalogGame);
+    a.meta.resolve(view({ game: { id: 'cA', title: 'Transistor' } as MetadataView['game'] }));
+    a.releases.resolve([group({ id: 'rA', rawTitle: 'Transistor v1', canonicalGameId: 'cA' })]);
+    a.related.resolve([
+      { game: { id: 'server-a', title: 'Transistor PS4', relation: 'port' }, gameId: 'cA2', onPc: false, groups: [group({ id: 'rA2', rawTitle: 'Transistor PS4', platform: 'ps4' })] },
+    ]);
+    await tick();
+    await tick();
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Bastion' })).toBeTruthy();
+    expect(screen.getByText('Bastion v1')).toBeTruthy();
+    expect(screen.queryByText('Transistor v1')).toBeNull();
+    expect(screen.queryByText('Transistor PS4')).toBeNull();
+    expect(screen.queryByText('Transistor')).toBeNull();
+  });
+});
+
+describe('GameDetails: the releases notice', () => {
+  it('moves the focus from its Retry into the release list the answer brings', async () => {
+    const again = deferred<ReleaseGroup[]>();
+    vi.mocked(getReleasesForGame).mockRejectedValueOnce(new Error('offline')).mockReturnValueOnce(again.promise);
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    const notice = (await screen.findByText(msg('games.detailReleasesFailed'))).closest('.notice') as HTMLElement;
+    const retry = within(notice).getByRole('button', { name: msg('games.catalogRetry') });
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+    expect(retry.getAttribute('aria-busy')).toBe('true');
+    again.resolve([group({ id: 'r1', rawTitle: 'Hades v1' })]);
+
+    await vi.waitFor(() => expect(notice.isConnected).toBe(false));
+    const row = (await screen.findByText('Hades v1')).closest('.release-row') as HTMLElement;
+    await vi.waitFor(() => expect(document.activeElement).toBe(within(row).getByRole('button', { name: msg('ui.download') })));
+  });
+});
+
+describe('GameDetails: a download of the game that ended without an install', () => {
+  const ended = (status: 'failed' | 'completed') =>
+    ({ id: 'd1', name: 'Hades', status, progress: status === 'completed' ? 1 : 0.4, error: '', addedAt: '', completedAt: null, files: [], origin: { gameId: 'c1' } }) as unknown as DownloadItem;
+
+  beforeEach(() => {
+    libraryGames.set([]);
+    vi.mocked(getCatalogGame).mockResolvedValue({ id: 'c1', title: 'Hades' } as CatalogGame);
+  });
+
+  afterEach(() => downloads.set([]));
+
+  it.each([
+    ['failed', cancelDownload],
+    ['completed', deleteDownloadData],
+  ] as const)('a %s one is discarded through its own call, behind a confirmation', async (status, call) => {
+    downloads.set([ended(status)]);
+    vi.mocked(call).mockResolvedValueOnce(undefined);
+    const { user } = renderDom(GameDetails, { id: 'c1' });
+    await user.click(await screen.findByRole('button', { name: msg('games.moreLabel') }));
+    await user.click(await screen.findByRole('menuitem', { name: msg('games.detailDiscardDownloadLabel') }));
+    const dialog = await screen.findByRole('dialog');
+
+    await user.click(within(dialog).getByRole('button', { name: msg('games.detailDiscardDownloadLabel') }));
+
+    await vi.waitFor(() => expect(call).toHaveBeenCalledWith('d1'));
+    expect(status === 'failed' ? deleteDownloadData : cancelDownload).not.toHaveBeenCalled();
+  });
+
+  it('a completed one opens the install dialog on that download', async () => {
+    downloads.set([ended('completed')]);
+    vi.mocked(inspectDownload).mockReturnValueOnce(new Promise(() => {}));
+    const { user } = renderDom(GameDetails, { id: 'c1' });
+
+    await user.click(await screen.findByRole('button', { name: msg('games.primaryInstall') }));
+
+    await vi.waitFor(() => expect(inspectDownload).toHaveBeenCalledWith('d1'));
   });
 });
