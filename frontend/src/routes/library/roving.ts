@@ -182,10 +182,14 @@ export function createRoving(options: RovingOptions): { attach: Attachment<HTMLE
     }
   }
 
-  // A press (a right click included) makes its item current, so a menu opened on it returns there.
+  // A press on a control (a right click included) makes its item current, so a menu opened on it
+  // returns there. A press on the item's own box (its padding, the gap a cell reaches into) is no
+  // choice of the player's: the item takes focus from script only, so it neither takes focus nor
+  // moves the Tab stop.
   function onpointerdown(event: PointerEvent) {
     if (!list) return;
     const item = itemOf(list, event.target);
+    if (item && item === event.target) return;
     const id = item ? options.idAt(items(list).indexOf(item)) : undefined;
     if (id !== undefined && id !== options.current()) {
       options.onmove(id);
@@ -206,7 +210,14 @@ export function createRoving(options: RovingOptions): { attach: Attachment<HTMLE
       if (touched.size > 0) refresh(touched);
     });
     observer.observe(node, { childList: true, subtree: true });
-    const offs = [on(node, 'keydown', onkeydown), on(node, 'focusin', onfocusin), on(node, 'pointerdown', onpointerdown)];
+    const offs = [
+      on(node, 'keydown', onkeydown),
+      on(node, 'focusin', onfocusin),
+      on(node, 'pointerdown', onpointerdown),
+      on(node, 'mousedown', (event) => {
+        if (itemOf(node, event.target) === event.target) event.preventDefault();
+      }),
+    ];
     return () => {
       observer.disconnect();
       offs.forEach((off) => off());

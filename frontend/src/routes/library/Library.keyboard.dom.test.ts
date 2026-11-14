@@ -1,6 +1,6 @@
 // First: services/library reaches this store back through stores/cloudsaves (see Library.state.dom.test.ts).
 import { libraryGames, libraryLoaded, runningGames } from '../../lib/stores/library';
-import { fireEvent, screen } from '@testing-library/svelte';
+import { fireEvent, screen, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
@@ -247,5 +247,35 @@ describe('Library: the game focus moves to comes into view', () => {
     await user.keyboard(view === 'grid' ? '{ArrowUp}' : '{ArrowUp}');
     expect(revealed().at(-1)).toBe(view === 'grid' ? 'Charlie' : 'Echo');
     for (const [options] of into.mock.calls) expect(options).toEqual({ block: 'nearest', inline: 'nearest' });
+  });
+});
+
+describe.each(['grid', 'list'] as const)('Library (%s): a pointer press', (view) => {
+  beforeEach(() => libraryView.set(view));
+
+  it('on an item\'s own box (its padding, not a control) takes neither focus nor the Tab stop', async () => {
+    const { user } = renderDom(Library);
+    const search = screen.getByLabelText(msg('games.librarySearchPlaceholder'));
+    search.focus();
+    const bravo = (results() as HTMLElement).children[1] as HTMLElement;
+
+    await user.pointer({ keys: '[MouseLeft]', target: bravo });
+
+    expect(document.activeElement).toBe(search);
+    beforeList().focus();
+    await user.tab();
+    expect(focusedTitle()).toBe('Alpha');
+  });
+
+  it('on a control of an item still makes that item the Tab stop', async () => {
+    const { user } = renderDom(Library);
+    const bravo = (results() as HTMLElement).children[1] as HTMLElement;
+
+    await user.click(within(bravo).getByRole('button', { name: msg('ui.play') }));
+
+    expect(playGame).toHaveBeenCalledWith('g-bravo');
+    beforeList().focus();
+    await user.tab();
+    expect(focusedTitle()).toBe('Bravo');
   });
 });
