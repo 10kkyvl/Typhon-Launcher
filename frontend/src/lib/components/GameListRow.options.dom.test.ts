@@ -69,4 +69,13 @@ describe('GameListRow: what the page may ask of a row', () => {
     await user.keyboard('{Enter}');
     expect(unwatch).toHaveBeenCalledTimes(1);
   });
+
+  it('skips layout off screen only when the page asks (`lazy`)', () => {
+    setup();
+    expect(row().classList.contains('lazy')).toBe(false);
+    document.body.replaceChildren();
+
+    setup({ lazy: true });
+    expect(row().classList.contains('lazy')).toBe(true);
+  });
 });

@@ -39,6 +39,7 @@
     actions,
     titleTone = 'muted',
     ambient = false,
+    lazy = false,
     onopen,
     onplay,
     onstop,
@@ -64,6 +65,8 @@
     actions?: GameListRowAction[];
     titleTone?: 'muted' | 'plain';
     ambient?: boolean;
+    /** Far off screen the row is not laid out or painted (content-visibility): for a long list. */
+    lazy?: boolean;
     onopen: (id: string) => void;
     onplay?: (id: string) => void;
     onstop?: (id: string) => void;
@@ -82,7 +85,7 @@
     });
 </script>
 
-<li class="row" class:running {@attach pressOpens} use:ambientHover={ambient ? id : null}>
+<li class="row" class:running class:lazy {@attach pressOpens} use:ambientHover={ambient ? id : null}>
   <span class="thumb"><Artwork src={cover} fallback={coverFallback} alt="" label={title} seed={artSeed ?? id} ratio="3 / 4" radius="var(--radius-xs)" /></span>
   <div class="main">
     <span class="title" id="{uid}-title"><TextLink tone={titleTone} truncate onclick={() => onopen(id)}>{title}</TextLink></span>
@@ -134,6 +137,13 @@
     border-radius: var(--radius-md);
     cursor: pointer;
     transition: background var(--dur) var(--ease);
+  }
+
+  /* Off screen it keeps the height of its cover; what it draws (the hover fill, focus rings) stays
+     inside its padding, where containment clips. */
+  .row.lazy {
+    content-visibility: auto;
+    contain-intrinsic-size: auto calc(var(--row-thumb-w) * 4 / 3);
   }
 
   .row:hover,
