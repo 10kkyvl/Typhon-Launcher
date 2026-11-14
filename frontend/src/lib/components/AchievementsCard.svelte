@@ -12,7 +12,6 @@
   import { achievementsStamp } from '../stores/achievements';
   import { toast } from '../stores/toasts';
   import { dateTime } from '../utils/format';
-  import { errorMessage } from '../utils/errors';
   import Button from './Button.svelte';
   import Card from './Card.svelte';
   import Notice from './Notice.svelte';
@@ -44,7 +43,7 @@
 
   function failureText(err: unknown, fallback: string): string {
     const code = errorCode(err);
-    return hasMessage(code) ? msg(code) : `${fallback}: ${errorMessage(err)}`;
+    return hasMessage(code) ? msg(code) : fallback;
   }
 
   // A retry keeps the failure on screen until its answer: the notice and its focused button stay.

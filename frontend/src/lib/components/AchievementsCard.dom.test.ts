@@ -1,4 +1,5 @@
 import { screen, within } from '@testing-library/svelte';
+import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { fetchAchievements, rescanAchievements, type AchievementsView } from '../services/achievements';
@@ -135,5 +136,37 @@ describe('AchievementsCard: refreshing', () => {
     rescan.resolve(view({ unlocked: 2 }));
     await vi.waitFor(() => expect(refresh.hasAttribute('aria-busy')).toBe(false));
     expect(document.activeElement).toBe(refresh);
+  });
+});
+
+describe('AchievementsCard: what a failure says', () => {
+  const noticeText = (button: HTMLElement) => button.closest('.notice')?.querySelector('.text')?.textContent?.trim();
+
+  it('a load failure whose code has no text says the fallback alone, never the Go words or the code', async () => {
+    vi.mocked(fetchAchievements).mockRejectedValue(new Error('typhon:achievements.scan_failed: чтение файла'));
+    renderDom(AchievementsCard, { gameId: 'g1' });
+
+    const retry = await screen.findByRole('button', { name: msg('common.retry') });
+
+    expect(noticeText(retry)).toBe(msg('games.achievementsLoadError'));
+  });
+
+  it('a load failure whose code has a text says that text', async () => {
+    vi.mocked(fetchAchievements).mockRejectedValue(new Error('typhon:achievements.store_broken: файл повреждён'));
+    renderDom(AchievementsCard, { gameId: 'g1' });
+
+    const retry = await screen.findByRole('button', { name: msg('common.retry') });
+
+    expect(noticeText(retry)).toBe(msg('achievements.store_broken'));
+  });
+
+  it('a refresh failure whose code has no text toasts the fallback alone', async () => {
+    vi.mocked(fetchAchievements).mockResolvedValue(view());
+    vi.mocked(rescanAchievements).mockRejectedValue(new Error('typhon:achievements.scan_failed: чтение файла'));
+    const { user } = renderDom(AchievementsCard, { gameId: 'g1' });
+
+    await user.click(await screen.findByRole('button', { name: msg('games.achievementsRefresh') }));
+
+    await vi.waitFor(() => expect(get(toasts).map((item) => item.message)).toEqual([msg('games.achievementsRefreshError')]));
   });
 });
