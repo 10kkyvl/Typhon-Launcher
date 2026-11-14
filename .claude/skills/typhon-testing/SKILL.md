@@ -44,6 +44,11 @@ or rewritten.
 - Frontend: stores and services are tested with vitest by behaviour (event arrived → state changed);
   interactions go in a `*.dom.test.ts` (see `.claude/rules/frontend.md`); an SSR snapshot proves
   markup only.
+- Vitest traps: `beforeEach(() => mock.mockReset())` returns the mock, which vitest runs as a teardown
+  (a rejecting mock then fails the test after its body): use a block body.
+  `vi.mock('…/services/library', importOriginal)` leaves `stores/library` on the real service, because
+  `services/library → stores/cloudsaves → stores/library` is an import cycle: import `stores/library`
+  first.
 
 ## When not to write one
 

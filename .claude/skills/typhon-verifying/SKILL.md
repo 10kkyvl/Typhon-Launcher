@@ -18,6 +18,9 @@ request matching observable behaviour, with the evidence next to it.
    gets its own line.
 4. Go: `go test ./internal/<pkg>/ -count=1`, `-race` for concurrent code,
    `GOOS=windows GOARCH=amd64 go vet ./...` if platform files changed; before push `wails3 task check:local`.
+   A long check is green only by its exit code as the last line (`RC=$?; …; echo "CHECK_LOCAL_EXIT=$RC"`):
+   "N files passed" is not enough, since vitest also exits 1 on an unhandled error outside any test; a
+   `tail` can cut the code off.
 5. Frontend: `npm run check`, affected `vitest` files; for screen behaviour, a live run with
    before/after screenshots (desktop and Big Picture). Bindings regenerated if exports changed.
 6. Live scenario "from click to result" for user-facing changes: status, modal, error, retry. Choose
