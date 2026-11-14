@@ -10,15 +10,22 @@ import { gameArt } from '../../lib/stores/metadata';
 import { libraryView } from '../../lib/stores/ui';
 import { playtime, relativeDate } from '../../lib/utils/format';
 import { renderDom } from '../../lib/testing/dom';
+import { libraryGenres } from '../../lib/stores/genres';
+import { genreLabel } from '../../lib/metadata/labels';
 import Library from './Library.svelte';
-import { carousel, played, recentTitles, slideTitles } from './libraryTesting';
+import { carousel, played, recentTitles, shownTitles, slideTitles } from './libraryTesting';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
+vi.mock('../../lib/stores/genres', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/stores/genres')>()),
+  requestLibraryGenres: vi.fn(async () => {}),
+}));
 vi.mock('../../lib/services/library', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/library')>()),
   getGames: vi.fn(async () => []),
   getCollections: vi.fn(async () => []),
+  allTags: vi.fn(async () => []),
   playGame: vi.fn(async () => {}),
   stopGame: vi.fn(async () => {}),
 }));
@@ -123,5 +130,32 @@ describe('Library: the carousel on the page', () => {
 
     expect(carousel()).toBeNull();
     expect(screen.getByRole('button', { name: msg('library.carousel.show') })).toBeTruthy();
+  });
+});
+
+describe('Library: a hidden game', () => {
+  const secret = played('g-secret', 'Secret One', 10, { canonicalGameId: 'c-secret', hidden: true, source: 'discovered' });
+
+  afterEach(() => libraryGenres.set({}));
+
+  it('is in "Hidden" and nowhere else: not in the list, the carousel, the row, the source menu or the genres', async () => {
+    libraryView.set('list');
+    libraryGames.set([secret, fifth, bare, wide, fourth, poster]);
+    libraryGenres.set({ 'c-secret': ['puzzle'], 'c-wide': ['shooter'] });
+    const { user } = renderDom(Library);
+
+    expect(shownTitles()).not.toContain('Secret One');
+    expect(slideTitles()).not.toContain('Secret One');
+    expect(recentTitles()).not.toContain('Secret One');
+    expect(screen.queryByRole('button', { name: msg('games.filterSourceAll') })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: msg('games.collectionAdd') }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).queryByRole('button', { name: genreLabel('puzzle') })).toBeNull();
+    expect(within(dialog).getByRole('button', { name: genreLabel('shooter') })).toBeTruthy();
+    await user.keyboard('{Escape}');
+
+    await user.click(screen.getByRole('radio', { name: msg('games.filterHidden') }));
+    expect(shownTitles()).toEqual(['Secret One']);
   });
 });
