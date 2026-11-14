@@ -402,7 +402,7 @@
   >
     {#snippet actions()}
       <GameActions
-        {data} {primary} {busy} {title} {localGame} {canonicalId} {installed} {wasInstalled} {external} {managed} {emulated}
+        {data} {primary} {busy} {localGame} {canonicalId} {installed} {wasInstalled} {external} {managed} {emulated}
         {updateIsRelease} {terminalDownload} {updateCard} {otherVersionsEl} bind:statusOpen bind:tagsOpen {onMenu} {startDownload}
         {retryTerminalDownload} {installFromTerminalDownload}
       />

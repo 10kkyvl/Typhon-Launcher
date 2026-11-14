@@ -14,27 +14,28 @@
     Square,
     Tag,
   } from '@lucide/svelte';
+  import { untrack } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import Notice from '../../lib/components/Notice.svelte';
-  import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import type UpdateCard from '../../lib/components/UpdateCard.svelte';
   import LeadAction from './LeadAction.svelte';
   import { libraryErrorText, type GamePageData } from './gamePageData.svelte';
   import { playLabel } from '../../lib/game/profiles';
   import { statusLabel } from '../../lib/game/status';
-  import type { BusyState, PrimaryAction, TerminalDownloadStatus } from '../../lib/game/view';
+  import type { BusyState, PrimaryAction, PrimaryKind, TerminalDownloadStatus } from '../../lib/game/view';
   import { msg } from '../../lib/i18n';
   import { installErrorText } from '../../lib/install/installErrors';
   import { isInstalledImage } from '../../lib/library/emulation';
   import type { Download as DownloadItem } from '../../lib/services/downloads';
-  import { playGame, playGameProfile, stopGame, type LibraryGame } from '../../lib/services/library';
+  import { launchesInFlight, playGame, playGameProfile, stopGame, type LibraryGame } from '../../lib/services/library';
   import { openGameProperties } from '../../lib/stores/gameProperties';
   import { metadataAvailable } from '../../lib/stores/metadata';
   import { saveBackupsEnabled } from '../../lib/stores/savebackup';
   import { toast } from '../../lib/stores/toasts';
   import { toggleWatch, watchedIds } from '../../lib/stores/watchlist';
+  import { focusHandOff } from '../../lib/utils/focusHandOff';
   import { progressPercent } from '../../lib/utils/format';
 
   /**
@@ -45,7 +46,6 @@
     data,
     primary,
     busy,
-    title,
     localGame,
     canonicalId,
     installed,
@@ -67,7 +67,6 @@
     data: GamePageData;
     primary: PrimaryAction;
     busy: BusyState | null;
-    title: string;
     localGame: LibraryGame | undefined;
     canonicalId: string | undefined;
     installed: boolean;
@@ -123,63 +122,151 @@
       : []),
   ]);
 
+  // A launch or a stop this page sent and Go has not answered yet. A launch another screen sent counts
+  // too (the service's set): the button is busy either way and a second press sends nothing.
+  let pending = $state<'launch' | 'stop' | null>(null);
+  const launching = $derived(pending === 'launch' || Boolean(localGame && $launchesInFlight.has(localGame.id)));
+  const launchKinds: readonly string[] = ['play', 'update', 'stop'];
+
+  interface Lead {
+    /** The action a press runs; with Update offered beside it, the main button is Play. */
+    kind: PrimaryKind;
+    label: string;
+    /** What the live region says of it: the label without a percentage that keeps moving. */
+    said: string;
+    busy: boolean;
+    progress: { value: number; indeterminate?: boolean } | null;
+  }
+
+  /** What the main button shows: the page's action, or the launch or stop in flight over it. */
+  const lead = $derived.by((): Lead => {
+    const kind = primary.kind === 'update' ? 'play' : primary.kind;
+    const plain = (label: string, busy = false): Lead => ({ kind, label, said: label, busy, progress: null });
+    if (launchKinds.includes(primary.kind) && launching) return plain(msg('games.mainActionLaunching'), true);
+    if (primary.kind === 'stop' && pending === 'stop') return plain(msg('games.mainActionStopping'), true);
+    if (primary.kind === 'progress') {
+      const label = busy?.indeterminate
+        ? primary.label
+        : msg('games.mainActionProgress', { label: primary.label, percent: busyPercent });
+      return { kind, label, said: primary.label, busy: true, progress: { value: busyPercent, indeterminate: busy?.indeterminate } };
+    }
+    if (primary.kind === 'resolving') return plain(primary.label, true);
+    if (kind === 'play') return plain(localGame ? playLabel(localGame) : msg('games.play'));
+    return plain(primary.label);
+  });
+
+  // Said once in the live region when the main button changes what it says; a percentage moving is
+  // not a change. Nothing is said for the state the page opens in.
+  const said = $derived(lead.said);
+  let announcement = $state('');
+  let opened = false;
+  $effect(() => {
+    const text = said;
+    untrack(() => {
+      if (opened) announcement = text;
+      opened = true;
+    });
+  });
+
+  let leadButton = $state<HTMLButtonElement>();
+  let row = $state<HTMLDivElement>();
+  const showAdd = $derived(!localGame && Boolean(canonicalId));
+  const showUpdate = $derived(primary.kind === 'update');
+
+  // A control of the row that leaves the page while it holds focus (Add to library once the game is in
+  // the library, Update once the update runs) hands focus to the main button. Runs before it leaves.
+  $effect.pre(() => {
+    void showAdd;
+    void showUpdate;
+    untrack(() => {
+      const active = document.activeElement;
+      if (!row || !leadButton || !active || active === leadButton || !row.contains(active)) return;
+      // A main button with nothing to offer is disabled and takes no focus: the next control does.
+      void focusHandOff()(() => (leadButton?.disabled ? row?.querySelector<HTMLElement>('button:not(:disabled)') : leadButton));
+    });
+  });
+
   async function play() {
-    if (!localGame) return;
+    if (!localGame || launching) return;
+    pending = 'launch';
     try {
       await playGame(localGame.id);
     } catch (err) {
       toast(libraryErrorText(err, msg('games.errorPlayFailed')), 'danger');
+    } finally {
+      pending = null;
     }
   }
 
   async function playProfile(profileID: string) {
-    if (!localGame) return;
+    if (!localGame || launching) return;
+    pending = 'launch';
     try {
       await playGameProfile(localGame.id, profileID);
     } catch (err) {
       toast(libraryErrorText(err, msg('games.errorPlayFailed')), 'danger');
+    } finally {
+      pending = null;
     }
   }
 
   async function stop() {
-    if (!localGame) return;
+    if (!localGame || pending) return;
+    pending = 'stop';
     try {
       await stopGame(localGame.id);
-    } catch {
-      toast(msg('games.errorStopFailed'), 'danger');
+    } catch (err) {
+      toast(libraryErrorText(err, msg('games.errorStopFailed')), 'danger');
+    } finally {
+      pending = null;
     }
   }
 
-  function runPrimary() {
-    if (primary.kind === 'play') play();
-    else if (primary.kind === 'stop') stop();
-    else if (primary.kind === 'download') startDownload();
-    else if (primary.kind === 'other-versions') otherVersionsEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    else if (primary.kind === 'update') updateCard?.start();
-    else if (primary.kind === 'retry-download') retryTerminalDownload();
-    else if (primary.kind === 'install-download') installFromTerminalDownload();
+  // The second click of a double click is never an action of its own: the click that started a launch
+  // can land again after the game is already running, and must not be read as Stop.
+  function pressLead(event: MouseEvent) {
+    if (event.detail > 1 || lead.busy) return;
+    if (lead.kind === 'play') play();
+    else if (lead.kind === 'stop') stop();
+    else if (lead.kind === 'download') startDownload();
+    else if (lead.kind === 'other-versions') otherVersionsEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    else if (lead.kind === 'retry-download') retryTerminalDownload();
+    else if (lead.kind === 'install-download') installFromTerminalDownload();
+  }
+
+  function startUpdate() {
+    updateCard?.start();
   }
 </script>
 
-<div class="cta" data-part="game-actions">
-  {#if primary.kind === 'progress'}
-    <div class="progress">
-      <span class="progress-label">{primary.label}</span>
-      <ProgressBar
-        value={busyPercent}
-        indeterminate={busy?.indeterminate}
-        stretch
-        label={title}
-        valueText={`${primary.label}, ${busyPercent}%`}
-      />
-      {#if !busy?.indeterminate}<span class="progress-pct">{busyPercent}%</span>{/if}
-    </div>
-  {:else if primary.kind === 'update'}
-    <LeadAction kind="play" game={localGame} onclick={play} onpick={playProfile}>
-      <Play size="1.8rem" strokeWidth={2} fill="currentColor" />
-      {localGame ? playLabel(localGame) : msg('games.play')}
-    </LeadAction>
-    <Button size="lg" disabled={primary.disabled} onclick={runPrimary}>
+<div class="cta" data-part="game-actions" bind:this={row}>
+  <LeadAction
+    kind={lead.kind}
+    game={localGame}
+    disabled={primary.disabled && !lead.busy}
+    busy={lead.busy}
+    progress={lead.progress}
+    bind:element={leadButton}
+    onclick={pressLead}
+    onpick={playProfile}
+  >
+    {#if !lead.busy}
+      {#if lead.kind === 'play'}
+        <Play size="1.8rem" strokeWidth={2} fill="currentColor" />
+      {:else if lead.kind === 'stop'}
+        <Square size="1.4rem" strokeWidth={2} fill="currentColor" />
+      {:else if lead.kind === 'download'}
+        <Download size="1.6rem" strokeWidth={1.8} />
+      {:else if lead.kind === 'install-download'}
+        <HardDriveDownload size="1.6rem" strokeWidth={1.8} />
+      {/if}
+    {/if}
+    {lead.label}
+  </LeadAction>
+  <span class="sr-only" role="status">{announcement}</span>
+
+  {#if showUpdate}
+    <Button size="lg" onclick={startUpdate}>
       {#if updateIsRelease}
         <Sparkles size="1.5rem" strokeWidth={1.8} />
       {:else}
@@ -187,29 +274,10 @@
       {/if}
       {primary.label}
     </Button>
-  {:else}
-    <LeadAction
-      kind={primary.kind}
-      game={localGame}
-      disabled={primary.disabled}
-      onclick={runPrimary}
-      onpick={playProfile}
-    >
-      {#if primary.kind === 'play'}
-        <Play size="1.8rem" strokeWidth={2} fill="currentColor" />
-      {:else if primary.kind === 'stop'}
-        <Square size="1.4rem" strokeWidth={2} fill="currentColor" />
-      {:else if primary.kind === 'download'}
-        <Download size="1.6rem" strokeWidth={1.8} />
-      {:else if primary.kind === 'install-download'}
-        <HardDriveDownload size="1.6rem" strokeWidth={1.8} />
-      {/if}
-      {primary.kind === 'play' && localGame ? playLabel(localGame) : primary.label}
-    </LeadAction>
   {/if}
 
-  {#if !localGame && canonicalId}
-    <Button size="lg" disabled={data.addingToLibrary} onclick={data.addToLibrary}>
+  {#if showAdd && canonicalId}
+    <Button size="lg" busy={data.addingToLibrary} onclick={data.addToLibrary}>
       <BookmarkPlus size="1.5rem" strokeWidth={1.8} />
       {msg('games.detailAddToLibraryButton')}
     </Button>
@@ -300,29 +368,6 @@
 
   .heart.pulse {
     animation: pop-in var(--dur-slow) var(--ease-spring);
-  }
-
-  .progress {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    width: min(42rem, 100%);
-    height: var(--control-lg);
-    padding: 0 1.8rem;
-    border-radius: var(--radius-md);
-    background: var(--surface-3);
-  }
-
-  .progress-label {
-    font-size: var(--font-sm);
-    font-weight: 500;
-    white-space: nowrap;
-  }
-
-  .progress-pct {
-    font-size: var(--font-xs);
-    color: var(--text-2);
-    font-variant-numeric: tabular-nums;
   }
 
   .note-plate {

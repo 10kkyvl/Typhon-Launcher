@@ -165,6 +165,17 @@ const plan = {
   backupAvailable: false,
 } as unknown as NonNullable<Update['plan']>;
 
+function release(id: string, gameId: string, title: string): ReleaseGroup {
+  return {
+    sourceName: 'Fixture source',
+    release: {
+      id, sourceId: 'fixture', rawTitle: title, title, normalizedTitle: title.toLowerCase(), canonicalGameId: gameId,
+      version: '', size: 1024, uploadedAt: null, uris: [], matchStatus: 'matched', matchConfidence: 1, matchMethod: 'override',
+      availability: 'available', firstSeenAt: '', lastSeenAt: '', createdAt: '',
+    },
+  } as ReleaseGroup;
+}
+
 /** The hero's action row. */
 function actions(): HTMLElement {
   const row = document.querySelector<HTMLElement>('[data-part="game-actions"]');
@@ -218,6 +229,197 @@ afterEach(() => {
   document.body.replaceChildren();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+});
+
+describe('GameDetails main action: a launch in flight', () => {
+  it('sends one launch for a double press and says it is launching, busy, while the call runs', async () => {
+    const launch = deferred<void>();
+    vi.mocked(playGame).mockReturnValueOnce(launch.promise);
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    const play = await mainAction(playName);
+
+    await user.dblClick(play);
+
+    expect(playGame).toHaveBeenCalledTimes(1);
+    expect(play.getAttribute('aria-busy')).toBe('true');
+    expect(play.textContent).toContain(msg('games.mainActionLaunching'));
+    expect(play.hasAttribute('disabled')).toBe(false);
+    launch.resolve();
+  });
+
+  it('is busy while a launch another screen started is in flight, and a press sends nothing', async () => {
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    const play = await mainAction(playName);
+
+    inFlight.set(new Set(['g1']));
+    await vi.waitFor(() => expect(play.getAttribute('aria-busy')).toBe('true'));
+    await user.click(play);
+
+    expect(playGame).not.toHaveBeenCalled();
+    expect(play.textContent).toContain(msg('games.mainActionLaunching'));
+  });
+
+  it('never reads the second click of the double click that started the game as Stop', async () => {
+    // The game starts at once: Go reports it running before the second click lands.
+    vi.mocked(playGame).mockImplementation(async (id) => {
+      runningGames.set(new Set([id]));
+    });
+    renderDom(GameDetails, { id: 'g1' });
+    const play = await mainAction(playName);
+
+    await fireEvent.click(play, { detail: 1 });
+    await vi.waitFor(() => expect(play.textContent).toContain(msg('games.stop')));
+    await fireEvent.click(play, { detail: 2 });
+
+    expect(playGame).toHaveBeenCalledTimes(1);
+    expect(stopGame).not.toHaveBeenCalled();
+  });
+
+  it('never reads a held Enter that started the game as Stop', async () => {
+    vi.mocked(playGame).mockImplementation(async (id) => {
+      runningGames.set(new Set([id]));
+    });
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    const play = await mainAction(playName);
+    play.focus();
+
+    await user.keyboard('{Enter>4/}');
+
+    await vi.waitFor(() => expect(play.textContent).toContain(msg('games.stop')));
+    expect(playGame).toHaveBeenCalledTimes(1);
+    expect(stopGame).not.toHaveBeenCalled();
+  });
+
+  it('keeps Stop busy while the stop runs: a second press sends nothing', async () => {
+    runningGames.set(new Set(['g1']));
+    const stopping = deferred<void>();
+    vi.mocked(stopGame).mockReturnValueOnce(stopping.promise);
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    const stop = await mainAction(msg('games.stop'));
+
+    await user.click(stop);
+    await user.click(stop);
+
+    expect(stopGame).toHaveBeenCalledTimes(1);
+    expect(stop.getAttribute('aria-busy')).toBe('true');
+    expect(stop.textContent).toContain(msg('games.mainActionStopping'));
+    stopping.resolve();
+  });
+
+  it('says the launching state once in a live region', async () => {
+    const launch = deferred<void>();
+    vi.mocked(playGame).mockReturnValueOnce(launch.promise);
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    const play = await mainAction(playName);
+
+    await user.click(play);
+
+    const region = within(actions()).getByRole('status');
+    expect(region.textContent?.trim()).toBe(msg('games.mainActionLaunching'));
+    launch.resolve();
+  });
+});
+
+describe('GameDetails main action: a failed stop', () => {
+  it("says the code's own text", async () => {
+    runningGames.set(new Set(['g1']));
+    vi.mocked(stopGame).mockRejectedValueOnce(new Error('typhon:library.process_gone: процесс не найден'));
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+
+    await user.click(await mainAction(msg('games.stop')));
+
+    await vi.waitFor(() => expect(get(toasts).map((item) => item.message)).toContain(msg('library.process_gone')));
+    expect(get(toasts).map((item) => item.message)).not.toContain(msg('games.errorStopFailed'));
+  });
+});
+
+describe('GameDetails main action: focus stays on it when it changes', () => {
+  it('stays on the same element from Play to Stop while an update is offered', async () => {
+    updates.set([update()]);
+    vi.mocked(playGame).mockImplementation(async (id) => {
+      runningGames.set(new Set([id]));
+    });
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    const play = await mainAction(playName);
+    play.focus();
+
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(play.textContent).toContain(msg('games.stop')));
+    expect(play.isConnected).toBe(true);
+    expect(document.activeElement).toBe(play);
+  });
+
+  it('moves from the profile chooser to the main action when the chooser goes with the launch', async () => {
+    libraryGames.set([{ ...hades, profiles: [{ id: 'p1', name: 'DirectX 11', executable: 'dx11.exe' }] } as unknown as LibraryGame]);
+    vi.mocked(playGameProfile).mockImplementation(async (id) => {
+      runningGames.set(new Set([id]));
+      return true;
+    });
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    const play = await mainAction(playName);
+    const chooser = within(actions()).getByRole('button', { name: msg('games.playProfileChoose') });
+    chooser.focus();
+
+    await user.keyboard('{Enter}');
+    await user.click(await screen.findByRole('menuitemradio', { name: 'DirectX 11' }));
+
+    await vi.waitFor(() => expect(chooser.isConnected).toBe(false));
+    expect(playGameProfile).toHaveBeenCalledWith('g1', 'p1');
+    await vi.waitFor(() => expect(document.activeElement).toBe(play));
+  });
+
+  it('stays on the same element when Retry download turns into the download progress', async () => {
+    libraryGames.set([]);
+    vi.mocked(getCatalogGame).mockResolvedValue({ id: 'c1', title: 'Hades' } as CatalogGame);
+    downloads.set([download({ status: 'failed', error: '' })]);
+    vi.mocked(resumeDownload).mockImplementation(async () => {
+      downloads.set([download({ status: 'downloading', progress: 0.1 })]);
+    });
+    const { user } = renderDom(GameDetails, { id: 'c1' });
+    const retry = await mainAction(msg('games.hubRetryDownload'));
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(retry.textContent).toContain(msg('state.downloadsStatusDownloading')));
+    expect(retry.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
+  });
+
+  it('moves from Update to the main action when the update starts and Update goes', async () => {
+    updates.set([update({ plan })]);
+    renderDom(GameDetails, { id: 'g1' });
+    const lead = await mainAction(playName);
+    const button = await mainAction(msg('games.mainActionUpdate'));
+    button.focus();
+
+    updates.set([update({ plan, state: 'updating', step: 'download', progress: 0.2 })]);
+
+    await vi.waitFor(() => expect(button.isConnected).toBe(false));
+    await vi.waitFor(() => expect(document.activeElement).toBe(lead));
+    expect(lead.getAttribute('aria-busy')).toBe('true');
+  });
+
+  it('moves from Add to library to the main action when the game joins the library', async () => {
+    libraryGames.set([]);
+    vi.mocked(getCatalogGame).mockResolvedValue({ id: 'c1', title: 'Hades' } as CatalogGame);
+    const added = { ...hades, id: 'g9', installedAt: '', uninstalled: true, executable: '' } as unknown as LibraryGame;
+    vi.mocked(addCatalogGame).mockImplementation(async () => {
+      libraryGames.set([added]);
+      return added;
+    });
+    vi.mocked(getReleasesForGame).mockResolvedValue([release('r1', 'c1', 'Hades')]);
+    const { user } = renderDom(GameDetails, { id: 'c1' });
+    const lead = await mainAction(msg('games.primaryDownload'));
+    const add = await mainAction(msg('games.detailAddToLibraryButton'));
+    add.focus();
+
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(add.isConnected).toBe(false));
+    await vi.waitFor(() => expect(document.activeElement).toBe(lead));
+  });
 });
 
 describe('GameDetails main action: an installed game with another download of it', () => {
