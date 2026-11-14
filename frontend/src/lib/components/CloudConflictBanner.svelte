@@ -1,11 +1,8 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import Button from './Button.svelte';
-  import Notice from './Notice.svelte';
-  import { msg } from '../i18n';
+  import SaveConflictNotice from './SaveConflictNotice.svelte';
   import { cloudStatusLoading, openCloudConflict, showConflictOnPage, unsettledConflicts } from '../stores/cloudsaves';
   import { focusHandOff } from '../utils/focusHandOff';
-  import { dateTime } from '../utils/format';
 
   /**
    * The game page's word on a save conflict of its game: one line with when each copy changed (and
@@ -51,19 +48,6 @@
     if (shown && gameId) return showConflictOnPage(gameId);
   });
 
-  function when(iso: string): string {
-    const value = new Date(iso);
-    return Number.isNaN(value.getTime()) ? iso : dateTime(value);
-  }
-
-  const line = $derived.by(() => {
-    if (!details) return msg('cloudsaves.conflictTitle');
-    const params = { local: when(details.localUpdatedAt), remote: when(details.remoteUpdatedAt) };
-    return details.remoteDevice
-      ? msg('cloudsaves.bannerWhenDevice', { ...params, device: details.remoteDevice })
-      : msg('cloudsaves.bannerWhen', params);
-  });
-
   function open() {
     if (gameId) openCloudConflict(gameId);
   }
@@ -72,12 +56,7 @@
 {#if shown}
   <div class="banner" bind:this={box}>
     <div class="fold">
-      <Notice tone="warning">
-        {line}
-        {#snippet action()}
-          <Button size="sm" variant="primary" onclick={open}>{msg('cloudsaves.resolve')}</Button>
-        {/snippet}
-      </Notice>
+      <SaveConflictNotice conflict={details} onresolve={open} />
     </div>
   </div>
 {/if}
