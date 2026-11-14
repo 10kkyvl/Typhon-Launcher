@@ -1,3 +1,8 @@
+<script module lang="ts">
+  /** How long the list has to stay as it is before what it shows is said: typing says it once. */
+  export const ANNOUNCE_MS = 600;
+</script>
+
 <script lang="ts">
   import Page from '../../lib/components/Page.svelte';
   import { BellOff, Pencil, Plus } from '@lucide/svelte';
@@ -201,6 +206,46 @@
     }),
   );
 
+  // When the filter, the search, the source, the status, the collection or the sort settles, a polite
+  // status says how many games the list shows, or why it is empty. Not when the page opens, and not
+  // when a game merely updates: only a change of what narrows or orders the list starts the wait.
+  const narrowedBy = $derived(JSON.stringify([filter, sourceFilter, statusFilter, activeCollectionId, search.trim(), sort]));
+  let said = $state('');
+  let sayings = $state(0);
+  let narrowedBefore: string | null = null;
+
+  function shownText(): string {
+    if (visibleGames.length > 0) return msg('library.shownCount', { count: visibleGames.length });
+    switch (reason?.kind) {
+      case 'loading':
+        return msg('library.loadingTitle');
+      case 'failed':
+        return msg('library.loadFailedTitle');
+      case 'empty':
+        return msg('games.libraryEmptyTitle');
+      case 'all-hidden':
+        return msg('library.allHiddenTitle');
+      case 'no-match':
+        return `${msg('games.nothingFoundTitle')}. ${narrowingText(reason.narrowing)}`;
+      default:
+        return '';
+    }
+  }
+
+  $effect(() => {
+    const key = narrowedBy;
+    if (narrowedBefore === null || narrowedBefore === key) {
+      narrowedBefore = key;
+      return;
+    }
+    narrowedBefore = key;
+    const timer = setTimeout(() => {
+      said = untrack(shownText);
+      sayings += 1;
+    }, ANNOUNCE_MS);
+    return () => clearTimeout(timer);
+  });
+
   function clearNarrowing() {
     const handOff = focusHandOff();
     search = '';
@@ -345,6 +390,9 @@
   {/if}
 
   <section class="section" bind:this={listSection}>
+    <div class="sr-only" data-library-status role="status">
+      {#key sayings}<span>{said}</span>{/key}
+    </div>
     <div class="section-head">
       <h2 id="{uid}-heading">{activeCollection ? activeCollection.name : sectionTitles[filter]}</h2>
     </div>

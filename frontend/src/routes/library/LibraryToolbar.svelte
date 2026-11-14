@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { ArrowDownUp, Bell, ChevronDown, Clock, Dices, EyeOff, LayoutGrid, List, MonitorDown, Star } from '@lucide/svelte';
+  import { ArrowDownUp, ChevronDown, Dices, LayoutGrid, List } from '@lucide/svelte';
   import Chip from '../../lib/components/Chip.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import SearchInput from '../../lib/components/SearchInput.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import { statusLabel } from '../../lib/game/status';
   import { msg } from '../../lib/i18n';
-  import { nextLibraryFilter, type LibraryFilter } from '../../lib/library/filters';
+  import type { LibraryFilter } from '../../lib/library/filters';
   import { sourceLabel, type GameSource } from '../../lib/library/source';
   import { STATUS_FILTERS, type StatusFilter } from '../../lib/library/statuses';
   import { libraryView } from '../../lib/stores/ui';
@@ -32,13 +32,13 @@
     onrandom: () => void;
   } = $props();
 
-  const filters = $derived<{ id: LibraryFilter; label: string; icon?: typeof Clock }[]>([
+  const filters = $derived<{ id: LibraryFilter; label: string }[]>([
     { id: 'all', label: msg('games.filterAll') },
-    { id: 'installed', label: msg('games.filterInstalled'), icon: MonitorDown },
-    { id: 'recent', label: msg('games.recentLabel'), icon: Clock },
-    { id: 'favorites', label: msg('library.filterFavorites'), icon: Star },
-    { id: 'hidden', label: msg('games.filterHidden'), icon: EyeOff },
-    ...(watched ? [{ id: 'watched' as const, label: msg('games.filterWatched'), icon: Bell }] : []),
+    { id: 'installed', label: msg('games.filterInstalled') },
+    { id: 'recent', label: msg('games.recentLabel') },
+    { id: 'favorites', label: msg('library.filterFavorites') },
+    { id: 'hidden', label: msg('games.filterHidden') },
+    ...(watched ? [{ id: 'watched' as const, label: msg('games.filterWatched') }] : []),
   ]);
 
   const sorts: readonly LibrarySort[] = ['title', 'recent', 'playtime', 'size', 'status', 'completed'];
@@ -69,14 +69,12 @@
       <Dices size="1.4rem" strokeWidth={1.8} />
       {msg('games.randomButton')}
     </Chip>
-    {#each filters as f (f.id)}
-      <Chip selected={filter === f.id} onclick={() => (filter = nextLibraryFilter(filter, f.id))}>
-        {#if f.icon}
-          <f.icon size="1.4rem" strokeWidth={1.8} />
-        {/if}
-        {f.label}
-      </Chip>
-    {/each}
+    <SegmentedControl
+      variant="pill"
+      label={msg('library.filterLabel')}
+      options={filters}
+      bind:value={() => filter, (id) => (filter = id as LibraryFilter)}
+    />
     {#if (librarySources.length >= 2 || sourceFilter !== 'all') && filter !== 'watched'}
       <DropdownMenu
         items={[

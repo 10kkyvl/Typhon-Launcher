@@ -130,7 +130,7 @@ describe('Library: why the list is empty', () => {
   it('names what narrows an empty list and clears all of it with one action', async () => {
     const { user } = renderDom(Library);
     await user.type(screen.getByLabelText(msg('games.librarySearchPlaceholder')), 'zzz');
-    await user.click(screen.getByRole('button', { name: msg('games.filterHidden') }));
+    await user.click(screen.getByRole('radio', { name: msg('games.filterHidden') }));
 
     expect(heading(msg('games.nothingFoundTitle'))).not.toBeNull();
     const what = [msg('library.narrowSearch'), msg('library.narrowFilter')].join(', ');
@@ -142,7 +142,7 @@ describe('Library: why the list is empty', () => {
 
     expect(listTitles()).toEqual(['Celeste', 'Hades']);
     expect((screen.getByLabelText(msg('games.librarySearchPlaceholder')) as HTMLInputElement).value).toBe('');
-    expect(screen.getByRole('button', { name: msg('games.filterHidden') }).getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByRole('radio', { name: msg('games.filterHidden') }).getAttribute('aria-checked')).toBe('false');
     expect(document.activeElement?.closest('.list')).not.toBeNull();
   });
 
@@ -242,19 +242,19 @@ describe('Library: the Watched filter', () => {
     watchAlertsLoaded.set(false);
   });
 
-  const chip = (name: string) => screen.queryByRole('button', { name });
+  const chip = (name: string) => screen.queryByRole('radio', { name });
 
   it('returns to All when the watchlist empties while the page is open', async () => {
     watchlist.set([entry]);
     watchAlertsLoaded.set(true);
     const { user } = renderDom(Library);
-    await user.click(screen.getByRole('button', { name: msg('games.filterWatched') }));
+    await user.click(screen.getByRole('radio', { name: msg('games.filterWatched') }));
     expect(listTitles()).toEqual(['Watched Game']);
 
     watchlist.set([]);
     await tick();
 
-    expect(chip(msg('games.filterAll'))?.getAttribute('aria-pressed')).toBe('true');
+    expect(chip(msg('games.filterAll'))?.getAttribute('aria-checked')).toBe('true');
     expect(chip(msg('games.filterWatched'))).toBeNull();
     expect(listTitles()).toEqual(['Celeste', 'Hades']);
   });
@@ -264,7 +264,7 @@ describe('Library: the Watched filter', () => {
     watchAlertsLoaded.set(true);
     renderDom(Library);
 
-    expect(chip(msg('games.filterAll'))?.getAttribute('aria-pressed')).toBe('true');
+    expect(chip(msg('games.filterAll'))?.getAttribute('aria-checked')).toBe('true');
     expect(chip(msg('games.filterWatched'))).toBeNull();
     expect(listTitles()).toEqual(['Celeste', 'Hades']);
   });
@@ -273,7 +273,7 @@ describe('Library: the Watched filter', () => {
     libraryChoices.set({ ...DEFAULT_CHOICES, filter: 'watched' });
     renderDom(Library);
 
-    expect(chip(msg('games.filterWatched'))?.getAttribute('aria-pressed')).toBe('true');
+    expect(chip(msg('games.filterWatched'))?.getAttribute('aria-checked')).toBe('true');
   });
 });
 
@@ -335,14 +335,14 @@ describe('Library: the recent games', () => {
 describe('Library: the player\'s choices', () => {
   it('survive leaving the page and coming back', async () => {
     const first = renderDom(Library);
-    await first.user.click(screen.getByRole('button', { name: msg('games.filterInstalled') }));
+    await first.user.click(screen.getByRole('radio', { name: msg('games.filterInstalled') }));
     await first.user.type(screen.getByLabelText(msg('games.librarySearchPlaceholder')), 'ha');
     await first.user.click(screen.getByRole('button', { name: msg('library.carousel.hide') }));
     first.unmount();
 
     renderDom(Library);
 
-    expect(screen.getByRole('button', { name: msg('games.filterInstalled') }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('radio', { name: msg('games.filterInstalled') }).getAttribute('aria-checked')).toBe('true');
     expect((screen.getByLabelText(msg('games.librarySearchPlaceholder')) as HTMLInputElement).value).toBe('ha');
     expect(screen.queryByRole('region', { name: msg('library.carousel.label') })).toBeNull();
     expect(listTitles()).toEqual(['Hades']);
@@ -399,7 +399,7 @@ describe('Library: the source menu', () => {
       game('g-secret', 'Secret', { source: 'discovered', hidden: true }),
     ]);
     const { user } = renderDom(Library);
-    await user.click(screen.getByRole('button', { name: msg('games.filterHidden') }));
+    await user.click(screen.getByRole('radio', { name: msg('games.filterHidden') }));
 
     await user.click(screen.getByRole('button', { name: msg('games.filterSourceAll') }));
 
