@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import source from './SaveBackupsModal.svelte?raw';
+import source from './GameSaves.svelte?raw';
 
-describe('SaveBackupsModal source link', () => {
+describe('GameSaves source link', () => {
   it('opens the wiki page by the catalog id, not the library id', () => {
     expect(source).toContain("await openReferenceLink(id, 'pcgamingwiki');");
     expect(source).toMatch(/const id = canonicalId;\s*if \(!id\) return;/);

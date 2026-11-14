@@ -148,9 +148,9 @@ const SITES: Record<string, Site[]> = {
     ['warning', false],
     ['danger', true],
   ],
-  // The cloud copy's reason, its tone set by its state, a running game and large backups are facts of the
-  // dialog; a failure just happened.
-  'lib/components/SaveBackupsModal.svelte': [
+  // The saves view of the "Saves…" dialog. The cloud copy's reason, its tone set by its state, a running
+  // game and large backups are facts of the view; a failure just happened.
+  'lib/components/GameSaves.svelte': [
     ['danger', true],
     ['dynamic', false],
     ['danger', true],
