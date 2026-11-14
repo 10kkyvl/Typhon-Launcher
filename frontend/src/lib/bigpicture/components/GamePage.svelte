@@ -6,6 +6,7 @@
   import StoreLinks from '../../components/StoreLinks.svelte';
   import ProgressBar from '../../components/ProgressBar.svelte';
   import { galleryShots, languageLabel, pickHero, primaryAction } from '../../game/view';
+  import { gameDownloads, gameInstalls } from '../../game/transfers';
   import { consoleGroupStart, consoleOrigin, firstWebUrl, orderReleases, sharedPlatform, splitReleases } from '../../game/releases';
   import { dlcView, hasRequirements, requirementColumns } from '../../game/extras';
   import { GAME_STATUSES, statusLabel, type GameStatus } from '../../game/status';
@@ -136,14 +137,10 @@
         }).label
       : bp('bp.game.tabReleases'),
   );
-  const downloadRows = $derived.by(() => $downloads
-    .filter((item) => ownsDownload(item))
-    .toSorted((a, b) => Date.parse(b.addedAt) - Date.parse(a.addedAt)));
+  const owner = $derived({ gameIds: [id, canonicalId, catalogGame?.id, localGame?.canonicalGameId], libraryId: localGame?.id });
+  const downloadRows = $derived(gameDownloads($downloads, owner));
   const currentDownload = $derived(downloadRows[0]);
-  const downloadIds = $derived(new Set(downloadRows.map((item) => item.id)));
-  const currentInstall = $derived.by(() => $installations
-    .filter((item) => downloadIds.has(item.downloadId) || Boolean(localGame && item.gameId === localGame.id))
-    .toSorted((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt))[0]);
+  const currentInstall = $derived(gameInstalls($installations, downloadRows, localGame?.id)[0]);
   const selectedPaths = $derived((torrent?.files ?? []).filter((_, index) => selectedFiles[index]).map((file) => file.path));
   const selectedCount = $derived(selectedFiles.filter(Boolean).length);
   const selectedBytes = $derived((torrent?.files ?? []).reduce((total, file, index) => total + (selectedFiles[index] ? file.size : 0), 0));
@@ -235,12 +232,6 @@
       releaseGroups = result.value;
     }
     if (releaseRequests.isCurrent(ticket)) releasesLoading = false;
-  }
-
-  function ownsDownload(item: DownloadItem): boolean {
-    const origin = item.origin ?? {};
-    const identifiers = [id, canonicalId, catalogGame?.id, localGame?.canonicalGameId].filter(Boolean);
-    return Boolean((origin.gameId && identifiers.includes(origin.gameId)) || (localGame && origin.libraryId === localGame.id));
   }
 
   function focusKey(key: string) {
