@@ -38,7 +38,7 @@
   import { toggleWatch, watchAlertsLoaded, watchlist } from '../../lib/stores/watchlist';
   import { libraryView } from '../../lib/stores/ui';
   import { focusHandOff } from '../../lib/utils/focusHandOff';
-  import { focusableIn, focusQuietly } from '../../lib/layers/focus';
+  import { focusableIn } from '../../lib/layers/focus';
   import { locale, msg } from '../../lib/i18n';
   import { libraryErrorText } from '../../lib/library/errors';
   import { emptyReason } from '../../lib/library/empty';
@@ -53,7 +53,7 @@
   import LibraryList from './LibraryList.svelte';
   import { narrowingText } from './entryText';
   import { itemOf } from './itemMenu';
-  import { controlsOf, primaryOf } from './roving';
+  import { controlsOf, primaryOf, revealFocus } from './roving';
 
   const uid = $props.id();
   const saved = get(libraryChoices);
@@ -337,7 +337,8 @@
       const active = document.activeElement;
       if (active && active !== document.body && active.isConnected) return;
       const target = heldTarget(was.held, ids);
-      if (target) focusQuietly(target);
+      const list = resultsList();
+      if (target) revealFocus(target, list?.contains(target) ? itemOf(list, target) : null);
     });
   });
 

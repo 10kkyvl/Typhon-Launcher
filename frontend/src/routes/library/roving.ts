@@ -27,6 +27,17 @@ export function controlsOf(item: HTMLElement): HTMLElement[] {
   return [...item.querySelectorAll<HTMLElement>(CONTROLS)].filter((el) => el.hasAttribute(OFF) || el.tabIndex >= 0);
 }
 
+/**
+ * Focuses `target` and brings its item into view by the least movement: the item scrolls only as far
+ * as it has to, whole cards included. The scroller (the shell's `main`) sits below the top bar, so
+ * nothing covers its top edge.
+ */
+export function revealFocus(target: HTMLElement, item: Element | null = null): void {
+  focusQuietly(target);
+  const box = item ?? target;
+  if (typeof box.scrollIntoView === 'function') box.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+
 /** The control an item is entered on: its first control (the title). */
 export function primaryOf(item: HTMLElement): HTMLElement | undefined {
   return controlsOf(item)[0];
@@ -105,7 +116,7 @@ export function createRoving(options: RovingOptions): { attach: Attachment<HTMLE
     options.onmove(id);
     refresh();
     const target = primaryOf(item);
-    if (target) focusQuietly(target);
+    if (target) revealFocus(target, item);
   }
 
   function onkeydown(event: KeyboardEvent) {
@@ -155,7 +166,7 @@ export function createRoving(options: RovingOptions): { attach: Attachment<HTMLE
     }
     if (event.target === item) {
       const target = primaryOf(item);
-      if (target) focusQuietly(target);
+      if (target) revealFocus(target, item);
     }
   }
 

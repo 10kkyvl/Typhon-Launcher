@@ -93,16 +93,25 @@ afterEach(() => {
 describe.each(['list', 'grid'] as const)('Library (%s): a game that leaves the list from the menu', (view) => {
   beforeEach(() => libraryView.set(view));
 
-  it('Hide hands focus to the next game', async () => {
+  it('Hide hands focus to the next game, and brings it into view', async () => {
+    const into = vi.fn();
+    HTMLElement.prototype.scrollIntoView = into;
     renderDom(Library);
     render(GameQuickMenu);
     hiding('g-bravo', true);
 
-    await pickFromMenu('Bravo', msg('games.actionHide'));
-    await settle();
+    try {
+      await pickFromMenu('Bravo', msg('games.actionHide'));
+      await settle();
 
-    expect(shownTitles()).toEqual(['Alpha', 'Charlie']);
-    expect(focusedTitle()).toBe('Charlie');
+      expect(shownTitles()).toEqual(['Alpha', 'Charlie']);
+      expect(focusedTitle()).toBe('Charlie');
+      const last = into.mock.contexts.at(-1) as HTMLElement | undefined;
+      expect(last?.contains(document.activeElement)).toBe(true);
+      expect(into.mock.calls.at(-1)).toEqual([{ block: 'nearest', inline: 'nearest' }]);
+    } finally {
+      delete (HTMLElement.prototype as Partial<HTMLElement>).scrollIntoView;
+    }
   });
 
   it('Hide of the last game hands focus to the one before it', async () => {

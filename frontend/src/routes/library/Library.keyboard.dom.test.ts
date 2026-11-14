@@ -175,3 +175,30 @@ describe('Library: the list by keyboard', () => {
     expect(focusedTitle()).toBe('Charlie');
   });
 });
+
+describe('Library: the game focus moves to comes into view', () => {
+  const into = vi.fn();
+  beforeEach(() => {
+    into.mockClear();
+    HTMLElement.prototype.scrollIntoView = into;
+  });
+  afterEach(() => {
+    delete (HTMLElement.prototype as Partial<HTMLElement>).scrollIntoView;
+  });
+
+  const revealed = () => into.mock.contexts.map((element) => (element as HTMLElement).querySelector('[id$="-title"]')?.textContent?.trim());
+
+  it.each(['grid', 'list'] as const)('in the %s, by the least movement, on End and on an arrow', async (view) => {
+    libraryView.set(view);
+    const { user } = renderDom(Library);
+    if (view === 'grid') layOut();
+    beforeList().focus();
+    await user.tab();
+
+    await user.keyboard('{End}');
+    expect(revealed().at(-1)).toBe('Foxtrot');
+    await user.keyboard(view === 'grid' ? '{ArrowUp}' : '{ArrowUp}');
+    expect(revealed().at(-1)).toBe(view === 'grid' ? 'Charlie' : 'Echo');
+    for (const [options] of into.mock.calls) expect(options).toEqual({ block: 'nearest', inline: 'nearest' });
+  });
+});
