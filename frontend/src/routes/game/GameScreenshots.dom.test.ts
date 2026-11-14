@@ -1,4 +1,5 @@
 import { screen } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import { listShots, screenshotsStatus, type Shot } from '../../lib/services/screenshots';
@@ -128,6 +129,78 @@ describe('GameScreenshots: a list that failed to load', () => {
 
     await user.keyboard('{Enter}');
     await vi.waitFor(() => expect(listShots).toHaveBeenCalledTimes(3));
+  });
+});
+
+// Both reads of `n` loads have settled, and the block has taken their answers.
+async function loadsDone(n: number) {
+  const settled = (results: { type: string }[]) => results.filter((result) => result.type !== 'incomplete').length;
+  await vi.waitFor(() => {
+    expect(settled(vi.mocked(listShots).mock.settledResults)).toBe(n);
+    expect(settled(vi.mocked(screenshotsStatus).mock.settledResults)).toBe(n);
+  });
+  await tick();
+}
+
+describe('GameScreenshots: how often a failure is reported', () => {
+  const listFailure = () => new Error('typhon:screenshots.read_failed: нет доступа');
+  const statusFailure = () => new Error('typhon:screenshots.status_failed: нет');
+
+  it('a list that keeps failing is reported once while its notice stands, and again after a success', async () => {
+    vi.mocked(listShots)
+      .mockRejectedValueOnce(listFailure())
+      .mockRejectedValueOnce(listFailure())
+      .mockRejectedValueOnce(listFailure())
+      .mockResolvedValueOnce([])
+      .mockRejectedValueOnce(listFailure());
+    renderDom(GameScreenshots, { gameId: 'g1', title: 'Hades' });
+    await loadsDone(1);
+    expect(toast).toHaveBeenCalledTimes(1);
+
+    lastSavedShot.set(saved('a.png'));
+    await loadsDone(2);
+    lastSavedShot.set(saved('b.png'));
+    await loadsDone(3);
+    expect(toast).toHaveBeenCalledTimes(1);
+
+    lastSavedShot.set(saved('c.png'));
+    await loadsDone(4);
+    lastSavedShot.set(saved('d.png'));
+    await loadsDone(5);
+    expect(toast).toHaveBeenCalledTimes(2);
+  });
+
+  it('a retry that fails again says it in the notice and toasts nothing', async () => {
+    vi.mocked(listShots).mockRejectedValue(listFailure());
+    const { user } = renderDom(GameScreenshots, { gameId: 'g1', title: 'Hades' });
+    const retry = await screen.findByRole('button', { name: msg('common.retry') });
+    await loadsDone(1);
+    expect(toast).toHaveBeenCalledTimes(1);
+
+    await user.click(retry);
+    await loadsDone(2);
+
+    expect(retry.isConnected).toBe(true);
+    expect(toast).toHaveBeenCalledTimes(1);
+  });
+
+  it('a status read that succeeds re-arms its one report', async () => {
+    vi.mocked(listShots).mockResolvedValue([]);
+    vi.mocked(screenshotsStatus)
+      .mockRejectedValueOnce(statusFailure())
+      .mockResolvedValueOnce({ enabled: true, hotkey: 'F12' } as Awaited<ReturnType<typeof screenshotsStatus>>)
+      .mockRejectedValueOnce(statusFailure());
+    renderDom(GameScreenshots, { gameId: 'g1', title: 'Hades' });
+    await loadsDone(1);
+    expect(toast).toHaveBeenCalledTimes(1);
+
+    lastSavedShot.set(saved('a.png'));
+    await loadsDone(2);
+    expect(toast).toHaveBeenCalledTimes(1);
+    lastSavedShot.set(saved('b.png'));
+    await loadsDone(3);
+
+    expect(toast).toHaveBeenCalledTimes(2);
   });
 });
 

@@ -38,8 +38,10 @@
   let retrying = $state(false);
   let grid = $state<HTMLElement>();
   let requestId = 0;
-  // A status read that keeps failing is reported once, not again on every reload; a success ends it.
+  // A read that keeps failing is reported once, not again on every reload; a success ends it. A list
+  // failure stands in its notice meanwhile, and the notice says a retry that fails again.
   let statusReported = false;
+  let listReported = false;
 
   // A retry leaves the failure on screen until its answer, and the notice says a second failure.
   async function load(retry = false) {
@@ -62,16 +64,19 @@
       shots = list.value;
       noLibrary = false;
       loadFailed = false;
+      listReported = false;
     } catch (err) {
       if (id !== requestId) return;
       shots = [];
       if (errorCode(err) === 'screenshots.no_library') {
         noLibrary = true;
         loadFailed = false;
+        listReported = false;
       } else {
         noLibrary = false;
         loadFailed = true;
-        if (!retry) toast(screenshotErrorText(err, msg('screenshots.loadError')), 'danger');
+        if (!retry && !listReported) toast(screenshotErrorText(err, msg('screenshots.loadError')), 'danger');
+        listReported = true;
       }
     } finally {
       if (id === requestId) loading = false;
@@ -88,6 +93,7 @@
   $effect(() => {
     void gameId;
     loading = true;
+    listReported = false;
     void load();
   });
 
