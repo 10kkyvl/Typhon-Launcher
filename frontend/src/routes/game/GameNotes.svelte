@@ -9,10 +9,11 @@
 
   const uid = $props.id();
 
-  // The game the text is typed for, fixed when the block is created: a save that runs after the
-  // block went (its flush on destroy, a retry of a failed save) still writes to this game, whatever
-  // the page shows by then.
-  const target = untrack(() => gameId);
+  // The game the text is typed for. Every save carries the game it was typed for, so a save that
+  // runs after the block went (its flush on destroy, a retry of a failed save) or after the page
+  // handed the block another game still writes to that game.
+  let target = untrack(() => gameId);
+  let limitFailed = false;
 
   type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -27,17 +28,44 @@
   const length = $derived(noteLength(text));
   const over = $derived(limit > 0 && length > limit);
 
-  const autosave = createAutosave(async (value) => {
-    phase = 'saving';
-    try {
-      await setNotes(target, value);
-      errorText = '';
-      phase = 'saved';
-    } catch (err) {
-      errorText = describe(err);
-      phase = 'error';
-      throw err;
-    }
+  // What a save says on screen belongs to the game shown: a save for the previous game says nothing
+  // here, and its failure is a toast.
+  function saverFor(id: string) {
+    return createAutosave(async (value) => {
+      if (id === target) phase = 'saving';
+      try {
+        await setNotes(id, value);
+        if (id !== target) return;
+        errorText = '';
+        phase = 'saved';
+      } catch (err) {
+        if (id === target) {
+          errorText = describe(err);
+          phase = 'error';
+        }
+        throw err;
+      }
+    });
+  }
+
+  let autosave = saverFor(target);
+
+  // The page may hand the block another game without creating it again: what is pending goes to the
+  // previous game, then the block edits the next game's own text.
+  $effect(() => {
+    const id = gameId;
+    untrack(() => {
+      if (id === target) return;
+      autosave.flush().catch((err: unknown) => toast(describe(err), 'danger'));
+      target = id;
+      autosave = saverFor(id);
+      text = stored;
+      dirty = false;
+      if (!limitFailed) {
+        phase = 'idle';
+        errorText = '';
+      }
+    });
   });
 
   function describe(err: unknown): string {
@@ -65,6 +93,7 @@
     try {
       limit = await notesLimit();
     } catch (err) {
+      limitFailed = true;
       errorText = describe(err);
       phase = 'error';
     }

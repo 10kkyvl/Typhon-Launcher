@@ -111,7 +111,7 @@ describe('GameNotes: a note over the limit', () => {
 describe('GameNotes: a save that outlives its block', () => {
   type Game = { id: string; notes: string } | null;
   const gameA = { id: 'game-a', notes: '' } as Game;
-  const gameB = { id: 'game-b', notes: 'B keeps this' } as Game;
+  const gameB = { id: 'game-b', notes: 'B-old' } as Game;
 
   it('a failed save retried when the page moves to another game is written to the first game', async () => {
     vi.mocked(setNotes).mockRejectedValueOnce(new Error('typhon:library.save_failed: disk full'));
@@ -153,5 +153,71 @@ describe('GameNotes: a save that outlives its block', () => {
     expect(vi.mocked(setNotes).mock.calls).toEqual([['game-a', 'A-txt']]);
     await Promise.resolve();
     expect(get(toasts)).toEqual([]);
+  });
+});
+
+// A parent may also keep the block and hand it the next game in place: what is pending goes to the
+// game it was typed for, and the block then edits the next game's own text.
+describe('GameNotes: the next game handed in place', () => {
+  type Game = { id: string; notes: string } | null;
+  const gameA = { id: 'game-a', notes: '' } as Game;
+  const gameB = { id: 'game-b', notes: 'B-old' } as Game;
+  const field = () => screen.getByRole('textbox', { name: msg('games.notesHeading') }) as HTMLTextAreaElement;
+
+  it('retries a failed save to the first game, then saves what is typed to the next one', async () => {
+    vi.mocked(setNotes).mockRejectedValueOnce(new Error('typhon:library.save_failed: disk full'));
+    const { user, rerender } = renderDom(GameNotesHarness, { game: gameA, keyed: false });
+    const area = field();
+    await user.type(area, 'A-txt');
+    area.blur();
+    await vi.waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
+
+    await rerender({ game: gameB, keyed: false });
+    await vi.waitFor(() => expect(setNotes).toHaveBeenCalledTimes(2));
+
+    expect(field()).toBe(area);
+    expect(area.value).toBe('B-old');
+    expect(screen.queryByRole('alert')).toBeNull();
+    await user.clear(area);
+    await user.type(area, 'B2');
+    area.blur();
+    await vi.waitFor(() => expect(setNotes).toHaveBeenCalledTimes(3));
+
+    expect(vi.mocked(setNotes).mock.calls).toEqual([
+      ['game-a', 'A-txt'],
+      ['game-a', 'A-txt'],
+      ['game-b', 'B2'],
+    ]);
+  });
+
+  it("saves text still being typed to the first game, and shows the next game's own text", async () => {
+    vi.useFakeTimers();
+    const { user, rerender } = renderDom(GameNotesHarness, { game: gameA, keyed: false });
+    await vi.advanceTimersByTimeAsync(0);
+    const area = field();
+    await user.type(area, 'A-txt');
+
+    await rerender({ game: gameB, keyed: false });
+    area.blur();
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(area.value).toBe('B-old');
+    expect(vi.mocked(setNotes).mock.calls).toEqual([['game-a', 'A-txt']]);
+  });
+
+  it('a retry for the first game that fails again is a toast, not an error under the next game', async () => {
+    vi.mocked(setNotes).mockRejectedValueOnce(new Error('disk full')).mockRejectedValueOnce(new Error('disk full'));
+    const { user, rerender } = renderDom(GameNotesHarness, { game: gameA, keyed: false });
+    const area = field();
+    await user.type(area, 'A-txt');
+    area.blur();
+    await vi.waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
+
+    await rerender({ game: gameB, keyed: false });
+
+    await vi.waitFor(() => expect(get(toasts).map((item) => item.message)).toEqual([msg('games.notesSaveError')]));
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(area.value).toBe('B-old');
+    expect(vi.mocked(setNotes).mock.calls.every(([id]) => id === 'game-a')).toBe(true);
   });
 });
