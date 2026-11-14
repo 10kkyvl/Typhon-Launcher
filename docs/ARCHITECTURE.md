@@ -114,7 +114,8 @@ Registered in `main.go::init` (typed) — families and their frontend consumers 
 | updates | `update:{available,started,updated,completed,failed,rollback,degraded}`, `verify:*`, `repair:*` | `updates.ts` |
 | relocate | `move:{started,progress,completed,failed,cancelled,degraded}` | `relocate.ts` |
 | lan | `lan:{peers,shares,hashing,transfer,stats}` | `lan.ts` |
-| cloud saves | `saves:cloud` (`cloudsaves.Event{gameId,status,...}`) | `cloudsaves.ts` (updates the status; a `conflict` opens no dialog: `liveIslandFeed.ts` says it, FLOWS §8 2c) |
+| cloud saves | `saves:cloud` (`cloudsaves.Event{gameId,status,...}`) | `cloudsaves.ts` (updates the status; a `conflict` opens no dialog: `liveIslandFeed.ts` says it, or the open game page's `CloudConflictBanner`, FLOWS §8 2c) |
+| save backups | `saves:backups` (`savebackup.Event`) | `stores/savebackup.ts` (toast), `components/GameSaves.svelte` (reloads its game's list) |
 | pending launch | `launch:pending` (`PendingLaunch{gameId,platform,code,profileId,profileLaunch}`; also read once at mount through `TakePending`) | `pendingLaunch.ts` |
 | history/playlog | `history:{recorded,updated,degraded}`, `playlog:{recorded,degraded}` | `history.ts`, `degraded.ts` |
 | theme | `theme:{updated,list,reverted}` | `theme.ts` |
