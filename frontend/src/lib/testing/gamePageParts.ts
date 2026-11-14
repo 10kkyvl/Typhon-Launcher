@@ -10,6 +10,7 @@ export const GAME_PAGE_PARTS = [
   'routes/game/gamePageData.svelte.ts',
   'routes/game/GamePageHero.svelte',
   'routes/game/GameActions.svelte',
+  'routes/game/GameMetaNotice.svelte',
 ] as const;
 
 /** The text of every part of the game page, in the order above. */

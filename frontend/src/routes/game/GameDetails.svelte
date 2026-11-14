@@ -4,13 +4,11 @@
   import { untrack } from 'svelte';
   import { genreLabel, themeLabel } from '../../lib/metadata/labels';
   import { FolderOpen } from '@lucide/svelte';
-  import { tick } from 'svelte';
   import AchievementsCard from '../../lib/components/AchievementsCard.svelte';
   import AddDownloadModal from '../../lib/components/AddDownloadModal.svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
-  import Spinner from '../../lib/components/Spinner.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import GameStatusModal from '../../lib/components/GameStatusModal.svelte';
@@ -39,6 +37,7 @@
   import GameActions from './GameActions.svelte';
   import GameFriendsPanel from './GameFriendsPanel.svelte';
   import GamePageHero from './GamePageHero.svelte';
+  import GameMetaNotice from './GameMetaNotice.svelte';
   import GameNotes from './GameNotes.svelte';
   import GameReviews from './GameReviews.svelte';
   import GameScreenshots from './GameScreenshots.svelte';
@@ -96,7 +95,6 @@
   import { installErrorText } from '../../lib/install/installErrors';
   import { metadataErrorText } from '../../lib/metadata/metadataErrors';
   import { sourceErrorText } from '../../lib/sources/sourceErrors';
-  import { focusableIn, focusQuietly } from '../../lib/layers/focus';
 
   let { id }: { id: string } = $props();
 
@@ -407,21 +405,6 @@
     } else if (actionId === 'shortcut-remove') {
       data.removeDesktopShortcut();
     }
-  }
-
-  let chooseSlot = $state<HTMLElement>();
-
-  async function retryMeta(): Promise<boolean> {
-    const ok = await data.refreshMeta(true);
-    if (!ok && !data.metaRetryable) {
-      await tick();
-      const active = document.activeElement;
-      if (!active || active === document.body || !active.isConnected) {
-        const choose = chooseSlot ? focusableIn(chooseSlot)[0] : undefined;
-        if (choose) focusQuietly(choose);
-      }
-    }
-    return ok;
   }
 
   async function openStore(store: StoreId) {
@@ -986,41 +969,7 @@
           </div>
           {@render column(columns.main)}
         {:else}
-          {#if data.metaState === 'searching'}
-            <div class="meta-note">
-              <Notice tone="info" title={msg('games.detailMetaSearchingTitle')}>
-                {#snippet icon()}
-                  <Spinner size="sm" />
-                {/snippet}
-                {msg('games.detailMetaSearchingHint', { title: title || msg('games.detailFallbackGameWord') })}
-              </Notice>
-            </div>
-          {:else if data.metaState === 'unmatched' || data.metaState === 'failed'}
-            <div class="meta-note">
-              <Notice
-                tone={data.metaState === 'failed' ? 'warning' : 'info'}
-                announce={data.metaSearchRan}
-                title={data.metaState === 'unmatched' ? msg('games.detailMetaUnmatchedTitle') : msg('games.detailMetaFailedTitle')}
-                bind:retrying={data.metaRetrying}
-                retry={data.metaState === 'failed' && data.metaRetryable
-                  ? {
-                      label: msg('common.retry'),
-                      pending: msg('games.detailMetaRetrying'),
-                      run: retryMeta,
-                      focus: () => titleHeading,
-                    }
-                  : undefined}
-              >
-                {data.metaState === 'unmatched' ? msg('games.detailMetaUnmatchedHint') : data.metaFailure || msg('games.detailMetaFailedHint')}
-                {#snippet action()}
-                  <span class="choose" bind:this={chooseSlot}>
-                    <Button size="sm" variant="primary" onclick={() => openMatch('find')}>{msg('games.detailChooseManually')}</Button>
-                  </span>
-                  <Button size="sm" variant="ghost" busy={data.metaSkipping} onclick={data.skipMeta}>{msg('games.detailSkipSearch')}</Button>
-                {/snippet}
-              </Notice>
-            </div>
-          {/if}
+          <GameMetaNotice {data} {title} {titleHeading} {openMatch} />
 
           {@render column(columns.main)}
         {/if}
@@ -1131,15 +1080,6 @@
   .side > .gsec.moved {
     overflow-x: auto;
     overflow-wrap: anywhere;
-  }
-
-  .meta-note {
-    max-width: var(--prose-max);
-    margin-bottom: var(--space-6);
-  }
-
-  .choose {
-    display: contents;
   }
 
   .summary {

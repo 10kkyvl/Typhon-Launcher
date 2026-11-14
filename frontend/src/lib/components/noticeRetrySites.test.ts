@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { GAME_PAGE_PARTS } from '../testing/gamePageParts';
 import { frontendSources } from '../testing/sources';
 
 /**
@@ -79,7 +80,8 @@ describe('a notice with a retry is kept while the retry runs', () => {
   });
 
   it('reads every component, Big Picture and the overlay included, and no test harness', () => {
-    expect(['lib/bigpicture/components/GamePage.svelte', 'overlay/Overlay.svelte', 'App.svelte', 'routes/game/GameDetails.svelte'].every(scanned)).toBe(true);
+    const gamePage = GAME_PAGE_PARTS.filter((path) => path.endsWith('.svelte'));
+    expect(['lib/bigpicture/components/GamePage.svelte', 'overlay/Overlay.svelte', 'App.svelte', ...gamePage].every(scanned)).toBe(true);
     expect(scanned('lib/testing/RetryHarness.svelte')).toBe(false);
     expect(Object.keys(frontendSources).some((path) => path.startsWith('lib/bigpicture/') && scanned(path))).toBe(true);
   });
