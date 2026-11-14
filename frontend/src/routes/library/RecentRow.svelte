@@ -69,6 +69,8 @@
           id={entry.id}
           title={entry.title}
           cover={cover(entry)}
+          coverFallback={entry.game?.cover}
+          artSeed={entry.catalogId ?? entry.id}
           variant="capsule"
           ambient
           installed={entry.installed}

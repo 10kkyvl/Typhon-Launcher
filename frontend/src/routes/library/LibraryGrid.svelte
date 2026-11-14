@@ -68,6 +68,9 @@
         id={entry.id}
         title={entry.title}
         cover={entryCover(entry, art)}
+        coverFallback={entry.game?.cover}
+        artSeed={entry.catalogId ?? entry.id}
+        favorite={entry.favorite}
         ambient
         titleFirst
         installed={entry.installed}
@@ -84,17 +87,26 @@
 </ul>
 
 <style>
+  /* The narrowest a card gets: the columns and the space a card off screen keeps before it is drawn. */
   .grid {
+    --card-min: 16rem;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(var(--card-min), 1fr));
     gap: var(--space-6) var(--space-5);
     margin: 0;
     padding: 0;
     list-style: none;
   }
 
+  /* A card far off screen is not laid out or painted (content-visibility); it keeps the height of a
+     cover and two lines meanwhile. Containment clips its paint to the cell, so the cell reaches half
+     the gap around the card: the hover lift and the focus ring stay inside it. */
   .cell {
     min-width: 0;
+    padding: var(--space-3) var(--space-2);
+    margin: calc(-1 * var(--space-3)) calc(-1 * var(--space-2));
+    content-visibility: auto;
+    contain-intrinsic-size: auto calc(var(--card-min) * 4 / 3 + 2 * var(--control-sm) + 2 * var(--space-3));
   }
 
   .grid.switched {
@@ -103,13 +115,13 @@
 
   @media (min-width: 2200px) {
     .grid {
-      grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+      --card-min: 18rem;
     }
   }
 
   @media (max-width: 1400px) {
     .grid {
-      grid-template-columns: repeat(auto-fill, minmax(14.5rem, 1fr));
+      --card-min: 14.5rem;
     }
   }
 </style>
