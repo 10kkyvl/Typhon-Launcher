@@ -149,17 +149,25 @@
 
   $effect(() => (ambient ? claimAmbient(current?.id ?? null) : undefined));
 
+  // Focus holds the carousel while the focused element is inside it. On focusout that is read once the
+  // event is over: a window that loses focus sends focusout with no relatedTarget though focus stays
+  // put, and a control removed while focused leaves focus on <body>.
   const holds: Attachment<HTMLElement> = (node) => {
+    let alive = true;
+    const recheck = () =>
+      queueMicrotask(() => {
+        if (alive) focused = node.contains(document.activeElement);
+      });
     const offs = [
       on(node, 'pointerenter', () => (hovering = true)),
       on(node, 'pointerleave', () => (hovering = false)),
       on(node, 'focusin', () => (focused = true)),
-      on(node, 'focusout', (event) => {
-        const next = event.relatedTarget;
-        if (!(next instanceof Node) || !node.contains(next)) focused = false;
-      }),
+      on(node, 'focusout', recheck),
     ];
-    return () => offs.forEach((off) => off());
+    return () => {
+      alive = false;
+      offs.forEach((off) => off());
+    };
   };
 
   let picker = $state<HTMLElement>();

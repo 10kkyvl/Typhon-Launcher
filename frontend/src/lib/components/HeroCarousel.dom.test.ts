@@ -88,6 +88,29 @@ describe('HeroCarousel: the timer', () => {
     expect(shown()).toBe('Game b');
   });
 
+  // Switching to another app sends focusout with no relatedTarget while focus stays on the control.
+  it('keeps the hold when the window loses focus with focus still inside, and runs out the time left once focus really leaves', async () => {
+    vi.useFakeTimers();
+    const { props, rerender } = setup();
+    await vi.advanceTimersByTimeAsync(3000);
+    const play = screen.getByRole('button', { name: msg('ui.play') });
+    play.focus();
+
+    play.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: null }));
+    expect(document.activeElement).toBe(play);
+    await vi.advanceTimersByTimeAsync(5 * ADVANCE_MS);
+    expect(shown()).toBe('Game a');
+    await rerender({ ...props, slides: [slide('c'), slide('b'), slide('a')] });
+    expect(pickers()[0].getAttribute('aria-label')).toBe(pickLabel(1, 3, 'Game a'));
+    expect(document.activeElement).toBe(play);
+
+    outside.focus();
+    await vi.advanceTimersByTimeAsync(ADVANCE_MS - 3000 - 1);
+    expect(shown()).toBe('Game a');
+    await vi.advanceTimersByTimeAsync(1);
+    expect(shown()).not.toBe('Game a');
+  });
+
   it('stops while the document is hidden', async () => {
     vi.useFakeTimers();
     setup();
