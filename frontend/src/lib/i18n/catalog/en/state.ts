@@ -3,6 +3,7 @@ import type { StateKey } from '../ru/state';
 
 export const state: Record<StateKey, Message> = {
   'state.downloadsStatusQueued': 'Queued',
+  'state.downloadsStatusDownloading': 'Downloading',
   'state.downloadsStatusMetadata': 'Fetching metadata',
   'state.downloadsStatusPaused': 'Paused',
   'state.downloadsStatusVerifying': 'Verifying files',

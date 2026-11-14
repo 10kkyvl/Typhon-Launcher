@@ -237,6 +237,15 @@ export const games: Record<GamesKey, Message> = {
   'games.relationUpdate': 'Updated version',
   'games.hubRetryDownload': 'Retry download',
 
+  'games.mainActionUpdate': 'Update',
+  'games.mainActionLaunching': 'Launching…',
+  'games.mainActionStopping': 'Stopping…',
+  'games.mainActionVerifying': 'Verifying files',
+  'games.mainActionRepairing': 'Repairing files',
+  'games.mainActionMoving': 'Moving',
+  'games.mainActionChooseExecutable': 'Choose executable',
+  'games.mainActionProgress': '{label} · {percent}%',
+
   'games.errorPlayFailed': 'Failed to launch the game',
   'games.errorStopFailed': 'Failed to stop the game',
   'games.errorFolderUnavailable': 'Folder unavailable',

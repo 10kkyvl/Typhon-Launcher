@@ -1,5 +1,6 @@
 export const state = {
   'state.downloadsStatusQueued': 'В очереди',
+  'state.downloadsStatusDownloading': 'Загрузка',
   'state.downloadsStatusMetadata': 'Получение метаданных',
   'state.downloadsStatusPaused': 'Пауза',
   'state.downloadsStatusVerifying': 'Проверка файлов',

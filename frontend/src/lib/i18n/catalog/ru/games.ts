@@ -235,6 +235,15 @@ export const games = {
   'games.relationUpdate': 'Обновлённая версия',
   'games.hubRetryDownload': 'Повторить загрузку',
 
+  'games.mainActionUpdate': 'Обновить',
+  'games.mainActionLaunching': 'Запуск…',
+  'games.mainActionStopping': 'Остановка…',
+  'games.mainActionVerifying': 'Проверка файлов',
+  'games.mainActionRepairing': 'Восстановление файлов',
+  'games.mainActionMoving': 'Перенос',
+  'games.mainActionChooseExecutable': 'Выбрать исполняемый файл',
+  'games.mainActionProgress': '{label} · {percent}%',
+
   'games.errorPlayFailed': 'Не удалось запустить игру',
   'games.errorStopFailed': 'Не удалось остановить игру',
   'games.errorFolderUnavailable': 'Папка недоступна',
