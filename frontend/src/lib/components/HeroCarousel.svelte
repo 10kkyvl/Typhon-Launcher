@@ -147,7 +147,10 @@
 
   $effect(() => on(document, 'visibilitychange', () => (pageHidden = document.hidden)));
 
-  $effect(() => (ambient ? claimAmbient(current?.id ?? null) : undefined));
+  // The claim follows the id of the game on screen, not the slide object: an update of the page that
+  // keeps the game (a new line, a launch in flight) claims nothing again.
+  const claimed = $derived(ambient ? (current?.id ?? null) : null);
+  $effect(() => claimAmbient(claimed));
 
   // Focus holds the carousel while the focused element is inside it. On focusout that is read once the
   // event is over: a window that loses focus sends focusout with no relatedTarget though focus stays
