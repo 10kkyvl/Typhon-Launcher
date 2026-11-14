@@ -179,7 +179,7 @@
           </button>
           <span class="when">{caption(shot)}</span>
           <span class="remove">
-            <IconButton label={msg('screenshots.delete')} size="sm" onclick={() => askDelete(shot)}>
+            <IconButton label={msg('games.blocks.screenshotDelete', { index: index + 1, count: shots.length, name: caption(shot) })} size="sm" onclick={() => askDelete(shot)}>
               <Trash2 size="1.5rem" strokeWidth={1.8} />
             </IconButton>
           </span>

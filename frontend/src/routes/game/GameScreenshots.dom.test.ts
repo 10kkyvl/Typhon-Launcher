@@ -53,6 +53,20 @@ describe('GameScreenshots: the thumbnails', () => {
     expect(new Set(names).size).toBe(3);
     expect(names[0]).toBe(msg('games.blocks.screenshotOpen', { index: 1, count: 3, name: dateTime(new Date(at)) }));
   });
+
+  it('each Delete names its screenshot the same way', async () => {
+    const at = '2026-11-14T10:00:00Z';
+    vi.mocked(listShots).mockResolvedValue([shot('a.png', at), shot('b.png', at)]);
+    renderDom(GameScreenshots, { gameId: 'g1', title: 'Hades' });
+    await vi.waitFor(() => expect(document.querySelectorAll('button.thumb')).toHaveLength(2));
+
+    const names = [...document.querySelectorAll('.remove button')].map((button) => button.getAttribute('aria-label'));
+
+    expect(names).toEqual([
+      msg('games.blocks.screenshotDelete', { index: 1, count: 2, name: dateTime(new Date(at)) }),
+      msg('games.blocks.screenshotDelete', { index: 2, count: 2, name: dateTime(new Date(at)) }),
+    ]);
+  });
 });
 
 describe('GameScreenshots: loading and nothing yet', () => {
