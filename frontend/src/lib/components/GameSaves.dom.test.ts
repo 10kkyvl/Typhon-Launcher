@@ -197,6 +197,29 @@ describe('GameSaves: the backups', () => {
     expect(await screen.findByText(msg('saves.empty'))).toBeTruthy();
   });
 
+  it('shows the cloud part alone, and asks nothing about backups, when backups are off', async () => {
+    saveBackupsEnabled.set(false);
+    renderDom(GameSaves, { gameId: 'g1' });
+
+    expect(within(cloudSection()).getByText(msg('cloudsaves.disabledHint'))).toBeTruthy();
+    expect(screen.queryByText(msg('saves.folderLabel'))).toBeNull();
+    expect(screen.queryByText(msg('saves.listTitle'))).toBeNull();
+    expect(vi.mocked(locateSaves)).not.toHaveBeenCalled();
+    expect(vi.mocked(listBackups)).not.toHaveBeenCalled();
+  });
+
+  it('loads the backups once they turn out to be on after the view came', async () => {
+    saveBackupsEnabled.set(false);
+    renderDom(GameSaves, { gameId: 'g1' });
+    expect(screen.queryByText(msg('saves.listTitle'))).toBeNull();
+
+    saveBackupsEnabled.set(true);
+
+    expect(await screen.findByText(msg('saves.empty'))).toBeTruthy();
+    expect(vi.mocked(listBackups)).toHaveBeenCalledWith('g1');
+    expect(vi.mocked(locateSaves)).toHaveBeenCalledWith('g1');
+  });
+
   it('says a folder it could not find in its own words, not the error text', async () => {
     vi.mocked(locateSaves).mockRejectedValue(new Error('typhon:something.unknown: путь не найден'));
     renderDom(GameSaves, { gameId: 'g1' });

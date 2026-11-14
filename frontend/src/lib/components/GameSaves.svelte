@@ -31,7 +31,7 @@
   import { libraryGames, runningGames } from '../stores/library';
   import { navigate } from '../stores/router';
   import { settings } from '../stores/settings';
-  import { closeSaveBackups } from '../stores/savebackup';
+  import { closeSaveBackups, saveBackupsEnabled } from '../stores/savebackup';
   import { toast } from '../stores/toasts';
   import { authState } from '../stores/user';
   import { focusHandOff } from '../utils/focusHandOff';
@@ -46,10 +46,18 @@
 
   /**
    * The saves of one library game: where they are, their cloud copy and its actions, and the local
-   * backups with create, restore and delete. Mounted by the "Saves…" dialog; `busy` tells it when a
-   * folder or backup action runs, so that it is not dismissed meanwhile.
+   * backups with create, restore and delete. Mounted by the "Saves…" dialog and the game page's Saves
+   * tab. Without backups (`backups`, else whether they are on) it is the cloud part alone and asks
+   * nothing about the folder or the backups. `busy` is true while a folder or backup action runs: the
+   * dialog is not dismissed meanwhile.
    */
-  let { gameId, busy = $bindable(false) }: { gameId: string; busy?: boolean } = $props();
+  let {
+    gameId,
+    backups,
+    busy = $bindable(false),
+  }: { gameId: string; backups?: boolean; busy?: boolean } = $props();
+
+  const withBackups = $derived(backups ?? $saveBackupsEnabled);
 
   const uid = $props.id();
   const changeId = `${uid}-change`;
@@ -90,6 +98,7 @@
   // The game shown, and its turn: an answer to an action or a load of an earlier game is dropped, so a
   // view whose id changes without a remount starts the new game from scratch.
   let loadedFor = '';
+  let backupsFor = '';
   let turn = 0;
   let listSeq = 0;
   let savesSeq = 0;
@@ -114,7 +123,18 @@
       cloudFailure = '';
       cloudDeleteAsked = false;
       cloudPullAsked = false;
+      backupsFor = '';
       void refreshCloudStatus();
+    });
+  });
+
+  // Backups that turn out to be on after the view came (the switch loads at startup) are loaded then.
+  $effect(() => {
+    const id = gameId;
+    if (!withBackups) return;
+    untrack(() => {
+      if (backupsFor === id) return;
+      backupsFor = id;
       void loadList(id);
       void loadSaves(id);
     });
@@ -122,6 +142,7 @@
 
   $effect(() => {
     const id = gameId;
+    if (!withBackups) return;
     return onBackupEvent((event) => {
       if (event.gameId === id) void loadList(id);
     });
@@ -372,40 +393,42 @@
 {/snippet}
 
 <div class="saves">
-  <div class="field">
-    <span class="field-label">{msg('saves.folderLabel')}</span>
-    {#if savesLoading && !saves && !savesError}
-      <Spinner size="sm" label={msg('saves.folderLoading')} />
-    {:else if saves?.path}
-      <p class="path">{saves.path}</p>
-      {@render source()}
-      <div class="actions">
-        <Button size="sm" disabled={busy && acting !== 'open'} busy={acting === 'open'} onclick={openSaves}>{msg('saves.open')}</Button>
-        <Button id={changeId} size="sm" disabled={busy && acting !== 'folder'} busy={acting === 'folder'} onclick={changeFolder}>{msg('saves.change')}</Button>
-      </div>
-    {:else if savesError}
-      <Notice tone="danger" compact>{savesError}</Notice>
-      <div class="actions">
-        <Button size="sm" disabled={busy && acting !== 'folder'} busy={acting === 'folder'} onclick={changeFolder}>{msg('saves.pickFolder')}</Button>
-      </div>
-    {:else if saves?.candidates && saves.candidates.length > 0}
-      <p class="hint">{msg('ui.savesMultipleCandidates', { title: target.title })}</p>
-      {@render source()}
-      <div class="actions">
-        <Button size="sm" disabled={busy} onclick={() => (candidatesOpen = true)}>
-          {msg('saves.pickFolder')}
-        </Button>
-      </div>
-    {:else}
-      <p class="hint">{saves && saves.unreadable > 0 ? msg('ui.savesPartialUnreadable') : msg('ui.savesNotFound')}</p>
-      {#if saves?.hintsError}
-        <p class="hint">{msg('saves.hintsFailed')}</p>
+  {#if withBackups}
+    <div class="field">
+      <span class="field-label">{msg('saves.folderLabel')}</span>
+      {#if savesLoading && !saves && !savesError}
+        <Spinner size="sm" label={msg('saves.folderLoading')} />
+      {:else if saves?.path}
+        <p class="path">{saves.path}</p>
+        {@render source()}
+        <div class="actions">
+          <Button size="sm" disabled={busy && acting !== 'open'} busy={acting === 'open'} onclick={openSaves}>{msg('saves.open')}</Button>
+          <Button id={changeId} size="sm" disabled={busy && acting !== 'folder'} busy={acting === 'folder'} onclick={changeFolder}>{msg('saves.change')}</Button>
+        </div>
+      {:else if savesError}
+        <Notice tone="danger" compact>{savesError}</Notice>
+        <div class="actions">
+          <Button size="sm" disabled={busy && acting !== 'folder'} busy={acting === 'folder'} onclick={changeFolder}>{msg('saves.pickFolder')}</Button>
+        </div>
+      {:else if saves?.candidates && saves.candidates.length > 0}
+        <p class="hint">{msg('ui.savesMultipleCandidates', { title: target.title })}</p>
+        {@render source()}
+        <div class="actions">
+          <Button size="sm" disabled={busy} onclick={() => (candidatesOpen = true)}>
+            {msg('saves.pickFolder')}
+          </Button>
+        </div>
+      {:else}
+        <p class="hint">{saves && saves.unreadable > 0 ? msg('ui.savesPartialUnreadable') : msg('ui.savesNotFound')}</p>
+        {#if saves?.hintsError}
+          <p class="hint">{msg('saves.hintsFailed')}</p>
+        {/if}
+        <div class="actions">
+          <Button size="sm" disabled={busy && acting !== 'folder'} busy={acting === 'folder'} onclick={changeFolder}>{msg('saves.pickFolder')}</Button>
+        </div>
       {/if}
-      <div class="actions">
-        <Button size="sm" disabled={busy && acting !== 'folder'} busy={acting === 'folder'} onclick={changeFolder}>{msg('saves.pickFolder')}</Button>
-      </div>
-    {/if}
-  </div>
+    </div>
+  {/if}
 
   <div class="field">
     <span class="field-label">{msg('cloudsaves.sectionTitle')}</span>
@@ -460,70 +483,72 @@
     {/if}
   </div>
 
-  <div class="list">
-    <div class="list-head">
-      <span class="field-label">{msg('saves.listTitle')}</span>
-      <Button id={createId} variant="primary" size="sm" disabled={(busy && !creating) || !saves?.path} busy={creating} onclick={create}>
-        {creating ? msg('saves.creating') : msg('saves.createBackup')}
-      </Button>
-    </div>
-
-    {#if failure}
-      <Notice tone="danger" compact>{failure}</Notice>
-    {/if}
-    {#if listError}
-      <Notice tone="danger" compact>{listError}</Notice>
-    {/if}
-    {#if gameRunning}
-      <Notice tone="warning" compact announce={false}>{msg('saves.gameRunning')}</Notice>
-    {/if}
-    {#if snapshots.some((s) => s.large)}
-      <Notice tone="warning" compact announce={false}>{msg('saves.largeWarning')}</Notice>
-    {/if}
-
-    {#if snapshots.length > 0}
-      <ul class="snapshots" bind:this={list}>
-        {#each snapshots as snapshot (snapshot.id)}
-          <li class="snapshot" data-snapshot={snapshot.id}>
-            <div class="snapshot-main">
-              <span class="snapshot-when">{snapshotWhen(snapshot)}</span>
-              {#if snapshot.broken}
-                <div class="snapshot-broken">
-                  <StatusBadge kind="danger" label={msg('saves.broken')} />
-                  {#if snapshot.problem}
-                    <span class="snapshot-problem">{snapshot.problem}</span>
-                  {/if}
-                </div>
-              {:else}
-                <span class="snapshot-meta">
-                  {snapshotKindLabel(snapshot.kind)} · {bytesSize(snapshot.sizeBytes)} · {msg('saves.filesCount', { count: snapshot.files })}
-                </span>
-                {#if snapshotPlayedAfter(snapshot)}
-                  <span class="snapshot-meta">{snapshotPlayedAfter(snapshot)}</span>
-                {/if}
-              {/if}
-            </div>
-            <div class="actions">
-              {#if !snapshot.broken}
-                <Button size="sm" disabled={busy || gameRunning} onclick={() => (pending = { kind: 'restore', snapshot })}>
-                  {msg('saves.restore')}
-                </Button>
-              {/if}
-              <Button size="sm" variant="danger" disabled={busy} onclick={() => askToDelete(snapshot)}>
-                {msg('saves.delete')}
-              </Button>
-            </div>
-          </li>
-        {/each}
-      </ul>
-    {:else if listLoading}
-      <Spinner size="sm" label={msg('common.loading')} />
-    {:else if !listError}
-      <div class="no-saves">
-        <EmptyState size="inline" align="center" lead title={msg('saves.empty')} description={msg('saves.emptyHint')} />
+  {#if withBackups}
+    <div class="list">
+      <div class="list-head">
+        <span class="field-label">{msg('saves.listTitle')}</span>
+        <Button id={createId} variant="primary" size="sm" disabled={(busy && !creating) || !saves?.path} busy={creating} onclick={create}>
+          {creating ? msg('saves.creating') : msg('saves.createBackup')}
+        </Button>
       </div>
-    {/if}
-  </div>
+
+      {#if failure}
+        <Notice tone="danger" compact>{failure}</Notice>
+      {/if}
+      {#if listError}
+        <Notice tone="danger" compact>{listError}</Notice>
+      {/if}
+      {#if gameRunning}
+        <Notice tone="warning" compact announce={false}>{msg('saves.gameRunning')}</Notice>
+      {/if}
+      {#if snapshots.some((s) => s.large)}
+        <Notice tone="warning" compact announce={false}>{msg('saves.largeWarning')}</Notice>
+      {/if}
+
+      {#if snapshots.length > 0}
+        <ul class="snapshots" bind:this={list}>
+          {#each snapshots as snapshot (snapshot.id)}
+            <li class="snapshot" data-snapshot={snapshot.id}>
+              <div class="snapshot-main">
+                <span class="snapshot-when">{snapshotWhen(snapshot)}</span>
+                {#if snapshot.broken}
+                  <div class="snapshot-broken">
+                    <StatusBadge kind="danger" label={msg('saves.broken')} />
+                    {#if snapshot.problem}
+                      <span class="snapshot-problem">{snapshot.problem}</span>
+                    {/if}
+                  </div>
+                {:else}
+                  <span class="snapshot-meta">
+                    {snapshotKindLabel(snapshot.kind)} · {bytesSize(snapshot.sizeBytes)} · {msg('saves.filesCount', { count: snapshot.files })}
+                  </span>
+                  {#if snapshotPlayedAfter(snapshot)}
+                    <span class="snapshot-meta">{snapshotPlayedAfter(snapshot)}</span>
+                  {/if}
+                {/if}
+              </div>
+              <div class="actions">
+                {#if !snapshot.broken}
+                  <Button size="sm" disabled={busy || gameRunning} onclick={() => (pending = { kind: 'restore', snapshot })}>
+                    {msg('saves.restore')}
+                  </Button>
+                {/if}
+                <Button size="sm" variant="danger" disabled={busy} onclick={() => askToDelete(snapshot)}>
+                  {msg('saves.delete')}
+                </Button>
+              </div>
+            </li>
+          {/each}
+        </ul>
+      {:else if listLoading}
+        <Spinner size="sm" label={msg('common.loading')} />
+      {:else if !listError}
+        <div class="no-saves">
+          <EmptyState size="inline" align="center" lead title={msg('saves.empty')} description={msg('saves.emptyHint')} />
+        </div>
+      {/if}
+    </div>
+  {/if}
 </div>
 
 

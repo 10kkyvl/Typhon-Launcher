@@ -17,7 +17,7 @@
   onclose={closeSaveBackups}
 >
   {#if target}
-    <GameSaves gameId={target.gameId} bind:busy />
+    <GameSaves gameId={target.gameId} backups bind:busy />
   {/if}
 
   {#snippet footer()}
