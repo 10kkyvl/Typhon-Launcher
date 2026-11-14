@@ -11,8 +11,9 @@
    * is empty.
    *
    * What shows, the first that exists and loads: `src`, then `fallback` (the game's own cover under a
-   * metadata cover that may fail), then the game's generated art (lib/art), seeded by `seed` (the
-   * game's id) or else by its name, with the letters on top.
+   * metadata cover that may fail), then, given a `seed`, the game's generated art (lib/art) with the
+   * letters on top. The seed names the game, the same one on every screen (its canonical id): without
+   * one (a search hit, a screenshot) the letters, or "?", stand on a plain tile.
    */
   let {
     src,
@@ -71,10 +72,14 @@
         onerror={() => (failed = { ...failed, [shown]: true })}
       />
     {/key}
-  {:else}
+  {:else if seed}
     <div class="fallback" role={alt ? 'img' : undefined} aria-label={alt || undefined}>
-      <span class="art"><GeneratedArt seed={seed ?? (label || alt)} {shape} /></span>
+      <span class="art"><GeneratedArt {seed} {shape} /></span>
       {#if initials}<span class="letters" aria-hidden="true">{initials}</span>{/if}
+    </div>
+  {:else}
+    <div class="tile" role={alt ? 'img' : undefined} aria-label={alt || undefined}>
+      <span aria-hidden="true">{initials || '?'}</span>
     </div>
   {/if}
 </div>
@@ -122,5 +127,25 @@
     font-weight: 600;
     letter-spacing: 0.02em;
     text-shadow: var(--art-text-shadow);
+  }
+
+  .tile {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    background:
+      linear-gradient(160deg, var(--artwork-sheen), transparent 55%),
+      var(--surface-3);
+    color: var(--text-3);
+    font-size: 2rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    container-type: inline-size;
+  }
+
+  .tile span {
+    font-size: clamp(1.2rem, 22cqw, 3.2rem);
   }
 </style>

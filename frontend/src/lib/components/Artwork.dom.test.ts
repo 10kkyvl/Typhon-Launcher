@@ -32,7 +32,7 @@ describe('Artwork: what shows when a picture is missing or fails', () => {
     const first = renderDom(Artwork, { src: '', fallback: 'game-cover.png', label: 'Hades' });
     expect(picture(first.container)?.getAttribute('src')).toBe('game-cover.png');
 
-    const same = renderDom(Artwork, { src: 'cover.png', fallback: 'cover.png', label: 'Hades' });
+    const same = renderDom(Artwork, { src: 'cover.png', fallback: 'cover.png', label: 'Hades', seed: 'g1' });
     await fireEvent.error(picture(same.container) as HTMLImageElement);
     expect(picture(same.container)).toBeNull();
     expect(generated(same.container)).not.toBeNull();
@@ -58,7 +58,35 @@ describe('Artwork: what shows when a picture is missing or fails', () => {
   });
 
   it('keeps its text alternative over the generated art: an image named alt, or nothing', () => {
-    renderDom(Artwork, { src: '', alt: 'Celeste' });
+    renderDom(Artwork, { src: '', alt: 'Celeste', seed: 'g-celeste' });
     expect(screen.getByRole('img', { name: 'Celeste' })).toBeTruthy();
+  });
+});
+
+// Generated art stands for a game, and only a caller that knows which game gives the seed: a search
+// hit or a screenshot that fails keeps the plain tile it always had.
+describe('Artwork without a seed', () => {
+  it('draws no generated art: the letters on a plain tile, or "?" with no name at all', () => {
+    const named = renderDom(Artwork, { src: '', label: 'Hollow Knight' });
+    expect(generated(named.container)).toBeNull();
+    expect(named.container.textContent?.trim()).toBe('HK');
+
+    const bare = renderDom(Artwork, { src: '', alt: '' });
+    expect(generated(bare.container)).toBeNull();
+    expect(bare.container.textContent?.trim()).toBe('?');
+  });
+
+  it('ends a failed cover and fallback on the plain tile, not on a landscape', async () => {
+    const { container } = renderDom(Artwork, { src: 'shot.png', fallback: 'other.png', alt: '' });
+    await fireEvent.error(picture(container) as HTMLImageElement);
+    await fireEvent.error(picture(container) as HTMLImageElement);
+    expect(picture(container)).toBeNull();
+    expect(generated(container)).toBeNull();
+    expect(container.textContent?.trim()).toBe('?');
+  });
+
+  it('treats an empty seed as none', () => {
+    const { container } = renderDom(Artwork, { src: '', label: 'Hades', seed: '' });
+    expect(generated(container)).toBeNull();
   });
 });

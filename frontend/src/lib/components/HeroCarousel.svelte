@@ -14,6 +14,8 @@
     id: string;
     title: string;
     art: HeroArt;
+    /** Seeds the generated art when there is no picture: the game's canonical id. Default: `id`. */
+    artSeed?: string;
     /** The line under the title (last session, play time): the page's words. */
     line?: string;
     running?: boolean;
@@ -211,7 +213,7 @@
                 <img class="wide" src={picture.url} alt="" draggable="false" onerror={() => fail(picture.url)} />
               {/key}
             {:else}
-              <span class="ground"><GeneratedArt seed={slide.id} shape="wide" /></span>
+              <span class="ground"><GeneratedArt seed={slide.artSeed ?? slide.id} shape="wide" /></span>
               {#if picture.kind === 'poster'}
                 {#key picture.url}
                   <img class="poster" src={picture.url} alt="" draggable="false" onerror={() => fail(picture.url)} />

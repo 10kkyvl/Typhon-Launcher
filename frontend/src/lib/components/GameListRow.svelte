@@ -22,6 +22,7 @@
     title,
     cover = '',
     coverFallback = '',
+    artSeed,
     details = [],
     size = '',
     running = false,
@@ -38,6 +39,8 @@
     cover?: string;
     /** The game's own cover, tried when `cover` fails to load. */
     coverFallback?: string;
+    /** Seeds the generated art when there is no cover: the game's canonical id. Default: `id`. */
+    artSeed?: string;
     /** The page's secondary texts under the title (last played, play time). */
     details?: string[];
     /** The size on disk, shown once at the row's end. */
@@ -67,7 +70,7 @@
 </script>
 
 <li class="row" class:running {@attach pressOpens}>
-  <span class="thumb"><Artwork src={cover} fallback={coverFallback} alt="" label={title} seed={id} ratio="3 / 4" radius="var(--radius-xs)" /></span>
+  <span class="thumb"><Artwork src={cover} fallback={coverFallback} alt="" label={title} seed={artSeed ?? id} ratio="3 / 4" radius="var(--radius-xs)" /></span>
   <div class="main">
     <span class="title" id="{uid}-title"><TextLink tone="muted" truncate onclick={() => onopen(id)}>{title}</TextLink></span>
     {#if details.length > 0}

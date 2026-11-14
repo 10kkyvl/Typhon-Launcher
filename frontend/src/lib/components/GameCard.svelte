@@ -39,6 +39,7 @@
     title,
     cover = '',
     coverFallback = '',
+    artSeed,
     installed = false,
     running = false,
     launching = false,
@@ -58,6 +59,8 @@
     cover?: string;
     /** The game's own cover, tried when `cover` (from metadata) fails to load. */
     coverFallback?: string;
+    /** Seeds the generated art when there is no cover: the game's canonical id, so every screen draws the same picture. Default: `id`. */
+    artSeed?: string;
     installed?: boolean;
     running?: boolean;
     /** A launch of this game waits on Go: Play shows busy and a second press sends nothing. */
@@ -114,7 +117,7 @@
     <!-- A pointer target only: the title below opens the same page and carries the game's name, so the
          cover is out of the Tab order and of the accessibility tree. -->
     <button class="cover" tabindex="-1" aria-hidden="true" onclick={() => navigate('game', { id })} aria-label={title}>
-      <Artwork src={cover} fallback={coverFallback} alt="" label={title} seed={id} {ratio} radius="var(--radius-md)" />
+      <Artwork src={cover} fallback={coverFallback} alt="" label={title} seed={artSeed ?? id} {ratio} radius="var(--radius-md)" />
       <span class="fade"></span>
     </button>
     {#if platform}
