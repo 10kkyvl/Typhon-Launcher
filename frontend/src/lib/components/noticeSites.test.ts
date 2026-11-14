@@ -195,17 +195,20 @@ const SITES: Record<string, Site[]> = {
   'routes/friends/Friends.svelte': [['info', false]],
   // Downloads held while a game runs: it starts and ends while the page is open.
   'routes/downloads/Downloads.svelte': [['info', true]],
-  // In source order: the downloads and the other versions failed to load (just happened); the stored
-  // error of the last download and the uninstalled game, shown on every opening; the metadata search
-  // running; "not found" or "failed" of the metadata, its tone set by which, announced when a search
-  // ran while the page was open and read with the page when it opens on it.
+  // In source order: the downloads and the other versions failed to load (just happened); the metadata
+  // search running; "not found" or "failed" of the metadata, its tone set by which, announced when a
+  // search ran while the page was open and read with the page when it opens on it.
   'routes/game/GameDetails.svelte': [
     ['danger', true],
     ['danger', true],
-    ['danger', false],
-    ['info', false],
     ['info', true],
     ['dynamic', 'dynamic'],
+  ],
+  // The game page's action row: the stored error of the last download and the uninstalled game, shown
+  // on every opening.
+  'routes/game/GameActions.svelte': [
+    ['danger', false],
+    ['info', false],
   ],
   'routes/game/GameReviews.svelte': [
     ['danger', true],

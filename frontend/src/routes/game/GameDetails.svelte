@@ -3,22 +3,7 @@
   import { locale } from '../../lib/i18n/locale';
   import { untrack } from 'svelte';
   import { genreLabel, themeLabel } from '../../lib/metadata/labels';
-  import {
-    ArrowUp,
-    BookmarkPlus,
-    Bell,
-    BellRing,
-    Download,
-    EllipsisVertical,
-    FolderOpen,
-    HardDriveDownload,
-    Heart,
-    Play,
-    SlidersHorizontal,
-    Sparkles,
-    Square,
-    Tag,
-  } from '@lucide/svelte';
+  import { FolderOpen } from '@lucide/svelte';
   import { tick } from 'svelte';
   import AchievementsCard from '../../lib/components/AchievementsCard.svelte';
   import AddDownloadModal from '../../lib/components/AddDownloadModal.svelte';
@@ -27,7 +12,6 @@
   import Card from '../../lib/components/Card.svelte';
   import Spinner from '../../lib/components/Spinner.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
-  import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import GameStatusModal from '../../lib/components/GameStatusModal.svelte';
   import GameTagsModal from '../../lib/components/GameTagsModal.svelte';
@@ -38,7 +22,6 @@
   import MetadataMatchModal from '../../lib/components/MetadataMatchModal.svelte';
   import Modal from '../../lib/components/Modal.svelte';
   import Notice from '../../lib/components/Notice.svelte';
-  import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import ReleaseList from '../../lib/components/ReleaseList.svelte';
   import SimilarReleases from '../../lib/components/SimilarReleases.svelte';
   import RemoveGameModal from '../../lib/components/RemoveGameModal.svelte';
@@ -53,20 +36,18 @@
   import Toggle from '../../lib/components/Toggle.svelte';
   import UpdateCard from '../../lib/components/UpdateCard.svelte';
   import VerifyCard from '../../lib/components/VerifyCard.svelte';
+  import GameActions from './GameActions.svelte';
   import GameFriendsPanel from './GameFriendsPanel.svelte';
   import GamePageHero from './GamePageHero.svelte';
   import GameNotes from './GameNotes.svelte';
   import GameReviews from './GameReviews.svelte';
   import GameScreenshots from './GameScreenshots.svelte';
   import ReviewSummary from './ReviewSummary.svelte';
-  import { createGamePageData, libraryErrorText } from './gamePageData.svelte';
+  import { createGamePageData } from './gamePageData.svelte';
   import { discardDownloadPrompt, removeDownloadPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
-  import { playLabel } from '../../lib/game/profiles';
-  import LeadAction from './LeadAction.svelte';
   import { consoleOrigin, firstWebUrl, relationKey, releaseOrigin, sharedPlatform, splitReleases } from '../../lib/game/releases';
   import { catalogLoadKey, pageTitle, releaseLoadKey, sameGameIds } from '../../lib/game/pageLoad';
   import { familyIds, showSimilar } from '../../lib/game/similar';
-  import { statusLabel } from '../../lib/game/status';
   import {
     busyState,
     clean,
@@ -87,7 +68,6 @@
   import { cancelDownload, deleteDownloadData, removeDownload, resumeDownload } from '../../lib/services/downloads';
   import type { Download as DownloadItem, DownloadOrigin, DownloadStatus } from '../../lib/services/downloads';
   import { missingImages, refreshMissingImages } from '../../lib/stores/missingImages';
-  import { playGame, playGameProfile, stopGame } from '../../lib/services/library';
   import { openReferenceLink, openStoreLink, type ReferenceKind, type StoreId } from '../../lib/services/metadata';
   import { referenceKinds, steamFacts } from '../../lib/game/extras';
   import { openGameFolder } from '../../lib/services/settings';
@@ -99,7 +79,6 @@
   import { installActive, installStatusLabels, installations } from '../../lib/stores/install';
   import { installIndeterminate } from '../../lib/install/progress';
   import { libraryGames, runningGames } from '../../lib/stores/library';
-  import { openGameProperties } from '../../lib/stores/gameProperties';
   import { emulationPlatform, isEmulated, isInstalledImage, pageGame, platformBadge } from '../../lib/library/emulation';
   import { externalLabel, isExternal } from '../../lib/library/external';
   import { metadataAvailable } from '../../lib/stores/metadata';
@@ -108,12 +87,11 @@
   import { navigate } from '../../lib/stores/router';
   import { openRedist } from '../../lib/stores/redist';
   import { toast } from '../../lib/stores/toasts';
-  import { toggleWatch, watchedIds } from '../../lib/stores/watchlist';
   import { settings } from '../../lib/stores/settings';
-  import { openSaveBackups, saveBackupsEnabled } from '../../lib/stores/savebackup';
+  import { openSaveBackups } from '../../lib/stores/savebackup';
   import { sources } from '../../lib/stores/sources';
   import { stepLabels, updatesByGame, verifications } from '../../lib/stores/updates';
-  import { bytesSize, formatCount, numericDate, playtime, progressPercent, relativeDate, truncateMiddle } from '../../lib/utils/format';
+  import { bytesSize, formatCount, numericDate, playtime, relativeDate, truncateMiddle } from '../../lib/utils/format';
   import { msg } from '../../lib/i18n';
   import { installErrorText } from '../../lib/install/installErrors';
   import { metadataErrorText } from '../../lib/metadata/metadataErrors';
@@ -396,41 +374,6 @@
     }),
   );
 
-  const busyPercent = $derived(progressPercent(busy?.progress ?? 0));
-
-  const menuItems = $derived([    ...($saveBackupsEnabled && localGame && !emulated ? [{ id: 'saves-backups', label: msg('games.detailSavesRollback') }] : []),
-    ...($metadataAvailable && canonicalId
-      ? metaView?.resolved
-        ? [
-            {
-              id: 'meta-refresh',
-              label: data.metaRefreshing ? msg('games.detailMetaRefreshingLabel') : msg('games.detailMetaRefreshLabel'),
-            },
-            { id: 'meta-change', label: msg('games.detailMetaChangeLabel') },
-          ]
-        : [{ id: 'meta-find', label: msg('games.detailMetaFindLabel') }]
-      : []),
-    ...(installed && (localGame?.shortcutPath || !external || localGame?.executable)
-      ? [
-          localGame?.shortcutPath
-            ? { id: 'shortcut-remove', label: msg('games.actionShortcutRemove') }
-            : { id: 'shortcut-create', label: msg('games.actionShortcutCreate') },
-        ]
-      : []),
-    ...(installed && (managed || isInstalledImage(localGame))
-      ? [{ id: 'uninstall', label: msg('games.actionUninstall'), danger: true, separator: true }]
-      : []),
-    ...(localGame
-      ? [{ id: 'remove', label: msg('games.actionRemoveLibrary'), danger: true, separator: !installed || !(managed || isInstalledImage(localGame)) }]
-      : []),
-    ...(terminalDownload
-      ? [
-          { id: 'remove-download', label: msg('games.detailRemoveDownloadLabel'), danger: true, separator: true },
-          { id: 'discard-download', label: msg('games.detailDiscardDownloadLabel'), danger: true },
-        ]
-      : []),
-  ]);
-
   function openMatch(mode: 'find' | 'change') {
     matchMode = mode;
     matchOpen = true;
@@ -587,33 +530,6 @@
     if (emulated) void refreshMissingImages();
   });
 
-  async function play() {
-    if (!localGame) return;
-    try {
-      await playGame(localGame.id);
-    } catch (err) {
-      toast(libraryErrorText(err, msg('games.errorPlayFailed')), 'danger');
-    }
-  }
-
-  async function playProfile(profileID: string) {
-    if (!localGame) return;
-    try {
-      await playGameProfile(localGame.id, profileID);
-    } catch (err) {
-      toast(libraryErrorText(err, msg('games.errorPlayFailed')), 'danger');
-    }
-  }
-
-  async function stop() {
-    if (!localGame) return;
-    try {
-      await stopGame(localGame.id);
-    } catch {
-      toast(msg('games.errorStopFailed'), 'danger');
-    }
-  }
-
   async function reveal() {
     if (!localGame) return;
     try {
@@ -625,16 +541,6 @@
 
   function scrollToReviews() {
     document.getElementById('reviews')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-
-  function runPrimary() {
-    if (primary.kind === 'play') play();
-    else if (primary.kind === 'stop') stop();
-    else if (primary.kind === 'download') startDownload();
-    else if (primary.kind === 'other-versions') otherVersionsEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    else if (primary.kind === 'update') updateCard?.start();
-    else if (primary.kind === 'retry-download') retryTerminalDownload();
-    else if (primary.kind === 'install-download') installFromTerminalDownload();
   }
 
   const missing = $derived(
@@ -1029,128 +935,11 @@
     {running} {notOnPcKind} {updateAvailable} {busy} {popOnce} {externalName} {emulated} {emulatedPlatform} {imageMissing}
   >
     {#snippet actions()}
-      <div class="cta" data-part="game-actions">
-        {#if primary.kind === 'progress'}
-          <div class="progress">
-            <span class="progress-label">{primary.label}</span>
-            <ProgressBar
-              value={busyPercent}
-              indeterminate={busy?.indeterminate}
-              stretch
-              label={title}
-              valueText={`${primary.label}, ${busyPercent}%`}
-            />
-            {#if !busy?.indeterminate}<span class="progress-pct">{busyPercent}%</span>{/if}
-          </div>
-        {:else if primary.kind === 'update'}
-          <LeadAction kind="play" game={localGame} onclick={play} onpick={playProfile}>
-            <Play size="1.8rem" strokeWidth={2} fill="currentColor" />
-            {localGame ? playLabel(localGame) : msg('games.play')}
-          </LeadAction>
-          <Button size="lg" disabled={primary.disabled} onclick={runPrimary}>
-            {#if updateIsRelease}
-              <Sparkles size="1.5rem" strokeWidth={1.8} />
-            {:else}
-              <ArrowUp size="1.5rem" strokeWidth={2} />
-            {/if}
-            {primary.label}
-          </Button>
-        {:else}
-          <LeadAction
-            kind={primary.kind}
-            game={localGame}
-            disabled={primary.disabled}
-            onclick={runPrimary}
-            onpick={playProfile}
-          >
-            {#if primary.kind === 'play'}
-              <Play size="1.8rem" strokeWidth={2} fill="currentColor" />
-            {:else if primary.kind === 'stop'}
-              <Square size="1.4rem" strokeWidth={2} fill="currentColor" />
-            {:else if primary.kind === 'download'}
-              <Download size="1.6rem" strokeWidth={1.8} />
-            {:else if primary.kind === 'install-download'}
-              <HardDriveDownload size="1.6rem" strokeWidth={1.8} />
-            {/if}
-            {primary.kind === 'play' && localGame ? playLabel(localGame) : primary.label}
-          </LeadAction>
-        {/if}
-
-        {#if !localGame && canonicalId}
-          <Button size="lg" disabled={data.addingToLibrary} onclick={data.addToLibrary}>
-            <BookmarkPlus size="1.5rem" strokeWidth={1.8} />
-            {msg('games.detailAddToLibraryButton')}
-          </Button>
-        {/if}
-
-        {#if !installed && canonicalId}
-          {@const watching = $watchedIds.has(canonicalId)}
-          <Button size="lg" onclick={() => toggleWatch(canonicalId)}>
-            {#if watching}
-              <BellRing size="1.5rem" strokeWidth={1.8} />
-              {msg('games.watchingButton')}
-            {:else}
-              <Bell size="1.5rem" strokeWidth={1.8} />
-              {msg('games.watchButton')}
-            {/if}
-          </Button>
-        {/if}
-
-        {#if localGame}
-          <IconButton
-            size="lg"
-            variant="secondary"
-            label={localGame.favorite ? msg('games.actionFavoriteRemove') : msg('games.actionFavoriteAdd')}
-            lit={Boolean(localGame.favorite)}
-            onclick={data.toggleFavorite}
-          >
-            <span class="heart" class:pulse={data.favoritePulse} onanimationend={() => (data.favoritePulse = false)}>
-              <Heart size="1.8rem" strokeWidth={1.8} fill={localGame.favorite ? 'currentColor' : 'none'} />
-            </span>
-          </IconButton>
-
-          {#if installed}
-            <IconButton size="lg" variant="secondary" label={msg('games.actionProperties')} onclick={() => openGameProperties(localGame.id)}>
-              <SlidersHorizontal size="1.8rem" strokeWidth={1.8} />
-            </IconButton>
-          {/if}
-
-          <Button size="lg" onclick={() => (statusOpen = true)}>
-            {msg('games.actionStatus', { status: statusLabel(localGame.status) })}
-          </Button>
-
-          <IconButton
-            size="lg"
-            variant="secondary"
-            label={localGame.tags?.length ? msg('games.tagsEditLabel') : msg('games.tagsAddLabel')}
-            onclick={() => (tagsOpen = true)}
-          >
-            <Tag size="1.8rem" strokeWidth={1.8} />
-          </IconButton>
-        {/if}
-
-        {#if menuItems.length > 0}
-          <DropdownMenu items={menuItems} onselect={onMenu}>
-            {#snippet trigger({ props })}
-              <IconButton {...props} size="lg" variant="secondary" label={msg('games.moreLabel')}>
-                <EllipsisVertical size="1.8rem" strokeWidth={1.8} />
-              </IconButton>
-            {/snippet}
-          </DropdownMenu>
-        {/if}
-      </div>
-
-      {#if primary.kind === 'retry-download' && terminalDownload?.error}
-        <div class="note-plate"><Notice tone="danger" announce={false}>{installErrorText(terminalDownload.error)}</Notice></div>
-      {:else if localGame && !installed && wasInstalled}
-        <div class="note-plate">
-          <Notice tone="info" announce={false}>
-            {primary.kind === 'install-download'
-              ? msg('games.detailUninstalledDownloadedNote')
-              : msg('games.detailUninstalledNote')}
-          </Notice>
-        </div>
-      {/if}
+      <GameActions
+        {data} {primary} {busy} {title} {localGame} {canonicalId} {installed} {wasInstalled} {external} {managed} {emulated}
+        {updateIsRelease} {terminalDownload} {updateCard} {otherVersionsEl} bind:statusOpen bind:tagsOpen {onMenu} {startDownload}
+        {retryTerminalDownload} {installFromTerminalDownload}
+      />
     {/snippet}
   </GamePageHero>
 {/snippet}
@@ -1298,51 +1087,6 @@
 </Page>
 
 <style>
-  .cta {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    flex-wrap: wrap;
-    margin-top: var(--space-5);
-    animation: rise-in var(--dur-panel) var(--ease) backwards;
-  }
-
-  .heart {
-    display: inline-flex;
-  }
-
-  .heart.pulse {
-    animation: pop-in var(--dur-slow) var(--ease-spring);
-  }
-
-  .progress {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    width: min(42rem, 100%);
-    height: var(--control-lg);
-    padding: 0 1.8rem;
-    border-radius: var(--radius-md);
-    background: var(--surface-3);
-  }
-
-  .progress-label {
-    font-size: var(--font-sm);
-    font-weight: 500;
-    white-space: nowrap;
-  }
-
-  .progress-pct {
-    font-size: var(--font-xs);
-    color: var(--text-2);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .note-plate {
-    margin-top: var(--space-4);
-    max-width: 56rem;
-  }
-
   .tabs-wrap {
     margin-bottom: var(--space-8);
   }
