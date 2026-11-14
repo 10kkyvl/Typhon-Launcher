@@ -30,6 +30,7 @@
   import { closeSaveBackups, runSavesWork, saveBackupsEnabled, savesInFlight, type SavesInFlight, type SavesWork } from '../stores/savebackup';
   import { toast } from '../stores/toasts';
   import { authState } from '../stores/user';
+  import { focusableIn } from '../layers/focus';
   import { focusHandOff } from '../utils/focusHandOff';
 
   interface Pending {
@@ -59,7 +60,9 @@
   const uid = $props.id();
   const changeId = `${uid}-change`;
   const createId = `${uid}-create`;
+  const syncId = `${uid}-sync`;
   let list = $state<HTMLElement>();
+  let root = $state<HTMLElement>();
 
   const game = $derived($libraryGames.find((g) => g.id === gameId));
   // What an action was started for: the game as it was at the press.
@@ -70,6 +73,18 @@
   const cloudSignedIn = $derived($authState === 'authenticated');
   const cloudGame = $derived($cloudStatus?.games.find((g) => g.gameId === gameId));
   const availability = $derived<CloudAvailability>(!cloudEnabled ? 'off' : !cloudSignedIn ? 'signed-out' : !canonicalId ? 'no-catalog' : 'on');
+
+  // Resolve goes once the conflict is settled: focus it held (or that came back to it from the
+  // conflict dialog) moves on to Sync now, else to the view's first control.
+  const resolvable = $derived(availability === 'on' && cloudGame?.state === 'conflict');
+  let wasResolvable = false;
+  $effect.pre(() => {
+    const now = resolvable;
+    untrack(() => {
+      if (wasResolvable && !now) void focusHandOff()(() => document.getElementById(syncId) ?? (root ? focusableIn(root)[0] : undefined));
+      wasResolvable = now;
+    });
+  });
 
   let snapshots = $state<Snapshot[]>([]);
   let listLoading = $state(false);
@@ -399,7 +414,7 @@
   }
 </script>
 
-<div class="saves">
+<div class="saves" bind:this={root}>
   {#if withBackups}
     <GameSavesFolder
       {saves}
@@ -424,6 +439,7 @@
       failure={cloudFailure}
       busy={cloudBusy}
       running={gameRunning}
+      {syncId}
       onsettings={openCloudSettings}
       onsync={cloudSync}
       onresolve={() => openCloudConflict(gameId)}

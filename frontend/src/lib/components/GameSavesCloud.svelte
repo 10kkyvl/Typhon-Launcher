@@ -23,6 +23,7 @@
     failure = '',
     busy = false,
     running = false,
+    syncId,
     onsettings,
     onsync,
     onresolve,
@@ -34,6 +35,8 @@
     failure?: string;
     busy?: boolean;
     running?: boolean;
+    /** The id of Sync now, where focus goes when Resolve goes. */
+    syncId?: string;
     onsettings: () => void;
     onsync: () => void;
     onresolve: () => void;
@@ -75,7 +78,7 @@
     <Notice tone="danger" compact>{failure}</Notice>
   {/if}
   <div class="actions">
-    <Button size="sm" {busy} onclick={onsync}>
+    <Button id={syncId} size="sm" {busy} onclick={onsync}>
       {busy ? msg('cloudsaves.syncing') : game?.code === 'cloud.excluded' ? msg('cloudsaves.enableAgain') : msg('cloudsaves.syncNow')}
     </Button>
     {#if game?.state === 'conflict'}
