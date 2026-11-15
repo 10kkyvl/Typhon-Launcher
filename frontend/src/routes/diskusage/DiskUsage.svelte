@@ -13,7 +13,6 @@
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import {
     countUnknown,
-    downloadBlocked,
     leftoverKindKey,
     reasonLabel,
     sizeSorted,
@@ -26,6 +25,7 @@
   import { installErrorText } from '../../lib/install/installErrors';
   import { activeMove } from '../../lib/stores/relocate';
   import { createDiskUsagePage } from './diskUsagePage.svelte';
+  import DownloadsSection from './DownloadsSection.svelte';
   import GamesSection from './GamesSection.svelte';
   import UsageRow from './UsageRow.svelte';
   import UsageSection from './UsageSection.svelte';
@@ -131,41 +131,7 @@
         <GamesSection {games} totalBytes={page.report.totals.gamesBytes} {now} {sort} {sortLabels} onsort={(next) => (sort = next)} onremove={openRemove} />
       {/if}
 
-      <UsageSection
-        title={msg('diskusage.downloadsTitle')}
-        hint={msg('diskusage.downloadsHint')}
-        total={total(page.report.totals.downloadsBytes, downloads.some((d) => d.sizeUnknown))}
-        empty={downloads.length === 0}
-        emptyText={msg('diskusage.downloadsEmpty')}
-      >
-        {#each downloads as download (download.id)}
-          {@const blocked = downloadBlocked(download)}
-          <UsageRow
-            title={download.name}
-            path={download.root}
-            pathTitle={download.root}
-            reason={blocked ? reasonLabel(download.reasonCode, download.reason) : download.seeding ? msg('diskusage.reason.seeding') : null}
-            size={size(download)}
-          >
-            {#snippet badges()}
-              {#if download.seeding}
-                <StatusBadge kind="accent" label={msg('diskusage.downloadSeeding')} plain />
-              {/if}
-              {#if download.installed}
-                <StatusBadge kind="success" label={msg('diskusage.downloadInstalled')} plain />
-              {/if}
-              {#if download.missing}
-                <StatusBadge kind="warning" label={msg('diskusage.missing')} plain />
-              {/if}
-            {/snippet}
-            {#snippet actions()}
-              <Button size="sm" variant="danger" disabled={blocked} onclick={() => page.askDownload(download)}>
-                {msg('diskusage.downloadDelete')}
-              </Button>
-            {/snippet}
-          </UsageRow>
-        {/each}
-      </UsageSection>
+      <DownloadsSection {downloads} totalBytes={page.report.totals.downloadsBytes} ondelete={page.askDownload} />
 
       <UsageSection
         title={msg('diskusage.leftoversTitle')}
