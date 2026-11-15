@@ -853,27 +853,26 @@ func (m *Manager) returnPending(infoHash string, p *pending) {
 // carries errMetadataRequired so the window fetches again. The hash
 // reservation StartDownloadFrom took is released here on every path.
 func (m *Manager) handBack(cl *client, infoHash string, mi *metainfo.MetaInfo, source string, cause error) error {
-	again := fmt.Errorf("%w: %w", errMetadataRequired, cause)
 	m.mu.Lock()
-	current := m.client == cl
-	m.mu.Unlock()
-	if !current {
-		m.releaseHash(infoHash)
-		return again
+	if m.client != cl {
+		err := m.giveUpLocked(infoHash, cause)
+		m.mu.Unlock()
+		return err
 	}
+	m.mu.Unlock()
 	probe, err := cl.addMetainfo(mi, cl.metaDir, storageOpts{})
 	if err != nil {
-		m.releaseHash(infoHash)
 		slog.Warn("hand back fetched torrent", "operation", "start_download", "error", err)
-		return again
+		return m.giveUp(infoHash, cause)
 	}
 	m.mu.Lock()
-	delete(m.reserved, infoHash)
 	if m.client != cl {
+		err := m.giveUpLocked(infoHash, cause)
 		m.mu.Unlock()
 		probe.drop()
-		return again
+		return err
 	}
+	m.releaseHashLocked(infoHash)
 	if _, taken := m.pending[infoHash]; taken {
 		m.mu.Unlock()
 		probe.drop()
@@ -882,6 +881,20 @@ func (m *Manager) handBack(cl *client, infoHash string, mi *metainfo.MetaInfo, s
 	m.pending[infoHash] = &pending{torrent: probe, source: source}
 	m.mu.Unlock()
 	return cause
+}
+
+// giveUpLocked ends a failed Start that leaves nothing waiting for the next
+// one: the hash it reserved is released and the error asks the window to
+// fetch again.
+func (m *Manager) giveUpLocked(infoHash string, cause error) error {
+	m.releaseHashLocked(infoHash)
+	return fmt.Errorf("%w: %w", errMetadataRequired, cause)
+}
+
+func (m *Manager) giveUp(infoHash string, cause error) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.giveUpLocked(infoHash, cause)
 }
 
 func (m *Manager) StartDownload(infoHash, destination string, selectedIndices []int) (Download, error) {
@@ -979,9 +992,10 @@ func (m *Manager) StartDownloadFrom(infoHash, destination string, selectedIndice
 
 	m.mu.Lock()
 	if m.client != cl {
+		err := m.giveUpLocked(infoHash, errNetworkDown)
 		m.mu.Unlock()
 		lt.drop()
-		return Download{}, m.handBack(cl, infoHash, &mi, p.source, errNetworkDown)
+		return Download{}, err
 	}
 	if err := m.keepMetainfo(infoHash, &mi, p.source, d.ID); err != nil {
 		m.mu.Unlock()
