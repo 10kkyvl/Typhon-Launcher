@@ -10,6 +10,7 @@ import {
   forceStartDownload,
   listDownloads,
   moveDownloadDown,
+  moveDownloadTo,
   moveDownloadUp,
   pauseDownload,
   removeDownload,
@@ -278,13 +279,23 @@ function failedMessage(item: Download): LiveIslandMessage {
 /** How an action ended: `code` is the `typhon:<code>` Go answered with, '' when it gave none. */
 export type DownloadActionOutcome = { ok: true } | { ok: false; code: string; error: unknown };
 
-const requests: Record<DownloadAction, (id: string) => Promise<void>> = {
+/**
+ * What a caller adds to a request: `toast: false` when it shows a failure itself, and for `moveTo`
+ * the place among the queued downloads, which no other action takes.
+ */
+export type DownloadActionOptions<A extends DownloadAction> = { toast?: boolean } & (A extends 'moveTo'
+  ? { position: number }
+  : { position?: never });
+
+const requests: Record<DownloadAction, (id: string, position: number | undefined) => Promise<void>> = {
   pause: (id) => pauseDownload(id),
   resume: (id) => resumeDownload(id),
   forceStart: (id) => forceStartDownload(id),
   downloadNow: (id) => downloadNowRequest(id),
   moveUp: (id) => moveDownloadUp(id),
   moveDown: (id) => moveDownloadDown(id),
+  moveTo: (id, position) =>
+    position === undefined ? Promise.reject(new Error('moveTo without a place')) : moveDownloadTo(id, position),
   cancel: (id) => cancelRequest(id),
   remove: (id) => removeDownload(id),
 };
@@ -298,20 +309,35 @@ const inFlight = new Map<string, Promise<DownloadActionOutcome>>();
  */
 export function requestDownloadAction(
   id: string,
+  action: 'moveTo',
+  options: DownloadActionOptions<'moveTo'>,
+): Promise<DownloadActionOutcome>;
+export function requestDownloadAction(
+  id: string,
+  action: Exclude<DownloadAction, 'moveTo'>,
+  options?: DownloadActionOptions<Exclude<DownloadAction, 'moveTo'>>,
+): Promise<DownloadActionOutcome>;
+export function requestDownloadAction(
+  id: string,
   action: DownloadAction,
-  options: { toast?: boolean } = {},
+  options: { toast?: boolean; position?: number } = {},
 ): Promise<DownloadActionOutcome> {
   const key = `${action}:${id}`;
   const running = inFlight.get(key);
   if (running) return running;
-  const call = perform(id, action, options.toast ?? true).finally(() => inFlight.delete(key));
+  const call = perform(id, action, options.position, options.toast ?? true).finally(() => inFlight.delete(key));
   inFlight.set(key, call);
   return call;
 }
 
-async function perform(id: string, action: DownloadAction, toastFailure: boolean): Promise<DownloadActionOutcome> {
+async function perform(
+  id: string,
+  action: DownloadAction,
+  position: number | undefined,
+  toastFailure: boolean,
+): Promise<DownloadActionOutcome> {
   try {
-    await requests[action](id);
+    await requests[action](id, position);
   } catch (error) {
     if (toastFailure) toast(installErrorText(error), 'danger');
     return { ok: false, code: errorCode(error), error };

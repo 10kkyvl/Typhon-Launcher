@@ -3,7 +3,16 @@ import type { PlayThrottle } from '../services/playThrottle';
 import { waitsForSchedule } from './schedule';
 
 /** What the user can ask of one download; each is one Manager method in Go. */
-export type DownloadAction = 'pause' | 'resume' | 'forceStart' | 'downloadNow' | 'moveUp' | 'moveDown' | 'cancel' | 'remove';
+export type DownloadAction =
+  | 'pause'
+  | 'resume'
+  | 'forceStart'
+  | 'downloadNow'
+  | 'moveUp'
+  | 'moveDown'
+  | 'moveTo'
+  | 'cancel'
+  | 'remove';
 
 export const downloadActionNames: readonly DownloadAction[] = [
   'pause',
@@ -12,16 +21,17 @@ export const downloadActionNames: readonly DownloadAction[] = [
   'downloadNow',
   'moveUp',
   'moveDown',
+  'moveTo',
   'cancel',
   'remove',
 ];
 
 const anyStatus: readonly DownloadAction[] = ['cancel', 'remove'];
 
-// The guards of internal/download (Pause, Resume, ForceStart, move, DownloadNow, discard); every
-// other status gets download.unavailable. actions.test.ts reads those guards from the Go source.
+// The guards of internal/download (Pause, Resume, ForceStart, move, MoveTo, DownloadNow, discard);
+// every other status gets download.unavailable. actions.test.ts reads those guards from the Go source.
 const accepted: Readonly<Record<DownloadStatus, readonly DownloadAction[]>> = {
-  queued: ['pause', 'forceStart', 'downloadNow', 'moveUp', 'moveDown', ...anyStatus],
+  queued: ['pause', 'forceStart', 'downloadNow', 'moveUp', 'moveDown', 'moveTo', ...anyStatus],
   metadata: ['downloadNow', ...anyStatus],
   downloading: ['pause', 'downloadNow', ...anyStatus],
   paused: ['resume', 'forceStart', 'downloadNow', ...anyStatus],
@@ -38,7 +48,8 @@ export function goAccepts(status: DownloadStatus, action: DownloadAction): boole
 /**
  * The actions a download offers, in `downloadActionNames` order: what Go accepts for its status, less
  * "Download now" where it would start nothing (it only lifts the schedule, so a paused download would
- * stay paused). Up and down are offered by status; the ends of the queue are the screen's to judge.
+ * stay paused). Up, down and a move to a place are offered by status; the ends of the queue are the
+ * screen's to judge.
  */
 export function downloadActions(
   download: Pick<Download, 'status' | 'ignoreSchedule'>,

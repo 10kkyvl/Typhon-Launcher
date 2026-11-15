@@ -165,6 +165,12 @@ export async function moveDownloadDown(id: string): Promise<void> {
   await Manager.MoveDown(id);
 }
 
+/** Puts a queued download at `position` among the queued downloads (Go clamps a place past either end). */
+export async function moveDownloadTo(id: string, position: number): Promise<void> {
+  if (!inWails) throw unavailable();
+  await Manager.MoveTo(id, position);
+}
+
 export async function forceStartDownload(id: string): Promise<void> {
   if (!inWails) throw unavailable();
   await Manager.ForceStart(id);

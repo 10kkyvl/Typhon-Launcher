@@ -6,9 +6,10 @@ const Get = vi.fn();
 const FetchMetadata = vi.fn();
 const StartDownload = vi.fn();
 const StartDownloadFrom = vi.fn();
+const MoveTo = vi.fn();
 
 vi.mock('../../../bindings/typhon/internal/download', () => ({
-  Manager: { CancelFetchMetadata, List, Get, FetchMetadata, StartDownload, StartDownloadFrom },
+  Manager: { CancelFetchMetadata, List, Get, FetchMetadata, StartDownload, StartDownloadFrom, MoveTo },
 }));
 
 beforeEach(() => {
@@ -87,5 +88,36 @@ describe('file lists that Go may send as null', () => {
     const { getDownload } = await load();
 
     await expect(getDownload('d1')).resolves.toMatchObject({ files: [file] });
+  });
+});
+
+describe('moveDownloadTo', () => {
+  it('asks Go to put the download at the place', async () => {
+    vi.resetModules();
+    vi.doMock('./backend', () => ({ inWails: true }));
+    MoveTo.mockResolvedValueOnce(undefined);
+    const { moveDownloadTo } = await import('./downloads');
+
+    await moveDownloadTo('d1', 3);
+
+    expect(MoveTo).toHaveBeenCalledWith('d1', 3);
+  });
+
+  it('passes the refusal from Go on', async () => {
+    vi.resetModules();
+    vi.doMock('./backend', () => ({ inWails: true }));
+    MoveTo.mockRejectedValueOnce(new Error('typhon:download.unavailable'));
+    const { moveDownloadTo } = await import('./downloads');
+
+    await expect(moveDownloadTo('d1', 0)).rejects.toThrow('typhon:download.unavailable');
+  });
+
+  it('throws outside Wails, as the other writes do', async () => {
+    vi.resetModules();
+    vi.doMock('./backend', () => ({ inWails: false }));
+    const { moveDownloadTo } = await import('./downloads');
+
+    await expect(moveDownloadTo('d1', 0)).rejects.toThrow('unavailable in browser');
+    expect(MoveTo).not.toHaveBeenCalled();
   });
 });

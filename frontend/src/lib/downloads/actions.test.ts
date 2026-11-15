@@ -39,6 +39,7 @@ function goGuards(): Record<DownloadAction, DownloadStatus[]> {
     downloadNow: accepted(String.raw`DownloadNow\(`),
     moveUp: accepted(String.raw`move\(`),
     moveDown: accepted(String.raw`move\(`),
+    moveTo: accepted(String.raw`MoveTo\(`),
     cancel: accepted(String.raw`discard\(`),
     remove: accepted(String.raw`discard\(`),
   };
@@ -46,7 +47,7 @@ function goGuards(): Record<DownloadAction, DownloadStatus[]> {
 
 describe('what Go accepts for a download, by status', () => {
   const EXPECTED: Record<DownloadStatus, DownloadAction[]> = {
-    queued: ['pause', 'forceStart', 'downloadNow', 'moveUp', 'moveDown', 'cancel', 'remove'],
+    queued: ['pause', 'forceStart', 'downloadNow', 'moveUp', 'moveDown', 'moveTo', 'cancel', 'remove'],
     metadata: ['downloadNow', 'cancel', 'remove'],
     downloading: ['pause', 'downloadNow', 'cancel', 'remove'],
     paused: ['resume', 'forceStart', 'downloadNow', 'cancel', 'remove'],
@@ -66,6 +67,7 @@ describe('what Go accepts for a download, by status', () => {
     const guards = goGuards();
     expect(statuses.length).toBeGreaterThan(6);
     expect(guards.pause.length).toBeGreaterThan(0);
+    expect([...downloadActionNames].sort()).toEqual(Object.keys(guards).sort());
     for (const status of statuses) {
       for (const action of downloadActionNames) {
         expect(goAccepts(status, action), `${status} ${action}`).toBe(guards[action].includes(status));

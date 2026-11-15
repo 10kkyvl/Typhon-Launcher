@@ -25,6 +25,7 @@ vi.mock('../services/downloads', () => ({
   forceStartDownload: vi.fn(async () => {}),
   moveDownloadDown: vi.fn(async () => {}),
   moveDownloadUp: vi.fn(async () => {}),
+  moveDownloadTo: vi.fn(async () => {}),
   pauseDownload: vi.fn(async () => {}),
   removeDownload: vi.fn(async () => {}),
   resumeDownload: vi.fn(async () => {}),
@@ -133,6 +134,41 @@ describe('an action reports its outcome', () => {
 
     expect(services[service]).toHaveBeenCalledWith('d1');
     expect(toast).toHaveBeenCalledWith('text of Error: typhon:download.unavailable', 'danger');
+  });
+});
+
+describe('moving a download to a place in the queue', () => {
+  it('sends the place to Go and reports the outcome', async () => {
+    const { store, services } = await load([makeDownload()]);
+
+    expect(await store.requestDownloadAction('d1', 'moveTo', { position: 2 })).toEqual({ ok: true });
+
+    expect(services.moveDownloadTo).toHaveBeenCalledWith('d1', 2);
+  });
+
+  it('reports a refusal by its code', async () => {
+    const { store, services, toast } = await load([makeDownload({ status: 'paused' })]);
+    const err = new Error('typhon:download.unavailable');
+    vi.mocked(services.moveDownloadTo).mockRejectedValueOnce(err);
+
+    const outcome = await store.requestDownloadAction('d1', 'moveTo', { position: 0, toast: false });
+
+    expect(outcome).toEqual({ ok: false, code: 'download.unavailable', error: err });
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  // Held by the type checker (npm run check); the run only keeps the cases in the suite.
+  it('takes a place for moveTo only, and never without one', async () => {
+    const { store } = await load([makeDownload()]);
+    const calls = [
+      // @ts-expect-error: a place means nothing to a pause
+      () => store.requestDownloadAction('d1', 'pause', { position: 1 }),
+      // @ts-expect-error: a move to a place needs the place
+      () => store.requestDownloadAction('d1', 'moveTo'),
+      // @ts-expect-error: a move to a place needs the place
+      () => store.requestDownloadAction('d1', 'moveTo', { toast: false }),
+    ];
+    expect(calls).toHaveLength(3);
   });
 });
 
