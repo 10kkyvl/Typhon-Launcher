@@ -232,6 +232,8 @@ export const transfers = {
   'transfers.moveErrSourceUnverifiable': 'Не удалось убедиться, что исходная папка не изменилась. Она сохранена, перенос не завершён',
   'transfers.moveErrSourceDamaged': 'Исходная папка повреждена или недоступна. Обе папки сохранены, перенос не завершён',
   'transfers.moveErrGameRemoved': 'Игра удалена из библиотеки, перенос не завершён. Файлы не тронуты',
+  'transfers.moveErrFolderShared': 'В папке игры лежат файлы другой игры из библиотеки, они переехали бы вместе с этой. Перенос не начат',
+  'transfers.moveErrGameRemoving': 'Игра удаляется. Перенос не начат',
   'transfers.moveErrRetriesExhausted': 'Перенос не удалось завершить после нескольких попыток',
   'transfers.moveErrExecutableOutside': 'Исполняемый файл лежит вне папки игры, перенос невозможен',
   'transfers.moveErrRelocating': 'Игра уже переносится',

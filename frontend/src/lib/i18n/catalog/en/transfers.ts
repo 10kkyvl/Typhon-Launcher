@@ -230,6 +230,8 @@ export const transfers: Record<TransfersKey, Message> = {
   'transfers.moveErrSourceUnverifiable': 'Could not confirm that the source folder is unchanged. It was kept, the move is not finished',
   'transfers.moveErrSourceDamaged': 'The source folder is damaged or unreadable. Both folders were kept, the move is not finished',
   'transfers.moveErrGameRemoved': 'The game was removed from the library, the move is not finished. Files were left untouched',
+  'transfers.moveErrFolderShared': "Another library game has files in this game's folder and would be moved with it. The move was not started",
+  'transfers.moveErrGameRemoving': 'The game is being removed. The move was not started',
   'transfers.moveErrRetriesExhausted': 'The move could not be finished after several attempts',
   'transfers.moveErrExecutableOutside': 'The executable is outside the game folder, so the game cannot be moved',
   'transfers.moveErrRelocating': 'The game is already being moved',
