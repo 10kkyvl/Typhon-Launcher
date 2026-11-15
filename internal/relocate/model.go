@@ -61,6 +61,9 @@ type Job struct {
 	FailedAt    Stage     `json:"failedAt,omitempty"`
 
 	RecoveryAttempts int `json:"recoveryAttempts,omitempty"`
+	// Orphaned marks a move whose game left the library before the repoint:
+	// the entry stays while a copy it made is on disk, see OrphanedCopies.
+	Orphaned bool `json:"orphaned,omitempty"`
 }
 
 func (j Job) clone() Job {
@@ -97,6 +100,8 @@ var (
 	ErrGameRemoved        = uierr.New("relocate.game_removed", "игра удалена из библиотеки, перенос не завершён; файлы не тронуты")
 	ErrRetriesExhausted   = uierr.New("relocate.retries_exhausted", "перенос не удалось завершить после нескольких попыток")
 	ErrMoveInProgress     = uierr.New("relocate.already_running", "перенос уже выполняется")
+	ErrFolderShared       = uierr.New("relocate.folder_shared", "в папке игры лежит другая игра библиотеки, её файлы переехали бы вместе с этой")
+	ErrGameRemoving       = uierr.New("relocate.game_removing", "игра удаляется, перенести её нельзя")
 )
 
 // maxRecoveryAttempts bounds how many startups retry a failed repoint or

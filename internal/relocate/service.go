@@ -533,11 +533,12 @@ func (s *Service) checkBusy(gameID string) error {
 	return nil
 }
 
-// reserveGame takes the library's launch lock for a game. The running check
-// and the lock are one step inside the library, so a launch cannot start
-// between checkBusy and the move.
+// reserveGame takes the library's move hold on a game. The running, removal
+// and shared-folder checks and the hold are one step inside the library, so
+// neither a launch, a removal nor a new card in the folder can come between
+// checkBusy and the move.
 func (s *Service) reserveGame(gameID string) (func(), error) {
-	release, err := s.lib.BeginRelocate(gameID)
+	release, err := s.lib.BeginMove(gameID)
 	switch {
 	case err == nil:
 		return release, nil
@@ -545,9 +546,29 @@ func (s *Service) reserveGame(gameID string) (func(), error) {
 		return nil, fmt.Errorf("%s: %w", gameID, ErrGameRunning)
 	case errors.Is(err, library.ErrGameRelocating):
 		return nil, fmt.Errorf("%s: %w", gameID, ErrMoveInProgress)
+	case errors.Is(err, library.ErrGameRemoving):
+		return nil, fmt.Errorf("%w: %w", ErrGameRemoving, err)
+	case errors.Is(err, library.ErrFolderShared):
+		return nil, fmt.Errorf("%w: %w", ErrFolderShared, err)
 	default:
 		return nil, fmt.Errorf("%s: %w", gameID, err)
 	}
+}
+
+// checkRelocatable refuses, before the folder is measured, a game that
+// Relocate would reject or whose folder holds another library game.
+func (s *Service) checkRelocatable(gameID string) error {
+	if err := s.lib.CheckRelocatable(gameID); err != nil {
+		return err
+	}
+	neighbours, err := s.lib.FolderNeighbours(gameID)
+	if err != nil {
+		return err
+	}
+	if len(neighbours) > 0 {
+		return fmt.Errorf("%w: %s", ErrFolderShared, neighbours[0].Title)
+	}
+	return nil
 }
 
 func gameTarget(source, parent string) (string, error) {
@@ -674,7 +695,7 @@ func (s *Service) MoveGame(gameID, parent string) (Job, error) {
 		return Job{}, err
 	}
 
-	if err := s.lib.CheckRelocatable(gameID); err != nil {
+	if err := s.checkRelocatable(gameID); err != nil {
 		return Job{}, err
 	}
 	if err := s.checkBusy(gameID); err != nil {
@@ -769,6 +790,9 @@ func (s *Service) completeJob(jobID string) {
 }
 
 func (s *Service) repointGame(_ context.Context, job Job) error {
+	if game, err := s.lib.Find(job.GameID); err == nil && game.Uninstalled {
+		return fmt.Errorf("%s: %w", job.GameID, ErrGameRemoved)
+	}
 	if _, err := s.lib.Relocate(job.GameID, job.Target); err != nil {
 		return fmt.Errorf("relocate %s: %w", job.GameID, err)
 	}
@@ -1040,7 +1064,7 @@ func (s *Service) MoveLibrary(parent string) (Job, error) {
 		if strings.TrimSpace(g.InstallDir) == "" || g.External != nil {
 			continue
 		}
-		if err := s.lib.CheckRelocatable(g.ID); err != nil {
+		if err := s.checkRelocatable(g.ID); err != nil {
 			return Job{}, err
 		}
 		if err := s.checkBusy(g.ID); err != nil {
@@ -1159,7 +1183,7 @@ func (s *Service) runGameLibraryItem(ctx context.Context, jobID, gameID string, 
 		_, err := s.transition(jobID, StagePrepare, func(j *Job) { j.Queue = rest })
 		return err
 	}
-	if err := s.lib.CheckRelocatable(gameID); err != nil {
+	if err := s.checkRelocatable(gameID); err != nil {
 		return s.failOrCancel(jobID, err)
 	}
 	if err := s.checkBusy(gameID); err != nil {

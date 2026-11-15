@@ -31,6 +31,8 @@ export const REASONS: Record<string, MessageKey> = {
   'relocate.source_unverifiable': 'transfers.moveErrSourceUnverifiable',
   'relocate.source_damaged': 'transfers.moveErrSourceDamaged',
   'relocate.game_removed': 'transfers.moveErrGameRemoved',
+  'relocate.folder_shared': 'transfers.moveErrFolderShared',
+  'relocate.game_removing': 'transfers.moveErrGameRemoving',
   'relocate.retries_exhausted': 'transfers.moveErrRetriesExhausted',
   'library.executable_outside': 'transfers.moveErrExecutableOutside',
   'library.relocating': 'transfers.moveErrRelocating',

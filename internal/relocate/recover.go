@@ -57,6 +57,10 @@ func (s *Service) logRecovery(found Job) {
 }
 
 func (s *Service) recoverJob(ctx context.Context, job Job) {
+	if job.Orphaned {
+		s.recoverOrphan(job)
+		return
+	}
 	release, ok := s.reserveForRecovery(job)
 	if !ok {
 		return
@@ -97,14 +101,15 @@ func (s *Service) surfaceStale(job Job) {
 
 // reserveForRecovery takes the launch lock of the game a resumable job moves,
 // so the game cannot start while recovery touches its folders. A game that is
-// gone from the library ends the job at once without touching any data.
+// gone from the library or uninstalled ends the job at once without touching
+// any data.
 func (s *Service) reserveForRecovery(job Job) (func(), bool) {
 	noop := func() {}
 	if s.lib == nil || !recoveryTouchesGame(job) {
 		return noop, true
 	}
-	if _, err := s.lib.Find(job.GameID); err != nil {
-		s.markRecoveryFailed(job.ID, ErrGameRemoved)
+	if game, err := s.lib.Find(job.GameID); err != nil || game.Uninstalled {
+		s.markOrphaned(job.ID)
 		return nil, false
 	}
 	release, err := s.lib.BeginRelocate(job.GameID)
