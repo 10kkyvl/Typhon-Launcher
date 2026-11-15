@@ -9,6 +9,7 @@
   import { toast } from '../../lib/stores/toasts';
   import { codeText, msg } from '../../lib/i18n';
   import ScheduleLine from './ScheduleLine.svelte';
+  import SpeedLimitControl from './SpeedLimitControl.svelte';
 
   let { onadd }: { onadd: () => void } = $props();
 
@@ -31,6 +32,9 @@
 
 <div class="controls">
   <ScheduleLine />
+  {#if $settings}
+    <SpeedLimitControl limit={$settings.downloadRateLimit} />
+  {/if}
   {#if concurrencyValue !== null}
     <DropdownMenu
       items={maxActiveDownloadOptions.map((o) => ({ ...o, checked: o.id === concurrencyValue }))}

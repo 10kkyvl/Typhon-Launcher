@@ -207,6 +207,8 @@ const SITES: Record<string, Site[]> = {
   'routes/friends/Friends.svelte': [['info', false]],
   // Downloads held while a game runs: it starts and ends while the page is open.
   'routes/downloads/PlayThrottleBanner.svelte': [['info', true]],
+  // The speed limit Go just refused, said in the popover the player is in.
+  'routes/downloads/SpeedLimitControl.svelte': [['danger', true]],
   // The game page, in its parts. The downloads and the other versions failed to load (just happened).
   'routes/game/GameSections.svelte': [['danger', true]],
   'routes/game/GameOtherVersions.svelte': [['danger', true]],
