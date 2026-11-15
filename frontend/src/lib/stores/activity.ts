@@ -3,9 +3,12 @@ import type { Download, DownloadStatus } from '../services/downloads';
 import type { Installation } from '../services/install';
 import type { MoveJob } from '../services/relocate';
 import type { VerifyState } from '../services/updates';
+import type { PlayThrottle } from '../services/playThrottle';
 import { bytesSize, etaLabel, speedBytes, truncateMiddle } from '../utils/format';
 import { locale, msg } from '../i18n';
+import { downloadActions } from '../downloads/actions';
 import { downloads, statusLabels } from './downloads';
+import { playThrottle } from './playThrottle';
 import { installActive, installStatusLabels, installations } from './install';
 import { installIndeterminate, installTotalUnknown } from '../install/progress';
 import { libraryGames } from './library';
@@ -27,7 +30,11 @@ export interface ActivityItem {
   indeterminate?: boolean;
   tone: ActivityTone;
   attention: boolean;
+  /** A download that stands still (queued or paused): it reads its state, not a percent. */
+  idle: boolean;
+  /** The download offers Pause (`downloadActions`). */
   pausable: boolean;
+  /** The download offers Continue (`downloadActions`). */
   resumable: boolean;
 }
 
@@ -59,7 +66,9 @@ function verifyDetail(item: VerifyState) {
   return '';
 }
 
-function fromDownload(item: Download): ActivityItem {
+function fromDownload(item: Download, throttle: PlayThrottle): ActivityItem {
+  const idle = item.status === 'paused' || item.status === 'queued';
+  const offers = downloadActions(item, throttle);
   return {
     key: `download:${item.id}`,
     kind: 'download',
@@ -68,10 +77,11 @@ function fromDownload(item: Download): ActivityItem {
     status: statusLabels(item.status),
     detail: downloadDetail(item),
     progress: item.progress,
-    tone: item.status === 'paused' || item.status === 'queued' ? 'muted' : 'accent',
+    tone: idle ? 'muted' : 'accent',
     attention: false,
-    pausable: item.status === 'downloading' || item.status === 'metadata',
-    resumable: item.status === 'paused' || item.status === 'queued',
+    idle,
+    pausable: offers.includes('pause'),
+    resumable: offers.includes('resume'),
   };
 }
 
@@ -88,6 +98,7 @@ function fromInstall(item: Installation): ActivityItem {
     progress: item.progress,
     tone: waiting ? 'warning' : 'accent',
     attention: waiting,
+    idle: false,
     pausable: false,
     resumable: false,
   };
@@ -104,6 +115,7 @@ function fromVerify(item: VerifyState, title: string): ActivityItem {
     progress: item.progress,
     tone: 'accent',
     attention: false,
+    idle: false,
     pausable: false,
     resumable: false,
   };
@@ -126,21 +138,22 @@ function fromMove(job: MoveJob): ActivityItem {
     progress: movePercent(job) / 100,
     tone: 'accent',
     attention: false,
+    idle: false,
     pausable: false,
     resumable: false,
   };
 }
 
 export const activity = derived(
-  [downloads, installations, verifications, activeMove, libraryGames, locale],
-  ([$downloads, $installations, $verifications, $activeMove, $libraryGames]) => {
+  [downloads, installations, verifications, activeMove, libraryGames, playThrottle, locale],
+  ([$downloads, $installations, $verifications, $activeMove, $libraryGames, $playThrottle]) => {
     const installItems = $installations
       .filter((i) => installActive(i.status) || i.status === 'waiting_for_user')
       .map(fromInstall);
     const installedDownloads = new Set(installItems.map((i) => i.downloadId));
     const downloadItems = $downloads
       .filter((d) => dockStatuses.includes(d.status) && !installedDownloads.has(d.id))
-      .map(fromDownload);
+      .map((d) => fromDownload(d, $playThrottle));
     const verifyItems = Object.values($verifications)
       .filter((v) => v.running)
       .map((v) =>

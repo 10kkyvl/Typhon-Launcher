@@ -364,6 +364,35 @@ describe('ActivityWidget: actions from the keyboard', () => {
     expect(resumeDownload).toHaveBeenCalledWith('d1');
   });
 
+  it('offers Pause on a queued download, never Continue Go would refuse, and keeps saying it is queued', async () => {
+    vi.mocked(pauseDownload).mockResolvedValue();
+    downloads.set([download({ status: 'queued' })]);
+    const { keys, head, panel } = mount();
+    expect(head()?.textContent?.replace(/\s+/g, ' ').trim()).toBe(`Hades ${msg('state.downloadsStatusQueued')}`);
+    await keys.click(head() as HTMLElement);
+    expect(within(panel() as HTMLElement).queryByRole('button', { name: msg('common.continue') })).toBeNull();
+
+    await keys.click(within(panel() as HTMLElement).getByRole('button', { name: msg('ui.pause') }));
+
+    expect(pauseDownload).toHaveBeenCalledWith('d1');
+    expect(resumeDownload).not.toHaveBeenCalled();
+  });
+
+  it('offers neither Pause nor Continue while the metadata is fetched', async () => {
+    downloads.set([download({ status: 'metadata' })]);
+    const { keys, head, panel } = mount();
+    await keys.click(head() as HTMLElement);
+
+    expect(within(panel() as HTMLElement).queryByRole('button', { name: msg('ui.pause') })).toBeNull();
+    expect(within(panel() as HTMLElement).queryByRole('button', { name: msg('common.continue') })).toBeNull();
+  });
+
+  it('leads with a download that moves rather than a queued one before it', () => {
+    downloads.set([download({ status: 'queued' }), download({ id: 'd2', name: 'Stardew', progress: 0.1 })]);
+    const { head } = mount();
+    expect(head()?.textContent?.replace(/\s+/g, ' ').trim()).toMatch(/^Stardew 10%/);
+  });
+
   it('Cancel install is called for the waiting installation; a failed cancel says its error and the button stays', async () => {
     const call = deferred();
     vi.mocked(cancelInstall).mockReturnValue(call.promise);

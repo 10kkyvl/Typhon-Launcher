@@ -25,6 +25,8 @@ export interface WidgetItem {
   indeterminate: boolean;
   tone: ActivityTone;
   attention: boolean;
+  /** A download that stands still (queued or paused). */
+  idle: boolean;
   pausable: boolean;
   resumable: boolean;
   /** A running game: its cover. */
@@ -45,6 +47,7 @@ function fromActivity(item: ActivityItem): WidgetItem {
     indeterminate: Boolean(item.indeterminate),
     tone: item.tone,
     attention: item.attention,
+    idle: item.idle,
     pausable: item.pausable,
     resumable: item.resumable,
   };
@@ -62,6 +65,7 @@ function fromGame(id: string, game: LibraryGame | undefined, startedAt: number |
     indeterminate: false,
     tone: 'accent',
     attention: false,
+    idle: false,
     pausable: false,
     resumable: false,
     cover: game?.cover ?? '',
@@ -97,7 +101,7 @@ export function shownItems(items: readonly WidgetItem[], route: Pick<Route, 'nam
 export function leadOf(items: readonly WidgetItem[]): WidgetItem | null {
   return (
     items.find((item) => item.attention) ??
-    items.find((item) => item.progress !== null && !item.indeterminate && !item.resumable) ??
+    items.find((item) => item.progress !== null && !item.indeterminate && !item.idle) ??
     items[0] ??
     null
   );
@@ -115,7 +119,7 @@ export function sessionClock(ms: number): string {
 /** What stands on an item's title line after its name: the percent, its state instead, or the session time. */
 export function reading(item: WidgetItem, now: number): string {
   if (item.kind === 'game') return item.startedAt === undefined ? '' : sessionClock(now - item.startedAt);
-  if (item.attention || item.resumable || item.indeterminate || item.progress === null) return item.status;
+  if (item.attention || item.idle || item.indeterminate || item.progress === null) return item.status;
   return `${progressPercent(item.progress)}%`;
 }
 
@@ -129,7 +133,7 @@ export function detailOf(item: WidgetItem, now: number): string {
 
 /** The value of a bar in words, when a percent alone would not say it: a paused or queued download. */
 export function valueText(item: WidgetItem): string | undefined {
-  if (!item.resumable || item.progress === null) return undefined;
+  if (!item.idle || item.progress === null) return undefined;
   return msg('ui.activityPausedValue', { status: item.status, percent: progressPercent(item.progress) });
 }
 

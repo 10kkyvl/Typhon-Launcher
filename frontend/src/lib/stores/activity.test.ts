@@ -177,6 +177,39 @@ describe('activity', () => {
     expect(items[1].resumable).toBe(true);
   });
 
+  it('offers on a download only what Go accepts for its status', async () => {
+    const { downloadsStore, activityStore } = await load();
+    downloadsStore.downloads.set([
+      makeDownload({ id: 'running' }),
+      makeDownload({ id: 'queued', status: 'queued' }),
+      makeDownload({ id: 'paused', status: 'paused' }),
+      makeDownload({ id: 'metadata', status: 'metadata' }),
+      makeDownload({ id: 'verifying', status: 'verifying' }),
+    ]);
+    const offers = Object.fromEntries(get(activityStore.activity).map((i) => [i.downloadId, [i.pausable, i.resumable]]));
+    expect(offers).toEqual({
+      running: [true, false],
+      queued: [true, false],
+      paused: [false, true],
+      metadata: [false, false],
+      verifying: [false, false],
+    });
+  });
+
+  it('marks a queued or paused download as standing still, whatever it offers', async () => {
+    const { downloadsStore, activityStore } = await load();
+    downloadsStore.downloads.set([
+      makeDownload({ id: 'running' }),
+      makeDownload({ id: 'queued', status: 'queued' }),
+      makeDownload({ id: 'paused', status: 'paused' }),
+    ]);
+    expect(get(activityStore.activity).map((i) => [i.downloadId, i.idle])).toEqual([
+      ['running', false],
+      ['queued', true],
+      ['paused', true],
+    ]);
+  });
+
   it('replaces a download row with its installation', async () => {
     const { downloadsStore, installStore, activityStore } = await load();
     downloadsStore.downloads.set([makeDownload({ id: 'd1', status: 'verifying' })]);
