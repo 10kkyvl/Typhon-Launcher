@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { balanced } from '../testing/scan';
 import { bindingSources, frontendSources, goSources } from '../testing/sources';
 
@@ -277,6 +277,15 @@ describe('runtime events', () => {
     expect([...UNREGISTERED].filter((name) => !names.has(name) || registered.has(name))).toEqual([]);
     const loose = subscribedEvents().filter(({ name }) => !registered.has(name) && !UNREGISTERED.has(name));
     expect(loose.map(({ file, name }) => `${file}: ${name}`)).toEqual([]);
+  });
+
+  it('include every event the downloads store names in its table', async () => {
+    vi.doMock('./backend', () => ({ inWails: false }));
+    const { downloadEvents } = await import('../stores/downloads');
+    const found = new Set(subscribedEvents().filter(({ file }) => file === 'lib/stores/downloads.ts').map(({ name }) => name));
+
+    expect(Object.values(downloadEvents)).toContain('download:reordered');
+    expect(Object.values(downloadEvents).filter((name) => !found.has(name))).toEqual([]);
   });
 
   it('are all raised somewhere in the Go sources', () => {

@@ -369,6 +369,9 @@ describe('ActivityWidget: actions from the keyboard', () => {
     downloads.set([download({ status: 'queued' })]);
     const { keys, head, panel } = mount();
     expect(head()?.textContent?.replace(/\s+/g, ' ').trim()).toBe(`Hades ${msg('state.downloadsStatusQueued')}`);
+    expect(screen.getByRole('progressbar', { name: 'Hades' }).getAttribute('aria-valuetext')).toBe(
+      msg('ui.activityPausedValue', { status: msg('state.downloadsStatusQueued'), percent: 42 }),
+    );
     await keys.click(head() as HTMLElement);
     expect(within(panel() as HTMLElement).queryByRole('button', { name: msg('common.continue') })).toBeNull();
 
