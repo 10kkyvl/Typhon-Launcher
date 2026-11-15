@@ -185,7 +185,7 @@ func TestInspectReuseRefusals(t *testing.T) {
 		}, errNoMetadata},
 		{"another operation holds the hash", func(t *testing.T, m *Manager, hash, parent string) (ReuseRequest, context.Context) {
 			m.mu.Lock()
-			m.reserved[hash] = true
+			m.reserved[hash] = reservation{}
 			m.mu.Unlock()
 			return ReuseRequest{InfoHash: hash, Path: parent}, t.Context()
 		}, errHashBusy},

@@ -288,7 +288,7 @@ func (m *Manager) metainfoFor(ctx context.Context, cl *client, source, infoHash 
 // TOCTOU window between this check and actually adding the torrent
 // (invariant 17).
 func (m *Manager) hashBusyLocked(infoHash string) bool {
-	if m.reserved[infoHash] {
+	if _, held := m.reserved[infoHash]; held {
 		return true
 	}
 	if _, waiting := m.pending[infoHash]; waiting {
@@ -310,7 +310,7 @@ func (m *Manager) hashBusyLocked(infoHash string) bool {
 // would share one engine and write to the wrong directory. The caller must
 // hold m.mu; see reserveHashExcept.
 func (m *Manager) hashInUseLocked(infoHash, excludeID string) bool {
-	if m.reserved[infoHash] {
+	if _, held := m.reserved[infoHash]; held {
 		return true
 	}
 	for _, d := range m.items {
@@ -336,7 +336,7 @@ func (m *Manager) reserveHash(infoHash string) bool {
 	if m.hashBusyLocked(infoHash) {
 		return false
 	}
-	m.reserved[infoHash] = true
+	m.reserved[infoHash] = reservation{}
 	return true
 }
 
@@ -349,7 +349,7 @@ func (m *Manager) reserveHashExcept(infoHash, excludeID string) bool {
 	if m.hashInUseLocked(infoHash, excludeID) {
 		return false
 	}
-	m.reserved[infoHash] = true
+	m.reserved[infoHash] = reservation{}
 	return true
 }
 

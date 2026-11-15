@@ -32,7 +32,8 @@ func TestCancelFetchMetadataReleasesReservationImmediately(t *testing.T) {
 		waitUntil(t, "FetchMetadata to reserve the infohash", func() bool {
 			m.mu.Lock()
 			defer m.mu.Unlock()
-			return m.reserved[hash]
+			_, held := m.reserved[hash]
+			return held
 		})
 
 		m.CancelFetchMetadata(source)
@@ -51,7 +52,7 @@ func TestCancelFetchMetadataReleasesReservationImmediately(t *testing.T) {
 	}
 
 	m.mu.Lock()
-	stillReserved := m.reserved[hash]
+	_, stillReserved := m.reserved[hash]
 	m.mu.Unlock()
 	if stillReserved {
 		t.Fatal("infohash reservation was not released right after cancellation")

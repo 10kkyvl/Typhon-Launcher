@@ -108,6 +108,13 @@ type pending struct {
 	source  string
 }
 
+// reservation holds an infohash between a busy check and the act that depends
+// on it. discarded records a DiscardMetadata that came while a Start held the
+// hash: what that Start would have left waiting is dropped instead.
+type reservation struct {
+	discarded bool
+}
+
 type jobState struct {
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -143,7 +150,7 @@ type Manager struct {
 	rates    map[string]*rateState
 	pending  map[string]*pending
 	jobs     map[string]*jobState
-	reserved map[string]bool
+	reserved map[string]reservation
 	fetching map[string]fetchEntry
 	fetchSeq int64
 	promoter *partPromoter
@@ -251,7 +258,7 @@ func newManagerAt(dir string, settingsService *settings.Service) (*Manager, erro
 		rates:    map[string]*rateState{},
 		pending:  map[string]*pending{},
 		jobs:     map[string]*jobState{},
-		reserved: map[string]bool{},
+		reserved: map[string]reservation{},
 		fetching: map[string]fetchEntry{},
 		promoter: newPartPromoter(),
 
@@ -669,7 +676,7 @@ func (m *Manager) FetchMetadata(source string) (TorrentInfo, error) {
 		m.mu.Unlock()
 		return TorrentInfo{}, errHashBusy
 	}
-	m.reserved[infoHash] = true
+	m.reserved[infoHash] = reservation{}
 	m.mu.Unlock()
 	reserved := true
 	defer func() {
@@ -802,10 +809,18 @@ func (m *Manager) CancelFetchMetadata(source string) {
 	}
 }
 
+// DiscardMetadata lets go of a fetched torrent the window no longer wants. A
+// Start that has taken it and still holds the hash learns of the discard
+// through its reservation: whatever that Start would leave waiting after a
+// failure is dropped. A Start that succeeds keeps its download.
 func (m *Manager) DiscardMetadata(infoHash string) {
 	m.mu.Lock()
 	p := m.pending[infoHash]
 	delete(m.pending, infoHash)
+	if r, held := m.reserved[infoHash]; held && p == nil {
+		r.discarded = true
+		m.reserved[infoHash] = r
+	}
 	m.mu.Unlock()
 	if p != nil {
 		p.torrent.drop()
@@ -831,11 +846,12 @@ func (m *Manager) discardMetainfoLocked(infoHash string) {
 // re-fetching. It also releases the infohash reservation that
 // StartDownloadFrom took when it pulled p out of m.pending: once p is back in
 // m.pending (or dropped because someone else raced in and left a different
-// entry there), hashBusyLocked's own pending check covers the hash again.
+// entry there), hashBusyLocked's own pending check covers the hash again. A
+// discard that came meanwhile drops p instead.
 func (m *Manager) returnPending(infoHash string, p *pending) {
 	m.mu.Lock()
-	delete(m.reserved, infoHash)
-	if _, taken := m.pending[infoHash]; !taken {
+	discarded := m.releaseStartLocked(infoHash)
+	if _, taken := m.pending[infoHash]; !taken && !discarded {
 		m.pending[infoHash] = p
 		m.mu.Unlock()
 		return
@@ -850,14 +866,21 @@ func (m *Manager) returnPending(infoHash string, p *pending) {
 // metainfo already in hand, without a fetch. A client that changed since has
 // dropped every waiting torrent of the old one, and a client that refuses the
 // probe would refuse the next Start too: then nothing waits, and the error
-// carries errMetadataRequired so the window fetches again. The hash
-// reservation StartDownloadFrom took is released here on every path.
+// carries errMetadataRequired so the window fetches again. After a discard
+// nothing waits either, and the error is the one the Start would report
+// without it. The hash reservation StartDownloadFrom took is released here on
+// every path.
 func (m *Manager) handBack(cl *client, infoHash string, mi *metainfo.MetaInfo, source string, cause error) error {
 	m.mu.Lock()
 	if m.client != cl {
 		err := m.giveUpLocked(infoHash, cause)
 		m.mu.Unlock()
 		return err
+	}
+	if m.reserved[infoHash].discarded {
+		m.releaseStartLocked(infoHash)
+		m.mu.Unlock()
+		return cause
 	}
 	m.mu.Unlock()
 	probe, err := cl.addMetainfo(mi, cl.metaDir, storageOpts{})
@@ -872,8 +895,8 @@ func (m *Manager) handBack(cl *client, infoHash string, mi *metainfo.MetaInfo, s
 		probe.drop()
 		return err
 	}
-	m.releaseHashLocked(infoHash)
-	if _, taken := m.pending[infoHash]; taken {
+	discarded := m.releaseStartLocked(infoHash)
+	if _, taken := m.pending[infoHash]; taken || discarded {
 		m.mu.Unlock()
 		probe.drop()
 		return cause
@@ -887,8 +910,21 @@ func (m *Manager) handBack(cl *client, infoHash string, mi *metainfo.MetaInfo, s
 // one: the hash it reserved is released and the error asks the window to
 // fetch again.
 func (m *Manager) giveUpLocked(infoHash string, cause error) error {
-	m.releaseHashLocked(infoHash)
+	m.releaseStartLocked(infoHash)
 	return fmt.Errorf("%w: %w", errMetadataRequired, cause)
+}
+
+// releaseStartLocked releases the hash a Start reserved and reports whether a
+// discard came while it was held. The discarded torrent's cached file goes in
+// the same hold: the Start may have written it again after the discard
+// removed it, and no new fetch of the hash can start before the release.
+func (m *Manager) releaseStartLocked(infoHash string) bool {
+	r := m.reserved[infoHash]
+	m.releaseHashLocked(infoHash)
+	if r.discarded {
+		m.discardMetainfoLocked(infoHash)
+	}
+	return r.discarded
 }
 
 func (m *Manager) giveUp(infoHash string, cause error) error {
@@ -921,7 +957,7 @@ func (m *Manager) StartDownloadFrom(infoHash, destination string, selectedIndice
 	p := m.pending[infoHash]
 	if p != nil {
 		delete(m.pending, infoHash)
-		m.reserved[infoHash] = true
+		m.reserved[infoHash] = reservation{}
 	}
 	cl := m.client
 	m.mu.Unlock()
@@ -939,8 +975,8 @@ func (m *Manager) StartDownloadFrom(infoHash, destination string, selectedIndice
 		return Download{}, errEmptyDestination
 	}
 	if err := os.MkdirAll(destination, 0o755); err != nil {
-		m.returnPending(infoHash, p)
 		slog.Error("create destination", "path", destination, "error", err)
+		m.returnPending(infoHash, p)
 		if errors.Is(err, fs.ErrPermission) {
 			return Download{}, errDestPermission
 		}

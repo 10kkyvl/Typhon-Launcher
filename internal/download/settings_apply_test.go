@@ -117,7 +117,8 @@ func TestFetchMetadataThatEndsWithoutMetadataLeavesNothingBehind(t *testing.T) {
 			waitUntil(t, "the fetch to reserve the hash", func() bool {
 				m.mu.Lock()
 				defer m.mu.Unlock()
-				return m.reserved[hash]
+				_, held := m.reserved[hash]
+				return held
 			})
 			m.CancelFetchMetadata(source)
 			return <-result
