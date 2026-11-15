@@ -385,7 +385,7 @@ describe('the panel of a download under way: Cancel means Go’s Cancel and asks
     const view = show([download(), download({ id: 'd2', name: 'Game Two' })], { onannounce });
 
     const dialog = await openCancel(view, 'Game One');
-    expect(dialog.textContent).toContain(`the ${bytesSize(420 * MB)} downloaded so far are deleted from disk`);
+    expect(dialog.textContent).toContain(`the ${bytesSize(420 * MB)} downloaded so far is deleted from disk`);
     await view.user.click(within(dialog).getByRole('button', { name: 'Cancel download' }));
 
     await waitFor(() => expect(screen.queryByRole('region', { name: 'Game One' })).toBeNull());
@@ -393,7 +393,7 @@ describe('the panel of a download under way: Cancel means Go’s Cancel and asks
     await waitFor(() =>
       expect(document.activeElement).toBe(within(panel('Game Two')).getByRole('button', { name: 'More actions for “Game Two”' })),
     );
-    expect(onannounce).toHaveBeenCalledWith('“Game One” cancelled');
+    expect(onannounce).toHaveBeenCalledWith('Download “Game One” cancelled');
   });
 
   it('the last panel to go hands focus to the one above it, and the only one to the heading the page gives', async () => {
@@ -444,7 +444,7 @@ describe('the panel of a download under way: Cancel means Go’s Cancel and asks
     const view = show([download({ inPlace: true, origin: { gameId: 'g1', purpose: 'update' } } as Partial<Download>)]);
 
     const dialog = await openCancel(view, 'Game One');
-    expect(dialog.textContent).toContain('The files it has already written stay on disk.');
+    expect(dialog.textContent).toMatch(/downloaded so far stays on disk, in “[^”]+”/);
     expect(dialog.textContent).not.toContain('deleted');
   });
 

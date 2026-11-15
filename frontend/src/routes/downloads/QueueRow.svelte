@@ -56,7 +56,7 @@
     offers: readonly DownloadAction[];
     /** The schedule holds this download back now. */
     waiting: boolean;
-    /** "Start now" would start something (queueRow.ts::startNowHelps). */
+    /** "Start now" would start something: nothing holds the download back (lib/downloads/schedule.ts::heldBack). */
     startNow: boolean;
     /** The screen opens the download's details: the menu offers them. */
     details: boolean;

@@ -2,6 +2,9 @@
   import { Ellipsis, Pause, Play } from '@lucide/svelte';
   import { t } from '../i18n';
   import { installErrorText } from '../install/installErrors';
+  import { cancelDownloadPrompt } from '../confirm/prompts';
+  import { cancelAsks } from '../downloads/cancel';
+  import { heldBack } from '../downloads/schedule';
   import { emptySpeedSeries, type SpeedSeries } from '../downloads/speedHistory';
   import { gamePageId, type Download } from '../services/downloads';
   import { openFolder } from '../services/settings';
@@ -27,7 +30,7 @@
   import SpeedGraph from './SpeedGraph.svelte';
   import StatusBadge from './StatusBadge.svelte';
   import type { MenuItem } from './menu';
-  import { cancelKeepsFiles, handOffTarget, heldBack, leadAction, panelOrder, speedLimit } from './downloadPanel';
+  import { handOffTarget, leadAction, panelOrder, speedLimit } from './downloadPanel';
 
   /**
    * The panel of a download under way on the Downloads screen, one per download of the store's `active`
@@ -155,7 +158,7 @@
   let cancelHand: ReturnType<typeof focusHandOff> | null = null;
 
   function cancelled(name: string) {
-    onannounce?.($t('downloads.panel.cancelled', { name }));
+    onannounce?.($t('downloads.cancel.done', { name }));
   }
 
   async function cancelNow() {
@@ -170,7 +173,7 @@
   }
 
   function askCancel() {
-    if (download.downloaded <= 0) {
+    if (!cancelAsks(download)) {
       void cancelNow();
       return;
     }
@@ -200,15 +203,7 @@
     if (hand) void hand(() => handOffTarget(cancelOrder, own, { stays: false, prefer: 'more', away }));
   }
 
-  const cancelPrompt = $derived({
-    title: $t('downloads.panel.cancelTitle', { name: download.name }),
-    text: cancelKeepsFiles(download)
-      ? $t('downloads.panel.cancelKeeps')
-      : $t('downloads.panel.cancelDeletes', { size: bytesSize(download.downloaded) }),
-    confirm: $t('downloads.panel.cancelConfirm'),
-    busy: $t('downloads.panel.cancelBusy'),
-    cancel: $t('downloads.panel.cancelKeep'),
-  });
+  const cancelPrompt = $derived(cancelDownloadPrompt(download));
 
   function onmenu(item: string) {
     if (item === 'details') onopen?.(download);

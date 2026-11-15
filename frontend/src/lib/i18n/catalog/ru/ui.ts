@@ -38,9 +38,6 @@ export const ui = {
   'ui.awaitingSources': 'Ожидание источников',
   'ui.bytesOfBytes': '{done} из {total}',
   'ui.cancelVerb': 'Отменить',
-  'ui.cancelDownloadTitle': 'Отменить загрузку?',
-  'ui.cancelDownloadWarning':
-    'Загрузка «{name}» будет остановлена, а уже скачанные файлы удалены с диска. Это действие нельзя отменить.',
   'ui.dontCancel': 'Не отменять',
   'ui.cancelDownload': 'Отменить загрузку',
 

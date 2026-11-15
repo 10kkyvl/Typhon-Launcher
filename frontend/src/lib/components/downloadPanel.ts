@@ -26,25 +26,6 @@ export function speedLimit(settings: Pick<Settings, 'downloadRateLimit'> | null,
   return Math.max(0, settings?.downloadRateLimit ?? 0);
 }
 
-/**
- * Whether Go would hold this download back if it started now: a running game in the pause mode, or the
- * schedule, unless "Download now" lifted it (internal/download `pausedLocked`). A forced start under a
- * hold sets the status to downloading with the engine gated, which would read as a stalled download.
- */
-export function heldBack(download: Pick<Download, 'ignoreSchedule'>, throttle: Pick<PlayThrottle, 'mode' | 'schedule'>): boolean {
-  if (throttle.mode === 'pause') return true;
-  return Boolean(throttle.schedule?.blocked) && !download.ignoreSchedule;
-}
-
-/**
- * Whether Go's Cancel leaves this download's files on disk: an in-place download (an update or a repair
- * written into the game's folder) and a flat one, whose folder Go cannot tell apart (manager.go `discard`,
- * `removalRoot`).
- */
-export function cancelKeepsFiles(download: Download): boolean {
-  return download.inPlace === true || download.flat === true;
-}
-
 function panels(): HTMLElement[] {
   return [...document.querySelectorAll<HTMLElement>(`[${PANEL_ATTR}]`)];
 }

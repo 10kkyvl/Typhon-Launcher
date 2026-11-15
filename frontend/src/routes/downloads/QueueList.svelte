@@ -12,9 +12,10 @@
   import { msg } from '../../lib/i18n';
   import DownloadsSection from './DownloadsSection.svelte';
   import QueueRow from './QueueRow.svelte';
-  import { cancelAsks, cancelPrompt } from './downloadCancel';
+  import { cancelDownloadPrompt } from '../../lib/confirm/prompts';
+  import { cancelAsks } from '../../lib/downloads/cancel';
+  import { heldBack } from '../../lib/downloads/schedule';
   import { askMove, keyTarget, pointerTarget, roomFor, settleMove, shownOrder, type MoveAsk, type RowBox } from './queueReorder';
-  import { startNowHelps } from './queueRow';
   import { afterLeaving, byData, createWatchers, handOffInView, type HandOff } from './rowFocus';
 
   /**
@@ -233,7 +234,7 @@
   const gone = (id: string) => () => !goIds.includes(id);
 
   function cancelled(download: Download, index: number, handOff: HandOff) {
-    onannounce(msg('downloads.queue.cancelled', { title: download.name }));
+    onannounce(msg('downloads.cancel.done', { name: download.name }));
     watchers.watch(gone(download.id), () => void handOffInView(handOff, () => afterLeaving(list, download.id, index, cancelIn)));
   }
 
@@ -299,7 +300,7 @@
         total={rows.length}
         offers={$downloadOffers.get(download.id) ?? []}
         {waiting}
-        startNow={startNowHelps(waiting, $playThrottle)}
+        startNow={!heldBack(download, $playThrottle)}
         details={Boolean(onopen)}
         {helpId}
         lifted={drag?.id === download.id}
@@ -325,7 +326,7 @@
 {#if asking}
   {@const current = asking}
   <ConfirmModal
-    prompt={cancelPrompt(current.download)}
+    prompt={cancelDownloadPrompt(current.download)}
     onconfirm={confirmCancel}
     errorText={installErrorText}
     onclose={() => (asking = null)}

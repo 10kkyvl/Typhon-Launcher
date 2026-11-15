@@ -16,7 +16,8 @@
   import { bytesSize } from '../../lib/utils/format';
   import { msg } from '../../lib/i18n';
   import DownloadsSection from './DownloadsSection.svelte';
-  import { cancelAsks, cancelPrompt } from './downloadCancel';
+  import { cancelDownloadPrompt } from '../../lib/confirm/prompts';
+  import { cancelAsks } from '../../lib/downloads/cancel';
   import { coverOf } from './downloadRow';
   import { afterLeaving, byData, createWatchers, handOffInView, pageHeading, type HandOff } from './rowFocus';
 
@@ -71,7 +72,7 @@
   let asking = $state<{ download: Download; index: number; handOff: HandOff } | null>(null);
 
   function cancelled(download: Download, index: number, handOff: HandOff) {
-    onannounce(msg('downloads.queue.cancelled', { title: download.name }));
+    onannounce(msg('downloads.cancel.done', { name: download.name }));
     watchers.watch(gone(download.id), () => void handOffInView(handOff, () => afterLeaving(list, download.id, index, cancelIn)));
   }
 
@@ -157,7 +158,7 @@
 {#if asking}
   {@const current = asking}
   <ConfirmModal
-    prompt={cancelPrompt(current.download)}
+    prompt={cancelDownloadPrompt(current.download)}
     onconfirm={confirmCancel}
     errorText={installErrorText}
     onclose={() => (asking = null)}

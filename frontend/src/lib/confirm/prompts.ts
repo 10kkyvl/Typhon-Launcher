@@ -1,4 +1,7 @@
+import { cancelKeepsFiles } from '../downloads/cancel';
 import { msg } from '../i18n';
+import type { Download } from '../services/downloads';
+import { bytesSize } from '../utils/format';
 
 export interface ConfirmPrompt {
   title: string;
@@ -43,11 +46,19 @@ export function discardDownloadPrompt(name: string): ConfirmPrompt {
   };
 }
 
-export function cancelDownloadPrompt(name: string): ConfirmPrompt {
+/**
+ * The question before Go's Cancel, the same on every surface: names the download and says what happens
+ * to what it has downloaded, deleted or left on disk (lib/downloads/cancel.ts).
+ */
+export function cancelDownloadPrompt(download: Pick<Download, 'name' | 'downloaded' | 'destination' | 'inPlace' | 'flat'>): ConfirmPrompt {
+  const size = bytesSize(download.downloaded);
   return {
-    title: msg('ui.cancelDownloadTitle'),
-    text: msg('ui.cancelDownloadWarning', { name }),
+    title: msg('downloads.cancel.title', { name: download.name }),
+    text: cancelKeepsFiles(download)
+      ? msg('downloads.cancel.keeps', { size, path: download.destination })
+      : msg('downloads.cancel.deletes', { size }),
     confirm: msg('ui.cancelDownload'),
+    busy: msg('downloads.cancel.busy'),
     cancel: msg('ui.dontCancel'),
   };
 }

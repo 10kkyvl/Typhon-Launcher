@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { bytesSize } from '../utils/format';
 import {
   blockPrompt,
   cancelDownloadPrompt,
@@ -55,11 +56,23 @@ describe('download prompts', () => {
     expect(prompt.confirm).toBe('Удалить загрузку и файлы');
   });
 
-  it('keeps the cancel wording of a running download', () => {
-    const prompt = cancelDownloadPrompt('Portal 2');
-    expect(prompt.text).toContain('Portal 2');
+  it('asks about cancelling a download by its name and says its data is deleted', () => {
+    const prompt = cancelDownloadPrompt({ name: 'Portal 2', downloaded: 3 * 1024 ** 3, destination: 'D:/Games/Portal 2' });
+    expect(prompt.title).toContain('Portal 2');
+    expect(prompt.text).toContain(bytesSize(3 * 1024 ** 3));
+    expect(prompt.text).toContain('удалены');
+    expect(prompt.text).not.toContain('D:/Games/Portal 2');
     expect(prompt.cancel).toBe('Не отменять');
     expect(prompt.confirm).toBe('Отменить загрузку');
+  });
+
+  it('does not promise a deletion Go skips: an in-place or flat download keeps its files, and the prompt says where', () => {
+    for (const kept of [{ inPlace: true }, { flat: true }]) {
+      const prompt = cancelDownloadPrompt({ name: 'Portal 2', downloaded: 1024 ** 2, destination: 'D:/Games/Portal 2', ...kept });
+      expect(prompt.text).toContain('останутся');
+      expect(prompt.text).toContain('D:/Games/Portal 2');
+      expect(prompt.text).not.toContain('удалены');
+    }
   });
 });
 

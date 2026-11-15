@@ -187,8 +187,8 @@ describe('FailedList: cancel', () => {
     const { user } = mount();
 
     await user.click(cancelX('Alpha'));
-    const dialog = await screen.findByRole('dialog', { name: msg('downloads.queue.cancelTitle', { title: 'Alpha' }) });
-    expect(dialog.textContent).toContain(msg('downloads.queue.cancelDeletes', { size: bytesSize(1024 ** 2) }));
+    const dialog = await screen.findByRole('dialog', { name: msg('downloads.cancel.title', { name: 'Alpha' }) });
+    expect(dialog.textContent).toContain(msg('downloads.cancel.deletes', { size: bytesSize(1024 ** 2) }));
     await user.click(within(dialog).getByRole('button', { name: msg('ui.cancelDownload') }));
 
     await vi.waitFor(() => expect(dialog.textContent).toContain(installErrorText(err)));
@@ -206,7 +206,7 @@ describe('FailedList: cancel', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
     goRemoves('a');
     await vi.waitFor(() => expect(document.activeElement).toBe(cancelX('Beta')));
-    expect(onannounce).toHaveBeenCalledWith(msg('downloads.queue.cancelled', { title: 'Alpha' }));
+    expect(onannounce).toHaveBeenCalledWith(msg('downloads.cancel.done', { name: 'Alpha' }));
 
     await user.keyboard('{Enter}');
     goRemoves('b');

@@ -366,8 +366,8 @@ describe('QueueList: cancel', () => {
     cancelX('Alpha').focus();
     await user.keyboard('{Enter}');
 
-    const dialog = await screen.findByRole('dialog', { name: msg('downloads.queue.cancelTitle', { title: 'Alpha' }) });
-    expect(dialog.textContent).toContain(msg('downloads.queue.cancelDeletes', { size: bytesSize(300 * 1024 ** 2) }));
+    const dialog = await screen.findByRole('dialog', { name: msg('downloads.cancel.title', { name: 'Alpha' }) });
+    expect(dialog.textContent).toContain(msg('downloads.cancel.deletes', { size: bytesSize(300 * 1024 ** 2) }));
     expect(cancelDownload).not.toHaveBeenCalled();
 
     await user.click(within(dialog).getByRole('button', { name: msg('ui.cancelDownload') }));
@@ -383,8 +383,8 @@ describe('QueueList: cancel', () => {
     await user.click(cancelX('Alpha'));
 
     const dialog = await screen.findByRole('dialog');
-    expect(dialog.textContent).toContain(msg('downloads.queue.cancelKeeps', { size: bytesSize(1024 ** 2), path: 'D:/Games/Alpha' }));
-    expect(dialog.textContent).not.toContain(msg('downloads.queue.cancelDeletes', { size: bytesSize(1024 ** 2) }));
+    expect(dialog.textContent).toContain(msg('downloads.cancel.keeps', { size: bytesSize(1024 ** 2), path: 'D:/Games/Alpha' }));
+    expect(dialog.textContent).not.toContain(msg('downloads.cancel.deletes', { size: bytesSize(1024 ** 2) }));
   });
 
   it('when Go refuses, the dialog stays open with the error by its code, and the row stays', async () => {
@@ -414,7 +414,7 @@ describe('QueueList: cancel', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(vi.mocked(cancelDownload).mock.calls).toEqual([['b']]);
     expect(removeDownload).not.toHaveBeenCalled();
-    await vi.waitFor(() => expect(onannounce).toHaveBeenCalledWith(msg('downloads.queue.cancelled', { title: 'Beta' })));
+    await vi.waitFor(() => expect(onannounce).toHaveBeenCalledWith(msg('downloads.cancel.done', { name: 'Beta' })));
   });
 
   it('a double press sends one cancel', async () => {

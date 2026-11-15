@@ -41,9 +41,6 @@ export const ui: Record<UiKey, Message> = {
   'ui.awaitingSources': 'Waiting for sources',
   'ui.bytesOfBytes': '{done} of {total}',
   'ui.cancelVerb': 'Cancel',
-  'ui.cancelDownloadTitle': 'Cancel download?',
-  'ui.cancelDownloadWarning':
-    "The download “{name}” will stop and the downloaded files will be deleted from disk. This can't be undone.",
   'ui.dontCancel': "Don't cancel",
   'ui.cancelDownload': 'Cancel download',
 
