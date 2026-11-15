@@ -17,7 +17,7 @@ authorization. A subagent report is evidence to verify, not proof: rerun its tes
 | `typhon-scout` | Sonnet / medium | no | Context brief with `file:line`, before any Opus role |
 | `typhon-test-author` | Opus / high | no | Behaviour test from the scenario, never from the diff |
 | `typhon-implementer` | Opus / high | own worktree | One stage: RED → fix → GREEN, commits on its branch |
-| `typhon-reviewer` | Opus / high | no | One diff against its brief: merge / fix first |
+| `typhon-reviewer` | Opus / high | scratch worktree, for mutation checks | One diff against its brief: merge / fix first |
 | `typhon-hunter` | Opus / high | no | Bug hunt over a scope without a diff |
 | `typhon-triage` | Sonnet / high | no | Report, log or flaky test → cause and package |
 | `typhon-*-keeper` (7) | Sonnet / medium or high | no | Up-to-date checks; triggers in `dispatch.md`; `deps` and `legal` before every release |

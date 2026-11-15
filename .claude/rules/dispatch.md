@@ -28,10 +28,13 @@ Limits that hold regardless of the row: no more than 5 implementers at once; two
 the same package; every agent gets a brief with what is already ruled out; every agent's result is
 re-run or re-read by the orchestrator before it reaches a commit or the user; a keeper this table
 triggers runs on the diff range only, a "full" keeper run is the user's request; a keeper's finding
-is re-read in the code before it is applied. After each stage the orchestrator stops hung agents and
-background shells and removes the worktrees of merged or abandoned agent branches; a process this
-session did not start is never killed, only listed for the owner. A worktree gets its own `npm ci`;
-never symlink `node_modules` (`common:build:frontend` runs `npm ci` and deletes the link's target).
+is re-read in the code before it is applied. A reviewer's mutation checks run in a scratch
+worktree of its own, never in the tree being integrated: a mutation left in place for a minute
+makes the orchestrator's own run lie (`.claude/agents/typhon-reviewer.md`). After each stage the
+orchestrator stops hung agents and background shells and removes the worktrees of merged or abandoned agent branches; a process this
+session did not start is never killed, only listed for the owner. An implementer's worktree gets
+its own `npm ci`; never symlink `node_modules` there (`common:build:frontend` runs `npm ci` and
+deletes the link's target).
 A read-only agent's scratch copy goes in a folder it names itself, and its cleanup removes that
 folder only; the orchestrator's own scripts live outside the shared scratchpad. A review finding
 that repeats in a second package becomes a base helper or a guard before the next brief goes out,
