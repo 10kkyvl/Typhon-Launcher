@@ -29,6 +29,7 @@ import { playGame, type LibraryGame } from '../../lib/services/library';
 import { openFolder } from '../../lib/services/settings';
 import { downloads } from '../../lib/stores/downloads';
 import { installations } from '../../lib/stores/install';
+import { resetHistory, route } from '../../lib/stores/router';
 import { toasts } from '../../lib/stores/toasts';
 import { renderDom } from '../../lib/testing/dom';
 import { bytesSize, clockTime, longDate, speedBytes } from '../../lib/utils/format';
@@ -179,6 +180,7 @@ afterEach(() => {
   installations.set([]);
   libraryGames.set([]);
   heading.remove();
+  resetHistory();
 });
 
 describe('completed downloads: the two parts', () => {
@@ -330,6 +332,18 @@ describe('completed downloads: each state of a row', () => {
     show([download({ origin: { gameId: 'g1', purpose: 'update' } })]);
 
     expect(within(row('Game One')).queryByRole('button', { name: /Install/ })).toBeNull();
+  });
+
+  it('update and repair files say what they are, by the download’s purpose, and the title leads to the game', async () => {
+    const view = show([
+      download({ origin: { gameId: 'g1', purpose: 'update' } }),
+      download({ id: 'd2', name: 'Game Two', origin: { gameId: 'g2', purpose: 'repair' } }),
+    ]);
+
+    expect(row('Game One').querySelector('.state')?.textContent?.trim()).toBe('Update files for the game');
+    expect(row('Game Two').querySelector('.state')?.textContent?.trim()).toBe('Repair files for the game');
+    await view.user.click(within(row('Game One')).getByRole('button', { name: 'Game One' }));
+    expect(get(route)).toMatchObject({ name: 'game', params: { id: 'g1' } });
   });
 
   it('installed: says so with the time, and Play launches the library game through the shared launch', async () => {

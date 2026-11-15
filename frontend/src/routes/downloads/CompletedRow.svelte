@@ -243,6 +243,8 @@
         {/if}
         {#if installedWhen}<span>{$t('downloads.done.installedAt', { when: installedWhen.words })}</span>{/if}
       </p>
+    {:else if kind === 'none'}
+      <p class="state">{download.origin.purpose === 'repair' ? $t('downloads.done.repairFiles') : $t('downloads.done.updateFiles')}</p>
     {/if}
 
     {#if download.seeding}
