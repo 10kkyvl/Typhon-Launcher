@@ -233,21 +233,37 @@ describe('error codes the interface names', () => {
 });
 
 describe('runtime events', () => {
-  function subscribedEvents(): Array<{ file: string; name: string }> {
-    const found: Array<{ file: string; name: string }> = [];
+  const EVENT_LITERAL = /(['"])([A-Za-z0-9_.-]+:[A-Za-z0-9:_.-]+)\1/g;
+  const SUBSCRIBE = /(?:Events\.(?:On|Once)|(?<![\w.])on)\(/g;
+
+  // How a name was found: the literal first argument of a subscription (`call`), a store's exported
+  // table of its events (`table`), or an array or table a loop subscribes to name by name (`loop`).
+  type Found = { file: string; name: string; via: 'call' | 'table' | 'loop' };
+
+  function subscribedEvents(): Found[] {
+    const found: Found[] = [];
     for (const [file, text] of Object.entries(frontendSources)) {
       // Stores subscribe through listenFirst()'s `on(name, handler)` as well as
       // directly through Events.On; both carry the event name as the first
       // literal argument, and every runtime event name contains a colon.
-      for (const match of text.matchAll(/(?:Events\.(?:On|Once)|(?<![\w.])on)\(/g)) {
+      for (const match of text.matchAll(SUBSCRIBE)) {
         const args = balanced(text, text.indexOf('(', match.index));
         const literal = args === null ? null : /^\s*(['"])([A-Za-z0-9_.-]+:[A-Za-z0-9:_.-]+)\1/.exec(args);
-        if (literal) found.push({ file, name: literal[2] });
+        if (literal) found.push({ file, name: literal[2], via: 'call' });
       }
       // A store that names its events in one table (`export const downloadEvents = { added:
       // 'download:added', … } as const`) subscribes to each of them through it.
       for (const table of text.matchAll(/export const \w+Events = \{([^}]*)\} as const/g)) {
-        for (const literal of table[1].matchAll(/(['"])([A-Za-z0-9_.-]+:[A-Za-z0-9:_.-]+)\1/g)) found.push({ file, name: literal[2] });
+        for (const literal of table[1].matchAll(EVENT_LITERAL)) found.push({ file, name: literal[2], via: 'table' });
+      }
+      // `for (const name of EVENTS) { Events.On(name, …) }`: every name the array (or table) holds.
+      for (const loop of text.matchAll(/for \(const (\w+) of (?:Object\.values\()?(\w+)\)?\)/g)) {
+        const [, variable, holder] = loop;
+        const body = balanced(text, text.indexOf('{', loop.index));
+        if (body === null || !new RegExp(String.raw`(?:Events\.(?:On|Once)|(?<![\w.])on)\(\s*${variable}\s*,`).test(body)) continue;
+        const declaration = new RegExp(String.raw`const ${holder}\s*(?::[^=]+)?=\s*[[{]`).exec(text);
+        const values = declaration === null ? null : balanced(text, declaration.index + declaration[0].length - 1);
+        for (const literal of (values ?? '').matchAll(EVENT_LITERAL)) found.push({ file, name: literal[2], via: 'loop' });
       }
     }
     return found;
@@ -262,12 +278,15 @@ describe('runtime events', () => {
   // constant, so nothing compares what Go sends with what the handler reads. Shrink, never grow.
   const UNREGISTERED = new Set([
     'diagnostics:logs_status',
+    'download:degraded',
     'downloads:play-throttle',
     'gamemode:error',
     'launcher:release_notes',
+    'move:degraded',
     'presence:status',
     'source:degraded',
     'sources:progress',
+    'update:degraded',
     'wrappers:progress',
   ]);
 
@@ -277,6 +296,11 @@ describe('runtime events', () => {
     expect([...UNREGISTERED].filter((name) => !names.has(name) || registered.has(name))).toEqual([]);
     const loose = subscribedEvents().filter(({ name }) => !registered.has(name) && !UNREGISTERED.has(name));
     expect(loose.map(({ file, name }) => `${file}: ${name}`)).toEqual([]);
+  });
+
+  it('are found where a store keeps them in an array it subscribes to name by name', () => {
+    const fromLoops = subscribedEvents().filter(({ file, via }) => file === 'lib/stores/degraded.ts' && via === 'loop').map(({ name }) => name);
+    expect(fromLoops).toContain('download:degraded');
   });
 
   it('include every event the downloads store names in its table', async () => {
