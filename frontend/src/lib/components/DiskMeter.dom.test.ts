@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { locale } from '../i18n';
 import { renderDom } from '../testing/dom';
 import { hintOnFocus } from '../testing/hints';
 import { bytesSize } from '../utils/format';
@@ -33,6 +34,18 @@ describe('DiskMeter', () => {
     expect(legend.textContent).toContain(bytesSize(50 * GB));
     expect(parts(container).map((p) => p.dataset.tone)).toEqual(['game', 'other']);
   });
+
+  // A screen reader reads the alternative as one run: its parts must stay apart in both languages.
+  for (const [lang, want] of [
+    ['ru', () => `Диск C: Игры: ${bytesSize(120 * GB)}; Другое: ${bytesSize(30 * GB)}; Свободно ${bytesSize(50 * GB)} из ${bytesSize(200 * GB)}`],
+    ['en', () => `Disk C: Игры: ${bytesSize(120 * GB)}; Другое: ${bytesSize(30 * GB)}; ${bytesSize(50 * GB)} free of ${bytesSize(200 * GB)}`],
+  ] as const) {
+    it(`separates the parts of the text alternative in ${lang}`, () => {
+      locale.set(lang);
+      const { getByRole } = renderDom(DiskMeter, { label: lang === 'ru' ? 'Диск C' : 'Disk C', segments: SEGMENTS, total: 200 * GB, free: 50 * GB });
+      expect(getByRole('img').getAttribute('aria-label')).toBe(want());
+    });
+  }
 
   for (const total of [0, undefined, -1, Number.NaN]) {
     it(`says the total ${String(total)} is unknown, draws nothing and writes no NaN`, () => {

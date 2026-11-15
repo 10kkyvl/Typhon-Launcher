@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { locale, t } from '../i18n';
+  import { t } from '../i18n';
   import { bytesSize } from '../utils/format';
   import { nextIndex } from '../utils/roving';
   import { meter, sizeWords, type MeterPart, type MeterSegment, type MeterSize } from './diskMeter';
@@ -55,8 +55,10 @@
     return [$t('common.meterTotal', { total: bytesSize(model.total) })];
   });
 
-  const list = $derived(new Intl.ListFormat($locale, { type: 'unit', style: 'long' }));
-  const alt = $derived($t('common.meterAlt', { label, details: list.format([...model.parts.map(partText), ...tail]) }));
+  // A list format joins Russian items with bare spaces, and a comma is the Russian decimal mark: the
+  // parts are kept apart by the catalogue's own separator.
+  const joined = (items: string[]) => items.join($t('common.meterSeparator'));
+  const alt = $derived($t('common.meterAlt', { label, details: joined([...model.parts.map(partText), ...tail]) }));
 
   let stop = $state(0);
   let bar = $state<HTMLElement>();
@@ -100,7 +102,7 @@
   {/if}
 
   {#if compact}
-    <p class="line"><Reading text={tail.join(', ')} /></p>
+    <p class="line"><Reading text={joined(tail)} /></p>
   {:else}
     <ul class="legend">
       {#each model.parts as part (part.key)}
@@ -117,7 +119,7 @@
           <span class="size"><Reading text={said(model.free)} /></span>
         </li>
       {/if}
-      <li class="total"><Reading text={model.total === null ? tail.join(', ') : $t('common.meterTotal', { total: bytesSize(model.total) })} /></li>
+      <li class="total"><Reading text={model.total === null ? joined(tail) : $t('common.meterTotal', { total: bytesSize(model.total) })} /></li>
     </ul>
   {/if}
 </div>
