@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('./backend', () => ({ inWails: false }));
 
-import { getSettings } from './settings';
+import { getSettings, maxActiveDownloadOptions } from './settings';
+import { BIG_PICTURE_DOWNLOAD_LIMITS } from '../bigpicture/preferences';
 import { DEFAULT_OVERLAY_HOTKEY, OVERLAY_HOTKEYS } from './overlay';
 import { DEFAULT_PRESENCE, PRESENCE_STATUSES } from './online';
 import { bindingSources, frontendSources, goSources } from '../testing/sources';
@@ -159,6 +160,18 @@ describe('settings choices', () => {
     const constants = goConstants();
     expect([...OVERLAY_HOTKEYS]).toEqual(wanted.map((name) => constants.get(name)));
     expect(DEFAULT_OVERLAY_HOTKEY).toBe(constants.get('OverlayHotkeyAltBacktick'));
+  });
+
+  it('offers exactly the downloads-at-a-time values Go accepts, and Big Picture only some of them', () => {
+    const source = goSource();
+    const low = /if s\.MaxActiveDownloads < (\d+) \{\s*s\.MaxActiveDownloads = \1\s*\}/.exec(source)?.[1];
+    const high = /if s\.MaxActiveDownloads > (\d+) \{\s*s\.MaxActiveDownloads = \1\s*\}/.exec(source)?.[1];
+    expect(low, 'the lower clamp of MaxActiveDownloads').toBeDefined();
+    expect(high, 'the upper clamp of MaxActiveDownloads').toBeDefined();
+    const accepted = Array.from({ length: Number(high) - Number(low) + 1 }, (_, i) => String(Number(low) + i));
+
+    expect(maxActiveDownloadOptions.map((option) => option.id)).toEqual(accepted);
+    expect(BIG_PICTURE_DOWNLOAD_LIMITS.map(String).filter((value) => !accepted.includes(value))).toEqual([]);
   });
 
   it('knows every presence status Go accepts, in the same order', () => {
