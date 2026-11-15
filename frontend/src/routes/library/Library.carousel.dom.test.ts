@@ -108,34 +108,24 @@ describe('Library: the carousel on the page', () => {
     expect(recentTitles()).toEqual(['Fifth One']);
   });
 
-  it('goes away for the session and comes back, its games in the "Recent" row meanwhile', async () => {
-    const { user } = renderDom(Library);
-    const hide = screen.getByRole('button', { name: msg('library.carousel.hide') });
-    hide.focus();
+  // Decision В11: the carousel is the page's stage and stays while there are slides.
+  it('cannot be put away: everything above the page\'s heading is the carousel itself', () => {
+    renderDom(Library);
 
-    await user.keyboard('{Enter}');
+    const region = carousel() as HTMLElement;
+    const bleed = region.closest('.bleed') as HTMLElement;
+    expect(bleed).toBeTruthy();
+    const outside = [...bleed.querySelectorAll('button')].filter((button) => !region.contains(button));
+    expect(outside.map((button) => button.getAttribute('aria-label') ?? button.textContent?.trim())).toEqual([]);
+    expect(screen.getByRole('heading', { level: 1 }).closest('header')?.querySelectorAll('button')).toHaveLength(0);
+  });
 
-    expect(carousel()).toBeNull();
-    expect(recentTitles()).toEqual(['Wide One', 'Poster One', 'Bare One', 'Fourth One', 'Fifth One']);
-    const show = screen.getByRole('button', { name: msg('library.carousel.show') });
-    expect(document.activeElement).toBe(show);
-
-    await user.keyboard('{Enter}');
+  it('stays with a choice to put it away stored by an earlier build, its games kept out of the "Recent" row', () => {
+    libraryChoices.set(Object.assign({}, DEFAULT_CHOICES, { heroHidden: true }));
+    renderDom(Library);
 
     expect(slideTitles()).toEqual(['Wide One', 'Poster One', 'Bare One']);
     expect(recentTitles()).toEqual(['Fourth One', 'Fifth One']);
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: msg('library.carousel.hide') }));
-  });
-
-  it('stays put away after leaving the page and coming back', async () => {
-    const first = renderDom(Library);
-    await first.user.click(screen.getByRole('button', { name: msg('library.carousel.hide') }));
-    first.unmount();
-
-    renderDom(Library);
-
-    expect(carousel()).toBeNull();
-    expect(screen.getByRole('button', { name: msg('library.carousel.show') })).toBeTruthy();
   });
 });
 
@@ -165,21 +155,13 @@ describe('Library: the carousel and the window backdrop', () => {
     expect(picked()).toBe('g-poster');
   });
 
-  it('claims nothing once put away, nor after the page is left', async () => {
+  it('lets the window go once the page is left', async () => {
     vi.useFakeTimers();
     const first = renderDom(Library);
     expect(get(ambientState).resting).toBe('g-wide');
     first.unmount();
     await settle();
     expect(get(ambientState).resting).toBeNull();
-
-    const { user } = renderDom(Library);
-    await user.click(screen.getByRole('button', { name: msg('library.carousel.hide') }));
-    await settle();
-    expect(get(ambientState).resting).toBeNull();
-    await user.click(screen.getByRole('button', { name: msg('library.carousel.show') }));
-    await settle();
-    expect(get(ambientState).resting).toBe('g-wide');
   });
 });
 

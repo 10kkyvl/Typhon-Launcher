@@ -83,9 +83,10 @@ describe('Library: one generated picture per game', () => {
 
 describe('Library: a cover that fails to load', () => {
   const own = played('g-hades', 'Hades', 9, { canonicalGameId: 'c-hades', cover: 'own.png' });
-  // Played before the carousel's three: Hades' capsule is in the "Recent" row once the carousel is away.
+  // Played before the carousel's three, Hades' capsule is in the "Recent" row.
+  const later = [played('g-a', 'Alpha', 12), played('g-b', 'Bravo', 11), played('g-c', 'Charlie', 10)];
   beforeEach(() => {
-    libraryGames.set([own]);
+    libraryGames.set([own, ...later]);
     gameArt.set({ 'c-hades': { cover: 'meta.png', hero: '', heroIsPoster: false } });
   });
 
@@ -101,7 +102,6 @@ describe('Library: a cover that fails to load', () => {
   });
 
   it('falls back to the game\'s own cover on its "Recent" capsule', async () => {
-    libraryChoices.set({ ...DEFAULT_CHOICES, heroHidden: true });
     renderDom(Library);
     const img = () => (recentSection() as HTMLElement).querySelector('.recent-item img') as HTMLImageElement;
     expect(img().getAttribute('src')).toBe('meta.png');

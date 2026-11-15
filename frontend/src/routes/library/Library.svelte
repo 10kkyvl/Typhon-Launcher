@@ -62,7 +62,6 @@
   let sourceFilter = $state(saved.source);
   let statusFilter = $state(saved.status);
   let search = $state(saved.search);
-  let heroHidden = $state(saved.heroHidden);
   let activeCollectionId = $state(saved.collection);
   let collectionOpen = $state(false);
   let randomOpen = $state(false);
@@ -74,7 +73,7 @@
   let collectionsRow = $state<HTMLElement>();
 
   $effect(() => {
-    libraryChoices.set({ filter, source: sourceFilter, status: statusFilter, collection: activeCollectionId, search, heroHidden });
+    libraryChoices.set({ filter, source: sourceFilter, status: statusFilter, collection: activeCollectionId, search });
   });
 
   $effect(() => {
@@ -258,24 +257,13 @@
   }
 
   const slides = $derived(buildSlides(entries, { running: $runningGames, stopped: $stoppedSinceList, locale: $locale }));
-  const carouselShown = $derived(!heroHidden && slides.length > 0);
   // The row leaves out what the carousel shows, so nothing is drawn twice at the top.
   const recentGames = $derived.by(() => {
-    const onScreen = new Set(carouselShown ? slides.map((entry) => entry.id) : []);
+    const onScreen = new Set(slides.map((entry) => entry.id));
     return recentEntries(entries, { stopped: $stoppedSinceList, locale: $locale, limit: RECENT_LIMIT + onScreen.size })
       .filter((entry) => !onScreen.has(entry.id))
       .slice(0, RECENT_LIMIT);
   });
-
-  let carouselBlock = $state<ReturnType<typeof LibraryCarousel>>();
-  let showCarouselSpot = $state<HTMLElement>();
-
-  // The control pressed goes with its block; focus moves to the one that takes it back.
-  function setCarouselHidden(hidden: boolean) {
-    const handOff = focusHandOff();
-    heroHidden = hidden;
-    void handOffInView(handOff, () => (hidden ? (showCarouselSpot ? focusableIn(showCarouselSpot)[0] : undefined) : carouselBlock?.hideControl()));
-  }
 
   // The game the list's Tab stop is on, kept across the grid and the list.
   let currentGame = $state<string>();
@@ -399,29 +387,12 @@
 
 <Page>
   {#snippet bleed()}
-    {#if carouselShown}
-      <LibraryCarousel
-        bind:this={carouselBlock}
-        entries={slides}
-        art={$gameArt}
-        running={$runningGames}
-        {busy}
-        onplay={toggleRun}
-        onstop={toggleRun}
-        onhide={() => setCarouselHidden(true)}
-      />
+    {#if slides.length > 0}
+      <LibraryCarousel entries={slides} art={$gameArt} running={$runningGames} {busy} onplay={toggleRun} onstop={toggleRun} />
     {/if}
   {/snippet}
 
-  <PageHeader title={msg('games.libraryWord')}>
-    {#snippet actions()}
-      {#if heroHidden && slides.length > 0}
-        <span bind:this={showCarouselSpot}>
-          <Button variant="ghost" size="sm" onclick={() => setCarouselHidden(false)}>{msg('library.carousel.show')}</Button>
-        </span>
-      {/if}
-    {/snippet}
-  </PageHeader>
+  <PageHeader title={msg('games.libraryWord')} />
 
   <div bind:this={recentBox}>
     {#if recentGames.length > 0}

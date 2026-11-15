@@ -41,7 +41,7 @@ describe('library view choices', () => {
     const { libraryChoices, librarySort, libraryView, DEFAULT_CHOICES } = await fresh(new MemoryStorage(), new MemoryStorage());
 
     expect(get(libraryChoices)).toEqual(DEFAULT_CHOICES);
-    expect(DEFAULT_CHOICES).toEqual({ filter: 'all', source: 'all', status: 'all', collection: '', search: '', heroHidden: false });
+    expect(DEFAULT_CHOICES).toEqual({ filter: 'all', source: 'all', status: 'all', collection: '', search: '' });
     expect(get(librarySort)).toBe('title');
     expect(get(libraryView)).toBe('grid');
   });
@@ -52,12 +52,12 @@ describe('library view choices', () => {
     const first = await fresh(local, session);
     first.libraryView.set('list');
     first.librarySort.set('playtime');
-    first.libraryChoices.set({ filter: 'favorites', source: 'steam', status: 'playing', collection: 'k1', search: 'hades', heroHidden: true });
+    first.libraryChoices.set({ filter: 'favorites', source: 'steam', status: 'playing', collection: 'k1', search: 'hades' });
 
     const reload = await fresh(local, session);
     expect(get(reload.libraryView)).toBe('list');
     expect(get(reload.librarySort)).toBe('playtime');
-    expect(get(reload.libraryChoices)).toEqual({ filter: 'favorites', source: 'steam', status: 'playing', collection: 'k1', search: 'hades', heroHidden: true });
+    expect(get(reload.libraryChoices)).toEqual({ filter: 'favorites', source: 'steam', status: 'playing', collection: 'k1', search: 'hades' });
 
     const restart = await fresh(local, new MemoryStorage());
     expect(get(restart.libraryView)).toBe('list');
@@ -79,6 +79,20 @@ describe('library view choices', () => {
     expect(get(next.libraryView)).toBe('grid');
     expect(get(next.librarySort)).toBe('title');
     expect(get(next.libraryChoices)).toEqual(next.DEFAULT_CHOICES);
+  });
+
+  // An earlier build stored whether the carousel was put away; the carousel stays now (decision В11).
+  it('drop the stored choice to put the carousel away and keep the rest', async () => {
+    const session = new MemoryStorage();
+    const first = await fresh(new MemoryStorage(), session);
+    first.libraryChoices.set({ ...first.DEFAULT_CHOICES });
+    const choicesKey = [...session.items.keys()][0];
+    session.items.set(choicesKey, JSON.stringify({ filter: 'favorites', heroHidden: true }));
+
+    const next = await fresh(new MemoryStorage(), session);
+
+    expect(get(next.libraryChoices)).toEqual({ ...next.DEFAULT_CHOICES, filter: 'favorites' });
+    expect('heroHidden' in get(next.libraryChoices)).toBe(false);
   });
 
   it('work in memory when storage throws on every read and write', async () => {

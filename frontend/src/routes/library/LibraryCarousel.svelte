@@ -1,7 +1,5 @@
 <script lang="ts">
-  import { X } from '@lucide/svelte';
   import HeroCarousel, { type HeroArt, type HeroSlide } from '../../lib/components/HeroCarousel.svelte';
-  import IconButton from '../../lib/components/IconButton.svelte';
   import { msg } from '../../lib/i18n';
   import type { GameArt } from '../../lib/services/metadata';
   import type { LibraryEntry } from '../../lib/library/entries';
@@ -12,8 +10,9 @@
 
   /**
    * The library's carousel: the model's slides with their pictures and the line the old hero showed
-   * (last session, play time), and the control that puts it away for the session. The slide on screen
-   * is the page's resting picture for the window backdrop (`ambient`); a rested card overrides it.
+   * (last session, play time). It stays while there are slides: nothing puts it away (decision В11).
+   * The slide on screen is the page's resting picture for the window backdrop (`ambient`); a rested
+   * card overrides it.
    */
   let {
     entries,
@@ -22,7 +21,6 @@
     busy,
     onplay,
     onstop,
-    onhide,
   }: {
     entries: readonly LibraryEntry[];
     art: Readonly<Record<string, GameArt>>;
@@ -31,7 +29,6 @@
     busy: (id: string) => boolean;
     onplay: (id: string) => void;
     onstop: (id: string) => void;
-    onhide: () => void;
   } = $props();
 
   // A wide picture is the hero; a metadata cover stands in as a poster; the game's own cover is
@@ -60,13 +57,6 @@
     return Boolean(id && openGameMenu(id, { at, focus, trigger: null, source }));
   });
 
-  let hideSpot = $state<HTMLElement>();
-
-  /** The control that puts the carousel away, for focus to land on when the carousel comes back. */
-  export function hideControl(): HTMLElement | undefined {
-    return hideSpot?.querySelector('button') ?? undefined;
-  }
-
   const slides = $derived<HeroSlide[]>(
     entries.map((entry) => ({
       id: entry.id,
@@ -82,21 +72,4 @@
 
 <div class="carousel" {@attach slideMenus}>
   <HeroCarousel {slides} bind:shown ambient onopen={(id) => navigate('game', { id })} {onplay} {onstop} />
-  <span class="hide" bind:this={hideSpot}>
-    <IconButton variant="secondary" size="sm" label={msg('library.carousel.hide')} onclick={onhide}>
-      <X size="1.6rem" strokeWidth={1.8} />
-    </IconButton>
-  </span>
 </div>
-
-<style>
-  .carousel {
-    position: relative;
-  }
-
-  .hide {
-    position: absolute;
-    top: var(--space-3);
-    right: var(--page-inset, var(--space-8));
-  }
-</style>

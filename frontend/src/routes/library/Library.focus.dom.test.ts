@@ -262,7 +262,7 @@ describe.each(['grid', 'list'] as const)('Library (%s): a game that moves when t
   afterEach(() => restore());
 
   it('keeps focus on the control the player pressed', async () => {
-    libraryChoices.set({ ...DEFAULT_CHOICES, filter: 'recent', heroHidden: true });
+    libraryChoices.set({ ...DEFAULT_CHOICES, filter: 'recent' });
     libraryGames.set([played('g-a', 'Alpha', 9), played('g-b', 'Bravo', 8), played('g-c', 'Charlie', 7), played('g-d', 'Delta', 6)]);
     runningGames.set(new Set(['g-c']));
     const { user } = renderDom(Library);
@@ -358,27 +358,6 @@ describe('Library: hand-offs that bring their target into view', () => {
   });
 
   const scrolledTo = (target: Element) => into.mock.contexts.some((box) => (box as Element).contains(target));
-
-  it('putting the carousel away and bringing it back', async () => {
-    libraryView.set('grid');
-    libraryGames.set([played('g-a', 'Alpha', 9), played('g-b', 'Bravo', 8)]);
-    const { user } = renderDom(Library);
-    screen.getByRole('button', { name: msg('library.carousel.hide') }).focus();
-
-    await user.keyboard('{Enter}');
-    await settle();
-    const show = screen.getByRole('button', { name: msg('library.carousel.show') });
-    expect(document.activeElement).toBe(show);
-    expect(scrolledTo(show)).toBe(true);
-
-    into.mockClear();
-    await user.keyboard('{Enter}');
-    await settle();
-    const hide = screen.getByRole('button', { name: msg('library.carousel.hide') });
-    expect(document.activeElement).toBe(hide);
-    expect(scrolledTo(hide)).toBe(true);
-    for (const [options] of into.mock.calls) expect(options).toEqual({ block: 'nearest', inline: 'nearest' });
-  });
 
   it('"Clear filters" landing on the first game', async () => {
     libraryView.set('grid');

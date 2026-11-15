@@ -297,15 +297,6 @@ describe('Library: the recent games', () => {
     expect(listTitles()).toEqual(['Beta', 'Gamma', 'Alpha', 'Foxtrot', 'Golf']);
   });
 
-  it('keeps the carousel\'s games in the row once the carousel is put away', async () => {
-    const { user } = renderDom(Library);
-    expect(within(recentRow()).queryAllByText('Beta')).toHaveLength(0);
-
-    await user.click(screen.getByRole('button', { name: msg('library.carousel.hide') }));
-
-    expect(within(recentRow()).queryAllByText('Beta').length).toBeGreaterThan(0);
-  });
-
   it('caps the row at twelve games', () => {
     libraryGames.set(Array.from({ length: 15 }, (_, i) => game(`g-${i}`, `Game ${i}`, { lastPlayed: `2026-10-${String(i + 1).padStart(2, '0')}T10:00:00Z` })));
     renderDom(Library);
@@ -337,14 +328,12 @@ describe('Library: the player\'s choices', () => {
     const first = renderDom(Library);
     await first.user.click(screen.getByRole('radio', { name: msg('games.filterInstalled') }));
     await first.user.type(screen.getByLabelText(msg('games.librarySearchPlaceholder')), 'ha');
-    await first.user.click(screen.getByRole('button', { name: msg('library.carousel.hide') }));
     first.unmount();
 
     renderDom(Library);
 
     expect(screen.getByRole('radio', { name: msg('games.filterInstalled') }).getAttribute('aria-checked')).toBe('true');
     expect((screen.getByLabelText(msg('games.librarySearchPlaceholder')) as HTMLInputElement).value).toBe('ha');
-    expect(screen.queryByRole('region', { name: msg('library.carousel.label') })).toBeNull();
     expect(listTitles()).toEqual(['Hades']);
   });
 });

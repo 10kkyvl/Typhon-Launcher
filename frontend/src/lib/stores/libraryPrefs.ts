@@ -1,7 +1,8 @@
 /**
  * The library's view choices. Grid or list and the sort stay across restarts (localStorage); the
- * filter, source, status, collection, search and the hidden hero stay for the session
- * (sessionStorage), so opening a game and coming back finds them as they were. Browser storage holds
+ * filter, source, status, collection and search stay for the session (sessionStorage), so opening a
+ * game and coming back finds them as they were. A field this build does not know (an earlier build's
+ * `heroHidden`) is dropped when read. Browser storage holds
  * these per-viewer conveniences only: it may throw or be missing, and then the choices live in memory.
  */
 import { writable, type Writable } from 'svelte/store';
@@ -17,7 +18,6 @@ export interface LibraryChoices {
   /** The id of the selected collection, '' for none. */
   collection: string;
   search: string;
-  heroHidden: boolean;
 }
 
 export const DEFAULT_CHOICES: Readonly<LibraryChoices> = Object.freeze({
@@ -26,7 +26,6 @@ export const DEFAULT_CHOICES: Readonly<LibraryChoices> = Object.freeze({
   status: 'all',
   collection: '',
   search: '',
-  heroHidden: false,
 });
 
 /** The filters the desktop page offers; a stored one it does not offer falls back to "All". */
@@ -85,7 +84,6 @@ function parseChoices(raw: unknown): LibraryChoices {
     status: oneOf(STATUS_FILTERS, stored.status, DEFAULT_CHOICES.status),
     collection: text(stored.collection),
     search: text(stored.search),
-    heroHidden: stored.heroHidden === true,
   };
 }
 
