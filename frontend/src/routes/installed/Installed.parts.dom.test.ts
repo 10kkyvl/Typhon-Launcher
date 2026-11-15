@@ -14,7 +14,10 @@ import Installed from './Installed.svelte';
 
 // The page keeps what its parts share and hands it down. A prop passed without `bind:`, a callback
 // not wired or a read moved into a part that is not always mounted breaks nothing a type check sees:
-// these tests go through each such seam the way a player does.
+// these tests go through such seams the way a player does: the search and the sorting, both removals,
+// the add dialog's fresh fields, the three reads and what makes each run again. Not held here: choose
+// folder, Find games and its progress words, Add image, the broken badge from the compatibility log,
+// covers following the art store.
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 const backend = vi.hoisted(() => ({ inWails: false }));
