@@ -1,14 +1,13 @@
 <script lang="ts">
   import Page from '../../lib/components/Page.svelte';
   import './settings-layout.css';
-  import { Eye, FolderOpen, HardDrive, RefreshCw, Trash2 } from '@lucide/svelte';
+  import { Eye, RefreshCw, Trash2 } from '@lucide/svelte';
   import { untrack } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import CloudConsentModal from '../../lib/components/CloudConsentModal.svelte';
   import CloudDisableModal from '../../lib/components/CloudDisableModal.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
-  import IconButton from '../../lib/components/IconButton.svelte';
   import LegalDocumentModal from '../../lib/components/LegalDocumentModal.svelte';
   import LibrarySetupModal from '../../lib/components/LibrarySetupModal.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
@@ -21,7 +20,6 @@
   import Tabs from '../../lib/components/Tabs.svelte';
   import { tabPanel } from '../../lib/components/tabs';
   import Toggle from '../../lib/components/Toggle.svelte';
-  import EmptyState from '../../lib/components/EmptyState.svelte';
   import Notice from '../../lib/components/Notice.svelte';
   import TextLink from '../../lib/components/TextLink.svelte';
   import AboutTab from './AboutTab.svelte';
@@ -29,14 +27,12 @@
   import DownloadsTab from './DownloadsTab.svelte';
   import DiscordCard from './DiscordCard.svelte';
   import LanSettingsRow from './LanSettingsRow.svelte';
-  import LibraryFoldersRow from './LibraryFoldersRow.svelte';
-  import LibraryLocationRow from './LibraryLocationRow.svelte';
+  import LibraryCard from './LibraryCard.svelte';
   import { createSettingsPage, overlayReason } from './settingsPage.svelte';
   import { SCREENSHOT_HOTKEYS } from '../../lib/services/screenshots';
   import { OVERLAY_HOTKEYS } from '../../lib/services/overlay';
-  import { openFolder, type GameMode, type Settings } from '../../lib/services/settings';
+  import type { GameMode, Settings } from '../../lib/services/settings';
   import { releaseNotesHistory, selfUpdateStatus } from '../../lib/stores/selfupdate';
-  import { navigate } from '../../lib/stores/router';
   import { settings, updateSettings, updateSettingsReporting } from '../../lib/stores/settings';
   import { toast } from '../../lib/stores/toasts';
   import { authState } from '../../lib/stores/user';
@@ -69,18 +65,6 @@
   const scaleValue = $derived(String(Math.round(($settings?.uiScale ?? 1) * 100)));
 
   const accountReady = $derived($authState === 'authenticated');
-
-  type PathKey = 'gamesPath' | 'downloadsPath' | 'screenshotsPath';
-
-  function folderRowOptions(): { key: PathKey; label: string }[] {
-    return [
-      { key: 'gamesPath', label: msg('settings.generalLibraryFolderGames') },
-      { key: 'downloadsPath', label: msg('settings.generalLibraryFolderDownloads') },
-      { key: 'screenshotsPath', label: msg('settings.generalLibraryFolderScreenshots') },
-    ];
-  }
-
-  const folderRows = $derived(folderRowOptions());
 
   function set(patch: Partial<Settings>) {
     updateSettings(patch);
@@ -136,15 +120,6 @@
         'danger',
       );
     });
-  }
-
-  async function openPath(path: string | undefined) {
-    if (!path) return;
-    try {
-      await openFolder(path);
-    } catch {
-      toast(msg('settings.generalLibraryFolderUnavailableToast'), 'danger');
-    }
   }
 
 </script>
@@ -325,86 +300,7 @@
           </div>
         </Card>
 
-        <Card title={msg('settings.generalLibraryCardTitle')}>
-          <div class="rows">
-            <div class="row folder-row">
-              <span class="row-label folder-label">{msg('settings.generalLibraryPathLabel')}</span>
-              <div class="folder-controls">
-                <input
-                  class="input sm"
-                  type="text"
-                  readonly
-                  placeholder={msg('settings.generalLibraryPathPlaceholder')}
-                  value={current?.libraryPath ?? ''}
-                />
-                <Button size="sm" onclick={page.openLibrarySetup}>
-                  {current?.libraryPath ? msg('common.edit') : msg('common.select')}
-                </Button>
-                <IconButton
-                  label={msg('settings.generalLibraryOpenFolderLabel')}
-                  size="sm"
-                  disabled={!current?.libraryPath}
-                  onclick={() => openPath(current?.libraryPath)}
-                >
-                  <FolderOpen size="1.6rem" strokeWidth={1.8} />
-                </IconButton>
-              </div>
-            </div>
-            {#if current?.libraryPath}
-              {#each folderRows as folder (folder.key)}
-                <div class="row folder-row">
-                  <span class="row-label folder-label">{folder.label}</span>
-                  <div class="folder-controls">
-                    <input class="input sm" type="text" readonly value={current?.[folder.key] ?? ''} />
-                    <IconButton label={msg('settings.generalLibraryOpenFolderLabel')} size="sm" onclick={() => openPath(current?.[folder.key])}>
-                      <FolderOpen size="1.6rem" strokeWidth={1.8} />
-                    </IconButton>
-                  </div>
-                </div>
-              {/each}
-            {:else}
-              <EmptyState size="inline" title={msg('settings.generalLibraryEmptyHint')} />
-            {/if}
-            {#if current?.libraryPath}
-              <LibraryFoldersRow />
-            {/if}
-            <div class="row">
-              <div class="row-text">
-                <span class="row-label">{msg('diskusage.settingsLabel')}</span>
-                <span class="row-sub">{msg('diskusage.settingsSub')}</span>
-              </div>
-              <Button size="sm" onclick={() => navigate('diskusage')}>
-                <HardDrive size="1.5rem" strokeWidth={1.8} />
-                {msg('diskusage.settingsOpen')}
-              </Button>
-            </div>
-            <div class="row">
-              <div class="row-text">
-                <span class="row-label">{msg('settings.extlibLabel')}</span>
-                <span class="row-sub">{msg('settings.extlibSub')}</span>
-              </div>
-              {#if page.appInfo?.platform === 'windows'}
-                <Button size="sm" disabled={page.importing} onclick={page.runImportExternal}>
-                  <RefreshCw size="1.5rem" strokeWidth={1.8} />
-                  {page.importing ? msg('settings.extlibRunning') : msg('settings.extlibLabel')}
-                </Button>
-              {:else}
-                <span class="row-sub">{msg('settings.extlibWindowsOnly')}</span>
-              {/if}
-            </div>
-            {#if page.importDetails.length > 0}
-              <details class="import-details" open>
-                <summary class="row-label">{msg('settings.extlibDetailsTitle')}</summary>
-                <ul>
-                  {#each page.importDetails as line, index (index)}
-                    <li class="row-sub">{line}</li>
-                  {/each}
-                </ul>
-              </details>
-            {/if}
-            <LibraryLocationRow />
-          </div>
-        </Card>
+        <LibraryCard {page} />
 
         <Card title={msg('settings.generalExperimentalCardTitle')}>
           <div class="rows">
@@ -710,38 +606,6 @@
   .row-sub {
     font-size: var(--font-xs);
     color: var(--text-3);
-  }
-
-  .import-details {
-    padding: var(--space-3) 0;
-  }
-
-  .import-details summary {
-    cursor: pointer;
-  }
-
-  .import-details ul {
-    margin: var(--space-2) 0 0;
-    padding-left: var(--space-5);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1);
-  }
-
-  .folder-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--space-2);
-  }
-
-  .folder-label {
-    font-size: var(--font-sm);
-  }
-
-  .folder-controls {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
   }
 
   .privacy-link {
