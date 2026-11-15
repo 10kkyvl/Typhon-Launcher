@@ -174,3 +174,35 @@ func TestStartAsksForANewFetchWhenTheClientChangesWhileTheTorrentIsHandedBack(t 
 		t.Fatalf("torrents in the new client = %d", got)
 	}
 }
+
+// A new fetch cannot help when the list was not read: every Start is refused
+// until the file is dealt with, so the refusal's own code comes first even
+// when nothing is left waiting.
+func TestStartRefusedForAnUnreadListSaysSoWhenNothingWaits(t *testing.T) {
+	m, hash := fetchedTorrent(t)
+	loadErr := loseTheList(t, m)
+	old, next := m.client, offlineClient(t)
+	adds := 0
+	old.filterTrackers = func(tiers [][]string) ([][]string, []lostTracker) {
+		adds++
+		if adds == 2 {
+			m.replaceClient(next)
+		}
+		return tiers, nil
+	}
+
+	_, err := m.StartDownloadFrom(hash, t.TempDir(), nil, Origin{})
+
+	if adds != 2 {
+		t.Fatalf("adds = %d, want the destination add and the hand-back add", adds)
+	}
+	if got := uierr.Code(err); got != "download.state_unread" {
+		t.Fatalf("code = %q (%v), want download.state_unread: fetching again would be refused the same way", got, err)
+	}
+	if !errors.Is(err, errStateUnread) || !errors.Is(err, loadErr) {
+		t.Fatalf("error %v lost why the list was not read", err)
+	}
+	if pending, reserved := m.bookkeeping(); pending != 0 || reserved != 0 {
+		t.Fatalf("pending = %d, reserved = %d", pending, reserved)
+	}
+}

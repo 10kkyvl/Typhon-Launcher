@@ -911,9 +911,13 @@ func (m *Manager) handBack(cl *client, infoHash string, mi *metainfo.MetaInfo, s
 
 // giveUpLocked ends a failed Start that leaves nothing waiting for the next
 // one: the hash it reserved is released and the error asks the window to
-// fetch again.
+// fetch again. A list that was not read refuses every Start, so there the
+// refusal stays the first code: a new fetch would end the same way.
 func (m *Manager) giveUpLocked(infoHash string, cause error) error {
 	m.releaseStartLocked(infoHash)
+	if errors.Is(cause, errStateUnread) {
+		return cause
+	}
 	return fmt.Errorf("%w: %w", errMetadataRequired, cause)
 }
 
