@@ -238,6 +238,14 @@ function washFailures(tokens: Record<string, string>): string[] {
   return [...out];
 }
 
+// The colours the Settings readability panel reads for a theme's tokens; a value written with color-mix
+// is computed as the browser does.
+function panelColors(themeTokens: Record<string, string>): Record<string, RGBA> {
+  const tokens = { ...CONTRAST_FALLBACKS, ...themeTokens };
+  const value = (name: string) => (/^color-mix\(/.test(tokens[name] ?? '') ? cssColor(tokens[name], tokens) : rgba(tokens[name] ?? name));
+  return Object.fromEntries(CONTRAST_TOKENS.map((name) => [name, name in DERIVED_COLORS ? cssColor(DERIVED_COLORS[name], tokens) : value(name)]));
+}
+
 function rgba(value: string): RGBA {
   expect(value).toMatch(MEASURABLE);
   const [r, g, b] = rgb(value, BLACK);
@@ -468,13 +476,7 @@ describe('built-in themes', () => {
     it(`${id} shows no warning in the Settings readability panel`, () => {
       const preset = builtIns().find((p) => p.id === id);
       expect(preset, id).toBeDefined();
-      const tokens = { ...CONTRAST_FALLBACKS, ...(preset as Preset).tokens };
-      // A value written with color-mix (the text plate's) is computed as the browser does, from the preset.
-      const value = (name: string) => (/^color-mix\(/.test(tokens[name] ?? '') ? cssColor(tokens[name], tokens) : rgba(tokens[name] ?? name));
-      const colors = Object.fromEntries(
-        CONTRAST_TOKENS.map((name) => [name, name in DERIVED_COLORS ? cssColor(DERIVED_COLORS[name], tokens) : value(name)]),
-      );
-      const rows = contrastReport(colors);
+      const rows = contrastReport(panelColors((preset as Preset).tokens));
       expect(rows.find((row) => row.id === 'stagePlate')?.ok, 'the text plate row is measured').toBe(true);
       expect(rows.filter((row) => row.ok !== true)).toEqual([]);
     });
@@ -582,6 +584,16 @@ describe("the stage's top bar scrim", () => {
 // read at 4.5:1 whatever the picture is: measured over black and over white.
 describe('the text plate on the stage', () => {
   const global = fs.readFileSync(new URL('./global.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+
+  // A user's theme forked from a preset keeps that preset's plate: a dark theme on a mid-grey page with
+  // light words must still get a plate dark enough for them on white art.
+  it('a theme forked from the dark preset on a #333 page with #ddd words keeps its words readable on the plate', () => {
+    const dark = builtIns().find((p) => p.id === 'dark');
+    expect(dark).toBeDefined();
+    const fork = { ...(dark as Preset).tokens, '--bg': '#333333', '--text': '#dddddd' };
+    const row = contrastReport(panelColors(fork)).find((r) => r.id === 'stagePlate');
+    expect(row?.ok, `${row?.ratio?.toFixed(2)}:1 on ${row?.against}`).toBe(true);
+  });
 
   it('draws the plate in --scrim-copy and the words in --text alone', () => {
     expect(ruleBody(global, '.stage-copy::before').background).toBe('var(--scrim-copy)');

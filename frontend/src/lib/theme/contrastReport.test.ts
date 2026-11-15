@@ -120,17 +120,13 @@ describe('contrastReport', () => {
       expect(row(page([14, 15, 17, 1], [237, 238, 240, 1], [0, 0, 0, 0]), 'stagePlate')).toMatchObject({ ok: false, against: '--scrim-copy' });
     });
 
-    it('passes the dark preset with its default plate, the page colour at 66 %', () => {
-      expect(row(page([14, 15, 17, 1], [237, 238, 240, 1], [14, 15, 17, 0.66]), 'stagePlate').ok).toBe(true);
+    it('passes the dark preset with its plate', () => {
+      expect(row(page([14, 15, 17, 1], [237, 238, 240, 1], [8, 9, 10, 0.66]), 'stagePlate').ok).toBe(true);
     });
 
-    // A finding about the default, not about this report: the default plate is the page colour at 66 %, so a
-    // dark theme whose page is mid-grey gets a plate too light under light words on white art (about 3.2:1).
-    it('flags a plain dark theme on a #333 page with #ddd words and the default plate', () => {
-      const got = row(page([51, 51, 51, 1], [221, 221, 221, 1], [51, 51, 51, 0.66]), 'stagePlate');
-      expect(got.ok).toBe(false);
-      expect(got.ratio).toBeGreaterThan(3);
-      expect(got.ratio).toBeLessThan(3.5);
+    it('passes a dark theme on a #333 page with #ddd words on the dark preset\'s plate, and flags a plate as light as its page', () => {
+      expect(row(page([51, 51, 51, 1], [221, 221, 221, 1], [8, 9, 10, 0.66]), 'stagePlate').ok).toBe(true);
+      expect(row(page([51, 51, 51, 1], [221, 221, 221, 1], [51, 51, 51, 0.66]), 'stagePlate')).toMatchObject({ ok: false, against: '--scrim-copy' });
     });
   });
 

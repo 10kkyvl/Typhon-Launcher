@@ -240,7 +240,7 @@ export const themeTokens: Record<ThemeTokensKey, Message> = {
   'settings.themeToken.motion-backdrop': 'Animation duration: game backdrop',
   'settings.themeTokenHint.motion-backdrop': 'How long the art behind the interface takes to flow from one game to the next',
   'settings.themeToken.scrim-copy': 'Text plate on game art',
-  'settings.themeTokenHint.scrim-copy': 'A translucent plate under a block of words that stands on the game art at the top of the window; it fades out to the right and below. The words on it are in the main text colour and have to stay readable over black and over white art. By default it is the page colour at 66 %',
+  'settings.themeTokenHint.scrim-copy': 'A translucent plate under a block of words that stands on the game art at the top of the window; it fades out to the right and below. The words on it are in the main text colour and have to stay readable over black and over white art. Dark themes take a near-black plate, light themes a pale one: a theme with dark words needs a light plate',
   'settings.themeToken.copy-fade-x': 'Text plate: fade to the right',
   'settings.themeTokenHint.copy-fade-x': 'How far to the right of the words the plate fades out',
   'settings.themeToken.copy-fade-y': 'Text plate: fade above and below',
