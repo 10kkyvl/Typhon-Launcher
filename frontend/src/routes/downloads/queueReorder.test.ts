@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { askMove, keyTarget, placeAt, pointerTarget, roomFor, settleMove, shownOrder, type MoveAsk, type RowBox } from './queueReorder';
+import { askMove, keyTarget, placeAt, pointerTarget, roomFor, settleMove, shownOrder, turned, type MoveAsk, type RowBox } from './queueReorder';
 
 describe('keyTarget: a key on the grip to the place it asks for', () => {
   it.each([
@@ -112,5 +112,20 @@ describe('askMove and settleMove: one move in flight per download, the last aske
     }
     expect(sent).toEqual(sends);
     expect(state).toEqual(end);
+  });
+});
+
+describe('turned: whether Go’s order moved a download among the others', () => {
+  it.each<[string, string[], string[], string, boolean]>([
+    ['moved past another', ['a', 'b', 'c', 'd'], ['a', 'b', 'd', 'c'], 'd', true],
+    ['passed by the one that moved', ['a', 'b', 'c', 'd'], ['a', 'b', 'd', 'c'], 'c', true],
+    ['not crossed by a move elsewhere', ['a', 'b', 'c', 'd'], ['b', 'a', 'c', 'd'], 'd', false],
+    ['others leaving ahead of it', ['a', 'b', 'c', 'd'], ['b', 'c', 'd'], 'd', false],
+    ['others joining ahead of it', ['a', 'b', 'd'], ['f', 'a', 'b', 'd'], 'd', false],
+    ['moved while another one left', ['a', 'b', 'c', 'd'], ['b', 'd', 'c'], 'd', true],
+    ['an id not in both orders', ['a', 'b'], ['b', 'a', 'd'], 'd', false],
+    ['an unchanged order', ['a', 'b', 'c'], ['a', 'b', 'c'], 'b', false],
+  ])('%s', (_name, before, after, id, moved) => {
+    expect(turned(before, after, id)).toBe(moved);
   });
 });

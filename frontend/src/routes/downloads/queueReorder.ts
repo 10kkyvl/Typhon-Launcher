@@ -1,7 +1,8 @@
 /**
  * The arithmetic of reordering the downloads queue: from a key or a pointer to a place, the room the
  * other rows make during a drag, the order shown while moves are asked, and how repeated asks for one
- * download collapse into at most one `moveTo` in flight. No DOM and no store: QueueList feeds it.
+ * download collapse into at most one `moveTo` in flight, and whether Go's order turned a download. No
+ * DOM and no store: QueueList feeds it.
  *
  * A place is an index among the QUEUED downloads, the `position` Go's `MoveTo` takes.
  */
@@ -66,6 +67,22 @@ export function shownOrder(ids: readonly string[], asked: ReadonlyMap<string, nu
   let order = [...ids];
   for (const [id, to] of asked) order = placeAt(order, id, to);
   return order;
+}
+
+/**
+ * Whether `id` stands among the other downloads in `after` otherwise than in `before`: the downloads
+ * ahead of it changed, which only Go's reorder does. Downloads that came, went or changed their status
+ * meanwhile count for nothing. Read over every download, not only the queued ones: a move that passes
+ * a download which has since started is still a move.
+ */
+export function turned(before: readonly string[], after: readonly string[], id: string): boolean {
+  const later = new Set(after);
+  const kept = new Set(before.filter((other) => later.has(other)));
+  if (!kept.has(id)) return false;
+  const ahead = (ids: readonly string[]) => ids.slice(0, ids.indexOf(id)).filter((other) => kept.has(other));
+  const was = new Set(ahead(before));
+  const now = ahead(after);
+  return now.length !== was.size || now.some((other) => !was.has(other));
 }
 
 /** The moves of one download: the place sent and not answered yet, and the last place asked meanwhile. */

@@ -6,7 +6,7 @@
   import { focusQuietly } from '../../lib/layers/focus';
   import type { Download } from '../../lib/services/downloads';
   import { downloadOffers, waitingForSchedule } from '../../lib/stores/downloadOffers';
-  import { queue, requestDownloadAction } from '../../lib/stores/downloads';
+  import { downloads, queue, requestDownloadAction } from '../../lib/stores/downloads';
   import { playThrottle } from '../../lib/stores/playThrottle';
   import { focusHandOff } from '../../lib/utils/focusHandOff';
   import { msg } from '../../lib/i18n';
@@ -16,7 +16,7 @@
   import { cancelDownloadPrompt } from '../../lib/confirm/prompts';
   import { cancelAsks } from '../../lib/downloads/cancel';
   import { heldBack } from '../../lib/downloads/schedule';
-  import { askMove, keyTarget, pointerTarget, roomFor, settleMove, shownOrder, type MoveAsk, type RowBox } from './queueReorder';
+  import { askMove, keyTarget, pointerTarget, roomFor, settleMove, shownOrder, turned, type MoveAsk, type RowBox } from './queueReorder';
   import type { LeaveTicket } from '../../lib/components/downloadPanel';
   import { byData, createWatchers, handOffInView, pressed, type HandOff } from './rowFocus';
 
@@ -53,17 +53,34 @@
   }
 
   /**
-   * A download being moved: `move` while a `moveTo` is in flight, `place` the last place asked. Once Go
-   * answered, the entry stays until Go's order shows the download there or it leaves the queue.
+   * A download being moved: `move` while a `moveTo` is in flight, `place` the last place asked, `owed`
+   * how many of the `moveTo` calls sent Go has not said its new order for yet. Once Go answered, the
+   * entry stays until Go's order comes, or the download leaves the queue.
    */
   interface Moving {
     move: MoveAsk | undefined;
     place: number;
+    owed: number;
     title: string;
     follow: Follow;
   }
 
   const moving = new SvelteMap<string, Moving>();
+
+  // Every download in the store's order, which only Go's `download:reordered` changes: the order last
+  // read, to tell Go's reorder of a download from a download that came, went or started.
+  const allIds = $derived($downloads.map((d) => d.id));
+  const allKey = $derived(allIds.join('\n'));
+  let heardOrder: string[] = [];
+
+  /** Counts Go's reorders since the last reading against the moves that wait for them, oldest call first. */
+  function hear() {
+    const now = allIds;
+    for (const [id, m] of moving) {
+      if (m.owed > 0 && turned(heardOrder, now, id)) moving.set(id, { ...m, owed: m.owed - 1 });
+    }
+    heardOrder = now;
+  }
 
   const shownIds = $derived(shownOrder(goIds, new Map(Array.from(moving, ([id, m]) => [id, m.place]))));
   const shownKey = $derived(shownIds.join('\n'));
@@ -81,6 +98,7 @@
     moving.set(id, {
       move: step.state,
       place: to,
+      owed: (current?.owed ?? 0) + (step.send === null ? 0 : 1),
       title: byId.get(id)?.name ?? current?.title ?? '',
       follow: how,
     });
@@ -89,6 +107,7 @@
 
   async function send(id: string, position: number) {
     const outcome = await requestDownloadAction(id, 'moveTo', { position });
+    hear();
     const current = moving.get(id);
     if (!current?.move) return;
     const step = settleMove(current.move, outcome.ok);
@@ -99,7 +118,7 @@
       return;
     }
     if (step.send !== null) {
-      moving.set(id, { ...current, move: step.state, place: step.send });
+      moving.set(id, { ...current, move: step.state, place: step.send, owed: current.owed + 1 });
       void send(id, step.send);
       return;
     }
@@ -107,15 +126,17 @@
     confirmMoves();
   }
 
-  // A move Go answered is settled when Go's order shows the download at the asked place (the last one
-  // when the queue has shrunk below it), or when the download left the queue. Any other change of Go's
-  // order (another download starting, an event of an earlier move) settles nothing: the list keeps
-  // showing the asked place over it, and the place said is the one Go ends on.
+  // A move is settled by Go's word once Go answered it: its reorder, before or after the answer (one
+  // per call sent, as they come in order), or the download leaving the queue. Go sends no reorder for
+  // a move to the place the download already holds, and a reorder it sends comes after every event it
+  // sent before it: so a move whose reorder is still owed is settled too when Go's order shows the
+  // download at the asked place (the last one when the queue has shrunk below it). Then the list is
+  // Go's order, and the place said is the one Go put the download at.
   function confirmMoves() {
     for (const [id, m] of moving) {
       if (m.move) continue;
       const at = goIds.indexOf(id);
-      if (at >= 0 && at !== Math.min(m.place, goIds.length - 1)) continue;
+      if (at >= 0 && m.owed > 0 && at !== Math.min(m.place, goIds.length - 1)) continue;
       moving.delete(id);
       if (at >= 0) onannounce(msg('downloads.queue.moved', { title: m.title, position: at + 1, total: goIds.length }));
       refocus(m.follow);
@@ -123,8 +144,12 @@
   }
 
   $effect(() => {
+    void allKey;
     void goKey;
-    untrack(confirmMoves);
+    untrack(() => {
+      hear();
+      confirmMoves();
+    });
   });
 
   // A row the list moves is a node moved in the page, which can drop its focus: put it back by id.
