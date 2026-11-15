@@ -272,7 +272,7 @@ func (f *fakeRegistrar) MarkUninstalled(id string) error {
 
 // BeginRemoval refuses what library.BeginRemoval refuses for the tests that
 // run on this fake: a running game, and files another card's footprint shares.
-func (f *fakeRegistrar) BeginRemoval(id string, deleteFiles bool) (func(), error) {
+func (f *fakeRegistrar) BeginRemoval(id, dir string) (func(), error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	game, ok := f.records[id]
@@ -282,7 +282,7 @@ func (f *fakeRegistrar) BeginRemoval(id string, deleteFiles bool) (func(), error
 	if f.running[id] {
 		return nil, library.ErrRelocateGameRunning
 	}
-	if deleteFiles {
+	if dir != "" {
 		if shared := f.neighboursLocked(game); len(shared) > 0 {
 			return nil, fmt.Errorf("%w: %s", library.ErrFolderShared, shared[0].Title)
 		}

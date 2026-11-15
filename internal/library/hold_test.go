@@ -31,7 +31,7 @@ func TestRemovalWithFilesNamesTheGamesSharingTheFolder(t *testing.T) {
 	a := addAt(t, s, filepath.Join(root, "game.exe"), "RepackX")
 	b := addAt(t, s, filepath.Join(root, "Bonus", "Game2.exe"), "Bonus")
 
-	_, err := s.BeginRemoval(a.ID, true)
+	_, err := s.BeginRemoval(a.ID, a.InstallDir)
 	requireCode(t, "BeginRemoval with files", err, "library.folder_shared")
 	neighbours, err := s.FolderNeighbours(a.ID)
 	if err != nil {
@@ -43,7 +43,7 @@ func TestRemovalWithFilesNamesTheGamesSharingTheFolder(t *testing.T) {
 	_, err = s.BeginMove(a.ID)
 	requireCode(t, "BeginMove", err, "library.folder_shared")
 
-	release, err := s.BeginRemoval(a.ID, false)
+	release, err := s.BeginRemoval(a.ID, "")
 	if err != nil {
 		t.Fatalf("a removal that keeps the files = %v", err)
 	}
@@ -54,7 +54,7 @@ func TestNoCardIsAddedInsideAFolderBeingDeleted(t *testing.T) {
 	s := newLibrary(t)
 	root := filepath.Join(t.TempDir(), "RepackX")
 	a := addAt(t, s, filepath.Join(root, "game.exe"), "RepackX")
-	release, err := s.BeginRemoval(a.ID, true)
+	release, err := s.BeginRemoval(a.ID, a.InstallDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestRemovalAndMoveOfAGameExcludeEachOther(t *testing.T) {
 	exe := filepath.Join(t.TempDir(), "Game", "game.exe")
 	game := addAt(t, s, exe, "Game")
 
-	release, err := s.BeginRemoval(game.ID, true)
+	release, err := s.BeginRemoval(game.ID, game.InstallDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestRemovalAndMoveOfAGameExcludeEachOther(t *testing.T) {
 	requireCode(t, "BeginMove during a removal", err, "library.removing")
 	_, err = s.BeginRelocate(game.ID)
 	requireCode(t, "BeginRelocate during a removal", err, "library.removing")
-	_, err = s.BeginRemoval(game.ID, false)
+	_, err = s.BeginRemoval(game.ID, "")
 	requireCode(t, "a second removal", err, "library.removing")
 	if err := os.Remove(exe); err != nil {
 		t.Fatal(err)
@@ -128,7 +128,7 @@ func TestRemovalAndMoveOfAGameExcludeEachOther(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.BeginRemoval(game.ID, false)
+	_, err = s.BeginRemoval(game.ID, "")
 	requireCode(t, "BeginRemoval during a move", err, "library.relocating")
 	requireCode(t, "RemoveGame during a move", s.RemoveGame(game.ID), "library.moving")
 	requireCode(t, "MarkUninstalled during a move", s.MarkUninstalled(game.ID), "library.moving")

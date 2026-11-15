@@ -67,7 +67,8 @@ type RemovalInfo struct {
 	DownloadBytes    int64         `json:"downloadBytes"`
 	DownloadPath     string        `json:"downloadPath"`
 	// SharedWith names the other games whose files lie in, around or at the
-	// game folder; while it is not empty the files cannot be deleted.
+	// game folder; while it is not empty the files cannot be deleted and the
+	// uninstaller cannot run.
 	SharedWith []library.FolderNeighbour `json:"sharedWith"`
 }
 
@@ -172,7 +173,11 @@ func (s *Service) RemoveGame(gameID string, opts RemoveOptions) error {
 			}
 		}
 	}
-	release, err := s.reserveRemoval(gameID, deleteFiles)
+	actsOn := ""
+	if deleteFiles || plan.method == RemovalInstaller {
+		actsOn = game.InstallDir
+	}
+	release, err := s.reserveRemoval(gameID, actsOn)
 	if err != nil {
 		return err
 	}
@@ -255,10 +260,11 @@ func (s *Service) RemoveGame(gameID string, opts RemoveOptions) error {
 }
 
 // reserveRemoval takes the library's hold on the game for the whole removal:
-// the check that no other card shares the folder and no move or launch has the
-// game, and the barring of all three, are one step inside the library.
-func (s *Service) reserveRemoval(gameID string, deleteFiles bool) (func(), error) {
-	release, err := s.library.BeginRemoval(gameID, deleteFiles)
+// the check that no other card shares the folder the removal acts on (dir, by
+// deleting it or by running the uninstaller in it) and no move or launch has
+// the game, and the barring of all three, are one step inside the library.
+func (s *Service) reserveRemoval(gameID, dir string) (func(), error) {
+	release, err := s.library.BeginRemoval(gameID, dir)
 	switch {
 	case err == nil:
 		return release, nil

@@ -354,6 +354,84 @@ func TestMoveRefusedWhileTheGameIsBeingRemoved(t *testing.T) {
 	release()
 }
 
+// The dialog sends these for a game with an uninstaller: "remove from computer"
+// on a game the launcher does not own keeps the card, "remove from library"
+// with the files toggle off does not. The uninstaller runs in the game folder
+// either way, and it may take the whole folder with it.
+var uninstallerRuns = []struct {
+	name string
+	opts RemoveOptions
+}{
+	{"keep the card", RemoveOptions{KeepInLibrary: true}},
+	{"remove the card", RemoveOptions{}},
+}
+
+func TestUninstallerRefusedInAFolderAnotherGameShares(t *testing.T) {
+	for _, tc := range uninstallerRuns {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newSharedRig(t)
+			dir := filepath.Join(t.TempDir(), "RepackX")
+			uninstaller := filepath.Join(dir, "unins000.exe")
+			mkFile(t, uninstaller, 512)
+			runner := &fakeRunner{act: func(runSpec) {
+				if err := os.RemoveAll(dir); err != nil {
+					t.Error(err)
+				}
+			}}
+			r.s.runner = runner
+			a := r.ownedGame(t, dir, "RepackX", library.Uninstall{Command: uninstaller})
+			bExe := filepath.Join(dir, "Bonus", "Game2.exe")
+			b := r.addedGame(t, bExe, "Bonus")
+
+			err := r.s.RemoveGame(a.ID, tc.opts)
+
+			if code := uierr.Code(err); code != "install.folder_shared" {
+				t.Fatalf("RemoveGame = %q (%v), want install.folder_shared", code, err)
+			}
+			if calls := runner.calls(); len(calls) != 0 {
+				t.Fatalf("the uninstaller ran in a folder another game shares: %+v", calls)
+			}
+			if missing(t, bExe) {
+				t.Fatal("the other game's files are gone")
+			}
+			if game, err := r.lib.Find(a.ID); err != nil || game.Uninstalled {
+				t.Fatalf("card of the refused game = %+v, %v; want it installed", game, err)
+			}
+			if _, err := r.lib.Find(b.ID); err != nil {
+				t.Fatalf("card of the other game: %v", err)
+			}
+		})
+	}
+}
+
+func TestUninstallerHoldsTheFolderWhileItRuns(t *testing.T) {
+	for _, tc := range uninstallerRuns {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newSharedRig(t)
+			dir := filepath.Join(t.TempDir(), "RepackX")
+			uninstaller := filepath.Join(dir, "unins000.exe")
+			mkFile(t, uninstaller, 512)
+			late := filepath.Join(dir, "Late", "Game3.exe")
+			mkFile(t, late, 512)
+			var addErr error
+			r.s.runner = &fakeRunner{act: func(runSpec) {
+				_, addErr = r.lib.AddGame(t.Context(), late, "Late")
+			}}
+			a := r.ownedGame(t, dir, "RepackX", library.Uninstall{Command: uninstaller})
+
+			if err := r.s.RemoveGame(a.ID, tc.opts); err != nil {
+				t.Fatalf("RemoveGame = %v", err)
+			}
+			if code := uierr.Code(addErr); code != "library.folder_busy" {
+				t.Fatalf("AddGame inside the folder while its uninstaller ran = %q (%v), want library.folder_busy", code, addErr)
+			}
+			if games := r.lib.GetGames(); len(games) > 1 {
+				t.Fatalf("cards = %+v, want no card added inside the folder", games)
+			}
+		})
+	}
+}
+
 func TestRemovalReleasesTheGameWhenItFails(t *testing.T) {
 	r := newSharedRig(t)
 	r.s.runner = &fakeRunner{code: 5}

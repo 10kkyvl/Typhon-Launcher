@@ -105,13 +105,15 @@ func (s *Service) reservedLocked(id string) error {
 }
 
 // BeginRemoval reserves a game for an uninstall: it fails while the game runs,
-// starts, moves or is already being removed, and with deleteFiles while another
-// card's files share its folder. Until release, PlayGame and the move
-// reservations refuse the game, and no card may be added inside its folder. The
-// checks and the reservation are one critical section of s.mu.
+// starts, moves or is already being removed. dir is the folder the removal acts
+// on, by deleting it or by running an uninstaller in it, and empty when it
+// touches no file; with a dir it also fails while another card's files share
+// that folder. Until release, PlayGame and the move reservations refuse the
+// game, and no card may be added inside dir. The checks and the reservation
+// are one critical section of s.mu.
 //
 //wails:ignore
-func (s *Service) BeginRemoval(id string, deleteFiles bool) (func(), error) {
+func (s *Service) BeginRemoval(id, dir string) (func(), error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	game := s.findLocked(id)
@@ -124,9 +126,7 @@ func (s *Service) BeginRemoval(id string, deleteFiles bool) (func(), error) {
 	if _, ok := s.running[id]; ok || s.starting[id] != nil {
 		return nil, ErrRelocateGameRunning
 	}
-	dir := ""
-	if deleteFiles {
-		dir = game.InstallDir
+	if dir != "" {
 		if neighbours := s.neighboursLocked(id, dir); len(neighbours) > 0 {
 			return nil, sharedError(neighbours)
 		}

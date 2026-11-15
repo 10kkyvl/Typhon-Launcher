@@ -124,7 +124,7 @@ type registrar interface {
 	RemoveGame(id string) error
 	MarkUninstalled(id string) error
 	CreateShortcut(id string) error
-	BeginRemoval(id string, deleteFiles bool) (func(), error)
+	BeginRemoval(id, dir string) (func(), error)
 	FolderNeighbours(id string) ([]library.FolderNeighbour, error)
 }
 
