@@ -164,12 +164,8 @@ const fallbackDefaults: Settings = {
   emulatorPaths: {},
 };
 
-export const maxActiveDownloadOptions = [
-  { id: '1', label: '1' },
-  { id: '2', label: '2' },
-  { id: '3', label: '3' },
-  { id: '5', label: '5' },
-];
+/** How many downloads may run at once: every count Go accepts (internal/settings clamps to 1…10). */
+export const maxActiveDownloadOptions = Array.from({ length: 10 }, (_, i) => ({ id: String(i + 1), label: String(i + 1) }));
 
 
 // Go sends a nil slice as null.
