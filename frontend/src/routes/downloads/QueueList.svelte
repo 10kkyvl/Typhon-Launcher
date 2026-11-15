@@ -12,6 +12,7 @@
   import { msg } from '../../lib/i18n';
   import DownloadsSection from './DownloadsSection.svelte';
   import QueueRow from './QueueRow.svelte';
+  import { downloadsSectionIds } from './sections';
   import { cancelDownloadPrompt } from '../../lib/confirm/prompts';
   import { cancelAsks } from '../../lib/downloads/cancel';
   import { heldBack } from '../../lib/downloads/schedule';
@@ -290,7 +291,7 @@
 </script>
 
 {#if rows.length > 0}
-<DownloadsSection title={msg('transfers.downloadsQueueHeading')} count={rows.length}>
+<DownloadsSection id={downloadsSectionIds.queue} title={msg('transfers.downloadsQueueHeading')} count={rows.length}>
   <ol class="queue" bind:this={list}>
     {#each rows as download, index (download.id)}
       {@const waiting = $waitingForSchedule.has(download.id)}

@@ -19,6 +19,7 @@
   import { cancelDownloadPrompt } from '../../lib/confirm/prompts';
   import { cancelAsks } from '../../lib/downloads/cancel';
   import { coverOf } from './downloadRow';
+  import { downloadsSectionIds } from './sections';
   import { afterLeaving, byData, createWatchers, handOffInView, pageHeading, type HandOff } from './rowFocus';
 
   /**
@@ -98,7 +99,7 @@
 </script>
 
 {#if $failed.length > 0}
-<DownloadsSection title={msg('transfers.downloadsFailedHeading')} count={$failed.length}>
+<DownloadsSection id={downloadsSectionIds.failed} title={msg('transfers.downloadsFailedHeading')} count={$failed.length}>
   <ul class="rows" bind:this={list}>
     {#each $failed as item, index (item.id)}
       {@const offers = $downloadOffers.get(item.id) ?? []}

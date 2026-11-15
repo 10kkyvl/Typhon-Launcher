@@ -13,14 +13,11 @@
     id,
     actions,
     children,
-  }: { title: string; count: number; id?: string; actions?: Snippet; children: Snippet } = $props();
-
-  const uid = $props.id();
-  const headingId = $derived(id ?? `${uid}-title`);
+  }: { title: string; count: number; id: string; actions?: Snippet; children: Snippet } = $props();
 </script>
 
-<section class="section" aria-labelledby={headingId}>
-  <SectionHeader {title} {count} id={headingId} {actions} />
+<section class="section" aria-labelledby={id}>
+  <SectionHeader {title} {count} {id} {actions} />
   {@render children()}
 </section>
 

@@ -2,7 +2,9 @@ import { screen } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import type { Download } from '../../lib/services/downloads';
+import type { Installation } from '../../lib/services/install';
 import { downloads, type DownloadProgress } from '../../lib/stores/downloads';
+import { installations } from '../../lib/stores/install';
 import { renderDom } from '../../lib/testing/dom';
 import Downloads from './Downloads.svelte';
 import { downloadsSectionIds } from './sections';
@@ -39,8 +41,25 @@ function download(patch: Partial<Download> = {}): Download {
   };
 }
 
+function installing(downloadId: string): Installation {
+  return { id: `i-${downloadId}`, downloadId, gameId: '', name: '', status: 'extracting', progress: 0.5, bytesDone: 1, bytesTotal: 2 } as Installation;
+}
+
+/** One download in each of the five sections. */
+function everySection() {
+  downloads.set([
+    download({ id: 'c', name: 'Done One' }),
+    download({ id: 'i', name: 'Installing One' }),
+    download({ id: 'q', name: 'Queued One', status: 'queued', progress: 0 }),
+    download({ id: 'f', name: 'Failed One', status: 'failed', error: 'x' }),
+    download({ id: 'a', name: 'Active One', status: 'downloading', progress: 0.5, completedAt: null }),
+  ]);
+  installations.set([installing('i')]);
+}
+
 afterEach(() => {
   downloads.set([]);
+  installations.set([]);
   document.body.replaceChildren();
 });
 
@@ -61,6 +80,17 @@ describe('Downloads: the sections', () => {
       msg('transfers.downloadsQueueHeading'),
       msg('transfers.downloadsCompletedHeading'),
     ]);
+  });
+
+  it('take their heading ids from sections.ts, one each, and are named by them', () => {
+    everySection();
+    renderDom(Downloads);
+
+    const named = [...document.querySelectorAll<HTMLElement>('section[aria-labelledby]')]
+      .map((section) => section.getAttribute('aria-labelledby') ?? '')
+      .filter((id) => document.getElementById(id)?.tagName === 'H2');
+    expect([...named].sort()).toEqual(Object.values(downloadsSectionIds).sort());
+    for (const id of named) expect(document.getElementById(id)?.getAttribute('tabindex')).toBe('-1');
   });
 
   it('name the active heading by its id, a focus target for script', () => {

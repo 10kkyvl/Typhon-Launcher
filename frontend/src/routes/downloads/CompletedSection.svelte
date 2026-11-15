@@ -10,6 +10,7 @@
   import { focusHandOff } from '../../lib/utils/focusHandOff';
   import CompletedRow from './CompletedRow.svelte';
   import { CLEAR_ASKS_ABOVE, canClear, completedKind, completedPart, type CompletedPart } from './completedRow';
+  import { downloadsSectionIds } from './sections';
 
   /**
    * One of the two sections of the completed downloads, newest first: "Installing" (their installation
@@ -38,7 +39,7 @@
   } = $props();
 
   const uid = $props.id();
-  const headingId = $derived(part === 'installing' ? 'downloads-installing-heading' : 'downloads-completed-heading');
+  const headingId = $derived(downloadsSectionIds[part]);
 
   const rows = $derived(
     $completed
