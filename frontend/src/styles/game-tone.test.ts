@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import buttonSource from '../lib/components/Button.svelte?raw';
 import cardSource from '../lib/components/GameCard.svelte?raw';
+import graphSource from '../lib/components/SpeedGraph.svelte?raw';
 import progressSource from '../lib/components/ProgressBar.svelte?raw';
 import tabsSource from '../lib/components/Tabs.svelte?raw';
-import { gameToneOf, toneVars } from '../lib/art/tone';
+import { contrast, fromHex, gameToneOf, hslToRgb, toHex, toneVars, type RGB } from '../lib/art/tone';
 import { ruleBody, styleOf } from '../lib/testing/css';
 import { goSources } from '../lib/testing/sources';
 
@@ -200,6 +201,40 @@ describe("a launching control inside a game's scope takes the game's colour", ()
       const tokens = { ...preset, ...v, ...ruleBody(css('./shell.css'), '.game-tone') };
       expect(bar('game', tokens)).toEqual({ fill: v['--game-fill'], streak: v['--game-on-fill'] });
       expect(bar('accent', tokens).fill).toBe(preset['--accent-bright']);
+    });
+  }
+});
+
+// Games of every hue, vivid and muted, light and dark: what the art can hand the tone.
+const SWEEP: RGB[] = [];
+for (let h = 0; h < 360; h += 5) for (const [s, l] of [[1, 0.5], [0.6, 0.5], [0.9, 0.3], [0.9, 0.75]]) SWEEP.push(hslToRgb(h, s, l));
+
+const GRAPH = styleOf(graphSource, 'SpeedGraph.svelte');
+const graph = (tokens: Record<string, string>) => ({
+  line: computed(ruleBody(GRAPH, '.line').stroke, tokens),
+  dot: computed(ruleBody(GRAPH, '.dot').background, tokens),
+});
+
+/**
+ * The speed graph's trace is a graphic the player reads (WCAG 1.4.11: 3:1 to what is next to it), drawn
+ * on the download's panel (--surface-2), not on --bg, against which the game's colours are clamped.
+ */
+describe("the speed graph's trace keeps 3:1 on the panel it is drawn on", () => {
+  for (const { id, tokens: preset } of PRESETS) {
+    const panel = fromHex(preset['--surface-2']);
+
+    it(`${id}: outside a game the trace is the bright accent`, () => {
+      expect(graph(preset)).toEqual({ line: preset['--accent-bright'], dot: preset['--accent-bright'] });
+      expect(contrast(fromHex(preset['--accent-bright']), panel)).toBeGreaterThanOrEqual(3);
+    });
+
+    it(`${id}: in every game's colour the line and its dot hold 3:1 on --surface-2`, () => {
+      const worst = SWEEP.map((color) => {
+        const { line, dot } = graph({ ...preset, ...toneVars(gameToneOf(color, { bg: preset['--bg'], text: preset['--text'] })) });
+        expect(dot).toBe(line);
+        return { color: toHex(color), line, ratio: contrast(fromHex(line), panel) };
+      }).reduce((a, b) => (b.ratio < a.ratio ? b : a));
+      expect(worst.ratio, `${worst.color} draws ${worst.line}`).toBeGreaterThanOrEqual(3);
     });
   }
 });

@@ -205,7 +205,7 @@
 
   .line {
     fill: none;
-    stroke: var(--game-fill, var(--accent-bright));
+    stroke: var(--game-accent, var(--accent-bright));
     stroke-width: 1.5;
     stroke-linejoin: round;
     stroke-linecap: round;
@@ -217,7 +217,7 @@
     width: var(--graph-dot, 0.6rem);
     height: var(--graph-dot, 0.6rem);
     border-radius: var(--radius-round);
-    background: var(--game-fill, var(--accent-bright));
+    background: var(--game-accent, var(--accent-bright));
     transform: translate(-50%, -50%);
   }
 
