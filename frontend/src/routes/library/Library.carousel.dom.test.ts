@@ -15,6 +15,7 @@ import { playtime, relativeDate } from '../../lib/utils/format';
 import { renderDom } from '../../lib/testing/dom';
 import { libraryGenres } from '../../lib/stores/genres';
 import { genreLabel } from '../../lib/metadata/labels';
+import type { LibraryGame } from '../../lib/services/library';
 import Library from './Library.svelte';
 import { backdropSources, rememberedGame } from '../../lib/backdrop/source';
 import { ambientState, HOVER_LEAVE_MS, HOVER_REST_MS, pickAmbient } from '../../lib/stores/ambient';
@@ -176,6 +177,42 @@ describe('Library: the carousel on the page', () => {
 
     expect(slideTitles()).toEqual(['Wide One', 'Poster One', 'Bare One']);
     expect(recentTitles()).toEqual(['Fourth One', 'Fifth One']);
+  });
+});
+
+describe('Library: the cover a slide shows for a game with no wide art', () => {
+  const solo = (patch: Partial<LibraryGame>) => libraryGames.set([played('g-solo', 'Solo One', 9, { canonicalGameId: 'c-solo', ...patch })]);
+  const cover = () => blockOf('Solo One');
+
+  it('is the metadata cover first, then the game\'s own cover once that fails to load', async () => {
+    solo({ cover: 'own.png' });
+    gameArt.set({ 'c-solo': { cover: 'meta.png', hero: '', heroIsPoster: false } });
+    renderDom(Library);
+    expect(cover().dataset.picture).toBe('cover');
+    expect(cover().querySelector('img')?.getAttribute('src')).toBe('meta.png');
+
+    await fireEvent.error(cover().querySelector('img') as HTMLImageElement);
+
+    expect(cover().querySelector('img')?.getAttribute('src')).toBe('own.png');
+  });
+
+  it('is a hero that is a poster when the metadata has no cover, before the game\'s own cover', () => {
+    solo({ cover: 'own.png' });
+    gameArt.set({ 'c-solo': { cover: '', hero: 'p.png', heroIsPoster: true } });
+    renderDom(Library);
+
+    expect(cover().dataset.picture).toBe('cover');
+    expect(cover().querySelector('img')?.getAttribute('src')).toBe('p.png');
+  });
+
+  it('is the generated art when there is no picture at all', () => {
+    solo({});
+    gameArt.set({ 'c-solo': { cover: '', hero: '', heroIsPoster: false } });
+    renderDom(Library);
+
+    expect(cover().dataset.picture).toBe('cover');
+    expect(cover().querySelector('img')).toBeNull();
+    expect(cover().querySelector('svg.generated-art')).not.toBeNull();
   });
 });
 
