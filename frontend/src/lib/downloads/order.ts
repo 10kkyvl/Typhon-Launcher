@@ -1,8 +1,8 @@
 /**
  * Puts the items of `list` into the order `order` gives their ids, and changes nothing else: an item
  * `order` does not name keeps its place, an id `order` names that `list` lacks is ignored, and every
- * item is the one `list` held. Go's queue order then comes from a snapshot, while the records and the
- * set of downloads keep coming from the events, which may be newer than that snapshot.
+ * item is the one `list` held. Go's queue order then comes from download:reordered, while the records
+ * and the set of downloads keep coming from the other events, which may be newer than that order.
  */
 export function followOrder<T extends { id: string }>(list: readonly T[], order: readonly string[]): T[] {
   const rank = new Map(order.map((id, index) => [id, index]));

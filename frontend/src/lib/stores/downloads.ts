@@ -56,11 +56,17 @@ export const downloadEvents = {
   completed: 'download:completed',
   failed: 'download:failed',
   removed: 'download:removed',
+  reordered: 'download:reordered',
 } as const;
 
 /** The payload of download:removed: internal/download.RemovedEvent. */
 export interface DownloadRemoved {
   id: string;
+}
+
+/** The payload of download:reordered: internal/download.ReorderedEvent, every download id in Go's order. */
+export interface DownloadReordered {
+  ids: string[];
 }
 
 export interface DownloadEventPayloads {
@@ -70,6 +76,7 @@ export interface DownloadEventPayloads {
   completed: Download;
   failed: Download;
   removed: DownloadRemoved;
+  reordered: DownloadReordered;
 }
 
 export const downloadsById = derived(downloads, ($downloads) => {
@@ -183,6 +190,12 @@ function hasId(data: unknown): boolean {
   return typeof data === 'object' && data !== null && typeof (data as { id?: unknown }).id === 'string';
 }
 
+function isOrder(data: unknown): data is DownloadReordered {
+  if (typeof data !== 'object' || data === null) return false;
+  const ids = (data as { ids?: unknown }).ids;
+  return Array.isArray(ids) && ids.every((id) => typeof id === 'string');
+}
+
 export async function initDownloads() {
   const { on, load } = listenFirst();
   if (!inWails) {
@@ -191,7 +204,10 @@ export async function initDownloads() {
   }
 
   // Every download event names its download; one that does not is dropped rather than stored.
-  const listen = <K extends keyof DownloadEventPayloads>(kind: K, handler: (payload: DownloadEventPayloads[K]) => void) =>
+  const listen = <K extends Exclude<keyof DownloadEventPayloads, 'reordered'>>(
+    kind: K,
+    handler: (payload: DownloadEventPayloads[K]) => void,
+  ) =>
     on(downloadEvents[kind], (event) => {
       if (hasId(event.data)) handler(event.data as DownloadEventPayloads[K]);
     });
@@ -220,6 +236,15 @@ export async function initDownloads() {
   });
   listen('removed', ({ id }) => {
     downloads.update((list) => list.filter((d) => d.id !== id));
+  });
+  // Go sends its whole order after every move. The records and the set of downloads stay as the
+  // other events left them: an id the store no longer holds is ignored, and a download the event
+  // does not name (added after Go sent it) keeps its index, which for an added one is the end.
+  on(downloadEvents.reordered, (event) => {
+    if (isOrder(event.data)) {
+      const { ids } = event.data;
+      downloads.update((list) => followOrder(list, ids));
+    }
   });
 
   downloads.set(await load(listDownloads));
@@ -291,28 +316,7 @@ async function perform(id: string, action: DownloadAction, toastFailure: boolean
     if (toastFailure) toast(installErrorText(error), 'danger');
     return { ok: false, code: errorCode(error), error };
   }
-  if (action === 'moveUp' || action === 'moveDown') await followGoOrder();
   return { ok: true };
-}
-
-let orderAsked = 0;
-
-// Go answers a move with download:updated for the two swapped items, which says nothing of their
-// places, so the order is read once more. Only the order is taken from that answer: a download added
-// or removed while it was on its way stays as the events left it, and an answer overtaken by a later
-// request is dropped. The move itself stands when only this read fails.
-async function followGoOrder() {
-  const asked = ++orderAsked;
-  let listed: Download[];
-  try {
-    listed = await listDownloads();
-  } catch (err) {
-    toast(installErrorText(err), 'danger');
-    return;
-  }
-  if (asked !== orderAsked) return;
-  const order = listed.map((d) => d.id);
-  downloads.update((list) => followOrder(list, order));
 }
 
 export async function pause(id: string): Promise<void> {

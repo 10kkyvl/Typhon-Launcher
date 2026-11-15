@@ -179,73 +179,64 @@ describe('a second call while the first is in flight', () => {
   });
 });
 
-describe('reordering follows Go without overwriting the list from a snapshot', () => {
-  it('keeps a download removed and one added while the order was asked for', async () => {
-    const { store, services } = await load([makeDownload({ id: 'a' }), makeDownload({ id: 'b' }), makeDownload({ id: 'gone' })]);
-    const listed = deferred<Download[]>();
-    vi.mocked(services.listDownloads).mockReturnValueOnce(listed.promise);
+describe('the order follows download:reordered', () => {
+  const reordered = (data: unknown) => handlers['download:reordered']({ data });
 
-    const move = store.moveUp('b');
-    await vi.waitFor(() => expect(services.listDownloads).toHaveBeenCalledTimes(2));
+  it('puts the list in the order Go sends', async () => {
+    const { store } = await load([makeDownload({ id: 'a' }), makeDownload({ id: 'b' }), makeDownload({ id: 'c' })]);
+
+    reordered({ ids: ['c', 'a', 'b'] });
+
+    expect(ids(get(store.downloads))).toEqual(['c', 'a', 'b']);
+  });
+
+  it('does not bring back a download removed meanwhile, and keeps one added since at the end', async () => {
+    const { store } = await load([makeDownload({ id: 'a' }), makeDownload({ id: 'b' }), makeDownload({ id: 'gone' })]);
     handlers['download:removed']({ data: { id: 'gone' } });
     handlers['download:added']({ data: makeDownload({ id: 'new' }) });
-    listed.resolve([makeDownload({ id: 'b' }), makeDownload({ id: 'a' }), makeDownload({ id: 'gone' })]);
-    await move;
+
+    reordered({ ids: ['gone', 'b', 'a'] });
 
     expect(ids(get(store.downloads))).toEqual(['b', 'a', 'new']);
   });
 
-  it('keeps the records the events brought: the order is all it takes from the answer', async () => {
-    const { store, services } = await load([makeDownload({ id: 'a' }), makeDownload({ id: 'b' })]);
-    const listed = deferred<Download[]>();
-    vi.mocked(services.listDownloads).mockReturnValueOnce(listed.promise);
-
-    const move = store.moveDown('a');
-    await vi.waitFor(() => expect(services.listDownloads).toHaveBeenCalledTimes(2));
+  it('keeps the records the events brought: the order is all it takes', async () => {
+    const { store } = await load([makeDownload({ id: 'a' }), makeDownload({ id: 'b' })]);
     handlers['download:updated']({ data: makeDownload({ id: 'a', status: 'downloading', downloaded: 300 }) });
-    listed.resolve([makeDownload({ id: 'b' }), makeDownload({ id: 'a', status: 'queued', downloaded: 0 })]);
-    await move;
+
+    reordered({ ids: ['b', 'a'] });
 
     expect(ids(get(store.downloads))).toEqual(['b', 'a']);
     expect(get(store.downloadsById).get('a')).toMatchObject({ status: 'downloading', downloaded: 300 });
   });
 
-  it('applies only the newest order when two answers come back out of turn', async () => {
-    const { store, services } = await load([makeDownload({ id: 'a' }), makeDownload({ id: 'b' }), makeDownload({ id: 'c' })]);
-    const older = deferred<Download[]>();
-    const newer = deferred<Download[]>();
-    vi.mocked(services.listDownloads).mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
+  it('changes nothing for a payload that is not a list of ids', async () => {
+    const { store } = await load([makeDownload({ id: 'a' }), makeDownload({ id: 'b' })]);
+    const before = get(store.downloads);
 
-    const first = store.moveUp('b');
-    await vi.waitFor(() => expect(services.listDownloads).toHaveBeenCalledTimes(2));
-    const second = store.moveUp('c');
-    await vi.waitFor(() => expect(services.listDownloads).toHaveBeenCalledTimes(3));
-    newer.resolve([makeDownload({ id: 'b' }), makeDownload({ id: 'c' }), makeDownload({ id: 'a' })]);
-    await second;
-    older.resolve([makeDownload({ id: 'b' }), makeDownload({ id: 'a' }), makeDownload({ id: 'c' })]);
-    await first;
+    for (const data of [null, undefined, 'b,a', {}, { id: 'a' }, { ids: null }, { ids: 'ba' }, { ids: [2, 1] }, { ids: ['b', 7] }]) {
+      reordered(data);
+    }
 
-    expect(ids(get(store.downloads))).toEqual(['b', 'c', 'a']);
+    expect(get(store.downloads)).toBe(before);
   });
 
-  it('asks for no order after a move Go refused, and reports the refusal', async () => {
+  it('a move reads no list: the order arrives with the event', async () => {
+    const { store, services } = await load([makeDownload({ id: 'a' }), makeDownload({ id: 'b' })]);
+
+    expect(await store.requestDownloadAction('b', 'moveUp')).toEqual({ ok: true });
+    await store.moveDown('a');
+
+    expect(services.listDownloads).toHaveBeenCalledTimes(1);
+    expect(ids(get(store.downloads))).toEqual(['a', 'b']);
+  });
+
+  it('reports a move Go refused', async () => {
     const { store, services } = await load([makeDownload({ id: 'a', status: 'paused' })]);
     vi.mocked(services.moveDownloadUp).mockRejectedValueOnce(new Error('typhon:download.unavailable'));
 
     const outcome = await store.requestDownloadAction('a', 'moveUp', { toast: false });
 
     expect(outcome).toMatchObject({ ok: false, code: 'download.unavailable' });
-    expect(services.listDownloads).toHaveBeenCalledTimes(1);
-  });
-
-  it('keeps the move as done when only reading the new order failed, and says so', async () => {
-    const { store, services, toast } = await load([makeDownload({ id: 'a' }), makeDownload({ id: 'b' })]);
-    vi.mocked(services.listDownloads).mockRejectedValueOnce(new Error('backend unavailable'));
-
-    const outcome = await store.requestDownloadAction('b', 'moveUp', { toast: false });
-
-    expect(outcome).toEqual({ ok: true });
-    expect(ids(get(store.downloads))).toEqual(['a', 'b']);
-    expect(toast).toHaveBeenCalledWith('text of Error: backend unavailable', 'danger');
   });
 });
