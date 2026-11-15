@@ -1,12 +1,16 @@
 <script lang="ts">
+  import BarChart from '../../lib/components/BarChart.svelte';
+  import { secondsScale, type ChartBucket } from '../../lib/components/barChart';
   import DiskMeter from '../../lib/components/DiskMeter.svelte';
   import { gameTone, type MeterSegment } from '../../lib/components/diskMeter';
   import IntegerInput from '../../lib/components/IntegerInput.svelte';
   import Select from '../../lib/components/Select.svelte';
   import type { SelectOption } from '../../lib/components/select';
+  import EmptyState from '../../lib/components/EmptyState.svelte';
   import SettingsRow from '../../lib/components/SettingsRow.svelte';
   import Slider from '../../lib/components/Slider.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
+  import { playtime } from '../../lib/utils/format';
   import ShowcaseRow from './ShowcaseRow.svelte';
   import ShowcaseSection from './ShowcaseSection.svelte';
 
@@ -51,6 +55,27 @@
   let scale = $state(2);
   let threads = $state(4);
   const SCALES = ['80%', '90%', '100%', '110%', '125%'];
+
+  const HOUR = 3600;
+  const time = (seconds: number) => (seconds > 0 ? playtime(seconds) : 'No play');
+  const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const WEEK: ChartBucket[] = [1.5, 0, 3.25, 0.5, 6.75, 0, 0].map((hours, index) => ({
+    key: DAY_NAMES[index],
+    label: `${DAY_NAMES[index]}, ${index + 2} November`,
+    tick: DAY_NAMES[index],
+    value: hours * HOUR,
+    current: index === 4,
+  }));
+  const WEEKS: ChartBucket[] = [4, 11, 0, 7.5, 2, 19, 9, 12].map((hours, index, all) => ({
+    key: `w${index}`,
+    label: index === all.length - 1 ? 'This week' : `Week of ${7 * index + 1 > 30 ? 7 * index - 29 : 7 * index + 1} ${index < 5 ? 'September' : 'October'}`,
+    tick: index === all.length - 1 ? 'Now' : `W${index + 1}`,
+    value: hours * HOUR,
+    current: index === all.length - 1,
+  }));
+  const HUGE: ChartBucket[] = [0.2, 0.1, 40, 0.3, 0.02].map((hours, index) => ({ key: `d${index}`, label: `Day ${index + 1}`, value: hours * HOUR }));
+  const NOTHING: ChartBucket[] = WEEK.map((day) => ({ ...day, value: 0 }));
+  let week = $state('w7');
 </script>
 
 <ShowcaseSection title="Screen parts" note="The disk meter, the settings row and the bar chart the screens share.">
@@ -126,6 +151,35 @@
       </SettingsRow>
     </div>
   </ShowcaseRow>
+
+  <ShowcaseRow caption="Bar chart: a week of hours on a round hour scale, a value over each bar, today set apart" stack>
+    <div class="chart">
+      <BarChart label="Play time by day" buckets={WEEK} format={time} scale={secondsScale(Math.max(...WEEK.map((day) => day.value)))} columns={['Day', 'Play time']} />
+    </div>
+  </ShowcaseRow>
+
+  <ShowcaseRow caption="With a selection: a radio group, arrows and Home / End, the chosen bar labelled" stack>
+    <div class="chart">
+      <BarChart label="Weeks" buckets={WEEKS} format={time} bind:selected={week} values="selected" height="6.4rem" />
+    </div>
+    <span class="picked">Chosen: {WEEKS.find((item) => item.key === week)?.label}</span>
+  </ShowcaseRow>
+
+  <ShowcaseRow caption="One huge bar: the small ones stay hairlines" stack>
+    <div class="chart">
+      <BarChart label="Play time by day" buckets={HUGE} format={time} />
+    </div>
+  </ShowcaseRow>
+
+  <ShowcaseRow caption="Nothing above zero: the caller's empty state" stack>
+    <div class="chart">
+      <BarChart label="Play time by day" buckets={NOTHING} format={time}>
+        {#snippet empty()}
+          <EmptyState size="inline" title="No play this week" />
+        {/snippet}
+      </BarChart>
+    </div>
+  </ShowcaseRow>
 </ShowcaseSection>
 
 <style>
@@ -138,7 +192,8 @@
     max-width: 32rem;
   }
 
-  .rows {
+  .rows,
+  .chart {
     max-width: 72rem;
   }
 

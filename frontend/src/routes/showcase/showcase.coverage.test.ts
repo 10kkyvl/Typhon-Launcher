@@ -53,6 +53,7 @@ const BASE = [
   // The parts the screens share for their figures and settings (ShowcaseKit.svelte).
   'DiskMeter',
   'SettingsRow',
+  'BarChart',
 ];
 
 /** Shown by what the page does rather than by a tag: the shell mounts the toast stack, the page raises toasts. */

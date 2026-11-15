@@ -18,6 +18,7 @@ const PARTS = [
   'lib/components/HeroCarousel.svelte',
   'lib/components/DiskMeter.svelte',
   'lib/components/SettingsRow.svelte',
+  'lib/components/BarChart.svelte',
 ];
 const COLOUR = /#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?|oklch|oklab|lab|lch)\(|\b(?:white|black)\b/i;
 

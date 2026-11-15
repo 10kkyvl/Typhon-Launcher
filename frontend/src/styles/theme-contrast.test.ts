@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import barChartSource from '../lib/components/BarChart.svelte?raw';
 import buttonSource from '../lib/components/Button.svelte?raw';
 import diskMeterSource from '../lib/components/DiskMeter.svelte?raw';
 import { METER_TONES } from '../lib/components/diskMeter';
@@ -547,6 +548,46 @@ describe("the disk meter's tones", () => {
         for (const tone of METER_TONES) {
           const r = ratio(over(cssColor(toneOf(tone), tokens), lane), lane);
           if (r < 3) out.push(`${tone} on the track over ${surface}: ${r.toFixed(2)} < 3`);
+        }
+      }
+      expect(out).toEqual([]);
+    });
+  }
+});
+
+// The bar chart (BarChart.svelte) says a value by the height of a bar, so every fill a bar takes must
+// stand out at 3:1 (WCAG 1.4.11) from what is behind it: the page surface, and for a bar that can be
+// chosen the plate its column draws when hovered or chosen.
+describe("the bar chart's bars", () => {
+  const chartStyle = styleOf(barChartSource, 'BarChart.svelte');
+  const fill = (selector: string) => ruleBody(chartStyle, selector).background;
+  // Each fill a bar takes, with the plate of its column under it.
+  const BARS: [string, string | null][] = [
+    ['.bar', null],
+    ['.current .bar', null],
+    ['button.col .bar', null],
+    ['button.col:hover .bar', 'button.col:hover'],
+    ["button.col[aria-checked='true'] .bar", "button.col[aria-checked='true']"],
+  ];
+
+  it('measures every rule that fills a bar', () => {
+    const filled = [...chartStyle.matchAll(/(?:^|\})\s*([^{}@]*\.bar)\s*\{[^}]*\bbackground:/g)].map((m) => m[1].trim());
+    expect(filled.sort()).toEqual(BARS.map(([selector]) => selector).sort());
+  });
+
+  for (const id of ['dark', 'light', 'contrast', 'blush']) {
+    it(`${id} shows every bar at 3:1 over every surface and its column's plate`, () => {
+      const preset = builtIns().find((p) => p.id === id);
+      expect(preset, id).toBeDefined();
+      const tokens = (preset as Preset).tokens;
+      const bg = paint(tokens, '--bg', BLACK);
+      const out: string[] = [];
+      for (const surface of PAGE) {
+        const under = surface === '--bg' ? bg : paint(tokens, surface, bg);
+        for (const [selector, plate] of BARS) {
+          const ground = plate ? over(cssColor(fill(plate), tokens), under) : under;
+          const r = ratio(over(cssColor(fill(selector), tokens), ground), ground);
+          if (r < 3) out.push(`${selector} over ${surface}: ${r.toFixed(2)} < 3`);
         }
       }
       expect(out).toEqual([]);
