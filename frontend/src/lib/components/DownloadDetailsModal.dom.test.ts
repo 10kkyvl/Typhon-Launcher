@@ -101,7 +101,9 @@ describe('DownloadDetailsModal: per-file progress follows Go while the download 
     expect(within(fileRow('Game/data.bin')).getByText(bytesText(5 * GB))).toBeTruthy();
   });
 
-  it('keeps reading while the download verifies or fetches its metadata', async () => {
+  // Go moves a file's bytes only while it downloads (download.Manager.sample); a verify sets them once
+  // as it ends, with a status change. A read during verifying or metadata copies the list for nothing.
+  it('reads once on open while the download verifies or fetches its metadata, and polls no more', async () => {
     for (const status of ['verifying', 'metadata'] as const) {
       vi.mocked(getDownload).mockReset();
       vi.mocked(getDownload).mockResolvedValue(record('a', status, [file('Game/data.bin', GB)]));
@@ -110,10 +112,49 @@ describe('DownloadDetailsModal: per-file progress follows Go while the download 
       await settle();
       await vi.advanceTimersByTimeAsync(3000);
       await settle();
-      expect(vi.mocked(getDownload).mock.calls.length, status).toBeGreaterThanOrEqual(3);
+      expect(getDownload, status).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount(), status).toBe(0);
       view.unmount();
     }
   });
+
+  it('reads once more when the status changes, so the numbers it stopped at are Go’s last', async () => {
+    vi.mocked(getDownload).mockResolvedValueOnce(record('a', 'verifying', [file('Game/data.bin', 2 * GB)]));
+    downloads.set([record('a', 'verifying', [file('Game/data.bin', 0)])]);
+    renderDom(DownloadDetailsModal, { open: true, id: 'a' });
+    await settle();
+    expect(getDownload).toHaveBeenCalledTimes(1);
+
+    vi.mocked(getDownload).mockResolvedValueOnce(record('a', 'paused', [file('Game/data.bin', 7 * GB)]));
+    downloads.set([record('a', 'paused', [file('Game/data.bin', 2 * GB)])]);
+    await settle();
+
+    expect(getDownload).toHaveBeenCalledTimes(2);
+    expect(within(fileRow('Game/data.bin')).getByText(bytesText(7 * GB))).toBeTruthy();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(getDownload).toHaveBeenCalledTimes(2);
+  });
+
+  it('a status change while a read is out reads again once that read is back', async () => {
+    const out = deferred<Download>();
+    vi.mocked(getDownload).mockReturnValueOnce(out.promise);
+    downloads.set([record('a', 'downloading', [file('Game/data.bin', 0)])]);
+    renderDom(DownloadDetailsModal, { open: true, id: 'a' });
+    await settle();
+
+    downloads.set([record('a', 'paused', [file('Game/data.bin', 3 * GB)])]);
+    await settle();
+    expect(getDownload).toHaveBeenCalledTimes(1);
+
+    vi.mocked(getDownload).mockResolvedValueOnce(record('a', 'paused', [file('Game/data.bin', 4 * GB)]));
+    out.resolve(record('a', 'downloading', [file('Game/data.bin', GB)]));
+    await settle();
+    await settle();
+
+    expect(getDownload).toHaveBeenCalledTimes(2);
+    expect(within(fileRow('Game/data.bin')).getByText(bytesText(4 * GB))).toBeTruthy();
+  });
+
 
   it('stops asking when the dialog closes, and leaves no timer behind', async () => {
     vi.mocked(getDownload).mockResolvedValue(record('a', 'downloading', [file('Game/data.bin', GB)]));
@@ -144,10 +185,13 @@ describe('DownloadDetailsModal: per-file progress follows Go while the download 
     expect(vi.getTimerCount()).toBe(0);
     expect(getDownload).toHaveBeenCalledTimes(calls);
 
+    // The change itself reads once, then the ticks take over.
     downloads.set([record('a', 'downloading', [file('Game/data.bin', GB)])]);
     await settle();
-    await vi.advanceTimersByTimeAsync(1000);
     expect(getDownload).toHaveBeenCalledTimes(calls + 1);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(getDownload).toHaveBeenCalledTimes(calls + 2);
+    expect(vi.getTimerCount()).toBe(1);
   });
 
   it('stops asking when the download leaves the list', async () => {

@@ -2,13 +2,15 @@
   import type { DownloadStatus, FileState } from '../services/downloads';
 
   /**
-   * How often the open dialog reads the files of a download that moves data. Go's progress tick
-   * carries no files, and `Get` copies the whole file list (thousands of entries in a large repack),
-   * so it is read once a second, the rate the screen's speed history samples at, not every tick.
+   * How often the open dialog reads the files of a running download. Go's progress tick carries no
+   * files, and `Get` copies the whole file list (thousands of entries in a large repack) under the
+   * manager's lock, so it is read once a second, the rate the screen's speed history samples at, not
+   * every tick. Go moves a file's bytes only while it downloads (`Manager.sample`); a verify sets them
+   * once as it ends, with a status change, which reads them once more.
    */
   const FILES_READ_MS = 1000;
 
-  const movesData: ReadonlySet<DownloadStatus> = new Set<DownloadStatus>(['downloading', 'verifying', 'metadata']);
+  const polled: DownloadStatus = 'downloading';
 </script>
 
 <script lang="ts">
@@ -32,7 +34,8 @@
 
   const download = $derived(id ? $downloadsById.get(id) : undefined);
   const gameId = $derived(download ? gamePageId(download) : '');
-  const moving = $derived(download ? movesData.has(download.status) : false);
+  const status = $derived(download?.status);
+  const running = $derived(status === polled);
   // Only a download that moves data has a speed to show: the record keeps the last one Go sent.
   const takesData = $derived(download?.status === 'downloading');
   const givesData = $derived(download?.status === 'downloading' || Boolean(download?.seeding));
@@ -41,13 +44,19 @@
   // brings a newer list, and the answer then gives way to it.
   // Raw: `base` is compared by identity, which a deep state proxy would break.
   let read = $state.raw<{ files: FileState[]; base: FileState[] } | null>(null);
-  // A slow answer is not asked for again while it is on its way.
+  // A slow answer is not asked for again while it is on its way. A status change meanwhile is owed a
+  // read when it is back: the answer out was asked before the change, and gives way to its list.
   const reading = new Set<string>();
+  const owed = new Set<string>();
   const files = $derived(download && read && read.base === download.files ? read.files : (download?.files ?? []));
 
-  async function readFiles(target: string) {
+  async function readFiles(target: string, settled = false) {
+    if (reading.has(target)) {
+      if (settled) owed.add(target);
+      return;
+    }
     const base = get(downloadsById).get(target)?.files;
-    if (!base || reading.has(target)) return;
+    if (!base) return;
     reading.add(target);
     try {
       const fresh = await getDownload(target);
@@ -56,19 +65,29 @@
       // A missed read keeps the numbers already shown and says nothing; the next tick asks again.
     } finally {
       reading.delete(target);
+      if (owed.delete(target) && open && id === target) void readFiles(target);
     }
   }
 
+  // The dialog's download: what Go answered for another one is not shown.
+  let shownFor: string | null = null;
+
+  // One read on open and one on each status change, so the numbers a download stops at are Go's last.
   $effect(() => {
     const target = open ? id : null;
+    const now = target ? status : undefined;
     untrack(() => {
-      read = null;
-      if (target) readFiles(target);
+      if (target !== shownFor) {
+        shownFor = target;
+        read = null;
+        owed.clear();
+      }
+      if (target && now) void readFiles(target, true);
     });
   });
 
   $effect(() => {
-    if (!open || !id || !moving) return;
+    if (!open || !id || !running) return;
     const target = id;
     const timer = setInterval(() => readFiles(target), FILES_READ_MS);
     return () => clearInterval(timer);
