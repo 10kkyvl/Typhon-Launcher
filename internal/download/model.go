@@ -123,6 +123,13 @@ type RemovedEvent struct {
 	ID string `json:"id"`
 }
 
+// ReorderedEvent lists every download in the manager's order after the queue
+// was rearranged, so the window can sort the list it holds without asking for
+// it again.
+type ReorderedEvent struct {
+	IDs []string `json:"ids"`
+}
+
 func occupiesSlot(s Status) bool {
 	return s == StatusDownloading || s == StatusVerifying || s == StatusMetadata
 }

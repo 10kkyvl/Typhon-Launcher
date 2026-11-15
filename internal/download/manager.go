@@ -44,6 +44,7 @@ const (
 	eventFailed    = "download:failed"
 	eventRemoved   = "download:removed"
 	eventDegraded  = "download:degraded"
+	eventReordered = "download:reordered"
 
 	tickInterval    = 250 * time.Millisecond
 	persistInterval = 5 * time.Second
@@ -1740,6 +1741,59 @@ func (m *Manager) move(id string, step int) error {
 	emit(eventUpdated, snapshot(m.items[index]))
 	emit(eventUpdated, snapshot(m.items[target]))
 	return nil
+}
+
+// MoveTo puts a queued download at position among the queued downloads in one
+// write. Downloads in other states keep their places in the list: the queue is
+// the order of the queued ones among themselves, which MoveUp and MoveDown step
+// through as well. A position past either end goes to that end, and a move to
+// the place the download already holds writes and emits nothing.
+func (m *Manager) MoveTo(id string, position int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	d := m.findLocked(id)
+	if d == nil {
+		return errNotFound
+	}
+	if d.Status != StatusQueued {
+		return errUnavailable
+	}
+	var slots []int
+	var queued []*Download
+	from := 0
+	for i, item := range m.items {
+		if item.Status != StatusQueued {
+			continue
+		}
+		if item == d {
+			from = len(queued)
+		}
+		slots = append(slots, i)
+		queued = append(queued, item)
+	}
+	to := min(max(position, 0), len(queued)-1)
+	if to == from {
+		return nil
+	}
+	before := slices.Clone(m.items)
+	queued = slices.Insert(slices.Delete(queued, from, from+1), to, d)
+	for k, i := range slots {
+		m.items[i] = queued[k]
+	}
+	if err := m.persistLocked(); err != nil {
+		m.items = before
+		return fmt.Errorf("изменить порядок загрузок: %w", err)
+	}
+	emit(eventReordered, m.orderLocked())
+	return nil
+}
+
+func (m *Manager) orderLocked() ReorderedEvent {
+	ids := make([]string, len(m.items))
+	for i, d := range m.items {
+		ids[i] = d.ID
+	}
+	return ReorderedEvent{IDs: ids}
 }
 
 func (m *Manager) schedule() {

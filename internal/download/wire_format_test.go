@@ -66,6 +66,7 @@ func TestPayloadsKeepTheirJSONKeys(t *testing.T) {
 			"downloadSpeed", "downloaded", "etaSeconds", "id", "peers", "progress", "seeders", "stalled", "stalledSince", "status", "uploadSpeed",
 		}},
 		{"RemovedEvent", RemovedEvent{}, []string{"id"}},
+		{"ReorderedEvent", ReorderedEvent{}, []string{"ids"}},
 		{"TorrentInfo", TorrentInfo{}, []string{"files", "infoHash", "name", "totalBytes"}},
 		{"NetworkState", NetworkState{}, []string{"address", "code", "mode", "reason", "state", "warning"}},
 		{"NetInterface", NetInterface{}, []string{"addresses", "description", "name", "up", "vpnLike"}},
@@ -224,6 +225,32 @@ func TestEventNamesMatchWhatTheFrontendListensTo(t *testing.T) {
 		if !strings.Contains(listened.String(), "'"+literal+"'") {
 			t.Errorf("no store of the frontend listens to %q", literal)
 		}
+	}
+}
+
+// The frontend sorts its list by this event; it is checked here until a store
+// listens to it and it joins the table above.
+func TestReorderEventWireFormat(t *testing.T) {
+	if eventReordered != "download:reordered" {
+		t.Fatalf("event constant is %q, want download:reordered", eventReordered)
+	}
+	m := newTestManager(t, 1)
+	m.addTestItem("a", StatusQueued)
+	m.addTestItem("b", StatusQueued)
+	log := recordEmits(t)
+	if err := m.MoveTo("b", 0); err != nil {
+		t.Fatal(err)
+	}
+	reorders := log.reorders()
+	if len(reorders) != 1 {
+		t.Fatalf("reorder events = %+v", reorders)
+	}
+	body, err := json.Marshal(reorders[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(body), `{"ids":["b","a"]}`; got != want {
+		t.Fatalf("payload = %s, want %s", got, want)
 	}
 }
 
