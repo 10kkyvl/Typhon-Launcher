@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import page from './Installed.svelte?raw';
+import addGame from './InstalledAddGame.svelte?raw';
 import game from './installedGame.ts?raw';
 
 const screen = import.meta.glob<string>(['./*.svelte', './*.ts', '!./*.test.ts'], { query: '?raw', import: 'default', eager: true });
 
 describe('Installed error toasts', () => {
   it('reads every file of the page', () => {
-    expect(Object.keys(screen).sort()).toEqual(['./Installed.svelte', './InstalledStorage.svelte', './installedGame.ts']);
+    expect(Object.keys(screen).sort()).toEqual(['./Installed.svelte', './InstalledAddGame.svelte', './InstalledStorage.svelte', './installedGame.ts']);
   });
 
   it.each(Object.entries(screen))('%s never shows the raw backend error message to the user', (_name, source) => {
@@ -15,7 +16,7 @@ describe('Installed error toasts', () => {
   });
 
   const sites: Array<{ name: string; source: string; snippet: string }> = [
-    { name: 'submitAdd', source: page, snippet: "toast(libraryErrorText(err, msg('games.installedAddGameError')), 'danger');" },
+    { name: 'submitAdd', source: addGame, snippet: "toast(libraryErrorText(err, msg('games.installedAddGameError')), 'danger');" },
     { name: 'play', source: game, snippet: "toast(libraryErrorText(err, msg('games.errorPlayFailed')), 'danger');" },
     { name: 'findGames', source: page, snippet: "toast(sourceErrorText(err, msg('games.installedScanError')), 'danger');" },
     { name: 'chooseExecutable', source: page, snippet: "toast(libraryErrorText(err, msg('games.installedChooseExeError')), 'danger');" },

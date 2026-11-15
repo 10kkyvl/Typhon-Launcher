@@ -21,7 +21,6 @@
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
-  import Modal from '../../lib/components/Modal.svelte';
   import RemoveGameModal from '../../lib/components/RemoveGameModal.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import SearchInput from '../../lib/components/SearchInput.svelte';
@@ -29,8 +28,6 @@
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { inWails } from '../../lib/services/backend';
   import {
-    addGame,
-    selectExecutable,
     selectGameExecutable,
     setExecutable,
     type LibraryGame,
@@ -55,6 +52,7 @@
   import { msg } from '../../lib/i18n';
   import { sourceErrorText } from '../../lib/sources/sourceErrors';
   import { coverFor, heroFor, libraryErrorText, play, sizeLabel, stop, updateLabel, type Sort } from './installedGame';
+  import InstalledAddGame from './InstalledAddGame.svelte';
   import InstalledStorage from './InstalledStorage.svelte';
 
   const sortLabels: Record<Sort, string> = {
@@ -112,24 +110,12 @@
     loadArt($installedGames.map((game) => game.canonicalGameId).filter((cid): cid is string => Boolean(cid)));
   });
 
-  let addOpen = $state(false);
-  let newExecutable = $state('');
-  let newTitle = $state('');
-  let adding = $state(false);
-
-  function titleFromPath(path: string) {
-    const base = path.split(/[\\/]/).pop() ?? '';
-    return base.replace(/\.exe$/i, '').replace(/[_.-]+/g, ' ').trim();
-  }
-
   function openAddDialog() {
     if (!inWails) {
       toast(msg('games.installedAddDesktopOnly'));
       return;
     }
-    newExecutable = '';
-    newTitle = '';
-    addOpen = true;
+    addGameDialog?.show();
   }
 
   $effect(() => {
@@ -157,32 +143,6 @@
       return;
     }
     imageOpen = true;
-  }
-
-  async function browseExecutable() {
-    try {
-      const path = await selectExecutable(msg('games.installedSelectExeDialog'));
-      if (path) {
-        newExecutable = path;
-        if (!newTitle.trim()) newTitle = titleFromPath(path);
-      }
-    } catch {
-      toast(msg('games.installedOpenDialogError'), 'danger');
-    }
-  }
-
-  async function submitAdd() {
-    if (!newExecutable.trim()) return;
-    adding = true;
-    try {
-      const game = await addGame(newExecutable.trim(), newTitle.trim());
-      toast(msg('games.installedGameAddedToast', { title: game.title }), 'success');
-      addOpen = false;
-    } catch (err) {
-      toast(libraryErrorText(err, msg('games.installedAddGameError')), 'danger');
-    } finally {
-      adding = false;
-    }
   }
 
   async function openInstallDir(game: LibraryGame) {
@@ -288,6 +248,8 @@
   }
 
   let librarySetupOpen = $state(false);
+
+  let addGameDialog = $state<InstalledAddGame | undefined>(undefined);
 
   const uid = $props.id();
 </script>
@@ -519,27 +481,7 @@
     />
   {/if}
 
-  <Modal dismissible={!adding} bind:open={addOpen} title={msg('games.installedAddGameModalTitle')}>
-    <div class="form">
-      <!-- Browse stands beside the field, outside its label: the field is named by the label alone. -->
-      <div class="field">
-        <label class="field-label" for="{uid}-executable">{msg('games.executableLabel')}</label>
-        <div class="field-row">
-          <input id="{uid}-executable" class="input" type="text" placeholder="C:\Games\Game\game.exe" bind:value={newExecutable} />
-          <Button onclick={browseExecutable}>{msg('games.installedBrowseButton')}</Button>
-        </div>
-      </div>
-      <label class="field">
-        <span class="field-label">{msg('games.installedTitleFieldLabel')}</span>
-        <input class="input" type="text" placeholder={msg('games.installedTitlePlaceholder')} bind:value={newTitle} />
-      </label>
-      <p class="form-hint">{msg('games.installedFolderAutoHint')}</p>
-    </div>
-    {#snippet footer()}
-      <Button disabled={adding} onclick={() => (addOpen = false)}>{msg('common.cancel')}</Button>
-      <Button variant="primary" busy={adding} disabled={!newExecutable.trim() && !adding} onclick={submitAdd}>{msg('common.add')}</Button>
-    {/snippet}
-  </Modal>
+  <InstalledAddGame bind:this={addGameDialog} {uid} />
 </Page>
 
 <style>
@@ -765,34 +707,6 @@
 
   .count {
     margin-top: var(--space-5);
-    font-size: var(--font-xs);
-    color: var(--text-3);
-  }
-
-  .form {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-  }
-
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-  }
-
-  .field-label {
-    font-size: var(--font-sm);
-    font-weight: 500;
-    color: var(--text-2);
-  }
-
-  .field-row {
-    display: flex;
-    gap: 0.8rem;
-  }
-
-  .form-hint {
     font-size: var(--font-xs);
     color: var(--text-3);
   }
