@@ -41,15 +41,15 @@
     return { cover: own?.cover || (own?.heroIsPoster ? own.hero : '') || fallback, fallback };
   }
 
-  // Whether each slide's game stands on the stage with wide art. "Not known yet" counts as none: the
-  // art store has no entry for a game it has not answered for, which for a game with no art at all
-  // lasts, so the slide shows its cover and gives way to the stage once the wide art is known. The
-  // block's height does not depend on it, so nothing below moves.
+  // The games known to have no wide art: only their slides show the cover. An answer not known yet is
+  // short and most games have wide art, so meanwhile the slide shows its words alone, as on the stage,
+  // and the words do not move when the answer comes. Wide art a later fetch brings drops the cover; the
+  // block's controls stay mounted.
   // Keyed on the ids as a string: an update that keeps the games subscribes to nothing again.
   const slideIds = $derived(entries.map((entry) => entry.id).join('\n'));
-  const wide = $derived.by(() => {
+  const noWide = $derived.by(() => {
     const ids = slideIds ? slideIds.split('\n') : [];
-    return derived(ids.map(stageWide), (answers) => new Set(ids.filter((_, index) => answers[index].state === 'yes')));
+    return derived(ids.map(stageWide), (answers) => new Set(ids.filter((_, index) => answers[index].state === 'no')));
   });
 
   function slideLine(entry: LibraryEntry): string {
@@ -72,7 +72,7 @@
     entries.map((entry) => ({
       id: entry.id,
       title: entry.title,
-      staged: $wide.has(entry.id),
+      staged: !$noWide.has(entry.id),
       art: slideArt(entry),
       artSeed: entry.catalogId ?? entry.id,
       line: slideLine(entry),

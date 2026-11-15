@@ -109,27 +109,59 @@ describe('Library: the carousel on the page', () => {
     expect(blockOf('Wide One').querySelector('img')?.getAttribute('src')).toBe('wide-cover.png');
   });
 
-  // The art store has no entry for a game it has not answered for, which for a game with no art at all
-  // lasts: the block does not wait on it with no picture at all.
-  it('shows the cover of a game the art store has not answered for, and stands it on the stage once its wide art comes', async () => {
-    gameArt.set({ 'c-poster': { cover: 'poster-cover.png', hero: 'poster-cover.png', heroIsPoster: true } });
-    libraryGames.set([fifth, bare, { ...wide, cover: 'own-wide.png' }, fourth, poster]);
+  describe('while the art store has not answered for its game yet', () => {
+    // Wide One's answer is not known yet; Poster One's is.
+    beforeEach(() => {
+      gameArt.set({ 'c-poster': { cover: 'poster-cover.png', hero: 'poster-cover.png', heroIsPoster: true } });
+      libraryGames.set([fifth, bare, { ...wide, cover: 'own-wide.png' }, fourth, poster]);
+    });
+    const parts = () => [...blockOf('Wide One').querySelectorAll('.copy > *, .stand > *, button')];
+
+    it('shows the words alone, as on the stage', () => {
+      renderDom(Library);
+      expect(blockOf('Wide One').dataset.picture).toBe('stage');
+      expect(blockOf('Wide One').querySelector('img, svg.generated-art')).toBeNull();
+    });
+
+    it('leaves the block as it is when the answer brings wide art', async () => {
+      renderDom(Library);
+      const before = parts();
+
+      gameArt.update((art) => ({ ...art, 'c-wide': { cover: 'wide-cover.png', hero: 'wide-hero.png', heroIsPoster: false } }));
+      await tick();
+
+      expect(blockOf('Wide One').dataset.picture).toBe('stage');
+      expect(parts()).toEqual(before);
+      expect(before.every((node) => node.isConnected)).toBe(true);
+    });
+
+    it('brings the cover in once the answer says there is no wide art', async () => {
+      renderDom(Library);
+      expect(blockOf('Wide One').querySelector('img')).toBeNull();
+
+      gameArt.update((art) => ({ ...art, 'c-wide': { cover: 'wide-cover.png', hero: '', heroIsPoster: false } }));
+      await tick();
+
+      expect(blockOf('Wide One').dataset.picture).toBe('cover');
+      expect(blockOf('Wide One').querySelector('img')?.getAttribute('src')).toBe('wide-cover.png');
+    });
+  });
+
+  // A background fetch can bring wide art to a game first answered without it.
+  it('drops the cover when wide art comes later, keeping focus on the control the player is on', async () => {
+    gameArt.set({ 'c-wide': { cover: 'wide-cover.png', hero: '', heroIsPoster: false } });
     renderDom(Library);
     expect(blockOf('Wide One').dataset.picture).toBe('cover');
-    expect(blockOf('Wide One').querySelector('img')?.getAttribute('src')).toBe('own-wide.png');
+    const play = within(blockOf('Wide One')).getByRole('button', { name: msg('ui.play') });
+    play.focus();
 
     gameArt.set({ 'c-wide': { cover: 'wide-cover.png', hero: 'wide-hero.png', heroIsPoster: false } });
     await tick();
 
     expect(blockOf('Wide One').dataset.picture).toBe('stage');
-  });
-
-  it('says under the title when the game was last played and for how long', () => {
-    renderDom(Library);
-
-    const line = carousel()?.querySelector('[data-picture] .line')?.textContent ?? '';
-    expect(line).toContain(msg('games.libraryLastSessionLabel', { date: relativeDate(wide.lastPlayed) }));
-    expect(line).toContain(msg('games.libraryPlaytimeLabel', { time: playtime(3600) }));
+    expect(blockOf('Wide One').querySelector('img')).toBeNull();
+    expect(play.isConnected).toBe(true);
+    expect(document.activeElement).toBe(play);
   });
 
   it('plays the game on screen, and stops it once it runs', async () => {

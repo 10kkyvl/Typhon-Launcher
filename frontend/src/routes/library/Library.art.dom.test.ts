@@ -66,6 +66,8 @@ afterEach(() => {
 describe('Library: one generated picture per game', () => {
   it('the card, the row and the slide of a game without art draw the picture of its catalog id', async () => {
     libraryGames.set([played('g-hades', 'Hades', 9, { canonicalGameId: 'c-hades' })]);
+    // The art store has answered: no picture (until it answers, the slide shows its words alone).
+    gameArt.set({ 'c-hades': { cover: '', hero: '', heroIsPoster: false } });
     const seeded = renderDom(GameCard, { id: 'another-id', title: 'Hades', artSeed: 'c-hades' }).container;
     renderDom(Library);
     const card = scene(itemOf('Hades'));
