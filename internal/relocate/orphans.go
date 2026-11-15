@@ -25,6 +25,10 @@ type OrphanedCopy struct {
 func (s *Service) markOrphaned(jobID string) {
 	if _, err := s.transition(jobID, StageFailed, func(j *Job) {
 		j.Error = ErrGameRemoved.Error()
+		j.OrphanedAt = j.Stage
+		if j.Stage == StageFailed {
+			j.OrphanedAt = j.FailedAt
+		}
 		j.FailedAt = ""
 		j.Orphaned = true
 	}); err != nil {
@@ -55,11 +59,17 @@ func (s *Service) recoverOrphan(job Job) {
 }
 
 // orphanCopy is the folder of an orphaned move that is on disk and claimed by
-// no card: the staging folder before the commit, the target after it. The
-// source is not one: it is the player's own folder, kept or deleted by the
-// player's removal.
+// no card: the staging folder before the commit, the target after it, and at
+// the cleanup also the old folder. Only the cleanup proves the repoint landed:
+// the old folder is then the launcher's leftover copy the cleanup was to
+// delete. Up to the repoint stage the card may still have named the old
+// folder, so it is the player's own, kept or deleted by the player's removal.
 func orphanCopy(job Job, games []library.Game) (string, error) {
-	for _, path := range []string{job.Staging, job.Target} {
+	paths := []string{job.Staging, job.Target}
+	if job.OrphanedAt == StageCleanup {
+		paths = append(paths, job.Source)
+	}
+	for _, path := range paths {
 		if path == "" {
 			continue
 		}

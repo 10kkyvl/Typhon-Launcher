@@ -139,3 +139,68 @@ func TestOrphanedStagingIsListedOnlyAsAnOrphanedCopy(t *testing.T) {
 		})
 	}
 }
+
+// At the cleanup the card names the target and the old folder is the copy the
+// cleanup was to delete: once the target is gone too, it is the copy left. Up
+// to the repoint the card may still have named the old folder, which is then
+// the player's own, kept or deleted by the player's removal, and never listed.
+func TestOrphanedMoveListsTheOldFolderOnlyAtTheCleanup(t *testing.T) {
+	cases := []struct {
+		name     string
+		stage    Stage
+		failedAt Stage
+		listed   bool
+	}{
+		{"cleanup", StageCleanup, "", true},
+		{"failed cleanup", StageFailed, StageCleanup, true},
+		{"repoint", StageRepoint, "", false},
+		{"failed repoint", StageFailed, StageRepoint, false},
+		{"commit", StageCommit, "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			lib := newTestLibrary(t)
+			game, src := addTestGame(t, lib)
+			target := filepath.Join(t.TempDir(), "Game")
+			if err := lib.RemoveGame(game.ID); err != nil {
+				t.Fatal(err)
+			}
+			job := Job{ID: "j1", Scope: ScopeGame, Stage: tc.stage, FailedAt: tc.failedAt, GameID: game.ID, Title: "Game", Source: src, Target: target}
+			if tc.stage == StageCommit {
+				job.Staging = target + stagingSuffix
+			}
+			s := newRecoverTestService(t, job)
+			s.lib = lib
+
+			s.recoverAll(context.Background())
+
+			if job := s.soleJob(t); !job.Orphaned {
+				t.Fatalf("job = %+v, want it kept as an orphan", job)
+			}
+			copies, err := s.OrphanedCopies()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !tc.listed {
+				if len(copies) != 0 {
+					t.Fatalf("OrphanedCopies = %+v, want none: the player's own folder is no copy of the move", copies)
+				}
+				s.recoverAll(context.Background())
+				if jobs := s.List(); len(jobs) != 0 {
+					t.Fatalf("jobs = %+v, want the entry dropped", jobs)
+				}
+				return
+			}
+			if len(copies) != 1 || !samePathT(copies[0].Path, src) {
+				t.Fatalf("OrphanedCopies = %+v, want the old folder %s", copies, src)
+			}
+			if err := os.RemoveAll(src); err != nil {
+				t.Fatal(err)
+			}
+			s.recoverAll(context.Background())
+			if jobs := s.List(); len(jobs) != 0 {
+				t.Fatalf("job kept after its last copy is gone: %+v", jobs)
+			}
+		})
+	}
+}
