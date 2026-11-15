@@ -46,6 +46,9 @@ var (
 	errGameMoving         = uierr.New("install.game_moving", "игра переносится на другой диск, удалить её можно после переноса")
 	errFolderShared       = uierr.New("install.folder_shared", "в папке игры лежит другая игра библиотеки, её файлы удалились бы вместе с этой")
 	errFolderChanged      = uierr.New("install.folder_changed", "папка игры изменилась, пока готовилось удаление, повторите удаление")
+	// The uninstaller runs for every removal of its game, "remove from the
+	// library" included, so this refusal cannot advise that.
+	errFolderSharedUninstaller = uierr.New("install.folder_shared_uninstaller", "в папке игры лежит другая игра библиотеки, а деинсталлятор этой игры может удалить всю папку: сначала уберите другую игру из библиотеки")
 )
 
 type RemovalInfo struct {
@@ -179,7 +182,7 @@ func (s *Service) RemoveGame(gameID string, opts RemoveOptions) error {
 	if deleteFiles || plan.method == RemovalInstaller {
 		actsOn = game.InstallDir
 	}
-	release, err := s.reserveRemoval(gameID, actsOn)
+	release, err := s.reserveRemoval(gameID, actsOn, plan.method == RemovalInstaller)
 	if err != nil {
 		return err
 	}
@@ -269,7 +272,7 @@ func (s *Service) RemoveGame(gameID string, opts RemoveOptions) error {
 // part of it: it asks this service's installs and the update service before
 // the hold, so an install or update that starts after that answer is not
 // excluded by the hold.
-func (s *Service) reserveRemoval(gameID, dir string) (func(), error) {
+func (s *Service) reserveRemoval(gameID, dir string, uninstaller bool) (func(), error) {
 	release, err := s.library.BeginRemoval(gameID, dir)
 	switch {
 	case err == nil:
@@ -278,6 +281,8 @@ func (s *Service) reserveRemoval(gameID, dir string) (func(), error) {
 		return nil, fmt.Errorf("%w: %w", errFolderChanged, err)
 	case errors.Is(err, library.ErrGameRelocating), errors.Is(err, library.ErrGameMoving):
 		return nil, fmt.Errorf("%w: %w", errGameMoving, err)
+	case errors.Is(err, library.ErrFolderShared) && uninstaller:
+		return nil, fmt.Errorf("%w: %w", errFolderSharedUninstaller, err)
 	case errors.Is(err, library.ErrFolderShared):
 		return nil, fmt.Errorf("%w: %w", errFolderShared, err)
 	case errors.Is(err, library.ErrRelocateGameRunning):

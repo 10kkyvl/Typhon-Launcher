@@ -369,8 +369,15 @@ var uninstallerRuns = []struct {
 	{"remove the card", RemoveOptions{}},
 }
 
+// The uninstaller runs for every removal of such a game, so the refusal has a
+// code of its own: its text cannot advise "remove from the library only",
+// which would run the same uninstaller.
 func TestUninstallerRefusedInAFolderAnotherGameShares(t *testing.T) {
-	for _, tc := range uninstallerRuns {
+	runs := append([]struct {
+		name string
+		opts RemoveOptions
+	}{{"delete the files", RemoveOptions{DeleteFiles: true}}}, uninstallerRuns...)
+	for _, tc := range runs {
 		t.Run(tc.name, func(t *testing.T) {
 			r := newSharedRig(t)
 			dir := filepath.Join(t.TempDir(), "RepackX")
@@ -388,8 +395,8 @@ func TestUninstallerRefusedInAFolderAnotherGameShares(t *testing.T) {
 
 			err := r.s.RemoveGame(a.ID, tc.opts)
 
-			if code := uierr.Code(err); code != "install.folder_shared" {
-				t.Fatalf("RemoveGame = %q (%v), want install.folder_shared", code, err)
+			if code := uierr.Code(err); code != "install.folder_shared_uninstaller" {
+				t.Fatalf("RemoveGame = %q (%v), want install.folder_shared_uninstaller", code, err)
 			}
 			if calls := runner.calls(); len(calls) != 0 {
 				t.Fatalf("the uninstaller ran in a folder another game shares: %+v", calls)
