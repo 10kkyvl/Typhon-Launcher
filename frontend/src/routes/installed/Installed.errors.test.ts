@@ -11,6 +11,7 @@ describe('Installed error toasts', () => {
     expect(Object.keys(screen).sort()).toEqual([
       './Installed.svelte',
       './InstalledAddGame.svelte',
+      './InstalledGrid.svelte',
       './InstalledList.svelte',
       './InstalledStorage.svelte',
       './InstalledToolbar.svelte',
