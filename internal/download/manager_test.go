@@ -18,6 +18,7 @@ type fakeTorrent struct {
 	mu           sync.Mutex
 	size         int64
 	done         int64
+	sent         int64
 	downloading  bool
 	uploading    bool
 	dropped      bool
@@ -82,7 +83,7 @@ func (f *fakeTorrent) filePaths(_ string) []string {
 func (f *fakeTorrent) stats() engineStats {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return engineStats{downloaded: f.done, seeders: 1, peers: 3}
+	return engineStats{downloaded: f.done, uploaded: f.sent, seeders: 1, peers: 3}
 }
 
 func (f *fakeTorrent) verify(ctx context.Context) error {

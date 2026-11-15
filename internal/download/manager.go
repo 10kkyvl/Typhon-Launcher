@@ -1967,7 +1967,7 @@ func (m *Manager) sample(ctx context.Context, now time.Time) {
 		before := *d
 		m.updateLocked(d, eng, now)
 		if d.Status == StatusDownloading && d.Total > 0 && d.Downloaded >= d.Total && m.jobs[d.ID] == nil && selectedHashed(d, eng) {
-			d.Status = StatusVerifying
+			m.idleLocked(d, StatusVerifying)
 			id, dest := d.ID, d.Destination
 			files := append([]FileState(nil), d.Files...)
 			emit(eventUpdated, snapshot(d))
