@@ -10,7 +10,6 @@
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import RemoveGameModal from '../../lib/components/RemoveGameModal.svelte';
   import Spinner from '../../lib/components/Spinner.svelte';
-  import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import {
     countUnknown,
     sizeSorted,
@@ -25,10 +24,9 @@
   import { createDiskUsagePage } from './diskUsagePage.svelte';
   import DownloadsSection from './DownloadsSection.svelte';
   import GamesSection from './GamesSection.svelte';
+  import GroupsSection from './GroupsSection.svelte';
   import LeftoversSection from './LeftoversSection.svelte';
-  import UsageRow from './UsageRow.svelte';
-  import UsageSection from './UsageSection.svelte';
-  import { size, total } from './usageSizes';
+  import { total } from './usageSizes';
 
   const page = createDiskUsagePage();
   let sort = $state<GameSort>('size');
@@ -134,51 +132,9 @@
 
       <LeftoversSection {leftovers} totalBytes={page.report.totals.leftoversBytes} ondelete={page.askLeftover} />
 
-      <UsageSection
-        title={msg('diskusage.screenshotsTitle')}
-        hint={msg('diskusage.screenshotsHint')}
-        total={total(page.report.totals.screenshotsBytes, screenshots.some((s) => s.sizeUnknown))}
-        empty={screenshots.length === 0}
-        emptyText={msg('diskusage.screenshotsEmpty')}
-      >
-        {#each screenshots as group (group.gameId)}
-          <UsageRow title={group.title} path={msg('diskusage.screenshotsCount', { count: group.count })} size={size(group)}>
-            {#snippet badges()}
-              {#if !group.inLibrary}
-                <StatusBadge kind="warning" label={msg('diskusage.leftLibrary')} plain />
-              {/if}
-            {/snippet}
-            {#snippet actions()}
-              <Button size="sm" variant="danger" onclick={() => page.askScreenshots(group)}>
-                {msg('diskusage.deleteAll')}
-              </Button>
-            {/snippet}
-          </UsageRow>
-        {/each}
-      </UsageSection>
+      <GroupsSection kind="screenshots" groups={screenshots} totalBytes={page.report.totals.screenshotsBytes} ondelete={page.askScreenshots} />
 
-      <UsageSection
-        title={msg('diskusage.snapshotsTitle')}
-        hint={msg('diskusage.snapshotsHint')}
-        total={total(page.report.totals.snapshotsBytes, snapshots.some((s) => s.sizeUnknown))}
-        empty={snapshots.length === 0}
-        emptyText={msg('diskusage.snapshotsEmpty')}
-      >
-        {#each snapshots as group (group.gameId)}
-          <UsageRow title={group.title} path={msg('diskusage.snapshotsCount', { count: group.count })} size={size(group)}>
-            {#snippet badges()}
-              {#if !group.inLibrary}
-                <StatusBadge kind="warning" label={msg('diskusage.leftLibrary')} plain />
-              {/if}
-            {/snippet}
-            {#snippet actions()}
-              <Button size="sm" variant="danger" onclick={() => page.askSnapshots(group)}>
-                {msg('diskusage.deleteAll')}
-              </Button>
-            {/snippet}
-          </UsageRow>
-        {/each}
-      </UsageSection>
+      <GroupsSection kind="snapshots" groups={snapshots} totalBytes={page.report.totals.snapshotsBytes} ondelete={page.askSnapshots} />
     {/if}
   {/if}
 
