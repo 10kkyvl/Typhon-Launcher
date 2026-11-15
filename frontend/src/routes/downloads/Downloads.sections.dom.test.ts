@@ -64,21 +64,17 @@ afterEach(() => {
 });
 
 describe('Downloads: the sections', () => {
-  it('stand in order: active, failed, queue, completed', () => {
-    downloads.set([
-      download({ id: 'c', name: 'Done One' }),
-      download({ id: 'q', name: 'Queued One', status: 'queued', progress: 0 }),
-      download({ id: 'f', name: 'Failed One', status: 'failed', error: 'x' }),
-      download({ id: 'a', name: 'Active One', status: 'downloading', progress: 0.5, completedAt: null }),
-    ]);
+  it('stand in order: active, installing, failed, queue, completed', () => {
+    everySection();
     renderDom(Downloads);
 
     const titles = screen.getAllByRole('heading', { level: 2 }).map((h) => h.firstChild?.textContent?.trim());
     expect(titles).toEqual([
       msg('transfers.downloadsActiveHeading'),
+      msg('downloads.done.installingTitle'),
       msg('transfers.downloadsFailedHeading'),
       msg('transfers.downloadsQueueHeading'),
-      msg('transfers.downloadsCompletedHeading'),
+      msg('downloads.done.title'),
     ]);
   });
 

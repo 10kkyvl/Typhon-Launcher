@@ -16,7 +16,7 @@
   import { navigate } from '../../lib/stores/router';
   import { installErrorText } from '../../lib/install/installErrors';
   import { msg, t } from '../../lib/i18n';
-  import CompletedList from './CompletedList.svelte';
+  import CompletedSection from './CompletedSection.svelte';
   import DownloadsActions from './DownloadsActions.svelte';
   import DownloadsAnnouncer from './DownloadsAnnouncer.svelte';
   import DownloadsSection from './DownloadsSection.svelte';
@@ -24,6 +24,7 @@
   import FailedList from './FailedList.svelte';
   import PlayThrottleBanner from './PlayThrottleBanner.svelte';
   import QueueList from './QueueList.svelte';
+  import { pageHeading } from './rowFocus';
   import { downloadsSectionIds } from './sections';
 
   let addOpen = $state(false);
@@ -134,14 +135,13 @@
     </EmptyState>
   {/if}
 
-  <!-- Finished downloads still installing take a part of their own here, between the active panels and
-       the failed list; until it comes, CompletedList below shows them with the rest. -->
+  <CompletedSection part="installing" onopen={openDetails} oninstall={openInstall} away={pageHeading} />
 
   <FailedList onopen={openDetails} />
 
   <QueueList />
 
-  <CompletedList onopen={openDetails} oninstall={openInstall} />
+  <CompletedSection part="completed" onopen={openDetails} oninstall={openInstall} away={pageHeading} />
 
   <DownloadsAnnouncer bind:this={announcer} />
 

@@ -103,7 +103,7 @@ describe('Downloads: no active download', () => {
 
 describe('Downloads: links', () => {
   // Decision В13: a finished download's name leads to its game's page; its details are in its row's menu
-  // (CompletedList.dom.test.ts).
+  // (Downloads.completed.dom.test.ts).
   it('the name of a finished download is a text link to its game’s page', async () => {
     downloads.set([download({ id: 'c', name: 'Done One', origin: { gameId: 'g-done' } })]);
     const { user } = renderDom(Downloads);

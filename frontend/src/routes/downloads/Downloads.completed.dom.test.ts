@@ -32,7 +32,7 @@ import { installations } from '../../lib/stores/install';
 import { toasts } from '../../lib/stores/toasts';
 import { renderDom } from '../../lib/testing/dom';
 import { bytesSize, clockTime, longDate, speedBytes } from '../../lib/utils/format';
-import CompletedList from './CompletedList.svelte';
+import CompletedSection from './CompletedSection.svelte';
 
 const MB = 1024 * 1024;
 // 18:06 on 28 October 2026, local time.
@@ -105,13 +105,19 @@ function libraryGame(patch: Partial<LibraryGame> = {}): LibraryGame {
 
 let heading: HTMLElement;
 
+/** The two completed sections as the page mounts them, "Installing" above "Completed", with one set of handlers. */
 function show(list: Download[], installs: Installation[] = [], props: { onannounce?: (text: string) => void } = {}) {
   downloads.set(list);
   installations.set(installs);
   const onopen = vi.fn();
   const oninstall = vi.fn();
-  const view = renderDom(CompletedList, { onopen, oninstall, away: () => heading, ...props });
-  return { ...view, onopen, oninstall };
+  const installing = renderDom(CompletedSection, { part: 'installing', onopen, oninstall, away: () => heading, ...props });
+  const done = renderDom(CompletedSection, { part: 'completed', onopen, oninstall, away: () => heading, ...props });
+  const unmount = () => {
+    installing.unmount();
+    done.unmount();
+  };
+  return { user: done.user, unmount, onopen, oninstall };
 }
 
 /** The row of a download, found by its title. */
