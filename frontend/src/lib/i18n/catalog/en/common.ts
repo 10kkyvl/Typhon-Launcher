@@ -20,4 +20,16 @@ export const common: Record<CommonKey, Message> = {
   'common.select': 'Select',
   'common.loading': 'Loading',
   'common.error': 'Error',
+  // 7-A kit
+  'common.meterAlt': '{label}: {details}',
+  'common.meterPart': '{name}: {size}',
+  'common.meterAtLeast': 'at least {size}',
+  'common.meterSizeUnknown': 'size unknown',
+  'common.meterFree': 'Free',
+  'common.meterFreeOf': '{free} free of {total}',
+  'common.meterTotal': '{total} in total',
+  'common.meterTotalUnknown': 'Total size unknown',
+  'common.chartPeriod': 'Period',
+  'common.chartValue': 'Value',
+  // /7-A kit
 };

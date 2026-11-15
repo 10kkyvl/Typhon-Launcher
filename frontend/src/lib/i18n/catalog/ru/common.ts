@@ -17,6 +17,18 @@ export const common = {
   'common.select': 'Выбрать',
   'common.loading': 'Загрузка',
   'common.error': 'Ошибка',
+  // 7-A kit
+  'common.meterAlt': '{label}: {details}',
+  'common.meterPart': '{name}: {size}',
+  'common.meterAtLeast': 'не меньше {size}',
+  'common.meterSizeUnknown': 'размер неизвестен',
+  'common.meterFree': 'Свободно',
+  'common.meterFreeOf': 'Свободно {free} из {total}',
+  'common.meterTotal': 'Всего {total}',
+  'common.meterTotalUnknown': 'Общий объём неизвестен',
+  'common.chartPeriod': 'Период',
+  'common.chartValue': 'Значение',
+  // /7-A kit
 } as const;
 
 export type CommonKey = keyof typeof common;
