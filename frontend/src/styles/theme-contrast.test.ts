@@ -551,8 +551,9 @@ describe('what stands over a game picture', () => {
 
 // The stage (ShellBackdrop) is a game's own picture across the top of the window, under the title bar and
 // the top bar, whose glyphs are the theme's text colour. Its one shade, over the top bar's row, is fixed
-// (shell.css) and a theme cannot change it, so it takes the page colour: on a light theme it lightens the
-// picture under dark glyphs instead of darkening it. Measured over the two extremes a picture brings.
+// (shell.css) and a theme cannot change it, so it takes the theme's text plate (--scrim-copy): on a light
+// theme it lightens the picture under dark glyphs instead of darkening it, and a dark theme on a mid-grey
+// page still gets a dark one. Measured over the two extremes a picture brings.
 describe("the stage's top bar scrim", () => {
   const shell = fs.readFileSync(new URL('./shell.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
   const scrim = /--stage-scrim:\s*([^;]+);/.exec(shell)?.[1]?.trim() ?? '';
@@ -560,16 +561,19 @@ describe("the stage's top bar scrim", () => {
   // The strongest stop is the first: the gradient only fades from there.
   const strongest = /^([\s\S]*?)\s+\S+$/.exec(topLevel(inner)[1] ?? '')?.[1] ?? '';
 
-  it('is a gradient from the top whose strongest stop is drawn in the page colour', () => {
+  it('is a gradient from the top whose strongest stop is drawn in the theme\'s text plate', () => {
     expect(topLevel(inner)[0]).toBe('180deg');
-    expect(strongest).toMatch(/var\(--bg\)/);
+    expect(strongest).toMatch(/var\(--scrim-copy\)/);
   });
 
-  for (const id of ['dark', 'light', 'contrast', 'blush']) {
+  const darkFork = (): Record<string, string> => ({ ...(builtIns().find((p) => p.id === 'dark') as Preset).tokens, '--bg': '#333333', '--text': '#dddddd' });
+  const cases: [string, () => Record<string, string>][] = [
+    ...['dark', 'light', 'contrast', 'blush'].map((id): [string, () => Record<string, string>] => [id, () => (builtIns().find((p) => p.id === id) as Preset).tokens]),
+    ['a dark fork on a #333 page with #ddd words', darkFork],
+  ];
+  for (const [id, tokensOf] of cases) {
     it(`${id}: the text colour stands out more on the scrim than on the bare picture at its worst`, () => {
-      const preset = builtIns().find((p) => p.id === id);
-      expect(preset, id).toBeDefined();
-      const tokens = (preset as Preset).tokens;
+      const tokens = tokensOf();
       const shade = cssColor(strongest, tokens);
       const text = paint(tokens, '--text', BLACK);
       const bare = Math.min(...[BLACK, WHITE].map((art) => ratio(text, art)));

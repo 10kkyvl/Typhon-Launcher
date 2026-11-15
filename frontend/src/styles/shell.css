@@ -46,8 +46,10 @@
   --stage-focus-x: 62%;
   --stage-focus-y: 26%;
   /* Only the top bar's row is shaded on the picture itself; words bring their own plate (.stage-copy).
-     In the page colour, so a light theme's dark glyphs get a light ground (theme-contrast.test.ts). */
-  --stage-scrim: linear-gradient(180deg, color-mix(in srgb, var(--bg) 46%, transparent) 0, color-mix(in srgb, var(--bg) 16%, transparent) 8rem, transparent 14rem);
+     Drawn from the theme's plate, so a light theme's dark glyphs get a light ground and a dark theme a
+     dark one whatever its page colour (theme-contrast.test.ts); on the dark plate it is the prototype's
+     0.46 to 0.16. */
+  --stage-scrim: linear-gradient(180deg, color-mix(in srgb, var(--scrim-copy) 70%, transparent) 0, color-mix(in srgb, var(--scrim-copy) 24%, transparent) 8rem, transparent 14rem);
   /* Stops of a mask gradient (only the alpha counts): two steps on the way out, so an edge eases. */
   --mask-solid: #000;
   --mask-most: rgba(0, 0, 0, 0.7);

@@ -27,7 +27,7 @@ describe('the stage and its text plate keep the prototype values', () => {
       '--stage-tail': '6vh',
       '--stage-focus-x': '62%',
       '--stage-focus-y': '26%',
-      '--stage-scrim': 'linear-gradient(180deg, color-mix(in srgb, var(--bg) 46%, transparent) 0, color-mix(in srgb, var(--bg) 16%, transparent) 8rem, transparent 14rem)',
+      '--stage-scrim': 'linear-gradient(180deg, color-mix(in srgb, var(--scrim-copy) 70%, transparent) 0, color-mix(in srgb, var(--scrim-copy) 24%, transparent) 8rem, transparent 14rem)',
       '--mask-solid': '#000',
       '--mask-most': 'rgba(0, 0, 0, 0.7)',
       '--mask-some': 'rgba(0, 0, 0, 0.28)',
