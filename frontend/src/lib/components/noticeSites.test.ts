@@ -297,6 +297,11 @@ const SITES: Record<string, Site[]> = {
     // A known hang of one emulator on this platform, shown with its row.
     ['warning', false],
   ],
+  'routes/settings/GeneralTab.svelte': [
+    // A failed overlay inside the row's status region, which says the change itself.
+    ['danger', false],
+    ['danger', true],
+  ],
   'routes/settings/LibraryFoldersRow.svelte': [['danger', true]],
   'routes/settings/LibraryLocationRow.svelte': [['danger', true]],
   'routes/settings/NetworkSettingsCard.svelte': [
@@ -305,11 +310,6 @@ const SITES: Record<string, Site[]> = {
     // What the proxy mode turns off, shown with the proxy fields.
     ['warning', false],
     ['dynamic', true],
-    ['danger', true],
-  ],
-  'routes/settings/Settings.svelte': [
-    // A failed overlay inside the row's status region, which says the change itself.
-    ['danger', false],
     ['danger', true],
   ],
   'routes/support/NewTicket.svelte': [

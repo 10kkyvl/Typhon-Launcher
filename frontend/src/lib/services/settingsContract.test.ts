@@ -83,7 +83,7 @@ function optionIds(source: string, from: string, to: string): string[] {
   return [...source.slice(start, end).matchAll(/\bid:\s*'([^']*)'/g)].map((match) => match[1]);
 }
 
-const settingsPage = frontendSources['routes/settings/Settings.svelte'];
+const generalTab = frontendSources['routes/settings/GeneralTab.svelte'];
 const downloadsTab = frontendSources['routes/settings/DownloadsTab.svelte'];
 const networkCard = frontendSources['routes/settings/NetworkSettingsCard.svelte'];
 
@@ -142,7 +142,7 @@ describe('settings choices', () => {
   });
 
   it('offers every interface language Go accepts, and no other', () => {
-    const ids = optionIds(settingsPage, "value={$settings?.language ?? 'system'}", 'onchange');
+    const ids = optionIds(generalTab, "value={$settings?.language ?? 'system'}", 'onchange');
     expect(ids.sort()).toEqual(constantsWithPrefix('Language').map(String).sort());
   });
 
