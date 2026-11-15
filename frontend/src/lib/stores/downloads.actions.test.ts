@@ -205,6 +205,21 @@ describe('a second call while the first is in flight', () => {
     expect(services.cancelDownload).toHaveBeenCalledWith('d1');
   });
 
+  it('toasts a shared failure once, when either caller asked for it', async () => {
+    const { store, services, toast } = await load([makeDownload()]);
+    const call = deferred<void>();
+    vi.mocked(services.cancelDownload).mockReturnValueOnce(call.promise);
+
+    const quiet = store.requestDownloadAction('d1', 'cancel', { toast: false });
+    const loud = store.requestDownloadAction('d1', 'cancel');
+    call.reject(new Error('typhon:download.not_found'));
+
+    expect((await quiet).ok).toBe(false);
+    expect((await loud).ok).toBe(false);
+    expect(toast).toHaveBeenCalledTimes(1);
+    expect(services.cancelDownload).toHaveBeenCalledTimes(1);
+  });
+
   it('is sent again after a failed first call', async () => {
     const { store, services } = await load([makeDownload()]);
     vi.mocked(services.pauseDownload).mockRejectedValueOnce(new Error('typhon:download.unavailable'));
@@ -212,6 +227,95 @@ describe('a second call while the first is in flight', () => {
     expect((await store.requestDownloadAction('d1', 'pause', { toast: false })).ok).toBe(false);
     expect(await store.requestDownloadAction('d1', 'pause')).toEqual({ ok: true });
     expect(services.pauseDownload).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('moves are not shared: each is sent after the one before it', () => {
+  it('sends two steps up as two calls, the second after the first answered, each with its outcome', async () => {
+    const { store, services } = await load([makeDownload()]);
+    const firstCall = deferred<void>();
+    const secondCall = deferred<void>();
+    vi.mocked(services.moveDownloadUp).mockReturnValueOnce(firstCall.promise).mockReturnValueOnce(secondCall.promise);
+
+    const first = store.requestDownloadAction('d1', 'moveUp');
+    const second = store.requestDownloadAction('d1', 'moveUp');
+    await Promise.resolve();
+    expect(services.moveDownloadUp).toHaveBeenCalledTimes(1);
+
+    firstCall.resolve();
+    expect(await first).toEqual({ ok: true });
+    await vi.waitFor(() => expect(services.moveDownloadUp).toHaveBeenCalledTimes(2));
+    secondCall.reject(new Error('typhon:download.unavailable'));
+
+    expect(await second).toMatchObject({ ok: false, code: 'download.unavailable' });
+  });
+
+  it('sends a move to another place made during a move to a place, in order', async () => {
+    const { store, services } = await load([makeDownload()]);
+    const firstCall = deferred<void>();
+    vi.mocked(services.moveDownloadTo).mockReturnValueOnce(firstCall.promise);
+
+    const first = store.requestDownloadAction('d1', 'moveTo', { position: 3 });
+    const second = store.requestDownloadAction('d1', 'moveTo', { position: 0 });
+    const step = store.moveDown('d1');
+    await Promise.resolve();
+    expect(vi.mocked(services.moveDownloadTo).mock.calls).toEqual([['d1', 3]]);
+    firstCall.resolve();
+
+    expect(await first).toEqual({ ok: true });
+    expect(await second).toEqual({ ok: true });
+    await step;
+    expect(vi.mocked(services.moveDownloadTo).mock.calls).toEqual([
+      ['d1', 3],
+      ['d1', 0],
+    ]);
+    expect(services.moveDownloadDown).toHaveBeenCalledWith('d1');
+    expect(vi.mocked(services.moveDownloadDown).mock.invocationCallOrder[0]).toBeGreaterThan(
+      vi.mocked(services.moveDownloadTo).mock.invocationCallOrder[1],
+    );
+  });
+
+  it('a failed first move does not swallow the second, and each caller sees its own outcome and toast', async () => {
+    const { store, services, toast } = await load([makeDownload()]);
+    const firstCall = deferred<void>();
+    vi.mocked(services.moveDownloadUp).mockReturnValueOnce(firstCall.promise);
+
+    const first = store.requestDownloadAction('d1', 'moveUp', { toast: false });
+    const second = store.requestDownloadAction('d1', 'moveUp');
+    firstCall.reject(new Error('typhon:download.unavailable'));
+
+    expect(await first).toMatchObject({ ok: false, code: 'download.unavailable' });
+    expect(await second).toEqual({ ok: true });
+    expect(services.moveDownloadUp).toHaveBeenCalledTimes(2);
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it('toasts the second move\'s failure when its caller asked, though the first did not', async () => {
+    const { store, services, toast } = await load([makeDownload()]);
+    vi.mocked(services.moveDownloadDown)
+      .mockRejectedValueOnce(new Error('typhon:download.unavailable'))
+      .mockRejectedValueOnce(new Error('typhon:download.not_found'));
+
+    const first = store.requestDownloadAction('d1', 'moveDown', { toast: false });
+    const second = store.requestDownloadAction('d1', 'moveDown');
+    await first;
+    await second;
+
+    expect(toast).toHaveBeenCalledTimes(1);
+    expect(toast).toHaveBeenCalledWith('text of Error: typhon:download.not_found', 'danger');
+  });
+
+  it('moves of two downloads do not wait for each other', async () => {
+    const { store, services } = await load([makeDownload(), makeDownload({ id: 'd2' })]);
+    const held = deferred<void>();
+    vi.mocked(services.moveDownloadUp).mockReturnValueOnce(held.promise);
+
+    const first = store.requestDownloadAction('d1', 'moveUp');
+    expect(await store.requestDownloadAction('d2', 'moveUp')).toEqual({ ok: true });
+    held.resolve();
+    await first;
+
+    expect(vi.mocked(services.moveDownloadUp).mock.calls).toEqual([['d1'], ['d2']]);
   });
 });
 

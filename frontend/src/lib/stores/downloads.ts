@@ -300,12 +300,27 @@ const requests: Record<DownloadAction, (id: string, position: number | undefined
   remove: (id) => removeDownload(id),
 };
 
-const inFlight = new Map<string, Promise<DownloadActionOutcome>>();
+const moves: ReadonlySet<DownloadAction> = new Set<DownloadAction>(['moveUp', 'moveDown', 'moveTo']);
+
+/** A call shared by every caller asking the same while it runs; `toast` is whether any of them wants one. */
+interface SharedCall {
+  outcome: Promise<DownloadActionOutcome>;
+  toast: boolean;
+}
+
+const inFlight = new Map<string, SharedCall>();
+
+/** The last move asked for each download, which the next one waits for. */
+const lastMove = new Map<string, Promise<DownloadActionOutcome>>();
 
 /**
  * Asks Go for `action` on download `id` and says how it ended. A failure is toasted unless the caller
- * shows it itself (`toast: false`, such as a confirm dialog with its own error line). While a call
- * for the same download and action runs, a second one is not sent: it gets the first one's outcome.
+ * shows it itself (`toast: false`, such as a confirm dialog with its own error line).
+ *
+ * While a call for the same download and action runs, a second one is not sent: it gets the first
+ * one's outcome, and the failure is toasted once if either caller asked for it. Moves are the
+ * exception, since two steps are two places: every move is sent, after the download's move before it
+ * has answered, and each caller gets the outcome and the toast of its own call.
  */
 export function requestDownloadAction(
   id: string,
@@ -322,27 +337,46 @@ export function requestDownloadAction(
   action: DownloadAction,
   options: { toast?: boolean; position?: number } = {},
 ): Promise<DownloadActionOutcome> {
+  const wantsToast = options.toast ?? true;
+  const send = () => perform(id, action, options.position);
+  if (moves.has(action)) {
+    const before = lastMove.get(id);
+    const call = (before ? before.then(send, send) : send()).then((outcome) => {
+      if (lastMove.get(id) === call) lastMove.delete(id);
+      return reported(outcome, wantsToast);
+    });
+    lastMove.set(id, call);
+    return call;
+  }
   const key = `${action}:${id}`;
   const running = inFlight.get(key);
-  if (running) return running;
-  const call = perform(id, action, options.position, options.toast ?? true).finally(() => inFlight.delete(key));
-  inFlight.set(key, call);
-  return call;
+  if (running) {
+    running.toast ||= wantsToast;
+    return running.outcome;
+  }
+  const shared: SharedCall = {
+    toast: wantsToast,
+    outcome: send().then((outcome) => {
+      inFlight.delete(key);
+      return reported(outcome, shared.toast);
+    }),
+  };
+  inFlight.set(key, shared);
+  return shared.outcome;
 }
 
-async function perform(
-  id: string,
-  action: DownloadAction,
-  position: number | undefined,
-  toastFailure: boolean,
-): Promise<DownloadActionOutcome> {
+async function perform(id: string, action: DownloadAction, position: number | undefined): Promise<DownloadActionOutcome> {
   try {
     await requests[action](id, position);
   } catch (error) {
-    if (toastFailure) toast(installErrorText(error), 'danger');
     return { ok: false, code: errorCode(error), error };
   }
   return { ok: true };
+}
+
+function reported(outcome: DownloadActionOutcome, wantsToast: boolean): DownloadActionOutcome {
+  if (!outcome.ok && wantsToast) toast(installErrorText(outcome.error), 'danger');
+  return outcome;
 }
 
 export async function pause(id: string): Promise<void> {
