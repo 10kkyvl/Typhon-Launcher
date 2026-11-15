@@ -33,13 +33,6 @@ func freeOf(bytes uint64) func(string) (platform.StorageInfo, error) {
 	return func(string) (platform.StorageInfo, error) { return platform.StorageInfo{FreeBytes: bytes}, nil }
 }
 
-type deleteFails struct {
-	*fakeDownloads
-	err error
-}
-
-func (d *deleteFails) DeleteData(string) error { return d.err }
-
 func TestPortableMoveRenamesOnTheSameVolume(t *testing.T) {
 	cases := []struct {
 		name        string
@@ -326,7 +319,10 @@ func TestPortableMoveDownloadRecordCleanup(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			r := newRig(t)
 			r.s.sameVolume = sameVolumes
-			r.s.downloads = &deleteFails{fakeDownloads: r.downloads, err: tc.deleteErr}
+			// The fake is told to fail, not swapped: the running service already reads its downloads.
+			r.downloads.mu.Lock()
+			r.downloads.deleteErr = tc.deleteErr
+			r.downloads.mu.Unlock()
 			root := t.TempDir()
 			portableSource(t, root, "Game")
 			r.download("d1", "Game", root)
