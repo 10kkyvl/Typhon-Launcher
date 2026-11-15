@@ -351,6 +351,40 @@ func (f *failingLibrary) RemoveGame(id string) error {
 	return f.fakeRegistrar.RemoveGame(id)
 }
 
+// An entry stays in the journal after its folder is gone when its drop or its
+// library half failed. A later removal of another game from the same folder
+// stages under a name of its own: run under the stale entry, a kill would
+// settle the other card, or this one the other way.
+func TestRemovalNeverStagesUnderAJournaledName(t *testing.T) {
+	dir := t.TempDir()
+	lib := &failingLibrary{fakeRegistrar: &fakeRegistrar{}, fail: true}
+	r := newJournalRig(t, dir, lib)
+	game := gameDir(t, "Game")
+	lib.put(library.Game{ID: "a", Title: "a", InstallDir: game, Uninstalled: true})
+	putOwnedCard(t, lib.fakeRegistrar, "b", game)
+	writeJournal(t, dir, journalEntry(t, game+removingSuffix, "a", game, true))
+
+	if err := r.s.RemoveGame("b", RemoveOptions{DeleteFiles: true}); !errors.Is(err, errLibrarySave) {
+		t.Fatalf("RemoveGame = %v, want the library failure", err)
+	}
+	if !missing(t, game) {
+		t.Fatal("files still there")
+	}
+	requireJournalHolds(t, dir, "a", "b")
+
+	lib.fail = false
+	next := newJournalRig(t, dir, lib)
+	next.restart(t)
+	if _, err := lib.Find("b"); !errors.Is(err, errFakeNoGame) {
+		t.Fatalf("card b after the next start = %v, want it removed as its removal asked", err)
+	}
+	card, err := lib.Find("a")
+	if err != nil || !card.Uninstalled || card.InstallDir != game {
+		t.Fatalf("card a = %+v, %v; want it left as it was", card, err)
+	}
+	requireJournalClear(t, dir)
+}
+
 func TestLibraryHalfOfARemovalIsRetriedAtTheNextStart(t *testing.T) {
 	dir := t.TempDir()
 	lib := &failingLibrary{fakeRegistrar: &fakeRegistrar{}, fail: true}

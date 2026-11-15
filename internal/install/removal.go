@@ -462,12 +462,8 @@ func (s *Service) stageForRemoval(entry removalEntry) (string, error) {
 	if missing {
 		return "", nil
 	}
-	staged, err := freeRemovalPath(dir)
+	staged, err := s.removals.claim(entry)
 	if err != nil {
-		return "", err
-	}
-	entry.Path = staged
-	if err := s.removals.add(entry); err != nil {
 		return "", err
 	}
 	if err := os.Rename(dir, staged); err != nil {
@@ -480,12 +476,17 @@ func (s *Service) stageForRemoval(entry removalEntry) (string, error) {
 	return staged, nil
 }
 
-func freeRemovalPath(dir string) (string, error) {
+// freeRemovalPath picks the first staged name for dir that is neither on disk
+// nor taken.
+func freeRemovalPath(dir string, taken func(string) bool) (string, error) {
 	base := dir + removingSuffix
 	for attempt := 0; attempt < maxSuffixAttempt; attempt++ {
 		candidate := base
 		if attempt > 0 {
 			candidate = fmt.Sprintf("%s-%d", base, attempt)
+		}
+		if taken(candidate) {
+			continue
 		}
 		missing, err := dirMissing(candidate)
 		if err != nil {

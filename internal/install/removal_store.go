@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"typhon/internal/platform"
 	"typhon/internal/storage"
 	"typhon/internal/uierr"
 )
@@ -99,17 +100,52 @@ func (s *removalStore) loadLocked() error {
 	return nil
 }
 
+// claim journals entry under the first staged name for its folder that is
+// neither on disk nor in the journal, and returns that name. A journaled name
+// may belong to a removal whose library half is still to be finished at the
+// next start: staging under it would finish that removal under this one's game
+// and choice, or this one under that one's.
+func (s *removalStore) claim(entry removalEntry) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.loadLocked(); err != nil {
+		return "", err
+	}
+	staged, err := freeRemovalPath(entry.InstallDir, s.journaledLocked)
+	if err != nil {
+		return "", err
+	}
+	entry.Path = staged
+	if err := s.appendLocked(entry); err != nil {
+		return "", err
+	}
+	return staged, nil
+}
+
 func (s *removalStore) add(entry removalEntry) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := s.loadLocked(); err != nil {
 		return err
 	}
+	if s.journaledLocked(entry.Path) {
+		return fmt.Errorf("removal %s is already journaled", entry.Path)
+	}
+	return s.appendLocked(entry)
+}
+
+// journaledLocked compares as the file system does: on Windows two cards may
+// spell one folder in different case.
+func (s *removalStore) journaledLocked(path string) bool {
 	for _, existing := range s.entries {
-		if existing.Path == entry.Path {
-			return nil
+		if platform.SamePath(existing.Path, path) {
+			return true
 		}
 	}
+	return false
+}
+
+func (s *removalStore) appendLocked(entry removalEntry) error {
 	previous := s.entries
 	s.entries = append(append([]removalEntry(nil), s.entries...), entry)
 	if err := s.saveLocked(); err != nil {
