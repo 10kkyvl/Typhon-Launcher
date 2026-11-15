@@ -45,6 +45,7 @@ var (
 	errNothingToRemove    = uierr.New("install.nothing_to_remove", "удалять с диска нечего")
 	errGameMoving         = uierr.New("install.game_moving", "игра переносится на другой диск, удалить её можно после переноса")
 	errFolderShared       = uierr.New("install.folder_shared", "в папке игры лежит другая игра библиотеки, её файлы удалились бы вместе с этой")
+	errFolderChanged      = uierr.New("install.folder_changed", "папка игры изменилась, пока готовилось удаление, повторите удаление")
 )
 
 type RemovalInfo struct {
@@ -273,6 +274,8 @@ func (s *Service) reserveRemoval(gameID, dir string) (func(), error) {
 	switch {
 	case err == nil:
 		return release, nil
+	case errors.Is(err, library.ErrFolderChanged):
+		return nil, fmt.Errorf("%w: %w", errFolderChanged, err)
 	case errors.Is(err, library.ErrGameRelocating), errors.Is(err, library.ErrGameMoving):
 		return nil, fmt.Errorf("%w: %w", errGameMoving, err)
 	case errors.Is(err, library.ErrFolderShared):

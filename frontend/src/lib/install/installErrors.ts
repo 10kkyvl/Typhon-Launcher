@@ -81,6 +81,7 @@ export const REASONS: Record<string, MessageKey> = {
   'install.unrecognized_source': 'errInstall.installUnrecognizedSource',
   'install.unsafe_removal': 'errInstall.installUnsafeRemoval',
   'install.folder_shared': 'errInstall.installFolderShared',
+  'install.folder_changed': 'errInstall.installFolderChanged',
   'install.game_moving': 'errInstall.installGameMoving',
   'install.removals_unreadable': 'errInstall.installRemovalsUnreadable',
   'install.unsupported_archive': 'errInstall.installUnsupportedArchive',

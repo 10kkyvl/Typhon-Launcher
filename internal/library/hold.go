@@ -15,6 +15,10 @@ var (
 	ErrFolderBusy   = uierr.New("library.folder_busy", "эту папку сейчас удаляют или переносят вместе с другой игрой")
 	ErrGameRemoving = uierr.New("library.removing", "игра удаляется")
 	ErrGameMoving   = uierr.New("library.moving", "игра переносится на другой диск, дождитесь конца переноса")
+	// ErrFolderChanged: the card names another folder than the one the caller
+	// decided on, and no move holds it now (a move ended, or an install or a
+	// scan gave the card another folder). Asking again sees the new folder.
+	ErrFolderChanged = fmt.Errorf("%w: the card names another folder", errInstallationChanged)
 )
 
 // FolderNeighbour is another library game whose files lie in, around or at a
@@ -127,10 +131,11 @@ func (s *Service) reservedLocked(id string) error {
 // starts, moves or is already being removed. dir is the folder the removal acts
 // on, by deleting it or by running an uninstaller in it, and empty when it
 // touches no file; with a dir it also fails while another card's files share
-// that folder, and with ErrGameMoving when the card no longer names dir (a
-// move ended since the caller looked). Until release, PlayGame and the move
-// reservations refuse the game, and no card may be added inside dir. The
-// checks and the reservation are one critical section of s.mu.
+// that folder, and with ErrFolderChanged when the card no longer names dir (a
+// move ended, or an install or a scan rebound the card, since the caller
+// looked); a move in progress is ErrGameRelocating. Until release, PlayGame
+// and the move reservations refuse the game, and no card may be added inside
+// dir. The checks and the reservation are one critical section of s.mu.
 //
 //wails:ignore
 func (s *Service) BeginRemoval(id, dir string) (func(), error) {
@@ -148,7 +153,7 @@ func (s *Service) BeginRemoval(id, dir string) (func(), error) {
 	}
 	if dir != "" {
 		if !platform.SamePath(game.InstallDir, dir) {
-			return nil, fmt.Errorf("%w: %s", ErrGameMoving, game.InstallDir)
+			return nil, fmt.Errorf("%w: %s", ErrFolderChanged, game.InstallDir)
 		}
 		if neighbours := s.neighboursLocked(id, dir); len(neighbours) > 0 {
 			return nil, sharedError(neighbours)

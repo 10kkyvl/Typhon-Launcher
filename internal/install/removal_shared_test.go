@@ -460,51 +460,71 @@ func TestRemovalHoldsTheFolderUntilTheCardIsSettled(t *testing.T) {
 	}
 }
 
-// A move of the game ends between the snapshot the removal plans with and its
-// reservation: the removal acts on the folder it reserved or on none, never on
-// one the card no longer names while it settles the card.
+// The card's folder changes between the snapshot the removal plans with and
+// its reservation, by a move that ended or by a scan that found the game
+// elsewhere: the removal acts on the folder it reserved or on none, never on
+// one the card no longer names while it settles the card. Nothing moves the
+// game any more, so the refusal says the folder changed, not that it moves.
 func TestRemovalActsOnTheFolderItPlannedWith(t *testing.T) {
-	for _, keep := range []bool{false, true} {
-		t.Run(fmt.Sprintf("keep=%v", keep), func(t *testing.T) {
-			r := newSharedRig(t)
-			oldDir := filepath.Join(t.TempDir(), "Game")
-			newDir := filepath.Join(t.TempDir(), "Game")
-			a := r.ownedGame(t, oldDir, "Game", library.Uninstall{})
-			var once sync.Once
-			r.s.SetBusyCheck(func(string) bool {
-				once.Do(func() {
-					release, err := r.lib.BeginMove(a.ID)
-					if err != nil {
-						t.Error(err)
-						return
-					}
-					defer release()
-					if err := os.Rename(oldDir, newDir); err != nil {
-						t.Error(err)
-					}
-					if _, err := r.lib.Relocate(a.ID, newDir); err != nil {
-						t.Error(err)
-					}
-				})
-				return false
-			})
-
-			err := r.s.RemoveGame(a.ID, RemoveOptions{DeleteFiles: true, KeepInLibrary: keep})
-
-			if code := uierr.Code(err); code != "install.game_moving" {
-				t.Fatalf("RemoveGame after the folder changed = %q (%v), want install.game_moving", code, err)
+	changes := map[string]func(t *testing.T, r sharedRig, id, oldDir, newDir string){
+		"a move ended": func(t *testing.T, r sharedRig, id, oldDir, newDir string) {
+			release, err := r.lib.BeginMove(id)
+			if err != nil {
+				t.Error(err)
+				return
 			}
-			if missing(t, filepath.Join(newDir, "Game.exe")) {
-				t.Fatal("files at the new folder deleted")
+			defer release()
+			if err := os.Rename(oldDir, newDir); err != nil {
+				t.Error(err)
 			}
-			card, err := r.lib.Find(a.ID)
-			if err != nil || card.Uninstalled || !samePath(card.InstallDir, newDir) {
-				t.Fatalf("card = %+v, %v; want it installed at %s", card, err, newDir)
+			if _, err := r.lib.Relocate(id, newDir); err != nil {
+				t.Error(err)
 			}
-			requireNoRemovalStaging(t, newDir)
-			requireJournalEmpty(t, r.s)
-		})
+		},
+		"a scan found it elsewhere": func(t *testing.T, r sharedRig, id, _, newDir string) {
+			exe := filepath.Join(newDir, "Game.exe")
+			mkFile(t, exe, 64)
+			if _, _, err := r.lib.ApplyDiscovered(library.Discovered{GameID: id, Title: "Game", Executable: exe, InstallDir: newDir}); err != nil {
+				t.Error(err)
+			}
+		},
 	}
+	for cause, change := range changes {
+		for _, keep := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/keep=%v", cause, keep), func(t *testing.T) {
+				r := newSharedRig(t)
+				oldDir := filepath.Join(t.TempDir(), "Game")
+				newDir := filepath.Join(t.TempDir(), "Game")
+				a := r.ownedGame(t, oldDir, "Game", library.Uninstall{})
+				var once sync.Once
+				r.s.SetBusyCheck(func(string) bool {
+					once.Do(func() { change(t, r, a.ID, oldDir, newDir) })
+					return false
+				})
+
+				err := r.s.RemoveGame(a.ID, RemoveOptions{DeleteFiles: true, KeepInLibrary: keep})
+
+				requireFolderChangedRefusal(t, r, a.ID, err, oldDir, newDir)
+			})
+		}
+	}
+}
+
+func requireFolderChangedRefusal(t *testing.T, r sharedRig, id string, err error, oldDir, newDir string) {
+	t.Helper()
+	if code := uierr.Code(err); code != "install.folder_changed" {
+		t.Fatalf("RemoveGame after the folder changed = %q (%v), want install.folder_changed", code, err)
+	}
+	if missing(t, filepath.Join(newDir, "Game.exe")) {
+		t.Fatal("files at the new folder deleted")
+	}
+	card, err := r.lib.Find(id)
+	if err != nil || card.Uninstalled || !samePath(card.InstallDir, newDir) {
+		t.Fatalf("card = %+v, %v; want it installed at %s", card, err, newDir)
+	}
+	requireNoRemovalStaging(t, oldDir)
+	requireNoRemovalStaging(t, newDir)
+	requireJournalEmpty(t, r.s)
 }
 
 func TestRemovalReleasesTheGameWhenItFails(t *testing.T) {
