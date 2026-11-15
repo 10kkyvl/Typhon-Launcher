@@ -44,6 +44,9 @@ export interface MeterPart {
   /** A caller's segment, or a part the meter adds: `other` for space no segment accounts for, `more`
    *  for the segments folded together. */
   kind: 'segment' | 'other' | 'more';
+  /** Unique in the model, for keyed lists: the key, made unique when two segments share one. */
+  id: string;
+  /** The caller's key, reported by a pick; METER_OTHER or METER_MORE for a part the meter adds. */
   key: string;
   /** The caller's label; empty for a part the meter adds, which DiskMeter names from the catalogue. */
   label: string;
@@ -99,7 +102,7 @@ export function meter(segments: readonly MeterSegment[], total: number | null | 
     const size = sizes[index];
     const bytes = bytesOf(size);
     const share = known !== null && bytes > 0 ? bytes / against : 0;
-    return { kind: 'segment', key: segment.key, label: segment.label, tone: segment.tone, size, share };
+    return { kind: 'segment', id: segment.key, key: segment.key, label: segment.label, tone: segment.tone, size, share };
   });
 
   // The track is the free space: what neither the segments nor the measured free space account for
@@ -107,7 +110,7 @@ export function meter(segments: readonly MeterSegment[], total: number | null | 
   const gap = known !== null && !overflow && free !== undefined && measurable(free) ? known - used - free : 0;
   if (gap > 0) {
     const exact = sizes.every((size) => size.kind === 'exact');
-    parts.push({ kind: 'other', key: METER_OTHER, label: '', tone: 'other', size: exact ? { kind: 'exact', bytes: gap } : { kind: 'unknown' }, share: gap / against });
+    parts.push({ kind: 'other', id: METER_OTHER, key: METER_OTHER, label: '', tone: 'other', size: exact ? { kind: 'exact', bytes: gap } : { kind: 'unknown' }, share: gap / against });
   }
 
   let freeSize: MeterSize | null;
@@ -116,7 +119,7 @@ export function meter(segments: readonly MeterSegment[], total: number | null | 
   else if (known !== null && parts.every((part) => part.size.kind === 'exact')) freeSize = { kind: 'exact', bytes: known - used };
   else freeSize = null;
 
-  const listed = folded(parts, width);
+  const listed = unique(folded(parts, width));
   return { total: known, parts: listed, drawn: listed.filter((part) => part.share > 0), free: freeSize, overflow };
 }
 
@@ -150,6 +153,7 @@ function folded(parts: MeterPart[], width: number): MeterPart[] {
   const inFold = parts.filter((part) => rest.has(part));
   const more: MeterPart = {
     kind: 'more',
+    id: METER_MORE,
     key: METER_MORE,
     label: '',
     tone: 'more',
@@ -159,6 +163,18 @@ function folded(parts: MeterPart[], width: number): MeterPart[] {
   };
   const segments = parts.filter((part) => part.kind === 'segment' && !rest.has(part));
   return [...segments, more, ...parts.filter((part) => part.kind !== 'segment')];
+}
+
+// Two segments under one key would break a keyed list: bad input is shown as given, not thrown, so a
+// repeated id gets the count of its earlier uses (the key a pick reports stays the caller's).
+function unique(parts: MeterPart[]): MeterPart[] {
+  const taken = new Set<string>();
+  return parts.map((part) => {
+    let id = part.id;
+    for (let uses = 1; taken.has(id); uses += 1) id = `${part.id}#${uses}`;
+    taken.add(id);
+    return id === part.id ? part : { ...part, id };
+  });
 }
 
 /** A size in words: the formatted bytes, a lower bound, or that it is unknown. */

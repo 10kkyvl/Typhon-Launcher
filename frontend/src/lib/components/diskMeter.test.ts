@@ -131,6 +131,16 @@ describe('the disk meter model', () => {
     expect(meter([seg('a', 10)], 100, -1).free).toEqual({ kind: 'unknown' });
   });
 
+  it('gives segments that share a key ids of their own, and keeps the key a pick reports', () => {
+    const m = meter([seg('a', 1), seg('a', 2), seg('a#1', 3), seg('a', 4)], 100);
+    expect(m.parts.map((p) => [p.id, p.key])).toEqual([
+      ['a', 'a'],
+      ['a#1', 'a'],
+      ['a#1#1', 'a#1'],
+      ['a#2', 'a'],
+    ]);
+  });
+
   it('has nothing to draw with no segments, and all of the total is free', () => {
     const m = meter([], 100);
     expect(m.drawn).toEqual([]);

@@ -4,6 +4,7 @@
   import { nextIndex } from '../utils/roving';
   import { METER_WIDTH, meter, sizeWords, type MeterPart, type MeterSegment, type MeterSize } from './diskMeter';
   import Reading from './Reading.svelte';
+  import TextLink from './TextLink.svelte';
   import Tooltip from './Tooltip.svelte';
 
   /**
@@ -18,7 +19,8 @@
    * which every tone stands out from (theme-contrast.test.ts), so adjacency never rests on colour.
    * Segments too small to be drawn at their size at the narrowest width the form is laid out for
    * (diskMeter.ts::METER_WIDTH) are folded into one "N more" part, said with their count and size; it
-   * is a button only with `onpickfolded`, which gets the keys folded into it. The track clips as a last
+   * is a button only with `onpickfolded`, which gets the keys folded into it. A segment the bar does not
+   * draw (zero or unknown size) is picked from its name in the legend. The track clips as a last
    * guard for a place narrower than that.
    *
    * `compact`: the bar and one line (free of total), for a settings row.
@@ -98,7 +100,7 @@
 <div class="meter" class:compact>
   {#if onpick && model.drawn.length > 0}
     <div class="bar" role="group" aria-label={alt} bind:this={bar}>
-      {#each model.drawn as part (part.key)}
+      {#each model.drawn as part (part.id)}
         {@const index = pickable.indexOf(part)}
         {#if index >= 0}
           <Tooltip text={partText(part)} describe={false}>
@@ -121,7 +123,7 @@
     </div>
   {:else}
     <div class="bar" role="img" aria-label={alt} data-state={model.total === null ? 'unknown' : undefined}>
-      {#each model.drawn as part (part.key)}
+      {#each model.drawn as part (part.id)}
         <span class="part" data-tone={part.tone} style:flex-basis="{part.share * 100}%"></span>
       {/each}
     </div>
@@ -131,10 +133,14 @@
     <p class="line"><Reading text={joined(tail)} /></p>
   {:else}
     <ul class="legend">
-      {#each model.parts as part (part.key)}
+      {#each model.parts as part (part.id)}
         <li>
           <span class="swatch" data-tone={part.tone} class:hollow={part.size.kind === 'unknown'} aria-hidden="true"></span>
-          <span class="name">{nameOf(part)}</span>
+          {#if onpick && part.kind === 'segment' && part.share === 0}
+            <span class="name"><TextLink tone="muted" onclick={() => onpick(part.key)}>{nameOf(part)}</TextLink></span>
+          {:else}
+            <span class="name">{nameOf(part)}</span>
+          {/if}
           <span class="size"><Reading text={said(part.size)} /></span>
         </li>
       {/each}

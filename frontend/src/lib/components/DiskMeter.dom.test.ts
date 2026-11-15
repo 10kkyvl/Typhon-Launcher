@@ -1,3 +1,4 @@
+import { within } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 import { locale } from '../i18n';
 import { renderDom } from '../testing/dom';
@@ -127,6 +128,46 @@ describe('DiskMeter', () => {
     expect(legendLines(getByRole('list'))).toEqual(
       [`Игры ${bytesSize(600 * GB)}`, `Другие файлы ${bytesSize(100 * GB)}`, `Свободно ${bytesSize(300 * GB)}`, `Всего ${bytesSize(1000 * GB)}`].map(words),
     );
+  });
+
+  // Bad input is said, not thrown: two segments under one key are both drawn, listed and pickable.
+  it('draws and lists two segments that share a key, and reports that key for either', async () => {
+    const onpick = vi.fn();
+    const twice: MeterSegment[] = [
+      { key: 'dup', label: 'Первая', bytes: 10 * GB, tone: 'game' },
+      { key: 'dup', label: 'Вторая', bytes: 20 * GB, tone: 'game-2' },
+    ];
+    const { getAllByRole, getByRole, user } = renderDom(DiskMeter, { label: 'Диск', segments: twice, total: 100 * GB, onpick });
+    expect(legendLines(getByRole('list')).slice(0, 2)).toEqual([`Первая ${bytesSize(10 * GB)}`, `Вторая ${bytesSize(20 * GB)}`].map(words));
+    const buttons = getAllByRole('button');
+    expect(buttons.map((b) => b.getAttribute('aria-label'))).toEqual([`Первая: ${bytesSize(10 * GB)}`, `Вторая: ${bytesSize(20 * GB)}`]);
+    await user.click(buttons[1]);
+    expect(onpick).toHaveBeenCalledWith('dup');
+  });
+
+  describe('a segment the bar cannot draw', () => {
+    const SOME: MeterSegment[] = [
+      { key: 'big', label: 'Большая', bytes: 50 * GB, tone: 'game' },
+      { key: 'empty', label: 'Пустая', bytes: 0, tone: 'game-2' },
+      { key: 'unmeasured', label: 'Не измерена', bytes: 0, tone: 'game-3', sizeUnknown: true },
+    ];
+
+    it('is listed, and picked from the legend when the meter picks', async () => {
+      const onpick = vi.fn();
+      const { getByRole, user } = renderDom(DiskMeter, { label: 'Диск', segments: SOME, total: 100 * GB, onpick });
+      const legend = getByRole('list');
+      expect(within(legend).getAllByRole('button').map((b) => b.textContent?.trim())).toEqual(['Пустая', 'Не измерена']);
+      await user.click(within(legend).getByRole('button', { name: 'Не измерена' }));
+      expect(onpick).toHaveBeenCalledWith('unmeasured');
+      await user.click(within(legend).getByRole('button', { name: 'Пустая' }));
+      expect(onpick).toHaveBeenLastCalledWith('empty');
+    });
+
+    it('is plain text in the legend of a meter that does not pick', () => {
+      const { getByRole } = renderDom(DiskMeter, { label: 'Диск', segments: SOME, total: 100 * GB });
+      expect(within(getByRole('list')).queryAllByRole('button')).toEqual([]);
+      expect(legendLines(getByRole('list')).slice(1, 3)).toEqual(['Пустая', 'Не измерена'].map((name, i) => words(`${name} ${i === 0 ? bytesSize(0) : 'размер неизвестен'}`)));
+    });
   });
 
   describe('with more parts than the bar can draw truthfully', () => {
