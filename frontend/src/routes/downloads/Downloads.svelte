@@ -53,6 +53,7 @@
   import { bytesSize, clockTime, relativeDate, speedBytes } from '../../lib/utils/format';
   import { msg } from '../../lib/i18n';
   import DownloadsActions from './DownloadsActions.svelte';
+  import DownloadsSection from './DownloadsSection.svelte';
   import PlayThrottleBanner from './PlayThrottleBanner.svelte';
 
   const scheduleHeld = $derived($playThrottle.schedule?.blocked === true);
@@ -151,8 +152,7 @@
     <span class="sum dim">{msg('transfers.downloadsQueuedCount', { count: $queue.length })}</span>
   </div>
 
-  <section class="section">
-    <h2>{msg('transfers.downloadsActiveHeading')} <span class="count">{$active.length}</span></h2>
+  <DownloadsSection title={msg('transfers.downloadsActiveHeading')} count={$active.length}>
     {#if $active.length === 0}
       <EmptyState size="inline" title={msg('transfers.downloadsEmptyActiveTitle')} />
     {:else}
@@ -162,12 +162,11 @@
         {/each}
       </div>
     {/if}
-  </section>
+  </DownloadsSection>
   {/if}
 
   {#if $failed.length > 0}
-  <section class="section">
-    <h2>{msg('transfers.downloadsFailedHeading')} <span class="count">{$failed.length}</span></h2>
+  <DownloadsSection title={msg('transfers.downloadsFailedHeading')} count={$failed.length}>
     <div class="rows">
       {#each $failed as item (item.id)}
         <div class="row failed">
@@ -200,12 +199,11 @@
         </div>
       {/each}
     </div>
-  </section>
+  </DownloadsSection>
   {/if}
 
   {#if $queue.length > 0}
-  <section class="section">
-  <h2>{msg('transfers.downloadsQueueHeading')} <span class="count">{$queue.length}</span></h2>
+  <DownloadsSection title={msg('transfers.downloadsQueueHeading')} count={$queue.length}>
     <div class="rows">
       {#each $queue as q, i (q.id)}
         <div class="row">
@@ -260,12 +258,11 @@
         </div>
       {/each}
     </div>
-  </section>
+  </DownloadsSection>
   {/if}
 
   {#if $completed.length > 0}
-  <section class="section">
-    <h2>{msg('transfers.downloadsCompletedHeading')} <span class="count">{$completed.length}</span></h2>
+  <DownloadsSection title={msg('transfers.downloadsCompletedHeading')} count={$completed.length}>
     <div class="rows">
       {#each $completed as item (item.id)}
         {@const install = $installationsByDownload.get(item.id)}
@@ -329,7 +326,7 @@
         </div>
       {/each}
     </div>
-  </section>
+  </DownloadsSection>
   {/if}
 
   <p class="footer-hint">
@@ -389,26 +386,6 @@
     width: 1px;
     height: 1.8rem;
     background: var(--border-strong);
-  }
-
-  .section {
-    margin-bottom: var(--space-8);
-    max-width: 140rem;
-  }
-
-  .section h2 {
-    display: flex;
-    align-items: baseline;
-    gap: 0.8rem;
-    font-size: var(--font-lg);
-    margin-bottom: var(--space-3);
-  }
-
-  .count {
-    font-size: var(--font-sm);
-    font-weight: 500;
-    color: var(--text-3);
-    font-variant-numeric: tabular-nums;
   }
 
   .rows {
