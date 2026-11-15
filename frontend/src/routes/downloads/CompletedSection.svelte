@@ -8,8 +8,10 @@
   import { completed, requestDownloadAction } from '../../lib/stores/downloads';
   import { installationsByDownload } from '../../lib/stores/install';
   import { focusHandOff } from '../../lib/utils/focusHandOff';
+  import type { LeaveTicket } from '../../lib/components/downloadPanel';
   import CompletedRow from './CompletedRow.svelte';
   import { CLEAR_ASKS_ABOVE, canClear, completedKind, completedPart, type CompletedPart } from './completedRow';
+  import { handOffInView, pageHeading, pressed } from './rowFocus';
   import { downloadsSectionIds } from './sections';
 
   /**
@@ -17,25 +19,22 @@
    * runs or waits for the player) or "Completed" (the rest, with "Clear the list"). The page mounts
    * each where it wants it; a section with no download renders nothing.
    *
-   * Focus: when a row leaves under the player's press (Remove, a Retry that moves it to "Installing",
-   * Clear), focus goes to the same download where it went, else the row now in its place, else the one
-   * above, else this section's heading, else `away` (the page's heading). It waits for the row to leave:
-   * Go may answer before its event does.
+   * Focus: when a row leaves under the player's press (Remove, a Retry that moves it to "Installing"),
+   * it goes by the screen's rule (rowFocus.ts) to the same download where it went, else the row now in
+   * its place, else the one above, else this section's heading, else the page's. It waits for the row to
+   * leave: Go may answer before its event does.
    */
   let {
     part,
     onopen,
     oninstall,
     onannounce,
-    away,
   }: {
     part: CompletedPart;
     onopen: (id: string) => void;
     oninstall: (id: string) => void;
     /** Says what the player did, in the page's one polite live region. */
     onannounce?: (text: string) => void;
-    /** Where focus goes when nothing of this section is left to take it. */
-    away?: () => HTMLElement | null | undefined;
   } = $props();
 
   const uid = $props.id();
@@ -51,31 +50,8 @@
   );
   const clearable = $derived(rows.filter((row) => canClear(row.download, row.kind)).map((row) => row.download.id));
 
-  let list = $state<HTMLElement>();
-
-  const ROW = 'data-completed-row';
-  const rowElements = (root: ParentNode | undefined) => [...(root?.querySelectorAll<HTMLElement>(`[${ROW}]`) ?? [])];
-  const control = (row: HTMLElement, prefer: 'lead' | 'more') =>
-    row.querySelector<HTMLElement>(`[data-row-control="${prefer}"]`) ?? row.querySelector<HTMLElement>('[data-row-control="more"]');
-
-  function target(id: string, order: readonly string[]): HTMLElement | null | undefined {
-    const moved = rowElements(document).find((row) => row.getAttribute(ROW) === id);
-    if (moved) return control(moved, 'lead');
-    const shown = new Map(rowElements(list).map((row) => [row.getAttribute(ROW) ?? '', row]));
-    const at = order.indexOf(id);
-    const candidates = at < 0 ? [] : [...order.slice(at + 1), ...order.slice(0, at).reverse()];
-    for (const other of candidates) {
-      const row = shown.get(other);
-      if (row) return control(row, 'more');
-    }
-    const heading = document.getElementById(headingId);
-    if (heading?.isConnected) return heading;
-    return away?.();
-  }
-
   interface Leaving {
-    order: string[];
-    hand: ReturnType<typeof focusHandOff>;
+    ticket: LeaveTicket;
     armed: boolean;
   }
 
@@ -84,12 +60,13 @@
   let cleared: { hand: ReturnType<typeof focusHandOff>; ids: Set<string> } | null = null;
 
   function onleave(id: string) {
-    const entry: Leaving = { order: rows.map((row) => row.download.id), hand: focusHandOff(), armed: false };
+    const entry: Leaving = { ticket: pressed(id, { follow: 'first', prefer: '[data-row-control="more"]' }), armed: false };
     leaving.set(id, entry);
     return (ok: boolean) => {
       if (leaving.get(id) !== entry) return;
       if (!ok) {
         leaving.delete(id);
+        entry.ticket.drop();
         return;
       }
       entry.armed = true;
@@ -101,13 +78,13 @@
     for (const [id, entry] of leaving) {
       if (!entry.armed || present.has(id)) continue;
       leaving.delete(id);
-      void entry.hand(() => target(id, entry.order));
+      void entry.ticket.handOn();
     }
     if (cleared && [...cleared.ids].every((id) => !present.has(id))) {
       const { hand } = cleared;
       cleared = null;
       // The Clear button is still there with rows left; with none, the section went from under it.
-      if (present.size === 0) void hand(() => away?.());
+      if (present.size === 0) void handOffInView(hand, pageHeading);
     }
   }
 
@@ -193,7 +170,7 @@
       count={rows.length}
       actions={part === 'completed' ? clear : undefined}
     />
-    <ul class="rows" bind:this={list}>
+    <ul class="rows">
       {#each rows as row (row.download.id)}
         <CompletedRow
           download={row.download}
@@ -215,7 +192,7 @@
     onconfirm={clearNow}
     onclose={() => (confirmOpen = false)}
     errorText={(err) => installErrorText(err)}
-    returnFocus={() => clearButton() ?? away?.()}
+    returnFocus={() => clearButton() ?? pageHeading()}
   />
 {/if}
 

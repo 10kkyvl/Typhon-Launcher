@@ -191,7 +191,7 @@
   });
 </script>
 
-<li class="row" data-completed-row={id} data-kind={kind}>
+<li class="row" data-download-row={id} data-kind={kind}>
   <div class="cover">
     <GameLink id={gameId} name={name} repeat>
       <Artwork src={coverOf(download, $gameArt)} alt="" label={name} seed={download.origin.gameId || id} ratio="3 / 4" radius="var(--radius-sm)" />

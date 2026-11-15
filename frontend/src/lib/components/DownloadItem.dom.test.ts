@@ -366,6 +366,39 @@ describe('the panel of a download under way: focus stays where the player is (D-
     await waitFor(() => expect(screen.queryByRole('region', { name: 'Game One' })).toBeNull());
     await waitFor(() => expect(document.activeElement).toBe(within(panel('Game Two')).getByRole('button', { name: 'Pause “Game Two”' })));
   });
+
+  it('a resume Go answers before its event: focus waits for the panel to leave, then the panel now in its place', async () => {
+    let later = () => {};
+    vi.mocked(resumeDownload).mockImplementation(async (id) => {
+      later = () => goSets(id, { status: 'queued' });
+    });
+    const view = show([download({ status: 'paused' }), download({ id: 'd2', name: 'Game Two' })]);
+    const toggle = within(panel('Game One')).getByRole('button', { name: 'Resume “Game One”' });
+    toggle.focus();
+
+    await view.user.keyboard('{Enter}');
+    await waitFor(() => expect(toggle.hasAttribute('aria-busy')).toBe(false));
+    await new Promise((done) => setTimeout(done, 20));
+    expect(document.activeElement).toBe(toggle);
+    later();
+
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Game One' })).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(within(panel('Game Two')).getByRole('button', { name: 'Pause “Game Two”' })));
+  });
+
+  it('a resume whose event comes before Go’s answer hands focus on once the answer comes', async () => {
+    const call = deferred();
+    vi.mocked(resumeDownload).mockReturnValue(call.promise);
+    const view = show([download({ status: 'paused' }), download({ id: 'd2', name: 'Game Two' })]);
+    within(panel('Game One')).getByRole('button', { name: 'Resume “Game One”' }).focus();
+
+    await view.user.keyboard('{Enter}');
+    goSets('d1', { status: 'queued' });
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Game One' })).toBeNull());
+    call.resolve();
+
+    await waitFor(() => expect(document.activeElement).toBe(within(panel('Game Two')).getByRole('button', { name: 'Pause “Game Two”' })));
+  });
 });
 
 describe('the panel of a download under way: Cancel means Go’s Cancel and asks first (D-2, D-7)', () => {

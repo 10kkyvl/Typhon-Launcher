@@ -3,14 +3,34 @@ import type { Download } from '../services/downloads';
 import type { PlayThrottle } from '../services/playThrottle';
 import type { Settings } from '../services/settings';
 
-/** The attribute naming a panel's download (DownloadItem.svelte); focus is handed on by it, not by index. */
-export const PANEL_ATTR = 'data-download-panel';
-
-/** The attribute marking the controls a hand-off may land on inside a panel. */
-export const CONTROL_ATTR = 'data-panel-control';
-
-/** Which control of a panel takes focus: the lead button, or the "more" menu's, which every panel has. */
+/** Where a panel's leaving hand-off lands among its controls (`data-panel-control`). */
 export type PanelControl = 'lead' | 'more';
+
+/** The selector of a panel's control of `kind`, for a hand-off's `prefer`. */
+export const panelControl = (kind: PanelControl) => `[data-panel-control="${kind}"]`;
+
+/**
+ * How a press that may take its row away wants focus handed on: `prefer` the control (a selector) the
+ * row that takes focus offers it on, and whether the download's own row in another section takes it,
+ * before the rows around it (`first`) or only when none is left (`last`).
+ */
+export interface LeaveHow {
+  follow?: 'first' | 'last';
+  prefer?: string;
+}
+
+/** A press's hand-off, its row's place read at the press. */
+export interface LeaveTicket {
+  /** Where focus goes now by the screen's rule; for a dialog's `returnFocus`. */
+  target(): HTMLElement | null;
+  /** Hands focus on, if it fell, once the row has left. */
+  handOn(): Promise<void>;
+  /** The press failed: nothing to hand on. */
+  drop(): void;
+}
+
+/** The screen's rule for where focus goes when a row leaves (routes/downloads/rowFocus.ts), called at the press. */
+export type Leave = (id: string, how?: LeaveHow) => LeaveTicket;
 
 /** The action of the panel's one lead button, the first Go offers: "Download now", else Pause, else Resume. */
 export function leadAction(offers: readonly DownloadAction[]): 'downloadNow' | 'pause' | 'resume' | null {
@@ -24,39 +44,4 @@ export function leadAction(offers: readonly DownloadAction[]): 'downloadNow' | '
 export function speedLimit(settings: Pick<Settings, 'downloadRateLimit'> | null, throttle: Pick<PlayThrottle, 'mode' | 'downloadLimit'>): number {
   if (throttle.mode === 'limit') return Math.max(0, throttle.downloadLimit);
   return Math.max(0, settings?.downloadRateLimit ?? 0);
-}
-
-function panels(): HTMLElement[] {
-  return [...document.querySelectorAll<HTMLElement>(`[${PANEL_ATTR}]`)];
-}
-
-/** The ids of the panels on the page, in their order. */
-export function panelOrder(): string[] {
-  return panels().map((panel) => panel.getAttribute(PANEL_ATTR) ?? '');
-}
-
-function controlIn(panel: HTMLElement, prefer: PanelControl): HTMLElement | null {
-  return panel.querySelector<HTMLElement>(`[${CONTROL_ATTR}="${prefer}"]`) ?? panel.querySelector<HTMLElement>(`[${CONTROL_ATTR}="more"]`);
-}
-
-/**
- * Where focus goes when the panel of `id` lost it: the same panel when it `stays` (a download that came
- * back under a new node), else the panel now in its place, else the one above, else `away` (the page's
- * section heading or its own heading). `order` is the panels' order at the press.
- */
-export function handOffTarget(
-  order: readonly string[],
-  id: string,
-  options: { stays: boolean; prefer: PanelControl; away?: () => HTMLElement | null | undefined },
-): HTMLElement | null | undefined {
-  const shown = new Map(panels().map((panel) => [panel.getAttribute(PANEL_ATTR) ?? '', panel]));
-  const own = shown.get(id);
-  if (options.stays && own) return controlIn(own, options.prefer);
-  const at = order.indexOf(id);
-  const candidates = at < 0 ? [] : [...order.slice(at + 1), ...order.slice(0, at).reverse()];
-  for (const other of candidates) {
-    const panel = shown.get(other);
-    if (panel) return controlIn(panel, options.prefer);
-  }
-  return options.away?.();
 }

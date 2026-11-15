@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import { Ellipsis, Pause, Play } from '@lucide/svelte';
   import { t } from '../i18n';
   import { installErrorText } from '../install/installErrors';
@@ -16,7 +17,6 @@
   import { settings } from '../stores/settings';
   import { sources } from '../stores/sources';
   import { toast } from '../stores/toasts';
-  import { focusHandOff } from '../utils/focusHandOff';
   import { bytesSize, etaLabel, progressPercent, rateLimitLabel, speedBytes } from '../utils/format';
   import Artwork from './Artwork.svelte';
   import Button from './Button.svelte';
@@ -30,7 +30,7 @@
   import SpeedGraph from './SpeedGraph.svelte';
   import StatusBadge from './StatusBadge.svelte';
   import type { MenuItem } from './menu';
-  import { handOffTarget, leadAction, panelOrder, speedLimit } from './downloadPanel';
+  import { leadAction, panelControl, speedLimit, type Leave, type LeaveTicket } from './downloadPanel';
 
   /**
    * The panel of a download under way on the Downloads screen, one per download of the store's `active`
@@ -43,22 +43,22 @@
    * A plain container: every control is a sibling named after the download. The lead button is one
    * button whose action follows what Go offers (Download now, Pause, Resume); while its call runs it is
    * busy and keeps focus. When the panel goes from under the focus its own press left there (a cancel, a
-   * resume that queues it), focus is handed to the panel now in its place, else the one above, else
-   * `away`. Cancel is Go's Cancel and asks first when data exists.
+   * resume that queues it), focus goes on by the screen's rule, `leave`, once the panel has gone, whichever
+   * of Go's answer and its event comes first. Cancel is Go's Cancel and asks first when data exists.
    */
   let {
     download,
     onopen,
     onannounce,
-    away,
+    leave,
   }: {
     download: Download;
     /** Opens the download's details. */
     onopen?: (download: Download) => void;
     /** Says what the player did, in the page's one polite live region. */
     onannounce?: (text: string) => void;
-    /** Where focus goes when the last panel leaves under it: the section's heading, else the page's. */
-    away?: () => HTMLElement | null | undefined;
+    /** The screen's rule for focus when a row leaves (routes/downloads/rowFocus.ts::pressed). */
+    leave?: Leave;
   } = $props();
 
   const uid = $props.id();
@@ -130,19 +130,49 @@
     });
   });
 
-  let root = $state<HTMLElement>();
   let leadBusy = $state(false);
+
+  // A press Go took whose panel may still leave: its hand-off waits for the panel to go. A lead press
+  // whose effect shows on a panel that stays (Pause turned Resume) needs none, so its wait ends there.
+  let held: { ticket: LeaveTicket; lead?: string | null } | null = null;
+  let gone = false;
+
+  onDestroy(() => {
+    gone = true;
+    const press = held;
+    held = null;
+    if (press) void press.ticket.handOn();
+  });
+
+  $effect(() => {
+    const now = lead;
+    if (held?.lead !== undefined && held.lead !== now) {
+      held.ticket.drop();
+      held = null;
+    }
+  });
+
+  function untilGone(ticket: LeaveTicket | undefined, pressedLead?: string | null) {
+    if (!ticket) return;
+    if (gone) void ticket.handOn();
+    else held = { ticket, lead: pressedLead };
+  }
 
   async function pressLead() {
     const action = lead;
     if (!action || leadBusy) return;
     const own = id;
-    const order = panelOrder();
-    const hand = focusHandOff();
+    const ticket = leave?.(own, { follow: 'first', prefer: panelControl('lead') });
     leadBusy = true;
-    await requestDownloadAction(own, action);
+    const outcome = await requestDownloadAction(own, action);
     leadBusy = false;
-    void hand(() => handOffTarget(order, own, { stays: true, prefer: 'lead', away }));
+    if (!outcome.ok) {
+      ticket?.drop();
+      return;
+    }
+    // Already shown on a panel that stays: nothing left to hand on.
+    if (!gone && lead !== action) ticket?.drop();
+    else untilGone(ticket, action);
   }
 
   async function openDestination() {
@@ -154,53 +184,51 @@
   }
 
   let confirmOpen = $state(false);
-  let cancelOrder: string[] = [];
-  let cancelHand: ReturnType<typeof focusHandOff> | null = null;
+  let asking: { ticket: LeaveTicket | undefined; done: boolean } | null = null;
 
   function cancelled(name: string) {
     onannounce?.($t('downloads.cancel.done', { name }));
   }
 
-  async function cancelNow() {
+  async function cancelNow(ticket: LeaveTicket | undefined) {
     const own = id;
     const name = download.name;
-    const order = panelOrder();
-    const hand = focusHandOff(() => root);
     const outcome = await requestDownloadAction(own, 'cancel');
-    if (!outcome.ok) return;
+    if (!outcome.ok) {
+      ticket?.drop();
+      return;
+    }
     cancelled(name);
-    void hand(() => handOffTarget(order, own, { stays: false, prefer: 'more', away }));
+    untilGone(ticket);
   }
 
   function askCancel() {
+    const ticket = leave?.(id, { prefer: panelControl('more') });
     if (!cancelAsks(download)) {
-      void cancelNow();
+      void cancelNow(ticket);
       return;
     }
-    cancelOrder = panelOrder();
+    asking = { ticket, done: false };
     confirmOpen = true;
   }
 
   // The dialog shows a refusal itself, by its code, and stays open for another try.
   async function confirmCancel() {
+    const current = asking;
     const own = id;
     const name = download.name;
-    cancelOrder = panelOrder();
-    const hand = focusHandOff(() => root);
     const outcome = await requestDownloadAction(own, 'cancel', { toast: false });
     if (!outcome.ok) throw outcome.error;
     cancelled(name);
-    cancelHand = hand;
+    if (!current) return;
+    current.done = true;
+    untilGone(current.ticket);
   }
 
-  // After a confirmed cancel the dialog gives focus back to the menu button of a panel on its way out:
-  // that counts as fallen, and focus goes on (`focusHandOff`'s `leaving`).
   function closeCancel() {
     confirmOpen = false;
-    const hand = cancelHand;
-    cancelHand = null;
-    const own = id;
-    if (hand) void hand(() => handOffTarget(cancelOrder, own, { stays: false, prefer: 'more', away }));
+    if (asking && !asking.done) asking.ticket?.drop();
+    asking = null;
   }
 
   const cancelPrompt = $derived(cancelDownloadPrompt(download));
@@ -220,8 +248,7 @@
   aria-labelledby={titleId}
   data-form={compact ? 'compact' : 'full'}
   data-state={download.status}
-  data-download-panel={id}
-  bind:this={root}
+  data-download-row={id}
   {@attach gameScope(gameId)}
 >
   <div class="cover">
@@ -311,7 +338,7 @@
     onconfirm={confirmCancel}
     onclose={closeCancel}
     errorText={(err) => installErrorText(err)}
-    returnFocus={() => handOffTarget(cancelOrder, id, { stays: false, prefer: 'more', away })}
+    returnFocus={() => asking?.ticket?.target()}
   />
 {/if}
 

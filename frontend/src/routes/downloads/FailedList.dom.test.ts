@@ -213,4 +213,79 @@ describe('FailedList: cancel', () => {
     await vi.waitFor(() => expect(document.activeElement).toBe(heading));
     expect(removeDownload).not.toHaveBeenCalled();
   });
+
+  it('a confirmed cancel Go answers before its removal: focus waits for the row to leave, then the row in its place', async () => {
+    vi.mocked(cancelDownload).mockResolvedValue();
+    downloads.set([failed('a', 'Alpha', { downloaded: 1024 }), failed('b', 'Beta')]);
+    const { user } = mount();
+
+    cancelX('Alpha').focus();
+    await user.keyboard('{Enter}');
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: msg('ui.cancelDownload') }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(document.activeElement).toBe(cancelX('Alpha'));
+
+    goRemoves('a');
+
+    await vi.waitFor(() => expect(document.activeElement).toBe(cancelX('Beta')));
+    expect(onannounce).toHaveBeenCalledWith(msg('downloads.cancel.done', { name: 'Alpha' }));
+  });
+});
+
+describe('FailedList: the cancel dialog follows its download', () => {
+  it('says what the download holds now, not at the press', async () => {
+    downloads.set([failed('a', 'Alpha', { downloaded: 1024 })]);
+    const { user } = mount();
+
+    await user.click(cancelX('Alpha'));
+    const dialog = await screen.findByRole('dialog');
+    downloads.update((list) => list.map((d) => (d.id === 'a' ? { ...d, downloaded: 900 * 1024 ** 2 } : d)));
+
+    await vi.waitFor(() => expect(dialog.textContent).toContain(msg('downloads.cancel.deletes', { size: bytesSize(900 * 1024 ** 2) })));
+  });
+
+  it('closes when the download leaves the list, and focus goes on by the rule; nothing is sent', async () => {
+    downloads.set([failed('a', 'Alpha', { downloaded: 1024 }), failed('b', 'Beta')]);
+    const { user } = mount();
+
+    cancelX('Alpha').focus();
+    await user.keyboard('{Enter}');
+    await screen.findByRole('dialog');
+    goRequeues('a');
+
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await vi.waitFor(() => expect(document.activeElement).toBe(cancelX('Beta')));
+    expect(cancelDownload).not.toHaveBeenCalled();
+  });
+});
+
+describe('FailedList: retry inside the page', () => {
+  it('with another failure left, focus stays in the failed list rather than following to the queue', async () => {
+    vi.mocked(resumeDownload).mockResolvedValue();
+    downloads.set([failed('a', 'Alpha'), failed('b', 'Beta')]);
+    const { user } = renderDom(Downloads);
+
+    retry('Alpha').focus();
+    await user.keyboard('{Enter}');
+    goRequeues('a');
+
+    await vi.waitFor(() => expect(screen.getByRole('button', { name: /^«Alpha», / })).toBeTruthy());
+    await vi.waitFor(() => expect(document.activeElement).toBe(retry('Beta')));
+  });
+
+  it('a download Go starts at once follows to its panel among the active downloads', async () => {
+    vi.mocked(resumeDownload).mockImplementation(async (id) =>
+      downloads.update((list) => list.map((d) => (d.id === id ? { ...d, status: 'downloading', error: '' } : d))),
+    );
+    downloads.set([failed('a', 'Alpha')]);
+    const { user } = renderDom(Downloads);
+
+    retry('Alpha').focus();
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: msg('downloads.panel.pauseNamed', { name: 'Alpha' }) })),
+    );
+  });
 });

@@ -24,7 +24,7 @@
   import FailedList from './FailedList.svelte';
   import PlayThrottleBanner from './PlayThrottleBanner.svelte';
   import QueueList from './QueueList.svelte';
-  import { pageHeading } from './rowFocus';
+  import { pressed } from './rowFocus';
   import { downloadsSectionIds } from './sections';
 
   let addOpen = $state(false);
@@ -103,7 +103,7 @@
     <DownloadsSection id={downloadsSectionIds.active} title={msg('transfers.downloadsActiveHeading')} count={$active.length}>
       <div class="rows">
         {#each $active as download (download.id)}
-          <DownloadItem {download} onopen={(d) => openDetails(d.id)} onannounce={announce} />
+          <DownloadItem {download} onopen={(d) => openDetails(d.id)} onannounce={announce} leave={pressed} />
         {/each}
       </div>
     </DownloadsSection>
@@ -135,13 +135,13 @@
     </EmptyState>
   {/if}
 
-  <CompletedSection part="installing" onopen={openDetails} oninstall={openInstall} onannounce={announce} away={pageHeading} />
+  <CompletedSection part="installing" onopen={openDetails} oninstall={openInstall} onannounce={announce} />
 
   <FailedList onopen={openDetails} onannounce={announce} />
 
   <QueueList onopen={openDetails} onannounce={announce} />
 
-  <CompletedSection part="completed" onopen={openDetails} oninstall={openInstall} onannounce={announce} away={pageHeading} />
+  <CompletedSection part="completed" onopen={openDetails} oninstall={openInstall} onannounce={announce} />
 
   <DownloadsAnnouncer bind:this={announcer} />
 

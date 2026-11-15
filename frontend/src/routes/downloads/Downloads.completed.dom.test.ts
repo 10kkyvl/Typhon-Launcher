@@ -111,8 +111,8 @@ function show(list: Download[], installs: Installation[] = [], props: { onannoun
   installations.set(installs);
   const onopen = vi.fn();
   const oninstall = vi.fn();
-  const installing = renderDom(CompletedSection, { part: 'installing', onopen, oninstall, away: () => heading, ...props });
-  const done = renderDom(CompletedSection, { part: 'completed', onopen, oninstall, away: () => heading, ...props });
+  const installing = renderDom(CompletedSection, { part: 'installing', onopen, oninstall, ...props });
+  const done = renderDom(CompletedSection, { part: 'completed', onopen, oninstall, ...props });
   const unmount = () => {
     installing.unmount();
     done.unmount();

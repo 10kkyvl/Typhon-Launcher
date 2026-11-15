@@ -17,7 +17,8 @@
   import { cancelAsks } from '../../lib/downloads/cancel';
   import { heldBack } from '../../lib/downloads/schedule';
   import { askMove, keyTarget, pointerTarget, roomFor, settleMove, shownOrder, type MoveAsk, type RowBox } from './queueReorder';
-  import { afterLeaving, byData, createWatchers, handOffInView, type HandOff } from './rowFocus';
+  import type { LeaveTicket } from '../../lib/components/downloadPanel';
+  import { byData, createWatchers, handOffInView, pressed, type HandOff } from './rowFocus';
 
   /**
    * The downloads Go holds as queued, in Go's order: a row's place here is the `position` MoveTo takes.
@@ -72,8 +73,6 @@
 
   const gripOf = (id: string) => byData(list, 'grip', id);
   const menuOf = (id: string) => byData(list, 'menu', id);
-  const cancelIn = (row: HTMLElement) => row.querySelector<HTMLElement>('[data-cancel]');
-  const menuIn = (row: HTMLElement) => row.querySelector<HTMLElement>('[data-menu]') ?? cancelIn(row);
 
   const follow = (target: () => HTMLElement | null): Follow => ({ handOff: focusHandOff(), target });
   const refocus = (f: Follow) => void handOffInView(f.handOff, f.target);
@@ -230,59 +229,80 @@
 
   const busyNow = new SvelteSet<string>();
   const busyCancel = new SvelteSet<string>();
-  let asking = $state<{ download: Download; index: number; handOff: HandOff } | null>(null);
+
+  /**
+   * The download a Cancel asks about, by id: the dialog says what the download holds now, not at the
+   * press, and goes when the download leaves the queue.
+   */
+  let asking = $state<{ id: string; ticket: LeaveTicket; done: boolean } | null>(null);
+  const askingDownload = $derived(asking ? byId.get(asking.id) : undefined);
+
+  $effect(() => {
+    if (asking && !askingDownload) untrack(closeCancel);
+  });
 
   const gone = (id: string) => () => !goIds.includes(id);
 
-  function cancelled(download: Download, index: number, handOff: HandOff) {
+  function cancelled(download: Download, ticket: LeaveTicket) {
     onannounce(msg('downloads.cancel.done', { name: download.name }));
-    watchers.watch(gone(download.id), () => void handOffInView(handOff, () => afterLeaving(list, download.id, index, cancelIn)));
+    watchers.watch(gone(download.id), () => void ticket.handOn());
   }
 
-  function askCancel(download: Download, index: number) {
-    const handOff = focusHandOff();
-    if (cancelAsks(download)) asking = { download, index, handOff };
-    else void cancelNow(download, index, handOff);
+  function askCancel(download: Download) {
+    const ticket = pressed(download.id);
+    if (cancelAsks(download)) asking = { id: download.id, ticket, done: false };
+    else void cancelNow(download, ticket);
   }
 
-  async function cancelNow(download: Download, index: number, handOff: HandOff) {
+  async function cancelNow(download: Download, ticket: LeaveTicket) {
     busyCancel.add(download.id);
     const outcome = await requestDownloadAction(download.id, 'cancel');
     busyCancel.delete(download.id);
-    if (outcome.ok) cancelled(download, index, handOff);
+    if (outcome.ok) cancelled(download, ticket);
+    else ticket.drop();
   }
 
   async function confirmCancel() {
     const current = asking;
-    if (!current) return;
-    const outcome = await requestDownloadAction(current.download.id, 'cancel', { toast: false });
+    const download = askingDownload;
+    if (!current || !download) return;
+    const outcome = await requestDownloadAction(current.id, 'cancel', { toast: false });
     if (!outcome.ok) throw outcome.error;
-    cancelled(current.download, current.index, current.handOff);
+    current.done = true;
+    cancelled(download, current.ticket);
   }
 
-  async function downloadNow(download: Download, index: number) {
-    const handOff = focusHandOff();
+  function closeCancel() {
+    if (asking && !asking.done) asking.ticket.drop();
+    asking = null;
+  }
+
+  async function downloadNow(download: Download) {
+    const ticket = pressed(download.id, { follow: 'first' });
     busyNow.add(download.id);
     const outcome = await requestDownloadAction(download.id, 'downloadNow');
     busyNow.delete(download.id);
-    if (!outcome.ok) return;
+    if (!outcome.ok) {
+      ticket.drop();
+      return;
+    }
     // The button goes once Go lifts the schedule for the download, and the row may go as it starts.
-    watchers.watch(
-      () => !($downloadOffers.get(download.id) ?? []).includes('downloadNow'),
-      () => void handOffInView(handOff, () => gripOf(download.id) ?? afterLeaving(list, download.id, index, cancelIn)),
-    );
+    watchers.watch(() => !($downloadOffers.get(download.id) ?? []).includes('downloadNow'), () => void ticket.handOn());
   }
 
-  async function startNow(download: Download, index: number) {
-    const handOff = focusHandOff();
+  async function startNow(download: Download) {
+    const ticket = pressed(download.id, { prefer: '[data-menu]' });
     const outcome = await requestDownloadAction(download.id, 'forceStart');
-    if (!outcome.ok) return;
-    watchers.watch(gone(download.id), () => void handOffInView(handOff, () => afterLeaving(list, download.id, index, menuIn)));
+    if (!outcome.ok) {
+      ticket.drop();
+      return;
+    }
+    watchers.watch(gone(download.id), () => void ticket.handOn());
   }
 
-  function pick(action: 'details' | 'start' | 'up' | 'down', download: Download, index: number) {
+  function pick(action: 'details' | 'start' | 'up' | 'down', download: Download) {
     if (action === 'details') onopen?.(download.id);
-    else if (action === 'start') void startNow(download, index);
+    else if (action === 'start') void startNow(download);
     else {
       const at = shownIds.indexOf(download.id);
       ask(download.id, action === 'up' ? at - 1 : at + 1, follow(() => menuOf(download.id)));
@@ -314,9 +334,9 @@
         ondrop={drop}
         onletgo={letGo}
         ontop={() => ask(download.id, 0, follow(() => gripOf(download.id)))}
-        onnow={() => downloadNow(download, index)}
-        oncancel={() => askCancel(download, index)}
-        onpick={(action) => pick(action, download, index)}
+        onnow={() => downloadNow(download)}
+        oncancel={() => askCancel(download)}
+        onpick={(action) => pick(action, download)}
       />
     {/each}
   </ol>
@@ -324,14 +344,14 @@
 </DownloadsSection>
 {/if}
 
-{#if asking}
-  {@const current = asking}
+{#if asking && askingDownload}
+  {@const ticket = asking.ticket}
   <ConfirmModal
-    prompt={cancelDownloadPrompt(current.download)}
+    prompt={cancelDownloadPrompt(askingDownload)}
     onconfirm={confirmCancel}
     errorText={installErrorText}
-    onclose={() => (asking = null)}
-    returnFocus={() => afterLeaving(list, current.download.id, current.index, cancelIn)}
+    onclose={closeCancel}
+    returnFocus={() => ticket.target()}
   />
 {/if}
 

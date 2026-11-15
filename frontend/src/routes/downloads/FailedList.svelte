@@ -12,7 +12,6 @@
   import { downloadOffers } from '../../lib/stores/downloadOffers';
   import { failed, requestDownloadAction } from '../../lib/stores/downloads';
   import { gameArt } from '../../lib/stores/metadata';
-  import { focusHandOff } from '../../lib/utils/focusHandOff';
   import { bytesSize } from '../../lib/utils/format';
   import { msg } from '../../lib/i18n';
   import DownloadsSection from './DownloadsSection.svelte';
@@ -20,7 +19,8 @@
   import { cancelAsks } from '../../lib/downloads/cancel';
   import { coverOf } from './downloadRow';
   import { downloadsSectionIds } from './sections';
-  import { afterLeaving, byData, createWatchers, handOffInView, pageHeading, type HandOff } from './rowFocus';
+  import type { LeaveTicket } from '../../lib/components/downloadPanel';
+  import { createWatchers, pressed } from './rowFocus';
 
   /**
    * Downloads Go marked failed, apart from the others: what failed (by its code), how much was
@@ -35,11 +35,8 @@
     onannounce?: (text: string) => void;
   } = $props();
 
-  let list = $state<HTMLElement>();
   const ids = $derived($failed.map((d) => d.id));
-
-  const retryIn = (row: HTMLElement) => row.querySelector<HTMLElement>('[data-retry]') ?? cancelIn(row);
-  const cancelIn = (row: HTMLElement) => row.querySelector<HTMLElement>('[data-cancel]');
+  const byId = $derived(new Map($failed.map((d) => [d.id, d])));
 
   const watchers = createWatchers();
   $effect(() => {
@@ -53,58 +50,69 @@
 
   // A retried download goes back to the queue (or straight to verifying). Focus stays in this list while
   // it has failures to work through, as after a cancel; with none left it follows the download to its
-  // grip in the queue, and otherwise to the page heading: the active panel is not this list's to know.
-  async function retry(download: Download, index: number) {
-    const handOff = focusHandOff();
+  // row wherever it went (the queue's grip, the active panel's lead).
+  async function retry(download: Download) {
+    const ticket = pressed(download.id, { follow: 'last' });
     busyRetry.add(download.id);
     const outcome = await requestDownloadAction(download.id, 'resume');
     busyRetry.delete(download.id);
-    if (!outcome.ok) return;
+    if (!outcome.ok) {
+      ticket.drop();
+      return;
+    }
     onannounce(msg('downloads.failed.retried', { title: download.name }));
-    watchers.watch(gone(download.id), () =>
-      void handOffInView(handOff, () => {
-        const near = afterLeaving(list, download.id, index, retryIn);
-        if (near && near !== pageHeading()) return near;
-        return byData(document, 'grip', download.id) ?? near;
-      }),
-    );
+    watchers.watch(gone(download.id), () => void ticket.handOn());
   }
 
-  let asking = $state<{ download: Download; index: number; handOff: HandOff } | null>(null);
+  /** The download a Cancel asks about, by id: the dialog says what it holds now and goes when it leaves the list. */
+  let asking = $state<{ id: string; ticket: LeaveTicket; done: boolean } | null>(null);
+  const askingDownload = $derived(asking ? byId.get(asking.id) : undefined);
 
-  function cancelled(download: Download, index: number, handOff: HandOff) {
+  $effect(() => {
+    if (asking && !askingDownload) untrack(closeCancel);
+  });
+
+  function cancelled(download: Download, ticket: LeaveTicket) {
     onannounce(msg('downloads.cancel.done', { name: download.name }));
-    watchers.watch(gone(download.id), () => void handOffInView(handOff, () => afterLeaving(list, download.id, index, cancelIn)));
+    watchers.watch(gone(download.id), () => void ticket.handOn());
   }
 
-  async function askCancel(download: Download, index: number) {
-    const handOff = focusHandOff();
+  async function askCancel(download: Download) {
+    const ticket = pressed(download.id);
     if (cancelAsks(download)) {
-      asking = { download, index, handOff };
+      asking = { id: download.id, ticket, done: false };
       return;
     }
     busyCancel.add(download.id);
     const outcome = await requestDownloadAction(download.id, 'cancel');
     busyCancel.delete(download.id);
-    if (outcome.ok) cancelled(download, index, handOff);
+    if (outcome.ok) cancelled(download, ticket);
+    else ticket.drop();
   }
 
   async function confirmCancel() {
     const current = asking;
-    if (!current) return;
-    const outcome = await requestDownloadAction(current.download.id, 'cancel', { toast: false });
+    const download = askingDownload;
+    if (!current || !download) return;
+    const outcome = await requestDownloadAction(current.id, 'cancel', { toast: false });
     if (!outcome.ok) throw outcome.error;
-    cancelled(current.download, current.index, current.handOff);
+    current.done = true;
+    cancelled(download, current.ticket);
+  }
+
+  function closeCancel() {
+    if (asking && !asking.done) asking.ticket.drop();
+    asking = null;
   }
 </script>
 
 {#if $failed.length > 0}
 <DownloadsSection id={downloadsSectionIds.failed} title={msg('transfers.downloadsFailedHeading')} count={$failed.length}>
-  <ul class="rows" bind:this={list}>
-    {#each $failed as item, index (item.id)}
+  <ul class="rows">
+    {#each $failed as item (item.id)}
       {@const offers = $downloadOffers.get(item.id) ?? []}
       {@const gameId = gamePageId(item)}
-      <li class="row failed" data-id={item.id}>
+      <li class="row failed" data-download-row={item.id}>
         <div class="thumb">
           <GameLink id={gameId} name={item.name} repeat>
             <Artwork src={coverOf(item, $gameArt)} alt="" label={item.name} ratio="3 / 4" radius="var(--radius-sm)" />
@@ -129,7 +137,7 @@
               busy={busyRetry.has(item.id)}
               aria-label={msg('downloads.failed.retryFor', { title: item.name })}
               data-retry={item.id}
-              onclick={() => retry(item, index)}
+              onclick={() => retry(item)}
             >
               <RotateCcw size="1.4rem" strokeWidth={1.8} aria-hidden="true" />
               {msg('common.retry')}
@@ -144,7 +152,7 @@
               size="sm"
               busy={busyCancel.has(item.id)}
               data-cancel={item.id}
-              onclick={() => askCancel(item, index)}
+              onclick={() => askCancel(item)}
             >
               <X size="1.6rem" strokeWidth={1.8} />
             </IconButton>
@@ -156,14 +164,14 @@
 </DownloadsSection>
 {/if}
 
-{#if asking}
-  {@const current = asking}
+{#if asking && askingDownload}
+  {@const ticket = asking.ticket}
   <ConfirmModal
-    prompt={cancelDownloadPrompt(current.download)}
+    prompt={cancelDownloadPrompt(askingDownload)}
     onconfirm={confirmCancel}
     errorText={installErrorText}
-    onclose={() => (asking = null)}
-    returnFocus={() => afterLeaving(list, current.download.id, current.index, cancelIn)}
+    onclose={closeCancel}
+    returnFocus={() => ticket.target()}
   />
 {/if}
 

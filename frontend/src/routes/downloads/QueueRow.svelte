@@ -98,7 +98,7 @@
   });
 </script>
 
-<li class="row" class:first={index === 0} class:lifted class:room={transform !== undefined && !lifted} data-id={download.id} style:transform>
+<li class="row" class:first={index === 0} class:lifted class:room={transform !== undefined && !lifted} data-download-row={download.id} style:transform>
   {#if movable}
     <Tooltip text={msg('downloads.queue.gripHint')} describe={false}>
       <button

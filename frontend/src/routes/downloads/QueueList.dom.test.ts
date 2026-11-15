@@ -557,3 +557,53 @@ describe('QueueList: a row', () => {
     expect(get(route)).toMatchObject({ name: 'game', params: { id: 'g-alpha' } });
   });
 });
+
+describe('QueueList: the cancel dialog follows its download', () => {
+  it('says what the download holds now, not at the press', async () => {
+    downloads.set([queued('a', 'Alpha', { downloaded: 1024 }), queued('b', 'Beta')]);
+    const { user } = mount();
+
+    await user.click(cancelX('Alpha'));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.textContent).toContain(msg('downloads.cancel.deletes', { size: bytesSize(1024) }));
+    downloads.update((list) => list.map((d) => (d.id === 'a' ? { ...d, downloaded: 900 * 1024 ** 2 } : d)));
+
+    await vi.waitFor(() => expect(dialog.textContent).toContain(msg('downloads.cancel.deletes', { size: bytesSize(900 * 1024 ** 2) })));
+    expect(dialog.textContent).not.toContain(msg('downloads.cancel.deletes', { size: bytesSize(1024) }));
+  });
+
+  it('closes when the download leaves the queue, and focus goes on by the rule; nothing is sent', async () => {
+    downloads.set([queued('a', 'Alpha', { downloaded: 1024 }), queued('b', 'Beta')]);
+    const { user } = mount();
+
+    cancelX('Alpha').focus();
+    await user.keyboard('{Enter}');
+    await screen.findByRole('dialog');
+    downloads.update((list) => list.map((d) => (d.id === 'a' ? { ...d, status: 'downloading' } : d)));
+
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await vi.waitFor(() => expect(document.activeElement).toBe(cancelX('Beta')));
+    expect(cancelDownload).not.toHaveBeenCalled();
+    downloads.update((list) => list.map((d) => (d.id === 'a' ? { ...d, status: 'queued' } : d)));
+    await new Promise((done) => setTimeout(done, 0));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('a confirmed cancel Go answers before its removal: focus waits for the row to leave, then the row in its place', async () => {
+    vi.mocked(cancelDownload).mockResolvedValue();
+    downloads.set([queued('a', 'Alpha', { downloaded: 1024 }), queued('b', 'Beta')]);
+    const { user } = mount();
+
+    cancelX('Alpha').focus();
+    await user.keyboard('{Enter}');
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: msg('ui.cancelDownload') }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(document.activeElement).toBe(cancelX('Alpha'));
+
+    goRemoves('a');
+
+    await vi.waitFor(() => expect(document.activeElement).toBe(cancelX('Beta')));
+    expect(onannounce).toHaveBeenCalledWith(msg('downloads.cancel.done', { name: 'Alpha' }));
+  });
+});
