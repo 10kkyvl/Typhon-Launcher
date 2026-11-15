@@ -21,7 +21,10 @@ export interface LeaveHow {
 
 /** A press's hand-off, its row's place read at the press. */
 export interface LeaveTicket {
-  /** Where focus goes now by the screen's rule; for a dialog's `returnFocus`. */
+  /**
+   * Where focus goes now by the screen's rule, for a dialog's `returnFocus`: the dialog focuses it
+   * without scrolling, so its row is brought into view once it has focus.
+   */
   target(): HTMLElement | null;
   /** Hands focus on, if it fell, once the row has left. */
   handOn(): Promise<void>;

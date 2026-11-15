@@ -8,11 +8,12 @@ vi.mock('../../lib/services/downloads', async (actual) => ({
   cancelDownload: vi.fn(),
   pauseDownload: vi.fn(),
   resumeDownload: vi.fn(),
+  removeDownload: vi.fn(),
   getDownload: vi.fn(() => new Promise(() => {})),
 }));
 
 import { msg } from '../../lib/i18n';
-import { cancelDownload, pauseDownload, resumeDownload, type Download } from '../../lib/services/downloads';
+import { cancelDownload, pauseDownload, removeDownload, resumeDownload, type Download } from '../../lib/services/downloads';
 import { downloads } from '../../lib/stores/downloads';
 import { resetHistory } from '../../lib/stores/router';
 import { toasts } from '../../lib/stores/toasts';
@@ -60,7 +61,7 @@ beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn(function (this: HTMLElement) {
     scrolled.push(this);
   });
-  for (const fn of [cancelDownload, pauseDownload, resumeDownload]) {
+  for (const fn of [cancelDownload, pauseDownload, removeDownload, resumeDownload]) {
     vi.mocked(fn).mockReset();
     vi.mocked(fn).mockResolvedValue(undefined);
   }
@@ -98,7 +99,7 @@ describe('Downloads: a row Go takes away from under the focus', () => {
     goSets('d1', { status: 'completed', completedAt: '2026-09-08T01:00:00Z' });
 
     await waitFor(() => expect(document.activeElement).toBe(pauseOf('Game Two')));
-    expect(scrolled).toContain(pauseOf('Game Two'));
+    expect(scrolled).toContain(panel('Game Two'));
   });
 
   it('the only panel completes: focus goes to the page heading, not to the download’s new row', async () => {
@@ -226,15 +227,98 @@ describe('Downloads: a row Go takes away from under the focus', () => {
 });
 
 describe('Downloads: the hand-off brings its target into view', () => {
-  it('a cancelled queue row hands focus to the row now in its place and scrolls it into view', async () => {
+  const rowOf = (el: HTMLElement) => el.closest<HTMLElement>('[data-download-row]');
+  const goRemoves = (id: string) => downloads.update((list) => list.filter((d) => d.id !== id));
+
+  it('a cancelled queue row hands focus to the row now in its place and brings that row into view', async () => {
     downloads.set([download({ status: 'queued' }), download({ id: 'd2', name: 'Game Two', status: 'queued' })]);
     const { user } = renderDom(Downloads);
 
     cancelX('Game One').focus();
     await user.keyboard('{Enter}');
-    downloads.update((list) => list.filter((d) => d.id !== 'd1'));
+    goRemoves('d1');
 
     await waitFor(() => expect(document.activeElement).toBe(cancelX('Game Two')));
-    expect(scrolled).toContain(cancelX('Game Two'));
+    expect(scrolled).toContain(rowOf(cancelX('Game Two')));
+    expect(scrolled).not.toContain(cancelX('Game Two'));
+  });
+
+  async function confirmCancel(user: ReturnType<typeof renderDom>['user'], title: string) {
+    cancelX(title).focus();
+    await user.keyboard('{Enter}');
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: msg('ui.cancelDownload') }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  }
+
+  it('a confirmed Cancel of the only queued row: the dialog gives focus to the page heading and brings it into view', async () => {
+    vi.mocked(cancelDownload).mockImplementation(async (id) => goRemoves(id));
+    downloads.set([download({ status: 'queued', downloaded: 100 })]);
+    const { user } = renderDom(Downloads);
+
+    await confirmCancel(user, 'Game One');
+
+    const heading = screen.getByRole('heading', { level: 1 });
+    await waitFor(() => expect(document.activeElement).toBe(heading));
+    await waitFor(() => expect(scrolled).toContain(heading));
+  });
+
+  it('a confirmed Cancel in the queue: the dialog gives focus to the row now in its place and brings that row into view', async () => {
+    vi.mocked(cancelDownload).mockImplementation(async (id) => goRemoves(id));
+    downloads.set([download({ status: 'queued', downloaded: 100 }), download({ id: 'd2', name: 'Game Two', status: 'queued' })]);
+    const { user } = renderDom(Downloads);
+
+    await confirmCancel(user, 'Game One');
+
+    await waitFor(() => expect(document.activeElement).toBe(cancelX('Game Two')));
+    await waitFor(() => expect(scrolled).toContain(rowOf(cancelX('Game Two'))));
+  });
+
+  it('a confirmed Cancel in the failed list: the dialog gives focus to the row now in its place and brings that row into view', async () => {
+    vi.mocked(cancelDownload).mockImplementation(async (id) => goRemoves(id));
+    downloads.set([
+      download({ status: 'failed', downloaded: 100, error: 'typhon:download.unavailable' }),
+      download({ id: 'd2', name: 'Game Two', status: 'failed', error: 'typhon:download.unavailable' }),
+    ]);
+    const { user } = renderDom(Downloads);
+
+    await confirmCancel(user, 'Game One');
+
+    await waitFor(() => expect(document.activeElement).toBe(cancelX('Game Two')));
+    await waitFor(() => expect(scrolled).toContain(rowOf(cancelX('Game Two'))));
+  });
+
+  it('a panel that goes with its cancel dialog open: the dialog gives focus to the panel now in its place and brings it into view', async () => {
+    downloads.set([download({ downloaded: 100 }), download({ id: 'd2', name: 'Game Two' })]);
+    const { user } = renderDom(Downloads);
+    within(panel('Game One')).getByRole('button', { name: msg('downloads.panel.more', { name: 'Game One' }) }).focus();
+    await user.keyboard('{Enter}');
+    screen.getByRole('menuitem', { name: msg('downloads.panel.cancel') }).focus();
+    await user.keyboard('{Enter}');
+    await screen.findByRole('dialog');
+
+    goSets('d1', { status: 'completed', completedAt: '2026-09-08T01:00:00Z' });
+
+    const more = () => within(panel('Game Two')).getByRole('button', { name: msg('downloads.panel.more', { name: 'Game Two' }) });
+    await waitFor(() => expect(document.activeElement).toBe(more()));
+    await waitFor(() => expect(scrolled).toContain(panel('Game Two')));
+  });
+
+  it('a confirmed Clear that empties the section: the dialog gives focus to the page heading and brings it into view', async () => {
+    vi.mocked(removeDownload).mockImplementation(async (id) => goRemoves(id));
+    downloads.set(
+      Array.from({ length: 6 }, (_, i) =>
+        download({ id: `u${i}`, name: `Update ${i}`, status: 'completed', completedAt: '2026-09-08T01:00:00Z', origin: { purpose: 'update' } }),
+      ),
+    );
+    const { user } = renderDom(Downloads);
+    screen.getByRole('button', { name: msg('downloads.done.clear') }).focus();
+    await user.keyboard('{Enter}');
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: msg('downloads.done.clearConfirm') }));
+
+    const heading = screen.getByRole('heading', { level: 1 });
+    await waitFor(() => expect(document.activeElement).toBe(heading));
+    await waitFor(() => expect(scrolled).toContain(heading));
   });
 });

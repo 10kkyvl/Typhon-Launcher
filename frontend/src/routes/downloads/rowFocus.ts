@@ -102,14 +102,34 @@ function headingOrPage(id: string | null): HTMLElement | null {
   return heading?.isConnected ? heading : pageHeading();
 }
 
-/** Finishes a hand-off and, when focus landed on the target, scrolls it into view by the least movement. */
+/**
+ * Scrolls into view, by the least movement, the row `target` is in (the whole row, so the player sees
+ * what took focus, not a control at the window's very edge), else `target` itself.
+ */
+function reveal(target: HTMLElement): void {
+  const box = target.closest<HTMLElement>(`[${ROW_ATTR}]`) ?? target;
+  if (typeof box.scrollIntoView === 'function') box.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+
+/** Finishes a hand-off and, when focus landed on the target, brings its row into view. */
 export async function handOffInView(handOff: HandOff, pick: () => HTMLElement | null): Promise<void> {
   const picked: { target: HTMLElement | null } = { target: null };
   await handOff(() => (picked.target = pick()));
   const { target } = picked;
-  if (target && document.activeElement === target && typeof target.scrollIntoView === 'function') {
-    target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  if (target && document.activeElement === target) reveal(target);
+}
+
+/**
+ * For a dialog's `returnFocus`: answers `target`, and brings its row into view once the dialog, which
+ * focuses without scrolling, has given it focus (in the same task, so a microtask later is enough).
+ */
+export function returnInView(target: HTMLElement | null | undefined): HTMLElement | null {
+  if (target) {
+    queueMicrotask(() => {
+      if (document.activeElement === target) reveal(target);
+    });
   }
+  return target ?? null;
 }
 
 // What the presses in flight ask for, by download: the page's catch-all hands focus on as they would.
@@ -127,7 +147,7 @@ export const pressed: Leave = (id, how = {}): LeaveTicket => {
     if (intents.get(id) === how) intents.delete(id);
   };
   return {
-    target: () => leaveTarget(place, how),
+    target: () => returnInView(leaveTarget(place, how)),
     handOn: () => {
       forget();
       return handOffInView(handOff, () => leaveTarget(place, how));

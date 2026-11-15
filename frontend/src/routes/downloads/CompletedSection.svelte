@@ -11,7 +11,7 @@
   import type { LeaveTicket } from '../../lib/components/downloadPanel';
   import CompletedRow from './CompletedRow.svelte';
   import { CLEAR_ASKS_ABOVE, canClear, completedKind, completedPart, type CompletedPart } from './completedRow';
-  import { handOffInView, pageHeading, pressed } from './rowFocus';
+  import { handOffInView, pageHeading, pressed, returnInView } from './rowFocus';
   import { downloadsSectionIds } from './sections';
 
   /**
@@ -192,7 +192,7 @@
     onconfirm={clearNow}
     onclose={() => (confirmOpen = false)}
     errorText={(err) => installErrorText(err)}
-    returnFocus={() => clearButton() ?? pageHeading()}
+    returnFocus={() => returnInView(clearButton() ?? pageHeading())}
   />
 {/if}
 
