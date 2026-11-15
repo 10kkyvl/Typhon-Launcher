@@ -396,9 +396,10 @@ func (s *Service) downloadOf(id string) (download.Download, bool, error) {
 	return d, true, nil
 }
 
+// forgetInstallations drops the finished installation records of a game. The
+// events go out after the lock is released: a listener may call back in.
 func (s *Service) forgetInstallations(gameID string) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	kept := make([]*Installation, 0, len(s.items))
 	dropped := make([]string, 0, 2)
 	for _, item := range s.items {
@@ -409,14 +410,17 @@ func (s *Service) forgetInstallations(gameID string) error {
 		kept = append(kept, item)
 	}
 	if len(dropped) == 0 {
+		s.mu.Unlock()
 		return nil
 	}
 	previous := s.items
 	s.items = kept
 	if err := s.persistNowLocked(); err != nil {
 		s.items = previous
+		s.mu.Unlock()
 		return err
 	}
+	s.mu.Unlock()
 	for _, id := range dropped {
 		emit(eventRemoved, RemovedEvent{ID: id})
 	}
