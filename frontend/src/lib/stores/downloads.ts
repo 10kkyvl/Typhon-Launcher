@@ -103,7 +103,8 @@ export const completed = derived(downloads, ($downloads) =>
     .sort((a, b) => Date.parse(b.completedAt ?? b.addedAt) - Date.parse(a.completedAt ?? a.addedAt)),
 );
 
-// Only a download that moves data adds to a total: one in verifying can still carry its last speeds.
+// Only a download that moves data adds to a total: downloading ones to the download total,
+// downloading or seeding ones to the upload total, whatever speeds any other status carries.
 const takesData = (d: Download) => d.status === 'downloading';
 const givesData = (d: Download) => d.status === 'downloading' || d.seeding;
 
