@@ -469,10 +469,14 @@ describe('built-in themes', () => {
       const preset = builtIns().find((p) => p.id === id);
       expect(preset, id).toBeDefined();
       const tokens = { ...CONTRAST_FALLBACKS, ...(preset as Preset).tokens };
+      // A value written with color-mix (the text plate's) is computed as the browser does, from the preset.
+      const value = (name: string) => (/^color-mix\(/.test(tokens[name] ?? '') ? cssColor(tokens[name], tokens) : rgba(tokens[name] ?? name));
       const colors = Object.fromEntries(
-        CONTRAST_TOKENS.map((name) => [name, name in DERIVED_COLORS ? cssColor(DERIVED_COLORS[name], tokens) : rgba(tokens[name] ?? name)]),
+        CONTRAST_TOKENS.map((name) => [name, name in DERIVED_COLORS ? cssColor(DERIVED_COLORS[name], tokens) : value(name)]),
       );
-      expect(contrastReport(colors).filter((row) => row.ok !== true)).toEqual([]);
+      const rows = contrastReport(colors);
+      expect(rows.find((row) => row.id === 'stagePlate')?.ok, 'the text plate row is measured').toBe(true);
+      expect(rows.filter((row) => row.ok !== true)).toEqual([]);
     });
   }
 

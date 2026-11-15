@@ -15,10 +15,16 @@ export interface ContrastCheck {
 // theme-contrast.test.ts holds the two equal).
 export const DANGER_LABEL = 'danger-button-label';
 
+// The two extremes a game's picture brings under the text plate on the stage (.stage-copy).
+export const ART_BLACK = 'art-black';
+export const ART_WHITE = 'art-white';
+
 // Colours a control draws that no single token holds, written exactly as the component writes them.
 // The browser computes them from the theme like a token (resolveColors).
 export const DERIVED_COLORS: Readonly<Record<string, string>> = {
   [DANGER_LABEL]: 'color-mix(in srgb, var(--danger) 80%, var(--text))',
+  [ART_BLACK]: '#000000',
+  [ART_WHITE]: '#ffffff',
 };
 
 // Where a button can stand: the page, a card, a raised panel.
@@ -40,6 +46,8 @@ export const CONTRAST_CHECKS: readonly ContrastCheck[] = [
   { id: 'danger', fg: '--danger', backgrounds: ['--bg', '--surface'], min: 3 },
   { id: 'success', fg: '--success', backgrounds: ['--bg', '--surface'], min: 3 },
   { id: 'warning', fg: '--warning', backgrounds: ['--bg', '--surface'], min: 3 },
+  // Words standing on a game's art: one colour on the plate, whatever the picture is.
+  { id: 'stagePlate', fg: '--text', backgrounds: ['--scrim-copy'], grounds: [ART_BLACK, ART_WHITE], min: 4.5 },
 ];
 
 export const CONTRAST_TOKENS: readonly string[] = [

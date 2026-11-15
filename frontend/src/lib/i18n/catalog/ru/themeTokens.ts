@@ -212,6 +212,7 @@ export const themeTokens = {
   'settings.themeContrast.danger': 'Ошибки и опасные действия',
   'settings.themeContrast.success': 'Успех',
   'settings.themeContrast.warning': 'Предупреждения',
+  'settings.themeContrast.stagePlate': 'Текст на арте игры, на чёрном и на белом арте',
   'settings.themeContrast.target': 'Нужно не меньше {min}',
   'settings.themeContrast.lowOn': 'Плохо видно на «{surface}», нужно не меньше {min}',
   'settings.themeContrast.unknown': 'Не удалось прочитать один из цветов',

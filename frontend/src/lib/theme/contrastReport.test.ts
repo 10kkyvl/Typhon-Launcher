@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ART_BLACK,
+  ART_WHITE,
   CONTRAST_CHECKS,
   CONTRAST_FALLBACKS,
   CONTRAST_TOKENS,
@@ -93,6 +95,43 @@ describe('contrastReport', () => {
     expect(colorExpression(DANGER_LABEL)).toBe(DERIVED_COLORS[DANGER_LABEL]);
     expect(colorExpression('--text')).toBe('var(--text)');
     expect(colorExpression('--accent-on')).toBe(`var(--accent-on, ${CONTRAST_FALLBACKS['--accent-on']})`);
+  });
+
+  // Words on a game's art stand on the text plate (.stage-copy): --text over --scrim-copy, laid over the
+  // two extremes a picture brings.
+  describe('the text plate on game art', () => {
+    const page = (bg: RGBA, text: RGBA, plate: RGBA): Record<string, RGBA> => ({
+      ...all(black),
+      '--bg': bg,
+      '--text': text,
+      '--scrim-copy': plate,
+      [ART_BLACK]: black,
+      [ART_WHITE]: white,
+    });
+
+    it('measures the plate over black and over white art, as the colours the window draws there', () => {
+      expect(colorExpression(ART_BLACK)).toBe('#000000');
+      expect(colorExpression(ART_WHITE)).toBe('#ffffff');
+      const check = CONTRAST_CHECKS.find((c) => c.id === 'stagePlate');
+      expect(check).toMatchObject({ fg: '--text', backgrounds: ['--scrim-copy'], grounds: [ART_BLACK, ART_WHITE], min: 4.5 });
+    });
+
+    it('warns when the plate is see-through: light words vanish on white art', () => {
+      expect(row(page([14, 15, 17, 1], [237, 238, 240, 1], [0, 0, 0, 0]), 'stagePlate')).toMatchObject({ ok: false, against: '--scrim-copy' });
+    });
+
+    it('passes the dark preset with its default plate, the page colour at 66 %', () => {
+      expect(row(page([14, 15, 17, 1], [237, 238, 240, 1], [14, 15, 17, 0.66]), 'stagePlate').ok).toBe(true);
+    });
+
+    // A finding about the default, not about this report: the default plate is the page colour at 66 %, so a
+    // dark theme whose page is mid-grey gets a plate too light under light words on white art (about 3.2:1).
+    it('flags a plain dark theme on a #333 page with #ddd words and the default plate', () => {
+      const got = row(page([51, 51, 51, 1], [221, 221, 221, 1], [51, 51, 51, 0.66]), 'stagePlate');
+      expect(got.ok).toBe(false);
+      expect(got.ratio).toBeGreaterThan(3);
+      expect(got.ratio).toBeLessThan(3.5);
+    });
   });
 
   it('rounds the ratio down so a near miss never reads as a pass', () => {

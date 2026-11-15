@@ -215,6 +215,7 @@ export const themeTokens: Record<ThemeTokensKey, Message> = {
   'settings.themeContrast.danger': 'Errors and destructive actions',
   'settings.themeContrast.success': 'Success',
   'settings.themeContrast.warning': 'Warnings',
+  'settings.themeContrast.stagePlate': 'Text on game art, over black and over white art',
   'settings.themeContrast.target': 'Needs at least {min}',
   'settings.themeContrast.lowOn': 'Hard to see on "{surface}", needs at least {min}',
   'settings.themeContrast.unknown': 'One of the colours could not be read',
