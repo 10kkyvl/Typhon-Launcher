@@ -270,3 +270,45 @@ describe('GameDetails on the stage: the header', () => {
     expect(document.activeElement).toBe(back);
   });
 });
+
+describe('GameDetails on the stage: the screenshots', () => {
+  const first = '/media/c1-shot-1.jpg';
+  const shots = [first, '/media/c1-shot-2.jpg'].map((url, n) => ({ id: `s${n + 1}`, url })) as MetadataView['screenshots'];
+
+  async function gallery(user: ReturnType<typeof renderDom>['user']): Promise<string[]> {
+    await user.click(await screen.findByRole('tab', { name: msg('games.detailTabScreenshots') }));
+    await vi.waitFor(() => expect(document.querySelectorAll('.shots .shot').length).toBeGreaterThan(0));
+    return [...document.querySelectorAll('.shots .shot img')].map((img) => img.getAttribute('src') ?? '');
+  }
+
+  it('keeps the hero picture in the gallery when the page shows the cover', async () => {
+    art({ c1: { cover: '/media/c1-cover.jpg', hero: '', heroIsPoster: false } });
+    vi.mocked(getMetadataView).mockResolvedValue(view({ hero: first, screenshots: shots }));
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    const h1 = await title();
+    await vi.waitFor(() => expect(screen.getByRole('img', { name: 'Hades' })).toBeTruthy());
+    expect(words(h1)).toBeNull();
+
+    expect(await gallery(user)).toEqual([first, '/media/c1-shot-2.jpg']);
+  });
+
+  it('leaves the hero picture out of the gallery while it stands on the stage', async () => {
+    art({ c1: { cover: '/media/c1-cover.jpg', hero: first, heroIsPoster: false } });
+    vi.mocked(getMetadataView).mockResolvedValue(view({ hero: first, screenshots: shots }));
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    const h1 = await title();
+    await vi.waitFor(() => expect(words(h1)).not.toBeNull());
+
+    expect(await gallery(user)).toEqual(['/media/c1-shot-2.jpg']);
+  });
+
+  it('leaves out the picture the stage shows when the metadata view names none', async () => {
+    art({ c1: { cover: '/media/c1-cover.jpg', hero: first, heroIsPoster: false } });
+    vi.mocked(getMetadataView).mockResolvedValue(view({ hero: '', screenshots: shots }));
+    const { user } = renderDom(GameDetails, { id: 'g1' });
+    const h1 = await title();
+    await vi.waitFor(() => expect(words(h1)).not.toBeNull());
+
+    expect(await gallery(user)).toEqual(['/media/c1-shot-2.jpg']);
+  });
+});

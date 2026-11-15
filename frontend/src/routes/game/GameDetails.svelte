@@ -166,7 +166,9 @@
   );
   const screenshots = $derived(metaView?.screenshots ?? []);
   const heroSrc = $derived(pickHero(metaView));
-  const shots = $derived(galleryShots(screenshots, heroSrc));
+  // The picture the stage shows is not repeated in the gallery; with the cover look it is shown nowhere
+  // else, so it stays there. Read lazily: the look is worked out further down.
+  const shots = $derived.by(() => galleryShots(screenshots, stagedSrc));
   const coverSrc = $derived(clean(metaView?.cover) || clean(catalogGame?.coverUrl) || clean(localGame?.cover));
 
   // A new hero leaves the gallery or comes back into it while the viewer is open: the viewer stays on
@@ -427,6 +429,7 @@
     if (!metaKnown) return 'pending';
     return heroSrc ? 'stage' : 'cover';
   });
+  const stagedSrc = $derived(heroLook !== 'stage' ? '' : $wide?.state === 'yes' ? $wide.src : heroSrc);
 
   // The main button scrolls to or drives these sections, so a theme that hides
   // them must not leave the button doing nothing.
