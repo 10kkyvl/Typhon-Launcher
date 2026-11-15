@@ -68,10 +68,13 @@ var stallAfter = 2 * time.Minute
 
 const restoreFailedMessage = "не удалось восстановить загрузку"
 
+// stateUnreadMessage is also the degraded notice, which the window shows as
+// text, so it goes there without the code.
+const stateUnreadMessage = "список загрузок не прочитан, запись отменена, чтобы не затереть файл"
+
 var ErrNotFound = uierr.New("download.not_found", "загрузка не найдена")
 
 var (
-	errStateUnread      = errors.New("список загрузок не прочитан, запись отменена, чтобы не затереть файл")
 	errSelectionLost    = errors.New("выбор файлов потерян: без него нельзя понять, что скачивать")
 	errMetainfoNotSaved = errors.New("не удалось сохранить torrent-файл: загрузку нельзя будет восстановить после перезапуска")
 	errRootUnknown      = errors.New("не удалось определить папку загрузки, данные не удалены")
@@ -101,6 +104,7 @@ var (
 	errDeleting          = uierr.New("download.deleting", "данные этой загрузки уже удаляются")
 	errDataLeft          = uierr.New("download.data_left", "запись удалена, но файлы остались на диске")
 	errSaveFailed        = uierr.New("download.save_failed", "не удалось сохранить список загрузок")
+	errStateUnread       = uierr.New("download.state_unread", stateUnreadMessage)
 )
 
 type pending struct {
@@ -506,10 +510,9 @@ func applySelection(info *metainfo.Info, selected []int) ([]FileState, error) {
 // records, not about which Download field motivated this call.
 func (m *Manager) persistLocked() error {
 	if m.loadErr != nil {
-		err := fmt.Errorf("%w: %w", errStateUnread, m.loadErr)
-		m.degraded = degradedStatus{Degraded: true, Message: err.Error()}
+		m.degraded = degradedStatus{Degraded: true, Message: fmt.Sprintf("%s: %v", stateUnreadMessage, m.loadErr)}
 		emit(eventDegraded, m.degraded)
-		return fmt.Errorf("%w: %w", errSaveFailed, err)
+		return fmt.Errorf("%w: %w", errStateUnread, m.loadErr)
 	}
 	records := make([]record, 0, len(m.items))
 	for _, d := range m.items {

@@ -133,6 +133,26 @@ func (m *Manager) replaceClient(cl *client) {
 	m.mu.Unlock()
 }
 
+// loseTheList makes the stored list unreadable and has m read it again, as a
+// start on a corrupt file does; the list in memory stays. It returns the
+// load's error.
+func loseTheList(t *testing.T, m *Manager) error {
+	t.Helper()
+	m.mu.Lock()
+	dir := m.store.dir
+	m.mu.Unlock()
+	if err := os.WriteFile(filepath.Join(dir, "downloads.json"), []byte(`[{"id":"a"`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m.mu.Lock()
+	err := m.loadLocked()
+	m.mu.Unlock()
+	if err == nil {
+		t.Fatal("the corrupt list was read")
+	}
+	return err
+}
+
 func attachFake(m *Manager, id string) *fakeTorrent {
 	eng := &fakeTorrent{size: 100}
 	m.mu.Lock()

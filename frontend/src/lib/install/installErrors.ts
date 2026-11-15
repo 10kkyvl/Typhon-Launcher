@@ -114,6 +114,7 @@ export const REASONS: Record<string, MessageKey> = {
   'download.restore_failed': 'errInstall.downloadRestoreFailed',
   'download.save_failed': 'errInstall.downloadSaveFailed',
   'download.seeding': 'errInstall.downloadSeeding',
+  'download.state_unread': 'errInstall.downloadStateUnread',
   'download.torrent_read_failed': 'errInstall.downloadTorrentReadFailed',
   'download.unavailable': 'errInstall.downloadUnavailable',
   'download.net_interface_down': 'errInstall.downloadNetInterfaceDown',
