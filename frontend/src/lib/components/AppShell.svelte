@@ -12,6 +12,7 @@
   import { liveIslandOn } from '../stores/liveIsland';
   import { initConflictToasts } from '../stores/liveIslandFeed';
   import { scrollmemory } from '../utils/scrollmemory';
+  import { setStageScroll } from '../stores/stage';
   import ChatPanel from './ChatPanel.svelte';
   import NetworkBanner from './NetworkBanner.svelte';
   import OfflineBanner from './OfflineBanner.svelte';
@@ -144,7 +145,7 @@
     {/if}
     <NetworkBanner />
     {#key $route}
-      <main class="content" use:scrollmemory {@attach focusPage}>
+      <main class="content" use:scrollmemory={setStageScroll} {@attach focusPage}>
         <div class="page" data-part="page">
           {@render children?.()}
         </div>

@@ -46,6 +46,16 @@ export function claimStage(gameId: string | null): () => void {
   };
 }
 
+const scrolled = writable(0);
+
+/** How far the page under the stage is scrolled, px, as the page will settle (utils/scrollmemory.ts). */
+export const stageScroll: Readable<number> = { subscribe: scrolled.subscribe };
+
+/** The shell's page scroller reports its position here; the stage drifts and fades with it. */
+export function setStageScroll(top: number): void {
+  scrolled.set(top);
+}
+
 // Pictures the stage could not load this session: their games have no wide art to stand on.
 const failed = writable<ReadonlySet<string>>(new Set());
 

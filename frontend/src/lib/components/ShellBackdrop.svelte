@@ -2,7 +2,9 @@
   import { onDestroy } from 'svelte';
   import { fade } from 'svelte/transition';
   import { ambientState, pickAmbient } from '../stores/ambient';
-  import { stageGame, stagePicture, stagePictureFailed } from '../stores/stage';
+  import type { Attachment } from 'svelte/attachments';
+  import { stageGame, stagePicture, stagePictureFailed, stageScroll } from '../stores/stage';
+  import { stageDrift } from '../backdrop/stageDrift';
   import { libraryGames } from '../stores/library';
   import { gameArt, requestArt } from '../stores/metadata';
   import { themeApplied } from '../theme/apply';
@@ -94,6 +96,15 @@
     return way === 'in' ? tokenMs('--motion-backdrop', 600) : tokenMs('--dur-panel', 200);
   }
 
+  // The stage drifts up and fades as the page scrolls, so the grid below never lies on a busy picture.
+  // Written straight on the element: a custom property on the shell would restyle every card each frame.
+  const drift: Attachment<HTMLElement> = (node) =>
+    stageScroll.subscribe((top) => {
+      const { shift, opacity } = stageDrift(top);
+      node.style.transform = `translate3d(0, ${shift}px, 0)`;
+      node.style.opacity = String(opacity);
+    });
+
   $effect(() => {
     const target = painter;
     if (!target) return;
@@ -107,7 +118,7 @@
 <div class="backdrop" aria-hidden="true">
   <canvas bind:this={canvas} width={BACKDROP_W} height={BACKDROP_H}></canvas>
   {#if $stagePicture}
-    <div class="stage" data-game={$stagePicture.id}>
+    <div class="stage" data-game={$stagePicture.id} {@attach drift}>
       {#key $stagePicture.src}
         {#if $stagePicture.src}
           {@const src = $stagePicture.src}
