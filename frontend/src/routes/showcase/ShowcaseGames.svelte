@@ -1,5 +1,7 @@
 <script lang="ts">
   import { BellOff } from '@lucide/svelte';
+  import Artwork from '../../lib/components/Artwork.svelte';
+  import GameLink from '../../lib/components/GameLink.svelte';
   import GameListRow from '../../lib/components/GameListRow.svelte';
   import GameSavesBackups from '../../lib/components/GameSavesBackups.svelte';
   import GameSavesCloud from '../../lib/components/GameSavesCloud.svelte';
@@ -9,11 +11,15 @@
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import type { SavesResult } from '../../lib/services/library';
   import type { Snapshot } from '../../lib/services/savebackup';
+  import { libraryGames } from '../../lib/stores/library';
   import { toast } from '../../lib/stores/toasts';
   import ShowcaseRow from './ShowcaseRow.svelte';
   import ShowcaseSection from './ShowcaseSection.svelte';
 
   const LAUNCH_MS = 2000;
+
+  // A game link opens a real page: the first game of the library, when there is one.
+  const linked = $derived($libraryGames[0] ?? null);
 
   // One sample game whose Play launches for two seconds, then runs until Stop: in the row and the carousel.
   let running = $state(false);
@@ -111,6 +117,20 @@
     <HeroCarousel level={4} slides={[{ id: 'sample-hades', title: 'Hades', art: {}, line: 'Starting…', launching: true }]} onopen={said('Open')} onplay={said('Play')} onstop={said('Stop')} />
   </ShowcaseRow>
 
+  <ShowcaseRow caption="Game links: a title, a long title cut on one line, a cover beside its title (pointer only), a game with no page (plain text); they open the library's first game">
+    <GameLink id={linked?.id} name={linked?.title ?? 'The library is empty'} />
+    <span class="cut"><GameLink id={linked?.id} name="Disco Elysium – The Final Cut, a title long enough to be cut" truncate /></span>
+    <span class="linked">
+      <span class="thumb">
+        <GameLink id={linked?.id} name={linked?.title ?? 'Hades'} repeat>
+          <Artwork src="" alt="" label={linked?.title ?? 'Hades'} seed={linked?.id ?? 'sample-hades'} ratio="3 / 4" radius="var(--radius-xs)" />
+        </GameLink>
+      </span>
+      <GameLink id={linked?.id} name={linked?.title ?? 'Hades'} />
+    </span>
+    <GameLink id="" name="Hades (no page)" />
+  </ShowcaseRow>
+
   <ShowcaseRow caption="List rows: idle with marks, one that launches when pressed, running, launching, favourite with no art" stack>
     <ul class="list">
       <GameListRow id="sample-hades" title="Hades" details={['Played yesterday', '42 h']} size="14.2 GB" onopen={said('Open')} onplay={said('Play')} onstop={said('Stop')} onmore={said('More')}>
@@ -175,6 +195,22 @@
 </ShowcaseSection>
 
 <style>
+  .cut {
+    display: flex;
+    max-width: 20rem;
+  }
+
+  .linked {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .thumb {
+    width: 4.8rem;
+    border-radius: var(--radius-xs);
+  }
+
   .part {
     display: flex;
     flex-direction: column;

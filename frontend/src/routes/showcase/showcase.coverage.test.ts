@@ -48,6 +48,7 @@ const BASE = [
   'Toasts',
   // The parts a game is shown with, in their states (ShowcaseGames.svelte).
   'GameListRow',
+  'GameLink',
   'HeroCarousel',
 ];
 

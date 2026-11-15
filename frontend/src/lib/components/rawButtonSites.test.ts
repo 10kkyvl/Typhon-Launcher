@@ -48,6 +48,7 @@ const ALLOWED: Record<string, Record<string, Kind>> = {
   'lib/components/ChatPanel.svelte': { 'toast-open': 'row' },
   'lib/components/FeedRow.svelte': { who: 'row', game: 'row' },
   'lib/components/GameCard.svelte': { cover: 'row', info: 'row', play: 'cover control', 'quick-btn': 'cover control' },
+  'lib/components/GameLink.svelte': { cover: 'row' },
   'lib/components/GameProfiles.svelte': { candidate: 'radio tile' },
   'lib/components/GamePropertiesModal.svelte': { candidate: 'list option' },
   'lib/components/HeroCarousel.svelte': { pick: 'tile' },
