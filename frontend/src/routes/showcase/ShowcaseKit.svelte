@@ -160,7 +160,7 @@
 
   <ShowcaseRow caption="With a selection: a radio group, arrows and Home / End, the chosen bar labelled" stack>
     <div class="chart">
-      <BarChart label="Weeks" buckets={WEEKS} format={time} bind:selected={week} values="selected" height="6.4rem" />
+      <BarChart label="Weeks" buckets={WEEKS} format={time} selectable bind:selected={week} values="selected" height="6.4rem" />
     </div>
     <span class="picked">Chosen: {WEEKS.find((item) => item.key === week)?.label}</span>
   </ShowcaseRow>

@@ -1,39 +1,46 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { t } from '../i18n';
+  import { locale, t } from '../i18n';
   import { motionOn } from '../motion/motion';
   import { nextIndex } from '../utils/roving';
-  import { barShare, chartMax, isEmpty, ticks, type ChartBucket, type ChartScale } from './barChart';
+  import { barShare, chartMax, chartValue, isEmpty, ticks, type ChartBucket, type ChartScale } from './barChart';
   import Reading from './Reading.svelte';
   import Tooltip from './Tooltip.svelte';
 
   /**
    * Vertical bars over buckets (days, weeks, months). The values are the caller's unit and `format`
    * writes them, so hours, hours a day and sessions share the chart. A zero bucket keeps its slot;
-   * with nothing above zero the caller's `empty` is shown instead.
+   * with nothing above zero the caller's `empty` is shown instead. A value that is not a number, is
+   * below zero or infinite is no value (barChart.ts::chartValue) for the bar, its label, the table and
+   * the radio alike; the words always say the value given, a bar over the scale is drawn to the top.
    *
    * Plain: the drawing is hidden from assistive tech and a table with the same numbers stands in for
    * it; each bar's value is a label over it.
    *
-   * With `bind:selected` the bars are one choice of a radio group (one Tab stop, the arrows, Home and
-   * End move the choice and the focus, stopping at the ends). Each radio is named by its bucket and
+   * With `selectable` the bars are one choice of a radio group (one Tab stop, the arrows, Home and
+   * End move the choice and the focus, stopping at the ends); `bind:selected` holds the chosen key,
+   * which may be none (null or a key no bucket has) without the group turning into a table. Each radio is named by its bucket and
    * value and shows them as a hint, so the radios are the list of numbers and no table repeats them.
    * `values="selected"` labels the chosen bar only, for a chart of many bars.
    *
    * `scale` gives the axis (barChart.ts::secondsScale for a time): its ticks are drawn and the bars
-   * are measured against its maximum; without it the tallest bar fills the height. Bars grow from
+   * are measured against its maximum; without it the tallest bar fills the height. The ticks are
+   * written by `tickFormat`, else by `format` with the zero tick a bare 0 (a format may word zero as
+   * an absence, "no play", which an axis must not say); a `tickFormat` writes the zero tick too. Bars grow from
    * zero only while motion is on. `--bar-chart-height` (or `height`) sets the height of the plot.
    */
   let {
     buckets,
     label,
     format,
+    selectable = false,
     selected = $bindable(),
     scale,
     values = 'all',
     columns,
     height,
     tick,
+    tickFormat,
     empty,
     testid,
   }: {
@@ -42,8 +49,10 @@
     label: string;
     /** A value in words ("2 h 10 min", "3 sessions"), for the labels, the axis and the table. */
     format: (value: number) => string;
-    /** The key of the chosen bucket. Binding it makes the bars a radio group. */
-    selected?: string;
+    /** The bars are a radio group, chosen or not yet. */
+    selectable?: boolean;
+    /** With `selectable`: the key of the chosen bucket, null for none. */
+    selected?: string | null;
     scale?: ChartScale;
     values?: 'all' | 'selected';
     /** The heads of the stand-in table's two columns; "Period" and "Value" by default. */
@@ -51,11 +60,12 @@
     height?: string;
     /** Draws what stands under a bar instead of the bucket's `tick` or `label`. */
     tick?: Snippet<[ChartBucket]>;
+    /** Writes the axis ticks, zero included; by default `format`, with the zero tick a bare 0. */
+    tickFormat?: (value: number) => string;
     empty?: Snippet;
     testid?: string;
   } = $props();
 
-  const selectable = $derived(selected !== undefined);
   const max = $derived(chartMax(buckets, scale));
   const marks = $derived(scale ? ticks(scale) : []);
   const chosen = $derived(buckets.findIndex((bucket) => bucket.key === selected));
@@ -66,8 +76,11 @@
     return current >= 0 ? current : buckets.length - 1;
   });
 
-  const named = (bucket: ChartBucket) => $t('common.chartBucket', { label: bucket.label, value: format(bucket.value) });
-  const labelled = (bucket: ChartBucket) => bucket.value > 0 && (values === 'all' || bucket.key === selected);
+  const said = (bucket: ChartBucket) => format(chartValue(bucket));
+  const named = (bucket: ChartBucket) => $t('common.chartBucket', { label: bucket.label, value: said(bucket) });
+  const labelled = (bucket: ChartBucket) => chartValue(bucket) > 0 && (values === 'all' || bucket.key === selected);
+  const zero = $derived(new Intl.NumberFormat($locale).format(0));
+  const tickText = (mark: number) => (tickFormat ? tickFormat(mark) : mark === 0 ? zero : format(mark));
 
   let group = $state<HTMLElement>();
 
@@ -83,10 +96,10 @@
 </script>
 
 {#snippet column(bucket: ChartBucket)}
-  {@const share = barShare(bucket.value, max)}
+  {@const share = barShare(chartValue(bucket), max)}
   <span class="well" aria-hidden="true">
     {#if share > 0}<span class="bar" style:height="{share * 100}%"></span>{/if}
-    {#if labelled(bucket)}<span class="value" style:bottom="{share * 100}%"><Reading text={format(bucket.value)} /></span>{/if}
+    {#if labelled(bucket)}<span class="value" style:bottom="{share * 100}%"><Reading text={said(bucket)} /></span>{/if}
   </span>
   <span class="tick" aria-hidden="true">{#if tick}{@render tick(bucket)}{:else}{bucket.tick ?? bucket.label}{/if}</span>
 {/snippet}
@@ -98,7 +111,7 @@
     {#if scale}
       <div class="axis" aria-hidden="true">
         {#each marks as mark (mark)}
-          <span class="mark" style:bottom="{barShare(mark, max) * 100}%"><Reading text={format(mark)} /></span>
+          <span class="mark" style:bottom="{barShare(mark, max) * 100}%"><Reading text={tickText(mark)} /></span>
         {/each}
       </div>
     {/if}
@@ -144,7 +157,7 @@
         </thead>
         <tbody>
           {#each buckets as bucket (bucket.key)}
-            <tr><th scope="row">{bucket.label}</th><td>{format(bucket.value)}</td></tr>
+            <tr><th scope="row">{bucket.label}</th><td>{said(bucket)}</td></tr>
           {/each}
         </tbody>
       </table>

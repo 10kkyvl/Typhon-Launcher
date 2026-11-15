@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { barShare, chartMax, hourScale, isEmpty, secondsScale, ticks, type ChartBucket } from './barChart';
+import { barShare, chartMax, chartValue, hourScale, isEmpty, secondsScale, ticks, type ChartBucket } from './barChart';
 
 const bucket = (key: string, value: number, extra: Partial<ChartBucket> = {}): ChartBucket => ({ key, label: key, value, ...extra });
 
@@ -47,8 +47,18 @@ describe('the chart arithmetic', () => {
   it('scales to the largest value, or to the scale given', () => {
     expect(chartMax([bucket('a', 3), bucket('b', 9)])).toBe(9);
     expect(chartMax([bucket('a', 3)], { max: 8, step: 2 })).toBe(8);
-    expect(chartMax([bucket('a', 0)])).toBe(1);
-    expect(chartMax([])).toBe(1);
+  });
+
+  it('scales values under 1 to the largest of them, and nothing to nothing', () => {
+    expect(chartMax([bucket('a', 0.5), bucket('b', 0.25)])).toBe(0.5);
+    expect(chartMax([bucket('a', 0)])).toBe(0);
+    expect(chartMax([])).toBe(0);
+    expect(barShare(1, 0)).toBe(0);
+  });
+
+  it('reads a value that is not a number, below zero or infinite as no value', () => {
+    expect([Number.NaN, -3, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 0, 2.5].map((value) => chartValue(bucket('a', value)))).toEqual([0, 0, 0, 0, 0, 2.5]);
+    expect(chartMax([bucket('a', Number.POSITIVE_INFINITY), bucket('b', 2)])).toBe(2);
   });
 
   it('gives each bar its share of the height, never below 0 or over 1', () => {

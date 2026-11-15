@@ -22,6 +22,9 @@ export interface ChartScale {
 
 const usable = (value: number) => (Number.isFinite(value) && value > 0 ? value : 0);
 
+/** A bucket's value as the bar, its label, the table and a radio's name all take it: 0 for no value. */
+export const chartValue = (bucket: ChartBucket): number => usable(bucket.value);
+
 const HOUR_STEPS = [1, 2, 3, 4, 6, 8, 10, 12, 16, 20, 24];
 
 /** A round axis maximum in hours (1, 2, 3, 4, 6, 8, 10, 12, …) and its tick step. */
@@ -47,10 +50,10 @@ export function ticks(scale: ChartScale): number[] {
   return Array.from({ length: Math.floor(max / step + 1e-9) + 1 }, (_, i) => i * step);
 }
 
-/** The value the full height stands for: the scale's maximum, or the largest value; never 0. */
+/** The value the full height stands for: the scale's maximum, or the largest value (0 for none). */
 export function chartMax(buckets: readonly ChartBucket[], scale?: ChartScale): number {
   if (scale && usable(scale.max) > 0) return scale.max;
-  return Math.max(1, ...buckets.map((bucket) => usable(bucket.value)));
+  return Math.max(0, ...buckets.map(chartValue));
 }
 
 /** A bar's height as a part of the full height, 0…1. */
