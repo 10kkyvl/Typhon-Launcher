@@ -157,6 +157,7 @@ func TestInterfaceTypesAreCoveredByWhatGoSends(t *testing.T) {
 		{"TorrentInfo", services["TorrentInfo"], TorrentInfo{}, true},
 		{"NetworkState", network["NetworkState"], NetworkState{}, true},
 		{"NetInterface", network["NetInterface"], NetInterface{}, true},
+		{"DownloadReordered", store["DownloadReordered"], ReorderedEvent{}, true},
 		{"DownloadProgress", store["DownloadProgress"], func() ProgressUpdate {
 			at := time.Now()
 			return ProgressUpdate{StalledSince: &at}
@@ -208,7 +209,7 @@ func TestEventNamesMatchWhatTheFrontendListensTo(t *testing.T) {
 	events := map[string]string{
 		"download:added": eventAdded, "download:updated": eventUpdated, "download:progress": eventProgress,
 		"download:completed": eventCompleted, "download:failed": eventFailed, "download:removed": eventRemoved,
-		"download:degraded": eventDegraded, "download:network": eventNetwork,
+		"download:degraded": eventDegraded, "download:network": eventNetwork, "download:reordered": eventReordered,
 	}
 	var listened strings.Builder
 	for _, rel := range []string{"downloads.ts", "degraded.ts", "network.ts"} {
@@ -228,12 +229,8 @@ func TestEventNamesMatchWhatTheFrontendListensTo(t *testing.T) {
 	}
 }
 
-// The frontend sorts its list by this event; it is checked here until a store
-// listens to it and it joins the table above.
+// The frontend sorts its list by this event.
 func TestReorderEventWireFormat(t *testing.T) {
-	if eventReordered != "download:reordered" {
-		t.Fatalf("event constant is %q, want download:reordered", eventReordered)
-	}
 	m := newTestManager(t, 1)
 	m.addTestItem("a", StatusQueued)
 	m.addTestItem("b", StatusQueued)
