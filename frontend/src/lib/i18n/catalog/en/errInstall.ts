@@ -115,6 +115,7 @@ export const errInstall: Record<ErrInstallKey, Message> = {
   'errInstall.downloadRestoreFailed': 'Could not restore the download',
   'errInstall.downloadSaveFailed': 'Could not save the downloads list',
   'errInstall.downloadSeeding': 'Seeding could not be stopped before deleting',
+  'errInstall.downloadStateUnread': 'The downloads list could not be read, so changes are not saved',
   'errInstall.downloadTorrentReadFailed': 'Could not read the torrent file',
   'errInstall.downloadUnavailable': 'Unavailable for this download',
 
