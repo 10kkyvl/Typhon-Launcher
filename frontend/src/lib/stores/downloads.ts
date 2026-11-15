@@ -1,8 +1,9 @@
-import { derived, get, writable } from 'svelte/store';
+import { derived, get, readable, writable, type Readable } from 'svelte/store';
 import { listenFirst } from './listenFirst';
 import { inWails } from '../services/backend';
 import type { DownloadAction } from '../downloads/actions';
 import { followOrder } from '../downloads/order';
+import { createSpeedHistory, emptySpeedSeries, type SpeedSeries } from '../downloads/speedHistory';
 import {
   cancelDownload as cancelRequest,
   downloadNow as downloadNowRequest,
@@ -104,6 +105,27 @@ export const stats = derived(downloads, ($downloads) => ({
   activeCount: $downloads.filter((d) => activeStatuses.includes(d.status)).length,
   queuedCount: $downloads.filter((d) => d.status === 'queued').length,
 }));
+
+const history = createSpeedHistory();
+
+downloads.subscribe((list) => {
+  const now = Date.now();
+  for (const d of list) history.record(d.id, d.status, d.downloadSpeed, now);
+  history.keep(new Set(list.map((d) => d.id)));
+});
+
+/**
+ * The download speed of one download over the last two minutes, a sample a second, kept since this
+ * window loaded; nothing is stored. A reader gets a fresh series every second; the timer runs only
+ * while somebody reads.
+ */
+export function speedHistory(id: string): Readable<SpeedSeries> {
+  return readable(emptySpeedSeries(), (set) => {
+    set(history.series(id, Date.now()));
+    const timer = setInterval(() => set(history.series(id, Date.now())), 1000);
+    return () => clearInterval(timer);
+  });
+}
 
 export function statusLabels(status: DownloadStatus): string {
   const labels: Record<DownloadStatus, string> = {
