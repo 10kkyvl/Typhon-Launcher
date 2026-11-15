@@ -9,7 +9,9 @@ import { balanced } from '../testing/scan';
  * "May reject", read from the caller's own file: the handler has no `catch`, or a `catch` that throws
  * again. The handler is the function `onconfirm` names or calls (`fn`, `() => fn(x)`), an inline
  * arrow's block, or, for `pending.run`, the `run` of every object assigned to `pending`, resolved the
- * same way. A handler that cannot be resolved in the file counts as one that may reject.
+ * same way. For `page.pending.run`, where the caller made `page` with a factory imported from a
+ * sibling `.svelte.ts` module (`const page = createX()`), that module is the file read. A handler that
+ * cannot be resolved counts as one that may reject.
  *
  * Limits: only one level is followed (a handler that calls a helper which catches still needs
  * `errorText`, which is harmless); a rethrow hidden in a called function is not seen; a `pending`
@@ -17,6 +19,7 @@ import { balanced } from '../testing/scan';
  */
 
 const sources = import.meta.glob<string>(['../../**/*.svelte'], { query: '?raw', import: 'default', eager: true });
+const modules = import.meta.glob<string>(['../../**/*.svelte.ts'], { query: '?raw', import: 'default', eager: true });
 
 function bodyAfter(text: string, at: number): string {
   const open = text.indexOf('{', at);
@@ -63,9 +66,23 @@ function pendingRuns(text: string, base: string): (string | null)[] | null {
   return runs.length ? runs : null;
 }
 
-function handlerBodies(text: string, handler: string): (string | null)[] | null {
+// The text of the `.svelte.ts` module whose factory made `owner` in this file, imported as `./x.svelte`.
+function ownerModule(path: string, text: string, owner: string): string | null {
+  const factory = new RegExp(`(?:const|let)\\s+${owner}\\s*=\\s*([\\w$]+)\\(`).exec(text)?.[1];
+  if (!factory) return null;
+  const from = new RegExp(`import\\s*\\{[^}]*\\b${factory}\\b[^}]*\\}\\s*from\\s*'\\./([^']+\\.svelte)'`).exec(text)?.[1];
+  if (!from) return null;
+  return modules[`${path.slice(0, path.lastIndexOf('/'))}/${from}.ts`] ?? null;
+}
+
+function handlerBodies(path: string, text: string, handler: string): (string | null)[] | null {
   const base = /^\s*([\w$]+)\.run\s*$/.exec(handler)?.[1];
   if (base) return pendingRuns(text, base);
+  const owned = /^\s*([\w$]+)\.([\w$]+)\.run\s*$/.exec(handler);
+  if (owned) {
+    const module = ownerModule(path, text, owned[1]);
+    return module === null ? null : pendingRuns(module, owned[2]);
+  }
   return [resolve(text, handler)];
 }
 
@@ -79,7 +96,7 @@ function unmapped(): string[] {
       if (/\berrorText=/.test(props)) continue;
       const at = props.indexOf('onconfirm=');
       const handler = at < 0 ? '' : (balanced(props, at + 'onconfirm='.length) ?? '');
-      const bodies = handlerBodies(text, handler);
+      const bodies = handlerBodies(path, text, handler);
       if (bodies && bodies.every((body) => body !== null && safe(body))) continue;
       missing.push(`${path}:${text.slice(0, tag.index).split('\n').length} onconfirm={${handler.trim()}}`);
     }

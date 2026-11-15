@@ -1,9 +1,8 @@
 <script lang="ts">
   import Page from '../../lib/components/Page.svelte';
   import './settings-layout.css';
-  import { Clipboard } from '@wailsio/runtime';
   import { Copy, Download, Eye, FolderOpen, HardDrive, LifeBuoy, ListChecks, RefreshCw, ScrollText, Send, Trash2 } from '@lucide/svelte';
-  import { onMount, untrack } from 'svelte';
+  import { untrack } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import CloudConsentModal from '../../lib/components/CloudConsentModal.svelte';
@@ -18,7 +17,6 @@
   import RateLimitInput from '../../lib/components/RateLimitInput.svelte';
   import ScheduleEditor from '../../lib/components/ScheduleEditor.svelte';
   import Select from '../../lib/components/Select.svelte';
-  import { cloudErrorText } from '../../lib/cloudsaves/messages';
   import { errorCode, hasMessage, msg } from '../../lib/i18n';
   import SentDataModal from '../../lib/components/SentDataModal.svelte';
   import Modal from '../../lib/components/Modal.svelte';
@@ -41,41 +39,20 @@
   import LibraryFoldersRow from './LibraryFoldersRow.svelte';
   import LibraryLocationRow from './LibraryLocationRow.svelte';
   import NetworkSettingsCard from './NetworkSettingsCard.svelte';
-  import { forgetSyncPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
-  import { forgetRemote, syncNow } from '../../lib/services/accountSync';
-  import { accountSyncReason } from '../../lib/services/accountSyncMessages';
-  import { inWails } from '../../lib/services/backend';
-  import { importExternalGames } from '../../lib/services/extlib';
-  import { importErrorText, summarizeImport } from '../../lib/library/extlibSummary';
-  import { cloudForget } from '../../lib/services/cloudsaves';
-  import { sendLogsPrompt } from '../../lib/confirm/prompts';
-  import { listLegalDocuments, type LegalMeta } from '../../lib/services/legal';
-  import { logsReason } from '../../lib/services/logsMessages';
-  import { onLogUploadStatus, sendLogs, type LogUploadStatus, type SendLogsResult } from '../../lib/services/logsUpload';
+  import { createSettingsPage, overlayReason } from './settingsPage.svelte';
   import { uploadPercent } from '../../lib/support/progress';
-  import { logsUploadErrorText } from '../../lib/services/logsUploadErrors';
   import { SCREENSHOT_HOTKEYS } from '../../lib/services/screenshots';
-  import { OVERLAY_HOTKEYS, onOverlayStatus, overlayStatus, type OverlayStatus } from '../../lib/services/overlay';
-  import { getSettings, maxActiveDownloadOptions, openFolder, type GameMode, type ScheduleWindow, type Settings } from '../../lib/services/settings';
+  import { OVERLAY_HOTKEYS } from '../../lib/services/overlay';
+  import { maxActiveDownloadOptions, openFolder, type GameMode, type Settings } from '../../lib/services/settings';
   import { defaultPlayDownloadLimit, defaultPlayUploadLimit } from '../../lib/services/playThrottle';
-  import {
-    exportLogs,
-    elevationSupported,
-    getAppInfo,
-    getSystemInfo,
-    getWineStatus,
-    type AppInfo,
-    type LogBundle,
-    type SystemInfo,
-    type WineStatus,
-  } from '../../lib/services/system';
+  import { elevationSupported, type SystemInfo } from '../../lib/services/system';
   import { releaseNotesHistory, requestCheck, rollbackInfo, selfUpdateChecking, selfUpdateStatus } from '../../lib/stores/selfupdate';
   import { rollbackShown } from '../../lib/services/selfupdate';
   import { rollbackReason } from '../../lib/services/selfupdateMessages';
-  import { cloudStatus, refreshCloudStatus } from '../../lib/stores/cloudsaves';
+  import { cloudStatus } from '../../lib/stores/cloudsaves';
   import { saveBackupsEnabled } from '../../lib/stores/savebackup';
   import { navigate } from '../../lib/stores/router';
-  import { settings, updateSettings, updateSettingsReporting, updateSettingsResult } from '../../lib/stores/settings';
+  import { settings, updateSettings, updateSettingsReporting } from '../../lib/stores/settings';
   import { toast } from '../../lib/stores/toasts';
   import { authState, currentUser } from '../../lib/stores/user';
   import { betaToggleShown, isBeta } from '../../lib/services/selfupdateChannel';
@@ -103,187 +80,20 @@
     });
   });
 
+  const page = createSettingsPage();
+
   const current = $derived($settings);
   const scaleValue = $derived(String(Math.round(($settings?.uiScale ?? 1) * 100)));
 
-  let appInfo = $state<AppInfo | null>(null);
-  let systemInfo = $state<SystemInfo | null>(null);
-  let systemFailed = $state(false);
-  let wineStatus = $state<WineStatus | null>(null);
-
-  let legalDocs = $state<LegalMeta[]>([]);
-  // The list failed to load in the app, or this build has no legal documents to show (a browser).
-  let legalState = $state<'' | 'failed' | 'unavailable'>('');
-  let legalOpen = $state(false);
-  let legalActiveId = $state<string | null>(null);
-  let legalActiveTitle = $state('');
-  let sourcesNoticeReviewOpen = $state(false);
-  let sentDataOpen = $state(false);
-
-  let logsBundle = $state<LogBundle | null>(null);
-  let logsSaving = $state(false);
-  let logsSending = $state(false);
-  let logsStage = $state<LogUploadStatus['state'] | 'idle'>('idle');
-  let logsProgress = $state<LogUploadStatus | null>(null);
-  const logsProgressPercent = $derived(logsProgress ? uploadPercent(logsProgress) : 0);
-  let logsSendResult = $state<SendLogsResult | null>(null);
-  let logsSendFailure = $state('');
+  const logsProgressPercent = $derived(page.logsProgress ? uploadPercent(page.logsProgress) : 0);
 
   const accountReady = $derived($authState === 'authenticated');
-  let syncingNow = $state(false);
-  let importing = $state(false);
-  let importDetails = $state<string[]>([]);
-  let forgettingRemote = $state(false);
-  let pending = $state<{ prompt: ConfirmPrompt; run: () => void | Promise<void> } | null>(null);
-
-  onMount(() => {
-    void refreshCloudStatus();
-    const offLogs = onLogUploadStatus((status) => {
-      logsStage = status.state;
-      if (status.state === 'sending' && (status.totalBytes ?? 0) > 0) {
-        logsProgress = status;
-      } else if (status.state !== 'sending') {
-        logsProgress = null;
-      }
-    });
-    void (async () => {
-      appInfo = await getAppInfo();
-      try {
-        systemInfo = await getSystemInfo();
-      } catch {
-        systemFailed = true;
-      }
-      wineStatus = await getWineStatus();
-      try {
-        legalDocs = await listLegalDocuments();
-      } catch {
-        legalState = inWails ? 'failed' : 'unavailable';
-      }
-    })();
-    return offLogs;
-  });
 
   function cpuLine(info: SystemInfo): string {
     const threads = msg('settings.aboutCpuThreads', { cores: info.cores });
     const cores = info.physicalCoresUnknown ? '' : `${msg('settings.aboutCpuCores', { cores: info.physicalCores })} · `;
     return `${info.cpuUnknown ? msg('settings.aboutUnknown') : info.cpu} · ${cores}${threads}`;
   }
-
-  async function saveLogs() {
-    if (!inWails) {
-      toast(msg('settings.aboutLogsDesktopOnly'));
-      return;
-    }
-    logsSaving = true;
-    try {
-      const bundle = await exportLogs();
-      logsBundle = bundle;
-      toast(msg('settings.aboutLogsSavedToast'), 'success');
-      try {
-        await openFolder(bundle.dir);
-      } catch {
-        toast(bundle.path);
-      }
-    } catch (err) {
-      logsBundle = null;
-      toast(logsReason(err), 'danger');
-    } finally {
-      logsSaving = false;
-    }
-  }
-
-  function openSendLogsConfirm() {
-    if (!inWails) {
-      toast(msg('settings.aboutLogsDesktopOnly'));
-      return;
-    }
-    if (logsSending) return;
-    logsSendFailure = '';
-    pending = { prompt: sendLogsPrompt(), run: confirmSendLogs };
-  }
-
-  function confirmSendLogs() {
-    if (logsSending) return;
-    logsSending = true;
-    logsSendResult = null;
-    logsStage = 'preparing';
-    logsProgress = null;
-    logsSendFailure = '';
-    void sendLogs()
-      .then((result) => {
-        logsSendResult = result;
-      })
-      .catch((err) => {
-        logsSendResult = null;
-        logsStage = 'error';
-        logsSendFailure = logsUploadErrorText(err);
-      })
-      .finally(() => {
-        logsSending = false;
-      });
-  }
-
-  async function copySendLogsId() {
-    if (!logsSendResult) return;
-    try {
-      await Clipboard.SetText(logsSendResult.id);
-      toast(msg('settings.aboutLogsSendIdCopiedToast'), 'info');
-    } catch {
-      toast(msg('settings.aboutLogsSendIdCopyFailedToast'), 'danger');
-    }
-  }
-
-  async function runSyncNow() {
-    if (syncingNow) return;
-    syncingNow = true;
-    try {
-      await syncNow();
-      toast(msg('settings.generalSyncDoneToast'), 'success');
-    } catch (err) {
-      toast(accountSyncReason(err, msg('settings.generalSyncFailedToast')), 'danger');
-    } finally {
-      syncingNow = false;
-    }
-  }
-
-  async function runImportExternal() {
-    if (importing) return;
-    importing = true;
-    importDetails = [];
-    try {
-      const report = summarizeImport(await importExternalGames());
-      importDetails = report.details;
-      toast(report.text, report.kind);
-    } catch (err) {
-      toast(importErrorText(err), 'danger');
-    } finally {
-      importing = false;
-    }
-  }
-
-  function askForgetRemote() {
-    if (forgettingRemote) return;
-    pending = { prompt: forgetSyncPrompt(), run: runForgetRemote };
-  }
-
-  async function runForgetRemote() {
-    if (forgettingRemote) return;
-    forgettingRemote = true;
-    try {
-      await forgetRemote();
-      settings.set(await getSettings());
-      toast(msg('settings.generalSyncForgetSuccessToast'), 'success');
-    } catch (err) {
-      toast(accountSyncReason(err, msg('settings.generalSyncForgetFailedToast')), 'danger');
-    } finally {
-      forgettingRemote = false;
-    }
-  }
-
-  let cloudConsentOpen = $state(false);
-  let cloudDisableOpen = $state(false);
-  let cloudBusy = $state(false);
-  let cloudForgetFailed = $state(false);
 
   const cloudUsage = $derived.by(() => {
     const status = $cloudStatus;
@@ -293,65 +103,6 @@
     }
     return msg('cloudsaves.usageUnknown', { used: bytesSize(status.usedBytes) });
   });
-
-  function changeCloudSaves(on: boolean) {
-    if (on) cloudConsentOpen = true;
-    else cloudDisableOpen = true;
-  }
-
-  async function enableCloudSaves() {
-    if (cloudBusy) return;
-    cloudBusy = true;
-    try {
-      if (await updateSettingsResult({ cloudSaves: true })) {
-        cloudConsentOpen = false;
-        cloudForgetFailed = false;
-        await refreshCloudStatus();
-      }
-    } finally {
-      cloudBusy = false;
-    }
-  }
-
-  async function runCloudForget() {
-    cloudForgetFailed = false;
-    try {
-      await cloudForget();
-    } catch (err) {
-      cloudForgetFailed = true;
-      toast(cloudErrorText(err, msg('cloudsaves.forgetFailed')), 'danger');
-    }
-    await refreshCloudStatus();
-  }
-
-  async function disableCloudSaves(forget: boolean) {
-    if (cloudBusy) return;
-    cloudBusy = true;
-    try {
-      if (!(await updateSettingsResult({ cloudSaves: false }))) return;
-      cloudDisableOpen = false;
-      if (forget) await runCloudForget();
-      else await refreshCloudStatus();
-    } finally {
-      cloudBusy = false;
-    }
-  }
-
-  async function retryCloudForget() {
-    if (cloudBusy) return;
-    cloudBusy = true;
-    try {
-      await runCloudForget();
-    } finally {
-      cloudBusy = false;
-    }
-  }
-
-  function openLegalDoc(meta: LegalMeta) {
-    legalActiveId = meta.id;
-    legalActiveTitle = meta.title;
-    legalOpen = true;
-  }
 
   type PathKey = 'gamesPath' | 'downloadsPath' | 'screenshotsPath';
 
@@ -365,9 +116,6 @@
 
   const folderRows = $derived(folderRowOptions());
 
-  let librarySetupOpen = $state(false);
-  let historyOpen = $state(false);
-
   function set(patch: Partial<Settings>) {
     updateSettings(patch);
   }
@@ -377,9 +125,9 @@
   const labelId = (name: string) => `${uid}-${name}-label`;
   const subId = (name: string) => `${uid}-${name}-sub`;
 
-  const portable = $derived(appInfo?.portable ?? false);
+  const portable = $derived(page.appInfo?.portable ?? false);
   const betaShown = $derived(betaToggleShown($authState, $currentUser));
-  const onBeta = $derived(isBeta($selfUpdateStatus.channel) || isBeta(appInfo?.channel));
+  const onBeta = $derived(isBeta($selfUpdateStatus.channel) || isBeta(page.appInfo?.channel));
 
   async function setBetaChannel(value: boolean) {
     const saved = await updateSettingsReporting({ updateBetaChannel: value }, () => toast(msg('state.settingsSaveFailed'), 'danger'));
@@ -393,7 +141,7 @@
     });
   }
 
-  const gameModeMac = $derived(appInfo?.platform === 'darwin');
+  const gameModeMac = $derived(page.appInfo?.platform === 'darwin');
   const trayEnabled = $derived(current?.minimizeToTray ?? true);
 
   function setGameMode(change: Partial<GameMode>) {
@@ -401,49 +149,20 @@
     updateSettings({ gameMode: { ...base, ...change } });
   }
 
-  let overlayInfo = $state<OverlayStatus | null>(null);
-  let overlayInfoFailed = $state(false);
-  let overlayError = $state('');
-
   const overlayHotkeyOptions = OVERLAY_HOTKEYS.map((key) => ({ id: key, label: key }));
   const overlayHotkey = $derived.by(() => {
     const id = current?.overlayHotkey ?? OVERLAY_HOTKEYS[0];
     return overlayHotkeyOptions.some((o) => o.id === id) ? id : OVERLAY_HOTKEYS[0];
   });
-  const overlayStatusFailed = $derived(overlayInfoFailed || (!!overlayInfo?.supported && !!overlayInfo.error));
+  const overlayStatusFailed = $derived(page.overlayInfoFailed || (!!page.overlayInfo?.supported && !!page.overlayInfo.error));
   const overlayStatusText = $derived.by(() => {
-    if (overlayInfoFailed) return msg('settings.overlayStatusUnknown');
-    if (!overlayInfo) return '';
-    if (!overlayInfo.supported) return msg('settings.overlayStatusUnsupported');
-    if (overlayInfo.error) return overlayReason(overlayInfo.error);
-    if (overlayInfo.enabled) return msg('settings.overlayStatusOn', { hotkey: overlayInfo.hotkey });
+    if (page.overlayInfoFailed) return msg('settings.overlayStatusUnknown');
+    if (!page.overlayInfo) return '';
+    if (!page.overlayInfo.supported) return msg('settings.overlayStatusUnsupported');
+    if (page.overlayInfo.error) return overlayReason(page.overlayInfo.error);
+    if (page.overlayInfo.enabled) return msg('settings.overlayStatusOn', { hotkey: page.overlayInfo.hotkey });
     return msg('settings.overlayStatusOff');
   });
-
-  async function loadOverlayStatus() {
-    try {
-      overlayInfo = await overlayStatus();
-      overlayInfoFailed = false;
-    } catch (err) {
-      console.warn('overlay status', err);
-      overlayInfoFailed = true;
-    }
-  }
-
-  function overlayReason(err: unknown): string {
-    const code = errorCode(err);
-    if (code && hasMessage(code)) return msg(code);
-    return err instanceof Error ? err.message : String(err);
-  }
-
-  async function setOverlay(patch: Partial<Settings>) {
-    overlayError = '';
-    await updateSettingsReporting(patch, (err) => {
-      const reason = overlayReason(err);
-      overlayError = reason ? msg('settings.overlaySaveError', { reason }) : msg('settings.overlaySaveErrorPlain');
-    });
-    await loadOverlayStatus();
-  }
 
   const screenshotHotkeyOptions = SCREENSHOT_HOTKEYS.map((key) => ({ id: key, label: key }));
   const screenshotHotkey = $derived.by(() => {
@@ -459,23 +178,6 @@
         'danger',
       );
     });
-  }
-
-  onMount(() => {
-    const off = onOverlayStatus((status) => {
-      overlayInfo = status;
-      overlayInfoFailed = false;
-    });
-    void loadOverlayStatus();
-    return off;
-  });
-
-  function openLibrarySetup() {
-    if (!inWails) {
-      toast(msg('settings.generalLibraryDesktopOnlyToast'));
-      return;
-    }
-    librarySetupOpen = true;
   }
 
   async function openPath(path: string | undefined) {
@@ -511,18 +213,6 @@
       playDownloadMode: id,
       playDownloadRateLimit: current?.playDownloadRateLimit || defaultPlayDownloadLimit,
       playUploadRateLimit: current?.playUploadRateLimit || defaultPlayUploadLimit,
-    });
-  }
-
-  let scheduleError = $state('');
-
-  async function setSchedule(downloadSchedule: ScheduleWindow[]) {
-    scheduleError = '';
-    await updateSettingsReporting({ downloadSchedule }, (err) => {
-      const reason = overlayReason(err);
-      scheduleError = reason
-        ? msg('settings.downloadsScheduleSaveError', { reason })
-        : msg('settings.downloadsScheduleSaveErrorPlain');
     });
   }
 
@@ -697,7 +387,7 @@
                 checked={current?.overlayEnabled ?? true}
                 labelledby={labelId('overlay-enabled')}
                 describedby={subId('overlay-enabled')}
-                onchange={(v) => setOverlay({ overlayEnabled: v })}
+                onchange={(v) => page.setOverlay({ overlayEnabled: v })}
               />
             </div>
             <div class="row">
@@ -710,7 +400,7 @@
                 value={overlayHotkey}
                 width="22rem"
                 options={overlayHotkeyOptions}
-                onchange={(id) => setOverlay({ overlayHotkey: id })}
+                onchange={(id) => page.setOverlay({ overlayHotkey: id })}
               />
             </div>
             <div class="row">
@@ -750,7 +440,7 @@
                     <span class="row-sub">{overlayStatusText}</span>
                   {/if}
                 </div>
-                {#if overlayError}<div class="message"><Notice tone="danger" compact>{overlayError}</Notice></div>{/if}
+                {#if page.overlayError}<div class="message"><Notice tone="danger" compact>{page.overlayError}</Notice></div>{/if}
               </div>
             </div>
           </div>
@@ -768,7 +458,7 @@
                   placeholder={msg('settings.generalLibraryPathPlaceholder')}
                   value={current?.libraryPath ?? ''}
                 />
-                <Button size="sm" onclick={openLibrarySetup}>
+                <Button size="sm" onclick={page.openLibrarySetup}>
                   {current?.libraryPath ? msg('common.edit') : msg('common.select')}
                 </Button>
                 <IconButton
@@ -814,20 +504,20 @@
                 <span class="row-label">{msg('settings.extlibLabel')}</span>
                 <span class="row-sub">{msg('settings.extlibSub')}</span>
               </div>
-              {#if appInfo?.platform === 'windows'}
-                <Button size="sm" disabled={importing} onclick={runImportExternal}>
+              {#if page.appInfo?.platform === 'windows'}
+                <Button size="sm" disabled={page.importing} onclick={page.runImportExternal}>
                   <RefreshCw size="1.5rem" strokeWidth={1.8} />
-                  {importing ? msg('settings.extlibRunning') : msg('settings.extlibLabel')}
+                  {page.importing ? msg('settings.extlibRunning') : msg('settings.extlibLabel')}
                 </Button>
               {:else}
                 <span class="row-sub">{msg('settings.extlibWindowsOnly')}</span>
               {/if}
             </div>
-            {#if importDetails.length > 0}
+            {#if page.importDetails.length > 0}
               <details class="import-details" open>
                 <summary class="row-label">{msg('settings.extlibDetailsTitle')}</summary>
                 <ul>
-                  {#each importDetails as line, index (index)}
+                  {#each page.importDetails as line, index (index)}
                     <li class="row-sub">{line}</li>
                   {/each}
                 </ul>
@@ -952,7 +642,7 @@
                 <span class="row-label">{msg('settings.generalPrivacyShowSentLabel')}</span>
                 <span class="row-sub">{msg('settings.generalPrivacyShowSentSub')}</span>
               </div>
-              <Button size="sm" onclick={() => (sentDataOpen = true)}>
+              <Button size="sm" onclick={() => (page.sentDataOpen = true)}>
                 <Eye size="1.5rem" strokeWidth={1.8} />
                 {msg('settings.generalPrivacyShowSentButton')}
               </Button>
@@ -962,7 +652,7 @@
                 <span class="row-label">{msg('settings.generalPrivacySessionStateLabel')}</span>
                 <span class="row-sub">{msg('settings.generalPrivacySessionStateSub')}</span>
                 <span class="row-sub privacy-link">
-                  <TextLink onclick={() => openLegalDoc({ id: 'privacy', title: msg('settings.generalPrivacyPolicyLinkLabel') })}>
+                  <TextLink onclick={() => page.openLegalDoc({ id: 'privacy', title: msg('settings.generalPrivacyPolicyLinkLabel') })}>
                     {msg('settings.generalPrivacyPolicyLinkLabel')}
                   </TextLink>
                 </span>
@@ -1007,9 +697,9 @@
                 <span class="row-label">{msg('settings.generalSyncNowLabel')}</span>
                 <span class="row-sub">{msg('settings.generalSyncNowSub')}</span>
               </div>
-              <Button size="sm" disabled={!accountReady || !current?.accountSync || syncingNow} onclick={runSyncNow}>
+              <Button size="sm" disabled={!accountReady || !current?.accountSync || page.syncingNow} onclick={page.runSyncNow}>
                 <RefreshCw size="1.5rem" strokeWidth={1.8} />
-                {syncingNow ? msg('settings.generalSyncNowRunning') : msg('settings.generalSyncNowLabel')}
+                {page.syncingNow ? msg('settings.generalSyncNowRunning') : msg('settings.generalSyncNowLabel')}
               </Button>
             </div>
             <div class="row danger-zone">
@@ -1020,11 +710,11 @@
               <Button
                 size="sm"
                 variant="danger"
-                disabled={!accountReady || forgettingRemote}
-                onclick={askForgetRemote}
+                disabled={!accountReady || page.forgettingRemote}
+                onclick={page.askForgetRemote}
               >
                 <Trash2 size="1.5rem" strokeWidth={1.8} />
-                {forgettingRemote ? msg('settings.generalSyncForgetRunning') : msg('settings.generalSyncForgetLabel')}
+                {page.forgettingRemote ? msg('settings.generalSyncForgetRunning') : msg('settings.generalSyncForgetLabel')}
               </Button>
             </div>
           </div>
@@ -1101,10 +791,10 @@
               <div class="row-text">
                 <span class="row-label">{msg('settings.downloadsScheduleLabel')}</span>
                 <span class="row-sub">{msg('settings.downloadsScheduleSub')}</span>
-                {#if scheduleError}<div class="message"><Notice tone="danger" compact>{scheduleError}</Notice></div>{/if}
+                {#if page.scheduleError}<div class="message"><Notice tone="danger" compact>{page.scheduleError}</Notice></div>{/if}
               </div>
               <div class="schedule-body">
-                <ScheduleEditor windows={current?.downloadSchedule ?? []} onchange={setSchedule} />
+                <ScheduleEditor windows={current?.downloadSchedule ?? []} onchange={page.setSchedule} />
               </div>
             </div>
             <div class="row">
@@ -1263,12 +953,12 @@
                 {:else if cloudUsage}
                   <span class="row-sub">{cloudUsage}{$cloudStatus?.pending ? ` · ${msg('cloudsaves.pending')}` : ''}</span>
                 {/if}
-                {#if cloudForgetFailed && !current?.cloudSaves}
+                {#if page.cloudForgetFailed && !current?.cloudSaves}
                   <span class="row-sub">{msg('cloudsaves.retryForgetHint')}</span>
                 {/if}
               </div>
-              {#if cloudForgetFailed && !current?.cloudSaves}
-                <Button size="sm" variant="danger" disabled={cloudBusy || !accountReady} onclick={retryCloudForget}>
+              {#if page.cloudForgetFailed && !current?.cloudSaves}
+                <Button size="sm" variant="danger" disabled={page.cloudBusy || !accountReady} onclick={page.retryCloudForget}>
                   {msg('cloudsaves.retryForget')}
                 </Button>
               {/if}
@@ -1277,7 +967,7 @@
                 labelledby={labelId('settings')}
                 describedby={subId('settings')}
                 disabled={!accountReady && !current?.cloudSaves}
-                onchange={changeCloudSaves}
+                onchange={page.changeCloudSaves}
               />
             </div>
             <div class="row">
@@ -1336,7 +1026,7 @@
                 onchange={(v) => set({ autoInstall: v })}
               />
             </div>
-            {#if appInfo && elevationSupported(appInfo)}
+            {#if page.appInfo && elevationSupported(page.appInfo)}
               <div class="row">
                 <div class="row-text">
                   <span class="row-label" id={labelId('downloads-elevate-ahead')}>{msg('settings.downloadsElevateAheadLabel')}</span>
@@ -1426,38 +1116,38 @@
             <img src="/typhon.png" alt="" width="44" height="44" draggable="false" />
             <div>
               <h3>Typhon Launcher</h3>
-              <span class="row-sub">{msg(onBeta ? 'settings.aboutVersionBetaLabel' : 'settings.aboutVersionLabel', { version: appInfo?.version ?? '—' })} · {appInfo?.platform ?? ''}/{appInfo?.arch ?? ''}{appInfo?.devMock ? ' · devmock' : ''}</span>
+              <span class="row-sub">{msg(onBeta ? 'settings.aboutVersionBetaLabel' : 'settings.aboutVersionLabel', { version: page.appInfo?.version ?? '—' })} · {page.appInfo?.platform ?? ''}/{page.appInfo?.arch ?? ''}{page.appInfo?.devMock ? ' · devmock' : ''}</span>
             </div>
           </div>
           <div class="rows">
-            {#if appInfo?.portable}
+            {#if page.appInfo?.portable}
               <div class="row">
                 <div class="row-text">
                   <span class="row-label">{msg('settings.aboutPortableLabel')}</span>
-                  <span class="row-sub">{msg('settings.aboutPortableDataDir', { path: appInfo.dataDir })}</span>
+                  <span class="row-sub">{msg('settings.aboutPortableDataDir', { path: page.appInfo.dataDir })}</span>
                 </div>
               </div>
             {/if}
-            {#if systemInfo}
+            {#if page.systemInfo}
               <div class="row">
                 <div class="row-text">
                   <span class="row-label">{msg('settings.aboutSystemLabel')}</span>
-                  <span class="row-sub">{systemInfo.osUnknown ? msg('settings.aboutUnknown') : systemInfo.os}</span>
+                  <span class="row-sub">{page.systemInfo.osUnknown ? msg('settings.aboutUnknown') : page.systemInfo.os}</span>
                 </div>
               </div>
               <div class="row">
                 <div class="row-text">
                   <span class="row-label">{msg('settings.aboutCpuLabel')}</span>
-                  <span class="row-sub">{cpuLine(systemInfo)}</span>
+                  <span class="row-sub">{cpuLine(page.systemInfo)}</span>
                 </div>
               </div>
               <div class="row">
                 <div class="row-text">
                   <span class="row-label">{msg('settings.aboutMemoryLabel')}</span>
-                  <span class="row-sub">{systemInfo.ramBytes > 0 ? bytesLabel(systemInfo.ramBytes) : msg('settings.aboutUnknown')}</span>
+                  <span class="row-sub">{page.systemInfo.ramBytes > 0 ? bytesLabel(page.systemInfo.ramBytes) : msg('settings.aboutUnknown')}</span>
                 </div>
               </div>
-            {:else if systemFailed}
+            {:else if page.systemFailed}
               <div class="row">
                 <div class="row-text">
                   <span class="row-label">{msg('settings.aboutSystemLabel')}</span>
@@ -1465,13 +1155,13 @@
                 </div>
               </div>
             {/if}
-            {#if wineStatus?.required}
+            {#if page.wineStatus?.required}
               <div class="row">
                 <div class="row-text">
                   <span class="row-label">{msg('settings.aboutRuntimeLabel')}</span>
                   <span class="row-sub">
-                    {#if wineStatus.installed}
-                      CrossOver {wineStatus.version}
+                    {#if page.wineStatus.installed}
+                      CrossOver {page.wineStatus.version}
                     {:else}
                       {msg('settings.aboutRuntimeMissing')}
                     {/if}
@@ -1486,7 +1176,7 @@
                   {#if $selfUpdateChecking}
                     {msg('settings.aboutCheckUpdatesChecking')}
                   {:else}
-                    {msg('settings.aboutInstalledVersion', { version: $selfUpdateStatus.currentVersion || appInfo?.version || '—' })}
+                    {msg('settings.aboutInstalledVersion', { version: $selfUpdateStatus.currentVersion || page.appInfo?.version || '—' })}
                     {#if $selfUpdateStatus.checkedAt}
                       · {msg('settings.aboutCheckedAt', { date: relativeDate($selfUpdateStatus.checkedAt) })}
                     {/if}
@@ -1509,7 +1199,7 @@
                   {/if}
                 </span>
               </div>
-              <Button size="sm" disabled={$releaseNotesHistory.length === 0} onclick={() => (historyOpen = true)}>
+              <Button size="sm" disabled={$releaseNotesHistory.length === 0} onclick={() => (page.historyOpen = true)}>
                 <ScrollText size="1.5rem" strokeWidth={1.8} />
                 {msg('settings.aboutHistoryButtonLabel')}
               </Button>
@@ -1555,69 +1245,69 @@
               <div class="row-text">
                 <span class="row-label">{msg('settings.aboutLogsLabel')}</span>
                 <span class="row-sub">
-                  {#if logsBundle}
-                    {logsBundle.name} · {bytesLabel(logsBundle.sizeBytes)} {msg('settings.aboutLogsAttachHint')}
+                  {#if page.logsBundle}
+                    {page.logsBundle.name} · {bytesLabel(page.logsBundle.sizeBytes)} {msg('settings.aboutLogsAttachHint')}
                   {:else}
                     {msg('settings.aboutLogsSaveHint')}
                   {/if}
                 </span>
               </div>
-              <Button size="sm" disabled={logsSaving} onclick={saveLogs}>
+              <Button size="sm" disabled={page.logsSaving} onclick={page.saveLogs}>
                 <Download size="1.5rem" strokeWidth={1.8} />
-                {logsSaving ? msg('settings.aboutLogsSavingEllipsis') : msg('settings.aboutLogsDownloadButton')}
+                {page.logsSaving ? msg('settings.aboutLogsSavingEllipsis') : msg('settings.aboutLogsDownloadButton')}
               </Button>
             </div>
             <div class="row">
               <div class="row-text">
                 <span class="row-label">{msg('settings.aboutLogsSendButton')}</span>
                 <span class="row-sub">
-                  {#if logsStage === 'preparing'}
+                  {#if page.logsStage === 'preparing'}
                     {msg('settings.aboutLogsPreparingEllipsis')}
-                  {:else if logsStage === 'sending' && logsProgress}
+                  {:else if page.logsStage === 'sending' && page.logsProgress}
                     {msg('settings.aboutLogsSendingProgress', { percent: logsProgressPercent })}
-                  {:else if logsStage === 'sending'}
+                  {:else if page.logsStage === 'sending'}
                     {msg('settings.aboutLogsSendingEllipsis')}
-                  {:else if logsStage === 'waiting'}
+                  {:else if page.logsStage === 'waiting'}
                     {msg('settings.aboutLogsWaitingEllipsis')}
-                  {:else if logsSendResult}
+                  {:else if page.logsSendResult}
                     {msg('settings.aboutLogsSentStatus')}
                   {:else}
                     {msg('settings.aboutLogsSendConfirmNote')}
                   {/if}
                 </span>
-                {#if logsSendFailure}
+                {#if page.logsSendFailure}
                   <div class="message">
-                    <Notice tone="danger" compact title={logsSendFailure}>{msg('settings.aboutLogsSendFailedHint')}</Notice>
+                    <Notice tone="danger" compact title={page.logsSendFailure}>{msg('settings.aboutLogsSendFailedHint')}</Notice>
                   </div>
                 {/if}
-                {#if logsSending}
+                {#if page.logsSending}
                   <div class="logs-upload-progress">
                     <ProgressBar
                       value={logsProgressPercent}
-                      indeterminate={logsStage !== 'sending' || !logsProgress}
+                      indeterminate={page.logsStage !== 'sending' || !page.logsProgress}
                       height={5}
                       label={msg('settings.aboutLogsLabel')}
                     />
                   </div>
                 {/if}
               </div>
-              <Button size="sm" disabled={logsSending} onclick={openSendLogsConfirm}>
+              <Button size="sm" disabled={page.logsSending} onclick={page.openSendLogsConfirm}>
                 <Send size="1.5rem" strokeWidth={1.8} />
-                {logsSending ? msg('settings.aboutLogsSendingEllipsis') : msg('settings.aboutLogsSendButton')}
+                {page.logsSending ? msg('settings.aboutLogsSendingEllipsis') : msg('settings.aboutLogsSendButton')}
               </Button>
             </div>
-            {#if logsSendResult}
+            {#if page.logsSendResult}
               <div class="row">
                 <div class="row-text">
                   <span class="row-label">{msg('settings.aboutLogsSendResultLabel')}</span>
-                  <span class="row-sub logs-send-id">{logsSendResult.id}</span>
+                  <span class="row-sub logs-send-id">{page.logsSendResult.id}</span>
                 </div>
-                <IconButton label={msg('settings.aboutLogsSendIdCopyLabel')} size="sm" onclick={copySendLogsId}>
+                <IconButton label={msg('settings.aboutLogsSendIdCopyLabel')} size="sm" onclick={page.copySendLogsId}>
                   <Copy size="1.5rem" strokeWidth={1.8} />
                 </IconButton>
               </div>
-              {#if logsSendResult.dropped.length > 0}
-                <p class="row-sub">{msg('settings.aboutLogsSendDroppedNote', { files: logsSendResult.dropped.join(', ') })}</p>
+              {#if page.logsSendResult.dropped.length > 0}
+                <p class="row-sub">{msg('settings.aboutLogsSendDroppedNote', { files: page.logsSendResult.dropped.join(', ') })}</p>
               {/if}
             {/if}
             <div class="row">
@@ -1634,18 +1324,18 @@
         </Card>
 
         <Card title={msg('settings.aboutLegalCardTitle')}>
-          {#if legalState === 'failed'}
+          {#if page.legalState === 'failed'}
             <Notice tone="danger" compact>{msg('settings.aboutLegalLoadError')}</Notice>
-          {:else if legalState === 'unavailable'}
+          {:else if page.legalState === 'unavailable'}
             <Notice tone="info" compact announce={false}>{msg('settings.aboutLegalUnavailable')}</Notice>
           {:else}
             <div class="rows">
-              {#each legalDocs as meta (meta.id)}
+              {#each page.legalDocs as meta (meta.id)}
                 <div class="row">
                   <div class="row-text">
                     <span class="row-label">{meta.title}</span>
                   </div>
-                  <Button size="sm" onclick={() => openLegalDoc(meta)}>{msg('common.open')}</Button>
+                  <Button size="sm" onclick={() => page.openLegalDoc(meta)}>{msg('common.open')}</Button>
                 </div>
               {/each}
               <div class="row">
@@ -1653,7 +1343,7 @@
                   <span class="row-label">{msg('settings.aboutSourcesNoticeLabel')}</span>
                   <span class="row-sub">{msg('settings.aboutSourcesNoticeSub')}</span>
                 </div>
-                <Button size="sm" onclick={() => (sourcesNoticeReviewOpen = true)}>{msg('common.open')}</Button>
+                <Button size="sm" onclick={() => (page.sourcesNoticeReviewOpen = true)}>{msg('common.open')}</Button>
               </div>
             </div>
           {/if}
@@ -1667,7 +1357,7 @@
   </div>
 
   <LibrarySetupModal
-    bind:open={librarySetupOpen}
+    bind:open={page.librarySetupOpen}
     title={current?.libraryPath ? msg('settings.generalLibrarySetupTitleChange') : msg('settings.generalLibrarySetupTitleNew')}
     note={current?.libraryPath
       ? msg('settings.generalLibrarySetupChangeNote')
@@ -1675,30 +1365,30 @@
   />
 
   <CloudConsentModal
-    bind:open={cloudConsentOpen}
-    busy={cloudBusy}
-    onenable={enableCloudSaves}
-    onpolicy={() => openLegalDoc({ id: 'privacy', title: msg('settings.generalPrivacyPolicyLinkLabel') })}
+    bind:open={page.cloudConsentOpen}
+    busy={page.cloudBusy}
+    onenable={page.enableCloudSaves}
+    onpolicy={() => page.openLegalDoc({ id: 'privacy', title: msg('settings.generalPrivacyPolicyLinkLabel') })}
   />
 
   <CloudDisableModal
-    bind:open={cloudDisableOpen}
-    busy={cloudBusy}
-    ondelete={() => disableCloudSaves(true)}
-    onkeep={() => disableCloudSaves(false)}
+    bind:open={page.cloudDisableOpen}
+    busy={page.cloudBusy}
+    ondelete={() => page.disableCloudSaves(true)}
+    onkeep={() => page.disableCloudSaves(false)}
   />
 
-  <LegalDocumentModal bind:open={legalOpen} documentId={legalActiveId} title={legalActiveTitle} />
+  <LegalDocumentModal bind:open={page.legalOpen} documentId={page.legalActiveId} title={page.legalActiveTitle} />
 
-  <SourcesNoticeModal bind:open={sourcesNoticeReviewOpen} mode="review" />
+  <SourcesNoticeModal bind:open={page.sourcesNoticeReviewOpen} mode="review" />
 
-  <SentDataModal bind:open={sentDataOpen} />
+  <SentDataModal bind:open={page.sentDataOpen} />
 
-  {#if pending}
-    <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} />
+  {#if page.pending}
+    <ConfirmModal prompt={page.pending.prompt} onconfirm={page.pending.run} onclose={() => (page.pending = null)} />
   {/if}
 
-  <Modal bind:open={historyOpen} title={msg('settings.aboutHistoryLabel')} width="104rem">
+  <Modal bind:open={page.historyOpen} title={msg('settings.aboutHistoryLabel')} width="104rem">
     <ReleaseNotesList notes={$releaseNotesHistory} currentVersion={$selfUpdateStatus.currentVersion} />
   </Modal>
 </Page>
