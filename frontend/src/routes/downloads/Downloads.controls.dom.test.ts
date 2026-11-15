@@ -91,11 +91,13 @@ describe('Downloads: downloads held while a game runs', () => {
 });
 
 describe('Downloads: no active download', () => {
-  it('says so with the base empty state, as a line under its heading', () => {
+  it('says so in one calm line where the active panels stand, with no heading of its own', () => {
     downloads.set([download({ id: 'c', name: 'Done One' })]);
     renderDom(Downloads);
 
-    expect(screen.getByText(msg('transfers.downloadsEmptyActiveTitle')).closest('.empty.inline')).not.toBeNull();
+    const line = screen.getByText(msg('downloads.page.calm')).closest('.calm') as HTMLElement;
+    expect(line.tagName).toBe('P');
+    expect(line.querySelector('h2, h3')).toBeNull();
   });
 });
 

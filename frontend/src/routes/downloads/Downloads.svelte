@@ -1,22 +1,26 @@
 <script lang="ts">
   import Page from '../../lib/components/Page.svelte';
-  import { Download, Plus } from '@lucide/svelte';
+  import { Download, Plus, Store } from '@lucide/svelte';
   import AddDownloadModal from '../../lib/components/AddDownloadModal.svelte';
   import Button from '../../lib/components/Button.svelte';
   import DownloadDetailsModal from '../../lib/components/DownloadDetailsModal.svelte';
   import DownloadItem from '../../lib/components/DownloadItem.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import InstallModal from '../../lib/components/InstallModal.svelte';
+  import Notice from '../../lib/components/Notice.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import { active, completed, failed, queue } from '../../lib/stores/downloads';
   import { requestArt } from '../../lib/stores/metadata';
-  import { msg } from '../../lib/i18n';
+  import { navigate } from '../../lib/stores/router';
+  import { installErrorText } from '../../lib/install/installErrors';
+  import { msg, t } from '../../lib/i18n';
   import CompletedList from './CompletedList.svelte';
   import DownloadsActions from './DownloadsActions.svelte';
   import DownloadsAnnouncer from './DownloadsAnnouncer.svelte';
   import DownloadsSection from './DownloadsSection.svelte';
   import DownloadsSummary from './DownloadsSummary.svelte';
   import FailedList from './FailedList.svelte';
+  import { downloadsListLoad, reloadDownloadsList } from './listLoad';
   import PlayThrottleBanner from './PlayThrottleBanner.svelte';
   import QueueList from './QueueList.svelte';
   import { downloadsSectionIds } from './sections';
@@ -26,11 +30,14 @@
   let detailsId = $state<string | null>(null);
   let installOpen = $state(false);
   let installDownloadId = $state<string | null>(null);
+  let retrying = $state(false);
   let announcer = $state<DownloadsAnnouncer>();
 
   const nothing = $derived(
     $active.length === 0 && $queue.length === 0 && $completed.length === 0 && $failed.length === 0,
   );
+  const loadFailed = $derived(!$downloadsListLoad.loaded && $downloadsListLoad.error != null);
+  const loading = $derived(!$downloadsListLoad.loaded && !loadFailed);
 
   /** What the lists say in the screen's live region (`onannounce`): what the player did, never progress. */
   function announce(text: string) {
@@ -67,34 +74,57 @@
 
   <PlayThrottleBanner />
 
-  {#if nothing}
-  <EmptyState level={2}
-    title={msg('transfers.downloadsEmptyActiveTitle')}
-    description={msg('transfers.downloadsEmptyActiveDescription')}
-  >
-    {#snippet icon()}
-      <Download size="2rem" strokeWidth={1.8} />
-    {/snippet}
-    {#snippet actions()}
-      <Button variant="primary" onclick={() => (addOpen = true)}>
-        <Plus size="1.5rem" strokeWidth={2} />
-        {msg('transfers.downloadsAddAction')}
-      </Button>
-    {/snippet}
-  </EmptyState>
-  {:else}
-  <DownloadsSection id={downloadsSectionIds.active} title={msg('transfers.downloadsActiveHeading')} count={$active.length}>
-    {#if $active.length === 0}
-      <EmptyState size="inline" title={msg('transfers.downloadsEmptyActiveTitle')} />
-    {:else}
+  {#if loadFailed || retrying}
+    <div class="load-failed">
+      <Notice
+        tone="danger"
+        title={$t('downloads.page.loadFailed')}
+        retry={{ label: $t('common.retry'), run: () => reloadDownloadsList() }}
+        bind:retrying
+      >
+        {installErrorText($downloadsListLoad.error, $t('downloads.page.loadFailedText'))}
+      </Notice>
+    </div>
+  {/if}
+
+  {#if $active.length > 0}
+    <DownloadsSection id={downloadsSectionIds.active} title={msg('transfers.downloadsActiveHeading')} count={$active.length}>
       <div class="rows">
         {#each $active as download (download.id)}
           <DownloadItem {download} onopen={(d) => openDetails(d.id)} />
         {/each}
       </div>
-    {/if}
-  </DownloadsSection>
+    </DownloadsSection>
+  {:else if !nothing}
+    <p class="calm">
+      <span>{$t('downloads.page.calm')}</span>
+      <Button size="sm" variant="ghost" onclick={() => navigate('catalog')}>
+        <Store size="1.4rem" strokeWidth={1.8} />
+        {$t('downloads.page.stores')}
+      </Button>
+    </p>
+  {:else if loading}
+    <EmptyState level={2} title={$t('downloads.page.loading')} />
+  {:else if !loadFailed && !retrying}
+    <EmptyState level={2} title={$t('downloads.page.emptyTitle')} description={$t('downloads.page.emptyText')}>
+      {#snippet icon()}
+        <Download size="2rem" strokeWidth={1.8} />
+      {/snippet}
+      {#snippet actions()}
+        <Button variant="primary" onclick={() => navigate('catalog')}>
+          <Store size="1.5rem" strokeWidth={1.8} />
+          {$t('downloads.page.stores')}
+        </Button>
+        <Button onclick={() => (addOpen = true)}>
+          <Plus size="1.5rem" strokeWidth={2} />
+          {msg('transfers.downloadsAddAction')}
+        </Button>
+      {/snippet}
+    </EmptyState>
   {/if}
+
+  <!-- Finished downloads still installing take a part of their own here, between the active panels and
+       the failed list; until it comes, CompletedList below shows them with the rest. -->
 
   <FailedList onopen={openDetails} />
 
@@ -116,5 +146,20 @@
     display: flex;
     flex-direction: column;
     gap: 0.8rem;
+  }
+
+  .calm {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1) var(--space-3);
+    max-width: 140rem;
+    margin-bottom: var(--space-8);
+    color: var(--text-2);
+  }
+
+  .load-failed {
+    max-width: 140rem;
+    margin-bottom: var(--space-6);
   }
 </style>

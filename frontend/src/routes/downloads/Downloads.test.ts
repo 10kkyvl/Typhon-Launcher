@@ -86,10 +86,10 @@ afterEach(() => {
 });
 
 describe('downloads screen', () => {
-  it('shows empty sections and no failed section when nothing was downloaded', () => {
+  it('says there is nothing, with no failed section, when nothing was downloaded', () => {
     const html = page();
 
-    expect(html).toContain('No active downloads');
+    expect(html).toContain('Dead calm. Nothing is downloading');
     expect(html).not.toContain('Failed');
     expect(html).not.toMatch(/class="row failed[ "]/);
   });

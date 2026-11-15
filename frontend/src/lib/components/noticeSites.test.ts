@@ -205,6 +205,8 @@ const SITES: Record<string, Site[]> = {
   'routes/friends/AddFriendModal.svelte': [['danger', true]],
   // Safety advice of the requests tab, read with it.
   'routes/friends/Friends.svelte': [['info', false]],
+  // The downloads list that could not be read at startup, with its Retry: the failure just happened.
+  'routes/downloads/Downloads.svelte': [['danger', true]],
   // Downloads held while a game runs: it starts and ends while the page is open.
   'routes/downloads/PlayThrottleBanner.svelte': [['info', true]],
   // The speed limit Go just refused, said in the popover the player is in.
