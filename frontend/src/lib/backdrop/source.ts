@@ -24,6 +24,21 @@ export function backdropSources(id: string, games: readonly LibraryGame[], art: 
   return [...new Set([clean(known?.hero), clean(known?.cover), clean(game?.cover)].filter(Boolean))];
 }
 
+/**
+ * Where a game's colour (stores/gameTone.ts) is read from: kept by the art key, so a catalog card, the
+ * library card and the game page of one game agree, or by the library id of a game with no catalog match
+ * (also the seed of its generated art). The pictures go the covers first, the one a card shows before the
+ * library's own, then the hero. Null while the art store has not answered for the game: a picture read
+ * now could be replaced by the answer, and the colour would change twice.
+ */
+export function toneSource(id: string, games: readonly LibraryGame[], art: ArtMap, answered: ReadonlySet<string>): { key: string; pictures: string[] } | null {
+  const { game, key } = artKey(id, games);
+  if (key && !(key in art) && !answered.has(key)) return null;
+  const known = key ? art[key] : undefined;
+  const own = game ?? (key ? games.find((g) => g.canonicalGameId === key) : undefined);
+  return { key: key ?? id, pictures: [...new Set([clean(known?.cover), clean(own?.cover), clean(known?.hero)].filter(Boolean))] };
+}
+
 /** Whether a game has a wide picture for the stage: known yes (with it), known no, or not known yet. */
 export type WideArt = { state: 'yes'; src: string } | { state: 'no' } | { state: 'unknown' };
 

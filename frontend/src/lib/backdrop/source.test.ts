@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { LibraryGame } from '../services/library';
 import type { GameArt } from '../services/metadata';
-import { artRequest, backdropSources, pageAmbient, playedArtRequests, rememberedGame, wideArt } from './source';
+import { artRequest, backdropSources, pageAmbient, playedArtRequests, rememberedGame, toneSource, wideArt } from './source';
 
 function game(id: string, extra: Partial<LibraryGame> = {}): LibraryGame {
   return {
@@ -152,5 +152,37 @@ describe('the wide art a game stands on the stage with', () => {
   it('is known to be missing for a library game without a catalog match: no art will ever come for it', () => {
     const games = [game('sideloaded', { cover: '/media/own.jpg' })];
     expect(wideArt('sideloaded', games, { sideloaded: art('', '/media/wrong.jpg') })).toEqual({ state: 'no' });
+  });
+});
+
+// The game's colour (stores/gameTone.ts) is kept per game by the art key the backdrop and the stage use,
+// read from the pictures the card shows first, and waits for the art store's answer rather than reading a
+// picture that is about to be replaced.
+describe('the pictures a game takes its colour from', () => {
+  const pc = game('lib-1', { canonicalGameId: 'c1', cover: '/media/own.jpg' });
+  const image = game('e1', { cover: '/media/e1.jpg', emulation: { platform: 'ps2', catalogGameId: 'c7' } } as Partial<LibraryGame>);
+  const games = [pc, image];
+  const known = { c1: art('/media/cover.jpg', '/media/hero.jpg'), c7: art('/media/c7.jpg', '/media/c7-hero.jpg') };
+
+  it('the covers first, the one the card shows before the library own, then the hero', () => {
+    expect(toneSource('lib-1', games, known, new Set(['c1']))).toEqual({ key: 'c1', pictures: ['/media/cover.jpg', '/media/own.jpg', '/media/hero.jpg'] });
+  });
+
+  it('one key and one list for a catalog id and the library id of the same game', () => {
+    expect(toneSource('c1', games, known, new Set(['c1']))).toEqual(toneSource('lib-1', games, known, new Set(['c1'])));
+  });
+
+  it('not known yet while the art store has not answered for the game', () => {
+    expect(toneSource('lib-1', games, {}, new Set())).toBeNull();
+    expect(toneSource('c9', games, {}, new Set())).toBeNull();
+  });
+
+  it('answered without art: the library cover alone, or nothing to read', () => {
+    expect(toneSource('lib-1', games, {}, new Set(['c1']))).toEqual({ key: 'c1', pictures: ['/media/own.jpg'] });
+    expect(toneSource('c9', games, {}, new Set(['c9']))).toEqual({ key: 'c9', pictures: [] });
+  });
+
+  it('an emulated image keys by its own id and reads its own cover, never its catalog game art', () => {
+    expect(toneSource('e1', games, known, new Set())).toEqual({ key: 'e1', pictures: ['/media/e1.jpg'] });
   });
 });

@@ -182,3 +182,18 @@
   /* A game in a list (GameListRow): the width of its cover thumbnail. */
   --row-thumb-w: 3.6rem;
 }
+
+/* A subtree painted in a game's own colour (stores/gameTone.ts sets the --game-* values inline with this
+   class): the controls that launch the game read --play-*. Neither is a theme token and neither has a root
+   value: outside a game each control falls back, where it paints, to the accent tokens of its own subtree,
+   so it is today's primary fill in every theme, with a personal accent and under a subtree's own accent. */
+.game-tone {
+  --play-bg: var(--game-fill);
+  --play-bg-hover: var(--game-fill-hover);
+  --play-bg-active: var(--game-fill-active);
+  --play-text: var(--game-on-fill);
+  --play-glow: var(--game-glow);
+  --play-glyph: var(--game-glyph);
+  --play-disc-hover: var(--game-disc-hover);
+  --play-disc-active: var(--game-disc-active);
+}
