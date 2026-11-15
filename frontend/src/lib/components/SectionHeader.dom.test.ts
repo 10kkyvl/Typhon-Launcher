@@ -25,6 +25,17 @@ describe('a section heading', () => {
     expect(getByRole('heading', { level: 3, name: 'Files' }).id).toBe('files-title');
   });
 
+  // A row that leaves (cancelled, removed, moved to another section) hands focus to its section's
+  // heading when no row is left to take it: the heading takes focus from script, not from Tab.
+  it('lets script focus its heading by id, outside the Tab order', () => {
+    const { getByRole } = renderDom(SectionHeader, { title: 'Queue', count: 2, id: 'queue-title' });
+    const heading = getByRole('heading', { name: 'Queue 2' });
+    expect(heading.getAttribute('tabindex')).toBe('-1');
+
+    document.getElementById('queue-title')?.focus();
+    expect(document.activeElement).toBe(heading);
+  });
+
   it('gives its heading an id of its own when none is given', () => {
     const { getByRole } = renderDom(SectionHeader, { title: 'Queue' });
     expect(getByRole('heading', { name: 'Queue' }).id).not.toBe('');
