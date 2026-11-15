@@ -1,22 +1,11 @@
 <script lang="ts">
   import Page from '../../lib/components/Page.svelte';
   import { ArrowDownUp, ChevronDown, Ellipsis, Heart, LayoutGrid, List, ThumbsDown, Undo2 } from '@lucide/svelte';
-  import { Events } from '@wailsio/runtime';
-  import { createPagePrefetch } from '../../lib/catalog/prefetch';
-  import { catalogWithoutDiscovery, mergeCatalogDisplay } from '../../lib/catalog/display';
-  import { nextGenre } from '../../lib/catalog/filters';
-  import { latestRunner, serialQueue } from '../../lib/catalog/serial';
-  import { loadCatalogContinuation, refreshCatalogSnapshot, reloadCatalogPrefix, withoutStale } from '../../lib/catalog/pages';
-  import { applyFreshPage, canWarmNextPage, createFreshPageBuffer, staleKeyOf, type FreshPageEvent } from '../../lib/catalog/stale';
-  import { maxAutoPages, observerAvailable, shouldLoadMore, watchSentinel } from '../../lib/catalog/infinite';
-  import { identityEvidenceChanged, identityFingerprint, matchesCatalogIdentity } from '../../lib/catalog/identity';
-  import { onDestroy, onMount, tick } from 'svelte';
+  import { mergeCatalogDisplay } from '../../lib/catalog/display';
   import { get } from 'svelte/store';
   import Notice from '../../lib/components/Notice.svelte';
   import RecommendationShelf from '../../lib/components/RecommendationShelf.svelte';
-  import { genreLabel, type Recommendation } from '../../lib/recommendations/display';
-  import { discoveryCache } from '../../lib/recommendations/cache';
-  import { defaultPreferences, emptyProfile, getDiscovery, getRecommendationPreferences, getRecommendationProfile, saveRecommendationPreferences, setNotInterested, type CatalogSort } from '../../lib/services/recommendations';
+  import { genreLabel } from '../../lib/recommendations/display';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
   import Chip from '../../lib/components/Chip.svelte';
@@ -30,173 +19,27 @@
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import Spinner from '../../lib/components/Spinner.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
-  import { playGame, setFavorite, stopGame } from '../../lib/services/library';
+  import { playGame, stopGame } from '../../lib/services/library';
   import { canPlay } from '../../lib/library/launch';
-  import {
-    compatOnlyWorking,
-    isCancelledRequest,
-    queryCatalogGames,
-    type CatalogGame,
-    type CatalogQuery,
-    type CompatInfo,
-    type GenreFacet,
-    type Source,
-  } from '../../lib/services/sources';
-  import { inWails } from '../../lib/services/backend';
-  import { getAppInfo } from '../../lib/services/system';
-  import type { MetadataView } from '../../lib/services/metadata';
+  import type { CatalogGame } from '../../lib/services/sources';
   import { gameMenu, gameMenuButton } from '../../lib/stores/gameMenu';
   import { installedGames, libraryGames, runningGames } from '../../lib/stores/library';
   import { gameArt, gameInfo } from '../../lib/stores/metadata';
-  import { currentRouteKey, navigate, recallRoute, route, stashRoute } from '../../lib/stores/router';
+  import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
-  import { sources } from '../../lib/stores/sources';
   import { catalogView } from '../../lib/stores/ui';
-  import { errorCode, hasMessage, msg } from '../../lib/i18n';
-  import { focusableIn, focusQuietly } from '../../lib/layers/focus';
+  import { msg } from '../../lib/i18n';
+  import { createCatalogPageData, libraryErrorText, type Sort } from './catalogPageData.svelte';
 
-  function libraryErrorText(err: unknown, fallback: string): string {
-    const code = errorCode(err);
-    return hasMessage(code) ? msg(code) : fallback;
-  }
-
-  type Sort = CatalogSort;
-
-  const pageSize = 60;
-  const allGenres = msg('games.filterAll');
-  const sortLabels: Record<Sort, string> = {
-    title: msg('games.sortAlpha'),
-    year: msg('games.catalogSortNewest'),
-    popular: msg('games.catalogSortPopular'),
-    rating: msg('games.catalogSortRating'),
-    'for-you': msg('games.catalogSortForYou'),
-    auto: msg('games.catalogSortAuto'),
-  };
-
-  interface Snapshot {
-    preferenceKey: string;
-    catalogFallback: boolean;
-    discoveryFallback: boolean;
-    discoveryStale: boolean;
-    profile: ReturnType<typeof emptyProfile>;
-    snapshot: string;
-    sourceState: Source[] | undefined;
-    discovery: Recommendation[];
-    hideLibrary: boolean;
-    hideNotInterested: boolean;
-    search: string;
-    genre: string;
-    sort: Sort;
-    compatOnly: boolean;
-    items: CatalogGame[];
-    total: number;
-    page: number;
-    failed: boolean;
-    revision: number;
-    offline: boolean;
-    incomplete: boolean;
-    platform: string;
-    kind: string;
-    facets: GenreFacet[];
-    platforms: GenreFacet[];
-  }
-
-  const routeKey = currentRouteKey();
-  const restored = recallRoute<Snapshot>(routeKey, 'catalog');
-
-  let sourceState = restored?.sourceState;
-  let snapshot = $state(restored?.snapshot ?? '');
-
-  let search = $state(restored?.search ?? get(route).params.q ?? '');
-  let genre = $state(restored?.genre ?? '');
-  let sort = $state<Sort>(restored?.sort ?? 'auto');
-  let compatOnly = $state(restored?.compatOnly ?? false);
-  // Бейдж и фильтр имеют смысл только там, где игры идут через CrossOver: на
-  // Windows они запускаются нативно, и цифра «94% запускается» там ни о чём.
-  let compatRelevant = $state(false);
-  let compatByGame = $state<Record<string, CompatInfo>>({});
-  let items = $state<CatalogGame[]>(restored?.items ?? []);
-  let total = $state(restored?.total ?? 0);
-  let page = $state(restored?.page ?? 0);
-  let loading = $state(!restored);
-  let appending = $state(false);
-  let sentinel = $state<HTMLElement>();
-  let autoPages = $state(0);
-  let failed = $state(restored?.failed ?? false);
-  let backendOutdated = $state(false);
-  let revision = $state(restored?.revision ?? 0);
-  let offline = $state(restored?.offline ?? false);
-  let incomplete = $state(restored?.incomplete ?? false);
-  let facets = $state<GenreFacet[]>(restored?.facets ?? []);
-  let platforms = $state<GenreFacet[]>(restored?.platforms ?? []);
-  let platform = $state(restored?.platform ?? "");
-  let kind = $state(restored?.kind ?? "");
-
-  let preferenceKey = restored?.preferenceKey ?? '';
-  let preferences = $state(defaultPreferences());
-  let profile = $state(restored?.profile ?? emptyProfile());
-  let hideLibrary = $state(restored?.hideLibrary ?? false);
-  let hideNotInterested = $state(restored?.hideNotInterested ?? true);
-  let discovery = $state<Recommendation[]>(restored?.discovery ?? []);
-  let discoveryLoading = $state(false);
-  let catalogFallback = $state(restored?.catalogFallback ?? false);
-  let discoveryFallback = $state(restored?.discoveryFallback ?? false);
-  let discoveryStale = $state(restored?.discoveryStale ?? false);
-  const personalizationFallback = $derived(catalogFallback || (discoveryFallback && !discoveryStale));
-  let lastDismissed = $state<{ id: string; title: string } | null>(null);
-  let preferenceBusy = $state(false);
-  let ready = $state(false);
-  let reloadToken = 0;
-  let favoriteSeq = 0;
-  const effectiveSort = $derived(sort === 'auto' ? profile.defaultSort : sort);
-  const discoveryVisible = $derived(effectiveSort === 'for-you' && !search.trim());
-  const displayedItems = $derived(catalogWithoutDiscovery(items, discoveryVisible ? discovery : []));
-
-  function personalQuery() {
-    return { stable: true, snapshot, hideLibrary, hideNotInterested };
-  }
-
-  function favoriteViewKey(): string {
-    return JSON.stringify({ search, genre, platform, kind, sort, compatOnly });
-  }
-
-  let staleKey = '';
-  const earlyFresh = createFreshPageBuffer();
-  let token = 0;
-  let catalogAbort = new AbortController();
-  let debounce: ReturnType<typeof setTimeout> | undefined;
-  let identityRefreshKey = '';
-  let identityRefreshRunning = false;
-  let identityRefreshToken = 0;
-  // Browse responses already contain list artwork. Loading full metadata for
-  // every visible card also changes provider identities while paging through
-  // the catalog; reserve that work for the game detail view.
-
-  onDestroy(() => {
-    clearTimeout(debounce);
-    token++;
-    reloadToken++;
-    catalogAbort.abort();
-    stashRoute(routeKey, 'catalog', {
-      revision, offline, incomplete, platform, kind, facets, platforms,
-      sourceState, snapshot, preferenceKey, catalogFallback, discoveryFallback, discoveryStale, profile, discovery: [...discovery], hideLibrary, hideNotInterested,
-      search,
-      genre,
-      sort,
-      compatOnly,
-      items: [...items],
-      total,
-      page,
-      failed,
-    } satisfies Snapshot);
-  });
+  // Created first: its effects are the page's, and run before the view switch's below.
+  const data = createCatalogPageData();
 
   const installedByGame = $derived.by(() => {
     const map = new Map<string, string>();
     for (const game of $installedGames) {
       if (game.canonicalGameId) {
         map.set(game.canonicalGameId, game.id);
-        for (const item of items) if (item.aliasIds?.includes(game.canonicalGameId)) map.set(item.id,game.id);
+        for (const item of data.pages.items) if (item.aliasIds?.includes(game.canonicalGameId)) map.set(item.id,game.id);
       }
     }
     return map;
@@ -209,7 +52,7 @@
     for (const game of $libraryGames) {
       if (game.canonicalGameId) {
         map.set(game.canonicalGameId, game.id);
-        for (const item of items) if (item.aliasIds?.includes(game.canonicalGameId)) map.set(item.id,game.id);
+        for (const item of data.pages.items) if (item.aliasIds?.includes(game.canonicalGameId)) map.set(item.id,game.id);
       }
     }
     return map;
@@ -221,465 +64,6 @@
     return map;
   });
 
-  const chips = $derived([allGenres, ...facets.filter((f) => f.count > 0).map((f) => f.label)]);
-
-  const prefetch = createPagePrefetch<Awaited<ReturnType<typeof queryCatalogGames>>>();
-
-  async function fetchPage(next: number) {
-    const current = ++token;
-    const requestedSources = get(sources);
-    const load = (q: CatalogQuery) => queryCatalogGames(q, catalogAbort.signal);
-    loading = true;
-    appending = next > 1;
-    if (next === 1) autoPages = 0;
-    try {
-      const request = {
-        ...personalQuery(),
-        revision: next === 1 ? 0 : revision,
-        search,
-        genre, platform, kind,
-        sort,
-        compat: compatOnly ? compatOnlyWorking : '',
-        page: next,
-        pageSize,
-        ...(next === 1 ? { allowStale: true } : {}),
-      };
-      const continuation = await loadCatalogContinuation(
-        request, items, load,
-        () => prefetch.take(JSON.stringify(request), () => load(request)),
-        () => current === token,
-        offline,
-      );
-      const { result, refreshed } = continuation;
-      if (current !== token) return;
-      sourceState = requestedSources;
-      items = continuation.items;
-      compatByGame = next === 1 || refreshed ? (result.compat ?? {}) : { ...compatByGame, ...(result.compat ?? {}) };
-      total = result.total;
-      page = result.page;
-      failed = false;
-      backendOutdated = false;
-      facets = result.facets ?? [];
-      platforms = result.platforms ?? [];
-      revision = result.revision ?? 0;
-      snapshot = result.snapshot ?? '';
-      if (next === 1 || refreshed) catalogFallback = result.personalizationFallback ?? false;
-      else catalogFallback ||= result.personalizationFallback ?? false;
-      offline = result.offline ?? false;
-      incomplete = !result.providers?.length || result.providers.some((p) => !p.complete);
-      if (next === 1 || refreshed) staleKey = staleKeyOf(result);
-      if (canWarmNextPage({ offline, staleKey, loaded: items.length, total })) {
-        const upcoming = { ...withoutStale(request), page: page + 1, revision, snapshot };
-        prefetch.warm(JSON.stringify(upcoming), () => load(upcoming));
-      }
-      applyEarlyFreshPage();
-    } catch (err) {
-      if (current !== token || isCancelledRequest(err)) return;
-      backendOutdated = errorCode(err) === "catalog.backend_outdated";
-      prefetch.clear();
-      if (next === 1) {
-        staleKey = '';
-        items = [];
-        total = 0;
-        page = 0;
-        revision = 0;
-        offline = false;
-        incomplete = false;
-        facets = [];
-        platforms = [];
-        compatByGame = {};
-      }
-      failed = true;
-    } finally {
-      if (current === token) {
-        loading = false;
-        appending = false;
-      }
-    }
-  }
-
-  async function reload(refreshProfile = true) {
-    if (!ready) return;
-    const active = ++reloadToken;
-    token++;
-    catalogAbort.abort();
-    catalogAbort = new AbortController();
-    identityRefreshRunning = false;
-    identityRefreshToken = 0;
-    prefetch.clear();
-    staleKey = '';
-    earlyFresh.clear();
-    loading = true;
-    items = [];
-    total = 0;
-    page = 0;
-    revision = 0;
-    snapshot = '';
-    catalogFallback = false;
-    // Pages own their frozen ranking and membership. The shelf may finish or
-    // revalidate later without changing the pagination request or its offsets.
-    await Promise.all([fetchPage(1), refreshDiscovery(active, { refreshProfile })]);
-  }
-
-  async function refreshDiscovery(active: number, { rotate = false, refreshProfile = false } = {}) {
-    const query = { search, genre, platform, kind, sort, compat: compatOnly ? compatOnlyWorking : '' };
-    const previousIDs = rotate ? discovery.map((item) => item.game.id) : [];
-    discoveryLoading = true;
-    if (refreshProfile) {
-      try {
-        const currentProfile = await getRecommendationProfile();
-        if (active !== reloadToken) return;
-        profile = currentProfile;
-      } catch {
-        if (active !== reloadToken) return;
-        discoveryFallback = true;
-      }
-    }
-    preferenceKey = JSON.stringify({ preferences, profile });
-    if (discoveryVisible) {
-      const key = JSON.stringify({ query, preferences, profile, library: get(libraryGames).map((game) => [
-        game.id, game.canonicalGameId, game.favorite, game.status, game.uninstalled, game.playtimeSeconds, game.lastPlayed,
-      ]) });
-      const { cached, refreshed } = discoveryCache.get(key, () => getDiscovery(query, previousIDs), rotate);
-      discovery = cached?.items ?? [];
-      discoveryFallback = cached?.fallback ?? false;
-      discoveryStale = false;
-      try {
-        if (refreshed) {
-          const result = await refreshed;
-          if (active !== reloadToken) return;
-          discovery = result.items;
-          discoveryFallback = result.fallback;
-          discoveryStale = result.fallback && Boolean(cached && !cached.fallback);
-        }
-      } catch {
-        if (active !== reloadToken) return;
-        discoveryFallback = true;
-        discoveryStale = Boolean(cached);
-      } finally {
-        if (active === reloadToken) discoveryLoading = false;
-      }
-    } else {
-      discovery = [];
-      discoveryLoading = false;
-      discoveryFallback = false;
-      discoveryStale = false;
-    }
-  }
-
-  // The first page failed: nothing of the catalog is on screen. Said in the place of the offline
-  // notice, by the same notice, so a retry that answers with the other state keeps its focused Retry.
-  // A new query (search, filter, sort) is not that retry: it shows loading, not the old failure.
-  let pageRetrying = $state(false);
-  const pageFailed = $derived(failed && items.length === 0 && (!loading || pageRetrying));
-  let results = $state<HTMLElement>();
-
-  // The notice's retry: it worked when the catalog came back, online.
-  async function retryFirstPage(): Promise<boolean> {
-    await reload();
-    return !failed && !offline;
-  }
-
-  let moreSlot = $state<HTMLElement>();
-  let moreRetrying = $state(false);
-  let freshFrom = 0;
-
-  // "Show more" goes when its page fails and the failure takes its place: focus that was on it moves
-  // to that notice's Retry instead of falling to the page. A refusal has no Retry: the notice itself
-  // takes the focus there, so the reason is read where the pressed button was and Tab goes on from it.
-  async function showMore() {
-    const pressed = Boolean(moreSlot?.contains(document.activeElement));
-    autoPages = 0;
-    await fetchPage(page + 1);
-    if (!pressed || !failed) return;
-    await tick();
-    const active = document.activeElement;
-    if (active && active !== document.body && active.isConnected) return;
-    const target = moreSlot ? (focusableIn(moreSlot)[0] ?? moreSlot.querySelector<HTMLElement>('[data-more-refused]')) : undefined;
-    if (target) focusQuietly(target);
-  }
-
-  // The notice's retry of the page that failed: on success focus goes to the first game it brought.
-  async function retryNextPage(): Promise<boolean> {
-    freshFrom = displayedItems.length;
-    await fetchPage(page + 1);
-    return !failed;
-  }
-
-  function firstFresh(): HTMLElement | undefined {
-    const node = results?.children[freshFrom];
-    return node instanceof HTMLElement ? focusableIn(node)[0] : undefined;
-  }
-
-  function refreshPicks() {
-    if (!ready || discoveryLoading) return;
-    void refreshDiscovery(++reloadToken, { rotate: true });
-  }
-
-  function restoreChoices() {
-    sort = (preferences.defaultSort || 'auto') as Sort;
-    genre = preferences.genre;
-    platform = preferences.platform;
-    kind = preferences.kind;
-    compatOnly = preferences.compatOnly;
-    hideLibrary = preferences.hideLibrary;
-    hideNotInterested = preferences.hideNotInterested;
-  }
-
-  const preferenceWrites = serialQueue();
-
-  const applyPreferences = latestRunner(() => preferenceWrites(async () => {
-    preferenceBusy = true;
-    try {
-      const next = { ...preferences, defaultSort: sort === 'auto' ? '' : sort, genre,
-        platform, kind, compatOnly, hideLibrary, hideNotInterested };
-      await saveRecommendationPreferences(next);
-      preferences = next;
-      preferenceKey = JSON.stringify({ preferences, profile });
-      await reload();
-    } catch {
-      restoreChoices();
-      toast(msg('games.recommendationError'), 'danger');
-    } finally { preferenceBusy = false; }
-  }));
-
-  function preferencesChanged() {
-    return applyPreferences();
-  }
-
-  function isDismissed(game: CatalogGame) {
-    return [game.id, game.serverId, ...(game.aliasIds ?? [])].some((id) => id && preferences.notInterested.includes(id));
-  }
-
-  // `changed` runs once the choice is saved and shown, before the catalog reloads with it.
-  function dismiss(game: CatalogGame, on = true, changed?: () => void) {
-    return preferenceWrites(async () => {
-      preferenceBusy = true;
-      try {
-        await setNotInterested(game.id, on);
-        preferences = await getRecommendationPreferences();
-        lastDismissed = on ? { id: game.id, title: game.title } : null;
-        changed?.();
-        await reload();
-      } catch { toast(msg('games.recommendationError'), 'danger'); }
-      finally { preferenceBusy = false; }
-    });
-  }
-
-  let undoing = $state(false);
-  // Where the put-away notice sat: the control after it takes the focus when the notice goes, else the
-  // one before it (the list after it may be reloading, with nothing to focus yet).
-  let dismissalEnd = $state<HTMLElement>();
-
-  async function undoDismissal() {
-    if (!lastDismissed || undoing) return;
-    undoing = true;
-    try {
-      await dismiss({ id: lastDismissed.id, title: lastDismissed.title } as CatalogGame, false, () => void focusPastDismissal());
-    } finally {
-      undoing = false;
-    }
-  }
-
-  async function focusPastDismissal() {
-    await tick();
-    const active = document.activeElement;
-    const end = dismissalEnd;
-    if (!end || (active && active !== document.body && active.isConnected)) return;
-    const all = focusableIn(document.body);
-    const after = all.find((el) => end.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING);
-    const before = all.findLast((el) => end.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_PRECEDING);
-    const next = after ?? before;
-    if (next) focusQuietly(next);
-  }
-
-  async function refreshLoadedPrefix(validateSnapshot = false) {
-    if (!inWails || identityRefreshRunning || page <= 0) return;
-    const current = ++token;
-    identityRefreshToken = current;
-    const targetPage = page;
-    identityRefreshRunning = true;
-    loading = true;
-    appending = false;
-    prefetch.clear();
-    const load = (q: CatalogQuery) => queryCatalogGames(q, catalogAbort.signal);
-    try {
-      const request = {
-        ...personalQuery(), revision, search, genre, platform, kind, sort,
-        compat: compatOnly ? compatOnlyWorking : '',
-        page: targetPage, pageSize,
-      };
-      const prefix = validateSnapshot
-        ? await refreshCatalogSnapshot(request, items, compatByGame, load, () => current === token, offline)
-        : await reloadCatalogPrefix(request, targetPage, load, () => current === token);
-      if (current !== token) return;
-      sourceState = get(sources);
-      items = prefix.items;
-      compatByGame = prefix.compat;
-      total = prefix.result.total;
-      page = prefix.result.page;
-      failed = false;
-      backendOutdated = false;
-      facets = prefix.result.facets ?? [];
-      platforms = prefix.result.platforms ?? [];
-      revision = prefix.result.revision ?? 0;
-      snapshot = prefix.result.snapshot ?? '';
-      catalogFallback ||= prefix.result.personalizationFallback ?? false;
-      offline = prefix.result.offline ?? false;
-      incomplete = !prefix.result.providers?.length || prefix.result.providers.some((p) => !p.complete);
-      staleKey = staleKeyOf(prefix.result);
-      if (canWarmNextPage({ offline, staleKey, loaded: items.length, total })) {
-        const upcoming = {
-          ...personalQuery(), revision,
-          search,
-          genre,
-          platform,
-          kind,
-          sort,
-          compat: compatOnly ? compatOnlyWorking : '',
-          page: page + 1,
-          pageSize,
-        };
-        prefetch.warm(JSON.stringify(upcoming), () => load(upcoming));
-      }
-      applyEarlyFreshPage();
-    } catch {
-      if (current === token) prefetch.clear();
-    } finally {
-      if (identityRefreshToken === current) {
-        identityRefreshRunning = false;
-        if (current === token) {
-          loading = false;
-          appending = false;
-        }
-      }
-    }
-  }
-
-  function refreshForMetadata(game: CatalogGame | undefined) {
-    if (!game || page <= 0) return;
-    const item = items.find((candidate) => matchesCatalogIdentity(candidate, game));
-    if (!item || !identityEvidenceChanged(item, game)) return;
-    const key = `${item.id}:${identityFingerprint(game)}`;
-    if (key === identityRefreshKey) return;
-    identityRefreshKey = key;
-    void refreshLoadedPrefix();
-  }
-
-  function applyEarlyFreshPage() {
-    if (!staleKey) return;
-    const early = earlyFresh.take(staleKey);
-    if (early) onFreshPage(early);
-  }
-
-  function onFreshPage(event: FreshPageEvent | undefined) {
-    if (event?.key && event.key !== staleKey) {
-      earlyFresh.remember(event);
-      return;
-    }
-    const verdict = applyFreshPage(staleKey, { revision, page: appending ? page + 1 : page, fallback: catalogFallback }, event);
-    if (verdict.action === 'ignore') {
-      if (event?.key && event.key === staleKey) {
-        staleKey = '';
-        earlyFresh.take(event.key);
-      }
-      return;
-    }
-    earlyFresh.take(staleKey);
-    staleKey = '';
-    if (verdict.action === 'reload') {
-      void reload(false);
-      return;
-    }
-    if (verdict.action === 'failed') {
-      if (verdict.error === 'catalog.changed') void reload(false);
-      else if (verdict.error === 'catalog.backend_outdated') backendOutdated = true;
-      else offline = true;
-      return;
-    }
-    const fresh = verdict.page;
-    items = fresh.items ?? [];
-    compatByGame = fresh.compat ?? {};
-    total = fresh.total;
-    facets = fresh.facets ?? [];
-    platforms = fresh.platforms ?? [];
-    catalogFallback = fresh.personalizationFallback ?? false;
-    offline = fresh.offline ?? false;
-    incomplete = !fresh.providers?.length || fresh.providers.some((p) => !p.complete);
-    if (canWarmNextPage({ offline, staleKey, loaded: items.length, total })) {
-      const upcoming = {
-        ...personalQuery(), revision, search, genre, platform, kind, sort,
-        compat: compatOnly ? compatOnlyWorking : '',
-        page: page + 1, pageSize,
-      };
-      prefetch.warm(JSON.stringify(upcoming), () => queryCatalogGames(upcoming, catalogAbort.signal));
-    }
-  }
-
-  function onSearch() {
-    clearTimeout(debounce);
-    debounce = setTimeout(() => void reload(false), 350);
-  }
-
-  function onSort(value: Sort) {
-    if (value === sort) return;
-    sort = value;
-    void preferencesChanged();
-  }
-
-  function onGenre(label: string) {
-    const value = label === allGenres ? '' : label;
-    const next = nextGenre(genre, value);
-    if (next === genre) return;
-    genre = next;
-    void preferencesChanged();
-  }
-
-  function onCompatOnly() {
-    compatOnly = !compatOnly;
-    void preferencesChanged();
-  }
-
-  onMount(() => {
-    let active = true;
-    void (async () => {
-      try {
-        const [saved, currentProfile] = await Promise.all([getRecommendationPreferences(), getRecommendationProfile()]);
-        if (!active) return;
-        preferences = saved;
-        profile = currentProfile;
-        restoreChoices();
-      } catch { discoveryFallback = true; }
-      if (!active) return;
-      ready = true;
-      const nextKey = JSON.stringify({ preferences, profile });
-      const reuse = restored && page > 0 && preferenceKey === nextKey;
-      preferenceKey = nextKey;
-      if (reuse) await Promise.all([refreshLoadedPrefix(true), refreshDiscovery(reloadToken)]);
-      else await reload(false);
-    })();
-    return () => { active = false; ready = false; };
-  });
-
-  onMount(() => {
-    if (!inWails) return;
-    return Events.On('metadata:updated', (event) => {
-      refreshForMetadata((event.data as MetadataView)?.game);
-    });
-  });
-
-  onMount(() => {
-    if (!inWails) return;
-    return Events.On('catalog:page', (event) => {
-      onFreshPage(event.data as FreshPageEvent | undefined);
-    });
-  });
-
-  onMount(async () => {
-    try { compatRelevant = (await getAppInfo()).platform === 'darwin'; }
-    catch { compatRelevant = false; }
-  });
-
   function catalogMeta(game: CatalogGame) {
     const rating = game.rating != null && game.ratingCount != null && game.ratingCount > 0
       ? msg('games.catalogRating', { rating: Math.round(game.rating), count: game.ratingCount }) : '';
@@ -689,15 +73,15 @@
   function listMeta(game: CatalogGame) { return [game.releaseYear, game.developer].filter(Boolean).join(" · "); }
 
   function cardActions(game: CatalogGame, title: string, libId: string | undefined, favorite: boolean): GameCardAction[] {
-    const dismissed = isDismissed(game);
+    const dismissed = data.isDismissed(game);
     const dismissAction: GameCardAction = {
       id: 'dismiss',
       label: dismissed ? msg('games.recommendationRestore') : msg('games.recommendationNotInterested'),
       icon: dismissed ? Undo2 : ThumbsDown,
       active: dismissed,
       pinned: dismissed,
-      busy: preferenceBusy,
-      onclick: () => void dismiss(game, !dismissed),
+      busy: data.preferenceBusy,
+      onclick: () => void data.dismiss(game, !dismissed),
     };
     if (!libId) return [dismissAction];
     const moreAction: GameCardAction = {
@@ -716,30 +100,11 @@
       quiet: true,
       onclick: (event) => {
         event.stopPropagation();
-        toggleFavorite(libId, favorite);
+        data.toggleFavorite(libId, favorite);
       },
     };
     return [moreAction, dismissAction, favoriteAction];
   }
-
-  const hasMore = $derived(items.length < total);
-  const autoLoad = observerAvailable();
-  const showMoreButton = $derived(hasMore && (!autoLoad || failed || autoPages >= maxAutoPages));
-
-  $effect(() => {
-    if (!sentinel || !autoLoad) return;
-    if (!shouldLoadMore({ hasMore, loading, failed, pagesSinceScroll: autoPages })) return;
-    return watchSentinel(sentinel, () => {
-      autoPages += 1;
-      void fetchPage(page + 1);
-    });
-  });
-
-  onMount(() => {
-    const resetAutoPages = () => { if (autoPages) autoPages = 0; };
-    document.addEventListener('scroll', resetAutoPages, { capture: true, passive: true });
-    return () => document.removeEventListener('scroll', resetAutoPages, true);
-  });
 
   let stuck = $state(false);
 
@@ -789,24 +154,6 @@
       toast(libraryErrorText(err, msg('games.errorPlayFailed')), 'danger');
     }
   }
-
-  async function toggleFavorite(libraryId: string, current: boolean) {
-    const expected = {
-      favorite: ++favoriteSeq,
-      reload: reloadToken,
-      token,
-      view: favoriteViewKey(),
-    };
-    const isCurrent = () => expected.favorite === favoriteSeq && expected.reload === reloadToken
-      && expected.token === token && expected.view === favoriteViewKey();
-    try {
-      await setFavorite(libraryId, !current);
-      // Saving a heart updates the library store immediately. Keep the visible
-      // shelf and loaded pages frozen until an explicit refresh/filter change.
-    } catch (err) {
-      if (isCurrent()) toast(libraryErrorText(err, msg('games.errorFavoriteFailed')), 'danger');
-    }
-  }
 </script>
 
 {#snippet installedStatus()}
@@ -816,31 +163,31 @@
 <Page>
   <PageHeader
     title={msg('games.allGamesTitle')}
-    count={total > 0 ? msg('games.catalogTotalCount', { count: total }) : undefined}
+    count={data.pages.total > 0 ? msg('games.catalogTotalCount', { count: data.pages.total }) : undefined}
   />
 
   <div class="toolbar-dock" use:watchStuck>
     <div class="toolbar-row" class:stuck>
       <div class="search-wrap">
-        <SearchInput bind:value={search} label={msg('games.catalogSearchPlaceholder')} placeholder={msg('games.catalogSearchPlaceholder')} loading={loading && !appending} oninput={onSearch} />
+        <SearchInput bind:value={data.search} label={msg('games.catalogSearchPlaceholder')} placeholder={msg('games.catalogSearchPlaceholder')} loading={data.pages.loading && !data.pages.appending} oninput={data.onSearch} />
       </div>
-      <fieldset class="controls" disabled={!ready}>
-        <Select value={platform} width="20rem" label={msg('games.catalogPlatform')} onchange={(id) => { platform = id; void preferencesChanged(); }}
-          options={[{id:'',label:msg('games.catalogAllPlatforms')}, ...platforms.map((p) => ({id:p.label,label:p.label}))]} />
-        <Select value={kind} width="13rem" label={msg('games.catalogKind')} onchange={(id) => { kind = id; void preferencesChanged(); }}
+      <fieldset class="controls" disabled={!data.ready}>
+        <Select value={data.platform} width="20rem" label={msg('games.catalogPlatform')} onchange={data.onPlatform}
+          options={[{id:'',label:msg('games.catalogAllPlatforms')}, ...data.pages.platforms.map((p) => ({id:p.label,label:p.label}))]} />
+        <Select value={data.kind} width="13rem" label={msg('games.catalogKind')} onchange={data.onKind}
           options={[{id:'',label:msg('games.catalogGames')},{id:'all',label:msg('games.catalogAllContent')},{id:'dlc',label:'DLC'},{id:'demo',label:msg('games.catalogDemos')},{id:'soundtrack',label:msg('games.catalogSoundtracks')},{id:'Bundle',label:msg('games.catalogBundles')},{id:'Edition',label:msg('games.catalogEditions')}]} />
         <DropdownMenu
           items={(['auto', 'for-you', 'popular', 'rating', 'year', 'title'] as Sort[]).map((id) => ({
             id,
-            label: sortLabels[id],
-            checked: sort === id,
+            label: data.sortLabels[id],
+            checked: data.sort === id,
           }))}
-          onselect={(id) => onSort(id as Sort)}
+          onselect={(id) => data.onSort(id as Sort)}
         >
           {#snippet trigger({ props })}
             <Chip {...props}>
               <ArrowDownUp size="1.4rem" strokeWidth={1.8} />
-              {sortLabels[(effectiveSort || 'popular') as Sort]}
+              {data.sortLabels[(data.effectiveSort || 'popular') as Sort]}
               <ChevronDown size="1.4rem" strokeWidth={1.8} />
             </Chip>
           {/snippet}
@@ -864,68 +211,68 @@
       </fieldset>
     </div>
   </div>
-  <fieldset class="chips" disabled={!ready}>
-    {#each chips as label (label)}
-      <Chip variant="outline" selected={(label === allGenres ? '' : label) === genre} onclick={() => onGenre(label)}>
-        {label === allGenres ? label : genreLabel(label)}
+  <fieldset class="chips" disabled={!data.ready}>
+    {#each data.chips as label (label)}
+      <Chip variant="outline" selected={(label === data.allGenres ? '' : label) === data.genre} onclick={() => data.onGenre(label)}>
+        {label === data.allGenres ? label : genreLabel(label)}
       </Chip>
     {/each}
     <span class="chips-sep" aria-hidden="true"></span>
-    <Chip variant="outline" selected={hideLibrary} onclick={() => { hideLibrary = !hideLibrary; void preferencesChanged(); }}>{msg('games.catalogHideLibrary')}</Chip>
-    <Chip variant="outline" selected={hideNotInterested} onclick={() => { hideNotInterested = !hideNotInterested; void preferencesChanged(); }}>{msg('games.catalogHideDismissed')}</Chip>
-    {#if compatRelevant}
+    <Chip variant="outline" selected={data.hideLibrary} onclick={data.onHideLibrary}>{msg('games.catalogHideLibrary')}</Chip>
+    <Chip variant="outline" selected={data.hideNotInterested} onclick={data.onHideNotInterested}>{msg('games.catalogHideDismissed')}</Chip>
+    {#if data.compatRelevant}
       <Chip
         variant="outline"
-        selected={compatOnly}
+        selected={data.compatOnly}
         hint={msg('games.compatFilterHint')}
-        onclick={onCompatOnly}
+        onclick={data.onCompatOnly}
       >
         {msg('games.compatFilterLabel')}
       </Chip>
     {/if}
   </fieldset>
 
-  {#if offline || pageFailed || pageRetrying}
+  {#if data.pages.offline || data.pageFailed || data.pageRetrying}
     <div class="page-note">
       <Notice
-        tone={pageFailed ? 'danger' : 'warning'}
-        title={pageFailed ? msg('games.catalogUnavailableTitle') : undefined}
-        level={pageFailed ? 2 : undefined}
-        bind:retrying={pageRetrying}
-        retry={{ label: msg('games.catalogRetry'), run: retryFirstPage, within: () => results }}
+        tone={data.pageFailed ? 'danger' : 'warning'}
+        title={data.pageFailed ? msg('games.catalogUnavailableTitle') : undefined}
+        level={data.pageFailed ? 2 : undefined}
+        bind:retrying={data.pageRetrying}
+        retry={{ label: msg('games.catalogRetry'), run: data.retryFirstPage, within: () => data.results }}
       >
-        {#if !pageFailed}
+        {#if !data.pageFailed}
           {msg('games.catalogOffline')}
-        {:else if backendOutdated}
+        {:else if data.pages.backendOutdated}
           {msg('games.catalogBackendOutdated')}
         {:else}
           {msg('games.catalogUnavailableDescription')}
         {/if}
       </Notice>
     </div>
-  {:else if incomplete}<details class="muted"><summary>{msg('games.catalogCoverage')}</summary><p>{msg('games.catalogIncomplete')}</p></details>{/if}
+  {:else if data.pages.incomplete}<details class="muted"><summary>{msg('games.catalogCoverage')}</summary><p>{msg('games.catalogIncomplete')}</p></details>{/if}
 
-  {#if lastDismissed}
+  {#if data.lastDismissed}
     <div class="page-note">
       <Notice tone="success">
-        {msg('games.recommendationDismissed', { title: lastDismissed.title })}
-        {#snippet action()}<Button size="sm" onclick={undoDismissal} busy={undoing} disabled={preferenceBusy && !undoing}>{msg('games.recommendationUndo')}</Button>{/snippet}
+        {msg('games.recommendationDismissed', { title: data.lastDismissed.title })}
+        {#snippet action()}<Button size="sm" onclick={data.undoDismissal} busy={data.undoing} disabled={data.preferenceBusy && !data.undoing}>{msg('games.recommendationUndo')}</Button>{/snippet}
       </Notice>
     </div>
   {/if}
-  <span bind:this={dismissalEnd} hidden></span>
-  {#if personalizationFallback}<div class="page-note"><Notice tone="info" compact>{msg('games.recommendationFallback')}</Notice></div>{/if}
-  {#if discoveryStale}<div class="page-note"><Notice tone="warning" compact>{msg('games.recommendationRefreshFailed')}</Notice></div>{/if}
-  {#if profile.confidence < 1 && (sort === 'auto' || sort === 'for-you')}<p class="muted profile-hint">{msg('games.recommendationNoHistory')}</p>{/if}
-  {#if discoveryVisible}
-    <RecommendationShelf title={msg('games.discoveryTitle')} items={discovery} loading={discoveryLoading || preferenceBusy}
-      emptyText={msg('games.recommendationEmpty')} onrefresh={refreshPicks} ondismiss={(item) => void dismiss(item.game)} />
+  <span bind:this={data.dismissalEnd} hidden></span>
+  {#if data.personalizationFallback}<div class="page-note"><Notice tone="info" compact>{msg('games.recommendationFallback')}</Notice></div>{/if}
+  {#if data.discoveryStale}<div class="page-note"><Notice tone="warning" compact>{msg('games.recommendationRefreshFailed')}</Notice></div>{/if}
+  {#if data.profile.confidence < 1 && (data.sort === 'auto' || data.sort === 'for-you')}<p class="muted profile-hint">{msg('games.recommendationNoHistory')}</p>{/if}
+  {#if data.discoveryVisible}
+    <RecommendationShelf title={msg('games.discoveryTitle')} items={data.discovery} loading={data.discoveryLoading || data.preferenceBusy}
+      emptyText={msg('games.recommendationEmpty')} onrefresh={data.refreshPicks} ondismiss={(item) => void data.dismiss(item.game)} />
   {/if}
 
-  {#if pageFailed}
+  {#if data.pageFailed}
     <!-- Said by the notice above the list. -->
-  {:else if displayedItems.length === 0}
-    {#if loading}
+  {:else if data.displayedItems.length === 0}
+    {#if data.pages.loading}
       <Spinner label={msg('games.catalogLoadingLabel')} />
       <div class="catalog-skeleton" class:grid={$catalogView === 'grid'} class:loading-list={$catalogView !== 'grid'} aria-hidden="true">
         {#each Array(12) as _}
@@ -938,9 +285,9 @@
           </div>
         {/each}
       </div>
-    {:else if discoveryVisible && discovery.length > 0}
+    {:else if data.discoveryVisible && data.discovery.length > 0}
       <p class="muted" role="status">{msg('games.catalogAllInDiscovery')}</p>
-    {:else if search.trim() || genre || platform || kind || compatOnly}
+    {:else if data.search.trim() || data.genre || data.platform || data.kind || data.compatOnly}
       <EmptyState level={2} title={msg('games.nothingFoundTitle')} description={msg('games.catalogNothingFoundDescription')} />
     {:else}
       <EmptyState level={2}
@@ -949,8 +296,8 @@
       />
     {/if}
   {:else if $catalogView === 'grid'}
-    <div class="grid" class:switched={viewSwitched} onanimationend={endViewSwitch} bind:this={results}>
-      {#each displayedItems as game (game.id)}
+    <div class="grid" class:switched={viewSwitched} onanimationend={endViewSwitch} bind:this={data.results}>
+      {#each data.displayedItems as game (game.id)}
         {@const shown = mergeCatalogDisplay(game, $gameInfo[game.id])}
         {@const libId = libraryByGame.get(game.id)}
         {@const isFav = libId ? Boolean(favoriteByLibraryId.get(libId)) : false}
@@ -963,7 +310,7 @@
             installed={isInstalled}
             running={$runningGames.has(installedByGame.get(game.id) ?? '')}
             meta={catalogMeta(shown)}
-            compat={compatRelevant ? compatByGame[game.id] : undefined}
+            compat={data.compatRelevant ? data.pages.compatByGame[game.id] : undefined}
             actions={cardActions(game, shown.title, libId, isFav)}
             footer={isInstalled ? installedStatus : undefined}
             onplay={playableIds.has(installedByGame.get(game.id) ?? '') ? () => toggleRun(installedByGame.get(game.id) ?? '') : undefined}
@@ -972,8 +319,8 @@
       {/each}
     </div>
   {:else}
-    <div class="list" class:switched={viewSwitched} onanimationend={endViewSwitch} bind:this={results}>
-      {#each displayedItems as game (game.id)}
+    <div class="list" class:switched={viewSwitched} onanimationend={endViewSwitch} bind:this={data.results}>
+      {#each data.displayedItems as game (game.id)}
         {@const shown = mergeCatalogDisplay(game, $gameInfo[game.id])}
         <div class="list-entry">
         <button
@@ -989,37 +336,37 @@
             <span class="list-meta right">{@render installedStatus()}</span>
           {/if}
         </button>
-        <span class="list-action" class:pinned={isDismissed(game)}>
-          <IconButton label={isDismissed(game) ? msg('games.recommendationRestore') : msg('games.recommendationNotInterested')}
-            lit={isDismissed(game)} disabled={preferenceBusy} onclick={() => void dismiss(game, !isDismissed(game))}>
-            {#if isDismissed(game)}<Undo2 size="1.4rem" />{:else}<ThumbsDown size="1.4rem" />{/if}
+        <span class="list-action" class:pinned={data.isDismissed(game)}>
+          <IconButton label={data.isDismissed(game) ? msg('games.recommendationRestore') : msg('games.recommendationNotInterested')}
+            lit={data.isDismissed(game)} disabled={data.preferenceBusy} onclick={() => void data.dismiss(game, !data.isDismissed(game))}>
+            {#if data.isDismissed(game)}<Undo2 size="1.4rem" />{:else}<ThumbsDown size="1.4rem" />{/if}
           </IconButton>
         </span></div>
       {/each}
     </div>
   {/if}
 
-  {#if items.length > 0}
-    {#if autoLoad}<div class="sentinel" bind:this={sentinel} aria-hidden="true"></div>{/if}
-    <div class="more" bind:this={moreSlot}>
-      {#if failed || moreRetrying}
+  {#if data.pages.items.length > 0}
+    {#if data.autoLoad}<div class="sentinel" bind:this={data.sentinel} aria-hidden="true"></div>{/if}
+    <div class="more" bind:this={data.moreSlot}>
+      {#if data.pages.failed || data.moreRetrying}
         <!-- A server too old for this sorting refuses every page the same way: no Retry for it. -->
         <Notice
           tone="danger"
           compact
-          tabindex={backendOutdated ? -1 : undefined}
-          data-more-refused={backendOutdated || undefined}
-          bind:retrying={moreRetrying}
-          retry={backendOutdated ? undefined : { label: msg('games.catalogRetry'), run: retryNextPage, focus: firstFresh }}
+          tabindex={data.pages.backendOutdated ? -1 : undefined}
+          data-more-refused={data.pages.backendOutdated || undefined}
+          bind:retrying={data.moreRetrying}
+          retry={data.pages.backendOutdated ? undefined : { label: msg('games.catalogRetry'), run: data.retryNextPage, focus: data.firstFresh }}
         >
-          {backendOutdated ? msg('games.catalogBackendOutdated') : msg('games.catalogMoreFailed')}
+          {data.pages.backendOutdated ? msg('games.catalogBackendOutdated') : msg('games.catalogMoreFailed')}
         </Notice>
-      {:else if showMoreButton}
-        <Button onclick={showMore} busy={loading}>{msg('games.catalogShowMore')}</Button>
-      {:else if hasMore && appending}
+      {:else if data.showMoreButton}
+        <Button onclick={data.showMore} busy={data.pages.loading}>{msg('games.catalogShowMore')}</Button>
+      {:else if data.hasMore && data.pages.appending}
         <Spinner label={msg('games.catalogLoadingMore')} />
       {/if}
-      <span class="muted">{msg('games.catalogShownOf', { shown: items.length, total })}</span>
+      <span class="muted">{msg('games.catalogShownOf', { shown: data.pages.items.length, total: data.pages.total })}</span>
     </div>
   {/if}
 </Page>
