@@ -170,11 +170,11 @@
   --artwork-sheen: rgba(255, 255, 255, 0.05); /* the light across the plain tile of a picture that is missing */
 
   /* The hero carousel (HeroCarousel), on the stage: the least height of its block on a short window,
-     the cover it shows for a game with no wide art, and a slide control with the bar its progress
-     runs along. */
+     the cover it shows for a game with no wide art, and a slide control (the game's cover) with the
+     bar its progress runs along. */
   --hero-min-h: 30rem;
   --hero-cover-w: clamp(13rem, 12vw, 17rem);
-  --hero-pick-w: 3.2rem;
+  --hero-chip-w: 5.2rem;
   --hero-pick-track: 0.4rem;
 
   /* A game in a list (GameListRow): the width of its cover thumbnail. */

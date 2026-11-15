@@ -255,6 +255,9 @@
             onclick={() => go(index)}
             {onkeydown}
           >
+            <span class="chip" aria-hidden="true">
+              <Artwork src={slide.art.cover ?? ''} fallback={slide.art.fallback} seed={slide.artSeed ?? slide.id} ratio="3 / 4" radius="var(--radius-sm)" />
+            </span>
             <span class="track" aria-hidden="true">
               {#if index === active && auto}<span class="bar" style:transform="scaleX({progress})"></span>{/if}
             </span>
@@ -336,45 +339,66 @@
     margin-top: var(--space-2);
   }
 
+  /* The slide controls are the games themselves: a short row of their covers, the one on screen raised. */
   .picker {
     position: absolute;
     right: var(--page-inset, var(--space-8));
     bottom: var(--space-8);
     display: flex;
-    gap: var(--space-1);
+    align-items: flex-end;
+    gap: var(--space-2);
   }
 
   .pick {
-    display: flex;
-    align-items: center;
-    width: var(--hero-pick-w);
-    height: var(--control-sm);
+    display: grid;
+    gap: var(--space-1);
+    width: var(--hero-chip-w);
     padding: 0;
     border: 0;
     background: none;
-    border-radius: var(--radius-xs);
+    border-radius: var(--radius-sm);
     cursor: pointer;
+    opacity: 0.62;
+    transition:
+      opacity var(--dur) var(--ease),
+      transform var(--dur-slow) var(--ease);
+  }
+
+  .pick:hover,
+  .pick[aria-current='true'] {
+    opacity: 1;
+  }
+
+  .pick[aria-current='true'] {
+    transform: translateY(calc(-1 * var(--space-1)));
+  }
+
+  .chip {
+    display: block;
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-lift);
+  }
+
+  .pick[aria-current='true'] .chip {
+    outline: 2px solid var(--text);
+    outline-offset: 2px;
   }
 
   .track {
     display: block;
-    width: 100%;
     height: var(--hero-pick-track);
     border-radius: var(--radius-bar);
-    background: color-mix(in srgb, var(--art-text) 30%, transparent);
     overflow: hidden;
-    transition: background var(--dur) var(--ease);
   }
 
-  .pick:hover .track,
   .pick[aria-current='true'] .track {
-    background: color-mix(in srgb, var(--art-text) 55%, transparent);
+    background: color-mix(in srgb, var(--text) 30%, transparent);
   }
 
   .bar {
     display: block;
     height: 100%;
-    background: var(--art-text);
+    background: var(--text);
     transform-origin: left;
   }
 </style>

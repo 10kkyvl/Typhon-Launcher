@@ -215,6 +215,19 @@ describe('HeroCarousel: the slide controls', () => {
     expect(pickers().map((button) => button.tabIndex)).toEqual([0, -1, -1]);
   });
 
+  it("shows each game's cover on its control, the generated art for a game with none, and keeps them out of the accessibility tree", () => {
+    setup({ slides: [slide('a', { staged: true }), slide('b'), slide('c', { art: {}, artSeed: 'canon-c' })] });
+    const [a, b, c] = pickers();
+    expect(a.querySelector('img')?.getAttribute('src')).toBe('a-cover.png');
+    expect(b.querySelector('img')?.getAttribute('src')).toBe('b-cover.png');
+    expect(c.querySelector('img')).toBeNull();
+    expect(c.querySelector('svg.generated-art')).not.toBeNull();
+    for (const button of pickers()) {
+      expect(button.querySelector('img')?.getAttribute('alt') ?? '').toBe('');
+      expect(button.querySelector('.artwork')?.closest('[aria-hidden="true"]')).not.toBeNull();
+    }
+  });
+
   it('moves between them with the arrow keys, Home and End, showing each slide as it goes', async () => {
     const { user } = setup();
     pickers()[0].focus();
