@@ -38,4 +38,33 @@ export const downloads: Record<DownloadsKey, Message> = {
   'downloads.panel.cancelKeep': 'Keep downloading',
   'downloads.panel.cancelled': '“{name}” cancelled',
   // ---- end 6-3
+  // Stage 6-4: the queue and the failed list (routes/downloads/Queue*, FailedList, downloadCancel).
+  'downloads.queue.grip': '“{title}”, position {position} of {total}',
+  'downloads.queue.gripHint': 'Drag to change the order',
+  'downloads.queue.help':
+    'The up and down arrows move the download one place, Home and End to the start and the end of the queue. Escape cancels a drag.',
+  'downloads.queue.position': '#{n} in the queue',
+  'downloads.queue.stateWaiting': 'Waiting',
+  'downloads.queue.stateSchedule': 'Waiting for the schedule',
+  'downloads.queue.stateNext': 'Starts next',
+  'downloads.queue.downloaded': '{percent}% downloaded',
+  'downloads.queue.downloadedFor': '“{title}” downloaded',
+  'downloads.queue.downloadNowFor': 'Download now: “{title}”',
+  'downloads.queue.toTop': 'To top',
+  'downloads.queue.toTopFor': 'To top of the queue: “{title}”',
+  'downloads.queue.details': 'Details',
+  'downloads.queue.cancelFor': 'Cancel downloading “{title}”',
+  'downloads.queue.moved': '“{title}” moved: position {position} of {total}',
+  'downloads.queue.moveFailed': 'Could not move “{title}”: {reason}',
+  'downloads.queue.cancelled': 'Download “{title}” cancelled',
+  'downloads.queue.cancelTitle': 'Cancel downloading “{title}”?',
+  'downloads.queue.cancelDeletes': 'The download stops and leaves the list, and the {size} downloaded so far is deleted from disk.',
+  'downloads.queue.cancelKeeps': 'The download stops and leaves the list. The {size} downloaded so far stays on disk, in “{path}”.',
+  'downloads.queue.cancelling': 'Cancelling…',
+  'downloads.failed.retryFor': 'Retry: “{title}”',
+  'downloads.failed.detailsFor': 'Details: “{title}”',
+  'downloads.failed.downloaded': '{done} of {total} downloaded',
+  'downloads.failed.nothing': 'Nothing downloaded',
+  'downloads.failed.retried': 'Retrying “{title}”',
+  // End of stage 6-4.
 };
