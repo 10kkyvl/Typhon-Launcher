@@ -35,7 +35,7 @@ describe('the window backdrop', () => {
     ];
     for (const path of elsewhere) {
       expect(frontendSources[path], path).toBeTypeOf('string');
-      expect(frontendSources[path], path).not.toMatch(/ShellBackdrop|stores\/ambient|<AppShell\b/);
+      expect(frontendSources[path], path).not.toMatch(/ShellBackdrop|stores\/ambient|stores\/stage|<AppShell\b/);
     }
   });
 
@@ -45,9 +45,11 @@ describe('the window backdrop', () => {
         path === 'lib/components/ShellBackdrop.svelte' ||
         path.startsWith('lib/backdrop/') ||
         path === 'lib/stores/ambient.ts' ||
+        path === 'lib/stores/stage.ts' ||
         path === 'lib/utils/ambientHover.ts',
     );
     expect(files.map(([path]) => path)).toContain('lib/components/ShellBackdrop.svelte');
+    expect(files.map(([path]) => path)).toContain('lib/stores/stage.ts');
     for (const [path, source] of files) {
       expect(source, path).not.toMatch(/backdrop-filter|filter\s*:\s*[^;]*blur\(/);
     }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { LibraryGame } from '../services/library';
 import type { GameArt } from '../services/metadata';
-import { artRequest, backdropSources, pageAmbient, playedArtRequests, rememberedGame } from './source';
+import { artRequest, backdropSources, pageAmbient, playedArtRequests, rememberedGame, wideArt } from './source';
 
 function game(id: string, extra: Partial<LibraryGame> = {}): LibraryGame {
   return {
@@ -114,5 +114,36 @@ describe('the game a game page shows behind the window', () => {
   it('is nothing for a game the page could not find or load: its id is not a game to ask art for', () => {
     expect(pageAmbient(undefined, 'route-id', false)).toBeNull();
     expect(pageAmbient('lib-1', 'c1', false)).toBeNull();
+  });
+});
+
+describe('the wide art a game stands on the stage with', () => {
+  const poster = (cover: string, hero: string): GameArt => ({ cover, hero, heroIsPoster: true });
+
+  it('is the hero Go chose for a library game, through its canonical id', () => {
+    const games = [game('lib-1', { canonicalGameId: 'c1', cover: '/media/own.jpg' })];
+    expect(wideArt('lib-1', games, { c1: art('/media/cover.jpg', '/media/hero.jpg') })).toEqual({ state: 'yes', src: '/media/hero.jpg' });
+  });
+
+  it('is the hero of a game outside the library, by its own id', () => {
+    expect(wideArt('catalog-7', [], { 'catalog-7': art('/media/c.jpg', '/media/h.jpg') })).toEqual({ state: 'yes', src: '/media/h.jpg' });
+  });
+
+  it('is never a poster, a cover or the library cover: those leave the game without wide art', () => {
+    const games = [game('lib-1', { canonicalGameId: 'c1', cover: '/media/own.jpg' })];
+    expect(wideArt('lib-1', games, { c1: poster('/media/cover.jpg', '/media/cover.jpg') })).toEqual({ state: 'no' });
+    expect(wideArt('lib-1', games, { c1: art('/media/cover.jpg', '') })).toEqual({ state: 'no' });
+    expect(wideArt('lib-1', games, { c1: art('/media/cover.jpg', 'null') })).toEqual({ state: 'no' });
+  });
+
+  it('is not known yet while the art store has not answered for the game', () => {
+    const games = [game('lib-1', { canonicalGameId: 'c1', cover: '/media/own.jpg' })];
+    expect(wideArt('lib-1', games, {})).toEqual({ state: 'unknown' });
+    expect(wideArt('catalog-7', [], {})).toEqual({ state: 'unknown' });
+  });
+
+  it('is known to be missing for a library game without a catalog match: no art will ever come for it', () => {
+    const games = [game('sideloaded', { cover: '/media/own.jpg' })];
+    expect(wideArt('sideloaded', games, { sideloaded: art('', '/media/wrong.jpg') })).toEqual({ state: 'no' });
   });
 });

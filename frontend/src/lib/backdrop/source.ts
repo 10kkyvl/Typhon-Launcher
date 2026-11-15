@@ -24,6 +24,23 @@ export function backdropSources(id: string, games: readonly LibraryGame[], art: 
   return [...new Set([clean(known?.hero), clean(known?.cover), clean(game?.cover)].filter(Boolean))];
 }
 
+/** Whether a game has a wide picture for the stage: known yes (with it), known no, or not known yet. */
+export type WideArt = { state: 'yes'; src: string } | { state: 'no' } | { state: 'unknown' };
+
+/**
+ * The wide picture a game stands on the stage with: Go's hero choice and nothing else (a poster is the
+ * cover again, and the stage would crop it). Not known yet while the art store has not answered for the
+ * game; known missing for a library game without a catalog match, for which no art will come.
+ */
+export function wideArt(id: string, games: readonly LibraryGame[], art: ArtMap): WideArt {
+  const { key } = artKey(id, games);
+  if (!key) return { state: 'no' };
+  if (!(key in art)) return { state: 'unknown' };
+  const known = art[key];
+  const src = known && !known.heroIsPoster ? clean(known.hero) : '';
+  return src ? { state: 'yes', src } : { state: 'no' };
+}
+
 /**
  * The game a game page claims: a library game by its own id, else the catalog game by its canonical id,
  * whether or not the art store knows it yet (the backdrop asks for the art and stays bare meanwhile).
