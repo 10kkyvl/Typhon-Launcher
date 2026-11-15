@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { artScene, artSpec } from './scene';
+import { artHorizon, artScene, artSpec } from './scene';
 
 describe('the generated art of a game', () => {
   it('is the same every time for the same game', () => {
@@ -35,5 +35,27 @@ describe('the generated art of a game', () => {
 
   it('takes nothing from the theme: an empty seed still draws', () => {
     expect(artScene('', 'cover').lands.length).toBeGreaterThan(0);
+  });
+});
+
+// The game's colour falls back to this when no picture of the game can be read and the card draws its
+// generated art: it must be a colour the picture shows, the band over its horizon, in every shape.
+describe('the colour of the generated art', () => {
+  const parse = (color: string) => (/^hsla\((\d+), ([\d.]+)%, ([\d.]+)%, 1\)$/.exec(color) ?? []).slice(1).map(Number);
+
+  it('is the horizon band the picture draws, for any game and shape', () => {
+    for (const seed of Array.from({ length: 40 }, (_, i) => `game-${i}`)) {
+      const [h, s, l] = artHorizon(seed);
+      for (const shape of ['cover', 'wide'] as const) {
+        const band = artScene(seed, shape).sky.find((stop) => stop.offset === 0.78);
+        expect(parse(band?.color ?? ''), `${seed} ${shape}`).toEqual([h, s, l]);
+      }
+    }
+  });
+
+  it('is the same every time for the same game and differs between games', () => {
+    expect(artHorizon('g-hades')).toEqual(artHorizon('g-hades'));
+    const all = new Set(Array.from({ length: 24 }, (_, i) => JSON.stringify(artHorizon(`game-${i}`))));
+    expect(all.size).toBeGreaterThan(12);
   });
 });
