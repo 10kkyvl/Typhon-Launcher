@@ -1,6 +1,7 @@
 import type { Download } from '../services/downloads';
 import type { LibraryGame } from '../services/library';
 import type { GameArt } from '../services/metadata';
+import { pickHero } from '../game/view';
 import { emulationPlatform } from './emulation';
 import { canPlay } from './launch';
 import { gameSource, type GameSource } from './source';
@@ -131,10 +132,10 @@ export function entryCover(entry: LibraryEntry, art: Readonly<Record<string, Gam
   return own?.cover || entry.game?.cover || '';
 }
 
-// The wide picture only: a hero that is the poster is the cover again, and a wide band would crop it.
+// The wide picture only, by the one rule (`pickHero`): a hero that is the poster is the cover again, and a
+// wide band would crop it.
 export function entryHeroArt(entry: LibraryEntry, art: Readonly<Record<string, GameArt>>): string {
-  const pictures = entry.catalogId ? art[entry.catalogId] : undefined;
-  return pictures && !pictures.heroIsPoster ? (pictures.hero ?? '') : '';
+  return pickHero(entry.catalogId ? art[entry.catalogId] : undefined);
 }
 
 function sameList<T>(next: T[], previous: T[]): T[] {

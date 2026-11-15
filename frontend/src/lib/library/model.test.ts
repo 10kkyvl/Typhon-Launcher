@@ -90,6 +90,13 @@ describe('library entries', () => {
     expect(entryHeroArt(entry, { 'c-g': { cover: 'cover.png', hero: 'cover.png', heroIsPoster: true } })).toBe('');
     expect(entryHeroArt(entry, {})).toBe('');
   });
+
+  it('takes the wide picture by the one rule the stage and the game page use: a blank placeholder is no picture', () => {
+    const entry = gameEntry(game('g', { canonicalGameId: 'c-g' }));
+    expect(entryHeroArt(entry, { 'c-g': { cover: 'cover.png', hero: 'null', heroIsPoster: false } })).toBe('');
+    expect(entryHeroArt(entry, { 'c-g': { cover: 'cover.png', hero: ' — ', heroIsPoster: false } })).toBe('');
+    expect(entryHeroArt(entry, { 'c-g': { cover: '', hero: ' hero.png ', heroIsPoster: false } })).toBe('hero.png');
+  });
 });
 
 describe('cheap updates', () => {
