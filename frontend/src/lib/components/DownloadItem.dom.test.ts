@@ -401,6 +401,37 @@ describe('the panel of a download under way: focus stays where the player is (D-
   });
 });
 
+describe('the panel of a download under way: the cancel dialog and the menu (R9)', () => {
+  it('Pause moves into the menu while "Download now" leads', async () => {
+    playThrottle.set({ ...idlePlayThrottle, active: true, schedule: { blocked: true, nextOpenAt: '' } });
+    const view = show([download({ downloadSpeed: 0 })]);
+
+    expect(within(panel('Game One')).getByRole('button', { name: 'Download now “Game One”' })).toBeTruthy();
+    await view.user.click(within(panel('Game One')).getByRole('button', { name: 'More actions for “Game One”' }));
+    expect(screen.getAllByRole('menuitem').map((item) => item.textContent?.trim())).toContain('Pause');
+    await view.user.click(screen.getByRole('menuitem', { name: 'Pause' }));
+    expect(pauseDownload).toHaveBeenCalledWith('d1');
+  });
+
+  it('an open dialog whose download leaves closes with its panel, and focus goes to the panel now in its place', async () => {
+    const view = show([download(), download({ id: 'd2', name: 'Game Two' })]);
+    const more = within(panel('Game One')).getByRole('button', { name: 'More actions for “Game One”' });
+    more.focus();
+    await view.user.keyboard('{Enter}');
+    screen.getByRole('menuitem', { name: 'Cancel download' }).focus();
+    await view.user.keyboard('{Enter}');
+    expect(screen.getByRole('dialog')).toBeTruthy();
+
+    goRemoves('d1');
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() =>
+      expect(document.activeElement).toBe(within(panel('Game Two')).getByRole('button', { name: 'More actions for “Game Two”' })),
+    );
+    expect(cancelDownload).not.toHaveBeenCalled();
+  });
+});
+
 describe('the panel of a download under way: Cancel means Go’s Cancel and asks first (D-2, D-7)', () => {
   async function openCancel(view: ReturnType<typeof show>, name: string) {
     const more = within(panel(name)).getByRole('button', { name: `More actions for “${name}”` });

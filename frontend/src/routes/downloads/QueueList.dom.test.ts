@@ -607,3 +607,101 @@ describe('QueueList: the cancel dialog follows its download', () => {
     expect(onannounce).toHaveBeenCalledWith(msg('downloads.cancel.done', { name: 'Alpha' }));
   });
 });
+
+describe('QueueList: the menu, Download now and Start now', () => {
+  it('Move down sends the place below', async () => {
+    vi.mocked(moveDownloadTo).mockResolvedValue();
+    downloads.set([queued('a', 'Alpha'), queued('b', 'Beta'), queued('c', 'Gamma')]);
+    const { user } = mount();
+
+    await user.click(screen.getByRole('button', { name: msg('transfers.downloadsQueueActionsFor', { name: 'Alpha' }) }));
+    await user.click(screen.getByRole('menuitem', { name: msg('transfers.downloadsMoveDown') }));
+
+    expect(vi.mocked(moveDownloadTo).mock.calls).toEqual([['a', 1]]);
+  });
+
+  it('Download now is busy while Go answers and keeps focus; when the button goes, focus goes to the row’s grip', async () => {
+    const call = deferred();
+    vi.mocked(downloadNow).mockReturnValue(call.promise);
+    playThrottle.set({ ...idlePlayThrottle, active: true, schedule: { blocked: true, nextOpenAt: '' } });
+    downloads.set([queued('a', 'Alpha'), queued('b', 'Beta')]);
+    const { user } = mount();
+    const now = screen.getByRole('button', { name: msg('downloads.queue.downloadNowFor', { title: 'Beta' }) });
+    now.focus();
+
+    await user.keyboard('{Enter}{Enter}');
+    expect(downloadNow).toHaveBeenCalledTimes(1);
+    expect(now.getAttribute('aria-busy')).toBe('true');
+    expect(document.activeElement).toBe(now);
+
+    call.resolve();
+    downloads.update((list) => list.map((d) => (d.id === 'b' ? { ...d, ignoreSchedule: true } : d)));
+
+    await vi.waitFor(() => expect(document.activeElement).toBe(grip('Beta')));
+  });
+
+  it('Start now: once the download leaves the queue, focus goes to the menu of the row now in its place', async () => {
+    vi.mocked(forceStartDownload).mockResolvedValue();
+    downloads.set([queued('a', 'Alpha'), queued('b', 'Beta')]);
+    const { user } = mount();
+    const menu = screen.getByRole('button', { name: msg('transfers.downloadsQueueActionsFor', { name: 'Alpha' }) });
+    menu.focus();
+    await user.keyboard('{Enter}');
+    const start = screen.getByRole('menuitem', { name: msg('transfers.downloadsStartNow') });
+    start.focus();
+    await user.keyboard('{Enter}');
+    await vi.waitFor(() => expect(forceStartDownload).toHaveBeenCalledWith('a'));
+
+    downloads.update((list) => list.map((d) => (d.id === 'a' ? { ...d, status: 'downloading' } : d)));
+
+    await vi.waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: msg('transfers.downloadsQueueActionsFor', { name: 'Beta' }) })),
+    );
+  });
+});
+
+describe('QueueList: what starts and moves a drag', () => {
+  beforeEach(() => {
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      const row = this.closest('li');
+      const index = row?.parentElement ? Array.from(row.parentElement.children).indexOf(row) : 0;
+      return new DOMRect(0, index * 60, 400, 50);
+    });
+    HTMLElement.prototype.setPointerCapture = vi.fn();
+    HTMLElement.prototype.releasePointerCapture = vi.fn();
+    HTMLElement.prototype.hasPointerCapture = vi.fn(() => true);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('only the primary button starts a drag', async () => {
+    downloads.set([queued('a', 'Alpha'), queued('b', 'Beta'), queued('c', 'Gamma')]);
+    mount();
+    const g = grip('Gamma');
+
+    await fireEvent.pointerDown(g, { pointerId: 1, button: 2, clientY: 145 });
+    await fireEvent.pointerMove(g, { pointerId: 1, clientY: 20 });
+    await fireEvent.pointerUp(g, { pointerId: 1, clientY: 20 });
+
+    expect(g.closest('li')?.style.transform).toBe('');
+    expect(moveDownloadTo).not.toHaveBeenCalled();
+  });
+
+  it('another pointer does not move a drag in progress, nor drop it', async () => {
+    vi.mocked(moveDownloadTo).mockResolvedValue();
+    downloads.set([queued('a', 'Alpha'), queued('b', 'Beta'), queued('c', 'Gamma')]);
+    mount();
+    const g = grip('Gamma');
+
+    await fireEvent.pointerDown(g, { pointerId: 1, button: 0, clientY: 145 });
+    await fireEvent.pointerMove(g, { pointerId: 2, clientY: 20 });
+    expect(g.closest('li')?.style.transform).toBe('translateY(0px)');
+    await fireEvent.pointerUp(g, { pointerId: 2, clientY: 20 });
+    expect(moveDownloadTo).not.toHaveBeenCalled();
+
+    await fireEvent.pointerUp(g, { pointerId: 1, clientY: 145 });
+    expect(moveDownloadTo).not.toHaveBeenCalled();
+  });
+});
