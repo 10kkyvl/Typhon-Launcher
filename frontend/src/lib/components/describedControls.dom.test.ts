@@ -47,6 +47,11 @@ describe('a base control described by the text beside it', () => {
     expect(getByRole('slider', { name: 'The setting', description: 'What the setting does' })).toBeTruthy();
   });
 
+  it('the slider asks to fill the place it is put in', () => {
+    const { container } = renderDom(Slider, { position: 1, max: 4, labelledby: 'row-label', valueText: '1', fill: true, onchange: vi.fn() });
+    expect(container.querySelector('.slider')?.classList.contains('fill')).toBe(true);
+  });
+
   // The row's label names the slider: the slider draws no hidden copy of it.
   it('the slider, named by the label beside it', () => {
     const { getByRole, container } = renderDom(Slider, { position: 1, max: 4, labelledby: 'row-label', valueText: '1', describedby: 'row-hint', onchange: vi.fn() });

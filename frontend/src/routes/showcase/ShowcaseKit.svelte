@@ -135,8 +135,8 @@
         {/snippet}
       </SettingsRow>
       <SettingsRow label="Interface scale" hint="The size of everything in the window" stack>
-        {#snippet children({ hintId })}
-          <Slider position={scale} max={SCALES.length - 1} label="Interface scale" hideLabel valueText={SCALES[scale]} startText={SCALES[0]} endText={SCALES.at(-1)} describedby={hintId} onchange={(at) => (scale = at)} />
+        {#snippet children({ labelId, hintId })}
+          <Slider position={scale} max={SCALES.length - 1} labelledby={labelId} fill valueText={SCALES[scale]} startText={SCALES[0]} endText={SCALES.at(-1)} describedby={hintId} onchange={(at) => (scale = at)} />
         {/snippet}
       </SettingsRow>
       <SettingsRow label="Library folders" hint="Where games are installed; the first is the default">

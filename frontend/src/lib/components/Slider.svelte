@@ -21,6 +21,8 @@
    * visible label beside it (a settings row's), and the slider draws no label of its own; `valueText`
    * is the value in words, shown above the track and read by assistive tech. `startText` and `endText` mark the ends of the
    * scale under the track. `disabled` and `busy` (a commit under way) take no input and keep focus.
+   * A slider has no width of its own: `fill` makes it take the whole width of the place it is put in
+   * (a stacked settings row's measure).
    * Sizes: `--slider-track` (track height), `--slider-thumb` (thumb side).
    */
   // One name: its own label, or the id of the label beside it.
@@ -39,6 +41,7 @@
     describedby,
     disabled = false,
     busy = false,
+    fill = false,
     oninput,
     onchange,
     testid,
@@ -58,6 +61,8 @@
     describedby?: string;
     disabled?: boolean;
     busy?: boolean;
+    /** Takes the whole width of its place. */
+    fill?: boolean;
     /** The step under a dragging pointer, each time it changes; `null` when the drag ends. */
     oninput?: (position: number | null) => void;
     /** A committed step: a key, or a drag released on a step other than the value it began on. */
@@ -176,7 +181,7 @@
   };
 </script>
 
-<div class="slider" class:disabled class:busy>
+<div class="slider" class:disabled class:busy class:fill>
   <div class="head" class:sr-only={hideLabel}>
     {#if label !== undefined}<span class="label" id="{uid}-label">{label}</span>{/if}
     <span class="value" aria-hidden="true"><Reading text={valueText} /></span>
@@ -219,6 +224,11 @@
     flex-direction: column;
     gap: var(--space-1);
     min-width: 0;
+  }
+
+  .slider.fill {
+    align-self: stretch;
+    width: 100%;
   }
 
   .slider.disabled {
