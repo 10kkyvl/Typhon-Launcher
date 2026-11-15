@@ -3,7 +3,6 @@
   import {
     ArrowDown,
     ArrowUp,
-    ChevronDown,
     CircleAlert,
     Download,
     FolderOpen,
@@ -11,7 +10,6 @@
     Menu,
     Plus,
     RotateCcw,
-    Settings,
     X,
   } from '@lucide/svelte';
   import AddDownloadModal from '../../lib/components/AddDownloadModal.svelte';
@@ -29,7 +27,7 @@
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import TextLink from '../../lib/components/TextLink.svelte';
   import { gamePageId, type Download as DownloadRecord } from '../../lib/services/downloads';
-  import { maxActiveDownloadOptions, openFolder } from '../../lib/services/settings';
+  import { openFolder } from '../../lib/services/settings';
   import {
     active,
     completed,
@@ -49,19 +47,13 @@
   import { gameArt, requestArt } from '../../lib/stores/metadata';
   import { navigate } from '../../lib/stores/router';
   import { playThrottle } from '../../lib/stores/playThrottle';
-  import { settings, updateSettings } from '../../lib/stores/settings';
   import { sources } from '../../lib/stores/sources';
   import { toast } from '../../lib/stores/toasts';
   import { errorMessage } from '../../lib/utils/errors';
   import { bytesSize, clockTime, relativeDate, speedBytes } from '../../lib/utils/format';
   import { msg } from '../../lib/i18n';
+  import DownloadsActions from './DownloadsActions.svelte';
   import PlayThrottleBanner from './PlayThrottleBanner.svelte';
-
-  const concurrencyValue = $derived(String($settings?.maxActiveDownloads ?? 2));
-
-  function pickConcurrency(id: string) {
-    updateSettings({ maxActiveDownloads: Number(id) });
-  }
 
   const scheduleHeld = $derived($playThrottle.schedule?.blocked === true);
 
@@ -129,24 +121,7 @@
 <Page>
   <PageHeader title={msg('transfers.downloadsTitle')}>
   {#snippet actions()}
-    <DropdownMenu
-      items={maxActiveDownloadOptions.map((o) => ({ ...o, checked: o.id === concurrencyValue }))}
-      onselect={pickConcurrency}
-    >
-      {#snippet trigger({ props })}
-        <Button {...props}>
-          {msg('transfers.downloadsConcurrency', { value: concurrencyValue })}
-          <ChevronDown size="1.4rem" strokeWidth={1.8} />
-        </Button>
-      {/snippet}
-    </DropdownMenu>
-    <IconButton label={msg('transfers.downloadsSettingsLabel')} onclick={() => navigate('settings', { tab: 'downloads' })}>
-      <Settings size="1.7rem" strokeWidth={1.8} />
-    </IconButton>
-    <Button variant="primary" onclick={() => (addOpen = true)}>
-      <Plus size="1.5rem" strokeWidth={2} />
-      {msg('transfers.downloadsAddAction')}
-    </Button>
+    <DownloadsActions onadd={() => (addOpen = true)} />
   {/snippet}
   </PageHeader>
 
