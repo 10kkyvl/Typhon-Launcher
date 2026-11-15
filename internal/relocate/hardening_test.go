@@ -29,9 +29,9 @@ func TestRepointFailureFailsTheJob(t *testing.T) {
 	game, src := addTestGame(t, lib)
 	target := filepath.Join(t.TempDir(), "target")
 
-	// The library cannot save the repoint: a game being moved can no longer be
-	// removed from under the move, so a folder in place of library.json is
-	// what fails it here, on every platform.
+	// The repoint fails because the library cannot save: a folder in place of
+	// library.json refuses the write on every platform, and the move's hold on
+	// the game keeps it in the library meanwhile.
 	afterCopyBeforeVerify = func(string) {
 		if err := os.Remove(libPath); err != nil {
 			t.Error(err)

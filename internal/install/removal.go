@@ -263,7 +263,11 @@ func (s *Service) RemoveGame(gameID string, opts RemoveOptions) error {
 // reserveRemoval takes the library's hold on the game for the whole removal:
 // the check that no other card shares the folder the removal acts on (dir, by
 // deleting it or by running the uninstaller in it) and no move or launch has
-// the game, and the barring of all three, are one step inside the library.
+// the game, and the barring of launches, moves, other removals, rebinding the
+// card and new cards in dir, are one step inside the library. gameBusy is not
+// part of it: it asks this service's installs and the update service before
+// the hold, so an install or update that starts after that answer is not
+// excluded by the hold.
 func (s *Service) reserveRemoval(gameID, dir string) (func(), error) {
 	release, err := s.library.BeginRemoval(gameID, dir)
 	switch {

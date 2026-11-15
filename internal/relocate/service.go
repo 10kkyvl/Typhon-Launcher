@@ -547,7 +547,9 @@ func (s *Service) checkBusy(gameID string) error {
 // reserveGame takes the library's move hold on a game. The running, removal
 // and shared-folder checks and the hold are one step inside the library, so
 // neither a launch, a removal nor a new card in the folder can come between
-// checkBusy and the move.
+// them and the move. checkBusy is not part of it: it asks the install, update
+// and download services before the hold, which does not exclude an install,
+// update or download that starts after that answer.
 func (s *Service) reserveGame(gameID string) (func(), error) {
 	release, err := s.lib.BeginMove(gameID)
 	switch {
