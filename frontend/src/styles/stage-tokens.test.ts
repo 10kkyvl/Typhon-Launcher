@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ruleBody } from '../lib/testing/css';
+import { ruleBody, styleOf } from '../lib/testing/css';
+import backdropSource from '../lib/components/ShellBackdrop.svelte?raw';
 
 type Fs = { readFileSync(path: URL, encoding: 'utf8'): string };
 const fs = (globalThis as unknown as { process: { getBuiltinModule(id: 'node:fs'): Fs } }).process.getBuiltinModule('node:fs');
@@ -38,6 +39,33 @@ describe('the stage and its text plate keep the prototype values', () => {
       '--copy-fade-x': '24rem',
       '--copy-fade-y': '8rem',
     });
+  });
+});
+
+// The prototype's ShellBackdrop.svelte: the stage's height from the foot, the melt into the blurred
+// picture, a plate 14 % taller than the stage, and the two fades of a change of game.
+describe('the stage layer keeps the prototype geometry', () => {
+  const css = styleOf(backdropSource, 'ShellBackdrop.svelte');
+  const melt = 'linear-gradient(180deg, var(--mask-solid) 0, var(--mask-solid) 78%, var(--mask-most) 87%, var(--mask-some) 94%, transparent 100%)';
+
+  it('the stage: from the top of the window to the foot and its tail, solid to 78 % and gone at its end', () => {
+    expect(ruleBody(css, '.stage')).toMatchObject({
+      position: 'absolute',
+      inset: '0 0 auto',
+      height: 'calc(var(--stage-foot) + var(--stage-tail))',
+      '-webkit-mask-image': melt,
+      'mask-image': melt,
+    });
+  });
+
+  it('the plate: taller than the stage, the picture covering it from the focus point', () => {
+    expect(ruleBody(css, '.plate').inset).toBe('0 0 -14%');
+    expect(ruleBody(css, '.plate img')).toMatchObject({ 'object-fit': 'cover', 'object-position': 'var(--stage-focus-x) var(--stage-focus-y)' });
+    expect(ruleBody(css, '.scrim').background).toBe('var(--stage-scrim)');
+  });
+
+  it('a change of game: the new picture arrives over --motion-backdrop, the old one leaves over 200 ms', () => {
+    expect(backdropSource).toMatch(/way === 'in' \? tokenMs\('--motion-backdrop', 600\) : tokenMs\('--dur-panel', 200\)/);
   });
 });
 
