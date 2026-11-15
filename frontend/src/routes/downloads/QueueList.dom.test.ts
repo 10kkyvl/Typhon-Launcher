@@ -10,6 +10,8 @@ import { downloads } from '../../lib/stores/downloads';
 import { playThrottle } from '../../lib/stores/playThrottle';
 import { resetHistory, route } from '../../lib/stores/router';
 import { toasts } from '../../lib/stores/toasts';
+import { sources } from '../../lib/stores/sources';
+import type { Source } from '../../lib/services/sources';
 import { renderDom } from '../../lib/testing/dom';
 import { bytesSize } from '../../lib/utils/format';
 import QueueList from './QueueList.svelte';
@@ -96,6 +98,7 @@ beforeEach(() => {
 
 afterEach(() => {
   downloads.set([]);
+  sources.set([]);
   toasts.set([]);
   playThrottle.set(idlePlayThrottle);
   resetHistory();
@@ -531,6 +534,17 @@ describe('QueueList: a row', () => {
     await user.click(screen.getByRole('button', { name: msg('transfers.downloadsQueueActionsFor', { name: 'Alpha' }) }));
     await user.click(screen.getByRole('menuitem', { name: msg('transfers.downloadsStartNow') }));
     expect(vi.mocked(forceStartDownload).mock.calls).toEqual([['a']]);
+  });
+
+  it('keeps the tags the row had: the kind of download, its source, and a download let outside the schedule', () => {
+    sources.set([{ id: 'src-1', name: 'Main feed' } as Source]);
+    downloads.set([queued('a', 'Alpha', { origin: { gameId: 'g-alpha', sourceId: 'src-1', purpose: 'update' }, ignoreSchedule: true })]);
+    mount();
+
+    const row = screen.getByRole('listitem');
+    for (const label of [msg('transfers.downloadsTypeUpdate'), 'Main feed', msg('transfers.outsideSchedule')]) {
+      expect(row.textContent, label).toContain(label);
+    }
   });
 
   it('the title leads to the game’s page; there is no separate game page button', async () => {
