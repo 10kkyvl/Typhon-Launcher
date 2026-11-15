@@ -3,11 +3,12 @@ import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Theme } from '../../../bindings/typhon/internal/theme';
-import { fromHex, gameToneOf, toneVars, type GameTone, type RGB } from '../art/tone';
+import { contrast, fromHex, gameToneOf, markGrounds, toneVars, type GameTone, type RGB, type ToneTheme } from '../art/tone';
 import type { PixelRead } from '../backdrop/pixels';
 import type { LibraryGame } from '../services/library';
 import GameScopeHarness from '../testing/GameScopeHarness.svelte';
 import { applyTheme, clearTheme } from '../theme/apply';
+import { downloads } from './downloads';
 import { libraryGames } from './library';
 import { gameArt, loadArt } from './metadata';
 import { gameScope, gameTone } from './gameTone';
@@ -35,18 +36,26 @@ vi.mock('../backdrop/pixels', async (original) => ({
 }));
 
 // jsdom resolves no colour on a canvas: the root's own value stands for what the browser computes.
+const resolved = vi.hoisted(() => ({
+  calls: 0,
+  colour(value: string): number[] | undefined {
+    const hex = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(value);
+    if (hex) return [...hex.slice(1).map((v) => parseInt(v, 16)), 1];
+    const rgba = /^rgba\(\s*(\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\s*\)$/.exec(value);
+    return rgba ? rgba.slice(1).map(Number) : undefined;
+  },
+}));
 vi.mock('../theme/resolveColors', () => ({
-  resolveColors: (_vars: Record<string, string>, names: readonly string[]) =>
-    Object.fromEntries(
-      names.map((name) => {
-        const value = document.documentElement.style.getPropertyValue(name).trim();
-        return [name, /^#[0-9a-f]{6}$/i.test(value) ? [...fromHex(value), 1] : undefined];
-      }),
-    ),
+  resolveColors: (_vars: Record<string, string>, names: readonly string[]) => {
+    resolved.calls += 1;
+    return Object.fromEntries(names.map((name) => [name, resolved.colour(document.documentElement.style.getPropertyValue(name).trim())]));
+  },
 }));
 
-const DARK = { '--bg': '#0e0f11', '--text': '#edeef0' };
-const LIGHT = { '--bg': '#eef1f4', '--text': '#10161d' };
+const DARK = { '--bg': '#0e0f11', '--text': '#edeef0', '--surface-2': '#1e2024', '--hover-strong': 'rgba(255, 255, 255, 0.08)' };
+const LIGHT = { '--bg': '#eef1f4', '--text': '#10161d', '--surface-2': '#ffffff', '--hover-strong': 'rgba(0, 0, 0, 0.07)' };
+// The dark page with the high-contrast preset's panel and track: only the grounds of a mark move.
+const DARK_STRONG_TRACK = { ...DARK, '--surface-2': '#141414', '--hover-strong': 'rgba(255, 255, 255, 0.18)' };
 const theme = (tokens: Record<string, string>): Theme => ({ id: 't', name: 't', base: 'dark', tokens, builtIn: true, updatedAt: '' });
 
 const RED: RGB = [200, 40, 30];
@@ -71,7 +80,13 @@ const settle = async () => {
 };
 
 const readsOf = (url: string) => canvas.read.mock.calls.filter(([u]) => u === url).length;
-const toneIn = (color: RGB, tokens: Record<string, string>) => gameToneOf(color, { bg: tokens['--bg'], text: tokens['--text'] });
+const toneTheme = (tokens: Record<string, string>): ToneTheme => ({
+  bg: tokens['--bg'],
+  text: tokens['--text'],
+  panel: tokens['--surface-2'],
+  track: resolved.colour(tokens['--hover-strong']) as ToneTheme['track'],
+});
+const toneIn = (color: RGB, tokens: Record<string, string>) => gameToneOf(color, toneTheme(tokens));
 
 let n = 0;
 // The colours are kept for the session, so every test names its own games.
@@ -189,6 +204,67 @@ describe("a game's colour", () => {
     expect(seen.at(-1)).toEqual(toneIn(RED, LIGHT));
     expect(toneIn(RED, LIGHT)).not.toEqual(toneIn(RED, DARK));
     expect(canvas.read).toHaveBeenCalledTimes(1);
+    stop();
+  });
+
+  it('clamps the mark against the panel and the progress track the window paints, not the page alone', async () => {
+    const c = fresh();
+    backend.art = { [c]: { cover: `/media/${c}.jpg`, hero: '', heroIsPoster: false } };
+    canvas.pictures[`/media/${c}.jpg`] = picture(BLUE);
+    await loadArt([c]);
+    const { seen, stop } = record(c);
+    await settle();
+
+    const mark = seen.at(-1)?.mark ?? '';
+    const worst = Math.min(...markGrounds(toneTheme(DARK)).map((g) => contrast(fromHex(mark), g)));
+    expect(worst, mark).toBeGreaterThanOrEqual(3);
+    expect(mark).toBe(toneIn(BLUE, DARK).mark);
+    expect(mark).not.toBe(gameToneOf(BLUE, { bg: DARK['--bg'], text: DARK['--text'] }).mark);
+    stop();
+  });
+
+  it('a theme change that moves only the panel and the track re-derives the mark with one theme read and no picture read; Play keeps its fill', async () => {
+    const c = fresh();
+    backend.art = { [c]: { cover: `/media/${c}.jpg`, hero: '', heroIsPoster: false } };
+    canvas.pictures[`/media/${c}.jpg`] = picture(BLUE);
+    await loadArt([c]);
+    const { seen, stop } = record(c);
+    await settle();
+    const before = seen.at(-1);
+    const themeReads = resolved.calls;
+
+    applyTheme(theme(DARK_STRONG_TRACK));
+    await settle();
+
+    const after = seen.at(-1);
+    expect(after).toEqual(toneIn(BLUE, DARK_STRONG_TRACK));
+    expect(after?.mark).not.toBe(before?.mark);
+    expect(after?.fill).toBe(before?.fill);
+    expect(after?.accent).toBe(before?.accent);
+    expect(resolved.calls - themeReads).toBe(1);
+    expect(canvas.read).toHaveBeenCalledTimes(1);
+    stop();
+  });
+
+  it('reads nothing per progress tick: no theme read, no picture read, no new colour handed out', async () => {
+    const c = fresh();
+    backend.art = { [c]: { cover: `/media/${c}.jpg`, hero: '', heroIsPoster: false } };
+    canvas.pictures[`/media/${c}.jpg`] = picture(RED);
+    await loadArt([c]);
+    const { seen, stop } = record(c);
+    await settle();
+    const handed = seen.length;
+    const themeReads = resolved.calls;
+
+    for (let i = 1; i <= 20; i++) {
+      downloads.set([{ id: `d-${c}`, gameId: c, progress: i * 5, status: 'downloading' } as never]);
+      await settle();
+    }
+
+    expect(resolved.calls).toBe(themeReads);
+    expect(canvas.read).toHaveBeenCalledTimes(1);
+    expect(seen.length).toBe(handed);
+    downloads.set([]);
     stop();
   });
 

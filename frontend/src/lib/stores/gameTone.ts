@@ -9,8 +9,8 @@ import { libraryGames } from './library';
 import { artAnswered, gameArt } from './metadata';
 
 /**
- * A game's own colour, for the controls that launch it (Play and its Stop, the round Play of a card) and
- * the game page's tab marker. Read once per game and picture from the art (lib/art/tone.ts), kept for the
+ * A game's own colour, for the controls that launch it (Play and its Stop, the round Play of a card), the
+ * game page's tab marker, and the marks drawn for it (a progress fill, a speed graph's line). Read once per game and picture from the art (lib/art/tone.ts), kept for the
  * session as three numbers per game, and clamped into the theme on every theme change without reading a
  * picture again. Until it is known, and when it cannot be known, a subscriber gets null and the controls
  * keep the theme's accent: no stand-in hue first.
@@ -49,13 +49,22 @@ function ensure(key: string, pictures: readonly string[]) {
   });
 }
 
-/** The page's --bg and --text as the window paints them, read again each time the window takes a new look. */
+/**
+ * The page's --bg and --text, and the grounds a mark is drawn on (the panel --surface-2 and the progress
+ * track --hover-strong), as the window paints them: read in one pass each time the window takes a new look,
+ * never per progress tick. A ground that does not resolve is left out and the mark is held on the rest.
+ */
 const theme: Readable<ToneTheme | null> = derived(themeApplied, () => {
-  const colors = resolveColors({}, ['--bg', '--text']);
+  const colors = resolveColors({}, ['--bg', '--text', '--surface-2', '--hover-strong']);
   const bg = colors['--bg'];
   const text = colors['--text'];
   if (!bg || !text) return null;
-  return { bg: toHex([bg[0], bg[1], bg[2]]), text: toHex([text[0], text[1], text[2]]) };
+  const tone: ToneTheme = { bg: toHex([bg[0], bg[1], bg[2]]), text: toHex([text[0], text[1], text[2]]) };
+  const panel = colors['--surface-2'];
+  if (panel) tone.panel = toHex([0, 1, 2].map((i) => panel[i] * panel[3] + bg[i] * (1 - panel[3])) as RGB);
+  const track = colors['--hover-strong'];
+  if (track) tone.track = track;
+  return tone;
 });
 
 /** The game's colour clamped into the current theme; null for no game, while unknown, and when there is none. */
