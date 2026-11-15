@@ -93,6 +93,13 @@ describe('Slider: keys', () => {
     expect(onchange.mock.calls).toEqual([[18], [11]]);
   });
 
+  it('moves Page Up and Page Down by the step count it is given, away from the ends', () => {
+    const { slider, onchange } = setup({ position: 6, page: 5 });
+    press(slider, 'PageUp');
+    press(slider, 'PageDown');
+    expect(onchange.mock.calls).toEqual([[11], [1]]);
+  });
+
   it('commits nothing past an end', () => {
     const start = setup({ position: 0 });
     press(start.slider, 'ArrowLeft');
