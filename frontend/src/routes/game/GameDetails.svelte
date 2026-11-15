@@ -6,6 +6,7 @@
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import Tabs from '../../lib/components/Tabs.svelte';
+  import { gameScope } from '../../lib/stores/gameTone';
   import { tabPanel } from '../../lib/components/tabs';
   import type UpdateCard from '../../lib/components/UpdateCard.svelte';
   import GameActions from './GameActions.svelte';
@@ -449,18 +450,21 @@
 {/snippet}
 
 {#snippet hero()}
-  <GamePageHero
-    {info} {title} {coverSrc} look={heroLook} bind:titleHeading {localGame} {installed} {wasInstalled}
-    {running} {notOnPcKind} {updateAvailable} {busy} {popOnce} {externalName} {emulated} {emulatedPlatform} {imageMissing}
-  >
-    {#snippet actions()}
-      <GameActions
-        {data} {primary} {busy} {localGame} {canonicalId} {installed} {wasInstalled} {external} {managed} {emulated}
-        {updateIsRelease} {terminalDownload} {update} {updateCard} {otherVersionsEl} {toOverview} bind:statusOpen bind:tagsOpen {onMenu} {startDownload}
-        {retryTerminalDownload} {installFromTerminalDownload}
-      />
-    {/snippet}
-  </GamePageHero>
+  <!-- The header's Play takes the game's colour; the wrapper draws no box. -->
+  <div class="tone" {@attach gameScope(ambientId)}>
+    <GamePageHero
+      {info} {title} {coverSrc} look={heroLook} bind:titleHeading {localGame} {installed} {wasInstalled}
+      {running} {notOnPcKind} {updateAvailable} {busy} {popOnce} {externalName} {emulated} {emulatedPlatform} {imageMissing}
+    >
+      {#snippet actions()}
+        <GameActions
+          {data} {primary} {busy} {localGame} {canonicalId} {installed} {wasInstalled} {external} {managed} {emulated}
+          {updateIsRelease} {terminalDownload} {update} {updateCard} {otherVersionsEl} {toOverview} bind:statusOpen bind:tagsOpen {onMenu} {startDownload}
+          {retryTerminalDownload} {installFromTerminalDownload}
+        />
+      {/snippet}
+    </GamePageHero>
+  </div>
 {/snippet}
 
 <Page bleed={gameShown ? hero : undefined}>
@@ -482,8 +486,8 @@
     <CloudConflictBanner gameId={localGame?.id} fallbackFocus={() => titleHeading} />
 
     {#if tabs.length > 1}
-      <div class="tabs-wrap" data-part="game-tabs">
-        <Tabs {tabs} idPrefix="{uid}-game" label={title} bind:value={activeTab} />
+      <div class="tabs-wrap" data-part="game-tabs" {@attach gameScope(ambientId)}>
+        <Tabs {tabs} idPrefix="{uid}-game" label={title} bind:value={activeTab} marker="var(--game-accent)" />
       </div>
     {/if}
 
@@ -522,6 +526,10 @@
 </Page>
 
 <style>
+  .tone {
+    display: contents;
+  }
+
   .tabs-wrap {
     margin-bottom: var(--space-8);
   }

@@ -34,6 +34,7 @@
   import { modalOpen } from '../layers';
   import { motionOn } from '../motion/motion';
   import { restAmbient } from '../stores/ambient';
+  import { gameScope } from '../stores/gameTone';
   import { claimStage } from '../stores/stage';
   import { nextIndex } from '../utils/roving';
   import Artwork from './Artwork.svelte';
@@ -50,7 +51,8 @@
    * is inside it, it is scrolled out of view, the window is hidden or a dialog is open, and it does
    * not run with motion off.
    * While the pointer or focus holds it, the slides keep their order on screen, each still showing
-   * its newest state. A slide the player picks is announced; one the timer moves to is not.
+   * its newest state. A slide the player picks is announced; one the timer moves to is not. Each slide is
+   * painted in its game's colour (stores/gameTone.ts), read as the carousel mounts: Play or Stop takes it.
    *
    * `stage`: the game on screen claims the stage (stores/stage.ts) by its id, whether or not it has
    * wide art there. `ambient`: it is the page's resting picture for the window backdrop
@@ -214,6 +216,7 @@
           aria-hidden={!shownHere || undefined}
           inert={!shownHere}
           data-picture={slide.staged ? 'stage' : 'cover'}
+          {@attach gameScope(slide.id)}
         >
           <div class="copy">
             {#if !slide.staged}
@@ -232,7 +235,7 @@
               {/if}
               {#if slide.line}<p class="line">{slide.line}</p>{/if}
               <div class="cta">
-                <Button variant="primary" size="lg" busy={slide.launching} onclick={() => (slide.running ? onstop : onplay)(slide.id)}>
+                <Button variant="play" size="lg" busy={slide.launching} onclick={() => (slide.running ? onstop : onplay)(slide.id)}>
                   {#if slide.running}<Square size="1.6rem" strokeWidth={2} fill="currentColor" />{msg('ui.stop')}{:else}<Play size="1.8rem" strokeWidth={2} fill="currentColor" />{msg('ui.play')}{/if}
                 </Button>
               </div>

@@ -43,6 +43,8 @@
   let lead = $state<HTMLSpanElement>();
 
   const launched = $derived(kind === 'play' && !busy ? game : undefined);
+  // Play and its Stop are the press that launches the game: inside the page's scope they take its colour.
+  const variant = $derived(progress ? 'secondary' : kind === 'play' || kind === 'stop' ? 'play' : 'primary');
   const split = $derived(launched ? profileChoices(launched).length > 1 : false);
 
   // The chevron goes when Play turns into anything else; if it held focus (a profile was just picked
@@ -69,7 +71,7 @@
 
 <span class="lead" bind:this={lead} role={split ? 'group' : undefined} aria-label={split ? msg('games.play') : undefined}>
   <Button
-    variant={progress ? 'secondary' : 'primary'}
+    {variant}
     size="lg"
     minWidth="18rem"
     join={split ? 'end' : undefined}
