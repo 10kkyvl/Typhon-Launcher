@@ -19,8 +19,11 @@
    * The control snippet gets the ids of the label and the hint, so the control is named and described
    * by them (`labelledby` / `describedby` on the base controls); `labelFor` ties a single field to the
    * label instead. `note` is a line in the warning colour, read with the hint. `disabledReason` says
-   * why the setting cannot be changed now: it leads the hint, so it is read with the control, and the
-   * snippet gets `disabled` to pass on.
+   * why the setting cannot be changed now: it leads the hint, and the row makes its control and its
+   * `below` inert itself, so a caller that forgets to pass `disabled` on cannot leave a live control
+   * under the reason. A screen reader then reads the label and the hint, the reason first, as text; the
+   * control is out of the Tab order and the accessibility tree. The snippet still gets `disabled`, for
+   * the control's own disabled look.
    *
    * Settings mounts well over a hundred of these: a row is one box, its words and its control. A row
    * stands on a card: the note's warning colour is text only on a surface, never on the page backdrop
@@ -71,10 +74,10 @@
     {/if}
   </div>
   {#if children}
-    <div class="control">{@render children(ids)}</div>
+    <div class="control" inert={!!disabledReason}>{@render children(ids)}</div>
   {/if}
   {#if below}
-    <div class="below">{@render below(ids)}</div>
+    <div class="below" inert={!!disabledReason}>{@render below(ids)}</div>
   {/if}
 </div>
 
