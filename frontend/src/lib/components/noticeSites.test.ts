@@ -47,6 +47,12 @@ const SITES: Record<string, Site[]> = {
   'lib/components/SimilarReleases.svelte': [['danger', true]],
   // Advice for the chosen platform, also inside InstallModal and AddDownloadModal.
   'lib/components/EmulatorHint.svelte': [['warning', false]],
+  // A fetch after a Start that found nothing waiting in Go failed, or brought the files back and
+  // Start has to be pressed again: both just happened.
+  'lib/components/AddDownloadModal.svelte': [
+    ['danger', true],
+    ['info', true],
+  ],
   'lib/components/AddImageModal.svelte': [
     ['danger', true],
     ['danger', true],

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { get } from 'svelte/store';
   import { FileUp } from '@lucide/svelte';
   import {
@@ -18,7 +18,10 @@
   import { settings } from '../stores/settings';
   import { toast } from '../stores/toasts';
   import { bytesSize } from '../utils/format';
+  import { focusHandOff } from '../utils/focusHandOff';
+  import { focusQuietly } from '../layers/focus';
   import { msg } from '../i18n';
+  import { errorCode } from '../i18n/errors';
   import { platformBadge } from '../library/emulation';
   import Button from './Button.svelte';
   import Checkbox from './Checkbox.svelte';
@@ -26,6 +29,7 @@
   import EmulatorHint from './EmulatorHint.svelte';
   import LibrarySetupModal from './LibrarySetupModal.svelte';
   import Modal from './Modal.svelte';
+  import Notice from './Notice.svelte';
   import Spinner from './Spinner.svelte';
 
   let {
@@ -46,6 +50,14 @@
   let platform = $state<AppInfo | null>(null);
   let pendingHash = '';
   let token = 0;
+  // What the files step was fetched from: a Start that finds nothing waiting in Go fetches it again.
+  let fetchedFrom = '';
+  // The file choices a fetch after such a Start keeps, by path; null for a fetch the player asked for.
+  let kept: Map<string, boolean> | null = null;
+  // After that fetch: Start has to be pressed again (restartNeeded), or the fetch failed (refetchError).
+  let restartNeeded = $state(false);
+  let refetchError = $state('');
+  let refetchRetrying = $state(false);
 
   const consolePlatform = $derived(origin?.platform ?? '');
   const libraryReady = $derived(Boolean($settings?.libraryPath));
@@ -77,6 +89,11 @@
     info = null;
     selected = [];
     starting = false;
+    fetchedFrom = '';
+    kept = null;
+    restartNeeded = false;
+    refetchError = '';
+    refetchRetrying = false;
   }
 
   $effect(() => {
@@ -93,7 +110,7 @@
         loadPlatform();
         if (preset) {
           source = preset;
-          proceed(preset);
+          ask(preset);
         }
       }
     });
@@ -110,24 +127,62 @@
     }
   }
 
-  async function proceed(value: string) {
+  // A fetch the player asked for starts anew; a fetch after a Start that found nothing waiting
+  // (`kept` set) keeps the files the player chose and says how it ended in the dialog. It answers
+  // whether the files step came, or undefined when the dialog moved on meanwhile.
+  async function proceed(value: string): Promise<boolean | undefined> {
     const current = ++token;
+    const choices = kept;
+    if (!choices) {
+      refetchError = '';
+      restartNeeded = false;
+    }
     step = 'loading';
     try {
       const result = await fetchMetadata(value);
       if (!open || current !== token) {
         discardMetadata(result.infoHash);
-        return;
+        return undefined;
       }
       pendingHash = result.infoHash;
+      fetchedFrom = value;
       info = result;
-      selected = result.files.map(() => true);
+      selected = result.files.map((file) => choices?.get(file.path) ?? true);
+      kept = null;
+      refetchError = '';
+      restartNeeded = choices !== null;
       step = 'files';
+      return true;
     } catch (err) {
-      if (!open || current !== token) return;
-      toast(installErrorText(err), 'danger');
+      if (!open || current !== token) return undefined;
+      if (choices) refetchError = installErrorText(err);
+      else toast(installErrorText(err), 'danger');
       step = 'source';
+      return false;
     }
+  }
+
+  function ask(value: string) {
+    kept = null;
+    return proceed(value);
+  }
+
+  const retryRefetch = () => proceed(fetchedFrom);
+
+  // While the fetch runs the files step and its Start are gone: focus waits on the dialog itself,
+  // and comes to Start when the files are back, unless the player has moved it meanwhile.
+  async function fetchAgain(choices: Map<string, boolean>) {
+    const root = document.getElementById(`${uid}-start`)?.closest('[role="dialog"]')?.closest<HTMLElement>('[tabindex]') ?? null;
+    const handOff = focusHandOff();
+    kept = choices;
+    const fetched = proceed(fetchedFrom);
+    await handOff(() => root);
+    if (!(await fetched)) return;
+    await tick();
+    const active = document.activeElement;
+    if (active && active !== document.body && active !== root && active.isConnected) return;
+    const start = document.getElementById(`${uid}-start`);
+    if (start) focusQuietly(start);
   }
 
   async function pickTorrent() {
@@ -135,7 +190,7 @@
       const path = await selectTorrentFile();
       if (!path) return;
       source = path;
-      await proceed(path);
+      await ask(path);
     } catch (err) {
       toast(installErrorText(err), 'danger');
     }
@@ -152,7 +207,9 @@
 
   async function start() {
     if (!info) return;
+    const files = info.files;
     const indices = selected.map((on, i) => (on ? i : -1)).filter((i) => i >= 0);
+    restartNeeded = false;
     starting = true;
     try {
       await startDownloadFrom(
@@ -166,6 +223,14 @@
       pendingHash = '';
       open = false;
     } catch (err) {
+      starting = false;
+      // Go holds nothing for this torrent any more (its client went with a network change): one fetch
+      // of the same source brings it back. Any other failure leaves it waiting for the next Start.
+      if (open && errorCode(err) === 'download.metadata_required') {
+        pendingHash = '';
+        await fetchAgain(new Map(files.map((file, i) => [file.path, Boolean(selected[i])])));
+        return;
+      }
       toast(installErrorText(err), 'danger');
     }
     starting = false;
@@ -183,6 +248,24 @@
     : msg('modals.addDownloadTitle')}
   width={step === 'files' && !consolePlatform ? '62rem' : '48rem'}
 >
+  {#if refetchError || refetchRetrying}
+    <div class="said">
+      <Notice
+        tone="danger"
+        compact
+        title={msg('modals.addDownloadRefetchFailed')}
+        bind:retrying={refetchRetrying}
+        retry={{ label: msg('common.retry'), run: retryRefetch, focus: () => document.getElementById(`${uid}-start`) }}
+      >
+        {refetchError}
+      </Notice>
+    </div>
+  {/if}
+  {#if restartNeeded && step === 'files'}
+    <div class="said">
+      <Notice tone="info" compact>{msg('modals.addDownloadRestartNeeded')}</Notice>
+    </div>
+  {/if}
   {#if step === 'source'}
     <div class="source">
       <label class="field">
@@ -259,19 +342,23 @@
   {#snippet footer()}
     {#if step === 'source'}
       <Button onclick={() => (open = false)}>{msg('common.cancel')}</Button>
-      <Button variant="primary" disabled={!canContinue} onclick={() => proceed(source.trim())}>{msg('common.continue')}</Button>
+      <Button variant="primary" disabled={!canContinue} onclick={() => ask(source.trim())}>{msg('common.continue')}</Button>
     {:else if step === 'files'}
       <span class="summary">
         {msg('downloads.selected', { count: selectedCount, size: bytesSize(selectedSize) })}
       </span>
       <Button onclick={() => (open = false)}>{msg('common.cancel')}</Button>
-      <Button variant="primary" disabled={selectedCount === 0} busy={starting} onclick={start}>{msg('modals.addDownloadStart')}</Button>
+      <Button id="{uid}-start" variant="primary" disabled={selectedCount === 0} busy={starting} onclick={start}>{msg('modals.addDownloadStart')}</Button>
     {/if}
   {/snippet}
 </Modal>
 {/if}
 
 <style>
+  .said {
+    margin-bottom: var(--space-4);
+  }
+
   .source {
     display: flex;
     flex-direction: column;

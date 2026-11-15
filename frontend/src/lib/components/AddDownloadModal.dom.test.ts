@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/svelte';
+import { screen, waitFor, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
@@ -14,6 +14,10 @@ vi.mock('../services/system', async (actual) => ({
   ...(await actual<typeof import('../services/system')>()),
   appInfo: vi.fn(async () => ({ version: '1', platform: 'windows', arch: 'amd64', devMock: false, portable: false, dataDir: '' })),
 }));
+vi.mock('../services/settings', async (actual) => ({
+  ...(await actual<typeof import('../services/settings')>()),
+  selectFolder: vi.fn(async () => ''),
+}));
 vi.mock('../stores/settings', async (actual) => {
   const { writable } = await import('svelte/store');
   return {
@@ -22,8 +26,20 @@ vi.mock('../stores/settings', async (actual) => {
   };
 });
 
-import { locale } from '../i18n';
-import { fetchMetadata, startDownloadFrom, type TorrentInfo } from '../services/downloads';
+import { get } from 'svelte/store';
+import { locale, msg } from '../i18n';
+import { installErrorText } from '../install/installErrors';
+import {
+  cancelFetchMetadata,
+  discardMetadata,
+  fetchMetadata,
+  startDownloadFrom,
+  type Download,
+  type DownloadOrigin,
+  type TorrentInfo,
+} from '../services/downloads';
+import { selectFolder } from '../services/settings';
+import { toasts } from '../stores/toasts';
 import { renderDom } from '../testing/dom';
 import { description } from '../testing/hints';
 import AddDownloadModal from './AddDownloadModal.svelte';
@@ -105,5 +121,255 @@ describe('AddDownloadModal files', () => {
     expect(start).toHaveProperty('disabled', false);
     expect(document.activeElement).toBe(start);
     started();
+  });
+});
+
+const MAGNET = 'magnet:?xt=urn:btih:abc';
+const NOTHING_WAITING = 'typhon:download.metadata_required: сначала получите метаданные торрента: typhon:download.no_client: клиент заменён';
+const FETCH_FAILED = 'typhon:download.no_metadata: метаданные не пришли';
+const GAME_ORIGIN: DownloadOrigin = { gameId: 'g1', sourceId: 's1', distributionId: 'd1', releaseId: 'r1', title: 'Celeste' };
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (err: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+// Said again after a failed retry: the notice's message comes into its live region again, as new nodes.
+function sayingAgain(notice: Element): () => string {
+  const region = notice.querySelector('.body');
+  const before = region?.firstElementChild;
+  return () => {
+    const now = region?.firstElementChild;
+    if (!region?.getAttribute('role') || !now || now === before) return '';
+    return (now.textContent ?? '').replace(/\s+/g, ' ').trim();
+  };
+}
+
+// Answers queued by one case (a fetch the dialog never made) must not reach the next.
+function freshMocks() {
+  vi.mocked(fetchMetadata).mockReset();
+  vi.mocked(fetchMetadata).mockResolvedValue(TORRENT);
+  vi.mocked(startDownloadFrom).mockReset();
+  vi.mocked(startDownloadFrom).mockResolvedValue({} as Download);
+  vi.mocked(discardMetadata).mockClear();
+  vi.mocked(cancelFetchMetadata).mockClear();
+}
+
+const startButton = () => screen.getByRole('button', { name: msg('modals.addDownloadStart') });
+const fileBox = (path: string) => screen.getByRole('checkbox', { name: path });
+
+describe('AddDownloadModal: a Start that finds nothing waiting in Go', () => {
+  beforeEach(() => {
+    freshMocks();
+    vi.mocked(selectFolder).mockResolvedValue('/elsewhere');
+  });
+
+  afterEach(() => {
+    toasts.set([]);
+  });
+
+  // Untick the readme, choose another folder, turn on the install: the choices a fetch must not lose.
+  async function choose(props: { origin?: DownloadOrigin } = {}) {
+    const view = renderDom(AddDownloadModal, { open: true, initialSource: MAGNET, ...props });
+    await screen.findByRole('checkbox', { name: 'Celeste/setup.exe' });
+    await view.user.click(fileBox('Celeste/readme.txt'));
+    await view.user.click(screen.getByRole('button', { name: msg('modals.addDownloadBrowse') }));
+    await waitFor(() => expect(screen.getByRole('textbox', { name: msg('modals.addDownloadDestinationLabel') })).toHaveProperty('value', '/elsewhere'));
+    await view.user.click(screen.getByRole('checkbox', { name: msg('modals.addDownloadAutoInstallLabel') }));
+    return view;
+  }
+
+  it('fetches the same source once, shows the loading step, and lands on the files with the choices kept, Start focused', async () => {
+    const refetch = deferred<TorrentInfo>();
+    vi.mocked(startDownloadFrom).mockRejectedValueOnce(new Error(NOTHING_WAITING));
+    const { user } = await choose();
+    vi.mocked(fetchMetadata).mockReturnValueOnce(refetch.promise);
+    startButton().focus();
+
+    await user.keyboard('{Enter}');
+
+    const loading = await screen.findByText(msg('modals.addDownloadFetchingMetadata'));
+    expect(loading.closest('[role="status"]')).not.toBeNull();
+    expect(fetchMetadata).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(fetchMetadata).mock.calls[1]).toEqual([MAGNET]);
+    const held = document.activeElement;
+    expect(held === document.body || !held?.isConnected).toBe(false);
+    expect(screen.getByRole('dialog').closest('[tabindex]')?.contains(held)).toBe(true);
+
+    refetch.resolve(TORRENT);
+
+    await screen.findByRole('checkbox', { name: 'Celeste/setup.exe' });
+    expect(fileBox('Celeste/setup.exe').getAttribute('aria-checked')).toBe('true');
+    expect(fileBox('Celeste/readme.txt').getAttribute('aria-checked')).toBe('false');
+    expect(screen.getByRole('textbox', { name: msg('modals.addDownloadDestinationLabel') })).toHaveProperty('value', '/elsewhere');
+    expect(screen.getByRole('checkbox', { name: msg('modals.addDownloadAutoInstallLabel') }).getAttribute('aria-checked')).toBe('true');
+    const note = screen.getByText(msg('modals.addDownloadRestartNeeded'));
+    expect(note.closest('.notice')).not.toBeNull();
+    expect(get(toasts)).toHaveLength(0);
+    await waitFor(() => expect(document.activeElement).toBe(startButton()));
+    expect(fetchMetadata).toHaveBeenCalledTimes(2);
+  });
+
+  it('sends the second Start with the kept choices and the origin, and closes when it succeeds', async () => {
+    vi.mocked(startDownloadFrom).mockRejectedValueOnce(new Error(NOTHING_WAITING));
+    const { user } = await choose({ origin: GAME_ORIGIN });
+    await user.click(startButton());
+    await waitFor(() => expect(screen.getByText(msg('modals.addDownloadRestartNeeded'))).toBeTruthy());
+
+    await user.click(startButton());
+
+    await waitFor(() => expect(startDownloadFrom).toHaveBeenCalledTimes(2));
+    const [first, second] = vi.mocked(startDownloadFrom).mock.calls;
+    expect(second).toEqual(first);
+    expect(second).toEqual(['abc', '/elsewhere', [0], { ...GAME_ORIGIN, autoInstall: true, elevateAhead: false }]);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(discardMetadata).not.toHaveBeenCalled();
+  });
+
+  it('when that fetch fails too: the source step, the failure by its code with a Retry, and no fetch of its own', async () => {
+    vi.mocked(startDownloadFrom).mockRejectedValueOnce(new Error(NOTHING_WAITING));
+    const { user } = await choose();
+    vi.mocked(fetchMetadata).mockRejectedValueOnce(new Error(FETCH_FAILED)).mockReturnValueOnce(new Promise(() => {}));
+
+    await user.click(startButton());
+
+    const alert = await screen.findByRole('alert');
+    const notice = alert.closest('.notice') as HTMLElement;
+    expect(notice.getAttribute('data-tone')).toBe('danger');
+    expect(alert.textContent).toContain(msg('modals.addDownloadRefetchFailed'));
+    expect(alert.textContent).toContain(installErrorText(new Error(FETCH_FAILED)));
+    expect(within(notice).getByRole('button', { name: msg('common.retry') })).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: msg('modals.addDownloadMagnetLabel') })).toHaveProperty('value', MAGNET);
+    for (let i = 0; i < 10; i += 1) await Promise.resolve();
+    expect(fetchMetadata).toHaveBeenCalledTimes(2);
+  });
+
+  it('Retry fetches the source again with the choices kept, and focuses Start', async () => {
+    const again = deferred<TorrentInfo>();
+    vi.mocked(startDownloadFrom).mockRejectedValueOnce(new Error(NOTHING_WAITING));
+    const { user } = await choose();
+    vi.mocked(fetchMetadata).mockRejectedValueOnce(new Error(FETCH_FAILED)).mockReturnValueOnce(again.promise);
+    await user.click(startButton());
+    const retry = await screen.findByRole('button', { name: msg('common.retry') });
+    const notice = retry.closest('.notice') as HTMLElement;
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(retry.getAttribute('aria-busy')).toBe('true');
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
+    expect(vi.mocked(fetchMetadata).mock.calls[2]).toEqual([MAGNET]);
+
+    again.resolve(TORRENT);
+
+    await screen.findByRole('checkbox', { name: 'Celeste/setup.exe' });
+    expect(notice.isConnected).toBe(false);
+    expect(fileBox('Celeste/readme.txt').getAttribute('aria-checked')).toBe('false');
+    expect(screen.getByRole('textbox', { name: msg('modals.addDownloadDestinationLabel') })).toHaveProperty('value', '/elsewhere');
+    await waitFor(() => expect(document.activeElement).toBe(startButton()));
+  });
+
+  it('keeps the notice when the Retry fails again, and says it again', async () => {
+    vi.mocked(startDownloadFrom).mockRejectedValueOnce(new Error(NOTHING_WAITING));
+    const { user } = await choose();
+    vi.mocked(fetchMetadata).mockRejectedValue(new Error(FETCH_FAILED));
+    await user.click(startButton());
+    const retry = await screen.findByRole('button', { name: msg('common.retry') });
+    const notice = retry.closest('.notice') as HTMLElement;
+    const words = notice.querySelector('.message')?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+    const said = sayingAgain(notice);
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => expect(said()).toBe(words));
+    expect(words).not.toBe('');
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
+    expect(fetchMetadata).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('AddDownloadModal: any other Start failure', () => {
+  beforeEach(() => {
+    freshMocks();
+  });
+
+  afterEach(() => {
+    toasts.set([]);
+  });
+
+  it('keeps the files step with Start working: a second press is sent and can succeed', async () => {
+    vi.mocked(startDownloadFrom).mockRejectedValueOnce(new Error('typhon:download.not_enough_space: мало места'));
+    const { user } = await files();
+
+    await user.click(startButton());
+
+    await waitFor(() => expect(get(toasts).map((t) => t.message)).toContain(installErrorText(new Error('typhon:download.not_enough_space'))));
+    expect(startButton()).toHaveProperty('disabled', false);
+    expect(startButton().getAttribute('aria-busy')).not.toBe('true');
+    expect(fetchMetadata).toHaveBeenCalledTimes(1);
+
+    await user.click(startButton());
+
+    await waitFor(() => expect(startDownloadFrom).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+});
+
+describe('AddDownloadModal: closing and starting', () => {
+  beforeEach(() => {
+    freshMocks();
+  });
+
+  it('closing during a fetch cancels it, discards what it brings later, and the late answer changes nothing', async () => {
+    const fetching = deferred<TorrentInfo>();
+    vi.mocked(fetchMetadata).mockReturnValueOnce(fetching.promise);
+    const { user, rerender } = renderDom(AddDownloadModal, { open: true, initialSource: MAGNET });
+    await screen.findByText(msg('modals.addDownloadFetchingMetadata'));
+
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(cancelFetchMetadata).toHaveBeenCalledWith(MAGNET);
+
+    vi.mocked(fetchMetadata).mockReturnValueOnce(new Promise(() => {}));
+    await rerender({ open: true, initialSource: MAGNET });
+    await screen.findByText(msg('modals.addDownloadFetchingMetadata'));
+
+    fetching.resolve(TORRENT);
+
+    await waitFor(() => expect(discardMetadata).toHaveBeenCalledWith('abc'));
+    expect(screen.queryByRole('checkbox', { name: 'Celeste/setup.exe' })).toBeNull();
+    expect(screen.getByText(msg('modals.addDownloadFetchingMetadata'))).toBeTruthy();
+  });
+
+  it('closing on the files step discards the fetched torrent', async () => {
+    const { user } = await files();
+
+    await user.click(screen.getByRole('button', { name: msg('common.cancel') }));
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(discardMetadata).toHaveBeenCalledWith('abc');
+  });
+
+  it('cannot be closed while it starts', async () => {
+    const starting = deferred<Download>();
+    vi.mocked(startDownloadFrom).mockReturnValueOnce(starting.promise);
+    const { user } = await files();
+    await user.click(startButton());
+
+    await user.keyboard('{Escape}');
+
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(discardMetadata).not.toHaveBeenCalled();
+    starting.resolve({} as Download);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 });
