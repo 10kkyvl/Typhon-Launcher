@@ -22,7 +22,12 @@
 
   // svelte-ignore state_referenced_locally
   let selected = $state(start);
+  // A rerender may hand the same `start` again: only a new one resets the choice.
+  // svelte-ignore state_referenced_locally
+  let last = start;
   $effect(() => {
+    if (start === last) return;
+    last = start;
     selected = start;
   });
   const format = (value: number) => (value > 0 ? `${value} ч` : 'не играли');

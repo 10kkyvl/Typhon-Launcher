@@ -1,6 +1,7 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte';
+  import { untrack, type Snippet } from 'svelte';
   import { locale, t } from '../i18n';
+  import { focusQuietly } from '../layers/focus';
   import { motionOn } from '../motion/motion';
   import { nextIndex } from '../utils/roving';
   import { barShare, chartMax, chartValue, isEmpty, ticks, type ChartBucket, type ChartScale } from './barChart';
@@ -19,7 +20,8 @@
    *
    * With `selectable` the bars are one choice of a radio group (one Tab stop, the arrows, Home and
    * End move the choice and the focus, stopping at the ends); `bind:selected` holds the chosen key,
-   * which may be none (null or a key no bucket has) without the group turning into a table. Each radio is named by its bucket and
+   * which may be none (null or a key no bucket has) without the group turning into a table. The Tab
+   * stop is kept by key; a focused bar whose bucket leaves hands focus to the bar in its place. Each radio is named by its bucket and
    * value and shows them as a hint, so the radios are the list of numbers and no table repeats them.
    * `values="selected"` labels the chosen bar only, for a chart of many bars.
    *
@@ -69,9 +71,14 @@
   const max = $derived(chartMax(buckets, scale));
   const marks = $derived(scale ? ticks(scale) : []);
   const chosen = $derived(buckets.findIndex((bucket) => bucket.key === selected));
-  // The one Tab stop: the chosen bar; while the choice is no bucket, the current one, else the last.
+  // The key of the bar focus was last on (a press, an arrow, a hand-off).
+  let focusedKey = $state<string | null>(null);
+  // The one Tab stop, by key: the chosen bar; while the choice is no bucket, the bar focus was last on,
+  // else the current one, else the last.
   const stop = $derived.by(() => {
     if (chosen >= 0) return chosen;
+    const held = buckets.findIndex((bucket) => bucket.key === focusedKey);
+    if (held >= 0) return held;
     const current = buckets.findIndex((bucket) => bucket.current);
     return current >= 0 ? current : buckets.length - 1;
   });
@@ -83,16 +90,40 @@
   const tickText = (mark: number) => (tickFormat ? tickFormat(mark) : mark === 0 ? zero : format(mark));
 
   let group = $state<HTMLElement>();
+  const radios = () => [...(group?.querySelectorAll<HTMLButtonElement>('[role="radio"]') ?? [])];
 
   function onkeydown(event: KeyboardEvent) {
     if (event.altKey || event.ctrlKey || event.metaKey) return;
-    const radios = [...(group?.querySelectorAll<HTMLButtonElement>('[role="radio"]') ?? [])];
-    const next = nextIndex(radios.indexOf(document.activeElement as HTMLButtonElement), buckets.length, event.key, { orientation: 'horizontal', loop: false });
+    const all = radios();
+    const next = nextIndex(all.indexOf(document.activeElement as HTMLButtonElement), buckets.length, event.key, { orientation: 'horizontal', loop: false });
     if (next === null) return;
     event.preventDefault();
     selected = buckets[next].key;
-    radios[next]?.focus();
+    all[next]?.focus();
   }
+
+  // A focused bar that leaves (its bucket gone from the data) hands focus to the bar now in its place,
+  // else to its neighbour, else to the group. Read before the bars change: which one held focus. Not
+  // state: nothing is drawn from it.
+  let held: number | null = null;
+  $effect.pre(() => {
+    void buckets;
+    const active = document.activeElement;
+    const at = active instanceof HTMLButtonElement ? untrack(radios).indexOf(active) : -1;
+    held = at >= 0 ? at : null;
+  });
+  $effect(() => {
+    void buckets;
+    const was = held;
+    held = null;
+    if (was === null || !group) return;
+    const active = document.activeElement;
+    if (active && active !== document.body && active.isConnected) return;
+    const now = radios();
+    const at = Math.min(was, now.length - 1);
+    if (at >= 0) focusedKey = untrack(() => buckets[at].key);
+    focusQuietly(now[at] ?? group);
+  });
 </script>
 
 {#snippet column(bucket: ChartBucket)}
@@ -122,7 +153,7 @@
         {/each}
       </div>
       {#if selectable}
-        <div class="cols" role="radiogroup" aria-label={label} bind:this={group}>
+        <div class="cols" role="radiogroup" aria-label={label} tabindex="-1" bind:this={group}>
           {#each buckets as bucket, index (bucket.key)}
             <Tooltip text={named(bucket)} describe={false}>
               <button
@@ -133,6 +164,7 @@
                 aria-checked={bucket.key === selected}
                 aria-label={named(bucket)}
                 tabindex={index === stop ? 0 : -1}
+                onfocus={() => (focusedKey = bucket.key)}
                 onclick={() => (selected = bucket.key)}
                 {onkeydown}
               >
@@ -328,5 +360,11 @@
   button.col:focus-visible {
     outline: 2px solid var(--accent-ring);
     outline-offset: 1px;
+  }
+
+  /* The group takes focus only when the focused bar left and none took its place. */
+  .cols:focus-visible {
+    outline: 2px solid var(--accent-ring);
+    outline-offset: 2px;
   }
 </style>

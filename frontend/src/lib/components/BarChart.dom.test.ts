@@ -166,6 +166,47 @@ describe('BarChart', () => {
       expect((focused as HTMLElement).isConnected).toBe(true);
     });
 
+    describe('as the buckets change', () => {
+      const aria = () => document.activeElement?.getAttribute('aria-label');
+
+      it('hands focus to the bar now in the place of a focused one that leaves', async () => {
+        const { rerender, user } = renderDom(BarChartHarness, { buckets: DAYS, selectable: true, start: 'wed' });
+        await user.tab();
+        expect(aria()).toBe('Ср, 4 ноября: 8 ч');
+        await rerender({ buckets: DAYS.filter((d) => d.key !== 'wed') });
+        expect(aria()).toBe('Чт, 5 ноября: 4 ч');
+        expect((document.activeElement as HTMLElement).tabIndex).toBe(0);
+      });
+
+      it('hands focus to the neighbour when the last one leaves', async () => {
+        const { rerender, user } = renderDom(BarChartHarness, { buckets: DAYS, selectable: true, start: 'thu' });
+        await user.tab();
+        await rerender({ buckets: DAYS.slice(0, 3) });
+        expect(aria()).toBe('Ср, 4 ноября: 8 ч');
+      });
+
+      it('keeps the Tab stop on the bar focus was handed to, by its key, when one is added before it', async () => {
+        const { container, rerender, user } = renderDom(BarChartHarness, { buckets: DAYS, selectable: true, start: 'mon' });
+        await user.tab();
+        await rerender({ buckets: DAYS.slice(1) });
+        expect(aria()).toBe('Вт, 3 ноября: не играли');
+        await user.tab();
+        await rerender({ buckets: [{ key: 'sun', label: 'Вс, 1 ноября', value: 1 }, ...DAYS.slice(1)] });
+        expect(radios(container).filter((radio) => radio.tabIndex === 0).map((radio) => radio.getAttribute('aria-label'))).toEqual(['Вт, 3 ноября: не играли']);
+      });
+
+      it('leaves focus alone when it was not on a bar', async () => {
+        const { rerender, user } = renderDom(BarChartHarness, { buckets: DAYS, selectable: true, start: 'wed' });
+        const outside = document.createElement('button');
+        document.body.append(outside);
+        await user.tab();
+        outside.focus();
+        await rerender({ buckets: DAYS.filter((d) => d.key !== 'wed') });
+        expect(document.activeElement).toBe(outside);
+        outside.remove();
+      });
+    });
+
     // A bar above the scale is drawn to the top and says what it holds, not what was drawn.
     it('clamps a value over the scale to the top and labels it with the real value', () => {
       const buckets: ChartBucket[] = [...DAYS, { key: 'fri', label: 'Пт, 6 ноября', value: 20 }];
