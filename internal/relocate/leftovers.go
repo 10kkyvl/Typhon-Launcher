@@ -66,7 +66,9 @@ func (s *Service) stagingFacts() ([]Job, []library.Game, error) {
 }
 
 // Stagings lists the staging folders of the journaled moves that exist, each
-// with the verdict on whether it may be deleted.
+// with the verdict on whether it may be deleted. An orphaned move's staging
+// folder is not one of them: it is a copy of a game, listed by OrphanedCopies,
+// and so never offered here, nor reserved for deletion by ReserveStaging.
 //
 //wails:ignore
 func (s *Service) Stagings() ([]Staging, error) {
@@ -76,7 +78,7 @@ func (s *Service) Stagings() ([]Staging, error) {
 	}
 	out := make([]Staging, 0, len(jobs))
 	for _, job := range jobs {
-		if job.Staging == "" {
+		if job.Staging == "" || job.Orphaned {
 			continue
 		}
 		if _, err := os.Lstat(job.Staging); err != nil {

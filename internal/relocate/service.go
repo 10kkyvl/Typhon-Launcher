@@ -299,6 +299,9 @@ func pathsConflict(aSource, aTarget, bSource, bTarget string) bool {
 func (s *Service) conflictsLocked(gameID, source, target string) error {
 	for _, j := range s.jobs {
 		if !jobActiveStage(j.Stage) {
+			if target != "" && keepsCopy(j) && pathsConflict(target, target+stagingSuffix, j.Target, j.Staging) {
+				return fmt.Errorf("%s: %w", target, ErrTargetNotEmpty)
+			}
 			continue
 		}
 		if gameID != "" && j.GameID == gameID {
@@ -309,6 +312,14 @@ func (s *Service) conflictsLocked(gameID, source, target string) error {
 		}
 	}
 	return nil
+}
+
+// keepsCopy tells a finished job that still holds a copy at its target or
+// staging folder: an orphan's, whose game left the library, and a failed
+// repoint's or cleanup's, which the next start resumes. Another move must not
+// copy into those folders, nor delete them on its error path.
+func keepsCopy(j Job) bool {
+	return j.Orphaned || j.FailedAt != ""
 }
 
 // gameConflict is conflictsLocked's gameID-only pre-check, taken before any
@@ -887,6 +898,12 @@ var afterCopyBeforeVerify func(staging string)
 
 func (s *Service) copyAndVerify(ctx context.Context, jobID, source, target string) error {
 	staging := target + stagingSuffix
+	// A staging folder with something in it is not this move's: it may be the
+	// only copy another move left. It is neither copied into nor deleted, and
+	// the job does not name it.
+	if !targetAvailable(staging) {
+		return s.failOrCancel(jobID, fmt.Errorf("%s: %w", staging, ErrTargetNotEmpty))
+	}
 	guard := func() error {
 		if s.stagingReservedLocked(staging) {
 			return errStagingReserved
