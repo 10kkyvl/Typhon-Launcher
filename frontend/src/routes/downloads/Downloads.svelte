@@ -3,15 +3,12 @@
   import {
     ArrowDown,
     ArrowUp,
-    CalendarClock,
     ChevronDown,
     CircleAlert,
     Download,
     FolderOpen,
     Gamepad2,
     Menu,
-    Gauge,
-    Pause,
     Plus,
     RotateCcw,
     Settings,
@@ -27,7 +24,6 @@
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import InstallModal from '../../lib/components/InstallModal.svelte';
-  import Notice from '../../lib/components/Notice.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
@@ -53,13 +49,13 @@
   import { gameArt, requestArt } from '../../lib/stores/metadata';
   import { navigate } from '../../lib/stores/router';
   import { playThrottle } from '../../lib/stores/playThrottle';
-  import { playThrottleBanner, scheduleOpenLabel } from '../../lib/services/playThrottle';
   import { settings, updateSettings } from '../../lib/stores/settings';
   import { sources } from '../../lib/stores/sources';
   import { toast } from '../../lib/stores/toasts';
   import { errorMessage } from '../../lib/utils/errors';
-  import { bytesSize, clockTime, rateLimitLabel, relativeDate, speedBytes } from '../../lib/utils/format';
+  import { bytesSize, clockTime, relativeDate, speedBytes } from '../../lib/utils/format';
   import { msg } from '../../lib/i18n';
+  import PlayThrottleBanner from './PlayThrottleBanner.svelte';
 
   const concurrencyValue = $derived(String($settings?.maxActiveDownloads ?? 2));
 
@@ -68,23 +64,6 @@
   }
 
   const scheduleHeld = $derived($playThrottle.schedule?.blocked === true);
-
-  const playBanner = $derived(playThrottleBanner($playThrottle));
-  const playBannerText = $derived.by(() => {
-    if (!playBanner) return '';
-    if (playBanner.kind === 'schedule') {
-      const when = scheduleOpenLabel(playBanner.nextOpenAt);
-      if (playBanner.game) {
-        return when ? msg('transfers.scheduleAndPlayBanner', { when }) : msg('transfers.scheduleAndPlayBannerNoNext');
-      }
-      return when ? msg('transfers.scheduleBanner', { when }) : msg('transfers.scheduleBannerNoNext');
-    }
-    if (playBanner.kind === 'pause') return msg('transfers.playPausedBanner');
-    return msg('transfers.playLimitedBanner', {
-      down: rateLimitLabel(playBanner.downloadLimit),
-      up: rateLimitLabel(playBanner.uploadLimit),
-    });
-  });
 
   let addOpen = $state(false);
   let detailsOpen = $state(false);
@@ -171,25 +150,7 @@
   {/snippet}
   </PageHeader>
 
-  {#if playBanner}
-  <div class="play-banner">
-    <Notice tone="info">
-      {#snippet icon()}
-        {#if playBanner.kind === 'schedule'}
-          <CalendarClock size="1.6rem" strokeWidth={1.8} />
-        {:else if playBanner.kind === 'pause'}
-          <Pause size="1.6rem" strokeWidth={1.8} />
-        {:else}
-          <Gauge size="1.6rem" strokeWidth={1.8} />
-        {/if}
-      {/snippet}
-      {playBannerText}
-      {#snippet action()}
-        <Button size="sm" onclick={() => navigate('settings', { tab: 'downloads' })}>{msg('transfers.playBannerSettings')}</Button>
-      {/snippet}
-    </Notice>
-  </div>
-  {/if}
+  <PlayThrottleBanner />
 
   {#if nothing}
   <EmptyState level={2}
@@ -409,11 +370,6 @@
 </Page>
 
 <style>
-  .play-banner {
-    max-width: 140rem;
-    margin-bottom: var(--space-6);
-  }
-
   .summary {
     display: flex;
     align-items: center;

@@ -200,7 +200,7 @@ const SITES: Record<string, Site[]> = {
   // Safety advice of the requests tab, read with it.
   'routes/friends/Friends.svelte': [['info', false]],
   // Downloads held while a game runs: it starts and ends while the page is open.
-  'routes/downloads/Downloads.svelte': [['info', true]],
+  'routes/downloads/PlayThrottleBanner.svelte': [['info', true]],
   // The game page, in its parts. The downloads and the other versions failed to load (just happened).
   'routes/game/GameSections.svelte': [['danger', true]],
   'routes/game/GameOtherVersions.svelte': [['danger', true]],
