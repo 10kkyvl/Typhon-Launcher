@@ -39,6 +39,8 @@ export interface MoveJob {
   recoveryAttempts?: number;
   /** The game left the library mid-move: the copy at `target` or `staging` is kept and belongs to no card. */
   orphaned?: boolean;
+  /** The stage the move had reached when its game left the library; at `cleanup` the old `source` folder is one of its copies. */
+  orphanedAt?: MoveStage;
 }
 
 const unavailable = () => new Error('unavailable in browser');
