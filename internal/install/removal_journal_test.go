@@ -594,3 +594,141 @@ func TestRemovalJournalWithoutAConfigDirSaysItIsUnreadable(t *testing.T) {
 		t.Fatalf("claim without a config dir = %v, want install.removals_unreadable", err)
 	}
 }
+
+// An entry whose library half is still pending shares the folder's staged
+// name with nothing: a later removal of another game from that folder stages
+// under a name of its own, so its drop leaves the pending entry, and the next
+// start still forgets the records of the game that left the library.
+func TestStaleEntrySurvivesAnotherRemovalOfItsFolder(t *testing.T) {
+	dir := t.TempDir()
+	lib := &fakeRegistrar{}
+	r := newJournalRig(t, dir, lib)
+	game := gameDir(t, "Game")
+	putOwnedCard(t, lib, "b", game)
+	writeJournal(t, dir, journalEntry(t, game+removingSuffix, "a", game, false))
+
+	if err := r.s.RemoveGame("b", RemoveOptions{DeleteFiles: true}); err != nil {
+		t.Fatalf("RemoveGame b = %v", err)
+	}
+	requireJournalHolds(t, dir, "a")
+	if err := r.s.store.save([]Installation{{ID: "ia", GameID: "a", Name: "a", Status: StatusCompleted, Destination: game}}); err != nil {
+		t.Fatal(err)
+	}
+	next := newJournalRig(t, dir, lib)
+	next.restart(t)
+	saved, err := mustServiceAt(t, dir).store.load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(saved) != 0 {
+		t.Fatalf("installations after the next start = %+v, want a's record forgotten", saved)
+	}
+}
+
+// rebindBeforeReserve is the real library with the game found by a scan in
+// another folder after the sweep looked at the card, before it reserves it.
+type rebindBeforeReserve struct {
+	*library.Service
+	rebind func() error
+	once   sync.Once
+	err    error
+}
+
+func (l *rebindBeforeReserve) BeginRemoval(id, dir string) (func(), error) {
+	l.once.Do(func() { l.err = l.rebind() })
+	return l.Service.BeginRemoval(id, dir)
+}
+
+func TestSweepRechecksTheCardUnderItsReservation(t *testing.T) {
+	lib, err := library.NewServiceAt(filepath.Join(t.TempDir(), "library.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := lib.ServiceShutdown(); err != nil {
+			t.Errorf("library shutdown: %v", err)
+		}
+	})
+	old := gameDir(t, "Game")
+	card, err := lib.RegisterInstalled(t.Context(), library.InstalledGame{
+		Title: "Game", Executable: filepath.Join(old, "Game.exe"), InstallDir: old,
+		InstallType: string(TypePortable), Owned: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(old); err != nil {
+		t.Fatal(err)
+	}
+	next := filepath.Join(t.TempDir(), "Game")
+	wrapped := &rebindBeforeReserve{Service: lib, rebind: func() error {
+		mkFile(t, filepath.Join(next, "Game.exe"), 64)
+		_, _, err := lib.ApplyDiscovered(library.Discovered{
+			GameID: card.ID, Title: "Game", Executable: filepath.Join(next, "Game.exe"), InstallDir: next,
+		})
+		return err
+	}}
+	dir := t.TempDir()
+	writeJournal(t, dir, journalEntry(t, old+removingSuffix, card.ID, old, true))
+	r := newJournalRig(t, dir, wrapped)
+
+	r.restart(t)
+
+	if wrapped.err != nil {
+		t.Fatalf("scan before the sweep's reservation: %v", wrapped.err)
+	}
+	got, err := lib.Find(card.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Uninstalled || !samePath(got.InstallDir, next) {
+		t.Fatalf("card found elsewhere before the sweep reserved it = %+v; want it installed at %s", got, next)
+	}
+}
+
+// With the journal unreadable, "remove from computer" of a game with an
+// uninstaller is refused before the uninstaller runs, not after it.
+func TestUnreadableJournalRefusesBeforeTheUninstaller(t *testing.T) {
+	dir := t.TempDir()
+	mkFile(t, filepath.Join(dir, "removals.json", "keep.txt"), 4)
+	lib, err := library.NewServiceAt(filepath.Join(t.TempDir(), "library.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := lib.ServiceShutdown(); err != nil {
+			t.Errorf("library shutdown: %v", err)
+		}
+	})
+	r := newJournalRig(t, dir, lib)
+	runner := &fakeRunner{}
+	r.s.runner = runner
+	r.start(t)
+	t.Cleanup(func() {
+		if err := r.s.ServiceShutdown(); err != nil {
+			t.Errorf("shutdown: %v", err)
+		}
+	})
+	game := gameDir(t, "Game")
+	uninstaller := filepath.Join(game, "unins000.exe")
+	mkFile(t, uninstaller, 64)
+	card, err := lib.RegisterInstalled(t.Context(), library.InstalledGame{
+		Title: "Game", Executable: filepath.Join(game, "Game.exe"), InstallDir: game,
+		InstallType: string(TypePortable), Owned: true, Uninstall: library.Uninstall{Command: uninstaller},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = r.s.RemoveGame(card.ID, RemoveOptions{DeleteFiles: true})
+
+	if code := uierr.Code(err); code != "install.removals_unreadable" {
+		t.Fatalf("RemoveGame = %q (%v), want install.removals_unreadable", code, err)
+	}
+	if calls := runner.calls(); len(calls) != 0 {
+		t.Fatalf("the uninstaller ran although the removal was refused: %d calls", len(calls))
+	}
+	if missing(t, filepath.Join(game, "Game.exe")) {
+		t.Fatal("files deleted although the removal was refused")
+	}
+}
