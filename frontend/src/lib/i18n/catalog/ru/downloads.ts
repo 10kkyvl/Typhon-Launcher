@@ -63,6 +63,38 @@ export const downloads = {
   'downloads.failed.nothing': 'Ничего не скачано',
   'downloads.failed.retried': '«{title}»: новая попытка',
   // End of stage 6-4.
+  // ── Stage 6-6: the page (header, speed limit, loading, empty) ──
+  'downloads.page.running': { one: '{count} загружается', few: '{count} загружаются', many: '{count} загружаются' },
+  'downloads.page.paused': { one: '{count} на паузе', few: '{count} на паузе', many: '{count} на паузе' },
+  'downloads.page.queued': { one: '{count} в очереди', few: '{count} в очереди', many: '{count} в очереди' },
+  'downloads.page.speeds': 'скачивание {down}, отдача {up}',
+  'downloads.page.history': 'История',
+  'downloads.page.scheduleFrom': 'По расписанию с {from}',
+  'downloads.page.scheduleWindows': {
+    one: 'По расписанию: {count} окно',
+    few: 'По расписанию: {count} окна',
+    many: 'По расписанию: {count} окон',
+  },
+  'downloads.page.scheduleHeld': 'Ждут расписания до {when}',
+  'downloads.page.scheduleHeldNoNext': 'Ждут расписания',
+  'downloads.page.scheduleOpen': 'Расписание в настройках загрузок',
+  'downloads.page.limitButton': 'Лимит: {value}',
+  'downloads.page.limitNone': 'нет',
+  'downloads.page.limitLabel': 'Лимит скорости загрузки',
+  'downloads.page.limitFiner': 'Точное значение, отдача и лимит на время игры —',
+  'downloads.page.limitSettings': 'в настройках загрузок',
+  'downloads.page.limitSaveFailed': 'Лимит не сохранён: {reason}',
+  'downloads.page.limitSaveFailedPlain': 'Лимит не сохранён',
+  'downloads.page.concurrencySaveFailed': 'Число одновременных загрузок не сохранено: {reason}',
+  'downloads.page.concurrencySaveFailedPlain': 'Число одновременных загрузок не сохранено',
+  'downloads.page.loading': 'Читаем список загрузок…',
+  'downloads.page.loadFailed': 'Не удалось прочитать список загрузок',
+  'downloads.page.loadFailedText': 'Попробуйте ещё раз. Если не выйдет, перезапустите лаунчер.',
+  'downloads.page.emptyTitle': 'Штиль. Сейчас ничего не загружается',
+  'downloads.page.emptyText': 'Выберите игру в магазинах или добавьте торрент — загрузка и установка появятся здесь.',
+  'downloads.page.stores': 'Открыть магазины',
+  'downloads.page.calm': 'Сейчас ничего не загружается',
+  // ── end of stage 6-6 ──
 } as const;
 
 export type DownloadsKey = keyof typeof downloads;
