@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import page from './Catalog.svelte?raw';
+import results from './CatalogResults.svelte?raw';
 import pageData from './catalogPageData.svelte.ts?raw';
 import pages from './catalogPages.svelte.ts?raw';
 
 describe('Catalog error toasts', () => {
   // Every file of the page that catches an error from Go.
   it.each([
-    ['Catalog.svelte', page],
+    ['CatalogResults.svelte', results],
     ['catalogPageData.svelte.ts', pageData],
     ['catalogPages.svelte.ts', pages],
   ])('%s never shows the raw backend error message to the user', (_name, source) => {
@@ -15,7 +15,7 @@ describe('Catalog error toasts', () => {
   });
 
   const sites: Array<{ name: string; source: string; snippet: string }> = [
-    { name: 'toggleRun', source: page, snippet: "toast(libraryErrorText(err, msg('games.errorPlayFailed')), 'danger');" },
+    { name: 'toggleRun', source: results, snippet: "toast(libraryErrorText(err, msg('games.errorPlayFailed')), 'danger');" },
     { name: 'toggleFavorite', source: pageData, snippet: "toast(libraryErrorText(err, msg('games.errorFavoriteFailed')), 'danger');" },
   ];
 
