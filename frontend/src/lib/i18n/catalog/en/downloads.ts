@@ -134,11 +134,12 @@ export const downloads: Record<DownloadsKey, Message> = {
   'downloads.done.updateFiles': 'Update files for the game',
   'downloads.done.repairFiles': 'Repair files for the game',
   'downloads.done.clear': 'Clear the list',
-  'downloads.done.clearNothing': 'Nothing to clear: downloads being installed, waiting for you or seeding stay in the list',
+  'downloads.done.clearNothing':
+    'Nothing to clear: only installed downloads and update or repair files leave the list; downloads still to install, being installed or seeding stay',
   'downloads.done.clearTitle': 'Clear the list of completed downloads?',
   'downloads.done.clearText': {
-    one: '{count} download leaves the list. Its files stay on disk.',
-    other: '{count} downloads leave the list. Their files stay on disk.',
+    one: '{count} download that is installed or holds update or repair files leaves the list; its files stay on disk. Downloads still to install stay.',
+    other: '{count} downloads that are installed or hold update or repair files leave the list; their files stay on disk. Downloads still to install stay.',
   },
   'downloads.done.clearConfirm': 'Clear',
   'downloads.done.clearBusy': 'Clearing…',

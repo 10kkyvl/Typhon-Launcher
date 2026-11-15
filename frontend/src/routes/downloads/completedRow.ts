@@ -35,11 +35,30 @@ export function completedPart(kind: CompletedKind): CompletedPart {
 }
 
 /**
- * Whether "Clear the list" takes the download: not while its installation runs or waits for the player
- * (the install reads its files and its record), and not while it seeds, which only its own row stops.
+ * Whether "Remove from list" is offered: not while the installation runs or waits for the player. The
+ * install reads the download's record, and a waiting row holds the screen's only Continue.
+ */
+export function canRemove(kind: CompletedKind): boolean {
+  return completedPart(kind) === 'completed';
+}
+
+/**
+ * Whether "Remove from list" asks first: on a download the screen can still install (ready, its
+ * install failed or stopped). Go's install and its retry read the download's record
+ * (internal/install/service.go `completedDownload`), so without it the game cannot be installed from
+ * here, though the files stay.
+ */
+export function removeAsks(kind: CompletedKind): boolean {
+  return kind === 'ready' || kind === 'failed' || kind === 'stopped';
+}
+
+/**
+ * Whether "Clear the list" takes the download: only one that needs nothing more from the screen (an
+ * installed one, update or repair files the updates apply), and not while it seeds, which only its own
+ * row stops.
  */
 export function canClear(download: Pick<Download, 'seeding'>, kind: CompletedKind): boolean {
-  return completedPart(kind) === 'completed' && !download.seeding;
+  return (kind === 'installed' || kind === 'none') && !download.seeding;
 }
 
 /** "Clear the list" asks first when more than this many downloads would leave the list. */

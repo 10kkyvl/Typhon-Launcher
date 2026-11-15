@@ -99,6 +99,11 @@ function installation(patch: Partial<Installation> = {}): Installation {
   };
 }
 
+/** Installations that finished, one per download id: rows that need nothing more from the screen. */
+function installed(...ids: string[]): Installation[] {
+  return ids.map((id) => installation({ id: `i-${id}`, downloadId: id, status: 'completed' }));
+}
+
 function libraryGame(patch: Partial<LibraryGame> = {}): LibraryGame {
   return { id: 'lib1', title: 'Game One', executable: 'game.exe', uninstalled: false, tags: [], ...patch } as unknown as LibraryGame;
 }
@@ -450,10 +455,11 @@ describe('completed downloads: Remove from list', () => {
   it('asks Go to remove, says so, and hands focus to the row now in its place', async () => {
     vi.mocked(removeDownload).mockImplementation(async (id) => goRemoves(id));
     const onannounce = vi.fn();
-    const view = show([download(), download({ id: 'd2', name: 'Game Two' })], [], { onannounce });
+    const view = show([download(), download({ id: 'd2', name: 'Game Two' })], installed('d1', 'd2'), { onannounce });
 
     await pickFromMenu(view, 'Game One', 'Remove from list (files stay)');
 
+    expect(screen.queryByRole('dialog')).toBeNull();
     await waitFor(() => expect(screen.queryByText('Game One')).toBeNull());
     expect(removeDownload).toHaveBeenCalledWith('d1');
     expect(onannounce).toHaveBeenCalledWith('“Game One” removed from the list');
@@ -462,7 +468,7 @@ describe('completed downloads: Remove from list', () => {
 
   it('the last row hands focus to the one above, the only one to the heading the page gives', async () => {
     vi.mocked(removeDownload).mockImplementation(async (id) => goRemoves(id));
-    const view = show([download(), download({ id: 'd2', name: 'Game Two' })]);
+    const view = show([download(), download({ id: 'd2', name: 'Game Two' })], installed('d1', 'd2'));
 
     await pickFromMenu(view, 'Game Two', 'Remove from list (files stay)');
     await waitFor(() => expect(document.activeElement).toBe(more('Game One')));
@@ -475,14 +481,14 @@ describe('completed downloads: Remove from list', () => {
     vi.mocked(removeDownload).mockImplementation(async (id) => goRemoves(id));
     const view = show(
       [download(), download({ id: 'd2', name: 'Game Two' })],
-      [installation({ id: 'i2', downloadId: 'd2', status: 'waiting_for_user' })],
+      [...installed('d1'), installation({ id: 'i2', downloadId: 'd2', status: 'waiting_for_user' })],
     );
 
-    await pickFromMenu(view, 'Game Two', 'Remove from list (files stay)');
+    await pickFromMenu(view, 'Game One', 'Remove from list (files stay)');
 
-    await waitFor(() => expect(screen.queryByText('Game Two')).toBeNull());
+    await waitFor(() => expect(screen.queryByText('Game One')).toBeNull());
     expect(document.activeElement).toBe(heading);
-    expect(section('Completed')).toBeTruthy();
+    expect(section('Installing')).toBeTruthy();
   });
 
   it('hands focus on also when Go answers before the row leaves', async () => {
@@ -490,7 +496,7 @@ describe('completed downloads: Remove from list', () => {
     vi.mocked(removeDownload).mockImplementation(async (id) => {
       removeLater = () => goRemoves(id);
     });
-    const view = show([download(), download({ id: 'd2', name: 'Game Two' })]);
+    const view = show([download(), download({ id: 'd2', name: 'Game Two' })], installed('d1', 'd2'));
 
     await pickFromMenu(view, 'Game One', 'Remove from list (files stay)');
     await waitFor(() => expect(removeDownload).toHaveBeenCalled());
@@ -503,7 +509,7 @@ describe('completed downloads: Remove from list', () => {
   it('a removal Go refuses is said by its code; the row stays and keeps focus on its menu button', async () => {
     vi.mocked(removeDownload).mockRejectedValueOnce(new Error('typhon:download.not_found: gone'));
     const onannounce = vi.fn();
-    const view = show([download()], [], { onannounce });
+    const view = show([download()], installed('d1'), { onannounce });
 
     await pickFromMenu(view, 'Game One', 'Remove from list (files stay)');
 
@@ -515,10 +521,120 @@ describe('completed downloads: Remove from list', () => {
   });
 });
 
+describe('completed downloads: Remove from list says what it takes', () => {
+  const removeItem = 'Remove from list (files stay)';
+  const menuItems = () => screen.getAllByRole('menuitem').map((item) => item.textContent?.trim());
+
+  it('is not offered while the installation runs or waits for the player', async () => {
+    const view = show(
+      [download(), download({ id: 'd2', name: 'Game Two' })],
+      [installation(), installation({ id: 'i2', downloadId: 'd2', status: 'waiting_for_user' })],
+    );
+
+    for (const name of ['Game One', 'Game Two']) {
+      await view.user.click(more(name));
+      expect(menuItems(), name).toEqual(['Details', 'Open folder']);
+      await view.user.keyboard('{Escape}');
+    }
+  });
+
+  it.each<[string, Partial<Installation> | null]>([
+    ['ready', null],
+    ['install failed', { status: 'failed', error: 'typhon:install.no_free_space' }],
+    ['install cancelled', { status: 'cancelled' }],
+    ['install interrupted', { status: 'interrupted' }],
+  ])('%s: asks first, naming the download and what goes; Keep sends nothing', async (_kind, install) => {
+    const view = show([download()], install ? [installation(install)] : []);
+
+    await pickFromMenu(view, 'Game One', removeItem);
+
+    const dialog = await screen.findByRole('dialog', { name: 'Remove “Game One” from the list?' });
+    expect(dialog.textContent).toContain(
+      'The download’s record goes and its files stay on disk. The game can no longer be installed from this screen.',
+    );
+    expect(dialog.textContent).not.toContain('Seeding stops too.');
+    expect(removeDownload).not.toHaveBeenCalled();
+    await view.user.click(within(dialog).getByRole('button', { name: 'Keep it' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(removeDownload).not.toHaveBeenCalled();
+    expect(row('Game One')).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(more('Game One')));
+  });
+
+  it('a confirmed removal sends Go’s Remove, says so, and focus goes to the row now in its place', async () => {
+    vi.mocked(removeDownload).mockImplementation(async (id) => goRemoves(id));
+    const onannounce = vi.fn();
+    const view = show([download(), download({ id: 'd2', name: 'Game Two' })], [], { onannounce });
+
+    await pickFromMenu(view, 'Game One', removeItem);
+    const dialog = await screen.findByRole('dialog');
+    await view.user.click(within(dialog).getByRole('button', { name: 'Remove' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(vi.mocked(removeDownload).mock.calls).toEqual([['d1']]);
+    expect(onannounce).toHaveBeenCalledWith('“Game One” removed from the list');
+    await waitFor(() => expect(document.activeElement).toBe(more('Game Two')));
+  });
+
+  it('a removal Go refuses stays in the dialog with the reason by its code', async () => {
+    vi.mocked(removeDownload).mockRejectedValueOnce(new Error('typhon:download.not_found: gone'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const view = show([download()]);
+
+    await pickFromMenu(view, 'Game One', removeItem);
+    const dialog = await screen.findByRole('dialog');
+    await view.user.click(within(dialog).getByRole('button', { name: 'Remove' }));
+
+    await waitFor(() => expect(within(dialog).getByRole('alert').textContent).not.toBe(''));
+    expect(dialog.textContent).not.toContain('typhon:');
+    expect(screen.getByRole('dialog')).toBe(dialog);
+    expect(get(toasts)).toEqual([]);
+  });
+
+  it('a seeding download that can still be installed: the dialog says seeding stops too', async () => {
+    const view = show([download({ seeding: true })]);
+
+    await pickFromMenu(view, 'Game One', 'Remove from list and stop seeding (files stay)');
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.textContent).toContain('Seeding stops too.');
+  });
+
+  it('an installed download and update or repair files go at once, with no dialog', async () => {
+    vi.mocked(removeDownload).mockImplementation(async (id) => goRemoves(id));
+    const view = show(
+      [download(), download({ id: 'd2', name: 'Game Two', origin: { gameId: 'g1', purpose: 'update' } })],
+      installed('d1'),
+    );
+
+    await pickFromMenu(view, 'Game One', removeItem);
+    await pickFromMenu(view, 'Game Two', removeItem);
+
+    await waitFor(() => expect(vi.mocked(removeDownload).mock.calls).toEqual([['d1'], ['d2']]));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('the dialog closes when its download leaves the list by Go’s doing; nothing is sent', async () => {
+    const view = show([download(), download({ id: 'd2', name: 'Game Two' })]);
+
+    await pickFromMenu(view, 'Game One', removeItem);
+    await screen.findByRole('dialog');
+    installations.set([installation()]);
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(removeDownload).not.toHaveBeenCalled();
+    // Back in "Completed" once its install stops: the old question does not come back with it.
+    installations.set([installation({ status: 'cancelled' })]);
+    await waitFor(() => expect(row('Game One').closest('section')).toBe(section('Completed')));
+    await new Promise((done) => setTimeout(done, 0));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
 describe('completed downloads: Clear the list', () => {
   const clearButton = () => within(section('Completed')).getByRole('button', { name: 'Clear the list' });
 
-  it('removes only what may go, one request each, and says how many went and how many could not', async () => {
+  it('removes only what needs nothing more from the screen, one request each, and says how many went and how many could not', async () => {
     vi.mocked(removeDownload).mockImplementation(async (id) => {
       if (id === 'f') throw new Error('typhon:download.not_found: gone');
       goRemoves(id);
@@ -532,11 +648,19 @@ describe('completed downloads: Clear the list', () => {
         download({ id: 'd', name: 'Installing One' }),
         download({ id: 'e', name: 'Waiting One' }),
         download({ id: 'f', name: 'Refused One' }),
+        download({ id: 'g', name: 'Failed One' }),
+        download({ id: 'h', name: 'Stopped One' }),
+        download({ id: 'u', name: 'Update One', origin: { gameId: 'g1', purpose: 'update' } }),
+        download({ id: 'r', name: 'Repair One', origin: { gameId: 'g1', purpose: 'repair' } }),
       ],
       [
         installation({ id: 'ib', downloadId: 'b', status: 'completed' }),
+        installation({ id: 'ic', downloadId: 'c', status: 'completed' }),
         installation({ id: 'id', downloadId: 'd', status: 'installing' }),
         installation({ id: 'ie', downloadId: 'e', status: 'waiting_for_user' }),
+        installation({ id: 'if', downloadId: 'f', status: 'completed' }),
+        installation({ id: 'ig', downloadId: 'g', status: 'failed' }),
+        installation({ id: 'ih', downloadId: 'h', status: 'cancelled' }),
       ],
       { onannounce },
     );
@@ -546,24 +670,30 @@ describe('completed downloads: Clear the list', () => {
     await view.user.keyboard('{Enter}');
 
     await waitFor(() => expect(onannounce).toHaveBeenCalledTimes(1));
-    expect(vi.mocked(removeDownload).mock.calls.map(([id]) => id).sort()).toEqual(['a', 'b', 'f']);
-    expect(onannounce).toHaveBeenCalledWith('Removed 2 downloads from the list. 1 could not be removed');
-    for (const name of ['Seeding One', 'Installing One', 'Waiting One', 'Refused One']) expect(row(name)).toBeTruthy();
-    expect(screen.queryByText('Ready One')).toBeNull();
-    expect(screen.queryByText('Installed One')).toBeNull();
+    expect(vi.mocked(removeDownload).mock.calls.map(([id]) => id).sort()).toEqual(['b', 'f', 'r', 'u']);
+    expect(onannounce).toHaveBeenCalledWith('Removed 3 downloads from the list. 1 could not be removed');
+    for (const name of ['Ready One', 'Seeding One', 'Installing One', 'Waiting One', 'Refused One', 'Failed One', 'Stopped One']) {
+      expect(row(name)).toBeTruthy();
+    }
+    for (const name of ['Installed One', 'Update One', 'Repair One']) expect(screen.queryByText(name)).toBeNull();
     // Nothing the store toasts on its own: the one announcement says it.
     expect(get(toasts)).toEqual([]);
     expect(document.activeElement).toBe(clear);
   });
 
   it('with nothing it may clear, it stays focusable and says why, and a press sends nothing', async () => {
-    const view = show([download({ seeding: true })]);
+    const view = show(
+      [download(), download({ id: 'd2', name: 'Game Two', seeding: true }), download({ id: 'd3', name: 'Game Three' })],
+      [installation({ id: 'i2', downloadId: 'd2', status: 'completed' }), installation({ id: 'i3', downloadId: 'd3', status: 'failed' })],
+    );
     const clear = clearButton();
 
     expect(clear.getAttribute('aria-disabled')).toBe('true');
     expect(clear.hasAttribute('disabled')).toBe(false);
     const describedBy = clear.getAttribute('aria-describedby') ?? '';
-    expect(describedBy.split(' ').map((id) => document.getElementById(id)?.textContent).join(' ')).toContain('Nothing to clear');
+    expect(describedBy.split(' ').map((id) => document.getElementById(id)?.textContent).join(' ')).toContain(
+      'Nothing to clear: only installed downloads and update or repair files leave the list; downloads still to install, being installed or seeding stay',
+    );
     clear.focus();
     await view.user.keyboard('{Enter}');
     expect(removeDownload).not.toHaveBeenCalled();
@@ -573,18 +703,20 @@ describe('completed downloads: Clear the list', () => {
   it('asks first when more than five would go, naming how many; five go at once', async () => {
     vi.mocked(removeDownload).mockImplementation(async (id) => goRemoves(id));
     const six = Array.from({ length: 6 }, (_, i) => download({ id: `x${i}`, name: `Game ${i}` }));
-    const view = show(six);
+    const view = show([...six, download({ id: 'ready', name: 'Ready One' })], installed(...six.map((d) => d.id)));
 
     await view.user.click(clearButton());
     const dialog = screen.getByRole('dialog', { name: 'Clear the list of completed downloads?' });
-    expect(dialog.textContent).toContain('6 downloads leave the list. Their files stay on disk.');
+    expect(dialog.textContent).toContain(
+      '6 downloads that are installed or hold update or repair files leave the list; their files stay on disk. Downloads still to install stay.',
+    );
     expect(removeDownload).not.toHaveBeenCalled();
     await view.user.click(within(dialog).getByRole('button', { name: 'Clear' }));
     await waitFor(() => expect(removeDownload).toHaveBeenCalledTimes(6));
 
     view.unmount();
     vi.mocked(removeDownload).mockClear();
-    const again = show(six.slice(0, 5));
+    const again = show(six.slice(0, 5), installed(...six.map((d) => d.id)));
     await again.user.click(clearButton());
     expect(screen.queryByRole('dialog')).toBeNull();
     await waitFor(() => expect(removeDownload).toHaveBeenCalledTimes(5));
@@ -592,7 +724,7 @@ describe('completed downloads: Clear the list', () => {
 
   it('when the whole section goes, focus goes to the heading the page gives', async () => {
     vi.mocked(removeDownload).mockImplementation(async (id) => goRemoves(id));
-    const view = show([download(), download({ id: 'd2', name: 'Game Two' })]);
+    const view = show([download(), download({ id: 'd2', name: 'Game Two' })], installed('d1', 'd2'));
     const clear = clearButton();
     clear.focus();
 
@@ -605,7 +737,7 @@ describe('completed downloads: Clear the list', () => {
   it('a second press while clearing sends nothing more', async () => {
     const gate = deferred();
     vi.mocked(removeDownload).mockImplementation(() => gate.promise);
-    const view = show([download()]);
+    const view = show([download()], installed('d1'));
     const clear = clearButton();
     clear.focus();
 

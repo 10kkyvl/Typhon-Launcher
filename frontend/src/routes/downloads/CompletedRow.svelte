@@ -27,7 +27,7 @@
   import { sources } from '../../lib/stores/sources';
   import { toast } from '../../lib/stores/toasts';
   import { makeFormat, progressPercent } from '../../lib/utils/format';
-  import { completedWhen, installedGame, type CompletedKind } from './completedRow';
+  import { canRemove, completedWhen, installedGame, type CompletedKind } from './completedRow';
   import { coverOf, sourceTag, typeTag } from './downloadRow';
 
   /**
@@ -168,11 +168,13 @@
     const items: MenuItem[] = [{ id: 'details', label: $t('downloads.panel.details') }];
     if (kind === 'failed' && retriesHere) items.push({ id: 'install', label: $t('downloads.done.installView') });
     items.push({ id: 'folder', label: $t('downloads.panel.openFolder') });
-    items.push({
-      id: 'remove',
-      label: download.seeding ? $t('downloads.done.removeSeeding') : $t('downloads.done.remove'),
-      separator: true,
-    });
+    if (canRemove(kind)) {
+      items.push({
+        id: 'remove',
+        label: download.seeding ? $t('downloads.done.removeSeeding') : $t('downloads.done.remove'),
+        separator: true,
+      });
+    }
     return items;
   });
 

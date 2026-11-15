@@ -130,7 +130,8 @@ describe('Downloads: every part speaks in the screen’s one live region', () =>
 
   it('the completed section: a removal from the list is said once', async () => {
     vi.mocked(removeDownload).mockImplementation(async (id) => goRemoves(id));
-    downloads.set([download(), download({ id: 'd2', name: 'Game Two' })]);
+    // Update files: a download Remove takes at once, with nothing to ask.
+    downloads.set([download({ origin: { purpose: 'update' } }), download({ id: 'd2', name: 'Game Two', origin: { purpose: 'update' } })]);
     const { user } = renderDom(Downloads);
 
     await pick(user, screen.getByRole('button', { name: msg('downloads.panel.more', { name: 'Game One' }) }), msg('downloads.done.remove'));

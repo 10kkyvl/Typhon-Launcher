@@ -7,7 +7,7 @@ import type { Download } from '../../lib/services/downloads';
 import type { InstallStatus } from '../../lib/services/install';
 import type { LibraryGame } from '../../lib/services/library';
 import { makeFormat } from '../../lib/utils/format';
-import { canClear, completedKind, completedPart, completedWhen, installedGame, type CompletedKind } from './completedRow';
+import { canClear, canRemove, completedKind, completedPart, completedWhen, installedGame, removeAsks, type CompletedKind } from './completedRow';
 
 const release: Pick<Download, 'origin'> = { origin: { gameId: 'g1' } };
 
@@ -37,14 +37,31 @@ describe('what became of a completed download', () => {
     expect(parts).toEqual(['installing', 'installing', 'completed', 'completed', 'completed', 'completed', 'completed']);
   });
 
-  it('clears neither what is installing, nor what waits for the player, nor what is seeding', () => {
-    expect(canClear({ seeding: false }, 'installing')).toBe(false);
-    expect(canClear({ seeding: false }, 'waiting')).toBe(false);
-    expect(canClear({ seeding: true }, 'ready')).toBe(false);
-    expect(canClear({ seeding: true }, 'installed')).toBe(false);
-    for (const kind of ['failed', 'stopped', 'installed', 'ready', 'none'] as const) {
-      expect(canClear({ seeding: false }, kind), kind).toBe(true);
-    }
+  it.each<[CompletedKind, boolean, boolean]>([
+    ['installed', false, true],
+    ['none', false, true],
+    ['installed', true, false],
+    ['none', true, false],
+    ['ready', false, false],
+    ['failed', false, false],
+    ['stopped', false, false],
+    ['installing', false, false],
+    ['waiting', false, false],
+  ])('Clear the list takes %s (seeding: %s): %s', (kind, seeding, clears) => {
+    expect(canClear({ seeding }, kind)).toBe(clears);
+  });
+
+  it.each<[CompletedKind, boolean, boolean]>([
+    ['installing', false, false],
+    ['waiting', false, false],
+    ['ready', true, true],
+    ['failed', true, true],
+    ['stopped', true, true],
+    ['installed', true, false],
+    ['none', true, false],
+  ])('Remove from list on %s: offered %s, asks first %s', (kind, offered, asks) => {
+    expect(canRemove(kind)).toBe(offered);
+    expect(removeAsks(kind)).toBe(asks);
   });
 });
 

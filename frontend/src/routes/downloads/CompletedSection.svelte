@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import SectionHeader from '../../lib/components/SectionHeader.svelte';
@@ -11,7 +12,7 @@
   import { focusHandOff } from '../../lib/utils/focusHandOff';
   import type { LeaveTicket } from '../../lib/components/downloadPanel';
   import CompletedRow from './CompletedRow.svelte';
-  import { CLEAR_ASKS_ABOVE, canClear, completedKind, completedPart, type CompletedKind, type CompletedPart } from './completedRow';
+  import { CLEAR_ASKS_ABOVE, canClear, completedKind, completedPart, removeAsks, type CompletedKind, type CompletedPart } from './completedRow';
   import { handOffInView, pageHeading, pressed, returnInView } from './rowFocus';
   import { downloadsSectionIds } from './sections';
 
@@ -109,12 +110,60 @@
     settle(new Set(rows.map((row) => row.download.id)));
   });
 
-  async function removeRow(download: Download) {
+  /**
+   * The download a "Remove from list" asks about, by id: the dialog says what goes and closes when the
+   * download leaves this section (Go removed it, or its install began).
+   */
+  let asking = $state<{ id: string; answer: (ok: boolean) => void; ticket: LeaveTicket; done: boolean } | null>(null);
+  const askingDownload = $derived(asking ? rows.find((row) => row.download.id === asking?.id)?.download : undefined);
+
+  $effect(() => {
+    if (asking && !askingDownload) untrack(closeRemove);
+  });
+
+  function removeRow(download: Download) {
+    const kind = rows.find((row) => row.download.id === download.id)?.kind;
     const answer = onleave(download.id);
+    const ticket = leaving.get(download.id)?.ticket;
+    if (kind && ticket && removeAsks(kind)) asking = { id: download.id, answer, ticket, done: false };
+    else void removeNow(download, answer);
+  }
+
+  async function removeNow(download: Download, answer: (ok: boolean) => void) {
     const outcome = await requestDownloadAction(download.id, 'remove');
     answer(outcome.ok);
     if (outcome.ok) onannounce?.($t('downloads.done.removed', { name: download.name }));
   }
+
+  // The dialog shows a refusal itself, by its code, and stays open for another try.
+  async function confirmRemove() {
+    const current = asking;
+    const download = askingDownload;
+    if (!current || !download) return;
+    const outcome = await requestDownloadAction(current.id, 'remove', { toast: false });
+    if (!outcome.ok) throw outcome.error;
+    current.done = true;
+    current.answer(true);
+    onannounce?.($t('downloads.done.removed', { name: download.name }));
+  }
+
+  function closeRemove() {
+    if (asking && !asking.done) asking.answer(false);
+    asking = null;
+  }
+
+  const removePrompt = $derived(
+    askingDownload
+      ? {
+          title: $t('downloads.done.removeTitle', { name: askingDownload.name }),
+          text: $t('downloads.done.removeText'),
+          note: askingDownload.seeding ? $t('downloads.done.removeSeedingNote') : undefined,
+          confirm: $t('downloads.done.removeConfirm'),
+          busy: $t('downloads.done.removeBusy'),
+          cancel: $t('downloads.done.removeKeep'),
+        }
+      : null,
+  );
 
   let clearing = $state(false);
   let confirmOpen = $state(false);
@@ -201,6 +250,17 @@
       {/each}
     </ul>
   </section>
+{/if}
+
+{#if asking && removePrompt}
+  {@const ticket = asking.ticket}
+  <ConfirmModal
+    prompt={removePrompt}
+    onconfirm={confirmRemove}
+    errorText={installErrorText}
+    onclose={closeRemove}
+    returnFocus={() => ticket.target()}
+  />
 {/if}
 
 {#if confirmOpen}
