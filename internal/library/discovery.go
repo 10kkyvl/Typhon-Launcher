@@ -63,6 +63,11 @@ func (s *Service) ApplyDiscovered(d Discovered) (Game, Outcome, error) {
 	if err != nil {
 		return Game{}, "", fmt.Errorf("normalize %s: %w", installDir, err)
 	}
+	release, err := s.holdForAdding("", d.Title, installDir)
+	if err != nil {
+		return Game{}, "", err
+	}
+	defer release()
 	executable := strings.TrimSpace(d.Executable)
 	if executable != "" {
 		info, err := os.Stat(executable)

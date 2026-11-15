@@ -663,15 +663,20 @@ func (s *Service) reviveLocked(pos int, title, installDir string, size int64, un
 }
 
 func (s *Service) RegisterInstalled(ctx context.Context, g InstalledGame) (Game, error) {
-	info, err := os.Stat(g.Executable)
-	if err != nil || info.IsDir() {
-		return Game{}, uierr.New("library.no_executable", "исполняемый файл не найден")
-	}
 	installDir := strings.TrimSpace(g.InstallDir)
 	if installDir == "" {
 		return Game{}, errEmptyInstallDir
 	}
 	title := strings.TrimSpace(g.Title)
+	release, err := s.holdForAdding("", title, installDir)
+	if err != nil {
+		return Game{}, err
+	}
+	defer release()
+	info, err := os.Stat(g.Executable)
+	if err != nil || info.IsDir() {
+		return Game{}, uierr.New("library.no_executable", "исполняемый файл не найден")
+	}
 	size, unknown := measureInstall(ctx, "", installDir)
 
 	s.mu.Lock()

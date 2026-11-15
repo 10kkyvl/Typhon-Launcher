@@ -1,12 +1,108 @@
 package library
 
 import (
+	"context"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
+	"typhon/internal/emulators"
 	"typhon/internal/uierr"
 )
+
+// wholeRemoval runs a whole removal of the game at root (reserve, delete the
+// folder, release) once, the first time it is called, and says how it went.
+func wholeRemoval(t *testing.T, s *Service, id, root string) (func(), *string) {
+	t.Helper()
+	var once sync.Once
+	outcome := new(string)
+	return func() {
+		once.Do(func() {
+			release, err := s.BeginRemoval(id, root)
+			if err != nil {
+				*outcome = "refused: " + uierr.Code(err)
+				return
+			}
+			defer release()
+			if err := os.RemoveAll(root); err != nil {
+				t.Error(err)
+			}
+			*outcome = "ran whole"
+		})
+	}, outcome
+}
+
+// duringMeasure runs remove when an adding path measures the folder: after it
+// looked at its file, before it saves the card.
+func duringMeasure(t *testing.T, remove func()) {
+	t.Helper()
+	old := measureInstall
+	t.Cleanup(func() { measureInstall = old })
+	measureInstall = func(context.Context, string, string) (int64, bool) {
+		remove()
+		return 1, false
+	}
+}
+
+// duringImageRead runs remove when the image is read after it was checked.
+func duringImageRead(t *testing.T, remove func()) {
+	t.Helper()
+	calls := 0
+	stubImageStat(t, func(path string) (fs.FileInfo, error) {
+		info, err := os.Lstat(path)
+		if calls++; calls == 2 {
+			remove()
+		}
+		return info, err
+	})
+}
+
+func TestNoCardIsSavedForFilesDeletedWhileItWasAdded(t *testing.T) {
+	add := map[string]func(t *testing.T, s *Service, root string, remove func()) (Game, error){
+		"AddGame": func(t *testing.T, s *Service, root string, remove func()) (Game, error) {
+			exe := writeFile(t, filepath.Join(root, "Bonus", "Game2.exe"), "stub")
+			duringMeasure(t, remove)
+			return s.AddGame(t.Context(), exe, "Bonus")
+		},
+		"RegisterInstalled": func(t *testing.T, s *Service, root string, remove func()) (Game, error) {
+			exe := writeFile(t, filepath.Join(root, "Bonus", "Game2.exe"), "stub")
+			duringMeasure(t, remove)
+			return s.RegisterInstalled(t.Context(), InstalledGame{Title: "Bonus", Executable: exe, InstallDir: filepath.Dir(exe)})
+		},
+		"AddEmulatedGame": func(t *testing.T, s *Service, root string, remove func()) (Game, error) {
+			iso := writeFile(t, filepath.Join(root, "ps2", "game.iso"), "12345678")
+			duringImageRead(t, remove)
+			return s.AddEmulatedGame(t.Context(), iso, emulators.PS2, "Bonus")
+		},
+		"RegisterEmulated": func(t *testing.T, s *Service, root string, remove func()) (Game, error) {
+			iso := writeFile(t, filepath.Join(root, "ps2", "game.iso"), "12345678")
+			duringImageRead(t, remove)
+			return s.RegisterEmulated(t.Context(), InstalledImage{Title: "Bonus", Platform: emulators.PS2, Image: iso, InstallDir: filepath.Dir(iso), Owned: true})
+		},
+	}
+	for name, adding := range add {
+		t.Run(name, func(t *testing.T) {
+			s := newLibrary(t)
+			root := filepath.Join(t.TempDir(), "RepackX")
+			a := addAt(t, s, filepath.Join(root, "game.exe"), "RepackX")
+			remove, outcome := wholeRemoval(t, s, a.ID, root)
+
+			g, err := adding(t, s, root, remove)
+
+			if *outcome == "" {
+				t.Fatal("the removal never ran: the hook missed the adding path")
+			}
+			if err != nil {
+				return
+			}
+			if _, statErr := os.Stat(g.Executable); statErr != nil {
+				t.Fatalf("card %q saved for a file deleted with another game (removal %s): %v", g.Title, *outcome, statErr)
+			}
+		})
+	}
+}
 
 func addAt(t *testing.T, s *Service, exe, title string) Game {
 	t.Helper()

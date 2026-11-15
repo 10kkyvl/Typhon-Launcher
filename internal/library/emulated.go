@@ -165,6 +165,11 @@ func (s *Service) AddEmulatedGame(ctx context.Context, romPath, platformID, titl
 	if err != nil {
 		return Game{}, err
 	}
+	release, err := s.holdForAdding("", title, dir)
+	if err != nil {
+		return Game{}, err
+	}
+	defer release()
 	facts, err := readImage(rom, ctx.Err)
 	if err != nil {
 		return Game{}, err
@@ -251,6 +256,11 @@ func (s *Service) RegisterEmulated(ctx context.Context, g InstalledImage) (Game,
 	if !platform.Inside(dir, rom) {
 		return Game{}, fmt.Errorf("%w: %s", errImageOutside, rom)
 	}
+	release, err := s.holdForAdding("", title, dir)
+	if err != nil {
+		return Game{}, err
+	}
+	defer release()
 	facts, err := readImage(rom, ctx.Err)
 	if err != nil {
 		return Game{}, err

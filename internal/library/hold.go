@@ -189,7 +189,11 @@ func (s *Service) BeginMove(id string) (func(), error) {
 }
 
 // holdForAdding keeps a removal or a move from deciding on dir while a card is
-// being added there; it refuses a dir whose files are being deleted or moved.
+// being added there or given that folder; it refuses a dir whose files are
+// being deleted or moved. Every path that looks at files before it saves a card
+// for them (AddGame, RegisterInstalled, the image paths, discovery) holds dir
+// from before the look until after the save, so the files it saw are the files
+// the card names. id is the card's when the path knows it, empty otherwise.
 func (s *Service) holdForAdding(id, title, dir string) (func(), error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
