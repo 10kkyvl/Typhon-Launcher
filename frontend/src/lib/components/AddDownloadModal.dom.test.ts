@@ -331,6 +331,103 @@ describe('AddDownloadModal: a Start that finds nothing waiting in Go', () => {
   });
 });
 
+describe('AddDownloadModal: a fetch the player asked for that fails', () => {
+  const OTHER = 'magnet:?xt=urn:btih:other';
+
+  beforeEach(() => {
+    freshMocks();
+  });
+
+  afterEach(() => {
+    toasts.set([]);
+  });
+
+  // Continue on a typed magnet; the dialog fails the fetch with `first`.
+  async function failContinue(first: Error) {
+    vi.mocked(fetchMetadata).mockRejectedValueOnce(first);
+    const view = renderDom(AddDownloadModal, { open: true });
+    const field = await screen.findByRole('textbox', { name: msg('modals.addDownloadMagnetLabel') });
+    await view.user.type(field, MAGNET);
+    await view.user.click(screen.getByRole('button', { name: msg('common.continue') }));
+    const retry = await screen.findByRole('button', { name: msg('common.retry') });
+    return { ...view, retry, notice: retry.closest('.notice') as HTMLElement };
+  }
+
+  it('says why on the source step, in the dialog, with a Retry, and raises no toast', async () => {
+    const { notice } = await failContinue(new Error(FETCH_FAILED));
+
+    const alert = within(notice).getByRole('alert');
+    expect(notice.getAttribute('data-tone')).toBe('danger');
+    expect(alert.textContent).toContain(installErrorText(new Error(FETCH_FAILED)));
+    expect(screen.getByRole('textbox', { name: msg('modals.addDownloadMagnetLabel') })).toHaveProperty('value', MAGNET);
+    expect(get(toasts)).toHaveLength(0);
+    expect(fetchMetadata).toHaveBeenCalledOnce();
+  });
+
+  it('opened with a source (the game page), says a failed fetch the same way', async () => {
+    vi.mocked(fetchMetadata).mockRejectedValueOnce(new Error(FETCH_FAILED));
+    renderDom(AddDownloadModal, { open: true, initialSource: MAGNET, origin: GAME_ORIGIN });
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain(installErrorText(new Error(FETCH_FAILED)));
+    expect(within(alert.closest('.notice') as HTMLElement).getByRole('button', { name: msg('common.retry') })).toBeTruthy();
+    expect(get(toasts)).toHaveLength(0);
+  });
+
+  it('Retry fetches the failed source again, keeps the notice while it runs, and focuses Start on the files', async () => {
+    const again = deferred<TorrentInfo>();
+    const { user, retry, notice } = await failContinue(new Error(FETCH_FAILED));
+    vi.mocked(fetchMetadata).mockReturnValueOnce(again.promise);
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(retry.getAttribute('aria-busy')).toBe('true');
+    expect(notice.isConnected).toBe(true);
+    expect(notice.textContent).toContain(installErrorText(new Error(FETCH_FAILED)));
+    expect(document.activeElement).toBe(retry);
+    expect(vi.mocked(fetchMetadata).mock.calls[1]).toEqual([MAGNET]);
+
+    again.resolve(TORRENT);
+
+    await screen.findByRole('checkbox', { name: 'Celeste/setup.exe' });
+    expect(notice.isConnected).toBe(false);
+    expect(fileBox('Celeste/readme.txt').getAttribute('aria-checked')).toBe('true');
+    await waitFor(() => expect(document.activeElement).toBe(startButton()));
+  });
+
+  it('keeps the notice when the Retry fails again, says it again, and keeps focus on Retry', async () => {
+    const { user, retry, notice } = await failContinue(new Error(FETCH_FAILED));
+    vi.mocked(fetchMetadata).mockRejectedValue(new Error(FETCH_FAILED));
+    const words = notice.querySelector('.message')?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+    const said = sayingAgain(notice);
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => expect(said()).toBe(words));
+    expect(words).toContain(installErrorText(new Error(FETCH_FAILED)));
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
+    expect(fetchMetadata).toHaveBeenCalledTimes(2);
+    expect(get(toasts)).toHaveLength(0);
+  });
+
+  it('a new Continue clears the old failure and fetches what the field holds', async () => {
+    const { user } = await failContinue(new Error(FETCH_FAILED));
+    vi.mocked(fetchMetadata).mockReturnValueOnce(new Promise(() => {}));
+    const field = screen.getByRole('textbox', { name: msg('modals.addDownloadMagnetLabel') });
+    await user.clear(field);
+    await user.type(field, OTHER);
+
+    await user.click(screen.getByRole('button', { name: msg('common.continue') }));
+
+    await screen.findByText(msg('modals.addDownloadFetchingMetadata'));
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(vi.mocked(fetchMetadata).mock.calls[1]).toEqual([OTHER]);
+  });
+});
+
 describe('AddDownloadModal: any other Start failure', () => {
   beforeEach(() => {
     freshMocks();

@@ -56,10 +56,14 @@
   let fetchedFrom = '';
   // The file choices a fetch after such a Start keeps, by path; null for a fetch the player asked for.
   let kept: Map<string, boolean> | null = null;
-  // After that fetch: Start has to be pressed again (restartNeeded), or the fetch failed (refetchError).
+  // After that fetch Start has to be pressed again.
   let restartNeeded = $state(false);
-  let refetchError = $state('');
-  let refetchRetrying = $state(false);
+  // A failed fetch, said on the source step with a Retry of the same source: why it failed, whether
+  // it was the fetch after a Start (which keeps `kept` for the Retry), and what it fetched.
+  let fetchError = $state('');
+  let refetchFailed = $state(false);
+  let failedFrom = '';
+  let retrying = $state(false);
 
   const consolePlatform = $derived(origin?.platform ?? '');
   const libraryReady = $derived(Boolean($settings?.libraryPath));
@@ -100,8 +104,10 @@
     fetchedFrom = '';
     kept = null;
     restartNeeded = false;
-    refetchError = '';
-    refetchRetrying = false;
+    fetchError = '';
+    refetchFailed = false;
+    failedFrom = '';
+    retrying = false;
   }
 
   $effect(() => {
@@ -135,16 +141,12 @@
     }
   }
 
-  // A fetch the player asked for starts anew; a fetch after a Start that found nothing waiting
-  // (`kept` set) keeps the files the player chose and says how it ended in the dialog. It answers
-  // whether the files step came, or undefined when the dialog moved on meanwhile.
+  // A fetch after a Start that found nothing waiting (`kept` set) keeps the files the player chose.
+  // A failure, of any fetch, is said in the dialog with a Retry; the failure stays on screen while the
+  // Retry runs. It answers whether the files step came, or undefined when the dialog moved on meanwhile.
   async function proceed(value: string): Promise<boolean | undefined> {
     const current = ++token;
     const choices = kept;
-    if (!choices) {
-      refetchError = '';
-      restartNeeded = false;
-    }
     fetching = value;
     step = 'loading';
     try {
@@ -158,25 +160,31 @@
       info = result;
       selected = result.files.map((file) => choices?.get(file.path) ?? true);
       kept = null;
-      refetchError = '';
+      fetchError = '';
+      refetchFailed = false;
       restartNeeded = choices !== null;
       step = 'files';
       return true;
     } catch (err) {
       if (!open || current !== token) return undefined;
-      if (choices) refetchError = installErrorText(err);
-      else toast(installErrorText(err), 'danger');
+      fetchError = installErrorText(err);
+      refetchFailed = choices !== null;
+      failedFrom = value;
       step = 'source';
       return false;
     }
   }
 
+  // A fetch the player asked for starts anew.
   function ask(value: string) {
     kept = null;
+    fetchError = '';
+    refetchFailed = false;
+    restartNeeded = false;
     return proceed(value);
   }
 
-  const retryRefetch = () => proceed(fetchedFrom);
+  const retryFetch = () => proceed(failedFrom);
 
   // While the fetch runs the files step and its Start are gone: focus waits on the dialog itself,
   // and comes to Start when the files are back, unless the player has moved it meanwhile.
@@ -257,16 +265,16 @@
     : msg('modals.addDownloadTitle')}
   width={step === 'files' && !consolePlatform ? '62rem' : '48rem'}
 >
-  {#if refetchError || refetchRetrying}
+  {#if fetchError || retrying}
     <div class="said">
       <Notice
         tone="danger"
         compact
-        title={msg('modals.addDownloadRefetchFailed')}
-        bind:retrying={refetchRetrying}
-        retry={{ label: msg('common.retry'), run: retryRefetch, focus: () => document.getElementById(`${uid}-start`) }}
+        title={refetchFailed ? msg('modals.addDownloadRefetchFailed') : undefined}
+        bind:retrying
+        retry={{ label: msg('common.retry'), run: retryFetch, focus: () => document.getElementById(`${uid}-start`) }}
       >
-        {refetchError}
+        {fetchError}
       </Notice>
     </div>
   {/if}
