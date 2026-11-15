@@ -94,9 +94,13 @@ export const completed = derived(downloads, ($downloads) =>
     .sort((a, b) => Date.parse(b.completedAt ?? b.addedAt) - Date.parse(a.completedAt ?? a.addedAt)),
 );
 
+// Only a download that moves data adds to a total: one in verifying can still carry its last speeds.
+const takesData = (d: Download) => d.status === 'downloading';
+const givesData = (d: Download) => d.status === 'downloading' || d.seeding;
+
 export const stats = derived(downloads, ($downloads) => ({
-  downSpeed: $downloads.reduce((sum, d) => sum + d.downloadSpeed, 0),
-  upSpeed: $downloads.reduce((sum, d) => sum + d.uploadSpeed, 0),
+  downSpeed: $downloads.reduce((sum, d) => sum + (takesData(d) ? d.downloadSpeed : 0), 0),
+  upSpeed: $downloads.reduce((sum, d) => sum + (givesData(d) ? d.uploadSpeed : 0), 0),
   activeCount: $downloads.filter((d) => activeStatuses.includes(d.status)).length,
   queuedCount: $downloads.filter((d) => d.status === 'queued').length,
 }));
