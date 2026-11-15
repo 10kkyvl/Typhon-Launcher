@@ -110,6 +110,25 @@ describe('DiskMeter', () => {
     );
   });
 
+  it('draws and lists the space no segment accounts for as other files, not as free', () => {
+    const { container, getByRole } = renderDom(DiskMeter, {
+      label: 'Диск E',
+      segments: [{ key: 'games', label: 'Игры', bytes: 600 * GB, tone: 'game' }],
+      total: 1000 * GB,
+      free: 300 * GB,
+    });
+    expect(parts(container).map((p) => [p.dataset.tone, parseFloat(p.style.flexBasis)])).toEqual([
+      ['game', 60],
+      ['other', 10],
+    ]);
+    expect(getByRole('img').getAttribute('aria-label')).toBe(
+      `Диск E: Игры: ${bytesSize(600 * GB)}; Другие файлы: ${bytesSize(100 * GB)}; Свободно ${bytesSize(300 * GB)} из ${bytesSize(1000 * GB)}`,
+    );
+    expect(legendLines(getByRole('list'))).toEqual(
+      [`Игры ${bytesSize(600 * GB)}`, `Другие файлы ${bytesSize(100 * GB)}`, `Свободно ${bytesSize(300 * GB)}`, `Всего ${bytesSize(1000 * GB)}`].map(words),
+    );
+  });
+
   it('in the compact form, is the bar and one line', () => {
     const { container, queryByRole, getByRole } = renderDom(DiskMeter, { label: 'Папка', segments: SEGMENTS, total: 200 * GB, free: 50 * GB, compact: true });
     expect(queryByRole('list')).toBeNull();

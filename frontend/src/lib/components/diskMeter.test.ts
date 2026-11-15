@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { METER_TONES, gameTone, meter, sizeWords, type MeterSegment } from './diskMeter';
+import { METER_OTHER, METER_TONES, gameTone, meter, sizeWords, type MeterSegment } from './diskMeter';
 
 const seg = (key: string, bytes: number, extra: Partial<MeterSegment> = {}): MeterSegment => ({ key, label: key, bytes, tone: 'game', ...extra });
 
@@ -135,6 +135,38 @@ describe('the disk meter model', () => {
     const m = meter([], 100);
     expect(m.drawn).toEqual([]);
     expect(m.free).toEqual({ kind: 'exact', bytes: 100 });
+  });
+});
+
+// The track stands for the free space: space that is neither a segment nor measured free must not be
+// drawn as free, so the meter lists it as a part of its own.
+describe('space no segment accounts for', () => {
+  const kinds = (m: ReturnType<typeof meter>) => m.parts.map((p) => [p.kind, p.key, p.size, p.share]);
+
+  it('is drawn and listed as other files when the free space is measured', () => {
+    const m = meter([seg('games', 600)], 1000, 300);
+    expect(kinds(m)).toEqual([
+      ['segment', 'games', { kind: 'exact', bytes: 600 }, 0.6],
+      ['other', METER_OTHER, { kind: 'exact', bytes: 100 }, 0.1],
+    ]);
+    expect(m.parts[1].tone).toBe('other');
+    expect(m.drawn.map((p) => p.key)).toEqual(['games', METER_OTHER]);
+    expect(m.free).toEqual({ kind: 'exact', bytes: 300 });
+  });
+
+  it('is of unknown size when a segment is only a lower bound, and still drawn: it is not free', () => {
+    const m = meter([seg('games', 600, { sizeUnknown: true })], 1000, 300);
+    expect(kinds(m)[1]).toEqual(['other', METER_OTHER, { kind: 'unknown' }, 0.1]);
+  });
+
+  it('is not added when the segments and the free space fill the total', () => {
+    expect(meter([seg('games', 600), seg('rest', 100, { tone: 'other' })], 1000, 300).parts.map((p) => p.kind)).toEqual(['segment', 'segment']);
+  });
+
+  it('is not added where the free space is derived, not measured, or the total is unknown', () => {
+    expect(meter([seg('games', 600)], 1000).parts.map((p) => p.kind)).toEqual(['segment']);
+    expect(meter([seg('games', 600)], 1000, null).parts.map((p) => p.kind)).toEqual(['segment']);
+    expect(meter([seg('games', 600)], 0, 300).parts.map((p) => p.kind)).toEqual(['segment']);
   });
 });
 

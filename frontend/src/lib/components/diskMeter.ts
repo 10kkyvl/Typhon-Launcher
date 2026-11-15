@@ -29,8 +29,14 @@ export interface MeterSegment {
 
 export type MeterSize = { kind: 'exact'; bytes: number } | { kind: 'atLeast'; bytes: number } | { kind: 'unknown' };
 
+/** The key of the part the meter adds for space no segment accounts for. */
+export const METER_OTHER = 'meter:other';
+
 export interface MeterPart {
+  /** A caller's segment, or the part the meter adds: `other` for space no segment accounts for. */
+  kind: 'segment' | 'other';
   key: string;
+  /** The caller's label; empty for a part the meter adds, which DiskMeter names from the catalogue. */
   label: string;
   tone: MeterTone;
   size: MeterSize;
@@ -41,7 +47,7 @@ export interface MeterPart {
 export interface MeterModel {
   /** The total, or null when it is unknown. */
   total: number | null;
-  /** Every segment in the given order, for the legend and the text alternative. */
+  /** Every segment in the given order, then the parts the meter adds: the legend and the text alternative. */
   parts: MeterPart[];
   /** The parts the bar draws: a known size above 0 against a known total, with room left in the bar. */
   drawn: MeterPart[];
@@ -82,8 +88,16 @@ export function meter(segments: readonly MeterSegment[], total: number | null | 
     const size = sizes[index];
     const bytes = bytesOf(size);
     const share = known !== null && bytes > 0 ? bytes / against : 0;
-    return { key: segment.key, label: segment.label, tone: segment.tone, size, share };
+    return { kind: 'segment', key: segment.key, label: segment.label, tone: segment.tone, size, share };
   });
+
+  // The track is the free space: what neither the segments nor the measured free space account for
+  // is a part of its own, or it would be drawn as free. Its size is known only when every segment's is.
+  const gap = known !== null && !overflow && free !== undefined && measurable(free) ? known - used - free : 0;
+  if (gap > 0) {
+    const exact = sizes.every((size) => size.kind === 'exact');
+    parts.push({ kind: 'other', key: METER_OTHER, label: '', tone: 'other', size: exact ? { kind: 'exact', bytes: gap } : { kind: 'unknown' }, share: gap / against });
+  }
 
   let freeSize: MeterSize | null;
   if (overflow) freeSize = null;

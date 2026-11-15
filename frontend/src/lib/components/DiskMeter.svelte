@@ -43,7 +43,8 @@
 
   const words = $derived({ atLeast: (size: string) => $t('common.meterAtLeast', { size }), unknown: $t('common.meterSizeUnknown') });
   const said = (size: MeterSize) => sizeWords(size, bytesSize, words);
-  const partText = (part: MeterPart) => $t('common.meterPart', { name: part.label, size: said(part.size) });
+  const nameOf = (part: MeterPart) => (part.kind === 'other' ? $t('common.meterOther') : part.label);
+  const partText = (part: MeterPart) => $t('common.meterPart', { name: nameOf(part), size: said(part.size) });
 
   // The free space and the total in one clause where both are known; an overflow says so instead.
   const tail = $derived.by(() => {
@@ -61,37 +62,45 @@
   const joined = (items: string[]) => items.join($t('common.meterSeparator'));
   const alt = $derived($t('common.meterAlt', { label, details: joined([...model.parts.map(partText), ...tail]) }));
 
+  // The drawn parts that are the caller's segments: the buttons, in the order the arrows move.
+  const pickable = $derived(model.drawn.filter((part) => part.kind === 'segment'));
+
   let stop = $state(0);
   let bar = $state<HTMLElement>();
-  const tabStop = $derived(Math.min(stop, Math.max(0, model.drawn.length - 1)));
+  const tabStop = $derived(Math.min(stop, Math.max(0, pickable.length - 1)));
 
   function onkeydown(event: KeyboardEvent, index: number) {
     if (event.altKey || event.ctrlKey || event.metaKey) return;
-    const next = nextIndex(index, model.drawn.length, event.key, { orientation: 'horizontal', loop: false });
+    const next = nextIndex(index, pickable.length, event.key, { orientation: 'horizontal', loop: false });
     if (next === null) return;
     event.preventDefault();
     stop = next;
-    bar?.querySelectorAll<HTMLButtonElement>('.part')[next]?.focus();
+    bar?.querySelectorAll<HTMLButtonElement>('button.part')[next]?.focus();
   }
 </script>
 
 <div class="meter" class:compact>
   {#if onpick && model.drawn.length > 0}
     <div class="bar" role="group" aria-label={alt} bind:this={bar}>
-      {#each model.drawn as part, index (part.key)}
-        <Tooltip text={partText(part)} describe={false}>
-          <button
-            type="button"
-            class="part"
-            data-tone={part.tone}
-            style:flex-basis="{part.share * 100}%"
-            aria-label={partText(part)}
-            tabindex={index === tabStop ? 0 : -1}
-            onfocus={() => (stop = index)}
-            onclick={() => onpick(part.key)}
-            onkeydown={(event) => onkeydown(event, index)}
-          ></button>
-        </Tooltip>
+      {#each model.drawn as part (part.key)}
+        {@const index = pickable.indexOf(part)}
+        {#if index >= 0}
+          <Tooltip text={partText(part)} describe={false}>
+            <button
+              type="button"
+              class="part"
+              data-tone={part.tone}
+              style:flex-basis="{part.share * 100}%"
+              aria-label={partText(part)}
+              tabindex={index === tabStop ? 0 : -1}
+              onfocus={() => (stop = index)}
+              onclick={() => onpick(part.key)}
+              onkeydown={(event) => onkeydown(event, index)}
+            ></button>
+          </Tooltip>
+        {:else}
+          <span class="part" data-tone={part.tone} style:flex-basis="{part.share * 100}%"></span>
+        {/if}
       {/each}
     </div>
   {:else}
@@ -109,7 +118,7 @@
       {#each model.parts as part (part.key)}
         <li>
           <span class="swatch" data-tone={part.tone} class:hollow={part.size.kind === 'unknown'} aria-hidden="true"></span>
-          <span class="name">{part.label}</span>
+          <span class="name">{nameOf(part)}</span>
           <span class="size"><Reading text={said(part.size)} /></span>
         </li>
       {/each}
