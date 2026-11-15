@@ -54,9 +54,12 @@ A screen can put its game on the stage: its wide art shows sharp across the top 
 behind the top bar and the sidebar, and flows into the blurred backdrop below. A theme does not
 change the stage's shape or the shade over the top bar's row; that shade takes the page colour
 `--bg`, so it is light in a light theme. Words that stand on the stage have a plate under them:
-`--scrim-copy` is its colour (by default the page colour at 66 %), `--copy-fade-x` and
-`--copy-fade-y` how far it fades out to the right and down. The words on it are one colour,
-`--text`, and must read at 4.5:1 or better over black and over white art.
+`--scrim-copy` is its colour (by default the page colour at 66 %), `--copy-fade-x` how far it
+fades out to the right of the words, `--copy-fade-y` above and below them. The words on it are one
+colour, `--text`, and must read at 4.5:1 or better over black and over white art; the theme
+editor's Readability panel checks this pair. The default plate is only as dark as `--bg`: on a
+mid-grey page such as `#333` it is too light for light words on white art, so such a theme should
+set `--scrim-copy` itself.
 
 ## What happens to a 1.x theme
 
