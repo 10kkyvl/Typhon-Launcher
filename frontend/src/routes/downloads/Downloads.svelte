@@ -9,6 +9,8 @@
   import InstallModal from '../../lib/components/InstallModal.svelte';
   import Notice from '../../lib/components/Notice.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
+  import { gamePageId } from '../../lib/services/downloads';
+  import { claimAmbient } from '../../lib/stores/ambient';
   import { active, completed, failed, queue } from '../../lib/stores/downloads';
   import { requestArt } from '../../lib/stores/metadata';
   import { navigate } from '../../lib/stores/router';
@@ -39,6 +41,14 @@
   const loadFailed = $derived(!$downloadsListLoad.loaded && $downloadsListLoad.error != null);
   const loading = $derived(!$downloadsListLoad.loaded && !loadFailed);
 
+  // The backdrop shows the first download under way, a running one before a paused one. Only the id is
+  // derived, so a progress tick does not claim again.
+  const ambientGame = $derived(
+    $active.filter((d) => d.status !== 'paused').map(gamePageId).find(Boolean) ||
+      $active.map(gamePageId).find(Boolean) ||
+      null,
+  );
+
   /** What the lists say in the screen's live region (`onannounce`): what the player did, never progress. */
   function announce(text: string) {
     announcer?.announce(text);
@@ -53,6 +63,8 @@
     installDownloadId = id;
     installOpen = true;
   }
+
+  $effect(() => claimAmbient(ambientGame));
 
   $effect(() => {
     const ids = [...$queue, ...$failed, ...$completed]
