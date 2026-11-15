@@ -77,13 +77,19 @@
     }),
   );
 
+  // Asks Go to drop a fetch or a fetched torrent the player has left. A refusal is logged, not shown:
+  // the dialog is closing or has moved on, and nothing in it can act on it.
+  function drop(call: Promise<unknown>, what: string) {
+    call.catch((err: unknown) => console.error(`add download: ${what}`, err));
+  }
+
   function reset() {
     token++;
     if (step === 'loading') {
-      cancelFetchMetadata(fetching);
+      drop(cancelFetchMetadata(fetching), 'cancel the metadata fetch');
     }
     if (pendingHash) {
-      discardMetadata(pendingHash);
+      drop(discardMetadata(pendingHash), 'discard the fetched torrent');
       pendingHash = '';
     }
     step = 'source';
@@ -144,7 +150,7 @@
     try {
       const result = await fetchMetadata(value);
       if (!open || current !== token) {
-        discardMetadata(result.infoHash);
+        drop(discardMetadata(result.infoHash), 'discard a torrent fetched for nothing');
         return undefined;
       }
       pendingHash = result.infoHash;

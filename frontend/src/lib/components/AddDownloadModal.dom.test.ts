@@ -1,13 +1,27 @@
 import { screen, waitFor, within } from '@testing-library/svelte';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
+// What the dialog asks Go to drop (`discard` a fetched torrent, `cancel` a fetch), and the refusal Go
+// answers with, if any. The service functions are plain, not spies: a spy handles the promise it
+// returns (to record how it settled), which would hide a rejection the dialog leaves unhandled.
+const cleanup = vi.hoisted(() => ({
+  discard: vi.fn<(hash: string) => void>(),
+  cancel: vi.fn<(source: string) => void>(),
+  refuse: { discard: null as Error | null, cancel: null as Error | null },
+}));
 vi.mock('../services/downloads', async (actual) => ({
   ...(await actual<typeof import('../services/downloads')>()),
   fetchMetadata: vi.fn(),
-  discardMetadata: vi.fn(async () => {}),
-  cancelFetchMetadata: vi.fn(async () => {}),
+  discardMetadata: (hash: string) => {
+    cleanup.discard(hash);
+    return cleanup.refuse.discard ? Promise.reject(cleanup.refuse.discard) : Promise.resolve();
+  },
+  cancelFetchMetadata: (source: string) => {
+    cleanup.cancel(source);
+    return cleanup.refuse.cancel ? Promise.reject(cleanup.refuse.cancel) : Promise.resolve();
+  },
   startDownloadFrom: vi.fn(async () => ({})),
 }));
 vi.mock('../services/system', async (actual) => ({
@@ -30,8 +44,6 @@ import { get } from 'svelte/store';
 import { locale, msg } from '../i18n';
 import { installErrorText } from '../install/installErrors';
 import {
-  cancelFetchMetadata,
-  discardMetadata,
   fetchMetadata,
   startDownloadFrom,
   type Download,
@@ -156,8 +168,10 @@ function freshMocks() {
   vi.mocked(fetchMetadata).mockResolvedValue(TORRENT);
   vi.mocked(startDownloadFrom).mockReset();
   vi.mocked(startDownloadFrom).mockResolvedValue({} as Download);
-  vi.mocked(discardMetadata).mockClear();
-  vi.mocked(cancelFetchMetadata).mockClear();
+  cleanup.discard.mockClear();
+  cleanup.cancel.mockClear();
+  cleanup.refuse.discard = null;
+  cleanup.refuse.cancel = null;
 }
 
 const startButton = () => screen.getByRole('button', { name: msg('modals.addDownloadStart') });
@@ -228,7 +242,7 @@ describe('AddDownloadModal: a Start that finds nothing waiting in Go', () => {
     expect(second).toEqual(first);
     expect(second).toEqual(['abc', '/elsewhere', [0], { ...GAME_ORIGIN, autoInstall: true, elevateAhead: false }]);
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expect(discardMetadata).not.toHaveBeenCalled();
+    expect(cleanup.discard).not.toHaveBeenCalled();
   });
 
   it('when that fetch fails too: the source step, the failure by its code with a Retry, and no fetch of its own', async () => {
@@ -293,7 +307,7 @@ describe('AddDownloadModal: a Start that finds nothing waiting in Go', () => {
     await user.keyboard('{Escape}');
 
     expect(screen.queryByRole('dialog')).toBeNull();
-    expect(cancelFetchMetadata).toHaveBeenCalledExactlyOnceWith(MAGNET);
+    expect(cleanup.cancel).toHaveBeenCalledExactlyOnceWith(MAGNET);
   });
 
   it('keeps the notice when the Retry fails again, and says it again', async () => {
@@ -344,6 +358,84 @@ describe('AddDownloadModal: any other Start failure', () => {
   });
 });
 
+type Proc = { on(event: 'unhandledRejection', fn: (reason: unknown) => void): void; off(event: 'unhandledRejection', fn: (reason: unknown) => void): void };
+const proc = (globalThis as unknown as { process: Proc }).process;
+
+// Rejections nobody handled, collected until the end of the case; a macrotask lets Node report them.
+function unhandled() {
+  const seen: unknown[] = [];
+  const note = (reason: unknown) => void seen.push(reason);
+  proc.on('unhandledRejection', note);
+  onTestFinished(() => proc.off('unhandledRejection', note));
+  return async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    return seen;
+  };
+}
+
+describe('AddDownloadModal: a cleanup Go refuses', () => {
+  const DISCARD_FAILED = new Error('typhon:download.no_client: discard refused');
+  const CANCEL_FAILED = new Error('typhon:download.no_client: cancel refused');
+
+  beforeEach(() => {
+    freshMocks();
+  });
+
+  afterEach(() => {
+    toasts.set([]);
+  });
+
+  it('a discard refused on close is logged, not left unhandled, and the dialog closes', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => errors.mockRestore());
+    const after = unhandled();
+    cleanup.refuse.discard = DISCARD_FAILED;
+    const { user } = await files();
+
+    await user.click(screen.getByRole('button', { name: msg('common.cancel') }));
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(cleanup.discard).toHaveBeenCalledWith('abc');
+    expect(await after()).toEqual([]);
+    expect(errors.mock.calls.some((call) => call.includes(DISCARD_FAILED))).toBe(true);
+    expect(get(toasts)).toHaveLength(0);
+  });
+
+  it('a cancel refused on close during a fetch is logged, not left unhandled', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => errors.mockRestore());
+    const after = unhandled();
+    cleanup.refuse.cancel = CANCEL_FAILED;
+    vi.mocked(fetchMetadata).mockReturnValueOnce(new Promise(() => {}));
+    const { user } = renderDom(AddDownloadModal, { open: true, initialSource: MAGNET });
+    await screen.findByText(msg('modals.addDownloadFetchingMetadata'));
+
+    await user.keyboard('{Escape}');
+
+    expect(cleanup.cancel).toHaveBeenCalledWith(MAGNET);
+    expect(await after()).toEqual([]);
+    expect(errors.mock.calls.some((call) => call.includes(CANCEL_FAILED))).toBe(true);
+  });
+
+  it('a discard refused for a late answer is logged, not left unhandled', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => errors.mockRestore());
+    const after = unhandled();
+    const fetching = deferred<TorrentInfo>();
+    vi.mocked(fetchMetadata).mockReturnValueOnce(fetching.promise);
+    cleanup.refuse.discard = DISCARD_FAILED;
+    const { user } = renderDom(AddDownloadModal, { open: true, initialSource: MAGNET });
+    await screen.findByText(msg('modals.addDownloadFetchingMetadata'));
+    await user.keyboard('{Escape}');
+
+    fetching.resolve(TORRENT);
+
+    await waitFor(() => expect(cleanup.discard).toHaveBeenCalledWith('abc'));
+    expect(await after()).toEqual([]);
+    expect(errors.mock.calls.some((call) => call.includes(DISCARD_FAILED))).toBe(true);
+  });
+});
+
 describe('AddDownloadModal: closing and starting', () => {
   beforeEach(() => {
     freshMocks();
@@ -358,7 +450,7 @@ describe('AddDownloadModal: closing and starting', () => {
     await user.keyboard('{Escape}');
 
     expect(screen.queryByRole('dialog')).toBeNull();
-    expect(cancelFetchMetadata).toHaveBeenCalledWith(MAGNET);
+    expect(cleanup.cancel).toHaveBeenCalledWith(MAGNET);
 
     vi.mocked(fetchMetadata).mockReturnValueOnce(new Promise(() => {}));
     await rerender({ open: true, initialSource: MAGNET });
@@ -366,7 +458,7 @@ describe('AddDownloadModal: closing and starting', () => {
 
     fetching.resolve(TORRENT);
 
-    await waitFor(() => expect(discardMetadata).toHaveBeenCalledWith('abc'));
+    await waitFor(() => expect(cleanup.discard).toHaveBeenCalledWith('abc'));
     expect(screen.queryByRole('checkbox', { name: 'Celeste/setup.exe' })).toBeNull();
     expect(screen.getByText(msg('modals.addDownloadFetchingMetadata'))).toBeTruthy();
   });
@@ -377,7 +469,7 @@ describe('AddDownloadModal: closing and starting', () => {
     await user.click(screen.getByRole('button', { name: msg('common.cancel') }));
 
     expect(screen.queryByRole('dialog')).toBeNull();
-    expect(discardMetadata).toHaveBeenCalledWith('abc');
+    expect(cleanup.discard).toHaveBeenCalledWith('abc');
   });
 
   it('cannot be closed while it starts', async () => {
@@ -389,7 +481,7 @@ describe('AddDownloadModal: closing and starting', () => {
     await user.keyboard('{Escape}');
 
     expect(screen.getByRole('dialog')).toBeTruthy();
-    expect(discardMetadata).not.toHaveBeenCalled();
+    expect(cleanup.discard).not.toHaveBeenCalled();
     starting.resolve({} as Download);
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
