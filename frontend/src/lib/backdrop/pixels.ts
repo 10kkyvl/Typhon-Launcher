@@ -248,3 +248,35 @@ export function loadImage(url: string): Promise<HTMLImageElement | null> {
     img.src = url;
   });
 }
+
+/** Why a picture's pixels could not be read: no canvas or image support, a failed fetch, a tainted canvas, nothing in it. */
+export type PixelFailure = 'unavailable' | 'load' | 'tainted' | 'empty';
+export type PixelRead = { ok: true; data: Uint8ClampedArray; width: number; height: number } | { ok: false; reason: PixelFailure };
+
+/**
+ * The one way the frontend reads a picture's pixels outside the backdrop's bake: loads it (`loadImage`)
+ * and draws it scaled down to fit `side` on its longer edge, never up. A picture that fails to fetch is
+ * worth asking again later; a tainted or empty one stays that way.
+ */
+export async function readPixels(url: string, side: number): Promise<PixelRead> {
+  if (typeof Image === 'undefined' || typeof document === 'undefined') return { ok: false, reason: 'unavailable' };
+  const image = await loadImage(url);
+  if (!image) return { ok: false, reason: 'load' };
+  const width = image.naturalWidth;
+  const height = image.naturalHeight;
+  if (!width || !height) return { ok: false, reason: 'empty' };
+  const scale = Math.min(1, side / Math.max(width, height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(width * scale));
+  canvas.height = Math.max(1, Math.round(height * scale));
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return { ok: false, reason: 'unavailable' };
+  try {
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    return { ok: true, data, width: canvas.width, height: canvas.height };
+  } catch {
+    // A cross-origin picture without CORS headers taints the canvas.
+    return { ok: false, reason: 'tainted' };
+  }
+}

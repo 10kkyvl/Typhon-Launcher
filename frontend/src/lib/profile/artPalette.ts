@@ -1,4 +1,5 @@
 import { writable } from 'svelte/store';
+import { readPixels, type PixelFailure } from '../backdrop/pixels';
 import { hexToHsv } from '../theme/colorPicker';
 import { darkenUntil, mixHex, PROFILE_TEXT_3, toHex } from './appearanceColor';
 
@@ -8,7 +9,7 @@ export interface ArtPalette {
   surface: string;
 }
 
-export type ArtFailure = 'unavailable' | 'load' | 'tainted' | 'empty';
+export type ArtFailure = PixelFailure;
 export type ArtResult = { ok: true; palette: ArtPalette } | { ok: false; reason: ArtFailure };
 
 export const artStatus = writable<'idle' | 'ok' | 'failed'>('idle');
@@ -51,36 +52,11 @@ export function quantise(pixels: ArrayLike<number>): ArtPalette | null {
 
 const cache = new Map<string, Promise<ArtResult>>();
 
-function sample(image: HTMLImageElement): ArtResult {
-  const width = image.naturalWidth, height = image.naturalHeight;
-  if (!width || !height) return { ok: false, reason: 'empty' };
-  const scale = Math.min(1, SAMPLE_SIDE / Math.max(width, height));
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.max(1, Math.round(width * scale));
-  canvas.height = Math.max(1, Math.round(height * scale));
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  if (!ctx) return { ok: false, reason: 'unavailable' };
-  let data: Uint8ClampedArray;
-  try {
-    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-    data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-  } catch {
-    return { ok: false, reason: 'tainted' };
-  }
-  const palette = quantise(data);
-  return palette ? { ok: true, palette } : { ok: false, reason: 'empty' };
-}
-
 function read(url: string): Promise<ArtResult> {
-  if (typeof Image === 'undefined' || typeof document === 'undefined') {
-    return Promise.resolve({ ok: false, reason: 'unavailable' });
-  }
-  return new Promise((resolve) => {
-    const image = new Image();
-    image.crossOrigin = 'anonymous';
-    image.onload = () => resolve(sample(image));
-    image.onerror = () => resolve({ ok: false, reason: 'load' });
-    image.src = url;
+  return readPixels(url, SAMPLE_SIDE).then((pixels): ArtResult => {
+    if (!pixels.ok) return pixels;
+    const palette = quantise(pixels.data);
+    return palette ? { ok: true, palette } : { ok: false, reason: 'empty' };
   });
 }
 
