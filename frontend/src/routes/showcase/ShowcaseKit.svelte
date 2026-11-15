@@ -4,6 +4,7 @@
   import DiskMeter from '../../lib/components/DiskMeter.svelte';
   import { gameTone, type MeterSegment } from '../../lib/components/diskMeter';
   import IntegerInput from '../../lib/components/IntegerInput.svelte';
+  import Button from '../../lib/components/Button.svelte';
   import Select from '../../lib/components/Select.svelte';
   import type { SelectOption } from '../../lib/components/select';
   import EmptyState from '../../lib/components/EmptyState.svelte';
@@ -42,7 +43,22 @@
     { key: 'screens', label: 'Screenshots', bytes: 0, tone: 'data', sizeUnknown: true },
   ];
 
+  // More games than a compact bar draws at their size: the smallest fold into one part.
+  const MANY: MeterSegment[] = Array.from({ length: 60 }, (_, index) => ({
+    key: `game-${index}`,
+    label: `Game ${index + 1}`,
+    bytes: (4 + (index % 7) * 3) * GB,
+    tone: gameTone(index),
+  }));
+  const UNDRAWN: MeterSegment[] = [
+    ...GAMES.slice(0, 2),
+    { key: 'new', label: 'Just installed, not measured yet', bytes: 0, tone: 'game-3', sizeUnknown: true },
+    { key: 'empty', label: 'An empty folder', bytes: 0, tone: 'game' },
+  ];
+
   let picked = $state('none yet');
+  let folded = $state('none yet');
+  let undrawn = $state('none yet');
 
   const uid = $props.id();
   const LANGUAGES: SelectOption[] = [
@@ -76,6 +92,10 @@
   const HUGE: ChartBucket[] = [0.2, 0.1, 40, 0.3, 0.02].map((hours, index) => ({ key: `d${index}`, label: `Day ${index + 1}`, value: hours * HOUR }));
   const NOTHING: ChartBucket[] = WEEK.map((day) => ({ ...day, value: 0 }));
   let week = $state('w7');
+  let notYet = $state<string | null>(null);
+  let stackOn = $state(true);
+  let stackLanguage = $state('en');
+  let stackScale = $state(2);
 </script>
 
 <ShowcaseSection title="Screen parts" note="The disk meter, the settings row and the bar chart the screens share.">
@@ -88,11 +108,27 @@
     <span class="picked">Picked: {picked}</span>
   </ShowcaseRow>
 
-  <ShowcaseRow caption="Overflow: the segments sum over the total, no free space is drawn" stack>
+  <ShowcaseRow caption="Overflow: the segments sum over the total; drawn in proportion to each other, no free space drawn or said, the words say so" stack>
     <DiskMeter label="Drive D:" segments={OVERFLOW} total={TOTAL} />
   </ShowcaseRow>
 
-  <ShowcaseRow caption="Unknown total, and sizes not measured (a lower bound, an unknown)" stack>
+  <ShowcaseRow caption="Space no segment accounts for, with the free space measured: drawn and listed as other files, not as free" stack>
+    <DiskMeter label="Drive G:" segments={GAMES} total={TOTAL} free={600 * GB} />
+  </ShowcaseRow>
+
+  <ShowcaseRow caption="Sixty games in a compact bar: the smallest fold into one part (a button here), the bar stays inside its track" stack>
+    <div class="compact" data-testid="kit-meter-fold">
+      <DiskMeter label="Library folder" segments={MANY} total={TOTAL} compact onpick={(key) => (picked = key)} onpickfolded={(keys) => (folded = `${keys.length} games`)} />
+    </div>
+    <span class="picked">Folded part picked: {folded}</span>
+  </ShowcaseRow>
+
+  <ShowcaseRow caption="Segments the bar cannot draw (unknown or zero size): listed, and picked from their names in the legend" stack>
+    <DiskMeter label="Library drive" segments={UNDRAWN} total={TOTAL} onpick={(key) => (undrawn = key)} />
+    <span class="picked">Picked: {undrawn}</span>
+  </ShowcaseRow>
+
+  <ShowcaseRow caption="Unknown total: a broken outline, nothing filled; and sizes not measured (a lower bound, an unknown)" stack>
     <DiskMeter label="Network drive" segments={UNMEASURED} total={0} />
     <DiskMeter label="Drive E:" segments={UNMEASURED} total={TOTAL} free={null} />
   </ShowcaseRow>
@@ -129,7 +165,7 @@
           <Toggle checked={motion} labelledby={labelId} describedby={hintId} onchange={(on) => (motion = on)} />
         {/snippet}
       </SettingsRow>
-      <SettingsRow label="In-game overlay" hint="A panel over the running game" disabledReason="Not available in the portable build">
+      <SettingsRow label="In-game overlay" hint="A panel over the running game" disabledReason="Not available in the portable build" testid="kit-row-disabled">
         {#snippet children({ labelId, hintId, disabled })}
           <Toggle checked={false} labelledby={labelId} describedby={hintId} {disabled} onchange={() => {}} />
         {/snippet}
@@ -152,6 +188,31 @@
     </div>
   </ShowcaseRow>
 
+  <ShowcaseRow caption="Stacked rows: each control under the text at its own width from the start; the slider asks to fill the text's measure" stack>
+    <div class="rows">
+      <SettingsRow label="Launch on startup" hint="A switch keeps its own width" stack testid="kit-stack-toggle">
+        {#snippet children({ labelId, hintId })}
+          <Toggle checked={stackOn} labelledby={labelId} describedby={hintId} onchange={(on) => (stackOn = on)} />
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow label="Language" hint="A select keeps its 22rem" stack testid="kit-stack-select">
+        {#snippet children({ labelId, hintId })}
+          <Select options={LANGUAGES} bind:value={stackLanguage} labelledby={labelId} describedby={hintId} />
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow label="Cache" hint="A button keeps its own width" stack testid="kit-stack-button">
+        {#snippet children()}
+          <Button onclick={() => {}}>Clear the cache</Button>
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow label="Interface scale" hint="A slider has no width of its own: it fills the measure" stack testid="kit-stack-slider">
+        {#snippet children({ labelId, hintId })}
+          <Slider position={stackScale} max={SCALES.length - 1} labelledby={labelId} fill valueText={SCALES[stackScale]} describedby={hintId} onchange={(at) => (stackScale = at)} />
+        {/snippet}
+      </SettingsRow>
+    </div>
+  </ShowcaseRow>
+
   <ShowcaseRow caption="Bar chart: a week of hours on a round hour scale, a value over each bar, today set apart" stack>
     <div class="chart">
       <BarChart label="Play time by day" buckets={WEEK} format={time} scale={secondsScale(Math.max(...WEEK.map((day) => day.value)))} columns={['Day', 'Play time']} />
@@ -163,6 +224,19 @@
       <BarChart label="Weeks" buckets={WEEKS} format={time} selectable bind:selected={week} values="selected" height="6.4rem" />
     </div>
     <span class="picked">Chosen: {WEEKS.find((item) => item.key === week)?.label}</span>
+  </ShowcaseRow>
+
+  <ShowcaseRow caption="Selectable before anything is chosen: a radio group, the Tab stop on the current week, no table" stack>
+    <div class="chart">
+      <BarChart label="Weeks" buckets={WEEKS} format={time} selectable bind:selected={notYet} values="selected" height="6.4rem" />
+    </div>
+    <span class="picked">Chosen: {WEEKS.find((item) => item.key === notYet)?.label ?? 'nothing yet'}</span>
+  </ShowcaseRow>
+
+  <ShowcaseRow caption="A value over the scale: drawn to the top, its label and the table say the real value" stack>
+    <div class="chart">
+      <BarChart label="Play time by day" buckets={WEEK} format={time} scale={{ max: 4 * HOUR, step: HOUR }} />
+    </div>
   </ShowcaseRow>
 
   <ShowcaseRow caption="One huge bar: the small ones stay hairlines" stack>
