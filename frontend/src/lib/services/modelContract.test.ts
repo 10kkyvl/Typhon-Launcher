@@ -92,6 +92,22 @@ const GO_NAMES: Record<string, string> = {
   'metadata.GameArt': 'metadata.Art',
 };
 
+// Fields the interface declares required while Go tags them omitempty: a reader trusting the type
+// meets undefined. Shrink, never grow.
+const REQUIRED_THOUGH_OMITTED = new Set<string>([
+  'lib/services/account.ts: ProfileSettings (account).showcase',
+  'lib/services/recommendations.ts: RecommendationPreferences (catalog).compatOnly',
+  'lib/services/recommendations.ts: RecommendationPreferences (catalog).defaultSort',
+  'lib/services/recommendations.ts: RecommendationPreferences (catalog).genre',
+  'lib/services/recommendations.ts: RecommendationPreferences (catalog).hideLibrary',
+  'lib/services/recommendations.ts: RecommendationPreferences (catalog).kind',
+  'lib/services/recommendations.ts: RecommendationPreferences (catalog).notInterested',
+  'lib/services/recommendations.ts: RecommendationPreferences (catalog).platform',
+  'lib/services/social.ts: ActivityView (social).achievements',
+  'lib/services/social.ts: ActivityView (social).review',
+  'lib/services/social.ts: ActivityView (social).seconds',
+]);
+
 function pairs(): Pair[] {
   const models = generatedModels();
   const all = declaredInterfaces();
@@ -143,6 +159,17 @@ describe('hand-written backend types', () => {
       }
     }
     expect(clashes).toEqual([]);
+  });
+
+  it('mark optional every field Go may leave out', () => {
+    const required: string[] = [];
+    for (const { where, declared, model } of compared) {
+      for (const [name, field] of declared) {
+        if (model.get(name)?.optional && !field.optional) required.push(`${where}.${name}`);
+      }
+    }
+    expect(required.filter((entry) => !REQUIRED_THOUGH_OMITTED.has(entry))).toEqual([]);
+    expect([...REQUIRED_THOUGH_OMITTED].filter((entry) => !required.includes(entry)), 'fixed: drop it from the list').toEqual([]);
   });
 });
 
