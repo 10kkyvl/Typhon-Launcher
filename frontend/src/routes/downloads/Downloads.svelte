@@ -103,7 +103,7 @@
     <DownloadsSection id={downloadsSectionIds.active} title={msg('transfers.downloadsActiveHeading')} count={$active.length}>
       <div class="rows">
         {#each $active as download (download.id)}
-          <DownloadItem {download} onopen={(d) => openDetails(d.id)} />
+          <DownloadItem {download} onopen={(d) => openDetails(d.id)} onannounce={announce} />
         {/each}
       </div>
     </DownloadsSection>
@@ -135,13 +135,13 @@
     </EmptyState>
   {/if}
 
-  <CompletedSection part="installing" onopen={openDetails} oninstall={openInstall} away={pageHeading} />
+  <CompletedSection part="installing" onopen={openDetails} oninstall={openInstall} onannounce={announce} away={pageHeading} />
 
-  <FailedList onopen={openDetails} />
+  <FailedList onopen={openDetails} onannounce={announce} />
 
-  <QueueList />
+  <QueueList onopen={openDetails} onannounce={announce} />
 
-  <CompletedSection part="completed" onopen={openDetails} oninstall={openInstall} away={pageHeading} />
+  <CompletedSection part="completed" onopen={openDetails} oninstall={openInstall} onannounce={announce} away={pageHeading} />
 
   <DownloadsAnnouncer bind:this={announcer} />
 
