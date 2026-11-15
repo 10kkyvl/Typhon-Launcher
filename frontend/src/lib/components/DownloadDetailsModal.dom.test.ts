@@ -155,6 +155,21 @@ describe('DownloadDetailsModal: per-file progress follows Go while the download 
     expect(within(fileRow('Game/data.bin')).getByText(bytesText(4 * GB))).toBeTruthy();
   });
 
+  it('asks for one read at a time: ticks while a read is out send nothing', async () => {
+    const out = deferred<Download>();
+    vi.mocked(getDownload).mockReturnValueOnce(out.promise);
+    downloads.set([record('a', 'downloading', [file('Game/data.bin', 0)])]);
+    renderDom(DownloadDetailsModal, { open: true, id: 'a' });
+    await settle();
+
+    await vi.advanceTimersByTimeAsync(2000);
+    await settle();
+
+    expect(getDownload).toHaveBeenCalledTimes(1);
+    out.resolve(record('a', 'downloading', [file('Game/data.bin', GB)]));
+    await settle();
+  });
+
 
   it('stops asking when the dialog closes, and leaves no timer behind', async () => {
     vi.mocked(getDownload).mockResolvedValue(record('a', 'downloading', [file('Game/data.bin', GB)]));
