@@ -1,4 +1,5 @@
 import { screen, waitFor, within } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -376,7 +377,7 @@ describe('completed downloads: each state of a row', () => {
     await waitFor(() => expect(play.hasAttribute('aria-busy')).toBe(false));
   });
 
-  it('offers no Play for a game that runs, has no executable or is not in the library', () => {
+  it('offers no Play for a game that runs, has no executable or is not in the library', async () => {
     libraryGames.set([libraryGame()]);
     runningGames.set(new Set(['lib1']));
     show([download()], [installation({ status: 'completed' })]);
@@ -385,10 +386,17 @@ describe('completed downloads: each state of a row', () => {
 
     runningGames.set(new Set());
     libraryGames.set([libraryGame({ executable: '' })]);
+    await tick();
+    expect(row('Game One').textContent).not.toContain('Game running');
     expect(within(row('Game One')).queryByRole('button', { name: /Play/ })).toBeNull();
 
     libraryGames.set([]);
+    await tick();
     expect(within(row('Game One')).queryByRole('button', { name: /Play/ })).toBeNull();
+
+    // The same row offers Play once the game can run: the checks above saw the page updated.
+    libraryGames.set([libraryGame()]);
+    await waitFor(() => expect(within(row('Game One')).getByRole('button', { name: 'Play “Game One”' })).toBeTruthy());
   });
 
   it('seeding: says so, with the upload speed while it moves', () => {
