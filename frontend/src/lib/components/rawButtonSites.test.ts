@@ -46,6 +46,7 @@ const ALLOWED: Record<string, Record<string, Kind>> = {
   'lib/components/ChatAttachments.svelte': { tile: 'thumbnail' },
   'lib/components/ChatConversations.svelte': { conversation: 'row' },
   'lib/components/ChatPanel.svelte': { 'toast-open': 'row' },
+  'lib/components/DiskMeter.svelte': { part: 'tile' },
   'lib/components/FeedRow.svelte': { who: 'row', game: 'row' },
   'lib/components/GameCard.svelte': { cover: 'row', info: 'row', play: 'cover control', 'quick-btn': 'cover control' },
   'lib/components/GameLink.svelte': { cover: 'row' },

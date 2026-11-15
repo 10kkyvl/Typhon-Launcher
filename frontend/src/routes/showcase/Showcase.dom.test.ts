@@ -35,7 +35,7 @@ describe('the component showcase', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: 'Component showcase' })).toBeTruthy();
     const sections = screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent);
-    expect(sections).toEqual(['Actions', 'Fields', 'Status', 'Notices', 'Layers', 'Games']);
+    expect(sections).toEqual(['Actions', 'Fields', 'Status', 'Notices', 'Layers', 'Games', 'Screen parts']);
     expect(warn).not.toHaveBeenCalled();
     expect(error).not.toHaveBeenCalled();
   });

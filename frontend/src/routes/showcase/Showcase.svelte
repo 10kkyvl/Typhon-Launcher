@@ -8,6 +8,7 @@
   import ShowcaseActions from './ShowcaseActions.svelte';
   import ShowcaseFields from './ShowcaseFields.svelte';
   import ShowcaseGames from './ShowcaseGames.svelte';
+  import ShowcaseKit from './ShowcaseKit.svelte';
   import ShowcaseLayers from './ShowcaseLayers.svelte';
   import ShowcaseNotices from './ShowcaseNotices.svelte';
   import ShowcaseStatus from './ShowcaseStatus.svelte';
@@ -33,6 +34,7 @@
     <ShowcaseNotices />
     <ShowcaseLayers />
     <ShowcaseGames />
+    <ShowcaseKit />
   </div>
 </Page>
 

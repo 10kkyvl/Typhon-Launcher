@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import buttonSource from '../lib/components/Button.svelte?raw';
+import diskMeterSource from '../lib/components/DiskMeter.svelte?raw';
+import { METER_TONES } from '../lib/components/diskMeter';
 import heroSource from '../lib/components/HeroCarousel.svelte?raw';
 import noticeSource from '../lib/components/Notice.svelte?raw';
 import textLinkSource from '../lib/components/TextLink.svelte?raw';
@@ -509,6 +511,47 @@ describe('built-in themes', () => {
     expect(dark).toBeDefined();
     expect(rootBlock()).toEqual((dark as Preset).tokens);
   });
+});
+
+// The disk meter (DiskMeter.svelte) tells its segments apart by the gap of track between them, so no
+// two tones have to differ from each other: each must stand out at 3:1 (WCAG 1.4.11) from the track
+// it sits on and that shows in the gap, over every page surface the meter can be put on.
+describe("the disk meter's tones", () => {
+  const meterStyle = styleOf(diskMeterSource, 'DiskMeter.svelte');
+  const toneOf = (tone: string) => ruleBody(meterStyle, `[data-tone='${tone}']`).background;
+  const track = () => ruleBody(meterStyle, '.bar').background;
+
+  it('paints every tone of the closed set and nothing else', () => {
+    const painted = [...meterStyle.matchAll(/\[data-tone='([\w-]+)'\]/g)].map((m) => m[1]);
+    expect(painted).toEqual([...METER_TONES]);
+    for (const tone of METER_TONES) expect(toneOf(tone), tone).toMatch(/var\(--/);
+  });
+
+  it('keeps neighbours apart by a gap of the track, and shows a hairline for a part under a pixel', () => {
+    const gap = ruleBody(meterStyle, '.bar').gap;
+    expect(parseFloat(gap), `gap: ${gap}`).toBeGreaterThan(0);
+    const part = ruleBody(meterStyle, '.part');
+    expect(parseFloat(part['min-width']), `min-width: ${part['min-width']}`).toBeGreaterThan(0);
+  });
+
+  for (const id of ['dark', 'light', 'contrast', 'blush']) {
+    it(`${id} shows every tone on the track at 3:1 over every surface`, () => {
+      const preset = builtIns().find((p) => p.id === id);
+      expect(preset, id).toBeDefined();
+      const tokens = (preset as Preset).tokens;
+      const bg = paint(tokens, '--bg', BLACK);
+      const out: string[] = [];
+      for (const surface of PAGE) {
+        const under = surface === '--bg' ? bg : paint(tokens, surface, bg);
+        const lane = over(cssColor(track(), tokens), under);
+        for (const tone of METER_TONES) {
+          const r = ratio(over(cssColor(toneOf(tone), tokens), lane), lane);
+          if (r < 3) out.push(`${tone} on the track over ${surface}: ${r.toFixed(2)} < 3`);
+        }
+      }
+      expect(out).toEqual([]);
+    });
+  }
 });
 
 // What stands over a game's cover is drawn in the fixed --art-* colours of shell.css, whatever the
