@@ -32,6 +32,7 @@ const BASE = [
   'Spinner',
   'ProgressBar',
   'Reading',
+  'SpeedGraph',
   'StatTile',
   'Card',
   'Page',

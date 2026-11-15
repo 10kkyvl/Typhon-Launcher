@@ -6,6 +6,7 @@
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import ProgressBar, { type ProgressTone } from '../../lib/components/ProgressBar.svelte';
   import Reading from '../../lib/components/Reading.svelte';
+  import SpeedGraph from '../../lib/components/SpeedGraph.svelte';
   import Spinner from '../../lib/components/Spinner.svelte';
   import StatTile from '../../lib/components/StatTile.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
@@ -20,6 +21,8 @@
   const TONES: ProgressTone[] = ['accent', 'game', 'success', 'warning', 'danger', 'muted'];
   const COUNTS = [0, 1, 7, 99, 120];
   const MB = 1024 ** 2;
+  // Two minutes of a download: a steady climb, a stop (a gap), then a run near the limit.
+  const SPEEDS = Array.from({ length: 120 }, (_, i) => (i >= 70 && i < 78 ? null : (18 + 14 * Math.sin(i / 7) + (i % 5)) * MB));
   const READINGS = [speedBytes(12.5 * MB), bytesSize(3.2 * 1024 * MB), etaLabel(4320), '54%', rateLimitLabel(0)];
 
   let progress = $state(40);
@@ -84,6 +87,13 @@
     <span class="big"><Reading text={speedBytes(41.7 * MB)} /></span>
   </ShowcaseRow>
 
+  <ShowcaseRow caption="Speed graphs: the last 40 s with a limit, the last 2 min without one, a single point, nothing yet" stack>
+    <span class="graph"><SpeedGraph series={{ samples: SPEEDS, moving: true }} limit={30 * MB} /></span>
+    <span class="graph"><SpeedGraph series={{ samples: SPEEDS, moving: true }} window={120} /></span>
+    <span class="graph"><SpeedGraph series={{ samples: [null, null, 12 * MB], moving: true }} /></span>
+    <span class="graph"><SpeedGraph series={{ samples: [], moving: false }} /></span>
+  </ShowcaseRow>
+
   <ShowcaseRow caption="Stat tiles">
     <StatTile value="128 h" label="Played">
       {#snippet icon()}<Clock />{/snippet}
@@ -134,6 +144,11 @@
     border-radius: var(--radius-sm);
     background: var(--accent);
     color: var(--accent-on);
+  }
+
+  .graph {
+    display: block;
+    max-width: 48rem;
   }
 
   .big {
