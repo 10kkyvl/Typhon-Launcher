@@ -159,6 +159,12 @@
     ];
     return () => {
       for (const off of offs) off();
+      // Torn down under a held pointer (a popover closed by Escape or a scroll): no release will come,
+      // so the drag ends here as a cancel, and a caller showing it returns to its own value.
+      if (drag) {
+        drag = null;
+        oninput?.(null);
+      }
     };
   };
 </script>

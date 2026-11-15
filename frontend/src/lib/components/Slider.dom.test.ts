@@ -239,6 +239,24 @@ describe('Slider: dragging', () => {
     expect(onchange).not.toHaveBeenCalled();
   });
 
+  // A popover that holds the slider closes on Escape or a scroll while the pointer is still down: the
+  // caller showing the drag must hear that it ended, and nothing is saved.
+  it('an unmount mid-drag ends the drag: the caller is told null and nothing is committed', async () => {
+    const { bar, onchange, oninput, unmount } = setup({ position: 7 });
+    await fireEvent.pointerDown(bar, { pointerId: 1, button: 0, clientX: xOf(12) });
+    await fireEvent.pointerMove(bar, { pointerId: 1, clientX: xOf(14) });
+    unmount();
+    expect(oninput.mock.calls).toEqual([[12], [14], [null]]);
+    expect(onchange).not.toHaveBeenCalled();
+  });
+
+  it('an unmount without a drag tells the caller nothing', () => {
+    const { oninput, onchange, unmount } = setup({ position: 7 });
+    unmount();
+    expect(oninput).not.toHaveBeenCalled();
+    expect(onchange).not.toHaveBeenCalled();
+  });
+
   it('keys do nothing while a drag is under way', async () => {
     const { slider, bar, onchange } = setup({ position: 7 });
     await fireEvent.pointerDown(bar, { pointerId: 1, button: 0, clientX: xOf(10) });
