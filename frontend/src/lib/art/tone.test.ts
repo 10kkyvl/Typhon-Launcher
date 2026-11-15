@@ -9,6 +9,32 @@ const PRESETS: { id: string; theme: ToneTheme }[] = [...(goSources['internal/the
   return { id: /\bID:\s*"([^"]+)"/.exec(m[1])?.[1] ?? '', theme: { bg: token('--bg'), text: token('--text') } };
 });
 
+/** `rgba(r, g, b, a)` of a preset's token, as the window resolves it. */
+function rgba(value: string): [number, number, number, number] {
+  const m = /^rgba\(\s*(\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\s*\)$/.exec(value);
+  if (!m) throw new Error(`not an rgba() colour: ${value}`);
+  return [Number(m[1]), Number(m[2]), Number(m[3]), Number(m[4])];
+}
+
+// The same presets with the grounds a mark is drawn on: the panel (--surface-2) and the progress track
+// (--hover-strong), which is laid over the panel and over the page.
+const MARK_PRESETS: { id: string; theme: ToneTheme }[] = [...(goSources['internal/theme/presets.go'] ?? '').matchAll(/^var preset\w+ = Theme\{([\s\S]*?)^\}/gm)].map((m) => {
+  const token = (name: string) => new RegExp(`"${name}":\\s*"([^"]*)"`).exec(m[1])?.[1] ?? '';
+  return {
+    id: /\bID:\s*"([^"]+)"/.exec(m[1])?.[1] ?? '',
+    theme: { bg: token('--bg'), text: token('--text'), panel: token('--surface-2'), track: rgba(token('--hover-strong')) },
+  };
+});
+
+/** The four grounds of a theme as the window paints them: page, panel, and the track over each, in whole channels. */
+function grounds(theme: ToneTheme): RGB[] {
+  const page = fromHex(theme.bg);
+  const panel = fromHex(theme.panel ?? theme.bg);
+  const [r, g, b, a] = theme.track ?? [0, 0, 0, 0];
+  const over = (below: RGB) => below.map((v, i) => Math.round([r, g, b][i] * a + v * (1 - a))) as RGB;
+  return [page, panel, over(page), over(panel)];
+}
+
 const pixels = (...colors: RGB[]) => Uint8ClampedArray.from(colors.flatMap(([r, g, b]) => [r, g, b, 255]));
 
 // Every hue in 15° steps, at a dull, a mid and a full saturation, from near black to near white.
@@ -100,5 +126,72 @@ describe('the game colour clamped into each built-in preset', () => {
       const { fill } = clampFill([200, 40, 30], theme);
       expect(Math.round(rgbToHsl(fromHex(fill))[0] / 10)).toBe(Math.round(rgbToHsl([200, 40, 30])[0] / 10));
     }
+  });
+});
+
+/** The lowest ratio of a colour against the grounds, with the ground it is measured on. */
+function worstOn(color: string, on: RGB[]): { ratio: number; ground: string } {
+  return on.map((g) => ({ ratio: contrast(fromHex(color), g), ground: toHex(g) })).reduce((a, b) => (b.ratio < a.ratio ? b : a));
+}
+
+// A mark (the progress fill, the speed graph's line) is a graphic: WCAG 1.4.11 asks 3:1 against what it is
+// drawn on, and the Downloads screen draws it on the page, the panel, and the progress track over either.
+describe("the game colour as a mark on the page, the panel and the progress track", () => {
+  it('reads the four presets with their panel and track', () => {
+    expect(MARK_PRESETS.map((p) => p.id)).toEqual(['dark', 'light', 'contrast', 'blush']);
+    for (const { theme } of MARK_PRESETS) {
+      expect(theme.panel).toMatch(/^#[0-9a-f]{6}$/i);
+      expect(theme.track?.[3]).toBeGreaterThan(0);
+    }
+  });
+
+  for (const { id, theme } of MARK_PRESETS) {
+    it(`${id}: the mark keeps 3:1 against every ground, for any picture colour`, () => {
+      const on = grounds(theme);
+      const failures = [...SAMPLES, ...EXTREMES]
+        .map((c) => ({ c, mark: gameToneOf(c, theme).mark }))
+        .map(({ c, mark }) => ({ c, mark, worst: worstOn(mark, on) }))
+        .filter(({ worst }) => !(worst.ratio >= 3))
+        .map(({ c, mark, worst }) => `${toHex(c)} -> ${mark} on ${worst.ground} ${worst.ratio.toFixed(2)}`);
+      expect(failures).toEqual([]);
+    });
+
+    it(`${id}: Play's fill and label and the tab marker are what they were: the panel and the track do not move them`, () => {
+      for (const c of [...SAMPLES, ...EXTREMES]) {
+        const page = { bg: theme.bg, text: theme.text };
+        const { fill, onFill, accent } = gameToneOf(c, theme);
+        expect({ fill, onFill, accent }, toHex(c)).toEqual({ ...clampFill(c, page), ...clampTone(c, page) });
+      }
+    });
+  }
+
+  it('keeps the hue of the art where the grounds leave it room', () => {
+    for (const { theme } of MARK_PRESETS) {
+      const { mark } = gameToneOf([200, 40, 30], theme);
+      expect(Math.round(rgbToHsl(fromHex(mark))[0] / 10)).toBe(Math.round(rgbToHsl([200, 40, 30])[0] / 10));
+    }
+  });
+
+  it("a user's theme with a mid-grey page and a lighter panel: the mark still keeps 3:1 on all four grounds", () => {
+    const odd: ToneTheme = { bg: '#3a3a3a', text: '#f0f0f0', panel: '#5a5a5a', track: [255, 255, 255, 0.18] };
+    const on = grounds(odd);
+    const failures = [...SAMPLES, ...EXTREMES]
+      .map((c) => ({ c, worst: worstOn(gameToneOf(c, odd).mark, on) }))
+      .filter(({ worst }) => !(worst.ratio >= 3))
+      .map(({ c, worst }) => `${toHex(c)} on ${worst.ground} ${worst.ratio.toFixed(2)}`);
+    expect(failures).toEqual([]);
+  });
+
+  it('a theme that names only its page clamps the mark against the page', () => {
+    const page = MARK_PRESETS[2].theme;
+    for (const c of [...SAMPLES, ...EXTREMES]) {
+      expect(worstOn(gameToneOf(c, { bg: page.bg, text: page.text }).mark, [fromHex(page.bg)]).ratio).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('where no colour holds 3:1 against every ground, the mark is the end that comes nearest', () => {
+    // Black page, light-grey panel: white reaches 2.85 on the panel, black 1 on the page.
+    const split: ToneTheme = { bg: '#000000', text: '#ffffff', panel: '#999999' };
+    expect(gameToneOf([30, 90, 220], split).mark).toBe('#ffffff');
   });
 });

@@ -43,7 +43,7 @@ describe("the game's colour in the stylesheets", () => {
   });
 
   it('every property the scope sets is read: by the game-tone class, or the tab marker for the accent', () => {
-    const tone = { fill: '#2f6f9f', onFill: '#ffffff', accent: '#7fb4dd' };
+    const tone = { fill: '#2f6f9f', onFill: '#ffffff', accent: '#7fb4dd', mark: '#5a9ccc' };
     const mapped = new Set(Object.values(scope).map((value) => /^var\((--[\w-]+)\)$/.exec(value)?.[1]));
     expect(Object.keys(toneVars(tone)).filter((name) => !mapped.has(name))).toEqual(['--game-accent']);
   });

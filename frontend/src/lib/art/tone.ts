@@ -1,10 +1,12 @@
 import { luminance } from '../theme/accent';
+import type { RGBA } from '../theme/contrastReport';
 
 /**
  * A game's own colour, read from its art and clamped into the theme (the 2.0 prototype's
  * `identity/artTone.ts`, decision В12): Play is filled with it, its label is white or ink, whichever
- * reads, and the game page's tab marker takes its accent. Every clamp is computed against the theme's
- * own --bg and --text, so the high-contrast preset keeps the game's colour at its own contrast.
+ * reads, the game page's tab marker takes its accent, and a progress bar and a speed graph draw its mark.
+ * Every clamp is computed against the theme's own colours, so the high-contrast preset keeps the game's
+ * colour at its own contrast.
  * Pure maths: `stores/gameTone.ts` reads the pictures and hands the result to the UI.
  */
 
@@ -15,6 +17,10 @@ export interface ToneTheme {
   bg: string;
   /** Primary text, #rrggbb. */
   text: string;
+  /** The panel marks are drawn on (--surface-2), #rrggbb; without it the mark is held on --bg alone. */
+  panel?: string;
+  /** The progress track's tint (--hover-strong), laid over --bg and over the panel; alpha 0–1. */
+  track?: RGBA;
 }
 
 export interface GameTone {
@@ -24,6 +30,8 @@ export interface GameTone {
   onFill: string;
   /** The game's colour as a mark on the page (a tab marker): >= 4.5:1 on --bg. */
   accent: string;
+  /** A graphic in the game's colour (a progress fill, a graph's line): >= 3:1 on every ground of `markGrounds`. */
+  mark: string;
 }
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
@@ -158,9 +166,49 @@ export function clampFill(color: RGB, theme: ToneTheme): { fill: string; onFill:
   return { fill: toHex(fill), onFill: toHex(onFill) };
 }
 
+/** What a mark is drawn on: the page, the panel, and the progress track over each, as the window blends them. */
+export function markGrounds(theme: ToneTheme): RGB[] {
+  const page = fromHex(theme.bg);
+  const under = theme.panel ? [page, fromHex(theme.panel)] : [page];
+  const track = theme.track;
+  if (!track) return under;
+  const a = clamp01(track[3]);
+  const over = (below: RGB) => fromHex(toHex(below.map((v, i) => track[i] * a + v * (1 - a)) as RGB));
+  return [...under, ...under.map(over)];
+}
+
+/** WCAG 1.4.11: a graphic needs 3:1 against what it is next to. */
+const MARK_MIN = 3;
+
+/**
+ * The game's colour as a graphic on any ground of `markGrounds`: the fill's saturation, lightness searched
+ * outward from the fill's own until the mark keeps 3:1 (with a hair of margin) against every ground at once.
+ * Lightness 0 and 1 are black and white, so if any colour holds, the search lands; the hue fades towards
+ * the end it needs. Where none holds (a light panel on a black page), the end that comes nearest wins,
+ * --text's end on a tie.
+ */
+export function clampMark(color: RGB, theme: ToneTheme): { mark: string } {
+  const grounds = markGrounds(theme);
+  const worst = (rgb: RGB) => Math.min(...grounds.map((g) => contrast(rgb, g)));
+  const [h, s] = rgbToHsl(color);
+  const sat = clamp01(Math.max(0.38, Math.min(s, 0.86)));
+  const dark = luminance(fromHex(theme.bg)) < 0.2;
+  const start = dark ? 0.5 : 0.42;
+  for (let step = 0; step <= 100; step += 1) {
+    for (const l of [start + step * 0.01, start - step * 0.01]) {
+      if (l < 0 || l > 1) continue;
+      const rgb = fromHex(toHex(hslToRgb(h, sat, l)));
+      if (worst(rgb) >= MARK_MIN + 0.05) return { mark: toHex(rgb) };
+    }
+  }
+  const text = fromHex(theme.text);
+  const ends: RGB[] = luminance(text) >= 0.5 ? [[255, 255, 255], [0, 0, 0]] : [[0, 0, 0], [255, 255, 255]];
+  return { mark: toHex(worst(ends[1]) > worst(ends[0]) ? ends[1] : ends[0]) };
+}
+
 /** Everything the UI paints in a game's colour, clamped into the current theme. */
 export function gameToneOf(color: RGB, theme: ToneTheme): GameTone {
-  return { ...clampTone(color, theme), ...clampFill(color, theme) };
+  return { ...clampTone(color, theme), ...clampFill(color, theme), ...clampMark(color, theme) };
 }
 
 /** A shade of the fill that moves away from what is drawn on it, so hover and press never cost its contrast. */
