@@ -45,6 +45,7 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.addDownloadStart': 'Start download',
   'modals.addDownloadRestartNeeded':
     'The network changed while the download was starting, so the torrent details were fetched again. Press "Start download" once more.',
+  'modals.addDownloadFetchFailed': 'Could not fetch the torrent details',
   'modals.addDownloadRefetchFailed': 'Could not fetch the torrent details again',
 
   // AddSourceModal.svelte

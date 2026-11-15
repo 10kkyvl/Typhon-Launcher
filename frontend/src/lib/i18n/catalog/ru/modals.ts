@@ -42,6 +42,7 @@ export const modals = {
   'modals.addDownloadStart': 'Начать загрузку',
   'modals.addDownloadRestartNeeded':
     'Пока загрузка запускалась, сменилась сеть, и данные торрента получены заново. Нажмите «Начать загрузку» ещё раз.',
+  'modals.addDownloadFetchFailed': 'Не удалось получить данные торрента',
   'modals.addDownloadRefetchFailed': 'Не удалось заново получить данные торрента',
 
   // AddSourceModal.svelte
