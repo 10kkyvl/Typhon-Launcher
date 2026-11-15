@@ -24,6 +24,8 @@ export const libraryLoaded = writable(false);
 /** Why the first list could not be read; null once a list has arrived. */
 export const libraryLoadError = writable<unknown>(null);
 export const installedGames = derived(libraryGames, (games) => games.filter((game) => !game.uninstalled));
+/** The library's games by id: how another store's record (an installation, a download) finds its game. */
+export const libraryGamesById = derived(libraryGames, (games) => new Map(games.map((game) => [game.id, game])));
 export const runningGames = writable<Set<string>>(new Set());
 // When this launcher saw each running game start (ms since the epoch). A game that was already running
 // when the launcher came up has no entry: how long it has been running is not known here.

@@ -73,11 +73,11 @@ export function completedWhen(
   return { words, exact: t('downloads.done.exact', { date: format.longDate(date), time }) };
 }
 
-/** The library game an installation added, if the library lists it. */
+/** The library game an installation added, if the library lists it; `games` is `stores/library.ts::libraryGamesById`. */
 export function installedGame(
   installation: Pick<Installation, 'gameId'> | undefined,
-  games: readonly LibraryGame[],
+  games: ReadonlyMap<string, LibraryGame>,
 ): LibraryGame | undefined {
   const id = installation?.gameId;
-  return id ? games.find((game) => game.id === id) : undefined;
+  return id ? games.get(id) : undefined;
 }

@@ -21,7 +21,7 @@
   import { launchesInFlight, playGame } from '../../lib/services/library';
   import { openFolder } from '../../lib/services/settings';
   import { installStatusLabels } from '../../lib/stores/install';
-  import { libraryGames, runningGames } from '../../lib/stores/library';
+  import { libraryGamesById, runningGames } from '../../lib/stores/library';
   import { gameArt } from '../../lib/stores/metadata';
   import { navigate } from '../../lib/stores/router';
   import { sources } from '../../lib/stores/sources';
@@ -71,7 +71,7 @@
   const type = $derived(typeTag(download));
   const source = $derived(sourceTag(download, $sources));
 
-  const game = $derived(kind === 'installed' ? installedGame(installation, $libraryGames) : undefined);
+  const game = $derived(kind === 'installed' ? installedGame(installation, $libraryGamesById) : undefined);
   const running = $derived(Boolean(game && $runningGames.has(game.id)));
   const playable = $derived(Boolean(game && canPlay(game)));
 

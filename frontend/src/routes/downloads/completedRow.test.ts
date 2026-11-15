@@ -95,7 +95,7 @@ describe('the library game an installation made', () => {
   const game = (patch: Partial<LibraryGame>) => ({ id: 'g1', title: 'Game One', executable: 'game.exe', uninstalled: false, ...patch }) as LibraryGame;
 
   it('is the game of the installation’s id, none without one', () => {
-    const games = [game({ id: 'g0' }), game({ id: 'g1' })];
+    const games = new Map([game({ id: 'g0' }), game({ id: 'g1' })].map((item) => [item.id, item]));
     expect(installedGame({ gameId: 'g1' }, games)?.id).toBe('g1');
     expect(installedGame({ gameId: '' }, games)).toBeUndefined();
     expect(installedGame(undefined, games)).toBeUndefined();

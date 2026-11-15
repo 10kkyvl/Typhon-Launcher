@@ -74,6 +74,17 @@ describe('library store', () => {
     expect(get(store.libraryGames).map((item) => item.id)).toEqual(['a', 'b']);
   });
 
+  it('finds a game by its id through one selector, following the list', async () => {
+    games = [game({ id: 'a', title: 'Alpha' }), game({ id: 'b', title: 'Beta', uninstalled: true })];
+    const { store } = await load();
+
+    expect(get(store.libraryGamesById).get('a')?.title).toBe('Alpha');
+    expect(get(store.libraryGamesById).get('b')?.title).toBe('Beta');
+    expect(get(store.libraryGamesById).get('gone')).toBeUndefined();
+    handlers['library:updated']({ data: [game({ id: 'c', title: 'Gamma' })] });
+    expect([...get(store.libraryGamesById).keys()]).toEqual(['c']);
+  });
+
   it('replaces the list from library:updated', async () => {
     games = [game({ id: 'a' })];
     const { store } = await load();
