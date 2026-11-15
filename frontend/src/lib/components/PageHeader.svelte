@@ -5,11 +5,14 @@
     title,
     subtitle,
     count,
+    meta,
     actions,
   }: {
     title: string;
     subtitle?: string;
     count?: string;
+    /** A line about the page under the title (a summary, a link), controls allowed; not part of the heading. */
+    meta?: Snippet;
     actions?: Snippet;
   } = $props();
 </script>
@@ -26,6 +29,9 @@
     </div>
     {#if subtitle}
       <p>{subtitle}</p>
+    {/if}
+    {#if meta}
+      <div class="meta">{@render meta()}</div>
     {/if}
   </div>
   {#if actions}
@@ -79,6 +85,16 @@
     max-width: var(--prose-max);
     font-size: var(--font-sm);
     color: var(--text-3);
+  }
+
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1) var(--space-3);
+    margin-top: var(--space-2);
+    font-size: var(--font-sm);
+    color: var(--text-2);
   }
 
   .actions {

@@ -20,6 +20,26 @@ describe('PageHeader in a DOM', () => {
   // text block opts out and starts at the top of the row. This is a tripwire over the declarations that
   // can move the title inside the header; where the title lands in pixels, and how the row wraps on a
   // narrow window, only a browser shows.
+  // A line about the page under its title (the downloads summary and the link to their history): its
+  // own row of the text block, controls included, and no part of the heading's name.
+  it('shows a meta line under the title, outside the heading, controls in it reachable', () => {
+    const meta = createRawSnippet(() => ({ render: () => '<span><span>2 downloading</span><button type="button">History</button></span>' }));
+    const { getByRole, getByText } = renderDom(PageHeader, { title: 'Downloads', meta, actions });
+    const heading = getByRole('heading', { level: 1, name: 'Downloads' });
+    const line = getByText('2 downloading').closest('.meta') as HTMLElement;
+
+    expect(line).not.toBeNull();
+    expect(heading.contains(line)).toBe(false);
+    expect(line.closest('.text')).toBe(heading.closest('.text'));
+    expect(heading.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(line.contains(getByRole('button', { name: 'History' }))).toBe(true);
+  });
+
+  it('has no meta line when none is given', () => {
+    const { container } = renderDom(PageHeader, { title: 'Library', subtitle: 'All games' });
+    expect(container.querySelector('.meta')).toBeNull();
+  });
+
   it('tripwire: nothing in the header moves the title off the top of the row, whatever stands beside it', () => {
     const none = (value: string, ...still: string[]) => ['', ...still].includes(value);
     for (const props of [{ title: 'Downloads', actions }, { title: 'Sources', subtitle: 'Where releases come from', actions }, { title: 'Library' }]) {
