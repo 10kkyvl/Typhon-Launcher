@@ -161,11 +161,11 @@ describe('Downloads: links', () => {
     expect(name.closest('.title')?.classList.contains('wraps')).toBe(true);
   });
 
-  it('"open download history" is a text link in its sentence that goes to the history', async () => {
+  it('"history" is a text link under the page title that goes to the history', async () => {
     const { user } = renderDom(Downloads);
-    const link = screen.getByRole('button', { name: msg('transfers.downloadsOpenHistoryLog') });
+    const link = screen.getByRole('button', { name: msg('downloads.page.history') });
     expect(link.classList.contains('text-link')).toBe(true);
-    expect(link.closest('p')?.textContent?.trim()).toMatch(new RegExp(`^${msg('transfers.downloadsFooterHintQuestion').replace('?', '\\?')}`));
+    expect(link.closest('header.page-header .meta')).not.toBeNull();
     link.focus();
 
     await user.keyboard('{Enter}');

@@ -1,28 +1,26 @@
 <script lang="ts">
-  import { CalendarClock, Gauge, Pause } from '@lucide/svelte';
+  import { Gauge, Pause } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import Notice from '../../lib/components/Notice.svelte';
-  import { playThrottleBanner, scheduleOpenLabel } from '../../lib/services/playThrottle';
+  import { playThrottleBanner } from '../../lib/services/playThrottle';
   import { playThrottle } from '../../lib/stores/playThrottle';
   import { navigate } from '../../lib/stores/router';
   import { rateLimitLabel } from '../../lib/utils/format';
   import { msg } from '../../lib/i18n';
 
-  const playBanner = $derived(playThrottleBanner($playThrottle));
+  // What a running game does to downloads. The schedule is said by the header's schedule line, which
+  // stands whenever a schedule exists; the banner leaves it out so the page says it once.
+  const playBanner = $derived(playThrottleBanner({ ...$playThrottle, schedule: undefined }));
   const playBannerText = $derived.by(() => {
     if (!playBanner) return '';
-    if (playBanner.kind === 'schedule') {
-      const when = scheduleOpenLabel(playBanner.nextOpenAt);
-      if (playBanner.game) {
-        return when ? msg('transfers.scheduleAndPlayBanner', { when }) : msg('transfers.scheduleAndPlayBannerNoNext');
-      }
-      return when ? msg('transfers.scheduleBanner', { when }) : msg('transfers.scheduleBannerNoNext');
-    }
     if (playBanner.kind === 'pause') return msg('transfers.playPausedBanner');
-    return msg('transfers.playLimitedBanner', {
-      down: rateLimitLabel(playBanner.downloadLimit),
-      up: rateLimitLabel(playBanner.uploadLimit),
-    });
+    if (playBanner.kind === 'limit') {
+      return msg('transfers.playLimitedBanner', {
+        down: rateLimitLabel(playBanner.downloadLimit),
+        up: rateLimitLabel(playBanner.uploadLimit),
+      });
+    }
+    return '';
   });
 </script>
 
@@ -30,9 +28,7 @@
 <div class="play-banner">
   <Notice tone="info">
     {#snippet icon()}
-      {#if playBanner.kind === 'schedule'}
-        <CalendarClock size="1.6rem" strokeWidth={1.8} />
-      {:else if playBanner.kind === 'pause'}
+      {#if playBanner.kind === 'pause'}
         <Pause size="1.6rem" strokeWidth={1.8} />
       {:else}
         <Gauge size="1.6rem" strokeWidth={1.8} />
