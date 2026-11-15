@@ -145,3 +145,32 @@ func TestStartAcrossAClientChangeAsksForANewFetch(t *testing.T) {
 		t.Fatalf("torrents in the new client = %d", got)
 	}
 }
+
+func TestStartAsksForANewFetchWhenTheClientChangesWhileTheTorrentIsHandedBack(t *testing.T) {
+	m, hash := fetchedTorrent(t)
+	breakDownloadsFile(t, m)
+	old, next := m.client, offlineClient(t)
+	adds := 0
+	// The first add is Start's at the destination; the second re-adds the
+	// fetched torrent to wait for the next Start, and the change lands there.
+	old.filterTrackers = func(tiers [][]string) ([][]string, []lostTracker) {
+		adds++
+		if adds == 2 {
+			m.replaceClient(next)
+		}
+		return tiers, nil
+	}
+
+	_, err := m.StartDownloadFrom(hash, t.TempDir(), nil, Origin{})
+
+	if adds != 2 {
+		t.Fatalf("adds = %d, want the destination add and the hand-back add", adds)
+	}
+	assertMustFetchAgain(t, m, err, errSaveFailed)
+	if got := len(old.cl.Torrents()); got != 0 {
+		t.Fatalf("torrents left in the replaced client = %d", got)
+	}
+	if got := len(next.cl.Torrents()); got != 0 {
+		t.Fatalf("torrents in the new client = %d", got)
+	}
+}
