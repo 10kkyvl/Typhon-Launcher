@@ -1,3 +1,4 @@
+import type { ComponentProps } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderDom } from '../testing/dom';
 import IntegerInput from './IntegerInput.svelte';
@@ -55,6 +56,17 @@ describe('a base control described by the text beside it', () => {
     expect(getByRole('textbox', { name: 'Threads', description: 'What the setting does' })).toBeTruthy();
   });
 
+  // A row's `labelFor` names the field by its visible label: an `aria-label` beside it would take over
+  // and the screen reader would say a name nobody sees.
+  it('the number field named by a label for its id keeps that name when a label is passed too', () => {
+    const label = document.createElement('label');
+    label.htmlFor = 'threads';
+    label.textContent = 'Threads';
+    document.body.append(label);
+    const props = { id: 'threads', label: 'Hidden copy', value: 4, min: 1, max: 16, onchange: vi.fn() } as unknown as ComponentProps<typeof IntegerInput>;
+    const { getByRole } = renderDom(IntegerInput, props);
+    expect(getByRole('textbox', { name: 'Threads' }).hasAttribute('aria-label')).toBe(false);
+  });
 });
 
 // The callers written before these props pass none of them: their controls carry no new attribute.

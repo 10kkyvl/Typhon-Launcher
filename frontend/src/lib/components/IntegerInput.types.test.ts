@@ -13,6 +13,8 @@ describe('IntegerInput props', () => {
     const byLabelFor: Props = { ...base, id: 'threads' };
     // @ts-expect-error: a field a screen reader would announce as a bare text box
     const unnamed: Props = { ...base };
-    expect([labelled, byLabelFor, unnamed]).toHaveLength(3);
+    // @ts-expect-error: a hidden name that would take over from the visible label
+    const twice: Props = { ...base, id: 'threads', label: 'Threads' };
+    expect([labelled, byLabelFor, unnamed, twice]).toHaveLength(4);
   });
 });

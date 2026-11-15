@@ -2,8 +2,10 @@
   import { untrack } from 'svelte';
   import { msg } from '../i18n';
 
-  // The field has a name either way: its own `label`, or an `id` a `<label for>` names it through.
-  type Named = { label: string; id?: string } | { id: string; label?: undefined };
+  // The field has one name: its own `label`, or an `id` a `<label for>` names it through (a settings
+  // row's `labelFor`). Never both: an `aria-label` would take over from the visible label, so with an
+  // `id` it is left off. IntegerInput.callers.test.ts holds every call site to a label for each id.
+  type Named = { label: string; id?: undefined } | { id: string; label?: undefined };
 
   let {
     value,
@@ -68,7 +70,7 @@
     type="text"
     inputmode="numeric"
     {id}
-    aria-label={label}
+    aria-label={id ? undefined : label}
     aria-describedby={describedby}
     aria-invalid={error !== ''}
     value={draft}
