@@ -255,7 +255,8 @@ describe('initialisation order', () => {
     vi.mocked(services.listDownloads).mockRejectedValueOnce(new Error('backend unavailable'));
     const store = await import('./downloads');
 
-    await expect(store.initDownloads()).rejects.toThrow('backend unavailable');
+    await store.initDownloads();
+    expect(get(store.downloadsLoadError)).toEqual(new Error('backend unavailable'));
     expect(handlers['download:added']).toBeTypeOf('function');
     handlers['download:added']({ data: makeDownload({ id: 'd3' }) });
     expect(get(store.downloads).map((d) => d.id)).toEqual(['d3']);

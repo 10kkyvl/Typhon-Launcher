@@ -27,6 +27,10 @@ import { navigate } from './router';
 import { ACTION_MS, toast } from './toasts';
 
 export const downloads = writable<Download[]>([]);
+/** Until the first list arrives, an empty `downloads` is not an empty list. */
+export const downloadsLoaded = writable(false);
+/** Why the first list could not be read; null once a list has arrived. */
+export const downloadsLoadError = writable<unknown>(null);
 
 // DownloadProgress mirrors internal/download.ProgressUpdate: the fields a
 // running download changes every 250ms tick, without Files or anything else
@@ -184,8 +188,32 @@ function mergeProgress(list: Download[], patch: DownloadProgress): Download[] {
   return next;
 }
 
-async function refresh() {
-  downloads.set(await listDownloads());
+// Every download event Go sent: a list asked for before one of them may predate it.
+let heard = 0;
+
+/** Reads the list; answers whether a list is there. A failure before any list is kept as state. */
+async function readList(read: () => Promise<Download[]>): Promise<boolean> {
+  try {
+    downloads.set(await read());
+  } catch (err) {
+    if (!get(downloadsLoaded)) downloadsLoadError.set(err);
+    return false;
+  }
+  downloadsLoaded.set(true);
+  downloadsLoadError.set(null);
+  return true;
+}
+
+/**
+ * Reads the list again, as the page's Retry after a failed first read does; answers whether a list is
+ * there. An event that arrives meanwhile gets the list asked once more, as the first read does.
+ */
+export function reloadDownloads(): Promise<boolean> {
+  return readList(async () => {
+    const before = heard;
+    const list = await listDownloads();
+    return heard === before ? list : listDownloads();
+  });
 }
 
 function hasId(data: unknown): boolean {
@@ -198,12 +226,18 @@ function isOrder(data: unknown): data is DownloadReordered {
   return Array.isArray(ids) && ids.every((id) => typeof id === 'string');
 }
 
-export async function initDownloads() {
-  const { on, load } = listenFirst();
+/** Subscribes first, then reads the list; never rejects: a failed first read is `downloadsLoadError`. */
+export async function initDownloads(): Promise<void> {
+  const first = listenFirst();
   if (!inWails) {
-    await refresh();
+    await readList(listDownloads);
     return;
   }
+  const on: typeof first.on = (name, handler) =>
+    first.on(name, (event) => {
+      heard += 1;
+      handler(event);
+    });
 
   // Every download event names its download; one that does not is dropped rather than stored.
   const listen = <K extends Exclude<keyof DownloadEventPayloads, 'reordered'>>(
@@ -249,8 +283,9 @@ export async function initDownloads() {
     }
   });
 
-  downloads.set(await load(listDownloads));
+  await readList(() => first.load(listDownloads));
 }
+
 function failedToast(item: Download): void {
   toast(msg('state.downloadsFailedToast', { name: item.name, error: installErrorText(item.error) }), 'danger');
 }
