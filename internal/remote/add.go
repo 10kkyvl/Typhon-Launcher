@@ -22,6 +22,9 @@ const (
 	// Codes of a background add that only the bot shows.
 	codeNoDestination = "no_destination"
 	codeStartFailed   = "start_failed"
+	// codeFetchAgain is the download manager's code for "fetch the torrent
+	// again", meant for the desktop dialog.
+	codeFetchAgain = "download.metadata_required"
 
 	// maxFound bounds a search answer; Discord shows 25 options in a menu.
 	maxFound = 10
@@ -204,10 +207,16 @@ func (s *Service) startDownload(req sources.DownloadRequest) {
 
 func (s *Service) addFailed(name string, err error) {
 	// Launcher error codes travel to the bot as they are; an error without
-	// one becomes the bot's generic sentence.
-	code := uierr.Code(err)
-	if code == "" {
-		code = codeStartFailed
+	// one becomes the bot's generic sentence. A failed Start puts
+	// metadata_required in front of its cause to make the window fetch
+	// again; the remote add never fetches again, so the cause is the answer.
+	codes := uierr.Codes(err)
+	if len(codes) > 1 && codes[0] == codeFetchAgain {
+		codes = codes[1:]
+	}
+	code := codeStartFailed
+	if len(codes) > 0 {
+		code = codes[0]
 	}
 	s.d.Log.Warn("remote download did not start", "component", "remote", "code", code, "error", err)
 	s.notify(KindAddFailed, name, code)

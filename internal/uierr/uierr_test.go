@@ -55,6 +55,34 @@ func TestWrapAddsACodeToAnExistingError(t *testing.T) {
 	}
 }
 
+func TestCodesListsEveryCodeOfTheChainOutermostFirst(t *testing.T) {
+	again := uierr.New("download.metadata_required", "получите метаданные")
+	cause := uierr.Wrap("download.add_torrent_failed", uierr.New("download.network_down", "сеть"))
+	err := fmt.Errorf("старт: %w", fmt.Errorf("%w: %w", again, cause))
+	got := uierr.Codes(err)
+	want := []string{"download.metadata_required", "download.add_torrent_failed", "download.network_down"}
+	if len(got) != len(want) {
+		t.Fatalf("коды %q, ожидались %q", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("коды %q, ожидались %q", got, want)
+		}
+	}
+	if first := uierr.Code(err); first != got[0] {
+		t.Fatalf("Code = %q, а первый из Codes = %q", first, got[0])
+	}
+}
+
+func TestCodesIsEmptyWithoutACode(t *testing.T) {
+	if got := uierr.Codes(fmt.Errorf("обёртка: %w", errors.New("простая"))); len(got) != 0 {
+		t.Fatalf("коды %q, ожидался пустой список", got)
+	}
+	if got := uierr.Codes(nil); len(got) != 0 {
+		t.Fatalf("коды %q для nil, ожидался пустой список", got)
+	}
+}
+
 func TestInnermostCodeWins(t *testing.T) {
 	inner := uierr.New("install.disk_full", "нет места")
 	outer := uierr.Wrap("install.failed", inner)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
@@ -15,6 +16,8 @@ import (
 	"typhon/internal/sources"
 	"typhon/internal/uierr"
 )
+
+var errFetchAgain = uierr.New("download.metadata_required", "x")
 
 type fakeReleases struct{ views []sources.ReleaseView }
 
@@ -183,6 +186,27 @@ func TestAddFailuresAreAnsweredOrReported(t *testing.T) {
 		{"no space", "rel-1", func(e *addEnv) {
 			e.starter.startErr = uierr.New("download.not_enough_space", "x")
 		}, "", sent{KindAddFailed, "Celeste v1.4", "download.not_enough_space"}},
+		// A Start that leaves nothing waiting puts metadata_required in front
+		// of its cause (download.giveUpLocked); the remote add never fetches
+		// again, so the bot hears the cause.
+		{"client replaced during the start", "rel-1", func(e *addEnv) {
+			e.starter.startErr = fmt.Errorf("%w: %w", errFetchAgain, uierr.New("download.network_down", "x"))
+		}, "", sent{KindAddFailed, "Celeste v1.4", "download.network_down"}},
+		{"client refused the torrent during the start", "rel-1", func(e *addEnv) {
+			e.starter.startErr = fmt.Errorf("%w: %w", errFetchAgain, uierr.Wrap("download.add_torrent_failed", errors.New("x")))
+		}, "", sent{KindAddFailed, "Celeste v1.4", "download.add_torrent_failed"}},
+		{"metadata required without a coded cause", "rel-1", func(e *addEnv) {
+			e.starter.startErr = fmt.Errorf("%w: %w", errFetchAgain, errors.New("x"))
+		}, "", sent{KindAddFailed, "Celeste v1.4", "download.metadata_required"}},
+		{"metadata required alone", "rel-1", func(e *addEnv) {
+			e.starter.startErr = errFetchAgain
+		}, "", sent{KindAddFailed, "Celeste v1.4", "download.metadata_required"}},
+		{"a coded error behind a plain wrap", "rel-1", func(e *addEnv) {
+			e.starter.startErr = fmt.Errorf("start: %w", uierr.New("download.not_enough_space", "x"))
+		}, "", sent{KindAddFailed, "Celeste v1.4", "download.not_enough_space"}},
+		{"no code at all", "rel-1", func(e *addEnv) {
+			e.starter.startErr = errors.New("x")
+		}, "", sent{KindAddFailed, "Celeste v1.4", codeStartFailed}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			e := newAddEnv(t)

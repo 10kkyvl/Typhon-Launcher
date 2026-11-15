@@ -53,13 +53,18 @@ func assertStartsWithoutAFetch(t *testing.T, m *Manager, hash string) {
 	m.wg.Wait()
 }
 
-func assertMustFetchAgain(t *testing.T, m *Manager, err error, cause error) {
+// assertMustFetchAgain also pins causeCode, the code right behind
+// metadata_required: the remote add reports that one to the bot.
+func assertMustFetchAgain(t *testing.T, m *Manager, err error, cause error, causeCode string) {
 	t.Helper()
 	if got := uierr.Code(err); got != "download.metadata_required" {
 		t.Fatalf("code = %q (%v), want download.metadata_required: the window has to fetch again", got, err)
 	}
 	if !errors.Is(err, cause) {
 		t.Fatalf("error %v lost its cause %v", err, cause)
+	}
+	if codes := uierr.Codes(err); len(codes) < 2 || codes[1] != causeCode {
+		t.Fatalf("codes = %q, want %q right behind download.metadata_required", codes, causeCode)
 	}
 	if got := len(m.List()); got != 0 {
 		t.Fatalf("a failed start left %d downloads", got)
@@ -119,7 +124,7 @@ func TestStartOnAStoppedClientAsksForANewFetch(t *testing.T) {
 
 	_, err := m.StartDownloadFrom(hash, t.TempDir(), nil, Origin{})
 
-	assertMustFetchAgain(t, m, err, errNetworkDown)
+	assertMustFetchAgain(t, m, err, errNetworkDown, "download.add_torrent_failed")
 	if got := len(m.client.cl.Torrents()); got != 0 {
 		t.Fatalf("torrents left in the stopped client = %d", got)
 	}
@@ -137,7 +142,7 @@ func TestStartAcrossAClientChangeAsksForANewFetch(t *testing.T) {
 
 	_, err := m.StartDownloadFrom(hash, t.TempDir(), nil, Origin{})
 
-	assertMustFetchAgain(t, m, err, errNetworkDown)
+	assertMustFetchAgain(t, m, err, errNetworkDown, "download.network_down")
 	if got := len(old.cl.Torrents()); got != 0 {
 		t.Fatalf("torrents left in the replaced client = %d", got)
 	}
@@ -166,7 +171,7 @@ func TestStartAsksForANewFetchWhenTheClientChangesWhileTheTorrentIsHandedBack(t 
 	if adds != 2 {
 		t.Fatalf("adds = %d, want the destination add and the hand-back add", adds)
 	}
-	assertMustFetchAgain(t, m, err, errSaveFailed)
+	assertMustFetchAgain(t, m, err, errSaveFailed, "download.save_failed")
 	if got := len(old.cl.Torrents()); got != 0 {
 		t.Fatalf("torrents left in the replaced client = %d", got)
 	}
