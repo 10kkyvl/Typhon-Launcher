@@ -816,6 +816,10 @@ func (m *Manager) DiscardMetadata(infoHash string) {
 func (m *Manager) discardMetainfo(infoHash string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.discardMetainfoLocked(infoHash)
+}
+
+func (m *Manager) discardMetainfoLocked(infoHash string) {
 	if m.findByHashLocked(infoHash) != nil || m.pending[infoHash] != nil {
 		return
 	}
