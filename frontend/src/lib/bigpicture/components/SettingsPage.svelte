@@ -6,7 +6,7 @@
   import type { Settings } from '../../services/settings';
   import { t } from '../../i18n';
   import { settings } from '../../stores/settings';
-  import { BIG_PICTURE_DOWNLOAD_LIMITS, BIG_PICTURE_LANGUAGES, BIG_PICTURE_UI_SCALES, saveBigPicturePreference, type PreferenceSaveState } from '../preferences';
+  import { bigPictureDownloadChoices, BIG_PICTURE_LANGUAGES, BIG_PICTURE_UI_SCALES, saveBigPicturePreference, type PreferenceSaveState } from '../preferences';
 
   let { onback }: { onback: () => void; requestText: RequestText } = $props();
   let page: HTMLElement;
@@ -113,7 +113,7 @@
         <h2><Download size="1.45em" />{$t('bp.settings.sectionDownloads')}</h2>
         <div class="setting-copy"><p>{$t('bp.settings.downloadsHint')}</p></div>
         <div class="choices download-choices" aria-label={$t('bp.settings.sectionDownloads')}>
-          {#each BIG_PICTURE_DOWNLOAD_LIMITS as count (count)}
+          {#each bigPictureDownloadChoices(current.maxActiveDownloads) as count (count)}
             <button class="bp-button choice" class:selected={current.maxActiveDownloads === count} aria-pressed={current.maxActiveDownloads === count} data-bp-focus={`settings-downloads-${count}`} onclick={() => void save({ maxActiveDownloads: count })}>
               {$t('bp.settings.downloadsValue', { count })}
             </button>

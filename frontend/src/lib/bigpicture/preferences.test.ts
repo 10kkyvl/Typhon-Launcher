@@ -20,7 +20,7 @@ vi.mock('../stores/toasts', () => ({ toast: vi.fn() }));
 
 const { getSettings, saveSettingsPatch } = await import('../services/settings');
 const { settings, initSettings } = await import('../stores/settings');
-const { saveBigPicturePreference } = await import('./preferences');
+const { BIG_PICTURE_DOWNLOAD_LIMITS, bigPictureDownloadChoices, saveBigPicturePreference } = await import('./preferences');
 
 function makeSettings(): Settings {
   return {
@@ -45,6 +45,26 @@ beforeEach(async () => {
   vi.mocked(saveSettingsPatch).mockReset();
   vi.mocked(saveSettingsPatch).mockImplementation(async (patch) => ({ ...makeSettings(), ...patch }));
   await initSettings();
+});
+
+describe('Big Picture concurrency choices', () => {
+  it('are the four when the stored value is one of them', () => {
+    for (const stored of BIG_PICTURE_DOWNLOAD_LIMITS) {
+      expect(bigPictureDownloadChoices(stored)).toEqual([1, 2, 3, 5]);
+    }
+  });
+
+  it('add a value another screen stored, in its place in order, and keep the four', () => {
+    expect(bigPictureDownloadChoices(4)).toEqual([1, 2, 3, 4, 5]);
+    expect(bigPictureDownloadChoices(6)).toEqual([1, 2, 3, 5, 6]);
+    expect(bigPictureDownloadChoices(10)).toEqual([1, 2, 3, 5, 10]);
+  });
+
+  it('are the four while nothing usable is stored', () => {
+    expect(bigPictureDownloadChoices(undefined)).toEqual([1, 2, 3, 5]);
+    expect(bigPictureDownloadChoices(0)).toEqual([1, 2, 3, 5]);
+    expect(bigPictureDownloadChoices(2.5)).toEqual([1, 2, 3, 5]);
+  });
 });
 
 describe('Big Picture preferences', () => {
