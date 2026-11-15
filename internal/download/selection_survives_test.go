@@ -249,11 +249,11 @@ func TestAFileTorrentIsNotAddedWhenItsMetadataCannotBeKept(t *testing.T) {
 	if got := persistedRecords(t, m); len(got) != 0 {
 		t.Fatalf("persisted %+v", got)
 	}
-	if got := len(m.client.cl.Torrents()); got != 0 {
-		t.Fatalf("torrents in the client = %d: a refused download must not keep downloading", got)
+	if got := len(m.client.cl.Torrents()); got != 1 {
+		t.Fatalf("torrents in the client = %d, want only the fetched one waiting for the next Start: a refused download must not keep downloading", got)
 	}
-	if pending, reserved := m.bookkeeping(); pending != 0 || reserved != 0 {
-		t.Fatalf("pending = %d, reserved = %d, want both released so the hash is not stuck busy", pending, reserved)
+	if pending, reserved := m.bookkeeping(); pending != 1 || reserved != 0 {
+		t.Fatalf("pending = %d, reserved = %d, want the fetched torrent waiting and the hash not stuck busy", pending, reserved)
 	}
 }
 

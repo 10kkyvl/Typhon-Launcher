@@ -125,6 +125,14 @@ func setItem(m *Manager, id string, edit func(d *Download)) {
 	edit(m.findLocked(id))
 }
 
+// replaceClient stands in for a network switch that swaps the client between
+// two steps of an operation.
+func (m *Manager) replaceClient(cl *client) {
+	m.mu.Lock()
+	m.client = cl
+	m.mu.Unlock()
+}
+
 func attachFake(m *Manager, id string) *fakeTorrent {
 	eng := &fakeTorrent{size: 100}
 	m.mu.Lock()

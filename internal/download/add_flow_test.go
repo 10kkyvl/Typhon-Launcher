@@ -245,11 +245,11 @@ func TestStartDownloadFromRollsBackOnPersistFailure(t *testing.T) {
 	if engines != 0 {
 		t.Fatalf("engines left = %d", engines)
 	}
-	if got := len(m.client.cl.Torrents()); got != 0 {
-		t.Fatalf("torrents left in the client = %d: the rolled back download must not keep downloading", got)
+	if got := len(m.client.cl.Torrents()); got != 1 {
+		t.Fatalf("torrents left in the client = %d, want only the fetched one waiting for the next Start: the rolled back download must not keep downloading", got)
 	}
-	if pending, reserved := m.bookkeeping(); pending != 0 || reserved != 0 {
-		t.Fatalf("pending = %d, reserved = %d, want both empty so the hash is not stuck busy", pending, reserved)
+	if pending, reserved := m.bookkeeping(); pending != 1 || reserved != 0 {
+		t.Fatalf("pending = %d, reserved = %d, want the fetched torrent waiting and the hash not stuck busy", pending, reserved)
 	}
 	if st := m.degradedStatus(); !st.Degraded {
 		t.Fatalf("degraded = %+v, want the failed write surfaced", st)

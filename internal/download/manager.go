@@ -840,6 +840,46 @@ func (m *Manager) returnPending(infoHash string, p *pending) {
 	p.torrent.drop()
 }
 
+// handBack lets the fetched torrent wait for the next Start after a failed one
+// and returns the error to report. StartDownloadFrom has dropped the probe to
+// add the torrent at its destination, so the probe is added again from the
+// metainfo already in hand, without a fetch. A client that changed since has
+// dropped every waiting torrent of the old one, and a client that refuses the
+// probe would refuse the next Start too: then nothing waits, and the error
+// carries errMetadataRequired so the window fetches again. The hash
+// reservation StartDownloadFrom took is released here on every path.
+func (m *Manager) handBack(cl *client, infoHash string, mi *metainfo.MetaInfo, source string, cause error) error {
+	again := fmt.Errorf("%w: %w", errMetadataRequired, cause)
+	m.mu.Lock()
+	current := m.client == cl
+	m.mu.Unlock()
+	if !current {
+		m.releaseHash(infoHash)
+		return again
+	}
+	probe, err := cl.addMetainfo(mi, cl.metaDir, storageOpts{})
+	if err != nil {
+		m.releaseHash(infoHash)
+		slog.Warn("hand back fetched torrent", "operation", "start_download", "error", err)
+		return again
+	}
+	m.mu.Lock()
+	delete(m.reserved, infoHash)
+	if m.client != cl {
+		m.mu.Unlock()
+		probe.drop()
+		return again
+	}
+	if _, taken := m.pending[infoHash]; taken {
+		m.mu.Unlock()
+		probe.drop()
+		return cause
+	}
+	m.pending[infoHash] = &pending{torrent: probe, source: source}
+	m.mu.Unlock()
+	return cause
+}
+
 func (m *Manager) StartDownload(infoHash, destination string, selectedIndices []int) (Download, error) {
 	return m.StartDownloadFrom(infoHash, destination, selectedIndices, Origin{})
 }
@@ -848,7 +888,7 @@ func (m *Manager) StartDownload(infoHash, destination string, selectedIndices []
 // and turns it into a live download. Taking p out of m.pending removes the
 // signal hashBusyLocked used to see this hash as busy, so the window until
 // the new download is either committed to m.items/m.engines or handed back
-// through returnPending is covered by reserving the hash here (invariant 17:
+// through returnPending or handBack is covered by reserving the hash here (invariant 17:
 // this is not one of the four windows the audit named, but the same TOCTOU
 // applies to it and anacrolix/torrent's own dedup cannot be relied on either).
 func (m *Manager) StartDownloadFrom(infoHash, destination string, selectedIndices []int, origin Origin) (Download, error) {
@@ -911,11 +951,8 @@ func (m *Manager) StartDownloadFrom(infoHash, destination string, selectedIndice
 
 	lt, err := cl.addMetainfo(&mi, destination, storageOpts{})
 	if err != nil {
-		// p.torrent is already gone, so there is nothing left to hand back
-		// through returnPending; release the reservation directly.
-		m.releaseHash(infoHash)
 		slog.Error("add torrent", "operation", "start_download", "error", err)
-		return Download{}, fmt.Errorf("%w: %w", errAddTorrentFailed, err)
+		return Download{}, m.handBack(cl, infoHash, &mi, p.source, fmt.Errorf("%w: %w", errAddTorrentFailed, err))
 	}
 
 	d := &Download{
@@ -938,16 +975,14 @@ func (m *Manager) StartDownloadFrom(infoHash, destination string, selectedIndice
 
 	m.mu.Lock()
 	if m.client != cl {
-		delete(m.reserved, infoHash)
 		m.mu.Unlock()
 		lt.drop()
-		return Download{}, errNetworkDown
+		return Download{}, m.handBack(cl, infoHash, &mi, p.source, errNetworkDown)
 	}
 	if err := m.keepMetainfo(infoHash, &mi, p.source, d.ID); err != nil {
-		delete(m.reserved, infoHash)
 		m.mu.Unlock()
 		lt.drop()
-		return Download{}, err
+		return Download{}, m.handBack(cl, infoHash, &mi, p.source, err)
 	}
 	m.items = append(m.items, d)
 	m.engines[d.ID] = lt
@@ -955,10 +990,10 @@ func (m *Manager) StartDownloadFrom(infoHash, destination string, selectedIndice
 	if err := m.persistLocked(); err != nil {
 		m.items = m.items[:len(m.items)-1]
 		delete(m.engines, d.ID)
-		delete(m.reserved, infoHash)
+		delete(m.verified, d.ID)
 		m.mu.Unlock()
 		lt.drop()
-		return Download{}, fmt.Errorf("добавить загрузку: %w", err)
+		return Download{}, m.handBack(cl, infoHash, &mi, p.source, fmt.Errorf("добавить загрузку: %w", err))
 	}
 	delete(m.reserved, infoHash)
 	slog.Info("download added", "download_id", d.ID, "name", d.Name)
