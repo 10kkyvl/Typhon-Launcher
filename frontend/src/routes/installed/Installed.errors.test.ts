@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import page from './Installed.svelte?raw';
 import addGame from './InstalledAddGame.svelte?raw';
+import list from './InstalledList.svelte?raw';
 import game from './installedGame.ts?raw';
 
 const screen = import.meta.glob<string>(['./*.svelte', './*.ts', '!./*.test.ts'], { query: '?raw', import: 'default', eager: true });
@@ -10,6 +11,7 @@ describe('Installed error toasts', () => {
     expect(Object.keys(screen).sort()).toEqual([
       './Installed.svelte',
       './InstalledAddGame.svelte',
+      './InstalledList.svelte',
       './InstalledStorage.svelte',
       './InstalledToolbar.svelte',
       './installedGame.ts',
@@ -25,7 +27,7 @@ describe('Installed error toasts', () => {
     { name: 'submitAdd', source: addGame, snippet: "toast(libraryErrorText(err, msg('games.installedAddGameError')), 'danger');" },
     { name: 'play', source: game, snippet: "toast(libraryErrorText(err, msg('games.errorPlayFailed')), 'danger');" },
     { name: 'findGames', source: page, snippet: "toast(sourceErrorText(err, msg('games.installedScanError')), 'danger');" },
-    { name: 'chooseExecutable', source: page, snippet: "toast(libraryErrorText(err, msg('games.installedChooseExeError')), 'danger');" },
+    { name: 'chooseExecutable', source: list, snippet: "toast(libraryErrorText(err, msg('games.installedChooseExeError')), 'danger');" },
   ];
 
   it.each(sites)('$name resolves the error through a translated catalog lookup, not raw text', ({ source, snippet }) => {
