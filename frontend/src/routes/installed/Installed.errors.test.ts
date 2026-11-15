@@ -7,7 +7,13 @@ const screen = import.meta.glob<string>(['./*.svelte', './*.ts', '!./*.test.ts']
 
 describe('Installed error toasts', () => {
   it('reads every file of the page', () => {
-    expect(Object.keys(screen).sort()).toEqual(['./Installed.svelte', './InstalledAddGame.svelte', './InstalledStorage.svelte', './installedGame.ts']);
+    expect(Object.keys(screen).sort()).toEqual([
+      './Installed.svelte',
+      './InstalledAddGame.svelte',
+      './InstalledStorage.svelte',
+      './InstalledToolbar.svelte',
+      './installedGame.ts',
+    ]);
   });
 
   it.each(Object.entries(screen))('%s never shows the raw backend error message to the user', (_name, source) => {

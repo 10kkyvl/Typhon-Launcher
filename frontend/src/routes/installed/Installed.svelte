@@ -1,12 +1,9 @@
 <script lang="ts">
   import Page from '../../lib/components/Page.svelte';
   import {
-    ChevronDown,
     EllipsisVertical,
     FolderOpen,
     Gamepad2,
-    LayoutGrid,
-    List,
     Play,
     Plus,
     RefreshCw,
@@ -16,15 +13,12 @@
   import AddImageModal from '../../lib/components/AddImageModal.svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
   import Button from '../../lib/components/Button.svelte';
-  import Chip from '../../lib/components/Chip.svelte';
   import ConsoleTag from '../../lib/components/ConsoleTag.svelte';
   import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import RemoveGameModal from '../../lib/components/RemoveGameModal.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
-  import SearchInput from '../../lib/components/SearchInput.svelte';
-  import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { inWails } from '../../lib/services/backend';
   import {
@@ -54,12 +48,7 @@
   import { coverFor, heroFor, libraryErrorText, play, sizeLabel, stop, updateLabel, type Sort } from './installedGame';
   import InstalledAddGame from './InstalledAddGame.svelte';
   import InstalledStorage from './InstalledStorage.svelte';
-
-  const sortLabels: Record<Sort, string> = {
-    recent: msg('games.recentLabel'),
-    alpha: msg('games.sortAlpha'),
-    size: msg('games.sortSize'),
-  };
+  import InstalledToolbar from './InstalledToolbar.svelte';
 
   let search = $state('');
   let sort = $state<Sort>('recent');
@@ -262,48 +251,7 @@
       : msg('games.installedEmptySubtitle')}
   >
     {#snippet actions()}
-      <div class="search-wrap">
-        <SearchInput bind:value={search} label={msg('games.installedSearchPlaceholder')} placeholder={msg('games.installedSearchPlaceholder')} />
-      </div>
-      <DropdownMenu
-        items={(['recent', 'alpha', 'size'] as const).map((id) => ({ id, label: sortLabels[id], checked: sort === id }))}
-        onselect={(id) => (sort = id as Sort)}
-      >
-        {#snippet trigger({ props })}
-          <Chip {...props}>
-            {msg('games.installedSortByLabel', { sort: sortLabels[sort] })}
-            <ChevronDown size="1.4rem" strokeWidth={1.8} />
-          </Chip>
-        {/snippet}
-      </DropdownMenu>
-      <SegmentedControl
-        label={msg('games.viewLabel')}
-        bind:value={$installedView}
-        options={[
-          { id: 'grid', label: msg('games.viewGrid') },
-          { id: 'list', label: msg('games.viewList') },
-        ]}
-      >
-        {#snippet item(option)}
-          {#if option.id === 'grid'}
-            <LayoutGrid size="1.6rem" strokeWidth={1.8} />
-          {:else}
-            <List size="1.6rem" strokeWidth={1.8} />
-          {/if}
-        {/snippet}
-      </SegmentedControl>
-      <Button onclick={findGames} busy={$scanning}>
-        {#if !$scanning}<RefreshCw size="1.5rem" strokeWidth={2} />{/if}
-        {$scanning ? scanLabel : msg('games.installedFindGames')}
-      </Button>
-      <Button onclick={openImageDialog}>
-        <Plus size="1.5rem" strokeWidth={2} />
-        {msg('emul.addButton')}
-      </Button>
-      <Button variant="primary" onclick={openAddDialog}>
-        <Plus size="1.5rem" strokeWidth={2} />
-        {msg('games.installedAddGameButton')}
-      </Button>
+      <InstalledToolbar bind:search bind:sort {scanLabel} onfind={findGames} onaddimage={openImageDialog} onaddgame={openAddDialog} />
     {/snippet}
   </PageHeader>
 
@@ -485,10 +433,6 @@
 </Page>
 
 <style>
-
-  .search-wrap {
-    width: 26rem;
-  }
 
   .list {
     display: flex;
