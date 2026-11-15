@@ -535,7 +535,30 @@ describe("the disk meter's tones", () => {
     expect(parseFloat(part['min-width']), `min-width: ${part['min-width']}`).toBeGreaterThan(0);
   });
 
+  // An unknown total is not an empty drive: the track is not filled, only outlined in a broken line.
+  const unknown = () => ruleBody(meterStyle, ".bar[data-state='unknown']");
+  const unknownLine = () => /^1px dashed (var\(--[\w-]+\))$/.exec(unknown().outline)?.[1] ?? '';
+
+  it('draws an unknown total as an empty outline, not as the track of an empty drive', () => {
+    expect(unknown().background).toBe('none');
+    expect(unknownLine(), `outline: ${unknown().outline}`).toMatch(/^var\(--/);
+  });
+
   for (const id of ['dark', 'light', 'contrast', 'blush']) {
+    it(`${id} draws the outline of an unknown total at 3:1 over every surface`, () => {
+      const preset = builtIns().find((p) => p.id === id);
+      expect(preset, id).toBeDefined();
+      const tokens = (preset as Preset).tokens;
+      const bg = paint(tokens, '--bg', BLACK);
+      const out: string[] = [];
+      for (const surface of PAGE) {
+        const under = surface === '--bg' ? bg : paint(tokens, surface, bg);
+        const r = ratio(over(cssColor(unknownLine(), tokens), under), under);
+        if (r < 3) out.push(`the outline over ${surface}: ${r.toFixed(2)} < 3`);
+      }
+      expect(out).toEqual([]);
+    });
+
     it(`${id} shows every tone on the track at 3:1 over every surface`, () => {
       const preset = builtIns().find((p) => p.id === id);
       expect(preset, id).toBeDefined();

@@ -160,6 +160,14 @@
     height: 1rem;
   }
 
+  /* An unknown total is not an empty drive, which is the filled track: nothing is filled, the place of
+     the bar is a broken outline, as the hollow swatch of a size not measured. */
+  .bar[data-state='unknown'] {
+    background: none;
+    outline: 1px dashed var(--text-3);
+    outline-offset: -1px;
+  }
+
   .part {
     flex-grow: 0;
     flex-shrink: 1;
