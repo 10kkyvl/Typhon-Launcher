@@ -30,11 +30,9 @@
   import { inWails } from '../../lib/services/backend';
   import {
     addGame,
-    playGame,
     selectExecutable,
     selectGameExecutable,
     setExecutable,
-    stopGame,
     type LibraryGame,
   } from '../../lib/services/library';
   import LibrarySetupModal from '../../lib/components/LibrarySetupModal.svelte';
@@ -53,17 +51,11 @@
   import { updatesByGame } from '../../lib/stores/updates';
   import { brokenStatus } from '../../lib/game/compat';
   import { compatStatuses, type CompatStatus } from '../../lib/services/compat';
-  import { bytesSize, relativeDate } from '../../lib/utils/format';
-  import { errorCode, hasMessage, msg } from '../../lib/i18n';
+  import { relativeDate } from '../../lib/utils/format';
+  import { msg } from '../../lib/i18n';
   import { sourceErrorText } from '../../lib/sources/sourceErrors';
+  import { coverFor, heroFor, libraryErrorText, play, sizeLabel, stop, updateLabel, type Sort } from './installedGame';
   import InstalledStorage from './InstalledStorage.svelte';
-
-  function libraryErrorText(err: unknown, fallback: string): string {
-    const code = errorCode(err);
-    return hasMessage(code) ? msg(code) : fallback;
-  }
-
-  type Sort = 'recent' | 'alpha' | 'size';
 
   const sortLabels: Record<Sort, string> = {
     recent: msg('games.recentLabel'),
@@ -115,23 +107,6 @@
       }
     });
   });
-
-  function sizeLabel(game: LibraryGame) {
-    return game.sizeBytes > 0 ? bytesSize(game.sizeBytes) : '';
-  }
-
-  function updateLabel(update?: { available: boolean; kind: string }) {
-    if (!update?.available) return '';
-    return update.kind === 'update' ? msg('games.updateKindUpdate') : msg('games.updateKindNewRelease');
-  }
-
-  function coverFor(game: LibraryGame) {
-    return (game.canonicalGameId && $gameArt[game.canonicalGameId]?.cover) || game.cover;
-  }
-
-  function heroFor(game: LibraryGame) {
-    return (game.canonicalGameId && $gameArt[game.canonicalGameId]?.hero) || coverFor(game);
-  }
 
   $effect(() => {
     loadArt($installedGames.map((game) => game.canonicalGameId).filter((cid): cid is string => Boolean(cid)));
@@ -207,22 +182,6 @@
       toast(libraryErrorText(err, msg('games.installedAddGameError')), 'danger');
     } finally {
       adding = false;
-    }
-  }
-
-  async function play(game: LibraryGame) {
-    try {
-      await playGame(game.id);
-    } catch (err) {
-      toast(libraryErrorText(err, msg('games.errorPlayFailed')), 'danger');
-    }
-  }
-
-  async function stop(game: LibraryGame) {
-    try {
-      await stopGame(game.id);
-    } catch {
-      toast(msg('games.errorStopFailed'), 'danger');
     }
   }
 
@@ -426,7 +385,7 @@
         <div class="row" role="presentation" {@attach gameContextMenu(game.id)}>
           <button class="game" onclick={() => navigate('game', { id: game.id })}>
             <div class="thumb" aria-hidden="true">
-              <Artwork src={heroFor(game)} alt="" label={game.title} radius="var(--radius-sm)" />
+              <Artwork src={heroFor(game, $gameArt)} alt="" label={game.title} radius="var(--radius-sm)" />
             </div>
             <div class="titles">
               <span class="title-line">
@@ -505,7 +464,7 @@
               onclick={() => navigate('game', { id: game.id })}
               aria-label={updateText ? `${game.title} — ${updateText}` : game.title}
             >
-              <Artwork src={coverFor(game)} alt="" label={game.title} ratio="3 / 4" radius="var(--radius-md)" />
+              <Artwork src={coverFor(game, $gameArt)} alt="" label={game.title} ratio="3 / 4" radius="var(--radius-md)" />
               {#if updateText}
                 <span class="card-badge">
                   <StatusBadge kind={update?.kind === 'update' ? 'warning' : 'neutral'} label={updateText} />
