@@ -217,6 +217,31 @@ describe("a game's colour", () => {
     again.stop();
   });
 
+  it('drops the answer for a picture the game no longer has, however late it comes', async () => {
+    const c = fresh();
+    const pending = new Map<string, (read: PixelRead) => void>();
+    const held = (url: string) => new Promise<PixelRead>((resolve) => pending.set(url, resolve));
+    canvas.read.mockImplementationOnce(held).mockImplementationOnce(held);
+    backend.art = { [c]: { cover: `/media/${c}-a.jpg`, hero: '', heroIsPoster: false } };
+    await loadArt([c]);
+    const { seen, stop } = record(c);
+    await settle();
+    expect([...pending.keys()]).toEqual([`/media/${c}-a.jpg`]);
+
+    gameArt.update((art) => ({ ...art, [c]: { cover: `/media/${c}-b.jpg`, hero: '', heroIsPoster: false } }));
+    await settle();
+    expect([...pending.keys()]).toEqual([`/media/${c}-a.jpg`, `/media/${c}-b.jpg`]);
+
+    pending.get(`/media/${c}-b.jpg`)?.(picture(BLUE));
+    await settle();
+    pending.get(`/media/${c}-a.jpg`)?.(picture(RED));
+    await settle();
+
+    expect(seen.at(-1)).toEqual(toneIn(BLUE, DARK));
+    expect(seen.some((tone) => tone !== null && tone.fill === toneIn(RED, DARK).fill)).toBe(false);
+    stop();
+  });
+
   it('is nothing for no game', () => {
     expect(get(gameTone(null))).toBeNull();
   });
