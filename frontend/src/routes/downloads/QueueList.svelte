@@ -1,178 +1,344 @@
 <script lang="ts">
-  import { Gamepad2, Menu, X } from '@lucide/svelte';
-  import Artwork from '../../lib/components/Artwork.svelte';
-  import Button from '../../lib/components/Button.svelte';
-  import ConsoleTag from '../../lib/components/ConsoleTag.svelte';
-  import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
-  import IconButton from '../../lib/components/IconButton.svelte';
-  import StatusBadge from '../../lib/components/StatusBadge.svelte';
-  import { gamePageId } from '../../lib/services/downloads';
-  import { downloadNow, forceStart, moveDown, moveUp, queue, remove } from '../../lib/stores/downloads';
-  import { gameArt } from '../../lib/stores/metadata';
+  import { untrack } from 'svelte';
+  import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+  import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
+  import { installErrorText } from '../../lib/install/installErrors';
+  import { focusQuietly } from '../../lib/layers/focus';
+  import type { Download } from '../../lib/services/downloads';
+  import { downloadOffers, waitingForSchedule } from '../../lib/stores/downloadOffers';
+  import { queue, requestDownloadAction } from '../../lib/stores/downloads';
   import { playThrottle } from '../../lib/stores/playThrottle';
-  import { navigate } from '../../lib/stores/router';
-  import { sources } from '../../lib/stores/sources';
+  import { focusHandOff } from '../../lib/utils/focusHandOff';
   import { msg } from '../../lib/i18n';
   import DownloadsSection from './DownloadsSection.svelte';
-  import { coverOf, sourceTag, typeTag } from './downloadRow';
+  import QueueRow from './QueueRow.svelte';
+  import { cancelAsks, cancelPrompt } from './downloadCancel';
+  import { askMove, keyTarget, pointerTarget, roomFor, settleMove, shownOrder, type MoveAsk, type RowBox } from './queueReorder';
+  import { startNowHelps } from './queueRow';
+  import { afterLeaving, byData, createWatchers, handOffInView, type HandOff } from './rowFocus';
 
-  const scheduleHeld = $derived($playThrottle.schedule?.blocked === true);
+  /**
+   * The downloads Go holds as queued, in Go's order: a row's place here is the `position` MoveTo takes.
+   * A download moves by its grip (arrow keys, Home/End, or a pointer drag), "To top" or the row menu;
+   * each move is one `moveTo`. While a move is in flight the list shows the asked order; Go's
+   * `download:reordered` (or a refusal) then puts Go's order back on screen, so no order lives only here.
+   *
+   * `onannounce` speaks through the screen's one polite live region: a move once Go confirms it, a
+   * refused move with its reason, a cancel.
+   */
+  let {
+    onannounce = () => {},
+    onopen,
+  }: {
+    onannounce?: (text: string) => void;
+    /** Opens a download's details; without it the row menu offers none. */
+    onopen?: (id: string) => void;
+  } = $props();
+
+  const uid = $props.id();
+  const helpId = `${uid}-help`;
+  let list = $state<HTMLElement>();
+
+  const goIds = $derived($queue.map((d) => d.id));
+  const goKey = $derived(goIds.join('\n'));
+  const byId = $derived(new Map($queue.map((d) => [d.id, d])));
+
+  /** Where focus goes once the page shows a move: decided at the press (`focusHandOff`), applied after. */
+  interface Follow {
+    handOff: HandOff;
+    target: () => HTMLElement | null;
+  }
+
+  /**
+   * A download being moved: `move` while a `moveTo` is in flight, `place` the last place asked, `order`
+   * Go's order when the last call went out. Once Go answered, the entry stays until Go's order shows the
+   * download there or changes at all.
+   */
+  interface Moving {
+    move: MoveAsk | undefined;
+    place: number;
+    order: string;
+    title: string;
+    follow: Follow;
+  }
+
+  const moving = new SvelteMap<string, Moving>();
+
+  const shownIds = $derived(shownOrder(goIds, new Map(Array.from(moving, ([id, m]) => [id, m.place]))));
+  const shownKey = $derived(shownIds.join('\n'));
+  const rows = $derived(shownIds.flatMap((id) => byId.get(id) ?? []));
+
+  const gripOf = (id: string) => byData(list, 'grip', id);
+  const menuOf = (id: string) => byData(list, 'menu', id);
+  const cancelIn = (row: HTMLElement) => row.querySelector<HTMLElement>('[data-cancel]');
+  const menuIn = (row: HTMLElement) => row.querySelector<HTMLElement>('[data-menu]') ?? cancelIn(row);
+
+  const follow = (target: () => HTMLElement | null): Follow => ({ handOff: focusHandOff(), target });
+  const refocus = (f: Follow) => void handOffInView(f.handOff, f.target);
+
+  function ask(id: string, to: number, how: Follow) {
+    const current = moving.get(id);
+    const step = askMove(current?.move, to);
+    moving.set(id, {
+      move: step.state,
+      place: to,
+      order: step.send === null && current ? current.order : goKey,
+      title: byId.get(id)?.name ?? current?.title ?? '',
+      follow: how,
+    });
+    if (step.send !== null) void send(id, step.send);
+  }
+
+  async function send(id: string, position: number) {
+    const outcome = await requestDownloadAction(id, 'moveTo', { position, toast: false });
+    const current = moving.get(id);
+    if (!current?.move) return;
+    const step = settleMove(current.move, outcome.ok);
+    if (!outcome.ok) {
+      moving.delete(id);
+      onannounce(msg('downloads.queue.moveFailed', { title: current.title, reason: installErrorText(outcome.error) }));
+      refocus(current.follow);
+      return;
+    }
+    if (step.send !== null) {
+      moving.set(id, { ...current, move: step.state, place: step.send, order: goKey });
+      void send(id, step.send);
+      return;
+    }
+    moving.set(id, { ...current, move: undefined });
+    confirmMoves();
+  }
+
+  // A move Go answered is confirmed when Go's order shows the download at the asked place, or when Go's
+  // order changed since the call went out (its event arrived): the place said is then Go's, not ours.
+  function confirmMoves() {
+    for (const [id, m] of moving) {
+      if (m.move) continue;
+      const at = goIds.indexOf(id);
+      if (at !== m.place && goKey === m.order) continue;
+      moving.delete(id);
+      if (at >= 0) onannounce(msg('downloads.queue.moved', { title: m.title, position: at + 1, total: goIds.length }));
+      refocus(m.follow);
+    }
+  }
+
+  $effect(() => {
+    void goKey;
+    untrack(confirmMoves);
+  });
+
+  // A row the list moves is a node moved in the page, which can drop its focus: put it back by id.
+  $effect(() => {
+    void shownKey;
+    untrack(() => {
+      for (const m of moving.values()) refocus(m.follow);
+    });
+  });
+
+  function gripKey(event: KeyboardEvent, id: string) {
+    if (drag) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        letGo();
+      }
+      return;
+    }
+    const index = shownIds.indexOf(id);
+    const to = keyTarget(event.key, index, shownIds.length);
+    if (to === null) return;
+    event.preventDefault();
+    if (to !== index) ask(id, to, follow(() => gripOf(id)));
+  }
+
+  interface Drag {
+    id: string;
+    from: number;
+    to: number;
+    dy: number;
+    startY: number;
+    pointerId: number;
+    boxes: RowBox[];
+    /** The held row's height and the gap after it: how far the others move to make room. */
+    step: number;
+    /** The list as the drag found it; any change cancels the drag. */
+    order: string;
+    grip: HTMLElement;
+  }
+
+  let drag = $state<Drag | null>(null);
+
+  function grab(event: PointerEvent, id: string) {
+    if (event.button !== 0 || drag || !list) return;
+    const from = shownIds.indexOf(id);
+    const rowEls = Array.from(list.querySelectorAll<HTMLElement>(':scope > li'));
+    if (from < 0 || rowEls.length < 2) return;
+    const boxes = rowEls.map((row) => {
+      const box = row.getBoundingClientRect();
+      return { top: box.top, height: box.height };
+    });
+    const gap = Math.max(0, boxes[1].top - (boxes[0].top + boxes[0].height));
+    const grip = event.currentTarget as HTMLElement;
+    grip.setPointerCapture(event.pointerId);
+    // WebKit does not focus a pressed button: the grip needs focus for Escape to reach it.
+    focusQuietly(grip);
+    drag = { id, from, to: from, dy: 0, startY: event.clientY, pointerId: event.pointerId, boxes, step: boxes[from].height + gap, order: shownKey, grip };
+  }
+
+  function track(event: PointerEvent) {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    event.preventDefault();
+    const dy = event.clientY - drag.startY;
+    drag = { ...drag, dy, to: pointerTarget(drag.boxes, drag.from, dy) };
+  }
+
+  function drop(event: PointerEvent) {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const { id, from, to } = drag;
+    letGo();
+    if (to !== from) ask(id, to, follow(() => gripOf(id)));
+  }
+
+  function letGo() {
+    const held = drag;
+    drag = null;
+    if (held?.grip.hasPointerCapture?.(held.pointerId)) held.grip.releasePointerCapture(held.pointerId);
+  }
+
+  // A download that starts, leaves or arrives under the pointer changes what each place means.
+  $effect(() => {
+    const key = shownKey;
+    untrack(() => {
+      if (drag && drag.order !== key) letGo();
+    });
+  });
+
+  function shiftOf(id: string, index: number): string | undefined {
+    if (!drag) return undefined;
+    if (id === drag.id) return `translateY(${drag.dy}px)`;
+    return `translateY(${roomFor(index, drag.from, drag.to, drag.step)}px)`;
+  }
+
+  const watchers = createWatchers();
+
+  $effect(() => {
+    void goKey;
+    void $downloadOffers;
+    untrack(() => watchers.check());
+  });
+
+  const busyNow = new SvelteSet<string>();
+  const busyCancel = new SvelteSet<string>();
+  let asking = $state<{ download: Download; index: number; handOff: HandOff } | null>(null);
+
+  const gone = (id: string) => () => !goIds.includes(id);
+
+  function cancelled(download: Download, index: number, handOff: HandOff) {
+    onannounce(msg('downloads.queue.cancelled', { title: download.name }));
+    watchers.watch(gone(download.id), () => void handOffInView(handOff, () => afterLeaving(list, download.id, index, cancelIn)));
+  }
+
+  function askCancel(download: Download, index: number) {
+    const handOff = focusHandOff();
+    if (cancelAsks(download)) asking = { download, index, handOff };
+    else void cancelNow(download, index, handOff);
+  }
+
+  async function cancelNow(download: Download, index: number, handOff: HandOff) {
+    busyCancel.add(download.id);
+    const outcome = await requestDownloadAction(download.id, 'cancel');
+    busyCancel.delete(download.id);
+    if (outcome.ok) cancelled(download, index, handOff);
+  }
+
+  async function confirmCancel() {
+    const current = asking;
+    if (!current) return;
+    const outcome = await requestDownloadAction(current.download.id, 'cancel', { toast: false });
+    if (!outcome.ok) throw outcome.error;
+    cancelled(current.download, current.index, current.handOff);
+  }
+
+  async function downloadNow(download: Download, index: number) {
+    const handOff = focusHandOff();
+    busyNow.add(download.id);
+    const outcome = await requestDownloadAction(download.id, 'downloadNow');
+    busyNow.delete(download.id);
+    if (!outcome.ok) return;
+    // The button goes once Go lifts the schedule for the download, and the row may go as it starts.
+    watchers.watch(
+      () => !($downloadOffers.get(download.id) ?? []).includes('downloadNow'),
+      () => void handOffInView(handOff, () => gripOf(download.id) ?? afterLeaving(list, download.id, index, cancelIn)),
+    );
+  }
+
+  async function startNow(download: Download, index: number) {
+    const handOff = focusHandOff();
+    const outcome = await requestDownloadAction(download.id, 'forceStart');
+    if (!outcome.ok) return;
+    watchers.watch(gone(download.id), () => void handOffInView(handOff, () => afterLeaving(list, download.id, index, menuIn)));
+  }
+
+  function pick(action: 'details' | 'start' | 'up' | 'down', download: Download, index: number) {
+    if (action === 'details') onopen?.(download.id);
+    else if (action === 'start') void startNow(download, index);
+    else {
+      const at = shownIds.indexOf(download.id);
+      ask(download.id, action === 'up' ? at - 1 : at + 1, follow(() => menuOf(download.id)));
+    }
+  }
 </script>
 
-{#if $queue.length > 0}
-<DownloadsSection title={msg('transfers.downloadsQueueHeading')} count={$queue.length}>
-  <div class="rows">
-    {#each $queue as q, i (q.id)}
-      <div class="row">
-        <div class="thumb" aria-hidden="true">
-          <Artwork src={coverOf(q, $gameArt)} alt="" label={q.name} ratio="3 / 4" radius="var(--radius-sm)" />
-        </div>
-        <div class="info inline">
-          <span class="title wraps">{q.name}</span>
-          {#if typeTag(q) || sourceTag(q, $sources) || q.ignoreSchedule}
-            <div class="tags">
-              {#if typeTag(q)}<StatusBadge kind="neutral" label={typeTag(q)} dot={false} />{/if}
-              {#if q.origin.platform}<ConsoleTag platform={q.origin.platform} />{/if}
-              {#if sourceTag(q, $sources)}<StatusBadge kind="neutral" label={sourceTag(q, $sources)} dot={false} />{/if}
-              {#if q.ignoreSchedule}<StatusBadge kind="neutral" label={msg('transfers.outsideSchedule')} dot={false} />{/if}
-            </div>
-          {/if}
-        </div>
-        <div class="status">
-          <span class="status-main">{msg('transfers.downloadsStatusWaiting')}</span>
-        </div>
-        <div class="row-actions">
-          {#if scheduleHeld && !q.ignoreSchedule}
-            <Button size="sm" onclick={() => downloadNow(q.id)}>{msg('transfers.downloadNow')}</Button>
-          {/if}
-          {#if gamePageId(q)}
-            <IconButton label={msg('transfers.gamePage')} size="sm" onclick={() => navigate('game', { id: gamePageId(q) })}>
-              <Gamepad2 size="1.6rem" strokeWidth={1.8} />
-            </IconButton>
-          {/if}
-          <DropdownMenu
-            items={[
-              ...(i > 0 ? [{ id: 'up', label: msg('transfers.downloadsMoveUp') }] : []),
-              ...(i < $queue.length - 1 ? [{ id: 'down', label: msg('transfers.downloadsMoveDown') }] : []),
-              { id: 'start', label: msg('transfers.downloadsStartNow'), separator: i > 0 || i < $queue.length - 1 },
-            ]}
-            onselect={(id) => {
-              if (id === 'up') moveUp(q.id);
-              else if (id === 'down') moveDown(q.id);
-              else forceStart(q.id);
-            }}
-          >
-            {#snippet trigger({ props })}
-              <IconButton {...props} label={msg('transfers.downloadsQueueActionsFor', { name: q.name })} size="sm">
-                <Menu size="1.6rem" strokeWidth={1.8} />
-              </IconButton>
-            {/snippet}
-          </DropdownMenu>
-          <IconButton label={msg('transfers.downloadsCancelLabel')} size="sm" onclick={() => remove(q.id)}>
-            <X size="1.6rem" strokeWidth={1.8} />
-          </IconButton>
-        </div>
-      </div>
+{#if rows.length > 0}
+<DownloadsSection title={msg('transfers.downloadsQueueHeading')} count={rows.length}>
+  <ol class="queue" bind:this={list}>
+    {#each rows as download, index (download.id)}
+      {@const waiting = $waitingForSchedule.has(download.id)}
+      <QueueRow
+        {download}
+        {index}
+        total={rows.length}
+        offers={$downloadOffers.get(download.id) ?? []}
+        {waiting}
+        startNow={startNowHelps(waiting, $playThrottle)}
+        details={Boolean(onopen)}
+        {helpId}
+        lifted={drag?.id === download.id}
+        transform={shiftOf(download.id, index)}
+        busyNow={busyNow.has(download.id)}
+        busyCancel={busyCancel.has(download.id)}
+        ongripkey={(event) => gripKey(event, download.id)}
+        ongrab={(event) => grab(event, download.id)}
+        ontrack={track}
+        ondrop={drop}
+        onletgo={letGo}
+        ontop={() => ask(download.id, 0, follow(() => gripOf(download.id)))}
+        onnow={() => downloadNow(download, index)}
+        oncancel={() => askCancel(download, index)}
+        onpick={(action) => pick(action, download, index)}
+      />
     {/each}
-  </div>
+  </ol>
+  <p id={helpId} class="sr-only">{msg('downloads.queue.help')}</p>
 </DownloadsSection>
 {/if}
 
+{#if asking}
+  {@const current = asking}
+  <ConfirmModal
+    prompt={cancelPrompt(current.download)}
+    onconfirm={confirmCancel}
+    errorText={installErrorText}
+    onclose={() => (asking = null)}
+    returnFocus={() => afterLeaving(list, current.download.id, current.index, cancelIn)}
+  />
+{/if}
+
 <style>
-  .rows {
+  .queue {
     display: flex;
     flex-direction: column;
-    gap: 0.8rem;
-  }
-
-  .row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-5);
-    min-height: 6.4rem;
-    padding: var(--space-2) var(--space-5);
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    transition: border-color var(--dur) var(--ease);
-    animation: rise-in var(--dur-panel) var(--ease) backwards;
-  }
-
-  .row:hover {
-    border-color: var(--border-strong);
-  }
-
-  .thumb {
-    width: 3.6rem;
-    flex-shrink: 0;
-  }
-
-  .info {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.4rem;
-  }
-
-  .info.inline {
-    flex-direction: row;
-    align-items: center;
-    gap: var(--space-3);
-  }
-
-  .tags {
-    flex-shrink: 0;
-  }
-
-  .title {
-    min-width: 0;
-    max-width: 100%;
-    font-size: var(--font-md);
-    font-weight: 600;
-    letter-spacing: var(--tracking-heading);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  /* A name is shown whole, wrapping in its row: an ellipsis would hide all of a text link (a button,
-     an atomic box), and a hint on the rest would reach a mouse only. */
-  .title.wraps {
-    white-space: normal;
-    overflow: visible;
-    overflow-wrap: anywhere;
-  }
-
-  .tags {
-    display: flex;
-    gap: 0.6rem;
-  }
-
-  .status {
-    display: flex;
-    flex-direction: column;
-    gap: 0.3rem;
-    flex-shrink: 0;
-    width: 17rem;
-    font-size: var(--font-sm);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .status-main {
-    color: var(--text-2);
-  }
-
-  .row-actions {
-    display: flex;
-    gap: 0.4rem;
-    flex-shrink: 0;
-  }
-
-  @media (max-width: 1300px) {
-    .status {
-      display: none;
-    }
+    margin: 0;
+    padding: 0;
+    list-style: none;
   }
 </style>

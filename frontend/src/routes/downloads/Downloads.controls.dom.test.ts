@@ -12,10 +12,10 @@ import { renderDom } from '../../lib/testing/dom';
 import Downloads from './Downloads.svelte';
 import completedList from './CompletedList.svelte?raw';
 import failedList from './FailedList.svelte?raw';
-import queueList from './QueueList.svelte?raw';
+import queueRow from './QueueRow.svelte?raw';
 
 // The parts of the screen that draw a row with a name, each with its own copy of the row's rules.
-const ROW_PARTS: Record<string, string> = { FailedList: failedList, QueueList: queueList, CompletedList: completedList };
+const ROW_PARTS: Record<string, string> = { FailedList: failedList, QueueRow: queueRow, CompletedList: completedList };
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));

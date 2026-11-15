@@ -71,6 +71,7 @@ const ALLOWED: Record<string, Record<string, Kind>> = {
   'routes/activity/PopularGames.svelte': { row: 'row' },
   'routes/activity/WeekActivity.svelte': { row: 'row' },
   'routes/catalog/Catalog.svelte': { 'list-row': 'row' },
+  'routes/downloads/QueueRow.svelte': { grip: 'drag handle' },
   'routes/friends/AddFriendModal.svelte': { preview: 'row' },
   'routes/friends/FriendCodeCard.svelte': { code: 'copies itself' },
   'routes/friends/FriendRow.svelte': { who: 'row' },
