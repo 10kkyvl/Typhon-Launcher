@@ -7,7 +7,9 @@ import source from './AddDownloadModal.svelte?raw';
 // immediate retry was rejected as "already used by another download" even
 // though nothing else was using it. reset() runs on every close (the $effect
 // depends on `open`), so it is the one place that can tell Go to give up on
-// a fetch that is still in flight.
+// a fetch that is still in flight. A tripwire: AddDownloadModal.dom.test.ts
+// proves the behaviour (closing during a fetch, and during a Retry of a
+// remembered source after the field was edited).
 describe('AddDownloadModal metadata fetch cancellation', () => {
   it('imports cancelFetchMetadata from the downloads service', () => {
     expect(source).toContain('cancelFetchMetadata');
@@ -16,7 +18,11 @@ describe('AddDownloadModal metadata fetch cancellation', () => {
 
   it('cancels the in-flight fetch in reset() while still on the loading step', () => {
     expect(source).toMatch(
-      /function reset\(\) \{\s*token\+\+;\s*if \(step === 'loading'\) \{\s*cancelFetchMetadata\(source\);\s*\}/,
+      /function reset\(\) \{\s*token\+\+;\s*if \(step === 'loading'\) \{\s*(?:\w+\()?cancelFetchMetadata\(fetching\)/,
     );
+  });
+
+  it('cancels the source the fetch was started with, not the field', () => {
+    expect(source).toMatch(/fetching = value;\s*step = 'loading';\s*try \{\s*const result = await fetchMetadata\(value\);/);
   });
 });

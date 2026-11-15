@@ -50,6 +50,8 @@
   let platform = $state<AppInfo | null>(null);
   let pendingHash = '';
   let token = 0;
+  // The source of the fetch in flight: a Retry fetches a remembered source whatever the field holds.
+  let fetching = '';
   // What the files step was fetched from: a Start that finds nothing waiting in Go fetches it again.
   let fetchedFrom = '';
   // The file choices a fetch after such a Start keeps, by path; null for a fetch the player asked for.
@@ -78,7 +80,7 @@
   function reset() {
     token++;
     if (step === 'loading') {
-      cancelFetchMetadata(source);
+      cancelFetchMetadata(fetching);
     }
     if (pendingHash) {
       discardMetadata(pendingHash);
@@ -137,6 +139,7 @@
       refetchError = '';
       restartNeeded = false;
     }
+    fetching = value;
     step = 'loading';
     try {
       const result = await fetchMetadata(value);

@@ -275,6 +275,27 @@ describe('AddDownloadModal: a Start that finds nothing waiting in Go', () => {
     await waitFor(() => expect(document.activeElement).toBe(startButton()));
   });
 
+  // Retry fetches the remembered source whatever the field says now; closing must cancel that fetch,
+  // or Go keeps it and its reserved hash until the metadata timeout.
+  it('closing during a Retry cancels the source being fetched, not the edited field', async () => {
+    vi.mocked(startDownloadFrom).mockRejectedValueOnce(new Error(NOTHING_WAITING));
+    const { user } = await choose();
+    vi.mocked(fetchMetadata).mockRejectedValueOnce(new Error(FETCH_FAILED)).mockReturnValueOnce(new Promise(() => {}));
+    await user.click(startButton());
+    const retry = await screen.findByRole('button', { name: msg('common.retry') });
+    const field = screen.getByRole('textbox', { name: msg('modals.addDownloadMagnetLabel') });
+    await user.clear(field);
+    await user.type(field, 'magnet:?xt=urn:btih:other');
+
+    await user.click(retry);
+    await waitFor(() => expect(fetchMetadata).toHaveBeenCalledTimes(3));
+    expect(vi.mocked(fetchMetadata).mock.calls[2]).toEqual([MAGNET]);
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(cancelFetchMetadata).toHaveBeenCalledExactlyOnceWith(MAGNET);
+  });
+
   it('keeps the notice when the Retry fails again, and says it again', async () => {
     vi.mocked(startDownloadFrom).mockRejectedValueOnce(new Error(NOTHING_WAITING));
     const { user } = await choose();
