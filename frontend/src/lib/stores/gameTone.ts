@@ -1,7 +1,6 @@
 import { derived, readable, writable, type Readable } from 'svelte/store';
 import type { Attachment } from 'svelte/attachments';
-import { artHorizon } from '../art/scene';
-import { dominant, gameToneOf, hslToRgb, toHex, toneVars, type GameTone, type RGB, type ToneTheme } from '../art/tone';
+import { dominant, gameToneOf, toHex, toneVars, type GameTone, type RGB, type ToneTheme } from '../art/tone';
 import { readPixels } from '../backdrop/pixels';
 import { toneSource } from '../backdrop/source';
 import { themeApplied } from '../theme/apply';
@@ -24,29 +23,18 @@ const SAMPLE_SIDE = 64;
 const sampled = writable<Readonly<Record<string, RGB | null>>>({});
 const asked = new Map<string, string>();
 
-function horizon(seed: string): RGB {
-  const [h, s, l] = artHorizon(seed);
-  return hslToRgb(h, s / 100, l / 100);
-}
-
 /**
- * The first picture that gives a colour wins. A game none of whose pictures loads (or that has none) is
- * drawn by its generated art on the card, so it takes that art's colour; a picture that shows but cannot
- * be read (tainted, grey, no canvas) leaves the theme's accent, never a hue the player sees nowhere.
+ * The first picture that gives a colour wins. The colour comes only from a picture that was read: a game
+ * with none, or whose pictures do not load, are tainted or grey, keeps the theme's accent, since whatever
+ * a screen draws in their place is not something this store can see.
  */
-async function sample(pictures: readonly string[], seed: string): Promise<RGB | null> {
-  let nothingShown = true;
+async function sample(pictures: readonly string[]): Promise<RGB | null> {
   for (const url of pictures) {
     const read = await readPixels(url, SAMPLE_SIDE);
-    if (read.ok) {
-      const rgb = dominant(read.data);
-      if (rgb) return rgb;
-      nothingShown = false;
-    } else if (read.reason !== 'load') {
-      nothingShown = false;
-    }
+    const rgb = read.ok ? dominant(read.data) : null;
+    if (rgb) return rgb;
   }
-  return nothingShown ? horizon(seed) : null;
+  return null;
 }
 
 // One read per game and set of pictures, however many controls ask; a new picture (or a failed one the
@@ -55,7 +43,7 @@ function ensure(key: string, pictures: readonly string[]) {
   const from = pictures.join('\n');
   if (asked.get(key) === from) return;
   asked.set(key, from);
-  void sample(pictures, key).then((rgb) => {
+  void sample(pictures).then((rgb) => {
     if (asked.get(key) !== from) return;
     sampled.update((all) => ({ ...all, [key]: rgb }));
   });

@@ -99,16 +99,6 @@ export function artSpec(seed: string): ArtSpec {
   return { sky: pick(SKIES), hue: Math.round(r() * 120 - 60), lands: [pick(LANDS), pick(LANDS)], sunX: Math.round(r() * 100) / 100 };
 }
 
-/**
- * The colour of a game's generated picture: the band over its horizon, the most vivid of its sky (the sun
- * and the lands take their hue from it). Hue in degrees, saturation and lightness in percent, as drawn.
- */
-export function artHorizon(seed: string): Hsl {
-  const spec = artSpec(seed);
-  const [, , c3] = PALETTE[spec.sky];
-  return [Math.round((((c3[0] + spec.hue) % 360) + 360) % 360), +clamp(c3[1]).toFixed(1), +clamp(c3[2]).toFixed(1)];
-}
-
 function landShade(c3: Hsl, depth: number): string {
   return hsla(c3[0], c3[1] * 0.45 * (1 - depth * 0.6), Math.max(2.5, c3[2] * 0.62 * (1 - depth) + 3));
 }

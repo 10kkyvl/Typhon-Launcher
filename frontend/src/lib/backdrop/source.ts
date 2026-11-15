@@ -26,8 +26,8 @@ export function backdropSources(id: string, games: readonly LibraryGame[], art: 
 
 /**
  * Where a game's colour (stores/gameTone.ts) is read from: kept by the art key, so a catalog card, the
- * library card and the game page of one game agree, or by the library id of a game with no catalog match
- * (also the seed of its generated art). The pictures go the covers first, the one a card shows before the
+ * library card and the game page of one game agree, or by the library id of a game with no catalog match.
+ * The pictures go the covers first, the one a card shows before the
  * library's own, then the hero. Null while the art store has not answered for the game: a picture read
  * now could be replaced by the answer, and the colour would change twice.
  */

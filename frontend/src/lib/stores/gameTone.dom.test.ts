@@ -3,8 +3,7 @@ import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Theme } from '../../../bindings/typhon/internal/theme';
-import { artHorizon } from '../art/scene';
-import { fromHex, gameToneOf, hslToRgb, toneVars, type GameTone, type RGB } from '../art/tone';
+import { fromHex, gameToneOf, toneVars, type GameTone, type RGB } from '../art/tone';
 import type { PixelRead } from '../backdrop/pixels';
 import type { LibraryGame } from '../services/library';
 import GameScopeHarness from '../testing/GameScopeHarness.svelte';
@@ -73,10 +72,6 @@ const settle = async () => {
 
 const readsOf = (url: string) => canvas.read.mock.calls.filter(([u]) => u === url).length;
 const toneIn = (color: RGB, tokens: Record<string, string>) => gameToneOf(color, { bg: tokens['--bg'], text: tokens['--text'] });
-const horizon = (seed: string) => {
-  const [h, s, l] = artHorizon(seed);
-  return hslToRgb(h, s / 100, l / 100);
-};
 
 let n = 0;
 // The colours are kept for the session, so every test names its own games.
@@ -143,19 +138,27 @@ describe("a game's colour", () => {
     stop();
   });
 
-  it('takes the colour of the generated art the card draws when no picture of the game loads, or when it has none', async () => {
-    const c = fresh();
+  // The colour comes only from a picture that was read: what a screen draws without one (a generated
+  // picture, letters, a cover the canvas could not fetch) is not something the store can see.
+  it('has no colour for a game with no picture: never a colour, the theme accent stays', async () => {
     const none = fresh();
-    backend.art = { [c]: { cover: `/media/${c}.jpg`, hero: '', heroIsPoster: false } };
-    await loadArt([c, none]);
-    const failed = record(c);
+    await loadArt([none]);
     const bare = record(none);
     await settle();
-    expect(failed.seen.at(-1)).toEqual(toneIn(horizon(c), DARK));
-    expect(bare.seen.at(-1)).toEqual(toneIn(horizon(none), DARK));
-    expect(failed.seen.at(-1)).not.toEqual(bare.seen.at(-1));
-    failed.stop();
+    expect(canvas.read).not.toHaveBeenCalled();
+    expect(bare.seen.every((tone) => tone === null)).toBe(true);
     bare.stop();
+  });
+
+  it('has no colour when every picture of the game fails to load', async () => {
+    const c = fresh();
+    backend.art = { [c]: { cover: `/media/${c}.jpg`, hero: `/media/${c}-hero.jpg`, heroIsPoster: false } };
+    await loadArt([c]);
+    const failed = record(c);
+    await settle();
+    expect(canvas.read).toHaveBeenCalledTimes(2);
+    expect(failed.seen.every((tone) => tone === null)).toBe(true);
+    failed.stop();
   });
 
   it('keeps the theme accent for a picture it shows but cannot read: tainted, grey, or no canvas', async () => {
