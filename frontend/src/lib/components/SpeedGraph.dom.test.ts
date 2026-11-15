@@ -60,6 +60,16 @@ describe('the speed graph draws a series', () => {
     expect(line[9][1]).toBeCloseTo(BOTTOM - PLOT / HEADROOM, 1);
   });
 
+  it('takes the peak and the scale over the drawn window, not a higher second that has left it', () => {
+    const format = (bytes: number) => `${Math.round(bytes / MB)} MiB/s`;
+    const { svg, container } = draw({ series: series([90 * MB, 10 * MB, 20 * MB, 30 * MB, 40 * MB]), window: 4, format });
+    const [line] = segments(svg);
+
+    expect(line.at(-1)?.[1]).toBeCloseTo(BOTTOM - PLOT / HEADROOM, 1);
+    expect(container.querySelector('figcaption .peak')?.textContent).toContain('40 MiB/s');
+    expect(container.querySelector('figcaption')?.textContent).not.toContain('90 MiB/s');
+  });
+
   it('breaks the line at a gap instead of drawing it down to zero', () => {
     const { svg } = draw({ series: series([10 * MB, 20 * MB, null, 30 * MB, 40 * MB]), window: 5 });
     const parts = segments(svg);
