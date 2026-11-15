@@ -1,7 +1,22 @@
+<script lang="ts" module>
+  import type { DownloadStatus, FileState } from '../services/downloads';
+
+  /**
+   * How often the open dialog reads the files of a download that moves data. Go's progress tick
+   * carries no files, and `Get` copies the whole file list (thousands of entries in a large repack),
+   * so it is read once a second, the rate the screen's speed history samples at, not every tick.
+   */
+  const FILES_READ_MS = 1000;
+
+  const movesData: ReadonlySet<DownloadStatus> = new Set<DownloadStatus>(['downloading', 'verifying', 'metadata']);
+</script>
+
 <script lang="ts">
+  import { untrack } from 'svelte';
+  import { get } from 'svelte/store';
   import { installErrorText } from '../install/installErrors';
   import { FolderOpen, Gamepad2 } from '@lucide/svelte';
-  import { gamePageId } from '../services/downloads';
+  import { gamePageId, getDownload } from '../services/downloads';
   import { openFolder } from '../services/settings';
   import { downloadsById, statusLabels } from '../stores/downloads';
   import { navigate } from '../stores/router';
@@ -13,9 +28,51 @@
   import { msg } from '../i18n';
 
   let { open = $bindable(false), id }: { open?: boolean; id: string | null } = $props();
+  const uid = $props.id();
 
   const download = $derived(id ? $downloadsById.get(id) : undefined);
   const gameId = $derived(download ? gamePageId(download) : '');
+  const moving = $derived(download ? movesData.has(download.status) : false);
+  // Only a download that moves data has a speed to show: the record keeps the last one Go sent.
+  const takesData = $derived(download?.status === 'downloading');
+  const givesData = $derived(download?.status === 'downloading' || Boolean(download?.seeding));
+
+  // The files Go answered with, and the store's file list they were read against: a status event
+  // brings a newer list, and the answer then gives way to it.
+  // Raw: `base` is compared by identity, which a deep state proxy would break.
+  let read = $state.raw<{ files: FileState[]; base: FileState[] } | null>(null);
+  // A slow answer is not asked for again while it is on its way.
+  const reading = new Set<string>();
+  const files = $derived(download && read && read.base === download.files ? read.files : (download?.files ?? []));
+
+  async function readFiles(target: string) {
+    const base = get(downloadsById).get(target)?.files;
+    if (!base || reading.has(target)) return;
+    reading.add(target);
+    try {
+      const fresh = await getDownload(target);
+      if (open && id === target) read = { files: fresh.files, base };
+    } catch {
+      // A missed read keeps the numbers already shown and says nothing; the next tick asks again.
+    } finally {
+      reading.delete(target);
+    }
+  }
+
+  $effect(() => {
+    const target = open ? id : null;
+    untrack(() => {
+      read = null;
+      if (target) readFiles(target);
+    });
+  });
+
+  $effect(() => {
+    if (!open || !id || !moving) return;
+    const target = id;
+    const timer = setInterval(() => readFiles(target), FILES_READ_MS);
+    return () => clearInterval(timer);
+  });
 
   function openGamePage(target: string) {
     open = false;
@@ -66,7 +123,7 @@
           </div>
           <div class="row">
             <span class="key">{msg('modals.downloadDetailsProgress')}</span>
-            <span class="value">{progressPercent(download.progress)}%</span>
+            <span class="value">{msg('format.percent', { value: progressPercent(download.progress) })}</span>
           </div>
           <div class="row">
             <span class="key">{msg('modals.downloadDetailsAdded')}</span>
@@ -92,35 +149,40 @@
             <span class="key">{msg('modals.downloadDetailsPeers')}</span>
             <span class="value">{download.peers}</span>
           </div>
-          <div class="row">
-            <span class="key">{msg('modals.downloadDetailsDownloadSpeed')}</span>
-            <span class="value">{speedBytes(download.downloadSpeed)}</span>
-          </div>
-          <div class="row">
-            <span class="key">{msg('modals.downloadDetailsUploadSpeed')}</span>
-            <span class="value">{speedBytes(download.uploadSpeed)}</span>
-          </div>
+          {#if takesData}
+            <div class="row">
+              <span class="key">{msg('modals.downloadDetailsDownloadSpeed')}</span>
+              <span class="value">{speedBytes(download.downloadSpeed)}</span>
+            </div>
+          {/if}
+          {#if givesData}
+            <div class="row">
+              <span class="key">{msg('modals.downloadDetailsUploadSpeed')}</span>
+              <span class="value">{speedBytes(download.uploadSpeed)}</span>
+            </div>
+          {/if}
         </div>
       </section>
 
       <section class="block">
         <h4>{msg('modals.downloadDetailsFiles')}</h4>
         <div class="file-list">
-          {#each download.files as file, i (i)}
+          {#each files as file, i (i)}
+            {@const amount = file.selected
+              ? msg('modals.downloadDetailsFileBytes', { done: bytesSize(file.bytesDone), total: bytesSize(file.size) })
+              : msg('modals.downloadDetailsSkipped')}
             <div class="file" class:skipped={!file.selected}>
               <div class="file-head">
-                <span class="file-path">{file.path}</span>
-                {#if file.selected}
-                  <span class="file-size">{bytesSize(file.bytesDone)} / {bytesSize(file.size)}</span>
-                {:else}
-                  <span class="file-size">{msg('modals.downloadDetailsSkipped')}</span>
-                {/if}
+                <span class="file-path" id="{uid}-file-{i}">{file.path}</span>
+                <!-- Said by the bar below as its value: once. -->
+                <span class="file-size" aria-hidden="true">{amount}</span>
               </div>
               <ProgressBar
                 value={file.selected && file.size > 0 ? (file.bytesDone / file.size) * 100 : 0}
                 height={4}
                 tone={file.selected ? 'accent' : 'muted'}
-                label={file.path}
+                labelledby="{uid}-file-{i}"
+                valueText={amount}
               />
             </div>
           {/each}
