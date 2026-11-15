@@ -113,6 +113,7 @@ func init() {
 	application.RegisterEvent[library.ProfileFallback](library.EventProfileFallback)
 	application.RegisterEvent[download.Download]("download:added")
 	application.RegisterEvent[download.Download]("download:updated")
+	application.RegisterEvent[download.ProgressUpdate]("download:progress")
 	application.RegisterEvent[download.Download]("download:completed")
 	application.RegisterEvent[download.Download]("download:failed")
 	application.RegisterEvent[download.RemovedEvent]("download:removed")

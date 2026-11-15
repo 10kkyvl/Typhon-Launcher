@@ -262,7 +262,6 @@ describe('runtime events', () => {
   // constant, so nothing compares what Go sends with what the handler reads. Shrink, never grow.
   const UNREGISTERED = new Set([
     'diagnostics:logs_status',
-    'download:progress',
     'downloads:play-throttle',
     'gamemode:error',
     'launcher:release_notes',
