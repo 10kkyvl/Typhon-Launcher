@@ -6,6 +6,7 @@
   import Notice from '../../lib/components/Notice.svelte';
   import SearchInput from '../../lib/components/SearchInput.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
+  import Slider from '../../lib/components/Slider.svelte';
   import Select from '../../lib/components/Select.svelte';
   import type { SelectOption } from '../../lib/components/select';
   import type { SegmentOption } from '../../lib/components/segmented';
@@ -13,6 +14,8 @@
   import { tabPanel, type TabItem } from '../../lib/components/tabs';
   import Toggle from '../../lib/components/Toggle.svelte';
   import { validAccent } from '../../lib/theme/accent';
+  import { rateLimitLabel } from '../../lib/utils/format';
+  import { SPEED_LIMIT_NO_LIMIT, speedLimitAt, speedLimitPosition } from '../../lib/utils/speedLimit';
   import ShowcaseRow from './ShowcaseRow.svelte';
   import ShowcaseSection from './ShowcaseSection.svelte';
 
@@ -23,6 +26,23 @@
   // Held by the page and asked for through onchange, as a caller that saves the choice does.
   let parts = $state([true, false, true]);
   const all = $derived(parts.every(Boolean) ? true : parts.some(Boolean) ? 'mixed' : false);
+
+  // The speed limit as a caller holds it: the stored bytes/s, a draft while the thumb is dragged, the
+  // step being saved, and a save that takes a second (busy) and refuses 1000 MB/s, so the thumb goes
+  // back to what is stored.
+  const MB = 1024 ** 2;
+  let limit = $state(12 * MB);
+  let draft = $state<number | null>(null);
+  let saving = $state<number | null>(null);
+  const limitShown = $derived(draft ?? saving ?? speedLimitPosition(limit));
+  const limitText = $derived(rateLimitLabel(draft !== null || saving !== null ? speedLimitAt(limitShown) : limit));
+  function saveLimit(position: number) {
+    saving = position;
+    setTimeout(() => {
+      if (speedLimitAt(position) !== 1000 * MB) limit = speedLimitAt(position);
+      saving = null;
+    }, 1000);
+  }
 
   let overlay = $state(true);
   let autostart = $state(false);
@@ -153,6 +173,25 @@
     <HexColorField label="Locked color" value="#22AA66" disabled />
   </ShowcaseRow>
 
+  <ShowcaseRow caption="Sliders: the speed limit from a stored 12 MB/s, off the steps (1000 MB/s is refused); disabled" stack>
+    <span class="slider">
+      <Slider
+        position={limitShown}
+        max={SPEED_LIMIT_NO_LIMIT}
+        label="Speed limit"
+        valueText={limitText}
+        startText={rateLimitLabel(speedLimitAt(0))}
+        endText={rateLimitLabel(0)}
+        busy={saving !== null}
+        oninput={(next) => (draft = next)}
+        onchange={saveLimit}
+      />
+    </span>
+    <span class="slider">
+      <Slider position={7} max={SPEED_LIMIT_NO_LIMIT} label="Locked limit" valueText={rateLimitLabel(speedLimitAt(7))} disabled onchange={() => {}} />
+    </span>
+  </ShowcaseRow>
+
   <ShowcaseRow caption="Number field (10 to 240; a value out of range is refused on Enter or blur)">
     <IntegerInput label="Frame limit" value={fps} min={10} max={240} onchange={(next) => (fps = next)} />
     <span class="field-label">Held value: {fps}</span>
@@ -191,6 +230,11 @@
     border-radius: var(--radius-md);
     font-size: var(--font-sm);
     color: var(--text-2);
+  }
+
+  .slider {
+    display: block;
+    max-width: 32rem;
   }
 
   .search {

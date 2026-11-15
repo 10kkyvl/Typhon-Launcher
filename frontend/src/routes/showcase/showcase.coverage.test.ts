@@ -23,6 +23,7 @@ const BASE = [
   'Toggle',
   'Select',
   'SegmentedControl',
+  'Slider',
   'Tabs',
   'SearchInput',
   'HexColorField',
