@@ -25,7 +25,7 @@ describe('a stacked settings row', () => {
   });
 
   it('lets a slider that asks to fill take the whole measure', () => {
-    const fill = ruleBody(slider, '.slider.fill');
+    const fill = ruleBody(slider, '.slider.fills');
     expect(fill['align-self']).toBe('stretch');
     expect(fill.width).toBe('100%');
   });

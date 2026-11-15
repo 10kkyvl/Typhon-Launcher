@@ -49,7 +49,11 @@ describe('a base control described by the text beside it', () => {
 
   it('the slider asks to fill the place it is put in', () => {
     const { container } = renderDom(Slider, { position: 1, max: 4, labelledby: 'row-label', valueText: '1', fill: true, onchange: vi.fn() });
-    expect(container.querySelector('.slider')?.classList.contains('fill')).toBe(true);
+    const root = container.querySelector('.slider');
+    expect(root?.classList.contains('fills')).toBe(true);
+    // `.fill` is the painted part of the track: the root under that name is painted whole.
+    expect(root?.classList.contains('fill')).toBe(false);
+    expect(container.querySelectorAll('.fill')).toHaveLength(1);
   });
 
   // The row's label names the slider: the slider draws no hidden copy of it.

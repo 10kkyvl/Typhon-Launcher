@@ -181,7 +181,7 @@
   };
 </script>
 
-<div class="slider" class:disabled class:busy class:fill>
+<div class="slider" class:disabled class:busy class:fills={fill}>
   <div class="head" class:sr-only={hideLabel}>
     {#if label !== undefined}<span class="label" id="{uid}-label">{label}</span>{/if}
     <span class="value" aria-hidden="true"><Reading text={valueText} /></span>
@@ -226,7 +226,7 @@
     min-width: 0;
   }
 
-  .slider.fill {
+  .slider.fills {
     align-self: stretch;
     width: 100%;
   }
