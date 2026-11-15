@@ -119,7 +119,7 @@
      included, so it paints above the toasts and every layer. The title bar sits above the scrims and
      the hints so the window can still be moved and closed; only the live island, which sits in its
      band clear of the window buttons, and the update screen cover it. */
-  --z-backdrop: -1; /* the window backdrop behind the shell */
+  --z-backdrop: -1; /* the window backdrop behind the shell, and the plate behind words on the stage */
   --z-sticky: 10; /* sticky bars inside a page */
   --z-corner: 120; /* toasts, the self-update card */
   --z-bigpicture: 130;

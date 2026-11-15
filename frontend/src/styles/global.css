@@ -242,6 +242,35 @@ html:has(.big-picture) ::-webkit-scrollbar-thumb:hover {
   border: 0;
 }
 
+/* A block of words that stands on the stage (ShellBackdrop) brings its own plate, so the words keep AA
+   wherever they wrap and whatever the picture is. It hugs the block and eases out to the right and below;
+   the rest of the picture stays as it is. The plate is on the backdrop's level and clipped by the page's
+   scroller, so it lies under all of the page's content, the line after the block included, and never
+   under the top bar; the block must not isolate itself, or its plate would cover that line. --copy-lead fades the left side too, for
+   a block that does not start at the page's edge; --copy-rise is how far down the block the plate reaches
+   full strength. On the stage there is one text colour: the quieter one would need a much heavier plate. */
+.stage-copy {
+  --copy-lead: 0rem;
+  --copy-rise: 0rem;
+  --text-2: var(--text);
+  position: relative;
+}
+
+.stage-copy::before {
+  --copy-across: linear-gradient(90deg, transparent 0, var(--mask-solid) var(--copy-lead), var(--mask-solid) calc(100% - var(--copy-fade-x)), var(--mask-most) calc(100% - var(--copy-fade-x) * 0.72), var(--mask-some) calc(100% - var(--copy-fade-x) * 0.36), transparent 100%);
+  --copy-down: linear-gradient(180deg, transparent 0, var(--mask-some) calc(var(--copy-fade-y) * 0.5 + var(--copy-rise) * 0.4), var(--mask-most) calc(var(--copy-fade-y) * 0.8 + var(--copy-rise) * 0.75), var(--mask-solid) calc(var(--copy-fade-y) + var(--copy-rise)), var(--mask-solid) calc(100% - var(--copy-fade-y)), var(--mask-most) calc(100% - var(--copy-fade-y) * 0.7), var(--mask-some) calc(100% - var(--copy-fade-y) * 0.34), transparent 100%);
+  content: '';
+  position: absolute;
+  z-index: var(--z-backdrop);
+  inset: calc(-1 * var(--copy-fade-y)) calc(-1 * var(--copy-fade-x)) calc(-1 * var(--copy-fade-y)) calc(-1 * max(var(--page-x), var(--copy-lead)));
+  background: var(--scrim-copy);
+  -webkit-mask-image: var(--copy-across), var(--copy-down);
+  -webkit-mask-composite: source-in;
+  mask-image: var(--copy-across), var(--copy-down);
+  mask-composite: intersect;
+  pointer-events: none;
+}
+
 ::selection {
   background: color-mix(in srgb, var(--accent) 35%, transparent);
 }

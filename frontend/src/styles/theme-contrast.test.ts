@@ -589,3 +589,31 @@ describe("the stage's top bar scrim", () => {
     });
   }
 });
+
+// Words that stand on the stage bring their own plate (.stage-copy in global.css): --scrim-copy under them,
+// one text colour on it (--text-2 is set to --text there). At full strength, under the words, the text must
+// read at 4.5:1 whatever the picture is: measured over black and over white.
+describe('the text plate on the stage', () => {
+  const global = fs.readFileSync(new URL('./global.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+
+  it('draws the plate in --scrim-copy and the words in --text alone', () => {
+    expect(ruleBody(global, '.stage-copy::before').background).toBe('var(--scrim-copy)');
+    expect(ruleBody(global, '.stage-copy')['--text-2']).toBe('var(--text)');
+  });
+
+  for (const id of ['dark', 'light', 'contrast', 'blush']) {
+    it(`${id} keeps the words on the plate readable over any picture (4.5:1)`, () => {
+      const preset = builtIns().find((p) => p.id === id);
+      expect(preset, id).toBeDefined();
+      const tokens = (preset as Preset).tokens;
+      const plate = cssColor(tokens['--scrim-copy'], tokens);
+      const out: string[] = [];
+      for (const [name, art] of [['black', BLACK], ['white', WHITE]] as const) {
+        const under = over(plate, art);
+        const r = ratio(paint(tokens, '--text', under), under);
+        if (r < 4.5) out.push(`--text on --scrim-copy over ${name}: ${r.toFixed(2)} < 4.5`);
+      }
+      expect(out).toEqual([]);
+    });
+  }
+});
