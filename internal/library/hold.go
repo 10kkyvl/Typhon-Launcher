@@ -2,6 +2,7 @@ package library
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -41,12 +42,30 @@ type folderHold struct {
 	dir   string
 }
 
+// overlaps says whether dir is one of roots, lies inside one or holds one. The
+// paths are compared by key, without touching the disk: it runs under s.mu. A
+// path whose key cannot be made counts as overlapping, because the answer
+// decides whether files may be deleted or moved. A link is not followed: a
+// card reached through a symlinked parent or a junction is compared by the
+// path it was added under.
 func overlaps(roots []string, dir string) bool {
 	if dir == "" {
 		return false
 	}
+	key, err := platform.PathKey(dir)
+	if err != nil {
+		return true
+	}
+	sep := string(filepath.Separator)
 	for _, root := range roots {
-		if root != "" && (platform.Inside(root, dir) || platform.Inside(dir, root)) {
+		if root == "" {
+			continue
+		}
+		rootKey, err := platform.PathKey(root)
+		if err != nil {
+			return true
+		}
+		if rootKey == key || strings.HasPrefix(key, rootKey+sep) || strings.HasPrefix(rootKey, key+sep) {
 			return true
 		}
 	}

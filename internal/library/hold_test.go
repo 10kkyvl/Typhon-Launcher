@@ -235,3 +235,31 @@ func TestRemovalAndMoveOfAGameExcludeEachOther(t *testing.T) {
 		t.Fatalf("MarkUninstalled after the move = %v", err)
 	}
 }
+
+// A footprint whose path cannot be resolved counts as overlapping: the check
+// guards a deletion, so not knowing is a refusal, never a pass.
+func TestOverlapFailsClosedOnAPathItCannotResolve(t *testing.T) {
+	root := t.TempDir()
+	games := filepath.Join(root, "Games")
+	cases := []struct {
+		name  string
+		roots []string
+		dir   string
+		want  bool
+	}{
+		{"same folder", []string{filepath.Join(games, "Foo")}, filepath.Join(games, "Foo"), true},
+		{"inside", []string{filepath.Join(games, "Foo", "Bonus")}, filepath.Join(games, "Foo"), true},
+		{"around", []string{games}, filepath.Join(games, "Foo"), true},
+		{"sibling sharing a prefix", []string{filepath.Join(games, "FooBar")}, filepath.Join(games, "Foo"), false},
+		{"sibling the folder is a prefix of", []string{filepath.Join(games, "Foo")}, filepath.Join(games, "FooBar"), false},
+		{"unresolvable footprint", []string{"   "}, filepath.Join(games, "Foo"), true},
+		{"unresolvable folder", []string{filepath.Join(games, "Foo")}, "   ", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := overlaps(tc.roots, tc.dir); got != tc.want {
+				t.Fatalf("overlaps(%q, %q) = %v, want %v", tc.roots, tc.dir, got, tc.want)
+			}
+		})
+	}
+}

@@ -111,6 +111,8 @@ func TestRemoveGameRefusesAFolderAnotherGameShares(t *testing.T) {
 		{"other game inside", layout{"RepackX", "RepackX/Bonus/Game2.exe"}, addActive, "install.folder_shared"},
 		{"game inside the other", layout{"Parent/RepackX", "Parent/launcher.exe"}, addActive, "install.folder_shared"},
 		{"siblings", layout{"Games/RepackX", "Games/Other/other.exe"}, addActive, ""},
+		{"sibling whose name starts with the folder's", layout{"Games/RepackX", "Games/RepackXBonus/b.exe"}, addActive, ""},
+		{"sibling whose name the folder's starts with", layout{"Games/RepackX", "Games/Repack/b.exe"}, addActive, ""},
 		{"archived card", layout{"RepackX", "RepackX/Bonus/Game2.exe"}, addArchived, ""},
 		{"uninstalled card", layout{"RepackX", "RepackX/Bonus/Game2.exe"}, addUninstalled, ""},
 		{"emulated game keeps its rule", layout{"RepackX", "RepackX/psx/game.cue"}, addEmulated, uierr.Code(emulators.ErrImageInside)},

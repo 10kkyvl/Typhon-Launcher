@@ -38,6 +38,8 @@ func TestMoveGameRefusesAFolderAnotherGameShares(t *testing.T) {
 		{"game inside the other", "Parent/RepackX", "Parent/launcher.exe", neighbourActive, "relocate.folder_shared"},
 		{"image of an emulated game inside", "RepackX", "RepackX/psx/game.cue", neighbourEmulated, "relocate.folder_shared"},
 		{"siblings", "Games/RepackX", "Games/Other/other.exe", neighbourActive, ""},
+		{"sibling whose name starts with the folder's", "Games/RepackX", "Games/RepackXBonus/b.exe", neighbourActive, ""},
+		{"sibling whose name the folder's starts with", "Games/RepackX", "Games/Repack/b.exe", neighbourActive, ""},
 		{"archived card", "RepackX", "RepackX/Bonus/Game2.exe", neighbourArchived, ""},
 		{"uninstalled card", "RepackX", "RepackX/Bonus/Game2.exe", neighbourUninstalled, ""},
 	}
