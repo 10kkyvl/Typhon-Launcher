@@ -43,6 +43,9 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.addDownloadElevateAheadLabel': 'Confirm administrator rights now',
   'modals.addDownloadElevateAheadSub': 'This download holds an installer that needs rights. Confirm now and the install runs without you; otherwise it waits for your confirmation',
   'modals.addDownloadStart': 'Start download',
+  'modals.addDownloadRestartNeeded':
+    'The network changed while the download was starting, so the torrent details were fetched again. Press "Start download" once more.',
+  'modals.addDownloadRefetchFailed': 'Could not fetch the torrent details again',
 
   // AddSourceModal.svelte
   'modals.addSourceAdded': 'Source "{name}" added',
@@ -93,6 +96,7 @@ export const modals: Record<ModalsKey, Message> = {
   'modals.downloadDetailsUploadSpeed': 'Upload speed',
   'modals.downloadDetailsFiles': 'Files',
   'modals.downloadDetailsSkipped': 'Skipped',
+  'modals.downloadDetailsFileBytes': '{done} of {total}',
 
   // SocialConsentScreen.svelte
   'modals.socialConsentEnableFailed': 'Failed to enable sync',

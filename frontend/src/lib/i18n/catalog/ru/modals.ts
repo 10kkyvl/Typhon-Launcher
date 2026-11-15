@@ -40,6 +40,9 @@ export const modals = {
   'modals.addDownloadElevateAheadLabel': 'Подтвердить права администратора сейчас',
   'modals.addDownloadElevateAheadSub': 'В загрузке установщик — ему нужны права. Подтвердите сейчас, и установка пройдёт без вас; иначе она дождётся вашего подтверждения',
   'modals.addDownloadStart': 'Начать загрузку',
+  'modals.addDownloadRestartNeeded':
+    'Пока загрузка запускалась, сменилась сеть, и данные торрента получены заново. Нажмите «Начать загрузку» ещё раз.',
+  'modals.addDownloadRefetchFailed': 'Не удалось заново получить данные торрента',
 
   // AddSourceModal.svelte
   'modals.addSourceAdded': 'Источник «{name}» добавлен',
@@ -90,6 +93,7 @@ export const modals = {
   'modals.downloadDetailsUploadSpeed': 'Скорость отдачи',
   'modals.downloadDetailsFiles': 'Файлы',
   'modals.downloadDetailsSkipped': 'Пропущен',
+  'modals.downloadDetailsFileBytes': '{done} из {total}',
 
   // SocialConsentScreen.svelte
   'modals.socialConsentEnableFailed': 'Не удалось включить синхронизацию',
