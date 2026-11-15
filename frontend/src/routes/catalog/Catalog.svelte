@@ -25,6 +25,7 @@
   import { msg } from '../../lib/i18n';
   import { createCatalogPageData, libraryErrorText } from './catalogPageData.svelte';
   import CatalogToolbar from './CatalogToolbar.svelte';
+  import CatalogNotes from './CatalogNotes.svelte';
 
   // Created first: its effects are the page's, and run before the view switch's below.
   const data = createCatalogPageData();
@@ -136,38 +137,7 @@
 
   <CatalogToolbar {data} />
 
-  {#if data.pages.offline || data.pageFailed || data.pageRetrying}
-    <div class="page-note">
-      <Notice
-        tone={data.pageFailed ? 'danger' : 'warning'}
-        title={data.pageFailed ? msg('games.catalogUnavailableTitle') : undefined}
-        level={data.pageFailed ? 2 : undefined}
-        bind:retrying={data.pageRetrying}
-        retry={{ label: msg('games.catalogRetry'), run: data.retryFirstPage, within: () => data.results }}
-      >
-        {#if !data.pageFailed}
-          {msg('games.catalogOffline')}
-        {:else if data.pages.backendOutdated}
-          {msg('games.catalogBackendOutdated')}
-        {:else}
-          {msg('games.catalogUnavailableDescription')}
-        {/if}
-      </Notice>
-    </div>
-  {:else if data.pages.incomplete}<details class="muted"><summary>{msg('games.catalogCoverage')}</summary><p>{msg('games.catalogIncomplete')}</p></details>{/if}
-
-  {#if data.lastDismissed}
-    <div class="page-note">
-      <Notice tone="success">
-        {msg('games.recommendationDismissed', { title: data.lastDismissed.title })}
-        {#snippet action()}<Button size="sm" onclick={data.undoDismissal} busy={data.undoing} disabled={data.preferenceBusy && !data.undoing}>{msg('games.recommendationUndo')}</Button>{/snippet}
-      </Notice>
-    </div>
-  {/if}
-  <span bind:this={data.dismissalEnd} hidden></span>
-  {#if data.personalizationFallback}<div class="page-note"><Notice tone="info" compact>{msg('games.recommendationFallback')}</Notice></div>{/if}
-  {#if data.discoveryStale}<div class="page-note"><Notice tone="warning" compact>{msg('games.recommendationRefreshFailed')}</Notice></div>{/if}
-  {#if data.profile.confidence < 1 && (data.sort === 'auto' || data.sort === 'for-you')}<p class="muted profile-hint">{msg('games.recommendationNoHistory')}</p>{/if}
+  <CatalogNotes {data} />
   {#if data.discoveryVisible}
     <RecommendationShelf title={msg('games.discoveryTitle')} items={data.discovery} loading={data.discoveryLoading || data.preferenceBusy}
       emptyText={msg('games.recommendationEmpty')} onrefresh={data.refreshPicks} ondismiss={(item) => void data.dismiss(item.game)} />
@@ -276,8 +246,6 @@
 </Page>
 
 <style>
-  .page-note { margin: var(--space-4) 0; }
-  .profile-hint { margin-bottom: var(--space-5); }
   .list-entry { display: flex; align-items: center; }
   .list-entry .list-row { flex: 1; min-width: 0; }
   .list-action { display: inline-flex; opacity: 0; pointer-events: none; transition: opacity var(--dur) var(--ease); }

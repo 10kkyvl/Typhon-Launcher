@@ -188,16 +188,17 @@ const SITES: Record<string, Site[]> = {
   'lib/components/profile/GamePicker.svelte': [['danger', true]],
   'routes/activity/Activity.svelte': [['danger', true]],
   'routes/auth/AuthScreen.svelte': [['danger', true]],
-  // The page fell back to a cached copy or its first page failed (one notice, warning or danger); a
-  // game just put away from the recommendations, with its undo; the picks that fell back or went
-  // stale; a next page failed.
-  'routes/catalog/Catalog.svelte': [
+  // The catalog page, in its parts. The page fell back to a cached copy or its first page failed (one
+  // notice, warning or danger); a game just put away from the recommendations, with its undo; the
+  // picks that fell back or went stale.
+  'routes/catalog/CatalogNotes.svelte': [
     ['dynamic', true],
     ['success', true],
     ['info', true],
     ['warning', true],
-    ['danger', true],
   ],
+  // A next page failed.
+  'routes/catalog/Catalog.svelte': [['danger', true]],
   'routes/diskusage/DiskUsage.svelte': [
     ['danger', true],
     ['danger', true],
