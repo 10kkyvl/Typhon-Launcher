@@ -10,12 +10,12 @@ import { resetHistory, route } from '../../lib/stores/router';
 import { ruleBody, styleOf } from '../../lib/testing/css';
 import { renderDom } from '../../lib/testing/dom';
 import Downloads from './Downloads.svelte';
-import completedList from './CompletedList.svelte?raw';
+import completedRow from './CompletedRow.svelte?raw';
 import failedList from './FailedList.svelte?raw';
 import queueRow from './QueueRow.svelte?raw';
 
 // The parts of the screen that draw a row with a name, each with its own copy of the row's rules.
-const ROW_PARTS: Record<string, string> = { FailedList: failedList, QueueRow: queueRow, CompletedList: completedList };
+const ROW_PARTS: Record<string, string> = { FailedList: failedList, QueueRow: queueRow, CompletedRow: completedRow };
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
@@ -102,8 +102,10 @@ describe('Downloads: no active download', () => {
 });
 
 describe('Downloads: links', () => {
-  it('the name of a finished download is a text link that opens its details', async () => {
-    downloads.set([download({ id: 'c', name: 'Done One' })]);
+  // Decision В13: a finished download's name leads to its game's page; its details are in its row's menu
+  // (CompletedList.dom.test.ts).
+  it('the name of a finished download is a text link to its game’s page', async () => {
+    downloads.set([download({ id: 'c', name: 'Done One', origin: { gameId: 'g-done' } })]);
     const { user } = renderDom(Downloads);
 
     const link = screen.getByRole('button', { name: 'Done One' });
@@ -111,7 +113,7 @@ describe('Downloads: links', () => {
     link.focus();
     await user.keyboard('{Enter}');
 
-    expect(await screen.findByRole('dialog')).toBeTruthy();
+    expect(get(route)).toMatchObject({ name: 'game', params: { id: 'g-done' } });
   });
 
   // Decision В13: a failed download's name leads to its game's page; its details have a control named
@@ -136,7 +138,7 @@ describe('Downloads: links', () => {
   it('a long download name wraps inside its row, shown in full, with no hint repeating it', () => {
     downloads.set([
       download({ id: 'f', name: 'Failed One', status: 'failed', error: 'x', origin: { gameId: 'g-f' } }),
-      download({ id: 'c', name: 'Done One' }),
+      download({ id: 'c', name: 'Done One', origin: { gameId: 'g-done' } }),
     ]);
     renderDom(Downloads);
 

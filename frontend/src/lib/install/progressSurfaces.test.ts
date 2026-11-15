@@ -4,7 +4,7 @@ import { frontendSources } from '../testing/sources';
 // Each entry is the file that draws the progress: on a screen split into parts, the part with the install cell.
 const SURFACES = [
   'lib/components/InstallModal.svelte',
-  'routes/downloads/CompletedList.svelte',
+  'routes/downloads/CompletedRow.svelte',
   'routes/game/GameDetails.svelte',
   'lib/bigpicture/components/DownloadsPage.svelte',
   'lib/bigpicture/components/GamePage.svelte',
