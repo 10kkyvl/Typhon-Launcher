@@ -135,6 +135,52 @@ describe('Downloads: a row Go takes away from under the focus', () => {
     await waitFor(() => expect(document.activeElement).toBe(grip('Beta')));
   });
 
+  it('the focused Pause goes as its download turns to verifying: focus stays in the panel, on its menu', async () => {
+    downloads.set([download(), download({ id: 'd2', name: 'Game Two' })]);
+    renderDom(Downloads);
+    pauseOf('Game One').focus();
+
+    goSets('d1', { status: 'verifying', downloadSpeed: 0 });
+
+    await waitFor(() => expect(document.activeElement).toBe(moreOf('Game One')));
+    expect(within(panel('Game One')).queryByRole('button', { name: msg('downloads.panel.pauseNamed', { name: 'Game One' }) })).toBeNull();
+  });
+
+  it('an item of a panel’s open menu has focus and Go completes that download: focus goes on from the panel', async () => {
+    downloads.set([download(), download({ id: 'd2', name: 'Game Two' })]);
+    const { user } = renderDom(Downloads);
+    moreOf('Game One').focus();
+    await user.keyboard('{Enter}');
+    screen.getByRole('menuitem', { name: msg('downloads.panel.details') }).focus();
+
+    goSets('d1', { status: 'completed', completedAt: '2026-09-08T01:00:00Z' });
+
+    await waitFor(() => expect(document.activeElement).toBe(moreOf('Game Two')));
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('Clear the list has focus and its section empties by Go’s doing: focus goes to the page heading', async () => {
+    downloads.set([download({ status: 'completed', completedAt: '2026-09-08T01:00:00Z' }), download({ id: 'd2', name: 'Game Two' })]);
+    renderDom(Downloads);
+    const clear = screen.getByRole('button', { name: msg('downloads.done.clear') });
+    clear.focus();
+
+    downloads.update((list) => list.filter((d) => d.id !== 'd1'));
+
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 })));
+  });
+
+  it('a section’s heading has focus and the section empties by Go’s doing: focus goes to the page heading', async () => {
+    downloads.set([download({ status: 'failed', error: 'typhon:download.unavailable' }), download({ id: 'd2', name: 'Game Two' })]);
+    renderDom(Downloads);
+    const failedHeading = screen.getByRole('heading', { level: 2, name: new RegExp(`^${msg('transfers.downloadsFailedHeading')}`) });
+    failedHeading.focus();
+
+    goSets('d1', { status: 'queued' });
+
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 })));
+  });
+
   it('focus elsewhere on the page is left alone', async () => {
     downloads.set([download(), download({ id: 'd2', name: 'Game Two' })]);
     renderDom(Downloads);

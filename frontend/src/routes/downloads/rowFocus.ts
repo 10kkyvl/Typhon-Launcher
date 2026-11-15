@@ -1,13 +1,14 @@
 import type { Leave, LeaveHow, LeaveTicket } from '../../lib/components/downloadPanel';
 import { focusHandOff } from '../../lib/utils/focusHandOff';
+import { downloadsSectionIds } from './sections';
 
 /**
  * The downloads screen's one rule for focus when a row or a panel leaves while focus is in it: the
  * download's own row where it moved, when the press asks to follow it (`LeaveHow.follow`); the row now
  * in its place, else the row above; else the section's heading; else the page heading. The next
  * section's first control is never guessed. The parts call `pressed` at a press that may take their
- * row away; the page calls `catchLeaving` before every change of its lists, which covers a row that
- * leaves by Go's own doing (a download completing, failing, starting).
+ * row away; the page calls `catchLeaving` before every change of its lists, which covers what goes by
+ * Go's own doing (a download completing, failing, starting, a control Go no longer offers).
  */
 
 /** What `focusHandOff` answers: called once the page shows what came instead of the pressed control. */
@@ -93,7 +94,11 @@ function leaveTarget(place: RowPlace, how: LeaveHow = {}): HTMLElement | null {
     if (row) return controlIn(row, prefer);
   }
   if (moved) return controlIn(moved, null);
-  const heading = place.heading ? document.getElementById(place.heading) : null;
+  return headingOrPage(place.heading);
+}
+
+function headingOrPage(id: string | null): HTMLElement | null {
+  const heading = id ? document.getElementById(id) : null;
   return heading?.isConnected ? heading : pageHeading();
 }
 
@@ -131,16 +136,37 @@ export const pressed: Leave = (id, how = {}): LeaveTicket => {
   };
 };
 
+const SECTION_HEADINGS: ReadonlySet<string> = new Set(Object.values(downloadsSectionIds));
+
 /**
- * The page's catch-all, run before every change of its lists ($effect.pre): when focus is in a row and
- * falls once the change shows, it goes on by the rule, as the press in flight on that row asked if any.
- * Focus anywhere else (a dialog, another page part) is left alone.
+ * What focus stands for on the page: the focused element, or, for an item of an open menu (a layer
+ * apart from the page), the menu's trigger, so the row the menu belongs to is known while it is open.
+ */
+function standsFor(focused: HTMLElement): HTMLElement {
+  const menu = focused.closest<HTMLElement>('[role="menu"][aria-labelledby]');
+  const trigger = menu ? document.getElementById(menu.getAttribute('aria-labelledby') ?? '') : null;
+  return trigger ?? focused;
+}
+
+/**
+ * The page's catch-all, run before every change of its lists ($effect.pre). When the element that holds
+ * focus is gone once the change shows, focus goes on by the rule from where it was: in a row (or a menu
+ * of a row), the same row's other control while the row stays, else the rule's steps, as the press in
+ * flight on that row asked if any; on a section's own control or heading, that heading, else the page
+ * heading. Focus that is still there, a dialog's included, and focus outside the screen's sections are
+ * left alone.
  */
 export function catchLeaving(): void {
   const focused = document.activeElement;
-  const row = focused instanceof HTMLElement ? focused.closest<HTMLElement>(`[${ROW_ATTR}]`) : null;
-  if (!row) return;
-  const place = placeOf(rowId(row), focused);
+  if (!(focused instanceof HTMLElement) || focused === document.body) return;
+  const owner = standsFor(focused);
+  const row = owner.closest<HTMLElement>(`[${ROW_ATTR}]`);
+  if (!row) {
+    const heading = owner.closest('section[aria-labelledby]')?.getAttribute('aria-labelledby');
+    if (heading && SECTION_HEADINGS.has(heading)) void handOffInView(focusHandOff(), () => headingOrPage(heading));
+    return;
+  }
+  const place = placeOf(rowId(row), owner);
   // Read now: the press's own hand-off may settle in the same update and forget it.
   const how = intents.get(place.id);
   void handOffInView(focusHandOff(), () => {

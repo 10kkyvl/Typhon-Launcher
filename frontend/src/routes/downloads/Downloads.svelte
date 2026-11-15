@@ -12,8 +12,12 @@
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import { gamePageId } from '../../lib/services/downloads';
   import { claimAmbient } from '../../lib/stores/ambient';
-  import { active, completed, downloadsLoaded, downloadsLoadError, failed, queue, reloadDownloads } from '../../lib/stores/downloads';
+  import { launchesInFlight } from '../../lib/services/library';
+  import { downloadOffers, waitingForSchedule } from '../../lib/stores/downloadOffers';
+  import { active, completed, downloads, downloadsLoaded, downloadsLoadError, failed, queue, reloadDownloads } from '../../lib/stores/downloads';
+  import { libraryGamesById, runningGames } from '../../lib/stores/library';
   import { requestArt } from '../../lib/stores/metadata';
+  import { playThrottle } from '../../lib/stores/playThrottle';
   import { navigate } from '../../lib/stores/router';
   import { installErrorText } from '../../lib/install/installErrors';
   import { installationsByDownload } from '../../lib/stores/install';
@@ -26,7 +30,6 @@
   import FailedList from './FailedList.svelte';
   import PlayThrottleBanner from './PlayThrottleBanner.svelte';
   import QueueList from './QueueList.svelte';
-  import { completedKind, completedPart } from './completedRow';
   import { catchLeaving, pressed } from './rowFocus';
   import { downloadsSectionIds } from './sections';
 
@@ -67,22 +70,18 @@
     installOpen = true;
   }
 
-  // Which section holds which download. A row that leaves its section by Go's doing (a download
-  // completes, fails or starts) while focus is in it goes before the page shows the change: focus is
-  // handed on by the screen's rule then, for every section in one place.
-  const placesKey = $derived(
-    [
-      $active.map((d) => d.id),
-      $failed.map((d) => d.id),
-      $queue.map((d) => d.id),
-      $completed.map((d) => `${d.id}:${completedPart(completedKind(d, $installationsByDownload.get(d.id)))}`),
-    ]
-      .map((ids) => ids.join(','))
-      .join('|'),
-  );
-
+  // Before any change of what the lists show (a row leaving its section, a control Go no longer offers,
+  // a section emptying, all by Go's doing), the screen's rule reads where focus is, and hands it on
+  // once the page shows the change if the focused element went with it.
   $effect.pre(() => {
-    void placesKey;
+    void $downloads;
+    void $downloadOffers;
+    void $waitingForSchedule;
+    void $playThrottle;
+    void $installationsByDownload;
+    void $libraryGamesById;
+    void $runningGames;
+    void $launchesInFlight;
     untrack(catchLeaving);
   });
 
