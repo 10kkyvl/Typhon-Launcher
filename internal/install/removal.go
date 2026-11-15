@@ -160,6 +160,9 @@ func (s *Service) RemoveGame(gameID string, opts RemoveOptions) error {
 		if err := removableDir(game.InstallDir); err != nil {
 			return err
 		}
+		if err := s.removals.ready(); err != nil {
+			return err
+		}
 		if err := s.checkHoldsOtherImage(game.InstallDir, game.ID); err != nil {
 			return err
 		}
@@ -189,8 +192,10 @@ func (s *Service) RemoveGame(gameID string, opts RemoveOptions) error {
 			return err
 		}
 	}
+	staged := ""
 	if deleteFiles {
-		if err := s.removeInstallDir(game.InstallDir); err != nil {
+		staged, err = s.deleteStaged(removalEntry{GameID: gameID, InstallDir: game.InstallDir, KeepInLibrary: opts.KeepInLibrary})
+		if err != nil {
 			return err
 		}
 		// Окружение запуска живёт вместе с файлами: пережившее их бутыль —
@@ -230,6 +235,13 @@ func (s *Service) RemoveGame(gameID string, opts RemoveOptions) error {
 	}
 	if forgetErr != nil {
 		return forgetErr
+	}
+	if staged != "" {
+		// Both halves are done; an entry left behind only makes the next
+		// start check a folder that is gone and a card that is settled.
+		if err := s.removals.drop(staged); err != nil {
+			slog.Warn("forget finished removal", "path", staged, "error", err)
+		}
 	}
 	slog.Info("game removed", "id", gameID, "title", game.Title, "method", plan.method,
 		"files", deleteFiles, "kept", opts.KeepInLibrary)
@@ -405,24 +417,38 @@ func (s *Service) forgetInstallations(gameID string) error {
 	return nil
 }
 
+// removeInstallDir deletes a folder no card depends on: once the files are
+// gone, nothing of the removal is left to finish.
 func (s *Service) removeInstallDir(dir string) error {
-	staged, err := s.stageForRemoval(dir)
-	if err != nil {
+	staged, err := s.deleteStaged(removalEntry{InstallDir: dir})
+	if err != nil || staged == "" {
 		return err
 	}
+	return s.removals.drop(staged)
+}
+
+// deleteStaged deletes entry.InstallDir and returns the staged path whose
+// journal entry stays until the caller has updated the library too: a process
+// killed in between is finished by the startup sweep, both halves of it.
+func (s *Service) deleteStaged(entry removalEntry) (string, error) {
+	staged, err := s.stageForRemoval(entry)
+	if err != nil {
+		return "", err
+	}
 	if staged == "" {
-		return nil
+		return "", nil
 	}
 	if err := os.RemoveAll(staged); err != nil {
-		return fmt.Errorf("удалить %s: %w", dir, err)
+		return "", fmt.Errorf("удалить %s: %w", entry.InstallDir, err)
 	}
-	return s.removals.drop(staged)
+	return staged, nil
 }
 
 // stageForRemoval переименовывает каталог перед удалением: переименование либо
 // проходит целиком, либо не трогает ничего, поэтому занятый каталог виден сразу,
 // а не после того, как половина файлов уже удалена.
-func (s *Service) stageForRemoval(dir string) (string, error) {
+func (s *Service) stageForRemoval(entry removalEntry) (string, error) {
+	dir := entry.InstallDir
 	missing, err := dirMissing(dir)
 	if err != nil {
 		return "", err
@@ -434,7 +460,8 @@ func (s *Service) stageForRemoval(dir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := s.removals.add(staged); err != nil {
+	entry.Path = staged
+	if err := s.removals.add(entry); err != nil {
 		return "", err
 	}
 	if err := os.Rename(dir, staged); err != nil {
@@ -470,19 +497,17 @@ func freeRemovalPath(dir string) (string, error) {
 // каталоге, поэтому подстроки в середине имени права на удаление не дают.
 var removalStagingName = regexp.MustCompile(`\.removing(-\d+)?$`)
 
-// sweepRemovals доводит до конца удаления, прерванные выключением. Каждая
-// запись проверяется так же, как путь перед stageForRemoval: абсолютный,
-// не корень, не symlink, настоящий каталог с суффиксом staging. Запись, не
-// прошедшая проверку, остаётся в журнале и попадает в лог, но не удаляется.
-// Отмена ctx здесь не прерывает проход: журнал делает удаление идемпотентным,
-// а ServiceShutdown ждёт завершения этой горутины (TestSweepRemovalsFinishesPending).
-func (s *Service) sweepRemovals() {
-	paths, err := s.removals.load()
-	if err != nil {
-		slog.Error("load pending removals", "error", err)
-		return
-	}
-	for _, path := range paths {
+// sweepRemovals доводит до конца удаления, прерванные выключением, — и файлы,
+// и запись библиотеки. Каждая запись проверяется так же, как путь перед
+// stageForRemoval: абсолютный, не корень, не symlink, настоящий каталог с
+// суффиксом staging. Запись, не прошедшая проверку, остаётся в журнале и
+// попадает в лог, но не удаляется; запись, у которой не удалась половина в
+// библиотеке, тоже остаётся до следующего запуска. Отмена ctx здесь не
+// прерывает проход: журнал делает удаление идемпотентным, а ServiceShutdown
+// ждёт завершения этой горутины (TestSweepRemovalsFinishesPending).
+func (s *Service) sweepRemovals(entries []removalEntry) {
+	for _, entry := range entries {
+		path := entry.Path
 		if !removalStagingName.MatchString(filepath.Base(path)) {
 			slog.Error("unexpected pending removal", "path", path)
 			continue
@@ -495,12 +520,48 @@ func (s *Service) sweepRemovals() {
 			slog.Warn("remove pending", "path", path, "error", err)
 			continue
 		}
+		if err := s.finishRemoval(entry); err != nil {
+			slog.Warn("finish pending removal in the library", "path", path, "game", entry.GameID, "error", err)
+			continue
+		}
 		if err := s.removals.drop(path); err != nil {
 			slog.Warn("forget pending removal", "path", path, "error", err)
 			continue
 		}
-		slog.Info("pending removal finished", "path", path)
+		slog.Info("pending removal finished", "path", path, "game", entry.GameID)
 	}
+}
+
+// finishRemoval does what a killed removal did not get to after its files: the
+// installation records and the card as the player asked. The card is touched
+// only while it still names the removed folder and that folder is gone, so a
+// game installed again since then is left alone. A bare path of an older
+// journal names no game and leaves the card as it is.
+func (s *Service) finishRemoval(entry removalEntry) error {
+	if entry.GameID == "" || s.library == nil {
+		return nil
+	}
+	if err := s.forgetInstallations(entry.GameID); err != nil {
+		return err
+	}
+	game, err := s.library.Find(entry.GameID)
+	if library.IsGameNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if game.Uninstalled || !samePath(game.InstallDir, entry.InstallDir) {
+		return nil
+	}
+	gone, err := dirMissing(entry.InstallDir)
+	if err != nil || !gone {
+		return err
+	}
+	if entry.KeepInLibrary {
+		return s.library.MarkUninstalled(entry.GameID)
+	}
+	return s.library.RemoveGame(entry.GameID)
 }
 
 func dirMissing(path string) (bool, error) {

@@ -345,6 +345,13 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		return err
 	}
 	s.loadErr = nil
+	// The journal is read before any removal can add to it; an unreadable one
+	// stays on disk untouched and every removal that deletes files refuses
+	// with install.removals_unreadable until it can be read.
+	pendingRemovals, err := s.removals.load()
+	if err != nil {
+		slog.Error("pending removals unreadable", "error", err)
+	}
 	resume := make([]string, 0, 2)
 	toFinalize := make([]string, 0, 2)
 	waitingDownloads := make([]string, 0, 2)
@@ -415,7 +422,7 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 			return
 		}
 		s.sweepPartial(base, staleItems)
-		s.sweepRemovals()
+		s.sweepRemovals(pendingRemovals)
 		if err := s.releaseOrphanedWaiting(base, waitingDownloads); err != nil && !errors.Is(err, context.Canceled) {
 			slog.Error("release installs of downloads removed earlier", "error", err)
 		}

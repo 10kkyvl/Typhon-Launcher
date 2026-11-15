@@ -566,10 +566,10 @@ func TestSweepRemovalsFinishesPending(t *testing.T) {
 	mkFile(t, filepath.Join(kept, "game.exe"), 64)
 
 	first := mustServiceAt(t, dir)
-	if err := first.removals.add(staged); err != nil {
+	if err := first.removals.add(removalEntry{Path: staged}); err != nil {
 		t.Fatalf("add staged: %v", err)
 	}
-	if err := first.removals.add(kept); err != nil {
+	if err := first.removals.add(removalEntry{Path: kept}); err != nil {
 		t.Fatalf("add kept: %v", err)
 	}
 
@@ -594,7 +594,7 @@ func TestStageForRemovalRecordsIntentBeforeRename(t *testing.T) {
 	s := mustServiceAt(t, t.TempDir())
 	dir := gameDir(t, "Staged")
 
-	staged, err := s.stageForRemoval(dir)
+	staged, err := s.stageForRemoval(removalEntry{InstallDir: dir})
 	if err != nil {
 		t.Fatalf("stage: %v", err)
 	}
@@ -605,7 +605,7 @@ func TestStageForRemovalRecordsIntentBeforeRename(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load pending: %v", err)
 	}
-	if len(pending) != 1 || pending[0] != staged {
+	if len(pending) != 1 || pending[0].Path != staged {
 		t.Fatalf("pending = %v, staged = %s", pending, staged)
 	}
 }
@@ -1077,7 +1077,7 @@ func TestSweepRemovalsRefusesEntriesThatAreNotStagingDirectories(t *testing.T) {
 
 	first := mustServiceAt(t, dir)
 	for _, p := range []string{lookalike, link, "Relative" + removingSuffix, staged} {
-		if err := first.removals.add(p); err != nil {
+		if err := first.removals.add(removalEntry{Path: p}); err != nil {
 			t.Fatalf("add %s: %v", p, err)
 		}
 	}
@@ -1108,7 +1108,7 @@ func TestSweepRemovalsRefusesEntriesThatAreNotStagingDirectories(t *testing.T) {
 		t.Fatalf("load journal: %v", err)
 	}
 	for _, p := range remaining {
-		if p == staged {
+		if p.Path == staged {
 			t.Fatal("the finished staging entry is still journaled")
 		}
 	}

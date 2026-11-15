@@ -18,6 +18,7 @@ import (
 	"typhon/internal/platform"
 	"typhon/internal/settings"
 	"typhon/internal/sources"
+	"typhon/internal/uierr"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -117,7 +118,9 @@ func (f *fakeDownloads) StopSeeding(id string) error {
 	return nil
 }
 
-var errFakeNoGame = errors.New("игра не найдена")
+// errFakeNoGame carries the library's code so that callers telling "no such
+// game" from a failure treat the fake as they treat the library.
+var errFakeNoGame = uierr.New("library.game_not_found", "игра не найдена")
 
 type fakeRegistrar struct {
 	mu      sync.Mutex
