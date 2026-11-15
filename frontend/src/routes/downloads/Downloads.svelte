@@ -13,21 +13,29 @@
   import { msg } from '../../lib/i18n';
   import CompletedList from './CompletedList.svelte';
   import DownloadsActions from './DownloadsActions.svelte';
+  import DownloadsAnnouncer from './DownloadsAnnouncer.svelte';
   import DownloadsSection from './DownloadsSection.svelte';
   import DownloadsSummary from './DownloadsSummary.svelte';
   import FailedList from './FailedList.svelte';
   import PlayThrottleBanner from './PlayThrottleBanner.svelte';
   import QueueList from './QueueList.svelte';
+  import { downloadsSectionIds } from './sections';
 
   let addOpen = $state(false);
   let detailsOpen = $state(false);
   let detailsId = $state<string | null>(null);
   let installOpen = $state(false);
   let installDownloadId = $state<string | null>(null);
+  let announcer = $state<DownloadsAnnouncer>();
 
   const nothing = $derived(
     $active.length === 0 && $queue.length === 0 && $completed.length === 0 && $failed.length === 0,
   );
+
+  /** What the lists say in the screen's live region (`onannounce`): what the player did, never progress. */
+  function announce(text: string) {
+    announcer?.announce(text);
+  }
 
   function openDetails(id: string) {
     detailsId = id;
@@ -75,7 +83,7 @@
     {/snippet}
   </EmptyState>
   {:else}
-  <DownloadsSection title={msg('transfers.downloadsActiveHeading')} count={$active.length}>
+  <DownloadsSection id={downloadsSectionIds.active} title={msg('transfers.downloadsActiveHeading')} count={$active.length}>
     {#if $active.length === 0}
       <EmptyState size="inline" title={msg('transfers.downloadsEmptyActiveTitle')} />
     {:else}
@@ -93,6 +101,8 @@
   <QueueList />
 
   <CompletedList onopen={openDetails} oninstall={openInstall} />
+
+  <DownloadsAnnouncer bind:this={announcer} />
 
   <AddDownloadModal bind:open={addOpen} />
 

@@ -1,11 +1,26 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import SectionHeader from '../../lib/components/SectionHeader.svelte';
 
-  let { title, count, children }: { title: string; count: number; children: Snippet } = $props();
+  /**
+   * One section of the downloads screen: its heading with the count and a slot for the section's
+   * actions ("Clear the list"), and the section named by that heading. `id` is the heading's, one of
+   * `downloadsSectionIds` (sections.ts), which the lists hand focus to when their last row leaves.
+   */
+  let {
+    title,
+    count,
+    id,
+    actions,
+    children,
+  }: { title: string; count: number; id?: string; actions?: Snippet; children: Snippet } = $props();
+
+  const uid = $props.id();
+  const headingId = $derived(id ?? `${uid}-title`);
 </script>
 
-<section class="section">
-  <h2>{title} <span class="count">{count}</span></h2>
+<section class="section" aria-labelledby={headingId}>
+  <SectionHeader {title} {count} id={headingId} {actions} />
   {@render children()}
 </section>
 
@@ -13,20 +28,5 @@
   .section {
     margin-bottom: var(--space-8);
     max-width: 140rem;
-  }
-
-  .section h2 {
-    display: flex;
-    align-items: baseline;
-    gap: 0.8rem;
-    font-size: var(--font-lg);
-    margin-bottom: var(--space-3);
-  }
-
-  .count {
-    font-size: var(--font-sm);
-    font-weight: 500;
-    color: var(--text-3);
-    font-variant-numeric: tabular-nums;
   }
 </style>
