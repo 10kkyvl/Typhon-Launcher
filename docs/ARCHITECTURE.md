@@ -109,7 +109,7 @@ Registered in `main.go::init` (typed) — families and their frontend consumers 
 | download | `download:{added,updated,progress,completed,failed,removed,reordered,degraded,network}` (`progress` is a slim `ProgressUpdate` every 250 ms; `removed` is `RemovedEvent{id}`; `reordered` is `ReorderedEvent{ids}`, every id in the manager's order, after `MoveUp/MoveDown/MoveTo`; `degraded` is not registered in `main.go`: its payload type is unexported) | `downloads.ts` (`downloadEvents`; `reordered` → `order.ts::followOrder`), `degraded.ts`, `network.ts` |
 | install | `install:{started,updated,completed,failed,cancelled,removed}` | `install.ts` |
 | sources | `source:{updated,error,degraded}`, `release:{added,removed,matched,needs-review}` | `sources.ts` |
-| metadata | `metadata:updated` | `metadata.ts`, `routes/game/gamePageData.svelte.ts` (the desktop game page), `routes/catalog/Catalog.svelte`, `lib/bigpicture/components/GamePage.svelte` |
+| metadata | `metadata:updated` | `metadata.ts`, `routes/game/gamePageData.svelte.ts` (the desktop game page), `routes/catalog/catalogPageData.svelte.ts` (the desktop catalog page), `lib/bigpicture/components/GamePage.svelte` |
 | discovery | `discovery:{started,progress,completed}` | `discovery.ts` |
 | updates | `update:{available,started,updated,completed,failed,rollback,degraded}`, `verify:*`, `repair:*` | `updates.ts` |
 | relocate | `move:{started,progress,completed,failed,cancelled,degraded}` | `relocate.ts` |
