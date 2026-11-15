@@ -47,6 +47,14 @@ describe('a base control described by the text beside it', () => {
     expect(getByRole('slider', { name: 'The setting', description: 'What the setting does' })).toBeTruthy();
   });
 
+  // The row's label names the slider: the slider draws no hidden copy of it.
+  it('the slider, named by the label beside it', () => {
+    const { getByRole, container } = renderDom(Slider, { position: 1, max: 4, labelledby: 'row-label', valueText: '1', describedby: 'row-hint', onchange: vi.fn() });
+    const slider = getByRole('slider', { name: 'The setting', description: 'What the setting does' });
+    expect(slider.getAttribute('aria-labelledby')).toBe('row-label');
+    expect(container.querySelector('.slider')?.textContent?.trim()).toBe('1');
+  });
+
   it('the number field, named by a label for its id', () => {
     const label = document.createElement('label');
     label.htmlFor = 'threads';
@@ -85,5 +93,26 @@ describe('a base control given no hint and no id', () => {
   it('the slider has no description', () => {
     const { getByRole } = renderDom(Slider, { position: 1, max: 4, label: 'Speed', valueText: '1', onchange: vi.fn() });
     expect(getByRole('slider', { name: 'Speed' }).hasAttribute('aria-describedby')).toBe(false);
+  });
+
+  // SpeedLimitControl and the showcase's sliders pass `label` and none of `labelledby` or `fill`.
+  it('the slider keeps its own label, its attributes and its classes', () => {
+    const { getByRole, container } = renderDom(Slider, { position: 1, max: 4, label: 'Speed', valueText: '1', onchange: vi.fn() });
+    const slider = getByRole('slider', { name: 'Speed' });
+    expect(slider.getAttributeNames().sort()).toEqual([
+      'aria-labelledby',
+      'aria-orientation',
+      'aria-valuemax',
+      'aria-valuemin',
+      'aria-valuenow',
+      'aria-valuetext',
+      'class',
+      'role',
+      'style',
+      'tabindex',
+    ]);
+    const root = container.querySelector('.slider') as HTMLElement;
+    expect([...root.classList].filter((name) => !name.startsWith('svelte-'))).toEqual(['slider']);
+    expect(root.querySelector('.head .label')?.textContent).toBe('Speed');
   });
 });

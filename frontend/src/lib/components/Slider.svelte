@@ -17,15 +17,20 @@
    * `position` may sit between steps (a value stored off the steps): it is drawn there and moves to a
    * step only when the player moves it.
    *
-   * `label` names it (visible above the track unless `hideLabel`); `valueText` is the value in words,
-   * shown beside the label and read by assistive tech. `startText` and `endText` mark the ends of the
+   * `label` names it (visible above the track unless `hideLabel`), or `labelledby` gives the id of a
+   * visible label beside it (a settings row's), and the slider draws no label of its own; `valueText`
+   * is the value in words, shown above the track and read by assistive tech. `startText` and `endText` mark the ends of the
    * scale under the track. `disabled` and `busy` (a commit under way) take no input and keep focus.
    * Sizes: `--slider-track` (track height), `--slider-thumb` (thumb side).
    */
+  // One name: its own label, or the id of the label beside it.
+  type Named = { label: string; labelledby?: undefined } | { labelledby: string; label?: undefined };
+
   let {
     position,
     max,
     label,
+    labelledby,
     hideLabel = false,
     valueText,
     startText,
@@ -42,7 +47,6 @@
     position: number;
     /** The last position; the track has max + 1 steps. */
     max: number;
-    label: string;
     hideLabel?: boolean;
     /** The value in words ("20 MB/s", "No limit"): the readout and `aria-valuetext`. */
     valueText: string;
@@ -60,7 +64,7 @@
     onchange: (position: number) => void;
     /** On the slider element itself. */
     testid?: string;
-  } = $props();
+  } & Named = $props();
 
   const uid = $props.id();
 
@@ -174,7 +178,7 @@
 
 <div class="slider" class:disabled class:busy>
   <div class="head" class:sr-only={hideLabel}>
-    <span class="label" id="{uid}-label">{label}</span>
+    {#if label !== undefined}<span class="label" id="{uid}-label">{label}</span>{/if}
     <span class="value" aria-hidden="true"><Reading text={valueText} /></span>
   </div>
   <div class="bar" {@attach pointer}>
@@ -185,7 +189,7 @@
         class="thumb"
         role="slider"
         tabindex="0"
-        aria-labelledby="{uid}-label"
+        aria-labelledby={labelledby ?? `${uid}-label`}
         aria-describedby={describedby}
         aria-orientation="horizontal"
         aria-valuemin={0}
@@ -235,6 +239,7 @@
   }
 
   .value {
+    margin-left: auto;
     color: var(--text);
     font-size: var(--font-sm);
     font-weight: 600;

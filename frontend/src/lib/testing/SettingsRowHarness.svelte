@@ -28,8 +28,8 @@
 </SettingsRow>
 
 <SettingsRow label="Масштаб" hint="Размер всего интерфейса" stack>
-  {#snippet children({ hintId })}
-    <Slider position={2} max={4} label="Масштаб" hideLabel valueText="100%" describedby={hintId} onchange={() => {}} />
+  {#snippet children({ labelId, hintId })}
+    <Slider position={2} max={4} labelledby={labelId} valueText="100%" describedby={hintId} onchange={() => {}} />
   {/snippet}
 </SettingsRow>
 
