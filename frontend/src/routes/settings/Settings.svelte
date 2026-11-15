@@ -106,7 +106,7 @@
   <SentDataModal bind:open={page.sentDataOpen} />
 
   {#if page.pending}
-    <ConfirmModal prompt={page.pending.prompt} onconfirm={page.pending.run} onclose={() => (page.pending = null)} />
+    <ConfirmModal prompt={page.pending.prompt} onconfirm={page.pending.run} onclose={page.closePending} />
   {/if}
 
   <Modal bind:open={page.historyOpen} title={msg('settings.aboutHistoryLabel')} width="104rem">

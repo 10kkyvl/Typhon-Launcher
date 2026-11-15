@@ -3,10 +3,16 @@ import page from './Settings.svelte?raw';
 import flow from './settingsPage.svelte.ts?raw';
 import about from './AboutTab.svelte?raw';
 
+const screen = import.meta.glob<string>(['./*.svelte', './*.svelte.ts'], { query: '?raw', import: 'default', eager: true });
+
 describe('Settings send-logs flow', () => {
   it('never sends on the button click itself, only after confirmation', () => {
     expect(about).toMatch(/onclick=\{page\.openSendLogsConfirm\}/);
-    expect(about).not.toMatch(/onclick=\{[^}]*sendLogs\(\)[^}]*\}/);
+    expect(Object.keys(screen).length).toBeGreaterThan(10);
+    const callers = Object.entries(screen)
+      .filter(([, text]) => /\bsendLogs\(/.test(text))
+      .map(([path]) => path);
+    expect(callers).toEqual(['./settingsPage.svelte.ts']);
   });
 
   // The send-logs confirmation goes through the same `pending` queue every
@@ -27,7 +33,6 @@ describe('Settings send-logs flow', () => {
   it('closes the confirmation immediately and shows real progress on the page', () => {
     expect(flow).toMatch(/function confirmSendLogs\(\)[\s\S]*?void sendLogs\(\)/);
     expect(flow).not.toMatch(/await sendLogs\(\)/);
-    expect(about).not.toMatch(/await sendLogs\(\)/);
     expect(about).toContain('<ProgressBar');
     expect(about).toContain('value={logsProgressPercent}');
     expect(about).toContain("indeterminate={page.logsStage !== 'sending' || !page.logsProgress}");

@@ -10,8 +10,9 @@ import { balanced } from '../testing/scan';
  * again. The handler is the function `onconfirm` names or calls (`fn`, `() => fn(x)`), an inline
  * arrow's block, or, for `pending.run`, the `run` of every object assigned to `pending`, resolved the
  * same way. For `page.pending.run`, where the caller made `page` with a factory imported from a
- * sibling `.svelte.ts` module (`const page = createX()`), that module is the file read. A handler that
- * cannot be resolved counts as one that may reject.
+ * sibling `.svelte.ts` module (`const page = createX()`), that module is the file read, and no
+ * component may assign such a `pending` itself: the module would not show it. A handler that cannot
+ * be resolved counts as one that may reject.
  *
  * Limits: only one level is followed (a handler that calls a helper which catches still needs
  * `errorText`, which is harmless); a rethrow hidden in a called function is not seen; a `pending`
@@ -111,5 +112,15 @@ describe('ConfirmModal callers', () => {
 
   it('pass errorText wherever the action may reject', () => {
     expect(unmapped()).toEqual([]);
+  });
+
+  it('never queue a confirmation on a pending they do not own', () => {
+    const foreign: string[] = [];
+    for (const [path, text] of Object.entries(sources)) {
+      for (const m of text.matchAll(/[\w$]+\.pending\s*=\s*\{/g)) {
+        foreign.push(`${path}:${text.slice(0, m.index).split('\n').length}`);
+      }
+    }
+    expect(foreign).toEqual([]);
   });
 });
