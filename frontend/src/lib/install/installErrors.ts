@@ -177,7 +177,12 @@ export const REASONS: Record<string, MessageKey> = {
   'emulators.unknown_platform': 'emulators.unknown_platform',
   'library.already_added': 'library.already_added',
   'library.cover_invalid': 'library.cover_invalid',
+  'library.folder_busy': 'library.folder_busy',
+  'library.game_not_found': 'library.game_not_found',
   'library.image_outside_dir': 'library.image_outside_dir',
+  'library.moving': 'library.moving',
+  'library.no_executable': 'library.no_executable',
+  'library.removing': 'library.removing',
 };
 
 function suggestedPath(err: unknown): string {

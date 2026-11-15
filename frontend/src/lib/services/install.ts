@@ -125,6 +125,8 @@ export interface RemovalInfo {
   downloadSeeding: boolean;
   downloadBytes: number;
   downloadPath: string;
+  /** Other library games with files in this game's folder; Go sends null for none. */
+  sharedWith: { id: string; title: string }[] | null;
 }
 
 export interface RemoveOptions {

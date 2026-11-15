@@ -97,13 +97,14 @@ describe.each(Object.entries(tables))('%s error codes', (_name, { reasons, text 
 
 describe('codes shared between tables', () => {
   it('does not give one code two meanings across the tables', () => {
-    const owner = new Map<string, string>();
+    // A code two screens can receive may sit in both their tables, with one message.
+    const owner = new Map<string, { name: string; key: string }>();
     const clashes: string[] = [];
     for (const [name, { reasons }] of Object.entries(tables)) {
-      for (const code of Object.keys(reasons)) {
+      for (const [code, key] of Object.entries(reasons)) {
         const previous = owner.get(code);
-        if (previous && previous !== name) clashes.push(`${code}: ${previous} and ${name}`);
-        else owner.set(code, name);
+        if (previous && previous.key !== key) clashes.push(`${code}: ${previous.name} says ${previous.key}, ${name} says ${key}`);
+        else if (!previous) owner.set(code, { name, key });
       }
     }
     expect(clashes).toEqual([]);

@@ -34,6 +34,11 @@ export interface MoveJob {
   startedAt: string;
   updatedAt: string;
   error?: string;
+  /** The stage a failed move stopped at. */
+  failedAt?: MoveStage;
+  recoveryAttempts?: number;
+  /** The game left the library mid-move: the copy at `target` or `staging` is kept and belongs to no card. */
+  orphaned?: boolean;
 }
 
 const unavailable = () => new Error('unavailable in browser');

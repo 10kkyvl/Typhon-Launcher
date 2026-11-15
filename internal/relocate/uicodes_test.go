@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -36,13 +37,27 @@ func codesIn(t *testing.T, pattern *regexp.Regexp, paths ...string) []string {
 // Коды ошибок — контракт между Go и интерфейсом: переименование с одной
 // стороны не ломает сборку, а тихо возвращает пользователю запасной текст.
 func TestErrorCodesMatchTheFrontendTable(t *testing.T) {
-	goCodes := codesIn(t, goCodePattern, "model.go", "service.go")
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatalf("glob: %v", err)
+	}
+	var sources []string
+	for _, file := range files {
+		if !strings.HasSuffix(file, "_test.go") {
+			sources = append(sources, file)
+		}
+	}
+	goCodes := codesIn(t, goCodePattern, sources...)
 	if len(goCodes) < 15 {
 		t.Fatalf("в пакете найдено %d кодов, ожидалось не меньше 15", len(goCodes))
 	}
 
-	tsPath := filepath.Join("..", "..", "frontend", "src", "lib", "relocate", "moveMessages.ts")
-	tsCodes := codesIn(t, tsCodePattern, tsPath)
+	// Отказы по временным папкам переноса показывает экран «Использование диска»,
+	// он читает таблицу установки.
+	lib := filepath.Join("..", "..", "frontend", "src", "lib")
+	tsCodes := codesIn(t, tsCodePattern,
+		filepath.Join(lib, "relocate", "moveMessages.ts"),
+		filepath.Join(lib, "install", "installErrors.ts"))
 
 	inTS := map[string]bool{}
 	for _, code := range tsCodes {
@@ -50,7 +65,7 @@ func TestErrorCodesMatchTheFrontendTable(t *testing.T) {
 	}
 	for _, code := range goCodes {
 		if !inTS[code] {
-			t.Errorf("код %q возвращается из Go, но не переводится в moveMessages.ts", code)
+			t.Errorf("код %q возвращается из Go, но не переводится ни в moveMessages.ts, ни в installErrors.ts", code)
 		}
 	}
 
@@ -60,7 +75,7 @@ func TestErrorCodesMatchTheFrontendTable(t *testing.T) {
 	}
 	for _, code := range tsCodes {
 		if !inGo[code] {
-			t.Errorf("код %q переводится в moveMessages.ts, но Go его не возвращает", code)
+			t.Errorf("код %q переводится в таблицах интерфейса, но Go его не возвращает", code)
 		}
 	}
 }

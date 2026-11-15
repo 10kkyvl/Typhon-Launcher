@@ -34,6 +34,7 @@ function info(patch: Partial<RemovalInfo> = {}): RemovalInfo {
     downloadSeeding: false,
     downloadBytes: 0,
     downloadPath: '',
+    sharedWith: null,
     ...patch,
   };
 }

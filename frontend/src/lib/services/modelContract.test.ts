@@ -90,6 +90,14 @@ interface Pair {
 const GO_NAMES: Record<string, string> = {
   'metadata.MetadataView': 'metadata.View',
   'metadata.GameArt': 'metadata.Art',
+  'relocate.MoveJob': 'relocate.Job',
+};
+
+// Interfaces a screen reads whole: a field Go sends and the interface lacks is one the screen cannot
+// show (the games sharing a folder, a move left without its card). Fields left out on purpose are the value.
+const FULL_MIRRORS: Record<string, string[]> = {
+  'lib/services/install.ts: RemovalInfo (install)': [],
+  'lib/services/relocate.ts: MoveJob (relocate)': [],
 };
 
 // Fields the interface declares required while Go tags them omitempty: a reader trusting the type
@@ -143,6 +151,15 @@ describe('hand-written backend types', () => {
       [...declared.keys()].filter((name) => !model.has(name)).map((name) => `${where}.${name}`),
     );
     expect(phantom).toEqual([]);
+  });
+
+  it('leave out no field of the Go struct where a screen reads the interface whole', () => {
+    const found = compared.filter(({ where }) => where in FULL_MIRRORS);
+    expect(found.map(({ where }) => where).sort()).toEqual(Object.keys(FULL_MIRRORS).sort());
+    const dropped = found.flatMap(({ where, declared, model }) =>
+      [...model.keys()].filter((name) => !declared.has(name) && !FULL_MIRRORS[where].includes(name)).map((name) => `${where}.${name}`),
+    );
+    expect(dropped).toEqual([]);
   });
 
   it('agree with the Go struct on whether a plain field is text, a number or a flag', () => {
