@@ -13,8 +13,6 @@
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import {
     countUnknown,
-    leftoverKindKey,
-    reasonLabel,
     sizeSorted,
     sortGames,
     type GameSort,
@@ -27,6 +25,7 @@
   import { createDiskUsagePage } from './diskUsagePage.svelte';
   import DownloadsSection from './DownloadsSection.svelte';
   import GamesSection from './GamesSection.svelte';
+  import LeftoversSection from './LeftoversSection.svelte';
   import UsageRow from './UsageRow.svelte';
   import UsageSection from './UsageSection.svelte';
   import { size, total } from './usageSizes';
@@ -133,29 +132,7 @@
 
       <DownloadsSection {downloads} totalBytes={page.report.totals.downloadsBytes} ondelete={page.askDownload} />
 
-      <UsageSection
-        title={msg('diskusage.leftoversTitle')}
-        hint={msg('diskusage.leftoversHint')}
-        total={total(page.report.totals.leftoversBytes, leftovers.some((l) => l.sizeUnknown))}
-        empty={leftovers.length === 0}
-        emptyText={msg('diskusage.leftoversEmpty')}
-      >
-        {#each leftovers as leftover (leftover.path)}
-          <UsageRow
-            title={msg(leftoverKindKey(leftover.kind))}
-            path={leftover.path}
-            pathTitle={leftover.path}
-            reason={leftover.deletable ? null : reasonLabel(leftover.reasonCode, leftover.reason)}
-            size={size(leftover)}
-          >
-            {#snippet actions()}
-              <Button size="sm" variant="danger" disabled={!leftover.deletable} onclick={() => page.askLeftover(leftover)}>
-                {msg('diskusage.leftoverDelete')}
-              </Button>
-            {/snippet}
-          </UsageRow>
-        {/each}
-      </UsageSection>
+      <LeftoversSection {leftovers} totalBytes={page.report.totals.leftoversBytes} ondelete={page.askLeftover} />
 
       <UsageSection
         title={msg('diskusage.screenshotsTitle')}
