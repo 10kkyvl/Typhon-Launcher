@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import buttonSource from '../lib/components/Button.svelte?raw';
 import cardSource from '../lib/components/GameCard.svelte?raw';
+import progressSource from '../lib/components/ProgressBar.svelte?raw';
 import tabsSource from '../lib/components/Tabs.svelte?raw';
 import { gameToneOf, toneVars } from '../lib/art/tone';
 import { ruleBody, styleOf } from '../lib/testing/css';
@@ -76,6 +77,7 @@ function computed(expr: string, tokens: Record<string, string>): string {
 
 const BUTTON = styleOf(buttonSource, 'Button.svelte');
 const CARD = styleOf(cardSource, 'GameCard.svelte');
+const BAR = styleOf(progressSource, 'ProgressBar.svelte');
 const ENABLED = ":not(:disabled, [aria-disabled='true'])";
 
 // What a launching control paints, at rest, hovered and pressed, with the properties in scope.
@@ -89,6 +91,16 @@ function button(tokens: Record<string, string>) {
     pressed: computed(ruleBody(BUTTON, `.play:active:hover${ENABLED}`).background, tokens),
     pressedAlone: computed(ruleBody(BUTTON, ".play:active:not(:hover, :disabled, [aria-disabled='true'])").background, tokens),
   };
+}
+
+// A progress bar of a tone: its fill and the streak that runs in it while data flows. The accent tone is the
+// track's own rule; the streak's fallback is written where it paints.
+function bar(tone: 'accent' | 'game', tokens: Record<string, string>) {
+  const own = tone === 'accent' ? {} : ruleBody(BAR, `.track[data-tone='${tone}']`);
+  const scope = { ...tokens, ...ruleBody(BAR, '.track'), ...own };
+  const band = /color-mix\(in srgb, (var\([\s\S]+\)) 30%, transparent\)/.exec(ruleBody(BAR, '.fill.active::after').background)?.[1];
+  if (!band) throw new Error('the streak has no colour');
+  return { fill: computed(scope['--bar'], scope), streak: computed(band, scope) };
 }
 
 function disc(tokens: Record<string, string>) {
@@ -147,6 +159,13 @@ describe('a launching control outside any game is the primary fill it was', () =
     }
   }
 
+  for (const { id, tokens } of PRESETS) {
+    it(`${id}: a progress bar in the game tone is the accent bar it was`, () => {
+      expect(bar('game', tokens)).toEqual(bar('accent', tokens));
+      expect(bar('game', tokens).fill).toBe(tokens['--accent-bright']);
+    });
+  }
+
   it("the tab marker is --accent-bright unless a page hands it another colour", () => {
     const marker = ruleBody(styleOf(tabsSource, 'Tabs.svelte'), '.underline .plate::after').background;
     expect(computed(marker, PRESETS[0].tokens)).toBe(PRESETS[0].tokens['--accent-bright']);
@@ -174,6 +193,13 @@ describe("a launching control inside a game's scope takes the game's colour", ()
         pressed: v['--game-disc-active'],
         pressedAlone: v['--game-disc-active'],
       });
+    });
+
+    it(`${id}: a progress bar in the game tone fills with the game's fill and runs its label colour as the streak`, () => {
+      const v = toneVars(gameToneOf([200, 40, 30], { bg: preset['--bg'], text: preset['--text'] }));
+      const tokens = { ...preset, ...v, ...ruleBody(css('./shell.css'), '.game-tone') };
+      expect(bar('game', tokens)).toEqual({ fill: v['--game-fill'], streak: v['--game-on-fill'] });
+      expect(bar('accent', tokens).fill).toBe(preset['--accent-bright']);
     });
   }
 });

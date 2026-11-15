@@ -15,7 +15,7 @@
 
   const KINDS = ['success', 'warning', 'danger', 'accent', 'neutral'] as const;
   const SPINNER_SIZES = ['sm', 'md', 'lg'] as const;
-  const TONES: ProgressTone[] = ['accent', 'success', 'warning', 'danger', 'muted'];
+  const TONES: ProgressTone[] = ['accent', 'game', 'success', 'warning', 'danger', 'muted'];
   const COUNTS = [0, 1, 7, 99, 120];
 
   let progress = $state(40);
@@ -63,6 +63,8 @@
     {#each TONES as tone (tone)}
       <ProgressBar value={progress} {tone} label={`Download, ${tone} tone`} />
     {/each}
+    <ProgressBar value={progress} tone="game" active label="Data flowing (game tone; the accent outside a game)" />
+    <ProgressBar value={progress} tone="game" active paused height={5} label="Paused" valueText={`Paused, ${progress}%`} />
     <ProgressBar value={0} indeterminate label="Waiting for the server" />
     <ProgressBar value={3} max={12} height={8} label="Files checked" valueText="3 of 12 files" />
     <span class="controls">

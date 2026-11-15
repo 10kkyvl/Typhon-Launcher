@@ -1,6 +1,9 @@
 <script lang="ts" module>
-  /** What a bar's colour says: running, done, waiting on the user, failed, or paused. */
-  export type ProgressTone = 'accent' | 'success' | 'warning' | 'danger' | 'muted';
+  /**
+   * What a bar's colour says: running, done, waiting on the user, failed, or paused. `game`: running, in
+   * the colour of the game it belongs to (inside a `gameScope`), the accent's colour outside one.
+   */
+  export type ProgressTone = 'accent' | 'game' | 'success' | 'warning' | 'danger' | 'muted';
 </script>
 
 <script lang="ts">
@@ -21,6 +24,8 @@
     valueText,
     stretch = false,
     decorative = false,
+    active = false,
+    paused = false,
   }: {
     value: number;
     indeterminate?: boolean;
@@ -38,6 +43,10 @@
      * assistive tech. A control's content is its name and hides any progress bar inside it.
      */
     decorative?: boolean;
+    /** Data is flowing: a streak runs inside the fill. None while paused, unknown, or with motion off. */
+    active?: boolean;
+    /** On hold: the fill cools (dims) and keeps its tone. Say it in `valueText` too: a look is not a state. */
+    paused?: boolean;
   } = $props();
 
   const now = $derived(max > 0 && Number.isFinite(value) ? Math.min(max, Math.max(0, value)) : 0);
@@ -49,7 +58,13 @@
 {#snippet fill()}
   <!-- A new node when the mode changes: it starts at its value instead of sliding there from the sweep. -->
   {#key indeterminate}
-    <div class="fill" class:indeterminate style:--pct={indeterminate ? undefined : `${pct}%`}></div>
+    <div
+      class="fill"
+      class:indeterminate
+      class:active={active && !paused && !indeterminate}
+      class:paused={paused && !indeterminate}
+      style:--pct={indeterminate ? undefined : `${pct}%`}
+    ></div>
   {/key}
 {/snippet}
 
@@ -89,6 +104,11 @@
     flex: 1;
   }
 
+  .track[data-tone='game'] {
+    --bar: var(--game-fill, var(--accent-bright));
+    --bar-streak: var(--game-on-fill, var(--accent-on, var(--accent-on-default)));
+  }
+
   .track[data-tone='success'] {
     --bar: var(--success);
   }
@@ -113,6 +133,49 @@
     background: var(--bar);
     transform: translateX(calc(var(--pct, 0%) - 100%));
     transition: transform var(--progress-step) linear;
+  }
+
+  .fill.active,
+  .fill.paused {
+    position: relative;
+  }
+
+  /* A band that crosses the drawn part of the fill (the fill is shifted, so that part starts at
+     100% - pct) and is cut by the track at its right end. */
+  .fill.active::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(100% - var(--pct, 0%));
+    width: calc(var(--pct, 0%) * 0.45);
+    min-width: var(--bar-streak-min, 2.4rem);
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--bar-streak, var(--accent-on, var(--accent-on-default))) 30%, transparent), transparent);
+    transform: translateX(-100%);
+    animation: streak var(--progress-sweep) ease-in-out infinite;
+  }
+
+  .fill.paused::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: var(--bg);
+    opacity: 0.4;
+  }
+
+  @keyframes streak {
+    from {
+      transform: translateX(-100%);
+    }
+    75%,
+    to {
+      transform: translateX(240%);
+    }
+  }
+
+  :global(.no-anim) .fill.active::after {
+    display: none;
   }
 
   .fill.indeterminate {
@@ -143,6 +206,12 @@
       width: 100%;
       animation: none;
       background: repeating-linear-gradient(-45deg, var(--bar) 0 0.4rem, transparent 0.4rem 0.8rem);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .fill.active::after {
+      display: none;
     }
   }
 </style>
