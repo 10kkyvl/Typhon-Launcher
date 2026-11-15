@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"typhon/internal/library"
@@ -361,6 +362,103 @@ func TestSweepKeepsTheRecordsOfAGameInstalledAgain(t *testing.T) {
 		t.Fatalf("installations after the sweep = %+v, want the new installation kept", saved)
 	}
 	requireJournalClear(t, dir)
+}
+
+// The game was installed again into the very folder before the sweep ran: the
+// folder is back, so the killed removal's library half no longer applies.
+func TestSweepLeavesACardInstalledAgainInTheSameFolder(t *testing.T) {
+	dir := t.TempDir()
+	r := newJournalRig(t, dir, &fakeRegistrar{})
+	game := gameDir(t, "Game")
+	putOwnedCard(t, r.registrar, "g1", game)
+	writeJournal(t, dir, journalEntry(t, game+removingSuffix, "g1", game, false))
+
+	r.restart(t)
+
+	card, err := r.registrar.Find("g1")
+	if err != nil || card.Uninstalled {
+		t.Fatalf("card installed again in the same folder = %+v, %v; want it left installed", card, err)
+	}
+	if missing(t, filepath.Join(game, "Game.exe")) {
+		t.Fatal("files of the new install deleted")
+	}
+	requireJournalClear(t, dir)
+}
+
+// reinstallingLibrary is the real library with the game installed again, or
+// found by a scan in another folder, at the moment the sweep settles its card:
+// after the sweep looked at the card and the folder, before the card changes.
+type reinstallingLibrary struct {
+	*library.Service
+	reinstall func() error
+	once      sync.Once
+	err       error
+}
+
+func (l *reinstallingLibrary) MarkUninstalled(id string) error {
+	l.once.Do(func() { l.err = l.reinstall() })
+	return l.Service.MarkUninstalled(id)
+}
+
+func TestSweepNeverUndoesAnInstallThatLandsWhileItSettles(t *testing.T) {
+	for _, where := range []string{"same folder", "another folder"} {
+		t.Run(where, func(t *testing.T) {
+			lib, err := library.NewServiceAt(filepath.Join(t.TempDir(), "library.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				if err := lib.ServiceShutdown(); err != nil {
+					t.Errorf("library shutdown: %v", err)
+				}
+			})
+			old := gameDir(t, "Game")
+			card, err := lib.RegisterInstalled(t.Context(), library.InstalledGame{
+				Title: "Game", Executable: filepath.Join(old, "Game.exe"), InstallDir: old,
+				InstallType: string(TypePortable), Owned: true,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.RemoveAll(old); err != nil {
+				t.Fatal(err)
+			}
+			wrapped := &reinstallingLibrary{Service: lib, reinstall: func() error {
+				if where == "another folder" {
+					next := filepath.Join(t.TempDir(), "Game")
+					mkFile(t, filepath.Join(next, "Game.exe"), 64)
+					_, _, err := lib.ApplyDiscovered(library.Discovered{
+						GameID: card.ID, Title: "Game", Executable: filepath.Join(next, "Game.exe"), InstallDir: next,
+					})
+					return err
+				}
+				mkFile(t, filepath.Join(old, "Game.exe"), 64)
+				_, err := lib.RegisterInstalled(context.Background(), library.InstalledGame{
+					Title: "Game", Executable: filepath.Join(old, "Game.exe"), InstallDir: old,
+					InstallType: string(TypePortable), Owned: true,
+				})
+				return err
+			}}
+			dir := t.TempDir()
+			writeJournal(t, dir, journalEntry(t, old+removingSuffix, card.ID, old, true))
+			r := newJournalRig(t, dir, wrapped)
+
+			r.restart(t)
+
+			got, err := lib.Find(card.ID)
+			if err != nil {
+				t.Fatalf("card: %v", err)
+			}
+			if wrapped.err == nil && got.Uninstalled {
+				t.Fatalf("an install that reported success was marked uninstalled by the sweep: %+v", got)
+			}
+			if wrapped.err != nil {
+				if code := uierr.Code(wrapped.err); code != "library.folder_busy" && code != "library.removing" {
+					t.Fatalf("install during the sweep's act = %q (%v), want it refused by the sweep's hold", code, wrapped.err)
+				}
+			}
+		})
+	}
 }
 
 // failingLibrary is a library whose half of the removal fails to save.

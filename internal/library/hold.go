@@ -210,6 +210,19 @@ func (s *Service) holdForAdding(id, title, dir string) (func(), error) {
 	}, nil
 }
 
+// removingLocked refuses to give the card at pos (-1: none) files again while
+// a removal holds it: the removal settles the card last, and an install or a
+// scan that rebound it in between would be marked uninstalled or removed.
+func (s *Service) removingLocked(pos int) error {
+	if pos < 0 {
+		return nil
+	}
+	if _, ok := s.removing[s.games[pos].ID]; ok {
+		return ErrGameRemoving
+	}
+	return nil
+}
+
 func (s *Service) addHoldLocked(h folderHold) *folderHold {
 	held := &h
 	s.holds = append(s.holds, held)

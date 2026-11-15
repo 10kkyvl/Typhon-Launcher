@@ -681,6 +681,9 @@ func (s *Service) RegisterInstalled(ctx context.Context, g InstalledGame) (Game,
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.removingLocked(s.matchRegisteredLocked(g)); err != nil {
+		return Game{}, err
+	}
 	previousExcluded := s.excluded
 	if err := s.allowLocked(installDir); err != nil {
 		return Game{}, err

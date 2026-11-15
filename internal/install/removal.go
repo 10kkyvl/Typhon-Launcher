@@ -559,6 +559,28 @@ func (s *Service) finishRemoval(entry removalEntry) error {
 	if !samePath(game.InstallDir, entry.InstallDir) {
 		return nil
 	}
+	// The check and the act run under the game's removal reservation: until the
+	// card is settled no install or scan rebinds it and it neither starts nor
+	// moves. No folder is held: nothing is deleted here, and other cards in the
+	// folder do not change what this card should say.
+	release, err := s.library.BeginRemoval(entry.GameID, "")
+	if library.IsGameNotFound(err) {
+		return s.forgetInstallations(entry.GameID)
+	}
+	if err != nil {
+		return err
+	}
+	defer release()
+	game, err = s.library.Find(entry.GameID)
+	if library.IsGameNotFound(err) {
+		return s.forgetInstallations(entry.GameID)
+	}
+	if err != nil {
+		return err
+	}
+	if !samePath(game.InstallDir, entry.InstallDir) {
+		return nil
+	}
 	gone, err := dirMissing(entry.InstallDir)
 	if err != nil || !gone {
 		return err

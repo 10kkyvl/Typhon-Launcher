@@ -100,6 +100,9 @@ func (s *Service) ApplyDiscovered(d Discovered) (Game, Outcome, error) {
 	if pos < 0 {
 		return s.createDiscoveredLocked(d, installDir, executable)
 	}
+	if err := s.removingLocked(pos); err != nil {
+		return Game{}, "", err
+	}
 	return s.mergeDiscoveredLocked(pos, d, installDir, executable)
 }
 

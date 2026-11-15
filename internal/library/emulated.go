@@ -276,6 +276,9 @@ func (s *Service) RegisterEmulated(ctx context.Context, g InstalledImage) (Game,
 	if err != nil {
 		return Game{}, err
 	}
+	if err := s.removingLocked(pos); err != nil {
+		return Game{}, err
+	}
 	if pos < 0 {
 		s.games = append(s.games, Game{ID: newID(), InstalledAt: time.Now()})
 		pos = len(s.games) - 1
