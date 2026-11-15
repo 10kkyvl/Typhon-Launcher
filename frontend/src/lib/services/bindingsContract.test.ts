@@ -303,13 +303,50 @@ describe('runtime events', () => {
     expect(fromLoops).toContain('download:degraded');
   });
 
-  it('include every event the downloads store names in its table', async () => {
-    vi.doMock('./backend', () => ({ inWails: false }));
-    const { downloadEvents } = await import('../stores/downloads');
-    const found = new Set(subscribedEvents().filter(({ file }) => file === 'lib/stores/downloads.ts').map(({ name }) => name));
+  describe('of the downloads store', () => {
+    const STORE = 'lib/stores/downloads.ts';
+    // Its own store, lib/stores/network.ts, follows the network change.
+    const ELSEWHERE = new Set(['download:network']);
 
-    expect(Object.values(downloadEvents)).toContain('download:reordered');
-    expect(Object.values(downloadEvents).filter((name) => !found.has(name))).toEqual([]);
+    async function table(): Promise<Record<string, string>> {
+      vi.doMock('./backend', () => ({ inWails: false }));
+      return { ...(await import('../stores/downloads')).downloadEvents };
+    }
+
+    // The kinds the store subscribes to: `listen('added', …)` and `on(downloadEvents.reordered, …)`.
+    function subscribedKinds(): Set<string> {
+      const text = frontendSources[STORE];
+      const kinds = new Set<string>();
+      for (const match of text.matchAll(/(?<![\w.])listen\(\s*'(\w+)'/g)) kinds.add(match[1]);
+      for (const match of text.matchAll(/(?<![\w.])on\(\s*downloadEvents(?:\.(\w+)|\[\s*'(\w+)'\s*\])/g)) kinds.add(match[1] ?? match[2]);
+      return kinds;
+    }
+
+    it('subscribes to every event its table names', async () => {
+      const events = await table();
+      const kinds = subscribedKinds();
+
+      expect(Object.keys(events)).toContain('reordered');
+      expect(Object.keys(events).filter((kind) => !kinds.has(kind))).toEqual([]);
+    });
+
+    it('names only events main.go registers', async () => {
+      expect(Object.values(await table()).filter((name) => !registered.has(name))).toEqual([]);
+    });
+
+    it('leaves no registered download event without a subscriber', async () => {
+      const events = await table();
+      const kinds = subscribedKinds();
+      const heard = new Set([
+        ...Object.entries(events).filter(([kind]) => kinds.has(kind)).map(([, name]) => name),
+        ...subscribedEvents().filter(({ via }) => via !== 'table').map(({ name }) => name),
+      ]);
+      const unheard = [...registered].filter((name) => name.startsWith('download:') && !ELSEWHERE.has(name) && !heard.has(name));
+
+      expect([...registered].filter((name) => name.startsWith('download:')).length).toBeGreaterThan(6);
+      expect(unheard).toEqual([]);
+      expect([...ELSEWHERE].filter((name) => !heard.has(name))).toEqual([]);
+    });
   });
 
   it('are all raised somewhere in the Go sources', () => {
