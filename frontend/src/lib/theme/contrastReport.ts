@@ -58,6 +58,19 @@ export const CONTRAST_TOKENS: readonly string[] = [
 // --accent-on comes from a personal accent; without one, buttons draw white.
 export const CONTRAST_FALLBACKS: Readonly<Record<string, string>> = { '--accent-on': '#fff' };
 
+// Optional theme colours the report measures, as styles/tokens.css sets them (contrastReport.test.ts holds
+// them equal). A theme that leaves one out is drawn with this value, whatever theme the window shows now.
+const STYLESHEET_COLORS: Readonly<Record<string, string>> = { '--scrim-copy': 'rgba(8, 9, 10, 0.66)' };
+
+/**
+ * The variables to resolve a theme's colours with: the theme's own, and the stylesheet's value for an
+ * optional colour it leaves out. The probe they are set on inherits the window's current theme, which is
+ * not what the window would draw for this one.
+ */
+export function measuredVars(vars: Record<string, string>): Record<string, string> {
+  return { ...STYLESHEET_COLORS, ...vars };
+}
+
 /** The CSS value whose computed colour is the one a name stands for. */
 export function colorExpression(name: string): string {
   const derived = DERIVED_COLORS[name];

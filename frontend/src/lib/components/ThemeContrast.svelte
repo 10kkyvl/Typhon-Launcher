@@ -1,7 +1,7 @@
 <script lang="ts">
   import { CircleAlert, CircleCheck, CircleHelp } from '@lucide/svelte';
   import { locale, msg, type MessageKey } from '../i18n';
-  import { CONTRAST_TOKENS, contrastReport, formatRatio, type ContrastRow } from '../theme/contrastReport';
+  import { CONTRAST_TOKENS, contrastReport, formatRatio, measuredVars, type ContrastRow } from '../theme/contrastReport';
   import { resolveColors } from '../theme/resolveColors';
   import { tokenLabelKey } from '../theme/tokens';
 
@@ -10,7 +10,7 @@
   let rows = $state<ContrastRow[]>([]);
 
   $effect(() => {
-    rows = contrastReport(resolveColors(vars, CONTRAST_TOKENS));
+    rows = contrastReport(resolveColors(measuredVars(vars), CONTRAST_TOKENS));
   });
 
   const warnings = $derived(rows.filter((row) => row.ok === false).length);

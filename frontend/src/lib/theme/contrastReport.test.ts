@@ -10,9 +10,14 @@ import {
   colorExpression,
   contrastReport,
   formatRatio,
+  measuredVars,
   type RGBA,
 } from './contrastReport';
 import { tokenGroups } from './tokens';
+import panelSource from '../components/ThemeContrast.svelte?raw';
+
+type Fs = { readFileSync(path: URL, encoding: 'utf8'): string };
+const fs = (globalThis as unknown as { process: { getBuiltinModule(id: 'node:fs'): Fs } }).process.getBuiltinModule('node:fs');
 
 const black: RGBA = [0, 0, 0, 1];
 const white: RGBA = [255, 255, 255, 1];
@@ -118,6 +123,16 @@ describe('contrastReport', () => {
 
     it('warns when the plate is see-through: light words vanish on white art', () => {
       expect(row(page([14, 15, 17, 1], [237, 238, 240, 1], [0, 0, 0, 0]), 'stagePlate')).toMatchObject({ ok: false, against: '--scrim-copy' });
+    });
+
+    // The panel resolves a draft's colours on a probe that inherits the window's current theme. A draft
+    // that leaves the plate out is drawn with the stylesheet's plate, so that one is measured.
+    it('measures a draft that leaves the plate out with the stylesheet\'s plate, not the window\'s current one', () => {
+      const css = fs.readFileSync(new URL('../../styles/tokens.css', import.meta.url), 'utf8');
+      const stylesheet = /--scrim-copy:\s*([^;]+);/.exec(css)?.[1]?.trim();
+      expect(measuredVars({ '--bg': '#ffffff' })['--scrim-copy']).toBe(stylesheet);
+      expect(measuredVars({ '--scrim-copy': 'rgba(1, 2, 3, 0.5)' })['--scrim-copy']).toBe('rgba(1, 2, 3, 0.5)');
+      expect(panelSource).toMatch(/resolveColors\(measuredVars\(vars\), CONTRAST_TOKENS\)/);
     });
 
     it('passes the dark preset with its plate', () => {
