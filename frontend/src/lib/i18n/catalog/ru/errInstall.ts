@@ -110,6 +110,7 @@ export const errInstall = {
   'errInstall.downloadNotEnoughSpace': 'недостаточно места на диске',
   'errInstall.downloadNotFound': 'загрузка не найдена',
   'errInstall.downloadRestoreFailed': 'не удалось восстановить загрузку',
+  'errInstall.downloadSaveFailed': 'не удалось сохранить список загрузок',
   'errInstall.downloadSeeding': 'не удалось остановить раздачу перед удалением',
   'errInstall.downloadTorrentReadFailed': 'не удалось прочитать torrent-файл',
   'errInstall.downloadUnavailable': 'недоступно для этой загрузки',

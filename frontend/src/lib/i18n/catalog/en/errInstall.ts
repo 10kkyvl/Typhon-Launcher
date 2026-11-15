@@ -113,6 +113,7 @@ export const errInstall: Record<ErrInstallKey, Message> = {
   'errInstall.downloadNotEnoughSpace': 'Not enough disk space',
   'errInstall.downloadNotFound': 'Download not found',
   'errInstall.downloadRestoreFailed': 'Could not restore the download',
+  'errInstall.downloadSaveFailed': 'Could not save the downloads list',
   'errInstall.downloadSeeding': 'Seeding could not be stopped before deleting',
   'errInstall.downloadTorrentReadFailed': 'Could not read the torrent file',
   'errInstall.downloadUnavailable': 'Unavailable for this download',
