@@ -397,6 +397,15 @@ describe('AddDownloadModal: a fetch the player asked for that fails', () => {
     expect(fetchMetadata).toHaveBeenCalledOnce();
   });
 
+  it('titles the failure as a failed fetch, not as the fetch again after a Start', async () => {
+    const { notice } = await failContinue(new Error(FETCH_FAILED));
+
+    const alert = within(notice).getByRole('alert');
+    expect(notice.querySelector('.title')?.textContent?.trim()).toBe(msg('modals.addDownloadFetchFailed'));
+    expect(alert.textContent).toContain(msg('modals.addDownloadFetchFailed'));
+    expect(alert.textContent).not.toContain(msg('modals.addDownloadRefetchFailed'));
+  });
+
   it('opened with a source (the game page), says a failed fetch the same way', async () => {
     vi.mocked(fetchMetadata).mockRejectedValueOnce(new Error(FETCH_FAILED));
     renderDom(AddDownloadModal, { open: true, initialSource: MAGNET, origin: GAME_ORIGIN });

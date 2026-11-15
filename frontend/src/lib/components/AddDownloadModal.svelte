@@ -270,7 +270,7 @@
       <Notice
         tone="danger"
         compact
-        title={refetchFailed ? msg('modals.addDownloadRefetchFailed') : undefined}
+        title={refetchFailed ? msg('modals.addDownloadRefetchFailed') : msg('modals.addDownloadFetchFailed')}
         bind:retrying
         retry={{ label: msg('common.retry'), run: retryFetch, focus: () => document.getElementById(`${uid}-start`) }}
       >
