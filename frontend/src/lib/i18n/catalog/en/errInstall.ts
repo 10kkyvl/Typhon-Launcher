@@ -116,6 +116,9 @@ export const errInstall: Record<ErrInstallKey, Message> = {
   'errInstall.downloadSaveFailed': 'Could not save the downloads list',
   'errInstall.downloadSeeding': 'Seeding could not be stopped before deleting',
   'errInstall.downloadStateUnread': 'The downloads list could not be read, so changes are not saved',
+  'errInstall.downloadMetainfoNotSaved': 'Could not keep the torrent file, and without it the download cannot be restored after a restart. Check the free disk space and add the download again',
+  'errInstall.downloadSelectionLost': 'The list of chosen files was lost, so it is unclear what to download. Remove the download and add it again, choosing the files',
+  'errInstall.downloadRootUnknown': 'Could not tell which folder belongs to this download, so no files were deleted. Delete them by hand in the downloads folder',
   'errInstall.downloadTorrentReadFailed': 'Could not read the torrent file',
   'errInstall.downloadUnavailable': 'Unavailable for this download',
 

@@ -113,6 +113,9 @@ export const errInstall = {
   'errInstall.downloadSaveFailed': 'не удалось сохранить список загрузок',
   'errInstall.downloadSeeding': 'не удалось остановить раздачу перед удалением',
   'errInstall.downloadStateUnread': 'список загрузок не прочитан, изменения не сохраняются',
+  'errInstall.downloadMetainfoNotSaved': 'не удалось сохранить torrent-файл, без него загрузку не восстановить после перезапуска. Проверьте свободное место на диске и добавьте загрузку снова',
+  'errInstall.downloadSelectionLost': 'список выбранных файлов потерян, и непонятно, что скачивать. Удалите загрузку и добавьте её снова, выбрав файлы',
+  'errInstall.downloadRootUnknown': 'не удалось определить папку этой загрузки, поэтому файлы не удалены. Удалите их вручную в папке загрузок',
   'errInstall.downloadTorrentReadFailed': 'не удалось прочитать torrent-файл',
   'errInstall.downloadUnavailable': 'недоступно для этой загрузки',
 
