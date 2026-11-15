@@ -11,7 +11,8 @@ import { balanced } from '../testing/scan';
  * arrow's block, or, for `pending.run`, the `run` of every object assigned to `pending`, resolved the
  * same way. For `page.pending.run`, where the caller made `page` with a factory imported from a
  * sibling `.svelte.ts` module (`const page = createX()`), that module is the file read, and no
- * component may assign such a `pending` itself: the module would not show it. A handler that cannot
+ * component may assign such a `pending` itself: the module would not show it. `current.run` read
+ * through `{@const current = page.pending}` is `page.pending.run`. A handler that cannot
  * be resolved counts as one that may reject.
  *
  * Limits: only one level is followed (a handler that calls a helper which catches still needs
@@ -78,7 +79,11 @@ function ownerModule(path: string, text: string, owner: string): string | null {
 
 function handlerBodies(path: string, text: string, handler: string): (string | null)[] | null {
   const base = /^\s*([\w$]+)\.run\s*$/.exec(handler)?.[1];
-  if (base) return pendingRuns(text, base);
+  if (base) {
+    const alias = new RegExp(`\\{@const\\s+${base}\\s*=\\s*([\\w$]+)\\.([\\w$]+)\\s*\\}`).exec(text);
+    if (alias) return handlerBodies(path, text, `${alias[1]}.${alias[2]}.run`);
+    return pendingRuns(text, base);
+  }
   const owned = /^\s*([\w$]+)\.([\w$]+)\.run\s*$/.exec(handler);
   if (owned) {
     const module = ownerModule(path, text, owned[1]);

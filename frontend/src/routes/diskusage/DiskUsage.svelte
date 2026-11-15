@@ -13,7 +13,6 @@
   import RemoveGameModal from '../../lib/components/RemoveGameModal.svelte';
   import Spinner from '../../lib/components/Spinner.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
-  import type { ConfirmPrompt } from '../../lib/confirm/prompts';
   import {
     ageOf,
     ageText,
@@ -35,46 +34,30 @@
   import { libraryGames } from '../../lib/stores/library';
   import { msg } from '../../lib/i18n';
   import { installErrorText } from '../../lib/install/installErrors';
-  import {
-    cachedUsage,
-    deleteDownloadData,
-    deleteLeftover,
-    deleteScreenshots,
-    deleteSnapshots,
-    scanUsage,
-    type DownloadUsage,
-    type GroupUsage,
-    type Leftover,
-    type Report,
-  } from '../../lib/services/diskusage';
   import { activeMove } from '../../lib/stores/relocate';
-  import { toast } from '../../lib/stores/toasts';
   import { bytesSize } from '../../lib/utils/format';
+  import { createDiskUsagePage } from './diskUsagePage.svelte';
 
-  let report = $state<Report | null>(null);
-  let scanning = $state(false);
-  let scanError = $state('');
+  const page = createDiskUsagePage();
   let sort = $state<GameSort>('size');
-  let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
   let removeOpen = $state(false);
   let removeTarget = $state<{ id: string; title: string } | null>(null);
   let removeMode = $state<'disk' | 'library'>('disk');
-  let scanSerial = 0;
 
   const sortLabels: Record<GameSort, string> = {
     size: msg('diskusage.sortSize'),
     played: msg('diskusage.sortPlayed'),
   };
 
-  const now = $derived(report ? Date.now() : 0);
-  const games = $derived(report ? sortGames(report.games, sort) : []);
-  const downloads = $derived(report ? sizeSorted(report.downloads) : []);
-  const leftovers = $derived(report ? sizeSorted(report.leftovers) : []);
-  const screenshots = $derived(report ? sizeSorted(report.screenshots) : []);
-  const snapshots = $derived(report ? sizeSorted(report.snapshots) : []);
-  const unknownCount = $derived(report ? countUnknown(report) : 0);
+  const now = $derived(page.report ? Date.now() : 0);
+  const games = $derived(page.report ? sortGames(page.report.games, sort) : []);
+  const downloads = $derived(page.report ? sizeSorted(page.report.downloads) : []);
+  const leftovers = $derived(page.report ? sizeSorted(page.report.leftovers) : []);
+  const screenshots = $derived(page.report ? sizeSorted(page.report.screenshots) : []);
+  const snapshots = $derived(page.report ? sizeSorted(page.report.snapshots) : []);
+  const unknownCount = $derived(page.report ? countUnknown(page.report) : 0);
   const isEmpty = $derived(
-    !!report &&
+    !!page.report &&
       games.length + downloads.length + leftovers.length + screenshots.length + snapshots.length === 0,
   );
 
@@ -90,113 +73,16 @@
     return totalText(bytes, unknown, format, (value) => msg('diskusage.atLeast', { size: value }));
   }
 
-  function failureText(err: unknown) {
-    return installErrorText(err, msg('diskusage.deleteFailed'));
-  }
-
-  async function refresh() {
-    const serial = ++scanSerial;
-    scanning = true;
-    scanError = '';
-    try {
-      const next = await scanUsage();
-      if (serial === scanSerial) report = next;
-    } catch (err) {
-      if (serial === scanSerial) scanError = installErrorText(err, msg('diskusage.scanFailed'));
-    } finally {
-      if (serial === scanSerial) scanning = false;
-    }
-  }
-
   onMount(() => {
-    void (async () => {
-      try {
-        const cached = await cachedUsage();
-        if (cached && !report) report = cached;
-      } catch (err) {
-        scanError = installErrorText(err, msg('diskusage.scanFailed'));
-      }
-      await refresh();
-    })();
+    void page.load();
   });
 
   let hadMove = false;
   $effect(() => {
     const active = $activeMove !== null;
-    if (hadMove && !active) void refresh();
+    if (hadMove && !active) void page.refresh();
     hadMove = active;
   });
-
-  function ask(prompt: ConfirmPrompt, action: () => Promise<void>, done: string) {
-    pending = {
-      prompt,
-      run: async () => {
-        try {
-          await action();
-          toast(done, 'success');
-        } catch (err) {
-          toast(failureText(err), 'danger');
-        }
-        await refresh();
-      },
-    };
-  }
-
-  function askDownload(download: DownloadUsage) {
-    ask(
-      {
-        title: msg('diskusage.downloadConfirmTitle'),
-        text: msg('diskusage.downloadConfirmText', { name: download.name }),
-        confirm: msg('diskusage.downloadDelete'),
-        busy: msg('diskusage.deleting'),
-      },
-      () => deleteDownloadData(download.id),
-      msg('diskusage.downloadDeleted'),
-    );
-  }
-
-  function askLeftover(leftover: Leftover) {
-    ask(
-      {
-        title: msg('diskusage.leftoverConfirmTitle'),
-        text: msg('diskusage.leftoverConfirmText', {
-          kind: msg(leftoverKindKey(leftover.kind)),
-          path: leftover.path,
-        }),
-        confirm: msg('diskusage.leftoverDelete'),
-        busy: msg('diskusage.deleting'),
-      },
-      () => deleteLeftover(leftover.path),
-      msg('diskusage.leftoverDeleted'),
-    );
-  }
-
-  function askScreenshots(group: GroupUsage) {
-    ask(
-      {
-        title: msg('diskusage.screenshotsConfirmTitle'),
-        text: msg('diskusage.screenshotsConfirmText', { title: group.title, count: group.count }),
-        confirm: msg('diskusage.deleteAll'),
-        busy: msg('diskusage.deleting'),
-      },
-      () => deleteScreenshots(group.gameId),
-      msg('diskusage.screenshotsDeleted'),
-    );
-  }
-
-  function askSnapshots(group: GroupUsage) {
-    ask(
-      {
-        title: msg('diskusage.snapshotsConfirmTitle'),
-        text: msg('diskusage.snapshotsConfirmText', { title: group.title, count: group.count }),
-        note: msg('diskusage.snapshotsConfirmNote'),
-        confirm: msg('diskusage.snapshotsConfirmAction'),
-        busy: msg('diskusage.deleting'),
-      },
-      () => deleteSnapshots(group.gameId),
-      msg('diskusage.snapshotsDeleted'),
-    );
-  }
 
   function openRemove(game: { id: string; title: string }) {
     removeTarget = { id: game.id, title: game.title };
@@ -208,19 +94,19 @@
 <Page>
   <PageHeader title={msg('diskusage.title')} subtitle={msg('diskusage.subtitle')}>
     {#snippet actions()}
-      <Button onclick={refresh} busy={scanning}>
-        {#if !scanning}<RefreshCw size="1.5rem" strokeWidth={2} />{/if}
-        {scanning ? msg('diskusage.scanning') : msg('diskusage.rescan')}
+      <Button onclick={page.refresh} busy={page.scanning}>
+        {#if !page.scanning}<RefreshCw size="1.5rem" strokeWidth={2} />{/if}
+        {page.scanning ? msg('diskusage.scanning') : msg('diskusage.rescan')}
       </Button>
     {/snippet}
   </PageHeader>
 
-  {#if scanError}
-    <div class="error"><Notice tone="danger">{scanError}</Notice></div>
+  {#if page.scanError}
+    <div class="error"><Notice tone="danger">{page.scanError}</Notice></div>
   {/if}
 
-  {#if !report}
-    {#if scanning}
+  {#if !page.report}
+    {#if page.scanning}
       <Spinner label={msg('diskusage.scanning')} />
     {/if}
   {:else}
@@ -229,23 +115,23 @@
         <span class="summary-icon"><HardDrive size="1.8rem" strokeWidth={1.8} /></span>
         <div class="figure">
           <span class="figure-label">{msg('diskusage.used')}</span>
-          <span class="figure-value">{total(report.totals.totalBytes, report.totals.unknownSizes)}</span>
+          <span class="figure-value">{total(page.report.totals.totalBytes, page.report.totals.unknownSizes)}</span>
         </div>
         <div class="figure">
           <span class="figure-label">{msg('diskusage.reclaimable')}</span>
-          <span class="figure-value">{total(report.totals.reclaimableBytes, report.totals.unknownSizes)}</span>
+          <span class="figure-value">{total(page.report.totals.reclaimableBytes, page.report.totals.unknownSizes)}</span>
         </div>
       </div>
-      {#if report.totals.unknownSizes}
+      {#if page.report.totals.unknownSizes}
         <p class="note">{msg('diskusage.unknownNote', { count: unknownCount })}</p>
       {/if}
     </Card>
 
-    {#if report.warnings.length > 0}
+    {#if page.report.warnings.length > 0}
       <div class="warnings">
         <Notice tone="danger" title={msg('diskusage.warningsTitle')} level={2}>
           <ul>
-            {#each report.warnings as warning, index (index)}
+            {#each page.report.warnings as warning, index (index)}
               <li>{msg('diskusage.warningLine', { area: warning.area, message: warning.message })}</li>
             {/each}
           </ul>
@@ -268,7 +154,7 @@
               <p class="muted">{msg('diskusage.gamesHint')}</p>
             </div>
             <div class="section-tools">
-              <span class="section-total">{total(report.totals.gamesBytes, games.some((g) => g.sizeUnknown))}</span>
+              <span class="section-total">{total(page.report.totals.gamesBytes, games.some((g) => g.sizeUnknown))}</span>
               <DropdownMenu
                 items={(['size', 'played'] as const).map((id) => ({ id, label: sortLabels[id], checked: sort === id }))}
                 onselect={(id) => (sort = id as GameSort)}
@@ -332,7 +218,7 @@
             <h2>{msg('diskusage.downloadsTitle')}</h2>
             <p class="muted">{msg('diskusage.downloadsHint')}</p>
           </div>
-          <span class="section-total">{total(report.totals.downloadsBytes, downloads.some((d) => d.sizeUnknown))}</span>
+          <span class="section-total">{total(page.report.totals.downloadsBytes, downloads.some((d) => d.sizeUnknown))}</span>
         </div>
         {#if downloads.length === 0}
           <EmptyState size="inline" title={msg('diskusage.downloadsEmpty')} />
@@ -363,7 +249,7 @@
                 </div>
                 <span class="size">{size(download)}</span>
                 <div class="actions">
-                  <Button size="sm" variant="danger" disabled={blocked} onclick={() => askDownload(download)}>
+                  <Button size="sm" variant="danger" disabled={blocked} onclick={() => page.askDownload(download)}>
                     {msg('diskusage.downloadDelete')}
                   </Button>
                 </div>
@@ -379,7 +265,7 @@
             <h2>{msg('diskusage.leftoversTitle')}</h2>
             <p class="muted">{msg('diskusage.leftoversHint')}</p>
           </div>
-          <span class="section-total">{total(report.totals.leftoversBytes, leftovers.some((l) => l.sizeUnknown))}</span>
+          <span class="section-total">{total(page.report.totals.leftoversBytes, leftovers.some((l) => l.sizeUnknown))}</span>
         </div>
         {#if leftovers.length === 0}
           <EmptyState size="inline" title={msg('diskusage.leftoversEmpty')} />
@@ -396,7 +282,7 @@
                 </div>
                 <span class="size">{size(leftover)}</span>
                 <div class="actions">
-                  <Button size="sm" variant="danger" disabled={!leftover.deletable} onclick={() => askLeftover(leftover)}>
+                  <Button size="sm" variant="danger" disabled={!leftover.deletable} onclick={() => page.askLeftover(leftover)}>
                     {msg('diskusage.leftoverDelete')}
                   </Button>
                 </div>
@@ -412,7 +298,7 @@
             <h2>{msg('diskusage.screenshotsTitle')}</h2>
             <p class="muted">{msg('diskusage.screenshotsHint')}</p>
           </div>
-          <span class="section-total">{total(report.totals.screenshotsBytes, screenshots.some((s) => s.sizeUnknown))}</span>
+          <span class="section-total">{total(page.report.totals.screenshotsBytes, screenshots.some((s) => s.sizeUnknown))}</span>
         </div>
         {#if screenshots.length === 0}
           <EmptyState size="inline" title={msg('diskusage.screenshotsEmpty')} />
@@ -431,7 +317,7 @@
                 </div>
                 <span class="size">{size(group)}</span>
                 <div class="actions">
-                  <Button size="sm" variant="danger" onclick={() => askScreenshots(group)}>
+                  <Button size="sm" variant="danger" onclick={() => page.askScreenshots(group)}>
                     {msg('diskusage.deleteAll')}
                   </Button>
                 </div>
@@ -447,7 +333,7 @@
             <h2>{msg('diskusage.snapshotsTitle')}</h2>
             <p class="muted">{msg('diskusage.snapshotsHint')}</p>
           </div>
-          <span class="section-total">{total(report.totals.snapshotsBytes, snapshots.some((s) => s.sizeUnknown))}</span>
+          <span class="section-total">{total(page.report.totals.snapshotsBytes, snapshots.some((s) => s.sizeUnknown))}</span>
         </div>
         {#if snapshots.length === 0}
           <EmptyState size="inline" title={msg('diskusage.snapshotsEmpty')} />
@@ -466,7 +352,7 @@
                 </div>
                 <span class="size">{size(group)}</span>
                 <div class="actions">
-                  <Button size="sm" variant="danger" onclick={() => askSnapshots(group)}>
+                  <Button size="sm" variant="danger" onclick={() => page.askSnapshots(group)}>
                     {msg('diskusage.deleteAll')}
                   </Button>
                 </div>
@@ -485,13 +371,13 @@
       gameId={removeTarget.id}
       title={removeTarget.title}
       emulated={isEmulated($libraryGames.find((game) => game.id === removeTarget?.id))}
-      onremoved={() => void refresh()}
+      onremoved={() => void page.refresh()}
     />
   {/if}
 
-  {#if pending}
-    {@const current = pending}
-    <ConfirmModal prompt={current.prompt} onconfirm={current.run} onclose={() => (pending = null)} errorText={(err) => installErrorText(err)} />
+  {#if page.pending}
+    {@const current = page.pending}
+    <ConfirmModal prompt={current.prompt} onconfirm={current.run} onclose={() => page.closePending()} errorText={(err) => installErrorText(err)} />
   {/if}
 </Page>
 
