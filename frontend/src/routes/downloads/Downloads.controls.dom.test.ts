@@ -11,6 +11,10 @@ import { ruleBody, styleOf } from '../../lib/testing/css';
 import { renderDom } from '../../lib/testing/dom';
 import Downloads from './Downloads.svelte';
 import page from './Downloads.svelte?raw';
+import failedList from './FailedList.svelte?raw';
+
+// The parts of the screen that draw a row with a name, each with its own copy of the row's rules.
+const ROW_PARTS: Record<string, string> = { Downloads: page, FailedList: failedList };
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
@@ -114,16 +118,18 @@ describe('Downloads: links', () => {
   it('a long download name wraps inside its row, shown in full, with no hint repeating it', () => {
     downloads.set([download({ id: 'f', name: 'Failed One', status: 'failed', error: 'x' }), download({ id: 'c', name: 'Done One' })]);
     renderDom(Downloads);
-    const wraps = ruleBody(styleOf(page, 'Downloads'), '.title.wraps');
 
     for (const name of ['Failed One', 'Done One']) {
       const link = screen.getByRole('button', { name });
       expect(link.closest('.title')?.classList.contains('wraps'), name).toBe(true);
       expect(link.closest('.tooltip-host'), name).toBeNull();
     }
-    expect(wraps['white-space']).toBe('normal');
-    expect(wraps['overflow-wrap']).toBe('anywhere');
-    expect(wraps.overflow).toBe('visible');
+    for (const [part, source] of Object.entries(ROW_PARTS)) {
+      const wraps = ruleBody(styleOf(source, part), '.title.wraps');
+      expect(wraps['white-space'], part).toBe('normal');
+      expect(wraps['overflow-wrap'], part).toBe('anywhere');
+      expect(wraps.overflow, part).toBe('visible');
+    }
   });
 
   // The row takes no focus: a hint on its name reaches a mouse only. The name is shown whole instead.

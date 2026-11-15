@@ -3,13 +3,11 @@
   import {
     ArrowDown,
     ArrowUp,
-    CircleAlert,
     Download,
     FolderOpen,
     Gamepad2,
     Menu,
     Plus,
-    RotateCcw,
     X,
   } from '@lucide/svelte';
   import AddDownloadModal from '../../lib/components/AddDownloadModal.svelte';
@@ -26,7 +24,7 @@
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import TextLink from '../../lib/components/TextLink.svelte';
-  import { gamePageId, type Download as DownloadRecord } from '../../lib/services/downloads';
+  import { gamePageId } from '../../lib/services/downloads';
   import { openFolder } from '../../lib/services/settings';
   import {
     active,
@@ -38,10 +36,8 @@
     moveUp,
     queue,
     remove,
-    resume,
     stats,
   } from '../../lib/stores/downloads';
-  import { installErrorText } from '../../lib/install/installErrors';
   import { installIndeterminate } from '../../lib/install/progress';
   import { installActive, installStatusLabels, installationsByDownload } from '../../lib/stores/install';
   import { gameArt, requestArt } from '../../lib/stores/metadata';
@@ -54,7 +50,9 @@
   import { msg } from '../../lib/i18n';
   import DownloadsActions from './DownloadsActions.svelte';
   import DownloadsSection from './DownloadsSection.svelte';
+  import FailedList from './FailedList.svelte';
   import PlayThrottleBanner from './PlayThrottleBanner.svelte';
+  import { coverOf, sourceTag, typeTag } from './downloadRow';
 
   const scheduleHeld = $derived($playThrottle.schedule?.blocked === true);
 
@@ -76,22 +74,6 @@
   function openInstall(id: string) {
     installDownloadId = id;
     installOpen = true;
-  }
-
-  function typeTag(d: DownloadRecord) {
-    if (d.origin.platform) return msg('state.installTypeImage');
-    if (d.origin.purpose === 'update') return msg('transfers.downloadsTypeUpdate');
-    if (d.origin.purpose === 'repair') return msg('transfers.downloadsTypeRepair');
-    if (d.origin.gameId || d.origin.releaseId) return msg('transfers.downloadsTypeGame');
-    return '';
-  }
-
-  function sourceTag(d: DownloadRecord) {
-    return $sources.find((s) => s.id === d.origin.sourceId)?.name ?? '';
-  }
-
-  function coverOf(d: DownloadRecord) {
-    return (d.origin.gameId && $gameArt[d.origin.gameId]?.cover) || '';
   }
 
   $effect(() => {
@@ -165,42 +147,7 @@
   </DownloadsSection>
   {/if}
 
-  {#if $failed.length > 0}
-  <DownloadsSection title={msg('transfers.downloadsFailedHeading')} count={$failed.length}>
-    <div class="rows">
-      {#each $failed as item (item.id)}
-        <div class="row failed">
-          <div class="thumb" aria-hidden="true">
-            <Artwork src={coverOf(item)} alt="" label={item.name} ratio="3 / 4" radius="var(--radius-sm)" />
-          </div>
-          <div class="info">
-            <span class="title wraps">
-              <TextLink tone="muted" onclick={() => openDetails(item.id)}>{item.name}</TextLink>
-            </span>
-            <span class="error-text">
-              <CircleAlert size="1.4rem" strokeWidth={1.8} />
-              <span>{installErrorText(item.error)}</span>
-            </span>
-          </div>
-          <div class="row-actions">
-            {#if gamePageId(item)}
-              <IconButton label={msg('transfers.gamePage')} size="sm" onclick={() => navigate('game', { id: gamePageId(item) })}>
-                <Gamepad2 size="1.6rem" strokeWidth={1.8} />
-              </IconButton>
-            {/if}
-            <Button size="sm" onclick={() => resume(item.id)}>
-              <RotateCcw size="1.4rem" strokeWidth={1.8} />
-              {msg('common.retry')}
-            </Button>
-            <IconButton label={msg('transfers.downloadsRemoveFromListLabel')} size="sm" onclick={() => remove(item.id)}>
-              <X size="1.6rem" strokeWidth={1.8} />
-            </IconButton>
-          </div>
-        </div>
-      {/each}
-    </div>
-  </DownloadsSection>
-  {/if}
+  <FailedList onopen={openDetails} />
 
   {#if $queue.length > 0}
   <DownloadsSection title={msg('transfers.downloadsQueueHeading')} count={$queue.length}>
@@ -208,15 +155,15 @@
       {#each $queue as q, i (q.id)}
         <div class="row">
           <div class="thumb" aria-hidden="true">
-            <Artwork src={coverOf(q)} alt="" label={q.name} ratio="3 / 4" radius="var(--radius-sm)" />
+            <Artwork src={coverOf(q, $gameArt)} alt="" label={q.name} ratio="3 / 4" radius="var(--radius-sm)" />
           </div>
           <div class="info inline">
             <span class="title wraps">{q.name}</span>
-            {#if typeTag(q) || sourceTag(q) || q.ignoreSchedule}
+            {#if typeTag(q) || sourceTag(q, $sources) || q.ignoreSchedule}
               <div class="tags">
                 {#if typeTag(q)}<StatusBadge kind="neutral" label={typeTag(q)} dot={false} />{/if}
                 {#if q.origin.platform}<ConsoleTag platform={q.origin.platform} />{/if}
-                {#if sourceTag(q)}<StatusBadge kind="neutral" label={sourceTag(q)} dot={false} />{/if}
+                {#if sourceTag(q, $sources)}<StatusBadge kind="neutral" label={sourceTag(q, $sources)} dot={false} />{/if}
                 {#if q.ignoreSchedule}<StatusBadge kind="neutral" label={msg('transfers.outsideSchedule')} dot={false} />{/if}
               </div>
             {/if}
@@ -268,17 +215,17 @@
         {@const install = $installationsByDownload.get(item.id)}
         <div class="row">
           <div class="thumb" aria-hidden="true">
-            <Artwork src={coverOf(item)} alt="" label={item.name} ratio="3 / 4" radius="var(--radius-sm)" />
+            <Artwork src={coverOf(item, $gameArt)} alt="" label={item.name} ratio="3 / 4" radius="var(--radius-sm)" />
           </div>
           <div class="info inline">
             <span class="title wraps">
               <TextLink tone="muted" onclick={() => openDetails(item.id)}>{item.name}</TextLink>
             </span>
-            {#if typeTag(item) || sourceTag(item)}
+            {#if typeTag(item) || sourceTag(item, $sources)}
               <div class="tags">
                 {#if typeTag(item)}<StatusBadge kind="neutral" label={typeTag(item)} dot={false} />{/if}
                 {#if item.origin.platform}<ConsoleTag platform={item.origin.platform} />{/if}
-                {#if sourceTag(item)}<StatusBadge kind="neutral" label={sourceTag(item)} dot={false} />{/if}
+                {#if sourceTag(item, $sources)}<StatusBadge kind="neutral" label={sourceTag(item, $sources)} dot={false} />{/if}
               </div>
             {/if}
           </div>
@@ -409,30 +356,6 @@
 
   .row:hover {
     border-color: var(--border-strong);
-  }
-
-  .row.failed {
-    border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
-  }
-
-  .error-text {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.6rem;
-    max-width: 100%;
-    font-size: var(--font-xs);
-    color: var(--danger);
-  }
-
-  .error-text span {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .error-text :global(svg) {
-    flex-shrink: 0;
   }
 
   .thumb {
