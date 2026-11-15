@@ -100,24 +100,42 @@ describe('Downloads: no active download', () => {
 });
 
 describe('Downloads: links', () => {
-  it('the name of a failed and of a finished download is a text link that opens its details', async () => {
-    downloads.set([download({ id: 'f', name: 'Failed One', status: 'failed', error: 'x' }), download({ id: 'c', name: 'Done One' })]);
+  it('the name of a finished download is a text link that opens its details', async () => {
+    downloads.set([download({ id: 'c', name: 'Done One' })]);
     const { user } = renderDom(Downloads);
 
-    for (const name of ['Failed One', 'Done One']) {
-      const link = screen.getByRole('button', { name });
-      expect(link.classList.contains('text-link'), name).toBe(true);
-    }
-    screen.getByRole('button', { name: 'Failed One' }).focus();
+    const link = screen.getByRole('button', { name: 'Done One' });
+    expect(link.classList.contains('text-link')).toBe(true);
+    link.focus();
     await user.keyboard('{Enter}');
 
     expect(await screen.findByRole('dialog')).toBeTruthy();
   });
 
+  // Decision В13: a failed download's name leads to its game's page; its details have a control named
+  // with the download.
+  it('the name of a failed download is a text link to its game’s page; Details opens its details', async () => {
+    downloads.set([download({ id: 'f', name: 'Failed One', status: 'failed', error: 'x', origin: { gameId: 'g-f' } })]);
+    const { user } = renderDom(Downloads);
+
+    const link = screen.getByRole('button', { name: 'Failed One' });
+    expect(link.classList.contains('text-link')).toBe(true);
+    screen.getByRole('button', { name: msg('downloads.failed.detailsFor', { title: 'Failed One' }) }).focus();
+    await user.keyboard('{Enter}');
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+
+    link.focus();
+    await user.keyboard('{Enter}');
+    expect(get(route)).toMatchObject({ name: 'game', params: { id: 'g-f' } });
+  });
+
   // A text link given an action is a button, an atomic box: an ellipsis on the line around it would
   // hide the whole link, so a long name wraps inside the row instead, shown in full.
   it('a long download name wraps inside its row, shown in full, with no hint repeating it', () => {
-    downloads.set([download({ id: 'f', name: 'Failed One', status: 'failed', error: 'x' }), download({ id: 'c', name: 'Done One' })]);
+    downloads.set([
+      download({ id: 'f', name: 'Failed One', status: 'failed', error: 'x', origin: { gameId: 'g-f' } }),
+      download({ id: 'c', name: 'Done One' }),
+    ]);
     renderDom(Downloads);
 
     for (const name of ['Failed One', 'Done One']) {
