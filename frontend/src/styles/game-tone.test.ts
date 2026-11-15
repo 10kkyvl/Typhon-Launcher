@@ -85,7 +85,9 @@ function button(tokens: Record<string, string>) {
     label: computed(ruleBody(BUTTON, '.play').color, tokens),
     hover: computed(ruleBody(BUTTON, `.play:hover${ENABLED}`).background, tokens),
     glow: ruleBody(BUTTON, `.play:hover${ENABLED}`)['box-shadow'].replace(/var\([\s\S]+\)$/, (v) => computed(v, tokens)),
-    pressed: computed(ruleBody(BUTTON, `.play:active${ENABLED}`).background, tokens),
+    // Pressed under the pointer, and pressed from the keyboard with the pointer elsewhere.
+    pressed: computed(ruleBody(BUTTON, `.play:active:hover${ENABLED}`).background, tokens),
+    pressedAlone: computed(ruleBody(BUTTON, ".play:active:not(:hover, :disabled, [aria-disabled='true'])").background, tokens),
   };
 }
 
@@ -94,7 +96,8 @@ function disc(tokens: Record<string, string>) {
     rest: computed(ruleBody(CARD, '.play').background, tokens),
     glyph: computed(ruleBody(CARD, '.play').color, tokens),
     hover: computed(ruleBody(CARD, '.play:hover').background, tokens),
-    pressed: computed(ruleBody(CARD, ".play:active:not([aria-busy='true'])").background, tokens),
+    pressed: computed(ruleBody(CARD, ".play:active:hover:not([aria-busy='true'])").background, tokens),
+    pressedAlone: computed(ruleBody(CARD, ".play:active:not(:hover, [aria-busy='true'])").background, tokens),
   };
 }
 
@@ -125,17 +128,20 @@ describe('a launching control outside any game is the primary fill it was', () =
           label: computed(primary.color, tokens),
           hover: computed(hover.background, tokens),
           glow: hover['box-shadow'].replace(/var\([\s\S]+\)$/, (v) => computed(v, tokens)),
-          // Pressed under the pointer the primary button shows its hover fill.
+          // Pressed under the pointer the primary button shows its hover fill; pressed with the pointer
+          // elsewhere (Space held on a focused button), its rest fill.
           pressed: computed(hover.background, tokens),
+          pressedAlone: computed(primary.background, tokens),
         });
       });
 
-      it(`${name}: a card's round Play draws the accent fill and label, its hover fill when hovered or pressed`, () => {
+      it(`${name}: a card's round Play draws the accent fill and label, its hover fill when hovered or pressed under the pointer`, () => {
         expect(disc(tokens)).toEqual({
           rest: computed('var(--accent)', tokens),
           glyph: computed('var(--accent-on, var(--accent-on-default))', tokens),
           hover: computed('var(--accent-hover)', tokens),
           pressed: computed('var(--accent-hover)', tokens),
+          pressedAlone: computed('var(--accent)', tokens),
         });
       });
     }
@@ -159,8 +165,15 @@ describe("a launching control inside a game's scope takes the game's colour", ()
         hover: v['--game-fill-hover'],
         glow: `0 0.8rem 2rem -0.8rem ${v['--game-glow']}`,
         pressed: v['--game-fill-active'],
+        pressedAlone: v['--game-fill-active'],
       });
-      expect(disc(tokens)).toEqual({ rest: v['--game-fill'], glyph: v['--game-glyph'], hover: v['--game-disc-hover'], pressed: v['--game-disc-active'] });
+      expect(disc(tokens)).toEqual({
+        rest: v['--game-fill'],
+        glyph: v['--game-glyph'],
+        hover: v['--game-disc-hover'],
+        pressed: v['--game-disc-active'],
+        pressedAlone: v['--game-disc-active'],
+      });
     });
   }
 });

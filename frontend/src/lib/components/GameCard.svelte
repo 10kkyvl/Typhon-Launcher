@@ -352,8 +352,15 @@
   }
 
   .play:active:not([aria-busy='true']) {
-    background: var(--play-disc-active, var(--accent-hover));
     transform: scale(0.92);
+  }
+
+  .play:active:hover:not([aria-busy='true']) {
+    background: var(--play-disc-active, var(--accent-hover));
+  }
+
+  .play:active:not(:hover, [aria-busy='true']) {
+    background: var(--play-disc-active, var(--accent));
   }
 
   .play[aria-busy='true'] {

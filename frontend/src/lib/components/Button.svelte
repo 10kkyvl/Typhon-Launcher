@@ -178,7 +178,8 @@
 
   /* No root value is set for --play-*: outside a game's scope each falls back to the primary colours of
      this subtree's own accent (styles/game-tone.test.ts). Pressed under the pointer, primary shows its
-     hover colour; a game's own pressed shade moves further from the label. */
+     hover colour, pressed from the keyboard with the pointer elsewhere its rest colour; a game's own
+     pressed shade moves further from the label in both. */
   .play {
     background: var(--play-bg, var(--accent));
     color: var(--play-text, var(--accent-on, var(--accent-on-default)));
@@ -190,8 +191,12 @@
     transform: translateY(-1px);
   }
 
-  .play:active:not(:disabled, [aria-disabled='true']) {
+  .play:active:hover:not(:disabled, [aria-disabled='true']) {
     background: var(--play-bg-active, var(--accent-hover));
+  }
+
+  .play:active:not(:hover, :disabled, [aria-disabled='true']) {
+    background: var(--play-bg-active, var(--accent));
   }
 
   .secondary {
