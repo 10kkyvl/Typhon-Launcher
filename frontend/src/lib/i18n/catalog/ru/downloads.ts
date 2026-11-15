@@ -9,6 +9,13 @@ export const downloads = {
   'downloads.speedGraph.peak': 'пик {speed}',
   'downloads.speedGraph.ago': '−{seconds} сек',
 
+  // ---- Cancelling a download: one wording for the panel, the queue and the failed list (lib/confirm/prompts.ts)
+  'downloads.cancel.title': 'Отменить загрузку «{name}»?',
+  'downloads.cancel.deletes': 'Загрузка остановится и уйдёт из списка, а уже скачанные {size} будут удалены с диска. Это нельзя отменить.',
+  'downloads.cancel.keeps': 'Загрузка остановится и уйдёт из списка. Скачанные {size} останутся на диске, в папке «{path}».',
+  'downloads.cancel.busy': 'Отменяем…',
+  'downloads.cancel.done': 'Загрузка «{name}» отменена',
+  // ---- end of cancelling a download
   // ---- 6-3: the panel of a download under way (lib/components/DownloadItem.svelte)
   'downloads.panel.pause': 'Пауза',
   'downloads.panel.pauseNamed': 'Пауза: «{name}»',

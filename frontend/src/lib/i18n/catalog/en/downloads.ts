@@ -8,6 +8,13 @@ export const downloads: Record<DownloadsKey, Message> = {
   'downloads.speedGraph.peak': 'peak {speed}',
   'downloads.speedGraph.ago': '−{seconds} s',
 
+  // ---- Cancelling a download: one wording for the panel, the queue and the failed list (lib/confirm/prompts.ts)
+  'downloads.cancel.title': 'Cancel downloading “{name}”?',
+  'downloads.cancel.deletes': "The download stops and leaves the list, and the {size} downloaded so far is deleted from disk. This can't be undone.",
+  'downloads.cancel.keeps': 'The download stops and leaves the list. The {size} downloaded so far stays on disk, in “{path}”.',
+  'downloads.cancel.busy': 'Cancelling…',
+  'downloads.cancel.done': 'Download “{name}” cancelled',
+  // ---- end of cancelling a download
   // ---- 6-3: the panel of a download under way (lib/components/DownloadItem.svelte)
   'downloads.panel.pause': 'Pause',
   'downloads.panel.pauseNamed': 'Pause “{name}”',
