@@ -268,7 +268,7 @@ func (s *Service) reserveRemoval(gameID, dir string) (func(), error) {
 	switch {
 	case err == nil:
 		return release, nil
-	case errors.Is(err, library.ErrGameRelocating):
+	case errors.Is(err, library.ErrGameRelocating), errors.Is(err, library.ErrGameMoving):
 		return nil, fmt.Errorf("%w: %w", errGameMoving, err)
 	case errors.Is(err, library.ErrFolderShared):
 		return nil, fmt.Errorf("%w: %w", errFolderShared, err)

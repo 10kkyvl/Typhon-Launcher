@@ -108,9 +108,10 @@ func (s *Service) reservedLocked(id string) error {
 // starts, moves or is already being removed. dir is the folder the removal acts
 // on, by deleting it or by running an uninstaller in it, and empty when it
 // touches no file; with a dir it also fails while another card's files share
-// that folder. Until release, PlayGame and the move reservations refuse the
-// game, and no card may be added inside dir. The checks and the reservation
-// are one critical section of s.mu.
+// that folder, and with ErrGameMoving when the card no longer names dir (a
+// move ended since the caller looked). Until release, PlayGame and the move
+// reservations refuse the game, and no card may be added inside dir. The
+// checks and the reservation are one critical section of s.mu.
 //
 //wails:ignore
 func (s *Service) BeginRemoval(id, dir string) (func(), error) {
@@ -127,6 +128,9 @@ func (s *Service) BeginRemoval(id, dir string) (func(), error) {
 		return nil, ErrRelocateGameRunning
 	}
 	if dir != "" {
+		if !platform.SamePath(game.InstallDir, dir) {
+			return nil, fmt.Errorf("%w: %s", ErrGameMoving, game.InstallDir)
+		}
 		if neighbours := s.neighboursLocked(id, dir); len(neighbours) > 0 {
 			return nil, sharedError(neighbours)
 		}

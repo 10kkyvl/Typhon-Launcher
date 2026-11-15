@@ -2,6 +2,7 @@ package install
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -428,6 +429,53 @@ func TestUninstallerHoldsTheFolderWhileItRuns(t *testing.T) {
 			if games := r.lib.GetGames(); len(games) > 1 {
 				t.Fatalf("cards = %+v, want no card added inside the folder", games)
 			}
+		})
+	}
+}
+
+// A move of the game ends between the snapshot the removal plans with and its
+// reservation: the removal acts on the folder it reserved or on none, never on
+// one the card no longer names while it settles the card.
+func TestRemovalActsOnTheFolderItPlannedWith(t *testing.T) {
+	for _, keep := range []bool{false, true} {
+		t.Run(fmt.Sprintf("keep=%v", keep), func(t *testing.T) {
+			r := newSharedRig(t)
+			oldDir := filepath.Join(t.TempDir(), "Game")
+			newDir := filepath.Join(t.TempDir(), "Game")
+			a := r.ownedGame(t, oldDir, "Game", library.Uninstall{})
+			var once sync.Once
+			r.s.SetBusyCheck(func(string) bool {
+				once.Do(func() {
+					release, err := r.lib.BeginMove(a.ID)
+					if err != nil {
+						t.Error(err)
+						return
+					}
+					defer release()
+					if err := os.Rename(oldDir, newDir); err != nil {
+						t.Error(err)
+					}
+					if _, err := r.lib.Relocate(a.ID, newDir); err != nil {
+						t.Error(err)
+					}
+				})
+				return false
+			})
+
+			err := r.s.RemoveGame(a.ID, RemoveOptions{DeleteFiles: true, KeepInLibrary: keep})
+
+			if code := uierr.Code(err); code != "install.game_moving" {
+				t.Fatalf("RemoveGame after the folder changed = %q (%v), want install.game_moving", code, err)
+			}
+			if missing(t, filepath.Join(newDir, "Game.exe")) {
+				t.Fatal("files at the new folder deleted")
+			}
+			card, err := r.lib.Find(a.ID)
+			if err != nil || card.Uninstalled || !samePath(card.InstallDir, newDir) {
+				t.Fatalf("card = %+v, %v; want it installed at %s", card, err, newDir)
+			}
+			requireNoRemovalStaging(t, newDir)
+			requireJournalEmpty(t, r.s)
 		})
 	}
 }
