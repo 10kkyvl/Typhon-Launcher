@@ -42,8 +42,10 @@ The frontend is rebuilt to stay for years and to be extended by themes, later by
   skill) in one commit; a rename or removal keeps existing themes working through
   `internal/theme/contract.go` and is documented in `THEMING.md`.
 - New routes, nav items, top-bar actions, game-page blocks, settings sections and backdrop claims
-  (`claimAmbient` in `lib/stores/ambient.ts`) are one registry entry plus one component, never an `if`
-  chain in a shared component. Where no registry exists yet, the first such feature creates it.
+  (`lib/stores/ambient.ts`: `claimAmbient` for a screen's game, `restAmbient` for a page's resting
+  picture; `lib/stores/stage.ts`: `claimStage` for the sharp art across the top) are one registry entry
+  plus one component, never an `if` chain in a shared component. Where no registry exists yet, the
+  first such feature creates it.
 - Before writing a button, menu, dialog, tab, switch, select, progress bar or notice, look for the base
   component in `lib/components/` (`Page.svelte` is the page container). A missing variant is added to
   the base component; no local copies, no `:global` reach-in.
@@ -88,3 +90,7 @@ Add a line when a mistake repeats; drop one a guard now enforces.
 - A component that stays mounted between openings (a dialog that reads its target from a store) starts
   every opening from scratch: reset per-opening state, bound flags such as `retrying` included, in an
   effect keyed on the target object, and ignore an answer that arrives from the previous opening.
+- Words on the stage (`.stage-copy`) bring a plate that eases out past their block: the block and its
+  parents clip nothing (a guard pins only the carousel), and the class is on only while the stage
+  shows the picture. Shoot such screens with wide art, without it (cover look) and in a light preset;
+  jsdom sees none of the three.
