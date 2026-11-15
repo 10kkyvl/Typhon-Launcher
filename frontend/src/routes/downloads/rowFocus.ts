@@ -141,9 +141,10 @@ export function catchLeaving(): void {
   const row = focused instanceof HTMLElement ? focused.closest<HTMLElement>(`[${ROW_ATTR}]`) : null;
   if (!row) return;
   const place = placeOf(rowId(row), focused);
+  // Read now: the press's own hand-off may settle in the same update and forget it.
+  const how = intents.get(place.id);
   void handOffInView(focusHandOff(), () => {
-    const how = intents.get(place.id);
-    intents.delete(place.id);
+    if (how && intents.get(place.id) === how) intents.delete(place.id);
     return leaveTarget(place, how);
   });
 }

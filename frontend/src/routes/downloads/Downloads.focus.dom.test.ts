@@ -6,12 +6,13 @@ vi.mock('../../lib/services/backend', () => ({ inWails: false }));
 vi.mock('../../lib/services/downloads', async (actual) => ({
   ...(await actual<typeof import('../../lib/services/downloads')>()),
   cancelDownload: vi.fn(),
+  pauseDownload: vi.fn(),
   resumeDownload: vi.fn(),
   getDownload: vi.fn(() => new Promise(() => {})),
 }));
 
 import { msg } from '../../lib/i18n';
-import { cancelDownload, resumeDownload, type Download } from '../../lib/services/downloads';
+import { cancelDownload, pauseDownload, resumeDownload, type Download } from '../../lib/services/downloads';
 import { downloads } from '../../lib/stores/downloads';
 import { resetHistory } from '../../lib/stores/router';
 import { toasts } from '../../lib/stores/toasts';
@@ -59,7 +60,7 @@ beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn(function (this: HTMLElement) {
     scrolled.push(this);
   });
-  for (const fn of [cancelDownload, resumeDownload]) {
+  for (const fn of [cancelDownload, pauseDownload, resumeDownload]) {
     vi.mocked(fn).mockReset();
     vi.mocked(fn).mockResolvedValue(undefined);
   }
@@ -82,6 +83,99 @@ describe('Downloads: focus goes with a download its own press moves to another s
     await user.keyboard('{Enter}');
 
     await waitFor(() => expect(document.activeElement).toBe(grip('Game One')));
+  });
+});
+
+describe('Downloads: a row Go takes away from under the focus', () => {
+  const pauseOf = (name: string) => within(panel(name)).getByRole('button', { name: msg('downloads.panel.pauseNamed', { name }) });
+  const moreOf = (name: string) => within(panel(name)).getByRole('button', { name: msg('downloads.panel.more', { name }) });
+
+  it('the focused panel completes: focus goes to the same control of the panel now in its place', async () => {
+    downloads.set([download(), download({ id: 'd2', name: 'Game Two' })]);
+    renderDom(Downloads);
+    pauseOf('Game One').focus();
+
+    goSets('d1', { status: 'completed', completedAt: '2026-09-08T01:00:00Z' });
+
+    await waitFor(() => expect(document.activeElement).toBe(pauseOf('Game Two')));
+    expect(scrolled).toContain(pauseOf('Game Two'));
+  });
+
+  it('the only panel completes: focus goes to the page heading, not to the download’s new row', async () => {
+    downloads.set([download(), download({ id: 'q', name: 'Queued One', status: 'queued' })]);
+    renderDom(Downloads);
+    moreOf('Game One').focus();
+
+    goSets('d1', { status: 'completed', completedAt: '2026-09-08T01:00:00Z' });
+
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 })));
+  });
+
+  it('a pause the panel showed is not followed: a later completion goes to the panel now in its place', async () => {
+    vi.mocked(pauseDownload).mockImplementation(async (id) => goSets(id, { status: 'paused', downloadSpeed: 0 }));
+    downloads.set([download(), download({ id: 'd2', name: 'Game Two' })]);
+    const { user } = renderDom(Downloads);
+    const toggle = pauseOf('Game One');
+    toggle.focus();
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(toggle.getAttribute('aria-label')).toBe(msg('downloads.panel.resumeNamed', { name: 'Game One' })));
+
+    goSets('d1', { status: 'completed', completedAt: '2026-09-08T01:00:00Z' });
+
+    await waitFor(() => expect(document.activeElement).toBe(pauseOf('Game Two')));
+  });
+
+  it('a queued download that starts: focus goes to the grip of the row now in its place', async () => {
+    downloads.set([download({ id: 'a', name: 'Alpha', status: 'queued' }), download({ id: 'b', name: 'Beta', status: 'queued' })]);
+    renderDom(Downloads);
+    grip('Alpha').focus();
+
+    goSets('a', { status: 'downloading' });
+
+    await waitFor(() => expect(document.activeElement).toBe(grip('Beta')));
+  });
+
+  it('focus elsewhere on the page is left alone', async () => {
+    downloads.set([download(), download({ id: 'd2', name: 'Game Two' })]);
+    renderDom(Downloads);
+    const add = screen.getAllByRole('button', { name: msg('transfers.downloadsAddAction') })[0];
+    add.focus();
+
+    goSets('d1', { status: 'completed', completedAt: '2026-09-08T01:00:00Z' });
+    await new Promise((done) => setTimeout(done, 20));
+
+    expect(document.activeElement).toBe(add);
+  });
+
+  it('an open menu keeps focus while another panel completes', async () => {
+    downloads.set([download(), download({ id: 'd2', name: 'Game Two' })]);
+    const { user } = renderDom(Downloads);
+    moreOf('Game Two').focus();
+    await user.keyboard('{Enter}');
+    const item = screen.getByRole('menuitem', { name: msg('downloads.panel.details') });
+    item.focus();
+
+    goSets('d1', { status: 'completed', completedAt: '2026-09-08T01:00:00Z' });
+    await new Promise((done) => setTimeout(done, 20));
+
+    expect(document.activeElement).toBe(item);
+  });
+
+  it('an open dialog keeps focus while the panel it came from completes', async () => {
+    downloads.set([download(), download({ id: 'd2', name: 'Game Two' })]);
+    const { user } = renderDom(Downloads);
+    moreOf('Game One').focus();
+    await user.keyboard('{Enter}');
+    screen.getByRole('menuitem', { name: msg('downloads.panel.details') }).focus();
+    await user.keyboard('{Enter}');
+    const dialog = await screen.findByRole('dialog', { name: 'Game One' });
+    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+    const held = document.activeElement;
+
+    goSets('d1', { status: 'completed', completedAt: '2026-09-08T01:00:00Z' });
+    await new Promise((done) => setTimeout(done, 20));
+
+    expect(document.activeElement).toBe(held);
   });
 });
 

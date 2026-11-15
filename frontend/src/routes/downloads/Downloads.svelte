@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import Page from '../../lib/components/Page.svelte';
   import { Download, Plus, Store } from '@lucide/svelte';
   import AddDownloadModal from '../../lib/components/AddDownloadModal.svelte';
@@ -15,6 +16,7 @@
   import { requestArt } from '../../lib/stores/metadata';
   import { navigate } from '../../lib/stores/router';
   import { installErrorText } from '../../lib/install/installErrors';
+  import { installationsByDownload } from '../../lib/stores/install';
   import { msg, t } from '../../lib/i18n';
   import CompletedSection from './CompletedSection.svelte';
   import DownloadsActions from './DownloadsActions.svelte';
@@ -24,7 +26,8 @@
   import FailedList from './FailedList.svelte';
   import PlayThrottleBanner from './PlayThrottleBanner.svelte';
   import QueueList from './QueueList.svelte';
-  import { pressed } from './rowFocus';
+  import { completedKind, completedPart } from './completedRow';
+  import { catchLeaving, pressed } from './rowFocus';
   import { downloadsSectionIds } from './sections';
 
   let addOpen = $state(false);
@@ -63,6 +66,25 @@
     installDownloadId = id;
     installOpen = true;
   }
+
+  // Which section holds which download. A row that leaves its section by Go's doing (a download
+  // completes, fails or starts) while focus is in it goes before the page shows the change: focus is
+  // handed on by the screen's rule then, for every section in one place.
+  const placesKey = $derived(
+    [
+      $active.map((d) => d.id),
+      $failed.map((d) => d.id),
+      $queue.map((d) => d.id),
+      $completed.map((d) => `${d.id}:${completedPart(completedKind(d, $installationsByDownload.get(d.id)))}`),
+    ]
+      .map((ids) => ids.join(','))
+      .join('|'),
+  );
+
+  $effect.pre(() => {
+    void placesKey;
+    untrack(catchLeaving);
+  });
 
   $effect(() => claimAmbient(ambientGame));
 
