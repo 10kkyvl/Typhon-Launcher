@@ -5,11 +5,13 @@
   import CountBadge from '../../lib/components/CountBadge.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import ProgressBar, { type ProgressTone } from '../../lib/components/ProgressBar.svelte';
+  import Reading from '../../lib/components/Reading.svelte';
   import Spinner from '../../lib/components/Spinner.svelte';
   import StatTile from '../../lib/components/StatTile.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import TextLink from '../../lib/components/TextLink.svelte';
   import { toast } from '../../lib/stores/toasts';
+  import { bytesSize, etaLabel, rateLimitLabel, speedBytes } from '../../lib/utils/format';
   import ShowcaseRow from './ShowcaseRow.svelte';
   import ShowcaseSection from './ShowcaseSection.svelte';
 
@@ -17,6 +19,8 @@
   const SPINNER_SIZES = ['sm', 'md', 'lg'] as const;
   const TONES: ProgressTone[] = ['accent', 'game', 'success', 'warning', 'danger', 'muted'];
   const COUNTS = [0, 1, 7, 99, 120];
+  const MB = 1024 ** 2;
+  const READINGS = [speedBytes(12.5 * MB), bytesSize(3.2 * 1024 * MB), etaLabel(4320), '54%', rateLimitLabel(0)];
 
   let progress = $state(40);
 </script>
@@ -73,6 +77,13 @@
     </span>
   </ShowcaseRow>
 
+  <ShowcaseRow caption="Readings: tabular numbers, the unit set apart; a big one takes its size from where it stands">
+    {#each READINGS as text (text)}
+      <Reading {text} />
+    {/each}
+    <span class="big"><Reading text={speedBytes(41.7 * MB)} /></span>
+  </ShowcaseRow>
+
   <ShowcaseRow caption="Stat tiles">
     <StatTile value="128 h" label="Played">
       {#snippet icon()}<Clock />{/snippet}
@@ -123,6 +134,11 @@
     border-radius: var(--radius-sm);
     background: var(--accent);
     color: var(--accent-on);
+  }
+
+  .big {
+    font-size: var(--font-title);
+    font-weight: 600;
   }
 
   .controls {

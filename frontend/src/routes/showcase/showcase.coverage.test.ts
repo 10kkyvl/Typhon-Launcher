@@ -31,6 +31,7 @@ const BASE = [
   'EmptyState',
   'Spinner',
   'ProgressBar',
+  'Reading',
   'StatTile',
   'Card',
   'Page',
