@@ -785,3 +785,41 @@ func TestOnlyTheNewestRemovalOfAGameSettlesItsCard(t *testing.T) {
 		})
 	}
 }
+
+// The journal becomes readable only once the service is closing: the pending
+// removals are left for the next start, not handed to a goroutine that
+// ServiceShutdown no longer waits for.
+func TestLateRemovalSweepIsSkippedOnceTheServiceIsClosing(t *testing.T) {
+	dir := t.TempDir()
+	journal := filepath.Join(dir, "removals.json")
+	mkFile(t, filepath.Join(journal, "keep.txt"), 4)
+	r := newJournalRig(t, dir, &fakeRegistrar{})
+	r.start(t)
+	if err := os.RemoveAll(journal); err != nil {
+		t.Fatal(err)
+	}
+	killed := gameDir(t, "Killed")
+	putOwnedCard(t, r.registrar, "k1", killed)
+	staged := killed + removingSuffix
+	if err := os.Rename(killed, staged); err != nil {
+		t.Fatal(err)
+	}
+	writeJournal(t, dir, journalEntry(t, staged, "k1", killed, true))
+	if err := r.s.ServiceShutdown(); err != nil {
+		t.Fatalf("shutdown: %v", err)
+	}
+
+	if err := r.s.removals.ready(); err != nil {
+		t.Fatalf("journal once readable: %v", err)
+	}
+	r.s.sweepLateRemovals()
+	r.s.wg.Wait()
+
+	if missing(t, staged) {
+		t.Fatal("pending removals were swept after the service began closing")
+	}
+	requireJournalHolds(t, dir, staged)
+	if card, err := r.registrar.Find("k1"); err != nil || card.Uninstalled {
+		t.Fatalf("card = %+v, %v; want it left for the next start", card, err)
+	}
+}
