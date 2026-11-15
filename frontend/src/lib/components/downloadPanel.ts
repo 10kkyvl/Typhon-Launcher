@@ -39,11 +39,10 @@ export function heldBack(download: Pick<Download, 'ignoreSchedule'>, throttle: P
 /**
  * Whether Go's Cancel leaves this download's files on disk: an in-place download (an update or a repair
  * written into the game's folder) and a flat one, whose folder Go cannot tell apart (manager.go `discard`,
- * `removalRoot`). Go sends both flags in the record; the TS type does not declare them yet.
+ * `removalRoot`).
  */
 export function cancelKeepsFiles(download: Download): boolean {
-  const flags = download as Download & { inPlace?: boolean; flat?: boolean };
-  return flags.inPlace === true || flags.flat === true;
+  return download.inPlace === true || download.flat === true;
 }
 
 function panels(): HTMLElement[] {

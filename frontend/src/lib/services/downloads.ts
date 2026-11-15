@@ -60,6 +60,10 @@ export interface Download {
   stalled?: boolean;
   stalledSince?: string | null;
   ignoreSchedule?: boolean;
+  /** Its payload has no folder of its own: Go cannot tell its files from others in the destination. */
+  flat?: boolean;
+  /** Written into an installed game's folder (an update or a repair). */
+  inPlace?: boolean;
   addedAt: string;
   completedAt: string | null;
   error: string;
