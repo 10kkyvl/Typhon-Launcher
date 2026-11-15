@@ -435,6 +435,31 @@ func TestUninstallerHoldsTheFolderWhileItRuns(t *testing.T) {
 	}
 }
 
+// The removal keeps its hold until the card is settled: a game added inside
+// the folder after the files went, before the card changed, is refused.
+func TestRemovalHoldsTheFolderUntilTheCardIsSettled(t *testing.T) {
+	r := newSharedRig(t)
+	dir := filepath.Join(t.TempDir(), "RepackX")
+	a := r.ownedGame(t, dir, "RepackX", library.Uninstall{})
+	late := filepath.Join(dir, "Late", "Game3.exe")
+	var addErr error
+	r.s.releaseRuntime = func(string) error {
+		mkFile(t, late, 64)
+		_, addErr = r.lib.AddGame(t.Context(), late, "Late")
+		return nil
+	}
+
+	if err := r.s.RemoveGame(a.ID, RemoveOptions{DeleteFiles: true}); err != nil {
+		t.Fatalf("RemoveGame = %v", err)
+	}
+	if code := uierr.Code(addErr); code != "library.folder_busy" {
+		t.Fatalf("AddGame inside the folder after its files went = %q (%v), want library.folder_busy", code, addErr)
+	}
+	if games := r.lib.GetGames(); len(games) != 0 {
+		t.Fatalf("cards = %+v, want none", games)
+	}
+}
+
 // A move of the game ends between the snapshot the removal plans with and its
 // reservation: the removal acts on the folder it reserved or on none, never on
 // one the card no longer names while it settles the card.

@@ -86,6 +86,30 @@ func TestMoveGameRefusesAFolderAnotherGameShares(t *testing.T) {
 	}
 }
 
+// A library move refuses a game whose folder holds another library game before
+// it registers a job or moves anything, as a single game's move does.
+func TestMoveLibraryRefusesASharedFolderBeforeMoving(t *testing.T) {
+	set := newTestSettings(t)
+	lib := newTestLibrary(t)
+	s := newTestService(t, set, lib, nil, nil, nil)
+	cfg := set.GetSettings()
+	a := addGameAt(t, lib, cfg.GamesPath, "RepackX")
+	bonus := filepath.Join(a.InstallDir, "Bonus", "Game2.exe")
+	addExeAt(t, lib, bonus, "Bonus")
+
+	_, err := s.MoveLibrary(t.TempDir())
+
+	if code := uierr.Code(err); code != "relocate.folder_shared" {
+		t.Fatalf("MoveLibrary = %q (%v), want relocate.folder_shared", code, err)
+	}
+	if got := s.List(); len(got) != 0 {
+		t.Fatalf("job registered despite the refusal: %+v", got)
+	}
+	if _, err := os.Stat(bonus); err != nil {
+		t.Fatalf("the other game's file touched: %v", err)
+	}
+}
+
 func neighbourActive(t *testing.T, lib *library.Service, exe string) {
 	t.Helper()
 	addExeAt(t, lib, exe, "Bonus")
