@@ -641,6 +641,38 @@ describe('the text plate on the stage', () => {
     });
   }
 
+  // The slide picker stands on the art beside the words: what marks the slide on screen (the ring of
+  // its cover) and the timer's bar must show at 3:1 (WCAG 1.4.11) on whatever the picker draws under
+  // them, over black and white art; the bar also against the track it runs along.
+  for (const id of ['dark', 'light', 'contrast', 'blush']) {
+    it(`${id} shows the carousel's current slide and its timer over any picture (3:1)`, () => {
+      const preset = builtIns().find((p) => p.id === id);
+      expect(preset, id).toBeDefined();
+      const tokens = (preset as Preset).tokens;
+      const ground = ruleBody(hero, '.picker').background ?? 'transparent';
+      const ring = /\bsolid\s+(\S+)$/.exec(ruleBody(hero, ".pick[aria-current='true'] .chip").outline ?? '')?.[1];
+      expect(ring, 'the current cover is ringed').toBeTypeOf('string');
+      const bar = ruleBody(hero, '.bar').background;
+      const track = ruleBody(hero, ".pick[aria-current='true'] .track").background ?? 'transparent';
+      const out: string[] = [];
+      for (const [name, art] of [['black', BLACK], ['white', WHITE]] as const) {
+        const under = over(cssColor(ground, tokens), art);
+        const lane = over(cssColor(track, tokens), under);
+        const drawn = (colour: string) => over(cssColor(colour, tokens), under);
+        const checks: [string, RGB, RGB][] = [
+          ['ring', drawn(ring as string), under],
+          ['bar', drawn(bar), under],
+          ['bar on its track', drawn(bar), lane],
+        ];
+        for (const [what, fg, bg] of checks) {
+          const r = ratio(fg, bg);
+          if (r < 3) out.push(`${what} over ${name}: ${r.toFixed(2)} < 3`);
+        }
+      }
+      expect(out).toEqual([]);
+    });
+  }
+
   for (const id of ['dark', 'light', 'contrast', 'blush']) {
     it(`${id} keeps the words on the plate readable over any picture (4.5:1)`, () => {
       const preset = builtIns().find((p) => p.id === id);

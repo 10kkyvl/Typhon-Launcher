@@ -339,7 +339,10 @@
     margin-top: var(--space-2);
   }
 
-  /* The slide controls are the games themselves: a short row of their covers, the one on screen raised. */
+  /* The slide controls are the games themselves: a short row of their covers, the one on screen raised.
+     They stand on the art beside the words, so they bring the words' plate colour: the ring and the
+     timer's bar hold 3:1 on it over any picture (theme-contrast.test.ts). The padding holds the raised
+     cover's ring. */
   .picker {
     position: absolute;
     right: var(--page-inset, var(--space-8));
@@ -347,6 +350,9 @@
     display: flex;
     align-items: flex-end;
     gap: var(--space-2);
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+    background: var(--scrim-copy);
   }
 
   .pick {
@@ -392,7 +398,7 @@
   }
 
   .pick[aria-current='true'] .track {
-    background: color-mix(in srgb, var(--text) 30%, transparent);
+    background: color-mix(in srgb, var(--text) 24%, transparent);
   }
 
   .bar {
