@@ -71,6 +71,13 @@ export function createSpeedHistory() {
       for (const id of tracks.keys()) if (!ids.has(id)) tracks.delete(id);
     },
 
+    /** How much it holds: the tracks and their samples together. */
+    size(): { tracks: number; samples: number } {
+      let samples = 0;
+      for (const track of tracks.values()) samples += track.samples.length;
+      return { tracks: tracks.size, samples };
+    },
+
     series(id: string, now: number): SpeedSeries {
       const out = emptySpeedSeries();
       const track = tracks.get(id);
