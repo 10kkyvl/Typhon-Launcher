@@ -2,6 +2,7 @@ package download
 
 import (
 	"encoding/json"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -205,26 +206,102 @@ func TestInterfaceTypesAreCoveredByWhatGoSends(t *testing.T) {
 	})
 }
 
-func TestEventNamesMatchWhatTheFrontendListensTo(t *testing.T) {
-	events := map[string]string{
-		"download:added": eventAdded, "download:updated": eventUpdated, "download:progress": eventProgress,
-		"download:completed": eventCompleted, "download:failed": eventFailed, "download:removed": eventRemoved,
-		"download:degraded": eventDegraded, "download:network": eventNetwork, "download:reordered": eventReordered,
+// unregisteredEvents names the package's events main.go does not register,
+// with the reason; the frontend still has to listen to each of them.
+var unregisteredEvents = map[string]string{
+	"download:degraded":       "its payload type degradedStatus is unexported",
+	"downloads:play-throttle": "the frontend types its payload by hand",
+}
+
+var registeredEventPattern = regexp.MustCompile(`RegisterEvent\[.+?\]\(\s*(?:"([^"]+)"|download\.(\w+))\s*\)`)
+
+// packageEvents maps every event constant of the package, in any of its
+// files, to its name.
+func packageEvents(t *testing.T) map[string]string {
+	t.Helper()
+	top, ok := parseDownloadTree(t)["."]
+	if !ok {
+		t.Fatal("no file of the package parsed")
 	}
-	var listened strings.Builder
-	for _, rel := range []string{"downloads.ts", "degraded.ts", "network.ts"} {
-		body, err := os.ReadFile(filepath.Join("..", "..", "frontend", "src", "lib", "stores", rel))
+	events := map[string]string{}
+	for name, value := range stringConsts(top.files) {
+		if strings.HasPrefix(name, "event") && strings.HasPrefix(value, "download") {
+			events[name] = value
+		}
+	}
+	return events
+}
+
+// frontendSources is the text of every non-test script and component of
+// the frontend, where a listener names the event it subscribes to.
+func frontendSources(t *testing.T) string {
+	t.Helper()
+	var all strings.Builder
+	src := os.DirFS(filepath.Join("..", "..", "frontend", "src"))
+	err := fs.WalkDir(src, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		name := d.Name()
+		script := strings.HasSuffix(name, ".ts") || strings.HasSuffix(name, ".svelte")
+		if !script || strings.Contains(name, ".test.") || strings.Contains(name, ".spec.") {
+			return nil
+		}
+		body, err := fs.ReadFile(src, path)
 		if err != nil {
-			t.Fatal(err)
+			return err
 		}
-		listened.Write(body)
+		all.Write(body)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("frontend not read: %v", err)
 	}
-	for literal, constant := range events {
-		if constant != literal {
-			t.Errorf("event constant is %q, want %q", constant, literal)
+	return all.String()
+}
+
+func TestEventNamesMatchWhatTheFrontendListensTo(t *testing.T) {
+	events := packageEvents(t)
+	if len(events) < 10 {
+		t.Fatalf("found %d event constants in the package, want at least 10: %v", len(events), events)
+	}
+	mainGo, err := os.ReadFile(filepath.Join("..", "..", "main.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	registered := map[string]bool{}
+	for _, m := range registeredEventPattern.FindAllStringSubmatch(string(mainGo), -1) {
+		switch {
+		case m[1] != "":
+			registered[m[1]] = true
+		case events[m[2]] != "":
+			registered[events[m[2]]] = true
 		}
-		if !strings.Contains(listened.String(), "'"+literal+"'") {
-			t.Errorf("no store of the frontend listens to %q", literal)
+	}
+	listened := frontendSources(t)
+
+	names := map[string]bool{}
+	for constant, name := range events {
+		names[name] = true
+		_, exempt := unregisteredEvents[name]
+		if !registered[name] && !exempt {
+			t.Errorf("%s = %q is not registered in main.go: register it with its payload type, or name it in unregisteredEvents with the reason", constant, name)
+		}
+		if registered[name] && exempt {
+			t.Errorf("%q is registered in main.go: drop it from unregisteredEvents", name)
+		}
+		if !strings.Contains(listened, "'"+name+"'") {
+			t.Errorf("%s = %q: nothing in the frontend listens to it", constant, name)
+		}
+	}
+	for name := range unregisteredEvents {
+		if !names[name] {
+			t.Errorf("unregisteredEvents names %q, which is no event of the package", name)
+		}
+	}
+	for name := range registered {
+		if (strings.HasPrefix(name, "download:") || strings.HasPrefix(name, "downloads:")) && !names[name] {
+			t.Errorf("main.go registers %q, which is no event constant of the package", name)
 		}
 	}
 }
