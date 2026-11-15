@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/anacrolix/torrent/metainfo"
+
+	"typhon/internal/uierr"
 )
 
 type lostCache struct {
@@ -197,6 +199,10 @@ func TestASelectionThatCannotBeAppliedFailsTheDownloadInsteadOfGuessing(t *testi
 			if d.Status != StatusFailed || !strings.Contains(d.Error, errSelectionLost.Error()) {
 				t.Fatalf("download = %s %q, want failed with the lost selection named", d.Status, d.Error)
 			}
+			// The list carries the error as text; the window reads the code from it.
+			if !strings.HasPrefix(d.Error, "typhon:download.selection_lost: ") {
+				t.Fatalf("error = %q, want the download.selection_lost code: the window would show its generic text", d.Error)
+			}
 			if len(d.Files) != 0 {
 				t.Fatalf("files = %+v: a selection that cannot be applied must not turn into every file", d.Files)
 			}
@@ -243,6 +249,9 @@ func TestAFileTorrentIsNotAddedWhenItsMetadataCannotBeKept(t *testing.T) {
 	if !errors.Is(err, errMetainfoNotSaved) {
 		t.Fatalf("error = %v, want errMetainfoNotSaved: this download could never be restored", err)
 	}
+	if got := uierr.Code(err); got != "download.metainfo_not_saved" {
+		t.Fatalf("code = %q (%v), want download.metainfo_not_saved: the window would show its generic text", got, err)
+	}
 	if got := len(m.List()); got != 0 {
 		t.Fatalf("downloads tracked = %d", got)
 	}
@@ -266,6 +275,9 @@ func TestAddTaskRefusesAFileTorrentItCannotCache(t *testing.T) {
 
 	if !errors.Is(err, errMetainfoNotSaved) {
 		t.Fatalf("error = %v, want errMetainfoNotSaved", err)
+	}
+	if got := uierr.Code(err); got != "download.metainfo_not_saved" {
+		t.Fatalf("code = %q (%v), want download.metainfo_not_saved", got, err)
 	}
 	if got := len(m.List()); got != 0 {
 		t.Fatalf("downloads tracked = %d", got)

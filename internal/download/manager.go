@@ -75,12 +75,9 @@ const stateUnreadMessage = "список загрузок не прочитан,
 var ErrNotFound = uierr.New("download.not_found", "загрузка не найдена")
 
 var (
-	errSelectionLost    = errors.New("выбор файлов потерян: без него нельзя понять, что скачивать")
-	errMetainfoNotSaved = errors.New("не удалось сохранить torrent-файл: загрузку нельзя будет восстановить после перезапуска")
-	errRootUnknown      = errors.New("не удалось определить папку загрузки, данные не удалены")
-)
-
-var (
+	errSelectionLost     = uierr.New("download.selection_lost", "выбор файлов потерян: без него нельзя понять, что скачивать")
+	errMetainfoNotSaved  = uierr.New("download.metainfo_not_saved", "не удалось сохранить torrent-файл: загрузку нельзя будет восстановить после перезапуска")
+	errRootUnknown       = uierr.New("download.root_unknown", "не удалось определить папку загрузки, данные не удалены")
 	errNotFound          = ErrNotFound
 	errUnavailable       = uierr.New("download.unavailable", "недоступно для этой загрузки")
 	errNoClient          = uierr.New("download.no_client", "торрент-клиент недоступен")

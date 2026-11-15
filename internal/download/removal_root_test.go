@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"typhon/internal/uierr"
 )
 
 // rootFixture lays out a destination with the data of a three file torrent
@@ -214,6 +216,9 @@ func TestNothingIsDeletedWhenTheFolderOfADownloadCannotBeDetermined(t *testing.T
 
 			if !errors.Is(err, errRootUnknown) {
 				t.Fatalf("error = %v, want errRootUnknown", err)
+			}
+			if got := uierr.Code(err); got != "download.root_unknown" {
+				t.Fatalf("code = %q (%v), want download.root_unknown: the window would show its generic text", got, err)
 			}
 			if _, getErr := m.Get("a"); getErr != nil {
 				t.Fatalf("the record was dropped although nothing was deleted: %v", getErr)
