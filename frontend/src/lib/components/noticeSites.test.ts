@@ -244,7 +244,7 @@ const SITES: Record<string, Site[]> = {
   'routes/game/ReviewSummary.svelte': [['danger', false]],
   // The history file could not be written: a state of the page, not an event of this visit.
   'routes/history/History.svelte': [['danger', false]],
-  'routes/installed/Installed.svelte': [['danger', true]],
+  'routes/installed/InstalledStorage.svelte': [['danger', true]],
   // The collections and the library list that failed to load: each failure just happened.
   'routes/library/Library.svelte': [
     ['danger', true],

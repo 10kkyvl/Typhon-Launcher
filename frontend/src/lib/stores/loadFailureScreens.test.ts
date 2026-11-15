@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import installed from '../../routes/installed/Installed.svelte?raw';
+import installed from '../../routes/installed/InstalledStorage.svelte?raw';
 import profile from '../../routes/profile/Profile.svelte?raw';
 import activity from '../../routes/activity/Activity.svelte?raw';
 import bigPictureProfile from '../bigpicture/components/ProfilePage.svelte?raw';
