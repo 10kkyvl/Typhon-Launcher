@@ -128,10 +128,10 @@ describe("a progress bar in the game's colour", () => {
     expect(getByRole('progressbar', { name: 'Game' }).dataset.tone).toBe('game');
   });
 
-  it("reads the game's fill where it paints, with the bright accent as the fallback", () => {
+  it("reads the game's mark where it paints, with the bright accent as the fallback", () => {
     expect(ruleBody(css, ".track[data-tone='game']")).toEqual({
-      '--bar': 'var(--game-fill, var(--accent-bright))',
-      '--bar-streak': 'var(--game-on-fill, var(--accent-on, var(--accent-on-default)))',
+      '--bar': 'var(--game-mark, var(--accent-bright))',
+      '--bar-streak': 'var(--game-on-mark, var(--accent-on, var(--accent-on-default)))',
     });
   });
 });

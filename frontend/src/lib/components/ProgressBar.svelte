@@ -105,8 +105,8 @@
   }
 
   .track[data-tone='game'] {
-    --bar: var(--game-fill, var(--accent-bright));
-    --bar-streak: var(--game-on-fill, var(--accent-on, var(--accent-on-default)));
+    --bar: var(--game-mark, var(--accent-bright));
+    --bar-streak: var(--game-on-mark, var(--accent-on, var(--accent-on-default)));
   }
 
   .track[data-tone='success'] {

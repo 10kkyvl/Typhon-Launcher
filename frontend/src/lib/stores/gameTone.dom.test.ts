@@ -348,6 +348,7 @@ describe('the scope a game paints its controls in', () => {
     await settle();
     expect(node.classList.contains('game-tone')).toBe(true);
     expect(vars(node)).toEqual(toneVars(toneIn(RED, DARK)));
+    expect(vars(node)).toMatchObject({ '--game-fill': toneIn(RED, DARK).fill, '--game-mark': toneIn(RED, DARK).mark });
   });
 
   it('a change of game takes the old colour away and brings the new one', async () => {
@@ -361,11 +362,26 @@ describe('the scope a game paints its controls in', () => {
     await rerender({ id: blue });
     await settle();
     expect(vars(node)).toEqual(toneVars(toneIn(BLUE, DARK)));
+    expect(vars(node)['--game-mark']).toBe(toneIn(BLUE, DARK).mark);
 
     await rerender({ id: null });
     await settle();
     expect(vars(node)).toEqual({});
     expect(node.classList.contains('game-tone')).toBe(false);
+  });
+
+  it('a theme change repaints the mark on the scope with the other colours, reading no picture again', async () => {
+    const blue = await coloured(BLUE);
+    render(GameScopeHarness, { props: { id: blue } });
+    const node = screen.getByTestId('scope');
+    await settle();
+    expect(vars(node)['--game-mark']).toBe(toneIn(BLUE, DARK).mark);
+
+    applyTheme(theme(DARK_STRONG_TRACK));
+    await settle();
+    expect(vars(node)).toEqual(toneVars(toneIn(BLUE, DARK_STRONG_TRACK)));
+    expect(vars(node)['--game-mark']).not.toBe(toneIn(BLUE, DARK).mark);
+    expect(canvas.read).toHaveBeenCalledTimes(1);
   });
 
   it('clears the node when it is destroyed', async () => {
@@ -374,6 +390,7 @@ describe('the scope a game paints its controls in', () => {
     const destroy = gameScope(red)(node);
     await settle();
     expect(node.classList.contains('game-tone')).toBe(true);
+    expect(vars(node)['--game-mark']).toBe(toneIn(RED, DARK).mark);
     expect(typeof destroy).toBe('function');
     (destroy as () => void)();
     expect(vars(node)).toEqual({});

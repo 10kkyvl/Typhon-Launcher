@@ -179,6 +179,6 @@ describe('a still picture', () => {
     const css = styleOf(source, 'SpeedGraph.svelte');
     expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?|oklch)\(|(?<![-\w])(?:white|black)(?![-\w])/i);
     // The game's mark colour, not its control fill: styles/game-tone.test.ts measures it on the panel.
-    expect(css).toMatch(/stroke:\s*var\(--game-accent, var\(--accent-bright\)\)/);
+    expect(css).toMatch(/stroke:\s*var\(--game-mark, var\(--accent-bright\)\)/);
   });
 });

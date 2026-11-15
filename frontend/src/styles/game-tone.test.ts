@@ -4,7 +4,7 @@ import cardSource from '../lib/components/GameCard.svelte?raw';
 import graphSource from '../lib/components/SpeedGraph.svelte?raw';
 import progressSource from '../lib/components/ProgressBar.svelte?raw';
 import tabsSource from '../lib/components/Tabs.svelte?raw';
-import { contrast, fromHex, gameToneOf, hslToRgb, toHex, toneVars, type RGB } from '../lib/art/tone';
+import { contrast, fromHex, gameToneOf, hslToRgb, toHex, toneVars, type RGB, type ToneTheme } from '../lib/art/tone';
 import { ruleBody, styleOf } from '../lib/testing/css';
 import { goSources } from '../lib/testing/sources';
 
@@ -42,10 +42,13 @@ describe("the game's colour in the stylesheets", () => {
     });
   });
 
-  it('every property the scope sets is read: by the game-tone class, or the tab marker for the accent', () => {
+  it('every property the scope sets is read: by the game-tone class, the tab marker for the accent, the bar and the graph for the mark', () => {
     const tone = { fill: '#2f6f9f', onFill: '#ffffff', accent: '#7fb4dd', mark: '#5a9ccc' };
     const mapped = new Set(Object.values(scope).map((value) => /^var\((--[\w-]+)\)$/.exec(value)?.[1]));
-    expect(Object.keys(toneVars(tone)).filter((name) => !mapped.has(name))).toEqual(['--game-accent']);
+    expect(Object.keys(toneVars(tone)).filter((name) => !mapped.has(name))).toEqual(['--game-accent', '--game-mark', '--game-on-mark']);
+    expect(progressSource).toContain('var(--game-mark,');
+    expect(progressSource).toContain('var(--game-on-mark,');
+    expect(graphSource).toContain('var(--game-mark,');
   });
 
   it('is no theme token and has no root value: a theme cannot set it, and a subtree accent is not shadowed', () => {
@@ -66,6 +69,21 @@ const PRESETS = [...(goSources['internal/theme/presets.go'] ?? '').matchAll(/^va
   id: /\bID:\s*"([^"]+)"/.exec(m[1])?.[1] ?? '',
   tokens: { '--accent-on-default': '#fff', ...Object.fromEntries([...m[1].matchAll(/"(--[\w-]+)":\s*"([^"]*)"/g)].map((t) => [t[1], t[2]])) } as Record<string, string>,
 }));
+
+/** A preset's grounds for the clamp, the way the store reads them from the window. */
+function toneTheme(tokens: Record<string, string>): ToneTheme {
+  const m = /^rgba\(\s*(\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\s*\)$/.exec(tokens['--hover-strong']);
+  if (!m) throw new Error(`--hover-strong is not rgba(): ${tokens['--hover-strong']}`);
+  return { bg: tokens['--bg'], text: tokens['--text'], panel: tokens['--surface-2'], track: [Number(m[1]), Number(m[2]), Number(m[3]), Number(m[4])] };
+}
+
+/** A translucent colour laid over an opaque ground, in whole channels as the window blends it. */
+function over(tint: string, below: string): RGB {
+  const m = /^rgba\(\s*(\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\s*\)$/.exec(tint);
+  if (!m) throw new Error(`not rgba(): ${tint}`);
+  const a = Number(m[4]);
+  return fromHex(below).map((v, i) => Math.round(Number(m[i + 1]) * a + v * (1 - a))) as RGB;
+}
 
 /** What a declaration computes to with these custom properties in scope, var() fallbacks included. */
 function computed(expr: string, tokens: Record<string, string>): string {
@@ -177,7 +195,7 @@ describe('a launching control outside any game is the primary fill it was', () =
 describe("a launching control inside a game's scope takes the game's colour", () => {
   for (const { id, tokens: preset } of PRESETS) {
     it(`${id}: Play's rest, label, hover, glow and pressed fill, and the card's disc, come from the game`, () => {
-      const v = toneVars(gameToneOf([200, 40, 30], { bg: preset['--bg'], text: preset['--text'] }));
+      const v = toneVars(gameToneOf([200, 40, 30], toneTheme(preset)));
       const tokens = { ...preset, ...v, ...ruleBody(css('./shell.css'), '.game-tone') };
       expect(button(tokens)).toEqual({
         rest: v['--game-fill'],
@@ -196,10 +214,10 @@ describe("a launching control inside a game's scope takes the game's colour", ()
       });
     });
 
-    it(`${id}: a progress bar in the game tone fills with the game's fill and runs its label colour as the streak`, () => {
-      const v = toneVars(gameToneOf([200, 40, 30], { bg: preset['--bg'], text: preset['--text'] }));
+    it(`${id}: a progress bar in the game tone fills with the game's mark and runs the colour that shows on it as the streak`, () => {
+      const v = toneVars(gameToneOf([200, 40, 30], toneTheme(preset)));
       const tokens = { ...preset, ...v, ...ruleBody(css('./shell.css'), '.game-tone') };
-      expect(bar('game', tokens)).toEqual({ fill: v['--game-fill'], streak: v['--game-on-fill'] });
+      expect(bar('game', tokens)).toEqual({ fill: v['--game-mark'], streak: v['--game-on-mark'] });
       expect(bar('accent', tokens).fill).toBe(preset['--accent-bright']);
     });
   }
@@ -230,11 +248,43 @@ describe("the speed graph's trace keeps 3:1 on the panel it is drawn on", () => 
 
     it(`${id}: in every game's colour the line and its dot hold 3:1 on --surface-2`, () => {
       const worst = SWEEP.map((color) => {
-        const { line, dot } = graph({ ...preset, ...toneVars(gameToneOf(color, { bg: preset['--bg'], text: preset['--text'] })) });
+        const { line, dot } = graph({ ...preset, ...toneVars(gameToneOf(color, toneTheme(preset))) });
         expect(dot).toBe(line);
         return { color: toHex(color), line, ratio: contrast(fromHex(line), panel) };
       }).reduce((a, b) => (b.ratio < a.ratio ? b : a));
       expect(worst.ratio, `${worst.color} draws ${worst.line}`).toBeGreaterThanOrEqual(3);
     });
+  }
+});
+
+/**
+ * A progress bar in the game tone is a graphic too: its fill is drawn on the bar's own track, which is
+ * --hover-strong laid over the download's panel (--surface-2) or, in a queue row, over the page (--bg).
+ */
+describe("a progress bar's fill in the game's colour keeps 3:1 on its track", () => {
+  it('the bar and the graph read the mark, with the bright accent where no game is in scope', () => {
+    expect(ruleBody(BAR, ".track[data-tone='game']")['--bar']).toBe('var(--game-mark, var(--accent-bright))');
+    expect(ruleBody(GRAPH, '.line').stroke).toBe('var(--game-mark, var(--accent-bright))');
+    expect(ruleBody(GRAPH, '.dot').background).toBe('var(--game-mark, var(--accent-bright))');
+  });
+
+  for (const { id, tokens: preset } of PRESETS) {
+    const grounds = { 'track over --surface-2': over(preset['--hover-strong'], preset['--surface-2']), 'track over --bg': over(preset['--hover-strong'], preset['--bg']) };
+
+    it(`${id}: outside a game the fill is the bright accent and holds 3:1 on both tracks`, () => {
+      expect(bar('game', preset).fill).toBe(preset['--accent-bright']);
+      for (const [name, ground] of Object.entries(grounds)) expect(contrast(fromHex(preset['--accent-bright']), ground), name).toBeGreaterThanOrEqual(3);
+    });
+
+    for (const [name, ground] of Object.entries(grounds)) {
+      it(`${id}: in every game's colour the fill holds 3:1 on the ${name}`, () => {
+        const worst = SWEEP.map((color) => {
+          const tokens = { ...preset, ...toneVars(gameToneOf(color, toneTheme(preset))), ...ruleBody(css('./shell.css'), '.game-tone') };
+          const { fill } = bar('game', tokens);
+          return { color: toHex(color), fill, ratio: contrast(fromHex(fill), ground) };
+        }).reduce((a, b) => (b.ratio < a.ratio ? b : a));
+        expect(worst.ratio, `${worst.color} fills ${worst.fill}`).toBeGreaterThanOrEqual(3);
+      });
+    }
   }
 });

@@ -234,7 +234,9 @@ function glyphOn(tone: GameTone): string {
 
 /**
  * The custom properties a game's subtree is painted with (stores/gameTone.ts sets them inline with the
- * `game-tone` class; shell.css points Play at them). Nothing for no game: the theme's accent stays.
+ * `game-tone` class; shell.css points Play at them, a progress bar and a speed graph read the mark where
+ * they paint). `--game-on-mark` is the streak over a filling bar: white or ink, whichever stands out on the
+ * mark. Nothing for no game: the theme's accent stays.
  */
 export function toneVars(tone: GameTone | null | undefined): Record<string, string> {
   if (!tone) return {};
@@ -250,5 +252,7 @@ export function toneVars(tone: GameTone | null | undefined): Record<string, stri
     '--game-disc-hover': shifted(tone.fill, 0.1, glyph),
     '--game-disc-active': shifted(tone.fill, 0.2, glyph),
     '--game-accent': tone.accent,
+    '--game-mark': tone.mark,
+    '--game-on-mark': contrast(fromHex(tone.mark), LIGHT_LABEL) >= contrast(fromHex(tone.mark), DARK_LABEL) ? WHITE : toHex(DARK_LABEL),
   };
 }

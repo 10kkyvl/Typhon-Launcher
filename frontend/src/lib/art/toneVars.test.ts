@@ -9,13 +9,26 @@ const light: GameTone = { fill: '#d9c35a', onFill: '#0e0f11', accent: '#e8d57a',
 describe('the custom properties a game paints its subtree with', () => {
   it('hands the whole colour to a subtree, and nothing for no game', () => {
     expect(toneVars(null)).toEqual({});
-    expect(toneVars(dark)).toMatchObject({ '--game-fill': dark.fill, '--game-on-fill': '#ffffff', '--game-accent': dark.accent });
+    expect(toneVars(dark)).toMatchObject({ '--game-fill': dark.fill, '--game-on-fill': '#ffffff', '--game-accent': dark.accent, '--game-mark': dark.mark });
   });
 
-  it('names only the properties shell.css maps for Play and the tab marker reads: no tint, no progress tone', () => {
+  it('names only the properties shell.css maps for Play, the tab marker reads, and the marks a progress bar and a speed graph draw: no tint', () => {
     expect(Object.keys(toneVars(dark)).sort()).toEqual(
-      ['--game-accent', '--game-disc-active', '--game-disc-hover', '--game-fill', '--game-fill-active', '--game-fill-hover', '--game-glow', '--game-glyph', '--game-on-fill'].sort(),
+      ['--game-accent', '--game-disc-active', '--game-disc-hover', '--game-fill', '--game-fill-active', '--game-fill-hover', '--game-glow', '--game-glyph', '--game-mark', '--game-on-fill', '--game-on-mark'].sort(),
     );
+  });
+
+  // The streak that runs in a filling bar is decoration over the mark: white or ink, whichever stands out more on it.
+  it('the streak over the mark is white on a dark mark and ink on a light one', () => {
+    expect(toneVars({ ...dark, mark: '#1f4f7f' })['--game-on-mark']).toBe('#ffffff');
+    expect(toneVars({ ...dark, mark: '#a8d4f4' })['--game-on-mark']).toBe('#0e0f11');
+    for (let h = 0; h < 360; h += 15) {
+      for (const l of [0.2, 0.4, 0.5, 0.6, 0.8]) {
+        const mark = hsl(h, 0.7, l);
+        const on = fromHex(toneVars({ ...dark, mark })['--game-on-mark']);
+        expect(contrast(on, fromHex(mark)), mark).toBeGreaterThanOrEqual(Math.max(contrast(fromHex('#ffffff'), fromHex(mark)), contrast(fromHex('#0e0f11'), fromHex(mark))));
+      }
+    }
   });
 
   it('hover and press move away from the label colour, so the label never loses contrast', () => {
