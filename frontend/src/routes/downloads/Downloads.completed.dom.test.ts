@@ -23,6 +23,7 @@ vi.mock('../../lib/services/library', async (actual) => ({
 
 import { libraryGames, runningGames } from '../../lib/stores/library';
 import { locale } from '../../lib/i18n';
+import { installErrorText } from '../../lib/install/installErrors';
 import { removeDownload, type Download } from '../../lib/services/downloads';
 import { retryInstall, type Installation } from '../../lib/services/install';
 import { playGame, type LibraryGame } from '../../lib/services/library';
@@ -690,9 +691,40 @@ describe('completed downloads: Clear the list', () => {
       expect(row(name)).toBeTruthy();
     }
     for (const name of ['Installed One', 'Update One', 'Repair One']) expect(screen.queryByText(name)).toBeNull();
-    // Nothing the store toasts on its own: the one announcement says it.
-    expect(get(toasts)).toEqual([]);
+    // Said on screen once, by the section, not once per refusal by the store.
+    expect(get(toasts).map((t) => [t.kind, t.message])).toEqual([
+      ['danger', `1 download could not be removed from the list: ${installErrorText(new Error('typhon:download.not_found: gone'))}`],
+    ]);
     expect(document.activeElement).toBe(clear);
+  });
+
+  it('a refusal is said on screen once, with how many and the first reason by its code', async () => {
+    const first = new Error('typhon:download.not_found: gone');
+    vi.mocked(removeDownload).mockImplementation(async (id) => {
+      if (id === 'd1') throw first;
+      if (id === 'd2') throw new Error('typhon:download.unavailable');
+    });
+    const onannounce = vi.fn();
+    const view = show([download(), download({ id: 'd2', name: 'Game Two' })], installed('d1', 'd2'), { onannounce });
+
+    await view.user.click(clearButton());
+
+    await waitFor(() => expect(onannounce).toHaveBeenCalledWith('2 could not be removed'));
+    expect(get(toasts).map((t) => [t.kind, t.message])).toEqual([
+      ['danger', `2 downloads could not be removed from the list: ${installErrorText(first)}`],
+    ]);
+    expect(installErrorText(first)).not.toContain('typhon:');
+  });
+
+  it('a clear Go takes whole says nothing on screen beyond the rows going', async () => {
+    vi.mocked(removeDownload).mockImplementation(async (id) => goRemoves(id));
+    const onannounce = vi.fn();
+    const view = show([download(), download({ id: 'd2', name: 'Game Two' })], installed('d1', 'd2'), { onannounce });
+
+    await view.user.click(clearButton());
+
+    await waitFor(() => expect(onannounce).toHaveBeenCalledWith('Removed 2 downloads from the list'));
+    expect(get(toasts)).toEqual([]);
   });
 
   it('with nothing it may clear, it stays focusable and says why, and a press sends nothing', async () => {

@@ -9,6 +9,7 @@
   import type { Installation } from '../../lib/services/install';
   import { completed, requestDownloadAction } from '../../lib/stores/downloads';
   import { installationsByDownload } from '../../lib/stores/install';
+  import { toast } from '../../lib/stores/toasts';
   import { focusHandOff } from '../../lib/utils/focusHandOff';
   import type { LeaveTicket } from '../../lib/components/downloadPanel';
   import CompletedRow from './CompletedRow.svelte';
@@ -174,7 +175,8 @@
     else void clearNow();
   }
 
-  // One request per download, one after another; the outcome is said once, with what Go refused.
+  // One request per download, one after another; the outcome is said once, with what Go refused: in the
+  // live region, and a refusal on screen too, as rows that stay say nothing to the eye of why.
   async function clearNow() {
     if (clearing) return;
     const ids = [...clearable];
@@ -183,13 +185,17 @@
     const hand = focusHandOff();
     let removed = 0;
     let refused = 0;
+    let reason: unknown = null;
     const gone = new Set<string>();
     for (const id of ids) {
       const outcome = await requestDownloadAction(id, 'remove', { toast: false });
       if (outcome.ok) {
         removed++;
         gone.add(id);
-      } else refused++;
+      } else {
+        refused++;
+        reason ??= outcome.error;
+      }
     }
     clearing = false;
     const said = [
@@ -197,6 +203,7 @@
       refused > 0 ? $t('downloads.done.clearFailed', { count: refused }) : '',
     ].filter(Boolean);
     onannounce?.(said.join('. '));
+    if (refused > 0) toast($t('downloads.done.clearFailedReason', { count: refused, reason: installErrorText(reason) }), 'danger');
     if (gone.size > 0) {
       cleared = { hand, ids: gone };
       settle(new Set(rows.map((row) => row.download.id)));
