@@ -80,6 +80,8 @@ export const REASONS: Record<string, MessageKey> = {
   'install.unknown_type': 'errInstall.installUnknownType',
   'install.unrecognized_source': 'errInstall.installUnrecognizedSource',
   'install.unsafe_removal': 'errInstall.installUnsafeRemoval',
+  'install.folder_shared': 'errInstall.installFolderShared',
+  'install.game_moving': 'errInstall.installGameMoving',
   'install.unsupported_archive': 'errInstall.installUnsupportedArchive',
   'install.worker_not_finished': 'errInstall.installWorkerNotFinished',
   'install.worker_state_missing': 'errInstall.installWorkerStateMissing',

@@ -43,6 +43,8 @@ var (
 	errUnsafeRemoval      = uierr.New("install.unsafe_removal", "этот каталог нельзя удалять целиком")
 	errNoLibraryAccess    = uierr.New("install.no_library_access", "библиотека недоступна")
 	errNothingToRemove    = uierr.New("install.nothing_to_remove", "удалять с диска нечего")
+	errGameMoving         = uierr.New("install.game_moving", "игра переносится на другой диск, удалить её можно после переноса")
+	errFolderShared       = uierr.New("install.folder_shared", "в папке игры лежит другая игра библиотеки, её файлы удалились бы вместе с этой")
 )
 
 type RemovalInfo struct {
@@ -64,6 +66,9 @@ type RemovalInfo struct {
 	DownloadSeeding  bool          `json:"downloadSeeding"`
 	DownloadBytes    int64         `json:"downloadBytes"`
 	DownloadPath     string        `json:"downloadPath"`
+	// SharedWith names the other games whose files lie in, around or at the
+	// game folder; while it is not empty the files cannot be deleted.
+	SharedWith []library.FolderNeighbour `json:"sharedWith"`
 }
 
 type RemoveOptions struct {
@@ -106,6 +111,9 @@ func (s *Service) InspectRemoval(gameID string) (RemovalInfo, error) {
 		Running:          s.library.IsRunning(gameID),
 		Busy:             s.gameBusy(plan.game),
 		DownloadID:       plan.game.SourceDownloadID,
+	}
+	if info.SharedWith, err = s.library.FolderNeighbours(gameID); err != nil {
+		return RemovalInfo{}, err
 	}
 	d, present, err := s.downloadOf(plan.game.SourceDownloadID)
 	if err != nil {
@@ -161,6 +169,11 @@ func (s *Service) RemoveGame(gameID string, opts RemoveOptions) error {
 			}
 		}
 	}
+	release, err := s.reserveRemoval(gameID, deleteFiles)
+	if err != nil {
+		return err
+	}
+	defer release()
 	if seedsFromGame && (deleteFiles || plan.method == RemovalInstaller) {
 		if err := s.downloads.StopSeeding(game.SourceDownloadID); err != nil {
 			return fmt.Errorf("%w: %w", errRemoveSeeding, err)
@@ -227,6 +240,25 @@ func (s *Service) RemoveGame(gameID string, opts RemoveOptions) error {
 		}
 	}
 	return nil
+}
+
+// reserveRemoval takes the library's hold on the game for the whole removal:
+// the check that no other card shares the folder and no move or launch has the
+// game, and the barring of all three, are one step inside the library.
+func (s *Service) reserveRemoval(gameID string, deleteFiles bool) (func(), error) {
+	release, err := s.library.BeginRemoval(gameID, deleteFiles)
+	switch {
+	case err == nil:
+		return release, nil
+	case errors.Is(err, library.ErrGameRelocating):
+		return nil, fmt.Errorf("%w: %w", errGameMoving, err)
+	case errors.Is(err, library.ErrFolderShared):
+		return nil, fmt.Errorf("%w: %w", errFolderShared, err)
+	case errors.Is(err, library.ErrRelocateGameRunning):
+		return nil, errGameRunning
+	default:
+		return nil, err
+	}
 }
 
 func (s *Service) removalPlan(gameID string) (removalPlan, error) {

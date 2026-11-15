@@ -124,6 +124,8 @@ type registrar interface {
 	RemoveGame(id string) error
 	MarkUninstalled(id string) error
 	CreateShortcut(id string) error
+	BeginRemoval(id string, deleteFiles bool) (func(), error)
+	FolderNeighbours(id string) ([]library.FolderNeighbour, error)
 }
 
 type job struct {

@@ -267,6 +267,46 @@ func (f *fakeRegistrar) MarkUninstalled(id string) error {
 	return nil
 }
 
+// BeginRemoval refuses what library.BeginRemoval refuses for the tests that
+// run on this fake: a running game, and files another card's footprint shares.
+func (f *fakeRegistrar) BeginRemoval(id string, deleteFiles bool) (func(), error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	game, ok := f.records[id]
+	if !ok {
+		return nil, errFakeNoGame
+	}
+	if f.running[id] {
+		return nil, library.ErrRelocateGameRunning
+	}
+	if deleteFiles {
+		if shared := f.neighboursLocked(game); len(shared) > 0 {
+			return nil, fmt.Errorf("%w: %s", library.ErrFolderShared, shared[0].Title)
+		}
+	}
+	return func() {}, nil
+}
+
+func (f *fakeRegistrar) FolderNeighbours(id string) ([]library.FolderNeighbour, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	game, ok := f.records[id]
+	if !ok {
+		return nil, errFakeNoGame
+	}
+	return f.neighboursLocked(game), nil
+}
+
+func (f *fakeRegistrar) neighboursLocked(game library.Game) []library.FolderNeighbour {
+	var out []library.FolderNeighbour
+	for _, other := range f.records {
+		if other.ID != game.ID && !other.Uninstalled && sharesFootprint(other, game.InstallDir) {
+			out = append(out, library.FolderNeighbour{ID: other.ID, Title: other.Title})
+		}
+	}
+	return out
+}
+
 func (f *fakeRegistrar) registered() []library.InstalledGame {
 	f.mu.Lock()
 	defer f.mu.Unlock()
