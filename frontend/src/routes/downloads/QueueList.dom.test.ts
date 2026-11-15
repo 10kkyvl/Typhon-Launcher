@@ -176,7 +176,7 @@ describe('QueueList: reorder from the keyboard', () => {
     expect(vi.mocked(moveDownloadTo).mock.calls).toEqual([['b', 0]]);
   });
 
-  it('a move Go refuses puts Go’s order back and says why by its code, not as a toast; focus stays on the grip', async () => {
+  it('a move Go refuses puts Go’s order back and says why by its code, in the live region and on screen; focus stays on the grip', async () => {
     const err = new Error('typhon:download.unavailable');
     vi.mocked(moveDownloadTo).mockRejectedValue(err);
     downloads.set([queued('a', 'Alpha'), queued('b', 'Beta'), queued('c', 'Gamma')]);
@@ -189,7 +189,8 @@ describe('QueueList: reorder from the keyboard', () => {
       expect(onannounce).toHaveBeenCalledWith(msg('downloads.queue.moveFailed', { title: 'Gamma', reason: installErrorText(err) })),
     );
     expect(shownOrder()).toEqual([gripName('Alpha', 1, 3), gripName('Beta', 2, 3), gripName('Gamma', 3, 3)]);
-    expect(get(toasts)).toEqual([]);
+    // Said for the eye as well: the row snapping back alone does not say why.
+    expect(get(toasts).map((t) => [t.kind, t.message])).toEqual([['danger', installErrorText(err)]]);
     await vi.waitFor(() => expect(document.activeElement).toBe(grip('Gamma')));
   });
 

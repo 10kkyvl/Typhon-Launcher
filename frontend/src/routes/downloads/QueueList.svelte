@@ -27,7 +27,7 @@
    * `download:reordered` (or a refusal) then puts Go's order back on screen, so no order lives only here.
    *
    * `onannounce` speaks through the screen's one polite live region: a move once Go confirms it, a
-   * refused move with its reason, a cancel.
+   * refused move with its reason (also a toast: a row snapping back says nothing to the eye), a cancel.
    */
   let {
     onannounce = () => {},
@@ -88,7 +88,7 @@
   }
 
   async function send(id: string, position: number) {
-    const outcome = await requestDownloadAction(id, 'moveTo', { position, toast: false });
+    const outcome = await requestDownloadAction(id, 'moveTo', { position });
     const current = moving.get(id);
     if (!current?.move) return;
     const step = settleMove(current.move, outcome.ok);
