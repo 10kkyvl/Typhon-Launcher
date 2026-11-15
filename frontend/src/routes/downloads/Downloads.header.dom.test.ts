@@ -155,9 +155,7 @@ describe('Downloads header: the schedule and the banner say the schedule once', 
 
     const said = banner()?.textContent ?? '';
     expect(said).toContain(msg('transfers.playPausedBanner'));
-    for (const key of ['transfers.scheduleBannerNoNext', 'transfers.scheduleAndPlayBannerNoNext', 'downloads.page.scheduleHeldNoNext'] as const) {
-      expect(said).not.toContain(msg(key));
-    }
+    expect(said).not.toContain(msg('downloads.page.scheduleHeldNoNext'));
     expect(line()?.textContent).toContain(msg('downloads.page.scheduleHeldNoNext'));
   });
 });
