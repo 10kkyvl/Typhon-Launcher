@@ -110,14 +110,13 @@ describe('HeroCarousel: the block on the stage', () => {
     expect(blockOf('Game a').querySelector('svg.generated-art')).not.toBeNull();
   });
 
-  it('stands its words on the stage plate, with the cover or without', () => {
+  it('stands its words on the stage plate while the stage shows the game, and on the page itself beside its cover', () => {
     setup({ slides: [slide('a'), slide('b', { staged: false })] });
-    for (const block of slideBlocks()) {
-      const title = block.querySelector('.title') as HTMLElement;
-      const plate = title.closest('.stage-copy') as HTMLElement;
-      expect(plate, block.textContent ?? '').not.toBeNull();
-      expect(plate.contains(block.querySelector('.cta'))).toBe(true);
-      expect(plate.querySelector('.artwork')).toBeNull();
-    }
+    const plate = (blockOf('Game a').querySelector('.title') as HTMLElement).closest('.stage-copy') as HTMLElement;
+    expect(plate).not.toBeNull();
+    expect(plate.contains(blockOf('Game a').querySelector('.cta'))).toBe(true);
+    // With no picture on the stage there is nothing to lift the words off: a plate there is a box on the page.
+    expect(blockOf('Game b').querySelector('.stage-copy')).toBeNull();
+    expect(blockOf('Game b').querySelector('.cta')).not.toBeNull();
   });
 });

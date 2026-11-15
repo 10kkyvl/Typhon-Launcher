@@ -611,13 +611,22 @@ describe('the text plate on the stage', () => {
   const CAROUSEL_WORDS = ['.title', '.line'];
 
   it("puts the carousel's words on the plate, drawn in the plate's text colours", () => {
-    expect(heroSource).toMatch(/<div class="stand stage-copy">/);
+    expect(heroSource).toMatch(/<div class="stand" class:stage-copy=\{slide\.staged\}>/);
     for (const selector of CAROUSEL_WORDS) {
       expect(['--text', '--text-2'], selector).toContain(token(ruleBody(hero, selector).color));
     }
     for (const selector of ['.hero', '.slide', '.copy', '.stand']) {
       const body = ruleBody(hero, selector);
       expect([body.background, body['background-color'], body['background-image']].filter(Boolean), selector).toEqual([]);
+    }
+  });
+
+  // The plate eases out past the words on every side; the carousel ends at the stage's foot, closer to
+  // its words than that, so a clipped block would cut the plate off in a line across the art.
+  it("lets the plate ease out past the carousel's own box", () => {
+    for (const selector of ['.hero', '.slide', '.copy']) {
+      const body = ruleBody(hero, selector);
+      expect([body.overflow, body['overflow-y'], body['clip-path'], body.contain].filter(Boolean), selector).toEqual([]);
     }
   });
 

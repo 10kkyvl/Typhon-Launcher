@@ -221,7 +221,7 @@
                 <Artwork src={slide.art.cover ?? ''} fallback={slide.art.fallback} label={slide.title} seed={slide.artSeed ?? slide.id} ratio="3 / 4" radius="var(--radius-md)" />
               </div>
             {/if}
-            <div class="stand stage-copy">
+            <div class="stand" class:stage-copy={slide.staged}>
               {#snippet titleLink()}<TextLink tone="plain" onclick={() => onopen(slide.id)}>{slide.title}</TextLink>{/snippet}
               {#if level === 4}
                 <h4 class="title">{@render titleLink()}</h4>
@@ -269,12 +269,12 @@
 {/if}
 
 <style>
-  /* No ground of its own: the stage shows through. The block ends at the stage's foot. */
+  /* No ground of its own: the stage shows through. The block ends at the stage's foot and clips nothing:
+     the words' plate eases out below it. */
   .hero {
     position: relative;
     height: calc(var(--stage-foot) - var(--titlebar-h) - var(--topbar-h));
     min-height: var(--hero-min-h);
-    overflow: hidden;
     isolation: isolate;
   }
 
