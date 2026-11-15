@@ -1876,6 +1876,8 @@ func (m *Manager) MoveTo(id string, position int) error {
 		m.items = before
 		return fmt.Errorf("изменить порядок загрузок: %w", err)
 	}
+	// Emitted under m.mu: the hold orders two concurrent reorders, so the last
+	// event to leave carries the final order.
 	emit(eventReordered, m.orderLocked())
 	return nil
 }
