@@ -99,6 +99,7 @@ var (
 	errAddTorrentFailed  = uierr.New("download.add_torrent_failed", "не удалось добавить торрент")
 	errDeleting          = uierr.New("download.deleting", "данные этой загрузки уже удаляются")
 	errDataLeft          = uierr.New("download.data_left", "запись удалена, но файлы остались на диске")
+	errSaveFailed        = uierr.New("download.save_failed", "не удалось сохранить список загрузок")
 )
 
 type pending struct {
@@ -500,7 +501,7 @@ func (m *Manager) persistLocked() error {
 		err := fmt.Errorf("%w: %w", errStateUnread, m.loadErr)
 		m.degraded = degradedStatus{Degraded: true, Message: err.Error()}
 		emit(eventDegraded, m.degraded)
-		return err
+		return fmt.Errorf("%w: %w", errSaveFailed, err)
 	}
 	records := make([]record, 0, len(m.items))
 	for _, d := range m.items {
@@ -531,7 +532,7 @@ func (m *Manager) persistLocked() error {
 	if err := m.store.save(records); err != nil {
 		m.degraded = degradedStatus{Degraded: true, Message: err.Error()}
 		emit(eventDegraded, m.degraded)
-		return fmt.Errorf("persist downloads: %w", err)
+		return fmt.Errorf("%w: persist downloads: %w", errSaveFailed, err)
 	}
 	m.degraded = degradedStatus{}
 	return nil

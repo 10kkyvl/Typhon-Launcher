@@ -112,6 +112,7 @@ export const REASONS: Record<string, MessageKey> = {
   'download.not_enough_space': 'errInstall.downloadNotEnoughSpace',
   'download.not_found': 'errInstall.downloadNotFound',
   'download.restore_failed': 'errInstall.downloadRestoreFailed',
+  'download.save_failed': 'errInstall.downloadSaveFailed',
   'download.seeding': 'errInstall.downloadSeeding',
   'download.torrent_read_failed': 'errInstall.downloadTorrentReadFailed',
   'download.unavailable': 'errInstall.downloadUnavailable',
