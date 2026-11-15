@@ -46,6 +46,7 @@
   import { bytesSize, etaLabel, progressPercent, speedBytes, truncateMiddle } from '../../utils/format';
   import { t } from '../../i18n';
   import { createTransferActionRunner, transferJourneyStage } from '../transfers';
+  import { choicesByPath, keptChoices, nothingWaiting } from '../gameDownload';
 
   let { onback, ongame, requestText }: {
     onback: () => void;
@@ -78,6 +79,10 @@
   let torrentInfo = $state<TorrentInfo | null>(null);
   let selectedFiles = $state<boolean[]>([]);
   let pendingMetadataHash = '';
+  // Set by a Start Go answered with nothing waiting: the choices by path the next fetch keeps, which
+  // a Retry of a failed fetch keeps too. After that fetch Start has to be pressed again.
+  let keptFiles: Map<string, boolean> | null = null;
+  let restartNeeded = $state(false);
   let downloadDestination = $state('');
   let autoInstall = $state(false);
   let elevateAhead = $state(false);
@@ -172,6 +177,8 @@
     torrentInfo = null;
     selectedFiles = [];
     torrentSource = '';
+    keptFiles = null;
+    restartNeeded = false;
     clearActionPrefix(`add:${addSession}:`);
     addSession++;
   }
@@ -314,6 +321,8 @@
     torrentSource = value;
     torrentInfo = null;
     pendingMetadataHash = '';
+    keptFiles = null;
+    restartNeeded = false;
     await showDialog('metadata');
     await loadMetadata(value);
   }
@@ -341,7 +350,9 @@
       }
       torrentInfo = info;
       pendingMetadataHash = info.infoHash;
-      selectedFiles = info.files.map(() => true);
+      selectedFiles = keptFiles ? keptChoices(keptFiles, info.files) : info.files.map(() => true);
+      restartNeeded = keptFiles !== null;
+      keptFiles = null;
     });
     metadataFlight = Promise.all([previousFlight, operation]).then(() => undefined);
     if (currentRequest() && dialog === 'metadata') await focusDialog();
@@ -372,6 +383,8 @@
       }
       if (!path || disposed || session !== addSession || !pageIsActive()) return;
       torrentSource = path;
+      keptFiles = null;
+      restartNeeded = false;
       await loadMetadata(path);
     });
   }
@@ -405,6 +418,9 @@
     const session = addSession;
     const indices = selectedFiles.map((selected, index) => selected ? index : -1).filter((index) => index >= 0);
     const key = addActionKey('start');
+    const current = () => !disposed && pageIsActive() && session === addSession && dialog === 'files';
+    let fetchAgain: Map<string, boolean> | null = null;
+    restartNeeded = false;
     const ok = await perform(key, async () => {
       startingHashes.add(info.infoHash);
       try {
@@ -413,11 +429,28 @@
           elevateAhead: autoInstall && canElevateAhead && elevateAhead,
         });
         if (pendingMetadataHash === info.infoHash) pendingMetadataHash = '';
-        if (!disposed && pageIsActive() && session === addSession && dialog === 'files') await closeDialog();
+        if (current()) await closeDialog();
+      } catch (error) {
+        if (!nothingWaiting(error) || !current()) throw error;
+        fetchAgain = choicesByPath(info.files, (index) => Boolean(selectedFiles[index]));
       } finally {
         startingHashes.delete(info.infoHash);
       }
     });
+    if (fetchAgain) {
+      // Go holds nothing for this torrent any more: nothing to discard, and one fetch of the same
+      // source brings it back, with the metadata dialog's loading, error and Retry.
+      if (pendingMetadataHash === info.infoHash) pendingMetadataHash = '';
+      keptFiles = fetchAgain;
+      torrentInfo = null;
+      selectedFiles = [];
+      await showDialog('metadata', true);
+      await loadMetadata(torrentSource);
+      if (restartNeeded && dialog === 'files' && session === addSession) {
+        focusControl(dialogElement?.querySelector<HTMLButtonElement>('[data-bp-focus="files:start"]:not(:disabled)') ?? undefined);
+      }
+      return;
+    }
     if (!ok && (disposed || !pageIsActive() || session !== addSession || dialog !== 'files')) {
       if (pendingMetadataHash === info.infoHash) pendingMetadataHash = '';
       discardMetadataSafely(info.infoHash);
@@ -1006,6 +1039,7 @@
         {@const startKey = addActionKey('start')}
         <h2 id="transfer-dialog-title">{$t('bp.transfers.chooseFilesTitle')}</h2>
         <div class="torrent-summary"><strong>{torrentInfo.name}</strong><span>{bytesSize(torrentInfo.totalBytes)}</span></div>
+        {#if restartNeeded}<p class="muted" role="status">{$t('modals.addDownloadRestartNeeded')}</p>{/if}
         <div class="destination-row">
           <div><span class="field-label">{$t('bp.transfers.destination')}</span><span class="path-value">{downloadDestination || '—'}</span></div>
           <button class="bp-button" data-bp-focus="files:folder" disabled={actionPending(folderKey)} onclick={chooseDownloadFolder}><FolderOpen size={20} />{$t('bp.transfers.changeFolder')}</button>

@@ -57,7 +57,7 @@ describe('GameDownloadFlow', () => {
       torrent: metadata,
     });
 
-    await flow.start('/downloads', [0], { autoInstall: true, elevateAhead: false });
+    await expect(flow.start('/downloads', [0], { autoInstall: true, elevateAhead: false })).resolves.toEqual({ kind: 'started' });
     expect(api.startDownload).toHaveBeenCalledWith('feed123', '/downloads', [0], {
       releaseId: 'release-1', sourceId: 'source-1', gameId: 'canonical-1', version: '1.0',
       autoInstall: true, elevateAhead: false,
@@ -131,5 +131,116 @@ describe('GameDownloadFlow', () => {
     await flow.start('/downloads/retry', [0], {});
     expect(api.fetchMetadata).toHaveBeenCalledTimes(1);
     expect(api.startDownload).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('GameDownloadFlow: a start Go answers with nothing waiting', () => {
+  const twoFiles: TorrentInfo = {
+    infoHash: 'feed123',
+    name: 'Game build',
+    totalBytes: 150,
+    files: [
+      { path: 'game.bin', size: 100, selected: true, bytesDone: 0 },
+      { path: 'extras.bin', size: 50, selected: true, bytesDone: 0 },
+    ],
+  };
+  // The same source fetched again: Go may list the files in another order, with one more.
+  const fetchedAgain: TorrentInfo = {
+    infoHash: 'feed123',
+    name: 'Game build',
+    totalBytes: 160,
+    files: [
+      { path: 'extras.bin', size: 50, selected: true, bytesDone: 0 },
+      { path: 'readme.txt', size: 10, selected: true, bytesDone: 0 },
+      { path: 'game.bin', size: 100, selected: true, bytesDone: 0 },
+    ],
+  };
+  const nothingWaiting = () => new Error('typhon:download.metadata_required: fetch the torrent metadata first');
+
+  it('fetches the same source once and is ready to start again with the files chosen before', async () => {
+    const api = services({
+      fetchMetadata: vi.fn().mockResolvedValueOnce(twoFiles).mockResolvedValueOnce(fetchedAgain),
+      startDownload: vi.fn().mockRejectedValueOnce(nothingWaiting()).mockResolvedValue(undefined),
+    });
+    const flow = new GameDownloadFlow(api);
+    await flow.prepare('release-1');
+    const phases: string[] = [];
+
+    const result = await flow.start('/downloads', [0], {}, (phase) => phases.push(phase));
+
+    expect(result).toMatchObject({ kind: 'ready', torrent: fetchedAgain, kept: [false, true, true] });
+    expect(phases).toEqual(['fetching']);
+    expect(flow.phase).toBe('ready');
+    expect(api.fetchMetadata).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(api.fetchMetadata).mock.calls[1]).toEqual([request.uri]);
+    expect(api.discardMetadata).not.toHaveBeenCalled();
+
+    await expect(flow.start('/downloads', [2], {})).resolves.toEqual({ kind: 'started' });
+    expect(api.startDownload).toHaveBeenCalledTimes(2);
+    expect(flow.phase).toBe('started');
+  });
+
+  it('does not fetch again after any other failure', async () => {
+    const failure = new Error('typhon:download.destination_unavailable: no disk');
+    const api = services({ startDownload: vi.fn().mockRejectedValueOnce(failure) });
+    const flow = new GameDownloadFlow(api);
+    await flow.prepare('release-1');
+
+    await expect(flow.start('/downloads', [0], {})).rejects.toBe(failure);
+    expect(flow.phase).toBe('ready');
+    expect(api.fetchMetadata).toHaveBeenCalledTimes(1);
+  });
+
+  it('says a failed fetch after the start as a fetch error, fetches no more by itself, and its retry keeps the choices', async () => {
+    const offline = new Error('no peers');
+    const api = services({
+      fetchMetadata: vi.fn().mockResolvedValueOnce(twoFiles).mockRejectedValueOnce(offline).mockResolvedValueOnce(fetchedAgain),
+      startDownload: vi.fn().mockRejectedValueOnce(nothingWaiting()),
+    });
+    const flow = new GameDownloadFlow(api);
+    await flow.prepare('release-1');
+
+    await expect(flow.start('/downloads', [1], {})).resolves.toEqual({ kind: 'error', phase: 'fetch-error', error: offline });
+    expect(flow.phase).toBe('fetch-error');
+    await Promise.resolve();
+    expect(api.fetchMetadata).toHaveBeenCalledTimes(2);
+    expect(api.startDownload).toHaveBeenCalledTimes(1);
+
+    await expect(flow.retry()).resolves.toMatchObject({ kind: 'ready', torrent: fetchedAgain, kept: [true, true, false] });
+    expect(api.fetchMetadata).toHaveBeenCalledTimes(3);
+  });
+
+  it('a fresh preparation after it chooses every file again', async () => {
+    const api = services({
+      fetchMetadata: vi.fn().mockResolvedValueOnce(twoFiles).mockRejectedValueOnce(new Error('no peers')).mockResolvedValue(twoFiles),
+      startDownload: vi.fn().mockRejectedValueOnce(nothingWaiting()),
+    });
+    const flow = new GameDownloadFlow(api);
+    await flow.prepare('release-1');
+    await flow.start('/downloads', [1], {});
+
+    const fresh = await flow.prepare('release-1');
+    expect(fresh).toMatchObject({ kind: 'ready', torrent: twoFiles });
+    expect(fresh).not.toHaveProperty('kept');
+  });
+
+  it('cancels the fetch after the start when the player leaves', async () => {
+    const pending = deferred<TorrentInfo>();
+    const api = services({
+      fetchMetadata: vi.fn().mockResolvedValueOnce(twoFiles).mockReturnValueOnce(pending.promise),
+      startDownload: vi.fn().mockRejectedValueOnce(nothingWaiting()),
+    });
+    const flow = new GameDownloadFlow(api);
+    await flow.prepare('release-1');
+
+    const starting = flow.start('/downloads', [0], {});
+    await vi.waitFor(() => expect(api.fetchMetadata).toHaveBeenCalledTimes(2));
+    await flow.cancel();
+    expect(api.cancelFetchMetadata).toHaveBeenCalledWith(request.uri);
+    pending.resolve(fetchedAgain);
+
+    await expect(starting).resolves.toEqual({ kind: 'stale' });
+    expect(api.discardMetadata).toHaveBeenCalledWith(fetchedAgain.infoHash);
+    expect(flow.phase).toBe('idle');
   });
 });

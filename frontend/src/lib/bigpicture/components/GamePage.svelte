@@ -81,6 +81,8 @@
   let platform = $state<AppInfo | null>(null);
   let elevationCheckFailed = $state(false);
   let startingDownload = $state(false);
+  // The files came back after a Start Go answered with nothing waiting: Start has to be pressed again.
+  let restartNeeded = $state(false);
   let changingFavorite = $state(false);
   let changingStatus = $state(false);
   let launching = $state(false);
@@ -291,6 +293,7 @@
       pendingReleaseId = '';
       torrent = null;
       selectedFiles = [];
+      restartNeeded = false;
       dialogError = '';
     }
     await tick();
@@ -413,6 +416,7 @@
     downloadStep = 'preparing';
     torrent = null;
     selectedFiles = [];
+    restartNeeded = false;
     const currentSettings = $settings;
     destination = currentSettings?.downloadsPath ?? '';
     autoInstall = currentSettings?.autoInstall ?? false;
@@ -443,15 +447,33 @@
     if (result.kind === 'stale' || dialog !== 'download') return;
     if (result.kind === 'error') {
       downloadStep = result.phase;
+      restartNeeded = false;
       dialogError = result.phase === 'prepare-error'
         ? sourceErrorText(result.error, bp('bp.game.prepareFailed'))
         : installErrorText(result.error, bp('bp.game.downloadFetchFailed'));
       return;
     }
     torrent = result.torrent;
-    selectedFiles = result.torrent.files.map(() => true);
+    selectedFiles = result.kept ?? result.torrent.files.map(() => true);
+    restartNeeded = result.kept !== undefined;
     downloadStep = 'files';
     dialogError = '';
+  }
+
+  // A fetch after Start replaces the step whose control held focus. Focus waits on the dialog's first
+  // control while it runs (`parked`), then goes to `key` or the step's default, unless the player has
+  // moved it meanwhile.
+  let parkedFocus: Element | null = null;
+
+  async function keepDialogFocus(key = '') {
+    await tick();
+    if (dialog !== 'download' || !dialogRoot) return;
+    const active = document.activeElement;
+    const lost = !active || active === document.body || active === dialogRoot || !active.isConnected;
+    if (!lost && active !== parkedFocus) return;
+    const wanted = key ? dialogRoot.querySelector<HTMLButtonElement>(`[data-bp-focus="${key}"]:not(:disabled)`) : null;
+    focusControl(wanted ?? dialogRoot.querySelector<HTMLButtonElement>('[data-bp-default]') ?? dialogRoot.querySelector<HTMLButtonElement>('[data-bp-focus]:not(:disabled)') ?? undefined);
+    parkedFocus = key ? null : document.activeElement;
   }
 
   async function retryMetadata() {
@@ -488,15 +510,27 @@
     if (!torrent || !canStartDownload) return;
     const indices = selectedFiles.map((selected, index) => selected ? index : -1).filter((index) => index >= 0);
     startingDownload = true;
+    restartNeeded = false;
     dialogError = '';
     try {
-      await downloadFlow.start(
+      // With nothing waiting in Go the flow fetches the release once more; the dialog can be closed then.
+      const result = await downloadFlow.start(
         destination.trim(),
         indices,
         consoleDownload.platform ? { ...consoleDownload } : { autoInstall, elevateAhead: autoInstall && canElevate && elevateAhead },
+        (phase) => {
+          startingDownload = false;
+          downloadStep = phase;
+          void keepDialogFocus();
+        },
       );
       startingDownload = false;
-      await closeDialog();
+      if (result.kind === 'started') {
+        await closeDialog();
+        return;
+      }
+      applyDownloadResult(result);
+      await keepDialogFocus('game:dialog:start');
     } catch (error) {
       dialogError = installErrorText(error, bp('bp.game.downloadStartFailed'));
     } finally {
@@ -780,6 +814,7 @@
             <div class="dialog-actions"><button class="large-button secondary" data-bp-focus="game:dialog:retry-metadata" data-bp-default onclick={() => void retryMetadata()}><RotateCw size="1.98rem" />{bp('bp.game.releaseRetry')}</button><button class="large-button secondary" data-bp-focus="game:dialog:close" onclick={() => void closeDialog()}>{bp('bp.game.cancel')}</button></div>
           {:else if torrent}
             <div class="torrent-summary"><strong>{torrent.name}</strong><span>{formattedSize(torrent.totalBytes)}</span></div>
+            {#if restartNeeded}<p class="muted" role="status">{$t('modals.addDownloadRestartNeeded')}</p>{/if}
             {#if consoleDownload.platform}
               <p class="muted">{bp('bp.game.consoleNote')}</p>
               {#if dialogError}<div class="dialog-error" role="alert">{dialogError}</div>{/if}
