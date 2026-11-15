@@ -380,4 +380,51 @@ describe('Downloads: what a press leaves behind, and Go moving a focused row', (
 
     await waitFor(() => expect(document.activeElement).toBe(grip('Beta')));
   });
+
+  it('a panel gone with its cancel dialog open leaves no press behind for its download’s later row', async () => {
+    downloads.set([
+      download({ downloaded: 100 }),
+      download({ id: 'd2', name: 'Game Two' }),
+      download({ id: 'd3', name: 'Game Three', status: 'completed', completedAt: '2026-09-08T00:00:00Z' }),
+    ]);
+    const { user } = renderDom(Downloads);
+    moreIn(panel('Game One'), 'Game One').focus();
+    await user.keyboard('{Enter}');
+    screen.getByRole('menuitem', { name: msg('downloads.panel.cancel') }).focus();
+    await user.keyboard('{Enter}');
+    await screen.findByRole('dialog');
+    goSets('d1', { status: 'completed', completedAt: '2026-09-08T01:00:00Z' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    // Later, focus on the download's completed row, which Go then takes away.
+    moreIn(rowOf('d1'), 'Game One').focus();
+    downloads.update((list) => list.filter((d) => d.id !== 'd1'));
+
+    await waitFor(() => expect(document.activeElement).toBe(moreIn(rowOf('d3'), 'Game Three')));
+  });
+
+  it('a Retry Go took whose row stayed (the install failed again) is not followed when Go moves the row later', async () => {
+    const failedInstall = (error: string) =>
+      ({ id: 'i-d1', downloadId: 'd1', gameId: '', status: 'failed', error, progress: 0, bytesDone: 0, bytesTotal: 0 }) as Installation;
+    downloads.set([
+      download({ status: 'completed', completedAt: '2026-09-08T02:00:00Z' }),
+      download({ id: 'd2', name: 'Game Two', status: 'completed', completedAt: '2026-09-08T01:00:00Z' }),
+    ]);
+    installations.set([failedInstall('typhon:install.no_free_space')]);
+    const { user } = renderDom(Downloads);
+    const retry = within(rowOf('d1')).getByRole('button', { name: msg('downloads.done.retryNamed', { name: 'Game One' }) });
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(retryInstall).toHaveBeenCalledWith('i-d1'));
+    installations.set([failedInstall('typhon:install.disk_full')]);
+    await new Promise((done) => setTimeout(done, 0));
+    expect(document.activeElement).toBe(retry);
+
+    installations.set([extracting('d1')]);
+
+    await waitFor(() =>
+      expect(document.activeElement).toBe(within(rowOf('d2')).getByRole('button', { name: msg('downloads.done.installNamed', { name: 'Game Two' }) })),
+    );
+  });
 });

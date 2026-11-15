@@ -142,6 +142,8 @@
     const press = held;
     held = null;
     if (press) void press.ticket.handOn();
+    // A cancel still asked about ends with the panel: the dialog goes with it and hands focus on itself.
+    if (asking && !asking.done) asking.ticket?.drop();
   });
 
   $effect(() => {

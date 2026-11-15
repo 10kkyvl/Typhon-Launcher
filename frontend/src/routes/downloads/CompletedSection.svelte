@@ -69,9 +69,11 @@
   });
   const clearable = $derived(rows.filter((row) => canClear(row.download, row.kind)).map((row) => row.download.id));
 
+  /** A press that may take its row away: armed once Go took it, with the row's installation at the press. */
   interface Leaving {
     ticket: LeaveTicket;
     armed: boolean;
+    installation: Installation | undefined;
   }
 
   // Plain maps: what the rows do decides when they settle, not a render of their own.
@@ -79,7 +81,11 @@
   let cleared: { hand: ReturnType<typeof focusHandOff>; ids: Set<string> } | null = null;
 
   function onleave(id: string) {
-    const entry: Leaving = { ticket: pressed(id, { follow: 'first', prefer: '[data-row-control="more"]' }), armed: false };
+    const entry: Leaving = {
+      ticket: pressed(id, { follow: 'first', prefer: '[data-row-control="more"]' }),
+      armed: false,
+      installation: rows.find((row) => row.download.id === id)?.installation,
+    };
     leaving.set(id, entry);
     return (ok: boolean) => {
       if (leaving.get(id) !== entry) return;
@@ -89,15 +95,23 @@
         return;
       }
       entry.armed = true;
-      settle(new Set(rows.map((row) => row.download.id)));
+      settle(shown());
     };
   }
 
-  function settle(present: ReadonlySet<string>) {
+  const shown = () => new Map(rows.map((row) => [row.download.id, row]));
+
+  // A press Go took ends when its row leaves (focus goes on), or when the row shows Go's outcome and
+  // stays (a retried install that failed again): then it is dropped, and Go's later moves of the row
+  // are not taken for it.
+  function settle(present: ReadonlyMap<string, Row>) {
     for (const [id, entry] of leaving) {
-      if (!entry.armed || present.has(id)) continue;
+      if (!entry.armed) continue;
+      const row = present.get(id);
+      if (row && row.installation === entry.installation) continue;
       leaving.delete(id);
-      void entry.ticket.handOn();
+      if (row) entry.ticket.drop();
+      else void entry.ticket.handOn();
     }
     if (cleared && [...cleared.ids].every((id) => !present.has(id))) {
       const { hand } = cleared;
@@ -108,7 +122,7 @@
   }
 
   $effect(() => {
-    settle(new Set(rows.map((row) => row.download.id)));
+    settle(shown());
   });
 
   /**
@@ -206,7 +220,7 @@
     if (refused > 0) toast($t('downloads.done.clearFailedReason', { count: refused, reason: installErrorText(reason) }), 'danger');
     if (gone.size > 0) {
       cleared = { hand, ids: gone };
-      settle(new Set(rows.map((row) => row.download.id)));
+      settle(shown());
     }
   }
 
