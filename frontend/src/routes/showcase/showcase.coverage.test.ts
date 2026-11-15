@@ -38,6 +38,7 @@ const BASE = [
   'Card',
   'Page',
   'PageHeader',
+  'SectionHeader',
   'Tooltip',
   'Modal',
   'ConfirmModal',

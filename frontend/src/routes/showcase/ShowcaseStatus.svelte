@@ -6,6 +6,7 @@
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import ProgressBar, { type ProgressTone } from '../../lib/components/ProgressBar.svelte';
   import Reading from '../../lib/components/Reading.svelte';
+  import SectionHeader from '../../lib/components/SectionHeader.svelte';
   import SpeedGraph from '../../lib/components/SpeedGraph.svelte';
   import Spinner from '../../lib/components/Spinner.svelte';
   import StatTile from '../../lib/components/StatTile.svelte';
@@ -92,6 +93,14 @@
     <span class="graph"><SpeedGraph series={{ samples: SPEEDS, moving: true }} window={120} /></span>
     <span class="graph"><SpeedGraph series={{ samples: [null, null, 12 * MB], moving: true }} /></span>
     <span class="graph"><SpeedGraph series={{ samples: [], moving: false }} /></span>
+  </ShowcaseRow>
+
+  <ShowcaseRow caption="Section headings (level 3 here; a screen's are level 2): a count, no count, actions on the right" stack>
+    <SectionHeader title="Queue" count={3} level={3} />
+    <SectionHeader title="Installing" level={3} />
+    <SectionHeader title="Completed" count={12} level={3}>
+      {#snippet actions()}<Button size="sm" variant="ghost" onclick={() => toast('Clear pressed', 'info')}>Clear</Button>{/snippet}
+    </SectionHeader>
   </ShowcaseRow>
 
   <ShowcaseRow caption="Stat tiles">
