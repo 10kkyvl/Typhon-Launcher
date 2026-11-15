@@ -2,21 +2,27 @@
   import { untrack } from 'svelte';
   import { msg } from '../i18n';
 
+  // The field has a name either way: its own `label`, or an `id` a `<label for>` names it through.
+  type Named = { label: string; id?: string } | { id: string; label?: undefined };
+
   let {
     value,
     min,
     max,
     label,
+    id,
+    describedby,
     width = '12rem',
     onchange,
   }: {
     value: number;
     min: number;
     max: number;
-    label: string;
+    /** Id of the text that says what the field sets. */
+    describedby?: string;
     width?: string;
     onchange: (value: number) => void;
-  } = $props();
+  } & Named = $props();
 
   let draft = $state('');
   let editing = $state(false);
@@ -61,7 +67,9 @@
     class="input"
     type="text"
     inputmode="numeric"
+    {id}
     aria-label={label}
+    aria-describedby={describedby}
     aria-invalid={error !== ''}
     value={draft}
     oninput={(event) => {

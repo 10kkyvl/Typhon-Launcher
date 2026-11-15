@@ -29,6 +29,7 @@
     id,
     label,
     labelledby,
+    describedby,
     placeholder,
     disabled = false,
     onchange,
@@ -42,6 +43,8 @@
     label?: string;
     /** Id of the visible label that names the field. */
     labelledby?: string;
+    /** Id of the text that says what the field sets. */
+    describedby?: string;
     /** Shown when the value is empty and no option has it. */
     placeholder?: string;
     disabled?: boolean;
@@ -224,6 +227,7 @@
     aria-activedescendant={open && active >= 0 ? optionId(active) : undefined}
     aria-label={label}
     aria-labelledby={label ? undefined : labelledby}
+    aria-describedby={describedby}
     {disabled}
     onclick={() => (open ? close() : show(null))}
     onkeydowncapture={onKeydown}

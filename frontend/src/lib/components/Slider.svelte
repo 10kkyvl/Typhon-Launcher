@@ -31,6 +31,7 @@
     startText,
     endText,
     page = 3,
+    describedby,
     disabled = false,
     busy = false,
     oninput,
@@ -49,6 +50,8 @@
     endText?: string;
     /** Steps that Page Up and Page Down move. */
     page?: number;
+    /** Id of the text that says what the slider sets. */
+    describedby?: string;
     disabled?: boolean;
     busy?: boolean;
     /** The step under a dragging pointer, each time it changes; `null` when the drag ends. */
@@ -183,6 +186,7 @@
         role="slider"
         tabindex="0"
         aria-labelledby="{uid}-label"
+        aria-describedby={describedby}
         aria-orientation="horizontal"
         aria-valuemin={0}
         aria-valuemax={max}
