@@ -10,12 +10,7 @@
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import RemoveGameModal from '../../lib/components/RemoveGameModal.svelte';
   import Spinner from '../../lib/components/Spinner.svelte';
-  import {
-    countUnknown,
-    sizeSorted,
-    sortGames,
-    type GameSort,
-  } from '../../lib/diskusage/usage';
+  import { countUnknown, sizeSorted, sortGames, type GameSort } from '../../lib/diskusage/usage';
   import { isEmulated } from '../../lib/library/emulation';
   import { libraryGames } from '../../lib/stores/library';
   import { msg } from '../../lib/i18n';
@@ -26,6 +21,7 @@
   import GamesSection from './GamesSection.svelte';
   import GroupsSection from './GroupsSection.svelte';
   import LeftoversSection from './LeftoversSection.svelte';
+  import UsageWarnings from './UsageWarnings.svelte';
   import { total } from './usageSizes';
 
   const page = createDiskUsagePage();
@@ -105,17 +101,7 @@
       {/if}
     </Card>
 
-    {#if page.report.warnings.length > 0}
-      <div class="warnings">
-        <Notice tone="danger" title={msg('diskusage.warningsTitle')} level={2}>
-          <ul>
-            {#each page.report.warnings as warning, index (index)}
-              <li>{msg('diskusage.warningLine', { area: warning.area, message: warning.message })}</li>
-            {/each}
-          </ul>
-        </Notice>
-      </div>
-    {/if}
+    <UsageWarnings warnings={page.report.warnings} />
 
     {#if isEmpty}
       <EmptyState level={2} title={msg('diskusage.emptyTitle')} description={msg('diskusage.emptyText')}>
@@ -192,13 +178,5 @@
     margin-top: var(--space-3);
     font-size: var(--font-sm);
     color: var(--text-3);
-  }
-
-  .warnings {
-    margin-top: var(--space-4);
-  }
-
-  .warnings ul {
-    padding-left: var(--space-5);
   }
 </style>

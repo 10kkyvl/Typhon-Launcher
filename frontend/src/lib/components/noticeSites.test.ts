@@ -199,10 +199,10 @@ const SITES: Record<string, Site[]> = {
   ],
   // A next page failed.
   'routes/catalog/Catalog.svelte': [['danger', true]],
-  'routes/diskusage/DiskUsage.svelte': [
-    ['danger', true],
-    ['danger', true],
-  ],
+  // The disk usage page, in its parts. The scan failed (just happened).
+  'routes/diskusage/DiskUsage.svelte': [['danger', true]],
+  // The areas the scan just could not read.
+  'routes/diskusage/UsageWarnings.svelte': [['danger', true]],
   'routes/friends/AddFriendModal.svelte': [['danger', true]],
   // Safety advice of the requests tab, read with it.
   'routes/friends/Friends.svelte': [['info', false]],
