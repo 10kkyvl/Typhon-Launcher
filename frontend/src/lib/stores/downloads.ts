@@ -1,6 +1,8 @@
 import { derived, get, writable } from 'svelte/store';
 import { listenFirst } from './listenFirst';
 import { inWails } from '../services/backend';
+import type { DownloadAction } from '../downloads/actions';
+import { followOrder } from '../downloads/order';
 import {
   cancelDownload as cancelRequest,
   downloadNow as downloadNowRequest,
@@ -17,6 +19,7 @@ import {
 import { installErrorText } from '../install/installErrors';
 import { withFiles } from '../utils/downloadFiles';
 import { msg } from '../i18n';
+import { errorCode } from '../i18n/errors';
 import { liveIsland, liveIslandOn, type LiveIslandMessage } from './liveIsland';
 import { navigate } from './router';
 import { ACTION_MS, toast } from './toasts';
@@ -221,48 +224,99 @@ function failedMessage(item: Download): LiveIslandMessage {
   };
 }
 
-async function run(action: () => Promise<void>) {
+/** How an action ended: `code` is the `typhon:<code>` Go answered with, '' when it gave none. */
+export type DownloadActionOutcome = { ok: true } | { ok: false; code: string; error: unknown };
+
+const requests: Record<DownloadAction, (id: string) => Promise<void>> = {
+  pause: (id) => pauseDownload(id),
+  resume: (id) => resumeDownload(id),
+  forceStart: (id) => forceStartDownload(id),
+  downloadNow: (id) => downloadNowRequest(id),
+  moveUp: (id) => moveDownloadUp(id),
+  moveDown: (id) => moveDownloadDown(id),
+  cancel: (id) => cancelRequest(id),
+  remove: (id) => removeDownload(id),
+};
+
+const inFlight = new Map<string, Promise<DownloadActionOutcome>>();
+
+/**
+ * Asks Go for `action` on download `id` and says how it ended. A failure is toasted unless the caller
+ * shows it itself (`toast: false`, such as a confirm dialog with its own error line). While a call
+ * for the same download and action runs, a second one is not sent: it gets the first one's outcome.
+ */
+export function requestDownloadAction(
+  id: string,
+  action: DownloadAction,
+  options: { toast?: boolean } = {},
+): Promise<DownloadActionOutcome> {
+  const key = `${action}:${id}`;
+  const running = inFlight.get(key);
+  if (running) return running;
+  const call = perform(id, action, options.toast ?? true).finally(() => inFlight.delete(key));
+  inFlight.set(key, call);
+  return call;
+}
+
+async function perform(id: string, action: DownloadAction, toastFailure: boolean): Promise<DownloadActionOutcome> {
   try {
-    await action();
+    await requests[action](id);
+  } catch (error) {
+    if (toastFailure) toast(installErrorText(error), 'danger');
+    return { ok: false, code: errorCode(error), error };
+  }
+  if (action === 'moveUp' || action === 'moveDown') await followGoOrder();
+  return { ok: true };
+}
+
+let orderAsked = 0;
+
+// Go answers a move with download:updated for the two swapped items, which says nothing of their
+// places, so the order is read once more. Only the order is taken from that answer: a download added
+// or removed while it was on its way stays as the events left it, and an answer overtaken by a later
+// request is dropped. The move itself stands when only this read fails.
+async function followGoOrder() {
+  const asked = ++orderAsked;
+  let listed: Download[];
+  try {
+    listed = await listDownloads();
   } catch (err) {
     toast(installErrorText(err), 'danger');
+    return;
   }
+  if (asked !== orderAsked) return;
+  const order = listed.map((d) => d.id);
+  downloads.update((list) => followOrder(list, order));
 }
 
-export function pause(id: string) {
-  return run(() => pauseDownload(id));
+export async function pause(id: string): Promise<void> {
+  await requestDownloadAction(id, 'pause');
 }
 
-export function resume(id: string) {
-  return run(() => resumeDownload(id));
+export async function resume(id: string): Promise<void> {
+  await requestDownloadAction(id, 'resume');
 }
 
-export function cancel(id: string) {
-  return run(() => cancelRequest(id));
+export async function cancel(id: string): Promise<void> {
+  await requestDownloadAction(id, 'cancel');
 }
 
-export function remove(id: string) {
-  return run(() => removeDownload(id));
+export async function remove(id: string): Promise<void> {
+  await requestDownloadAction(id, 'remove');
 }
 
-export function forceStart(id: string) {
-  return run(() => forceStartDownload(id));
+export async function forceStart(id: string): Promise<void> {
+  await requestDownloadAction(id, 'forceStart');
 }
 
-export function downloadNow(id: string) {
-  return run(() => downloadNowRequest(id));
+export async function downloadNow(id: string): Promise<void> {
+  await requestDownloadAction(id, 'downloadNow');
 }
 
-export function moveUp(id: string) {
-  return run(async () => {
-    await moveDownloadUp(id);
-    await refresh();
-  });
+export async function moveUp(id: string): Promise<void> {
+  await requestDownloadAction(id, 'moveUp');
 }
 
-export function moveDown(id: string) {
-  return run(async () => {
-    await moveDownloadDown(id);
-    await refresh();
-  });
+export async function moveDown(id: string): Promise<void> {
+  await requestDownloadAction(id, 'moveDown');
 }
