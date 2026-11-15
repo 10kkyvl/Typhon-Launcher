@@ -58,6 +58,9 @@ The file is exactly this object and nothing else (unknown keys are refused):
    With `"base": "light"` also set `--ambient-dim` to `0.74`: the game art behind the interface
    is dimmed toward `--bg` by that share, and a light page needs more of itself over the art.
    `1` turns the art off; the launcher limits the art's brightness for the text itself.
+   With `"base": "light"` also set `--scrim-copy` to a pale plate in the page tone, for example
+   `rgba(238, 241, 244, 0.92)`: a missing one is the dark default, and dark `--text` on it fails the
+   readability check.
 3. Keep the surface ladder ordered by elevation: `--bg` → `--surface` → `--surface-2` →
    `--surface-3` → `--surface-4`, each a small step lighter (dark base) or darker (light base).
 4. Keep text readable. Contrast ratio (WCAG) of `--text` on `--bg` and on `--surface-2` at least
@@ -169,7 +172,7 @@ A complete dark theme ("night ocean": deep blue with a teal accent):
       `name`, `base`, `tokens`, `css` and, if the user asked to move or hide something, `layout`.
 - [ ] Every `layout` id is in layout.md, none appears twice, `settings` is not hidden.
 - [ ] `css` has no backslash and nothing from the refused list in Custom CSS.
-- [ ] All 26 color tokens are present (plus the three shadows and `--ambient-dim` for a light base); every token name
+- [ ] All 26 color tokens are present (plus the three shadows, `--ambient-dim` and `--scrim-copy` for a light base); every token name
       is in tokens.md; no `--ui-scale`.
 - [ ] Every value matches its kind; no quotes anywhere inside values.
 - [ ] Contrast targets from step 4 hold (state the ratios you computed).
