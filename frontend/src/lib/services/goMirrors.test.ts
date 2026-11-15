@@ -65,15 +65,30 @@ describe('values the frontend repeats from Go', () => {
     expect(themeDisplayName({ id: 'new-preset', name: 'stored-name', builtIn: true })).toBe('stored-name');
   });
 
-  it('reads the same progress fields from a download tick as Go sends', () => {
-    const struct = /type ProgressUpdate struct \{([\s\S]*?)\n\}/.exec(go('internal/download/model.go'))?.[1] ?? '';
-    const sent = [...struct.matchAll(/`json:"(\w+)[^"]*"`/g)].map((match) => match[1]).sort();
-    const source = frontendSources['lib/stores/downloads.ts'];
-    const body = /export interface DownloadProgress \{([\s\S]*?)\n\}/.exec(source)?.[1] ?? '';
-    const read = [...body.matchAll(/^ {2}(\w+)\??:/gm)].map((match) => match[1]).sort();
+});
 
-    expect(sent.length).toBeGreaterThan(8);
-    expect(read).toEqual(sent);
+describe('download event payloads the store declares by hand', () => {
+  // json name → whether Go may leave it out (omitempty).
+  function sent(struct: string): Record<string, boolean> {
+    const body = new RegExp(String.raw`type ${struct} struct \{([\s\S]*?)\n\}`).exec(go('internal/download/model.go'))?.[1] ?? '';
+    return Object.fromEntries([...body.matchAll(/json:"(\w+)([^"]*)"/g)].map((match) => [match[1], match[2].split(',').includes('omitempty')]));
+  }
+
+  // field → whether the interface marks it optional.
+  function read(name: string): Record<string, boolean> {
+    const body = new RegExp(String.raw`export interface ${name} \{([\s\S]*?)\n\}`).exec(frontendSources['lib/stores/downloads.ts'])?.[1] ?? '';
+    return Object.fromEntries([...body.matchAll(/^ {2}(\w+)(\??):/gm)].map((match) => [match[1], match[2] === '?']));
+  }
+
+  it.each([
+    ['ProgressUpdate', 'DownloadProgress', 8],
+    ['RemovedEvent', 'DownloadRemoved', 0],
+    ['ReorderedEvent', 'DownloadReordered', 0],
+  ])('reads %s as %s: the same fields, optional exactly where Go may leave one out', (struct, name, atLeast) => {
+    const go = sent(struct);
+
+    expect(Object.keys(go).length).toBeGreaterThan(atLeast);
+    expect(read(name)).toEqual(go);
   });
 });
 
