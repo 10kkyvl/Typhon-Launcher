@@ -11,9 +11,6 @@
     discardMetadata,
     fetchMetadata,
     forceStartDownload,
-    listDownloads,
-    moveDownloadDown,
-    moveDownloadUp,
     pauseDownload,
     removeDownload,
     resumeDownload,
@@ -42,7 +39,7 @@
   import { appInfo, elevationSupported, type AppInfo } from '../../services/system';
   import { installErrorText, needsInteractiveInstall } from '../../install/installErrors';
   import { installIndeterminate, installTotalUnknown } from '../../install/progress';
-  import { active, completed, downloads, downloadsById, queue, statusLabels } from '../../stores/downloads';
+  import { active, completed, downloads, downloadsById, queue, requestDownloadAction, statusLabels } from '../../stores/downloads';
   import { installStatusLabels, installTypeLabels, installations, installationsByDownload, upsertInstallation } from '../../stores/install';
   import { libraryGames } from '../../stores/library';
   import { settings } from '../../stores/settings';
@@ -701,12 +698,14 @@
     else if (installation.gameId) ongame(installation.gameId);
   }
 
+  // Go sends download:reordered after every step and the store follows it: no list is read here, as a
+  // read would overwrite removes and adds that land while it is in flight.
   function queueAction(item: DownloadRecord, direction: 'up' | 'down') {
     const key = actionKey('download', item.id, `move-${direction}`);
-    const action = direction === 'up' ? moveDownloadUp : moveDownloadDown;
+    const action = direction === 'up' ? 'moveUp' : 'moveDown';
     void perform(key, async () => {
-      await action(item.id);
-      downloads.set(await listDownloads());
+      const outcome = await requestDownloadAction(item.id, action, { toast: false });
+      if (!outcome.ok) throw outcome.error;
     });
   }
 
