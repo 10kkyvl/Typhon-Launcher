@@ -31,5 +31,6 @@ export const common: Record<CommonKey, Message> = {
   'common.meterTotalUnknown': 'Total size unknown',
   'common.chartPeriod': 'Period',
   'common.chartValue': 'Value',
+  'common.chartBucket': '{label}: {value}',
   // /7-A kit
 };

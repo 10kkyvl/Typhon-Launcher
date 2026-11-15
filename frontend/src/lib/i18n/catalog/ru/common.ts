@@ -28,6 +28,7 @@ export const common = {
   'common.meterTotalUnknown': 'Общий объём неизвестен',
   'common.chartPeriod': 'Период',
   'common.chartValue': 'Значение',
+  'common.chartBucket': '{label}: {value}',
   // /7-A kit
 } as const;
 
