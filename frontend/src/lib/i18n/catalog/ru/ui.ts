@@ -36,11 +36,8 @@ export const ui = {
   'ui.repair': 'Восстановление',
   'ui.game': 'Игра',
   'ui.awaitingSources': 'Ожидание источников',
-  'ui.seedersPeers': 'Сиды: {seeders} · пиры: {peers}',
   'ui.bytesOfBytes': '{done} из {total}',
-  'ui.timeLeft': 'Осталось {eta}',
   'ui.cancelVerb': 'Отменить',
-  'ui.moreAboutDownload': 'Подробнее о загрузке',
   'ui.cancelDownloadTitle': 'Отменить загрузку?',
   'ui.cancelDownloadWarning':
     'Загрузка «{name}» будет остановлена, а уже скачанные файлы удалены с диска. Это действие нельзя отменить.',
