@@ -370,6 +370,9 @@ func ImageMembers(rom string, alive func() error) (files []string, complete bool
 // folder. An empty title keeps the old name. The title id goes with the old image:
 // the emulator installs what the card now points at.
 func (s *Service) bindImageLocked(pos int, title, rom, folder, platformID string, facts imageFacts) (Game, error) {
+	if err := s.removingLocked(pos); err != nil {
+		return Game{}, err
+	}
 	previous := s.games[pos]
 	s.games[pos].Emulation = &Emulation{Platform: platformID, Files: facts.files}
 	if previous.Emulation != nil && previous.Owned && platform.Inside(previous.InstallDir, rom) {
@@ -414,6 +417,15 @@ func (s *Service) rebindImage(id, path, platformID string) (Game, error) {
 	if err != nil {
 		return Game{}, err
 	}
+	card, err := s.Find(id)
+	if err != nil {
+		return Game{}, err
+	}
+	release, err := s.holdForAdding(id, card.Title, folder)
+	if err != nil {
+		return Game{}, err
+	}
+	defer release()
 	facts, err := readImage(rom, func() error { return nil })
 	if err != nil {
 		return Game{}, err

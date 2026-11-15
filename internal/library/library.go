@@ -642,6 +642,9 @@ func (s *Service) matchRegisteredLocked(g InstalledGame) int {
 }
 
 func (s *Service) reviveLocked(pos int, title, installDir string, size int64, unknown bool) (Game, error) {
+	if err := s.removingLocked(pos); err != nil {
+		return Game{}, err
+	}
 	previous := s.games[pos]
 	clearInstalledProvenance(&s.games[pos])
 	s.games[pos].Owned = false
@@ -864,6 +867,12 @@ func (s *Service) ApplyInstalledUpdate(ctx context.Context, u InstalledUpdate) (
 			return Game{}, errors.New("игра не найдена")
 		}
 		previous := s.games[pos]
+		if u.InstallDir != "" && !platform.SamePath(u.InstallDir, previous.InstallDir) {
+			if err := s.removingLocked(pos); err != nil {
+				s.mu.Unlock()
+				return Game{}, err
+			}
+		}
 		if previous.InstallDir != before.InstallDir || previous.Executable != before.Executable {
 			s.mu.Unlock()
 			if u.InstallDir != "" && previous.InstallDir != u.InstallDir {

@@ -81,6 +81,12 @@ func TestNoCardIsSavedForFilesDeletedWhileItWasAdded(t *testing.T) {
 			duringImageRead(t, remove)
 			return s.RegisterEmulated(t.Context(), InstalledImage{Title: "Bonus", Platform: emulators.PS2, Image: iso, InstallDir: filepath.Dir(iso), Owned: true})
 		},
+		"SetExecutable of an image": func(t *testing.T, s *Service, root string, remove func()) (Game, error) {
+			card := emulatedGame(t, s, "elsewhere.iso")
+			iso := writeFile(t, filepath.Join(root, "ps2", "game.iso"), "12345678")
+			duringImageRead(t, remove)
+			return s.SetExecutable(card.ID, iso)
+		},
 	}
 	for name, adding := range add {
 		t.Run(name, func(t *testing.T) {
@@ -99,6 +105,96 @@ func TestNoCardIsSavedForFilesDeletedWhileItWasAdded(t *testing.T) {
 			}
 			if _, statErr := os.Stat(g.Executable); statErr != nil {
 				t.Fatalf("card %q saved for a file deleted with another game (removal %s): %v", g.Title, *outcome, statErr)
+			}
+		})
+	}
+}
+
+// A removal holds its card from its decision until it settles the card: every
+// path that gives a card files again refuses that card meanwhile, or the
+// removal would mark uninstalled or remove the card the player has just added.
+func TestNoPathBindsFilesToACardARemovalHolds(t *testing.T) {
+	native := func(t *testing.T, s *Service) Game {
+		t.Helper()
+		card := addAt(t, s, filepath.Join(t.TempDir(), "Game", "game.exe"), "Game")
+		if err := s.MarkUninstalled(card.ID); err != nil {
+			t.Fatal(err)
+		}
+		return card
+	}
+	installed := func(t *testing.T, s *Service) Game {
+		t.Helper()
+		return addAt(t, s, filepath.Join(t.TempDir(), "Game", "game.exe"), "Game")
+	}
+	image := func(uninstalled bool) func(t *testing.T, s *Service) Game {
+		return func(t *testing.T, s *Service) Game {
+			t.Helper()
+			card := emulatedGame(t, s, "game.iso")
+			if uninstalled {
+				if err := s.MarkUninstalled(card.ID); err != nil {
+					t.Fatal(err)
+				}
+			}
+			return card
+		}
+	}
+	cases := []struct {
+		name string
+		card func(t *testing.T, s *Service) Game
+		bind func(t *testing.T, s *Service, card Game) error
+	}{
+		{"AddGame", native, func(t *testing.T, s *Service, card Game) error {
+			_, err := s.AddGame(t.Context(), card.Executable, card.Title)
+			return err
+		}},
+		{"RegisterInstalled", native, func(t *testing.T, s *Service, card Game) error {
+			_, err := s.RegisterInstalled(t.Context(), InstalledGame{Title: card.Title, Executable: card.Executable, InstallDir: card.InstallDir})
+			return err
+		}},
+		{"ApplyDiscovered", native, func(t *testing.T, s *Service, card Game) error {
+			_, _, err := s.ApplyDiscovered(Discovered{GameID: card.ID, Title: card.Title, Executable: card.Executable, InstallDir: card.InstallDir})
+			return err
+		}},
+		{"AddEmulatedGame", image(true), func(t *testing.T, s *Service, card Game) error {
+			_, err := s.AddEmulatedGame(t.Context(), card.Executable, emulators.PS2, card.Title)
+			return err
+		}},
+		{"RegisterEmulated", image(true), func(t *testing.T, s *Service, card Game) error {
+			_, err := s.RegisterEmulated(t.Context(), InstalledImage{Title: card.Title, Platform: emulators.PS2, Image: card.Executable, InstallDir: card.InstallDir})
+			return err
+		}},
+		{"ApplyInstalledUpdate into another folder", installed, func(t *testing.T, s *Service, card Game) error {
+			next := filepath.Join(t.TempDir(), "Game")
+			_, err := s.ApplyInstalledUpdate(t.Context(), InstalledUpdate{ID: card.ID, InstallDir: next, Executable: writeFile(t, filepath.Join(next, "game.exe"), "stub")})
+			return err
+		}},
+		{"SetExecutable of an image", image(false), func(t *testing.T, s *Service, card Game) error {
+			_, err := s.SetExecutable(card.ID, writeFile(t, filepath.Join(t.TempDir(), "moved.iso"), "1234567"))
+			return err
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newLibrary(t)
+			card := tc.card(t, s)
+			before, err := s.Find(card.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			release, err := s.BeginRemoval(card.ID, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			bindErr := tc.bind(t, s, before)
+			release()
+
+			requireCode(t, tc.name+" during the removal of its card", bindErr, "library.removing")
+			after, err := s.Find(card.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if after.Uninstalled != before.Uninstalled || after.Executable != before.Executable || after.InstallDir != before.InstallDir {
+				t.Fatalf("card during its removal = %+v, want it as it was: %+v", after, before)
 			}
 		})
 	}

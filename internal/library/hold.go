@@ -231,7 +231,8 @@ func (s *Service) reserveMove(id string, own bool, dirs []string) (func(), error
 // holdForAdding keeps a removal or a move from deciding on dir while a card is
 // being added there or given that folder; it refuses a dir whose files are
 // being deleted or moved. Every path that looks at files before it saves a card
-// for them (AddGame, RegisterInstalled, the image paths, discovery) holds dir
+// for them (AddGame, RegisterInstalled, the image paths with SetExecutable of an
+// image, discovery) holds dir
 // from before the look until after the save, so the files it saw are the files
 // the card names. id is the card's when the path knows it, empty otherwise.
 func (s *Service) holdForAdding(id, title, dir string) (func(), error) {
@@ -252,7 +253,10 @@ func (s *Service) holdForAdding(id, title, dir string) (func(), error) {
 
 // removingLocked refuses to give the card at pos (-1: none) files again while
 // a removal holds it: the removal settles the card last, and an install or a
-// scan that rebound it in between would be marked uninstalled or removed.
+// scan that rebound it in between would be marked uninstalled or removed. Every
+// path that binds a card to files asks it under the lock it saves the card in:
+// RegisterInstalled, discovery, RegisterEmulated, and reviveLocked and
+// bindImageLocked for AddGame, AddEmulatedGame and SetExecutable of an image.
 func (s *Service) removingLocked(pos int) error {
 	if pos < 0 {
 		return nil
