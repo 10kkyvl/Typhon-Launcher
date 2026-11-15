@@ -106,3 +106,85 @@ describe('waiting for the schedule', () => {
     expect(byId.get('p')).toContain('resume');
   });
 });
+
+describe('the offers keep still while only progress moves', () => {
+  function progress(id: string, step: number) {
+    handlers['download:progress']({
+      data: { id, status: 'downloading', progress: step / 20, downloaded: step * 10, downloadSpeed: 1000 + step, uploadSpeed: 0, etaSeconds: 5, seeders: 1, peers: 1, stalled: false },
+    });
+  }
+
+  async function watched() {
+    seeded = [makeDownload({ id: 'a', status: 'downloading' }), makeDownload({ id: 'b', status: 'queued' })];
+    const { offers, throttle } = await load();
+    throttle.playThrottle.set(blocked);
+    const byId: Array<ReadonlyMap<string, readonly string[]>> = [];
+    const waiting: Array<ReadonlySet<string>> = [];
+    const stops = [offers.downloadOffers.subscribe((value) => byId.push(value)), offers.waitingForSchedule.subscribe((value) => waiting.push(value))];
+    return { byId, waiting, throttle, stop: () => stops.forEach((stop) => stop()) };
+  }
+
+  it('a burst of progress ticks notifies nobody and keeps the same array for the download', async () => {
+    const { byId, waiting, stop } = await watched();
+    const first = byId[0].get('a');
+
+    for (let step = 0; step < 12; step++) progress('a', step);
+
+    expect(byId).toHaveLength(1);
+    expect(waiting).toHaveLength(1);
+    expect(byId[0].get('a')).toBe(first);
+    stop();
+  });
+
+  it('a status change notifies once, with a new array for that download only', async () => {
+    const { byId, waiting, stop } = await watched();
+    progress('a', 1);
+
+    handlers['download:updated']({ data: makeDownload({ id: 'a', status: 'paused' }) });
+
+    expect(byId).toHaveLength(2);
+    expect(byId[1].get('a')).not.toBe(byId[0].get('a'));
+    expect(byId[1].get('a')).toContain('resume');
+    expect(byId[1].get('b')).toBe(byId[0].get('b'));
+    expect(waiting).toHaveLength(2);
+    expect([...waiting[1]]).toEqual(['b']);
+    stop();
+  });
+
+  it('a new throttle that keeps the schedule blocked notifies nobody; lifting the block notifies', async () => {
+    const { byId, waiting, throttle, stop } = await watched();
+
+    throttle.playThrottle.set({ ...blocked, active: true, mode: 'limit', downloadLimit: 1024 });
+    expect(byId).toHaveLength(1);
+    expect(waiting).toHaveLength(1);
+
+    throttle.playThrottle.set({ ...blocked, schedule: { blocked: false, nextOpenAt: '' } });
+    expect(byId).toHaveLength(2);
+    expect(byId[1].get('b')).not.toContain('downloadNow');
+    expect(waiting).toHaveLength(2);
+    expect(waiting[1].size).toBe(0);
+    stop();
+  });
+
+  it('"Download now" on one download changes that download only', async () => {
+    const { byId, stop } = await watched();
+
+    handlers['download:updated']({ data: makeDownload({ id: 'b', status: 'queued', ignoreSchedule: true }) });
+
+    expect(byId).toHaveLength(2);
+    expect(byId[1].get('b')).not.toContain('downloadNow');
+    expect(byId[1].get('a')).toBe(byId[0].get('a'));
+    stop();
+  });
+
+  it('a download that arrives or leaves is news', async () => {
+    const { byId, stop } = await watched();
+
+    handlers['download:added']({ data: makeDownload({ id: 'c', status: 'completed' }) });
+    handlers['download:removed']({ data: { id: 'a' } });
+
+    expect(byId).toHaveLength(3);
+    expect([...byId[2].keys()]).toEqual(['b', 'c']);
+    stop();
+  });
+});
