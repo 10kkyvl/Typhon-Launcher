@@ -271,6 +271,48 @@ func TestNoCardIsAddedInsideAFolderBeingDeleted(t *testing.T) {
 	}
 }
 
+// A store sync and a move's repoint give a card a folder without an adding
+// hold: the save itself refuses a card that would lie in a folder being
+// deleted, and the memory goes back to what is on disk.
+func TestNoCardIsSavedInsideAFolderBeingDeletedByAPathWithoutAnAddingHold(t *testing.T) {
+	cases := []struct {
+		name string
+		bind func(t *testing.T, s *Service, inside string) error
+	}{
+		{"store sync", func(t *testing.T, s *Service, inside string) error {
+			exe := writeFile(t, filepath.Join(inside, "Game2.exe"), "stub")
+			_, err := s.ApplyExternal(t.Context(), []ExternalGame{{Provider: ProviderSteam, AppID: "42", Title: "Bonus", InstallDir: inside, Executable: exe}})
+			return err
+		}},
+		{"move repoint", func(t *testing.T, s *Service, inside string) error {
+			b := addAt(t, s, filepath.Join(t.TempDir(), "Bonus", "Game2.exe"), "Bonus")
+			_, err := s.Relocate(b.ID, inside)
+			return err
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newLibrary(t)
+			root := filepath.Join(t.TempDir(), "RepackX")
+			a := addAt(t, s, filepath.Join(root, "game.exe"), "RepackX")
+			inside := filepath.Join(root, "Bonus")
+			release, err := s.BeginRemoval(a.ID, root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			bindErr := tc.bind(t, s, inside)
+			release()
+
+			requireCode(t, tc.name+" into a folder being deleted", bindErr, "library.folder_busy")
+			for _, g := range append(s.GetGames(), mustServiceAt(t, s.path).GetGames()...) {
+				if g.ID != a.ID && overlaps(g.Footprint(), root) {
+					t.Fatalf("card %+v lies in the folder being deleted", g)
+				}
+			}
+		})
+	}
+}
+
 func TestUninstalledCardInsideDoesNotCountUntilItComesBack(t *testing.T) {
 	s := newLibrary(t)
 	root := filepath.Join(t.TempDir(), "RepackX")
