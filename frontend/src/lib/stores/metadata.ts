@@ -1,4 +1,4 @@
-import { get, writable } from 'svelte/store';
+import { get, writable, type Readable } from 'svelte/store';
 import { listenFirst } from './listenFirst';
 import { inWails } from '../services/backend';
 import { ensureArt, getGameArt, isMetadataAvailable, type GameArt, type MetadataView } from '../services/metadata';
@@ -10,6 +10,20 @@ import { toast } from './toasts';
 export const metadataAvailable = writable(false);
 export const gameArt = writable<Record<string, GameArt>>({});
 export const gameInfo = writable<Record<string, CatalogGame>>({});
+
+// The backend leaves a game without art out of its answer, so `gameArt` alone cannot tell "no art" from
+// "not asked yet". These are the ids a request has come back for (or failed for) and the ids an update
+// event named; one without an entry in `gameArt` has no art for now. Updated after `gameArt`, so a game
+// whose art arrives is never seen as answered without it.
+const answered = writable<ReadonlySet<string>>(new Set());
+export const artAnswered: Readable<ReadonlySet<string>> = { subscribe: answered.subscribe };
+
+function markAnswered(ids: Iterable<string>) {
+  answered.update((set) => {
+    const fresh = [...ids].filter((id) => id && !set.has(id));
+    return fresh.length === 0 ? set : new Set([...set, ...fresh]);
+  });
+}
 
 const chunkSize = 48;
 const retryDelay = 3000;
@@ -51,6 +65,7 @@ export async function initMetadata() {
       }
       return { ...map, [id]: { cover: view.cover, hero: view.hero, heroIsPoster: view.heroIsPoster } };
     });
+    markAnswered([id]);
     if (pending.size > 0) pump();
   });
   await probe();
@@ -62,14 +77,16 @@ async function fetchArt(ids: string[]) {
   if (missing.length === 0) return;
   const art = await getGameArt(missing);
   artFailureShown = false;
-  if (Object.keys(art).length === 0) return;
-  gameArt.update((map) => ({ ...map, ...art }));
+  if (Object.keys(art).length > 0) gameArt.update((map) => ({ ...map, ...art }));
+  markAnswered(missing);
 }
 
 export async function loadArt(ids: string[]) {
   try {
     await fetchArt(ids);
   } catch (err) {
+    // Nothing more comes for these games until they are asked again: a screen waiting on their art stops waiting.
+    markAnswered(ids);
     if (artFailureShown) return;
     artFailureShown = true;
     toast(metadataErrorText(err, msg('state.metadataLoadFailed')), 'danger');
@@ -116,6 +133,7 @@ async function pump() {
   } catch (err) {
     const now = Date.now();
     for (const id of pending) taken.set(id, now);
+    markAnswered(pending);
     pending.clear();
     if (!artFailureShown) {
       artFailureShown = true;

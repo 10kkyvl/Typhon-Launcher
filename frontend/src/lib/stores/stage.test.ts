@@ -3,6 +3,17 @@ import { get } from 'svelte/store';
 
 vi.mock('../services/backend', () => ({ inWails: false }));
 
+// The art the backend has: what GetArt answers (games without art are left out) and what EnsureArt takes.
+const backend = vi.hoisted(() => ({
+  getGameArt: vi.fn(async (_ids: string[]): Promise<Record<string, unknown>> => ({})),
+  ensureArt: vi.fn(async (ids: string[]) => ids),
+}));
+vi.mock('../services/metadata', async (original) => ({
+  ...(await original<typeof import('../services/metadata')>()),
+  getGameArt: (ids: string[]) => backend.getGameArt(ids),
+  ensureArt: (ids: string[]) => backend.ensureArt(ids),
+}));
+
 type Stage = typeof import('./stage');
 type Library = typeof import('./library');
 type Metadata = typeof import('./metadata');
@@ -11,6 +22,10 @@ let library: Library;
 let metadata: Metadata;
 
 beforeEach(async () => {
+  backend.getGameArt.mockReset();
+  backend.getGameArt.mockImplementation(async () => ({}));
+  backend.ensureArt.mockReset();
+  backend.ensureArt.mockImplementation(async (ids: string[]) => ids);
   vi.resetModules();
   library = await import('./library');
   metadata = await import('./metadata');
@@ -97,6 +112,47 @@ describe('whether a game has wide art for the stage', () => {
     expect(answer('lib-1')).toEqual({ state: 'unknown' });
     metadata.gameArt.set({ c1: { cover: '/media/cover.jpg', hero: '/media/hero.jpg', heroIsPoster: false } });
     expect(answer('lib-1')).toEqual({ state: 'yes', src: '/media/hero.jpg' });
+  });
+
+  it('is no once the backend has answered without art for the game: it never stays unknown', async () => {
+    backend.getGameArt.mockImplementation(async () => ({}));
+    expect(answer('c9')).toEqual({ state: 'unknown' });
+    await metadata.loadArt(['c9']);
+    expect(backend.getGameArt).toHaveBeenCalledWith(['c9']);
+    expect(answer('c9')).toEqual({ state: 'no' });
+  });
+
+  it('is no once the stage\'s own request for art comes back without any', async () => {
+    backend.getGameArt.mockImplementation(async () => ({}));
+    metadata.requestArt(['c10']);
+    await vi.waitFor(() => expect(answer('c10')).toEqual({ state: 'no' }));
+  });
+
+  it('turns to yes when art arrives for a game that was answered without any', async () => {
+    await metadata.loadArt(['c11']);
+    expect(answer('c11')).toEqual({ state: 'no' });
+    backend.getGameArt.mockImplementation(async () => ({}));
+    metadata.gameArt.update((map) => ({ ...map, c11: { cover: '', hero: '/media/late.jpg', heroIsPoster: false } }));
+    expect(answer('c11')).toEqual({ state: 'yes', src: '/media/late.jpg' });
+  });
+
+  it('is no when asking the backend failed: nothing would come for the game until it is asked again', async () => {
+    backend.getGameArt.mockImplementation(async () => {
+      throw new Error('typhon:metadata.unavailable');
+    });
+    await metadata.loadArt(['c12']);
+    expect(answer('c12')).toEqual({ state: 'no' });
+  });
+
+  it('a game with art is yes from the first answer, never no on the way', async () => {
+    backend.getGameArt.mockImplementation(async () => ({ c13: { cover: '', hero: '/media/h13.jpg', heroIsPoster: false } }));
+    const seen: string[] = [];
+    const stop = stage.stageWide('c13').subscribe((wide) => seen.push(wide.state));
+    await metadata.loadArt(['c13']);
+    expect(seen[0]).toBe('unknown');
+    expect(seen.slice(1).every((state) => state === 'yes')).toBe(true);
+    expect(seen.length).toBeGreaterThan(1);
+    stop();
   });
 
   it('is no for a game whose hero is its poster', () => {

@@ -3,7 +3,7 @@ import { wideArt, type WideArt } from '../backdrop/source';
 import type { LibraryGame } from '../services/library';
 import type { GameArt } from '../services/metadata';
 import { libraryGames } from './library';
-import { gameArt } from './metadata';
+import { artAnswered, gameArt } from './metadata';
 
 /**
  * The stage: the focused game's wide art, sharp, across the top of the window behind the top bar, the
@@ -64,26 +64,34 @@ export function stagePictureFailed(src: string): void {
   failed.update((set) => (set.has(src) ? set : new Set([...set, src])));
 }
 
-function answer(id: string, games: readonly LibraryGame[], art: Readonly<Record<string, GameArt>>, broken: ReadonlySet<string>): WideArt {
-  const wide = wideArt(id, games, art);
+function answer(
+  id: string,
+  games: readonly LibraryGame[],
+  art: Readonly<Record<string, GameArt>>,
+  heard: ReadonlySet<string>,
+  broken: ReadonlySet<string>,
+): WideArt {
+  const wide = wideArt(id, games, art, heard);
   return wide.state === 'yes' && broken.has(wide.src) ? { state: 'no' } : wide;
 }
 
 /**
- * Whether `gameId` has wide art the stage can show: yes (with the picture), no (a poster, no hero, a
- * picture that failed to load) or not known yet. A screen whose game has none shows its cover itself;
- * its claim still stands and the stage stays empty.
+ * Whether `gameId` has wide art the stage can show: yes (with the picture), no (a poster, no hero, no
+ * art in the backend's answer or the request failed, a picture that failed to load) or not known yet
+ * (not asked or not answered yet; the stage asks for the art of a game it stands). A screen whose game
+ * has none shows its cover itself; its claim still stands and the stage stays empty. A "no" from the
+ * backend's answer turns to "yes" if art it went to fetch arrives later.
  */
 export function stageWide(gameId: string): Readable<WideArt> {
-  return derived([libraryGames, gameArt, failed], ([games, art, broken]) => answer(gameId, games, art, broken));
+  return derived([libraryGames, gameArt, artAnswered, failed], ([games, art, heard, broken]) => answer(gameId, games, art, heard, broken));
 }
 
 /** What the stage draws: the staged game and its wide picture ('' when it has none); null with no claim. */
 export const stagePicture: Readable<{ id: string; src: string } | null> = derived(
-  [claimed, libraryGames, gameArt, failed],
-  ([id, games, art, broken]) => {
+  [claimed, libraryGames, gameArt, artAnswered, failed],
+  ([id, games, art, heard, broken]) => {
     if (!id) return null;
-    const wide = answer(id, games, art, broken);
+    const wide = answer(id, games, art, heard, broken);
     return { id, src: wide.state === 'yes' ? wide.src : '' };
   },
 );

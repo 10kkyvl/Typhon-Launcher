@@ -1,4 +1,4 @@
-import { clean } from '../game/view';
+import { clean, pickHero } from '../game/view';
 import type { LibraryGame } from '../services/library';
 import type { GameArt } from '../services/metadata';
 
@@ -28,16 +28,17 @@ export function backdropSources(id: string, games: readonly LibraryGame[], art: 
 export type WideArt = { state: 'yes'; src: string } | { state: 'no' } | { state: 'unknown' };
 
 /**
- * The wide picture a game stands on the stage with: Go's hero choice and nothing else (a poster is the
- * cover again, and the stage would crop it). Not known yet while the art store has not answered for the
- * game; known missing for a library game without a catalog match, for which no art will come.
+ * The wide picture a game stands on the stage with: Go's hero choice by the one rule (`pickHero`: a
+ * poster is the cover again, and the stage would crop it). Not known yet until the art store has heard
+ * back about the game (`answered`: the backend leaves a game without art out of its answer); known
+ * missing for a library game without a catalog match, for which no art will come. A "no" can still turn
+ * to "yes" when art the backend went to fetch arrives later.
  */
-export function wideArt(id: string, games: readonly LibraryGame[], art: ArtMap): WideArt {
+export function wideArt(id: string, games: readonly LibraryGame[], art: ArtMap, answered: ReadonlySet<string> = new Set()): WideArt {
   const { key } = artKey(id, games);
   if (!key) return { state: 'no' };
-  if (!(key in art)) return { state: 'unknown' };
-  const known = art[key];
-  const src = known && !known.heroIsPoster ? clean(known.hero) : '';
+  if (!(key in art)) return answered.has(key) ? { state: 'no' } : { state: 'unknown' };
+  const src = pickHero(art[key]);
   return src ? { state: 'yes', src } : { state: 'no' };
 }
 

@@ -142,6 +142,13 @@ describe('the wide art a game stands on the stage with', () => {
     expect(wideArt('catalog-7', [], {})).toEqual({ state: 'unknown' });
   });
 
+  it('is known to be missing once the art store has heard back about the game without art', () => {
+    const games = [game('lib-1', { canonicalGameId: 'c1', cover: '/media/own.jpg' })];
+    expect(wideArt('lib-1', games, {}, new Set(['c1']))).toEqual({ state: 'no' });
+    expect(wideArt('catalog-7', [], {}, new Set(['catalog-7']))).toEqual({ state: 'no' });
+    expect(wideArt('catalog-7', [], {}, new Set(['other']))).toEqual({ state: 'unknown' });
+  });
+
   it('is known to be missing for a library game without a catalog match: no art will ever come for it', () => {
     const games = [game('sideloaded', { cover: '/media/own.jpg' })];
     expect(wideArt('sideloaded', games, { sideloaded: art('', '/media/wrong.jpg') })).toEqual({ state: 'no' });
