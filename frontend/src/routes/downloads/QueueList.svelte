@@ -53,14 +53,12 @@
   }
 
   /**
-   * A download being moved: `move` while a `moveTo` is in flight, `place` the last place asked, `order`
-   * Go's order when the last call went out. Once Go answered, the entry stays until Go's order shows the
-   * download there or changes at all.
+   * A download being moved: `move` while a `moveTo` is in flight, `place` the last place asked. Once Go
+   * answered, the entry stays until Go's order shows the download there or it leaves the queue.
    */
   interface Moving {
     move: MoveAsk | undefined;
     place: number;
-    order: string;
     title: string;
     follow: Follow;
   }
@@ -83,7 +81,6 @@
     moving.set(id, {
       move: step.state,
       place: to,
-      order: step.send === null && current ? current.order : goKey,
       title: byId.get(id)?.name ?? current?.title ?? '',
       follow: how,
     });
@@ -102,7 +99,7 @@
       return;
     }
     if (step.send !== null) {
-      moving.set(id, { ...current, move: step.state, place: step.send, order: goKey });
+      moving.set(id, { ...current, move: step.state, place: step.send });
       void send(id, step.send);
       return;
     }
@@ -110,13 +107,15 @@
     confirmMoves();
   }
 
-  // A move Go answered is confirmed when Go's order shows the download at the asked place, or when Go's
-  // order changed since the call went out (its event arrived): the place said is then Go's, not ours.
+  // A move Go answered is settled when Go's order shows the download at the asked place (the last one
+  // when the queue has shrunk below it), or when the download left the queue. Any other change of Go's
+  // order (another download starting, an event of an earlier move) settles nothing: the list keeps
+  // showing the asked place over it, and the place said is the one Go ends on.
   function confirmMoves() {
     for (const [id, m] of moving) {
       if (m.move) continue;
       const at = goIds.indexOf(id);
-      if (at !== m.place && goKey === m.order) continue;
+      if (at >= 0 && at !== Math.min(m.place, goIds.length - 1)) continue;
       moving.delete(id);
       if (at >= 0) onannounce(msg('downloads.queue.moved', { title: m.title, position: at + 1, total: goIds.length }));
       refocus(m.follow);

@@ -220,6 +220,69 @@ describe('QueueList: reorder from the keyboard', () => {
   });
 });
 
+describe('QueueList: a move is settled by Go’s order, not by any change of it', () => {
+  it('another download leaving the queue does not settle a move Go answered: the asked place stays until Go shows it', async () => {
+    vi.mocked(moveDownloadTo).mockResolvedValue();
+    downloads.set([queued('a', 'Alpha'), queued('b', 'Beta'), queued('c', 'Gamma'), queued('d', 'Delta')]);
+    const { user } = mount();
+    grip('Delta').focus();
+
+    await user.keyboard('{Home}');
+    await new Promise((done) => setTimeout(done, 0));
+    downloads.update((list) => list.map((d) => (d.id === 'a' ? { ...d, status: 'downloading' } : d)));
+    await new Promise((done) => setTimeout(done, 0));
+
+    expect(shownOrder()).toEqual([gripName('Delta', 1, 3), gripName('Beta', 2, 3), gripName('Gamma', 3, 3)]);
+    expect(onannounce).not.toHaveBeenCalled();
+
+    goReorders(['d', 'b', 'c', 'a']);
+
+    await vi.waitFor(() => expect(onannounce).toHaveBeenCalledWith(msg('downloads.queue.moved', { title: 'Delta', position: 1, total: 3 })));
+    expect(onannounce).toHaveBeenCalledTimes(1);
+    expect(shownOrder()).toEqual([gripName('Delta', 1, 3), gripName('Beta', 2, 3), gripName('Gamma', 3, 3)]);
+    expect(document.activeElement).toBe(grip('Delta'));
+  });
+
+  it('two collapsed moves, each answered before its event: one saying, of the place Go ended on, and focus kept', async () => {
+    const first = deferred();
+    const second = deferred();
+    vi.mocked(moveDownloadTo).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    downloads.set([queued('a', 'Alpha'), queued('b', 'Beta'), queued('c', 'Gamma'), queued('d', 'Delta')]);
+    const { user } = mount();
+    grip('Alpha').focus();
+
+    await user.keyboard('{ArrowDown}{ArrowDown}');
+    first.resolve();
+    await vi.waitFor(() => expect(vi.mocked(moveDownloadTo).mock.calls).toEqual([['a', 1], ['a', 2]]));
+    goReorders(['b', 'a', 'c', 'd']);
+    second.resolve();
+    await new Promise((done) => setTimeout(done, 0));
+
+    expect(onannounce).not.toHaveBeenCalled();
+    expect(shownOrder()).toEqual([gripName('Beta', 1, 4), gripName('Gamma', 2, 4), gripName('Alpha', 3, 4), gripName('Delta', 4, 4)]);
+
+    goReorders(['b', 'c', 'a', 'd']);
+
+    await vi.waitFor(() => expect(onannounce).toHaveBeenCalledWith(msg('downloads.queue.moved', { title: 'Alpha', position: 3, total: 4 })));
+    expect(onannounce).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(grip('Alpha'));
+  });
+
+  it('a place past the end, the queue having shrunk, is settled at the last place', async () => {
+    vi.mocked(moveDownloadTo).mockResolvedValue();
+    downloads.set([queued('a', 'Alpha'), queued('b', 'Beta'), queued('c', 'Gamma')]);
+    const { user } = mount();
+    grip('Alpha').focus();
+
+    await user.keyboard('{End}');
+    await new Promise((done) => setTimeout(done, 0));
+    downloads.update((list) => list.map((d) => (d.id === 'b' ? { ...d, status: 'downloading' } : d)));
+    goReorders(['b', 'c', 'a']);
+
+    await vi.waitFor(() => expect(onannounce).toHaveBeenCalledWith(msg('downloads.queue.moved', { title: 'Alpha', position: 2, total: 2 })));
+  });
+});
+
 describe('QueueList: to top', () => {
   it('is offered on every row but the first, sends moveTo place 0, and focus follows the download to its grip', async () => {
     vi.mocked(moveDownloadTo).mockResolvedValue();
