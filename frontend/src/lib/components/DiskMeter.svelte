@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { t } from '../i18n';
+  import { focusQuietly } from '../layers/focus';
   import { bytesSize } from '../utils/format';
   import { nextIndex } from '../utils/roving';
   import { METER_WIDTH, meter, sizeWords, type MeterPart, type MeterSegment, type MeterSize } from './diskMeter';
@@ -83,23 +85,52 @@
     else onpick?.(part.key);
   }
 
-  let stop = $state(0);
+  // The one Tab stop, kept by the part's id; when that part leaves, the one now in its place.
+  let stop = $state<{ id: string; index: number }>({ id: '', index: 0 });
   let bar = $state<HTMLElement>();
-  const tabStop = $derived(Math.min(stop, Math.max(0, pickable.length - 1)));
+  const tabStop = $derived.by(() => {
+    const at = pickable.findIndex((part) => part.id === stop.id);
+    return at >= 0 ? at : Math.min(stop.index, Math.max(0, pickable.length - 1));
+  });
+
+  const buttons = () => [...(bar?.querySelectorAll<HTMLButtonElement>('button.part') ?? [])];
 
   function onkeydown(event: KeyboardEvent, index: number) {
     if (event.altKey || event.ctrlKey || event.metaKey) return;
     const next = nextIndex(index, pickable.length, event.key, { orientation: 'horizontal', loop: false });
     if (next === null) return;
     event.preventDefault();
-    stop = next;
-    bar?.querySelectorAll<HTMLButtonElement>('button.part')[next]?.focus();
+    stop = { id: pickable[next].id, index: next };
+    buttons()[next]?.focus();
   }
+
+  // A focused part that leaves hands focus to the part now in its place, else to its neighbour, else to
+  // the group. Read before the bar changes: which part held focus, and where. Not state: nothing is
+  // drawn from it.
+  let held: number | null = null;
+  $effect.pre(() => {
+    void pickable;
+    const active = document.activeElement;
+    held = active instanceof HTMLButtonElement ? untrack(buttons).indexOf(active) : -1;
+    if (held < 0) held = null;
+  });
+  $effect(() => {
+    void pickable;
+    const was = held;
+    held = null;
+    if (was === null || !bar) return;
+    const active = document.activeElement;
+    if (active && active !== document.body && active.isConnected) return;
+    const now = buttons();
+    const at = Math.min(was, now.length - 1);
+    if (at >= 0) stop = { id: pickable[at].id, index: at };
+    focusQuietly(now[at] ?? bar);
+  });
 </script>
 
 <div class="meter" class:compact>
-  {#if onpick && model.drawn.length > 0}
-    <div class="bar" role="group" aria-label={alt} bind:this={bar}>
+  {#if onpick}
+    <div class="bar" role="group" aria-label={alt} tabindex="-1" data-state={model.total === null ? 'unknown' : undefined} bind:this={bar}>
       {#each model.drawn as part (part.id)}
         {@const index = pickable.indexOf(part)}
         {#if index >= 0}
@@ -111,7 +142,7 @@
               style:flex-basis="{part.share * 100}%"
               aria-label={partText(part)}
               tabindex={index === tabStop ? 0 : -1}
-              onfocus={() => (stop = index)}
+              onfocus={() => (stop = { id: part.id, index })}
               onclick={() => pick(part)}
               onkeydown={(event) => onkeydown(event, index)}
             ></button>
@@ -211,6 +242,12 @@
   /* Hovered, a segment takes a share of the text colour: further from the track in every theme. */
   button.part:hover {
     background-image: linear-gradient(color-mix(in srgb, var(--text) 20%, transparent), color-mix(in srgb, var(--text) 20%, transparent));
+  }
+
+  /* The group takes focus only when the focused part left and none took its place. */
+  .bar:focus-visible {
+    outline: 2px solid var(--accent-ring);
+    outline-offset: 2px;
   }
 
   /* Right on the part: the track clips, and its padding holds the ring. */

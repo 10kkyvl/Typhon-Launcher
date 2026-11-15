@@ -235,5 +235,62 @@ describe('DiskMeter', () => {
       const first = getAllByRole('button')[0];
       expect(await hintOnFocus(first)).toBe(first.getAttribute('aria-label'));
     });
+
+    // The Tab stop and a hand-off follow the segment, not its place in the row: a size that changes
+    // can add, drop or move parts under the user's focus.
+    describe('as the segments change', () => {
+      const part = (key: string, gb: number): MeterSegment => ({ key, label: key, bytes: gb * GB, tone: 'game' });
+      const ABC = [part('a', 30), part('b', 20), part('c', 10)];
+      const named = (key: string) => `${key}: ${bytesSize(ABC.find((s) => s.key === key)?.bytes ?? 0)}`;
+      const meterOf = (segments: MeterSegment[]) => renderDom(DiskMeter, { label: 'Диск', segments, total: 100 * GB, onpick: vi.fn() });
+
+      it('keeps the Tab stop on the same segment when one is added before it', async () => {
+        const { getAllByRole, rerender, user } = meterOf(ABC);
+        await user.tab();
+        await user.keyboard('{ArrowRight}');
+        await user.tab();
+        expect(document.activeElement).toBe(document.body);
+        await rerender({ segments: [part('new', 5), ...ABC] });
+        const stops = getAllByRole('button').filter((b) => b.tabIndex === 0);
+        expect(stops.map((b) => b.getAttribute('aria-label'))).toEqual([named('b')]);
+      });
+
+      it('hands focus to the segment now in the place of a focused one that leaves', async () => {
+        const { rerender, user } = meterOf(ABC);
+        await user.tab();
+        await user.keyboard('{ArrowRight}');
+        expect(document.activeElement?.getAttribute('aria-label')).toBe(named('b'));
+        await rerender({ segments: [ABC[0], ABC[2]] });
+        expect(document.activeElement?.getAttribute('aria-label')).toBe(named('c'));
+        expect((document.activeElement as HTMLElement).tabIndex).toBe(0);
+      });
+
+      it('hands focus to the neighbour when the last one leaves', async () => {
+        const { rerender, user } = meterOf(ABC);
+        await user.tab();
+        await user.keyboard('{End}');
+        await rerender({ segments: ABC.slice(0, 2) });
+        expect(document.activeElement?.getAttribute('aria-label')).toBe(named('b'));
+      });
+
+      it('hands focus to the group when no segment is left to draw', async () => {
+        const { rerender, user, getByRole } = meterOf(ABC.slice(0, 1));
+        await user.tab();
+        await rerender({ segments: [], total: 0 });
+        expect(document.activeElement).toBe(getByRole('group'));
+        expect(getByRole('group').dataset.state).toBe('unknown');
+      });
+
+      it('leaves focus alone when it was not on a segment', async () => {
+        const { rerender, user } = meterOf(ABC);
+        const outside = document.createElement('button');
+        document.body.append(outside);
+        await user.tab();
+        outside.focus();
+        await rerender({ segments: ABC.slice(1) });
+        expect(document.activeElement).toBe(outside);
+        outside.remove();
+      });
+    });
   });
 });
