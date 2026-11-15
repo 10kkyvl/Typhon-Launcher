@@ -37,6 +37,11 @@ Settings → Appearance).
 
 The "Readability" panel in the theme editor shows these pairs and warns; it never blocks a save.
 The personal accent from Settings is applied on top of the theme and derives every role itself.
+The button that launches a game ("Play" and "Stop", the round Play on a card), the selected tab's
+underline on a game's page, and the progress bar and speed graph in a download's panel take the game's
+own colour, fitted to the theme's `--bg` and `--text` (the bar and the graph's line also to the panel and
+the bar's track: 3:1 or better on each). These are not theme tokens (`--play-*`, `--game-*`): a theme does
+not set them, and outside a game they are drawn in the theme's accent.
 
 The top bar's search field and button groups are rounded by `--radius-control` (`999px`, pills);
 to get square controls back, set it to a small length such as `0.8rem`.
