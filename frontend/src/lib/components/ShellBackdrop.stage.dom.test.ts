@@ -147,6 +147,45 @@ describe('the stage in the window backdrop', () => {
     expect(pictures(container).map((img) => img.getAttribute('src'))).toEqual(['/media/celeste-hero.jpg']);
   });
 
+  it('when the system asks for reduced motion, swaps to the next game at once', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query.includes('prefers-reduced-motion: reduce'),
+      media: query,
+      onchange: null,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent: () => false,
+    }));
+    try {
+      const { container } = render(ShellBackdrop);
+      stand('elden');
+      await tick();
+      stand('celeste');
+      await tick();
+      expect(pictures(container).map((img) => img.getAttribute('src'))).toEqual(['/media/celeste-hero.jpg']);
+      expect(running.filter((animation) => animation.element.matches('.plate'))).toEqual([]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('in a hidden window, swaps to the next game at once', async () => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+    try {
+      const { container } = render(ShellBackdrop);
+      stand('elden');
+      await tick();
+      stand('celeste');
+      await tick();
+      expect(pictures(container).map((img) => img.getAttribute('src'))).toEqual(['/media/celeste-hero.jpg']);
+      expect(running.filter((animation) => animation.element.matches('.plate'))).toEqual([]);
+    } finally {
+      Reflect.deleteProperty(document, 'hidden');
+    }
+  });
+
   it('with motion off, swaps to the next game at once', async () => {
     document.documentElement.classList.add('no-anim');
     const { container } = render(ShellBackdrop);
