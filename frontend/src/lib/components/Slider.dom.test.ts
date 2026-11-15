@@ -182,6 +182,23 @@ describe('Slider: dragging', () => {
     expect(onchange).toHaveBeenCalledExactlyOnceWith(18);
   });
 
+  // The documented caller: it shows the drag by handing each reported step back as `position`, so at
+  // the release `position` already is the step under the pointer.
+  it('commits a release for a caller that hands each step back, measured from where the drag began', async () => {
+    const { bar, onchange, oninput, rerender } = setup({ position: 7 });
+    oninput.mockImplementation((step) => void rerender({ position: step ?? 7 }));
+    await fireEvent.pointerDown(bar, { pointerId: 1, button: 0, clientX: xOf(9) });
+    await fireEvent.pointerMove(bar, { pointerId: 1, clientX: xOf(12) });
+    await fireEvent.pointerUp(bar, { pointerId: 1, clientX: xOf(12) });
+    expect(onchange).toHaveBeenCalledExactlyOnceWith(12);
+
+    onchange.mockClear();
+    await fireEvent.pointerDown(bar, { pointerId: 2, button: 0, clientX: xOf(9) });
+    await fireEvent.pointerMove(bar, { pointerId: 2, clientX: xOf(7) });
+    await fireEvent.pointerUp(bar, { pointerId: 2, clientX: xOf(7) });
+    expect(onchange).not.toHaveBeenCalled();
+  });
+
   it('a release on the value it started from commits nothing', async () => {
     const { bar, onchange, oninput } = setup({ position: 7 });
     await fireEvent.pointerDown(bar, { pointerId: 1, button: 0, clientX: xOf(7) });

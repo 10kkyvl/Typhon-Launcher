@@ -11,10 +11,11 @@
    *
    * It never writes the value itself: the thumb is drawn at `position`, what the caller holds. A key
    * commits through `onchange`; a drag reports each new step through `oninput` and commits once on
-   * release through `onchange`, then `oninput(null)`: the drag is over (a cancelled drag sends only
-   * that). A caller that shows the drag hands the reported step back as `position` until `null`, and a
-   * refused commit leaves the thumb on the caller's value. `position` may sit between steps (a value
-   * stored off the steps): it is drawn there and moves to a step only when the player moves it.
+   * release through `onchange` (when it ends off the value it began on), then `oninput(null)`: the
+   * drag is over (a cancelled drag sends only that). A caller that shows the drag hands the reported
+   * step back as `position` until `null`, and a refused commit leaves the thumb on the caller's value.
+   * `position` may sit between steps (a value stored off the steps): it is drawn there and moves to a
+   * step only when the player moves it.
    *
    * `label` names it (visible above the track unless `hideLabel`); `valueText` is the value in words,
    * shown beside the label and read by assistive tech. `startText` and `endText` mark the ends of the
@@ -52,7 +53,7 @@
     busy?: boolean;
     /** The step under a dragging pointer, each time it changes; `null` when the drag ends. */
     oninput?: (position: number | null) => void;
-    /** A committed step: a key, or a drag released on a step other than `position`. */
+    /** A committed step: a key, or a drag released on a step other than the value it began on. */
     onchange: (position: number) => void;
     /** On the slider element itself. */
     testid?: string;
@@ -62,8 +63,10 @@
 
   let track: HTMLElement | undefined = $state();
   let thumb: HTMLElement | undefined = $state();
-  // The drag under way: its pointer and the last step reported. Not state: nothing is drawn from it.
-  let drag: { id: number; at: number } | null = null;
+  // The drag under way: its pointer, the caller's value when it began and the last step reported. Not
+  // state: nothing is drawn from it. A caller showing the drag hands each step back as `position`, so
+  // the release is measured from where the drag began, not from `position`.
+  let drag: { id: number; from: number; at: number } | null = null;
 
   const blocked = $derived(disabled || busy);
   const shown = $derived(Math.min(max, Math.max(0, position)));
@@ -116,7 +119,7 @@
     event.preventDefault();
     thumb?.focus({ preventScroll: true });
     (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
-    drag = { id: event.pointerId, at: next };
+    drag = { id: event.pointerId, from: position, at: next };
     oninput?.(next);
   }
 
@@ -130,11 +133,11 @@
 
   function up(event: PointerEvent) {
     if (!drag || event.pointerId !== drag.id) return;
-    const done = drag.at;
+    const { from, at: done } = drag;
     drag = null;
     const bar = event.currentTarget as HTMLElement;
     if (bar.hasPointerCapture?.(event.pointerId)) bar.releasePointerCapture(event.pointerId);
-    if (done !== position) onchange(done);
+    if (done !== from) onchange(done);
     oninput?.(null);
   }
 
