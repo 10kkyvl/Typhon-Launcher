@@ -7,7 +7,7 @@
  */
 
 /** The colours a segment can take; DiskMeter.svelte paints each from theme tokens. */
-export const METER_TONES = ['game', 'game-2', 'game-3', 'data', 'reclaim', 'other'] as const;
+export const METER_TONES = ['game', 'game-2', 'game-3', 'data', 'reclaim', 'other', 'more'] as const;
 export type MeterTone = (typeof METER_TONES)[number];
 
 const GAME_STEPS = ['game', 'game-2', 'game-3'] as const satisfies readonly MeterTone[];
@@ -31,10 +31,19 @@ export type MeterSize = { kind: 'exact'; bytes: number } | { kind: 'atLeast'; by
 
 /** The key of the part the meter adds for space no segment accounts for. */
 export const METER_OTHER = 'meter:other';
+/** The key of the part the segments too small to draw on their own are folded into. */
+export const METER_MORE = 'meter:more';
+
+/** The narrowest track each form of the meter is laid out for, in rem. */
+export const METER_WIDTH = { full: 32, compact: 16 } as const;
+/** The width a part above 0 bytes is drawn at however small, and the gap of track between parts, in rem. */
+export const METER_HAIRLINE = 0.2;
+export const METER_GAP = 0.2;
 
 export interface MeterPart {
-  /** A caller's segment, or the part the meter adds: `other` for space no segment accounts for. */
-  kind: 'segment' | 'other';
+  /** A caller's segment, or a part the meter adds: `other` for space no segment accounts for, `more`
+   *  for the segments folded together. */
+  kind: 'segment' | 'other' | 'more';
   key: string;
   /** The caller's label; empty for a part the meter adds, which DiskMeter names from the catalogue. */
   label: string;
@@ -42,6 +51,8 @@ export interface MeterPart {
   size: MeterSize;
   /** The part of the bar it takes, 0…1; 0 for a part that is not drawn. */
   share: number;
+  /** For `more`: the keys of the segments folded into it, in the caller's order. */
+  folded?: string[];
 }
 
 export interface MeterModel {
@@ -76,7 +87,7 @@ const bytesOf = (size: MeterSize) => (size.kind === 'unknown' ? 0 : size.bytes);
  * width agrees with its size beside its neighbours, every part above 0 shows) and no free space is
  * drawn or said; the caller explains the cause.
  */
-export function meter(segments: readonly MeterSegment[], total: number | null | undefined, free?: number | null): MeterModel {
+export function meter(segments: readonly MeterSegment[], total: number | null | undefined, free?: number | null, width: number = METER_WIDTH.full): MeterModel {
   const known = measurable(total) && total > 0 ? total : null;
   const sizes = segments.map(sizeOf);
   const used = sizes.reduce((sum, size) => sum + bytesOf(size), 0);
@@ -105,7 +116,49 @@ export function meter(segments: readonly MeterSegment[], total: number | null | 
   else if (known !== null && parts.every((part) => part.size.kind === 'exact')) freeSize = { kind: 'exact', bytes: known - used };
   else freeSize = null;
 
-  return { total: known, parts, drawn: parts.filter((part) => part.share > 0), free: freeSize, overflow };
+  const listed = folded(parts, width);
+  return { total: known, parts: listed, drawn: listed.filter((part) => part.share > 0), free: freeSize, overflow };
+}
+
+/**
+ * The parts with those the bar cannot draw truthfully folded into one `more` part, placed after the
+ * caller's segments. With k parts drawn the parts share the width less k − 1 gaps (the worst case: a
+ * full bar, whose flex bases add up to the width and shrink by the gaps in proportion). A segment is
+ * drawn on its own only when it takes a hairline of that room or more, so its width agrees with its
+ * size; one part may stay under that and be drawn as a hairline: the last segment when it alone is
+ * left, else the fold. The largest set of segments that meets this, with the k hairlines and k − 1
+ * gaps inside the width, is drawn; other files are never folded in with them.
+ */
+function folded(parts: MeterPart[], width: number): MeterPart[] {
+  const candidates = parts.filter((part) => part.kind === 'segment' && part.share > 0).sort((a, b) => b.share - a.share);
+  const fixed = parts.filter((part) => part.kind !== 'segment' && part.share > 0).length;
+  if (candidates.length < 2) return parts;
+
+  let keep = 0;
+  for (let own = candidates.length - 1; own >= 0; own -= 1) {
+    const k = own + 1 + fixed;
+    const room = width - (k - 1) * METER_GAP;
+    const fits = k * METER_HAIRLINE + (k - 1) * METER_GAP <= width;
+    if (fits && candidates.slice(0, own).every((part) => part.share * room >= METER_HAIRLINE)) {
+      keep = own;
+      break;
+    }
+  }
+  const rest = new Set(candidates.slice(keep));
+  if (rest.size < 2) return parts;
+
+  const inFold = parts.filter((part) => rest.has(part));
+  const more: MeterPart = {
+    kind: 'more',
+    key: METER_MORE,
+    label: '',
+    tone: 'more',
+    size: { kind: inFold.some((part) => part.size.kind !== 'exact') ? 'atLeast' : 'exact', bytes: inFold.reduce((sum, part) => sum + bytesOf(part.size), 0) },
+    share: inFold.reduce((sum, part) => sum + part.share, 0),
+    folded: inFold.map((part) => part.key),
+  };
+  const segments = parts.filter((part) => part.kind === 'segment' && !rest.has(part));
+  return [...segments, more, ...parts.filter((part) => part.kind !== 'segment')];
 }
 
 /** A size in words: the formatted bytes, a lower bound, or that it is unknown. */

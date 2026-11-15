@@ -2,7 +2,7 @@
   import { t } from '../i18n';
   import { bytesSize } from '../utils/format';
   import { nextIndex } from '../utils/roving';
-  import { meter, sizeWords, type MeterPart, type MeterSegment, type MeterSize } from './diskMeter';
+  import { METER_WIDTH, meter, sizeWords, type MeterPart, type MeterSegment, type MeterSize } from './diskMeter';
   import Reading from './Reading.svelte';
   import Tooltip from './Tooltip.svelte';
 
@@ -16,6 +16,10 @@
    * segments are buttons instead (one Tab stop, the arrows move, a hint names each); a segment under
    * one pixel still shows as a hairline. Neighbouring segments are kept apart by a gap of the track,
    * which every tone stands out from (theme-contrast.test.ts), so adjacency never rests on colour.
+   * Segments too small to be drawn at their size at the narrowest width the form is laid out for
+   * (diskMeter.ts::METER_WIDTH) are folded into one "N more" part, said with their count and size; it
+   * is a button only with `onpickfolded`, which gets the keys folded into it. The track clips as a last
+   * guard for a place narrower than that.
    *
    * `compact`: the bar and one line (free of total), for a settings row.
    */
@@ -26,6 +30,7 @@
     label,
     compact = false,
     onpick,
+    onpickfolded,
   }: {
     segments: MeterSegment[];
     /** Bytes in all; zero, missing or not a number reads as unknown. */
@@ -37,13 +42,19 @@
     compact?: boolean;
     /** Makes each drawn segment a button that reports its key. */
     onpick?: (key: string) => void;
+    /** With `onpick`, makes the "N more" part a button too, reporting the keys folded into it. */
+    onpickfolded?: (keys: string[]) => void;
   } = $props();
 
-  const model = $derived(meter(segments, total, free));
+  const model = $derived(meter(segments, total, free, compact ? METER_WIDTH.compact : METER_WIDTH.full));
 
   const words = $derived({ atLeast: (size: string) => $t('common.meterAtLeast', { size }), unknown: $t('common.meterSizeUnknown') });
   const said = (size: MeterSize) => sizeWords(size, bytesSize, words);
-  const nameOf = (part: MeterPart) => (part.kind === 'other' ? $t('common.meterOther') : part.label);
+  function nameOf(part: MeterPart): string {
+    if (part.kind === 'other') return $t('common.meterOther');
+    if (part.kind === 'more') return $t('common.meterMore', { count: part.folded?.length ?? 0 });
+    return part.label;
+  }
   const partText = (part: MeterPart) => $t('common.meterPart', { name: nameOf(part), size: said(part.size) });
 
   // The free space and the total in one clause where both are known; an overflow says so instead.
@@ -62,8 +73,13 @@
   const joined = (items: string[]) => items.join($t('common.meterSeparator'));
   const alt = $derived($t('common.meterAlt', { label, details: joined([...model.parts.map(partText), ...tail]) }));
 
-  // The drawn parts that are the caller's segments: the buttons, in the order the arrows move.
-  const pickable = $derived(model.drawn.filter((part) => part.kind === 'segment'));
+  // The drawn parts a press reports: the buttons, in the order the arrows move.
+  const pickable = $derived(model.drawn.filter((part) => part.kind === 'segment' || (part.kind === 'more' && onpickfolded)));
+
+  function pick(part: MeterPart) {
+    if (part.kind === 'more') onpickfolded?.(part.folded ?? []);
+    else onpick?.(part.key);
+  }
 
   let stop = $state(0);
   let bar = $state<HTMLElement>();
@@ -94,7 +110,7 @@
               aria-label={partText(part)}
               tabindex={index === tabStop ? 0 : -1}
               onfocus={() => (stop = index)}
-              onclick={() => onpick(part.key)}
+              onclick={() => pick(part)}
               onkeydown={(event) => onkeydown(event, index)}
             ></button>
           </Tooltip>
@@ -147,11 +163,14 @@
   }
 
   /* The track. Its colour shows in the gap between segments and in the free space after them. */
+  /* The gap and the parts' min-width are diskMeter.ts::METER_GAP and METER_HAIRLINE: the fold rule
+     counts with them. */
   .bar {
     display: flex;
     gap: 0.2rem;
     height: 1.4rem;
     padding: 0.2rem;
+    overflow: hidden;
     border-radius: var(--radius-xs);
     background: var(--hover-strong);
   }
@@ -188,9 +207,10 @@
     background-image: linear-gradient(color-mix(in srgb, var(--text) 20%, transparent), color-mix(in srgb, var(--text) 20%, transparent));
   }
 
+  /* Right on the part: the track clips, and its padding holds the ring. */
   button.part:focus-visible {
     outline: 2px solid var(--accent-ring);
-    outline-offset: 2px;
+    outline-offset: 0;
   }
 
   [data-tone='game'] {
@@ -215,6 +235,10 @@
 
   [data-tone='other'] {
     background: var(--text-3);
+  }
+
+  [data-tone='more'] {
+    background: color-mix(in srgb, var(--accent-text) 45%, var(--text-3));
   }
 
   .legend {

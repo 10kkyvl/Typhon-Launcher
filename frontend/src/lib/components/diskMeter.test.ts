@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { METER_OTHER, METER_TONES, gameTone, meter, sizeWords, type MeterSegment } from './diskMeter';
+import { METER_GAP, METER_HAIRLINE, METER_MORE, METER_OTHER, METER_TONES, METER_WIDTH, gameTone, meter, sizeWords, type MeterSegment } from './diskMeter';
 
 const seg = (key: string, bytes: number, extra: Partial<MeterSegment> = {}): MeterSegment => ({ key, label: key, bytes, tone: 'game', ...extra });
 
@@ -138,6 +138,91 @@ describe('the disk meter model', () => {
   });
 });
 
+// The rule that keeps a bar truthful and inside its track, at the narrowest width it is laid out for:
+// with k parts drawn, the room the parts share is the width less k − 1 gaps; a part drawn on its own
+// takes at least a hairline of that room, so it is drawn at its size, not puffed up to the hairline.
+// Only the smallest one drawn may be a hairline (a part far under a pixel, or the fold); the rest fold
+// into one "N more" part, and the k hairlines and k − 1 gaps fit in the width.
+describe('folding what cannot be drawn truthfully', () => {
+  const room = (width: number, k: number) => width - (k - 1) * METER_GAP;
+
+  // Other files are never folded in with the segments, so they too may be a hairline.
+  function holds(m: ReturnType<typeof meter>, width: number) {
+    const k = m.drawn.length;
+    expect(k * METER_HAIRLINE + (k - 1) * METER_GAP, 'the hairlines and the gaps fit in the width').toBeLessThanOrEqual(width + 1e-9);
+    const atSize = m.drawn
+      .filter((p) => p.kind !== 'other')
+      .sort((a, b) => a.share - b.share)
+      .slice(1);
+    for (const part of atSize) expect(part.share * room(width, k), `${part.key} is drawn at its size`).toBeGreaterThanOrEqual(METER_HAIRLINE - 1e-9);
+  }
+
+  it('lays a compact bar out for a narrower track than the full one', () => {
+    expect(METER_WIDTH).toEqual({ full: 32, compact: 16 });
+  });
+
+  it('folds sixty equal games in a compact bar into twenty and one "40 more" part', () => {
+    const games = Array.from({ length: 60 }, (_, i) => seg(`g${i}`, 10, { tone: gameTone(i) }));
+    const m = meter(games, 600, undefined, METER_WIDTH.compact);
+    expect(m.drawn.length).toBe(21);
+    expect(m.drawn.slice(0, 20).map((p) => p.key)).toEqual(games.slice(0, 20).map((g) => g.key));
+    const more = m.drawn[20];
+    expect([more.kind, more.key, more.tone, more.size, more.folded?.length]).toEqual(['more', METER_MORE, 'more', { kind: 'exact', bytes: 400 }, 40]);
+    expect(more.folded).toEqual(games.slice(20).map((g) => g.key));
+    expect(m.parts.map((p) => p.key)).toEqual([...games.slice(0, 20).map((g) => g.key), METER_MORE]);
+    holds(m, METER_WIDTH.compact);
+  });
+
+  it('draws the same sixty games each on its own in the full bar', () => {
+    const games = Array.from({ length: 60 }, (_, i) => seg(`g${i}`, 10));
+    const m = meter(games, 600, undefined, METER_WIDTH.full);
+    expect(m.drawn.length).toBe(60);
+    expect(m.parts.some((p) => p.kind === 'more')).toBe(false);
+    holds(m, METER_WIDTH.full);
+  });
+
+  it('folds the smallest, keeps the caller order of the rest, and puts the fold before other files', () => {
+    const m = meter([seg('a', 5), seg('big', 9000), seg('b', 3), seg('c', 7), seg('d', 3000)], 100_000, 87_000, METER_WIDTH.compact);
+    expect(m.drawn.map((p) => p.key)).toEqual(['big', 'd', METER_MORE, METER_OTHER]);
+    expect(m.parts.find((p) => p.kind === 'more')?.folded).toEqual(['a', 'b', 'c']);
+    holds(m, METER_WIDTH.compact);
+  });
+
+  it('leaves one part far under a pixel on its own, as a hairline', () => {
+    const m = meter([seg('big', 999_999_999_999), seg('tiny', 1)], 1_000_000_000_000, undefined, METER_WIDTH.compact);
+    expect(m.drawn.map((p) => p.key)).toEqual(['big', 'tiny']);
+  });
+
+  it('says a fold holding a lower bound as a lower bound', () => {
+    const m = meter([seg('big', 1000), seg('a', 1, { sizeUnknown: true }), seg('b', 1)], 1002, undefined, METER_WIDTH.compact);
+    expect(m.drawn.map((p) => [p.key, p.size])).toEqual([
+      ['big', { kind: 'exact', bytes: 1000 }],
+      [METER_MORE, { kind: 'atLeast', bytes: 2 }],
+    ]);
+  });
+
+  it('does not fold the parts it does not draw', () => {
+    const m = meter([seg('big', 1000), seg('zero', 0), seg('none', 0, { sizeUnknown: true })], 2000, undefined, METER_WIDTH.compact);
+    expect(m.parts.map((p) => p.key)).toEqual(['big', 'zero', 'none']);
+  });
+
+  // Many mixes of sizes, counts and widths: the rule holds for each.
+  it('keeps every bar inside its track and in proportion', () => {
+    let seed = 7;
+    const next = () => (seed = (seed * 48271) % 2147483647) / 2147483647;
+    for (let run = 0; run < 300; run += 1) {
+      const count = 1 + Math.floor(next() * 120);
+      const segments = Array.from({ length: count }, (_, i) => seg(`s${i}`, Math.floor(next() ** 4 * 1e6)));
+      const width = next() < 0.5 ? METER_WIDTH.compact : METER_WIDTH.full;
+      const sum = segments.reduce((total, s) => total + s.bytes, 0);
+      const m = meter(segments, sum + Math.floor(next() * sum), undefined, width);
+      holds(m, width);
+      const listed = m.parts.reduce((total, p) => total + (p.size.kind === 'unknown' ? 0 : p.size.bytes), 0);
+      expect(listed, 'the legend still adds up to the segments').toBe(sum);
+    }
+  });
+});
+
 // The track stands for the free space: space that is neither a segment nor measured free must not be
 // drawn as free, so the meter lists it as a part of its own.
 describe('space no segment accounts for', () => {
@@ -183,7 +268,7 @@ describe('sizes in words', () => {
 
 describe('the tones', () => {
   it('are a small closed set', () => {
-    expect(METER_TONES).toEqual(['game', 'game-2', 'game-3', 'data', 'reclaim', 'other']);
+    expect(METER_TONES).toEqual(['game', 'game-2', 'game-3', 'data', 'reclaim', 'other', 'more']);
   });
 
   it('give games their steps in turn', () => {

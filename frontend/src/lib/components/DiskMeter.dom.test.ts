@@ -4,7 +4,7 @@ import { renderDom } from '../testing/dom';
 import { hintOnFocus } from '../testing/hints';
 import { bytesSize } from '../utils/format';
 import DiskMeter from './DiskMeter.svelte';
-import type { MeterSegment } from './diskMeter';
+import { gameTone, type MeterSegment } from './diskMeter';
 
 const GB = 1024 ** 3;
 const SEGMENTS: MeterSegment[] = [
@@ -127,6 +127,35 @@ describe('DiskMeter', () => {
     expect(legendLines(getByRole('list'))).toEqual(
       [`Игры ${bytesSize(600 * GB)}`, `Другие файлы ${bytesSize(100 * GB)}`, `Свободно ${bytesSize(300 * GB)}`, `Всего ${bytesSize(1000 * GB)}`].map(words),
     );
+  });
+
+  describe('with more parts than the bar can draw truthfully', () => {
+    const games = (count: number): MeterSegment[] => Array.from({ length: count }, (_, i) => ({ key: `g${i}`, label: `Игра ${i}`, bytes: 10 * GB, tone: gameTone(i) }));
+
+    it('folds the rest into one part, said with its count and size, and not a button unless asked', () => {
+      const { container, getByRole, getAllByRole } = renderDom(DiskMeter, { label: 'Папка', segments: games(60), total: 600 * GB, compact: true, onpick: vi.fn() });
+      expect(parts(container)).toHaveLength(21);
+      expect(getAllByRole('button')).toHaveLength(20);
+      expect(parts(container).at(-1)?.dataset.tone).toBe('more');
+      expect(getByRole('group').getAttribute('aria-label')).toContain(`; Ещё 40 частей: ${bytesSize(400 * GB)}; `);
+    });
+
+    it('lists the fold in the legend', () => {
+      const { getByRole } = renderDom(DiskMeter, { label: 'Диск', segments: games(100), total: 1000 * GB });
+      const lines = legendLines(getByRole('list'));
+      expect(lines).toHaveLength(60 + 1 + 2);
+      expect(lines[60]).toBe(words(`Ещё 40 частей ${bytesSize(400 * GB)}`));
+    });
+
+    it('makes the fold a button when the caller asks, which reports the keys folded in it', async () => {
+      const onpickfolded = vi.fn();
+      const { getAllByRole, user } = renderDom(DiskMeter, { label: 'Папка', segments: games(60), total: 600 * GB, compact: true, onpick: vi.fn(), onpickfolded });
+      const buttons = getAllByRole('button');
+      expect(buttons).toHaveLength(21);
+      expect(buttons.at(-1)?.getAttribute('aria-label')).toBe(`Ещё 40 частей: ${bytesSize(400 * GB)}`);
+      await user.click(buttons.at(-1) as HTMLElement);
+      expect(onpickfolded).toHaveBeenCalledWith(games(60).slice(20).map((g) => g.key));
+    });
   });
 
   it('in the compact form, is the bar and one line', () => {
