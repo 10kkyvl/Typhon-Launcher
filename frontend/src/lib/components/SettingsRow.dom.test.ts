@@ -79,6 +79,12 @@ describe('SettingsRow', () => {
     expect(container.querySelector('.hint')).toBeNull();
   });
 
+  // An id that points at nothing would describe the control by nothing, or by whatever later takes it.
+  it('hands its control no description when it has no hint', () => {
+    const { getByRole } = renderDom(SettingsRowHarness);
+    expect(getByRole('switch', { name: 'Без подсказки' }).hasAttribute('aria-describedby')).toBe(false);
+  });
+
   it('repeats no id over two hundred rows', () => {
     const { container } = renderDom(SettingsRowHarness, { many: 200 });
     const ids = [...container.querySelectorAll('[id]')].map((el) => el.id);

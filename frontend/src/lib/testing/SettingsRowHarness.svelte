@@ -51,6 +51,12 @@
   {/snippet}
 </SettingsRow>
 
+<SettingsRow label="Без подсказки">
+  {#snippet children({ labelId, hintId })}
+    <Toggle labelledby={labelId} describedby={hintId} />
+  {/snippet}
+</SettingsRow>
+
 <!-- A caller that forgot to pass `disabled` on: the row still keeps its control and its part below out of reach. -->
 <SettingsRow label="Запись" hint="Пишет видео игры" disabledReason={reason}>
   {#snippet children({ labelId, hintId })}
