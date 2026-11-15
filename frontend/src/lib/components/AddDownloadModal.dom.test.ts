@@ -229,6 +229,39 @@ describe('AddDownloadModal: a Start that finds nothing waiting in Go', () => {
     expect(fetchMetadata).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps the choices by path when the fetch brings the files back in another order', async () => {
+    vi.mocked(startDownloadFrom).mockRejectedValueOnce(new Error(NOTHING_WAITING));
+    const { user } = await choose();
+    vi.mocked(fetchMetadata).mockResolvedValueOnce({ ...TORRENT, files: [...TORRENT.files].reverse() });
+
+    await user.click(startButton());
+    await screen.findByText(msg('modals.addDownloadRestartNeeded'));
+
+    expect(fileBox('Celeste/readme.txt').getAttribute('aria-checked')).toBe('false');
+    expect(fileBox('Celeste/setup.exe').getAttribute('aria-checked')).toBe('true');
+    await user.click(startButton());
+    await waitFor(() => expect(startDownloadFrom).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(startDownloadFrom).mock.calls[1][2]).toEqual([1]);
+  });
+
+  it('leaves the focus where the player moved it while the files were fetched', async () => {
+    const refetch = deferred<TorrentInfo>();
+    vi.mocked(startDownloadFrom).mockRejectedValueOnce(new Error(NOTHING_WAITING));
+    const { user } = await choose();
+    vi.mocked(fetchMetadata).mockReturnValueOnce(refetch.promise);
+    await user.click(startButton());
+    await screen.findByText(msg('modals.addDownloadFetchingMetadata'));
+    const close = screen.getByRole('button', { name: msg('common.close') });
+    close.focus();
+
+    refetch.resolve(TORRENT);
+
+    await screen.findByRole('checkbox', { name: 'Celeste/setup.exe' });
+    for (let i = 0; i < 10; i += 1) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(document.activeElement).toBe(close);
+  });
+
   it('sends the second Start with the kept choices and the origin, and closes when it succeeds', async () => {
     vi.mocked(startDownloadFrom).mockRejectedValueOnce(new Error(NOTHING_WAITING));
     const { user } = await choose({ origin: GAME_ORIGIN });
