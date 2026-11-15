@@ -91,21 +91,23 @@
   const backupActions = { onrestore: (s: Snapshot) => toast(`Restore pressed: ${s.id}`, 'info'), ondelete: (s: Snapshot) => toast(`Delete pressed: ${s.id}`, 'info') };
   const conflict = { localUpdatedAt: '2026-11-01T10:00:00Z', remoteUpdatedAt: '2026-11-02T18:30:00Z', remoteDevice: 'Steam Deck' };
 
-  // No art, a poster (the app's own picture), and a hero and a cover that both fail to load.
+  // The samples claim no stage: a game with wide art shows its words alone, one without shows its
+  // cover (the app's own picture), its generated art when it has none or both covers fail to load.
   const slides = $derived<HeroSlide[]>([
-    { id: 'sample-celeste', title: 'Celeste', art: {}, line: 'No picture: its generated art. Press Play: it launches for two seconds, then runs', running, launching },
-    { id: 'sample-poster', title: 'A game whose hero is a poster', art: { hero: '/typhon.png', heroIsPoster: true }, line: 'Played yesterday · 42 h' },
-    { id: 'sample-broken', title: 'Hollow Knight', art: { hero: '/missing-hero.png', cover: '/missing-cover.png' }, line: 'Both pictures fail: the generated art' },
+    { id: 'sample-celeste', title: 'Celeste', art: {}, line: 'No cover: its generated art. Press Play: it launches for two seconds, then runs', running, launching },
+    { id: 'sample-staged', title: 'A game on the stage', staged: true, art: {}, line: 'Wide art: the stage draws it, the block holds only the words' },
+    { id: 'sample-poster', title: 'A game with no wide art', art: { cover: '/typhon.png' }, line: 'Its cover in the block · 42 h' },
+    { id: 'sample-broken', title: 'Hollow Knight', art: { cover: '/missing-cover.png', fallback: '/missing-own.png' }, line: 'Both covers fail: the generated art' },
   ]);
 </script>
 
 <ShowcaseSection title="Games" note="The parts a game is shown with: the hero carousel, the list row, its saves (folder, backups, cloud copy) and its save conflict banner. Data and callbacks come from the page.">
-  <ShowcaseRow caption="Hero carousel: three slides (no art, a poster, pictures that fail); moves every 7 s unless held" stack>
+  <ShowcaseRow caption="Hero carousel: four slides (no art, on the stage, a cover, covers that fail); moves every 7 s unless held" stack>
     <HeroCarousel level={4} {slides} onopen={said('Open')} onplay={launch} onstop={() => (running = false)} />
   </ShowcaseRow>
 
   <ShowcaseRow caption="Hero carousel: one slide, running; one slide, launching" stack>
-    <HeroCarousel level={4} slides={[{ id: 'sample-outer-wilds', title: 'Outer Wilds', art: {}, line: 'Playing now', running: true }]} onopen={said('Open')} onplay={said('Play')} onstop={said('Stop')} />
+    <HeroCarousel level={4} slides={[{ id: 'sample-outer-wilds', title: 'Outer Wilds', staged: true, art: {}, line: 'Playing now', running: true }]} onopen={said('Open')} onplay={said('Play')} onstop={said('Stop')} />
     <HeroCarousel level={4} slides={[{ id: 'sample-hades', title: 'Hades', art: {}, line: 'Starting…', launching: true }]} onopen={said('Open')} onplay={said('Play')} onstop={said('Stop')} />
   </ShowcaseRow>
 

@@ -3,34 +3,25 @@
   export const ADVANCE_MS = 7000;
 
   export interface HeroArt {
-    /** A wide picture, or a poster when `heroIsPoster`. */
-    hero?: string;
-    /** The game's cover: a poster, used when the hero is missing or fails. */
+    /** The game's cover, a poster (a hero that is a poster is the cover again). */
     cover?: string;
-    heroIsPoster?: boolean;
+    /** The game's own cover, tried when `cover` fails to load. */
+    fallback?: string;
   }
 
   export interface HeroSlide {
     id: string;
     title: string;
+    /** The game has wide art on the stage: the block draws no picture of its own. Default: off, the block shows the cover. */
+    staged?: boolean;
     art: HeroArt;
-    /** Seeds the generated art when there is no picture: the game's canonical id. Default: `id`. */
+    /** Seeds the generated art when there is no cover: the game's canonical id. Default: `id`. */
     artSeed?: string;
     /** The line under the title (last session, play time): the page's words. */
     line?: string;
     running?: boolean;
     /** A launch of this game waits on Go. */
     launching?: boolean;
-  }
-
-  export type HeroPicture = { kind: 'wide' | 'poster'; url: string } | { kind: 'generated' };
-
-  /** What a slide shows: the hero, then the cover as a poster, then the generated art; a failed URL is skipped. */
-  export function heroPicture(art: HeroArt, failed: Record<string, true>): HeroPicture {
-    const candidates: { kind: 'wide' | 'poster'; url: string }[] = [];
-    if (art.hero) candidates.push({ kind: art.heroIsPoster ? 'poster' : 'wide', url: art.hero });
-    if (art.cover && art.cover !== art.hero) candidates.push({ kind: 'poster', url: art.cover });
-    return candidates.find((candidate) => !(candidate.url in failed)) ?? { kind: 'generated' };
   }
 </script>
 
@@ -39,28 +30,32 @@
   import type { Attachment } from 'svelte/attachments';
   import { on } from 'svelte/events';
   import { Play, Square } from '@lucide/svelte';
-  import GeneratedArt from '../art/GeneratedArt.svelte';
   import { msg } from '../i18n';
   import { modalOpen } from '../layers';
   import { motionOn } from '../motion/motion';
   import { restAmbient } from '../stores/ambient';
+  import { claimStage } from '../stores/stage';
   import { nextIndex } from '../utils/roving';
+  import Artwork from './Artwork.svelte';
   import Button from './Button.svelte';
   import TextLink from './TextLink.svelte';
   import { runSlide, watchInView } from './slideTimer';
 
   /**
-   * The games the page puts forward, one slide at a time: a picture, the title (which opens the game),
-   * the page's line under it and Play or Stop (WAI-ARIA carousel with a slide picker). With two
+   * The games the page puts forward, one slide at a time: the title (which opens the game), the page's
+   * line under it and Play or Stop, on the stage's text plate (WAI-ARIA carousel with a slide picker).
+   * The carousel draws no picture band: a slide whose game has wide art stands on the stage, which
+   * the window draws behind it; one whose game has none shows the game's cover in the block. With two
    * slides or more it moves on every ADVANCE_MS; the timer holds while the pointer is over it, focus
    * is inside it, it is scrolled out of view, the window is hidden or a dialog is open, and it does
    * not run with motion off.
    * While the pointer or focus holds it, the slides keep their order on screen, each still showing
    * its newest state. A slide the player picks is announced; one the timer moves to is not.
    *
-   * `ambient`: the game on screen is the page's resting picture for the window backdrop
-   * (restAmbient): it tints the window unless a screen claims a game or a card is rested on. The
-   * prototype's logo and blurred underlay have no source in the launcher and are not drawn.
+   * `stage`: the game on screen claims the stage (stores/stage.ts) by its id, whether or not it has
+   * wide art there. `ambient`: it is the page's resting picture for the window backdrop
+   * (restAmbient): it tints the window unless a screen claims a game or a card is rested on. Both
+   * are the caller's choice, off by default. The prototype's logo has no source in the launcher.
    */
   let {
     slides: incoming,
@@ -68,6 +63,7 @@
     onplay,
     onstop,
     ambient = false,
+    stage = false,
     level = 2,
     shown = $bindable(),
   }: {
@@ -77,6 +73,8 @@
     onstop: (id: string) => void;
     /** The game on screen is the page's resting picture for the window backdrop. Default: off. */
     ambient?: boolean;
+    /** The game on screen claims the stage. Default: off. */
+    stage?: boolean;
     /** The heading level of a slide's title, under the page's own heading. */
     level?: 2 | 3 | 4;
     /** Read only: the id of the slide on screen, for what the page does with that game (its menu). */
@@ -90,7 +88,6 @@
   let pageHidden = $state(typeof document !== 'undefined' && document.hidden);
   let inView = $state(true);
   let activeId = $state<string | null>(null);
-  let failed = $state<Record<string, true>>({});
   let progress = $state(0);
 
   // Held by the pointer or focus, or out of view, the order on screen stays as it was; each slide
@@ -162,6 +159,8 @@
   // keeps the game (a new line, a launch in flight) claims nothing again.
   const claimed = $derived(ambient ? (current?.id ?? null) : null);
   $effect(() => restAmbient(claimed));
+  const onStage = $derived(stage ? (current?.id ?? null) : null);
+  $effect(() => claimStage(onStage));
 
   // Focus holds the carousel while the focused element is inside it. On focusout that is read once the
   // event is over: a window that loses focus sends focusout with no relatedTarget though focus stays
@@ -199,8 +198,6 @@
     go(next);
     all[next]?.focus();
   }
-
-  const fail = (url: string) => (failed = { ...failed, [url]: true });
 </script>
 
 {#if current}
@@ -208,7 +205,6 @@
     <div class="slides" id="{uid}-slides" aria-live={running ? 'off' : 'polite'}>
       {#each slides as slide, index (slide.id)}
         {@const shownHere = index === active}
-        {@const picture = heroPicture(slide.art, failed)}
         <div
           class="slide"
           class:on={shownHere}
@@ -217,36 +213,29 @@
           aria-label={msg('library.carousel.position', { index: String(index + 1), total: String(count) })}
           aria-hidden={!shownHere || undefined}
           inert={!shownHere}
-          data-picture={picture.kind}
+          data-picture={slide.staged ? 'stage' : 'cover'}
         >
-          <div class="art">
-            {#if picture.kind === 'wide'}
-              {#key picture.url}
-                <img class="wide" src={picture.url} alt="" draggable="false" onerror={() => fail(picture.url)} />
-              {/key}
-            {:else}
-              <span class="ground"><GeneratedArt seed={slide.artSeed ?? slide.id} shape="wide" /></span>
-              {#if picture.kind === 'poster'}
-                {#key picture.url}
-                  <img class="poster" src={picture.url} alt="" draggable="false" onerror={() => fail(picture.url)} />
-                {/key}
-              {/if}
-            {/if}
-          </div>
           <div class="copy">
-            {#snippet titleLink()}<TextLink tone="plain" onclick={() => onopen(slide.id)}>{slide.title}</TextLink>{/snippet}
-            {#if level === 4}
-              <h4 class="title">{@render titleLink()}</h4>
-            {:else if level === 3}
-              <h3 class="title">{@render titleLink()}</h3>
-            {:else}
-              <h2 class="title">{@render titleLink()}</h2>
+            {#if !slide.staged}
+              <div class="cover">
+                <Artwork src={slide.art.cover ?? ''} fallback={slide.art.fallback} label={slide.title} seed={slide.artSeed ?? slide.id} ratio="3 / 4" radius="var(--radius-md)" />
+              </div>
             {/if}
-            {#if slide.line}<p class="line">{slide.line}</p>{/if}
-            <div class="cta">
-              <Button variant="primary" size="lg" busy={slide.launching} onclick={() => (slide.running ? onstop : onplay)(slide.id)}>
-                {#if slide.running}<Square size="1.6rem" strokeWidth={2} fill="currentColor" />{msg('ui.stop')}{:else}<Play size="1.8rem" strokeWidth={2} fill="currentColor" />{msg('ui.play')}{/if}
-              </Button>
+            <div class="stand stage-copy">
+              {#snippet titleLink()}<TextLink tone="plain" onclick={() => onopen(slide.id)}>{slide.title}</TextLink>{/snippet}
+              {#if level === 4}
+                <h4 class="title">{@render titleLink()}</h4>
+              {:else if level === 3}
+                <h3 class="title">{@render titleLink()}</h3>
+              {:else}
+                <h2 class="title">{@render titleLink()}</h2>
+              {/if}
+              {#if slide.line}<p class="line">{slide.line}</p>{/if}
+              <div class="cta">
+                <Button variant="primary" size="lg" busy={slide.launching} onclick={() => (slide.running ? onstop : onplay)(slide.id)}>
+                  {#if slide.running}<Square size="1.6rem" strokeWidth={2} fill="currentColor" />{msg('ui.stop')}{:else}<Play size="1.8rem" strokeWidth={2} fill="currentColor" />{msg('ui.play')}{/if}
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -277,18 +266,17 @@
 {/if}
 
 <style>
+  /* No ground of its own: the stage shows through. The block ends at the stage's foot. */
   .hero {
     position: relative;
-    height: var(--hero-h);
+    height: calc(var(--stage-foot) - var(--titlebar-h) - var(--topbar-h));
+    min-height: var(--hero-min-h);
     overflow: hidden;
     isolation: isolate;
-    background: var(--surface-2);
   }
 
   .slides,
-  .slide,
-  .art,
-  .ground {
+  .slide {
     position: absolute;
     inset: 0;
   }
@@ -302,37 +290,27 @@
     opacity: 1;
   }
 
-  .wide {
-    width: 100%;
+  .copy {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-6);
     height: 100%;
-    object-fit: cover;
+    padding: var(--space-8) var(--page-inset, var(--space-8)) var(--space-12);
   }
 
-  /* A poster keeps its own shape at the block's end; the game's generated art fills the rest. */
-  .poster {
-    position: absolute;
-    top: var(--space-6);
-    bottom: var(--space-6);
-    right: var(--page-inset, var(--space-8));
-    height: calc(100% - 2 * var(--space-6));
-    aspect-ratio: 3 / 4;
-    object-fit: cover;
+  .cover {
+    flex: none;
+    width: var(--hero-cover-w);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-lift);
   }
 
-  /* The text stands on the scrim's full strength; the scrim fades out only in the padding above it. */
-  .copy {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
+  .stand {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     gap: var(--space-2);
-    padding: var(--space-12) var(--page-inset, var(--space-8)) var(--space-8);
-    background: linear-gradient(to top, var(--hero-scrim) calc(100% - var(--space-12)), transparent);
+    min-width: 0;
   }
 
   .title {
@@ -342,8 +320,7 @@
     font-weight: 700;
     line-height: 1.15;
     letter-spacing: var(--tracking-title);
-    color: var(--art-text);
-    text-shadow: var(--art-text-shadow);
+    color: var(--text);
     text-wrap: balance;
     overflow-wrap: anywhere;
   }
@@ -351,7 +328,7 @@
   .line {
     margin: 0;
     font-size: var(--font-md);
-    color: var(--art-text-2);
+    color: var(--text-2);
     font-variant-numeric: tabular-nums;
   }
 

@@ -13,7 +13,7 @@ type Props = ComponentProps<typeof HeroCarousel>;
 const slide = (id: string, patch: Partial<HeroSlide> = {}): HeroSlide => ({
   id,
   title: `Game ${id}`,
-  art: { hero: `${id}-hero.png`, cover: `${id}-cover.png` },
+  art: { cover: `${id}-cover.png` },
   line: `Played ${id}`,
   ...patch,
 });

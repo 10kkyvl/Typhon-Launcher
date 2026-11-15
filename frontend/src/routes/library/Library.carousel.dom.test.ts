@@ -18,7 +18,17 @@ import { genreLabel } from '../../lib/metadata/labels';
 import Library from './Library.svelte';
 import { backdropSources, rememberedGame } from '../../lib/backdrop/source';
 import { ambientState, HOVER_LEAVE_MS, HOVER_REST_MS, pickAmbient } from '../../lib/stores/ambient';
+import { stageGame, stagePictureFailed } from '../../lib/stores/stage';
 import { carousel, played, recentTitles, results, shownTitles, slideTitles } from './libraryTesting';
+
+/** The carousel's slide blocks, the ones off screen included. */
+const blocks = () => [...(carousel()?.querySelectorAll<HTMLElement>('[data-picture]') ?? [])];
+const blockOf = (title: string) => blocks().find((block) => block.querySelector('.title')?.textContent?.trim() === title) as HTMLElement;
+// A release of the stage is published after the task that made it.
+const settleTask = async () => {
+  await Promise.resolve();
+  await tick();
+};
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
@@ -63,14 +73,54 @@ afterEach(() => {
 });
 
 describe('Library: the carousel on the page', () => {
-  it('shows the three last played games, each with the picture kind its art gives', () => {
+  it('shows the three last played games: one with wide art on the stage, the others with their cover in the block', () => {
     renderDom(Library);
 
     expect(slideTitles()).toEqual(['Wide One', 'Poster One', 'Bare One']);
-    const kinds = [...(carousel()?.querySelectorAll('[data-picture]') ?? [])].map((slide) => slide.getAttribute('data-picture'));
-    expect(kinds).toEqual(['wide', 'poster', 'generated']);
-    expect(carousel()?.querySelector('img.wide')?.getAttribute('src')).toBe('wide-hero.png');
-    expect(carousel()?.querySelector('img.poster')?.getAttribute('src')).toBe('poster-cover.png');
+    expect(blocks().map((block) => block.dataset.picture)).toEqual(['stage', 'cover', 'cover']);
+    expect(blockOf('Wide One').querySelector('img, svg.generated-art')).toBeNull();
+    expect(blockOf('Poster One').querySelector('img')?.getAttribute('src')).toBe('poster-cover.png');
+    expect(blockOf('Bare One').querySelector('svg.generated-art')).not.toBeNull();
+  });
+
+  it('puts the game of the slide on screen on the stage, and nothing once the page is left', async () => {
+    const { user, unmount } = renderDom(Library);
+    expect(get(stageGame)).toBe('g-wide');
+
+    await user.click(within(carousel() as HTMLElement).getByRole('button', { name: msg('library.carousel.pick', { index: '2', total: '3', title: 'Poster One' }) }));
+    await settleTask();
+    expect(get(stageGame)).toBe('g-poster');
+
+    unmount();
+    await settleTask();
+    expect(get(stageGame)).toBeNull();
+  });
+
+  it('shows the cover in the block once the stage cannot load the wide art', async () => {
+    gameArt.set({ 'c-wide': { cover: 'wide-cover.png', hero: 'broken-hero.png', heroIsPoster: false } });
+    renderDom(Library);
+    expect(blockOf('Wide One').dataset.picture).toBe('stage');
+
+    stagePictureFailed('broken-hero.png');
+    await tick();
+
+    expect(blockOf('Wide One').dataset.picture).toBe('cover');
+    expect(blockOf('Wide One').querySelector('img')?.getAttribute('src')).toBe('wide-cover.png');
+  });
+
+  // The art store has no entry for a game it has not answered for, which for a game with no art at all
+  // lasts: the block does not wait on it with no picture at all.
+  it('shows the cover of a game the art store has not answered for, and stands it on the stage once its wide art comes', async () => {
+    gameArt.set({ 'c-poster': { cover: 'poster-cover.png', hero: 'poster-cover.png', heroIsPoster: true } });
+    libraryGames.set([fifth, bare, { ...wide, cover: 'own-wide.png' }, fourth, poster]);
+    renderDom(Library);
+    expect(blockOf('Wide One').dataset.picture).toBe('cover');
+    expect(blockOf('Wide One').querySelector('img')?.getAttribute('src')).toBe('own-wide.png');
+
+    gameArt.set({ 'c-wide': { cover: 'wide-cover.png', hero: 'wide-hero.png', heroIsPoster: false } });
+    await tick();
+
+    expect(blockOf('Wide One').dataset.picture).toBe('stage');
   });
 
   it('says under the title when the game was last played and for how long', () => {
@@ -149,6 +199,8 @@ describe('Library: the carousel and the window backdrop', () => {
     await fireEvent.pointerEnter(card('Fourth One'), { pointerType: 'mouse' });
     await vi.advanceTimersByTimeAsync(HOVER_REST_MS);
     expect(picked()).toBe('g-fourth');
+    // The card moves the blurred backdrop only: the stage keeps the slide on screen.
+    expect(get(stageGame)).toBe('g-poster');
 
     await fireEvent.pointerLeave(card('Fourth One'));
     await vi.advanceTimersByTimeAsync(HOVER_LEAVE_MS);

@@ -505,14 +505,12 @@ describe('built-in themes', () => {
   });
 });
 
-// What stands over a game's picture is drawn in the fixed --art-* colours of shell.css, whatever the
+// What stands over a game's cover is drawn in the fixed --art-* colours of shell.css, whatever the
 // theme, because the picture is under it: it is measured over the two extremes a picture brings, black
-// and white, and over each preset's page and the carousel's own ground, where no picture has loaded yet.
+// and white, and over each preset's page and raised surface, where no picture has loaded yet.
 describe('what stands over a game picture', () => {
   const shell = fs.readFileSync(new URL('./shell.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
   const fixed = Object.fromEntries([...shell.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
-  const hero = styleOf(heroSource, 'HeroCarousel.svelte');
-  const token = (value: string) => /^var\((--[\w-]+)\)$/.exec(value)?.[1] ?? value;
 
   function grounds(): [string, RGB][] {
     const out: [string, RGB][] = [
@@ -537,21 +535,6 @@ describe('what stands over a game picture', () => {
     }
     return out;
   }
-
-  it("reads the colours the hero carousel's text is drawn in", () => {
-    expect(token(ruleBody(hero, '.title').color)).toBe('--art-text');
-    expect(token(ruleBody(hero, '.line').color)).toBe('--art-text-2');
-    // The text stands where the scrim is at full strength: the gradient fades only in the padding above it.
-    expect(ruleBody(hero, '.copy').background).toMatch(/^linear-gradient\(to top, var\(--hero-scrim\) calc\(100% - var\(--space-12\)\), transparent\)$/);
-    expect(ruleBody(hero, '.copy').padding).toMatch(/^var\(--space-12\) /);
-  });
-
-  it("keeps the hero carousel's title and line readable on its scrim over any picture (4.5:1)", () => {
-    expect(failuresOn('--hero-scrim', [
-      { fg: '--art-text', min: 4.5 },
-      { fg: '--art-text-2', min: 4.5 },
-    ])).toEqual([]);
-  });
 
   it("shows a card's cover controls and marks on their plates over any picture (3:1)", () => {
     for (const plate of ['--art-control', '--art-control-hover', '--art-control-quiet']) {
@@ -600,6 +583,43 @@ describe('the text plate on the stage', () => {
     expect(ruleBody(global, '.stage-copy::before').background).toBe('var(--scrim-copy)');
     expect(ruleBody(global, '.stage-copy')['--text-2']).toBe('var(--text)');
   });
+
+  // The library's carousel stands on the stage: its words are on the plate, in the colours the plate's
+  // rule measures, and nothing of its own paints under them.
+  const hero = styleOf(heroSource, 'HeroCarousel.svelte');
+  const token = (value: string | undefined) => /^var\((--[\w-]+)\)$/.exec(value ?? '')?.[1];
+  const CAROUSEL_WORDS = ['.title', '.line'];
+
+  it("puts the carousel's words on the plate, drawn in the plate's text colours", () => {
+    expect(heroSource).toMatch(/<div class="stand stage-copy">/);
+    for (const selector of CAROUSEL_WORDS) {
+      expect(['--text', '--text-2'], selector).toContain(token(ruleBody(hero, selector).color));
+    }
+    for (const selector of ['.hero', '.slide', '.copy', '.stand']) {
+      const body = ruleBody(hero, selector);
+      expect([body.background, body['background-color'], body['background-image']].filter(Boolean), selector).toEqual([]);
+    }
+  });
+
+  for (const id of ['dark', 'light', 'contrast', 'blush']) {
+    it(`${id} keeps the carousel's title and line readable on the plate over any picture (4.5:1)`, () => {
+      const preset = builtIns().find((p) => p.id === id);
+      expect(preset, id).toBeDefined();
+      const tokens = (preset as Preset).tokens;
+      // Under .stage-copy --text-2 is --text.
+      const colourOf = (selector: string) => (token(ruleBody(hero, selector).color) === '--text-2' ? ruleBody(global, '.stage-copy')['--text-2'] : ruleBody(hero, selector).color);
+      const plate = cssColor(tokens['--scrim-copy'], tokens);
+      const out: string[] = [];
+      for (const selector of CAROUSEL_WORDS) {
+        for (const [name, art] of [['black', BLACK], ['white', WHITE]] as const) {
+          const under = over(plate, art);
+          const r = ratio(over(cssColor(colourOf(selector), tokens), under), under);
+          if (r < 4.5) out.push(`${selector} on --scrim-copy over ${name}: ${r.toFixed(2)} < 4.5`);
+        }
+      }
+      expect(out).toEqual([]);
+    });
+  }
 
   for (const id of ['dark', 'light', 'contrast', 'blush']) {
     it(`${id} keeps the words on the plate readable over any picture (4.5:1)`, () => {
