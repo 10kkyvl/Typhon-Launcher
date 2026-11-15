@@ -244,6 +244,11 @@ describe('runtime events', () => {
         const literal = args === null ? null : /^\s*(['"])([A-Za-z0-9_.-]+:[A-Za-z0-9:_.-]+)\1/.exec(args);
         if (literal) found.push({ file, name: literal[2] });
       }
+      // A store that names its events in one table (`export const downloadEvents = { added:
+      // 'download:added', … } as const`) subscribes to each of them through it.
+      for (const table of text.matchAll(/export const \w+Events = \{([^}]*)\} as const/g)) {
+        for (const literal of table[1].matchAll(/(['"])([A-Za-z0-9_.-]+:[A-Za-z0-9:_.-]+)\1/g)) found.push({ file, name: literal[2] });
+      }
     }
     return found;
   }

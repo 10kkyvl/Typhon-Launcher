@@ -44,6 +44,30 @@ export interface DownloadProgress {
   stalledSince?: string | null;
 }
 
+/** The events Go's download Manager sends (the event* constants of internal/download/manager.go). */
+export const downloadEvents = {
+  added: 'download:added',
+  updated: 'download:updated',
+  progress: 'download:progress',
+  completed: 'download:completed',
+  failed: 'download:failed',
+  removed: 'download:removed',
+} as const;
+
+/** The payload of download:removed: internal/download.RemovedEvent. */
+export interface DownloadRemoved {
+  id: string;
+}
+
+export interface DownloadEventPayloads {
+  added: Download;
+  updated: Download;
+  progress: DownloadProgress;
+  completed: Download;
+  failed: Download;
+  removed: DownloadRemoved;
+}
+
 export const downloadsById = derived(downloads, ($downloads) => {
   const map = new Map<string, Download>();
   for (const d of $downloads) map.set(d.id, d);
@@ -126,6 +150,10 @@ async function refresh() {
   downloads.set(await listDownloads());
 }
 
+function hasId(data: unknown): boolean {
+  return typeof data === 'object' && data !== null && typeof (data as { id?: unknown }).id === 'string';
+}
+
 export async function initDownloads() {
   const { on, load } = listenFirst();
   if (!inWails) {
@@ -133,31 +161,35 @@ export async function initDownloads() {
     return;
   }
 
-  on('download:added', (event) => {
-    const item = withFiles(event.data as Download);
+  // Every download event names its download; one that does not is dropped rather than stored.
+  const listen = <K extends keyof DownloadEventPayloads>(kind: K, handler: (payload: DownloadEventPayloads[K]) => void) =>
+    on(downloadEvents[kind], (event) => {
+      if (hasId(event.data)) handler(event.data as DownloadEventPayloads[K]);
+    });
+
+  listen('added', (payload) => {
+    const item = withFiles(payload);
     upsert(item);
     toast(msg('state.downloadsAddedToast', { name: item.name }));
   });
-  on('download:updated', (event) => {
-    upsert(withFiles(event.data as Download));
+  listen('updated', (payload) => {
+    upsert(withFiles(payload));
   });
-  on('download:progress', (event) => {
-    const patch = event.data as DownloadProgress;
+  listen('progress', (patch) => {
     downloads.update((list) => mergeProgress(list, patch));
   });
-  on('download:completed', (event) => {
-    const item = withFiles(event.data as Download);
+  listen('completed', (payload) => {
+    const item = withFiles(payload);
     upsert(item);
     toast(msg('state.downloadsCompletedToast', { name: item.name }), 'success');
   });
-  on('download:failed', (event) => {
-    const item = withFiles(event.data as Download);
+  listen('failed', (payload) => {
+    const item = withFiles(payload);
     upsert(item);
     if (get(liveIslandOn)) liveIsland.show(failedMessage(item));
     else failedToast(item);
   });
-  on('download:removed', (event) => {
-    const { id } = event.data as { id: string };
+  listen('removed', ({ id }) => {
     downloads.update((list) => list.filter((d) => d.id !== id));
   });
 
