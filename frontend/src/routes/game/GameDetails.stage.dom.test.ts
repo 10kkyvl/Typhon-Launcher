@@ -312,3 +312,41 @@ describe('GameDetails on the stage: the screenshots', () => {
     expect(await gallery(user)).toEqual(['/media/c1-shot-2.jpg']);
   });
 });
+
+// An emulated image links to its catalog game for the game page alone (internal/library/emulated.go,
+// Emulation.CatalogGameID): its library card keeps its own cover, and the backdrop and the stage key it the
+// same way, so its page reads the catalog game's metadata but stands on no catalog art.
+describe('GameDetails on the stage: an emulated image', () => {
+  const okami = {
+    ...hades,
+    id: 'e1',
+    title: 'Okami',
+    canonicalGameId: '',
+    cover: '/media/e1-cover.jpg',
+    executable: '',
+    owned: true,
+    installType: 'console_image',
+    emulation: { platform: 'ps2', catalogGameId: 'c7' },
+  } as unknown as LibraryGame;
+
+  beforeEach(() => {
+    libraryGames.set([okami]);
+    art({ c7: { cover: '/media/c7-cover.jpg', hero: '/media/c7-hero.jpg', heroIsPoster: false } });
+    vi.mocked(getCatalogGame).mockResolvedValue({ id: 'c7', title: 'Okami' } as CatalogGame);
+    vi.mocked(getMetadataView).mockResolvedValue(
+      view({ game: { id: 'c7', title: 'Okami' } as MetadataView['game'], cover: '/media/c7-cover.jpg', hero: '/media/c7-hero.jpg' }),
+    );
+  });
+
+  it.each([
+    ['its catalog page', 'c7'],
+    ['its own card', 'e1'],
+  ])('opened from %s shows its cover on an empty stage claimed by the card', async (_, id) => {
+    renderDom(GameDetails, { id });
+    const h1 = await title('Okami');
+
+    await vi.waitFor(() => expect(screen.getByRole('img', { name: 'Okami' })).toBeTruthy());
+    expect(words(h1)).toBeNull();
+    expect(get(stageGame)).toBe('e1');
+  });
+});
