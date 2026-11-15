@@ -138,9 +138,12 @@
     max-width: 100%;
   }
 
+  /* A grid, so a control with no width of its own (a slider) takes the text's measure, not its content's. */
   .stack .control {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
     flex-basis: 100%;
-    justify-content: flex-start;
+    max-width: var(--prose-max);
   }
 
   .below {
