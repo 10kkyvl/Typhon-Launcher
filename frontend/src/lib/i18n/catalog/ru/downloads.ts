@@ -130,6 +130,14 @@ export const downloads = {
   'downloads.done.remove': 'Убрать из списка (файлы останутся)',
   'downloads.done.removeSeeding': 'Убрать из списка и остановить раздачу (файлы останутся)',
   'downloads.done.removed': '«{name}» убрана из списка',
+  'downloads.done.removeTitle': 'Убрать «{name}» из списка?',
+  'downloads.done.removeText': 'Запись о загрузке будет удалена, а файлы останутся на диске. Установить игру с этого экрана будет уже нельзя.',
+  'downloads.done.removeSeedingNote': 'Раздача тоже остановится.',
+  'downloads.done.removeConfirm': 'Убрать',
+  'downloads.done.removeBusy': 'Убираем…',
+  'downloads.done.removeKeep': 'Оставить',
+  'downloads.done.updateFiles': 'Файлы обновления игры',
+  'downloads.done.repairFiles': 'Файлы восстановления игры',
   'downloads.done.clear': 'Очистить список',
   'downloads.done.clearNothing': 'Убирать нечего: устанавливаемые, ждущие вас и раздающиеся загрузки остаются в списке',
   'downloads.done.clearTitle': 'Очистить список завершённых?',
@@ -150,6 +158,11 @@ export const downloads = {
     one: '{count} не удалось убрать',
     few: '{count} не удалось убрать',
     many: '{count} не удалось убрать',
+  },
+  'downloads.done.clearFailedReason': {
+    one: '{count} загрузку не удалось убрать из списка: {reason}',
+    few: '{count} загрузки не удалось убрать из списка: {reason}',
+    many: '{count} загрузок не удалось убрать из списка: {reason}',
   },
   // ---- end 6-5
 } as const;

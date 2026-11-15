@@ -125,6 +125,14 @@ export const downloads: Record<DownloadsKey, Message> = {
   'downloads.done.remove': 'Remove from list (files stay)',
   'downloads.done.removeSeeding': 'Remove from list and stop seeding (files stay)',
   'downloads.done.removed': '“{name}” removed from the list',
+  'downloads.done.removeTitle': 'Remove “{name}” from the list?',
+  'downloads.done.removeText': 'The download’s record goes and its files stay on disk. The game can no longer be installed from this screen.',
+  'downloads.done.removeSeedingNote': 'Seeding stops too.',
+  'downloads.done.removeConfirm': 'Remove',
+  'downloads.done.removeBusy': 'Removing…',
+  'downloads.done.removeKeep': 'Keep it',
+  'downloads.done.updateFiles': 'Update files for the game',
+  'downloads.done.repairFiles': 'Repair files for the game',
   'downloads.done.clear': 'Clear the list',
   'downloads.done.clearNothing': 'Nothing to clear: downloads being installed, waiting for you or seeding stay in the list',
   'downloads.done.clearTitle': 'Clear the list of completed downloads?',
@@ -142,6 +150,10 @@ export const downloads: Record<DownloadsKey, Message> = {
   'downloads.done.clearFailed': {
     one: '{count} could not be removed',
     other: '{count} could not be removed',
+  },
+  'downloads.done.clearFailedReason': {
+    one: '{count} download could not be removed from the list: {reason}',
+    other: '{count} downloads could not be removed from the list: {reason}',
   },
   // ---- end 6-5
 };
