@@ -51,20 +51,47 @@ describe('the disk meter model', () => {
     expect(m.overflow).toBe(false);
   });
 
-  it('clamps segments that sum over the total and draws no free space for the overflow', () => {
-    const m = meter([seg('a', 80), seg('b', 50), seg('c', 10)], 100);
+  // The sizes disagree with the total: which is wrong is not the meter's to know, so every part is
+  // drawn against the others over the whole bar, and no free space is drawn or said.
+  it('draws an overflow in proportion over the whole bar, every part visible, and says no free space', () => {
+    const m = meter([seg('a', 800), seg('b', 400), seg('c', 0), seg('d', 200)], 1000);
     expect(m.overflow).toBe(true);
     expect(m.drawn.map((p) => [p.key, p.share])).toEqual([
-      ['a', 0.8],
-      ['b', 0.2],
+      ['a', 800 / 1400],
+      ['b', 400 / 1400],
+      ['d', 200 / 1400],
     ]);
-    expect(m.drawn.reduce((sum, p) => sum + p.share, 0)).toBe(1);
-    expect(m.free).toEqual({ kind: 'exact', bytes: 0 });
-    expect(m.parts.map((p) => p.key)).toEqual(['a', 'b', 'c']);
+    expect(m.drawn.reduce((sum, p) => sum + p.share, 0)).toBeCloseTo(1, 12);
+    expect(m.free).toBeNull();
+    expect(m.parts.map((p) => [p.key, p.size])).toEqual([
+      ['a', { kind: 'exact', bytes: 800 }],
+      ['b', { kind: 'exact', bytes: 400 }],
+      ['c', { kind: 'exact', bytes: 0 }],
+      ['d', { kind: 'exact', bytes: 200 }],
+    ]);
   });
 
-  it('keeps the free space the caller measured when the segments overflow', () => {
-    expect(meter([seg('a', 120)], 100, 10).free).toEqual({ kind: 'exact', bytes: 10 });
+  it('says no free space for an overflow even when the caller measured one', () => {
+    const m = meter([seg('a', 1200)], 1000, 10);
+    expect(m.overflow).toBe(true);
+    expect(m.free).toBeNull();
+    expect(m.drawn.map((p) => p.share)).toEqual([1]);
+  });
+
+  it('takes segments and the measured free space over the total for an overflow', () => {
+    const m = meter([seg('a', 600), seg('b', 200)], 1000, 500);
+    expect(m.overflow).toBe(true);
+    expect(m.free).toBeNull();
+    expect(m.drawn.map((p) => [p.key, p.share])).toEqual([
+      ['a', 0.75],
+      ['b', 0.25],
+    ]);
+  });
+
+  it('is no overflow when the parts and the free space fill the total exactly', () => {
+    const m = meter([seg('a', 600)], 1000, 400);
+    expect(m.overflow).toBe(false);
+    expect(m.free).toEqual({ kind: 'exact', bytes: 400 });
   });
 
   it('draws a segment far under one pixel, so the bar can show it as a hairline', () => {

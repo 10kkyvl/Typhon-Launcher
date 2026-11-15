@@ -19,6 +19,9 @@ function everything(root: HTMLElement): string {
 }
 
 const parts = (root: HTMLElement) => [...root.querySelectorAll<HTMLElement>('.part')];
+// Each legend entry as one line of words, every run of spaces (no-break ones too) as one space.
+const words = (text: string) => text.replace(/\s+/g, ' ').trim();
+const legendLines = (list: HTMLElement) => [...list.querySelectorAll('li')].map((li) => words(li.textContent ?? ''));
 
 describe('DiskMeter', () => {
   it('is one image whose text alternative carries the numbers of the legend', () => {
@@ -85,18 +88,26 @@ describe('DiskMeter', () => {
     expect(getByRole('list').textContent).toContain('размер неизвестен');
   });
 
-  it('draws no free space for segments over the total', () => {
+  it('draws the parts of an overflow in proportion, each with its real size, and says the sizes do not add up', () => {
     const { container, getByRole } = renderDom(DiskMeter, {
-      label: 'Диск',
+      label: 'Диск D',
       segments: [
-        { key: 'a', label: 'Игры', bytes: 80 * GB, tone: 'game' },
-        { key: 'b', label: 'Другое', bytes: 50 * GB, tone: 'other' },
+        { key: 'a', label: 'Игры', bytes: 800 * GB, tone: 'game' },
+        { key: 'b', label: 'Другое', bytes: 400 * GB, tone: 'other' },
       ],
-      total: 100 * GB,
+      total: 1000 * GB,
+      free: 0,
     });
     const bases = parts(container).map((p) => parseFloat(p.style.flexBasis));
-    expect(bases).toEqual([80, 20]);
-    expect(getByRole('img').getAttribute('aria-label')).toContain(`Свободно ${bytesSize(0)}`);
+    expect(bases[0] / bases[1]).toBeCloseTo(2, 9);
+    expect(bases[0] + bases[1]).toBeCloseTo(100, 9);
+    expect(getByRole('img').getAttribute('aria-label')).toBe(
+      `Диск D: Игры: ${bytesSize(800 * GB)}; Другое: ${bytesSize(400 * GB)}; Размеры в сумме больше общего объёма; Всего ${bytesSize(1000 * GB)}`,
+    );
+    const legend = getByRole('list');
+    expect(legendLines(legend)).toEqual(
+      [`Игры ${bytesSize(800 * GB)}`, `Другое ${bytesSize(400 * GB)}`, `Размеры в сумме больше общего объёма; Всего ${bytesSize(1000 * GB)}`].map(words),
+    );
   });
 
   it('in the compact form, is the bar and one line', () => {

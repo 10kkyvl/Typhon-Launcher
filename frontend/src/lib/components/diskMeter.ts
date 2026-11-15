@@ -1,7 +1,7 @@
 /**
  * What DiskMeter draws and says, from the numbers it is given. The truth rules live here: a total that
  * is zero, missing or not a number is unknown and nothing is drawn against it; segments that sum over
- * the total are clamped and the overflow is never shown as free space; a size the caller does not know
+ * the total are drawn in proportion to each other and no free space is said; a size the caller does not know
  * (the `sizeUnknown` flag of lib/diskusage: a lower bound when bytes > 0, unknown otherwise) is said as
  * such, never drawn as 0.
  */
@@ -45,9 +45,9 @@ export interface MeterModel {
   parts: MeterPart[];
   /** The parts the bar draws: a known size above 0 against a known total, with room left in the bar. */
   drawn: MeterPart[];
-  /** Free space to say, or null when there is none to say (unknown total, or not derivable). */
+  /** Free space to say, or null when there is none to say (unknown total, overflow, or not derivable). */
   free: MeterSize | null;
-  /** The segments sum over the total. */
+  /** The segments, with the measured free space, sum over the total: drawn in proportion, free not said. */
   overflow: boolean;
 }
 
@@ -64,36 +64,34 @@ const bytesOf = (size: MeterSize) => (size.kind === 'unknown' ? 0 : size.bytes);
 /**
  * `free`: the free space the caller measured (null when it could not); left out, it is derived as what
  * the segments leave of the total, and only when every size is exact.
+ *
+ * Overflow: the segments, with the measured free space, add up to more than the total. Which number is
+ * wrong is not the meter's to know, so each part is drawn against the others over the whole bar (its
+ * width agrees with its size beside its neighbours, every part above 0 shows) and no free space is
+ * drawn or said; the caller explains the cause.
  */
 export function meter(segments: readonly MeterSegment[], total: number | null | undefined, free?: number | null): MeterModel {
   const known = measurable(total) && total > 0 ? total : null;
-  let room = known ?? 0;
-  let used = 0;
-  const parts = segments.map((segment): MeterPart => {
-    const size = sizeOf(segment);
+  const sizes = segments.map(sizeOf);
+  const used = sizes.reduce((sum, size) => sum + bytesOf(size), 0);
+  const measuredFree = free !== undefined && measurable(free) ? free : 0;
+  const overflow = known !== null && used + measuredFree > known;
+  const against = overflow ? used : (known ?? 0);
+
+  const parts = segments.map((segment, index): MeterPart => {
+    const size = sizes[index];
     const bytes = bytesOf(size);
-    used += bytes;
-    let share = 0;
-    if (known !== null && bytes > 0) {
-      const drawn = Math.min(bytes, room);
-      share = drawn / known;
-      room -= drawn;
-    }
+    const share = known !== null && bytes > 0 ? bytes / against : 0;
     return { key: segment.key, label: segment.label, tone: segment.tone, size, share };
   });
 
   let freeSize: MeterSize | null;
-  if (free !== undefined) freeSize = measurable(free) ? { kind: 'exact', bytes: free } : { kind: 'unknown' };
-  else if (known !== null && parts.every((part) => part.size.kind === 'exact')) freeSize = { kind: 'exact', bytes: Math.max(0, known - used) };
+  if (overflow) freeSize = null;
+  else if (free !== undefined) freeSize = measurable(free) ? { kind: 'exact', bytes: free } : { kind: 'unknown' };
+  else if (known !== null && parts.every((part) => part.size.kind === 'exact')) freeSize = { kind: 'exact', bytes: known - used };
   else freeSize = null;
 
-  return {
-    total: known,
-    parts,
-    drawn: parts.filter((part) => part.share > 0),
-    free: freeSize,
-    overflow: known !== null && used > known,
-  };
+  return { total: known, parts, drawn: parts.filter((part) => part.share > 0), free: freeSize, overflow };
 }
 
 /** A size in words: the formatted bytes, a lower bound, or that it is unknown. */

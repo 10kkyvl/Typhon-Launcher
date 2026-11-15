@@ -9,7 +9,7 @@
   /**
    * How a disk or a folder is filled: one bar of named segments over a total, and a legend in words.
    * The numbers go in as data (`segments`, `total`, `free`); diskMeter.ts holds the truth rules (an
-   * unknown total draws nothing, an overflow is clamped and never shown as free, a size not measured
+   * unknown total draws nothing, an overflow is drawn in proportion and says no free space, a size not measured
    * is said, not drawn as 0).
    *
    * The bar is one image whose text alternative carries the legend's numbers. With `onpick` its
@@ -45,8 +45,9 @@
   const said = (size: MeterSize) => sizeWords(size, bytesSize, words);
   const partText = (part: MeterPart) => $t('common.meterPart', { name: part.label, size: said(part.size) });
 
-  // The free space and the total in one clause where both are known.
+  // The free space and the total in one clause where both are known; an overflow says so instead.
   const tail = $derived.by(() => {
+    if (model.overflow && model.total !== null) return [$t('common.meterOverflow'), $t('common.meterTotal', { total: bytesSize(model.total) })];
     if (model.total === null) {
       const free = model.free ? [$t('common.meterPart', { name: $t('common.meterFree'), size: said(model.free) })] : [];
       return [...free, $t('common.meterTotalUnknown')];
@@ -119,7 +120,7 @@
           <span class="size"><Reading text={said(model.free)} /></span>
         </li>
       {/if}
-      <li class="total"><Reading text={model.total === null ? joined(tail) : $t('common.meterTotal', { total: bytesSize(model.total) })} /></li>
+      <li class="total"><Reading text={model.total === null || model.overflow ? joined(tail) : $t('common.meterTotal', { total: bytesSize(model.total) })} /></li>
     </ul>
   {/if}
 </div>
