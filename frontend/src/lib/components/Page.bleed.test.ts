@@ -12,11 +12,18 @@ const page = frontendSources['lib/components/Page.svelte'];
 const rule = (source: string, selector: string) => new RegExp(`${selector.replace(/\./g, '\\.')}\\s*\\{([^}]*)\\}`).exec(source)?.[1] ?? '';
 const decl = (body: string, property: string) => new RegExp(`(?:^|;|\\n)\\s*${property}\\s*:\\s*([^;]+);`).exec(body)?.[1].trim();
 
-function rootPx(name: string): number {
-  const css = fs.readFileSync(new URL('../../styles/tokens.css', import.meta.url), 'utf8');
+function rootPx(name: string, sheet = 'tokens.css'): number {
+  const css = fs.readFileSync(new URL(`../../styles/${sheet}`, import.meta.url), 'utf8');
   const value = new RegExp(`${name}:\\s*([\\d.]+)rem;`).exec(css)?.[1];
   expect(value, name).toBeTypeOf('string');
   return Number(value) * 10;
+}
+
+function rootVh(name: string, sheet: string): number {
+  const css = fs.readFileSync(new URL(`../../styles/${sheet}`, import.meta.url), 'utf8');
+  const value = new RegExp(`${name}:\\s*([\\d.]+)vh;`).exec(css)?.[1];
+  expect(value, name).toBeTypeOf('string');
+  return Number(value) / 100;
 }
 
 // Evaluates a declaration made of var(), calc(), max(), arithmetic and 100cqi, all in px.
@@ -57,6 +64,33 @@ describe('the page bleed', () => {
       const contentX = (width - box) / 2 + evaluate(padding, vars, width);
       const heroX = evaluate(decl(bleed, '--page-inset') as string, vars, width);
       expect(heroX, `${width}px`).toBeCloseTo(contentX, 6);
+    }
+  });
+
+  // On the stage the header is its words alone, inside the header's padding: they start where the page
+  // content starts, and their plate reaches back across that padding to the scroller's edge.
+  it("keeps the game header's words on the stage at the header's own inset", () => {
+    const source = frontendSources['routes/game/GamePageHero.svelte'];
+    const words = rule(source, '  .words.stage-copy');
+    expect(words, 'the words block on the stage').not.toBe('');
+    expect(decl(words, '--copy-lead')).toBe('var(--page-inset)');
+    for (const property of ['margin', 'margin-left', 'margin-inline', 'margin-inline-start', 'padding', 'padding-left', 'padding-inline', 'padding-inline-start']) {
+      expect(decl(words, property), property).toBeUndefined();
+      expect(decl(rule(source, '  .ident'), property), property).toBeUndefined();
+      expect(decl(rule(source, '  .foot'), property), property).toBeUndefined();
+    }
+  });
+
+  it("ends the game header on the stage at the stage's foot, 24rem at the least", () => {
+    const staged = decl(rule(frontendSources['routes/game/GamePageHero.svelte'], '  .hero.staged'), 'min-height');
+    expect(staged, 'the header on the stage sets its height').toBeTypeOf('string');
+    const titlebar = rootPx('--titlebar-h', 'shell.css');
+    const topbar = rootPx('--topbar-h');
+    const foot = rootVh('--stage-foot', 'shell.css');
+    for (const height of [720, 900, 1440]) {
+      const vars = { '--stage-foot': foot * height, '--titlebar-h': titlebar, '--topbar-h': topbar };
+      const bottom = titlebar + topbar + evaluate((staged as string).replace(/(\d+(?:\.\d+)?)rem/g, (_, n: string) => String(Number(n) * 10)), vars, 0);
+      expect(bottom, `${height}px`).toBeCloseTo(Math.max(foot * height, titlebar + topbar + 240), 6);
     }
   });
 });

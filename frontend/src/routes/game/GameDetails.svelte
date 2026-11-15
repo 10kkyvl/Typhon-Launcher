@@ -41,6 +41,7 @@
   import { canPlay } from '../../lib/library/launch';
   import { metadataAvailable } from '../../lib/stores/metadata';
   import { claimAmbient } from '../../lib/stores/ambient';
+  import { claimStage, stageWide } from '../../lib/stores/stage';
   import { pageAmbient } from '../../lib/backdrop/source';
   import { navigate } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
@@ -158,7 +159,6 @@
   let lightboxOpen = $state(false);
   let lightboxIndex = $state(0);
   let pickerOpen = $state(false);
-  let heroFailed = $state(false);
 
   const info = $derived(metaView?.game ?? catalogGame ?? null);
   const title = $derived(
@@ -168,14 +168,6 @@
   const heroSrc = $derived(pickHero(metaView));
   const shots = $derived(galleryShots(screenshots, heroSrc));
   const coverSrc = $derived(clean(metaView?.cover) || clean(catalogGame?.coverUrl) || clean(localGame?.cover));
-  const showHero = $derived(Boolean(heroSrc) && !heroFailed);
-
-  $effect(() => {
-    heroSrc;
-    untrack(() => {
-      heroFailed = false;
-    });
-  });
 
   // A new hero leaves the gallery or comes back into it while the viewer is open: the viewer stays on
   // the picture it shows, found again by id, not on the position it had.
@@ -421,6 +413,20 @@
   const gameShown = $derived(!missing && !loadFailed);
   const ambientId = $derived(pageAmbient(localGame?.id, canonicalId, gameShown));
   $effect(() => claimAmbient(ambientId));
+  $effect(() => claimStage(ambientId));
+
+  // Whether the header stands on the stage: the stage's own answer once it has one (a picture that
+  // failed to load there is a "no"); until then the page's metadata, whose hero is the same choice. The
+  // art store may never answer for a game with no art at all, so the page does not wait on it; it waits
+  // only while its metadata is read, and not when there is none to read or the read failed.
+  const wide = $derived(ambientId ? stageWide(ambientId) : null);
+  const metaKnown = $derived(Boolean(metaView) || !canonicalId || data.metaReadFailed);
+  const heroLook = $derived.by((): 'stage' | 'cover' | 'pending' => {
+    const answer = $wide?.state ?? 'unknown';
+    if (answer !== 'unknown') return answer === 'yes' ? 'stage' : 'cover';
+    if (!metaKnown) return 'pending';
+    return heroSrc ? 'stage' : 'cover';
+  });
 
   // The main button scrolls to or drives these sections, so a theme that hides
   // them must not leave the button doing nothing.
@@ -441,7 +447,7 @@
 
 {#snippet hero()}
   <GamePageHero
-    {info} {title} {coverSrc} {heroSrc} {showHero} bind:heroFailed bind:titleHeading {localGame} {installed} {wasInstalled}
+    {info} {title} {coverSrc} look={heroLook} bind:titleHeading {localGame} {installed} {wasInstalled}
     {running} {notOnPcKind} {updateAvailable} {busy} {popOnce} {externalName} {emulated} {emulatedPlatform} {imageMissing}
   >
     {#snippet actions()}

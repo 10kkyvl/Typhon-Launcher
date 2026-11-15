@@ -11,19 +11,19 @@
   import type { LibraryGame } from '../../lib/services/library';
   import type { CatalogGame } from '../../lib/services/sources';
   import { navigate } from '../../lib/stores/router';
-  import { revealImage } from '../../lib/utils/revealImage';
 
   /**
-   * The game page's hero: the art, the breadcrumb, the cover, the state badges, the title and the meta
-   * line. The action row and its notes come from the page as `actions`.
+   * The game page's header: the breadcrumb, the state badges, the title and the meta line; the action
+   * row and its notes come from the page as `actions`. It draws no picture of its own. `look` says what
+   * it stands on: `stage`, the game's wide art on the window's stage (ShellBackdrop), where the words
+   * bring their own plate and the header ends at the stage's foot; `cover`, an empty stage, with the
+   * game's cover beside the words; `pending`, not known yet, with the cover's place held by its skeleton.
    */
   let {
     info,
     title,
     coverSrc,
-    heroSrc,
-    showHero,
-    heroFailed = $bindable(),
+    look,
     titleHeading = $bindable(),
     localGame,
     installed,
@@ -42,9 +42,7 @@
     info: CatalogGame | null;
     title: string;
     coverSrc: string;
-    heroSrc: string;
-    showHero: boolean;
-    heroFailed: boolean;
+    look: 'stage' | 'cover' | 'pending';
     titleHeading: HTMLElement | undefined;
     localGame: LibraryGame | undefined;
     installed: boolean;
@@ -82,174 +80,136 @@
       platforms,
     }),
   );
+
+  const staged = $derived(look === 'stage');
 </script>
 
-<section class="hero" class:plain={!showHero} data-part="game-hero">
-  <div class="art">
-    {#if showHero}
-      {#key heroSrc}
-        <img src={heroSrc} class="media-reveal" use:revealImage alt="" decoding="async" draggable="false" onerror={() => (heroFailed = true)} />
-      {/key}
-    {/if}
-  </div>
-  <div class="veil"></div>
-
-  <nav class="breadcrumb">
-    {#if installed}
-      <span class="crumb"><TextLink tone="muted" onclick={() => navigate('installed')}>{msg('games.installedStatusWord')}</TextLink></span>
-    {:else}
-      <span class="crumb"><TextLink tone="muted" onclick={() => navigate('library')}>{msg('games.libraryWord')}</TextLink></span>
-    {/if}
-    <ChevronRight size="1.4rem" strokeWidth={1.8} />
-    <span class="crumb current">{title || msg('games.detailFallbackTitle')}</span>
-  </nav>
-
-  <div class="foot">
-    <div class="cover">
-      {#if title}
-        <Artwork src={coverSrc} alt={title} ratio="3 / 4" radius="var(--radius-md)" />
+<section class="hero" class:staged data-part="game-hero">
+  <div class="words" class:stage-copy={staged}>
+    <nav class="breadcrumb">
+      {#if installed}
+        <span class="crumb"><TextLink tone="muted" onclick={() => navigate('installed')}>{msg('games.installedStatusWord')}</TextLink></span>
       {:else}
-        <div class="skeleton cover-skeleton"></div>
+        <span class="crumb"><TextLink tone="muted" onclick={() => navigate('library')}>{msg('games.libraryWord')}</TextLink></span>
       {/if}
-    </div>
+      <ChevronRight size="1.4rem" strokeWidth={1.8} />
+      <span class="crumb current">{title || msg('games.detailFallbackTitle')}</span>
+    </nav>
 
-    <div class="ident">
-      <div class="state">
-        {#if running}
-          <StatusBadge kind="accent" label={msg('games.runningLabel')} />
-        {:else if installed}
-          <StatusBadge kind="success" label={msg('games.installedStatusWord')} dot={false} />
-        {:else if localGame && wasInstalled}
-          <StatusBadge kind="neutral" label={msg('games.detailBadgeUninstalled')} dot={false} />
-        {:else if title}
-          <StatusBadge kind="neutral" label={msg('games.notInstalledStatusWord')} dot={false} />
-        {/if}
-        {#if notOnPcKind}
-          <StatusBadge
-            kind="neutral"
-            label={notOnPcKind === "other-platform" ? msg('games.badgeNotPcVersion') : msg('games.badgeNeverOnPc')}
-            dot={false}
-          />
-        {/if}
-        {#if updateAvailable && !busy}
-          <span class="pop" use:popOnce>
-            <StatusBadge kind="accent" label={msg('games.detailBadgeUpdateAvailable')} />
-          </span>
-        {/if}
-        {#if externalName}
-          <StatusBadge kind="neutral" label={externalName} dot={false} />
-        {/if}
-        {#if emulated}
-          <ConsoleTag platform={emulatedPlatform} />
-          {#if imageMissing}<StatusBadge kind="danger" label={msg('emul.imageMissing')} dot={false} />{/if}
-        {/if}
-        {#if localGame?.status}
-          <StatusBadge kind={statusBadgeKind(localGame.status)} label={statusLabel(localGame.status)} dot={false} />
-          {@const finished = completionLine(localGame.status, localGame.completedAt)}
-          {#if finished}<span class="completed-on">{finished}</span>{/if}
-        {/if}
-        {#each localGame?.tags ?? [] as tag (tag)}
-          <StatusBadge kind="neutral" label={tag} dot={false} />
-        {/each}
-      </div>
-
-      {#if title}
-        <h1 class="title" tabindex="-1" bind:this={titleHeading}>{title}</h1>
-      {:else}
-        <div class="skeleton title-skeleton"></div>
+    <div class="foot">
+      {#if !staged}
+        <div class="cover">
+          {#if title && look === 'cover'}
+            <Artwork src={coverSrc} alt={title} ratio="3 / 4" radius="var(--radius-md)" />
+          {:else}
+            <div class="skeleton cover-skeleton"></div>
+          {/if}
+        </div>
       {/if}
 
-      {#if metaParts.length > 0}
-        <p class="metaline">
-          {#each metaParts as part, index (part)}
-            {#if index > 0}<span class="sep">·</span>{/if}
-            <span>{part}</span>
+      <div class="ident">
+        <div class="state">
+          {#if running}
+            <StatusBadge kind="accent" label={msg('games.runningLabel')} />
+          {:else if installed}
+            <StatusBadge kind="success" label={msg('games.installedStatusWord')} dot={false} />
+          {:else if localGame && wasInstalled}
+            <StatusBadge kind="neutral" label={msg('games.detailBadgeUninstalled')} dot={false} />
+          {:else if title}
+            <StatusBadge kind="neutral" label={msg('games.notInstalledStatusWord')} dot={false} />
+          {/if}
+          {#if notOnPcKind}
+            <StatusBadge
+              kind="neutral"
+              label={notOnPcKind === "other-platform" ? msg('games.badgeNotPcVersion') : msg('games.badgeNeverOnPc')}
+              dot={false}
+            />
+          {/if}
+          {#if updateAvailable && !busy}
+            <span class="pop" use:popOnce>
+              <StatusBadge kind="accent" label={msg('games.detailBadgeUpdateAvailable')} />
+            </span>
+          {/if}
+          {#if externalName}
+            <StatusBadge kind="neutral" label={externalName} dot={false} />
+          {/if}
+          {#if emulated}
+            <ConsoleTag platform={emulatedPlatform} />
+            {#if imageMissing}<StatusBadge kind="danger" label={msg('emul.imageMissing')} dot={false} />{/if}
+          {/if}
+          {#if localGame?.status}
+            <StatusBadge kind={statusBadgeKind(localGame.status)} label={statusLabel(localGame.status)} dot={false} />
+            {@const finished = completionLine(localGame.status, localGame.completedAt)}
+            {#if finished}<span class="completed-on">{finished}</span>{/if}
+          {/if}
+          {#each localGame?.tags ?? [] as tag (tag)}
+            <StatusBadge kind="neutral" label={tag} dot={false} />
           {/each}
-        </p>
-      {/if}
+        </div>
 
-      {@render actions()}
+        {#if title}
+          <h1 class="title" tabindex="-1" bind:this={titleHeading}>{title}</h1>
+        {:else}
+          <div class="skeleton title-skeleton"></div>
+        {/if}
+
+        {#if metaParts.length > 0}
+          <p class="metaline">
+            {#each metaParts as part, index (part)}
+              {#if index > 0}<span class="sep">·</span>{/if}
+              <span>{part}</span>
+            {/each}
+          </p>
+        {/if}
+
+        {@render actions()}
+      </div>
     </div>
   </div>
 </section>
 
 <style>
   .hero {
-    position: relative;
     margin-bottom: var(--space-8);
     padding: var(--space-4) var(--page-inset) var(--space-5);
-    min-height: clamp(31rem, 42vh, 48rem);
+    min-height: clamp(24rem, 28vh, 30rem);
     display: flex;
     flex-direction: column;
     justify-content: space-between;
     gap: var(--space-8);
   }
 
-  .art {
-    position: absolute;
-    inset: 0;
-    overflow: hidden;
+  /* On the stage the header is its words alone and ends at the stage's foot, where the art gives way. */
+  .hero.staged {
+    min-height: max(24rem, calc(var(--stage-foot) - var(--titlebar-h) - var(--topbar-h)));
+    justify-content: flex-end;
   }
 
-  /* The art and its veil melt into the window backdrop below the hero instead of ending on the page colour. */
-  .art,
-  .veil {
-    -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent 100%);
-    mask-image: linear-gradient(180deg, #000 55%, transparent 100%);
+  /* Off the stage the breadcrumb and the cover with the words are the header's own rows. */
+  .words {
+    display: contents;
   }
 
-  .art img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: 50% 28%;
+  /* On the stage they are one block of words as wide as they need, so the plate eases out to the right
+     and the rest of the art stays bare. The plate reaches back to the scroller's edge and fades in up to
+     the words, which on a wide window start well inside it. */
+  .words.stage-copy {
+    --copy-lead: var(--page-inset);
+    display: block;
+    align-self: flex-start;
+    max-width: 64rem;
   }
 
-  .hero.plain {
-    min-height: clamp(24rem, 28vh, 30rem);
+  /* One text colour on the stage: the quiet greys would need a heavier plate. */
+  .stage-copy :is(.breadcrumb, .crumb, .sep, .completed-on) {
+    color: var(--text);
   }
 
-  .hero.plain .art {
-    background:
-      radial-gradient(100% 78% at 6% 0%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 64%),
-      radial-gradient(80% 70% at 88% 8%, var(--hover), transparent 62%),
-      linear-gradient(180deg, var(--surface-3), var(--bg) 86%);
-  }
-
-  .veil {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background:
-      linear-gradient(
-        180deg,
-        color-mix(in srgb, var(--bg) 58%, transparent) 0%,
-        color-mix(in srgb, var(--bg) 8%, transparent) 20%,
-        color-mix(in srgb, var(--bg) 8%, transparent) 38%,
-        color-mix(in srgb, var(--bg) 62%, transparent) 68%,
-        color-mix(in srgb, var(--bg) 92%, transparent) 88%,
-        var(--bg) 100%
-      ),
-      linear-gradient(
-        90deg,
-        color-mix(in srgb, var(--bg) 82%, transparent) 0%,
-        color-mix(in srgb, var(--bg) 52%, transparent) 34%,
-        color-mix(in srgb, var(--bg) 10%, transparent) 62%,
-        transparent 80%
-      );
-  }
-
-  .hero.plain .veil {
-    background: linear-gradient(
-      180deg,
-      transparent 60%,
-      color-mix(in srgb, var(--bg) 60%, transparent) 82%,
-      var(--bg) 100%
-    );
+  .stage-copy .breadcrumb {
+    margin-bottom: var(--space-4);
   }
 
   .breadcrumb {
-    position: relative;
     display: flex;
     align-items: center;
     gap: 0.8rem;
@@ -271,7 +231,6 @@
   }
 
   .foot {
-    position: relative;
     display: flex;
     align-items: flex-end;
     gap: var(--space-6);
@@ -370,7 +329,6 @@
 
   @media (max-width: 1200px) {
     .hero {
-      min-height: 28rem;
       gap: var(--space-6);
     }
 
