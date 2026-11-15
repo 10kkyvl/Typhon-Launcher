@@ -84,6 +84,7 @@ function optionIds(source: string, from: string, to: string): string[] {
 }
 
 const settingsPage = frontendSources['routes/settings/Settings.svelte'];
+const downloadsTab = frontendSources['routes/settings/DownloadsTab.svelte'];
 const networkCard = frontendSources['routes/settings/NetworkSettingsCard.svelte'];
 
 describe('settings across the bridge', () => {
@@ -126,17 +127,17 @@ describe('settings nested structs', () => {
 
 describe('settings choices', () => {
   it('offers every download cleanup policy Go accepts, and no other', () => {
-    const ids = optionIds(settingsPage, 'function cleanupPolicyOptionsList', 'const cleanupPolicyOptions');
+    const ids = optionIds(downloadsTab, 'function cleanupPolicyOptionsList', 'const cleanupPolicyOptions');
     expect(ids.sort()).toEqual(constantsWithPrefix('Cleanup').map(String).sort());
   });
 
   it('offers every source refresh interval Go accepts, and no other', () => {
-    const ids = optionIds(settingsPage, 'function sourceRefreshOptionsList', 'const sourceRefreshOptions');
+    const ids = optionIds(downloadsTab, 'function sourceRefreshOptionsList', 'const sourceRefreshOptions');
     expect(ids.sort()).toEqual(constantsWithPrefix('Refresh').map(String).sort());
   });
 
   it('offers every keep-previous-version choice Go accepts, and no other', () => {
-    const ids = optionIds(settingsPage, 'function keepPreviousOptionsList', 'const keepPreviousOptions');
+    const ids = optionIds(downloadsTab, 'function keepPreviousOptionsList', 'const keepPreviousOptions');
     expect(ids.sort()).toEqual(constantsWithPrefix('KeepPrevious').map(String).sort());
   });
 

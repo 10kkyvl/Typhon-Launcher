@@ -291,6 +291,7 @@ const SITES: Record<string, Site[]> = {
     ['warning', true],
     ['danger', true],
   ],
+  'routes/settings/DownloadsTab.svelte': [['danger', true]],
   'routes/settings/EmulatorsCard.svelte': [
     ['danger', true],
     // A known hang of one emulator on this platform, shown with its row.
@@ -309,7 +310,6 @@ const SITES: Record<string, Site[]> = {
   'routes/settings/Settings.svelte': [
     // A failed overlay inside the row's status region, which says the change itself.
     ['danger', false],
-    ['danger', true],
     ['danger', true],
   ],
   'routes/support/NewTicket.svelte': [
