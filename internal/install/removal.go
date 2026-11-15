@@ -527,7 +527,9 @@ var removalStagingName = regexp.MustCompile(`\.removing(-\d+)?$`)
 // stageForRemoval: абсолютный, не корень, не symlink, настоящий каталог с
 // суффиксом staging. Запись, не прошедшая проверку, остаётся в журнале и
 // попадает в лог, но не удаляется; запись, у которой не удалась половина в
-// библиотеке, тоже остаётся до следующего запуска. Отмена ctx здесь не
+// библиотеке, тоже остаётся до следующего запуска. Карточку решает только
+// самая поздняя запись игры: более ранняя лишь удаляет свою папку и уходит
+// из журнала, иначе прежний выбор игрока перекрыл бы новый. Отмена ctx здесь не
 // прерывает проход: журнал делает удаление идемпотентным, а ServiceShutdown
 // ждёт завершения этой горутины (TestSweepRemovalsFinishesPending).
 func (s *Service) sweepRemovals(entries []removalEntry) {
@@ -545,7 +547,14 @@ func (s *Service) sweepRemovals(entries []removalEntry) {
 			slog.Warn("remove pending", "path", path, "error", err)
 			continue
 		}
-		if err := s.finishRemoval(entry); err != nil {
+		older, err := s.removals.superseded(entry)
+		if err != nil {
+			slog.Warn("compare pending removals of a game", "path", path, "game", entry.GameID, "error", err)
+			continue
+		}
+		if older {
+			slog.Info("pending removal superseded by a later one of the game", "path", path, "game", entry.GameID)
+		} else if err := s.finishRemoval(entry); err != nil {
 			slog.Warn("finish pending removal in the library", "path", path, "game", entry.GameID, "error", err)
 			continue
 		}

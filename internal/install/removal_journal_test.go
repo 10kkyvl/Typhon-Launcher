@@ -732,3 +732,56 @@ func TestUnreadableJournalRefusesBeforeTheUninstaller(t *testing.T) {
 		t.Fatal("files deleted although the removal was refused")
 	}
 }
+
+// A game's first removal deleted its files but its card was never settled
+// (the library failed to save); the game was installed again and removed
+// again, and the launcher was killed after that delete. Only the newest
+// entry says what the player wants now: the older one only deletes its
+// folder.
+func TestOnlyTheNewestRemovalOfAGameSettlesItsCard(t *testing.T) {
+	for _, tc := range []struct {
+		name               string
+		olderKeep, newKeep bool
+	}{
+		{"kept first, then removed from the library", true, false},
+		{"removed from the library first, then kept", false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			r := newJournalRig(t, dir, &fakeRegistrar{})
+			game := gameDir(t, "Game")
+			putOwnedCard(t, r.registrar, "a", game)
+			older := game + removingSuffix
+			newer := game + removingSuffix + "-1"
+			if err := os.Rename(game, newer); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.RemoveAll(newer); err != nil {
+				t.Fatal(err)
+			}
+			mkFile(t, filepath.Join(older, "leftover.bin"), 64)
+			data, err := json.Marshal([]map[string]any{
+				{"path": older, "gameId": "a", "installDir": game, "keepInLibrary": tc.olderKeep},
+				{"path": newer, "gameId": "a", "installDir": game, "keepInLibrary": tc.newKeep},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			writeJournal(t, dir, string(data))
+
+			r.restart(t)
+
+			if !missing(t, older) {
+				t.Fatal("the older removal's folder is still on disk")
+			}
+			card, err := r.registrar.Find("a")
+			switch {
+			case tc.newKeep && (err != nil || !card.Uninstalled):
+				t.Fatalf("card = %+v, %v; want it kept and uninstalled as the newest removal asked", card, err)
+			case !tc.newKeep && !errors.Is(err, errFakeNoGame):
+				t.Fatalf("card = %+v, %v; want it removed from the library as the newest removal asked", card, err)
+			}
+			requireJournalClear(t, dir)
+		})
+	}
+}
