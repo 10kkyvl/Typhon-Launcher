@@ -9,7 +9,7 @@
   import ShowcaseRow from './ShowcaseRow.svelte';
   import ShowcaseSection from './ShowcaseSection.svelte';
 
-  const VARIANTS = ['primary', 'secondary', 'ghost', 'danger'] as const;
+  const VARIANTS = ['primary', 'play', 'secondary', 'ghost', 'danger'] as const;
   const SIZES = ['sm', 'md', 'lg'] as const;
   const BUSY_MS = 1500;
 
@@ -64,8 +64,8 @@
 
   <ShowcaseRow caption="Joined, block, a long label and a count">
     <span class="joined">
-      <Button variant="primary" join="end" onclick={pressed('Play')}><Play size="1.4rem" />Play</Button>
-      <Button variant="primary" join="start" icon aria-label="Play profile" onclick={pressed('Profile')}><ChevronDown size="1.4rem" /></Button>
+      <Button variant="play" join="end" onclick={pressed('Play')}><Play size="1.4rem" />Play</Button>
+      <Button variant="play" join="start" icon aria-label="Play profile" onclick={pressed('Profile')}><ChevronDown size="1.4rem" /></Button>
     </span>
     <Button onclick={pressed('Long')}>A button whose label runs on for longer than any label should</Button>
     <Button onclick={pressed('Friends')}>Friends <CountBadge count={3} label="3 friend requests" /></Button>

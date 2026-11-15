@@ -18,6 +18,7 @@
   import Spinner from './Spinner.svelte';
   import { refuseWhile } from './refuse';
   import { ambientHover } from '../utils/ambientHover';
+  import { gameScope } from '../stores/gameTone';
 
   interface GameCardActionBase {
     id: string;
@@ -93,6 +94,15 @@
   } = $props();
 
   const uid = $props.id();
+
+  // The round Play takes the game's colour, read only once the pointer rests on the card or focus enters
+  // it: a grid of a thousand cards reads no picture until one is looked at.
+  let toneWanted = $state(false);
+  const wantTone: Attachment<HTMLElement> = (node) => {
+    const want = () => (toneWanted = true);
+    const offs = [on(node, 'pointerenter', want), on(node, 'focusin', want)];
+    return () => offs.forEach((off) => off());
+  };
   const playable = $derived(installed && Boolean(onplay));
 
   let popped = $state('');
@@ -134,7 +144,7 @@
   </button>
 {/snippet}
 
-<div class="card" class:title-first={titleFirst} role="presentation" {@attach gameContextMenu(id)} {@attach launchKey} use:ambientHover={ambient ? id : null}>
+<div class="card" class:title-first={titleFirst} role="presentation" {@attach gameContextMenu(id)} {@attach launchKey} {@attach wantTone} use:ambientHover={ambient ? id : null}>
   {#if titleFirst}{@render info()}{/if}
   <div class="cover-wrap" class:playable class:running={playable && running}>
     <!-- A pointer target only: the title below opens the same page and carries the game's name, so the
@@ -157,6 +167,7 @@
         aria-busy={launching || undefined}
         onclick={onplay}
         {@attach refuseWhile(() => launching)}
+        {@attach toneWanted ? gameScope(id) : undefined}
       >
         {#if launching}
           <Spinner size="sm" tone="current" />
@@ -317,8 +328,9 @@
     width: 3.2rem;
     height: 3.2rem;
     border-radius: var(--radius-md);
-    background: var(--accent);
-    color: var(--accent-on, var(--accent-on-default));
+    /* The game's colour inside its scope (stores/gameTone.ts); the accent fill anywhere else. */
+    background: var(--play-bg, var(--accent));
+    color: var(--play-glyph, var(--accent-on, var(--accent-on-default)));
     opacity: 0;
     transform: translateY(0.4rem) scale(0.9);
     transition:
@@ -328,7 +340,7 @@
   }
 
   .play:hover {
-    background: var(--accent-hover);
+    background: var(--play-disc-hover, var(--accent-hover));
   }
 
   .cover-wrap:hover .play,
@@ -340,6 +352,7 @@
   }
 
   .play:active:not([aria-busy='true']) {
+    background: var(--play-disc-active, var(--accent-hover));
     transform: scale(0.92);
   }
 

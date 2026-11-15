@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { toneVars } from '../lib/art/tone';
-import { ruleBody } from '../lib/testing/css';
+import buttonSource from '../lib/components/Button.svelte?raw';
+import cardSource from '../lib/components/GameCard.svelte?raw';
+import tabsSource from '../lib/components/Tabs.svelte?raw';
+import { gameToneOf, toneVars } from '../lib/art/tone';
+import { ruleBody, styleOf } from '../lib/testing/css';
 import { goSources } from '../lib/testing/sources';
 
 type Fs = { readFileSync(path: URL, encoding: 'utf8'): string };
@@ -44,6 +47,7 @@ describe("the game's colour in the stylesheets", () => {
   });
 
   it('is no theme token and has no root value: a theme cannot set it, and a subtree accent is not shadowed', () => {
+    expect(rootNames('./shell.css')).toContain('--accent-on-default');
     for (const file of ['./tokens.css', './shell.css']) {
       expect(rootNames(file).filter((name) => /^--(play|game)-/.test(name)), file).toEqual([]);
     }
@@ -53,4 +57,110 @@ describe("the game's colour in the stylesheets", () => {
       expect(/"--(play|game)-/.test(source), file).toBe(false);
     }
   });
+});
+
+// The built-in presets' tokens (internal/theme/presets.go) and the fixed label default of shell.css.
+const PRESETS = [...(goSources['internal/theme/presets.go'] ?? '').matchAll(/^var preset\w+ = Theme\{([\s\S]*?)^\}/gm)].map((m) => ({
+  id: /\bID:\s*"([^"]+)"/.exec(m[1])?.[1] ?? '',
+  tokens: { '--accent-on-default': '#fff', ...Object.fromEntries([...m[1].matchAll(/"(--[\w-]+)":\s*"([^"]*)"/g)].map((t) => [t[1], t[2]])) } as Record<string, string>,
+}));
+
+/** What a declaration computes to with these custom properties in scope, var() fallbacks included. */
+function computed(expr: string, tokens: Record<string, string>): string {
+  const ref = /^var\((--[\w-]+)(?:\s*,\s*([\s\S]+))?\)$/.exec(expr.trim());
+  if (!ref) return expr.trim();
+  if (ref[1] in tokens) return computed(tokens[ref[1]], tokens);
+  if (ref[2] === undefined) throw new Error(`${ref[1]} has no value and no fallback`);
+  return computed(ref[2], tokens);
+}
+
+const BUTTON = styleOf(buttonSource, 'Button.svelte');
+const CARD = styleOf(cardSource, 'GameCard.svelte');
+const ENABLED = ":not(:disabled, [aria-disabled='true'])";
+
+// What a launching control paints, at rest, hovered and pressed, with the properties in scope.
+function button(tokens: Record<string, string>) {
+  return {
+    rest: computed(ruleBody(BUTTON, '.play').background, tokens),
+    label: computed(ruleBody(BUTTON, '.play').color, tokens),
+    hover: computed(ruleBody(BUTTON, `.play:hover${ENABLED}`).background, tokens),
+    glow: ruleBody(BUTTON, `.play:hover${ENABLED}`)['box-shadow'].replace(/var\([\s\S]+\)$/, (v) => computed(v, tokens)),
+    pressed: computed(ruleBody(BUTTON, `.play:active${ENABLED}`).background, tokens),
+  };
+}
+
+function disc(tokens: Record<string, string>) {
+  return {
+    rest: computed(ruleBody(CARD, '.play').background, tokens),
+    glyph: computed(ruleBody(CARD, '.play').color, tokens),
+    hover: computed(ruleBody(CARD, '.play:hover').background, tokens),
+    pressed: computed(ruleBody(CARD, ".play:active:not([aria-busy='true'])").background, tokens),
+  };
+}
+
+describe('a launching control outside any game is the primary fill it was', () => {
+  it('reads the four presets', () => {
+    expect(PRESETS.map((p) => p.id)).toEqual(['dark', 'light', 'contrast', 'blush']);
+  });
+
+  it("the primary button's own rules are unchanged", () => {
+    expect(ruleBody(BUTTON, '.primary')).toEqual({ background: 'var(--accent)', color: 'var(--accent-on, var(--accent-on-default))' });
+    expect(ruleBody(BUTTON, `.primary:hover${ENABLED}`)).toEqual({
+      background: 'var(--accent-hover)',
+      'box-shadow': '0 0.8rem 2rem -0.8rem var(--accent-ring)',
+      transform: 'translateY(-1px)',
+    });
+  });
+
+  for (const accentOn of [undefined, '#000000']) {
+    for (const { id, tokens: preset } of PRESETS) {
+      const tokens = accentOn ? { ...preset, '--accent-on': accentOn } : preset;
+      const name = `${id}${accentOn ? ' with a personal accent' : ''}`;
+
+      it(`${name}: Play and Stop draw the primary fill, label, hover, glow and pressed fill`, () => {
+        const primary = ruleBody(BUTTON, '.primary');
+        const hover = ruleBody(BUTTON, `.primary:hover${ENABLED}`);
+        expect(button(tokens)).toEqual({
+          rest: computed(primary.background, tokens),
+          label: computed(primary.color, tokens),
+          hover: computed(hover.background, tokens),
+          glow: hover['box-shadow'].replace(/var\([\s\S]+\)$/, (v) => computed(v, tokens)),
+          // Pressed under the pointer the primary button shows its hover fill.
+          pressed: computed(hover.background, tokens),
+        });
+      });
+
+      it(`${name}: a card's round Play draws the accent fill and label, its hover fill when hovered or pressed`, () => {
+        expect(disc(tokens)).toEqual({
+          rest: computed('var(--accent)', tokens),
+          glyph: computed('var(--accent-on, var(--accent-on-default))', tokens),
+          hover: computed('var(--accent-hover)', tokens),
+          pressed: computed('var(--accent-hover)', tokens),
+        });
+      });
+    }
+  }
+
+  it("the tab marker is --accent-bright unless a page hands it another colour", () => {
+    const marker = ruleBody(styleOf(tabsSource, 'Tabs.svelte'), '.underline .plate::after').background;
+    expect(computed(marker, PRESETS[0].tokens)).toBe(PRESETS[0].tokens['--accent-bright']);
+    expect(computed(marker, { ...PRESETS[0].tokens, '--tab-marker': '#123456' })).toBe('#123456');
+  });
+});
+
+describe("a launching control inside a game's scope takes the game's colour", () => {
+  for (const { id, tokens: preset } of PRESETS) {
+    it(`${id}: Play's rest, label, hover, glow and pressed fill, and the card's disc, come from the game`, () => {
+      const v = toneVars(gameToneOf([200, 40, 30], { bg: preset['--bg'], text: preset['--text'] }));
+      const tokens = { ...preset, ...v, ...ruleBody(css('./shell.css'), '.game-tone') };
+      expect(button(tokens)).toEqual({
+        rest: v['--game-fill'],
+        label: v['--game-on-fill'],
+        hover: v['--game-fill-hover'],
+        glow: `0 0.8rem 2rem -0.8rem ${v['--game-glow']}`,
+        pressed: v['--game-fill-active'],
+      });
+      expect(disc(tokens)).toEqual({ rest: v['--game-fill'], glyph: v['--game-glyph'], hover: v['--game-disc-hover'], pressed: v['--game-disc-active'] });
+    });
+  }
 });

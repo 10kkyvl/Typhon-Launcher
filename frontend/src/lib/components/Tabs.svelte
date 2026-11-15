@@ -20,6 +20,7 @@
     label,
     labelledby,
     divider = true,
+    marker,
   }: {
     tabs: TabItem[];
     value: string;
@@ -32,6 +33,8 @@
     labelledby?: string;
     /** The line under an underline strip; off where the page draws its own edge. */
     divider?: boolean;
+    /** The colour of the chosen tab's underline, a CSS colour (the game page hands its game's accent). Default: --accent-bright. */
+    marker?: string;
   } = $props();
 
   let strip = $state<HTMLElement>();
@@ -78,7 +81,7 @@
   });
 </script>
 
-<div class="tabs {variant}" class:divider>
+<div class="tabs {variant}" class:divider style:--tab-marker={marker}>
   <div class="strip" role="tablist" aria-label={label} aria-labelledby={label ? undefined : labelledby} bind:this={strip}>
     <span class="plate" aria-hidden="true" bind:this={plateEl}></span>
     {#each tabs as tab, index (tab.id)}
@@ -186,7 +189,7 @@
     bottom: -1px;
     height: 2px;
     border-radius: var(--cut);
-    background: var(--accent-bright);
+    background: var(--tab-marker, var(--accent-bright));
   }
 
   .pill .tab {

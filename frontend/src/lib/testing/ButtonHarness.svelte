@@ -4,6 +4,7 @@
   // A submit button in a form, its disabled, busy and reason state set by the test, with handlers spread
   // onto it the way a menu trigger spreads its props. For Button.dom.test.ts.
   let {
+    variant,
     disabled = false,
     reason,
     busy = false,
@@ -14,6 +15,7 @@
     onkeydown,
     onpointerdown,
   }: {
+    variant?: 'primary' | 'play' | 'secondary' | 'ghost' | 'danger';
     disabled?: boolean;
     reason?: string;
     busy?: boolean;
@@ -34,5 +36,5 @@
   }}
 >
   <input aria-label="Name" />
-  <Button type="submit" {disabled} {reason} {busy} {block} aria-haspopup={popup ? 'menu' : undefined} {onclick} {onkeydown} {onpointerdown}>Save</Button>
+  <Button type="submit" {variant} {disabled} {reason} {busy} {block} aria-haspopup={popup ? 'menu' : undefined} {onclick} {onkeydown} {onpointerdown}>Save</Button>
 </form>

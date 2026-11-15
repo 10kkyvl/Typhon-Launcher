@@ -22,7 +22,11 @@
     children,
     ...rest
   }: Omit<HTMLButtonAttributes, 'class' | 'onclick' | 'children' | 'title'> & {
-    variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
+    /**
+     * `play` is the button that launches a game (Play, and its Stop on the same button): inside a game's
+     * scope (stores/gameTone.ts) it is filled with the game's colour, anywhere else it is `primary`.
+     */
+    variant?: 'primary' | 'play' | 'secondary' | 'ghost' | 'danger';
     size?: 'md' | 'sm' | 'lg';
     disabled?: boolean;
     /**
@@ -170,6 +174,24 @@
     background: var(--accent-hover);
     box-shadow: 0 0.8rem 2rem -0.8rem var(--accent-ring);
     transform: translateY(-1px);
+  }
+
+  /* No root value is set for --play-*: outside a game's scope each falls back to the primary colours of
+     this subtree's own accent (styles/game-tone.test.ts). Pressed under the pointer, primary shows its
+     hover colour; a game's own pressed shade moves further from the label. */
+  .play {
+    background: var(--play-bg, var(--accent));
+    color: var(--play-text, var(--accent-on, var(--accent-on-default)));
+  }
+
+  .play:hover:not(:disabled, [aria-disabled='true']) {
+    background: var(--play-bg-hover, var(--accent-hover));
+    box-shadow: 0 0.8rem 2rem -0.8rem var(--play-glow, var(--accent-ring));
+    transform: translateY(-1px);
+  }
+
+  .play:active:not(:disabled, [aria-disabled='true']) {
+    background: var(--play-bg-active, var(--accent-hover));
   }
 
   .secondary {
