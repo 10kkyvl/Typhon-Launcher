@@ -21,6 +21,7 @@ export const common = {
   'common.meterAlt': '{label}: {details}',
   'common.meterPart': '{name}: {size}',
   'common.meterAtLeast': 'не меньше {size}',
+  'common.meterAtMost': 'не больше {size}',
   'common.meterSizeUnknown': 'размер неизвестен',
   'common.meterFree': 'Свободно',
   'common.meterFreeOf': 'Свободно {free} из {total}',

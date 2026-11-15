@@ -24,6 +24,7 @@ export const common: Record<CommonKey, Message> = {
   'common.meterAlt': '{label}: {details}',
   'common.meterPart': '{name}: {size}',
   'common.meterAtLeast': 'at least {size}',
+  'common.meterAtMost': 'at most {size}',
   'common.meterSizeUnknown': 'size unknown',
   'common.meterFree': 'Free',
   'common.meterFreeOf': '{free} free of {total}',
