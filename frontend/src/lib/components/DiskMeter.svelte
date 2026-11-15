@@ -200,8 +200,8 @@
   }
 
   /* The track. Its colour shows in the gap between segments and in the free space after them. */
-  /* The gap and the parts' min-width are diskMeter.ts::METER_GAP and METER_HAIRLINE: the fold rule
-     counts with them. */
+  /* The gap, the padding and the parts' min-width are diskMeter.ts::METER_GAP, METER_PAD and
+     METER_HAIRLINE: the fold rule counts with them. */
   .bar {
     display: flex;
     gap: 0.2rem;

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import barChartSource from '../lib/components/BarChart.svelte?raw';
 import buttonSource from '../lib/components/Button.svelte?raw';
 import diskMeterSource from '../lib/components/DiskMeter.svelte?raw';
-import { METER_GAP, METER_HAIRLINE, METER_TONES } from '../lib/components/diskMeter';
+import { METER_GAP, METER_HAIRLINE, METER_PAD, METER_TONES } from '../lib/components/diskMeter';
 import heroSource from '../lib/components/HeroCarousel.svelte?raw';
 import noticeSource from '../lib/components/Notice.svelte?raw';
 import textLinkSource from '../lib/components/TextLink.svelte?raw';
@@ -535,10 +535,12 @@ describe("the disk meter's tones", () => {
     expect(parseFloat(part['min-width']), `min-width: ${part['min-width']}`).toBeGreaterThan(0);
   });
 
-  // diskMeter.ts folds parts by the hairline and the gap the bar draws: the two must be the same numbers,
-  // and the track clips whatever a narrower place than the meter is laid out for would push past it.
-  it('draws the hairline and the gap the fold rule counts with, and clips at the track', () => {
+  // diskMeter.ts folds parts by the hairline, the gap and the padding the bar draws (its parts are laid
+  // out in the track's content box, border-box sizing): the same numbers, and the track clips whatever
+  // a narrower place than the meter is laid out for would push past it.
+  it('draws the hairline, the gap and the padding the fold rule counts with, and clips at the track', () => {
     expect(ruleBody(meterStyle, '.bar').gap).toBe(`${METER_GAP}rem`);
+    expect(ruleBody(meterStyle, '.bar').padding).toBe(`${METER_PAD}rem`);
     expect(ruleBody(meterStyle, '.part')['min-width']).toBe(`${METER_HAIRLINE}rem`);
     expect(ruleBody(meterStyle, '.bar').overflow).toBe('hidden');
   });

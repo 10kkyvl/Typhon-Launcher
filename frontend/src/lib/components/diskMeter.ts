@@ -36,9 +36,11 @@ export const METER_MORE = 'meter:more';
 
 /** The narrowest track each form of the meter is laid out for, in rem. */
 export const METER_WIDTH = { full: 32, compact: 16 } as const;
-/** The width a part above 0 bytes is drawn at however small, and the gap of track between parts, in rem. */
+/** The width a part above 0 bytes is drawn at however small, the gap of track between parts and the
+ *  track's padding around them, in rem. */
 export const METER_HAIRLINE = 0.2;
 export const METER_GAP = 0.2;
+export const METER_PAD = 0.2;
 
 export interface MeterPart {
   /** A caller's segment, or a part the meter adds: `other` for space no segment accounts for, `more`
@@ -123,10 +125,14 @@ export function meter(segments: readonly MeterSegment[], total: number | null | 
   return { total: known, parts: listed, drawn: listed.filter((part) => part.share > 0), free: freeSize, overflow };
 }
 
+// Rem sums of tenths are not exact in binary: a part that takes exactly a hairline must count as one.
+const EPSILON = 1e-9;
+
 /**
  * The parts with those the bar cannot draw truthfully folded into one `more` part, placed after the
- * caller's segments. With k parts drawn the parts share the width less k − 1 gaps (the worst case: a
- * full bar, whose flex bases add up to the width and shrink by the gaps in proportion). A segment is
+ * caller's segments. The parts are laid out in the track's content box (the width less its padding on
+ * both sides); with k parts drawn they share that box less k − 1 gaps (the worst case: a full bar,
+ * whose flex bases add up to the box and shrink by the gaps in proportion). A segment is
  * drawn on its own only when it takes a hairline of that room or more, so its width agrees with its
  * size; one part may stay under that and be drawn as a hairline: the last segment when it alone is
  * left, else the fold. The largest set of segments that meets this, with the k hairlines and k − 1
@@ -137,12 +143,13 @@ function folded(parts: MeterPart[], width: number): MeterPart[] {
   const fixed = parts.filter((part) => part.kind !== 'segment' && part.share > 0).length;
   if (candidates.length < 2) return parts;
 
+  const box = width - 2 * METER_PAD;
   let keep = 0;
   for (let own = candidates.length - 1; own >= 0; own -= 1) {
     const k = own + 1 + fixed;
-    const room = width - (k - 1) * METER_GAP;
-    const fits = k * METER_HAIRLINE + (k - 1) * METER_GAP <= width;
-    if (fits && candidates.slice(0, own).every((part) => part.share * room >= METER_HAIRLINE)) {
+    const room = box - (k - 1) * METER_GAP;
+    const fits = k * METER_HAIRLINE + (k - 1) * METER_GAP <= box + EPSILON;
+    if (fits && candidates.slice(0, own).every((part) => part.share * room >= METER_HAIRLINE - EPSILON)) {
       keep = own;
       break;
     }

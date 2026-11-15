@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { METER_GAP, METER_HAIRLINE, METER_MORE, METER_OTHER, METER_TONES, METER_WIDTH, gameTone, meter, sizeWords, type MeterSegment } from './diskMeter';
+import { METER_GAP, METER_HAIRLINE, METER_MORE, METER_OTHER, METER_PAD, METER_TONES, METER_WIDTH, gameTone, meter, sizeWords, type MeterSegment } from './diskMeter';
 
 const seg = (key: string, bytes: number, extra: Partial<MeterSegment> = {}): MeterSegment => ({ key, label: key, bytes, tone: 'game', ...extra });
 
@@ -149,17 +149,19 @@ describe('the disk meter model', () => {
 });
 
 // The rule that keeps a bar truthful and inside its track, at the narrowest width it is laid out for:
-// with k parts drawn, the room the parts share is the width less k − 1 gaps; a part drawn on its own
-// takes at least a hairline of that room, so it is drawn at its size, not puffed up to the hairline.
-// Only the smallest one drawn may be a hairline (a part far under a pixel, or the fold); the rest fold
-// into one "N more" part, and the k hairlines and k − 1 gaps fit in the width.
+// the parts are laid out in the track's content box (the width less its padding on both sides); with
+// k parts drawn, the room they share is that box less k − 1 gaps; a part drawn on its own takes at
+// least a hairline of that room, so it is drawn at its size, not puffed up to the hairline. Only the
+// smallest one drawn may be a hairline (a part far under a pixel, or the fold); the rest fold into one
+// "N more" part, and the k hairlines and k − 1 gaps fit in the box.
 describe('folding what cannot be drawn truthfully', () => {
-  const room = (width: number, k: number) => width - (k - 1) * METER_GAP;
+  const box = (width: number) => width - 2 * METER_PAD;
+  const room = (width: number, k: number) => box(width) - (k - 1) * METER_GAP;
 
   // Other files are never folded in with the segments, so they too may be a hairline.
   function holds(m: ReturnType<typeof meter>, width: number) {
     const k = m.drawn.length;
-    expect(k * METER_HAIRLINE + (k - 1) * METER_GAP, 'the hairlines and the gaps fit in the width').toBeLessThanOrEqual(width + 1e-9);
+    expect(k * METER_HAIRLINE + (k - 1) * METER_GAP, 'the hairlines and the gaps fit in the content box').toBeLessThanOrEqual(box(width) + 1e-9);
     const atSize = m.drawn
       .filter((p) => p.kind !== 'other')
       .sort((a, b) => a.share - b.share)
@@ -171,15 +173,17 @@ describe('folding what cannot be drawn truthfully', () => {
     expect(METER_WIDTH).toEqual({ full: 32, compact: 16 });
   });
 
-  it('folds sixty equal games in a compact bar into twenty and one "40 more" part', () => {
+  // 16rem less 0.4rem of padding is 15.6rem; with 18 games and the fold drawn, 18 gaps leave 12rem, of
+  // which each game's 1/60 is the 0.2rem hairline. Without the padding the arithmetic would keep 20.
+  it('folds sixty equal games in a compact bar into eighteen and one "42 more" part', () => {
     const games = Array.from({ length: 60 }, (_, i) => seg(`g${i}`, 10, { tone: gameTone(i) }));
     const m = meter(games, 600, undefined, METER_WIDTH.compact);
-    expect(m.drawn.length).toBe(21);
-    expect(m.drawn.slice(0, 20).map((p) => p.key)).toEqual(games.slice(0, 20).map((g) => g.key));
-    const more = m.drawn[20];
-    expect([more.kind, more.key, more.tone, more.size, more.folded?.length]).toEqual(['more', METER_MORE, 'more', { kind: 'exact', bytes: 400 }, 40]);
-    expect(more.folded).toEqual(games.slice(20).map((g) => g.key));
-    expect(m.parts.map((p) => p.key)).toEqual([...games.slice(0, 20).map((g) => g.key), METER_MORE]);
+    expect(m.drawn.length).toBe(19);
+    expect(m.drawn.slice(0, 18).map((p) => p.key)).toEqual(games.slice(0, 18).map((g) => g.key));
+    const more = m.drawn[18];
+    expect([more.kind, more.key, more.tone, more.size, more.folded?.length]).toEqual(['more', METER_MORE, 'more', { kind: 'exact', bytes: 420 }, 42]);
+    expect(more.folded).toEqual(games.slice(18).map((g) => g.key));
+    expect(m.parts.map((p) => p.key)).toEqual([...games.slice(0, 18).map((g) => g.key), METER_MORE]);
     holds(m, METER_WIDTH.compact);
   });
 

@@ -175,27 +175,27 @@ describe('DiskMeter', () => {
 
     it('folds the rest into one part, said with its count and size, and not a button unless asked', () => {
       const { container, getByRole, getAllByRole } = renderDom(DiskMeter, { label: 'Папка', segments: games(60), total: 600 * GB, compact: true, onpick: vi.fn() });
-      expect(parts(container)).toHaveLength(21);
-      expect(getAllByRole('button')).toHaveLength(20);
+      expect(parts(container)).toHaveLength(19);
+      expect(getAllByRole('button')).toHaveLength(18);
       expect(parts(container).at(-1)?.dataset.tone).toBe('more');
-      expect(getByRole('group').getAttribute('aria-label')).toContain(`; Ещё 40 частей: ${bytesSize(400 * GB)}; `);
+      expect(getByRole('group').getAttribute('aria-label')).toContain(`; Ещё 42 части: ${bytesSize(420 * GB)}; `);
     });
 
     it('lists the fold in the legend', () => {
       const { getByRole } = renderDom(DiskMeter, { label: 'Диск', segments: games(100), total: 1000 * GB });
       const lines = legendLines(getByRole('list'));
-      expect(lines).toHaveLength(60 + 1 + 2);
-      expect(lines[60]).toBe(words(`Ещё 40 частей ${bytesSize(400 * GB)}`));
+      expect(lines).toHaveLength(58 + 1 + 2);
+      expect(lines[58]).toBe(words(`Ещё 42 части ${bytesSize(420 * GB)}`));
     });
 
     it('makes the fold a button when the caller asks, which reports the keys folded in it', async () => {
       const onpickfolded = vi.fn();
       const { getAllByRole, user } = renderDom(DiskMeter, { label: 'Папка', segments: games(60), total: 600 * GB, compact: true, onpick: vi.fn(), onpickfolded });
       const buttons = getAllByRole('button');
-      expect(buttons).toHaveLength(21);
-      expect(buttons.at(-1)?.getAttribute('aria-label')).toBe(`Ещё 40 частей: ${bytesSize(400 * GB)}`);
+      expect(buttons).toHaveLength(19);
+      expect(buttons.at(-1)?.getAttribute('aria-label')).toBe(`Ещё 42 части: ${bytesSize(420 * GB)}`);
       await user.click(buttons.at(-1) as HTMLElement);
-      expect(onpickfolded).toHaveBeenCalledWith(games(60).slice(20).map((g) => g.key));
+      expect(onpickfolded).toHaveBeenCalledWith(games(60).slice(18).map((g) => g.key));
     });
   });
 
