@@ -6,6 +6,7 @@ vi.mock('../services/backend', () => ({ inWails: false }));
 import DownloadItem from './DownloadItem.svelte';
 import { locale } from '../i18n';
 import type { Download } from '../services/downloads';
+import { downloads } from '../stores/downloads';
 import { speedBytes } from '../utils/format';
 
 function download(patch: Partial<Download> = {}): Download {
@@ -37,7 +38,9 @@ function download(patch: Partial<Download> = {}): Download {
   };
 }
 
+// The panel reads what Go offers for its download from the store, as the page has it.
 function html(item: Download): string {
+  downloads.set([item]);
   return render(DownloadItem, { props: { download: item } }).body;
 }
 
@@ -47,6 +50,7 @@ beforeEach(() => {
 
 afterEach(() => {
   locale.set('ru');
+  downloads.set([]);
 });
 
 describe('download card', () => {
@@ -55,12 +59,13 @@ describe('download card', () => {
 
     expect(out).toContain('Game One');
     expect(out).toContain('42%');
-    expect(out).toContain('class="down');
-    expect(out).toContain(speedBytes(2048));
-    expect(out).toContain('class="up');
-    expect(out).toContain(speedBytes(512));
+    expect(out).toContain('data-testid="download-speed"');
+    // A reading sets its number and unit in spans of their own: compare the words.
+    const words = out.replace(/<[^>]*>/g, '');
+    expect(words).toContain(speedBytes(2048));
+    expect(words).toContain(`upload ${speedBytes(512)}`);
     expect(out).toContain('Pause');
-    expect(out).not.toContain('Continue');
+    expect(out).not.toContain('Resume');
   });
 
   it('says the download is waiting for sources instead of a frozen bar when it stalled', () => {
@@ -78,17 +83,17 @@ describe('download card', () => {
     const out = html(download({ status: 'paused', stalled: true }));
 
     expect(out).not.toContain('class="stalled');
-    expect(out).toContain('Continue');
-    expect(out).not.toContain('>Pause<');
+    expect(out).toContain('Resume');
+    expect(out).not.toContain('Pause “');
   });
 
-  it('offers only a cancel for a queued download and shows no speeds', () => {
-    const out = html(download({ status: 'queued', progress: 0, downloadSpeed: 0, uploadSpeed: 0 }));
+  it('shows no speed and offers no pause while the files are checked', () => {
+    const out = html(download({ status: 'verifying', downloadSpeed: 0, uploadSpeed: 0, etaSeconds: -1 }));
 
-    expect(out).not.toContain('↓');
+    expect(out).not.toContain('data-testid="download-speed"');
     expect(out).not.toContain('Pause');
-    expect(out).not.toContain('Continue');
-    expect(out).toContain('Cancel');
+    expect(out).not.toContain('Resume');
+    expect(out).toContain('More actions for “Game One”');
   });
 
   it('leaves out the time left when the estimate is unknown', () => {
@@ -108,6 +113,6 @@ describe('download card', () => {
     expect(game).toContain('Game</span>');
     expect(update).toContain('Update');
     expect(repair).toContain('Repair');
-    expect(plain).not.toContain('class="tags');
+    expect(plain).not.toMatch(/>(Game|Update|Repair)</);
   });
 });

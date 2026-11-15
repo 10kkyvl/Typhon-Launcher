@@ -1,288 +1,417 @@
 <script lang="ts">
-  import { ArrowDown, ArrowUp, ChevronRight, Gamepad2, Pause, Play, X } from '@lucide/svelte';
-  import { gamePageId, type Download } from '../services/downloads';
-  import { cancelDownloadPrompt } from '../confirm/prompts';
-  import { cancel, downloadNow, pause, resume, statusLabels } from '../stores/downloads';
-  import { playThrottle } from '../stores/playThrottle';
-  import { gameArt, requestArt } from '../stores/metadata';
-  import { navigate } from '../stores/router';
-  import { sources } from '../stores/sources';
-  import { bytesSize, etaLabel, speedBytes } from '../utils/format';
-  import { msg } from '../i18n';
+  import { Ellipsis, Pause, Play } from '@lucide/svelte';
+  import { t } from '../i18n';
   import { installErrorText } from '../install/installErrors';
+  import { emptySpeedSeries, type SpeedSeries } from '../downloads/speedHistory';
+  import { gamePageId, type Download } from '../services/downloads';
+  import { openFolder } from '../services/settings';
+  import { requestDownloadAction, speedHistory, statusLabels } from '../stores/downloads';
+  import { downloadOffers, waitingForSchedule } from '../stores/downloadOffers';
+  import { gameScope } from '../stores/gameTone';
+  import { gameArt, requestArt } from '../stores/metadata';
+  import { playThrottle } from '../stores/playThrottle';
+  import { settings } from '../stores/settings';
+  import { sources } from '../stores/sources';
+  import { toast } from '../stores/toasts';
+  import { focusHandOff } from '../utils/focusHandOff';
+  import { bytesSize, etaLabel, progressPercent, rateLimitLabel, speedBytes } from '../utils/format';
   import Artwork from './Artwork.svelte';
   import Button from './Button.svelte';
   import ConfirmModal from './ConfirmModal.svelte';
   import ConsoleTag from './ConsoleTag.svelte';
+  import DropdownMenu from './DropdownMenu.svelte';
+  import GameLink from './GameLink.svelte';
   import IconButton from './IconButton.svelte';
   import ProgressBar from './ProgressBar.svelte';
+  import Reading from './Reading.svelte';
+  import SpeedGraph from './SpeedGraph.svelte';
   import StatusBadge from './StatusBadge.svelte';
+  import type { MenuItem } from './menu';
+  import { cancelKeepsFiles, handOffTarget, heldBack, leadAction, panelOrder, speedLimit } from './downloadPanel';
 
+  /**
+   * The panel of a download under way on the Downloads screen, one per download of the store's `active`
+   * list: cover, tags, title, progress, the speed, time left and peers, one lead button and a "more"
+   * menu, and the speed graph of the last 40 seconds. A download that moves data or is about to
+   * (downloading, metadata, verifying) is the full panel; a paused one the compact form, without the
+   * graph and the speed, which nothing moves. The form follows the status (`data-form`); the controls are
+   * the same nodes in both, so a download changing form keeps focus where it was.
+   *
+   * A plain container: every control is a sibling named after the download. The lead button is one
+   * button whose action follows what Go offers (Download now, Pause, Resume); while its call runs it is
+   * busy and keeps focus. When the panel goes from under the focus its own press left there (a cancel, a
+   * resume that queues it), focus is handed to the panel now in its place, else the one above, else
+   * `away`. Cancel is Go's Cancel and asks first when data exists.
+   */
   let {
     download,
     onopen,
+    onannounce,
+    away,
   }: {
     download: Download;
+    /** Opens the download's details. */
     onopen?: (download: Download) => void;
+    /** Says what the player did, in the page's one polite live region. */
+    onannounce?: (text: string) => void;
+    /** Where focus goes when the last panel leaves under it: the section's heading, else the page's. */
+    away?: () => HTMLElement | null | undefined;
   } = $props();
 
-  const downloading = $derived(download.status === 'downloading');
-  const pct = $derived(download.progress * 100);
-  const barTone = $derived(download.status === 'paused' ? 'muted' : 'accent');
+  const uid = $props.id();
+  const titleId = `${uid}-title`;
 
+  const id = $derived(download.id);
+  const gameId = $derived(gamePageId(download));
+  const artId = $derived(download.origin.gameId ?? '');
+  const cover = $derived((artId && $gameArt[artId]?.cover) || '');
+  const sourceName = $derived($sources.find((s) => s.id === download.origin.sourceId)?.name ?? '');
   const typeTag = $derived.by(() => {
-    if (download.origin.platform) return msg('state.installTypeImage');
-    if (download.origin.purpose === 'update') return msg('ui.update');
-    if (download.origin.purpose === 'repair') return msg('ui.repair');
-    if (download.origin.gameId || download.origin.releaseId) return msg('ui.game');
+    if (download.origin.platform) return $t('state.installTypeImage');
+    if (download.origin.purpose === 'update') return $t('ui.update');
+    if (download.origin.purpose === 'repair') return $t('ui.repair');
+    if (download.origin.gameId || download.origin.releaseId) return $t('ui.game');
     return '';
   });
 
-  const canDownloadNow = $derived(
-    $playThrottle.schedule?.blocked === true &&
-    !download.ignoreSchedule &&
-    download.status !== 'completed' &&
-    download.status !== 'failed',
+  const offers = $derived($downloadOffers.get(id) ?? []);
+  const lead = $derived(leadAction(offers));
+  const waiting = $derived($waitingForSchedule.has(id));
+  const compact = $derived(download.status === 'paused');
+  const downloading = $derived(download.status === 'downloading');
+  const metadata = $derived(download.status === 'metadata');
+  const limit = $derived(speedLimit($settings, $playThrottle));
+
+  const percent = $derived(progressPercent(download.progress));
+  const amountParams = $derived({ done: bytesSize(download.downloaded), total: bytesSize(download.total), percent });
+  const amount = $derived($t('downloads.panel.amount', amountParams));
+  const valueText = $derived(
+    download.status === 'paused'
+      ? $t('downloads.panel.amountPaused', amountParams)
+      : download.status === 'verifying'
+        ? $t('downloads.panel.amountChecking', amountParams)
+        : amount,
   );
 
-  const gameId = $derived(gamePageId(download));
-  const sourceTag = $derived($sources.find((s) => s.id === download.origin.sourceId)?.name ?? '');
-  const cover = $derived((download.origin.gameId && $gameArt[download.origin.gameId]?.cover) || '');
+  const leadLabel = $derived(
+    lead === 'downloadNow'
+      ? { text: $t('downloads.panel.downloadNow'), name: $t('downloads.panel.downloadNowNamed', { name: download.name }) }
+      : lead === 'pause'
+        ? { text: $t('downloads.panel.pause'), name: $t('downloads.panel.pauseNamed', { name: download.name }) }
+        : { text: $t('downloads.panel.resume'), name: $t('downloads.panel.resumeNamed', { name: download.name }) },
+  );
 
-  $effect(() => {
-    if (download.origin.gameId) requestArt([download.origin.gameId]);
+  // "Download now" is the lead whenever Go offers it, so the menu does not repeat it; Pause, which Go
+  // still takes then, moves into the menu.
+  const menuItems = $derived.by((): MenuItem[] => {
+    const items: MenuItem[] = [{ id: 'details', label: $t('downloads.panel.details') }];
+    if (lead === 'downloadNow' && offers.includes('pause')) items.push({ id: 'pause', label: $t('downloads.panel.pause') });
+    if (offers.includes('forceStart') && !heldBack(download, $playThrottle)) {
+      items.push({ id: 'forceStart', label: $t('downloads.panel.startNow') });
+    }
+    items.push({ id: 'folder', label: $t('downloads.panel.openFolder') });
+    if (offers.includes('cancel')) items.push({ id: 'cancel', label: $t('downloads.panel.cancel'), danger: true, separator: true });
+    return items;
   });
 
-  let confirmOpen = $state(false);
+  $effect(() => {
+    if (artId) requestArt([artId]);
+  });
 
-  function stop(e: MouseEvent) {
-    e.stopPropagation();
+  // One reader of the speed series per panel while it draws the graph; none in the compact form.
+  let series = $state<SpeedSeries>(emptySpeedSeries());
+  $effect(() => {
+    if (compact) return;
+    return speedHistory(id).subscribe((next) => {
+      series = next;
+    });
+  });
+
+  let root = $state<HTMLElement>();
+  let leadBusy = $state(false);
+
+  async function pressLead() {
+    const action = lead;
+    if (!action || leadBusy) return;
+    const own = id;
+    const order = panelOrder();
+    const hand = focusHandOff();
+    leadBusy = true;
+    await requestDownloadAction(own, action);
+    leadBusy = false;
+    void hand(() => handOffTarget(order, own, { stays: true, prefer: 'lead', away }));
+  }
+
+  async function openDestination() {
+    try {
+      await openFolder(download.destination);
+    } catch {
+      toast($t('transfers.downloadsFolderUnavailable'), 'danger');
+    }
+  }
+
+  let confirmOpen = $state(false);
+  let cancelOrder: string[] = [];
+  let cancelHand: ReturnType<typeof focusHandOff> | null = null;
+
+  function cancelled(name: string) {
+    onannounce?.($t('downloads.panel.cancelled', { name }));
+  }
+
+  async function cancelNow() {
+    const own = id;
+    const name = download.name;
+    const order = panelOrder();
+    const hand = focusHandOff(() => root);
+    const outcome = await requestDownloadAction(own, 'cancel');
+    if (!outcome.ok) return;
+    cancelled(name);
+    void hand(() => handOffTarget(order, own, { stays: false, prefer: 'more', away }));
+  }
+
+  function askCancel() {
+    if (download.downloaded <= 0) {
+      void cancelNow();
+      return;
+    }
+    cancelOrder = panelOrder();
+    confirmOpen = true;
+  }
+
+  // The dialog shows a refusal itself, by its code, and stays open for another try.
+  async function confirmCancel() {
+    const own = id;
+    const name = download.name;
+    cancelOrder = panelOrder();
+    const hand = focusHandOff(() => root);
+    const outcome = await requestDownloadAction(own, 'cancel', { toast: false });
+    if (!outcome.ok) throw outcome.error;
+    cancelled(name);
+    cancelHand = hand;
+  }
+
+  // After a confirmed cancel the dialog gives focus back to the menu button of a panel on its way out:
+  // that counts as fallen, and focus goes on (`focusHandOff`'s `leaving`).
+  function closeCancel() {
+    confirmOpen = false;
+    const hand = cancelHand;
+    cancelHand = null;
+    const own = id;
+    if (hand) void hand(() => handOffTarget(cancelOrder, own, { stays: false, prefer: 'more', away }));
+  }
+
+  const cancelPrompt = $derived({
+    title: $t('downloads.panel.cancelTitle', { name: download.name }),
+    text: cancelKeepsFiles(download)
+      ? $t('downloads.panel.cancelKeeps')
+      : $t('downloads.panel.cancelDeletes', { size: bytesSize(download.downloaded) }),
+    confirm: $t('downloads.panel.cancelConfirm'),
+    busy: $t('downloads.panel.cancelBusy'),
+    cancel: $t('downloads.panel.cancelKeep'),
+  });
+
+  function onmenu(item: string) {
+    if (item === 'details') onopen?.(download);
+    else if (item === 'pause') void requestDownloadAction(id, 'pause');
+    else if (item === 'forceStart') void requestDownloadAction(id, 'forceStart');
+    else if (item === 'folder') void openDestination();
+    else if (item === 'cancel') askCancel();
   }
 </script>
 
-<div
+<section
   class="item"
-  role="button"
-  tabindex="0"
-  onclick={() => onopen?.(download)}
-  onkeydown={(e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      onopen?.(download);
-    }
-  }}
+  class:compact
+  aria-labelledby={titleId}
+  data-form={compact ? 'compact' : 'full'}
+  data-state={download.status}
+  data-download-panel={id}
+  bind:this={root}
+  {@attach gameScope(gameId)}
 >
-  <div class="thumb">
-    <Artwork src={cover} alt={download.name} ratio="3 / 4" radius="var(--radius-sm)" />
+  <div class="cover">
+    <GameLink id={gameId} name={download.name} repeat>
+      <Artwork src={cover} alt="" label={download.name} seed={artId || id} ratio="3 / 4" radius="var(--radius-sm)" />
+    </GameLink>
   </div>
+
   <div class="main">
-    <div class="head">
-      <span class="title" title={download.name}>{download.name}</span>
-      {#if typeTag || sourceTag || download.ignoreSchedule}
-        <div class="tags">
-          {#if typeTag}<StatusBadge kind="neutral" label={typeTag} dot={false} />{/if}
-          {#if download.origin.platform}<ConsoleTag platform={download.origin.platform} />{/if}
-          {#if sourceTag}<StatusBadge kind="neutral" label={sourceTag} dot={false} />{/if}
-          {#if download.ignoreSchedule}<StatusBadge kind="neutral" label={msg('transfers.outsideSchedule')} dot={false} />{/if}
-        </div>
-      {/if}
-      {#if canDownloadNow}
-        <Button
-          size="sm"
-          variant="ghost"
-          onclick={(e) => {
-            stop(e);
-            downloadNow(download.id);
-          }}
-        >
-          {msg('transfers.downloadNow')}
-        </Button>
-      {/if}
+    <div class="tags">
+      {#if !downloading}<StatusBadge kind={compact ? 'warning' : 'accent'} label={statusLabels(download.status)} />{/if}
+      {#if typeTag}<StatusBadge kind="neutral" label={typeTag} dot={false} />{/if}
+      {#if download.origin.platform}<ConsoleTag platform={download.origin.platform} />{/if}
+      {#if download.total > 0}<span class="tag"><Reading text={bytesSize(download.total)} /></span>{/if}
+      {#if sourceName}<span class="tag">{sourceName}</span>{/if}
+      {#if download.ignoreSchedule}<StatusBadge kind="neutral" label={$t('transfers.outsideSchedule')} dot={false} />{/if}
     </div>
-    <div class="progress-row">
-      <div class="bar">
-        <ProgressBar value={pct} tone={barTone} height={6} indeterminate={download.status === 'metadata'} decorative />
-      </div>
-      <span class="pct">{download.status === 'metadata' ? '' : `${Math.floor(pct)}%`}</span>
-    </div>
-    <div class="meta">
-      {#if downloading && download.stalled}
-        <span class="stalled">{msg('ui.awaitingSources')}</span>
-        <span class="sep">·</span>
-        <span class="dim">{msg('ui.seedersPeers', { seeders: download.seeders, peers: download.peers })}</span>
-      {:else if downloading}
-        <span>{msg('ui.bytesOfBytes', { done: bytesSize(download.downloaded), total: bytesSize(download.total) })}</span>
-        {#if download.etaSeconds >= 0}
-          <span class="sep">·</span>
-          <span class="eta">{msg('ui.timeLeft', { eta: etaLabel(download.etaSeconds) })}</span>
-        {/if}
-      {:else}
-        <span class="state" class:paused={download.status === 'paused'}>{statusLabels(download.status)}</span>
-      {/if}
-    </div>
-  </div>
-  <div class="speeds" aria-hidden={!downloading}>
-    {#if downloading}
-      <span class="down"><ArrowDown size="1.3rem" strokeWidth={2} />{speedBytes(download.downloadSpeed)}</span>
-      <span class="up"><ArrowUp size="1.3rem" strokeWidth={2} />{speedBytes(download.uploadSpeed)}</span>
+
+    <h3 class="title" id={titleId}><GameLink id={gameId} name={download.name} /></h3>
+
+    <ProgressBar
+      value={download.progress * 100}
+      indeterminate={metadata}
+      height={6}
+      tone="game"
+      label={$t('downloads.panel.progressOf', { name: download.name })}
+      {valueText}
+      active={downloading && download.downloadSpeed > 0 && !waiting}
+      paused={compact}
+    />
+    {#if !metadata}
+      <p class="amount" aria-hidden="true" data-testid="download-amount"><Reading text={amount} /></p>
     {/if}
-  </div>
-  <div class="controls">
-    <span class="toggle">
-      {#if downloading}
+
+    {#if waiting}
+      <p class="note">{$t('downloads.panel.scheduleNote')}</p>
+    {:else if downloading}
+      <p class="stats">
+        <span class="speed" data-testid="download-speed"><span class="sr-only">{$t('downloads.panel.speed')}</span><Reading text={speedBytes(download.downloadSpeed)} /></span>
+        {#if limit > 0}<span class="sub"><Reading text={$t('downloads.panel.limit', { limit: rateLimitLabel(limit) })} /></span>{/if}
+        <span class="rest">
+          {#if download.stalled}
+            <span class="stalled">{$t('ui.awaitingSources')}</span>
+          {:else if download.etaSeconds >= 0}
+            <Reading text={$t('downloads.panel.eta', { eta: etaLabel(download.etaSeconds) })} />
+          {/if}
+          <span class="dim"><Reading text={$t('downloads.panel.peers', { peers: download.peers, seeders: download.seeders })} /></span>
+          <span class="dim"><Reading text={$t('downloads.panel.upload', { speed: speedBytes(download.uploadSpeed) })} /></span>
+        </span>
+      </p>
+    {/if}
+
+    <div class="actions">
+      {#if lead}
         <Button
+          variant={lead === 'pause' ? 'secondary' : 'primary'}
           size="sm"
-          minWidth="12.4rem"
-          onclick={(e) => {
-            stop(e);
-            pause(download.id);
-          }}
+          busy={leadBusy}
+          aria-label={leadLabel.name}
+          data-panel-control="lead"
+          onclick={pressLead}
         >
-          <Pause size="1.5rem" strokeWidth={1.8} />
-          {msg('ui.pause')}
-        </Button>
-      {:else if download.status === 'paused'}
-        <Button
-          size="sm"
-          variant="primary"
-          minWidth="12.4rem"
-          onclick={(e) => {
-            stop(e);
-            resume(download.id);
-          }}
-        >
-          <Play size="1.5rem" strokeWidth={1.8} />
-          {msg('common.continue')}
+          {#if lead === 'pause'}<Pause size="1.5rem" strokeWidth={1.8} aria-hidden="true" />{:else}<Play size="1.5rem" strokeWidth={1.8} aria-hidden="true" />{/if}
+          {leadLabel.text}
         </Button>
       {/if}
-    </span>
-    {#if gameId}
-      <IconButton
-        label={msg('transfers.gamePage')}
-        size="sm"
-        onclick={(e) => {
-          stop(e);
-          navigate('game', { id: gameId });
-        }}
-      >
-        <Gamepad2 size="1.6rem" strokeWidth={1.8} />
-      </IconButton>
-    {/if}
-    <IconButton
-      label={msg('ui.cancelVerb')}
-      size="sm"
-      onclick={(e) => {
-        stop(e);
-        confirmOpen = true;
-      }}
-    >
-      <X size="1.6rem" strokeWidth={1.8} />
-    </IconButton>
-    <IconButton
-      label={msg('ui.moreAboutDownload')}
-      size="sm"
-      onclick={(e) => {
-        stop(e);
-        onopen?.(download);
-      }}
-    >
-      <ChevronRight size="1.8rem" strokeWidth={1.8} />
-    </IconButton>
+      <DropdownMenu items={menuItems} align="left" onselect={onmenu}>
+        {#snippet trigger({ props })}
+          <IconButton label={$t('downloads.panel.more', { name: download.name })} size="sm" {...props} data-panel-control="more">
+            <Ellipsis size="1.6rem" strokeWidth={1.8} />
+          </IconButton>
+        {/snippet}
+      </DropdownMenu>
+    </div>
   </div>
-</div>
+
+  {#if !compact}
+    <div class="graph">
+      <SpeedGraph {series} {limit} testid="download-graph" />
+    </div>
+  {/if}
+</section>
 
 {#if confirmOpen}
   <ConfirmModal
-    prompt={cancelDownloadPrompt(download.name)}
-    onconfirm={() => cancel(download.id)}
-    onclose={() => (confirmOpen = false)}
+    prompt={cancelPrompt}
+    onconfirm={confirmCancel}
+    onclose={closeCancel}
     errorText={(err) => installErrorText(err)}
+    returnFocus={() => handOffTarget(cancelOrder, id, { stays: false, prefer: 'more', away })}
   />
 {/if}
 
 <style>
   .item {
     display: grid;
-    grid-template-columns: 4.8rem minmax(0, 1fr) 10.5rem 24rem;
-    align-items: center;
-    column-gap: var(--space-5);
-    padding: var(--space-3) var(--space-5);
+    grid-template-columns: 12rem minmax(0, 1fr) minmax(20rem, 28rem);
+    gap: var(--space-5);
+    align-items: start;
+    padding: var(--space-5);
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    cursor: pointer;
-    transition: border-color var(--dur) var(--ease);
-    animation: rise-in var(--dur-panel) var(--ease) backwards;
   }
 
-  .item:hover {
-    border-color: var(--border-strong);
+  .item.compact {
+    grid-template-columns: 6.4rem minmax(0, 1fr);
+    padding: var(--space-3) var(--space-5);
+  }
+
+  .cover {
+    overflow: hidden;
+    border-radius: var(--radius-sm);
   }
 
   .main {
-    min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
-  }
-
-  .head {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
+    gap: var(--space-2);
     min-width: 0;
-  }
-
-  .title {
-    min-width: 0;
-    font-size: var(--font-md);
-    font-weight: 600;
-    letter-spacing: var(--tracking-heading);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   .tags {
     display: flex;
-    gap: 0.6rem;
-    flex-shrink: 0;
-  }
-
-  .progress-row {
-    display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-3);
-    min-height: 2.2rem;
-  }
-
-  .bar {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .pct {
-    flex-shrink: 0;
-    width: 4.2rem;
-    text-align: right;
-    font-size: var(--font-sm);
-    font-weight: 500;
-    color: var(--text);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .meta {
+    gap: var(--space-2) var(--space-3);
+    color: var(--text-2);
     font-size: var(--font-xs);
-    color: var(--text-3);
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 
-  .sep {
-    margin: 0 0.5rem;
-    opacity: 0.6;
+  .tags:empty {
+    display: none;
+  }
+
+  .tag {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .title {
+    margin: 0;
+    font-size: var(--font-lg);
+    font-weight: 650;
+    letter-spacing: var(--tracking-heading);
+    overflow-wrap: anywhere;
+  }
+
+  .compact .title {
+    font-size: var(--font-md);
+  }
+
+  .amount,
+  .note {
+    margin: 0;
+    color: var(--text-2);
+    font-size: var(--font-sm);
+  }
+
+  .stats {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-1) var(--space-4);
+    margin: var(--space-1) 0 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .speed {
+    font-size: var(--font-title);
+    font-weight: 650;
+    letter-spacing: var(--tracking-title);
+    line-height: 1.1;
+  }
+
+  .sub {
+    color: var(--text-2);
+    font-size: var(--font-xs);
+  }
+
+  .rest {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-3);
+    color: var(--text-2);
+    font-size: var(--font-sm);
   }
 
   .dim {
@@ -290,65 +419,28 @@
   }
 
   .stalled {
-    color: var(--warning, var(--text-2));
+    color: var(--warning);
   }
 
-  .eta,
-  .state.paused {
-    color: var(--text-2);
-  }
-
-  .speeds {
+  .actions {
     display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 0.4rem;
-    min-width: 0;
-    font-size: var(--font-sm);
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-
-  .speeds span {
-    display: inline-flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 0.4rem;
+    gap: var(--space-2);
+    margin-top: var(--space-1);
   }
 
-  .down {
-    font-weight: 500;
-    color: var(--text);
-  }
-
-  .up {
-    font-size: var(--font-xs);
-    color: var(--text-3);
-  }
-
-  .controls {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 0.4rem;
+  .graph {
     min-width: 0;
   }
 
-  .toggle {
-    display: flex;
-    justify-content: flex-end;
-    flex: 1;
-    min-width: 0;
-    margin-right: 0.4rem;
-  }
-
-  @media (max-width: 1300px) {
+  @media (max-width: 1100px) {
     .item {
-      grid-template-columns: 4.8rem minmax(0, 1fr) 9.5rem 24rem;
-      column-gap: var(--space-4);
+      grid-template-columns: 9.6rem minmax(0, 1fr);
     }
 
-    .tags {
-      display: none;
+    .graph {
+      grid-column: 1 / -1;
     }
   }
 </style>
