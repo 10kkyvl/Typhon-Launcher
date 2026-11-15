@@ -1,12 +1,10 @@
 <script lang="ts">
   import Page from '../../lib/components/Page.svelte';
   import { onMount } from 'svelte';
-  import { ChevronDown, HardDrive, RefreshCw } from '@lucide/svelte';
+  import { HardDrive, RefreshCw } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
-  import Chip from '../../lib/components/Chip.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
-  import DropdownMenu from '../../lib/components/DropdownMenu.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import Notice from '../../lib/components/Notice.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
@@ -14,26 +12,21 @@
   import Spinner from '../../lib/components/Spinner.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import {
-    ageOf,
-    ageText,
-    canManageGame,
     countUnknown,
     downloadBlocked,
-    gameBlockedKey,
-    isStale,
     leftoverKindKey,
     reasonLabel,
     sizeSorted,
     sortGames,
     type GameSort,
   } from '../../lib/diskusage/usage';
-  import { openMoveGame } from '../../lib/game/actions/move';
   import { isEmulated } from '../../lib/library/emulation';
   import { libraryGames } from '../../lib/stores/library';
   import { msg } from '../../lib/i18n';
   import { installErrorText } from '../../lib/install/installErrors';
   import { activeMove } from '../../lib/stores/relocate';
   import { createDiskUsagePage } from './diskUsagePage.svelte';
+  import GamesSection from './GamesSection.svelte';
   import UsageRow from './UsageRow.svelte';
   import UsageSection from './UsageSection.svelte';
   import { size, total } from './usageSizes';
@@ -135,54 +128,7 @@
       </EmptyState>
     {:else}
       {#if games.length > 0}
-        <UsageSection title={msg('diskusage.gamesTitle')} hint={msg('diskusage.gamesHint')} total={total(page.report.totals.gamesBytes, games.some((g) => g.sizeUnknown))}>
-          {#snippet tools()}
-            <DropdownMenu
-              items={(['size', 'played'] as const).map((id) => ({ id, label: sortLabels[id], checked: sort === id }))}
-              onselect={(id) => (sort = id as GameSort)}
-            >
-              {#snippet trigger({ props })}
-                <Chip {...props}>
-                  {msg('diskusage.sortLabel', { sort: sortLabels[sort] })}
-                  <ChevronDown size="1.4rem" strokeWidth={1.8} />
-                </Chip>
-              {/snippet}
-            </DropdownMenu>
-          {/snippet}
-          {#each games as game (game.id)}
-            {@const blocked = gameBlockedKey(game)}
-            {@const manage = canManageGame(game)}
-            <UsageRow title={game.title} path={game.installDir} pathTitle={game.installDir} played={ageText(ageOf(game.lastPlayed, now))} size={size(game)}>
-              {#snippet badges()}
-                {#if game.external}
-                  <StatusBadge kind="neutral" label={msg('diskusage.external')} plain />
-                {/if}
-                {#if game.linked}
-                  <StatusBadge kind="neutral" label={msg('diskusage.linked')} hint={msg('diskusage.linkedHint')} plain />
-                {/if}
-                {#if game.missing}
-                  <StatusBadge kind="warning" label={msg('diskusage.missing')} plain />
-                {/if}
-                {#if game.running}
-                  <StatusBadge kind="accent" label={msg('diskusage.running')} plain />
-                {/if}
-                {#if isStale(game.lastPlayed, now)}
-                  <StatusBadge kind="warning" label={msg('diskusage.stale')} plain />
-                {/if}
-              {/snippet}
-              {#snippet actions()}
-                {#if !game.external}
-                  <Button size="sm" disabled={!manage} reason={blocked ? msg(blocked) : ''} onclick={() => openMoveGame(game.id)}>
-                    {msg('diskusage.move')}
-                  </Button>
-                  <Button size="sm" variant="danger" disabled={!manage} reason={blocked ? msg(blocked) : ''} onclick={() => openRemove(game)}>
-                    {msg('diskusage.remove')}
-                  </Button>
-                {/if}
-              {/snippet}
-            </UsageRow>
-          {/each}
-        </UsageSection>
+        <GamesSection {games} totalBytes={page.report.totals.gamesBytes} {now} {sort} {sortLabels} onsort={(next) => (sort = next)} onremove={openRemove} />
       {/if}
 
       <UsageSection
