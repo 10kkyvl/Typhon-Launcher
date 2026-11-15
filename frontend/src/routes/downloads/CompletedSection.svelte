@@ -5,12 +5,13 @@
   import { t } from '../../lib/i18n';
   import { installErrorText } from '../../lib/install/installErrors';
   import type { Download } from '../../lib/services/downloads';
+  import type { Installation } from '../../lib/services/install';
   import { completed, requestDownloadAction } from '../../lib/stores/downloads';
   import { installationsByDownload } from '../../lib/stores/install';
   import { focusHandOff } from '../../lib/utils/focusHandOff';
   import type { LeaveTicket } from '../../lib/components/downloadPanel';
   import CompletedRow from './CompletedRow.svelte';
-  import { CLEAR_ASKS_ABOVE, canClear, completedKind, completedPart, type CompletedPart } from './completedRow';
+  import { CLEAR_ASKS_ABOVE, canClear, completedKind, completedPart, type CompletedKind, type CompletedPart } from './completedRow';
   import { handOffInView, pageHeading, pressed, returnInView } from './rowFocus';
   import { downloadsSectionIds } from './sections';
 
@@ -40,14 +41,30 @@
   const uid = $props.id();
   const headingId = $derived(downloadsSectionIds[part]);
 
-  const rows = $derived(
-    $completed
-      .map((download) => {
-        const installation = $installationsByDownload.get(download.id);
-        return { download, installation, kind: completedKind(download, installation) };
-      })
-      .filter((row) => completedPart(row.kind) === part),
-  );
+  interface Row {
+    download: Download;
+    installation: Installation | undefined;
+    kind: CompletedKind;
+  }
+
+  // A row keeps its object while its download and its installation are the same objects: a progress
+  // tick of another download changes `$completed` and must not make every row redo its work.
+  let lastRows = new Map<string, Row>();
+
+  const rows = $derived.by(() => {
+    const next = new Map<string, Row>();
+    for (const download of $completed) {
+      const installation = $installationsByDownload.get(download.id);
+      const kept = lastRows.get(download.id);
+      const row =
+        kept && kept.download === download && kept.installation === installation
+          ? kept
+          : { download, installation, kind: completedKind(download, installation) };
+      next.set(download.id, row);
+    }
+    lastRows = next;
+    return Array.from(next.values()).filter((row) => completedPart(row.kind) === part);
+  });
   const clearable = $derived(rows.filter((row) => canClear(row.download, row.kind)).map((row) => row.download.id));
 
   interface Leaving {
