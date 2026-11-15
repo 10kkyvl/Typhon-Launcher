@@ -240,7 +240,7 @@ export const themeTokens = {
   'settings.themeTokenHint.scrim-copy': 'Полупрозрачная подложка под блоком текста, который стоит на арте игры вверху окна; спадает вправо и вниз. Текст на ней — цвет основного текста, он должен читаться и на чёрном, и на белом арте. По умолчанию это цвет страницы на 66 %',
   'settings.themeToken.copy-fade-x': 'Подложка текста: спад вправо',
   'settings.themeTokenHint.copy-fade-x': 'На каком расстоянии справа от текста подложка сходит на нет',
-  'settings.themeToken.copy-fade-y': 'Подложка текста: спад вниз',
+  'settings.themeToken.copy-fade-y': 'Подложка текста: спад по вертикали',
   'settings.themeTokenHint.copy-fade-y': 'На каком расстоянии над текстом и под ним подложка сходит на нет',
 } as const;
 

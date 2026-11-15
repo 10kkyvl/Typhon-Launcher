@@ -108,7 +108,7 @@ Every token a `.typhontheme` file may set. *Default* is the built-in dark value 
 | `--ambient-dim` | number | Game backdrop: dim: Share of the page colour (`--bg`) laid over the game art behind the interface, from 0 to 1: the more, the calmer the art; 1 turns the art off. The launcher still limits the art's brightness so text stays readable | `0.6` |
 | `--scrim-copy` | color | Text plate on game art: A translucent plate under a block of words that stands on the game art across the top of the window; it fades out to the right and below. The words on it are `--text`, which has to stay readable on it over black and over white art. The default is the page colour (`--bg`) at 66 %, so a light theme gets a light plate without setting it | `color-mix(in srgb, var(--bg) 66%, transparent)` |
 | `--copy-fade-x` | length | Text plate: fade to the right: How far to the right of the words the plate fades out | `24rem` |
-| `--copy-fade-y` | length | Text plate: fade down: How far above and below the words the plate fades out | `8rem` |
+| `--copy-fade-y` | length | Text plate: fade above and below: How far above and below the words the plate fades out | `8rem` |
 | `--shadow-pop` | shadow | Shadow: menus and tooltips: Shadow of drop-down menus, tooltips and notifications | `0 0.8rem 2.4rem rgba(0, 0, 0, 0.5), 0 1px 0 rgba(255, 255, 255, 0.04) inset` |
 | `--shadow-modal` | shadow | Shadow: dialogs: Shadow of dialog windows and full-screen viewers | `0 2.4rem 6rem rgba(0, 0, 0, 0.6)` |
 | `--shadow-lift` | shadow | Shadow: raised card: Shadow of a game cover on hover | `0 1.2rem 2.8rem -0.8rem rgba(0, 0, 0, 0.65)` |
