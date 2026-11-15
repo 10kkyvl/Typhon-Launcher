@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { balanced } from '../testing/scan';
+import { fromSettingsRow, usesIn, type Use } from '../testing/markup';
 import { frontendSources } from '../testing/sources';
 
 /**
@@ -7,94 +7,11 @@ import { frontendSources } from '../testing/sources';
  * and Toggle never writes it (Toggle.svelte), so a `bind:checked` next to `onchange` would never be
  * written: such a caller sets its own state in `onchange`.
  *
- * Limit: the markup is read as tags and `{...}` expressions; markup built in script is not seen, and
- * `labelledby` and `describedby` are checked only for an `id=` with the same expression inside the
- * element the switch sits in.
+ * Limit: see lib/testing/markup.ts; `labelledby` and `describedby` are checked only for an `id=` with
+ * the same expression inside the element the switch sits in, or the ids a SettingsRow hands it.
  */
 
-interface Element {
-  name: string;
-  start: number;
-  end: number;
-}
-
-const VOID = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr']);
-
-// The end of the tag that opens at `start` (the index after its `>`), past braces and quoted values.
-function tagEnd(text: string, start: number): number {
-  let at = start + 1;
-  let quote = '';
-  while (at < text.length) {
-    const ch = text[at];
-    if (ch === '{') {
-      const inner = balanced(text, at);
-      if (inner === null) return text.length;
-      at += inner.length + 2;
-      continue;
-    }
-    if (quote) {
-      if (ch === quote) quote = '';
-    } else if (ch === '"' || ch === "'") quote = ch;
-    else if (ch === '>') return at + 1;
-    at += 1;
-  }
-  return text.length;
-}
-
-// Every element of a component's markup, spanning from its opening tag to its closing one.
-function elements(text: string): Element[] {
-  const found: Element[] = [];
-  const open: { name: string; start: number }[] = [];
-  let at = 0;
-  while (at < text.length) {
-    const rest = text.slice(at, at + 80);
-    const raw = /^<(script|style)\b/.exec(rest)?.[1];
-    if (raw) {
-      const close = text.indexOf(`</${raw}>`, at);
-      at = close < 0 ? text.length : close + raw.length + 3;
-    } else if (rest.startsWith('<!--')) {
-      const close = text.indexOf('-->', at);
-      at = close < 0 ? text.length : close + 3;
-    } else if (text[at] === '{') {
-      const inner = balanced(text, at);
-      at += inner === null ? 1 : inner.length + 2;
-    } else if (rest.startsWith('</')) {
-      const close = /^<\/([\w:.-]+)\s*>/.exec(rest);
-      const index = close ? open.map((element) => element.name).lastIndexOf(close[1]) : -1;
-      if (close && index >= 0) {
-        const [element] = open.splice(index);
-        found.push({ name: element.name, start: element.start, end: at + close[0].length });
-      }
-      at += close ? close[0].length : 2;
-    } else if (/^<[A-Za-z]/.test(rest)) {
-      const name = /^<([\w:.-]+)/.exec(rest)?.[1] ?? '';
-      const end = tagEnd(text, at);
-      if (text[end - 2] === '/' || VOID.has(name.toLowerCase())) found.push({ name, start: at, end });
-      else open.push({ name, start: at });
-      at = end;
-    } else at += 1;
-  }
-  return found;
-}
-
-interface Use {
-  path: string;
-  tag: string;
-  /** The markup of the element the switch sits in: its row. */
-  row: string;
-}
-
-function toggles(path: string, text: string): Use[] {
-  const all = elements(text);
-  return all
-    .filter((element) => element.name === 'Toggle')
-    .map((toggle) => {
-      const parent = all
-        .filter((element) => element !== toggle && element.start < toggle.start && element.end >= toggle.end)
-        .sort((a, b) => b.start - a.start)[0];
-      return { path, tag: text.slice(toggle.start, toggle.end), row: parent ? text.slice(parent.start, parent.end) : text };
-    });
-}
+const toggles = (path: string, text: string): Use[] => usesIn(path, text, 'Toggle');
 
 const callers = Object.entries(frontendSources).filter(([path]) => path.endsWith('.svelte') && !path.startsWith('lib/testing/'));
 const uses = callers.flatMap(([path, text]) => toggles(path, text));
@@ -125,14 +42,6 @@ function named({ path, tag, row }: Use, text = frontendSources[path] ?? ''): boo
   if (own) return !text.includes(`>{${own}}<`);
   const by = /\blabelledby=("[^"]*"|\{[^}]*\})/.exec(tag)?.[1];
   return by !== undefined && (row.includes(`id=${by}`) || fromSettingsRow(row, 'labelId', by));
-}
-
-// A switch put straight into a SettingsRow's snippet takes the ids the row hands it
-// (`{#snippet children({ labelId, hintId })}`): the row draws its label and hint with them. Read by the
-// names the row gives; a renamed binding is not seen.
-function fromSettingsRow(row: string, key: 'labelId' | 'hintId', by: string): boolean {
-  const snippet = new RegExp(String.raw`\{#snippet \w+\(\{[^}]*\b${key}\b[^}]*\}\)\}`);
-  return /^<SettingsRow\b/.test(row) && by === `{${key}}` && snippet.test(row);
 }
 
 // The description, where there is one, is the row's own text too. A description shown only in some

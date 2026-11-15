@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { balanced } from '../testing/scan';
+import { fromSettingsRow, usesIn, type Use } from '../testing/markup';
 import { frontendSources } from '../testing/sources';
 
 /**
@@ -7,29 +7,26 @@ import { frontendSources } from '../testing/sources';
  * Select never writes it (Select.svelte), so a `bind:value` next to `onchange` would never be written:
  * such a caller sets its own state in `onchange`.
  *
- * Limit: a tag is read up to its first `>` outside braces; markup built in script is not seen.
+ * Limit: see lib/testing/markup.ts; the row of a use is the element it sits in.
  */
 
-function tags(text: string, name: string): string[] {
-  const found: string[] = [];
-  for (const m of text.matchAll(new RegExp(`<${name}\\b`, 'g'))) {
-    let at = (m.index ?? 0) + m[0].length;
-    while (at < text.length && text[at] !== '>') {
-      if (text[at] === '{') {
-        const inner = balanced(text, at);
-        if (inner === null) break;
-        at += inner.length + 2;
-      } else at += 1;
-    }
-    found.push(text.slice(m.index, at + 1));
-  }
-  return found;
+// A screen reader announces an unnamed field as a bare combobox; see the test below for the ways a
+// field is named. A `<label for>` and an element with the `labelledby` id are looked for in the whole
+// file (the settings cards put the label in a column beside the field's own box); the id a SettingsRow
+// hands its snippet only in that row, as Toggle's guard reads it.
+function named({ path, tag, row }: Use, text: string): boolean {
+  if (/\blabel=\{msg\(/.test(tag)) return true;
+  const id = /\bid=("[^"]*"|\{[^}]*\})/.exec(tag)?.[1];
+  if (id && text.includes(`for=${id}`)) return true;
+  const by = /\blabelledby=("[^"]*"|\{[^}]*\})/.exec(tag)?.[1];
+  if (!by) return path === 'lib/components/RateLimitInput.svelte' && /\{labelledby\}/.test(tag);
+  return (by !== '{labelId}' && text.includes(`id=${by}`)) || fromSettingsRow(row, 'labelId', by);
 }
 
-function uses(name: string): { path: string; tag: string }[] {
+function uses(name: string): Use[] {
   return Object.entries(frontendSources)
     .filter(([path]) => path.endsWith('.svelte'))
-    .flatMap(([path, text]) => tags(text, name).map((tag) => ({ path, tag })));
+    .flatMap(([path, text]) => usesIn(path, text, name));
 }
 
 describe('Select call sites', () => {
@@ -43,23 +40,24 @@ describe('Select call sites', () => {
   // a field with no visible label; RateLimitInput passes its caller's `labelledby` on. An `id` alone,
   // without such a `<label for>`, names nothing.
   it('name every field: from the visible label next to it, or with label where none is shown', () => {
-    const unnamed = [...uses('Select'), ...uses('RateLimitInput')].filter(({ path, tag }) => {
-      const text = frontendSources[path] ?? '';
-      if (/\blabel=\{msg\(/.test(tag)) return false;
-      const id = /\bid=("[^"]*"|\{[^}]*\})/.exec(tag)?.[1];
-      if (id && text.includes(`for=${id}`)) return false;
-      const by = /\blabelledby=("[^"]*"|\{[^}]*\})/.exec(tag)?.[1];
-      if (!by) return !(path === 'lib/components/RateLimitInput.svelte' && /\{labelledby\}/.test(tag));
-      return !text.includes(`id=${by}`) && !fromSettingsRow(text, by);
-    });
+    const unnamed = [...uses('Select'), ...uses('RateLimitInput')].filter((use) => !named(use, frontendSources[use.path] ?? ''));
     expect(unnamed.map(({ path, tag }) => `${path}: ${tag}`)).toEqual([]);
+  });
+
+  it('take the label id only inside the SettingsRow that hands it', () => {
+    const outside = '<script lang="ts"></script>\n<SettingsRow label="Sound">{#snippet children({ labelId, hintId })}<Toggle labelledby={labelId} />{/snippet}</SettingsRow>\n<Select labelledby={labelId} />';
+    const inside = '<SettingsRow label="Language">{#snippet children({ labelId })}<Select labelledby={labelId} />{/snippet}</SettingsRow>';
+    expect(usesIn('x.svelte', outside, 'Select').map((use) => named(use, outside))).toEqual([false]);
+    expect(usesIn('x.svelte', inside, 'Select').map((use) => named(use, inside))).toEqual([true]);
+    const label = '<div class="row"><span id="lang">Language</span><Select labelledby="lang" /></div>';
+    expect(usesIn('x.svelte', label, 'Select').map((use) => named(use, label))).toEqual([true]);
   });
 
   it('take the label id a SettingsRow hands its snippet', () => {
     const row = '<SettingsRow label="Language">{#snippet children({ labelId, hintId })}<Select labelledby={labelId} />{/snippet}</SettingsRow>';
-    expect(fromSettingsRow(row, '{labelId}')).toBe(true);
-    expect(fromSettingsRow(row.replace('labelId, ', ''), '{labelId}')).toBe(false);
-    expect(fromSettingsRow('<div>{#snippet children({ labelId })}<Select labelledby={labelId} />{/snippet}</div>', '{labelId}')).toBe(false);
+    expect(fromSettingsRow(row, 'labelId', '{labelId}')).toBe(true);
+    expect(fromSettingsRow(row.replace('labelId, ', ''), 'labelId', '{labelId}')).toBe(false);
+    expect(fromSettingsRow('<div>{#snippet children({ labelId })}<Select labelledby={labelId} />{/snippet}</div>', 'labelId', '{labelId}')).toBe(false);
   });
 
   it('bind the value or hold it with onchange, never both', () => {
@@ -81,12 +79,6 @@ describe('Select call sites', () => {
 });
 
 const SPREAD_ALLOWED: string[] = [];
-
-// A field in a SettingsRow's snippet is named by the label the row draws with the id it hands the
-// snippet (`{#snippet children({ labelId })}`). Read in the file, as the rest of this guard reads ids.
-function fromSettingsRow(text: string, by: string): boolean {
-  return by === '{labelId}' && /<SettingsRow\b/.test(text) && /\{#snippet \w+\(\{[^}]*\blabelId\b[^}]*\}\)\}/.test(text);
-}
 
 function bothWays(tag: string): boolean {
   return /\bbind:value\b/.test(tag) && /(\bonchange=|\{\s*onchange\s*\})/.test(tag);
