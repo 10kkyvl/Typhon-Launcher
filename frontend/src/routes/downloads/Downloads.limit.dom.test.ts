@@ -127,6 +127,20 @@ describe('Downloads: the speed limit popover', () => {
     expect(get(toasts)).toEqual([]);
   });
 
+  it('a refusal said in the popover is gone when it opens again', async () => {
+    vi.mocked(saveSettingsPatch).mockRejectedValueOnce(new Error('typhon:settings.library_not_writable: denied'));
+    const { user } = await openLimit(20 * MB);
+    await user.keyboard('{ArrowRight}');
+    const dialog = screen.getByRole('dialog', { name: msg('downloads.page.limitLabel') });
+    await waitFor(() => expect(within(dialog).queryByRole('alert')).not.toBeNull());
+
+    await user.keyboard('{Escape}');
+    await user.keyboard('{Enter}');
+
+    const again = screen.getByRole('dialog', { name: msg('downloads.page.limitLabel') });
+    expect(within(again).queryByRole('alert')).toBeNull();
+  });
+
   it('a drag shows each step on the slider and the button, and saves once on release', async () => {
     vi.mocked(saveSettingsPatch).mockImplementation(async (patch) => ({ ...stored(0), ...patch }) as Settings);
     await openLimit(20 * MB);

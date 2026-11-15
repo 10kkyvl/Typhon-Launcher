@@ -11,10 +11,16 @@ vi.mock('../../lib/services/downloads', async (actual) => ({
   removeDownload: vi.fn(),
   getDownload: vi.fn(() => new Promise(() => {})),
 }));
+vi.mock('../../lib/services/install', async (actual) => ({
+  ...(await actual<typeof import('../../lib/services/install')>()),
+  retryInstall: vi.fn(),
+}));
 
 import { msg } from '../../lib/i18n';
 import { cancelDownload, pauseDownload, removeDownload, resumeDownload, type Download } from '../../lib/services/downloads';
+import { retryInstall, type Installation } from '../../lib/services/install';
 import { downloads } from '../../lib/stores/downloads';
+import { installations } from '../../lib/stores/install';
 import { resetHistory } from '../../lib/stores/router';
 import { toasts } from '../../lib/stores/toasts';
 import { renderDom } from '../../lib/testing/dom';
@@ -61,7 +67,7 @@ beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn(function (this: HTMLElement) {
     scrolled.push(this);
   });
-  for (const fn of [cancelDownload, pauseDownload, removeDownload, resumeDownload]) {
+  for (const fn of [cancelDownload, pauseDownload, removeDownload, resumeDownload, retryInstall]) {
     vi.mocked(fn).mockReset();
     vi.mocked(fn).mockResolvedValue(undefined);
   }
@@ -69,6 +75,7 @@ beforeEach(() => {
 
 afterEach(() => {
   downloads.set([]);
+  installations.set([]);
   toasts.set([]);
   resetHistory();
   document.body.replaceChildren();
@@ -320,5 +327,57 @@ describe('Downloads: the hand-off brings its target into view', () => {
     const heading = screen.getByRole('heading', { level: 1 });
     await waitFor(() => expect(document.activeElement).toBe(heading));
     await waitFor(() => expect(scrolled).toContain(heading));
+  });
+});
+
+describe('Downloads: what a press leaves behind, and Go moving a focused row', () => {
+  const pauseOf = (name: string) => within(panel(name)).getByRole('button', { name: msg('downloads.panel.pauseNamed', { name }) });
+  const resumeOf = (name: string) => within(panel(name)).getByRole('button', { name: msg('downloads.panel.resumeNamed', { name }) });
+  const moreIn = (row: HTMLElement, name: string) => within(row).getByRole('button', { name: msg('downloads.panel.more', { name }) });
+  const rowOf = (id: string) => document.querySelector<HTMLElement>(`[data-download-row="${id}"]`) as HTMLElement;
+  const extracting = (downloadId: string) =>
+    ({ id: `i-${downloadId}`, downloadId, gameId: '', status: 'extracting', progress: 0.1, bytesDone: 1, bytesTotal: 10 }) as Installation;
+
+  it('a Pause Go answers before its event: once the panel shows Resume, a later completion is not followed', async () => {
+    downloads.set([download(), download({ id: 'd2', name: 'Game Two' })]);
+    const { user } = renderDom(Downloads);
+    pauseOf('Game One').focus();
+
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(pauseDownload).toHaveBeenCalledWith('d1'));
+    await new Promise((done) => setTimeout(done, 0));
+    goSets('d1', { status: 'paused', downloadSpeed: 0 });
+    await waitFor(() => expect(document.activeElement).toBe(resumeOf('Game One')));
+
+    goSets('d1', { status: 'completed', completedAt: '2026-09-08T01:00:00Z' });
+
+    await waitFor(() => expect(document.activeElement).toBe(pauseOf('Game Two')));
+  });
+
+  it('a focused completed row Go moves to "Installing": focus goes to the row now in its place, not along', async () => {
+    downloads.set([
+      download({ status: 'completed', completedAt: '2026-09-08T02:00:00Z' }),
+      download({ id: 'd2', name: 'Game Two', status: 'completed', completedAt: '2026-09-08T01:00:00Z' }),
+    ]);
+    renderDom(Downloads);
+    moreIn(rowOf('d1'), 'Game One').focus();
+
+    installations.set([extracting('d1')]);
+
+    await waitFor(() => expect(document.activeElement).toBe(moreIn(rowOf('d2'), 'Game Two')));
+  });
+
+  it('the catch-all starts from the focused row: the last queued row that starts hands focus to the row above', async () => {
+    downloads.set([
+      download({ id: 'a', name: 'Alpha', status: 'queued' }),
+      download({ id: 'b', name: 'Beta', status: 'queued' }),
+      download({ id: 'c', name: 'Gamma', status: 'queued' }),
+    ]);
+    renderDom(Downloads);
+    grip('Gamma').focus();
+
+    goSets('c', { status: 'downloading' });
+
+    await waitFor(() => expect(document.activeElement).toBe(grip('Beta')));
   });
 });

@@ -311,6 +311,16 @@ describe('completed downloads: each state of a row', () => {
     );
   });
 
+  it('a failure that needs the player: the lead opens the install dialog instead of retrying here', async () => {
+    const view = show([download()], [installation({ status: 'failed', error: 'typhon:install.installer_needs_interactive' })]);
+    const own = row('Game One');
+
+    expect(within(own).queryByRole('button', { name: 'Retry installing “Game One”' })).toBeNull();
+    await view.user.click(within(own).getByRole('button', { name: 'Installation details for “Game One”' }));
+    expect(view.oninstall).toHaveBeenCalledWith('d1');
+    expect(retryInstall).not.toHaveBeenCalled();
+  });
+
   it('cancelled and interrupted say which, and offer to install again', async () => {
     const view = show(
       [download(), download({ id: 'd2', name: 'Game Two' })],
@@ -357,6 +367,19 @@ describe('completed downloads: each state of a row', () => {
     expect(own.textContent).toContain(`installed today, ${clockTime(new Date(2026, 9, 28, 15, 30))}`);
     await view.user.click(within(own).getByRole('button', { name: 'Play “Game One”' }));
     expect(playGame).toHaveBeenCalledWith('lib1');
+  });
+
+  it('a Play that fails is said on screen by its code, and the row stays as it was', async () => {
+    vi.mocked(playGame).mockRejectedValueOnce(new Error('typhon:nonexistent.code: no such'));
+    libraryGames.set([libraryGame()]);
+    const view = show([download()], [installation({ status: 'completed' })]);
+    const play = within(row('Game One')).getByRole('button', { name: 'Play “Game One”' });
+    play.focus();
+
+    await view.user.keyboard('{Enter}');
+
+    await waitFor(() => expect(get(toasts).map((t) => [t.kind, t.message])).toEqual([['danger', 'Failed to launch the game']]));
+    expect(document.activeElement).toBe(play);
   });
 
   it('Play pressed twice launches once, busy and focused while the launch runs', async () => {
@@ -786,6 +809,20 @@ describe('completed downloads: Clear the list', () => {
 
     await waitFor(() => expect(screen.queryByRole('region', { name: /^Completed/ })).toBeNull());
     await waitFor(() => expect(document.activeElement).toBe(heading));
+  });
+
+  it('removes one download after another, not all at once', async () => {
+    const first = deferred();
+    vi.mocked(removeDownload).mockImplementationOnce(() => first.promise);
+    const view = show([download(), download({ id: 'd2', name: 'Game Two' })], installed('d1', 'd2'));
+
+    await view.user.click(clearButton());
+
+    await waitFor(() => expect(removeDownload).toHaveBeenCalledTimes(1));
+    await new Promise((done) => setTimeout(done, 0));
+    expect(removeDownload).toHaveBeenCalledTimes(1);
+    first.resolve();
+    await waitFor(() => expect(vi.mocked(removeDownload).mock.calls).toEqual([['d1'], ['d2']]));
   });
 
   it('a second press while clearing sends nothing more', async () => {
