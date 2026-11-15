@@ -209,6 +209,107 @@ func TestMoveToAgreesWithMoveUpAndMoveDown(t *testing.T) {
 	}
 }
 
+func (l *emitLog) names() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	out := make([]string, 0, len(l.events))
+	for _, e := range l.events {
+		out = append(out, e.name)
+	}
+	return out
+}
+
+func listedOrder(m *Manager) []string {
+	var ids []string
+	for _, d := range m.List() {
+		ids = append(ids, d.ID)
+	}
+	return ids
+}
+
+// A step up or down tells the window the whole new order the way MoveTo does,
+// besides the two downloads it swapped, so the window does not have to read the
+// list again to learn it.
+func TestAStepSaysTheNewOrder(t *testing.T) {
+	cases := []struct {
+		name string
+		step func(m *Manager) error
+	}{
+		{"up", func(m *Manager) error { return m.MoveUp("q3") }},
+		{"down", func(m *Manager) error { return m.MoveDown("q1") }},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			m := mixedQueue(t)
+			log := recordEmits(t)
+
+			if err := c.step(m); err != nil {
+				t.Fatal(err)
+			}
+
+			reorders := log.reorders()
+			if want := listedOrder(m); len(reorders) != 1 || !slices.Equal(reorders[0].IDs, want) {
+				t.Fatalf("reorder events = %+v, want one carrying %v", reorders, want)
+			}
+			want := []string{eventUpdated, eventUpdated, eventReordered}
+			if got := log.names(); !slices.Equal(got, want) {
+				t.Fatalf("events = %v, want %v", got, want)
+			}
+		})
+	}
+}
+
+func TestAStepThatDoesNotMoveSaysNothing(t *testing.T) {
+	cases := []struct {
+		name string
+		step func(m *Manager) error
+		code string
+	}{
+		{"the first queued up", func(m *Manager) error { return m.MoveUp("q1") }, ""},
+		{"the last queued down", func(m *Manager) error { return m.MoveDown("q4") }, ""},
+		{"a paused one", func(m *Manager) error { return m.MoveUp("P") }, "download.unavailable"},
+		{"an unknown one", func(m *Manager) error { return m.MoveDown("nope") }, "download.not_found"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			m := mixedQueue(t)
+			before := m.order()
+			log := recordEmits(t)
+
+			err := c.step(m)
+
+			if got := uierr.Code(err); got != c.code || (c.code == "" && err != nil) {
+				t.Fatalf("step = %v, code %q, want %q", err, got, c.code)
+			}
+			if got := m.order(); !slices.Equal(got, before) {
+				t.Fatalf("order = %v, want %v", got, before)
+			}
+			if got := log.names(); len(got) != 0 {
+				t.Fatalf("events %v for a step that moved nothing", got)
+			}
+		})
+	}
+}
+
+func TestAStepThatIsNotSavedSaysNoOrder(t *testing.T) {
+	m := mixedQueue(t)
+	before := m.order()
+	log := recordEmits(t)
+	breakStore(t, m)
+
+	err := m.MoveDown("q1")
+
+	if got := uierr.Code(err); got != "download.save_failed" {
+		t.Fatalf("code = %q (%v), want download.save_failed", got, err)
+	}
+	if got := m.order(); !slices.Equal(got, before) {
+		t.Fatalf("order = %v, want it rolled back to %v", got, before)
+	}
+	if n := log.count(eventReordered) + log.count(eventUpdated); n != 0 {
+		t.Fatalf("%d order or download events emitted for a step that was not saved", n)
+	}
+}
+
 func TestConcurrentMovesAndPausesKeepEveryDownloadOnce(t *testing.T) {
 	m := newTestManager(t, 1)
 	var ids []string

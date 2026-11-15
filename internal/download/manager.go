@@ -1832,6 +1832,9 @@ func (m *Manager) move(id string, step int) error {
 	}
 	emit(eventUpdated, snapshot(m.items[index]))
 	emit(eventUpdated, snapshot(m.items[target]))
+	// Under m.mu for the same reason as in MoveTo: the last order event to
+	// leave carries the final order.
+	emit(eventReordered, m.orderLocked())
 	return nil
 }
 
