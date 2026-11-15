@@ -43,7 +43,7 @@
      * assistive tech. A control's content is its name and hides any progress bar inside it.
      */
     decorative?: boolean;
-    /** Data is flowing: a streak runs inside the fill. None while paused, unknown, or with motion off. */
+    /** Data is flowing: a streak runs inside the fill. None while paused, unknown, at 0 or with motion off. */
     active?: boolean;
     /** On hold: the fill cools (dims) and keeps its tone. Say it in `valueText` too: a look is not a state. */
     paused?: boolean;
@@ -61,7 +61,7 @@
     <div
       class="fill"
       class:indeterminate
-      class:active={active && !paused && !indeterminate}
+      class:active={active && !paused && !indeterminate && pct > 0}
       class:paused={paused && !indeterminate}
       style:--pct={indeterminate ? undefined : `${pct}%`}
     ></div>
@@ -135,13 +135,16 @@
     transition: transform var(--progress-step) linear;
   }
 
+  /* The fill's box ends where the drawn part ends (it is shifted, not shortened), and the track cuts
+     its start: clipping here keeps what the fill draws over itself on the progress. */
   .fill.active,
   .fill.paused {
     position: relative;
+    overflow: hidden;
   }
 
   /* A band that crosses the drawn part of the fill (the fill is shifted, so that part starts at
-     100% - pct) and is cut by the track at its right end. */
+     100% - pct) and runs out at the end of the progress. */
   .fill.active::after {
     content: '';
     position: absolute;

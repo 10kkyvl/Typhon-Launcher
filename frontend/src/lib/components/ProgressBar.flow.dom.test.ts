@@ -72,6 +72,26 @@ describe('a progress bar whose data is flowing', () => {
     expect(reduced).toMatch(/display:\s*none/);
   });
 
+  // The band travels to 1.08–1.53 times the drawn width: unclipped it slides off the end of the progress
+  // onto the empty track and reads as more done. The fill's box ends where the drawn part ends (it is
+  // shifted, not shortened), so the fill clipping its pseudo-elements keeps the band on the progress.
+  it('keeps the streak inside the drawn part: the fill clips it', () => {
+    const flowing = fillOf({ active: true });
+    applyStyles(flowing, source);
+    expect(streak(flowing)).toBe(true);
+    expect(getComputedStyle(flowing).overflow).toBe('hidden');
+  });
+
+  it('runs no streak at 0 %, where nothing is drawn', () => {
+    const empty = fillOf({ active: true, value: 0 });
+    applyStyles(empty, source);
+    expect(streak(empty)).toBe(false);
+
+    const started = fillOf({ active: true, value: 0.5 });
+    applyStyles(started, source);
+    expect(streak(started)).toBe(true);
+  });
+
   it('moves the streak by transform only, from the start of the drawn part', () => {
     const body = ruleBody(css, '.fill.active::after');
     expect(body.left).toBe('calc(100% - var(--pct, 0%))');
