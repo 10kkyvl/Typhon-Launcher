@@ -3,13 +3,21 @@ import results from './CatalogResults.svelte?raw';
 import pageData from './catalogPageData.svelte.ts?raw';
 import pages from './catalogPages.svelte.ts?raw';
 
+const screen = import.meta.glob<string>(['./*.svelte', './*.svelte.ts'], { query: '?raw', import: 'default', eager: true });
+
 describe('Catalog error toasts', () => {
-  // Every file of the page that catches an error from Go.
-  it.each([
-    ['CatalogResults.svelte', results],
-    ['catalogPageData.svelte.ts', pageData],
-    ['catalogPages.svelte.ts', pages],
-  ])('%s never shows the raw backend error message to the user', (_name, source) => {
+  it('reads every file of the page', () => {
+    expect(Object.keys(screen).sort()).toEqual([
+      './Catalog.svelte',
+      './CatalogNotes.svelte',
+      './CatalogResults.svelte',
+      './CatalogToolbar.svelte',
+      './catalogPageData.svelte.ts',
+      './catalogPages.svelte.ts',
+    ]);
+  });
+
+  it.each(Object.entries(screen))('%s never shows the raw backend error message to the user', (_name, source) => {
     expect(source).not.toMatch(/err\.message/);
     expect(source).not.toMatch(/instanceof Error/);
   });
