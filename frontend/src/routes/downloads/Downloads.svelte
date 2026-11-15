@@ -11,7 +11,7 @@
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import { gamePageId } from '../../lib/services/downloads';
   import { claimAmbient } from '../../lib/stores/ambient';
-  import { active, completed, failed, queue } from '../../lib/stores/downloads';
+  import { active, completed, downloadsLoaded, downloadsLoadError, failed, queue, reloadDownloads } from '../../lib/stores/downloads';
   import { requestArt } from '../../lib/stores/metadata';
   import { navigate } from '../../lib/stores/router';
   import { installErrorText } from '../../lib/install/installErrors';
@@ -22,7 +22,6 @@
   import DownloadsSection from './DownloadsSection.svelte';
   import DownloadsSummary from './DownloadsSummary.svelte';
   import FailedList from './FailedList.svelte';
-  import { downloadsListLoad, reloadDownloadsList } from './listLoad';
   import PlayThrottleBanner from './PlayThrottleBanner.svelte';
   import QueueList from './QueueList.svelte';
   import { downloadsSectionIds } from './sections';
@@ -38,8 +37,8 @@
   const nothing = $derived(
     $active.length === 0 && $queue.length === 0 && $completed.length === 0 && $failed.length === 0,
   );
-  const loadFailed = $derived(!$downloadsListLoad.loaded && $downloadsListLoad.error != null);
-  const loading = $derived(!$downloadsListLoad.loaded && !loadFailed);
+  const loadFailed = $derived(!$downloadsLoaded && $downloadsLoadError != null);
+  const loading = $derived(!$downloadsLoaded && !loadFailed);
 
   // The backdrop shows the first download under way, a running one before a paused one. Only the id is
   // derived, so a progress tick does not claim again.
@@ -91,10 +90,10 @@
       <Notice
         tone="danger"
         title={$t('downloads.page.loadFailed')}
-        retry={{ label: $t('common.retry'), run: () => reloadDownloadsList() }}
+        retry={{ label: $t('common.retry'), run: reloadDownloads }}
         bind:retrying
       >
-        {installErrorText($downloadsListLoad.error, $t('downloads.page.loadFailedText'))}
+        {installErrorText($downloadsLoadError, $t('downloads.page.loadFailedText'))}
       </Notice>
     </div>
   {/if}

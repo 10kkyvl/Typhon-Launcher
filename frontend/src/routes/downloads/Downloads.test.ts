@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
 
 import Downloads from './Downloads.svelte';
-import { downloads } from '../../lib/stores/downloads';
+import { downloads, downloadsLoaded } from '../../lib/stores/downloads';
 import { installations } from '../../lib/stores/install';
 import { locale } from '../../lib/i18n';
 import type { Download } from '../../lib/services/downloads';
@@ -87,6 +87,7 @@ afterEach(() => {
 
 describe('downloads screen', () => {
   it('says there is nothing, with no failed section, when nothing was downloaded', () => {
+    downloadsLoaded.set(true);
     const html = page();
 
     expect(html).toContain('Dead calm. Nothing is downloading');
