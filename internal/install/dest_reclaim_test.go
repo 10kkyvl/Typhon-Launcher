@@ -225,6 +225,30 @@ func TestReclaimKeepsTheRecordWhenPersistFails(t *testing.T) {
 	}
 }
 
+// A new install into the folder a failed install left behind clears the
+// leftover through the removal journal: while the journal cannot be read the
+// leftover stays and the install says why.
+func TestReclaimRefusesWhileTheRemovalJournalIsUnreadable(t *testing.T) {
+	r := newRig(t)
+	r.s.freeSpace = freeOf(1 << 30)
+	archive := zipDownload(t, r)
+	dest := filepath.Join(t.TempDir(), "Game")
+	seedFailedInstall(t, r, archive, dest, true)
+	if err := os.Mkdir(filepath.Join(r.dir, "removals.json"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	r.restart()
+
+	_, err := r.s.Start("d1", StartOptions{Destination: dest})
+
+	if code := errCode(err); code != "install.removals_unreadable" {
+		t.Fatalf("Start = %q (%v), want install.removals_unreadable", code, err)
+	}
+	if missing(t, filepath.Join(dest, "stale.bin")) {
+		t.Fatal("the leftover was deleted without a journal entry")
+	}
+}
+
 func TestReclaimFailureReleasesTheOwnershipMark(t *testing.T) {
 	r := newRig(t)
 	r.s.freeSpace = freeOf(1 << 30)

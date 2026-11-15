@@ -47,6 +47,10 @@ type removalStore struct {
 	dir     string
 	entries []removalEntry
 	loaded  bool
+	// failed is set while the journal could not be read; late holds what it
+	// held when it was read after all, for the sweep the startup skipped.
+	failed bool
+	late   []removalEntry
 }
 
 func newRemovalStore(dir string) *removalStore {
@@ -81,23 +85,48 @@ func (s *removalStore) loadLocked() error {
 	if s.loaded {
 		return nil
 	}
-	if s.dir == "" {
-		return errors.New("removals path unavailable")
-	}
-	data, err := os.ReadFile(s.path())
-	if errors.Is(err, fs.ErrNotExist) {
-		s.entries, s.loaded = nil, true
-		return nil
-	}
+	entries, err := s.readLocked()
 	if err != nil {
-		return fmt.Errorf("%w: read %s: %w", errRemovalsUnreadable, s.path(), err)
+		s.failed = true
+		return err
 	}
-	var entries []removalEntry
-	if err := json.Unmarshal(data, &entries); err != nil {
-		return fmt.Errorf("%w: parse %s: %w", errRemovalsUnreadable, s.path(), err)
+	if s.failed {
+		s.failed = false
+		s.late = append([]removalEntry(nil), entries...)
 	}
 	s.entries, s.loaded = entries, true
 	return nil
+}
+
+func (s *removalStore) readLocked() ([]removalEntry, error) {
+	if s.dir == "" {
+		return nil, fmt.Errorf("%w: config dir unknown", errRemovalsUnreadable)
+	}
+	data, err := os.ReadFile(s.path())
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("%w: read %s: %w", errRemovalsUnreadable, s.path(), err)
+	}
+	var entries []removalEntry
+	if err := json.Unmarshal(data, &entries); err != nil {
+		return nil, fmt.Errorf("%w: parse %s: %w", errRemovalsUnreadable, s.path(), err)
+	}
+	return entries, nil
+}
+
+// takeLate hands over, once, the entries of a journal that was read only
+// after an earlier read failed: the startup sweep went without them.
+func (s *removalStore) takeLate() ([]removalEntry, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.late == nil {
+		return nil, false
+	}
+	late := s.late
+	s.late = nil
+	return late, true
 }
 
 // claim journals entry under the first staged name for its folder that is
@@ -181,7 +210,7 @@ func (s *removalStore) drop(path string) error {
 
 func (s *removalStore) saveLocked() error {
 	if s.dir == "" {
-		return errors.New("removals path unavailable")
+		return fmt.Errorf("%w: config dir unknown", errRemovalsUnreadable)
 	}
 	if err := os.MkdirAll(s.dir, 0o755); err != nil {
 		return err

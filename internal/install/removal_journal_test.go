@@ -546,3 +546,51 @@ func TestLibraryHalfOfARemovalIsRetriedAtTheNextStart(t *testing.T) {
 	}
 	requireJournalClear(t, dir)
 }
+
+// The journal could not be read at startup and becomes readable later in the
+// run: the sweep skipped at startup runs once then, before the run ends.
+func TestPendingRemovalsAreSweptOnceTheJournalBecomesReadable(t *testing.T) {
+	dir := t.TempDir()
+	journal := filepath.Join(dir, "removals.json")
+	mkFile(t, filepath.Join(journal, "keep.txt"), 4)
+	r := newJournalRig(t, dir, &fakeRegistrar{})
+	r.start(t)
+
+	if err := os.RemoveAll(journal); err != nil {
+		t.Fatal(err)
+	}
+	killed := gameDir(t, "Killed")
+	putOwnedCard(t, r.registrar, "k1", killed)
+	staged := killed + removingSuffix
+	if err := os.Rename(killed, staged); err != nil {
+		t.Fatal(err)
+	}
+	writeJournal(t, dir, journalEntry(t, staged, "k1", killed, true))
+	game := gameDir(t, "Game")
+	putOwnedCard(t, r.registrar, "g1", game)
+
+	if err := r.s.RemoveGame("g1", RemoveOptions{DeleteFiles: true}); err != nil {
+		t.Fatalf("RemoveGame once the journal is readable = %v", err)
+	}
+	if err := r.s.ServiceShutdown(); err != nil {
+		t.Fatalf("shutdown: %v", err)
+	}
+
+	if !missing(t, staged) {
+		t.Fatal("the killed removal's folder is still there: the sweep never ran this run")
+	}
+	if card, err := r.registrar.Find("k1"); err != nil || !card.Uninstalled {
+		t.Fatalf("card of the killed removal = %+v, %v; want it kept and uninstalled", card, err)
+	}
+	requireJournalClear(t, dir)
+}
+
+func TestRemovalJournalWithoutAConfigDirSaysItIsUnreadable(t *testing.T) {
+	store := newRemovalStore("")
+	if code := uierr.Code(store.ready()); code != "install.removals_unreadable" {
+		t.Fatalf("ready without a config dir = %q, want install.removals_unreadable", code)
+	}
+	if _, err := store.claim(removalEntry{InstallDir: gameDir(t, "Game")}); uierr.Code(err) != "install.removals_unreadable" {
+		t.Fatalf("claim without a config dir = %v, want install.removals_unreadable", err)
+	}
+}

@@ -164,6 +164,7 @@ func (s *Service) RemoveGame(gameID string, opts RemoveOptions) error {
 		if err := s.removals.ready(); err != nil {
 			return err
 		}
+		s.sweepLateRemovals()
 		if err := s.checkHoldsOtherImage(game.InstallDir, game.ID); err != nil {
 			return err
 		}
@@ -470,6 +471,7 @@ func (s *Service) stageForRemoval(entry removalEntry) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	s.sweepLateRemovals()
 	if err := os.Rename(dir, staged); err != nil {
 		locked := fmt.Errorf("%w: %w", errFilesLocked, err)
 		if dropErr := s.removals.drop(staged); dropErr != nil {
@@ -541,6 +543,30 @@ func (s *Service) sweepRemovals(entries []removalEntry) {
 		}
 		slog.Info("pending removal finished", "path", path, "game", entry.GameID)
 	}
+}
+
+// sweepLateRemovals runs the startup sweep's work once the journal it could
+// not read becomes readable later in the run: in the background, tracked by
+// s.wg so ServiceShutdown waits for it, and not at all once the service is
+// closing (the next start sweeps instead).
+func (s *Service) sweepLateRemovals() {
+	entries, ok := s.removals.takeLate()
+	if !ok || len(entries) == 0 {
+		return
+	}
+	s.mu.Lock()
+	if s.closing {
+		s.mu.Unlock()
+		slog.Info("skip pending removals, service is closing", "count", len(entries))
+		return
+	}
+	s.wg.Add(1)
+	s.mu.Unlock()
+	slog.Info("removal journal readable again, finishing pending removals", "count", len(entries))
+	go func() {
+		defer s.wg.Done()
+		s.sweepRemovals(entries)
+	}()
 }
 
 // finishRemoval does what a killed removal did not get to after its files: the
