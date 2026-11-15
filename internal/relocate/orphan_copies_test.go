@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"typhon/internal/hashdir"
 	"typhon/internal/library"
 	"typhon/internal/uierr"
 )
@@ -137,6 +138,54 @@ func TestOrphanedStagingIsListedOnlyAsAnOrphanedCopy(t *testing.T) {
 			}
 			r.requireCopyListed(t)
 		})
+	}
+}
+
+// After the crash the player added a game found inside the old folder of an
+// interrupted move. Recovery holds the move's folders as a live move does: it
+// does not delete the old folder with that game in it, and leaves the job for
+// a later start, as it does when the game is busy.
+func TestRecoveryLeavesAMoveWhoseFolderGainedAnotherGame(t *testing.T) {
+	lib := newTestLibrary(t)
+	game, src := addTestGame(t, lib)
+	manifest, err := hashdir.Build(context.Background(), src, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(t.TempDir(), "Game")
+	mustMkdirFile(t, target, "game.exe", "stub")
+	if _, err := lib.Relocate(game.ID, target); err != nil {
+		t.Fatal(err)
+	}
+	bonus := filepath.Join(src, "Bonus", "Game2.exe")
+	other := addExeAt(t, lib, bonus, "Bonus")
+	job := Job{ID: "j1", Scope: ScopeGame, Stage: StageCleanup, GameID: game.ID, Title: "Game", Source: src, Target: target}
+	s := newRecoverTestService(t, job)
+	s.lib = lib
+	if err := s.st.saveManifest(job.ID, manifest); err != nil {
+		t.Fatal(err)
+	}
+
+	s.recoverAll(context.Background())
+
+	if _, err := os.Stat(bonus); err != nil {
+		t.Fatalf("recovery deleted the old folder with another game in it: %v", err)
+	}
+	if got := s.soleJob(t); got.Stage != StageCleanup || got.RecoveryAttempts != 0 {
+		t.Fatalf("job = %s attempts=%d, want it left for a later start", got.Stage, got.RecoveryAttempts)
+	}
+	if _, err := lib.Find(other.ID); err != nil {
+		t.Fatalf("card of the other game: %v", err)
+	}
+	if err := lib.RemoveGame(other.ID); err != nil {
+		t.Fatal(err)
+	}
+	s.recoverAll(context.Background())
+	if jobs := s.List(); len(jobs) != 0 {
+		t.Fatalf("jobs after the other game left = %+v, want the move finished", jobs)
+	}
+	if _, err := os.Stat(src); !os.IsNotExist(err) {
+		t.Fatalf("old folder after the move finished: %v", err)
 	}
 }
 

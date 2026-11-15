@@ -157,6 +157,15 @@ func (s *Service) BeginRemoval(id, dir string) (func(), error) {
 //
 //wails:ignore
 func (s *Service) BeginMove(id string) (func(), error) {
+	return s.reserveMove(id, true, nil)
+}
+
+// reserveMove reserves a game for a move that acts on dirs, and on the card's
+// own folder when own is set: it fails while the game runs, starts, moves or
+// is being removed, or while another card's files share one of those folders,
+// and holds them against new cards until release. The checks and the
+// reservation are one critical section of s.mu.
+func (s *Service) reserveMove(id string, own bool, dirs []string) (func(), error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	game := s.findLocked(id)
@@ -169,21 +178,33 @@ func (s *Service) BeginMove(id string) (func(), error) {
 	if _, ok := s.running[id]; ok || s.starting[id] != nil {
 		return nil, ErrRelocateGameRunning
 	}
-	if neighbours := s.neighboursLocked(id, game.InstallDir); len(neighbours) > 0 {
-		return nil, sharedError(neighbours)
+	if own {
+		dirs = append([]string{game.InstallDir}, dirs...)
+	}
+	for _, dir := range dirs {
+		if neighbours := s.neighboursLocked(id, dir); len(neighbours) > 0 {
+			return nil, sharedError(neighbours)
+		}
 	}
 	if s.relocating == nil {
 		s.relocating = map[string]struct{}{}
 	}
 	s.relocating[id] = struct{}{}
-	hold := s.addHoldLocked(folderHold{kind: holdMove, game: id, dir: game.InstallDir})
+	held := make([]*folderHold, 0, len(dirs))
+	for _, dir := range dirs {
+		if dir != "" {
+			held = append(held, s.addHoldLocked(folderHold{kind: holdMove, game: id, dir: dir}))
+		}
+	}
 	var once sync.Once
 	return func() {
 		once.Do(func() {
 			s.mu.Lock()
 			defer s.mu.Unlock()
 			delete(s.relocating, id)
-			s.dropHoldLocked(hold)
+			for _, hold := range held {
+				s.dropHoldLocked(hold)
+			}
 		})
 	}, nil
 }

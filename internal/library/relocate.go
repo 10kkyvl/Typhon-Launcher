@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"typhon/internal/emulators"
 	"typhon/internal/platform"
@@ -156,35 +155,16 @@ func (s *Service) CheckRelocatable(id string) error {
 
 // BeginRelocate reserves the game for a move: it fails while the game runs,
 // starts or is being removed, and PlayGame refuses the game until release is
-// called. The check and the reservation share one critical section, so a
-// launch cannot slip in between them. Recovery of an interrupted move takes
-// this one; a new move takes BeginMove.
+// called. dirs are the folders the move still acts on: it also fails while
+// another card's files share one of them, and holds them against new cards
+// until release. The checks and the reservation share one critical section,
+// so neither a launch nor a new card can slip in between them. Recovery of an
+// interrupted move takes this one with the job's folders, whichever the card
+// names by now; a new move takes BeginMove.
 //
 //wails:ignore
-func (s *Service) BeginRelocate(id string) (func(), error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.findLocked(id) == nil {
-		return nil, errNotFound
-	}
-	if err := s.reservedLocked(id); err != nil {
-		return nil, err
-	}
-	if _, ok := s.running[id]; ok || s.starting[id] != nil {
-		return nil, ErrRelocateGameRunning
-	}
-	if s.relocating == nil {
-		s.relocating = map[string]struct{}{}
-	}
-	s.relocating[id] = struct{}{}
-	var once sync.Once
-	return func() {
-		once.Do(func() {
-			s.mu.Lock()
-			delete(s.relocating, id)
-			s.mu.Unlock()
-		})
-	}, nil
+func (s *Service) BeginRelocate(id string, dirs ...string) (func(), error) {
+	return s.reserveMove(id, false, dirs)
 }
 
 func rebaseUninstallCommand(command, oldRoot, newRoot string) string {

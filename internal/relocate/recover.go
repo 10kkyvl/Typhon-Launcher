@@ -99,10 +99,12 @@ func (s *Service) surfaceStale(job Job) {
 	}
 }
 
-// reserveForRecovery takes the launch lock of the game a resumable job moves,
-// so the game cannot start while recovery touches its folders. A game that is
-// gone from the library or uninstalled ends the job at once without touching
-// any data.
+// reserveForRecovery takes the move reservation of the game a resumable job
+// moves, with the job's folders held as a live move holds its own: the game
+// cannot start and no card can be added in them while recovery touches them.
+// A card that came to lie in one of them since the crash, or a busy game,
+// leaves the job as it is for a later start. A game that is gone from the
+// library or uninstalled ends the job at once without touching any data.
 func (s *Service) reserveForRecovery(job Job) (func(), bool) {
 	noop := func() {}
 	if s.lib == nil || !recoveryTouchesGame(job) {
@@ -112,7 +114,7 @@ func (s *Service) reserveForRecovery(job Job) (func(), bool) {
 		s.markOrphaned(job.ID)
 		return nil, false
 	}
-	release, err := s.lib.BeginRelocate(job.GameID)
+	release, err := s.lib.BeginRelocate(job.GameID, job.Source, job.Target, job.Staging)
 	if err != nil {
 		slog.Warn("recovery skipped: game is busy", "job", job.ID, "game", job.GameID, "error", err)
 		return nil, false
