@@ -272,6 +272,12 @@ const SITES: Record<string, Site[]> = {
     ['warning', true],
     ['danger', true],
   ],
+  'routes/settings/AboutTab.svelte': [
+    ['danger', true],
+    ['danger', true],
+    // This build has no legal documents to show: a fact read with the card.
+    ['info', false],
+  ],
   'routes/settings/AppearanceTab.svelte': [
     // The stored theme's CSS breaks a later rule: a fact of the theme, shown whenever it is edited.
     ['warning', false],
@@ -305,10 +311,6 @@ const SITES: Record<string, Site[]> = {
     ['danger', false],
     ['danger', true],
     ['danger', true],
-    ['danger', true],
-    ['danger', true],
-    // This build has no legal documents to show: a fact read with the card.
-    ['info', false],
   ],
   'routes/support/NewTicket.svelte': [
     ['danger', true],

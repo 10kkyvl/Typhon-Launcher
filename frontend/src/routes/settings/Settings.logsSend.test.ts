@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import page from './Settings.svelte?raw';
 import flow from './settingsPage.svelte.ts?raw';
+import about from './AboutTab.svelte?raw';
 
 describe('Settings send-logs flow', () => {
   it('never sends on the button click itself, only after confirmation', () => {
-    expect(page).toMatch(/onclick=\{page\.openSendLogsConfirm\}/);
-    expect(page).not.toMatch(/onclick=\{[^}]*sendLogs\(\)[^}]*\}/);
+    expect(about).toMatch(/onclick=\{page\.openSendLogsConfirm\}/);
+    expect(about).not.toMatch(/onclick=\{[^}]*sendLogs\(\)[^}]*\}/);
   });
 
   // The send-logs confirmation goes through the same `pending` queue every
@@ -26,14 +27,14 @@ describe('Settings send-logs flow', () => {
   it('closes the confirmation immediately and shows real progress on the page', () => {
     expect(flow).toMatch(/function confirmSendLogs\(\)[\s\S]*?void sendLogs\(\)/);
     expect(flow).not.toMatch(/await sendLogs\(\)/);
-    expect(page).not.toMatch(/await sendLogs\(\)/);
-    expect(page).toContain('<ProgressBar');
-    expect(page).toContain('value={logsProgressPercent}');
-    expect(page).toContain("indeterminate={page.logsStage !== 'sending' || !page.logsProgress}");
+    expect(about).not.toMatch(/await sendLogs\(\)/);
+    expect(about).toContain('<ProgressBar');
+    expect(about).toContain('value={logsProgressPercent}');
+    expect(about).toContain("indeterminate={page.logsStage !== 'sending' || !page.logsProgress}");
   });
 
   it('shows the short id from a successful send', () => {
-    expect(page).toContain('page.logsSendResult.id');
+    expect(about).toContain('page.logsSendResult.id');
     expect(flow).toContain('logsSendResult = result');
   });
 
@@ -43,11 +44,11 @@ describe('Settings send-logs flow', () => {
   });
 
   it('offers the manual download as a fallback after any failure', () => {
-    expect(page).toContain("msg('settings.aboutLogsSendFailedHint')");
+    expect(about).toContain("msg('settings.aboutLogsSendFailedHint')");
   });
 
   it('warns about dropped rotations when the upload had to trim the bundle', () => {
-    expect(page).toContain("msg('settings.aboutLogsSendDroppedNote'");
-    expect(page).toContain('page.logsSendResult.dropped');
+    expect(about).toContain("msg('settings.aboutLogsSendDroppedNote'");
+    expect(about).toContain('page.logsSendResult.dropped');
   });
 });

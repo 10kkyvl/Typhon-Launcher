@@ -1,7 +1,7 @@
 <script lang="ts">
   import Page from '../../lib/components/Page.svelte';
   import './settings-layout.css';
-  import { Copy, Download, Eye, FolderOpen, HardDrive, LifeBuoy, ListChecks, RefreshCw, ScrollText, Send, Trash2 } from '@lucide/svelte';
+  import { Eye, FolderOpen, HardDrive, RefreshCw, Trash2 } from '@lucide/svelte';
   import { untrack } from 'svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
@@ -12,7 +12,6 @@
   import LegalDocumentModal from '../../lib/components/LegalDocumentModal.svelte';
   import LibrarySetupModal from '../../lib/components/LibrarySetupModal.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
-  import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import IntegerInput from '../../lib/components/IntegerInput.svelte';
   import RateLimitInput from '../../lib/components/RateLimitInput.svelte';
   import ScheduleEditor from '../../lib/components/ScheduleEditor.svelte';
@@ -25,13 +24,11 @@
   import Tabs from '../../lib/components/Tabs.svelte';
   import { tabPanel } from '../../lib/components/tabs';
   import Toggle from '../../lib/components/Toggle.svelte';
-  import RollbackAction from '../../lib/components/RollbackAction.svelte';
   import StableOffer from '../../lib/components/StableOffer.svelte';
-  import UpdateBanner from '../../lib/components/UpdateBanner.svelte';
-  import DiscordJoinButton from '../../lib/components/DiscordJoinButton.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import Notice from '../../lib/components/Notice.svelte';
   import TextLink from '../../lib/components/TextLink.svelte';
+  import AboutTab from './AboutTab.svelte';
   import AppearanceTab from './AppearanceTab.svelte';
   import DiscordCard from './DiscordCard.svelte';
   import EmulatorsCard from './EmulatorsCard.svelte';
@@ -40,15 +37,12 @@
   import LibraryLocationRow from './LibraryLocationRow.svelte';
   import NetworkSettingsCard from './NetworkSettingsCard.svelte';
   import { createSettingsPage, overlayReason } from './settingsPage.svelte';
-  import { uploadPercent } from '../../lib/support/progress';
   import { SCREENSHOT_HOTKEYS } from '../../lib/services/screenshots';
   import { OVERLAY_HOTKEYS } from '../../lib/services/overlay';
   import { maxActiveDownloadOptions, openFolder, type GameMode, type Settings } from '../../lib/services/settings';
   import { defaultPlayDownloadLimit, defaultPlayUploadLimit } from '../../lib/services/playThrottle';
-  import { elevationSupported, type SystemInfo } from '../../lib/services/system';
-  import { releaseNotesHistory, requestCheck, rollbackInfo, selfUpdateChecking, selfUpdateStatus } from '../../lib/stores/selfupdate';
-  import { rollbackShown } from '../../lib/services/selfupdate';
-  import { rollbackReason } from '../../lib/services/selfupdateMessages';
+  import { elevationSupported } from '../../lib/services/system';
+  import { releaseNotesHistory, requestCheck, selfUpdateStatus } from '../../lib/stores/selfupdate';
   import { cloudStatus } from '../../lib/stores/cloudsaves';
   import { saveBackupsEnabled } from '../../lib/stores/savebackup';
   import { navigate } from '../../lib/stores/router';
@@ -56,7 +50,7 @@
   import { toast } from '../../lib/stores/toasts';
   import { authState, currentUser } from '../../lib/stores/user';
   import { betaToggleShown, isBeta } from '../../lib/services/selfupdateChannel';
-  import { bytesLabel, bytesSize, relativeDate } from '../../lib/utils/format';
+  import { bytesSize } from '../../lib/utils/format';
 
   let { tab: initialTab }: { tab?: string } = $props();
 
@@ -85,15 +79,7 @@
   const current = $derived($settings);
   const scaleValue = $derived(String(Math.round(($settings?.uiScale ?? 1) * 100)));
 
-  const logsProgressPercent = $derived(page.logsProgress ? uploadPercent(page.logsProgress) : 0);
-
   const accountReady = $derived($authState === 'authenticated');
-
-  function cpuLine(info: SystemInfo): string {
-    const threads = msg('settings.aboutCpuThreads', { cores: info.cores });
-    const cores = info.physicalCoresUnknown ? '' : `${msg('settings.aboutCpuCores', { cores: info.physicalCores })} · `;
-    return `${info.cpuUnknown ? msg('settings.aboutUnknown') : info.cpu} · ${cores}${threads}`;
-  }
 
   const cloudUsage = $derived.by(() => {
     const status = $cloudStatus;
@@ -1109,247 +1095,7 @@
   {:else if tab === 'appearance'}
     <AppearanceTab />
   {:else if tab === 'about'}
-    <div class="settings-grid">
-      <div class="settings-column">
-        <Card>
-          <div class="about-logo">
-            <img src="/typhon.png" alt="" width="44" height="44" draggable="false" />
-            <div>
-              <h3>Typhon Launcher</h3>
-              <span class="row-sub">{msg(onBeta ? 'settings.aboutVersionBetaLabel' : 'settings.aboutVersionLabel', { version: page.appInfo?.version ?? '—' })} · {page.appInfo?.platform ?? ''}/{page.appInfo?.arch ?? ''}{page.appInfo?.devMock ? ' · devmock' : ''}</span>
-            </div>
-          </div>
-          <div class="rows">
-            {#if page.appInfo?.portable}
-              <div class="row">
-                <div class="row-text">
-                  <span class="row-label">{msg('settings.aboutPortableLabel')}</span>
-                  <span class="row-sub">{msg('settings.aboutPortableDataDir', { path: page.appInfo.dataDir })}</span>
-                </div>
-              </div>
-            {/if}
-            {#if page.systemInfo}
-              <div class="row">
-                <div class="row-text">
-                  <span class="row-label">{msg('settings.aboutSystemLabel')}</span>
-                  <span class="row-sub">{page.systemInfo.osUnknown ? msg('settings.aboutUnknown') : page.systemInfo.os}</span>
-                </div>
-              </div>
-              <div class="row">
-                <div class="row-text">
-                  <span class="row-label">{msg('settings.aboutCpuLabel')}</span>
-                  <span class="row-sub">{cpuLine(page.systemInfo)}</span>
-                </div>
-              </div>
-              <div class="row">
-                <div class="row-text">
-                  <span class="row-label">{msg('settings.aboutMemoryLabel')}</span>
-                  <span class="row-sub">{page.systemInfo.ramBytes > 0 ? bytesLabel(page.systemInfo.ramBytes) : msg('settings.aboutUnknown')}</span>
-                </div>
-              </div>
-            {:else if page.systemFailed}
-              <div class="row">
-                <div class="row-text">
-                  <span class="row-label">{msg('settings.aboutSystemLabel')}</span>
-                  <span class="row-sub">{msg('settings.aboutSystemFailed')}</span>
-                </div>
-              </div>
-            {/if}
-            {#if page.wineStatus?.required}
-              <div class="row">
-                <div class="row-text">
-                  <span class="row-label">{msg('settings.aboutRuntimeLabel')}</span>
-                  <span class="row-sub">
-                    {#if page.wineStatus.installed}
-                      CrossOver {page.wineStatus.version}
-                    {:else}
-                      {msg('settings.aboutRuntimeMissing')}
-                    {/if}
-                  </span>
-                </div>
-              </div>
-            {/if}
-            <div class="row">
-              <div class="row-text">
-                <span class="row-label">{msg('settings.aboutCheckUpdatesLabel')}</span>
-                <span class="row-sub">
-                  {#if $selfUpdateChecking}
-                    {msg('settings.aboutCheckUpdatesChecking')}
-                  {:else}
-                    {msg('settings.aboutInstalledVersion', { version: $selfUpdateStatus.currentVersion || page.appInfo?.version || '—' })}
-                    {#if $selfUpdateStatus.checkedAt}
-                      · {msg('settings.aboutCheckedAt', { date: relativeDate($selfUpdateStatus.checkedAt) })}
-                    {/if}
-                  {/if}
-                </span>
-              </div>
-              <Button size="sm" disabled={$selfUpdateChecking} onclick={requestCheck}>
-                <ListChecks size="1.5rem" strokeWidth={1.8} />
-                {$selfUpdateChecking ? msg('settings.aboutCheckingEllipsis') : msg('settings.aboutCheckButtonLabel')}
-              </Button>
-            </div>
-            <div class="row">
-              <div class="row-text">
-                <span class="row-label">{msg('settings.aboutHistoryLabel')}</span>
-                <span class="row-sub">
-                  {#if $releaseNotesHistory.length > 0}
-                    {msg('settings.aboutHistoryHasNotes')}
-                  {:else}
-                    {msg('settings.aboutHistoryEmpty')}
-                  {/if}
-                </span>
-              </div>
-              <Button size="sm" disabled={$releaseNotesHistory.length === 0} onclick={() => (page.historyOpen = true)}>
-                <ScrollText size="1.5rem" strokeWidth={1.8} />
-                {msg('settings.aboutHistoryButtonLabel')}
-              </Button>
-            </div>
-            {#if rollbackShown($rollbackInfo)}
-              <div class="row">
-                <div class="row-text">
-                  <span class="row-label">{msg('settings.aboutRollbackLabel')}</span>
-                  <span class="row-sub">
-                    {#if $rollbackInfo.available}
-                      {msg('settings.aboutRollbackAvailable', { version: $rollbackInfo.version })}
-                    {:else}
-                      {rollbackReason($rollbackInfo)}
-                    {/if}
-                  </span>
-                </div>
-                <RollbackAction />
-              </div>
-            {/if}
-            <div class="row">
-              <div class="row-text">
-                <span class="row-label">{msg('settings.aboutLicenseLabel')}</span>
-                <span class="row-sub">{msg('settings.aboutLicenseText')}</span>
-              </div>
-            </div>
-            <div class="row">
-              <div class="row-text">
-                <span class="row-label">{msg('discord.communityLabel')}</span>
-                <span class="row-sub">{msg('discord.communitySub')}</span>
-              </div>
-              <DiscordJoinButton />
-            </div>
-            <UpdateBanner />
-            <StableOffer />
-          </div>
-        </Card>
-
-      </div>
-      <div class="settings-column">
-        <Card title={msg('settings.aboutDiagnosticsCardTitle')}>
-          <div class="rows">
-            <div class="row">
-              <div class="row-text">
-                <span class="row-label">{msg('settings.aboutLogsLabel')}</span>
-                <span class="row-sub">
-                  {#if page.logsBundle}
-                    {page.logsBundle.name} · {bytesLabel(page.logsBundle.sizeBytes)} {msg('settings.aboutLogsAttachHint')}
-                  {:else}
-                    {msg('settings.aboutLogsSaveHint')}
-                  {/if}
-                </span>
-              </div>
-              <Button size="sm" disabled={page.logsSaving} onclick={page.saveLogs}>
-                <Download size="1.5rem" strokeWidth={1.8} />
-                {page.logsSaving ? msg('settings.aboutLogsSavingEllipsis') : msg('settings.aboutLogsDownloadButton')}
-              </Button>
-            </div>
-            <div class="row">
-              <div class="row-text">
-                <span class="row-label">{msg('settings.aboutLogsSendButton')}</span>
-                <span class="row-sub">
-                  {#if page.logsStage === 'preparing'}
-                    {msg('settings.aboutLogsPreparingEllipsis')}
-                  {:else if page.logsStage === 'sending' && page.logsProgress}
-                    {msg('settings.aboutLogsSendingProgress', { percent: logsProgressPercent })}
-                  {:else if page.logsStage === 'sending'}
-                    {msg('settings.aboutLogsSendingEllipsis')}
-                  {:else if page.logsStage === 'waiting'}
-                    {msg('settings.aboutLogsWaitingEllipsis')}
-                  {:else if page.logsSendResult}
-                    {msg('settings.aboutLogsSentStatus')}
-                  {:else}
-                    {msg('settings.aboutLogsSendConfirmNote')}
-                  {/if}
-                </span>
-                {#if page.logsSendFailure}
-                  <div class="message">
-                    <Notice tone="danger" compact title={page.logsSendFailure}>{msg('settings.aboutLogsSendFailedHint')}</Notice>
-                  </div>
-                {/if}
-                {#if page.logsSending}
-                  <div class="logs-upload-progress">
-                    <ProgressBar
-                      value={logsProgressPercent}
-                      indeterminate={page.logsStage !== 'sending' || !page.logsProgress}
-                      height={5}
-                      label={msg('settings.aboutLogsLabel')}
-                    />
-                  </div>
-                {/if}
-              </div>
-              <Button size="sm" disabled={page.logsSending} onclick={page.openSendLogsConfirm}>
-                <Send size="1.5rem" strokeWidth={1.8} />
-                {page.logsSending ? msg('settings.aboutLogsSendingEllipsis') : msg('settings.aboutLogsSendButton')}
-              </Button>
-            </div>
-            {#if page.logsSendResult}
-              <div class="row">
-                <div class="row-text">
-                  <span class="row-label">{msg('settings.aboutLogsSendResultLabel')}</span>
-                  <span class="row-sub logs-send-id">{page.logsSendResult.id}</span>
-                </div>
-                <IconButton label={msg('settings.aboutLogsSendIdCopyLabel')} size="sm" onclick={page.copySendLogsId}>
-                  <Copy size="1.5rem" strokeWidth={1.8} />
-                </IconButton>
-              </div>
-              {#if page.logsSendResult.dropped.length > 0}
-                <p class="row-sub">{msg('settings.aboutLogsSendDroppedNote', { files: page.logsSendResult.dropped.join(', ') })}</p>
-              {/if}
-            {/if}
-            <div class="row">
-              <div class="row-text">
-                <span class="row-label">{msg('tickets.settingsLabel')}</span>
-                <span class="row-sub">{msg('tickets.settingsHint')}</span>
-              </div>
-              <Button size="sm" onclick={() => navigate('support', { view: 'new', topic: 'launcher' })}>
-                <LifeBuoy size="1.5rem" strokeWidth={1.8} />
-                {msg('tickets.writeSupport')}
-              </Button>
-            </div>
-          </div>
-        </Card>
-
-        <Card title={msg('settings.aboutLegalCardTitle')}>
-          {#if page.legalState === 'failed'}
-            <Notice tone="danger" compact>{msg('settings.aboutLegalLoadError')}</Notice>
-          {:else if page.legalState === 'unavailable'}
-            <Notice tone="info" compact announce={false}>{msg('settings.aboutLegalUnavailable')}</Notice>
-          {:else}
-            <div class="rows">
-              {#each page.legalDocs as meta (meta.id)}
-                <div class="row">
-                  <div class="row-text">
-                    <span class="row-label">{meta.title}</span>
-                  </div>
-                  <Button size="sm" onclick={() => page.openLegalDoc(meta)}>{msg('common.open')}</Button>
-                </div>
-              {/each}
-              <div class="row">
-                <div class="row-text">
-                  <span class="row-label">{msg('settings.aboutSourcesNoticeLabel')}</span>
-                  <span class="row-sub">{msg('settings.aboutSourcesNoticeSub')}</span>
-                </div>
-                <Button size="sm" onclick={() => (page.sourcesNoticeReviewOpen = true)}>{msg('common.open')}</Button>
-              </div>
-            </div>
-          {/if}
-        </Card>
-      </div>
-    </div>
+    <AboutTab {page} />
   {/if}
   </div>
   {/key}
@@ -1473,11 +1219,6 @@
     min-width: 0;
   }
 
-  .logs-upload-progress {
-    width: min(28rem, 100%);
-    margin-top: var(--space-2);
-  }
-
   .folder-row {
     flex-direction: column;
     align-items: stretch;
@@ -1492,17 +1233,6 @@
     display: flex;
     align-items: center;
     gap: var(--space-2);
-  }
-
-  .about-logo {
-    display: flex;
-    align-items: center;
-    gap: var(--space-4);
-    margin-bottom: var(--space-4);
-  }
-
-  .about-logo h3 {
-    margin-bottom: 2px;
   }
 
   .privacy-link {

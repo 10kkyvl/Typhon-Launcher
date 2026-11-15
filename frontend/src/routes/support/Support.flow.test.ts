@@ -10,7 +10,7 @@ import logsConfirm from './LogsConfirm.svelte?raw';
 import app from '../../App.svelte?raw';
 import sidebar from '../../lib/components/Sidebar.svelte?raw';
 import auth from '../auth/AuthScreen.svelte?raw';
-import settings from '../settings/Settings.svelte?raw';
+import settings from '../settings/AboutTab.svelte?raw';
 import moveModal from '../../lib/components/MoveGameModal.svelte?raw';
 import notifications from '../../lib/stores/notifications.ts?raw';
 
