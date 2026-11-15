@@ -540,30 +540,34 @@ func (s *Service) sweepRemovals(entries []removalEntry) {
 }
 
 // finishRemoval does what a killed removal did not get to after its files: the
-// installation records and the card as the player asked. The card is touched
-// only while it still names the removed folder and that folder is gone, so a
-// game installed again since then is left alone. A bare path of an older
-// journal names no game and leaves the card as it is.
+// installation records and the card as the player asked. Both are touched only
+// while the card still names the removed folder and that folder is gone, so a
+// game installed again since then keeps its card and its records; a card that
+// left the library leaves records nobody owns. A bare path of an older journal
+// names no game and leaves the card as it is.
 func (s *Service) finishRemoval(entry removalEntry) error {
 	if entry.GameID == "" || s.library == nil {
 		return nil
 	}
-	if err := s.forgetInstallations(entry.GameID); err != nil {
-		return err
-	}
 	game, err := s.library.Find(entry.GameID)
 	if library.IsGameNotFound(err) {
-		return nil
+		return s.forgetInstallations(entry.GameID)
 	}
 	if err != nil {
 		return err
 	}
-	if game.Uninstalled || !samePath(game.InstallDir, entry.InstallDir) {
+	if !samePath(game.InstallDir, entry.InstallDir) {
 		return nil
 	}
 	gone, err := dirMissing(entry.InstallDir)
 	if err != nil || !gone {
 		return err
+	}
+	if err := s.forgetInstallations(entry.GameID); err != nil {
+		return err
+	}
+	if game.Uninstalled {
+		return nil
 	}
 	if entry.KeepInLibrary {
 		return s.library.MarkUninstalled(entry.GameID)

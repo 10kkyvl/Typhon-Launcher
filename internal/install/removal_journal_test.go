@@ -336,6 +336,33 @@ func TestSweepLeavesACardThatMovedOn(t *testing.T) {
 	requireJournalClear(t, dir)
 }
 
+// The game was installed again since the killed removal: the sweep leaves its
+// card and the record of the new installation alone.
+func TestSweepKeepsTheRecordsOfAGameInstalledAgain(t *testing.T) {
+	dir := t.TempDir()
+	r := newJournalRig(t, dir, &fakeRegistrar{})
+	old := filepath.Join(t.TempDir(), "Game")
+	reinstalled := gameDir(t, "Game")
+	putOwnedCard(t, r.registrar, "g1", reinstalled)
+	record := Installation{ID: "i1", GameID: "g1", Name: "Game", Status: StatusCompleted, Destination: reinstalled}
+	if err := r.s.store.save([]Installation{record}); err != nil {
+		t.Fatal(err)
+	}
+	writeJournal(t, dir, journalEntry(t, old+removingSuffix, "g1", old, false))
+
+	r.restart(t)
+
+	after := mustServiceAt(t, dir)
+	saved, err := after.store.load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(saved) != 1 || saved[0].ID != "i1" {
+		t.Fatalf("installations after the sweep = %+v, want the new installation kept", saved)
+	}
+	requireJournalClear(t, dir)
+}
+
 // failingLibrary is a library whose half of the removal fails to save.
 type failingLibrary struct {
 	*fakeRegistrar
