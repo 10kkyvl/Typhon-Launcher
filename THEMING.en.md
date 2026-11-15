@@ -20,7 +20,7 @@ Settings → Appearance).
 |---|---|---|
 | Root size | `1rem` = 11 px | `1rem` = 10 px |
 | Fonts | Inter Tight | Onest for the interface, JetBrains Mono for paths and code; both ship with the launcher |
-| New tokens | — | `--font-mono`, `--accent-bright`, `--island-fill`, `--island-gap`, `--radius-control`, `--ambient-dim`, `--motion-backdrop` |
+| New tokens | — | `--font-mono`, `--accent-bright`, `--island-fill`, `--island-gap`, `--radius-control`, `--ambient-dim`, `--motion-backdrop`, `--scrim-copy`, `--copy-fade-x`, `--copy-fade-y` |
 | Accent | one colour for everything | four roles, see below |
 | Built-in themes | three | four, Blush added |
 | Defaults | blue accent, navy background, 6–18 px radii | teal accent, graphite background, 8–24 px radii, the size scale of the 2.0 design |
@@ -49,6 +49,14 @@ itself so text on it reads at AA or better. Status colours are text only on surf
 they are marks and keep 3:1 or better. When the faint text `--text-3` leaves the art too little
 room, as in the built-in light theme, the art is not drawn. How fast the art flows from one game
 to the next is `--motion-backdrop`.
+
+A screen can put its game on the stage: its wide art shows sharp across the top of the window,
+behind the top bar and the sidebar, and flows into the blurred backdrop below. A theme does not
+change the stage's shape or the shade over the top bar's row; that shade takes the page colour
+`--bg`, so it is light in a light theme. Words that stand on the stage have a plate under them:
+`--scrim-copy` is its colour (by default the page colour at 66 %), `--copy-fade-x` and
+`--copy-fade-y` how far it fades out to the right and down. The words on it are one colour,
+`--text`, and must read at 4.5:1 or better over black and over white art.
 
 ## What happens to a 1.x theme
 
