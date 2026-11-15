@@ -15,13 +15,28 @@ import (
 
 func TestRepointFailureFailsTheJob(t *testing.T) {
 	forceCopyPath(t)
-	lib := newTestLibrary(t)
+	libPath := filepath.Join(t.TempDir(), "library.json")
+	lib, err := library.NewServiceAt(libPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := lib.ServiceShutdown(); err != nil {
+			t.Errorf("library shutdown: %v", err)
+		}
+	})
 	s := newTestService(t, nil, lib, nil, nil, nil)
 	game, src := addTestGame(t, lib)
 	target := filepath.Join(t.TempDir(), "target")
 
+	// The library cannot save the repoint: a game being moved can no longer be
+	// removed from under the move, so a folder in place of library.json is
+	// what fails it here, on every platform.
 	afterCopyBeforeVerify = func(string) {
-		if err := lib.RemoveGame(game.ID); err != nil {
+		if err := os.Remove(libPath); err != nil {
+			t.Error(err)
+		}
+		if err := os.MkdirAll(filepath.Join(libPath, "keep"), 0o700); err != nil {
 			t.Error(err)
 		}
 	}

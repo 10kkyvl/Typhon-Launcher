@@ -154,10 +154,11 @@ func (s *Service) CheckRelocatable(id string) error {
 	return checkExecutableInside(*game)
 }
 
-// BeginRelocate reserves the game for a move: it fails while the game runs or
-// starts, and PlayGame refuses the game until release is called. The check and
-// the reservation share one critical section, so a launch cannot slip in
-// between them.
+// BeginRelocate reserves the game for a move: it fails while the game runs,
+// starts or is being removed, and PlayGame refuses the game until release is
+// called. The check and the reservation share one critical section, so a
+// launch cannot slip in between them. Recovery of an interrupted move takes
+// this one; a new move takes BeginMove.
 //
 //wails:ignore
 func (s *Service) BeginRelocate(id string) (func(), error) {
@@ -166,8 +167,8 @@ func (s *Service) BeginRelocate(id string) (func(), error) {
 	if s.findLocked(id) == nil {
 		return nil, errNotFound
 	}
-	if _, ok := s.relocating[id]; ok {
-		return nil, ErrGameRelocating
+	if err := s.reservedLocked(id); err != nil {
+		return nil, err
 	}
 	if _, ok := s.running[id]; ok || s.starting[id] != nil {
 		return nil, ErrRelocateGameRunning

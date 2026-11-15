@@ -191,6 +191,8 @@ var ErrInvalidStatus = uierr.New("library.invalid_status", "invalid game status"
 type Service struct {
 	starting        map[string]context.CancelFunc
 	relocating      map[string]struct{}
+	removing        map[string]struct{}
+	holds           []*folderHold
 	sameCanonical   func(string, string) bool
 	onUpdated       func([]Game)
 	mu              sync.Mutex
@@ -470,6 +472,9 @@ func (s *Service) persist() error {
 	if s.path == "" {
 		return errors.New("library path unavailable")
 	}
+	if err := s.checkHoldsLocked(); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
 		return err
 	}
@@ -564,23 +569,31 @@ func (s *Service) GetRunningGames() []string {
 }
 
 func (s *Service) AddGame(ctx context.Context, executable, title string) (Game, error) {
-	info, err := os.Stat(executable)
-	if err != nil || info.IsDir() {
-		return Game{}, uierr.New("library.no_executable", "исполняемый файл не найден")
-	}
 	provided := strings.TrimSpace(title)
 	title = provided
 	if title == "" {
 		title = TitleFromExecutable(executable)
 	}
-
 	installDir := strings.TrimSpace(filepath.Dir(executable))
 	if installDir == "" {
 		return Game{}, errEmptyInstallDir
 	}
+	id := newID()
+	// The folder is held before the executable is looked at: a removal that
+	// decided on this folder earlier has either deleted it by now or still
+	// holds it, and a removal deciding later sees this card coming.
+	release, err := s.holdForAdding(id, title, installDir)
+	if err != nil {
+		return Game{}, err
+	}
+	defer release()
+	info, err := os.Stat(executable)
+	if err != nil || info.IsDir() {
+		return Game{}, uierr.New("library.no_executable", "исполняемый файл не найден")
+	}
 	size, unknown := measureInstall(ctx, "", installDir)
 	game := Game{
-		ID:          newID(),
+		ID:          id,
 		Title:       title,
 		Executable:  executable,
 		InstallDir:  installDir,
@@ -981,6 +994,9 @@ func (s *Service) removeGameLocked(id string) error {
 	if s.starting[id] != nil {
 		return uierr.New("library.already_running", "игра запускается")
 	}
+	if _, ok := s.relocating[id]; ok {
+		return ErrGameMoving
+	}
 	for i, game := range s.games {
 		if game.ID != id {
 			continue
@@ -1072,6 +1088,9 @@ func (s *Service) resetInstallLocked(g *Game) {
 }
 
 func (s *Service) markUninstalledLocked(id string) error {
+	if _, ok := s.relocating[id]; ok {
+		return ErrGameMoving
+	}
 	for i := range s.games {
 		if s.games[i].ID != id {
 			continue

@@ -233,8 +233,8 @@ func (s *Service) play(id, profileID string, explicit bool) error {
 	if s.closed {
 		return errSessionNotRunning
 	}
-	if _, ok := s.relocating[id]; ok {
-		return ErrGameRelocating
+	if err := s.reservedLocked(id); err != nil {
+		return err
 	}
 	if _, ok := s.running[id]; ok || s.starting[id] != nil {
 		return uierr.New("library.already_running", "игра уже запущена")
