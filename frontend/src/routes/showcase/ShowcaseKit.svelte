@@ -1,6 +1,12 @@
 <script lang="ts">
   import DiskMeter from '../../lib/components/DiskMeter.svelte';
   import { gameTone, type MeterSegment } from '../../lib/components/diskMeter';
+  import IntegerInput from '../../lib/components/IntegerInput.svelte';
+  import Select from '../../lib/components/Select.svelte';
+  import type { SelectOption } from '../../lib/components/select';
+  import SettingsRow from '../../lib/components/SettingsRow.svelte';
+  import Slider from '../../lib/components/Slider.svelte';
+  import Toggle from '../../lib/components/Toggle.svelte';
   import ShowcaseRow from './ShowcaseRow.svelte';
   import ShowcaseSection from './ShowcaseSection.svelte';
 
@@ -33,6 +39,18 @@
   ];
 
   let picked = $state('none yet');
+
+  const uid = $props.id();
+  const LANGUAGES: SelectOption[] = [
+    { id: 'en', label: 'English' },
+    { id: 'ru', label: 'Russian' },
+  ];
+  let startup = $state(true);
+  let motion = $state(true);
+  let language = $state('en');
+  let scale = $state(2);
+  let threads = $state(4);
+  const SCALES = ['80%', '90%', '100%', '110%', '125%'];
 </script>
 
 <ShowcaseSection title="Screen parts" note="The disk meter, the settings row and the bar chart the screens share.">
@@ -63,6 +81,51 @@
       <DiskMeter label="Library folder" segments={DISK.slice(0, 1)} total={TOTAL} free={273 * GB} compact />
     </div>
   </ShowcaseRow>
+
+  <ShowcaseRow caption="Settings rows: each base control named by the label and described by the hint" stack>
+    <div class="rows">
+      <SettingsRow label="Launch on startup" hint="The launcher opens when you sign in to the system">
+        {#snippet children({ labelId, hintId })}
+          <Toggle checked={startup} labelledby={labelId} describedby={hintId} onchange={(on) => (startup = on)} />
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow label="Language" hint="The language of the interface">
+        {#snippet children({ labelId, hintId })}
+          <Select options={LANGUAGES} bind:value={language} labelledby={labelId} describedby={hintId} />
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow label="Download threads" hint="How many parts of a file come at once" labelFor="{uid}-threads">
+        {#snippet children({ hintId })}
+          <IntegerInput id="{uid}-threads" value={threads} min={1} max={16} describedby={hintId} onchange={(value) => (threads = value)} />
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow label="Animations" hint="Smooth transitions between screens" note="The system asks for reduced motion: animations stay off">
+        {#snippet children({ labelId, hintId })}
+          <Toggle checked={motion} labelledby={labelId} describedby={hintId} onchange={(on) => (motion = on)} />
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow label="In-game overlay" hint="A panel over the running game" disabledReason="Not available in the portable build">
+        {#snippet children({ labelId, hintId, disabled })}
+          <Toggle checked={false} labelledby={labelId} describedby={hintId} {disabled} onchange={() => {}} />
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow label="Interface scale" hint="The size of everything in the window" stack>
+        {#snippet children({ hintId })}
+          <Slider position={scale} max={SCALES.length - 1} label="Interface scale" hideLabel valueText={SCALES[scale]} startText={SCALES[0]} endText={SCALES.at(-1)} describedby={hintId} onchange={(at) => (scale = at)} />
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow label="Library folders" hint="Where games are installed; the first is the default">
+        {#snippet below({ labelId })}
+          <ul class="folders" aria-labelledby={labelId}>
+            <li>
+              <span>D:\Games</span>
+              <DiskMeter label="D:\Games" segments={DISK.slice(0, 1)} total={TOTAL} free={273 * GB} compact />
+            </li>
+          </ul>
+        {/snippet}
+      </SettingsRow>
+    </div>
+  </ShowcaseRow>
 </ShowcaseSection>
 
 <style>
@@ -73,5 +136,24 @@
 
   .compact {
     max-width: 32rem;
+  }
+
+  .rows {
+    max-width: 72rem;
+  }
+
+  .folders {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .folders li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 24rem);
+    align-items: center;
+    gap: var(--space-4);
+    font-size: var(--font-sm);
+    color: var(--text-2);
   }
 </style>

@@ -17,6 +17,7 @@ const PARTS = [
   'lib/components/GameListRow.svelte',
   'lib/components/HeroCarousel.svelte',
   'lib/components/DiskMeter.svelte',
+  'lib/components/SettingsRow.svelte',
 ];
 const COLOUR = /#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?|oklch|oklab|lab|lch)\(|\b(?:white|black)\b/i;
 

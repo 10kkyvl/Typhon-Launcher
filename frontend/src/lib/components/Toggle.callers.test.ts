@@ -124,7 +124,15 @@ function named({ path, tag, row }: Use, text = frontendSources[path] ?? ''): boo
   const own = /\blabel=\{(msg\('[\w.]+'\))\}/.exec(tag)?.[1];
   if (own) return !text.includes(`>{${own}}<`);
   const by = /\blabelledby=("[^"]*"|\{[^}]*\})/.exec(tag)?.[1];
-  return by !== undefined && row.includes(`id=${by}`);
+  return by !== undefined && (row.includes(`id=${by}`) || fromSettingsRow(row, 'labelId', by));
+}
+
+// A switch put straight into a SettingsRow's snippet takes the ids the row hands it
+// (`{#snippet children({ labelId, hintId })}`): the row draws its label and hint with them. Read by the
+// names the row gives; a renamed binding is not seen.
+function fromSettingsRow(row: string, key: 'labelId' | 'hintId', by: string): boolean {
+  const snippet = new RegExp(String.raw`\{#snippet \w+\(\{[^}]*\b${key}\b[^}]*\}\)\}`);
+  return /^<SettingsRow\b/.test(row) && by === `{${key}}` && snippet.test(row);
 }
 
 // The description, where there is one, is the row's own text too. A description shown only in some
@@ -133,7 +141,7 @@ function describedInRow({ tag, row }: Use): boolean {
   const by = /\bdescribedby=("[^"]*"|\{(?:[^{}]|\{[^{}]*\})*\})/.exec(tag)?.[1];
   if (by === undefined) return true;
   const templates = [...by.matchAll(/`([^`]*)`/g)].map((m) => `"${m[1].replace(/\$\{/g, '{')}"`);
-  return [by, ...templates].some((id) => row.includes(`id=${id}`));
+  return [by, ...templates].some((id) => row.includes(`id=${id}`)) || fromSettingsRow(row, 'hintId', by);
 }
 
 const at = (row: string, tag: string): Use => ({ path: 'x.svelte', tag, row });
@@ -158,6 +166,10 @@ describe('Toggle call sites', () => {
     expect(named(at(row, '<Toggle checked={on} labelledby="nowhere" />'))).toBe(false);
     // The label is in the file, but in another row.
     expect(named(at('<div><Toggle /></div>', '<Toggle checked={on} labelledby="row" />'), row)).toBe(false);
+    const settings = '<SettingsRow label="Sound">{#snippet children({ labelId, hintId })}<Toggle labelledby={labelId} />{/snippet}</SettingsRow>';
+    expect(named(at(settings, '<Toggle labelledby={labelId} />'))).toBe(true);
+    expect(named(at(settings.replace('labelId, ', ''), '<Toggle labelledby={labelId} />'))).toBe(false);
+    expect(named(at('<div>{#snippet children({ labelId })}<Toggle />{/snippet}</div>', '<Toggle labelledby={labelId} />'))).toBe(false);
     expect(uses.filter((use) => !named(use)).map(({ path, tag }) => `${path}: ${tag}`)).toEqual([]);
   });
 
@@ -169,6 +181,9 @@ describe('Toggle call sites', () => {
     const some = '<div><span id="{uid}-sub">Only here</span><Toggle /></div>';
     expect(describedInRow(at(some, '<Toggle describedby={shown ? `${uid}-sub` : undefined} />'))).toBe(true);
     expect(describedInRow(at(some, '<Toggle describedby={shown ? `${uid}-other` : undefined} />'))).toBe(false);
+    const settings = '<SettingsRow label="Sound" hint="Plays a chime">{#snippet children({ labelId, hintId })}<Toggle />{/snippet}</SettingsRow>';
+    expect(describedInRow(at(settings, '<Toggle labelledby={labelId} describedby={hintId} />'))).toBe(true);
+    expect(describedInRow(at(settings.replace(', hintId', ''), '<Toggle labelledby={labelId} describedby={hintId} />'))).toBe(false);
     expect(uses.filter((use) => !describedInRow(use)).map(({ path, tag }) => `${path}: ${tag}`)).toEqual([]);
   });
 

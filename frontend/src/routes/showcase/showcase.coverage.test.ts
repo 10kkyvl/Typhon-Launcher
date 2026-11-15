@@ -52,6 +52,7 @@ const BASE = [
   'HeroCarousel',
   // The parts the screens share for their figures and settings (ShowcaseKit.svelte).
   'DiskMeter',
+  'SettingsRow',
 ];
 
 /** Shown by what the page does rather than by a tag: the shell mounts the toast stack, the page raises toasts. */

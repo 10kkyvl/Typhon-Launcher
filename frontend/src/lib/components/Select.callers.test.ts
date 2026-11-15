@@ -50,9 +50,16 @@ describe('Select call sites', () => {
       if (id && text.includes(`for=${id}`)) return false;
       const by = /\blabelledby=("[^"]*"|\{[^}]*\})/.exec(tag)?.[1];
       if (!by) return !(path === 'lib/components/RateLimitInput.svelte' && /\{labelledby\}/.test(tag));
-      return !text.includes(`id=${by}`);
+      return !text.includes(`id=${by}`) && !fromSettingsRow(text, by);
     });
     expect(unnamed.map(({ path, tag }) => `${path}: ${tag}`)).toEqual([]);
+  });
+
+  it('take the label id a SettingsRow hands its snippet', () => {
+    const row = '<SettingsRow label="Language">{#snippet children({ labelId, hintId })}<Select labelledby={labelId} />{/snippet}</SettingsRow>';
+    expect(fromSettingsRow(row, '{labelId}')).toBe(true);
+    expect(fromSettingsRow(row.replace('labelId, ', ''), '{labelId}')).toBe(false);
+    expect(fromSettingsRow('<div>{#snippet children({ labelId })}<Select labelledby={labelId} />{/snippet}</div>', '{labelId}')).toBe(false);
   });
 
   it('bind the value or hold it with onchange, never both', () => {
@@ -74,6 +81,12 @@ describe('Select call sites', () => {
 });
 
 const SPREAD_ALLOWED: string[] = [];
+
+// A field in a SettingsRow's snippet is named by the label the row draws with the id it hands the
+// snippet (`{#snippet children({ labelId })}`). Read in the file, as the rest of this guard reads ids.
+function fromSettingsRow(text: string, by: string): boolean {
+  return by === '{labelId}' && /<SettingsRow\b/.test(text) && /\{#snippet \w+\(\{[^}]*\blabelId\b[^}]*\}\)\}/.test(text);
+}
 
 function bothWays(tag: string): boolean {
   return /\bbind:value\b/.test(tag) && /(\bonchange=|\{\s*onchange\s*\})/.test(tag);

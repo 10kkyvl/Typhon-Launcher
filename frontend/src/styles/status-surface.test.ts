@@ -222,6 +222,7 @@ const ON_SURFACE: Record<string, [surface: string, ...rules: string[]]> = {
   'lib/components/ThemeContrast.svelte': ['Card of the theme editor', '.summary', '.summary.bad', '.icon', 'li.bad .icon'],
   'lib/components/IntegerInput.svelte': ['the cards of the settings page', '.error'],
   'lib/components/RateLimitInput.svelte': ['the cards of the settings page', '.error'],
+  'lib/components/SettingsRow.svelte': ['the cards of the settings page', '.note'],
   'lib/components/ReleaseNotesList.svelte': ['a dialog; badges', '.kind-added', '.kind-fixed', '.kind-removed'],
   'lib/components/ActivityWidget.svelte': ['the sidebar island and the popover panel; an icon', '.icon.attention'],
   'lib/components/TopbarSearch.svelte': ['the results panel', '.results-note.error'],
