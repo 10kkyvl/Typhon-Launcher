@@ -232,6 +232,26 @@ describe('GameDetails on the stage: the header', () => {
     expect([...document.querySelectorAll('img')].map((img) => img.getAttribute('src'))).not.toContain(src);
   });
 
+  it('shows the cover, not the skeleton, when its metadata cannot be read and the art store has not answered', async () => {
+    vi.mocked(getMetadataView).mockRejectedValue(new Error('typhon:metadata.read_failed: disk'));
+    renderDom(GameDetails, { id: 'g1' });
+    const h1 = await title();
+
+    await vi.waitFor(() => expect(screen.getByRole('img', { name: 'Hades' })).toBeTruthy());
+    expect(header().querySelector('.cover-skeleton')).toBeNull();
+    expect(words(h1)).toBeNull();
+  });
+
+  it("stands on the stage when the stage has wide art its metadata view does not name", async () => {
+    art({ c1: { cover: '/media/c1-cover.jpg', hero: '/media/c1-store-hero.jpg', heroIsPoster: false } });
+    vi.mocked(getMetadataView).mockResolvedValue(view({ hero: '' }));
+    renderDom(GameDetails, { id: 'g1' });
+    const h1 = await title();
+
+    await vi.waitFor(() => expect(words(h1)).not.toBeNull());
+    expect(screen.queryByRole('img', { name: 'Hades' })).toBeNull();
+  });
+
   it('keeps the breadcrumb and the title the same nodes, focus included, when the header turns to the cover', async () => {
     const src = '/media/c1-hero-focus.jpg';
     art({ c1: { cover: '/media/c1-cover.jpg', hero: src, heroIsPoster: false } });
