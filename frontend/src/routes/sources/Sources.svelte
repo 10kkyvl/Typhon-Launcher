@@ -32,11 +32,12 @@
   import type { Source, SourceStatus } from '../../lib/services/sources';
   import { msg } from '../../lib/i18n';
   import SourceRow from './SourceRow.svelte';
+  import { catchLeaving, placeOf, returnTo, type RowPlace } from './rowFocus';
 
   let addOpen = $state(false);
   let noticeOpen = $state(false);
   let detailsOpen = $state(false);
-  let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
+  let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void>; place: RowPlace | null } | null>(null);
   let detailsId = $state<string | null>(null);
   let detailsReleaseId = $state<string | null>(null);
   let statusFilter = $state('all');
@@ -95,6 +96,14 @@
     statusFilter === 'all' ? $sources : $sources.filter((source) => source.status === statusFilter),
   );
 
+  // Before any change of the rows shown (a removal, a source Go drops, a row the filter no longer
+  // shows), the screen's rule reads where focus is, and hands it on if the focused row went.
+  $effect.pre(() => {
+    void filteredSources;
+    void $sourcesLoaded;
+    untrack(catchLeaving);
+  });
+
   function openDetails(id: string) {
     detailsId = id;
     detailsReleaseId = null;
@@ -110,7 +119,7 @@
     } else if (action === 'details') {
       openDetails(source.id);
     } else if (action === 'remove') {
-      pending = { prompt: removeSourcePrompt(source.name), run: () => remove(source.id) };
+      pending = { prompt: removeSourcePrompt(source.name), run: () => remove(source.id), place: placeOf(document.activeElement) };
     }
   }
 </script>
@@ -129,7 +138,7 @@
           {$refreshingAll ? msg('transfers.sourcesUpdatingEllipsis') : msg('transfers.sourcesRefreshAll')}
         {/if}
       </Button>
-      <Button variant="primary" onclick={startAddSource}>
+      <Button variant="primary" data-sources-add onclick={startAddSource}>
         <Plus size="1.5rem" strokeWidth={2} />
         {msg('transfers.sourcesAddAction')}
       </Button>
@@ -204,7 +213,14 @@
   <SourceDetailsModal bind:open={detailsOpen} sourceId={detailsId} focusReleaseId={detailsReleaseId} />
 
   {#if pending}
-    <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} errorText={(err) => sourceErrorText(err)} />
+    {@const place = pending.place}
+    <ConfirmModal
+      prompt={pending.prompt}
+      onconfirm={pending.run}
+      onclose={() => (pending = null)}
+      errorText={(err) => sourceErrorText(err)}
+      returnFocus={() => returnTo(place)}
+    />
   {/if}
 </Page>
 

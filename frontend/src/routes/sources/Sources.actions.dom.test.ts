@@ -184,8 +184,8 @@ describe('Sources: removing a source', () => {
     expect(toastsSaid()).toEqual([]);
   });
 
-  // R2: the row and its menu are gone, and focus falls to the page.
-  it('R2: leaves focus on nothing once the row is gone', async () => {
+  // R2: the row and its menu are gone; focus goes to the row now in its place (Sources.focus.dom.test.ts).
+  it('R2: hands focus to the row now in its place once the row is gone', async () => {
     sources.set([MAIN, MIRROR]);
     show();
     const keys = user();
@@ -199,7 +199,7 @@ describe('Sources: removing a source', () => {
 
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(rowNames()).toEqual(['Mirror']);
-    expect(document.activeElement).toBe(document.body);
+    await waitFor(() => expect(document.activeElement).toBe(menuButton('Mirror')));
   });
 });
 

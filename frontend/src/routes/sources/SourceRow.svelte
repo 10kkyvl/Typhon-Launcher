@@ -93,9 +93,9 @@
   const health = $derived(healthMetaFor(source.health));
 </script>
 
-<div class="row" class:disabled={!source.enabled}>
+<div class="row" class:disabled={!source.enabled} data-source-row={source.id}>
   {#snippet details()}
-    <button class="source" onclick={() => onopen(source.id)}>
+    <button class="source" data-row-control="open" onclick={() => onopen(source.id)}>
       <span class="type-icon">
         {#if source.type === 'file'}
           <FileText size="1.7rem" strokeWidth={1.8} />
@@ -139,12 +139,12 @@
       {/if}
     {/if}
     {#if source.lastError}
-      <IconButton size="sm" label={msg('common.error')} hint={truncateMiddle(sourceErrorText(source.lastError), 90)} onclick={() => onopen(source.id)}>
+      <IconButton size="sm" data-row-control="mark" label={msg('common.error')} hint={truncateMiddle(sourceErrorText(source.lastError), 90)} onclick={() => onopen(source.id)}>
         <span class="mark danger"><CircleAlert size="1.5rem" strokeWidth={1.8} /></span>
       </IconButton>
     {:else if source.health !== 'healthy'}
       {@const warnings = source.warnings?.length ? source.warnings.map(sourceWarningText).join('; ') : ''}
-      <IconButton size="sm" label={health.label} hint={warnings ? `${health.label}: ${warnings}` : undefined} onclick={() => onopen(source.id)}>
+      <IconButton size="sm" data-row-control="mark" label={health.label} hint={warnings ? `${health.label}: ${warnings}` : undefined} onclick={() => onopen(source.id)}>
         <span class="mark {health.kind}"><health.icon size="1.5rem" strokeWidth={1.8} /></span>
       </IconButton>
     {/if}
@@ -160,6 +160,7 @@
       })}
     >
       <TextLink
+        data-row-control="counts"
         aria-label={source.review > 0
           ? msg('transfers.sourcesMatchReviewName', { matched: formatCount(source.matched), review: formatCount(source.review) })
           : msg('transfers.sourcesMatchName', { matched: formatCount(source.matched) })}
@@ -173,7 +174,7 @@
   <span class="cell menu-cell">
     <DropdownMenu items={sourceMenu(source)} onselect={onaction}>
       {#snippet trigger({ props })}
-        <IconButton {...props} label={msg('transfers.sourcesMenuFor', { name: source.name })} size="sm">
+        <IconButton {...props} data-row-control="menu" label={msg('transfers.sourcesMenuFor', { name: source.name })} size="sm">
           <EllipsisVertical size="1.6rem" strokeWidth={1.8} />
         </IconButton>
       {/snippet}
