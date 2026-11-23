@@ -47,7 +47,11 @@ describe('profile appearance preview', () => {
     expect(h.state().previewFailed).toBe(false);
   });
 
+  // A danger Notice announces as an alert by default; the editing bar further down has an alert of its
+  // own, so the notice is matched right after the condition, not anywhere after it.
   it('shows the failure as an alert', () => {
-    expect(source).toMatch(/\{#if previewFailed\}[\s\S]*role="alert"/);
+    expect(source).toMatch(
+      /\{#if previewFailed\}\s*<div class="load-error"><Notice tone="danger">\{msg\('profile\.previewLoadFailed'\)\}<\/Notice>/,
+    );
   });
 });

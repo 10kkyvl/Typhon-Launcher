@@ -33,11 +33,13 @@ import { renderDom } from '../../lib/testing/dom';
 import Profile from './Profile.svelte';
 
 // The page keeps the profile, the draft and the snapshot's derived state; ProfileExternalBlock draws the bodies
-// of the blocks BlockGrid leaves to the page (playing, recent, activity, stats, about). Held here: each prop the
-// page hands that part (the block type, the game being played and its open, the hidden types, the art and the
-// library stores, the bio) and the part's own read of the snapshot store, each with what makes it change; and,
+// of the blocks BlockGrid leaves to the page (playing, recent, activity, stats, about). Held here: the block
+// type each body is drawn for, the game being played and its open, the recent row following the snapshot, the
+// art and the library stores, the stats block's hidden badge on first render, the bio being there; and,
 // through the page, the leave guard (ask, stay, leave, the draft kept and restored), the save flow (the patch
-// without the showcase, edit mode left) and the preview read with its failure notice. Not held: the each items'
+// without the showcase, edit mode left) and the preview read with its failure notice. Not held: the activity
+// and stats bodies following the snapshot store, the hidden types and the bio changing after the first render,
+// the hidden badges of the playing and activity blocks, the cover of the game being played, the each items'
 // reference equality that made the part read the snapshot store itself (invisible in the DOM), the block
 // editor's own controls (Profile.blocks.dom.test.ts) and the appearance panel (ProfileAppearancePanel.*).
 
