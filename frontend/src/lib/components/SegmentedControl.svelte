@@ -22,6 +22,7 @@
     variant = 'box',
     label,
     labelledby,
+    describedby,
   }: {
     options: SegmentOption[];
     value: string;
@@ -32,6 +33,8 @@
     label?: string;
     /** Id of the visible label next to the group. */
     labelledby?: string;
+    /** Id of the text that says what the choice sets (a settings row's hint). */
+    describedby?: string;
   } = $props();
 
   let root = $state<HTMLElement>();
@@ -76,7 +79,7 @@
   });
 </script>
 
-<div class="segmented {variant}" role="radiogroup" aria-label={label} aria-labelledby={label ? undefined : labelledby} bind:this={root}>
+<div class="segmented {variant}" role="radiogroup" aria-label={label} aria-labelledby={label ? undefined : labelledby} aria-describedby={describedby} bind:this={root}>
   <span class="plate" aria-hidden="true" bind:this={plateEl}></span>
   {#each options as option, index (option.id)}
     <!-- A segment drawn by `item` (an icon) shows its label as a tooltip; a text segment shows it already. -->

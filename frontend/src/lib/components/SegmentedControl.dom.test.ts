@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderDom } from '../testing/dom';
-import { hintOnFocus } from '../testing/hints';
+import { description, hintOnFocus } from '../testing/hints';
 import SegmentedHarness from '../testing/SegmentedHarness.svelte';
+import SegmentedControl from './SegmentedControl.svelte';
 import type { SegmentOption } from './segmented';
 
 const VIEWS: SegmentOption[] = [
@@ -128,5 +129,23 @@ describe('SegmentedControl', () => {
     expect(getByRole('radio', { name: 'All friends 12' })).toBeTruthy();
     expect(getByRole('radio', { name: 'Requests 0' })).toBeTruthy();
     expect(checked(getByRole('radio', { name: 'Away 3' }))).toBe('false');
+  });
+
+  it('has no description of its own unless a caller names one', () => {
+    const { getByRole } = renderDom(SegmentedHarness, { options: VIEWS, start: 'list', labelled: true });
+    expect(getByRole('radiogroup', { name: 'Shown as' }).hasAttribute('aria-describedby')).toBe(false);
+  });
+
+  it('is described by the text its caller names (a settings row hint)', () => {
+    const hint = document.createElement('p');
+    hint.id = 'view-hint';
+    hint.textContent = 'How the list is drawn';
+    document.body.append(hint);
+    try {
+      const { getByRole } = renderDom(SegmentedControl, { options: VIEWS, value: 'list', label: 'View', describedby: 'view-hint' });
+      expect(description(getByRole('radiogroup', { name: 'View' }))).toBe('How the list is drawn');
+    } finally {
+      hint.remove();
+    }
   });
 });

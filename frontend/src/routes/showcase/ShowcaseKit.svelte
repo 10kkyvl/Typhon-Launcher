@@ -6,6 +6,7 @@
   import IntegerInput from '../../lib/components/IntegerInput.svelte';
   import Button from '../../lib/components/Button.svelte';
   import RateLimitInput from '../../lib/components/RateLimitInput.svelte';
+  import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import Select from '../../lib/components/Select.svelte';
   import type { SelectOption } from '../../lib/components/select';
   import EmptyState from '../../lib/components/EmptyState.svelte';
@@ -120,6 +121,12 @@
   let stackLanguage = $state('en');
   let stackScale = $state(2);
   let limit = $state(25 * 1024 * 1024);
+  let route = $state('direct');
+  const ROUTES = [
+    { id: 'direct', label: 'Direct' },
+    { id: 'interface', label: 'Interface' },
+    { id: 'proxy', label: 'Proxy' },
+  ];
 </script>
 
 <ShowcaseSection title="Screen parts" note="The disk meter, the settings row and the bar chart the screens share.">
@@ -295,6 +302,11 @@
       <SettingsRow label="Download speed limit" hint="Maximum incoming traffic speed" testid="kit-row-limit">
         {#snippet children({ labelId, hintId })}
           <RateLimitInput value={limit} presets={[10, 25, 50]} labelledby={labelId} describedby={hintId} onchange={(bytes) => (limit = bytes)} />
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow label="Connection" hint="How the launcher reaches the network" testid="kit-row-mode">
+        {#snippet children({ labelId, hintId })}
+          <SegmentedControl options={ROUTES} labelledby={labelId} describedby={hintId} bind:value={route} />
         {/snippet}
       </SettingsRow>
       <SettingsRow label="Upload speed limit" hint="Maximum outgoing traffic speed" disabledReason="Set by the play mode while a game runs" testid="kit-row-limit-disabled">
