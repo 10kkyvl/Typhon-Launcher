@@ -76,6 +76,8 @@ async function page(cursor: number, append: boolean, owner: number): Promise<voi
     feedLoadedAt.set(Date.now());
     feedReady.set(true);
     feedLoadError.set(null);
+    // A first page replaces the list: a failed "Show more" of the old one no longer stands.
+    if (!append) feedMoreError.set(null);
   } catch (err) {
     if (owner !== generation) return;
     // A refresh of a feed already on screen fails in the background: a toast. A first page or a next

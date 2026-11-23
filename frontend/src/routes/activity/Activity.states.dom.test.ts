@@ -188,6 +188,27 @@ describe('Activity: the feed', () => {
   });
 });
 
+describe('Activity: coming back to the feed', () => {
+  it('a failed "Show more" is not said again once a later visit has read the first page anew', async () => {
+    vi.mocked(feed)
+      .mockResolvedValueOnce(page([event(1, now(), 'Hades')], 5))
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(page([event(1, now(), 'Hades')], 5));
+    authState.set('authenticated');
+    const first = renderDom(Activity);
+    await first.user.click(await screen.findByRole('button', { name: msg('transfers.activityShowMore') }));
+    await feedColumn().findByText(msg('transfers.activityMoreFailed'));
+    first.unmount();
+
+    renderDom(Activity);
+
+    await vi.waitFor(() => expect(feed).toHaveBeenCalledTimes(3));
+    await vi.waitFor(() => expect(screen.getByRole('button', { name: msg('transfers.activityShowMore') }).getAttribute('aria-busy')).toBeNull());
+    expect(feedColumn().getByText('Hades')).toBeTruthy();
+    expect(feedColumn().queryByText(msg('transfers.activityMoreFailed'))).toBeNull();
+  });
+});
+
 describe('Activity: a feed that could not be read', () => {
   it('a failed first page is a danger notice with Retry, not the "no friends yet" state, and no toast', async () => {
     vi.mocked(feed).mockRejectedValueOnce(new Error('offline'));

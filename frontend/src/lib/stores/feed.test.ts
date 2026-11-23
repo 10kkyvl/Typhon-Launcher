@@ -362,6 +362,24 @@ describe('неудачное чтение ленты', () => {
     expect(seen).toEqual([seen[0], seen[0] + 1, seen[0] + 2]);
   });
 
+  it('удачное чтение первой страницы снимает провал «Показать ещё»: список уже другой', async () => {
+    const { loadFeed, moreFeed, fetchFeed, feedMoreError } = await load();
+    fetchFeed
+      .mockResolvedValueOnce({ events: [event(1)], next: 5 } as never)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockRejectedValueOnce(new Error('still offline'))
+      .mockResolvedValueOnce({ events: [event(1)], next: 5 } as never);
+    await loadFeed(true);
+    await moreFeed();
+    expect(get(feedMoreError)).not.toBeNull();
+
+    await loadFeed(true);
+    expect(get(feedMoreError)).not.toBeNull();
+
+    await loadFeed(true);
+    expect(get(feedMoreError)).toBeNull();
+  });
+
   it('сброс ленты снимает оба провала', async () => {
     const { loadFeed, moreFeed, resetFeed, fetchFeed, feedMoreError, feedLoadError } = await load();
     fetchFeed.mockRejectedValueOnce(new Error('offline'));
