@@ -554,6 +554,18 @@ describe("the disk meter's tones", () => {
     expect(unknownLine(), `outline: ${unknown().outline}`).toMatch(/^var\(--/);
   });
 
+  // Space not known to be free (other files and free space together) is neither a fill nor the bare
+  // track, which means free: on the bar a broken outline over the track, in the legend a broken
+  // outline over the page surface.
+  const restLine = (selector: string) => /^1px dashed (var\(--[\w-]+\))$/.exec(ruleBody(meterStyle, selector).outline)?.[1] ?? '';
+
+  it('draws the space not known to be free as a broken outline, on the bar and in the legend', () => {
+    for (const selector of ['.part.rest', '.swatch.rest']) {
+      expect(ruleBody(meterStyle, selector).background, selector).toBe('none');
+      expect(restLine(selector), `${selector} outline: ${ruleBody(meterStyle, selector).outline}`).toMatch(/^var\(--/);
+    }
+  });
+
   for (const id of ['dark', 'light', 'contrast', 'blush']) {
     it(`${id} draws the outline of an unknown total at 3:1 over every surface`, () => {
       const preset = builtIns().find((p) => p.id === id);
@@ -565,6 +577,23 @@ describe("the disk meter's tones", () => {
         const under = surface === '--bg' ? bg : paint(tokens, surface, bg);
         const r = ratio(over(cssColor(unknownLine(), tokens), under), under);
         if (r < 3) out.push(`the outline over ${surface}: ${r.toFixed(2)} < 3`);
+      }
+      expect(out).toEqual([]);
+    });
+
+    it(`${id} draws the outline of space not known to be free at 3:1 over the track and over every surface`, () => {
+      const preset = builtIns().find((p) => p.id === id);
+      expect(preset, id).toBeDefined();
+      const tokens = (preset as Preset).tokens;
+      const bg = paint(tokens, '--bg', BLACK);
+      const out: string[] = [];
+      for (const surface of PAGE) {
+        const under = surface === '--bg' ? bg : paint(tokens, surface, bg);
+        const lane = over(cssColor(track(), tokens), under);
+        const onBar = ratio(over(cssColor(restLine('.part.rest'), tokens), lane), lane);
+        if (onBar < 3) out.push(`the part's outline on the track over ${surface}: ${onBar.toFixed(2)} < 3`);
+        const inLegend = ratio(over(cssColor(restLine('.swatch.rest'), tokens), under), under);
+        if (inLegend < 3) out.push(`the swatch's outline over ${surface}: ${inLegend.toFixed(2)} < 3`);
       }
       expect(out).toEqual([]);
     });

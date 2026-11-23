@@ -3,7 +3,8 @@
  * is zero, missing or not a number is unknown and nothing is drawn against it; segments that sum over
  * the total are drawn in proportion to each other and a measured free space, and only a measured free
  * space is said; a size the caller does not know (the `sizeUnknown` flag of lib/diskusage: a lower
- * bound when bytes > 0, unknown otherwise) is said as such, never drawn as 0.
+ * bound when bytes > 0, unknown otherwise) is said as such, never drawn as 0; the bare track is free
+ * space and nothing else, so space the meter cannot call free is a part of its own.
  */
 
 /** The colours a segment can take; DiskMeter.svelte paints each from theme tokens. */
@@ -33,6 +34,9 @@ export type MeterSize = { kind: 'exact'; bytes: number } | { kind: 'atLeast'; by
 
 /** The key of the part the meter adds for space no segment accounts for. */
 export const METER_OTHER = 'meter:other';
+/** The key of the part the meter adds for the space after the segments when it is not known to be
+ *  free: other files and free space together. */
+export const METER_REST = 'meter:rest';
 /** The key of the part the segments too small to draw on their own are folded into. */
 export const METER_MORE = 'meter:more';
 
@@ -45,16 +49,19 @@ export const METER_GAP = 0.2;
 export const METER_PAD = 0.2;
 
 export interface MeterPart {
-  /** A caller's segment, or a part the meter adds: `other` for space no segment accounts for, `more`
-   *  for the segments folded together. */
-  kind: 'segment' | 'other' | 'more';
+  /** A caller's segment, or a part the meter adds: `other` for space no segment and no measured free
+   *  space accounts for, `rest` for the space after the segments when no free space was measured and
+   *  none can be derived, `more` for the segments folded together. */
+  kind: 'segment' | 'other' | 'rest' | 'more';
   /** Unique in the model, for keyed lists: the key, made unique when two segments share one. */
   id: string;
-  /** The caller's key, reported by a pick; METER_OTHER or METER_MORE for a part the meter adds. */
+  /** The caller's key, reported by a pick; METER_OTHER, METER_REST or METER_MORE for a part the meter
+   *  adds. */
   key: string;
   /** The caller's label; empty for a part the meter adds, which DiskMeter names from the catalogue. */
   label: string;
-  tone: MeterTone;
+  /** Null for `rest`: it is neither a fill nor the track, and DiskMeter outlines it. */
+  tone: MeterTone | null;
   size: MeterSize;
   /** The part of the bar it takes, 0…1; 0 for a part that is not drawn. */
   share: number;
@@ -69,8 +76,8 @@ export interface MeterModel {
   parts: MeterPart[];
   /** The parts the bar draws: a known size above 0 against a known total, with room left in the bar. */
   drawn: MeterPart[];
-  /** Free space to say, or null when there is none to say (not derivable, or an overflow without a
-   *  measured one). */
+  /** Free space to say, or null when there is none to say apart (a `rest` part holds it, or an overflow
+   *  without a measured one). */
   free: MeterSize | null;
   /** The segments, with the measured free space, sum over the total: drawn in proportion to each other
    *  and the measured free space, which alone is said. */
@@ -90,6 +97,12 @@ const bytesOf = (size: MeterSize) => (size.kind === 'unknown' ? 0 : size.bytes);
 /**
  * `free`: the free space the caller measured (null when it could not); left out, it is derived as what
  * the segments leave of the total, and only when every size is exact.
+ *
+ * The bare track is free space. Measured, the free space is the track and what neither it nor the
+ * segments account for is other files; derived, it is the track. Otherwise (not measured, or not
+ * derivable beside a size not fully measured) the space after the segments is one `rest` part, other
+ * files and free space together, exact when every size is, else at most that space; the free space is
+ * then not said apart from it.
  *
  * Overflow: the segments, with the measured free space, add up to more than the total. Which number is
  * wrong is not the meter's to know, so each part is drawn against the others and the measured free
@@ -116,15 +129,21 @@ export function meter(segments: readonly MeterSegment[], total: number | null | 
 
   // The track is the free space: what neither the segments nor the measured free space account for
   // is a part of its own, or it would be drawn as free. Its size is exact only when every segment's
-  // is; beside a size not fully measured, that segment may take some of it: at most the gap.
-  const gap = known !== null && !overflow && measured ? known - used - measuredFree : 0;
-  if (gap > 0) {
-    const exact = sizes.every((size) => size.kind === 'exact');
-    parts.push({ kind: 'other', id: METER_OTHER, key: METER_OTHER, label: '', tone: 'other', size: { kind: exact ? 'exact' : 'atMost', bytes: gap }, share: gap / against });
+  // is; beside a size not fully measured, that segment may take some of it: at most the gap. Without
+  // a measured free space the whole gap is that part, unless the free space is derived (every size
+  // exact, free left out), which makes the gap free.
+  const exact = sizes.every((size) => size.kind === 'exact');
+  const gap = known !== null && !overflow ? known - used - measuredFree : 0;
+  const rest = gap > 0 && !measured && (free !== undefined || !exact);
+  if (gap > 0 && (measured || rest)) {
+    const size: MeterSize = { kind: exact ? 'exact' : 'atMost', bytes: gap };
+    if (measured) parts.push({ kind: 'other', id: METER_OTHER, key: METER_OTHER, label: '', tone: 'other', size, share: gap / against });
+    else parts.push({ kind: 'rest', id: METER_REST, key: METER_REST, label: '', tone: null, size, share: gap / against });
   }
 
   let freeSize: MeterSize | null;
   if (overflow) freeSize = measured ? { kind: 'exact', bytes: measuredFree } : null;
+  else if (rest) freeSize = null;
   else if (free !== undefined) freeSize = measurable(free) ? { kind: 'exact', bytes: free } : { kind: 'unknown' };
   else if (known !== null && parts.every((part) => part.size.kind === 'exact')) freeSize = { kind: 'exact', bytes: known - used };
   else freeSize = null;
@@ -140,15 +159,16 @@ const EPSILON = 1e-9;
 
 /**
  * The parts with those the bar cannot draw truthfully folded into one `more` part, placed after the
- * caller's segments. The parts are laid out in the track's content box (the width less its padding on
- * both sides); with k parts drawn they share that box less k − 1 gaps (the worst case: a full bar,
- * whose flex bases add up to the box and shrink by the gaps in proportion). A segment is
- * drawn on its own only when it takes a hairline of that room or more, so its width agrees with its
- * size; one part may stay under that and be drawn as a hairline: the last segment when it alone is
- * left, else the fold. The largest set of segments that meets this, with the k hairlines and k − 1
- * gaps inside the box, is drawn; other files are never folded in with them. The fold never takes
- * every segment (it would name none): when no segment meets the rule, the largest stays, a hairline
- * beside the fold. A fold of one is never made: that segment is drawn as a hairline itself.
+ * caller's segments, before the parts the meter adds. The parts are laid out in the track's content
+ * box (the width less its padding on both sides); with k parts drawn they share that box less k − 1
+ * gaps (the worst case: a full bar, whose flex bases add up to the box and shrink by the gaps in
+ * proportion). A segment is drawn on its own only when it takes a hairline of that room or more, so
+ * its width agrees with its size; one part may stay under that and be drawn as a hairline: the last
+ * segment when it alone is left, else the fold. The largest set of segments that meets this, with
+ * the k hairlines and k − 1 gaps inside the box, is drawn; other files and the rest are never folded
+ * in with them. The fold never takes every segment (it would name none): when no segment meets the
+ * rule, the largest stays, a hairline beside the fold. A fold of one is never made: that segment is
+ * drawn as a hairline itself.
  */
 function folded(parts: MeterPart[], width: number): MeterPart[] {
   const candidates = parts.filter((part) => part.kind === 'segment' && part.share > 0).sort((a, b) => b.share - a.share);

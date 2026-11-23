@@ -166,16 +166,86 @@ describe('DiskMeter', () => {
     expect(swatches[1].classList.contains('hollow')).toBe(false);
   });
 
+  // The bare track says "free". Where the free space was not measured, or cannot be derived beside a
+  // size not fully measured, the space after the segments is outlined as other files and free space
+  // together, and the free space is not said apart from it.
+  describe('the space after the segments, not known to be free', () => {
+    const REST = 'Другие файлы и свободное место';
+    const restOf = (root: HTMLElement) => parts(root).filter((p) => p.classList.contains('rest'));
+
+    it('is outlined and named as other files and free space when the free space was not measured', () => {
+      const { container, getByRole } = renderDom(DiskMeter, { label: 'Диск F', segments: [{ key: 'games', label: 'Игры', bytes: 600 * GB, tone: 'game' }], total: 1000 * GB, free: null });
+      expect(parts(container).map((p) => [p.dataset.tone ?? null, p.classList.contains('rest'), parseFloat(p.style.flexBasis)])).toEqual([
+        ['game', false, 60],
+        [null, true, 40],
+      ]);
+      expect(getByRole('img').getAttribute('aria-label')).toBe(`Диск F: Игры: ${bytesSize(600 * GB)}; ${REST}: ${bytesSize(400 * GB)}; Всего ${bytesSize(1000 * GB)}`);
+      expect(legendLines(getByRole('list'))).toEqual([`Игры ${bytesSize(600 * GB)}`, `${REST} ${bytesSize(400 * GB)}`, `Всего ${bytesSize(1000 * GB)}`].map(words));
+      const swatch = container.querySelectorAll('.legend .swatch')[1];
+      expect([swatch.classList.contains('rest'), swatch.hasAttribute('data-tone')]).toEqual([true, false]);
+    });
+
+    it('says it as an upper bound beside a game still being measured, the free space left out', () => {
+      const { container, getByRole } = renderDom(DiskMeter, {
+        label: 'Диск F',
+        segments: [
+          { key: 'games', label: 'Игры', bytes: 600 * GB, tone: 'game' },
+          { key: 'new', label: 'Новая', bytes: 20 * GB, tone: 'game-2', sizeUnknown: true },
+        ],
+        total: 1000 * GB,
+        compact: true,
+      });
+      expect(restOf(container).map((p) => parseFloat(p.style.flexBasis))).toEqual([38]);
+      expect(container.querySelector('.line')?.textContent).toBe(`${REST}: не больше ${bytesSize(380 * GB)}; Всего ${bytesSize(1000 * GB)}`);
+      expect(getByRole('img').getAttribute('aria-label')).toBe(
+        `Диск F: Игры: ${bytesSize(600 * GB)}; Новая: не меньше ${bytesSize(20 * GB)}; ${REST}: не больше ${bytesSize(380 * GB)}; Всего ${bytesSize(1000 * GB)}`,
+      );
+    });
+
+    it('is not drawn where the free space is derived from exact sizes: that is the track, said as free', () => {
+      const { container } = renderDom(DiskMeter, { label: 'Диск F', segments: [{ key: 'games', label: 'Игры', bytes: 600 * GB, tone: 'game' }], total: 1000 * GB, compact: true });
+      expect(restOf(container)).toEqual([]);
+      expect(container.querySelector('.line')?.textContent).toBe(`Свободно ${bytesSize(400 * GB)} из ${bytesSize(1000 * GB)}`);
+    });
+  });
+
   // The words, the legend and the bar of every combination come from one model: each is checked
   // against the model `meter` returns for the same input (whose rules diskMeter.test.ts pins over the
-  // same combinations), in the words the rules give.
+  // same combinations), in the words the rules give. The drawing is also read against the words
+  // alone, without the model: a model that lacks a part would draw and say the same wrong thing.
   describe('says, lists and draws one model', () => {
     const T = 1000 * GB;
+    const REST = 'Другие файлы и свободное место';
+    const escaped = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Read from the drawing and the words only: the bare track is said as free space of its width,
+    // and a part drawn as the rest (no fill, an outline) is said as other files and free space of
+    // its width, in the text alternative and in the words on screen.
+    function drawingMatchesWords(container: HTMLElement, compact: boolean, overflow: boolean) {
+      const drawn = parts(container);
+      const bare = 100 - drawn.reduce((sum, p) => sum + parseFloat(p.style.flexBasis), 0);
+      const alt = words(container.querySelector('.bar')?.getAttribute('aria-label') ?? '');
+      const seen = compact ? words(container.querySelector('.line')?.textContent ?? '') : legendLines(container.querySelector('.legend') as HTMLElement).join(' | ');
+      for (const [where, said] of [
+        ['the text alternative', alt],
+        ['the words on screen', seen],
+      ]) {
+        if (bare > 1e-6) {
+          const free = overflow ? '\\S' : escaped(words(bytesSize((bare / 100) * T)));
+          expect(said, `${where} says the bare track (${bare}%) as free space`).toMatch(new RegExp(`Свободно:? ${free}`));
+        }
+        for (const rest of drawn.filter((p) => p.classList.contains('rest'))) {
+          const size = escaped(words(bytesSize((parseFloat(rest.style.flexBasis) / 100) * T)));
+          expect(said, `${where} names the outlined part`).toMatch(new RegExp(`${REST}:? (не больше )?${size}`));
+        }
+        if (drawn.some((p) => p.classList.contains('rest'))) expect(said, `${where} does not say free space apart from the rest`).not.toContain('Свободно');
+      }
+      for (const rest of drawn.filter((p) => p.classList.contains('rest'))) expect(rest.dataset.tone, 'the rest is not a fill').toBeUndefined();
+    }
     const plural = new Intl.PluralRules('ru');
     const MORE = { one: 'часть', few: 'части', many: 'частей', other: 'части' } as Record<string, string>;
     const size = (s: MeterSize) =>
       s.kind === 'unknown' ? 'размер неизвестен' : s.kind === 'atLeast' ? `не меньше ${bytesSize(s.bytes)}` : s.kind === 'atMost' ? `не больше ${bytesSize(s.bytes)}` : bytesSize(s.bytes);
-    const name = (p: MeterPart) => (p.kind === 'other' ? 'Другие файлы' : p.kind === 'more' ? `Ещё ${p.folded?.length} ${MORE[plural.select(p.folded?.length ?? 0)]}` : p.label);
+    const name = (p: MeterPart) => (p.kind === 'other' ? 'Другие файлы' : p.kind === 'rest' ? REST : p.kind === 'more' ? `Ещё ${p.folded?.length} ${MORE[plural.select(p.folded?.length ?? 0)]}` : p.label);
     const seg = (key: string, bytes: number, sizeUnknown = false): MeterSegment => ({ key, label: `Игра ${key}`, bytes, tone: 'game', sizeUnknown });
 
     for (const overflow of [false, true])
@@ -193,6 +263,7 @@ describe('DiskMeter', () => {
                 const { container, getByRole, queryByRole } = renderDom(DiskMeter, { label: 'Диск', segments, total: T, free: given, compact });
 
                 expect(parts(container).map((p) => parseFloat(p.style.flexBasis))).toEqual(m.drawn.map((p) => p.share * 100));
+                drawingMatchesWords(container, compact, overflow);
                 const tail = m.overflow
                   ? [...(m.free ? [`Свободно: ${size(m.free)}`] : []), 'Размеры в сумме больше общего объёма', `Всего ${bytesSize(T)}`]
                   : m.free
@@ -201,7 +272,8 @@ describe('DiskMeter', () => {
                 expect(getByRole('img').getAttribute('aria-label')).toBe(`Диск: ${[...m.parts.map((p) => `${name(p)}: ${size(p.size)}`), ...tail].join('; ')}`);
                 if (compact) {
                   expect(queryByRole('list')).toBeNull();
-                  expect(container.querySelector('.line')?.textContent).toBe(tail.join('; '));
+                  const rest = m.parts.filter((p) => p.kind === 'rest').map((p) => `${REST}: ${size(p.size)}`);
+                  expect(container.querySelector('.line')?.textContent).toBe([...rest, ...tail].join('; '));
                   return;
                 }
                 const ends = m.overflow ? [`Размеры в сумме больше общего объёма; Всего ${bytesSize(T)}`] : [`Всего ${bytesSize(T)}`];

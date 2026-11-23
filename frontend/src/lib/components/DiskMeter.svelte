@@ -18,6 +18,12 @@
    * Pass an `other` segment only for space you measured; space that no segment and no measured free
    * space accounts for is added as "Other files" in the same tone.
    *
+   * The bare track is free space and nothing else. When the free space was not measured (`free` null)
+   * or cannot be derived (left out beside a size not fully measured), the space after the segments is
+   * one part, "Other files and free space", outlined in a broken line as an unknown total is: neither a
+   * fill nor the track. It is listed, and in the compact form said on its line; the free space is not
+   * said apart from it.
+   *
    * The bar is one image whose text alternative carries the legend's numbers. With `onpick` its
    * segments are buttons instead (one Tab stop, the arrows move, a hint names each); a segment under
    * one pixel still shows as a hairline. Neighbouring segments are kept apart by a gap of the track,
@@ -74,6 +80,7 @@
   const said = (size: MeterSize) => sizeWords(size, bytesSize, words);
   function nameOf(part: MeterPart): string {
     if (part.kind === 'other') return $t('common.meterOther');
+    if (part.kind === 'rest') return $t('common.meterRest');
     if (part.kind === 'more') {
       const count = part.folded?.length ?? 0;
       return foldLabel ? foldLabel(count) : $t('common.meterMore', { count });
@@ -100,6 +107,9 @@
   // parts are kept apart by the catalogue's own separator.
   const joined = (items: string[]) => items.join($t('common.meterSeparator'));
   const alt = $derived($t('common.meterAlt', { label, details: joined([...model.parts.map(partText), ...tail]) }));
+  // The compact line: the free space and the total, after the rest when there is one, as the rest is
+  // drawn and holds the free space the line would otherwise say.
+  const line = $derived(joined([...model.parts.filter((part) => part.kind === 'rest').map(partText), ...tail]));
 
   // The drawn parts a press reports: the buttons, in the order the arrows move.
   const pickable = $derived(model.drawn.filter((part) => part.kind === 'segment' || (part.kind === 'more' && onpickfolded)));
@@ -194,25 +204,25 @@
             ></button>
           </Tooltip>
         {:else}
-          <span class="part" data-tone={part.tone} style:flex-basis="{part.share * 100}%"></span>
+          <span class="part" class:rest={part.kind === 'rest'} data-tone={part.tone} style:flex-basis="{part.share * 100}%"></span>
         {/if}
       {/each}
     </div>
   {:else}
     <div class="bar" role="img" aria-label={alt} data-state={model.total === null ? 'unknown' : undefined}>
       {#each model.drawn as part (part.id)}
-        <span class="part" data-tone={part.tone} style:flex-basis="{part.share * 100}%"></span>
+        <span class="part" class:rest={part.kind === 'rest'} data-tone={part.tone} style:flex-basis="{part.share * 100}%"></span>
       {/each}
     </div>
   {/if}
 
   {#if compact}
-    <p class="line"><Reading text={joined(tail)} /></p>
+    <p class="line"><Reading text={line} /></p>
   {:else}
     <ul class="legend">
       {#each model.parts as part (part.id)}
         <li>
-          <span class="swatch" data-tone={part.tone} class:hollow={part.size.kind === 'unknown'} aria-hidden="true"></span>
+          <span class="swatch" data-tone={part.tone} class:hollow={part.size.kind === 'unknown'} class:rest={part.kind === 'rest'} aria-hidden="true"></span>
           {#if onpick && part.kind === 'segment' && part.share === 0}
             <span class="name"><TextLink tone="muted" data-pick={part.id} onclick={() => onpick(part.key)}>{nameOf(part)}</TextLink></span>
           {:else if onpick && part.kind === 'more'}
@@ -346,6 +356,14 @@
     background: color-mix(in srgb, var(--accent-text) 45%, var(--text-3));
   }
 
+  /* Space not known to be free: neither a fill nor the bare track, which means free. A broken outline,
+     as an unknown total's. */
+  .part.rest {
+    background: none;
+    outline: 1px dashed var(--text-3);
+    outline-offset: -1px;
+  }
+
   .legend {
     display: flex;
     flex-wrap: wrap;
@@ -394,6 +412,12 @@
   .swatch.hollow {
     background: none;
     box-shadow: inset 0 0 0 1px var(--text-3);
+  }
+
+  .swatch.rest {
+    background: none;
+    outline: 1px dashed var(--text-3);
+    outline-offset: -1px;
   }
 
   .name {

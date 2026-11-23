@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { METER_GAP, METER_HAIRLINE, METER_MORE, METER_OTHER, METER_PAD, METER_TONES, METER_WIDTH, gameTone, meter, sizeWords, type MeterSegment } from './diskMeter';
+import { METER_GAP, METER_HAIRLINE, METER_MORE, METER_OTHER, METER_PAD, METER_REST, METER_TONES, METER_WIDTH, gameTone, meter, sizeWords, type MeterSegment } from './diskMeter';
 
 const seg = (key: string, bytes: number, extra: Partial<MeterSegment> = {}): MeterSegment => ({ key, label: key, bytes, tone: 'game', ...extra });
 
@@ -126,8 +126,9 @@ describe('the disk meter model', () => {
       ['none', { kind: 'unknown' }],
       ['broken', { kind: 'unknown' }],
       ['negative', { kind: 'unknown' }],
+      [METER_REST, { kind: 'atMost', bytes: 60 }],
     ]);
-    expect(m.drawn.map((p) => p.key)).toEqual(['bound']);
+    expect(m.drawn.map((p) => p.key)).toEqual(['bound', METER_REST]);
     expect(numbers(m).every(Number.isFinite)).toBe(true);
   });
 
@@ -136,10 +137,13 @@ describe('the disk meter model', () => {
     expect(meter([seg('none', 0, { sizeUnknown: true })], 100).free).toBeNull();
   });
 
-  it('says a free space the caller could not measure is unknown', () => {
-    expect(meter([seg('a', 10)], 100, null).free).toEqual({ kind: 'unknown' });
-    expect(meter([seg('a', 10)], 100, Number.NaN).free).toEqual({ kind: 'unknown' });
-    expect(meter([seg('a', 10)], 100, -1).free).toEqual({ kind: 'unknown' });
+  // Where the segments leave no space, or nothing is drawn against an unknown total, no part holds
+  // the free space: it is said on its own, as unknown.
+  it('says a free space the caller could not measure is unknown where no part holds it', () => {
+    for (const free of [null, Number.NaN, -1]) {
+      expect(meter([seg('a', 100)], 100, free).free).toEqual({ kind: 'unknown' });
+      expect(meter([seg('a', 10)], 0, free).free).toEqual({ kind: 'unknown' });
+    }
   });
 
   it('gives segments that share a key ids of their own, and keeps the key a pick reports', () => {
@@ -175,7 +179,7 @@ describe('folding what cannot be drawn truthfully', () => {
   function holds(m: ReturnType<typeof meter>, width: number) {
     const k = m.drawn.length;
     expect(k * METER_HAIRLINE + (k - 1) * METER_GAP, 'the hairlines and the gaps fit in the content box').toBeLessThanOrEqual(box(width) + 1e-9);
-    const own = m.drawn.filter((p) => p.kind !== 'other');
+    const own = m.drawn.filter((p) => p.kind !== 'other' && p.kind !== 'rest');
     expect(own.length === 0 || own.some((p) => p.kind === 'segment'), 'a segment is drawn beside the fold').toBe(true);
     const lone = own.length === 2 && own[1].kind === 'more';
     const atSize = own.sort((a, b) => a.share - b.share).slice(lone ? 2 : 1);
@@ -267,7 +271,7 @@ describe('folding what cannot be drawn truthfully', () => {
 
   it('does not fold the parts it does not draw', () => {
     const m = meter([seg('big', 1000), seg('zero', 0), seg('none', 0, { sizeUnknown: true })], 2000, undefined, METER_WIDTH.compact);
-    expect(m.parts.map((p) => p.key)).toEqual(['big', 'zero', 'none']);
+    expect(m.parts.map((p) => p.key)).toEqual(['big', 'zero', 'none', METER_REST]);
   });
 
   // Many mixes of sizes, counts and widths: the rule holds for each.
@@ -322,8 +326,61 @@ describe('space no segment accounts for', () => {
 
   it('is not added where the free space is derived, not measured, or the total is unknown', () => {
     expect(meter([seg('games', 600)], 1000).parts.map((p) => p.kind)).toEqual(['segment']);
-    expect(meter([seg('games', 600)], 1000, null).parts.map((p) => p.kind)).toEqual(['segment']);
+    expect(meter([seg('games', 600)], 1000, null).parts.map((p) => p.kind)).toEqual(['segment', 'rest']);
     expect(meter([seg('games', 600)], 0, 300).parts.map((p) => p.kind)).toEqual(['segment']);
+  });
+});
+
+// The bare track means free space and nothing else. The space after the segments is drawn as track
+// only when it is known to be free (measured, or derived from exact sizes); otherwise it is one part
+// of its own, other files and free space together, and the free space is not said apart from it.
+describe('space not known to be free', () => {
+  const kinds = (m: ReturnType<typeof meter>) => m.parts.map((p) => [p.kind, p.key, p.tone, p.size, p.share]);
+
+  it('is a part of its own when the free space could not be measured, exact beside exact sizes', () => {
+    for (const free of [null, Number.NaN, -1]) {
+      const m = meter([seg('games', 600)], 1000, free);
+      expect(kinds(m)).toEqual([
+        ['segment', 'games', 'game', { kind: 'exact', bytes: 600 }, 0.6],
+        ['rest', METER_REST, null, { kind: 'exact', bytes: 400 }, 0.4],
+      ]);
+      expect(m.drawn.map((p) => p.key)).toEqual(['games', METER_REST]);
+      expect(m.free).toBeNull();
+    }
+  });
+
+  it('is an upper bound beside a size not fully measured when the free space could not be measured', () => {
+    const m = meter([seg('games', 600, { sizeUnknown: true }), seg('new', 0, { sizeUnknown: true })], 1000, null);
+    expect(kinds(m)[2]).toEqual(['rest', METER_REST, null, { kind: 'atMost', bytes: 400 }, 0.4]);
+    expect(m.free).toBeNull();
+  });
+
+  it('is a part of its own, an upper bound, when free space cannot be derived beside a lower bound or an unknown size', () => {
+    const bound = meter([seg('games', 600, { sizeUnknown: true })], 1000);
+    expect(kinds(bound)[1]).toEqual(['rest', METER_REST, null, { kind: 'atMost', bytes: 400 }, 0.4]);
+    expect(bound.free).toBeNull();
+    const unknown = meter([seg('games', 600), seg('new', 0, { sizeUnknown: true })], 1000);
+    expect(kinds(unknown)[2]).toEqual(['rest', METER_REST, null, { kind: 'atMost', bytes: 400 }, 0.4]);
+    expect(unknown.drawn.map((p) => p.key)).toEqual(['games', METER_REST]);
+  });
+
+  it('is the track, said as free, when it is derived from exact sizes or measured', () => {
+    expect(meter([seg('games', 600)], 1000).parts.map((p) => p.kind)).toEqual(['segment']);
+    expect(meter([seg('games', 600)], 1000).free).toEqual({ kind: 'exact', bytes: 400 });
+    expect(meter([seg('games', 600, { sizeUnknown: true })], 1000, 300).parts.map((p) => p.kind)).toEqual(['segment', 'other']);
+  });
+
+  it('is not added where the segments leave no space or overflow', () => {
+    expect(meter([seg('games', 1000)], 1000, null).parts.map((p) => p.kind)).toEqual(['segment']);
+    expect(meter([seg('games', 1000, { sizeUnknown: true })], 1000).parts.map((p) => p.kind)).toEqual(['segment']);
+    const over = meter([seg('games', 1200, { sizeUnknown: true })], 1000, null);
+    expect([over.overflow, over.parts.map((p) => p.kind), over.free]).toEqual([true, ['segment'], null]);
+  });
+
+  it('is placed after the fold and takes a slot of the room', () => {
+    const games = Array.from({ length: 59 }, (_, i) => seg(`g${i}`, 10));
+    const m = meter(games, 600, null, METER_WIDTH.compact);
+    expect(m.drawn.map((p) => p.kind)).toEqual([...Array.from({ length: 17 }, () => 'segment'), 'more', 'rest']);
   });
 });
 
@@ -364,32 +421,40 @@ describe('the rules over every combination', () => {
       // Drawn against the segments and the measured free space in an overflow, else against the total.
       const against = overflow ? used + measured : T;
       const gap = !overflow && free === 'measured' ? T - used - measured : 0;
+      // The space after the segments when it is not known to be free: free not measured, or not
+      // derivable beside a size not fully measured.
+      const rest = !overflow && (free === 'null' || (free === 'derived' && !exact)) ? T - used : 0;
       const bytesOf = (p: (typeof m.parts)[number]) =>
-        p.kind === 'other' ? gap : p.kind === 'more' ? (p.folded ?? []).reduce((sum, f) => sum + (f.size.kind === 'unknown' ? 0 : f.size.bytes), 0) : (given.segments.find((s) => s.key === p.key)?.bytes ?? 0);
+        p.kind === 'other'
+          ? gap
+          : p.kind === 'rest'
+            ? rest
+            : p.kind === 'more'
+              ? (p.folded ?? []).reduce((sum, f) => sum + (f.size.kind === 'unknown' ? 0 : f.size.bytes), 0)
+              : (given.segments.find((s) => s.key === p.key)?.bytes ?? 0);
       for (const part of m.drawn) expect(part.share * against, part.key).toBeCloseTo(bytesOf(part), -3);
       const drawn = m.drawn.reduce((sum, p) => sum + p.share, 0);
-      expect(drawn).toBeCloseTo(overflow ? used / against : (used + gap) / T, 9);
+      expect(drawn).toBeCloseTo(overflow ? used / against : (used + gap + rest) / T, 9);
 
-      // The legend lists every segment once (folded or not) and other files for the gap.
+      // The legend lists every segment once (folded or not), other files for the gap and the rest for
+      // the space not known to be free.
       const listed = m.parts.flatMap((p) => (p.kind === 'more' ? (p.folded ?? []) : [p]));
       expect(listed.filter((p) => p.kind === 'segment').map((p) => p.key)).toEqual(given.segments.map((s) => s.key));
       const other = m.parts.find((p) => p.kind === 'other');
       expect(other?.size ?? null).toEqual(gap > 0 ? { kind: exact ? 'exact' : 'atMost', bytes: gap } : null);
+      const restPart = m.parts.find((p) => p.kind === 'rest');
+      expect(restPart?.size ?? null).toEqual(rest > 0 ? { kind: exact ? 'exact' : 'atMost', bytes: rest } : null);
       expect(m.parts.some((p) => p.kind === 'more')).toBe(fold);
 
       // Free space: a measured one is always said; a derived one only without overflow and with every
-      // size exact; one that could not be measured is said as unknown, except in an overflow.
-      const said =
-        free === 'measured'
-          ? { kind: 'exact', bytes: measured }
-          : free === 'derived'
-            ? !overflow && exact
-              ? { kind: 'exact', bytes: T - used }
-              : null
-            : overflow
-              ? null
-              : { kind: 'unknown' };
+      // size exact; one that could not be measured is not said apart: the rest says it, and in an
+      // overflow nothing does.
+      const said = free === 'measured' ? { kind: 'exact', bytes: measured } : free === 'derived' && !overflow && exact ? { kind: 'exact', bytes: T - used } : null;
       expect(m.free).toEqual(said);
+
+      // The bare track is free space and nothing else: without an overflow, what the drawn parts leave
+      // of the bar is the free space the model says.
+      if (!overflow) expect((1 - drawn) * T, 'the bare track is the free space said').toBeCloseTo(m.free?.kind === 'exact' ? m.free.bytes : 0, -3);
       expect(numbers(m).every(Number.isFinite)).toBe(true);
     });
   }
