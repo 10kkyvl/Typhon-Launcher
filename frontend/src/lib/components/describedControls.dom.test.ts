@@ -84,6 +84,15 @@ describe('a base control described by the text beside it', () => {
     const { getByRole } = renderDom(IntegerInput, props);
     expect(getByRole('textbox', { name: 'Threads' }).hasAttribute('aria-label')).toBe(false);
   });
+
+  // A disabled settings row hands `disabled` to its control: the number field takes it too, keeping its
+  // value readable and out of reach of typing.
+  it('the number field, disabled by its row, keeps its value', () => {
+    const { getByRole } = renderDom(IntegerInput, { value: 4, min: 1, max: 16, label: 'Threads', disabled: true, onchange: vi.fn() });
+    const field = getByRole('textbox', { name: 'Threads' }) as HTMLInputElement;
+    expect(field.disabled).toBe(true);
+    expect(field.value).toBe('4');
+  });
 });
 
 // The callers written before these props pass none of them: their controls carry no new attribute.

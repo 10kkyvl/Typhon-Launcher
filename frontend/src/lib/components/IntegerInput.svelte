@@ -14,6 +14,7 @@
     label,
     id,
     describedby,
+    disabled = false,
     width = '12rem',
     onchange,
   }: {
@@ -22,6 +23,8 @@
     max: number;
     /** Id of the text that says what the field sets. */
     describedby?: string;
+    /** Out of reach of typing, its value still shown and read (a disabled settings row). */
+    disabled?: boolean;
     width?: string;
     onchange: (value: number) => void;
   } & Named = $props();
@@ -73,6 +76,7 @@
     aria-label={id ? undefined : label}
     aria-describedby={describedby}
     aria-invalid={error !== ''}
+    {disabled}
     value={draft}
     oninput={(event) => {
       editing = true;
