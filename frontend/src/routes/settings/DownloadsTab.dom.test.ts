@@ -24,6 +24,7 @@ vi.mock('../../lib/services/cloudsaves', async (importOriginal) => ({
 
 import { msg, type MessageKey } from '../../lib/i18n';
 import { cloudForget } from '../../lib/services/cloudsaves';
+import { updateReason } from '../../lib/services/selfupdateMessages';
 import { defaultPlayDownloadLimit, defaultPlayUploadLimit } from '../../lib/services/playThrottle';
 import { saveSettingsPatch, type Settings as SettingsData } from '../../lib/services/settings';
 import { cloudStatus } from '../../lib/stores/cloudsaves';
@@ -403,6 +404,18 @@ describe('the downloads tab: beta versions', () => {
 
     await vi.waitFor(() => expect(requestCheck).toHaveBeenCalledTimes(1));
     expect(saveSettingsPatch).toHaveBeenCalledExactlyOnceWith({ updateBetaChannel: true });
+  });
+
+  it('says a check that fails after the channel is saved, the way a failed check is said', async () => {
+    authState.set('authenticated');
+    currentUser.set(TESTER);
+    vi.mocked(requestCheck).mockRejectedValue(new Error('offline'));
+    const keys = open();
+
+    await keys.click(screen.getByRole('switch', { name: msg('settings.downloadsBetaLabel') }));
+
+    await vi.waitFor(() => expect(toastTexts()).toContain(updateReason(new Error('offline'))));
+    expect(get(toasts).find((item) => item.message === updateReason(new Error('offline')))?.kind).toBe('danger');
   });
 
   it('says a channel that was not saved, and checks nothing', async () => {

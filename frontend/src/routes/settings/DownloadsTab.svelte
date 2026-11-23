@@ -16,6 +16,7 @@
   import { defaultPlayDownloadLimit, defaultPlayUploadLimit } from '../../lib/services/playThrottle';
   import { elevationSupported } from '../../lib/services/system';
   import { betaToggleShown, isBeta } from '../../lib/services/selfupdateChannel';
+  import { updateReason } from '../../lib/services/selfupdateMessages';
   import { requestCheck, selfUpdateStatus } from '../../lib/stores/selfupdate';
   import { cloudStatus } from '../../lib/stores/cloudsaves';
   import { saveBackupsEnabled } from '../../lib/stores/savebackup';
@@ -81,7 +82,12 @@
 
   async function setBetaChannel(value: boolean) {
     const saved = await updateSettingsReporting({ updateBetaChannel: value }, () => toast(msg('state.settingsSaveFailed'), 'danger'));
-    if (saved) await requestCheck();
+    if (!saved) return;
+    try {
+      await requestCheck();
+    } catch (err) {
+      toast(updateReason(err) || msg('state.selfupdateReasonUnknown'), 'danger');
+    }
   }
 
   const downloadLimitPresets = [10, 25, 50];
