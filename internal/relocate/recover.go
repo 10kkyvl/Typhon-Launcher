@@ -100,11 +100,14 @@ func (s *Service) surfaceStale(job Job) {
 }
 
 // reserveForRecovery takes the move reservation of the game a resumable job
-// moves, with the job's folders held as a live move holds its own: the game
-// cannot start and no card can be added in them while recovery touches them.
-// A card that came to lie in one of them since the crash, or a busy game,
-// leaves the job as it is for a later start. A game that is gone from the
-// library or uninstalled ends the job at once without touching any data.
+// moves, with the job's folders held: the old folder as a live move holds the
+// game's, the copy's folders against a card inside them. The game cannot
+// start and no card can be added in them while recovery touches them. A card
+// that came to lie in one of them since the crash fails the job at its stage
+// (see failShared). A busy game or a card still being added leaves the job as
+// it is for a later start: the journal has no stage that says "waiting", so
+// until then it reads as the stage it was killed in. A game that is gone from
+// the library or uninstalled ends the job at once without touching any data.
 func (s *Service) reserveForRecovery(job Job) (func(), bool) {
 	noop := func() {}
 	if s.lib == nil || !recoveryTouchesGame(job) {
@@ -114,12 +117,40 @@ func (s *Service) reserveForRecovery(job Job) (func(), bool) {
 		s.markOrphaned(job.ID)
 		return nil, false
 	}
-	release, err := s.lib.BeginRelocate(job.GameID, job.Source, job.Target, job.Staging)
-	if err != nil {
+	release, err := s.lib.BeginRecovery(job.GameID, job.Source, job.Target, job.Staging)
+	switch {
+	case err == nil:
+		return release, true
+	case errors.Is(err, library.ErrFolderShared):
+		s.failShared(job, err)
+	default:
 		slog.Warn("recovery skipped: game is busy", "job", job.ID, "game", job.GameID, "error", err)
-		return nil, false
 	}
-	return release, true
+	return nil, false
+}
+
+// failShared fails a job another card's files are in the way of, at the stage
+// it was found in, so the player sees a failed move with its reason instead
+// of a move that never ends. Like a failed repoint or cleanup, the refusal
+// spends one recovery attempt and the next start resumes the job from that
+// stage; the last attempt ends it for good.
+func (s *Service) failShared(job Job, cause error) {
+	err := fmt.Errorf("%w: %w", ErrFolderShared, cause)
+	if job.RecoveryAttempts+1 >= maxRecoveryAttempts {
+		s.markRecoveryFailed(job.ID, exhausted(err.Error()))
+		return
+	}
+	stage := job.Stage
+	if stage == StageFailed {
+		stage = job.FailedAt
+	}
+	if _, tErr := s.transition(job.ID, StageFailed, func(j *Job) {
+		j.Error = err.Error()
+		j.FailedAt = stage
+		j.RecoveryAttempts++
+	}); tErr != nil {
+		slog.Error("mark move failed on recovery", "job", job.ID, "error", tErr)
+	}
 }
 
 func recoveryTouchesGame(job Job) bool {
@@ -127,21 +158,30 @@ func recoveryTouchesGame(job Job) bool {
 	case "", itemDownloads, itemScreenshots, itemSettings:
 		return false
 	}
-	switch job.Stage {
+	return resumable(job.Stage) || job.Stage == StageFailed && resumable(job.FailedAt)
+}
+
+// resumable names the stages a move resumes from at the next start. A job
+// fails at the first two only when another card was in the way of recovery.
+func resumable(stage Stage) bool {
+	switch stage {
 	case StagePrepare, StageCommit, StageRepoint, StageCleanup:
 		return true
-	case StageFailed:
-		return job.FailedAt == StageRepoint || job.FailedAt == StageCleanup
 	}
 	return false
 }
 
 // recoverFailed resumes a job that failed after its bytes reached Target: a
 // failed repoint is retried, and a failed cleanup retries the removal of the
-// old copy, but only while Target is the copy the library points at. Every
-// other failed job is just surfaced and dropped.
+// old copy, but only while Target is the copy the library points at. A job
+// failed at its prepare or commit because another card was in the way is
+// resumed from there. Every other failed job is just surfaced and dropped.
 func (s *Service) recoverFailed(ctx context.Context, job Job) {
 	switch job.FailedAt {
+	case StagePrepare:
+		s.recoverPrepare(ctx, job)
+	case StageCommit:
+		s.recoverCommit(ctx, job)
 	case StageRepoint:
 		s.runAttempt(ctx, job, StageRepoint, s.recoverRepoint)
 	case StageCleanup:

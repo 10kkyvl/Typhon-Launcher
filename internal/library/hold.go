@@ -44,6 +44,16 @@ type folderHold struct {
 	game  string
 	title string
 	dir   string
+	// inside: only a card at or inside dir counts against the hold, not one
+	// whose folder holds dir; that is the folder a move puts its copy in.
+	inside bool
+}
+
+func (h *folderHold) covers(roots []string) bool {
+	if h.inside {
+		return within(roots, h.dir)
+	}
+	return overlaps(roots, h.dir)
 }
 
 // overlaps says whether dir is one of roots, lies inside one or holds one. The
@@ -76,33 +86,87 @@ func overlaps(roots []string, dir string) bool {
 	return false
 }
 
-// neighboursLocked counts the cards that own files on disk: an uninstalled card
-// keeps its old folder only as a hint for the next install, and an archived one
-// is no longer in s.games and claims no folder at all.
+// within says whether one of roots is dir or lies inside it, compared by key
+// and failing closed as overlaps does.
+func within(roots []string, dir string) bool {
+	if dir == "" {
+		return false
+	}
+	key, err := platform.PathKey(dir)
+	if err != nil {
+		return true
+	}
+	sep := string(filepath.Separator)
+	for _, root := range roots {
+		if root == "" {
+			continue
+		}
+		rootKey, err := platform.PathKey(root)
+		if err != nil {
+			return true
+		}
+		if rootKey == key || strings.HasPrefix(rootKey, key+sep) {
+			return true
+		}
+	}
+	return false
+}
+
+// neighboursLocked lists the cards whose files deleting or moving dir would
+// take along, the cards being added there included.
 func (s *Service) neighboursLocked(id, dir string) []FolderNeighbour {
-	var out []FolderNeighbour
+	cards, adding := s.blockersLocked(id, []string{dir}, nil)
+	return append(cards, adding...)
+}
+
+// blockersLocked lists the cards in the way of a removal or a move of id:
+// around are folders checked either way (the game's own folder), inside are
+// folders checked only for what lies at or in them (where a move puts its
+// copy: every library folder lies in some folder that holds other cards).
+// It counts the cards that own files on disk: an uninstalled card keeps its
+// old folder only as a hint for the next install, and an archived one is no
+// longer in s.games and claims no folder at all. adding lists the cards being
+// added there, which a later try may no longer meet.
+func (s *Service) blockersLocked(id string, around, inside []string) (cards, adding []FolderNeighbour) {
+	hit := func(roots []string) bool {
+		for _, dir := range around {
+			if overlaps(roots, dir) {
+				return true
+			}
+		}
+		for _, dir := range inside {
+			if within(roots, dir) {
+				return true
+			}
+		}
+		return false
+	}
 	for _, g := range s.games {
 		if g.ID == id || g.Uninstalled {
 			continue
 		}
-		if overlaps(g.Footprint(), dir) {
-			out = append(out, FolderNeighbour{ID: g.ID, Title: g.Title})
+		if hit(g.Footprint()) {
+			cards = append(cards, FolderNeighbour{ID: g.ID, Title: g.Title})
 		}
 	}
 	for _, h := range s.holds {
-		if h.kind == holdAdd && h.game != id && overlaps([]string{h.dir}, dir) {
-			out = append(out, FolderNeighbour{ID: h.game, Title: h.title})
+		if h.kind == holdAdd && h.game != id && hit([]string{h.dir}) {
+			adding = append(adding, FolderNeighbour{ID: h.game, Title: h.title})
 		}
 	}
-	return out
+	return cards, adding
 }
 
-func sharedError(neighbours []FolderNeighbour) error {
+func titlesOf(neighbours []FolderNeighbour) string {
 	titles := make([]string, 0, len(neighbours))
 	for _, n := range neighbours {
 		titles = append(titles, n.Title)
 	}
-	return fmt.Errorf("%w: %s", ErrFolderShared, strings.Join(titles, ", "))
+	return strings.Join(titles, ", ")
+}
+
+func sharedError(neighbours []FolderNeighbour) error {
+	return fmt.Errorf("%w: %s", ErrFolderShared, titlesOf(neighbours))
 }
 
 // FolderNeighbours lists the other games whose files deleting or moving this
@@ -181,15 +245,30 @@ func (s *Service) BeginRemoval(id, dir string) (func(), error) {
 //
 //wails:ignore
 func (s *Service) BeginMove(id string) (func(), error) {
-	return s.reserveMove(id, true, nil)
+	return s.reserveMove(id, true, nil, nil)
 }
 
-// reserveMove reserves a game for a move that acts on dirs, and on the card's
-// own folder when own is set: it fails while the game runs, starts, moves or
-// is being removed, or while another card's files share one of those folders,
-// and holds them against new cards until release. The checks and the
-// reservation are one critical section of s.mu.
-func (s *Service) reserveMove(id string, own bool, dirs []string) (func(), error) {
+// BeginRecovery is BeginRelocate for the recovery of a move a killed process
+// left: source, the folder the files came from, is checked as BeginMove checks
+// the game's folder; copies, the folders the move put the files in, only for
+// a card at or inside them, so a move into a folder that holds another card
+// (a tool added from the games folder itself) resumes as it ran. It fails
+// with ErrFolderShared while a card lies there and with ErrFolderBusy while
+// only a card being added does, and holds every one of them against new
+// cards under the same rule until release.
+//
+//wails:ignore
+func (s *Service) BeginRecovery(id, source string, copies ...string) (func(), error) {
+	return s.reserveMove(id, false, []string{source}, copies)
+}
+
+// reserveMove reserves a game for a move that acts on the around and inside
+// folders (see blockersLocked), and on the card's own folder when own is set:
+// it fails while the game runs, starts, moves or is being removed, or while
+// another card's files lie in the way, and holds those folders against new
+// cards until release. The checks and the reservation are one critical
+// section of s.mu.
+func (s *Service) reserveMove(id string, own bool, around, inside []string) (func(), error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	game := s.findLocked(id)
@@ -203,21 +282,30 @@ func (s *Service) reserveMove(id string, own bool, dirs []string) (func(), error
 		return nil, ErrRelocateGameRunning
 	}
 	if own {
-		dirs = append([]string{game.InstallDir}, dirs...)
+		around = append([]string{game.InstallDir}, around...)
 	}
-	for _, dir := range dirs {
-		if neighbours := s.neighboursLocked(id, dir); len(neighbours) > 0 {
-			return nil, sharedError(neighbours)
-		}
+	cards, adding := s.blockersLocked(id, around, inside)
+	switch {
+	case own && len(cards)+len(adding) > 0:
+		return nil, sharedError(append(cards, adding...))
+	case len(cards) > 0:
+		return nil, sharedError(cards)
+	case len(adding) > 0:
+		return nil, fmt.Errorf("%w: %s", ErrFolderBusy, titlesOf(adding))
 	}
 	if s.relocating == nil {
 		s.relocating = map[string]struct{}{}
 	}
 	s.relocating[id] = struct{}{}
-	held := make([]*folderHold, 0, len(dirs))
-	for _, dir := range dirs {
+	held := make([]*folderHold, 0, len(around)+len(inside))
+	for _, dir := range around {
 		if dir != "" {
 			held = append(held, s.addHoldLocked(folderHold{kind: holdMove, game: id, dir: dir}))
+		}
+	}
+	for _, dir := range inside {
+		if dir != "" {
+			held = append(held, s.addHoldLocked(folderHold{kind: holdMove, game: id, dir: dir, inside: true}))
 		}
 	}
 	var once sync.Once
@@ -244,7 +332,7 @@ func (s *Service) holdForAdding(id, title, dir string) (func(), error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, h := range s.holds {
-		if h.kind != holdAdd && overlaps([]string{h.dir}, dir) {
+		if h.kind != holdAdd && h.covers([]string{dir}) {
 			return nil, ErrFolderBusy
 		}
 	}
@@ -298,7 +386,7 @@ func (s *Service) checkHoldsLocked() error {
 			continue
 		}
 		for _, g := range s.games {
-			if g.ID != h.game && !g.Uninstalled && overlaps(g.Footprint(), h.dir) {
+			if g.ID != h.game && !g.Uninstalled && h.covers(g.Footprint()) {
 				return fmt.Errorf("%w: %s", ErrFolderBusy, g.Title)
 			}
 		}

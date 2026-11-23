@@ -374,6 +374,68 @@ func TestRemovalAndMoveOfAGameExcludeEachOther(t *testing.T) {
 	}
 }
 
+// Recovery of a move checks the old folder as a live move checks the game's
+// folder, and the folders the copy is in (target, staging) only for a card at
+// or inside them: a card whose folder holds them is how every library folder
+// looks. A card being added is a passing refusal of its own.
+func TestRecoveryReservationChecksTheCopiesOnlyForCardsInside(t *testing.T) {
+	cases := []struct {
+		name  string
+		other func(source, target string) string
+		want  string
+	}{
+		{"card around the target", func(_, target string) string { return filepath.Join(filepath.Dir(target), "tool.exe") }, ""},
+		{"card inside the target", func(_, target string) string { return filepath.Join(target, "Bonus", "tool.exe") }, "library.folder_shared"},
+		{"card in the staging folder", func(_, target string) string { return filepath.Join(target+".staging", "tool.exe") }, "library.folder_shared"},
+		{"card around the old folder", func(source, _ string) string { return filepath.Join(filepath.Dir(source), "tool.exe") }, "library.folder_shared"},
+		{"card inside the old folder", func(source, _ string) string { return filepath.Join(source, "Bonus", "tool.exe") }, "library.folder_shared"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newLibrary(t)
+			game := addAt(t, s, filepath.Join(t.TempDir(), "Games", "Game", "game.exe"), "Game")
+			target := filepath.Join(t.TempDir(), "Games", "Game")
+			addAt(t, s, tc.other(game.InstallDir, target), "Tool")
+
+			release, err := s.BeginRecovery(game.ID, game.InstallDir, target, target+".staging")
+			if tc.want != "" {
+				requireCode(t, "BeginRecovery", err, tc.want)
+				return
+			}
+			if err != nil {
+				t.Fatalf("BeginRecovery = %v", err)
+			}
+			defer release()
+			if _, err := s.Relocate(game.ID, target); err != nil {
+				t.Fatalf("repoint while the recovery holds the copy = %v", err)
+			}
+			_, err = s.AddGame(t.Context(), writeFile(t, filepath.Join(target, "Late", "late.exe"), "stub"), "Late")
+			requireCode(t, "AddGame inside the copy during its recovery", err, "library.folder_busy")
+			if _, err := s.AddGame(t.Context(), writeFile(t, filepath.Join(filepath.Dir(target), "tool2.exe"), "stub"), "Tool 2"); err != nil {
+				t.Fatalf("AddGame of a folder that holds the copy during its recovery = %v", err)
+			}
+		})
+	}
+}
+
+func TestRecoveryReservationWaitsForACardBeingAddedInside(t *testing.T) {
+	s := newLibrary(t)
+	game := addAt(t, s, filepath.Join(t.TempDir(), "Game", "game.exe"), "Game")
+	target := filepath.Join(t.TempDir(), "Game")
+	var recoverErr error
+	duringMeasure(t, func() {
+		release, err := s.BeginRecovery(game.ID, game.InstallDir, target)
+		if err == nil {
+			release()
+		}
+		recoverErr = err
+	})
+	if _, err := s.AddGame(t.Context(), writeFile(t, filepath.Join(target, "Late", "late.exe"), "stub"), "Late"); err != nil {
+		t.Fatal(err)
+	}
+	requireCode(t, "BeginRecovery while a card is added inside the copy", recoverErr, "library.folder_busy")
+}
+
 // A footprint whose path cannot be resolved counts as overlapping: the check
 // guards a deletion, so not knowing is a refusal, never a pass.
 func TestOverlapFailsClosedOnAPathItCannotResolve(t *testing.T) {

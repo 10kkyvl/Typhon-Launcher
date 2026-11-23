@@ -155,16 +155,13 @@ func (s *Service) CheckRelocatable(id string) error {
 
 // BeginRelocate reserves the game for a move: it fails while the game runs,
 // starts or is being removed, and PlayGame refuses the game until release is
-// called. dirs are the folders the move still acts on: it also fails while
-// another card's files share one of them, and holds them against new cards
-// until release. The checks and the reservation share one critical section,
-// so neither a launch nor a new card can slip in between them. Recovery of an
-// interrupted move takes this one with the job's folders, whichever the card
-// names by now; a new move takes BeginMove.
+// called. The checks and the reservation share one critical section, so no
+// launch can slip in between them. It holds no folder: a new move takes
+// BeginMove, the recovery of an interrupted one BeginRecovery.
 //
 //wails:ignore
-func (s *Service) BeginRelocate(id string, dirs ...string) (func(), error) {
-	return s.reserveMove(id, false, dirs)
+func (s *Service) BeginRelocate(id string) (func(), error) {
+	return s.reserveMove(id, false, nil, nil)
 }
 
 func rebaseUninstallCommand(command, oldRoot, newRoot string) string {
