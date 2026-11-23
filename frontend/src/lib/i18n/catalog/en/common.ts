@@ -33,6 +33,7 @@ export const common: Record<CommonKey, Message> = {
   'common.meterSeparator': '; ',
   'common.meterOverflow': 'The sizes add up to more than the total',
   'common.meterOther': 'Other files',
+  'common.meterRest': 'Other files and free space',
   'common.meterMore': { one: '{count} more part', other: '{count} more parts' },
   'common.chartPeriod': 'Period',
   'common.chartValue': 'Value',

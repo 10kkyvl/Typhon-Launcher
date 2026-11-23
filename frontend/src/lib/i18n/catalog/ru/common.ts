@@ -30,6 +30,7 @@ export const common = {
   'common.meterSeparator': '; ',
   'common.meterOverflow': 'Размеры в сумме больше общего объёма',
   'common.meterOther': 'Другие файлы',
+  'common.meterRest': 'Другие файлы и свободное место',
   'common.meterMore': {
     one: 'Ещё {count} часть',
     few: 'Ещё {count} части',
