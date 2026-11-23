@@ -434,4 +434,13 @@ export const settings: Record<SettingsKey, Message> = {
   'settings.layoutSection.reviewSummary': 'Rating',
   'settings.layoutSection.friends': 'Friends',
   'settings.appearanceExportDirtyHint': 'Save your changes to export them',
+  // 7-S1 general
+  'settings.generalSyncOffReason': 'Turn on sync between devices first',
+  'settings.generalLibraryOpenNamedFolderLabel': 'Open the “{folder}” folder',
+  'settings.generalLibraryOpenNoPathReason': 'The library folder isn’t chosen yet',
+  'settings.generalLibraryMoveProgress': '{stage} · {title} — {summary}',
+  'settings.generalLibraryMoveProgressNoTitle': '{stage} — {summary}',
+  'settings.generalLibraryMoveProgressQueue': '{stage} · {title} · games left: {count} — {summary}',
+  'settings.generalLibraryMoveProgressQueueNoTitle': '{stage} · games left: {count} — {summary}',
+  // /7-S1 general
 };

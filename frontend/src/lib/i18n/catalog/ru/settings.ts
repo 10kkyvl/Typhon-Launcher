@@ -433,6 +433,15 @@ export const settings = {
   'settings.layoutSection.reviewSummary': 'Оценка',
   'settings.layoutSection.friends': 'Друзья',
   'settings.appearanceExportDirtyHint': 'Сохраните изменения, чтобы экспортировать их',
+  // 7-S1 general
+  'settings.generalSyncOffReason': 'Сначала включите синхронизацию между устройствами',
+  'settings.generalLibraryOpenNamedFolderLabel': 'Открыть папку «{folder}»',
+  'settings.generalLibraryOpenNoPathReason': 'Папка библиотеки ещё не выбрана',
+  'settings.generalLibraryMoveProgress': '{stage} · {title} — {summary}',
+  'settings.generalLibraryMoveProgressNoTitle': '{stage} — {summary}',
+  'settings.generalLibraryMoveProgressQueue': '{stage} · {title} · осталось игр: {count} — {summary}',
+  'settings.generalLibraryMoveProgressQueueNoTitle': '{stage} · осталось игр: {count} — {summary}',
+  // /7-S1 general
 } as const;
 
 export type SettingsKey = keyof typeof settings;
