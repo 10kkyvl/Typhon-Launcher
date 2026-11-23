@@ -12,7 +12,7 @@
   import { isIndeterminate, progressPercent, type SourceProgress } from '../../lib/sources/progress';
   import { sourceErrorText } from '../../lib/sources/sourceErrors';
   import { sourceWarningText } from '../../lib/sources/sourceWarnings';
-  import { clockTime, formatCount, numericDate, relativeDate, truncateMiddle } from '../../lib/utils/format';
+  import { clockTime, formatCount, longDate, relativeDate, truncateMiddle } from '../../lib/utils/format';
 
   /** One source on the Sources screen: what it is, its state, its counts and its menu. */
   let {
@@ -70,10 +70,12 @@
     }
   }
 
-  function exactTime(iso: string | null) {
-    if (!iso) return undefined;
+  /** When the source was last refreshed: in words, and exactly. Null when it never was. */
+  function refreshedAt(iso: string | null): { words: string; exact: string } | null {
+    if (!iso) return null;
     const date = new Date(iso);
-    return Number.isNaN(date.getTime()) ? undefined : `${numericDate(date)}, ${clockTime(date)}`;
+    if (Number.isNaN(date.getTime())) return null;
+    return { words: relativeDate(iso), exact: msg('transfers.sourcesExactTime', { date: longDate(date), time: clockTime(date) }) };
   }
 
   function sourceMenu(source: Source) {
@@ -91,6 +93,7 @@
 
   const badge = $derived(statusBadgeFor(source.status));
   const health = $derived(healthMetaFor(source.health));
+  const when = $derived(refreshedAt(source.lastUpdatedAt));
 </script>
 
 <div class="row" class:disabled={!source.enabled} data-source-row={source.id}>
@@ -110,9 +113,9 @@
             <span class="insecure"><ShieldAlert size="1.4rem" strokeWidth={1.8} /></span>
           {/if}
         </span>
-        <span class="source-url" title={sourceLocation(source)}>{sourceLocation(source)}</span>
+        <span class="source-url">{sourceLocation(source)}</span>
         {#if source.lastError}
-          <span class="source-error" title={sourceErrorText(source.lastError)}>{sourceErrorText(source.lastError)}</span>
+          <span class="source-error">{sourceErrorText(source.lastError)}</span>
         {/if}
       </span>
     </button>
@@ -125,7 +128,7 @@
   <span class="cell status">
     {#if live}
       {@const percent = Math.round(progressPercent(live))}
-      <span class="live" title={stageLabel(live)}>
+      <span class="live">
         <span class="live-label">{stageLabel(live)}</span>
         <span class="live-bar">
           <ProgressBar value={percent} indeterminate={isIndeterminate(live)} height={4} label={source.name} valueText={`${stageLabel(live)}, ${percent}%`} />
@@ -149,7 +152,17 @@
       </IconButton>
     {/if}
   </span>
-  <span class="cell" title={exactTime(source.lastUpdatedAt)}>{relativeDate(source.lastUpdatedAt)}</span>
+  <span class="cell">
+    {#if when}
+      <!-- The exact time goes to assistive tech as text and to the pointer as a hint; the time element
+           takes focus only from the pointer, so the row adds no Tab stop for it. -->
+      <Tooltip text={when.exact} describe={false}>
+        <time datetime={source.lastUpdatedAt} tabindex="-1"><span aria-hidden="true">{when.words}</span><span class="sr-only">{when.exact}</span></time>
+      </Tooltip>
+    {:else}
+      {relativeDate(source.lastUpdatedAt)}
+    {/if}
+  </span>
   <span class="cell nums">{formatCount(source.entries)}</span>
   <span class="cell nums counts">
     <Tooltip
@@ -190,9 +203,7 @@
   .source-error {
     font-size: var(--font-xs);
     color: var(--danger);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
   }
 
   .live {
@@ -293,9 +304,7 @@
   .source-url {
     font-size: var(--font-xs);
     color: var(--text-3);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
   }
 
   .cell {

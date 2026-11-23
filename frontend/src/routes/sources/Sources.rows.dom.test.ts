@@ -1,12 +1,14 @@
-import { render, screen, within } from '@testing-library/svelte';
+import { render, screen, waitFor, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import { sourceErrorText } from '../../lib/sources/sourceErrors';
 import { sourceProgress } from '../../lib/stores/sourceProgress';
 import { sources } from '../../lib/stores/sources';
 import { user } from '../../lib/testing/dom';
-import { clockTime, numericDate, relativeDate } from '../../lib/utils/format';
+import { ruleBody, styleOf } from '../../lib/testing/css';
+import { clockTime, longDate, relativeDate } from '../../lib/utils/format';
 import Sources from './Sources.svelte';
+import row from './SourceRow.svelte?raw';
 import { MAIN, MIRROR, menuButton, mountPoint, resetScreen, rowNames, rowOf, source, words } from './sourcesTesting';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
@@ -142,15 +144,52 @@ describe('Sources: when a source was last refreshed', () => {
     expect(words(rowOf('Mirror'))).toContain(relativeDate(null));
   });
 
-  // R3: the exact time is a native title, reachable by a mouse only.
-  it('R3: gives the exact time as a native title only', () => {
+  // R3: the exact time is text for assistive tech and a hint on hover, as History says a record's time.
+  it('R3: says the exact time to assistive tech and on hover', async () => {
     const at = '2026-11-20T09:30:00Z';
     sources.set([source({ lastUpdatedAt: at })]);
     show();
 
     const date = new Date(at);
-    const exact = `${numericDate(date)}, ${clockTime(date)}`;
-    expect(rowOf('Main feed').querySelector(`[title="${exact}"]`)?.textContent?.trim()).toBe(relativeDate(at));
+    const exact = msg('transfers.sourcesExactTime', { date: longDate(date), time: clockTime(date) });
+    const time = rowOf('Main feed').querySelector('time');
+    expect(time?.getAttribute('datetime')).toBe(at);
+    expect(time?.querySelector('.sr-only')?.textContent).toBe(exact);
+    expect(time?.tabIndex).toBe(-1);
+
+    await user().hover(time as HTMLElement);
+    await waitFor(() => expect(document.querySelector('[data-part="tooltip"]')?.textContent?.trim()).toBe(exact));
+  });
+
+  it('R3: has no exact time to give for a source never refreshed', () => {
+    sources.set([source({ lastUpdatedAt: null })]);
+    show();
+
+    expect(rowOf('Main feed').querySelector('time')).toBeNull();
+  });
+});
+
+// R3: a native title reaches a mouse only; the screen says what it has to say as text or through a Tooltip.
+describe('Sources: no native title', () => {
+  it('R3: carries none in a row of any state', () => {
+    sources.set([
+      source({ status: 'error', lastError: 'typhon:sources.feed_invalid_json: bad json', lastUpdatedAt: '2026-11-20T09:30:00Z' }),
+      source({ id: 's2', name: 'Mirror', status: 'updating', insecure: true, url: 'http://mirror.invalid/feed.json' }),
+      source({ id: 's3', name: 'Warned', health: 'warning', warnings: ['duplicate entries'] }),
+    ]);
+    sourceProgress.set({ s2: { stage: 'match', done: 5, total: 10, startedAt: 0, sawMatch: true } });
+    show();
+
+    expect(document.querySelector('[title]')).toBeNull();
+  });
+
+  // Read from the source: jsdom applies no stylesheet. A cut text with no title would hide its end.
+  it('R3: shows the address and the reason of a failure whole, not cut with an ellipsis', () => {
+    const css = styleOf(row, 'SourceRow');
+    for (const selector of ['.source-url', '.source-error']) {
+      expect(ruleBody(css, selector)['text-overflow'], selector).toBeUndefined();
+      expect(ruleBody(css, selector)['overflow-wrap'], selector).toBe('anywhere');
+    }
   });
 });
 
