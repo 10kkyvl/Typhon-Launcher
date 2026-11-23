@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"os"
 
@@ -90,12 +89,12 @@ func (s *Service) recoverJob(ctx context.Context, job Job) {
 
 // surfaceStale handles a job that was already terminal when the process
 // crashed, before the UI could see the event: emit it once more and drop
-// the leftover journal entry. A job whose staging folder is still on disk
+// the leftover journal entry. A job that still holds a folder (holdsCopies)
 // stays, without the event: the entry is what lists that folder for Disk
-// usage and what lets a retry of the same move take it over, and it goes at
-// the first start after the folder does.
+// usage and what lets a retry of the same move take its staging folder over,
+// and it goes at the first start after the last such folder does.
 func (s *Service) surfaceStale(job Job) {
-	if stagingLeft(job) {
+	if s.holdsCopies(job) {
 		return
 	}
 	emit(eventForStage(job.Stage), job.clone())
@@ -167,36 +166,18 @@ func (s *Service) endedForCard(job Job) bool {
 
 // failShared fails a job another card's files are in the way of, at the stage
 // it was found in, so the player sees a failed move with its reason instead
-// of a move that never ends. Like a failed repoint or cleanup, the refusal
-// spends one recovery attempt and the next start resumes the job from that
-// stage; the last attempt ends it for good.
+// of a move that never ends. Being blocked is not the move's failure: it
+// spends no recovery attempt, and every start resumes the job from that stage
+// for as long as the card stays in the way.
 func (s *Service) failShared(job Job, cause error) {
 	err := fmt.Errorf("%w: %w", ErrFolderShared, cause)
-	if job.RecoveryAttempts+1 >= maxRecoveryAttempts {
-		s.markRecoveryFailed(job.ID, exhausted(err.Error()))
-		return
-	}
-	stage := job.Stage
-	if stage == StageFailed {
-		stage = job.FailedAt
-	}
+	stage := stageOf(job)
 	if _, tErr := s.transition(job.ID, StageFailed, func(j *Job) {
 		j.Error = err.Error()
 		j.FailedAt = stage
-		j.RecoveryAttempts++
 	}); tErr != nil {
 		slog.Error("mark move failed on recovery", "job", job.ID, "error", tErr)
 	}
-}
-
-// stagingLeft says whether the job's staging folder may still be on disk: a
-// folder that cannot be looked at counts as there.
-func stagingLeft(job Job) bool {
-	if job.Staging == "" {
-		return false
-	}
-	_, err := os.Lstat(job.Staging)
-	return !errors.Is(err, fs.ErrNotExist)
 }
 
 func recoveryTouchesGame(job Job) bool {

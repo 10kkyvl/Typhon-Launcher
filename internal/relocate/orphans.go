@@ -86,13 +86,8 @@ func (s *Service) recoverOrphan(job Job) {
 	if s.lib == nil {
 		return
 	}
-	copies, err := orphanCopies(job, s.lib.GetGames())
-	if err != nil {
-		slog.Warn("check the copy of a move whose game left the library", "job", job.ID, "error", err)
-		return
-	}
-	if len(copies) > 0 {
-		slog.Info("copy of a move whose game left the library kept", "job", job.ID, "game", job.GameID, "copies", len(copies))
+	if s.holdsCopies(job) {
+		slog.Info("copy of a move its game's card is done with kept", "job", job.ID, "game", job.GameID)
 		return
 	}
 	if err := s.removeJob(job.ID); err != nil {
@@ -102,16 +97,37 @@ func (s *Service) recoverOrphan(job Job) {
 	}
 }
 
-// orphanCopies lists the folders of an orphaned move that are on disk and
-// claimed by no card: the staging folder before the commit, the target after
-// it, and once the repoint had landed (OrphanedAt is the cleanup) also the old
-// folder, which is then the launcher's leftover copy the cleanup was to
-// delete. Before that the card may still have named the old folder, so it is
-// the player's own, kept or deleted by the player's removal.
-func orphanCopies(job Job, games []library.Game) ([]OrphanedCopy, error) {
-	candidates := []OrphanedCopy{{Kind: CopyStaging, Path: job.Staging}, {Kind: CopyTarget, Path: job.Target}}
-	if job.OrphanedAt == StageCleanup {
-		candidates = append(candidates, OrphanedCopy{Kind: CopySource, Path: job.Source})
+// holdsCopies says whether a finished job must stay in the journal: it still
+// holds a folder (heldCopies), or the disk could not be looked at.
+func (s *Service) holdsCopies(job Job) bool {
+	var games []library.Game
+	if s.lib != nil {
+		games = s.lib.GetGames()
+	}
+	held, err := heldCopies(job, games)
+	if err != nil {
+		slog.Warn("check the folders a finished move wrote", "job", job.ID, "error", err)
+		return true
+	}
+	return len(held) > 0
+}
+
+// heldCopies answers, for a finished job, which folders it may have written
+// are still on disk with no card naming them: the staging folder, and for a
+// game the target, and the old folder once the repoint had landed (OrphanedAt
+// is the cleanup, or the card names the target), which is then the leftover
+// copy the cleanup was to delete. Before that the card may still name the old
+// folder, so it is the player's own. A folder counts as named only by a card
+// whose own folder it is: a card around the copy or inside it does not
+// account for it. The journal keeper, OrphanedCopies and Stagings all ask
+// this one question.
+func heldCopies(job Job, games []library.Game) ([]OrphanedCopy, error) {
+	candidates := []OrphanedCopy{{Kind: CopyStaging, Path: job.Staging}}
+	if gameItem(job.GameID) {
+		candidates = append(candidates, OrphanedCopy{Kind: CopyTarget, Path: job.Target})
+		if job.OrphanedAt == StageCleanup || !job.Orphaned && cardNames(job.GameID, job.Target, games) {
+			candidates = append(candidates, OrphanedCopy{Kind: CopySource, Path: job.Source})
+		}
 	}
 	var out []OrphanedCopy
 	for _, c := range candidates {
@@ -124,7 +140,7 @@ func orphanCopies(job Job, games []library.Game) ([]OrphanedCopy, error) {
 			}
 			return nil, err
 		}
-		if claimed(c.Path, games) {
+		if named(c.Path, games) {
 			continue
 		}
 		c.JobID, c.GameID, c.Title = job.ID, job.GameID, job.Title
@@ -132,6 +148,14 @@ func orphanCopies(job Job, games []library.Game) ([]OrphanedCopy, error) {
 		out = append(out, c)
 	}
 	return out, nil
+}
+
+func gameItem(id string) bool {
+	switch id {
+	case "", itemDownloads, itemScreenshots, itemSettings:
+		return false
+	}
+	return true
 }
 
 func cardAlive(id string, games []library.Game) bool {
@@ -143,13 +167,23 @@ func cardAlive(id string, games []library.Game) bool {
 	return false
 }
 
-func claimed(path string, games []library.Game) bool {
+func cardNames(id, path string, games []library.Game) bool {
+	for _, g := range games {
+		if g.ID == id {
+			return !g.Uninstalled && platform.SamePath(g.InstallDir, path)
+		}
+	}
+	return false
+}
+
+// named says whether path is the folder of a card that owns files on disk.
+func named(path string, games []library.Game) bool {
 	for _, g := range games {
 		if g.Uninstalled {
 			continue
 		}
 		for _, root := range g.Footprint() {
-			if pathsConflict(path, "", root, "") {
+			if platform.SamePath(root, path) {
 				return true
 			}
 		}
@@ -157,8 +191,11 @@ func claimed(path string, games []library.Game) bool {
 	return false
 }
 
-// OrphanedCopies lists the copies of moves that are over for their game's
-// card, for the disk usage screen.
+// OrphanedCopies lists, for the disk usage screen, the copies of moves that
+// are over: every folder a move its game's card is done with still holds, and
+// the target and old folder a move that ended for good holds (its staging
+// folder is a leftover Stagings lists). A move still to be resumed is not
+// over, and its folders are not listed here.
 //
 //wails:ignore
 func (s *Service) OrphanedCopies() ([]OrphanedCopy, error) {
@@ -168,14 +205,18 @@ func (s *Service) OrphanedCopies() ([]OrphanedCopy, error) {
 	games := s.lib.GetGames()
 	var out []OrphanedCopy
 	for _, job := range s.List() {
-		if !job.Orphaned {
+		if !terminal(job.Stage) || job.FailedAt != "" {
 			continue
 		}
-		copies, err := orphanCopies(job, games)
+		copies, err := heldCopies(job, games)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, copies...)
+		for _, c := range copies {
+			if job.Orphaned || c.Kind != CopyStaging {
+				out = append(out, c)
+			}
+		}
 	}
 	return out, nil
 }

@@ -81,11 +81,12 @@ func (s *Service) Stagings() ([]Staging, error) {
 		if job.Staging == "" || job.Orphaned {
 			continue
 		}
-		if _, err := os.Lstat(job.Staging); err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
-				continue
-			}
+		held, err := stagingHeld(job, games)
+		if err != nil {
 			return nil, err
+		}
+		if !held {
+			continue
 		}
 		_, srcErr := os.Lstat(job.Source)
 		if srcErr != nil && !errors.Is(srcErr, fs.ErrNotExist) {
@@ -95,6 +96,29 @@ func (s *Service) Stagings() ([]Staging, error) {
 		out = append(out, Staging{Path: job.Staging, Deletable: ok, Reason: reason, Code: code})
 	}
 	return out, nil
+}
+
+// stagingHeld says whether a job's staging folder is one to list: for a
+// finished job, when heldCopies holds it; for a running one, while it is on
+// disk.
+func stagingHeld(job Job, games []library.Game) (bool, error) {
+	if !terminal(job.Stage) {
+		_, err := os.Lstat(job.Staging)
+		if errors.Is(err, fs.ErrNotExist) {
+			return false, nil
+		}
+		return err == nil, err
+	}
+	held, err := heldCopies(job, games)
+	if err != nil {
+		return false, err
+	}
+	for _, c := range held {
+		if c.Kind == CopyStaging {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // ReserveStaging checks that the staging folder at path may go and, in the

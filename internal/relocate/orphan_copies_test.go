@@ -145,8 +145,8 @@ func TestOrphanedStagingIsListedOnlyAsAnOrphanedCopy(t *testing.T) {
 // After the crash the player added a game found inside the old folder of an
 // interrupted move. Recovery holds the move's folders as a live move does: it
 // does not delete the old folder with that game in it. The job reads as failed
-// at its stage with the reason, not as a move still running, and the next
-// start retries it from there.
+// at its stage with the reason, not as a move still running, spends no
+// recovery attempt, and the next start retries it from there.
 func TestRecoveryFailsAMoveWhoseFolderGainedAnotherGame(t *testing.T) {
 	lib := newTestLibrary(t)
 	game, src := addTestGame(t, lib)
@@ -173,8 +173,8 @@ func TestRecoveryFailsAMoveWhoseFolderGainedAnotherGame(t *testing.T) {
 	if _, err := os.Stat(bonus); err != nil {
 		t.Fatalf("recovery deleted the old folder with another game in it: %v", err)
 	}
-	if got := s.soleJob(t); got.Stage != StageFailed || got.FailedAt != StageCleanup || got.RecoveryAttempts != 1 || !strings.Contains(got.Error, "relocate.folder_shared") {
-		t.Fatalf("job = %s/%q attempts=%d error=%q, want it failed at the cleanup by relocate.folder_shared, one attempt spent", got.Stage, got.FailedAt, got.RecoveryAttempts, got.Error)
+	if got := s.soleJob(t); got.Stage != StageFailed || got.FailedAt != StageCleanup || got.RecoveryAttempts != 0 || !strings.Contains(got.Error, "relocate.folder_shared") {
+		t.Fatalf("job = %s/%q attempts=%d error=%q, want it failed at the cleanup by relocate.folder_shared, no attempt spent", got.Stage, got.FailedAt, got.RecoveryAttempts, got.Error)
 	}
 	if _, err := lib.Find(other.ID); err != nil {
 		t.Fatalf("card of the other game: %v", err)
@@ -238,43 +238,76 @@ func TestRecoveryFinishesAMoveIntoAFolderAnotherCardHolds(t *testing.T) {
 	}
 }
 
-// Each start that finds another card in the move's old folder spends one of
-// the job's recovery attempts; when they run out the job ends failed for good
-// with nothing deleted, as a cleanup that keeps failing does.
-func TestRecoveryRefusedByAnotherCardRunsOutOfAttempts(t *testing.T) {
-	lib := newTestLibrary(t)
-	game, src := addTestGame(t, lib)
-	manifest, err := hashdir.Build(context.Background(), src, nil)
-	if err != nil {
-		t.Fatal(err)
+// Being blocked by another card is not the move's failure: however many
+// starts find the card in the way, the job spends no attempt and stays failed
+// at its stage with relocate.folder_shared, to be resumed. A job killed at the
+// repoint, or at the prepare after a same-volume rename landed, has no staging
+// folder; its copy at the target (in the second case the only copy) stays
+// tracked, and the move finishes once the card and its files are gone.
+func TestRefusalByAnotherCardNeverRetiresTheMove(t *testing.T) {
+	cases := []struct {
+		name  string
+		stage Stage
+		// renamed: the same-volume rename had landed before the kill.
+		renamed bool
+	}{
+		{"repoint", StageRepoint, false},
+		{"prepare, rename landed", StagePrepare, true},
 	}
-	target := filepath.Join(t.TempDir(), "Game")
-	mustMkdirFile(t, target, "game.exe", "stub")
-	if _, err := lib.Relocate(game.ID, target); err != nil {
-		t.Fatal(err)
-	}
-	bonus := filepath.Join(src, "Bonus", "Game2.exe")
-	addExeAt(t, lib, bonus, "Bonus")
-	job := Job{ID: "j1", Scope: ScopeGame, Stage: StageCleanup, GameID: game.ID, Title: "Game", Source: src, Target: target}
-	s := newRecoverTestService(t, job)
-	s.lib = lib
-	if err := s.st.saveManifest(job.ID, manifest); err != nil {
-		t.Fatal(err)
-	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			lib := newTestLibrary(t)
+			game, src := addTestGame(t, lib)
+			manifest, err := hashdir.Build(context.Background(), src, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			target := filepath.Join(t.TempDir(), "Game")
+			if tc.renamed {
+				if err := os.Rename(src, target); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				mustMkdirFile(t, target, "game.exe", "stub")
+			}
+			bonus := filepath.Join(target, "Bonus")
+			tool := addExeAt(t, lib, filepath.Join(bonus, "tool.exe"), "Bonus")
+			job := Job{ID: "j1", Scope: ScopeGame, Stage: tc.stage, GameID: game.ID, Title: "Game", Source: src, Target: target}
+			s := newRecoverTestService(t, job)
+			s.lib = lib
+			if err := s.st.saveManifest(job.ID, manifest); err != nil {
+				t.Fatal(err)
+			}
 
-	for range maxRecoveryAttempts {
-		s.recoverAll(context.Background())
-	}
+			for start := range maxRecoveryAttempts + 2 {
+				s.recoverAll(context.Background())
+				got := s.soleJob(t)
+				if got.Stage != StageFailed || got.FailedAt != tc.stage || got.RecoveryAttempts != 0 || !strings.Contains(got.Error, "relocate.folder_shared") {
+					t.Fatalf("start %d: job = %s/%q attempts=%d error=%q, want it failed at %s by relocate.folder_shared, no attempt spent", start+1, got.Stage, got.FailedAt, got.RecoveryAttempts, got.Error, tc.stage)
+				}
+			}
+			if _, err := os.Stat(filepath.Join(target, "game.exe")); err != nil {
+				t.Fatalf("the copy at the target: %v", err)
+			}
 
-	got := s.soleJob(t)
-	if got.Stage != StageFailed || got.FailedAt != "" {
-		t.Fatalf("job = %s/%q after %d starts, want it failed for good", got.Stage, got.FailedAt, maxRecoveryAttempts)
-	}
-	if !strings.Contains(got.Error, "relocate.retries_exhausted") || !strings.Contains(got.Error, "relocate.folder_shared") {
-		t.Fatalf("error %q must carry the exhausted code and the reason", got.Error)
-	}
-	if _, err := os.Stat(bonus); err != nil {
-		t.Fatalf("the other game's files: %v", err)
+			if err := lib.RemoveGame(tool.ID); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.RemoveAll(bonus); err != nil {
+				t.Fatal(err)
+			}
+			s.recoverAll(context.Background())
+
+			if jobs := s.List(); len(jobs) != 0 {
+				t.Fatalf("jobs after the card left = %+v, want the move finished", jobs)
+			}
+			if card, err := lib.Find(game.ID); err != nil || !samePathT(card.InstallDir, target) {
+				t.Fatalf("card at %s (%v), want it at %s", card.InstallDir, err, target)
+			}
+			if _, err := os.Stat(src); !os.IsNotExist(err) {
+				t.Fatalf("old folder after the move finished: %v", err)
+			}
+		})
 	}
 }
 
@@ -479,6 +512,105 @@ func TestOrphanedMoveListsTheOldFolderOnlyAtTheCleanup(t *testing.T) {
 			s.recoverAll(context.Background())
 			if jobs := s.List(); len(jobs) != 0 {
 				t.Fatalf("job kept after its last copy is gone: %+v", jobs)
+			}
+		})
+	}
+}
+
+// A move that ended for good (out of attempts, a failed verification, an
+// undecided commit) stays in the journal while any folder it may have written
+// is on disk and no card names it: the staging folder, the target, and the
+// old folder once the card names the target. A card whose folder only holds
+// the copy does not account for it. Disk usage lists each such folder: the
+// staging folder as a leftover, the others as copies the card moved on from.
+// The entry goes once every one is gone or named by the game's card.
+func TestFinishedMoveIsKeptWhileACopyItWroteIsOnDisk(t *testing.T) {
+	type leave func(t *testing.T, lib *library.Service, game library.Game, src, target string) (Job, []copyWant, string)
+	cases := []struct {
+		name string
+		// leave prepares the folders and the card and returns the job, the
+		// copies OrphanedCopies lists and the staging folder Stagings lists.
+		leave leave
+	}{
+		{"out of attempts at the repoint", func(t *testing.T, _ *library.Service, game library.Game, src, target string) (Job, []copyWant, string) {
+			mustMkdirFile(t, target, "game.exe", "stub")
+			return Job{ID: "j1", Scope: ScopeGame, Stage: StageFailed, Error: exhausted("boom").Error(), GameID: game.ID, Title: "Game", Source: src, Target: target},
+				[]copyWant{{CopyTarget, target}}, ""
+		}},
+		{"a card in the folder around the copy", func(t *testing.T, lib *library.Service, game library.Game, src, target string) (Job, []copyWant, string) {
+			mustMkdirFile(t, target, "game.exe", "stub")
+			addExeAt(t, lib, filepath.Join(filepath.Dir(target), "tool.exe"), "Tool")
+			return Job{ID: "j1", Scope: ScopeGame, Stage: StageFailed, Error: exhausted("boom").Error(), GameID: game.ID, Title: "Game", Source: src, Target: target},
+				[]copyWant{{CopyTarget, target}}, ""
+		}},
+		{"verification failed at the cleanup", func(t *testing.T, lib *library.Service, game library.Game, src, target string) (Job, []copyWant, string) {
+			mustMkdirFile(t, target, "game.exe", "stub")
+			if _, err := lib.Relocate(game.ID, target); err != nil {
+				t.Fatal(err)
+			}
+			return Job{ID: "j1", Scope: ScopeGame, Stage: StageFailed, Error: ErrVerifyFailed.Error(), GameID: game.ID, Title: "Game", Source: src, Target: target},
+				[]copyWant{{CopySource, src}}, ""
+		}},
+		{"undecided commit", func(t *testing.T, _ *library.Service, game library.Game, src, target string) (Job, []copyWant, string) {
+			mustMkdirFile(t, target, "game.exe", "stub")
+			mustMkdirFile(t, target+stagingSuffix, "game.exe", "stub")
+			return Job{ID: "j1", Scope: ScopeGame, Stage: StageFailed, Error: ErrAmbiguousRecovery.Error(), GameID: game.ID, Title: "Game", Source: src, Target: target, Staging: target + stagingSuffix},
+				[]copyWant{{CopyTarget, target}}, target + stagingSuffix
+		}},
+		{"copy named by the game's card", func(t *testing.T, lib *library.Service, game library.Game, src, target string) (Job, []copyWant, string) {
+			mustMkdirFile(t, target, "game.exe", "stub")
+			if _, err := lib.Relocate(game.ID, target); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.RemoveAll(src); err != nil {
+				t.Fatal(err)
+			}
+			return Job{ID: "j1", Scope: ScopeGame, Stage: StageFailed, Error: exhausted("boom").Error(), GameID: game.ID, Title: "Game", Source: src, Target: target}, nil, ""
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			lib := newTestLibrary(t)
+			game, src := addTestGame(t, lib)
+			target := filepath.Join(t.TempDir(), "Game")
+			job, want, staging := tc.leave(t, lib, game, src, target)
+			s := newRecoverTestService(t, job)
+			s.lib = lib
+
+			s.recoverAll(context.Background())
+			s.recoverAll(context.Background())
+
+			if len(want) == 0 && staging == "" {
+				if jobs := s.List(); len(jobs) != 0 {
+					t.Fatalf("jobs = %+v, want the entry dropped: nothing it wrote is left untracked", jobs)
+				}
+				return
+			}
+			if got := s.soleJob(t); got.Stage != StageFailed || got.FailedAt != "" {
+				t.Fatalf("job = %s/%q, want it kept as it ended", got.Stage, got.FailedAt)
+			}
+			requireCopies(t, s, job.ID, want...)
+			stagings, err := s.Stagings()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if staging == "" && len(stagings) != 0 || staging != "" && (len(stagings) != 1 || !samePathT(stagings[0].Path, staging)) {
+				t.Fatalf("Stagings = %+v, want %q", stagings, staging)
+			}
+
+			for _, w := range want {
+				if err := os.RemoveAll(w.path); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if staging != "" {
+				if err := os.RemoveAll(staging); err != nil {
+					t.Fatal(err)
+				}
+			}
+			s.recoverAll(context.Background())
+			if jobs := s.List(); len(jobs) != 0 {
+				t.Fatalf("jobs after its folders are gone = %+v, want the entry dropped", jobs)
 			}
 		})
 	}
