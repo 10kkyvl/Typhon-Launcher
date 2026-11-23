@@ -6,6 +6,7 @@
   import Card from '../../lib/components/Card.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import GameLink from '../../lib/components/GameLink.svelte';
+  import StatTile from '../../lib/components/StatTile.svelte';
   import { coverOf } from '../../lib/profile/view';
   import type { WeekSummary } from '../../lib/profile/week';
   import { gameArt } from '../../lib/stores/metadata';
@@ -26,10 +27,7 @@
   {#if week.totalSeconds === 0}
     <EmptyState size="inline" title={msg('transfers.activityWeekEmpty')} />
   {:else}
-    <div class="total">
-      <span class="value">{playtime(week.totalSeconds)}</span>
-      <span class="window">{msg('transfers.activityWeekWindow')}</span>
-    </div>
+    <StatTile value={playtime(week.totalSeconds)} label={msg('transfers.activityWeekWindow')} />
 
     <!-- A narrow card: no axis and no value over the bars; the total above and the table say them. -->
     <div class="chart">
@@ -70,26 +68,6 @@
 </Card>
 
 <style>
-  .total {
-    display: flex;
-    align-items: baseline;
-    gap: var(--space-2);
-    flex-wrap: wrap;
-  }
-
-  .value {
-    font-size: var(--font-title);
-    font-weight: 600;
-    letter-spacing: var(--tracking-title);
-    line-height: 1.1;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .window {
-    font-size: var(--font-sm);
-    color: var(--text-3);
-  }
-
   .chart {
     margin-top: var(--space-5);
   }
@@ -122,7 +100,7 @@
   .text {
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: var(--space-1);
     min-width: 0;
   }
 
@@ -136,7 +114,7 @@
   }
 
   .sub {
-    font-size: 1.2rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
   }
@@ -144,5 +122,4 @@
   .all {
     margin-top: var(--space-4);
   }
-
 </style>

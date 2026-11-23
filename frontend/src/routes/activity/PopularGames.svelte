@@ -49,7 +49,7 @@
     align-items: center;
     gap: var(--space-4);
     width: 100%;
-    padding: 0.8rem var(--space-4);
+    padding: var(--space-2) var(--space-4);
     border-radius: var(--radius-md);
     text-align: left;
     transition: background var(--dur) var(--ease);
@@ -70,7 +70,7 @@
   .text {
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: var(--space-1);
     min-width: 0;
   }
 
@@ -84,7 +84,7 @@
   }
 
   .sub {
-    font-size: 1.2rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
   }
 

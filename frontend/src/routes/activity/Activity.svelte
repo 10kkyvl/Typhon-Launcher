@@ -283,7 +283,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.4rem;
+    gap: var(--space-1);
     text-align: center;
   }
 
@@ -299,7 +299,7 @@
   }
 
   .bio {
-    margin-top: 0.4rem;
+    margin-top: var(--space-1);
     font-size: var(--font-sm);
     line-height: 1.5;
     color: var(--text-2);

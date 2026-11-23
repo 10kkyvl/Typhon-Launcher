@@ -260,7 +260,7 @@
     display: flex;
     flex-direction: column;
     flex: 1;
-    gap: 0.4rem;
+    gap: var(--space-1);
     min-width: 0;
   }
 
@@ -273,7 +273,7 @@
   }
 
   .sub {
-    font-size: 1.2rem;
+    font-size: var(--font-xs);
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
   }

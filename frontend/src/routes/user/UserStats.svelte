@@ -60,7 +60,7 @@
   .stats-hidden {
     display: flex;
     align-items: center;
-    gap: 0.8rem;
+    gap: var(--space-2);
   }
 
   .stats-hidden .label {
