@@ -374,6 +374,47 @@ func TestRemovalAndMoveOfAGameExcludeEachOther(t *testing.T) {
 	}
 }
 
+// A removal deletes, and a live move takes along, everything in the game's
+// folder: a card added around that folder is refused as one added at or inside
+// it, by the adding hold and by the save's backstop.
+func TestRemovalAndMoveHoldsRefuseACardAroundAtOrInside(t *testing.T) {
+	holds := []struct {
+		name  string
+		begin func(s *Service, a Game) (func(), error)
+	}{
+		{"removal", func(s *Service, a Game) (func(), error) { return s.BeginRemoval(a.ID, a.InstallDir) }},
+		{"live move", func(s *Service, a Game) (func(), error) { return s.BeginMove(a.ID) }},
+	}
+	for _, h := range holds {
+		for _, where := range []string{"around", "at", "inside"} {
+			t.Run(h.name+"/"+where, func(t *testing.T) {
+				s := newLibrary(t)
+				root := filepath.Join(t.TempDir(), "Games", "RepackX")
+				a := addAt(t, s, filepath.Join(root, "game.exe"), "RepackX")
+				release, err := h.begin(s, a)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer release()
+				var exe string
+				switch where {
+				case "around":
+					exe = filepath.Join(filepath.Dir(root), "tool.exe")
+				case "at":
+					exe = filepath.Join(root, "tool.exe")
+				default:
+					exe = filepath.Join(root, "Bonus", "tool.exe")
+				}
+				_, err = s.AddGame(t.Context(), writeFile(t, exe, "stub"), "Tool")
+				requireCode(t, "AddGame "+where, err, "library.folder_busy")
+				other := addAt(t, s, filepath.Join(t.TempDir(), "Other", "o.exe"), "Other")
+				_, err = s.Relocate(other.ID, filepath.Dir(exe))
+				requireCode(t, "Relocate "+where+" (the save's backstop)", err, "library.folder_busy")
+			})
+		}
+	}
+}
+
 // Recovery of a move checks the old folder as a live move checks the game's
 // folder, and the folders the copy is in (target, staging) only for a card at
 // or inside them: a card whose folder holds them is how every library folder
