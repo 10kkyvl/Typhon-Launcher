@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import Page from '../../lib/components/Page.svelte';
   import { History as HistoryIcon, Trash2 } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
@@ -103,6 +104,22 @@
   }
 
   const gameOf = $derived(historyGames($libraryGames));
+
+  // A game leaving the library turns its name and cover in a row into plain text, and focus on them would
+  // fall to the page. Before the rows change, the row that holds focus is read; once they show the
+  // change, focus that fell stays in that row: its control, else the row itself.
+  $effect.pre(() => {
+    void gameOf;
+    untrack(catchLeaving);
+  });
+
+  function catchLeaving() {
+    const focused = document.activeElement;
+    const row = focused instanceof HTMLElement ? focused.closest<HTMLElement>('[data-history-row]') : null;
+    if (!row || row === focused || !list?.contains(row)) return;
+    const id = row.dataset.historyRow ?? '';
+    void handOnInView(focusHandOff(), () => recordTarget(id));
+  }
 
   const days = $derived.by(() => {
     const groups: { key: string; label: string; records: HistoryRecord[] }[] = [];

@@ -385,6 +385,36 @@ describe('History: the game a row is about', () => {
     expect(rowOf(msg('transfers.historyRemovedTitle', { title: 'Epsilon' })).querySelector('button')).toBeNull();
   });
 
+  // The name stops being a button when its game leaves the library: the focused button leaves the page,
+  // as in a browser, and jsdom, as a browser, leaves focus on <body> then.
+  it("keeps focus in the row when the game whose name holds it leaves the library", async () => {
+    libraryGames.set([game('lib-alpha', { title: 'Alpha' }), game('lib-gamma', { title: 'Gamma', canonicalGameId: 'cat-gamma' })]);
+    history.set(linked);
+    renderDom(History);
+    const row = rowOf(installed('Alpha'));
+    within(row).getByRole('button', { name: 'Alpha' }).focus();
+
+    libraryGames.set([game('lib-gamma', { title: 'Gamma', canonicalGameId: 'cat-gamma' })]);
+
+    await waitFor(() => expect(within(row).queryByRole('button')).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(row));
+    expect(row.getAttribute('tabindex')).toBe('-1');
+  });
+
+  it('leaves focus where it is when a game leaves the library while focus is elsewhere', async () => {
+    libraryGames.set([game('lib-alpha', { title: 'Alpha' }), game('lib-gamma', { title: 'Gamma', canonicalGameId: 'cat-gamma' })]);
+    history.set(linked);
+    renderDom(History);
+    const gamma = within(rowOf(msg('transfers.historyUpdatedTitle', { title: 'Gamma' }))).getByRole('button', { name: 'Gamma' });
+    gamma.focus();
+
+    libraryGames.set([game('lib-gamma', { title: 'Gamma', canonicalGameId: 'cat-gamma' })]);
+
+    await waitFor(() => expect(within(rowOf(installed('Alpha'))).queryByRole('button')).toBeNull());
+    await Promise.resolve();
+    expect(document.activeElement).toBe(gamma);
+  });
+
   it('leaves the name plain for a game the library no longer holds or a record of no game', () => {
     libraryGames.set([game('lib-alpha', { title: 'Alpha' })]);
     history.set(linked);
