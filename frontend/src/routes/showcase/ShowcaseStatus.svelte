@@ -125,6 +125,12 @@
     <StatTile value="3 h 40 min" label="Longest session" sub="Hades II · 10 Nov" />
   </ShowcaseRow>
 
+  <ShowcaseRow caption="Stat tiles centred, as under a profile's centred name">
+    <StatTile value={42} label="Games" align="center" />
+    <StatTile value="1 280" label="Hours" align="center" />
+    <StatTile value={17} label="Completed" align="center" />
+  </ShowcaseRow>
+
   <ShowcaseRow caption="Cards">
     <Card title="A card with an action">
       {#snippet action()}<TextLink onclick={() => toast('Show all pressed', 'info')}>Show all</TextLink>{/snippet}

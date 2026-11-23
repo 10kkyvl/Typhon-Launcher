@@ -4,7 +4,8 @@
   /**
    * A figure of a screen: its value over its label. `mark` stands where the value would when there is
    * no value to show (a figure its owner hid); `sub` is a second line under the label (what the
-   * figure is of: the game and the day of the longest session).
+   * figure is of: the game and the day of the longest session). `align` lines the parts up at the
+   * start (the default) or centres them and their text, for a row of tiles under a centred block.
    */
   let {
     value,
@@ -12,14 +13,16 @@
     label,
     sub,
     icon,
+    align = 'start',
   }: ({ value: string | number; mark?: undefined } | { value?: undefined; mark: Snippet }) & {
     label: string;
     sub?: string;
     icon?: Snippet;
+    align?: 'start' | 'center';
   } = $props();
 </script>
 
-<div class="tile">
+<div class="tile" class:centred={align === 'center'}>
   {#if icon}
     <span class="icon">{@render icon()}</span>
   {/if}
@@ -41,6 +44,11 @@
     align-items: flex-start;
     gap: 0.8rem;
     min-width: 0;
+  }
+
+  .tile.centred {
+    align-items: center;
+    text-align: center;
   }
 
   .icon {

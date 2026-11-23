@@ -1,7 +1,9 @@
 import { createRawSnippet } from 'svelte';
 import { describe, expect, it } from 'vitest';
 import { renderDom } from '../testing/dom';
+import { applyStyles } from '../testing/styles';
 import StatTile from './StatTile.svelte';
+import source from './StatTile.svelte?raw';
 
 const snippet = (html: string) => createRawSnippet(() => ({ render: () => html }));
 
@@ -34,6 +36,22 @@ describe('StatTile', () => {
     const mark = getByText('Hidden');
     expect(mark.compareDocumentPosition(getByText('Hours')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(tile.contains(mark)).toBe(true);
+  });
+
+  it('draws the same markup with its parts at the start, named or left out', () => {
+    const { container } = renderDom(StatTile, { value: 42, label: 'Games', align: 'start' });
+    expect(shape(container)).toBe('<div class="tile"><span class="value">42</span><span class="label">Games</span></div>');
+  });
+
+  it('lines its parts up at the start unless asked, and centres them and their text when asked', () => {
+    const start = renderDom(StatTile, { value: 42, label: 'Games' });
+    const centre = renderDom(StatTile, { value: 7, label: 'Completed games of the year', align: 'center' });
+    const plain = start.container.querySelector('.tile') as HTMLElement;
+    const centred = centre.container.querySelector('.tile') as HTMLElement;
+    applyStyles(plain, source);
+
+    expect([getComputedStyle(plain).alignItems, getComputedStyle(plain).textAlign]).toEqual(['flex-start', 'start']);
+    expect([getComputedStyle(centred).alignItems, getComputedStyle(centred).textAlign]).toEqual(['center', 'center']);
   });
 
   it('adds a second line under the label', () => {
