@@ -48,6 +48,21 @@ export function historyLabel(record: Record): HistoryLabel {
   }
 }
 
+// Stands for the game's name while a title is cut around it; no title or name holds it.
+const NAME = '\u0000';
+
+/**
+ * The record's title cut around the game's name, so the name alone can lead to the game's page while
+ * the words around it stay in the order the language puts them: before + name + after is the title.
+ */
+export function historyTitleParts(record: Record): { before: string; name: string; after: string } {
+  const name = record.title || msg('transfers.historyUntitledGame');
+  const marked = historyLabel({ ...record, title: NAME }).title;
+  const at = marked.indexOf(NAME);
+  if (at < 0) return { before: historyLabel(record).title, name: '', after: '' };
+  return { before: marked.slice(0, at), name, after: marked.slice(at + NAME.length) };
+}
+
 /** When a record happened: the time of day for the row, and in full for assistive tech and the hint. Null without a readable time. */
 export function historyWhen(iso: string): { words: string; exact: string } | null {
   const date = new Date(iso);

@@ -8,6 +8,7 @@ import { clearHistory as clearRequest, getHistoryStatus, Kind, listHistory, type
 import type { LibraryGame } from '../../lib/services/library';
 import { history, historyErrorText, historyLoaded, historyLoadError, historyStatus, initHistory } from '../../lib/stores/history';
 import { libraryGames } from '../../lib/stores/library';
+import { resetHistory, route } from '../../lib/stores/router';
 import { toasts } from '../../lib/stores/toasts';
 import { renderDom } from '../../lib/testing/dom';
 import { updateErrorText } from '../../lib/updates/updateErrors';
@@ -103,6 +104,7 @@ afterEach(() => {
   vi.mocked(listHistory).mockReset();
   vi.mocked(getHistoryStatus).mockReset();
   vi.mocked(clearRequest).mockReset();
+  resetHistory();
   document.body.replaceChildren();
 });
 
@@ -359,6 +361,49 @@ describe('History: what a row says', () => {
 
     await user.hover(time as HTMLElement);
     await waitFor(() => expect(document.querySelector('[data-part="tooltip"]')?.textContent?.trim()).toBe(exact));
+  });
+});
+
+describe('History: the game a row is about', () => {
+  const linked: HistoryRecord[] = [
+    record('a', Kind.KindInstalled, 'Alpha', at(0, 10), { gameId: 'lib-alpha' }),
+    record('c', Kind.KindUpdated, 'Gamma', at(0, 9), { gameId: 'cat-gamma', fromVersion: '1', toVersion: '2' }),
+    record('e', Kind.KindRemoved, 'Epsilon', at(0, 8), { gameId: 'lib-epsilon' }),
+    record('n', Kind.KindDownloaded, 'Nu', at(0, 7)),
+  ];
+
+  // Go records the library id of the game (an install, a removal, a move, a LAN copy) or its catalog id
+  // (a download, a failed install, an update, a rollback).
+  it("links the game's name to its page while the library holds it, by its library or its catalog id", async () => {
+    libraryGames.set([game('lib-alpha', { title: 'Alpha' }), game('lib-gamma', { title: 'Gamma', canonicalGameId: 'cat-gamma' })]);
+    history.set(linked);
+    const { user } = renderDom(History);
+
+    const alpha = rowOf(installed('Alpha'));
+    await user.click(within(alpha).getByRole('button', { name: 'Alpha' }));
+    expect(get(route)).toMatchObject({ name: 'game', params: { id: 'lib-alpha' } });
+
+    const gamma = rowOf(msg('transfers.historyUpdatedTitle', { title: 'Gamma' }));
+    await user.click(within(gamma).getByRole('button', { name: 'Gamma' }));
+    expect(get(route)).toMatchObject({ name: 'game', params: { id: 'lib-gamma' } });
+  });
+
+  it("tags a row found by the game's catalog id with its console too", () => {
+    libraryGames.set([game('lib-gamma', { title: 'Gamma', canonicalGameId: 'cat-gamma', emulation: { platform: 'ps2' } as LibraryGame['emulation'] })]);
+    history.set(linked);
+    renderDom(History);
+
+    const tagged = rows().filter((row) => within(row).queryByText(platformBadge('ps2')) !== null);
+    expect(tagged.map((row) => words(row.querySelector(TITLE)))).toEqual([msg('transfers.historyUpdatedTitle', { title: 'Gamma' })]);
+  });
+
+  it('leaves the name plain for a game the library no longer holds or a record of no game', () => {
+    libraryGames.set([game('lib-alpha', { title: 'Alpha' })]);
+    history.set(linked);
+    renderDom(History);
+
+    expect(within(rowOf(msg('transfers.historyRemovedTitle', { title: 'Epsilon' }))).queryByRole('button')).toBeNull();
+    expect(within(rowOf(msg('transfers.historyDownloadedTitle', { title: 'Nu' }))).queryByRole('button')).toBeNull();
   });
 });
 

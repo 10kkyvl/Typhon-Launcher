@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { historyLabel, historyWhen } from './historyText';
+import { historyLabel, historyTitleParts, historyWhen } from './historyText';
 import { msg } from '../i18n';
 import { clockTime, longDate } from '../utils/format';
 import { Kind, type Record } from '../../../bindings/typhon/internal/history';
@@ -118,5 +118,27 @@ describe('historyWhen', () => {
   it('gives nothing for a time that cannot be read', () => {
     expect(historyWhen('not a date')).toBeNull();
     expect(historyWhen('')).toBeNull();
+  });
+});
+
+describe('historyTitleParts', () => {
+  it('cuts the title around the game name, the words keeping their order', () => {
+    const rolled = record({ title: 'Doom', kind: Kind.KindRolledBack, toVersion: '1.2' });
+    const parts = historyTitleParts(rolled);
+    expect(parts.name).toBe('Doom');
+    expect(parts.before + parts.name + parts.after).toBe(historyLabel(rolled).title);
+  });
+
+  it('names an untitled game "Game"', () => {
+    const parts = historyTitleParts(record({ title: '' }));
+    expect(parts.name).toBe(msg('transfers.historyUntitledGame'));
+    expect(parts.before + parts.name + parts.after).toBe(historyLabel(record({ title: '' })).title);
+  });
+
+  it.each(Object.values(Kind))('keeps the whole title of a %s record', (kind) => {
+    const item = record({ kind, title: 'Hades', fromVersion: '1', toVersion: '2', bytesKnown: true, bytes: 10 });
+    const parts = historyTitleParts(item);
+    expect(parts.before + parts.name + parts.after).toBe(historyLabel(item).title);
+    expect(parts.name).toBe('Hades');
   });
 });

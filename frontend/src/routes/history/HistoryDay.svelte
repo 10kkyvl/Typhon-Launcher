@@ -12,28 +12,31 @@
     Wifi,
   } from '@lucide/svelte';
   import ConsoleTag from '../../lib/components/ConsoleTag.svelte';
+  import GameLink from '../../lib/components/GameLink.svelte';
   import SectionHeader from '../../lib/components/SectionHeader.svelte';
   import Tooltip from '../../lib/components/Tooltip.svelte';
-  import { historyLabel, historyWhen } from '../../lib/history/historyText';
+  import type { HistoryGameLookup } from '../../lib/history/historyGame';
+  import { historyLabel, historyTitleParts, historyWhen } from '../../lib/history/historyText';
   import { Kind, type Record as HistoryRecord } from '../../lib/services/history';
 
   /**
    * One day of the history: its heading (a section heading, focusable by script) and its records,
    * newest first, as a list on a plate of its own. A row says what happened to which game, why when it
-   * failed, and when; the kind's icon marks what happened.
+   * failed, and when; the kind's icon marks what happened. The game's name in it leads to the game's
+   * page while the library holds the game.
    */
   let {
     id,
     label,
     records,
-    consoleOf,
+    gameOf,
   }: {
     /** The id of the day's heading, which names the section. */
     id: string;
     label: string;
     records: HistoryRecord[];
-    /** The console of each library game that runs in an emulator, by library id. */
-    consoleOf: ReadonlyMap<string, string>;
+    /** The library game of a record (lib/history/historyGame.ts). */
+    gameOf: HistoryGameLookup;
   } = $props();
 
   const icons: Record<Kind, typeof HistoryIcon> = {
@@ -60,12 +63,14 @@
       {@const text = historyLabel(record)}
       {@const Icon = icons[record.kind] ?? HistoryIcon}
       {@const when = historyWhen(record.at)}
-      {@const platform = record.gameId ? consoleOf.get(record.gameId) : undefined}
+      {@const game = gameOf(record.gameId)}
+      {@const title = historyTitleParts(record)}
+      {@const platform = game?.emulation?.platform}
       <li class="row" class:failed={failed(record.kind)} data-history-row={record.id} data-kind={record.kind}>
         <span class="mark" aria-hidden="true"><Icon size="1.6rem" strokeWidth={1.8} /></span>
         <div class="main">
           <div class="head">
-            <p class="title">{text.title}</p>
+            <p class="title">{title.before}<GameLink id={game?.id} name={title.name} />{title.after}</p>
             {#if platform}<ConsoleTag {platform} />{/if}
           </div>
           {#if text.detail}<p class="detail">{text.detail}</p>{/if}

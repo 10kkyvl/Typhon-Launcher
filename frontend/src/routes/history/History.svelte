@@ -10,6 +10,7 @@
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import { clearHistoryPrompt } from '../../lib/confirm/prompts';
   import { filterHistory } from '../../lib/history/historyFilter';
+  import { historyGames } from '../../lib/history/historyGame';
   import { Kind, type Record as HistoryRecord } from '../../lib/services/history';
   import { libraryGames } from '../../lib/stores/library';
   import {
@@ -76,9 +77,7 @@
     return age < 2 * 86_400_000 ? relativeDate(iso) : longDate(date);
   }
 
-  const consoleOf = $derived(
-    new Map($libraryGames.flatMap((game) => (game.emulation?.platform ? [[game.id, game.emulation.platform] as const] : []))),
-  );
+  const gameOf = $derived(historyGames($libraryGames));
 
   const days = $derived.by(() => {
     const groups: { key: string; label: string; records: HistoryRecord[] }[] = [];
@@ -169,7 +168,7 @@
     {:else}
       <div class="days" bind:this={list}>
         {#each days as day (day.key)}
-          <HistoryDay id="{uid}-day-{day.key}" label={day.label} records={day.records} {consoleOf} />
+          <HistoryDay id="{uid}-day-{day.key}" label={day.label} records={day.records} {gameOf} />
         {/each}
       </div>
     {/if}
