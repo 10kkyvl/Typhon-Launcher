@@ -1,6 +1,7 @@
 import { within } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 import { locale } from '../i18n';
+import FocusThiefHarness from '../testing/FocusThiefHarness.svelte';
 import { renderDom } from '../testing/dom';
 import { hintOnFocus } from '../testing/hints';
 import { bytesSize } from '../utils/format';
@@ -537,6 +538,22 @@ describe('DiskMeter', () => {
         await rerender({ segments: ABC.slice(1) });
         expect(document.activeElement).toBe(b);
       });
+
+      // Another part of the page (a dialog opening) moves focus in its own effect in the same update:
+      // the meter's hand-off runs after it and must not take focus back, whether the focused part
+      // stays or leaves.
+      for (const [name, next] of [
+        ['stays', [ABC[1], ABC[2]]],
+        ['leaves', [ABC[0], ABC[2]]],
+      ] as const) {
+        it(`does not take focus back from what moved it in the same update, when the focused part ${name}`, async () => {
+          const { container, getByRole, rerender } = renderDom(FocusThiefHarness, { segments: ABC, steal: 0 });
+          const b = within(container).getByRole('button', { name: named('b') });
+          b.focus();
+          await rerender({ segments: [...next], steal: 1 });
+          expect(document.activeElement).toBe(getByRole('button', { name: 'Диалог' }));
+        });
+      }
 
       it('leaves focus alone when it was not on a segment', async () => {
         const { rerender, user } = meterOf(ABC);

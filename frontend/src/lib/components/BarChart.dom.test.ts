@@ -1,6 +1,7 @@
 import { within } from '@testing-library/svelte';
 import { afterEach, describe, expect, it } from 'vitest';
 import BarChartHarness from '../testing/BarChartHarness.svelte';
+import FocusThiefHarness from '../testing/FocusThiefHarness.svelte';
 import { renderDom } from '../testing/dom';
 import { hintOnFocus } from '../testing/hints';
 import type { ChartBucket } from './barChart';
@@ -218,6 +219,21 @@ describe('BarChart', () => {
         expect(chart.tabIndex).toBe(-1);
         expect(chart.contains(getByTestId('empty'))).toBe(true);
       });
+
+      // Another part of the page (a dialog opening) moves focus in its own effect in the same update:
+      // the chart's hand-off runs after it and must not take focus back, whether the focused bar stays
+      // or leaves.
+      for (const [name, next] of [
+        ['stays', DAYS.filter((d) => d.key !== 'mon')],
+        ['leaves', DAYS.filter((d) => d.key !== 'wed')],
+      ] as const) {
+        it(`does not take focus back from what moved it in the same update, when the focused bar ${name}`, async () => {
+          const { container, getByRole, rerender } = renderDom(FocusThiefHarness, { buckets: DAYS, steal: 0 });
+          within(container).getByRole('radio', { name: 'Ср, 4 ноября: 8 ч' }).focus();
+          await rerender({ buckets: next, steal: 1 });
+          expect(document.activeElement).toBe(getByRole('button', { name: 'Диалог' }));
+        });
+      }
 
       it('leaves focus alone when it was not on a bar', async () => {
         const { rerender, user } = renderDom(BarChartHarness, { buckets: DAYS, selectable: true, start: 'wed' });
