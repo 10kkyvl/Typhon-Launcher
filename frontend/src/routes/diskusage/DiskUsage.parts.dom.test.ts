@@ -27,8 +27,11 @@ import DiskUsage from './DiskUsage.svelte';
 // Move to the move store; each section's total from its own field; the warnings. Not held here: the
 // reason lines and marks of a row, disabled buttons and their reasons, the note on unknown sizes,
 // the busy Rescan, the scan error's notice, the `emulated` flag the remove dialog gets from the
-// library store, the error text of a failed delete (`DiskUsage.lifecycle.dom.test.ts` holds what the
-// page reads on mount and when a move ends).
+// library store, the error text of a failed delete; of a confirmation: its title, note and button
+// words, the toast after it, that the dialog stays until the delete and the rescan are over; an
+// overtaken scan's answer dropped, a cached report never replacing a newer scan; the games section
+// hidden with no games; a section's hint (`DiskUsage.lifecycle.dom.test.ts` holds what the page reads
+// on mount and when a move ends).
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
