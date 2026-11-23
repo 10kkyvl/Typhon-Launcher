@@ -419,6 +419,14 @@ describe('DiskMeter', () => {
       expect(container.querySelector('.members')).toBeNull();
     });
 
+    it("words the fold from the catalogue when the caller's label is empty", () => {
+      const { getByRole } = renderDom(DiskMeter, { label: 'Диск', segments: games(100), total: 1000 * GB, foldLabel: () => '' });
+      expect(legendLines(getByRole('list'))[58]).toBe(words(`Ещё 42 части ${bytesSize(420 * GB)}`));
+      expect(getByRole('img').getAttribute('aria-label')).toContain(`; Ещё 42 части: ${bytesSize(420 * GB)}; `);
+      const picking = renderDom(DiskMeter, { label: 'Диск', segments: games(60), total: 600 * GB, compact: true, onpick: vi.fn(), onpickfolded: vi.fn(), foldLabel: () => '' });
+      expect(picking.getAllByRole('button').at(-1)?.getAttribute('aria-label')).toBe(`Ещё 42 части: ${bytesSize(420 * GB)}`);
+    });
+
     it('keeps the fold plain text with its count and sum in the legend of a meter that does not pick', () => {
       const { getByRole } = renderDom(DiskMeter, { label: 'Диск', segments: games(100), total: 1000 * GB });
       expect(within(getByRole('list')).queryAllByRole('button')).toEqual([]);

@@ -59,7 +59,8 @@
     /** What is measured ("Disk C:", a folder): the start of the text alternative. */
     label: string;
     compact?: boolean;
-    /** The fold's name for its count of segments, from the caller's catalogue ("12 more games"). */
+    /** The fold's name for its count of segments, from the caller's catalogue ("12 more games"); an
+     *  empty one falls back to the catalogue's "N more parts". */
     foldLabel?: (count: number) => string;
     /** Makes each drawn segment a button that reports its key. */
     onpick?: (key: string) => void;
@@ -88,7 +89,9 @@
     if (part.kind === 'rest') return $t('common.meterRest');
     if (part.kind === 'more') {
       const count = part.folded?.length ?? 0;
-      return foldLabel ? foldLabel(count) : $t('common.meterMore', { count });
+      // An empty name would leave the fold's entry, its button and its hint with nothing to say.
+      const own = foldLabel?.(count) ?? '';
+      return own.trim() ? own : $t('common.meterMore', { count });
     }
     return part.label;
   }
