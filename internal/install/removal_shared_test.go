@@ -316,6 +316,38 @@ func TestRemoveGameRefusedWhileTheGameIsBeingMoved(t *testing.T) {
 	}
 }
 
+// The recovery of another game's move writes its copy into a folder inside
+// this game's: deleting this game's folder would delete that copy, which may
+// be the only one. The removal is refused with the library's code, and
+// nothing is deleted or staged.
+func TestRemoveGameRefusedAroundAnotherGamesRecoveringCopy(t *testing.T) {
+	r := newSharedRig(t)
+	dir := filepath.Join(t.TempDir(), "Tools")
+	tool := r.ownedGame(t, dir, "Tool", library.Uninstall{})
+	moving := r.addedGame(t, filepath.Join(t.TempDir(), "Game", "game.exe"), "Game")
+	copyDir := filepath.Join(dir, "Game")
+	mkFile(t, filepath.Join(copyDir, "game.exe"), 512)
+	release, err := r.lib.BeginRecovery(moving.ID, moving.InstallDir, copyDir, copyDir+".staging")
+	if err != nil {
+		t.Fatalf("take the recovery reservation: %v", err)
+	}
+
+	err = r.s.RemoveGame(tool.ID, RemoveOptions{DeleteFiles: true})
+
+	if code := uierr.Code(err); code != "library.folder_busy" {
+		t.Fatalf("RemoveGame around a recovering copy = %q (%v), want library.folder_busy", code, err)
+	}
+	if missing(t, filepath.Join(copyDir, "game.exe")) {
+		t.Fatal("the recovering copy was deleted with the folder around it")
+	}
+	requireNoRemovalStaging(t, dir)
+	requireJournalEmpty(t, r.s)
+	release()
+	if err := r.s.RemoveGame(tool.ID, RemoveOptions{DeleteFiles: true}); err != nil {
+		t.Fatalf("RemoveGame after the recovery ended = %v", err)
+	}
+}
+
 // A move asks the library for the game while the uninstaller is running: the
 // removal holds the game from its decision to its end.
 func TestMoveRefusedWhileTheGameIsBeingRemoved(t *testing.T) {

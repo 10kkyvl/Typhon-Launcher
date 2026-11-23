@@ -119,6 +119,33 @@ func (s *Service) neighboursLocked(id, dir string) []FolderNeighbour {
 	return append(cards, adding...)
 }
 
+// heldByOthersLocked lists the other games whose removal, move or recovery
+// holds a folder at, inside or around one of dirs. Whatever the kind of hold,
+// that game's files there are being deleted, read or written, so deleting or
+// moving dirs, or writing a copy into them, would take them along: a hold
+// that bars only the cards inside it (a recovery's copy) bars a removal of a
+// folder around it all the same.
+func (s *Service) heldByOthersLocked(id string, dirs []string) []FolderNeighbour {
+	var out []FolderNeighbour
+	seen := map[string]bool{}
+	for _, h := range s.holds {
+		if h.kind == holdAdd || h.game == id || h.dir == "" || seen[h.game] || !overlaps(dirs, h.dir) {
+			continue
+		}
+		seen[h.game] = true
+		title := h.game
+		if game := s.findLocked(h.game); game != nil {
+			title = game.Title
+		}
+		out = append(out, FolderNeighbour{ID: h.game, Title: title})
+	}
+	return out
+}
+
+func busyError(holders []FolderNeighbour) error {
+	return fmt.Errorf("%w: %s", ErrFolderBusy, titlesOf(holders))
+}
+
 // blockersLocked lists the cards in the way of a removal or a move of id:
 // around are folders checked either way (the game's own folder), inside are
 // folders checked only for what lies at or in them (where a move puts its
@@ -195,7 +222,9 @@ func (s *Service) reservedLocked(id string) error {
 // starts, moves or is already being removed. dir is the folder the removal acts
 // on, by deleting it or by running an uninstaller in it, and empty when it
 // touches no file; with a dir it also fails while another card's files share
-// that folder, and with ErrFolderChanged when the card no longer names dir (a
+// that folder, with ErrFolderBusy while another game's removal, move or
+// recovery holds a folder at, in or around it, and with ErrFolderChanged when
+// the card no longer names dir (a
 // move ended, or an install or a scan rebound the card, since the caller
 // looked); a move in progress is ErrGameRelocating. Until release, PlayGame
 // and the move reservations refuse the game, and no card may be added inside
@@ -221,6 +250,9 @@ func (s *Service) BeginRemoval(id, dir string) (func(), error) {
 		}
 		if neighbours := s.neighboursLocked(id, dir); len(neighbours) > 0 {
 			return nil, sharedError(neighbours)
+		}
+		if holders := s.heldByOthersLocked(id, []string{dir}); len(holders) > 0 {
+			return nil, busyError(holders)
 		}
 	}
 	if s.removing == nil {
@@ -254,8 +286,9 @@ func (s *Service) BeginMove(id string) (func(), error) {
 // a card at or inside them, so a move into a folder that holds another card
 // (a tool added from the games folder itself) resumes as it ran. It fails
 // with ErrFolderShared while a card lies there and with ErrFolderBusy while
-// only a card being added does, and holds every one of them against new
-// cards under the same rule until release.
+// only a card being added does or another game's removal, move or recovery
+// holds a folder at, in or around one of them, and holds every one of them
+// against new cards under the same rule until release.
 //
 //wails:ignore
 func (s *Service) BeginRecovery(id, source string, copies ...string) (func(), error) {
@@ -264,8 +297,9 @@ func (s *Service) BeginRecovery(id, source string, copies ...string) (func(), er
 
 // reserveMove reserves a game for a move that acts on the around and inside
 // folders (see blockersLocked), and on the card's own folder when own is set:
-// it fails while the game runs, starts, moves or is being removed, or while
-// another card's files lie in the way, and holds those folders against new
+// it fails while the game runs, starts, moves or is being removed, while
+// another card's files lie in the way or another game's hold overlaps one of
+// the folders, and holds those folders against new
 // cards until release. The checks and the reservation are one critical
 // section of s.mu.
 func (s *Service) reserveMove(id string, own bool, around, inside []string) (func(), error) {
@@ -291,7 +325,10 @@ func (s *Service) reserveMove(id string, own bool, around, inside []string) (fun
 	case len(cards) > 0:
 		return nil, sharedError(cards)
 	case len(adding) > 0:
-		return nil, fmt.Errorf("%w: %s", ErrFolderBusy, titlesOf(adding))
+		return nil, busyError(adding)
+	}
+	if holders := s.heldByOthersLocked(id, append(append([]string(nil), around...), inside...)); len(holders) > 0 {
+		return nil, busyError(holders)
 	}
 	if s.relocating == nil {
 		s.relocating = map[string]struct{}{}

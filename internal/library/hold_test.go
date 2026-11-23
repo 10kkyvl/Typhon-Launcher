@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -412,6 +413,77 @@ func TestRemovalAndMoveHoldsRefuseACardAroundAtOrInside(t *testing.T) {
 				requireCode(t, "Relocate "+where+" (the save's backstop)", err, "library.folder_busy")
 			})
 		}
+	}
+}
+
+// A removal or a move of one game is refused while its folder is at, inside or
+// around a folder another game's removal, move or recovery holds: deleting or
+// moving it would take the other game's files being deleted, read or written
+// along. A recovery holds its copy only against cards inside it, so a card
+// around the copy exists; deleting that card's folder is what is refused.
+func TestRemovalOrMoveRefusedAroundAFolderAnotherGameHolds(t *testing.T) {
+	type rig struct {
+		s      *Service
+		parent string
+		game   Game
+	}
+	holders := []struct {
+		name string
+		hold func(t *testing.T, r rig) (func(), error)
+		// inHeld is a folder inside what the holder holds.
+		inHeld func(r rig) string
+	}{
+		{"recovery into the folder", func(_ *testing.T, r rig) (func(), error) {
+			target := filepath.Join(r.parent, "Game")
+			return r.s.BeginRecovery(r.game.ID, r.game.InstallDir, target, target+".staging")
+		}, func(r rig) string { return filepath.Join(r.parent, "Game", "Sub") }},
+		{"removal of a folder", func(_ *testing.T, r rig) (func(), error) {
+			return r.s.BeginRemoval(r.game.ID, r.game.InstallDir)
+		}, func(r rig) string { return filepath.Join(r.game.InstallDir, "Sub") }},
+		{"live move of a folder", func(_ *testing.T, r rig) (func(), error) {
+			return r.s.BeginMove(r.game.ID)
+		}, func(r rig) string { return filepath.Join(r.game.InstallDir, "Sub") }},
+	}
+	for _, h := range holders {
+		t.Run(h.name, func(t *testing.T) {
+			s := newLibrary(t)
+			parent := filepath.Join(t.TempDir(), "Games")
+			r := rig{s: s, parent: parent, game: addAt(t, s, filepath.Join(t.TempDir(), "Games", "Game", "game.exe"), "Game")}
+			var tool Game
+			if h.name == "recovery into the folder" {
+				tool = addAt(t, s, filepath.Join(parent, "tool.exe"), "Tool")
+			}
+			release, err := h.hold(t, r)
+			if err != nil {
+				t.Fatalf("holder = %v", err)
+			}
+			defer release()
+
+			if tool.ID != "" {
+				_, err = s.BeginRemoval(tool.ID, parent)
+				requireCode(t, "removal with files of the folder around a recovering copy", err, "library.folder_busy")
+				_, err = s.BeginMove(tool.ID)
+				requireCode(t, "move of the folder around a recovering copy", err, "library.folder_busy")
+				if !strings.Contains(err.Error(), "Game") {
+					t.Fatalf("refusal %q does not name the game holding the folder", err)
+				}
+			}
+			other := addAt(t, s, filepath.Join(t.TempDir(), "Other", "other.exe"), "Other")
+			_, err = s.BeginRecovery(other.ID, other.InstallDir, h.inHeld(r), h.inHeld(r)+".staging")
+			requireCode(t, "recovery of another game into a held folder", err, "library.folder_busy")
+
+			sibling := addAt(t, s, filepath.Join(t.TempDir(), "Sibling", "sibling.exe"), "Sibling")
+			rel, err := s.BeginRemoval(sibling.ID, sibling.InstallDir)
+			if err != nil {
+				t.Fatalf("removal of a folder clear of every hold = %v", err)
+			}
+			rel()
+			rel, err = s.BeginRecovery(sibling.ID, sibling.InstallDir, filepath.Join(parent, "Sibling"))
+			if err != nil {
+				t.Fatalf("recovery into a sibling of a held folder = %v", err)
+			}
+			rel()
+		})
 	}
 }
 
