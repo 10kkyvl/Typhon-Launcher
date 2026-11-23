@@ -94,6 +94,8 @@ function open(patch: Partial<typeof BASE> & Record<string, unknown> = {}) {
   render(Settings, { target: app });
 }
 
+const said = (...keys: MessageKey[]) => keys.map((key) => msg(key)).join(' ');
+const button = (key: MessageKey) => screen.getByRole('button', { name: msg(key) }) as HTMLButtonElement;
 const toastTexts = () => get(toasts).map((item) => item.message);
 const sw = (key: MessageKey) => screen.getByRole('switch', { name: msg(key) });
 const field = (key: MessageKey) => screen.getByRole('combobox', { name: msg(key) });
@@ -147,13 +149,16 @@ const SWITCHES: [label: MessageKey, hint: MessageKey, patch: Record<string, unkn
   ['settings.generalLanLabel', 'settings.generalLanSub', { lanSharing: true }],
 ];
 
+// A row's warning note is read with its hint.
+const NOTES: Partial<Record<MessageKey, MessageKey>> = { 'settings.overlayEnabledLabel': 'settings.overlayExclusiveNote' };
+
 describe('the general tab: every switch', () => {
   for (const [label, hint, patch] of SWITCHES) {
     it(`${label}: named and described by its row, saves ${JSON.stringify(patch)}`, async () => {
       open();
       const control = sw(label);
       expect(control.hasAttribute('disabled')).toBe(false);
-      expect(description(control)).toBe(msg(hint));
+      expect(description(control)).toBe(NOTES[label] ? said(hint, NOTES[label]) : msg(hint));
 
       await user().click(control);
 
@@ -231,7 +236,7 @@ describe('the general tab: every select', () => {
       open();
       const control = field(label);
       expect(control.hasAttribute('aria-disabled') || control.hasAttribute('disabled')).toBe(false);
-      expect(description(control), hint).toBe('');
+      expect(description(control)).toBe(msg(hint));
 
       await user().click(control);
       await user().click(screen.getByRole('option', { name: option }));
@@ -248,7 +253,7 @@ describe('the general tab: disabled rows', () => {
     const startup = sw('settings.generalLaunchOnStartupLabel');
     await waitFor(() => expect(startup.hasAttribute('disabled')).toBe(true));
     expect(startup.getAttribute('aria-checked')).toBe('false');
-    expect(description(startup)).toContain(msg('settings.generalLaunchOnStartupPortable'));
+    expect(description(startup)).toBe(said('settings.generalLaunchOnStartupPortable', 'settings.generalLaunchOnStartupSub'));
   });
 
   it('turns hiding during a game off without the tray', () => {
@@ -256,26 +261,36 @@ describe('the general tab: disabled rows', () => {
     const hide = sw('settings.gameModeHideLabel');
     expect(hide.hasAttribute('disabled')).toBe(true);
     expect(hide.getAttribute('aria-checked')).toBe('false');
-    expect(screen.getByText(msg('settings.gameModeHideNeedsTray'))).toBeTruthy();
+    expect(description(hide)).toBe(said('settings.gameModeHideNeedsTray', 'settings.gameModeHideSub'));
   });
 
   it('turns the account rows off without an account', () => {
     authState.set('unauthenticated');
     open();
-    expect(sw('settings.generalSyncEnableLabel').hasAttribute('disabled')).toBe(true);
-    expect(screen.getByText(msg('settings.generalSyncNeedsAccountSub'))).toBeTruthy();
-    expect(sw('settings.generalAutoAwayLabel').hasAttribute('disabled')).toBe(true);
-    expect((screen.getByRole('button', { name: msg('settings.generalSyncNowLabel') }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole('button', { name: msg('settings.generalSyncForgetLabel') }) as HTMLButtonElement).disabled).toBe(true);
+    const account = 'settings.generalSyncNeedsAccountSub';
+    const sync = sw('settings.generalSyncEnableLabel');
+    expect(sync.hasAttribute('disabled')).toBe(true);
+    expect(description(sync)).toBe(said(account, 'settings.generalSyncEnableSub'));
+    const away = sw('settings.generalAutoAwayLabel');
+    expect(away.hasAttribute('disabled')).toBe(true);
+    expect(description(away)).toBe(said(account, 'settings.generalAutoAwaySub'));
+    expect(button('settings.generalSyncNowLabel').disabled).toBe(true);
+    expect(description(button('settings.generalSyncNowLabel'))).toBe(said(account, 'settings.generalSyncNowSub'));
+    expect(button('settings.generalSyncForgetLabel').disabled).toBe(true);
+    expect(description(button('settings.generalSyncForgetLabel'))).toBe(said(account, 'settings.generalSyncForgetSub'));
     expect(screen.queryByText(msg('discord.cardTitle'))).toBeNull();
   });
 
   it('turns auto-away and Sync now off while sync is off', () => {
     open({ accountSync: false });
     expect(sw('settings.generalSyncEnableLabel').hasAttribute('disabled')).toBe(false);
-    expect(sw('settings.generalAutoAwayLabel').hasAttribute('disabled')).toBe(true);
-    expect((screen.getByRole('button', { name: msg('settings.generalSyncNowLabel') }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole('button', { name: msg('settings.generalSyncForgetLabel') }) as HTMLButtonElement).disabled).toBe(false);
+    const away = sw('settings.generalAutoAwayLabel');
+    expect(away.hasAttribute('disabled')).toBe(true);
+    expect(description(away)).toBe(said('settings.generalSyncOffReason', 'settings.generalAutoAwaySub'));
+    expect(button('settings.generalSyncNowLabel').disabled).toBe(true);
+    expect(description(button('settings.generalSyncNowLabel'))).toBe(said('settings.generalSyncOffReason', 'settings.generalSyncNowSub'));
+    expect(button('settings.generalSyncForgetLabel').disabled).toBe(false);
+    expect(description(button('settings.generalSyncForgetLabel'))).toBe(msg('settings.generalSyncForgetSub'));
   });
 
   it('hides the power and priority rows on a Mac', async () => {
@@ -295,7 +310,7 @@ describe('the general tab: disabled rows', () => {
 });
 
 describe('the general tab: the overlay status', () => {
-  const region = () => screen.getByText(msg('settings.overlayStatusLabel')).parentElement?.querySelector('[role="status"]') as HTMLElement;
+  const region = () => screen.getByRole('status', { name: msg('settings.overlayStatusLabel') });
 
   it('says the overlay works with its hotkey', async () => {
     open();

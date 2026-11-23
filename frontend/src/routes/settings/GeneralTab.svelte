@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { Eye, RefreshCw, Trash2 } from '@lucide/svelte';
+  import { Eye } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import Notice from '../../lib/components/Notice.svelte';
   import Select from '../../lib/components/Select.svelte';
+  import SettingsRow from '../../lib/components/SettingsRow.svelte';
   import TextLink from '../../lib/components/TextLink.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
   import DiscordCard from './DiscordCard.svelte';
@@ -21,19 +22,20 @@
   // The general tab: startup, game mode, the overlay and screenshots, the library, the interface,
   // privacy, account sync and Discord. The overlay status, the sync actions and the dialogs these
   // rows open are the page's: they outlive a switch of tabs.
-  let { page, uid }: { page: SettingsPage; uid: string } = $props();
+  let { page }: { page: SettingsPage } = $props();
 
   const current = $derived($settings);
   const scaleValue = $derived(String(Math.round(($settings?.uiScale ?? 1) * 100)));
 
   const accountReady = $derived($authState === 'authenticated');
+  const syncOn = $derived(current?.accountSync ?? false);
+  const needsAccount = $derived(accountReady ? undefined : msg('settings.generalSyncNeedsAccountSub'));
+  // Auto-away and Sync now act on the synced account: off without one, then off while sync is.
+  const needsSync = $derived(needsAccount ?? (syncOn ? undefined : msg('settings.generalSyncOffReason')));
 
   function set(patch: Partial<Settings>) {
     updateSettings(patch);
   }
-
-  const labelId = (name: string) => `${uid}-${name}-label`;
-  const subId = (name: string) => `${uid}-${name}-sub`;
 
   const portable = $derived(page.appInfo?.portable ?? false);
 
@@ -87,187 +89,152 @@
 <div class="settings-grid">
   <div class="settings-column">
     <Card title={msg('settings.generalStartupCardTitle')}>
-      <div class="rows">
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('general-launch-on-startup')}>{msg('settings.generalLaunchOnStartupLabel')}</span>
-            <span class="row-sub" id={subId('general-launch-on-startup')}>{portable ? msg('settings.generalLaunchOnStartupPortable') : msg('settings.generalLaunchOnStartupSub')}</span>
-          </div>
+      <SettingsRow
+        label={msg('settings.generalLaunchOnStartupLabel')}
+        hint={msg('settings.generalLaunchOnStartupSub')}
+        disabledReason={portable ? msg('settings.generalLaunchOnStartupPortable') : undefined}
+      >
+        {#snippet children({ labelId, hintId, disabled })}
           <Toggle
             checked={!portable && (current?.launchOnStartup ?? false)}
-            disabled={portable}
-            labelledby={labelId('general-launch-on-startup')}
-            describedby={subId('general-launch-on-startup')}
+            {disabled}
+            labelledby={labelId}
+            describedby={hintId}
             onchange={(v) => void setLaunchOnStartup(v)}
           />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('general-minimize-to-tray')}>{msg('settings.generalMinimizeToTrayLabel')}</span>
-            <span class="row-sub" id={subId('general-minimize-to-tray')}>{msg('settings.generalMinimizeToTraySub')}</span>
-          </div>
-          <Toggle
-            checked={current?.minimizeToTray ?? true}
-            labelledby={labelId('general-minimize-to-tray')}
-            describedby={subId('general-minimize-to-tray')}
-            onchange={(v) => set({ minimizeToTray: v })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('general-discord-rpc')}>{msg('settings.generalDiscordRpcLabel')}</span>
-            <span class="row-sub" id={subId('general-discord-rpc')}>{msg('settings.generalDiscordRpcSub')}</span>
-          </div>
-          <Toggle
-            checked={current?.discordRichPresence ?? false}
-            labelledby={labelId('general-discord-rpc')}
-            describedby={subId('general-discord-rpc')}
-            onchange={(v) => set({ discordRichPresence: v })}
-          />
-        </div>
-      </div>
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow label={msg('settings.generalMinimizeToTrayLabel')} hint={msg('settings.generalMinimizeToTraySub')}>
+        {#snippet children({ labelId, hintId })}
+          <Toggle checked={current?.minimizeToTray ?? true} labelledby={labelId} describedby={hintId} onchange={(v) => set({ minimizeToTray: v })} />
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow label={msg('settings.generalDiscordRpcLabel')} hint={msg('settings.generalDiscordRpcSub')}>
+        {#snippet children({ labelId, hintId })}
+          <Toggle checked={current?.discordRichPresence ?? false} labelledby={labelId} describedby={hintId} onchange={(v) => set({ discordRichPresence: v })} />
+        {/snippet}
+      </SettingsRow>
     </Card>
 
     <Card title={msg('settings.gameModeCardTitle')}>
-      <div class="rows">
-        <span class="row-sub">{msg('settings.gameModeDuring')}</span>
-        {#if !gameModeMac}
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label" id={labelId('game-mode-power')}>{msg('settings.gameModePowerLabel')}</span>
-              <span class="row-sub" id={subId('game-mode-power')}>{msg('settings.gameModePowerSub')}</span>
-            </div>
+      <p class="intro">{msg('settings.gameModeDuring')}</p>
+      {#if !gameModeMac}
+        <SettingsRow label={msg('settings.gameModePowerLabel')} hint={msg('settings.gameModePowerSub')}>
+          {#snippet children({ labelId, hintId })}
             <Toggle
               checked={current?.gameMode?.highPerformance ?? false}
-              labelledby={labelId('game-mode-power')}
-              describedby={subId('game-mode-power')}
+              labelledby={labelId}
+              describedby={hintId}
               onchange={(v) => setGameMode({ highPerformance: v })}
             />
-          </div>
-        {/if}
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('game-mode-hide')}>{msg('settings.gameModeHideLabel')}</span>
-            <span class="row-sub" id={subId('game-mode-hide')}>{msg('settings.gameModeHideSub')}</span>
-            {#if !trayEnabled}
-              <span class="row-sub">{msg('settings.gameModeHideNeedsTray')}</span>
-            {/if}
-          </div>
+          {/snippet}
+        </SettingsRow>
+      {/if}
+      <SettingsRow
+        label={msg('settings.gameModeHideLabel')}
+        hint={msg('settings.gameModeHideSub')}
+        disabledReason={trayEnabled ? undefined : msg('settings.gameModeHideNeedsTray')}
+      >
+        {#snippet children({ labelId, hintId, disabled })}
           <Toggle
             checked={trayEnabled && (current?.gameMode?.hideLauncher ?? false)}
-            disabled={!trayEnabled}
-            labelledby={labelId('game-mode-hide')}
-            describedby={subId('game-mode-hide')}
+            {disabled}
+            labelledby={labelId}
+            describedby={hintId}
             onchange={(v) => setGameMode({ hideLauncher: v })}
           />
-        </div>
-        {#if !gameModeMac}
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label" id={labelId('game-mode-priority')}>{msg('settings.gameModePriorityLabel')}</span>
-              <span class="row-sub" id={subId('game-mode-priority')}>{msg('settings.gameModePrioritySub')}</span>
-            </div>
+        {/snippet}
+      </SettingsRow>
+      {#if !gameModeMac}
+        <SettingsRow label={msg('settings.gameModePriorityLabel')} hint={msg('settings.gameModePrioritySub')}>
+          {#snippet children({ labelId, hintId })}
             <Toggle
               checked={current?.gameMode?.raisePriority ?? false}
-              labelledby={labelId('game-mode-priority')}
-              describedby={subId('game-mode-priority')}
+              labelledby={labelId}
+              describedby={hintId}
               onchange={(v) => setGameMode({ raisePriority: v })}
             />
-          </div>
-        {/if}
-      </div>
+          {/snippet}
+        </SettingsRow>
+      {/if}
     </Card>
 
     <Card title={msg('settings.overlayCardTitle')}>
-      <div class="rows">
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('overlay-enabled')}>{msg('settings.overlayEnabledLabel')}</span>
-            <span class="row-sub" id={subId('overlay-enabled')}>{msg('settings.overlayEnabledSub')}</span>
-            <span class="row-sub">{msg('settings.overlayExclusiveNote')}</span>
-          </div>
+      <SettingsRow label={msg('settings.overlayEnabledLabel')} hint={msg('settings.overlayEnabledSub')} note={msg('settings.overlayExclusiveNote')}>
+        {#snippet children({ labelId, hintId })}
           <Toggle
             checked={current?.overlayEnabled ?? true}
-            labelledby={labelId('overlay-enabled')}
-            describedby={subId('overlay-enabled')}
+            labelledby={labelId}
+            describedby={hintId}
             onchange={(v) => page.setOverlay({ overlayEnabled: v })}
           />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('overlay-hotkey')}>{msg('settings.overlayHotkeyLabel')}</span>
-            <span class="row-sub">{msg('settings.overlayHotkeySub')}</span>
-          </div>
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow label={msg('settings.overlayHotkeyLabel')} hint={msg('settings.overlayHotkeySub')}>
+        {#snippet children({ labelId, hintId })}
           <Select
-            labelledby={labelId('overlay-hotkey')}
+            labelledby={labelId}
+            describedby={hintId}
             value={overlayHotkey}
             width="22rem"
             options={overlayHotkeyOptions}
             onchange={(id) => page.setOverlay({ overlayHotkey: id })}
           />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('screenshots-enabled')}>{msg('settings.screenshotsEnabledLabel')}</span>
-            <span class="row-sub" id={subId('screenshots-enabled')}>{msg('settings.screenshotsEnabledSub')}</span>
-          </div>
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow label={msg('settings.screenshotsEnabledLabel')} hint={msg('settings.screenshotsEnabledSub')}>
+        {#snippet children({ labelId, hintId })}
           <Toggle
             checked={current?.screenshotsEnabled ?? true}
-            labelledby={labelId('screenshots-enabled')}
-            describedby={subId('screenshots-enabled')}
+            labelledby={labelId}
+            describedby={hintId}
             onchange={(v) => setScreenshots({ screenshotsEnabled: v })}
           />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('screenshot-hotkey')}>{msg('settings.screenshotHotkeyLabel')}</span>
-            <span class="row-sub">{msg('settings.screenshotHotkeySub')}</span>
-          </div>
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow label={msg('settings.screenshotHotkeyLabel')} hint={msg('settings.screenshotHotkeySub')}>
+        {#snippet children({ labelId, hintId })}
           <Select
-            labelledby={labelId('screenshot-hotkey')}
+            labelledby={labelId}
+            describedby={hintId}
             value={screenshotHotkey}
             width="22rem"
             options={screenshotHotkeyOptions}
             onchange={(id) => setScreenshots({ screenshotHotkey: id })}
           />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.overlayStatusLabel')}</span>
-            <!-- The overlay's state, refreshed by events: a change is said politely; a failure sits on a
-                 danger plate, which says nothing of its own on opening the page. -->
-            <div role="status">
-              {#if overlayStatusFailed}
-                <div class="message"><Notice tone="danger" compact announce={false}>{overlayStatusText}</Notice></div>
-              {:else}
-                <span class="row-sub">{overlayStatusText}</span>
-              {/if}
-            </div>
-            {#if page.overlayError}<div class="message"><Notice tone="danger" compact>{page.overlayError}</Notice></div>{/if}
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow label={msg('settings.overlayStatusLabel')}>
+        {#snippet below({ labelId })}
+          <!-- The overlay's state, refreshed by events: a change is said politely; a failure sits on a
+               danger plate, which says nothing of its own on opening the page. -->
+          <div role="status" aria-labelledby={labelId}>
+            {#if overlayStatusFailed}
+              <Notice tone="danger" compact announce={false}>{overlayStatusText}</Notice>
+            {:else}
+              <span class="status-text">{overlayStatusText}</span>
+            {/if}
           </div>
-        </div>
-      </div>
+          {#if page.overlayError}<div class="message"><Notice tone="danger" compact>{page.overlayError}</Notice></div>{/if}
+        {/snippet}
+      </SettingsRow>
     </Card>
 
     <LibraryCard {page} />
 
     <Card title={msg('settings.generalExperimentalCardTitle')}>
-      <div class="rows">
-        <LanSettingsRow />
-      </div>
+      <LanSettingsRow />
     </Card>
   </div>
 
   <div class="settings-column">
     <Card title={msg('settings.generalInterfaceCardTitle')}>
-      <div class="rows">
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('language')}>{msg('settings.language')}</span>
-            <span class="row-sub">{msg('settings.languageSub')}</span>
-          </div>
+      <SettingsRow label={msg('settings.language')} hint={msg('settings.languageSub')}>
+        {#snippet children({ labelId, hintId })}
+          <!-- Each language by its own name, read the same whatever the interface's language. -->
           <Select
-            labelledby={labelId('language')}
+            labelledby={labelId}
+            describedby={hintId}
             value={$settings?.language ?? 'system'}
             width="22rem"
             options={[
@@ -277,14 +244,13 @@
             ]}
             onchange={(id) => set({ language: id })}
           />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('ui-scale')}>{msg('settings.generalUiScaleLabel')}</span>
-            <span class="row-sub">{msg('settings.generalUiScaleSub')}</span>
-          </div>
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow label={msg('settings.generalUiScaleLabel')} hint={msg('settings.generalUiScaleSub')}>
+        {#snippet children({ labelId, hintId })}
           <Select
-            labelledby={labelId('ui-scale')}
+            labelledby={labelId}
+            describedby={hintId}
             value={scaleValue}
             width="22rem"
             options={[
@@ -295,152 +261,85 @@
             ]}
             onchange={(id) => set({ uiScale: Number(id) / 100 })}
           />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('general-animations')}>{msg('settings.generalAnimationsLabel')}</span>
-            <span class="row-sub" id={subId('general-animations')}>{msg('settings.generalAnimationsSub')}</span>
-          </div>
-          <Toggle
-            checked={current?.animationsEnabled ?? true}
-            labelledby={labelId('general-animations')}
-            describedby={subId('general-animations')}
-            onchange={(v) => set({ animationsEnabled: v })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('general-hw-accel')}>{msg('settings.generalHwAccelLabel')}</span>
-            <span class="row-sub" id={subId('general-hw-accel')}>{msg('settings.generalHwAccelSub')}</span>
-          </div>
-          <Toggle
-            checked={current?.hardwareAcceleration ?? true}
-            labelledby={labelId('general-hw-accel')}
-            describedby={subId('general-hw-accel')}
-            onchange={(v) => set({ hardwareAcceleration: v })}
-          />
-        </div>
-      </div>
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow label={msg('settings.generalAnimationsLabel')} hint={msg('settings.generalAnimationsSub')}>
+        {#snippet children({ labelId, hintId })}
+          <Toggle checked={current?.animationsEnabled ?? true} labelledby={labelId} describedby={hintId} onchange={(v) => set({ animationsEnabled: v })} />
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow label={msg('settings.generalHwAccelLabel')} hint={msg('settings.generalHwAccelSub')}>
+        {#snippet children({ labelId, hintId })}
+          <Toggle checked={current?.hardwareAcceleration ?? true} labelledby={labelId} describedby={hintId} onchange={(v) => set({ hardwareAcceleration: v })} />
+        {/snippet}
+      </SettingsRow>
     </Card>
 
     <Card title={msg('settings.generalPrivacyCardTitle')}>
-      <div class="rows">
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('general-privacy-stats')}>{msg('settings.generalPrivacyStatsLabel')}</span>
-            <span class="row-sub" id={subId('general-privacy-stats')}>{msg('settings.generalPrivacyStatsSub')}</span>
-          </div>
-          <Toggle
-            checked={current?.anonymousUsageStats ?? false}
-            labelledby={labelId('general-privacy-stats')}
-            describedby={subId('general-privacy-stats')}
-            onchange={(v) => set({ anonymousUsageStats: v })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('general-privacy-diag')}>{msg('settings.generalPrivacyDiagLabel')}</span>
-            <span class="row-sub" id={subId('general-privacy-diag')}>{msg('settings.generalPrivacyDiagSub')}</span>
-          </div>
-          <Toggle
-            checked={current?.anonymousDiagnostics ?? false}
-            labelledby={labelId('general-privacy-diag')}
-            describedby={subId('general-privacy-diag')}
-            onchange={(v) => set({ anonymousDiagnostics: v })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('general-privacy-heartbeat')}>{msg('settings.generalPrivacyHeartbeatLabel')}</span>
-            <span class="row-sub" id={subId('general-privacy-heartbeat')}>{msg('settings.generalPrivacyHeartbeatSub')}</span>
-          </div>
-          <Toggle
-            checked={current?.sessionHeartbeat ?? true}
-            labelledby={labelId('general-privacy-heartbeat')}
-            describedby={subId('general-privacy-heartbeat')}
-            onchange={(v) => set({ sessionHeartbeat: v })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.generalPrivacyShowSentLabel')}</span>
-            <span class="row-sub">{msg('settings.generalPrivacyShowSentSub')}</span>
-          </div>
-          <Button size="sm" onclick={() => (page.sentDataOpen = true)}>
+      <SettingsRow label={msg('settings.generalPrivacyStatsLabel')} hint={msg('settings.generalPrivacyStatsSub')}>
+        {#snippet children({ labelId, hintId })}
+          <Toggle checked={current?.anonymousUsageStats ?? false} labelledby={labelId} describedby={hintId} onchange={(v) => set({ anonymousUsageStats: v })} />
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow label={msg('settings.generalPrivacyDiagLabel')} hint={msg('settings.generalPrivacyDiagSub')}>
+        {#snippet children({ labelId, hintId })}
+          <Toggle checked={current?.anonymousDiagnostics ?? false} labelledby={labelId} describedby={hintId} onchange={(v) => set({ anonymousDiagnostics: v })} />
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow label={msg('settings.generalPrivacyHeartbeatLabel')} hint={msg('settings.generalPrivacyHeartbeatSub')}>
+        {#snippet children({ labelId, hintId })}
+          <Toggle checked={current?.sessionHeartbeat ?? true} labelledby={labelId} describedby={hintId} onchange={(v) => set({ sessionHeartbeat: v })} />
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow label={msg('settings.generalPrivacyShowSentLabel')} hint={msg('settings.generalPrivacyShowSentSub')}>
+        {#snippet children({ hintId })}
+          <Button size="sm" aria-describedby={hintId} onclick={() => (page.sentDataOpen = true)}>
             <Eye size="1.5rem" strokeWidth={1.8} />
             {msg('settings.generalPrivacyShowSentButton')}
           </Button>
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.generalPrivacySessionStateLabel')}</span>
-            <span class="row-sub">{msg('settings.generalPrivacySessionStateSub')}</span>
-            <span class="row-sub privacy-link">
-              <TextLink onclick={() => page.openLegalDoc({ id: 'privacy', title: msg('settings.generalPrivacyPolicyLinkLabel') })}>
-                {msg('settings.generalPrivacyPolicyLinkLabel')}
-              </TextLink>
-            </span>
-          </div>
-        </div>
-      </div>
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow label={msg('settings.generalPrivacySessionStateLabel')} hint={msg('settings.generalPrivacySessionStateSub')}>
+        {#snippet below()}
+          <TextLink onclick={() => page.openLegalDoc({ id: 'privacy', title: msg('settings.generalPrivacyPolicyLinkLabel') })}>
+            {msg('settings.generalPrivacyPolicyLinkLabel')}
+          </TextLink>
+        {/snippet}
+      </SettingsRow>
     </Card>
 
     <Card title={msg('settings.generalSyncCardTitle')}>
-      <div class="rows">
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('general-sync-enable')}>{msg('settings.generalSyncEnableLabel')}</span>
-            <span class="row-sub" id={subId('general-sync-enable')}>{msg('settings.generalSyncEnableSub')}</span>
-            {#if !accountReady}
-              <span class="row-sub">{msg('settings.generalSyncNeedsAccountSub')}</span>
-            {/if}
-          </div>
-          <Toggle
-            checked={current?.accountSync ?? false}
-            labelledby={labelId('general-sync-enable')}
-            describedby={subId('general-sync-enable')}
-            disabled={!accountReady}
-            onchange={(v) => set({ accountSync: v })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('general-auto-away')}>{msg('settings.generalAutoAwayLabel')}</span>
-            <span class="row-sub" id={subId('general-auto-away')}>{msg('settings.generalAutoAwaySub')}</span>
-          </div>
+      <SettingsRow label={msg('settings.generalSyncEnableLabel')} hint={msg('settings.generalSyncEnableSub')} disabledReason={needsAccount}>
+        {#snippet children({ labelId, hintId, disabled })}
+          <Toggle checked={syncOn} labelledby={labelId} describedby={hintId} {disabled} onchange={(v) => set({ accountSync: v })} />
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow label={msg('settings.generalAutoAwayLabel')} hint={msg('settings.generalAutoAwaySub')} disabledReason={needsSync}>
+        {#snippet children({ labelId, hintId, disabled })}
           <Toggle
             checked={current?.presenceAutoAway ?? true}
-            labelledby={labelId('general-auto-away')}
-            describedby={subId('general-auto-away')}
-            disabled={!accountReady || !current?.accountSync}
+            labelledby={labelId}
+            describedby={hintId}
+            {disabled}
             onchange={(v) => set({ presenceAutoAway: v })}
           />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.generalSyncNowLabel')}</span>
-            <span class="row-sub">{msg('settings.generalSyncNowSub')}</span>
-          </div>
-          <Button size="sm" disabled={!accountReady || !current?.accountSync || page.syncingNow} onclick={page.runSyncNow}>
-            <RefreshCw size="1.5rem" strokeWidth={1.8} />
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow label={msg('settings.generalSyncNowLabel')} hint={msg('settings.generalSyncNowSub')} disabledReason={needsSync}>
+        {#snippet children({ hintId, disabled })}
+          <Button size="sm" aria-describedby={hintId} disabled={disabled || page.syncingNow} onclick={page.runSyncNow}>
             {page.syncingNow ? msg('settings.generalSyncNowRunning') : msg('settings.generalSyncNowLabel')}
           </Button>
-        </div>
-        <div class="row danger-zone">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.generalSyncForgetLabel')}</span>
-            <span class="row-sub">{msg('settings.generalSyncForgetSub')}</span>
-          </div>
-          <Button
-            size="sm"
-            variant="danger"
-            disabled={!accountReady || page.forgettingRemote}
-            onclick={page.askForgetRemote}
-          >
-            <Trash2 size="1.5rem" strokeWidth={1.8} />
-            {page.forgettingRemote ? msg('settings.generalSyncForgetRunning') : msg('settings.generalSyncForgetLabel')}
-          </Button>
-        </div>
+        {/snippet}
+      </SettingsRow>
+      <div class="danger-zone">
+        <SettingsRow label={msg('settings.generalSyncForgetLabel')} hint={msg('settings.generalSyncForgetSub')} disabledReason={needsAccount}>
+          {#snippet children({ hintId, disabled })}
+            <Button size="sm" variant="danger" aria-describedby={hintId} disabled={disabled || page.forgettingRemote} onclick={page.askForgetRemote}>
+              {page.forgettingRemote ? msg('settings.generalSyncForgetRunning') : msg('settings.generalSyncForgetLabel')}
+            </Button>
+          {/snippet}
+        </SettingsRow>
       </div>
     </Card>
 
@@ -451,53 +350,27 @@
 </div>
 
 <style>
-  .rows {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-6);
-    padding: 1.3rem 0;
-  }
-
-  .row + .row {
-    border-top: 1px solid var(--border);
-  }
-
-  .row.danger-zone {
-    margin-top: var(--space-3);
-    padding: var(--space-3) var(--space-4);
-    border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
-    border-radius: var(--radius-md);
-    background: var(--danger-subtle);
-  }
-
-  .row-text {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-  }
-
-  .row-label {
-    font-size: var(--font-md);
-    font-weight: 500;
-  }
-
-  .row-sub {
+  .intro {
+    margin: 0 0 var(--space-1);
     font-size: var(--font-xs);
     color: var(--text-3);
   }
 
-  .privacy-link {
-    margin-top: var(--space-1);
+  .status-text {
+    font-size: var(--font-xs);
+    color: var(--text-3);
   }
 
   .message {
     margin-top: var(--space-2);
+  }
+
+  /* An action that cannot be undone stands apart, on its own danger plate. */
+  .danger-zone {
+    margin-top: var(--space-3);
+    padding: 0 var(--space-4);
+    border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+    border-radius: var(--radius-md);
+    background: var(--danger-subtle);
   }
 </style>

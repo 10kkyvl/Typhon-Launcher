@@ -1,68 +1,31 @@
 <script lang="ts">
   import { msg } from '../../lib/i18n';
+  import SettingsRow from '../../lib/components/SettingsRow.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
   import { lanStats } from '../../lib/stores/lan';
   import { settings, updateSettings } from '../../lib/stores/settings';
-
-  const uid = $props.id();
 </script>
 
-<div class="row">
-  <div class="row-text">
-    <span class="row-label" id="{uid}-general-lan-label">{msg('settings.generalLanLabel')}</span>
-    <span class="row-sub" id="{uid}-general-lan-sub">{msg('settings.generalLanSub')}</span>
-  </div>
-  <Toggle
-    checked={$settings?.lanSharing ?? false}
-    labelledby="{uid}-general-lan-label"
-    describedby="{uid}-general-lan-sub"
-    onchange={(v) => updateSettings({ lanSharing: v })}
-  />
-</div>
+<SettingsRow label={msg('settings.generalLanLabel')} hint={msg('settings.generalLanSub')}>
+  {#snippet children({ labelId, hintId })}
+    <Toggle
+      checked={$settings?.lanSharing ?? false}
+      labelledby={labelId}
+      describedby={hintId}
+      onchange={(v) => updateSettings({ lanSharing: v })}
+    />
+  {/snippet}
+</SettingsRow>
 {#if $settings?.lanSharing}
-  <div class="row">
-    <div class="row-text">
-      <span class="row-label">{msg('settings.generalLanStateLabel')}</span>
-      <span class="row-sub"
-        >{msg('settings.generalLanStatsLine', {
-          peersKnown: $lanStats.peersKnown,
-          offersKnown: $lanStats.offersKnown,
-          sharesActive: $lanStats.sharesActive,
-          announcesSent: $lanStats.announcesSent,
-          announcesReceived: $lanStats.announcesReceived,
-        })}</span
-      >
-    </div>
-  </div>
+  <!-- What the sharing sees on the network: a status line, no control. -->
+  <SettingsRow
+    label={msg('settings.generalLanStateLabel')}
+    hint={msg('settings.generalLanStatsLine', {
+      peersKnown: $lanStats.peersKnown,
+      offersKnown: $lanStats.offersKnown,
+      sharesActive: $lanStats.sharesActive,
+      announcesSent: $lanStats.announcesSent,
+      announcesReceived: $lanStats.announcesReceived,
+    })}
+  />
 {/if}
-
-<style>
-  .row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-6);
-    padding: 1.3rem 0;
-  }
-
-  .row + .row {
-    border-top: 1px solid var(--border);
-  }
-
-  .row-text {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-  }
-
-  .row-label {
-    font-size: var(--font-md);
-    font-weight: 500;
-  }
-
-  .row-sub {
-    font-size: var(--font-xs);
-    color: var(--text-3);
-  }
-</style>

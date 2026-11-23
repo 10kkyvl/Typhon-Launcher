@@ -64,7 +64,7 @@
   {#key tab}
   <div class="tab-body" {...tabPanel(uid, tab)}>
   {#if tab === 'general'}
-    <GeneralTab {page} {uid} />
+    <GeneralTab {page} />
   {:else if tab === 'downloads'}
     <DownloadsTab {page} {uid} />
   {:else if tab === 'appearance'}
