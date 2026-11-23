@@ -10,9 +10,18 @@
 
   let {
     windows,
+    labelledby,
+    describedby,
+    disabled = false,
     onchange,
   }: {
     windows: ScheduleWindow[];
+    /** Id of the visible label that names the schedule: the editor is then a group with that name. */
+    labelledby?: string;
+    /** Id of the text that says what the schedule does. */
+    describedby?: string;
+    /** Out of reach, the windows still shown and read (a disabled settings row). */
+    disabled?: boolean;
     onchange: (next: ScheduleWindow[]) => void;
   } = $props();
 
@@ -56,7 +65,7 @@
   }
 </script>
 
-<div class="schedule">
+<div class="schedule" role={labelledby ? 'group' : undefined} aria-labelledby={labelledby} aria-describedby={describedby}>
   {#if draft.length === 0}
     <EmptyState size="inline" title={msg('settings.downloadsScheduleEmpty')} />
   {:else}
@@ -64,7 +73,7 @@
       <div class="row">
         <div class="days" role="group" aria-label={msg('settings.downloadsScheduleDays')}>
           {#each weekdays as day (day.value)}
-            <Chip selected={item.days.includes(day.value)} onclick={() => toggleDay(i, day.value)}>
+            <Chip selected={item.days.includes(day.value)} {disabled} onclick={() => toggleDay(i, day.value)}>
               {msg(day.label)}
             </Chip>
           {/each}
@@ -74,6 +83,7 @@
             class="input time"
             type="time"
             aria-label={msg('settings.downloadsScheduleFrom')}
+            {disabled}
             value={item.from}
             onchange={(e) => setTime(i, 'from', e.currentTarget.value)}
           />
@@ -82,10 +92,11 @@
             class="input time"
             type="time"
             aria-label={msg('settings.downloadsScheduleTo')}
+            {disabled}
             value={item.to}
             onchange={(e) => setTime(i, 'to', e.currentTarget.value)}
           />
-          <IconButton label={msg('settings.downloadsScheduleRemove')} size="sm" onclick={() => remove(i)}>
+          <IconButton label={msg('settings.downloadsScheduleRemove')} size="sm" {disabled} onclick={() => remove(i)}>
             <Trash2 size="1.5rem" strokeWidth={1.8} />
           </IconButton>
         </div>
@@ -94,7 +105,7 @@
     <p class="hint">{msg('settings.downloadsScheduleOvernight')}</p>
   {/if}
   <div class="actions">
-    <Button size="sm" onclick={add}>
+    <Button size="sm" {disabled} onclick={add}>
       <Plus size="1.4rem" strokeWidth={2} />
       {msg('settings.downloadsScheduleAdd')}
     </Button>

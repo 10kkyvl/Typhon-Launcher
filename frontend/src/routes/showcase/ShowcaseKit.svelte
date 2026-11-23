@@ -7,6 +7,8 @@
   import Button from '../../lib/components/Button.svelte';
   import RateLimitInput from '../../lib/components/RateLimitInput.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
+  import ScheduleEditor from '../../lib/components/ScheduleEditor.svelte';
+  import type { ScheduleWindow } from '../../lib/services/settings';
   import Select from '../../lib/components/Select.svelte';
   import type { SelectOption } from '../../lib/components/select';
   import EmptyState from '../../lib/components/EmptyState.svelte';
@@ -122,6 +124,7 @@
   let stackScale = $state(2);
   let limit = $state(25 * 1024 * 1024);
   let route = $state('direct');
+  let windows = $state<ScheduleWindow[]>([{ days: [1, 2, 3, 4, 5], from: '01:00', to: '07:00' }]);
   const ROUTES = [
     { id: 'direct', label: 'Direct' },
     { id: 'interface', label: 'Interface' },
@@ -307,6 +310,16 @@
       <SettingsRow label="Connection" hint="How the launcher reaches the network" testid="kit-row-mode">
         {#snippet children({ labelId, hintId })}
           <SegmentedControl options={ROUTES} labelledby={labelId} describedby={hintId} bind:value={route} />
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow label="Schedule" hint="Outside the windows, downloads and seeding stand still" testid="kit-row-schedule">
+        {#snippet below({ labelId, hintId })}
+          <ScheduleEditor {windows} labelledby={labelId} describedby={hintId} onchange={(next) => (windows = next)} />
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow label="Schedule (locked)" hint="The same editor in a row with a reason" disabledReason="Managed by your organisation" testid="kit-row-schedule-disabled">
+        {#snippet below({ labelId, hintId, disabled })}
+          <ScheduleEditor {windows} labelledby={labelId} describedby={hintId} {disabled} onchange={() => {}} />
         {/snippet}
       </SettingsRow>
       <SettingsRow label="Upload speed limit" hint="Maximum outgoing traffic speed" disabledReason="Set by the play mode while a game runs" testid="kit-row-limit-disabled">

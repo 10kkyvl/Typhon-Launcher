@@ -23,7 +23,7 @@ import { frontendSources } from '../testing/sources';
 
 /** The base controls that take `disabled` and turn their own element off with it. */
 const CONTROLS = ['Toggle', 'Select', 'Slider', 'IntegerInput', 'Button', 'IconButton', 'Checkbox', 'SegmentedControl'];
-CONTROLS.push('RateLimitInput');
+CONTROLS.push('RateLimitInput', 'ScheduleEditor');
 /** Components that may stand under a reason as they are: a link that says why or how to fix it. */
 const QUIET = ['TextLink'];
 const RAW = ['button', 'input', 'select', 'textarea'];
@@ -197,9 +197,11 @@ describe('SettingsRow call sites', () => {
     });
   }
 
-  it('holds the speed limit field to the flag like any base control', () => {
+  it('holds the speed limit field and the schedule editor to the flag like any base control', () => {
     expect(refused(row('{ labelId, disabled }', '<RateLimitInput value={1} presets={[1]} labelledby={labelId} {disabled} onchange={set} />'))).toBe(false);
     expect(refused(row('{ labelId }', '<RateLimitInput value={1} presets={[1]} labelledby={labelId} onchange={set} />'))).toBe(true);
+    expect(refused(row('{ labelId, disabled }', '<ScheduleEditor windows={[]} labelledby={labelId} {disabled} onchange={set} />'))).toBe(false);
+    expect(refused(row('{ labelId }', '<ScheduleEditor windows={[]} labelledby={labelId} onchange={set} />'))).toBe(true);
   });
 
   it('finds nothing to refuse in the call sites', () => {
