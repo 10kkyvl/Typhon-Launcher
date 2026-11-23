@@ -6,7 +6,7 @@ import { installErrorText } from '../../lib/install/installErrors';
 import { platformBadge } from '../../lib/library/emulation';
 import { clearHistory as clearRequest, getHistoryStatus, Kind, listHistory, type Record as HistoryRecord } from '../../lib/services/history';
 import type { LibraryGame } from '../../lib/services/library';
-import { history, historyErrorText, historyStatus, initHistory } from '../../lib/stores/history';
+import { history, historyErrorText, historyLoaded, historyLoadError, historyStatus, initHistory } from '../../lib/stores/history';
 import { libraryGames } from '../../lib/stores/library';
 import { toasts } from '../../lib/stores/toasts';
 import { renderDom } from '../../lib/testing/dom';
@@ -90,10 +90,13 @@ const installed = (title: string) => msg('transfers.historyInstalledTitle', { ti
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'], now: NOW });
+  historyLoaded.set(true);
 });
 
 afterEach(() => {
   history.set([]);
+  historyLoaded.set(false);
+  historyLoadError.set(null);
   historyStatus.set({ degraded: false, message: '' });
   libraryGames.set([]);
   toasts.set([]);
@@ -335,15 +338,77 @@ describe('History: states', () => {
     expect(rows()).toHaveLength(12);
   });
 
-  // D2: a first read that failed is not told from an empty history.
-  it('D2: shows a failed first read as an empty history', async () => {
-    vi.mocked(listHistory).mockRejectedValueOnce(new Error('service not ready'));
-    vi.mocked(getHistoryStatus).mockResolvedValue({ degraded: false, message: '' });
-    await expect(initHistory()).rejects.toThrow('service not ready');
+  it('shows a loading state, not an empty history, until the first read answers', () => {
+    historyLoaded.set(false);
+    vi.mocked(listHistory).mockReturnValueOnce(new Promise(() => {}));
+    void initHistory();
     renderDom(History);
 
-    expect(screen.getByRole('heading', { name: msg('transfers.historyEmptyTitle') })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: msg('transfers.historyLoading') })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: msg('transfers.historyEmptyTitle') })).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  // D2: a first read that failed says so, with a Retry, instead of looking like an empty history.
+  it('D2: says a failed first read with a Retry, and no empty state; the Retry reads again', async () => {
+    historyLoaded.set(false);
+    vi.mocked(listHistory).mockRejectedValueOnce(new Error('service not ready'));
+    vi.mocked(getHistoryStatus).mockResolvedValue({ degraded: false, message: '' });
+    await initHistory();
+    vi.mocked(listHistory).mockResolvedValueOnce([]);
+    const { user } = renderDom(History);
+
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toContain(msg('transfers.historyLoadFailed'));
+    expect(alert.closest('.notice')?.getAttribute('data-tone')).toBe('danger');
+    expect(screen.queryByRole('heading', { name: msg('transfers.historyEmptyTitle') })).toBeNull();
+    expect(screen.queryByRole('heading', { name: msg('transfers.historyLoading') })).toBeNull();
+
+    const retry = screen.getByRole('button', { name: msg('common.retry') });
+    retry.focus();
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: msg('transfers.historyEmptyTitle') })).toBeTruthy());
+    expect(listHistory).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 }));
+  });
+
+  it('D2: shows the list the Retry brought', async () => {
+    historyLoaded.set(false);
+    vi.mocked(listHistory).mockRejectedValueOnce(new Error('service not ready'));
+    vi.mocked(getHistoryStatus).mockResolvedValue({ degraded: false, message: '' });
+    await initHistory();
+    vi.mocked(listHistory).mockResolvedValueOnce(RECORDS);
+    const { user } = renderDom(History);
+
+    await user.click(screen.getByRole('button', { name: msg('common.retry') }));
+
+    await waitFor(() => expect(rows()).toHaveLength(12));
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('D2: keeps the failure and its Retry when the read fails again, says it again, focus staying on Retry', async () => {
+    historyLoaded.set(false);
+    vi.mocked(listHistory).mockRejectedValueOnce(new Error('service not ready'));
+    vi.mocked(getHistoryStatus).mockResolvedValue({ degraded: false, message: '' });
+    await initHistory();
+    vi.mocked(listHistory).mockRejectedValueOnce(new Error('still not ready'));
+    const { user } = renderDom(History);
+    const notice = screen.getByRole('alert').closest('.notice') as HTMLElement;
+    const region = notice.querySelector('.body') as HTMLElement;
+    const before = region.firstElementChild;
+    const retry = within(notice).getByRole('button', { name: msg('common.retry') });
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => expect(region.firstElementChild).not.toBe(before));
+    expect(listHistory).toHaveBeenCalledTimes(2);
+    expect(notice.isConnected).toBe(true);
+    expect(region.textContent).toContain(msg('transfers.historyLoadFailed'));
+    expect(document.activeElement).toBe(retry);
+    expect(screen.queryByRole('heading', { name: msg('transfers.historyEmptyTitle') })).toBeNull();
   });
 });
 

@@ -24,7 +24,15 @@
   import { historyLabel } from '../../lib/history/historyText';
   import { Kind, type Record as HistoryRecord } from '../../lib/services/history';
   import { libraryGames } from '../../lib/stores/library';
-  import { clearHistory, history, historyErrorText, historyStatus } from '../../lib/stores/history';
+  import {
+    clearHistory,
+    history,
+    historyErrorText,
+    historyLoaded,
+    historyLoadError,
+    historyStatus,
+    reloadHistory,
+  } from '../../lib/stores/history';
   import { toast } from '../../lib/stores/toasts';
   import { clockTime, longDate, relativeDate } from '../../lib/utils/format';
   import { msg } from '../../lib/i18n';
@@ -44,6 +52,11 @@
   let segment = $state('all');
   let query = $state('');
   let clearOpen = $state(false);
+  let retrying = $state(false);
+  let list = $state<HTMLElement>();
+
+  const loadFailed = $derived(!$historyLoaded && $historyLoadError != null);
+  const loading = $derived(!$historyLoaded && !loadFailed);
 
   const kindsFilter = $derived(segments.find((s) => s.id === segment)?.kinds);
   const filtered = $derived(filterHistory($history, { kinds: kindsFilter, query }));
@@ -135,12 +148,25 @@
     </div>
   {/if}
 
+  {#if loadFailed || retrying}
+    <!-- On success focus that was on Retry goes to the first control of the list, else the page heading. -->
+    <div class="banner">
+      <Notice tone="danger" bind:retrying retry={{ label: msg('common.retry'), run: reloadHistory, within: () => list }}>
+        {historyErrorText($historyLoadError, msg('transfers.historyLoadFailed'))}
+      </Notice>
+    </div>
+  {/if}
+
   {#if $history.length === 0}
-    <EmptyState level={2} title={msg('transfers.historyEmptyTitle')} description={msg('transfers.historyEmptyDescription')}>
-      {#snippet icon()}
-        <HistoryIcon size="2rem" strokeWidth={1.8} />
-      {/snippet}
-    </EmptyState>
+    {#if loading}
+      <EmptyState level={2} title={msg('transfers.historyLoading')} />
+    {:else if !loadFailed && !retrying}
+      <EmptyState level={2} title={msg('transfers.historyEmptyTitle')} description={msg('transfers.historyEmptyDescription')}>
+        {#snippet icon()}
+          <HistoryIcon size="2rem" strokeWidth={1.8} />
+        {/snippet}
+      </EmptyState>
+    {/if}
   {:else}
     <div class="toolbar">
       <SegmentedControl options={tabs} label={msg('transfers.historySegmentLabel')} variant="pill" bind:value={segment} />
@@ -153,7 +179,7 @@
       <EmptyState level={2} title={msg('transfers.historyNoResultsTitle')} description={msg('transfers.historyNoResultsDescription')} />
     {:else}
       {#key segment}
-        <div class="days">
+        <div class="days" bind:this={list}>
           {#each days as day (day.key)}
             <section class="day">
               <h2 class="day-label">{day.label}</h2>

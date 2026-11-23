@@ -20,10 +20,12 @@ vi.mock('./toasts', () => ({ toast: vi.fn() }));
 let seeded: Record[] = [];
 let status: Status = { degraded: false, message: '' };
 const clear = vi.fn(async () => {});
+const list = vi.fn(async () => seeded);
+const readStatus = vi.fn(async () => status);
 
 vi.mock('../services/history', () => ({
-  listHistory: vi.fn(async () => seeded),
-  getHistoryStatus: vi.fn(async () => status),
+  listHistory: list,
+  getHistoryStatus: readStatus,
   clearHistory: clear,
 }));
 
@@ -45,6 +47,8 @@ beforeEach(() => {
   seeded = [];
   status = { degraded: false, message: '' };
   clear.mockResolvedValue(undefined);
+  list.mockImplementation(async () => seeded);
+  readStatus.mockImplementation(async () => status);
 });
 
 describe('history store', () => {
@@ -103,6 +107,86 @@ describe('history store', () => {
     const { store } = await load();
 
     expect(get(store.historyStatus)).toEqual({ degraded: true, message: 'read only' });
+  });
+});
+
+describe('the first read', () => {
+  it('is not done until the list arrives, and done once it has', async () => {
+    seeded = [record('a', '2026-09-01T10:00:00Z')];
+    let answer: (records: Record[]) => void = () => {};
+    list.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)));
+    vi.resetModules();
+    const store = await import('./history');
+    const started = store.initHistory();
+
+    expect(get(store.historyLoaded)).toBe(false);
+    expect(get(store.historyLoadError)).toBeNull();
+    answer(seeded);
+    await started;
+    expect(get(store.historyLoaded)).toBe(true);
+    expect(get(store.history)).toHaveLength(1);
+  });
+
+  it('keeps a failed first read as state instead of rejecting, the recent list staying empty', async () => {
+    const failure = new Error('service not ready');
+    list.mockRejectedValueOnce(failure);
+    const { store } = await load();
+
+    expect(get(store.historyLoaded)).toBe(false);
+    expect(get(store.historyLoadError)).toBe(failure);
+    expect(get(store.history)).toEqual([]);
+    expect(get(store.historyRecent)).toEqual([]);
+  });
+
+  it('reads again on reload: the list, the recent list and the status come, and the failure goes', async () => {
+    list.mockRejectedValueOnce(new Error('service not ready'));
+    readStatus.mockRejectedValueOnce(new Error('service not ready'));
+    const { store } = await load();
+    seeded = [record('a', '2026-09-01T10:00:00Z'), record('b', '2026-09-02T10:00:00Z')];
+    status = { degraded: true, message: 'read only' };
+
+    await expect(store.reloadHistory()).resolves.toBe(true);
+
+    expect(get(store.historyLoaded)).toBe(true);
+    expect(get(store.historyLoadError)).toBeNull();
+    expect(get(store.historyRecent).map((item) => item.id)).toEqual(['b', 'a']);
+    expect(get(store.historyStatus)).toEqual({ degraded: true, message: 'read only' });
+  });
+
+  it('answers false and keeps the failure when the reload fails too', async () => {
+    list.mockRejectedValueOnce(new Error('first'));
+    const { store } = await load();
+    const again = new Error('again');
+    list.mockRejectedValueOnce(again);
+
+    await expect(store.reloadHistory()).resolves.toBe(false);
+
+    expect(get(store.historyLoaded)).toBe(false);
+    expect(get(store.historyLoadError)).toBe(again);
+  });
+
+  it('takes a whole list from history:updated as read', async () => {
+    list.mockRejectedValueOnce(new Error('service not ready'));
+    const { store } = await load();
+
+    handlers['history:updated']({ data: [record('x', '2026-09-05T10:00:00Z')] });
+
+    expect(get(store.historyLoaded)).toBe(true);
+    expect(get(store.historyLoadError)).toBeNull();
+    expect(get(store.history).map((item) => item.id)).toEqual(['x']);
+  });
+
+  it('shows the list when only the status could not be read', async () => {
+    seeded = [record('a', '2026-09-01T10:00:00Z')];
+    readStatus.mockRejectedValueOnce(new Error('status unreadable'));
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { store } = await load();
+
+    expect(get(store.historyLoaded)).toBe(true);
+    expect(get(store.history)).toHaveLength(1);
+    expect(get(store.historyStatus)).toEqual({ degraded: false, message: '' });
+    expect(errors).toHaveBeenCalled();
+    errors.mockRestore();
   });
 });
 
