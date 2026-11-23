@@ -256,4 +256,16 @@ export const transfers: Record<TransfersKey, Message> = {
   // 7-B stats
   'transfers.activityMoreFailed': 'Could not load more events',
   // /7-B stats
+  // 7-R sources
+  'transfers.sourcesLoading': 'Loading sources…',
+  'transfers.sourcesLoadFailed': 'Could not load the list of sources',
+  'transfers.sourcesUpdatedAt': 'Updated: {when}',
+  'transfers.sourcesNeverUpdated': 'Not refreshed yet',
+  'transfers.sourcesExactTime': '{date} at {time}',
+  'transfers.sourcesHealthHint': '{label}: {warnings}',
+  'transfers.sourcesStageProgress': '{stage}, {percent}%',
+  'transfers.sourcesEntriesCount': { one: '{count} entry', other: '{count} entries' },
+  'transfers.sourcesReviewCount': '+{review} to review',
+  'transfers.sourcesToggleName': 'Use source "{name}"',
+  // /7-R sources
 };

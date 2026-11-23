@@ -262,6 +262,22 @@ export const transfers = {
   // 7-B stats
   'transfers.activityMoreFailed': 'Не удалось загрузить следующие события',
   // /7-B stats
+  // 7-R sources
+  'transfers.sourcesLoading': 'Загружаем источники…',
+  'transfers.sourcesLoadFailed': 'Не удалось загрузить список источников',
+  'transfers.sourcesUpdatedAt': 'Обновлён: {when}',
+  'transfers.sourcesNeverUpdated': 'Ещё не обновлялся',
+  'transfers.sourcesExactTime': '{date} в {time}',
+  'transfers.sourcesHealthHint': '{label}: {warnings}',
+  'transfers.sourcesStageProgress': '{stage}, {percent}%',
+  'transfers.sourcesEntriesCount': {
+    one: '{count} запись',
+    few: '{count} записи',
+    many: '{count} записей',
+  },
+  'transfers.sourcesReviewCount': '+{review} на проверку',
+  'transfers.sourcesToggleName': 'Использовать источник «{name}»',
+  // /7-R sources
 } as const;
 
 export type TransfersKey = keyof typeof transfers;
