@@ -79,6 +79,8 @@ export const errInstall = {
   'errInstall.installUnrecognizedSource': 'формат файла не распознан',
   'errInstall.installUnsafeRemoval': 'этот каталог нельзя удалять целиком',
   'errInstall.installFolderShared': 'в папке игры лежат файлы другой игры из библиотеки: уберите эту игру только из библиотеки или сначала уберите из библиотеки другую',
+  'errInstall.installFolderSharedUninstaller': 'в папке игры лежат файлы другой игры из библиотеки, а деинсталлятор этой игры может удалить всю папку: сначала уберите из библиотеки другую игру',
+  'errInstall.installFolderChanged': 'папка игры изменилась, пока готовилось удаление: откройте удаление ещё раз',
   'errInstall.installGameMoving': 'игра сейчас переносится: удалить её можно, когда перенос закончится',
   'errInstall.installRemovalsUnreadable': 'не читается журнал незавершённых удалений (removals.json в папке настроек): пока это так, файлы игр не удаляются; убрать игру только из библиотеки можно',
   'errInstall.installUnsupportedArchive': 'формат архива не поддерживается, распакуйте вручную',

@@ -82,6 +82,8 @@ export const errInstall: Record<ErrInstallKey, Message> = {
   'errInstall.installUnrecognizedSource': 'The file format was not recognized',
   'errInstall.installUnsafeRemoval': 'This folder cannot be removed entirely',
   'errInstall.installFolderShared': "Another library game has files in this game's folder. Remove this game from the library only, or remove the other game from the library first",
+  'errInstall.installFolderSharedUninstaller': "Another library game has files in this game's folder, and this game's uninstaller may delete the whole folder. Remove the other game from the library first",
+  'errInstall.installFolderChanged': "The game's folder changed while the removal was being prepared. Open the removal again",
   'errInstall.installGameMoving': 'The game is being moved. Remove it once the move has finished',
   'errInstall.installRemovalsUnreadable': 'The log of unfinished removals (removals.json in the settings folder) cannot be read. Until it can, game files are not deleted; removing the game from the library only still works',
   'errInstall.installUnsupportedArchive': 'This archive format is not supported, extract it manually',
