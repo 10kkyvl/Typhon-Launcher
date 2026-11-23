@@ -220,6 +220,30 @@ describe('BarChart', () => {
         expect(chart.contains(getByTestId('empty'))).toBe(true);
       });
 
+      // The chart's box loses its role and name when the bars come back: focus left on it would sit on
+      // an unnamed element. It goes on to the bar that holds the Tab stop.
+      it('hands focus from the chart to the bar with the Tab stop when the bars come back', async () => {
+        const { container, rerender, user } = renderDom(BarChartHarness, { buckets: DAYS, selectable: true, start: 'wed' });
+        await user.tab();
+        await rerender({ buckets: DAYS.map((d) => ({ ...d, value: 0 })) });
+        expect(document.activeElement?.classList.contains('chart-box')).toBe(true);
+        await rerender({ buckets: DAYS });
+        expect(aria()).toBe('Ср, 4 ноября: 8 ч');
+        expect(document.activeElement).toBe(radios(container).find((radio) => radio.tabIndex === 0));
+      });
+
+      it('leaves focus alone when the bars come back and focus is not on the chart', async () => {
+        const { rerender, user } = renderDom(BarChartHarness, { buckets: DAYS, selectable: true, start: 'wed' });
+        const outside = document.createElement('button');
+        document.body.append(outside);
+        await user.tab();
+        await rerender({ buckets: DAYS.map((d) => ({ ...d, value: 0 })) });
+        outside.focus();
+        await rerender({ buckets: DAYS });
+        expect(document.activeElement).toBe(outside);
+        outside.remove();
+      });
+
       // Another part of the page (a dialog opening) moves focus in its own effect in the same update:
       // the chart's hand-off runs after it and must not take focus back, whether the focused bar stays
       // or leaves.

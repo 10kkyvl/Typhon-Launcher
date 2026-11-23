@@ -22,7 +22,8 @@
    * End move the choice and the focus, stopping at the ends); `bind:selected` holds the chosen key,
    * which may be none (null or a key no bucket has) without the group turning into a table. The Tab
    * stop is kept by key; a focused bar whose bucket leaves hands focus to the bar in its place, and
-   * to the chart's own box when the bars leave for the empty state. Each radio is named by its bucket
+   * to the chart's own box when the bars leave for the empty state, and from that box to the bar with
+   * the Tab stop when they come back. Each radio is named by its bucket
    * and value and shows them as a hint, so the radios are the list of numbers and no table repeats
    * them.
    * `values="selected"` labels the chosen bar only, for a chart of many bars.
@@ -129,6 +130,20 @@
     const at = Math.min(was, now.length - 1);
     if (at >= 0) focusedKey = untrack(() => buckets[at].key);
     focusQuietly(now[at] ?? (group?.isConnected ? group : root));
+  });
+
+  // The chart's box loses its role and name when the bars come back from the empty state: focus left
+  // on it goes on to the bar that holds the Tab stop. Not state: nothing is drawn from it.
+  let wasBlank = false;
+  $effect(() => {
+    const before = wasBlank;
+    wasBlank = blank;
+    untrack(() => {
+      if (before && !blank && document.activeElement === root) {
+        const target = radios().find((radio) => radio.tabIndex === 0);
+        if (target) focusQuietly(target);
+      }
+    });
   });
 </script>
 
