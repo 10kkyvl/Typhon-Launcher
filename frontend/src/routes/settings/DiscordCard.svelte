@@ -8,6 +8,7 @@
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import DiscordJoinButton from '../../lib/components/DiscordJoinButton.svelte';
   import Notice from '../../lib/components/Notice.svelte';
+  import SettingsRow from '../../lib/components/SettingsRow.svelte';
   import Spinner from '../../lib/components/Spinner.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
   import type { ConfirmPrompt } from '../../lib/confirm/prompts';
@@ -22,8 +23,6 @@
   import { handleSessionLost } from '../../lib/stores/user';
 
   let { api = discordApi }: { api?: DiscordApi } = $props();
-
-  const uid = $props.id();
 
   // The flow owns one session of polling; the prop is a test seam fixed at mount.
   // svelte-ignore state_referenced_locally
@@ -92,6 +91,10 @@
   const steps = $derived([msg('discord.step1'), msg('discord.step2'), msg('discord.step3'), msg('discord.step4')]);
 </script>
 
+{#snippet linkError()}
+  <Notice tone="danger" compact>{accountMessage($view.errorCode)}</Notice>
+{/snippet}
+
 <Card title={msg('discord.cardTitle')}>
   <div class="discord" bind:this={body}>
     {#if $view.phase === 'loading' && !retrying}
@@ -103,44 +106,39 @@
         {msg('discord.loadFailed')}
       </Notice>
     {:else if $view.phase === 'linked'}
-      <div class="row">
-        <div class="text">
-          <span class="label">{msg('discord.linkedAs', { name: $view.link?.discordUsername ?? '' })}</span>
-          <span class="sub">{msg('discord.linkedSub')}</span>
-          {#if $view.errorCode}<div class="message"><Notice tone="danger" compact>{accountMessage($view.errorCode)}</Notice></div>{/if}
-        </div>
-        <Button size="sm" variant="danger" disabled={$view.busy} onclick={askUnlink}>
-          <Unlink size="1.5rem" strokeWidth={1.8} />
-          {msg('discord.unlinkButton')}
-        </Button>
-      </div>
-      <div class="row">
-        <div class="text">
-          <span class="label" id="{uid}-remote-label">{msg('discord.remoteLabel')}</span>
-          <span class="sub" id="{uid}-remote-sub">{msg('discord.remoteSub')}</span>
-        </div>
-        <Toggle checked={remoteOn} labelledby="{uid}-remote-label" describedby="{uid}-remote-sub" onchange={setRemote} />
-      </div>
-      {#if remoteOn}
-        <div class="row nested">
-          <div class="text">
-            <span class="label" id="{uid}-remote-downloads-label">{msg('discord.remoteDownloadsLabel')}</span>
-            <span class="sub" id="{uid}-remote-downloads-sub">{msg('discord.remoteDownloadsSub')}</span>
+      <div class="rows">
+        <SettingsRow
+          label={msg('discord.linkedAs', { name: $view.link?.discordUsername ?? '' })}
+          hint={msg('discord.linkedSub')}
+          below={$view.errorCode ? linkError : undefined}
+        >
+          {#snippet children({ hintId })}
+            <Button size="sm" variant="danger" aria-describedby={hintId} disabled={$view.busy} onclick={askUnlink}>
+              <Unlink size="1.5rem" strokeWidth={1.8} />
+              {msg('discord.unlinkButton')}
+            </Button>
+          {/snippet}
+        </SettingsRow>
+        <SettingsRow label={msg('discord.remoteLabel')} hint={msg('discord.remoteSub')}>
+          {#snippet children({ labelId, hintId })}
+            <Toggle checked={remoteOn} labelledby={labelId} describedby={hintId} onchange={setRemote} />
+          {/snippet}
+        </SettingsRow>
+        {#if remoteOn}
+          <!-- Part of remote control: set in under it. -->
+          <div class="nested">
+            <SettingsRow label={msg('discord.remoteDownloadsLabel')} hint={msg('discord.remoteDownloadsSub')}>
+              {#snippet children({ labelId, hintId })}
+                <Toggle checked={remoteDownloadsOn} labelledby={labelId} describedby={hintId} onchange={(on) => setSetting({ discordRemoteDownloads: on })} />
+              {/snippet}
+            </SettingsRow>
           </div>
-          <Toggle
-            checked={remoteDownloadsOn}
-            labelledby="{uid}-remote-downloads-label"
-            describedby="{uid}-remote-downloads-sub"
-            onchange={(on) => setSetting({ discordRemoteDownloads: on })}
-          />
-        </div>
-      {/if}
-      <div class="row">
-        <div class="text">
-          <span class="label" id="{uid}-notify-label">{msg('discord.notifyLabel')}</span>
-          <span class="sub" id="{uid}-notify-sub">{msg('discord.notifySub')}</span>
-        </div>
-        <Toggle checked={notifyOn} labelledby="{uid}-notify-label" describedby="{uid}-notify-sub" onchange={(on) => setSetting({ discordNotifications: on })} />
+        {/if}
+        <SettingsRow label={msg('discord.notifyLabel')} hint={msg('discord.notifySub')}>
+          {#snippet children({ labelId, hintId })}
+            <Toggle checked={notifyOn} labelledby={labelId} describedby={hintId} onchange={(on) => setSetting({ discordNotifications: on })} />
+          {/snippet}
+        </SettingsRow>
       </div>
     {:else if $view.phase === 'code'}
       <div class="code-block">
@@ -202,9 +200,16 @@
     gap: var(--space-3) var(--space-6);
   }
 
+  /* The rows' own separators stop at the indented row's box: it draws them above and below. */
   .nested {
     padding-left: var(--space-5);
+    border-block: 1px solid var(--border);
     border-left: 2px solid var(--border);
+  }
+
+  .rows {
+    display: flex;
+    flex-direction: column;
   }
 
   .text {
@@ -214,11 +219,6 @@
     min-width: 0;
     flex: 1 1 22rem;
     overflow-wrap: anywhere;
-  }
-
-  .label {
-    font-size: var(--font-md);
-    font-weight: 500;
   }
 
   .sub {
