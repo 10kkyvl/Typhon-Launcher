@@ -196,7 +196,7 @@
                   </span>
                   <span class="text">
                     <span class="title"><GameLink id={game ? game.id : null} name={title} truncate /></span>
-                    <span class="sub">{playtime(item.seconds)} · {msg('stats.topSessions', { count: item.sessions })}</span>
+                    <span class="sub">{msg('stats.topLine', { time: playtime(item.seconds), count: item.sessions })}</span>
                     <ProgressBar value={Math.round(item.share * 100)} label={title} valueText={msg('stats.topShare', { share: Math.round(item.share * 100) })} />
                   </span>
                 </li>

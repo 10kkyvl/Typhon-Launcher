@@ -25,7 +25,7 @@ vi.mock('../../lib/stores/router', async (importOriginal) => ({
   navigate: vi.fn(),
 }));
 
-import { msg } from '../../lib/i18n';
+import { locale, msg } from '../../lib/i18n';
 import type { LibraryGame } from '../../lib/services/library';
 import { getStats } from '../../lib/services/playlog';
 import { libraryGames } from '../../lib/stores/library';
@@ -60,6 +60,19 @@ describe('Stats: most played', () => {
     expect(share('Hades').getAttribute('aria-valuenow')).toBe('75');
     expect(share('Hades').getAttribute('aria-valuetext')).toBe(msg('stats.topShare', { share: 75 }));
     expect(share('Celeste').getAttribute('aria-valuetext')).toBe(msg('stats.topShare', { share: 25 }));
+  });
+
+  // One catalogued message, so a language can put the time and the sessions in its own order.
+  it('says a game’s time and sessions as one sentence of the reader’s language', async () => {
+    locale.set('en');
+    libraryGames.set([{ id: 'g1', title: 'Hades' } as LibraryGame, { id: 'g2', title: 'Celeste' } as LibraryGame]);
+    const { findByRole, getAllByRole } = renderDom(Stats);
+    await findByRole('button', { name: 'Hades' });
+
+    const texts = getAllByRole('listitem').map((row) => row.textContent?.replace(/\s+/g, ' ').trim());
+    expect(texts[0]).toContain(msg('stats.topLine', { time: playtime(3000), count: 2 }));
+    expect(texts[1]).toContain(msg('stats.topLine', { time: playtime(1000), count: 1 }));
+    expect(msg('stats.topLine', { time: playtime(1000), count: 1 })).toBe(`${playtime(1000)} in 1 session`);
   });
 
   // A game without art shows initials in its place: they are a picture, not part of the row's name.
