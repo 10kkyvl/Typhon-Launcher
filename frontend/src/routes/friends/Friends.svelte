@@ -1,7 +1,6 @@
 <script lang="ts">
   import Page from '../../lib/components/Page.svelte';
   import { onMount, untrack } from 'svelte';
-  import { fade, fly } from 'svelte/transition';
   import { LogIn, ShieldCheck, UserPlus, Users } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
@@ -34,8 +33,8 @@
   import { msg } from '../../lib/i18n';
   import AddFriendModal from './AddFriendModal.svelte';
   import FriendCodeCard from './FriendCodeCard.svelte';
-  import FriendRow from './FriendRow.svelte';
   import FriendsList from './FriendsList.svelte';
+  import RequestCards from './RequestCards.svelte';
   import { playerFrame } from '../../lib/profile/appearanceCard';
   import { frameReserve } from '../../lib/profile/frameLook';
 
@@ -56,16 +55,6 @@
 
   const isGuest = $derived($authState === 'guest');
   const page = $derived($friendsPage);
-
-  function motion(token: string): number {
-    const root = document.documentElement;
-    if (root.classList.contains('no-anim') || matchMedia('(prefers-reduced-motion: reduce)').matches) return 0;
-    return parseFloat(getComputedStyle(root).getPropertyValue(token)) || 0;
-  }
-
-  function settling(id: string): boolean {
-    return busy.endsWith(`:${id}`);
-  }
 
   const onlineFriends = $derived(
     page.friends.filter((f) => {
@@ -207,37 +196,26 @@
 </script>
 
 {#snippet incomingCards()}
-  <div class="cards">
-    {#each page.incoming as request (request.id)}
-      <div
-        class="request"
-        class:settling={settling(request.id)}
-        in:fly={{ y: '0.8rem', duration: motion('--dur-panel') }}
-        out:fade={{ duration: motion('--dur') }}
+  <RequestCards users={page.incoming} {busy} reserve={incomingReserve} stats={incomingStats} onopen={openProfile}>
+    {#snippet actions(request)}
+      <Button
+        variant="primary"
+        size="sm"
+        disabled={!!busy}
+        onclick={() =>
+          run(`accept:${request.id}`, () => accept(request.id), msg('social.acceptRequestFailed'), msg('social.friendsNowFriends'))}
       >
-        <FriendRow user={request} variant="card" reserve={incomingReserve} stats={incomingStats(request)} onopen={() => openProfile(request)}>
-          {#snippet actions()}
-            <Button
-              variant="primary"
-              size="sm"
-              disabled={!!busy}
-              onclick={() =>
-                run(`accept:${request.id}`, () => accept(request.id), msg('social.acceptRequestFailed'), msg('social.friendsNowFriends'))}
-            >
-              {msg('social.relationIncoming')}
-            </Button>
-            <Button
-              size="sm"
-              disabled={!!busy}
-              onclick={() => run(`decline:${request.id}`, () => decline(request.id), msg('social.declineRequestFailed'))}
-            >
-              {msg('social.declineButton')}
-            </Button>
-          {/snippet}
-        </FriendRow>
-      </div>
-    {/each}
-  </div>
+        {msg('social.relationIncoming')}
+      </Button>
+      <Button
+        size="sm"
+        disabled={!!busy}
+        onclick={() => run(`decline:${request.id}`, () => decline(request.id), msg('social.declineRequestFailed'))}
+      >
+        {msg('social.declineButton')}
+      </Button>
+    {/snippet}
+  </RequestCards>
 {/snippet}
 
 <Page>
@@ -330,29 +308,18 @@
 
         {#if page.outgoing.length > 0}
           <h4 class="eyebrow">{msg('social.friendsSentHeading')}</h4>
-          <div class="cards">
-            {#each page.outgoing as request (request.id)}
-              <div
-                class="request"
-                class:settling={settling(request.id)}
-                in:fly={{ y: '0.8rem', duration: motion('--dur-panel') }}
-                out:fade={{ duration: motion('--dur') }}
+          <RequestCards users={page.outgoing} {busy} reserve={outgoingReserve} stats={outgoingStats} onopen={openProfile}>
+            {#snippet actions(request)}
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={!!busy}
+                onclick={() => run(`cancel:${request.id}`, () => decline(request.id), msg('social.cancelRequestFailed'))}
               >
-                <FriendRow user={request} variant="card" reserve={outgoingReserve} stats={outgoingStats(request)} onopen={() => openProfile(request)}>
-                  {#snippet actions()}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={!!busy}
-                      onclick={() => run(`cancel:${request.id}`, () => decline(request.id), msg('social.cancelRequestFailed'))}
-                    >
-                      {msg('social.cancelRequestButton')}
-                    </Button>
-                  {/snippet}
-                </FriendRow>
-              </div>
-            {/each}
-          </div>
+                {msg('social.cancelRequestButton')}
+              </Button>
+            {/snippet}
+          </RequestCards>
         {/if}
       {/if}
 
@@ -370,29 +337,18 @@
         description={msg('social.friendsEmptyBlockedDesc')}
       />
     {:else}
-      <div class="cards">
-        {#each blocked as user (user.id)}
-          <div
-            class="request"
-            class:settling={settling(user.id)}
-            in:fly={{ y: '0.8rem', duration: motion('--dur-panel') }}
-            out:fade={{ duration: motion('--dur') }}
+      <RequestCards users={blocked} {busy} reserve={blockedReserve}>
+        {#snippet actions(user)}
+          <Button
+            size="sm"
+            disabled={!!busy}
+            onclick={() =>
+              run(`unblock:${user.id}`, () => unblock(user.id), msg('social.unblockFailed'), msg('social.userUnblocked'))}
           >
-            <FriendRow {user} variant="card" reserve={blockedReserve}>
-              {#snippet actions()}
-                <Button
-                  size="sm"
-                  disabled={!!busy}
-                  onclick={() =>
-                    run(`unblock:${user.id}`, () => unblock(user.id), msg('social.unblockFailed'), msg('social.userUnblocked'))}
-                >
-                  {msg('social.unblockButton')}
-                </Button>
-              {/snippet}
-            </FriendRow>
-          </div>
-        {/each}
-      </div>
+            {msg('social.unblockButton')}
+          </Button>
+        {/snippet}
+      </RequestCards>
     {/if}
   {/if}
 
@@ -425,14 +381,6 @@
     color: var(--accent-text);
   }
 
-  .request {
-    transition: opacity var(--dur) var(--ease);
-  }
-
-  .request.settling {
-    opacity: 0.55;
-  }
-
   .eyebrow-dot {
     width: 0.8rem;
     height: 0.8rem;
@@ -443,12 +391,6 @@
   .eyebrow-count {
     font-variant-numeric: tabular-nums;
     color: var(--text-2);
-  }
-
-  .cards {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
   }
 
   .eyebrow {

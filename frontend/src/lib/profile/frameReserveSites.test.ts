@@ -21,21 +21,32 @@ const friendRow = friendsScreen['FriendRow.svelte'];
 
 describe('lists that stack avatars give every row the same frame reserve', () => {
   it('passes a reserve to every FriendRow on the friends page', () => {
-    expect(Object.keys(friendsScreen).sort()).toEqual(['AddFriendModal.svelte', 'FriendCodeCard.svelte', 'FriendRow.svelte', 'Friends.svelte', 'FriendsList.svelte']);
+    expect(Object.keys(friendsScreen).sort()).toEqual([
+      'AddFriendModal.svelte',
+      'FriendCodeCard.svelte',
+      'FriendRow.svelte',
+      'Friends.svelte',
+      'FriendsList.svelte',
+      'RequestCards.svelte',
+    ]);
     const rows = Object.fromEntries(Object.entries(friendsScreen).map(([file, source]) => [file, tags(source, 'FriendRow')]));
     expect(Object.fromEntries(Object.entries(rows).map(([file, found]) => [file, found.length]))).toEqual({
       'AddFriendModal.svelte': 0,
       'FriendCodeCard.svelte': 0,
       'FriendRow.svelte': 0,
-      'Friends.svelte': 3,
+      'Friends.svelte': 0,
       'FriendsList.svelte': 2,
+      'RequestCards.svelte': 1,
     });
-    for (const row of rows['Friends.svelte']) expect(row).toMatch(/reserve=\{\w+Reserve\}/);
-    // A part hands on the reserve the page gives it, and the page gives one computed over a whole list.
-    for (const row of rows['FriendsList.svelte']) expect(row).toContain('{reserve}');
-    const mounts = tags(friends, 'FriendsList');
-    expect(mounts).toHaveLength(1);
-    expect(mounts[0]).toContain('reserve={listReserve}');
+    // A part hands on the reserve the page gives it, and the page gives one computed over a whole list:
+    // the friends of the tab, the incoming and the sent requests, the blocked users.
+    for (const row of [...rows['FriendsList.svelte'], ...rows['RequestCards.svelte']]) expect(row).toContain('{reserve}');
+    expect(tags(friends, 'FriendsList').map((tag) => /reserve=\{(\w+)\}/.exec(tag)?.[1])).toEqual(['listReserve']);
+    expect(tags(friends, 'RequestCards').map((tag) => /reserve=\{(\w+)\}/.exec(tag)?.[1])).toEqual([
+      'incomingReserve',
+      'outgoingReserve',
+      'blockedReserve',
+    ]);
   });
 
   it('computes the friends page reserves over whole lists, not the search result', () => {
