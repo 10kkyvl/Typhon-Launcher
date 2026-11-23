@@ -27,7 +27,9 @@ export interface MeterSegment {
   sizeUnknown?: boolean;
 }
 
-export type MeterSize = { kind: 'exact'; bytes: number } | { kind: 'atLeast'; bytes: number } | { kind: 'unknown' };
+/** A size measured, only a lower bound (a segment not fully measured), only an upper bound (the space
+ *  left beside such a segment), or not known at all. */
+export type MeterSize = { kind: 'exact'; bytes: number } | { kind: 'atLeast'; bytes: number } | { kind: 'atMost'; bytes: number } | { kind: 'unknown' };
 
 /** The key of the part the meter adds for space no segment accounts for. */
 export const METER_OTHER = 'meter:other';
@@ -108,11 +110,12 @@ export function meter(segments: readonly MeterSegment[], total: number | null | 
   });
 
   // The track is the free space: what neither the segments nor the measured free space account for
-  // is a part of its own, or it would be drawn as free. Its size is known only when every segment's is.
+  // is a part of its own, or it would be drawn as free. Its size is exact only when every segment's
+  // is; beside a size not fully measured, that segment may take some of it: at most the gap.
   const gap = known !== null && !overflow && free !== undefined && measurable(free) ? known - used - free : 0;
   if (gap > 0) {
     const exact = sizes.every((size) => size.kind === 'exact');
-    parts.push({ kind: 'other', id: METER_OTHER, key: METER_OTHER, label: '', tone: 'other', size: exact ? { kind: 'exact', bytes: gap } : { kind: 'unknown' }, share: gap / against });
+    parts.push({ kind: 'other', id: METER_OTHER, key: METER_OTHER, label: '', tone: 'other', size: { kind: exact ? 'exact' : 'atMost', bytes: gap }, share: gap / against });
   }
 
   let freeSize: MeterSize | null;
@@ -190,8 +193,13 @@ function unique(parts: MeterPart[]): MeterPart[] {
   });
 }
 
-/** A size in words: the formatted bytes, a lower bound, or that it is unknown. */
-export function sizeWords(size: MeterSize, format: (bytes: number) => string, words: { atLeast: (size: string) => string; unknown: string }): string {
+/** A size in words: the formatted bytes, a lower or an upper bound, or that it is unknown. */
+export function sizeWords(
+  size: MeterSize,
+  format: (bytes: number) => string,
+  words: { atLeast: (size: string) => string; atMost: (size: string) => string; unknown: string },
+): string {
   if (size.kind === 'unknown') return words.unknown;
-  return size.kind === 'atLeast' ? words.atLeast(format(size.bytes)) : format(size.bytes);
+  if (size.kind === 'atLeast') return words.atLeast(format(size.bytes));
+  return size.kind === 'atMost' ? words.atMost(format(size.bytes)) : format(size.bytes);
 }

@@ -130,6 +130,25 @@ describe('DiskMeter', () => {
     );
   });
 
+  it('says other files beside a lower bound as an upper bound, drawn and filled, in the legend and the alternative', () => {
+    const { container, getByRole } = renderDom(DiskMeter, {
+      label: 'Диск E',
+      segments: [{ key: 'games', label: 'Игры', bytes: 600 * GB, tone: 'game', sizeUnknown: true }],
+      total: 1000 * GB,
+      free: 300 * GB,
+    });
+    expect(getByRole('img').getAttribute('aria-label')).toBe(
+      `Диск E: Игры: не меньше ${bytesSize(600 * GB)}; Другие файлы: не больше ${bytesSize(100 * GB)}; Свободно ${bytesSize(300 * GB)} из ${bytesSize(1000 * GB)}`,
+    );
+    expect(legendLines(getByRole('list'))[1]).toBe(words(`Другие файлы не больше ${bytesSize(100 * GB)}`));
+    expect(parts(container).map((p) => [p.dataset.tone, parseFloat(p.style.flexBasis)])).toEqual([
+      ['game', 60],
+      ['other', 10],
+    ]);
+    const swatches = [...container.querySelectorAll('.legend .swatch')];
+    expect(swatches[1].classList.contains('hollow')).toBe(false);
+  });
+
   // Bad input is said, not thrown: two segments under one key are both drawn, listed and pickable.
   it('draws and lists two segments that share a key, and reports that key for either', async () => {
     const onpick = vi.fn();

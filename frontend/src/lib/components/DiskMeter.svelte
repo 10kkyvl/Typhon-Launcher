@@ -63,7 +63,11 @@
   // The fold's entry in the legend, opened to list the segments folded into it.
   let open = $state(false);
 
-  const words = $derived({ atLeast: (size: string) => $t('common.meterAtLeast', { size }), unknown: $t('common.meterSizeUnknown') });
+  const words = $derived({
+    atLeast: (size: string) => $t('common.meterAtLeast', { size }),
+    atMost: (size: string) => $t('common.meterAtMost', { size }),
+    unknown: $t('common.meterSizeUnknown'),
+  });
   const said = (size: MeterSize) => sizeWords(size, bytesSize, words);
   function nameOf(part: MeterPart): string {
     if (part.kind === 'other') return $t('common.meterOther');

@@ -281,9 +281,17 @@ describe('space no segment accounts for', () => {
     expect(m.free).toEqual({ kind: 'exact', bytes: 300 });
   });
 
-  it('is of unknown size when a segment is only a lower bound, and still drawn: it is not free', () => {
+  // A segment that is only a lower bound may take some of the gap: what is left for other files is at
+  // most the gap. That space is still known not to be free, so it is drawn at the gap's width.
+  it('is an upper bound beside a segment that is only a lower bound, and still drawn: it is not free', () => {
     const m = meter([seg('games', 600, { sizeUnknown: true })], 1000, 300);
-    expect(kinds(m)[1]).toEqual(['other', METER_OTHER, { kind: 'unknown' }, 0.1]);
+    expect(kinds(m)[1]).toEqual(['other', METER_OTHER, { kind: 'atMost', bytes: 100 }, 0.1]);
+    expect(m.drawn.map((p) => p.key)).toEqual(['games', METER_OTHER]);
+  });
+
+  it('is an upper bound beside a segment of unknown size', () => {
+    const m = meter([seg('games', 600), seg('new', 0, { sizeUnknown: true })], 1000, 300);
+    expect(kinds(m)[2]).toEqual(['other', METER_OTHER, { kind: 'atMost', bytes: 100 }, 0.1]);
   });
 
   it('is not added when the segments and the free space fill the total', () => {
@@ -299,11 +307,12 @@ describe('space no segment accounts for', () => {
 
 describe('sizes in words', () => {
   const format = (bytes: number) => `${bytes} B`;
-  const words = { atLeast: (size: string) => `at least ${size}`, unknown: 'size unknown' };
+  const words = { atLeast: (size: string) => `at least ${size}`, atMost: (size: string) => `at most ${size}`, unknown: 'size unknown' };
 
-  it('writes an exact size, a lower bound and an unknown size', () => {
+  it('writes an exact size, a lower bound, an upper bound and an unknown size', () => {
     expect(sizeWords({ kind: 'exact', bytes: 5 }, format, words)).toBe('5 B');
     expect(sizeWords({ kind: 'atLeast', bytes: 5 }, format, words)).toBe('at least 5 B');
+    expect(sizeWords({ kind: 'atMost', bytes: 5 }, format, words)).toBe('at most 5 B');
     expect(sizeWords({ kind: 'unknown' }, format, words)).toBe('size unknown');
   });
 });
