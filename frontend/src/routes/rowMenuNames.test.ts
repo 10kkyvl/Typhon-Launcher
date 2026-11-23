@@ -12,7 +12,7 @@ import { msg } from '../lib/i18n';
 import { downloads } from '../lib/stores/downloads';
 import { libraryGames } from '../lib/stores/library';
 import { friendsPage } from '../lib/stores/social';
-import { sources } from '../lib/stores/sources';
+import { sources, sourcesLoaded } from '../lib/stores/sources';
 import { authState } from '../lib/stores/user';
 import type { Download } from '../lib/services/downloads';
 import type { LibraryGame } from '../lib/services/library';
@@ -42,6 +42,7 @@ afterEach(() => {
   libraryGames.set([]);
   friendsPage.set({ friends: [], incoming: [], outgoing: [] });
   sources.set([]);
+  sourcesLoaded.set(false);
   authState.set('bootstrapping');
 });
 
@@ -59,6 +60,7 @@ describe('row menu buttons name their row', () => {
   });
 
   it('Sources: each source', () => {
+    sourcesLoaded.set(true);
     sources.set(
       ['Main feed', 'Mirror'].map(
         (name, i) =>

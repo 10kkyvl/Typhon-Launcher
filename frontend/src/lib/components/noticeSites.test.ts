@@ -264,8 +264,11 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
     ['danger', true],
   ],
-  // Where sources are fetched: a standing fact of the page.
-  'routes/sources/Sources.svelte': [['info', false]],
+  // Where sources are fetched: a standing fact of the page; a failed first read of the list, with Retry.
+  'routes/sources/Sources.svelte': [
+    ['info', false],
+    ['danger', true],
+  ],
   'routes/stats/Stats.svelte': [
     ['danger', true],
     ['danger', true],

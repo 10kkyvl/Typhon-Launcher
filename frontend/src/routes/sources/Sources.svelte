@@ -15,7 +15,17 @@
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import { route } from '../../lib/stores/router';
   import { removeSourcePrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
-  import { refresh, refreshAll, refreshingAll, remove, sources, toggle } from '../../lib/stores/sources';
+  import {
+    refresh,
+    refreshAll,
+    refreshingAll,
+    reloadSources,
+    remove,
+    sources,
+    sourcesLoaded,
+    sourcesLoadError,
+    toggle,
+  } from '../../lib/stores/sources';
   import { needsSourcesNotice } from '../../lib/stores/sourcesNotice';
   import { sourceProgress } from '../../lib/stores/sourceProgress';
   import { overallPercent } from '../../lib/sources/progress';
@@ -30,6 +40,11 @@
   let detailsId = $state<string | null>(null);
   let detailsReleaseId = $state<string | null>(null);
   let statusFilter = $state('all');
+  let retrying = $state(false);
+  let list = $state<HTMLElement>();
+
+  const loadFailed = $derived(!$sourcesLoaded && $sourcesLoadError != null);
+  const loading = $derived(!$sourcesLoaded && !loadFailed);
 
   const progressList = $derived(Object.values($sourceProgress));
   const allPercent = $derived(Math.round(overallPercent(progressList)));
@@ -125,7 +140,20 @@
     <Notice tone="info" announce={false}>{msg('transfers.sourcesNotice')}</Notice>
   </div>
 
-  {#if $sources.length === 0}
+  {#if loadFailed || retrying}
+    <!-- On success focus that was on Retry goes to the first control of the list, else the page heading. -->
+    <div class="load-failed">
+      <Notice tone="danger" bind:retrying retry={{ label: msg('common.retry'), run: reloadSources, within: () => list }}>
+        {sourceErrorText($sourcesLoadError, msg('transfers.sourcesLoadFailed'))}
+      </Notice>
+    </div>
+  {/if}
+
+  {#if !$sourcesLoaded}
+    {#if loading}
+      <EmptyState level={2} title={msg('transfers.sourcesLoading')} />
+    {/if}
+  {:else if $sources.length === 0}
     <EmptyState level={2}
       title={msg('transfers.sourcesEmptyTitle')}
       description={msg('transfers.sourcesEmptyDescription')}
@@ -147,7 +175,7 @@
       <EmptyState level={2} title={msg('transfers.sourcesEmptyFilteredTitle')} description={msg('transfers.sourcesEmptyFilteredDescription')} />
     {:else}
       {#key statusFilter}
-      <div class="table">
+      <div class="table" data-source-list bind:this={list}>
         <div class="thead">
           <span class="th">{msg('transfers.sourcesColName')}</span>
           <span class="th">{msg('transfers.sourcesColStatus')}</span>
@@ -182,6 +210,10 @@
 
 <style>
   .fetched-here {
+    margin-bottom: var(--space-5);
+  }
+
+  .load-failed {
     margin-bottom: var(--space-5);
   }
 
@@ -225,7 +257,11 @@
   }
 
   @media (max-width: 1300px) {
-    .table {
+    .load-failed {
+    margin-bottom: var(--space-5);
+  }
+
+  .table {
       --source-columns: minmax(20rem, 1.6fr) 15rem 10rem 12rem 4rem;
     }
 

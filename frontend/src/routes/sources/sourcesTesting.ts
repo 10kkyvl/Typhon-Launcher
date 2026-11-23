@@ -7,7 +7,7 @@ import type { Source } from '../../lib/services/sources';
 import { resetHistory } from '../../lib/stores/router';
 import { settings } from '../../lib/stores/settings';
 import { sourceProgress } from '../../lib/stores/sourceProgress';
-import { refreshingAll, sources } from '../../lib/stores/sources';
+import { refreshingAll, sources, sourcesLoaded, sourcesLoadError } from '../../lib/stores/sources';
 import { toasts } from '../../lib/stores/toasts';
 
 // Fixtures of the Sources page's dom tests. Each test file mocks the services itself (vi.mock is
@@ -73,8 +73,9 @@ export function acceptNotice(accepted: boolean): void {
   settings.set({ sourcesNoticeAccepted: accepted } as Settings);
 }
 
-/** The page's own container, as App mounts it. */
-export function mountPoint(): HTMLDivElement {
+/** The page's own container, as App mounts it; `read`: the store has read the list (what `sources` holds is all). */
+export function mountPoint(read = true): HTMLDivElement {
+  sourcesLoaded.set(read);
   // jsdom has no ResizeObserver; the status filter measures its plate with one.
   vi.stubGlobal(
     'ResizeObserver',
@@ -94,6 +95,8 @@ export function mountPoint(): HTMLDivElement {
 export function resetScreen(): void {
   vi.unstubAllGlobals();
   sources.set([]);
+  sourcesLoaded.set(false);
+  sourcesLoadError.set(null);
   refreshingAll.set(false);
   sourceProgress.set({});
   toasts.set([]);

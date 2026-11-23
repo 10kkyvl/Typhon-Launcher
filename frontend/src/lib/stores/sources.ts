@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store';
+import { get, writable } from 'svelte/store';
 import { listenFirst } from './listenFirst';
 import { inWails } from '../services/backend';
 import {
@@ -19,6 +19,10 @@ import { toast } from './toasts';
 export { errorMessage, sourceErrorText };
 
 export const sources = writable<Source[]>([]);
+/** Until a whole list arrives, `sources` holds only what events said: not the list of sources. */
+export const sourcesLoaded = writable(false);
+/** Why the first list could not be read; null once a list has arrived. */
+export const sourcesLoadError = writable<unknown>(null);
 export const refreshingAll = writable(false);
 
 interface SourceErrorEvent {
@@ -62,16 +66,59 @@ function upsert(item: Source) {
   });
 }
 
-async function reload() {
-  sources.set(await listSources());
+function received(list: Source[]) {
+  sources.set(list);
+  sourcesLoaded.set(true);
+  sourcesLoadError.set(null);
 }
 
-export async function initSources() {
-  const { on, load } = listenFirst();
+/** Reads the whole list again after an action; a failure is the action's to report. */
+async function reload() {
+  received(await listSources());
+}
+
+// Every source event Go sent: a list asked for before one of them may predate it.
+let heard = 0;
+
+/** Reads the list; answers whether a list is there. A failure before any list is kept as state. */
+async function readList(read: () => Promise<Source[]>): Promise<boolean> {
+  try {
+    received(await read());
+  } catch (err) {
+    if (!get(sourcesLoaded)) sourcesLoadError.set(err);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Reads the list again, as the page's Retry after a failed first read does; answers whether a list is
+ * there. An event that arrives meanwhile gets the list asked once more, as the first read does.
+ */
+export function reloadSources(): Promise<boolean> {
+  return readList(async () => {
+    const before = heard;
+    const list = await listSources();
+    return heard === before ? list : listSources();
+  });
+}
+
+/**
+ * Subscribes first, then reads the list; never rejects: a failed first read is `sourcesLoadError`.
+ * Events before a list arrived still go into `sources` (a download row names its source from there);
+ * the whole list replaces them when it comes.
+ */
+export async function initSources(): Promise<void> {
+  const first = listenFirst();
   if (!inWails) {
-    await reload();
+    await readList(listSources);
     return;
   }
+  const on: typeof first.on = (name, handler) =>
+    first.on(name, (event) => {
+      heard += 1;
+      handler(event);
+    });
 
   on('source:updated', (event) => {
     const item = event.data as Source;
@@ -95,7 +142,7 @@ export async function initSources() {
     const { count } = event.data as ReleaseBatchEvent;
     if (count > 0) toast(msg('state.sourcesNewEntries', { count }));
   });
-  await load(reload);
+  await readList(() => first.load(listSources));
 }
 
 export async function refresh(id: string) {

@@ -4,7 +4,7 @@ import { msg } from '../../lib/i18n';
 import type { Source } from '../../lib/services/sources';
 import { sourceErrorText } from '../../lib/sources/sourceErrors';
 import { sourceProgress } from '../../lib/stores/sourceProgress';
-import { refreshingAll, sources } from '../../lib/stores/sources';
+import { refreshingAll, sources, sourcesLoaded } from '../../lib/stores/sources';
 import { ruleBody, styleOf } from '../../lib/testing/css';
 import { user } from '../../lib/testing/dom';
 import { describedControls, hintOnFocus } from '../../lib/testing/hints';
@@ -31,6 +31,7 @@ beforeEach(() => {
     unobserve() {}
     disconnect() {}
   });
+  sourcesLoaded.set(true);
   app = document.createElement('div');
   app.id = 'app';
   document.body.append(app);
@@ -39,6 +40,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   sources.set([]);
+  sourcesLoaded.set(false);
   document.body.replaceChildren();
 });
 

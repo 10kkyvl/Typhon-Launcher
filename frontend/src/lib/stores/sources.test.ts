@@ -45,6 +45,8 @@ async function load() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // An answer one test queued and never used must not reach the next.
+  for (const fn of Object.values(api)) fn.mockReset();
   seeded = [];
   api.listSources.mockImplementation(async () => seeded);
 });
@@ -96,6 +98,86 @@ describe('source events', () => {
     handlers['release:added']({ data: { sourceId: 'a', count: 7 } });
     expect(toast).toHaveBeenCalledTimes(1);
     expect(String(toast.mock.calls[0][0])).toContain('7');
+  });
+});
+
+// R1: a first read that failed is kept as state, so the screen can say so instead of "no sources yet".
+describe('the first read of the list', () => {
+  it('R1: says the list is read once it arrived, empty included', async () => {
+    const { store } = await load();
+
+    expect(get(store.sourcesLoaded)).toBe(true);
+    expect(get(store.sourcesLoadError)).toBeNull();
+  });
+
+  it('R1: keeps a failed first read as the reason, without rejecting, and with the events still heard', async () => {
+    api.listSources.mockRejectedValueOnce(new Error('service not ready'));
+    const { store } = await load();
+
+    expect(get(store.sourcesLoaded)).toBe(false);
+    expect(String(get(store.sourcesLoadError))).toContain('service not ready');
+    expect(Object.keys(handlers)).toContain('source:updated');
+  });
+
+  it('R1: an event before any list arrived is kept, and the list is still not read', async () => {
+    api.listSources.mockRejectedValueOnce(new Error('service not ready'));
+    const { store } = await load();
+
+    handlers['source:updated']({ data: source('a', 'Alpha') });
+
+    expect(get(store.sources).map((item) => item.id)).toEqual(['a']);
+    expect(get(store.sourcesLoaded)).toBe(false);
+  });
+
+  it('R1: a reload after the failure reads the whole list, which replaces what events left', async () => {
+    api.listSources.mockRejectedValueOnce(new Error('service not ready'));
+    const { store } = await load();
+    handlers['source:updated']({ data: source('a', 'Alpha') });
+    seeded = [source('b'), source('c')];
+
+    expect(await store.reloadSources()).toBe(true);
+
+    expect(get(store.sources).map((item) => item.id)).toEqual(['b', 'c']);
+    expect(get(store.sourcesLoaded)).toBe(true);
+    expect(get(store.sourcesLoadError)).toBeNull();
+  });
+
+  it('R1: a reload that fails again answers false and keeps the newest reason', async () => {
+    api.listSources.mockRejectedValueOnce(new Error('service not ready'));
+    const { store } = await load();
+    api.listSources.mockRejectedValueOnce(new Error('still not ready'));
+
+    expect(await store.reloadSources()).toBe(false);
+
+    expect(get(store.sourcesLoaded)).toBe(false);
+    expect(String(get(store.sourcesLoadError))).toContain('still not ready');
+  });
+
+  it('R1: an event that arrives while the reload reads gets the list read once more', async () => {
+    api.listSources.mockRejectedValueOnce(new Error('service not ready'));
+    const { store } = await load();
+    api.listSources.mockImplementationOnce(async () => {
+      handlers['source:updated']({ data: source('b') });
+      return [source('a')];
+    });
+    seeded = [source('a'), source('b')];
+
+    expect(await store.reloadSources()).toBe(true);
+
+    expect(api.listSources).toHaveBeenCalledTimes(3);
+    expect(get(store.sources).map((item) => item.id)).toEqual(['a', 'b']);
+  });
+
+  it('R1: a list an action read after the failure counts as read', async () => {
+    api.listSources.mockRejectedValueOnce(new Error('service not ready'));
+    api.refreshSource.mockResolvedValueOnce({ entries: 1, added: 0, review: 0 });
+    const { store } = await load();
+    seeded = [source('a')];
+
+    await store.refresh('a');
+
+    expect(get(store.sourcesLoaded)).toBe(true);
+    expect(get(store.sourcesLoadError)).toBeNull();
   });
 });
 
