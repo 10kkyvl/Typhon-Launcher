@@ -395,8 +395,8 @@ describe('History: clearing', () => {
     expect(focused === document.body || (focused instanceof HTMLButtonElement && focused.disabled)).toBe(true);
   });
 
-  // D1: the store says the failure and swallows it, so the screen says "cleared" as well and closes the dialog.
-  it('D1: says a failed clear twice, once as a success, and closes the dialog', async () => {
+  // D1: a failed clear is said once, in the dialog, which stays open for another try.
+  it('D1: keeps the list and the dialog when Go could not clear, says why there, and nothing else', async () => {
     history.set(RECORDS);
     vi.mocked(clearRequest).mockRejectedValue(new Error('typhon:history.clear_failed: read-only disk'));
     const { user } = renderDom(History);
@@ -404,11 +404,10 @@ describe('History: clearing', () => {
     await user.click(clearButton());
     await user.click(within(dialog()).getByRole('button', { name: msg('transfers.historyClearAction') }));
 
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(within(dialog()).getByRole('alert').textContent).toContain(msg('history.clear_failed')));
+    expect(historyErrorText(new Error('typhon:history.clear_failed'))).toBe(msg('history.clear_failed'));
+    expect(within(dialog()).getByRole('button', { name: msg('common.retry') })).toBeTruthy();
     expect(rows()).toHaveLength(12);
-    expect(toastsSaid()).toEqual([
-      ['danger', historyErrorText(new Error('typhon:history.clear_failed'))],
-      ['success', msg('transfers.historyCleared')],
-    ]);
+    expect(toastsSaid()).toEqual([]);
   });
 });

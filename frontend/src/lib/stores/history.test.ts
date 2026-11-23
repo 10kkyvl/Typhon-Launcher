@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import type { Record, Status } from '../services/history';
+import { msg } from '../i18n';
 
 const handlers: { [name: string]: (event: { data: unknown }) => void } = {};
 
@@ -117,26 +118,22 @@ describe('clearing the history', () => {
     expect(toast).not.toHaveBeenCalled();
   });
 
-  it('keeps the records and tells the player when the backend could not clear them', async () => {
+  it('keeps the records and hands the failure to the caller, saying nothing itself', async () => {
     seeded = [record('a', '2026-09-01T10:00:00Z')];
-    clear.mockRejectedValueOnce(new Error('typhon:history.clear_failed: disk is read only'));
+    const failure = new Error('typhon:history.clear_failed: disk is read only');
+    clear.mockRejectedValueOnce(failure);
     const { store, toast } = await load();
 
-    await store.clearHistory();
+    await expect(store.clearHistory()).rejects.toBe(failure);
 
     expect(get(store.history)).toHaveLength(1);
-    expect(toast).toHaveBeenCalledTimes(1);
-    expect(toast.mock.calls[0][1]).toBe('danger');
-    expect(String(toast.mock.calls[0][0])).not.toContain('typhon:');
+    expect(toast).not.toHaveBeenCalled();
   });
 
-  it('gives a generic message for a failure without a code', async () => {
-    clear.mockRejectedValueOnce(new Error('boom'));
-    const { store, toast } = await load();
+  it('words a failure by its code, and a failure without one generically', async () => {
+    const { store } = await load();
 
-    await store.clearHistory();
-
-    expect(toast).toHaveBeenCalledTimes(1);
-    expect(String(toast.mock.calls[0][0])).not.toContain('boom');
+    expect(store.historyErrorText(new Error('typhon:history.clear_failed: disk is read only'))).toBe(msg('history.clear_failed'));
+    expect(store.historyErrorText(new Error('boom'))).toBe(msg('errLibrary.historyErrFallback'));
   });
 });

@@ -112,13 +112,10 @@
     return kind === Kind.KindInstallFailed || kind === Kind.KindUpdateFailed;
   }
 
+  // A refusal rejects: the dialog stays open and says why (errorText).
   async function confirmClear() {
-    try {
-      await clearHistory();
-      toast(msg('transfers.historyCleared'), 'success');
-    } catch (err) {
-      toast(historyErrorText(err), 'danger');
-    }
+    await clearHistory();
+    toast(msg('transfers.historyCleared'), 'success');
   }
 </script>
 
@@ -187,7 +184,7 @@
   {/if}
 
   {#if clearOpen}
-    <ConfirmModal prompt={clearHistoryPrompt()} onconfirm={confirmClear} onclose={() => (clearOpen = false)} />
+    <ConfirmModal prompt={clearHistoryPrompt()} onconfirm={confirmClear} errorText={(err) => historyErrorText(err)} onclose={() => (clearOpen = false)} />
   {/if}
 </Page>
 

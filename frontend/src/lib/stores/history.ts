@@ -10,7 +10,6 @@ import {
 } from '../services/history';
 import { errorCode, msg } from '../i18n';
 import type { MessageKey } from '../i18n';
-import { toast } from './toasts';
 
 const REASONS: { [code: string]: MessageKey } = {
   'history.clear_failed': 'history.clear_failed',
@@ -54,11 +53,8 @@ export async function initHistory() {
   historyStatus.set(await load(getHistoryStatus));
 }
 
-export async function clearHistory() {
-  try {
-    await clearHistoryRequest();
-    history.set([]);
-  } catch (err) {
-    toast(historyErrorText(err), 'danger');
-  }
+/** Asks Go to clear the journal; a refusal is the caller's to say (the confirmation shows it). */
+export async function clearHistory(): Promise<void> {
+  await clearHistoryRequest();
+  history.set([]);
 }
