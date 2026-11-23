@@ -10,6 +10,7 @@
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import SettingsRow from '../../lib/components/SettingsRow.svelte';
   import Slider from '../../lib/components/Slider.svelte';
+  import TextLink from '../../lib/components/TextLink.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
   import { playtime } from '../../lib/utils/format';
   import ShowcaseRow from './ShowcaseRow.svelte';
@@ -55,6 +56,26 @@
     { key: 'new', label: 'Just installed, not measured yet', bytes: 0, tone: 'game-3', sizeUnknown: true },
     { key: 'empty', label: 'An empty folder', bytes: 0, tone: 'game' },
   ];
+
+  // Three small games on a 2 TB drive: none takes a hairline of the bar, so the largest stays beside
+  // the fold of the other two.
+  const TB = 1024 * GB;
+  const ALL_TINY: MeterSegment[] = [
+    { key: 'celeste', label: 'Celeste', bytes: 1 * GB, tone: 'game' },
+    { key: 'hades', label: 'Hades', bytes: 5 * GB, tone: 'game-2' },
+    { key: 'inside', label: 'Inside', bytes: 3 * GB, tone: 'game-3' },
+  ];
+  const BOUND_GAME: MeterSegment[] = [{ key: 'games', label: 'Games (still being measured)', bytes: 420 * GB, tone: 'game', sizeUnknown: true }];
+  // A hundred games on the full bar: the smallest fold, and the fold's entry in the legend opens.
+  const HUNDRED: MeterSegment[] = Array.from({ length: 100 }, (_, index) => ({
+    key: `lib-${index}`,
+    label: `Game ${index + 1}`,
+    bytes: (index < 40 ? 20 + (index % 5) * 6 : 0.2 + (index % 4) * 0.1) * GB,
+    tone: gameTone(index),
+  }));
+  let tinyPicked = $state('none yet');
+  let hundredPicked = $state('none yet');
+  let why = $state(false);
 
   let picked = $state('none yet');
   let folded = $state('none yet');
@@ -108,8 +129,34 @@
     <span class="picked">Picked: {picked}</span>
   </ShowcaseRow>
 
-  <ShowcaseRow caption="Overflow: the segments sum over the total; drawn in proportion to each other, no free space drawn or said, the words say so" stack>
+  <ShowcaseRow caption="Overflow: the segments sum over the total; drawn in proportion to each other, free space not measured so neither drawn nor said, the words say so" stack>
     <DiskMeter label="Drive D:" segments={OVERFLOW} total={TOTAL} />
+  </ShowcaseRow>
+
+  <ShowcaseRow caption="Overflow with a measured free space: 600 GB of games and 500 GB free on a 1,000 GB drive; the free space is said and drawn as the track the parts leave" stack>
+    <div data-testid="kit-meter-overflow-free">
+      <DiskMeter label="Drive H:" segments={GAMES.slice(0, 1).map((game) => ({ ...game, bytes: 600 * GB }))} total={TOTAL} free={500 * GB} />
+    </div>
+  </ShowcaseRow>
+
+  <ShowcaseRow caption="Every game too small to draw: three games on a 2 TB drive; the largest stays (a hairline) beside the fold of the other two, each pickable" stack>
+    <div data-testid="kit-meter-tiny">
+      <DiskMeter label="Drive T:" segments={ALL_TINY} total={2 * TB} free={1948 * GB} onpick={(key) => (tinyPicked = key)} foldLabel={(count) => `${count} more games`} />
+    </div>
+    <span class="picked">Picked: {tinyPicked}</span>
+  </ShowcaseRow>
+
+  <ShowcaseRow caption="A game still being measured beside other files: its size a lower bound, the space beside it at most the gap, drawn filled" stack>
+    <div data-testid="kit-meter-at-most">
+      <DiskMeter label="Drive I:" segments={BOUND_GAME} total={TOTAL} free={500 * GB} />
+    </div>
+  </ShowcaseRow>
+
+  <ShowcaseRow caption="A hundred games on the full bar: the fold's entry in the legend opens to list the folded games, each a pick" stack>
+    <div data-testid="kit-meter-fold-open">
+      <DiskMeter label="Library drive" segments={HUNDRED} total={2 * TB} free={600 * GB} onpick={(key) => (hundredPicked = key)} foldLabel={(count) => `${count} more games`} />
+    </div>
+    <span class="picked">Picked: {hundredPicked}</span>
   </ShowcaseRow>
 
   <ShowcaseRow caption="Space no segment accounts for, with the free space measured: drawn and listed as other files, not as free" stack>
@@ -168,6 +215,15 @@
       <SettingsRow label="In-game overlay" hint="A panel over the running game" disabledReason="Not available in the portable build" testid="kit-row-disabled">
         {#snippet children({ labelId, hintId, disabled })}
           <Toggle checked={false} labelledby={labelId} describedby={hintId} {disabled} onchange={() => {}} />
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow label="Record gameplay" hint="Saves a video of the game" disabledReason="The recorder is not installed" testid="kit-row-disabled-link">
+        {#snippet children({ labelId, hintId, disabled })}
+          <Toggle checked labelledby={labelId} describedby={hintId} {disabled} onchange={() => {}} />
+        {/snippet}
+        {#snippet below()}
+          <TextLink tone="muted" onclick={() => (why = !why)}>How to install the recorder</TextLink>
+          {#if why}<p class="picked">Install it from the downloads page, then restart the launcher.</p>{/if}
         {/snippet}
       </SettingsRow>
       <SettingsRow label="Interface scale" hint="The size of everything in the window" stack>
