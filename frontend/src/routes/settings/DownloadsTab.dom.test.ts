@@ -285,14 +285,14 @@ describe('the downloads tab: the schedule', () => {
     );
   });
 
-  it('says a schedule that was not saved on a danger notice, and keeps the edited window', async () => {
+  it('says a schedule that was not saved under the editor, on a danger notice, in the catalog\'s words', async () => {
     vi.mocked(saveSettingsPatch).mockRejectedValue(new Error('locked'));
     const keys = open();
 
     await keys.click(screen.getByRole('button', { name: msg('settings.downloadsScheduleAdd') }));
 
     const alert = await screen.findByRole('alert');
-    expect(alert.textContent).toContain(msg('settings.downloadsScheduleSaveError', { reason: 'locked' }));
+    expect(alert.textContent?.trim()).toBe(msg('settings.downloadsScheduleSaveErrorPlain'));
     expect(alert.closest('[data-tone]')?.getAttribute('data-tone')).toBe('danger');
     const days = screen.getByRole('group', { name: msg('settings.downloadsScheduleDays') });
     expect(days.compareDocumentPosition(alert) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
