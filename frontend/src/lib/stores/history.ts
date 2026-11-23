@@ -65,14 +65,16 @@ async function readStatus(read: () => Promise<Status>): Promise<void> {
 
 /**
  * Reads the list and the status again, as the page's Retry after a failed first read does; answers
- * whether a list is there. An event that arrives meanwhile gets the list asked once more.
+ * whether a list is there. An event that arrives meanwhile gets the list asked once more; a whole list
+ * it brought counts even when that second read fails.
  */
 export async function reloadHistory(): Promise<boolean> {
-  const ok = await readList(async () => {
+  await readList(async () => {
     const before = heard;
     const list = await listHistory();
     return heard === before ? list : listHistory();
   });
+  const ok = get(historyLoaded);
   if (ok) await readStatus(getHistoryStatus);
   return ok;
 }

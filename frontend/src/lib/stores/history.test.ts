@@ -165,6 +165,24 @@ describe('the first read', () => {
     expect(get(store.historyLoadError)).toBe(again);
   });
 
+  it('answers true when the re-read fails but history:updated brought a whole list during the reload', async () => {
+    list.mockRejectedValueOnce(new Error('service not ready'));
+    const { store } = await load();
+    let answer: (records: Record[]) => void = () => {};
+    list.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)));
+    list.mockRejectedValueOnce(new Error('again'));
+
+    const reloading = store.reloadHistory();
+    handlers['history:updated']({ data: [record('x', '2026-09-05T10:00:00Z')] });
+    answer([]);
+
+    await expect(reloading).resolves.toBe(true);
+    expect(list).toHaveBeenCalledTimes(3);
+    expect(get(store.historyLoaded)).toBe(true);
+    expect(get(store.historyLoadError)).toBeNull();
+    expect(get(store.history).map((item) => item.id)).toEqual(['x']);
+  });
+
   it('takes a whole list from history:updated as read', async () => {
     list.mockRejectedValueOnce(new Error('service not ready'));
     const { store } = await load();

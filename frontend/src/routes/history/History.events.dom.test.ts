@@ -111,3 +111,27 @@ describe('History: records Go sends before a whole list was read', () => {
     expect((clearButton() as HTMLButtonElement).disabled).toBe(false);
   });
 });
+
+describe('History: a Retry that a whole list from Go overtakes', () => {
+  it('counts the list history:updated brought during the Retry as read when the re-read fails, and hands focus on', async () => {
+    await failedFirstRead();
+    let answer: (records: HistoryRecord[]) => void = () => {};
+    vi.mocked(listHistory).mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)));
+    vi.mocked(listHistory).mockRejectedValueOnce(new Error('still not ready'));
+    const { user } = renderDom(History);
+    const retry = screen.getByRole('button', { name: msg('common.retry') });
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+    handlers['history:updated']({ data: RECORDS });
+    answer([]);
+
+    await waitFor(() => expect(listHistory).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(rows()).toHaveLength(12));
+    // The notice stays while the Retry runs, until the second read has failed.
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+    // The notice went with Retry in it (jsdom, as a browser, leaves focus on <body> then): focus goes
+    // where any successful Retry sends it, the list having no control, the page heading.
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 })));
+  });
+});
