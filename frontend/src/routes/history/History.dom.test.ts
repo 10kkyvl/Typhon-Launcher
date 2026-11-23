@@ -446,18 +446,44 @@ describe('History: clearing', () => {
     expect(toastsSaid()).toEqual([['success', msg('transfers.historyCleared')]]);
   });
 
-  // D4: the dialog hands focus back to Clear, which the empty list has just disabled.
-  it('D4: leaves focus on nothing once the list is cleared', async () => {
+  // D4: Clear, where the dialog would hand focus back, is disabled by the empty list: focus goes to the page heading.
+  it('D4: hands focus to the page heading once the list is cleared', async () => {
     history.set(RECORDS);
     vi.mocked(clearRequest).mockResolvedValue(undefined);
     const { user } = renderDom(History);
 
-    await user.click(clearButton());
-    await user.click(within(dialog()).getByRole('button', { name: msg('transfers.historyClearAction') }));
+    clearButton().focus();
+    await user.keyboard('{Enter}');
+    within(dialog()).getByRole('button', { name: msg('transfers.historyClearAction') }).focus();
+    await user.keyboard('{Enter}');
 
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    const focused = document.activeElement;
-    expect(focused === document.body || (focused instanceof HTMLButtonElement && focused.disabled)).toBe(true);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 })));
+  });
+
+  it('D4: gives focus back to Clear when the dialog is cancelled', async () => {
+    history.set(RECORDS);
+    const { user } = renderDom(History);
+
+    clearButton().focus();
+    await user.keyboard('{Enter}');
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(clearButton());
+  });
+
+  it('D4: hands focus to the page heading when the list emptied while the dialog was open and it is cancelled', async () => {
+    history.set(RECORDS);
+    const { user } = renderDom(History);
+
+    clearButton().focus();
+    await user.keyboard('{Enter}');
+    history.set([]);
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 })));
   });
 
   // D1: a failed clear is said once, in the dialog, which stays open for another try.

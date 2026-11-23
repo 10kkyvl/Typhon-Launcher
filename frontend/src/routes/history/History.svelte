@@ -34,6 +34,7 @@
     reloadHistory,
   } from '../../lib/stores/history';
   import { toast } from '../../lib/stores/toasts';
+  import { focusHandOff } from '../../lib/utils/focusHandOff';
   import { clockTime, longDate, relativeDate } from '../../lib/utils/format';
   import { locale, msg } from '../../lib/i18n';
 
@@ -125,17 +126,31 @@
     return kind === Kind.KindInstallFailed || kind === Kind.KindUpdateFailed;
   }
 
+  const clearButton = () => document.querySelector<HTMLButtonElement>('[data-history-clear]');
+  const pageHeading = () => document.querySelector<HTMLElement>('h1[tabindex="-1"]');
+
   // A refusal rejects: the dialog stays open and says why (errorText).
   async function confirmClear() {
     await clearHistory();
     toast(msg('transfers.historyCleared'), 'success');
+  }
+
+  // The dialog hands focus back to Clear; once the list is empty Clear is disabled and cannot take it,
+  // so focus goes on to the page heading.
+  function closeClear() {
+    const handOff = focusHandOff(() => {
+      const button = clearButton();
+      return button?.disabled ? button : null;
+    });
+    clearOpen = false;
+    void handOff(pageHeading);
   }
 </script>
 
 <Page>
   <PageHeader title={msg('transfers.historyTitle')} subtitle={msg('transfers.historySubtitle')}>
     {#snippet actions()}
-      <Button variant="ghost" disabled={$history.length === 0} onclick={() => (clearOpen = true)}>
+      <Button variant="ghost" disabled={$history.length === 0} data-history-clear onclick={() => (clearOpen = true)}>
         <Trash2 size="1.5rem" strokeWidth={1.8} />
         {msg('transfers.historyClearAction')}
       </Button>
@@ -210,7 +225,7 @@
   {/if}
 
   {#if clearOpen}
-    <ConfirmModal prompt={clearHistoryPrompt()} onconfirm={confirmClear} errorText={(err) => historyErrorText(err)} onclose={() => (clearOpen = false)} />
+    <ConfirmModal prompt={clearHistoryPrompt()} onconfirm={confirmClear} errorText={(err) => historyErrorText(err)} onclose={closeClear} />
   {/if}
 </Page>
 
