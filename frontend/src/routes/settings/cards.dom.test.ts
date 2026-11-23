@@ -197,6 +197,23 @@ describe('DiscordCard', () => {
   });
 });
 
+describe('DiscordCard: unlinking', () => {
+  // The Unlink button goes with the linked rows: focus lands on the card's Link button instead.
+  it('hands focus to Link once the account is unlinked', async () => {
+    const getLink = vi.fn<DiscordApi['getLink']>().mockResolvedValue({ linked: true, discordId: '1', discordUsername: 'player', linkedAt: '' });
+    const unlink = vi.fn<DiscordApi['unlink']>().mockResolvedValue();
+    const { user } = renderDom(DiscordCard, { api: { getLink, createLinkCode: vi.fn(), unlink } });
+    const button = await screen.findByRole('button', { name: msg('discord.unlinkButton') });
+    button.focus();
+    await user.keyboard('{Enter}');
+    const dialog = await screen.findByRole('dialog', { name: msg('discord.unlinkTitle') });
+    await user.click(within(dialog).getByRole('button', { name: msg('discord.unlinkConfirm') }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(unlink).toHaveBeenCalledOnce();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: msg('discord.linkButton') })));
+  });
+});
+
 describe('NetworkSettingsCard: the proxy', () => {
   const PROXY = { networkMode: 'proxy', proxyType: 'http', proxyHost: 'proxy.lan', proxyPort: 3128, proxyUsername: 'me' };
   beforeEach(() => {

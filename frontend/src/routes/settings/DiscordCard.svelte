@@ -182,7 +182,14 @@
 </Card>
 
 {#if confirming}
-  <ConfirmModal prompt={confirming} onconfirm={unlink} onclose={() => (confirming = null)} errorText={(err) => accountErrorText(err)} />
+  <!-- Unlinked, the card shows Link where Unlink stood: focus goes there. -->
+  <ConfirmModal
+    prompt={confirming}
+    onconfirm={unlink}
+    onclose={() => (confirming = null)}
+    errorText={(err) => accountErrorText(err)}
+    returnFocus={() => body?.querySelector<HTMLElement>('button')}
+  />
 {/if}
 
 <style>
