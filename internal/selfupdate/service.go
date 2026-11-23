@@ -126,7 +126,7 @@ func NewService() (*Service, error) {
 		client:         client,
 		store:          store,
 		notes:          notes,
-		portable:       portable,
+		portable:       updatesPortable(portable),
 		currentVersion: app.Version,
 	}, nil
 }
