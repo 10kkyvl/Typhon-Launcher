@@ -37,9 +37,18 @@ export interface Use {
   snippet: RowSnippet | null;
 }
 
-interface SnippetBlock {
+/** A `{#snippet name(params)}…{/snippet}` block, from its opening tag to the end of its closing one. */
+export interface SnippetBlock {
   name: string;
   params: string;
+  start: number;
+  end: number;
+}
+
+/** A `{…}` of the markup itself (`{@render x()}`, `{#each …}`, `{value}`), not one in a tag: its text
+ *  inside the braces, and where it starts and ends. */
+export interface MarkupTag {
+  inner: string;
   start: number;
   end: number;
 }
@@ -67,9 +76,10 @@ export function tagEnd(text: string, start: number): number {
   return text.length;
 }
 
-function scan(text: string): { elements: MarkupElement[]; snippets: SnippetBlock[] } {
+function scan(text: string): { elements: MarkupElement[]; snippets: SnippetBlock[]; tags: MarkupTag[] } {
   const found: MarkupElement[] = [];
   const snippets: SnippetBlock[] = [];
+  const tags: MarkupTag[] = [];
   const open: { name: string; start: number }[] = [];
   const openSnippets: { name: string; params: string; start: number }[] = [];
   let at = 0;
@@ -84,6 +94,7 @@ function scan(text: string): { elements: MarkupElement[]; snippets: SnippetBlock
       at = close < 0 ? text.length : close + 3;
     } else if (text[at] === '{') {
       const inner = balanced(text, at);
+      if (inner !== null) tags.push({ inner, start: at, end: at + inner.length + 2 });
       const header = inner === null ? null : /^#snippet\s+([\w$]+)\s*\(([\s\S]*)\)\s*$/.exec(inner);
       if (header) openSnippets.push({ name: header[1], params: header[2], start: at });
       else if (inner !== null && /^\/snippet\s*$/.test(inner)) {
@@ -107,12 +118,39 @@ function scan(text: string): { elements: MarkupElement[]; snippets: SnippetBlock
       at = end;
     } else at += 1;
   }
-  return { elements: found, snippets };
+  return { elements: found, snippets, tags };
 }
 
 /** Every element of a component's markup, spanning from its opening tag to its closing one. */
 export function elements(text: string): MarkupElement[] {
   return scan(text).elements;
+}
+
+/** A component's markup read at once: its elements, its `{#snippet}` blocks and its `{…}` tags. */
+export function markup(text: string): { elements: MarkupElement[]; snippets: SnippetBlock[]; tags: MarkupTag[] } {
+  return scan(text);
+}
+
+/** Whether an opening tag takes attributes through a spread (`{...props}`), which `attributes` skips. */
+export function hasSpread(tag: string): boolean {
+  let at = /^<[\w:.-]+/.exec(tag)?.[0].length ?? 0;
+  while (at < tag.length) {
+    const ch = tag[at];
+    if (ch === '"' || ch === "'") {
+      const close = tag.indexOf(ch, at + 1);
+      at = close < 0 ? tag.length : close + 1;
+      continue;
+    }
+    if (ch === '{') {
+      const inner = balanced(tag, at);
+      if (inner === null) return false;
+      if (/^\s*\.\.\./.test(inner)) return true;
+      at += inner.length + 2;
+      continue;
+    }
+    at += 1;
+  }
+  return false;
 }
 
 /**
@@ -167,8 +205,12 @@ export function attributeValues(text: string, name: string): string[] {
   });
 }
 
-// `{ labelId, hintId: hint, disabled = false }` → labelId → labelId, hintId → hint, disabled → disabled.
-function destructured(params: string): Record<string, string> {
+/** The names a SettingsRow's ids take in a snippet's parameter: `{ labelId, hintId: hint, disabled = false }`
+ *  gives labelId → labelId, hintId → hint, disabled → disabled; a parameter not destructured (`ids`, or
+ *  `ids: SettingsRowIds`) gives each as `ids.<name>`. */
+export function destructured(params: string): Record<string, string> {
+  const whole = /^\s*([\w$]+)\s*(?::[\s\S]*)?$/.exec(params)?.[1];
+  if (whole) return Object.fromEntries(['labelId', 'hintId', 'disabled'].map((name) => [name, `${whole}.${name}`]));
   const pattern = /^\s*\{([^{}]*)\}/.exec(params)?.[1];
   const bound: Record<string, string> = {};
   for (const entry of pattern?.split(',') ?? []) {
