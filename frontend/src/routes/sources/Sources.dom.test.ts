@@ -72,7 +72,7 @@ describe('Sources: row hints without a mouse', () => {
   it('the warnings of a source are reachable from its health mark', async () => {
     sources.set([source({ health: 'warning', warnings: ['duplicate entries'] })]);
     render(Sources, { target: app, props: {} });
-    const text = `${msg('transfers.sourcesHealthWarning')}: duplicate entries`;
+    const text = msg('transfers.sourcesHealthHint', { label: msg('transfers.sourcesHealthWarning'), warnings: 'duplicate entries' });
     await expectReachable(text);
     expect(screen.getByRole('button', { name: msg('transfers.sourcesHealthWarning') })).toBeTruthy();
   });

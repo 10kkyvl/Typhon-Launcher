@@ -131,7 +131,7 @@
       <span class="live">
         <span class="live-label">{stageLabel(live)}</span>
         <span class="live-bar">
-          <ProgressBar value={percent} indeterminate={isIndeterminate(live)} height={4} label={source.name} valueText={`${stageLabel(live)}, ${percent}%`} />
+          <ProgressBar value={percent} indeterminate={isIndeterminate(live)} height={4} label={source.name} valueText={msg('transfers.sourcesStageProgress', { stage: stageLabel(live), percent })} />
           {#if !isIndeterminate(live)}<span class="live-percent">{percent}%</span>{/if}
         </span>
       </span>
@@ -147,7 +147,7 @@
       </IconButton>
     {:else if source.health !== 'healthy'}
       {@const warnings = source.warnings?.length ? source.warnings.map(sourceWarningText).join('; ') : ''}
-      <IconButton size="sm" data-row-control="mark" label={health.label} hint={warnings ? `${health.label}: ${warnings}` : undefined} onclick={() => onopen(source.id)}>
+      <IconButton size="sm" data-row-control="mark" label={health.label} hint={warnings ? msg('transfers.sourcesHealthHint', { label: health.label, warnings }) : undefined} onclick={() => onopen(source.id)}>
         <span class="mark {health.kind}"><health.icon size="1.5rem" strokeWidth={1.8} /></span>
       </IconButton>
     {/if}
