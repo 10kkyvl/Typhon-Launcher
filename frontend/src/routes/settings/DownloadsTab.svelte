@@ -30,8 +30,7 @@
   // The downloads tab: speed, schedule and seeding, the network, updates and saves, installation and
   // the emulators. Cloud saves and the schedule's save error are the page's: they outlive a switch of
   // tabs, and the cloud dialogs are the page's.
-  // `uid` is what the page still hands every tab; the rows here make their own ids.
-  let { page }: { page: SettingsPage; uid?: string } = $props();
+  let { page }: { page: SettingsPage } = $props();
 
   const current = $derived($settings);
   const accountReady = $derived($authState === 'authenticated');

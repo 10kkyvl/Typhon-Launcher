@@ -66,7 +66,7 @@
   {#if tab === 'general'}
     <GeneralTab {page} />
   {:else if tab === 'downloads'}
-    <DownloadsTab {page} {uid} />
+    <DownloadsTab {page} />
   {:else if tab === 'appearance'}
     <AppearanceTab />
   {:else if tab === 'about'}
