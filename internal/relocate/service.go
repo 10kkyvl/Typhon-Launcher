@@ -900,11 +900,10 @@ var afterCopyBeforeVerify func(staging string)
 
 func (s *Service) copyAndVerify(ctx context.Context, jobID, source, target string) error {
 	staging := target + stagingSuffix
-	// A staging folder with something in it is not this move's: it may be the
-	// only copy another move left. It is neither copied into nor deleted, and
-	// the job does not name it.
 	if !targetAvailable(staging) {
-		return s.failOrCancel(jobID, fmt.Errorf("%s: %w", staging, ErrTargetNotEmpty))
+		if err := s.takeOverStaging(jobID, target, staging); err != nil {
+			return s.failOrCancel(jobID, err)
+		}
 	}
 	guard := func() error {
 		if s.stagingReservedLocked(staging) {
@@ -977,6 +976,49 @@ func (s *Service) copyAndVerify(ctx context.Context, jobID, source, target strin
 		return err
 	}
 	return nil
+}
+
+// takeOverStaging lets a move reuse the staging folder an earlier attempt of
+// the same game from the same folder into the same target left behind: that
+// attempt is finished and its folder holds a part copy of a source that is
+// still there, so the retry deletes it and starts again, and the old entry
+// goes with it. Any other staging folder with something in it may be the only
+// copy another move left: it is neither copied into nor deleted, and the job
+// does not name it.
+func (s *Service) takeOverStaging(jobID, target, staging string) error {
+	s.mu.Lock()
+	owner := s.stagingOwnerLocked(jobID, target, staging)
+	reserved := s.stagingReservedLocked(staging)
+	s.mu.Unlock()
+	if owner == "" {
+		return fmt.Errorf("%s: %w", staging, ErrStagingLeft)
+	}
+	if reserved {
+		return errStagingReserved
+	}
+	if err := removeTree(staging); err != nil {
+		return fmt.Errorf("%w: remove %s: %w", ErrStagingLeft, staging, err)
+	}
+	return s.removeJob(owner)
+}
+
+// stagingOwnerLocked names the finished job of the same game, source and
+// target whose staging folder is staging, or "" when there is none. A job
+// that keeps a copy (an orphan's, a failed repoint's or cleanup's) never is.
+func (s *Service) stagingOwnerLocked(jobID, target, staging string) string {
+	current := s.findJobLocked(jobID)
+	if current == nil || current.GameID == "" {
+		return ""
+	}
+	for _, j := range s.jobs {
+		if j.ID == jobID || j.GameID != current.GameID || !terminal(j.Stage) || keepsCopy(j) {
+			continue
+		}
+		if platform.SamePath(j.Staging, staging) && platform.SamePath(j.Target, target) && platform.SamePath(j.Source, current.Source) {
+			return j.ID
+		}
+	}
+	return ""
 }
 
 // cleanupItem removes source once its data is safely at Target and Target

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 
@@ -89,8 +90,14 @@ func (s *Service) recoverJob(ctx context.Context, job Job) {
 
 // surfaceStale handles a job that was already terminal when the process
 // crashed, before the UI could see the event: emit it once more and drop
-// the leftover journal entry.
+// the leftover journal entry. A job whose staging folder is still on disk
+// stays, without the event: the entry is what lists that folder for Disk
+// usage and what lets a retry of the same move take it over, and it goes at
+// the first start after the folder does.
 func (s *Service) surfaceStale(job Job) {
+	if stagingLeft(job) {
+		return
+	}
 	emit(eventForStage(job.Stage), job.clone())
 	if err := s.removeJob(job.ID); err != nil {
 		// Logged and surfaced via move:degraded inside removeJob already;
@@ -151,6 +158,16 @@ func (s *Service) failShared(job Job, cause error) {
 	}); tErr != nil {
 		slog.Error("mark move failed on recovery", "job", job.ID, "error", tErr)
 	}
+}
+
+// stagingLeft says whether the job's staging folder may still be on disk: a
+// folder that cannot be looked at counts as there.
+func stagingLeft(job Job) bool {
+	if job.Staging == "" {
+		return false
+	}
+	_, err := os.Lstat(job.Staging)
+	return !errors.Is(err, fs.ErrNotExist)
 }
 
 func recoveryTouchesGame(job Job) bool {

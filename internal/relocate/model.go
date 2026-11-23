@@ -105,6 +105,7 @@ var (
 	ErrMoveInProgress     = uierr.New("relocate.already_running", "перенос уже выполняется")
 	ErrFolderShared       = uierr.New("relocate.folder_shared", "в папке игры лежит другая игра библиотеки, её файлы переехали бы вместе с этой")
 	ErrGameRemoving       = uierr.New("relocate.game_removing", "игра удаляется, перенести её нельзя")
+	ErrStagingLeft        = uierr.New("relocate.staging_left", "рядом с целевой папкой осталась временная папка другого переноса, перенос её не трогает")
 )
 
 // maxRecoveryAttempts bounds how many startups retry a failed repoint or
