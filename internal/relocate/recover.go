@@ -121,7 +121,7 @@ func (s *Service) reserveForRecovery(job Job) (func(), bool) {
 		return noop, true
 	}
 	if game, err := s.lib.Find(job.GameID); err != nil || game.Uninstalled {
-		s.markOrphaned(job.ID)
+		s.markOrphaned(job.ID, err == nil && platform.SamePath(game.InstallDir, job.Target))
 		return nil, false
 	}
 	release, err := s.lib.BeginRecovery(job.GameID, job.Source, job.Target, job.Staging)

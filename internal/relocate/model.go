@@ -65,7 +65,8 @@ type Job struct {
 	// the entry stays while a copy it made is on disk, see OrphanedCopies.
 	Orphaned bool `json:"orphaned,omitempty"`
 	// OrphanedAt is the stage the move had reached when its game left the
-	// library; it says whether the old folder is one of the move's copies.
+	// library, the cleanup when the card named the target by then; it says
+	// whether the old folder is one of the move's copies.
 	OrphanedAt Stage `json:"orphanedAt,omitempty"`
 }
 

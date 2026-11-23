@@ -332,6 +332,93 @@ func TestRecoveryFailsAtTheCommitAndResumesFromIt(t *testing.T) {
 	}
 }
 
+// Disk usage gets every copy an orphaned move left, each named for what it is,
+// not only the first one found; the entry goes once none of them is left.
+func TestOrphanedCopiesListsEveryCopyWithItsKind(t *testing.T) {
+	type copyAt struct{ kind, path string }
+	cases := []struct {
+		name string
+		// leave prepares the card and the folders and returns the job.
+		leave func(t *testing.T, lib *library.Service, game library.Game, src, target string) Job
+		want  func(src, target string) []copyAt
+	}{
+		{"cleanup with the target and the old folder", func(t *testing.T, lib *library.Service, game library.Game, src, target string) Job {
+			mustMkdirFile(t, target, "game.exe", "stub")
+			if err := lib.RemoveGame(game.ID); err != nil {
+				t.Fatal(err)
+			}
+			return Job{ID: "j1", Scope: ScopeGame, Stage: StageCleanup, GameID: game.ID, Title: "Game", Source: src, Target: target}
+		}, func(src, target string) []copyAt {
+			return []copyAt{{"target", target}, {"source", src}}
+		}},
+		{"repoint that landed, then uninstalled", func(t *testing.T, lib *library.Service, game library.Game, src, target string) Job {
+			mustMkdirFile(t, target, "game.exe", "stub")
+			if _, err := lib.Relocate(game.ID, target); err != nil {
+				t.Fatal(err)
+			}
+			if err := lib.MarkUninstalled(game.ID); err != nil {
+				t.Fatal(err)
+			}
+			return Job{ID: "j1", Scope: ScopeGame, Stage: StageRepoint, GameID: game.ID, Title: "Game", Source: src, Target: target}
+		}, func(src, target string) []copyAt {
+			return []copyAt{{"target", target}, {"source", src}}
+		}},
+		{"repoint that did not land, then uninstalled", func(t *testing.T, lib *library.Service, game library.Game, src, target string) Job {
+			mustMkdirFile(t, target, "game.exe", "stub")
+			if err := lib.MarkUninstalled(game.ID); err != nil {
+				t.Fatal(err)
+			}
+			return Job{ID: "j1", Scope: ScopeGame, Stage: StageRepoint, GameID: game.ID, Title: "Game", Source: src, Target: target}
+		}, func(_, target string) []copyAt {
+			return []copyAt{{"target", target}}
+		}},
+		{"commit with the copy in staging", func(t *testing.T, lib *library.Service, game library.Game, src, target string) Job {
+			mustMkdirFile(t, target+stagingSuffix, "game.exe", "stub")
+			if err := lib.RemoveGame(game.ID); err != nil {
+				t.Fatal(err)
+			}
+			return Job{ID: "j1", Scope: ScopeGame, Stage: StageCommit, GameID: game.ID, Title: "Game", Source: src, Target: target, Staging: target + stagingSuffix}
+		}, func(_, target string) []copyAt {
+			return []copyAt{{"staging", target + stagingSuffix}}
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			lib := newTestLibrary(t)
+			game, src := addTestGame(t, lib)
+			target := filepath.Join(t.TempDir(), "Game")
+			job := tc.leave(t, lib, game, src, target)
+			s := newRecoverTestService(t, job)
+			s.lib = lib
+
+			s.recoverAll(context.Background())
+
+			copies, err := s.OrphanedCopies()
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := tc.want(src, target)
+			if len(copies) != len(want) {
+				t.Fatalf("OrphanedCopies = %+v, want %+v", copies, want)
+			}
+			for i, w := range want {
+				if copies[i].Kind != w.kind || !samePathT(copies[i].Path, w.path) || copies[i].JobID != job.ID {
+					t.Fatalf("OrphanedCopies[%d] = %+v, want %s at %s", i, copies[i], w.kind, w.path)
+				}
+			}
+			for _, w := range want {
+				if err := os.RemoveAll(w.path); err != nil {
+					t.Fatal(err)
+				}
+			}
+			s.recoverAll(context.Background())
+			if jobs := s.List(); len(jobs) != 0 {
+				t.Fatalf("job kept after its last copy is gone: %+v", jobs)
+			}
+		})
+	}
+}
+
 // At the cleanup the card names the target and the old folder is the copy the
 // cleanup was to delete: once the target is gone too, it is the copy left. Up
 // to the repoint the card may still have named the old folder, which is then
