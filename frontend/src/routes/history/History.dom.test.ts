@@ -25,7 +25,7 @@ vi.mock('../../lib/services/history', async (actual) => ({
 }));
 
 // The markup the screen draws a record in, and the parts of it this file reads.
-const ROW = '.row';
+const ROW = '[data-history-row]';
 const TITLE = '.title';
 const DETAIL = '.detail';
 const TIME = '.when [aria-hidden="true"]';
@@ -104,6 +104,34 @@ afterEach(() => {
   vi.mocked(getHistoryStatus).mockReset();
   vi.mocked(clearRequest).mockReset();
   document.body.replaceChildren();
+});
+
+describe('History: the layout', () => {
+  it('says how many records there are under the title, and nothing of the kind while there are none', () => {
+    history.set(RECORDS);
+    const view = renderDom(History);
+
+    const header = screen.getByRole('heading', { level: 1 }).closest('header') as HTMLElement;
+    expect(within(header).getByText(msg('transfers.historyCount', { count: 12 }))).toBeTruthy();
+
+    history.set([]);
+    view.rerender({});
+    expect(within(header).queryByText(msg('transfers.historyCount', { count: 0 }))).toBeNull();
+  });
+
+  it('makes each day a section named by its heading, with its records as a list', () => {
+    history.set(RECORDS);
+    renderDom(History);
+
+    const regions = screen.getAllByRole('region');
+    expect(regions.map((region) => words(document.getElementById(region.getAttribute('aria-labelledby') ?? '')))).toEqual(dayHeadings());
+    const today = regions[0];
+    expect(within(within(today).getByRole('list')).getAllByRole('listitem').map((item) => words(item.querySelector(TITLE)))).toEqual([
+      installed('Alpha'),
+      msg('transfers.historyUpdateFailedTitle', { title: 'Beta' }),
+      installed('Ведьмак 3'),
+    ]);
+  });
 });
 
 describe('History: the segments', () => {

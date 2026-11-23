@@ -203,7 +203,7 @@ const ON_SURFACE: Record<string, [surface: string, ...rules: string[]]> = {
   'routes/game/ReviewComposer.svelte': ["the plate of one's own review", '.recommend.negative'],
   'routes/profile/Profile.svelte': ['the editing bar', '.topbar-sub.error'],
   'routes/profile/ProfileHeader.svelte': ['the profile canvas', '.error'],
-  'routes/history/History.svelte': ['the table', '.row.failed .icon-cell', '.row.failed .detail'],
+  'routes/history/HistoryDay.svelte': ["the plate of a day's list", '.row.failed .mark', '.row.failed .detail'],
   'routes/sources/Sources.svelte': [
     'the table; the error and health marks are icons in a row of it',
     '.source-error',
@@ -261,7 +261,7 @@ const ON_SURFACE: Record<string, [surface: string, ...rules: string[]]> = {
 const LOCAL_SURFACE: Record<string, string> = {
   'routes/game/ReviewComposer.svelte': '.mine',
   'routes/profile/Profile.svelte': '.topbar',
-  'routes/history/History.svelte': '.table',
+  'routes/history/HistoryDay.svelte': '.rows',
   'routes/sources/Sources.svelte': '.table',
   'routes/downloads/FailedList.svelte': '.row',
   'lib/components/TopbarSearch.svelte': '.results',
