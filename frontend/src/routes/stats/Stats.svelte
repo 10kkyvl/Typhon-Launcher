@@ -140,18 +140,16 @@
         <div class="tiles">
           <StatTile value={playtime(summary.totalSeconds)} label={msg('stats.totalLabel')} />
           <StatTile value={summary.sessions} label={msg('stats.sessionsLabel')} />
-          <div class="longest">
-            <span class="longest-value">{summary.longest ? playtime(summary.longest.seconds) : msg('stats.longestNone')}</span>
-            <span class="longest-label">{msg('stats.longestLabel')}</span>
-            {#if summary.longest}
-              <span class="longest-sub">
-                {msg('stats.longestSub', {
+          <StatTile
+            label={msg('stats.longestLabel')}
+            value={summary.longest ? playtime(summary.longest.seconds) : msg('stats.longestNone')}
+            sub={summary.longest
+              ? msg('stats.longestSub', {
                   game: titleOf(summary.longest.gameId, summary.longest.title),
                   date: summary.longest.at ? shortDate(summary.longest.at) : '',
-                })}
-              </span>
-            {/if}
-          </div>
+                })
+              : undefined}
+          />
         </div>
 
         <section class="section">
@@ -227,36 +225,6 @@
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--space-6);
-  }
-
-  .longest {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.8rem;
-    min-width: 0;
-  }
-
-  .longest-value {
-    font-size: var(--font-title);
-    font-weight: 600;
-    letter-spacing: var(--tracking-title);
-    line-height: 1.1;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .longest-label {
-    font-size: var(--font-sm);
-    color: var(--text-3);
-  }
-
-  .longest-sub {
-    max-width: 100%;
-    font-size: 1.2rem;
-    color: var(--text-2);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .section h2 {

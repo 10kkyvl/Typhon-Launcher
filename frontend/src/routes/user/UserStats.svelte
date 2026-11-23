@@ -7,8 +7,6 @@
   import HiddenBadge from '../profile/HiddenBadge.svelte';
 
   let { stats }: { stats: StatsView | null } = $props();
-
-  const hint = msg('social.statsHiddenHint');
 </script>
 
 {#if stats}
@@ -20,11 +18,10 @@
     </div>
     <div class="stat">
       {#if stats.hours == null}
-        <div class="tile">
-          <span class="icon"><Clock size="1.8rem" strokeWidth={1.8} /></span>
-          <HiddenBadge text={hint} />
-          <span class="label">{msg('social.statHours')}</span>
-        </div>
+        <StatTile label={msg('social.statHours')}>
+          {#snippet icon()}<Clock size="1.8rem" strokeWidth={1.8} />{/snippet}
+          {#snippet mark()}<HiddenBadge text={msg('social.statsHiddenHint')} />{/snippet}
+        </StatTile>
       {:else}
         <StatTile value={formatCount(stats.hours)} label={msg('social.statHours')}>
           {#snippet icon()}<Clock size="1.8rem" strokeWidth={1.8} />{/snippet}
@@ -39,7 +36,7 @@
   </div>
 {:else}
   <div class="stats-hidden">
-    <HiddenBadge text={hint} />
+    <HiddenBadge text={msg('social.statsHiddenHint')} />
     <span class="label">{msg('social.statsHiddenLabel')}</span>
   </div>
 {/if}
@@ -58,24 +55,6 @@
   .stat:first-child {
     padding-left: 0;
     border-left: 0;
-  }
-
-  .tile {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.8rem;
-    min-width: 0;
-  }
-
-  .tile .icon {
-    display: inline-flex;
-    color: var(--text-3);
-  }
-
-  .tile .label {
-    font-size: var(--font-sm);
-    color: var(--text-3);
   }
 
   .stats-hidden {

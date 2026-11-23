@@ -113,6 +113,18 @@
     <StatTile value="7 / 50" label="Achievements" />
   </ShowcaseRow>
 
+  <ShowcaseRow caption="Stat tiles: a mark where a hidden value stands, a second line under the label">
+    <StatTile label="Hours">
+      {#snippet icon()}<Clock />{/snippet}
+      {#snippet mark()}
+        <StatusBadge kind="neutral" label="Hidden" hint="The owner hid this figure">
+          {#snippet icon()}<EyeOff strokeWidth={1.8} />{/snippet}
+        </StatusBadge>
+      {/snippet}
+    </StatTile>
+    <StatTile value="3 h 40 min" label="Longest session" sub="Hades II · 10 Nov" />
+  </ShowcaseRow>
+
   <ShowcaseRow caption="Cards">
     <Card title="A card with an action">
       {#snippet action()}<TextLink onclick={() => toast('Show all pressed', 'info')}>Show all</TextLink>{/snippet}
