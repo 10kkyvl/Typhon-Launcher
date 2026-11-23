@@ -68,19 +68,34 @@ describe('EmulatorsCard: a platform', () => {
     expect(hang.closest('[data-tone]')?.getAttribute('data-tone')).toBe('warning');
   });
 
-  it('offers a reset only on a platform whose emulator is set', async () => {
+  it('names every button after its platform, starting with the words it shows', async () => {
     renderDom(EmulatorsCard, {});
     await screen.findByText('PlayStation 2 · PCSX2');
-    expect(screen.getAllByRole('button', { name: msg('emul.official') })).toHaveLength(2);
-    expect(screen.getAllByRole('button', { name: msg('emul.choose') })).toHaveLength(2);
-    expect(screen.getAllByRole('button', { name: msg('emul.reset') })).toHaveLength(1);
+    for (const platform of ['PlayStation 2', 'PlayStation Vita']) {
+      const official = screen.getByRole('button', { name: msg('settings.emulatorsOfficialFor', { platform }) });
+      const choose = screen.getByRole('button', { name: msg('settings.emulatorsChooseFor', { platform }) });
+      expect(official.textContent?.trim()).toBe(msg('emul.official'));
+      expect(choose.textContent?.trim()).toBe(msg('emul.choose'));
+      expect(msg('settings.emulatorsOfficialFor', { platform }).startsWith(msg('emul.official'))).toBe(true);
+      expect(msg('settings.emulatorsChooseFor', { platform }).startsWith(msg('emul.choose'))).toBe(true);
+    }
+    // A reset only on a platform whose emulator is set.
+    expect(screen.getByRole('button', { name: msg('settings.emulatorsResetFor', { platform: 'PlayStation Vita' }) }).textContent?.trim()).toBe(msg('emul.reset'));
+    expect(msg('settings.emulatorsResetFor', { platform: 'PlayStation Vita' }).startsWith(msg('emul.reset'))).toBe(true);
+    expect(screen.queryByRole('button', { name: msg('settings.emulatorsResetFor', { platform: 'PlayStation 2' }) })).toBeNull();
+  });
+
+  it('shows the path in full with no native tooltip', async () => {
+    const { container } = renderDom(EmulatorsCard, {});
+    await screen.findByText(VITA.path);
+    expect(container.querySelectorAll('[title]')).toHaveLength(0);
   });
 
   it("opens the emulator's site, and says when it cannot", async () => {
     vi.mocked(openOfficialPage).mockResolvedValueOnce().mockRejectedValueOnce(new Error('no browser'));
     const { user } = renderDom(EmulatorsCard, {});
     await screen.findByText('PlayStation 2 · PCSX2');
-    const [ps2] = screen.getAllByRole('button', { name: msg('emul.official') });
+    const ps2 = screen.getByRole('button', { name: msg('settings.emulatorsOfficialFor', { platform: 'PlayStation 2' }) });
 
     await user.click(ps2);
     expect(openOfficialPage).toHaveBeenLastCalledWith('ps2');
@@ -94,7 +109,7 @@ describe('EmulatorsCard: a platform', () => {
     const { user } = renderDom(EmulatorsCard, {});
     await screen.findByText('PlayStation 2 · PCSX2');
 
-    await user.click(screen.getAllByRole('button', { name: msg('emul.choose') })[0]);
+    await user.click(screen.getByRole('button', { name: msg('settings.emulatorsChooseFor', { platform: 'PlayStation 2' }) }));
 
     expect(selectEmulatorFile).toHaveBeenCalledExactlyOnceWith(msg('emul.pickDialog', { emulator: 'PCSX2' }));
     await waitFor(() => expect(setEmulatorPath).toHaveBeenCalledExactlyOnceWith('ps2', '/apps/pcsx2'));
@@ -109,7 +124,7 @@ describe('EmulatorsCard: a platform', () => {
     const { user } = renderDom(EmulatorsCard, {});
     await screen.findByText('PlayStation 2 · PCSX2');
 
-    await user.click(screen.getAllByRole('button', { name: msg('emul.choose') })[0]);
+    await user.click(screen.getByRole('button', { name: msg('settings.emulatorsChooseFor', { platform: 'PlayStation 2' }) }));
 
     await waitFor(() => expect(toastTexts()).toContain(msg('emul.saveFailed')));
   });
@@ -119,7 +134,7 @@ describe('EmulatorsCard: a platform', () => {
     const { user } = renderDom(EmulatorsCard, {});
     await screen.findByText('PlayStation 2 · PCSX2');
 
-    await user.click(screen.getByRole('button', { name: msg('emul.reset') }));
+    await user.click(screen.getByRole('button', { name: msg('settings.emulatorsResetFor', { platform: 'PlayStation Vita' }) }));
 
     expect(setEmulatorPath).toHaveBeenCalledExactlyOnceWith('vita', '');
     await waitFor(() => expect(toastTexts()).toContain(msg('emul.pathReset', { emulator: 'Vita3K' })));

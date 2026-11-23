@@ -114,7 +114,7 @@ describe('EmulatorsCard', () => {
     await screen.findByText(`${PLATFORM.name} · ${PLATFORM.emulator}`);
     expect(screen.queryByRole('alert')).toBeNull();
     // Focus moves once the rows that replaced the notice are drawn, to their first control.
-    await waitFor(() => expect(document.activeElement).toBe(document.querySelector('.rows')?.querySelector('button')));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: msg('settings.emulatorsOfficialFor', { platform: PLATFORM.name }) })));
     // The notice went before its retry answered: the card still learns the retry is over.
     expect((screen.getByRole('button', { name: msg('emul.detect') }) as HTMLButtonElement).disabled).toBe(false);
   });

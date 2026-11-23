@@ -6,6 +6,7 @@
   import Checkbox from '../../lib/components/Checkbox.svelte';
   import Modal from '../../lib/components/Modal.svelte';
   import Notice from '../../lib/components/Notice.svelte';
+  import SettingsRow from '../../lib/components/SettingsRow.svelte';
   import Spinner from '../../lib/components/Spinner.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { hasMessage, msg } from '../../lib/i18n';
@@ -210,37 +211,31 @@
       {msg('emul.loadFailed')}
     </Notice>
   {:else}
-    <div class="rows" bind:this={list}>
+    <div bind:this={list}>
       {#each rows as row (row.id)}
-        {@const reason = reasonText(row)}
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{row.name} · {row.emulator}</span>
-            <span class="row-sub path" title={row.path}>{row.path}</span>
-            {#if reason}<span class="row-sub">{reason}</span>{/if}
-            {#if row.warnings.includes('discord_exit_hang')}
-              <div class="row-warning">
-                <Notice tone="warning" compact announce={false}>{msg('emul.discordExitHang')}</Notice>
-              </div>
-            {/if}
-          </div>
-          <div class="controls">
+        <SettingsRow label={msg('settings.emulatorsRowLabel', { platform: row.name, emulator: row.emulator })} hint={row.path || undefined} note={reasonText(row) || undefined}>
+          {#snippet children()}
             <StatusBadge kind={statusKind(row)} label={statusLabel(row)} />
-            <Button size="sm" onclick={() => openSite(row)}>
+            <Button size="sm" aria-label={msg('settings.emulatorsOfficialFor', { platform: row.name })} onclick={() => openSite(row)}>
               <ExternalLink size="1.3rem" strokeWidth={1.8} />
               {msg('emul.official')}
             </Button>
-            <Button size="sm" disabled={busy !== ''} onclick={() => choose(row)}>
+            <Button size="sm" aria-label={msg('settings.emulatorsChooseFor', { platform: row.name })} disabled={busy !== ''} onclick={() => choose(row)}>
               <FolderOpen size="1.3rem" strokeWidth={1.8} />
               {msg('emul.choose')}
             </Button>
             {#if row.status !== 'not_set'}
-              <Button size="sm" variant="ghost" disabled={busy !== ''} onclick={() => reset(row)}>
+              <Button size="sm" variant="ghost" aria-label={msg('settings.emulatorsResetFor', { platform: row.name })} disabled={busy !== ''} onclick={() => reset(row)}>
                 {msg('emul.reset')}
               </Button>
             {/if}
-          </div>
-        </div>
+          {/snippet}
+          {#snippet below()}
+            {#if row.warnings.includes('discord_exit_hang')}
+              <Notice tone="warning" compact announce={false}>{msg('emul.discordExitHang')}</Notice>
+            {/if}
+          {/snippet}
+        </SettingsRow>
       {/each}
     </div>
   {/if}
@@ -274,62 +269,6 @@
     font-size: var(--font-xs);
     color: var(--text-3);
     line-height: 1.5;
-  }
-
-  .rows {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-6);
-    padding: 1.3rem 0;
-  }
-
-  .row + .row {
-    border-top: 1px solid var(--border);
-  }
-
-  .row-text {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-  }
-
-  .row-label {
-    font-size: var(--font-md);
-    font-weight: 500;
-  }
-
-  .row-sub {
-    font-size: var(--font-xs);
-    color: var(--text-3);
-  }
-
-  .path {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .path:empty {
-    display: none;
-  }
-
-  .controls {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: var(--space-2);
-  }
-
-  .row-warning {
-    margin-top: var(--space-1);
   }
 
   .found {
