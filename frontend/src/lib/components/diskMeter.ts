@@ -1,9 +1,9 @@
 /**
  * What DiskMeter draws and says, from the numbers it is given. The truth rules live here: a total that
  * is zero, missing or not a number is unknown and nothing is drawn against it; segments that sum over
- * the total are drawn in proportion to each other and no free space is said; a size the caller does not know
- * (the `sizeUnknown` flag of lib/diskusage: a lower bound when bytes > 0, unknown otherwise) is said as
- * such, never drawn as 0.
+ * the total are drawn in proportion to each other and a measured free space, and only a measured free
+ * space is said; a size the caller does not know (the `sizeUnknown` flag of lib/diskusage: a lower
+ * bound when bytes > 0, unknown otherwise) is said as such, never drawn as 0.
  */
 
 /** The colours a segment can take; DiskMeter.svelte paints each from theme tokens. */
@@ -69,9 +69,11 @@ export interface MeterModel {
   parts: MeterPart[];
   /** The parts the bar draws: a known size above 0 against a known total, with room left in the bar. */
   drawn: MeterPart[];
-  /** Free space to say, or null when there is none to say (unknown total, overflow, or not derivable). */
+  /** Free space to say, or null when there is none to say (not derivable, or an overflow without a
+   *  measured one). */
   free: MeterSize | null;
-  /** The segments, with the measured free space, sum over the total: drawn in proportion, free not said. */
+  /** The segments, with the measured free space, sum over the total: drawn in proportion to each other
+   *  and the measured free space, which alone is said. */
   overflow: boolean;
 }
 
@@ -90,17 +92,20 @@ const bytesOf = (size: MeterSize) => (size.kind === 'unknown' ? 0 : size.bytes);
  * the segments leave of the total, and only when every size is exact.
  *
  * Overflow: the segments, with the measured free space, add up to more than the total. Which number is
- * wrong is not the meter's to know, so each part is drawn against the others over the whole bar (its
- * width agrees with its size beside its neighbours, every part above 0 shows) and no free space is
- * drawn or said; the caller explains the cause.
+ * wrong is not the meter's to know, so each part is drawn against the others and the measured free
+ * space over the whole bar (its width agrees with its size beside its neighbours, every part above 0
+ * shows, the free space is the track they leave); a measured free space is said, as it is what the
+ * player acts on, and a derived or unmeasurable one is neither drawn nor said. The caller explains
+ * the cause.
  */
 export function meter(segments: readonly MeterSegment[], total: number | null | undefined, free?: number | null, width: number = METER_WIDTH.full): MeterModel {
   const known = measurable(total) && total > 0 ? total : null;
   const sizes = segments.map(sizeOf);
   const used = sizes.reduce((sum, size) => sum + bytesOf(size), 0);
-  const measuredFree = free !== undefined && measurable(free) ? free : 0;
+  const measured = free !== undefined && measurable(free);
+  const measuredFree = measured ? free : 0;
   const overflow = known !== null && used + measuredFree > known;
-  const against = overflow ? used : (known ?? 0);
+  const against = overflow ? used + measuredFree : (known ?? 0);
 
   const parts = segments.map((segment, index): MeterPart => {
     const size = sizes[index];
@@ -112,14 +117,14 @@ export function meter(segments: readonly MeterSegment[], total: number | null | 
   // The track is the free space: what neither the segments nor the measured free space account for
   // is a part of its own, or it would be drawn as free. Its size is exact only when every segment's
   // is; beside a size not fully measured, that segment may take some of it: at most the gap.
-  const gap = known !== null && !overflow && free !== undefined && measurable(free) ? known - used - free : 0;
+  const gap = known !== null && !overflow && measured ? known - used - measuredFree : 0;
   if (gap > 0) {
     const exact = sizes.every((size) => size.kind === 'exact');
     parts.push({ kind: 'other', id: METER_OTHER, key: METER_OTHER, label: '', tone: 'other', size: { kind: exact ? 'exact' : 'atMost', bytes: gap }, share: gap / against });
   }
 
   let freeSize: MeterSize | null;
-  if (overflow) freeSize = null;
+  if (overflow) freeSize = measured ? { kind: 'exact', bytes: measuredFree } : null;
   else if (free !== undefined) freeSize = measurable(free) ? { kind: 'exact', bytes: free } : { kind: 'unknown' };
   else if (known !== null && parts.every((part) => part.size.kind === 'exact')) freeSize = { kind: 'exact', bytes: known - used };
   else freeSize = null;

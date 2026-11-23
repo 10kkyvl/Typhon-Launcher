@@ -12,8 +12,8 @@
   /**
    * How a disk or a folder is filled: one bar of named segments over a total, and a legend in words.
    * The numbers go in as data (`segments`, `total`, `free`); diskMeter.ts holds the truth rules (an
-   * unknown total draws nothing, an overflow is drawn in proportion and says no free space, a size not measured
-   * is said, not drawn as 0).
+   * unknown total draws nothing, an overflow is drawn in proportion and says only a measured free
+   * space, a size not measured is said, not drawn as 0).
    *
    * The bar is one image whose text alternative carries the legend's numbers. With `onpick` its
    * segments are buttons instead (one Tab stop, the arrows move, a hint names each); a segment under
@@ -79,12 +79,15 @@
   }
   const partText = (part: MeterPart) => $t('common.meterPart', { name: nameOf(part), size: said(part.size) });
 
-  // The free space and the total in one clause where both are known; an overflow says so instead.
+  const freePart = (size: MeterSize) => $t('common.meterPart', { name: $t('common.meterFree'), size: said(size) });
+  // An overflow's words after the parts: that the sizes disagree, and the total.
+  const overflowEnd = $derived(model.overflow && model.total !== null ? [$t('common.meterOverflow'), $t('common.meterTotal', { total: bytesSize(model.total) })] : []);
+  // The free space and the total in one clause where both are known; an overflow says a measured free
+  // space on its own, then that the sizes disagree.
   const tail = $derived.by(() => {
-    if (model.overflow && model.total !== null) return [$t('common.meterOverflow'), $t('common.meterTotal', { total: bytesSize(model.total) })];
+    if (model.overflow && model.total !== null) return [...(model.free ? [freePart(model.free)] : []), ...overflowEnd];
     if (model.total === null) {
-      const free = model.free ? [$t('common.meterPart', { name: $t('common.meterFree'), size: said(model.free) })] : [];
-      return [...free, $t('common.meterTotalUnknown')];
+      return [...(model.free ? [freePart(model.free)] : []), $t('common.meterTotalUnknown')];
     }
     if (model.free) return [$t('common.meterFreeOf', { free: said(model.free), total: bytesSize(model.total) })];
     return [$t('common.meterTotal', { total: bytesSize(model.total) })];
@@ -214,7 +217,7 @@
           <span class="size"><Reading text={said(model.free)} /></span>
         </li>
       {/if}
-      <li class="total"><Reading text={model.total === null || model.overflow ? joined(tail) : $t('common.meterTotal', { total: bytesSize(model.total) })} /></li>
+      <li class="total"><Reading text={model.total === null ? joined(tail) : model.overflow ? joined(overflowEnd) : $t('common.meterTotal', { total: bytesSize(model.total) })} /></li>
     </ul>
   {/if}
 </div>

@@ -5,7 +5,7 @@ import { renderDom } from '../testing/dom';
 import { hintOnFocus } from '../testing/hints';
 import { bytesSize } from '../utils/format';
 import DiskMeter from './DiskMeter.svelte';
-import { gameTone, type MeterSegment } from './diskMeter';
+import { METER_WIDTH, gameTone, meter, type MeterPart, type MeterSegment, type MeterSize } from './diskMeter';
 
 const GB = 1024 ** 3;
 const SEGMENTS: MeterSegment[] = [
@@ -97,7 +97,6 @@ describe('DiskMeter', () => {
         { key: 'b', label: 'Другое', bytes: 400 * GB, tone: 'other' },
       ],
       total: 1000 * GB,
-      free: 0,
     });
     const bases = parts(container).map((p) => parseFloat(p.style.flexBasis));
     expect(bases[0] / bases[1]).toBeCloseTo(2, 9);
@@ -108,6 +107,24 @@ describe('DiskMeter', () => {
     const legend = getByRole('list');
     expect(legendLines(legend)).toEqual(
       [`Игры ${bytesSize(800 * GB)}`, `Другое ${bytesSize(400 * GB)}`, `Размеры в сумме больше общего объёма; Всего ${bytesSize(1000 * GB)}`].map(words),
+    );
+  });
+
+  // Free space is what the player acts on before installing: measured, it is said in an overflow too,
+  // before the overflow sentence, and drawn as the track the parts leave.
+  it('says a measured free space in an overflow, then the overflow, then the total, and draws it as track', () => {
+    const { container, getByRole } = renderDom(DiskMeter, {
+      label: 'Диск D',
+      segments: [{ key: 'games', label: 'Игры', bytes: 600 * GB, tone: 'game' }],
+      total: 1000 * GB,
+      free: 500 * GB,
+    });
+    expect(parts(container).map((p) => parseFloat(p.style.flexBasis))).toEqual([(600 / 1100) * 100]);
+    expect(getByRole('img').getAttribute('aria-label')).toBe(
+      `Диск D: Игры: ${bytesSize(600 * GB)}; Свободно: ${bytesSize(500 * GB)}; Размеры в сумме больше общего объёма; Всего ${bytesSize(1000 * GB)}`,
+    );
+    expect(legendLines(getByRole('list'))).toEqual(
+      [`Игры ${bytesSize(600 * GB)}`, `Свободно ${bytesSize(500 * GB)}`, `Размеры в сумме больше общего объёма; Всего ${bytesSize(1000 * GB)}`].map(words),
     );
   });
 
@@ -147,6 +164,52 @@ describe('DiskMeter', () => {
     ]);
     const swatches = [...container.querySelectorAll('.legend .swatch')];
     expect(swatches[1].classList.contains('hollow')).toBe(false);
+  });
+
+  // The words, the legend and the bar of every combination come from one model: each is checked
+  // against the model `meter` returns for the same input (whose rules diskMeter.test.ts pins over the
+  // same combinations), in the words the rules give.
+  describe('says, lists and draws one model', () => {
+    const T = 1000 * GB;
+    const plural = new Intl.PluralRules('ru');
+    const MORE = { one: 'часть', few: 'части', many: 'частей', other: 'части' } as Record<string, string>;
+    const size = (s: MeterSize) =>
+      s.kind === 'unknown' ? 'размер неизвестен' : s.kind === 'atLeast' ? `не меньше ${bytesSize(s.bytes)}` : s.kind === 'atMost' ? `не больше ${bytesSize(s.bytes)}` : bytesSize(s.bytes);
+    const name = (p: MeterPart) => (p.kind === 'other' ? 'Другие файлы' : p.kind === 'more' ? `Ещё ${p.folded?.length} ${MORE[plural.select(p.folded?.length ?? 0)]}` : p.label);
+    const seg = (key: string, bytes: number, sizeUnknown = false): MeterSegment => ({ key, label: `Игра ${key}`, bytes, tone: 'game', sizeUnknown });
+
+    for (const overflow of [false, true])
+      for (const free of ['measured', 'derived', 'null'] as const)
+        for (const sizes of ['exact', 'lowerBound', 'unknown'] as const)
+          for (const fold of [false, true])
+            for (const compact of [false, true]) {
+              it(`overflow ${overflow}, free ${free}, sizes ${sizes}, fold ${fold}, compact ${compact}`, () => {
+                const segments = [seg('g1', 300 * GB), seg('g2', 200 * GB, sizes === 'lowerBound')];
+                if (overflow) segments.push(seg('g3', 700 * GB));
+                if (sizes === 'unknown') segments.push(seg('new', 0, true));
+                if (fold) for (let i = 0; i < 60; i += 1) segments.push(seg(`t${i}`, GB / 100));
+                const given = free === 'measured' ? (overflow ? 250 * GB : 300 * GB) : free === 'null' ? null : undefined;
+                const m = meter(segments, T, given, compact ? METER_WIDTH.compact : METER_WIDTH.full);
+                const { container, getByRole, queryByRole } = renderDom(DiskMeter, { label: 'Диск', segments, total: T, free: given, compact });
+
+                expect(parts(container).map((p) => parseFloat(p.style.flexBasis))).toEqual(m.drawn.map((p) => p.share * 100));
+                const tail = m.overflow
+                  ? [...(m.free ? [`Свободно: ${size(m.free)}`] : []), 'Размеры в сумме больше общего объёма', `Всего ${bytesSize(T)}`]
+                  : m.free
+                    ? [`Свободно ${size(m.free)} из ${bytesSize(T)}`]
+                    : [`Всего ${bytesSize(T)}`];
+                expect(getByRole('img').getAttribute('aria-label')).toBe(`Диск: ${[...m.parts.map((p) => `${name(p)}: ${size(p.size)}`), ...tail].join('; ')}`);
+                if (compact) {
+                  expect(queryByRole('list')).toBeNull();
+                  expect(container.querySelector('.line')?.textContent).toBe(tail.join('; '));
+                  return;
+                }
+                const ends = m.overflow ? [`Размеры в сумме больше общего объёма; Всего ${bytesSize(T)}`] : [`Всего ${bytesSize(T)}`];
+                expect(legendLines(getByRole('list'))).toEqual(
+                  [...m.parts.map((p) => `${name(p)} ${size(p.size)}`), ...(m.free ? [`Свободно ${size(m.free)}`] : []), ...ends].map(words),
+                );
+              });
+            }
   });
 
   // Bad input is said, not thrown: two segments under one key are both drawn, listed and pickable.

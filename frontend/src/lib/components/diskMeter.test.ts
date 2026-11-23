@@ -71,21 +71,32 @@ describe('the disk meter model', () => {
     ]);
   });
 
-  it('says no free space for an overflow even when the caller measured one', () => {
+  // Free space is what the player acts on before installing: a measured one is said even when the
+  // numbers disagree, and the parts are drawn against the segments and it, so it shows as track.
+  it('says and draws a measured free space in an overflow of the segments alone', () => {
     const m = meter([seg('a', 1200)], 1000, 10);
     expect(m.overflow).toBe(true);
-    expect(m.free).toBeNull();
-    expect(m.drawn.map((p) => p.share)).toEqual([1]);
+    expect(m.free).toEqual({ kind: 'exact', bytes: 10 });
+    expect(m.drawn.map((p) => p.share)).toEqual([1200 / 1210]);
   });
 
-  it('takes segments and the measured free space over the total for an overflow', () => {
+  it('takes the segments and the measured free space over the total for an overflow, and says the free space', () => {
     const m = meter([seg('a', 600), seg('b', 200)], 1000, 500);
     expect(m.overflow).toBe(true);
-    expect(m.free).toBeNull();
+    expect(m.free).toEqual({ kind: 'exact', bytes: 500 });
     expect(m.drawn.map((p) => [p.key, p.share])).toEqual([
-      ['a', 0.75],
-      ['b', 0.25],
+      ['a', 600 / 1300],
+      ['b', 200 / 1300],
     ]);
+  });
+
+  it('says no free space in an overflow when it is derived or could not be measured', () => {
+    for (const free of [undefined, null, Number.NaN]) {
+      const m = meter([seg('a', 600), seg('b', 600)], 1000, free);
+      expect(m.overflow).toBe(true);
+      expect(m.free).toBeNull();
+      expect(m.drawn.map((p) => p.share)).toEqual([0.5, 0.5]);
+    }
   });
 
   it('is no overflow when the parts and the free space fill the total exactly', () => {
@@ -303,6 +314,74 @@ describe('space no segment accounts for', () => {
     expect(meter([seg('games', 600)], 1000, null).parts.map((p) => p.kind)).toEqual(['segment']);
     expect(meter([seg('games', 600)], 0, 300).parts.map((p) => p.kind)).toEqual(['segment']);
   });
+});
+
+// Every combination the screens can hand the meter: overflow or not × free measured, derived or not
+// measurable × sizes exact, a lower bound or an unknown one × a fold or none × the compact or the full
+// width. For each, the model must follow the rules, so that the words, the legend and the bar, all
+// drawn from it, agree.
+describe('the rules over every combination', () => {
+  const GB = 1024 ** 3;
+  const T = 1000 * GB;
+  type Free = 'measured' | 'derived' | 'null';
+  type Sizes = 'exact' | 'lowerBound' | 'unknown';
+
+  function input(overflow: boolean, free: Free, sizes: Sizes, fold: boolean) {
+    const segments = [seg('g1', 300 * GB), seg('g2', 200 * GB, { sizeUnknown: sizes === 'lowerBound' })];
+    if (overflow) segments.push(seg('g3', 700 * GB));
+    if (sizes === 'unknown') segments.push(seg('new', 0, { sizeUnknown: true }));
+    if (fold) for (let i = 0; i < 60; i += 1) segments.push(seg(`t${i}`, GB / 100));
+    const measured = overflow ? 250 * GB : 300 * GB;
+    return { segments, free: free === 'measured' ? measured : free === 'null' ? null : undefined };
+  }
+
+  const combos: [boolean, Free, Sizes, boolean, number][] = [];
+  for (const overflow of [false, true])
+    for (const free of ['measured', 'derived', 'null'] as const)
+      for (const sizes of ['exact', 'lowerBound', 'unknown'] as const)
+        for (const fold of [false, true]) for (const width of [METER_WIDTH.compact, METER_WIDTH.full]) combos.push([overflow, free, sizes, fold, width]);
+
+  for (const [overflow, free, sizes, fold, width] of combos) {
+    it(`overflow ${overflow}, free ${free}, sizes ${sizes}, fold ${fold}, width ${width}`, () => {
+      const given = input(overflow, free, sizes, fold);
+      const m = meter(given.segments, T, given.free, width);
+      const used = given.segments.reduce((sum, s) => sum + s.bytes, 0);
+      const measured = typeof given.free === 'number' ? given.free : 0;
+      const exact = sizes === 'exact';
+      expect(m.overflow).toBe(overflow);
+
+      // Drawn against the segments and the measured free space in an overflow, else against the total.
+      const against = overflow ? used + measured : T;
+      const gap = !overflow && free === 'measured' ? T - used - measured : 0;
+      const bytesOf = (p: (typeof m.parts)[number]) =>
+        p.kind === 'other' ? gap : p.kind === 'more' ? (p.folded ?? []).reduce((sum, f) => sum + (f.size.kind === 'unknown' ? 0 : f.size.bytes), 0) : (given.segments.find((s) => s.key === p.key)?.bytes ?? 0);
+      for (const part of m.drawn) expect(part.share * against, part.key).toBeCloseTo(bytesOf(part), -3);
+      const drawn = m.drawn.reduce((sum, p) => sum + p.share, 0);
+      expect(drawn).toBeCloseTo(overflow ? used / against : (used + gap) / T, 9);
+
+      // The legend lists every segment once (folded or not) and other files for the gap.
+      const listed = m.parts.flatMap((p) => (p.kind === 'more' ? (p.folded ?? []) : [p]));
+      expect(listed.filter((p) => p.kind === 'segment').map((p) => p.key)).toEqual(given.segments.map((s) => s.key));
+      const other = m.parts.find((p) => p.kind === 'other');
+      expect(other?.size ?? null).toEqual(gap > 0 ? { kind: exact ? 'exact' : 'atMost', bytes: gap } : null);
+      expect(m.parts.some((p) => p.kind === 'more')).toBe(fold);
+
+      // Free space: a measured one is always said; a derived one only without overflow and with every
+      // size exact; one that could not be measured is said as unknown, except in an overflow.
+      const said =
+        free === 'measured'
+          ? { kind: 'exact', bytes: measured }
+          : free === 'derived'
+            ? !overflow && exact
+              ? { kind: 'exact', bytes: T - used }
+              : null
+            : overflow
+              ? null
+              : { kind: 'unknown' };
+      expect(m.free).toEqual(said);
+      expect(numbers(m).every(Number.isFinite)).toBe(true);
+    });
+  }
 });
 
 describe('sizes in words', () => {
