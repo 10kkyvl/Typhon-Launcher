@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { renderDom } from '../testing/dom';
+import SettingsRowHarness from '../testing/SettingsRowHarness.svelte';
+import SettingsRow from './SettingsRow.svelte';
 
 // Inside a region the row made inert (the `inert` property; see the test that uses it).
 function inert(element: Element): boolean {
   for (let at: Element | null = element; at; at = at.parentElement) if ((at as HTMLElement & { inert?: boolean }).inert === true) return true;
   return false;
 }
-import SettingsRowHarness from '../testing/SettingsRowHarness.svelte';
-import SettingsRow from './SettingsRow.svelte';
 
 describe('SettingsRow', () => {
   it('names each base control with its label and describes it with its hint', () => {

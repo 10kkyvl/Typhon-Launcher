@@ -11,9 +11,9 @@
   /**
    * Vertical bars over buckets (days, weeks, months). The values are the caller's unit and `format`
    * writes them, so hours, hours a day and sessions share the chart. A zero bucket keeps its slot;
-   * with nothing above zero the caller's `empty` is shown instead. A value that is not a number, is
-   * below zero or infinite is no value (barChart.ts::chartValue) for the bar, its label, the table and
-   * the radio alike; the words always say the value given, a bar over the scale is drawn to the top.
+   * with nothing above zero the caller's `empty` is shown instead. The words say the real value even
+   * when the bar is clamped to the scale; a NaN, negative or infinite value is said as `format(0)`,
+   * and the bar, its label, the table and the radio all take it as no value (barChart.ts::chartValue).
    *
    * Plain: the drawing is hidden from assistive tech and a table with the same numbers stands in for
    * it; each bar's value is a label over it.
@@ -21,15 +21,18 @@
    * With `selectable` the bars are one choice of a radio group (one Tab stop, the arrows, Home and
    * End move the choice and the focus, stopping at the ends); `bind:selected` holds the chosen key,
    * which may be none (null or a key no bucket has) without the group turning into a table. The Tab
-   * stop is kept by key; a focused bar whose bucket leaves hands focus to the bar in its place. Each radio is named by its bucket and
-   * value and shows them as a hint, so the radios are the list of numbers and no table repeats them.
+   * stop is kept by key; a focused bar whose bucket leaves hands focus to the bar in its place, and
+   * to the chart's own box when the bars leave for the empty state. Each radio is named by its bucket
+   * and value and shows them as a hint, so the radios are the list of numbers and no table repeats
+   * them.
    * `values="selected"` labels the chosen bar only, for a chart of many bars.
    *
    * `scale` gives the axis (barChart.ts::secondsScale for a time): its ticks are drawn and the bars
    * are measured against its maximum; without it the tallest bar fills the height. The ticks are
    * written by `tickFormat`, else by `format` with the zero tick a bare 0 (a format may word zero as
-   * an absence, "no play", which an axis must not say); a `tickFormat` writes the zero tick too. Bars grow from
-   * zero only while motion is on. `--bar-chart-height` (or `height`) sets the height of the plot.
+   * an absence, "no play", which an axis must not say); a `tickFormat` writes the zero tick too. Bars
+   * grow from zero only while motion is on. `--bar-chart-height` (or `height`) sets the height of the
+   * plot.
    */
   let {
     buckets,
