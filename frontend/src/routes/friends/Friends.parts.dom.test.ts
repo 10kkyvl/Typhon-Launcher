@@ -2,7 +2,7 @@ import { cleanup, render, screen, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
-import { accept, blocks, refresh, unblock, unfriend, type FriendView, type RequestView, type UserCard } from '../../lib/services/social';
+import { accept, blocks, decline, refresh, unblock, unfriend, type FriendView, type RequestView, type UserCard } from '../../lib/services/social';
 import type { Settings } from '../../lib/services/settings';
 import { commonLine } from '../../lib/social/view';
 import { navigate } from '../../lib/stores/router';
@@ -18,9 +18,11 @@ import Friends from './Friends.svelte';
 // the buttons of each card list as a snippet. A prop passed without `bind:`, a callback not wired or a
 // reserve taken from the wrong list breaks nothing a type check sees: these tests go through each such
 // seam the way a player does, and through the page's reads and what makes them run again.
-// Not held here: the cards' slide and fade (jsdom runs no motion), the grid view's rows (the same
-// props as the list's), the friend code card, the consent dialog and the add dialog's own lookup, which
-// are the page's and its children's, not seams of this split.
+// Not held here: that the cards slide and fade only when one comes or goes and not when a tab mounts
+// the list (the transitions are local; no test counts them), the blocked list read again once the
+// sync consent is given (only the sign-in is driven), the grid view's rows (the same props as the
+// list's), the friend code card, the consent dialog and the add dialog's own lookup, which are the
+// page's and its children's, not seams of this split.
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
@@ -187,6 +189,15 @@ describe('Friends: the card lists', () => {
     answer();
     await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(cardOf('Inna').classList.contains('settling')).toBe(false));
+  });
+
+  it('sends a card’s action for that card, not for the first of its list', async () => {
+    await mount();
+
+    await userEvents().click(within(cardOf('Kirill')).getByRole('button', { name: msg('social.declineButton') }));
+
+    await vi.waitFor(() => expect(decline).toHaveBeenCalledWith('r-kirill'));
+    expect(decline).toHaveBeenCalledTimes(1);
   });
 
   it('gives each list its own stats and profile link, and a blocked card none', async () => {
