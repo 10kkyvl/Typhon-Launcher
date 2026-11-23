@@ -261,14 +261,76 @@ func (s *Service) registerJob(job Job) error {
 			return err
 		}
 	}
+	previous := cloneJobs(s.jobs)
+	ended := s.supersedeLocked(job.GameID, job.ID, job.Source)
 	s.jobs = append(s.jobs, job)
 	if err := s.persistJournalLocked(); err != nil {
-		s.jobs = s.jobs[:len(s.jobs)-1]
+		s.jobs = previous
 		s.mu.Unlock()
 		return err
 	}
 	s.mu.Unlock()
+	for _, old := range ended {
+		emit(eventFailed, old)
+	}
 	emit(eventStarted, job.clone())
+	return nil
+}
+
+// supersedeLocked ends every resumable failed move of gameID but keep, as a
+// recovery ends a move whose card moved on: a new move of the game starts
+// from source, the folder its card names, and the old move must never resume
+// over it. The caller writes the journal with the new move in the same
+// persist and restores the jobs it saved before this call when that fails.
+// It returns the ended jobs for their events.
+func (s *Service) supersedeLocked(gameID, keep, source string) []Job {
+	switch gameID {
+	case "", itemDownloads, itemScreenshots, itemSettings:
+		return nil
+	}
+	var ended []Job
+	for i := range s.jobs {
+		j := &s.jobs[i]
+		if j.ID == keep || j.GameID != gameID || j.Orphaned || j.Stage != StageFailed || !resumable(j.FailedAt) {
+			continue
+		}
+		endForCard(j, j.FailedAt == StageCleanup || platform.SamePath(source, j.Target), ErrMovedOn)
+		j.UpdatedAt = time.Now()
+		ended = append(ended, j.clone())
+	}
+	return ended
+}
+
+// startGameItem makes a game the current item of a library move, as mutate
+// says, and ends that game's resumable failed moves in the same journal write
+// (see supersedeLocked).
+func (s *Service) startGameItem(jobID string, mutate func(*Job)) error {
+	s.mu.Lock()
+	job := s.findJobLocked(jobID)
+	if job == nil {
+		s.mu.Unlock()
+		return ErrJobNotFound
+	}
+	previous := cloneJobs(s.jobs)
+	mutate(job)
+	job.Stage = StagePrepare
+	job.UpdatedAt = time.Now()
+	snap := job.clone()
+	ended := s.supersedeLocked(snap.GameID, jobID, snap.Source)
+	if err := s.persistJournalLocked(); err != nil {
+		s.jobs = previous
+		s.status = degradedStatus{Degraded: true, Message: err.Error()}
+		status := s.status
+		s.mu.Unlock()
+		emit(eventDegraded, status)
+		return fmt.Errorf("persist move transition: %w", err)
+	}
+	s.status = degradedStatus{}
+	s.mu.Unlock()
+	for _, old := range ended {
+		emit(eventFailed, old)
+	}
+	emit(eventProgress, snap)
 	return nil
 }
 
@@ -1268,7 +1330,7 @@ func (s *Service) runGameLibraryItem(ctx context.Context, jobID, gameID string, 
 		return s.failOrCancel(jobID, err)
 	}
 
-	if _, err := s.transition(jobID, StagePrepare, func(j *Job) {
+	if err := s.startGameItem(jobID, func(j *Job) {
 		j.GameID = gameID
 		j.Title = game.Title
 		j.Source = source

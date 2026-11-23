@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"typhon/internal/library"
+	"typhon/internal/settings"
 	"typhon/internal/uierr"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -18,11 +19,17 @@ import (
 // journal, with the startup recovery already run.
 func serviceWithJournal(t *testing.T, lib *library.Service, jobs ...Job) *Service {
 	t.Helper()
-	dir := t.TempDir()
+	return serviceWithJournalAt(t, t.TempDir(), nil, lib, jobs...)
+}
+
+// serviceWithJournalAt is serviceWithJournal with the journal kept in dir and
+// the settings a library move needs.
+func serviceWithJournalAt(t *testing.T, dir string, set *settings.Service, lib *library.Service, jobs ...Job) *Service {
+	t.Helper()
 	if err := newStore(dir).saveJournal(jobs); err != nil {
 		t.Fatal(err)
 	}
-	s, err := NewServiceAt(dir, nil, lib, nil, nil, nil)
+	s, err := NewServiceAt(dir, set, lib, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"typhon/internal/library"
+	"typhon/internal/platform"
 )
 
 // OrphanedCopy is a copy a move made of a game that left the library before
@@ -21,6 +22,10 @@ type OrphanedCopy struct {
 	Title  string `json:"title"`
 	Path   string `json:"path"`
 	Kind   string `json:"kind"`
+	// MovedOn says the game's card is still in the library and names another
+	// folder: the copy is one the card moved on from, not a copy of a game
+	// that left the library.
+	MovedOn bool `json:"movedOn"`
 }
 
 const (
@@ -29,26 +34,50 @@ const (
 	CopySource  = "source"
 )
 
-// markOrphaned ends a move whose game was removed or uninstalled before the
-// move was finished. Neither copy is touched and the card is not brought back;
-// the entry stays in the journal so the copies stay listed. repointed says the
-// card, uninstalled, still names the target: the repoint had landed, the
-// cleanup was all that was left, and the old folder is one of the copies.
-func (s *Service) markOrphaned(jobID string, repointed bool) {
-	if _, err := s.transition(jobID, StageFailed, func(j *Job) {
-		j.Error = ErrGameRemoved.Error()
-		j.OrphanedAt = j.Stage
-		if j.Stage == StageFailed {
-			j.OrphanedAt = j.FailedAt
-		}
-		if repointed {
-			j.OrphanedAt = StageCleanup
-		}
-		j.FailedAt = ""
-		j.Orphaned = true
-	}); err != nil {
-		slog.Error("mark move of a removed game", "job", jobID, "error", err)
+// markOrphaned ends a move that is over for its game's card, see endForCard.
+func (s *Service) markOrphaned(jobID string, repointed bool, cause error) {
+	if _, err := s.transition(jobID, StageFailed, func(j *Job) { endForCard(j, repointed, cause) }); err != nil {
+		slog.Error("end a move its game's card is done with", "job", jobID, "error", err)
 	}
+}
+
+// endForCard ends a move before it was finished because its game's card is
+// done with it: the game was removed or uninstalled (ErrGameRemoved), or the
+// card names a folder the move no longer leads to (ErrMovedOn). No copy is
+// touched and the card is not brought back; the entry stays in the journal so
+// the copies stay listed. repointed says the repoint had landed and the
+// cleanup was all that was left: the old folder is then one of the copies.
+func endForCard(j *Job, repointed bool, cause error) {
+	j.Error = cause.Error()
+	j.OrphanedAt = j.Stage
+	if j.Stage == StageFailed {
+		j.OrphanedAt = j.FailedAt
+	}
+	if repointed {
+		j.OrphanedAt = StageCleanup
+	}
+	j.FailedAt = ""
+	j.Orphaned = true
+	j.Stage = StageFailed
+}
+
+// cardMovedOn says whether a card at installDir has moved on from a job: a
+// recovery repoints it only while it names the job's source (the repoint is
+// owed) or its target (done), and past the repoint, where the old folder is
+// deleted, only while it names the target.
+func cardMovedOn(job Job, installDir string) bool {
+	if platform.SamePath(installDir, job.Target) {
+		return false
+	}
+	return stageOf(job) == StageCleanup || !platform.SamePath(installDir, job.Source)
+}
+
+// stageOf is the stage a job is at or failed at.
+func stageOf(job Job) Stage {
+	if job.Stage == StageFailed {
+		return job.FailedAt
+	}
+	return job.Stage
 }
 
 // recoverOrphan drops the entry of an orphaned move once nothing of it is left
@@ -99,9 +128,19 @@ func orphanCopies(job Job, games []library.Game) ([]OrphanedCopy, error) {
 			continue
 		}
 		c.JobID, c.GameID, c.Title = job.ID, job.GameID, job.Title
+		c.MovedOn = cardAlive(job.GameID, games)
 		out = append(out, c)
 	}
 	return out, nil
+}
+
+func cardAlive(id string, games []library.Game) bool {
+	for _, g := range games {
+		if g.ID == id {
+			return !g.Uninstalled
+		}
+	}
+	return false
 }
 
 func claimed(path string, games []library.Game) bool {
@@ -118,8 +157,8 @@ func claimed(path string, games []library.Game) bool {
 	return false
 }
 
-// OrphanedCopies lists the copies of moves whose game left the library, for
-// the disk usage screen.
+// OrphanedCopies lists the copies of moves that are over for their game's
+// card, for the disk usage screen.
 //
 //wails:ignore
 func (s *Service) OrphanedCopies() ([]OrphanedCopy, error) {

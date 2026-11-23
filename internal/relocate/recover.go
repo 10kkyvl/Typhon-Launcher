@@ -114,19 +114,31 @@ func (s *Service) surfaceStale(job Job) {
 // (see failShared). A busy game or a card still being added leaves the job as
 // it is for a later start: the journal has no stage that says "waiting", so
 // until then it reads as the stage it was killed in. A game that is gone from
-// the library or uninstalled ends the job at once without touching any data.
+// the library or uninstalled, or whose card moved on from the job, ends the
+// job at once without touching any data (endedForCard).
 func (s *Service) reserveForRecovery(job Job) (func(), bool) {
 	noop := func() {}
 	if s.lib == nil || !recoveryTouchesGame(job) {
 		return noop, true
 	}
-	if game, err := s.lib.Find(job.GameID); err != nil || game.Uninstalled {
-		s.markOrphaned(job.ID, err == nil && platform.SamePath(game.InstallDir, job.Target))
+	if s.endedForCard(job) {
 		return nil, false
 	}
 	release, err := s.lib.BeginRecovery(job.GameID, job.Source, job.Target, job.Staging)
 	switch {
 	case err == nil:
+		// recoverAll works from a copy of the journal: a new move may have
+		// ended the job, or moved the game, since. Under the reservation no
+		// move or removal changes either, so both are read again here.
+		current, err := s.jobSnapshot(job.ID)
+		if err != nil || current.Orphaned || current.Stage != job.Stage || current.FailedAt != job.FailedAt {
+			release()
+			return nil, false
+		}
+		if s.endedForCard(job) {
+			release()
+			return nil, false
+		}
 		return release, true
 	case errors.Is(err, library.ErrFolderShared):
 		s.failShared(job, err)
@@ -134,6 +146,23 @@ func (s *Service) reserveForRecovery(job Job) (func(), bool) {
 		slog.Warn("recovery skipped: game is busy", "job", job.ID, "game", job.GameID, "error", err)
 	}
 	return nil, false
+}
+
+// endedForCard ends a job its game's card is done with, and says so: the game
+// left the library or was uninstalled, or its card names a folder the job no
+// longer leads to (cardMovedOn). Nothing is repointed or deleted; the copies
+// stay listed through OrphanedCopies.
+func (s *Service) endedForCard(job Job) bool {
+	game, err := s.lib.Find(job.GameID)
+	switch {
+	case err != nil || game.Uninstalled:
+		s.markOrphaned(job.ID, err == nil && platform.SamePath(game.InstallDir, job.Target), ErrGameRemoved)
+	case cardMovedOn(job, game.InstallDir):
+		s.markOrphaned(job.ID, stageOf(job) == StageCleanup, ErrMovedOn)
+	default:
+		return false
+	}
+	return true
 }
 
 // failShared fails a job another card's files are in the way of, at the stage

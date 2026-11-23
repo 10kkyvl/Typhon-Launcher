@@ -34,6 +34,7 @@ export const REASONS: Record<string, MessageKey> = {
   'relocate.folder_shared': 'transfers.moveErrFolderShared',
   'relocate.game_removing': 'transfers.moveErrGameRemoving',
   'relocate.staging_left': 'transfers.moveErrStagingLeft',
+  'relocate.moved_on': 'transfers.moveErrMovedOn',
   'relocate.retries_exhausted': 'transfers.moveErrRetriesExhausted',
   'library.executable_outside': 'transfers.moveErrExecutableOutside',
   'library.folder_busy': 'library.folder_busy',

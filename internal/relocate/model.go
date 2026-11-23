@@ -61,12 +61,14 @@ type Job struct {
 	FailedAt    Stage     `json:"failedAt,omitempty"`
 
 	RecoveryAttempts int `json:"recoveryAttempts,omitempty"`
-	// Orphaned marks a move whose game left the library before the repoint:
-	// the entry stays while a copy it made is on disk, see OrphanedCopies.
+	// Orphaned marks a move that is over for its game's card before it was
+	// finished: the game left the library (ErrGameRemoved), or its card names
+	// a folder the move no longer leads to (ErrMovedOn). The entry stays while
+	// a copy it made is on disk, see OrphanedCopies.
 	Orphaned bool `json:"orphaned,omitempty"`
-	// OrphanedAt is the stage the move had reached when its game left the
-	// library, the cleanup when the card named the target by then; it says
-	// whether the old folder is one of the move's copies.
+	// OrphanedAt is the stage the move had reached when it became orphaned,
+	// the cleanup when the repoint had landed by then; it says whether the
+	// old folder is one of the move's copies.
 	OrphanedAt Stage `json:"orphanedAt,omitempty"`
 }
 
@@ -107,6 +109,7 @@ var (
 	ErrFolderShared       = uierr.New("relocate.folder_shared", "в папке игры лежит другая игра библиотеки, её файлы переехали бы вместе с этой")
 	ErrGameRemoving       = uierr.New("relocate.game_removing", "игра удаляется, перенести её нельзя")
 	ErrStagingLeft        = uierr.New("relocate.staging_left", "рядом с целевой папкой осталась временная папка другого переноса, перенос её не трогает")
+	ErrMovedOn            = uierr.New("relocate.moved_on", "карточка игры указывает на другую папку, этот перенос закончен без неё; его копии не тронуты")
 )
 
 // maxRecoveryAttempts bounds how many startups retry a failed repoint or

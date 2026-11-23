@@ -118,7 +118,7 @@ func TestRecoverFailedJobAfterRepoint(t *testing.T) {
 		wantJobGone  bool
 	}{
 		{"cleanup failed, new copy registered", StageCleanup, true, false, true, true, true},
-		{"cleanup failed, library still at old copy", StageCleanup, false, false, false, false, true},
+		{"cleanup failed, library still at old copy", StageCleanup, false, false, false, false, false},
 		{"cleanup failed, new copy corrupt", StageCleanup, true, true, false, true, false},
 		{"repoint failed, library still at old copy", StageRepoint, false, false, true, true, true},
 		{"repoint failed, new copy corrupt", StageRepoint, false, true, false, false, false},
