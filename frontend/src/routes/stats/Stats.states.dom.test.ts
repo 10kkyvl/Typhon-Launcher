@@ -121,6 +121,34 @@ describe('Stats: the period switch', () => {
   });
 });
 
+describe('Stats: the period switch is one choice of three', () => {
+  it('is a radio group named by what it chooses, the chosen period checked, one Tab stop', async () => {
+    vi.mocked(getStats).mockResolvedValueOnce(week());
+    const { findByText } = renderDom(Stats);
+    await findByText(msg('stats.totalLabel'));
+
+    const group = screen.getByRole('radiogroup', { name: msg('stats.periodLabel') });
+    const radios = within(group).getAllByRole('radio');
+    expect(radios.map((radio) => radio.textContent?.trim())).toEqual([msg('stats.periodWeek'), msg('stats.periodMonth'), msg('stats.periodYear')]);
+    expect(radios.map((radio) => radio.getAttribute('aria-checked'))).toEqual(['true', 'false', 'false']);
+    expect(radios.map((radio) => radio.tabIndex)).toEqual([0, -1, -1]);
+  });
+
+  it('an arrow key chooses the next period and asks for it', async () => {
+    vi.mocked(getStats).mockResolvedValueOnce(week()).mockReturnValueOnce(new Promise(() => {}));
+    const { findByText, user } = renderDom(Stats);
+    await findByText(msg('stats.totalLabel'));
+    screen.getByRole('radio', { name: msg('stats.periodWeek') }).focus();
+
+    await user.keyboard('{ArrowRight}');
+
+    const monthRadio = screen.getByRole('radio', { name: msg('stats.periodMonth') });
+    expect(monthRadio.getAttribute('aria-checked')).toBe('true');
+    expect(document.activeElement).toBe(monthRadio);
+    expect(vi.mocked(getStats).mock.calls.map(([period]) => period)).toEqual(['week', 'month']);
+  });
+});
+
 describe('Stats: a reload while the period is shown', () => {
   it('reloads the shown period when a session is recorded', async () => {
     vi.mocked(getStats).mockResolvedValueOnce(week()).mockResolvedValueOnce(month()).mockResolvedValueOnce(month());

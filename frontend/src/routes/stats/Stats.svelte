@@ -3,10 +3,10 @@
   import { onMount } from 'svelte';
   import { ChartColumn } from '@lucide/svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
-  import Chip from '../../lib/components/Chip.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import Notice from '../../lib/components/Notice.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
+  import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import Spinner from '../../lib/components/Spinner.svelte';
   import StatTile from '../../lib/components/StatTile.svelte';
   import { coverOf } from '../../lib/profile/view';
@@ -24,6 +24,8 @@
     month: () => msg('stats.periodMonth'),
     year: () => msg('stats.periodYear'),
   };
+
+  const periodOptions = STATS_PERIODS.map((value) => ({ id: value, label: periodLabels[value]() }));
 
   let period = $state<StatsPeriod>('week');
   let data = $state<Stats | null>(null);
@@ -113,11 +115,12 @@
 <Page>
   <PageHeader title={msg('stats.title')} subtitle={msg('stats.subtitle')}>
     {#snippet actions()}
-      <div class="periods" role="group" aria-label={msg('stats.periodLabel')}>
-        {#each STATS_PERIODS as value (value)}
-          <Chip selected={period === value} onclick={() => pick(value)}>{periodLabels[value]()}</Chip>
-        {/each}
-      </div>
+      <SegmentedControl
+        options={periodOptions}
+        label={msg('stats.periodLabel')}
+        variant="pill"
+        bind:value={() => period, (next) => pick(next as StatsPeriod)}
+      />
     {/snippet}
   </PageHeader>
 
@@ -204,11 +207,6 @@
 </Page>
 
 <style>
-  .periods {
-    display: flex;
-    gap: var(--space-2);
-  }
-
   .body {
     display: flex;
     flex-direction: column;
