@@ -62,7 +62,7 @@
     if (page.overlayInfoFailed) return msg('settings.overlayStatusUnknown');
     if (!page.overlayInfo) return '';
     if (!page.overlayInfo.supported) return msg('settings.overlayStatusUnsupported');
-    if (page.overlayInfo.error) return overlayReason(page.overlayInfo.error);
+    if (page.overlayInfo.error) return overlayReason(page.overlayInfo.error) || msg('settings.overlaySaveErrorPlain');
     if (page.overlayInfo.enabled) return msg('settings.overlayStatusOn', { hotkey: page.overlayInfo.hotkey });
     return msg('settings.overlayStatusOff');
   });

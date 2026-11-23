@@ -1,7 +1,7 @@
 import { onMount } from 'svelte';
 import { Clipboard } from '@wailsio/runtime';
 import { cloudErrorText } from '../../lib/cloudsaves/messages';
-import { errorCode, hasMessage, msg } from '../../lib/i18n';
+import { codeText, msg } from '../../lib/i18n';
 import { forgetSyncPrompt, sendLogsPrompt, type ConfirmPrompt } from '../../lib/confirm/prompts';
 import { forgetRemote, syncNow } from '../../lib/services/accountSync';
 import { accountSyncReason } from '../../lib/services/accountSyncMessages';
@@ -31,10 +31,12 @@ import { toast } from '../../lib/stores/toasts';
 
 export type SettingsPage = ReturnType<typeof createSettingsPage>;
 
+/**
+ * The catalogued message of a failed overlay, screenshot or schedule save's code, else '': Go's own
+ * words are never shown, each place says its own catalogued text instead.
+ */
 export function overlayReason(err: unknown): string {
-  const code = errorCode(err);
-  if (code && hasMessage(code)) return msg(code);
-  return err instanceof Error ? err.message : String(err);
+  return codeText(err, '');
 }
 
 /**

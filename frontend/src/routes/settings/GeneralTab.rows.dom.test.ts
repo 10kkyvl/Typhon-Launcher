@@ -316,6 +316,29 @@ describe('the general tab: the overlay status', () => {
     expect(region().querySelector('[data-tone="danger"]')).not.toBeNull();
   });
 
+  // Go's own words never reach the player: a failure without a code says the place's own text.
+  it('says an overlay failure without a code by the catalogued text, not Go\'s', async () => {
+    vi.mocked(overlayStatus).mockResolvedValue({ supported: true, enabled: true, hotkey: 'Alt+`', error: 'register Alt+`: hotkey taken' });
+    open();
+    await waitFor(() => expect(region().textContent?.trim()).toBe(msg('settings.overlaySaveErrorPlain')));
+    expect(region().querySelector('[data-tone="danger"]')).not.toBeNull();
+  });
+
+  it('says an overlay change that failed without a code by the catalogued text', async () => {
+    vi.mocked(saveSettingsPatch).mockRejectedValue(new Error('locked'));
+    open();
+    await user().click(sw('settings.overlayEnabledLabel'));
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent?.trim()).toBe(msg('settings.overlaySaveErrorPlain'));
+  });
+
+  it('says a screenshot change that failed without a code by the catalogued text', async () => {
+    vi.mocked(saveSettingsPatch).mockRejectedValue(new Error('hotkey taken'));
+    open();
+    await user().click(sw('settings.screenshotsEnabledLabel'));
+    await waitFor(() => expect(toastTexts()).toEqual([msg('settings.screenshotsSaveErrorPlain')]));
+  });
+
   it('says a coded overlay failure by its message', async () => {
     vi.mocked(overlayStatus).mockResolvedValue({ supported: true, enabled: true, hotkey: 'Alt+`', error: 'typhon:overlay.hotkey_unavailable: register Alt+`: taken' });
     open();

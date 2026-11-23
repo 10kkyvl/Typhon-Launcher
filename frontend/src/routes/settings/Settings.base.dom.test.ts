@@ -67,7 +67,7 @@ describe('Settings: the general tab', () => {
     await user().keyboard(' ');
 
     const alert = await screen.findByRole('alert');
-    expect(alert.textContent).toContain(msg('settings.overlaySaveError', { reason: 'locked' }));
+    expect(alert.textContent?.trim()).toBe(msg('settings.overlaySaveErrorPlain'));
     expect(alert.closest('[data-tone]')?.getAttribute('data-tone')).toBe('danger');
   });
 });

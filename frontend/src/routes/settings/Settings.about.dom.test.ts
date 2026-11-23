@@ -68,7 +68,8 @@ describe('Settings: the overlay status in the app', () => {
   it('shows a failed overlay on a danger notice inside the status line, not as red text', async () => {
     vi.mocked(overlayStatus).mockResolvedValueOnce({ supported: true, enabled: true, hotkey: 'Alt+`', error: 'hook failed' });
     render(Settings, { target: app });
-    const text = await screen.findByText('hook failed');
+    const text = await screen.findByText(msg('settings.overlaySaveErrorPlain'));
+    expect(screen.queryByText('hook failed')).toBeNull();
     expect(text.closest('[data-tone]')?.getAttribute('data-tone')).toBe('danger');
     const region = text.closest('[role="status"]') as HTMLElement;
     expect(region).not.toBeNull();
