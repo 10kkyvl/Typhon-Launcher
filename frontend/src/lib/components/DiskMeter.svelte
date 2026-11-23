@@ -15,6 +15,9 @@
    * unknown total draws nothing, an overflow is drawn in proportion and says only a measured free
    * space, a size not measured is said, not drawn as 0).
    *
+   * Pass an `other` segment only for space you measured; space that no segment and no measured free
+   * space accounts for is added as "Other files" in the same tone.
+   *
    * The bar is one image whose text alternative carries the legend's numbers. With `onpick` its
    * segments are buttons instead (one Tab stop, the arrows move, a hint names each); a segment under
    * one pixel still shows as a hairline. Neighbouring segments are kept apart by a gap of the track,

@@ -212,6 +212,29 @@ describe('DiskMeter', () => {
             }
   });
 
+  // A caller's own `other` segment is space it measured; what nothing accounts for is added beside it
+  // in the same tone. The two are two entries under their own names, never merged into one.
+  it("lists a caller's other segment and the space nothing accounts for as two entries", () => {
+    const { container, getByRole } = renderDom(DiskMeter, {
+      label: 'Диск',
+      segments: [
+        { key: 'games', label: 'Игры', bytes: 600 * GB, tone: 'game' },
+        { key: 'system', label: 'Система', bytes: 50 * GB, tone: 'other' },
+      ],
+      total: 1000 * GB,
+      free: 300 * GB,
+    });
+    expect(legendLines(getByRole('list')).slice(0, 3)).toEqual([`Игры ${bytesSize(600 * GB)}`, `Система ${bytesSize(50 * GB)}`, `Другие файлы ${bytesSize(50 * GB)}`].map(words));
+    expect(getByRole('img').getAttribute('aria-label')).toBe(
+      `Диск: Игры: ${bytesSize(600 * GB)}; Система: ${bytesSize(50 * GB)}; Другие файлы: ${bytesSize(50 * GB)}; Свободно ${bytesSize(300 * GB)} из ${bytesSize(1000 * GB)}`,
+    );
+    expect(parts(container).map((p) => [p.dataset.tone, parseFloat(p.style.flexBasis)])).toEqual([
+      ['game', 60],
+      ['other', 5],
+      ['other', 5],
+    ]);
+  });
+
   // Bad input is said, not thrown: two segments under one key are both drawn, listed and pickable.
   it('draws and lists two segments that share a key, and reports that key for either', async () => {
     const onpick = vi.fn();
