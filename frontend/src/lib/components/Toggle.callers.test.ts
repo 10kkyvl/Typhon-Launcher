@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fromSettingsRow, usesIn, type Use } from '../testing/markup';
+import { attributeValues, fromSettingsRow, usesIn, type Use } from '../testing/markup';
 import { frontendSources } from '../testing/sources';
 
 /**
@@ -8,7 +8,8 @@ import { frontendSources } from '../testing/sources';
  * written: such a caller sets its own state in `onchange`.
  *
  * Limit: see lib/testing/markup.ts; `labelledby` and `describedby` are checked only for an `id=` with
- * the same expression inside the element the switch sits in, or the ids a SettingsRow hands it.
+ * the same expression inside the element the switch sits in, or the ids the SettingsRow snippet that
+ * holds it takes.
  */
 
 const toggles = (path: string, text: string): Use[] => usesIn(path, text, 'Toggle');
@@ -37,23 +38,25 @@ function spreads(tag: string): boolean {
 // an `id=` inside the element the switch sits in: its row); `label` is for a switch whose row shows no
 // label of its own, so a `label` whose text the same file also shows as an element's content is a
 // hidden copy and is refused.
-function named({ path, tag, row }: Use, text = frontendSources[path] ?? ''): boolean {
+function named({ path, tag, row, snippet }: Use, text = frontendSources[path] ?? ''): boolean {
   const own = /\blabel=\{(msg\('[\w.]+'\))\}/.exec(tag)?.[1];
   if (own) return !text.includes(`>{${own}}<`);
   const by = /\blabelledby=("[^"]*"|\{[^}]*\})/.exec(tag)?.[1];
-  return by !== undefined && (row.includes(`id=${by}`) || fromSettingsRow(row, 'labelId', by));
+  return by !== undefined && (attributeValues(row, 'id').includes(by) || fromSettingsRow(snippet, 'labelId', by));
 }
 
 // The description, where there is one, is the row's own text too. A description shown only in some
 // rows is written `{cond ? `${a}-sub` : undefined}`: each template in it is the id `"{a}-sub"`.
-function describedInRow({ tag, row }: Use): boolean {
+function describedInRow({ tag, row, snippet }: Use): boolean {
   const by = /\bdescribedby=("[^"]*"|\{(?:[^{}]|\{[^{}]*\})*\})/.exec(tag)?.[1];
   if (by === undefined) return true;
   const templates = [...by.matchAll(/`([^`]*)`/g)].map((m) => `"${m[1].replace(/\$\{/g, '{')}"`);
-  return [by, ...templates].some((id) => row.includes(`id=${id}`)) || fromSettingsRow(row, 'hintId', by);
+  const ids = attributeValues(row, 'id');
+  return [by, ...templates].some((id) => ids.includes(id)) || fromSettingsRow(snippet, 'hintId', by);
 }
 
-const at = (row: string, tag: string): Use => ({ path: 'x.svelte', tag, row });
+const at = (row: string, tag: string): Use => ({ path: 'x.svelte', tag, row, snippet: null });
+const first = (text: string): Use => toggles('x.svelte', text)[0];
 
 describe('Toggle call sites', () => {
   it('reads them', () => {
@@ -76,10 +79,19 @@ describe('Toggle call sites', () => {
     // The label is in the file, but in another row.
     expect(named(at('<div><Toggle /></div>', '<Toggle checked={on} labelledby="row" />'), row)).toBe(false);
     const settings = '<SettingsRow label="Sound">{#snippet children({ labelId, hintId })}<Toggle labelledby={labelId} />{/snippet}</SettingsRow>';
-    expect(named(at(settings, '<Toggle labelledby={labelId} />'))).toBe(true);
-    expect(named(at(settings.replace('labelId, ', ''), '<Toggle labelledby={labelId} />'))).toBe(false);
-    expect(named(at('<div>{#snippet children({ labelId })}<Toggle />{/snippet}</div>', '<Toggle labelledby={labelId} />'))).toBe(false);
+    expect(named(first(settings), '')).toBe(true);
+    expect(named(first(settings.replace('labelId, ', '')), '')).toBe(false);
+    expect(named(first('<div>{#snippet children({ labelId })}<Toggle labelledby={labelId} />{/snippet}</div>'), '')).toBe(false);
     expect(uses.filter((use) => !named(use)).map(({ path, tag }) => `${path}: ${tag}`)).toEqual([]);
+  });
+
+  it('read the ids a SettingsRow hands a switch wrapped in its snippet', () => {
+    const text = '<SettingsRow label="Sound" hint="Plays a chime">{#snippet children({ labelId, hintId })}<div class="pair"><Toggle labelledby={labelId} describedby={hintId} onchange={save} /></div>{/snippet}</SettingsRow>';
+    const [use] = toggles('x.svelte', text);
+    expect([named(use, text), describedInRow(use)]).toEqual([true, true]);
+    const below = '<SettingsRow label="Sound">{#snippet children()}<span><Toggle labelledby={labelId} describedby={hintId} /></span>{/snippet}{#snippet below({ labelId, hintId })}<p id="x"></p>{/snippet}</SettingsRow>';
+    const [other] = toggles('x.svelte', below);
+    expect([named(other, below), describedInRow(other)]).toEqual([false, false]);
   });
 
   it('describe a switch by the text of its own row', () => {
@@ -90,9 +102,9 @@ describe('Toggle call sites', () => {
     const some = '<div><span id="{uid}-sub">Only here</span><Toggle /></div>';
     expect(describedInRow(at(some, '<Toggle describedby={shown ? `${uid}-sub` : undefined} />'))).toBe(true);
     expect(describedInRow(at(some, '<Toggle describedby={shown ? `${uid}-other` : undefined} />'))).toBe(false);
-    const settings = '<SettingsRow label="Sound" hint="Plays a chime">{#snippet children({ labelId, hintId })}<Toggle />{/snippet}</SettingsRow>';
-    expect(describedInRow(at(settings, '<Toggle labelledby={labelId} describedby={hintId} />'))).toBe(true);
-    expect(describedInRow(at(settings.replace(', hintId', ''), '<Toggle labelledby={labelId} describedby={hintId} />'))).toBe(false);
+    const settings = '<SettingsRow label="Sound" hint="Plays a chime">{#snippet children({ labelId, hintId })}<Toggle labelledby={labelId} describedby={hintId} />{/snippet}</SettingsRow>';
+    expect(describedInRow(first(settings))).toBe(true);
+    expect(describedInRow(first(settings.replace(', hintId', '')))).toBe(false);
     expect(uses.filter((use) => !describedInRow(use)).map(({ path, tag }) => `${path}: ${tag}`)).toEqual([]);
   });
 

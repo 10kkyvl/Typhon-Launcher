@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fromSettingsRow, usesIn, type Use } from '../testing/markup';
+import { attributeValues, fromSettingsRow, usesIn, type Use } from '../testing/markup';
 import { frontendSources } from '../testing/sources';
 
 /**
@@ -14,13 +14,13 @@ import { frontendSources } from '../testing/sources';
 // field is named. A `<label for>` and an element with the `labelledby` id are looked for in the whole
 // file (the settings cards put the label in a column beside the field's own box); the id a SettingsRow
 // hands its snippet only in that row, as Toggle's guard reads it.
-function named({ path, tag, row }: Use, text: string): boolean {
+function named({ path, tag, snippet }: Use, text: string): boolean {
   if (/\blabel=\{msg\(/.test(tag)) return true;
   const id = /\bid=("[^"]*"|\{[^}]*\})/.exec(tag)?.[1];
-  if (id && text.includes(`for=${id}`)) return true;
+  if (id && attributeValues(text, 'for').includes(id)) return true;
   const by = /\blabelledby=("[^"]*"|\{[^}]*\})/.exec(tag)?.[1];
   if (!by) return path === 'lib/components/RateLimitInput.svelte' && /\{labelledby\}/.test(tag);
-  return (by !== '{labelId}' && text.includes(`id=${by}`)) || fromSettingsRow(row, 'labelId', by);
+  return (by !== '{labelId}' && attributeValues(text, 'id').includes(by)) || fromSettingsRow(snippet, 'labelId', by);
 }
 
 function uses(name: string): Use[] {
@@ -53,11 +53,34 @@ describe('Select call sites', () => {
     expect(usesIn('x.svelte', label, 'Select').map((use) => named(use, label))).toEqual([true]);
   });
 
+  // Inside a row means inside the row's own `children` or `below` snippet at any depth, and the id is
+  // the row's only where that snippet takes it. Markup in a comment or a string is not markup.
+  it('read the row of a field inside its snippet at any depth, by what that snippet takes', () => {
+    const named1 = (text: string) => usesIn('x.svelte', text, 'Select').map((use) => named(use, text));
+    // Wrapped in an element, in a block, a multi-line row tag: still the row's.
+    expect(named1('<SettingsRow label="L">{#snippet children({ labelId })}<div class="pair"><Select labelledby={labelId} /></div>{/snippet}</SettingsRow>')).toEqual([true]);
+    expect(named1('<SettingsRow\n  label="L"\n  hint={a > b ? x : y}\n>\n  {#snippet children({ labelId, hintId })}\n    {#if shown}<span><Select labelledby={labelId} /></span>{/if}\n  {/snippet}\n</SettingsRow>')).toEqual([true]);
+    // A renamed binding is read by its new name.
+    expect(named1('<SettingsRow label="L">{#snippet children({ labelId: name })}<Select labelledby={name} />{/snippet}</SettingsRow>')).toEqual([true]);
+    expect(named1('<SettingsRow label="L">{#snippet children({ labelId: name })}<Select labelledby={labelId} />{/snippet}</SettingsRow>')).toEqual([false]);
+    // The label id taken by `below` only does not name a field in `children`.
+    expect(named1('<SettingsRow label="L">{#snippet children()}<Select labelledby={labelId} />{/snippet}{#snippet below({ labelId })}<ul aria-labelledby={labelId}></ul>{/snippet}</SettingsRow>')).toEqual([false]);
+    // In a row inside another row's snippet, the outer row's label id is not the inner row's.
+    expect(named1('<SettingsRow label="Outer">{#snippet below({ labelId })}<SettingsRow label="Inner">{#snippet children()}<Select labelledby={labelId} />{/snippet}</SettingsRow>{/snippet}</SettingsRow>')).toEqual([false]);
+    // A snippet header in a comment takes nothing.
+    expect(named1('<SettingsRow label="L"><!-- {#snippet children({ labelId })} -->{#snippet children()}<Select labelledby={labelId} />{/snippet}</SettingsRow>')).toEqual([false]);
+    // A `<label for>` in a comment or a string names nothing; a real one does.
+    expect(named1('<!-- <label for="{uid}-lang">Language</label> --><Select id="{uid}-lang" />')).toEqual([false]);
+    expect(named1('<p>{\'<label for="{uid}-lang">\'}</p><Select id="{uid}-lang" />')).toEqual([false]);
+    expect(named1('<label for="{uid}-lang">Language</label><Select id="{uid}-lang" />')).toEqual([true]);
+  });
+
   it('take the label id a SettingsRow hands its snippet', () => {
     const row = '<SettingsRow label="Language">{#snippet children({ labelId, hintId })}<Select labelledby={labelId} />{/snippet}</SettingsRow>';
-    expect(fromSettingsRow(row, 'labelId', '{labelId}')).toBe(true);
-    expect(fromSettingsRow(row.replace('labelId, ', ''), 'labelId', '{labelId}')).toBe(false);
-    expect(fromSettingsRow('<div>{#snippet children({ labelId })}<Select labelledby={labelId} />{/snippet}</div>', 'labelId', '{labelId}')).toBe(false);
+    const snippetOf = (text: string) => usesIn('x.svelte', text, 'Select')[0].snippet;
+    expect(fromSettingsRow(snippetOf(row), 'labelId', '{labelId}')).toBe(true);
+    expect(fromSettingsRow(snippetOf(row.replace('labelId, ', '')), 'labelId', '{labelId}')).toBe(false);
+    expect(fromSettingsRow(snippetOf('<div>{#snippet children({ labelId })}<Select labelledby={labelId} />{/snippet}</div>'), 'labelId', '{labelId}')).toBe(false);
   });
 
   it('bind the value or hold it with onchange, never both', () => {

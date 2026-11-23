@@ -1,12 +1,13 @@
 import { balanced } from './scan';
 
 /**
- * Markup read for the call-site guards (`*.callers.test.ts`): where a component is used and the element
- * it sits in, so a label or hint id is checked in the use's own row, not anywhere in its file.
+ * Markup read for the call-site guards (`*.callers.test.ts`): where a component is used, the element it
+ * sits in and the SettingsRow snippet that holds it, so a label or hint id is checked in the use's own
+ * row, not anywhere in its file.
  *
- * Limit: the markup is read as tags and `{...}` expressions; markup built in script is not seen, and a
- * snippet is not an element, so the row of a control put straight into `{#snippet}` is the component
- * the snippet belongs to.
+ * Limit: the markup is read as tags, `{...}` expressions and `{#snippet}` blocks; markup built in
+ * script is not seen. Comments, `<script>` and `<style>` are not markup, nor is the text an expression
+ * or an attribute's value holds.
  */
 
 export interface MarkupElement {
@@ -15,12 +16,32 @@ export interface MarkupElement {
   end: number;
 }
 
+/** A `{#snippet}` a SettingsRow is given (`children`, `below`) and the names it takes from the row. */
+export interface RowSnippet {
+  /** The opening tag of the SettingsRow. */
+  row: string;
+  /** Where that SettingsRow starts in its file: two rows with the same tag stay apart. */
+  at: number;
+  name: string;
+  /** What the snippet destructures: the row's name for a value (`labelId`) → the local name. */
+  bound: Record<string, string>;
+}
+
 export interface Use {
   path: string;
   /** The opening tag of the use: its attributes, not what it holds. */
   tag: string;
-  /** The markup of the element the use sits in: its row. The whole file when it sits in none. */
+  /** The markup of the element the use sits in. The whole file when it sits in none. */
   row: string;
+  /** The innermost SettingsRow snippet the use sits in, at any depth; null outside every row. */
+  snippet: RowSnippet | null;
+}
+
+interface SnippetBlock {
+  name: string;
+  params: string;
+  start: number;
+  end: number;
 }
 
 const VOID = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr']);
@@ -46,10 +67,11 @@ export function tagEnd(text: string, start: number): number {
   return text.length;
 }
 
-/** Every element of a component's markup, spanning from its opening tag to its closing one. */
-export function elements(text: string): MarkupElement[] {
+function scan(text: string): { elements: MarkupElement[]; snippets: SnippetBlock[] } {
   const found: MarkupElement[] = [];
+  const snippets: SnippetBlock[] = [];
   const open: { name: string; start: number }[] = [];
+  const openSnippets: { name: string; params: string; start: number }[] = [];
   let at = 0;
   while (at < text.length) {
     const rest = text.slice(at, at + 80);
@@ -62,6 +84,12 @@ export function elements(text: string): MarkupElement[] {
       at = close < 0 ? text.length : close + 3;
     } else if (text[at] === '{') {
       const inner = balanced(text, at);
+      const header = inner === null ? null : /^#snippet\s+([\w$]+)\s*\(([\s\S]*)\)\s*$/.exec(inner);
+      if (header) openSnippets.push({ name: header[1], params: header[2], start: at });
+      else if (inner !== null && /^\/snippet\s*$/.test(inner)) {
+        const block = openSnippets.pop();
+        if (block) snippets.push({ ...block, end: at + inner.length + 2 });
+      }
       at += inner === null ? 1 : inner.length + 2;
     } else if (rest.startsWith('</')) {
       const close = /^<\/([\w:.-]+)\s*>/.exec(rest);
@@ -79,29 +107,103 @@ export function elements(text: string): MarkupElement[] {
       at = end;
     } else at += 1;
   }
+  return { elements: found, snippets };
+}
+
+/** Every element of a component's markup, spanning from its opening tag to its closing one. */
+export function elements(text: string): MarkupElement[] {
+  return scan(text).elements;
+}
+
+/**
+ * The attributes of an opening tag, each with its value as written: `"…"`, `'…'`, `{…}` or a bare
+ * word; `{name}` for the shorthand `{name}`; `true` for one with no value. A spread is skipped.
+ */
+export function attributes(tag: string): Map<string, string> {
+  const found = new Map<string, string>();
+  let at = /^<[\w:.-]+/.exec(tag)?.[0].length ?? 0;
+  while (at < tag.length) {
+    const ch = tag[at];
+    if (/\s/.test(ch) || ch === '/' || ch === '>') {
+      at += 1;
+      continue;
+    }
+    if (ch === '{') {
+      const inner = balanced(tag, at);
+      if (inner === null) break;
+      const name = inner.trim();
+      if (/^[\w$]+$/.test(name)) found.set(name, `{${name}}`);
+      at += inner.length + 2;
+      continue;
+    }
+    const name = /^[^\s=/>{]+/.exec(tag.slice(at))?.[0] ?? '';
+    if (!name) break;
+    at += name.length;
+    if (tag[at] !== '=') {
+      found.set(name, 'true');
+      continue;
+    }
+    at += 1;
+    const open = tag[at];
+    let value: string;
+    if (open === '"' || open === "'") {
+      const close = tag.indexOf(open, at + 1);
+      value = tag.slice(at, close < 0 ? tag.length : close + 1);
+    } else if (open === '{') {
+      const inner = balanced(tag, at);
+      value = inner === null ? tag.slice(at) : `{${inner}}`;
+    } else value = /^[^\s>]*/.exec(tag.slice(at))?.[0] ?? '';
+    found.set(name, value);
+    at += value.length;
+  }
   return found;
 }
 
-/** Each use of the component `name` in `text`, with the element it sits in. */
+/** Every value the attribute `name` takes on an element of the markup. */
+export function attributeValues(text: string, name: string): string[] {
+  return elements(text).flatMap((element) => {
+    const value = attributes(text.slice(element.start, tagEnd(text, element.start))).get(name);
+    return value === undefined ? [] : [value];
+  });
+}
+
+// `{ labelId, hintId: hint, disabled = false }` → labelId → labelId, hintId → hint, disabled → disabled.
+function destructured(params: string): Record<string, string> {
+  const pattern = /^\s*\{([^{}]*)\}/.exec(params)?.[1];
+  const bound: Record<string, string> = {};
+  for (const entry of pattern?.split(',') ?? []) {
+    const match = /^\s*([\w$]+)\s*(?::\s*([\w$]+))?\s*(?:=[\s\S]*)?$/.exec(entry);
+    if (match) bound[match[1]] = match[2] ?? match[1];
+  }
+  return bound;
+}
+
+/** Each use of the component `name` in `text`, with the element it sits in and its row's snippet. */
 export function usesIn(path: string, text: string, name: string): Use[] {
-  const all = elements(text);
+  const { elements: all, snippets } = scan(text);
+  const around = (start: number, end: number) => all.filter((element) => element.start < start && element.end >= end).sort((a, b) => b.start - a.start);
+  const rows = snippets.flatMap((block) => {
+    const owner = around(block.start, block.end)[0];
+    return owner?.name === 'SettingsRow' ? [{ ...block, owner }] : [];
+  });
   return all
     .filter((element) => element.name === name)
     .map((use) => {
-      const parent = all
-        .filter((element) => element !== use && element.start < use.start && element.end >= use.end)
-        .sort((a, b) => b.start - a.start)[0];
-      return { path, tag: text.slice(use.start, tagEnd(text, use.start)), row: parent ? text.slice(parent.start, parent.end) : text };
+      const parent = around(use.start, use.end).find((element) => element !== use);
+      const block = rows.filter((row) => row.start < use.start && row.end >= use.end).sort((a, b) => b.start - a.start)[0];
+      const snippet: RowSnippet | null = block
+        ? { row: text.slice(block.owner.start, tagEnd(text, block.owner.start)), at: block.owner.start, name: block.name, bound: destructured(block.params) }
+        : null;
+      return { path, tag: text.slice(use.start, tagEnd(text, use.start)), row: parent ? text.slice(parent.start, parent.end) : text, snippet };
     });
 }
 
 /**
- * A control put straight into a SettingsRow's snippet takes the ids the row hands it
+ * A control inside a SettingsRow's snippet, at any depth, takes the ids the row hands it
  * (`{#snippet children({ labelId, hintId })}`): the row draws its label and hint with them. True when
- * `row` is that SettingsRow, its snippet takes `key`, and `by` is that binding. Read by the names the
- * row gives; a renamed binding is not seen.
+ * the snippet that holds the use takes `key`, and `by` is the name it took it under.
  */
-export function fromSettingsRow(row: string, key: 'labelId' | 'hintId', by: string): boolean {
-  const snippet = new RegExp(String.raw`\{#snippet \w+\(\{[^}]*\b${key}\b[^}]*\}\)\}`);
-  return /^<SettingsRow\b/.test(row) && by === `{${key}}` && snippet.test(row);
+export function fromSettingsRow(snippet: RowSnippet | null, key: 'labelId' | 'hintId', by: string): boolean {
+  const local = snippet?.bound[key];
+  return local !== undefined && by === `{${local}}`;
 }
