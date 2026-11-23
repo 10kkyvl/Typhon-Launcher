@@ -9,9 +9,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
@@ -23,12 +21,9 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"syscall"
 	"time"
-
-	"typhon/internal/selfupdate"
 )
 
 const (
@@ -134,114 +129,6 @@ func resolveKeyPair(encodedSeed string) (ed25519.PrivateKey, ed25519.PublicKey, 
 		return nil, nil, errBadSeed
 	}
 	return priv, pub, nil
-}
-
-func hashFile(path string) (size int64, sum string, err error) {
-	//nolint:gosec // G703: path is either our own build output in a temp dir or the developer's own -artifact flag to this local dev tool, not external input
-	f, err := os.Open(path)
-	if err != nil {
-		return 0, "", fmt.Errorf("open artifact %q: %w", path, err)
-	}
-	defer func() {
-		if cerr := f.Close(); cerr != nil && err == nil {
-			err = fmt.Errorf("close artifact %q: %w", path, cerr)
-		}
-	}()
-
-	h := sha256.New()
-	size, err = io.Copy(h, f)
-	if err != nil {
-		return 0, "", fmt.Errorf("hash artifact %q: %w", path, err)
-	}
-	return size, hex.EncodeToString(h.Sum(nil)), nil
-}
-
-func artifactName() string {
-	return fmt.Sprintf("typhon-%s-%s", runtime.GOOS, runtime.GOARCH)
-}
-
-func buildSignedManifest(version string, artifactPath string, port int, priv ed25519.PrivateKey) ([]byte, selfupdate.Artifact, error) {
-	size, sum, err := hashFile(artifactPath)
-	if err != nil {
-		return nil, selfupdate.Artifact{}, err
-	}
-	name := artifactName()
-	art := selfupdate.Artifact{
-		OS:     runtime.GOOS,
-		Arch:   runtime.GOARCH,
-		Kind:   selfupdate.KindInstaller,
-		Name:   name,
-		URL:    fmt.Sprintf("http://127.0.0.1:%d/launcher/download/%s/%s", port, version, name),
-		Size:   size,
-		SHA256: sum,
-	}
-	if err := art.Validate(); err != nil {
-		return nil, selfupdate.Artifact{}, fmt.Errorf("build artifact: %w", err)
-	}
-	m := selfupdate.Manifest{
-		Version:     version,
-		PublishedAt: time.Now().UTC(),
-		Notes:       "Local devrelease build.",
-		Artifacts:   []selfupdate.Artifact{art},
-	}
-	signed, err := selfupdate.SignManifest(m, priv)
-	if err != nil {
-		return nil, selfupdate.Artifact{}, fmt.Errorf("sign manifest: %w", err)
-	}
-	return signed, art, nil
-}
-
-type releaseServer struct {
-	signed       []byte
-	version      string
-	artifactName string
-	artifactPath string
-}
-
-func (s *releaseServer) handleManifest(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-store")
-	if _, err := w.Write(s.signed); err != nil {
-		slog.Warn("devrelease: write manifest response", "error", err)
-	}
-}
-
-func (s *releaseServer) handleDownload(w http.ResponseWriter, r *http.Request) {
-	version := r.PathValue("version")
-	name := r.PathValue("name")
-	if version != s.version || name != s.artifactName {
-		http.NotFound(w, r)
-		return
-	}
-
-	f, err := os.Open(s.artifactPath)
-	if err != nil {
-		slog.Error("devrelease: open artifact for download", "error", err)
-		http.Error(w, "artifact unavailable", http.StatusInternalServerError)
-		return
-	}
-	defer func() {
-		if cerr := f.Close(); cerr != nil {
-			slog.Warn("devrelease: close artifact file", "error", cerr)
-		}
-	}()
-
-	info, err := f.Stat()
-	if err != nil {
-		slog.Error("devrelease: stat artifact for download", "error", err)
-		http.Error(w, "artifact unavailable", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/octet-stream")
-	http.ServeContent(w, r, "", info.ModTime(), f)
-}
-
-func newMux(s *releaseServer) *http.ServeMux {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /launcher/manifest", s.handleManifest)
-	mux.HandleFunc("GET /launcher/download/{version}/{name}", s.handleDownload)
-	return mux
 }
 
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
