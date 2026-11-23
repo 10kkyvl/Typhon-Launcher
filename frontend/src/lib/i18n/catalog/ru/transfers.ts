@@ -245,6 +245,19 @@ export const transfers = {
   'transfers.moveErrDialogUnavailable': 'Диалог выбора папки недоступен',
   'transfers.moveErrShuttingDown': 'Лаунчер завершает работу, повторите позже',
   'transfers.moveErrNotReady': 'Служба переноса ещё не готова, повторите через момент',
+  // 7-H history
+  'transfers.historyLoading': 'Загружаем историю…',
+  'transfers.historyLoadFailed': 'Не удалось загрузить историю',
+  'transfers.historyExactTime': '{date} в {time}',
+  'transfers.historySegmentMoves': 'Перемещения',
+  'transfers.historyCount': {
+    one: '{count} запись',
+    few: '{count} записи',
+    many: '{count} записей',
+  },
+  'transfers.historyShowMore': 'Показать ещё',
+  'transfers.historyShownOf': 'Показано {shown} из {total}',
+  // /7-H history
 } as const;
 
 export type TransfersKey = keyof typeof transfers;

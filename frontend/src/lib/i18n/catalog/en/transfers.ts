@@ -243,4 +243,13 @@ export const transfers: Record<TransfersKey, Message> = {
   'transfers.moveErrDialogUnavailable': 'Folder picker unavailable',
   'transfers.moveErrShuttingDown': 'The launcher is shutting down, try again later',
   'transfers.moveErrNotReady': 'The move service is not ready yet, try again in a moment',
+  // 7-H history
+  'transfers.historyLoading': 'Loading history…',
+  'transfers.historyLoadFailed': 'Could not load the history',
+  'transfers.historyExactTime': '{date} at {time}',
+  'transfers.historySegmentMoves': 'Moves',
+  'transfers.historyCount': { one: '{count} record', other: '{count} records' },
+  'transfers.historyShowMore': 'Show more',
+  'transfers.historyShownOf': 'Showing {shown} of {total}',
+  // /7-H history
 };
