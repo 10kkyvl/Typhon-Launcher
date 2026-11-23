@@ -15,6 +15,7 @@ import type { LibraryGame } from '../../lib/services/library';
 import { getStats, onPlaylogRecorded, type Stats as StatsData, type StatsPeriod } from '../../lib/services/playlog';
 import { libraryGames } from '../../lib/stores/library';
 import { renderDom } from '../../lib/testing/dom';
+import { hintOnFocus } from '../../lib/testing/hints';
 import { playtime, shortDate, weekday } from '../../lib/utils/format';
 import Stats from './Stats.svelte';
 
@@ -46,14 +47,21 @@ const week = (extra: Partial<StatsData> = {}) => stats('week', 7, (index) => (in
 const month = () => stats('month', 30, (index) => (index % 4 === 0 ? 1800 : 0));
 const year = () => stats('year', 365, (index) => (index % 30 === 0 ? 3600 : 0));
 
-/** The chart's words, bucket by bucket: [when, value], as a user without sight or a pointer reaches them. */
-async function chartWords(name: string): Promise<string[][]> {
-  const table = await screen.findByRole('table', { name });
-  return within(table)
-    .getAllByRole('row')
-    .slice(1)
-    .map((row) => [within(row).getByRole('rowheader').textContent?.trim() ?? '', within(row).getByRole('cell').textContent?.trim() ?? '']);
+/**
+ * The chart's words, bucket by bucket, as a user without sight or a pointer reaches them: each bar is a
+ * radio of the chart's group, named by its date and its value.
+ */
+async function chartWords(name: string): Promise<string[]> {
+  const group = await screen.findByRole('radiogroup', { name });
+  return within(group).getAllByRole('radio').map((radio) => radio.getAttribute('aria-label') ?? '');
 }
+
+/** The bars of the chart named `name`. */
+const bars = (name: string) => within(screen.getByRole('radiogroup', { name })).getAllByRole('radio');
+
+/** The value labels drawn over the bars, by bar: null where none is drawn. */
+const valueLabels = (container: HTMLElement) =>
+  [...container.querySelectorAll('.chart-box .col')].map((col) => col.querySelector('.value')?.textContent?.trim() ?? null);
 
 /** A period's control by its name, whatever form the switch takes. */
 function periodControl(name: string): HTMLElement {
@@ -61,6 +69,7 @@ function periodControl(name: string): HTMLElement {
 }
 
 const valueWords = (seconds: number) => (seconds > 0 ? playtime(seconds) : msg('stats.chartIdle'));
+const barWords = (when: string, seconds: number) => msg('common.chartBucket', { label: when, value: valueWords(seconds) });
 
 let recorded: (() => void) | undefined;
 
@@ -205,10 +214,10 @@ describe('Stats: the chart in words', () => {
     vi.mocked(getStats).mockResolvedValueOnce(data);
     renderDom(Stats);
 
-    const expected = (data.days ?? []).map((day, index) => [shortDate(back(6 - index)), valueWords(day.seconds)]);
+    const expected = (data.days ?? []).map((day, index) => barWords(shortDate(back(6 - index)), day.seconds));
     expect(await chartWords(msg('stats.chartTitle'))).toEqual(expected);
-    expect(expected[5][1]).toBe(playtime(5400));
-    expect(expected[0][1]).toBe(msg('stats.chartIdle'));
+    expect(expected[5]).toContain(playtime(5400));
+    expect(expected[0]).toContain(msg('stats.chartIdle'));
   });
 
   it('a month says each of its thirty days', async () => {
@@ -218,7 +227,7 @@ describe('Stats: the chart in words', () => {
     await chartWords(msg('stats.chartTitle'));
     await user.click(periodControl(msg('stats.periodMonth')));
 
-    const expected = (data.days ?? []).map((day, index) => [shortDate(back(29 - index)), valueWords(day.seconds)]);
+    const expected = (data.days ?? []).map((day, index) => barWords(shortDate(back(29 - index)), day.seconds));
     await vi.waitFor(async () => expect(await chartWords(msg('stats.chartTitle'))).toEqual(expected));
   });
 
@@ -237,7 +246,7 @@ describe('Stats: the chart in words', () => {
       if (found) found.seconds += day.seconds;
       else totals.set(key, { at: new Date(Number(key.slice(0, 4)), Number(key.slice(5, 7)) - 1, 1), seconds: day.seconds });
     }
-    const expected = [...totals.values()].map(({ at, seconds }) => [monthLong.format(at), valueWords(seconds)]);
+    const expected = [...totals.values()].map(({ at, seconds }) => barWords(monthLong.format(at), seconds));
     expect(expected).toHaveLength(13);
     await vi.waitFor(async () => expect(await chartWords(msg('stats.chartTitleYear'))).toEqual(expected));
   });
@@ -264,7 +273,7 @@ describe('Stats: the sections', () => {
     const headings = screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent?.replace(/\s+/g, ' ').trim());
     expect(headings).toEqual([msg('stats.chartTitle'), `${msg('stats.topTitle')} 2`]);
     const chart = screen.getByRole('region', { name: msg('stats.chartTitle') });
-    expect(within(chart).getByRole('table', { name: msg('stats.chartTitle') })).toBeTruthy();
+    expect(within(chart).getByRole('radiogroup', { name: msg('stats.chartTitle') })).toBeTruthy();
     const top = screen.getByRole('region', { name: `${msg('stats.topTitle')} 2` });
     expect(within(top).getAllByRole('listitem')).toHaveLength(2);
   });
@@ -307,12 +316,98 @@ describe('Stats: the shared bar chart', () => {
     expect(marks).not.toContain(msg('stats.chartIdle'));
   });
 
-  it('the drawing is hidden from assistive tech: the table says it', async () => {
+  it('is one choice of its bars, nothing chosen at first, one Tab stop, with no table repeating them and no title', async () => {
     vi.mocked(getStats).mockResolvedValueOnce(week());
     const { container } = renderDom(Stats);
     await chartWords(msg('stats.chartTitle'));
 
-    expect(container.querySelector('.cols')?.getAttribute('aria-hidden')).toBe('true');
+    const all = bars(msg('stats.chartTitle'));
+    expect(all.map((bar) => bar.getAttribute('aria-checked'))).toEqual(Array(7).fill('false'));
+    expect(all.filter((bar) => bar.tabIndex === 0)).toEqual([all[6]]);
+    expect(screen.queryByRole('table')).toBeNull();
     expect(container.querySelector('[title]')).toBeNull();
+  });
+});
+
+describe('Stats: a bar chosen on the chart', () => {
+  it('a week and a year label every bar that has play; a month labels none until one is chosen', async () => {
+    vi.mocked(getStats).mockResolvedValueOnce(week()).mockResolvedValueOnce(month()).mockResolvedValueOnce(year());
+    const { container, user } = renderDom(Stats);
+    await chartWords(msg('stats.chartTitle'));
+    expect(valueLabels(container)).toEqual([null, null, null, null, null, playtime(5400), null]);
+
+    await user.click(periodControl(msg('stats.periodMonth')));
+    await vi.waitFor(async () => expect(await chartWords(msg('stats.chartTitle'))).toHaveLength(30));
+    expect(valueLabels(container)).toEqual(Array(30).fill(null));
+
+    await user.click(periodControl(msg('stats.periodYear')));
+    await vi.waitFor(async () => expect(await chartWords(msg('stats.chartTitleYear'))).toHaveLength(13));
+    expect(valueLabels(container).filter((label) => label !== null).length).toBeGreaterThan(1);
+  });
+
+  it('in a month, Tab reaches today, the arrows move the choice, and the chosen bar shows its value', async () => {
+    const data = month();
+    vi.mocked(getStats).mockResolvedValueOnce(week()).mockResolvedValueOnce(data);
+    const { container, user } = renderDom(Stats);
+    await chartWords(msg('stats.chartTitle'));
+    await user.click(periodControl(msg('stats.periodMonth')));
+    await vi.waitFor(async () => expect(await chartWords(msg('stats.chartTitle'))).toHaveLength(30));
+    const all = bars(msg('stats.chartTitle'));
+    const label = (seconds: number) => playtime(seconds);
+
+    all[29].focus();
+    await user.keyboard('{ArrowLeft}');
+    expect(document.activeElement).toBe(all[28]);
+    expect(all[28].getAttribute('aria-checked')).toBe('true');
+    expect(valueLabels(container)[28]).toBe(label((data.days ?? [])[28].seconds));
+    expect(valueLabels(container).filter((value) => value !== null)).toHaveLength(1);
+
+    await user.keyboard('{Home}');
+    expect(document.activeElement).toBe(all[0]);
+    expect(valueLabels(container)[0]).toBe(label((data.days ?? [])[0].seconds));
+    expect(valueLabels(container).filter((value) => value !== null)).toHaveLength(1);
+    expect(all.filter((bar) => bar.tabIndex === 0)).toEqual([all[0]]);
+  });
+
+  it('a bar says its date and value in a hint on focus and on hover', async () => {
+    vi.mocked(getStats).mockResolvedValueOnce(week());
+    const { user } = renderDom(Stats);
+    await chartWords(msg('stats.chartTitle'));
+    const all = bars(msg('stats.chartTitle'));
+    const hint = () => document.querySelector('[data-part="tooltip"]')?.textContent?.trim() ?? null;
+
+    expect(await hintOnFocus(all[6])).toBe(barWords(shortDate(TO), 0));
+
+    await user.hover(all[5]);
+    await vi.waitFor(() => expect(hint()).toBe(barWords(shortDate(back(1)), 5400)));
+  });
+
+  it('a change of period takes the choice away', async () => {
+    vi.mocked(getStats).mockResolvedValueOnce(week()).mockResolvedValueOnce(month()).mockResolvedValueOnce(week());
+    const { user } = renderDom(Stats);
+    await chartWords(msg('stats.chartTitle'));
+    await user.click(bars(msg('stats.chartTitle'))[5]);
+    expect(bars(msg('stats.chartTitle'))[5].getAttribute('aria-checked')).toBe('true');
+
+    await user.click(periodControl(msg('stats.periodMonth')));
+    await vi.waitFor(async () => expect(await chartWords(msg('stats.chartTitle'))).toHaveLength(30));
+    expect(bars(msg('stats.chartTitle')).filter((bar) => bar.getAttribute('aria-checked') === 'true')).toEqual([]);
+
+    await user.click(periodControl(msg('stats.periodWeek')));
+    await vi.waitFor(async () => expect(await chartWords(msg('stats.chartTitle'))).toHaveLength(7));
+    expect(bars(msg('stats.chartTitle')).filter((bar) => bar.getAttribute('aria-checked') === 'true')).toEqual([]);
+  });
+
+  it('a recorded session keeps the bar that is chosen', async () => {
+    vi.mocked(getStats).mockResolvedValueOnce(week()).mockResolvedValueOnce(week());
+    const { user } = renderDom(Stats);
+    await chartWords(msg('stats.chartTitle'));
+    await user.click(bars(msg('stats.chartTitle'))[5]);
+
+    recorded?.();
+
+    await vi.waitFor(() => expect(getStats).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(screen.queryByText(msg('stats.loading'))).toBeNull());
+    expect(bars(msg('stats.chartTitle'))[5].getAttribute('aria-checked')).toBe('true');
   });
 });

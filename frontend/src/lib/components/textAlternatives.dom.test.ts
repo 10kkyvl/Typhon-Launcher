@@ -70,38 +70,43 @@ describe('text alternatives for hints on what no keyboard reaches', () => {
     expect(readText(badge)).toBe(msg('games.externalBadgeTitle', { provider: msg('games.sourceSteam') }));
   });
 
-  // A chart's drawing is hidden from assistive tech; a table stands in for it, a row per bucket: its date
-  // in the row's header, its value in the cell. No hover is needed to reach either.
-  const tableRows = (name: string) => {
-    const table = screen.getByRole('table', { name });
-    return within(table)
-      .getAllByRole('row')
-      .slice(1)
-      .map((row) => `${readText(within(row).getByRole('rowheader'))} · ${readText(within(row).getByRole('cell'))}`);
-  };
+  // A chart's bars are one radio group: each bar a radio named by its date and its value, one Tab stop
+  // and the arrows along them, the same words in a hint on focus. No hover is needed to reach either.
+  const barNames = (name: string) =>
+    within(screen.getByRole('radiogroup', { name }))
+      .getAllByRole('radio')
+      .map((radio) => radio.getAttribute('aria-label'));
+  const barWords = (label: string, value: string) => msg('common.chartBucket', { label, value });
 
-  it("the week chart is a table whose rows read as each day's date and play time", () => {
+  it("the week chart's bars read as each day's date and play time, and a keyboard reaches them", async () => {
     const today = new Date(2026, 10, 11);
     const week = weekSummary(
       [{ date: '2026-11-10', entries: [{ game: { id: 'g', title: 'Hades', cover: '', archived: false, playtimeSeconds: 3600, status: '' }, seconds: 3600 }] }],
       today,
     );
     render(WeekActivity, { target: app, props: { week } });
-    const rows = tableRows(msg('transfers.activityWeekTitle'));
-    expect(rows).toHaveLength(7);
+    const names = barNames(msg('transfers.activityWeekTitle'));
+    expect(names).toHaveLength(7);
     const monday = week.days.find((day) => day.date === '2026-11-10');
-    expect(rows).toContain(`${shortDate(monday?.at as Date)} · ${playtime(3600)}`);
-    expect(rows).toContain(`${shortDate(week.days[0].at)} · ${msg('transfers.activityWeekIdle')}`);
+    expect(names).toContain(barWords(shortDate(monday?.at as Date), playtime(3600)));
+    expect(names).toContain(barWords(shortDate(week.days[0].at), msg('transfers.activityWeekIdle')));
+    const radios = screen.getAllByRole('radio');
+    expect(radios.filter(tabbable)).toHaveLength(1);
+    expect(await hintOnFocus(radios.filter(tabbable)[0])).toBe(names[6]);
     expect(app.querySelector('[title]')).toBeNull();
   });
 
-  it("the stats chart is a table whose rows read as each bar's date and play time", async () => {
+  it("the stats chart's bars read as each bar's date and play time, and a keyboard reaches them", async () => {
     render(Stats, { target: app });
-    await screen.findByRole('table', { name: msg('stats.chartTitle') });
-    expect(tableRows(msg('stats.chartTitle'))).toEqual([
-      `${shortDate(new Date(2026, 10, 9))} · ${msg('stats.chartIdle')}`,
-      `${shortDate(new Date(2026, 10, 10))} · ${playtime(5400)}`,
+    await screen.findByRole('radiogroup', { name: msg('stats.chartTitle') });
+    const names = barNames(msg('stats.chartTitle'));
+    expect(names).toEqual([
+      barWords(shortDate(new Date(2026, 10, 9)), msg('stats.chartIdle')),
+      barWords(shortDate(new Date(2026, 10, 10)), playtime(5400)),
     ]);
+    const bars = within(screen.getByRole('radiogroup', { name: msg('stats.chartTitle') })).getAllByRole('radio');
+    expect(bars.filter(tabbable)).toHaveLength(1);
+    expect(await hintOnFocus(bars.filter(tabbable)[0])).toBe(names[1]);
     expect(app.querySelector('[title]')).toBeNull();
   });
 

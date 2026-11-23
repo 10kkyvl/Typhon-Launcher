@@ -23,7 +23,7 @@ import { settings } from '../../lib/stores/settings';
 import { toasts } from '../../lib/stores/toasts';
 import { authState, authView } from '../../lib/stores/user';
 import { renderDom } from '../../lib/testing/dom';
-import { relativeDate } from '../../lib/utils/format';
+import { playtime, relativeDate, shortDate } from '../../lib/utils/format';
 import activitySource from './Activity.svelte?raw';
 import Activity from './Activity.svelte';
 import WeekActivity from './WeekActivity.svelte';
@@ -375,15 +375,55 @@ describe('Activity: the week chart', () => {
     entries: [{ game: { id: 'g', title: 'Hades', cover: '', archived: false, playtimeSeconds: seconds, status: '' }, seconds }],
   });
 
-  it('is the shared bar chart: seven days, today set apart, no axis, the table says each day', () => {
+  const valueLabels = (container: HTMLElement) =>
+    [...container.querySelectorAll('.chart-box .col')].map((col) => col.querySelector('.value')?.textContent?.trim() ?? null);
+
+  it('is the shared bar chart: seven days, today set apart, no axis, each day a bar of one choice, nothing chosen', () => {
     const week = weekSummary([played('2026-11-10', 3600), played('2026-11-11', 1800)], new Date(2026, 10, 11));
     const { container } = renderDom(WeekActivity, { week });
 
-    const table = screen.getByRole('table', { name: msg('transfers.activityWeekTitle') });
-    expect(within(table).getAllByRole('row').slice(1)).toHaveLength(7);
-    expect([...container.querySelectorAll('.col')].map((col) => col.classList.contains('current'))).toEqual([false, false, false, false, false, false, true]);
+    const group = screen.getByRole('radiogroup', { name: msg('transfers.activityWeekTitle') });
+    const bars = within(group).getAllByRole('radio');
+    expect(bars).toHaveLength(7);
+    expect(bars.map((bar) => bar.getAttribute('aria-checked'))).toEqual(Array(7).fill('false'));
+    expect(bars.filter((bar) => bar.tabIndex === 0)).toEqual([bars[6]]);
+    expect(bars.map((bar) => bar.classList.contains('current'))).toEqual([false, false, false, false, false, false, true]);
     expect(container.querySelector('.axis')).toBeNull();
-    expect(container.querySelector('.cols')?.getAttribute('aria-hidden')).toBe('true');
+    expect(valueLabels(container)).toEqual(Array(7).fill(null));
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(container.querySelector('[title]')).toBeNull();
+  });
+
+  it('the arrows move the choice along the days, and the chosen day shows its time over its bar', async () => {
+    const week = weekSummary([played('2026-11-10', 3600), played('2026-11-11', 1800)], new Date(2026, 10, 11));
+    const { container, user } = renderDom(WeekActivity, { week });
+    const bars = within(screen.getByRole('radiogroup', { name: msg('transfers.activityWeekTitle') })).getAllByRole('radio');
+
+    await user.tab();
+    expect(document.activeElement).toBe(bars[6]);
+    await user.keyboard('{ArrowLeft}');
+
+    expect(document.activeElement).toBe(bars[5]);
+    expect(bars[5].getAttribute('aria-checked')).toBe('true');
+    expect(valueLabels(container)).toEqual([null, null, null, null, null, playtime(3600), null]);
+
+    await user.keyboard('{End}');
+    expect(valueLabels(container)).toEqual([null, null, null, null, null, null, playtime(1800)]);
+  });
+
+  it('a day says its date and time in a hint when the pointer rests on its bar', async () => {
+    const week = weekSummary([played('2026-11-10', 3600)], new Date(2026, 10, 11));
+    const { user } = renderDom(WeekActivity, { week });
+    const bars = within(screen.getByRole('radiogroup', { name: msg('transfers.activityWeekTitle') })).getAllByRole('radio');
+    const monday = week.days[5];
+
+    await user.hover(bars[5]);
+
+    await vi.waitFor(() =>
+      expect(document.querySelector('[data-part="tooltip"]')?.textContent?.trim()).toBe(
+        msg('common.chartBucket', { label: shortDate(monday.at), value: playtime(3600) }),
+      ),
+    );
   });
 });
 

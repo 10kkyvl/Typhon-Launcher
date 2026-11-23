@@ -39,6 +39,8 @@
   let failed = $state(false);
   let failure = $state('');
   let requestId = 0;
+  // The chart's chosen bar, by its key: none at first and after a change of period.
+  let chosenBar = $state<string | null>(null);
 
   const summary = $derived(data ? summarize(data) : null);
   const buckets = $derived(data ? chartBuckets(data.period, data.days ?? []) : []);
@@ -94,6 +96,7 @@
   function pick(next: StatsPeriod) {
     if (next === period) return;
     period = next;
+    chosenBar = null;
     data = null;
     failed = false;
     void load(next);
@@ -170,14 +173,16 @@
 
         <section aria-labelledby="{uid}-chart">
           <SectionHeader id="{uid}-chart" title={data.period === 'year' ? msg('stats.chartTitleYear') : msg('stats.chartTitle')} />
-          <!-- Thirty days leave no room for a value over each bar: the axis and the table say them. -->
+          <!-- Each bar is a choice named by its date and value, shown in a hint on hover and focus. Thirty
+               days leave no room for a value over each bar: a month labels the chosen one only. -->
           <BarChart
             label={data.period === 'year' ? msg('stats.chartTitleYear') : msg('stats.chartTitle')}
             buckets={bars}
             format={playedWords}
             scale={secondsScale(best)}
+            selectable
+            bind:selected={chosenBar}
             values={data.period === 'month' ? 'selected' : 'all'}
-            columns={[data.period === 'year' ? msg('stats.chartMonth') : msg('stats.chartDay'), msg('stats.chartPlaytime')]}
           />
         </section>
 

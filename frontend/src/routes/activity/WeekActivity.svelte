@@ -21,6 +21,8 @@
   );
 
   const playedWords = (seconds: number) => (seconds > 0 ? playtime(seconds) : msg('transfers.activityWeekIdle'));
+
+  let chosenDay = $state<string | null>(null);
 </script>
 
 <Card title={msg('transfers.activityWeekTitle')}>
@@ -29,15 +31,17 @@
   {:else}
     <StatTile value={playtime(week.totalSeconds)} label={msg('transfers.activityWeekWindow')} />
 
-    <!-- A narrow card: no axis and no value over the bars; the total above and the table say them. -->
+    <!-- A narrow card: no axis, and a value over the chosen day's bar only; each bar names its day and
+         time, in a hint on hover and focus too. -->
     <div class="chart">
       <BarChart
         label={msg('transfers.activityWeekTitle')}
         buckets={bars}
         format={playedWords}
+        selectable
+        bind:selected={chosenDay}
         values="selected"
         height="6.4rem"
-        columns={[msg('stats.chartDay'), msg('stats.chartPlaytime')]}
       />
     </div>
 
