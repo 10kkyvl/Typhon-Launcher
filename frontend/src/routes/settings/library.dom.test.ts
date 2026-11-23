@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/svelte';
+import { cleanup, screen, waitFor, within } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -34,6 +34,7 @@ import { moves } from '../../lib/stores/relocate';
 import { settings } from '../../lib/stores/settings';
 import { toasts } from '../../lib/stores/toasts';
 import { renderDom } from '../../lib/testing/dom';
+import { description } from '../../lib/testing/hints';
 import LibraryFoldersRow from './LibraryFoldersRow.svelte';
 import LibraryLocationRow from './LibraryLocationRow.svelte';
 
@@ -79,7 +80,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  document.body.replaceChildren();
+  // Unmounted first: a mounted folder list would ask for the folders again when the settings reset.
+  cleanup();
   settings.set(null);
   moves.set([]);
   toasts.set([]);
@@ -93,6 +95,11 @@ describe('the library folders row', () => {
   it('lists each folder with its space, and a Remove on every folder but the primary', async () => {
     renderDom(LibraryFoldersRow, {});
     await screen.findByText('/extra');
+    const list = screen.getByRole('list', { name: msg('settings.libraryFoldersLabel') });
+    expect(within(list).getAllByRole('listitem')).toHaveLength(3);
+    // The whole path is on screen: no native title repeats it.
+    expect(screen.getByText('/extra').hasAttribute('title')).toBe(false);
+    expect(description(screen.getByRole('button', { name: msg('settings.libraryFolderAdd') }))).toBe(msg('settings.libraryFoldersSub'));
     expect(screen.getByText('/games')).toBeTruthy();
     expect(screen.getByText(msg('settings.libraryFolderPrimary'))).toBeTruthy();
     expect(screen.getByText(msg('settings.libraryFolderUnavailable'))).toBeTruthy();
@@ -134,8 +141,9 @@ describe('the library move row', () => {
   it('is off without a library', () => {
     settings.set({ libraryPath: '' } as unknown as SettingsData);
     renderDom(LibraryLocationRow, {});
-    expect((screen.getByRole('button', { name: msg('settings.generalLibraryMoveButtonLabel') }) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText(msg('settings.generalLibraryMoveEmptySub'))).toBeTruthy();
+    const move = screen.getByRole('button', { name: msg('settings.generalLibraryMoveButtonLabel') }) as HTMLButtonElement;
+    expect(move.disabled).toBe(true);
+    expect(description(move)).toBe(msg('settings.generalLibraryMoveEmptySub'));
   });
 
   it('moves the library to the folder picked', async () => {
@@ -153,12 +161,19 @@ describe('the library move row', () => {
     moves.set([JOB]);
     vi.mocked(cancelMove).mockResolvedValueOnce();
     const { user } = renderDom(LibraryLocationRow, {});
-    const bar = screen.getByRole('progressbar', { name: msg('settings.generalLibraryMoveLabel') });
-    const text = bar.parentElement?.textContent ?? '';
-    for (const part of [stageLabel(JOB.stage), JOB.title, moveSummary(JOB), msg('settings.generalLibraryMoveCancelHint')]) expect(text).toContain(part);
-    expect((screen.getByRole('button', { name: msg('settings.generalLibraryMoveButtonLabel') }) as HTMLButtonElement).disabled).toBe(true);
+    screen.getByRole('progressbar', { name: msg('settings.generalLibraryMoveLabel') });
+    // The line is one catalogued message, not pieces joined in the markup.
+    const line = msg('settings.generalLibraryMoveProgressQueue', { stage: stageLabel(JOB.stage), title: JOB.title, count: 2, summary: moveSummary(JOB) });
+    expect(screen.getByText(line)).toBeTruthy();
+    expect(screen.getByText(msg('settings.generalLibraryMoveCancelHint'))).toBeTruthy();
     await user.click(screen.getByRole('button', { name: msg('settings.generalLibraryMoveCancelButton') }));
     await waitFor(() => expect(cancelMove).toHaveBeenCalledExactlyOnceWith('m1'));
+  });
+
+  it('words the move line without a title or a queue', () => {
+    moves.set([{ ...JOB, title: '', queue: null }]);
+    renderDom(LibraryLocationRow, {});
+    expect(screen.getByText(msg('settings.generalLibraryMoveProgressNoTitle', { stage: stageLabel(JOB.stage), summary: moveSummary(JOB) }))).toBeTruthy();
   });
 
   it('says a cancel that failed on a toast', async () => {

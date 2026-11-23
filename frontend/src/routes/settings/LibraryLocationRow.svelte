@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { FolderInput } from '@lucide/svelte';
   import { msg } from '../../lib/i18n';
   import Button from '../../lib/components/Button.svelte';
   import Notice from '../../lib/components/Notice.svelte';
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
+  import SettingsRow from '../../lib/components/SettingsRow.svelte';
   import { moveErrorText } from '../../lib/relocate/moveMessages';
   import { movePercent, moveSummary, stageLabel } from '../../lib/relocate/moveText';
   import { inWails } from '../../lib/services/backend';
-  import { cancelMove, moveLibrary, selectMoveTargetFolder } from '../../lib/services/relocate';
+  import { cancelMove, moveLibrary, selectMoveTargetFolder, type MoveJob } from '../../lib/services/relocate';
   import { activeMove } from '../../lib/stores/relocate';
   import { settings } from '../../lib/stores/settings';
   import { toast } from '../../lib/stores/toasts';
@@ -17,7 +17,18 @@
   let failure = $state('');
 
   const job = $derived($activeMove && $activeMove.scope === 'library' ? $activeMove : null);
-  const queueLeft = $derived(job?.queue?.length ?? 0);
+  const libraryPath = $derived($settings?.libraryPath ?? '');
+
+  // The running move in one sentence: its stage, the game being copied, the games after it, the totals.
+  function progressLine(move: MoveJob): string {
+    const stage = stageLabel(move.stage);
+    const summary = moveSummary(move);
+    const count = move.queue?.length ?? 0;
+    if (move.title && count > 0) return msg('settings.generalLibraryMoveProgressQueue', { stage, title: move.title, count, summary });
+    if (move.title) return msg('settings.generalLibraryMoveProgress', { stage, title: move.title, summary });
+    if (count > 0) return msg('settings.generalLibraryMoveProgressQueueNoTitle', { stage, count, summary });
+    return msg('settings.generalLibraryMoveProgressNoTitle', { stage, summary });
+  }
 
   async function start() {
     if (starting || job) return;
@@ -57,85 +68,60 @@
   }
 </script>
 
-<div class="row">
-  <div class="row-text">
-    <span class="row-label">{msg('settings.generalLibraryMoveLabel')}</span>
-    <span class="row-sub">
-      {#if $settings?.libraryPath}
-        {msg('settings.generalLibraryMoveCurrentSub', { path: $settings.libraryPath })}
-      {:else}
-        {msg('settings.generalLibraryMoveEmptySub')}
-      {/if}
-    </span>
-  </div>
-  <Button size="sm" disabled={starting || !!job || !$settings?.libraryPath} onclick={start}>
-    <FolderInput size="1.5rem" strokeWidth={1.8} />
-    {starting ? msg('settings.generalLibraryMoveStartingEllipsis') : msg('settings.generalLibraryMoveButtonLabel')}
-  </Button>
-</div>
-
-{#if job}
-  <div class="row progress-row">
-    <div class="progress-body">
+{#snippet progress()}
+  {#if job}
+    <div class="progress">
       <ProgressBar value={movePercent(job)} label={msg('settings.generalLibraryMoveLabel')} />
-      <span class="row-sub">
-        {stageLabel(job.stage)}{job.title ? ` · ${job.title}` : ''}
-        {#if queueLeft > 0}
-          {msg('settings.generalLibraryMoveQueueLeft', { count: queueLeft })}
-        {/if}
-        — {moveSummary(job)}
-      </span>
-      <span class="row-sub">{msg('settings.generalLibraryMoveCancelHint')}</span>
+      <div class="progress-line">
+        <div class="progress-text">
+          <span>{progressLine(job)}</span>
+          <span>{msg('settings.generalLibraryMoveCancelHint')}</span>
+        </div>
+        <Button size="sm" variant="danger" disabled={cancelling} onclick={cancel}>
+          {cancelling ? msg('settings.generalLibraryMoveCancellingEllipsis') : msg('settings.generalLibraryMoveCancelButton')}
+        </Button>
+      </div>
     </div>
-    <Button size="sm" variant="danger" disabled={cancelling} onclick={cancel}>
-      {cancelling ? msg('settings.generalLibraryMoveCancellingEllipsis') : msg('settings.generalLibraryMoveCancelButton')}
-    </Button>
-  </div>
-{/if}
+  {/if}
+  {#if failure}
+    <div class:failure={!!job}><Notice tone="danger" compact>{failure}</Notice></div>
+  {/if}
+{/snippet}
 
-{#if failure}
-  <div class="failure">
-    <Notice tone="danger" compact>{failure}</Notice>
-  </div>
-{/if}
+<SettingsRow
+  label={msg('settings.generalLibraryMoveLabel')}
+  hint={libraryPath ? msg('settings.generalLibraryMoveCurrentSub', { path: libraryPath }) : undefined}
+  disabledReason={libraryPath ? undefined : msg('settings.generalLibraryMoveEmptySub')}
+  below={job || failure ? progress : undefined}
+>
+  {#snippet children({ hintId, disabled })}
+    <Button size="sm" aria-describedby={hintId} disabled={disabled || starting || !!job} onclick={start}>
+      {starting ? msg('settings.generalLibraryMoveStartingEllipsis') : msg('settings.generalLibraryMoveButtonLabel')}
+    </Button>
+  {/snippet}
+</SettingsRow>
 
 <style>
-  .row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-6);
-    padding: 1.3rem 0;
-    border-top: 1px solid var(--border);
-  }
-
-  .row-text {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-  }
-
-  .row-label {
-    font-size: var(--font-md);
-    font-weight: 500;
-  }
-
-  .row-sub {
-    font-size: var(--font-xs);
-    color: var(--text-3);
-  }
-
-  .progress-row {
-    align-items: flex-start;
-  }
-
-  .progress-body {
-    flex: 1;
-    min-width: 0;
+  .progress {
     display: flex;
     flex-direction: column;
     gap: 0.6rem;
+  }
+
+  .progress-line {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-4);
+  }
+
+  .progress-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+    font-size: var(--font-xs);
+    color: var(--text-3);
   }
 
   .failure {

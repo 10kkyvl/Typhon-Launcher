@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/svelte';
+import { cleanup, screen, waitFor, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -339,6 +339,12 @@ describe('NetworkSettingsCard: the proxy', () => {
 });
 
 describe('the library rows', () => {
+  // Unmounted before the shared reset: a mounted folder list asks for the folders again when the
+  // settings reset, and the reset mock answers nothing.
+  afterEach(() => {
+    cleanup();
+  });
+
   it('report a folder list that cannot be read on a danger notice', async () => {
     vi.mocked(libraryFolders).mockRejectedValue(new Error('down'));
     renderDom(LibraryFoldersRow, {});

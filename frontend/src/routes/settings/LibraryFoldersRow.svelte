@@ -4,6 +4,7 @@
   import Button from '../../lib/components/Button.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import Notice from '../../lib/components/Notice.svelte';
+  import SettingsRow from '../../lib/components/SettingsRow.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { removeLibraryFolderPrompt } from '../../lib/confirm/prompts';
   import { errorCode, hasMessage, msg } from '../../lib/i18n';
@@ -90,44 +91,44 @@
 </script>
 
 {#if inWails}
-  <div class="row">
-    <div class="row-text">
-      <span class="row-label">{msg('settings.libraryFoldersLabel')}</span>
-      <span class="row-sub">{msg('settings.libraryFoldersSub')}</span>
-    </div>
-    <Button size="sm" disabled={adding} onclick={add}>
-      <Plus size="1.5rem" strokeWidth={1.8} />
-      {msg('settings.libraryFolderAdd')}
-    </Button>
-  </div>
-
-  {#if loadFailed && folders.length === 0}
-    <div class="failure">
-      <Notice tone="danger" compact>{msg('settings.libraryFoldersLoadFailed')}</Notice>
-    </div>
-  {/if}
-
-  {#each folders as folder (folder.path)}
-    <div class="row folder" class:unavailable={!folder.available}>
-      <div class="row-text">
-        <span class="path" title={folder.path}>{folder.path}</span>
-        <span class="row-sub">
-          {#if folder.primary}<span class="tag"><StatusBadge kind="accent" dot={false} label={msg('settings.libraryFolderPrimary')} /></span>{/if}
-          {#if folder.available}
-            {msg('settings.libraryFolderSpace', { free: bytesSize(folder.freeBytes), total: bytesSize(folder.totalBytes) })}
-          {:else}
-            <StatusBadge kind="danger" label={msg('settings.libraryFolderUnavailable')} />
-          {/if}
-          · {msg('settings.libraryFolderGames', { count: gamesInFolder(folder.path, $installedGames) })}
-        </span>
-      </div>
-      {#if !folder.primary}
-        <Button size="sm" disabled={removing === folder.path} onclick={() => (pendingRemove = folder.path)}>
-          {msg('settings.libraryFolderRemove')}
-        </Button>
+  <SettingsRow label={msg('settings.libraryFoldersLabel')} hint={msg('settings.libraryFoldersSub')}>
+    {#snippet children({ hintId })}
+      <Button size="sm" aria-describedby={hintId} disabled={adding} onclick={add}>
+        <Plus size="1.5rem" strokeWidth={1.8} />
+        {msg('settings.libraryFolderAdd')}
+      </Button>
+    {/snippet}
+    {#snippet below({ labelId })}
+      {#if loadFailed && folders.length === 0}
+        <Notice tone="danger" compact>{msg('settings.libraryFoldersLoadFailed')}</Notice>
       {/if}
-    </div>
-  {/each}
+      {#if folders.length > 0}
+        <ul class="folders" aria-labelledby={labelId}>
+          {#each folders as folder (folder.path)}
+            <li class="folder" class:unavailable={!folder.available}>
+              <div class="folder-text">
+                <span class="path">{folder.path}</span>
+                <span class="facts">
+                  {#if folder.primary}<StatusBadge kind="accent" dot={false} label={msg('settings.libraryFolderPrimary')} />{/if}
+                  {#if folder.available}
+                    <span>{msg('settings.libraryFolderSpace', { free: bytesSize(folder.freeBytes), total: bytesSize(folder.totalBytes) })}</span>
+                  {:else}
+                    <StatusBadge kind="danger" label={msg('settings.libraryFolderUnavailable')} />
+                  {/if}
+                  <span>{msg('settings.libraryFolderGames', { count: gamesInFolder(folder.path, $installedGames) })}</span>
+                </span>
+              </div>
+              {#if !folder.primary}
+                <Button size="sm" disabled={removing === folder.path} onclick={() => (pendingRemove = folder.path)}>
+                  {msg('settings.libraryFolderRemove')}
+                </Button>
+              {/if}
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    {/snippet}
+  </SettingsRow>
 {/if}
 
 {#if pendingRemove}
@@ -140,30 +141,33 @@
 {/if}
 
 <style>
-  .row {
+  .folders {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+  }
+
+  .folder {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--space-6);
-    padding: 1.3rem 0;
+    gap: var(--space-4);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .folder + .folder {
     border-top: 1px solid var(--border);
   }
 
-  .row-text {
+  .folder-text {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 0.2rem;
     min-width: 0;
-  }
-
-  .row-label {
-    font-size: var(--font-md);
-    font-weight: 500;
-  }
-
-  .row-sub {
-    font-size: var(--font-xs);
-    color: var(--text-3);
   }
 
   .path {
@@ -175,11 +179,13 @@
     color: var(--text-3);
   }
 
-  .tag {
-    margin-right: var(--space-2);
-  }
-
-  .failure {
-    margin-top: var(--space-2);
+  /* The folder's facts, apart by space rather than by a joining glyph. */
+  .facts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1) var(--space-3);
+    font-size: var(--font-xs);
+    color: var(--text-3);
   }
 </style>

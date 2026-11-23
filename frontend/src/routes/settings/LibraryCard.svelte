@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { FolderOpen, HardDrive, RefreshCw } from '@lucide/svelte';
+  import { FolderOpen, HardDrive } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
+  import SettingsRow from '../../lib/components/SettingsRow.svelte';
   import LibraryFoldersRow from './LibraryFoldersRow.svelte';
   import LibraryLocationRow from './LibraryLocationRow.svelte';
   import { msg } from '../../lib/i18n';
@@ -18,6 +19,7 @@
   // outlive a switch of tabs, and the library setup dialog is the page's.
   let { page }: { page: SettingsPage } = $props();
 
+  const uid = $props.id();
   const current = $derived($settings);
 
   type PathKey = 'gamesPath' | 'downloadsPath' | 'screenshotsPath';
@@ -32,6 +34,9 @@
 
   const folderRows = $derived(folderRowOptions());
 
+  // Unknown before the app facts arrive, and then not Windows: the import is a Windows feature.
+  const extlibReason = $derived(page.appInfo?.platform === 'windows' ? undefined : msg('settings.extlibWindowsOnly'));
+
   async function openPath(path: string | undefined) {
     if (!path) return;
     try {
@@ -42,12 +47,23 @@
   }
 </script>
 
+{#snippet importDetails()}
+  <details class="import-details" open>
+    <summary>{msg('settings.extlibDetailsTitle')}</summary>
+    <ul>
+      {#each page.importDetails as line, index (index)}
+        <li>{line}</li>
+      {/each}
+    </ul>
+  </details>
+{/snippet}
+
 <Card title={msg('settings.generalLibraryCardTitle')}>
-  <div class="rows">
-    <div class="row folder-row">
-      <span class="row-label folder-label">{msg('settings.generalLibraryPathLabel')}</span>
-      <div class="folder-controls">
+  <SettingsRow label={msg('settings.generalLibraryPathLabel')} labelFor="{uid}-library" stack>
+    {#snippet children()}
+      <div class="path-field">
         <input
+          id="{uid}-library"
           class="input sm"
           type="text"
           readonly
@@ -61,109 +77,78 @@
           label={msg('settings.generalLibraryOpenFolderLabel')}
           size="sm"
           disabled={!current?.libraryPath}
+          reason={current?.libraryPath ? '' : msg('settings.generalLibraryOpenNoPathReason')}
           onclick={() => openPath(current?.libraryPath)}
         >
           <FolderOpen size="1.6rem" strokeWidth={1.8} />
         </IconButton>
       </div>
-    </div>
-    {#if current?.libraryPath}
-      {#each folderRows as folder (folder.key)}
-        <div class="row folder-row">
-          <span class="row-label folder-label">{folder.label}</span>
-          <div class="folder-controls">
-            <input class="input sm" type="text" readonly value={current?.[folder.key] ?? ''} />
-            <IconButton label={msg('settings.generalLibraryOpenFolderLabel')} size="sm" onclick={() => openPath(current?.[folder.key])}>
+    {/snippet}
+  </SettingsRow>
+  {#if current?.libraryPath}
+    {#each folderRows as folder (folder.key)}
+      <SettingsRow label={folder.label} labelFor="{uid}-{folder.key}" stack>
+        {#snippet children()}
+          <div class="path-field">
+            <input id="{uid}-{folder.key}" class="input sm" type="text" readonly value={current?.[folder.key] ?? ''} />
+            <IconButton
+              label={msg('settings.generalLibraryOpenNamedFolderLabel', { folder: folder.label })}
+              size="sm"
+              onclick={() => openPath(current?.[folder.key])}
+            >
               <FolderOpen size="1.6rem" strokeWidth={1.8} />
             </IconButton>
           </div>
-        </div>
-      {/each}
-    {:else}
-      <EmptyState size="inline" title={msg('settings.generalLibraryEmptyHint')} />
-    {/if}
-    {#if current?.libraryPath}
-      <LibraryFoldersRow />
-    {/if}
-    <div class="row">
-      <div class="row-text">
-        <span class="row-label">{msg('diskusage.settingsLabel')}</span>
-        <span class="row-sub">{msg('diskusage.settingsSub')}</span>
-      </div>
-      <Button size="sm" onclick={() => navigate('diskusage')}>
+        {/snippet}
+      </SettingsRow>
+    {/each}
+  {:else}
+    <EmptyState size="inline" title={msg('settings.generalLibraryEmptyHint')} />
+  {/if}
+  {#if current?.libraryPath}
+    <LibraryFoldersRow />
+  {/if}
+  <SettingsRow label={msg('diskusage.settingsLabel')} hint={msg('diskusage.settingsSub')}>
+    {#snippet children({ hintId })}
+      <Button size="sm" aria-describedby={hintId} onclick={() => navigate('diskusage')}>
         <HardDrive size="1.5rem" strokeWidth={1.8} />
         {msg('diskusage.settingsOpen')}
       </Button>
-    </div>
-    <div class="row">
-      <div class="row-text">
-        <span class="row-label">{msg('settings.extlibLabel')}</span>
-        <span class="row-sub">{msg('settings.extlibSub')}</span>
-      </div>
-      {#if page.appInfo?.platform === 'windows'}
-        <Button size="sm" disabled={page.importing} onclick={page.runImportExternal}>
-          <RefreshCw size="1.5rem" strokeWidth={1.8} />
-          {page.importing ? msg('settings.extlibRunning') : msg('settings.extlibLabel')}
-        </Button>
-      {:else}
-        <span class="row-sub">{msg('settings.extlibWindowsOnly')}</span>
-      {/if}
-    </div>
-    {#if page.importDetails.length > 0}
-      <details class="import-details" open>
-        <summary class="row-label">{msg('settings.extlibDetailsTitle')}</summary>
-        <ul>
-          {#each page.importDetails as line, index (index)}
-            <li class="row-sub">{line}</li>
-          {/each}
-        </ul>
-      </details>
-    {/if}
-    <LibraryLocationRow />
-  </div>
+    {/snippet}
+  </SettingsRow>
+  <SettingsRow
+    label={msg('settings.extlibLabel')}
+    hint={msg('settings.extlibSub')}
+    disabledReason={extlibReason}
+    below={page.importDetails.length > 0 ? importDetails : undefined}
+  >
+    {#snippet children({ hintId, disabled })}
+      <Button size="sm" aria-describedby={hintId} disabled={disabled || page.importing} onclick={page.runImportExternal}>
+        {page.importing ? msg('settings.extlibRunning') : msg('settings.extlibLabel')}
+      </Button>
+    {/snippet}
+  </SettingsRow>
+  <LibraryLocationRow />
 </Card>
 
 <style>
-  .rows {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .row {
+  /* A path field fills the row's measure; its buttons keep their own width beside it. */
+  .path-field {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--space-6);
-    padding: 1.3rem 0;
+    gap: var(--space-2);
+    width: 100%;
   }
 
-  .row + .row {
-    border-top: 1px solid var(--border);
-  }
-
-  .row-text {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+  .path-field input {
+    flex: 1;
     min-width: 0;
-  }
-
-  .row-label {
-    font-size: var(--font-md);
-    font-weight: 500;
-  }
-
-  .row-sub {
-    font-size: var(--font-xs);
-    color: var(--text-3);
-  }
-
-  .import-details {
-    padding: var(--space-3) 0;
   }
 
   .import-details summary {
     cursor: pointer;
+    font-size: var(--font-sm);
+    font-weight: 500;
   }
 
   .import-details ul {
@@ -172,21 +157,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-1);
-  }
-
-  .folder-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--space-2);
-  }
-
-  .folder-label {
-    font-size: var(--font-sm);
-  }
-
-  .folder-controls {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
+    font-size: var(--font-xs);
+    color: var(--text-3);
   }
 </style>

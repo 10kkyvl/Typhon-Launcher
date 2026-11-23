@@ -301,11 +301,13 @@ describe('the general tab: disabled rows', () => {
     expect(sw('settings.gameModeHideLabel')).toBeTruthy();
   });
 
-  it('offers the import from other launchers on Windows only', async () => {
+  it('turns the import from other launchers off outside Windows and says so', async () => {
     vi.mocked(getAppInfo).mockResolvedValue({ ...APP, platform: 'darwin' });
     open();
     await screen.findByText(msg('settings.extlibWindowsOnly'));
-    expect(screen.queryByRole('button', { name: msg('settings.extlibLabel') })).toBeNull();
+    const find = button('settings.extlibLabel');
+    expect(find.disabled).toBe(true);
+    expect(description(find)).toBe(said('settings.extlibWindowsOnly', 'settings.extlibSub'));
   });
 });
 
@@ -460,19 +462,33 @@ describe('the general tab: the library card', () => {
     const select = screen.getByRole('button', { name: msg('common.select') });
     await user().click(select);
     expect(toastTexts()).toEqual([msg('settings.generalLibraryDesktopOnlyToast')]);
-    const opens = screen.getAllByRole('button', { name: msg('settings.generalLibraryOpenFolderLabel') });
-    expect(opens.map((button) => (button as HTMLButtonElement).disabled)).toEqual([true]);
+    const path = screen.getByRole('textbox', { name: msg('settings.generalLibraryPathLabel') }) as HTMLInputElement;
+    expect([path.value, path.placeholder, path.readOnly]).toEqual(['', msg('settings.generalLibraryPathPlaceholder'), true]);
+    // Off, and says why, but still reached by the keyboard.
+    const openButton = button('settings.generalLibraryOpenFolderLabel');
+    expect(openButton.getAttribute('aria-disabled')).toBe('true');
+    expect(description(openButton)).toBe(msg('settings.generalLibraryOpenNoPathReason'));
+    await user().click(openButton);
+    expect(openFolder).not.toHaveBeenCalled();
   });
 
   it('with a library: the path and its three parts, each opened in the file manager', async () => {
     vi.mocked(openFolder).mockResolvedValue();
     open({ libraryPath: '/lib', gamesPath: '/lib/games', downloadsPath: '/lib/downloads', screenshotsPath: '/lib/shots' });
-    const values = screen.getAllByRole('textbox').map((box) => (box as HTMLInputElement).value);
-    expect(values).toEqual(['/lib', '/lib/games', '/lib/downloads', '/lib/shots']);
+    const parts: [MessageKey, string][] = [
+      ['settings.generalLibraryPathLabel', '/lib'],
+      ['settings.generalLibraryFolderGames', '/lib/games'],
+      ['settings.generalLibraryFolderDownloads', '/lib/downloads'],
+      ['settings.generalLibraryFolderScreenshots', '/lib/shots'],
+    ];
+    // Each field is named by its row, each Open button by the folder it opens.
+    for (const [label, value] of parts) expect((screen.getByRole('textbox', { name: msg(label) }) as HTMLInputElement).value).toBe(value);
     expect(screen.getByRole('button', { name: msg('common.edit') })).toBeTruthy();
-    const opens = screen.getAllByRole('button', { name: msg('settings.generalLibraryOpenFolderLabel') });
-    expect(opens).toHaveLength(4);
-    for (const button of opens) await user().click(button);
+    const opens = [
+      button('settings.generalLibraryOpenFolderLabel'),
+      ...parts.slice(1).map(([label]) => screen.getByRole('button', { name: msg('settings.generalLibraryOpenNamedFolderLabel', { folder: msg(label) }) })),
+    ];
+    for (const target of opens) await user().click(target);
     expect(vi.mocked(openFolder).mock.calls.map(([path]) => path)).toEqual(['/lib', '/lib/games', '/lib/downloads', '/lib/shots']);
   });
 
