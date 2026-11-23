@@ -72,95 +72,126 @@ func TestCheckRelocatable(t *testing.T) {
 	}
 }
 
-func TestBeginRelocateBlocksLaunch(t *testing.T) {
-	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
-	game, _ := addRelocateGame(t, s)
-	s.prepare = func(context.Context, launch) error { return errors.New("stop before real launch") }
-
-	release, err := s.BeginRelocate(game.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := s.PlayGame(game.ID); !errors.Is(err, ErrGameRelocating) {
-		t.Fatalf("PlayGame while relocating = %v, want ErrGameRelocating", err)
-	}
-	if _, err := s.BeginRelocate(game.ID); !errors.Is(err, ErrGameRelocating) {
-		t.Fatalf("second BeginRelocate = %v, want ErrGameRelocating", err)
-	}
-	release()
-	release()
-	if err := s.PlayGame(game.ID); errors.Is(err, ErrGameRelocating) {
-		t.Fatal("launch still refused after release")
-	}
+// moveReservations are the two ways a move reserves a game: a new move, and
+// the recovery of one a killed process left.
+var moveReservations = []struct {
+	name  string
+	begin func(s *Service, game Game) (func(), error)
+}{
+	{"new move", func(s *Service, game Game) (func(), error) { return s.BeginMove(game.ID) }},
+	{"recovery", func(s *Service, game Game) (func(), error) {
+		return s.BeginRecovery(game.ID, game.InstallDir, game.InstallDir+"-moved")
+	}},
 }
 
-func TestBeginRelocateRefusesAStartingGame(t *testing.T) {
-	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
-	game, _ := addRelocateGame(t, s)
-	entered := make(chan struct{})
-	proceed := make(chan struct{})
-	s.prepare = func(context.Context, launch) error {
-		close(entered)
-		<-proceed
-		return errors.New("stop before real launch")
-	}
-	done := make(chan error, 1)
-	go func() { done <- s.PlayGame(game.ID) }()
-	<-entered
+func TestMoveReservationBlocksLaunch(t *testing.T) {
+	for _, r := range moveReservations {
+		t.Run(r.name, func(t *testing.T) {
+			s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+			game, _ := addRelocateGame(t, s)
+			s.prepare = func(context.Context, launch) error { return errors.New("stop before real launch") }
 
-	if _, err := s.BeginRelocate(game.ID); !errors.Is(err, ErrRelocateGameRunning) {
-		t.Fatalf("BeginRelocate during a launch = %v, want ErrRelocateGameRunning", err)
-	}
-	close(proceed)
-	if err := <-done; err == nil {
-		t.Fatal("expected the injected preparation failure")
-	}
-}
-
-func TestBeginRelocateRefusesUnknownGame(t *testing.T) {
-	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
-	if _, err := s.BeginRelocate("missing"); !errors.Is(err, errNotFound) {
-		t.Fatalf("err = %v, want errNotFound", err)
-	}
-}
-
-func TestBeginRelocateAndLaunchNeverOverlap(t *testing.T) {
-	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
-	game, _ := addRelocateGame(t, s)
-	var holding atomic.Bool
-	var overlap atomic.Bool
-	s.prepare = func(context.Context, launch) error {
-		if holding.Load() {
-			overlap.Store(true)
-		}
-		return errors.New("stop before real launch")
-	}
-
-	for range 200 {
-		var wg sync.WaitGroup
-		wg.Add(2)
-		go func() {
-			defer wg.Done()
-			if err := s.PlayGame(game.ID); err == nil {
-				overlap.Store(true)
-			}
-		}()
-		go func() {
-			defer wg.Done()
-			release, err := s.BeginRelocate(game.ID)
+			release, err := r.begin(s, game)
 			if err != nil {
-				return
+				t.Fatal(err)
 			}
-			holding.Store(true)
 			if err := s.PlayGame(game.ID); !errors.Is(err, ErrGameRelocating) {
-				overlap.Store(true)
+				t.Fatalf("PlayGame while relocating = %v, want ErrGameRelocating", err)
 			}
-			holding.Store(false)
+			for _, again := range moveReservations {
+				if _, err := again.begin(s, game); !errors.Is(err, ErrGameRelocating) {
+					t.Fatalf("%s during a %s = %v, want ErrGameRelocating", again.name, r.name, err)
+				}
+			}
 			release()
-		}()
-		wg.Wait()
+			release()
+			if err := s.PlayGame(game.ID); errors.Is(err, ErrGameRelocating) {
+				t.Fatal("launch still refused after release")
+			}
+		})
 	}
-	if overlap.Load() {
-		t.Fatal("a launch ran while the game was locked for a move")
+}
+
+func TestMoveReservationRefusesAStartingGame(t *testing.T) {
+	for _, r := range moveReservations {
+		t.Run(r.name, func(t *testing.T) {
+			s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+			game, _ := addRelocateGame(t, s)
+			entered := make(chan struct{})
+			proceed := make(chan struct{})
+			s.prepare = func(context.Context, launch) error {
+				close(entered)
+				<-proceed
+				return errors.New("stop before real launch")
+			}
+			done := make(chan error, 1)
+			go func() { done <- s.PlayGame(game.ID) }()
+			<-entered
+
+			if _, err := r.begin(s, game); !errors.Is(err, ErrRelocateGameRunning) {
+				t.Fatalf("%s during a launch = %v, want ErrRelocateGameRunning", r.name, err)
+			}
+			close(proceed)
+			if err := <-done; err == nil {
+				t.Fatal("expected the injected preparation failure")
+			}
+		})
+	}
+}
+
+func TestMoveReservationRefusesUnknownGame(t *testing.T) {
+	for _, r := range moveReservations {
+		t.Run(r.name, func(t *testing.T) {
+			s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+			missing := Game{ID: "missing", InstallDir: filepath.Join(t.TempDir(), "missing")}
+			if _, err := r.begin(s, missing); !errors.Is(err, errNotFound) {
+				t.Fatalf("err = %v, want errNotFound", err)
+			}
+		})
+	}
+}
+
+func TestMoveReservationAndLaunchNeverOverlap(t *testing.T) {
+	for _, r := range moveReservations {
+		t.Run(r.name, func(t *testing.T) {
+			s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+			game, _ := addRelocateGame(t, s)
+			var holding atomic.Bool
+			var overlap atomic.Bool
+			s.prepare = func(context.Context, launch) error {
+				if holding.Load() {
+					overlap.Store(true)
+				}
+				return errors.New("stop before real launch")
+			}
+
+			for range 200 {
+				var wg sync.WaitGroup
+				wg.Add(2)
+				go func() {
+					defer wg.Done()
+					if err := s.PlayGame(game.ID); err == nil {
+						overlap.Store(true)
+					}
+				}()
+				go func() {
+					defer wg.Done()
+					release, err := r.begin(s, game)
+					if err != nil {
+						return
+					}
+					holding.Store(true)
+					if err := s.PlayGame(game.ID); !errors.Is(err, ErrGameRelocating) {
+						overlap.Store(true)
+					}
+					holding.Store(false)
+					release()
+				}()
+				wg.Wait()
+			}
+			if overlap.Load() {
+				t.Fatal("a launch ran while the game was locked for a move")
+			}
+		})
 	}
 }

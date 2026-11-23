@@ -153,17 +153,6 @@ func (s *Service) CheckRelocatable(id string) error {
 	return checkExecutableInside(*game)
 }
 
-// BeginRelocate reserves the game for a move: it fails while the game runs,
-// starts or is being removed, and PlayGame refuses the game until release is
-// called. The checks and the reservation share one critical section, so no
-// launch can slip in between them. It holds no folder: a new move takes
-// BeginMove, the recovery of an interrupted one BeginRecovery.
-//
-//wails:ignore
-func (s *Service) BeginRelocate(id string) (func(), error) {
-	return s.reserveMove(id, false, nil, nil)
-}
-
 func rebaseUninstallCommand(command, oldRoot, newRoot string) string {
 	if oldRoot == "" {
 		return command

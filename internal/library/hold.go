@@ -271,16 +271,19 @@ func (s *Service) BeginRemoval(id, dir string) (func(), error) {
 	}, nil
 }
 
-// BeginMove is BeginRelocate for a move that has not touched any file yet: it
-// also fails while another card's files share the game's folder, and holds the
-// folder against new cards until release.
+// BeginMove reserves a game for a move that has not touched any file yet: it
+// fails while the game runs, starts, moves or is being removed, while another
+// card's files share the game's folder or another game's hold overlaps it, and
+// until release PlayGame, removals and other moves refuse the game and no card
+// may be added in its folder. The checks and the reservation share one
+// critical section, so no launch can slip in between them.
 //
 //wails:ignore
 func (s *Service) BeginMove(id string) (func(), error) {
 	return s.reserveMove(id, true, nil, nil)
 }
 
-// BeginRecovery is BeginRelocate for the recovery of a move a killed process
+// BeginRecovery is BeginMove for the recovery of a move a killed process
 // left: source, the folder the files came from, is checked as BeginMove checks
 // the game's folder; copies, the folders the move put the files in, only for
 // a card at or inside them, so a move into a folder that holds another card

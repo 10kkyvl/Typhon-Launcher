@@ -348,8 +348,8 @@ func TestRemovalAndMoveOfAGameExcludeEachOther(t *testing.T) {
 	}
 	_, err = s.BeginMove(game.ID)
 	requireCode(t, "BeginMove during a removal", err, "library.removing")
-	_, err = s.BeginRelocate(game.ID)
-	requireCode(t, "BeginRelocate during a removal", err, "library.removing")
+	_, err = s.BeginRecovery(game.ID, game.InstallDir, game.InstallDir+"-moved")
+	requireCode(t, "BeginRecovery during a removal", err, "library.removing")
 	_, err = s.BeginRemoval(game.ID, "")
 	requireCode(t, "a second removal", err, "library.removing")
 	if err := os.Remove(exe); err != nil {

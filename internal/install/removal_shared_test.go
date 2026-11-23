@@ -287,7 +287,7 @@ func TestRemoveGameRefusedWhileTheGameIsBeingMoved(t *testing.T) {
 				uninstall = library.Uninstall{Command: uninstaller}
 			}
 			a := r.ownedGame(t, dir, "Moving", uninstall)
-			release, err := r.lib.BeginRelocate(a.ID)
+			release, err := r.lib.BeginMove(a.ID)
 			if err != nil {
 				t.Fatalf("take the move reservation: %v", err)
 			}
@@ -366,7 +366,7 @@ func TestMoveRefusedWhileTheGameIsBeingRemoved(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- r.s.RemoveGame(a.ID, RemoveOptions{DeleteFiles: true, KeepInLibrary: true}) }()
 	<-entered
-	release, err := r.lib.BeginRelocate(a.ID)
+	release, err := r.lib.BeginMove(a.ID)
 	if err == nil {
 		release()
 		close(proceed)
@@ -382,7 +382,7 @@ func TestMoveRefusedWhileTheGameIsBeingRemoved(t *testing.T) {
 	if err := <-done; err != nil {
 		t.Fatalf("RemoveGame = %v", err)
 	}
-	release, err = r.lib.BeginRelocate(a.ID)
+	release, err = r.lib.BeginMove(a.ID)
 	if err != nil {
 		t.Fatalf("the removal kept its reservation after it ended: %v", err)
 	}
@@ -577,7 +577,7 @@ func TestRemovalReleasesTheGameWhenItFails(t *testing.T) {
 	if err := r.s.RemoveGame(a.ID, RemoveOptions{DeleteFiles: true}); uierr.Code(err) != "install.uninstall_failed" {
 		t.Fatalf("RemoveGame = %v, want install.uninstall_failed", err)
 	}
-	release, err := r.lib.BeginRelocate(a.ID)
+	release, err := r.lib.BeginMove(a.ID)
 	if err != nil {
 		t.Fatalf("the failed removal kept its reservation: %v", err)
 	}

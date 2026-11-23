@@ -182,7 +182,7 @@ func TestRecoveryReservesTheGame(t *testing.T) {
 			if !tc.corrupt && !errors.Is(playErr, library.ErrGameRelocating) {
 				t.Fatalf("PlayGame during recovery = %v, want ErrGameRelocating", playErr)
 			}
-			release, err := lib.BeginRelocate(game.ID)
+			release, err := lib.BeginRecovery(game.ID, src, target)
 			if err != nil {
 				t.Fatalf("reservation leaked past recovery: %v", err)
 			}

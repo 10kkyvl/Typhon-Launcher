@@ -306,7 +306,7 @@ func TestMoveGameRefusesAGameLockedForAMove(t *testing.T) {
 	s := newTestService(t, nil, lib, nil, nil, nil)
 	game, src := addTestGame(t, lib)
 
-	release, err := lib.BeginRelocate(game.ID)
+	release, err := lib.BeginMove(game.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
