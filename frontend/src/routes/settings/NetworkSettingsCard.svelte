@@ -6,6 +6,7 @@
   import Notice from '../../lib/components/Notice.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import Select from '../../lib/components/Select.svelte';
+  import SettingsRow from '../../lib/components/SettingsRow.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import { msg } from '../../lib/i18n';
   import {
@@ -26,6 +27,7 @@
   import { networkState } from '../../lib/stores/network';
   import { settings, updateSettingsReporting } from '../../lib/stores/settings';
   import { toast } from '../../lib/stores/toasts';
+  import { focusHandOff } from '../../lib/utils/focusHandOff';
 
   const portPattern = /^\d{1,5}$/;
   const uid = $props.id();
@@ -215,8 +217,10 @@
     }
   }
 
+  // The delete button goes once the password is gone: focus held on it moves to the password field.
   async function removePassword() {
     if (passwordBusy) return;
+    const handOff = focusHandOff();
     passwordBusy = true;
     failure = '';
     portError = '';
@@ -230,6 +234,7 @@
     } finally {
       passwordBusy = false;
     }
+    await handOff(() => document.getElementById(`${uid}-password`));
   }
 
   async function checkProxy() {
@@ -254,234 +259,145 @@
 </script>
 
 <Card title={msg('settings.networkCardTitle')}>
-  <div class="rows">
-    <div class="row">
-      <div class="row-text">
-        <span class="row-label" id="{uid}-mode-label">{msg('settings.networkModeLabel')}</span>
-        <span class="row-sub">{msg('settings.networkModeSub')}</span>
-      </div>
-      <SegmentedControl options={modeOptions} labelledby="{uid}-mode-label" bind:value={mode} disabled={applying} />
-    </div>
+  <SettingsRow label={msg('settings.networkModeLabel')} hint={msg('settings.networkModeSub')}>
+    {#snippet children({ labelId, hintId })}
+      <SegmentedControl options={modeOptions} labelledby={labelId} describedby={hintId} bind:value={mode} disabled={applying} />
+    {/snippet}
+  </SettingsRow>
 
-    {#if mode === 'interface'}
-      <div class="row">
-        <div class="row-text">
-          <span class="row-label" id="{uid}-interface-label">{msg('settings.networkInterfaceLabel')}</span>
-          <span class="row-sub">{msg('settings.networkInterfaceSub')}</span>
-          {#if interfacesError}
-            <div class="message"><Notice tone="danger" compact>{interfacesError}</Notice></div>
-          {:else if interfacesLoaded && interfaces.length === 0}
-            <div class="message"><Notice tone="warning" compact>{msg('settings.networkInterfaceEmpty')}</Notice></div>
-          {/if}
-        </div>
-        <div class="control">
-          <Select
-            labelledby="{uid}-interface-label"
-            value={iface}
-            width="32rem"
-            options={interfaceOptions}
-            onchange={(id) => (iface = id)}
-          />
-          <Button size="sm" busy={interfacesLoading} onclick={loadInterfaces}>
-            {#if !interfacesLoading}<RefreshCw size="1.4rem" strokeWidth={1.8} />{/if}
-            {msg('settings.networkInterfaceRefresh')}
-          </Button>
-        </div>
-      </div>
-    {/if}
+  {#if mode === 'interface'}
+    <SettingsRow label={msg('settings.networkInterfaceLabel')} hint={msg('settings.networkInterfaceSub')}>
+      {#snippet children({ labelId, hintId })}
+        <Select labelledby={labelId} describedby={hintId} value={iface} width="32rem" options={interfaceOptions} onchange={(id) => (iface = id)} />
+        <Button size="sm" busy={interfacesLoading} onclick={loadInterfaces}>
+          {#if !interfacesLoading}<RefreshCw size="1.4rem" strokeWidth={1.8} />{/if}
+          {msg('settings.networkInterfaceRefresh')}
+        </Button>
+      {/snippet}
+      {#snippet below()}
+        {#if interfacesError}
+          <Notice tone="danger" compact>{interfacesError}</Notice>
+        {:else if interfacesLoaded && interfaces.length === 0}
+          <Notice tone="warning" compact>{msg('settings.networkInterfaceEmpty')}</Notice>
+        {/if}
+      {/snippet}
+    </SettingsRow>
+  {/if}
 
-    {#if mode === 'proxy'}
-      <div class="row">
-        <div class="row-text">
-          <span class="row-label" id="{uid}-proxy-type-label">{msg('settings.networkProxyTypeLabel')}</span>
-        </div>
-        <Select labelledby="{uid}-proxy-type-label" value={proxyType} width="20rem" options={proxyTypeOptions} onchange={(id) => (proxyType = id)} />
-      </div>
-      <div class="row">
-        <div class="row-text">
-          <span class="row-label">{msg('settings.networkProxyHostLabel')}</span>
-          <span class="row-sub">{msg('settings.networkProxyHostSub')}</span>
-        </div>
+  {#if mode === 'proxy'}
+    <SettingsRow label={msg('settings.networkProxyTypeLabel')}>
+      {#snippet children({ labelId })}
+        <Select labelledby={labelId} value={proxyType} width="20rem" options={proxyTypeOptions} onchange={(id) => (proxyType = id)} />
+      {/snippet}
+    </SettingsRow>
+    <SettingsRow label={msg('settings.networkProxyHostLabel')} hint={msg('settings.networkProxyHostSub')} labelFor="{uid}-host">
+      {#snippet children({ hintId })}
+        <input id="{uid}-host" class="input field" type="text" autocomplete="off" spellcheck="false" aria-describedby={hintId} placeholder="proxy.example.com" bind:value={host} />
+      {/snippet}
+    </SettingsRow>
+    <SettingsRow label={msg('settings.networkProxyPortLabel')} labelFor="{uid}-port">
+      {#snippet children()}
         <input
-          class="input field"
-          type="text"
-          autocomplete="off"
-          spellcheck="false"
-          aria-label={msg('settings.networkProxyHostLabel')}
-          placeholder="proxy.example.com"
-          bind:value={host}
-        />
-      </div>
-      <div class="row">
-        <div class="row-text">
-          <span class="row-label">{msg('settings.networkProxyPortLabel')}</span>
-          {#if portError}
-            {#key portRefusals}
-              <span class="field-error" id="{uid}-port-error" role="alert">{portError}</span>
-            {/key}
-          {/if}
-        </div>
-        <input
+          id="{uid}-port"
           class="input field port"
           type="text"
           inputmode="numeric"
           autocomplete="off"
-          aria-label={msg('settings.networkProxyPortLabel')}
           aria-invalid={portError ? 'true' : undefined}
           aria-describedby={portError ? `${uid}-port-error` : undefined}
           placeholder="1080"
           bind:value={port}
         />
-      </div>
-      <div class="row">
-        <div class="row-text">
-          <span class="row-label">{msg('settings.networkProxyUsernameLabel')}</span>
-          <span class="row-sub">{msg('settings.networkProxyUsernameSub')}</span>
-        </div>
+      {/snippet}
+      {#snippet below()}
+        {#if portError}
+          {#key portRefusals}
+            <span class="field-error" id="{uid}-port-error" role="alert">{portError}</span>
+          {/key}
+        {/if}
+      {/snippet}
+    </SettingsRow>
+    <SettingsRow label={msg('settings.networkProxyUsernameLabel')} hint={msg('settings.networkProxyUsernameSub')} labelFor="{uid}-username">
+      {#snippet children({ hintId })}
+        <input id="{uid}-username" class="input field" type="text" autocomplete="off" spellcheck="false" aria-describedby={hintId} bind:value={username} />
+      {/snippet}
+    </SettingsRow>
+    <SettingsRow label={msg('settings.networkProxyPasswordLabel')} hint={msg('settings.networkProxyPasswordSub')} labelFor="{uid}-password">
+      {#snippet children({ hintId })}
         <input
+          id="{uid}-password"
           class="input field"
-          type="text"
-          autocomplete="off"
-          spellcheck="false"
-          aria-label={msg('settings.networkProxyUsernameLabel')}
-          bind:value={username}
+          type="password"
+          autocomplete="new-password"
+          aria-describedby={hintId}
+          placeholder={hasPassword ? msg('settings.networkProxyPasswordSaved') : msg('settings.networkProxyPasswordLabel')}
+          bind:value={password}
         />
+        {#if hasPassword}
+          <Button size="sm" variant="danger" busy={passwordBusy} onclick={removePassword}>
+            {msg('settings.networkProxyPasswordDelete')}
+          </Button>
+        {/if}
+      {/snippet}
+    </SettingsRow>
+    <div class="part">
+      <div class="wide"><Notice tone="warning" compact announce={false}>{msg('settings.networkProxyWarning')}</Notice></div>
+    </div>
+    <div class="part test">
+      <div class="result">
+        {#if !dirty && testResult}
+          <Notice tone={testResult.ok ? 'success' : 'danger'} compact>{testResult.text}</Notice>
+        {/if}
       </div>
-      <div class="row">
-        <div class="row-text">
-          <span class="row-label">{msg('settings.networkProxyPasswordLabel')}</span>
-          <span class="row-sub">{msg('settings.networkProxyPasswordSub')}</span>
-        </div>
-        <div class="control">
-          <input
-            class="input field"
-            type="password"
-            autocomplete="new-password"
-            aria-label={msg('settings.networkProxyPasswordLabel')}
-            placeholder={hasPassword
-              ? msg('settings.networkProxyPasswordSaved')
-              : msg('settings.networkProxyPasswordLabel')}
-            bind:value={password}
-          />
-          {#if hasPassword}
-            <Button size="sm" variant="danger" disabled={passwordBusy} onclick={removePassword}>
-              {msg('settings.networkProxyPasswordDelete')}
-            </Button>
-          {/if}
-        </div>
-      </div>
-      <div class="row">
-        <div class="wide">
-          <Notice tone="warning" compact announce={false}>{msg('settings.networkProxyWarning')}</Notice>
-        </div>
-      </div>
-      <div class="row">
-        <div class="row-text">
-          {#if dirty}
-            <span class="row-sub">{msg('settings.networkProxyTestNeedsApply')}</span>
-          {:else if testResult}
-            <Notice tone={testResult.ok ? 'success' : 'danger'} compact>{testResult.text}</Notice>
-          {/if}
-        </div>
-        <Button size="sm" disabled={dirty || testing} onclick={checkProxy}>
-          {testing ? msg('settings.networkProxyTesting') : msg('settings.networkProxyTest')}
-        </Button>
-      </div>
-    {/if}
-
-    {#if failure}
-      <div class="row">
-        <div class="wide">
-          <Notice tone="danger" compact>{failure}</Notice>
-        </div>
-      </div>
-    {/if}
-
-    <div class="row actions">
-      <Button variant="primary" disabled={!dirty || applying} onclick={apply}>
-        {applying ? msg('settings.networkApplying') : msg('settings.networkApply')}
+      <Button size="sm" disabled={dirty} reason={dirty ? msg('settings.networkProxyTestNeedsApply') : ''} busy={testing} onclick={checkProxy}>
+        {msg('settings.networkProxyTest')}
       </Button>
     </div>
+  {/if}
 
-    {#if status}
-      <div class="row">
-        <div class="row-text">
-          <span class="row-label">{msg('settings.networkStatusLabel')}</span>
-          {#if statusDetail}
-            <span class="row-sub">{statusDetail}</span>
-          {/if}
-          {#if statusWarning}
-            <span class="row-sub">{statusWarning}</span>
-          {/if}
-        </div>
-        <StatusBadge
-          kind={statusChecking ? 'accent' : statusDown ? 'danger' : statusWarning ? 'warning' : 'success'}
-          label={statusChecking
-            ? msg('settings.networkStatusChecking')
-            : statusDown
-              ? msg('settings.networkStatusDown')
-              : msg('settings.networkStatusOk')}
-        />
-      </div>
-    {/if}
+  {#if failure}
+    <div class="part">
+      <div class="wide"><Notice tone="danger" compact>{failure}</Notice></div>
+    </div>
+  {/if}
+
+  <div class="part actions">
+    <Button variant="primary" disabled={!dirty} reason={dirty ? '' : msg('settings.networkApplyNothing')} busy={applying} onclick={apply}>
+      {msg('settings.networkApply')}
+    </Button>
   </div>
+
+  {#if status}
+    <div class="part status">
+      <div class="status-text">
+        <span class="status-label">{msg('settings.networkStatusLabel')}</span>
+        {#if statusDetail}
+          <span class="status-sub">{statusDetail}</span>
+        {/if}
+        {#if statusWarning}
+          <span class="status-sub">{statusWarning}</span>
+        {/if}
+      </div>
+      <StatusBadge
+        kind={statusChecking ? 'accent' : statusDown ? 'danger' : statusWarning ? 'warning' : 'success'}
+        label={statusChecking
+          ? msg('settings.networkStatusChecking')
+          : statusDown
+            ? msg('settings.networkStatusDown')
+            : msg('settings.networkStatusOk')}
+      />
+    </div>
+  {/if}
 </Card>
 
 <style>
-  .rows {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .row {
+  .part {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--space-6);
-    padding: 1.3rem 0;
-  }
-
-  .row + .row {
+    gap: var(--space-3) var(--space-6);
+    padding: var(--space-3) 0;
     border-top: 1px solid var(--border);
-  }
-
-  .row-text {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-  }
-
-  .row-label {
-    font-size: var(--font-md);
-    font-weight: 500;
-  }
-
-  .row-sub {
-    font-size: var(--font-xs);
-    color: var(--text-3);
-  }
-
-  .control {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  .field {
-    width: 26rem;
-  }
-
-  .field.port {
-    width: 12rem;
-  }
-
-  .control .field {
-    width: 22rem;
-  }
-
-  .actions {
-    justify-content: flex-end;
   }
 
   .wide {
@@ -489,8 +405,39 @@
     min-width: 0;
   }
 
-  .message {
-    margin-top: var(--space-2);
+  .result {
+    flex: 1 1 22rem;
+    min-width: 0;
+  }
+
+  .actions {
+    justify-content: flex-end;
+  }
+
+  .status-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+  }
+
+  .status-label {
+    font-size: var(--font-md);
+    font-weight: 500;
+  }
+
+  .status-sub {
+    font-size: var(--font-xs);
+    color: var(--text-3);
+  }
+
+  .field {
+    width: 26rem;
+    max-width: 100%;
+  }
+
+  .field.port {
+    width: 12rem;
   }
 
   .field-error {

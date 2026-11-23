@@ -53,10 +53,10 @@ afterEach(() => {
 });
 
 describe('NetworkSettingsCard: the mode', () => {
-  it('is a radio group named by its label', () => {
+  it('is a radio group named by its label and described by its hint', () => {
     renderDom(NetworkSettingsCard, {});
     const group = screen.getByRole('radiogroup', { name: msg('settings.networkModeLabel') });
-    expect(description(group)).toBe('');
+    expect(description(group)).toBe(msg('settings.networkModeSub'));
     expect(screen.getByRole('radio', { name: msg('settings.networkModeDirect') }).getAttribute('aria-checked')).toBe('true');
   });
 
@@ -72,6 +72,7 @@ describe('NetworkSettingsCard: the mode', () => {
     const list = await screen.findByRole('combobox', { name: msg('settings.networkInterfaceLabel') });
     expect(group.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(listNetworkInterfaces).toHaveBeenCalledTimes(1);
+    expect(description(list)).toBe(msg('settings.networkInterfaceSub'));
     expect(screen.getByRole('button', { name: msg('settings.networkInterfaceRefresh') })).toBeTruthy();
   });
 
@@ -120,12 +121,22 @@ describe('NetworkSettingsCard: the proxy fields', () => {
     expect(screen.getByRole('combobox', { name: msg('settings.networkProxyTypeLabel') }).textContent).toContain('HTTP');
   });
 
-  it('describes no field by its text yet', () => {
+  it('names each field once, by a label element, and describes it by its hint', () => {
     renderDom(NetworkSettingsCard, {});
-    expect(description(field('settings.networkProxyHostLabel'))).toBe('');
-    expect(description(field('settings.networkProxyUsernameLabel'))).toBe('');
-    expect(description(field('settings.networkProxyPasswordLabel'))).toBe('');
+    const hints: Array<[MessageKey, MessageKey | null]> = [
+      ['settings.networkProxyHostLabel', 'settings.networkProxyHostSub'],
+      ['settings.networkProxyPortLabel', null],
+      ['settings.networkProxyUsernameLabel', 'settings.networkProxyUsernameSub'],
+      ['settings.networkProxyPasswordLabel', 'settings.networkProxyPasswordSub'],
+    ];
+    for (const [label, hint] of hints) {
+      const input = field(label);
+      expect(input.hasAttribute('aria-label')).toBe(false);
+      expect(input.labels?.[0]?.textContent).toBe(msg(label));
+      expect(description(input)).toBe(hint ? msg(hint) : '');
+    }
   });
+
 
   it('applies the proxy, the password first', async () => {
     const { user } = renderDom(NetworkSettingsCard, {});
@@ -156,18 +167,25 @@ describe('NetworkSettingsCard: the proxy fields', () => {
     expect(saveSettingsPatch).not.toHaveBeenCalled();
   });
 
-  it('deletes a stored password', async () => {
+  it('deletes a stored password, busy while it runs, then hands focus to the password field', async () => {
     vi.mocked(hasProxyPassword).mockResolvedValue(true);
-    vi.mocked(setProxyPassword).mockResolvedValue();
+    let answer: () => void = () => {};
+    vi.mocked(setProxyPassword).mockImplementation(() => new Promise<void>((resolve) => (answer = resolve)));
     const { user } = renderDom(NetworkSettingsCard, {});
     const remove = await screen.findByRole('button', { name: msg('settings.networkProxyPasswordDelete') });
     expect(field('settings.networkProxyPasswordLabel').placeholder).toBe(msg('settings.networkProxyPasswordSaved'));
+    expect(field('settings.networkProxyPasswordLabel').compareDocumentPosition(remove) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
-    await user.click(remove);
+    remove.focus();
+    await user.keyboard('{Enter}');
 
     expect(setProxyPassword).toHaveBeenCalledExactlyOnceWith('me', '');
+    expect(remove.getAttribute('aria-busy')).toBe('true');
+    expect(document.activeElement).toBe(remove);
+    answer();
     await waitFor(() => expect(screen.queryByRole('button', { name: msg('settings.networkProxyPasswordDelete') })).toBeNull());
     expect(toastTexts()).toContain(msg('settings.networkProxyPasswordDeletedToast'));
+    await waitFor(() => expect(document.activeElement).toBe(field('settings.networkProxyPasswordLabel')));
   });
 
   it('says a password that could not be deleted, the button kept', async () => {
@@ -188,12 +206,19 @@ describe('NetworkSettingsCard: the proxy check', () => {
     settings.set({ ...PROXY } as unknown as SettingsData);
   });
 
-  it('checks the saved proxy', async () => {
-    vi.mocked(testProxy).mockResolvedValue();
+  it('checks the saved proxy, busy and keeping focus while it runs', async () => {
+    let answer: () => void = () => {};
+    vi.mocked(testProxy).mockImplementation(() => new Promise<void>((resolve) => (answer = resolve)));
     const { user } = renderDom(NetworkSettingsCard, {});
-    await user.click(screen.getByRole('button', { name: msg('settings.networkProxyTest') }));
+    const check = screen.getByRole('button', { name: msg('settings.networkProxyTest') });
+    check.focus();
+    await user.keyboard('{Enter}');
     expect(testProxy).toHaveBeenCalledTimes(1);
+    expect(check.getAttribute('aria-busy')).toBe('true');
+    expect(document.activeElement).toBe(check);
+    answer();
     expect(await screen.findByText(msg('settings.networkProxyTestOk'))).toBeTruthy();
+    expect(document.activeElement).toBe(check);
   });
 
   it('says a failed check on a danger notice', async () => {
@@ -204,15 +229,50 @@ describe('NetworkSettingsCard: the proxy check', () => {
     expect(said.closest('[data-tone]')?.getAttribute('data-tone')).toBe('danger');
   });
 
-  it('checks nothing while an edit is not applied, and says to apply first', async () => {
+  it('checks nothing while an edit is not applied, and says why through its reason, still reachable', async () => {
     const { user } = renderDom(NetworkSettingsCard, {});
     await user.type(field('settings.networkProxyHostLabel'), 'x');
     const check = screen.getByRole('button', { name: msg('settings.networkProxyTest') }) as HTMLButtonElement;
-    expect(screen.getByText(msg('settings.networkProxyTestNeedsApply'))).toBeTruthy();
+    expect(check.getAttribute('aria-disabled')).toBe('true');
+    expect(check.disabled).toBe(false);
+    expect(description(check)).toBe(msg('settings.networkProxyTestNeedsApply'));
 
     await user.click(check);
 
     expect(testProxy).not.toHaveBeenCalled();
+  });
+});
+
+describe('NetworkSettingsCard: Apply', () => {
+  beforeEach(() => {
+    settings.set({ ...PROXY } as unknown as SettingsData);
+  });
+
+  it('says why it is off while nothing changed', () => {
+    renderDom(NetworkSettingsCard, {});
+    const apply = screen.getByRole('button', { name: msg('settings.networkApply') });
+    expect(apply.getAttribute('aria-disabled')).toBe('true');
+    expect(description(apply)).toBe(msg('settings.networkApplyNothing'));
+  });
+
+  it('keeps focus through a good Apply, busy while it runs, then off with its reason', async () => {
+    let answer: (value: SettingsData) => void = () => {};
+    vi.mocked(saveSettingsPatch).mockImplementation((patch) => new Promise<SettingsData>((resolve) => (answer = () => resolve({ ...get(settings), ...patch } as SettingsData))));
+    const { user } = renderDom(NetworkSettingsCard, {});
+    await user.type(field('settings.networkProxyHostLabel'), 'x');
+    const apply = screen.getByRole('button', { name: msg('settings.networkApply') });
+    expect(apply.hasAttribute('aria-disabled')).toBe(false);
+
+    apply.focus();
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(saveSettingsPatch).toHaveBeenCalledTimes(1));
+    expect(apply.getAttribute('aria-busy')).toBe('true');
+    expect(document.activeElement).toBe(apply);
+
+    answer({} as SettingsData);
+    await waitFor(() => expect(apply.getAttribute('aria-disabled')).toBe('true'));
+    expect(document.activeElement).toBe(apply);
+    expect(description(apply)).toBe(msg('settings.networkApplyNothing'));
   });
 });
 

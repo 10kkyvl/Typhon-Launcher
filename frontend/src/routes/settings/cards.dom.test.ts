@@ -226,8 +226,8 @@ describe('NetworkSettingsCard: the proxy', () => {
     expect((screen.getByRole('textbox', { name: msg('settings.networkProxyHostLabel') }) as HTMLInputElement).value).toBe('proxy.lan');
     expect((screen.getByRole('textbox', { name: msg('settings.networkProxyPortLabel') }) as HTMLInputElement).value).toBe('3128');
     expect((screen.getByRole('textbox', { name: msg('settings.networkProxyUsernameLabel') }) as HTMLInputElement).value).toBe('me');
-    const apply = screen.getByRole('button', { name: msg('settings.networkApply') }) as HTMLButtonElement;
-    expect(apply.disabled).toBe(true);
+    const apply = screen.getByRole('button', { name: msg('settings.networkApply') });
+    expect(apply.getAttribute('aria-disabled')).toBe('true');
     await user.click(apply);
     expect(saveSettingsPatch).not.toHaveBeenCalled();
   });
@@ -285,9 +285,9 @@ describe('NetworkSettingsCard: the proxy', () => {
     const host = screen.getByRole('textbox', { name: msg('settings.networkProxyHostLabel') }) as HTMLInputElement;
     await user.clear(host);
     await user.type(host, 'typed.lan');
-    const apply = screen.getByRole('button', { name: msg('settings.networkApply') }) as HTMLButtonElement;
+    const apply = screen.getByRole('button', { name: msg('settings.networkApply') });
     await user.click(apply);
-    await waitFor(() => expect(apply.disabled).toBe(true));
+    await waitFor(() => expect(apply.getAttribute('aria-disabled')).toBe('true'));
 
     settings.set({ ...PROXY, proxyHost: 'later.lan' } as unknown as SettingsData);
     await waitFor(() => expect(host.value).toBe('later.lan'));
