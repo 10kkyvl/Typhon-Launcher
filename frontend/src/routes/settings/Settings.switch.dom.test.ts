@@ -61,14 +61,11 @@ describe('Settings: a switch row', () => {
   });
 
   // The settings store refuses a change it cannot save (not loaded) before it changes anything, so the
-  // switch must not show the press. Found through its row, not its name, so the case reads the same
-  // against a switch that names itself differently.
+  // switch must not show the press.
   it('shows the held state when the page refuses the change', async () => {
     settings.set(null);
     render(Settings, { target: app });
-    const row = screen.getByText(msg('settings.generalMinimizeToTrayLabel')).closest('.row');
-    expect(row).toBeInstanceOf(HTMLElement);
-    const tray = within(row as HTMLElement).getByRole('switch');
+    const tray = screen.getByRole('switch', { name: msg('settings.generalMinimizeToTrayLabel') });
     expect(tray.getAttribute('aria-checked')).toBe('true');
 
     await user().click(tray);
