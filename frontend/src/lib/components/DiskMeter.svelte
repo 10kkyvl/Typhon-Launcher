@@ -69,8 +69,13 @@
 
   const model = $derived(meter(segments, total, free, compact ? METER_WIDTH.compact : METER_WIDTH.full));
   const uid = $props.id();
-  // The fold's entry in the legend, opened to list the segments folded into it.
-  let open = $state(false);
+  const folding = $derived(model.parts.some((part) => part.kind === 'more'));
+  // The fold's entry in the legend, opened to list the segments folded into it. Closed whenever the
+  // fold leaves, so a fold that comes back starts closed.
+  let open = $derived.by(() => {
+    void folding;
+    return false;
+  });
 
   const words = $derived({
     atLeast: (size: string) => $t('common.meterAtLeast', { size }),

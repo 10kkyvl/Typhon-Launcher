@@ -405,6 +405,20 @@ describe('DiskMeter', () => {
       expect(document.getElementById(fold.getAttribute('aria-controls') ?? '')).toBeNull();
     });
 
+    it('closes the fold when it leaves, so it does not come back open', async () => {
+      const { container, rerender, user } = renderDom(DiskMeter, { label: 'Диск', segments: games(100), total: 1000 * GB, onpick: vi.fn() });
+      const legend = () => container.querySelector('.legend') as HTMLElement;
+      await user.click(within(legend()).getByRole('button', { name: 'Ещё 42 части' }));
+      expect(container.querySelector('.members')).not.toBeNull();
+      await rerender({ segments: games(99) });
+      expect(within(legend()).getByRole('button', { name: 'Ещё 41 часть' }).getAttribute('aria-expanded')).toBe('true');
+      await rerender({ segments: games(3) });
+      expect(within(legend()).queryByRole('button', { name: /^Ещё/ })).toBeNull();
+      await rerender({ segments: games(100) });
+      expect(within(legend()).getByRole('button', { name: 'Ещё 42 части' }).getAttribute('aria-expanded')).toBe('false');
+      expect(container.querySelector('.members')).toBeNull();
+    });
+
     it('keeps the fold plain text with its count and sum in the legend of a meter that does not pick', () => {
       const { getByRole } = renderDom(DiskMeter, { label: 'Диск', segments: games(100), total: 1000 * GB });
       expect(within(getByRole('list')).queryAllByRole('button')).toEqual([]);
