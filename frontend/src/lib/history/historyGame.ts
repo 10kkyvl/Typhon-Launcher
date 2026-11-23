@@ -8,7 +8,7 @@ export type HistoryGameLookup = (gameId: string | undefined) => LibraryGame | un
 /**
  * The one join of a history record to the library. Go records either the game's library id (an
  * install, a removal, a move, a copy over the local network) or its catalog id (a download, a failed
- * install, an update, a rollback), so a record finds its game by the library id first, then by the
+ * install, an update, a failed update, a rollback), so a record finds its game by the library id first, then by the
  * catalog id. Two library games of one catalog game: the first in the library's order.
  */
 export function historyGames(games: readonly LibraryGame[]): HistoryGameLookup {
@@ -21,7 +21,13 @@ export function historyGames(games: readonly LibraryGame[]): HistoryGameLookup {
 }
 
 // The kinds Go records with the game's catalog id (see historyGames).
-const CATALOG_KINDS: ReadonlySet<Kind> = new Set([Kind.KindDownloaded, Kind.KindInstallFailed, Kind.KindUpdated, Kind.KindRolledBack]);
+const CATALOG_KINDS: ReadonlySet<Kind> = new Set([
+  Kind.KindDownloaded,
+  Kind.KindInstallFailed,
+  Kind.KindUpdated,
+  Kind.KindUpdateFailed,
+  Kind.KindRolledBack,
+]);
 
 /**
  * The picture of a record's game: `key` is the catalog id the art store knows it by (what the screen asks

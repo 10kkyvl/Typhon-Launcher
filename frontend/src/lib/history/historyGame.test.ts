@@ -50,4 +50,11 @@ describe('historyArt', () => {
     expect(historyArt({ kind: Kind.KindRemoved, gameId: 'lib-gone' }, undefined, art)).toEqual({ key: '', cover: '', seed: 'lib-gone' });
     expect(historyArt({ kind: Kind.KindMoved, gameId: undefined }, undefined, art)).toEqual({ key: '', cover: '', seed: '' });
   });
+
+  // Go records a failed update by the catalog id, as it does an update and a rollback (updates/apply.go).
+  it("gives a removed game's failed update the cover its updates and rollbacks get", () => {
+    for (const kind of [Kind.KindUpdated, Kind.KindUpdateFailed, Kind.KindRolledBack]) {
+      expect(historyArt({ kind, gameId: 'cat-a' }, undefined, art), kind).toEqual({ key: 'cat-a', cover: 'https://art/a.jpg', seed: 'cat-a' });
+    }
+  });
 });
