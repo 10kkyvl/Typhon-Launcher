@@ -8,6 +8,7 @@ import { clearHistory as clearRequest, getHistoryStatus, Kind, listHistory, type
 import type { LibraryGame } from '../../lib/services/library';
 import { history, historyErrorText, historyLoaded, historyLoadError, historyStatus, initHistory } from '../../lib/stores/history';
 import { libraryGames } from '../../lib/stores/library';
+import { gameArt, requestArt } from '../../lib/stores/metadata';
 import { resetHistory, route } from '../../lib/stores/router';
 import { toasts } from '../../lib/stores/toasts';
 import { renderDom } from '../../lib/testing/dom';
@@ -18,6 +19,11 @@ import History from './History.svelte';
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
 // Go's history.Service: List, StatusOf and Clear answer as each test says.
+// The art store's one request path, as the Downloads rows use it; the covers come through gameArt.
+vi.mock('../../lib/stores/metadata', async (actual) => ({
+  ...(await actual<typeof import('../../lib/stores/metadata')>()),
+  requestArt: vi.fn(),
+}));
 vi.mock('../../lib/services/history', async (actual) => ({
   ...(await actual<typeof import('../../lib/services/history')>()),
   listHistory: vi.fn(),
@@ -100,6 +106,8 @@ afterEach(() => {
   historyLoadError.set(null);
   historyStatus.set({ degraded: false, message: '' });
   libraryGames.set([]);
+  gameArt.set({});
+  vi.mocked(requestArt).mockReset();
   toasts.set([]);
   vi.mocked(listHistory).mockReset();
   vi.mocked(getHistoryStatus).mockReset();
@@ -369,7 +377,7 @@ describe('History: the game a row is about', () => {
     record('a', Kind.KindInstalled, 'Alpha', at(0, 10), { gameId: 'lib-alpha' }),
     record('c', Kind.KindUpdated, 'Gamma', at(0, 9), { gameId: 'cat-gamma', fromVersion: '1', toVersion: '2' }),
     record('e', Kind.KindRemoved, 'Epsilon', at(0, 8), { gameId: 'lib-epsilon' }),
-    record('n', Kind.KindDownloaded, 'Nu', at(0, 7)),
+    record('n', Kind.KindDownloaded, 'Nu', at(0, 7), { gameId: 'cat-nu' }),
   ];
 
   // Go records the library id of the game (an install, a removal, a move, a LAN copy) or its catalog id
@@ -395,6 +403,38 @@ describe('History: the game a row is about', () => {
 
     const tagged = rows().filter((row) => within(row).queryByText(platformBadge('ps2')) !== null);
     expect(tagged.map((row) => words(row.querySelector(TITLE)))).toEqual([msg('transfers.historyUpdatedTitle', { title: 'Gamma' })]);
+  });
+
+  it("starts each row with the game's cover from the art store, else the library's own, asking the store once for the games it can name", () => {
+    libraryGames.set([
+      game('lib-alpha', { title: 'Alpha', canonicalGameId: 'cat-alpha', cover: 'file:///covers/alpha.jpg' }),
+      game('lib-gamma', { title: 'Gamma', canonicalGameId: 'cat-gamma', cover: 'file:///covers/gamma-own.jpg' }),
+    ]);
+    gameArt.set({ 'cat-gamma': { cover: 'https://art.example/gamma.jpg', hero: '', heroIsPoster: false } });
+    history.set(linked);
+    renderDom(History);
+
+    const cover = (title: string) => rowOf(title).querySelector('img')?.getAttribute('src') ?? null;
+    expect(cover(installed('Alpha'))).toBe('file:///covers/alpha.jpg');
+    expect(cover(msg('transfers.historyUpdatedTitle', { title: 'Gamma' }))).toBe('https://art.example/gamma.jpg');
+    expect(cover(msg('transfers.historyRemovedTitle', { title: 'Epsilon' }))).toBeNull();
+    expect(cover(msg('transfers.historyDownloadedTitle', { title: 'Nu' }))).toBeNull();
+    // A removed game's library id names nothing in the catalog: it is not asked for.
+    expect(vi.mocked(requestArt).mock.calls.flat(2).sort()).toEqual(['cat-alpha', 'cat-gamma', 'cat-nu']);
+  });
+
+  it("makes the cover of a library game a second way to its page for the pointer only, the name being the one stop", () => {
+    libraryGames.set([game('lib-alpha', { title: 'Alpha', canonicalGameId: 'cat-alpha', cover: 'file:///covers/alpha.jpg' })]);
+    history.set(linked);
+    renderDom(History);
+
+    const row = rowOf(installed('Alpha'));
+    expect(row.querySelector('img')).not.toBeNull();
+    const picture = row.querySelector('img')?.closest('button') as HTMLButtonElement;
+    expect(picture.tabIndex).toBe(-1);
+    expect(picture.getAttribute('aria-hidden')).toBe('true');
+    expect(within(row).getAllByRole('button').map((button) => button.textContent?.trim())).toEqual(['Alpha']);
+    expect(rowOf(msg('transfers.historyRemovedTitle', { title: 'Epsilon' })).querySelector('button')).toBeNull();
   });
 
   it('leaves the name plain for a game the library no longer holds or a record of no game', () => {

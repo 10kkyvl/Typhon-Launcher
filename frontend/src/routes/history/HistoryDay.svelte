@@ -11,19 +11,21 @@
     Undo2,
     Wifi,
   } from '@lucide/svelte';
+  import Artwork from '../../lib/components/Artwork.svelte';
   import ConsoleTag from '../../lib/components/ConsoleTag.svelte';
   import GameLink from '../../lib/components/GameLink.svelte';
   import SectionHeader from '../../lib/components/SectionHeader.svelte';
   import Tooltip from '../../lib/components/Tooltip.svelte';
-  import type { HistoryGameLookup } from '../../lib/history/historyGame';
+  import { historyArt, type HistoryGameLookup } from '../../lib/history/historyGame';
   import { historyLabel, historyTitleParts, historyWhen } from '../../lib/history/historyText';
   import { Kind, type Record as HistoryRecord } from '../../lib/services/history';
+  import { gameArt } from '../../lib/stores/metadata';
 
   /**
    * One day of the history: its heading (a section heading, focusable by script) and its records,
    * newest first, as a list on a plate of its own. A row says what happened to which game, why when it
-   * failed, and when; the kind's icon marks what happened. The game's name in it leads to the game's
-   * page while the library holds the game.
+   * failed, and when; the game's cover leads it and the kind's icon marks what happened. The game's
+   * name, and for the pointer its cover, lead to the game's page while the library holds the game.
    */
   let {
     id,
@@ -66,7 +68,13 @@
       {@const game = gameOf(record.gameId)}
       {@const title = historyTitleParts(record)}
       {@const platform = game?.emulation?.platform}
+      {@const picture = historyArt(record, game, $gameArt)}
       <li class="row" class:failed={failed(record.kind)} data-history-row={record.id} data-kind={record.kind}>
+        <div class="cover">
+          <GameLink id={game?.id} name={title.name} repeat>
+            <Artwork src={picture.cover} alt="" label={title.name} seed={picture.seed || undefined} ratio="3 / 4" radius="var(--radius-sm)" />
+          </GameLink>
+        </div>
         <span class="mark" aria-hidden="true"><Icon size="1.6rem" strokeWidth={1.8} /></span>
         <div class="main">
           <div class="head">
@@ -102,7 +110,7 @@
 
   .row {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: var(--row-thumb-w) auto minmax(0, 1fr) auto;
     align-items: center;
     gap: var(--space-3);
     min-height: var(--space-12);
@@ -111,6 +119,11 @@
 
   .row + .row {
     border-top: 1px solid var(--border);
+  }
+
+  .cover {
+    overflow: hidden;
+    border-radius: var(--radius-sm);
   }
 
   .mark {

@@ -10,9 +10,10 @@
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import { clearHistoryPrompt } from '../../lib/confirm/prompts';
   import { filterHistory } from '../../lib/history/historyFilter';
-  import { historyGames } from '../../lib/history/historyGame';
+  import { historyArt, historyGames } from '../../lib/history/historyGame';
   import { Kind, type Record as HistoryRecord } from '../../lib/services/history';
   import { libraryGames } from '../../lib/stores/library';
+  import { requestArt } from '../../lib/stores/metadata';
   import {
     clearHistory,
     history,
@@ -93,6 +94,13 @@
       }
     }
     return groups;
+  });
+
+  // The covers of the records shown, through the art store's one request path; a key it already holds
+  // or has just asked for is not asked again.
+  $effect(() => {
+    const ids = [...new Set(filtered.map((record) => historyArt(record, gameOf(record.gameId), {}).key).filter(Boolean))];
+    if (ids.length > 0) requestArt(ids);
   });
 
   const clearButton = () => document.querySelector<HTMLButtonElement>('[data-history-clear]');
