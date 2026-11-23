@@ -69,7 +69,9 @@
       {@const title = historyTitleParts(record)}
       {@const platform = game?.emulation?.platform}
       {@const picture = historyArt(record, game, $gameArt)}
-      <li class="row" class:failed={failed(record.kind)} data-history-row={record.id} data-kind={record.kind}>
+      <!-- The row takes focus from script only, where focus has nowhere else to go in it (the page's Show
+           more, a game leaving the library); it is named by its sentence. -->
+      <li class="row" class:failed={failed(record.kind)} data-history-row={record.id} data-kind={record.kind} tabindex="-1" aria-labelledby="{id}-{record.id}">
         <div class="cover">
           <GameLink id={game?.id} name={title.name} repeat>
             <Artwork src={picture.cover} alt="" label={title.name} seed={picture.seed || undefined} ratio="3 / 4" radius="var(--radius-sm)" />
@@ -78,7 +80,7 @@
         <span class="mark" aria-hidden="true"><Icon size="1.6rem" strokeWidth={1.8} /></span>
         <div class="main">
           <div class="head">
-            <p class="title">{title.before}<GameLink id={game?.id} name={title.name} />{title.after}</p>
+            <p class="title" id="{id}-{record.id}">{title.before}<GameLink id={game?.id} name={title.name} />{title.after}</p>
             {#if platform}<ConsoleTag {platform} />{/if}
           </div>
           {#if text.detail}<p class="detail">{text.detail}</p>{/if}
@@ -115,6 +117,11 @@
     gap: var(--space-3);
     min-height: var(--space-12);
     padding: var(--space-2) var(--space-4) var(--space-2) var(--space-3);
+  }
+
+  /* The list clips what stands out of it: the ring is drawn inside the row. */
+  .row:focus-visible {
+    outline-offset: -2px;
   }
 
   .row + .row {

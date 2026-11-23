@@ -7,7 +7,7 @@ import { libraryGames } from '../../lib/stores/library';
 import { requestArt } from '../../lib/stores/metadata';
 import { renderDom } from '../../lib/testing/dom';
 import History from './History.svelte';
-import { clearButton, game, installed, NOW, RECORDS, record, resetScreen, rowOf, rows, search, toastsSaid } from './historyTesting';
+import { clearButton, game, installed, NOW, RECORDS, record, resetScreen, ROW, rowOf, rows, search, toastsSaid } from './historyTesting';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
@@ -267,17 +267,33 @@ describe('History: a long history', () => {
     expect(document.activeElement).toBe(within(rowOf(installed(name(121)))).getByRole('button', { name: name(121) }));
   });
 
-  it('hands focus to the day of the first new record when it has nothing to focus', async () => {
+  it('hands focus to the first new record itself, out of the Tab order and named by its sentence, when it has nothing to focus, and scrolls to that row alone', async () => {
     history.set(many(70));
-    const { user } = renderDom(History);
-    expect(rows()).toHaveLength(60);
+    const scrolled: { el: Element; options: unknown }[] = [];
+    const scrollIntoView = vi.fn(function (this: Element, options?: unknown) {
+      scrolled.push({ el: this, options });
+    });
+    const own = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView');
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { configurable: true, writable: true, value: scrollIntoView });
+    try {
+      const { user } = renderDom(History);
+      expect(rows()).toHaveLength(60);
 
-    (more() as HTMLElement).focus();
-    await user.keyboard('{Enter}');
+      (more() as HTMLElement).focus();
+      await user.keyboard('{Enter}');
 
-    expect(rows()).toHaveLength(70);
-    const heading = rowOf(installed(name(60))).closest('section')?.querySelector('h2');
-    await waitFor(() => expect(document.activeElement).toBe(heading));
+      expect(rows()).toHaveLength(70);
+      const row = rowOf(installed(name(60)));
+      // Thirty rows of its day stand above it: the day's heading is far from the new records.
+      expect([...(row.closest('section')?.querySelectorAll(ROW) ?? [])].indexOf(row)).toBe(30);
+      await waitFor(() => expect(document.activeElement).toBe(row));
+      expect(row.getAttribute('tabindex')).toBe('-1');
+      expect(screen.getByRole('listitem', { name: installed(name(60)) })).toBe(row);
+      expect(scrolled).toEqual([{ el: row, options: { block: 'nearest', inline: 'nearest' } }]);
+    } finally {
+      if (own) Object.defineProperty(Element.prototype, 'scrollIntoView', own);
+      else delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    }
   });
 
   it('starts again from sixty when the segment or the search changes', async () => {

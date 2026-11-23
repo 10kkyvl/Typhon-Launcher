@@ -129,29 +129,30 @@
 
   /**
    * The next page. Show more keeps focus while records are left; the press that brings the last of them
-   * takes the button away, and focus goes to the first record it brought that has a control (Tab goes on
-   * through the new ones from there), else to the heading of that record's day.
+   * takes the button away, and focus goes to the first record it brought (Tab goes on through the new
+   * ones from there), brought into view.
    */
   async function showMore() {
-    const fresh = new Set(filtered.slice(shown.length, shown.length + PAGE).map((record) => record.id));
+    const first = filtered[shown.length]?.id;
     const handOff = focusHandOff();
     limit += PAGE;
-    const picked: { target: HTMLElement | null } = { target: null };
-    await handOff(() => (picked.target = firstFresh(fresh)));
-    const { target } = picked;
-    if (target && document.activeElement === target) {
-      const box = target.closest<HTMLElement>('[data-history-row]') ?? target;
-      if (typeof box.scrollIntoView === 'function') box.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    }
+    await handOnInView(handOff, () => (first === undefined ? null : recordTarget(first)));
   }
 
-  function firstFresh(fresh: ReadonlySet<string>): HTMLElement | null {
-    const rows = Array.from(list?.querySelectorAll<HTMLElement>('[data-history-row]') ?? []).filter((row) => fresh.has(row.dataset.historyRow ?? ''));
-    for (const row of rows) {
-      const control = focusableIn(row)[0];
-      if (control) return control;
-    }
-    return rows[0]?.closest('section')?.querySelector<HTMLElement>('h2[tabindex="-1"]') ?? null;
+  /** Where focus goes in record `id`'s row: its first control, else the row itself (focusable by script only). */
+  function recordTarget(id: string): HTMLElement | null {
+    const row = Array.from(list?.querySelectorAll<HTMLElement>('[data-history-row]') ?? []).find((el) => el.dataset.historyRow === id);
+    return row ? (focusableIn(row)[0] ?? row) : null;
+  }
+
+  /** Finishes a hand-off and, when focus landed on the target, scrolls its row into view by the least movement. */
+  async function handOnInView(handOff: ReturnType<typeof focusHandOff>, pick: () => HTMLElement | null): Promise<void> {
+    const picked: { target: HTMLElement | null } = { target: null };
+    await handOff(() => (picked.target = pick()));
+    const { target } = picked;
+    if (!target || document.activeElement !== target) return;
+    const box = target.closest<HTMLElement>('[data-history-row]') ?? target;
+    if (typeof box.scrollIntoView === 'function') box.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
 
   const clearButton = () => document.querySelector<HTMLButtonElement>('[data-history-clear]');
