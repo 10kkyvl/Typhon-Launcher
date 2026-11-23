@@ -1,6 +1,6 @@
 <script lang="ts">
   import Page from '../../lib/components/Page.svelte';
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { LogIn, UserPlus, Users } from '@lucide/svelte';
   import Avatar from '../../lib/components/Avatar.svelte';
   import { ownFrame } from '../../lib/profile/frameSources';
@@ -28,6 +28,7 @@
     feedLoading,
     feedMoreError,
     feedReady,
+    feedResets,
     loadFeed,
     moreFeed,
     noteEvent,
@@ -41,6 +42,8 @@
   import { friendsPage, needsSocialConsent } from '../../lib/stores/social';
   import { toast } from '../../lib/stores/toasts';
   import { authState, currentUser, leaveGuest } from '../../lib/stores/user';
+  import { focusableIn } from '../../lib/layers/focus';
+  import { focusHandOff } from '../../lib/utils/focusHandOff';
   import { formatCount } from '../../lib/utils/format';
   import { msg } from '../../lib/i18n';
   import FriendRow from '../friends/FriendRow.svelte';
@@ -93,8 +96,21 @@
     return { igdbId: gameId, title: friend.presence?.gameTitle ?? '' };
   }
 
+  const pageHeading = () => document.querySelector<HTMLElement>('h1[tabindex="-1"]');
+
+  // On entry and after every reset under the open screen (a reconnect, another account) the first page
+  // is read again.
   $effect(() => {
+    void $feedResets;
     if (!isGuest && !$needsSocialConsent) void loadFeed(true);
+  });
+
+  // Before the DOM drops what a reset took: focus that was in the column (a Retry whose notice goes)
+  // moves to the column's first control, else to the page heading, not to the body.
+  $effect.pre(() => {
+    void $feedResets;
+    const handOff = untrack(() => (feedColumn?.contains(document.activeElement) ? focusHandOff() : null));
+    void handOff?.(() => (feedColumn ? focusableIn(feedColumn)[0] : undefined) ?? pageHeading());
   });
 
   $effect(() => {

@@ -330,6 +330,38 @@ describe('неудачное чтение ленты', () => {
     expect(get(feedEvents).map((e) => e.id)).toEqual([1, 2]);
   });
 
+  it('повторное чтение, прерванное сбросом, отвечает тем, что принесло чтение после сброса', async () => {
+    const { reloadFeed, loadFeed, resetFeed, fetchFeed } = await load();
+    let cut = () => {};
+    let bring = () => {};
+    fetchFeed
+      .mockReturnValueOnce(new Promise((_resolve, reject) => (cut = () => reject(new Error('offline')))) as never)
+      .mockReturnValueOnce(new Promise((resolve) => (bring = () => resolve({ events: [event(1)], next: 0 }))) as never);
+
+    const answer = reloadFeed();
+    resetFeed();
+    const after = loadFeed(true);
+    cut();
+    await vi.advanceTimersByTimeAsync(0);
+    bring();
+
+    expect(await answer).toBe(true);
+    await after;
+    expect(fetchFeed).toHaveBeenCalledTimes(2);
+  });
+
+  it('каждый сброс ленты виден экрану, чтобы тот перечитал первую страницу', async () => {
+    const { resetFeed, feedResets } = await load();
+    const seen: number[] = [];
+    const stop = feedResets.subscribe((count) => seen.push(count));
+
+    resetFeed();
+    resetFeed();
+    stop();
+
+    expect(seen).toEqual([seen[0], seen[0] + 1, seen[0] + 2]);
+  });
+
   it('сброс ленты снимает оба провала', async () => {
     const { loadFeed, moreFeed, resetFeed, fetchFeed, feedMoreError, feedLoadError } = await load();
     fetchFeed.mockRejectedValueOnce(new Error('offline'));

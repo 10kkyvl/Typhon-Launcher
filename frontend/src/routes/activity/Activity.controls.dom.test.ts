@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/svelte';
+import { cleanup, screen } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import { weekSummary } from '../../lib/profile/week';
@@ -73,6 +73,8 @@ describe('Activity: rows that open a game', () => {
 
 describe('Activity: more of the feed', () => {
   afterEach(() => {
+    // Unmounted first: a reset under the open screen reads the feed again.
+    cleanup();
     resetFeed();
     authState.set('bootstrapping');
     vi.mocked(feed).mockReset();

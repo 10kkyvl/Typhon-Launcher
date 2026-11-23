@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/svelte';
+import { cleanup, screen, within } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -62,6 +62,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // Unmounted first: a reset under the open screen reads the feed again.
+  cleanup();
   resetFeed();
   authState.set('bootstrapping');
   settings.set(null);
@@ -248,6 +250,93 @@ describe('Activity: a feed that could not be read', () => {
   });
 });
 
+describe('Activity: a feed cleared under the open screen', () => {
+  // What the social store does on every change of the auth state (a reconnect, another account).
+  const reconnect = () => {
+    authState.set('authenticated');
+    resetFeed();
+  };
+
+  it('asks for the first page again, once, and shows what it brought', async () => {
+    vi.mocked(feed).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(page([event(1, now(), 'Hades')]));
+    authState.set('offline');
+    renderDom(Activity);
+    await feedColumn().findByRole('alert');
+
+    reconnect();
+
+    expect(await feedColumn().findByText('Hades')).toBeTruthy();
+    expect(feed).toHaveBeenCalledTimes(2);
+    expect(feedColumn().queryByRole('alert')).toBeNull();
+    expect(feedColumn().queryByRole('status')).toBeNull();
+  });
+
+  it('a Retry under way when the feed is cleared answers with the read that follows, and focus goes into the feed', async () => {
+    let fail = (_reason: Error) => {};
+    vi.mocked(feed)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockReturnValueOnce(new Promise<FeedPage>((_resolve, reject) => (fail = reject)))
+      .mockResolvedValueOnce(page([event(1, now(), 'Hades')]));
+    authState.set('offline');
+    const { user } = renderDom(Activity);
+    const notice = (await feedColumn().findByRole('alert')).closest('.notice') as HTMLElement;
+    within(notice).getByRole('button', { name: msg('common.retry') }).focus();
+    await user.keyboard('{Enter}');
+    await vi.waitFor(() => expect(feed).toHaveBeenCalledTimes(2));
+
+    reconnect();
+    await vi.waitFor(() => expect(feed).toHaveBeenCalledTimes(3));
+    fail(new Error('the old read, cut short'));
+
+    expect(await feedColumn().findByText('Hades')).toBeTruthy();
+    await vi.waitFor(() => expect(notice.isConnected).toBe(false));
+    await vi.waitFor(() => expect(feedColumn().getAllByRole('button')).toContain(document.activeElement));
+    expect(feed).toHaveBeenCalledTimes(3);
+  });
+
+  it('focus on the Retry of a notice the clearing takes away goes to the page heading, and stays there when the feed comes', async () => {
+    let answer = (_page: FeedPage) => {};
+    vi.mocked(feed)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockReturnValueOnce(new Promise<FeedPage>((resolve) => (answer = resolve)));
+    authState.set('offline');
+    renderDom(Activity);
+    const notice = (await feedColumn().findByRole('alert')).closest('.notice') as HTMLElement;
+    within(notice).getByRole('button', { name: msg('common.retry') }).focus();
+
+    reconnect();
+
+    await vi.waitFor(() => expect(feed).toHaveBeenCalledTimes(2));
+    expect(await feedColumn().findByText(msg('transfers.activityLoading'))).toBeTruthy();
+    expect(notice.isConnected).toBe(false);
+    const heading = screen.getByRole('heading', { level: 1, name: msg('transfers.activityTitle') });
+    await vi.waitFor(() => expect(document.activeElement).toBe(heading));
+
+    answer(page([event(1, now(), 'Hades')]));
+
+    expect(await feedColumn().findByText('Hades')).toBeTruthy();
+    expect(document.activeElement).toBe(heading);
+  });
+
+  it('a clearing leaves alone focus that was not in the feed column', async () => {
+    vi.mocked(feed).mockRejectedValueOnce(new Error('offline')).mockReturnValueOnce(new Promise(() => {}));
+    authState.set('offline');
+    renderDom(Activity);
+    await feedColumn().findByRole('alert');
+    const heading = screen.getByRole('heading', { level: 1, name: msg('transfers.activityTitle') });
+    const outside = document.createElement('button');
+    document.body.append(outside);
+    outside.focus();
+
+    reconnect();
+
+    expect(await feedColumn().findByText(msg('transfers.activityLoading'))).toBeTruthy();
+    expect(document.activeElement).toBe(outside);
+    expect(heading).not.toBe(document.activeElement);
+    outside.remove();
+  });
+});
+
 describe('Activity: the week card with no play', () => {
   it('says so and still offers all the activity', async () => {
     const { user } = renderDom(WeekActivity, { week: weekSummary([], new Date(2026, 10, 11)) });
@@ -328,5 +417,36 @@ describe('Activity: what the feed column holds while the first page loads', () =
     const spinner = (await screen.findByText(msg('transfers.activityLoading'))).closest('.spinner[role="status"]');
     expect(spinner).not.toBeNull();
     expect(within(document.body).queryByText(msg('transfers.activityFeedEmptyTitle'))).toBeNull();
+  });
+
+  it('never says "no friends yet", not even for a moment, before a read has come back, on entry or after a clearing', async () => {
+    let answer = (_page: FeedPage) => {};
+    vi.mocked(feed)
+      .mockReturnValueOnce(new Promise(() => {}))
+      .mockReturnValueOnce(new Promise<FeedPage>((resolve) => (answer = resolve)));
+    // Nodes keep their words after they leave the page: one that came and went is still seen here.
+    const seen: Node[] = [];
+    const observer = new MutationObserver((records) => {
+      for (const record of records) seen.push(...record.addedNodes, ...record.removedNodes);
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    const said = () => seen.some((node) => node.textContent?.includes(msg('transfers.activityFeedEmptyTitle')));
+    try {
+      authState.set('authenticated');
+      renderDom(Activity);
+      await feedColumn().findByText(msg('transfers.activityLoading'));
+
+      resetFeed();
+      await vi.waitFor(() => expect(feed).toHaveBeenCalledTimes(2));
+      await feedColumn().findByText(msg('transfers.activityLoading'));
+      await Promise.resolve();
+      expect(said()).toBe(false);
+
+      answer(page([]));
+      expect(await feedColumn().findByText(msg('transfers.activityFeedEmptyTitle'))).toBeTruthy();
+      expect(said()).toBe(true);
+    } finally {
+      observer.disconnect();
+    }
   });
 });

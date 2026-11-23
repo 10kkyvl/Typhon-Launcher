@@ -1,4 +1,4 @@
-import { get, writable } from 'svelte/store';
+import { get, writable, type Readable } from 'svelte/store';
 import { AccountError } from '../services/account';
 import { accountErrorText } from '../services/accountMessages';
 import {
@@ -23,6 +23,10 @@ export const feedPending = writable<ReadonlySet<number>>(new Set());
 export const feedLoadError = writable<unknown>(null);
 /** Why the last "Show more" failed: the list stays, the screen says it beside the button. */
 export const feedMoreError = writable<unknown>(null);
+
+const resets = writable(0);
+/** Moves on every `resetFeed`: a screen that shows the feed reads its first page again when it does. */
+export const feedResets: Readable<number> = { subscribe: resets.subscribe };
 
 export const staleAfter = 60_000;
 
@@ -106,9 +110,17 @@ export async function loadFeed(force = false): Promise<void> {
   await queue(0, false);
 }
 
-/** Reads the first page again, as the screen's Retry does; answers whether a feed is there. */
+/**
+ * Reads the first page again, as the screen's Retry does; answers whether a feed is there. A reset
+ * during the read makes it moot: the answer is then the read that follows the reset, if one does.
+ */
 export async function reloadFeed(): Promise<boolean> {
+  let owner = generation;
   await loadFeed(true);
+  while (owner !== generation && inflight) {
+    owner = generation;
+    await inflight;
+  }
   return get(feedReady);
 }
 
@@ -131,6 +143,7 @@ export function resetFeed(): void {
   feedReady.set(false);
   feedLoadError.set(null);
   feedMoreError.set(null);
+  resets.update((count) => count + 1);
 }
 
 export async function reactToEvent(id: number, emoji: string): Promise<void> {
