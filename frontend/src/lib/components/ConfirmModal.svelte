@@ -70,7 +70,7 @@
       <Button disabled={running} onclick={cancel}>{prompt.cancel ?? msg('common.cancel')}</Button>
     </span>
     <span class="action" data-autofocus={destructive ? undefined : ''} bind:this={confirmSlot}>
-      <Button variant={prompt.tone ?? 'danger'} disabled={running} onclick={confirm}>
+      <Button variant={prompt.tone ?? 'danger'} busy={running} onclick={confirm}>
         {running ? (prompt.busy ?? prompt.confirm) : error ? msg('common.retry') : prompt.confirm}
       </Button>
     </span>

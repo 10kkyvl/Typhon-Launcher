@@ -85,7 +85,12 @@ describe('ConfirmModal in a DOM', () => {
 
     const busy = button('Removing…');
     expect(dialog.getAttribute('aria-busy')).toBe('true');
-    expect(busy).toHaveProperty('disabled', true);
+    // Busy, not disabled: a browser takes focus off a disabled button and the page behind gets it.
+    expect(busy).toHaveProperty('disabled', false);
+    expect(busy.getAttribute('aria-busy')).toBe('true');
+    expect(busy.getAttribute('aria-disabled')).toBe('true');
+    busy.focus();
+    expect(document.activeElement).toBe(busy);
     expect(button(msg('common.cancel'))).toHaveProperty('disabled', true);
     await keys.keyboard('{Escape}');
     await keys.click(button(msg('common.close')));
