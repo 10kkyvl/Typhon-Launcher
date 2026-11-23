@@ -1,0 +1,380 @@
+import { render, screen, within } from '@testing-library/svelte';
+import { get } from 'svelte/store';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
+vi.mock('../../lib/services/backend', () => ({ inWails: false }));
+vi.mock('../../lib/services/settings', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/services/settings')>()),
+  saveSettingsPatch: vi.fn(),
+}));
+// A Windows build: the row that asks for admin rights ahead of time is shown there.
+vi.mock('../../lib/services/system', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/services/system')>()),
+  getAppInfo: vi.fn(async () => ({ version: '2.0.0', platform: 'windows', arch: 'amd64', devMock: false, portable: false, dataDir: '' })),
+}));
+vi.mock('../../lib/stores/selfupdate', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/stores/selfupdate')>()),
+  requestCheck: vi.fn(async () => {}),
+}));
+vi.mock('../../lib/services/cloudsaves', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/services/cloudsaves')>()),
+  cloudForget: vi.fn(),
+}));
+
+import { msg, type MessageKey } from '../../lib/i18n';
+import { cloudForget } from '../../lib/services/cloudsaves';
+import { defaultPlayDownloadLimit, defaultPlayUploadLimit } from '../../lib/services/playThrottle';
+import { saveSettingsPatch, type Settings as SettingsData } from '../../lib/services/settings';
+import { cloudStatus } from '../../lib/stores/cloudsaves';
+import { saveBackupsEnabled } from '../../lib/stores/savebackup';
+import { requestCheck, selfUpdateStatus } from '../../lib/stores/selfupdate';
+import { settings } from '../../lib/stores/settings';
+import { toasts } from '../../lib/stores/toasts';
+import { authState, currentUser } from '../../lib/stores/user';
+import type { CurrentUser } from '../../lib/services/account';
+import { user } from '../../lib/testing/dom';
+import { description } from '../../lib/testing/hints';
+import Settings from './Settings.svelte';
+
+const MB = 1024 * 1024;
+
+const SAVED = {
+  language: 'system',
+  uiScale: 1,
+  downloadRateLimit: 0,
+  uploadRateLimit: 0,
+  playDownloadMode: 'off',
+  maxActiveDownloads: 2,
+  uploadWhileDownloading: false,
+  seedAfterDownload: false,
+  sourceRefreshInterval: '6h',
+  updateCheckAutomatically: true,
+  updateAutoDownload: false,
+  updateBetaChannel: false,
+  updateSaveBackup: true,
+  saveBackupAfterSession: true,
+  saveBackupBeforeLaunch: true,
+  saveBackupLimit: 5,
+  cloudSaves: false,
+  keepPreviousVersion: 'first_launch',
+  allowTorrentReuse: true,
+  installCleanupPolicy: 'delete',
+  autoInstall: false,
+  elevateAhead: false,
+  installSkipShortcuts: true,
+  desktopShortcuts: true,
+  installSkipExtras: true,
+  verifyAfterInstall: true,
+  installVerifyRepack: false,
+  downloadSchedule: [],
+} as unknown as SettingsData;
+
+let app: HTMLDivElement;
+
+beforeEach(() => {
+  // jsdom has no ResizeObserver; the settings tabs measure their marker with one.
+  vi.stubGlobal('ResizeObserver', class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  });
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  app = document.createElement('div');
+  app.id = 'app';
+  document.body.append(app);
+  settings.set({ ...SAVED });
+  vi.mocked(saveSettingsPatch).mockImplementation(async (patch) => ({ ...get(settings), ...patch }) as SettingsData);
+});
+
+afterEach(() => {
+  settings.set(null);
+  toasts.set([]);
+  authState.set('bootstrapping');
+  currentUser.set(null);
+  cloudStatus.set(null);
+  saveBackupsEnabled.set(false);
+  selfUpdateStatus.set({ state: 'idle', currentVersion: '' });
+  document.body.replaceChildren();
+  vi.mocked(saveSettingsPatch).mockReset();
+  vi.mocked(requestCheck).mockReset();
+  vi.mocked(cloudForget).mockReset();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
+function open() {
+  render(Settings, { target: app, props: { tab: 'downloads' } });
+  return user();
+}
+
+const toastTexts = () => get(toasts).map((item) => item.message);
+
+// Every switch of the tab: its name, its description, the setting it writes.
+const SWITCHES: Array<[label: MessageKey, sub: MessageKey, key: keyof SettingsData]> = [
+  ['settings.downloadsUploadWhileDownloadingLabel', 'settings.downloadsUploadWhileDownloadingSub', 'uploadWhileDownloading'],
+  ['settings.downloadsSeedAfterLabel', 'settings.downloadsSeedAfterSub', 'seedAfterDownload'],
+  ['settings.downloadsUpdateCheckAutoLabel', 'settings.downloadsUpdateCheckAutoSub', 'updateCheckAutomatically'],
+  ['settings.downloadsUpdateAutoDownloadLabel', 'settings.downloadsUpdateAutoDownloadSub', 'updateAutoDownload'],
+  ['settings.downloadsSaveBackupLabel', 'settings.downloadsSaveBackupSub', 'updateSaveBackup'],
+  ['settings.downloadsTorrentReuseLabel', 'settings.downloadsTorrentReuseSub', 'allowTorrentReuse'],
+  ['settings.downloadsAutoInstallLabel', 'settings.downloadsAutoInstallSub', 'autoInstall'],
+  ['settings.downloadsElevateAheadLabel', 'settings.downloadsElevateAheadSub', 'elevateAhead'],
+  ['settings.downloadsSkipShortcutsLabel', 'settings.downloadsSkipShortcutsSub', 'installSkipShortcuts'],
+  ['settings.downloadsDesktopShortcutsLabel', 'settings.downloadsDesktopShortcutsSub', 'desktopShortcuts'],
+  ['settings.downloadsSkipExtrasLabel', 'settings.downloadsSkipExtrasSub', 'installSkipExtras'],
+  ['settings.downloadsVerifyAfterInstallLabel', 'settings.downloadsVerifyAfterInstallSub', 'verifyAfterInstall'],
+  ['settings.downloadsVerifyRepackLabel', 'settings.downloadsVerifyRepackSub', 'installVerifyRepack'],
+];
+
+// Every list of the tab: its name, its description, an option (a catalog key or the shown text) and
+// the patch it writes. Keys are read at the test's time: the catalog's language is set by then.
+const SELECTS: Array<[label: MessageKey, sub: MessageKey, option: MessageKey | string, patch: Partial<SettingsData>]> = [
+  ['settings.downloadsRateLimitLabel', 'settings.downloadsRateLimitSub', '10 MB/s', { downloadRateLimit: 10 * MB }],
+  ['settings.downloadsUploadLimitLabel', 'settings.downloadsUploadLimitSub', '5 MB/s', { uploadRateLimit: 5 * MB }],
+  ['settings.downloadsPlayLabel', 'settings.downloadsPlaySub', 'settings.downloadsPlayPause', { playDownloadMode: 'pause' }],
+  ['settings.downloadsMaxActiveLabel', 'settings.downloadsMaxActiveSub', '3', { maxActiveDownloads: 3 }],
+  ['settings.downloadsSourceRefreshLabel', 'settings.downloadsSourceRefreshSub', 'settings.downloadsSourceRefreshDaily', { sourceRefreshInterval: '24h' }],
+  ['settings.downloadsKeepPreviousLabel', 'settings.downloadsKeepPreviousSub', 'settings.downloadsKeepPrevious24h', { keepPreviousVersion: '24h' }],
+  ['settings.downloadsAfterInstallLabel', 'settings.downloadsAfterInstallSub', 'settings.downloadsCleanupKeep', { installCleanupPolicy: 'keep' }],
+];
+
+describe('the downloads tab: switches', () => {
+  it.each(SWITCHES)('%s is a switch named by its label, described by its text, writing its setting', async (label, sub, key) => {
+    const keys = open();
+    const toggle = await screen.findByRole('switch', { name: msg(label) });
+    expect(description(toggle)).toBe(msg(sub));
+    expect(toggle.hasAttribute('disabled')).toBe(false);
+    const before = toggle.getAttribute('aria-checked') === 'true';
+    expect(before).toBe(Boolean(SAVED[key]));
+
+    await keys.click(toggle);
+
+    await vi.waitFor(() => expect(saveSettingsPatch).toHaveBeenCalledExactlyOnceWith({ [key]: !before }));
+    expect(toggle.getAttribute('aria-checked')).toBe(String(!before));
+  });
+
+  it('shows the held state and says so when a switch is not saved', async () => {
+    vi.mocked(saveSettingsPatch).mockRejectedValue(new Error('locked'));
+    const keys = open();
+    const toggle = screen.getByRole('switch', { name: msg('settings.downloadsSeedAfterLabel') });
+
+    await keys.click(toggle);
+
+    await vi.waitFor(() => expect(toastTexts()).toContain(msg('state.settingsSaveFailed')));
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+  });
+});
+
+describe('the downloads tab: lists', () => {
+  it.each(SELECTS)('%s is a list named by its label, writing its choice', async (label, _sub, option, patch) => {
+    const keys = open();
+    const field = screen.getByRole('combobox', { name: msg(label) });
+    expect(field.hasAttribute('disabled')).toBe(false);
+
+    await keys.click(field);
+    await keys.click(screen.getByRole('option', { name: option.startsWith('settings.') ? msg(option as MessageKey) : option }));
+
+    await vi.waitFor(() => expect(saveSettingsPatch).toHaveBeenCalledExactlyOnceWith(patch));
+  });
+
+  it('describes no list by its text yet', () => {
+    open();
+    const described = SELECTS.map(([label]) => description(screen.getByRole('combobox', { name: msg(label) })));
+    expect(described).toEqual(SELECTS.map(() => ''));
+  });
+});
+
+describe('the downloads tab: while playing', () => {
+  it('adds the two in-game limits after the list when "limit" is chosen, writing the defaults, focus kept on the list', async () => {
+    const keys = open();
+    const mode = screen.getByRole('combobox', { name: msg('settings.downloadsPlayLabel') });
+    expect(screen.queryByRole('combobox', { name: msg('settings.downloadsPlayLimitDownLabel') })).toBeNull();
+    mode.focus();
+    await keys.keyboard('{Enter}');
+    await keys.click(screen.getByRole('option', { name: msg('settings.downloadsPlayLimit') }));
+
+    await vi.waitFor(() =>
+      expect(saveSettingsPatch).toHaveBeenCalledExactlyOnceWith({
+        playDownloadMode: 'limit',
+        playDownloadRateLimit: defaultPlayDownloadLimit,
+        playUploadRateLimit: defaultPlayUploadLimit,
+      }),
+    );
+    const down = await screen.findByRole('combobox', { name: msg('settings.downloadsPlayLimitDownLabel') });
+    const up = screen.getByRole('combobox', { name: msg('settings.downloadsPlayLimitUpLabel') });
+    expect(mode.compareDocumentPosition(down) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(down.compareDocumentPosition(up) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(document.activeElement).toBe(mode);
+  });
+
+  it('writes an in-game limit chosen from its list', async () => {
+    settings.set({ ...SAVED, playDownloadMode: 'limit', playDownloadRateLimit: 2 * MB, playUploadRateLimit: 1 * MB } as SettingsData);
+    const keys = open();
+
+    await keys.click(screen.getByRole('combobox', { name: msg('settings.downloadsPlayLimitDownLabel') }));
+    await keys.click(screen.getByRole('option', { name: '5 MB/s' }));
+
+    await vi.waitFor(() => expect(saveSettingsPatch).toHaveBeenCalledExactlyOnceWith({ playDownloadRateLimit: 5 * MB }));
+  });
+});
+
+describe('the downloads tab: save backups', () => {
+  it('shows the three backup rows after the switch while backups are on', async () => {
+    saveBackupsEnabled.set(true);
+    open();
+    const main = screen.getByRole('switch', { name: msg('settings.downloadsSaveBackupLabel') });
+    const after = screen.getByRole('switch', { name: msg('settings.downloadsSaveBackupAfterSessionLabel') });
+    const before = screen.getByRole('switch', { name: msg('settings.downloadsSaveBackupBeforeLaunchLabel') });
+    expect(description(after)).toBe(msg('settings.downloadsSaveBackupAfterSessionSub'));
+    expect(description(before)).toBe(msg('settings.downloadsSaveBackupBeforeLaunchSub'));
+    expect(main.compareDocumentPosition(after) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(after.compareDocumentPosition(before) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('names the limit field once and writes the typed number', async () => {
+    saveBackupsEnabled.set(true);
+    const keys = open();
+    const limit = screen.getByRole('textbox', { name: msg('settings.downloadsSaveBackupLimitField') });
+    expect((limit as HTMLInputElement).value).toBe('5');
+
+    await keys.clear(limit);
+    await keys.type(limit, '9{Enter}');
+
+    await vi.waitFor(() => expect(saveSettingsPatch).toHaveBeenCalledExactlyOnceWith({ saveBackupLimit: 9 }));
+  });
+
+  it('writes the sub-switches', async () => {
+    saveBackupsEnabled.set(true);
+    const keys = open();
+    await keys.click(screen.getByRole('switch', { name: msg('settings.downloadsSaveBackupAfterSessionLabel') }));
+    await vi.waitFor(() => expect(saveSettingsPatch).toHaveBeenCalledExactlyOnceWith({ saveBackupAfterSession: false }));
+  });
+});
+
+describe('the downloads tab: the schedule', () => {
+  it('adds a window and writes the schedule', async () => {
+    const keys = open();
+    expect(screen.getByText(msg('settings.downloadsScheduleEmpty'))).toBeTruthy();
+
+    await keys.click(screen.getByRole('button', { name: msg('settings.downloadsScheduleAdd') }));
+
+    await vi.waitFor(() =>
+      expect(saveSettingsPatch).toHaveBeenCalledExactlyOnceWith({ downloadSchedule: [{ days: [0, 1, 2, 3, 4, 5, 6], from: '01:00', to: '07:00' }] }),
+    );
+  });
+
+  it('says a schedule that was not saved on a danger notice, and keeps the edited window', async () => {
+    vi.mocked(saveSettingsPatch).mockRejectedValue(new Error('locked'));
+    const keys = open();
+
+    await keys.click(screen.getByRole('button', { name: msg('settings.downloadsScheduleAdd') }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain(msg('settings.downloadsScheduleSaveError', { reason: 'locked' }));
+    expect(alert.closest('[data-tone]')?.getAttribute('data-tone')).toBe('danger');
+    expect(screen.getByRole('group', { name: msg('settings.downloadsScheduleDays') })).toBeTruthy();
+  });
+});
+
+describe('the downloads tab: cloud saves', () => {
+  it('is out of reach without an account, and says an account is needed', () => {
+    authState.set('unauthenticated');
+    open();
+    const cloud = screen.getByRole('switch', { name: msg('cloudsaves.settingsLabel') });
+    expect(cloud.hasAttribute('disabled')).toBe(true);
+    expect(screen.getByText(msg('cloudsaves.settingsNeedsAccount'))).toBeTruthy();
+  });
+
+  it('opens the consent dialog from the switch with an account, writing nothing yet', async () => {
+    authState.set('authenticated');
+    const keys = open();
+    const cloud = screen.getByRole('switch', { name: msg('cloudsaves.settingsLabel') });
+    expect(cloud.hasAttribute('disabled')).toBe(false);
+    expect(description(cloud)).toBe(msg('cloudsaves.settingsSub'));
+
+    await keys.click(cloud);
+
+    expect(await screen.findByRole('dialog', { name: msg('cloudsaves.consentTitle') })).toBeTruthy();
+    expect(saveSettingsPatch).not.toHaveBeenCalled();
+  });
+
+  it('shows the cloud usage and that copies are pending', async () => {
+    authState.set('authenticated');
+    settings.set({ ...SAVED, cloudSaves: true } as SettingsData);
+    open();
+    cloudStatus.set({ enabled: true, signedIn: true, usedBytes: 0, quotaBytes: 0, maxBytes: 0, error: '', pending: true, games: [] });
+    const usage = msg('cloudsaves.usageUnknown', { used: '0 B' });
+    expect(await screen.findByText(`${usage} · ${msg('cloudsaves.pending')}`)).toBeTruthy();
+  });
+
+  it('offers to delete the cloud copies again after the deletion failed, the switch kept in its place', async () => {
+    authState.set('authenticated');
+    settings.set({ ...SAVED, cloudSaves: true } as SettingsData);
+    vi.mocked(cloudForget).mockRejectedValue(new Error('down'));
+    const keys = open();
+    const cloud = screen.getByRole('switch', { name: msg('cloudsaves.settingsLabel') });
+
+    await keys.click(cloud);
+    const dialog = await screen.findByRole('dialog', { name: msg('cloudsaves.disableTitle') });
+    await keys.click(within(dialog).getByRole('button', { name: msg('cloudsaves.disableDelete') }));
+
+    await vi.waitFor(() => expect(saveSettingsPatch).toHaveBeenCalledExactlyOnceWith({ cloudSaves: false }));
+    const retry = await screen.findByRole('button', { name: msg('cloudsaves.retryForget') });
+    expect(screen.getByText(msg('cloudsaves.retryForgetHint'))).toBeTruthy();
+    expect(cloud.isConnected).toBe(true);
+    expect(cloud.getAttribute('aria-checked')).toBe('false');
+
+    vi.mocked(cloudForget).mockResolvedValueOnce();
+    await keys.click(retry);
+    await vi.waitFor(() => expect(cloudForget).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(screen.queryByRole('button', { name: msg('cloudsaves.retryForget') })).toBeNull());
+  });
+});
+
+describe('the downloads tab: beta versions', () => {
+  const TESTER = { tester: true } as CurrentUser;
+
+  it('is offered to a signed-in tester only', () => {
+    authState.set('authenticated');
+    currentUser.set({ tester: false } as CurrentUser);
+    open();
+    expect(screen.queryByRole('switch', { name: msg('settings.downloadsBetaLabel') })).toBeNull();
+  });
+
+  it('saves the channel, then checks for an update', async () => {
+    authState.set('authenticated');
+    currentUser.set(TESTER);
+    const keys = open();
+    const beta = screen.getByRole('switch', { name: msg('settings.downloadsBetaLabel') });
+    expect(description(beta)).toBe(msg('settings.downloadsBetaSub'));
+
+    await keys.click(beta);
+
+    await vi.waitFor(() => expect(requestCheck).toHaveBeenCalledTimes(1));
+    expect(saveSettingsPatch).toHaveBeenCalledExactlyOnceWith({ updateBetaChannel: true });
+  });
+
+  it('says a channel that was not saved, and checks nothing', async () => {
+    authState.set('authenticated');
+    currentUser.set(TESTER);
+    vi.mocked(saveSettingsPatch).mockRejectedValue(new Error('locked'));
+    const keys = open();
+
+    await keys.click(screen.getByRole('switch', { name: msg('settings.downloadsBetaLabel') }));
+
+    await vi.waitFor(() => expect(toastTexts()).toContain(msg('state.settingsSaveFailed')));
+    expect(requestCheck).not.toHaveBeenCalled();
+  });
+
+  // The template drops the space before the dot: the two words run together in the name.
+  it('names the channel in the label while the launcher is on beta', () => {
+    authState.set('authenticated');
+    currentUser.set(TESTER);
+    settings.set({ ...SAVED, updateBetaChannel: true } as SettingsData);
+    selfUpdateStatus.set({ state: 'idle', currentVersion: '2.0.0-beta.1', channel: 'beta' });
+    open();
+    const name = `${msg('settings.downloadsBetaLabel')}· ${msg('settings.downloadsBetaChannelMark')}`;
+    expect(screen.getByRole('switch', { name }).getAttribute('aria-checked')).toBe('true');
+  });
+});
