@@ -123,7 +123,7 @@
     below={page.importDetails.length > 0 ? importDetails : undefined}
   >
     {#snippet children({ hintId, disabled })}
-      <Button size="sm" aria-describedby={hintId} disabled={disabled || page.importing} onclick={page.runImportExternal}>
+      <Button size="sm" aria-describedby={hintId} {disabled} busy={page.importing} onclick={page.runImportExternal}>
         {page.importing ? msg('settings.extlibRunning') : msg('settings.extlibLabel')}
       </Button>
     {/snippet}

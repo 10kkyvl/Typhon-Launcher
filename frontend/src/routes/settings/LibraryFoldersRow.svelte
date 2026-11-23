@@ -27,6 +27,10 @@
   let adding = $state(false);
   let removing = $state<string | null>(null);
   let pendingRemove = $state<string | null>(null);
+  // Where focus goes once the removed folder's row, and its Remove, are gone.
+  let nextAfterRemove: string | null = null;
+  let list = $state<HTMLUListElement>();
+  const uid = $props.id();
   let seq = 0;
 
   function errorText(err: unknown, fallback: string): string {
@@ -77,6 +81,17 @@
     }
   }
 
+  function askRemove(path: string) {
+    const at = folders.findIndex((folder) => folder.path === path);
+    nextAfterRemove = folders.slice(at + 1).find((folder) => !folder.primary)?.path ?? null;
+    pendingRemove = path;
+  }
+
+  function focusAfterRemove(): HTMLElement | null {
+    const next = [...(list?.querySelectorAll('li') ?? [])].find((item) => item.dataset.path === nextAfterRemove);
+    return next?.querySelector('button') ?? document.getElementById(`${uid}-add`);
+  }
+
   async function remove(path: string) {
     removing = path;
     try {
@@ -93,7 +108,7 @@
 {#if inWails}
   <SettingsRow label={msg('settings.libraryFoldersLabel')} hint={msg('settings.libraryFoldersSub')}>
     {#snippet children({ hintId })}
-      <Button size="sm" aria-describedby={hintId} disabled={adding} onclick={add}>
+      <Button id="{uid}-add" size="sm" aria-describedby={hintId} busy={adding} onclick={add}>
         <Plus size="1.5rem" strokeWidth={1.8} />
         {msg('settings.libraryFolderAdd')}
       </Button>
@@ -103,9 +118,9 @@
         <Notice tone="danger" compact>{msg('settings.libraryFoldersLoadFailed')}</Notice>
       {/if}
       {#if folders.length > 0}
-        <ul class="folders" aria-labelledby={labelId}>
+        <ul class="folders" aria-labelledby={labelId} bind:this={list}>
           {#each folders as folder (folder.path)}
-            <li class="folder" class:unavailable={!folder.available}>
+            <li class="folder" class:unavailable={!folder.available} data-path={folder.path}>
               <div class="folder-text">
                 <span class="path">{folder.path}</span>
                 <span class="facts">
@@ -119,7 +134,7 @@
                 </span>
               </div>
               {#if !folder.primary}
-                <Button size="sm" disabled={removing === folder.path} onclick={() => (pendingRemove = folder.path)}>
+                <Button size="sm" disabled={removing === folder.path} onclick={() => askRemove(folder.path)}>
                   {msg('settings.libraryFolderRemove')}
                 </Button>
               {/if}
@@ -137,6 +152,7 @@
     prompt={removeLibraryFolderPrompt(target)}
     onconfirm={() => remove(target)}
     onclose={() => (pendingRemove = null)}
+    returnFocus={focusAfterRemove}
   />
 {/if}
 

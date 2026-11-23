@@ -524,3 +524,67 @@ describe('the settings page: its first reads', () => {
     expect(console.warn).toHaveBeenCalledWith(expect.any(String), down);
   });
 });
+
+// A button its own press puts to work keeps focus: busy, not disabled.
+describe('the general tab: buttons at work', () => {
+  function later() {
+    let resolve: () => void = () => {};
+    const promise = new Promise<void>((yes) => {
+      resolve = yes;
+    });
+    return { promise, resolve };
+  }
+
+  const atWork = (target: HTMLButtonElement) => [target.disabled, target.getAttribute('aria-busy'), document.activeElement === target];
+
+  it('keeps Sync now in focus and busy while it syncs', async () => {
+    const run = later();
+    vi.mocked(syncNow).mockReturnValueOnce(run.promise);
+    open();
+    const sync = button('settings.generalSyncNowLabel');
+    sync.focus();
+    await user().keyboard('{Enter}');
+    await waitFor(() => expect(syncNow).toHaveBeenCalledOnce());
+    const busy = screen.getByRole('button', { name: msg('settings.generalSyncNowRunning') }) as HTMLButtonElement;
+    expect(busy).toBe(sync);
+    expect(atWork(sync)).toEqual([false, 'true', true]);
+    run.resolve();
+    await waitFor(() => expect(sync.hasAttribute('aria-busy')).toBe(false));
+    expect(document.activeElement).toBe(sync);
+  });
+
+  it('keeps Forget busy while it deletes, and returns focus to it when the dialog closes', async () => {
+    const run = later();
+    vi.mocked(forgetRemote).mockReturnValueOnce(run.promise);
+    open();
+    const forget = button('settings.generalSyncForgetLabel');
+    forget.focus();
+    await user().keyboard('{Enter}');
+    const dialog = await screen.findByRole('dialog');
+    const buttons = within(dialog).getAllByRole('button');
+    await user().click(buttons[buttons.length - 1]);
+    await waitFor(() => expect(forgetRemote).toHaveBeenCalledOnce());
+    expect([forget.disabled, forget.getAttribute('aria-busy')]).toEqual([false, 'true']);
+    run.resolve();
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(forget));
+  });
+
+  it('keeps the import in focus and busy while it searches', async () => {
+    let finish: () => void = () => {};
+    vi.mocked(importExternalGames).mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = () => resolve({ providers: [], added: 0, updated: 0, metadataErrors: null });
+      }),
+    );
+    open();
+    const find = await screen.findByRole('button', { name: msg('settings.extlibLabel') }) as HTMLButtonElement;
+    await waitFor(() => expect(find.disabled).toBe(false));
+    find.focus();
+    await user().keyboard('{Enter}');
+    await waitFor(() => expect(importExternalGames).toHaveBeenCalledOnce());
+    expect(atWork(find)).toEqual([false, 'true', true]);
+    finish();
+    await waitFor(() => expect(find.hasAttribute('aria-busy')).toBe(false));
+  });
+});

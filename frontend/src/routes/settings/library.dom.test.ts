@@ -184,3 +184,76 @@ describe('the library move row', () => {
     await waitFor(() => expect(toastTexts()).toEqual([msg('settings.generalLibraryMoveCancelFailed')]));
   });
 });
+
+// A button its own press puts to work keeps focus; a removed folder's dialog hands focus on.
+describe('the library rows: focus', () => {
+  it('keeps Add folder in focus and busy while it adds', async () => {
+    vi.mocked(selectFolder).mockResolvedValueOnce('/new');
+    const added = deferred<SettingsData>();
+    vi.mocked(addLibraryFolder).mockReturnValueOnce(added.promise);
+    const { user } = renderDom(LibraryFoldersRow, {});
+    const add = screen.getByRole('button', { name: msg('settings.libraryFolderAdd') }) as HTMLButtonElement;
+    add.focus();
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(addLibraryFolder).toHaveBeenCalledOnce());
+    expect([add.disabled, add.getAttribute('aria-busy'), document.activeElement === add]).toEqual([false, 'true', true]);
+    added.resolve(SETTINGS);
+    await waitFor(() => expect(add.hasAttribute('aria-busy')).toBe(false));
+  });
+
+  it('keeps Move in focus and busy while the move starts and runs', async () => {
+    vi.mocked(selectMoveTargetFolder).mockResolvedValueOnce('/new');
+    const started = deferred<MoveJob>();
+    vi.mocked(moveLibrary).mockReturnValueOnce(started.promise);
+    const { user } = renderDom(LibraryLocationRow, {});
+    const move = screen.getByRole('button', { name: msg('settings.generalLibraryMoveButtonLabel') }) as HTMLButtonElement;
+    move.focus();
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(moveLibrary).toHaveBeenCalledOnce());
+    expect([move.disabled, move.getAttribute('aria-busy'), document.activeElement === move]).toEqual([false, 'true', true]);
+    moves.set([JOB]);
+    started.resolve(JOB);
+    await screen.findByRole('progressbar');
+    expect(move.isConnected).toBe(true);
+    expect([move.disabled, move.getAttribute('aria-busy'), document.activeElement === move]).toEqual([false, 'true', true]);
+  });
+
+  async function removeThrough(path: string, left: LibraryFolder[]) {
+    vi.mocked(removeLibraryFolder).mockResolvedValueOnce({ ...SETTINGS, extraLibraryPaths: left.filter((f) => !f.primary).map((f) => f.path) } as SettingsData);
+    const { user } = renderDom(LibraryFoldersRow, {});
+    await screen.findByText(path);
+    const item = screen.getByText(path).closest('li') as HTMLElement;
+    const remove = within(item).getByRole('button', { name: msg('settings.libraryFolderRemove') });
+    remove.focus();
+    await user.keyboard('{Enter}');
+    const dialog = await screen.findByRole('dialog', { name: msg('settings.libraryFolderRemoveTitle') });
+    vi.mocked(libraryFolders).mockResolvedValue(left);
+    await user.click(within(dialog).getByRole('button', { name: msg('settings.libraryFolderRemove') }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(screen.queryByText(path)).toBeNull());
+  }
+
+  it("hands focus to the next folder's Remove when a folder is removed", async () => {
+    await removeThrough('/extra', [PRIMARY, THIRD]);
+    const next = within(screen.getByText('/third').closest('li') as HTMLElement).getByRole('button', { name: msg('settings.libraryFolderRemove') });
+    await waitFor(() => expect(document.activeElement).toBe(next));
+  });
+
+  it('hands focus to Add folder when the last folder is removed', async () => {
+    await removeThrough('/third', [PRIMARY, EXTRA]);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: msg('settings.libraryFolderAdd') })));
+  });
+
+  it('returns focus to Remove when the removal is cancelled', async () => {
+    const { user } = renderDom(LibraryFoldersRow, {});
+    await screen.findByText('/extra');
+    const remove = within(screen.getByText('/extra').closest('li') as HTMLElement).getByRole('button', { name: msg('settings.libraryFolderRemove') });
+    remove.focus();
+    await user.keyboard('{Enter}');
+    await screen.findByRole('dialog');
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(remove));
+    expect(removeLibraryFolder).not.toHaveBeenCalled();
+  });
+});

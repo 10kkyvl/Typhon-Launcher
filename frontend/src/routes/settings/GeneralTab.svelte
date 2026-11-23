@@ -327,7 +327,7 @@
       </SettingsRow>
       <SettingsRow label={msg('settings.generalSyncNowLabel')} hint={msg('settings.generalSyncNowSub')} disabledReason={needsSync}>
         {#snippet children({ hintId, disabled })}
-          <Button size="sm" aria-describedby={hintId} disabled={disabled || page.syncingNow} onclick={page.runSyncNow}>
+          <Button size="sm" aria-describedby={hintId} {disabled} busy={page.syncingNow} onclick={page.runSyncNow}>
             {page.syncingNow ? msg('settings.generalSyncNowRunning') : msg('settings.generalSyncNowLabel')}
           </Button>
         {/snippet}
@@ -335,7 +335,7 @@
       <div class="danger-zone">
         <SettingsRow label={msg('settings.generalSyncForgetLabel')} hint={msg('settings.generalSyncForgetSub')} disabledReason={needsAccount}>
           {#snippet children({ hintId, disabled })}
-            <Button size="sm" variant="danger" aria-describedby={hintId} disabled={disabled || page.forgettingRemote} onclick={page.askForgetRemote}>
+            <Button size="sm" variant="danger" aria-describedby={hintId} {disabled} busy={page.forgettingRemote} onclick={page.askForgetRemote}>
               {page.forgettingRemote ? msg('settings.generalSyncForgetRunning') : msg('settings.generalSyncForgetLabel')}
             </Button>
           {/snippet}

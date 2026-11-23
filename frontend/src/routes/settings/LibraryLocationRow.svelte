@@ -95,7 +95,8 @@
   below={job || failure ? progress : undefined}
 >
   {#snippet children({ hintId, disabled })}
-    <Button size="sm" aria-describedby={hintId} disabled={disabled || starting || !!job} onclick={start}>
+    <!-- Busy from the press to the end of the move it started: it keeps focus all along. -->
+    <Button size="sm" aria-describedby={hintId} {disabled} busy={starting || !!job} onclick={start}>
       {starting ? msg('settings.generalLibraryMoveStartingEllipsis') : msg('settings.generalLibraryMoveButtonLabel')}
     </Button>
   {/snippet}
