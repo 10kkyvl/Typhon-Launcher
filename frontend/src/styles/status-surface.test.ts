@@ -204,8 +204,9 @@ const ON_SURFACE: Record<string, [surface: string, ...rules: string[]]> = {
   'routes/profile/Profile.svelte': ['the editing bar', '.topbar-sub.error'],
   'routes/profile/ProfileHeader.svelte': ['the profile canvas', '.error'],
   'routes/history/HistoryDay.svelte': ["the plate of a day's list", '.row.failed .mark', '.row.failed .detail'],
-  'routes/sources/Sources.svelte': [
-    'the table; the error and health marks are icons in a row of it',
+  'routes/sources/Sources.svelte': ['the table the rows of SourceRow.svelte sit on'],
+  'routes/sources/SourceRow.svelte': [
+    'the table of Sources.svelte (.table, held opaque there); the error and health marks are icons in a row of it',
     '.source-error',
     '.insecure',
     '.mark.danger',

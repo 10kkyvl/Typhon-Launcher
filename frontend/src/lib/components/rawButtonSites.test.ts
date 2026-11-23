@@ -90,7 +90,7 @@ const ALLOWED: Record<string, Record<string, Kind>> = {
   'routes/profile/ProfilePlaying.svelte': { open: 'row' },
   'routes/settings/AccentPicker.svelte': { swatch: 'radio tile' },
   'routes/settings/ThemeTiles.svelte': { preset: 'radio tile' },
-  'routes/sources/Sources.svelte': { source: 'row' },
+  'routes/sources/SourceRow.svelte': { source: 'row' },
   'routes/support/TicketList.svelte': { row: 'row' },
   'routes/user/GameRow.svelte': { row: 'row' },
   'routes/user/UserActivity.svelte': { row: 'row' },

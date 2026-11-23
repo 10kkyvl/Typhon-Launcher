@@ -9,7 +9,7 @@ import { ruleBody, styleOf } from '../../lib/testing/css';
 import { user } from '../../lib/testing/dom';
 import { describedControls, hintOnFocus } from '../../lib/testing/hints';
 import Sources from './Sources.svelte';
-import page from './Sources.svelte?raw';
+import row from './SourceRow.svelte?raw';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
@@ -113,8 +113,8 @@ describe('Sources: the error and health marks of a row', () => {
     expect(await screen.findByRole('dialog')).toBeTruthy();
   });
 
-  // A status colour painted by the page's own stylesheet is one the status-surface guard can see.
-  it('take their status colour from the page’s stylesheet, not from a prop on the icon', () => {
+  // A status colour painted by the row's own stylesheet is one the status-surface guard can see.
+  it('take their status colour from the row’s stylesheet, not from a prop on the icon', () => {
     sources.set([
       source({ id: 's1', name: 'Main feed', status: 'error', lastError: 'feed answered 503' }),
       source({ id: 's2', name: 'Old feed', health: 'warning', warnings: ['duplicate entries'] }),
@@ -126,7 +126,7 @@ describe('Sources: the error and health marks of a row', () => {
       [screen.getByRole('button', { name: msg('transfers.sourcesHealthWarning') }), 'warning'],
       [screen.getByRole('button', { name: msg('transfers.sourcesHealthError') }), 'danger'],
     ] as const;
-    const css = styleOf(page, 'Sources');
+    const css = styleOf(row, 'SourceRow');
 
     for (const [button, kind] of marks) {
       const icon = button.querySelector(`.mark.${kind} svg`);
@@ -213,13 +213,13 @@ describe('Sources: refreshing all', () => {
 // stay inline. Read from the source: jsdom applies no stylesheet.
 describe('Sources: what its text links hold', () => {
   it('is inline, so the link\'s underline draws on it', () => {
-    const style = /<style>([\s\S]*?)<\/style>/.exec(page)?.[1] ?? '';
+    const style = /<style>([\s\S]*?)<\/style>/.exec(row)?.[1] ?? '';
     const boxed = new Set(
       [...style.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
         .filter((rule) => /(^|;)\s*display\s*:\s*(?!inline\s*;|contents)/.test(rule[2]))
         .flatMap((rule) => [...rule[1].matchAll(/\.([\w-]+)/g)].map((m) => m[1])),
     );
-    const links = [...page.matchAll(/<TextLink\b[\s\S]*?<\/TextLink>/g)].map((m) => m[0]);
+    const links = [...row.matchAll(/<TextLink\b[\s\S]*?<\/TextLink>/g)].map((m) => m[0]);
     expect(links.length).toBeGreaterThan(0);
     const held = links.flatMap((link) => [...link.matchAll(/\bclass="([^"]*)"/g)].flatMap((m) => m[1].split(/\s+/)));
     expect(held.filter((name) => boxed.has(name))).toEqual([]);
