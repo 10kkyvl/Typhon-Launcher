@@ -6,6 +6,7 @@
   import RateLimitInput from '../../lib/components/RateLimitInput.svelte';
   import ScheduleEditor from '../../lib/components/ScheduleEditor.svelte';
   import Select from '../../lib/components/Select.svelte';
+  import SettingsRow from '../../lib/components/SettingsRow.svelte';
   import StableOffer from '../../lib/components/StableOffer.svelte';
   import Toggle from '../../lib/components/Toggle.svelte';
   import EmulatorsCard from './EmulatorsCard.svelte';
@@ -45,6 +46,7 @@
     updateSettings(patch);
   }
 
+  const fieldId = $props.id();
   const labelId = (name: string) => `${uid}-${name}-label`;
   const subId = (name: string) => `${uid}-${name}-sub`;
 
@@ -140,62 +142,32 @@
   <div class="settings-column">
     <Card title={msg('settings.downloadsTab')}>
       <div class="rows">
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('download-limit')}>{msg('settings.downloadsRateLimitLabel')}</span>
-            <span class="row-sub">{msg('settings.downloadsRateLimitSub')}</span>
-          </div>
-          <RateLimitInput
-            labelledby={labelId('download-limit')}
-            value={current?.downloadRateLimit ?? 0}
-            presets={downloadLimitPresets}
-            onchange={(bytes) => set({ downloadRateLimit: bytes })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('upload-limit')}>{msg('settings.downloadsUploadLimitLabel')}</span>
-            <span class="row-sub">{msg('settings.downloadsUploadLimitSub')}</span>
-          </div>
-          <RateLimitInput
-            labelledby={labelId('upload-limit')}
-            value={current?.uploadRateLimit ?? 0}
-            presets={uploadLimitPresets}
-            onchange={(bytes) => set({ uploadRateLimit: bytes })}
-          />
-        </div>
-        <div class='row'>
-          <div class='row-text'>
-            <span class='row-label' id={labelId('play-mode')}>{msg('settings.downloadsPlayLabel')}</span>
-            <span class='row-sub'>{msg('settings.downloadsPlaySub')}</span>
-          </div>
-          <Select labelledby={labelId('play-mode')} value={playModeValue} width='20rem' options={playModeOptions} onchange={pickPlayMode} />
-        </div>
+        <SettingsRow label={msg('settings.downloadsRateLimitLabel')} hint={msg('settings.downloadsRateLimitSub')}>
+          {#snippet children({ labelId, hintId })}
+            <RateLimitInput labelledby={labelId} describedby={hintId} value={current?.downloadRateLimit ?? 0} presets={downloadLimitPresets} onchange={(bytes) => set({ downloadRateLimit: bytes })} />
+          {/snippet}
+        </SettingsRow>
+        <SettingsRow label={msg('settings.downloadsUploadLimitLabel')} hint={msg('settings.downloadsUploadLimitSub')}>
+          {#snippet children({ labelId, hintId })}
+            <RateLimitInput labelledby={labelId} describedby={hintId} value={current?.uploadRateLimit ?? 0} presets={uploadLimitPresets} onchange={(bytes) => set({ uploadRateLimit: bytes })} />
+          {/snippet}
+        </SettingsRow>
+        <SettingsRow label={msg('settings.downloadsPlayLabel')} hint={msg('settings.downloadsPlaySub')}>
+          {#snippet children({ labelId, hintId })}
+            <Select labelledby={labelId} describedby={hintId} value={playModeValue} width="20rem" options={playModeOptions} onchange={pickPlayMode} />
+          {/snippet}
+        </SettingsRow>
         {#if playModeValue === 'limit'}
-          <div class='row'>
-            <div class='row-text'>
-              <span class='row-label' id={labelId('play-download-limit')}>{msg('settings.downloadsPlayLimitDownLabel')}</span>
-            </div>
-            <RateLimitInput
-              labelledby={labelId('play-download-limit')}
-              value={current?.playDownloadRateLimit ?? 0}
-              presets={playDownloadPresets}
-              allowUnlimited={false}
-              onchange={(bytes) => set({ playDownloadRateLimit: bytes })}
-            />
-          </div>
-          <div class='row'>
-            <div class='row-text'>
-              <span class='row-label' id={labelId('play-upload-limit')}>{msg('settings.downloadsPlayLimitUpLabel')}</span>
-            </div>
-            <RateLimitInput
-              labelledby={labelId('play-upload-limit')}
-              value={current?.playUploadRateLimit ?? 0}
-              presets={playUploadPresets}
-              allowUnlimited={false}
-              onchange={(bytes) => set({ playUploadRateLimit: bytes })}
-            />
-          </div>
+          <SettingsRow label={msg('settings.downloadsPlayLimitDownLabel')}>
+            {#snippet children({ labelId })}
+              <RateLimitInput labelledby={labelId} value={current?.playDownloadRateLimit ?? 0} presets={playDownloadPresets} allowUnlimited={false} onchange={(bytes) => set({ playDownloadRateLimit: bytes })} />
+            {/snippet}
+          </SettingsRow>
+          <SettingsRow label={msg('settings.downloadsPlayLimitUpLabel')}>
+            {#snippet children({ labelId })}
+              <RateLimitInput labelledby={labelId} value={current?.playUploadRateLimit ?? 0} presets={playUploadPresets} allowUnlimited={false} onchange={(bytes) => set({ playUploadRateLimit: bytes })} />
+            {/snippet}
+          </SettingsRow>
         {/if}
         <div class="row">
           <div class="row-text">
@@ -207,56 +179,26 @@
             <ScheduleEditor windows={current?.downloadSchedule ?? []} onchange={page.setSchedule} />
           </div>
         </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('max-active')}>{msg('settings.downloadsMaxActiveLabel')}</span>
-            <span class="row-sub">{msg('settings.downloadsMaxActiveSub')}</span>
-          </div>
-          <Select
-            labelledby={labelId('max-active')}
-            value={maxActiveValue}
-            width="20rem"
-            options={maxActiveDownloadOptions}
-            onchange={(id) => set({ maxActiveDownloads: Number(id) })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('downloads-upload-while-downloading')}>{msg('settings.downloadsUploadWhileDownloadingLabel')}</span>
-            <span class="row-sub" id={subId('downloads-upload-while-downloading')}>{msg('settings.downloadsUploadWhileDownloadingSub')}</span>
-          </div>
-          <Toggle
-            checked={current?.uploadWhileDownloading ?? false}
-            labelledby={labelId('downloads-upload-while-downloading')}
-            describedby={subId('downloads-upload-while-downloading')}
-            onchange={(v) => set({ uploadWhileDownloading: v })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('downloads-seed-after')}>{msg('settings.downloadsSeedAfterLabel')}</span>
-            <span class="row-sub" id={subId('downloads-seed-after')}>{msg('settings.downloadsSeedAfterSub')}</span>
-          </div>
-          <Toggle
-            checked={current?.seedAfterDownload ?? false}
-            labelledby={labelId('downloads-seed-after')}
-            describedby={subId('downloads-seed-after')}
-            onchange={(v) => set({ seedAfterDownload: v })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('source-refresh')}>{msg('settings.downloadsSourceRefreshLabel')}</span>
-            <span class="row-sub">{msg('settings.downloadsSourceRefreshSub')}</span>
-          </div>
-          <Select
-            labelledby={labelId('source-refresh')}
-            value={sourceRefreshInterval}
-            width="20rem"
-            options={sourceRefreshOptions}
-            onchange={(id) => set({ sourceRefreshInterval: id })}
-          />
-        </div>
+        <SettingsRow label={msg('settings.downloadsMaxActiveLabel')} hint={msg('settings.downloadsMaxActiveSub')}>
+          {#snippet children({ labelId, hintId })}
+            <Select labelledby={labelId} describedby={hintId} value={maxActiveValue} width="20rem" options={maxActiveDownloadOptions} onchange={(id) => set({ maxActiveDownloads: Number(id) })} />
+          {/snippet}
+        </SettingsRow>
+        <SettingsRow label={msg('settings.downloadsUploadWhileDownloadingLabel')} hint={msg('settings.downloadsUploadWhileDownloadingSub')}>
+          {#snippet children({ labelId, hintId })}
+            <Toggle checked={current?.uploadWhileDownloading ?? false} labelledby={labelId} describedby={hintId} onchange={(v) => set({ uploadWhileDownloading: v })} />
+          {/snippet}
+        </SettingsRow>
+        <SettingsRow label={msg('settings.downloadsSeedAfterLabel')} hint={msg('settings.downloadsSeedAfterSub')}>
+          {#snippet children({ labelId, hintId })}
+            <Toggle checked={current?.seedAfterDownload ?? false} labelledby={labelId} describedby={hintId} onchange={(v) => set({ seedAfterDownload: v })} />
+          {/snippet}
+        </SettingsRow>
+        <SettingsRow label={msg('settings.downloadsSourceRefreshLabel')} hint={msg('settings.downloadsSourceRefreshSub')}>
+          {#snippet children({ labelId, hintId })}
+            <Select labelledby={labelId} describedby={hintId} value={sourceRefreshInterval} width="20rem" options={sourceRefreshOptions} onchange={(id) => set({ sourceRefreshInterval: id })} />
+          {/snippet}
+        </SettingsRow>
       </div>
     </Card>
 
@@ -264,30 +206,16 @@
 
     <Card title={msg('settings.downloadsUpdatesCardTitle')}>
       <div class="rows">
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('downloads-update-check-auto')}>{msg('settings.downloadsUpdateCheckAutoLabel')}</span>
-            <span class="row-sub" id={subId('downloads-update-check-auto')}>{msg('settings.downloadsUpdateCheckAutoSub')}</span>
-          </div>
-          <Toggle
-            checked={current?.updateCheckAutomatically ?? true}
-            labelledby={labelId('downloads-update-check-auto')}
-            describedby={subId('downloads-update-check-auto')}
-            onchange={(v) => set({ updateCheckAutomatically: v })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('downloads-update-auto-download')}>{msg('settings.downloadsUpdateAutoDownloadLabel')}</span>
-            <span class="row-sub" id={subId('downloads-update-auto-download')}>{msg('settings.downloadsUpdateAutoDownloadSub')}</span>
-          </div>
-          <Toggle
-            checked={current?.updateAutoDownload ?? false}
-            labelledby={labelId('downloads-update-auto-download')}
-            describedby={subId('downloads-update-auto-download')}
-            onchange={(v) => set({ updateAutoDownload: v })}
-          />
-        </div>
+        <SettingsRow label={msg('settings.downloadsUpdateCheckAutoLabel')} hint={msg('settings.downloadsUpdateCheckAutoSub')}>
+          {#snippet children({ labelId, hintId })}
+            <Toggle checked={current?.updateCheckAutomatically ?? true} labelledby={labelId} describedby={hintId} onchange={(v) => set({ updateCheckAutomatically: v })} />
+          {/snippet}
+        </SettingsRow>
+        <SettingsRow label={msg('settings.downloadsUpdateAutoDownloadLabel')} hint={msg('settings.downloadsUpdateAutoDownloadSub')}>
+          {#snippet children({ labelId, hintId })}
+            <Toggle checked={current?.updateAutoDownload ?? false} labelledby={labelId} describedby={hintId} onchange={(v) => set({ updateAutoDownload: v })} />
+          {/snippet}
+        </SettingsRow>
         {#if betaShown}
           <div class="row">
             <div class="row-text">
@@ -303,56 +231,27 @@
           </div>
         {/if}
         <StableOffer />
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('downloads-save-backup')}>{msg('settings.downloadsSaveBackupLabel')}</span>
-            <span class="row-sub" id={subId('downloads-save-backup')}>{msg('settings.downloadsSaveBackupSub')}</span>
-          </div>
-          <Toggle
-            checked={current?.updateSaveBackup ?? true}
-            labelledby={labelId('downloads-save-backup')}
-            describedby={subId('downloads-save-backup')}
-            onchange={(v) => set({ updateSaveBackup: v })}
-          />
-        </div>
+        <SettingsRow label={msg('settings.downloadsSaveBackupLabel')} hint={msg('settings.downloadsSaveBackupSub')}>
+          {#snippet children({ labelId, hintId })}
+            <Toggle checked={current?.updateSaveBackup ?? true} labelledby={labelId} describedby={hintId} onchange={(v) => set({ updateSaveBackup: v })} />
+          {/snippet}
+        </SettingsRow>
         {#if $saveBackupsEnabled}
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label" id={labelId('downloads-save-backup-after-session')}>{msg('settings.downloadsSaveBackupAfterSessionLabel')}</span>
-              <span class="row-sub" id={subId('downloads-save-backup-after-session')}>{msg('settings.downloadsSaveBackupAfterSessionSub')}</span>
-            </div>
-            <Toggle
-              checked={current?.saveBackupAfterSession ?? true}
-              labelledby={labelId('downloads-save-backup-after-session')}
-              describedby={subId('downloads-save-backup-after-session')}
-              onchange={(v) => set({ saveBackupAfterSession: v })}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label" id={labelId('downloads-save-backup-before-launch')}>{msg('settings.downloadsSaveBackupBeforeLaunchLabel')}</span>
-              <span class="row-sub" id={subId('downloads-save-backup-before-launch')}>{msg('settings.downloadsSaveBackupBeforeLaunchSub')}</span>
-            </div>
-            <Toggle
-              checked={current?.saveBackupBeforeLaunch ?? true}
-              labelledby={labelId('downloads-save-backup-before-launch')}
-              describedby={subId('downloads-save-backup-before-launch')}
-              onchange={(v) => set({ saveBackupBeforeLaunch: v })}
-            />
-          </div>
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label">{msg('settings.downloadsSaveBackupLimitLabel')}</span>
-              <span class="row-sub">{msg('settings.downloadsSaveBackupLimitSub')}</span>
-            </div>
-            <IntegerInput
-              value={current?.saveBackupLimit ?? 5}
-              min={1}
-              max={50}
-              label={msg('settings.downloadsSaveBackupLimitField')}
-              onchange={(n) => set({ saveBackupLimit: n })}
-            />
-          </div>
+          <SettingsRow label={msg('settings.downloadsSaveBackupAfterSessionLabel')} hint={msg('settings.downloadsSaveBackupAfterSessionSub')}>
+          {#snippet children({ labelId, hintId })}
+            <Toggle checked={current?.saveBackupAfterSession ?? true} labelledby={labelId} describedby={hintId} onchange={(v) => set({ saveBackupAfterSession: v })} />
+          {/snippet}
+        </SettingsRow>
+          <SettingsRow label={msg('settings.downloadsSaveBackupBeforeLaunchLabel')} hint={msg('settings.downloadsSaveBackupBeforeLaunchSub')}>
+          {#snippet children({ labelId, hintId })}
+            <Toggle checked={current?.saveBackupBeforeLaunch ?? true} labelledby={labelId} describedby={hintId} onchange={(v) => set({ saveBackupBeforeLaunch: v })} />
+          {/snippet}
+        </SettingsRow>
+          <SettingsRow label={msg('settings.downloadsSaveBackupLimitLabel')} hint={msg('settings.downloadsSaveBackupLimitSub')} labelFor="{fieldId}-backup-limit">
+            {#snippet children({ hintId })}
+              <IntegerInput id="{fieldId}-backup-limit" describedby={hintId} value={current?.saveBackupLimit ?? 5} min={1} max={50} onchange={(n) => set({ saveBackupLimit: n })} />
+            {/snippet}
+          </SettingsRow>
         {/if}
         <div class="row">
           <div class="row-text">
@@ -380,136 +279,64 @@
             onchange={page.changeCloudSaves}
           />
         </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('keep-previous')}>{msg('settings.downloadsKeepPreviousLabel')}</span>
-            <span class="row-sub">{msg('settings.downloadsKeepPreviousSub')}</span>
-          </div>
-          <Select
-            labelledby={labelId('keep-previous')}
-            value={keepPreviousVersion}
-            width="28rem"
-            options={keepPreviousOptions}
-            onchange={(id) => set({ keepPreviousVersion: id })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('downloads-torrent-reuse')}>{msg('settings.downloadsTorrentReuseLabel')}</span>
-            <span class="row-sub" id={subId('downloads-torrent-reuse')}>{msg('settings.downloadsTorrentReuseSub')}</span>
-          </div>
-          <Toggle
-            checked={current?.allowTorrentReuse ?? true}
-            labelledby={labelId('downloads-torrent-reuse')}
-            describedby={subId('downloads-torrent-reuse')}
-            onchange={(v) => set({ allowTorrentReuse: v })}
-          />
-        </div>
+        <SettingsRow label={msg('settings.downloadsKeepPreviousLabel')} hint={msg('settings.downloadsKeepPreviousSub')}>
+          {#snippet children({ labelId, hintId })}
+            <Select labelledby={labelId} describedby={hintId} value={keepPreviousVersion} width="28rem" options={keepPreviousOptions} onchange={(id) => set({ keepPreviousVersion: id })} />
+          {/snippet}
+        </SettingsRow>
+        <SettingsRow label={msg('settings.downloadsTorrentReuseLabel')} hint={msg('settings.downloadsTorrentReuseSub')}>
+          {#snippet children({ labelId, hintId })}
+            <Toggle checked={current?.allowTorrentReuse ?? true} labelledby={labelId} describedby={hintId} onchange={(v) => set({ allowTorrentReuse: v })} />
+          {/snippet}
+        </SettingsRow>
       </div>
     </Card>
   </div>
   <div class="settings-column">
     <Card title={msg('settings.downloadsInstallCardTitle')}>
       <div class="rows">
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('after-install')}>{msg('settings.downloadsAfterInstallLabel')}</span>
-            <span class="row-sub">{msg('settings.downloadsAfterInstallSub')}</span>
-          </div>
-          <Select
-            labelledby={labelId('after-install')}
-            value={cleanupPolicy}
-            width="26rem"
-            options={cleanupPolicyOptions}
-            onchange={(id) => set({ installCleanupPolicy: id })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('downloads-auto-install')}>{msg('settings.downloadsAutoInstallLabel')}</span>
-            <span class="row-sub" id={subId('downloads-auto-install')}>{msg('settings.downloadsAutoInstallSub')}</span>
-          </div>
-          <Toggle
-            checked={current?.autoInstall ?? false}
-            labelledby={labelId('downloads-auto-install')}
-            describedby={subId('downloads-auto-install')}
-            onchange={(v) => set({ autoInstall: v })}
-          />
-        </div>
+        <SettingsRow label={msg('settings.downloadsAfterInstallLabel')} hint={msg('settings.downloadsAfterInstallSub')}>
+          {#snippet children({ labelId, hintId })}
+            <Select labelledby={labelId} describedby={hintId} value={cleanupPolicy} width="26rem" options={cleanupPolicyOptions} onchange={(id) => set({ installCleanupPolicy: id })} />
+          {/snippet}
+        </SettingsRow>
+        <SettingsRow label={msg('settings.downloadsAutoInstallLabel')} hint={msg('settings.downloadsAutoInstallSub')}>
+          {#snippet children({ labelId, hintId })}
+            <Toggle checked={current?.autoInstall ?? false} labelledby={labelId} describedby={hintId} onchange={(v) => set({ autoInstall: v })} />
+          {/snippet}
+        </SettingsRow>
         {#if page.appInfo && elevationSupported(page.appInfo)}
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label" id={labelId('downloads-elevate-ahead')}>{msg('settings.downloadsElevateAheadLabel')}</span>
-              <span class="row-sub" id={subId('downloads-elevate-ahead')}>{msg('settings.downloadsElevateAheadSub')}</span>
-            </div>
-            <Toggle
-              checked={current?.elevateAhead ?? false}
-              labelledby={labelId('downloads-elevate-ahead')}
-              describedby={subId('downloads-elevate-ahead')}
-              onchange={(v) => set({ elevateAhead: v })}
-            />
-          </div>
+          <SettingsRow label={msg('settings.downloadsElevateAheadLabel')} hint={msg('settings.downloadsElevateAheadSub')}>
+          {#snippet children({ labelId, hintId })}
+            <Toggle checked={current?.elevateAhead ?? false} labelledby={labelId} describedby={hintId} onchange={(v) => set({ elevateAhead: v })} />
+          {/snippet}
+        </SettingsRow>
         {/if}
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('downloads-skip-shortcuts')}>{msg('settings.downloadsSkipShortcutsLabel')}</span>
-            <span class="row-sub" id={subId('downloads-skip-shortcuts')}>{msg('settings.downloadsSkipShortcutsSub')}</span>
-          </div>
-          <Toggle
-            checked={current?.installSkipShortcuts ?? true}
-            labelledby={labelId('downloads-skip-shortcuts')}
-            describedby={subId('downloads-skip-shortcuts')}
-            onchange={(v) => set({ installSkipShortcuts: v })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('downloads-desktop-shortcuts')}>{msg('settings.downloadsDesktopShortcutsLabel')}</span>
-            <span class="row-sub" id={subId('downloads-desktop-shortcuts')}>{msg('settings.downloadsDesktopShortcutsSub')}</span>
-          </div>
-          <Toggle
-            checked={current?.desktopShortcuts ?? true}
-            labelledby={labelId('downloads-desktop-shortcuts')}
-            describedby={subId('downloads-desktop-shortcuts')}
-            onchange={(v) => set({ desktopShortcuts: v })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('downloads-skip-extras')}>{msg('settings.downloadsSkipExtrasLabel')}</span>
-            <span class="row-sub" id={subId('downloads-skip-extras')}>{msg('settings.downloadsSkipExtrasSub')}</span>
-          </div>
-          <Toggle
-            checked={current?.installSkipExtras ?? true}
-            labelledby={labelId('downloads-skip-extras')}
-            describedby={subId('downloads-skip-extras')}
-            onchange={(v) => set({ installSkipExtras: v })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('downloads-verify-after-install')}>{msg('settings.downloadsVerifyAfterInstallLabel')}</span>
-            <span class="row-sub" id={subId('downloads-verify-after-install')}>{msg('settings.downloadsVerifyAfterInstallSub')}</span>
-          </div>
-          <Toggle
-            checked={current?.verifyAfterInstall ?? true}
-            labelledby={labelId('downloads-verify-after-install')}
-            describedby={subId('downloads-verify-after-install')}
-            onchange={(v) => set({ verifyAfterInstall: v })}
-          />
-        </div>
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('downloads-verify-repack')}>{msg('settings.downloadsVerifyRepackLabel')}</span>
-            <span class="row-sub" id={subId('downloads-verify-repack')}>{msg('settings.downloadsVerifyRepackSub')}</span>
-          </div>
-          <Toggle
-            checked={current?.installVerifyRepack ?? false}
-            labelledby={labelId('downloads-verify-repack')}
-            describedby={subId('downloads-verify-repack')}
-            onchange={(v) => set({ installVerifyRepack: v })}
-          />
-        </div>
+        <SettingsRow label={msg('settings.downloadsSkipShortcutsLabel')} hint={msg('settings.downloadsSkipShortcutsSub')}>
+          {#snippet children({ labelId, hintId })}
+            <Toggle checked={current?.installSkipShortcuts ?? true} labelledby={labelId} describedby={hintId} onchange={(v) => set({ installSkipShortcuts: v })} />
+          {/snippet}
+        </SettingsRow>
+        <SettingsRow label={msg('settings.downloadsDesktopShortcutsLabel')} hint={msg('settings.downloadsDesktopShortcutsSub')}>
+          {#snippet children({ labelId, hintId })}
+            <Toggle checked={current?.desktopShortcuts ?? true} labelledby={labelId} describedby={hintId} onchange={(v) => set({ desktopShortcuts: v })} />
+          {/snippet}
+        </SettingsRow>
+        <SettingsRow label={msg('settings.downloadsSkipExtrasLabel')} hint={msg('settings.downloadsSkipExtrasSub')}>
+          {#snippet children({ labelId, hintId })}
+            <Toggle checked={current?.installSkipExtras ?? true} labelledby={labelId} describedby={hintId} onchange={(v) => set({ installSkipExtras: v })} />
+          {/snippet}
+        </SettingsRow>
+        <SettingsRow label={msg('settings.downloadsVerifyAfterInstallLabel')} hint={msg('settings.downloadsVerifyAfterInstallSub')}>
+          {#snippet children({ labelId, hintId })}
+            <Toggle checked={current?.verifyAfterInstall ?? true} labelledby={labelId} describedby={hintId} onchange={(v) => set({ verifyAfterInstall: v })} />
+          {/snippet}
+        </SettingsRow>
+        <SettingsRow label={msg('settings.downloadsVerifyRepackLabel')} hint={msg('settings.downloadsVerifyRepackSub')}>
+          {#snippet children({ labelId, hintId })}
+            <Toggle checked={current?.installVerifyRepack ?? false} labelledby={labelId} describedby={hintId} onchange={(v) => set({ installVerifyRepack: v })} />
+          {/snippet}
+        </SettingsRow>
       </div>
     </Card>
 

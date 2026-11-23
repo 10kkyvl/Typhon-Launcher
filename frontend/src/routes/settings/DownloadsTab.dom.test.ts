@@ -178,10 +178,10 @@ describe('the downloads tab: lists', () => {
     await vi.waitFor(() => expect(saveSettingsPatch).toHaveBeenCalledExactlyOnceWith(patch));
   });
 
-  it('describes no list by its text yet', () => {
+  it('describes every list by the text of its row', () => {
     open();
     const described = SELECTS.map(([label]) => description(screen.getByRole('combobox', { name: msg(label) })));
-    expect(described).toEqual(SELECTS.map(() => ''));
+    expect(described).toEqual(SELECTS.map(([, sub]) => msg(sub)));
   });
 });
 
@@ -232,10 +232,12 @@ describe('the downloads tab: save backups', () => {
     expect(after.compareDocumentPosition(before) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('names the limit field once and writes the typed number', async () => {
+  it('names the limit field once, by the label of its row, and writes the typed number', async () => {
     saveBackupsEnabled.set(true);
     const keys = open();
-    const limit = screen.getByRole('textbox', { name: msg('settings.downloadsSaveBackupLimitField') });
+    const limit = screen.getByRole('textbox', { name: msg('settings.downloadsSaveBackupLimitLabel') });
+    expect(limit.hasAttribute('aria-label')).toBe(false);
+    expect(description(limit)).toBe(msg('settings.downloadsSaveBackupLimitSub'));
     expect((limit as HTMLInputElement).value).toBe('5');
 
     await keys.clear(limit);
