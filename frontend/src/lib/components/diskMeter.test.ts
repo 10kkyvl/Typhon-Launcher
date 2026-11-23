@@ -208,6 +208,17 @@ describe('folding what cannot be drawn truthfully', () => {
     holds(m, METER_WIDTH.full);
   });
 
+  // Other files take a slot and a gap of their own: 59 games of 1/60 of the drive and 5 of 600 for
+  // other files leave room for 17 games beside the fold and other files (15.6rem less 18 gaps is
+  // 12rem); counted without other files, the room would keep 18, a little under their size.
+  it('counts other files among the parts the room is shared by', () => {
+    const games = Array.from({ length: 59 }, (_, i) => seg(`g${i}`, 10));
+    const m = meter(games, 600, 5, METER_WIDTH.compact);
+    expect(m.drawn.map((p) => p.kind)).toEqual([...Array.from({ length: 17 }, () => 'segment'), 'more', 'other']);
+    expect(m.parts.find((p) => p.kind === 'more')?.folded).toHaveLength(42);
+    holds(m, METER_WIDTH.compact);
+  });
+
   it('folds the smallest, keeps the caller order of the rest, and puts the fold before other files', () => {
     const m = meter([seg('a', 5), seg('big', 9000), seg('b', 3), seg('c', 7), seg('d', 3000)], 100_000, 87_000, METER_WIDTH.compact);
     expect(m.drawn.map((p) => p.key)).toEqual(['big', 'd', METER_MORE, METER_OTHER]);

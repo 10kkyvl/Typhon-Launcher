@@ -195,6 +195,17 @@ describe('BarChart', () => {
         expect(radios(container).filter((radio) => radio.tabIndex === 0).map((radio) => radio.getAttribute('aria-label'))).toEqual(['Вт, 3 ноября: не играли']);
       });
 
+      it('leaves focus on a bar that stays while another is added or removed before it', async () => {
+        const { rerender, user } = renderDom(BarChartHarness, { buckets: DAYS, selectable: true, start: 'wed' });
+        await user.tab();
+        const wed = document.activeElement;
+        expect(aria()).toBe('Ср, 4 ноября: 8 ч');
+        await rerender({ buckets: [{ key: 'sun', label: 'Вс, 1 ноября', value: 1 }, ...DAYS] });
+        expect(document.activeElement).toBe(wed);
+        await rerender({ buckets: DAYS.slice(1) });
+        expect(document.activeElement).toBe(wed);
+      });
+
       it('leaves focus alone when it was not on a bar', async () => {
         const { rerender, user } = renderDom(BarChartHarness, { buckets: DAYS, selectable: true, start: 'wed' });
         const outside = document.createElement('button');

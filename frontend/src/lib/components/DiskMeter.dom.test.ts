@@ -432,6 +432,18 @@ describe('DiskMeter', () => {
         expect(getByRole('group').dataset.state).toBe('unknown');
       });
 
+      it('leaves focus on a part that stays while another is added or removed before it', async () => {
+        const { rerender, user } = meterOf(ABC);
+        await user.tab();
+        await user.keyboard('{ArrowRight}');
+        const b = document.activeElement;
+        expect(b?.getAttribute('aria-label')).toBe(named('b'));
+        await rerender({ segments: [part('new', 5), ...ABC] });
+        expect(document.activeElement).toBe(b);
+        await rerender({ segments: ABC.slice(1) });
+        expect(document.activeElement).toBe(b);
+      });
+
       it('leaves focus alone when it was not on a segment', async () => {
         const { rerender, user } = meterOf(ABC);
         const outside = document.createElement('button');
