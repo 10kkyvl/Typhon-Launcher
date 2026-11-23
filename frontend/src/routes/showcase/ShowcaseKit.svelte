@@ -5,6 +5,7 @@
   import { gameTone, type MeterSegment } from '../../lib/components/diskMeter';
   import IntegerInput from '../../lib/components/IntegerInput.svelte';
   import Button from '../../lib/components/Button.svelte';
+  import RateLimitInput from '../../lib/components/RateLimitInput.svelte';
   import Select from '../../lib/components/Select.svelte';
   import type { SelectOption } from '../../lib/components/select';
   import EmptyState from '../../lib/components/EmptyState.svelte';
@@ -118,6 +119,7 @@
   let stackOn = $state(true);
   let stackLanguage = $state('en');
   let stackScale = $state(2);
+  let limit = $state(25 * 1024 * 1024);
 </script>
 
 <ShowcaseSection title="Screen parts" note="The disk meter, the settings row and the bar chart the screens share.">
@@ -283,6 +285,21 @@
       <SettingsRow label="Interface scale" hint="A slider has no width of its own: it fills the measure" stack testid="kit-stack-slider">
         {#snippet children({ labelId, hintId })}
           <Slider position={stackScale} max={SCALES.length - 1} labelledby={labelId} fill valueText={SCALES[stackScale]} describedby={hintId} onchange={(at) => (stackScale = at)} />
+        {/snippet}
+      </SettingsRow>
+    </div>
+  </ShowcaseRow>
+
+  <ShowcaseRow caption="Rows of the downloads tab: each control named by the label, described by the hint, and off with the row's reason" stack>
+    <div class="rows">
+      <SettingsRow label="Download speed limit" hint="Maximum incoming traffic speed" testid="kit-row-limit">
+        {#snippet children({ labelId, hintId })}
+          <RateLimitInput value={limit} presets={[10, 25, 50]} labelledby={labelId} describedby={hintId} onchange={(bytes) => (limit = bytes)} />
+        {/snippet}
+      </SettingsRow>
+      <SettingsRow label="Upload speed limit" hint="Maximum outgoing traffic speed" disabledReason="Set by the play mode while a game runs" testid="kit-row-limit-disabled">
+        {#snippet children({ labelId, hintId, disabled })}
+          <RateLimitInput value={3 * 1024 * 1024} presets={[1, 5, 10]} labelledby={labelId} describedby={hintId} {disabled} onchange={() => {}} />
         {/snippet}
       </SettingsRow>
     </div>

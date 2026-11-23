@@ -10,6 +10,8 @@
     width = '20rem',
     allowUnlimited = true,
     labelledby,
+    describedby,
+    disabled = false,
     onchange,
   }: {
     value: number;
@@ -18,6 +20,10 @@
     allowUnlimited?: boolean;
     /** Id of the visible label that names the limit field. */
     labelledby: string;
+    /** Id of the text that says what the limit sets: it describes the list and the number field. */
+    describedby?: string;
+    /** Out of reach, the limit still shown and read (a disabled settings row). */
+    disabled?: boolean;
     onchange: (bytes: number) => void;
   } = $props();
 
@@ -99,7 +105,7 @@
 </script>
 
 <div class="limit" style:width>
-  <Select value={mode} {options} width="100%" {labelledby} onchange={select} />
+  <Select value={mode} {options} width="100%" {labelledby} {describedby} {disabled} onchange={select} />
   {#if mode === 'custom'}
     <div class="custom">
       <input
@@ -109,7 +115,9 @@
         inputmode="decimal"
         placeholder={rateMbText(50 * MB)}
         aria-label={msg('ui.speedMbps')}
+        aria-describedby={describedby}
         aria-invalid={error !== ''}
+        {disabled}
         value={draft}
         oninput={(event) => {
           editing = true;

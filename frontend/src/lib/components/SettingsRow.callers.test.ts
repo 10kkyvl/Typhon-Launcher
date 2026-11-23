@@ -23,6 +23,7 @@ import { frontendSources } from '../testing/sources';
 
 /** The base controls that take `disabled` and turn their own element off with it. */
 const CONTROLS = ['Toggle', 'Select', 'Slider', 'IntegerInput', 'Button', 'IconButton', 'Checkbox', 'SegmentedControl'];
+CONTROLS.push('RateLimitInput');
 /** Components that may stand under a reason as they are: a link that says why or how to fix it. */
 const QUIET = ['TextLink'];
 const RAW = ['button', 'input', 'select', 'textarea'];
@@ -183,7 +184,7 @@ describe('SettingsRow call sites', () => {
     ['a raw input', row('{ disabled }', '<input type="checkbox" />')],
     ['a raw select', row('{ disabled }', '<select><option>a</option></select>')],
     ['a raw textarea', row('{ disabled }', '<textarea></textarea>')],
-    ['a component the guard does not know', row('{ disabled }', '<RateLimitInput value={1} />')],
+    ['a component the guard does not know', row('{ disabled }', '<DiskMeter label="Drive" />')],
     ['a control inside a component the guard does not know', row('{ disabled }', '<Card>{#snippet body()}<Toggle {disabled} />{/snippet}</Card>')],
     ['markup written as html', row('{ disabled }', '{@html controls}')],
     ['the flag taken again by an each block', row('{ disabled }', '{#each rows as disabled}<Toggle {disabled} />{/each}')],
@@ -195,6 +196,11 @@ describe('SettingsRow call sites', () => {
       expect(refused(text)).toBe(true);
     });
   }
+
+  it('holds the speed limit field to the flag like any base control', () => {
+    expect(refused(row('{ labelId, disabled }', '<RateLimitInput value={1} presets={[1]} labelledby={labelId} {disabled} onchange={set} />'))).toBe(false);
+    expect(refused(row('{ labelId }', '<RateLimitInput value={1} presets={[1]} labelledby={labelId} onchange={set} />'))).toBe(true);
+  });
 
   it('finds nothing to refuse in the call sites', () => {
     expect(sources.flatMap(([path, text]) => refusals(path, text))).toEqual([]);
