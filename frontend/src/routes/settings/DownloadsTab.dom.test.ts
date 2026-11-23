@@ -233,6 +233,18 @@ describe('the downloads tab: save backups', () => {
     expect(after.compareDocumentPosition(before) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it('adds the backup rows after the switch that holds focus, focus kept', async () => {
+    open();
+    const main = screen.getByRole('switch', { name: msg('settings.downloadsSaveBackupLabel') });
+    main.focus();
+
+    saveBackupsEnabled.set(true);
+
+    const after = await screen.findByRole('switch', { name: msg('settings.downloadsSaveBackupAfterSessionLabel') });
+    expect(main.compareDocumentPosition(after) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(document.activeElement).toBe(main);
+  });
+
   it('names the limit field once, by the label of its row, and writes the typed number', async () => {
     saveBackupsEnabled.set(true);
     const keys = open();
