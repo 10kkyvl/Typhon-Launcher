@@ -22,6 +22,13 @@ export const stats = {
   'stats.loadErrorReason': 'Не удалось загрузить статистику: {reason}',
   'stats.retry': 'Повторить',
   'stats.loading':'Считаем статистику',
+  // 7-B stats
+  'stats.topLine': { one: '{time} за {count} сессию', few: '{time} за {count} сессии', many: '{time} за {count} сессий', other: '{time} за {count} сессии' },
+  'stats.topShare': '{share}% всего времени за период',
+  'stats.chartDay': 'День',
+  'stats.chartMonth': 'Месяц',
+  'stats.chartPlaytime': 'Время в игре',
+  // /7-B stats
 } as const;
 
 export type StatsKey = keyof typeof stats;

@@ -258,6 +258,9 @@ export const transfers = {
   'transfers.historyShowMore': 'Показать ещё',
   'transfers.historyShownOf': 'Показано {shown} из {total}',
   // /7-H history
+  // 7-B stats
+  'transfers.activityMoreFailed': 'Не удалось загрузить следующие события',
+  // /7-B stats
 } as const;
 
 export type TransfersKey = keyof typeof transfers;

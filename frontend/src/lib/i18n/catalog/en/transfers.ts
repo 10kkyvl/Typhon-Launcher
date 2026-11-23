@@ -252,4 +252,7 @@ export const transfers: Record<TransfersKey, Message> = {
   'transfers.historyShowMore': 'Show more',
   'transfers.historyShownOf': 'Showing {shown} of {total}',
   // /7-H history
+  // 7-B stats
+  'transfers.activityMoreFailed': 'Could not load more events',
+  // /7-B stats
 };

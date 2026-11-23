@@ -25,4 +25,11 @@ export const stats: Record<StatsKey, Message> = {
   'stats.loadErrorReason': 'Could not load statistics: {reason}',
   'stats.retry': 'Retry',
   'stats.loading':'Calculating statistics',
+  // 7-B stats
+  'stats.topLine': { one: '{time} in {count} session', other: '{time} in {count} sessions' },
+  'stats.topShare': '{share}% of the period’s play time',
+  'stats.chartDay': 'Day',
+  'stats.chartMonth': 'Month',
+  'stats.chartPlaytime': 'Play time',
+  // /7-B stats
 };
