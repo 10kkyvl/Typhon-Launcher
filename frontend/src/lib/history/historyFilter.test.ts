@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { filterHistory, type HistoryFilterOptions } from './historyFilter';
+import { filterHistory } from './historyFilter';
 import { Kind, type Record } from '../../../bindings/typhon/internal/history';
 
 const record = (over: Partial<Record> = {}): Record => ({
@@ -51,10 +51,11 @@ describe('filterHistory', () => {
     expect(filterHistory(records, { query: '  hades  ' }).map((r) => r.id)).toEqual(['b']);
   });
 
-  // D3: the query and the titles are lower-cased by the Russian rules, whatever the reader's language.
-  it('D3: lower-cases by the Russian rules whatever locale it is given', () => {
+  // D3: the query and the titles are lower-cased by the rules of the reader's language.
+  it('D3: lower-cases by the rules of the locale it is given', () => {
     const dotless = [record({ id: 't', title: 'ISTANBUL' })];
-    expect(filterHistory(dotless, { query: 'ıstanbul', locale: 'tr' } as HistoryFilterOptions)).toEqual([]);
+    expect(filterHistory(dotless, { query: 'ıstanbul', locale: 'tr' }).map((r) => r.id)).toEqual(['t']);
+    expect(filterHistory(dotless, { query: 'istanbul', locale: 'en' }).map((r) => r.id)).toEqual(['t']);
   });
 
   it('returns nothing when the query matches no title', () => {

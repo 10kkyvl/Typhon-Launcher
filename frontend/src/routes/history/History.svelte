@@ -35,7 +35,7 @@
   } from '../../lib/stores/history';
   import { toast } from '../../lib/stores/toasts';
   import { clockTime, longDate, relativeDate } from '../../lib/utils/format';
-  import { msg } from '../../lib/i18n';
+  import { locale, msg } from '../../lib/i18n';
 
   const segments: { id: string; label: string; kinds?: Kind[] }[] = [
     { id: 'all', label: msg('transfers.historySegmentAll') },
@@ -59,7 +59,7 @@
   const loading = $derived(!$historyLoaded && !loadFailed);
 
   const kindsFilter = $derived(segments.find((s) => s.id === segment)?.kinds);
-  const filtered = $derived(filterHistory($history, { kinds: kindsFilter, query }));
+  const filtered = $derived(filterHistory($history, { kinds: kindsFilter, query, locale: $locale }));
 
   const tabs = $derived(
     segments.map((s) => ({
