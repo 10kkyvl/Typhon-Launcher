@@ -6,8 +6,10 @@
   import BarChart from '../../lib/components/BarChart.svelte';
   import { secondsScale, type ChartBucket as Bar } from '../../lib/components/barChart';
   import EmptyState from '../../lib/components/EmptyState.svelte';
+  import GameLink from '../../lib/components/GameLink.svelte';
   import Notice from '../../lib/components/Notice.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
+  import ProgressBar from '../../lib/components/ProgressBar.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import Spinner from '../../lib/components/Spinner.svelte';
   import StatTile from '../../lib/components/StatTile.svelte';
@@ -17,7 +19,6 @@
   import { gameTitle, summarize } from '../../lib/stats/summary';
   import { libraryGames } from '../../lib/stores/library';
   import { gameArt, loadArt } from '../../lib/stores/metadata';
-  import { navigate } from '../../lib/stores/router';
   import { playtime, shortDate, weekday } from '../../lib/utils/format';
   import { errorCode, hasMessage, locale, msg } from '../../lib/i18n';
 
@@ -180,26 +181,27 @@
         {#if summary.top.length > 0}
           <section class="section">
             <h2>{msg('stats.topTitle')}</h2>
-            <div class="top" bind:this={topList}>
+            <!-- A game gone from the library has no page: its title is plain text and its cover blank. -->
+            <ol class="top" bind:this={topList}>
               {#each summary.top as item (item.gameId)}
                 {@const game = libraryById.get(item.gameId)}
-                <button class="row" type="button" disabled={!game} onclick={() => navigate('game', { id: item.gameId })}>
-                  <span class="cover" aria-hidden="true">
+                {@const title = titleOf(item.gameId, item.title)}
+                <li class="row">
+                  <span class="cover">
                     {#if game}
-                      <Artwork src={coverOf({ ...game, status: game.status ?? '' }, $gameArt)} alt="" label={game.title} ratio="3 / 4" radius="var(--radius-sm)" />
+                      <GameLink id={game.id} name={title} repeat>
+                        <Artwork src={coverOf({ ...game, status: game.status ?? '' }, $gameArt)} alt="" label={game.title} ratio="3 / 4" radius="var(--radius-sm)" />
+                      </GameLink>
                     {/if}
                   </span>
                   <span class="text">
-                    <span class="title">{titleOf(item.gameId, item.title)}</span>
-                    <span class="sub">
-                      {playtime(item.seconds)} · {msg('stats.topSessions', { count: item.sessions })}
-                      <span class="sr-only">· {Math.round(item.share * 100)}%</span>
-                    </span>
-                    <span class="share" aria-hidden="true"><span class="share-fill" style:width="{Math.round(item.share * 100)}%"></span></span>
+                    <span class="title"><GameLink id={game ? game.id : null} name={title} truncate /></span>
+                    <span class="sub">{playtime(item.seconds)} · {msg('stats.topSessions', { count: item.sessions })}</span>
+                    <ProgressBar value={Math.round(item.share * 100)} label={title} valueText={msg('stats.topShare', { share: Math.round(item.share * 100) })} />
                   </span>
-                </button>
+                </li>
               {/each}
-            </div>
+            </ol>
           </section>
         {/if}
       </div>
@@ -236,21 +238,16 @@
   .top {
     display: flex;
     flex-direction: column;
+    gap: var(--space-1);
+    padding: 0;
+    list-style: none;
   }
 
   .row {
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    width: 100%;
-    padding: 0.6rem var(--space-3);
-    border-radius: var(--radius-md);
-    text-align: left;
-    transition: background var(--dur) var(--ease);
-  }
-
-  .row:not(:disabled):hover {
-    background: var(--hover);
+    padding: var(--space-1) var(--space-3);
   }
 
   .cover {
@@ -283,20 +280,6 @@
     font-size: 1.2rem;
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
-  }
-
-  .share {
-    display: block;
-    height: 0.4rem;
-    border-radius: var(--radius-sm);
-    background: var(--surface-3);
-    overflow: hidden;
-  }
-
-  .share-fill {
-    display: block;
-    height: 100%;
-    background: var(--accent-bright);
   }
 
   .load-error {

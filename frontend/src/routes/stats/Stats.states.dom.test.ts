@@ -294,7 +294,7 @@ describe('Stats: the shared bar chart', () => {
     const { container } = renderDom(Stats);
     await chartWords(msg('stats.chartTitle'));
 
-    expect(screen.queryAllByRole('listitem')).toHaveLength(0);
+    expect(container.querySelector('.cols')?.getAttribute('aria-hidden')).toBe('true');
     expect(container.querySelector('[title]')).toBeNull();
   });
 });

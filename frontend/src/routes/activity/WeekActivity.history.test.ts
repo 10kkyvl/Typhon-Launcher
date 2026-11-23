@@ -16,8 +16,10 @@ it('renders archived sessions in the week and profile without a broken library l
   expect(week.totalSeconds).toBe(7200);
   const weekly = render(WeekActivity, { props: { week } }).body;
   const profile = render(ProfileActivity, { props: { days: activity, hidden: false } }).body;
-  for (const html of [weekly, profile]) {
-    expect(html).toContain('Archived game');
-    expect(html).toMatch(/<button[^>]*disabled/);
-  }
+  for (const html of [weekly, profile]) expect(html).toContain('Archived game');
+  // The week names an archived game as plain text: no control around it, none to disable.
+  const row = /<li[^>]*>[\s\S]*?Archived game[\s\S]*?<\/li>/.exec(weekly)?.[0] ?? '';
+  expect(row).not.toBe('');
+  expect(row).not.toMatch(/<button/);
+  expect(profile).toMatch(/<button[^>]*disabled/);
 });

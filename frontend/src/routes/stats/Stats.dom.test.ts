@@ -20,44 +20,81 @@ vi.mock('../../lib/services/playlog', async (importOriginal) => ({
     longest: null,
   })),
 }));
+vi.mock('../../lib/stores/router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/stores/router')>()),
+  navigate: vi.fn(),
+}));
 
 import { msg } from '../../lib/i18n';
 import type { LibraryGame } from '../../lib/services/library';
 import { getStats } from '../../lib/services/playlog';
 import { libraryGames } from '../../lib/stores/library';
+import { navigate } from '../../lib/stores/router';
 import { toasts } from '../../lib/stores/toasts';
 import { renderDom } from '../../lib/testing/dom';
+import { playtime } from '../../lib/utils/format';
 import Stats from './Stats.svelte';
 
 afterEach(() => libraryGames.set([]));
 
-describe('Stats: most played', () => {
-  // The bar under each game draws its share of the period's playtime; the row's text says it.
-  it('says each game’s share of the playtime in the row, the bar only draws it', async () => {
-    libraryGames.set([{ id: 'g1', title: 'Hades' } as LibraryGame, { id: 'g2', title: 'Celeste' } as LibraryGame]);
-    const { findByRole, container } = renderDom(Stats);
+/** The text a screen reader reads out of `element`: everything not hidden from it. */
+function readText(element: Element): string {
+  const parts: string[] = [];
+  const walk = (node: Node) => {
+    if (node instanceof Element && (node.getAttribute('aria-hidden') === 'true' || node.hasAttribute('hidden'))) return;
+    if (node.nodeType === Node.TEXT_NODE) parts.push(node.textContent ?? '');
+    node.childNodes.forEach(walk);
+  };
+  walk(element);
+  return parts.join(' ').replace(/\s+/g, ' ').trim();
+}
 
-    const named = async (title: string) => {
-      let found = '';
-      await findByRole('button', {
-        name: (name) => {
-          if (name.includes(title)) found = name;
-          return name.includes(title);
-        },
-      });
-      return found;
-    };
-    expect(await named('Hades')).toMatch(/ · 75%$/);
-    expect(await named('Celeste')).toMatch(/ · 25%$/);
-    for (const share of container.querySelectorAll('.share')) expect(share.getAttribute('aria-hidden')).toBe('true');
+describe('Stats: most played', () => {
+  // The bar under each game is its share of the period's playtime, named by the game and said in words.
+  it('says each game’s share of the playtime through its bar, named by the game', async () => {
+    libraryGames.set([{ id: 'g1', title: 'Hades' } as LibraryGame, { id: 'g2', title: 'Celeste' } as LibraryGame]);
+    const { findByRole, getByRole } = renderDom(Stats);
+    await findByRole('button', { name: 'Hades' });
+
+    const share = (title: string) => getByRole('progressbar', { name: title });
+    expect(share('Hades').getAttribute('aria-valuenow')).toBe('75');
+    expect(share('Hades').getAttribute('aria-valuetext')).toBe(msg('stats.topShare', { share: 75 }));
+    expect(share('Celeste').getAttribute('aria-valuetext')).toBe(msg('stats.topShare', { share: 25 }));
   });
 
   // A game without art shows initials in its place: they are a picture, not part of the row's name.
   it('names each row by the game first, the cover says nothing', async () => {
     libraryGames.set([{ id: 'g1', title: 'Hades' } as LibraryGame, { id: 'g2', title: 'Celeste' } as LibraryGame]);
-    const { findByRole } = renderDom(Stats);
+    const { findByRole, getAllByRole } = renderDom(Stats);
 
-    expect(await findByRole('button', { name: (name) => name.startsWith('Hades ') })).toBeTruthy();
+    const link = await findByRole('button', { name: 'Hades' });
+    expect(readText(getAllByRole('listitem')[0]).startsWith('Hades ')).toBe(true);
+    expect(link.closest('li')).toBe(getAllByRole('listitem')[0]);
+  });
+
+  it('the title leads to the game’s page, one Tab stop per game: the cover is for the pointer', async () => {
+    vi.mocked(navigate).mockReset();
+    libraryGames.set([{ id: 'g1', title: 'Hades' } as LibraryGame, { id: 'g2', title: 'Celeste' } as LibraryGame]);
+    const { findByRole, getAllByRole, user } = renderDom(Stats);
+
+    await user.click(await findByRole('button', { name: 'Hades' }));
+
+    expect(navigate).toHaveBeenCalledWith('game', { id: 'g1' });
+    const row = getAllByRole('listitem')[0];
+    const tabbable = [...row.querySelectorAll<HTMLElement>('button, a[href], [tabindex]')].filter((element) => element.tabIndex >= 0);
+    expect(tabbable.map((element) => element.textContent?.trim())).toEqual(['Hades']);
+  });
+
+  it('a game gone from the library is named as plain text, with its time, and leads nowhere', async () => {
+    libraryGames.set([{ id: 'g2', title: 'Celeste' } as LibraryGame]);
+    const { findByRole, getAllByRole, queryByRole } = renderDom(Stats);
+    await findByRole('button', { name: 'Celeste' });
+
+    const gone = getAllByRole('listitem').find((row) => readText(row).startsWith('Hades')) as HTMLElement;
+    expect(gone).toBeTruthy();
+    expect(gone.querySelectorAll('button')).toHaveLength(0);
+    expect(queryByRole('button', { name: 'Hades' })).toBeNull();
+    expect(readText(gone)).toContain(playtime(3000));
   });
 });
 

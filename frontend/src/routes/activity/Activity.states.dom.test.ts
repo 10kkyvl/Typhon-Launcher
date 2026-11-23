@@ -172,7 +172,27 @@ describe('Activity: the week chart', () => {
     expect(within(table).getAllByRole('row').slice(1)).toHaveLength(7);
     expect([...container.querySelectorAll('.col')].map((col) => col.classList.contains('current'))).toEqual([false, false, false, false, false, false, true]);
     expect(container.querySelector('.axis')).toBeNull();
-    expect(screen.queryAllByRole('listitem')).toHaveLength(0);
+    expect(container.querySelector('.cols')?.getAttribute('aria-hidden')).toBe('true');
+  });
+});
+
+describe('Activity: the games of the week', () => {
+  const entry = (id: string, title: string, seconds: number, archived = false) => ({
+    game: { id, title, cover: '', archived, playtimeSeconds: seconds, status: '' },
+    seconds,
+  });
+
+  it('a title leads to its game; an archived one is plain text; the time stays with each', async () => {
+    const week = weekSummary([{ date: '2026-11-10', entries: [entry('g1', 'Hades', 3600), entry('old', 'Archived game', 1800, true)] }], new Date(2026, 10, 11));
+    const { user } = renderDom(WeekActivity, { week });
+
+    await user.click(screen.getByRole('button', { name: 'Hades' }));
+
+    expect(navigate).toHaveBeenCalledWith('game', { id: 'g1' });
+    expect(screen.queryByRole('button', { name: /Archived game/ })).toBeNull();
+    const rows = screen.getAllByRole('listitem').map((row) => row.textContent?.replace(/\s+/g, ' ').trim());
+    expect(rows).toHaveLength(2);
+    expect(rows[1]).toContain('Archived game');
   });
 });
 

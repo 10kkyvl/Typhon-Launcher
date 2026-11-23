@@ -5,6 +5,7 @@
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
+  import GameLink from '../../lib/components/GameLink.svelte';
   import { coverOf } from '../../lib/profile/view';
   import type { WeekSummary } from '../../lib/profile/week';
   import { gameArt } from '../../lib/stores/metadata';
@@ -43,19 +44,23 @@
     </div>
 
     {#if week.games.length > 0}
-      <div class="games">
+      <!-- An archived game has no page: its title is plain text and its cover a picture only. -->
+      <ul class="games">
         {#each week.games as item (item.game.id)}
-          <button class="row" type="button" disabled={item.game.archived} onclick={() => navigate('game', { id: item.game.id })}>
-            <span class="cover" aria-hidden="true">
-              <Artwork src={coverOf(item.game, $gameArt)} alt="" label={item.game.title} ratio="3 / 4" radius="var(--radius-sm)" />
+          {@const id = item.game.archived ? null : item.game.id}
+          <li class="row">
+            <span class="cover">
+              <GameLink {id} name={item.game.title} repeat>
+                <Artwork src={coverOf(item.game, $gameArt)} alt="" label={item.game.title} ratio="3 / 4" radius="var(--radius-sm)" />
+              </GameLink>
             </span>
             <span class="text">
-              <span class="title">{item.game.title}</span>
+              <span class="title"><GameLink {id} name={item.game.title} truncate /></span>
               <span class="sub">{playtime(item.seconds)}</span>
             </span>
-          </button>
+          </li>
         {/each}
-      </div>
+      </ul>
     {/if}
   {/if}
 
@@ -92,24 +97,18 @@
   .games {
     display: flex;
     flex-direction: column;
-    margin: var(--space-4) calc(var(--space-4) * -1) 0;
-    padding-top: var(--space-4);
+    gap: var(--space-1);
+    margin: var(--space-4) 0 0;
+    padding: var(--space-4) 0 0;
     border-top: 1px solid var(--border);
+    list-style: none;
   }
 
   .row {
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    width: 100%;
-    padding: 0.6rem var(--space-4);
-    border-radius: var(--radius-md);
-    text-align: left;
-    transition: background var(--dur) var(--ease);
-  }
-
-  .row:hover {
-    background: var(--hover);
+    padding: var(--space-1) 0;
   }
 
   .cover {
