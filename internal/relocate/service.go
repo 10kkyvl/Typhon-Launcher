@@ -984,7 +984,8 @@ func (s *Service) copyAndVerify(ctx context.Context, jobID, source, target strin
 // still there, so the retry deletes it and starts again, and the old entry
 // goes with it. Any other staging folder with something in it may be the only
 // copy another move left: it is neither copied into nor deleted, and the job
-// does not name it.
+// does not name it. A failed delete of the retry's own folder carries the
+// cause as a failed delete of the move's old folder does (cleanupItem).
 func (s *Service) takeOverStaging(jobID, target, staging string) error {
 	s.mu.Lock()
 	owner := s.stagingOwnerLocked(jobID, target, staging)
@@ -997,7 +998,7 @@ func (s *Service) takeOverStaging(jobID, target, staging string) error {
 		return errStagingReserved
 	}
 	if err := removeTree(staging); err != nil {
-		return fmt.Errorf("%w: remove %s: %w", ErrStagingLeft, staging, err)
+		return fmt.Errorf("remove left %s: %w", staging, err)
 	}
 	return s.removeJob(owner)
 }

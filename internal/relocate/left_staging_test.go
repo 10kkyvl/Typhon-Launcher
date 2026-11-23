@@ -2,6 +2,7 @@ package relocate
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -106,6 +107,48 @@ func TestRetryOfAMoveTakesOverItsOwnLeftStagingFolder(t *testing.T) {
 	}
 	if jobs := s.List(); len(jobs) != 0 {
 		t.Fatalf("jobs = %+v, want the old attempt's entry gone with its folder", jobs)
+	}
+}
+
+// The retry's own delete of the staging folder its earlier attempt left fails:
+// the move fails with that failure and its cause, as a failed delete of the
+// move's old folder does, not with "another move's staging folder", and the
+// earlier attempt's entry stays while its folder does.
+func TestRetryThatCannotDeleteItsOwnLeftStagingFolderSaysSo(t *testing.T) {
+	forceCopyPath(t)
+	lib := newTestLibrary(t)
+	game, src := addTestGame(t, lib)
+	parent := t.TempDir()
+	target := filepath.Join(parent, "Game")
+	staging := target + stagingSuffix
+	leftover := mustMkdirFile(t, staging, "half.bin", "half a copy")
+	old := Job{ID: "old", Scope: ScopeGame, Stage: StageFailed, Error: "boom", GameID: game.ID, Title: "Game", Source: src, Target: target, Staging: staging}
+	s := serviceWithJournal(t, lib, old)
+	denied := errors.New("access denied by the test")
+	removeTree = func(path string) error {
+		if samePathT(path, staging) {
+			return denied
+		}
+		return os.RemoveAll(path)
+	}
+	t.Cleanup(func() { removeTree = os.RemoveAll })
+
+	job, err := s.MoveGame(game.ID, parent)
+	if err != nil {
+		t.Fatalf("MoveGame = %v", err)
+	}
+	done := s.wait(job.ID)
+	if done.Stage != StageFailed || strings.Contains(done.Error, "relocate.staging_left") || !strings.Contains(done.Error, denied.Error()) {
+		t.Fatalf("move = %s (%s), want it failed by its own failed delete with the cause, not relocate.staging_left", done.Stage, done.Error)
+	}
+	if _, err := os.Stat(leftover); err != nil {
+		t.Fatalf("the left staging folder: %v", err)
+	}
+	if _, err := s.jobSnapshot(old.ID); err != nil {
+		t.Fatalf("the earlier attempt's entry went while its folder is on disk: %v", err)
+	}
+	if card, err := lib.Find(game.ID); err != nil || !samePathT(card.InstallDir, src) {
+		t.Fatalf("card = %+v, %v; want it where it was", card, err)
 	}
 }
 
