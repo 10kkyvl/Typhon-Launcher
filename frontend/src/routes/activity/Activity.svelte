@@ -21,7 +21,19 @@
   import { feedDayGroups } from '../../lib/social/feed';
   import { popularGames } from '../../lib/social/popular';
   import { isPlaying, presenceDot, sortFriends, statusDot } from '../../lib/social/presence';
-  import { feedCursor, feedEvents, feedLoading, loadFeed, moreFeed, noteEvent, reactToEvent } from '../../lib/stores/feed';
+  import {
+    feedCursor,
+    feedEvents,
+    feedLoadError,
+    feedLoading,
+    feedMoreError,
+    feedReady,
+    loadFeed,
+    moreFeed,
+    noteEvent,
+    reactToEvent,
+    reloadFeed,
+  } from '../../lib/stores/feed';
   import { loadArt } from '../../lib/stores/metadata';
   import { shownPresence } from '../../lib/stores/presence';
   import { initProfile, profileFailed, profileSnapshot } from '../../lib/stores/profile';
@@ -45,6 +57,9 @@
 
   const isGuest = $derived($authState === 'guest');
   const feedGroups = $derived(feedDayGroups($feedEvents));
+  const feedFailed = $derived(!$feedReady && $feedLoadError != null);
+  let feedRetrying = $state(false);
+  let feedColumn = $state<HTMLElement>();
 
   const user = $derived($currentUser);
   const displayName = $derived(user?.displayName || user?.username || '');
@@ -147,9 +162,17 @@
         <WeekActivity {week} />
       </div>
 
-      <div class="center">
-        {#if $feedEvents.length === 0}
-          {#if $feedLoading}
+      <div class="center" bind:this={feedColumn}>
+        {#if feedFailed || feedRetrying}
+          <Notice
+            tone="danger"
+            bind:retrying={feedRetrying}
+            retry={{ label: msg('common.retry'), run: reloadFeed, within: () => feedColumn }}
+          >
+            {accountErrorText($feedLoadError, msg('state.feedLoadFailed'))}
+          </Notice>
+        {:else if $feedEvents.length === 0}
+          {#if !$feedReady || $feedLoading}
             <Spinner label={msg('transfers.activityLoading')} />
           {:else}
             <EmptyState level={2}
@@ -187,6 +210,9 @@
           {/each}
           {#if $feedCursor > 0}
             <div class="more">
+              {#if $feedMoreError}
+                <Notice tone="danger" compact>{accountErrorText($feedMoreError, msg('transfers.activityMoreFailed'))}</Notice>
+              {/if}
               <Button busy={$feedLoading} onclick={() => moreFeed()}>{msg('transfers.activityShowMore')}</Button>
             </div>
           {/if}
@@ -302,7 +328,9 @@
 
   .more {
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-3);
     padding: var(--space-5) 0;
   }
 

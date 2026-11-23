@@ -19,6 +19,10 @@ export const feedLoading = writable(false);
 export const feedReady = writable(false);
 export const feedLoadedAt = writable(0);
 export const feedPending = writable<ReadonlySet<number>>(new Set());
+/** Why the first page failed while no page has been read (`feedReady` false): the screen shows it with a retry. */
+export const feedLoadError = writable<unknown>(null);
+/** Why the last "Show more" failed: the list stays, the screen says it beside the button. */
+export const feedMoreError = writable<unknown>(null);
 
 export const staleAfter = 60_000;
 
@@ -51,6 +55,7 @@ function fresh(): boolean {
 
 async function page(cursor: number, append: boolean, owner: number): Promise<void> {
   feedLoading.set(true);
+  if (append) feedMoreError.set(null);
   try {
     let loaded = await fetchFeed(cursor > 0 ? String(cursor) : '');
     if (owner !== generation) return;
@@ -66,9 +71,14 @@ async function page(cursor: number, append: boolean, owner: number): Promise<voi
     feedCursor.set(loaded.next);
     feedLoadedAt.set(Date.now());
     feedReady.set(true);
+    feedLoadError.set(null);
   } catch (err) {
     if (owner !== generation) return;
-    report(err, msg('state.feedLoadFailed'));
+    // A refresh of a feed already on screen fails in the background: a toast. A first page or a next
+    // one fails where the player looks: the screen says it.
+    if (append) feedMoreError.set(err);
+    else if (!get(feedReady)) feedLoadError.set(err);
+    else report(err, msg('state.feedLoadFailed'));
   } finally {
     if (owner === generation) feedLoading.set(false);
   }
@@ -96,6 +106,12 @@ export async function loadFeed(force = false): Promise<void> {
   await queue(0, false);
 }
 
+/** Reads the first page again, as the screen's Retry does; answers whether a feed is there. */
+export async function reloadFeed(): Promise<boolean> {
+  await loadFeed(true);
+  return get(feedReady);
+}
+
 export async function moreFeed(): Promise<void> {
   const cursor = get(feedCursor);
   if (cursor <= 0) return;
@@ -113,6 +129,8 @@ export function resetFeed(): void {
   feedCursor.set(0);
   feedLoadedAt.set(0);
   feedReady.set(false);
+  feedLoadError.set(null);
+  feedMoreError.set(null);
 }
 
 export async function reactToEvent(id: number, emoji: string): Promise<void> {

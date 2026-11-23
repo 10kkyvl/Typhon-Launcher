@@ -186,7 +186,12 @@ const SITES: Record<string, Site[]> = {
   'lib/components/profile/BlockGrid.svelte': [['danger', true]],
   'lib/components/profile/BlockPicker.svelte': [['warning', false]],
   'lib/components/profile/GamePicker.svelte': [['danger', true]],
-  'routes/activity/Activity.svelte': [['danger', true]],
+  // The profile's figures and the feed's first page failed to load; a "Show more" failed.
+  'routes/activity/Activity.svelte': [
+    ['danger', true],
+    ['danger', true],
+    ['danger', true],
+  ],
   'routes/auth/AuthScreen.svelte': [['danger', true]],
   // The catalog page, in its parts. The page fell back to a cached copy or its first page failed (one
   // notice, warning or danger); a game just put away from the recommendations, with its undo; the

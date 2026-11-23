@@ -264,3 +264,85 @@ describe('страницы без известных событий', () => {
     expect(fetchFeed).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('неудачное чтение ленты', () => {
+  it('провал первой страницы остаётся состоянием ленты, без тоста', async () => {
+    const { loadFeed, fetchFeed, feedReady, feedLoadError } = await load();
+    const { toast } = await import('./toasts');
+    const failure = new Error('offline');
+    fetchFeed.mockRejectedValueOnce(failure);
+
+    await loadFeed(true);
+
+    expect(get(feedReady)).toBe(false);
+    expect(get(feedLoadError)).toBe(failure);
+    expect(vi.mocked(toast)).not.toHaveBeenCalled();
+  });
+
+  it('провал фонового обновления уже прочитанной ленты говорит тостом и не трогает состояние', async () => {
+    const { loadFeed, fetchFeed, feedReady, feedLoadError, feedEvents } = await load();
+    const { toast } = await import('./toasts');
+    fetchFeed.mockResolvedValueOnce({ events: [event(1)], next: 0 } as never).mockRejectedValueOnce(new Error('offline'));
+    await loadFeed(true);
+
+    await loadFeed(true);
+
+    expect(get(feedReady)).toBe(true);
+    expect(get(feedLoadError)).toBeNull();
+    expect(get(feedEvents).map((e) => e.id)).toEqual([1]);
+    expect(vi.mocked(toast)).toHaveBeenCalledTimes(1);
+  });
+
+  it('повторное чтение отвечает, пришла ли лента, и снимает провал', async () => {
+    const { reloadFeed, fetchFeed, feedReady, feedLoadError } = await load();
+    fetchFeed.mockRejectedValueOnce(new Error('offline')).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ events: [], next: 0 });
+
+    expect(await reloadFeed()).toBe(false);
+    expect(await reloadFeed()).toBe(false);
+    expect(get(feedLoadError)).not.toBeNull();
+    expect(await reloadFeed()).toBe(true);
+    expect(get(feedReady)).toBe(true);
+    expect(get(feedLoadError)).toBeNull();
+  });
+
+  it('провал «Показать ещё» сохраняет список и остаётся состоянием до новой попытки, без тоста', async () => {
+    const { loadFeed, moreFeed, fetchFeed, feedEvents, feedMoreError, feedLoadError } = await load();
+    const { toast } = await import('./toasts');
+    const failure = new Error('offline');
+    let release = () => {};
+    fetchFeed
+      .mockResolvedValueOnce({ events: [event(1)], next: 5 } as never)
+      .mockRejectedValueOnce(failure)
+      .mockReturnValueOnce(new Promise((resolve) => (release = () => resolve({ events: [event(2)], next: 0 }))) as never);
+    await loadFeed(true);
+
+    await moreFeed();
+
+    expect(get(feedEvents).map((e) => e.id)).toEqual([1]);
+    expect(get(feedMoreError)).toBe(failure);
+    expect(get(feedLoadError)).toBeNull();
+    expect(vi.mocked(toast)).not.toHaveBeenCalled();
+
+    const next = moreFeed();
+    await vi.waitFor(() => expect(get(feedMoreError)).toBeNull());
+    release();
+    await next;
+    expect(get(feedEvents).map((e) => e.id)).toEqual([1, 2]);
+  });
+
+  it('сброс ленты снимает оба провала', async () => {
+    const { loadFeed, moreFeed, resetFeed, fetchFeed, feedMoreError, feedLoadError } = await load();
+    fetchFeed.mockRejectedValueOnce(new Error('offline'));
+    await loadFeed(true);
+    expect(get(feedLoadError)).not.toBeNull();
+    fetchFeed.mockResolvedValueOnce({ events: [event(1)], next: 5 } as never).mockRejectedValueOnce(new Error('offline'));
+    await loadFeed(true);
+    await moreFeed();
+    expect(get(feedMoreError)).not.toBeNull();
+
+    resetFeed();
+
+    expect(get(feedLoadError)).toBeNull();
+    expect(get(feedMoreError)).toBeNull();
+  });
+});

@@ -150,17 +150,101 @@ describe('Activity: the feed', () => {
     expect(screen.queryByRole('button', { name: msg('transfers.activityShowMore') })).toBeNull();
   });
 
-  it('a failed "Show more" keeps the list and the button to try again', async () => {
+  it('a failed "Show more" keeps the list and the button, and says so beside it once, not in a toast', async () => {
     vi.mocked(feed).mockResolvedValueOnce(page([event(1, now(), 'Hades')], 5)).mockRejectedValueOnce(new Error('offline'));
     authState.set('authenticated');
     const { user } = renderDom(Activity);
 
-    await user.click(await screen.findByRole('button', { name: msg('transfers.activityShowMore') }));
+    const more = await screen.findByRole('button', { name: msg('transfers.activityShowMore') });
+    await user.click(more);
 
     await vi.waitFor(() => expect(feed).toHaveBeenCalledTimes(2));
-    await vi.waitFor(() => expect(screen.getByRole('button', { name: msg('transfers.activityShowMore') }).getAttribute('aria-busy')).toBeNull());
+    await vi.waitFor(() => expect(more.getAttribute('aria-busy')).toBeNull());
     expect(feedColumn().getByText('Hades')).toBeTruthy();
-    expect(get(toasts).map((item) => item.message)).toEqual([msg('state.feedLoadFailed')]);
+    const said = await feedColumn().findByRole('alert');
+    expect(said.textContent).toContain(msg('transfers.activityMoreFailed'));
+    expect(said.closest('.more')).toBe(more.closest('.more'));
+    expect(get(toasts)).toEqual([]);
+    expect(feedColumn().getAllByText(msg('transfers.activityMoreFailed'))).toHaveLength(1);
+  });
+
+  it('a "Show more" pressed again takes the failure away while it loads', async () => {
+    vi.mocked(feed)
+      .mockResolvedValueOnce(page([event(1, now(), 'Hades')], 5))
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockReturnValueOnce(new Promise(() => {}));
+    authState.set('authenticated');
+    const { user } = renderDom(Activity);
+    const more = await screen.findByRole('button', { name: msg('transfers.activityShowMore') });
+    await user.click(more);
+    await feedColumn().findByText(msg('transfers.activityMoreFailed'));
+
+    await user.click(more);
+
+    await vi.waitFor(() => expect(feedColumn().queryByText(msg('transfers.activityMoreFailed'))).toBeNull());
+    expect(document.activeElement).toBe(more);
+  });
+});
+
+describe('Activity: a feed that could not be read', () => {
+  it('a failed first page is a danger notice with Retry, not the "no friends yet" state, and no toast', async () => {
+    vi.mocked(feed).mockRejectedValueOnce(new Error('offline'));
+    authState.set('authenticated');
+    renderDom(Activity);
+
+    const notice = (await feedColumn().findByRole('alert')).closest('.notice') as HTMLElement;
+    expect(notice.getAttribute('data-tone')).toBe('danger');
+    expect(notice.textContent).toContain(msg('state.feedLoadFailed'));
+    expect(within(notice).getByRole('button', { name: msg('common.retry') })).toBeTruthy();
+    expect(feedColumn().queryByText(msg('transfers.activityFeedEmptyTitle'))).toBeNull();
+    expect(feedColumn().queryByRole('button', { name: msg('social.friendsAddFriend') })).toBeNull();
+    expect(get(toasts)).toEqual([]);
+  });
+
+  it('a retry that brings the feed shows it and hands the focus into it', async () => {
+    vi.mocked(feed).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(page([event(1, now(), 'Hades')]));
+    authState.set('authenticated');
+    const { user } = renderDom(Activity);
+    const notice = (await feedColumn().findByRole('alert')).closest('.notice') as HTMLElement;
+    within(notice).getByRole('button', { name: msg('common.retry') }).focus();
+
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(notice.isConnected).toBe(false));
+    expect(feedColumn().getByText('Hades')).toBeTruthy();
+    await vi.waitFor(() => expect(feedColumn().getAllByRole('button')).toContain(document.activeElement));
+  });
+
+  it('a retry that fails again keeps the notice and the focus on its Retry', async () => {
+    vi.mocked(feed).mockRejectedValueOnce(new Error('offline')).mockRejectedValueOnce(new Error('still offline'));
+    authState.set('authenticated');
+    const { user } = renderDom(Activity);
+    const region = await feedColumn().findByRole('alert');
+    const notice = region.closest('.notice') as HTMLElement;
+    const before = region.firstElementChild;
+    const retry = within(notice).getByRole('button', { name: msg('common.retry') });
+    retry.focus();
+
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(feed).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(retry.hasAttribute('aria-busy')).toBe(false));
+    expect(notice.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
+    // Said again: the failure's words come into the live region as a new node.
+    await vi.waitFor(() => expect(region.firstElementChild).not.toBe(before));
+    expect(region.textContent).toContain(msg('state.feedLoadFailed'));
+    expect(get(toasts)).toEqual([]);
+  });
+
+  it('says "no friends yet" only after a read that came back with nothing', async () => {
+    vi.mocked(feed).mockResolvedValueOnce(page([]));
+    authState.set('authenticated');
+    renderDom(Activity);
+
+    expect(await feedColumn().findByText(msg('transfers.activityFeedEmptyTitle'))).toBeTruthy();
+    expect(feedColumn().getByRole('button', { name: msg('social.friendsAddFriend') })).toBeTruthy();
+    expect(feedColumn().queryByRole('alert')).toBeNull();
   });
 });
 
@@ -230,7 +314,7 @@ describe('Activity: the columns by the width of the window', () => {
 
   it('the hidden columns are the ones that hold the week and the friends playing now', () => {
     const markup = activitySource.replace(/<(script|style)\b[\s\S]*?<\/\1>/g, '');
-    expect(markup).toMatch(/<div class="left">[\s\S]*<WeekActivity\b[\s\S]*<div class="center">/);
+    expect(markup).toMatch(/<div class="left">[\s\S]*<WeekActivity\b[\s\S]*<div class="center"[ >]/);
     expect(markup).toMatch(/<div class="right">[\s\S]*activityPlayingTitle[\s\S]*<PopularGames\b/);
   });
 });
