@@ -528,18 +528,16 @@ var removalStagingName = regexp.MustCompile(`\.removing(-\d+)?$`)
 // суффиксом staging. Запись, не прошедшая проверку, остаётся в журнале и
 // попадает в лог, но не удаляется; запись, у которой не удалась половина в
 // библиотеке, тоже остаётся до следующего запуска. Карточку решает только
-// самая поздняя запись игры: более ранняя лишь удаляет свою папку и уходит
-// из журнала, иначе прежний выбор игрока перекрыл бы новый. Отмена ctx здесь не
-// прерывает проход: журнал делает удаление идемпотентным, а ServiceShutdown
-// ждёт завершения этой горутины (TestSweepRemovalsFinishesPending).
+// самая поздняя запись игры, по которой проход может действовать: более ранняя
+// лишь удаляет свою папку и уходит из журнала, иначе прежний выбор игрока
+// перекрыл бы новый; отвергнутая запись не решает ничего и ничего не
+// перекрывает. Отмена ctx здесь не прерывает проход: журнал делает удаление
+// идемпотентным, а ServiceShutdown ждёт завершения этой горутины
+// (TestSweepRemovalsFinishesPending).
 func (s *Service) sweepRemovals(entries []removalEntry) {
 	for _, entry := range entries {
 		path := entry.Path
-		if !removalStagingName.MatchString(filepath.Base(path)) {
-			slog.Error("unexpected pending removal", "path", path)
-			continue
-		}
-		if err := removableDir(path); err != nil {
+		if err := sweepable(path); err != nil {
 			slog.Error("refuse pending removal", "path", path, "error", err)
 			continue
 		}
@@ -547,7 +545,7 @@ func (s *Service) sweepRemovals(entries []removalEntry) {
 			slog.Warn("remove pending", "path", path, "error", err)
 			continue
 		}
-		older, err := s.removals.superseded(entry)
+		older, err := s.supersededBySweepable(entry)
 		if err != nil {
 			slog.Warn("compare pending removals of a game", "path", path, "game", entry.GameID, "error", err)
 			continue
@@ -564,6 +562,31 @@ func (s *Service) sweepRemovals(entries []removalEntry) {
 		}
 		slog.Info("pending removal finished", "path", path, "game", entry.GameID)
 	}
+}
+
+// sweepable says whether the sweep may act on a journaled path: only a name
+// freeRemovalPath gives, and a real folder or nothing at all.
+func sweepable(path string) error {
+	if !removalStagingName.MatchString(filepath.Base(path)) {
+		return fmt.Errorf("%w: not a removal staging name: %s", errUnsafeRemoval, path)
+	}
+	return removableDir(path)
+}
+
+// supersededBySweepable says whether a later entry of the same game is one the
+// sweep may act on: only such an entry says what the player wants for the card
+// now. The disk is looked at outside the journal's lock.
+func (s *Service) supersededBySweepable(entry removalEntry) (bool, error) {
+	later, err := s.removals.later(entry)
+	if err != nil {
+		return false, err
+	}
+	for _, next := range later {
+		if sweepable(next.Path) == nil {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // sweepLateRemovals runs the startup sweep's work once the journal it could

@@ -163,25 +163,28 @@ func (s *removalStore) add(entry removalEntry) error {
 	return s.appendLocked(entry)
 }
 
-// superseded says whether a later entry of the same game is in the journal:
-// entries are appended, so the last one of a game is its newest removal, the
-// one that says what the player wants for the card now.
-func (s *removalStore) superseded(entry removalEntry) (bool, error) {
+// later lists the entries of the same game journaled after entry: entries are
+// appended, so they are the game's newer removals. For an entry no longer in
+// the journal every entry of its game is listed.
+func (s *removalStore) later(entry removalEntry) ([]removalEntry, error) {
 	if entry.GameID == "" {
-		return false, nil
+		return nil, nil
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := s.loadLocked(); err != nil {
-		return false, err
+		return nil, err
 	}
-	newest := ""
+	var out []removalEntry
 	for _, existing := range s.entries {
-		if existing.GameID == entry.GameID {
-			newest = existing.Path
+		switch {
+		case platform.SamePath(existing.Path, entry.Path):
+			out = out[:0]
+		case existing.GameID == entry.GameID:
+			out = append(out, existing)
 		}
 	}
-	return newest != "" && !platform.SamePath(newest, entry.Path), nil
+	return out, nil
 }
 
 // journaledLocked compares as the file system does: on Windows two cards may

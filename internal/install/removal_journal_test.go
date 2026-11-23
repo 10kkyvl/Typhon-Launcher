@@ -786,6 +786,81 @@ func TestOnlyTheNewestRemovalOfAGameSettlesItsCard(t *testing.T) {
 	}
 }
 
+// An entry the sweep refuses to act on (a name freeRemovalPath never gives, or
+// a path that is no real folder) settles nothing, so it supersedes nothing
+// either: the game's valid entry settles the card whether it is the older or
+// the newer one, and the refused entry stays in the journal untouched.
+func TestARefusedRemovalEntryDoesNotSupersedeAValidOne(t *testing.T) {
+	refusals := []struct {
+		name string
+		// make puts the refused entry's path on disk next to game.
+		make func(t *testing.T, game string) string
+	}{
+		{"name the sweep never stages", func(t *testing.T, game string) string {
+			path := game + ".old"
+			mkFile(t, filepath.Join(path, "keep.bin"), 64)
+			return path
+		}},
+		{"a file, not a folder", func(t *testing.T, game string) string {
+			path := game + removingSuffix + "-1"
+			mkFile(t, path, 64)
+			return path
+		}},
+	}
+	for _, refused := range refusals {
+		for _, refusedNewest := range []bool{true, false} {
+			order := "refused entry newest"
+			if !refusedNewest {
+				order = "refused entry oldest"
+			}
+			t.Run(refused.name+"/"+order, func(t *testing.T) {
+				dir := t.TempDir()
+				r := newJournalRig(t, dir, &fakeRegistrar{})
+				game := gameDir(t, "Game")
+				putOwnedCard(t, r.registrar, "a", game)
+				valid := game + removingSuffix
+				if err := os.Rename(game, valid); err != nil {
+					t.Fatal(err)
+				}
+				bad := refused.make(t, game)
+				entries := []map[string]any{
+					{"path": valid, "gameId": "a", "installDir": game, "keepInLibrary": true},
+					{"path": bad, "gameId": "a", "installDir": game, "keepInLibrary": false},
+				}
+				if !refusedNewest {
+					entries[0], entries[1] = entries[1], entries[0]
+				}
+				data, err := json.Marshal(entries)
+				if err != nil {
+					t.Fatal(err)
+				}
+				writeJournal(t, dir, string(data))
+
+				r.restart(t)
+
+				if !missing(t, valid) {
+					t.Fatal("the valid removal's folder is still on disk")
+				}
+				if missing(t, bad) {
+					t.Fatal("the sweep deleted the path of the entry it refuses")
+				}
+				card, err := r.registrar.Find("a")
+				if err != nil || !card.Uninstalled {
+					t.Fatalf("card uninstalled = %v (%v); want it kept and uninstalled as the valid removal asked", card.Uninstalled, err)
+				}
+				requireJournalHolds(t, dir, bad)
+				encoded, err := json.Marshal(valid)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if body := readJournal(t, dir); strings.Contains(body, string(encoded)) {
+					t.Fatalf("removals.json = %s, want the valid entry dropped", body)
+				}
+			})
+		}
+	}
+}
+
 // The journal becomes readable only once the service is closing: the pending
 // removals are left for the next start, not handed to a goroutine that
 // ServiceShutdown no longer waits for.
