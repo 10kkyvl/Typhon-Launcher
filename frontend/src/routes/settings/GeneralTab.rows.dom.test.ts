@@ -9,9 +9,13 @@ vi.mock('../../lib/services/settings', async (importOriginal) => ({
   saveSettingsPatch: vi.fn(),
   openFolder: vi.fn(),
 }));
-vi.mock('../../lib/services/system', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../lib/services/system')>()),
-  getAppInfo: vi.fn(),
+vi.mock('../../lib/services/system', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../../lib/services/system')>();
+  return { ...original, getAppInfo: vi.fn(), getWineStatus: vi.fn(original.getWineStatus) };
+});
+vi.mock('../../lib/services/legal', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/services/legal')>()),
+  listLegalDocuments: vi.fn(async () => [{ id: 'terms', title: 'Terms of use' }]),
 }));
 vi.mock('../../lib/services/overlay', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/overlay')>()),
@@ -44,7 +48,8 @@ import { forgetRemote, syncNow } from '../../lib/services/accountSync';
 import { importExternalGames } from '../../lib/services/extlib';
 import { overlayStatus } from '../../lib/services/overlay';
 import { openFolder, saveSettingsPatch, type Settings as SettingsData } from '../../lib/services/settings';
-import { getAppInfo, type AppInfo } from '../../lib/services/system';
+import { listLegalDocuments } from '../../lib/services/legal';
+import { getAppInfo, getWineStatus, type AppInfo } from '../../lib/services/system';
 import { navigate } from '../../lib/stores/router';
 import { settings } from '../../lib/stores/settings';
 import { toasts } from '../../lib/stores/toasts';
@@ -115,7 +120,7 @@ afterEach(() => {
   toasts.set([]);
   authState.set('bootstrapping');
   document.body.replaceChildren();
-  for (const fn of [saveSettingsPatch, getAppInfo, overlayStatus, syncNow, forgetRemote, importExternalGames, navigate, openFolder]) {
+  for (const fn of [listLegalDocuments, getWineStatus, saveSettingsPatch, getAppInfo, overlayStatus, syncNow, forgetRemote, importExternalGames, navigate, openFolder]) {
     vi.mocked(fn).mockReset();
   }
   vi.restoreAllMocks();
@@ -461,5 +466,30 @@ describe('the general tab: the library card', () => {
     open({ libraryPath: '/lib', gamesPath: '/lib/games' });
     await user().click(screen.getAllByRole('button', { name: msg('settings.generalLibraryOpenFolderLabel') })[0]);
     await waitFor(() => expect(toastTexts()).toEqual([msg('settings.generalLibraryFolderUnavailableToast')]));
+  });
+});
+
+// The page reads the app, the system, CrossOver and the legal list once on opening: one read that fails
+// leaves the others to run, keeps its row's unknown state and is logged.
+describe('the settings page: its first reads', () => {
+  it('reads the system, CrossOver and the legal list when the app facts fail', async () => {
+    const down = new Error('app info down');
+    vi.mocked(getAppInfo).mockRejectedValue(down);
+    open();
+    await waitFor(() => expect(listLegalDocuments).toHaveBeenCalledOnce());
+    expect(getWineStatus).toHaveBeenCalledOnce();
+    expect(console.warn).toHaveBeenCalledWith(expect.any(String), down);
+    // The unknown platform keeps the launch switch on offer, as before the read.
+    expect(sw('settings.generalLaunchOnStartupLabel').hasAttribute('disabled')).toBe(false);
+    await user().click(screen.getByRole('tab', { name: msg('settings.aboutTab') }));
+    expect(await screen.findByText('Terms of use')).toBeTruthy();
+  });
+
+  it('reads the legal list when the CrossOver status fails', async () => {
+    const down = new Error('wine down');
+    vi.mocked(getWineStatus).mockRejectedValueOnce(down);
+    open();
+    await waitFor(() => expect(listLegalDocuments).toHaveBeenCalledOnce());
+    expect(console.warn).toHaveBeenCalledWith(expect.any(String), down);
   });
 });

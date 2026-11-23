@@ -84,14 +84,23 @@ export function createSettingsPage() {
         logsProgress = null;
       }
     });
+    // Each read fails on its own: a failed one keeps its rows' unknown state, the others still run.
     void (async () => {
-      appInfo = await getAppInfo();
+      try {
+        appInfo = await getAppInfo();
+      } catch (err) {
+        console.warn('settings: app info', err);
+      }
       try {
         systemInfo = await getSystemInfo();
       } catch {
         systemFailed = true;
       }
-      wineStatus = await getWineStatus();
+      try {
+        wineStatus = await getWineStatus();
+      } catch (err) {
+        console.warn('settings: CrossOver status', err);
+      }
       try {
         legalDocs = await listLegalDocuments();
       } catch {
