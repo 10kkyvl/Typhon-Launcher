@@ -442,6 +442,15 @@ export const settings = {
   'settings.generalLibraryMoveProgressQueue': '{stage} · {title} · осталось игр: {count} — {summary}',
   'settings.generalLibraryMoveProgressQueueNoTitle': '{stage} · осталось игр: {count} — {summary}',
   // /7-S1 general
+  // 7-S2 downloads
+  'settings.downloadsBetaLabelMarked': '{label} · {mark}',
+  'settings.downloadsCloudUsagePending': '{usage} · {pending}',
+  'settings.networkApplyNothing': 'Нечего применять: настройки не менялись',
+  'settings.emulatorsRowLabel': '{platform} · {emulator}',
+  'settings.emulatorsOfficialFor': 'Официальный сайт эмулятора для {platform}',
+  'settings.emulatorsChooseFor': 'Указать эмулятор для {platform}',
+  'settings.emulatorsResetFor': 'Сбросить эмулятор для {platform}',
+  // /7-S2 downloads
 } as const;
 
 export type SettingsKey = keyof typeof settings;

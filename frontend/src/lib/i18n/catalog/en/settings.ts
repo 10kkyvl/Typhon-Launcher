@@ -443,4 +443,13 @@ export const settings: Record<SettingsKey, Message> = {
   'settings.generalLibraryMoveProgressQueue': '{stage} · {title} · games left: {count} — {summary}',
   'settings.generalLibraryMoveProgressQueueNoTitle': '{stage} · games left: {count} — {summary}',
   // /7-S1 general
+  // 7-S2 downloads
+  'settings.downloadsBetaLabelMarked': '{label} · {mark}',
+  'settings.downloadsCloudUsagePending': '{usage} · {pending}',
+  'settings.networkApplyNothing': 'Nothing to apply: the settings have not changed',
+  'settings.emulatorsRowLabel': '{platform} · {emulator}',
+  'settings.emulatorsOfficialFor': 'Official website of the {platform} emulator',
+  'settings.emulatorsChooseFor': 'Choose the {platform} emulator',
+  'settings.emulatorsResetFor': 'Reset the {platform} emulator',
+  // /7-S2 downloads
 };
