@@ -2,7 +2,7 @@ import { msg } from '../i18n';
 import { installErrorText } from '../install/installErrors';
 import { updateErrorText } from '../updates/updateErrors';
 import type { Record } from '../../../bindings/typhon/internal/history';
-import { bytesSize } from '../utils/format';
+import { bytesSize, clockTime, longDate } from '../utils/format';
 
 export interface HistoryLabel {
   title: string;
@@ -46,4 +46,12 @@ export function historyLabel(record: Record): HistoryLabel {
     default:
       return { title: msg('transfers.historyUnknownTitle', { title }), detail: record.detail ?? '' };
   }
+}
+
+/** When a record happened: the time of day for the row, and in full for assistive tech and the hint. Null without a readable time. */
+export function historyWhen(iso: string): { words: string; exact: string } | null {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  const time = clockTime(date);
+  return { words: time, exact: msg('transfers.historyExactTime', { date: longDate(date), time }) };
 }

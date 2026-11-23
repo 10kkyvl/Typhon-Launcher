@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { historyLabel } from './historyText';
+import { historyLabel, historyWhen } from './historyText';
+import { msg } from '../i18n';
+import { clockTime, longDate } from '../utils/format';
 import { Kind, type Record } from '../../../bindings/typhon/internal/history';
 
 const record = (over: Partial<Record> = {}): Record => ({
@@ -101,5 +103,20 @@ describe('historyLabel', () => {
     const label = historyLabel(record({ kind: '' as Kind }));
     expect(label.title).not.toBe('');
     expect(label.title).toContain('Cyberpunk 2077');
+  });
+});
+
+describe('historyWhen', () => {
+  it('gives the time of day for the row and the date with the time in full', () => {
+    const at = new Date(2026, 10, 22, 20, 5);
+    expect(historyWhen(at.toISOString())).toEqual({
+      words: clockTime(at),
+      exact: msg('transfers.historyExactTime', { date: longDate(at), time: clockTime(at) }),
+    });
+  });
+
+  it('gives nothing for a time that cannot be read', () => {
+    expect(historyWhen('not a date')).toBeNull();
+    expect(historyWhen('')).toBeNull();
   });
 });

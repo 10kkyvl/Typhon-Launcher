@@ -19,9 +19,10 @@
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import SearchInput from '../../lib/components/SearchInput.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
+  import Tooltip from '../../lib/components/Tooltip.svelte';
   import { clearHistoryPrompt } from '../../lib/confirm/prompts';
   import { filterHistory } from '../../lib/history/historyFilter';
-  import { historyLabel } from '../../lib/history/historyText';
+  import { historyLabel, historyWhen } from '../../lib/history/historyText';
   import { Kind, type Record as HistoryRecord } from '../../lib/services/history';
   import { libraryGames } from '../../lib/stores/library';
   import {
@@ -35,7 +36,7 @@
   } from '../../lib/stores/history';
   import { toast } from '../../lib/stores/toasts';
   import { focusHandOff } from '../../lib/utils/focusHandOff';
-  import { clockTime, longDate, relativeDate } from '../../lib/utils/format';
+  import { longDate, relativeDate } from '../../lib/utils/format';
   import { locale, msg } from '../../lib/i18n';
 
   const segments: { id: string; label: string; kinds?: Kind[] }[] = [
@@ -95,11 +96,6 @@
   function dayLabel(iso: string, date: Date) {
     const age = dayStart(new Date()) - dayStart(date);
     return age < 2 * 86_400_000 ? relativeDate(iso) : longDate(date);
-  }
-
-  function timeOf(iso: string) {
-    const date = new Date(iso);
-    return Number.isNaN(date.getTime()) ? '' : clockTime(date);
   }
 
   const consoleOf = $derived(
@@ -202,18 +198,27 @@
                 {#each day.records as record (record.id)}
                   {@const label = historyLabel(record)}
                   {@const Icon = iconFor(record.kind)}
+                  {@const when = historyWhen(record.at)}
                   <div class="row" class:failed={failed(record.kind)}>
                     <span class="icon-cell"><Icon size="1.7rem" strokeWidth={1.8} /></span>
                     <div class="body">
                       <div class="head">
-                        <span class="title" title={label.title}>{label.title}</span>
+                        <span class="title">{label.title}</span>
                         {#if record.gameId && consoleOf.has(record.gameId)}<ConsoleTag platform={consoleOf.get(record.gameId) ?? ''} />{/if}
                       </div>
                       {#if label.detail}
-                        <span class="detail" title={label.detail}>{label.detail}</span>
+                        <span class="detail">{label.detail}</span>
                       {/if}
                     </div>
-                    <span class="when" title={relativeDate(record.at)}>{timeOf(record.at)}</span>
+                    <span class="when">
+                      {#if when}
+                        <!-- The exact time goes to assistive tech as text and to the pointer as a hint; the time element
+                             takes focus only from the pointer, so the row adds no Tab stop for it. -->
+                        <Tooltip text={when.exact} describe={false}>
+                          <time datetime={record.at} tabindex="-1"><span aria-hidden="true">{when.words}</span><span class="sr-only">{when.exact}</span></time>
+                        </Tooltip>
+                      {/if}
+                    </span>
                   </div>
                 {/each}
               </div>
@@ -327,22 +332,19 @@
     min-width: 0;
   }
 
+  /* Shown whole, wrapping in the row: an ellipsis would hide words that no keyboard could reach. */
   .title {
     min-width: 0;
     font-size: var(--font-sm);
     font-weight: 500;
     color: var(--text);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
   }
 
   .detail {
     font-size: var(--font-xs);
     color: var(--text-3);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
   }
 
   .when {

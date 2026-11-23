@@ -28,7 +28,7 @@ vi.mock('../../lib/services/history', async (actual) => ({
 const ROW = '.row';
 const TITLE = '.title';
 const DETAIL = '.detail';
-const TIME = '.when';
+const TIME = '.when [aria-hidden="true"]';
 
 const NOW = new Date(2026, 10, 23, 15, 0);
 const at = (daysAgo: number, hours: number, minutes = 0) => new Date(2026, 10, 23 - daysAgo, hours, minutes).toISOString();
@@ -302,15 +302,22 @@ describe('History: what a row says', () => {
     expect(tagged.map((row) => words(row.querySelector(TITLE)))).toEqual([msg('transfers.historyMovedTitle', { title: 'Iota' })]);
   });
 
-  // D5: each row repeats its title, its detail and its day in native `title` hints, which reach a mouse only.
-  it('D5: carries native title hints on the title, the detail and the time', () => {
+  // D5: no native `title` hints: the title and the detail are shown whole, the exact time is text for
+  // assistive tech and a hint on hover.
+  it('D5: says the exact time to assistive tech and on hover, and carries no native title', async () => {
     history.set(RECORDS);
-    renderDom(History);
+    const { user } = renderDom(History);
 
     const row = rowOf(msg('transfers.historyUpdatedTitle', { title: 'Gamma' }));
-    expect(row.querySelector(TITLE)?.getAttribute('title')).toBe(msg('transfers.historyUpdatedTitle', { title: 'Gamma' }));
-    expect(row.querySelector(DETAIL)?.getAttribute('title')).toBe('1.0 → 1.1');
-    expect(row.querySelector(TIME)?.getAttribute('title')).toBe(msg('format.yesterday'));
+    const when = new Date(2026, 10, 22, 20, 0);
+    const exact = msg('transfers.historyExactTime', { date: longDate(when), time: clockTime(when) });
+    expect(document.querySelector('[title]')).toBeNull();
+    const time = row.querySelector('time');
+    expect(time?.getAttribute('datetime')).toBe(when.toISOString());
+    expect(time?.querySelector('.sr-only')?.textContent).toBe(exact);
+
+    await user.hover(time as HTMLElement);
+    await waitFor(() => expect(document.querySelector('[data-part="tooltip"]')?.textContent?.trim()).toBe(exact));
   });
 });
 
