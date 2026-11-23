@@ -56,8 +56,8 @@ export interface MeterPart {
   size: MeterSize;
   /** The part of the bar it takes, 0…1; 0 for a part that is not drawn. */
   share: number;
-  /** For `more`: the keys of the segments folded into it, in the caller's order. */
-  folded?: string[];
+  /** For `more`: the segments folded into it, in the caller's order, each with its own id. */
+  folded?: MeterPart[];
 }
 
 export interface MeterModel {
@@ -121,7 +121,9 @@ export function meter(segments: readonly MeterSegment[], total: number | null | 
   else if (known !== null && parts.every((part) => part.size.kind === 'exact')) freeSize = { kind: 'exact', bytes: known - used };
   else freeSize = null;
 
-  const listed = unique(folded(parts, width));
+  // Ids are made unique before the fold, so a folded segment keeps its own, and again after it, for a
+  // caller's key that is the fold's.
+  const listed = unique(folded(unique(parts), width));
   return { total: known, parts: listed, drawn: listed.filter((part) => part.share > 0), free: freeSize, overflow };
 }
 
@@ -136,7 +138,9 @@ const EPSILON = 1e-9;
  * drawn on its own only when it takes a hairline of that room or more, so its width agrees with its
  * size; one part may stay under that and be drawn as a hairline: the last segment when it alone is
  * left, else the fold. The largest set of segments that meets this, with the k hairlines and k − 1
- * gaps inside the width, is drawn; other files are never folded in with them.
+ * gaps inside the box, is drawn; other files are never folded in with them. The fold never takes
+ * every segment (it would name none): when no segment meets the rule, the largest stays, a hairline
+ * beside the fold. A fold of one is never made: that segment is drawn as a hairline itself.
  */
 function folded(parts: MeterPart[], width: number): MeterPart[] {
   const candidates = parts.filter((part) => part.kind === 'segment' && part.share > 0).sort((a, b) => b.share - a.share);
@@ -154,6 +158,8 @@ function folded(parts: MeterPart[], width: number): MeterPart[] {
       break;
     }
   }
+  // The fold never takes every segment: with none drawn at its size, the largest stays as a hairline.
+  keep = Math.max(keep, 1);
   const rest = new Set(candidates.slice(keep));
   if (rest.size < 2) return parts;
 
@@ -166,7 +172,7 @@ function folded(parts: MeterPart[], width: number): MeterPart[] {
     tone: 'more',
     size: { kind: inFold.some((part) => part.size.kind !== 'exact') ? 'atLeast' : 'exact', bytes: inFold.reduce((sum, part) => sum + bytesOf(part.size), 0) },
     share: inFold.reduce((sum, part) => sum + part.share, 0),
-    folded: inFold.map((part) => part.key),
+    folded: inFold,
   };
   const segments = parts.filter((part) => part.kind === 'segment' && !rest.has(part));
   return [...segments, more, ...parts.filter((part) => part.kind !== 'segment')];

@@ -20,12 +20,17 @@
    * one pixel still shows as a hairline. Neighbouring segments are kept apart by a gap of the track,
    * which every tone stands out from (theme-contrast.test.ts), so adjacency never rests on colour.
    * Segments too small to be drawn at their size at the narrowest width the form is laid out for
-   * (diskMeter.ts::METER_WIDTH) are folded into one "N more" part, said with their count and size; it
-   * is a button only with `onpickfolded`, which gets the keys folded into it. A segment the bar does not
-   * draw (zero or unknown size) is picked from its name in the legend. The track clips as a last
-   * guard for a place narrower than that.
+   * (diskMeter.ts::METER_WIDTH) are folded into one "N more" part, said with their count and size
+   * (`foldLabel` words it, "12 more games"; the catalogue's "N more parts" by default); the fold never
+   * takes every segment. On the bar the fold is a button only with `onpickfolded`, which gets the keys
+   * folded into it. In the full form's legend, with `onpick`, the fold's entry is a disclosure that
+   * lists the folded segments by name and size, each a pick; without `onpick` it is text. A segment the
+   * bar does not draw (zero or unknown size) is picked from its name in the legend. The track clips as
+   * a last guard for a place narrower than that.
    *
-   * `compact`: the bar and one line (free of total), for a settings row.
+   * `compact`: the bar and one line (free of total), for a settings row. It has no legend, so it offers
+   * only its drawn parts and, with `onpickfolded`, the fold: a folded or undrawn segment cannot be
+   * picked from a compact meter.
    */
   let {
     segments,
@@ -33,6 +38,7 @@
     free,
     label,
     compact = false,
+    foldLabel,
     onpick,
     onpickfolded,
   }: {
@@ -44,6 +50,8 @@
     /** What is measured ("Disk C:", a folder): the start of the text alternative. */
     label: string;
     compact?: boolean;
+    /** The fold's name for its count of segments, from the caller's catalogue ("12 more games"). */
+    foldLabel?: (count: number) => string;
     /** Makes each drawn segment a button that reports its key. */
     onpick?: (key: string) => void;
     /** With `onpick`, makes the "N more" part a button too, reporting the keys folded into it. */
@@ -51,12 +59,18 @@
   } = $props();
 
   const model = $derived(meter(segments, total, free, compact ? METER_WIDTH.compact : METER_WIDTH.full));
+  const uid = $props.id();
+  // The fold's entry in the legend, opened to list the segments folded into it.
+  let open = $state(false);
 
   const words = $derived({ atLeast: (size: string) => $t('common.meterAtLeast', { size }), unknown: $t('common.meterSizeUnknown') });
   const said = (size: MeterSize) => sizeWords(size, bytesSize, words);
   function nameOf(part: MeterPart): string {
     if (part.kind === 'other') return $t('common.meterOther');
-    if (part.kind === 'more') return $t('common.meterMore', { count: part.folded?.length ?? 0 });
+    if (part.kind === 'more') {
+      const count = part.folded?.length ?? 0;
+      return foldLabel ? foldLabel(count) : $t('common.meterMore', { count });
+    }
     return part.label;
   }
   const partText = (part: MeterPart) => $t('common.meterPart', { name: nameOf(part), size: said(part.size) });
@@ -81,7 +95,7 @@
   const pickable = $derived(model.drawn.filter((part) => part.kind === 'segment' || (part.kind === 'more' && onpickfolded)));
 
   function pick(part: MeterPart) {
-    if (part.kind === 'more') onpickfolded?.(part.folded ?? []);
+    if (part.kind === 'more') onpickfolded?.((part.folded ?? []).map((member) => member.key));
     else onpick?.(part.key);
   }
 
@@ -169,10 +183,24 @@
           <span class="swatch" data-tone={part.tone} class:hollow={part.size.kind === 'unknown'} aria-hidden="true"></span>
           {#if onpick && part.kind === 'segment' && part.share === 0}
             <span class="name"><TextLink tone="muted" onclick={() => onpick(part.key)}>{nameOf(part)}</TextLink></span>
+          {:else if onpick && part.kind === 'more'}
+            <span class="name">
+              <TextLink tone="muted" id="{uid}-fold" aria-expanded={open} aria-controls="{uid}-members" onclick={() => (open = !open)}>{nameOf(part)}</TextLink>
+            </span>
           {:else}
             <span class="name">{nameOf(part)}</span>
           {/if}
           <span class="size"><Reading text={said(part.size)} /></span>
+          {#if onpick && part.kind === 'more' && open}
+            <ul class="members" id="{uid}-members" aria-labelledby="{uid}-fold">
+              {#each part.folded ?? [] as member (member.id)}
+                <li>
+                  <span class="name"><TextLink tone="muted" onclick={() => onpick(member.key)}>{member.label}</TextLink></span>
+                  <span class="size"><Reading text={said(member.size)} /></span>
+                </li>
+              {/each}
+            </ul>
+          {/if}
         </li>
       {/each}
       {#if model.free && model.total !== null}
@@ -299,6 +327,22 @@
     align-items: center;
     gap: var(--space-2);
     min-width: 0;
+  }
+
+  /* The fold's segments, opened under its entry on a line of their own, set in by the swatch. */
+  .legend li:has(> .members) {
+    flex-wrap: wrap;
+    flex-basis: 100%;
+  }
+
+  .members {
+    display: flex;
+    flex-basis: 100%;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-6);
+    margin: 0;
+    padding: 0 0 0 calc(1rem + var(--space-2));
+    list-style: none;
   }
 
   .swatch {

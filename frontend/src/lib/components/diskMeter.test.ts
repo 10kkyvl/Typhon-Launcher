@@ -158,14 +158,16 @@ describe('folding what cannot be drawn truthfully', () => {
   const box = (width: number) => width - 2 * METER_PAD;
   const room = (width: number, k: number) => box(width) - (k - 1) * METER_GAP;
 
-  // Other files are never folded in with the segments, so they too may be a hairline.
+  // Other files are never folded in with the segments, so they too may be a hairline. The fold never
+  // takes every segment: when none is drawn at its size, the largest stays beside the fold, both
+  // hairlines.
   function holds(m: ReturnType<typeof meter>, width: number) {
     const k = m.drawn.length;
     expect(k * METER_HAIRLINE + (k - 1) * METER_GAP, 'the hairlines and the gaps fit in the content box').toBeLessThanOrEqual(box(width) + 1e-9);
-    const atSize = m.drawn
-      .filter((p) => p.kind !== 'other')
-      .sort((a, b) => a.share - b.share)
-      .slice(1);
+    const own = m.drawn.filter((p) => p.kind !== 'other');
+    expect(own.length === 0 || own.some((p) => p.kind === 'segment'), 'a segment is drawn beside the fold').toBe(true);
+    const lone = own.length === 2 && own[1].kind === 'more';
+    const atSize = own.sort((a, b) => a.share - b.share).slice(lone ? 2 : 1);
     for (const part of atSize) expect(part.share * room(width, k), `${part.key} is drawn at its size`).toBeGreaterThanOrEqual(METER_HAIRLINE - 1e-9);
   }
 
@@ -182,7 +184,7 @@ describe('folding what cannot be drawn truthfully', () => {
     expect(m.drawn.slice(0, 18).map((p) => p.key)).toEqual(games.slice(0, 18).map((g) => g.key));
     const more = m.drawn[18];
     expect([more.kind, more.key, more.tone, more.size, more.folded?.length]).toEqual(['more', METER_MORE, 'more', { kind: 'exact', bytes: 420 }, 42]);
-    expect(more.folded).toEqual(games.slice(18).map((g) => g.key));
+    expect(more.folded?.map((p) => [p.key, p.label, p.size])).toEqual(games.slice(18).map((g) => [g.key, g.label, { kind: 'exact', bytes: 10 }]));
     expect(m.parts.map((p) => p.key)).toEqual([...games.slice(0, 18).map((g) => g.key), METER_MORE]);
     holds(m, METER_WIDTH.compact);
   });
@@ -198,8 +200,34 @@ describe('folding what cannot be drawn truthfully', () => {
   it('folds the smallest, keeps the caller order of the rest, and puts the fold before other files', () => {
     const m = meter([seg('a', 5), seg('big', 9000), seg('b', 3), seg('c', 7), seg('d', 3000)], 100_000, 87_000, METER_WIDTH.compact);
     expect(m.drawn.map((p) => p.key)).toEqual(['big', 'd', METER_MORE, METER_OTHER]);
-    expect(m.parts.find((p) => p.kind === 'more')?.folded).toEqual(['a', 'b', 'c']);
+    expect(m.parts.find((p) => p.kind === 'more')?.folded?.map((p) => p.key)).toEqual(['a', 'b', 'c']);
     holds(m, METER_WIDTH.compact);
+  });
+
+  // Three games of 1, 5 and 3 GB on a 2 TB drive: none takes a hairline of the bar. Folding all three
+  // would name no game and leave "N more" first with nothing before it.
+  it('never folds every segment: the largest stays, as a hairline, and only the rest fold', () => {
+    const GB = 1024 ** 3;
+    const m = meter([seg('celeste', 1 * GB), seg('hades', 5 * GB), seg('inside', 3 * GB)], 2048 * GB, 1948 * GB);
+    expect(m.parts.map((p) => p.key)).toEqual(['hades', METER_MORE, METER_OTHER]);
+    expect(m.drawn.map((p) => p.key)).toEqual(['hades', METER_MORE, METER_OTHER]);
+    expect(m.parts[1].folded?.map((p) => p.key)).toEqual(['celeste', 'inside']);
+    expect(m.parts[1].size).toEqual({ kind: 'exact', bytes: 4 * GB });
+    holds(m, METER_WIDTH.full);
+  });
+
+  it('folds nothing when only two segments are too small: a fold of one does not exist', () => {
+    const m = meter([seg('a', 1), seg('b', 2)], 1e9);
+    expect(m.drawn.map((p) => p.key)).toEqual(['a', 'b']);
+  });
+
+  it('gives each folded segment an id of its own when keys repeat', () => {
+    const m = meter([seg('big', 1e9), seg('x', 1), seg('x', 1), seg('y', 1)], 2e9, undefined, METER_WIDTH.compact);
+    expect(m.parts.find((p) => p.kind === 'more')?.folded?.map((p) => [p.id, p.key])).toEqual([
+      ['x', 'x'],
+      ['x#1', 'x'],
+      ['y', 'y'],
+    ]);
   });
 
   it('leaves one part far under a pixel on its own, as a hairline', () => {

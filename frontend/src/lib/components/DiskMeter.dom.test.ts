@@ -188,6 +188,52 @@ describe('DiskMeter', () => {
       expect(lines[58]).toBe(words(`Ещё 42 части ${bytesSize(420 * GB)}`));
     });
 
+    it("words the fold with the caller's own label", () => {
+      const foldLabel = (count: number) => `ещё ${count} игры`;
+      const { getByRole } = renderDom(DiskMeter, { label: 'Диск', segments: games(100), total: 1000 * GB, foldLabel });
+      expect(legendLines(getByRole('list'))[58]).toBe(words(`ещё 42 игры ${bytesSize(420 * GB)}`));
+      expect(getByRole('img').getAttribute('aria-label')).toContain(`; ещё 42 игры: ${bytesSize(420 * GB)}; `);
+    });
+
+    it('names the largest game first when every game is too small to draw, the rest in the fold', () => {
+      const tiny: MeterSegment[] = [
+        { key: 'celeste', label: 'Celeste', bytes: 1 * GB, tone: 'game' },
+        { key: 'hades', label: 'Hades', bytes: 5 * GB, tone: 'game-2' },
+        { key: 'inside', label: 'Inside', bytes: 3 * GB, tone: 'game-3' },
+      ];
+      const { getByRole } = renderDom(DiskMeter, { label: 'D', segments: tiny, total: 2048 * GB, free: 1948 * GB });
+      expect(getByRole('img').getAttribute('aria-label')?.startsWith(`D: Hades: ${bytesSize(5 * GB)}; Ещё 2 части: ${bytesSize(4 * GB)}; `)).toBe(true);
+    });
+
+    // The full form's legend reaches every folded game when the meter picks: its fold entry opens to
+    // list them by name and size, each a pick, in the caller's order.
+    it('opens the fold in the legend of a meter that picks, and picks a folded segment from it', async () => {
+      const onpick = vi.fn();
+      const { container, user } = renderDom(DiskMeter, { label: 'Диск', segments: games(100), total: 1000 * GB, onpick });
+      const legend = container.querySelector('.legend') as HTMLElement;
+      const fold = within(legend).getByRole('button', { name: 'Ещё 42 части' });
+      expect(fold.getAttribute('aria-expanded')).toBe('false');
+      expect(within(legend).queryByRole('button', { name: 'Игра 58' })).toBeNull();
+      await user.click(fold);
+      expect(fold.getAttribute('aria-expanded')).toBe('true');
+      const members = document.getElementById(fold.getAttribute('aria-controls') ?? '') as HTMLElement;
+      expect(members.tagName).toBe('UL');
+      expect(legend.contains(members)).toBe(true);
+      expect(within(members).getAllByRole('button').map((b) => b.textContent?.trim())).toEqual(games(100).slice(58).map((g) => g.label));
+      expect(legendLines(members)[0]).toBe(words(`Игра 58 ${bytesSize(10 * GB)}`));
+      await user.click(within(members).getByRole('button', { name: 'Игра 70' }));
+      expect(onpick).toHaveBeenCalledWith('g70');
+      await user.click(fold);
+      expect(fold.getAttribute('aria-expanded')).toBe('false');
+      expect(document.getElementById(fold.getAttribute('aria-controls') ?? '')).toBeNull();
+    });
+
+    it('keeps the fold plain text with its count and sum in the legend of a meter that does not pick', () => {
+      const { getByRole } = renderDom(DiskMeter, { label: 'Диск', segments: games(100), total: 1000 * GB });
+      expect(within(getByRole('list')).queryAllByRole('button')).toEqual([]);
+      expect(legendLines(getByRole('list'))[58]).toBe(words(`Ещё 42 части ${bytesSize(420 * GB)}`));
+    });
+
     it('makes the fold a button when the caller asks, which reports the keys folded in it', async () => {
       const onpickfolded = vi.fn();
       const { getAllByRole, user } = renderDom(DiskMeter, { label: 'Папка', segments: games(60), total: 600 * GB, compact: true, onpick: vi.fn(), onpickfolded });
