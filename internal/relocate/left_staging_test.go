@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"typhon/internal/library"
+	"typhon/internal/uierr"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -105,6 +106,40 @@ func TestRetryOfAMoveTakesOverItsOwnLeftStagingFolder(t *testing.T) {
 	}
 	if jobs := s.List(); len(jobs) != 0 {
 		t.Fatalf("jobs = %+v, want the old attempt's entry gone with its folder", jobs)
+	}
+}
+
+// A move that failed at its commit holds the verified copy in its staging
+// folder and is resumed at the next start: a new move of the same game into
+// the same place neither starts over it nor takes the folder over.
+func TestRetryNeverTakesOverAStagingFolderItsJobStillResumes(t *testing.T) {
+	forceCopyPath(t)
+	lib := newTestLibrary(t)
+	game, src := addTestGame(t, lib)
+	parent := t.TempDir()
+	target := filepath.Join(parent, "Game")
+	staging := target + stagingSuffix
+	copied := mustMkdirFile(t, staging, "game.exe", "stub")
+	addExeAt(t, lib, filepath.Join(staging, "Tool", "tool.exe"), "Tool")
+	old := Job{ID: "old", Scope: ScopeGame, Stage: StageCommit, GameID: game.ID, Title: "Game", Source: src, Target: target, Staging: staging}
+	s := serviceWithJournal(t, lib, old)
+	if got, err := s.jobSnapshot(old.ID); err != nil || got.Stage != StageFailed || got.FailedAt != StageCommit {
+		t.Fatalf("job after the start = %+v, %v; want it failed at the commit, to be resumed", got, err)
+	}
+
+	job, err := s.MoveGame(game.ID, parent)
+	if err == nil {
+		done := s.wait(job.ID)
+		if _, statErr := os.Stat(copied); statErr != nil {
+			t.Fatalf("a new move (ended %s: %s) deleted the copy a resumable move holds: %v", done.Stage, done.Error, statErr)
+		}
+		t.Fatalf("a new move started over the copy a resumable move holds; it ended %s (%s)", done.Stage, done.Error)
+	}
+	if code := uierr.Code(err); code != "relocate.target_not_empty" {
+		t.Fatalf("MoveGame = %q (%v), want relocate.target_not_empty", code, err)
+	}
+	if _, err := os.Stat(copied); err != nil {
+		t.Fatalf("the copy a resumable move holds: %v", err)
 	}
 }
 
