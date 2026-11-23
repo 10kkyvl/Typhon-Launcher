@@ -447,6 +447,86 @@ describe('History: the game a row is about', () => {
   });
 });
 
+describe('History: a long history', () => {
+  const name = (index: number) => `Game ${String(index).padStart(3, '0')}`;
+  // Newest first, half an hour apart: a few days.
+  const many = (count: number, kind: (index: number) => Kind = () => Kind.KindInstalled): HistoryRecord[] =>
+    Array.from({ length: count }, (_, index) =>
+      record(`m${index}`, kind(index), name(index), new Date(NOW.getTime() - (index + 1) * 30 * 60_000).toISOString(), { gameId: `lib-${index}` }),
+    );
+  const more = () => screen.queryByRole('button', { name: msg('transfers.historyShowMore') });
+
+  it('shows sixty records, then sixty more at each press of Show more, which keeps focus while more are left', async () => {
+    history.set(many(130));
+    const { user } = renderDom(History);
+
+    expect(rows()).toHaveLength(60);
+    expect(screen.getByText(msg('transfers.historyShownOf', { shown: 60, total: 130 }))).toBeTruthy();
+
+    (more() as HTMLElement).focus();
+    await user.keyboard('{Enter}');
+
+    expect(rows()).toHaveLength(120);
+    expect(document.activeElement).toBe(more());
+    expect(screen.getByText(msg('transfers.historyShownOf', { shown: 120, total: 130 }))).toBeTruthy();
+  });
+
+  it('hands focus to the first record the last press brought, from which Tab goes on through the new ones', async () => {
+    libraryGames.set(Array.from({ length: 130 }, (_, index) => game(`lib-${index}`, { title: name(index) })));
+    history.set(many(130));
+    const { user } = renderDom(History);
+    expect(rows()).toHaveLength(60);
+
+    (more() as HTMLElement).focus();
+    await user.keyboard('{Enter}');
+    await user.keyboard('{Enter}');
+
+    expect(rows()).toHaveLength(130);
+    expect(more()).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(within(rowOf(installed(name(120)))).getByRole('button', { name: name(120) })));
+    await user.tab();
+    expect(document.activeElement).toBe(within(rowOf(installed(name(121)))).getByRole('button', { name: name(121) }));
+  });
+
+  it('hands focus to the day of the first new record when it has nothing to focus', async () => {
+    history.set(many(70));
+    const { user } = renderDom(History);
+    expect(rows()).toHaveLength(60);
+
+    (more() as HTMLElement).focus();
+    await user.keyboard('{Enter}');
+
+    expect(rows()).toHaveLength(70);
+    const heading = rowOf(installed(name(60))).closest('section')?.querySelector('h2');
+    await waitFor(() => expect(document.activeElement).toBe(heading));
+  });
+
+  it('starts again from sixty when the segment or the search changes', async () => {
+    history.set(many(130, (index) => (index % 2 === 0 ? Kind.KindInstalled : Kind.KindUpdated)));
+    const { user } = renderDom(History);
+
+    await user.click(more() as HTMLElement);
+    expect(rows()).toHaveLength(120);
+
+    await user.click(screen.getByRole('radio', { name: new RegExp(msg('transfers.historySegmentInstalls')) }));
+    expect(rows()).toHaveLength(60);
+    await user.click(more() as HTMLElement);
+    expect(rows()).toHaveLength(65);
+
+    await user.type(search(), 'game');
+    expect(rows()).toHaveLength(60);
+  });
+
+  it('shows no Show more for a history that fits', () => {
+    history.set(many(60));
+    renderDom(History);
+
+    expect(rows()).toHaveLength(60);
+    expect(more()).toBeNull();
+    expect(screen.queryByText(msg('transfers.historyShownOf', { shown: 60, total: 60 }))).toBeNull();
+  });
+});
+
 describe('History: states', () => {
   it('says the history is empty, with nothing to filter or clear', () => {
     renderDom(History);

@@ -25,6 +25,7 @@
   } from '../../lib/stores/history';
   import { toast } from '../../lib/stores/toasts';
   import { focusHandOff } from '../../lib/utils/focusHandOff';
+  import { focusableIn } from '../../lib/layers/focus';
   import { longDate, relativeDate } from '../../lib/utils/format';
   import { locale, msg } from '../../lib/i18n';
   import HistoryDay from './HistoryDay.svelte';
@@ -47,6 +48,9 @@
     { id: 'moves', label: msg('transfers.historySegmentMoves'), kinds: [Kind.KindMoved] },
   ];
 
+  // A long history comes a page at a time, as on the prototype.
+  const PAGE = 60;
+
   const uid = $props.id();
 
   let segment = $state('all');
@@ -60,6 +64,12 @@
 
   const kindsFilter = $derived(segments.find((s) => s.id === segment)?.kinds);
   const filtered = $derived(filterHistory($history, { kinds: kindsFilter, query, locale: $locale }));
+
+  // How far "Show more" went, for the filter it was pressed under: another segment or query starts again.
+  const filterKey = $derived(`${segment}\u0000${query}`);
+  let paging = $state({ key: '', limit: PAGE });
+  const limit = $derived(paging.key === filterKey ? paging.limit : PAGE);
+  const shown = $derived(filtered.slice(0, limit));
 
   const tabs = $derived(
     segments.map((s) => ({
@@ -82,7 +92,7 @@
 
   const days = $derived.by(() => {
     const groups: { key: string; label: string; records: HistoryRecord[] }[] = [];
-    for (const record of filtered) {
+    for (const record of shown) {
       const date = new Date(record.at);
       const valid = !Number.isNaN(date.getTime());
       const key = valid ? String(dayStart(date)) : 'unknown';
@@ -99,9 +109,36 @@
   // The covers of the records shown, through the art store's one request path; a key it already holds
   // or has just asked for is not asked again.
   $effect(() => {
-    const ids = [...new Set(filtered.map((record) => historyArt(record, gameOf(record.gameId), {}).key).filter(Boolean))];
+    const ids = [...new Set(shown.map((record) => historyArt(record, gameOf(record.gameId), {}).key).filter(Boolean))];
     if (ids.length > 0) requestArt(ids);
   });
+
+  /**
+   * The next page. Show more keeps focus while records are left; the press that brings the last of them
+   * takes the button away, and focus goes to the first record it brought that has a control (Tab goes on
+   * through the new ones from there), else to the heading of that record's day.
+   */
+  async function showMore() {
+    const fresh = new Set(filtered.slice(shown.length, shown.length + PAGE).map((record) => record.id));
+    const handOff = focusHandOff();
+    paging = { key: filterKey, limit: limit + PAGE };
+    const picked: { target: HTMLElement | null } = { target: null };
+    await handOff(() => (picked.target = firstFresh(fresh)));
+    const { target } = picked;
+    if (target && document.activeElement === target) {
+      const box = target.closest<HTMLElement>('[data-history-row]') ?? target;
+      if (typeof box.scrollIntoView === 'function') box.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+  }
+
+  function firstFresh(fresh: ReadonlySet<string>): HTMLElement | null {
+    const rows = Array.from(list?.querySelectorAll<HTMLElement>('[data-history-row]') ?? []).filter((row) => fresh.has(row.dataset.historyRow ?? ''));
+    for (const row of rows) {
+      const control = focusableIn(row)[0];
+      if (control) return control;
+    }
+    return rows[0]?.closest('section')?.querySelector<HTMLElement>('h2[tabindex="-1"]') ?? null;
+  }
 
   const clearButton = () => document.querySelector<HTMLButtonElement>('[data-history-clear]');
   const pageHeading = () => document.querySelector<HTMLElement>('h1[tabindex="-1"]');
@@ -179,6 +216,12 @@
           <HistoryDay id="{uid}-day-{day.key}" label={day.label} records={day.records} {gameOf} />
         {/each}
       </div>
+      {#if filtered.length > shown.length}
+        <div class="more">
+          <Button onclick={showMore}>{msg('transfers.historyShowMore')}</Button>
+          <span class="shown" role="status">{msg('transfers.historyShownOf', { shown: shown.length, total: filtered.length })}</span>
+        </div>
+      {/if}
     {/if}
   {/if}
 
@@ -214,5 +257,19 @@
     flex-direction: column;
     gap: var(--space-8);
     max-width: 110rem;
+  }
+
+  .more {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-4);
+    margin-top: var(--space-6);
+  }
+
+  .shown {
+    font-size: var(--font-sm);
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
   }
 </style>
