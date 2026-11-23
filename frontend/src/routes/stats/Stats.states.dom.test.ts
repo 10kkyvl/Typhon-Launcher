@@ -46,24 +46,13 @@ const week = (extra: Partial<StatsData> = {}) => stats('week', 7, (index) => (in
 const month = () => stats('month', 30, (index) => (index % 4 === 0 ? 1800 : 0));
 const year = () => stats('year', 365, (index) => (index % 30 === 0 ? 3600 : 0));
 
-/** The text a screen reader reads out of `element`: everything not hidden from it. */
-function readText(element: Element): string {
-  const parts: string[] = [];
-  const walk = (node: Node) => {
-    if (node instanceof Element && (node.getAttribute('aria-hidden') === 'true' || node.hasAttribute('hidden'))) return;
-    if (node.nodeType === Node.TEXT_NODE) parts.push(node.textContent ?? '');
-    node.childNodes.forEach(walk);
-  };
-  walk(element);
-  return parts.join(' ').replace(/\s+/g, ' ').trim();
-}
-
 /** The chart's words, bucket by bucket: [when, value], as a user without sight or a pointer reaches them. */
 async function chartWords(name: string): Promise<string[][]> {
-  const list = await screen.findByRole('list', { name });
-  return within(list)
-    .getAllByRole('listitem')
-    .map((item) => readText(item).split(' · '));
+  const table = await screen.findByRole('table', { name });
+  return within(table)
+    .getAllByRole('row')
+    .slice(1)
+    .map((row) => [within(row).getByRole('rowheader').textContent?.trim() ?? '', within(row).getByRole('cell').textContent?.trim() ?? '']);
 }
 
 /** A period's control by its name, whatever form the switch takes. */
@@ -260,5 +249,52 @@ describe('Stats: the chart in words', () => {
 
     const ticks = [...container.querySelectorAll('.tick')].map((tick) => tick.textContent?.trim());
     expect(ticks).toEqual(Array.from({ length: 7 }, (_, index) => weekday(back(6 - index))));
+  });
+});
+
+describe('Stats: the shared bar chart', () => {
+  // Under the bars: the day of the month every fifth day, the other days blank.
+  it('a month marks every fifth day under its bars', async () => {
+    vi.mocked(getStats).mockResolvedValueOnce(week()).mockResolvedValueOnce(month());
+    const { container, user } = renderDom(Stats);
+    await chartWords(msg('stats.chartTitle'));
+    await user.click(periodControl(msg('stats.periodMonth')));
+    await vi.waitFor(async () => expect(await chartWords(msg('stats.chartTitle'))).toHaveLength(30));
+
+    const ticks = [...container.querySelectorAll('.tick')].map((tick) => tick.textContent?.trim());
+    expect(ticks).toEqual(Array.from({ length: 30 }, (_, index) => (index % 5 === 0 ? `${back(29 - index).getDate()}` : '')));
+  });
+
+  it('sets today apart, and in a year the month today is in', async () => {
+    vi.mocked(getStats).mockResolvedValueOnce(week()).mockResolvedValueOnce(year());
+    const { container, user } = renderDom(Stats);
+    await chartWords(msg('stats.chartTitle'));
+    const current = () => [...container.querySelectorAll('.col')].map((col) => col.classList.contains('current'));
+
+    expect(current()).toEqual([false, false, false, false, false, false, true]);
+
+    await user.click(periodControl(msg('stats.periodYear')));
+    await vi.waitFor(async () => expect(await chartWords(msg('stats.chartTitleYear'))).toHaveLength(13));
+    expect(current()).toEqual([...Array(12).fill(false), true]);
+  });
+
+  it('draws an hour axis whose zero is a bare number, not the words for no play', async () => {
+    vi.mocked(getStats).mockResolvedValueOnce(week());
+    const { container } = renderDom(Stats);
+    await chartWords(msg('stats.chartTitle'));
+
+    const marks = [...container.querySelectorAll('.axis .mark')].map((mark) => mark.textContent?.trim());
+    expect(marks[0]).toBe('0');
+    expect(marks.at(-1)).toBe(playtime(2 * 3600));
+    expect(marks).not.toContain(msg('stats.chartIdle'));
+  });
+
+  it('the drawing is hidden from assistive tech: the table says it', async () => {
+    vi.mocked(getStats).mockResolvedValueOnce(week());
+    const { container } = renderDom(Stats);
+    await chartWords(msg('stats.chartTitle'));
+
+    expect(screen.queryAllByRole('listitem')).toHaveLength(0);
+    expect(container.querySelector('[title]')).toBeNull();
   });
 });

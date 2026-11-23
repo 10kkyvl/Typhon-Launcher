@@ -7,6 +7,8 @@ vi.mock('../services/playlog', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/playlog')>()),
   getStats: vi.fn(async (period: string) => ({
     period,
+    from: '2026-11-09',
+    to: '2026-11-10',
     totalSeconds: 5400,
     sessions: 2,
     longest: null,
@@ -68,29 +70,39 @@ describe('text alternatives for hints on what no keyboard reaches', () => {
     expect(readText(badge)).toBe(msg('games.externalBadgeTitle', { provider: msg('games.sourceSteam') }));
   });
 
-  it("the week chart is a list whose items read as each day's date and play time", () => {
+  // A chart's drawing is hidden from assistive tech; a table stands in for it, a row per bucket: its date
+  // in the row's header, its value in the cell. No hover is needed to reach either.
+  const tableRows = (name: string) => {
+    const table = screen.getByRole('table', { name });
+    return within(table)
+      .getAllByRole('row')
+      .slice(1)
+      .map((row) => `${readText(within(row).getByRole('rowheader'))} · ${readText(within(row).getByRole('cell'))}`);
+  };
+
+  it("the week chart is a table whose rows read as each day's date and play time", () => {
     const today = new Date(2026, 10, 11);
     const week = weekSummary(
       [{ date: '2026-11-10', entries: [{ game: { id: 'g', title: 'Hades', cover: '', archived: false, playtimeSeconds: 3600, status: '' }, seconds: 3600 }] }],
       today,
     );
     render(WeekActivity, { target: app, props: { week } });
-    const list = screen.getByRole('list', { name: msg('transfers.activityWeekTitle') });
-    const items = within(list).getAllByRole('listitem');
-    expect(items).toHaveLength(7);
+    const rows = tableRows(msg('transfers.activityWeekTitle'));
+    expect(rows).toHaveLength(7);
     const monday = week.days.find((day) => day.date === '2026-11-10');
-    expect(items.map(readText)).toContain(`${shortDate(monday?.at as Date)} · ${playtime(3600)}`);
-    expect(items.map(readText)).toContain(`${shortDate(week.days[0].at)} · ${msg('transfers.activityWeekIdle')}`);
+    expect(rows).toContain(`${shortDate(monday?.at as Date)} · ${playtime(3600)}`);
+    expect(rows).toContain(`${shortDate(week.days[0].at)} · ${msg('transfers.activityWeekIdle')}`);
+    expect(app.querySelector('[title]')).toBeNull();
   });
 
-  it("the stats chart is a list whose items read as each bar's date and play time", async () => {
+  it("the stats chart is a table whose rows read as each bar's date and play time", async () => {
     render(Stats, { target: app });
-    const list = await screen.findByRole('list', { name: msg('stats.chartTitle') });
-    const texts = within(list).getAllByRole('listitem').map(readText);
-    expect(texts).toEqual([
+    await screen.findByRole('table', { name: msg('stats.chartTitle') });
+    expect(tableRows(msg('stats.chartTitle'))).toEqual([
       `${shortDate(new Date(2026, 10, 9))} · ${msg('stats.chartIdle')}`,
       `${shortDate(new Date(2026, 10, 10))} · ${playtime(5400)}`,
     ]);
+    expect(app.querySelector('[title]')).toBeNull();
   });
 
   it('the other sources of a release are named to a keyboard and a screen reader', async () => {

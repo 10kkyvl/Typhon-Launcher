@@ -3,6 +3,8 @@
   import { onMount } from 'svelte';
   import { ChartColumn } from '@lucide/svelte';
   import Artwork from '../../lib/components/Artwork.svelte';
+  import BarChart from '../../lib/components/BarChart.svelte';
+  import { secondsScale, type ChartBucket as Bar } from '../../lib/components/barChart';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import Notice from '../../lib/components/Notice.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
@@ -11,7 +13,7 @@
   import StatTile from '../../lib/components/StatTile.svelte';
   import { coverOf } from '../../lib/profile/view';
   import { getStats, onPlaylogRecorded, STATS_PERIODS, type Stats, type StatsPeriod } from '../../lib/services/playlog';
-  import { barHeight, bestSeconds, chartBuckets, labelEvery, type ChartBucket } from '../../lib/stats/buckets';
+  import { bestSeconds, chartBuckets, currentKey, labelEvery, type ChartBucket } from '../../lib/stats/buckets';
   import { gameTitle, summarize } from '../../lib/stats/summary';
   import { libraryGames } from '../../lib/stores/library';
   import { gameArt, loadArt } from '../../lib/stores/metadata';
@@ -40,6 +42,16 @@
   const step = $derived(labelEvery(data?.period ?? period));
   const monthShort = $derived(new Intl.DateTimeFormat($locale, { month: 'short' }));
   const monthLong = $derived(new Intl.DateTimeFormat($locale, { month: 'long', year: 'numeric' }));
+  const current = $derived(data ? currentKey(data.period, data.to) : '');
+  const bars = $derived<Bar[]>(
+    buckets.map((bucket, index) => ({
+      key: bucket.key,
+      label: bucket.unit === 'month' ? monthLong.format(bucket.at) : shortDate(bucket.at),
+      tick: barTick(bucket, index),
+      value: bucket.seconds,
+      current: bucket.key === current,
+    })),
+  );
   const libraryById = $derived(new Map($libraryGames.map((game) => [game.id, game])));
 
   function failureText(err: unknown): string {
@@ -83,17 +95,14 @@
     void load(next);
   }
 
-  function barLabel(bucket: ChartBucket, index: number): string {
+  function barTick(bucket: ChartBucket, index: number): string {
     if (bucket.unit === 'month') return monthShort.format(bucket.at);
     if (step === 1) return weekday(bucket.at);
     return index % step === 0 ? `${bucket.at.getDate()}` : '';
   }
 
-  function barTitle(bucket: ChartBucket): string {
-    const value = bucket.seconds > 0 ? playtime(bucket.seconds) : msg('stats.chartIdle');
-    const when = bucket.unit === 'month' ? monthLong.format(bucket.at) : shortDate(bucket.at);
-    return `${when} · ${value}`;
-  }
+  // A day or a month without play is said as such in the labels and the table; the axis keeps its bare 0.
+  const playedWords = (seconds: number) => (seconds > 0 ? playtime(seconds) : msg('stats.chartIdle'));
 
   function titleOf(gameId: string, title: string): string {
     return gameTitle(title, libraryById.get(gameId)?.title, msg('stats.deletedGame'));
@@ -157,23 +166,15 @@
 
         <section class="section">
           <h2>{data.period === 'year' ? msg('stats.chartTitleYear') : msg('stats.chartTitle')}</h2>
-          <!-- Each bar reads as its date and play time: the bars and the tick labels are for the eye. -->
-          <div
-            class="chart"
-            style:--count={buckets.length}
-            role="list"
-            aria-label={data.period === 'year' ? msg('stats.chartTitleYear') : msg('stats.chartTitle')}
-          >
-            {#each buckets as bucket, index (bucket.key)}
-              <span class="col" role="listitem" title={barTitle(bucket)}>
-                <span class="track" aria-hidden="true">
-                  <span class="fill" style:height="{barHeight(bucket.seconds, best)}%"></span>
-                </span>
-                <span class="tick" aria-hidden="true">{barLabel(bucket, index)}</span>
-                <span class="sr-only">{barTitle(bucket)}</span>
-              </span>
-            {/each}
-          </div>
+          <!-- Thirty days leave no room for a value over each bar: the axis and the table say them. -->
+          <BarChart
+            label={data.period === 'year' ? msg('stats.chartTitleYear') : msg('stats.chartTitle')}
+            buckets={bars}
+            format={playedWords}
+            scale={secondsScale(best)}
+            values={data.period === 'month' ? 'selected' : 'all'}
+            columns={[data.period === 'year' ? msg('stats.chartMonth') : msg('stats.chartDay'), msg('stats.chartPlaytime')]}
+          />
         </section>
 
         {#if summary.top.length > 0}
@@ -230,45 +231,6 @@
     font-size: var(--font-md);
     font-weight: 600;
     letter-spacing: var(--tracking-heading);
-  }
-
-  .chart {
-    display: grid;
-    grid-template-columns: repeat(var(--count, 7), minmax(0, 1fr));
-    gap: var(--space-1);
-  }
-
-  .col {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.6rem;
-    min-width: 0;
-  }
-
-  .track {
-    display: flex;
-    align-items: flex-end;
-    width: 100%;
-    height: 12rem;
-    border-radius: var(--radius-sm);
-    background: var(--surface-3);
-    overflow: hidden;
-  }
-
-  .fill {
-    display: block;
-    width: 100%;
-    border-radius: var(--radius-sm);
-    background: var(--accent-bright);
-    transition: height var(--dur-panel) var(--ease);
-  }
-
-  .tick {
-    height: 1.6rem;
-    font-size: 1.2rem;
-    color: var(--text-3);
-    white-space: nowrap;
   }
 
   .top {

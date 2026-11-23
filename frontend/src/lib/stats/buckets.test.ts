@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DayTotal } from '../services/playlog';
-import { barHeight, bestSeconds, chartBuckets, chartUnit, labelEvery, parseDay } from './buckets';
+import { bestSeconds, chartBuckets, chartUnit, currentKey, labelEvery, parseDay } from './buckets';
 
 function range(from: string, count: number, seconds: (index: number) => number): DayTotal[] {
   const start = parseDay(from)!;
@@ -52,14 +52,19 @@ describe('chart scale', () => {
     expect(chartUnit('week')).toBe('day');
   });
 
-  it('finds the best bucket and scales bars against it', () => {
+  it('finds the best bucket', () => {
     const buckets = chartBuckets('week', range('2026-10-09', 7, (i) => (i === 2 ? 3600 : 0)));
-    const best = bestSeconds(buckets);
-    expect(best).toBe(3600);
-    expect(barHeight(3600, best)).toBe(100);
-    expect(barHeight(0, best)).toBe(0);
-    expect(barHeight(10, best)).toBe(4);
-    expect(barHeight(10, 0)).toBe(0);
+    expect(bestSeconds(buckets)).toBe(3600);
+    expect(bestSeconds([])).toBe(0);
+  });
+
+  it('finds the bucket today is in: the last day, or its month for a year', () => {
+    const days = range('2025-11-12', 365, () => 60);
+    const to = days[days.length - 1].date;
+    expect(chartBuckets('week', days.slice(-7)).map((bucket) => bucket.key === currentKey('week', to))).toEqual([false, false, false, false, false, false, true]);
+    const year = chartBuckets('year', days);
+    expect(year.filter((bucket) => bucket.key === currentKey('year', to)).map((bucket) => bucket.key)).toEqual(['2026-11']);
+    expect(year.at(-1)?.key).toBe('2026-11');
   });
 
   it('labels every fifth day of a month and every bar otherwise', () => {

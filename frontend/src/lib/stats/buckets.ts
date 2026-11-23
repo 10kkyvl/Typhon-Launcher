@@ -49,9 +49,9 @@ export function bestSeconds(buckets: ChartBucket[]): number {
   return buckets.reduce((best, bucket) => Math.max(best, bucket.seconds), 0);
 }
 
-export function barHeight(seconds: number, best: number): number {
-  if (seconds <= 0 || best <= 0) return 0;
-  return Math.max(4, Math.round((seconds / best) * 100));
+/** The key of the bucket that holds the period's last day (today): the day, or its month for a year. */
+export function currentKey(period: string, to: string): string {
+  return chartUnit(period) === 'month' ? to.slice(0, 7) : to;
 }
 
 export function labelEvery(period: string): number {

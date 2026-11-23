@@ -158,6 +158,24 @@ describe('Activity: the week card with no play', () => {
   });
 });
 
+describe('Activity: the week chart', () => {
+  const played = (date: string, seconds: number) => ({
+    date,
+    entries: [{ game: { id: 'g', title: 'Hades', cover: '', archived: false, playtimeSeconds: seconds, status: '' }, seconds }],
+  });
+
+  it('is the shared bar chart: seven days, today set apart, no axis, the table says each day', () => {
+    const week = weekSummary([played('2026-11-10', 3600), played('2026-11-11', 1800)], new Date(2026, 10, 11));
+    const { container } = renderDom(WeekActivity, { week });
+
+    const table = screen.getByRole('table', { name: msg('transfers.activityWeekTitle') });
+    expect(within(table).getAllByRole('row').slice(1)).toHaveLength(7);
+    expect([...container.querySelectorAll('.col')].map((col) => col.classList.contains('current'))).toEqual([false, false, false, false, false, false, true]);
+    expect(container.querySelector('.axis')).toBeNull();
+    expect(screen.queryAllByRole('listitem')).toHaveLength(0);
+  });
+});
+
 describe('Activity: the columns by the width of the window', () => {
   // jsdom lays nothing out: the rules are read from the source. Below 1400px the right column goes,
   // below 1100px the left one; the middle (the feed) always stays.

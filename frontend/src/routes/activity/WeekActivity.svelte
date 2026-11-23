@@ -1,10 +1,12 @@
 <script lang="ts">
   import Artwork from '../../lib/components/Artwork.svelte';
+  import BarChart from '../../lib/components/BarChart.svelte';
+  import type { ChartBucket } from '../../lib/components/barChart';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import { coverOf } from '../../lib/profile/view';
-  import type { WeekDay, WeekSummary } from '../../lib/profile/week';
+  import type { WeekSummary } from '../../lib/profile/week';
   import { gameArt } from '../../lib/stores/metadata';
   import { navigate } from '../../lib/stores/router';
   import { playtime, shortDate, weekday } from '../../lib/utils/format';
@@ -12,15 +14,11 @@
 
   let { week }: { week: WeekSummary } = $props();
 
-  function barHeight(day: WeekDay): string {
-    if (day.seconds <= 0 || week.bestSeconds <= 0) return '0';
-    return `${Math.max(8, Math.round((day.seconds / week.bestSeconds) * 100))}%`;
-  }
+  const bars = $derived<ChartBucket[]>(
+    week.days.map((day) => ({ key: day.date, label: shortDate(day.at), tick: weekday(day.at), value: day.seconds, current: day.today })),
+  );
 
-  function dayTitle(day: WeekDay): string {
-    const value = day.seconds > 0 ? playtime(day.seconds) : msg('transfers.activityWeekIdle');
-    return `${shortDate(day.at)} · ${value}`;
-  }
+  const playedWords = (seconds: number) => (seconds > 0 ? playtime(seconds) : msg('transfers.activityWeekIdle'));
 </script>
 
 <Card title={msg('transfers.activityWeekTitle')}>
@@ -32,17 +30,16 @@
       <span class="window">{msg('transfers.activityWeekWindow')}</span>
     </div>
 
-    <!-- Each bar reads as its date and play time: the bars and the weekday letters are for the eye. -->
-    <div class="chart" role="list" aria-label={msg('transfers.activityWeekTitle')}>
-      {#each week.days as day (day.date)}
-        <span class="col" class:today={day.today} role="listitem" title={dayTitle(day)}>
-          <span class="track" aria-hidden="true">
-            <span class="fill" style:height={barHeight(day)}></span>
-          </span>
-          <span class="day" aria-hidden="true">{weekday(day.at)}</span>
-          <span class="sr-only">{dayTitle(day)}</span>
-        </span>
-      {/each}
+    <!-- A narrow card: no axis and no value over the bars; the total above and the table say them. -->
+    <div class="chart">
+      <BarChart
+        label={msg('transfers.activityWeekTitle')}
+        buckets={bars}
+        format={playedWords}
+        values="selected"
+        height="6.4rem"
+        columns={[msg('stats.chartDay'), msg('stats.chartPlaytime')]}
+      />
     </div>
 
     {#if week.games.length > 0}
@@ -89,52 +86,7 @@
   }
 
   .chart {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: var(--space-1);
     margin-top: var(--space-5);
-  }
-
-  .col {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.6rem;
-    width: 100%;
-  }
-
-  .track {
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
-    width: 100%;
-    height: 6.4rem;
-    border-radius: var(--radius-sm);
-    background: var(--surface-3);
-    overflow: hidden;
-  }
-
-  .fill {
-    display: block;
-    width: 100%;
-    min-height: 0;
-    border-radius: var(--radius-sm);
-    background: var(--accent-bright);
-    opacity: 0.45;
-    transition: height var(--dur-panel) var(--ease);
-  }
-
-  .col.today .fill {
-    opacity: 1;
-  }
-
-  .day {
-    font-size: 1.2rem;
-    color: var(--text-3);
-  }
-
-  .col.today .day {
-    color: var(--text-2);
   }
 
   .games {
