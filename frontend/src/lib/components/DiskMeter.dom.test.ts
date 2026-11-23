@@ -443,5 +443,68 @@ describe('DiskMeter', () => {
         outside.remove();
       });
     });
+
+    // Every pick the meter owns hands focus by one rule when it leaves: to the pick of the same segment
+    // wherever it now is (the bar or the legend), else to its neighbour among the picks it stood with,
+    // else to the bar's Tab stop, else to the group.
+    describe('as a focused pick in the legend leaves', () => {
+      const part = (key: string, gb: number, sizeUnknown = false): MeterSegment => ({ key, label: key, bytes: gb * GB, tone: 'game', sizeUnknown });
+      const meterOf = (segments: MeterSegment[]) => renderDom(DiskMeter, { label: 'Диск', segments, total: 100 * GB, onpick: vi.fn() });
+      const legend = (root: HTMLElement) => root.querySelector('.legend') as HTMLElement;
+
+      it('follows a segment from its name in the legend to its part on the bar when it is measured', async () => {
+        const { container, rerender } = meterOf([part('a', 30), part('x', 0, true), part('y', 0, true)]);
+        within(legend(container)).getByRole('button', { name: 'x' }).focus();
+        await rerender({ segments: [part('a', 30), part('x', 10), part('y', 0, true)] });
+        expect(document.activeElement?.getAttribute('aria-label')).toBe(`x: ${bytesSize(10 * GB)}`);
+        expect((document.activeElement as HTMLElement).tabIndex).toBe(0);
+      });
+
+      it('follows a segment from the bar to its name in the legend when its size is no longer known', async () => {
+        const { container, rerender, user } = meterOf([part('a', 30), part('b', 20), part('c', 10)]);
+        await user.tab();
+        await user.keyboard('{ArrowRight}');
+        await rerender({ segments: [part('a', 30), part('b', 0, true), part('c', 10)] });
+        expect(document.activeElement).toBe(within(legend(container)).getByRole('button', { name: 'b' }));
+      });
+
+      it('hands focus to the name now in the place of one that leaves, else to its neighbour', async () => {
+        const { container, rerender } = meterOf([part('a', 30), part('x', 0, true), part('y', 0, true)]);
+        within(legend(container)).getByRole('button', { name: 'x' }).focus();
+        await rerender({ segments: [part('a', 30), part('y', 0, true)] });
+        expect(document.activeElement).toBe(within(legend(container)).getByRole('button', { name: 'y' }));
+        await rerender({ segments: [part('a', 30)] });
+        expect(document.activeElement?.getAttribute('aria-label')).toBe(`a: ${bytesSize(30 * GB)}`);
+      });
+
+      it('hands focus to the group when no pick is left', async () => {
+        const { container, rerender, getByRole } = meterOf([part('x', 0, true)]);
+        within(legend(container)).getByRole('button', { name: 'x' }).focus();
+        await rerender({ segments: [] });
+        expect(document.activeElement).toBe(getByRole('group'));
+      });
+
+      describe('in the fold', () => {
+        const games = (count: number, first = 10): MeterSegment[] => Array.from({ length: count }, (_, i) => part(`g${i}`, i === 0 ? first : 0.01));
+
+        it('follows a folded segment to its part on the bar when it grows', async () => {
+          const { container, rerender, user } = meterOf(games(5));
+          await user.click(within(legend(container)).getByRole('button', { name: /^Ещё 4/ }));
+          within(legend(container)).getByRole('button', { name: 'g2' }).focus();
+          const grown = games(5).map((g) => (g.key === 'g2' ? part('g2', 20) : g));
+          await rerender({ segments: grown });
+          expect(document.activeElement?.getAttribute('aria-label')).toBe(`g2: ${bytesSize(20 * GB)}`);
+        });
+
+        it('hands focus on from the fold when it is gone', async () => {
+          const { container, rerender, user } = meterOf(games(5));
+          const fold = within(legend(container)).getByRole('button', { name: /^Ещё 4/ });
+          await user.click(fold);
+          expect(document.activeElement).toBe(fold);
+          await rerender({ segments: games(1) });
+          expect(document.activeElement?.getAttribute('aria-label')).toBe(`g0: ${bytesSize(10 * GB)}`);
+        });
+      });
+    });
   });
 });

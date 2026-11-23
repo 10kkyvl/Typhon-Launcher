@@ -128,31 +128,52 @@
     buttons()[next]?.focus();
   }
 
-  // A focused part that leaves hands focus to the part now in its place, else to its neighbour, else to
-  // the group. Read before the bar changes: which part held focus, and where. Not state: nothing is
-  // drawn from it.
-  let held: number | null = null;
+  // Every pick the meter owns (a part on the bar, a name in the legend, the fold's disclosure and its
+  // list) carries the id of its part. A focused pick that leaves hands focus to the pick of the same
+  // part wherever it now is (a segment measured at last moves from the legend to the bar), else to the
+  // pick now in its place among those it stood with (the bar's, or the legend's), else to the bar's Tab
+  // stop, else to the group.
+  let root = $state<HTMLElement>();
+  const picks = (where: HTMLElement | null | undefined) => [...(where?.querySelectorAll<HTMLElement>('[data-pick]') ?? [])];
+  const legendOf = () => root?.querySelector<HTMLElement>('.legend');
+
+  // Read before the meter changes: which pick held focus, and where. Not state: nothing is drawn from it.
+  let held: { id: string; onBar: boolean; index: number } | null = null;
   $effect.pre(() => {
-    void pickable;
+    void model;
+    void open;
     const active = document.activeElement;
-    held = active instanceof HTMLButtonElement ? untrack(buttons).indexOf(active) : -1;
-    if (held < 0) held = null;
+    const id = active instanceof HTMLElement && root?.contains(active) ? active.dataset.pick : undefined;
+    if (id === undefined) {
+      held = null;
+      return;
+    }
+    const onBar = !!bar?.contains(active);
+    held = { id, onBar, index: untrack(() => picks(onBar ? bar : legendOf())).indexOf(active as HTMLElement) };
   });
   $effect(() => {
-    void pickable;
+    void model;
+    void open;
     const was = held;
     held = null;
     if (was === null || !bar) return;
     const active = document.activeElement;
     if (active && active !== document.body && active.isConnected) return;
-    const now = buttons();
-    const at = Math.min(was, now.length - 1);
+    const near = picks(was.onBar ? bar : legendOf());
+    const all = picks(root);
+    const target =
+      near.find((pick) => pick.dataset.pick === was.id) ??
+      all.find((pick) => pick.dataset.pick === was.id) ??
+      near[Math.min(was.index, near.length - 1)] ??
+      buttons().find((button) => button.tabIndex === 0) ??
+      bar;
+    const at = buttons().indexOf(target as HTMLButtonElement);
     if (at >= 0) stop = { id: pickable[at].id, index: at };
-    focusQuietly(now[at] ?? bar);
+    focusQuietly(target);
   });
 </script>
 
-<div class="meter" class:compact>
+<div class="meter" class:compact bind:this={root}>
   {#if onpick}
     <div class="bar" role="group" aria-label={alt} tabindex="-1" data-state={model.total === null ? 'unknown' : undefined} bind:this={bar}>
       {#each model.drawn as part (part.id)}
@@ -165,6 +186,7 @@
               data-tone={part.tone}
               style:flex-basis="{part.share * 100}%"
               aria-label={partText(part)}
+              data-pick={part.id}
               tabindex={index === tabStop ? 0 : -1}
               onfocus={() => (stop = { id: part.id, index })}
               onclick={() => pick(part)}
@@ -192,10 +214,12 @@
         <li>
           <span class="swatch" data-tone={part.tone} class:hollow={part.size.kind === 'unknown'} aria-hidden="true"></span>
           {#if onpick && part.kind === 'segment' && part.share === 0}
-            <span class="name"><TextLink tone="muted" onclick={() => onpick(part.key)}>{nameOf(part)}</TextLink></span>
+            <span class="name"><TextLink tone="muted" data-pick={part.id} onclick={() => onpick(part.key)}>{nameOf(part)}</TextLink></span>
           {:else if onpick && part.kind === 'more'}
             <span class="name">
-              <TextLink tone="muted" id="{uid}-fold" aria-expanded={open} aria-controls="{uid}-members" onclick={() => (open = !open)}>{nameOf(part)}</TextLink>
+              <TextLink tone="muted" id="{uid}-fold" aria-expanded={open} aria-controls="{uid}-members" data-pick={part.id} onclick={() => (open = !open)}>
+                {nameOf(part)}
+              </TextLink>
             </span>
           {:else}
             <span class="name">{nameOf(part)}</span>
@@ -205,7 +229,7 @@
             <ul class="members" id="{uid}-members" aria-labelledby="{uid}-fold">
               {#each part.folded ?? [] as member (member.id)}
                 <li>
-                  <span class="name"><TextLink tone="muted" onclick={() => onpick(member.key)}>{member.label}</TextLink></span>
+                  <span class="name"><TextLink tone="muted" data-pick={member.id} onclick={() => onpick(member.key)}>{member.label}</TextLink></span>
                   <span class="size"><Reading text={said(member.size)} /></span>
                 </li>
               {/each}
