@@ -4,14 +4,11 @@
   import { get } from 'svelte/store';
   import { RotateCcw } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
-  import Card from '../../lib/components/Card.svelte';
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
-  import GameCard from '../../lib/components/GameCard.svelte';
   import Notice from '../../lib/components/Notice.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import ProfileCanvas from '../../lib/components/ProfileCanvas.svelte';
   import ProfileCover from '../../lib/components/ProfileCover.svelte';
-  import AboutBlock from '../../lib/components/profile/AboutBlock.svelte';
   import BlockGrid from '../../lib/components/profile/BlockGrid.svelte';
   import BlockPicker from '../../lib/components/profile/BlockPicker.svelte';
   import BlockSettings from '../../lib/components/profile/BlockSettings.svelte';
@@ -38,7 +35,6 @@
     type AddResult,
   } from '../../lib/profile/layout';
   import { ownAutoArt, resolveOwn, type GridBlock } from '../../lib/profile/layoutView';
-  import { coverOf } from '../../lib/profile/view';
   import { type ProfileSettings, type ProfileSettingsPatch, type BlockWidth, DEFAULT_PROFILE } from '../../lib/services/account';
   import { accountErrorText } from '../../lib/services/accountMessages';
   import { getProfilePreview, type GameRef, type ProfileSnapshot } from '../../lib/services/profile';
@@ -48,14 +44,11 @@
   import { navigate, registerLeaveGuard } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
   import { authState, currentUser, isOffline, saveProfile } from '../../lib/stores/user';
-  import { playtime, relativeDate } from '../../lib/utils/format';
   import HiddenBadge from './HiddenBadge.svelte';
-  import ProfileActivity from './ProfileActivity.svelte';
   import ProfileAppearancePanel from './ProfileAppearancePanel.svelte';
+  import ProfileExternalBlock from './ProfileExternalBlock.svelte';
   import ProfileHeader from './ProfileHeader.svelte';
-  import ProfilePlaying from './ProfilePlaying.svelte';
   import ProfileSettingsModal from './ProfileSettingsModal.svelte';
-  import ProfileStats from './ProfileStats.svelte';
 
   function copyOf(source: ProfileSettings): ProfileSettings {
     const copy = JSON.parse(JSON.stringify(source)) as ProfileSettings;
@@ -137,10 +130,6 @@
         }) || undefined
       : undefined,
   );
-
-  function lastPlayedOf(id: string): string | null {
-    return $libraryGames.find((game) => game.id === id)?.lastPlayed ?? null;
-  }
 
   function titleOf(igdbId: number): string {
     return (
@@ -345,40 +334,14 @@
 {/snippet}
 
 {#snippet external(block: GridBlock)}
-  {#if block.type === 'playing' && playingNow}
-    <ProfilePlaying
-      title={playingNow.title}
-      art={coverOf(playingNow, $gameArt)}
-      hidden={hiddenTypes.has('playing')}
-      disabled={playingNow.archived}
-      onopen={() => navigate('game', { id: playingNow.id })}
-    />
-  {:else if block.type === 'recent'}
-    <Card title={msg('social.recentlyPlayedTitle')}>
-      <div class="recent-row">
-        {#each $profileSnapshot.playing as entry (entry.game.id)}
-          <div class="recent-item">
-            <GameCard id={entry.game.id} title={entry.game.title} cover={coverOf(entry.game, $gameArt)} variant="capsule">
-              {#snippet footer()}
-                <span class="recent-meta">
-                  <span class="dot"></span>
-                  {playtime(entry.game.playtimeSeconds)} · {relativeDate(lastPlayedOf(entry.game.id))}
-                </span>
-              {/snippet}
-            </GameCard>
-          </div>
-        {/each}
-      </div>
-    </Card>
-  {:else if block.type === 'activity'}
-    <ProfileActivity days={$profileSnapshot.activity} hidden={hiddenTypes.has('activity')} />
-  {:else if block.type === 'stats'}
-    <Card title={msg('profile.blockStats')}>
-      <ProfileStats stats={$profileSnapshot.stats} hidden={hiddenTypes.has('stats')} />
-    </Card>
-  {:else if block.type === 'about'}
-    <AboutBlock {bio} />
-  {/if}
+  <ProfileExternalBlock
+    type={block.type}
+    {playingNow}
+    {hiddenTypes}
+    art={$gameArt}
+    library={$libraryGames}
+    {bio}
+  />
 {/snippet}
 
 <Page>
@@ -560,36 +523,6 @@
     flex-direction: column;
     gap: var(--space-4);
     min-width: 0;
-  }
-
-  .recent-row {
-    display: flex;
-    gap: var(--space-4);
-    overflow-x: auto;
-    margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-2)) 0;
-    padding: var(--space-2) var(--space-2) var(--space-3);
-  }
-
-  .recent-item {
-    flex: 0 0 auto;
-    width: 22rem;
-  }
-
-  .recent-meta {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.6rem;
-    font-size: var(--font-xs);
-    color: var(--text-3);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .recent-meta .dot {
-    width: 0.7rem;
-    height: 0.7rem;
-    border-radius: 50%;
-    background: var(--success);
-    flex-shrink: 0;
   }
 
   @media (max-width: 1000px) {
