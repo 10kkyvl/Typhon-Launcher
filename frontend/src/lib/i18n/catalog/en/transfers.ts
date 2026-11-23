@@ -233,6 +233,7 @@ export const transfers: Record<TransfersKey, Message> = {
   'transfers.moveErrFolderShared': "Another library game has files in this game's folder and would be moved with it. The move cannot go on while that game is in this folder",
   'transfers.moveErrGameRemoving': 'The game is being removed. The move was not started',
   'transfers.moveErrStagingLeft': 'A temporary folder left by another move is next to the destination. Delete it on the Disk usage screen or choose another folder',
+  'transfers.moveErrMovedOn': 'The game is already in another folder: this move was stopped and its copies were kept',
   'transfers.moveErrRetriesExhausted': 'The move could not be finished after several attempts',
   'transfers.moveErrExecutableOutside': 'The executable is outside the game folder, so the game cannot be moved',
   'transfers.moveErrRelocating': 'The game is already being moved',

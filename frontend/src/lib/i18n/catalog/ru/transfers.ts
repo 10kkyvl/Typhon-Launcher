@@ -235,6 +235,7 @@ export const transfers = {
   'transfers.moveErrFolderShared': 'В папке игры лежат файлы другой игры из библиотеки, они переехали бы вместе с этой. Перенос не идёт, пока та игра в этой папке',
   'transfers.moveErrGameRemoving': 'Игра удаляется. Перенос не начат',
   'transfers.moveErrStagingLeft': 'Рядом с папкой назначения осталась временная папка другого переноса. Удалите её на экране «Место на диске» или выберите другую папку',
+  'transfers.moveErrMovedOn': 'Игра уже лежит в другой папке: этот перенос остановлен, его копии сохранены',
   'transfers.moveErrRetriesExhausted': 'Перенос не удалось завершить после нескольких попыток',
   'transfers.moveErrExecutableOutside': 'Исполняемый файл лежит вне папки игры, перенос невозможен',
   'transfers.moveErrRelocating': 'Игра уже переносится',

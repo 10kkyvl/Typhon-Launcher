@@ -15,7 +15,7 @@ export const errLibrary: Record<ErrLibraryKey, Message> = {
   'library.completed_at_in_future': 'The completion date is in the future',
   'library.no_executable': 'Executable file not found',
   'library.folder_shared': "Another library game has files in this game's folder",
-  'library.folder_busy': 'This folder is being removed or moved with another game. Add the game once that has finished',
+  'library.folder_busy': 'This folder is being removed or moved with another game. Try again once that has finished',
   'library.removing': 'The game is being removed',
   'library.moving': 'The game is being moved. Wait until the move finishes',
   'library.already_added': 'This game is already added',
