@@ -135,20 +135,23 @@ describe('History: the layout', () => {
 });
 
 describe('History: the segments', () => {
+  // Downloads and copies over the local network count as installs, and moves have a segment of their
+  // own, as the prototype groups them.
   it('counts every record under All and the kinds of each segment under it', () => {
     history.set(RECORDS);
     renderDom(History);
 
     expect(segments()).toEqual([
       `${msg('transfers.historySegmentAll')} 12`,
-      `${msg('transfers.historySegmentInstalls')} 4`,
+      `${msg('transfers.historySegmentInstalls')} 6`,
       `${msg('transfers.historySegmentUpdates')} 3`,
       `${msg('transfers.historySegmentRemovals')} 2`,
+      `${msg('transfers.historySegmentMoves')} 1`,
     ]);
     expect(rows()).toHaveLength(12);
   });
 
-  it('shows installs and failed installs under Installs', async () => {
+  it('shows installs, failed installs, downloads and copies from the local network under Installs', async () => {
     history.set(RECORDS);
     const { user } = renderDom(History);
 
@@ -158,6 +161,8 @@ describe('History: the segments', () => {
       installed('Alpha'),
       installed('Ведьмак 3'),
       msg('transfers.historyInstallFailedTitle', { title: 'Eta' }),
+      msg('transfers.historyDownloadedTitle', { title: 'Theta' }),
+      msg('transfers.historyLanReceivedTitle', { title: 'Kappa' }),
       installed('Lambda'),
     ]);
   });
@@ -184,20 +189,28 @@ describe('History: the segments', () => {
     expect(titles()).toEqual([msg('transfers.historyRemovedTitle', { title: 'Epsilon' }), msg('transfers.historyRemovedTitle', { title: 'Zeta' })]);
   });
 
-  it('lists downloads, moves and LAN copies under All only', async () => {
+  it('shows moves under Moves', async () => {
     history.set(RECORDS);
     const { user } = renderDom(History);
-    const others = [
-      msg('transfers.historyDownloadedTitle', { title: 'Theta' }),
-      msg('transfers.historyMovedTitle', { title: 'Iota' }),
-      msg('transfers.historyLanReceivedTitle', { title: 'Kappa' }),
-    ];
-    expect(titles()).toEqual(expect.arrayContaining(others));
 
-    for (const name of ['historySegmentInstalls', 'historySegmentUpdates', 'historySegmentRemovals'] as const) {
+    await user.click(screen.getByRole('radio', { name: new RegExp(msg('transfers.historySegmentMoves')) }));
+
+    expect(titles()).toEqual([msg('transfers.historyMovedTitle', { title: 'Iota' })]);
+  });
+
+  it('puts every record of a known kind under exactly one segment besides All', async () => {
+    history.set(RECORDS);
+    const { user } = renderDom(History);
+    const all = titles();
+    const seen: string[] = [];
+
+    for (const name of ['historySegmentInstalls', 'historySegmentUpdates', 'historySegmentRemovals', 'historySegmentMoves'] as const) {
       await user.click(screen.getByRole('radio', { name: new RegExp(msg(`transfers.${name}`)) }));
-      expect(titles().filter((title) => others.includes(title))).toEqual([]);
+      seen.push(...titles());
     }
+
+    expect(all).toHaveLength(RECORDS.length);
+    expect([...seen].sort()).toEqual([...all].sort());
   });
 });
 

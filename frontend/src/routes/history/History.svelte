@@ -27,15 +27,22 @@
   import { locale, msg } from '../../lib/i18n';
   import HistoryDay from './HistoryDay.svelte';
 
+  // Every known kind is under one segment besides All: a download and a copy from the local network
+  // brought a game in, as an install did.
   const segments: { id: string; label: string; kinds?: Kind[] }[] = [
     { id: 'all', label: msg('transfers.historySegmentAll') },
-    { id: 'installs', label: msg('transfers.historySegmentInstalls'), kinds: [Kind.KindInstalled, Kind.KindInstallFailed] },
+    {
+      id: 'installs',
+      label: msg('transfers.historySegmentInstalls'),
+      kinds: [Kind.KindInstalled, Kind.KindInstallFailed, Kind.KindDownloaded, Kind.KindLanReceived],
+    },
     {
       id: 'updates',
       label: msg('transfers.historySegmentUpdates'),
       kinds: [Kind.KindUpdated, Kind.KindUpdateFailed, Kind.KindRolledBack],
     },
     { id: 'removals', label: msg('transfers.historySegmentRemovals'), kinds: [Kind.KindRemoved, Kind.KindUninstalled] },
+    { id: 'moves', label: msg('transfers.historySegmentMoves'), kinds: [Kind.KindMoved] },
   ];
 
   const uid = $props.id();
