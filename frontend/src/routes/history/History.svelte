@@ -61,9 +61,12 @@
 
   const loadFailed = $derived(!$historyLoaded && $historyLoadError != null);
   const loading = $derived(!$historyLoaded && !loadFailed);
+  // The history the page shows: none until a whole list was read. A record Go sends before that stays in
+  // the store and comes with the list, but alone it is not the history, so nothing counts or lists it.
+  const records = $derived($historyLoaded ? $history : []);
 
   const kindsFilter = $derived(segments.find((s) => s.id === segment)?.kinds);
-  const filtered = $derived(filterHistory($history, { kinds: kindsFilter, query, locale: $locale }));
+  const filtered = $derived(filterHistory(records, { kinds: kindsFilter, query, locale: $locale }));
 
   // How far "Show more" went, for the filter it was pressed under: another segment or query starts again.
   const filterKey = $derived(`${segment}\u0000${query}`);
@@ -75,7 +78,7 @@
     segments.map((s) => ({
       id: s.id,
       label: s.label,
-      count: s.kinds ? $history.filter((r) => s.kinds!.includes(r.kind)).length : $history.length,
+      count: s.kinds ? records.filter((r) => s.kinds!.includes(r.kind)).length : records.length,
     })),
   );
 
@@ -162,13 +165,13 @@
 </script>
 
 {#snippet count()}
-  <span>{msg('transfers.historyCount', { count: $history.length })}</span>
+  <span>{msg('transfers.historyCount', { count: records.length })}</span>
 {/snippet}
 
 <Page>
-  <PageHeader title={msg('transfers.historyTitle')} subtitle={msg('transfers.historySubtitle')} meta={$history.length > 0 ? count : undefined}>
+  <PageHeader title={msg('transfers.historyTitle')} subtitle={msg('transfers.historySubtitle')} meta={records.length > 0 ? count : undefined}>
     {#snippet actions()}
-      <Button variant="ghost" disabled={$history.length === 0} data-history-clear onclick={() => (clearOpen = true)}>
+      <Button variant="ghost" disabled={records.length === 0} data-history-clear onclick={() => (clearOpen = true)}>
         <Trash2 size="1.5rem" strokeWidth={1.8} />
         {msg('transfers.historyClearAction')}
       </Button>
@@ -190,7 +193,7 @@
     </div>
   {/if}
 
-  {#if $history.length === 0}
+  {#if records.length === 0}
     {#if loading}
       <EmptyState level={2} title={msg('transfers.historyLoading')} />
     {:else if !loadFailed && !retrying}
