@@ -121,6 +121,24 @@ describe('BarChart', () => {
       expect(all.map((radio) => radio.tabIndex)).toEqual([-1, -1, -1, 0]);
     });
 
+    // Around the bars the radio group or the table carries the name: a named group around them would be
+    // read first ("Weeks, group", then "Weeks, radio group").
+    it('leaves the chart box without a role or a name while the bars show, before and after the empty state', async () => {
+      const box = (root: HTMLElement) => root.querySelector('.chart-box') as HTMLElement;
+      const plain = renderDom(BarChartHarness, { buckets: DAYS });
+      expect([box(plain.container).getAttribute('role'), box(plain.container).getAttribute('aria-label')]).toEqual([null, null]);
+      expect(plain.queryAllByRole('group')).toEqual([]);
+      plain.unmount();
+      const { container, queryAllByRole, rerender } = renderDom(BarChartHarness, { buckets: DAYS, selectable: true, start: 'wed' });
+      expect([box(container).getAttribute('role'), box(container).getAttribute('aria-label')]).toEqual([null, null]);
+      expect(queryAllByRole('group')).toEqual([]);
+      await rerender({ buckets: DAYS.map((d) => ({ ...d, value: 0 })) });
+      expect([box(container).getAttribute('role'), box(container).getAttribute('aria-label')]).toEqual(['group', 'Недели']);
+      await rerender({ buckets: DAYS });
+      expect([box(container).getAttribute('role'), box(container).getAttribute('aria-label')]).toEqual([null, null]);
+      expect(queryAllByRole('group')).toEqual([]);
+    });
+
     it('chooses a pressed bar, a zero one too', async () => {
       const { container, getByTestId, user } = renderDom(BarChartHarness, { buckets: DAYS, selectable: true, start: 'wed' });
       await user.click(radios(container)[1]);
