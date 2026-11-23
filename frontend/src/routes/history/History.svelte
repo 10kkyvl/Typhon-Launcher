@@ -68,11 +68,22 @@
   const kindsFilter = $derived(segments.find((s) => s.id === segment)?.kinds);
   const filtered = $derived(filterHistory(records, { kinds: kindsFilter, query, locale: $locale }));
 
-  // How far "Show more" went, for the filter it was pressed under: another segment or query starts again.
-  const filterKey = $derived(`${segment}\u0000${query}`);
-  let paging = $state({ key: '', limit: PAGE });
-  const limit = $derived(paging.key === filterKey ? paging.limit : PAGE);
+  // How far "Show more" went. Every change of the segment or the query starts again, a change back
+  // to the filter it was pressed under included.
+  let limit = $state(PAGE);
   const shown = $derived(filtered.slice(0, limit));
+
+  function pickSegment(next: string) {
+    if (next === segment) return;
+    segment = next;
+    limit = PAGE;
+  }
+
+  function setQuery(next: string) {
+    if (next === query) return;
+    query = next;
+    limit = PAGE;
+  }
 
   const tabs = $derived(
     segments.map((s) => ({
@@ -124,7 +135,7 @@
   async function showMore() {
     const fresh = new Set(filtered.slice(shown.length, shown.length + PAGE).map((record) => record.id));
     const handOff = focusHandOff();
-    paging = { key: filterKey, limit: limit + PAGE };
+    limit += PAGE;
     const picked: { target: HTMLElement | null } = { target: null };
     await handOff(() => (picked.target = firstFresh(fresh)));
     const { target } = picked;
@@ -205,9 +216,9 @@
     {/if}
   {:else}
     <div class="toolbar">
-      <SegmentedControl options={tabs} label={msg('transfers.historySegmentLabel')} variant="pill" bind:value={segment} />
+      <SegmentedControl options={tabs} label={msg('transfers.historySegmentLabel')} variant="pill" bind:value={() => segment, pickSegment} />
       <div class="search-slot">
-        <SearchInput bind:value={query} label={msg('transfers.historySearchPlaceholder')} placeholder={msg('transfers.historySearchPlaceholder')} />
+        <SearchInput bind:value={() => query, setQuery} label={msg('transfers.historySearchPlaceholder')} placeholder={msg('transfers.historySearchPlaceholder')} />
       </div>
     </div>
 

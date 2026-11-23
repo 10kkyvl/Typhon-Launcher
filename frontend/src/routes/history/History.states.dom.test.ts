@@ -296,6 +296,25 @@ describe('History: a long history', () => {
     expect(rows()).toHaveLength(60);
   });
 
+  it('starts again from sixty when the player comes back to the segment or the search Show more was pressed under', async () => {
+    history.set(many(130, (index) => (index % 2 === 0 ? Kind.KindInstalled : Kind.KindUpdated)));
+    const { user } = renderDom(History);
+    const segment = (key: 'historySegmentAll' | 'historySegmentInstalls') => screen.getByRole('radio', { name: new RegExp(msg(`transfers.${key}`)) });
+
+    await user.click(more() as HTMLElement);
+    expect(rows()).toHaveLength(120);
+    await user.click(segment('historySegmentInstalls'));
+    await user.click(segment('historySegmentAll'));
+    expect(rows()).toHaveLength(60);
+
+    await user.type(search(), 'game');
+    await user.click(more() as HTMLElement);
+    expect(rows()).toHaveLength(120);
+    await user.type(search(), 'x');
+    await user.type(search(), '{Backspace}');
+    expect(rows()).toHaveLength(60);
+  });
+
   it('shows no Show more for a history that fits', () => {
     history.set(many(60));
     renderDom(History);
