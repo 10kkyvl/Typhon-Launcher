@@ -255,6 +255,12 @@ describe('the downloads tab: save backups', () => {
 });
 
 describe('the downloads tab: the schedule', () => {
+  it('is a group named and described by its row', () => {
+    open();
+    const editor = screen.getByRole('group', { name: msg('settings.downloadsScheduleLabel') });
+    expect(description(editor)).toBe(msg('settings.downloadsScheduleSub'));
+  });
+
   it('adds a window and writes the schedule', async () => {
     const keys = open();
     expect(screen.getByText(msg('settings.downloadsScheduleEmpty'))).toBeTruthy();
@@ -275,17 +281,27 @@ describe('the downloads tab: the schedule', () => {
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain(msg('settings.downloadsScheduleSaveError', { reason: 'locked' }));
     expect(alert.closest('[data-tone]')?.getAttribute('data-tone')).toBe('danger');
-    expect(screen.getByRole('group', { name: msg('settings.downloadsScheduleDays') })).toBeTruthy();
+    const days = screen.getByRole('group', { name: msg('settings.downloadsScheduleDays') });
+    expect(days.compareDocumentPosition(alert) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
 
 describe('the downloads tab: cloud saves', () => {
-  it('is out of reach without an account, and says an account is needed', () => {
+  it('is out of reach without an account, and says why in its description', () => {
     authState.set('unauthenticated');
     open();
     const cloud = screen.getByRole('switch', { name: msg('cloudsaves.settingsLabel') });
     expect(cloud.hasAttribute('disabled')).toBe(true);
-    expect(screen.getByText(msg('cloudsaves.settingsNeedsAccount'))).toBeTruthy();
+    expect(description(cloud)).toBe(`${msg('cloudsaves.settingsNeedsAccount')} ${msg('cloudsaves.settingsSub')}`);
+  });
+
+  it('stays in reach when on without an account, so it can be turned off, and says an account is needed', () => {
+    authState.set('unauthenticated');
+    settings.set({ ...SAVED, cloudSaves: true } as SettingsData);
+    open();
+    const cloud = screen.getByRole('switch', { name: msg('cloudsaves.settingsLabel') });
+    expect(cloud.hasAttribute('disabled')).toBe(false);
+    expect(description(cloud)).toBe(`${msg('cloudsaves.settingsSub')} ${msg('cloudsaves.settingsNeedsAccount')}`);
   });
 
   it('opens the consent dialog from the switch with an account, writing nothing yet', async () => {
@@ -301,13 +317,15 @@ describe('the downloads tab: cloud saves', () => {
     expect(saveSettingsPatch).not.toHaveBeenCalled();
   });
 
-  it('shows the cloud usage and that copies are pending', async () => {
+  it('shows the cloud usage and that copies are pending, after the switch', async () => {
     authState.set('authenticated');
     settings.set({ ...SAVED, cloudSaves: true } as SettingsData);
     open();
     cloudStatus.set({ enabled: true, signedIn: true, usedBytes: 0, quotaBytes: 0, maxBytes: 0, error: '', pending: true, games: [] });
     const usage = msg('cloudsaves.usageUnknown', { used: '0 B' });
-    expect(await screen.findByText(`${usage} · ${msg('cloudsaves.pending')}`)).toBeTruthy();
+    const line = await screen.findByText(`${usage} · ${msg('cloudsaves.pending')}`);
+    const cloud = screen.getByRole('switch', { name: msg('cloudsaves.settingsLabel') });
+    expect(cloud.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('offers to delete the cloud copies again after the deletion failed, the switch kept in its place', async () => {
@@ -323,14 +341,44 @@ describe('the downloads tab: cloud saves', () => {
 
     await vi.waitFor(() => expect(saveSettingsPatch).toHaveBeenCalledExactlyOnceWith({ cloudSaves: false }));
     const retry = await screen.findByRole('button', { name: msg('cloudsaves.retryForget') });
-    expect(screen.getByText(msg('cloudsaves.retryForgetHint'))).toBeTruthy();
+    expect(description(cloud)).toBe(`${msg('cloudsaves.settingsSub')} ${msg('cloudsaves.retryForgetHint')}`);
     expect(cloud.isConnected).toBe(true);
     expect(cloud.getAttribute('aria-checked')).toBe('false');
+    // The switch keeps its place: the retry comes after it, never in front of it.
+    expect(cloud.compareDocumentPosition(retry) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
-    vi.mocked(cloudForget).mockResolvedValueOnce();
-    await keys.click(retry);
+    let answer: () => void = () => {};
+    vi.mocked(cloudForget).mockImplementationOnce(() => new Promise<void>((resolve) => (answer = resolve)));
+    retry.focus();
+    await keys.keyboard('{Enter}');
     await vi.waitFor(() => expect(cloudForget).toHaveBeenCalledTimes(2));
+    expect(retry.getAttribute('aria-busy')).toBe('true');
+    expect(document.activeElement).toBe(retry);
+
+    answer();
     await vi.waitFor(() => expect(screen.queryByRole('button', { name: msg('cloudsaves.retryForget') })).toBeNull());
+    await vi.waitFor(() => expect(document.activeElement).toBe(cloud));
+  });
+});
+
+describe('the downloads tab: a retry of the cloud deletion that fails again', () => {
+  it('keeps the retry and focus on it', async () => {
+    authState.set('authenticated');
+    settings.set({ ...SAVED, cloudSaves: true } as SettingsData);
+    vi.mocked(cloudForget).mockRejectedValue(new Error('down'));
+    const keys = open();
+    await keys.click(screen.getByRole('switch', { name: msg('cloudsaves.settingsLabel') }));
+    const dialog = await screen.findByRole('dialog', { name: msg('cloudsaves.disableTitle') });
+    await keys.click(within(dialog).getByRole('button', { name: msg('cloudsaves.disableDelete') }));
+    const retry = await screen.findByRole('button', { name: msg('cloudsaves.retryForget') });
+
+    retry.focus();
+    await keys.keyboard('{Enter}');
+
+    await vi.waitFor(() => expect(cloudForget).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(retry.hasAttribute('aria-busy')).toBe(false));
+    expect(retry.isConnected).toBe(true);
+    expect(document.activeElement).toBe(retry);
   });
 });
 
@@ -369,14 +417,13 @@ describe('the downloads tab: beta versions', () => {
     expect(requestCheck).not.toHaveBeenCalled();
   });
 
-  // The template drops the space before the dot: the two words run together in the name.
   it('names the channel in the label while the launcher is on beta', () => {
     authState.set('authenticated');
     currentUser.set(TESTER);
     settings.set({ ...SAVED, updateBetaChannel: true } as SettingsData);
     selfUpdateStatus.set({ state: 'idle', currentVersion: '2.0.0-beta.1', channel: 'beta' });
     open();
-    const name = `${msg('settings.downloadsBetaLabel')}· ${msg('settings.downloadsBetaChannelMark')}`;
+    const name = `${msg('settings.downloadsBetaLabel')} · ${msg('settings.downloadsBetaChannelMark')}`;
     expect(screen.getByRole('switch', { name }).getAttribute('aria-checked')).toBe('true');
   });
 });

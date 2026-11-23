@@ -23,12 +23,14 @@
   import { toast } from '../../lib/stores/toasts';
   import { authState, currentUser } from '../../lib/stores/user';
   import { bytesSize } from '../../lib/utils/format';
+  import { focusHandOff } from '../../lib/utils/focusHandOff';
   import type { SettingsPage } from './settingsPage.svelte';
 
   // The downloads tab: speed, schedule and seeding, the network, updates and saves, installation and
   // the emulators. Cloud saves and the schedule's save error are the page's: they outlive a switch of
   // tabs, and the cloud dialogs are the page's.
-  let { page, uid }: { page: SettingsPage; uid: string } = $props();
+  // `uid` is what the page still hands every tab; the rows here make their own ids.
+  let { page }: { page: SettingsPage; uid?: string } = $props();
 
   const current = $derived($settings);
   const accountReady = $derived($authState === 'authenticated');
@@ -42,16 +44,40 @@
     return msg('cloudsaves.usageUnknown', { used: bytesSize(status.usedBytes) });
   });
 
+  const cloudLine = $derived(
+    cloudUsage && $cloudStatus?.pending ? msg('settings.downloadsCloudUsagePending', { usage: cloudUsage, pending: msg('cloudsaves.pending') }) : cloudUsage,
+  );
+  // The page clears its failure as a retry starts: the retry stays, busy, until the answer, and goes
+  // only once it succeeds, focus held on it then moving to the switch beside it.
+  let retrying = $state(false);
+  const forgetLeft = $derived((page.cloudForgetFailed || retrying) && !current?.cloudSaves);
+  const cloudOff = $derived(!accountReady && !current?.cloudSaves);
+
+  async function retryForget() {
+    if (retrying) return;
+    const handOff = focusHandOff();
+    retrying = true;
+    try {
+      await page.retryCloudForget();
+    } finally {
+      retrying = false;
+    }
+    await handOff(() => document.getElementById(`${fieldId}-cloud`));
+  }
+
   function set(patch: Partial<Settings>) {
     updateSettings(patch);
   }
 
   const fieldId = $props.id();
-  const labelId = (name: string) => `${uid}-${name}-label`;
-  const subId = (name: string) => `${uid}-${name}-sub`;
 
   const betaShown = $derived(betaToggleShown($authState, $currentUser));
   const onBeta = $derived(isBeta($selfUpdateStatus.channel) || isBeta(page.appInfo?.channel));
+  const betaLabel = $derived(
+    onBeta
+      ? msg('settings.downloadsBetaLabelMarked', { label: msg('settings.downloadsBetaLabel'), mark: msg('settings.downloadsBetaChannelMark') })
+      : msg('settings.downloadsBetaLabel'),
+  );
 
   async function setBetaChannel(value: boolean) {
     const saved = await updateSettingsReporting({ updateBetaChannel: value }, () => toast(msg('state.settingsSaveFailed'), 'danger'));
@@ -141,7 +167,6 @@
 <div class="settings-grid">
   <div class="settings-column">
     <Card title={msg('settings.downloadsTab')}>
-      <div class="rows">
         <SettingsRow label={msg('settings.downloadsRateLimitLabel')} hint={msg('settings.downloadsRateLimitSub')}>
           {#snippet children({ labelId, hintId })}
             <RateLimitInput labelledby={labelId} describedby={hintId} value={current?.downloadRateLimit ?? 0} presets={downloadLimitPresets} onchange={(bytes) => set({ downloadRateLimit: bytes })} />
@@ -169,16 +194,12 @@
             {/snippet}
           </SettingsRow>
         {/if}
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label">{msg('settings.downloadsScheduleLabel')}</span>
-            <span class="row-sub">{msg('settings.downloadsScheduleSub')}</span>
+        <SettingsRow label={msg('settings.downloadsScheduleLabel')} hint={msg('settings.downloadsScheduleSub')}>
+          {#snippet below({ labelId, hintId })}
+            <ScheduleEditor windows={current?.downloadSchedule ?? []} labelledby={labelId} describedby={hintId} onchange={page.setSchedule} />
             {#if page.scheduleError}<div class="message"><Notice tone="danger" compact>{page.scheduleError}</Notice></div>{/if}
-          </div>
-          <div class="schedule-body">
-            <ScheduleEditor windows={current?.downloadSchedule ?? []} onchange={page.setSchedule} />
-          </div>
-        </div>
+          {/snippet}
+        </SettingsRow>
         <SettingsRow label={msg('settings.downloadsMaxActiveLabel')} hint={msg('settings.downloadsMaxActiveSub')}>
           {#snippet children({ labelId, hintId })}
             <Select labelledby={labelId} describedby={hintId} value={maxActiveValue} width="20rem" options={maxActiveDownloadOptions} onchange={(id) => set({ maxActiveDownloads: Number(id) })} />
@@ -199,13 +220,11 @@
             <Select labelledby={labelId} describedby={hintId} value={sourceRefreshInterval} width="20rem" options={sourceRefreshOptions} onchange={(id) => set({ sourceRefreshInterval: id })} />
           {/snippet}
         </SettingsRow>
-      </div>
     </Card>
 
     <NetworkSettingsCard />
 
     <Card title={msg('settings.downloadsUpdatesCardTitle')}>
-      <div class="rows">
         <SettingsRow label={msg('settings.downloadsUpdateCheckAutoLabel')} hint={msg('settings.downloadsUpdateCheckAutoSub')}>
           {#snippet children({ labelId, hintId })}
             <Toggle checked={current?.updateCheckAutomatically ?? true} labelledby={labelId} describedby={hintId} onchange={(v) => set({ updateCheckAutomatically: v })} />
@@ -217,18 +236,11 @@
           {/snippet}
         </SettingsRow>
         {#if betaShown}
-          <div class="row">
-            <div class="row-text">
-              <span class="row-label" id={labelId('downloads-beta')}>{msg('settings.downloadsBetaLabel')}{#if onBeta} · {msg('settings.downloadsBetaChannelMark')}{/if}</span>
-              <span class="row-sub" id={subId('downloads-beta')}>{msg('settings.downloadsBetaSub')}</span>
-            </div>
-            <Toggle
-              checked={current?.updateBetaChannel ?? false}
-              labelledby={labelId('downloads-beta')}
-              describedby={subId('downloads-beta')}
-              onchange={setBetaChannel}
-            />
-          </div>
+          <SettingsRow label={betaLabel} hint={msg('settings.downloadsBetaSub')}>
+            {#snippet children({ labelId, hintId })}
+              <Toggle checked={current?.updateBetaChannel ?? false} labelledby={labelId} describedby={hintId} onchange={setBetaChannel} />
+            {/snippet}
+          </SettingsRow>
         {/if}
         <StableOffer />
         <SettingsRow label={msg('settings.downloadsSaveBackupLabel')} hint={msg('settings.downloadsSaveBackupSub')}>
@@ -253,32 +265,22 @@
             {/snippet}
           </SettingsRow>
         {/if}
-        <div class="row">
-          <div class="row-text">
-            <span class="row-label" id={labelId('settings')}>{msg('cloudsaves.settingsLabel')}</span>
-            <span class="row-sub" id={subId('settings')}>{msg('cloudsaves.settingsSub')}</span>
-            {#if !accountReady}
-              <span class="row-sub">{msg('cloudsaves.settingsNeedsAccount')}</span>
-            {:else if cloudUsage}
-              <span class="row-sub">{cloudUsage}{$cloudStatus?.pending ? ` · ${msg('cloudsaves.pending')}` : ''}</span>
+        <SettingsRow
+          label={msg('cloudsaves.settingsLabel')}
+          hint={msg('cloudsaves.settingsSub')}
+          disabledReason={cloudOff ? msg('cloudsaves.settingsNeedsAccount') : undefined}
+          note={!accountReady && !cloudOff ? msg('cloudsaves.settingsNeedsAccount') : forgetLeft ? msg('cloudsaves.retryForgetHint') : undefined}
+        >
+          {#snippet children({ labelId, hintId, disabled })}
+            <Toggle id="{fieldId}-cloud" checked={current?.cloudSaves ?? false} labelledby={labelId} describedby={hintId} {disabled} onchange={page.changeCloudSaves} />
+          {/snippet}
+          {#snippet below({ disabled })}
+            {#if accountReady && cloudLine}<p class="cloud-line">{cloudLine}</p>{/if}
+            {#if forgetLeft}
+              <Button size="sm" variant="danger" {disabled} busy={retrying || page.cloudBusy} onclick={retryForget}>{msg('cloudsaves.retryForget')}</Button>
             {/if}
-            {#if page.cloudForgetFailed && !current?.cloudSaves}
-              <span class="row-sub">{msg('cloudsaves.retryForgetHint')}</span>
-            {/if}
-          </div>
-          {#if page.cloudForgetFailed && !current?.cloudSaves}
-            <Button size="sm" variant="danger" disabled={page.cloudBusy || !accountReady} onclick={page.retryCloudForget}>
-              {msg('cloudsaves.retryForget')}
-            </Button>
-          {/if}
-          <Toggle
-            checked={current?.cloudSaves ?? false}
-            labelledby={labelId('settings')}
-            describedby={subId('settings')}
-            disabled={!accountReady && !current?.cloudSaves}
-            onchange={page.changeCloudSaves}
-          />
-        </div>
+          {/snippet}
+        </SettingsRow>
         <SettingsRow label={msg('settings.downloadsKeepPreviousLabel')} hint={msg('settings.downloadsKeepPreviousSub')}>
           {#snippet children({ labelId, hintId })}
             <Select labelledby={labelId} describedby={hintId} value={keepPreviousVersion} width="28rem" options={keepPreviousOptions} onchange={(id) => set({ keepPreviousVersion: id })} />
@@ -289,12 +291,10 @@
             <Toggle checked={current?.allowTorrentReuse ?? true} labelledby={labelId} describedby={hintId} onchange={(v) => set({ allowTorrentReuse: v })} />
           {/snippet}
         </SettingsRow>
-      </div>
     </Card>
   </div>
   <div class="settings-column">
     <Card title={msg('settings.downloadsInstallCardTitle')}>
-      <div class="rows">
         <SettingsRow label={msg('settings.downloadsAfterInstallLabel')} hint={msg('settings.downloadsAfterInstallSub')}>
           {#snippet children({ labelId, hintId })}
             <Select labelledby={labelId} describedby={hintId} value={cleanupPolicy} width="26rem" options={cleanupPolicyOptions} onchange={(id) => set({ installCleanupPolicy: id })} />
@@ -337,7 +337,6 @@
             <Toggle checked={current?.installVerifyRepack ?? false} labelledby={labelId} describedby={hintId} onchange={(v) => set({ installVerifyRepack: v })} />
           {/snippet}
         </SettingsRow>
-      </div>
     </Card>
 
     <EmulatorsCard />
@@ -345,46 +344,13 @@
 </div>
 
 <style>
-  .rows {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-6);
-    padding: 1.3rem 0;
-  }
-
-  .row + .row {
-    border-top: 1px solid var(--border);
-  }
-
-  .row-text {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-  }
-
-  .row-label {
-    font-size: var(--font-md);
-    font-weight: 500;
-  }
-
-  .row-sub {
-    font-size: var(--font-xs);
-    color: var(--text-3);
-  }
-
-  .schedule-body {
-    flex: 1 1 100%;
-    min-width: 0;
-  }
-
   .message {
     margin-top: var(--space-2);
+  }
+
+  .cloud-line {
+    margin: 0 0 var(--space-2);
+    font-size: var(--font-xs);
+    color: var(--text-3);
   }
 </style>
