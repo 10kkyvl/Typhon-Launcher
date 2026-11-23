@@ -5,6 +5,7 @@ import { sourceErrorText } from '../../lib/sources/sourceErrors';
 import { sourceProgress } from '../../lib/stores/sourceProgress';
 import { sources } from '../../lib/stores/sources';
 import { user } from '../../lib/testing/dom';
+import { describedControls } from '../../lib/testing/hints';
 import { ruleBody, styleOf } from '../../lib/testing/css';
 import { clockTime, longDate, relativeDate } from '../../lib/utils/format';
 import Sources from './Sources.svelte';
@@ -141,7 +142,7 @@ describe('Sources: when a source was last refreshed', () => {
     show();
 
     expect(words(rowOf('Main feed'))).toContain(relativeDate(at));
-    expect(words(rowOf('Mirror'))).toContain(relativeDate(null));
+    expect(words(rowOf('Mirror'))).toContain(msg('transfers.sourcesNeverUpdated'));
   });
 
   // R3: the exact time is text for assistive tech and a hint on hover, as History says a record's time.
@@ -154,7 +155,7 @@ describe('Sources: when a source was last refreshed', () => {
     const exact = msg('transfers.sourcesExactTime', { date: longDate(date), time: clockTime(date) });
     const time = rowOf('Main feed').querySelector('time');
     expect(time?.getAttribute('datetime')).toBe(at);
-    expect(time?.querySelector('.sr-only')?.textContent).toBe(exact);
+    expect(time?.querySelector('.sr-only')?.textContent).toBe(msg('transfers.sourcesUpdatedAt', { when: exact }));
     expect(time?.tabIndex).toBe(-1);
 
     await user().hover(time as HTMLElement);
@@ -199,11 +200,11 @@ describe('Sources: the counts of a row', () => {
     show();
 
     const main = within(rowOf('Main feed')).getByRole('button', { name: msg('transfers.sourcesMatchReviewName', { matched: '7', review: '2' }) });
-    expect(words(main)).toBe('7 +2');
+    expect(words(main)).toBe(`${msg('transfers.sourcesMatchName', { matched: '7' })} ${msg('transfers.sourcesReviewCount', { review: '2' })}`);
     const mirror = within(rowOf('Mirror')).getByRole('button', { name: msg('transfers.sourcesMatchName', { matched: '3' }) });
-    expect(words(mirror)).toBe('3');
-    expect(words(rowOf('Main feed'))).toContain('10');
-    expect(words(rowOf('Mirror'))).toContain('4');
+    expect(words(mirror)).toBe(msg('transfers.sourcesMatchName', { matched: '3' }));
+    expect(words(rowOf('Main feed'))).toContain(msg('transfers.sourcesEntriesCount', { count: 10 }));
+    expect(words(rowOf('Mirror'))).toContain(msg('transfers.sourcesEntriesCount', { count: 4 }));
   });
 
   it('open the source’s details', async () => {
@@ -213,5 +214,58 @@ describe('Sources: the counts of a row', () => {
     await user().click(within(rowOf('Main feed')).getByRole('button', { name: msg('transfers.sourcesMatchReviewName', { matched: '7', review: '2' }) }));
 
     expect(await screen.findByRole('dialog', { name: 'Main feed' })).toBeTruthy();
+  });
+});
+
+// R5: a list of rows, as Downloads and History draw theirs: each source one item, its name the row's
+// main control, and what each number means said in the row instead of by a header no cell is tied to.
+describe('Sources: the list', () => {
+  it('R5: is a list named by the page, one item per source', () => {
+    sources.set([MAIN, MIRROR]);
+    show();
+
+    const list = screen.getByRole('list', { name: msg('transfers.sourcesTitle') });
+    expect(within(list).getAllByRole('listitem').map((item) => item.getAttribute('data-source-row'))).toEqual(['s1', 's2']);
+  });
+
+  it('R5: draws no header row of column names', () => {
+    sources.set([MAIN]);
+    show();
+
+    for (const key of ['transfers.sourcesColName', 'transfers.sourcesColStatus', 'transfers.sourcesColUpdated', 'transfers.sourcesColEntries', 'transfers.sourcesColMatched'] as const) {
+      expect(screen.queryByText(msg(key)), key).toBeNull();
+    }
+  });
+
+  it('R5: the source’s name is the row’s first control, named by the name alone, and opens the details', async () => {
+    sources.set([MAIN, MIRROR]);
+    show();
+
+    const name = within(rowOf('Mirror')).getByRole('button', { name: 'Mirror' });
+    expect(name.classList.contains('text-link')).toBe(true);
+    expect(rowOf('Mirror').querySelector('button')).toBe(name);
+
+    await user().click(name);
+
+    expect(await screen.findByRole('dialog', { name: 'Mirror' })).toBeTruthy();
+  });
+
+  it('R5: says when the source was refreshed in words of its own', () => {
+    const at = '2026-11-20T09:30:00Z';
+    sources.set([source({ lastUpdatedAt: at }), source({ id: 's2', name: 'Mirror' })]);
+    show();
+
+    const time = rowOf('Main feed').querySelector('time [aria-hidden="true"]');
+    expect(words(time)).toBe(msg('transfers.sourcesUpdatedAt', { when: relativeDate(at) }));
+    expect(words(rowOf('Mirror'))).toContain(msg('transfers.sourcesNeverUpdated'));
+  });
+
+  it('R5: the insecure mark is a picture beside the name; the warning is the name’s description', () => {
+    sources.set([source({ url: 'http://example.invalid/feed.json', insecure: true })]);
+    show();
+
+    const name = within(rowOf('Main feed')).getByRole('button', { name: 'Main feed' });
+    expect(describedControls(document, msg('transfers.sourcesInsecureTooltip'))).toEqual([name]);
+    expect(rowOf('Main feed').querySelector('.insecure')?.getAttribute('aria-hidden')).toBe('true');
   });
 });

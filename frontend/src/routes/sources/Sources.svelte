@@ -184,15 +184,7 @@
       <EmptyState level={2} title={msg('transfers.sourcesEmptyFilteredTitle')} description={msg('transfers.sourcesEmptyFilteredDescription')} />
     {:else}
       {#key statusFilter}
-      <div class="table" data-source-list bind:this={list}>
-        <div class="thead">
-          <span class="th">{msg('transfers.sourcesColName')}</span>
-          <span class="th">{msg('transfers.sourcesColStatus')}</span>
-          <span class="th">{msg('transfers.sourcesColUpdated')}</span>
-          <span class="th nums">{msg('transfers.sourcesColEntries')}</span>
-          <span class="th nums">{msg('transfers.sourcesColMatched')}</span>
-          <span class="th"></span>
-        </div>
+      <ul class="list" aria-label={msg('transfers.sourcesTitle')} data-source-list bind:this={list}>
         {#each filteredSources as source (source.id)}
           <SourceRow
             {source}
@@ -201,7 +193,7 @@
             onaction={(action) => onSourceMenu(source, action)}
           />
         {/each}
-      </div>
+      </ul>
       {/key}
     {/if}
   {/if}
@@ -233,15 +225,17 @@
     margin-bottom: var(--space-5);
   }
 
-  .table {
-    --source-columns: minmax(24rem, 1.6fr) 16rem 11rem 9.5rem 12rem 4rem;
+  .list {
     display: flex;
     flex-direction: column;
     max-width: 140rem;
-    margin-top: var(--space-5);
+    margin: var(--space-5) 0 0;
+    padding: 0;
+    list-style: none;
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     background: var(--surface-2);
+    overflow: hidden;
     animation: rise-in var(--dur-panel) var(--ease) backwards;
   }
 
@@ -251,38 +245,5 @@
     gap: 0.4rem;
     min-width: 12rem;
     text-align: left;
-  }
-
-  .thead {
-    display: grid;
-    grid-template-columns: var(--source-columns);
-    align-items: center;
-    gap: var(--space-5);
-    padding: 1rem 1.2rem;
-  }
-
-  .th {
-    font-size: 1.2rem;
-    font-weight: 500;
-    color: var(--text-3);
-    white-space: nowrap;
-  }
-
-  .th.nums {
-    text-align: right;
-  }
-
-  @media (max-width: 1300px) {
-    .load-failed {
-    margin-bottom: var(--space-5);
-  }
-
-  .table {
-      --source-columns: minmax(20rem, 1.6fr) 15rem 10rem 12rem 4rem;
-    }
-
-    .th:nth-child(4) {
-      display: none;
-    }
   }
 </style>

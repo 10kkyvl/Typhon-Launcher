@@ -14,7 +14,11 @@
   import { sourceWarningText } from '../../lib/sources/sourceWarnings';
   import { clockTime, formatCount, longDate, relativeDate, truncateMiddle } from '../../lib/utils/format';
 
-  /** One source on the Sources screen: what it is, its state, its counts and its menu. */
+  /**
+   * One source on the Sources screen, an item of its list: what it is and where it is read from, why
+   * its last refresh failed, its counts, its state and when it was refreshed, and its menu. The name is
+   * the row's lead control and opens the details; every number says in the row what it counts.
+   */
   let {
     source,
     live,
@@ -94,97 +98,103 @@
   const badge = $derived(statusBadgeFor(source.status));
   const health = $derived(healthMetaFor(source.health));
   const when = $derived(refreshedAt(source.lastUpdatedAt));
+  const matched = $derived(formatCount(source.matched));
+  const review = $derived(formatCount(source.review));
 </script>
 
-<div class="row" class:disabled={!source.enabled} data-source-row={source.id}>
-  {#snippet details()}
-    <button class="source" data-row-control="open" onclick={() => onopen(source.id)}>
-      <span class="type-icon">
-        {#if source.type === 'file'}
-          <FileText size="1.7rem" strokeWidth={1.8} />
-        {:else}
-          <Globe size="1.7rem" strokeWidth={1.8} />
-        {/if}
-      </span>
-      <span class="source-text">
-        <span class="source-name">
-          {source.name}
-          {#if source.insecure}
-            <span class="insecure"><ShieldAlert size="1.4rem" strokeWidth={1.8} /></span>
-          {/if}
-        </span>
-        <span class="source-url">{sourceLocation(source)}</span>
-        {#if source.lastError}
-          <span class="source-error">{sourceErrorText(source.lastError)}</span>
-        {/if}
-      </span>
-    </button>
-  {/snippet}
-  {#if source.insecure}
-    <Tooltip text={msg('transfers.sourcesInsecureTooltip')}>{@render details()}</Tooltip>
-  {:else}
-    {@render details()}
-  {/if}
-  <span class="cell status">
-    {#if live}
-      {@const percent = Math.round(progressPercent(live))}
-      <span class="live">
-        <span class="live-label">{stageLabel(live)}</span>
-        <span class="live-bar">
-          <ProgressBar value={percent} indeterminate={isIndeterminate(live)} height={4} label={source.name} valueText={msg('transfers.sourcesStageProgress', { stage: stageLabel(live), percent })} />
-          {#if !isIndeterminate(live)}<span class="live-percent">{percent}%</span>{/if}
-        </span>
-      </span>
+{#snippet open()}
+  <TextLink tone="plain" data-row-control="open" onclick={() => onopen(source.id)}>{source.name}</TextLink>
+{/snippet}
+
+<li class="row" class:off={!source.enabled} data-source-row={source.id}>
+  <span class="type-icon" aria-hidden="true">
+    {#if source.type === 'file'}
+      <FileText size="1.7rem" strokeWidth={1.8} />
     {:else}
-      <StatusBadge kind={badge.kind} label={badge.label} plain />
-      {#if source.status === 'updating'}
-        <Spinner size="sm" />
+      <Globe size="1.7rem" strokeWidth={1.8} />
+    {/if}
+  </span>
+
+  <div class="main">
+    <p class="name">
+      {#if source.insecure}
+        <Tooltip text={msg('transfers.sourcesInsecureTooltip')}>{@render open()}</Tooltip>
+        <span class="insecure" aria-hidden="true"><ShieldAlert size="1.4rem" strokeWidth={1.8} /></span>
+      {:else}
+        {@render open()}
       {/if}
-    {/if}
+    </p>
+    <p class="source-url">{sourceLocation(source)}</p>
     {#if source.lastError}
-      <IconButton size="sm" data-row-control="mark" label={msg('common.error')} hint={truncateMiddle(sourceErrorText(source.lastError), 90)} onclick={() => onopen(source.id)}>
-        <span class="mark danger"><CircleAlert size="1.5rem" strokeWidth={1.8} /></span>
-      </IconButton>
-    {:else if source.health !== 'healthy'}
-      {@const warnings = source.warnings?.length ? source.warnings.map(sourceWarningText).join('; ') : ''}
-      <IconButton size="sm" data-row-control="mark" label={health.label} hint={warnings ? msg('transfers.sourcesHealthHint', { label: health.label, warnings }) : undefined} onclick={() => onopen(source.id)}>
-        <span class="mark {health.kind}"><health.icon size="1.5rem" strokeWidth={1.8} /></span>
-      </IconButton>
+      <p class="source-error">{sourceErrorText(source.lastError)}</p>
     {/if}
-  </span>
-  <span class="cell">
-    {#if when}
-      <!-- The exact time goes to assistive tech as text and to the pointer as a hint; the time element
-           takes focus only from the pointer, so the row adds no Tab stop for it. -->
-      <Tooltip text={when.exact} describe={false}>
-        <time datetime={source.lastUpdatedAt} tabindex="-1"><span aria-hidden="true">{when.words}</span><span class="sr-only">{when.exact}</span></time>
+    <p class="facts">
+      <span>{msg('transfers.sourcesEntriesCount', { count: source.entries })}</span>
+      <Tooltip text={msg('transfers.sourcesMatchTooltip', { matched, review, unmatched: formatCount(source.unmatched) })}>
+        <TextLink
+          data-row-control="counts"
+          aria-label={source.review > 0 ? msg('transfers.sourcesMatchReviewName', { matched, review }) : msg('transfers.sourcesMatchName', { matched })}
+          onclick={() => onopen(source.id)}
+        >
+          <!-- Inline, with a no-break space between: the link's underline draws on inline boxes only. -->
+          <span class="count">{msg('transfers.sourcesMatchName', { matched })}</span>{#if source.review > 0}&nbsp;<span class="count review">{msg('transfers.sourcesReviewCount', { review })}</span>{/if}
+        </TextLink>
       </Tooltip>
-    {:else}
-      {relativeDate(source.lastUpdatedAt)}
-    {/if}
-  </span>
-  <span class="cell nums">{formatCount(source.entries)}</span>
-  <span class="cell nums counts">
-    <Tooltip
-      text={msg('transfers.sourcesMatchTooltip', {
-        matched: formatCount(source.matched),
-        review: formatCount(source.review),
-        unmatched: formatCount(source.unmatched),
-      })}
-    >
-      <TextLink
-        data-row-control="counts"
-        aria-label={source.review > 0
-          ? msg('transfers.sourcesMatchReviewName', { matched: formatCount(source.matched), review: formatCount(source.review) })
-          : msg('transfers.sourcesMatchName', { matched: formatCount(source.matched) })}
-        onclick={() => onopen(source.id)}
-      >
-        <!-- Inline, with a no-break space between: the link's underline draws on inline boxes only. -->
-        <span class="count">{formatCount(source.matched)}</span>{#if source.review > 0}&nbsp;<span class="count review">+{formatCount(source.review)}</span>{/if}
-      </TextLink>
-    </Tooltip>
-  </span>
-  <span class="cell menu-cell">
+    </p>
+  </div>
+
+  <div class="state">
+    <div class="status">
+      {#if live}
+        {@const percent = Math.round(progressPercent(live))}
+        <span class="live">
+          <span class="live-label">{stageLabel(live)}</span>
+          <span class="live-bar">
+            <ProgressBar value={percent} indeterminate={isIndeterminate(live)} height={4} label={source.name} valueText={msg('transfers.sourcesStageProgress', { stage: stageLabel(live), percent })} />
+            {#if !isIndeterminate(live)}<span class="live-percent">{percent}%</span>{/if}
+          </span>
+        </span>
+      {:else}
+        <StatusBadge kind={badge.kind} label={badge.label} plain />
+        {#if source.status === 'updating'}
+          <Spinner size="sm" />
+        {/if}
+      {/if}
+      {#if source.lastError}
+        <IconButton size="sm" data-row-control="mark" label={msg('common.error')} hint={truncateMiddle(sourceErrorText(source.lastError), 90)} onclick={() => onopen(source.id)}>
+          <span class="mark danger"><CircleAlert size="1.5rem" strokeWidth={1.8} /></span>
+        </IconButton>
+      {:else if source.health !== 'healthy'}
+        {@const warnings = source.warnings?.length ? source.warnings.map(sourceWarningText).join('; ') : ''}
+        <IconButton
+          size="sm"
+          data-row-control="mark"
+          label={health.label}
+          hint={warnings ? msg('transfers.sourcesHealthHint', { label: health.label, warnings }) : undefined}
+          onclick={() => onopen(source.id)}
+        >
+          <span class="mark {health.kind}"><health.icon size="1.5rem" strokeWidth={1.8} /></span>
+        </IconButton>
+      {/if}
+    </div>
+    <p class="when">
+      {#if when}
+        <!-- The exact time goes to assistive tech as text and to the pointer as a hint; the time element
+             takes focus only from the pointer, so the row adds no Tab stop for it. -->
+        <Tooltip text={when.exact} describe={false}>
+          <time datetime={source.lastUpdatedAt} tabindex="-1"
+            ><span aria-hidden="true">{msg('transfers.sourcesUpdatedAt', { when: when.words })}</span><span class="sr-only"
+              >{msg('transfers.sourcesUpdatedAt', { when: when.exact })}</span
+            ></time
+          >
+        </Tooltip>
+      {:else}
+        {msg('transfers.sourcesNeverUpdated')}
+      {/if}
+    </p>
+  </div>
+
+  <div class="actions">
     <DropdownMenu items={sourceMenu(source)} onselect={onaction}>
       {#snippet trigger({ props })}
         <IconButton {...props} data-row-control="menu" label={msg('transfers.sourcesMenuFor', { name: source.name })} size="sm">
@@ -192,12 +202,76 @@
         </IconButton>
       {/snippet}
     </DropdownMenu>
-  </span>
-</div>
+  </div>
+</li>
 
 <style>
-  .row:last-child {
-    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  .row {
+    display: grid;
+    grid-template-columns: var(--row-thumb-w) minmax(0, 1fr) minmax(16rem, 22rem) auto;
+    align-items: center;
+    gap: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    transition: background var(--dur) var(--ease);
+  }
+
+  .row:not(:first-child) {
+    border-top: 1px solid var(--border);
+  }
+
+  .row:hover {
+    background: var(--hover);
+  }
+
+  .type-icon {
+    display: grid;
+    place-items: center;
+    width: var(--row-thumb-w);
+    height: var(--row-thumb-w);
+    border-radius: var(--radius-md);
+    background: var(--surface-3);
+    color: var(--text-2);
+  }
+
+  .main,
+  .state {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    min-width: 0;
+  }
+
+  .main p,
+  .state p {
+    margin: 0;
+  }
+
+  /* Shown whole, wrapping in the row: an ellipsis would hide words that no keyboard could reach. */
+  .name {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--font-md);
+    font-weight: 500;
+    color: var(--text);
+    overflow-wrap: anywhere;
+  }
+
+  .row.off .name,
+  .row.off .facts {
+    color: var(--text-3);
+  }
+
+  .insecure {
+    display: inline-flex;
+    color: var(--warning);
+  }
+
+  .source-url {
+    font-size: var(--font-xs);
+    color: var(--text-3);
+    overflow-wrap: anywhere;
   }
 
   .source-error {
@@ -206,10 +280,35 @@
     overflow-wrap: anywhere;
   }
 
+  .facts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-1) var(--space-3);
+    font-size: var(--font-xs);
+    color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .count {
+    white-space: nowrap;
+  }
+
+  .count.review {
+    color: var(--warning);
+  }
+
+  .status {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: var(--space-8);
+  }
+
   .live {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: var(--space-1);
     min-width: 0;
     width: 100%;
   }
@@ -217,8 +316,7 @@
   .live-label {
     font-size: var(--font-xs);
     color: var(--text-2);
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
   }
 
   .live-bar {
@@ -234,103 +332,9 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* The columns are the table's (Sources.svelte), shared with its header row; every row draws the
-     line above it, the header's included. */
-  .row {
-    display: grid;
-    grid-template-columns: var(--source-columns);
-    align-items: center;
-    gap: var(--space-5);
-    padding: 1.2rem 1.2rem;
-    border-top: 1px solid var(--border);
-    transition: background var(--dur) var(--ease);
-  }
-
-  .row:hover {
-    background: var(--hover);
-  }
-
-  .row.disabled .source-name,
-  .row.disabled .cell {
-    color: var(--text-3);
-  }
-
-  .source {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    min-width: 0;
-    text-align: left;
-  }
-
-  .type-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 3.6rem;
-    height: 3.6rem;
-    flex-shrink: 0;
-    border-radius: var(--radius-md);
-    background: var(--surface-3);
-    color: var(--text-2);
-  }
-
-  .source-text {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    min-width: 0;
-  }
-
-  .insecure {
-    display: inline-flex;
-    align-items: center;
-    color: var(--warning);
-  }
-
-  .source-name {
-    font-size: var(--font-md);
-    font-weight: 500;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    transition: color var(--dur) var(--ease);
-  }
-
-  .source:hover .source-name {
-    color: var(--accent-text);
-  }
-
-  .source-url {
+  .when {
     font-size: var(--font-xs);
     color: var(--text-3);
-    overflow-wrap: anywhere;
-  }
-
-  .cell {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.6rem;
-    min-width: 0;
-    font-size: var(--font-sm);
-    color: var(--text-2);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .cell.status,
-  .cell.counts {
-    overflow: visible;
-  }
-
-  /* The menu button's focus ring is drawn outside it. */
-  .cell.menu-cell {
-    overflow: visible;
-  }
-
-  .cell.nums {
-    justify-content: flex-end;
     font-variant-numeric: tabular-nums;
   }
 
@@ -346,23 +350,8 @@
     color: var(--warning);
   }
 
-  .count {
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-
-  .count.review {
-    font-size: var(--font-xs);
-    color: var(--warning);
-  }
-
-  .menu-cell {
-    justify-self: end;
-  }
-
-  @media (max-width: 1300px) {
-    .cell.nums:not(.counts) {
-      display: none;
-    }
+  .actions {
+    display: flex;
+    align-items: center;
   }
 </style>
