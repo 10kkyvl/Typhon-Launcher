@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -859,6 +860,53 @@ func TestARefusedRemovalEntryDoesNotSupersedeAValidOne(t *testing.T) {
 			})
 		}
 	}
+}
+
+// An older removal of the game whose folder cannot be deleted stays in the
+// journal for the next start; it is older all the same, and the newest entry
+// settles the card as the player last asked.
+func TestNewestRemovalSettlesTheCardWhileAnOlderOneStaysPending(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("a folder the test cannot delete from is made with unix permissions")
+	}
+	dir := t.TempDir()
+	r := newJournalRig(t, dir, &fakeRegistrar{})
+	game := gameDir(t, "Game")
+	putOwnedCard(t, r.registrar, "a", game)
+	older := game + removingSuffix
+	newer := game + removingSuffix + "-1"
+	if err := os.Rename(game, newer); err != nil {
+		t.Fatal(err)
+	}
+	mkFile(t, filepath.Join(older, "locked", "leftover.bin"), 64)
+	locked := filepath.Join(older, "locked")
+	if err := os.Chmod(locked, 0o500); err != nil { //nolint:gosec // G302: the test needs a folder nothing can be deleted from
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chmod(locked, 0o700); err != nil { //nolint:gosec // G302: gives back the rights taken above so the temp dir can go
+			t.Error(err)
+		}
+	})
+	data, err := json.Marshal([]map[string]any{
+		{"path": older, "gameId": "a", "installDir": game, "keepInLibrary": false},
+		{"path": newer, "gameId": "a", "installDir": game, "keepInLibrary": true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeJournal(t, dir, string(data))
+
+	r.restart(t)
+
+	if missing(t, filepath.Join(locked, "leftover.bin")) {
+		t.Skip("the folder could be deleted from after all (running with elevated rights)")
+	}
+	card, err := r.registrar.Find("a")
+	if err != nil || !card.Uninstalled {
+		t.Fatalf("card uninstalled = %v (%v); want it kept and uninstalled as the newest removal asked", card.Uninstalled, err)
+	}
+	requireJournalHolds(t, dir, older)
 }
 
 // The journal becomes readable only once the service is closing: the pending
