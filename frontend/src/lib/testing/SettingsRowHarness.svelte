@@ -57,13 +57,14 @@
   {/snippet}
 </SettingsRow>
 
-<!-- A caller that forgot to pass `disabled` on: the row still keeps its control and its part below out of reach. -->
+<!-- A disabled row whose switch is on, and a part below with a link that says why. -->
 <SettingsRow label="Запись" hint="Пишет видео игры" disabledReason={reason}>
-  {#snippet children({ labelId, hintId })}
-    <Toggle labelledby={labelId} describedby={hintId} />
+  {#snippet children({ labelId, hintId, disabled })}
+    <Toggle checked labelledby={labelId} describedby={hintId} {disabled} />
   {/snippet}
   {#snippet below({ labelId })}
     <button type="button" aria-labelledby={labelId}>Папка записей</button>
+    <a href="#why">Почему недоступно</a>
   {/snippet}
 </SettingsRow>
 

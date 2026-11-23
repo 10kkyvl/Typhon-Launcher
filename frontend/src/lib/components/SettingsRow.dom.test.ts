@@ -3,7 +3,7 @@ import { renderDom } from '../testing/dom';
 import SettingsRowHarness from '../testing/SettingsRowHarness.svelte';
 import SettingsRow from './SettingsRow.svelte';
 
-// Inside a region the row made inert (the `inert` property; see the test that uses it).
+// Inside an inert region (the `inert` property; see the test that uses it).
 function inert(element: Element): boolean {
   for (let at: Element | null = element; at; at = at.parentElement) if ((at as HTMLElement & { inert?: boolean }).inert === true) return true;
   return false;
@@ -46,19 +46,20 @@ describe('SettingsRow', () => {
     expect(inert(getByRole('button', { name: 'Запись' }))).toBe(false);
   });
 
-  // A caller can forget to pass `disabled` on: the row itself keeps a live control out of reach under
-  // its reason, and the reason stays readable beside it. jsdom knows no `inert`: Svelte sets the
-  // property, which a browser reflects to the attribute and honours (out of the Tab order and the
-  // accessibility tree); the property is what is read here.
-  it('keeps the control and the part below out of reach in a disabled row, told or not', () => {
+  // The snippet's `disabled` is the contract (SettingsRow.callers.test.ts holds every caller to it): the
+  // row makes nothing inert, which would take the switch's state, a select's value and a slider's
+  // value out of the accessibility tree, and a "why" link out of reach below. jsdom knows no `inert`:
+  // Svelte sets the property, which a browser honours; the property is what is read here.
+  it("keeps a disabled control's state readable and a link below reachable", () => {
     const { getByRole } = renderDom(SettingsRowHarness, { reason: 'Недоступно в портативной версии' });
-    const record = getByRole('switch', { name: 'Запись' });
-    expect(record).toHaveProperty('disabled', false);
-    expect(inert(record)).toBe(true);
-    expect(inert(getByRole('button', { name: 'Запись' }))).toBe(true);
+    const record = getByRole('switch', { name: 'Запись', checked: true });
+    expect(record).toHaveProperty('disabled', true);
+    expect(inert(record)).toBe(false);
+    const why = getByRole('link', { name: 'Почему недоступно' });
+    expect(inert(why)).toBe(false);
+    expect(inert(getByRole('button', { name: 'Запись' }))).toBe(false);
     const hint = record.closest('.settings-row')?.querySelector('.hint') as HTMLElement;
     expect(hint.textContent).toContain('Недоступно в портативной версии');
-    expect(inert(hint)).toBe(false);
   });
 
   it('draws `below` full width under the row, with the ids', () => {
