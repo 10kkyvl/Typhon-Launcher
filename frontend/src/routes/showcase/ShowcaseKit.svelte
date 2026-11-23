@@ -66,6 +66,7 @@
     { key: 'inside', label: 'Inside', bytes: 3 * GB, tone: 'game-3' },
   ];
   const BOUND_GAME: MeterSegment[] = [{ key: 'games', label: 'Games (still being measured)', bytes: 420 * GB, tone: 'game', sizeUnknown: true }];
+  const MEASURING: MeterSegment[] = [...GAMES.slice(0, 2), { key: 'measuring', label: 'Starfield (still being measured)', bytes: 40 * GB, tone: 'game-3', sizeUnknown: true }];
   // A hundred games on the full bar: the smallest fold, and the fold's entry in the legend opens.
   const HUNDRED: MeterSegment[] = Array.from({ length: 100 }, (_, index) => ({
     key: `lib-${index}`,
@@ -161,6 +162,24 @@
 
   <ShowcaseRow caption="Space no segment accounts for, with the free space measured: drawn and listed as other files, not as free" stack>
     <DiskMeter label="Drive G:" segments={GAMES} total={TOTAL} free={600 * GB} />
+  </ShowcaseRow>
+
+  <ShowcaseRow caption="The free space not measured (free null), every game measured: the space after the games is outlined, not bare track, and said as other files and free space, exact; full and compact" stack>
+    <div data-testid="kit-meter-free-null">
+      <DiskMeter label="Drive J" segments={GAMES} total={TOTAL} free={null} />
+    </div>
+    <div class="compact" data-testid="kit-meter-free-null-compact">
+      <DiskMeter label="Drive J" segments={GAMES} total={TOTAL} free={null} compact />
+    </div>
+  </ShowcaseRow>
+
+  <ShowcaseRow caption="The free space left out beside a game still being measured: it cannot be derived, so the space after the games is outlined and said as other files and free space, at most; full and compact" stack>
+    <div data-testid="kit-meter-rest-bound">
+      <DiskMeter label="Drive K" segments={MEASURING} total={TOTAL} />
+    </div>
+    <div class="compact" data-testid="kit-meter-rest-bound-compact">
+      <DiskMeter label="Drive K" segments={MEASURING} total={TOTAL} compact />
+    </div>
   </ShowcaseRow>
 
   <ShowcaseRow caption="Sixty games in a compact bar: the smallest fold into one part (a button here), the bar stays inside its track" stack>
