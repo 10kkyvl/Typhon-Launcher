@@ -90,6 +90,8 @@
   const tickText = (mark: number) => (tickFormat ? tickFormat(mark) : mark === 0 ? zero : format(mark));
 
   let group = $state<HTMLElement>();
+  let root = $state<HTMLElement>();
+  const blank = $derived(isEmpty(buckets) && !!empty);
   const radios = () => [...(group?.querySelectorAll<HTMLButtonElement>('[role="radio"]') ?? [])];
 
   function onkeydown(event: KeyboardEvent) {
@@ -103,8 +105,9 @@
   }
 
   // A focused bar that leaves (its bucket gone from the data) hands focus to the bar now in its place,
-  // else to its neighbour, else to the group. Read before the bars change: which one held focus. Not
-  // state: nothing is drawn from it.
+  // else to its neighbour, else to the group, else (the group gone with the bars, the empty state in
+  // their place) to the chart itself. Read before the bars change: which one held focus. Not state:
+  // nothing is drawn from it.
   let held: number | null = null;
   $effect.pre(() => {
     void buckets;
@@ -116,13 +119,13 @@
     void buckets;
     const was = held;
     held = null;
-    if (was === null || !group) return;
+    if (was === null || !root) return;
     const active = document.activeElement;
     if (active && active !== document.body && active.isConnected) return;
     const now = radios();
     const at = Math.min(was, now.length - 1);
     if (at >= 0) focusedKey = untrack(() => buckets[at].key);
-    focusQuietly(now[at] ?? group);
+    focusQuietly(now[at] ?? (group?.isConnected ? group : root));
   });
 </script>
 
@@ -135,69 +138,82 @@
   <span class="tick" aria-hidden="true">{#if tick}{@render tick(bucket)}{:else}{bucket.tick ?? bucket.label}{/if}</span>
 {/snippet}
 
-{#if isEmpty(buckets) && empty}
-  {@render empty()}
-{:else}
-  <div class="bar-chart" class:grow={$motionOn} class:scaled={!!scale} style:--bar-chart-height={height} style:--count={buckets.length} data-testid={testid}>
-    {#if scale}
-      <div class="axis" aria-hidden="true">
-        {#each marks as mark (mark)}
-          <span class="mark" style:bottom="{barShare(mark, max) * 100}%"><Reading text={tickText(mark)} /></span>
-        {/each}
-      </div>
-    {/if}
-    <div class="plot">
-      <div class="lines" aria-hidden="true">
-        {#each marks.length ? marks : [0] as mark (mark)}
-          <span class="line" class:base={mark === 0} style:bottom="{barShare(mark, max) * 100}%"></span>
-        {/each}
-      </div>
-      {#if selectable}
-        <div class="cols" role="radiogroup" aria-label={label} tabindex="-1" bind:this={group}>
-          {#each buckets as bucket, index (bucket.key)}
-            <Tooltip text={named(bucket)} describe={false}>
-              <button
-                type="button"
-                class="col"
-                class:current={bucket.current}
-                role="radio"
-                aria-checked={bucket.key === selected}
-                aria-label={named(bucket)}
-                tabindex={index === stop ? 0 : -1}
-                onfocus={() => (focusedKey = bucket.key)}
-                onclick={() => (selected = bucket.key)}
-                {onkeydown}
-              >
-                {@render column(bucket)}
-              </button>
-            </Tooltip>
-          {/each}
-        </div>
-      {:else}
-        <div class="cols" aria-hidden="true">
-          {#each buckets as bucket (bucket.key)}
-            <span class="col" class:current={bucket.current}>{@render column(bucket)}</span>
+<!-- The chart's own box takes focus only from a bar that left with its group. Named while it holds the
+     empty state; around the bars the table or the radio group carries the name. -->
+<div class="chart-box" tabindex="-1" role={blank ? 'group' : undefined} aria-label={blank ? label : undefined} data-testid={testid} bind:this={root}>
+  {#if blank}
+    {@render empty?.()}
+  {:else}
+    <div class="bar-chart" class:grow={$motionOn} class:scaled={!!scale} style:--bar-chart-height={height} style:--count={buckets.length}>
+      {#if scale}
+        <div class="axis" aria-hidden="true">
+          {#each marks as mark (mark)}
+            <span class="mark" style:bottom="{barShare(mark, max) * 100}%"><Reading text={tickText(mark)} /></span>
           {/each}
         </div>
       {/if}
-    </div>
-    {#if !selectable}
-      <table class="sr-only">
-        <caption>{label}</caption>
-        <thead>
-          <tr><th scope="col">{columns?.[0] ?? $t('common.chartPeriod')}</th><th scope="col">{columns?.[1] ?? $t('common.chartValue')}</th></tr>
-        </thead>
-        <tbody>
-          {#each buckets as bucket (bucket.key)}
-            <tr><th scope="row">{bucket.label}</th><td>{said(bucket)}</td></tr>
+      <div class="plot">
+        <div class="lines" aria-hidden="true">
+          {#each marks.length ? marks : [0] as mark (mark)}
+            <span class="line" class:base={mark === 0} style:bottom="{barShare(mark, max) * 100}%"></span>
           {/each}
-        </tbody>
-      </table>
-    {/if}
-  </div>
-{/if}
+        </div>
+        {#if selectable}
+          <div class="cols" role="radiogroup" aria-label={label} tabindex="-1" bind:this={group}>
+            {#each buckets as bucket, index (bucket.key)}
+              <Tooltip text={named(bucket)} describe={false}>
+                <button
+                  type="button"
+                  class="col"
+                  class:current={bucket.current}
+                  role="radio"
+                  aria-checked={bucket.key === selected}
+                  aria-label={named(bucket)}
+                  tabindex={index === stop ? 0 : -1}
+                  onfocus={() => (focusedKey = bucket.key)}
+                  onclick={() => (selected = bucket.key)}
+                  {onkeydown}
+                >
+                  {@render column(bucket)}
+                </button>
+              </Tooltip>
+            {/each}
+          </div>
+        {:else}
+          <div class="cols" aria-hidden="true">
+            {#each buckets as bucket (bucket.key)}
+              <span class="col" class:current={bucket.current}>{@render column(bucket)}</span>
+            {/each}
+          </div>
+        {/if}
+      </div>
+      {#if !selectable}
+        <table class="sr-only">
+          <caption>{label}</caption>
+          <thead>
+            <tr><th scope="col">{columns?.[0] ?? $t('common.chartPeriod')}</th><th scope="col">{columns?.[1] ?? $t('common.chartValue')}</th></tr>
+          </thead>
+          <tbody>
+            {#each buckets as bucket (bucket.key)}
+              <tr><th scope="row">{bucket.label}</th><td>{said(bucket)}</td></tr>
+            {/each}
+          </tbody>
+        </table>
+      {/if}
+    </div>
+  {/if}
+</div>
 
 <style>
+  .chart-box {
+    min-width: 0;
+  }
+
+  .chart-box:focus-visible {
+    outline: 2px solid var(--accent-ring);
+    outline-offset: 2px;
+  }
+
   .bar-chart {
     --plot: var(--bar-chart-height, 18rem);
     /* Over the plot, for the label of a bar that fills the height. */

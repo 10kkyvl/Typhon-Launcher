@@ -206,6 +206,19 @@ describe('BarChart', () => {
         expect(document.activeElement).toBe(wed);
       });
 
+      // The bars leave with their group when nothing is above zero: focus goes to the chart itself, which
+      // now holds the caller's empty state and is named by the chart's label.
+      it('hands focus to the chart, named by its label, when the data turns it into the empty state', async () => {
+        const { getByRole, getByTestId, rerender, user } = renderDom(BarChartHarness, { buckets: DAYS, selectable: true, start: 'wed' });
+        await user.tab();
+        expect(aria()).toBe('Ср, 4 ноября: 8 ч');
+        await rerender({ buckets: DAYS.map((d) => ({ ...d, value: 0 })) });
+        const chart = getByRole('group', { name: 'Недели' });
+        expect(document.activeElement).toBe(chart);
+        expect(chart.tabIndex).toBe(-1);
+        expect(chart.contains(getByTestId('empty'))).toBe(true);
+      });
+
       it('leaves focus alone when it was not on a bar', async () => {
         const { rerender, user } = renderDom(BarChartHarness, { buckets: DAYS, selectable: true, start: 'wed' });
         const outside = document.createElement('button');
