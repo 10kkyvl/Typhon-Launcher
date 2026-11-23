@@ -252,6 +252,24 @@ describe('Stats: the chart in words', () => {
   });
 });
 
+describe('Stats: the sections', () => {
+  it('the chart and the most played are sections named by level-2 headings, the list with its count', async () => {
+    vi.mocked(getStats).mockResolvedValueOnce(week({ top: [
+      { gameId: 'g1', title: 'Hades', seconds: 3000, sessions: 2 },
+      { gameId: 'g2', title: 'Celeste', seconds: 2400, sessions: 1 },
+    ] }));
+    renderDom(Stats);
+    await chartWords(msg('stats.chartTitle'));
+
+    const headings = screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent?.replace(/\s+/g, ' ').trim());
+    expect(headings).toEqual([msg('stats.chartTitle'), `${msg('stats.topTitle')} 2`]);
+    const chart = screen.getByRole('region', { name: msg('stats.chartTitle') });
+    expect(within(chart).getByRole('table', { name: msg('stats.chartTitle') })).toBeTruthy();
+    const top = screen.getByRole('region', { name: `${msg('stats.topTitle')} 2` });
+    expect(within(top).getAllByRole('listitem')).toHaveLength(2);
+  });
+});
+
 describe('Stats: the shared bar chart', () => {
   // Under the bars: the day of the month every fifth day, the other days blank.
   it('a month marks every fifth day under its bars', async () => {

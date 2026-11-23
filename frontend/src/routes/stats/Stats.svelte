@@ -10,6 +10,7 @@
   import Notice from '../../lib/components/Notice.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import ProgressBar from '../../lib/components/ProgressBar.svelte';
+  import SectionHeader from '../../lib/components/SectionHeader.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import Spinner from '../../lib/components/Spinner.svelte';
   import StatTile from '../../lib/components/StatTile.svelte';
@@ -27,6 +28,8 @@
     month: () => msg('stats.periodMonth'),
     year: () => msg('stats.periodYear'),
   };
+
+  const uid = $props.id();
 
   const periodOptions = STATS_PERIODS.map((value) => ({ id: value, label: periodLabels[value]() }));
 
@@ -165,8 +168,8 @@
           />
         </div>
 
-        <section class="section">
-          <h2>{data.period === 'year' ? msg('stats.chartTitleYear') : msg('stats.chartTitle')}</h2>
+        <section aria-labelledby="{uid}-chart">
+          <SectionHeader id="{uid}-chart" title={data.period === 'year' ? msg('stats.chartTitleYear') : msg('stats.chartTitle')} />
           <!-- Thirty days leave no room for a value over each bar: the axis and the table say them. -->
           <BarChart
             label={data.period === 'year' ? msg('stats.chartTitleYear') : msg('stats.chartTitle')}
@@ -179,8 +182,8 @@
         </section>
 
         {#if summary.top.length > 0}
-          <section class="section">
-            <h2>{msg('stats.topTitle')}</h2>
+          <section aria-labelledby="{uid}-top">
+            <SectionHeader id="{uid}-top" title={msg('stats.topTitle')} count={summary.top.length} />
             <!-- A game gone from the library has no page: its title is plain text and its cover blank. -->
             <ol class="top" bind:this={topList}>
               {#each summary.top as item (item.gameId)}
@@ -226,13 +229,6 @@
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--space-6);
-  }
-
-  .section h2 {
-    margin-bottom: var(--space-4);
-    font-size: var(--font-md);
-    font-weight: 600;
-    letter-spacing: var(--tracking-heading);
   }
 
   .top {

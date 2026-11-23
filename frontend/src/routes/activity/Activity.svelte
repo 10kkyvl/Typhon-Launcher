@@ -10,6 +10,7 @@
   import FeedRow from '../../lib/components/FeedRow.svelte';
   import Notice from '../../lib/components/Notice.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
+  import SectionHeader from '../../lib/components/SectionHeader.svelte';
   import SocialConsentScreen from '../../lib/components/SocialConsentScreen.svelte';
   import Spinner from '../../lib/components/Spinner.svelte';
   import StatTile from '../../lib/components/StatTile.svelte';
@@ -37,6 +38,8 @@
   import WeekActivity from './WeekActivity.svelte';
 
   const PLAYING_LIMIT = 6;
+
+  const uid = $props.id();
 
   let consentOpen = $state(false);
 
@@ -166,17 +169,21 @@
           {/if}
         {:else}
           {#each feedGroups as group (group.key)}
-            <h4 class="eyebrow">{group.label}</h4>
-            {#each group.events as event (event.id)}
-              <Card>
-                <FeedRow
-                  {event}
-                  own={event.user.id === user?.id}
-                  onreact={(emoji) => reactToEvent(event.id, emoji)}
-                  onnote={(note) => noteEvent(event.id, note)}
-                />
-              </Card>
-            {/each}
+            <section class="day" aria-labelledby="{uid}-day-{group.key}">
+              <SectionHeader id="{uid}-day-{group.key}" title={group.label} count={group.events.length} />
+              <div class="events">
+                {#each group.events as event (event.id)}
+                  <Card>
+                    <FeedRow
+                      {event}
+                      own={event.user.id === user?.id}
+                      onreact={(emoji) => reactToEvent(event.id, emoji)}
+                      onnote={(note) => noteEvent(event.id, note)}
+                    />
+                  </Card>
+                {/each}
+              </div>
+            </section>
           {/each}
           {#if $feedCursor > 0}
             <div class="more">
@@ -299,27 +306,10 @@
     padding: var(--space-5) 0;
   }
 
-  .eyebrow {
+  .events {
     display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    margin-top: var(--space-2);
-    font-size: 1.2rem;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--text-3);
-  }
-
-  .eyebrow::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: var(--border);
-  }
-
-  .eyebrow:first-child {
-    margin-top: 0;
+    flex-direction: column;
+    gap: var(--space-4);
   }
 
   @media (max-width: 1400px) {

@@ -110,14 +110,31 @@ describe('Activity: the feed', () => {
     const labels = [relativeDate(today.createdAt), relativeDate(yesterday.createdAt)];
     const hades = await feedColumn().findByText('Hades');
     const celeste = feedColumn().getByText('Celeste');
-    const headings = screen.getAllByRole('heading').map((heading) => heading.textContent?.trim());
-    expect(headings.filter((text) => labels.includes(text ?? ''))).toEqual(labels);
-    const first = screen.getByRole('heading', { name: labels[0] });
-    const second = screen.getByRole('heading', { name: labels[1] });
+    const day = (label: string) => screen.getByRole('heading', { name: (name) => name.startsWith(label) });
+    const first = day(labels[0]);
+    const second = day(labels[1]);
     const order = (a: Node, b: Node) => a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING;
     expect(order(first, hades)).toBeTruthy();
     expect(order(hades, second)).toBeTruthy();
     expect(order(second, celeste)).toBeTruthy();
+  });
+
+  it('heads each day with a section heading under the page title, its count of events beside it', async () => {
+    const events = [event(1, now(), 'Hades'), event(2, now(), 'Celeste'), event(3, daysAgo(1), 'Tunic')];
+    vi.mocked(feed).mockResolvedValueOnce(page(events));
+    authState.set('authenticated');
+    renderDom(Activity);
+    await feedColumn().findByText('Tunic');
+
+    const today = relativeDate(events[0].createdAt);
+    const yesterday = relativeDate(events[2].createdAt);
+    const days = feedColumn().getAllByRole('heading', { level: 2 });
+    expect(days.map((heading) => heading.textContent?.replace(/\s+/g, ' ').trim())).toEqual([`${today} 2`, `${yesterday} 1`]);
+    const todaySection = feedColumn().getByRole('region', { name: `${today} 2` });
+    expect(within(todaySection).getByText('Hades')).toBeTruthy();
+    expect(within(todaySection).getByText('Celeste')).toBeTruthy();
+    expect(within(todaySection).queryByText('Tunic')).toBeNull();
+    expect(feedColumn().queryAllByRole('heading', { level: 4 })).toHaveLength(0);
   });
 
   it('"Show more" adds the next page under the list and goes when nothing is left', async () => {
