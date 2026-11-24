@@ -157,7 +157,9 @@ export function poseAt(flight: ArcFlight, p: number): ArcPose {
   };
 }
 
-const fill = (elapsed: number) => FILL_TO * (1 - Math.exp((-FILL_RATE * Math.max(0, elapsed)) / 1000));
+/** How full the funnel (or the ring, with motion off) is `elapsed` ms into applying. */
+export const fillAt = (elapsed: number) => FILL_TO * (1 - Math.exp((-FILL_RATE * Math.max(0, elapsed)) / 1000));
+const fill = fillAt;
 // Bottom ring first: the fill reads upwards.
 const litBy = (value: number) => each((i) => clamp01(value * count - (count - 1 - i)));
 // The lower the ring, the faster it turns.

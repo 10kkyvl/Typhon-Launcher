@@ -2,9 +2,10 @@ import { screen, within } from '@testing-library/svelte';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { selfUpdateOutcome, selfUpdateStatus } from '../stores/selfupdate';
+import { endUpdateShow } from '../stores/updateShow';
 import { renderDom } from '../testing/dom';
 import UpdateOverlay from './UpdateOverlay.svelte';
-import overlaySource from './UpdateOverlay.svelte?raw';
+import showSource from './UpdateShow.svelte?raw';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
@@ -27,6 +28,7 @@ afterAll(() => {
 afterEach(() => {
   selfUpdateStatus.set({ state: 'idle', currentVersion: '' });
   selfUpdateOutcome.set(null);
+  endUpdateShow();
 });
 
 const APPLYING = { state: 'applying', currentVersion: '1.4.0', availableVersion: '1.5.0' } as const;
@@ -41,8 +43,9 @@ describe('UpdateOverlay while an update is applied', () => {
     expect(within(dialog).getByText(msg('ui.launcherWillRestartShort'))).toBeTruthy();
   });
 
+  // The update show (UpdateShow.svelte) took the panel's place and its cover.
   it('covers the whole window above the title bar, so nothing under it takes a press', () => {
-    const rule = /\n {2}\.overlay \{([^}]*)\}/.exec(overlaySource)?.[1] ?? '';
+    const rule = /\n {2}\.show \{([^}]*)\}/.exec(showSource)?.[1] ?? '';
     expect(rule).toMatch(/position: fixed/);
     expect(rule).toMatch(/inset: 0/);
     expect(rule).toMatch(/z-index: var\(--z-update\)/);

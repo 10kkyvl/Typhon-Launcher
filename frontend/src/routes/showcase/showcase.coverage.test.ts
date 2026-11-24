@@ -73,6 +73,8 @@ const NOT_BASE: Record<string, string> = {
   RateLimitInput: 'the download speed limit field of the settings',
   SavesCandidatesModal: 'the save folder picker of the game menu',
   TagEditor: 'the tag list of the collection and tag dialogs, built on Chip',
+  UpdateFunnel: 'the funnel of the launcher-update show, drawn by it frame by frame',
+  UpdateRing: 'the still ring of the launcher-update show with motion off',
   ThemeContrast: "the theme editor's contrast report",
 };
 

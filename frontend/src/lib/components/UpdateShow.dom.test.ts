@@ -1,0 +1,302 @@
+import { screen, within } from '@testing-library/svelte';
+import { tick } from 'svelte';
+import { get } from 'svelte/store';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { msg } from '../i18n';
+import { selfUpdateOutcome, selfUpdateStatus } from '../stores/selfupdate';
+import { endUpdateShow, logoArcsAway, resumeFinishedShow, showFollowsStatus, updateShow } from '../stores/updateShow';
+import { renderDom } from '../testing/dom';
+import UpdateShowHarness from '../testing/UpdateShowHarness.svelte';
+
+vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
+vi.mock('../services/backend', () => ({ inWails: false }));
+
+// jsdom lays nothing out and has no Web Animations. The logo and the funnel get their boxes from a
+// stub; the frames come from the clock (fake), one per animation frame (fake). What a frame is made
+// of is updateShowTimeline.test.ts's; here: what the player gets on screen, and when.
+
+const START = 1_700_000_000_000;
+const APPLYING = { state: 'applying', currentVersion: '1.4.0', availableVersion: '1.5.0' } as const;
+const READY = { state: 'ready', currentVersion: '1.4.0', availableVersion: '1.5.0', error: 'still running', errorCode: 'apply' } as const;
+const box = (left: number, top: number, width: number, height: number) => ({ left, top, width, height, right: left + width, bottom: top + height, x: left, y: top, toJSON: () => ({}) }) as DOMRect;
+
+beforeAll(() => {
+  // The outcome card fades; its transitions finish at once.
+  const finished = () => ({
+    cancel: () => {},
+    set onfinish(done: () => void) {
+      done();
+    },
+  });
+  Object.defineProperty(Element.prototype, 'animate', { value: finished, configurable: true, writable: true });
+});
+
+afterAll(() => {
+  Reflect.deleteProperty(Element.prototype, 'animate');
+});
+
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+  vi.setSystemTime(START);
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+    if (this.matches('[data-logo-origin]')) return box(20, 30, 28, 28);
+    if (this.matches('.funnel-box')) return box(500, 300, 360, 277);
+    return box(0, 0, 0, 0);
+  });
+});
+
+afterEach(() => {
+  document.documentElement.classList.remove('no-anim');
+  selfUpdateStatus.set({ state: 'idle', currentVersion: '' });
+  selfUpdateOutcome.set(null);
+  endUpdateShow();
+  vi.restoreAllMocks();
+});
+
+const shown = () => document.querySelector<HTMLElement>('[data-testid="update-show"]');
+const clones = () => [...document.querySelectorAll<HTMLElement>('[data-arc-clone]')];
+const poses = () => clones().map((clone) => `${clone.style.transform} | ${clone.style.opacity}`);
+const logoArcs = () => [...document.querySelectorAll<SVGPathElement>('[data-logo-origin] [data-arc]')];
+const picture = () => document.querySelector('img.logo-mark') as HTMLImageElement;
+
+async function advance(ms: number) {
+  vi.advanceTimersByTime(ms);
+  await tick();
+}
+
+describe('the update show while the update is applied', () => {
+  it('never starts from a downloaded update', async () => {
+    selfUpdateStatus.set({ state: 'ready', currentVersion: '1.4.0', availableVersion: '1.5.0' });
+    renderDom(UpdateShowHarness);
+    await advance(100);
+    expect(shown()).toBeNull();
+  });
+
+  it('flies the five arcs off the logo over the whole window, and says what the old panel said, once', async () => {
+    renderDom(UpdateShowHarness);
+    selfUpdateStatus.set(APPLYING);
+    await tick();
+
+    const show = shown() as HTMLElement;
+    expect(show.dataset.mode).toBe('flight');
+    expect(clones()).toHaveLength(5);
+    const dialog = screen.getByRole('dialog', { name: msg('ui.installingUpdateTitle') });
+    expect(dialog).toBe(show);
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    const status = within(dialog).getAllByRole('status');
+    expect(status).toHaveLength(1);
+    expect(status[0].textContent).toContain(msg('ui.installingVersion', { version: '1.5.0' }));
+    expect(status[0].textContent).toContain(msg('ui.launcherWillRestartShort'));
+    // The logo's own arcs are away while their copies fly.
+    expect(picture().classList.contains('away')).toBe(true);
+    expect(logoArcs().map((arc) => arc.style.opacity)).toEqual(['0', '0', '0', '0', '0']);
+  });
+
+  it('draws the frame of the moment: on the logo at first, on the way mid-flight, gone into the funnel in the hold', async () => {
+    renderDom(UpdateShowHarness);
+    selfUpdateStatus.set(APPLYING);
+    await tick();
+    expect(shown()?.dataset.stage).toBe('fly');
+    expect(clones()[0].style.transform).toBe('translate(0px, 0px) rotate(0deg) scale(1, 1)');
+    expect(clones().map((clone) => clone.style.opacity)).toEqual(['1', '1', '1', '1', '1']);
+
+    await advance(600);
+    expect(shown()?.dataset.stage).toBe('fly');
+    expect(clones()[0].style.transform).not.toBe('translate(0px, 0px) rotate(0deg) scale(1, 1)');
+
+    await advance(2400);
+    expect(shown()?.dataset.stage).toBe('hold');
+    expect(clones().map((clone) => clone.style.opacity)).toEqual(['0', '0', '0', '0', '0']);
+    expect([...document.querySelectorAll('[data-funnel] [data-layer]')].map((layer) => layer.getAttribute('opacity'))).toEqual(['1', '1', '1', '1', '1']);
+  });
+
+  it('mounted late, draws the hold at once and plays no flight', async () => {
+    showFollowsStatus(APPLYING, START - 10_000);
+    renderDom(UpdateShowHarness);
+    await tick();
+    expect(shown()?.dataset.stage).toBe('hold');
+    const seen: string[] = [];
+    for (let i = 0; i < 20; i++) {
+      seen.push(...clones().map((clone) => clone.style.opacity));
+      await advance(16);
+    }
+    expect(new Set(seen)).toEqual(new Set(['0']));
+  });
+
+  it('draws the same thing in two mounts that share the moment the show began and the clock', async () => {
+    showFollowsStatus(APPLYING, START - 700);
+    const first = renderDom(UpdateShowHarness);
+    await tick();
+    const a = poses();
+    first.unmount();
+    expect(clones()).toEqual([]);
+
+    renderDom(UpdateShowHarness);
+    await tick();
+    expect(poses()).toEqual(a);
+    expect(a.some((pose) => !pose.startsWith('translate(0px, 0px)'))).toBe(true);
+  });
+
+  it('stays up as long as the status says applying, however long', async () => {
+    renderDom(UpdateShowHarness);
+    selfUpdateStatus.set(APPLYING);
+    await advance(120_000);
+    expect(shown()?.dataset.stage).toBe('hold');
+  });
+
+  it('sends the arcs home and leaves when applying ends without a new version', async () => {
+    renderDom(UpdateShowHarness);
+    selfUpdateStatus.set(APPLYING);
+    await advance(3000);
+    selfUpdateStatus.set(READY);
+    await tick();
+    expect(shown()?.dataset.stage).toBe('home');
+
+    await advance(1000);
+    expect(shown()).toBeNull();
+    expect(get(updateShow)).toBeNull();
+    expect(picture().classList.contains('away')).toBe(false);
+    expect(logoArcs()).toEqual([]);
+  });
+
+  it('finishes when the running version changed: the arcs come back and the show leaves', async () => {
+    renderDom(UpdateShowHarness);
+    selfUpdateStatus.set(APPLYING);
+    await advance(3000);
+    selfUpdateStatus.set({ state: 'idle', currentVersion: '1.5.0' });
+    await advance(100);
+    expect(shown()?.dataset.stage).toBe('finish');
+    await advance(3000);
+    expect(shown()).toBeNull();
+    expect(picture().classList.contains('away')).toBe(false);
+  });
+});
+
+describe('the start after an update', () => {
+  it('opens on the held funnel, plays the finish, then the card says the result', async () => {
+    selfUpdateOutcome.set({ version: '1.5.0', ok: true, finishedAt: '' });
+    resumeFinishedShow();
+    renderDom(UpdateShowHarness);
+    await tick();
+
+    expect(shown()?.dataset.stage).toBe('finish');
+    expect(clones().map((clone) => clone.style.opacity)).toEqual(['0', '0', '0', '0', '0']);
+    expect(logoArcs().map((arc) => arc.style.opacity)).toEqual(['0', '0', '0', '0', '0']);
+    expect(screen.queryByText(msg('ui.launcherUpdatedTo', { version: '1.5.0' }))).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
+
+    await advance(3000);
+    expect(shown()).toBeNull();
+    expect(screen.getByText(msg('ui.launcherUpdatedTo', { version: '1.5.0' }))).toBeTruthy();
+  });
+
+  it('with motion off plays nothing and the card says the result at once', async () => {
+    document.documentElement.classList.add('no-anim');
+    selfUpdateOutcome.set({ version: '1.5.0', ok: true, finishedAt: '' });
+    resumeFinishedShow();
+    renderDom(UpdateShowHarness);
+    await tick();
+    expect(shown()).toBeNull();
+    expect(screen.getByText(msg('ui.launcherUpdatedTo', { version: '1.5.0' }))).toBeTruthy();
+  });
+});
+
+describe('the update show with motion off', () => {
+  it('is a still ring on the logo with the same words, and nothing flies', async () => {
+    document.documentElement.classList.add('no-anim');
+    renderDom(UpdateShowHarness);
+    selfUpdateStatus.set(APPLYING);
+    await tick();
+    expect(shown()?.dataset.mode).toBe('ring');
+    expect(clones()).toEqual([]);
+    expect(document.querySelector('[data-funnel]')).toBeNull();
+    expect(document.querySelector('.ringmark [data-ring-value]')).not.toBeNull();
+    expect(screen.getByRole('status').textContent).toContain(msg('ui.installingVersion', { version: '1.5.0' }));
+    expect(picture().classList.contains('away')).toBe(false);
+  });
+
+  it('switched off mid-flight, ends the motion at once: no copy left, the logo whole, the words still there', async () => {
+    renderDom(UpdateShowHarness);
+    selfUpdateStatus.set(APPLYING);
+    await advance(600);
+    expect(clones()).toHaveLength(5);
+
+    document.documentElement.classList.add('no-anim');
+    await advance(0);
+    expect(clones()).toEqual([]);
+    expect(document.querySelector('[data-arc-clone]')).toBeNull();
+    expect(shown()?.dataset.mode).toBe('ring');
+    expect(picture().classList.contains('away')).toBe(false);
+    expect(screen.getByRole('status').textContent).toContain(msg('ui.installingVersion', { version: '1.5.0' }));
+  });
+});
+
+describe('the update show in Big Picture (no sidebar logo)', () => {
+  it('is the ring above the words, in the middle of the window', async () => {
+    renderDom(UpdateShowHarness, { logo: false });
+    selfUpdateStatus.set(APPLYING);
+    await tick();
+    expect(shown()?.dataset.mode).toBe('ring');
+    expect(clones()).toEqual([]);
+    expect(document.querySelector('.stage .ring-box [data-ring-value]')).not.toBeNull();
+    expect(screen.getByRole('status').textContent).toContain(msg('ui.launcherWillRestartShort'));
+  });
+});
+
+describe('a window not laid out', () => {
+  it('has no funnel to fly to: the ring stands in, and the way home still ends the show', async () => {
+    vi.mocked(Element.prototype.getBoundingClientRect).mockImplementation(function (this: Element) {
+      return this.matches('[data-logo-origin]') ? box(20, 30, 28, 28) : box(0, 0, 0, 0);
+    });
+    renderDom(UpdateShowHarness);
+    selfUpdateStatus.set(APPLYING);
+    await tick();
+    expect(shown()?.dataset.mode).toBe('ring');
+    selfUpdateStatus.set(READY);
+    await tick();
+    expect(shown()).toBeNull();
+  });
+});
+
+describe('the shell going while the show runs', () => {
+  it('leaves no copy of an arc on the page and gives the logo its arcs back', async () => {
+    const { unmount } = renderDom(UpdateShowHarness);
+    selfUpdateStatus.set(APPLYING);
+    await advance(600);
+    unmount();
+    expect(document.querySelector('[data-arc-clone]')).toBeNull();
+    expect(shown()).toBeNull();
+    expect(get(logoArcsAway)).toBeNull();
+  });
+});
+
+describe('focus while the show is up', () => {
+  it('holds focus so no key reaches the page, and gives it back to where it was', async () => {
+    const { user } = renderDom(UpdateShowHarness);
+    const play = screen.getByRole('button', { name: 'Play' });
+    play.focus();
+    selfUpdateStatus.set(APPLYING);
+    await tick();
+    expect(document.activeElement).toBe(shown());
+
+    await user.keyboard('{Tab}');
+    expect(document.activeElement).toBe(shown());
+
+    selfUpdateStatus.set(READY);
+    await advance(1000);
+    await vi.waitFor(() => expect(document.activeElement).toBe(play));
+  });
+
+  it('gives focus to the page heading when what held it is gone', async () => {
+    const { rerender } = renderDom(UpdateShowHarness);
+    screen.getByRole('button', { name: 'Play' }).focus();
+    selfUpdateStatus.set(APPLYING);
+    await tick();
+    await rerender({ page: false });
+    await rerender({ page: true });
+
+    selfUpdateStatus.set(READY);
+    await advance(1000);
+    await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Library' })));
+  });
+});

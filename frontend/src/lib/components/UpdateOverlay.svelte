@@ -1,9 +1,9 @@
 <script lang="ts">
   import { CheckCircle2, Download, TriangleAlert, X } from '@lucide/svelte';
-  import Spinner from './Spinner.svelte';
   import { fade, fly } from 'svelte/transition';
   import IconButton from './IconButton.svelte';
   import ProgressBar from './ProgressBar.svelte';
+  import UpdateShow from './UpdateShow.svelte';
   import {
     dismissOutcome,
     requestCancelDownload,
@@ -13,6 +13,7 @@
     selfUpdateStatus,
   } from '../stores/selfupdate';
   import { route } from '../stores/router';
+  import { updateShow } from '../stores/updateShow';
   import { themeLayout } from '../stores/layout';
   import { outcomeReason } from '../services/selfupdateMessages';
   import { bytesSize } from '../utils/format';
@@ -32,16 +33,7 @@
   const pct = $derived(totalBytes > 0 ? Math.min(100, Math.max(0, (downloadedBytes / totalBytes) * 100)) : 0);
 </script>
 
-{#if applying}
-  <div class="overlay" role="dialog" aria-modal="true" aria-label={msg('ui.installingUpdateTitle')}>
-    <div class="panel">
-      <Spinner size="lg" />
-      <h3>{msg('ui.installingVersion', { version })}</h3>
-      <p>{msg('ui.launcherWillRestartShort')}</p>
-      <div class="marquee"><span></span></div>
-    </div>
-  </div>
-{/if}
+<UpdateShow />
 
 {#if downloading && !applying && $route.name !== 'settings' && !$bigPictureActive}
   <div class="card" class:sidebar-right={$themeLayout.side === 'right'}>
@@ -55,7 +47,7 @@
     <ProgressBar value={Math.round(pct)} label={msg(status.delta ? 'ui.downloadingUpdatePatch' : 'ui.downloadingUpdate', { version })} />
     <span class="meta">{msg('ui.bytesOfBytes', { done: bytesSize(downloadedBytes), total: bytesSize(totalBytes) })} · {Math.round(pct)}%</span>
   </div>
-{:else if outcome && !$bigPictureActive}
+{:else if outcome && !$bigPictureActive && !$updateShow}
   <div class="card" class:card-danger={!outcome.ok} class:sidebar-right={$themeLayout.side === 'right'} in:fly={{ x: -24, duration: 220 }} out:fade={{ duration: 200 }}>
     <div class="row">
       {#if outcome.ok}
@@ -86,62 +78,6 @@
 {/if}
 
 <style>
-  .overlay {
-    position: fixed;
-    inset: 0;
-    z-index: var(--z-update);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(4, 6, 10, 0.82);
-  }
-
-  .panel {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--space-4);
-    width: min(42rem, calc(100vw - 4.8rem));
-    padding: 3.6rem 3.2rem;
-    text-align: center;
-    color: var(--text);
-    background: var(--surface-2);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-xl);
-    box-shadow: var(--shadow-modal);
-  }
-
-  .panel h3 {
-    margin: 0;
-    font-size: var(--font-lg);
-  }
-
-  .panel p {
-    margin: 0;
-    color: var(--text-2);
-    font-size: var(--font-sm);
-    line-height: 1.5;
-  }
-
-  .marquee {
-    position: relative;
-    width: 100%;
-    height: 0.4rem;
-    margin-top: var(--space-2);
-    background: rgba(255, 255, 255, 0.07);
-    border-radius: 99rem;
-    overflow: hidden;
-  }
-
-  .marquee span {
-    position: absolute;
-    inset-block: 0;
-    width: 34%;
-    background: var(--accent-bright);
-    border-radius: 99rem;
-    animation: slide 1.4s var(--ease) infinite;
-  }
-
   .card {
     position: fixed;
     left: calc(var(--sidebar-now) + 2.4rem);
@@ -186,14 +122,5 @@
 
   .card-danger .meta {
     color: var(--danger);
-  }
-
-  @keyframes slide {
-    0% {
-      left: -34%;
-    }
-    100% {
-      left: 100%;
-    }
   }
 </style>

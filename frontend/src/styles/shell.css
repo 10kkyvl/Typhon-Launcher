@@ -59,6 +59,14 @@
   --ease-out: var(--ease);
   --motion-spin: 800ms; /* one turn of a spinner */
 
+  /* The launcher-update show (UpdateShow.svelte): one logo arc's flight into the funnel, the step
+     between two arcs leaving, one turn of the funnel's middle ring, and the dim under it: about 45 %,
+     so the funnel reads and the page stays seen. */
+  --motion-show: 1200ms;
+  --motion-stagger-arc: 120ms;
+  --motion-funnel: 1400ms;
+  --scrim-update: rgba(8, 9, 10, 0.45);
+
   /* The logo's own colours (the picture public/typhon.png), for its arcs drawn in vector while the
      update show flies them; the tint setting draws them in the accent instead. Not theme tokens: the
      logo is the brand's in every theme. */

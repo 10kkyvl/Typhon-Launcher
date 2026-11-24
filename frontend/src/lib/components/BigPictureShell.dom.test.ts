@@ -6,6 +6,7 @@ import { selectEmulatorFile, setEmulatorPath } from '../services/emulators';
 import { emulatorPrompt } from '../stores/emulatorPrompt';
 import { liveIslandOn } from '../stores/liveIsland';
 import { selfUpdateStatus } from '../stores/selfupdate';
+import { endUpdateShow } from '../stores/updateShow';
 import { toast, toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
 import BigPictureHarness from '../testing/BigPictureHarness.svelte';
@@ -187,7 +188,10 @@ describe('toasts in Big Picture', () => {
 // While the launcher applies its own update the overlay says so over Big Picture: nothing of Big
 // Picture under it takes focus or a key.
 describe('Big Picture while the launcher update is applied', () => {
-  afterEach(() => selfUpdateStatus.set({ state: 'idle', currentVersion: '' }));
+  afterEach(() => {
+    selfUpdateStatus.set({ state: 'idle', currentVersion: '' });
+    endUpdateShow();
+  });
 
   it('makes its page inert and gives it back when applying ends', async () => {
     render(BigPictureHarness, { target: app });
