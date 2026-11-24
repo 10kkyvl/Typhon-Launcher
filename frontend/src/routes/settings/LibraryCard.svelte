@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { FolderOpen, HardDrive } from '@lucide/svelte';
+  import { FolderOpen, HardDrive, RefreshCw } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
@@ -126,6 +126,7 @@
   >
     {#snippet children({ hintId, disabled })}
       <Button size="sm" aria-describedby={hintId} disabled={disabled || !platformKnown} busy={page.importing} onclick={page.runImportExternal}>
+        <RefreshCw size="1.5rem" strokeWidth={1.8} />
         {page.importing ? msg('settings.extlibRunning') : msg('settings.extlibLabel')}
       </Button>
     {/snippet}

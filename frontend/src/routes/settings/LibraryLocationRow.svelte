@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { FolderInput } from '@lucide/svelte';
   import { msg } from '../../lib/i18n';
   import Button from '../../lib/components/Button.svelte';
   import Notice from '../../lib/components/Notice.svelte';
@@ -97,6 +98,7 @@
   {#snippet children({ hintId, disabled })}
     <!-- Busy from the press to the end of the move it started: it keeps focus all along. -->
     <Button size="sm" aria-describedby={hintId} {disabled} busy={starting || !!job} onclick={start}>
+      <FolderInput size="1.5rem" strokeWidth={1.8} />
       {starting ? msg('settings.generalLibraryMoveStartingEllipsis') : msg('settings.generalLibraryMoveButtonLabel')}
     </Button>
   {/snippet}

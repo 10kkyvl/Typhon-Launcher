@@ -433,6 +433,15 @@ describe('the general tab: the overlay status', () => {
 });
 
 describe('the general tab: the buttons', () => {
+  // An icon beside the words: drawn, never read, and off with its button.
+  it('marks Sync now, Forget and the import with an icon a screen reader does not read', async () => {
+    open();
+    for (const key of ['settings.generalSyncNowLabel', 'settings.generalSyncForgetLabel', 'settings.extlibLabel'] as const) {
+      const icons = [...button(key).querySelectorAll('svg')];
+      expect(icons.map((icon) => icon.getAttribute('aria-hidden')), key).toEqual(['true']);
+    }
+  });
+
   it('opens the sent data from Show sent data', async () => {
     open();
     await user().click(screen.getByRole('button', { name: msg('settings.generalPrivacyShowSentButton') }));

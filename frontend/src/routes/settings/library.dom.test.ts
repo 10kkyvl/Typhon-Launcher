@@ -146,6 +146,13 @@ describe('the library move row', () => {
     expect(description(move)).toBe(msg('settings.generalLibraryMoveEmptySub'));
   });
 
+  it('marks Move with an icon a screen reader does not read', () => {
+    settings.set({ libraryPath: '/lib' } as unknown as SettingsData);
+    renderDom(LibraryLocationRow, {});
+    const move = screen.getByRole('button', { name: msg('settings.generalLibraryMoveButtonLabel') });
+    expect([...move.querySelectorAll('svg')].map((icon) => icon.getAttribute('aria-hidden'))).toEqual(['true']);
+  });
+
   it('moves the library to the folder picked', async () => {
     vi.mocked(selectMoveTargetFolder).mockResolvedValueOnce('/new');
     const started = deferred<MoveJob>();

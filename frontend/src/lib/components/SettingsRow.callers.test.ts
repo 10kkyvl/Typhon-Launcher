@@ -10,13 +10,14 @@ import { frontendSources } from '../testing/sources';
  * caller's: it may keep a link that says why.
  *
  * The guard refuses what it cannot follow. In a disabled row's `children` it accepts the base controls
- * of CONTROLS, each given the snippet's flag; TextLink; plain text and layout elements; and a
- * `{@render}` of a snippet defined there. It refuses a raw `<button>`, `<input>`, `<select>` or
- * `<textarea>`, any other component (one it does not know may hold a control: a new control is added
- * to CONTROLS on purpose, once it takes `disabled`), a `{@render}` of a snippet from outside the row,
- * `{@html}`, a block that takes the flag's name again, a control outside a `children` snippet (which
- * takes no flag), `children` passed as a prop, and a row that takes its props through a spread (its
- * reason cannot be read).
+ * of CONTROLS, each given the snippet's flag; TextLink; plain text and layout elements; a `{@render}`
+ * of a snippet defined there; and an icon of the file's `@lucide/svelte` import whose parent element is
+ * one of CONTROLS (an `<svg aria-hidden>` with nothing to focus, off with its control). It refuses a
+ * raw `<button>`, `<input>`, `<select>` or `<textarea>`, any other component (one it does not know may
+ * hold a control: a new control is added to CONTROLS on purpose, once it takes `disabled`), an icon
+ * anywhere else, a `{@render}` of a snippet from outside the row, `{@html}`, a block that takes the
+ * flag's name again, a control outside a `children` snippet (which takes no flag), `children` passed
+ * as a prop, and a row that takes its props through a spread (its reason cannot be read).
  *
  * Limit: see lib/testing/markup.ts.
  */
@@ -27,6 +28,20 @@ CONTROLS.push('RateLimitInput', 'ScheduleEditor');
 /** Components that may stand under a reason as they are: a link that says why or how to fix it. */
 const QUIET = ['TextLink'];
 const RAW = ['button', 'input', 'select', 'textarea'];
+
+// The local names of a file's value imports from `@lucide/svelte`: its icon components.
+function lucideIcons(text: string): Set<string> {
+  const names = new Set<string>();
+  for (const [, typeOnly, list] of text.matchAll(/\bimport\s+(type\s+)?\{([^}]*)\}\s*from\s*['"]@lucide\/svelte['"]/g)) {
+    if (typeOnly) continue;
+    for (const part of list.split(',')) {
+      const spec = part.trim();
+      if (!spec || /^type\s/.test(spec)) continue;
+      names.add(/\sas\s+([\w$]+)$/.exec(spec)?.[1] ?? spec);
+    }
+  }
+  return names;
+}
 
 const named = (name: string) => new RegExp(String.raw`(?<![\w$.])${name.replace(/[$.]/g, '\\$&')}(?![\w$])`);
 const lineOf = (text: string, at: number) => text.slice(0, at).split('\n').length;
@@ -84,6 +99,7 @@ function rebinds(tag: string, flag: string): boolean {
 /** What a file's disabled rows hold that the guard cannot follow: one line each, empty when none. */
 function refusals(path: string, text: string): string[] {
   const { elements: all, snippets, tags } = markup(text);
+  const icons = lucideIcons(text);
   const inside = (start: number, end: number, range: { start: number; end: number }) => start >= range.start && end <= range.end;
   const owner = (start: number, end: number) => all.filter((element) => element.start < start && element.end >= end).sort((a, b) => b.start - a.start)[0];
   const out: string[] = [];
@@ -112,7 +128,8 @@ function refusals(path: string, text: string): string[] {
       const tag = text.slice(element.start, tagEnd(text, element.start));
       if (CONTROLS.includes(element.name)) {
         if (!takesFlag(attributes(tag).get('disabled'), flag)) out.push(`${where}: ${tag} does not take the row's disabled`);
-      } else if (RAW.includes(element.name)) out.push(`${where}: a raw <${element.name}> the row cannot turn off`);
+      } else if (icons.has(element.name) && CONTROLS.includes(owner(element.start, element.end)?.name ?? '')) continue;
+      else if (RAW.includes(element.name)) out.push(`${where}: a raw <${element.name}> the row cannot turn off`);
       else if (!QUIET.includes(element.name) && /^[A-Z]|[:.]/.test(element.name)) out.push(`${where}: <${element.name}>, a component the guard does not know`);
     }
 
@@ -202,6 +219,30 @@ describe('SettingsRow call sites', () => {
     expect(refused(row('{ labelId }', '<RateLimitInput value={1} presets={[1]} labelledby={labelId} onchange={set} />'))).toBe(true);
     expect(refused(row('{ labelId, disabled }', '<ScheduleEditor windows={[]} labelledby={labelId} {disabled} onchange={set} />'))).toBe(false);
     expect(refused(row('{ labelId }', '<ScheduleEditor windows={[]} labelledby={labelId} onchange={set} />'))).toBe(true);
+  });
+
+  describe('a decorative icon', () => {
+    const lucide = "<script>import { RefreshCw, Trash2 as Bin, type LucideIcon } from '@lucide/svelte';</script>";
+
+    it('is accepted inside a control the row turns off, the icon imported from lucide', () => {
+      expect(refused(lucide + row('{ disabled }', '<Button {disabled} onclick={go}><RefreshCw size="1.5rem" />Sync</Button>'))).toBe(false);
+      expect(refused(lucide + row('{ disabled }', '<Button {disabled} busy={busy}>{#if !busy}<Bin size="1.5rem" />{/if}Delete</Button>'))).toBe(false);
+      expect(refused(lucide + row('{ disabled }', '<IconButton label="Open" {disabled}><RefreshCw /></IconButton>'))).toBe(false);
+    });
+
+    for (const [name, text] of [
+      ['a lucide icon outside a control', lucide + row('{ disabled }', '<span class="mark"><RefreshCw /></span><Button {disabled}>Sync</Button>')],
+      ['a lucide icon straight in the snippet', lucide + row('{ disabled }', '<RefreshCw /><Button {disabled}>Sync</Button>')],
+      ['a lucide icon in a plain element inside a control', lucide + row('{ disabled }', '<Button {disabled}><span><RefreshCw /></span>Sync</Button>')],
+      ['another component inside a control', lucide + row('{ disabled }', '<Button {disabled}><DiskMeter label="Drive" />Sync</Button>')],
+      ['an icon of the same name not from lucide', "<script>import RefreshCw from './RefreshCw.svelte';</script>" + row('{ disabled }', '<Button {disabled}><RefreshCw />Sync</Button>')],
+      ['a name lucide gives only as a type', lucide + row('{ disabled }', '<Button {disabled}><LucideIcon />Sync</Button>')],
+      ['an icon from a lucide import of a type', "<script>import type { RefreshCw } from '@lucide/svelte';</script>" + row('{ disabled }', '<Button {disabled}><RefreshCw />Sync</Button>')],
+    ] as const) {
+      it(`is refused as ${name}`, () => {
+        expect(refused(text)).toBe(true);
+      });
+    }
   });
 
   it('finds nothing to refuse in the call sites', () => {

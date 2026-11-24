@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Eye } from '@lucide/svelte';
+  import { Eye, RefreshCw, Trash2 } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
   import Notice from '../../lib/components/Notice.svelte';
@@ -330,6 +330,7 @@
       <SettingsRow label={msg('settings.generalSyncNowLabel')} hint={msg('settings.generalSyncNowSub')} disabledReason={needsSync}>
         {#snippet children({ hintId, disabled })}
           <Button size="sm" aria-describedby={hintId} {disabled} busy={page.syncingNow} onclick={page.runSyncNow}>
+            <RefreshCw size="1.5rem" strokeWidth={1.8} />
             {page.syncingNow ? msg('settings.generalSyncNowRunning') : msg('settings.generalSyncNowLabel')}
           </Button>
         {/snippet}
@@ -338,6 +339,7 @@
         <SettingsRow label={msg('settings.generalSyncForgetLabel')} hint={msg('settings.generalSyncForgetSub')} disabledReason={needsAccount}>
           {#snippet children({ hintId, disabled })}
             <Button size="sm" variant="danger" aria-describedby={hintId} {disabled} busy={page.forgettingRemote} onclick={page.askForgetRemote}>
+              <Trash2 size="1.5rem" strokeWidth={1.8} />
               {page.forgettingRemote ? msg('settings.generalSyncForgetRunning') : msg('settings.generalSyncForgetLabel')}
             </Button>
           {/snippet}
