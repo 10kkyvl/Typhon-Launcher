@@ -156,7 +156,8 @@ describe('the general tab: every switch', () => {
   for (const [label, hint, patch] of SWITCHES) {
     it(`${label}: named and described by its row, saves ${JSON.stringify(patch)}`, async () => {
       open();
-      const control = sw(label);
+      // The power and priority rows come with the app facts.
+      const control = await screen.findByRole('switch', { name: msg(label) });
       expect(control.hasAttribute('disabled')).toBe(false);
       expect(description(control)).toBe(NOTES[label] ? said(hint, NOTES[label]) : msg(hint));
 
@@ -308,6 +309,54 @@ describe('the general tab: disabled rows', () => {
     const find = button('settings.extlibLabel');
     expect(find.disabled).toBe(true);
     expect(description(find)).toBe(said('settings.extlibWindowsOnly', 'settings.extlibSub'));
+  });
+});
+
+// What only some platforms have waits for the app facts: a Mac must not see Windows rows while they
+// are pending or after their read failed, and Windows must not hear it lacks Windows.
+describe('the general tab: rows that depend on the platform', () => {
+  const windowsRows = () => ['settings.gameModePowerLabel', 'settings.gameModePriorityLabel'].map((key) => screen.queryByRole('switch', { name: msg(key as MessageKey) }));
+
+  it('draws no Windows row and offers no import while the app facts are pending', () => {
+    vi.mocked(getAppInfo).mockReturnValue(new Promise(() => {}));
+    open();
+    expect(windowsRows()).toEqual([null, null]);
+    const find = button('settings.extlibLabel');
+    expect(find.disabled).toBe(true);
+    expect(description(find)).toBe(msg('settings.extlibSub'));
+    expect(screen.queryByText(msg('settings.extlibWindowsOnly'))).toBeNull();
+    expect(sw('settings.gameModeHideLabel')).toBeTruthy();
+  });
+
+  it('draws no Windows row and offers no import when the app facts could not be read', async () => {
+    vi.mocked(getAppInfo).mockRejectedValue(new Error('app info down'));
+    open();
+    await waitFor(() => expect(console.warn).toHaveBeenCalled());
+    expect(windowsRows()).toEqual([null, null]);
+    const find = button('settings.extlibLabel');
+    expect(find.disabled).toBe(true);
+    expect(description(find)).toBe(msg('settings.extlibSub'));
+    expect(screen.queryByText(msg('settings.extlibWindowsOnly'))).toBeNull();
+  });
+
+  it('on a Mac: no Windows row, and the import off because it needs Windows', async () => {
+    vi.mocked(getAppInfo).mockResolvedValue({ ...APP, platform: 'darwin' });
+    open();
+    const find = button('settings.extlibLabel');
+    await waitFor(() => expect(description(find)).toBe(said('settings.extlibWindowsOnly', 'settings.extlibSub')));
+    expect(find.disabled).toBe(true);
+    expect(windowsRows()).toEqual([null, null]);
+  });
+
+  it('on Windows: the power and priority switches, and the import on offer', async () => {
+    open();
+    const [power, priority] = await Promise.all(
+      ['settings.gameModePowerLabel', 'settings.gameModePriorityLabel'].map((key) => screen.findByRole('switch', { name: msg(key as MessageKey) })),
+    );
+    expect([power.hasAttribute('disabled'), priority.hasAttribute('disabled')]).toEqual([false, false]);
+    const find = button('settings.extlibLabel');
+    expect(find.disabled).toBe(false);
+    expect(description(find)).toBe(msg('settings.extlibSub'));
   });
 });
 

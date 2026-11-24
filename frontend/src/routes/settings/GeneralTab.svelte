@@ -46,7 +46,9 @@
     });
   }
 
-  const gameModeMac = $derived(page.appInfo?.platform === 'darwin');
+  // Windows-only rows wait for the platform: drawn on a guess, a Mac would show them while the app
+  // facts are pending or after their read failed.
+  const gameModePlatformRows = $derived(page.appInfo !== null && page.appInfo.platform !== 'darwin');
   const trayEnabled = $derived(current?.minimizeToTray ?? true);
 
   function setGameMode(change: Partial<GameMode>) {
@@ -118,7 +120,7 @@
 
     <Card title={msg('settings.gameModeCardTitle')}>
       <p class="intro">{msg('settings.gameModeDuring')}</p>
-      {#if !gameModeMac}
+      {#if gameModePlatformRows}
         <SettingsRow label={msg('settings.gameModePowerLabel')} hint={msg('settings.gameModePowerSub')}>
           {#snippet children({ labelId, hintId })}
             <Toggle
@@ -145,7 +147,7 @@
           />
         {/snippet}
       </SettingsRow>
-      {#if !gameModeMac}
+      {#if gameModePlatformRows}
         <SettingsRow label={msg('settings.gameModePriorityLabel')} hint={msg('settings.gameModePrioritySub')}>
           {#snippet children({ labelId, hintId })}
             <Toggle
