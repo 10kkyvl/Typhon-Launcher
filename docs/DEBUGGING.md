@@ -62,7 +62,7 @@ wails3 task build:devmock
 wails3 task run:devmock
 wails3 task dev:devmock
 wails3 task test:devmock
-wails3 task devrelease VERSION=0.9.9      # fake signed self-update server on 127.0.0.1:8099; prints the two TYPHON_DEVMOCK_* vars
+wails3 task devrelease VERSION=0.9.9      # mock self-update source on 127.0.0.1:8099 (§4.1); prints the two TYPHON_DEVMOCK_* vars
 
 # Go checks: select those relevant to the change; this is not a mandatory sequence.
 # Main/internal scope avoids unrelated generated build/ios packages.
@@ -100,12 +100,54 @@ The Wails development build (`common:build:frontend DEV=true`, also `build:devmo
 | Launch | Library → Play → `library.Service.PlayGame`; devmock spawns a fake process registered in `devmock-processes.json` for `TYPHON_DEVMOCK_GAME_SECONDS` | `game started/stopped`, `game:started/stopped` events, playtime in `library.json` |
 | Update detection | edit the feed file: same `distributionId`, higher `version`, refresh the source | `update available`, `<ConfigDir>/updates.json`; rules in `internal/updates/resolver.go::ResolveUpdate` |
 | Update install | game page → update → `updates.Service.PreparePlan` → `StartUpdate` | `<Library>/Games/.staging/<gameID>`, `<installDir>.previous`, `journal.json`, `update:*` events |
-| Self-update | `wails3 task devrelease VERSION=x.y.z`, export the printed vars, start devmock; About → check | `selfupdate/state.json`, `selfupdate/<version>/<artifact>[.partial]`, `selfupdate/worker/*`, `launcher:update_status` |
+| Self-update | mock source of §4.1, start devmock with its `update.env`; About → check | `selfupdate/state.json`, `selfupdate/<version>/<artifact>[.partial]`, `selfupdate/worker/*`, `launcher:update_status` |
 | Move between disks | game page → move → `relocate.Service.MoveGame` (or Settings → library folder → `MoveLibrary`) | `moves.json`, `<target>.staging`, `move:*` events |
 | Uninstall / delete | game page → remove → `install.Service.InspectRemoval` + `RemoveGame` | `<installDir>.removing[-N]`, `removals.json`, `install:removed`, `library-excluded.json` |
 | Crash recovery | kill the process (`kill -9`) mid-flow, restart | `ServiceStartup` log lines listed in §7 |
 
 Windows-only paths (UAC worker, `.lnk`, registry uninstall, Credential Manager) cannot be reproduced on macOS; the devmock protocol tests are the closest stand-in, and `GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build . ./internal/...` proves compilation only.
+
+### 4.1 Self-update against the mock source
+
+`tools/devrelease` builds devmock launchers of consecutive versions (only `-X typhon/internal/app.Version`
+differs), signs a manifest for each with `Notes` and `Releases` and serves them on 127.0.0.1. Run it from
+the tree the test app is built from, after the frontend build, so the new versions carry the same UI.
+
+```bash
+go run ./tools/devrelease -version 1.4.2 -count 3 -seconds 20 -state <dir>   # or wails3 task devrelease VERSION=1.4.2 -- -state <dir>
+source <dir>/update.env    # in the launcher wrapper, before exec: TYPHON_DEVMOCK_MANIFEST_URL and _RELEASE_PUBKEY
+curl -s 127.0.0.1:8099/control                     # mode, pace, chain, what the last launcher was offered
+curl -s -X POST '127.0.0.1:8099/control?fail=hash'  # switch a failure on; fail= switches back to normal
+curl -s -X POST '127.0.0.1:8099/control?seconds=60' # pace of downloads that start afterwards
+```
+
+- `-state <dir>` keeps the signing key (`release-key`) between runs and writes `update.env`; `-notes <file>`
+  takes a JSON array of `{summary, changes:[{kind,text}]}` (entry i for version i, a built-in Russian
+  sample otherwise); `-seconds N` makes one whole artifact take about N s (0: full speed); `-artifact
+  <binary>` serves one pre-built version (`-count 1`).
+- The manifest offers the oldest version newer than the request's `X-Typhon-Version`, so after each
+  update the next one of the chain is offered; past the last one the launcher is up to date. Replay
+  from the start needs the original binary back and a launcher restart.
+- With `TYPHON_DEVMOCK_MANIFEST_URL` set a devmock launcher updates as an installed one even in portable
+  mode (`selfupdate/mode_devmock.go`): plain artifact, rename over the running binary. The worker and the
+  relaunched launcher inherit the environment, so `TYPHON_PORTABLE_DIR`, `TYPHON_TEST_DATA_DIR` and the
+  `TYPHON_DEVMOCK_*` switches still apply; the relaunched process's stdout/stderr are not the wrapper's
+  (its log is `<ConfigDir>/typhon.log`, the worker's `<ConfigDir>/selfupdate/worker/worker.log`).
+- The startup check runs at once, then every 15 min (failed quiet checks retry from 30 s); a quiet check
+  does not show its error. About → "check for updates" asks at once and shows the code.
+
+| `fail=` | What the source does | Code in the launcher |
+|---|---|---|
+| `manifest-500` | manifest answers 500 | `selfupdate.manifest_status` |
+| `bad-signature` | manifest signed with a stranger key | `selfupdate.bad_signature` |
+| `unknown-key` | manifest names an unknown key id | `selfupdate.unknown_key` |
+| `artifact-500` | artifact answers 500 | `selfupdate.artifact_status` after 3 tries (about 7 s) |
+| `stall` | no byte past the middle (or past the current position) until cleared or the client leaves | `selfupdate.stalled` after the 60 s guard × 3 tries; clearing the mode in time lets the same transfer carry on |
+| `hash` | right length, last byte flipped | `selfupdate.hash_mismatch` at the end of the download |
+| `size` | one byte short | `selfupdate.size_mismatch` |
+
+The listener binds 127.0.0.1 and refuses any non-loopback peer; `POST /control` with an `Origin` header
+(a web page) is refused.
 
 ## 5. State on disk
 
