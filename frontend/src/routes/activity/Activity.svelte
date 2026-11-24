@@ -169,9 +169,9 @@
             {#if user?.bio}<p class="bio">{user.bio}</p>{/if}
           </div>
           <div class="stats">
-            <StatTile value={formatCount(stats.games)} label={msg('transfers.activityStatGames')} />
-            <StatTile value={formatCount(stats.hours)} label={msg('transfers.activityStatHours')} />
-            <StatTile value={formatCount(stats.completed)} label={msg('transfers.activityStatCompleted')} />
+            <StatTile align="center" value={formatCount(stats.games)} label={msg('transfers.activityStatGames')} />
+            <StatTile align="center" value={formatCount(stats.hours)} label={msg('transfers.activityStatHours')} />
+            <StatTile align="center" value={formatCount(stats.completed)} label={msg('transfers.activityStatCompleted')} />
           </div>
         </Card>
 
@@ -329,11 +329,6 @@
     margin-top: var(--space-5);
     padding-top: var(--space-5);
     border-top: 1px solid var(--border);
-    text-align: center;
-  }
-
-  .stats :global(.tile) {
-    align-items: center;
   }
 
   .friends {

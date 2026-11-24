@@ -26,6 +26,9 @@ function declarations(css: string, names: RegExp): string[] {
   return [...css.matchAll(/^\s*([a-z-]+):\s*([^;]+);/gm)].filter(([, name]) => names.test(name)).map(([, name, value]) => `${name}: ${value.trim()}`);
 }
 
+/** A rule naming a figure's or a heading's class anywhere in its selector, or any :global reach-in. */
+const COPY_OR_REACH_IN = [/(^|[\s,>+~(])\.(eyebrow|longest|tile)\b[^{;]*\{/m, /:global\b/];
+
 const SPACING = /^(gap|row-gap|column-gap|margin(-\w+)?|padding(-\w+)?)$/;
 const SPACE_VALUE = /^((var\(--space-\d+\)|0|auto|calc\(var\(--space-\d+\) \* -1\))\s*)+$/;
 
@@ -48,10 +51,10 @@ describe('the statistics and activity styles', () => {
     expect(literal).toEqual([]);
   });
 
-  it('draw no local copy of a figure or of a section heading', () => {
+  it('draw no local copy of a figure or of a section heading, and reach into no base part', () => {
     const markup = (source: string) => source.replace(/<(script|style)\b[\s\S]*?<\/\1>/g, '');
     const copies = Object.entries(FILES).flatMap(([path, source]) => [
-      ...[/^\s*\.(eyebrow|longest|tile)\b/m].filter((pattern) => pattern.test(style(source))).map((pattern) => `${path}: ${pattern.source}`),
+      ...COPY_OR_REACH_IN.filter((pattern) => pattern.test(style(source))).map((pattern) => `${path}: ${pattern.source}`),
       ...[/class="(value|tile|eyebrow)"/, /<h[2-6]\b(?![^>]*class="name")/].filter((pattern) => pattern.test(markup(source))).map((pattern) => `${path}: ${pattern.source}`),
     ]);
     expect(copies).toEqual([]);
@@ -61,5 +64,10 @@ describe('the statistics and activity styles', () => {
     expect(declarations('a {\n  gap: 0.4rem;\n  font-size: 1.2rem;\n}', SPACING)).toEqual(['gap: 0.4rem']);
     expect(SPACE_VALUE.test('var(--space-4) calc(var(--space-4) * -1) 0')).toBe(true);
     expect(SPACE_VALUE.test('0.6rem var(--space-3)')).toBe(false);
+    const caught = (css: string) => COPY_OR_REACH_IN.some((pattern) => pattern.test(css));
+    expect(caught('  .tile {\n    gap: 0;\n  }')).toBe(true);
+    expect(caught('  .stats :global(.tile) {\n    align-items: center;\n  }')).toBe(true);
+    expect(caught('  .stats .tile,\n  .row {\n    gap: 0;\n  }')).toBe(true);
+    expect(caught('  .stats {\n    text-align: center;\n  }\n  .tiles {\n    gap: 0;\n  }')).toBe(false);
   });
 });

@@ -23,6 +23,8 @@ import { settings } from '../../lib/stores/settings';
 import { toasts } from '../../lib/stores/toasts';
 import { authState, authView } from '../../lib/stores/user';
 import { renderDom } from '../../lib/testing/dom';
+import { applyStyles } from '../../lib/testing/styles';
+import statTileSource from '../../lib/components/StatTile.svelte?raw';
 import { playtime, relativeDate, shortDate } from '../../lib/utils/format';
 import activitySource from './Activity.svelte?raw';
 import Activity from './Activity.svelte';
@@ -444,6 +446,23 @@ describe('Activity: the games of the week', () => {
     const rows = screen.getAllByRole('listitem').map((row) => row.textContent?.replace(/\s+/g, ' ').trim());
     expect(rows).toHaveLength(2);
     expect(rows[1]).toContain('Archived game');
+  });
+});
+
+describe('Activity: the profile card', () => {
+  it('centres its three figures under the centred name, through the tile itself', () => {
+    vi.mocked(feed).mockReturnValueOnce(new Promise(() => {}));
+    authState.set('authenticated');
+    const { container } = renderDom(Activity);
+
+    const tiles = [...container.querySelectorAll<HTMLElement>('.left .tile')];
+    expect(tiles.map((tile) => tile.querySelector('.label')?.textContent)).toEqual([
+      msg('transfers.activityStatGames'),
+      msg('transfers.activityStatHours'),
+      msg('transfers.activityStatCompleted'),
+    ]);
+    applyStyles(tiles[0], statTileSource);
+    expect(tiles.map((tile) => [getComputedStyle(tile).alignItems, getComputedStyle(tile).textAlign])).toEqual(Array(3).fill(['center', 'center']));
   });
 });
 
