@@ -486,8 +486,15 @@ func (s *Service) recoverPrepare(ctx context.Context, job Job) {
 }
 
 // recoverCopyOrVerify undoes an interrupted copy: Source was never touched
-// by CopyDir/hashdir.Build, so only Staging needs cleaning up.
+// by CopyDir/hashdir.Build, so only Staging needs cleaning up. That holds only
+// while Source is there: with it gone the staging folder may hold the only
+// bytes of the game, so nothing is deleted, the job ends for good and the
+// folder stays listed (stagingVerdict: possibly the only copy).
 func (s *Service) recoverCopyOrVerify(job Job) {
+	if job.Staging != "" && !exists(job.Source) && present(job.Staging) {
+		s.markRecoveryFailed(job.ID, fmt.Errorf("%w: %s is gone, %s kept", ErrAmbiguousRecovery, job.Source, job.Staging))
+		return
+	}
 	if job.Staging != "" {
 		release, err := s.holdStaging(job)
 		switch {
