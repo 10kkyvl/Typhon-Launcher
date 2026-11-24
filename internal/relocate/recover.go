@@ -325,8 +325,9 @@ func (s *Service) registeredAtTarget(job Job) bool {
 
 // keepReappearedSource settles a renamed move whose old folder is on disk
 // again at the repoint. The rename took that folder away, so what is there
-// now is not the move's (the game was installed there again, or screenshots
-// were taken since): it is never deleted. A card that already names the
+// now is not the move's (the game was installed there again, or the player or
+// another program made it; the launcher's own screenshot capture refuses a
+// missing folder): it is never deleted. A card that already names the
 // move's copy finished the move; one that names the old folder is done with
 // the move, which ends with its copy listed; an item with no card fails for
 // good, both folders kept.

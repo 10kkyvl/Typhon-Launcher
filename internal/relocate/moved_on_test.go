@@ -710,7 +710,7 @@ func TestRenamedMoveNeverListsTheOldPlaceAsItsCopy(t *testing.T) {
 }
 
 // The same for a library move's screenshots folder: one that exists again at
-// the old place holds screenshots taken since, and is never deleted.
+// the old place holds what someone put there since, and is never deleted.
 func TestRenamedLibraryItemKeepsAFolderThatAppearedAtTheOldPlace(t *testing.T) {
 	root := t.TempDir()
 	src := filepath.Join(root, "old", "Screenshots")
