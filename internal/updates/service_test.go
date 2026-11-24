@@ -46,6 +46,9 @@ func (f *fakeLibrary) ApplyInstalledUpdate(_ context.Context, u library.Installe
 		if f.games[i].ID != u.ID {
 			continue
 		}
+		if u.InstallDir != "" && filepath.Clean(u.InstallDir) != filepath.Clean(f.games[i].InstallDir) {
+			return library.Game{}, library.ErrFolderChanged
+		}
 		f.games[i].Version = u.Version
 		f.games[i].Executable = u.Executable
 		f.games[i].ReleaseID = u.ReleaseID

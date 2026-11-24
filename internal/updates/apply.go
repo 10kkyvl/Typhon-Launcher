@@ -1595,10 +1595,18 @@ func (s *Service) recordUsage(ev usagestats.Event) {
 	rec(ev)
 }
 
+// restoreJournalMetadata gives the card back the version it had when the
+// journal was written. A card that names another folder since has nothing of
+// that folder's to restore: it is left as it is, the files of the journal's
+// folder are put back all the same, and the journal is done.
 func (s *Service) restoreJournalMetadata(ctx context.Context, j SwapJournal) error {
 	if j.Original == nil || s.library == nil {
 		return nil
 	}
 	_, err := s.library.ApplyInstalledUpdate(ctx, *j.Original)
+	if errors.Is(err, library.ErrFolderChanged) {
+		slog.Warn("recover swap journal: the card names another folder, left as it is", "game", j.GameID, "kind", j.Kind, "folder", j.InstallDir, "error", err)
+		return nil
+	}
 	return err
 }

@@ -2,6 +2,7 @@ package updates
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -43,13 +44,17 @@ func (s *Service) finishRollback(ctx context.Context, j SwapJournal) error {
 	if s.library == nil {
 		return errNoLibrary
 	}
-	if _, err := s.library.ApplyInstalledUpdate(ctx, library.InstalledUpdate{
+	// A card that names another folder since is left as it is: the rollback is
+	// finished in its own folder and reported as not applied to the card, so
+	// no start is left holding a journal it can never finish.
+	_, cardErr := s.library.ApplyInstalledUpdate(ctx, library.InstalledUpdate{
 		ID: j.GameID, InstallDir: r.InstallDir, Executable: r.Executable,
 		Version: r.Version, VersionSource: string(VersionSourceRelease),
 		ReleaseID: r.ReleaseID, SourceID: r.SourceID, DistributionID: r.DistributionID,
 		ReleaseUploadedAt: r.ReleaseUploadedAt,
-	}); err != nil {
-		return err
+	})
+	if cardErr != nil && !errors.Is(cardErr, library.ErrFolderChanged) {
+		return cardErr
 	}
 	s.mu.Lock()
 	old, had := s.rollbacks[j.GameID]
@@ -74,7 +79,7 @@ func (s *Service) finishRollback(ctx context.Context, j SwapJournal) error {
 	}
 	s.updateFieldsBestEffort(j.GameID, func(u *Update) { u.CanRollback = false; u.State = StateIdle; u.Plan = nil; u.Error = "" })
 	s.store.removeManifest(j.GameID)
-	return nil
+	return cardErr
 }
 
 func (s *Service) restoreSwapRollbackMetadata(j SwapJournal) error {

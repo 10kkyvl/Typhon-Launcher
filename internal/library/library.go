@@ -836,6 +836,12 @@ func (s *Service) recordUsage(ev usagestats.Event) {
 	s.usageRecord(ev)
 }
 
+// ApplyInstalledUpdate records the version an update or a rollback wrote into
+// the card's folder. It never gives the card another folder: a u.InstallDir
+// the card no longer names is ErrFolderChanged (a move finished, an install or
+// a scan rebound the card), and a game held by a move or its recovery is
+// ErrGameMoving, since the move repoints the card and deletes the old folder.
+//
 //wails:ignore
 func (s *Service) ApplyInstalledUpdate(ctx context.Context, u InstalledUpdate) (Game, error) {
 	const maxMeasureRetries = 3
@@ -867,11 +873,20 @@ func (s *Service) ApplyInstalledUpdate(ctx context.Context, u InstalledUpdate) (
 			return Game{}, errors.New("игра не найдена")
 		}
 		previous := s.games[pos]
-		if u.InstallDir != "" && !platform.SamePath(u.InstallDir, previous.InstallDir) {
+		otherFolder := u.InstallDir != "" && !platform.SamePath(u.InstallDir, previous.InstallDir)
+		if otherFolder {
 			if err := s.removingLocked(pos); err != nil {
 				s.mu.Unlock()
 				return Game{}, err
 			}
+		}
+		if _, ok := s.relocating[u.ID]; ok {
+			s.mu.Unlock()
+			return Game{}, ErrGameMoving
+		}
+		if otherFolder {
+			s.mu.Unlock()
+			return Game{}, fmt.Errorf("%w: %s", ErrFolderChanged, previous.InstallDir)
 		}
 		if previous.InstallDir != before.InstallDir || previous.Executable != before.Executable {
 			s.mu.Unlock()
