@@ -8,6 +8,7 @@ vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).
 import { msg } from '../../lib/i18n';
 import { dismissToast, queuedToasts, toasts } from '../../lib/stores/toasts';
 import { renderDom } from '../../lib/testing/dom';
+import { endUpdateShow, updateShow } from '../../lib/stores/updateShow';
 import Showcase from './Showcase.svelte';
 import { RETRY_MS } from './ShowcaseNotices.svelte';
 
@@ -35,7 +36,7 @@ describe('the component showcase', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: 'Component showcase' })).toBeTruthy();
     const sections = screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent);
-    expect(sections).toEqual(['Actions', 'Fields', 'Status', 'Notices', 'Layers', 'Games', 'Screen parts']);
+    expect(sections).toEqual(['Actions', 'Fields', 'Status', 'Notices', 'Layers', 'Games', 'Screen parts', 'Launcher update']);
     expect(warn).not.toHaveBeenCalled();
     expect(error).not.toHaveBeenCalled();
   });
@@ -136,5 +137,37 @@ describe('the component showcase', () => {
     expect(create.getAttribute('aria-busy')).toBe('true');
     expect(create.textContent).toContain(msg('saves.creating'));
     expect(document.activeElement).toBe(create);
+  });
+});
+
+// The show covers the window while it runs (lib/components/UpdateShow.svelte, mounted by the app, not
+// here): each play has to end on its own, and the motion-off play gives the setting back.
+describe('the launcher update plays of the showcase', () => {
+  afterEach(() => {
+    endUpdateShow();
+    document.documentElement.classList.remove('no-anim');
+  });
+
+  it('starts the show and, four seconds on, ends applying the way it says', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const { user } = renderDom(Showcase);
+    for (const [name, phase] of [['Update that works', 'finish'], ['Update that fails', 'home']] as const) {
+      endUpdateShow();
+      await user.click(screen.getByRole('button', { name }));
+      expect(get(updateShow)?.phase, name).toBe('run');
+      vi.advanceTimersByTime(4000);
+      expect(get(updateShow)?.phase, name).toBe(phase);
+    }
+    await user.click(screen.getByRole('button', { name: 'Start after an update' }));
+    expect(get(updateShow)?.phase).toBe('finish');
+  });
+
+  it('plays with motion off and gives the animations setting back when the show is over', async () => {
+    const { user } = renderDom(Showcase);
+    await user.click(screen.getByRole('button', { name: 'With motion off' }));
+    expect(document.documentElement.classList.contains('no-anim')).toBe(true);
+    expect(get(updateShow)?.phase).toBe('run');
+    endUpdateShow();
+    expect(document.documentElement.classList.contains('no-anim')).toBe(false);
   });
 });

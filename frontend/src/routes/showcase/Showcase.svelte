@@ -12,6 +12,7 @@
   import ShowcaseLayers from './ShowcaseLayers.svelte';
   import ShowcaseNotices from './ShowcaseNotices.svelte';
   import ShowcaseStatus from './ShowcaseStatus.svelte';
+  import ShowcaseUpdate from './ShowcaseUpdate.svelte';
 
   /**
    * Every base component of lib/components in its states, in the current theme: for developers, theme
@@ -35,6 +36,7 @@
     <ShowcaseLayers />
     <ShowcaseGames />
     <ShowcaseKit />
+    <ShowcaseUpdate />
   </div>
 </Page>
 
