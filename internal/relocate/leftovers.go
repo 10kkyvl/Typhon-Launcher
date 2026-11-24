@@ -48,14 +48,23 @@ func stagingVerdict(job Job, sourceExists bool, games []library.Game) (ok bool, 
 		platform.Inside(job.Source, job.Staging) || platform.Inside(job.Staging, job.Source):
 		return false, diskreason.RelocateJournal, "папка пересекается с исходной"
 	}
+	if holdsGame(job.Staging, games) {
+		return false, diskreason.HoldsGame, "в этой папке лежит игра из библиотеки"
+	}
+	return true, "", ""
+}
+
+// holdsGame says whether a library card's files lie at path, inside it or
+// around it: deleting path would take them along.
+func holdsGame(path string, games []library.Game) bool {
 	for _, g := range games {
 		for _, root := range g.Footprint() {
-			if platform.SamePath(root, job.Staging) || platform.Inside(root, job.Staging) || platform.Inside(job.Staging, root) {
-				return false, diskreason.HoldsGame, "в этой папке лежит игра из библиотеки"
+			if platform.SamePath(root, path) || platform.Inside(root, path) || platform.Inside(path, root) {
+				return true
 			}
 		}
 	}
-	return true, "", ""
+	return false
 }
 
 func (s *Service) stagingFacts() ([]Job, []library.Game, error) {
