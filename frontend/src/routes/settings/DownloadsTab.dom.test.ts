@@ -401,6 +401,31 @@ describe('the downloads tab: a retry of the cloud deletion that fails again', ()
   });
 });
 
+describe('the downloads tab: a failed cloud deletion after signing out', () => {
+  it('keeps the retry on screen but off, with the switch, until an account is back', async () => {
+    authState.set('authenticated');
+    settings.set({ ...SAVED, cloudSaves: true } as SettingsData);
+    vi.mocked(cloudForget).mockRejectedValue(new Error('down'));
+    const keys = open();
+    await keys.click(screen.getByRole('switch', { name: msg('cloudsaves.settingsLabel') }));
+    const dialog = await screen.findByRole('dialog', { name: msg('cloudsaves.disableTitle') });
+    await keys.click(within(dialog).getByRole('button', { name: msg('cloudsaves.disableDelete') }));
+    const retry = (await screen.findByRole('button', { name: msg('cloudsaves.retryForget') })) as HTMLButtonElement;
+    expect(retry.disabled).toBe(false);
+
+    authState.set('unauthenticated');
+
+    await vi.waitFor(() => expect(retry.disabled).toBe(true));
+    expect(screen.getByRole('switch', { name: msg('cloudsaves.settingsLabel') }).hasAttribute('disabled')).toBe(true);
+    await keys.click(retry);
+    expect(cloudForget).toHaveBeenCalledTimes(1);
+
+    authState.set('authenticated');
+
+    await vi.waitFor(() => expect(retry.disabled).toBe(false));
+  });
+});
+
 describe('the downloads tab: beta versions', () => {
   const TESTER = { tester: true } as CurrentUser;
 
