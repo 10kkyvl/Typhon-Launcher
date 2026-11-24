@@ -1,10 +1,4 @@
 <script lang="ts">
-  import { settings as appearanceSettings } from '../stores/settings';
-  import { displayedAccent } from '../theme/apply';
-  import { rgb } from '../theme/accent';
-  const logoChannels = $derived(rgb($displayedAccent).map(v => v / 255));
-  // Replace the blue chroma (B-R), retaining neutral shadows and highlights.
-  const logoMatrix = $derived(logoChannels.map(k => `${1-k} 0 ${k} 0 0`).join(' ') + ' 0 0 0 1 0');
   import { Activity, ChartColumn, Database, Download, HardDrive, Gamepad2, History, LayoutGrid, LifeBuoy, MonitorDown, Settings, SwatchBook, Users, Wifi } from '@lucide/svelte';
   import { navigate, route, type RouteName } from '../stores/router';
   import { incomingCount } from '../stores/social';
@@ -18,6 +12,7 @@
   import ActivityWidget from './ActivityWidget.svelte';
   import BetaBadge from './BetaBadge.svelte';
   import CountBadge from './CountBadge.svelte';
+  import LogoMark from './LogoMark.svelte';
   import SidebarStatus from './SidebarStatus.svelte';
 
   let sidebar = $state<HTMLElement>();
@@ -112,8 +107,7 @@
 <aside class="sidebar" class:right={$themeLayout.side === 'right'} data-part="sidebar" bind:this={sidebar}>
   <span class="plate" bind:this={plateEl} aria-hidden="true"></span>
   <div class="logo">
-    <svg width="0" height="0" aria-hidden="true" style="position:absolute"><defs><filter id="typhon-accent-logo" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values={logoMatrix} /></filter></defs></svg>
-    <img style:filter={$appearanceSettings?.tintLogo ? 'url(#typhon-accent-logo)' : undefined} class="logo-mark" src="/typhon.png" alt="" draggable="false" />
+    <LogoMark />
     <span class="wordmark">Typhon</span>
     <BetaBadge />
   </div>
@@ -175,11 +169,6 @@
     gap: var(--space-2);
     padding: 0.2rem 0.6rem 0;
     margin-bottom: var(--space-8);
-  }
-
-  .logo-mark {
-    width: 2.8rem;
-    height: 2.8rem;
   }
 
   .wordmark {
