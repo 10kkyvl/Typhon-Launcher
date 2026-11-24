@@ -21,6 +21,7 @@
   } from '../stores/updates';
   import { bytesSize, progressPercent, relativeDate } from '../utils/format';
   import { updateReasonKey } from './updateReason';
+  import { activeMove } from '../stores/relocate';
   import { toast } from '../stores/toasts';
   import { msg } from '../i18n';
 
@@ -35,6 +36,9 @@
   const availability = $derived(update.availability);
   const plan = $derived(update.plan ?? null);
   const busy = $derived(update.state === 'updating' || update.state === 'update_downloading');
+  // The game page holds its main action during the game's own move: the update would write the
+  // folder the move copies and deletes, and the launcher refuses it then.
+  const moving = $derived(!running && $activeMove?.gameId === update.gameId);
   const isUpdate = $derived(availability.kind === 'update');
   const noRelease = $derived(availability.kind === 'none');
   const headline = $derived.by(() => {
@@ -89,7 +93,7 @@
   }
 
   export function start() {
-    if (busy || running) return;
+    if (busy || running || moving) return;
     if (plan) {
       confirmOpen = true;
       return;
@@ -189,6 +193,8 @@
   {/if}
   {#if running}
     <div class="reason"><Notice compact announce={false}>{msg('ui.gameRunningBeforeUpdate')}</Notice></div>
+  {:else if moving}
+    <div class="reason"><Notice compact announce={false}>{msg('games.mainActionMoving')}</Notice></div>
   {/if}
 
   <div class="actions">
@@ -198,7 +204,7 @@
         {msg('ui.abort')}
       </Button>
     {:else if plan}
-      <Button variant="primary" disabled={running} onclick={() => (confirmOpen = true)}>{msg('ui.updateAction')}</Button>
+      <Button variant="primary" disabled={running || moving} onclick={() => (confirmOpen = true)}>{msg('ui.updateAction')}</Button>
       <Button aria-expanded={detailsOpen} aria-controls={detailsOpen ? `${uid}-details` : undefined} onclick={() => (detailsOpen = !detailsOpen)}>
         {msg('ui.details')}
         <span class="chevron" class:open={detailsOpen}>

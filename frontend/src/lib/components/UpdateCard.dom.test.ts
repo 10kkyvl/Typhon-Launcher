@@ -3,6 +3,8 @@ import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../i18n';
 import { getUpdateHistory, type Update } from '../services/updates';
+import type { MoveJob } from '../services/relocate';
+import { moves } from '../stores/relocate';
 import { toasts } from '../stores/toasts';
 import { renderDom } from '../testing/dom';
 import UpdateCard from './UpdateCard.svelte';
@@ -16,8 +18,13 @@ vi.mock('../services/updates', async (importOriginal) => ({
 
 afterEach(() => {
   toasts.set([]);
+  moves.set([]);
   vi.mocked(getUpdateHistory).mockReset();
 });
+
+function move(patch: Partial<MoveJob> = {}): MoveJob {
+  return { id: 'm1', scope: 'game', stage: 'copy', gameId: 'g', title: 'Game', ...patch } as MoveJob;
+}
 
 function update(patch: Partial<Update> = {}): Update {
   return {
@@ -62,6 +69,30 @@ describe('UpdateCard', () => {
     expect(screen.getByText(msg('ui.gameRunningBeforeUpdate')).closest('.notice')).toBeTruthy();
     expect(document.querySelector('.notice[data-tone="danger"]')).toBeTruthy();
     expect(document.querySelector('p.error')).toBeNull();
+  });
+
+  it('turns Update off while the game moves and says why, as the game page does', async () => {
+    moves.set([move()]);
+    const { user } = renderDom(UpdateCard, { update: update({ plan } as Partial<Update>), running: false });
+
+    const action = screen.getByRole('button', { name: msg('ui.updateAction') });
+    expect(action.hasAttribute('disabled')).toBe(true);
+    expect(screen.getByText(msg('games.mainActionMoving')).closest('.notice')).toBeTruthy();
+    await user.click(action);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('keeps Update on while another game moves or the game\'s own move is over', () => {
+    moves.set([move({ gameId: 'other' })]);
+    renderDom(UpdateCard, { update: update({ plan } as Partial<Update>), running: false });
+    expect(screen.getByRole('button', { name: msg('ui.updateAction') }).hasAttribute('disabled')).toBe(false);
+    expect(screen.queryByText(msg('games.mainActionMoving'))).toBeNull();
+  });
+
+  it('keeps Update on once the game\'s move has failed', () => {
+    moves.set([move({ stage: 'failed' })]);
+    renderDom(UpdateCard, { update: update({ plan } as Partial<Update>), running: false });
+    expect(screen.getByRole('button', { name: msg('ui.updateAction') }).hasAttribute('disabled')).toBe(false);
   });
 
   it('says the history could not be loaded when it fails, and opens no empty dialog', async () => {
