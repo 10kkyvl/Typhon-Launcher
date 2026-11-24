@@ -4,6 +4,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"sync"
+	"time"
 
 	"typhon/internal/selfupdate"
 )
@@ -14,6 +16,27 @@ const versionHeader = "X-Typhon-Version"
 
 type releaseServer struct {
 	releases []release
+	control  *control
+	wait     waitFunc
+}
+
+func newReleaseServer(releases []release, seconds int, wait waitFunc) *releaseServer {
+	if wait == nil {
+		wait = sleepCtx
+	}
+	return &releaseServer{releases: releases, control: &control{seconds: seconds}, wait: wait}
+}
+
+// control is what can be switched while the source runs.
+type control struct {
+	mu      sync.Mutex
+	seconds int
+}
+
+func (c *control) pace() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.seconds
 }
 
 // offerFor picks what to answer a launcher running clientVersion: the oldest
@@ -83,8 +106,14 @@ func (s *releaseServer) handleDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A paced or stalled download outlives the server's WriteTimeout by
+	// design; the client's own stall guard is what ends a hung transfer.
+	if err := http.NewResponseController(w).SetWriteDeadline(time.Time{}); err != nil {
+		slog.Warn("devrelease: lift the write deadline for the download", "error", err)
+	}
 	w.Header().Set("Content-Type", "application/octet-stream")
-	http.ServeContent(w, r, "", info.ModTime(), f)
+	paced := newPacedWriter(r.Context(), w, info.Size(), s.control.pace(), s.wait)
+	http.ServeContent(paced, r, "", info.ModTime(), f)
 }
 
 func newMux(s *releaseServer) *http.ServeMux {

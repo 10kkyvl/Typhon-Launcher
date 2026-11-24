@@ -37,6 +37,7 @@ const (
 var (
 	errMissingVersion = errors.New("devrelease: -version is required")
 	errNotRepoRoot    = errors.New("devrelease: go.mod not found in the current directory; run from the repository root, or pass -artifact")
+	errBadSeconds     = errors.New("devrelease: -seconds must not be negative")
 	errBadSeed        = errors.New("devrelease: -seed must be a base64-encoded 32-byte ed25519 seed")
 )
 
@@ -48,6 +49,7 @@ type config struct {
 	state    string
 	count    int
 	notes    string
+	seconds  int
 }
 
 func parseFlags(args []string, stderr io.Writer) (config, error) {
@@ -60,12 +62,16 @@ func parseFlags(args []string, stderr io.Writer) (config, error) {
 	fs.StringVar(&cfg.seed, "seed", "", "base64-encoded ed25519 seed, 32 bytes (default: the -state key, else a one-off key)")
 	fs.IntVar(&cfg.count, "count", 3, "how many consecutive patch versions to build from -version and offer one after another (1 with -artifact)")
 	fs.StringVar(&cfg.notes, "notes", "", "JSON array of {summary, changes:[{kind,text}]} release notes, entry i for version i (default: a built-in sample)")
+	fs.IntVar(&cfg.seconds, "seconds", 20, "about how long one whole artifact download takes, so progress, cancel and resume can be watched (0: full speed)")
 	fs.StringVar(&cfg.state, "state", "", "directory that keeps the signing key between runs and receives update.env for a wrapper to source")
 	if err := fs.Parse(args); err != nil {
 		return config{}, err
 	}
 	if cfg.version == "" {
 		return config{}, errMissingVersion
+	}
+	if cfg.seconds < 0 {
+		return config{}, errBadSeconds
 	}
 	if cfg.artifact != "" {
 		countSet := false
@@ -157,7 +163,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return closeListener(listener, err)
 	}
 
-	srv := &releaseServer{releases: releases}
+	srv := newReleaseServer(releases, cfg.seconds, sleepCtx)
 	httpServer := &http.Server{
 		Handler:           newMux(srv),
 		ReadHeaderTimeout: readHeaderTimeout,

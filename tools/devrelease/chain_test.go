@@ -105,7 +105,7 @@ func chainServer(t *testing.T) (*releaseServer, ed25519.PublicKey) {
 	if err != nil {
 		t.Fatalf("prepareReleases: %v", err)
 	}
-	return &releaseServer{releases: releases}, pub
+	return newReleaseServer(releases, 0, nil), pub
 }
 
 func fetchOffer(t *testing.T, url string, pub ed25519.PublicKey, clientVersion string) selfupdate.Manifest {

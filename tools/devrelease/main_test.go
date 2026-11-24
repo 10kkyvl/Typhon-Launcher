@@ -174,7 +174,7 @@ func TestHandleManifestServesSignedBytesWithNoStore(t *testing.T) {
 		t.Fatalf("newRelease: %v", err)
 	}
 
-	srv := &releaseServer{releases: []release{rel}}
+	srv := newReleaseServer([]release{rel}, 0, nil)
 	ts := httptest.NewServer(newMux(srv))
 	defer ts.Close()
 
@@ -207,7 +207,7 @@ func TestHandleDownloadServesArtifactBytes(t *testing.T) {
 		t.Fatalf("write artifact: %v", err)
 	}
 
-	srv := &releaseServer{releases: []release{{version: "1.2.3", path: path, art: selfupdate.Artifact{Name: "typhon-devmock"}}}}
+	srv := newReleaseServer([]release{{version: "1.2.3", path: path, art: selfupdate.Artifact{Name: "typhon-devmock"}}}, 0, nil)
 	ts := httptest.NewServer(newMux(srv))
 	defer ts.Close()
 
@@ -234,7 +234,7 @@ func TestHandleDownloadUnknownVersionOrNameIs404(t *testing.T) {
 	if err := os.WriteFile(path, []byte("x"), 0o755); err != nil {
 		t.Fatalf("write artifact: %v", err)
 	}
-	srv := &releaseServer{releases: []release{{version: "1.2.3", path: path, art: selfupdate.Artifact{Name: "typhon-devmock"}}}}
+	srv := newReleaseServer([]release{{version: "1.2.3", path: path, art: selfupdate.Artifact{Name: "typhon-devmock"}}}, 0, nil)
 	ts := httptest.NewServer(newMux(srv))
 	defer ts.Close()
 
@@ -273,7 +273,7 @@ func TestHandleDownloadServesRange(t *testing.T) {
 		t.Fatalf("write artifact: %v", err)
 	}
 
-	srv := &releaseServer{releases: []release{{version: "1.2.3", path: path, art: selfupdate.Artifact{Name: "typhon-devmock"}}}}
+	srv := newReleaseServer([]release{{version: "1.2.3", path: path, art: selfupdate.Artifact{Name: "typhon-devmock"}}}, 0, nil)
 	ts := httptest.NewServer(newMux(srv))
 	defer ts.Close()
 
