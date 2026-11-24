@@ -12,6 +12,7 @@ import (
 	"typhon/internal/emulators"
 	"typhon/internal/hashdir"
 	"typhon/internal/library"
+	"typhon/internal/settings"
 	"typhon/internal/uierr"
 )
 
@@ -319,6 +320,155 @@ func TestCopyOfAGameThatLeftTheLibraryStaysTracked(t *testing.T) {
 				t.Fatalf("job kept after its copy is gone: %+v", jobs)
 			}
 		})
+	}
+}
+
+// A live move holds its target and its staging folder as a recovery holds its
+// copies, from before anything is made there until its goroutine ends: a
+// removal with files of a card whose folder holds one of them is refused (just
+// after a same-volume rename the target is the only copy), and no card is
+// added at or inside them. MoveGame and a library move's game item alike.
+func TestLiveMoveHoldsItsTargetAndStaging(t *testing.T) {
+	type attempt struct {
+		what string
+		err  error
+	}
+	cases := []struct {
+		name    string
+		library bool
+		copy    bool
+	}{
+		{"move, rename", false, false},
+		{"move, copy", false, true},
+		{"library move item, rename", true, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.copy {
+				forceCopyPath(t)
+			}
+			var set *settings.Service
+			gamesDir := t.TempDir()
+			if tc.library {
+				set = newTestSettings(t)
+				gamesDir = set.GetSettings().GamesPath
+			}
+			lib := newTestLibrary(t)
+			s := newTestService(t, set, lib, nil, nil, nil)
+			game := addGameAt(t, lib, gamesDir, "Game")
+			parent := t.TempDir()
+			// A store's card is not moved by a library move, so the Tool stays
+			// in the folder that holds the new library.
+			toolExe := mustMkdirFile(t, parent, "tool.exe", "stub")
+			if _, err := lib.ApplyExternal(t.Context(), []library.ExternalGame{{Provider: library.ProviderSteam, AppID: "42", Title: "Tool", InstallDir: parent, Executable: toolExe}}); err != nil {
+				t.Fatal(err)
+			}
+			var tool library.Game
+			for _, g := range lib.GetGames() {
+				if g.External != nil {
+					tool = g
+				}
+			}
+
+			var attempts []attempt
+			try := func(where string) {
+				release, err := lib.BeginRemoval(tool.ID, tool.InstallDir)
+				if err == nil {
+					release()
+				}
+				attempts = append(attempts, attempt{"removal of the folder around the " + where, err})
+				_, err = lib.AddGame(t.Context(), filepath.Join(where, "late.exe"), "Late")
+				attempts = append(attempts, attempt{"card added inside the " + where, err})
+			}
+			prev := renameDir
+			renameDir = func(oldpath, newpath string) error {
+				if !tc.copy && samePathT(oldpath, game.InstallDir) {
+					if err := prev(oldpath, newpath); err != nil {
+						return err
+					}
+					mustMkdirFile(t, newpath, "late.exe", "stub")
+					try(newpath)
+					return os.Remove(filepath.Join(newpath, "late.exe"))
+				}
+				return prev(oldpath, newpath)
+			}
+			afterCopyBeforeVerify = func(staging string) {
+				late := mustMkdirFile(t, staging+"-late", "late.exe", "stub")
+				if err := os.Rename(late, filepath.Join(staging, "late.exe")); err != nil {
+					t.Error(err)
+				}
+				try(staging)
+				if err := os.Remove(filepath.Join(staging, "late.exe")); err != nil {
+					t.Error(err)
+				}
+			}
+			t.Cleanup(func() { renameDir, afterCopyBeforeVerify = prev, nil })
+
+			var job Job
+			var err error
+			if tc.library {
+				job, err = s.MoveLibrary(parent)
+			} else {
+				job, err = s.MoveGame(game.ID, parent)
+			}
+			if err != nil {
+				t.Fatalf("move = %v", err)
+			}
+			done := s.wait(job.ID)
+			if done.Stage != "" && done.Stage != StageDone {
+				t.Fatalf("move = %s (%s)", done.Stage, done.Error)
+			}
+			if len(attempts) == 0 {
+				t.Fatal("the move never reached its target or staging folder")
+			}
+			for _, a := range attempts {
+				if code := uierr.Code(a.err); code != "library.folder_busy" {
+					t.Errorf("%s during the move = %q (%v), want library.folder_busy", a.what, code, a.err)
+				}
+			}
+			card, err := lib.Find(game.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := os.Stat(filepath.Join(card.InstallDir, "game.exe")); err != nil {
+				t.Fatalf("the moved game: %v", err)
+			}
+			release, err := lib.BeginRemoval(game.ID, "")
+			if err != nil {
+				t.Fatalf("the game after the move ended = %v, want it free", err)
+			}
+			release()
+		})
+	}
+}
+
+// A move into a folder another game's removal is deleting is refused before
+// anything is made at its target, and the refusal leaves nothing behind.
+func TestMoveIntoAFolderBeingRemovedIsRefusedWithNothingMade(t *testing.T) {
+	lib := newTestLibrary(t)
+	s := newTestService(t, nil, lib, nil, nil, nil)
+	game, src := addTestGame(t, lib)
+	parent := filepath.Join(t.TempDir(), "Tools")
+	tool := addExeAt(t, lib, filepath.Join(parent, "tool.exe"), "Tool")
+	release, err := lib.BeginRemoval(tool.ID, tool.InstallDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+
+	_, err = s.MoveGame(game.ID, filepath.Join(parent, "Games"))
+
+	if code := uierr.Code(err); code != "library.folder_busy" {
+		t.Fatalf("MoveGame into a folder being removed = %q (%v), want library.folder_busy", code, err)
+	}
+	if _, err := os.Stat(filepath.Join(parent, "Games")); !os.IsNotExist(err) {
+		t.Fatalf("the refused move made its target's parent: %v", err)
+	}
+	if jobs := s.List(); len(jobs) != 0 {
+		t.Fatalf("jobs = %+v, want none", jobs)
+	}
+	if card, err := lib.Find(game.ID); err != nil || !samePathT(card.InstallDir, src) {
+		t.Fatalf("card = %+v, %v", card, err)
 	}
 }
 

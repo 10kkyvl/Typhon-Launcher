@@ -416,6 +416,51 @@ func TestRemovalAndMoveHoldsRefuseACardAroundAtOrInside(t *testing.T) {
 	}
 }
 
+// A live move holds the folders it writes (target, staging) as a recovery
+// holds its copies: a card at or inside one refuses the move, and none can be
+// added there until release; a card around them is how every library folder
+// is reached and counts for neither.
+func TestLiveMoveHoldsItsCopiesAgainstCardsAtOrInside(t *testing.T) {
+	for _, where := range []string{"around", "at", "inside", "in the staging"} {
+		t.Run(where, func(t *testing.T) {
+			exeIn := func(target string) string {
+				switch where {
+				case "around":
+					return filepath.Join(filepath.Dir(target), "tool.exe")
+				case "at":
+					return filepath.Join(target, "tool.exe")
+				case "inside":
+					return filepath.Join(target, "Bonus", "tool.exe")
+				}
+				return filepath.Join(target+".staging", "tool.exe")
+			}
+			s := newLibrary(t)
+			game := addAt(t, s, filepath.Join(t.TempDir(), "Game", "game.exe"), "Game")
+			target := filepath.Join(t.TempDir(), "Games", "Game")
+
+			release, err := s.BeginMove(game.ID, target, target+".staging")
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, addErr := s.AddGame(t.Context(), writeFile(t, exeIn(target), "stub"), "Tool")
+			release()
+			if where == "around" {
+				if addErr != nil {
+					t.Fatalf("AddGame around the move's target = %v", addErr)
+				}
+				return
+			}
+			requireCode(t, "AddGame "+where+" the move's target", addErr, "library.folder_busy")
+
+			if _, err := s.AddGame(t.Context(), exeIn(target), "Tool"); err != nil {
+				t.Fatal(err)
+			}
+			_, err = s.BeginMove(game.ID, target, target+".staging")
+			requireCode(t, "BeginMove with a card "+where+" its target", err, "library.folder_shared")
+		})
+	}
+}
+
 // A removal or a move of one game is refused while its folder is at, inside or
 // around a folder another game's removal, move or recovery holds: deleting or
 // moving it would take the other game's files being deleted, read or written
@@ -443,6 +488,14 @@ func TestRemovalOrMoveRefusedAroundAFolderAnotherGameHolds(t *testing.T) {
 		{"live move of a folder", func(_ *testing.T, r rig) (func(), error) {
 			return r.s.BeginMove(r.game.ID)
 		}, func(r rig) string { return filepath.Join(r.game.InstallDir, "Sub") }},
+		{"live move into the folder", func(_ *testing.T, r rig) (func(), error) {
+			target := filepath.Join(r.parent, "Game")
+			return r.s.BeginMove(r.game.ID, target, target+".staging")
+		}, func(r rig) string { return filepath.Join(r.parent, "Game", "Sub") }},
+		{"live move into the folder, its staging", func(_ *testing.T, r rig) (func(), error) {
+			target := filepath.Join(r.parent, "Game")
+			return r.s.BeginMove(r.game.ID, target, target+".staging")
+		}, func(r rig) string { return filepath.Join(r.parent, "Game.staging", "Sub") }},
 	}
 	for _, h := range holders {
 		t.Run(h.name, func(t *testing.T) {
@@ -450,7 +503,7 @@ func TestRemovalOrMoveRefusedAroundAFolderAnotherGameHolds(t *testing.T) {
 			parent := filepath.Join(t.TempDir(), "Games")
 			r := rig{s: s, parent: parent, game: addAt(t, s, filepath.Join(t.TempDir(), "Games", "Game", "game.exe"), "Game")}
 			var tool Game
-			if h.name == "recovery into the folder" {
+			if strings.Contains(h.name, "into the folder") {
 				tool = addAt(t, s, filepath.Join(parent, "tool.exe"), "Tool")
 			}
 			release, err := h.hold(t, r)

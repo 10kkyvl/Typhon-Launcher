@@ -384,13 +384,14 @@ func keepsCopy(j Job) bool {
 	return j.Orphaned || j.FailedAt != ""
 }
 
-// gameConflict is conflictsLocked's gameID-only pre-check, taken before any
-// filesystem probing. Path collisions still need a real target, so those
-// stay caught only by the atomic check inside registerJob.
-func (s *Service) gameConflict(gameID string) error {
+// gameConflict is conflictsLocked's pre-check, taken with gameID alone before
+// any filesystem probing, and with the paths again before the library hold,
+// whose refusal of a folder another move writes would otherwise come first
+// with another code. registerJob holds the atomic check.
+func (s *Service) gameConflict(gameID, source, target string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.conflictsLocked(gameID, "", "")
+	return s.conflictsLocked(gameID, source, target)
 }
 
 // libraryConflictLocked refuses a second concurrent MoveLibrary: it would
@@ -606,14 +607,16 @@ func (s *Service) checkBusy(gameID string) error {
 	return nil
 }
 
-// reserveGame takes the library's move hold on a game. The running, removal
-// and shared-folder checks and the hold are one step inside the library, so
-// neither a launch, a removal nor a new card in the folder can come between
-// them and the move. checkBusy is not part of it: it asks the install, update
-// and download services before the hold, which does not exclude an install,
+// reserveGame takes the library's move hold on a game, its folder and the
+// folders the move writes: target and its staging folder. The running,
+// removal and shared-folder checks and the hold are one step inside the
+// library, so neither a launch, a removal nor a new card in those folders can
+// come between them and the move; it is taken before anything is made at
+// target. checkBusy is not part of it: it asks the install, update and
+// download services before the hold, which does not exclude an install,
 // update or download that starts after that answer.
-func (s *Service) reserveGame(gameID string) (func(), error) {
-	release, err := s.lib.BeginMove(gameID)
+func (s *Service) reserveGame(gameID, target string) (func(), error) {
+	release, err := s.lib.BeginMove(gameID, target, target+stagingSuffix)
 	switch {
 	case err == nil:
 		return release, nil
@@ -783,7 +786,7 @@ func (s *Service) MoveGame(gameID, parent string) (Job, error) {
 	// error instead of a clean ErrMoveInProgress. registerJob still holds
 	// the atomic guarantee (invariant 17); this only makes the common case
 	// fail fast and legibly.
-	if err := s.gameConflict(gameID); err != nil {
+	if err := s.gameConflict(gameID, "", ""); err != nil {
 		return Job{}, err
 	}
 	cleanTarget, err := gameTarget(source, parent)
@@ -811,7 +814,10 @@ func (s *Service) MoveGame(gameID, parent string) (Job, error) {
 		StartedAt:  time.Now(),
 		UpdatedAt:  time.Now(),
 	}
-	release, err := s.reserveGame(gameID)
+	if err := s.gameConflict(gameID, source, cleanTarget); err != nil {
+		return Job{}, err
+	}
+	release, err := s.reserveGame(gameID, cleanTarget)
 	if err != nil {
 		return Job{}, err
 	}
@@ -1316,15 +1322,15 @@ func (s *Service) runGameLibraryItem(ctx context.Context, jobID, gameID string, 
 	if err := s.checkBusy(gameID); err != nil {
 		return s.failOrCancel(jobID, err)
 	}
-	release, err := s.reserveGame(gameID)
-	if err != nil {
-		return s.failOrCancel(jobID, err)
-	}
-	defer release()
 	target := rebase(oldRoot, root, source)
 	if !targetAvailable(target) {
 		return s.failOrCancel(jobID, fmt.Errorf("%s: %w", target, ErrTargetNotEmpty))
 	}
+	release, err := s.reserveGame(gameID, target)
+	if err != nil {
+		return s.failOrCancel(jobID, err)
+	}
+	defer release()
 	total, err := install.DirSize(ctx, source)
 	if err != nil {
 		return s.failOrCancel(jobID, fmt.Errorf("measure %s: %w", source, err))

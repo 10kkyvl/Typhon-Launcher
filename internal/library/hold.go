@@ -273,14 +273,17 @@ func (s *Service) BeginRemoval(id, dir string) (func(), error) {
 
 // BeginMove reserves a game for a move that has not touched any file yet: it
 // fails while the game runs, starts, moves or is being removed, while another
-// card's files share the game's folder or another game's hold overlaps it, and
-// until release PlayGame, removals and other moves refuse the game and no card
-// may be added in its folder. The checks and the reservation share one
+// card's files share the game's folder or lie at or inside one of copies (the
+// folders the move will put the files in: its target and staging folder), or
+// another game's hold overlaps any of them, and until release PlayGame,
+// removals and other moves refuse the game, no card may be added in its folder
+// or at or inside a copy, and no other game's removal, move or recovery may
+// take a folder at, in or around one. The checks and the reservation share one
 // critical section, so no launch can slip in between them.
 //
 //wails:ignore
-func (s *Service) BeginMove(id string) (func(), error) {
-	return s.reserveMove(id, true, nil, nil)
+func (s *Service) BeginMove(id string, copies ...string) (func(), error) {
+	return s.reserveMove(id, true, nil, copies)
 }
 
 // BeginRecovery is BeginMove for the recovery of a move a killed process
