@@ -96,7 +96,8 @@
   below={job || failure ? progress : undefined}
 >
   {#snippet children({ hintId, disabled })}
-    <!-- Busy from the press to the end of the move it started: it keeps focus all along. -->
+    <!-- Busy from the press while the move starts, and while any library move runs, also one that was
+         running when the tab opened: one move at a time, and the button keeps focus all along. -->
     <Button size="sm" aria-describedby={hintId} {disabled} busy={starting || !!job} onclick={start}>
       <FolderInput size="1.5rem" strokeWidth={1.8} />
       {starting ? msg('settings.generalLibraryMoveStartingEllipsis') : msg('settings.generalLibraryMoveButtonLabel')}
