@@ -23,9 +23,17 @@ type OrphanedCopy struct {
 	Path   string `json:"path"`
 	Kind   string `json:"kind"`
 	// MovedOn says the game's card is still in the library and names another
-	// folder: the copy is one the card moved on from, not a copy of a game
-	// that left the library.
+	// folder that is on disk: the copy is one the card moved on from, not a
+	// copy of a game that left the library.
 	MovedOn bool `json:"movedOn"`
+	// OnlyCopy says the game's card names a folder that is gone, or the game
+	// has no card with files, and this copy is the newest complete one the
+	// move knows: deleting it may delete the game. False also where that
+	// cannot be known from the journal (see onlyCopy).
+	OnlyCopy bool `json:"onlyCopy"`
+	// HoldsGame says a library card's files lie at, in or around this copy:
+	// it must never be offered for deletion.
+	HoldsGame bool `json:"holdsGame"`
 }
 
 const (
@@ -124,6 +132,7 @@ func heldCopies(job Job, games []library.Game) ([]OrphanedCopy, error) {
 		}
 	}
 	var out []OrphanedCopy
+	onDisk := map[string]bool{}
 	for _, c := range candidates {
 		if c.Path == "" {
 			continue
@@ -134,14 +143,72 @@ func heldCopies(job Job, games []library.Game) ([]OrphanedCopy, error) {
 			}
 			return nil, err
 		}
+		onDisk[c.Kind] = true
 		if named(c.Path, games) {
 			continue
 		}
 		c.JobID, c.GameID, c.Title = job.ID, job.GameID, job.Title
-		c.MovedOn = cardAlive(job.GameID, games)
 		out = append(out, c)
 	}
+	if len(out) == 0 {
+		return nil, nil
+	}
+	card, err := cardFolder(job.GameID, games)
+	if err != nil {
+		return nil, err
+	}
+	var withFiles []library.Game
+	for _, g := range games {
+		if !g.Uninstalled {
+			withFiles = append(withFiles, g)
+		}
+	}
+	for i := range out {
+		c := &out[i]
+		c.MovedOn = card.onDisk && !platform.SamePath(card.dir, c.Path)
+		c.OnlyCopy = !card.onDisk && newestComplete(job, c.Kind, onDisk)
+		c.HoldsGame = holdsGame(c.Path, withFiles)
+	}
 	return out, nil
+}
+
+// gameFolder is what a job's game's card names: dir, and whether it is a
+// card with files whose folder is on disk.
+type gameFolder struct {
+	dir    string
+	onDisk bool
+}
+
+func cardFolder(id string, games []library.Game) (gameFolder, error) {
+	for _, g := range games {
+		if g.ID != id || g.Uninstalled || g.InstallDir == "" {
+			continue
+		}
+		_, err := os.Lstat(g.InstallDir)
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return gameFolder{}, err
+		}
+		return gameFolder{dir: g.InstallDir, onDisk: err == nil}, nil
+	}
+	return gameFolder{}, nil
+}
+
+// newestComplete says whether a copy of kind is, from the journal alone, the
+// newest complete copy of the game the job knows; onDisk says which kinds are
+// on disk. The target is complete once the rename that made it landed: a
+// renamed move's always, a copied move's from the repoint on, which only an
+// ended move's OrphanedAt still says (a move that ended for good keeps no
+// stage). The staging folder is complete and newest at the commit while no
+// target is there to compete with it. The old folder may be a cleanup's half
+// deleted remains: never.
+func newestComplete(job Job, kind string, onDisk map[string]bool) bool {
+	switch kind {
+	case CopyTarget:
+		return job.Renamed || job.Orphaned && (job.OrphanedAt == StageRepoint || job.OrphanedAt == StageCleanup)
+	case CopyStaging:
+		return job.Orphaned && job.OrphanedAt == StageCommit && !onDisk[CopyTarget]
+	}
+	return false
 }
 
 func gameItem(id string) bool {
@@ -150,15 +217,6 @@ func gameItem(id string) bool {
 		return false
 	}
 	return true
-}
-
-func cardAlive(id string, games []library.Game) bool {
-	for _, g := range games {
-		if g.ID == id {
-			return !g.Uninstalled
-		}
-	}
-	return false
 }
 
 func cardNames(id, path string, games []library.Game) bool {

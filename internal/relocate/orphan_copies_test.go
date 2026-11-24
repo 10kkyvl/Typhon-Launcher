@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -514,6 +515,130 @@ func TestOrphanedMoveListsTheOldFolderOnlyAtTheCleanup(t *testing.T) {
 			s.recoverAll(context.Background())
 			if jobs := s.List(); len(jobs) != 0 {
 				t.Fatalf("job kept after its last copy is gone: %+v", jobs)
+			}
+		})
+	}
+}
+
+// Each listed copy says what Disk usage needs to word and guard it: movedOn
+// only while the game's card names another folder that is on disk; onlyCopy
+// when the card names a folder that is gone, or the game has no card with
+// files, and the copy is the newest complete one the move knows; holdsGame
+// when a card's files lie at, in or around it.
+func TestOrphanedCopySaysWhetherItIsTheOnlyCopy(t *testing.T) {
+	type fact struct {
+		kind                         string
+		movedOn, onlyCopy, holdsGame bool
+	}
+	type rig struct {
+		lib         *library.Service
+		game        library.Game
+		src, target string
+	}
+	cases := []struct {
+		name string
+		// leave prepares the card and folders and returns the job as the
+		// journal has it before a start.
+		leave func(t *testing.T, r rig) Job
+		// after changes the disk once recovery has run.
+		after func(t *testing.T, r rig)
+		want  func(r rig) []fact
+	}{
+		{"renamed, out of attempts, card at the old folder that is gone", func(t *testing.T, r rig) Job {
+			if err := os.Rename(r.src, r.target); err != nil {
+				t.Fatal(err)
+			}
+			return Job{ID: "j1", Scope: ScopeGame, Stage: StageFailed, Renamed: true, RecoveryAttempts: maxRecoveryAttempts, Error: ErrRetriesExhausted.Error(), GameID: r.game.ID, Title: "Game", Source: r.src, Target: r.target}
+		}, nil, func(rig) []fact { return []fact{{CopyTarget, false, true, false}} }},
+		{"card moved on to a folder on disk", func(t *testing.T, r rig) Job {
+			mustMkdirFile(t, r.target, "game.exe", "stub")
+			third := filepath.Join(t.TempDir(), "Game")
+			mustMkdirFile(t, third, "game.exe", "stub")
+			if _, err := r.lib.Relocate(r.game.ID, third); err != nil {
+				t.Fatal(err)
+			}
+			return Job{ID: "j1", Scope: ScopeGame, Stage: StageFailed, FailedAt: StageRepoint, GameID: r.game.ID, Title: "Game", Source: r.src, Target: r.target}
+		}, nil, func(rig) []fact { return []fact{{CopyTarget, true, false, false}} }},
+		{"card moved on to a folder since deleted", func(t *testing.T, r rig) Job {
+			mustMkdirFile(t, r.target, "game.exe", "stub")
+			third := filepath.Join(t.TempDir(), "Game")
+			mustMkdirFile(t, third, "game.exe", "stub")
+			if _, err := r.lib.Relocate(r.game.ID, third); err != nil {
+				t.Fatal(err)
+			}
+			return Job{ID: "j1", Scope: ScopeGame, Stage: StageFailed, FailedAt: StageRepoint, GameID: r.game.ID, Title: "Game", Source: r.src, Target: r.target}
+		}, func(t *testing.T, r rig) {
+			card, err := r.lib.Find(r.game.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.RemoveAll(card.InstallDir); err != nil {
+				t.Fatal(err)
+			}
+		}, func(rig) []fact { return []fact{{CopyTarget, false, true, false}} }},
+		{"uninstalled after the repoint landed", func(t *testing.T, r rig) Job {
+			mustMkdirFile(t, r.target, "game.exe", "stub")
+			if _, err := r.lib.Relocate(r.game.ID, r.target); err != nil {
+				t.Fatal(err)
+			}
+			if err := r.lib.MarkUninstalled(r.game.ID); err != nil {
+				t.Fatal(err)
+			}
+			return Job{ID: "j1", Scope: ScopeGame, Stage: StageRepoint, GameID: r.game.ID, Title: "Game", Source: r.src, Target: r.target}
+		}, nil, func(rig) []fact { return []fact{{CopyTarget, false, true, false}, {CopySource, false, false, false}} }},
+		{"removed at the commit, the copy in staging", func(t *testing.T, r rig) Job {
+			mustMkdirFile(t, r.target+stagingSuffix, "game.exe", "stub")
+			if err := r.lib.RemoveGame(r.game.ID); err != nil {
+				t.Fatal(err)
+			}
+			return Job{ID: "j1", Scope: ScopeGame, Stage: StageCommit, GameID: r.game.ID, Title: "Game", Source: r.src, Target: r.target, Staging: r.target + stagingSuffix}
+		}, func(t *testing.T, r rig) {
+			if err := os.RemoveAll(r.src); err != nil {
+				t.Fatal(err)
+			}
+		}, func(rig) []fact { return []fact{{CopyStaging, false, true, false}} }},
+		{"undecided commit, card at the old folder that is gone", func(t *testing.T, r rig) Job {
+			mustMkdirFile(t, r.target, "game.exe", "stub")
+			mustMkdirFile(t, r.target+stagingSuffix, "game.exe", "stub")
+			if err := os.RemoveAll(r.src); err != nil {
+				t.Fatal(err)
+			}
+			return Job{ID: "j1", Scope: ScopeGame, Stage: StageFailed, Error: ErrAmbiguousRecovery.Error(), GameID: r.game.ID, Title: "Game", Source: r.src, Target: r.target, Staging: r.target + stagingSuffix}
+		}, nil, func(rig) []fact { return []fact{{CopyTarget, false, false, false}} }},
+		{"undecided commit, card at the old folder", func(t *testing.T, r rig) Job {
+			mustMkdirFile(t, r.target, "game.exe", "stub")
+			mustMkdirFile(t, r.target+stagingSuffix, "game.exe", "stub")
+			return Job{ID: "j1", Scope: ScopeGame, Stage: StageFailed, Error: ErrAmbiguousRecovery.Error(), GameID: r.game.ID, Title: "Game", Source: r.src, Target: r.target, Staging: r.target + stagingSuffix}
+		}, nil, func(rig) []fact { return []fact{{CopyTarget, true, false, false}} }},
+		{"a card in the folder around the copy", func(t *testing.T, r rig) Job {
+			mustMkdirFile(t, r.target, "game.exe", "stub")
+			addExeAt(t, r.lib, filepath.Join(filepath.Dir(r.target), "tool.exe"), "Tool")
+			return Job{ID: "j1", Scope: ScopeGame, Stage: StageFailed, Error: exhausted("boom").Error(), GameID: r.game.ID, Title: "Game", Source: r.src, Target: r.target}
+		}, nil, func(rig) []fact { return []fact{{CopyTarget, true, false, true}} }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			lib := newTestLibrary(t)
+			game, src := addTestGame(t, lib)
+			r := rig{lib: lib, game: game, src: src, target: filepath.Join(t.TempDir(), "Game")}
+			job := tc.leave(t, r)
+			s := newRecoverTestService(t, job)
+			s.lib = lib
+			s.recoverAll(context.Background())
+			if tc.after != nil {
+				tc.after(t, r)
+			}
+
+			copies, err := s.OrphanedCopies()
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got []fact
+			for _, c := range copies {
+				got = append(got, fact{c.Kind, c.MovedOn, c.OnlyCopy, c.HoldsGame})
+			}
+			if want := tc.want(r); !reflect.DeepEqual(got, want) {
+				t.Fatalf("copies = %+v\nfacts %+v, want %+v", copies, got, want)
 			}
 		})
 	}
