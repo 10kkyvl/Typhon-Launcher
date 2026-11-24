@@ -630,7 +630,9 @@ func (s *Service) recoverRepoint(ctx context.Context, job Job) {
 // Source is checked against the manifest too: one that holds a file the copy
 // lacks (added or changed since) is kept and the job fails for good by
 // ErrSourceChanged, the folder listed through OrphanedCopies; files it lost
-// are the part a failed delete already took.
+// are the part a failed delete already took. A file it cannot read (held
+// locked) deletes nothing and fails the attempt as a failed delete does, for
+// the next start to try again.
 func (s *Service) recoverCleanup(ctx context.Context, job Job) {
 	if job.Renamed || !exists(job.Source) {
 		if err := s.st.removeManifest(job.ID); err != nil {
@@ -660,6 +662,10 @@ func (s *Service) recoverCleanup(ctx context.Context, job Job) {
 	}
 	if gained := withoutMissing(source); hasIssues(gained) {
 		s.markRecoveryFailed(job.ID, fmt.Errorf("%w: %s", ErrSourceChanged, describeVerify(gained)))
+		return
+	}
+	if locked := unreadable(source); hasIssues(locked) {
+		s.markRecoveryRetryable(job.ID, fmt.Errorf("remove old %s: cannot read %s", job.Source, describeVerify(locked)))
 		return
 	}
 	if err := removeTree(job.Source); err != nil {
@@ -697,17 +703,29 @@ func sourceDamaged(r hashdir.Result) bool {
 }
 
 // withoutMissing keeps what an old folder holds that the verified copy does
-// not: files added or changed since the manifest, and files it cannot read.
-// A file it lost is what a cleanup that failed half way leaves.
+// not: files added or changed since the manifest. A file it lost is what a
+// cleanup that failed half way leaves; a file it cannot read (held locked) is
+// not known to differ, and unreadable answers for it.
 func withoutMissing(r hashdir.Result) hashdir.Result {
 	issues := r.Issues[:0:0]
 	for _, issue := range r.Issues {
-		if issue.Kind != hashdir.IssueMissing {
+		if issue.Kind != hashdir.IssueMissing && issue.Kind != hashdir.IssueUnreadable {
 			issues = append(issues, issue)
 		}
 	}
 	r.Issues = issues
 	return r
+}
+
+// unreadable keeps the files of a verification that could not be read.
+func unreadable(r hashdir.Result) hashdir.Result {
+	var issues []hashdir.Issue
+	for _, issue := range r.Issues {
+		if issue.Kind == hashdir.IssueUnreadable {
+			issues = append(issues, issue)
+		}
+	}
+	return hashdir.Result{Issues: issues}
 }
 
 // withoutMarker drops the install marker from a re-verification: the manifest
