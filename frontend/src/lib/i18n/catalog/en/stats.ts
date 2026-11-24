@@ -18,7 +18,6 @@ export const stats: Record<StatsKey, Message> = {
   'stats.chartTitleYear': 'By month',
   'stats.chartIdle': 'no play',
   'stats.topTitle': 'Most played',
-  'stats.topSessions': { one: '{count} session', other: '{count} sessions' },
   'stats.deletedGame': 'Deleted game',
   'stats.empty': 'No games were played in this period. Launch a game and your statistics will appear here.',
   'stats.loadError': 'Could not load statistics',
@@ -28,8 +27,5 @@ export const stats: Record<StatsKey, Message> = {
   // 7-B stats
   'stats.topLine': { one: '{time} in {count} session', other: '{time} in {count} sessions' },
   'stats.topShare': '{share}% of the period’s play time',
-  'stats.chartDay': 'Day',
-  'stats.chartMonth': 'Month',
-  'stats.chartPlaytime': 'Play time',
   // /7-B stats
 };
