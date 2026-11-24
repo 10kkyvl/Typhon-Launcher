@@ -60,6 +60,8 @@
   // old window holds (the arcs are inside it, out of sight) and looks for the logo at the finish.
   const mode = $derived($motionOn && (logo || show?.handoff) && (!funnel || funnel.width >= 4) ? 'flight' : 'ring');
   const geometry = $derived(funnel ? { logo: logo ?? { left: funnel.left + funnel.width / 2, top: funnel.top + funnel.height / 2, size: 0 }, funnel } : null);
+  const flights = $derived(geometry ? arcFlights(geometry) : null);
+  const laidOut = $derived(geometry !== null);
 
   function measureLogo(): ShowGeometry['logo'] | null {
     const origin = document.querySelector('[data-logo-origin]');
@@ -68,9 +70,31 @@
     return { left: box.left, top: box.top, size: box.width };
   }
 
-  const measureFunnel: Attachment<HTMLElement> = (node) => {
+  function measureFunnelBox(node: Element) {
     const box = node.getBoundingClientRect();
-    funnel = { left: box.left, top: box.top, width: box.width, height: box.height };
+    const next = { left: box.left, top: box.top, width: box.width, height: box.height };
+    const was = untrack(() => funnel);
+    if (!was || Object.entries(next).some(([key, value]) => was[key as keyof typeof next] !== value)) funnel = next;
+  }
+
+  function remeasureLogo() {
+    const next = measureLogo();
+    const was = untrack(() => logo);
+    if (!next || !was || next.left !== was.left || next.top !== was.top || next.size !== was.size) logo = next;
+  }
+
+  // A resize or a snap of the window mid-show moves the logo and the funnel: they are measured again,
+  // so the copies fly from and to where they are now. A host without ResizeObserver measures once.
+  function watchSize(nodes: (Element | null)[], measure: () => void): (() => void) | undefined {
+    if (typeof ResizeObserver !== 'function') return;
+    const observer = new ResizeObserver(measure);
+    for (const node of nodes) if (node) observer.observe(node);
+    return () => observer.disconnect();
+  }
+
+  const measureFunnel: Attachment<HTMLElement> = (node) => {
+    measureFunnelBox(node);
+    return watchSize([node], () => measureFunnelBox(node));
   };
 
   const sameAway = (a: readonly boolean[] | null, b: readonly boolean[]) => a !== null && a.every((value, i) => value === b[i]);
@@ -95,16 +119,18 @@
   // The flight: one frame now, then one per animation frame, until the show's last.
   $effect(() => {
     const current = show;
-    if (!current || mode !== 'flight' || !geometry) return;
+    if (!current || mode !== 'flight' || !laidOut) return;
     // An owed finish starts with this, its first frame; the store's answer runs this effect again.
     if (current.owed) {
       beginOwedFinish(time.now());
       return;
     }
     const clock = phaseClock(current);
-    const flights = arcFlights(geometry);
+    // Each frame takes the places measured last: a resize moves the flight, it does not restart it.
     const draw = () => {
-      const next = showFrame(clock, time.now(), timing, flights);
+      const paths = untrack(() => flights);
+      if (!paths) return true;
+      const next = showFrame(clock, time.now(), timing, paths);
       frame = next;
       if (!sameAway(untrack(() => $logoArcsAway), next.away)) logoArcsAway.set(next.away);
       if (next.stage !== 'done') return true;
@@ -144,8 +170,15 @@
   // Mounted means the screen under it is up: a finish owed after that would dim a page in use.
   $effect(() => hostUpdateShow());
 
-  const measure: Attachment<HTMLElement> = () => {
+  // The show covers the window, so its own box changes with the window's: the funnel, centred in it,
+  // moves without changing size.
+  const measure: Attachment<HTMLElement> = (node) => {
     logo = measureLogo();
+    return watchSize([node, document.querySelector('[data-logo-origin]')], () => {
+      remeasureLogo();
+      const box = node.querySelector('.funnel-box');
+      if (box) measureFunnelBox(box);
+    });
   };
 
   // Only the status ends the show, never Escape or Big Picture's back.
@@ -153,7 +186,6 @@
   const pageHeading = () => document.querySelector<HTMLElement>('main h1');
 
   const transform = (pose: ArcPose) => `translate(${pose.x}px, ${pose.y}px) rotate(${pose.rotate}deg) scale(${pose.sx}, ${pose.sy})`;
-  const flights = $derived(geometry ? arcFlights(geometry) : null);
   const ringValue = $derived(show ? fillAt(now - show.startedAt) : 0);
   // A successor has no logo when it takes over: in a seamless restart both windows draw the ring in the middle.
   const ringOnLogo = $derived(Boolean(logo) && !show?.handoff);

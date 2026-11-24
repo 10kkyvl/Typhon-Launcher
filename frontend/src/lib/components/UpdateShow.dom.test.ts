@@ -421,6 +421,88 @@ describe('the wall clock stepping back an hour', () => {
   });
 });
 
+// jsdom has no ResizeObserver and lays nothing out: a stand-in observer is called by hand, and the
+// boxes the stub answers are moved as a resize or a snap would move them.
+describe('a window resized while the arcs fly', () => {
+  const observers: { callback: () => void; watched: Set<Element>; disconnected: boolean }[] = [];
+
+  beforeEach(() => {
+    observers.length = 0;
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        record: { callback: () => void; watched: Set<Element>; disconnected: boolean };
+        constructor(callback: () => void) {
+          this.record = { callback, watched: new Set(), disconnected: false };
+          observers.push(this.record);
+        }
+        observe(element: Element) {
+          this.record.watched.add(element);
+        }
+        unobserve(element: Element) {
+          this.record.watched.delete(element);
+        }
+        disconnect() {
+          this.record.disconnected = true;
+          this.record.watched.clear();
+        }
+      },
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const watched = () => observers.flatMap((observer) => [...observer.watched]);
+
+  it('watches the logo, the funnel and the window, and flies from and to where they are now', async () => {
+    const first = renderDom(UpdateShowHarness);
+    selfUpdateStatus.set(APPLYING);
+    await tick();
+    await advance(3000);
+    expect(clones()[0].style.top).toBe('30px');
+    const before = poses();
+
+    vi.mocked(Element.prototype.getBoundingClientRect).mockImplementation(function (this: Element) {
+      if (this.matches('[data-logo-origin]')) return box(20, 90, 28, 28);
+      if (this.matches('.funnel-box')) return box(300, 200, 360, 277);
+      return box(0, 0, 0, 0);
+    });
+    for (const observer of observers) observer.callback();
+    // The fake animation frames fall on 16 ms marks of their own: within two of them, one is drawn.
+    await advance(32);
+
+    expect(clones()[0].style.top).toBe('90px');
+    // In the funnel, every arc where its ring is now, as a window first laid out this way draws it,
+    // and the show goes on from where it was.
+    expect(shown()?.dataset.stage).toBe('hold');
+    const resized = poses();
+    expect(resized).not.toEqual(before);
+    const origins = clones().map((clone) => clone.style.transformOrigin);
+    first.unmount();
+    renderDom(UpdateShowHarness);
+    await tick();
+    expect(poses()).toEqual(resized);
+    expect(clones().map((clone) => clone.style.transformOrigin)).toEqual(origins);
+    expect(watched().some((element) => element.matches('[data-logo-origin]'))).toBe(true);
+    expect(watched().some((element) => element.matches('.funnel-box'))).toBe(true);
+    expect(watched()).toContain(shown());
+  });
+
+  it('stops watching when the show ends', async () => {
+    renderDom(UpdateShowHarness);
+    selfUpdateStatus.set(APPLYING);
+    await advance(3000);
+    expect(observers.length).toBeGreaterThan(0);
+    selfUpdateStatus.set(READY);
+    await tick();
+    await advance(1000);
+    expect(shown()).toBeNull();
+    expect(observers.every((observer) => observer.disconnected)).toBe(true);
+  });
+});
+
 describe('the update show with motion off', () => {
   it('is a still ring on the logo with the same words, and nothing flies', async () => {
     document.documentElement.classList.add('no-anim');
