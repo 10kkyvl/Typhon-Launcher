@@ -25,7 +25,7 @@ import { networkState } from '../../lib/stores/network';
 import { settings } from '../../lib/stores/settings';
 import { toasts } from '../../lib/stores/toasts';
 import { renderDom } from '../../lib/testing/dom';
-import { description } from '../../lib/testing/hints';
+import { describedControls, description } from '../../lib/testing/hints';
 import NetworkSettingsCard from './NetworkSettingsCard.svelte';
 
 const DIRECT = { networkMode: 'direct', networkInterface: '', proxyType: 'socks5', proxyHost: '', proxyPort: 0, proxyUsername: '' };
@@ -240,6 +240,28 @@ describe('NetworkSettingsCard: the proxy check', () => {
     await user.click(check);
 
     expect(testProxy).not.toHaveBeenCalled();
+  });
+
+  it('shows why the check waits on the card itself while an edit is not applied, said once to a screen reader', async () => {
+    const text = msg('settings.networkProxyTestNeedsApply');
+    const shown = () =>
+      [...document.body.querySelectorAll('*')].filter(
+        (el) => el.children.length === 0 && el.textContent?.trim() === text && !el.closest('[hidden], [aria-hidden="true"]'),
+      );
+    const { user } = renderDom(NetworkSettingsCard, {});
+    expect(shown()).toHaveLength(0);
+
+    await user.type(field('settings.networkProxyHostLabel'), 'x');
+
+    const lines = shown();
+    expect(lines).toHaveLength(1);
+    const [line] = lines;
+    expect(line.id).toBe('');
+    expect(describedControls(document.body, text)).toEqual([screen.getByRole('button', { name: msg('settings.networkProxyTest') })]);
+
+    await user.type(field('settings.networkProxyHostLabel'), '{Backspace}');
+
+    expect(shown()).toHaveLength(0);
   });
 });
 

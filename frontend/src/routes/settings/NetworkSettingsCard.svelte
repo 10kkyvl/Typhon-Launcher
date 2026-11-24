@@ -345,7 +345,10 @@
     </div>
     <div class="part test">
       <div class="result">
-        {#if !dirty && testResult}
+        <!-- The button's description already says this to a screen reader; this line is for the eye. -->
+        {#if dirty}
+          <span class="needs-apply">{msg('settings.networkProxyTestNeedsApply')}</span>
+        {:else if testResult}
           <Notice tone={testResult.ok ? 'success' : 'danger'} compact>{testResult.text}</Notice>
         {/if}
       </div>
@@ -408,6 +411,12 @@
   .result {
     flex: 1 1 22rem;
     min-width: 0;
+  }
+
+  .needs-apply {
+    font-size: var(--font-xs);
+    line-height: 1.5;
+    color: var(--text-2);
   }
 
   .actions {
