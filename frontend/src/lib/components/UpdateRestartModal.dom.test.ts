@@ -9,6 +9,7 @@ import { toasts } from '../stores/toasts';
 import { endUpdateShow, updateShow } from '../stores/updateShow';
 import { renderDom } from '../testing/dom';
 import UpdateBanner from './UpdateBanner.svelte';
+import UpdateShow from './UpdateShow.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
@@ -72,10 +73,13 @@ describe('the restart of a downloaded update', () => {
 
   it('refused by the backend, says why in a toast and leaves no show behind', async () => {
     vi.mocked(applyUpdate).mockRejectedValue(new Error('typhon:selfupdate.not_ready'));
+    // The show starts at the press (the moment a seamless restart hands on), so it is mounted to go home.
+    renderDom(UpdateShow);
     const { user, dialog } = await confirmRestart();
     await user.click(within(dialog).getByRole('button', { name: msg('ui.restartAndUpdate') }));
     await vi.waitFor(() => expect(get(toasts).some((item) => item.kind === 'danger')).toBe(true));
     expect(get(toasts).map((item) => item.message)).toContain(msg('state.selfupdateReasonInstallerNotFound'));
-    expect(get(updateShow)).toBeNull();
+    await vi.waitFor(() => expect(get(updateShow)).toBeNull());
+    expect(document.querySelector('[data-testid="update-show"]')).toBeNull();
   });
 });

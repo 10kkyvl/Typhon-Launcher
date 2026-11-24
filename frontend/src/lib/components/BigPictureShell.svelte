@@ -12,7 +12,7 @@
   import { runningGames } from '../stores/library';
   import { downloads } from '../stores/downloads';
   import { authState, isOffline, leaveGuest } from '../stores/user';
-  import { selfUpdateStatus } from '../stores/selfupdate';
+  import { selfUpdateApplying } from '../stores/selfupdate';
   import { t, locale } from '../i18n';
   import HomePage from '../bigpicture/components/HomePage.svelte';
   import LibraryPage from '../bigpicture/components/LibraryPage.svelte';
@@ -50,7 +50,7 @@
   const launchPlaces = new Map<string, { key: number; focus: string }>();
   const active = $derived(pages[pages.length - 1]);
   const palette = $derived(bigPictureStyle({ shown: $displayedAccent, theme: $activeTheme, personal: $settings?.accentColor ?? '' }));
-  const applyingUpdate = $derived($selfUpdateStatus.state === 'applying');
+  const applyingUpdate = $derived($selfUpdateApplying);
   const currentDownloads = $derived($downloads.filter((item) => item.status !== 'completed'));
   function activeHandle() { return handles[active.key] as BigPicturePageHandle | undefined; }
   const sections = $derived.by(() => {

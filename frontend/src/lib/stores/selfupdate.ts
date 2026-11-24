@@ -5,6 +5,7 @@ import {
   acknowledgeReleaseNotes as acknowledgeReleaseNotesRequest,
   applyRollback as applyRollbackRequest,
   applyUpdate as applyUpdateRequest,
+  beginHandoff as beginHandoffRequest,
   cancelDownload as cancelDownloadRequest,
   checkForUpdate as checkForUpdateRequest,
   dismissUpdate as dismissUpdateRequest,
@@ -26,11 +27,41 @@ import {
 import { updateReason } from '../services/selfupdateMessages';
 import { msg } from '../i18n';
 import { toast } from './toasts';
-import { resumeFinishedShow, showFollowsStatus, updateShow } from './updateShow';
+import { resumeFinishedShow, showFollowsStatus, updateShow, updateShowHandoff, type ConfirmedStart } from './updateShow';
 
 export const selfUpdateStatus = writable<SelfUpdateStatus>({ state: 'idle', currentVersion: '' });
+
+/**
+ * A restart the player confirmed, from the press until Go answers it. Go says "applying" only after it
+ * has checked the download once more; the press counts as applying already, so the show, the banner,
+ * the sidebar and Big Picture hold still from the moment the player asked. `over` is Go's status when
+ * the request was answered (null while it is in flight): any newer status is the truth again.
+ */
+interface Confirmed extends ConfirmedStart {
+  over: SelfUpdateStatus | null;
+}
+
+const confirmed = writable<Confirmed | null>(null);
+selfUpdateStatus.subscribe((status) => {
+  const press = get(confirmed);
+  if (press?.over && press.over !== status) confirmed.set(null);
+});
+
+const effectiveStatus = derived([selfUpdateStatus, confirmed], ([$status, $confirmed]): { status: SelfUpdateStatus; confirmed?: ConfirmedStart } => {
+  if (!$confirmed || ($confirmed.over !== null && $confirmed.over !== $status)) return { status: $status };
+  const start = { startedAt: $confirmed.startedAt, handoff: $confirmed.handoff };
+  if ($status.state === 'applying') return { status: $status, confirmed: start };
+  return { status: { ...$status, state: 'applying', error: undefined, errorCode: undefined }, confirmed: start };
+});
+
 // Every status the launcher holds, from Go or set by a test or the showcase, moves the update show.
-selfUpdateStatus.subscribe((status) => showFollowsStatus(status));
+effectiveStatus.subscribe(({ status, confirmed: start }) => showFollowsStatus(status, Date.now(), start));
+
+/** The one answer to "is the launcher's update being applied?", the press of a restart included. */
+export const selfUpdateApplying = derived(effectiveStatus, ({ status }) => status.state === 'applying');
+
+/** Go rolled a seamless restart back: the launcher runs as before and the update is still ready. */
+export const handoffFailed = derived(effectiveStatus, ({ status }) => status.state === 'ready' && status.errorCode === 'handoff_failed');
 export const selfUpdateProgress = writable<SelfUpdateProgress | null>(null);
 export const selfUpdateChecking = writable(false);
 export const selfUpdateDownloading = writable(false);
@@ -47,7 +78,7 @@ export const releaseNotesHistory = derived(releaseNotes, ($notes) => $notes.hist
 // A downloaded installer stays installable whatever the last check said, and
 // an available update stays downloadable: only its own failed download turns
 // the banner into "failed".
-export const selfUpdateView = derived(selfUpdateStatus, ($status) => {
+export const selfUpdateView = derived(effectiveStatus, ({ status: $status }) => {
   if ($status.state === 'failed') return 'failed';
   if (!$status.error || $status.errorCode === 'rollback') return $status.state;
   switch ($status.state) {
@@ -63,8 +94,8 @@ export const selfUpdateView = derived(selfUpdateStatus, ($status) => {
 });
 
 export const selfUpdateBusy = derived(
-  [selfUpdateStatus, selfUpdateDownloading, rollbackBusy],
-  ([$status, $downloading, $rollbackBusy]) =>
+  [effectiveStatus, selfUpdateDownloading, rollbackBusy],
+  ([{ status: $status }, $downloading, $rollbackBusy]) =>
     $downloading || $rollbackBusy || $status.state === 'downloading' || $status.state === 'applying',
 );
 
@@ -230,12 +261,52 @@ export async function requestCancelDownload() {
   }
 }
 
-export async function requestApply() {
+/** False while an earlier press is still waiting for Go's answer. */
+function confirmRestart(handoff: boolean): boolean {
+  if (get(confirmed)?.over === null) return false;
+  confirmed.set({ startedAt: Date.now(), handoff, over: null });
+  return true;
+}
+
+function confirmedAnswered() {
+  const status = get(selfUpdateStatus);
+  confirmed.update((c) => c && { ...c, over: status });
+}
+
+async function applyConfirmed() {
   try {
     await applyUpdateRequest();
+    confirmedAnswered();
   } catch (err) {
+    confirmed.set(null);
     toast(updateReason(err), 'danger');
   }
+}
+
+/** The restart through the worker: the launcher closes and starts again on the new version. */
+export async function requestApply() {
+  if (!confirmRestart(false)) return;
+  await applyConfirmed();
+}
+
+/**
+ * The restart without a restart: the show starts at the press and Go gets that moment, so the
+ * successor draws the same frame. Where Go refuses, the worker restarts the launcher at once.
+ */
+export async function requestHandoff() {
+  if (!confirmRestart(true)) return;
+  const startedAt = updateShowHandoff()?.startedAt ?? Date.now();
+  try {
+    await beginHandoffRequest(startedAt);
+    confirmedAnswered();
+    return;
+  } catch (err) {
+    // BeginHandoff's contract: an error means nothing changed and the worker path is open. Whatever
+    // the cause (another platform, a portable build, a busy service), that path says its own error.
+    console.warn('seamless update refused, restarting instead', err);
+  }
+  confirmed.update((c) => c && { ...c, handoff: false });
+  await applyConfirmed();
 }
 
 export async function requestRollback() {

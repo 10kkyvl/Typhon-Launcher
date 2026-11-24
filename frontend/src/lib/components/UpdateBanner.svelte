@@ -7,6 +7,7 @@
   import ProgressBar from './ProgressBar.svelte';
   import UpdateRestartModal from './UpdateRestartModal.svelte';
   import {
+    handoffFailed,
     requestCancelDownload,
     requestDismiss,
     requestDownload,
@@ -122,7 +123,7 @@
 {:else if view === 'ready'}
   <div class="message">
     <Notice tone="success" announce={moved} title={msg('ui.updateReadyMessage', { version: status.availableVersion ?? '' })}>
-      {msg('ui.launcherRestartNewVersion')}
+      {$handoffFailed ? msg('state.selfupdateHandoffFailed') : msg('ui.launcherRestartNewVersion')}
       {#snippet action()}
         <Button variant="primary" size="sm" onclick={() => (confirmOpen = true)}>{msg('ui.restartAndUpdate')}</Button>
         <Button size="sm" onclick={requestDismiss}>{msg('ui.notNow')}</Button>
