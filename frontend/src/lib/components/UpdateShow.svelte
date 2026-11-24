@@ -2,16 +2,17 @@
   import { untrack } from 'svelte';
   import type { Attachment } from 'svelte/attachments';
   import { msg } from '../i18n';
-  import { focusQuietly } from '../layers/focus';
+  import { layer } from '../layers';
   import { runFrames } from '../motion/frames';
   import { motionOn, tokenMs } from '../motion/motion';
   import { curtainDrawn } from '../stores/handoff';
   import { settings } from '../stores/settings';
-  import { endUpdateShow, logoArcsAway, updateShow } from '../stores/updateShow';
+  import { endUpdateShow, logoArcsAway, updateShow, type UpdateShowState } from '../stores/updateShow';
   import LogoArcs from './LogoArcs.svelte';
   import UpdateFunnel from './UpdateFunnel.svelte';
   import UpdateRing from './UpdateRing.svelte';
   import { LOGO_ARCS } from './logoArcs';
+  import { portal } from '../utils/portal';
   import { arcFlights, curtainClosedAt, fillAt, showFrame, stillCurtain, type ArcPose, type ShowFrame, type ShowGeometry, type ShowTiming } from './updateShowTimeline';
 
   /**
@@ -23,8 +24,8 @@
    *
    * With motion off, or with no sidebar logo to fly from (Big Picture), it is a still ring that fills,
    * on the logo's place or above the words, and a finish or a way home has nothing to play.
-   * While it is up it covers the window and holds focus (the page under it takes no press or key);
-   * at its end focus goes back where it was, else to the page's heading.
+   * While it says something it is a cover on the layer stack (lib/layers): the page and every dialog
+   * under it take no press or key; at its end focus goes back where it was, else to the page's heading.
    */
 
   const show = $derived($updateShow);
@@ -122,26 +123,13 @@
   // a show that is still running is drawn again by the next mount from the clock.
   $effect(() => () => logoArcsAway.set(null));
 
-  // Only a show that says something holds focus: the finish at a start (no words) is decoration.
-  const cover: Attachment<HTMLElement> = (node) => {
+  const measure: Attachment<HTMLElement> = () => {
     logo = measureLogo();
-    if (!untrack(() => words)) return;
-    const held = document.activeElement;
-    const before = held instanceof HTMLElement && held !== document.body ? held : null;
-    focusQuietly(node);
-    return () => {
-      queueMicrotask(() => {
-        const active = document.activeElement;
-        if (active && active !== document.body && active.isConnected) return;
-        const back = before?.isConnected && !before.closest('[inert]') ? before : document.querySelector<HTMLElement>('main h1');
-        if (back) focusQuietly(back);
-      });
-    };
   };
 
-  function holdKeys(event: KeyboardEvent) {
-    if (event.key === 'Tab') event.preventDefault();
-  }
+  // Only the status ends the show, never Escape or Big Picture's back.
+  const stay = () => {};
+  const pageHeading = () => document.querySelector<HTMLElement>('main h1');
 
   const transform = (pose: ArcPose) => `translate(${pose.x}px, ${pose.y}px) rotate(${pose.rotate}deg) scale(${pose.sx}, ${pose.sy})`;
   const flights = $derived(geometry ? arcFlights(geometry) : null);
@@ -151,65 +139,81 @@
   const curtain = $derived(mode === 'flight' ? (frame?.curtain ?? 0) : show ? stillCurtain(show, now, timing) : 0);
 </script>
 
-{#if show}
-  <!-- svelte-ignore a11y_no_noninteractive_tabindex: it holds focus so the page under it takes no key -->
+{#if show && words}
   <div
     class="show"
-    role={words ? 'dialog' : undefined}
-    aria-modal={words ? 'true' : undefined}
-    aria-label={words ? msg('ui.installingUpdateTitle') : undefined}
-    aria-hidden={words ? undefined : 'true'}
-    tabindex={words ? -1 : undefined}
+    role="dialog"
+    aria-modal="true"
+    aria-label={msg('ui.installingUpdateTitle')}
     data-testid="update-show"
     data-mode={mode}
     data-stage={mode === 'flight' ? (frame?.stage ?? 'fly') : 'ring'}
-    onkeydown={holdKeys}
-    {@attach cover}
+    {@attach layer({ cover: true, dismissible: () => false, dismiss: stay, returnFocus: pageHeading })}
+    {@attach measure}
   >
-    <div class="scrim" style:opacity={mode === 'flight' ? (frame?.scrim ?? 0) : 1}></div>
-    <div class="curtain" style:opacity={curtain}></div>
-    {#if mode === 'flight'}
-      <div class="expand" style:transform="scale({frame?.ring.scale ?? 0})" style:opacity={frame?.ring.opacity ?? 0}></div>
-    {/if}
-    <div class="stage">
-      {#if mode === 'flight'}
-        <div class="funnel-box" {@attach measureFunnel}>
-          <UpdateFunnel layers={frame?.layers} lit={frame?.lit} turn={frame?.turn} />
-        </div>
-      {:else if !ringOnLogo}
-        <div class="ring-box"><UpdateRing value={ringValue} /></div>
-      {/if}
-      {#if words}
-        <div class="words" role="status" style:opacity={mode === 'flight' ? (frame?.words ?? 0) : 1}>
-          <p class="title">{msg('ui.installingVersion', { version: words })}</p>
-          <p class="note">{msg(show.handoff ? 'ui.handoffNote' : 'ui.launcherWillRestartShort')}</p>
-        </div>
-      {/if}
-    </div>
-    {#if mode === 'ring' && ringOnLogo && logo}
-      <div class="ringmark" style:left="{logo.left}px" style:top="{logo.top}px" style:width="{logo.size}px" style:height="{logo.size}px">
-        <UpdateRing value={ringValue} />
-      </div>
-    {/if}
-    {#if mode === 'flight' && logo && flights && frame}
-      {#each LOGO_ARCS as arc, i (arc.id)}
-        <div
-          class="clone"
-          data-arc-clone={arc.id}
-          style:left="{logo.left}px"
-          style:top="{logo.top}px"
-          style:width="{logo.size}px"
-          style:height="{logo.size}px"
-          style:transform-origin="{flights[i].ox}px {flights[i].oy}px"
-          style:transform={transform(frame.arcs[i])}
-          style:opacity={frame.arcs[i].opacity}
-        >
-          <LogoArcs only={arc.id} {tint} />
-        </div>
-      {/each}
-    {/if}
+    {@render picture(show)}
+  </div>
+{:else if show}
+  <!-- The finish at a start (no words) is decoration: no layer, no focus, hidden from screen readers.
+       Out of #app, so no dialog opened under it makes it inert: for its two seconds its dim takes
+       every press, rather than let one through to what it half hides. -->
+  <div
+    class="show"
+    aria-hidden="true"
+    data-testid="update-show"
+    data-mode={mode}
+    data-stage={mode === 'flight' ? (frame?.stage ?? 'fly') : 'ring'}
+    {@attach portal}
+    {@attach measure}
+  >
+    {@render picture(show)}
   </div>
 {/if}
+
+{#snippet picture(show: UpdateShowState)}
+  <div class="scrim" style:opacity={mode === 'flight' ? (frame?.scrim ?? 0) : 1}></div>
+  <div class="curtain" style:opacity={curtain}></div>
+  {#if mode === 'flight'}
+    <div class="expand" style:transform="scale({frame?.ring.scale ?? 0})" style:opacity={frame?.ring.opacity ?? 0}></div>
+  {/if}
+  <div class="stage">
+    {#if mode === 'flight'}
+      <div class="funnel-box" {@attach measureFunnel}>
+        <UpdateFunnel layers={frame?.layers} lit={frame?.lit} turn={frame?.turn} />
+      </div>
+    {:else if !ringOnLogo}
+      <div class="ring-box"><UpdateRing value={ringValue} /></div>
+    {/if}
+    {#if words}
+      <div class="words" role="status" style:opacity={mode === 'flight' ? (frame?.words ?? 0) : 1}>
+        <p class="title">{msg('ui.installingVersion', { version: words })}</p>
+        <p class="note">{msg(show.handoff ? 'ui.handoffNote' : 'ui.launcherWillRestartShort')}</p>
+      </div>
+    {/if}
+  </div>
+  {#if mode === 'ring' && ringOnLogo && logo}
+    <div class="ringmark" style:left="{logo.left}px" style:top="{logo.top}px" style:width="{logo.size}px" style:height="{logo.size}px">
+      <UpdateRing value={ringValue} />
+    </div>
+  {/if}
+  {#if mode === 'flight' && logo && flights && frame}
+    {#each LOGO_ARCS as arc, i (arc.id)}
+      <div
+        class="clone"
+        data-arc-clone={arc.id}
+        style:left="{logo.left}px"
+        style:top="{logo.top}px"
+        style:width="{logo.size}px"
+        style:height="{logo.size}px"
+        style:transform-origin="{flights[i].ox}px {flights[i].oy}px"
+        style:transform={transform(frame.arcs[i])}
+        style:opacity={frame.arcs[i].opacity}
+      >
+        <LogoArcs only={arc.id} {tint} />
+      </div>
+    {/each}
+  {/if}
+{/snippet}
 
 <style>
   .show {
