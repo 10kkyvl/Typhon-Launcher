@@ -32,6 +32,12 @@ describe('the update show follows the update status', () => {
     expect(get(updateShow)).toMatchObject({ startedAt: 1000, phase: 'home', since: 9000 });
   });
 
+  it('goes home, not to the finish, when applying ends with the same version still running', () => {
+    showFollowsStatus(status('applying'), 1000);
+    showFollowsStatus(status('idle', '1.4.0'), 9000);
+    expect(get(updateShow)).toMatchObject({ phase: 'home', since: 9000 });
+  });
+
   it('finishes when the running version changed', () => {
     showFollowsStatus(status('applying'), 1000);
     showFollowsStatus(status('idle', '1.5.0'), 9000);

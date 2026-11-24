@@ -262,6 +262,28 @@ describe('the start after an update', () => {
     expect(screen.getByText(msg('ui.launcherUpdatedTo', { version: '1.5.0' }))).toBeTruthy();
   });
 
+  it('is decoration: hidden from screen readers, takes no focus and moves none at its end', async () => {
+    selfUpdateOutcome.set({ version: '1.5.0', ok: true, finishedAt: '' });
+    resumeFinishedShow();
+    const { user } = renderDom(UpdateShowHarness);
+    await tick();
+    const show = shown() as HTMLElement;
+    expect(show.getAttribute('aria-hidden')).toBe('true');
+    expect(show.hasAttribute('tabindex')).toBe(false);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(document.body);
+
+    // Tab is not held: the page under the finish keeps its keys.
+    await user.keyboard('{Tab}');
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Play' }));
+    screen.getByRole('button', { name: 'Play' }).blur();
+
+    await advance(3000);
+    expect(shown()).toBeNull();
+    await Promise.resolve();
+    expect(document.activeElement).toBe(document.body);
+  });
+
   it('with motion off plays nothing and the card says the result at once', async () => {
     document.documentElement.classList.add('no-anim');
     selfUpdateOutcome.set({ version: '1.5.0', ok: true, finishedAt: '' });
@@ -370,5 +392,20 @@ describe('focus while the show is up', () => {
     selfUpdateStatus.set(READY);
     await advance(1000);
     await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Library' })));
+  });
+
+  it('gives no focus back into a part of the page that is inert when it ends: the page heading takes it', async () => {
+    renderDom(UpdateShowHarness);
+    const play = screen.getByRole('button', { name: 'Play' });
+    play.focus();
+    selfUpdateStatus.set(APPLYING);
+    await tick();
+    expect(document.activeElement).toBe(shown());
+    play.setAttribute('inert', '');
+
+    selfUpdateStatus.set(READY);
+    await advance(1000);
+    await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Library' })));
+    expect(document.activeElement).not.toBe(play);
   });
 });
