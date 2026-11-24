@@ -84,6 +84,7 @@ type librarySource interface {
 	GetInstalledGames() []library.Game
 	GetRunningGames() []string
 	ApplyInstalledUpdate(ctx context.Context, u library.InstalledUpdate) (library.Game, error)
+	BeginUpdate(id string) (func(), error)
 	BindDistribution(id, sourceID, releaseID, distributionID string, releaseUploadedAt *time.Time) (library.Game, error)
 	LocateSaves(ctx context.Context, id string) (library.SavesResult, error)
 }

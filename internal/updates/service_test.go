@@ -24,6 +24,33 @@ type fakeLibrary struct {
 	applied  []library.InstalledUpdate
 	saves    string
 	savesErr error
+	// moving refuses BeginUpdate as the library refuses a game held by a
+	// move; held counts the holds not released yet.
+	moving map[string]bool
+	held   int
+}
+
+func (f *fakeLibrary) BeginUpdate(id string) (func(), error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.moving[id] {
+		return nil, library.ErrGameRelocating
+	}
+	f.held++
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			f.mu.Lock()
+			defer f.mu.Unlock()
+			f.held--
+		})
+	}, nil
+}
+
+func (f *fakeLibrary) holdsLeft() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.held
 }
 
 func (f *fakeLibrary) GetInstalledGames() []library.Game {

@@ -35,6 +35,8 @@ func (b *blockingLibrary) ApplyInstalledUpdate(ctx context.Context, u library.In
 	return b.inner.ApplyInstalledUpdate(ctx, u)
 }
 
+func (b *blockingLibrary) BeginUpdate(id string) (func(), error) { return b.inner.BeginUpdate(id) }
+
 func (b *blockingLibrary) BindDistribution(id, sourceID, releaseID, distributionID string, releaseUploadedAt *time.Time) (library.Game, error) {
 	return b.inner.BindDistribution(id, sourceID, releaseID, distributionID, releaseUploadedAt)
 }

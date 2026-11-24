@@ -76,6 +76,55 @@ func TestApplyInstalledUpdateRefusesAFolderTheCardNoLongerNames(t *testing.T) {
 	}
 }
 
+// An update or a repair writes the game's folder from its start to its end:
+// it and a move of the game, live or recovered, exclude each other in the
+// library's lock, whichever comes first, and a released hold lets the other in.
+func TestUpdateAndMoveOfAGameExcludeEachOther(t *testing.T) {
+	s := newLibrary(t)
+	card := addAt(t, s, filepath.Join(t.TempDir(), "Game", "game.exe"), "Game")
+	target := filepath.Join(t.TempDir(), "Game")
+
+	releaseUpdate, err := s.BeginUpdate(card.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.BeginMove(card.ID, target); !errors.Is(err, ErrGameUpdating) {
+		t.Fatalf("BeginMove during an update = %v, want ErrGameUpdating", err)
+	}
+	if _, err := s.BeginRecovery(card.ID, card.InstallDir, target); !errors.Is(err, ErrGameUpdating) {
+		t.Fatalf("BeginRecovery during an update = %v, want ErrGameUpdating", err)
+	}
+	releaseUpdate()
+	releaseUpdate()
+
+	releaseMove, err := s.BeginMove(card.ID, target)
+	if err != nil {
+		t.Fatalf("BeginMove after the update = %v", err)
+	}
+	if _, err := s.BeginUpdate(card.ID); !errors.Is(err, ErrGameRelocating) {
+		t.Fatalf("BeginUpdate during a move = %v, want ErrGameRelocating", err)
+	}
+	releaseMove()
+
+	releaseRemoval, err := s.BeginRemoval(card.ID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.BeginUpdate(card.ID); !errors.Is(err, ErrGameRemoving) {
+		t.Fatalf("BeginUpdate during a removal = %v, want ErrGameRemoving", err)
+	}
+	releaseRemoval()
+
+	release, err := s.BeginUpdate(card.ID)
+	if err != nil {
+		t.Fatalf("BeginUpdate with nothing else held = %v", err)
+	}
+	release()
+	if _, err := s.BeginUpdate("missing"); err == nil {
+		t.Fatal("BeginUpdate of a game not in the library granted")
+	}
+}
+
 // The card's own folder, given or left empty, is what every update registers.
 func TestApplyInstalledUpdateRegistersTheCardsOwnFolder(t *testing.T) {
 	for _, tc := range []struct {

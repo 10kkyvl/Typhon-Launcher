@@ -428,10 +428,16 @@ func (s *Service) RepairGame(gameID string) error {
 	if !started {
 		return errBusy
 	}
+	releaseFolder, err := s.holdGameFolder(gameID)
+	if err != nil {
+		s.endJob(gameID)
+		return err
+	}
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
 		defer s.endJob(gameID)
+		defer releaseFolder()
 		s.repair(ctx, game, release, state.Flat)
 	}()
 	return nil

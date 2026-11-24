@@ -192,6 +192,7 @@ type Service struct {
 	starting        map[string]context.CancelFunc
 	relocating      map[string]struct{}
 	removing        map[string]struct{}
+	updating        map[string]int
 	holds           []*folderHold
 	sameCanonical   func(string, string) bool
 	onUpdated       func([]Game)

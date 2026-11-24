@@ -609,12 +609,13 @@ func (s *Service) checkBusy(gameID string) error {
 
 // reserveGame takes the library's move hold on a game, its folder and the
 // folders the move writes: target and its staging folder. The running,
-// removal and shared-folder checks and the hold are one step inside the
-// library, so neither a launch, a removal nor a new card in those folders can
-// come between them and the move; it is taken before anything is made at
-// target. checkBusy is not part of it: it asks the install, update and
-// download services before the hold, which does not exclude an install,
-// update or download that starts after that answer.
+// removal, update and shared-folder checks and the hold are one step inside
+// the library, so neither a launch, a removal, an update or repair (which
+// hold the game through library.BeginUpdate) nor a new card in those folders
+// can come between them and the move; it is taken before anything is made at
+// target. checkBusy is not part of it: it asks the install and download
+// services before the hold, which does not exclude an install or a download
+// that starts after that answer.
 func (s *Service) reserveGame(gameID, target string) (func(), error) {
 	release, err := s.lib.BeginMove(gameID, target, target+stagingSuffix)
 	switch {
@@ -622,6 +623,8 @@ func (s *Service) reserveGame(gameID, target string) (func(), error) {
 		return release, nil
 	case errors.Is(err, library.ErrRelocateGameRunning):
 		return nil, fmt.Errorf("%s: %w", gameID, ErrGameRunning)
+	case errors.Is(err, library.ErrGameUpdating):
+		return nil, fmt.Errorf("%s: %w", gameID, ErrUpdateBusy)
 	case errors.Is(err, library.ErrGameRelocating):
 		return nil, fmt.Errorf("%s: %w", gameID, ErrMoveInProgress)
 	case errors.Is(err, library.ErrGameRemoving):

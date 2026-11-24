@@ -1,6 +1,7 @@
 package library
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,9 @@ var (
 	ErrFolderBusy   = uierr.New("library.folder_busy", "эту папку сейчас удаляют или переносят вместе с другой игрой")
 	ErrGameRemoving = uierr.New("library.removing", "игра удаляется")
 	ErrGameMoving   = uierr.New("library.moving", "игра переносится на другой диск, дождитесь конца переноса")
+	// ErrGameUpdating refuses a move of a game an update or a repair writes;
+	// the move service answers it with its own code.
+	ErrGameUpdating = errors.New("game folder is being updated")
 	// ErrFolderChanged: the card names another folder than the one the caller
 	// decided on, and no move holds it now (a move ended, or an install or a
 	// scan gave the card another folder). Asking again sees the new folder.
@@ -218,6 +222,38 @@ func (s *Service) reservedLocked(id string) error {
 	return nil
 }
 
+// BeginUpdate reserves a game for an update or a repair, which writes its
+// folder from start to end: it fails while the game moves, its move is
+// recovered or it is being removed, and until release no move or move
+// recovery of the game is granted (ErrGameUpdating). The check and the
+// reservation are one critical section of s.mu.
+//
+//wails:ignore
+func (s *Service) BeginUpdate(id string) (func(), error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.findLocked(id) == nil {
+		return nil, errNotFound
+	}
+	if err := s.reservedLocked(id); err != nil {
+		return nil, err
+	}
+	if s.updating == nil {
+		s.updating = map[string]int{}
+	}
+	s.updating[id]++
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			if s.updating[id]--; s.updating[id] <= 0 {
+				delete(s.updating, id)
+			}
+		})
+	}, nil
+}
+
 // BeginRemoval reserves a game for an uninstall: it fails while the game runs,
 // starts, moves or is already being removed. dir is the folder the removal acts
 // on, by deleting it or by running an uninstaller in it, and empty when it
@@ -303,7 +339,7 @@ func (s *Service) BeginRecovery(id, source string, copies ...string) (func(), er
 
 // reserveMove reserves a game for a move that acts on the around and inside
 // folders (see blockersLocked), and on the card's own folder when own is set:
-// it fails while the game runs, starts, moves or is being removed, while
+// it fails while the game runs, starts, moves, is updated or is being removed, while
 // another card's files lie in the way or another game's hold overlaps one of
 // the folders, and holds those folders against new
 // cards until release. The checks and the reservation are one critical
@@ -320,6 +356,9 @@ func (s *Service) reserveMove(id string, own bool, around, inside []string) (fun
 	}
 	if _, ok := s.running[id]; ok || s.starting[id] != nil {
 		return nil, ErrRelocateGameRunning
+	}
+	if s.updating[id] > 0 {
+		return nil, ErrGameUpdating
 	}
 	if own {
 		around = append([]string{game.InstallDir}, around...)

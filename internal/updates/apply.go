@@ -73,7 +73,13 @@ func (s *Service) StartUpdate(gameID string) error {
 	if !started {
 		return errBusy
 	}
+	release, err := s.holdGameFolder(gameID)
+	if err != nil {
+		s.endJob(gameID)
+		return err
+	}
 	if err := s.validatePlan(gameID, *current.Plan); err != nil {
+		release()
 		s.endJob(gameID)
 		return err
 	}
@@ -113,6 +119,7 @@ func (s *Service) StartUpdate(gameID string) error {
 	go func() {
 		defer s.wg.Done()
 		defer s.endJob(gameID)
+		defer release()
 		err := s.runUpdate(ctx, plan)
 		moved := err != nil && s.installMovedFrom(plan)
 		switch {
@@ -219,6 +226,19 @@ func (s *Service) StartUpdate(gameID string) error {
 		}
 	}()
 	return nil
+}
+
+// holdGameFolder takes the library's hold for a job that writes the game's
+// folder (an update, a repair), after the job slot: until release no move or
+// move recovery of the game is granted, and a game a move holds is refused
+// here, in the library's lock, so neither can start between the other's check
+// and its start.
+func (s *Service) holdGameFolder(gameID string) (func(), error) {
+	release, err := s.library.BeginUpdate(gameID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", errBusy, err)
+	}
+	return release, nil
 }
 
 func (s *Service) CancelUpdate(gameID string) error {
