@@ -34,8 +34,8 @@ afterEach(() => {
 
 const APPLYING = { state: 'applying', currentVersion: '1.4.0', availableVersion: '1.5.0' } as const;
 
-// The show that took the old panel's place is mounted by App.svelte over every screen, beside the
-// overlay; the harness mounts both as the app does.
+// While an update is applied the update show (UpdateShow.svelte) says it, mounted by App.svelte over
+// every screen beside the overlay; the harness mounts both as the app does.
 describe('UpdateOverlay while an update is applied', () => {
   it('says which version is installed and that the launcher restarts, in a modal dialog', () => {
     selfUpdateStatus.set(APPLYING);
@@ -46,7 +46,6 @@ describe('UpdateOverlay while an update is applied', () => {
     expect(within(dialog).getByText(msg('ui.launcherWillRestartShort'))).toBeTruthy();
   });
 
-  // The update show (UpdateShow.svelte) took the panel's place and its cover.
   it('covers the whole window above the title bar, so nothing under it takes a press', () => {
     const rule = /\n {2}\.show \{([^}]*)\}/.exec(showSource)?.[1] ?? '';
     expect(rule).toMatch(/position: fixed/);

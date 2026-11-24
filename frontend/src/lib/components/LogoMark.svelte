@@ -9,7 +9,8 @@
   const logoMatrix = $derived(logoChannels.map(k => `${1-k} 0 ${k} 0 0`).join(' ') + ' 0 0 0 1 0');
   const tint = $derived(Boolean($appearanceSettings?.tintLogo));
   // The picture at rest; while the update show flies the arcs, the same logo in vector, so the arcs
-  // that are away can leave it one by one (UpdateShow.svelte finds it by `data-logo-origin`).
+  // that are away can leave it one by one (UpdateShow.svelte finds it by `data-logo-origin`). The swap
+  // is in plain sight: at the show's first frame the dim has not begun.
   const away = $derived($logoArcsAway);
 </script>
 

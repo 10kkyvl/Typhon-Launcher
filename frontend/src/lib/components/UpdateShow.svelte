@@ -16,11 +16,11 @@
   import { arcFlights, curtainClosedAt, fillAt, showFrame, showTime, stillCurtain, type ArcPose, type ShowFrame, type ShowGeometry, type ShowTiming } from './updateShowTimeline';
 
   /**
-   * The launcher-update show, in place of the old "installing" panel: over a dim the logo's five arcs
-   * lift off the sidebar logo and fly into a turning funnel that holds while the update applies; the
-   * finish brings them back, the way home brings them back after a failure. What happens when is
-   * stores/updateShow.ts's; every frame comes from the clock (updateShowTimeline.ts), so a show
-   * mounted late draws its present frame without the flight before it.
+   * The launcher-update show, all the window shows while an update is applied: over a dim the logo's
+   * five arcs lift off the sidebar logo and fly into a turning funnel that holds while the update
+   * applies; the finish brings them back, the way home brings them back after a failure. What
+   * happens when is stores/updateShow.ts's; every frame comes from the clock (updateShowTimeline.ts),
+   * so a show mounted late draws its present frame without the flight before it.
    *
    * With motion off, or with no sidebar logo to fly from (Big Picture), it is a still ring that fills,
    * on the logo's place or above the words, and a finish or a way home has nothing to play.

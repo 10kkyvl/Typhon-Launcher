@@ -73,7 +73,7 @@ describe('the update show while the update is applied', () => {
     expect(shown()).toBeNull();
   });
 
-  it('flies the five arcs off the logo over the whole window, and says what the old panel said, once', async () => {
+  it('flies the five arcs off the logo over the whole window, and says once which version it installs and that the launcher restarts', async () => {
     renderDom(UpdateShowHarness);
     selfUpdateStatus.set(APPLYING);
     await tick();
