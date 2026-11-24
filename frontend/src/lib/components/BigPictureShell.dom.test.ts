@@ -5,6 +5,7 @@ import { msg } from '../i18n';
 import { selectEmulatorFile, setEmulatorPath } from '../services/emulators';
 import { emulatorPrompt } from '../stores/emulatorPrompt';
 import { liveIslandOn } from '../stores/liveIsland';
+import { selfUpdateStatus } from '../stores/selfupdate';
 import { toast, toasts } from '../stores/toasts';
 import { user } from '../testing/dom';
 import BigPictureHarness from '../testing/BigPictureHarness.svelte';
@@ -180,5 +181,25 @@ describe('toasts in Big Picture', () => {
     expect(message.closest('.toast-corner')).not.toBeNull();
     expect(document.querySelector('[data-part="live-island"]')).toBeNull();
     expect(get(liveIslandOn)).toBe(false);
+  });
+});
+
+// While the launcher applies its own update the overlay says so over Big Picture: nothing of Big
+// Picture under it takes focus or a key.
+describe('Big Picture while the launcher update is applied', () => {
+  afterEach(() => selfUpdateStatus.set({ state: 'idle', currentVersion: '' }));
+
+  it('makes its page inert and gives it back when applying ends', async () => {
+    render(BigPictureHarness, { target: app });
+    await screen.findByRole('button', { name: 'Play' });
+    // Svelte sets the `inert` property, which a browser reflects to the attribute and jsdom does not.
+    const stage = () => document.querySelector('[data-big-picture] > .stage') as HTMLElement;
+    expect(stage().inert).toBeFalsy();
+
+    selfUpdateStatus.set({ state: 'applying', currentVersion: '1.4.0', availableVersion: '1.5.0' });
+    await vi.waitFor(() => expect(stage().inert).toBe(true));
+
+    selfUpdateStatus.set({ state: 'ready', currentVersion: '1.4.0', availableVersion: '1.5.0' });
+    await vi.waitFor(() => expect(stage().inert).toBe(false));
   });
 });
