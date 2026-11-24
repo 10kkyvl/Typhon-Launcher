@@ -17,6 +17,10 @@ vi.mock('../../lib/stores/selfupdate', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/stores/selfupdate')>()),
   requestCheck: vi.fn(async () => {}),
 }));
+vi.mock('../../lib/services/selfupdate', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/services/selfupdate')>()),
+  checkForUpdate: vi.fn(),
+}));
 vi.mock('../../lib/services/cloudsaves', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/services/cloudsaves')>()),
   cloudForget: vi.fn(),
@@ -24,6 +28,7 @@ vi.mock('../../lib/services/cloudsaves', async (importOriginal) => ({
 
 import { msg, type MessageKey } from '../../lib/i18n';
 import { cloudForget } from '../../lib/services/cloudsaves';
+import { checkForUpdate } from '../../lib/services/selfupdate';
 import { updateReason } from '../../lib/services/selfupdateMessages';
 import { defaultPlayDownloadLimit, defaultPlayUploadLimit } from '../../lib/services/playThrottle';
 import { saveSettingsPatch, type Settings as SettingsData } from '../../lib/services/settings';
@@ -100,6 +105,7 @@ afterEach(() => {
   vi.mocked(saveSettingsPatch).mockReset();
   vi.mocked(requestCheck).mockReset();
   vi.mocked(cloudForget).mockReset();
+  vi.mocked(checkForUpdate).mockReset();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -418,16 +424,25 @@ describe('the downloads tab: beta versions', () => {
     expect(saveSettingsPatch).toHaveBeenCalledExactlyOnceWith({ updateBetaChannel: true });
   });
 
-  it('says a check that fails after the channel is saved, the way a failed check is said', async () => {
+  // requestCheck says a failed check itself and never rejects: the tab adds nothing to it.
+  it('keeps a saved channel when the check after it fails, said once, the way a failed check is said', async () => {
     authState.set('authenticated');
     currentUser.set(TESTER);
-    vi.mocked(requestCheck).mockRejectedValue(new Error('offline'));
+    const failure = new Error('typhon:selfupdate.stalled: read tcp');
+    vi.mocked(checkForUpdate).mockRejectedValue(failure);
+    const real = await vi.importActual<typeof import('../../lib/stores/selfupdate')>('../../lib/stores/selfupdate');
+    vi.mocked(requestCheck).mockImplementation(real.requestCheck);
     const keys = open();
+    const beta = screen.getByRole('switch', { name: msg('settings.downloadsBetaLabel') });
 
-    await keys.click(screen.getByRole('switch', { name: msg('settings.downloadsBetaLabel') }));
+    await keys.click(beta);
 
-    await vi.waitFor(() => expect(toastTexts()).toContain(updateReason(new Error('offline'))));
-    expect(get(toasts).find((item) => item.message === updateReason(new Error('offline')))?.kind).toBe('danger');
+    await vi.waitFor(() => expect(checkForUpdate).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(get(toasts)).toHaveLength(1));
+    expect(get(toasts).map((item) => [item.kind, item.message])).toEqual([['danger', updateReason(failure)]]);
+    expect(saveSettingsPatch).toHaveBeenCalledExactlyOnceWith({ updateBetaChannel: true });
+    expect(get(settings)?.updateBetaChannel).toBe(true);
+    expect(beta.getAttribute('aria-checked')).toBe('true');
   });
 
   it('says a channel that was not saved, and checks nothing', async () => {
