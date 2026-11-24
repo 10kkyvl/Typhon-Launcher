@@ -46,6 +46,7 @@ type config struct {
 	artifact string
 	port     int
 	seed     string
+	state    string
 }
 
 func parseFlags(args []string, stderr io.Writer) (config, error) {
@@ -55,7 +56,8 @@ func parseFlags(args []string, stderr io.Writer) (config, error) {
 	fs.StringVar(&cfg.version, "version", "", "version to publish in the manifest (required)")
 	fs.StringVar(&cfg.artifact, "artifact", "", "path to a pre-built launcher artifact (default: build one with -tags devmock)")
 	fs.IntVar(&cfg.port, "port", 8099, "port to bind on 127.0.0.1")
-	fs.StringVar(&cfg.seed, "seed", "", "base64-encoded ed25519 seed, 32 bytes (default: generate one)")
+	fs.StringVar(&cfg.seed, "seed", "", "base64-encoded ed25519 seed, 32 bytes (default: the -state key, else a one-off key)")
+	fs.StringVar(&cfg.state, "state", "", "directory that keeps the signing key between runs and receives update.env for a wrapper to source")
 	if err := fs.Parse(args); err != nil {
 		return config{}, err
 	}
@@ -131,6 +133,22 @@ func resolveKeyPair(encodedSeed string) (ed25519.PrivateKey, ed25519.PublicKey, 
 	return priv, pub, nil
 }
 
+// keyPairFor prefers an explicit -seed, then the key kept in -state, and
+// only then a one-off key that dies with the process.
+func keyPairFor(cfg config) (ed25519.PrivateKey, ed25519.PublicKey, error) {
+	if cfg.seed != "" || cfg.state == "" {
+		return resolveKeyPair(cfg.seed)
+	}
+	return stateKeyPair(cfg.state)
+}
+
+func closeListener(l net.Listener, cause error) error {
+	if err := l.Close(); err != nil {
+		return errors.Join(cause, fmt.Errorf("close listener: %w", err))
+	}
+	return cause
+}
+
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	cfg, err := parseFlags(args, stderr)
 	if err != nil {
@@ -143,14 +161,23 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	}
 	defer cleanup()
 
-	priv, pub, err := resolveKeyPair(cfg.seed)
+	priv, pub, err := keyPairFor(cfg)
 	if err != nil {
 		return err
 	}
 
-	signed, art, err := buildSignedManifest(cfg.version, artifactPath, cfg.port, priv)
+	listener, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(cfg.port)))
 	if err != nil {
-		return err
+		return fmt.Errorf("listen on 127.0.0.1:%d: %w", cfg.port, err)
+	}
+	port := cfg.port
+	if addr, ok := listener.Addr().(*net.TCPAddr); ok {
+		port = addr.Port
+	}
+
+	signed, art, err := buildSignedManifest(cfg.version, artifactPath, port, priv)
+	if err != nil {
+		return closeListener(listener, err)
 	}
 
 	srv := &releaseServer{signed: signed, version: cfg.version, artifactName: art.Name, artifactPath: artifactPath}
@@ -162,17 +189,17 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		IdleTimeout:       idleTimeout,
 	}
 
-	listener, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(cfg.port)))
-	if err != nil {
-		return fmt.Errorf("listen on 127.0.0.1:%d: %w", cfg.port, err)
+	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+	lines := envLines(baseURL, pub)
+	for _, line := range lines {
+		if _, err := io.WriteString(stdout, line+"\n"); err != nil {
+			return closeListener(listener, fmt.Errorf("print env line: %w", err))
+		}
 	}
-
-	baseURL := fmt.Sprintf("http://127.0.0.1:%d", cfg.port)
-	if _, err := os.Stdout.WriteString("TYPHON_DEVMOCK_MANIFEST_URL=" + baseURL + "\n"); err != nil {
-		return fmt.Errorf("print manifest url: %w", err)
-	}
-	if _, err := os.Stdout.WriteString("TYPHON_DEVMOCK_RELEASE_PUBKEY=" + base64.StdEncoding.EncodeToString(pub) + "\n"); err != nil {
-		return fmt.Errorf("print release pubkey: %w", err)
+	if cfg.state != "" {
+		if err := writeEnvFile(cfg.state, lines); err != nil {
+			return closeListener(listener, err)
+		}
 	}
 	slog.Info("devrelease: serving", "url", baseURL, "version", cfg.version, "artifact", artifactPath)
 
