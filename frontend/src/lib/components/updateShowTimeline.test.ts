@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LOGO_ARCS } from './logoArcs';
-import { REST_POSE, arcFlights, flightEnd, showFrame, type ShowFrame, type ShowTiming } from './updateShowTimeline';
+import { REST_POSE, arcFlights, curtainClosedAt, flightEnd, showFrame, stillCurtain, type ShowFrame, type ShowTiming } from './updateShowTimeline';
 
 // The show is a function of the wall clock: these are the frames a person sees at given moments, and
 // what makes a second process that knows only `startedAt` draw the same thing.
@@ -109,6 +109,56 @@ describe('the finish', () => {
     expect(last.words).toBe(0);
     expect(last.layers).toEqual([0, 0, 0, 0, 0]);
     expect(finish(LONG, LONG + end - 20).stage).toBe('finish');
+  });
+});
+
+describe('the curtain of a seamless restart', () => {
+  const clock = (phase: 'run' | 'finish' | 'home', since = START) => ({ startedAt: START, phase, since, handoff: true });
+  const seamless = (elapsed: number) => showFrame(clock('run'), START + elapsed, T, FLIGHTS);
+  const closed = curtainClosedAt(START, T, true) - START;
+
+  it('stays open through the flight, then deepens while the funnel holds until it is the page colour', () => {
+    expect(seamless(0).curtain).toBe(0);
+    expect(seamless(flightEnd(T)).curtain).toBe(0);
+    const half = seamless(flightEnd(T) + T.fly / 2).curtain;
+    expect(half).toBeGreaterThan(0);
+    expect(half).toBeLessThan(1);
+    expect(seamless(closed).curtain).toBe(1);
+    expect(seamless(closed - 1).curtain).toBeLessThan(1);
+    expect(seamless(10 * 60_000).curtain).toBe(1);
+  });
+
+  it('is drawn the same by two processes that know only when the show began', () => {
+    for (const at of [500, flightEnd(T) + 300, closed, closed + 4321]) {
+      expect(seamless(at)).toEqual(showFrame(clock('run'), START + at, T, arcFlights(GEO)));
+    }
+  });
+
+  it('is not there in an ordinary restart: the page stays under the dim', () => {
+    expect(run(closed).curtain).toBe(0);
+    expect(run(10 * 60_000).curtain).toBe(0);
+  });
+
+  it('lifts with the dim at the finish and on the way home', () => {
+    const LONG = 60_000;
+    const finish = (at: number) => showFrame(clock('finish', START + LONG), START + LONG + at, T, FLIGHTS);
+    expect(finish(0).curtain).toBe(1);
+    expect(finish(T.slow + T.base).curtain).toBe(1);
+    expect(finish(T.slow + T.base + T.slow / 2).curtain).toBeCloseTo(finish(T.slow + T.base + T.slow / 2).scrim, 6);
+    expect(finish(T.slow + T.base + T.slow).curtain).toBe(0);
+
+    const home = (at: number) => showFrame(clock('home', START + LONG), START + LONG + at, T, FLIGHTS);
+    expect(home(0).curtain).toBe(1);
+    expect(home(T.slow / 2).curtain).toBeCloseTo(0.5, 6);
+    expect(home(T.slow).curtain).toBe(0);
+  });
+
+  it('with motion off closes at once when the flight would have ended, with nothing in between', () => {
+    const closedStill = curtainClosedAt(START, T, false);
+    expect(closedStill).toBe(START + flightEnd(T));
+    expect(stillCurtain(clock('run'), closedStill - 1, T)).toBe(0);
+    expect(stillCurtain(clock('run'), closedStill, T)).toBe(1);
+    expect(stillCurtain({ ...clock('run'), handoff: false }, closedStill + 5000, T)).toBe(0);
   });
 });
 

@@ -94,6 +94,8 @@ export interface ShowClock {
   startedAt: number;
   phase: ShowPhase;
   since: number;
+  /** A seamless restart: the curtain closes over the page while the funnel holds. */
+  handoff?: boolean;
 }
 
 export interface ShowFrame {
@@ -109,6 +111,8 @@ export interface ShowFrame {
   /** Each ring's turn, degrees. */
   turn: number[];
   scrim: number;
+  /** The page colour over the dim, 0..1: opaque hides the page entirely. */
+  curtain: number;
   words: number;
   ring: { scale: number; opacity: number };
 }
@@ -121,6 +125,22 @@ const count = LOGO_ARCS.length;
 const each = <T>(fn: (i: number) => T): T[] => Array.from({ length: count }, (_, i) => fn(i));
 
 export const flightEnd = (t: ShowTiming) => (count - 1) * t.step + t.fly;
+
+
+/**
+ * When the curtain of a seamless restart is the page colour through and through: after the flight it
+ * deepens for one flight's time; with motion off it closes in one step when the flight would have
+ * ended. Before this moment the successor does not let Go show its window (stores/handoff.ts): only
+ * an opaque curtain hides that the two windows have different pages under it.
+ */
+export const curtainClosedAt = (startedAt: number, t: ShowTiming, motion: boolean) => startedAt + flightEnd(t) + (motion ? t.fly : 0);
+
+const deepening = (elapsed: number, t: ShowTiming, handoff: boolean | undefined) => (handoff ? clamp01((elapsed - flightEnd(t)) / t.fly) : 0);
+
+/** The curtain with motion off: no frames, only the run's step; a finish or a way home ends the show. */
+export function stillCurtain(clock: ShowClock, now: number, t: ShowTiming): number {
+  return clock.handoff && clock.phase === 'run' && now >= curtainClosedAt(clock.startedAt, t, false) ? 1 : 0;
+}
 
 export function arcFlights(geo: ShowGeometry): ArcFlight[] {
   const { logo, funnel } = geo;
@@ -167,7 +187,7 @@ const turnAt = (elapsed: number, t: ShowTiming) => each((i) => -((360 * elapsed)
 const progressOf = (elapsed: number, i: number, t: ShowTiming) => clamp01((elapsed - i * t.step) / t.fly);
 const HIDDEN_RING = { scale: RING_FROM, opacity: 0 };
 
-function runFrame(elapsed: number, t: ShowTiming, flights: ArcFlight[]): ShowFrame {
+function runFrame(elapsed: number, t: ShowTiming, flights: ArcFlight[], handoff?: boolean): ShowFrame {
   const end = flightEnd(t);
   return {
     stage: elapsed < end ? 'fly' : 'hold',
@@ -177,14 +197,17 @@ function runFrame(elapsed: number, t: ShowTiming, flights: ArcFlight[]): ShowFra
     lit: litBy(fill(elapsed)),
     turn: turnAt(elapsed, t),
     scrim: clamp01(elapsed / t.slow),
+    curtain: deepening(elapsed, t, handoff),
     words: clamp01((elapsed - end) / t.slow),
     ring: HIDDEN_RING,
   };
 }
 
-function finishFrame(elapsed: number, sinceFinish: number, t: ShowTiming, flights: ArcFlight[]): ShowFrame {
-  const hold = runFrame(elapsed - sinceFinish, t, flights);
+function finishFrame(elapsed: number, sinceFinish: number, t: ShowTiming, flights: ArcFlight[], handoff?: boolean): ShowFrame {
+  const hold = runFrame(elapsed - sinceFinish, t, flights, handoff);
   const s = sinceFinish - t.slow;
+  // The curtain lifts with the dim, so the page comes back as it went.
+  const lift = s < t.base ? 1 : 1 - clamp01((s - t.base) / t.slow);
   const returns = flights.map((_, i) => {
     const delay = t.base + (count - 1 - i) * t.step;
     return clamp01((s - delay) / (RETURN * t.fly));
@@ -199,13 +222,14 @@ function finishFrame(elapsed: number, sinceFinish: number, t: ShowTiming, flight
     lit: litBy(lerp(fill(elapsed - sinceFinish), 1, clamp01(sinceFinish / t.slow))),
     turn: turnAt(elapsed, t),
     scrim: s < t.base ? hold.scrim : 1 - clamp01((s - t.base) / t.slow),
+    curtain: hold.curtain * lift,
     words: s < 0 ? hold.words : hold.words * (1 - clamp01(s / t.base)),
     ring: s < 0 ? HIDDEN_RING : { scale: lerp(RING_FROM, RING_TO, easeOut(ringAt)), opacity: RING_OPACITY * (1 - easeOut(ringAt)) },
   };
 }
 
-function homeFrame(elapsed: number, sinceHome: number, t: ShowTiming, flights: ArcFlight[]): ShowFrame {
-  const from = runFrame(elapsed - sinceHome, t, flights);
+function homeFrame(elapsed: number, sinceHome: number, t: ShowTiming, flights: ArcFlight[], handoff?: boolean): ShowFrame {
+  const from = runFrame(elapsed - sinceHome, t, flights, handoff);
   const back = easeOut(clamp01(sinceHome / (2 * t.base)));
   const done = sinceHome >= Math.max(2 * t.base, t.slow);
   const fade = 1 - clamp01(sinceHome / t.base);
@@ -224,6 +248,7 @@ function homeFrame(elapsed: number, sinceHome: number, t: ShowTiming, flights: A
     lit: from.lit,
     turn: turnAt(elapsed, t),
     scrim: from.scrim * (1 - clamp01(sinceHome / t.slow)),
+    curtain: from.curtain * (1 - clamp01(sinceHome / t.slow)),
     words: from.words * fade,
     ring: HIDDEN_RING,
   };
@@ -237,12 +262,12 @@ export function showFrame(clock: ShowClock, now: number, t: ShowTiming, flights:
   const elapsed = now - clock.startedAt;
   switch (clock.phase) {
     case 'run':
-      return runFrame(elapsed, t, flights);
+      return runFrame(elapsed, t, flights, clock.handoff);
     case 'finish': {
       const from = Math.max(clock.since, clock.startedAt + flightEnd(t));
-      return now < from ? runFrame(elapsed, t, flights) : finishFrame(elapsed, now - from, t, flights);
+      return now < from ? runFrame(elapsed, t, flights, clock.handoff) : finishFrame(elapsed, now - from, t, flights, clock.handoff);
     }
     case 'home':
-      return homeFrame(elapsed, Math.max(0, now - clock.since), t, flights);
+      return homeFrame(elapsed, Math.max(0, now - clock.since), t, flights, clock.handoff);
   }
 }

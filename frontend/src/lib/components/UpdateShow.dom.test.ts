@@ -7,6 +7,7 @@ import { selfUpdateOutcome, selfUpdateStatus } from '../stores/selfupdate';
 import { endUpdateShow, logoArcsAway, resumeFinishedShow, showFollowsStatus, updateShow } from '../stores/updateShow';
 import { renderDom } from '../testing/dom';
 import UpdateShowHarness from '../testing/UpdateShowHarness.svelte';
+import showSource from './UpdateShow.svelte?raw';
 
 vi.mock('@wailsio/runtime', async () => (await import('../testing/dom')).wailsRuntime());
 vi.mock('../services/backend', () => ({ inWails: false }));
@@ -169,6 +170,60 @@ describe('the update show while the update is applied', () => {
     await advance(3000);
     expect(shown()).toBeNull();
     expect(picture().classList.contains('away')).toBe(false);
+  });
+});
+
+describe('the update show of a seamless restart', () => {
+  const curtain = () => document.querySelector<HTMLElement>('[data-testid="update-show"] .curtain');
+  const seamless = () => showFollowsStatus(APPLYING, START, { startedAt: START, handoff: true });
+
+  it('closes a curtain of the page colour over the page while the funnel holds', async () => {
+    seamless();
+    renderDom(UpdateShowHarness);
+    await tick();
+    expect(curtain()?.style.opacity).toBe('0');
+    await advance(1680 + 600);
+    const half = Number(curtain()?.style.opacity);
+    expect(half).toBeGreaterThan(0);
+    expect(half).toBeLessThan(1);
+    // Frames come one animation frame (16 ms) apart: the first after the closing moment is opaque.
+    await advance(600 + 16);
+    expect(curtain()?.style.opacity).toBe('1');
+    const rule = /\n {2}\.curtain \{([^}]*)\}/.exec(showSource)?.[1] ?? '';
+    expect(rule).toMatch(/background: var\(--bg\)/);
+  });
+
+  it('says the launcher stays open, not that it restarts', async () => {
+    seamless();
+    renderDom(UpdateShowHarness);
+    await tick();
+    const status = screen.getByRole('status');
+    expect(status.textContent).toContain(msg('ui.installingVersion', { version: '1.5.0' }));
+    expect(status.textContent).toContain(msg('ui.handoffNote'));
+    expect(status.textContent).not.toContain(msg('ui.launcherWillRestartShort'));
+  });
+
+  it('refused by Go and going on as an ordinary restart, opens no curtain', async () => {
+    seamless();
+    renderDom(UpdateShowHarness);
+    showFollowsStatus(APPLYING, START + 200, { startedAt: START, handoff: false });
+    await advance(5000);
+    expect(curtain()?.style.opacity).toBe('0');
+    expect(screen.getByRole('status').textContent).toContain(msg('ui.launcherWillRestartShort'));
+  });
+
+  it('with motion off, closes the curtain in one step when the flight would have ended', async () => {
+    document.documentElement.classList.add('no-anim');
+    seamless();
+    renderDom(UpdateShowHarness);
+    await advance(1600);
+    expect(shown()?.dataset.mode).toBe('ring');
+    expect(curtain()?.style.opacity).toBe('0');
+    await advance(80);
+    expect(curtain()?.style.opacity).toBe('1');
+    // The successor has no logo to put the ring on: both windows draw it above the words.
+    expect(document.querySelector('.stage .ring-box [data-ring-value]')).not.toBeNull();
+    expect(document.querySelector('.ringmark')).toBeNull();
   });
 });
 

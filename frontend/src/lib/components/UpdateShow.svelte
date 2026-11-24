@@ -11,7 +11,7 @@
   import UpdateFunnel from './UpdateFunnel.svelte';
   import UpdateRing from './UpdateRing.svelte';
   import { LOGO_ARCS } from './logoArcs';
-  import { arcFlights, fillAt, showFrame, type ArcPose, type ShowFrame, type ShowGeometry, type ShowTiming } from './updateShowTimeline';
+  import { arcFlights, curtainClosedAt, fillAt, showFrame, stillCurtain, type ArcPose, type ShowFrame, type ShowGeometry, type ShowTiming } from './updateShowTimeline';
 
   /**
    * The launcher-update show, in place of the old "installing" panel: over a dim the logo's five arcs
@@ -97,7 +97,13 @@
     }
     now = Date.now();
     const timer = setInterval(() => (now = Date.now()), 1000);
-    return () => clearInterval(timer);
+    // The curtain's step lands on its moment, not on the next second's tick.
+    const closing = clock.handoff ? curtainClosedAt(clock.startedAt, timing, false) - now : -1;
+    const step = closing > 0 ? setTimeout(() => (now = Date.now()), closing) : undefined;
+    return () => {
+      clearInterval(timer);
+      clearTimeout(step);
+    };
   });
 
   // The shell going (Big Picture swapped in, the language switched): the logo gets its arcs back;
@@ -128,6 +134,9 @@
   const transform = (pose: ArcPose) => `translate(${pose.x}px, ${pose.y}px) rotate(${pose.rotate}deg) scale(${pose.sx}, ${pose.sy})`;
   const flights = $derived(geometry ? arcFlights(geometry) : null);
   const ringValue = $derived(show ? fillAt(now - show.startedAt) : 0);
+  // A successor has no logo when it takes over: in a seamless restart both windows draw the ring in the middle.
+  const ringOnLogo = $derived(Boolean(logo) && !show?.handoff);
+  const curtain = $derived(mode === 'flight' ? (frame?.curtain ?? 0) : show ? stillCurtain(show, now, timing) : 0);
 </script>
 
 {#if show}
@@ -146,6 +155,7 @@
     {@attach cover}
   >
     <div class="scrim" style:opacity={mode === 'flight' ? (frame?.scrim ?? 0) : 1}></div>
+    <div class="curtain" style:opacity={curtain}></div>
     {#if mode === 'flight'}
       <div class="expand" style:transform="scale({frame?.ring.scale ?? 0})" style:opacity={frame?.ring.opacity ?? 0}></div>
     {/if}
@@ -154,17 +164,17 @@
         <div class="funnel-box" {@attach measureFunnel}>
           <UpdateFunnel layers={frame?.layers} lit={frame?.lit} turn={frame?.turn} />
         </div>
-      {:else if !logo}
+      {:else if !ringOnLogo}
         <div class="ring-box"><UpdateRing value={ringValue} /></div>
       {/if}
       {#if words}
         <div class="words" role="status" style:opacity={mode === 'flight' ? (frame?.words ?? 0) : 1}>
           <p class="title">{msg('ui.installingVersion', { version: words })}</p>
-          <p class="note">{msg('ui.launcherWillRestartShort')}</p>
+          <p class="note">{msg(show.handoff ? 'ui.handoffNote' : 'ui.launcherWillRestartShort')}</p>
         </div>
       {/if}
     </div>
-    {#if mode === 'ring' && logo}
+    {#if mode === 'ring' && ringOnLogo && logo}
       <div class="ringmark" style:left="{logo.left}px" style:top="{logo.top}px" style:width="{logo.size}px" style:height="{logo.size}px">
         <UpdateRing value={ringValue} />
       </div>
@@ -201,6 +211,13 @@
     position: absolute;
     inset: 0;
     background: var(--scrim-update);
+  }
+
+  /* A seamless restart's curtain: the page colour the successor's window opens in. */
+  .curtain {
+    position: absolute;
+    inset: 0;
+    background: var(--bg);
   }
 
   .stage {
