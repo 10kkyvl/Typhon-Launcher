@@ -35,8 +35,10 @@ import { settings } from '../../lib/stores/settings';
 import { toasts } from '../../lib/stores/toasts';
 import { renderDom } from '../../lib/testing/dom';
 import { description } from '../../lib/testing/hints';
+import LibraryCard from './LibraryCard.svelte';
 import LibraryFoldersRow from './LibraryFoldersRow.svelte';
 import LibraryLocationRow from './LibraryLocationRow.svelte';
+import type { SettingsPage } from './settingsPage.svelte';
 
 const GB = 1024 ** 3;
 const PRIMARY: LibraryFolder = { path: '/games', primary: true, freeBytes: 10 * GB, totalBytes: 100 * GB, available: true };
@@ -134,6 +136,24 @@ describe('the library folders row', () => {
     await user.click(within(dialog).getByRole('button', { name: msg('settings.libraryFolderRemove') }));
     await waitFor(() => expect(removeLibraryFolder).toHaveBeenCalledExactlyOnceWith('/extra'));
     await waitFor(() => expect(screen.queryByText('/extra')).toBeNull());
+  });
+});
+
+describe('the library card: the import row', () => {
+  // The button says the row's own label: beside the words it squeezed the hint into a narrow column.
+  it('puts the import button under its words, the disk usage button kept beside them', async () => {
+    const page = {
+      appInfo: { version: '2.0.0', platform: 'windows', arch: 'amd64', devMock: false, portable: false, dataDir: '' },
+      importDetails: [],
+      importing: false,
+      runImportExternal: vi.fn(),
+      openLibrarySetup: vi.fn(),
+    } as unknown as SettingsPage;
+    renderDom(LibraryCard, { page });
+    await waitFor(() => expect(libraryFolders).toHaveBeenCalled());
+    const rowOf = (name: string) => screen.getByRole('button', { name }).closest('.settings-row');
+    expect(rowOf(msg('settings.extlibLabel'))?.classList.contains('stack')).toBe(true);
+    expect(rowOf(msg('diskusage.settingsOpen'))?.classList.contains('stack')).toBe(false);
   });
 });
 

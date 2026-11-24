@@ -123,6 +123,7 @@
     hint={msg('settings.extlibSub')}
     disabledReason={extlibReason}
     below={page.importDetails.length > 0 ? importDetails : undefined}
+    stack
   >
     {#snippet children({ hintId, disabled })}
       <Button size="sm" aria-describedby={hintId} disabled={disabled || !platformKnown} busy={page.importing} onclick={page.runImportExternal}>
