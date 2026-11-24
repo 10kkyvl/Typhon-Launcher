@@ -18,10 +18,9 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
-	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -47,6 +46,8 @@ type config struct {
 	port     int
 	seed     string
 	state    string
+	count    int
+	notes    string
 }
 
 func parseFlags(args []string, stderr io.Writer) (config, error) {
@@ -57,6 +58,8 @@ func parseFlags(args []string, stderr io.Writer) (config, error) {
 	fs.StringVar(&cfg.artifact, "artifact", "", "path to a pre-built launcher artifact (default: build one with -tags devmock)")
 	fs.IntVar(&cfg.port, "port", 8099, "port to bind on 127.0.0.1")
 	fs.StringVar(&cfg.seed, "seed", "", "base64-encoded ed25519 seed, 32 bytes (default: the -state key, else a one-off key)")
+	fs.IntVar(&cfg.count, "count", 3, "how many consecutive patch versions to build from -version and offer one after another (1 with -artifact)")
+	fs.StringVar(&cfg.notes, "notes", "", "JSON array of {summary, changes:[{kind,text}]} release notes, entry i for version i (default: a built-in sample)")
 	fs.StringVar(&cfg.state, "state", "", "directory that keeps the signing key between runs and receives update.env for a wrapper to source")
 	if err := fs.Parse(args); err != nil {
 		return config{}, err
@@ -64,50 +67,16 @@ func parseFlags(args []string, stderr io.Writer) (config, error) {
 	if cfg.version == "" {
 		return config{}, errMissingVersion
 	}
-	return cfg, nil
-}
-
-// resolveArtifact returns the path to the launcher binary to serve. Building
-// one is the common path during development; -artifact exists so CI or a
-// script that already produced a devmock build does not pay for a second one.
-func resolveArtifact(ctx context.Context, cfg config, stdout, stderr io.Writer) (path string, cleanup func(), err error) {
 	if cfg.artifact != "" {
-		abs, err := filepath.Abs(cfg.artifact)
-		if err != nil {
-			return "", nil, fmt.Errorf("resolve artifact path: %w", err)
-		}
-		if _, err := os.Stat(abs); err != nil {
-			return "", nil, fmt.Errorf("stat artifact: %w", err)
-		}
-		return abs, func() {}, nil
-	}
-
-	if _, err := os.Stat("go.mod"); err != nil {
-		return "", nil, errNotRepoRoot
-	}
-	tmpDir, err := os.MkdirTemp("", "typhon-devrelease-")
-	if err != nil {
-		return "", nil, fmt.Errorf("create build dir: %w", err)
-	}
-	cleanup = func() {
-		if rerr := os.RemoveAll(tmpDir); rerr != nil {
-			slog.Warn("remove devrelease build dir", "dir", tmpDir, "error", rerr)
+		countSet := false
+		fs.Visit(func(f *flag.Flag) { countSet = countSet || f.Name == "count" })
+		if !countSet {
+			cfg.count = 1
+		} else if cfg.count != 1 {
+			return config{}, errArtifactWithCount
 		}
 	}
-
-	out := filepath.Join(tmpDir, "typhon")
-	buildCtx, cancel := context.WithTimeout(ctx, buildTimeout)
-	defer cancel()
-	ldflags := "-X typhon/internal/app.Version=" + cfg.version
-	//nolint:gosec // G204: fixed argv (go build ...), cfg.version only appears inside a fixed -ldflags template, not as a shell string (invariant 33)
-	cmd := exec.CommandContext(buildCtx, "go", "build", "-tags", "devmock", "-ldflags", ldflags, "-o", out, ".")
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	if err := cmd.Run(); err != nil {
-		cleanup()
-		return "", nil, fmt.Errorf("build devmock launcher artifact: %w", err)
-	}
-	return out, cleanup, nil
+	return cfg, nil
 }
 
 func resolveKeyPair(encodedSeed string) (ed25519.PrivateKey, ed25519.PublicKey, error) {
@@ -155,7 +124,15 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	artifactPath, cleanup, err := resolveArtifact(ctx, cfg, stdout, stderr)
+	versions, err := versionChain(cfg.version, cfg.count)
+	if err != nil {
+		return err
+	}
+	templates, err := loadNotes(cfg.notes)
+	if err != nil {
+		return err
+	}
+	paths, cleanup, err := resolveArtifacts(ctx, cfg, versions, goBuild(stdout, stderr))
 	if err != nil {
 		return err
 	}
@@ -175,12 +152,12 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		port = addr.Port
 	}
 
-	signed, art, err := buildSignedManifest(cfg.version, artifactPath, port, priv)
+	releases, err := prepareReleases(versions, paths, port, templates, time.Now().UTC(), priv)
 	if err != nil {
 		return closeListener(listener, err)
 	}
 
-	srv := &releaseServer{signed: signed, version: cfg.version, artifactName: art.Name, artifactPath: artifactPath}
+	srv := &releaseServer{releases: releases}
 	httpServer := &http.Server{
 		Handler:           newMux(srv),
 		ReadHeaderTimeout: readHeaderTimeout,
@@ -201,7 +178,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 			return closeListener(listener, err)
 		}
 	}
-	slog.Info("devrelease: serving", "url", baseURL, "version", cfg.version, "artifact", artifactPath)
+	slog.Info("devrelease: serving", "url", baseURL, "versions", strings.Join(versions, ","))
 
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- httpServer.Serve(listener) }()

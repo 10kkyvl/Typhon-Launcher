@@ -93,37 +93,39 @@ func TestResolveKeyPairRejectsBadSeed(t *testing.T) {
 	}
 }
 
-func TestResolveArtifactUsesGivenFile(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "typhon")
-	if err := os.WriteFile(path, []byte("binary"), 0o755); err != nil {
-		t.Fatalf("write artifact: %v", err)
-	}
-
-	got, cleanup, err := resolveArtifact(t.Context(), config{artifact: path}, &bytes.Buffer{}, &bytes.Buffer{})
+func TestResolveArtifactsUsesGivenFile(t *testing.T) {
+	path := writeFakeArtifact(t)
+	got, cleanup, err := resolveArtifacts(t.Context(), config{artifact: path}, []string{"1.2.3"}, refuseBuild(t))
 	if err != nil {
-		t.Fatalf("resolveArtifact: %v", err)
+		t.Fatalf("resolveArtifacts: %v", err)
 	}
 	defer cleanup()
-	if got != path {
-		t.Fatalf("resolveArtifact() = %q, want %q", got, path)
+	if len(got) != 1 || got[0] != path {
+		t.Fatalf("resolveArtifacts() = %q, want [%q]", got, path)
 	}
 }
 
-func TestResolveArtifactMissingFile(t *testing.T) {
-	if _, _, err := resolveArtifact(t.Context(), config{artifact: filepath.Join(t.TempDir(), "missing")}, &bytes.Buffer{}, &bytes.Buffer{}); err == nil {
-		t.Fatal("resolveArtifact() error = nil, want an error for a missing artifact")
+func TestResolveArtifactsMissingFile(t *testing.T) {
+	if _, _, err := resolveArtifacts(t.Context(), config{artifact: filepath.Join(t.TempDir(), "missing")}, []string{"1.2.3"}, refuseBuild(t)); err == nil {
+		t.Fatal("resolveArtifacts() error = nil, want an error for a missing artifact")
 	}
 }
 
-func TestResolveArtifactRequiresRepoRootWhenBuilding(t *testing.T) {
+func TestBuildRequiresRepoRoot(t *testing.T) {
 	t.Chdir(t.TempDir())
-	if _, _, err := resolveArtifact(t.Context(), config{}, &bytes.Buffer{}, &bytes.Buffer{}); !errors.Is(err, errNotRepoRoot) {
-		t.Fatalf("resolveArtifact() error = %v, want errNotRepoRoot", err)
+	if err := goBuild(&bytes.Buffer{}, &bytes.Buffer{})(t.Context(), "1.2.3", filepath.Join(t.TempDir(), "typhon")); !errors.Is(err, errNotRepoRoot) {
+		t.Fatalf("goBuild() error = %v, want errNotRepoRoot", err)
 	}
 }
 
-func TestBuildSignedManifestRoundTrip(t *testing.T) {
+func refuseBuild(t *testing.T) buildFunc {
+	return func(context.Context, string, string) error {
+		t.Error("build called although -artifact was given")
+		return errors.New("unexpected build")
+	}
+}
+
+func TestNewReleaseRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	artifactPath := filepath.Join(dir, "typhon")
 	content := []byte("fake launcher binary")
@@ -136,10 +138,11 @@ func TestBuildSignedManifestRoundTrip(t *testing.T) {
 		t.Fatalf("resolveKeyPair: %v", err)
 	}
 
-	signed, art, err := buildSignedManifest("1.2.3", artifactPath, 8099, priv)
+	rel, err := newRelease("1.2.3", artifactPath, 8099, "summary", nil, time.Now(), priv)
 	if err != nil {
-		t.Fatalf("buildSignedManifest: %v", err)
+		t.Fatalf("newRelease: %v", err)
 	}
+	art := rel.art
 	if art.Name != artifactName() || art.OS != runtime.GOOS || art.Arch != runtime.GOARCH {
 		t.Fatalf("artifact = %+v", art)
 	}
@@ -147,7 +150,7 @@ func TestBuildSignedManifestRoundTrip(t *testing.T) {
 		t.Fatalf("artifact.Size = %d, want %d", art.Size, len(content))
 	}
 
-	m, err := selfupdate.VerifyManifest(signed, pub)
+	m, err := selfupdate.VerifyManifest(rel.signed, pub)
 	if err != nil {
 		t.Fatalf("VerifyManifest: %v", err)
 	}
@@ -166,12 +169,12 @@ func TestHandleManifestServesSignedBytesWithNoStore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveKeyPair: %v", err)
 	}
-	signed, _, err := buildSignedManifest("1.2.3", writeFakeArtifact(t), 8099, priv)
+	rel, err := newRelease("1.2.3", writeFakeArtifact(t), 8099, "summary", nil, time.Now(), priv)
 	if err != nil {
-		t.Fatalf("buildSignedManifest: %v", err)
+		t.Fatalf("newRelease: %v", err)
 	}
 
-	srv := &releaseServer{signed: signed, version: "1.2.3"}
+	srv := &releaseServer{releases: []release{rel}}
 	ts := httptest.NewServer(newMux(srv))
 	defer ts.Close()
 
@@ -204,7 +207,7 @@ func TestHandleDownloadServesArtifactBytes(t *testing.T) {
 		t.Fatalf("write artifact: %v", err)
 	}
 
-	srv := &releaseServer{version: "1.2.3", artifactName: "typhon-devmock", artifactPath: path}
+	srv := &releaseServer{releases: []release{{version: "1.2.3", path: path, art: selfupdate.Artifact{Name: "typhon-devmock"}}}}
 	ts := httptest.NewServer(newMux(srv))
 	defer ts.Close()
 
@@ -231,7 +234,7 @@ func TestHandleDownloadUnknownVersionOrNameIs404(t *testing.T) {
 	if err := os.WriteFile(path, []byte("x"), 0o755); err != nil {
 		t.Fatalf("write artifact: %v", err)
 	}
-	srv := &releaseServer{version: "1.2.3", artifactName: "typhon-devmock", artifactPath: path}
+	srv := &releaseServer{releases: []release{{version: "1.2.3", path: path, art: selfupdate.Artifact{Name: "typhon-devmock"}}}}
 	ts := httptest.NewServer(newMux(srv))
 	defer ts.Close()
 
@@ -270,7 +273,7 @@ func TestHandleDownloadServesRange(t *testing.T) {
 		t.Fatalf("write artifact: %v", err)
 	}
 
-	srv := &releaseServer{version: "1.2.3", artifactName: "typhon-devmock", artifactPath: path}
+	srv := &releaseServer{releases: []release{{version: "1.2.3", path: path, art: selfupdate.Artifact{Name: "typhon-devmock"}}}}
 	ts := httptest.NewServer(newMux(srv))
 	defer ts.Close()
 
