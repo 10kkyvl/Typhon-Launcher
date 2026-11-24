@@ -289,9 +289,37 @@ describe('the start after an update', () => {
     });
   }
 
-  it('read once the shell is already on screen, plays nothing: no dim over a page in use, the card says the result', async () => {
+  // The sign-in can settle first: a guest, an offline start or a saved session answers in one local
+  // call, the outcome after three. The steady clock is faked too: the bound is measured on it.
+  const withSteadyClock = () => {
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'Date', 'performance', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    vi.setSystemTime(START);
+  };
+
+  it('read a few milliseconds after the shell appeared, plays the whole finish from its first frame over it', async () => {
+    withSteadyClock();
     renderDom(UpdateShowHarness);
-    await advance(5000);
+    await advance(30);
+    expect(shown()).toBeNull();
+    selfUpdateOutcome.set({ version: '1.5.0', ok: true, finishedAt: '' });
+    expect(resumeFinishedShow()).toBe(true);
+    await tick();
+
+    expect(shown()?.dataset.stage).toBe('finish');
+    expect(shown()?.querySelector<HTMLElement>('.scrim')?.style.opacity).toBe('1');
+    expect(clones().map((clone) => clone.style.opacity)).toEqual(['0', '0', '0', '0', '0']);
+    await advance(450 + 200 + 4 * 120 + 500);
+    expect(shown()?.dataset.stage).toBe('finish');
+    expect(screen.queryByText(msg('ui.launcherUpdatedTo', { version: '1.5.0' }))).toBeNull();
+    await advance(1500);
+    expect(shown()).toBeNull();
+    expect(screen.getByText(msg('ui.launcherUpdatedTo', { version: '1.5.0' }))).toBeTruthy();
+  });
+
+  it('read three seconds after the shell appeared, plays nothing: no dim over a page in use, the card says the result', async () => {
+    withSteadyClock();
+    renderDom(UpdateShowHarness);
+    await advance(3000);
     selfUpdateOutcome.set({ version: '1.5.0', ok: true, finishedAt: '' });
     const played = resumeFinishedShow();
     await tick();
@@ -542,6 +570,24 @@ describe('the update show in Big Picture (no sidebar logo)', () => {
     expect(clones()).toEqual([]);
     expect(document.querySelector('.stage .ring-box [data-ring-value]')).not.toBeNull();
     expect(screen.getByRole('status').textContent).toContain(msg('ui.launcherWillRestartShort'));
+  });
+
+  it('at a start after an update has no logo to bring the arcs back to: whichever answers first, no dim stays', async () => {
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'Date', 'performance', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    selfUpdateOutcome.set({ version: '1.5.0', ok: true, finishedAt: '' });
+    expect(resumeFinishedShow()).toBe(true);
+    const outcomeFirst = renderDom(UpdateShowHarness, { logo: false });
+    await tick();
+    expect(shown()).toBeNull();
+    expect(get(updateShow)).toBeNull();
+    outcomeFirst.unmount();
+
+    renderDom(UpdateShowHarness, { logo: false });
+    await advance(30);
+    expect(resumeFinishedShow()).toBe(true);
+    await tick();
+    expect(shown()).toBeNull();
+    expect(get(updateShow)).toBeNull();
   });
 });
 

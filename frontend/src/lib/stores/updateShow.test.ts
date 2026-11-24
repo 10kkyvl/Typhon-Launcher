@@ -1,7 +1,7 @@
 import { get } from 'svelte/store';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SelfUpdateStatus } from '../services/selfupdate';
-import { beginOwedFinish, endUpdateShow, hostUpdateShow, logoArcsAway, resumeFinishedShow, showFollowsStatus, takeOverShow, updateShow, updateShowHandoff } from './updateShow';
+import { FRESH_SHELL_MS, beginOwedFinish, endUpdateShow, hostUpdateShow, logoArcsAway, resumeFinishedShow, showFollowsStatus, takeOverShow, updateShow, updateShowHandoff } from './updateShow';
 
 const status = (state: SelfUpdateStatus['state'], currentVersion = '1.4.0'): SelfUpdateStatus => ({ state, currentVersion, availableVersion: '1.5.0' });
 
@@ -62,15 +62,26 @@ describe('the start after an update', () => {
     expect(get(updateShow)?.since).toBe(5000);
   });
 
-  it('plays nothing once the shell is on screen, unless asked to play over it', () => {
-    const gone = hostUpdateShow();
-    expect(resumeFinishedShow()).toBe(false);
-    expect(get(updateShow)).toBeNull();
-    expect(resumeFinishedShow(true)).toBe(true);
-    endUpdateShow();
-    gone();
-    gone();
-    expect(resumeFinishedShow()).toBe(true);
+  it('still plays over a shell that has just appeared; plays nothing once it has been up for the player to use, unless asked to play over it', () => {
+    vi.useFakeTimers({ toFake: ['performance'] });
+    try {
+      const gone = hostUpdateShow();
+      vi.advanceTimersByTime(FRESH_SHELL_MS);
+      expect(resumeFinishedShow()).toBe(true);
+      endUpdateShow();
+
+      vi.advanceTimersByTime(1);
+      expect(resumeFinishedShow()).toBe(false);
+      expect(get(updateShow)).toBeNull();
+      expect(resumeFinishedShow(true)).toBe(true);
+      endUpdateShow();
+      gone();
+      gone();
+      vi.advanceTimersByTime(5000);
+      expect(resumeFinishedShow()).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('never replaces a show that is up, a successor\'s held one included', () => {

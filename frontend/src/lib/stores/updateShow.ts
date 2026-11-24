@@ -68,13 +68,25 @@ export function showFollowsStatus(status: SelfUpdateStatus, now = Date.now(), co
   state.set({ ...show, phase: changed ? 'finish' : 'home', since: now });
 }
 
+/**
+ * How long a shell that has just appeared still takes the finish after an update. The sign-in and
+ * the read of the update's outcome are both answered at the start, and which comes first is a race:
+ * a guest, an offline start or a saved session settles in one local call, the outcome comes after
+ * three, milliseconds later. Half a second is about the least a person needs to take in a screen that
+ * has just appeared and act on it: an outcome read sooner finishes over the start, one read later
+ * would dim a page in use. A time bound, measured on the steady clock.
+ */
+export const FRESH_SHELL_MS = 500;
+
 let hosts = 0;
+let shellSince = 0;
 
 /**
  * UpdateShow is mounted: from now on the shell (or the screen the sign-in led to) is on screen.
  * Returns the disposer for its unmount.
  */
 export function hostUpdateShow(): () => void {
+  if (hosts === 0) shellSince = performance.now();
   hosts += 1;
   let gone = false;
   return () => {
@@ -87,12 +99,14 @@ export function hostUpdateShow(): () => void {
 /**
  * The start after an update: the show is owed its finish, drawn from its hold (the moment it began is
  * unknown and long past). Its clock starts at the first frame the show draws, however long the
- * sign-in keeps the shell away. Once the shell is on screen it is too late: a dim over a page in use
- * says nothing the card does not, so nothing plays and the answer is false. `overShell` plays it
- * anyway (the showcase's play). A show already up (a successor's) is never replaced.
+ * sign-in keeps the shell away, and a shell that has just appeared (FRESH_SHELL_MS) still takes it.
+ * Once the shell has been up for the player to use it is too late: a dim over a page in use says
+ * nothing the card does not, so nothing plays and the answer is false. `overShell` plays it anyway
+ * (the showcase's play). A show already up (a successor's) is never replaced.
  */
 export function resumeFinishedShow(overShell = false): boolean {
-  if (get(state) || (hosts > 0 && !overShell)) return false;
+  const inUse = hosts > 0 && performance.now() - shellSince > FRESH_SHELL_MS;
+  if (get(state) || (inUse && !overShell)) return false;
   state.set({ startedAt: 0, phase: 'finish', since: 0, version: '', from: '', owed: true });
   return true;
 }

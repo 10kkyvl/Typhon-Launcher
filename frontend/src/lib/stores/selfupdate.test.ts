@@ -277,13 +277,35 @@ describe('release notes', () => {
     }
   });
 
-  it('read once the shell is on screen, plays no show: the card says the result and hides two seconds later', async () => {
-    vi.useFakeTimers();
+  it('read just after the shell appeared (the sign-in settled first), still owes the finish', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'] });
     try {
       const { service, store, show } = await load();
       vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
       vi.mocked(service.getOutcome).mockResolvedValue({ version: '1.1.0', ok: true, finishedAt: '' } as never);
       const gone = show.hostUpdateShow();
+      vi.advanceTimersByTime(20);
+
+      await store.initSelfUpdate();
+
+      expect(get(show.updateShow)).toMatchObject({ phase: 'finish', owed: true });
+      vi.advanceTimersByTime(store.OUTCOME_SUCCESS_MS * 10);
+      expect(get(store.selfUpdateOutcome)?.version).toBe('1.1.0');
+      show.endUpdateShow();
+      gone();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('read once the shell has been up for seconds, plays no show: the card says the result and hides two seconds later', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'] });
+    try {
+      const { service, store, show } = await load();
+      vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
+      vi.mocked(service.getOutcome).mockResolvedValue({ version: '1.1.0', ok: true, finishedAt: '' } as never);
+      const gone = show.hostUpdateShow();
+      vi.advanceTimersByTime(3000);
 
       await store.initSelfUpdate();
 
