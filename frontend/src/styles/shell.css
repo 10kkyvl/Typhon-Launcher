@@ -59,6 +59,16 @@
   --ease-out: var(--ease);
   --motion-spin: 800ms; /* one turn of a spinner */
 
+  /* The logo's own colours (the picture public/typhon.png), for its arcs drawn in vector while the
+     update show flies them; the tint setting draws them in the accent instead. Not theme tokens: the
+     logo is the brand's in every theme. */
+  --logo-tile-top: #151f36;
+  --logo-tile-bottom: #0a0f19;
+  --logo-glow: #22305a;
+  --logo-arc-light: #8aa6ee;
+  --logo-arc-mid: #3a5097;
+  --logo-arc-deep: #1c2846;
+
   /* The geometry of the base controls that the control sizes in tokens.css do not cover. */
   --control-border-w: 1px; /* the stroke of a button or a chip, transparent where it shows no colour */
   --control-seam: 1px; /* between the two halves of a split button */
