@@ -597,6 +597,21 @@ func TestOrphanedCopySaysWhetherItIsTheOnlyCopy(t *testing.T) {
 				t.Fatal(err)
 			}
 		}, func(rig) []fact { return []fact{{CopyStaging, false, true, false}} }},
+		{"removed at the commit, a folder at the target beside the staging", func(t *testing.T, r rig) Job {
+			mustMkdirFile(t, r.target+stagingSuffix, "game.exe", "stub")
+			mustMkdirFile(t, r.target, "game.exe", "stub")
+			if err := r.lib.RemoveGame(r.game.ID); err != nil {
+				t.Fatal(err)
+			}
+			return Job{ID: "j1", Scope: ScopeGame, Stage: StageCommit, GameID: r.game.ID, Title: "Game", Source: r.src, Target: r.target, Staging: r.target + stagingSuffix}
+		}, nil, func(rig) []fact { return []fact{{CopyStaging, false, false, false}, {CopyTarget, false, false, false}} }},
+		{"removed at the commit after its rename landed", func(t *testing.T, r rig) Job {
+			mustMkdirFile(t, r.target, "game.exe", "stub")
+			if err := r.lib.RemoveGame(r.game.ID); err != nil {
+				t.Fatal(err)
+			}
+			return Job{ID: "j1", Scope: ScopeGame, Stage: StageCommit, GameID: r.game.ID, Title: "Game", Source: r.src, Target: r.target, Staging: r.target + stagingSuffix}
+		}, nil, func(rig) []fact { return []fact{{CopyTarget, false, true, false}} }},
 		{"undecided commit, card at the old folder that is gone", func(t *testing.T, r rig) Job {
 			mustMkdirFile(t, r.target, "game.exe", "stub")
 			mustMkdirFile(t, r.target+stagingSuffix, "game.exe", "stub")

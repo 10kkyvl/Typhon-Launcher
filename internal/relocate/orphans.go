@@ -196,15 +196,30 @@ func cardFolder(id string, games []library.Game) (gameFolder, error) {
 // newestComplete says whether a copy of kind is, from the journal alone, the
 // newest complete copy of the game the job knows; onDisk says which kinds are
 // on disk. The target is complete once the rename that made it landed: a
-// renamed move's always, a copied move's from the repoint on, which only an
-// ended move's OrphanedAt still says (a move that ended for good keeps no
-// stage). The staging folder is complete and newest at the commit while no
-// target is there to compete with it. The old folder may be a cleanup's half
-// deleted remains: never.
+// renamed move's always, a copied move's from the repoint on, or at the commit
+// once the staging folder is gone, which only an ended move's OrphanedAt still
+// says (a move that ended for good keeps no stage, so its target is never
+// called the only copy). The staging folder is complete and newest at the
+// commit while no target is there to compete with it. The old folder may be a
+// cleanup's half deleted remains: never.
 func newestComplete(job Job, kind string, onDisk map[string]bool) bool {
 	switch kind {
 	case CopyTarget:
-		return job.Renamed || job.Orphaned && (job.OrphanedAt == StageRepoint || job.OrphanedAt == StageCleanup)
+		if job.Renamed {
+			return true
+		}
+		if !job.Orphaned {
+			return false
+		}
+		switch job.OrphanedAt {
+		case StageRepoint, StageCleanup:
+			return true
+		case StageCommit:
+			// The commit renames the staging folder into the target: a target
+			// with no staging folder left is that rename landed.
+			return !onDisk[CopyStaging]
+		}
+		return false
 	case CopyStaging:
 		return job.Orphaned && job.OrphanedAt == StageCommit && !onDisk[CopyTarget]
 	}
