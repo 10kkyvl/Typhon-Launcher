@@ -146,7 +146,9 @@ func TestOrphanedStagingIsListedOnlyAsAnOrphanedCopy(t *testing.T) {
 // interrupted move. Recovery holds the move's folders as a live move does: it
 // does not delete the old folder with that game in it. The job reads as failed
 // at its stage with the reason, not as a move still running, spends no
-// recovery attempt, and the next start retries it from there.
+// recovery attempt, and the next start retries it from there. The game's
+// files stay when its card leaves, so the cleanup retried then still keeps
+// the folder: it holds files the copy lacks.
 func TestRecoveryFailsAMoveWhoseFolderGainedAnotherGame(t *testing.T) {
 	lib := newTestLibrary(t)
 	game, src := addTestGame(t, lib)
@@ -183,11 +185,11 @@ func TestRecoveryFailsAMoveWhoseFolderGainedAnotherGame(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.recoverAll(context.Background())
-	if jobs := s.List(); len(jobs) != 0 {
-		t.Fatalf("jobs after the other game left = %+v, want the move finished", jobs)
+	if got := s.soleJob(t); got.Stage != StageFailed || got.FailedAt != "" || !strings.Contains(got.Error, "relocate.source_changed") {
+		t.Fatalf("job after the other game left = %s/%q %q, want it failed for good by relocate.source_changed: the old folder holds files the copy lacks", got.Stage, got.FailedAt, got.Error)
 	}
-	if _, err := os.Stat(src); !os.IsNotExist(err) {
-		t.Fatalf("old folder after the move finished: %v", err)
+	if _, err := os.Stat(bonus); err != nil {
+		t.Fatalf("recovery deleted files the copy lacks: %v", err)
 	}
 }
 

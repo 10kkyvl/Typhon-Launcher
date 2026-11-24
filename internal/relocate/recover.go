@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 
@@ -281,6 +282,34 @@ func (s *Service) registeredAtTarget(job Job) bool {
 	return err == nil && platform.SamePath(game.InstallDir, job.Target)
 }
 
+// keepReappearedSource settles a renamed move whose old folder is on disk
+// again at the repoint. The rename took that folder away, so what is there
+// now is not the move's (the game was installed there again, or screenshots
+// were taken since): it is never deleted. A card that already names the
+// move's copy finished the move; one that names the old folder is done with
+// the move, which ends with its copy listed; an item with no card fails for
+// good, both folders kept.
+func (s *Service) keepReappearedSource(job Job) {
+	switch {
+	case !gameItem(job.GameID):
+		s.markRecoveryFailed(job.ID, fmt.Errorf("%w: %s", ErrSourceChanged, job.Source))
+	case s.registeredAtTarget(job):
+		if err := s.st.removeManifest(job.ID); err != nil {
+			slog.Warn("remove move manifest on recovery", "job", job.ID, "error", err)
+		}
+		s.continueAfterItem(job)
+	default:
+		s.markOrphaned(job.ID, false, ErrMovedOn)
+	}
+}
+
+// present says whether something is at path: only a path proven missing is
+// not, since the answer decides whether a folder may be deleted.
+func present(path string) bool {
+	_, err := os.Lstat(path)
+	return !errors.Is(err, fs.ErrNotExist)
+}
+
 // repointSafe proves, before a repoint is retried, that retrying cannot lose
 // data: Source must still match the manifest taken before the move, since the
 // library may have kept running from it after the failure. When Source has
@@ -459,6 +488,10 @@ func (s *Service) recoverCommit(ctx context.Context, job Job) {
 }
 
 func (s *Service) recoverRepoint(ctx context.Context, job Job) {
+	if job.Renamed && job.GameID != itemSettings && present(job.Source) {
+		s.keepReappearedSource(job)
+		return
+	}
 	if !s.repointSafe(ctx, job) {
 		return
 	}
@@ -513,6 +546,10 @@ func (s *Service) recoverRepoint(ctx context.Context, job Job) {
 // way would wrongly report an already-successful move as failed (KRIT-2).
 // Only a Source that still exists means the crash landed before RemoveAll,
 // and a full re-verify against Target is actually required before it runs.
+// Source is checked against the manifest too: one that holds a file the copy
+// lacks (added or changed since) is kept and the job fails for good by
+// ErrSourceChanged, the folder listed through OrphanedCopies; files it lost
+// are the part a failed delete already took.
 func (s *Service) recoverCleanup(ctx context.Context, job Job) {
 	if job.Renamed || !exists(job.Source) {
 		if err := s.st.removeManifest(job.ID); err != nil {
@@ -533,6 +570,15 @@ func (s *Service) recoverCleanup(ctx context.Context, job Job) {
 	}
 	if hasIssues(result) {
 		s.markRecoveryFailed(job.ID, fmt.Errorf("%w: %s", ErrVerifyFailed, describeVerify(result)))
+		return
+	}
+	source, err := checkManifest(ctx, job.Source, manifest)
+	if err != nil {
+		s.verifyInterrupted(ctx, job, err)
+		return
+	}
+	if gained := withoutMissing(source); hasIssues(gained) {
+		s.markRecoveryFailed(job.ID, fmt.Errorf("%w: %s", ErrSourceChanged, describeVerify(gained)))
 		return
 	}
 	if err := removeTree(job.Source); err != nil {
@@ -567,6 +613,20 @@ func sourceDamaged(r hashdir.Result) bool {
 		}
 	}
 	return false
+}
+
+// withoutMissing keeps what an old folder holds that the verified copy does
+// not: files added or changed since the manifest, and files it cannot read.
+// A file it lost is what a cleanup that failed half way leaves.
+func withoutMissing(r hashdir.Result) hashdir.Result {
+	issues := r.Issues[:0:0]
+	for _, issue := range r.Issues {
+		if issue.Kind != hashdir.IssueMissing {
+			issues = append(issues, issue)
+		}
+	}
+	r.Issues = issues
+	return r
 }
 
 // withoutMarker drops the install marker from a re-verification: the manifest

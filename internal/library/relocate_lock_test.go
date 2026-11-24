@@ -14,11 +14,9 @@ func TestRelocateReportsMarkerWriteFailure(t *testing.T) {
 	s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
 	game, _ := addRelocateGame(t, s)
 
-	blocker := filepath.Join(t.TempDir(), "file")
-	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	newDir := filepath.Join(blocker, "new")
+	// A folder where the marker goes refuses its write on every platform.
+	newDir := filepath.Join(t.TempDir(), "new")
+	mustDir(t, filepath.Join(newDir, MarkerName, "keep"))
 
 	if _, err := s.Relocate(game.ID, newDir); err == nil {
 		t.Fatal("a failed install marker write was swallowed")

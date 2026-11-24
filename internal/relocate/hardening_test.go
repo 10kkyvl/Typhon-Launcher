@@ -71,6 +71,41 @@ func TestRepointFailureFailsTheJob(t *testing.T) {
 	}
 }
 
+// A move whose copy is gone by the repoint never points the card at it: the
+// job fails at the repoint by relocate.verify_failed, the card keeps its
+// folder, and no empty folder is made where the copy was.
+func TestRepointRefusesACopyThatIsGone(t *testing.T) {
+	lib := newTestLibrary(t)
+	s := newTestService(t, nil, lib, nil, nil, nil)
+	game, src := addTestGame(t, lib)
+	parent := t.TempDir()
+	target := filepath.Join(parent, "Game")
+	prev := renameDir
+	renameDir = func(oldpath, newpath string) error {
+		if err := prev(oldpath, newpath); err != nil {
+			return err
+		}
+		return os.RemoveAll(newpath)
+	}
+	t.Cleanup(func() { renameDir = prev })
+
+	job, err := s.MoveGame(game.ID, parent)
+	if err != nil {
+		t.Fatalf("MoveGame = %v", err)
+	}
+	final := s.wait(job.ID)
+
+	if final.Stage != StageFailed || final.FailedAt != StageRepoint || !strings.Contains(final.Error, "relocate.verify_failed") {
+		t.Fatalf("job = %s/%q %q, want it failed at the repoint by relocate.verify_failed", final.Stage, final.FailedAt, final.Error)
+	}
+	if card, err := lib.Find(game.ID); err != nil || !samePathT(card.InstallDir, src) {
+		t.Fatalf("card = %+v, %v; want it left at %s", card, err, src)
+	}
+	if _, err := os.Stat(target); !os.IsNotExist(err) {
+		t.Fatalf("folder where the copy was: %v, want none", err)
+	}
+}
+
 func TestCleanupFailureIsRetriedOnStartup(t *testing.T) {
 	forceCopyPath(t)
 	lib := newTestLibrary(t)

@@ -117,7 +117,8 @@ func (s *Service) holdsCopies(job Job) bool {
 // game the target, and the old folder once the repoint had landed (OrphanedAt
 // is the cleanup, or the card names the target), which is then the leftover
 // copy the cleanup was to delete. Before that the card may still name the old
-// folder, so it is the player's own. A folder counts as named only by a card
+// folder, so it is the player's own. A move that renamed its folder has no old
+// folder: whatever is at that place now came later. A folder counts as named only by a card
 // whose own folder it is: a card around the copy or inside it does not
 // account for it. The journal keeper, OrphanedCopies and Stagings all ask
 // this one question.
@@ -125,7 +126,7 @@ func heldCopies(job Job, games []library.Game) ([]OrphanedCopy, error) {
 	candidates := []OrphanedCopy{{Kind: CopyStaging, Path: job.Staging}}
 	if gameItem(job.GameID) {
 		candidates = append(candidates, OrphanedCopy{Kind: CopyTarget, Path: job.Target})
-		if job.OrphanedAt == StageCleanup || !job.Orphaned && cardNames(job.GameID, job.Target, games) {
+		if !job.Renamed && (job.OrphanedAt == StageCleanup || !job.Orphaned && cardNames(job.GameID, job.Target, games)) {
 			candidates = append(candidates, OrphanedCopy{Kind: CopySource, Path: job.Source})
 		}
 	}

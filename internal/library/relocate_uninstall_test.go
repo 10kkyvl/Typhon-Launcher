@@ -12,7 +12,7 @@ func TestRelocateRewritesUninstallerPath(t *testing.T) {
 	s.mu.Lock()
 	s.games[0].Uninstall = Uninstall{Command: filepath.Join(old, "unins000.exe"), QuietCommand: filepath.Join(old, "unins000.exe") + " /S"}
 	s.mu.Unlock()
-	next, err := s.Relocate(g.ID, filepath.Join(t.TempDir(), "new"))
+	next, err := s.Relocate(g.ID, mustDir(t, filepath.Join(t.TempDir(), "new")))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -357,3 +357,197 @@ func TestRecoveryLeavesAJobANewMoveEndedSinceItsSnapshot(t *testing.T) {
 	}
 	requireMovedOn(t, old)
 }
+
+// A move that renamed its folder took the old folder away: a folder at the
+// old place at the next start is not the move's leftover (the game was
+// installed there again, with a new save). Recovery never deletes it; while
+// the card names it the move is over for that card, and its copy is listed.
+func TestRenamedMoveLeavesAFolderThatAppearedAtTheOldPlace(t *testing.T) {
+	cases := []struct {
+		name            string
+		stage, failedAt Stage
+		// cardAtCopy: the repoint had landed, the card names the move's copy.
+		cardAtCopy bool
+	}{
+		{"failed at the repoint, card at the new install", StageFailed, StageRepoint, false},
+		{"killed at the repoint, card at the new install", StageRepoint, "", false},
+		{"killed at the repoint, card at the copy", StageRepoint, "", true},
+		{"killed at the cleanup, card at the copy", StageCleanup, "", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			lib := newTestLibrary(t)
+			game, src := addTestGame(t, lib)
+			target := filepath.Join(t.TempDir(), "Game")
+			if err := os.Rename(src, target); err != nil {
+				t.Fatal(err)
+			}
+			if tc.cardAtCopy {
+				if _, err := lib.Relocate(game.ID, target); err != nil {
+					t.Fatal(err)
+				}
+			}
+			mustMkdirFile(t, src, "game.exe", "fresh install")
+			save := mustMkdirFile(t, src, "save.dat", "progress made on the fresh install")
+			job := Job{ID: "j1", Scope: ScopeGame, Stage: tc.stage, FailedAt: tc.failedAt, Renamed: true, GameID: game.ID, Title: "Game", Source: src, Target: target}
+			s := newRecoverTestService(t, job)
+			s.lib = lib
+
+			s.recoverAll(context.Background())
+
+			if _, err := os.Stat(save); err != nil {
+				t.Fatalf("the folder at the old place was deleted: %v; jobs %+v", err, s.List())
+			}
+			if _, err := os.Stat(filepath.Join(target, "game.exe")); err != nil {
+				t.Fatalf("the move's copy: %v", err)
+			}
+			card, err := lib.Find(game.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.cardAtCopy {
+				if !samePathT(card.InstallDir, target) {
+					t.Fatalf("card at %s, want it left at the copy %s", card.InstallDir, target)
+				}
+				if jobs := s.List(); len(jobs) != 0 {
+					t.Fatalf("jobs = %+v, want the move finished: its card names its copy", jobs)
+				}
+				return
+			}
+			if !samePathT(card.InstallDir, src) {
+				t.Fatalf("card repointed to %s, the move's copy; want it at the new install %s", card.InstallDir, src)
+			}
+			requireMovedOn(t, s.soleJob(t))
+			requireCopies(t, s, job.ID, copyWant{CopyTarget, target})
+		})
+	}
+}
+
+// A renamed move has no old folder of its own once the rename landed: a
+// folder at the old place is never listed as one of its copies, also after
+// the card that named it left.
+func TestRenamedMoveNeverListsTheOldPlaceAsItsCopy(t *testing.T) {
+	lib := newTestLibrary(t)
+	game, src := addTestGame(t, lib)
+	target := filepath.Join(t.TempDir(), "Game")
+	if err := os.Rename(src, target); err != nil {
+		t.Fatal(err)
+	}
+	mustMkdirFile(t, src, "game.exe", "fresh install")
+	job := Job{ID: "j1", Scope: ScopeGame, Stage: StageCleanup, Renamed: true, GameID: game.ID, Title: "Game", Source: src, Target: target}
+	s := newRecoverTestService(t, job)
+	s.lib = lib
+	s.recoverAll(context.Background())
+	requireMovedOn(t, s.soleJob(t))
+	if err := lib.MarkUninstalled(game.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	copies, err := s.OrphanedCopies()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range copies {
+		if samePathT(c.Path, src) {
+			t.Fatalf("OrphanedCopies = %+v, lists the folder at the old place as the move's", copies)
+		}
+	}
+}
+
+// The same for a library move's screenshots folder: one that exists again at
+// the old place holds screenshots taken since, and is never deleted.
+func TestRenamedLibraryItemKeepsAFolderThatAppearedAtTheOldPlace(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(root, "old", "Screenshots")
+	target := filepath.Join(root, "new", "Screenshots")
+	mustMkdirFile(t, target, "shot1.png", "moved")
+	shot := mustMkdirFile(t, src, "shot2.png", "taken after the failure")
+	job := Job{ID: "j1", Scope: ScopeLibrary, Stage: StageRepoint, Renamed: true, GameID: itemScreenshots, Title: "Скриншоты", Source: src, Target: target}
+	s := newRecoverTestService(t, job)
+
+	s.recoverAll(context.Background())
+
+	if _, err := os.Stat(shot); err != nil {
+		t.Fatalf("screenshots taken at the old place deleted: %v; jobs %+v", err, s.List())
+	}
+	got := s.soleJob(t)
+	if got.Stage != StageFailed || got.FailedAt != "" || !strings.Contains(got.Error, "relocate.source_changed") {
+		t.Fatalf("job = %s/%q %q, want it failed for good by relocate.source_changed", got.Stage, got.FailedAt, got.Error)
+	}
+}
+
+// On the copy path the old folder is deleted at a resumed cleanup only while
+// it holds nothing the verified copy lacks: a file added or changed since the
+// manifest keeps the folder, the job fails for good by relocate.source_changed
+// and the folder is listed as the move's old folder. A folder the failed
+// cleanup already emptied in part is still finished off.
+func TestResumedCleanupKeepsAnOldFolderThatChanged(t *testing.T) {
+	cases := []struct {
+		name            string
+		stage, failedAt Stage
+		change          func(t *testing.T, src string)
+		wantKept        bool
+	}{
+		{"killed, a save added", StageCleanup, "", func(t *testing.T, src string) {
+			mustMkdirFile(t, src, "save.dat", "progress")
+		}, true},
+		{"failed, a file changed", StageFailed, StageCleanup, func(t *testing.T, src string) {
+			mustMkdirFile(t, src, "game.exe", "patched")
+		}, true},
+		{"failed, a file already deleted", StageFailed, StageCleanup, func(t *testing.T, src string) {
+			if err := os.Remove(filepath.Join(src, "game.exe")); err != nil {
+				t.Fatal(err)
+			}
+		}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			lib := newTestLibrary(t)
+			game, src := addTestGame(t, lib)
+			mustMkdirFile(t, src, "data.bin", "payload")
+			manifest, err := hashdir.Build(context.Background(), src, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			target := filepath.Join(t.TempDir(), "Game")
+			mustMkdirFile(t, target, "game.exe", "stub")
+			mustMkdirFile(t, target, "data.bin", "payload")
+			if _, err := lib.Relocate(game.ID, target); err != nil {
+				t.Fatal(err)
+			}
+			tc.change(t, src)
+			job := Job{ID: "j1", Scope: ScopeGame, Stage: tc.stage, FailedAt: tc.failedAt, GameID: game.ID, Title: "Game", Source: src, Target: target}
+			s := newRecoverTestService(t, job)
+			s.lib = lib
+			if err := s.st.saveManifest(job.ID, manifest); err != nil {
+				t.Fatal(err)
+			}
+
+			s.recoverAll(context.Background())
+
+			if !tc.wantKept {
+				if exists(src) {
+					t.Fatalf("old folder kept, want the cleanup finished; jobs %+v", s.List())
+				}
+				if jobs := s.List(); len(jobs) != 0 {
+					t.Fatalf("jobs = %+v, want the move finished", jobs)
+				}
+				return
+			}
+			if _, err := os.Stat(filepath.Join(src, "data.bin")); err != nil {
+				t.Fatalf("old folder deleted although it changed since the manifest: %v; jobs %+v", err, s.List())
+			}
+			got := s.soleJob(t)
+			if got.Stage != StageFailed || got.FailedAt != "" || !strings.Contains(got.Error, "relocate.source_changed") {
+				t.Fatalf("job = %s/%q %q, want it failed for good by relocate.source_changed", got.Stage, got.FailedAt, got.Error)
+			}
+			copies, err := s.OrphanedCopies()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(copies) != 1 || copies[0].Kind != CopySource || !samePathT(copies[0].Path, src) {
+				t.Fatalf("OrphanedCopies = %+v, want the old folder listed", copies)
+			}
+		})
+	}
+}

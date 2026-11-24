@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -15,6 +16,7 @@ import (
 var (
 	errRelocateEmptyInstallDir    = errors.New("не указан новый каталог установки")
 	errRelocateRelativeInstallDir = errors.New("новый каталог установки должен быть абсолютным путём")
+	errRelocateMissingInstallDir  = errors.New("нового каталога установки нет на диске")
 	ErrExecutableOutside          = uierr.New("library.executable_outside", "исполняемый файл лежит вне каталога установки")
 	ErrGameRelocating             = uierr.New("library.relocating", "игра переносится на другой диск, запуск недоступен")
 	ErrRelocateGameRunning        = errors.New("игра запущена")
@@ -22,7 +24,8 @@ var (
 
 // Relocate rebases a game's on-disk pointers onto a new InstallDir after
 // internal/relocate has already moved its files there. It never moves data
-// itself.
+// itself, and refuses a folder that is not on disk: the copy is gone, and the
+// marker write would make an empty folder for the card to name.
 //
 //wails:ignore
 func (s *Service) Relocate(id, newInstallDir string) (Game, error) {
@@ -34,6 +37,13 @@ func (s *Service) Relocate(id, newInstallDir string) (Game, error) {
 		return Game{}, fmt.Errorf("%w: %s", errRelocateRelativeInstallDir, newInstallDir)
 	}
 	newInstallDir = filepath.Clean(newInstallDir)
+	info, err := os.Stat(newInstallDir)
+	if err != nil {
+		return Game{}, fmt.Errorf("%w: %w", errRelocateMissingInstallDir, err)
+	}
+	if !info.IsDir() {
+		return Game{}, fmt.Errorf("%w: not a directory: %s", errRelocateMissingInstallDir, newInstallDir)
+	}
 
 	s.mu.Lock()
 	game := s.findLocked(id)

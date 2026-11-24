@@ -2,6 +2,7 @@ package library
 
 import (
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -33,7 +34,7 @@ func TestRelocateRebasesExecutableAndSaves(t *testing.T) {
 	s.games[0].SavesDir = savesDir
 	s.mu.Unlock()
 
-	newDir := filepath.Join(t.TempDir(), "new")
+	newDir := mustDir(t, filepath.Join(t.TempDir(), "new"))
 	updated, err := s.Relocate(game.ID, newDir)
 	if err != nil {
 		t.Fatalf("relocate: %v", err)
@@ -68,7 +69,7 @@ func TestRelocateKeepsSavesOutsideInstallDir(t *testing.T) {
 	s.games[0].SavesDir = external
 	s.mu.Unlock()
 
-	newDir := filepath.Join(t.TempDir(), "new")
+	newDir := mustDir(t, filepath.Join(t.TempDir(), "new"))
 	updated, err := s.Relocate(game.ID, newDir)
 	if err != nil {
 		t.Fatalf("relocate: %v", err)
@@ -93,7 +94,7 @@ func TestRelocateRejectsExecutableOutside(t *testing.T) {
 	s.games[0].Executable = outside
 	s.mu.Unlock()
 
-	newDir := filepath.Join(t.TempDir(), "new")
+	newDir := mustDir(t, filepath.Join(t.TempDir(), "new"))
 	if _, err := s.Relocate(game.ID, newDir); !errors.Is(err, ErrExecutableOutside) {
 		t.Fatalf("err = %v, want ErrExecutableOutside", err)
 	}
@@ -117,7 +118,7 @@ func TestRelocateRollsBackOnPersistFailure(t *testing.T) {
 	}
 	s.path = filepath.Join(blocked, "library.json")
 
-	newDir := filepath.Join(t.TempDir(), "new")
+	newDir := mustDir(t, filepath.Join(t.TempDir(), "new"))
 	if _, err := s.Relocate(game.ID, newDir); err == nil {
 		t.Fatal("expected persist to fail")
 	}
@@ -130,6 +131,49 @@ func TestRelocateRollsBackOnPersistFailure(t *testing.T) {
 	}
 	if got.Executable != game.Executable {
 		t.Fatalf("executable rolled forward despite failed persist: %q", got.Executable)
+	}
+}
+
+// A card is never pointed at a folder that is not there: the move's copy is
+// gone, and writing the marker would make an empty folder for it to name.
+func TestRelocateRefusesAFolderThatIsNotThere(t *testing.T) {
+	cases := []struct {
+		name    string
+		prepare func(t *testing.T, dir string)
+		cause   error
+	}{
+		{"missing", func(*testing.T, string) {}, fs.ErrNotExist},
+		{"a file", func(t *testing.T, dir string) {
+			if err := os.WriteFile(dir, []byte("x"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := mustServiceAt(t, filepath.Join(t.TempDir(), "library.json"))
+			game, oldDir := addRelocateGame(t, s)
+			newDir := filepath.Join(t.TempDir(), "new")
+			tc.prepare(t, newDir)
+
+			_, err := s.Relocate(game.ID, newDir)
+			if err == nil {
+				t.Fatal("Relocate to a folder that is not there succeeded")
+			}
+			if tc.cause != nil && !errors.Is(err, tc.cause) {
+				t.Fatalf("err = %v, want the cause %v kept", err, tc.cause)
+			}
+			stored, err := s.Find(game.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if stored.InstallDir != oldDir {
+				t.Fatalf("card at %s, want it left at %s", stored.InstallDir, oldDir)
+			}
+			if info, err := os.Stat(newDir); err == nil && info.IsDir() {
+				t.Fatalf("Relocate made the folder %s", newDir)
+			}
+		})
 	}
 }
 

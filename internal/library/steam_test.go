@@ -619,7 +619,7 @@ func TestRelocateRefreshesExistingEntryOnly(t *testing.T) {
 	}
 	fake.entries[sc.AppID] = sc
 
-	newDir := filepath.Join(t.TempDir(), "new")
+	newDir := mustDir(t, filepath.Join(t.TempDir(), "new"))
 	if _, err := s.Relocate(moved.ID, newDir); err != nil {
 		t.Fatalf("Relocate: %v", err)
 	}

@@ -869,6 +869,9 @@ func (s *Service) repointGame(_ context.Context, job Job) error {
 		return fmt.Errorf("%s: %w", job.GameID, ErrGameRemoved)
 	}
 	if _, err := s.lib.Relocate(job.GameID, job.Target); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("%w: relocate %s: %w", ErrVerifyFailed, job.GameID, err)
+		}
 		return fmt.Errorf("relocate %s: %w", job.GameID, err)
 	}
 	return nil

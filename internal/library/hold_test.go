@@ -287,7 +287,7 @@ func TestNoCardIsSavedInsideAFolderBeingDeletedByAPathWithoutAnAddingHold(t *tes
 		}},
 		{"move repoint", func(t *testing.T, s *Service, inside string) error {
 			b := addAt(t, s, filepath.Join(t.TempDir(), "Bonus", "Game2.exe"), "Bonus")
-			_, err := s.Relocate(b.ID, inside)
+			_, err := s.Relocate(b.ID, mustDir(t, inside))
 			return err
 		}},
 	}
@@ -519,7 +519,7 @@ func TestRecoveryReservationChecksTheCopiesOnlyForCardsInside(t *testing.T) {
 				t.Fatalf("BeginRecovery = %v", err)
 			}
 			defer release()
-			if _, err := s.Relocate(game.ID, target); err != nil {
+			if _, err := s.Relocate(game.ID, mustDir(t, target)); err != nil {
 				t.Fatalf("repoint while the recovery holds the copy = %v", err)
 			}
 			_, err = s.AddGame(t.Context(), writeFile(t, filepath.Join(target, "Late", "late.exe"), "stub"), "Late")
