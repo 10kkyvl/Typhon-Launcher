@@ -13,6 +13,10 @@
         background: #090d17;
       }
     </style>
+    <!-- The in-game overlay window loads this page too and must stay transparent from its first frame. -->
+    <script>
+      if (new URLSearchParams(location.search).has('overlay')) document.getElementById('boot-bg')?.remove();
+    </script>
   </head>
   <body>
     <div id="app"></div>

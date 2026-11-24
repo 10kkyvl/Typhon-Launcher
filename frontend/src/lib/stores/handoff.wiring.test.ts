@@ -20,6 +20,12 @@ describe('the wiring of a successor', () => {
     expect(html).toContain('#090d17');
   });
 
+  it('leaves the in-game overlay window transparent from its first frame', () => {
+    const drop = html.indexOf("has('overlay')) document.getElementById('boot-bg')?.remove()");
+    expect(drop).toBeGreaterThan(html.indexOf('id="boot-bg"'));
+    expect(drop).toBeLessThan(html.indexOf('</head>'));
+  });
+
   it('mounts the show once, over every screen, from the first frame in a successor', () => {
     expect(app.match(/<UpdateShow \/>/g)).toHaveLength(1);
     expect(app).toMatch(/\{#if shellDecided \|\| \$updateShow\?\.held\}\s*\{#key \$locale\}<UpdateShow \/>\{\/key\}\s*\{\/if\}/);
