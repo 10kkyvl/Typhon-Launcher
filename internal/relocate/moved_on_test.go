@@ -6,11 +6,14 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"typhon/internal/hashdir"
 	"typhon/internal/library"
 	"typhon/internal/settings"
+
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // refusedCommit is the start after a move of Game killed at its commit, with
@@ -316,6 +319,120 @@ func TestLibraryMoveEndsTheResumableMoveOfAGameItMoves(t *testing.T) {
 		}
 	}
 	requireCopies(t, r.s, r.old.ID, copyWant{CopyStaging, r.staging})
+}
+
+// journalBreaker answers the busy check of the install service, and on its
+// nth call makes the journal unwritable: the folder it lives in becomes a file.
+type journalBreaker struct {
+	t     *testing.T
+	dir   string
+	nth   int32
+	calls *atomic.Int32
+}
+
+func (b journalBreaker) Busy(string) bool {
+	if b.calls.Add(1) == b.nth {
+		if err := os.Rename(b.dir, b.dir+"-away"); err != nil {
+			b.t.Error(err)
+		}
+		if err := os.WriteFile(b.dir, []byte("x"), 0o600); err != nil {
+			b.t.Error(err)
+		}
+	}
+	return false
+}
+
+// A library move's game item that cannot be journaled changes no job in
+// memory: neither the item it was to start nor the game's resumable move it
+// was to end in the same write.
+func TestLibraryItemThatCannotBeJournaledChangesNoJob(t *testing.T) {
+	set := newTestSettings(t)
+	lib := newTestLibrary(t)
+	r := newRefusedCommit(t, set, lib, set.GetSettings().GamesPath)
+	if err := r.s.ServiceShutdown(); err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := newStore(dir).saveJournal([]Job{r.old}); err != nil {
+		t.Fatal(err)
+	}
+	s, err := NewServiceAt(dir, set, lib, nil, journalBreaker{t: t, dir: dir, nth: 2, calls: new(atomic.Int32)}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := s.ServiceShutdown(); err != nil {
+			t.Errorf("relocate shutdown: %v", err)
+		}
+	})
+	s.wg.Wait()
+	// The Tool stays in the copy as a store's card, which a library move
+	// leaves where it is.
+	if err := lib.RemoveGame(r.tool.ID); err != nil {
+		t.Fatal(err)
+	}
+	external := library.ExternalGame{Provider: library.ProviderSteam, AppID: "42", Title: "Tool", InstallDir: filepath.Join(r.staging, "Tool"), Executable: filepath.Join(r.staging, "Tool", "tool.exe")}
+	if _, err := lib.ApplyExternal(t.Context(), []library.ExternalGame{external}); err != nil {
+		t.Fatal(err)
+	}
+
+	job, err := s.MoveLibrary(t.TempDir())
+	if err != nil {
+		t.Fatalf("MoveLibrary = %v", err)
+	}
+	s.wait(job.ID)
+
+	for _, j := range s.List() {
+		switch j.ID {
+		case r.old.ID:
+			if j.Orphaned || j.Stage != StageFailed || j.FailedAt != StageCommit {
+				t.Fatalf("resumable move after the failed write = %+v, want it as it was", j)
+			}
+		case job.ID:
+			if j.GameID != "" || j.Stage != StagePrepare || len(j.Queue) != len(job.Queue) {
+				t.Fatalf("library move after the failed write = %+v, want it as registered", j)
+			}
+		}
+	}
+}
+
+// Recovery that leaves a job (a new move ended it since recovery read it, or
+// its card moved on) gives the game back at once: it is not held as moving
+// for the rest of the session.
+func TestRecoveryReleasesTheGameWhenItLeavesAJob(t *testing.T) {
+	t.Run("ended since recovery read it", func(t *testing.T) {
+		r := newStaleRepoint(t)
+		r.s.recoverJob(context.Background(), r.snapshot)
+		release, err := r.lib.BeginRemoval(r.game.ID, "")
+		if err != nil {
+			t.Fatalf("game after recovery left the job = %v, want it free", err)
+		}
+		release()
+	})
+	t.Run("card moved on", func(t *testing.T) {
+		lib := newTestLibrary(t)
+		game, src := addTestGame(t, lib)
+		target := filepath.Join(t.TempDir(), "Game")
+		mustMkdirFile(t, target, "game.exe", "stub")
+		third := filepath.Join(t.TempDir(), "Game")
+		mustMkdirFile(t, third, "game.exe", "stub")
+		if _, err := lib.Relocate(game.ID, third); err != nil {
+			t.Fatal(err)
+		}
+		job := Job{ID: "j1", Scope: ScopeGame, Stage: StageFailed, FailedAt: StageRepoint, GameID: game.ID, Title: "Game", Source: src, Target: target}
+		s := newRecoverTestService(t, job)
+		s.lib = lib
+		s.recoverJob(context.Background(), job)
+		requireMovedOn(t, s.soleJob(t))
+		release, err := lib.BeginRemoval(game.ID, "")
+		if err != nil {
+			t.Fatalf("game after recovery ended the job = %v, want it free", err)
+		}
+		release()
+	})
 }
 
 // Recovery acts on the copy of the journal it took at the start. A new move
