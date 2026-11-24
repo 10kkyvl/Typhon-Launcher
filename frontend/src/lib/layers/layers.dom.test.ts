@@ -5,7 +5,7 @@ import { user } from '../testing/dom';
 import ListboxHarness from '../testing/ListboxHarness.svelte';
 import Modal from '../components/Modal.svelte';
 import { focusableIn, initialFocus, nextFocusTarget } from './focus';
-import { dismissTopLayer, openLayer as register, type LayerOptions } from './index';
+import { dismissTopLayer, openLayer as register, topModalLayer, type LayerOptions } from './index';
 
 let app: HTMLDivElement;
 const open: (() => void)[] = [];
@@ -189,6 +189,53 @@ describe('a layer that took focus', () => {
     close();
 
     expect(document.activeElement).toBe(byId('opener'));
+  });
+});
+
+describe('a cover over every layer', () => {
+  it('keeps a dialog opened under it inert and out of focus; at its end focus enters the dialog, and comes back where the cover found it', () => {
+    byId('opener').focus();
+    const cover = dialog('');
+    const closeCover = openLayer(cover, { cover: true, dismissible: () => false, dismiss: vi.fn() });
+    expect(document.activeElement).toBe(cover);
+
+    const crash = dialog('<button id="crash-ok">ok</button>');
+    const closeCrash = openLayer(crash, { dismiss: vi.fn() });
+    expect(crash.hasAttribute('inert')).toBe(true);
+    expect(cover.hasAttribute('inert')).toBe(false);
+    expect(document.activeElement).toBe(cover);
+    expect(topModalLayer()).toBe(cover);
+
+    closeCover();
+    expect(crash.hasAttribute('inert')).toBe(false);
+    expect(document.activeElement).toBe(byId('crash-ok'));
+
+    closeCrash();
+    expect(document.activeElement).toBe(byId('opener'));
+  });
+
+  it('holds Tab and Escape on itself while a dialog waits under it', async () => {
+    const dismissCrash = vi.fn();
+    const cover = dialog('');
+    openLayer(cover, { cover: true, dismissible: () => false, dismiss: vi.fn() });
+    openLayer(dialog('<button>ok</button>'), { dismiss: dismissCrash });
+
+    await user().keyboard('{Tab}{Escape}');
+
+    expect(document.activeElement).toBe(cover);
+    expect(dismissCrash).not.toHaveBeenCalled();
+  });
+});
+
+describe('focus given back into a page that something else made inert', () => {
+  it('goes to the fallback instead', () => {
+    byId('opener').focus();
+    const close = register(dialog('<button>a</button>'), { dismiss: () => {}, returnFocus: () => byId('other') });
+    byId('opener').setAttribute('inert', '');
+
+    close();
+
+    expect(document.activeElement).toBe(byId('other'));
   });
 });
 

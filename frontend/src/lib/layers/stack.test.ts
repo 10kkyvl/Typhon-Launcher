@@ -398,3 +398,38 @@ describe('LayerStack a dialog opened from a menu item', () => {
     expect(stack.close(second)).toEqual({ focus: 'fallback', enter: null });
   });
 });
+
+describe('LayerStack a cover', () => {
+  it('stays on top: a layer opened while it is up goes under it, inert, and Escape stops at the cover', () => {
+    const { stack, box, open } = world();
+    const show = box('show');
+    open(show, { cover: true, dismissible: () => false, opener: 'play' });
+    const crash = box('crash', 'crash-button');
+    const crashId = open(crash, { opener: 'play' });
+
+    expect(stack.top()).toBe(show);
+    expect(stack.topModal()).toBe(show);
+    expect(stack.covered(crashId)).toBe(true);
+    expect(stack.inert()).toEqual({ app: true, layers: [crash] });
+    expect(stack.dismissTop()).toEqual({ consumed: true, closed: null, dismiss: null });
+    expect(stack.elements()).toEqual([crash, show]);
+  });
+
+  it('closing the layer under it leaves focus on the cover', () => {
+    const { stack, box, open } = world();
+    open(box('show', 'show'), { cover: true, dismissible: () => false, opener: 'play' });
+    const crashId = open(box('crash'), { opener: 'show' });
+    expect(stack.close(crashId)).toBeNull();
+  });
+
+  it('ending over a dialog opened under it, hands focus into that dialog, which later gives it back where the cover found it', () => {
+    const { stack, box, open } = world();
+    const showId = open(box('show', 'show'), { cover: true, dismissible: () => false, opener: 'play' });
+    const crash = box('crash', 'crash-button');
+    const crashId = open(crash, { opener: 'show' });
+
+    expect(stack.close(showId)).toEqual({ focus: null, enter: crash });
+    expect(stack.covered(crashId)).toBe(false);
+    expect(stack.close(crashId)).toEqual({ focus: 'play', enter: null });
+  });
+});

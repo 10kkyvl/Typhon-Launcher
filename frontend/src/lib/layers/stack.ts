@@ -40,6 +40,11 @@ export interface LayerSpec<E, F> {
    * closes as if it were the top one.
    */
   passive?: boolean;
+  /**
+   * Covers the whole window above every other layer (the launcher-update show): it stays on top of
+   * the stack, so a layer opened while it is up goes under it, inert as long as it is covered.
+   */
+  cover?: boolean;
 }
 
 /** A value, or a getter for one that may change while the layer is open. */
@@ -84,14 +89,30 @@ export class LayerStack<E, F> {
     return this.#entries.length;
   }
 
+  /**
+   * A layer opened while a cover is up goes under the cover. Its opener is then the cover itself (it
+   * holds focus), which is gone by the time the layer closes: its way home is the cover's own.
+   */
   open(spec: LayerSpec<E, F>): symbol {
     const id = Symbol('layer');
-    this.#entries.push({ ...spec, id, inherited: [] });
+    const at = spec.cover ? -1 : this.#entries.findIndex((entry) => entry.cover);
+    if (at < 0) {
+      this.#entries.push({ ...spec, id, inherited: [] });
+      return id;
+    }
+    const cover = this.#entries.slice(at).find((entry) => spec.opener !== null && this.env.contains(entry.element, spec.opener));
+    this.#entries.splice(at, 0, { ...spec, opener: cover ? cover.opener : spec.opener, id, inherited: [] });
     return id;
   }
 
   has(id: symbol): boolean {
     return this.#entries.some((entry) => entry.id === id);
+  }
+
+  /** A cover is up above this layer: it takes no focus and no key until the cover ends. */
+  covered(id: symbol): boolean {
+    const index = this.#entries.findIndex((entry) => entry.id === id);
+    return index >= 0 && this.#entries.slice(index + 1).some((entry) => entry.cover);
   }
 
   /** Every open layer's element, bottom to top. */

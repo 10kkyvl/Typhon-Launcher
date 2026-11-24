@@ -30,12 +30,20 @@ const KEEP = 'data-layer-keep';
 const OWN_ESCAPE = 'data-layer-own-escape';
 
 // Focus targets and press targets are any Element: a press often lands on an icon's <svg> or <path>.
+const inerted = new Set<HTMLElement>();
+// A target under an `inert` the stack did not set (Big Picture's stage while an update applies) takes
+// no focus; one under the stack's own is reachable again once the layer closing now is gone.
+const inertElsewhere = (target: Element): boolean => {
+  for (let at = target.closest('[inert]'); at; at = at.parentElement?.closest('[inert]') ?? null) {
+    if (!(at instanceof HTMLElement && inerted.has(at))) return true;
+  }
+  return false;
+};
 const stack = new LayerStack<HTMLElement, Element>({
   contains: (element, target) => element.contains(target),
   holds: (anchor, target) => anchor.contains(target),
-  alive: (target) => target.isConnected,
+  alive: (target) => target.isConnected && !inertElsewhere(target),
 });
-const inerted = new Set<HTMLElement>();
 const modal = writable(false);
 const dialogOnTop = writable<HTMLElement | null>(null);
 let onTop: HTMLElement | null = null;
@@ -55,7 +63,8 @@ const owners = new WeakMap<HTMLElement, () => HTMLElement | null>();
  *   sits on `--z-layer`, so the layer opened last paints on top, as the stack orders them. The one
  *   exception is a passive layer (a hint, see below): its root sits on `--z-hint`, above the toast
  *   region and every other layer, because a hint explains what is under the pointer wherever that is,
- *   a toast's button included. z-index.test.ts holds both.
+ *   a toast's button included. A cover (`cover`, the update show) is the other: it stays on top of
+ *   the stack and its root sits on `--z-update`. z-index.test.ts holds all three.
  * - A dialog (Modal, Lightbox) is modal: it makes everything under it inert (the app content and every
  *   layer under it), takes focus on open (`initialFocus`), traps Tab and returns focus on close
  *   (`returnFocus` when its opener is gone). It owns the keyboard: `topModalLayer()` is the dialog that
@@ -115,6 +124,12 @@ export interface LayerOptions {
   owner?: () => HTMLElement | null | undefined;
   /** Non-modal: a press outside it, its trigger and the layers it owns closes it. Default true. */
   outsidePress?: boolean;
+  /**
+   * A modal layer over the whole window that stays above every other one (the launcher-update show;
+   * its root sits on --z-update, above the title bar). A layer opened while it is up goes under it:
+   * inert, taking no focus, until the cover ends; then focus enters the dialog on top.
+   */
+  cover?: boolean;
 }
 
 function appContent(): HTMLElement[] {
@@ -317,9 +332,11 @@ export function openLayer(element: HTMLElement, options: LayerOptions): () => vo
     anchor: trigger,
     outsidePress: !modal && options.outsidePress !== false,
     passive,
+    cover: modal && options.cover === true,
   });
   const focus = options.initialFocus?.();
   const takesFocus = modal || Boolean(focus);
+  const covered = stack.covered(id);
   // Only a layer that takes focus can hold it itself (a click on its bare background keeps it inside).
   if (takesFocus && !element.hasAttribute('tabindex')) element.setAttribute('tabindex', '-1');
   if (takesFocus) holders.add(element);
@@ -343,7 +360,7 @@ export function openLayer(element: HTMLElement, options: LayerOptions): () => vo
 
   element.addEventListener('keydown', onKeydown);
   sync();
-  if (takesFocus) focusQuietly(initialFocus(element, focus));
+  if (takesFocus && !covered) focusQuietly(initialFocus(element, focus));
 
   return () => {
     element.removeEventListener('keydown', onKeydown);
