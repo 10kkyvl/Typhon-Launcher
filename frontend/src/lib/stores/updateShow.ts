@@ -27,6 +27,8 @@ export interface UpdateShowState {
   handoff?: boolean;
   /** A successor holds the show it took over: no status moves it until `releaseShow`. */
   held?: boolean;
+  /** A finish owed at a start after an update: `since` is the first frame the show draws (`beginOwedFinish`). */
+  owed?: boolean;
 }
 
 /** A restart the player confirmed: the show began at the press, not when the status said so. */
@@ -66,12 +68,40 @@ export function showFollowsStatus(status: SelfUpdateStatus, now = Date.now(), co
   state.set({ ...show, phase: changed ? 'finish' : 'home', since: now });
 }
 
+let hosts = 0;
+
 /**
- * The start after an update: the show opens held and plays its finish. With no hand-over the moment
- * it began is unknown and long past, so it is drawn from its hold.
+ * UpdateShow is mounted: from now on the shell (or the screen the sign-in led to) is on screen.
+ * Returns the disposer for its unmount.
  */
-export function resumeFinishedShow(now = Date.now(), startedAt = 0): void {
-  state.set({ startedAt, phase: 'finish', since: now, version: '', from: '' });
+export function hostUpdateShow(): () => void {
+  hosts += 1;
+  let gone = false;
+  return () => {
+    if (gone) return;
+    gone = true;
+    hosts -= 1;
+  };
+}
+
+/**
+ * The start after an update: the show is owed its finish, drawn from its hold (the moment it began is
+ * unknown and long past). Its clock starts at the first frame the show draws, however long the
+ * sign-in keeps the shell away. Once the shell is on screen it is too late: a dim over a page in use
+ * says nothing the card does not, so nothing plays and the answer is false. `overShell` plays it
+ * anyway (the showcase's play). A show already up (a successor's) is never replaced.
+ */
+export function resumeFinishedShow(overShell = false): boolean {
+  if (get(state) || (hosts > 0 && !overShell)) return false;
+  state.set({ startedAt: 0, phase: 'finish', since: 0, version: '', from: '', owed: true });
+  return true;
+}
+
+/** The first frame of an owed finish is drawn at `now`: the finish is timed from it. */
+export function beginOwedFinish(now: number): void {
+  const show = get(state);
+  if (!show?.owed) return;
+  state.set({ startedAt: show.startedAt, phase: show.phase, since: now, version: show.version, from: show.from });
 }
 
 /**

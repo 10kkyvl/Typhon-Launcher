@@ -158,6 +158,7 @@ describe('the launcher update plays of the showcase', () => {
       vi.advanceTimersByTime(4000);
       expect(get(updateShow)?.phase, name).toBe(phase);
     }
+    endUpdateShow();
     await user.click(screen.getByRole('button', { name: 'Start after an update' }));
     expect(get(updateShow)?.phase).toBe('finish');
   });

@@ -57,7 +57,7 @@
   <ShowcaseRow caption="Play it">
     <Button onclick={() => play(done)}>Update that works</Button>
     <Button onclick={() => play(failed)}>Update that fails</Button>
-    <Button onclick={() => resumeFinishedShow()}>Start after an update</Button>
+    <Button onclick={() => resumeFinishedShow(true)}>Start after an update</Button>
     <Button onclick={playStill}>With motion off</Button>
   </ShowcaseRow>
 

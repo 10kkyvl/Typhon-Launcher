@@ -195,8 +195,8 @@ export async function initSelfUpdate() {
     const outcome = await getOutcome();
     if (outcome) {
       selfUpdateOutcome.set(outcome);
-      if (outcome.ok && outcome.kind !== 'rolled_back') {
-        resumeFinishedShow();
+      // Read once the shell is up, the update is said by the card alone (resumeFinishedShow).
+      if (outcome.ok && outcome.kind !== 'rolled_back' && resumeFinishedShow()) {
         offs.push(hideOutcomeAfterShow());
       } else if (outcome.ok) {
         hideOutcomeSoon();

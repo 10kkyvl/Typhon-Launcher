@@ -277,6 +277,26 @@ describe('release notes', () => {
     }
   });
 
+  it('read once the shell is on screen, plays no show: the card says the result and hides two seconds later', async () => {
+    vi.useFakeTimers();
+    try {
+      const { service, store, show } = await load();
+      vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
+      vi.mocked(service.getOutcome).mockResolvedValue({ version: '1.1.0', ok: true, finishedAt: '' } as never);
+      const gone = show.hostUpdateShow();
+
+      await store.initSelfUpdate();
+
+      expect(get(show.updateShow)).toBeNull();
+      expect(get(store.selfUpdateOutcome)?.version).toBe('1.1.0');
+      vi.advanceTimersByTime(store.OUTCOME_SUCCESS_MS);
+      expect(get(store.selfUpdateOutcome)).toBeNull();
+      gone();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps a failed outcome until the player closes it', async () => {
     vi.useFakeTimers();
     try {

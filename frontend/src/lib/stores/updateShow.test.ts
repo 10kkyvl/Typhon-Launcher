@@ -1,7 +1,7 @@
 import { get } from 'svelte/store';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { SelfUpdateStatus } from '../services/selfupdate';
-import { endUpdateShow, logoArcsAway, resumeFinishedShow, showFollowsStatus, updateShow, updateShowHandoff } from './updateShow';
+import { beginOwedFinish, endUpdateShow, hostUpdateShow, logoArcsAway, resumeFinishedShow, showFollowsStatus, takeOverShow, updateShow, updateShowHandoff } from './updateShow';
 
 const status = (state: SelfUpdateStatus['state'], currentVersion = '1.4.0'): SelfUpdateStatus => ({ state, currentVersion, availableVersion: '1.5.0' });
 
@@ -52,14 +52,31 @@ describe('the update show follows the update status', () => {
 });
 
 describe('the start after an update', () => {
-  it('opens on the held show and plays its finish, with no words of its own', () => {
-    resumeFinishedShow(5000);
+  it('owes the finish from the held show, with no words of its own, timed from the first frame drawn', () => {
+    expect(resumeFinishedShow()).toBe(true);
+    expect(get(updateShow)).toMatchObject({ startedAt: 0, phase: 'finish', version: '', from: '', owed: true });
+
+    beginOwedFinish(5000);
     expect(get(updateShow)).toEqual({ startedAt: 0, phase: 'finish', since: 5000, version: '', from: '' });
+    beginOwedFinish(9000);
+    expect(get(updateShow)?.since).toBe(5000);
   });
 
-  it('takes the moment the show began when one is handed over', () => {
-    resumeFinishedShow(5000, 4200);
-    expect(get(updateShow)?.startedAt).toBe(4200);
+  it('plays nothing once the shell is on screen, unless asked to play over it', () => {
+    const gone = hostUpdateShow();
+    expect(resumeFinishedShow()).toBe(false);
+    expect(get(updateShow)).toBeNull();
+    expect(resumeFinishedShow(true)).toBe(true);
+    endUpdateShow();
+    gone();
+    gone();
+    expect(resumeFinishedShow()).toBe(true);
+  });
+
+  it('never replaces a show that is up, a successor\'s held one included', () => {
+    takeOverShow(1000, '1.5.0');
+    expect(resumeFinishedShow()).toBe(false);
+    expect(get(updateShow)).toMatchObject({ held: true, phase: 'run', version: '1.5.0' });
   });
 });
 

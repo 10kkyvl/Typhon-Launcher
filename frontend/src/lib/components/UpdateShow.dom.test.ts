@@ -262,6 +262,46 @@ describe('the start after an update', () => {
     expect(screen.getByText(msg('ui.launcherUpdatedTo', { version: '1.5.0' }))).toBeTruthy();
   });
 
+  // The shell opens once the sign-in has settled, which for a signed-in player waits on the network:
+  // the finish is timed from its first frame on screen, not from when the outcome was read.
+  for (const late of [0, 900, 2500]) {
+    it(`drawn ${late} ms after the outcome was read, opens on the held funnel and plays the whole finish`, async () => {
+      selfUpdateOutcome.set({ version: '1.5.0', ok: true, finishedAt: '' });
+      resumeFinishedShow();
+      vi.setSystemTime(START + late);
+      renderDom(UpdateShowHarness);
+      await tick();
+
+      expect(shown()?.dataset.stage).toBe('finish');
+      expect(shown()?.querySelector<HTMLElement>('.scrim')?.style.opacity).toBe('1');
+      expect(clones().map((clone) => clone.style.opacity)).toEqual(['0', '0', '0', '0', '0']);
+      expect([...document.querySelectorAll('[data-funnel] [data-layer]')].map((layer) => layer.getAttribute('opacity'))).toEqual(['1', '1', '1', '1', '1']);
+
+      // Well into the finish: the innermost arc is back out of the funnel, the card still waits.
+      await advance(450 + 200 + 4 * 120 + 500);
+      expect(shown()?.dataset.stage).toBe('finish');
+      expect(clones()[4].style.opacity).toBe('1');
+      expect(screen.queryByText(msg('ui.launcherUpdatedTo', { version: '1.5.0' }))).toBeNull();
+
+      await advance(1500);
+      expect(shown()).toBeNull();
+      expect(screen.getByText(msg('ui.launcherUpdatedTo', { version: '1.5.0' }))).toBeTruthy();
+    });
+  }
+
+  it('read once the shell is already on screen, plays nothing: no dim over a page in use, the card says the result', async () => {
+    renderDom(UpdateShowHarness);
+    await advance(5000);
+    selfUpdateOutcome.set({ version: '1.5.0', ok: true, finishedAt: '' });
+    const played = resumeFinishedShow();
+    await tick();
+
+    expect(shown()).toBeNull();
+    expect(get(updateShow)).toBeNull();
+    expect(played).toBe(false);
+    expect(screen.getByText(msg('ui.launcherUpdatedTo', { version: '1.5.0' }))).toBeTruthy();
+  });
+
   it('is decoration: hidden from screen readers, takes no focus and moves none at its end', async () => {
     selfUpdateOutcome.set({ version: '1.5.0', ok: true, finishedAt: '' });
     resumeFinishedShow();

@@ -7,7 +7,7 @@
   import { motionOn, tokenMs } from '../motion/motion';
   import { curtainDrawn } from '../stores/handoff';
   import { settings } from '../stores/settings';
-  import { endUpdateShow, logoArcsAway, updateShow, type UpdateShowState } from '../stores/updateShow';
+  import { beginOwedFinish, endUpdateShow, hostUpdateShow, logoArcsAway, updateShow, type UpdateShowState } from '../stores/updateShow';
   import LogoArcs from './LogoArcs.svelte';
   import UpdateFunnel from './UpdateFunnel.svelte';
   import UpdateRing from './UpdateRing.svelte';
@@ -84,6 +84,11 @@
   $effect(() => {
     const clock = show;
     if (!clock || mode !== 'flight' || !geometry) return;
+    // An owed finish starts with this, its first frame; the store's answer runs this effect again.
+    if (clock.owed) {
+      beginOwedFinish(Date.now());
+      return;
+    }
     const flights = arcFlights(geometry);
     const draw = (at: number) => {
       const next = showFrame(clock, at, timing, flights);
@@ -122,6 +127,9 @@
   // The shell going (Big Picture swapped in, the language switched): the logo gets its arcs back;
   // a show that is still running is drawn again by the next mount from the clock.
   $effect(() => () => logoArcsAway.set(null));
+
+  // Mounted means the screen under it is up: a finish owed after that would dim a page in use.
+  $effect(() => hostUpdateShow());
 
   const measure: Attachment<HTMLElement> = () => {
     logo = measureLogo();
