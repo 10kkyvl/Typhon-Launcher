@@ -13,7 +13,7 @@
   import UpdateRing from './UpdateRing.svelte';
   import { LOGO_ARCS } from './logoArcs';
   import { portal } from '../utils/portal';
-  import { arcFlights, curtainClosedAt, fillAt, showFrame, stillCurtain, type ArcPose, type ShowFrame, type ShowGeometry, type ShowTiming } from './updateShowTimeline';
+  import { arcFlights, curtainClosedAt, fillAt, showFrame, showTime, stillCurtain, type ArcPose, type ShowFrame, type ShowGeometry, type ShowTiming } from './updateShowTimeline';
 
   /**
    * The launcher-update show, in place of the old "installing" panel: over a dim the logo's five arcs
@@ -43,7 +43,17 @@
   let logo = $state<ShowGeometry['logo'] | null>(null);
   let funnel = $state<ShowGeometry['funnel'] | null>(null);
   let frame = $state<ShowFrame | null>(null);
+  const time = showTime();
   let now = $state(Date.now());
+
+  // A phase never begins before a frame already drawn: after the wall clock stepped back, a way home
+  // stamped by it would otherwise have begun long ago and end at once. Kept per phase, so the start
+  // stays put while it plays.
+  let phase: { of: UpdateShowState; since: number } | null = null;
+  function phaseClock(show: UpdateShowState): UpdateShowState {
+    if (phase?.of !== show) phase = { of: show, since: Math.max(show.since, time.last()) };
+    return { ...show, since: phase.since };
+  }
 
   // A funnel with no box (a window not laid out) has nowhere to fly to: the ring stands in. A
   // successor takes the show over before its shell, and the logo, are there: it draws the funnel the
@@ -69,6 +79,8 @@
     if (show) return;
     frame = null;
     funnel = null;
+    phase = null;
+    time.reset();
   });
 
   $effect(() => {
@@ -82,23 +94,24 @@
 
   // The flight: one frame now, then one per animation frame, until the show's last.
   $effect(() => {
-    const clock = show;
-    if (!clock || mode !== 'flight' || !geometry) return;
+    const current = show;
+    if (!current || mode !== 'flight' || !geometry) return;
     // An owed finish starts with this, its first frame; the store's answer runs this effect again.
-    if (clock.owed) {
-      beginOwedFinish(Date.now());
+    if (current.owed) {
+      beginOwedFinish(time.now());
       return;
     }
+    const clock = phaseClock(current);
     const flights = arcFlights(geometry);
-    const draw = (at: number) => {
-      const next = showFrame(clock, at, timing, flights);
+    const draw = () => {
+      const next = showFrame(clock, time.now(), timing, flights);
       frame = next;
       if (!sameAway(untrack(() => $logoArcsAway), next.away)) logoArcsAway.set(next.away);
       if (next.stage !== 'done') return true;
       endUpdateShow();
       return false;
     };
-    if (!draw(Date.now())) return;
+    if (!draw()) return;
     const stop = runFrames(draw);
     return () => stop?.();
   });
@@ -113,11 +126,11 @@
       endUpdateShow();
       return;
     }
-    now = Date.now();
-    const timer = setInterval(() => (now = Date.now()), 1000);
+    now = time.now();
+    const timer = setInterval(() => (now = time.now()), 1000);
     // The curtain's step lands on its moment, not on the next second's tick.
     const closing = clock.handoff ? curtainClosedAt(clock.startedAt, timing, false) - now : -1;
-    const step = closing > 0 ? setTimeout(() => (now = Date.now()), closing) : undefined;
+    const step = closing > 0 ? setTimeout(() => (now = time.now()), closing) : undefined;
     return () => {
       clearInterval(timer);
       clearTimeout(step);

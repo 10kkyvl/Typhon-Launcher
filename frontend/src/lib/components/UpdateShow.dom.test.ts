@@ -335,6 +335,92 @@ describe('the start after an update', () => {
   });
 });
 
+// A time sync or the player setting the clock steps the wall clock back. The show is drawn on the
+// wall clock (two processes must draw the same frame) but never backwards: it goes on from the last
+// frame it drew at a steady pace. The steady clock is faked too, so both move with the test.
+describe('the wall clock stepping back an hour', () => {
+  const HOUR = 3_600_000;
+  const turn = () => document.querySelector('[data-funnel] [data-layer] .dash')?.getAttribute('transform') ?? '';
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'Date', 'performance', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    vi.setSystemTime(START);
+  });
+
+  it('while the funnel holds, goes on turning from where it was: no frame drawn twice, none from before', async () => {
+    renderDom(UpdateShowHarness);
+    selfUpdateStatus.set(APPLYING);
+    await advance(3000);
+    const before = poses();
+    vi.setSystemTime(Date.now() - HOUR);
+    await advance(100);
+
+    const show = shown() as HTMLElement;
+    expect(show.dataset.stage).toBe('hold');
+    expect(show.querySelector<HTMLElement>('.scrim')?.style.opacity).toBe('1');
+    expect(show.querySelector<HTMLElement>('.words')?.style.opacity).toBe('1');
+    expect(poses()).toEqual(before);
+    const a = turn();
+    await advance(200);
+    expect(turn()).not.toBe(a);
+    expect(document.activeElement).toBe(show);
+  });
+
+  it('on the way home, brings the arcs back and leaves, giving focus back', async () => {
+    renderDom(UpdateShowHarness);
+    const play = screen.getByRole('button', { name: 'Play' });
+    play.focus();
+    selfUpdateStatus.set(APPLYING);
+    await advance(3000);
+    selfUpdateStatus.set(READY);
+    await tick();
+    vi.setSystemTime(Date.now() - HOUR);
+    await advance(1000);
+
+    expect(shown()).toBeNull();
+    expect(get(updateShow)).toBeNull();
+    await vi.waitFor(() => expect(document.activeElement).toBe(play));
+  });
+
+  it('stepped back before the way home began, still plays it rather than end at once', async () => {
+    renderDom(UpdateShowHarness);
+    selfUpdateStatus.set(APPLYING);
+    await advance(3000);
+    vi.setSystemTime(Date.now() - HOUR);
+    await advance(100);
+    selfUpdateStatus.set(READY);
+    await advance(100);
+
+    expect(shown()?.dataset.stage).toBe('home');
+    await advance(1000);
+    expect(shown()).toBeNull();
+  });
+
+  it('during the finish, brings the arcs back and leaves, and the card says the result', async () => {
+    selfUpdateOutcome.set({ version: '1.5.0', ok: true, finishedAt: '' });
+    resumeFinishedShow();
+    renderDom(UpdateShowHarness);
+    await advance(800);
+    vi.setSystemTime(Date.now() - HOUR);
+    await advance(3000);
+
+    expect(shown()).toBeNull();
+    expect(screen.getByText(msg('ui.launcherUpdatedTo', { version: '1.5.0' }))).toBeTruthy();
+  });
+
+  it('with motion off, keeps the ring as full as it was', async () => {
+    document.documentElement.classList.add('no-anim');
+    renderDom(UpdateShowHarness);
+    selfUpdateStatus.set(APPLYING);
+    await advance(5000);
+    const ring = () => Number(document.querySelector('[data-ring-value]')?.getAttribute('data-ring-value'));
+    const full = ring();
+    vi.setSystemTime(Date.now() - HOUR);
+    await advance(1000);
+    expect(ring()).toBeGreaterThanOrEqual(full);
+  });
+});
+
 describe('the update show with motion off', () => {
   it('is a still ring on the logo with the same words, and nothing flies', async () => {
     document.documentElement.classList.add('no-anim');

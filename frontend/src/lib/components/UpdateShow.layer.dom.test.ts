@@ -111,6 +111,7 @@ describe('the update show with its words, on the layer stack', () => {
     expect(document.activeElement).toBe(show);
 
     selfUpdateStatus.set(READY);
+    await tick();
     await advance(1000);
     expect(shown()).toBeNull();
     expect(dialog.closest('[inert]')).toBeNull();

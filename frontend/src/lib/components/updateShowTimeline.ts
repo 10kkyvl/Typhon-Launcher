@@ -142,6 +142,41 @@ export function stillCurtain(clock: ShowClock, now: number, t: ShowTiming): numb
   return clock.handoff && clock.phase === 'run' && now >= curtainClosedAt(clock.startedAt, t, false) ? 1 : 0;
 }
 
+export interface ShowTime {
+  /** The moment to draw now, ms since the epoch. */
+  now(): number;
+  /** The last moment `now` answered, or -Infinity. */
+  last(): number;
+  /** A new show: the next moment is the wall clock's again. */
+  reset(): void;
+}
+
+/**
+ * The clock a show is drawn on. It reads the wall clock, so two processes that share `startedAt`
+ * draw the same frame, but it never goes back: when the wall clock steps back (a time sync, the
+ * player setting the time) it goes on from the last moment it answered at the pace of the steady
+ * clock until the wall clock is there again; a step forward is taken as it comes, as the other
+ * process sees it too. Meanwhile a window that saw the step back draws that much further on than one
+ * started after it.
+ */
+export function showTime(wall: () => number = () => Date.now(), steady: () => number = () => performance.now()): ShowTime {
+  let at = -Infinity;
+  let mark = 0;
+  return {
+    now() {
+      const read = steady();
+      const told = wall();
+      at = told >= at ? told : at + Math.max(0, read - mark);
+      mark = read;
+      return at;
+    },
+    last: () => at,
+    reset() {
+      at = -Infinity;
+    },
+  };
+}
+
 export function arcFlights(geo: ShowGeometry): ArcFlight[] {
   const { logo, funnel } = geo;
   const k = funnel.width / FUNNEL_VIEW.w;
@@ -256,10 +291,11 @@ function homeFrame(elapsed: number, sinceHome: number, t: ShowTiming, flights: A
 
 /**
  * The frame of the show at `now`. A finish asked for while the arcs are still flying starts once
- * they have arrived; the way home starts at once, from where they were.
+ * they have arrived; the way home starts at once, from where they were. A show that begins after
+ * `now` (a clock that stepped back) is at its first frame.
  */
 export function showFrame(clock: ShowClock, now: number, t: ShowTiming, flights: ArcFlight[]): ShowFrame {
-  const elapsed = now - clock.startedAt;
+  const elapsed = Math.max(0, now - clock.startedAt);
   switch (clock.phase) {
     case 'run':
       return runFrame(elapsed, t, flights, clock.handoff);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LOGO_ARCS } from './logoArcs';
-import { REST_POSE, arcFlights, curtainClosedAt, flightEnd, showFrame, stillCurtain, type ShowFrame, type ShowTiming } from './updateShowTimeline';
+import { REST_POSE, arcFlights, curtainClosedAt, flightEnd, showFrame, showTime, stillCurtain, type ShowFrame, type ShowTiming } from './updateShowTimeline';
 
 // The show is a function of the wall clock: these are the frames a person sees at given moments, and
 // what makes a second process that knows only `startedAt` draw the same thing.
@@ -181,5 +181,43 @@ describe('the way home after a failure', () => {
     }
     const halfway = home(flightEnd(T) + 5000, flightEnd(T) + 5000 + T.base);
     expect(halfway.arcs.every((pose) => pose.opacity > 0 && pose.opacity < 1)).toBe(true);
+  });
+});
+
+describe('a wall clock that stepped back', () => {
+  const HOUR = 3_600_000;
+
+  it('draws a show that begins after the moment asked for at its first frame', () => {
+    expect(showFrame({ startedAt: START + HOUR, phase: 'run', since: START + HOUR }, START, T, FLIGHTS)).toEqual(run(0));
+  });
+
+  it('never goes back: after a step back the show time goes on at the steady pace; a step forward is taken as it comes', () => {
+    let wall = START;
+    let steady = 0;
+    const time = showTime(
+      () => wall,
+      () => steady,
+    );
+    expect(time.last()).toBe(-Infinity);
+    expect(time.now()).toBe(START);
+    wall += 16;
+    steady += 16;
+    expect(time.now()).toBe(START + 16);
+
+    wall -= HOUR;
+    steady += 16;
+    expect(time.now()).toBe(START + 32);
+    wall += 16;
+    steady += 16;
+    expect(time.now()).toBe(START + 48);
+    expect(time.last()).toBe(START + 48);
+
+    wall = START + 5000;
+    steady += 16;
+    expect(time.now()).toBe(START + 5000);
+
+    time.reset();
+    wall = START - HOUR;
+    expect(time.now()).toBe(START - HOUR);
   });
 });
