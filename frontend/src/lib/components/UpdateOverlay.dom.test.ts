@@ -4,6 +4,7 @@ import { msg } from '../i18n';
 import { selfUpdateOutcome, selfUpdateStatus } from '../stores/selfupdate';
 import { endUpdateShow } from '../stores/updateShow';
 import { renderDom } from '../testing/dom';
+import UpdateShowHarness from '../testing/UpdateShowHarness.svelte';
 import UpdateOverlay from './UpdateOverlay.svelte';
 import showSource from './UpdateShow.svelte?raw';
 
@@ -33,10 +34,12 @@ afterEach(() => {
 
 const APPLYING = { state: 'applying', currentVersion: '1.4.0', availableVersion: '1.5.0' } as const;
 
+// The show that took the old panel's place is mounted by App.svelte over every screen, beside the
+// overlay; the harness mounts both as the app does.
 describe('UpdateOverlay while an update is applied', () => {
   it('says which version is installed and that the launcher restarts, in a modal dialog', () => {
     selfUpdateStatus.set(APPLYING);
-    renderDom(UpdateOverlay);
+    renderDom(UpdateShowHarness);
     const dialog = screen.getByRole('dialog', { name: msg('ui.installingUpdateTitle') });
     expect(dialog.getAttribute('aria-modal')).toBe('true');
     expect(within(dialog).getByText(msg('ui.installingVersion', { version: '1.5.0' }))).toBeTruthy();
@@ -54,7 +57,7 @@ describe('UpdateOverlay while an update is applied', () => {
 
   it('shows nothing of it before or after applying', () => {
     selfUpdateStatus.set({ state: 'ready', currentVersion: '1.4.0', availableVersion: '1.5.0' });
-    renderDom(UpdateOverlay);
+    renderDom(UpdateShowHarness);
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.queryByText(msg('ui.installingVersion', { version: '1.5.0' }))).toBeNull();
   });

@@ -5,6 +5,7 @@
   import { focusQuietly } from '../layers/focus';
   import { runFrames } from '../motion/frames';
   import { motionOn, tokenMs } from '../motion/motion';
+  import { curtainDrawn } from '../stores/handoff';
   import { settings } from '../stores/settings';
   import { endUpdateShow, logoArcsAway, updateShow } from '../stores/updateShow';
   import LogoArcs from './LogoArcs.svelte';
@@ -43,9 +44,11 @@
   let frame = $state<ShowFrame | null>(null);
   let now = $state(Date.now());
 
-  // A funnel with no box (a window not laid out) has nowhere to fly to: the ring stands in.
-  const mode = $derived($motionOn && logo && (!funnel || funnel.width >= 4) ? 'flight' : 'ring');
-  const geometry = $derived(logo && funnel ? { logo, funnel } : null);
+  // A funnel with no box (a window not laid out) has nowhere to fly to: the ring stands in. A
+  // successor takes the show over before its shell, and the logo, are there: it draws the funnel the
+  // old window holds (the arcs are inside it, out of sight) and looks for the logo at the finish.
+  const mode = $derived($motionOn && (logo || show?.handoff) && (!funnel || funnel.width >= 4) ? 'flight' : 'ring');
+  const geometry = $derived(funnel ? { logo: logo ?? { left: funnel.left + funnel.width / 2, top: funnel.top + funnel.height / 2, size: 0 }, funnel } : null);
 
   function measureLogo(): ShowGeometry['logo'] | null {
     const origin = document.querySelector('[data-logo-origin]');
@@ -65,6 +68,15 @@
     if (show) return;
     frame = null;
     funnel = null;
+  });
+
+  $effect(() => {
+    if (show && show.phase !== 'run' && !untrack(() => logo)) logo = measureLogo();
+  });
+
+  // A successor lets Go show its window once the closed curtain is on screen (stores/handoff.ts).
+  $effect(() => {
+    if (show?.held && curtain >= 1) curtainDrawn();
   });
 
   // The flight: one frame now, then one per animation frame, until the show's last.

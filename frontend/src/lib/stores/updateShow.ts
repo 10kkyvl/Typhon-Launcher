@@ -74,6 +74,21 @@ export function resumeFinishedShow(now = Date.now(), startedAt = 0): void {
   state.set({ startedAt, phase: 'finish', since: now, version: '', from: '' });
 }
 
+/**
+ * A successor of a seamless restart goes on with the show the old launcher began: the same clock, so
+ * the same frame, held until the old launcher is gone (`releaseShow`).
+ */
+export function takeOverShow(startedAt: number, version: string): void {
+  state.set({ startedAt, phase: 'run', since: startedAt, version, from: '', handoff: true, held: true });
+}
+
+/** The successor owns the launcher: the show plays its finish from where it is. */
+export function releaseShow(now = Date.now()): void {
+  const show = get(state);
+  if (!show?.held) return;
+  state.set({ startedAt: show.startedAt, phase: 'finish', since: now, version: show.version, from: show.from, handoff: true });
+}
+
 /** Called by the show once its last frame is drawn, or when it cannot be drawn at all. */
 export function endUpdateShow(): void {
   state.set(null);

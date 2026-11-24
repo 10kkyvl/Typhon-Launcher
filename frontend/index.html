@@ -5,6 +5,14 @@
     <link rel="icon" type="image/png" href="/typhon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Typhon</title>
+    <!-- The dark theme's --bg before any stylesheet; main.ts swaps in the colour a seamless restart
+         hands over and removes this once it is not needed. -->
+    <style id="boot-bg">
+      html,
+      body {
+        background: #090d17;
+      }
+    </style>
   </head>
   <body>
     <div id="app"></div>

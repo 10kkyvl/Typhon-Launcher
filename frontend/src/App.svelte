@@ -18,6 +18,9 @@
   import TelemetryConsentScreen from './lib/components/TelemetryConsentScreen.svelte';
   import TitleBar from './lib/components/TitleBar.svelte';
   import UpdateOverlay from './lib/components/UpdateOverlay.svelte';
+  import UpdateShow from './lib/components/UpdateShow.svelte';
+  import { setShellReady } from './lib/stores/handoff';
+  import { updateShow } from './lib/stores/updateShow';
   import { initDegradedNotices } from './lib/stores/degraded';
   import { initGameModeNotices } from './lib/stores/gamemode';
   import { initMissingImages } from './lib/stores/missingImages';
@@ -121,6 +124,10 @@
   $effect(() => setLinksReady(linksReady));
   // CloudConflictModal below is mounted under the same gate.
   $effect(() => setWindowReady(linksReady));
+  // The sign-in settled: the screen it leads to (the shell, or the sign-in, legal or consent screen)
+  // is drawn with its first data, so a seamless restart's curtain may lift off it.
+  const shellDecided = $derived($authState !== 'bootstrapping');
+  $effect(() => setShellReady(shellDecided));
 
   onDestroy(refreshStorageOnFolderChange());
 </script>
@@ -195,6 +202,11 @@
 {/key}
 {/if}
 
+<!-- Over every screen once the sign-in has settled; from the first frame in a successor of a seamless
+     restart, which takes the show over before its shell exists. -->
+{#if shellDecided || $updateShow?.held}
+  {#key $locale}<UpdateShow />{/key}
+{/if}
 <EmulatorNeededModal />
 <BiosNeededModal />
 <EmulatorBusyModal />

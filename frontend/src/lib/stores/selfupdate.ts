@@ -129,6 +129,12 @@ function hideOutcomeAfterShow(): () => void {
   };
 }
 
+/** A seamless restart leaves no worker outcome behind: the successor says the result itself. */
+export function announceUpdated(version: string) {
+  selfUpdateOutcome.set({ version, ok: true, finishedAt: new Date().toISOString() });
+  hideOutcomeAfterShow();
+}
+
 let announcedVersion = '';
 
 function isCancelled(err: unknown): boolean {

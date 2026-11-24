@@ -3,7 +3,6 @@
   import { fade, fly } from 'svelte/transition';
   import IconButton from './IconButton.svelte';
   import ProgressBar from './ProgressBar.svelte';
-  import UpdateShow from './UpdateShow.svelte';
   import {
     dismissOutcome,
     requestCancelDownload,
@@ -32,8 +31,6 @@
   const downloadedBytes = $derived(progress?.downloadedBytes ?? status.downloadedBytes ?? 0);
   const pct = $derived(totalBytes > 0 ? Math.min(100, Math.max(0, (downloadedBytes / totalBytes) * 100)) : 0);
 </script>
-
-<UpdateShow />
 
 {#if downloading && !applying && $route.name !== 'settings' && !$bigPictureActive}
   <div class="card" class:sidebar-right={$themeLayout.side === 'right'}>
