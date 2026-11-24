@@ -4,10 +4,12 @@
   import ReleaseNotesList from './ReleaseNotesList.svelte';
   import RollbackAction from './RollbackAction.svelte';
   import { dismissReleaseNotes, releaseNotes, rollbackInfo, unseenReleaseNotes } from '../stores/selfupdate';
+  import { updateShow } from '../stores/updateShow';
   import { msg } from '../i18n';
 
   const notes = $derived($unseenReleaseNotes);
-  const open = $derived(notes.length > 0);
+  // Not under the update show: a dialog would make the show inert and take focus behind its curtain.
+  const open = $derived(notes.length > 0 && !$updateShow);
   const title = $derived(
     msg('modals.releaseNotesTitle', { version: notes.length === 1 ? notes[0].version : $releaseNotes.currentVersion }),
   );
