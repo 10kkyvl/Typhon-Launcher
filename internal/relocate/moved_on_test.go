@@ -570,31 +570,47 @@ func TestEndingAMoveTwiceChangesNothing(t *testing.T) {
 // Recovery refused by a card in the way of a move a new move ended since
 // never makes that move resumable again: its copy stays listed.
 func TestRefusedRecoveryNeverRevivesAnEndedMove(t *testing.T) {
-	forceCopyPath(t)
-	lib := newTestLibrary(t)
-	r := newRefusedCommit(t, nil, lib, t.TempDir())
-	snapshot := r.old
-	job, err := r.s.MoveGame(r.game.ID, t.TempDir())
-	if err != nil {
-		t.Fatalf("MoveGame = %v", err)
-	}
-	r.s.wait(job.ID)
-	ended, err := r.s.jobSnapshot(r.old.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	requireMovedOn(t, ended)
+	for _, newMoveFails := range []bool{false, true} {
+		name := "the new move finished elsewhere"
+		if newMoveFails {
+			name = "the new move failed, the card at the old folder"
+		}
+		t.Run(name, func(t *testing.T) {
+			forceCopyPath(t)
+			lib := newTestLibrary(t)
+			r := newRefusedCommit(t, nil, lib, t.TempDir())
+			snapshot := r.old
+			if newMoveFails {
+				afterCopyBeforeVerify = func(staging string) {
+					if err := os.WriteFile(filepath.Join(staging, "extra.bin"), []byte("x"), 0o600); err != nil {
+						t.Error(err)
+					}
+				}
+				t.Cleanup(func() { afterCopyBeforeVerify = nil })
+			}
+			job, err := r.s.MoveGame(r.game.ID, t.TempDir())
+			if err != nil {
+				t.Fatalf("MoveGame = %v", err)
+			}
+			r.s.wait(job.ID)
+			ended, err := r.s.jobSnapshot(r.old.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			requireMovedOn(t, ended)
 
-	r.s.recoverJob(context.Background(), snapshot)
+			r.s.recoverJob(context.Background(), snapshot)
 
-	again, err := r.s.jobSnapshot(r.old.ID)
-	if err != nil {
-		t.Fatal(err)
+			again, err := r.s.jobSnapshot(r.old.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(again, ended) {
+				t.Fatalf("ended job changed by a refused recovery:\nbefore %+v\nafter  %+v", ended, again)
+			}
+			requireCopies(t, r.s, r.old.ID, copyWant{CopyStaging, r.staging})
+		})
 	}
-	if !reflect.DeepEqual(again, ended) {
-		t.Fatalf("ended job changed by a refused recovery:\nbefore %+v\nafter  %+v", ended, again)
-	}
-	requireCopies(t, r.s, r.old.ID, copyWant{CopyStaging, r.staging})
 }
 
 // A move that renamed its folder took the old folder away: a folder at the
