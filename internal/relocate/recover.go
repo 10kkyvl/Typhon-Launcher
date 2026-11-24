@@ -489,12 +489,52 @@ func (s *Service) recoverPrepare(ctx context.Context, job Job) {
 // by CopyDir/hashdir.Build, so only Staging needs cleaning up.
 func (s *Service) recoverCopyOrVerify(job Job) {
 	if job.Staging != "" {
+		release, err := s.holdStaging(job)
+		switch {
+		case errors.Is(err, library.ErrFolderBusy):
+			slog.Warn("recovery skipped: staging folder is busy", "job", job.ID, "path", job.Staging, "error", err)
+			return
+		case err != nil:
+			s.markRecoveryFailed(job.ID, fmt.Errorf("%w: %s: %w", ErrFolderShared, job.Staging, err))
+			return
+		}
 		removeStaging(job.Staging)
+		release()
 	}
 	if err := s.st.removeManifest(job.ID); err != nil {
 		slog.Warn("remove move manifest on recovery", "job", job.ID, "error", err)
 	}
 	s.markRecoveryFailed(job.ID, fmt.Errorf("перенос прерван на этапе %s", job.Stage))
+}
+
+// holdStaging keeps new cards out of a killed copy's staging folder while it
+// is deleted, and refuses one a card lies at or inside: such a card came
+// after the crash, and its files are not the move's. Without the game's
+// reservation (the game left the library, or runs) the cards are looked at
+// instead; another game's hold on the folder is ErrFolderBusy.
+func (s *Service) holdStaging(job Job) (func(), error) {
+	noop := func() {}
+	if s.lib == nil || !gameItem(job.GameID) {
+		return noop, nil
+	}
+	release, err := s.lib.BeginRecovery(job.GameID, "", job.Staging)
+	switch {
+	case err == nil:
+		return release, nil
+	case errors.Is(err, library.ErrFolderShared), errors.Is(err, library.ErrFolderBusy):
+		return nil, err
+	}
+	for _, g := range s.lib.GetGames() {
+		if g.Uninstalled {
+			continue
+		}
+		for _, root := range g.Footprint() {
+			if platform.SamePath(root, job.Staging) || platform.Inside(job.Staging, root) {
+				return nil, fmt.Errorf("%w: %s", library.ErrFolderShared, g.Title)
+			}
+		}
+	}
+	return noop, nil
 }
 
 func (s *Service) recoverCommit(ctx context.Context, job Job) {

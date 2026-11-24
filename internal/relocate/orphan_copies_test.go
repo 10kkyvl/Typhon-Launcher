@@ -194,6 +194,58 @@ func TestRecoveryFailsAMoveWhoseFolderGainedAnotherGame(t *testing.T) {
 	}
 }
 
+// A move killed while copying leaves a part copy in its staging folder, which
+// recovery deletes. A game added inside that folder since (a scan, or a
+// journal from before the live move held it) is never deleted with it: the job
+// fails for good, the folder stays and is listed as one that holds a game.
+func TestRecoveryAtTheCopyNeverDeletesAGameInTheStagingFolder(t *testing.T) {
+	cases := []struct {
+		name    string
+		stage   Stage
+		removed bool
+	}{
+		{"copy", StageCopy, false},
+		{"verify", StageVerify, false},
+		{"copy, the game removed since", StageCopy, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			lib := newTestLibrary(t)
+			game, src := addTestGame(t, lib)
+			target := filepath.Join(t.TempDir(), "Game")
+			staging := target + stagingSuffix
+			mustMkdirFile(t, staging, "game.exe", "part")
+			bonus := filepath.Join(staging, "Bonus", "Game2.exe")
+			addExeAt(t, lib, bonus, "Bonus")
+			if tc.removed {
+				if err := lib.RemoveGame(game.ID); err != nil {
+					t.Fatal(err)
+				}
+			}
+			job := Job{ID: "j1", Scope: ScopeGame, Stage: tc.stage, GameID: game.ID, Title: "Game", Source: src, Target: target, Staging: staging}
+			s := newRecoverTestService(t, job)
+			s.lib = lib
+
+			s.recoverAll(context.Background())
+
+			if _, err := os.Stat(bonus); err != nil {
+				t.Fatalf("recovery deleted a game added inside the staging folder: %v", err)
+			}
+			got := s.soleJob(t)
+			if got.Stage != StageFailed || got.FailedAt != "" || !strings.Contains(got.Error, "relocate.folder_shared") {
+				t.Fatalf("job = %s/%q %q, want it failed for good by relocate.folder_shared", got.Stage, got.FailedAt, got.Error)
+			}
+			stagings, err := s.Stagings()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(stagings) != 1 || stagings[0].Deletable {
+				t.Fatalf("Stagings = %+v, want the folder listed and not deletable", stagings)
+			}
+		})
+	}
+}
+
 // A tool added from the games folder itself holds that folder: a live move
 // into it goes ahead, and so does the same move resumed after a kill.
 func TestRecoveryFinishesAMoveIntoAFolderAnotherCardHolds(t *testing.T) {
