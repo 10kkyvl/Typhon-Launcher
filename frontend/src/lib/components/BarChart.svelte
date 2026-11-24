@@ -177,7 +177,7 @@
           {/each}
         </div>
         {#if selectable}
-          <div class="cols" role="radiogroup" aria-label={label} tabindex="-1" bind:this={group}>
+          <div class="cols" class:chosen={chosen >= 0} role="radiogroup" aria-label={label} tabindex="-1" bind:this={group}>
             {#each buckets as bucket, index (bucket.key)}
               <Tooltip text={named(bucket)} describe={false}>
                 <button
@@ -363,14 +363,10 @@
     color: var(--text);
   }
 
-  /* A bar that can be chosen: quiet until it is, as the week strip of the prototype. */
+  /* Bars that can be chosen read as a plain chart until one is; then the rest go quiet around it. */
   button.col {
     padding-bottom: var(--space-1);
     cursor: pointer;
-  }
-
-  button.col .bar {
-    background: var(--text-3);
   }
 
   button.col:hover {
@@ -378,7 +374,11 @@
     color: var(--text);
   }
 
-  button.col:hover .bar {
+  .chosen button.col .bar {
+    background: var(--text-3);
+  }
+
+  .chosen button.col:hover .bar {
     background: var(--text-2);
   }
 
@@ -387,7 +387,7 @@
     color: var(--text);
   }
 
-  button.col[aria-checked='true'] .bar {
+  .chosen button.col[aria-checked='true'] .bar {
     background: var(--accent-bright);
   }
 

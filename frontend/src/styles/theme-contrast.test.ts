@@ -627,9 +627,14 @@ describe("the bar chart's bars", () => {
   const BARS: [string, string | null][] = [
     ['.bar', null],
     ['.current .bar', null],
-    ['button.col .bar', null],
-    ['button.col:hover .bar', 'button.col:hover'],
-    ["button.col[aria-checked='true'] .bar", "button.col[aria-checked='true']"],
+    ['.chosen button.col .bar', null],
+    ['.chosen button.col:hover .bar', 'button.col:hover'],
+    [".chosen button.col[aria-checked='true'] .bar", "button.col[aria-checked='true']"],
+  ];
+  // With no bar chosen a hovered column draws its plate under the plain fills.
+  const HOVERED: [string, string][] = [
+    ['.bar', 'button.col:hover'],
+    ['.current .bar', 'button.col:hover'],
   ];
 
   it('measures every rule that fills a bar', () => {
@@ -646,10 +651,10 @@ describe("the bar chart's bars", () => {
       const out: string[] = [];
       for (const surface of PAGE) {
         const under = surface === '--bg' ? bg : paint(tokens, surface, bg);
-        for (const [selector, plate] of BARS) {
+        for (const [selector, plate] of [...BARS, ...HOVERED]) {
           const ground = plate ? over(cssColor(fill(plate), tokens), under) : under;
           const r = ratio(over(cssColor(fill(selector), tokens), ground), ground);
-          if (r < 3) out.push(`${selector} over ${surface}: ${r.toFixed(2)} < 3`);
+          if (r < 3) out.push(`${selector} over ${plate ?? 'no plate'} on ${surface}: ${r.toFixed(2)} < 3`);
         }
       }
       expect(out).toEqual([]);

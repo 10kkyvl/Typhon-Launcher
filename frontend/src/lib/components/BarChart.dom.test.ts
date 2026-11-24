@@ -86,6 +86,14 @@ describe('BarChart', () => {
   describe('with a selection', () => {
     const radios = (root: HTMLElement) => within(root).getAllByRole('radio');
 
+    it('goes quiet around a chosen bar only: with none chosen the group is not marked', async () => {
+      const { getByRole, user } = renderDom(BarChartHarness, { buckets: DAYS, selectable: true });
+      const group = getByRole('radiogroup', { name: 'Недели' });
+      expect(group.classList.contains('chosen')).toBe(false);
+      await user.click(radios(group)[0]);
+      expect(group.classList.contains('chosen')).toBe(true);
+    });
+
     it('is a named radio group whose radios carry the numbers, one Tab stop on the chosen one', () => {
       const { getByRole, container, queryByRole } = renderDom(BarChartHarness, { buckets: DAYS, selectable: true, start: 'wed' });
       expect(getByRole('radiogroup', { name: 'Недели' })).toBeTruthy();
