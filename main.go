@@ -1039,10 +1039,24 @@ func main() {
 	selfupdateService.SetHandoffWindow(window)
 	selfupdateService.SetHandoffBackground(themeService.Background)
 	if handoffMode {
-		if err := windowhandoff.Prepare(window, handoffSpec.Geometry); err != nil {
-			// The window still opens, at the default size, and the hand-off goes on.
-			slog.Warn("prepare the hand-off window", "error", err)
+		// The native window appears inside wails.Run, so it is prepared from the
+		// first event that finds it there. If preparing fails the window is shown
+		// plainly: a visible start still lets the old launcher hand over, a
+		// window left hidden draws nothing and the hand-over times out.
+		preparer := windowhandoff.NewPreparer(window, handoffSpec.Geometry)
+		prepareHandoffWindow := func() {
+			prepared, err := preparer.Try()
+			if prepared && err != nil {
+				slog.Warn("prepare the hand-off window, showing it plainly", "error", err)
+				window.Show()
+			}
 		}
+		wails.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+			prepareHandoffWindow()
+		})
+		window.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) {
+			prepareHandoffWindow()
+		})
 	}
 
 	chatDesktop := messaging.NewDesktop(context.Background(), wails, window)

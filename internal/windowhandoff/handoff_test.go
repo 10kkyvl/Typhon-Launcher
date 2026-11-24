@@ -122,3 +122,35 @@ func TestPlacePrimaryFallbackWhenNoneMarked(t *testing.T) {
 		t.Fatalf("got %+v", got)
 	}
 }
+
+func TestPreparerWaitsForTheNativeWindowAndPreparesOnce(t *testing.T) {
+	native := false
+	calls := 0
+	p := &Preparer{
+		ready:   func() bool { return native },
+		prepare: func() error { calls++; return nil },
+	}
+
+	if prepared, err := p.Try(); prepared || err != nil || calls != 0 {
+		t.Fatalf("Try before the native window exists = %v, %v with %d prepare calls; want it left for later", prepared, err, calls)
+	}
+
+	native = true
+	if prepared, err := p.Try(); !prepared || err != nil || calls != 1 {
+		t.Fatalf("Try once the native window exists = %v, %v with %d prepare calls; want it prepared", prepared, err, calls)
+	}
+	if prepared, err := p.Try(); prepared || err != nil || calls != 1 {
+		t.Fatalf("second Try = %v, %v with %d prepare calls; want nothing done twice", prepared, err, calls)
+	}
+}
+
+func TestPreparerHandsBackWhyPreparingFailed(t *testing.T) {
+	p := &Preparer{
+		ready:   func() bool { return true },
+		prepare: func() error { return ErrNoGeometry },
+	}
+	prepared, err := p.Try()
+	if !prepared || !errors.Is(err, ErrNoGeometry) {
+		t.Fatalf("Try = %v, %v; want the attempt reported with ErrNoGeometry", prepared, err)
+	}
+}

@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync/atomic"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -75,6 +76,38 @@ func Prepare(w *application.WebviewWindow, g Geometry) error {
 		w.Fullscreen()
 	}
 	return nil
+}
+
+// Preparer readies a successor's window as soon as its native window exists.
+// The native window is created inside the application's run loop, after the
+// window object: an attempt made before that is not a failure, a later one
+// does the work. Unprepared, the window is never ordered in and its webview
+// draws nothing, so the outgoing launcher would wait for a frame that cannot
+// come.
+type Preparer struct {
+	done    atomic.Bool
+	ready   func() bool
+	prepare func() error
+}
+
+func NewPreparer(w *application.WebviewWindow, g Geometry) *Preparer {
+	return &Preparer{
+		ready:   func() bool { return w.NativeWindow() != nil },
+		prepare: func() error { return Prepare(w, g) },
+	}
+}
+
+// Try prepares the window if its native window is there and no earlier call
+// has prepared it. prepared tells whether this call did the work; err is that
+// work's result.
+func (p *Preparer) Try() (prepared bool, err error) {
+	if !p.ready() {
+		return false, nil
+	}
+	if !p.done.CompareAndSwap(false, true) {
+		return false, nil
+	}
+	return true, p.prepare()
 }
 
 // DisableTransitions turns off the system show/hide/close animation of w, so
