@@ -1145,6 +1145,36 @@ func (s *Service) failOrCancel(jobID string, err error) error {
 	return err
 }
 
+// refuseItem ends a library move whose next item was refused before anything
+// of it started. The job still carries the item moved before it, at its
+// cleanup: failOrCancel would leave that stage on it, so the next start would
+// finish that item again and a retry would meet its target as a copy kept.
+// The job fails for good with the refused item's error and names the library
+// again, as it did before its first item.
+func (s *Service) refuseItem(jobID, oldRoot, root string, err error) error {
+	stage := StageFailed
+	if errors.Is(err, context.Canceled) {
+		stage = StageCancelled
+	}
+	if _, tErr := s.transition(jobID, stage, func(j *Job) {
+		j.GameID = ""
+		j.Title = libraryTitle
+		j.Source = oldRoot
+		j.Target = root
+		j.Renamed = false
+		j.Staging = ""
+		j.TotalBytes = 0
+		j.CopiedBytes = 0
+		j.CurrentFile = ""
+		j.Phase = ""
+		j.Error = err.Error()
+		j.FailedAt = ""
+	}); tErr != nil {
+		return tErr
+	}
+	return err
+}
+
 // retryableStage names the stage a failed job can be resumed from: once the
 // bytes are at Target, a repoint or cleanup failure is retried on startup
 // rather than abandoned.
@@ -1165,6 +1195,8 @@ func (s *Service) cancelJob(jobID string) error {
 }
 
 // --- MoveLibrary ------------------------------------------------------------
+
+const libraryTitle = "Библиотека"
 
 // MoveLibrary moves the whole library (every installed game, the downloads
 // tree and the screenshots tree) to a new root and switches settings over
@@ -1228,7 +1260,7 @@ func (s *Service) MoveLibrary(parent string) (Job, error) {
 		ID:        newID(),
 		Scope:     ScopeLibrary,
 		Stage:     StagePrepare,
-		Title:     "Библиотека",
+		Title:     libraryTitle,
 		Source:    oldRoot,
 		Target:    root,
 		Queue:     queue,
@@ -1293,7 +1325,7 @@ func (s *Service) runLibraryItem(ctx context.Context, jobID, item string, rest [
 		return s.runDownloadsItem(ctx, jobID, rest, cfg, oldRoot, root)
 	case itemScreenshots:
 		newPath := rebase(oldRoot, root, cfg.ScreenshotsPath)
-		return s.runDirItem(ctx, jobID, itemScreenshots, "Скриншоты", cfg.ScreenshotsPath, newPath, rest)
+		return s.runDirItem(ctx, jobID, itemScreenshots, "Скриншоты", cfg.ScreenshotsPath, newPath, rest, oldRoot, root)
 	case itemSettings:
 		return s.runSettingsItem(jobID, rest, oldRoot, root)
 	default:
@@ -1304,7 +1336,7 @@ func (s *Service) runLibraryItem(ctx context.Context, jobID, item string, rest [
 func (s *Service) runGameLibraryItem(ctx context.Context, jobID, gameID string, rest []string, oldRoot, root string) error {
 	game, err := s.lib.Find(gameID)
 	if err != nil {
-		return s.failOrCancel(jobID, fmt.Errorf("%s: %w", gameID, ErrGameNotFound))
+		return s.refuseItem(jobID, oldRoot, root, fmt.Errorf("%s: %w", gameID, ErrGameNotFound))
 	}
 	if game.External != nil {
 		_, err := s.transition(jobID, StagePrepare, func(j *Job) { j.Queue = rest })
@@ -1312,7 +1344,7 @@ func (s *Service) runGameLibraryItem(ctx context.Context, jobID, gameID string, 
 	}
 	source := strings.TrimSpace(game.InstallDir)
 	if source == "" {
-		return s.failOrCancel(jobID, fmt.Errorf("%s: %w", gameID, ErrEmptyInstallDir))
+		return s.refuseItem(jobID, oldRoot, root, fmt.Errorf("%s: %w", gameID, ErrEmptyInstallDir))
 	}
 	source = filepath.Clean(source)
 	if platform.Inside(root, source) {
@@ -1320,26 +1352,26 @@ func (s *Service) runGameLibraryItem(ctx context.Context, jobID, gameID string, 
 		return err
 	}
 	if err := s.checkRelocatable(gameID); err != nil {
-		return s.failOrCancel(jobID, err)
+		return s.refuseItem(jobID, oldRoot, root, err)
 	}
 	if err := s.checkBusy(gameID); err != nil {
-		return s.failOrCancel(jobID, err)
+		return s.refuseItem(jobID, oldRoot, root, err)
 	}
 	target := rebase(oldRoot, root, source)
 	if !targetAvailable(target) {
-		return s.failOrCancel(jobID, fmt.Errorf("%s: %w", target, ErrTargetNotEmpty))
+		return s.refuseItem(jobID, oldRoot, root, fmt.Errorf("%s: %w", target, ErrTargetNotEmpty))
 	}
 	release, err := s.reserveGame(gameID, target)
 	if err != nil {
-		return s.failOrCancel(jobID, err)
+		return s.refuseItem(jobID, oldRoot, root, err)
 	}
 	defer release()
 	total, err := install.DirSize(ctx, source)
 	if err != nil {
-		return s.failOrCancel(jobID, fmt.Errorf("measure %s: %w", source, err))
+		return s.refuseItem(jobID, oldRoot, root, fmt.Errorf("measure %s: %w", source, err))
 	}
 	if err := checkFreeSpace(target, total); err != nil {
-		return s.failOrCancel(jobID, err)
+		return s.refuseItem(jobID, oldRoot, root, err)
 	}
 
 	if err := s.startGameItem(jobID, func(j *Job) {
@@ -1371,14 +1403,14 @@ func (s *Service) runGameLibraryItem(ctx context.Context, jobID, gameID string, 
 // runDirItem moves one directory that carries no per-entry bookkeeping of
 // its own (screenshots today). A missing source is not an error: it means
 // the folder was never created, so there is nothing to move.
-func (s *Service) runDirItem(ctx context.Context, jobID, itemID, title, source, target string, rest []string) error {
+func (s *Service) runDirItem(ctx context.Context, jobID, itemID, title, source, target string, rest []string, oldRoot, root string) error {
 	source = filepath.Clean(strings.TrimSpace(source))
 	target = filepath.Clean(strings.TrimSpace(target))
 	if source == "" {
-		return s.failOrCancel(jobID, fmt.Errorf("%s: %w", itemID, ErrEmptySource))
+		return s.refuseItem(jobID, oldRoot, root, fmt.Errorf("%s: %w", itemID, ErrEmptySource))
 	}
 	if target == "" {
-		return s.failOrCancel(jobID, fmt.Errorf("%s: %w", itemID, ErrEmptyTarget))
+		return s.refuseItem(jobID, oldRoot, root, fmt.Errorf("%s: %w", itemID, ErrEmptyTarget))
 	}
 
 	if _, err := os.Stat(source); errors.Is(err, fs.ErrNotExist) {
@@ -1401,7 +1433,7 @@ func (s *Service) runDirItem(ctx context.Context, jobID, itemID, title, source, 
 
 	total, err := install.DirSize(ctx, source)
 	if err != nil {
-		return s.failOrCancel(jobID, fmt.Errorf("measure %s: %w", source, err))
+		return s.refuseItem(jobID, oldRoot, root, fmt.Errorf("measure %s: %w", source, err))
 	}
 	if _, err := s.transition(jobID, StagePrepare, func(j *Job) {
 		j.GameID = itemID
@@ -1429,7 +1461,7 @@ func (s *Service) runDirItem(ctx context.Context, jobID, itemID, title, source, 
 func (s *Service) runDownloadsItem(ctx context.Context, jobID string, rest []string, cfg settings.Settings, oldRoot, root string) error {
 	oldDownloads := strings.TrimSpace(cfg.DownloadsPath)
 	if oldDownloads == "" {
-		return s.failOrCancel(jobID, fmt.Errorf("%s: %w", itemDownloads, ErrEmptySource))
+		return s.refuseItem(jobID, oldRoot, root, fmt.Errorf("%s: %w", itemDownloads, ErrEmptySource))
 	}
 	oldDownloads = filepath.Clean(oldDownloads)
 	newDownloads := rebase(oldRoot, root, oldDownloads)
@@ -1486,7 +1518,7 @@ func (s *Service) runDownloadsItem(ctx context.Context, jobID string, rest []str
 func (s *Service) runSettingsItem(jobID string, rest []string, oldRoot, root string) error {
 	if _, err := s.transition(jobID, StagePrepare, func(j *Job) {
 		j.GameID = itemSettings
-		j.Title = "Библиотека"
+		j.Title = libraryTitle
 		j.Source = oldRoot
 		j.Target = root
 		j.Staging = ""
