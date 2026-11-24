@@ -193,6 +193,23 @@ describe('the update show of a seamless restart', () => {
     expect(rule).toMatch(/background: var\(--bg\)/);
   });
 
+  it('rolled back by Go with the curtain closed, lifts it with the dim as the arcs go home, and leaves', async () => {
+    seamless();
+    renderDom(UpdateShowHarness);
+    await advance(4000);
+    expect(curtain()?.style.opacity).toBe('1');
+
+    selfUpdateStatus.set({ ...READY, errorCode: 'handoff_failed' });
+    await advance(225);
+    expect(shown()?.dataset.stage).toBe('home');
+    const lifting = Number(curtain()?.style.opacity);
+    expect(lifting).toBeGreaterThan(0);
+    expect(lifting).toBeLessThan(1);
+    await advance(1000);
+    expect(shown()).toBeNull();
+    expect(screen.getByRole('button', { name: 'Play' })).toBeTruthy();
+  });
+
   it('says the launcher stays open, not that it restarts', async () => {
     seamless();
     renderDom(UpdateShowHarness);

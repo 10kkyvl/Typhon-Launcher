@@ -110,6 +110,7 @@ function picture() {
     curtain: look('.curtain'),
     funnel: [...(show?.querySelectorAll('[data-funnel] [data-layer]') ?? [])].map((layer) => layer.outerHTML),
     ring: show?.querySelector('[data-ring-value]')?.outerHTML ?? null,
+    ringPlace: show?.querySelector('[data-ring-value]')?.closest('.ring-box, .ringmark')?.className.split(' ')[0] ?? null,
     words: show?.querySelector('[role="status"]')?.textContent?.trim() ?? null,
   };
 }
