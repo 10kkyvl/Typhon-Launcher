@@ -95,6 +95,14 @@ describe('statusReason', () => {
     );
   });
 
+  it('says a rolled-back seamless update by its code, not by the Go errors joined in it', async () => {
+    const { statusReason } = await import('./selfupdateMessages');
+
+    expect(
+      statusReason({ state: 'ready', currentVersion: '1.0.0', error: 'selfupdate: the new launcher did not show its window in time', errorCode: 'handoff_failed' }),
+    ).toBe('Лаунчер остался на прежней версии, обновление по-прежнему готово.');
+  });
+
   it('falls back to the stage when the cause is unknown', async () => {
     const { statusReason } = await import('./selfupdateMessages');
 

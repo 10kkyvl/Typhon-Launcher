@@ -99,6 +99,7 @@ function codeReasons(): Record<string, string> {
     version: msg('state.selfupdateCodeCheckFailed'),
     download: msg('state.selfupdateCodeDownloadFailed'),
     apply: msg('state.selfupdateCodeApplyFailed'),
+    handoff_failed: msg('state.selfupdateHandoffFailed'),
   };
 }
 

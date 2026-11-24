@@ -227,3 +227,63 @@ export async function dismissUpdate(): Promise<void> {
     throw toSelfUpdateError(err);
   }
 }
+
+/**
+ * The seamless restart (hand-over): the old launcher swaps itself on disk and starts its successor
+ * beside it; the successor draws the same update show and takes the window's place once its first
+ * frame is on screen. Go's side: internal/selfupdate/handoff_{old,new}.go.
+ */
+export interface HandoffInfo {
+  /** This launcher is a successor whose old launcher has not exited yet. */
+  active: boolean;
+  /** When the show began in the old launcher, ms since the epoch. */
+  phaseStart: number;
+  version: string;
+  /** The theme's page colour the old launcher was showing, `#rrggbb`. */
+  background: string;
+}
+
+/** Go's `eventHandoffDone`: the old launcher is gone and this one has started its services. */
+export const EVENT_HANDOFF_DONE = 'launcher:handoff_done';
+
+export function inactiveHandoff(): HandoffInfo {
+  return { active: false, phaseStart: 0, version: '', background: '' };
+}
+
+export function toHandoffInfo(value: unknown): HandoffInfo {
+  const raw = (value ?? {}) as Partial<HandoffInfo>;
+  return {
+    active: raw.active === true,
+    phaseStart: Number(raw.phaseStart) || 0,
+    version: typeof raw.version === 'string' ? raw.version : '',
+    background: typeof raw.background === 'string' ? raw.background : '',
+  };
+}
+
+export async function getHandoffInfo(): Promise<HandoffInfo> {
+  if (!inWails) return inactiveHandoff();
+  try {
+    return toHandoffInfo(await SelfUpdateService.HandoffInfo());
+  } catch (err) {
+    throw toSelfUpdateError(err);
+  }
+}
+
+/** An error means nothing changed and `applyUpdate` (the restart through the worker) is still open. */
+export async function beginHandoff(phaseStart: number): Promise<void> {
+  if (!inWails) throw unavailable();
+  try {
+    await SelfUpdateService.BeginHandoff(get(locale), phaseStart);
+  } catch (err) {
+    throw toSelfUpdateError(err);
+  }
+}
+
+export async function handoffRendered(): Promise<void> {
+  if (!inWails) throw unavailable();
+  try {
+    await SelfUpdateService.HandoffRendered();
+  } catch (err) {
+    throw toSelfUpdateError(err);
+  }
+}

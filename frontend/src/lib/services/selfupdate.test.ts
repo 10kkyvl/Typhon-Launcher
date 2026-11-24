@@ -15,6 +15,9 @@ const bindings = {
   GetOutcome: vi.fn(),
   GetReleaseNotes: vi.fn(),
   AcknowledgeReleaseNotes: vi.fn(),
+  BeginHandoff: vi.fn(),
+  HandoffInfo: vi.fn(),
+  HandoffRendered: vi.fn(),
 };
 
 vi.mock('../../../bindings/typhon/internal/selfupdate', () => ({ Service: bindings }));
@@ -188,6 +191,47 @@ describe('selfupdate service errors', () => {
     bindings.DismissUpdate.mockRejectedValueOnce(new Error('boom'));
 
     await expect(dismissUpdate()).rejects.toMatchObject({ code: 'unknown', message: 'boom' });
+  });
+});
+
+describe('the seamless restart calls', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('hands Go the moment the show began, with the selected language', async () => {
+    const { beginHandoff } = await import('./selfupdate');
+    applyLanguage('en');
+    bindings.BeginHandoff.mockResolvedValueOnce(undefined);
+
+    await expect(beginHandoff(1_700_000_000_123)).resolves.toBeUndefined();
+    expect(bindings.BeginHandoff).toHaveBeenCalledExactlyOnceWith('en', 1_700_000_000_123);
+  });
+
+  it('passes a refused hand-over on as an error, so the caller can restart instead', async () => {
+    const { beginHandoff, SelfUpdateError } = await import('./selfupdate');
+    bindings.BeginHandoff.mockRejectedValueOnce(new Error('selfupdate: updating without a restart is not available here'));
+
+    await expect(beginHandoff(1)).rejects.toBeInstanceOf(SelfUpdateError);
+  });
+
+  it('reads what a successor is handed, and nothing in an ordinary start', async () => {
+    const { getHandoffInfo } = await import('./selfupdate');
+    bindings.HandoffInfo.mockResolvedValueOnce({ active: true, phaseStart: 42, version: '1.5.0', background: '#101418' });
+    await expect(getHandoffInfo()).resolves.toEqual({ active: true, phaseStart: 42, version: '1.5.0', background: '#101418' });
+
+    bindings.HandoffInfo.mockResolvedValueOnce({ active: false, phaseStart: 0, version: '', background: '' });
+    await expect(getHandoffInfo()).resolves.toMatchObject({ active: false });
+  });
+
+  it('tells Go the successor has drawn its first frame, and reports a failure', async () => {
+    const { handoffRendered } = await import('./selfupdate');
+    bindings.HandoffRendered.mockResolvedValueOnce(undefined);
+    await expect(handoffRendered()).resolves.toBeUndefined();
+    expect(bindings.HandoffRendered).toHaveBeenCalledTimes(1);
+
+    bindings.HandoffRendered.mockRejectedValueOnce(new Error('selfupdate: no window to reveal'));
+    await expect(handoffRendered()).rejects.toThrow('no window to reveal');
   });
 });
 
