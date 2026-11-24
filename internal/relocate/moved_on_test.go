@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -356,6 +357,127 @@ func TestRecoveryLeavesAJobANewMoveEndedSinceItsSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	requireMovedOn(t, old)
+}
+
+// staleRepoint is a move failed at the repoint whose card already names its
+// target (the repoint landed, the marker write did not), ended by a new move
+// of the game from that target, which then finished: s holds the old job as
+// recovery's copy of the journal had it before the new move.
+type staleRepoint struct {
+	s        *Service
+	lib      *library.Service
+	game     library.Game
+	src      string
+	snapshot Job
+	ended    Job
+}
+
+func newStaleRepoint(t *testing.T) staleRepoint {
+	t.Helper()
+	lib := newTestLibrary(t)
+	game, src := addTestGame(t, lib)
+	target := filepath.Join(t.TempDir(), "Game")
+	mustMkdirFile(t, target, "game.exe", "stub")
+	if _, err := lib.Relocate(game.ID, target); err != nil {
+		t.Fatal(err)
+	}
+	old := Job{ID: "old", Scope: ScopeGame, Stage: StageFailed, FailedAt: StageRepoint, GameID: game.ID, Title: "Game", Source: src, Target: target}
+	s := newRecoverTestService(t, old)
+	s.lib = lib
+	snapshot := s.List()[0]
+
+	third := filepath.Join(t.TempDir(), "Game")
+	if err := s.registerJob(Job{ID: "new", Scope: ScopeGame, Stage: StagePrepare, GameID: game.ID, Title: "Game", Source: target, Target: third}); err != nil {
+		t.Fatal(err)
+	}
+	ended, err := s.jobSnapshot(old.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(target, third); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := lib.Relocate(game.ID, third); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.removeJob("new"); err != nil {
+		t.Fatal(err)
+	}
+	return staleRepoint{s: s, lib: lib, game: game, src: src, snapshot: snapshot, ended: ended}
+}
+
+func (r staleRepoint) requireSourceListed(t *testing.T) {
+	t.Helper()
+	copies, err := r.s.OrphanedCopies()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range copies {
+		if samePathT(c.Path, r.src) && c.Kind == CopySource {
+			return
+		}
+	}
+	t.Fatalf("old folder %s not listed; copies %+v", r.src, copies)
+}
+
+// A new move from the old target ends a move failed at the repoint whose card
+// already named that target: the repoint had landed, so the old folder is the
+// move's leftover and is listed.
+func TestNewMoveFromTheOldTargetListsTheOldFolder(t *testing.T) {
+	r := newStaleRepoint(t)
+	requireMovedOn(t, r.ended)
+	if r.ended.OrphanedAt != StageCleanup {
+		t.Fatalf("ended job orphanedAt = %q, want the cleanup: the repoint had landed", r.ended.OrphanedAt)
+	}
+	r.requireSourceListed(t)
+}
+
+// Ending a move is done once: recovery, working from its copy of the journal,
+// reaches a move a new move ended since and changes none of its fields, so the
+// leftover old folder stays listed.
+func TestEndingAMoveTwiceChangesNothing(t *testing.T) {
+	r := newStaleRepoint(t)
+
+	r.s.recoverJob(context.Background(), r.snapshot)
+
+	again, err := r.s.jobSnapshot(r.snapshot.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(again, r.ended) {
+		t.Fatalf("job ended a second time:\nbefore %+v\nafter  %+v", r.ended, again)
+	}
+	r.requireSourceListed(t)
+}
+
+// Recovery refused by a card in the way of a move a new move ended since
+// never makes that move resumable again: its copy stays listed.
+func TestRefusedRecoveryNeverRevivesAnEndedMove(t *testing.T) {
+	forceCopyPath(t)
+	lib := newTestLibrary(t)
+	r := newRefusedCommit(t, nil, lib, t.TempDir())
+	snapshot := r.old
+	job, err := r.s.MoveGame(r.game.ID, t.TempDir())
+	if err != nil {
+		t.Fatalf("MoveGame = %v", err)
+	}
+	r.s.wait(job.ID)
+	ended, err := r.s.jobSnapshot(r.old.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireMovedOn(t, ended)
+
+	r.s.recoverJob(context.Background(), snapshot)
+
+	again, err := r.s.jobSnapshot(r.old.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(again, ended) {
+		t.Fatalf("ended job changed by a refused recovery:\nbefore %+v\nafter  %+v", ended, again)
+	}
+	requireCopies(t, r.s, r.old.ID, copyWant{CopyStaging, r.staging})
 }
 
 // A move that renamed its folder took the old folder away: a folder at the

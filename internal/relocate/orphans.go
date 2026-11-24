@@ -34,13 +34,6 @@ const (
 	CopySource  = "source"
 )
 
-// markOrphaned ends a move that is over for its game's card, see endForCard.
-func (s *Service) markOrphaned(jobID string, repointed bool, cause error) {
-	if _, err := s.transition(jobID, StageFailed, func(j *Job) { endForCard(j, repointed, cause) }); err != nil {
-		slog.Error("end a move its game's card is done with", "job", jobID, "error", err)
-	}
-}
-
 // endForCard ends a move before it was finished because its game's card is
 // done with it: the game was removed or uninstalled (ErrGameRemoved), or the
 // card names a folder the move no longer leads to (ErrMovedOn). No copy is

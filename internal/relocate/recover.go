@@ -15,9 +15,12 @@ import (
 )
 
 // recoverAll resumes or undoes every job left in moves.json from a previous
-// run. It runs once from ServiceStartup's goroutine, before any new
-// MoveGame/MoveLibrary call can register another job, so it does not need
-// to coordinate with the live queue processing.
+// run. It runs once from ServiceStartup's goroutine, which sets the service's
+// context first: MoveGame and MoveLibrary are open while it works, and a new
+// move of a game ends that game's resumable job (supersedeLocked). recoverAll
+// works from a copy of the journal taken at its start, so every job is read
+// again under its reservation, and every change it makes to a job holds only
+// while the job is still where that copy had it (reserveForRecovery).
 func (s *Service) recoverAll(ctx context.Context) {
 	s.mu.Lock()
 	jobs := make([]Job, len(s.jobs))
@@ -121,62 +124,100 @@ func (s *Service) reserveForRecovery(job Job) (func(), bool) {
 	if s.lib == nil || !recoveryTouchesGame(job) {
 		return noop, true
 	}
-	if s.endedForCard(job) {
+	release, err := s.lib.BeginRecovery(job.GameID, job.Source, job.Target, job.Staging)
+	if err != nil {
+		// A game that left the library cannot be reserved, and a card that
+		// moved on may be what is in the way: the job ends without touching
+		// any data, so no reservation is needed for that.
+		if s.endedForCard(job) {
+			return nil, false
+		}
+		if errors.Is(err, library.ErrFolderShared) {
+			s.failShared(job, err)
+			return nil, false
+		}
+		slog.Warn("recovery skipped: game is busy", "job", job.ID, "game", job.GameID, "error", err)
 		return nil, false
 	}
-	release, err := s.lib.BeginRecovery(job.GameID, job.Source, job.Target, job.Staging)
-	switch {
-	case err == nil:
-		// recoverAll works from a copy of the journal: a new move may have
-		// ended the job, or moved the game, since. Under the reservation no
-		// move or removal changes either, so both are read again here.
-		current, err := s.jobSnapshot(job.ID)
-		if err != nil || current.Orphaned || current.Stage != job.Stage || current.FailedAt != job.FailedAt {
-			release()
-			return nil, false
-		}
-		if s.endedForCard(job) {
-			release()
-			return nil, false
-		}
-		return release, true
-	case errors.Is(err, library.ErrFolderShared):
-		s.failShared(job, err)
-	default:
-		slog.Warn("recovery skipped: game is busy", "job", job.ID, "game", job.GameID, "error", err)
+	// recoverAll works from a copy of the journal: a new move may have ended
+	// the job, or moved the game, since. Under the reservation no move or
+	// removal changes either, so both are read again here.
+	current, err := s.jobSnapshot(job.ID)
+	if err != nil || !sameStage(current, job) {
+		release()
+		return nil, false
 	}
-	return nil, false
+	if s.endedForCard(current) {
+		release()
+		return nil, false
+	}
+	return release, true
 }
 
-// endedForCard ends a job its game's card is done with, and says so: the game
-// left the library or was uninstalled, or its card names a folder the job no
-// longer leads to (cardMovedOn). Nothing is repointed or deleted; the copies
-// stay listed through OrphanedCopies.
+// sameStage says whether a job is still where recovery found it: not over for
+// its card, at the same stage, failed at the same stage.
+func sameStage(current, found Job) bool {
+	return !current.Orphaned && current.Stage == found.Stage && current.FailedAt == found.FailedAt
+}
+
+// endedForCard says whether a job is not to be resumed for its game's card,
+// and ends it when it is still where recovery found it: the game left the
+// library or was uninstalled, or its card names a folder the job no longer
+// leads to (cardMovedOn). Nothing is repointed or deleted; the copies stay
+// listed through OrphanedCopies. A job that changed since recovery read it (a
+// new move ended it) is left exactly as it is.
 func (s *Service) endedForCard(job Job) bool {
 	game, err := s.lib.Find(job.GameID)
 	switch {
 	case err != nil || game.Uninstalled:
-		s.markOrphaned(job.ID, err == nil && platform.SamePath(game.InstallDir, job.Target), ErrGameRemoved)
+		s.endUnchanged(job, err == nil && platform.SamePath(game.InstallDir, job.Target), ErrGameRemoved)
 	case cardMovedOn(job, game.InstallDir):
-		s.markOrphaned(job.ID, stageOf(job) == StageCleanup, ErrMovedOn)
+		s.endUnchanged(job, stageOf(job) == StageCleanup, ErrMovedOn)
 	default:
 		return false
 	}
 	return true
 }
 
+// errJobChanged refuses a recovery's change to a job that is no longer where
+// recovery found it.
+var errJobChanged = errors.New("the move changed since recovery read it")
+
+// unchangedGuard is a guardedTransition guard that holds while the job is
+// where recovery found it.
+func (s *Service) unchangedGuard(found Job) func() error {
+	return func() error {
+		current := s.findJobLocked(found.ID)
+		if current == nil || !sameStage(*current, found) {
+			return errJobChanged
+		}
+		return nil
+	}
+}
+
+// endUnchanged ends a job for its card (endForCard) only while it is where
+// recovery found it, in one hold of s.mu: a job that is over is never ended
+// again.
+func (s *Service) endUnchanged(found Job, repointed bool, cause error) {
+	_, err := s.guardedTransition(found.ID, StageFailed, s.unchangedGuard(found), func(j *Job) { endForCard(j, repointed, cause) })
+	if err != nil && !errors.Is(err, errJobChanged) {
+		slog.Error("end a move its game's card is done with", "job", found.ID, "error", err)
+	}
+}
+
 // failShared fails a job another card's files are in the way of, at the stage
 // it was found in, so the player sees a failed move with its reason instead
 // of a move that never ends. Being blocked is not the move's failure: it
 // spends no recovery attempt, and every start resumes the job from that stage
-// for as long as the card stays in the way.
+// for as long as the card stays in the way. A job that changed since recovery
+// read it is left as it is.
 func (s *Service) failShared(job Job, cause error) {
 	err := fmt.Errorf("%w: %w", ErrFolderShared, cause)
 	stage := stageOf(job)
-	if _, tErr := s.transition(job.ID, StageFailed, func(j *Job) {
+	if _, tErr := s.guardedTransition(job.ID, StageFailed, s.unchangedGuard(job), func(j *Job) {
 		j.Error = err.Error()
 		j.FailedAt = stage
-	}); tErr != nil {
+	}); tErr != nil && !errors.Is(tErr, errJobChanged) {
 		slog.Error("mark move failed on recovery", "job", job.ID, "error", tErr)
 	}
 }
@@ -299,7 +340,7 @@ func (s *Service) keepReappearedSource(job Job) {
 		}
 		s.continueAfterItem(job)
 	default:
-		s.markOrphaned(job.ID, false, ErrMovedOn)
+		s.endUnchanged(job, false, ErrMovedOn)
 	}
 }
 
