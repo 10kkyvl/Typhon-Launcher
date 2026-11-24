@@ -206,6 +206,7 @@ export const state: Record<StateKey, Message> = {
   'state.selfupdateCodeCheckFailed': 'Failed to check for updates.',
   'state.selfupdateCodeDownloadFailed': 'Failed to download the update.',
   'state.selfupdateCodeApplyFailed': 'Failed to install the update.',
+  'state.selfupdateHandoffFailed': 'The launcher stayed on the previous version; the update is still ready.',
 
   'state.stateSaveFailed': 'Could not save state to disk: {message}',
 

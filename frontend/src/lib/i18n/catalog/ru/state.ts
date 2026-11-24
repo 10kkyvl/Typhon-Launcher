@@ -205,6 +205,7 @@ export const state = {
   'state.selfupdateCodeCheckFailed': 'Не удалось проверить обновления.',
   'state.selfupdateCodeDownloadFailed': 'Не удалось загрузить обновление.',
   'state.selfupdateCodeApplyFailed': 'Не удалось установить обновление.',
+  'state.selfupdateHandoffFailed': 'Лаунчер остался на прежней версии, обновление по-прежнему готово.',
 
   'state.stateSaveFailed': 'Не удалось сохранить состояние на диск: {message}',
 

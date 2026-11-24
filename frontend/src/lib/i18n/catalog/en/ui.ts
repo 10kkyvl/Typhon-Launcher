@@ -187,6 +187,9 @@ export const ui: Record<UiKey, Message> = {
   'ui.installingVersion': 'Installing version {version}',
   'ui.launcherWillRestartShort':
     'The launcher will close, install the update, and restart itself. This takes less than a minute.',
+  'ui.handoffNote': 'The launcher stays open. This takes a few seconds.',
+  'ui.handoffFailedTitle': 'Updating without a restart did not work',
+  'ui.updateWithRestart': 'Update with a restart',
   'ui.launcherUpdatedTo': 'Launcher updated to {version}',
   'ui.updateFailedVersion': 'Update {version} failed to install',
   'ui.launcherRolledBackTo': 'Typhon went back to version {version}',

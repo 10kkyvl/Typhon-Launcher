@@ -185,6 +185,9 @@ export const ui = {
   'ui.installingVersion': 'Устанавливаем версию {version}',
   'ui.launcherWillRestartShort':
     'Лаунчер закроется, установит обновление и запустится сам. Это займёт меньше минуты.',
+  'ui.handoffNote': 'Лаунчер не закроется. Это займёт несколько секунд.',
+  'ui.handoffFailedTitle': 'Обновить без перезапуска не вышло',
+  'ui.updateWithRestart': 'Обновить с перезапуском',
   'ui.launcherUpdatedTo': 'Лаунчер обновлён до {version}',
   'ui.updateFailedVersion': 'Обновление {version} не установилось',
   'ui.launcherRolledBackTo': 'Typhon вернулся на версию {version}',
