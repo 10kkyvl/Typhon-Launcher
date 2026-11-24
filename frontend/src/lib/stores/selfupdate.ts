@@ -26,8 +26,11 @@ import {
 import { updateReason } from '../services/selfupdateMessages';
 import { msg } from '../i18n';
 import { toast } from './toasts';
+import { resumeFinishedShow, showFollowsStatus, updateShow } from './updateShow';
 
 export const selfUpdateStatus = writable<SelfUpdateStatus>({ state: 'idle', currentVersion: '' });
+// Every status the launcher holds, from Go or set by a test or the showcase, moves the update show.
+selfUpdateStatus.subscribe((status) => showFollowsStatus(status));
 export const selfUpdateProgress = writable<SelfUpdateProgress | null>(null);
 export const selfUpdateChecking = writable(false);
 export const selfUpdateDownloading = writable(false);
@@ -72,6 +75,27 @@ let outcomeTimer: ReturnType<typeof setTimeout> | undefined;
 export function dismissOutcome() {
   clearTimeout(outcomeTimer);
   selfUpdateOutcome.set(null);
+}
+
+function hideOutcomeSoon() {
+  clearTimeout(outcomeTimer);
+  outcomeTimer = setTimeout(dismissOutcome, OUTCOME_SUCCESS_MS);
+}
+
+// The card says the result once the update show has played its finish, then hides on its own.
+function hideOutcomeAfterShow(): () => void {
+  let waiting = true;
+  let off = () => {};
+  off = updateShow.subscribe((show) => {
+    if (show || !waiting) return;
+    waiting = false;
+    hideOutcomeSoon();
+    queueMicrotask(() => off());
+  });
+  return () => {
+    waiting = false;
+    off();
+  };
 }
 
 let announcedVersion = '';
@@ -134,9 +158,11 @@ export async function initSelfUpdate() {
     const outcome = await getOutcome();
     if (outcome) {
       selfUpdateOutcome.set(outcome);
-      if (outcome.ok) {
-        clearTimeout(outcomeTimer);
-        outcomeTimer = setTimeout(dismissOutcome, OUTCOME_SUCCESS_MS);
+      if (outcome.ok && outcome.kind !== 'rolled_back') {
+        resumeFinishedShow();
+        offs.push(hideOutcomeAfterShow());
+      } else if (outcome.ok) {
+        hideOutcomeSoon();
       } else {
         const key = outcome.kind === 'rolled_back' ? 'state.selfupdateRollbackFailedToast' : 'state.selfupdateApplyFailedToast';
         toast(msg(key, { version: outcome.version }), 'danger');

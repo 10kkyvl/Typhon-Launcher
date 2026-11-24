@@ -48,9 +48,10 @@ async function load() {
   for (const key of Object.keys(handlers)) delete handlers[key];
   const service = await import('../services/selfupdate');
   const store = await import('./selfupdate');
+  const show = await import('./updateShow');
   vi.mocked(service.getReleaseNotes).mockResolvedValue({ currentVersion: '1.0.0', unseen: [], history: [] } as never);
   vi.mocked(service.getRollback).mockResolvedValue(service.noRollback() as never);
-  return { service, store };
+  return { service, store, show };
 }
 
 beforeEach(() => {
@@ -249,10 +250,12 @@ describe('release notes', () => {
     expect(get(store.selfUpdateOutcome)?.version).toBe('1.1.0');
   });
 
-  it('hides the success card on its own after two seconds', async () => {
+  // The start after an update plays the end of the update show first (stores/updateShow.ts); the card
+  // says the result once the show is over, and hides on its own two seconds later.
+  it('hides the success card on its own two seconds after the update show has ended', async () => {
     vi.useFakeTimers();
     try {
-      const { service, store } = await load();
+      const { service, store, show } = await load();
       vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
       vi.mocked(service.getOutcome).mockResolvedValue({ version: '1.1.0', ok: true, finishedAt: '' } as never);
 
@@ -261,6 +264,10 @@ describe('release notes', () => {
       await store.initSelfUpdate();
 
       expect(get(toasts.toasts)).toHaveLength(0);
+      expect(get(show.updateShow)?.phase).toBe('finish');
+      vi.advanceTimersByTime(store.OUTCOME_SUCCESS_MS * 10);
+      expect(get(store.selfUpdateOutcome)?.version).toBe('1.1.0');
+      show.endUpdateShow();
       vi.advanceTimersByTime(store.OUTCOME_SUCCESS_MS - 1);
       expect(get(store.selfUpdateOutcome)?.version).toBe('1.1.0');
       vi.advanceTimersByTime(1);
@@ -504,6 +511,67 @@ describe('rollback', () => {
     await store.initSelfUpdate();
 
     expect(get(toasts.toasts).map((t) => t.message)).toEqual(['Не удалось вернуться на версию 1.1.0']);
+  });
+});
+
+describe('the update show', () => {
+  it('starts when the status says the update is being applied, and not before', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(1_700_000_000_000);
+      const { service, store, show } = await load();
+      vi.mocked(service.getStatus).mockResolvedValue(makeStatus({ state: 'ready', availableVersion: '1.1.0' }) as never);
+      vi.mocked(service.getOutcome).mockResolvedValue(null as never);
+      await store.initSelfUpdate();
+      expect(get(show.updateShow)).toBeNull();
+
+      handlers['launcher:update_status']({ data: makeStatus({ state: 'applying', availableVersion: '1.1.0' }) });
+
+      expect(get(show.updateShow)).toMatchObject({ startedAt: 1_700_000_000_000, phase: 'run', version: '1.1.0' });
+      expect(show.updateShowHandoff()).toEqual({ startedAt: 1_700_000_000_000 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('goes home when applying ends without a new version, while the failure is said as before', async () => {
+    const { service, store, show } = await load();
+    vi.mocked(service.getStatus).mockResolvedValue(makeStatus({ state: 'applying', availableVersion: '1.1.0' }) as never);
+    vi.mocked(service.getOutcome).mockResolvedValue(null as never);
+    await store.initSelfUpdate();
+    expect(get(show.updateShow)?.phase).toBe('run');
+
+    handlers['launcher:update_status']({ data: makeStatus({ state: 'ready', availableVersion: '1.1.0', error: 'still running', errorCode: 'apply' }) });
+
+    expect(get(show.updateShow)?.phase).toBe('home');
+    expect(get(store.selfUpdateView)).toBe('ready');
+  });
+
+  it('plays nothing at a start after a failed update or a rollback', async () => {
+    for (const outcome of [
+      { version: '1.1.0', ok: false, error: 'boom', finishedAt: '' },
+      { kind: 'rolled_back', version: '1.0.0', ok: true, finishedAt: '' },
+    ]) {
+      const { service, store, show } = await load();
+      vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
+      vi.mocked(service.getOutcome).mockResolvedValue(outcome as never);
+      await store.initSelfUpdate();
+      expect(get(show.updateShow), JSON.stringify(outcome)).toBeNull();
+    }
+  });
+
+  it('hides a rolled back start\'s card two seconds after it was read, with no show before it', async () => {
+    vi.useFakeTimers();
+    try {
+      const { service, store } = await load();
+      vi.mocked(service.getStatus).mockResolvedValue(makeStatus() as never);
+      vi.mocked(service.getOutcome).mockResolvedValue({ kind: 'rolled_back', version: '1.0.0', ok: true, finishedAt: '' } as never);
+      await store.initSelfUpdate();
+      vi.advanceTimersByTime(store.OUTCOME_SUCCESS_MS);
+      expect(get(store.selfUpdateOutcome)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
