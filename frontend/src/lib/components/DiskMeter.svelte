@@ -4,7 +4,7 @@
   import { focusQuietly } from '../layers/focus';
   import { bytesSize } from '../utils/format';
   import { nextIndex } from '../utils/roving';
-  import { METER_WIDTH, meter, sizeWords, type MeterPart, type MeterSegment, type MeterSize } from './diskMeter';
+  import { METER_WIDTH, meter, sizeWords, sumMeter, type MeterPart, type MeterSegment, type MeterSize } from './diskMeter';
   import Reading from './Reading.svelte';
   import TextLink from './TextLink.svelte';
   import Tooltip from './Tooltip.svelte';
@@ -45,6 +45,7 @@
     segments,
     total,
     free,
+    sum = false,
     label,
     compact = false,
     foldLabel,
@@ -53,9 +54,12 @@
   }: {
     segments: MeterSegment[];
     /** Bytes in all; zero, missing or not a number reads as unknown. */
-    total: number | null | undefined;
+    total?: number | null;
     /** Free bytes as measured; null when they could not be. Left out, derived from the segments. */
     free?: number | null;
+    /** The segments are an owner's own files, not a disk's: their sum is the total (`total` and `free`
+     *  are not read), no free space is said, and the total is a lower bound when a size is one. */
+    sum?: boolean;
     /** What is measured ("Disk C:", a folder): the start of the text alternative. */
     label: string;
     compact?: boolean;
@@ -68,7 +72,8 @@
     onpickfolded?: (keys: string[]) => void;
   } = $props();
 
-  const model = $derived(meter(segments, total, free, compact ? METER_WIDTH.compact : METER_WIDTH.full));
+  const width = $derived(compact ? METER_WIDTH.compact : METER_WIDTH.full);
+  const model = $derived(sum ? sumMeter(segments, width) : meter(segments, total, free, width));
   const uid = $props.id();
   const folding = $derived(model.parts.some((part) => part.kind === 'more'));
   // The fold's entry in the legend, opened to list the segments folded into it. Closed whenever the
@@ -84,6 +89,7 @@
     unknown: $t('common.meterSizeUnknown'),
   });
   const said = (size: MeterSize) => sizeWords(size, bytesSize, words);
+  const totalSaid = $derived(model.total === null ? '' : said({ kind: model.totalAtLeast ? 'atLeast' : 'exact', bytes: model.total }));
   function nameOf(part: MeterPart): string {
     if (part.kind === 'other') return $t('common.meterOther');
     if (part.kind === 'rest') return $t('common.meterRest');
@@ -99,7 +105,7 @@
 
   const freePart = (size: MeterSize) => $t('common.meterPart', { name: $t('common.meterFree'), size: said(size) });
   // An overflow's words after the parts: that the sizes disagree, and the total.
-  const overflowEnd = $derived(model.overflow && model.total !== null ? [$t('common.meterOverflow'), $t('common.meterTotal', { total: bytesSize(model.total) })] : []);
+  const overflowEnd = $derived(model.overflow && model.total !== null ? [$t('common.meterOverflow'), $t('common.meterTotal', { total: totalSaid })] : []);
   // The free space and the total in one clause where both are known; an overflow says a measured free
   // space on its own, then that the sizes disagree.
   const tail = $derived.by(() => {
@@ -107,8 +113,8 @@
     if (model.total === null) {
       return [...(model.free ? [freePart(model.free)] : []), $t('common.meterTotalUnknown')];
     }
-    if (model.free) return [$t('common.meterFreeOf', { free: said(model.free), total: bytesSize(model.total) })];
-    return [$t('common.meterTotal', { total: bytesSize(model.total) })];
+    if (model.free) return [$t('common.meterFreeOf', { free: said(model.free), total: totalSaid })];
+    return [$t('common.meterTotal', { total: totalSaid })];
   });
 
   // A list format joins Russian items with bare spaces, and a comma is the Russian decimal mark: the
@@ -262,7 +268,7 @@
           <span class="size"><Reading text={said(model.free)} /></span>
         </li>
       {/if}
-      <li class="total"><Reading text={model.total === null ? joined(tail) : model.overflow ? joined(overflowEnd) : $t('common.meterTotal', { total: bytesSize(model.total) })} /></li>
+      <li class="total"><Reading text={model.total === null ? joined(tail) : model.overflow ? joined(overflowEnd) : $t('common.meterTotal', { total: totalSaid })} /></li>
     </ul>
   {/if}
 </div>

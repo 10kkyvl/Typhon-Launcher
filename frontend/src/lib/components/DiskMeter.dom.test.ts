@@ -631,3 +631,23 @@ describe('DiskMeter', () => {
     });
   });
 });
+
+describe('DiskMeter of an owner\'s own files (sum)', () => {
+  it('lists no free space and says the total as a lower bound when a size is one', async () => {
+    const { msg } = await import('../i18n');
+    const segments: MeterSegment[] = [
+      { key: 'games', label: 'Игры', bytes: 30 * GB, tone: 'game', sizeUnknown: true },
+      { key: 'data', label: 'Загрузки', bytes: 10 * GB, tone: 'data' },
+    ];
+    const { getByRole, container } = renderDom(DiskMeter, { label: 'Файлы лаунчера', segments, sum: true });
+    const lines = legendLines(container.querySelector('ul, ol') as HTMLElement);
+    expect(lines.some((line) => line.startsWith(msg('common.meterFree')))).toBe(false);
+    const total = words(msg('common.meterTotal', { total: msg('common.meterAtLeast', { size: bytesSize(40 * GB) }) }));
+    expect(lines.at(-1)).toBe(total);
+    const alt = words(getByRole('img').getAttribute('aria-label') ?? '');
+    expect(alt).toContain(total);
+    expect(alt).not.toContain(msg('common.meterFree'));
+    expect(everything(container)).not.toMatch(/NaN|Infinity/);
+  });
+});
+

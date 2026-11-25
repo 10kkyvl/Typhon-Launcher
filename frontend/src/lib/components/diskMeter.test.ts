@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { METER_GAP, METER_HAIRLINE, METER_MORE, METER_OTHER, METER_PAD, METER_REST, METER_TONES, METER_WIDTH, gameTone, meter, sizeWords, type MeterSegment } from './diskMeter';
+import { METER_GAP, METER_HAIRLINE, METER_MORE, METER_OTHER, METER_PAD, METER_REST, METER_TONES, METER_WIDTH, gameTone, meter, sizeWords, sumMeter, type MeterSegment } from './diskMeter';
 
 const seg = (key: string, bytes: number, extra: Partial<MeterSegment> = {}): MeterSegment => ({ key, label: key, bytes, tone: 'game', ...extra });
 
@@ -481,3 +481,38 @@ describe('the tones', () => {
     expect([0, 1, 2, 3, 4, -1].map(gameTone)).toEqual(['game', 'game-2', 'game-3', 'game', 'game-2', 'game-3']);
   });
 });
+
+// An owner's own files, not a disk: the launcher's files across every drive have no free space of
+// their own, and their total is their sum.
+describe('the disk meter model of an owner\'s own files', () => {
+  const GB = 1024 ** 3;
+  it('says no free space and adds no part of its own', () => {
+    const model = sumMeter([
+      { key: 'a', label: 'A', bytes: 30 * GB, tone: 'game' },
+      { key: 'b', label: 'B', bytes: 10 * GB, tone: 'data' },
+    ]);
+    expect(model.total).toBe(40 * GB);
+    expect(model.totalAtLeast).toBe(false);
+    expect(model.free).toBeNull();
+    expect(model.overflow).toBe(false);
+    expect(model.parts.map((part) => part.kind)).toEqual(['segment', 'segment']);
+    expect(model.parts.map((part) => part.share)).toEqual([0.75, 0.25]);
+  });
+
+  it('says the total as a lower bound beside a size not fully measured', () => {
+    const model = sumMeter([
+      { key: 'a', label: 'A', bytes: 30 * GB, tone: 'game', sizeUnknown: true },
+      { key: 'b', label: 'B', bytes: 10 * GB, tone: 'data' },
+    ]);
+    expect(model.total).toBe(40 * GB);
+    expect(model.totalAtLeast).toBe(true);
+    expect(model.free).toBeNull();
+    expect(model.parts.every((part) => part.kind === 'segment')).toBe(true);
+  });
+
+  it('is an unknown total when nothing is measured, and a disk\'s total is never a lower bound', () => {
+    expect(sumMeter([{ key: 'a', label: 'A', bytes: 0, tone: 'game', sizeUnknown: true }]).total).toBeNull();
+    expect(meter([{ key: 'a', label: 'A', bytes: 30 * GB, tone: 'game', sizeUnknown: true }], 100 * GB, 10 * GB).totalAtLeast).toBe(false);
+  });
+});
+

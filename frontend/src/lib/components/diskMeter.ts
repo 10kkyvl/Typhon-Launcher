@@ -82,6 +82,8 @@ export interface MeterModel {
   /** The segments, with the measured free space, sum over the total: drawn in proportion to each other
    *  and the measured free space, which alone is said. */
   overflow: boolean;
+  /** The total is a lower bound: a sum that holds a size not fully measured (`sumMeter` only). */
+  totalAtLeast: boolean;
 }
 
 const measurable = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0;
@@ -151,7 +153,19 @@ export function meter(segments: readonly MeterSegment[], total: number | null | 
   // Ids are made unique before the fold, so a folded segment keeps its own, and again after it, for a
   // caller's key that is the fold's.
   const listed = unique(folded(unique(parts), width));
-  return { total: known, parts: listed, drawn: listed.filter((part) => part.share > 0), free: freeSize, overflow };
+  return { total: known, parts: listed, drawn: listed.filter((part) => part.share > 0), free: freeSize, overflow, totalAtLeast: false };
+}
+
+/**
+ * The meter of an owner's own files rather than of a disk (the launcher's files across every drive):
+ * the total is the segments' sum, so there is no free space to say and no space of anyone else's to
+ * draw, and beside a size not fully measured the total is a lower bound.
+ */
+export function sumMeter(segments: readonly MeterSegment[], width: number = METER_WIDTH.full): MeterModel {
+  const sizes = segments.map(sizeOf);
+  const used = sizes.reduce((sum, size) => sum + bytesOf(size), 0);
+  const model = meter(segments, used, 0, width);
+  return { ...model, free: null, totalAtLeast: model.total !== null && sizes.some((size) => size.kind !== 'exact') };
 }
 
 // Rem sums of tenths are not exact in binary: a part that takes exactly a hairline must count as one.
