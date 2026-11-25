@@ -104,6 +104,16 @@ describe('PathField: Browse', () => {
     expect(pick).toHaveBeenCalledTimes(2);
   });
 
+  // Two activations in one task, before Svelte has drawn the busy state: the Button's guard, which
+  // stands only while it is given a `reason` (an empty one included), refuses the second.
+  it('two presses in one task reach the caller once', () => {
+    const onbrowse = vi.fn(() => new Promise<void>(() => {}));
+    renderDom(PathField, { label: 'Library folder', browseLabel: 'Browse', onbrowse });
+    browse().click();
+    browse().click();
+    expect(onbrowse).toHaveBeenCalledTimes(1);
+  });
+
   it('takes a caller that answers at once, with no promise', async () => {
     const onbrowse = vi.fn();
     const { user } = renderDom(PathField, { label: 'Library folder', browseLabel: 'Browse', onbrowse });
@@ -143,6 +153,25 @@ describe('PathField: an error', () => {
     expect(screen.getByRole('alert').textContent).toBe('No room');
     expect(description(browse())).toBe('D:/Games No room');
   });
+
+  it('a changed error is announced again once the field was seen without one', async () => {
+    const props = { label: 'Library folder', value: 'D:/Games', browseLabel: 'Browse', onbrowse: vi.fn() };
+    const { rerender } = renderDom(PathField, { ...props, error: '' });
+    await rerender({ ...props, error: 'Not writable' });
+    const first = screen.getByRole('alert');
+    await rerender({ ...props, error: 'No room' });
+    const second = screen.getByRole('alert');
+    expect(second.textContent).toBe('No room');
+    expect(second).not.toBe(first);
+  });
+
+  it('mounted with an error, a changed error that never cleared is read, not announced', async () => {
+    const props = { label: 'Library folder', value: 'D:/Games', browseLabel: 'Browse', onbrowse: vi.fn() };
+    const { rerender } = renderDom(PathField, { ...props, error: 'Not writable' });
+    await rerender({ ...props, error: 'No room' });
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(description(browse())).toBe('D:/Games No room');
+  });
 });
 
 describe('PathField: editable', () => {
@@ -161,6 +190,27 @@ describe('PathField: editable', () => {
     expect(description(field)).toBe('A folder on any drive Games already there stay Not writable');
     expect(screen.getByText('Install to').tagName).toBe('LABEL');
     expect(screen.queryByRole('group')).toBeNull();
+  });
+
+  it('is described by what is known about the path; Browse beside it is described by nothing', () => {
+    renderDom(PathFieldHarness, { editable: true, initial: 'D:/Games', pick: vi.fn() });
+    expect(screen.getByText('Free: 12 GB')).toBeTruthy();
+    expect(description(screen.getByRole('textbox', { name: 'Install to' }))).toBe('Free: 12 GB');
+    expect(browse().hasAttribute('aria-describedby')).toBe(false);
+  });
+
+  it('reads the reason, what is known about the path, the hint, the page text and the error, in that order', () => {
+    const note = document.createElement('p');
+    note.id = 'page-note';
+    note.textContent = 'Games already there stay';
+    document.body.append(note);
+    const words = { hint: 'A folder on any drive', describedby: 'page-note', error: 'Not writable' };
+    renderDom(PathFieldHarness, { editable: true, initial: 'D:/Games', pick: vi.fn(), ...words, disabledReason: 'A move is running' });
+    expect(description(screen.getByRole('textbox', { name: 'Install to' }))).toBe('A move is running Free: 12 GB A folder on any drive Games already there stay Not writable');
+
+    document.body.replaceChildren(note);
+    renderDom(PathFieldHarness, { initial: 'D:/Games', pick: vi.fn(), ...words });
+    expect(description(browse())).toBe('D:/Games Free: 12 GB A folder on any drive Games already there stay Not writable');
   });
 
   it('writes what is typed to the bound value, shows a value the caller sets, and takes what Browse picked', async () => {

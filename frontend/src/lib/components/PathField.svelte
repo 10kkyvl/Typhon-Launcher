@@ -24,8 +24,14 @@
    * `hint`, `describedby`, `error` and `disabledReason` are TextField's: described by all, the error
    * last and announced when it comes after the field was seen without one; the reason disables the
    * field and the button, leads the line under them and stays reachable on the button. `facts` is a
-   * line under the path for what the caller knows about it (the drive and its free space), read with
-   * the path.
+   * line under the path for what the caller knows about it (the drive and its free space), read
+   * right after the path: Browse reads the path, the facts, the hint, the page text and the error;
+   * an editable field the reason, then the same from the facts on.
+   *
+   * A path that cannot be changed is shown, not editable, with Browse refused by `disabledReason`.
+   * While a flow runs, refuse it by `disabledReason`, not bare `disabled`: a natively disabled Browse
+   * that holds focus drops it to the page body in Chromium. The shown path takes no keyboard focus;
+   * a keyboard user hears it as Browse's description.
    */
   type Named = { label: string; labelledby?: undefined } | { labelledby: string; label?: undefined };
 
@@ -78,8 +84,9 @@
   const errorId = $derived(error ? `${uid}-error` : undefined);
   const off = $derived(disabled || !!disabledReason);
 
-  // The field's description, as TextField's: the reason, the hint, the page's text, the error.
-  const fieldDescription = $derived([reasonId, hintId, describedby, errorId].filter(Boolean).join(' ') || undefined);
+  // The field's description, as TextField's with the facts after the reason: what is known about the
+  // path is read next to it, as on Browse below.
+  const fieldDescription = $derived([reasonId, facts ? factsId : undefined, hintId, describedby, errorId].filter(Boolean).join(' ') || undefined);
   // The button's, when the path is shown: the path and what is known about it first. The reason is
   // left out: the button says it through its own `reason`.
   const browseDescription = $derived(
