@@ -107,6 +107,16 @@ describe('rowFocus: where focus goes', () => {
     expect(leaveTarget(place!)).toBe(button('Stop a'));
   });
 
+  it('passes over a row with nothing to focus for the next nearest one', () => {
+    page({ one: ['a', 'b', 'c'] });
+    const { placeOf, leaveTarget } = rowFocus(scoped);
+    const place = placeOf(button('Stop b'));
+    document.querySelectorAll('[data-row="c"] button').forEach((el) => el.remove());
+    dropRow('b');
+
+    expect(leaveTarget(place!)).toBe(button('Stop a'));
+  });
+
   it('never takes a row of another part, and falls back as the screen says', () => {
     page({ one: ['a'], two: ['b'] });
     const { placeOf, leaveTarget } = rowFocus(scoped);

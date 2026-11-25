@@ -67,6 +67,10 @@
 
   const activeTransfers = $derived($transfers.filter((t) => t.status === 'receiving'));
 
+  // A transfer that ended while its cancel was asked (Go finished, failed or cancelled it) has nothing
+  // left to cancel: its question goes with its row, and focus goes on by the row rule.
+  const asked = $derived(asking && activeTransfers.some((t) => t.id === asking?.transfer.id) ? asking : null);
+
   const rejectedNote = $derived(rejectedSummary($lanStats));
 
   // Before any change of the rows shown (a share stopped, an offer Go dropped, the offers regrouped, a
@@ -318,8 +322,8 @@
     </div>
   {/if}
 
-  {#if asking}
-    {@const { transfer, place } = asking}
+  {#if asked}
+    {@const { transfer, place } = asked}
     <ConfirmModal
       prompt={cancelPrompt(transfer)}
       onconfirm={() => cancelTransfer(transfer.id)}

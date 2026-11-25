@@ -94,10 +94,18 @@ export function rowFocus(rule: RowRule) {
     return null;
   }
 
-  /** Where focus goes for a row that stood at `place`, by the rule. */
+  /**
+   * Where focus goes for a row that stood at `place`, by the rule. A row with nothing to focus (a game
+   * still in preparation) is passed over for the next nearest one.
+   */
   function leaveTarget(place: RowPlace): HTMLElement | null {
-    const row = stays(place) ?? nearest(place);
-    return row ? rule.controlIn(row, place.control) : rule.fallback(place);
+    const shown = shownIn(place.scope);
+    for (const id of [place.id, ...nearOrder(place.order, place.id)]) {
+      const row = shown.get(id);
+      const control = row ? rule.controlIn(row, place.control) : null;
+      if (control) return control;
+    }
+    return rule.fallback(place);
   }
 
   /** Brings the row `target` is in into view by the least movement: focus moved by script does not scroll. */
