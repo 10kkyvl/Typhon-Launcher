@@ -78,6 +78,12 @@ func paintHidden(w *application.WebviewWindow) error {
 		savedMu.Unlock()
 		w32.SetWindowLong(hwnd, w32.GWL_EXSTYLE, old|hiddenStyle)
 		if !w32.SetLayeredWindowAttributes(hwnd, 0, 0, w32.LWA_ALPHA) {
+			// Leave an ordinary window for the plain Show the caller falls
+			// back to: a layered one without attributes stays invisible.
+			w32.SetWindowLong(hwnd, w32.GWL_EXSTYLE, old)
+			savedMu.Lock()
+			delete(savedStyle, hwnd)
+			savedMu.Unlock()
 			return errors.New("SetLayeredWindowAttributes(alpha 0) failed")
 		}
 		w.Show()
