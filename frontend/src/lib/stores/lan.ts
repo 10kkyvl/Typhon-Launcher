@@ -40,11 +40,19 @@ const emptyStats: Stats = {
 
 export const lanStats = writable<Stats>(emptyStats);
 
+const sayFailed = (item: Transfer) =>
+  toast(msg('transfers.lanTransferFailedToast', { title: item.title, error: sourceErrorText(item.error, msg('transfers.lanUnknownError')) }), 'danger');
+
+// While a download's answer is awaited, the transfers Go reported ended, and whether their failure was
+// said: Go's event may come before its answer, which must not bring an ended transfer back.
+let awaitingAnswers = 0;
+const ended = new Map<string, { item: Transfer; said: boolean }>();
+
 function upsertTransfer(item: Transfer) {
   // A failure is said by the transfer the list held: the row leaves, and nothing else would say why.
-  if (item.status === 'failed' && get(transfers).some((t) => t.id === item.id)) {
-    toast(msg('transfers.lanTransferFailedToast', { title: item.title, error: sourceErrorText(item.error, msg('transfers.lanUnknownError')) }), 'danger');
-  }
+  const held = get(transfers).some((t) => t.id === item.id);
+  if (item.status === 'failed' && held) sayFailed(item);
+  if (item.status !== 'receiving' && awaitingAnswers > 0) ended.set(item.id, { item, said: item.status !== 'failed' || held });
   transfers.update((list) => {
     if (item.status !== 'receiving') return list.filter((t) => t.id !== item.id);
     const index = list.findIndex((t) => t.id === item.id);
@@ -296,8 +304,20 @@ export function unshare(gameId: string) {
 
 export function receive(infoHash: string, peerId: string) {
   return run(async () => {
-    const transfer = await receiveRequest(infoHash, peerId);
-    upsertTransfer(transfer);
+    awaitingAnswers += 1;
+    try {
+      const transfer = await receiveRequest(infoHash, peerId);
+      const end = ended.get(transfer.id);
+      if (!end) {
+        upsertTransfer(transfer);
+        return;
+      }
+      // It failed before the list ever held it: nothing else says so.
+      if (!end.said) sayFailed(end.item);
+    } finally {
+      awaitingAnswers -= 1;
+      if (awaitingAnswers === 0) ended.clear();
+    }
   });
 }
 

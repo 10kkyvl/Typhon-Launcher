@@ -241,6 +241,57 @@ describe('lan store pins: answers', () => {
     expect(get(store.transfers).map((t) => t.id)).toEqual(['new']);
   });
 
+  it('Go’s answer to a download whose transfer was already reported cancelled does not bring the transfer back', async () => {
+    const { service, store } = await load();
+    const { toast } = await import('./toasts');
+    let answer!: (value: never) => void;
+    vi.mocked(service.receive).mockReturnValueOnce(new Promise((resolve) => (answer = resolve)) as never);
+
+    const done = store.receive('hash', 'p1');
+    handlers['lan:transfer']({ data: makeTransfer() });
+    handlers['lan:transfer']({ data: makeTransfer({ status: 'cancelled' }) });
+    answer(makeTransfer() as never);
+    await done;
+
+    expect(get(store.transfers)).toEqual([]);
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it('a transfer reported failed before Go’s answer to its download is said once and not brought back', async () => {
+    const { service, store } = await load();
+    const { toast } = await import('./toasts');
+    const { msg } = await import('../i18n');
+    let answer!: (value: never) => void;
+    vi.mocked(service.receive).mockReturnValueOnce(new Promise((resolve) => (answer = resolve)) as never);
+
+    const done = store.receive('hash', 'p1');
+    handlers['lan:transfer']({ data: makeTransfer({ status: 'failed' }) });
+    answer(makeTransfer() as never);
+    await done;
+
+    expect(get(store.transfers)).toEqual([]);
+    expect(toast).toHaveBeenCalledExactlyOnceWith(
+      msg('transfers.lanTransferFailedToast', { title: 'Игра', error: msg('transfers.lanUnknownError') }),
+      'danger',
+    );
+  });
+
+  it('a transfer that failed while the list held it is said once, its late answer saying nothing more', async () => {
+    const { service, store } = await load();
+    const { toast } = await import('./toasts');
+    let answer!: (value: never) => void;
+    vi.mocked(service.receive).mockReturnValueOnce(new Promise((resolve) => (answer = resolve)) as never);
+
+    const done = store.receive('hash', 'p1');
+    handlers['lan:transfer']({ data: makeTransfer() });
+    handlers['lan:transfer']({ data: makeTransfer({ status: 'failed' }) });
+    answer(makeTransfer() as never);
+    await done;
+
+    expect(get(store.transfers)).toEqual([]);
+    expect(toast).toHaveBeenCalledTimes(1);
+  });
+
   it('a refused download is said in the words of its code, never in Go’s text', async () => {
     const { service, store } = await load();
     const { msg } = await import('../i18n');
