@@ -332,4 +332,7 @@ export const social: Record<SocialKey, Message> = {
   'social.friendsChangeCodeTitle': 'Change code',
   'social.friendsChangeCodeWarning':
     "The old code will stop working: nobody will be able to find you with it anymore. Already-sent requests and your friend list won't be affected.",
+  // 7-F2 user
+  'social.userNotFoundHiddenDesc': "Check the username. A profile also won't open when one of you has blocked the other.",
+  'social.userActionsNeedConnection': 'Not available without a connection to the server',
 };

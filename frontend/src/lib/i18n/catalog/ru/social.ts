@@ -330,6 +330,9 @@ export const social = {
   'social.friendsChangeCodeTitle': 'Сменить код',
   'social.friendsChangeCodeWarning':
     'Старый код перестанет работать: по нему вас больше никто не найдёт. Уже отправленные заявки и список друзей это не затронет.',
+  // 7-F2 user
+  'social.userNotFoundHiddenDesc': 'Проверьте имя. Профиль не откроется и тогда, когда один из вас заблокировал другого.',
+  'social.userActionsNeedConnection': 'Без связи с сервером это недоступно',
 } as const;
 
 export type SocialKey = keyof typeof social;
