@@ -144,6 +144,8 @@ export const diskusage = {
   'diskusage.unknownGame': 'Неизвестная игра',
   'diskusage.copyOf': 'Игра: {title}',
   'diskusage.measuredAt': 'Измерено в {time}',
+  'diskusage.measuredYesterday': 'Измерено вчера в {time}',
+  'diskusage.measuredOn': 'Измерено {date} в {time}',
   'diskusage.remeasuring': 'Пересчитываю…',
   'diskusage.blockedMoving': 'Игра переносится',
   'diskusage.blockedLibraryMoving': 'Идёт перенос библиотеки',

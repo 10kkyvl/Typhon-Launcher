@@ -130,6 +130,8 @@ export const diskusage: Record<DiskusageKey, Message> = {
   'diskusage.unknownGame': 'Unknown game',
   'diskusage.copyOf': 'Game: {title}',
   'diskusage.measuredAt': 'Measured at {time}',
+  'diskusage.measuredYesterday': 'Measured yesterday at {time}',
+  'diskusage.measuredOn': 'Measured on {date} at {time}',
   'diskusage.remeasuring': 'Measuring again…',
   'diskusage.blockedMoving': 'The game is being moved',
   'diskusage.blockedLibraryMoving': 'The library is being moved',
