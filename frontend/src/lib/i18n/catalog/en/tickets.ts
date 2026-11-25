@@ -95,4 +95,13 @@ export const tickets = {
   'tickets.writeSupport': 'Contact support',
   'tickets.settingsLabel': 'Contact support',
   'tickets.settingsHint': 'The reply arrives in the Support section. You can attach the logs to the request.',
+  // 7-P support
+  'tickets.counterNear': { one: '{count} character left', other: '{count} characters left' },
+  'tickets.counterAt': 'The length limit is reached',
+  'tickets.counterOver': { one: '{count} character over the limit', other: '{count} characters over the limit' },
+  'tickets.sendHint': '{keys} sends',
+  'tickets.thread': 'Messages',
+  'tickets.messageTime': '{date} at {time}',
+  'tickets.signInAgain': 'Sign in again',
+  // /7-P support
 } as const;

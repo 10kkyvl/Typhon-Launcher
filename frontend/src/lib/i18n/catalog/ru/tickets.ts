@@ -96,4 +96,13 @@ export const tickets = {
   'tickets.writeSupport': 'Написать в поддержку',
   'tickets.settingsLabel': 'Написать в поддержку',
   'tickets.settingsHint': 'Ответ придёт в раздел «Поддержка». Логи можно приложить к обращению.',
+  // 7-P support
+  'tickets.counterNear': { one: 'Остался {count} символ', few: 'Осталось {count} символа', many: 'Осталось {count} символов' },
+  'tickets.counterAt': 'Достигнут предел длины',
+  'tickets.counterOver': { one: 'На {count} символ больше предела', few: 'На {count} символа больше предела', many: 'На {count} символов больше предела' },
+  'tickets.sendHint': '{keys} — отправить',
+  'tickets.thread': 'Сообщения',
+  'tickets.messageTime': '{date} в {time}',
+  'tickets.signInAgain': 'Войти снова',
+  // /7-P support
 } as const;
