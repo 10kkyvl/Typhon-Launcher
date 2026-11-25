@@ -186,7 +186,7 @@ describe('a successor of a seamless restart', () => {
     await loadHandoff();
 
     const view = render(App);
-    // Past Go's own limit (90 s for the old launcher to exit), after which Go quits this process.
+    // Past the 90 s after which Go logs that the old launcher is still going and waits on.
     vi.advanceTimersByTime(120_000);
 
     expect(calls).toEqual(EARLY);

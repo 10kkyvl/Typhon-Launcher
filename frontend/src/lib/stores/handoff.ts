@@ -21,8 +21,9 @@ import { releaseShow, takeOverShow } from './updateShow';
  * list, or an error outside the error contract), so the stores that read one are started through
  * `afterHandoff`: at once in an ordinary start, after that event in a successor.
  *
- * Nothing here keeps time for truth: a successor whose old launcher never exits is ended by Go
- * (CompleteHandoff gives up and quits), and one that never reports is rolled back by the old one.
+ * Nothing here keeps time for truth. A successor whose old launcher never exits stays held behind the
+ * curtain: Go logs the overrun and goes on waiting (waitForOldLauncher), and nothing ends it. One that
+ * never reports is rolled back by the old launcher.
  */
 
 let successor: HandoffInfo | null = null;
