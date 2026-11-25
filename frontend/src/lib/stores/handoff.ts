@@ -17,6 +17,10 @@ import { releaseShow, takeOverShow } from './updateShow';
  *    held-back services have started (`launcher:handoff_done`), and the shell has its first data
  *    (`setShellReady`, App.svelte). Then the show plays its finish and the result is said.
  *
+ * Until `launcher:handoff_done` a held-back service answers as if it had never started (an empty
+ * list, or an error outside the error contract), so the stores that read one are started through
+ * `afterHandoff`: at once in an ordinary start, after that event in a successor.
+ *
  * Nothing here keeps time for truth: a successor whose old launcher never exits is ended by Go
  * (CompleteHandoff gives up and quits), and one that never reports is rolled back by the old one.
  */
@@ -26,6 +30,7 @@ let reported = false;
 let oldGone = false;
 let shellReady = false;
 let offDone: (() => void) | null = null;
+let held: Array<() => void> = [];
 
 type Frame = (next: () => void) => unknown;
 
@@ -35,9 +40,11 @@ export async function loadHandoff(): Promise<HandoffInfo | null> {
   successor = null;
   reported = false;
   oldGone = false;
+  held = [];
   // Listen before asking: Go may finish between the answer and a subscription made after it.
   offDone = Events.On(EVENT_HANDOFF_DONE, () => {
     oldGone = true;
+    startHeld();
     settle();
   });
   let info: HandoffInfo;
@@ -70,6 +77,41 @@ export function curtainDrawn(frame: Frame = (next) => requestAnimationFrame(next
       });
     }),
   );
+}
+
+/**
+ * Runs `start` now, or in a successor whose old launcher is still alive, once Go has let the
+ * held-back services start. Answers a disposer: for what `start` answered once it has run, for the
+ * wait before that.
+ */
+export function afterHandoff(start: () => unknown): () => void {
+  if (!successor || oldGone) return disposerOf(start());
+  let dispose = () => {};
+  const run = () => {
+    dispose = disposerOf(start());
+  };
+  held.push(run);
+  return () => {
+    held = held.filter((other) => other !== run);
+    dispose();
+  };
+}
+
+function disposerOf(answer: unknown): () => void {
+  return typeof answer === 'function' ? (answer as () => void) : () => {};
+}
+
+function startHeld() {
+  const waiting = held;
+  held = [];
+  for (const run of waiting) {
+    try {
+      run();
+    } catch (err) {
+      // One store that fails to start must not keep the others, or the show's end, waiting.
+      console.error('start a store held back by the update hand-over', err);
+    }
+  }
 }
 
 export function setShellReady(ready: boolean): void {

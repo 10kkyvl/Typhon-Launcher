@@ -17,11 +17,20 @@ const record = vi.hoisted(
     },
 );
 
+const handlers = vi.hoisted(() => new Map<string, Array<(event: { data: unknown }) => void>>());
+
 // A module may call Go as it loads (the metadata service sets its language); that answer never comes.
-vi.mock('@wailsio/runtime', async () => ({
-  ...(await import('./lib/testing/dom')).wailsRuntime(),
-  Call: { ByID: vi.fn(() => new Promise(() => {})) },
-}));
+vi.mock('@wailsio/runtime', async () => {
+  const runtime = (await import('./lib/testing/dom')).wailsRuntime();
+  runtime.Events.On = vi.fn((name: string | undefined, cb: (event: unknown) => void) => {
+    if (!name) return () => {};
+    const list = handlers.get(name) ?? [];
+    list.push(cb as (event: { data: unknown }) => void);
+    handlers.set(name, list);
+    return () => handlers.set(name, (handlers.get(name) ?? []).filter((other) => other !== cb));
+  });
+  return { ...runtime, Call: { ByID: vi.fn(() => new Promise(() => {})) } };
+});
 vi.mock('./lib/services/backend', () => ({ inWails: true }));
 vi.mock('./lib/services/selfupdate', async (original) => ({
   ...(await original<typeof import('./lib/services/selfupdate')>()),
@@ -107,14 +116,84 @@ const ORDINARY = [
   'initLegalAcceptance',
 ];
 
+// The stores whose init reaches a Go service that a successor holds back (handoffgate.Startup) until
+// the old launcher is gone; in a successor they start when Go says so, in this order.
+const HELD = [
+  'initGameModeNotices',
+  'initDownloads',
+  'initPlayThrottle',
+  'initNetwork',
+  'initInstalls',
+  'initLibrary',
+  'initMoves',
+  'initSources',
+  'initUpdates',
+  'initMetadata',
+  'initLan',
+  'initSocial',
+  'initPresence',
+  'initSaveBackups',
+  'initCollections',
+  'initCloudSaves',
+  'initMissingImages',
+];
+const EARLY = ORDINARY.filter((name) => !HELD.includes(name));
+
+const ACTIVE = { active: true, phaseStart: 1_700_000_000_000, version: '1.5.0', background: '#101418' };
+const DONE = 'launcher:handoff_done';
+
+function handOver() {
+  for (const handler of [...(handlers.get(DONE) ?? [])]) handler({ data: { ...ACTIVE, active: false } });
+}
+
 beforeEach(() => {
   calls.length = 0;
+  handlers.clear();
 });
 
 describe('an ordinary start', () => {
   it('starts every store as App mounts, in the same order, before the first frame', async () => {
     vi.mocked(getHandoffInfo).mockResolvedValue({ active: false, phaseStart: 0, version: '', background: '' });
     await loadHandoff();
+
+    const view = render(App);
+
+    expect(calls).toEqual(ORDINARY);
+    view.unmount();
+  });
+});
+
+describe('a successor of a seamless restart', () => {
+  it('starts only what Go does not hold back, and the rest once the old launcher is gone, in its order', async () => {
+    vi.mocked(getHandoffInfo).mockResolvedValue(ACTIVE);
+    await loadHandoff();
+
+    const view = render(App);
+
+    expect(calls).toEqual(EARLY);
+    handOver();
+    expect(calls).toEqual([...EARLY, ...HELD]);
+    handOver();
+    expect(calls).toEqual([...EARLY, ...HELD]);
+    view.unmount();
+  });
+
+  it('starts everything at once when the old launcher was gone before the app mounted', async () => {
+    vi.mocked(getHandoffInfo).mockResolvedValue(ACTIVE);
+    await loadHandoff();
+    handOver();
+
+    const view = render(App);
+
+    expect(calls).toEqual(ORDINARY);
+    view.unmount();
+  });
+
+  it('with Go not saying whether it is a successor, is an ordinary start', async () => {
+    vi.mocked(getHandoffInfo).mockRejectedValue(new Error('boom'));
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await loadHandoff();
+    quiet.mockRestore();
 
     const view = render(App);
 

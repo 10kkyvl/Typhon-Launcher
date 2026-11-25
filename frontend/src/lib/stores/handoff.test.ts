@@ -161,3 +161,85 @@ describe('a successor', () => {
     expect(get(show.updateShow)?.phase).toBe('finish');
   });
 });
+
+describe('what waits for the hand-over', () => {
+  it('runs at once in an ordinary start and answers what the start answered', async () => {
+    const { service, handoff } = await load();
+    vi.mocked(service.getHandoffInfo).mockResolvedValue({ active: false, phaseStart: 0, version: '', background: '' });
+    await handoff.loadHandoff();
+    const off = vi.fn();
+    const start = vi.fn(() => off);
+
+    const dispose = handoff.afterHandoff(start);
+
+    expect(start).toHaveBeenCalledOnce();
+    dispose();
+    expect(off).toHaveBeenCalledOnce();
+  });
+
+  it('in a successor, waits for Go to say the old launcher is gone, not for the shell', async () => {
+    const { service, handoff } = await load();
+    vi.mocked(service.getHandoffInfo).mockResolvedValue(ACTIVE);
+    await handoff.loadHandoff();
+    const start = vi.fn();
+
+    handoff.afterHandoff(start);
+    handoff.setShellReady(true);
+    expect(start).not.toHaveBeenCalled();
+
+    handlers[DONE]({ data: { ...ACTIVE, active: false } });
+    expect(start).toHaveBeenCalledOnce();
+  });
+
+  it('starts the held stores before the show is released, so the finish plays over a shell that has asked for its data', async () => {
+    const { service, handoff, show } = await load();
+    vi.mocked(service.getHandoffInfo).mockResolvedValue(ACTIVE);
+    await handoff.loadHandoff();
+    handoff.setShellReady(true);
+    const phases: Array<string | undefined> = [];
+
+    handoff.afterHandoff(() => phases.push(get(show.updateShow)?.phase));
+    handlers[DONE]({ data: { ...ACTIVE, active: false } });
+
+    expect(phases).toEqual(['run']);
+    expect(get(show.updateShow)?.phase).toBe('finish');
+  });
+
+  it('a store disposed while it waits never starts; one disposed after it started is stopped', async () => {
+    const { service, handoff } = await load();
+    vi.mocked(service.getHandoffInfo).mockResolvedValue(ACTIVE);
+    await handoff.loadHandoff();
+    const dropped = vi.fn();
+    const off = vi.fn();
+    const kept = vi.fn(() => off);
+
+    handoff.afterHandoff(dropped)();
+    const dispose = handoff.afterHandoff(kept);
+    handlers[DONE]({ data: { ...ACTIVE, active: false } });
+
+    expect(dropped).not.toHaveBeenCalled();
+    expect(kept).toHaveBeenCalledOnce();
+    dispose();
+    expect(off).toHaveBeenCalledOnce();
+  });
+
+  it('a store that throws as it starts keeps neither the others nor the end of the show waiting', async () => {
+    const { service, handoff, show } = await load();
+    vi.mocked(service.getHandoffInfo).mockResolvedValue(ACTIVE);
+    await handoff.loadHandoff();
+    handoff.setShellReady(true);
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const after = vi.fn();
+
+    handoff.afterHandoff(() => {
+      throw new Error('boom');
+    });
+    handoff.afterHandoff(after);
+    handlers[DONE]({ data: { ...ACTIVE, active: false } });
+
+    expect(after).toHaveBeenCalledOnce();
+    expect(get(show.updateShow)?.phase).toBe('finish');
+    expect(quiet).toHaveBeenCalled();
+    quiet.mockRestore();
+  });
+});
