@@ -9,9 +9,33 @@
   import StatTile from '../../lib/components/StatTile.svelte';
   import { rejectedSummary, sharedGameTitle, transferLabel } from '../../lib/lan/lanText';
   import { libraryGames } from '../../lib/stores/library';
-  import { cancel, hashing, lanStats, offers, receive, shares, transfers, unshare } from '../../lib/stores/lan';
+  import Notice from '../../lib/components/Notice.svelte';
+  import {
+    cancel,
+    hashing,
+    lanLoaded,
+    lanLoadError,
+    lanStats,
+    offers,
+    receive,
+    reloadLan,
+    shares,
+    transfers,
+    unshare,
+    watchOffers,
+  } from '../../lib/stores/lan';
+  import { sourceErrorText } from '../../lib/sources/sourceErrors';
   import { bytesSize, formatCount, relativeDate } from '../../lib/utils/format';
   import { msg } from '../../lib/i18n';
+
+  let retrying = $state(false);
+  let content = $state<HTMLElement>();
+
+  const loadFailed = $derived(!$lanLoaded && $lanLoadError != null);
+  const loading = $derived(!$lanLoaded && !loadFailed);
+
+  // Go sends no event when the offers nearby change: they are read again while the screen shows them.
+  $effect(() => watchOffers());
 
   const preparing = $derived(
     [...$hashing.values()].filter((p) => !$shares.some((s) => s.gameId === p.gameId && s.enabled)),
@@ -33,6 +57,21 @@
 <Page>
   <PageHeader title={msg('transfers.lanTitle')} subtitle={msg('transfers.lanSubtitle')} />
 
+  {#if loadFailed || retrying}
+    <!-- On success focus that was on Retry goes to the first control of the sections, else the page heading. -->
+    <div class="load-failed">
+      <Notice tone="danger" bind:retrying retry={{ label: msg('common.retry'), run: reloadLan, within: () => content }}>
+        {sourceErrorText($lanLoadError, msg('transfers.lanLoadFailed'))}
+      </Notice>
+    </div>
+  {/if}
+
+  {#if !$lanLoaded}
+    {#if loading}
+      <EmptyState level={2} title={msg('transfers.lanLoading')} />
+    {/if}
+  {:else}
+  <div class="content" bind:this={content}>
   <div class="stats">
     <div class="stat">
       <StatTile value={formatCount($lanStats.peersKnown)} label={msg('transfers.lanPeersLabel')}>
@@ -144,9 +183,15 @@
       </div>
     {/if}
   </section>
+  </div>
+  {/if}
 </Page>
 
 <style>
+  .load-failed {
+    margin-bottom: var(--space-5);
+  }
+
   .stats {
     display: inline-flex;
     align-items: flex-start;

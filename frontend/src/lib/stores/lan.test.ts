@@ -16,6 +16,11 @@ vi.mock('../services/backend', () => ({ inWails: true }));
 
 vi.mock('./toasts', () => ({ toast: vi.fn() }));
 
+vi.mock('./settings', async () => {
+  const { writable } = await import('svelte/store');
+  return { settings: writable(null) };
+});
+
 vi.mock('../services/lan', () => ({
   getPeers: vi.fn(async () => []),
   getOffers: vi.fn(async () => []),
@@ -121,41 +126,6 @@ describe('share / unshare race', () => {
   });
 });
 
-describe('offers polling', () => {
-  it('toasts once when the backend goes unreachable, not on every 10s tick', async () => {
-    const { service } = await load();
-    vi.mocked(service.getOffers).mockRejectedValue(new Error('dial tcp: connection refused'));
-
-    const { toast } = await import('./toasts');
-    vi.mocked(toast).mockClear();
-
-    await vi.advanceTimersByTimeAsync(10000);
-    await vi.advanceTimersByTimeAsync(10000);
-    await vi.advanceTimersByTimeAsync(10000);
-
-    expect(toast).toHaveBeenCalledTimes(1);
-  });
-
-  it('allows a new toast once polling recovers and fails again', async () => {
-    const { service } = await load();
-    vi.mocked(service.getOffers).mockRejectedValue(new Error('dial tcp: connection refused'));
-
-    const { toast } = await import('./toasts');
-    vi.mocked(toast).mockClear();
-
-    await vi.advanceTimersByTimeAsync(10000);
-    expect(toast).toHaveBeenCalledTimes(1);
-
-    vi.mocked(service.getOffers).mockResolvedValueOnce([]);
-    await vi.advanceTimersByTimeAsync(10000);
-
-    vi.mocked(service.getOffers).mockRejectedValue(new Error('dial tcp: connection refused'));
-    await vi.advanceTimersByTimeAsync(10000);
-
-    expect(toast).toHaveBeenCalledTimes(2);
-  });
-});
-
 // Stage 1: what Go's events and answers do to the store today, pinned before the screen is rebuilt.
 describe('lan store pins: events', () => {
   it('lan:peers, lan:shares and lan:stats replace what the store holds', async () => {
@@ -207,7 +177,6 @@ describe('lan store pins: answers', () => {
     const { msg } = await import('../i18n');
     vi.mocked(service.receive).mockRejectedValue(new Error('typhon:lan.already_have: lan: this game is already shared or being received'));
     const { toast } = await import('./toasts');
-    vi.mocked(toast).mockClear();
 
     await store.receive('hash', 'p1');
 

@@ -1,10 +1,13 @@
 import { screen, within } from '@testing-library/svelte';
+import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
 vi.mock('../../lib/services/lan', async (actual) => ({
   ...(await actual<typeof import('../../lib/services/lan')>()),
+  // The screen reads the offers again while it is shown: Go answers what the test set.
+  getOffers: vi.fn(async () => get((await import('../../lib/stores/lan')).offers)),
   receive: vi.fn(),
   unshare: vi.fn(),
   cancel: vi.fn(),

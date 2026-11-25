@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store';
+import { get, writable } from 'svelte/store';
 import { listenFirst } from './listenFirst';
 import { inWails } from '../services/backend';
 import {
@@ -18,6 +18,7 @@ import {
   type Transfer,
 } from '../services/lan';
 import { sourceErrorText } from '../sources/sourceErrors';
+import { settings } from './settings';
 import { toast } from './toasts';
 
 export const peers = writable<Peer[]>([]);
@@ -67,9 +68,65 @@ function clearHashing(gameId: string) {
   });
 }
 
-export async function initLan() {
-  if (!inWails) return;
-  const { on, load } = listenFirst();
+/** Until a whole first read arrives, the lists hold only what events said: not what Go holds. */
+export const lanLoaded = writable(false);
+/** Why the first read failed; null once a read has arrived. */
+export const lanLoadError = writable<unknown>(null);
+
+type Snapshot = [Peer[], Offer[], Share[], Stats];
+
+const readSnapshot = (): Promise<Snapshot> => Promise.all([getPeers(), getOffers(), getShares(), getStats()]);
+
+function received([peersList, offersList, sharesList, statsResult]: Snapshot) {
+  peers.set(peersList);
+  offers.set(offersList);
+  shares.set(sharesList);
+  lanStats.set(statsResult);
+  lanLoaded.set(true);
+  lanLoadError.set(null);
+}
+
+/** Reads everything; answers whether a read is there. A failure before any read is kept as state. */
+async function readAll(read: () => Promise<Snapshot>): Promise<boolean> {
+  try {
+    received(await read());
+  } catch (err) {
+    if (!get(lanLoaded)) lanLoadError.set(err);
+    return false;
+  }
+  return true;
+}
+
+// Every LAN event Go sent: a read asked for before one of them may predate it.
+let heard = 0;
+
+/**
+ * Reads everything again, as the screen's Retry after a failed first read does; answers whether a read
+ * is there. An event that arrives meanwhile gets the snapshot asked once more, as the first read does.
+ */
+export function reloadLan(): Promise<boolean> {
+  return readAll(async () => {
+    const before = heard;
+    const snapshot = await readSnapshot();
+    return heard === before ? snapshot : readSnapshot();
+  });
+}
+
+/**
+ * Subscribes first, then reads; never rejects: a failed first read is `lanLoadError`. Nothing is read
+ * in the background from here: the offers are read again only while a screen watches them.
+ */
+export async function initLan(): Promise<void> {
+  const first = listenFirst();
+  if (!inWails) {
+    await readAll(readSnapshot);
+    return;
+  }
+  const on: typeof first.on = (name, handler) =>
+    first.on(name, (event) => {
+      heard += 1;
+      handler(event);
+    });
 
   on('lan:peers', (event) => {
     peers.set((event.data as Peer[]) ?? []);
@@ -96,31 +153,77 @@ export async function initLan() {
     lanStats.set(event.data as Stats);
   });
 
-  try {
-    const [peersList, offersList, sharesList, statsResult] = await load(() =>
-      Promise.all([getPeers(), getOffers(), getShares(), getStats()]),
-    );
-    peers.set(peersList);
-    offers.set(offersList);
-    shares.set(sharesList);
-    lanStats.set(statsResult);
-  } catch (err) {
-    toast(sourceErrorText(err), 'danger');
-  }
+  await readAll(() => first.load(readSnapshot));
+}
 
-  let offersPollFailing = false;
-  setInterval(async () => {
-    try {
-      const offersList = await getOffers();
-      offers.set(offersList);
-      offersPollFailing = false;
-    } catch (err) {
-      if (!offersPollFailing) {
-        offersPollFailing = true;
-        toast(sourceErrorText(err), 'danger');
-      }
-    }
-  }, 10000);
+/** How often the offers are read again while watched: Go sends no event when they change. */
+export const OFFERS_POLL_MS = 10_000;
+
+let watchers = 0;
+let poll: ReturnType<typeof setInterval> | null = null;
+let stopFollowing: (() => void) | null = null;
+// Bumped whenever the poll starts or stops: an answer asked for before then is dropped.
+let pollRun = 0;
+
+async function pollOffers(run: number) {
+  try {
+    const list = await getOffers();
+    if (run === pollRun) offers.set(list);
+  } catch {
+    // A failed background read keeps the list on screen and the next tick asks again; the screen's
+    // first read is where a failure is said.
+  }
+}
+
+async function readStats(run: number) {
+  try {
+    const result = await getStats();
+    if (run === pollRun) lanStats.set(result);
+  } catch {
+    // The figures stay as Go last sent them; its next lan:stats event replaces them.
+  }
+}
+
+function stopPoll() {
+  if (poll === null) return;
+  clearInterval(poll);
+  poll = null;
+  pollRun += 1;
+}
+
+/** Sharing as the settings say: while on, the offers are read at once and then on every tick. */
+function follow(sharing: boolean) {
+  if (sharing === (poll !== null)) return;
+  if (!sharing) {
+    stopPoll();
+    // Go dropped its table of offers with the sharing: what was nearby is no longer known.
+    offers.set([]);
+    void readStats(pollRun);
+    return;
+  }
+  pollRun += 1;
+  const run = pollRun;
+  void pollOffers(run);
+  poll = setInterval(() => void pollOffers(run), OFFERS_POLL_MS);
+}
+
+/**
+ * Keeps the offers fresh while the caller shows them and LAN sharing is on (Go has none to give while it
+ * is off). One poll serves every watcher; the returned stop ends this watch, and the poll with the last.
+ */
+export function watchOffers(): () => void {
+  watchers += 1;
+  if (watchers === 1) stopFollowing = settings.subscribe((value) => follow(Boolean(value?.lanSharing)));
+  let stopped = false;
+  return () => {
+    if (stopped) return;
+    stopped = true;
+    watchers -= 1;
+    if (watchers > 0) return;
+    stopFollowing?.();
+    stopFollowing = null;
+    stopPoll();
+  };
 }
 
 async function run(action: () => Promise<void>) {

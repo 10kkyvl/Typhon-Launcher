@@ -255,6 +255,8 @@ const SITES: Record<string, Site[]> = {
     ['danger', true],
   ],
   'routes/installed/InstalledStorage.svelte': [['danger', true]],
+  // The first read that failed: it just happened.
+  'routes/lan/Lan.svelte': [['danger', true]],
   // The collections and the library list that failed to load: each failure just happened.
   'routes/library/Library.svelte': [
     ['danger', true],

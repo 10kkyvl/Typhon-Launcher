@@ -1,8 +1,14 @@
 import { screen } from '@testing-library/svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { get } from 'svelte/store';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
+// The screen reads the offers again while it is shown: Go answers what the test set.
+vi.mock('../../lib/services/lan', async (actual) => ({
+  ...(await actual<typeof import('../../lib/services/lan')>()),
+  getOffers: vi.fn(async () => get((await import('../../lib/stores/lan')).offers)),
+}));
 
 import { msg } from '../../lib/i18n';
 import type { LibraryGame } from '../../lib/services/library';
@@ -13,12 +19,11 @@ import { styleOf, topLevel } from '../../lib/testing/css';
 import { renderDom } from '../../lib/testing/dom';
 import Lan from './Lan.svelte';
 import page from './Lan.svelte?raw';
+import { ready, resetScreen } from './lanTesting';
 
-afterEach(() => {
-  hashing.set(new Map());
-  offers.set([]);
-  libraryGames.set([]);
-});
+beforeEach(() => ready());
+
+afterEach(() => resetScreen());
 
 const game = (id: string, title: string) => ({ id, title }) as LibraryGame;
 const progress = (gameId: string, processedBytes: number) => ({ gameId, processedBytes, totalBytes: 200, currentFile: '', done: false });

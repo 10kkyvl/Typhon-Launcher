@@ -2,7 +2,7 @@ import { screen, within } from '@testing-library/svelte';
 import { msg } from '../../lib/i18n';
 import type { Settings } from '../../lib/services/settings';
 import type { HashProgress, Offer, Share, Stats, Transfer } from '../../lib/services/lan';
-import { hashing, lanStats, offers, peers, shares, transfers } from '../../lib/stores/lan';
+import { hashing, lanLoaded, lanLoadError, lanStats, offers, peers, shares, transfers } from '../../lib/stores/lan';
 import { libraryGames } from '../../lib/stores/library';
 import { settings } from '../../lib/stores/settings';
 import { toasts } from '../../lib/stores/toasts';
@@ -67,9 +67,15 @@ export function stats(patch: Partial<Stats> = {}): Stats {
   return { announcesSent: 0, announcesReceived: 0, rejected: null, peersKnown: 0, offersKnown: 0, sharesActive: 0, ...patch };
 }
 
+/** LAN sharing as the settings hold it. */
+export function sharingOn(on = true): void {
+  settings.set({ lanSharing: on } as Settings);
+}
+
 /** What the screen shows once its stores hold a first read; LAN sharing is on unless `sharing` says otherwise. */
 export function ready(sharing = true): void {
-  settings.set({ lanSharing: sharing } as Settings);
+  sharingOn(sharing);
+  lanLoaded.set(true);
 }
 
 /** The stores the screen reads, back as they start. */
@@ -80,6 +86,8 @@ export function resetScreen(): void {
   peers.set([]);
   hashing.set(new Map());
   lanStats.set(stats());
+  lanLoaded.set(false);
+  lanLoadError.set(null);
   libraryGames.set([]);
   settings.set(null);
   toasts.set([]);
