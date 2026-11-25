@@ -182,13 +182,20 @@ export function countUnknown(report: {
 
 /**
  * When a report was measured (its walk started), as the History screen says a time: the clock time in
- * words, the date and the time for the hint and for assistive tech. Null for a time it cannot read.
+ * words, with "yesterday" or the date for a report of another day of `now` (a cached report lives for
+ * the whole launcher run); the date and the time for the hint and for assistive tech. Null for a time
+ * it cannot read.
  */
-export function measuredWhen(iso: string): { words: string; exact: string } | null {
+export function measuredWhen(iso: string, now: Date = new Date()): { words: string; exact: string } | null {
   const at = new Date(iso);
   if (!iso || Number.isNaN(at.getTime())) return null;
   const time = clockTime(at);
-  return { words: msg('diskusage.measuredAt', { time }), exact: msg('transfers.historyExactTime', { date: longDate(at), time }) };
+  const date = longDate(at);
+  const dayStart = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((dayStart(now) - dayStart(at)) / 86_400_000);
+  const words =
+    days <= 0 ? msg('diskusage.measuredAt', { time }) : days === 1 ? msg('diskusage.measuredYesterday', { time }) : msg('diskusage.measuredOn', { date, time });
+  return { words, exact: msg('transfers.historyExactTime', { date, time }) };
 }
 
 export function ageText(age: Age): string {

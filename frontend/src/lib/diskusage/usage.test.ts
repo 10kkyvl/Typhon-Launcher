@@ -4,6 +4,7 @@ import { en } from '../i18n/catalog/en';
 import { ru } from '../i18n/catalog/ru';
 import { goSources } from '../testing/sources';
 import type { DownloadUsage, GameUsage } from '../services/diskusage';
+import { clockTime, longDate } from '../utils/format';
 import {
   ageOf,
   ageText,
@@ -13,6 +14,7 @@ import {
   gameBlockedKey,
   isStale,
   leftoverKindKey,
+  measuredWhen,
   REASON_CODES,
   reasonLabel,
   sizeSorted,
@@ -289,5 +291,30 @@ describe('warning codes', () => {
     for (const code of ['diskusage.warning.new_one', '', 'diskusage.title']) {
       expect(warningText({ area: 'downloads', code, message: 'permission denied' }), code).toBe(msg('diskusage.warningUnknown'));
     }
+  });
+});
+
+describe('when a report was measured', () => {
+  // Local times: "today" is the reader's calendar day. The cached report lives for the whole launcher
+  // run, so one measured on another day says its day too.
+  const now = new Date(2026, 10, 25, 18, 0);
+  const at = (day: number, hour: number) => new Date(2026, 10, day, hour, 5);
+  const exact = (date: Date) => msg('transfers.historyExactTime', { date: longDate(date), time: clockTime(date) });
+
+  it('says only the time for a report measured today', () => {
+    const today = at(25, 0);
+    expect(measuredWhen(today.toISOString(), now)).toEqual({ words: msg('diskusage.measuredAt', { time: clockTime(today) }), exact: exact(today) });
+  });
+
+  it('says "yesterday" for a report of the day before, and the date for an older one, with the time', () => {
+    const yesterday = at(24, 23);
+    const older = at(12, 10);
+    expect(measuredWhen(yesterday.toISOString(), now)).toEqual({ words: msg('diskusage.measuredYesterday', { time: clockTime(yesterday) }), exact: exact(yesterday) });
+    expect(measuredWhen(older.toISOString(), now)).toEqual({ words: msg('diskusage.measuredOn', { date: longDate(older), time: clockTime(older) }), exact: exact(older) });
+  });
+
+  it('answers nothing for a time it cannot read', () => {
+    expect(measuredWhen('', now)).toBeNull();
+    expect(measuredWhen('not a time', now)).toBeNull();
   });
 });

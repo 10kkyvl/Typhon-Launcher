@@ -27,7 +27,8 @@ const SCANNED_AT = '2026-11-12T10:40:00Z';
 const cached = report({ games: [game('g1', 'From the cache')], scannedAt: CACHED_AT });
 const fresh = report({ games: [game('g1', 'Fresh')], scannedAt: SCANNED_AT });
 
-const measured = (iso: string) => msg('diskusage.measuredAt', { time: clockTime(new Date(iso)) });
+// The fixtures were measured days before any run of these tests: their age says the date too.
+const measured = (iso: string) => msg('diskusage.measuredOn', { date: longDate(new Date(iso)), time: clockTime(new Date(iso)) });
 const exact = (iso: string) => msg('transfers.historyExactTime', { date: longDate(new Date(iso)), time: clockTime(new Date(iso)) });
 
 function deferred<T>() {
