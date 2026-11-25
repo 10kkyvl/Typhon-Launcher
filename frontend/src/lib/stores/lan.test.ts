@@ -207,4 +207,15 @@ describe('lan store pins: answers', () => {
     handlers['lan:transfer']({ data: makeTransfer({ status: 'cancelled' }) });
     expect(get(store.transfers)).toHaveLength(0);
   });
+
+  it('a cancel asked through a confirmation rejects with Go’s refusal and leaves the saying to it', async () => {
+    const { service, store } = await load();
+    const refusal = new Error('typhon:lan.unknown_transfer: lan: unknown transfer');
+    vi.mocked(service.cancel).mockRejectedValue(refusal);
+    const { toast } = await import('./toasts');
+
+    await expect(store.cancelTransfer('t1')).rejects.toBe(refusal);
+
+    expect(toast).not.toHaveBeenCalled();
+  });
 });

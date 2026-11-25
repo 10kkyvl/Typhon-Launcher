@@ -1,5 +1,9 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
+  import { SvelteSet } from 'svelte/reactivity';
   import Page from '../../lib/components/Page.svelte';
+  import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
+  import type { ConfirmPrompt } from '../../lib/confirm/prompts';
   import { Download, MonitorSmartphone, Share2, Wifi, X } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
@@ -15,6 +19,7 @@
   import { libraryGames, libraryGamesById } from '../../lib/stores/library';
   import {
     cancel,
+    cancelTransfer,
     hashing,
     lanLoaded,
     lanLoadError,
@@ -31,9 +36,13 @@
   import { bytesSize, formatCount, progressPercent, relativeDate } from '../../lib/utils/format';
   import { msg } from '../../lib/i18n';
   import { offerKey, offersByComputer } from './offerGroups';
+  import { catchLeaving, placeOf, returnTo, type RowPlace } from './rowFocus';
 
   let retrying = $state(false);
   let content = $state<HTMLElement>();
+  // The actions Go has not answered yet, by row: a second press waits for the first answer.
+  const pending = new SvelteSet<string>();
+  let asking = $state<{ transfer: Transfer; place: RowPlace | null } | null>(null);
 
   const uid = $props.id();
   const headings = { nearby: `${uid}-nearby`, sharing: `${uid}-sharing`, transfers: `${uid}-transfers` };
@@ -53,6 +62,45 @@
   const activeTransfers = $derived($transfers.filter((t) => t.status === 'receiving'));
 
   const rejectedNote = $derived(rejectedSummary($lanStats));
+
+  // Before any change of the rows shown (a share stopped, an offer Go dropped, the offers regrouped, a
+  // transfer that ended), the screen's rule reads where focus is, and hands it on if the focused row went.
+  $effect.pre(() => {
+    void $offers;
+    void $shares;
+    void preparing;
+    void activeTransfers;
+    void $lanLoaded;
+    untrack(catchLeaving);
+  });
+
+  /** Runs a row's action once until Go answers; the store says a refusal in the words of its code. */
+  async function act(key: string, action: () => Promise<void>) {
+    if (pending.has(key)) return;
+    pending.add(key);
+    try {
+      await action();
+    } finally {
+      pending.delete(key);
+    }
+  }
+
+  // A cancel deletes what was received (Go's discardReceiving): it asks first when there is something,
+  // as a download's cancel does (lib/downloads/cancel.ts).
+  function askCancel(transfer: Transfer) {
+    if (transfer.downloaded > 0) asking = { transfer, place: placeOf(document.activeElement) };
+    else void act(`cancel:${transfer.id}`, () => cancel(transfer.id));
+  }
+
+  function cancelPrompt(transfer: Transfer): ConfirmPrompt {
+    return {
+      title: msg('transfers.lanCancelTitle', { title: transfer.title }),
+      text: msg('transfers.lanCancelText', { size: bytesSize(transfer.downloaded) }),
+      confirm: msg('transfers.lanCancelConfirm'),
+      busy: msg('transfers.lanCancelBusy'),
+      cancel: msg('ui.dontCancel'),
+    };
+  }
 
   /** The library's id of a game of this computer, for its link; none once the library no longer holds it. */
   const pageOf = (gameId: string) => $libraryGamesById.get(gameId)?.id;
@@ -86,7 +134,8 @@
         size="sm"
         data-row-control="download"
         aria-label={msg('transfers.lanDownloadFor', { title: offer.title, host: offer.host })}
-        onclick={() => receive(offer.infoHash, offer.peerId)}
+        busy={pending.has(`download:${offerKey(offer)}`)}
+        onclick={() => act(`download:${offerKey(offer)}`, () => receive(offer.infoHash, offer.peerId))}
       >
         <Download size="1.4rem" strokeWidth={1.8} />
         {msg('transfers.lanDownload')}
@@ -131,7 +180,7 @@
         </div>
       </div>
 
-      <section class="section" aria-labelledby={headings.nearby}>
+      <section class="section" aria-labelledby={headings.nearby} data-lan-section="nearby">
         <SectionHeader id={headings.nearby} title={msg('transfers.lanNearbyHeading')} count={$offers.length} />
         {#if $offers.length === 0}
           <EmptyState level={3}
@@ -166,7 +215,7 @@
         {/if}
       </section>
 
-      <section class="section" aria-labelledby={headings.sharing}>
+      <section class="section" aria-labelledby={headings.sharing} data-lan-section="sharing">
         <SectionHeader id={headings.sharing} title={msg('transfers.lanSharingHeading')} count={$shares.length} />
         {#if $shares.length === 0 && preparing.length === 0}
           <EmptyState size="inline" title={msg('transfers.lanNoShares')} />
@@ -200,7 +249,8 @@
                     size="sm"
                     data-row-control="stop"
                     aria-label={msg('transfers.lanStopSharingFor', { title: share.title })}
-                    onclick={() => unshare(share.gameId)}>{msg('transfers.lanStopSharing')}</Button
+                    busy={pending.has(`stop:${share.gameId}`)}
+                    onclick={() => act(`stop:${share.gameId}`, () => unshare(share.gameId))}>{msg('transfers.lanStopSharing')}</Button
                   >
                 </div>
               </li>
@@ -209,7 +259,7 @@
         {/if}
       </section>
 
-      <section class="section" aria-labelledby={headings.transfers}>
+      <section class="section" aria-labelledby={headings.transfers} data-lan-section="transfers">
         <SectionHeader id={headings.transfers} title={msg('transfers.lanTransfersHeading')} count={activeTransfers.length} />
         {#if activeTransfers.length === 0}
           <EmptyState size="inline" title={msg('transfers.lanNoTransfers')} />
@@ -234,7 +284,8 @@
                     size="sm"
                     data-row-control="cancel"
                     label={msg('transfers.lanCancelFor', { title: transfer.title })}
-                    onclick={() => cancel(transfer.id)}
+                    busy={pending.has(`cancel:${transfer.id}`)}
+                    onclick={() => askCancel(transfer)}
                   >
                     <X size="1.5rem" strokeWidth={1.8} />
                   </IconButton>
@@ -245,6 +296,17 @@
         {/if}
       </section>
     </div>
+  {/if}
+
+  {#if asking}
+    {@const { transfer, place } = asking}
+    <ConfirmModal
+      prompt={cancelPrompt(transfer)}
+      onconfirm={() => cancelTransfer(transfer.id)}
+      onclose={() => (asking = null)}
+      errorText={(err) => sourceErrorText(err)}
+      returnFocus={() => returnTo(place)}
+    />
   {/if}
 </Page>
 

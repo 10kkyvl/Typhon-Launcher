@@ -278,6 +278,11 @@ export function receive(infoHash: string, peerId: string) {
   });
 }
 
+/** Rejects when Go refused: the confirmation that asks for it shows the reason. */
+export async function cancelTransfer(id: string): Promise<void> {
+  await cancelRequest(id);
+}
+
 export function cancel(id: string) {
-  return run(() => cancelRequest(id));
+  return run(() => cancelTransfer(id));
 }
