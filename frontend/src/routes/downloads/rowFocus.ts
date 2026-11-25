@@ -1,5 +1,6 @@
 import type { Leave, LeaveHow, LeaveTicket } from '../../lib/components/downloadPanel';
 import { focusHandOff } from '../../lib/utils/focusHandOff';
+import { menuOwner, rowFocus, type RowPlace } from '../../lib/utils/rowFocus';
 import { downloadsSectionIds } from './sections';
 
 /**
@@ -34,14 +35,6 @@ export function pageHeading(): HTMLElement | null {
   return document.querySelector<HTMLElement>('h1[tabindex="-1"]');
 }
 
-/** Where a row stood: its download, the id of its section's heading, its section's rows in order, the kind of control focus was on. */
-interface RowPlace {
-  id: string;
-  heading: string | null;
-  order: string[];
-  control: string | null;
-}
-
 const rowId = (row: Element) => row.getAttribute(ROW_ATTR) ?? '';
 
 function rowsIn(section: Element | null | undefined): HTMLElement[] {
@@ -67,34 +60,39 @@ function controlIn(row: HTMLElement, prefer: string | null): HTMLElement | null 
   return (prefer ? row.querySelector<HTMLElement>(prefer) : null) ?? row.querySelector<HTMLElement>(ANY_CONTROL);
 }
 
+/** Where row `id` stands now, its section's heading as the place's scope. */
 function placeOf(id: string, focused: Element | null): RowPlace {
   const row = byData(document, 'download-row', id);
   const section = row ? sectionOf(row) : null;
   return {
     id,
-    heading: section?.getAttribute('aria-labelledby') ?? null,
+    scope: section?.getAttribute('aria-labelledby') ?? null,
     order: rowsIn(section).map(rowId),
     control: focused && row?.contains(focused) ? kindOf(focused) : null,
   };
 }
 
+// The shared row rule over a section's rows; the place is read by download (`placeOf` above), and the
+// presses' intents sit on top of it in `leaveTarget`.
+const rows = rowFocus({
+  rowAttr: ROW_ATTR,
+  scopeBy: sectionBy,
+  controlIn,
+  fallback: (place) => headingOrPage(place.scope),
+});
+
 /** Where focus goes for a row that stood at `place`, by the screen's rule. */
 function leaveTarget(place: RowPlace, how: LeaveHow = {}): HTMLElement | null {
   const prefer = how.prefer ?? place.control;
-  const shown = new Map(rowsIn(sectionBy(place.heading)).map((row) => [rowId(row), row]));
   // The row stayed and only its control went (a button Go no longer offers): its own row keeps focus.
-  const own = shown.get(place.id);
+  const own = rows.stays(place);
   if (own) return controlIn(own, prefer);
   const moved = how.follow ? byData(document, 'download-row', place.id) : null;
   if (moved && how.follow === 'first') return controlIn(moved, null);
-  const at = place.order.indexOf(place.id);
-  const near = at < 0 ? [] : [...place.order.slice(at + 1), ...place.order.slice(0, at).reverse()];
-  for (const other of near) {
-    const row = shown.get(other);
-    if (row) return controlIn(row, prefer);
-  }
+  const near = rows.nearest(place);
+  if (near) return controlIn(near, prefer);
   if (moved) return controlIn(moved, null);
-  return headingOrPage(place.heading);
+  return headingOrPage(place.scope);
 }
 
 function headingOrPage(id: string | null): HTMLElement | null {
@@ -102,21 +100,12 @@ function headingOrPage(id: string | null): HTMLElement | null {
   return heading?.isConnected ? heading : pageHeading();
 }
 
-/**
- * Scrolls into view, by the least movement, the row `target` is in (the whole row, so the player sees
- * what took focus, not a control at the window's very edge), else `target` itself.
- */
-function reveal(target: HTMLElement): void {
-  const box = target.closest<HTMLElement>(`[${ROW_ATTR}]`) ?? target;
-  if (typeof box.scrollIntoView === 'function') box.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-}
-
 /** Finishes a hand-off and, when focus landed on the target, brings its row into view. */
 export async function handOffInView(handOff: HandOff, pick: () => HTMLElement | null): Promise<void> {
   const picked: { target: HTMLElement | null } = { target: null };
   await handOff(() => (picked.target = pick()));
   const { target } = picked;
-  if (target && document.activeElement === target) reveal(target);
+  if (target && document.activeElement === target) rows.reveal(target);
 }
 
 /**
@@ -126,7 +115,7 @@ export async function handOffInView(handOff: HandOff, pick: () => HTMLElement | 
 export function returnInView(target: HTMLElement | null | undefined): HTMLElement | null {
   if (target) {
     queueMicrotask(() => {
-      if (document.activeElement === target) reveal(target);
+      if (document.activeElement === target) rows.reveal(target);
     });
   }
   return target ?? null;
@@ -159,16 +148,6 @@ export const pressed: Leave = (id, how = {}): LeaveTicket => {
 const SECTION_HEADINGS: ReadonlySet<string> = new Set(Object.values(downloadsSectionIds));
 
 /**
- * What focus stands for on the page: the focused element, or, for an item of an open menu (a layer
- * apart from the page), the menu's trigger, so the row the menu belongs to is known while it is open.
- */
-function standsFor(focused: HTMLElement): HTMLElement {
-  const menu = focused.closest<HTMLElement>('[role="menu"][aria-labelledby]');
-  const trigger = menu ? document.getElementById(menu.getAttribute('aria-labelledby') ?? '') : null;
-  return trigger ?? focused;
-}
-
-/**
  * The page's catch-all, run before every change of its lists ($effect.pre). When the element that holds
  * focus is gone once the change shows, focus goes on by the rule from where it was: in a row (or a menu
  * of a row), the same row's other control while the row stays, else the rule's steps, as the press in
@@ -179,7 +158,7 @@ function standsFor(focused: HTMLElement): HTMLElement {
 export function catchLeaving(): void {
   const focused = document.activeElement;
   if (!(focused instanceof HTMLElement) || focused === document.body) return;
-  const owner = standsFor(focused);
+  const owner = menuOwner(focused);
   const row = owner.closest<HTMLElement>(`[${ROW_ATTR}]`);
   if (!row) {
     const heading = owner.closest('section[aria-labelledby]')?.getAttribute('aria-labelledby');
