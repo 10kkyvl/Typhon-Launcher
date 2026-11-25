@@ -184,7 +184,7 @@ describe('AuthScreen: a refused submit', () => {
     expect(document.activeElement).toBe(submit);
   });
 
-  it('says a reply outside the error contract as the server failure, never its raw text', async () => {
+  it('says a reply outside the error contract as the form\'s own failure, never its raw text', async () => {
     account.Login.mockRejectedValue(new Error('pq: relation "users" does not exist'));
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     const { user } = screenIn('login');
@@ -192,7 +192,7 @@ describe('AuthScreen: a refused submit', () => {
     await user.type(field(msg('transfers.authPasswordLabel')), 'fake-pass-1{Enter}');
 
     const alert = await screen.findByRole('alert');
-    expect(alert.textContent?.trim()).toBe(msg('state.accountErrorServerError'));
+    expect(alert.textContent?.trim()).toBe(msg('transfers.authGenericError'));
     expect(document.body.textContent).not.toContain('relation');
     error.mockRestore();
   });
