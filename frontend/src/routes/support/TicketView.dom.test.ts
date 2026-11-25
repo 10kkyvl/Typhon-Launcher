@@ -309,6 +309,96 @@ describe('TicketView: the reply is the base multi-line field', () => {
   });
 });
 
+describe('TicketView: a reply sent while the one before it is still being read back', () => {
+  const FIRST = message(4, 'user', 'First.', '2026-11-02T09:00:00Z');
+  const threadItems = () => within(screen.getByRole('list', { name: msg('tickets.thread') })).queryAllByRole('listitem').map((item) => words(item));
+  // Every answer that has arrived is acted on: a macrotask runs after all the microtasks queued before it.
+  const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  async function firstSentAndReloading() {
+    const reload = held<ReturnType<typeof thread>>();
+    vi.mocked(replyTicket).mockResolvedValueOnce(FIRST);
+    const view = await opened();
+    vi.mocked(getTicket).mockReturnValue(reload.promise);
+    await view.user.type(replyBox(), 'First.');
+    await view.user.keyboard('{Control>}{Enter}{/Control}');
+    await vi.waitFor(() => expect(getTicket).toHaveBeenCalledTimes(2));
+    expect(replyBox().value).toBe('');
+    return { ...view, reload };
+  }
+
+  it('the box takes the next reply at once, and the second stays busy until its own answer and is sent once', async () => {
+    const second = held<ReturnType<typeof message>>();
+    const { user, reload } = await firstSentAndReloading();
+    expect(replyBox().readOnly).toBe(false);
+    vi.mocked(replyTicket).mockReturnValue(second.promise);
+
+    await user.type(replyBox(), 'Second.');
+    await user.keyboard('{Control>}{Enter}{/Control}');
+    await vi.waitFor(() => expect(replyTicket).toHaveBeenCalledTimes(2));
+    reload.resolve(thread(TICKET, [...MESSAGES, FIRST]));
+    await vi.waitFor(() => expect(threadItems().at(-1)).toContain('First.'));
+    await settled();
+
+    expect(replyBox().readOnly).toBe(true);
+    expect(screen.getByRole('button', { name: msg('tickets.replySending') }).getAttribute('aria-busy')).toBe('true');
+    await user.keyboard('{Control>}{Enter}{/Control}');
+    expect(vi.mocked(replyTicket).mock.calls.map((call) => call[1])).toEqual(['First.', 'Second.']);
+
+    vi.mocked(getTicket).mockResolvedValue(thread(TICKET, [...MESSAGES, FIRST]));
+    second.resolve(message(5, 'user', 'Second.', '2026-11-02T09:01:00Z'));
+    await vi.waitFor(() => expect(replyBox().value).toBe(''));
+    expect(replyBox().readOnly).toBe(false);
+  });
+
+  it('a read back that fails after a sent reply leaves the box empty and open, says the failure, and sends nothing again', async () => {
+    const { user, reload } = await firstSentAndReloading();
+    reload.reject(new AccountError('network_error'));
+
+    const alert = await screen.findByRole('alert');
+    await vi.waitFor(() => expect(alert.textContent).toContain(msg('state.accountErrorNetwork')));
+    await settled();
+    expect(said()).toEqual([['success', msg('tickets.replySent')]]);
+    expect(replyBox().value).toBe('');
+    expect(replyBox().readOnly).toBe(false);
+    expect(replyButton().hasAttribute('aria-busy')).toBe(false);
+    expect(replyTicket).toHaveBeenCalledTimes(1);
+
+    vi.mocked(replyTicket).mockResolvedValueOnce(message(5, 'user', 'Again.', '2026-11-02T09:01:00Z'));
+    await user.type(replyBox(), 'Again.');
+    await user.click(replyButton());
+    await vi.waitFor(() => expect(replyTicket).toHaveBeenCalledTimes(2));
+    expect(replyTicket).toHaveBeenLastCalledWith(7, 'Again.', false);
+  });
+
+  it('a second reply with logs keeps its upload progress while the first one\'s read back answers', async () => {
+    const second = held<ReturnType<typeof message>>();
+    const { user, reload } = await firstSentAndReloading();
+    vi.mocked(replyTicket).mockReturnValue(second.promise);
+    await user.type(replyBox(), 'Second.');
+    await user.click(screen.getByRole('switch', { name: msg('tickets.attachLogs') }));
+    await user.click(replyBox());
+    await user.keyboard('{Control>}{Enter}{/Control}');
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: msg('tickets.logsConfirmButton') }));
+    await vi.waitFor(() => expect(replyTicket).toHaveBeenLastCalledWith(7, 'Second.', true));
+    emitUpload({ state: 'sending', sentBytes: 768, totalBytes: 1024 });
+    await screen.findByRole('progressbar', { name: msg('settings.aboutLogsLabel') });
+
+    reload.resolve(thread(TICKET, [...MESSAGES, FIRST]));
+    await vi.waitFor(() => expect(threadItems().at(-1)).toContain('First.'));
+    await settled();
+
+    const bar = screen.getByRole('progressbar', { name: msg('settings.aboutLogsLabel') });
+    expect(bar.getAttribute('aria-valuetext')).toBe(msg('settings.aboutLogsSendingProgress', { percent: 75 }));
+    expect(screen.getByRole('switch', { name: msg('tickets.attachLogs') }).getAttribute('aria-checked')).toBe('true');
+    emitUpload({ state: 'sending', sentBytes: 1024, totalBytes: 1024 });
+    await vi.waitFor(() => expect(bar.getAttribute('aria-valuetext')).toBe(msg('settings.aboutLogsSendingProgress', { percent: 100 })));
+
+    second.resolve(message(5, 'user', 'Second.', '2026-11-02T09:01:00Z'));
+    await vi.waitFor(() => expect(screen.queryByRole('progressbar')).toBeNull());
+  });
+});
+
 describe('TicketView: a session gone', () => {
   it('on reading the request: says sign-in is needed and offers it instead of Retry', async () => {
     authState.set('authenticated');

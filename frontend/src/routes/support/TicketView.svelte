@@ -150,6 +150,10 @@
     void submitReply();
   }
 
+  // The send that owns `sending` and `upload`: a sent reply lets go of them before its read back, so
+  // the next reply may start meanwhile, and only the send that owns them clears them.
+  let sendRun = 0;
+
   // A refusal of the text is said at the box, which takes focus; any other once, in the reply form.
   async function submitReply() {
     if (sending || !limits) return;
@@ -162,6 +166,7 @@
     }
     // Focus in the reply form at the press (the box or Reply) goes to the cleared box once it is sent.
     const fromForm = Boolean(replyBox?.contains(document.activeElement));
+    const mine = ++sendRun;
     sending = true;
     upload = null;
     try {
@@ -170,6 +175,8 @@
       reply = '';
       attachLogs = false;
       sending = false;
+      upload = null;
+      sendRun += 1;
       toast(msg('tickets.replySent'), 'success');
       if (fromForm) {
         await tick();
@@ -178,7 +185,7 @@
       refreshPending = false;
       await load();
     } catch (err) {
-      sending = false;
+      if (mine === sendRun) sending = false;
       const text = supportErrorText(err, msg('tickets.replyFailed'));
       if (accountErrorField(err) === 'body') {
         replyError = text;
@@ -189,8 +196,10 @@
         replySignedOut = sessionGone(err);
       }
     } finally {
-      sending = false;
-      upload = null;
+      if (mine === sendRun) {
+        sending = false;
+        upload = null;
+      }
       settle();
     }
   }
