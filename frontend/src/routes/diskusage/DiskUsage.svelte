@@ -1,6 +1,6 @@
 <script lang="ts">
   import Page from '../../lib/components/Page.svelte';
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { HardDrive, RefreshCw } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
@@ -22,7 +22,7 @@
   import { deleteErrorText } from '../../lib/diskusage/errors';
   import { activeMove } from '../../lib/stores/relocate';
   import { createDiskUsagePage } from './diskUsagePage.svelte';
-  import { placeOf, returnTo, type RowPlace } from './rowFocus';
+  import { catchLeaving, placeOf, returnTo, type RowPlace } from './rowFocus';
   import DownloadsSection from './DownloadsSection.svelte';
   import GamesSection from './GamesSection.svelte';
   import GroupsSection from './GroupsSection.svelte';
@@ -86,6 +86,12 @@
     if (folders === null) return;
     if (seenFolders !== null && folders !== seenFolders) void page.refresh();
     seenFolders = folders;
+  });
+
+  // Any new report can drop the row that holds focus, or the control in it, whoever asked for the scan.
+  $effect.pre(() => {
+    void page.report;
+    untrack(catchLeaving);
   });
 
   // The library disk as last measured; a disk with no size counts as not measured.

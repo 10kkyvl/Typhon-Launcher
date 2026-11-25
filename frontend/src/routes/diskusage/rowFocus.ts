@@ -49,22 +49,12 @@ export function placeOf(key: string, control: string): RowPlace {
   return place ? { ...place, control } : { id: key, scope: null, order: [], control };
 }
 
-/** Where focus goes for a row that stood at `place`, by the screen's rule. */
-export function leaveTarget(place: RowPlace): HTMLElement | null {
-  const own = rule.stays(place);
-  return own ? controlIn(own, place.control) : rule.leaveTarget(place);
-}
-
 /**
- * For a dialog's `returnFocus` (a delete's confirmation, the removal dialog): answers the rule's target
- * for `place` once the dialog closes, and brings its row into view after the dialog has focused it
- * (focus moved by script does not scroll).
+ * `leaveTarget`: where focus goes for a row that stood at `place`; a row that stays with nothing left
+ * to focus (a refused delete took its Delete) is passed over like a row that left.
+ * `returnTo`: for a dialog's `returnFocus` (a delete's confirmation, the removal dialog), the same
+ * target, brought into view once the dialog has focused it.
+ * `catchLeaving`: run before the report is replaced; focus in a row that is gone, or on a control that
+ * is, goes on by the rule once the page shows the new report. Focus anywhere else is left alone.
  */
-export function returnTo(place: RowPlace | null): HTMLElement | null {
-  if (!place) return null;
-  const target = leaveTarget(place);
-  queueMicrotask(() => {
-    if (target && document.activeElement === target) rule.reveal(target);
-  });
-  return target;
-}
+export const { leaveTarget, returnTo, catchLeaving } = rule;
