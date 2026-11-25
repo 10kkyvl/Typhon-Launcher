@@ -47,8 +47,8 @@ const groupsOf = (from: Report, kind: GroupKind) => (kind === 'screenshots' ? fr
 const rowOf = (from: Report | null, group: GroupRef) => (from ? groupsOf(from, group.kind).find((g) => g.gameId === group.gameId) : undefined);
 
 /**
- * What the disk usage page reads and deletes: the report (the cached one first, then a scan; an answer
- * overtaken by a newer scan is dropped), the scan's state and error, and the one confirmation every
+ * What the disk usage page reads and deletes: the report (the cached one first, then a scan; one scan
+ * at a time, a measure asked during it runs once after it), the scan's state and error, and the one confirmation every
  * delete goes through, which rescans when it is done. Created once by the page; the page starts
  * `load()` on mount, `refresh()` when a move ends, and `leave()` when it unmounts.
  */
@@ -63,13 +63,38 @@ export function createDiskUsagePage() {
   let running = false;
   let scanSerial = 0;
   let left = false;
+  // The scan in flight, and the one more asked while it runs: Go joins a running walk, whose game list
+  // was read when it began, so its answer may predate the change that asked. Any number of asks during
+  // a scan make one follow-up.
+  let inFlight: Promise<boolean> | null = null;
+  let followUp: Promise<boolean> | null = null;
 
   /**
-   * Measures again; answers whether a report came. The last failure stays said until the scan answers,
-   * so a retry in flight keeps its words. A scan stopped by `leave` (or by CancelScan) is not a failure.
+   * Measures again; answers whether a report came, from a scan that began after the call. The last
+   * failure stays said until the scan answers, so a retry in flight keeps its words. A scan stopped by
+   * `leave` (or by CancelScan) is not a failure.
    */
-  async function refresh(): Promise<boolean> {
-    if (left) return false;
+  function refresh(): Promise<boolean> {
+    if (left) return Promise.resolve(false);
+    if (!inFlight) return start();
+    followUp ??= inFlight.then(() => {
+      followUp = null;
+      return start();
+    });
+    return followUp;
+  }
+
+  function start(): Promise<boolean> {
+    if (left) return Promise.resolve(false);
+    const flight = measure();
+    inFlight = flight;
+    void flight.then(() => {
+      if (inFlight === flight) inFlight = null;
+    });
+    return flight;
+  }
+
+  async function measure(): Promise<boolean> {
     const serial = ++scanSerial;
     scanning = true;
     try {
@@ -83,7 +108,8 @@ export function createDiskUsagePage() {
       if (serial === scanSerial) scanError = isScanCancelled(err) ? '' : diskusageErrorText(err, msg('diskusage.scanFailed'));
       return false;
     } finally {
-      if (serial === scanSerial) scanning = false;
+      // With a follow-up asked, the page stays measuring until it answers.
+      if (serial === scanSerial && !followUp) scanning = false;
     }
   }
 

@@ -70,6 +70,11 @@ describe('the disk usage page', () => {
   });
 
   it('scans again when a move ends, and not after it is left', async () => {
+    // The first scan answers: a move that ends during a scan asks for one after it (rescan test).
+    vi.mocked(scanUsage).mockImplementationOnce(async () => {
+      P.log.push('scan');
+      return report('Fresh');
+    });
     const view = renderDom(DiskUsage);
     await settle();
     expect(P.log).toEqual(['cached', 'scan']);
