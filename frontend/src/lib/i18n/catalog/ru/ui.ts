@@ -188,6 +188,7 @@ export const ui = {
   'ui.handoffNote': 'Лаунчер не закроется. Это займёт несколько секунд.',
   'ui.handoffWaitingNote':
     'Прежняя версия ещё завершает свою работу, например доканчивает установку. Обновление продолжится, как только она закончит.',
+  'ui.handoffCloseLauncher': 'Закрыть лаунчер',
   'ui.handoffFailedTitle': 'Обновить без перезапуска не вышло',
   'ui.updateWithRestart': 'Обновить с перезапуском',
   'ui.launcherUpdatedTo': 'Лаунчер обновлён до {version}',
