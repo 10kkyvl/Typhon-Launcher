@@ -137,7 +137,8 @@ describe('обновление лаунчера в списке уведомле
     const items = get(notifications.notifications).filter((n) => n.id.startsWith('launcher-update'));
     expect(items).toHaveLength(1);
     expect(items[0].id).toMatch(/^launcher-update-error:1\.3\.0:/);
-    expect(items[0].text).toContain('прежнюю версию не получилось вернуть');
+    const { msg } = await import('../i18n');
+    expect(items[0].text).toContain(msg('state.selfupdateHandoffUndoFailed'));
   });
 
   it('состояние failed без текста ошибки даёт запись с запасным текстом', async () => {
