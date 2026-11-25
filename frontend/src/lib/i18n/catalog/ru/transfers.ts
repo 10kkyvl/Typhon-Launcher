@@ -276,7 +276,6 @@ export const transfers = {
     many: '{count} записей',
   },
   'transfers.sourcesReviewCount': '+{review} на проверку',
-  'transfers.sourcesToggleName': 'Использовать источник «{name}»',
   // /7-R sources
 } as const;
 

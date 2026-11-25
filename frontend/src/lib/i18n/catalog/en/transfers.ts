@@ -266,6 +266,5 @@ export const transfers: Record<TransfersKey, Message> = {
   'transfers.sourcesStageProgress': '{stage}, {percent}%',
   'transfers.sourcesEntriesCount': { one: '{count} entry', other: '{count} entries' },
   'transfers.sourcesReviewCount': '+{review} to review',
-  'transfers.sourcesToggleName': 'Use source "{name}"',
   // /7-R sources
 };
