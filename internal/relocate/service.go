@@ -75,6 +75,8 @@ type Service struct {
 	cancel  context.CancelFunc
 	closing bool
 	wg      sync.WaitGroup
+	// recovering is set while the startup's recoverAll runs.
+	recovering bool
 
 	// reservedStaging holds the staging folders that are being deleted from
 	// outside; a move may not copy into one of them.
@@ -124,14 +126,33 @@ func (s *Service) ServiceStartup(ctx context.Context, opts application.ServiceOp
 func (s *Service) startService(ctx context.Context, _ application.ServiceOptions) error {
 	s.mu.Lock()
 	s.ctx, s.cancel = context.WithCancel(ctx)
+	s.recovering = true
 	s.mu.Unlock()
 
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
+		defer func() {
+			s.mu.Lock()
+			s.recovering = false
+			s.mu.Unlock()
+		}()
 		s.recoverAll(s.ctx)
 	}()
 	return nil
+}
+
+// WorkRunning reports whether a move runs now: one started by MoveGame or
+// MoveLibrary that has not reached a terminal stage, or the startup's
+// recovery of interrupted moves. The self-update asks it before it quits the
+// launcher, whose shutdown cancels a move and waits for it to stop. A move
+// left in the journal for a later start is not running.
+//
+//wails:ignore
+func (s *Service) WorkRunning() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.running) > 0 || s.recovering
 }
 
 func (s *Service) ServiceShutdown() error {
