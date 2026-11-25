@@ -164,6 +164,7 @@ type Service struct {
 	loadErr    error
 	jobs       map[string]*job
 	brokers    map[string]*broker
+	removing   int // removals between their reservation and its release
 	onFinished func(Installation)
 	busy       func(gameID string) bool
 	title      func(origin download.Origin) string

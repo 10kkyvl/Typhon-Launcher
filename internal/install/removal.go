@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 
 	"typhon/internal/download"
 	"typhon/internal/library"
@@ -276,7 +277,18 @@ func (s *Service) reserveRemoval(gameID, dir string, uninstaller bool) (func(), 
 	release, err := s.library.BeginRemoval(gameID, dir)
 	switch {
 	case err == nil:
-		return release, nil
+		s.mu.Lock()
+		s.removing++
+		s.mu.Unlock()
+		var once sync.Once
+		return func() {
+			once.Do(func() {
+				s.mu.Lock()
+				s.removing--
+				s.mu.Unlock()
+				release()
+			})
+		}, nil
 	case errors.Is(err, library.ErrFolderChanged):
 		return nil, fmt.Errorf("%w: %w", errFolderChanged, err)
 	case errors.Is(err, library.ErrGameRelocating), errors.Is(err, library.ErrGameMoving):

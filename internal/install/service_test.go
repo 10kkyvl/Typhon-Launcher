@@ -137,6 +137,8 @@ type fakeRegistrar struct {
 	shortcuts   []string
 	shortcutErr error
 	next        int
+	// onRemove runs as the library is asked to forget a game, before it does.
+	onRemove func()
 }
 
 func (f *fakeRegistrar) CreateShortcut(id string) error {
@@ -243,6 +245,12 @@ func (f *fakeRegistrar) setRunning(id string, running bool) {
 }
 
 func (f *fakeRegistrar) RemoveGame(id string) error {
+	f.mu.Lock()
+	hook := f.onRemove
+	f.mu.Unlock()
+	if hook != nil {
+		hook()
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if _, ok := f.records[id]; !ok {

@@ -129,6 +129,19 @@ func (s *Service) SetHandoffBackground(f func() string) {
 	s.mu.Unlock()
 }
 
+// SetHandoffBlocker gives the service the question it asks before a
+// hand-over: whether work runs that the shutdown of this launcher would wait
+// for or cut short (an install, a removal, an elevated installer). The old
+// window is hidden before that shutdown, so a hand-over is refused while it
+// does and the update takes the ordinary restart instead.
+//
+//wails:ignore
+func (s *Service) SetHandoffBlocker(f func() bool) {
+	s.mu.Lock()
+	s.handoffBlocker = f
+	s.mu.Unlock()
+}
+
 func (s *Service) serviceContext() context.Context {
 	s.mu.Lock()
 	ctx := s.ctx
@@ -219,9 +232,13 @@ func (s *Service) prepareHandoff() (handoffPlan, error) {
 	s.mu.Lock()
 	state := s.status.State
 	readyPath, art, version := s.readyPath, s.readyArtifact, s.status.AvailableVersion
+	blocked := s.handoffBlocker
 	s.mu.Unlock()
 	if state != StateReady || art == nil {
 		return handoffPlan{}, ErrNotReady
+	}
+	if blocked != nil && blocked() {
+		return handoffPlan{}, fmt.Errorf("%w: an install, a removal or an elevated installer is running", ErrHandoffUnsupported)
 	}
 	if err := s.refuseUnsettledHandoff(); err != nil {
 		return handoffPlan{}, err

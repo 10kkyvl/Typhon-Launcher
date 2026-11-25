@@ -101,6 +101,7 @@ type Service struct {
 	handoffRunning    atomic.Bool
 	handoffWindow     *application.WebviewWindow
 	handoffBackground func() string
+	handoffBlocker    func() bool
 	handoffSpec       *HandoffSpec // set only in a successor launcher
 	handoffFinished   bool
 	handoffOldGone    bool // the old process exited; the held-back cleanup may run
