@@ -127,7 +127,7 @@
   $effect(() => setWindowReady(linksReady));
   // The sign-in settled: the screen it leads to (the shell, or the sign-in, legal or consent screen)
   // is drawn with its first data, so a seamless restart's curtain may lift off it.
-  const shellDecided = $derived($authState !== 'bootstrapping');
+  const shellDecided = $derived(!$bootSplash);
   $effect(() => setShellReady(shellDecided));
 
   onDestroy(refreshStorageOnFolderChange());
