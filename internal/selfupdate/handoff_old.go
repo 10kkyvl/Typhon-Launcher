@@ -48,10 +48,20 @@ var (
 			a.Quit()
 		}
 	}
+	hideOldWindow      = hideWithoutTransition
 	handoffSaveCurrent = snapshotPrevious
 	methodFor          = handoffMethodFor
 	targetFor          = handoffTargetFor
 )
+
+// hideWithoutTransition takes the old window off screen at once: the
+// successor's window already stands in its place, so a closing animation
+// would show the user two windows.
+func hideWithoutTransition(w *application.WebviewWindow) error {
+	err := windowhandoff.DisableTransitions(w)
+	w.Hide()
+	return err
+}
 
 // handoffProc is the successor as the old process sees it.
 type handoffProc interface {
@@ -363,6 +373,13 @@ func (s *Service) runHandoff(ctx context.Context, plan handoffPlan, phaseStart i
 		// macOS 14 that succeeds only when the active app yielded to it.
 		if err := yieldForeground(proc.Pid()); err != nil {
 			slog.Warn("selfupdate: let the successor take the activation", "error", err)
+		}
+	}
+	// The successor's window stands where this one is; this one goes now,
+	// not after the services have stopped (Wails closes windows last).
+	if window != nil {
+		if err := hideOldWindow(window); err != nil {
+			slog.Warn("selfupdate: hide the old window without a transition", "error", err)
 		}
 	}
 	// Quit from its own goroutine: the shutdown waits for this one.

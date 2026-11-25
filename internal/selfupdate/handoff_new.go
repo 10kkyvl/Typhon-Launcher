@@ -124,9 +124,7 @@ func (s *Service) CompleteHandoff(ctx context.Context, takeover func() error) er
 	if spec == nil {
 		return errors.New("selfupdate: this launcher was not started by a hand-off")
 	}
-	waitCtx, cancel := context.WithTimeout(ctx, parentExitTimeout)
-	defer cancel()
-	if err := waitForParentExit(waitCtx, spec.ParentPID); err != nil {
+	if err := waitForOldLauncher(ctx, spec.ParentPID); err != nil {
 		return err
 	}
 	if err := takeover(); err != nil {
@@ -151,6 +149,23 @@ func (s *Service) CompleteHandoff(ctx context.Context, takeover func() error) er
 	s.mu.Unlock()
 	emit(eventHandoffDone, s.HandoffInfo())
 	return nil
+}
+
+// waitForOldLauncher waits for the old process to exit, for as long as this
+// launcher runs. The old one has hidden its window and is stopping its
+// services, which flush state and may sit out network timeouts; ending it
+// would cut those saves short and stop the installers in its job, and giving
+// up here would quit the only window the user sees. Past parentExitTimeout
+// the wait is only logged.
+func waitForOldLauncher(ctx context.Context, pid int) error {
+	waitCtx, cancel := context.WithTimeout(ctx, parentExitTimeout)
+	err := waitForParentExit(waitCtx, pid)
+	cancel()
+	if !errors.Is(err, errParentStillRunning) || ctx.Err() != nil {
+		return err
+	}
+	slog.Warn("selfupdate: the old launcher is still shutting down, waiting on", "pid", pid, "after", parentExitTimeout)
+	return waitForParentExit(ctx, pid)
 }
 
 // finishHandoff settles the journal after the old process is gone. Failures

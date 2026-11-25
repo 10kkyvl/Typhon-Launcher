@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"typhon/internal/handoffgate"
+	"typhon/internal/windowhandoff"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -54,6 +55,74 @@ func TestCompleteHandoffTakesOverOnlyAfterTheOldLauncherExited(t *testing.T) {
 	}
 	if tookOverAlive.Load() {
 		t.Fatal("the single instance was taken over while the old launcher was alive")
+	}
+}
+
+// The old launcher shuts down slowly (services flush, a network times out).
+// Killing it would cut those saves short and stop installers in its job, so
+// the successor keeps waiting past the bound instead of quitting.
+func TestSuccessorKeepsWaitingForASlowOldLauncher(t *testing.T) {
+	r := newSuccessorRig(t, false)
+	prevTimeout := parentExitTimeout
+	parentExitTimeout = 20 * time.Millisecond
+	t.Cleanup(func() { parentExitTimeout = prevTimeout })
+	polls := make(chan struct{}, 64)
+	parentAlive = func(int) (bool, error) {
+		select {
+		case polls <- struct{}{}:
+		default:
+		}
+		return r.oldAlive.Load(), nil
+	}
+	done := make(chan error, 1)
+	go func() { done <- r.complete(t) }()
+	// Well past the bound: more polls than fit in it.
+	for i := 0; i < 12; i++ {
+		select {
+		case <-polls:
+		case err := <-done:
+			t.Fatalf("CompleteHandoff() gave up with %v while the old launcher was still shutting down", err)
+		case <-time.After(5 * time.Second):
+			t.Fatal("the old launcher is no longer polled")
+		}
+	}
+	r.oldAlive.Store(false)
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("CompleteHandoff() = %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("CompleteHandoff did not return after the old launcher exited")
+	}
+}
+
+// Once the successor's window is up, the old one goes at once and without a
+// transition, before the old process starts its shutdown.
+func TestOldLauncherHidesItsWindowBeforeItQuits(t *testing.T) {
+	r := newHandoffRig(t, func(spec HandoffSpec, _ *fakeSuccessor) {
+		if err := os.WriteFile(spec.ReadyPath, []byte(spec.Nonce), 0o600); err != nil { //nolint:forbidigo // test double for the successor's marker
+			t.Errorf("write the marker: %v", err)
+		}
+	})
+	r.svc.SetHandoffWindow(&application.WebviewWindow{})
+	prevCapture := captureGeometry
+	captureGeometry = func(*application.WebviewWindow) windowhandoff.Geometry {
+		return windowhandoff.Geometry{Width: 800, Height: 600}
+	}
+	t.Cleanup(func() { captureGeometry = prevCapture })
+	var hidden atomic.Int32
+	hideOldWindow = func(*application.WebviewWindow) error {
+		if r.quit.Load() != 0 {
+			t.Error("the window was hidden after the quit")
+		}
+		hidden.Add(1)
+		return nil
+	}
+	r.svc.runHandoff(t.Context(), r.plan, 1)
+	r.waitQuit(t)
+	if hidden.Load() != 1 {
+		t.Fatalf("hidden %d times, want once before the quit", hidden.Load())
 	}
 }
 

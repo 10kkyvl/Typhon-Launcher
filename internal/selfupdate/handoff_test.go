@@ -49,13 +49,14 @@ func exists(t *testing.T, path string) bool {
 
 func silenceSeams(t *testing.T) {
 	t.Helper()
-	prevAllow, prevYield, prevQuit, prevSettle := allowForeground, yieldForeground, quitApplication, settleWindow
+	prevAllow, prevYield, prevQuit, prevSettle, prevHide := allowForeground, yieldForeground, quitApplication, settleWindow, hideOldWindow
 	allowForeground = func(int) error { return nil }
 	yieldForeground = func(int) error { return nil }
 	quitApplication = func() {}
 	settleWindow = func(*application.WebviewWindow, bool) error { return nil }
+	hideOldWindow = func(*application.WebviewWindow) error { return nil }
 	t.Cleanup(func() {
-		allowForeground, yieldForeground, quitApplication, settleWindow = prevAllow, prevYield, prevQuit, prevSettle
+		allowForeground, yieldForeground, quitApplication, settleWindow, hideOldWindow = prevAllow, prevYield, prevQuit, prevSettle, prevHide
 	})
 }
 
