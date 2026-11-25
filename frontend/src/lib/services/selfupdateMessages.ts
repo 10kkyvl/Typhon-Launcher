@@ -5,6 +5,7 @@ import type { RollbackInfo, SelfUpdateOutcome, SelfUpdateStatus } from './selfup
 const REASONS: Record<string, MessageKey> = {
   'selfupdate.handoff_unsupported': 'state.selfupdateReasonHandoffUnsupported',
   'selfupdate.handoff_pending': 'state.selfupdateReasonHandoffPending',
+  'selfupdate.not_waiting': 'state.selfupdateReasonNotWaiting',
   'selfupdate.not_replaced': 'state.selfupdateReasonBinaryUnchanged',
   'selfupdate.parent_still_running': 'state.selfupdateReasonLauncherDidNotExit',
   'selfupdate.hash_mismatch': 'state.selfupdateReasonCorruptDownload',

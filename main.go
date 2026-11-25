@@ -174,6 +174,7 @@ func init() {
 	application.RegisterEvent[theme.SourceFailure]("theme:source-failed")
 	application.RegisterEvent[selfupdate.Status]("launcher:update_status")
 	application.RegisterEvent[selfupdate.HandoffInfo]("launcher:handoff_done")
+	application.RegisterEvent[application.Void]("launcher:handoff_waiting")
 	application.RegisterEvent[selfupdate.Progress]("launcher:update_progress")
 	application.RegisterEvent[playlog.Session]("playlog:recorded")
 	application.RegisterEvent[playlog.DegradedStatus]("playlog:degraded")
@@ -1042,6 +1043,10 @@ func main() {
 
 	selfupdateService.SetHandoffWindow(window)
 	selfupdateService.SetHandoffBackground(themeService.Background)
+	// An install, a removal or an elevated installer keeps the old launcher
+	// from exiting: the update then goes the ordinary way, with a restart.
+	selfupdateService.SetHandoffBlocker(installService.WorkRunning)
+	selfupdateService.SetSuccessorQuit(wails.Quit)
 	if handoffMode {
 		// The native window appears inside wails.Run, so it is prepared from the
 		// first event that finds it there. If preparing fails the window is shown
