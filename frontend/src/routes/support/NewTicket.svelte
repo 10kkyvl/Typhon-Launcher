@@ -30,19 +30,23 @@
   import { handleSessionLost } from '../../lib/stores/user';
   import { runeCount } from '../../lib/profile/layout';
   import AttachLogs from './AttachLogs.svelte';
+  import { forgetRequest, keepRequest, keptRequest } from './drafts';
   import LogsConfirm from './LogsConfirm.svelte';
   import { bodyCounter, isPlainEnter, isSendShortcut, sendKeys, sessionGone } from './sending';
 
   let { initialTopic, initialSubject = '' }: { initialTopic: SupportTopic; initialSubject?: string } = $props();
   const uid = $props.id();
 
-  let topic = $state<string>(untrack(() => initialTopic));
-  let attachLogs = $state(untrack(() => attachLogsByDefault(initialTopic)));
-  let logsTouched = false;
-  let game = $state<{ igdbId: number; title: string } | null>(null);
+  // What the player left unsent (the session gone, another screen opened) comes back before what the
+  // way in suggests.
+  const draft = keptRequest();
+  let topic = $state<string>(draft?.topic ?? untrack(() => initialTopic));
+  let attachLogs = $state(draft?.attachLogs ?? untrack(() => attachLogsByDefault(initialTopic)));
+  let logsTouched = draft?.logsTouched ?? false;
+  let game = $state<{ igdbId: number; title: string } | null>(draft?.game ?? null);
   let pickerOpen = $state(false);
-  let subject = $state(untrack(() => initialSubject));
-  let body = $state('');
+  let subject = $state(draft?.subject ?? untrack(() => initialSubject));
+  let body = $state(draft?.body ?? '');
   let limits = $state<Limits | null>(null);
   let limitsFailure = $state('');
   let errors = $state<DraftErrors>({});
@@ -94,6 +98,16 @@
     };
   });
 
+  $effect(() => {
+    const now = { topic, game, subject, body, attachLogs };
+    untrack(() => keepRequest({ ...now, logsTouched }));
+  });
+
+  function cancel() {
+    forgetRequest();
+    goBack();
+  }
+
   function changeTopic(id: string) {
     topic = id;
     if (!logsTouched && isTopic(id)) attachLogs = attachLogsByDefault(id);
@@ -140,6 +154,7 @@
         () => confirm.ask(),
       );
       if (!outcome.sent) return;
+      forgetRequest();
       announceCreated(outcome.value, onScreen, {
         notify: (text) => toast(text, 'success'),
         open: (number) => navigate('support', { ticket: String(number) }),
@@ -247,7 +262,7 @@
     {/if}
 
     <div class="actions">
-      <Button disabled={sending} onclick={goBack}>{msg('common.cancel')}</Button>
+      <Button disabled={sending} onclick={cancel}>{msg('common.cancel')}</Button>
       <Button variant="primary" busy={sending} onclick={submit}>
         {sending ? msg('tickets.submitting') : msg('tickets.submit')}
       </Button>

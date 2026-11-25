@@ -167,6 +167,7 @@ describe('where the section is reachable from', () => {
       'routes/support/Support.svelte',
       'routes/support/TicketList.svelte',
       'routes/support/TicketView.svelte',
+      'routes/support/drafts.ts',
       'routes/support/messageTime.ts',
       'routes/support/sending.ts',
     ]);

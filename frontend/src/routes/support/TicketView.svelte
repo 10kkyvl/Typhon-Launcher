@@ -30,6 +30,7 @@
   import { toast } from '../../lib/stores/toasts';
   import { handleSessionLost } from '../../lib/stores/user';
   import AttachLogs from './AttachLogs.svelte';
+  import { keepReply, keptReply } from './drafts';
   import LogsConfirm from './LogsConfirm.svelte';
   import { messageWhen } from './messageTime';
   import { bodyCounter, isSendShortcut, sendKeys, sessionGone } from './sending';
@@ -42,7 +43,8 @@
   let failure = $state('');
   let limits = $state<Limits | null>(null);
   let limitsFailure = $state('');
-  let reply = $state('');
+  // A reply left unsent in this request (the session gone, another screen opened) comes back.
+  let reply = $state(untrack(() => keptReply(number)));
   let replyError = $state('');
   let replyFailure = $state('');
   // A read or a reply found the session gone: its notice offers to sign in instead of a Retry.
@@ -108,6 +110,12 @@
       run += 1;
       off();
     };
+  });
+
+  // Kept as it is typed; a sent reply clears the box, and with it what is kept.
+  $effect(() => {
+    const text = reply;
+    untrack(() => keepReply(number, text));
   });
 
   // A reload a reply asked for while a Retry or a sent reply was on its way: it runs once that answers.
