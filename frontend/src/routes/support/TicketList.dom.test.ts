@@ -10,16 +10,16 @@ import { resetHistory, route } from '../../lib/stores/router';
 import { authState } from '../../lib/stores/user';
 import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import { renderDom } from '../../lib/testing/dom';
-import { page, ticket, words } from './supportTesting';
+import { page, ticket, words } from '../../lib/testing/supportTesting';
 import TicketList from './TicketList.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
-vi.mock('../../../bindings/typhon/internal/support', async (original) => (await import('./supportTesting')).fakeService(await original(), 'support'));
-vi.mock('../../../bindings/typhon/internal/diagnostics', async (original) => (await import('./supportTesting')).fakeService(await original(), 'diagnostics'));
-vi.mock('../../../bindings/typhon/internal/account', async (original) => (await import('./supportTesting')).fakeService(await original(), 'account'));
-vi.mock('../../lib/services/support', async (original) => (await import('./supportTesting')).supportService(await original()));
-vi.mock('../../lib/services/logsUpload', async () => (await import('./supportTesting')).logsUpload());
-vi.mock('../../lib/services/account', async (original) => (await import('./supportTesting')).accountOpeners(await original()));
+vi.mock('../../../bindings/typhon/internal/support', async (original) => (await import('../../lib/testing/supportTesting')).fakeService(await original(), 'support'));
+vi.mock('../../../bindings/typhon/internal/diagnostics', async (original) => (await import('../../lib/testing/supportTesting')).fakeService(await original(), 'diagnostics'));
+vi.mock('../../../bindings/typhon/internal/account', async (original) => (await import('../../lib/testing/supportTesting')).fakeService(await original(), 'account'));
+vi.mock('../../lib/services/support', async (original) => (await import('../../lib/testing/supportTesting')).supportService(await original()));
+vi.mock('../../lib/services/logsUpload', async () => (await import('../../lib/testing/supportTesting')).logsUpload());
+vi.mock('../../lib/services/account', async (original) => (await import('../../lib/testing/supportTesting')).accountOpeners(await original()));
 
 const OPEN = ticket(3, 'Game will not start', { status: 'open', topic: 'launch', updatedAt: new Date().toISOString() });
 const ANSWERED = ticket(2, 'Download stuck at 99%', { status: 'waiting_user', topic: 'install', unread: true });

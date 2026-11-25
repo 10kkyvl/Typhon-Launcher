@@ -1,13 +1,14 @@
 import { vi } from 'vitest';
-import type { LogUploadStatus } from '../../lib/services/logsUpload';
-import type { Limits, Message, Ticket, TicketPage, TicketThread } from '../../lib/services/support';
+import type { LogUploadStatus } from '../services/logsUpload';
+import type { Limits, Message, Ticket, TicketPage, TicketThread } from '../services/support';
 
-// Fixtures and stand-ins of the support screens' dom tests. Each test file mocks the modules itself
-// (vi.mock is hoisted per file) through the factories here, so no test can reach the support backend:
+// Fixtures and stand-ins of the tests that mount a support screen (routes/support). Each test file
+// mocks the modules itself (vi.mock is hoisted per file) through the factories here, so no test can
+// reach the support backend:
 //
-//   vi.mock('../../lib/services/support', async (original) => (await import('./supportTesting')).supportService(await original()));
-//   vi.mock('../../lib/services/logsUpload', async () => (await import('./supportTesting')).logsUpload());
-//   vi.mock('../../lib/services/account', async (original) => (await import('./supportTesting')).accountOpeners(await original()));
+//   vi.mock('../../lib/services/support', async (original) => (await import('../../lib/testing/supportTesting')).supportService(await original()));
+//   vi.mock('../../lib/services/logsUpload', async () => (await import('../../lib/testing/supportTesting')).logsUpload());
+//   vi.mock('../../lib/services/account', async (original) => (await import('../../lib/testing/supportTesting')).accountOpeners(await original()));
 //
 // Ticket text here is made up.
 
@@ -61,10 +62,10 @@ export function accountOpeners<T extends object>(original: T) {
  * assert that `calls` (lib/testing/fakeBinding) stays empty, so a call that slipped past the mocks
  * above is seen, not sent.
  *
- *   vi.mock('../../../bindings/typhon/internal/support', async (original) => (await import('./supportTesting')).fakeService(await original(), 'support'));
+ *   vi.mock('../../../bindings/typhon/internal/support', async (original) => (await import('../../lib/testing/supportTesting')).fakeService(await original(), 'support'));
  */
 export async function fakeService<T extends object>(original: T, prefix: string) {
-  const { fakeBinding } = await import('../../lib/testing/fakeBinding');
+  const { fakeBinding } = await import('./fakeBinding');
   return { ...original, Service: fakeBinding(prefix) };
 }
 

@@ -169,7 +169,6 @@ describe('where the section is reachable from', () => {
       'routes/support/TicketView.svelte',
       'routes/support/messageTime.ts',
       'routes/support/sending.ts',
-      'routes/support/supportTesting.ts',
     ]);
   });
 });

@@ -38,7 +38,7 @@ describe('the support screens', () => {
   // The unread poll (once a minute) and the refresh on window focus are lib/stores/support.ts's, which
   // App.svelte starts and stops; a screen reacts to the count and owns no clock or window listener.
   it('run no clock and listen to no window of their own', () => {
-    const own = Object.entries(sourcesUnder('routes/support/')).filter(([path]) => !path.endsWith('supportTesting.ts'));
+    const own = Object.entries(sourcesUnder('routes/support/'));
     expect(own.filter(([, source]) => /\bset(?:Interval|Timeout)\(|addEventListener\(|<svelte:window\b|\bon\(window\b/.test(source)).map(([path]) => path)).toEqual([]);
   });
 

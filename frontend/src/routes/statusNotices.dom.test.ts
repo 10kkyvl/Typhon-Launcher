@@ -32,13 +32,13 @@ vi.mock('../lib/services/emulators', async (importOriginal) => ({
   listPlatforms: vi.fn(),
 }));
 // The support list reaches the real support backend: the whole service, the log upload, the account
-// openers and their bindings are stand-ins (support/supportTesting.ts), and no call reaches a binding.
-vi.mock('../../bindings/typhon/internal/support', async (original) => (await import('./support/supportTesting')).fakeService(await original(), 'support'));
-vi.mock('../../bindings/typhon/internal/diagnostics', async (original) => (await import('./support/supportTesting')).fakeService(await original(), 'diagnostics'));
-vi.mock('../../bindings/typhon/internal/account', async (original) => (await import('./support/supportTesting')).fakeService(await original(), 'account'));
-vi.mock('../lib/services/support', async (original) => (await import('./support/supportTesting')).supportService(await original()));
-vi.mock('../lib/services/logsUpload', async () => (await import('./support/supportTesting')).logsUpload());
-vi.mock('../lib/services/account', async (original) => (await import('./support/supportTesting')).accountOpeners(await original()));
+// openers and their bindings are stand-ins (lib/testing/supportTesting.ts), and no call reaches a binding.
+vi.mock('../../bindings/typhon/internal/support', async (original) => (await import('../lib/testing/supportTesting')).fakeService(await original(), 'support'));
+vi.mock('../../bindings/typhon/internal/diagnostics', async (original) => (await import('../lib/testing/supportTesting')).fakeService(await original(), 'diagnostics'));
+vi.mock('../../bindings/typhon/internal/account', async (original) => (await import('../lib/testing/supportTesting')).fakeService(await original(), 'account'));
+vi.mock('../lib/services/support', async (original) => (await import('../lib/testing/supportTesting')).supportService(await original()));
+vi.mock('../lib/services/logsUpload', async () => (await import('../lib/testing/supportTesting')).logsUpload());
+vi.mock('../lib/services/account', async (original) => (await import('../lib/testing/supportTesting')).accountOpeners(await original()));
 
 afterEach(() => {
   expect(calls).toEqual([]);

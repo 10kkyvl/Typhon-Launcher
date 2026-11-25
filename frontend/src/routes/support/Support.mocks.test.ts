@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
  * The support screens send a player's text, replies and log bundles to the real support backend, and
  * the screens' own reads (the list, a request, the unread count) reach it too. So every test that
  * mounts a support screen replaces the whole support service (Limits, List, Get, Resolve, Unread,
- * Create, Reply), the log upload and the account service's openers with mocks (supportTesting.ts),
+ * Create, Reply), the log upload and the account service's openers with mocks (lib/testing/supportTesting.ts),
  * and fakes the three generated bindings, so a call that slipped past the mocks is recorded rather
  * than sent. A source tripwire over the test files: what a mock answers is each test's to get right.
  */
