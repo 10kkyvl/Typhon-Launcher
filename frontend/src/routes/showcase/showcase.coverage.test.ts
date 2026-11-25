@@ -28,6 +28,7 @@ const BASE = [
   'SearchInput',
   'TextField',
   'TextArea',
+  'PathField',
   'HexColorField',
   'IntegerInput',
   'Notice',

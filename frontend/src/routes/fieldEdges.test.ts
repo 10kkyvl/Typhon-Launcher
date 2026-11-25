@@ -32,6 +32,10 @@ const FORMS: Record<string, Allowed> = {
     '.counter.over': 'the count past its limit',
     '.error': "a field message's plate over the backdrop",
   },
+  // The base path field: the red edge of a typed path that is wrong; its message's plate.
+  'lib/components/PathField.svelte': {
+    '.error': "a field message's plate over the backdrop",
+  },
 };
 
 const squeeze = (text: string) => text.replace(/\s+/g, ' ').trim();

@@ -6,6 +6,7 @@
   import IconButton from '../../lib/components/IconButton.svelte';
   import IntegerInput from '../../lib/components/IntegerInput.svelte';
   import Notice from '../../lib/components/Notice.svelte';
+  import PathField from '../../lib/components/PathField.svelte';
   import SearchInput from '../../lib/components/SearchInput.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import Slider from '../../lib/components/Slider.svelte';
@@ -101,6 +102,24 @@
   let secret = $state('fake-pass');
   let revealed = $state(false);
   let search = $state('a query to clear');
+
+  // A picker that takes a second, as the system's folder dialog does, and answers the next folder.
+  const FOLDERS = ['D:/Games', 'E:/A drive with a long folder name/Games bought on sale/Typhon Library/Installed games'];
+  let folder = $state('');
+  let destination = $state('C:/Games/Hades');
+  let destinationError = $state('');
+  function pickFolder(): Promise<void> {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        folder = FOLDERS[(FOLDERS.indexOf(folder) + 1) % FOLDERS.length];
+        resolve();
+      }, 1000);
+    });
+  }
+
+  function browseDestination() {
+    destination = 'D:/Games/Hades';
+  }
 
   let note = $state('');
   let message = $state('The game closes right after the logo.\nIt worked yesterday.');
@@ -220,6 +239,17 @@
     <span><Button size="sm" onclick={() => (messageError = message.trim() ? '' : 'Describe the problem.')}>Check</Button></span>
     <span class="text"><TextArea label="Sent" rows={2} value="Already sent, read-only while the answer comes." readonly /></span>
     <span class="text"><TextArea label="Reply" rows={2} disabledReason="The request is closed." /></span>
+  </ShowcaseRow>
+
+  <ShowcaseRow caption="Path fields: none chosen, then a long path after Browse (busy for a second) with a fact under it; typed as well as browsed, with an error after Check; disabled with a reason" stack>
+    <span class="text">
+      <PathField label="Library folder" placeholder="No folder chosen" browseLabel="Browse" onbrowse={pickFolder} value={folder}>
+        {#snippet facts()}{#if folder}<span class="field-label">Drive {folder.slice(0, 1)} · 412 GB free of 1 TB</span>{/if}{/snippet}
+      </PathField>
+    </span>
+    <span class="text"><PathField label="Install to" editable hint="A folder on any drive." error={destinationError} browseLabel="Browse" onbrowse={browseDestination} bind:value={destination} /></span>
+    <span><Button size="sm" onclick={() => (destinationError = destination.trim() ? '' : 'Choose where to install.')}>Check</Button></span>
+    <span class="text"><PathField label="Move to" value="D:/Games/Hades" disabledReason="The game is running." browseLabel="Browse" onbrowse={() => {}} /></span>
   </ShowcaseRow>
 
   <ShowcaseRow caption="Search fields">
