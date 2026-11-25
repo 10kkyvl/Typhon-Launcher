@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"typhon/internal/storage"
+	"typhon/internal/uierr"
 	"typhon/internal/windowhandoff"
 )
 
@@ -61,7 +62,7 @@ const (
 
 // ErrHandoffUnsupported means this build, platform or installation cannot
 // update without a restart; nothing was changed and the worker path is open.
-var ErrHandoffUnsupported = errors.New("selfupdate: updating without a restart is not available here")
+var ErrHandoffUnsupported = uierr.New("selfupdate.handoff_unsupported", "selfupdate: updating without a restart is not available here")
 
 var errHandoffBadSpec = errors.New("selfupdate: the hand-off argument is not valid")
 

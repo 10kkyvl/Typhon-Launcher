@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"typhon/internal/handoffgate"
+	"typhon/internal/uierr"
 	"typhon/internal/windowhandoff"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -740,8 +741,14 @@ func TestBeginHandoffRejectsAnUnsupportedPlatformBeforeAnyChange(t *testing.T) {
 	r.svc.readyArtifact = &art
 	r.svc.portable = true
 
-	if err := r.svc.BeginHandoff("en", 1); !errors.Is(err, ErrHandoffUnsupported) {
+	err := r.svc.BeginHandoff("en", 1)
+	if !errors.Is(err, ErrHandoffUnsupported) {
 		t.Fatalf("BeginHandoff() error = %v, want ErrHandoffUnsupported", err)
+	}
+	// The update screen tells "cannot hand over here" from a real failure by
+	// this code and only then falls back to the restart without a word.
+	if got := uierr.Code(err); got != "selfupdate.handoff_unsupported" {
+		t.Fatalf("BeginHandoff() error code = %q, want selfupdate.handoff_unsupported", got)
 	}
 	if r.svc.busy || r.svc.GetStatus().State != StateReady {
 		t.Fatal("the worker fallback is not open after a rejected hand-off")
