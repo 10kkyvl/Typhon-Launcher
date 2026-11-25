@@ -132,6 +132,31 @@
   ];
   let mode = $state('keep');
 
+  // A choice the page writes at once and takes a second to save: the list is held meanwhile, and the
+  // line above it says why.
+  const SYNC_TARGETS: OptionItem[] = [
+    { id: 'cloud', title: 'Typhon cloud', note: 'Every device signed in to this account' },
+    { id: 'disk', title: 'A folder on this computer', note: 'D:/Backups/Saves' },
+    { id: 'off', title: 'Nowhere', note: 'Saves stay where the game writes them' },
+  ];
+  let syncTarget = $state('cloud');
+  let syncSaving = $state(false);
+  function saveSyncTarget(id: string) {
+    syncSaving = true;
+    setTimeout(() => {
+      syncTarget = id;
+      syncSaving = false;
+    }, 1000);
+  }
+
+  // Applied as soon as it is chosen, so the arrows only move and Space, Enter or a press choose.
+  const REGIONS: OptionItem[] = ['Europe', 'North America', 'South America', 'Asia', 'Oceania'].map((title) => ({ id: title.toLowerCase().replace(' ', '-'), title }));
+  let region = $state('europe');
+  let regionWrites = $state(0);
+
+  const MANY_FOLDERS: OptionItem[] = Array.from({ length: 20 }, (_, index) => ({ id: `f${index + 1}`, title: `D:/Games/Folder ${index + 1}`, fact: `${(index + 1) * 3} GB` }));
+  let manyFolder = $state('f1');
+
   function browseDestination() {
     destination = 'D:/Games/Hades';
   }
@@ -277,6 +302,28 @@
     </span>
   </ShowcaseRow>
 
+  <ShowcaseRow caption="Option lists: held while the page saves a choice (a second); applied at once, so the arrows only move and Space, Enter or a press choose; twenty rows scrolling in a bounded box, the keys bringing the row into view" stack>
+    <span class="field-label" id="{uid}-sync">Sync saves to</span>
+    <span class="field-label">{syncSaving ? 'Saving the choice…' : 'Saved.'}</span>
+    <span class="text"><OptionList labelledby="{uid}-sync" options={SYNC_TARGETS} value={syncTarget} disabled={syncSaving} onchange={saveSyncTarget} /></span>
+    <span class="field-label" id="{uid}-region">Download region</span>
+    <span class="field-label">Applied {regionWrites} {regionWrites === 1 ? 'time' : 'times'}</span>
+    <span class="text">
+      <OptionList
+        labelledby="{uid}-region"
+        options={REGIONS}
+        value={region}
+        activation="manual"
+        onchange={(id) => {
+          region = id;
+          regionWrites += 1;
+        }}
+      />
+    </span>
+    <span class="field-label" id="{uid}-many">Twenty folders (chosen: {manyFolder})</span>
+    <div class="text scroll-box"><OptionList labelledby="{uid}-many" options={MANY_FOLDERS} bind:value={manyFolder} /></div>
+  </ShowcaseRow>
+
   <ShowcaseRow caption="Search fields">
     <span class="search"><SearchInput label="Search the showcase" bind:value={query} placeholder="Type a name" /></span>
     <span class="search"><SearchInput label="Searching" value="hollow" loading /></span>
@@ -365,6 +412,11 @@
   .text {
     display: block;
     width: 32rem;
+  }
+
+  .scroll-box {
+    max-height: 24rem;
+    overflow-y: auto;
   }
 
   .mode-title {
