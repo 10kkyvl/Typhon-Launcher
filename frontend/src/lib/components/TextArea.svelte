@@ -138,7 +138,8 @@
   });
 </script>
 
-<div class="text-area">
+<!-- The rows, for the field's floor in CSS: on the wrapper, as the field itself carries no style. -->
+<div class="text-area" style:--rows={rows}>
   {#if label || counter}
     <div class="head">
       {#if label}
@@ -208,9 +209,11 @@
   }
 
   /* The shared `.input` rule draws a one-line field: the rows set the height here, and the text gets
-     room above and below. */
+     room above and below. Dragged, it stops at its rows: the floor is the rows' lines, the padding
+     above and below and the 1px border of `.input` (border-box). */
   .area {
     height: auto;
+    min-height: calc(var(--rows) * 1lh + 1.8rem + 2px);
     padding: 0.9rem 1.2rem;
     line-height: 1.55;
     resize: vertical;

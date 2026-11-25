@@ -1,10 +1,12 @@
 import { screen, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ruleBody, styleOf } from '../testing/css';
 import { renderDom } from '../testing/dom';
 import { description } from '../testing/hints';
 import TextAreaHarness from '../testing/TextAreaHarness.svelte';
 import TextArea from './TextArea.svelte';
+import textAreaSource from './TextArea.svelte?raw';
 import type { TextAreaCounter } from './textArea';
 
 afterEach(() => {
@@ -23,6 +25,16 @@ describe('TextArea: a multi-line field', () => {
     expect(box().classList.contains('input')).toBe(true);
     expect(box().rows).toBe(6);
     expect(box().getAttribute('dir')).toBe('auto');
+  });
+
+  // jsdom lays nothing out: the floor is read from the rule and the value the field carries.
+  it('cannot be dragged lower than the rows it opens at', () => {
+    renderDom(TextArea, { label: 'Details', rows: 6 });
+    expect(box().parentElement?.style.getPropertyValue('--rows')).toBe('6');
+    const area = ruleBody(styleOf(textAreaSource, 'TextArea.svelte'), '.area');
+    expect(area.resize).toBe('vertical');
+    expect(area['min-height']).toBe('calc(var(--rows) * 1lh + 1.8rem + 2px)');
+    expect(area.padding).toBe('0.9rem 1.2rem');
   });
 
   it('makes a new line on Enter, and leaves Ctrl/Cmd+Enter to the caller', async () => {
