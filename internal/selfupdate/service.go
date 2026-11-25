@@ -109,6 +109,8 @@ type Service struct {
 	handoffSettled    bool // the successor has become an ordinary application
 	handoffRevealedAt time.Time
 	handoffWaiting    bool // the old process is slow to exit; the update screen says so
+	successorQuit     func()
+	successorQuitting bool // QuitWaitingSuccessor has asked to quit
 	// owedUndo puts the previous launcher back after a failed hand-off whose
 	// own undo failed; nil when nothing is owed.
 	owedUndo func() error

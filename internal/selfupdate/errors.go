@@ -42,6 +42,7 @@ var (
 	ErrReadOnly            = uierr.New("selfupdate.read_only", "selfupdate: state failed to load, refusing to persist")
 	ErrNotReplaced         = uierr.New("selfupdate.not_replaced", "selfupdate: installer finished but left the launcher binary unchanged")
 	ErrManifestOutdated    = uierr.New("selfupdate.manifest_outdated", "selfupdate: launcher version is rejected by the manifest endpoint")
+	ErrNotWaiting          = uierr.New("selfupdate.not_waiting", "selfupdate: this launcher is not waiting for an old one to exit")
 
 	ErrRollbackUnsupported   = uierr.New("selfupdate.rollback_unsupported", "selfupdate: rolling back the launcher is not supported on this platform")
 	ErrNoPrevious            = uierr.New("selfupdate.rollback_none", "selfupdate: no previous launcher version is saved")

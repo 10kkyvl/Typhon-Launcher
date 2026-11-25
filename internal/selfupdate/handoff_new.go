@@ -136,6 +136,16 @@ func (s *Service) CompleteHandoff(ctx context.Context, takeover func() error) er
 	if err := s.waitForOldLauncher(ctx, spec.ParentPID); err != nil {
 		return err
 	}
+	s.mu.Lock()
+	quitting := s.successorQuitting
+	s.mu.Unlock()
+	if quitting {
+		// The player closed this launcher while it waited: it is on its way
+		// out and takes nothing over; the next start settles the journal.
+		// Nil, not an error: the caller would ask a quitting app to quit.
+		slog.Info("selfupdate: the old launcher left after the successor was closed; the next start settles the hand-over")
+		return nil
+	}
 	if err := takeover(); err != nil {
 		return fmt.Errorf("selfupdate: take over the single instance: %w", err)
 	}
@@ -259,6 +269,41 @@ func (s *Service) finishHandoff(ctx context.Context) {
 	if err := clearJournal(s.dir); err != nil {
 		slog.Warn("selfupdate: remove the hand-off journal", "error", err)
 	}
+}
+
+// SetSuccessorQuit gives the service the call that quits this application,
+// for QuitWaitingSuccessor.
+//
+//wails:ignore
+func (s *Service) SetSuccessorQuit(quit func()) {
+	s.mu.Lock()
+	s.successorQuit = quit
+	s.mu.Unlock()
+}
+
+// QuitWaitingSuccessor quits this launcher while it is the successor of a
+// hand-over whose old launcher has not exited yet: the player gives up
+// waiting. The old launcher and the hand-over journal are left as they are,
+// for the next start to settle. In any other state it does nothing and
+// returns ErrNotWaiting; a second call quits nothing more.
+func (s *Service) QuitWaitingSuccessor() error {
+	s.mu.Lock()
+	if s.handoffSpec == nil || s.handoffOldGone {
+		s.mu.Unlock()
+		return ErrNotWaiting
+	}
+	first := !s.successorQuitting
+	s.successorQuitting = true
+	quit := s.successorQuit
+	s.mu.Unlock()
+	if !first {
+		return nil
+	}
+	slog.Warn("selfupdate: the player closes the successor before the old launcher exited; the next start settles the hand-over")
+	if quit != nil {
+		quit()
+	}
+	return nil
 }
 
 // successorPending reports a successor whose old launcher has not exited yet.
