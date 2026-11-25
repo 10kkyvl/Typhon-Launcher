@@ -35,7 +35,7 @@ describe('lists that stack avatars give every row the same frame reserve', () =>
       'FriendCodeCard.svelte': 0,
       'FriendRow.svelte': 0,
       'Friends.svelte': 0,
-      'FriendsList.svelte': 2,
+      'FriendsList.svelte': 1,
       'RequestCards.svelte': 1,
     });
     // A part hands on the reserve the page gives it, and the page gives one computed over a whole list:

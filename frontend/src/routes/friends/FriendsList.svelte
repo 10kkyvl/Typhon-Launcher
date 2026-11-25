@@ -6,10 +6,11 @@
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import IconButton from '../../lib/components/IconButton.svelte';
   import SearchInput from '../../lib/components/SearchInput.svelte';
+  import SectionHeader from '../../lib/components/SectionHeader.svelte';
   import SegmentedControl from '../../lib/components/SegmentedControl.svelte';
   import type { FrameReserve } from '../../lib/profile/frameLook';
   import { chatPeerOf, type FriendView, type UserCard } from '../../lib/services/social';
-  import { presenceDot, presenceLine, sortFriends } from '../../lib/social/presence';
+  import { isPlaying, presenceDot, presenceLine, sortFriends } from '../../lib/social/presence';
   import { friendsView } from '../../lib/stores/ui';
   import { openChat } from '../../lib/stores/messaging';
   import { msg } from '../../lib/i18n';
@@ -64,6 +65,10 @@
     return sortBy === 'status' ? sortFriends(filtered) : sortByName(filtered);
   });
 
+  // The friends in a game lead the list under their own heading, in the order the sorting gives.
+  const playingNow = $derived(visibleFriends.filter((f) => isPlaying(f.presence)));
+  const others = $derived(visibleFriends.filter((f) => !isPlaying(f.presence)));
+
   function playingGame(friend: FriendView): { igdbId: number; title: string } | null {
     const presence = friend.presence;
     if (!presence || presenceDot(presence) === 'offline' || presence.gameId == null) return null;
@@ -93,6 +98,28 @@
       </IconButton>
     {/snippet}
   </DropdownMenu>
+{/snippet}
+
+{#snippet rows(list: FriendView[])}
+  <div class={$friendsView === 'grid' ? 'grid' : 'list'}>
+    {#each list as friend (friend.id)}
+      <div class="item" data-friends-row={friend.id}>
+        <FriendRow
+          user={friend}
+          status={presenceDot(friend.presence)}
+          meta={presenceLine(friend.presence)}
+          game={playingGame(friend)}
+          variant={$friendsView === 'grid' ? 'grid' : 'list'}
+          {reserve}
+          onopen={() => onopen(friend)}
+        >
+          {#snippet actions()}
+            {@render friendActions(friend)}
+          {/snippet}
+        </FriendRow>
+      </div>
+    {/each}
+  </div>
 {/snippet}
 
 {#if friends.length > 0}
@@ -153,46 +180,17 @@
   {:else}
     <EmptyState level={2} title={msg('social.friendsEmptyNobodyTitle')} description={msg('social.friendsEmptyNobodyDesc')} />
   {/if}
-{:else if $friendsView === 'grid'}
-  <div class="grid">
-    {#each visibleFriends as friend (friend.id)}
-      <div class="item" data-friends-row={friend.id}>
-        <FriendRow
-          user={friend}
-          status={presenceDot(friend.presence)}
-          meta={presenceLine(friend.presence)}
-          game={playingGame(friend)}
-          variant="grid"
-          {reserve}
-          onopen={() => onopen(friend)}
-        >
-          {#snippet actions()}
-            {@render friendActions(friend)}
-          {/snippet}
-        </FriendRow>
-      </div>
-    {/each}
-  </div>
+{:else if playingNow.length > 0}
+  <SectionHeader title={msg('social.friendsPlayingNowHeading')} count={playingNow.length} />
+  {@render rows(playingNow)}
+  {#if others.length > 0}
+    <div class="others">
+      <SectionHeader title={msg('social.friendsOthersHeading')} count={others.length} />
+    </div>
+    {@render rows(others)}
+  {/if}
 {:else}
-  <div class="list">
-    {#each visibleFriends as friend (friend.id)}
-      <div class="item" data-friends-row={friend.id}>
-        <FriendRow
-          user={friend}
-          status={presenceDot(friend.presence)}
-          meta={presenceLine(friend.presence)}
-          game={playingGame(friend)}
-          variant="list"
-          {reserve}
-          onopen={() => onopen(friend)}
-        >
-          {#snippet actions()}
-            {@render friendActions(friend)}
-          {/snippet}
-        </FriendRow>
-      </div>
-    {/each}
-  </div>
+  {@render rows(visibleFriends)}
 {/if}
 
 <style>
@@ -216,6 +214,10 @@
     align-items: center;
     gap: var(--space-3);
     flex-shrink: 0;
+  }
+
+  .others {
+    margin-top: var(--space-6);
   }
 
   .list {
