@@ -4,6 +4,7 @@ package selfupdate
 
 import (
 	"context"
+	"os/exec"
 	"syscall"
 )
 
@@ -20,3 +21,7 @@ func swapBundleParked(context.Context, handoffPlan, handoffJournal) (func() erro
 }
 
 func undoBundleSwap(handoffJournal) error { return ErrHandoffUnsupported }
+
+// handoffOutput leaves the successor without the old launcher's output: a
+// released launcher writes its own log file.
+func handoffOutput(*exec.Cmd) {}

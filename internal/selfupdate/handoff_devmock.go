@@ -4,6 +4,8 @@ package selfupdate
 
 import (
 	"context"
+	"os"
+	"os/exec"
 	"syscall"
 )
 
@@ -28,3 +30,10 @@ func swapBundleParked(context.Context, handoffPlan, handoffJournal) (func() erro
 }
 
 func undoBundleSwap(handoffJournal) error { return ErrHandoffUnsupported }
+
+// handoffOutput lets the successor write where the dev build itself writes, so
+// what its window logs before and after the hand-over can be read in one place.
+func handoffOutput(cmd *exec.Cmd) {
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+}

@@ -73,6 +73,7 @@ func startHandoffProcess(exe string, args []string) (handoffProc, error) {
 	cmd := exec.Command(exe, args...)
 	cmd.Env = env
 	cmd.SysProcAttr = handoffProcAttr()
+	handoffOutput(cmd)
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("start the successor launcher: %w", err)
 	}

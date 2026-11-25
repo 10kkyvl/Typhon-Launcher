@@ -6,13 +6,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"golang.org/x/sys/unix"
 	"io/fs"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"syscall"
-
-	"golang.org/x/sys/unix"
 )
 
 func handoffMethodFor(art Artifact, _ bool) handoffMethod {
@@ -79,3 +79,7 @@ func undoBundleSwap(j handoffJournal) error {
 	}
 	return os.RemoveAll(j.OldPath)
 }
+
+// handoffOutput leaves the successor without the old launcher's output: a
+// released launcher writes its own log file.
+func handoffOutput(*exec.Cmd) {}
