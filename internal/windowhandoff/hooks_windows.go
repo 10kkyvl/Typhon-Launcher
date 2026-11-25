@@ -99,25 +99,37 @@ func reveal(w *application.WebviewWindow) error {
 		orig, ok := savedStyle[hwnd]
 		delete(savedStyle, hwnd)
 		savedMu.Unlock()
-		if !ok {
-			orig = uint32(w32.GetWindowLong(hwnd, w32.GWL_EXSTYLE)) &^ hiddenStyle
-		}
-		var errs []error
-		if !w32.SetLayeredWindowAttributes(hwnd, 0, 255, w32.LWA_ALPHA) {
-			errs = append(errs, errors.New("SetLayeredWindowAttributes(alpha 255) failed"))
-		}
-		// Dropping WS_EX_LAYERED (unless the app had it) makes the window an
-		// ordinary one again; the others are restored from the saved style.
-		w32.SetWindowLong(hwnd, w32.GWL_EXSTYLE, orig)
-		if err := setTransitions(hwnd, false); err != nil {
-			errs = append(errs, err)
-		}
-		// Repaint the frame after the style change.
-		if !w32.SetWindowPos(hwnd, 0, 0, 0, 0, 0, w32.SWP_NOMOVE|w32.SWP_NOSIZE|w32.SWP_NOZORDER|w32.SWP_NOACTIVATE|w32.SWP_FRAMECHANGED) {
-			errs = append(errs, errors.New("SetWindowPos(FRAMECHANGED) failed"))
-		}
-		return errors.Join(errs...)
+		return revealStyled(win32Window(hwnd), orig, ok, hiddenStyle)
 	})
+}
+
+// win32Window is styleOps on a real window handle.
+type win32Window w32.HWND
+
+func (h win32Window) exStyle() uint32 {
+	return uint32(w32.GetWindowLong(w32.HWND(h), w32.GWL_EXSTYLE))
+}
+
+func (h win32Window) setExStyle(style uint32) {
+	w32.SetWindowLong(w32.HWND(h), w32.GWL_EXSTYLE, style)
+}
+
+func (h win32Window) setAlpha(alpha byte) error {
+	if !w32.SetLayeredWindowAttributes(w32.HWND(h), 0, alpha, w32.LWA_ALPHA) {
+		return fmt.Errorf("SetLayeredWindowAttributes(alpha %d) failed", alpha)
+	}
+	return nil
+}
+
+func (h win32Window) setTransitions(disabled bool) error {
+	return setTransitions(w32.HWND(h), disabled)
+}
+
+func (h win32Window) frameChanged() error {
+	if !w32.SetWindowPos(w32.HWND(h), 0, 0, 0, 0, 0, w32.SWP_NOMOVE|w32.SWP_NOSIZE|w32.SWP_NOZORDER|w32.SWP_NOACTIVATE|w32.SWP_FRAMECHANGED) {
+		return errors.New("SetWindowPos(FRAMECHANGED) failed")
+	}
+	return nil
 }
 
 // The successor takes the focus at the reveal, while the outgoing launcher
