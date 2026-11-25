@@ -108,5 +108,8 @@ export const tickets = {
   'tickets.requestNotSentNewer': 'Обращение «{subject}» не отправлено. В форме нового обращения остался текст, написанный позже.',
   'tickets.replyNotSentKept': 'Ответ в обращении «{subject}» не отправлен. Его текст снова в поле ответа.',
   'tickets.replyNotSentNewer': 'Ответ в обращении «{subject}» не отправлен. В поле ответа остался текст, написанный позже.',
+  'tickets.draftKept': 'У вас есть неотправленное обращение «{subject}».',
+  'tickets.draftKeptNoSubject': 'У вас есть неотправленное обращение без темы.',
+  'tickets.draftRestore': 'Вернуть его',
   // /7-P support
 } as const;

@@ -107,5 +107,8 @@ export const tickets = {
   'tickets.requestNotSentNewer': 'The request “{subject}” was not sent. The new request form keeps the text written after it.',
   'tickets.replyNotSentKept': 'Your reply in “{subject}” was not sent. Its text is back in the reply box.',
   'tickets.replyNotSentNewer': 'Your reply in “{subject}” was not sent. The reply box keeps the text written after it.',
+  'tickets.draftKept': 'You have an unsent request: “{subject}”.',
+  'tickets.draftKeptNoSubject': 'You have an unsent request without a subject.',
+  'tickets.draftRestore': 'Restore it',
   // /7-P support
 } as const;
