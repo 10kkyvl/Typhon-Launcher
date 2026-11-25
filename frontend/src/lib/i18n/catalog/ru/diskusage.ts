@@ -156,6 +156,8 @@ export const diskusage = {
   'diskusage.meterVolume': 'Диск {volume}',
   'diskusage.meterLauncher': 'Файлы лаунчера',
   'diskusage.freeUnknown': 'Свободное место на диске библиотеки не измерено',
+  'diskusage.screenshotsConfirmSized': 'Все снимки игры «{title}» ({count}, {size}) будут удалены с диска без возможности восстановления.',
+  'diskusage.snapshotsConfirmSized': 'Все локальные копии сохранений игры «{title}» ({count}, {size}) будут удалены.',
 } as const;
 
 export type DiskusageKey = keyof typeof diskusage;

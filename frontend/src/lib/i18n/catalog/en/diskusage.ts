@@ -142,4 +142,6 @@ export const diskusage: Record<DiskusageKey, Message> = {
   'diskusage.meterVolume': 'Disk {volume}',
   'diskusage.meterLauncher': 'Launcher files',
   'diskusage.freeUnknown': 'Free space on the library disk was not measured',
+  'diskusage.screenshotsConfirmSized': 'All screenshots of "{title}" ({count}, {size}) will be deleted from disk and cannot be restored.',
+  'diskusage.snapshotsConfirmSized': 'All local save copies of "{title}" ({count}, {size}) will be deleted.',
 };
