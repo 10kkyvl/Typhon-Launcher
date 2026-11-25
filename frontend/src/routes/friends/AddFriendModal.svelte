@@ -19,11 +19,13 @@
   let query = $state('');
   let found = $state<PublicProfile | null>(null);
   let error = $state('');
+  let sendError = $state('');
   let searching = $state(false);
   let sending = $state(false);
 
   let timer: ReturnType<typeof setTimeout> | undefined;
   let attempt = 0;
+  let lookingFor = '';
 
   const canSend = $derived(!!found && found.relation === 'none');
   const mutual = $derived(found ? commonLine(found.mutualCount, found.common?.count ?? 0) : '');
@@ -33,6 +35,7 @@
     query = '';
     found = null;
     error = '';
+    sendError = '';
     searching = false;
     attempt += 1;
     clearTimeout(timer);
@@ -49,6 +52,8 @@
       return;
     }
     searching = true;
+    lookingFor = term;
+    sendError = '';
     try {
       const result = isFriendCode(term)
         ? await profileByCode(term)
@@ -72,6 +77,8 @@
 
   function submit(event: KeyboardEvent) {
     if (event.key !== 'Enter') return;
+    // A press while the same lookup or the send runs: the answer on its way stands.
+    if (sending || (searching && query.trim() === lookingFor)) return;
     clearTimeout(timer);
     lookup(query);
   }
@@ -89,6 +96,7 @@
   async function send() {
     if (!found || !canSend || sending) return;
     sending = true;
+    sendError = '';
     try {
       const result = await sendRequest(found.username);
       toast(result.accepted ? msg('social.friendsNowFriends') : msg('social.relationOutgoing'), 'success');
@@ -96,7 +104,7 @@
       reset();
       onsent?.();
     } catch (err) {
-      toast(accountErrorText(err, msg('social.friendsSendRequestFailed')), 'danger');
+      sendError = accountErrorText(err, msg('social.friendsSendRequestFailed'));
     } finally {
       sending = false;
     }
@@ -131,6 +139,9 @@
       </button>
       {#if hint}
         <p class="hint">{hint}</p>
+      {/if}
+      {#if sendError}
+        <Notice tone="danger" compact>{sendError}</Notice>
       {/if}
     {:else if error}
       <Notice tone="danger" compact>{error}</Notice>

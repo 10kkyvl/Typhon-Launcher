@@ -209,7 +209,11 @@ const SITES: Record<string, Site[]> = {
   'routes/diskusage/DiskUsage.svelte': [['danger', true]],
   // The areas the scan just could not read.
   'routes/diskusage/UsageWarnings.svelte': [['danger', true]],
-  'routes/friends/AddFriendModal.svelte': [['danger', true]],
+  // A send that failed and a lookup that failed, said in the dialog (just happened).
+  'routes/friends/AddFriendModal.svelte': [
+    ['danger', true],
+    ['danger', true],
+  ],
   // The code that could not be read (just happened).
   'routes/friends/FriendCodeCard.svelte': [['danger', true]],
   // The friends and the blocked list that could not be read (just happened); the safety advice of the

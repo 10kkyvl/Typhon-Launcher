@@ -17,7 +17,6 @@
     block,
     blocks as fetchBlocks,
     decline,
-    refresh,
     unblock,
     unfriend,
     type RequestView,
@@ -53,7 +52,7 @@
   let retrying = $state(false);
   let blockedRetrying = $state(false);
   let content = $state<HTMLElement>();
-  let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void> } | null>(null);
+  let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void>; errorText: (err: unknown) => string } | null>(null);
   let busy = $state('');
   let myCode = $state('');
   let search = $state('');
@@ -144,16 +143,25 @@
     }
   }
 
-  async function run(id: string, action: () => Promise<void>, fallback: string, done?: string) {
+  /**
+   * Runs one action at a time. Its failure is said once in a toast, or thrown to the confirmation that
+   * asked (`confirmed`), which says it and offers Retry. Once the action went through its success is
+   * said and the lists are read again: a failed read is said as a read failure, not as the action's.
+   */
+  async function run(id: string, action: () => Promise<void>, fallback: string, done?: string, confirmed = false) {
     if (busy) return;
     busy = id;
     try {
-      await action();
+      try {
+        await action();
+      } catch (err) {
+        if (confirmed) throw err;
+        report(err, fallback);
+        return;
+      }
       if (done) toast(done, 'success');
-      await refresh();
+      await reloadFriends();
       if (id.startsWith('block:') || id.startsWith('unblock:')) await loadBlocks();
-    } catch (err) {
-      report(err, fallback);
     } finally {
       busy = '';
     }
@@ -174,13 +182,16 @@
             () => unfriend(user.id),
             msg('social.friendsUnfriendFailed'),
             msg('social.friendsUnfriended'),
+            true,
           ),
+        errorText: (err) => accountErrorText(err, msg('social.friendsUnfriendFailed')),
       };
       return;
     }
     pending = {
       prompt: blockPrompt(name, true),
-      run: () => run(`block:${user.id}`, () => block(user.id), msg('social.blockFailed'), msg('social.userBlocked')),
+      run: () => run(`block:${user.id}`, () => block(user.id), msg('social.blockFailed'), msg('social.userBlocked'), true),
+      errorText: (err) => accountErrorText(err, msg('social.blockFailed')),
     };
   }
 
@@ -413,7 +424,7 @@
   <SocialConsentScreen bind:open={consentOpen} />
 
   {#if pending}
-    <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} errorText={(err) => accountErrorText(err)} />
+    <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} errorText={pending.errorText} />
   {/if}
 </Page>
 

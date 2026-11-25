@@ -3,7 +3,7 @@
   import { Check, Copy } from '@lucide/svelte';
   import Button from '../../lib/components/Button.svelte';
   import Card from '../../lib/components/Card.svelte';
-  import Modal from '../../lib/components/Modal.svelte';
+  import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import Notice from '../../lib/components/Notice.svelte';
   import Spinner from '../../lib/components/Spinner.svelte';
   import Tooltip from '../../lib/components/Tooltip.svelte';
@@ -18,7 +18,6 @@
   let failure = $state<unknown>(null);
   let retrying = $state(false);
   let card = $state<HTMLElement>();
-  let rotating = $state(false);
   let confirmOpen = $state(false);
   let copied = $state('');
 
@@ -47,18 +46,17 @@
     }
   }
 
+  const rotatePrompt = {
+    title: msg('social.friendsChangeCodeTitle'),
+    text: msg('social.friendsChangeCodeWarning'),
+    confirm: msg('social.friendsGenerateNew'),
+    busy: msg('social.friendsRotating'),
+  };
+
+  /** The confirmation runs it: a failure stays in the dialog with its words and Retry. */
   async function rotate() {
-    if (rotating) return;
-    rotating = true;
-    try {
-      code = await rotateFriendCode();
-      confirmOpen = false;
-      toast(msg('social.friendsCodeRotated'), 'success');
-    } catch (err) {
-      toast(accountErrorText(err, msg('social.friendsCodeRotateFailed')), 'danger');
-    } finally {
-      rotating = false;
-    }
+    code = await rotateFriendCode();
+    toast(msg('social.friendsCodeRotated'), 'success');
   }
 
   onMount(() => {
@@ -95,24 +93,21 @@
           {msg('social.friendsCopyCode')}
         {/if}
       </Button>
-      <Button variant="ghost" size="sm" disabled={!code || rotating} onclick={() => (confirmOpen = true)}>
+      <Button variant="ghost" size="sm" disabled={!code} onclick={() => (confirmOpen = true)}>
         {msg('social.friendsGenerateNew')}
       </Button>
     </div>
   </div>
 </Card>
 
-<Modal dismissible={!rotating} bind:open={confirmOpen} title={msg('social.friendsChangeCodeTitle')} width="42rem">
-  <p class="warn">
-    {msg('social.friendsChangeCodeWarning')}
-  </p>
-  {#snippet footer()}
-    <Button disabled={rotating} onclick={() => (confirmOpen = false)}>{msg('common.cancel')}</Button>
-    <Button variant="danger" busy={rotating} onclick={rotate}>
-      {rotating ? msg('social.friendsRotating') : msg('social.friendsGenerateNew')}
-    </Button>
-  {/snippet}
-</Modal>
+{#if confirmOpen}
+  <ConfirmModal
+    prompt={rotatePrompt}
+    onconfirm={rotate}
+    onclose={() => (confirmOpen = false)}
+    errorText={(err) => accountErrorText(err, msg('social.friendsCodeRotateFailed'))}
+  />
+{/if}
 
 <style>
   .card {
@@ -175,9 +170,4 @@
     gap: var(--space-2);
   }
 
-  .warn {
-    font-size: var(--font-md);
-    line-height: 1.6;
-    color: var(--text-2);
-  }
 </style>
