@@ -187,10 +187,14 @@ describe('a successor whose old launcher is still shutting down', () => {
     await handoff.loadHandoff();
     const waiting = handlers[WAITING];
     handlers[DONE]({ data: { ...ACTIVE, active: false } });
-    handoff.setShellReady(true);
 
+    // The shell has no data yet: the show is still held and the listeners are still on.
     waiting?.({ data: null });
+    expect(get(handoff.handoffWaiting)).toBe(false);
+    expect(get(show.updateShow)).toMatchObject({ held: true });
 
+    handoff.setShellReady(true);
+    waiting?.({ data: null });
     expect(get(handoff.handoffWaiting)).toBe(false);
     expect(get(show.updateShow)?.phase).toBe('finish');
   });
