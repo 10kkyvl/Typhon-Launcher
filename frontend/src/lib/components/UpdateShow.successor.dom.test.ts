@@ -269,6 +269,32 @@ describe('a successor whose old launcher is still shutting down', () => {
     expect(quitWaitingSuccessor).toHaveBeenCalledTimes(2);
   });
 
+  // The show covers the page and the toasts with it: a refusal has to be said inside the show.
+  it('says a refusal of the close under the button, and nothing when the wait has just ended', async () => {
+    await becomeSuccessor(START - 10_000);
+    renderDom(UpdateShowHarness, { logo: false, page: false });
+    await advance(48);
+    handlers['launcher:handoff_waiting']({ data: null });
+    await tick();
+    await tick();
+    const button = screen.getByRole('button', { name: msg('ui.handoffCloseLauncher') });
+    const said = () => shown()?.querySelector('[role="alert"]')?.textContent?.trim() ?? '';
+
+    vi.mocked(quitWaitingSuccessor).mockRejectedValueOnce(new Error('typhon:selfupdate.not_waiting: not a waiting successor'));
+    button.click();
+    await tick();
+    await tick();
+    expect(said()).toBe('');
+
+    vi.mocked(quitWaitingSuccessor).mockRejectedValueOnce(new Error('typhon:selfupdate.busy: selfupdate: busy'));
+    button.click();
+    await tick();
+    await tick();
+    expect(said()).not.toBe('');
+    expect(shown()?.contains(shown()?.querySelector('[role="alert"]') ?? null)).toBe(true);
+    expect(button.getAttribute('aria-busy')).not.toBe('true');
+  });
+
   it('in the old window, keeps its words whatever comes', async () => {
     showFollowsStatus(APPLYING, START - 10_000, { startedAt: START - 10_000, handoff: true });
     renderDom(UpdateShowHarness);

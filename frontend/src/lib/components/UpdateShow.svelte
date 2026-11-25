@@ -10,7 +10,6 @@
   import { quitWaitingSuccessor } from '../services/selfupdate';
   import { updateReason } from '../services/selfupdateMessages';
   import { settings } from '../stores/settings';
-  import { toast } from '../stores/toasts';
   import { beginOwedFinish, endUpdateShow, hostUpdateShow, logoArcsAway, updateShow, type UpdateShowState } from '../stores/updateShow';
   import Button from './Button.svelte';
   import LogoArcs from './LogoArcs.svelte';
@@ -41,6 +40,8 @@
   // the player can do is offered here and takes focus as it appears.
   const waitingForOld = $derived(Boolean(show?.handoff && show.held && $handoffWaiting));
   let closing = $state(false);
+  // The show covers the page, the toasts included: a refusal is said here.
+  let closeRefused = $state('');
   const focusClose: Attachment<HTMLElement> = (node) => {
     const button = node.querySelector('button');
     if (button) focusQuietly(button);
@@ -49,12 +50,14 @@
   async function closeLauncher() {
     if (closing) return;
     closing = true;
+    closeRefused = '';
     try {
       await quitWaitingSuccessor();
     } catch (err) {
-      // Go quits on success, and this window goes with it: only a refusal comes back.
+      // Go quits on success, and this window goes with it: only a refusal comes back. One that says
+      // the wait is over needs no words: the old launcher is gone and the finish follows.
       closing = false;
-      toast(updateReason(err), 'danger');
+      if (!(err instanceof Error && err.message.includes('selfupdate.not_waiting'))) closeRefused = updateReason(err);
     }
   }
 
@@ -272,6 +275,9 @@
     {#if waitingForOld}
       <div class="wait-actions" {@attach focusClose}>
         <Button busy={closing} onclick={closeLauncher}>{msg('ui.handoffCloseLauncher')}</Button>
+        <div role="alert">
+          {#if closeRefused}<p class="wait-refused">{closeRefused}</p>{/if}
+        </div>
       </div>
     {/if}
   </div>
@@ -372,8 +378,19 @@
 
   .wait-actions {
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
     margin-top: var(--space-3);
+  }
+
+  .wait-refused {
+    padding: var(--space-1) var(--space-3);
+    color: var(--text);
+    font-size: var(--font-sm);
+    text-align: center;
+    background: var(--surface-3);
+    border-radius: var(--radius-sm);
   }
 
   .expand {
