@@ -19,10 +19,11 @@
 }
 
 .settings-page .card {
-  container: settings-card / inline-size;
   min-width: 0;
 }
 
+/* The rows not yet on SettingsRow (the appearance tab's, the Discord card's unlinked intro) wrap their
+   control under the words, as SettingsRow does. */
 .settings-page .settings-grid .row {
   flex-wrap: wrap;
   gap: var(--space-3) var(--space-6);
@@ -42,39 +43,8 @@
   line-height: 1.5;
 }
 
-.settings-page .settings-grid .folder-controls {
-  min-width: 0;
-  flex: 1;
-}
-
-.settings-page .settings-grid .folder-controls .input {
-  min-width: 0;
-  flex: 1;
-}
-
-.settings-page .settings-grid .folder-controls > :not(.input) {
-  flex-shrink: 0;
-}
-
-.settings-page .settings-grid .progress-body {
-  flex-basis: 24rem;
-  overflow-wrap: anywhere;
-}
-
 @container settings-page (min-width: 110rem) {
   .settings-page .settings-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@container settings-card (min-width: 60rem) {
-  .settings-page .settings-grid .folder-row {
-    flex-direction: row;
-    align-items: center;
-    gap: var(--space-4);
-  }
-
-  .settings-page .settings-grid .folder-label {
-    flex: 0 0 16rem;
   }
 }
