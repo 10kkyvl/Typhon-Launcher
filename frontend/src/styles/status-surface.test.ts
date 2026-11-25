@@ -199,7 +199,7 @@ const AREAS: [RegExp, string][] = [
 // A status colour without a plate of its own: the surface it sits on, then the rules. Marks and icons
 // are not text (3:1); a badge carries a fill of its own (see below). A new entry needs its surface named.
 const ON_SURFACE: Record<string, [surface: string, ...rules: string[]]> = {
-  'routes/diskusage/UsageRow.svelte': ['Card', '.reason'],
+  'routes/diskusage/UsageRow.svelte': ['the fill of a row (.row, held opaque there)', ".reason[data-tone='warning']"],
   'routes/game/ReviewComposer.svelte': ["the plate of one's own review", '.recommend.negative'],
   'routes/profile/Profile.svelte': ['the editing bar', '.topbar-sub.error'],
   'routes/profile/ProfileHeader.svelte': ['the profile canvas', '.error'],
@@ -266,6 +266,7 @@ const LOCAL_SURFACE: Record<string, string> = {
   'routes/game/ReviewComposer.svelte': '.mine',
   'routes/profile/Profile.svelte': '.topbar',
   'routes/history/HistoryDay.svelte': '.rows',
+  'routes/diskusage/UsageRow.svelte': '.row',
   'routes/sources/Sources.svelte': '.list',
   'routes/settings/Settings.svelte': '.tabs-plate',
   'routes/downloads/FailedList.svelte': '.row',

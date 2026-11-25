@@ -1,8 +1,9 @@
 <script lang="ts">
   import Button from '../../lib/components/Button.svelte';
-  import { leftoverKindKey, reasonLabel } from '../../lib/diskusage/usage';
+  import { gameTitle, leftoverKindKey, leftoverOfGame, reasonLabel, reasonTone } from '../../lib/diskusage/usage';
   import { msg } from '../../lib/i18n';
   import type { Leftover } from '../../lib/services/diskusage';
+  import { libraryGamesById } from '../../lib/stores/library';
   import { usageSectionIds } from './sections';
   import UsageRow from './UsageRow.svelte';
   import UsageSection from './UsageSection.svelte';
@@ -35,8 +36,12 @@
     <UsageRow
       key="leftovers:{leftover.path}"
       title={msg(leftoverKindKey(leftover.kind))}
+      game={leftoverOfGame(leftover)
+        ? { id: leftover.gameId && $libraryGamesById.has(leftover.gameId) ? leftover.gameId : null, name: gameTitle(leftover) }
+        : undefined}
       path={leftover.path}
       reason={leftover.deletable ? null : reasonLabel(leftover.reasonCode)}
+      reasonTone={reasonTone(leftover.reasonCode)}
       size={size(leftover)}
     >
       {#snippet actions()}

@@ -1,7 +1,7 @@
 <script lang="ts">
   import Button from '../../lib/components/Button.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
-  import { downloadBlocked, reasonLabel } from '../../lib/diskusage/usage';
+  import { downloadBlocked, reasonLabel, reasonTone } from '../../lib/diskusage/usage';
   import { msg } from '../../lib/i18n';
   import type { DownloadUsage } from '../../lib/services/diskusage';
   import { usageSectionIds } from './sections';
@@ -39,6 +39,7 @@
       title={download.name}
       path={download.root}
       reason={blocked ? reasonLabel(download.reasonCode) : download.seeding ? msg('diskusage.reason.seeding') : null}
+      reasonTone={blocked ? reasonTone(download.reasonCode) : 'plain'}
       size={size(download)}
     >
       {#snippet badges()}

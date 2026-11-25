@@ -189,6 +189,22 @@ export function reasonLabel(code: string): string {
   return REASONS.has(code) && hasMessage(code) ? msg(code) : msg('diskusage.cannotDelete');
 }
 
+// A folder that may be the only copy of a game, or holds an installed game: the player is warned.
+const WARNING_REASONS: ReadonlySet<string> = new Set(['diskusage.reason.only_copy', 'diskusage.reason.holds_game']);
+
+/** How a row's reason reads: a warning for a folder that matters to a game, plain otherwise. */
+export function reasonTone(code: string): 'warning' | 'plain' {
+  return WARNING_REASONS.has(code) ? 'warning' : 'plain';
+}
+
+// The kinds that belong to one game: a move's copies and a removal's folder.
+const GAME_KINDS: ReadonlySet<string> = new Set(['relocate_copy_staging', 'relocate_copy_target', 'relocate_copy_source', 'removal']);
+
+/** Whether a leftover's row says whose game it is (Go names the game of a move's copy, when it knows it). */
+export function leftoverOfGame(leftover: Leftover): boolean {
+  return GAME_KINDS.has(leftover.kind) || leftover.kind.startsWith('relocate_copy_') || Boolean(leftover.gameId || leftover.title);
+}
+
 /** Every warning code a report can carry: internal/diskusage/codes.go::Warn* (usage.test.ts reads it). */
 const WARNING_CODES = [
   'diskusage.warning.size_not_saved',
