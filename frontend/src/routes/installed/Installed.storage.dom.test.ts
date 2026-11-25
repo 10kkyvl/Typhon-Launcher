@@ -119,6 +119,20 @@ describe('Installed: the storage card', () => {
     expect(legend()[1]).toBe(`${msg('installed.meterMoreGames', { count: 12 })} ${bytesSize(12 * 1024 ** 2)}`);
   });
 
+  it('a game measured as 0 bytes takes no part of the meter and is not counted in the fold', () => {
+    const zero = Array.from({ length: 3 }, (_, i) => game(`g-zero-${i}`, `Zero ${i}`, 0));
+    libraryGames.set([game('g-big', 'Big', 80 * GB), ...Array.from({ length: 12 }, (_, i) => game(`g-${i}`, `Small ${i}`, 1024 ** 2)), ...zero]);
+    storageInfo.set({ ...info, freeBytes: 10 * GB, usedBytes: 90 * GB });
+    renderDom(Installed);
+
+    expect(legend()[1]).toBe(`${msg('installed.meterMoreGames', { count: 12 })} ${bytesSize(12 * 1024 ** 2)}`);
+    cleanup();
+
+    libraryGames.set([game('g-a', 'A', 10 * GB), ...zero]);
+    renderDom(Installed);
+    expect(legend().some((line) => line?.startsWith('Zero'))).toBe(false);
+  });
+
   it('picking a game on the meter brings its row into view and focuses it, clearing a search that hid it', async () => {
     libraryGames.set([game('g-a', 'A', 10 * GB), game('g-b', 'B', 5 * GB)]);
     storageInfo.set(info);
