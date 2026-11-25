@@ -206,9 +206,12 @@ type Service struct {
 	excluded        []string
 	// loadErr is set when the files could not be read again at a held-back
 	// start; the snapshot stays and nothing is saved over them.
-	loadErr   error
-	running   map[string]*session
-	onSession func(gameID string, seconds int64)
+	loadErr error
+	// rereadBeforeGate says ReloadBeforeGateOpens has read the files again in
+	// a successor, so its held-back start does not.
+	rereadBeforeGate bool
+	running          map[string]*session
+	onSession        func(gameID string, seconds int64)
 	// onOutcome получает исход запуска: сколько играли и закрыли ли игру
 	// сами. Отдельно от onSession, потому что у того другой смысл — учёт
 	// наигранного времени.

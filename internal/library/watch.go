@@ -36,18 +36,40 @@ const defaultWatchInterval = 1 * time.Second
 //
 // A successor built this service, and read its files, while the old launcher
 // still ran and could still write them (a session ending, an install
-// finishing); its held-back start reads them again before anything here can
-// save over that write. An ordinary start read them moments ago and does not.
+// finishing). They are read again before anything can save over that write:
+// by ReloadBeforeGateOpens, which runs before any held-back start, or, when
+// nothing ran it, by this service's own held-back start. An ordinary start
+// read them moments ago and does not.
 func (s *Service) ServiceStartup(ctx context.Context, opts application.ServiceOptions) error {
 	deferred := handoffgate.Armed()
 	return handoffgate.Startup(ctx, "library", func() error {
-		if deferred {
+		s.mu.Lock()
+		reread := s.rereadBeforeGate
+		s.mu.Unlock()
+		if deferred && !reread {
 			if err := s.reload(); err != nil {
 				return err
 			}
 		}
 		return s.startService(ctx, opts)
 	})
+}
+
+// ReloadBeforeGateOpens reads the library's files again in a successor whose
+// old launcher has exited, before the gate lets the held-back starts run: one
+// of them (a move's recovery, an install finalized after a crash) may save
+// the library the moment it is released, and must save what the old launcher
+// left, not what this launcher read while the old one still ran. The
+// service's own held-back start then does not read them a second time,
+// whatever this returned. An error leaves every later save refused; the
+// files are not touched.
+//
+//wails:ignore
+func (s *Service) ReloadBeforeGateOpens() error {
+	s.mu.Lock()
+	s.rereadBeforeGate = true
+	s.mu.Unlock()
+	return s.reload()
 }
 
 // reload replaces what the constructor read with what the files hold now, by

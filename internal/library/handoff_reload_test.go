@@ -106,6 +106,107 @@ func TestSuccessorLibraryUnreadableAtItsStartRefusesToSave(t *testing.T) {
 	}
 }
 
+// The gate releases every held-back start at once. One of them (a move's
+// recovery, an install finalized after a crash) may save the library as soon
+// as it runs; the re-read that runs before the gate opens means it saves what
+// the old launcher left, and the library's own start does not then swap an
+// older picture over that save.
+func TestAHeldBackStartThatSavesAtOnceKeepsTheOldLaunchersWrite(t *testing.T) {
+	path := seedLibrary(t)
+	old := mustServiceAt(t, path)
+	handoffgate.Arm()
+	t.Cleanup(handoffgate.Open)
+	succ := mustServiceAt(t, path)
+	if err := succ.ServiceStartup(t.Context(), application.ServiceOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	saved := make(chan error, 1)
+	if err := handoffgate.Startup(t.Context(), "test-saves-at-once", func() error {
+		_, err := succ.SetFavorite("b", true)
+		saved <- err
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := old.SetFavorite("a", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := succ.ReloadBeforeGateOpens(); err != nil {
+		t.Fatalf("ReloadBeforeGateOpens() = %v", err)
+	}
+	openGate(t)
+	if err := <-saved; err != nil {
+		t.Fatalf("the held-back save failed: %v", err)
+	}
+
+	if a, b := favourite(t, succ, "a"), favourite(t, succ, "b"); !a || !b {
+		t.Fatalf("the successor holds favourite a=%v b=%v, want both the old launcher's write and its own save", a, b)
+	}
+	again := mustServiceAt(t, path)
+	if !favourite(t, again, "a") || !favourite(t, again, "b") {
+		t.Fatal("library.json lost the old launcher's write or the held-back save")
+	}
+}
+
+// After the re-read before the gate, the library's own start does not read
+// the file a second time: what it holds is what that re-read found.
+func TestTheLibraryStartDoesNotReadAgainAfterTheReReadBeforeTheGate(t *testing.T) {
+	path := seedLibrary(t)
+	handoffgate.Arm()
+	t.Cleanup(handoffgate.Open)
+	succ := mustServiceAt(t, path)
+	if err := succ.ServiceStartup(t.Context(), application.ServiceOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := succ.ReloadBeforeGateOpens(); err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.WriteAtomic(path, []byte(`[{"id":"a","title":"A","favorite":true}]`)); err != nil {
+		t.Fatal(err)
+	}
+	openGate(t)
+
+	if got, a := len(succ.GetGames()), favourite(t, succ, "a"); got != 2 || a {
+		t.Fatalf("the successor holds %d games, favourite a=%v: the library's start read the file a second time", got, a)
+	}
+}
+
+// A re-read before the gate that fails does not keep the launcher from coming
+// up: the gate still opens, the library keeps what it read at construction and
+// refuses to save over the file it could not read.
+func TestAFailedReReadBeforeTheGateRefusesSaves(t *testing.T) {
+	path := seedLibrary(t)
+	handoffgate.Arm()
+	t.Cleanup(handoffgate.Open)
+	succ := mustServiceAt(t, path)
+	if err := succ.ServiceStartup(t.Context(), application.ServiceOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	broken := []byte(`[{"id":"a",`)
+	if err := storage.WriteAtomic(path, broken); err != nil {
+		t.Fatal(err)
+	}
+	if err := succ.ReloadBeforeGateOpens(); err == nil {
+		t.Fatal("ReloadBeforeGateOpens() = nil for a file that cannot be read")
+	}
+	openGate(t)
+
+	if got := len(succ.GetGames()); got != 2 {
+		t.Fatalf("the successor holds %d games, want the 2 it read at construction", got)
+	}
+	if _, err := succ.SetFavorite("b", true); err == nil {
+		t.Fatal("SetFavorite() saved over a library file that could not be read")
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(raw) != string(broken) {
+		t.Fatalf("library.json = %s, want it untouched", raw)
+	}
+}
+
 // An ordinary start reads the file once, at construction: its start does not
 // read it again.
 func TestOrdinaryLibraryStartDoesNotReadTheFileAgain(t *testing.T) {
