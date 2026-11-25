@@ -1,4 +1,5 @@
 import { screen, within } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
@@ -197,7 +198,7 @@ describe("a user's page: what it shows", () => {
     await vi.waitFor(() => expect(get(route).name).toBe('profile'));
   });
 
-  it('an answer for the name the page has left is not shown', async () => {
+  it('an answer for the name the page has left is not shown while the new name loads', async () => {
     const ann = pending<PublicProfile>();
     const bob = pending<PublicProfile>();
     vi.mocked(fetchProfile).mockImplementation((name) => (name === 'ann' ? ann.promise : bob.promise));
@@ -212,6 +213,24 @@ describe("a user's page: what it shows", () => {
     bob.resolve(player({ id: 'u2', username: 'bob', displayName: 'Bob' }));
     await screen.findByText('Bob');
     expect(screen.queryByText('Ann')).toBeNull();
+  });
+
+  it('an answer for the name the page has left does not replace the new name once it has painted', async () => {
+    const ann = pending<PublicProfile>();
+    const bob = pending<PublicProfile>();
+    vi.mocked(fetchProfile).mockImplementation((name) => (name === 'ann' ? ann.promise : bob.promise));
+    const { rerender } = renderDom(UserProfile, { username: 'ann' });
+
+    await rerender({ username: 'bob' });
+    bob.resolve(player({ id: 'u2', username: 'bob', displayName: 'Bob' }));
+    await screen.findByText('Bob');
+    ann.resolve(player({ displayName: 'Ann' }));
+    await ann.promise;
+    await tick();
+
+    expect(screen.queryByText('Ann')).toBeNull();
+    expect(screen.getByText('Bob')).toBeTruthy();
+    expect(screen.queryByText(msg('social.loadingEllipsis'))).toBeNull();
   });
 
   it("Write opens the chat with the friend", async () => {

@@ -107,6 +107,41 @@ describe("a user's page: offline", () => {
     expect(vi.mocked(sendRequest)).not.toHaveBeenCalled();
   });
 
+  it("on a friend's page the friend menu says why it waits", async () => {
+    authState.set('offline');
+    vi.mocked(fetchProfile).mockResolvedValue(player({ relation: 'friend' }));
+    renderDom(UserProfile, { username: 'ann' });
+    await screen.findByText('@ann', { selector: '.username' });
+
+    const more = screen.getByRole('button', { name: msg('social.moreLabel') });
+    expect(more.getAttribute('aria-disabled')).toBe('true');
+    expect(description(more)).toBe(msg('social.userActionsNeedConnection'));
+  });
+
+  it('a request from the player: Accept and Decline each say why they wait', async () => {
+    authState.set('offline');
+    vi.mocked(fetchProfile).mockResolvedValue(player({ relation: 'incoming' }));
+    renderDom(UserProfile, { username: 'ann' });
+    await screen.findByText('@ann', { selector: '.username' });
+
+    for (const name of [msg('social.relationIncoming'), msg('social.declineButton')]) {
+      const control = screen.getByRole('button', { name });
+      expect(control.getAttribute('aria-disabled'), name).toBe('true');
+      expect(description(control), name).toBe(msg('social.userActionsNeedConnection'));
+    }
+  });
+
+  it('a request sent to the player: Cancel request says why it waits', async () => {
+    authState.set('offline');
+    vi.mocked(fetchProfile).mockResolvedValue(player({ relation: 'outgoing' }));
+    renderDom(UserProfile, { username: 'ann' });
+    await screen.findByText('@ann', { selector: '.username' });
+
+    const cancel = screen.getByRole('button', { name: msg('social.cancelRequestButton') });
+    expect(cancel.getAttribute('aria-disabled')).toBe('true');
+    expect(description(cancel)).toBe(msg('social.userActionsNeedConnection'));
+  });
+
   it('going offline keeps the profile read last and holds its actions; back online they work again', async () => {
     vi.mocked(fetchProfile).mockResolvedValue(player());
     vi.mocked(sendRequest).mockResolvedValue({ accepted: false } as SendResult);

@@ -17,6 +17,7 @@ import { toasts } from '../../lib/stores/toasts';
 import { authState } from '../../lib/stores/user';
 import { renderDom } from '../../lib/testing/dom';
 import { calls, resetBindings } from '../../lib/testing/fakeBinding';
+import { description } from '../../lib/testing/hints';
 import UserProfile from './UserProfile.svelte';
 import { player } from './userTesting';
 
@@ -94,6 +95,26 @@ describe("a user's page: the pressed control", () => {
     expect(vi.mocked(decline)).not.toHaveBeenCalled();
   });
 
+  it('Cancel request pressed: Cancel is the busy one and keeps the focus', async () => {
+    vi.mocked(decline).mockReturnValue(new Promise(() => {}));
+    const { user } = await mount(player({ relation: 'outgoing' }));
+
+    const cancel = await press(user, msg('social.cancelRequestButton'));
+
+    expect(cancel.getAttribute('aria-busy')).toBe('true');
+    expect(document.activeElement).toBe(cancel);
+  });
+
+  it('Decline pressed: Decline is the busy one, Accept is not', async () => {
+    vi.mocked(decline).mockReturnValue(new Promise(() => {}));
+    const { user } = await mount(player({ relation: 'incoming' }));
+
+    const declineButton = await press(user, msg('social.declineButton'));
+
+    expect(declineButton.getAttribute('aria-busy')).toBe('true');
+    expect(button(msg('social.relationIncoming')).hasAttribute('aria-busy')).toBe(false);
+  });
+
   it('a failed Add leaves the focus on Add, no longer busy', async () => {
     vi.mocked(sendRequest).mockRejectedValue(new AccountError('request_blocked'));
     const { user } = await mount(player());
@@ -140,6 +161,25 @@ describe("a user's page: focus when the buttons change", () => {
     await press(user, msg('social.cancelRequestButton'));
 
     await vi.waitFor(() => expect(document.activeElement).toBe(button(msg('social.relationNone'))));
+  });
+
+  it('the connection drops while Cancel runs: Cancel keeps the focus and says why, then focus lands on Add, which says it too', async () => {
+    const answer = pending<void>();
+    vi.mocked(decline).mockReturnValue(answer.promise);
+    const { user } = await mount(player({ relation: 'outgoing' }), player());
+    const cancel = await press(user, msg('social.cancelRequestButton'));
+
+    authState.set('offline');
+    await vi.waitFor(() => expect(description(cancel)).toBe(msg('social.userActionsNeedConnection')));
+    expect(cancel.hasAttribute('disabled')).toBe(false);
+    expect(cancel.getAttribute('aria-busy')).toBe('true');
+    expect(document.activeElement).toBe(cancel);
+    answer.resolve(undefined);
+
+    const add = await screen.findByRole('button', { name: msg('social.relationNone') });
+    await vi.waitFor(() => expect(document.activeElement).toBe(add));
+    expect(add.getAttribute('aria-disabled')).toBe('true');
+    expect(description(add)).toBe(msg('social.userActionsNeedConnection'));
   });
 
   it('a confirmed unfriend: the dialog closes and focus lands on Add', async () => {
