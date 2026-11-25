@@ -3,25 +3,28 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import { userCommon, type CommonGame, type CommonGamesPage } from '../../lib/services/social';
 import { user } from '../../lib/testing/dom';
+import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import UserCommonModal from './UserCommonModal.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
-vi.mock('../../lib/services/social', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../lib/services/social')>()),
-  userCommon: vi.fn(),
-}));
+vi.mock('../../../bindings/typhon/internal/social', async (original) => (await import('./userTesting')).fakeService(await original(), 'social'));
+vi.mock('../../../bindings/typhon/internal/messaging', async (original) => (await import('./userTesting')).fakeService(await original(), 'messaging'));
+vi.mock('../../lib/services/social', async (original) => (await import('./userTesting')).socialService(await original()));
+vi.mock('../../lib/stores/messaging', async (original) => (await import('./userTesting')).messagingStore(await original()));
 
 const game = (igdbId: number, title: string): CommonGame => ({ igdbId, title, coverUrl: '', viewerOwned: true, targetOwned: true });
 
 let app: HTMLDivElement;
 
 beforeEach(() => {
+  resetBindings();
   app = document.createElement('div');
   app.id = 'app';
   document.body.append(app);
 });
 
 afterEach(() => {
+  expect(calls).toEqual([]);
   vi.mocked(userCommon).mockReset();
   document.body.replaceChildren();
 });

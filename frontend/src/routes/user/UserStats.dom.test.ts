@@ -1,10 +1,15 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
+vi.mock('../../../bindings/typhon/internal/social', async (original) => (await import('./userTesting')).fakeService(await original(), 'social'));
+vi.mock('../../../bindings/typhon/internal/messaging', async (original) => (await import('./userTesting')).fakeService(await original(), 'messaging'));
+vi.mock('../../lib/services/social', async (original) => (await import('./userTesting')).socialService(await original()));
+vi.mock('../../lib/stores/messaging', async (original) => (await import('./userTesting')).messagingStore(await original()));
 
 import { msg } from '../../lib/i18n';
 import { renderDom } from '../../lib/testing/dom';
+import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import { describedControls } from '../../lib/testing/hints';
 import { formatCount } from '../../lib/utils/format';
 import UserStats from './UserStats.svelte';
@@ -28,6 +33,14 @@ function figures(root: HTMLElement): { label: string; shown: string }[] {
     return { label, shown: shownText(stat).replace(label, '').trim() };
   });
 }
+
+beforeEach(() => {
+  resetBindings();
+});
+
+afterEach(() => {
+  expect(calls).toEqual([]);
+});
 
 describe("UserStats: another player's figures", () => {
   it('all shown: games, hours and completed, each a number over its label', () => {

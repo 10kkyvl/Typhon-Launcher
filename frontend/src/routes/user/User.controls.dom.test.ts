@@ -1,6 +1,6 @@
 import { screen, within } from '@testing-library/svelte';
 import { get } from 'svelte/store';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import {
   profile as fetchProfile,
@@ -15,6 +15,7 @@ import { AccountError } from '../../lib/services/account';
 import { resetHistory, route } from '../../lib/stores/router';
 import { authState } from '../../lib/stores/user';
 import { renderDom } from '../../lib/testing/dom';
+import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import GameRow from './GameRow.svelte';
 import UserCommonModal from './UserCommonModal.svelte';
 import UserMutual from './UserMutual.svelte';
@@ -23,11 +24,10 @@ import UserRecent from './UserRecent.svelte';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
-vi.mock('../../lib/services/social', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../lib/services/social')>()),
-  userCommon: vi.fn(),
-  profile: vi.fn(),
-}));
+vi.mock('../../../bindings/typhon/internal/social', async (original) => (await import('./userTesting')).fakeService(await original(), 'social'));
+vi.mock('../../../bindings/typhon/internal/messaging', async (original) => (await import('./userTesting')).fakeService(await original(), 'messaging'));
+vi.mock('../../lib/services/social', async (original) => (await import('./userTesting')).socialService(await original()));
+vi.mock('../../lib/stores/messaging', async (original) => (await import('./userTesting')).messagingStore(await original()));
 
 const closedProfile = {
   id: 'u1',
@@ -63,7 +63,12 @@ function nameOf(title: string): string {
 
 const times = (text: string, word: string) => text.split(word).length - 1;
 
+beforeEach(() => {
+  resetBindings();
+});
+
 afterEach(() => {
+  expect(calls).toEqual([]);
   document.body.replaceChildren();
 });
 

@@ -3,7 +3,7 @@ import type { PublicProfile } from '../../lib/services/social';
 
 // Fixtures and stand-ins of the user page's tests. Each test file mocks the modules itself (vi.mock is
 // hoisted per file) through the factories here, so no test reaches the social or the messaging
-// backend:
+// backend (User.mocks.test.ts holds every test of this folder that mounts a part to these four lines):
 //
 //   vi.mock('../../../bindings/typhon/internal/social', async (original) => (await import('./userTesting')).fakeService(await original(), 'social'));
 //   vi.mock('../../../bindings/typhon/internal/messaging', async (original) => (await import('./userTesting')).fakeService(await original(), 'messaging'));
