@@ -89,6 +89,15 @@ describe('the start after an update', () => {
     expect(resumeFinishedShow()).toBe(false);
     expect(get(updateShow)).toMatchObject({ held: true, phase: 'run', version: '1.5.0' });
   });
+
+  it('keeps for a successor\'s curtain only a colour the old window could have handed over', () => {
+    takeOverShow(1000, '1.5.0', '#A1b2C3');
+    expect(get(updateShow)?.background).toBe('#A1b2C3');
+    for (const handed of ['', 'red', '#abc', 'url(x)', '#123456; } body { display: none']) {
+      takeOverShow(1000, '1.5.0', handed);
+      expect(get(updateShow)?.background).toBeUndefined();
+    }
+  });
 });
 
 describe('ending the show', () => {
