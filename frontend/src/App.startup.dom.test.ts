@@ -143,7 +143,7 @@ const HELD = [
 ];
 const EARLY = ORDINARY.filter((name) => !HELD.includes(name));
 
-const ACTIVE = { active: true, phaseStart: 1_700_000_000_000, version: '1.5.0', background: '#101418' };
+const ACTIVE = { active: true, phaseStart: 1_700_000_000_000, version: '1.5.0', background: '#101418', waiting: false };
 const DONE = 'launcher:handoff_done';
 
 function handOver() {
@@ -157,7 +157,7 @@ beforeEach(() => {
 
 describe('an ordinary start', () => {
   it('starts every store as App mounts, in the same order, before the first frame', async () => {
-    vi.mocked(getHandoffInfo).mockResolvedValue({ active: false, phaseStart: 0, version: '', background: '' });
+    vi.mocked(getHandoffInfo).mockResolvedValue({ active: false, phaseStart: 0, version: '', background: '', waiting: false });
     await loadHandoff();
 
     const view = render(App);
@@ -242,7 +242,7 @@ describe('the update show over the sign-in that could not reach the server', () 
       configurable: true,
       writable: true,
     });
-    vi.mocked(getHandoffInfo).mockResolvedValue({ active: false, phaseStart: 0, version: '', background: '' });
+    vi.mocked(getHandoffInfo).mockResolvedValue({ active: false, phaseStart: 0, version: '', background: '', waiting: false });
     await loadHandoff();
     // The successors above leave their held shows behind.
     endUpdateShow();

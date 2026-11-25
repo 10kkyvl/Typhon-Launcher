@@ -23,7 +23,7 @@ vi.mock('../services/selfupdate', async (importOriginal) => ({
 // launcher is gone. The show is held until that and the shell's first data, then finishes.
 
 const PHASE = 1_700_000_000_000;
-const ACTIVE = { active: true, phaseStart: PHASE, version: '1.5.0', background: '#101418' };
+const ACTIVE = { active: true, phaseStart: PHASE, version: '1.5.0', background: '#101418', waiting: false };
 const DONE = 'launcher:handoff_done';
 
 async function load() {
@@ -53,7 +53,7 @@ beforeEach(() => {
 describe('an ordinary start', () => {
   it('takes over nothing, holds no show and never tells Go a hand-over frame was drawn', async () => {
     const { service, handoff, show } = await load();
-    vi.mocked(service.getHandoffInfo).mockResolvedValue({ active: false, phaseStart: 0, version: '', background: '' });
+    vi.mocked(service.getHandoffInfo).mockResolvedValue({ active: false, phaseStart: 0, version: '', background: '', waiting: false });
 
     await expect(handoff.loadHandoff()).resolves.toBeNull();
     const { frame, step } = frames();
@@ -162,10 +162,77 @@ describe('a successor', () => {
   });
 });
 
+describe('a successor whose old launcher is still shutting down', () => {
+  const WAITING = 'launcher:handoff_waiting';
+
+  it('says so from Go\'s word until the old launcher is gone, then finishes as before', async () => {
+    const { service, handoff, show } = await load();
+    vi.mocked(service.getHandoffInfo).mockResolvedValue(ACTIVE);
+    await handoff.loadHandoff();
+    handoff.setShellReady(true);
+    expect(get(handoff.handoffWaiting)).toBe(false);
+
+    handlers[WAITING]({ data: null });
+    expect(get(handoff.handoffWaiting)).toBe(true);
+    expect(get(show.updateShow)).toMatchObject({ held: true, phase: 'run' });
+
+    handlers[DONE]({ data: { ...ACTIVE, active: false } });
+    expect(get(handoff.handoffWaiting)).toBe(false);
+    expect(get(show.updateShow)?.phase).toBe('finish');
+  });
+
+  it('pays no heed to the word once the old launcher is gone', async () => {
+    const { service, handoff, show } = await load();
+    vi.mocked(service.getHandoffInfo).mockResolvedValue(ACTIVE);
+    await handoff.loadHandoff();
+    const waiting = handlers[WAITING];
+    handlers[DONE]({ data: { ...ACTIVE, active: false } });
+    handoff.setShellReady(true);
+
+    waiting?.({ data: null });
+
+    expect(get(handoff.handoffWaiting)).toBe(false);
+    expect(get(show.updateShow)?.phase).toBe('finish');
+  });
+
+  it('reloaded while Go waits, learns it from HandoffInfo', async () => {
+    const { service, handoff } = await load();
+    vi.mocked(service.getHandoffInfo).mockResolvedValue({ ...ACTIVE, waiting: true });
+    await handoff.loadHandoff();
+
+    expect(get(handoff.handoffWaiting)).toBe(true);
+    handlers[DONE]({ data: { ...ACTIVE, active: false } });
+    expect(get(handoff.handoffWaiting)).toBe(false);
+  });
+
+  it('takes the word even when it comes before the answer to HandoffInfo', async () => {
+    const { service, handoff } = await load();
+    vi.mocked(service.getHandoffInfo).mockImplementation(async () => {
+      handlers[WAITING]?.({ data: null });
+      return ACTIVE;
+    });
+    await handoff.loadHandoff();
+
+    expect(get(handoff.handoffWaiting)).toBe(true);
+  });
+
+  it('in an ordinary start, says nothing whatever Go answers', async () => {
+    const { service, handoff } = await load();
+    vi.mocked(service.getHandoffInfo).mockImplementation(async () => {
+      handlers[WAITING]?.({ data: null });
+      return { active: false, phaseStart: 0, version: '', background: '', waiting: true };
+    });
+    await handoff.loadHandoff();
+
+    expect(get(handoff.handoffWaiting)).toBe(false);
+    expect(handlers[WAITING]).toBeUndefined();
+  });
+});
+
 describe('what waits for the hand-over', () => {
   it('runs at once in an ordinary start and answers what the start answered', async () => {
     const { service, handoff } = await load();
-    vi.mocked(service.getHandoffInfo).mockResolvedValue({ active: false, phaseStart: 0, version: '', background: '' });
+    vi.mocked(service.getHandoffInfo).mockResolvedValue({ active: false, phaseStart: 0, version: '', background: '', waiting: false });
     await handoff.loadHandoff();
     const off = vi.fn();
     const start = vi.fn(() => off);

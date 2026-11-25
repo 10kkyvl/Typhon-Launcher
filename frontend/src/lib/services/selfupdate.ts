@@ -241,13 +241,18 @@ export interface HandoffInfo {
   version: string;
   /** The theme's page colour the old launcher was showing, `#rrggbb`. */
   background: string;
+  /** Go has said the old launcher is still shutting down well after the reveal (EVENT_HANDOFF_WAITING). */
+  waiting: boolean;
 }
 
 /** Go's `eventHandoffDone`: the old launcher is gone and this one has started its services. */
 export const EVENT_HANDOFF_DONE = 'launcher:handoff_done';
 
+/** Go's word, once, that the old launcher is still shutting down some time after the reveal. No payload. */
+export const EVENT_HANDOFF_WAITING = 'launcher:handoff_waiting';
+
 export function inactiveHandoff(): HandoffInfo {
-  return { active: false, phaseStart: 0, version: '', background: '' };
+  return { active: false, phaseStart: 0, version: '', background: '', waiting: false };
 }
 
 export function toHandoffInfo(value: unknown): HandoffInfo {
@@ -257,6 +262,7 @@ export function toHandoffInfo(value: unknown): HandoffInfo {
     phaseStart: Number(raw.phaseStart) || 0,
     version: typeof raw.version === 'string' ? raw.version : '',
     background: typeof raw.background === 'string' ? raw.background : '',
+    waiting: raw.waiting === true,
   };
 }
 

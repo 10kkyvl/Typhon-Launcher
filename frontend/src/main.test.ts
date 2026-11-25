@@ -76,7 +76,7 @@ describe('the boot colour', () => {
   });
 
   it('in a successor of a seamless restart, is the colour handed over, painted before the app mounts and kept while the show runs', async () => {
-    handoff = { active: true, phaseStart: 1, version: '1.5.0', background: '#f4f1ea' };
+    handoff = { active: true, phaseStart: 1, version: '1.5.0', background: '#f4f1ea', waiting: false };
     await start();
     expect(bootAtMount[0]).toBe('html, body { background: #f4f1ea; }');
     expect(boot.removed).toBe(false);
@@ -85,7 +85,7 @@ describe('the boot colour', () => {
   });
 
   it('never takes a colour that is not one', async () => {
-    handoff = { active: true, phaseStart: 1, version: '1.5.0', background: 'red; } body { display: none' };
+    handoff = { active: true, phaseStart: 1, version: '1.5.0', background: 'red; } body { display: none', waiting: false };
     await start();
     expect(bootAtMount[0]).toContain('#090d17');
   });

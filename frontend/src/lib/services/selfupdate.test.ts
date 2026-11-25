@@ -218,10 +218,19 @@ describe('the seamless restart calls', () => {
   it('reads what a successor is handed, and nothing in an ordinary start', async () => {
     const { getHandoffInfo } = await import('./selfupdate');
     bindings.HandoffInfo.mockResolvedValueOnce({ active: true, phaseStart: 42, version: '1.5.0', background: '#101418' });
-    await expect(getHandoffInfo()).resolves.toEqual({ active: true, phaseStart: 42, version: '1.5.0', background: '#101418' });
+    await expect(getHandoffInfo()).resolves.toEqual({ active: true, phaseStart: 42, version: '1.5.0', background: '#101418', waiting: false });
 
     bindings.HandoffInfo.mockResolvedValueOnce({ active: false, phaseStart: 0, version: '', background: '' });
     await expect(getHandoffInfo()).resolves.toMatchObject({ active: false });
+  });
+
+  it('reads that Go is still waiting for the old launcher, and only a true as such', async () => {
+    const { getHandoffInfo } = await import('./selfupdate');
+    bindings.HandoffInfo.mockResolvedValueOnce({ active: true, phaseStart: 42, version: '1.5.0', background: '#101418', waiting: true });
+    await expect(getHandoffInfo()).resolves.toMatchObject({ active: true, waiting: true });
+
+    bindings.HandoffInfo.mockResolvedValueOnce({ active: true, phaseStart: 42, version: '1.5.0', background: '#101418', waiting: 'yes' });
+    await expect(getHandoffInfo()).resolves.toMatchObject({ active: true, waiting: false });
   });
 
   it('tells Go the successor has drawn its first frame, and reports a failure', async () => {

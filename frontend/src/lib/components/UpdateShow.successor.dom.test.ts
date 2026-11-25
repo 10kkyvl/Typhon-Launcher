@@ -80,7 +80,7 @@ async function advance(ms: number) {
 }
 
 async function becomeSuccessor(phaseStart: number) {
-  vi.mocked(getHandoffInfo).mockResolvedValue({ active: true, phaseStart, version: '1.5.0', background: '#090d17' });
+  vi.mocked(getHandoffInfo).mockResolvedValue({ active: true, phaseStart, version: '1.5.0', background: '#090d17', waiting: false });
   expect(await loadHandoff()).not.toBeNull();
 }
 
@@ -160,7 +160,7 @@ describe('the colour of the curtain', () => {
   const curtainColour = () => shown()?.querySelector<HTMLElement>('.curtain')?.style.backgroundColor ?? null;
 
   it('in a successor is the colour handed over, while held and while it lifts off the page', async () => {
-    vi.mocked(getHandoffInfo).mockResolvedValue({ active: true, phaseStart: START - 10_000, version: '1.5.0', background: '#123456' });
+    vi.mocked(getHandoffInfo).mockResolvedValue({ active: true, phaseStart: START - 10_000, version: '1.5.0', background: '#123456', waiting: false });
     expect(await loadHandoff()).not.toBeNull();
     renderDom(UpdateShowHarness, { logo: true, page: true });
     await advance(48);
@@ -175,7 +175,7 @@ describe('the colour of the curtain', () => {
   });
 
   it('handed something that is not a colour, is left to the page token', async () => {
-    vi.mocked(getHandoffInfo).mockResolvedValue({ active: true, phaseStart: START - 10_000, version: '1.5.0', background: 'url(x)' });
+    vi.mocked(getHandoffInfo).mockResolvedValue({ active: true, phaseStart: START - 10_000, version: '1.5.0', background: 'url(x)', waiting: false });
     expect(await loadHandoff()).not.toBeNull();
     renderDom(UpdateShowHarness, { logo: false, page: false });
     await advance(48);
@@ -189,6 +189,42 @@ describe('the colour of the curtain', () => {
     await tick();
     expect(shown()?.querySelector<HTMLElement>('.curtain')?.style.opacity).toBe('1');
     expect(curtainColour()).toBe('');
+  });
+});
+
+describe('a successor whose old launcher is still shutting down', () => {
+  const note = () => shown()?.querySelector('[role="status"] .note')?.textContent?.trim() ?? null;
+
+  it.each([
+    ['with motion', false],
+    ['with motion off', true],
+  ])('%s, says the previous version is finishing its work until it is gone, then finishes', async (_name, still) => {
+    if (still) document.documentElement.classList.add('no-anim');
+    await becomeSuccessor(START - 10_000);
+    renderDom(UpdateShowHarness, { logo: false, page: false });
+    await advance(48);
+    expect(note()).toBe(msg('ui.handoffNote'));
+
+    handlers['launcher:handoff_waiting']({ data: null });
+    await tick();
+    expect(note()).toBe(msg('ui.handoffWaitingNote'));
+    expect(shown()?.querySelector<HTMLElement>('.curtain')?.style.opacity).toBe('1');
+
+    setShellReady(true);
+    handlers['launcher:handoff_done']({ data: { active: false, phaseStart: START - 10_000, version: '1.5.0', background: '#090d17', waiting: false } });
+    await advance(100);
+    expect(note()).not.toBe(msg('ui.handoffWaitingNote'));
+    await advance(3000);
+    expect(shown()).toBeNull();
+  });
+
+  it('in the old window, keeps its words whatever comes', async () => {
+    showFollowsStatus(APPLYING, START - 10_000, { startedAt: START - 10_000, handoff: true });
+    renderDom(UpdateShowHarness);
+    await tick();
+    handlers['launcher:handoff_waiting']?.({ data: null });
+    await tick();
+    expect(note()).toBe(msg('ui.handoffNote'));
   });
 });
 
@@ -228,7 +264,7 @@ describe('telling Go the successor may be shown', () => {
   });
 
   it('never does in an ordinary start, nor at the finish after an ordinary restart', async () => {
-    vi.mocked(getHandoffInfo).mockResolvedValue({ active: false, phaseStart: 0, version: '', background: '' });
+    vi.mocked(getHandoffInfo).mockResolvedValue({ active: false, phaseStart: 0, version: '', background: '', waiting: false });
     expect(await loadHandoff()).toBeNull();
     resumeFinishedShow();
     renderDom(UpdateShowHarness);

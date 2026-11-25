@@ -1,6 +1,7 @@
+import { writable, type Readable } from 'svelte/store';
 import { Events } from '@wailsio/runtime';
 import { inWails } from '../services/backend';
-import { EVENT_HANDOFF_DONE, getHandoffInfo, handoffRendered, type HandoffInfo } from '../services/selfupdate';
+import { EVENT_HANDOFF_DONE, EVENT_HANDOFF_WAITING, getHandoffInfo, handoffRendered, type HandoffInfo } from '../services/selfupdate';
 import { announceUpdated } from './selfupdate';
 import { releaseShow, takeOverShow } from './updateShow';
 
@@ -21,17 +22,24 @@ import { releaseShow, takeOverShow } from './updateShow';
  * list, or an error outside the error contract), so the stores that read one are started through
  * `afterHandoff`: at once in an ordinary start, after that event in a successor.
  *
- * Nothing here keeps time for truth. A successor whose old launcher never exits stays held behind the
- * curtain: Go logs the overrun and goes on waiting (waitForOldLauncher), and nothing ends it. One that
- * never reports is rolled back by the old launcher.
+ * Nothing here keeps time for truth. A successor whose old launcher does not exit stays held behind
+ * the curtain: Go does not end it, it goes on waiting (waitForOldLauncher) and says so once
+ * (`launcher:handoff_waiting`, or `waiting` in HandoffInfo for a page loaded after that), and the
+ * show says it in `handoffWaiting`'s words. One that never reports is rolled back by the old launcher.
  */
 
 let successor: HandoffInfo | null = null;
 let reported = false;
 let oldGone = false;
 let shellReady = false;
+let heardWaiting = false;
 let offDone: (() => void) | null = null;
+let offWaiting: (() => void) | null = null;
 let held: Array<() => void> = [];
+
+const waiting = writable(false);
+/** A successor's old launcher is still shutting down, by Go's word, and has not gone yet. */
+export const handoffWaiting: Readable<boolean> = { subscribe: waiting.subscribe };
 
 type Frame = (next: () => void) => unknown;
 
@@ -41,12 +49,21 @@ export async function loadHandoff(): Promise<HandoffInfo | null> {
   successor = null;
   reported = false;
   oldGone = false;
+  heardWaiting = false;
+  waiting.set(false);
   held = [];
-  // Listen before asking: Go may finish between the answer and a subscription made after it.
+  // Listen before asking: Go may finish, or say it waits, between the answer and a subscription made
+  // after it.
   offDone = Events.On(EVENT_HANDOFF_DONE, () => {
     oldGone = true;
+    waiting.set(false);
     startHeld();
     settle();
+  });
+  offWaiting = Events.On(EVENT_HANDOFF_WAITING, () => {
+    if (oldGone) return;
+    heardWaiting = true;
+    if (successor) waiting.set(true);
   });
   let info: HandoffInfo;
   try {
@@ -64,6 +81,7 @@ export async function loadHandoff(): Promise<HandoffInfo | null> {
   }
   successor = info;
   takeOverShow(info.phaseStart, info.version, info.background);
+  if (!oldGone && (info.waiting || heardWaiting)) waiting.set(true);
   return info;
 }
 
@@ -132,4 +150,6 @@ function settle() {
 function stopListening() {
   offDone?.();
   offDone = null;
+  offWaiting?.();
+  offWaiting = null;
 }

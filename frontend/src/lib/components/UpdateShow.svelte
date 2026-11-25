@@ -5,7 +5,7 @@
   import { layer } from '../layers';
   import { runFrames } from '../motion/frames';
   import { motionOn, tokenMs } from '../motion/motion';
-  import { curtainDrawn } from '../stores/handoff';
+  import { curtainDrawn, handoffWaiting } from '../stores/handoff';
   import { settings } from '../stores/settings';
   import { beginOwedFinish, endUpdateShow, hostUpdateShow, logoArcsAway, updateShow, type UpdateShowState } from '../stores/updateShow';
   import LogoArcs from './LogoArcs.svelte';
@@ -240,7 +240,7 @@
     {#if words}
       <div class="words" role="status" style:opacity={mode === 'flight' ? (frame?.words ?? 0) : 1}>
         <p class="title">{msg('ui.installingVersion', { version: words })}</p>
-        <p class="note">{msg(show.handoff ? 'ui.handoffNote' : 'ui.launcherWillRestartShort')}</p>
+        <p class="note">{msg(!show.handoff ? 'ui.launcherWillRestartShort' : show.held && $handoffWaiting ? 'ui.handoffWaitingNote' : 'ui.handoffNote')}</p>
       </div>
     {/if}
   </div>
