@@ -26,6 +26,8 @@ export type DiskUsagePage = ReturnType<typeof createDiskUsagePage>;
 export interface PendingDelete {
   /** Read anew with every report for a group, whose delete Go answers from its latest scan. */
   readonly prompt: ConfirmPrompt;
+  /** The prompt's words follow the report (a group's question). */
+  follows: boolean;
   run: () => Promise<void>;
   returnFocus: () => HTMLElement | null;
 }
@@ -151,6 +153,7 @@ export function createDiskUsagePage() {
         return prompt();
       },
       returnFocus: () => returnTo(place),
+      follows: group !== null,
       run: async () => {
         // A Retry after the group's rows went: Go has nothing of it to delete.
         if (group && !rowOf(report, group)) return;

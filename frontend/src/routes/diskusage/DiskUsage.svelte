@@ -240,6 +240,7 @@
       onclose={() => page.closePending()}
       errorText={deleteErrorText}
       returnFocus={current.returnFocus}
+      live={current.follows}
     />
   {/if}
 </Page>

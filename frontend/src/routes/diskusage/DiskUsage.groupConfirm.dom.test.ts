@@ -95,6 +95,7 @@ const KINDS: Kind[] = [
 const withGroups = (kind: Kind, groups: GroupUsage[]): Report => report({ [kind.name]: groups });
 const asked = (kind: Kind, title: string, count: number, size: string) => msg(kind.text, { title, count: msg(kind.count, { count }), size });
 const textOf = (dialog: HTMLElement) => dialog.querySelector(`#${CSS.escape(dialog.getAttribute('aria-describedby') ?? '')}`)?.textContent;
+const liveOf = (dialog: HTMLElement) => dialog.querySelector(`#${CSS.escape(dialog.getAttribute('aria-describedby') ?? '')}`)?.getAttribute('aria-live') ?? null;
 
 beforeEach(() => {
   vi.mocked(cachedUsage).mockResolvedValue(null);
@@ -124,6 +125,8 @@ describe.each(KINDS.map((k) => [k.name, k] as const))('DiskUsage: the question o
     vi.mocked(scanUsage).mockResolvedValue(withGroups(kind, [group('g-h', 'Hades', 12, { sizeBytes: 2 * GB })]));
     const { dialog } = await openFor(kind, 'Hades');
     expect(textOf(dialog)).toBe(asked(kind, 'Hades', 12, bytesSize(2 * GB)));
+    // Its words follow the report: a change in them is said, not only shown.
+    expect(liveOf(dialog)).toBe('polite');
   });
 
   it('follows a rescan that changed the group, and Confirm then deletes what it says', async () => {
@@ -246,6 +249,7 @@ describe('DiskUsage: the question of a single row', () => {
 
     await user.click(within(rowOf('diskusage.leftoversTitle', 'D:\\Games\\.partial')).getByRole('button', { name: msg('diskusage.leftoverDelete') }));
     let dialog = await screen.findByRole('dialog');
+    expect(liveOf(dialog)).toBeNull();
     libraryChanges();
     await settle();
     expect(screen.queryByText('D:\\Games\\.other')).not.toBeNull();
