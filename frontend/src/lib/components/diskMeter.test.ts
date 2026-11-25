@@ -512,6 +512,8 @@ describe('the disk meter model of an owner\'s own files', () => {
 
   it('is an unknown total when nothing is measured, and a disk\'s total is never a lower bound', () => {
     expect(sumMeter([{ key: 'a', label: 'A', bytes: 0, tone: 'game', sizeUnknown: true }]).total).toBeNull();
+    expect(sumMeter([]).total).toBe(0);
+    expect(sumMeter([]).totalAtLeast).toBe(false);
     expect(meter([{ key: 'a', label: 'A', bytes: 30 * GB, tone: 'game', sizeUnknown: true }], 100 * GB, 10 * GB).totalAtLeast).toBe(false);
   });
 });

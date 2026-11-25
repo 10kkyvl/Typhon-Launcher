@@ -165,7 +165,9 @@ export function sumMeter(segments: readonly MeterSegment[], width: number = METE
   const sizes = segments.map(sizeOf);
   const used = sizes.reduce((sum, size) => sum + bytesOf(size), 0);
   const model = meter(segments, used, 0, width);
-  return { ...model, free: null, totalAtLeast: model.total !== null && sizes.some((size) => size.kind !== 'exact') };
+  const exact = sizes.every((size) => size.kind === 'exact');
+  // Nothing at all, every size known, is a total of nothing, not an unknown one.
+  return { ...model, total: model.total ?? (exact ? 0 : null), free: null, totalAtLeast: model.total !== null && !exact };
 }
 
 // Rem sums of tenths are not exact in binary: a part that takes exactly a hairline must count as one.
