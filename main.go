@@ -1276,7 +1276,12 @@ func main() {
 				// on beside whatever holds it. The old launcher, if it is
 				// still alive, keeps its window.
 				slog.Error("complete the hand-off", "component", "app", "error", err)
-				wails.Quit()
+				// When the launcher is already quitting, the wait ended because
+				// of that quit: asking to quit again would wait on a main loop
+				// that has ended (Windows) and keep the process alive for ever.
+				if handoffCtx.Err() == nil {
+					wails.Quit()
+				}
 			}
 		}()
 	}
