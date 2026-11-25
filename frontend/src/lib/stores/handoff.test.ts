@@ -191,6 +191,24 @@ describe('what waits for the hand-over', () => {
     expect(start).toHaveBeenCalledOnce();
   });
 
+  it('in a successor, takes Go\'s word that the old launcher is gone even when it comes before the answer to HandoffInfo', async () => {
+    const { service, handoff, show } = await load();
+    // Go answers, then emits; the event crosses to the window before the answer does. Emitted with
+    // nobody listening, it is lost, as the runtime loses it.
+    vi.mocked(service.getHandoffInfo).mockImplementation(async () => {
+      handlers[DONE]?.({ data: { ...ACTIVE, active: false } });
+      return ACTIVE;
+    });
+    await handoff.loadHandoff();
+    const start = vi.fn();
+
+    handoff.afterHandoff(start);
+    expect(start).toHaveBeenCalledOnce();
+    expect(get(show.updateShow)).toMatchObject({ held: true, phase: 'run' });
+    handoff.setShellReady(true);
+    expect(get(show.updateShow)?.phase).toBe('finish');
+  });
+
   it('starts the held stores before the show is released, so the finish plays over a shell that has asked for its data', async () => {
     const { service, handoff, show } = await load();
     vi.mocked(service.getHandoffInfo).mockResolvedValue(ACTIVE);

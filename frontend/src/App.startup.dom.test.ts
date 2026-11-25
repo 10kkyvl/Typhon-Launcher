@@ -1,9 +1,11 @@
 import { render } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getHandoffInfo } from './lib/services/selfupdate';
 import { get } from 'svelte/store';
 import { loadHandoff } from './lib/stores/handoff';
-import { updateShow } from './lib/stores/updateShow';
+import { endUpdateShow, resumeFinishedShow, updateShow } from './lib/stores/updateShow';
+import { authState, bootSplash, retryBootstrap } from './lib/stores/user';
 import App from './App.svelte';
 
 // The stores App.svelte starts as it mounts, by name and in order. Each init is replaced by a recorder
@@ -215,5 +217,57 @@ describe('a successor of a seamless restart', () => {
 
     expect(calls).toEqual(ORDINARY);
     view.unmount();
+  });
+});
+
+// Last in the file: the retried sign-in below is left waiting for an answer that never comes.
+describe('the update show over the sign-in that could not reach the server', () => {
+  it('stays up while a retried sign-in passes through "bootstrapping" with the screen kept', async () => {
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame'] });
+    const rect = (left: number, top: number, width: number, height: number) =>
+      ({ left, top, width, height, right: left + width, bottom: top + height, x: left, y: top, toJSON: () => ({}) }) as DOMRect;
+    const boxes = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      if (this.matches('[data-logo-origin]')) return rect(20, 30, 28, 28);
+      if (this.matches('.funnel-box')) return rect(500, 300, 360, 277);
+      return rect(0, 0, 0, 0);
+    });
+    Object.defineProperty(Element.prototype, 'animate', {
+      value: () => ({
+        cancel: () => {},
+        finished: Promise.resolve(),
+        set onfinish(done: () => void) {
+          done();
+        },
+      }),
+      configurable: true,
+      writable: true,
+    });
+    vi.mocked(getHandoffInfo).mockResolvedValue({ active: false, phaseStart: 0, version: '', background: '' });
+    await loadHandoff();
+    // The successors above leave their held shows behind.
+    endUpdateShow();
+    const view = render(App);
+    try {
+      authState.set('unavailable');
+      await tick();
+      // The start after an ordinary update: a finish with no words, owed and not held.
+      expect(resumeFinishedShow()).toBe(true);
+      await tick();
+      const shown = () => document.querySelector<HTMLElement>('[data-testid="update-show"]');
+      expect(shown()?.dataset.stage).toBe('finish');
+
+      void retryBootstrap();
+      await tick();
+      expect(get(authState)).toBe('bootstrapping');
+      expect(get(bootSplash)).toBe(false);
+      expect(shown()?.dataset.stage).toBe('finish');
+      expect(get(updateShow)).not.toBeNull();
+    } finally {
+      view.unmount();
+      endUpdateShow();
+      boxes.mockRestore();
+      Reflect.deleteProperty(Element.prototype, 'animate');
+      vi.useRealTimers();
+    }
   });
 });
