@@ -12,17 +12,30 @@ const tests = import.meta.glob<string>(['../../**/*.test.ts', '!../../**/node_mo
 
 const SCREEN = /\bimport\s+\w+\s+from\s+'[^']*\/(?:Support|TicketList|TicketView|NewTicket|AttachLogs|LogsConfirm|SupportRouteHarness)\.svelte'/;
 
-const NEEDED: [string, RegExp][] = [
-  ['the whole support service', /vi\.mock\('[^']*lib\/services\/support',[^\n]*\bsupportService\(/],
-  ['the log upload', /vi\.mock\('[^']*lib\/services\/logsUpload',[^\n]*\blogsUpload\(\)/],
-  ['the account openers', /vi\.mock\('[^']*lib\/services\/account',[^\n]*\baccountOpeners\(/],
-  ['the support binding', /vi\.mock\('[^']*bindings\/typhon\/internal\/support',[^\n]*\bfakeService\([^\n]*'support'\)/],
-  ['the diagnostics binding', /vi\.mock\('[^']*bindings\/typhon\/internal\/diagnostics',[^\n]*\bfakeService\([^\n]*'diagnostics'\)/],
-  ['the account binding', /vi\.mock\('[^']*bindings\/typhon\/internal\/account',[^\n]*\bfakeService\([^\n]*'account'\)/],
-  ['no call reached a binding', /expect\(calls\)\.toEqual\(\[\]\)/],
+const FIXTURES = String.raw`\(await import\('[^']*\/supportTesting'\)\)`;
+
+/**
+ * The module is mocked once, by exactly the factory of the fixtures and nothing around it: a spread, an
+ * Object.assign or a second vi.mock after it could put one real function back over the whole mock.
+ * `\1` is the factory's own parameter, the original module.
+ */
+function only(path: string, call: string): (source: string) => boolean {
+  const any = new RegExp(String.raw`vi\.mock\('[^']*${path}'`, 'g');
+  const exact = new RegExp(String.raw`^vi\.mock\('[^']*${path}', async \((\w*)\) => ${FIXTURES}\.${call}\);$`, 'm');
+  return (source) => (source.match(any) ?? []).length === 1 && exact.test(source);
+}
+
+const NEEDED: [string, (source: string) => boolean][] = [
+  ['the whole support service', only(String.raw`lib\/services\/support`, String.raw`supportService\(await \1\(\)\)`)],
+  ['the log upload', only(String.raw`lib\/services\/logsUpload`, String.raw`logsUpload\(\)`)],
+  ['the account openers', only(String.raw`lib\/services\/account`, String.raw`accountOpeners\(await \1\(\)\)`)],
+  ['the support binding', only(String.raw`bindings\/typhon\/internal\/support`, String.raw`fakeService\(await \1\(\), 'support'\)`)],
+  ['the diagnostics binding', only(String.raw`bindings\/typhon\/internal\/diagnostics`, String.raw`fakeService\(await \1\(\), 'diagnostics'\)`)],
+  ['the account binding', only(String.raw`bindings\/typhon\/internal\/account`, String.raw`fakeService\(await \1\(\), 'account'\)`)],
+  ['no call reached a binding', (source) => /expect\(calls\)\.toEqual\(\[\]\)/.test(source)],
 ];
 
-const missing = (source: string) => NEEDED.filter(([, pattern]) => !pattern.test(source)).map(([what]) => what);
+const missing = (source: string) => NEEDED.filter(([, holds]) => !holds(source)).map(([what]) => what);
 
 const mounting = Object.entries(tests).filter(([, source]) => SCREEN.test(source));
 
@@ -34,8 +47,24 @@ describe('tests that mount a support screen', () => {
     expect(mounting.length).toBeGreaterThanOrEqual(8);
   });
 
+  it('refuse a mock that puts one real function back over the whole one', () => {
+    const fixtures = "(await import('../../lib/testing/supportTesting'))";
+    const whole = `vi.mock('../../lib/services/support', async (original) => ${fixtures}.supportService(await original()));`;
+    expect(missing(whole)).not.toContain('the whole support service');
+    for (const mock of [
+      "vi.mock('../../lib/services/support', async (importOriginal) => ({ ...(await importOriginal()), listTickets: vi.fn() }));",
+      `vi.mock('../../lib/services/support', async (original) => ({ ...${fixtures}.supportService(await original()), getTicket: (await original<typeof import('../../lib/services/support')>()).getTicket }));`,
+      `vi.mock('../../lib/services/support', async (original) => ({ ...${fixtures}.supportService(await original()), unreadTickets: (await original<typeof import('../../lib/services/support')>()).unreadTickets }));`,
+      `vi.mock('../../lib/services/support', async (original) => Object.assign(${fixtures}.supportService(await original()), { getTicket: (await original<typeof import('../../lib/services/support')>()).getTicket }));`,
+      `${whole}\nvi.mock('../../lib/services/support', async (original) => await original());`,
+    ]) {
+      expect(missing(mock), mock).toContain('the whole support service');
+    }
+    expect(missing(`vi.mock('../../lib/services/account', async (original) => ({ ...${fixtures}.accountOpeners(await original()), logout: vi.fn() }));`)).toContain('the account openers');
+    expect(missing(`vi.mock('../../lib/services/logsUpload', async () => ({ ...${fixtures}.logsUpload(), sendLogs: vi.fn() }));`)).toContain('the log upload');
+  });
+
   it('mock the whole support service, the log upload and the account openers, and fake the bindings', () => {
-    expect(missing("vi.mock('../../lib/services/support', async (importOriginal) => ({ ...(await importOriginal()), listTickets: vi.fn() }));")).toContain('the whole support service');
     expect(mounting.map(([path, source]) => [path, missing(source)]).filter(([, gaps]) => gaps.length > 0)).toEqual([]);
   });
 });
