@@ -2,6 +2,7 @@ package library
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"path/filepath"
 	"strings"
@@ -32,8 +33,42 @@ const defaultWatchInterval = 1 * time.Second
 // the detector simply never runs and watching stays false.
 // ServiceStartup runs the startup at once, or after the old launcher has
 // exited when this one is the successor of a seamless update.
+//
+// A successor built this service, and read its files, while the old launcher
+// still ran and could still write them (a session ending, an install
+// finishing); its held-back start reads them again before anything here can
+// save over that write. An ordinary start read them moments ago and does not.
 func (s *Service) ServiceStartup(ctx context.Context, opts application.ServiceOptions) error {
-	return handoffgate.Startup(ctx, "library", func() error { return s.startService(ctx, opts) })
+	deferred := handoffgate.Armed()
+	return handoffgate.Startup(ctx, "library", func() error {
+		if deferred {
+			if err := s.reload(); err != nil {
+				return err
+			}
+		}
+		return s.startService(ctx, opts)
+	})
+}
+
+// reload replaces what the constructor read with what the files hold now, by
+// the constructor's own reading. Files it cannot read leave the constructor's
+// snapshot in place and every later save refused: the file on disk stays the
+// only copy of the player's library, as when the constructor's read fails.
+func (s *Service) reload() error {
+	fresh, err := NewServiceAt(s.path)
+	if err != nil {
+		s.mu.Lock()
+		s.loadErr = err
+		s.mu.Unlock()
+		return fmt.Errorf("library: read the library again after the hand-over: %w", err)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.games, s.archived = fresh.games, fresh.archived
+	s.excluded, s.collections = fresh.excluded, fresh.collections
+	s.savedNative, s.savedEmulated = fresh.savedNative, fresh.savedEmulated
+	s.emitUpdated()
+	return nil
 }
 
 func (s *Service) startService(ctx context.Context, _ application.ServiceOptions) error {

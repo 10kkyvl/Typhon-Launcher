@@ -204,8 +204,11 @@ type Service struct {
 	games           []Game
 	archived        []Game
 	excluded        []string
-	running         map[string]*session
-	onSession       func(gameID string, seconds int64)
+	// loadErr is set when the files could not be read again at a held-back
+	// start; the snapshot stays and nothing is saved over them.
+	loadErr   error
+	running   map[string]*session
+	onSession func(gameID string, seconds int64)
 	// onOutcome получает исход запуска: сколько играли и закрыли ли игру
 	// сами. Отдельно от onSession, потому что у того другой смысл — учёт
 	// наигранного времени.
@@ -472,6 +475,9 @@ func (s *Service) load() ([]Game, error) {
 func (s *Service) persist() error {
 	if s.path == "" {
 		return errors.New("library path unavailable")
+	}
+	if s.loadErr != nil {
+		return fmt.Errorf("library not saved, its files could not be read: %w", s.loadErr)
 	}
 	if err := s.checkHoldsLocked(); err != nil {
 		return err
