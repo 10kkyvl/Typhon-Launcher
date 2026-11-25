@@ -84,6 +84,11 @@ export function createDiskUsagePage() {
     return followUp;
   }
 
+  // After a delete Go stops the walk that was running and the waiting scan measures the disk as the
+  // delete left it: that answer is the one to wait for, and a second walk after it would only hold
+  // the confirmation open.
+  const remeasured = () => inFlight ?? refresh();
+
   function start(): Promise<boolean> {
     if (left) return Promise.resolve(false);
     const flight = measure();
@@ -155,10 +160,10 @@ export function createDiskUsagePage() {
           try {
             result = await action();
           } catch (err) {
-            await refresh();
+            await remeasured();
             throw err;
           }
-          await refresh();
+          await remeasured();
         } finally {
           running = false;
         }
