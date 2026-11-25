@@ -1,0 +1,218 @@
+import { cleanup, screen, within } from '@testing-library/svelte';
+import { get } from 'svelte/store';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { msg } from '../../lib/i18n';
+import { AccountError } from '../../lib/services/account';
+import { createTicket, ticketLimits } from '../../lib/services/support';
+import { navigate, resetHistory, route } from '../../lib/stores/router';
+import { toasts } from '../../lib/stores/toasts';
+import { calls, resetBindings } from '../../lib/testing/fakeBinding';
+import { renderDom } from '../../lib/testing/dom';
+import { emitUpload, held, LIMITS, ticket, words } from './supportTesting';
+import NewTicket from './NewTicket.svelte';
+
+vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
+vi.mock('../../../bindings/typhon/internal/support', async (original) => (await import('./supportTesting')).fakeService(await original(), 'support'));
+vi.mock('../../../bindings/typhon/internal/diagnostics', async (original) => (await import('./supportTesting')).fakeService(await original(), 'diagnostics'));
+vi.mock('../../../bindings/typhon/internal/account', async (original) => (await import('./supportTesting')).fakeService(await original(), 'account'));
+vi.mock('../../lib/services/support', async (original) => (await import('./supportTesting')).supportService(await original()));
+vi.mock('../../lib/services/logsUpload', async () => (await import('./supportTesting')).logsUpload());
+vi.mock('../../lib/services/account', async (original) => (await import('./supportTesting')).accountOpeners(await original()));
+
+beforeEach(() => {
+  resetBindings();
+  toasts.set([]);
+  navigate('support', { view: 'new' });
+  vi.mocked(ticketLimits).mockResolvedValue(LIMITS);
+});
+
+afterEach(() => {
+  cleanup();
+  expect(calls).toEqual([]);
+  vi.mocked(ticketLimits).mockReset();
+  vi.mocked(createTicket).mockReset();
+  toasts.set([]);
+  resetHistory();
+});
+
+const said = () => get(toasts).map((item) => [item.kind, item.message]);
+const subjectField = () => screen.getByRole('textbox', { name: new RegExp(msg('tickets.subjectLabel')) }) as HTMLInputElement;
+const bodyField = () => screen.getByRole('textbox', { name: new RegExp(msg('tickets.bodyLabel')) }) as HTMLTextAreaElement;
+const logsSwitch = () => screen.getByRole('switch', { name: msg('tickets.attachLogs') });
+const submit = () => screen.getByRole('button', { name: msg('tickets.submit') });
+
+async function form(props: { initialTopic: 'install' | 'launch' | 'account' | 'launcher' | 'other'; initialSubject?: string }) {
+  const view = renderDom(NewTicket, props);
+  await screen.findByRole('button', { name: msg('tickets.submit') });
+  return view;
+}
+
+async function filled(props: Parameters<typeof form>[0] = { initialTopic: 'account' }) {
+  const view = await form(props);
+  await view.user.type(subjectField(), '  Cannot sign in  ');
+  await view.user.type(bodyField(), '  The code never arrives.  ');
+  return view;
+}
+
+describe('NewTicket: the form', () => {
+  it('starts on the topic it was opened with, and attaches logs by default where they help', async () => {
+    await form({ initialTopic: 'launcher' });
+    expect(words(screen.getByRole('combobox', { name: msg('tickets.topicLabel') }))).toBe(msg('tickets.topicLauncher'));
+    expect(logsSwitch().getAttribute('aria-checked')).toBe('true');
+  });
+
+  it.each([
+    ['install', 'true'],
+    ['launch', 'true'],
+    ['launcher', 'true'],
+    ['account', 'false'],
+    ['other', 'false'],
+  ] as const)('the logs switch starts %s at %s', async (topic, on) => {
+    await form({ initialTopic: topic });
+    expect(logsSwitch().getAttribute('aria-checked')).toBe(on);
+  });
+
+  it('follows the topic with the logs default until the player sets the switch', async () => {
+    const { user } = await form({ initialTopic: 'account' });
+    const topic = screen.getByRole('combobox', { name: msg('tickets.topicLabel') });
+
+    await user.click(topic);
+    await user.click(screen.getByRole('option', { name: msg('tickets.topicInstall') }));
+    expect(logsSwitch().getAttribute('aria-checked')).toBe('true');
+
+    await user.click(logsSwitch());
+    await user.click(topic);
+    await user.click(screen.getByRole('option', { name: msg('tickets.topicLaunch') }));
+    expect(logsSwitch().getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('takes the subject it was opened with', async () => {
+    await form({ initialTopic: 'other', initialSubject: 'Beta 2.0: crash' });
+    expect(subjectField().value).toBe('Beta 2.0: crash');
+  });
+
+  it('shows the lengths against the limits Go gives', async () => {
+    vi.mocked(ticketLimits).mockResolvedValue({ maxSubjectRunes: 20, maxBodyRunes: 300 });
+    const { user } = await form({ initialTopic: 'account' });
+    expect(screen.getByText(msg('tickets.counter', { count: 0, max: 20 }))).toBeTruthy();
+    expect(screen.getByText(msg('tickets.counter', { count: 0, max: 300 }))).toBeTruthy();
+
+    await user.type(subjectField(), 'Longer than twenty letters');
+    await user.click(submit());
+
+    expect(subjectField().getAttribute('aria-invalid')).toBe('true');
+    expect(screen.getByText(msg('tickets.errSubjectTooLong', { max: 20 }))).toBeTruthy();
+    expect(createTicket).not.toHaveBeenCalled();
+  });
+
+  it('goes back on Cancel', async () => {
+    const { user } = await form({ initialTopic: 'account' });
+    await user.click(screen.getByRole('button', { name: msg('common.cancel') }));
+    expect(get(route).name).toBe('library');
+  });
+});
+
+describe('NewTicket: what Create sends', () => {
+  it('sends the topic, the trimmed subject and text, no game and no logs, then opens the new request', async () => {
+    vi.mocked(createTicket).mockResolvedValue(ticket(12, 'Cannot sign in', { topic: 'account' }));
+    const { user } = await filled();
+
+    await user.click(submit());
+
+    await vi.waitFor(() => expect(get(route)).toMatchObject({ name: 'support', params: { ticket: '12' } }));
+    expect(createTicket).toHaveBeenCalledWith({ topic: 'account', subject: 'Cannot sign in', body: 'The code never arrives.', gameIgdbId: null, attachLogs: false });
+    expect(said()).toEqual([['success', msg('tickets.created', { ref: 'T-12' })]]);
+  });
+
+  it('asks before attaching logs, and sends nothing when the player declines', async () => {
+    const { user } = await filled({ initialTopic: 'launcher' });
+
+    await user.click(submit());
+    const dialog = await screen.findByRole('dialog', { name: msg('tickets.logsConfirmTitle') });
+    expect(words(dialog)).toContain(msg('tickets.logsConfirmText'));
+    expect(words(dialog)).toContain(msg('tickets.logsConfirmNote'));
+    await user.click(within(dialog).getByRole('button', { name: msg('common.cancel') }));
+
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(createTicket).not.toHaveBeenCalled();
+    expect(subjectField().value).toBe('  Cannot sign in  ');
+    expect(get(route).params).toEqual({ view: 'new' });
+  });
+
+  it('sends the logs with the request once the player agrees, and shows the upload while it runs', async () => {
+    const sent = held<ReturnType<typeof ticket>>();
+    vi.mocked(createTicket).mockReturnValue(sent.promise);
+    const { user } = await filled({ initialTopic: 'launcher' });
+
+    await user.click(submit());
+    const dialog = await screen.findByRole('dialog', { name: msg('tickets.logsConfirmTitle') });
+    await user.click(within(dialog).getByRole('button', { name: msg('tickets.logsConfirmButton') }));
+    await vi.waitFor(() => expect(createTicket).toHaveBeenCalledWith(expect.objectContaining({ topic: 'launcher', attachLogs: true })));
+
+    emitUpload({ state: 'sending', sentBytes: 512, totalBytes: 1024 });
+    const bar = await screen.findByRole('progressbar', { name: msg('settings.aboutLogsLabel') });
+    expect(bar.getAttribute('aria-valuenow')).toBe('50');
+    expect(screen.getByText(msg('settings.aboutLogsSendingProgress', { percent: 50 }))).toBeTruthy();
+
+    sent.resolve(ticket(13, 'Cannot sign in'));
+    await vi.waitFor(() => expect(get(route).params).toEqual({ ticket: '13' }));
+  });
+});
+
+describe('NewTicket: a refused request says why by its code', () => {
+  it.each([
+    ['ticket_invalid_subject', 'subject', msg('errSupport.invalidSubject')],
+    ['ticket_invalid_body', 'body', msg('errSupport.invalidBody')],
+  ] as const)('%s at the %s field, keeping what was typed', async (code, field, text) => {
+    vi.mocked(createTicket).mockRejectedValue(new AccountError(code));
+    const { user } = await filled();
+
+    await user.click(submit());
+
+    const target = field === 'subject' ? subjectField : bodyField;
+    await vi.waitFor(() => expect(target().getAttribute('aria-invalid')).toBe('true'));
+    expect(screen.getByText(text)).toBeTruthy();
+    expect(subjectField().value).toBe('  Cannot sign in  ');
+    expect(bodyField().value).toBe('  The code never arrives.  ');
+  });
+
+  it.each([
+    ['ticket_limit', msg('errSupport.limit')],
+    ['network_error', msg('state.accountErrorNetwork')],
+    ['ticket_bundle_limit', msg('errSupport.bundleLimit')],
+  ])('%s in the form', async (code, text) => {
+    vi.mocked(createTicket).mockRejectedValue(new AccountError(code));
+    const { user } = await filled();
+
+    await user.click(submit());
+
+    const alert = await screen.findByRole('alert');
+    await vi.waitFor(() => expect(alert.textContent).toContain(text));
+    expect(subjectField().hasAttribute('aria-invalid')).toBe(false);
+    expect(get(route).params).toEqual({ view: 'new' });
+  });
+
+  it('a failed log upload says that nothing was sent', async () => {
+    vi.mocked(createTicket).mockRejectedValue(new Error('typhon:diagnostics.upload_failed'));
+    const { user } = await filled({ initialTopic: 'launcher' });
+
+    await user.click(submit());
+    const dialog = await screen.findByRole('dialog', { name: msg('tickets.logsConfirmTitle') });
+    await user.click(within(dialog).getByRole('button', { name: msg('tickets.logsConfirmButton') }));
+
+    const alert = await screen.findByRole('alert');
+    await vi.waitFor(() => expect(alert.textContent).toContain(msg('errSupport.logsFailed')));
+    expect(subjectField().value).toBe('  Cannot sign in  ');
+  });
+
+  it('an unknown failure says the plain failure, never the raw text', async () => {
+    vi.mocked(createTicket).mockRejectedValue(new AccountError('something_new'));
+    const { user } = await filled();
+
+    await user.click(submit());
+
+    const alert = await screen.findByRole('alert');
+    await vi.waitFor(() => expect(alert.textContent).toContain(msg('errSupport.generic')));
+    expect(alert.textContent).not.toContain('something_new');
+  });
+});
