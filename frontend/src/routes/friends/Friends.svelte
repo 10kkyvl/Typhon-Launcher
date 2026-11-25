@@ -35,6 +35,7 @@
   import FriendCodeCard from './FriendCodeCard.svelte';
   import FriendsList from './FriendsList.svelte';
   import RequestCards from './RequestCards.svelte';
+  import { catchLeaving, placeOf, returnTo, type RowPlace } from './rowFocus';
   import { playerFrame } from '../../lib/profile/appearanceCard';
   import { frameReserve } from '../../lib/profile/frameLook';
 
@@ -53,6 +54,9 @@
   let blockedRetrying = $state(false);
   let content = $state<HTMLElement>();
   let pending = $state<{ prompt: ConfirmPrompt; run: () => Promise<void>; errorText: (err: unknown) => string } | null>(null);
+  // The row a confirmation was asked from: focus goes back by the row rule when the dialog closes.
+  let askedFrom: RowPlace | null = null;
+  // The action in flight, `<action>:<user id>`: its button is busy and every other press waits for it.
   let busy = $state('');
   let myCode = $state('');
   let search = $state('');
@@ -173,6 +177,7 @@
       return;
     }
     const name = user.displayName || user.username;
+    askedFrom = placeOf(document.activeElement);
     if (item === 'unfriend') {
       pending = {
         prompt: unfriendPrompt(name),
@@ -210,6 +215,16 @@
     });
   });
 
+  // Before any change of the cards and rows shown (an answered request, a removed friend, a list read
+  // again), the row rule reads where focus is and hands it on if its card or row went.
+  $effect.pre(() => {
+    void page;
+    void blocked;
+    void blockedLoaded;
+    void $friendsLoaded;
+    untrack(catchLeaving);
+  });
+
   // Read on arrival and again whenever the session changes under the screen (a guest signs in, the
   // connection comes back): the store forgets the lists of a session that ended.
   $effect(() => {
@@ -228,7 +243,8 @@
       <Button
         variant="primary"
         size="sm"
-        disabled={!!busy}
+        data-row-control="accept"
+        busy={busy === `accept:${request.id}`}
         onclick={() =>
           run(`accept:${request.id}`, () => accept(request.id), msg('social.acceptRequestFailed'), msg('social.friendsNowFriends'))}
       >
@@ -236,7 +252,8 @@
       </Button>
       <Button
         size="sm"
-        disabled={!!busy}
+        data-row-control="decline"
+        busy={busy === `decline:${request.id}`}
         onclick={() => run(`decline:${request.id}`, () => decline(request.id), msg('social.declineRequestFailed'))}
       >
         {msg('social.declineButton')}
@@ -315,7 +332,7 @@
         <div class="content" bind:this={content}>
           {#if presenceTabs.has(tab)}
             {#if page.incoming.length > 0}
-              <section class="incoming" aria-label={msg('social.friendsIncomingHeading')}>
+              <section class="incoming" data-friends-section="incoming" aria-label={msg('social.friendsIncomingHeading')}>
                 <h4 class="eyebrow">
                   <span class="eyebrow-dot"></span>
                   {msg('social.friendsIncomingHeading')}
@@ -325,43 +342,50 @@
               </section>
             {/if}
 
-            <FriendsList
-              friends={page.friends}
-              group={groupFor}
-              {tab}
-              reserve={listReserve}
-              bind:search
-              bind:sortBy
-              onadd={() => (addOpen = true)}
-              onmenu={onMenu}
-              onopen={openProfile}
-            />
+            <div data-friends-section="friends">
+              <FriendsList
+                friends={page.friends}
+                group={groupFor}
+                {tab}
+                reserve={listReserve}
+                bind:search
+                bind:sortBy
+                onadd={() => (addOpen = true)}
+                onmenu={onMenu}
+                onopen={openProfile}
+              />
+            </div>
           {:else if page.incoming.length === 0 && page.outgoing.length === 0}
             <EmptyState level={2} title={msg('social.friendsEmptyRequestsTitle')} description={msg('social.friendsEmptyRequestsDesc')} />
           {:else}
             {#if page.incoming.length > 0}
-              <h4 class="eyebrow">
-                <span class="eyebrow-dot"></span>
-                {msg('social.friendsIncomingHeading')}
-                <span class="eyebrow-count">{page.incoming.length}</span>
-              </h4>
-              {@render incomingCards()}
+              <section data-friends-section="incoming" aria-label={msg('social.friendsIncomingHeading')}>
+                <h4 class="eyebrow">
+                  <span class="eyebrow-dot"></span>
+                  {msg('social.friendsIncomingHeading')}
+                  <span class="eyebrow-count">{page.incoming.length}</span>
+                </h4>
+                {@render incomingCards()}
+              </section>
             {/if}
 
             {#if page.outgoing.length > 0}
-              <h4 class="eyebrow">{msg('social.friendsSentHeading')}</h4>
-              <RequestCards users={page.outgoing} {busy} reserve={outgoingReserve} stats={outgoingStats} onopen={openProfile}>
-                {#snippet actions(request)}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={!!busy}
-                    onclick={() => run(`cancel:${request.id}`, () => decline(request.id), msg('social.cancelRequestFailed'))}
-                  >
-                    {msg('social.cancelRequestButton')}
-                  </Button>
-                {/snippet}
-              </RequestCards>
+              <section data-friends-section="outgoing" aria-label={msg('social.friendsSentHeading')}>
+                <h4 class="eyebrow">{msg('social.friendsSentHeading')}</h4>
+                <RequestCards users={page.outgoing} {busy} reserve={outgoingReserve} stats={outgoingStats} onopen={openProfile}>
+                  {#snippet actions(request)}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      data-row-control="cancel"
+                      busy={busy === `cancel:${request.id}`}
+                      onclick={() => run(`cancel:${request.id}`, () => decline(request.id), msg('social.cancelRequestFailed'))}
+                    >
+                      {msg('social.cancelRequestButton')}
+                    </Button>
+                  {/snippet}
+                </RequestCards>
+              </section>
             {/if}
           {/if}
         </div>
@@ -392,7 +416,7 @@
           <div class="loading"><Spinner label={msg('social.loadingEllipsis')} /></div>
         {/if}
       {:else}
-        <div class="content" bind:this={content}>
+        <div class="content" data-friends-section="blocked" bind:this={content}>
           {#if blocked.length === 0}
             <EmptyState level={2}
               title={msg('social.friendsEmptyBlockedTitle')}
@@ -403,7 +427,8 @@
               {#snippet actions(user)}
                 <Button
                   size="sm"
-                  disabled={!!busy}
+                  data-row-control="unblock"
+                  busy={busy === `unblock:${user.id}`}
                   onclick={() =>
                     run(`unblock:${user.id}`, () => unblock(user.id), msg('social.unblockFailed'), msg('social.userUnblocked'))}
                 >
@@ -424,7 +449,13 @@
   <SocialConsentScreen bind:open={consentOpen} />
 
   {#if pending}
-    <ConfirmModal prompt={pending.prompt} onconfirm={pending.run} onclose={() => (pending = null)} errorText={pending.errorText} />
+    <ConfirmModal
+      prompt={pending.prompt}
+      onconfirm={pending.run}
+      onclose={() => (pending = null)}
+      errorText={pending.errorText}
+      returnFocus={() => returnTo(askedFrom)}
+    />
   {/if}
 </Page>
 

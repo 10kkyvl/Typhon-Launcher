@@ -82,13 +82,13 @@
 </script>
 
 {#snippet friendActions(friend: FriendView)}
-  <Button variant="ghost" size="sm" onclick={() => openMessage(friend)}>
+  <Button variant="ghost" size="sm" data-row-control="chat" onclick={() => openMessage(friend)}>
     <MessageCircle size="1.4rem" strokeWidth={1.8} />
     {msg('social.chatWrite')}
   </Button>
   <DropdownMenu items={menuItems} onselect={(item) => onmenu(friend, item)}>
     {#snippet trigger({ props })}
-      <IconButton {...props} label={msg('social.friendMenuFor', { name: friend.displayName || friend.username })} size="sm">
+      <IconButton {...props} data-row-control="menu" label={msg('social.friendMenuFor', { name: friend.displayName || friend.username })} size="sm">
         <EllipsisVertical size="1.7rem" strokeWidth={1.8} />
       </IconButton>
     {/snippet}
@@ -156,37 +156,41 @@
 {:else if $friendsView === 'grid'}
   <div class="grid">
     {#each visibleFriends as friend (friend.id)}
-      <FriendRow
-        user={friend}
-        status={presenceDot(friend.presence)}
-        meta={presenceLine(friend.presence)}
-        game={playingGame(friend)}
-        variant="grid"
-        {reserve}
-        onopen={() => onopen(friend)}
-      >
-        {#snippet actions()}
-          {@render friendActions(friend)}
-        {/snippet}
-      </FriendRow>
+      <div class="item" data-friends-row={friend.id}>
+        <FriendRow
+          user={friend}
+          status={presenceDot(friend.presence)}
+          meta={presenceLine(friend.presence)}
+          game={playingGame(friend)}
+          variant="grid"
+          {reserve}
+          onopen={() => onopen(friend)}
+        >
+          {#snippet actions()}
+            {@render friendActions(friend)}
+          {/snippet}
+        </FriendRow>
+      </div>
     {/each}
   </div>
 {:else}
   <div class="list">
     {#each visibleFriends as friend (friend.id)}
-      <FriendRow
-        user={friend}
-        status={presenceDot(friend.presence)}
-        meta={presenceLine(friend.presence)}
-        game={playingGame(friend)}
-        variant="list"
-        {reserve}
-        onopen={() => onopen(friend)}
-      >
-        {#snippet actions()}
-          {@render friendActions(friend)}
-        {/snippet}
-      </FriendRow>
+      <div class="item" data-friends-row={friend.id}>
+        <FriendRow
+          user={friend}
+          status={presenceDot(friend.presence)}
+          meta={presenceLine(friend.presence)}
+          game={playingGame(friend)}
+          variant="list"
+          {reserve}
+          onopen={() => onopen(friend)}
+        >
+          {#snippet actions()}
+            {@render friendActions(friend)}
+          {/snippet}
+        </FriendRow>
+      </div>
     {/each}
   </div>
 {/if}
@@ -219,7 +223,7 @@
     flex-direction: column;
   }
 
-  .list :global(.row + .row) {
+  .list > .item + .item {
     border-top: 1px solid var(--border);
   }
 
@@ -227,5 +231,10 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
     gap: var(--space-4);
+  }
+
+  /* A card fills its cell, so the cards of a line are as tall as the tallest. */
+  .grid > .item {
+    display: grid;
   }
 </style>

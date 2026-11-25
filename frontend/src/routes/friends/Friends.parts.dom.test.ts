@@ -175,7 +175,7 @@ describe('Friends: the list part', () => {
 });
 
 describe('Friends: the card lists', () => {
-  it('dims the card whose action runs and holds every card’s buttons until it answers', async () => {
+  it('dims the card whose action runs and holds a press on any card until it answers', async () => {
     let answer!: () => void;
     vi.mocked(accept).mockReturnValueOnce(new Promise<void>((resolve) => (answer = resolve)));
     await mount();
@@ -186,7 +186,8 @@ describe('Friends: the card lists', () => {
     expect(accept).toHaveBeenCalledWith('r-inna');
     expect(cardOf('Inna').classList.contains('settling')).toBe(true);
     expect(cardOf('Kirill').classList.contains('settling')).toBe(false);
-    expect(within(cardOf('Kirill')).getAllByRole('button', { name: /./ }).filter((b) => b.closest('.actions')).every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
+    await keys.click(within(cardOf('Kirill')).getByRole('button', { name: msg('social.declineButton') }));
+    expect(decline).not.toHaveBeenCalled();
 
     answer();
     await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(2));

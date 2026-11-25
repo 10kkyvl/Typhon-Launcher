@@ -1,6 +1,6 @@
 <script lang="ts" generics="T extends UserCard">
   import type { Snippet } from 'svelte';
-  import { fade, fly } from 'svelte/transition';
+  import { fly } from 'svelte/transition';
   import type { FrameReserve } from '../../lib/profile/frameLook';
   import type { UserCard } from '../../lib/services/social';
   import FriendRow from './FriendRow.svelte';
@@ -33,13 +33,15 @@
   }
 </script>
 
+<!-- A card that leaves goes at once, with no fade: a fading card would still hold the focus of its
+     pressed button, and the row rule would find it still there (rowFocus.ts). -->
 <div class="cards">
   {#each users as user (user.id)}
     <div
       class="request"
+      data-friends-row={user.id}
       class:settling={settling(user.id)}
       in:fly={{ y: '0.8rem', duration: motion('--dur-panel') }}
-      out:fade={{ duration: motion('--dur') }}
     >
       <FriendRow {user} variant="card" {reserve} stats={stats?.(user)} onopen={onopen && (() => onopen(user))}>
         {#snippet actions()}
