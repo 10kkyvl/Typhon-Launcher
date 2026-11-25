@@ -37,10 +37,11 @@ const SITES: Record<string, Site[]> = {
     ['success', 'dynamic'],
     ['info', 'dynamic'],
   ],
-  // The stored error of the last update and the running game that holds an update back, shown on
-  // every opening of the game.
+  // The stored error of the last update, and the running game or the game's own move that holds an
+  // update back, shown on every opening of the game.
   'lib/components/UpdateCard.svelte': [
     ['danger', false],
+    ['info', false],
     ['info', false],
   ],
   'lib/components/SystemRequirements.svelte': [['danger', true]],
