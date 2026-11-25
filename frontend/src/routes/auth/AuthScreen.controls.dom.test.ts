@@ -1,24 +1,34 @@
 import { fireEvent, screen } from '@testing-library/svelte';
 import { tick } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
-import { AccountError, continueAsGuest, login, openForgotPassword } from '../../lib/services/account';
 import { authState, authView } from '../../lib/stores/user';
 import { renderDom } from '../../lib/testing/dom';
 import AuthScreen from './AuthScreen.svelte';
 
-vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
-vi.mock('../../lib/services/account', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../lib/services/account')>()),
-  login: vi.fn(),
-  continueAsGuest: vi.fn(),
-  openForgotPassword: vi.fn(async () => {}),
+// The whole account service is a stub: no call from this file reaches a backend; a method a test does
+// not set up rejects. Credentials typed here are made-up literals.
+const account = vi.hoisted(() => ({
+  Bootstrap: vi.fn(),
+  Login: vi.fn(),
+  Register: vi.fn(),
+  ContinueAsGuest: vi.fn(),
+  Logout: vi.fn(),
+  OpenForgotPassword: vi.fn(),
+  OpenSupportSite: vi.fn(),
 }));
 
+vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
+vi.mock('../../../bindings/typhon/internal/account', () => ({ Service: account }));
+vi.mock('../../lib/services/backend', () => ({ inWails: true }));
+
+beforeEach(() => {
+  for (const method of Object.values(account)) method.mockImplementation(async () => Promise.reject(new Error('not set up by the test')));
+  account.OpenForgotPassword.mockResolvedValue(undefined);
+});
+
 afterEach(() => {
-  vi.mocked(login).mockReset();
-  vi.mocked(continueAsGuest).mockReset();
-  vi.mocked(openForgotPassword).mockClear();
+  for (const method of Object.values(account)) method.mockReset();
   authState.set('bootstrapping');
   authView.set('login');
 });
@@ -39,7 +49,7 @@ describe('AuthScreen: links and buttons', () => {
 
     forgot.focus();
     await user.keyboard('{Enter}');
-    expect(openForgotPassword).toHaveBeenCalledTimes(1);
+    expect(account.OpenForgotPassword).toHaveBeenCalledTimes(1);
 
     register.focus();
     await user.keyboard('{Enter}');
@@ -48,10 +58,10 @@ describe('AuthScreen: links and buttons', () => {
 
   it('signs in with the primary base button, which keeps focus and says it is busy while the request runs', async () => {
     let settle: (err: unknown) => void = () => {};
-    vi.mocked(login).mockImplementation(() => new Promise((_resolve, reject) => (settle = reject)));
+    account.Login.mockImplementation(() => new Promise((_resolve, reject) => (settle = reject)));
     const { user } = signInScreen();
-    await user.type(screen.getByLabelText(msg('transfers.authIdentifierLabel')), 'player');
-    await user.type(screen.getByLabelText(msg('transfers.authPasswordLabel')), 'secret');
+    await user.type(screen.getByLabelText(msg('transfers.authIdentifierLabel')), 'player_one');
+    await user.type(screen.getByLabelText(msg('transfers.authPasswordLabel')), 'fake-pass-1');
     const submit = screen.getByRole('button', { name: msg('transfers.authSignInAction') });
     expect(submit.classList.contains('btn')).toBe(true);
     expect(submit.classList.contains('primary')).toBe(true);
@@ -62,7 +72,7 @@ describe('AuthScreen: links and buttons', () => {
     expect(submit.hasAttribute('disabled')).toBe(false);
     expect(document.activeElement).toBe(submit);
     expect(submit.textContent).toContain(msg('transfers.authSigningIn'));
-    settle(new AccountError('invalid_password'));
+    settle(new Error('invalid_password'));
     await vi.waitFor(() => expect(submit.hasAttribute('aria-busy')).toBe(false));
   });
 
@@ -75,10 +85,10 @@ describe('AuthScreen: links and buttons', () => {
 
 describe('AuthScreen: messages', () => {
   it('shows a failure of the whole form as a danger notice', async () => {
-    vi.mocked(login).mockRejectedValue(new AccountError('server_error'));
+    account.Login.mockRejectedValue(new Error('server_error'));
     const { container, user } = signInScreen();
-    await user.type(screen.getByLabelText(msg('transfers.authIdentifierLabel')), 'player');
-    await user.type(screen.getByLabelText(msg('transfers.authPasswordLabel')), 'secret{Enter}');
+    await user.type(screen.getByLabelText(msg('transfers.authIdentifierLabel')), 'player_one');
+    await user.type(screen.getByLabelText(msg('transfers.authPasswordLabel')), 'fake-pass-1{Enter}');
 
     const alert = await screen.findByRole('alert');
     const notice = alert.closest('.notice');
@@ -87,11 +97,11 @@ describe('AuthScreen: messages', () => {
   });
 
   it('keeps a field message out of the field label, tied to the field', async () => {
-    vi.mocked(login).mockRejectedValue(new AccountError('invalid_password'));
+    account.Login.mockRejectedValue(new Error('invalid_password'));
     const { user } = signInScreen();
-    await user.type(screen.getByLabelText(msg('transfers.authIdentifierLabel')), 'player');
+    await user.type(screen.getByLabelText(msg('transfers.authIdentifierLabel')), 'player_one');
     const password = screen.getByLabelText(msg('transfers.authPasswordLabel'));
-    await user.type(password, 'secret{Enter}');
+    await user.type(password, 'fake-pass-1{Enter}');
 
     const alert = await screen.findByRole('alert');
     expect(alert.closest('label')).toBeNull();
@@ -103,7 +113,7 @@ describe('AuthScreen: messages', () => {
 describe('AuthScreen: while a request runs and between the two forms', () => {
   it('shows the guest entry busy on its own button, not the sign-in as signing in', async () => {
     let settle: (err: unknown) => void = () => {};
-    vi.mocked(continueAsGuest).mockImplementation(() => new Promise((_resolve, reject) => (settle = reject)));
+    account.ContinueAsGuest.mockImplementation(() => new Promise((_resolve, reject) => (settle = reject)));
     const { user } = signInScreen();
     const guest = screen.getByRole('button', { name: msg('transfers.authGuestAction') });
     const submit = screen.getByRole('button', { name: msg('transfers.authSignInAction') });
@@ -114,7 +124,7 @@ describe('AuthScreen: while a request runs and between the two forms', () => {
     expect(document.activeElement).toBe(guest);
     expect(submit.hasAttribute('aria-busy')).toBe(false);
     expect(submit.textContent).not.toContain(msg('transfers.authSigningIn'));
-    settle(new AccountError('server_error'));
+    settle(new Error('server_error'));
     await vi.waitFor(() => expect(guest.hasAttribute('aria-busy')).toBe(false));
   });
 
@@ -132,19 +142,19 @@ describe('AuthScreen: while a request runs and between the two forms', () => {
 
   it('keeps focus in the field Enter was pressed in: the fields refuse edits without turning disabled', async () => {
     let settle: (err: unknown) => void = () => {};
-    vi.mocked(login).mockImplementation(() => new Promise((_resolve, reject) => (settle = reject)));
+    account.Login.mockImplementation(() => new Promise((_resolve, reject) => (settle = reject)));
     const { user } = signInScreen();
-    await user.type(screen.getByLabelText(msg('transfers.authIdentifierLabel')), 'player');
+    await user.type(screen.getByLabelText(msg('transfers.authIdentifierLabel')), 'player_one');
     const password = screen.getByLabelText(msg('transfers.authPasswordLabel')) as HTMLInputElement;
 
-    await user.type(password, 'secret{Enter}');
+    await user.type(password, 'fake-pass-1{Enter}');
 
     expect(password.disabled).toBe(false);
     expect(password.readOnly).toBe(true);
     expect(document.activeElement).toBe(password);
     await user.type(password, 'x');
-    expect(password.value).toBe('secret');
-    settle(new AccountError('invalid_password'));
+    expect(password.value).toBe('fake-pass-1');
+    settle(new Error('invalid_password'));
     await vi.waitFor(() => expect(password.readOnly).toBe(false));
   });
 
