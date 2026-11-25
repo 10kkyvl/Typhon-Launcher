@@ -43,6 +43,11 @@ var (
 	ErrNotReplaced         = uierr.New("selfupdate.not_replaced", "selfupdate: installer finished but left the launcher binary unchanged")
 	ErrManifestOutdated    = uierr.New("selfupdate.manifest_outdated", "selfupdate: launcher version is rejected by the manifest endpoint")
 	ErrNotWaiting          = uierr.New("selfupdate.not_waiting", "selfupdate: this launcher is not waiting for an old one to exit")
+	// ErrWorkRunning refuses an update, with or without a restart, while work
+	// runs that the launcher's shutdown would wait for (an install, a removal,
+	// a move, a game update's patch): nothing was staged, the update stays
+	// ready and can be applied once that work ends.
+	ErrWorkRunning = uierr.New("selfupdate.work_running", "selfupdate: an install, a removal, a move or a game update is running")
 
 	ErrRollbackUnsupported   = uierr.New("selfupdate.rollback_unsupported", "selfupdate: rolling back the launcher is not supported on this platform")
 	ErrNoPrevious            = uierr.New("selfupdate.rollback_none", "selfupdate: no previous launcher version is saved")

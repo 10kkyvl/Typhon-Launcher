@@ -1118,7 +1118,14 @@ func (s *Service) applyReady(language string, downgrade bool) error {
 		s.mu.Unlock()
 		return ErrNotReady
 	}
+	blocked := s.handoffBlocker
 	s.mu.Unlock()
+	if err := refuseWhileWorkRuns(blocked); err != nil {
+		s.mu.Lock()
+		s.busy = false
+		s.mu.Unlock()
+		return err
+	}
 	// The worker snapshots whatever sits at the launcher's name as this
 	// version; with a hand-over unsettled that may be another build.
 	if err := s.refuseUnsettledHandoff(); err != nil {

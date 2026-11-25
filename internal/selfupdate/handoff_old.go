@@ -129,17 +129,25 @@ func (s *Service) SetHandoffBackground(f func() string) {
 	s.mu.Unlock()
 }
 
-// SetHandoffBlocker gives the service the question it asks before a
-// hand-over: whether work runs that the shutdown of this launcher would wait
-// for or cut short (an install, a removal, an elevated installer). The old
-// window is hidden before that shutdown, so a hand-over is refused while it
-// does and the update takes the ordinary restart instead.
+// SetHandoffBlocker gives the service the question it asks before an update,
+// seamless or ordinary: whether work runs that the shutdown of this launcher
+// would wait for or cut short (an install, a removal, a move, a game update's
+// patch). Both quit this launcher, and its shutdown would then wait behind a
+// hidden or frozen window, so both are refused with ErrWorkRunning while it
+// does.
 //
 //wails:ignore
 func (s *Service) SetHandoffBlocker(f func() bool) {
 	s.mu.Lock()
 	s.handoffBlocker = f
 	s.mu.Unlock()
+}
+
+func refuseWhileWorkRuns(blocked func() bool) error {
+	if blocked != nil && blocked() {
+		return ErrWorkRunning
+	}
+	return nil
 }
 
 func (s *Service) serviceContext() context.Context {
@@ -163,7 +171,8 @@ func (s *Service) serviceContext() context.Context {
 // An error means nothing was changed and ApplyUpdate, the worker path that
 // restarts the launcher, is still available; ErrHandoffUnsupported (code
 // selfupdate.handoff_unsupported) says this build, platform or installation
-// cannot hand over at all. After a nil return the outcome arrives as status
+// cannot hand over at all; ErrWorkRunning (selfupdate.work_running) says work
+// runs that ApplyUpdate refuses for too. After a nil return the outcome arrives as status
 // events: the process exits on success, and on failure the swap is undone and
 // the state is ready again with error code handoff_failed.
 func (s *Service) BeginHandoff(phaseStart int64) error {
@@ -237,8 +246,8 @@ func (s *Service) prepareHandoff() (handoffPlan, error) {
 	if state != StateReady || art == nil {
 		return handoffPlan{}, ErrNotReady
 	}
-	if blocked != nil && blocked() {
-		return handoffPlan{}, fmt.Errorf("%w: an install, a removal or an elevated installer is running", ErrHandoffUnsupported)
+	if err := refuseWhileWorkRuns(blocked); err != nil {
+		return handoffPlan{}, err
 	}
 	if err := s.refuseUnsettledHandoff(); err != nil {
 		return handoffPlan{}, err
