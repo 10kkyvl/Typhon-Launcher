@@ -223,6 +223,30 @@ describe('bootstrapSession', () => {
   });
 });
 
+describe('accountErrorText', () => {
+  it('says the surface\'s own text for a failure outside the contract, and the generic one without it', async () => {
+    const { accountErrorText, accountMessage } = await import('./accountMessages');
+    const { toAccountError } = await import('./account');
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const uncoded = toAccountError(new Error('social: service is not running'));
+    quiet.mockRestore();
+
+    expect(uncoded.code).toBe('server_error');
+    expect(accountErrorText(uncoded, 'FALLBACK')).toBe('FALLBACK');
+    expect(accountErrorText(uncoded)).toBe(accountMessage(''));
+    expect(accountErrorText(uncoded)).not.toBe(accountMessage('server_error'));
+  });
+
+  it('keeps the server\'s text for a server error Go or the interface names as one', async () => {
+    const { accountErrorText, accountMessage } = await import('./accountMessages');
+    const { AccountError, toAccountError } = await import('./account');
+
+    expect(accountErrorText(toAccountError(new Error('server_error')), 'FALLBACK')).toBe(accountMessage('server_error'));
+    expect(accountErrorText(new AccountError('server_error'), 'FALLBACK')).toBe(accountMessage('server_error'));
+    expect(accountErrorText(toAccountError(new Error('network_error')), 'FALLBACK')).toBe(accountMessage('network_error'));
+  });
+});
+
 describe('accountMessage', () => {
   it('has its own text for rate_limited instead of the generic fallback', async () => {
     const { accountMessage } = await import('./accountMessages');

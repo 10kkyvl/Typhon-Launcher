@@ -54,7 +54,8 @@ export function accountMessage(code: string, fallback = msg('state.accountErrorG
 }
 
 export function accountErrorText(err: unknown, fallback?: string): string {
-  const code = err instanceof AccountError ? err.code : '';
+  // Without a code the surface says what failed in its own words, not that the server answered oddly.
+  const code = err instanceof AccountError && !err.outsideContract ? err.code : '';
   return accountMessage(code, fallback);
 }
 

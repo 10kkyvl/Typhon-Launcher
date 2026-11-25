@@ -255,6 +255,8 @@ const CODE_FIELDS: Record<string, string> = {
 export class AccountError extends Error {
   code: string;
   field: string;
+  /** Go failed without a code of this contract: nothing says the server was even asked. */
+  outsideContract = false;
 
   constructor(code: string, field = CODE_FIELDS[code] ?? '') {
     super(code);
@@ -269,7 +271,9 @@ export function toAccountError(err: unknown): AccountError {
   const raw = err instanceof Error ? err.message : String(err);
   if (KNOWN_CODES.has(raw)) return new AccountError(raw);
   console.error('account call failed outside the error contract', raw, err);
-  return new AccountError('server_error');
+  const error = new AccountError('server_error');
+  error.outsideContract = true;
+  return error;
 }
 
 const unauthenticated = () => new AccountError('unauthenticated');
