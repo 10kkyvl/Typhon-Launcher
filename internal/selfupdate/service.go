@@ -107,6 +107,8 @@ type Service struct {
 	handoffOldGone    bool // the old process exited; the held-back cleanup may run
 	handoffRevealed   bool // the successor's window is on screen
 	handoffSettled    bool // the successor has become an ordinary application
+	handoffRevealedAt time.Time
+	handoffWaiting    bool // the old process is slow to exit; the update screen says so
 	// owedUndo puts the previous launcher back after a failed hand-off whose
 	// own undo failed; nil when nothing is owed.
 	owedUndo func() error

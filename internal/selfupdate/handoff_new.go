@@ -28,6 +28,14 @@ var (
 // handoffSettleTimeout bounds the wait for held-back services to start.
 const handoffSettleTimeout = 30 * time.Second
 
+// eventHandoffWaiting tells the update screen that the old launcher is still
+// shutting down handoffSlowAfter after this window was revealed.
+const eventHandoffWaiting = "launcher:handoff_waiting"
+
+// handoffSlowAfter is how long after the reveal an old launcher still
+// shutting down is shown as a wait. A variable for the tests only.
+var handoffSlowAfter = 10 * time.Second
+
 var errNoHandoffWindow = errors.New("selfupdate: no window to reveal")
 
 // SetHandoff marks this launcher as the successor in a seamless update.
@@ -52,7 +60,7 @@ func (s *Service) HandoffInfo() HandoffInfo {
 	if !ValidBackground(bg) {
 		bg = defaultHandoffBackground
 	}
-	return HandoffInfo{Active: !s.handoffFinished, PhaseStart: spec.PhaseStart, Version: spec.Version, Background: bg}
+	return HandoffInfo{Active: !s.handoffFinished, PhaseStart: spec.PhaseStart, Version: spec.Version, Background: bg, Waiting: s.handoffWaiting}
 }
 
 // HandoffRendered is called once by the update screen after it has really
@@ -85,6 +93,7 @@ func (s *Service) reveal() error {
 	}
 	s.mu.Lock()
 	s.handoffRevealed = true
+	s.handoffRevealedAt = time.Now()
 	s.mu.Unlock()
 	s.settleIfDue()
 	return nil
@@ -124,7 +133,7 @@ func (s *Service) CompleteHandoff(ctx context.Context, takeover func() error) er
 	if spec == nil {
 		return errors.New("selfupdate: this launcher was not started by a hand-off")
 	}
-	if err := waitForOldLauncher(ctx, spec.ParentPID); err != nil {
+	if err := s.waitForOldLauncher(ctx, spec.ParentPID); err != nil {
 		return err
 	}
 	if err := takeover(); err != nil {
@@ -133,6 +142,7 @@ func (s *Service) CompleteHandoff(ctx context.Context, takeover func() error) er
 	handoffgate.Open()
 	s.mu.Lock()
 	s.handoffOldGone = true
+	s.handoffWaiting = false
 	s.mu.Unlock()
 	s.settleIfDue()
 
@@ -156,16 +166,49 @@ func (s *Service) CompleteHandoff(ctx context.Context, takeover func() error) er
 // services, which flush state and may sit out network timeouts; ending it
 // would cut those saves short and stop the installers in its job, and giving
 // up here would quit the only window the user sees. Past parentExitTimeout
-// the wait is only logged.
-func waitForOldLauncher(ctx context.Context, pid int) error {
-	waitCtx, cancel := context.WithTimeout(ctx, parentExitTimeout)
-	err := waitForParentExit(waitCtx, pid)
-	cancel()
-	if !errors.Is(err, errParentStillRunning) || ctx.Err() != nil {
-		return err
+// the wait is logged; past handoffSlowAfter after the reveal the update
+// screen is told (markSlow).
+func (s *Service) waitForOldLauncher(ctx context.Context, pid int) error {
+	ticker := time.NewTicker(parentPollInterval)
+	defer ticker.Stop()
+	logAt := time.Now().Add(parentExitTimeout)
+	logged := false
+	for {
+		alive, err := parentAlive(pid)
+		if err != nil {
+			return err
+		}
+		if !alive {
+			return nil
+		}
+		now := time.Now()
+		if !logged && !now.Before(logAt) {
+			slog.Warn("selfupdate: the old launcher is still shutting down, waiting on", "pid", pid, "after", parentExitTimeout)
+			logged = true
+		}
+		s.markSlow(now)
+		select {
+		case <-ctx.Done():
+			return errParentStillRunning
+		case <-ticker.C:
+		}
 	}
-	slog.Warn("selfupdate: the old launcher is still shutting down, waiting on", "pid", pid, "after", parentExitTimeout)
-	return waitForParentExit(ctx, pid)
+}
+
+// markSlow records, once, that the old launcher is still shutting down
+// handoffSlowAfter after this window was revealed, and tells the update
+// screen. Before the reveal the old window is the one on screen.
+func (s *Service) markSlow(now time.Time) {
+	s.mu.Lock()
+	due := s.handoffRevealed && !s.handoffWaiting && !s.handoffOldGone && now.Sub(s.handoffRevealedAt) >= handoffSlowAfter
+	if due {
+		s.handoffWaiting = true
+	}
+	s.mu.Unlock()
+	if due {
+		slog.Info("selfupdate: the old launcher is slow to exit, the update screen says so", "after", handoffSlowAfter)
+		emit(eventHandoffWaiting, nil)
+	}
 }
 
 // finishHandoff settles the journal after the old process is gone. Failures

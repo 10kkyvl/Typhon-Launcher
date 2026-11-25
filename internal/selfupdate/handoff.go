@@ -93,11 +93,15 @@ type HandoffSpec struct {
 
 // HandoffInfo is what the update screen asks of a successor launcher. Active
 // stays true until the old process is gone and this one owns the launcher.
+// Waiting turns true when the old process is still shutting down
+// handoffSlowAfter after this window was revealed (launcher:handoff_waiting),
+// and false again once it is gone.
 type HandoffInfo struct {
 	Active     bool   `json:"active"`
 	PhaseStart int64  `json:"phaseStart"`
 	Version    string `json:"version"`
 	Background string `json:"background"`
+	Waiting    bool   `json:"waiting"`
 }
 
 // handoffJournal is the record of a handoff in progress.
