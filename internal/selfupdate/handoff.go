@@ -307,6 +307,28 @@ func runsFromTarget(j handoffJournal, exe string, exeErr error) bool {
 	return platform.SamePath(exe, j.Target)
 }
 
+// settleBundleJournal settles a bundle hand-off from what this start proves.
+// The parked name holds the new bundle until the exchange and the old one
+// after it, and no stage written around an atomic exchange can tell a kill
+// just before it from one just after it. The running version can: a start
+// from the bundle at the target knows which build is there, and then the
+// parked bundle is the other one and surplus. Without that proof nothing is
+// removed and the journal stays.
+func settleBundleJournal(j handoffJournal, exe string, exeErr error, current string) error {
+	if !runsFromTarget(j, exe, exeErr) {
+		return fmt.Errorf("selfupdate: this launcher does not run from %s and cannot tell which bundle is parked; the hand-off is left for a start from there", j.Target)
+	}
+	if sameVersion(j.Version, current) {
+		slog.Info("selfupdate: the new bundle runs, removing the parked one", "stage", j.Stage)
+	} else {
+		slog.Warn("selfupdate: a bundle hand-off did not finish; the previous build runs, removing the parked new one", "stage", j.Stage)
+	}
+	if err := os.RemoveAll(j.OldPath); err != nil {
+		return fmt.Errorf("selfupdate: remove the parked bundle: %w", err)
+	}
+	return nil
+}
+
 // RecoverHandoff settles a handoff whose old process died before it finished
 // (design step 9). Run it on a normal start, before the services load state;
 // the successor of a live handoff never calls it. current is the running
@@ -339,7 +361,17 @@ func RecoverHandoff(configDir, current string) error {
 	}
 
 	var errs []error
-	if (j.Stage == stageDone && targetPresent(j)) || (sameVersion(j.Version, current) && runsFromTarget(j, exe, exeErr)) {
+	if j.Method == methodBundle {
+		if err := settleBundleJournal(j, exe, exeErr, current); err != nil {
+			// Keep the journal: the next start tries again.
+			return err
+		}
+		if !sameVersion(j.Version, current) {
+			if derr := discardStaging(configDir); derr != nil {
+				errs = append(errs, fmt.Errorf("selfupdate: drop the unused snapshot: %w", derr))
+			}
+		}
+	} else if (j.Stage == stageDone && targetPresent(j)) || (sameVersion(j.Version, current) && runsFromTarget(j, exe, exeErr)) {
 		// A launcher sits at the name: the successor that took over, or this
 		// start, which is the new build run from there. The parked one is
 		// surplus, whatever the stage, an owed undo included.
@@ -349,7 +381,7 @@ func RecoverHandoff(configDir, current string) error {
 		// launcher that was running ever goes to the parked name, and with the
 		// name empty it is the only launcher left.
 		slog.Warn("selfupdate: a hand-off did not finish, putting the previous launcher back", "stage", j.Stage, "version", j.Version)
-		if uerr := undoSwap(j); uerr != nil {
+		if uerr := undoParkedExe(j); uerr != nil {
 			return fmt.Errorf("selfupdate: undo an interrupted hand-off: %w", uerr)
 		}
 		if derr := discardStaging(configDir); derr != nil {
