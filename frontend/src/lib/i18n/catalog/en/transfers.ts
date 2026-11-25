@@ -260,4 +260,7 @@ export const transfers: Record<TransfersKey, Message> = {
   'transfers.sourcesEntriesCount': { one: '{count} entry', other: '{count} entries' },
   'transfers.sourcesReviewCount': '+{review} to review',
   // /7-R sources
+  // 7-A auth
+  'transfers.authShowPassword': 'Show password',
+  // /7-A auth
 };

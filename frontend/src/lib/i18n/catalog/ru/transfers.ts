@@ -270,6 +270,9 @@ export const transfers = {
   },
   'transfers.sourcesReviewCount': '+{review} на проверку',
   // /7-R sources
+  // 7-A auth
+  'transfers.authShowPassword': 'Показать пароль',
+  // /7-A auth
 } as const;
 
 export type TransfersKey = keyof typeof transfers;
