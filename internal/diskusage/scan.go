@@ -37,8 +37,8 @@ type scanner struct {
 	sets    map[groupKey][]string
 }
 
-func (sc *scanner) warn(area string, err error) {
-	sc.report.Warnings = append(sc.report.Warnings, Warning{Area: area, Message: err.Error()})
+func (sc *scanner) warn(code string, err error) {
+	sc.report.Warnings = append(sc.report.Warnings, Warning{Area: warningArea[code], Code: code, Message: err.Error()})
 }
 
 // walkDisk measures everything once. It is the only place that walks the
@@ -198,7 +198,7 @@ func (sc *scanner) scanGames() error {
 			continue
 		}
 		if _, err := sc.s.deps.Library.UpdateMeasuredSize(g.ID, g.InstallDir, m.size, false); err != nil {
-			sc.warn("games", fmt.Errorf("%s: %w", g.Title, err))
+			sc.warn(WarnSizeNotSaved, fmt.Errorf("%s: %w", g.Title, err))
 		}
 	}
 	return nil
@@ -253,6 +253,10 @@ func downloadReasonCode(err error) string {
 		return diskreason.OwnedByInstall
 	case "install.download_is_install":
 		return diskreason.HoldsGame
+	case "install.no_game_list":
+		return reasonGamesUnchecked
+	case "updates.download_in_use":
+		return diskreason.UpdateOwned
 	}
 	return diskreason.Unknown
 }
@@ -263,7 +267,11 @@ func (sc *scanner) scanScreenshots() error {
 		return ctxErr
 	}
 	if err != nil {
-		sc.warn("screenshots", err)
+		if uierr.Code(err) == screenshotsNoLibrary {
+			sc.warn(WarnScreenshotsNoFolder, err)
+		} else {
+			sc.warn(WarnScreenshotsUnreadable, err)
+		}
 		return nil
 	}
 	for _, u := range usage {
@@ -283,7 +291,11 @@ func (sc *scanner) scanSnapshots() error {
 		return ctxErr
 	}
 	if err != nil {
-		sc.warn("snapshots", err)
+		if uierr.Code(err) == snapshotsDisabled {
+			sc.warn(WarnSnapshotsDisabled, err)
+		} else {
+			sc.warn(WarnSnapshotsUnreadable, err)
+		}
 		return nil
 	}
 	for _, u := range usage {

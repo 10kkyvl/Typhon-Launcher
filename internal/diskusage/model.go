@@ -97,8 +97,10 @@ type Totals struct {
 
 // Warning is a part of the scan that failed. The rest of the report is still
 // true; the part named here is missing from it rather than shown as empty.
+// Code is the warning code; Message is the cause as Go wrote it, for logs.
 type Warning struct {
 	Area    string `json:"area"`
+	Code    string `json:"code"`
 	Message string `json:"message"`
 }
 

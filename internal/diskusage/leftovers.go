@@ -76,7 +76,7 @@ func (sc *scanner) scanRoot(root, kind string, match func(fs.DirEntry) bool, own
 		return nil
 	}
 	if err != nil {
-		sc.warn("leftovers", err)
+		sc.warn(WarnFolderUnreadable, err)
 		return nil
 	}
 	for _, e := range dirEntries {
@@ -99,7 +99,7 @@ func (sc *scanner) scanRoot(root, kind string, match func(fs.DirEntry) bool, own
 func (sc *scanner) scanStagings() error {
 	stagings, err := sc.s.deps.Relocations.Stagings()
 	if err != nil {
-		sc.warn("leftovers", err)
+		sc.warn(WarnMovesUnchecked, err)
 		return nil
 	}
 	for _, st := range stagings {
@@ -214,7 +214,7 @@ func (sc *scanner) scanUpdateDirs() error {
 		for _, p := range paths {
 			if _, err := os.Lstat(p.path); err != nil {
 				if !errors.Is(err, fs.ErrNotExist) {
-					sc.warn("leftovers", err)
+					sc.warn(WarnFolderUnreadable, err)
 				}
 				continue
 			}
@@ -235,7 +235,7 @@ func (sc *scanner) scanUpdateDirs() error {
 func (sc *scanner) addLeftover(path, kind string, o entry) error {
 	key, err := platform.PathKey(path)
 	if err != nil {
-		sc.warn("leftovers", err)
+		sc.warn(WarnFolderUnreadable, err)
 		return nil
 	}
 	if _, dup := sc.entries[key]; dup {

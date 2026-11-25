@@ -81,7 +81,11 @@ func (sc *scanner) addGroup(key groupKey, items []groupItem, listErr error, fall
 		groups = &sc.report.Snapshots
 	}
 	if listErr != nil {
-		sc.warn(key.kind.String(), fmt.Errorf("%s: %w", key.gameID, listErr))
+		if key.kind == groupShots {
+			sc.warn(WarnScreenshotsUnreadable, fmt.Errorf("%s: %w", key.gameID, listErr))
+		} else {
+			sc.warn(WarnSnapshotsUnreadable, fmt.Errorf("%s: %w", key.gameID, listErr))
+		}
 		*groups = append(*groups, sc.group(key.gameID, fallback.Count, fallback.SizeBytes, fallback.SizeUnknown))
 		return
 	}
