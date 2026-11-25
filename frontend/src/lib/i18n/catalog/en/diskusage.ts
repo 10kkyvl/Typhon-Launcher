@@ -20,7 +20,6 @@ export const diskusage: Record<DiskusageKey, Message> = {
   'diskusage.atLeast': 'at least {size}',
   'diskusage.sizeUnknown': 'size could not be determined',
   'diskusage.warningsTitle': 'Not everything could be measured',
-  'diskusage.warningLine': '{area}: {message}',
   'diskusage.emptyTitle': 'Nothing here yet',
   'diskusage.emptyText': 'No games, downloads, leftovers or snapshots found',
 

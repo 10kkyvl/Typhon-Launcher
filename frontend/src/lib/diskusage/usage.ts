@@ -1,4 +1,4 @@
-import type { DownloadUsage, GameUsage, GroupUsage, Leftover } from '../services/diskusage';
+import type { DownloadUsage, GameUsage, GroupUsage, Leftover, LeftoverKind, Warning } from '../services/diskusage';
 import { hasMessage, msg, type MessageKey } from '../i18n';
 
 export const STALE_DAYS = 90;
@@ -70,7 +70,11 @@ const LEFTOVER_KEYS: Record<string, MessageKey> = {
   update_previous: 'diskusage.kindUpdatePrevious',
   update_replaced: 'diskusage.kindUpdateReplaced',
   download_orphan: 'diskusage.kindDownloadOrphan',
-};
+  relocate_copy_staging: 'diskusage.kindRelocateCopyStaging',
+  relocate_copy_target: 'diskusage.kindRelocateCopyTarget',
+  relocate_copy_source: 'diskusage.kindRelocateCopySource',
+  removal: 'diskusage.kindRemoval',
+} satisfies Record<LeftoverKind, MessageKey>;
 
 export function leftoverKindKey(kind: string): MessageKey {
   return LEFTOVER_KEYS[kind] ?? 'diskusage.kindUnknown';
@@ -135,23 +139,53 @@ export function ageText(age: Age): string {
   }
 }
 
+/** Every reason code a report can carry: internal/diskusage/codes.go::reasonCodes (usage.test.ts reads it). */
 export const REASON_CODES = [
-  'owned_by_install',
-  'only_copy',
-  'no_record',
-  'relocate_active',
-  'relocate_journal',
-  'holds_game',
-  'update_owned',
-  'symlink',
-  'foreign_part',
-  'owned_by_download',
-  'seeding',
-  'incomplete',
-  'unreadable',
-  'unknown',
-] as const;
+  'diskusage.reason.owned_by_install',
+  'diskusage.reason.only_copy',
+  'diskusage.reason.no_record',
+  'diskusage.reason.relocate_active',
+  'diskusage.reason.relocate_journal',
+  'diskusage.reason.holds_game',
+  'diskusage.reason.update_owned',
+  'diskusage.reason.symlink',
+  'diskusage.reason.foreign_part',
+  'diskusage.reason.owned_by_download',
+  'diskusage.reason.seeding',
+  'diskusage.reason.incomplete',
+  'diskusage.reason.unreadable',
+  'diskusage.reason.unknown',
+  'diskusage.reason.games_unchecked',
+  'diskusage.reason.relocate_copy',
+  'diskusage.reason.relocate_unjournaled',
+  'diskusage.reason.removal_pending',
+  'diskusage.reason.removal_unjournaled',
+  'diskusage.reason.removals_unreadable',
+  'diskusage.reason.folder_held',
+] as const satisfies readonly MessageKey[];
 
-export function reasonLabel(code: string, fallback: string): string {
-  return hasMessage(code) ? msg(code) : fallback;
+const REASONS: ReadonlySet<string> = new Set(REASON_CODES);
+
+/** Why a row cannot be deleted, in words: its code's, or the row's plain "cannot be deleted". */
+export function reasonLabel(code: string): string {
+  return REASONS.has(code) && hasMessage(code) ? msg(code) : msg('diskusage.cannotDelete');
+}
+
+/** Every warning code a report can carry: internal/diskusage/codes.go::Warn* (usage.test.ts reads it). */
+const WARNING_CODES = [
+  'diskusage.warning.size_not_saved',
+  'diskusage.warning.folder_unreadable',
+  'diskusage.warning.moves_unchecked',
+  'diskusage.warning.removals_unreadable',
+  'diskusage.warning.screenshots_no_folder',
+  'diskusage.warning.screenshots_unreadable',
+  'diskusage.warning.snapshots_disabled',
+  'diskusage.warning.snapshots_unreadable',
+] as const satisfies readonly MessageKey[];
+
+const WARNINGS: ReadonlySet<string> = new Set(WARNING_CODES);
+
+/** A warning in words: its code's, or the plain "part of the report could not be measured". */
+export function warningText(warning: Warning): string {
+  return WARNINGS.has(warning.code) && hasMessage(warning.code) ? msg(warning.code) : msg('diskusage.warningUnknown');
 }

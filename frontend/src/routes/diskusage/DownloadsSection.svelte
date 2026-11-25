@@ -34,7 +34,7 @@
       title={download.name}
       path={download.root}
       pathTitle={download.root}
-      reason={blocked ? reasonLabel(download.reasonCode, download.reason) : download.seeding ? msg('diskusage.reason.seeding') : null}
+      reason={blocked ? reasonLabel(download.reasonCode) :download.seeding ? msg('diskusage.reason.seeding') : null}
       size={size(download)}
     >
       {#snippet badges()}

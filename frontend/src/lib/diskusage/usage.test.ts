@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { msg } from '../i18n';
 import { en } from '../i18n/catalog/en';
 import { ru } from '../i18n/catalog/ru';
+import { goSources } from '../testing/sources';
 import type { DownloadUsage, GameUsage } from '../services/diskusage';
 import {
   ageOf,
@@ -17,6 +19,7 @@ import {
   sizeText,
   sortGames,
   totalText,
+  warningText,
 } from './usage';
 
 const NOW = Date.parse('2026-10-20T12:00:00Z');
@@ -151,17 +154,18 @@ describe('game actions', () => {
   });
 });
 
+// The Go constants of a file: name → value, for `Name = "value"` lines.
+function goConstants(path: string): Map<string, string> {
+  const source = goSources[path];
+  expect(source, path).toBeTypeOf('string');
+  return new Map([...source.matchAll(/^\t(\w+)\s*=\s*"([^"]*)"/gm)].map((m) => [m[1], m[2]]));
+}
+
 describe('leftoverKindKey', () => {
-  it('names every kind the backend sends', () => {
-    const kinds = [
-      'install_partial',
-      'download_part',
-      'relocate_staging',
-      'update_staging',
-      'update_previous',
-      'update_replaced',
-      'download_orphan',
-    ];
+  it('names every kind the backend sends, each in its own words', () => {
+    const kinds = [...goConstants('internal/diskusage/model.go')].filter(([name]) => name.startsWith('Kind')).map(([, value]) => value);
+    expect(kinds).toContain('removal');
+    expect(kinds).toContain('relocate_copy_source');
     const keys = kinds.map(leftoverKindKey);
     expect(new Set(keys).size).toBe(kinds.length);
     expect(keys).not.toContain('diskusage.kindUnknown');
@@ -214,25 +218,54 @@ describe('countUnknown', () => {
       games: [game({ sizeUnknown: true }), game({})],
       downloads: [],
       leftovers: [],
-      screenshots: [{ gameId: 'a', title: 'a', inLibrary: true, count: 1, ...one }],
-      snapshots: [{ gameId: 'b', title: 'b', inLibrary: true, count: 1, ...known }],
+      screenshots: [{ gameId: 'a', title: 'a', titleUnknown: false, inLibrary: true, count: 1, ...one }],
+      snapshots: [{ gameId: 'b', title: 'b', titleUnknown: false, inLibrary: true, count: 1, ...known }],
     };
     expect(countUnknown(report)).toBe(2);
   });
 });
 
 describe('reason codes', () => {
+  it('are the set Go gives, read from internal/diskusage/codes.go and the diskreason package', () => {
+    const named = new Map([...goConstants('internal/diskreason/reason.go'), ...goConstants('internal/diskusage/codes.go')]);
+    const body = /var reasonCodes = \[\]string\{([\s\S]*?)\n\}/.exec(goSources['internal/diskusage/codes.go'])?.[1] ?? '';
+    const fromGo = [...body.matchAll(/(?:diskreason\.)?(\w+),/g)].map((m) => named.get(m[1]));
+    expect(fromGo.length).toBeGreaterThan(20);
+    expect(fromGo.every((code) => typeof code === 'string')).toBe(true);
+    expect([...REASON_CODES].sort()).toEqual([...(fromGo as string[])].sort());
+  });
+
   it('have ru and en text for every code in the closed set', () => {
     for (const code of REASON_CODES) {
-      const key = `diskusage.reason.${code}`;
-      expect(Object.hasOwn(ru, key), key).toBe(true);
-      expect(Object.hasOwn(en, key), key).toBe(true);
+      expect(Object.hasOwn(ru, code), code).toBe(true);
+      expect(Object.hasOwn(en, code), code).toBe(true);
     }
   });
 
-  it('translates by code and falls back to the backend text for an unknown one', () => {
-    expect(reasonLabel('diskusage.reason.seeding', 'x')).toBe('Раздаётся, при удалении остановится');
-    expect(reasonLabel('diskusage.reason.new_one', 'text from go')).toBe('text from go');
-    expect(reasonLabel('', 'text from go')).toBe('text from go');
+  it('translates by code and says a code it does not know in its own plain words, never in Go’s', () => {
+    expect(reasonLabel('diskusage.reason.seeding')).toBe('Раздаётся, при удалении остановится');
+    expect(reasonLabel('diskusage.reason.folder_held')).toBe(ru['diskusage.reason.folder_held']);
+    expect(reasonLabel('diskusage.reason.new_one')).toBe(msg('diskusage.cannotDelete'));
+    expect(reasonLabel('')).toBe(msg('diskusage.cannotDelete'));
+    expect(reasonLabel('diskusage.title')).toBe(msg('diskusage.cannotDelete'));
+  });
+});
+
+describe('warning codes', () => {
+  const codes = [...goConstants('internal/diskusage/codes.go')].filter(([name]) => name.startsWith('Warn')).map(([, value]) => value);
+
+  it('word every code Go gives, in both languages', () => {
+    expect(codes.length).toBe(8);
+    for (const code of codes) {
+      expect(Object.hasOwn(ru, code), code).toBe(true);
+      expect(Object.hasOwn(en, code), code).toBe(true);
+      expect(warningText({ area: 'x', code, message: 'go text' })).toBe(ru[code as keyof typeof ru]);
+    }
+  });
+
+  it('says a code it does not know in plain words, never Go’s message or area', () => {
+    for (const code of ['diskusage.warning.new_one', '', 'diskusage.title']) {
+      expect(warningText({ area: 'downloads', code, message: 'permission denied' }), code).toBe(msg('diskusage.warningUnknown'));
+    }
   });
 });

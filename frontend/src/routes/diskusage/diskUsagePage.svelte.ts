@@ -59,7 +59,7 @@ export function createDiskUsagePage() {
     await refresh();
   }
 
-  function ask(prompt: ConfirmPrompt, action: () => Promise<void>, done: string) {
+  function ask(prompt: ConfirmPrompt, action: () => Promise<unknown>, done: string) {
     pending = {
       prompt,
       run: async () => {

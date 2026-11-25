@@ -99,7 +99,7 @@ describe('a status message of a page', () => {
       leftovers: [],
       screenshots: [],
       snapshots: [],
-      warnings: [{ area: 'downloads', message: 'permission denied' }],
+      warnings: [{ area: 'screenshots', code: 'diskusage.warning.screenshots_unreadable', message: 'permission denied' }],
       totals: { gamesBytes: 0, downloadsBytes: 0, leftoversBytes: 0, screenshotsBytes: 0, snapshotsBytes: 0, totalBytes: 0, reclaimableBytes: 0, unknownSizes: false },
       scannedAt: '2026-11-12T00:00:00Z',
     };

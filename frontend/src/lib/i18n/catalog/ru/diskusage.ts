@@ -18,7 +18,6 @@ export const diskusage = {
   'diskusage.atLeast': 'не менее {size}',
   'diskusage.sizeUnknown': 'размер не удалось определить',
   'diskusage.warningsTitle': 'Не всё удалось посчитать',
-  'diskusage.warningLine': '{area}: {message}',
   'diskusage.emptyTitle': 'Здесь пока пусто',
   'diskusage.emptyText': 'Игр, загрузок, остатков и снимков не найдено',
 

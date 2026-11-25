@@ -75,7 +75,10 @@ const report = {
   leftovers: [{ path: 'D:\\Games\\.partial', kind: 'install_partial', sizeBytes: GB, sizeUnknown: false, deletable: true, reason: '', reasonCode: '' }],
   screenshots: [group('g-hades', 'Hades', 12)],
   snapshots: [group('g-celeste', 'Celeste', 4)],
-  warnings: [{ area: 'downloads', message: 'denied' }],
+  warnings: [
+    { area: 'leftovers', code: 'diskusage.warning.folder_unreadable', message: 'denied' },
+    { area: 'leftovers', code: 'diskusage.warning.from_a_newer_go', message: 'denied' },
+  ],
   totals: { gamesBytes: 11 * GB, downloadsBytes: 21 * GB, leftoversBytes: 31 * GB, screenshotsBytes: 41 * GB, snapshotsBytes: 51 * GB, totalBytes: 99 * GB, reclaimableBytes: 61 * GB, unknownSizes: false },
   scannedAt: '2026-11-12T00:00:00Z',
 } as Report;
@@ -86,7 +89,8 @@ const rowTitles = (title: string) => [...section(title).querySelectorAll('.row .
 beforeEach(() => {
   vi.mocked(cachedUsage).mockResolvedValue(null);
   vi.mocked(scanUsage).mockResolvedValue(report);
-  for (const remove of [deleteDownloadData, deleteLeftover, deleteScreenshots, deleteSnapshots]) vi.mocked(remove).mockResolvedValue();
+  for (const remove of [deleteDownloadData, deleteLeftover]) vi.mocked(remove).mockResolvedValue();
+  for (const remove of [deleteScreenshots, deleteSnapshots]) vi.mocked(remove).mockResolvedValue({ deleted: 1, gone: 0, failed: 0, code: '' });
   libraryGames.set([{ id: 'g-hades', title: 'Hades' }, { id: 'g-celeste', title: 'Celeste' }] as LibraryGame[]);
 });
 
@@ -171,6 +175,22 @@ describe('DiskUsage: the games section', () => {
   });
 });
 
+describe('DiskUsage: a reason Go gives in a code the table does not know', () => {
+  it('is said in the row’s plain words, never in Go’s text', async () => {
+    vi.mocked(scanUsage).mockResolvedValue({
+      ...report,
+      leftovers: [{ path: 'D:\\Games\\.odd', kind: 'install_partial', sizeBytes: GB, sizeUnknown: false, deletable: false, reason: 'текст из Go', reasonCode: 'diskusage.reason.from_a_newer_go' }],
+      downloads: [{ ...report.downloads[0], referenced: true, reason: 'текст из Go', reasonCode: 'diskusage.reason.from_a_newer_go' }],
+    });
+    await shown();
+    for (const title of ['diskusage.leftoversTitle', 'diskusage.downloadsTitle'] as const) {
+      const box = section(msg(title));
+      expect(within(box).getByText(msg('diskusage.cannotDelete')), title).toBeTruthy();
+      expect(box.textContent, title).not.toContain('текст из Go');
+    }
+  });
+});
+
 describe('DiskUsage: what each part is given', () => {
   it('each section shows the total of its own field', async () => {
     await shown();
@@ -185,8 +205,11 @@ describe('DiskUsage: what each part is given', () => {
     expect(within(section(msg('diskusage.snapshotsTitle'))).getByText(msg('diskusage.snapshotsCount', { count: 4 }))).toBeTruthy();
   });
 
-  it('the warnings of the report are listed', async () => {
+  it('the warnings of the report are listed in their catalogued words, never in Go’s', async () => {
     await shown();
-    expect(screen.getByText(msg('diskusage.warningLine', { area: 'downloads', message: 'denied' }))).toBeTruthy();
+    const list = screen.getByRole('heading', { level: 2, name: msg('diskusage.warningsTitle') }).closest('.notice') as HTMLElement;
+    expect([...list.querySelectorAll('li')].map((li) => li.textContent)).toEqual([msg('diskusage.warning.folder_unreadable'), msg('diskusage.warningUnknown')]);
+    expect(list.textContent).not.toContain('denied');
+    expect(list.textContent).not.toContain('leftovers');
   });
 });

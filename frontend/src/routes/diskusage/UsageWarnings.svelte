@@ -1,9 +1,10 @@
 <script lang="ts">
   import Notice from '../../lib/components/Notice.svelte';
+  import { warningText } from '../../lib/diskusage/usage';
   import { msg } from '../../lib/i18n';
   import type { Warning } from '../../lib/services/diskusage';
 
-  // The areas the scan could not read, one line each; nothing while there are none.
+  // The parts the scan could not read, one line each in the words of its code; nothing while there are none.
   let { warnings }: { warnings: Warning[] } = $props();
 </script>
 
@@ -12,7 +13,7 @@
     <Notice tone="danger" title={msg('diskusage.warningsTitle')} level={2}>
       <ul>
         {#each warnings as warning, index (index)}
-          <li>{msg('diskusage.warningLine', { area: warning.area, message: warning.message })}</li>
+          <li>{warningText(warning)}</li>
         {/each}
       </ul>
     </Notice>

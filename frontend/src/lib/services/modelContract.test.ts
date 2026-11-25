@@ -98,6 +98,14 @@ const GO_NAMES: Record<string, string> = {
 const FULL_MIRRORS: Record<string, string[]> = {
   'lib/services/install.ts: RemovalInfo (install)': [],
   'lib/services/relocate.ts: MoveJob (relocate)': [],
+  'lib/services/diskusage.ts: GameUsage (diskusage)': [],
+  'lib/services/diskusage.ts: DownloadUsage (diskusage)': [],
+  'lib/services/diskusage.ts: Leftover (diskusage)': [],
+  'lib/services/diskusage.ts: GroupUsage (diskusage)': [],
+  'lib/services/diskusage.ts: GroupDelete (diskusage)': [],
+  'lib/services/diskusage.ts: Warning (diskusage)': [],
+  'lib/services/diskusage.ts: Totals (diskusage)': [],
+  'lib/services/diskusage.ts: Report (diskusage)': [],
 };
 
 // Fields the interface declares required while Go tags them omitempty: a reader trusting the type

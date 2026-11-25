@@ -32,7 +32,7 @@
       title={msg(leftoverKindKey(leftover.kind))}
       path={leftover.path}
       pathTitle={leftover.path}
-      reason={leftover.deletable ? null : reasonLabel(leftover.reasonCode, leftover.reason)}
+      reason={leftover.deletable ? null : reasonLabel(leftover.reasonCode)}
       size={size(leftover)}
     >
       {#snippet actions()}
