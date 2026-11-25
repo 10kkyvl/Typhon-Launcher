@@ -296,7 +296,7 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: var(--space-1);
   }
 
   .subject {
@@ -315,7 +315,7 @@
   .meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.4rem var(--space-3);
+    gap: var(--space-1) var(--space-3);
     font-size: var(--font-xs);
     color: var(--text-3);
   }

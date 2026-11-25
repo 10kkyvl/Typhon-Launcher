@@ -8,6 +8,7 @@ import { resetHistory, route } from '../../lib/stores/router';
 import { unreadReplies } from '../../lib/stores/support';
 import { toasts } from '../../lib/stores/toasts';
 import { authState } from '../../lib/stores/user';
+import { clockTime, longDate, shortDate } from '../../lib/utils/format';
 import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import { renderDom } from '../../lib/testing/dom';
 import { description } from '../../lib/testing/hints';
@@ -77,6 +78,32 @@ describe('TicketView: the request', () => {
     ]);
     expect(words(items[0])).toContain(msg('tickets.logsAttached'));
     expect(words(items[1])).not.toContain(msg('tickets.logsAttached'));
+  });
+
+  it('names the thread, and says when each message was written: words on screen, the exact time to assistive tech and on hover', async () => {
+    const { user } = await opened();
+    const list = screen.getByRole('list', { name: msg('tickets.thread') });
+    const items = within(list).getAllByRole('listitem');
+    const written = new Date('2026-11-01T12:30:00Z');
+    const exact = msg('tickets.messageTime', { date: longDate(written), time: clockTime(written) });
+    const time = items[1].querySelector('time');
+
+    expect(time?.getAttribute('datetime')).toBe('2026-11-01T12:30:00Z');
+    expect(time?.querySelector('[aria-hidden="true"]')?.textContent).toBe(msg('tickets.messageTime', { date: shortDate(written), time: clockTime(written) }));
+    expect(time?.querySelector('.sr-only')?.textContent).toBe(exact);
+    expect(document.querySelector('[title]')).toBeNull();
+    await user.hover(time as HTMLElement);
+    await vi.waitFor(() => expect(document.querySelector('[data-part="tooltip"]')?.textContent?.trim()).toBe(exact));
+  });
+
+  it('says only the clock time for a message of today, and nothing for a time it cannot read', async () => {
+    const now = new Date();
+    vi.mocked(getTicket).mockResolvedValue(thread(TICKET, [message(1, 'staff', 'Hello.', now.toISOString()), message(2, 'user', 'Hi.', 'not a date')]));
+    await opened();
+    const items = within(screen.getByRole('list', { name: msg('tickets.thread') })).getAllByRole('listitem');
+    expect(items[0].querySelector('time [aria-hidden="true"]')?.textContent).toBe(clockTime(now));
+    expect(items[1].querySelector('time')).toBeNull();
+    expect(words(items[1])).toBe(`${msg('tickets.you')} Hi.`);
   });
 
   it('goes back to the list', async () => {

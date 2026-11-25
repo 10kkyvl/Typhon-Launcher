@@ -272,7 +272,7 @@
   .field {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    gap: var(--space-2);
     min-width: 0;
   }
 
@@ -280,7 +280,7 @@
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: 0.8rem;
+    gap: var(--space-2);
     font-size: var(--font-xs);
     color: var(--text-2);
   }
@@ -297,7 +297,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-3);
-    padding: 0.6rem 0.6rem 0.6rem 1.2rem;
+    padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-md);
     background: var(--surface-2);
@@ -318,7 +318,7 @@
   .progress {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    gap: var(--space-2);
   }
 
   .actions {

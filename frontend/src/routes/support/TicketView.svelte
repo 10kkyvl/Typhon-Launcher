@@ -8,6 +8,7 @@
   import Spinner from '../../lib/components/Spinner.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import TextArea from '../../lib/components/TextArea.svelte';
+  import Tooltip from '../../lib/components/Tooltip.svelte';
   import type { ConfirmPrompt } from '../../lib/confirm/prompts';
   import { msg } from '../../lib/i18n';
   import { accountErrorField } from '../../lib/services/accountMessages';
@@ -28,9 +29,9 @@
   import { refreshUnread, unreadReplies } from '../../lib/stores/support';
   import { toast } from '../../lib/stores/toasts';
   import { handleSessionLost } from '../../lib/stores/user';
-  import { dateTime } from '../../lib/utils/format';
   import AttachLogs from './AttachLogs.svelte';
   import LogsConfirm from './LogsConfirm.svelte';
+  import { messageWhen } from './messageTime';
   import { bodyCounter, isSendShortcut, sendKeys, sessionGone } from './sending';
 
   let { number }: { number: number } = $props();
@@ -143,11 +144,6 @@
     });
   });
 
-  function when(iso: string): string {
-    const value = new Date(iso);
-    return Number.isNaN(value.getTime()) ? '' : dateTime(value);
-  }
-
   function sendOnShortcut(event: KeyboardEvent) {
     if (!isSendShortcut(event)) return;
     event.preventDefault();
@@ -256,12 +252,19 @@
     {/if}
   </header>
 
-  <ul class="thread">
+  <ul class="thread" aria-label={msg('tickets.thread')}>
     {#each thread.messages as message (message.id)}
+      {@const written = messageWhen(message.createdAt)}
       <li class="bubble" class:mine={message.author === 'user'} class:staff={message.author !== 'user'}>
         <div class="bubble-head">
           <span class="author">{message.author === 'user' ? msg('tickets.you') : msg('tickets.staff')}</span>
-          <span class="time">{when(message.createdAt)}</span>
+          {#if written}
+            <!-- The exact time goes to assistive tech as text and to the pointer as a hint; the time
+                 element takes focus only from the pointer, so a message adds no Tab stop for it. -->
+            <Tooltip text={written.exact} describe={false}>
+              <time class="time" datetime={message.createdAt} tabindex="-1"><span aria-hidden="true">{written.words}</span><span class="sr-only">{written.exact}</span></time>
+            </Tooltip>
+          {/if}
         </div>
         <p class="text" dir="auto">{message.body}</p>
         {#if message.logBundleId}
@@ -334,7 +337,7 @@
 
 <style>
   .top {
-    margin: 0 0 var(--space-4) -0.8rem;
+    margin: 0 0 var(--space-4) calc(-1 * var(--space-2));
   }
 
   .banner {
@@ -365,7 +368,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.6rem var(--space-3);
+    gap: var(--space-2) var(--space-3);
     margin-top: var(--space-2);
     font-size: var(--font-sm);
     color: var(--text-3);
@@ -408,7 +411,7 @@
     align-items: baseline;
     justify-content: space-between;
     gap: var(--space-4);
-    margin-bottom: 0.6rem;
+    margin-bottom: var(--space-2);
     font-size: var(--font-xs);
   }
 
@@ -434,8 +437,8 @@
   .logs {
     display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
-    margin-top: 0.8rem;
+    gap: var(--space-1);
+    margin-top: var(--space-2);
     font-size: var(--font-xs);
     color: var(--text-3);
   }
@@ -457,7 +460,7 @@
   .progress {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    gap: var(--space-2);
   }
 
   .actions {

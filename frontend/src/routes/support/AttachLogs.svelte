@@ -42,7 +42,7 @@
   .text {
     display: flex;
     flex-direction: column;
-    gap: 0.3rem;
+    gap: var(--space-1);
     min-width: 0;
   }
 
