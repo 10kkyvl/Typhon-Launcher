@@ -153,20 +153,54 @@ func (s *Service) BeginHandoff(phaseStart int64) error {
 		return err
 	}
 
+	ctx := s.serviceContext()
 	s.mu.Lock()
+	if err := ctx.Err(); err != nil {
+		// ServiceShutdown has cancelled the service and may already be in
+		// wg.Wait: no goroutine may join now.
+		s.busy = false
+		s.mu.Unlock()
+		return fmt.Errorf("selfupdate: the launcher is shutting down: %w", err)
+	}
 	s.status = clearError(s.status)
 	s.status.State = StateApplying
 	applying := s.status
+	s.handoffRunning.Store(true)
+	s.wg.Add(1)
 	s.mu.Unlock()
 	emit(eventStatus, applying)
-	s.handoffRunning.Store(true)
 
-	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		s.runHandoff(s.serviceContext(), plan, phaseStart)
+		s.runHandoff(ctx, plan, phaseStart)
 	}()
 	return nil
+}
+
+// HoldLaunch sets a second launch aside while this launcher hands itself
+// over and reports whether it did. The successor does not repeat a launch
+// that reached the old process, so if the hand-over fails the last one set
+// aside goes to the handler SetLaunchReplay gave; if it succeeds, the window
+// that launch would have opened is the one closing.
+//
+//wails:ignore
+func (s *Service) HoldLaunch(args []string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.handoffRunning.Load() {
+		return false
+	}
+	s.heldLaunch = append([]string(nil), args...)
+	return true
+}
+
+// SetLaunchReplay sets where a launch held during a failed hand-over goes.
+//
+//wails:ignore
+func (s *Service) SetLaunchReplay(fn func(args []string)) {
+	s.mu.Lock()
+	s.launchReplay = fn
+	s.mu.Unlock()
 }
 
 // prepareHandoff decides how the swap will go and verifies the download. It
@@ -441,8 +475,12 @@ func (s *Service) failHandoff(plan handoffPlan, j handoffJournal, proc handoffPr
 		slog.Error("selfupdate: the previous launcher could not be put back, it stays parked", "parked", j.OldPath, "target", j.Target)
 	}
 
-	s.handoffRunning.Store(false)
 	s.mu.Lock()
+	// Under the lock HoldLaunch checks: a launch either lands in heldLaunch
+	// before this or is handled at once after it.
+	s.handoffRunning.Store(false)
+	held, replay := s.heldLaunch, s.launchReplay
+	s.heldLaunch = nil
 	s.busy = false
 	if !undone {
 		s.owedUndo = undo
@@ -452,6 +490,9 @@ func (s *Service) failHandoff(plan handoffPlan, j handoffJournal, proc handoffPr
 	s.status = status
 	s.mu.Unlock()
 	emit(eventStatus, status)
+	if held != nil && replay != nil {
+		replay(held)
+	}
 }
 
 // refuseUnsettledHandoff keeps any update from starting while a hand-over

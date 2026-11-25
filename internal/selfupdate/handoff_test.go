@@ -511,23 +511,29 @@ func (f *fakeSuccessor) Kill() error {
 func (f *fakeSuccessor) Done() <-chan struct{} { return f.done }
 
 type handoffRig struct {
-	disk handoffDisk
-	svc  *Service
-	plan handoffPlan
-	quit atomic.Int32
-	proc *fakeSuccessor
-	args []string
+	disk   handoffDisk
+	svc    *Service
+	plan   handoffPlan
+	quit   atomic.Int32
+	quitCh chan struct{}
+	proc   *fakeSuccessor
+	args   []string
 }
 
-// newHandoffRig wires a Service whose "successor" is behave(spec, proc).
+// newHandoffRig wires a Service whose "successor" is behave(spec, proc). The
+// service is set up as BeginHandoff leaves it: applying and busy.
 func newHandoffRig(t *testing.T, behave func(spec HandoffSpec, proc *fakeSuccessor)) *handoffRig {
 	t.Helper()
 	silenceSeams(t)
-	r := &handoffRig{disk: newHandoffDisk(t), proc: newFakeSuccessor()}
+	r := &handoffRig{disk: newHandoffDisk(t), proc: newFakeSuccessor(), quitCh: make(chan struct{}, 4)}
 	r.plan = r.disk.plan(t, newBody, sha256Hex(t, []byte(newBody)))
-	r.svc = &Service{dir: r.disk.cfg, store: mustStore(t, r.disk.cfg), currentVersion: "1.4.0", ctx: t.Context()}
-	r.svc.status = Status{State: StateApplying, CurrentVersion: "1.4.0", AvailableVersion: "1.5.0"}
-	r.svc.busy = true
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	r.svc = &Service{
+		dir: r.disk.cfg, store: mustStore(t, r.disk.cfg), currentVersion: "1.4.0", ctx: ctx, cancel: cancel,
+		status: Status{State: StateApplying, CurrentVersion: "1.4.0", AvailableVersion: "1.5.0"},
+		busy:   true,
+	}
 
 	prevStart, prevQuit, prevTimeout := startHandoff, quitApplication, handoffReadyTimeout
 	startHandoff = func(exe string, args []string) (handoffProc, error) {
@@ -545,10 +551,41 @@ func newHandoffRig(t *testing.T, behave func(spec HandoffSpec, proc *fakeSuccess
 		behave(spec, r.proc)
 		return r.proc, nil
 	}
-	quitApplication = func() { r.quit.Add(1) }
+	quitApplication = func() {
+		r.quit.Add(1)
+		r.quitCh <- struct{}{}
+	}
 	handoffReadyTimeout = 300 * time.Millisecond
 	t.Cleanup(func() { startHandoff, quitApplication, handoffReadyTimeout = prevStart, prevQuit, prevTimeout })
 	return r
+}
+
+// waitQuit waits for the old launcher's quit, which runs on its own goroutine.
+func (r *handoffRig) waitQuit(t *testing.T) {
+	t.Helper()
+	select {
+	case <-r.quitCh:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the old launcher did not quit")
+	}
+}
+
+// readyForHandoff puts the rig's service where the update screen offers the
+// update, as a finished download leaves it: ready, idle, with the rig's
+// verified artifact, on a platform that hands over an executable. Call it
+// only while no hand-over of the rig runs.
+func (r *handoffRig) readyForHandoff(t *testing.T) {
+	t.Helper()
+	prevMethod, prevTarget := methodFor, targetFor
+	methodFor = func(Artifact, bool) handoffMethod { return methodExeFile }
+	targetFor = func(exe string, _ handoffMethod) (string, error) { return exe, nil }
+	t.Cleanup(func() { methodFor, targetFor = prevMethod, prevTarget })
+	art := r.plan.Art
+	r.svc.busy = false
+	r.svc.status.State = StateReady
+	r.svc.readyPath = r.plan.ArtifactPath
+	r.svc.readyArtifact = &art
+	r.svc.portable = true
 }
 
 func (r *handoffRig) assertRolledBack(t *testing.T) {
@@ -593,10 +630,7 @@ func TestHandoffHappyPath(t *testing.T) {
 	})
 	r.svc.runHandoff(t.Context(), r.plan, 1234)
 
-	deadline := time.Now().Add(time.Second)
-	for r.quit.Load() == 0 && time.Now().Before(deadline) {
-		time.Sleep(5 * time.Millisecond)
-	}
+	r.waitQuit(t)
 	if r.quit.Load() != 1 {
 		t.Fatalf("quit called %d times, want once", r.quit.Load())
 	}
@@ -690,18 +724,8 @@ func TestHandoffRollsBackWhenTheSuccessorCannotStart(t *testing.T) {
 
 func TestBeginHandoffWithAWrongHashChangesNothing(t *testing.T) {
 	r := newHandoffRig(t, func(HandoffSpec, *fakeSuccessor) { t.Error("the successor started despite a hash mismatch") })
-	art := r.plan.Art
-	art.SHA256 = strings.Repeat("cd", 32)
-	prevMethod, prevTarget := methodFor, targetFor
-	methodFor = func(Artifact, bool) handoffMethod { return methodExeFile }
-	targetFor = func(exe string, _ handoffMethod) (string, error) { return exe, nil }
-	t.Cleanup(func() { methodFor, targetFor = prevMethod, prevTarget })
-
-	r.svc.busy = false
-	r.svc.status.State = StateReady
-	r.svc.readyPath = r.plan.ArtifactPath
-	r.svc.readyArtifact = &art
-	r.svc.portable = true
+	r.plan.Art.SHA256 = strings.Repeat("cd", 32)
+	r.readyForHandoff(t)
 
 	err := r.svc.BeginHandoff(1)
 	if !errors.Is(err, ErrHashMismatch) && !errors.Is(err, ErrSizeMismatch) {
@@ -731,15 +755,8 @@ func TestBeginHandoffWithAWrongHashChangesNothing(t *testing.T) {
 
 func TestBeginHandoffRejectsAnUnsupportedPlatformBeforeAnyChange(t *testing.T) {
 	r := newHandoffRig(t, func(HandoffSpec, *fakeSuccessor) {})
-	prevMethod := methodFor
+	r.readyForHandoff(t)
 	methodFor = func(Artifact, bool) handoffMethod { return "" }
-	t.Cleanup(func() { methodFor = prevMethod })
-	art := r.plan.Art
-	r.svc.busy = false
-	r.svc.status.State = StateReady
-	r.svc.readyPath = r.plan.ArtifactPath
-	r.svc.readyArtifact = &art
-	r.svc.portable = true
 
 	err := r.svc.BeginHandoff(1)
 	if !errors.Is(err, ErrHandoffUnsupported) {
@@ -818,12 +835,15 @@ func TestSuccessorStartupHoldsBackStateCleanup(t *testing.T) {
 	if s.successorPending() {
 		t.Fatal("a normal launcher reports a pending successor")
 	}
-	s.SetHandoff(HandoffSpec{})
-	if !s.successorPending() {
+	r := newSuccessorRig(t, false)
+	if !r.svc.successorPending() {
 		t.Fatal("a successor does not hold back its cleanup")
 	}
-	s.handoffOldGone = true
-	if s.successorPending() {
+	r.oldAlive.Store(false)
+	if err := r.complete(t); err != nil {
+		t.Fatalf("CompleteHandoff() = %v", err)
+	}
+	if r.svc.successorPending() {
 		t.Fatal("cleanup is still held back after the old launcher left")
 	}
 }

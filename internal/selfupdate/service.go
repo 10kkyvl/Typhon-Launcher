@@ -108,9 +108,13 @@ type Service struct {
 	handoffSettled    bool // the successor has become an ordinary application
 	// owedUndo puts the previous launcher back after a failed hand-off whose
 	// own undo failed; nil when nothing is owed.
-	owedUndo   func() error
-	renderOnce sync.Once
-	renderErr  error
+	owedUndo func() error
+	// heldLaunch is the last second launch set aside during a hand-over;
+	// launchReplay handles it if the hand-over fails.
+	heldLaunch   []string
+	launchReplay func(args []string)
+	renderOnce   sync.Once
+	renderErr    error
 }
 
 func NewService() (*Service, error) {

@@ -145,25 +145,6 @@ func TestRecoverHandoffNeverSweepsTheOnlyLauncher(t *testing.T) {
 	}
 }
 
-// readyForHandoff puts the rig's service where the update screen offers the
-// update: ready, idle, with the rig's verified artifact, on a platform that
-// hands over an executable.
-func (r *handoffRig) readyForHandoff(t *testing.T) {
-	t.Helper()
-	prevMethod, prevTarget := methodFor, targetFor
-	methodFor = func(Artifact, bool) handoffMethod { return methodExeFile }
-	targetFor = func(exe string, _ handoffMethod) (string, error) { return exe, nil }
-	t.Cleanup(func() { methodFor, targetFor = prevMethod, prevTarget })
-	art := r.plan.Art
-	r.svc.mu.Lock()
-	r.svc.busy = false
-	r.svc.status.State = StateReady
-	r.svc.readyPath = r.plan.ArtifactPath
-	r.svc.readyArtifact = &art
-	r.svc.portable = true
-	r.svc.mu.Unlock()
-}
-
 // countSnapshots replaces the snapshot of the running launcher with a record
 // of what it would have saved, under which label.
 func countSnapshots(t *testing.T) *[]string {
