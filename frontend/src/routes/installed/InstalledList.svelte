@@ -169,9 +169,14 @@
             {#if isEmulated(game)}<ConsoleTag platform={emulationPlatform(game)} />{/if}
           </span>
           <span class="path">{game.installDir}</span>
-          {#if sizeLabel(game) || updateText}
+          {#if sizeLabel(game) || updateText || moving(game)}
             <span class="size">
               {sizeLabel(game)}
+              {#if moving(game)}
+                <span class="row-moving">
+                  <StatusBadge kind="accent" label={msg('installed.moving')} plain />
+                </span>
+              {/if}
               {#if updateText}
                 <span class="row-update">
                   <StatusBadge kind={update?.kind === 'update' ? 'warning' : 'neutral'} label={updateText} plain />
@@ -272,12 +277,11 @@
     letter-spacing: var(--tracking-heading);
   }
 
+  /* A path is shown whole: it wraps at any character rather than being cut. */
   .path {
     font-size: var(--font-xs);
     color: var(--text-3);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
   }
 
   .size {
@@ -312,6 +316,13 @@
     vertical-align: bottom;
   }
 
+  /* The status column says "Moving" where it is shown; the size line says it where it is not. */
+  .row-moving {
+    display: none;
+    margin-left: var(--space-2);
+    vertical-align: bottom;
+  }
+
   @media (max-width: 1400px) {
     .row {
       grid-template-columns: minmax(22rem, 1fr) auto;
@@ -319,6 +330,10 @@
 
     .status {
       display: none;
+    }
+
+    .row-moving {
+      display: inline-flex;
     }
   }
 </style>

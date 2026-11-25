@@ -3,12 +3,15 @@ import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import type { LibraryGame } from '../../lib/services/library';
+import type { MoveJob } from '../../lib/services/relocate';
 import { libraryGames, libraryLoaded } from '../../lib/stores/library';
+import { moves } from '../../lib/stores/relocate';
 import { route } from '../../lib/stores/router';
 import { installedView } from '../../lib/stores/ui';
 import { renderDom } from '../../lib/testing/dom';
 import { bytesSize } from '../../lib/utils/format';
 import Installed from './Installed.svelte';
+import listSource from './InstalledList.svelte?raw';
 
 // The rows on the base parts: the title is the game's link, the picture beside it a repeat of it;
 // a size not fully measured is said in words, in the list and in the grid.
@@ -49,6 +52,7 @@ afterEach(() => {
   libraryGames.set([]);
   libraryLoaded.set(false);
   installedView.set('list');
+  moves.set([]);
   document.body.replaceChildren();
 });
 
@@ -76,5 +80,35 @@ describe('Installed: sizes in words', () => {
     expect(row('g-exact').textContent).toContain(bytesSize(3 * GB));
     expect(row('g-least').textContent).toContain(msg('common.meterAtLeast', { size: bytesSize(2 * GB) }));
     expect(row('g-unknown').textContent).toContain(msg('common.meterSizeUnknown'));
+  });
+});
+
+// jsdom applies no layout and no media query: these pin the rules by their text; the narrow row and a
+// long path pushing nothing out are seen only in a real browser.
+const styles = (/<style>([\s\S]*)<\/style>/.exec(listSource)?.[1] ?? '').replace(/\/\*[\s\S]*?\*\//g, '');
+const narrow = /@media \(max-width: 1400px\) \{([\s\S]*)\}\s*$/.exec(styles)?.[1] ?? '';
+const ruleOf = (css: string, selector: string) => new RegExp(`(?:^|\\})\\s*${selector.replace('.', '\\.')}\\s*\\{([^}]*)\\}`).exec(css)?.[1] ?? '';
+
+describe('Installed: a long install path', () => {
+  it('wraps at any character in the list, never cut', () => {
+    const rule = ruleOf(styles, '.path');
+    expect(rule).toMatch(/overflow-wrap:\s*anywhere/);
+    expect(rule).not.toMatch(/text-overflow|nowrap|overflow:\s*hidden/);
+  });
+});
+
+describe('Installed: a game being moved, at every width', () => {
+  it('says “Moving” beside its size where the status column is hidden, and nothing else comes back there', () => {
+    libraryGames.set([game('g-exact', 'Exact', { sizeBytes: 3 * GB }), game('g-least', 'Least', { sizeBytes: 2 * GB })]);
+    moves.set([{ id: 'm1', scope: 'game', stage: 'copy', gameId: 'g-exact', title: 'Exact' } as unknown as MoveJob]);
+    installedView.set('list');
+    renderDom(Installed);
+
+    const titles = (id: string) => row(id).querySelector('.titles')?.textContent ?? '';
+    expect(titles('g-exact')).toContain(msg('installed.moving'));
+    expect(titles('g-least')).not.toContain(msg('installed.moving'));
+    expect(ruleOf(narrow, '.status')).toMatch(/display:\s*none/);
+    expect(ruleOf(styles, '.row-moving')).toMatch(/display:\s*none/);
+    expect(ruleOf(narrow, '.row-moving')).toMatch(/display:\s*inline-flex/);
   });
 });
