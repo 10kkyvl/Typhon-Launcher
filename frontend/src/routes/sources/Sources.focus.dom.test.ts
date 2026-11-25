@@ -18,6 +18,7 @@ vi.mock('../../lib/services/sources', async (actual) => ({
 
 let app: HTMLDivElement;
 let scrolled: Element[];
+const realScrollIntoView = Element.prototype.scrollIntoView;
 
 beforeEach(() => {
   app = mountPoint();
@@ -33,6 +34,7 @@ beforeEach(() => {
 afterEach(() => {
   resetScreen();
   vi.restoreAllMocks();
+  Element.prototype.scrollIntoView = realScrollIntoView;
   vi.mocked(listSources).mockReset();
   vi.mocked(removeSource).mockReset();
 });
