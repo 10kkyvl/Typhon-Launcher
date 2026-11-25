@@ -61,7 +61,14 @@ func swapBundleParked(ctx context.Context, p handoffPlan, j handoffJournal) (fun
 		return nil, fmt.Errorf("selfupdate: move the new bundle beside the old one: %w", err)
 	}
 	if err := unix.RenamexNp(j.OldPath, p.Target, unix.RENAME_SWAP); err != nil {
-		return nil, errors.Join(fmt.Errorf("selfupdate: swap the bundles: %w", err), os.RemoveAll(j.OldPath))
+		cause := fmt.Errorf("selfupdate: swap the bundles: %w", err)
+		// Nothing was exchanged: the parked name holds the new bundle, and
+		// removing it is all the undo there is.
+		owed := func() error { return os.RemoveAll(j.OldPath) }
+		if rerr := owed(); rerr != nil {
+			return owed, errors.Join(cause, rerr)
+		}
+		return nil, cause
 	}
 	return func() error { return undoBundleSwap(j) }, nil
 }

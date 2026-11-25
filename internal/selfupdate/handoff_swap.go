@@ -56,7 +56,10 @@ func (p handoffPlan) journalFor(parentPID int) handoffJournal {
 }
 
 // performSwap puts the new launcher in place and returns the call that puts
-// the old one back. On error it has already put everything back itself.
+// the old one back. On error it has tried to put everything back itself: a nil
+// undo then means the disk is as it was, and a non-nil one means that undo
+// failed and is still owed: the launcher's name may hold the new build or
+// nothing, and the old one is parked. Calling it again retries.
 func performSwap(ctx context.Context, p handoffPlan, j handoffJournal) (undo func() error, err error) {
 	switch p.Method {
 	case methodExeFile, methodExeZip:
@@ -96,7 +99,17 @@ func swapParkedExe(ctx context.Context, p handoffPlan, j handoffJournal) (func()
 		return nil, errors.Join(fmt.Errorf("selfupdate: park the running launcher: %w", err), revert())
 	}
 	if err := handoffRename(j.StagedPath, j.Target); err != nil {
-		return nil, errors.Join(fmt.Errorf("selfupdate: put the new launcher in place: %w", err), undo())
+		cause := fmt.Errorf("selfupdate: put the new launcher in place: %w", err)
+		if rerr := revert(); rerr != nil {
+			// The installed-programs entry shows the new version; the launcher
+			// itself is what the undo below is about.
+			slog.Warn("selfupdate: put the installed version back in the registry", "error", rerr)
+		}
+		owed := func() error { return undoParkedExe(j) }
+		if uerr := owed(); uerr != nil {
+			return owed, errors.Join(cause, uerr)
+		}
+		return nil, cause
 	}
 	return undo, nil
 }
@@ -180,19 +193,25 @@ func swapInstaller(ctx context.Context, p handoffPlan, j handoffJournal) (func()
 		return nil, fmt.Errorf("selfupdate: park the running launcher: %w", err)
 	}
 	undo := func() error { return undoParkedExe(j) }
+	fail := func(cause error) (func() error, error) {
+		if uerr := undo(); uerr != nil {
+			return undo, errors.Join(cause, uerr)
+		}
+		return nil, cause
+	}
 	if err := applyInstaller(ctx, p.ArtifactPath, p.InstallDir, p.Target); err != nil {
-		return nil, errors.Join(err, undo())
+		return fail(err)
 	}
 	before, err := fileDigest(ctx, j.OldPath)
 	if err != nil {
-		return nil, errors.Join(err, undo())
+		return fail(err)
 	}
 	after, err := fileDigest(ctx, j.Target)
 	if err != nil {
-		return nil, errors.Join(err, undo())
+		return fail(err)
 	}
 	if err := ensureReplaced(before, after, j.Target); err != nil {
-		return nil, errors.Join(err, undo())
+		return fail(err)
 	}
 	return undo, nil
 }

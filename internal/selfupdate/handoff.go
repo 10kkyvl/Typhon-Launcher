@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"typhon/internal/platform"
 	"typhon/internal/storage"
 	"typhon/internal/uierr"
 	"typhon/internal/windowhandoff"
@@ -48,6 +49,10 @@ const (
 	stageSwapped  = "swapped"  // the new launcher is in place, the successor not confirmed
 	stageReady    = "ready"    // the successor rendered; the old process is closing
 	stageDone     = "done"     // the successor owns the launcher; leftovers may go
+	// stageUndoOwed: the hand-over failed and putting the old launcher back
+	// failed too. The parked launcher may be the only one left; nothing is
+	// swept and no new update starts until recovery has put it back.
+	stageUndoOwed = "undo-owed"
 )
 
 // handoffMethod says how the new launcher gets onto the disk.
@@ -282,6 +287,26 @@ func sweepOld(dir string) {
 	}
 }
 
+// targetPresent reports whether something sits at the launcher's name.
+func targetPresent(j handoffJournal) bool {
+	_, err := os.Lstat(j.Target)
+	return err == nil
+}
+
+// runsFromTarget reports that this process was started from the launcher's
+// name and that name is still taken: then the build at the name is the one
+// running, and its version is known. Recovery runs at start, before anything
+// could have moved the name since.
+func runsFromTarget(j handoffJournal, exe string, exeErr error) bool {
+	if exeErr != nil || !targetPresent(j) {
+		return false
+	}
+	if j.Method == methodBundle {
+		return platform.SamePath(filepath.Dir(filepath.Dir(filepath.Dir(exe))), j.Target)
+	}
+	return platform.SamePath(exe, j.Target)
+}
+
 // RecoverHandoff settles a handoff whose old process died before it finished
 // (design step 9). Run it on a normal start, before the services load state;
 // the successor of a live handoff never calls it. current is the running
@@ -309,18 +334,27 @@ func RecoverHandoff(configDir, current string) error {
 		}
 	}
 
+	if err := checkOwnedName(j); err != nil {
+		return err
+	}
+
 	var errs []error
-	if j.Stage != stageDone && !sameVersion(j.Version, current) {
-		slog.Warn("selfupdate: a hand-off was interrupted before the new launcher took over, undoing the swap", "stage", j.Stage, "version", j.Version)
+	if (j.Stage == stageDone && targetPresent(j)) || (sameVersion(j.Version, current) && runsFromTarget(j, exe, exeErr)) {
+		// A launcher sits at the name: the successor that took over, or this
+		// start, which is the new build run from there. The parked one is
+		// surplus, whatever the stage, an owed undo included.
+		sweepOld(filepath.Dir(j.OldPath))
+	} else {
+		// Putting the parked launcher back is safe from any state: only the
+		// launcher that was running ever goes to the parked name, and with the
+		// name empty it is the only launcher left.
+		slog.Warn("selfupdate: a hand-off did not finish, putting the previous launcher back", "stage", j.Stage, "version", j.Version)
 		if uerr := undoSwap(j); uerr != nil {
-			// Keep the journal: the next start tries again.
 			return fmt.Errorf("selfupdate: undo an interrupted hand-off: %w", uerr)
 		}
 		if derr := discardStaging(configDir); derr != nil {
 			errs = append(errs, fmt.Errorf("selfupdate: drop the unused snapshot: %w", derr))
 		}
-	} else {
-		sweepOld(filepath.Dir(j.OldPath))
 	}
 	if cerr := clearReadyMarkers(configDir); cerr != nil {
 		errs = append(errs, cerr)

@@ -21,6 +21,11 @@ const (
 	// rolled back; the launcher keeps running on its previous version.
 	errorCodeHandoffFailed = "handoff_failed"
 
+	// errorCodeHandoffUndoFailed is a hand-off that failed and could not put
+	// the previous launcher back. No update can start until the next launch
+	// has settled it, so the screen offers neither retry nor restart.
+	errorCodeHandoffUndoFailed = "handoff_undo_failed"
+
 	// handoffKillWait is how long the old process waits for a killed
 	// successor to release its image before it undoes the swap.
 	handoffKillWait = 5 * time.Second
@@ -263,7 +268,8 @@ func (s *Service) runHandoff(ctx context.Context, plan handoffPlan, phaseStart i
 	}
 	undo, err = performSwap(ctx, plan, j)
 	if err != nil {
-		undo = nil // performSwap has already put everything back
+		// undo is nil when the swap put everything back, or the undo it
+		// still owes.
 		fail(err)
 		return
 	}
@@ -403,6 +409,7 @@ func (s *Service) failHandoff(plan handoffPlan, j handoffJournal, proc handoffPr
 			undone = false
 		}
 	}
+	code := errorCodeHandoffFailed
 	if undone {
 		if readyPath, rerr := HandoffReadyPath(s.dir, plan.Nonce); rerr == nil {
 			if rerr := removeIfExists(readyPath); rerr != nil {
@@ -413,20 +420,58 @@ func (s *Service) failHandoff(plan handoffPlan, j handoffJournal, proc handoffPr
 			errs = append(errs, cerr)
 		}
 		sweepOld(handoffOldDir(plan.Exe))
-	}
-	// With the swap not undone the journal stays: the next start settles it.
-	if staged {
-		if derr := discardStaging(s.dir); derr != nil {
-			slog.Warn("selfupdate: remove the unused snapshot, it is dropped on the next start", "error", derr)
+		if staged {
+			if derr := discardStaging(s.dir); derr != nil {
+				slog.Warn("selfupdate: remove the unused snapshot, it is dropped on the next start", "error", derr)
+			}
 		}
+	} else {
+		// The old launcher may be parked with nothing, or the new build, at
+		// its name. Nothing is swept, the snapshot of the old build stays
+		// (the next start promotes or drops it by the version it runs) and
+		// the journal says the undo is owed, so no update starts on top.
+		code = errorCodeHandoffUndoFailed
+		j.Stage = stageUndoOwed
+		if serr := saveJournal(s.dir, j); serr != nil {
+			errs = append(errs, serr)
+		}
+		slog.Error("selfupdate: the previous launcher could not be put back, it stays parked", "parked", j.OldPath, "target", j.Target)
 	}
 
 	s.handoffRunning.Store(false)
 	s.mu.Lock()
 	s.busy = false
-	status := errorStatus(s.status, errorCodeHandoffFailed, errors.Join(errs...))
+	if !undone {
+		s.owedUndo = undo
+	}
+	status := errorStatus(s.status, code, errors.Join(errs...))
 	status.State = StateReady
 	s.status = status
 	s.mu.Unlock()
 	emit(eventStatus, status)
+}
+
+// payOwedUndo retries, in the process that failed it, the undo a hand-off
+// still owes. On success the journal goes and updates may start again.
+func (s *Service) payOwedUndo() error {
+	s.mu.Lock()
+	undo := s.owedUndo
+	s.owedUndo = nil
+	s.mu.Unlock()
+	if undo == nil {
+		return nil
+	}
+	if err := undo(); err != nil {
+		s.mu.Lock()
+		if s.owedUndo == nil {
+			s.owedUndo = undo
+		}
+		s.mu.Unlock()
+		return err
+	}
+	slog.Info("selfupdate: the previous launcher is back in place")
+	if derr := discardStaging(s.dir); derr != nil {
+		slog.Warn("selfupdate: remove the unused snapshot, it is dropped on the next start", "error", derr)
+	}
+	return clearJournal(s.dir)
 }

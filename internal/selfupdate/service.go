@@ -106,8 +106,11 @@ type Service struct {
 	handoffOldGone    bool // the old process exited; the held-back cleanup may run
 	handoffRevealed   bool // the successor's window is on screen
 	handoffSettled    bool // the successor has become an ordinary application
-	renderOnce        sync.Once
-	renderErr         error
+	// owedUndo puts the previous launcher back after a failed hand-off whose
+	// own undo failed; nil when nothing is owed.
+	owedUndo   func() error
+	renderOnce sync.Once
+	renderErr  error
 }
 
 func NewService() (*Service, error) {
@@ -309,6 +312,11 @@ func (s *Service) ServiceShutdown() error {
 		s.wg.Done()
 	}
 	s.wg.Wait()
+	// The last chance in this process: a launcher left parked with its name
+	// empty cannot be started again to recover itself.
+	if err := s.payOwedUndo(); err != nil {
+		slog.Error("selfupdate: the previous launcher is still parked, the next start puts it back", "error", err)
+	}
 	return nil
 }
 
