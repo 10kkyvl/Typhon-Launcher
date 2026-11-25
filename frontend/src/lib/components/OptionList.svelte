@@ -21,6 +21,10 @@
    * dialog body it sits in, and a row chosen by the keys is brought into view. With no rows it draws
    * nothing: the caller says why the list is empty. When the rows change under the focus (a row gone),
    * focus stays in the list, on its Tab stop.
+   *
+   * `disabled` holds the whole list while the caller's write runs: the group and every row say so,
+   * and no key or press chooses or moves focus. No row is natively disabled, so a focused row keeps
+   * its focus and the Tab stop stays; the caller says why the list is held.
    */
   type Named = { label: string; labelledby?: undefined } | { labelledby: string; label?: undefined };
 
@@ -31,6 +35,7 @@
     labelledby,
     describedby,
     onchange,
+    disabled = false,
     row,
   }: Named & {
     options: T[];
@@ -38,6 +43,8 @@
     /** Id(s) of the page's text that says what the choice is for. */
     describedby?: string;
     onchange?: (id: string) => void;
+    /** The list is held while the caller writes the choice; the caller says why. */
+    disabled?: boolean;
     row?: Snippet<[T]>;
   } = $props();
 
@@ -62,7 +69,7 @@
 
   function choose(index: number) {
     const option = options[index];
-    if (!option || option.disabledReason || option.id === value) return;
+    if (disabled || !option || option.disabledReason || option.id === value) return;
     if (onchange) onchange(option.id);
     else value = option.id;
   }
@@ -73,6 +80,7 @@
     const next = nextIndex(all.indexOf(event.currentTarget as HTMLElement), options.length, event.key, { orientation: 'both', isDisabled: off });
     if (next === null) return;
     event.preventDefault();
+    if (disabled) return;
     choose(next);
     const target = all[next];
     if (!target) return;
@@ -99,7 +107,15 @@
 </script>
 
 {#if options.length > 0}
-  <div class="option-list" role="radiogroup" aria-label={label} aria-labelledby={labelledby} aria-describedby={describedby} bind:this={root}>
+  <div
+    class="option-list"
+    role="radiogroup"
+    aria-label={label}
+    aria-labelledby={labelledby}
+    aria-describedby={describedby}
+    aria-disabled={disabled ? 'true' : undefined}
+    bind:this={root}
+  >
     {#each options as option, index (option.id)}
       {@const checked = option.id === value}
       <button
@@ -107,11 +123,14 @@
         class="option"
         role="radio"
         aria-checked={checked}
-        aria-disabled={option.disabledReason ? 'true' : undefined}
+        aria-disabled={disabled || option.disabledReason ? 'true' : undefined}
         aria-labelledby={partId(index, 'name')}
         aria-describedby={described(option, index)}
         tabindex={index === stop ? 0 : -1}
         onclick={() => choose(index)}
+        onmousedown={(event) => {
+          if (disabled) event.preventDefault();
+        }}
         {onkeydown}
       >
         <span class="mark" class:on={checked} aria-hidden="true"></span>

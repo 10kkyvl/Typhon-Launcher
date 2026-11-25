@@ -184,6 +184,79 @@ describe('OptionList: the value', () => {
   });
 });
 
+describe('OptionList: held while the caller writes', () => {
+  const group = () => screen.getByRole('radiogroup', { name: 'Folder' });
+  const rowStates = () => screen.getAllByRole('radio').map((row) => row.getAttribute('aria-disabled'));
+
+  it('says so on the group and on every row, and draws no reason of its own', () => {
+    renderDom(OptionListHarness, { options: FOLDERS, start: 'a', disabled: true });
+    expect(group().getAttribute('aria-disabled')).toBe('true');
+    expect(rowStates()).toEqual(['true', 'true', 'true', 'true']);
+    expect(screen.getAllByRole('radio').map((row) => (row as HTMLButtonElement).disabled)).toEqual([false, false, false, false]);
+    expect(document.querySelectorAll('.reason')).toHaveLength(1);
+    expect(description(radio('C:/Saves/Hades'))).toBe('Changed today 12 MB');
+  });
+
+  for (const held of ['bound', 'through onchange'] as const) {
+    it(`no key and no press chooses, reports, writes or moves focus (${held})`, async () => {
+      const asked: string[] = [];
+      const through = held === 'bound' ? undefined : (id: string) => (asked.push(id), true);
+      const { user } = renderDom(OptionListHarness, { options: FOLDERS, start: 'b', disabled: true, through });
+      radio(LONG).focus();
+
+      for (const key of ['{ArrowDown}', '{ArrowUp}', '{ArrowRight}', '{ArrowLeft}', '{Home}', '{End}', ' ', '{Enter}']) {
+        await user.keyboard(key);
+        expect(document.activeElement, key).toBe(radio(LONG));
+      }
+      await user.click(radio('E:/Cloud/Hades'));
+      expect(document.activeElement).toBe(radio(LONG));
+
+      expect(asked).toEqual([]);
+      expect(screen.getByRole('status').textContent).toBe('b');
+      expect(checked()).toEqual([radio(LONG)]);
+    });
+  }
+
+  it('swallows the arrows it ignores, so the dialog body does not scroll under a held list', () => {
+    renderDom(OptionListHarness, { options: FOLDERS, start: 'a', disabled: true });
+    const row = radio('C:/Saves/Hades');
+    row.focus();
+    const event = new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true });
+    row.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('keeps the focused row focused and the Tab stop where it was when it turns on', async () => {
+    const { user, rerender } = renderDom(OptionListHarness, { options: FOLDERS, start: 'd', disabled: false });
+    radio('E:/Cloud/Hades').focus();
+
+    await rerender({ options: FOLDERS, start: 'd', disabled: true });
+
+    expect(document.activeElement).toBe(radio('E:/Cloud/Hades'));
+    expect(radio('E:/Cloud/Hades')).toHaveProperty('disabled', false);
+    expect(screen.getAllByRole('radio').map((row) => row.tabIndex)).toEqual([-1, -1, -1, 0]);
+    await user.tab();
+    expect(document.activeElement).toBe(after());
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(radio('E:/Cloud/Hades'));
+  });
+
+  it('gives everything back when it turns off', async () => {
+    const { user, rerender } = renderDom(OptionListHarness, { options: FOLDERS, start: 'a', disabled: true });
+    radio('C:/Saves/Hades').focus();
+
+    await rerender({ options: FOLDERS, start: 'a', disabled: false });
+
+    expect(group().hasAttribute('aria-disabled')).toBe(false);
+    expect(rowStates()).toEqual([null, null, 'true', null]);
+    await user.keyboard('{ArrowDown}');
+    expect(document.activeElement).toBe(radio(LONG));
+    expect(screen.getByRole('status').textContent).toBe('b');
+    await user.click(radio('E:/Cloud/Hades'));
+    expect(screen.getByRole('status').textContent).toBe('d');
+  });
+});
+
 describe('OptionList: rows that change under it', () => {
   it('keeps focus in the list when the focused row leaves: the chosen id is gone, so focus goes to the first row', async () => {
     const { rerender } = renderDom(OptionListHarness, { options: FOLDERS, start: 'b' });
