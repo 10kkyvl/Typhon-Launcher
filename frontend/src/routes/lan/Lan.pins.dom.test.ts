@@ -127,7 +127,7 @@ describe('Lan pins: the actions', () => {
     transfers.set([transfer({ downloaded: 0 })]);
     const { user } = renderDom(Lan);
 
-    await user.click(rowButton('Celeste', 'transfers.lanCancelLabel'));
+    await user.click(rowButton('Celeste', 'transfers.lanCancelFor'));
 
     expect(cancel).toHaveBeenCalledExactlyOnceWith('t1');
   });

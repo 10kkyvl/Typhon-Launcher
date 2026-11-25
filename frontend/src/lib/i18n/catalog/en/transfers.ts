@@ -79,7 +79,6 @@ export const transfers: Record<TransfersKey, Message> = {
   'transfers.lanStopSharing': 'Stop sharing',
   'transfers.lanTransfersHeading': 'Transfers',
   'transfers.lanNoTransfers': 'No active transfers.',
-  'transfers.lanCancelLabel': 'Cancel',
   'transfers.lanReceiving': 'Receiving…',
   'transfers.lanReceivingPercent': 'Receiving… {percent}%',
   'transfers.lanReceived': 'Received',

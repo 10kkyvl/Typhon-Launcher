@@ -76,7 +76,6 @@ export const transfers = {
   'transfers.lanStopSharing': 'Перестать раздавать',
   'transfers.lanTransfersHeading': 'Передачи',
   'transfers.lanNoTransfers': 'Нет активных передач.',
-  'transfers.lanCancelLabel': 'Отменить',
   'transfers.lanReceiving': 'Получение…',
   'transfers.lanReceivingPercent': 'Получение… {percent}%',
   'transfers.lanReceived': 'Получено',

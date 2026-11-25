@@ -114,7 +114,7 @@ export function rowOf(title: string): HTMLElement {
   return row;
 }
 
-/** The button of `title`'s row whose name starts with `key`'s words. */
-export function rowButton(title: string, key: 'transfers.lanDownload' | 'transfers.lanStopSharing' | 'transfers.lanCancelLabel'): HTMLElement {
-  return within(rowOf(title)).getByRole('button', { name: new RegExp(`^${escaped(msg(key))}`) });
+/** The button of `title`'s row whose name starts with `key`'s words for that row's game. */
+export function rowButton(title: string, key: 'transfers.lanDownload' | 'transfers.lanStopSharing' | 'transfers.lanCancelFor'): HTMLElement {
+  return within(rowOf(title)).getByRole('button', { name: new RegExp(`^${escaped(msg(key, { title }))}`) });
 }
