@@ -276,10 +276,15 @@ func (s *Service) onSettingsChanged(next settings.Settings) {
 		}
 		if err := s.enable(root); err != nil {
 			slog.Error("enable lan sharing", "error", err)
+			return
 		}
+		// With no shares nothing announces, so nothing else would send the
+		// new session's figures.
+		s.emit("lan:stats", s.StatsOf())
 		return
 	}
 	s.disable()
+	s.emit("lan:stats", s.StatsOf())
 }
 
 // enable starts the LAN client and its background goroutines. It is a
