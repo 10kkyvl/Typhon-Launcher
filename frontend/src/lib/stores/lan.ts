@@ -49,6 +49,8 @@ let awaitingAnswers = 0;
 const ended = new Map<string, { item: Transfer; said: boolean }>();
 
 function upsertTransfer(item: Transfer) {
+  // Go's progress event can land after its report that the transfer ended.
+  if (item.status === 'receiving' && ended.has(item.id)) return;
   // A failure is said by the transfer the list held: the row leaves, and nothing else would say why.
   const held = get(transfers).some((t) => t.id === item.id);
   if (item.status === 'failed' && held) sayFailed(item);

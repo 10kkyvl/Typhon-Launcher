@@ -257,6 +257,21 @@ describe('lan store pins: answers', () => {
     expect(toast).not.toHaveBeenCalled();
   });
 
+  it('a progress event that arrives after the transfer was reported cancelled does not bring it back either', async () => {
+    const { service, store } = await load();
+    let answer!: (value: never) => void;
+    vi.mocked(service.receive).mockReturnValueOnce(new Promise((resolve) => (answer = resolve)) as never);
+
+    const done = store.receive('hash', 'p1');
+    handlers['lan:transfer']({ data: makeTransfer({ status: 'cancelled' }) });
+    handlers['lan:transfer']({ data: makeTransfer() });
+    expect(get(store.transfers)).toEqual([]);
+    answer(makeTransfer() as never);
+    await done;
+
+    expect(get(store.transfers)).toEqual([]);
+  });
+
   it('a transfer reported failed before Go’s answer to its download is said once and not brought back', async () => {
     const { service, store } = await load();
     const { toast } = await import('./toasts');
