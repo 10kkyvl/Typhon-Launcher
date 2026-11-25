@@ -11,6 +11,7 @@
     onclose,
     errorText = (err: unknown) => codeText(err),
     returnFocus,
+    live = false,
   }: {
     prompt: ConfirmPrompt;
     /** The action. While it runs the dialog cannot be dismissed; when it rejects, the dialog stays open with the error. */
@@ -24,6 +25,9 @@
     errorText?: (err: unknown) => string;
     /** Where focus goes on close when the element that opened the dialog is gone (a menu item). */
     returnFocus?: () => HTMLElement | null | undefined;
+    /** The question's text can change while the dialog is open (it follows data): a change is then said
+     *  to a screen reader, once and whole. The first reading comes with the dialog either way. */
+    live?: boolean;
   } = $props();
 
   const uid = $props.id();
@@ -58,7 +62,7 @@
 </script>
 
 <Modal open title={prompt.title} width="44rem" dismissible={!running} busy={running} describedby={textId} {returnFocus} onclose={cancel}>
-  <p class="text" id={textId}>{prompt.text}</p>
+  <p class="text" id={textId} aria-live={live ? 'polite' : undefined} aria-atomic={live ? 'true' : undefined}>{prompt.text}</p>
   {#if prompt.note}
     <p class="note">{prompt.note}</p>
   {/if}

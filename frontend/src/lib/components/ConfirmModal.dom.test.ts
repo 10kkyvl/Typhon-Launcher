@@ -31,7 +31,7 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
-function confirmDialog(props: { prompt?: ConfirmPrompt; onconfirm: () => void | Promise<void>; errorText?: (err: unknown) => string }) {
+function confirmDialog(props: { prompt?: ConfirmPrompt; onconfirm: () => void | Promise<void>; errorText?: (err: unknown) => string ; live?: boolean }) {
   const onclose = vi.fn();
   const view = render(ConfirmModal, { target: app, props: { prompt: remove, onclose, ...props } });
   const keys = user();
@@ -46,6 +46,20 @@ describe('ConfirmModal in a DOM', () => {
 
     expect(document.getElementById(dialog.getAttribute('aria-describedby') ?? '')?.textContent).toBe('Files stay on disk.');
     expect(document.activeElement).toBe(button(msg('common.cancel')));
+  });
+
+  // A question whose words can change while it is open (a count that follows a rescan) says the change;
+  // any other question is read once, with the dialog.
+  it('says a changed text again only when asked to', () => {
+    const plain = confirmDialog({ onconfirm: vi.fn() });
+    const quiet = document.getElementById(plain.dialog.getAttribute('aria-describedby') ?? '');
+    expect(quiet?.hasAttribute('aria-live')).toBe(false);
+    plain.unmount();
+
+    const said = confirmDialog({ onconfirm: vi.fn(), live: true });
+    const text = document.getElementById(said.dialog.getAttribute('aria-describedby') ?? '');
+    expect(text?.getAttribute('aria-live')).toBe('polite');
+    expect(text?.getAttribute('aria-atomic')).toBe('true');
   });
 
   it('Enter on open answers the safe action only', async () => {
