@@ -18,7 +18,6 @@
     note = '',
     onready = undefined,
   }: { open?: boolean; title?: string; note?: string; onready?: (next: Settings) => void } = $props();
-  const uid = $props.id();
 
   let parent = $state('');
   let proposed = $state('');
