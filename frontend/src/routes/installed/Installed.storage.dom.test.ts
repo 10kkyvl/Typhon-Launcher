@@ -4,7 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import type { LibraryGame } from '../../lib/services/library';
 import type { StorageInfo } from '../../lib/services/system';
+import { tick } from 'svelte';
+import type { MoveJob } from '../../lib/services/relocate';
+import { getStorageInfo } from '../../lib/services/system';
 import { libraryGames, libraryLoaded } from '../../lib/stores/library';
+import { moves } from '../../lib/stores/relocate';
 import { route } from '../../lib/stores/router';
 import { settings } from '../../lib/stores/settings';
 import { storageFailed, storageInfo } from '../../lib/stores/storage';
@@ -52,6 +56,7 @@ afterEach(() => {
   settings.set(null);
   storageInfo.set(null);
   storageFailed.set(false);
+  moves.set([]);
   Reflect.deleteProperty(Element.prototype, 'scrollIntoView');
   vi.clearAllMocks();
   document.body.replaceChildren();
@@ -152,5 +157,73 @@ describe('Installed: the storage card', () => {
     expect(notice.textContent).toContain(msg('games.installedStorageLoadFailed'));
     expect(within(notice).getByRole('button', { name: msg('common.retry') })).toBeTruthy();
     expect(screen.queryByText(msg('games.installedStorageTitle'))).toBeNull();
+  });
+});
+
+describe('Installed: the storage numbers stay true', () => {
+  const reads = () => vi.mocked(getStorageInfo).mock.calls.length;
+  const move = (stage: MoveJob['stage']) => ({ id: 'm1', scope: 'game', stage, gameId: 'g-a', title: 'A' }) as MoveJob;
+
+  it('are read when the screen is entered', () => {
+    renderDom(Installed);
+
+    expect(reads()).toBe(1);
+  });
+
+  it('are read again when an installed game comes, goes, moves or is measured, not when a game merely changes', async () => {
+    libraryGames.set([game('g-a', 'A', 10 * GB)]);
+    renderDom(Installed);
+    await tick();
+
+    libraryGames.set([{ ...game('g-a', 'A', 10 * GB), lastPlayed: '2026-11-20T10:00:00Z' } as LibraryGame]);
+    await tick();
+    expect(reads()).toBe(1);
+
+    libraryGames.set([game('g-a', 'A', 12 * GB)]);
+    await tick();
+    expect(reads()).toBe(2);
+
+    libraryGames.set([game('g-a', 'A', 12 * GB, { installDir: 'C:\\Moved\\A' })]);
+    await tick();
+    expect(reads()).toBe(3);
+
+    libraryGames.set([]);
+    await tick();
+    expect(reads()).toBe(4);
+  });
+
+  it('are read again when a move ends', async () => {
+    renderDom(Installed);
+    moves.set([move('copy')]);
+    await tick();
+    expect(reads()).toBe(1);
+
+    moves.set([move('done')]);
+    await tick();
+
+    expect(reads()).toBe(2);
+  });
+
+  it('follow the library folder Go reads, not the games folder', async () => {
+    renderDom(Installed);
+
+    settings.set({ libraryPath: 'C:\\Games', gamesPath: 'E:\\Elsewhere' } as NonNullable<Parameters<typeof settings.set>[0]>);
+    await tick();
+    expect(reads()).toBe(1);
+
+    settings.set({ libraryPath: 'D:\\Library', gamesPath: 'E:\\Elsewhere' } as NonNullable<Parameters<typeof settings.set>[0]>);
+    await tick();
+    expect(reads()).toBe(2);
+  });
+
+  it('are no longer followed once the screen is left', async () => {
+    const view = renderDom(Installed);
+    view.unmount();
+
+    libraryGames.set([game('g-a', 'A', 10 * GB)]);
+    moves.set([move('done')]);
+    await tick();
+
+    expect(reads()).toBe(1);
   });
 });

@@ -2,10 +2,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { get, writable } from 'svelte/store';
 
 const getStorageInfo = vi.fn();
-const settings = writable<{ libraryPath: string } | null>({ libraryPath: 'D:\Games' });
+const settings = writable<{ libraryPath: string; gamesPath?: string } | null>({ libraryPath: 'D:\Games' });
+type Game = { id: string; installDir: string; sizeBytes: number; sizeUnknown?: boolean; title?: string };
+const installedGames = writable<Game[]>([]);
+const activeMove = writable<{ id: string } | null>(null);
 
 vi.mock('../services/system', () => ({ getStorageInfo }));
 vi.mock('./settings', () => ({ settings }));
+vi.mock('./library', () => ({ installedGames }));
+vi.mock('./relocate', () => ({ activeMove }));
 
 const info = { path: 'D:\Games', volume: 'D:', filesystem: 'NTFS', totalBytes: 100, freeBytes: 40, usedBytes: 60 };
 
@@ -17,6 +22,8 @@ async function load() {
 beforeEach(() => {
   vi.clearAllMocks();
   settings.set({ libraryPath: 'D:\Games' });
+  installedGames.set([]);
+  activeMove.set(null);
 });
 
 describe('library storage', () => {
@@ -87,5 +94,40 @@ describe('library storage', () => {
     expect(getStorageInfo).not.toHaveBeenCalled();
     expect(get(store.storageInfo)).toBeNull();
     expect(get(store.storageFailed)).toBe(false);
+  });
+});
+
+describe('following the library storage', () => {
+  const game: Game = { id: 'g1', installDir: 'D:\\Games\\One', sizeBytes: 10 };
+
+  it('reads now, and again on each change that moves the numbers, until it is disposed', async () => {
+    getStorageInfo.mockResolvedValue(info);
+    installedGames.set([game]);
+    const store = await load();
+
+    const stop = store.followStorage();
+    expect(getStorageInfo).toHaveBeenCalledTimes(1);
+
+    installedGames.set([{ ...game, title: 'renamed' }]);
+    settings.set({ libraryPath: get(settings)?.libraryPath ?? '', gamesPath: 'E:\\Other' });
+    expect(getStorageInfo).toHaveBeenCalledTimes(1);
+
+    installedGames.set([{ ...game, sizeUnknown: true }]);
+    expect(getStorageInfo).toHaveBeenCalledTimes(2);
+    installedGames.set([]);
+    expect(getStorageInfo).toHaveBeenCalledTimes(3);
+    settings.set({ libraryPath: 'F:\\Library' });
+    expect(getStorageInfo).toHaveBeenCalledTimes(4);
+    activeMove.set({ id: 'm1' });
+    expect(getStorageInfo).toHaveBeenCalledTimes(4);
+    activeMove.set(null);
+    expect(getStorageInfo).toHaveBeenCalledTimes(5);
+
+    stop();
+    installedGames.set([game]);
+    activeMove.set({ id: 'm2' });
+    activeMove.set(null);
+    expect(getStorageInfo).toHaveBeenCalledTimes(5);
+    await vi.waitFor(() => expect(get(store.storageInfo)).toEqual(info));
   });
 });

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import Page from '../../lib/components/Page.svelte';
   import { Gamepad2, Plus, RefreshCw, Search } from '@lucide/svelte';
   import AddImageModal from '../../lib/components/AddImageModal.svelte';
@@ -16,6 +16,7 @@
   import { installedGames, libraryLoaded, libraryLoadError, loadLibrary, runningGames } from '../../lib/stores/library';
   import { isEmulated } from '../../lib/library/emulation';
   import { refreshMissingImages } from '../../lib/stores/missingImages';
+  import { followStorage } from '../../lib/stores/storage';
   import { externalLabel } from '../../lib/library/external';
   import { loadArt } from '../../lib/stores/metadata';
   import { toast } from '../../lib/stores/toasts';
@@ -32,6 +33,8 @@
 
   let search = $state('');
   let sort = $state<Sort>('recent');
+
+  onMount(followStorage);
 
   // Журнал совместимости набирается сам из исходов запусков. Перечитываем его
   // при каждой смене состава запущенных игр: сессия только что закончилась —
