@@ -42,6 +42,8 @@
   let detailsReleaseId = $state<string | null>(null);
   let statusFilter = $state('all');
   let retrying = $state(false);
+  // The state each switch asked Go for, by source, until Go answers; then the source's own shows again.
+  let asked = $state<Record<string, boolean>>({});
   let list = $state<HTMLElement>();
 
   const loadFailed = $derived(!$sourcesLoaded && $sourcesLoadError != null);
@@ -110,12 +112,23 @@
     detailsOpen = true;
   }
 
+  /** A refusal is said once, by the store; the switch then shows the source as Go still holds it. */
+  async function onToggle(source: Source, enabled: boolean) {
+    if (source.id in asked) return;
+    asked = { ...asked, [source.id]: enabled };
+    try {
+      await toggle(source.id, enabled);
+    } finally {
+      const next = { ...asked };
+      delete next[source.id];
+      asked = next;
+    }
+  }
+
   async function onSourceMenu(source: Source, action: string) {
     if (action === 'refresh') {
       if (source.status === 'updating') return;
       await refresh(source.id);
-    } else if (action === 'toggle') {
-      await toggle(source.id, !source.enabled);
     } else if (action === 'details') {
       openDetails(source.id);
     } else if (action === 'remove') {
@@ -189,7 +202,9 @@
           <SourceRow
             {source}
             live={source.status === 'updating' ? $sourceProgress[source.id] : undefined}
+            enabled={asked[source.id] ?? source.enabled}
             onopen={openDetails}
+            ontoggle={(enabled) => onToggle(source, enabled)}
             onaction={(action) => onSourceMenu(source, action)}
           />
         {/each}

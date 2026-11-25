@@ -56,12 +56,13 @@ describe('Sources: a row shows its source', () => {
     expect(within(rowOf('Main feed')).queryByRole('progressbar')).toBeNull();
   });
 
-  it('a disabled source says so, and its menu offers to enable it', async () => {
+  // R6: the switch on the row says it is off (Sources.toggle.dom.test.ts).
+  it('R6: a disabled source says so, and its switch is off', () => {
     sources.set([source({ enabled: false, status: 'disabled' })]);
     show();
 
     expect(within(rowOf('Main feed')).getByText(msg('transfers.sourcesStatusDisabled'))).toBeTruthy();
-    expect(await menuItems('Main feed')).toContainEqual([msg('transfers.sourcesEnableAction'), false]);
+    expect(within(rowOf('Main feed')).getByRole('switch').getAttribute('aria-checked')).toBe('false');
   });
 
   it('an updating source with no stage heard yet says it is updating, and its refresh item is off', async () => {

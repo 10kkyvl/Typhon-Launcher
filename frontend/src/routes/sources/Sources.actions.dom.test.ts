@@ -19,7 +19,7 @@ import { refreshingAll, sources } from '../../lib/stores/sources';
 import { acceptSourcesNotice } from '../../lib/stores/sourcesNotice';
 import { user } from '../../lib/testing/dom';
 import Sources from './Sources.svelte';
-import { acceptNotice, MAIN, MIRROR, menuButton, mountPoint, OLD, pick, resetScreen, rowNames, toastsSaid } from './sourcesTesting';
+import { acceptNotice, MAIN, MIRROR, menuButton, mountPoint, pick, resetScreen, rowNames, toastsSaid } from './sourcesTesting';
 
 vi.mock('@wailsio/runtime', async () => (await import('../../lib/testing/dom')).wailsRuntime());
 vi.mock('../../lib/services/backend', () => ({ inWails: false }));
@@ -72,7 +72,8 @@ const show = () => render(Sources, { target: app, props: {} });
 const removeDialog = () => screen.getByRole('dialog', { name: msg('transfers.sourcesRemoveAction') });
 
 describe('Sources: the row menu', () => {
-  it('offers refresh, disable, details and remove, in that order', async () => {
+  // R6: the toggle moved to a switch on the row (Sources.toggle.dom.test.ts).
+  it('R6: offers refresh, details and remove, in that order', async () => {
     sources.set([MAIN]);
     show();
 
@@ -80,7 +81,6 @@ describe('Sources: the row menu', () => {
 
     expect(screen.getAllByRole('menuitem').map((item) => item.textContent?.trim())).toEqual([
       msg('transfers.sourcesRefreshNow'),
-      msg('transfers.sourcesDisableAction'),
       msg('transfers.sourcesDetailsAction'),
       msg('transfers.sourcesRemoveAction'),
     ]);
@@ -106,28 +106,6 @@ describe('Sources: the row menu', () => {
     await user().click(screen.getByRole('menuitem', { name: msg('transfers.sourcesUpdatingEllipsis') }));
 
     expect(refreshSource).not.toHaveBeenCalled();
-  });
-
-  it('Disable asks Go to turn the source off, Enable to turn a disabled one on', async () => {
-    sources.set([MAIN, OLD]);
-    show();
-
-    await pick(user(), 'Main feed', msg('transfers.sourcesDisableAction'));
-    await waitFor(() => expect(setSourceEnabled).toHaveBeenCalledWith('s1', false));
-    await pick(user(), 'Old feed', msg('transfers.sourcesEnableAction'));
-    await waitFor(() => expect(setSourceEnabled).toHaveBeenCalledWith('s3', true));
-    expect(setSourceEnabled).toHaveBeenCalledTimes(2);
-  });
-
-  it('a refused toggle is said once, and the source stays as Go has it', async () => {
-    vi.mocked(setSourceEnabled).mockRejectedValueOnce(new Error('typhon:sources.source_busy: busy'));
-    sources.set([MAIN]);
-    show();
-
-    await pick(user(), 'Main feed', msg('transfers.sourcesDisableAction'));
-
-    await waitFor(() => expect(toastsSaid()).toEqual([['danger', sourceErrorText(new Error('typhon:sources.source_busy'))]]));
-    expect(get(sources)[0].enabled).toBe(true);
   });
 
   it('Details opens the dialog of that source', async () => {

@@ -6,6 +6,7 @@
   import Spinner from '../../lib/components/Spinner.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import TextLink from '../../lib/components/TextLink.svelte';
+  import Toggle from '../../lib/components/Toggle.svelte';
   import Tooltip from '../../lib/components/Tooltip.svelte';
   import { msg } from '../../lib/i18n';
   import { sourceLocation, type Source, type SourceHealth, type SourceStatus } from '../../lib/services/sources';
@@ -22,14 +23,20 @@
   let {
     source,
     live,
+    enabled,
     onopen,
+    ontoggle,
     onaction,
   }: {
     source: Source;
     /** The refresh stage Go reports while the source updates. */
     live: SourceProgress | undefined;
+    /** What the switch shows: the state the page asked Go for while Go answers, else the source's own. */
+    enabled: boolean;
     /** Opens the source's details. */
     onopen: (id: string) => void;
+    /** The switch was pressed: asks for the source on (true) or off. */
+    ontoggle: (enabled: boolean) => void;
     /** An item of the row menu was picked. */
     onaction: (action: string) => void;
   } = $props();
@@ -89,12 +96,13 @@
         label: source.status === 'updating' ? msg('transfers.sourcesUpdatingEllipsis') : msg('transfers.sourcesRefreshNow'),
         disabled: source.status === 'updating',
       },
-      { id: 'toggle', label: source.enabled ? msg('transfers.sourcesDisableAction') : msg('transfers.sourcesEnableAction') },
       { id: 'details', label: msg('transfers.sourcesDetailsAction') },
       { id: 'remove', label: msg('transfers.sourcesRemoveAction'), danger: true, separator: true },
     ];
   }
 
+  const uid = $props.id();
+  const nameId = `${uid}-name`;
   const badge = $derived(statusBadgeFor(source.status));
   const health = $derived(healthMetaFor(source.health));
   const when = $derived(refreshedAt(source.lastUpdatedAt));
@@ -116,7 +124,7 @@
   </span>
 
   <div class="main">
-    <p class="name">
+    <p class="name" id={nameId}>
       {#if source.insecure}
         <Tooltip text={msg('transfers.sourcesInsecureTooltip')}>{@render open()}</Tooltip>
         <span class="insecure" aria-hidden="true"><ShieldAlert size="1.4rem" strokeWidth={1.8} /></span>
@@ -194,6 +202,9 @@
     </p>
   </div>
 
+  <!-- Named by the source's name the row shows: the switch says whether that source is in use. -->
+  <Toggle checked={enabled} labelledby={nameId} data-row-control="switch" onchange={ontoggle} />
+
   <div class="actions">
     <DropdownMenu items={sourceMenu(source)} onselect={onaction}>
       {#snippet trigger({ props })}
@@ -208,7 +219,7 @@
 <style>
   .row {
     display: grid;
-    grid-template-columns: var(--row-thumb-w) minmax(0, 1fr) minmax(16rem, 22rem) auto;
+    grid-template-columns: var(--row-thumb-w) minmax(0, 1fr) minmax(16rem, 22rem) auto auto;
     align-items: center;
     gap: var(--space-4);
     padding: var(--space-3) var(--space-4);
