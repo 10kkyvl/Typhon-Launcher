@@ -46,7 +46,13 @@ export async function refreshUnread(): Promise<void> {
     counted = true;
   } catch (err) {
     if (owner !== session || request !== latest) return;
-    if (err instanceof AccountError && err.code === 'unauthenticated') return;
+    // The session is gone: the count is no one's now. The player learns of it from the next call
+    // they make, not from a background poll.
+    if (err instanceof AccountError && err.code === 'unauthenticated') {
+      counted = false;
+      unreadReplies.set(0);
+      return;
+    }
     if (failing) return;
     failing = true;
     toast(supportErrorText(err, msg('tickets.pollFailed')), 'danger');

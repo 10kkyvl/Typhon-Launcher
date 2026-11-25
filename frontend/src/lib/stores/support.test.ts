@@ -274,6 +274,24 @@ describe('support polling failures', () => {
     expect(messages()).toEqual([]);
   });
 
+  it('drops the badge when the poll finds the session gone, and counts a session back as a first load', async () => {
+    unread.mockResolvedValue(2);
+    start();
+    authState.set('authenticated');
+    await settle();
+    expect(get(unreadReplies)).toBe(2);
+
+    unread.mockRejectedValue(new AccountError('unauthenticated'));
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    expect(get(unreadReplies)).toBe(0);
+    expect(get(authState)).toBe('authenticated');
+
+    unread.mockResolvedValue(2);
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    expect(get(unreadReplies)).toBe(2);
+    expect(messages()).toEqual([]);
+  });
+
   it('falls back to the polling message for an unknown failure', async () => {
     unread.mockRejectedValue(new Error('boom'));
     start();
