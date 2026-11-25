@@ -600,6 +600,26 @@ func (s *Service) GetUpdates() []Update {
 	return list
 }
 
+// WorkRunning reports whether a game update writes a game's files now: a job
+// of StartUpdate past its download (unpacking, applying a patch, backing up,
+// swapping, cleaning up). The self-update asks it before it quits the
+// launcher, whose shutdown cancels the job and waits for it to put the files
+// back. A job that waits on its download is not counted: downloads resume
+// after a restart.
+//
+//wails:ignore
+func (s *Service) WorkRunning() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for gameID := range s.jobs {
+		u := s.updates[gameID]
+		if u != nil && u.State == StateUpdating && u.Step != "" && u.Step != StepDownload {
+			return true
+		}
+	}
+	return false
+}
+
 //wails:ignore
 func (s *Service) Busy(gameID string) bool {
 	s.mu.Lock()
