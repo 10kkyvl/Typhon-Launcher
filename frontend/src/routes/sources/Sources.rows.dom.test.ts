@@ -231,11 +231,11 @@ describe('Sources: the list', () => {
 
   it('R5: draws no header row of column names', () => {
     sources.set([MAIN]);
-    show();
+    const { container } = show();
 
-    for (const key of ['transfers.sourcesColName', 'transfers.sourcesColStatus', 'transfers.sourcesColUpdated', 'transfers.sourcesColEntries', 'transfers.sourcesColMatched'] as const) {
-      expect(screen.queryByText(msg(key)), key).toBeNull();
-    }
+    expect(screen.queryAllByRole('columnheader')).toEqual([]);
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(container.querySelector('.thead')).toBeNull();
   });
 
   it('R5: the source’s name is the row’s first control, named by the name alone, and opens the details', async () => {
