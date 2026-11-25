@@ -1,9 +1,11 @@
 import { screen, within } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { msg } from '../../lib/i18n';
 import { AccountError } from '../../lib/services/account';
 import {
   accept,
+  block,
   decline,
   profile as fetchProfile,
   refresh,
@@ -113,6 +115,58 @@ describe("a user's page: the pressed control", () => {
 
     expect(declineButton.getAttribute('aria-busy')).toBe('true');
     expect(button(msg('social.relationIncoming')).hasAttribute('aria-busy')).toBe(false);
+  });
+
+  it('while Add runs the menu button is held, saying why, and opens no menu; the answer releases it', async () => {
+    const answer = pending<SendResult>();
+    vi.mocked(sendRequest).mockReturnValue(answer.promise);
+    const { user } = await mount(player());
+    await press(user, msg('social.relationNone'));
+    const more = button(msg('social.moreLabel'));
+
+    expect(more.getAttribute('aria-disabled')).toBe('true');
+    expect(more.hasAttribute('disabled')).toBe(false);
+    expect(description(more)).toBe(msg('social.userActionRunning'));
+    await user.click(more);
+    more.focus();
+    await user.keyboard('{Enter}');
+    await user.keyboard('{ArrowDown}');
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(vi.mocked(block)).not.toHaveBeenCalled();
+
+    answer.resolve({ accepted: false } as SendResult);
+    await vi.waitFor(() => expect(more.hasAttribute('aria-disabled')).toBe(false));
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('menuitem', { name: msg('social.blockLabel') })).toBeTruthy();
+  });
+
+  it("the menu button that holds the focus keeps it while another control's action runs", async () => {
+    vi.mocked(accept).mockReturnValue(new Promise(() => {}));
+    await mount(player({ relation: 'incoming' }));
+    const more = button(msg('social.moreLabel'));
+    more.focus();
+
+    // A pointer press in the macOS WebKit view leaves focus where it was.
+    button(msg('social.relationIncoming')).click();
+    await tick();
+
+    expect(button(msg('social.relationIncoming')).getAttribute('aria-busy')).toBe('true');
+    expect(more.getAttribute('aria-disabled')).toBe('true');
+    expect(more.hasAttribute('disabled')).toBe(false);
+    expect(document.activeElement).toBe(more);
+  });
+
+  it("on a friend's page the friend menu button is held while its unfriend runs", async () => {
+    vi.mocked(unfriend).mockReturnValue(new Promise(() => {}));
+    const { user } = await mount(player({ relation: 'friend' }));
+
+    const more = await press(user, msg('social.moreLabel'));
+    await user.click(screen.getByRole('menuitem', { name: msg('social.unfriendLabel') }));
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: msg('social.unfriendLabel') }));
+
+    await vi.waitFor(() => expect(more.getAttribute('aria-disabled')).toBe('true'));
+    expect(more.hasAttribute('disabled')).toBe(false);
+    expect(description(more)).toBe(msg('social.userActionRunning'));
   });
 
   it('a failed Add leaves the focus on Add, no longer busy', async () => {

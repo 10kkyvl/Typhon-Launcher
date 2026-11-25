@@ -55,6 +55,9 @@
   const waits = (action: string) => offline || (!!busy && busy !== action);
   // '' while online, so a control whose reason comes and goes stays one element and keeps focus.
   const held = $derived(offline ? msg('social.userActionsNeedConnection') : '');
+  // A menu button can hold focus while another control's action runs (a pointer press in WebKit does
+  // not move it), so it is held with a reason rather than disabled, which would drop focus to the page.
+  const menuHeld = $derived(held || (busy ? msg('social.userActionRunning') : ''));
 
   const friendMenu: MenuItem[] = [
     { id: 'unfriend', label: msg('social.unfriendLabel'), danger: true },
@@ -99,7 +102,7 @@
             {#if onmessage}<Button variant="primary" disabled={offline} reason={held} data-relation-control={anchor('write')} onclick={onmessage}>{msg('social.chatWrite')}</Button>{/if}
             <DropdownMenu items={friendMenu} onselect={onaction}>
               {#snippet trigger({ props })}
-                <IconButton {...props} label={msg('social.moreLabel')} disabled={offline} reason={held} data-relation-control={anchor('menu')}>
+                <IconButton {...props} label={msg('social.moreLabel')} disabled={!!menuHeld} reason={menuHeld} data-relation-control={anchor('menu')}>
                   <EllipsisVertical size="1.8rem" strokeWidth={1.8} />
                 </IconButton>
               {/snippet}
@@ -122,7 +125,7 @@
             {/if}
             <DropdownMenu items={blockMenu} onselect={onaction}>
               {#snippet trigger({ props })}
-                <IconButton {...props} label={msg('social.moreLabel')} disabled={offline} reason={held}>
+                <IconButton {...props} label={msg('social.moreLabel')} disabled={!!menuHeld} reason={menuHeld}>
                   <EllipsisVertical size="1.8rem" strokeWidth={1.8} />
                 </IconButton>
               {/snippet}
