@@ -3,7 +3,7 @@ import { get, writable } from 'svelte/store';
 import type { MoveJob } from '../services/relocate';
 
 const getStorageInfo = vi.fn();
-const settings = writable<{ libraryPath: string; gamesPath?: string } | null>({ libraryPath: 'D:\Games' });
+const settings = writable<{ libraryPath: string; gamesPath?: string } | null>({ libraryPath: 'D:\\Games' });
 type Game = { id: string; installDir: string; sizeBytes: number; sizeUnknown?: boolean; title?: string };
 const installedGames = writable<Game[]>([]);
 
@@ -13,7 +13,7 @@ vi.mock('../services/relocate', () => ({ listMoves: vi.fn(async () => []) }));
 vi.mock('./settings', () => ({ settings }));
 vi.mock('./library', () => ({ installedGames }));
 
-const info = { path: 'D:\Games', volume: 'D:', filesystem: 'NTFS', totalBytes: 100, freeBytes: 40, usedBytes: 60 };
+const info = { path: 'D:\\Games', volume: 'D:', filesystem: 'NTFS', totalBytes: 100, freeBytes: 40, usedBytes: 60 };
 
 async function load() {
   vi.resetModules();
@@ -29,7 +29,7 @@ const move = (id: string, gameId: string, stage: MoveJob['stage'] = 'copy') => (
 
 beforeEach(() => {
   vi.clearAllMocks();
-  settings.set({ libraryPath: 'D:\Games' });
+  settings.set({ libraryPath: 'D:\\Games' });
   installedGames.set([]);
 });
 
