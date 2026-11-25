@@ -31,6 +31,7 @@
   import { navigate } from '../../lib/stores/router';
   import { openChat } from '../../lib/stores/messaging';
   import { toast } from '../../lib/stores/toasts';
+  import { focusHandOff } from '../../lib/utils/focusHandOff';
   import { authState, leaveGuest } from '../../lib/stores/user';
   import { msg } from '../../lib/i18n';
   import type { SocialKey } from '../../lib/i18n/catalog/ru/social';
@@ -51,8 +52,8 @@
   let refreshing = $state(false);
   let failure = $state('');
   let missing = $state(false);
-  let busy = $state(false);
   type Action = 'add' | 'cancel' | 'accept' | 'decline' | 'unfriend' | 'block';
+  let busy = $state<Action | ''>('');
   let pending = $state<{ prompt: ConfirmPrompt; action: Action } | null>(null);
 
   // What failed, when the answer carries no code of its own.
@@ -158,7 +159,11 @@
     const action = id as Action;
     if (!current || busy || !(action in FAILED)) return;
     if (action !== 'unfriend' && action !== 'block') {
-      perform(action).catch((err) => toast(failedText(action, err), 'danger'));
+      const handOff = focusHandOff();
+      perform(action).then(
+        () => handOff(relationControl),
+        (err: unknown) => toast(failedText(action, err), 'danger'),
+      );
       return;
     }
     const label = current.displayName || current.username;
@@ -198,7 +203,7 @@
   async function perform(action: Action): Promise<void> {
     const current = data;
     if (!current || busy) return;
-    busy = true;
+    busy = action;
     try {
       toast(await change(action, current), 'success');
       if (action === 'block') {
@@ -214,9 +219,12 @@
       const failed = (await load(current.username, true)) ?? listFailed;
       if (failed) toast(accountErrorText(failed, msg('social.userRefreshFailed')), 'danger');
     } finally {
-      busy = false;
+      busy = '';
     }
   }
+
+  // UserHeader marks the control that stands for the relation the page now shows.
+  const relationControl = () => profileBox?.querySelector<HTMLElement>('[data-relation-control]');
 
   function signIn(view: 'login' | 'register') {
     leaveGuest(view).catch((err) => toast(accountErrorText(err, msg('social.signInFailed')), 'danger'));
@@ -353,6 +361,7 @@
       onconfirm={() => perform(action)}
       onclose={() => (pending = null)}
       errorText={(err) => failedText(action, err)}
+      returnFocus={relationControl}
     />
   {/if}
 </Page>

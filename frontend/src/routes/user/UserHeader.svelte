@@ -22,7 +22,8 @@
     onmessage,
   }: {
     profile: PublicProfile;
-    busy: boolean;
+    /** The action that is running: its control is busy and the others wait. */
+    busy: string;
     onaction: (id: string) => void;
     onmessage?: () => void;
   } = $props();
@@ -36,6 +37,19 @@
     playing ? (profile.presence?.gameTitle ? msg('social.playingIn', { name: profile.presence.gameTitle }) : msg('social.playing')) : '',
   );
   const pending = $derived(profile.relation === 'none' || profile.relation === 'outgoing' || profile.relation === 'incoming');
+
+  // The control that stands for the relation, where focus lands when an action changes the set of
+  // buttons: a sent request → Cancel request, an accepted one → Write (else the friend menu), a declined
+  // or cancelled request and an unfriend → Add; an incoming request → Accept.
+  const standsFor = $derived.by(() => {
+    if (profile.relation === 'none') return 'add';
+    if (profile.relation === 'outgoing') return 'cancel';
+    if (profile.relation === 'incoming') return 'accept';
+    if (profile.relation === 'friend') return onmessage ? 'write' : 'menu';
+    return '';
+  });
+  const anchor = (control: string) => (standsFor === control ? '' : undefined);
+  const waits = (action: string) => !!busy && busy !== action;
 
   const friendMenu: MenuItem[] = [
     { id: 'unfriend', label: msg('social.unfriendLabel'), danger: true },
@@ -77,27 +91,29 @@
         <div class="head-actions">
           {#if profile.relation === 'friend'}
             <StatusBadge kind="success" label={relationLabel('friend')} />
-            {#if onmessage}<Button variant="primary" onclick={onmessage}>{msg('social.chatWrite')}</Button>{/if}
+            {#if onmessage}<Button variant="primary" data-relation-control={anchor('write')} onclick={onmessage}>{msg('social.chatWrite')}</Button>{/if}
             <DropdownMenu items={friendMenu} onselect={onaction}>
               {#snippet trigger({ props })}
-                <IconButton {...props} label={msg('social.moreLabel')}>
+                <IconButton {...props} label={msg('social.moreLabel')} data-relation-control={anchor('menu')}>
                   <EllipsisVertical size="1.8rem" strokeWidth={1.8} />
                 </IconButton>
               {/snippet}
             </DropdownMenu>
           {:else if pending}
             {#if profile.relation === 'none'}
-              <Button variant="primary" disabled={busy} onclick={() => onaction('add')}>
+              <Button variant="primary" busy={busy === 'add'} disabled={waits('add')} data-relation-control={anchor('add')} onclick={() => onaction('add')}>
                 {relationLabel('none')}
               </Button>
             {:else if profile.relation === 'outgoing'}
               <StatusBadge kind="neutral" label={relationLabel('outgoing')} />
-              <Button variant="ghost" disabled={busy} onclick={() => onaction('cancel')}>{msg('social.cancelRequestButton')}</Button>
+              <Button variant="ghost" busy={busy === 'cancel'} disabled={waits('cancel')} data-relation-control={anchor('cancel')} onclick={() => onaction('cancel')}>
+                {msg('social.cancelRequestButton')}
+              </Button>
             {:else}
-              <Button variant="primary" disabled={busy} onclick={() => onaction('accept')}>
+              <Button variant="primary" busy={busy === 'accept'} disabled={waits('accept')} data-relation-control={anchor('accept')} onclick={() => onaction('accept')}>
                 {relationLabel('incoming')}
               </Button>
-              <Button disabled={busy} onclick={() => onaction('decline')}>{msg('social.declineButton')}</Button>
+              <Button busy={busy === 'decline'} disabled={waits('decline')} onclick={() => onaction('decline')}>{msg('social.declineButton')}</Button>
             {/if}
             <DropdownMenu items={blockMenu} onselect={onaction}>
               {#snippet trigger({ props })}
