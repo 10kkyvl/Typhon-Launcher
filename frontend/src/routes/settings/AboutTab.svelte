@@ -104,7 +104,7 @@
       {/if}
       <SettingsRow label={msg('settings.aboutCheckUpdatesLabel')} hint={checkHint}>
         {#snippet children({ hintId })}
-          <Button size="sm" aria-describedby={hintId} disabled={$selfUpdateChecking} onclick={requestCheck}>
+          <Button size="sm" aria-describedby={hintId} busy={$selfUpdateChecking} onclick={requestCheck}>
             <ListChecks size="1.5rem" strokeWidth={1.8} />
             {$selfUpdateChecking ? msg('settings.aboutCheckingEllipsis') : msg('settings.aboutCheckButtonLabel')}
           </Button>
@@ -112,10 +112,11 @@
       </SettingsRow>
       <SettingsRow
         label={msg('settings.aboutHistoryLabel')}
-        hint={$releaseNotesHistory.length > 0 ? msg('settings.aboutHistoryHasNotes') : msg('settings.aboutHistoryEmpty')}
+        hint={msg('settings.aboutHistoryHasNotes')}
+        disabledReason={$releaseNotesHistory.length > 0 ? undefined : msg('settings.aboutHistoryEmpty')}
       >
-        {#snippet children({ hintId })}
-          <Button size="sm" aria-describedby={hintId} disabled={$releaseNotesHistory.length === 0} onclick={() => (page.historyOpen = true)}>
+        {#snippet children({ hintId, disabled })}
+          <Button size="sm" aria-describedby={hintId} {disabled} onclick={() => (page.historyOpen = true)}>
             <ScrollText size="1.5rem" strokeWidth={1.8} />
             {msg('settings.aboutHistoryButtonLabel')}
           </Button>
@@ -145,7 +146,7 @@
     <Card title={msg('settings.aboutDiagnosticsCardTitle')}>
       <SettingsRow label={msg('settings.aboutLogsLabel')} hint={logsSaveHint}>
         {#snippet children({ hintId })}
-          <Button size="sm" aria-describedby={hintId} disabled={page.logsSaving} onclick={page.saveLogs}>
+          <Button size="sm" aria-describedby={hintId} busy={page.logsSaving} onclick={page.saveLogs}>
             <Download size="1.5rem" strokeWidth={1.8} />
             {page.logsSaving ? msg('settings.aboutLogsSavingEllipsis') : msg('settings.aboutLogsDownloadButton')}
           </Button>
@@ -153,7 +154,7 @@
       </SettingsRow>
       <SettingsRow label={msg('settings.aboutLogsSendButton')} hint={msg('settings.aboutLogsSendConfirmNote')}>
         {#snippet children({ hintId })}
-          <Button size="sm" aria-describedby={hintId} disabled={page.logsSending} onclick={page.openSendLogsConfirm}>
+          <Button size="sm" aria-describedby={hintId} busy={page.logsSending} onclick={page.openSendLogsConfirm}>
             <Send size="1.5rem" strokeWidth={1.8} />
             {page.logsSending ? msg('settings.aboutLogsSendingEllipsis') : msg('settings.aboutLogsSendButton')}
           </Button>

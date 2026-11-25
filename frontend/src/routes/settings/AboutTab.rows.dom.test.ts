@@ -312,7 +312,7 @@ describe('the about tab: the launcher update rows', () => {
     open();
     const history = button(msg('settings.aboutHistoryButtonLabel'));
     expect(history.disabled).toBe(true);
-    expect(await said('settings.aboutHistoryLabel')).toBe(msg('settings.aboutHistoryEmpty'));
+    expect(await said('settings.aboutHistoryLabel')).toBe(`${msg('settings.aboutHistoryEmpty')} ${msg('settings.aboutHistoryHasNotes')}`);
     releaseNotes.set({ currentVersion: '1.4.2', unseen: [], history: [{ version: '1.4.2', publishedAt: '2026-11-01', changes: [] }] });
     await waitFor(() => expect(history.disabled).toBe(false));
     expect(await said('settings.aboutHistoryLabel')).toBe(msg('settings.aboutHistoryHasNotes'));
@@ -483,7 +483,7 @@ describe('the about tab: each control described by its row', () => {
     open();
     await screen.findByText('Terms of use');
     expect(description(button(msg('settings.aboutCheckButtonLabel')))).toBe(msg('settings.aboutInstalledVersion', { version: '1.4.2' }));
-    expect(description(button(msg('settings.aboutHistoryButtonLabel')))).toBe(msg('settings.aboutHistoryEmpty'));
+    expect(description(button(msg('settings.aboutHistoryButtonLabel')))).toBe(`${msg('settings.aboutHistoryEmpty')} ${msg('settings.aboutHistoryHasNotes')}`);
     expect(description(button(msg('settings.aboutLogsDownloadButton')))).toBe(msg('settings.aboutLogsSaveHint'));
     expect(description(button(msg('settings.aboutLogsSendButton')))).toBe(msg('settings.aboutLogsSendConfirmNote'));
     expect(description(button(msg('tickets.writeSupport')))).toBe(msg('tickets.settingsHint'));
@@ -539,5 +539,71 @@ describe('the about tab: markup', () => {
   it('has no local row of its own', () => {
     expect(about).not.toMatch(/class="rows?\b|row-text|row-label|row-sub/);
     expect((markup.match(/<SettingsRow\b/g) ?? []).length).toBeGreaterThanOrEqual(14);
+  });
+});
+
+// A button its own press puts to work keeps focus: busy, not disabled. A button that is off says why,
+// the reason first.
+describe('the about tab: buttons at work and buttons that are off', () => {
+  const atWork = (target: HTMLButtonElement) => [target.disabled, target.getAttribute('aria-busy'), document.activeElement === target];
+
+  it('keeps Check in focus and busy while it checks', async () => {
+    const check = later<SelfUpdateStatus>();
+    vi.mocked(checkForUpdate).mockReturnValueOnce(check.promise);
+    open();
+    const press = button(msg('settings.aboutCheckButtonLabel'));
+    press.focus();
+    await user().keyboard('{Enter}');
+    await waitFor(() => expect(checkForUpdate).toHaveBeenCalledOnce());
+    expect(atWork(press)).toEqual([false, 'true', true]);
+    check.resolve({ state: 'idle', currentVersion: '1.4.2' });
+    await waitFor(() => expect(press.hasAttribute('aria-busy')).toBe(false));
+    expect(document.activeElement).toBe(press);
+  });
+
+  it('keeps Download logs in focus and busy while it saves', async () => {
+    const save = later<typeof BUNDLE>();
+    vi.mocked(exportLogs).mockReturnValueOnce(save.promise);
+    open();
+    const press = button(msg('settings.aboutLogsDownloadButton'));
+    press.focus();
+    await user().keyboard('{Enter}');
+    await waitFor(() => expect(exportLogs).toHaveBeenCalledOnce());
+    expect(atWork(press)).toEqual([false, 'true', true]);
+    save.resolve(BUNDLE);
+    await waitFor(() => expect(press.hasAttribute('aria-busy')).toBe(false));
+    expect(document.activeElement).toBe(press);
+  });
+
+  it('returns focus to Send to us after the question, busy while it sends, and a press there tries again after a failure', async () => {
+    const send = later<{ id: string; dropped: string[] }>();
+    vi.mocked(sendLogs).mockReturnValueOnce(send.promise);
+    open();
+    const press = await screen.findByRole('button', { name: msg('settings.aboutLogsSendButton') }) as HTMLButtonElement;
+    press.focus();
+    await user().keyboard('{Enter}');
+    const dialog = await screen.findByRole('dialog');
+    await user().click(within(dialog).getByRole('button', { name: msg('settings.aboutLogsSendConfirmButton') }));
+    await waitFor(() => expect(sendLogs).toHaveBeenCalledOnce());
+    await waitFor(() => expect(dialog.isConnected).toBe(false));
+    await waitFor(() => expect(document.activeElement).toBe(press));
+    expect(atWork(press)).toEqual([false, 'true', true]);
+
+    send.reject(new Error('typhon:diagnostics.log_upload_network: dial tcp'));
+    await screen.findByRole('alert');
+    expect(atWork(press)).toEqual([false, null, true]);
+    await user().keyboard('{Enter}');
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+    expect(sendLogs).toHaveBeenCalledOnce();
+  });
+
+  it('says why the update history is off, the reason first', async () => {
+    open();
+    const history = button(msg('settings.aboutHistoryButtonLabel'));
+    expect(history.disabled).toBe(true);
+    expect(description(history)).toBe(`${msg('settings.aboutHistoryEmpty')} ${msg('settings.aboutHistoryHasNotes')}`);
+    releaseNotes.set({ currentVersion: '1.4.2', unseen: [], history: [{ version: '1.4.2', publishedAt: '2026-11-01', changes: [] }] });
+    await waitFor(() => expect(history.disabled).toBe(false));
+    expect(description(history)).toBe(msg('settings.aboutHistoryHasNotes'));
   });
 });
