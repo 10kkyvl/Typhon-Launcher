@@ -1,6 +1,6 @@
 <script lang="ts">
   import Page from '../../lib/components/Page.svelte';
-  import { Lock, LogIn, UserRound } from '@lucide/svelte';
+  import { Lock, LogIn, UserRound, Users } from '@lucide/svelte';
   import ProfileCanvas from '../../lib/components/ProfileCanvas.svelte';
   import ProfileCover from '../../lib/components/ProfileCover.svelte';
   import Button from '../../lib/components/Button.svelte';
@@ -8,6 +8,7 @@
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import EmptyState from '../../lib/components/EmptyState.svelte';
   import Notice from '../../lib/components/Notice.svelte';
+  import SocialConsentScreen from '../../lib/components/SocialConsentScreen.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
   import Spinner from '../../lib/components/Spinner.svelte';
   import AboutBlock from '../../lib/components/profile/AboutBlock.svelte';
@@ -30,9 +31,10 @@
   import { openGameByIGDB } from '../../lib/social/openGame';
   import { navigate } from '../../lib/stores/router';
   import { openChat } from '../../lib/stores/messaging';
+  import { needsSocialConsent } from '../../lib/stores/social';
   import { toast } from '../../lib/stores/toasts';
   import { focusHandOff } from '../../lib/utils/focusHandOff';
-  import { authState, leaveGuest } from '../../lib/stores/user';
+  import { authState, isOffline, leaveGuest } from '../../lib/stores/user';
   import { msg } from '../../lib/i18n';
   import type { SocialKey } from '../../lib/i18n/catalog/ru/social';
   import HiddenBadge from '../profile/HiddenBadge.svelte';
@@ -68,6 +70,7 @@
   const failedText = (action: Action, err: unknown) => accountErrorText(err, msg(FAILED[action]));
 
   const isGuest = $derived($authState === 'guest');
+  let consentOpen = $state(false);
   const name = $derived(data ? data.displayName || data.username : '');
   const stranger = $derived(!!data && data.relation !== 'friend' && data.relation !== 'self');
   const closed = $derived(!!data && data.visibility === 'private' && data.relation !== 'self');
@@ -157,7 +160,7 @@
   function act(id: string) {
     const current = data;
     const action = id as Action;
-    if (!current || busy || !(action in FAILED)) return;
+    if (!current || busy || $isOffline || !(action in FAILED)) return;
     if (action !== 'unfriend' && action !== 'block') {
       const handOff = focusHandOff();
       perform(action).then(
@@ -232,7 +235,8 @@
 
   $effect(() => {
     const target = username ?? '';
-    if (isGuest) {
+    // A guest has no account to ask with, and without consent to sync Go refuses every social call.
+    if (isGuest || $needsSocialConsent) {
       data = null;
       loading = false;
       missing = false;
@@ -295,6 +299,15 @@
         <Button onclick={() => signIn('register')}>{msg('social.createAccountButton')}</Button>
       {/snippet}
     </EmptyState>
+  {:else if $needsSocialConsent}
+    <EmptyState level={2} title={msg('social.friendsConsentTitle')} description={msg('social.friendsConsentDesc')}>
+      {#snippet icon()}
+        <Users size="2.2rem" strokeWidth={1.6} />
+      {/snippet}
+      {#snippet actions()}
+        <Button variant="primary" onclick={() => (consentOpen = true)}>{msg('social.friendsEnableSync')}</Button>
+      {/snippet}
+    </EmptyState>
   {:else if loading && !failure}
     <Spinner label={msg('social.loadingEllipsis')} />
   {:else if missing}
@@ -326,7 +339,7 @@
     <div class="profile" class:refreshing bind:this={profileBox}>
       <ProfileCanvas appearance={data.appearance} {autoArt}>
       <ProfileCover appearance={data.appearance} {autoArt} />
-      <UserHeader profile={data} {busy} onaction={act} onmessage={() => data && openChat(chatPeerOf(data))} />
+      <UserHeader profile={data} {busy} offline={$isOffline} onaction={act} onmessage={() => data && openChat(chatPeerOf(data))} />
       {#if closed}
         <Notice tone="info" announce={false}>
           {#snippet icon()}<Lock size="1.6rem" strokeWidth={1.8} />{/snippet}
@@ -358,6 +371,8 @@
       </ProfileCanvas>
     </div>
   {/if}
+
+  <SocialConsentScreen bind:open={consentOpen} />
 
   {#if pending}
     {@const action = pending.action}
