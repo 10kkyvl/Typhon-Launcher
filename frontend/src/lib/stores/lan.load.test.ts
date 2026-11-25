@@ -194,6 +194,89 @@ describe('lan store: the offers poll', () => {
     stop();
   });
 
+  it('sharing turned off in Settings while no screen watched: the first watch empties the offers and reads the figures once', async () => {
+    const { service, store, settings } = await fresh();
+    settings.set({ lanSharing: true });
+    vi.mocked(service.getStats).mockResolvedValueOnce({ ...emptyStats, peersKnown: 3, offersKnown: 5 } as never);
+    vi.mocked(service.getOffers).mockResolvedValueOnce([offer('Portal 2')] as never);
+    await store.initLan();
+    settings.set({ lanSharing: false });
+    vi.mocked(service.getStats).mockClear();
+
+    const stop = store.watchOffers();
+    await vi.advanceTimersByTimeAsync(0);
+    settings.set({ lanSharing: false });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(service.getStats).toHaveBeenCalledTimes(1);
+    expect(get(store.lanStats).peersKnown).toBe(0);
+    expect(get(store.lanStats).offersKnown).toBe(0);
+    expect(get(store.offers)).toEqual([]);
+    stop();
+  });
+
+  it('off, on and off again across watches: each watch that finds sharing off after it was on settles once', async () => {
+    const { service, store, settings } = await fresh();
+    settings.set({ lanSharing: false });
+    let stop = store.watchOffers();
+    stop();
+    settings.set({ lanSharing: true });
+    vi.mocked(service.getOffers).mockResolvedValueOnce([offer('Portal 2')] as never);
+    stop = store.watchOffers();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(get(store.offers)).toHaveLength(1);
+    stop();
+
+    settings.set({ lanSharing: false });
+    vi.mocked(service.getStats).mockClear();
+    stop = store.watchOffers();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(service.getStats).toHaveBeenCalledTimes(1);
+    expect(get(store.offers)).toEqual([]);
+    stop();
+  });
+
+  it('figures Go sent while sharing was on and no screen watched are read again by the next watch that finds it off', async () => {
+    const { service, store, settings } = await fresh();
+    await store.initLan();
+    settings.set({ lanSharing: false });
+    let stop = store.watchOffers();
+    await vi.advanceTimersByTimeAsync(0);
+    stop();
+    settings.set({ lanSharing: true });
+    handlers['lan:stats']({ data: { ...emptyStats, peersKnown: 4 } });
+    settings.set({ lanSharing: false });
+    vi.mocked(service.getStats).mockClear();
+
+    stop = store.watchOffers();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(service.getStats).toHaveBeenCalledTimes(1);
+    expect(get(store.lanStats).peersKnown).toBe(0);
+    stop();
+  });
+
+  it('a read again while sharing was on is settled again by the next watch that finds it off', async () => {
+    const { service, store, settings } = await fresh();
+    settings.set({ lanSharing: false });
+    let stop = store.watchOffers();
+    await vi.advanceTimersByTimeAsync(0);
+    stop();
+    settings.set({ lanSharing: true });
+    vi.mocked(service.getStats).mockResolvedValueOnce({ ...emptyStats, peersKnown: 3 } as never);
+    await store.reloadLan();
+    settings.set({ lanSharing: false });
+    vi.mocked(service.getStats).mockClear();
+
+    stop = store.watchOffers();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(service.getStats).toHaveBeenCalledTimes(1);
+    expect(get(store.lanStats).peersKnown).toBe(0);
+    stop();
+  });
+
   it('a poll answer that arrives after sharing went off does not bring the offers back', async () => {
     const { service, store, settings } = await fresh();
     let answer!: (value: never) => void;

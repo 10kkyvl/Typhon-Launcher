@@ -87,6 +87,7 @@ const readSnapshot = (): Promise<Snapshot> => Promise.all([getPeers(), getOffers
 const stillShared = (list: Share[] | null | undefined) => (list ?? []).filter((share) => share.enabled);
 
 function received([peersList, offersList, sharesList, statsResult]: Snapshot) {
+  settledOff = false;
   peers.set(peersList);
   offers.set(offersList);
   shares.set(stillShared(sharesList));
@@ -108,6 +109,12 @@ async function readAll(read: () => Promise<Snapshot>): Promise<boolean> {
 
 // Every LAN event Go sent: a read asked for before one of them may predate it.
 let heard = 0;
+
+// Whether the offers and figures the store holds are what Go has while sharing is off. Go says nothing
+// when sharing is switched (in Settings, where no screen watches the offers), so whatever may have come
+// from a running sharing (a read, a lan:stats event, a poll) clears it, and the next watch that finds
+// sharing off settles again.
+let settledOff = false;
 
 /**
  * Reads everything again, as the screen's Retry after a failed first read does; answers whether a read
@@ -159,6 +166,7 @@ export async function initLan(): Promise<void> {
     upsertTransfer(event.data as Transfer);
   });
   on('lan:stats', (event) => {
+    settledOff = false;
     lanStats.set(event.data as Stats);
   });
 
@@ -200,16 +208,22 @@ function stopPoll() {
   pollRun += 1;
 }
 
-/** Sharing as the settings say: while on, the offers are read at once and then on every tick. */
+/**
+ * Sharing as the settings say: while on, the offers are read at once and then on every tick; found off,
+ * the offers are emptied and the figures read once, unless the store has settled for off since.
+ */
 function follow(sharing: boolean) {
-  if (sharing === (poll !== null)) return;
   if (!sharing) {
     stopPoll();
+    if (settledOff) return;
+    settledOff = true;
     // Go dropped its table of offers with the sharing: what was nearby is no longer known.
     offers.set([]);
     void readStats(pollRun);
     return;
   }
+  settledOff = false;
+  if (poll !== null) return;
   pollRun += 1;
   const run = pollRun;
   void pollOffers(run);
