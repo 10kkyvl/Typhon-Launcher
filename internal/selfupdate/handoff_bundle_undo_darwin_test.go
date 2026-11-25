@@ -25,6 +25,7 @@ func newBundleDisk(t *testing.T) bundleDisk {
 	d := bundleDisk{cfg: t.TempDir(), bundle: filepath.Join(t.TempDir(), "Typhon.app")}
 	d.exe = filepath.Join(d.bundle, "Contents", "MacOS", "typhon")
 	writeTestFile(t, d.exe, []byte("old build"))
+	//nolint:gosec // G302: the stand-in launcher must be executable, as a real one is
 	if err := os.Chmod(d.exe, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -42,6 +43,7 @@ func lockInside(t *testing.T, bundle string) string {
 	t.Helper()
 	rel := filepath.Join("Contents", "Locked")
 	writeTestFile(t, filepath.Join(bundle, rel, "keep"), []byte("x"))
+	//nolint:gosec // G302: a folder that can be listed but not emptied, so that RemoveAll stops half-way
 	if err := os.Chmod(filepath.Join(bundle, rel), 0o500); err != nil {
 		t.Fatal(err)
 	}
@@ -50,6 +52,7 @@ func lockInside(t *testing.T, bundle string) string {
 
 func unlock(t *testing.T, dir string) {
 	t.Helper()
+	//nolint:gosec // G302: a folder needs its search bit for its files to be removed
 	if err := os.Chmod(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -85,6 +88,7 @@ func TestBundleUndoRetriedAfterAPartialRemovalKeepsTheOldBundle(t *testing.T) {
 	locked := lockInside(t, d.bundle) // the new bundle, at the target now
 	t.Cleanup(func() {
 		for _, b := range []string{d.bundle, j.OldPath} {
+			//nolint:gosec // G302: a folder needs its search bit for t.TempDir to remove it
 			if err := os.Chmod(filepath.Join(b, locked), 0o755); err != nil && !errors.Is(err, os.ErrNotExist) {
 				t.Logf("unlock %s: %v", b, err)
 			}
@@ -157,6 +161,7 @@ func TestBundleUndoNeverExchangesTwice(t *testing.T) {
 	locked := lockInside(t, d.bundle)
 	t.Cleanup(func() {
 		for _, b := range []string{d.bundle, j.OldPath} {
+			//nolint:gosec // G302: a folder needs its search bit for t.TempDir to remove it
 			if err := os.Chmod(filepath.Join(b, locked), 0o755); err != nil && !errors.Is(err, os.ErrNotExist) {
 				t.Logf("unlock %s: %v", b, err)
 			}
@@ -213,6 +218,7 @@ func TestBundleHandoffWithAHalfRemovedNewBundleKeepsTheOldOneThroughShutdownAndR
 	t.Cleanup(func() { startHandoff, handoffReadyTimeout = prevStart, prevTimeout })
 	t.Cleanup(func() {
 		for _, b := range []string{d.bundle, j.OldPath} {
+			//nolint:gosec // G302: a folder needs its search bit for t.TempDir to remove it
 			if err := os.Chmod(filepath.Join(b, "Contents", "Locked"), 0o755); err != nil && !errors.Is(err, os.ErrNotExist) {
 				t.Logf("unlock %s: %v", b, err)
 			}

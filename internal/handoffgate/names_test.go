@@ -62,7 +62,10 @@ func gateCalls(root string) ([]gateCall, error) {
 					continue
 				}
 				for _, spec := range gen.Specs {
-					vs := spec.(*ast.ValueSpec)
+					vs, ok := spec.(*ast.ValueSpec)
+					if !ok {
+						continue
+					}
 					for i, id := range vs.Names {
 						if i < len(vs.Values) {
 							if lit, ok := vs.Values[i].(*ast.BasicLit); ok && lit.Kind == token.STRING {
