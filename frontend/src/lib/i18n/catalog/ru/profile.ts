@@ -143,6 +143,16 @@ export const profile = {
   'profile.layoutErrChars': 'В тексте есть недопустимые символы: управляющие знаки, разделители строк или переключатели направления текста. Уберите их.',
   'profile.saveBusy': 'Предыдущее сохранение ещё идёт. Повторите через мгновение.',
   'profile.blocksFromNewer': 'Часть блоков создана более новой версией лаунчера: здесь их не видно, но они занимают места ({hidden} из {count}). Чтобы добавить новые, обновите лаунчер или освободите место.',
+  // 7-F3 profile
+  'profile.loadingStats': 'Загружаем статистику профиля…',
+  'profile.usernameHint': 'Так вас увидят другие: @{username}',
+  'profile.bioCounter': '{count} из {max}',
+  'profile.bioNear': { one: 'Остался {count} символ', few: 'Осталось {count} символа', many: 'Осталось {count} символов' },
+  'profile.bioAt': 'Достигнут предел длины',
+  'profile.bioOver': { one: 'Предел превышен на {count} символ', few: 'Предел превышен на {count} символа', many: 'Предел превышен на {count} символов' },
+  'profile.editOffline': 'Нет связи с сервером. Набранное останется здесь, а сохранить его можно будет, когда связь вернётся.',
+  'profile.statFriends': 'Друзья',
+  'profile.offlineNote': 'Нет связи с сервером: профиль показан по последним данным, а изменить его можно будет, когда связь вернётся.',
 } as const;
 
 export type ProfileKey = keyof typeof profile;

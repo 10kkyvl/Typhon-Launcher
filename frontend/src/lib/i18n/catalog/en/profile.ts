@@ -146,4 +146,14 @@ export const profile: Record<ProfileKey, Message> = {
   'profile.layoutErrChars': 'The text has characters that are not allowed: control characters, line separators or text direction overrides. Remove them.',
   'profile.saveBusy': 'The previous save is still running. Try again in a moment.',
   'profile.blocksFromNewer': 'Some blocks were created by a newer version of the launcher: they are not shown here but still take up places ({hidden} of {count}). Update the launcher or free a place to add new ones.',
+  // 7-F3 profile
+  'profile.loadingStats': 'Loading profile statistics…',
+  'profile.usernameHint': 'Others will see you as @{username}',
+  'profile.bioCounter': '{count} of {max}',
+  'profile.bioNear': { one: '{count} character left', other: '{count} characters left' },
+  'profile.bioAt': 'The length limit is reached',
+  'profile.bioOver': { one: '{count} character over the limit', other: '{count} characters over the limit' },
+  'profile.editOffline': 'No connection to the server. What you typed stays here, and you can save it once the connection is back.',
+  'profile.statFriends': 'Friends',
+  'profile.offlineNote': 'No connection to the server: the profile shows the last data it had, and you can change it once the connection is back.',
 };
