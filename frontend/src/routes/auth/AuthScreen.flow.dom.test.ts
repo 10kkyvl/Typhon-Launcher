@@ -387,3 +387,22 @@ describe('AuthScreen: where a refusal sends focus', () => {
   });
 });
 
+describe('AuthScreen: a link that cannot open', () => {
+  // The screen is outside the shell, which holds the toast stack: a toast raised here shows nowhere.
+  it.each([
+    ['tickets.forgotPassword', 'OpenForgotPassword', 'tickets.forgotOpenFailed'],
+    ['tickets.cantSignIn', 'OpenSupportSite', 'tickets.siteOpenFailed'],
+  ] as const)('%s says the failure on the screen and keeps focus on the link', async (link, method, text) => {
+    account[method].mockRejectedValue(new Error('network_error'));
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { user } = screenIn('login');
+    const pressed = screen.getByRole('button', { name: msg(link) });
+    await user.click(pressed);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent?.trim()).toBe(msg(text));
+    expect(document.activeElement).toBe(pressed);
+    error.mockRestore();
+  });
+});
+

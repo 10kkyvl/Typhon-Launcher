@@ -129,8 +129,11 @@ describe('where the section is reachable from', () => {
     expect(support).toMatch(/catch \(err\) \{[^}]*toast\(msg\('tickets\.siteOpenFailed'\), 'danger'\)/);
     expect(auth).toContain('openSupportSite');
     expect(auth).toMatch(/onclick=\{onCantSignIn\}>\{msg\('tickets\.cantSignIn'\)\}/);
-    expect(auth).toMatch(/catch \(err\) \{[^}]*toast\(msg\('tickets\.siteOpenFailed'\), 'danger'\)/);
-    expect(auth).toMatch(/catch \(err\) \{[^}]*toast\(msg\('tickets\.forgotOpenFailed'\), 'danger'\)/);
+    // The sign-in screen has no toast stack (the shell holds it): it says the failure in its form.
+    // AuthScreen.flow.dom.test.ts proves it on screen.
+    expect(auth).toMatch(/catch \(err\) \{[^}]*errors = \{ general: msg\('tickets\.siteOpenFailed'\) \}/);
+    expect(auth).toMatch(/catch \(err\) \{[^}]*errors = \{ general: msg\('tickets\.forgotOpenFailed'\) \}/);
+    expect(auth).not.toMatch(/\btoast\(/);
   });
 
   it('offers a support button next to the logs in the settings, with the launcher topic', () => {

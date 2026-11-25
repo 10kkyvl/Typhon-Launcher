@@ -9,7 +9,6 @@
   import { accountErrorField, accountErrorText, accountMessage } from '../../lib/services/accountMessages';
   import { openForgotPassword, openSupportSite } from '../../lib/services/account';
   import { authReason, authState, authView, enterAsGuest, retryBootstrap, signIn, signUp } from '../../lib/stores/user';
-  import { toast } from '../../lib/stores/toasts';
   import { focusHandOff } from '../../lib/utils/focusHandOff';
   import { msg } from '../../lib/i18n';
 
@@ -108,21 +107,24 @@
     }
   }
 
+  // Said in the form: the toast stack lives in the shell, which is not on screen before sign-in.
   async function onForgot() {
+    errors = {};
     try {
       await openForgotPassword();
     } catch (err) {
       console.error('open password reset page', err);
-      toast(msg('tickets.forgotOpenFailed'), 'danger');
+      errors = { general: msg('tickets.forgotOpenFailed') };
     }
   }
 
   async function onCantSignIn() {
+    errors = {};
     try {
       await openSupportSite();
     } catch (err) {
       console.error('open support page', err);
-      toast(msg('tickets.siteOpenFailed'), 'danger');
+      errors = { general: msg('tickets.siteOpenFailed') };
     }
   }
 
