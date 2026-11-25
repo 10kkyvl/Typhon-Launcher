@@ -155,7 +155,7 @@ export const diskusage = {
   'diskusage.segmentKept': 'Остатки, которые удалить нельзя',
   'diskusage.meterLauncher': 'Файлы лаунчера',
   'diskusage.freeUnknown': 'Свободное место на диске библиотеки не измерено',
-  'diskusage.libraryDisk': 'Диск библиотеки {volume}: свободно {free} из {total}',
+  'diskusage.libraryDisk': 'Диск библиотеки {volume} — свободно {free} из {total}',
   'diskusage.screenshotsConfirmSized': 'Все снимки игры «{title}» ({count}, {size}) будут удалены с диска без возможности восстановления.',
   'diskusage.snapshotsConfirmSized': 'Все локальные копии сохранений игры «{title}» ({count}, {size}) будут удалены.',
 } as const;
