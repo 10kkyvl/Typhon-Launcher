@@ -4,6 +4,7 @@ import type { RollbackInfo, SelfUpdateOutcome, SelfUpdateStatus } from './selfup
 
 const REASONS: Record<string, MessageKey> = {
   'selfupdate.handoff_unsupported': 'state.selfupdateReasonHandoffUnsupported',
+  'selfupdate.handoff_pending': 'state.selfupdateReasonHandoffPending',
   'selfupdate.not_replaced': 'state.selfupdateReasonBinaryUnchanged',
   'selfupdate.parent_still_running': 'state.selfupdateReasonLauncherDidNotExit',
   'selfupdate.hash_mismatch': 'state.selfupdateReasonCorruptDownload',
@@ -101,6 +102,7 @@ function codeReasons(): Record<string, string> {
     download: msg('state.selfupdateCodeDownloadFailed'),
     apply: msg('state.selfupdateCodeApplyFailed'),
     handoff_failed: msg('state.selfupdateHandoffFailed'),
+    handoff_undo_failed: msg('state.selfupdateHandoffUndoFailed'),
   };
 }
 
