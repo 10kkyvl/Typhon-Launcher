@@ -11,6 +11,7 @@
   import MaskedEmail from '../../lib/components/MaskedEmail.svelte';
   import StatusBadge from '../../lib/components/StatusBadge.svelte';
   import Notice from '../../lib/components/Notice.svelte';
+  import Spinner from '../../lib/components/Spinner.svelte';
   import StyledName from '../../lib/components/StyledName.svelte';
   import { appearanceOf } from '../../lib/profile/appearance';
   import type { ProfileAppearance } from '../../lib/services/account';
@@ -29,6 +30,7 @@
   let {
     running,
     stats,
+    statsFailed = false,
     showOnline,
     showPlaying,
     showStats,
@@ -39,7 +41,10 @@
     statusText,
   }: {
     running: GameRef[];
-    stats: ProfileStatsData;
+    /** The figures, or null until the first read has answered them. */
+    stats: ProfileStatsData | null;
+    /** The read of the figures failed: the page says so in its notice, the header shows none. */
+    statsFailed?: boolean;
     showOnline: boolean;
     showPlaying: boolean;
     showStats: boolean;
@@ -213,10 +218,13 @@
             </DropdownMenu>
           {/if}
         </div>
-        {#if !isGuest}
+        {#if !isGuest && stats}
           <div class="stats">
             <ProfileStats {stats} hidden={!showStats} />
           </div>
+        {:else if !isGuest && !statsFailed}
+          <!-- The page's status says what is loading; this mark only holds the figures' place. -->
+          <div class="stats"><Spinner size="sm" /></div>
         {/if}
       </div>
     </div>

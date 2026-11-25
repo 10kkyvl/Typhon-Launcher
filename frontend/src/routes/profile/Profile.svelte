@@ -7,6 +7,7 @@
   import ConfirmModal from '../../lib/components/ConfirmModal.svelte';
   import Notice from '../../lib/components/Notice.svelte';
   import PageHeader from '../../lib/components/PageHeader.svelte';
+  import Spinner from '../../lib/components/Spinner.svelte';
   import ProfileCanvas from '../../lib/components/ProfileCanvas.svelte';
   import ProfileCover from '../../lib/components/ProfileCover.svelte';
   import BlockGrid from '../../lib/components/profile/BlockGrid.svelte';
@@ -37,10 +38,10 @@
   import { ownAutoArt, resolveOwn, type GridBlock } from '../../lib/profile/layoutView';
   import { type ProfileSettings, type ProfileSettingsPatch, type BlockWidth, DEFAULT_PROFILE } from '../../lib/services/account';
   import { accountErrorText } from '../../lib/services/accountMessages';
-  import { getProfilePreview, type GameRef, type ProfileSnapshot } from '../../lib/services/profile';
+  import { EMPTY_SNAPSHOT, getProfilePreview, type GameRef, type ProfileSnapshot } from '../../lib/services/profile';
   import { libraryGames } from '../../lib/stores/library';
   import { gameArt, loadArt } from '../../lib/stores/metadata';
-  import { initProfile, profileDraft, profileFailed, profileSnapshot } from '../../lib/stores/profile';
+  import { initProfile, profileDraft, profileFailed, profileSnapshot, refreshProfile } from '../../lib/stores/profile';
   import { navigate, registerLeaveGuard } from '../../lib/stores/router';
   import { toast } from '../../lib/stores/toasts';
   import { authState, currentUser, isOffline, saveProfile } from '../../lib/stores/user';
@@ -73,6 +74,13 @@
   let picked = $state<Record<number, GameRef>>({});
   let full = $state<ProfileSnapshot | null>(null);
   let previewFailed = $state(false);
+  let previewRetrying = $state(false);
+  let previewSeq = 0;
+  let snapshotRetrying = $state(false);
+  // The store starts on an empty snapshot and says nothing of having been answered: the figures are
+  // known once it holds another one (a read of an earlier visit) or once a read set it while the page
+  // is on screen.
+  let answered = $state(get(profileSnapshot) !== EMPTY_SNAPSHOT);
   let settingsOpen = $state(false);
   let pending = $state<{ prompt: ConfirmPrompt; run: () => void } | null>(null);
 
@@ -250,6 +258,27 @@
     picked = { ...picked, [pick.igdbId]: pick.game };
   }
 
+  async function retrySnapshot(): Promise<boolean> {
+    await refreshProfile();
+    return !get(profileFailed);
+  }
+
+  // An answer of a read that a newer one or the editor's closing replaced is dropped.
+  async function loadPreview(): Promise<boolean | undefined> {
+    const id = ++previewSeq;
+    try {
+      const snapshot = await getProfilePreview();
+      if (id !== previewSeq) return undefined;
+      full = snapshot;
+      previewFailed = false;
+      return true;
+    } catch {
+      if (id !== previewSeq) return undefined;
+      previewFailed = true;
+      return false;
+    }
+  }
+
   async function save() {
     if (!canSave) return;
     saving = true;
@@ -305,21 +334,27 @@
   });
 
   $effect(() => {
-    let active = true;
     $currentUser?.id;
     previewFailed = false;
-    if (wantsFull) {
-      getProfilePreview()
-        .then((snapshot) => { if (active) full = snapshot; })
-        .catch(() => { if (active) previewFailed = true; });
-    } else { full = null; }
-    return () => { active = false; };
+    // A retry this run replaces answers nothing to its notice, which would wait on it for ever.
+    previewRetrying = false;
+    if (wantsFull) void loadPreview();
+    else full = null;
+    return () => {
+      previewSeq++;
+    };
   });
 
   onMount(() => {
+    let first = true;
+    const stop = profileSnapshot.subscribe(() => {
+      if (first) first = false;
+      else answered = true;
+    });
     initProfile();
     const stash = get(profileDraft);
     if (stash && stash.owner === get(currentUser)?.id) startEditing();
+    return stop;
   });
 
   onDestroy(() => {
@@ -347,12 +382,16 @@
 <Page>
   <PageHeader title={msg('social.profileLabel')} />
 
-  {#if $profileFailed}
-    <div class="load-error"><Notice tone="danger">{msg('profile.loadFailed')}</Notice></div>
+  {#if $profileFailed || snapshotRetrying}
+    <div class="load-error">
+      <Notice tone="danger" bind:retrying={snapshotRetrying} retry={{ label: msg('common.retry'), run: retrySnapshot }}>{msg('profile.loadFailed')}</Notice>
+    </div>
   {/if}
 
-  {#if previewFailed}
-    <div class="load-error"><Notice tone="danger">{msg('profile.previewLoadFailed')}</Notice></div>
+  {#if previewFailed || previewRetrying}
+    <div class="load-error">
+      <Notice tone="danger" bind:retrying={previewRetrying} retry={{ label: msg('common.retry'), run: loadPreview }}>{msg('profile.previewLoadFailed')}</Notice>
+    </div>
   {/if}
 
   <div class="workspace" class:editing>
@@ -384,7 +423,8 @@
         <ProfileCover {appearance} {autoArt} />
         <ProfileHeader
           running={$profileSnapshot.running}
-          stats={$profileSnapshot.stats}
+          stats={answered ? $profileSnapshot.stats : null}
+          statsFailed={$profileFailed || snapshotRetrying}
           showOnline={shown.showOnline}
           showPlaying={shown.showPlaying}
           showStats={shown.showStats}
@@ -395,7 +435,11 @@
           onsettings={openSettings}
         />
 
-        {#if !isGuest}
+        {#if !isGuest && !answered && !editing}
+          {#if !$profileFailed && !snapshotRetrying}
+            <div class="blocks"><Spinner label={msg('profile.loadingStats')} /></div>
+          {/if}
+        {:else if !isGuest}
           <div class="blocks">
             <BlockGrid
               blocks={gridBlocks}

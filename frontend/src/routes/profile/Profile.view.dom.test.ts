@@ -58,7 +58,8 @@ describe('the profile page', () => {
     signIn({ showStats: false });
     renderDom(Profile);
 
-    const badges = screen.getAllByText('Hidden').filter((element) => description(element) === 'Stats hidden from others. You can see them.');
+    // The figures, and the badge beside them, come with the first read.
+    const badges = (await screen.findAllByText('Hidden')).filter((element) => description(element) === 'Stats hidden from others. You can see them.');
     expect(badges).toHaveLength(1);
     expect(tabbable(badges[0])).toBe(true);
     expect(badges[0].classList.contains('badge')).toBe(true);

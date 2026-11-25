@@ -15,8 +15,12 @@ describe('screens show a failed load instead of an empty state', () => {
   const NOTICE = /\{#if \$profileFailed\}\s*(<div[^>]*>)?<Notice tone="danger">/;
   const LINE = /\{#if \$profileFailed\}\s*<p[^>]*role="alert"/;
 
+  it('the profile screen shows the profile statistics failure with a retry, kept while it runs', () => {
+    expect(profile).toMatch(/\{#if \$profileFailed \|\| snapshotRetrying\}\s*(<div[^>]*>)?\s*<Notice tone="danger" bind:retrying=\{snapshotRetrying\} retry=\{\{[^}]*run: retrySnapshot[^>]*>\{msg\('profile\.loadFailed'\)\}/);
+    expect(profile).toMatch(/async function retrySnapshot\(\)[\s\S]*?await refreshProfile\(\);\s*return !get\(profileFailed\);/);
+  });
+
   it.each([
-    ['profile', profile, NOTICE, "msg('profile.loadFailed')"],
     ['activity', activity, NOTICE, "msg('profile.loadFailed')"],
     ['big picture profile', bigPictureProfile, LINE, "$t('bp.profile.loadFailed')"],
   ])('the %s screen shows the profile statistics failure', (_name, source, shape, text) => {
