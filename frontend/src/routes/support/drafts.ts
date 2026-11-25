@@ -6,6 +6,9 @@ import { currentUser } from '../../lib/stores/user';
  * again" unmounts the whole shell, and the text comes back when the form opens again after the
  * sign-in. Kept for the account it was typed under: a guest keeps nothing, and another account signing
  * in drops it. In memory only, never on disk: it can hold personal text.
+ *
+ * A text leaves what is kept when its send starts, so a form opened again meanwhile cannot send it a
+ * second time; a send that fails gives it back, unless something newer is kept by then.
  */
 
 export interface RequestDraft {
@@ -18,9 +21,12 @@ export interface RequestDraft {
   logsTouched: boolean;
 }
 
+/** The form that wrote what is kept: only it forgets it (Cancel, its own send). */
+export type Writer = object;
+
 interface Kept {
   owner: string;
-  request: RequestDraft | null;
+  request: { draft: RequestDraft; by: Writer } | null;
   replies: Map<number, string>;
 }
 
@@ -70,28 +76,56 @@ function typed(draft: RequestDraft): boolean {
   return Boolean(draft.subject.trim() || draft.body.trim() || draft.game);
 }
 
-/** Keeps the new request as the player has it now; a form with nothing typed keeps nothing. */
-export function keepRequest(draft: RequestDraft): void {
+function copy(draft: RequestDraft): RequestDraft {
+  return { ...draft, game: draft.game ? { ...draft.game } : null };
+}
+
+/** Keeps the new request as the player has it now in `by`; a form with nothing typed keeps nothing. */
+export function keepRequest(draft: RequestDraft, by: Writer): void {
   if (!typed(draft)) {
-    forgetRequest();
+    const from = mine();
+    if (from) from.request = null;
+    settle();
     return;
   }
   const into = writable();
   if (!into) return;
-  into.request = { ...draft, game: draft.game ? { ...draft.game } : null };
+  into.request = { draft: copy(draft), by };
 }
 
 /** The new request the signed-in player left unsent, if any. */
 export function keptRequest(): RequestDraft | null {
   const request = mine()?.request;
-  return request ? { ...request, game: request.game ? { ...request.game } : null } : null;
+  return request ? copy(request.draft) : null;
 }
 
-export function forgetRequest(): void {
+/** Forgets the kept request if `by` wrote it: a draft of another form stays. */
+export function forgetRequest(by: Writer): void {
   const from = mine();
-  if (!from) return;
+  if (!from || from.request?.by !== by) return;
   from.request = null;
   settle();
+}
+
+/** Listeners of a request given back by a failed send: a form open and untouched takes it. */
+const requestBack = new Set<(draft: RequestDraft) => void>();
+
+export function onRequestBack(listener: (draft: RequestDraft) => void): () => void {
+  requestBack.add(listener);
+  return () => requestBack.delete(listener);
+}
+
+/**
+ * A send of `draft` from `by` failed: it is kept again, unless something newer is kept by now. Answers
+ * whether it was.
+ */
+export function returnRequest(draft: RequestDraft, by: Writer): boolean {
+  if (mine()?.request) return false;
+  const into = writable();
+  if (!into) return false;
+  into.request = { draft: copy(draft), by };
+  for (const listener of [...requestBack]) listener(copy(draft));
+  return true;
 }
 
 /** Keeps the reply typed in a request; an empty one keeps nothing. */
@@ -113,4 +147,21 @@ export function forgetReply(ticket: number): void {
   if (!from) return;
   from.replies.delete(ticket);
   settle();
+}
+
+const replyBack = new Set<(ticket: number, text: string) => void>();
+
+export function onReplyBack(listener: (ticket: number, text: string) => void): () => void {
+  replyBack.add(listener);
+  return () => replyBack.delete(listener);
+}
+
+/** A send of a reply failed: it is kept again, unless a newer reply is kept in that request by now. */
+export function returnReply(ticket: number, text: string): boolean {
+  if (keptReply(ticket)) return false;
+  const into = writable();
+  if (!into) return false;
+  into.replies.set(ticket, text);
+  for (const listener of [...replyBack]) listener(ticket, text);
+  return true;
 }

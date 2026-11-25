@@ -233,6 +233,29 @@ describe('sendNewTicket', () => {
   });
 });
 
+describe('the moment a text leaves', () => {
+  it('is said once the player agreed to the logs, right before the request or the reply goes', async () => {
+    const order: string[] = [];
+    create.mockImplementation(async () => {
+      order.push('create');
+      return { number: 1, ref: 'T-1' } as Ticket;
+    });
+    reply.mockImplementation(async () => {
+      order.push('reply');
+      return {} as Awaited<ReturnType<typeof replyTicket>>;
+    });
+    const ask = (answer: boolean) => async () => {
+      order.push('asked');
+      return answer;
+    };
+    await sendNewTicket({ ...draft, attachLogs: true }, ask(false), () => order.push('started'));
+    await sendNewTicket({ ...draft, attachLogs: true }, ask(true), () => order.push('started'));
+    await sendReply(3, 'Text', true, ask(false), () => order.push('started'));
+    await sendReply(3, 'Text', false, ask(true), () => order.push('started'));
+    expect(order).toEqual(['asked', 'asked', 'started', 'create', 'asked', 'started', 'reply']);
+  });
+});
+
 describe('sendReply', () => {
   it('sends a plain reply without a prompt', async () => {
     const confirm = vi.fn(async () => true);

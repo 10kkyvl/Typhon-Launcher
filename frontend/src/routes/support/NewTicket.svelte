@@ -30,7 +30,7 @@
   import { handleSessionLost } from '../../lib/stores/user';
   import { runeCount } from '../../lib/profile/layout';
   import AttachLogs from './AttachLogs.svelte';
-  import { forgetRequest, keepRequest, keptRequest } from './drafts';
+  import { forgetRequest, keepRequest, keptRequest, onRequestBack, returnRequest, type RequestDraft, type Writer } from './drafts';
   import LogsConfirm from './LogsConfirm.svelte';
   import { bodyCounter, isPlainEnter, isSendShortcut, sendKeys, sessionGone } from './sending';
 
@@ -61,6 +61,11 @@
   const topics = $derived(topicOptions());
   const stage = $derived(logsStageText(upload));
 
+  // This form, as the writer of what is kept: its Cancel and its own send forget only what it wrote.
+  const me: Writer = {};
+  // The player changed something here since the form opened.
+  let edited = false;
+
   let form = $state<HTMLElement>();
   let subjectField = $state<HTMLInputElement>();
   let bodyField = $state<HTMLTextAreaElement>();
@@ -87,33 +92,65 @@
 
   let onScreen = true;
 
+  function fill(from: RequestDraft) {
+    topic = from.topic;
+    game = from.game;
+    subject = from.subject;
+    body = from.body;
+    attachLogs = from.attachLogs;
+    logsTouched = from.logsTouched;
+  }
+
   onMount(() => {
     void loadLimits();
     const off = onLogUploadStatus((status) => {
       if (sending) upload = status;
     });
+    // A request whose send failed after its form was left comes back into this one while the player
+    // has not changed anything here.
+    const offBack = onRequestBack((back) => {
+      if (!edited) fill(back);
+    });
     return () => {
       onScreen = false;
       off();
+      offBack();
     };
   });
 
   $effect(() => {
     const now = { topic, game, subject, body, attachLogs };
-    untrack(() => keepRequest({ ...now, logsTouched }));
+    untrack(() => keepRequest({ ...now, logsTouched }, me));
   });
 
   function cancel() {
-    forgetRequest();
+    forgetRequest(me);
     goBack();
   }
 
   function changeTopic(id: string) {
+    edited = true;
     topic = id;
     if (!logsTouched && isTopic(id)) attachLogs = attachLogsByDefault(id);
   }
 
+  function clearGame() {
+    edited = true;
+    game = null;
+  }
+
+  function editField(field: 'subject' | 'body') {
+    edited = true;
+    errors = { ...errors, [field]: undefined };
+  }
+
+  function setLogs() {
+    edited = true;
+    logsTouched = true;
+  }
+
   function pickGame(pick: { igdbId: number; game: { title: string } }) {
+    edited = true;
     game = { igdbId: pick.igdbId, title: pick.game.title };
     pickerOpen = false;
   }
@@ -148,18 +185,29 @@
     }
     sending = true;
     upload = null;
+    const sent: RequestDraft = { topic, game: game ? { ...game } : null, subject, body, attachLogs, logsTouched };
+    let started = false;
     try {
       const outcome = await sendNewTicket(
         { topic, subject, body, gameIgdbId: game?.igdbId ?? null, attachLogs },
         () => confirm.ask(),
+        () => {
+          started = true;
+          forgetRequest(me);
+        },
       );
       if (!outcome.sent) return;
-      forgetRequest();
+      forgetRequest(me);
       announceCreated(outcome.value, onScreen, {
         notify: (text) => toast(text, 'success'),
         open: (number) => navigate('support', { ticket: String(number) }),
       });
     } catch (err) {
+      const back = started && returnRequest(sent, me);
+      if (!onScreen) {
+        if (started) toast(msg(back ? 'tickets.requestNotSentKept' : 'tickets.requestNotSentNewer', { subject: sent.subject.trim() }), 'danger');
+        return;
+      }
       sending = false;
       await showError(err);
     } finally {
@@ -189,7 +237,7 @@
       {#if game}
         <div class="chosen">
           <span class="chosen-title" dir="auto">{game.title}</span>
-          <IconButton size="sm" label={msg('tickets.gameClear')} disabled={sending} onclick={() => (game = null)}>
+          <IconButton size="sm" label={msg('tickets.gameClear')} disabled={sending} onclick={clearGame}>
             <X size="1.5rem" strokeWidth={1.8} />
           </IconButton>
         </div>
@@ -218,7 +266,7 @@
       error={errors.subject}
       bind:value={subject}
       bind:input={subjectField}
-      oninput={() => (errors = { ...errors, subject: undefined })}
+      oninput={() => editField('subject')}
       onkeydown={sendOn(isPlainEnter)}
     />
 
@@ -234,14 +282,14 @@
       error={errors.body}
       bind:value={body}
       bind:textarea={bodyField}
-      oninput={() => (errors = { ...errors, body: undefined })}
+      oninput={() => editField('body')}
       onkeydown={sendOn(isSendShortcut)}
     />
 
     <AttachLogs
       bind:checked={attachLogs}
       disabled={sending}
-      onchange={() => (logsTouched = true)}
+      onchange={setLogs}
     />
 
     {#if formError}

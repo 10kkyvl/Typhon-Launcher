@@ -11,7 +11,7 @@ import { authState, currentUser } from '../../lib/stores/user';
 import { calls, resetBindings } from '../../lib/testing/fakeBinding';
 import { renderDom } from '../../lib/testing/dom';
 import { LIMITS, message, thread, ticket } from '../../lib/testing/supportTesting';
-import { forgetReply, forgetRequest, keepReply, keepRequest, keptReply, keptRequest, type RequestDraft } from './drafts';
+import { forgetReply, forgetRequest, keepReply, keepRequest, keptReply, keptRequest, onRequestBack, returnReply, returnRequest, type RequestDraft } from './drafts';
 import NewTicket from './NewTicket.svelte';
 import TicketView from './TicketView.svelte';
 
@@ -223,6 +223,7 @@ describe('a reply left unsent', () => {
 
 describe('the kept drafts themselves', () => {
   const as = (id: string | null) => currentUser.set(id ? player(id) : null);
+  const form = {};
   const DRAFT: RequestDraft = {
     topic: 'launch',
     game: { igdbId: 42, title: 'A game' },
@@ -234,7 +235,7 @@ describe('the kept drafts themselves', () => {
 
   it('give the player back the request they left, game and logs switch included, as a copy', () => {
     const game = { igdbId: 42, title: 'A game' };
-    keepRequest({ ...DRAFT, game });
+    keepRequest({ ...DRAFT, game }, form);
     game.title = 'Changed after';
     expect(keptRequest()).toEqual(DRAFT);
 
@@ -244,7 +245,7 @@ describe('the kept drafts themselves', () => {
   });
 
   it('are dropped as soon as another account signs in, before anything is read', () => {
-    keepRequest(DRAFT);
+    keepRequest(DRAFT, form);
     keepReply(7, 'Still closes.');
     as(null);
     as(`${me}-other`);
@@ -256,19 +257,51 @@ describe('the kept drafts themselves', () => {
   it('keep a reply per request, and forget each on its own', () => {
     keepReply(7, 'For seven.');
     keepReply(8, 'For eight.');
-    keepRequest(DRAFT);
+    keepRequest(DRAFT, form);
     forgetReply(7);
     expect([keptReply(7), keptReply(8)]).toEqual(['', 'For eight.']);
-    forgetRequest();
+    forgetRequest(form);
     expect(keptRequest()).toBeNull();
     expect(keptReply(8)).toBe('For eight.');
   });
 
+  it('forget a request only for the form that wrote it', () => {
+    keepRequest(DRAFT, form);
+    forgetRequest({});
+    expect(keptRequest()).toEqual(DRAFT);
+  });
+
+  it('take the text of a failed send back only while nothing newer is kept, and tell an open form', () => {
+    const heard: RequestDraft[] = [];
+    const off = onRequestBack((back) => heard.push(back));
+    try {
+      expect(returnRequest(DRAFT, form)).toBe(true);
+      expect(keptRequest()).toEqual(DRAFT);
+      const newer = { ...DRAFT, subject: 'Written after' };
+      keepRequest(newer, {});
+      expect(returnRequest(DRAFT, form)).toBe(false);
+      expect(keptRequest()).toEqual(newer);
+      expect(heard).toEqual([DRAFT]);
+    } finally {
+      off();
+    }
+    keepReply(7, 'Written after');
+    expect([returnReply(7, 'Failed'), keptReply(7)]).toEqual([false, 'Written after']);
+    expect([returnReply(8, 'Failed'), keptReply(8)]).toEqual([true, 'Failed']);
+  });
+
+  it('take nothing back for a guest', () => {
+    as(null);
+    expect([returnRequest(DRAFT, form), returnReply(7, 'Failed')]).toEqual([false, false]);
+    as(me);
+    expect([keptRequest(), keptReply(7)]).toEqual([null, '']);
+  });
+
   it('keep nothing for a form with nothing typed in it, and an emptied form forgets what was kept', () => {
-    keepRequest({ ...DRAFT, game: null, subject: '  ', body: '' });
+    keepRequest({ ...DRAFT, game: null, subject: '  ', body: '' }, form);
     expect(keptRequest()).toBeNull();
-    keepRequest(DRAFT);
-    keepRequest({ ...DRAFT, game: null, subject: '', body: '' });
+    keepRequest(DRAFT, form);
+    keepRequest({ ...DRAFT, game: null, subject: '', body: '' }, form);
     expect(keptRequest()).toBeNull();
     keepReply(7, 'Text');
     keepReply(7, '');

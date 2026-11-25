@@ -30,7 +30,7 @@
   import { toast } from '../../lib/stores/toasts';
   import { handleSessionLost } from '../../lib/stores/user';
   import AttachLogs from './AttachLogs.svelte';
-  import { keepReply, keptReply } from './drafts';
+  import { forgetReply, keepReply, keptReply, onReplyBack, returnReply } from './drafts';
   import LogsConfirm from './LogsConfirm.svelte';
   import { messageWhen } from './messageTime';
   import { bodyCounter, isSendShortcut, sendKeys, sessionGone } from './sending';
@@ -100,23 +100,31 @@
     }
   }
 
+  let onScreen = true;
+
   onMount(() => {
     void load();
     void loadLimits();
     const off = onLogUploadStatus((next) => {
       if (sending) upload = next;
     });
+    // A reply to this request whose send failed after the request was left comes back into an empty box.
+    const offBack = onReplyBack((ticket, text) => {
+      if (ticket === number && !reply.trim()) reply = text;
+    });
     return () => {
+      onScreen = false;
       run += 1;
       off();
+      offBack();
     };
   });
 
-  // Kept as it is typed; a sent reply clears the box, and with it what is kept.
-  $effect(() => {
-    const text = reply;
-    untrack(() => keepReply(number, text));
-  });
+  // Kept as the player types it; the send takes it out when it starts.
+  function typed() {
+    replyError = '';
+    keepReply(number, reply);
+  }
 
   // A reload a reply asked for while a Retry or a sent reply was on its way: it runs once that answers.
   let refreshPending = false;
@@ -177,8 +185,14 @@
     const mine = ++sendRun;
     sending = true;
     upload = null;
+    const text = reply;
+    const about = ticket?.subject ?? '';
+    let started = false;
     try {
-      const outcome = await sendReply(number, reply, attachLogs, () => confirm.ask());
+      const outcome = await sendReply(number, text, attachLogs, () => confirm.ask(), () => {
+        started = true;
+        forgetReply(number);
+      });
       if (!outcome.sent) return;
       reply = '';
       attachLogs = false;
@@ -192,14 +206,19 @@
       refreshPending = false;
       await load();
     } catch (err) {
+      const back = started && returnReply(number, text);
+      if (!onScreen) {
+        if (started) toast(msg(back ? 'tickets.replyNotSentKept' : 'tickets.replyNotSentNewer', { subject: about }), 'danger');
+        return;
+      }
       sending = false;
-      const text = supportErrorText(err, msg('tickets.replyFailed'));
+      const said = supportErrorText(err, msg('tickets.replyFailed'));
       if (accountErrorField(err) === 'body') {
-        replyError = text;
+        replyError = said;
         await tick();
         replyField?.focus();
       } else {
-        replyFailure = text;
+        replyFailure = said;
         replySignedOut = sessionGone(err);
       }
     } finally {
@@ -313,7 +332,7 @@
         error={replyError}
         bind:value={reply}
         bind:textarea={replyField}
-        oninput={() => (replyError = '')}
+        oninput={typed}
         onkeydown={sendOnShortcut}
       />
 

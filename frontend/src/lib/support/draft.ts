@@ -61,8 +61,10 @@ export function hasErrors(errors: DraftErrors): boolean {
   return Boolean(errors.subject || errors.body);
 }
 
-export async function sendNewTicket(input: NewTicket, confirmLogs: ConfirmLogs): Promise<SendOutcome<Ticket>> {
+/** `started` runs once the player has agreed to everything and the request is about to leave. */
+export async function sendNewTicket(input: NewTicket, confirmLogs: ConfirmLogs, started: () => void = () => {}): Promise<SendOutcome<Ticket>> {
   if (input.attachLogs && !(await confirmLogs())) return { sent: false };
+  started();
   const value = await createTicket({
     ...input,
     subject: input.subject.trim(),
@@ -85,8 +87,10 @@ export async function sendReply(
   body: string,
   attachLogs: boolean,
   confirmLogs: ConfirmLogs,
+  started: () => void = () => {},
 ): Promise<SendOutcome<Message>> {
   if (attachLogs && !(await confirmLogs())) return { sent: false };
+  started();
   const value = await replyTicket(number, body.trim(), attachLogs);
   return { sent: true, value };
 }
